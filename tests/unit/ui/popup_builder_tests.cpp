@@ -22,6 +22,11 @@ using namespace NWB::Impl;
 using namespace NWB::Impl::Ui;
 using namespace NWB::UiWidgetTests;
 
+constexpr AStringView s_PopupKey = "popup";
+constexpr AStringView s_ApplyKey = "apply";
+constexpr AStringView s_CloseKey = "close";
+constexpr AStringView s_LaterKey = "later";
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -90,7 +95,7 @@ protected:
         return m_context.endRoot() && m_context.finishFrame();
     }
 
-    [[nodiscard]] WidgetId ownerId(const AStringView key = "popup")const{
+    [[nodiscard]] WidgetId ownerId(const AStringView key = s_PopupKey)const{
         return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), key));
     }
 };
@@ -107,14 +112,14 @@ TEST_F(UiPopupBuilderTests, ModalBackdropAndBodyRenderAboveAPanelDeclaredByALate
     options.side = PopupPlacementSide::Center;
     options.size = { 180.0f, 120.0f };
     ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginPopup("popup", state, options));
-    EXPECT_FALSE(m_builder.button("apply", "Apply", Control()));
+    ASSERT_TRUE(m_builder.beginPopup(s_PopupKey, state, options));
+    EXPECT_FALSE(m_builder.button(s_ApplyKey, "Apply", Control()));
     ASSERT_TRUE(m_builder.endPopup());
     ASSERT_TRUE(m_context.endRoot());
     const WidgetRoot laterRoot{ 87u, 1u };
     ASSERT_TRUE(m_context.beginRoot(laterRoot));
     ASSERT_TRUE(m_builder.beginPanel("later", { 0.0f, 0.0f, 800.0f, 600.0f }));
-    EXPECT_FALSE(m_builder.button("apply", "Later", Control()));
+    EXPECT_FALSE(m_builder.button(s_ApplyKey, "Later", Control()));
     ASSERT_TRUE(m_builder.endPanel());
     ASSERT_TRUE(finishRoot());
     const DrawSnapshot snapshot = m_paint.freeze();
@@ -144,7 +149,7 @@ TEST_F(UiPopupBuilderTests, ModalBackdropAndBodyRenderAboveAPanelDeclaredByALate
     EXPECT_FLOAT_EQ(opposite.position.y, 600.0f);
     EXPECT_FLOAT_EQ(first.color.a, m_builder.popupStyle().backdrop.a);
     ASSERT_TRUE(m_context.commitFrame(1u));
-    const WidgetId child = id("apply", "popup");
+    const WidgetId child = id(s_ApplyKey, s_PopupKey);
     EXPECT_EQ(m_context.input().hitTest({ 325.0f, 255.0f }), child);
     EXPECT_FALSE(m_context.input().hitTest({ 10.0f, 10.0f }).valid());
     EXPECT_TRUE(m_context.input().wouldConsumePointer({ 10.0f, 10.0f }));
@@ -156,19 +161,19 @@ TEST_F(UiPopupBuilderTests, ClosingFromTheBodySkipsBackdropBodyPaintAndCandidate
     PopupOptions options = Anchored();
     options.modal = true;
     ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginPopup("popup", state, options));
-    EXPECT_FALSE(m_builder.button("close", "Close", Control()));
+    ASSERT_TRUE(m_builder.beginPopup(s_PopupKey, state, options));
+    EXPECT_FALSE(m_builder.button(s_CloseKey, "Close", Control()));
     ASSERT_TRUE(finishPopup());
     const DrawSnapshot first = m_paint.freeze();
     EXPECT_FALSE(first.commands().empty());
     ASSERT_TRUE(m_context.commitFrame(1u));
-    const WidgetId closeId = id("close", "popup");
+    const WidgetId closeId = id(s_CloseKey, s_PopupKey);
     ASSERT_NE(target(closeId), nullptr);
     const SIMDVectorSingle closePoint = VectorAdd(VectorSet(target(closeId)->rectangle.x, target(closeId)->rectangle.y, 0.0f, 0.0f), VectorReplicate(4.0f));
     click({ VectorGetX(closePoint), VectorGetY(closePoint) });
     ASSERT_TRUE(begin(2u));
-    ASSERT_TRUE(m_builder.beginPopup("popup", state, options));
-    EXPECT_TRUE(m_builder.button("close", "Close", Control()));
+    ASSERT_TRUE(m_builder.beginPopup(s_PopupKey, state, options));
+    EXPECT_TRUE(m_builder.button(s_CloseKey, "Close", Control()));
     state.close();
     ASSERT_TRUE(m_builder.endPopup());
     EXPECT_TRUE(m_builder.balanced());
@@ -176,7 +181,7 @@ TEST_F(UiPopupBuilderTests, ClosingFromTheBodySkipsBackdropBodyPaintAndCandidate
     EXPECT_TRUE(m_context.input().actions().empty());
     EXPECT_FALSE(m_context.input().hitTest({ 55.0f, 100.0f }).valid());
     ASSERT_TRUE(m_builder.beginPanel("base", { 0.0f, 0.0f, 100.0f, 80.0f }));
-    EXPECT_FALSE(m_builder.button("apply", "Base", Control(80.0f, 24.0f)));
+    EXPECT_FALSE(m_builder.button(s_ApplyKey, "Base", Control(80.0f, 24.0f)));
     ASSERT_TRUE(m_builder.endPanel());
     ASSERT_TRUE(finishRoot());
     const DrawSnapshot closed = m_paint.freeze();
@@ -189,22 +194,22 @@ TEST_F(UiPopupBuilderTests, ClosingFromTheBodySkipsBackdropBodyPaintAndCandidate
     EXPECT_FALSE(m_context.input().hasPopup());
     EXPECT_EQ(target(ownerId()), nullptr);
     EXPECT_EQ(target(closeId), nullptr);
-    EXPECT_NE(target(id("apply", "base")), nullptr);
+    EXPECT_NE(target(id(s_ApplyKey, "base")), nullptr);
 }
 
 TEST_F(UiPopupBuilderTests, ClosingAfterTheFirstQueuedButtonPreventsLaterQueuedActionsInTheSameBody){
     PopupState state;
     state.open();
     ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginPopup("popup", state, Anchored()));
-    EXPECT_FALSE(m_builder.button("close", "Close", Control()));
-    EXPECT_FALSE(m_builder.button("later", "Later", Control()));
+    ASSERT_TRUE(m_builder.beginPopup(s_PopupKey, state, Anchored()));
+    EXPECT_FALSE(m_builder.button(s_CloseKey, "Close", Control()));
+    EXPECT_FALSE(m_builder.button(s_LaterKey, "Later", Control()));
     ASSERT_TRUE(finishPopup());
     const DrawSnapshot first = m_paint.freeze();
     EXPECT_FALSE(first.commands().empty());
     ASSERT_TRUE(m_context.commitFrame(1u));
-    const HitTarget* close = target(id("close", "popup"));
-    const HitTarget* later = target(id("later", "popup"));
+    const HitTarget* close = target(id(s_CloseKey, s_PopupKey));
+    const HitTarget* later = target(id(s_LaterKey, s_PopupKey));
     ASSERT_NE(close, nullptr);
     ASSERT_NE(later, nullptr);
     // Lanes are the close point and the later point.
@@ -213,10 +218,10 @@ TEST_F(UiPopupBuilderTests, ClosingAfterTheFirstQueuedButtonPreventsLaterQueuedA
     click({ VectorGetZ(points), VectorGetW(points) });
     ASSERT_EQ(m_context.input().actions().size(), 2u);
     ASSERT_TRUE(begin(2u));
-    ASSERT_TRUE(m_builder.beginPopup("popup", state, Anchored()));
-    ASSERT_TRUE(m_builder.button("close", "Close", Control()));
+    ASSERT_TRUE(m_builder.beginPopup(s_PopupKey, state, Anchored()));
+    ASSERT_TRUE(m_builder.button(s_CloseKey, "Close", Control()));
     state.close();
-    EXPECT_FALSE(m_builder.button("later", "Later", Control()));
+    EXPECT_FALSE(m_builder.button(s_LaterKey, "Later", Control()));
     EXPECT_TRUE(m_context.input().actions().empty());
     EXPECT_FALSE(m_context.input().focus().valid());
     ASSERT_TRUE(finishPopup());
@@ -231,13 +236,13 @@ TEST_F(UiPopupBuilderTests, EditBoxAfterBodyCloseDoesNotLendItsModelOrChangeHost
     PopupState state;
     state.open();
     ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginPopup("popup", state, Anchored()));
-    EXPECT_FALSE(m_builder.button("close", "Close", Control()));
+    ASSERT_TRUE(m_builder.beginPopup(s_PopupKey, state, Anchored()));
+    EXPECT_FALSE(m_builder.button(s_CloseKey, "Close", Control()));
     ASSERT_TRUE(finishPopup());
     const DrawSnapshot first = m_paint.freeze();
     EXPECT_FALSE(first.commands().empty());
     ASSERT_TRUE(m_context.commitFrame(1u));
-    const HitTarget* close = target(id("close", "popup"));
+    const HitTarget* close = target(id(s_CloseKey, s_PopupKey));
     ASSERT_NE(close, nullptr);
     const SIMDVectorSingle closePoint = VectorAdd(VectorSet(close->rectangle.x, close->rectangle.y, 0.0f, 0.0f), VectorReplicate(4.0f));
     click({ VectorGetX(closePoint), VectorGetY(closePoint) });
@@ -252,8 +257,8 @@ TEST_F(UiPopupBuilderTests, EditBoxAfterBodyCloseDoesNotLendItsModelOrChangeHost
     CountingEditHost host;
     m_builder.setEditHost(&host);
     ASSERT_TRUE(begin(2u));
-    ASSERT_TRUE(m_builder.beginPopup("popup", state, Anchored()));
-    ASSERT_TRUE(m_builder.button("close", "Close", Control()));
+    ASSERT_TRUE(m_builder.beginPopup(s_PopupKey, state, Anchored()));
+    ASSERT_TRUE(m_builder.button(s_CloseKey, "Close", Control()));
     state.close();
     const EditBoxResult result = m_builder.editBox("edit", model, editState);
     EXPECT_TRUE(result.valid);
@@ -277,7 +282,7 @@ TEST_F(UiPopupBuilderTests, EditBoxAfterBodyCloseDoesNotLendItsModelOrChangeHost
     EXPECT_EQ(host.loans, 0u);
     EXPECT_EQ(host.publications, 0u);
     ASSERT_TRUE(m_context.commitFrame(2u));
-    EXPECT_EQ(target(id("edit", "popup")), nullptr);
+    EXPECT_EQ(target(id("edit", s_PopupKey)), nullptr);
     m_builder.setEditHost(nullptr);
 }
 
@@ -285,17 +290,17 @@ TEST_F(UiPopupBuilderTests, CloseAndReopenInTheBodySkipsOldEpochPaintAndActionsU
     PopupState state;
     state.open();
     ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginPopup("popup", state, Anchored()));
-    EXPECT_FALSE(m_builder.button("close", "Close", Control()));
-    EXPECT_FALSE(m_builder.button("later", "Later", Control()));
+    ASSERT_TRUE(m_builder.beginPopup(s_PopupKey, state, Anchored()));
+    EXPECT_FALSE(m_builder.button(s_CloseKey, "Close", Control()));
+    EXPECT_FALSE(m_builder.button(s_LaterKey, "Later", Control()));
     ASSERT_TRUE(finishPopup());
     const DrawSnapshot first = m_paint.freeze();
     EXPECT_FALSE(first.commands().empty());
     ASSERT_TRUE(m_context.commitFrame(1u));
     ASSERT_NE(target(ownerId()), nullptr);
     const PopupToken oldToken = target(ownerId())->popup;
-    const HitTarget* close = target(id("close", "popup"));
-    const HitTarget* later = target(id("later", "popup"));
+    const HitTarget* close = target(id(s_CloseKey, s_PopupKey));
+    const HitTarget* later = target(id(s_LaterKey, s_PopupKey));
     ASSERT_NE(close, nullptr);
     ASSERT_NE(later, nullptr);
     // Lanes are the close point and the later point.
@@ -304,12 +309,12 @@ TEST_F(UiPopupBuilderTests, CloseAndReopenInTheBodySkipsOldEpochPaintAndActionsU
     click({ VectorGetZ(points), VectorGetW(points) });
     ASSERT_EQ(m_context.input().actions().size(), 2u);
     ASSERT_TRUE(begin(2u));
-    ASSERT_TRUE(m_builder.beginPopup("popup", state, Anchored()));
-    ASSERT_TRUE(m_builder.button("close", "Close", Control()));
+    ASSERT_TRUE(m_builder.beginPopup(s_PopupKey, state, Anchored()));
+    ASSERT_TRUE(m_builder.button(s_CloseKey, "Close", Control()));
     state.close();
     state.open();
     EXPECT_GT(state.openGeneration(), oldToken.openGeneration);
-    EXPECT_FALSE(m_builder.button("later", "Later", Control()));
+    EXPECT_FALSE(m_builder.button(s_LaterKey, "Later", Control()));
     EXPECT_TRUE(m_context.input().actions().empty());
     EXPECT_FALSE(m_context.input().focus().valid());
     ASSERT_TRUE(finishPopup());
@@ -320,9 +325,9 @@ TEST_F(UiPopupBuilderTests, CloseAndReopenInTheBodySkipsOldEpochPaintAndActionsU
     EXPECT_FALSE(m_context.input().hasPopup());
     EXPECT_TRUE(m_context.input().targets().empty());
     ASSERT_TRUE(begin(3u));
-    ASSERT_TRUE(m_builder.beginPopup("popup", state, Anchored()));
-    EXPECT_FALSE(m_builder.button("close", "Close", Control()));
-    EXPECT_FALSE(m_builder.button("later", "Later", Control()));
+    ASSERT_TRUE(m_builder.beginPopup(s_PopupKey, state, Anchored()));
+    EXPECT_FALSE(m_builder.button(s_CloseKey, "Close", Control()));
+    EXPECT_FALSE(m_builder.button(s_LaterKey, "Later", Control()));
     ASSERT_TRUE(finishPopup());
     const DrawSnapshot reopened = m_paint.freeze();
     EXPECT_FALSE(reopened.commands().empty());
@@ -331,14 +336,14 @@ TEST_F(UiPopupBuilderTests, CloseAndReopenInTheBodySkipsOldEpochPaintAndActionsU
     EXPECT_EQ(target(ownerId())->popup.instanceGeneration, oldToken.instanceGeneration);
     EXPECT_EQ(target(ownerId())->popup.openGeneration, state.openGeneration());
     EXPECT_TRUE(m_context.input().actions().empty());
-    const HitTarget* reopenedLater = target(id("later", "popup"));
+    const HitTarget* reopenedLater = target(id(s_LaterKey, s_PopupKey));
     ASSERT_NE(reopenedLater, nullptr);
     const SIMDVectorSingle reopenedPoint = VectorAdd(VectorSet(reopenedLater->rectangle.x, reopenedLater->rectangle.y, 0.0f, 0.0f), VectorReplicate(4.0f));
     click({ VectorGetX(reopenedPoint), VectorGetY(reopenedPoint) });
     ASSERT_TRUE(begin(4u));
-    ASSERT_TRUE(m_builder.beginPopup("popup", state, Anchored()));
-    EXPECT_FALSE(m_builder.button("close", "Close", Control()));
-    EXPECT_TRUE(m_builder.button("later", "Later", Control()));
+    ASSERT_TRUE(m_builder.beginPopup(s_PopupKey, state, Anchored()));
+    EXPECT_FALSE(m_builder.button(s_CloseKey, "Close", Control()));
+    EXPECT_TRUE(m_builder.button(s_LaterKey, "Later", Control()));
     ASSERT_TRUE(finishPopup());
     const DrawSnapshot active = m_paint.freeze();
     EXPECT_FALSE(active.commands().empty());
@@ -350,7 +355,7 @@ TEST_F(UiPopupBuilderTests, PopupRequiresThePrecedingPanelToBeBalanced){
     state.open();
     ASSERT_TRUE(begin(1u));
     ASSERT_TRUE(m_builder.beginPanel("base", { 0.0f, 0.0f, 100.0f, 80.0f }));
-    EXPECT_FALSE(m_builder.beginPopup("popup", state, Anchored()));
+    EXPECT_FALSE(m_builder.beginPopup(s_PopupKey, state, Anchored()));
     EXPECT_TRUE(m_context.failed());
     EXPECT_FALSE(m_builder.balanced());
     EXPECT_FALSE(m_builder.endPanel());
@@ -362,7 +367,7 @@ TEST_F(UiPopupBuilderTests, OpenBodyContainerPreventsEndPopupAndRootPublication)
     PopupState state;
     state.open();
     ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginPopup("popup", state, Anchored()));
+    ASSERT_TRUE(m_builder.beginPopup(s_PopupKey, state, Anchored()));
     ASSERT_TRUE(m_builder.beginColumn("body"));
     EXPECT_FALSE(m_builder.endPopup());
     EXPECT_TRUE(m_context.failed());
@@ -377,7 +382,7 @@ TEST_F(UiPopupBuilderTests, WrongPanelEndCannotCloseAPopupLoanOrPublishIt){
     PopupState state;
     state.open();
     ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginPopup("popup", state, Anchored()));
+    ASSERT_TRUE(m_builder.beginPopup(s_PopupKey, state, Anchored()));
     EXPECT_FALSE(m_builder.endPanel());
     EXPECT_TRUE(m_context.failed());
     EXPECT_FALSE(m_builder.balanced());
@@ -392,13 +397,13 @@ TEST_F(UiPopupBuilderTests, ReplacementClosedStateImmediatelyFencesPreviousAccep
     PopupState original;
     original.open();
     ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginPopup("popup", original, Anchored()));
-    EXPECT_FALSE(m_builder.button("apply", "Apply", Control()));
+    ASSERT_TRUE(m_builder.beginPopup(s_PopupKey, original, Anchored()));
+    EXPECT_FALSE(m_builder.button(s_ApplyKey, "Apply", Control()));
     ASSERT_TRUE(finishPopup());
     const DrawSnapshot accepted = m_paint.freeze();
     EXPECT_FALSE(accepted.commands().empty());
     ASSERT_TRUE(m_context.commitFrame(1u));
-    const WidgetId child = id("apply", "popup");
+    const WidgetId child = id(s_ApplyKey, s_PopupKey);
     ASSERT_NE(target(child), nullptr);
     const SIMDVectorSingle childPoint = VectorAdd(VectorSet(target(child)->rectangle.x, target(child)->rectangle.y, 0.0f, 0.0f), VectorReplicate(4.0f));
     click({ VectorGetX(childPoint), VectorGetY(childPoint) });
@@ -406,7 +411,7 @@ TEST_F(UiPopupBuilderTests, ReplacementClosedStateImmediatelyFencesPreviousAccep
     PopupState replacement;
     ASSERT_NE(replacement.instanceGeneration(), original.instanceGeneration());
     ASSERT_TRUE(begin(2u));
-    EXPECT_FALSE(m_builder.beginPopup("popup", replacement, Anchored()));
+    EXPECT_FALSE(m_builder.beginPopup(s_PopupKey, replacement, Anchored()));
     EXPECT_FALSE(m_context.failed());
     EXPECT_TRUE(m_builder.balanced());
     EXPECT_FALSE(m_context.input().focus().valid());
@@ -426,8 +431,8 @@ TEST_F(UiPopupBuilderTests, MissingPopupAndPanelSkinRejectsAdmissionWithoutChang
     PopupState state;
     state.open();
     ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginPopup("popup", state, Anchored()));
-    EXPECT_FALSE(m_builder.button("apply", "Apply", Control()));
+    ASSERT_TRUE(m_builder.beginPopup(s_PopupKey, state, Anchored()));
+    EXPECT_FALSE(m_builder.button(s_ApplyKey, "Apply", Control()));
     ASSERT_TRUE(finishPopup());
     const DrawSnapshot accepted = m_paint.freeze();
     EXPECT_FALSE(accepted.commands().empty());
@@ -437,14 +442,14 @@ TEST_F(UiPopupBuilderTests, MissingPopupAndPanelSkinRejectsAdmissionWithoutChang
     PopupOptions moved = Anchored();
     moved.anchor = { 300.0f, 300.0f, 80.0f, 24.0f };
     ASSERT_TRUE(begin(2u));
-    EXPECT_FALSE(m_builder.beginPopup("popup", state, moved));
+    EXPECT_FALSE(m_builder.beginPopup(s_PopupKey, state, moved));
     EXPECT_TRUE(m_context.failed());
     EXPECT_TRUE(m_builder.balanced());
     ExpectBounds(state.placement().bounds, previous);
     EXPECT_FALSE(m_context.finishFrame());
     EXPECT_FALSE(m_context.commitFrame(2u));
     EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
-    EXPECT_NE(target(id("apply", "popup")), nullptr);
+    EXPECT_NE(target(id(s_ApplyKey, s_PopupKey)), nullptr);
 }
 
 

@@ -23,20 +23,25 @@ using namespace NWB;
 using namespace NWB::Impl;
 using namespace NWB::Impl::Ui;
 
+constexpr AStringView s_SkinPath = "tests/ui/skin";
+constexpr AStringView s_TexturePath = "tests/ui/texture";
+constexpr AStringView s_SpriteRegion = "sprite";
+constexpr AStringView s_PanelRegion = "panel";
+
 
 class UiPaintTests : public testing::Test{
 public:
     UiPaintTests()
         : m_arena(Name("tests/ui/paint"))
-        , m_skin(m_arena, Name("tests/ui/skin"))
+        , m_skin(m_arena, Name(s_SkinPath))
         , m_builder(m_arena)
     {
         UiSkin::RegionVector regions(m_arena);
-        regions.push_back({ Name("sprite"), { 16u, 32u, 32u, 24u }, {}, {}, 0.0f, 0.0f, UiSkinDrawMode::Sprite });
-        UiSkinRegion panel{ Name("panel"), { 0u, 0u, 32u, 24u }, { 4u, 6u, 8u, 2u }, {}, 0.0f, 0.0f, UiSkinDrawMode::NineSlice };
+        regions.push_back({ Name(s_SpriteRegion), { 16u, 32u, 32u, 24u }, {}, {}, 0.0f, 0.0f, UiSkinDrawMode::Sprite });
+        UiSkinRegion panel{ Name(s_PanelRegion), { 0u, 0u, 32u, 24u }, { 4u, 6u, 8u, 2u }, {}, 0.0f, 0.0f, UiSkinDrawMode::NineSlice };
         regions.push_back(panel);
-        m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 128u, 64u, 2.0f, Move(regions));
-        m_builder.begin({ 200.0f, 100.0f, 1.5f, 2.0f }, 7u, 3u, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
+        m_skin.setAtlas(Core::Assets::AssetRef<Texture>(s_TexturePath), 128u, 64u, 2.0f, Move(regions));
+        m_builder.begin({ 200.0f, 100.0f, 1.5f, 2.0f }, 7u, 3u, Core::Assets::AssetRef<UiSkin>(s_SkinPath), m_skin);
         m_builder.reserve(32u);
     }
 
@@ -105,7 +110,7 @@ TEST_F(UiPaintTests, NestedClipsTrimGeometryAndUvAndRestoreTheirParent){
     EXPECT_FALSE(m_builder.popClip());
     m_builder.pushClip({ 10.0f, 10.0f, 30.0f, 30.0f });
     m_builder.pushClip({ 20.0f, 5.0f, 40.0f, 20.0f });
-    ASSERT_TRUE(m_builder.drawRegion(Name("sprite"), { 0.0f, 0.0f, 64.0f, 48.0f }));
+    ASSERT_TRUE(m_builder.drawRegion(Name(s_SpriteRegion), { 0.0f, 0.0f, 64.0f, 48.0f }));
     m_builder.pushClip({ 100.0f, 100.0f, 1.0f, 1.0f });
     m_builder.fillRect({ 0.0f, 0.0f, 200.0f, 100.0f });
     ASSERT_TRUE(m_builder.popClip());
@@ -126,7 +131,7 @@ TEST_F(UiPaintTests, NestedClipsTrimGeometryAndUvAndRestoreTheirParent){
 }
 
 TEST_F(UiPaintTests, UndersizedNineSliceCollapsesCenterAndScalesOpposingBorders){
-    ASSERT_TRUE(m_builder.drawRegion(Name("panel"), { 10.0f, 20.0f, 3.0f, 2.0f }));
+    ASSERT_TRUE(m_builder.drawRegion(Name(s_PanelRegion), { 10.0f, 20.0f, 3.0f, 2.0f }));
     const auto snapshot = m_builder.freeze();
     ASSERT_EQ(snapshot.vertices().size(), 16u);
     EXPECT_FLOAT_EQ(snapshot.vertices()[2].position.x, 11.0f);
@@ -151,11 +156,11 @@ TEST_F(UiPaintTests, NineSliceZeroBordersDoNotEvaluateInactiveShrinkRatios){
     for(usize index = 0u; index < LengthOf(borders); ++index){
         SCOPED_TRACE(index);
         UiSkin::RegionVector regions(m_arena);
-        regions.push_back({ Name("panel"), { 0u, 0u, 32u, 24u }, borders[index], {}, 0.0f, 0.0f, UiSkinDrawMode::NineSlice });
-        m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 128u, 64u, 2.0f, Move(regions));
-        m_builder.begin({ 200.0f, 100.0f }, 7u, 3u, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
+        regions.push_back({ Name(s_PanelRegion), { 0u, 0u, 32u, 24u }, borders[index], {}, 0.0f, 0.0f, UiSkinDrawMode::NineSlice });
+        m_skin.setAtlas(Core::Assets::AssetRef<Texture>(s_TexturePath), 128u, 64u, 2.0f, Move(regions));
+        m_builder.begin({ 200.0f, 100.0f }, 7u, 3u, Core::Assets::AssetRef<UiSkin>(s_SkinPath), m_skin);
         ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-        const bool drawn = m_builder.drawRegion(Name("panel"), { 10.0f, 20.0f, 3.0f, 2.0f });
+        const bool drawn = m_builder.drawRegion(Name(s_PanelRegion), { 10.0f, 20.0f, 3.0f, 2.0f });
         const i32 exceptions = TestFloatingPointExceptions(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW);
         EXPECT_EQ(exceptions, 0);
         ASSERT_TRUE(drawn);
@@ -169,7 +174,7 @@ TEST_F(UiPaintTests, NineSliceZeroBordersDoNotEvaluateInactiveShrinkRatios){
 TEST_F(UiPaintTests, BatchesOnlyMergeAdjacentCompatiblePaintAndKeepIndexOrder){
     m_builder.fillRect({ 1.0f, 1.0f, 5.0f, 5.0f }, { 1.0f, 0.0f, 0.0f, 0.5f });
     m_builder.fillRect({ 2.0f, 2.0f, 5.0f, 5.0f }, { 0.0f, 1.0f, 0.0f, 1.0f });
-    ASSERT_TRUE(m_builder.drawRegion(Name("sprite"), { 3.0f, 3.0f, 5.0f, 5.0f }));
+    ASSERT_TRUE(m_builder.drawRegion(Name(s_SpriteRegion), { 3.0f, 3.0f, 5.0f, 5.0f }));
     m_builder.fillRect({ 4.0f, 4.0f, 5.0f, 5.0f });
     m_builder.pushClip({ 0.0f, 0.0f, 20.0f, 20.0f });
     m_builder.fillRect({ 5.0f, 5.0f, 5.0f, 5.0f });
@@ -183,18 +188,18 @@ TEST_F(UiPaintTests, BatchesOnlyMergeAdjacentCompatiblePaintAndKeepIndexOrder){
 }
 
 TEST_F(UiPaintTests, FrozenSnapshotOwnsPaintAcrossBuilderReuseAndSourceSkinChanges){
-    ASSERT_TRUE(m_builder.drawRegion(Name("sprite"), { 0.0f, 0.0f, 20.0f, 20.0f }));
+    ASSERT_TRUE(m_builder.drawRegion(Name(s_SpriteRegion), { 0.0f, 0.0f, 20.0f, 20.0f }));
     EXPECT_FALSE(m_builder.drawRegion(Name("missing"), { 0.0f, 0.0f, 20.0f, 20.0f }));
     const auto first = m_builder.freeze();
     UiSkin::RegionVector regions(m_arena);
-    regions.push_back({ Name("sprite"), { 0u, 0u, 4u, 4u }, {}, {}, 0.0f, 0.0f, UiSkinDrawMode::Sprite });
+    regions.push_back({ Name(s_SpriteRegion), { 0u, 0u, 4u, 4u }, {}, {}, 0.0f, 0.0f, UiSkinDrawMode::Sprite });
     m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/replacement"), 16u, 16u, 1.0f, Move(regions));
-    m_builder.begin({ 20.0f, 20.0f }, 8u, 4u, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
-    ASSERT_TRUE(m_builder.drawRegion(Name("sprite"), { 0.0f, 0.0f, 10.0f, 10.0f }));
+    m_builder.begin({ 20.0f, 20.0f }, 8u, 4u, Core::Assets::AssetRef<UiSkin>(s_SkinPath), m_skin);
+    ASSERT_TRUE(m_builder.drawRegion(Name(s_SpriteRegion), { 0.0f, 0.0f, 10.0f, 10.0f }));
     const auto second = m_builder.freeze();
     EXPECT_EQ(first.generation(), 7u);
     EXPECT_EQ(first.skinBinding().generation, 3u);
-    EXPECT_EQ(first.skinBinding().texture.name(), Name("tests/ui/texture"));
+    EXPECT_EQ(first.skinBinding().texture.name(), Name(s_TexturePath));
     EXPECT_EQ(first.skinBinding().atlasWidth, 128u);
     EXPECT_FLOAT_EQ(first.displayMetrics().pixelScaleX, 1.5f);
     EXPECT_FLOAT_EQ(first.vertices()[0].texCoord.x, 16.0f / 128.0f);

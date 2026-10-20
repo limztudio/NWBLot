@@ -30,6 +30,9 @@ private:
 
 private:
     static constexpr usize s_KeyCount = 256u;
+    // Press and release, each for native timestamps and for zero-time XSendEvent input.
+    static constexpr usize s_KindCount = 4u;
+    static constexpr u32 s_ZeroTimeKindOffset = 2u;
     static constexpr u32 s_HalfRange = 1u << 31u;
 
     [[nodiscard]] static bool Newer(u32 timestamp, u32 serial, const Stamp& previous)noexcept;
@@ -47,8 +50,8 @@ public:
 private:
     // Native timestamps and zero-time XSendEvent input have independent ordering domains.
     TextInputSessionToken m_session;
-    Array<Array<Stamp, 4u>, s_KeyCount> m_history{};
-    Array<Array<Stamp, 4u>, s_KeyCount> m_retiredHistory{};
+    Array<Array<Stamp, s_KindCount>, s_KeyCount> m_history{};
+    Array<Array<Stamp, s_KindCount>, s_KeyCount> m_retiredHistory{};
 };
 
 

@@ -32,6 +32,15 @@ namespace __hidden_font_atlas_cook_glyph_metadata{
 
 using Core::Metascript::Value;
 static constexpr AStringView s_DiagnosticPrefix = "Font atlas glyph meta";
+static constexpr AStringView s_AdvanceUnitsField = "advance_units";
+static constexpr AStringView s_GroupField = "group";
+static constexpr AStringView s_ChannelField = "channel";
+static constexpr AStringView s_XField = "x";
+static constexpr AStringView s_YField = "y";
+static constexpr AStringView s_WidthField = "width";
+static constexpr AStringView s_HeightField = "height";
+static constexpr AStringView s_PlaneLeftField = "plane_left";
+static constexpr AStringView s_PlaneTopField = "plane_top";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -51,48 +60,48 @@ static constexpr AStringView s_DiagnosticPrefix = "Font atlas glyph meta";
 
     if(!Core::Assets::CheckMetadataAssetMap(path, map, s_DiagnosticPrefix))
         return MakeUnexpected(Failure{});
-    const bool hasBitmap = map.findField("width") != nullptr;
+    const bool hasBitmap = map.findField(s_WidthField) != nullptr;
     if(!Core::Assets::ValidateMetadataAssetFields(path, map, s_DiagnosticPrefix, [hasBitmap](const AStringView field)noexcept{
-        return field == "advance_units" || (hasBitmap && (field == "group" || field == "channel" || field == "x" || field == "y" || field == "width" || field == "height" || field == "plane_left" || field == "plane_top"));
+        return field == s_AdvanceUnitsField || (hasBitmap && (field == s_GroupField || field == s_ChannelField || field == s_XField || field == s_YField || field == s_WidthField || field == s_HeightField || field == s_PlaneLeftField || field == s_PlaneTopField));
     }
     ))
         return MakeUnexpected(Failure{});
-    auto advanceUnitsResult = Core::Assets::ReadMetadataFiniteF32Field(path, map, s_DiagnosticPrefix, "advance_units", true);
+    auto advanceUnitsResult = Core::Assets::ReadMetadataFiniteF32Field(path, map, s_DiagnosticPrefix, s_AdvanceUnitsField, true);
     if(!advanceUnitsResult)
         return MakeUnexpected(Failure{});
     glyph.advanceUnits = *advanceUnitsResult;
     glyph.glyphId = glyphId;
     if(!hasBitmap)
         return glyph;
-    auto groupResult = ReadU32(path, map, "group", s_FontAtlasMaxGroupCount - 1u);
+    auto groupResult = ReadU32(path, map, s_GroupField, s_FontAtlasMaxGroupCount - 1u);
     if(!groupResult)
         return MakeUnexpected(Failure{});
     glyph.group = *groupResult;
-    auto channelResult = ReadU32(path, map, "channel", 3u);
+    auto channelResult = ReadU32(path, map, s_ChannelField, s_FontAtlasMaxChannelCount - 1u);
     if(!channelResult)
         return MakeUnexpected(Failure{});
     glyph.channel = *channelResult;
-    auto xResult = ReadU32(path, map, "x", s_FontAtlasMaxExtent);
+    auto xResult = ReadU32(path, map, s_XField, s_FontAtlasMaxExtent);
     if(!xResult)
         return MakeUnexpected(Failure{});
     glyph.x = *xResult;
-    auto yResult = ReadU32(path, map, "y", s_FontAtlasMaxExtent);
+    auto yResult = ReadU32(path, map, s_YField, s_FontAtlasMaxExtent);
     if(!yResult)
         return MakeUnexpected(Failure{});
     glyph.y = *yResult;
-    auto widthResult = ReadU32(path, map, "width", s_FontAtlasMaxExtent);
+    auto widthResult = ReadU32(path, map, s_WidthField, s_FontAtlasMaxExtent);
     if(!widthResult)
         return MakeUnexpected(Failure{});
     glyph.width = *widthResult;
-    auto heightResult = ReadU32(path, map, "height", s_FontAtlasMaxExtent);
+    auto heightResult = ReadU32(path, map, s_HeightField, s_FontAtlasMaxExtent);
     if(!heightResult)
         return MakeUnexpected(Failure{});
     glyph.height = *heightResult;
-    auto planeLeftResult = Core::Assets::ReadMetadataFiniteF32Field(path, map, s_DiagnosticPrefix, "plane_left", true);
+    auto planeLeftResult = Core::Assets::ReadMetadataFiniteF32Field(path, map, s_DiagnosticPrefix, s_PlaneLeftField, true);
     if(!planeLeftResult)
         return MakeUnexpected(Failure{});
     glyph.planeLeft = *planeLeftResult;
-    auto planeTopResult = Core::Assets::ReadMetadataFiniteF32Field(path, map, s_DiagnosticPrefix, "plane_top", true);
+    auto planeTopResult = Core::Assets::ReadMetadataFiniteF32Field(path, map, s_DiagnosticPrefix, s_PlaneTopField, true);
     if(!planeTopResult)
         return MakeUnexpected(Failure{});
     glyph.planeTop = *planeTopResult;
@@ -121,7 +130,7 @@ static constexpr AStringView s_DiagnosticPrefix = "Font atlas glyph meta";
 
 Expected<Core::Assets::AssetVector<FontAtlasGlyph>> ParseFontAtlasGlyphMetadata(const Path& nwbFilePath, const Core::Metascript::Value& asset, const FontAtlasPayload& payload){
     using namespace __hidden_font_atlas_cook_glyph_metadata;
-    const auto glyphs = Core::Assets::FindMetadataListField(nwbFilePath, asset, s_DiagnosticPrefix, "glyphs");
+    const auto glyphs = Core::Assets::FindMetadataListField(nwbFilePath, asset, s_DiagnosticPrefix, s_FontAtlasGlyphsField);
     if(!glyphs)
         return MakeUnexpected(glyphs.error());
     if(payload.sourceGlyphCount == 0u || payload.sourceGlyphCount > s_FontAtlasMaxGlyphCount || (*glyphs)->asList().size() != payload.sourceGlyphCount){

@@ -52,6 +52,7 @@ Expected<Builder::ListRow> Builder::prepareListRow(const ListFrame& frame, const
 }
 
 Expected<ScrollPlacement> Builder::measureListPlacement(ListFrame& frame, const LayoutBox& box, const Rect& clip){
+    constexpr u32 s_MaxPreparedRows = 1024u;
     auto& rows = frame.rows;
     ListState& state = *frame.state;
     ScrollState scroll;
@@ -80,7 +81,7 @@ Expected<ScrollPlacement> Builder::measureListPlacement(ListFrame& frame, const 
         }
         if(revealCursor)
             candidate = ScrollLayout::Calculate(box.rectangle, clip, frame.padding, frame.style.scrollbarWidth, frame.style.minimumThumb, frame.rowCount, frame.rowHeight, scroll.offset());
-        if(!candidate || candidate->endRow - candidate->firstRow > 1024u)
+        if(!candidate || candidate->endRow - candidate->firstRow > s_MaxPreparedRows)
             return MakeUnexpected(Failure{});
         f32 height = frame.rowHeight;
         for(u64 index = candidate->firstRow; index < candidate->endRow; ++index){
@@ -88,7 +89,7 @@ Expected<ScrollPlacement> Builder::measureListPlacement(ListFrame& frame, const 
             if(found != rows.end() && found->index == index)
                 continue;
             // The work bound is independent of dataset size, even when a cursor reveal introduces a new interval.
-            if(rows.size() >= 1024u)
+            if(rows.size() >= s_MaxPreparedRows)
                 return MakeUnexpected(Failure{});
             auto row = prepareListRow(frame, index);
             if(!row)
@@ -163,7 +164,7 @@ bool Builder::paintList(const Item& item, const LayoutBox& box){
     frame.rows.clear();
     if(placement.scrollbarVisible){
         const UiSkinRegion* track = region(frame.style.track, frame.style.trackFallback);
-        const auto thumbIdResult = MakeWidgetId(item.state.id, "scrollbar");
+        const auto thumbIdResult = MakeWidgetId(item.state.id, WidgetPartKey::s_Scrollbar);
         if(!thumbIdResult)
             return false;
         const WidgetId thumbId = *thumbIdResult;
@@ -182,7 +183,7 @@ bool Builder::paintList(const Item& item, const LayoutBox& box){
             target.rectangle = placement.track;
             target.clip = clip;
             target.control = frame.token;
-            const auto trackId = MakeWidgetId(item.state.id, "track");
+            const auto trackId = MakeWidgetId(item.state.id, WidgetPartKey::s_Track);
             if(!trackId || !m_context.addPartTarget(item.state, *trackId, target))
                 return false;
             target.rectangle = placement.thumb;
@@ -198,7 +199,7 @@ bool Builder::paintList(const Item& item, const LayoutBox& box){
 
 bool Builder::paintListRows(const Item& item, const ListFrame& frame, const ScrollPlacement& placement){
     const auto& rows = frame.rows;
-    const auto rowsIdResult = MakeWidgetId(item.state.id, "rows");
+    const auto rowsIdResult = MakeWidgetId(item.state.id, WidgetPartKey::s_Rows);
     if(!rowsIdResult)
         return false;
     const WidgetId rowsId = *rowsIdResult;

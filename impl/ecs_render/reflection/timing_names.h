@@ -19,6 +19,9 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// One timed range owns a begin and an end timestamp query.
+inline constexpr u32 s_ReflectionGpuTimingQueriesPerRange = 2u;
+
 namespace ReflectionGpuTimingScope{
     inline constexpr Core::GpuTimingScopeDefinition s_DepthPyramid("render.reflection_depth_pyramid");
     inline constexpr Core::GpuTimingScopeDefinition s_Classify("render.reflection_classify");

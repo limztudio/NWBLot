@@ -44,6 +44,7 @@ inline constexpr AStringView s_Addr2LineDemangleFlag = "-C";
 inline constexpr AStringView s_Addr2LineInlineFlag = "-i";
 inline constexpr AStringView s_Addr2LineExeFlag = "-e";
 inline constexpr AStringView s_AnonymousModulePath = "<anonymous>";
+inline constexpr usize s_SymbolizerResultReserveMultiplier = 3u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -93,13 +94,13 @@ public:
     if(prefix == AStringView::npos)
         return MakeUnexpected(Failure{});
 
-    usize end = prefix + 2u;
+    usize end = prefix + s_HexAddressPrefix.size();
     while(end < line.size() && line[end] != ' ' && line[end] != '\t' && line[end] != '\r' && line[end] != '\n')
         ++end;
-    if(end == prefix + 2u)
+    if(end == prefix + s_HexAddressPrefix.size())
         return MakeUnexpected(Failure{});
 
-    return ::ParseVariableHexU64(AStringView(line.data() + prefix + 2u, end - prefix - 2u));
+    return ::ParseVariableHexU64(AStringView(line.data() + prefix + s_HexAddressPrefix.size(), end - prefix - s_HexAddressPrefix.size()));
 }
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
@@ -110,7 +111,7 @@ public:
 
 [[nodiscard]] static Expected<AString<Core::Alloc::ScratchArena>> ExtractSymbolizerResult(Core::Alloc::ScratchArena& arena, const AStringView outputText){
     AString<Core::Alloc::ScratchArena> outSymbol(arena);
-    outSymbol.reserve(AddSize(outputText.size(), SizeOf<3u>(outputText.size())));
+    outSymbol.reserve(AddSize(outputText.size(), SizeOf<s_SymbolizerResultReserveMultiplier>(outputText.size())));
 
     usize cursor = 0u;
     while(const auto function = NextTrimmedTextLine(outputText, cursor)){
@@ -164,7 +165,7 @@ public:
 
 [[nodiscard]] static Expected<AString<Core::Alloc::ScratchArena>> TryRunLinuxSymbolizer(Core::Alloc::ScratchArena& arena, const AStringView toolName, const AStringView modulePathText, const u64 moduleOffset){
     AString<Core::Alloc::ScratchArena> addressArgument{arena};
-    addressArgument.reserve(s_HexAddressPrefix.size() + 16u);
+    addressArgument.reserve(s_HexAddressPrefix.size() + ::s_HexU64DigitCount);
     addressArgument += s_HexAddressPrefix;
     AppendHexU64(moduleOffset, addressArgument);
 
@@ -261,7 +262,7 @@ static void AppendLinuxClientCallstack(Core::Alloc::ScratchArena& arena, const A
     static_cast<void>(config);
     static_cast<void>(arena);
 
-    outReport += "\n[callstack]\n";
+    outReport += s_CallstackSectionHeader;
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
     LinuxSymbolFileCache symbolFileCache(arena);
@@ -286,7 +287,7 @@ static void AppendLinuxClientCallstack(Core::Alloc::ScratchArena& arena, const A
             const auto mapEntry = ::FindLinuxProcessMemoryMapForAddress(procMaps->entries, *address);
             if(mapEntry){
                 const u64 moduleOffset = *address - mapEntry->begin;
-                const AStringView modulePath = mapEntry->path.empty() ? AStringView("<anonymous>") : mapEntry->path;
+                const AStringView modulePath = mapEntry->path.empty() ? AStringView(s_AnonymousModulePath) : mapEntry->path;
                 outReport += " ";
                 outReport.append(modulePath.data(), modulePath.size());
                 outReport += "+";
@@ -304,7 +305,7 @@ static void AppendLinuxClientCallstack(Core::Alloc::ScratchArena& arena, const A
             }
         }
 
-        outReport += "\n";
+        outReport += s_ReportLineEnd;
     }
 }
 
@@ -361,7 +362,7 @@ void AppendLinuxArtifactSummary(Core::Alloc::ScratchArena& scratchArena, const C
 
     outReport += "instruction_pointer=";
     AppendHexAddress(outReport, *instructionPointer);
-    outReport += "\n";
+    outReport += s_ReportLineEnd;
 
     if(!procMapsPresent){
         outReport += "detail=proc maps missing for module lookup; symbolic frame resolution unavailable\n";
@@ -378,7 +379,7 @@ void AppendLinuxArtifactSummary(Core::Alloc::ScratchArena& scratchArena, const C
         return;
     }
 
-    const AStringView modulePath = instructionMapEntry->path.empty() ? AStringView("<anonymous>") : instructionMapEntry->path;
+    const AStringView modulePath = instructionMapEntry->path.empty() ? AStringView(s_AnonymousModulePath) : instructionMapEntry->path;
     outReport += "instruction_pointer_module=";
     outReport.append(modulePath.data(), modulePath.size());
     outReport += "\nmodule_relative_ip=";

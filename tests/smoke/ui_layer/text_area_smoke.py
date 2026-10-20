@@ -15,6 +15,8 @@ from window_smoke import parse_args
 from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
     read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
 from fixture_environment import build_fixture_environment
+from checkpoint_report import CHECKPOINT_POLL_SECONDS, CHECKPOINT_STAGE_TIMEOUT_SECONDS
+from fixture_launch import DISPLAY_MARKER_TIMEOUT_SECONDS
 
 LIT_SCROLL = "scroll"
 LIT_ENABLED = "enabled"
@@ -57,12 +59,16 @@ LIT_BLURS = "blurs"
 LIT_RESET = "reset"
 LIT_HOME = "Home"
 LIT_UI_TEXTAREA_FIXTURE = "UI TextArea fixture"
+LIT_CROSS_LINE_CLIPBOARD_TEXT = "f\nx\nabcde"
+LIT_CANONICAL_PASTE_TEXT = "ab\ncdef\nxy"
 
 
 INITIAL = "abcdef\nx\nabcdef\n한국어"
 LONG_LINE = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl"
 LONG_DOCUMENT = (LONG_LINE + "\n") * 16 + "tail"
 MODEL_EPOCHS = ("model_revision", "external_revision", "selection_generation")
+CLIPBOARD_VERIFY_TIMEOUT_SECONDS = 5.0
+CLIPBOARD_VERIFY_POLL_SECONDS = 0.05
 
 
 def scroll_matches(state, expected):
@@ -111,7 +117,7 @@ class TextAreaRun:
         self.expected.update(changes)
         time.sleep(settle)
         path = self.args.output_directory / f"{len(self.stages):02}_{name}.bmp"
-        stage_deadline = min(self.deadline, time.monotonic() + 10.0)
+        stage_deadline = min(self.deadline, time.monotonic() + CHECKPOINT_STAGE_TIMEOUT_SECONDS)
         report = None
         entry_sequence = self.snapshot[LIT_SEQUENCE] if self.snapshot is not None else -1
         settled = not wait_for_settle
@@ -121,14 +127,14 @@ class TextAreaRun:
             text = collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern)
             snapshot = snapshot_from_logs(text)
             if snapshot is None:
-                time.sleep(0.1)
+                time.sleep(CHECKPOINT_POLL_SECONDS)
                 continue
             if snapshot[LIT_LOGICAL_EXTENT][0] < 640.0 or snapshot[LIT_LOGICAL_EXTENT][1] < 440.0:
                 raise SmokeSkip("the TextArea fixture needs a logical client of at least 640x440")
             if not settled:
                 if snapshot[LIT_SEQUENCE] <= entry_sequence:
                     # The viewport click only lands after the next published marker sequence; pre-toggle logs describe the old viewport geometry.
-                    time.sleep(0.1)
+                    time.sleep(CHECKPOINT_POLL_SECONDS)
                     continue
                 settled = True
             def capture_frame(*, prepared=False, refresh_snapshot=False):
@@ -155,7 +161,7 @@ class TextAreaRun:
                     self.caret_phase_waits += 1
                 except SmokeFailure:
                     # The 1s blink phase can be unobservable under full-suite GPU load; retry a fresh capture instead of failing the gate outright.
-                    time.sleep(0.1)
+                    time.sleep(CHECKPOINT_POLL_SECONDS)
                     continue
                 # Freeze the admitted caret phase before log collection or another native preparation delay.
                 report = capture_frame(prepared=True, refresh_snapshot=True)
@@ -165,14 +171,14 @@ class TextAreaRun:
                 self.stages.append(report)
                 self.write_report(False)
                 return
-            time.sleep(0.1)
+            time.sleep(CHECKPOINT_POLL_SECONDS)
         self.failure_report = {LIT_STAGE: name, LIT_CAPTURE: str(path), "observation": report, LIT_NATIVE_WINDOW: self.native.observe_window()}
         self.write_report(False)
         raise SmokeFailure(f"TextArea displayed-state gate '{name}' failed: {self.failure_report}")
 
     def require_clipboard(self, text):
         expected = text.replace("\n", "\r\n") if self.native.windows else text
-        deadline, observed = min(self.deadline, time.monotonic() + 5.0), None
+        deadline, observed = min(self.deadline, time.monotonic() + CLIPBOARD_VERIFY_TIMEOUT_SECONDS), None
         while time.monotonic() < deadline:
             ensure_process_running(self.process, "during TextArea OS clipboard verification")
             observed = self.native.clipboard_text(timeout=min(2.0, max(0.1, deadline - time.monotonic())))
@@ -180,7 +186,7 @@ class TextAreaRun:
                 self.stages[-1][LIT_OS_CLIPBOARD] = {LIT_EXPECTED: expected, "observed": observed, LIT_PASSED: True}
                 self.write_report(False)
                 return
-            time.sleep(0.05)
+            time.sleep(CLIPBOARD_VERIFY_POLL_SECONDS)
         self.failure_report = {LIT_STAGE: self.stages[-1][LIT_STAGE], LIT_OS_CLIPBOARD: {LIT_EXPECTED: expected, "observed_bytes": len(observed.encode(LIT_UTF_8)) if observed is not None else None,
             "observed_hash": text_hash(observed) if observed is not None else None, LIT_PASSED: False}}
         self.write_report(False)
@@ -313,20 +319,20 @@ class TextAreaRun:
         self.checkpoint("shift_down_paints_multiple_selection_lines", anchor=5, caret=14, minimum_selection_lines=2)
         self.native.tap(LIT_C, control=True)
         self.checkpoint("cross_line_copy_preserves_selection", minimum_selection_lines=2)
-        self.require_clipboard("f\nx\nabcde")
+        self.require_clipboard(LIT_CROSS_LINE_CLIPBOARD_TEXT)
         self.native.tap(LIT_X, control=True)
         self.checkpoint("cross_line_cut_is_one_completed_edit", text="abcdef\n한국어", anchor=5, caret=5, preferred_valid=0, preferred_bits=0)
-        self.require_clipboard("f\nx\nabcde")
+        self.require_clipboard(LIT_CROSS_LINE_CLIPBOARD_TEXT)
         self.native.tap(LIT_Z, control=True)
         self.checkpoint("one_undo_restores_cross_line_cut_and_selection", text=INITIAL, anchor=5, caret=14, minimum_selection_lines=2, preferred_valid=0, preferred_bits=0)
         self.controller("clipboard")
         seeds = self.snapshot[LIT_CLIPBOARD_SEEDS] + 1
         self.checkpoint("real_clipboard_seed_is_complete", focus=0, clipboard_seeds=seeds, preferred_valid=0, preferred_bits=0)
-        self.require_clipboard("ab\r\ncdef\r\nxy" if not self.native.windows else "ab\ncdef\nxy")
+        self.require_clipboard("ab\r\ncdef\r\nxy" if not self.native.windows else LIT_CANONICAL_PASTE_TEXT)
         self.focus("focus_precedes_crlf_paste")
         self.native.tap(LIT_A, control=True)
         self.native.tap(LIT_V, control=True)
-        canonical = "ab\ncdef\nxy"
+        canonical = LIT_CANONICAL_PASTE_TEXT
         self.checkpoint("os_paste_admits_canonical_lf", text=canonical, anchor=10, caret=10, preferred_valid=0, preferred_bits=0)
         self.native.tap(LIT_Z, control=True)
         self.checkpoint("one_undo_restores_multiline_paste", text=INITIAL, anchor=0, caret=len(INITIAL.encode(LIT_UTF_8)), minimum_selection_lines=3)
@@ -420,7 +426,7 @@ def run(args):
             backend.prepare_raw_client_window(handle)
         else:
             backend.prepare_window(handle)
-        wait_for_log_message(log_directory, log_baseline, log_pattern, "UiTextAreaSmoke: display", min(args.timeout, 15.0))
+        wait_for_log_message(log_directory, log_baseline, log_pattern, "UiTextAreaSmoke: display", min(args.timeout, DISPLAY_MARKER_TIMEOUT_SECONDS))
         text_run = TextAreaRun(args, backend, handle, application, log_directory, log_baseline, log_pattern)
         text_run.execute()
     finally:

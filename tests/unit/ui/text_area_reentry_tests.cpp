@@ -18,6 +18,8 @@ using namespace NWB;
 using namespace NWB::Impl::Ui;
 using namespace NWB::UiTextAreaTests;
 
+constexpr AStringView s_ReenteredKey = "reentered";
+
 
 class AreaReentrySource final : public ComboSource{
 public:
@@ -96,7 +98,7 @@ TEST_F(UiTextAreaReentryTests, HostLoanResetRejectsWithoutClearingTheLentModel){
         failedAtAttempt = m_builder.failed();
     };
     ASSERT_TRUE(beginArea(2u));
-    EXPECT_FALSE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
+    EXPECT_FALSE(m_builder.textArea(s_TextAreaKey, m_model, m_state, AreaOptions()).valid);
     EXPECT_EQ(attempts, 1u);
     EXPECT_TRUE(failedAtAttempt);
     EXPECT_EQ(m_host.loans, 1u);
@@ -117,10 +119,10 @@ TEST_F(UiTextAreaReentryTests, HostLoanNestedDeclarationRejectsBeforeASecondLoan
     EditBoxResult nested;
     m_host.loanHook = [&]()noexcept{
         ++attempts;
-        nested = m_builder.textArea("reentered", otherModel, otherState, AreaOptions());
+        nested = m_builder.textArea(s_ReenteredKey, otherModel, otherState, AreaOptions());
     };
     ASSERT_TRUE(beginArea(2u));
-    EXPECT_FALSE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
+    EXPECT_FALSE(m_builder.textArea(s_TextAreaKey, m_model, m_state, AreaOptions()).valid);
     EXPECT_EQ(attempts, 1u);
     EXPECT_FALSE(nested.valid);
     EXPECT_EQ(m_host.loans, 1u);
@@ -137,7 +139,7 @@ TEST_F(UiTextAreaReentryTests, PublicationResetRejectsBeforeLaterAreaPublication
     TextAreaState otherState;
     ASSERT_TRUE(otherModel.setText("other\narea"));
     ASSERT_TRUE(beginArea(2u));
-    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
+    ASSERT_TRUE(m_builder.textArea(s_TextAreaKey, m_model, m_state, AreaOptions()).valid);
     ASSERT_TRUE(m_builder.textArea("other", otherModel, otherState, AreaOptions()).valid);
     usize attempts = 0u;
     bool failedAtAttempt = false;
@@ -172,7 +174,7 @@ TEST_F(UiTextAreaReentryTests, ChildRowScopeReentryRejectsBeforeSiblingAreaPubli
     sibling.open();
     ASSERT_TRUE(beginParent(2u));
     ASSERT_TRUE(m_builder.textArea("parentArea", m_model, m_state, AreaOptions()).valid);
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::LargeLoanChildOptions()));
+    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::LargeLoanChildOptions()));
     ASSERT_TRUE(m_builder.virtualList("list", source, list, UiWidgetTests::LargeLoanListOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     ASSERT_TRUE(m_builder.beginPopup("sibling", sibling, UiWidgetTests::LargeLoanChildOptions()));
@@ -182,7 +184,7 @@ TEST_F(UiTextAreaReentryTests, ChildRowScopeReentryRejectsBeforeSiblingAreaPubli
     bool endAccepted = true;
     bool failedAtAttempt = false;
     source.rowHook = [&]()noexcept{
-        beginAccepted = m_builder.beginPanel("reentered", { 0.0f, 0.0f, 100.0f, 80.0f });
+        beginAccepted = m_builder.beginPanel(s_ReenteredKey, { 0.0f, 0.0f, 100.0f, 80.0f });
         endAccepted = m_builder.endPanel();
         failedAtAttempt = m_builder.failed();
     };

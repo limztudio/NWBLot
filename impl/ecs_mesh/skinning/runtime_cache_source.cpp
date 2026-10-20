@@ -39,6 +39,7 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
     | RuntimeMeshDirtyFlag::GpuUploadDirty
     | RuntimeMeshDirtyFlag::MeshletBoundsDirty
 ;
+static constexpr TStringView s_AssetLoadContext = NWB_TEXT("MeshSkinningRuntimeCache");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -282,11 +283,11 @@ Expected<MeshSkinningRuntimeCache::MeshSkinningSource*> MeshSkinningRuntimeCache
         return &cachedSource;
     }
 
-    auto loadedSkinAsset = m_assetManager.loadTypedSync<Skin>(skinAsset.name(), NWB_TEXT("MeshSkinningRuntimeCache"), "skin");
+    auto loadedSkinAsset = m_assetManager.loadTypedSync<Skin>(skinAsset.name(), __hidden_runtime_cache_source::s_AssetLoadContext, Skin::s_AssetTypeText);
     if(!loadedSkinAsset)
         return MakeUnexpected(Failure{});
 
-    auto loadedMeshAsset = m_assetManager.loadTypedSync<Mesh>((*loadedSkinAsset)->mesh().name(), NWB_TEXT("MeshSkinningRuntimeCache"), Mesh::s_AssetTypeText);
+    auto loadedMeshAsset = m_assetManager.loadTypedSync<Mesh>((*loadedSkinAsset)->mesh().name(), __hidden_runtime_cache_source::s_AssetLoadContext, Mesh::s_AssetTypeText);
     if(!loadedMeshAsset)
         return MakeUnexpected(Failure{});
 

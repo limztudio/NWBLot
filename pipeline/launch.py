@@ -26,19 +26,34 @@ EXIT_FAILURE = 1
 CACHE_KEY_HEX_DIGITS = 16
 TEXT_ENCODING = "utf-8"
 MAIN_ENTRY = "__main__"
+INPUT_LIST_LINE_END = "\n"
+ASSET_EXTENSION = ".nwb"
+INPUT_LIST_NAME = "inputs.list"
+DEFAULT_CACHE_DIRECTORY = "__build_obj/asset_cache"
+ACTION_EXTEND = "extend"
+OPTION_OUTPUT_SHORT = "-o"
+OPTION_OUTPUT = "--output"
+OPTION_OUTPUT_DIRECTORY = "--output-directory"
+OPTION_ASSET_ROOT = "--asset-root"
+OPTION_CACHE_DIRECTORY = "--cache-directory"
+OPTION_CONFIGURATION = "--configuration"
+OPTION_ASSET_TYPE = "--asset-type"
+OPTION_INCLUDE_SKIN_DEPENDENCIES = "--include-skin-dependencies"
+OPTION_INPUT_LIST = "--input-list"
+OPTION_REPO_ROOT = "--repo-root"
 
 
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     ROOT_LAUNCHER.add_build_options(parser)
-    parser.add_argument("--asset-root", type=Path, action="extend", nargs="+", required=True)
-    parser.add_argument("--input", type=Path, action="extend", nargs="+", help="Explicit .nwb files or directories; defaults to all asset roots")
-    parser.add_argument("-o", "--output", "--output-directory", type=Path, required=True)
-    parser.add_argument("--cache-directory", type=Path)
+    parser.add_argument(OPTION_ASSET_ROOT, type=Path, action=ACTION_EXTEND, nargs="+", required=True)
+    parser.add_argument("--input", type=Path, action=ACTION_EXTEND, nargs="+", help="Explicit .nwb files or directories; defaults to all asset roots")
+    parser.add_argument(OPTION_OUTPUT_SHORT, OPTION_OUTPUT, OPTION_OUTPUT_DIRECTORY, type=Path, required=True)
+    parser.add_argument(OPTION_CACHE_DIRECTORY, type=Path)
     parser.add_argument("--build-directory", type=Path, help="Persistent directory for standalone .nwba artifacts")
-    parser.add_argument("--configuration", help="Asset configuration label; defaults to the selected --config")
-    parser.add_argument("--asset-type", default="graphics")
-    parser.add_argument("--include-skin-dependencies", action="store_true", help="Include textures referenced by selected UI skins")
+    parser.add_argument(OPTION_CONFIGURATION, help="Asset configuration label; defaults to the selected --config")
+    parser.add_argument(OPTION_ASSET_TYPE, default="graphics")
+    parser.add_argument(OPTION_INCLUDE_SKIN_DEPENDENCIES, action="store_true", help="Include textures referenced by selected UI skins")
     parser.add_argument("--tool-directory", type=Path, help="Directory containing the three built pipeline executables")
     parser.add_argument("--dependency-computer", type=Path)
     parser.add_argument("--asset-builder", type=Path)
@@ -77,7 +92,7 @@ def discover_directory(directory: Path) -> list[Path]:
                 mode = entry.stat(follow_symlinks=False).st_mode
                 if stat.S_ISDIR(mode):
                     directories.append(Path(entry.path))
-                elif Path(entry.name).suffix.lower() == ".nwb":
+                elif Path(entry.name).suffix.lower() == ASSET_EXTENSION:
                     if stat.S_ISLNK(mode):
                         mode = entry.stat().st_mode
                     if stat.S_ISREG(mode):
@@ -96,7 +111,7 @@ def discover_inputs(roots: list[Path], inputs: list[Path] | None, repo_root: Pat
         if value.is_dir():
             for path in discover_directory(value):
                 files[path] = None
-        elif value.is_file() and value.suffix.lower() == ".nwb":
+        elif value.is_file() and value.suffix.lower() == ASSET_EXTENSION:
             files[value] = None
         else:
             raise ValueError(f"Input is not a .nwb file or directory: {value}")
@@ -107,10 +122,10 @@ def write_inputs(path: Path, values: list[Path]) -> None:
     lines = []
     for value in values:
         spelling = str(value)
-        if "\n" in spelling or "\r" in spelling:
+        if INPUT_LIST_LINE_END in spelling or "\r" in spelling:
             raise ValueError("Asset paths must not contain newlines")
-        lines.append(spelling + "\n")
-    path.write_text("".join(lines), encoding=TEXT_ENCODING, newline="\n")
+        lines.append(spelling + INPUT_LIST_LINE_END)
+    path.write_text("".join(lines), encoding=TEXT_ENCODING, newline=INPUT_LIST_LINE_END)
 
 
 def run_stage(executable: Path, arguments: list[str], repo_root: Path) -> None:
@@ -120,20 +135,20 @@ def run_stage(executable: Path, arguments: list[str], repo_root: Path) -> None:
 
 def pipeline_commands(options: argparse.Namespace, repo_root: Path, roots: list[Path], output: Path, cache: Path, built: Path, configuration: str, tools: tuple[Path, Path, Path], workspace: Path,) -> list[tuple[Path, list[str]]]:
     dependency, builder, gatherer = tools
-    initial_list = workspace / "inputs.list"
+    initial_list = workspace / INPUT_LIST_NAME
     dependency_list = workspace / "dependencies.list"
-    dependency_arguments = ["--input-list", str(initial_list), "--output", str(dependency_list)]
+    dependency_arguments = [OPTION_INPUT_LIST, str(initial_list), OPTION_OUTPUT, str(dependency_list)]
     if options.include_skin_dependencies:
-        dependency_arguments.extend(["--include-skin-dependencies", "--repo-root", str(repo_root)])
+        dependency_arguments.extend([OPTION_INCLUDE_SKIN_DEPENDENCIES, OPTION_REPO_ROOT, str(repo_root)])
         for root in roots:
-            dependency_arguments.extend(["--asset-root", str(root)])
-    builder_arguments = ["--input-list", str(dependency_list), "--repo-root", str(repo_root), "--output-directory", str(built), "--cache-directory", str(cache), "--asset-type", options.asset_type,]
+            dependency_arguments.extend([OPTION_ASSET_ROOT, str(root)])
+    builder_arguments = [OPTION_INPUT_LIST, str(dependency_list), OPTION_REPO_ROOT, str(repo_root), OPTION_OUTPUT_DIRECTORY, str(built), OPTION_CACHE_DIRECTORY, str(cache), OPTION_ASSET_TYPE, options.asset_type,]
     for root in roots:
-        builder_arguments.extend(["--asset-root", str(root)])
-    gatherer_arguments = ["--input-list", str(built / "assets.list"), "--output-directory", str(output)]
+        builder_arguments.extend([OPTION_ASSET_ROOT, str(root)])
+    gatherer_arguments = [OPTION_INPUT_LIST, str(built / "assets.list"), OPTION_OUTPUT_DIRECTORY, str(output)]
     if configuration:
-        builder_arguments.extend(["--configuration", configuration])
-        gatherer_arguments.extend(["--configuration", configuration])
+        builder_arguments.extend([OPTION_CONFIGURATION, configuration])
+        gatherer_arguments.extend([OPTION_CONFIGURATION, configuration])
     return [(dependency, dependency_arguments), (builder, builder_arguments), (gatherer, gatherer_arguments),]
 
 
@@ -144,7 +159,7 @@ def cook(options: argparse.Namespace) -> None:
     inputs = discover_inputs(roots, options.input, repo_root)
     configuration = settings.config if options.configuration is None else options.configuration
     output = resolve_path(repo_root, options.output)
-    cache = resolve_path(repo_root, options.cache_directory or Path("__build_obj/asset_cache"))
+    cache = resolve_path(repo_root, options.cache_directory or Path(DEFAULT_CACHE_DIRECTORY))
     output_key = hashlib.sha256(str(output).encode(TEXT_ENCODING)).hexdigest()[:CACHE_KEY_HEX_DIGITS]
     configuration_key = hashlib.sha256(configuration.encode(TEXT_ENCODING)).hexdigest()[:CACHE_KEY_HEX_DIGITS]
     built = resolve_path(repo_root, options.build_directory) if options.build_directory else cache / "pipeline" / configuration_key / output_key
@@ -164,7 +179,7 @@ def cook(options: argparse.Namespace) -> None:
     cache.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="pipeline-", dir=cache) as temporary:
         workspace = Path(temporary)
-        write_inputs(workspace / "inputs.list", inputs)
+        write_inputs(workspace / INPUT_LIST_NAME, inputs)
         for executable, arguments in pipeline_commands(options, repo_root, roots, output, cache, built, configuration, tools, workspace):
             run_stage(executable, arguments, repo_root)
 

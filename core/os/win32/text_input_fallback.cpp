@@ -22,18 +22,18 @@ Expected<u32> Win32TextInputService::decodeFallbackCharInput(const u32 unit)noex
         m_pendingHighSurrogate = 0u;
         return MakeUnexpected(Failure{});
     }
-    if(unit > 0xffffu){
+    if(unit > s_MaxU16){
         m_pendingHighSurrogate = 0u;
         return MakeUnexpected(Failure{});
     }
-    if(unit >= 0xd800u && unit <= 0xdbffu){
+    if(unit >= BasicStringDetail::s_UnicodeHighSurrogateMin && unit <= BasicStringDetail::s_UnicodeHighSurrogateMax){
         m_pendingHighSurrogate = unit;
         return MakeUnexpected(Failure{});
     }
-    if(unit >= 0xdc00u && unit <= 0xdfffu){
+    if(unit >= BasicStringDetail::s_UnicodeLowSurrogateMin && unit <= BasicStringDetail::s_UnicodeLowSurrogateMax){
         if(m_pendingHighSurrogate == 0u)
             return MakeUnexpected(Failure{});
-        const u32 codePoint = 0x10000u + ((m_pendingHighSurrogate - 0xd800u) << 10u) + (unit - 0xdc00u);
+        const u32 codePoint = BasicStringDetail::s_Utf8FourByteMinCodePoint + ((m_pendingHighSurrogate - BasicStringDetail::s_UnicodeHighSurrogateMin) << BasicStringDetail::s_Utf16SurrogatePayloadBits) + (unit - BasicStringDetail::s_UnicodeLowSurrogateMin);
         m_pendingHighSurrogate = 0u;
         return codePoint;
     }

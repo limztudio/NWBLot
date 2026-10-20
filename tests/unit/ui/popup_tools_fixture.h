@@ -26,6 +26,11 @@ namespace UiPopupToolsTests{
 using namespace Impl::Ui;
 using namespace UiWidgetTests;
 
+inline constexpr AStringView s_PopupToolsPanelKey = "panel";
+inline constexpr AStringView s_AnchorKey = "anchor";
+inline constexpr AStringView s_TooltipKey = "tip";
+inline constexpr AStringView s_MenuKey = "menu";
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -126,15 +131,15 @@ protected:
     }
 
     [[nodiscard]] bool declareTools(const u64 generation, const bool tooltip = true, const bool menu = true, const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f }){
-        if(!begin(generation) || !m_builder.beginPanel("panel", bounds))
+        if(!begin(generation) || !m_builder.beginPanel(s_PopupToolsPanelKey, bounds))
             return false;
         m_builder.setDeltaSeconds(m_deltaSeconds);
-        m_anchorActivated = m_builder.button("anchor", "Anchor", m_anchorOptions);
+        m_anchorActivated = m_builder.button(s_AnchorKey, "Anchor", m_anchorOptions);
         m_menuResult = {};
-        if(tooltip && !m_builder.tooltip("tip", "anchor", "Helpful text", m_tooltip, m_tooltipOptions))
+        if(tooltip && !m_builder.tooltip(s_TooltipKey, s_AnchorKey, "Helpful text", m_tooltip, m_tooltipOptions))
             return false;
         if(menu){
-            m_menuResult = m_builder.contextMenu("menu", "anchor", m_source, m_menu, m_menuOptions);
+            m_menuResult = m_builder.contextMenu(s_MenuKey, s_AnchorKey, m_source, m_menu, m_menuOptions);
             if(!m_menuResult.valid)
                 return false;
         }
@@ -158,11 +163,11 @@ protected:
         m_builder.setDeltaSeconds(m_deltaSeconds);
         if(!m_builder.beginPopup("plain", m_plainPopup, options))
             return false;
-        m_anchorActivated = m_builder.button("anchor", "Popup anchor", m_anchorOptions);
-        return m_builder.tooltip("tip", "anchor", "Overlay help", m_tooltip, m_tooltipOptions) && m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame() && m_context.commitFrame(generation);
+        m_anchorActivated = m_builder.button(s_AnchorKey, "Popup anchor", m_anchorOptions);
+        return m_builder.tooltip(s_TooltipKey, s_AnchorKey, "Overlay help", m_tooltip, m_tooltipOptions) && m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame() && m_context.commitFrame(generation);
     }
 
-    [[nodiscard]] WidgetId anchor(const AStringView parent = "panel")const{ return id("anchor", parent); }
+    [[nodiscard]] WidgetId anchor(const AStringView parent = s_PopupToolsPanelKey)const{ return id(s_AnchorKey, parent); }
 
     [[nodiscard]] const HitTarget* menuHost()const noexcept{
         for(const HitTarget& entry : m_context.input().targets()){
@@ -180,7 +185,7 @@ protected:
         return nullptr;
     }
 
-    [[nodiscard]] bool moveToAnchor(const AStringView parent = "panel"){
+    [[nodiscard]] bool moveToAnchor(const AStringView parent = s_PopupToolsPanelKey){
         const HitTarget* accepted = target(anchor(parent));
         if(!accepted)
             return false;

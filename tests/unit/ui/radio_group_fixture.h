@@ -28,6 +28,9 @@ namespace UiRadioGroupTests{
 using namespace Impl::Ui;
 using namespace UiWidgetTests;
 
+inline constexpr AStringView s_RadioPanelKey = "panel";
+inline constexpr AStringView s_RadioGroupKey = "radio";
+
 namespace RadioCallbackSite{
     enum Enum : u8{ None, Instance, Revision, Count, Key, Text, Enabled };
 };

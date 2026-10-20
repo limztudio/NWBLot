@@ -27,13 +27,15 @@ LIT_NWB_UI_IR_REPLAY = "NWB_UI_IR_REPLAY"
 LIT_NWB_UI_LAYER_RESIZE_CAPTURE = "NWB_UI_LAYER_RESIZE_CAPTURE"
 LIT_DOT = "dot"
 LIT_PANEL = "panel"
+LIT_SWITCH_ON = "1"
+LIT_SWITCH_OFF = "0"
 
 
 class UiFixtureEnvironmentTests(unittest.TestCase):
     def test_inherited_selectors_and_capture_controls_cannot_override_selected_fixture(self):
-        inherited = {f"NWB_UI_LAYER_{fixture}": "1" for fixture in FIXTURE_FLAGS}
-        inherited.update({f"NWB_UI_LAYER_{fixture}_SKIN": "1" for fixture in SKIN_FIXTURES})
-        inherited.update({name: "1" for name in AUXILIARY_SWITCHES})
+        inherited = {f"NWB_UI_LAYER_{fixture}": LIT_SWITCH_ON for fixture in FIXTURE_FLAGS}
+        inherited.update({f"NWB_UI_LAYER_{fixture}_SKIN": LIT_SWITCH_ON for fixture in SKIN_FIXTURES})
+        inherited.update({name: LIT_SWITCH_ON for name in AUXILIARY_SWITCHES})
         inherited.update({name: "stale" for name in CAPTURE_ENVIRONMENT})
         inherited.update({LIT_PATH: LIT_LOADER_PATH, LIT_NWB_LINUX_BACKEND: LIT_WAYLAND})
         frozen = dict(inherited)
@@ -41,11 +43,11 @@ class UiFixtureEnvironmentTests(unittest.TestCase):
             with self.subTest(fixture=fixture):
                 skin = LIT_ALTERNATE if fixture in SKIN_FIXTURES else LIT_DEFAULT
                 environment = build_fixture_environment(inherited, fixture, skin=skin)
-                active = [name for name in FIXTURE_FLAGS if environment[f"NWB_UI_LAYER_{name}"] == "1"]
+                active = [name for name in FIXTURE_FLAGS if environment[f"NWB_UI_LAYER_{name}"] == LIT_SWITCH_ON]
                 self.assertEqual(active, [] if fixture is None else [fixture])
-                active_skins = [name for name in SKIN_FIXTURES if environment[f"NWB_UI_LAYER_{name}_SKIN"] == "1"]
+                active_skins = [name for name in SKIN_FIXTURES if environment[f"NWB_UI_LAYER_{name}_SKIN"] == LIT_SWITCH_ON]
                 self.assertEqual(active_skins, [fixture] if fixture in SKIN_FIXTURES else [])
-                self.assertTrue(all(environment[name] == "0" for name in AUXILIARY_SWITCHES))
+                self.assertTrue(all(environment[name] == LIT_SWITCH_OFF for name in AUXILIARY_SWITCHES))
                 self.assertTrue(all(name not in environment for name in CAPTURE_ENVIRONMENT))
                 self.assertEqual(environment[LIT_PATH], LIT_LOADER_PATH)
                 self.assertEqual(environment[LIT_NWB_LINUX_BACKEND], LIT_WAYLAND)
@@ -70,19 +72,19 @@ class UiFixtureEnvironmentTests(unittest.TestCase):
     def test_replay_scene_re_admits_only_its_explicit_current_switch(self):
         from raster_ir_parity_smoke import capture_environment
         from types import SimpleNamespace
-        inherited = {f"NWB_UI_LAYER_{name}": "1" for name in FIXTURE_FLAGS}
-        inherited.update({LIT_NWB_UI_IR_REPLAY: "1", LIT_NWB_UI_LAYER_RESIZE_CAPTURE: "1"})
+        inherited = {f"NWB_UI_LAYER_{name}": LIT_SWITCH_ON for name in FIXTURE_FLAGS}
+        inherited.update({LIT_NWB_UI_IR_REPLAY: LIT_SWITCH_ON, LIT_NWB_UI_LAYER_RESIZE_CAPTURE: LIT_SWITCH_ON})
         args = SimpleNamespace(mode_environment=LIT_NWB_UI_IR_REPLAY)
         with patch.dict("os.environ", inherited, clear=True):
             direct = capture_environment(args, "paint", "direct")
             replay = capture_environment(args, "texture_image", "replay")
-        self.assertTrue(all(direct[f"NWB_UI_LAYER_{name}"] == "0" for name in FIXTURE_FLAGS))
-        self.assertEqual(direct[LIT_NWB_UI_IR_REPLAY], "0")
-        self.assertEqual(replay[LIT_NWB_UI_IR_REPLAY], "1")
-        self.assertEqual(replay["NWB_UI_LAYER_TEXTURE_IMAGE"], "1")
-        self.assertEqual(replay["NWB_UI_LAYER_TEXTURE_IMAGE_SKIN"], "1")
-        self.assertEqual(replay[LIT_NWB_UI_LAYER_RESIZE_CAPTURE], "0")
-        self.assertTrue(all(replay[f"NWB_UI_LAYER_{name}"] == "0" for name in FIXTURE_FLAGS if name != "TEXTURE_IMAGE"))
+        self.assertTrue(all(direct[f"NWB_UI_LAYER_{name}"] == LIT_SWITCH_OFF for name in FIXTURE_FLAGS))
+        self.assertEqual(direct[LIT_NWB_UI_IR_REPLAY], LIT_SWITCH_OFF)
+        self.assertEqual(replay[LIT_NWB_UI_IR_REPLAY], LIT_SWITCH_ON)
+        self.assertEqual(replay["NWB_UI_LAYER_TEXTURE_IMAGE"], LIT_SWITCH_ON)
+        self.assertEqual(replay["NWB_UI_LAYER_TEXTURE_IMAGE_SKIN"], LIT_SWITCH_ON)
+        self.assertEqual(replay[LIT_NWB_UI_LAYER_RESIZE_CAPTURE], LIT_SWITCH_OFF)
+        self.assertTrue(all(replay[f"NWB_UI_LAYER_{name}"] == LIT_SWITCH_OFF for name in FIXTURE_FLAGS if name != "TEXTURE_IMAGE"))
 
 
 class UiProbeReferenceTests(unittest.TestCase):

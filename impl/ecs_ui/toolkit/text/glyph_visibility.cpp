@@ -28,6 +28,8 @@ namespace __hidden_ui_glyph_visibility{
 
 
 inline constexpr f64 s_RasterMarginPixels = 2.0;
+inline constexpr f64 s_FixedPointRoundBias = 0.5;
+inline constexpr f64 s_HalfPixel = 0.5;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -119,7 +121,7 @@ TextGlyphIntersection::Enum TextGlyphVisibility::Candidate(const PlacedGlyph& gl
         if(ink.width <= 0.0f || ink.height <= 0.0f || !glyph.face->coverageInkReliable())
             return TextGlyphIntersection::Visible;
     }
-    const SIMDVectorDouble shapedSizeValue = VectorDoubleDivide(VectorDoubleFloor(VectorDoubleAdd(VectorDoubleMultiply(VectorDoubleReplicate(fontSize), VectorDoubleReplicate(s_TextFixedPointScaleF64)), VectorDoubleReplicate(0.5))), VectorDoubleReplicate(s_TextFixedPointScaleF64));
+    const SIMDVectorDouble shapedSizeValue = VectorDoubleDivide(VectorDoubleFloor(VectorDoubleAdd(VectorDoubleMultiply(VectorDoubleReplicate(fontSize), VectorDoubleReplicate(s_TextFixedPointScaleF64)), VectorDoubleReplicate(s_FixedPointRoundBias))), VectorDoubleReplicate(s_TextFixedPointScaleF64));
     const f64 shapedSize = VectorDoubleGetX(shapedSizeValue);
     const SIMDVectorDouble scaleNumerators = VectorDoubleSet(glyph.coverage.known ? 1.0 : static_cast<f64>(fontSize), physicalSize, glyph.coverage.known ? 0.0 : static_cast<f64>(fontSize), 0.0);
     const SIMDVectorDouble scaleDenominators = VectorDoubleSet(glyph.coverage.known ? 1.0 : shapedSize, fontSize, glyph.coverage.known ? 1.0 : static_cast<f64>(glyph.face->unitsPerEm()), 1.0);
@@ -134,7 +136,7 @@ TextGlyphIntersection::Enum TextGlyphVisibility::Candidate(const PlacedGlyph& gl
     );
     const f64 rasterMargin = VectorDoubleGetX(rasterMarginValue);
     const SIMDVectorDouble pixelScaleVector = VectorDoubleSet(pixelScale.x, pixelScale.y, 1.0, 1.0);
-    const SIMDVectorDouble margin = VectorDoubleAdd(VectorDoubleSet(rasterMargin, rasterMargin, 0.0, 0.0), VectorDoubleDivide(VectorDoubleSet(0.5, 0.5, 0.0, 0.0), pixelScaleVector));
+    const SIMDVectorDouble margin = VectorDoubleAdd(VectorDoubleSet(rasterMargin, rasterMargin, 0.0, 0.0), VectorDoubleDivide(VectorDoubleSet(s_HalfPixel, s_HalfPixel, 0.0, 0.0), pixelScaleVector));
     const SIMDVectorDouble inkOrigin = VectorDoubleSet(ink.x, ink.y, 0.0, 0.0);
     const SIMDVectorDouble inkEnd = VectorDoubleAdd(inkOrigin, VectorDoubleSet(ink.width, ink.height, 0.0, 0.0));
     const SIMDVectorDouble position = VectorDoubleAdd(VectorDoubleSet(topLeft.x, topLeft.y, 0.0, 0.0), VectorDoubleSet(glyph.position.x, glyph.position.y, 0.0, 0.0));
@@ -188,7 +190,7 @@ Expected<Rect> TextGlyphVisibility::CoverageRectangle(const PlacedGlyph& glyph, 
     const SIMDVectorDouble position = VectorDoubleSelect(positive, negative, s_DoubleSIMDMaskY);
     // FreeType has already rasterized this bitmap on an integer grid; align its texel edges to physical pixels.
     const SIMDVectorDouble pixelScaleVector = VectorDoubleSet(pixelScale.x, pixelScale.y, 0.0, 0.0);
-    const SIMDVectorDouble biased = VectorDoubleMultiplyAddExpression(position, pixelScaleVector, VectorDoubleSet(0.5, 0.5, 0.0, 0.0));
+    const SIMDVectorDouble biased = VectorDoubleMultiplyAddExpression(position, pixelScaleVector, VectorDoubleSet(s_HalfPixel, s_HalfPixel, 0.0, 0.0));
     const SIMDVectorDouble aligned = VectorDoubleDivide(VectorDoubleFloor(biased), VectorDoubleSet(pixelScale.x, pixelScale.y, 1.0, 1.0));
     const SIMDVectorDouble size = VectorDoubleDivide(VectorDoubleSet(record.pixels.width, record.pixels.height, 0.0, 0.0), VectorDoubleReplicate(static_cast<f64>(rasterScale)));
     return MakeUiRect<UiRectPrecision::BoundedEndpoints>(VectorDoublePermute<0, 1, 4, 5>(aligned, size));

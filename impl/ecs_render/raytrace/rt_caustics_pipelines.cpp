@@ -152,7 +152,7 @@ bool RendererRayTracingSystem::ensureSwCausticPipeline(){
         }
     }
 
-    if(!m_shaderSystem.loadShader<ComputeShader>(shader, AssetsGraphicsCaustic::s_SwPhotonShaderName, csg ? "NWB_RT_CSG_ENABLED=1" : "NWB_RT_CSG_ENABLED=0", "ECSRender_SwCausticPhotons")){
+    if(!m_shaderSystem.loadShader<ComputeShader>(shader, AssetsGraphicsCaustic::s_SwPhotonShaderName, csg ? s_RayTracingCsgEnabledVariant : s_RayTracingCsgDisabledVariant, "ECSRender_SwCausticPhotons")){
         failed = true;
         return false;
     }
@@ -403,7 +403,7 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
     Core::ShaderHandle missShader;
     Core::ShaderHandle closestHitShader;
     if(
-        !m_shaderSystem.loadShader<RayGenerationShader>(raygenShader, AssetsGraphicsCaustic::s_HwRaygenShaderName, csg ? "NWB_RT_CSG_ENABLED=1" : "NWB_RT_CSG_ENABLED=0", "ECSRender_CausticHwRaygen")
+        !m_shaderSystem.loadShader<RayGenerationShader>(raygenShader, AssetsGraphicsCaustic::s_HwRaygenShaderName, csg ? s_RayTracingCsgEnabledVariant : s_RayTracingCsgDisabledVariant, "ECSRender_CausticHwRaygen")
         || !m_shaderSystem.loadShader<MissShader>(missShader, AssetsGraphicsCaustic::s_HwMissShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CausticHwMiss")
         || !m_shaderSystem.loadShader<ClosestHitShader>(closestHitShader, AssetsGraphicsCaustic::s_HwClosestHitShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CausticHwClosestHit")
     ){

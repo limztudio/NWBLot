@@ -40,6 +40,7 @@ namespace __hidden_reflection_tasks{
 
 
 inline constexpr TStringView s_DisabledReflectionRoute = NWB_TEXT("disabled");
+inline constexpr AStringView s_HardwareResolveTaskLabel = "Reflection Hardware Resolve";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -611,7 +612,7 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
                     NWB_LOGGER_ERROR(NWB_TEXT("RendererReflectionSystem: failed to format CSG hardware slice identity: {}"), StringConvert(sliceIdentity.error().message()));
                     return MakeUnexpected(Failure{});
                 }
-                Core::GpuTaskDesc sliceDesc = TaskDesc(*sliceIdentity, "Reflection Hardware Resolve", dependency);
+                Core::GpuTaskDesc sliceDesc = TaskDesc(*sliceIdentity, s_HardwareResolveTaskLabel, dependency);
                 Core::GpuTaskSchedulingHint scheduling;
                 scheduling.forceSubmissionBoundary = true;
                 scheduling.allowPacketMerge = false;
@@ -626,7 +627,7 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
                 dependency = *dependencyResult4;
             }
         }
-        else if(!appendDispatch(Name("render.reflection.hardware"), "Reflection Hardware Resolve", DispatchStage::Hardware))
+        else if(!appendDispatch(Name("render.reflection.hardware"), s_HardwareResolveTaskLabel, DispatchStage::Hardware))
             return MakeUnexpected(Failure{});
     }
 

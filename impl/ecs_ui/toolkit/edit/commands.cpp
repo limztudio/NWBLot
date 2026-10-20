@@ -20,6 +20,12 @@ namespace __hidden_ui_edit_commands{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr AStringView s_NewlineText = "\n";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static bool IsMutation(const EditCommand::Enum command)noexcept{
     return
         command == EditCommand::Backspace || command == EditCommand::Delete || command == EditCommand::WordBackspace
@@ -121,7 +127,7 @@ EditCommandResult ApplyEditCommand(EditModel& model, const EditCommandRequest& r
     case EditCommand::WordRight: applied = model.move(EditMove::WordRight, request.extend); break;
     case EditCommand::DocumentHome: applied = model.move(EditMove::DocumentHome, request.extend); break;
     case EditCommand::DocumentEnd: applied = model.move(EditMove::DocumentEnd, request.extend); break;
-    case EditCommand::Newline: applied = model.replaceSelection("\n"); break;
+    case EditCommand::Newline: applied = model.replaceSelection(__hidden_ui_edit_commands::s_NewlineText); break;
     case EditCommand::Backspace: applied = model.backspace(); break;
     case EditCommand::Delete: applied = model.eraseForward(); break;
     case EditCommand::WordBackspace: applied = __hidden_ui_edit_commands::EraseWord(model, false); break;

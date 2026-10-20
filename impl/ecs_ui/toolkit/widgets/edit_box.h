@@ -34,6 +34,11 @@ struct EditBoxPlacement{
     f32 scrollY = 0.0f;
 };
 
+inline constexpr Color s_EditBoxSelectionColor = { 0.20f, 0.40f, 0.78f, 0.75f };
+inline constexpr Color s_EditBoxInactiveSelectionColor = { 0.28f, 0.31f, 0.38f, 0.55f };
+inline constexpr Color s_EditBoxCaretColor = { 0.95f, 0.97f, 1.0f, 1.0f };
+inline constexpr Color s_EditBoxPreeditColor = { 0.50f, 0.72f, 1.0f, 1.0f };
+
 struct EditBoxStyle{
     Name normal = UiSkinToolkitRegions::s_EditNormalRegionName;
     Name hover = UiSkinToolkitRegions::s_EditHoverRegionName;
@@ -44,10 +49,10 @@ struct EditBoxStyle{
     Color background = s_StyleInsetColor;
     Color text = s_StyleTextColor;
     Color disabledText = s_StyleDisabledTextColor;
-    Color selection = { 0.20f, 0.40f, 0.78f, 0.75f };
-    Color inactiveSelection = { 0.28f, 0.31f, 0.38f, 0.55f };
-    Color caret = { 0.95f, 0.97f, 1.0f, 1.0f };
-    Color preedit = { 0.50f, 0.72f, 1.0f, 1.0f };
+    Color selection = s_EditBoxSelectionColor;
+    Color inactiveSelection = s_EditBoxInactiveSelectionColor;
+    Color caret = s_EditBoxCaretColor;
+    Color preedit = s_EditBoxPreeditColor;
     Insets padding = { s_StyleSpacingMedium, s_StyleSpacingSmall, s_StyleSpacingMedium, s_StyleSpacingSmall };
 };
 

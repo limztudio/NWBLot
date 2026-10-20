@@ -239,6 +239,10 @@ namespace HandlerMutationType{
 
 class InputDispatcher{
 private:
+    static constexpr usize s_KeyboardScancodeCount = 512u;
+
+
+private:
     struct HandlerMutation{
         IInputEventHandler* handler = nullptr;
         HandlerMutationType::Enum type = HandlerMutationType::Remove;
@@ -308,7 +312,7 @@ private:
     usize m_pendingHandlerRemovalCount = 0;
     u32 m_dispatchDepth = 0;
     u64 m_keyboardTextPolicyEpoch = 0u;
-    Array<bool, 512u> m_keyboardTextPolicies{};
+    Array<bool, s_KeyboardScancodeCount> m_keyboardTextPolicies{};
     bool m_keyboardTextBlocked = false;
     bool m_windowFocused = true;
     f32 m_mousePositionScaleX = 1.f;

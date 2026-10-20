@@ -22,6 +22,7 @@
 // Bound each retained-CSG dispatch without changing the complete frame ray budget.
 #define NWB_REFLECTION_TRACE_SLICE_RAYS 8192u
 #define NWB_REFLECTION_INDIRECT_ARGUMENT_BYTES 12u
+#define NWB_REFLECTION_QUEUE_ENTRY_BYTES 4u
 #define NWB_REFLECTION_CSG_PUSH_CONSTANT_BYTES 8u
 #define NWB_REFLECTION_CSG_PUSH_UINT_FIELDS(FIELD) \
     FIELD(frameParametersSlot) \
@@ -41,6 +42,9 @@
 #define NWB_REFLECTION_SOURCE_HARDWARE 3.0
 #define NWB_REFLECTION_SOURCE_CONFIDENCE_ENCODE_SCALE 0.5
 #define NWB_REFLECTION_SOURCE_CONFIDENCE_DECODE_SCALE 2.0
+
+// FP16 raster positions carry at most this relative error.
+#define NWB_REFLECTION_POSITION_RELATIVE_ERROR 0.0009765625
 
 // Counter byte offsets: candidates and the feedback receiver bound drive scheduling.
 #define NWB_REFLECTION_COUNTER_CANDIDATES 0u
@@ -69,6 +73,9 @@
 #define NWB_REFLECTION_COUNTER_EXTERIOR_ELIGIBLE_RAYS 92u
 #define NWB_REFLECTION_COUNTER_PHYSICAL_QUERIES 96u
 #define NWB_REFLECTION_COUNTER_SIZE 100u
+
+// Adding this wrapped value subtracts one from a counter.
+#define NWB_REFLECTION_COUNTER_SUBTRACT_ONE 0xffffffffu
 
 // Eleven std140 lanes: targets own descriptors; this frame payload only borrows selectors.
 #define NWB_REFLECTION_FRAME_ROUTE_UINT_FIELDS(FIELD) \

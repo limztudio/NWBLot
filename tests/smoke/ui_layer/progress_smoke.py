@@ -11,6 +11,7 @@ from progress_probe import observe_progress, snapshot_from_logs, value_bits
 from probe_common import center
 from window_capture_smoke import run_smoke_main
 from passive_run import PassiveImageRun, run_passive_image
+from checkpoint_report import CHECKPOINT_STAGE_TIMEOUT_SECONDS
 
 LIT_PROGRESS = "progress"
 LIT_TAB = "Tab"
@@ -18,6 +19,8 @@ LIT_QUARTER = "quarter"
 LIT_LOGICAL_EXTENT = "logical_extent"
 LIT_RECTANGLES = "rectangles"
 LIT_ESCAPE = "Escape"
+
+FIXTURE_TIMEOUT_SECONDS = 180
 
 
 class ProgressRun(PassiveImageRun):
@@ -27,7 +30,7 @@ class ProgressRun(PassiveImageRun):
         self.expected = { "phase": 0, "focus_code": 0, "before_clicks": 0, "after_clicks": 0, "parent": 0, "child": 0, "popup_count": 0, "progress_targets": 0, "declared_frozen_bits": value_bits(0.25), "post_declaration_bits": value_bits(0.75), }
 
     def checkpoint(self, name, *, extent=None, extra=None, **changes):
-        return self.capture_checkpoint(name, extent=extent, extra=extra, stage_timeout=10.0, changes=changes)
+        return self.capture_checkpoint(name, extent=extent, extra=extra, stage_timeout=CHECKPOINT_STAGE_TIMEOUT_SECONDS, changes=changes)
 
     def write_report(self, passed):
         report = { "passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "failure": self.failure_report, "input_path": "Win32 constrained physical cursor with posted pointer/key messages"
@@ -72,7 +75,7 @@ def run(args):
 
 
 def main(argv):
-    return run_smoke_main(argv, parse_args, run, default_timeout=180)
+    return run_smoke_main(argv, parse_args, run, default_timeout=FIXTURE_TIMEOUT_SECONDS)
 
 
 if __name__ == "__main__":

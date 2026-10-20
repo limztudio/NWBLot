@@ -17,6 +17,26 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_ui_controls_paint{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr f32 s_CheckmarkInsetFraction = 0.2f;
+// The mark loses its inset on both opposite sides.
+inline constexpr f32 s_CheckmarkInsetSides = 2.0f;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool Builder::paintPanel(){
     const LayoutBox* panel = m_scope->m_layout.box(0u);
     if(!panel)
@@ -89,15 +109,15 @@ bool Builder::paintItem(const Item& item, const LayoutBox& box){
     else if(item.state.kind == WidgetKind::Checkbox){
         const Name& preferred = !item.enabled ? item.style.checkboxDisabled : item.checked ? item.style.checkboxChecked : hover ? item.style.checkboxHover : item.style.checkbox;
         const UiSkinRegion* skinRegion = region(preferred, item.style.checkbox);
-        const SIMDVectorSingle centered = VectorMax(VectorZero(), VectorScale(VectorSubtract(VectorReplicate(box.rectangle.height), VectorSet(item.checkboxExtent, measured.y, 0.0f, 0.0f)), 0.5f));
+        const SIMDVectorSingle centered = VectorMax(VectorZero(), VectorScale(VectorSubtract(VectorReplicate(box.rectangle.height), VectorSet(item.checkboxExtent, measured.y, 0.0f, 0.0f)), s_RectCenterFraction));
         const SIMDVectorSingle squareOrigin = VectorAdd(VectorSet(origin.x, origin.y, 0.0f, 0.0f), VectorSet(0.0f, VectorGetX(centered), 0.0f, 0.0f));
         const Rect square{ VectorGetX(squareOrigin), VectorGetY(squareOrigin), item.checkboxExtent, item.checkboxExtent };
         painted = skinRegion && m_paint.drawRegion(skinRegion->name, square);
         if(painted && item.checked && m_skin->findRegion(item.style.checkboxMark)){
-            const f32 inset = VectorGetX(VectorScale(VectorReplicate(item.checkboxExtent), 0.2f));
-            const Color tint = item.enabled ? Color{} : Color{ 1.0f, 1.0f, 1.0f, 0.5f };
+            const f32 inset = VectorGetX(VectorScale(VectorReplicate(item.checkboxExtent), __hidden_ui_controls_paint::s_CheckmarkInsetFraction));
+            const Color tint = item.enabled ? Color{} : Color{ 1.0f, 1.0f, 1.0f, s_StyleDisabledIconAlpha };
             const SIMDVectorSingle markOrigin = VectorAdd(VectorSet(square.x, square.y, 0.0f, 0.0f), VectorReplicate(inset));
-            const SIMDVectorSingle markSize = VectorNegativeMultiplySubtractExpression(VectorReplicate(2.0f), VectorReplicate(inset), VectorSet(square.width, square.height, square.width, square.height));
+            const SIMDVectorSingle markSize = VectorNegativeMultiplySubtractExpression(VectorReplicate(__hidden_ui_controls_paint::s_CheckmarkInsetSides), VectorReplicate(inset), VectorSet(square.width, square.height, square.width, square.height));
             const SIMDVectorSingle mark = VectorPermute<0, 1, 4, 5>(markOrigin, markSize);
             painted = m_paint.drawRegion(item.style.checkboxMark, { VectorGetX(mark), VectorGetY(mark), VectorGetZ(mark), VectorGetW(mark) }, tint);
         }

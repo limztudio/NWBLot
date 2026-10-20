@@ -123,8 +123,8 @@ TEST_F(UiSliderLifetimeTests, ChangedClipRetiresOldPointerGeometryEvenWhenTheFul
     EXPECT_TRUE(send({ InputEventType::PrimaryDown, origin }).pointerConsumed);
     EXPECT_TRUE(send({ InputEventType::PointerMove, { VectorGetX(VectorAdd(VectorReplicate(origin.x), VectorReplicate(30.0f))), origin.y } }).pointerConsumed);
     ASSERT_TRUE(begin(2u, { 180.0f, 600.0f, 1.0f, 1.0f }));
-    ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 360.0f, 240.0f }));
-    ASSERT_TRUE(m_builder.slider("slider", m_state, Options()));
+    ASSERT_TRUE(m_builder.beginPanel(s_SliderPanelKey, { 10.0f, 10.0f, 360.0f, 240.0f }));
+    ASSERT_TRUE(m_builder.slider(s_SliderKey, m_state, Options()));
     ASSERT_TRUE(finishPanel());
     ASSERT_TRUE(m_context.commitFrame(2u));
     EXPECT_FLOAT_EQ(m_state.placement().track.width, before.track.width);

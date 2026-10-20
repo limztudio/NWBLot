@@ -26,6 +26,13 @@ namespace __hidden_ui_gpu_texture_images{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr TStringView s_ImageLoadContext = NWB_TEXT("UI Texture Image");
+static constexpr AStringView s_ImageMarkerLabel = "UI Texture Image";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] static bool ValidSource(const SharedImageSource& source)noexcept{
     if(!source || source->generation() == 0u || !source->identity().valid())
         return false;
@@ -130,7 +137,7 @@ Expected<GpuVersion<GpuTextureImageVersion>> GpuRendererState::prepareTextureIma
     if(!versionResult)
         return MakeUnexpected(versionResult.error());
     GpuVersion<GpuTextureImageVersion> version = Move(*versionResult);
-    if(!TextureAssetLoader::Create(version->m_texture, source->texture(), source->identity().name(), m_graphics, NWB_TEXT("UI Texture Image")))
+    if(!TextureAssetLoader::Create(version->m_texture, source->texture(), source->identity().name(), m_graphics, __hidden_ui_gpu_texture_images::s_ImageLoadContext))
         return MakeUnexpected(Failure{});
     if(!__hidden_ui_gpu_texture_images::ValidVersion(*version)){
         NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: texture image {} has invalid GPU format, geometry, or readiness"), source->generation());
@@ -166,7 +173,7 @@ Expected<GpuTextureGraphResources> GpuRendererState::declareTextureImages(Core::
         const auto& source = frame->m_snapshot.textureImages()[index];
         if(!image || !source || !image->m_source || image->m_source->generation() != source->generation() || image->m_source->identity() != source->identity() || !__hidden_ui_gpu_texture_images::ValidVersion(*image))
             return MakeUnexpected(Failure{});
-        char identityText[32u];
+        char identityText[TextDetail::s_DecimalTextBufferBytes];
         const AStringView suffix = FormatDecimal(index, identityText);
         const auto readyIdentity = DeriveName(Name("ui.texture_image_ready/"), suffix);
         const auto textureIdentity = DeriveName(Name("ui.texture_image/"), suffix);
@@ -181,7 +188,7 @@ Expected<GpuTextureGraphResources> GpuRendererState::declareTextureImages(Core::
         const Core::GpuExternalCompletionId ready = *readyResult;
         const auto textureResult = graph.importTexture(
             image->m_texture.texture,
-            Core::GpuGraphResourceDesc().setIdentity(*textureIdentity).setMarkerLabel("UI Texture Image")
+            Core::GpuGraphResourceDesc().setIdentity(*textureIdentity).setMarkerLabel(__hidden_ui_gpu_texture_images::s_ImageMarkerLabel)
                 .setType(Core::GpuGraphResourceType::Texture).setInitialAvailabilityCompletion(ready)
                 .setExternalFinalState(Core::ResourceStates::ShaderResource)
         );

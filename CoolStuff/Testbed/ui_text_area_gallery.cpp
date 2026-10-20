@@ -3,6 +3,7 @@
 
 
 #include "ui_text_area_gallery.h"
+#include "ui_gallery_constants.h"
 
 #include <core/common/log.h>
 
@@ -26,18 +27,18 @@ UiTextAreaGallery::UiTextAreaGallery(NWB::Core::Alloc::GlobalArena& arena)
 void UiTextAreaGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
     using namespace NWB::Impl::Ui;
     Builder& ui = context.ui;
-    if(!ui.beginPanel("text_area_gallery", { x, y, 400.0f, 260.0f }))
+    if(!ui.beginPanel("text_area_gallery", { x, y, s_SelectorWidth, s_ContentHeight }))
         return;
     const f32 previousFontSize = ui.style().fontSize;
-    ui.style().fontSize = 14.0f;
-    bool valid = ui.label("title", "Multiline text area");
-    if(ui.checkbox("read_only", "Read only", m_readOnly))
+    ui.style().fontSize = s_GalleryFontSize;
+    bool valid = ui.label(s_TitleKey, "Multiline text area");
+    if(ui.checkbox(s_ReadOnlyKey, "Read only", m_readOnly))
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: text area read only={}"), m_readOnly);
     TextAreaOptions options;
     options.height = { LayoutSizePolicy::Stretch, 1.0f };
     options.readOnly = m_readOnly;
     const EditBoxResult result = ui.textArea("document", m_document, m_state, options);
-    valid = result.valid && ui.label("hint", "Home / End: line; Ctrl: whole document") && valid;
+    valid = result.valid && ui.label(s_HintKey, "Home / End: line; Ctrl: whole document") && valid;
     valid = ui.endPanel() && valid;
     ui.style().fontSize = previousFontSize;
     if(result.submitted)

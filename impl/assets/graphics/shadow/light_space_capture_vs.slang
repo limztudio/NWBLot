@@ -9,9 +9,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Outside the clip volume, so a culled vertex is clipped away.
+#define NWB_LIGHT_SPACE_CAPTURE_CULLED_CLIP_POSITION float4(2.0, 2.0, 2.0, 1.0)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NwbLightSpaceCaptureVertex main(uint vertex : SV_VertexID, uint primitiveBase : SV_StartInstanceLocation){
     NwbLightSpaceCaptureVertex output = (NwbLightSpaceCaptureVertex)0;
-    output.position = float4(2.0, 2.0, 2.0, 1.0);
+    output.position = NWB_LIGHT_SPACE_CAPTURE_CULLED_CLIP_POSITION;
     const NwbLightSpaceView view = nwbLightSpaceLoadView(g_NwbLightSpacePush.viewIndex);
     if(view.depthRange.w == 0.0 || g_NwbLightSpacePush.instanceIndex >= g_NwbLightSpacePush.instanceCount)
         return output;

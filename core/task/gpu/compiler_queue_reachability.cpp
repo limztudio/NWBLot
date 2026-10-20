@@ -27,13 +27,14 @@ namespace __hidden_gpu_task_queue_reachability{
 
 
 inline constexpr usize s_BitsPerWord = sizeof(u64) * 8u;
+inline constexpr u64 s_LowHalfWordMask = 0x00000000FFFFFFFFull;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 static void TransposeTaskRelationTile(Array<u64, s_BitsPerWord>& tile)noexcept{
-    u64 mask = 0x00000000FFFFFFFFull;
+    u64 mask = s_LowHalfWordMask;
     for(usize shift = s_BitsPerWord / 2u; shift != 0u; shift /= 2u){
         // Exchange each row-address bit with the corresponding column-address bit, starting with the high bit.
         for(usize block = 0u; block < s_BitsPerWord; block += shift * 2u){
@@ -349,7 +350,8 @@ bool BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView&
             compactWordCount += span;
         }
         // Include temporary bounds and retained offsets so compact rows reduce peak scratch use.
-        const usize compactBudget = (totalWordCount - totalWordCount / 4u) * sizeof(u64);
+        constexpr usize s_CompactBudgetReserveDivisor = 4u;
+        const usize compactBudget = (totalWordCount - totalWordCount / s_CompactBudgetReserveDivisor) * sizeof(u64);
         const usize compactBytes = compactWordCount * sizeof(u64);
         const auto metadataBytes = TryMultiply<usize>(taskCount, sizeof(usize) + sizeof(GpuTaskSchedulingReachability::WordRange));
         const bool compactRows = metadataBytes && compactBytes <= compactBudget && *metadataBytes <= compactBudget - compactBytes;

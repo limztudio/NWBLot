@@ -4,6 +4,7 @@
 
 #include "ui_skin_preview.h"
 #include "project.h"
+#include "ui_gallery_constants.h"
 
 #include <core/common/log.h>
 
@@ -32,14 +33,54 @@ using ShapeRequest = NWB::Impl::Ui::ShapeRequest;
 
 static constexpr f32 s_PanelWidth = 280.0f;
 static constexpr f32 s_Margin = 18.0f;
+static constexpr f32 s_PanelBaseHeight = 170.0f;
+static constexpr f32 s_PanelBottomGap = 12.0f;
+static constexpr f32 s_CaptionPadding = 8.0f;
+static constexpr f32 s_MinimumGalleryX = 390.0f;
+static constexpr f32 s_LabelFontSize = 13.0f;
+static constexpr f32 s_LargeLabelFontSize = 14.0f;
+static constexpr f32 s_LeftColumnX = 12.0f;
+static constexpr f32 s_RightColumnX = 146.0f;
+static constexpr f32 s_ButtonTopY = 12.0f;
+static constexpr f32 s_ButtonBottomY = 50.0f;
+static constexpr f32 s_ButtonWidth = 122.0f;
+static constexpr f32 s_ButtonHeight = 30.0f;
+static constexpr f32 s_EditFocusedY = 88.0f;
+static constexpr f32 s_EditFocusedWidth = 218.0f;
+static constexpr f32 s_EditFocusedHeight = 32.0f;
+static constexpr f32 s_ComboArrowX = 204.0f;
+static constexpr f32 s_ComboArrowY = 96.0f;
+static constexpr f32 s_ComboArrowSize = 16.0f;
+static constexpr f32 s_CheckboxX = 242.0f;
+static constexpr f32 s_CheckboxY = 90.0f;
+static constexpr f32 s_CheckboxSize = 26.0f;
+static constexpr f32 s_CheckboxMarkX = 247.0f;
+static constexpr f32 s_CheckboxMarkY = 95.0f;
+static constexpr f32 s_CheckboxMarkSize = 16.0f;
+static constexpr f32 s_ProgressTrackY = 132.0f;
+static constexpr f32 s_ProgressTrackWidth = 256.0f;
+static constexpr f32 s_ProgressTrackHeight = 16.0f;
+static constexpr f32 s_ProgressFillX = 14.0f;
+static constexpr f32 s_ProgressFillY = 134.0f;
+static constexpr f32 s_ProgressFillWidth = 168.0f;
+static constexpr f32 s_ProgressFillHeight = 12.0f;
+static constexpr f32 s_EditNormalY = 158.0f;
+static constexpr f32 s_EditNormalWidth = 256.0f;
+static constexpr f32 s_CaptionX = 18.0f;
+static constexpr f32 s_CaptionY = 162.0f;
+static constexpr f32 s_CaptionWidth = 244.0f;
+static constexpr f32 s_LeftTextX = 20.0f;
+static constexpr f32 s_RightTextX = 154.0f;
+static constexpr f32 s_ButtonTextWidth = 106.0f;
+static constexpr f32 s_EditTextWidth = 178.0f;
+static constexpr NWB::Impl::Ui::Color s_LabelTextColor{ 0.92f, 0.96f, 1.0f, 1.0f };
+static constexpr NWB::Impl::Ui::Color s_DisabledLabelTextColor{ 0.38f, 0.42f, 0.48f, 1.0f };
 static const Name s_Panel("panel.normal");
-static const Name s_ButtonNormal("button.normal");
 static const Name s_ButtonHover("button.hover");
 static const Name s_ButtonPressed("button.pressed");
 static const Name s_ButtonDisabled("button.disabled");
 static const Name s_EditNormal("edit.normal");
 static const Name s_EditFocused("edit.focused");
-static const Name s_ComboArrow("combo.arrow");
 static const Name s_Checkbox("checkbox.checked");
 static const Name s_CheckboxMark("checkbox.mark");
 static const Name s_ProgressTrack("progress.track");
@@ -52,34 +93,34 @@ static constexpr StringView s_KoreanText = "\xED\x95\x9C\xEA\xB8\x80 \xEC\xA1\xB
 
 // Origin lanes are x, y; caption height is splat across lanes.
 [[nodiscard]] static bool DrawSkinGallery(PaintBuilder& paint, const SIMDVectorSingle origin, const SIMDVectorSingle captionHeight){
-    const SIMDVectorSingle buttonNormal = VectorAdd(origin, VectorSet(12.0f, 12.0f, 0.0f, 0.0f));
-    const SIMDVectorSingle buttonHover = VectorAdd(origin, VectorSet(146.0f, 12.0f, 0.0f, 0.0f));
-    const SIMDVectorSingle buttonPressed = VectorAdd(origin, VectorSet(12.0f, 50.0f, 0.0f, 0.0f));
-    const SIMDVectorSingle buttonDisabled = VectorAdd(origin, VectorSet(146.0f, 50.0f, 0.0f, 0.0f));
-    const SIMDVectorSingle editFocused = VectorAdd(origin, VectorSet(12.0f, 88.0f, 0.0f, 0.0f));
-    const SIMDVectorSingle comboArrow = VectorAdd(origin, VectorSet(204.0f, 96.0f, 0.0f, 0.0f));
-    const SIMDVectorSingle checkbox = VectorAdd(origin, VectorSet(242.0f, 90.0f, 0.0f, 0.0f));
-    const SIMDVectorSingle checkboxMark = VectorAdd(origin, VectorSet(247.0f, 95.0f, 0.0f, 0.0f));
-    const SIMDVectorSingle progressTrack = VectorAdd(origin, VectorSet(12.0f, 132.0f, 0.0f, 0.0f));
-    const SIMDVectorSingle progressFill = VectorAdd(origin, VectorSet(14.0f, 134.0f, 0.0f, 0.0f));
-    const SIMDVectorSingle editNormal = VectorAdd(origin, VectorSet(12.0f, 158.0f, 0.0f, 0.0f));
+    const SIMDVectorSingle buttonNormal = VectorAdd(origin, VectorSet(s_LeftColumnX, s_ButtonTopY, 0.0f, 0.0f));
+    const SIMDVectorSingle buttonHover = VectorAdd(origin, VectorSet(s_RightColumnX, s_ButtonTopY, 0.0f, 0.0f));
+    const SIMDVectorSingle buttonPressed = VectorAdd(origin, VectorSet(s_LeftColumnX, s_ButtonBottomY, 0.0f, 0.0f));
+    const SIMDVectorSingle buttonDisabled = VectorAdd(origin, VectorSet(s_RightColumnX, s_ButtonBottomY, 0.0f, 0.0f));
+    const SIMDVectorSingle editFocused = VectorAdd(origin, VectorSet(s_LeftColumnX, s_EditFocusedY, 0.0f, 0.0f));
+    const SIMDVectorSingle comboArrow = VectorAdd(origin, VectorSet(s_ComboArrowX, s_ComboArrowY, 0.0f, 0.0f));
+    const SIMDVectorSingle checkbox = VectorAdd(origin, VectorSet(s_CheckboxX, s_CheckboxY, 0.0f, 0.0f));
+    const SIMDVectorSingle checkboxMark = VectorAdd(origin, VectorSet(s_CheckboxMarkX, s_CheckboxMarkY, 0.0f, 0.0f));
+    const SIMDVectorSingle progressTrack = VectorAdd(origin, VectorSet(s_LeftColumnX, s_ProgressTrackY, 0.0f, 0.0f));
+    const SIMDVectorSingle progressFill = VectorAdd(origin, VectorSet(s_ProgressFillX, s_ProgressFillY, 0.0f, 0.0f));
+    const SIMDVectorSingle editNormal = VectorAdd(origin, VectorSet(s_LeftColumnX, s_EditNormalY, 0.0f, 0.0f));
     return
-        paint.drawRegion(s_Panel, { VectorGetX(origin), VectorGetY(origin), s_PanelWidth, VectorGetX(VectorAdd(VectorReplicate(170.0f), captionHeight)) })
-        && paint.drawRegion(s_ButtonNormal, { VectorGetX(buttonNormal), VectorGetY(buttonNormal), 122.0f, 30.0f })
-        && paint.drawRegion(s_ButtonHover, { VectorGetX(buttonHover), VectorGetY(buttonHover), 122.0f, 30.0f })
-        && paint.drawRegion(s_ButtonPressed, { VectorGetX(buttonPressed), VectorGetY(buttonPressed), 122.0f, 30.0f })
-        && paint.drawRegion(s_ButtonDisabled, { VectorGetX(buttonDisabled), VectorGetY(buttonDisabled), 122.0f, 30.0f })
-        && paint.drawRegion(s_EditFocused, { VectorGetX(editFocused), VectorGetY(editFocused), 218.0f, 32.0f })
-        && paint.drawRegion(s_ComboArrow, { VectorGetX(comboArrow), VectorGetY(comboArrow), 16.0f, 16.0f })
-        && paint.drawRegion(s_Checkbox, { VectorGetX(checkbox), VectorGetY(checkbox), 26.0f, 26.0f })
-        && paint.drawRegion(s_CheckboxMark, { VectorGetX(checkboxMark), VectorGetY(checkboxMark), 16.0f, 16.0f })
-        && paint.drawRegion(s_ProgressTrack, { VectorGetX(progressTrack), VectorGetY(progressTrack), 256.0f, 16.0f })
-        && paint.drawRegion(s_ProgressFill, { VectorGetX(progressFill), VectorGetY(progressFill), 168.0f, 12.0f })
-        && paint.drawRegion(s_EditNormal, { VectorGetX(editNormal), VectorGetY(editNormal), 256.0f, VectorGetX(captionHeight) })
+        paint.drawRegion(s_Panel, { VectorGetX(origin), VectorGetY(origin), s_PanelWidth, VectorGetX(VectorAdd(VectorReplicate(s_PanelBaseHeight), captionHeight)) })
+        && paint.drawRegion(s_ButtonNormal, { VectorGetX(buttonNormal), VectorGetY(buttonNormal), s_ButtonWidth, s_ButtonHeight })
+        && paint.drawRegion(s_ButtonHover, { VectorGetX(buttonHover), VectorGetY(buttonHover), s_ButtonWidth, s_ButtonHeight })
+        && paint.drawRegion(s_ButtonPressed, { VectorGetX(buttonPressed), VectorGetY(buttonPressed), s_ButtonWidth, s_ButtonHeight })
+        && paint.drawRegion(s_ButtonDisabled, { VectorGetX(buttonDisabled), VectorGetY(buttonDisabled), s_ButtonWidth, s_ButtonHeight })
+        && paint.drawRegion(s_EditFocused, { VectorGetX(editFocused), VectorGetY(editFocused), s_EditFocusedWidth, s_EditFocusedHeight })
+        && paint.drawRegion(s_ComboArrow, { VectorGetX(comboArrow), VectorGetY(comboArrow), s_ComboArrowSize, s_ComboArrowSize })
+        && paint.drawRegion(s_Checkbox, { VectorGetX(checkbox), VectorGetY(checkbox), s_CheckboxSize, s_CheckboxSize })
+        && paint.drawRegion(s_CheckboxMark, { VectorGetX(checkboxMark), VectorGetY(checkboxMark), s_CheckboxMarkSize, s_CheckboxMarkSize })
+        && paint.drawRegion(s_ProgressTrack, { VectorGetX(progressTrack), VectorGetY(progressTrack), s_ProgressTrackWidth, s_ProgressTrackHeight })
+        && paint.drawRegion(s_ProgressFill, { VectorGetX(progressFill), VectorGetY(progressFill), s_ProgressFillWidth, s_ProgressFillHeight })
+        && paint.drawRegion(s_EditNormal, { VectorGetX(editNormal), VectorGetY(editNormal), s_EditNormalWidth, VectorGetX(captionHeight) })
     ;
 }
 
-[[nodiscard]] static bool ConfigureLabel(Label& label, const StringView text, const f32 size = 13.0f){
+[[nodiscard]] static bool ConfigureLabel(Label& label, const StringView text, const f32 size = s_LabelFontSize){
     return label.setText(ShapeRequest{ .text = text, .fontSize = size }) == NWB::Impl::Ui::TextLayoutStatus::Success;
 }
 
@@ -106,25 +147,27 @@ UiSkinPreview::UiSkinPreview(NWB::Core::Alloc::GlobalArena& arena, const NWB::Co
     using namespace __hidden_ui_skin_preview;
     const bool configured = ConfigureLabel(m_normal, "Normal") && ConfigureLabel(m_hover, "Hover")
         && ConfigureLabel(m_pressed, "Pressed") && ConfigureLabel(m_disabled, "Disabled")
-        && ConfigureLabel(m_edit, "UTF-8 labels", 14.0f) && ConfigureLabel(m_caption, "FreeType + HarfBuzz", 14.0f)
-        && m_korean.setText(ShapeRequest{ .text = s_KoreanText, .fontSize = 13.0f, .scriptTag = NWB::Impl::Ui::TextScriptTag('H', 'a', 'n', 'g'), .language = "ko" }) == NWB::Impl::Ui::TextLayoutStatus::Success;
+        && ConfigureLabel(m_edit, "UTF-8 labels", s_LargeLabelFontSize) && ConfigureLabel(m_caption, "FreeType + HarfBuzz", s_LargeLabelFontSize)
+        && m_korean.setText(ShapeRequest{ .text = s_KoreanText, .fontSize = s_LabelFontSize, .scriptTag = NWB::Impl::Ui::TextScriptTag('H', 'a', 'n', 'g'), .language = "ko" }) == NWB::Impl::Ui::TextLayoutStatus::Success;
     NWB_FATAL_ASSERT_MSG(configured, NWB_TEXT("Testbed UI labels must have valid constant text"));
 }
 
 Expected<NWB::Impl::Ui::Rect> UiSkinPreview::galleryBounds(NWB::Impl::UiPaintContext& context){
+    using namespace __hidden_ui_skin_preview;
     const auto caption = m_caption.measure(context.text, context.display);
     const auto korean = m_korean.measure(context.text, context.display);
     if(!caption || !korean)
         return MakeUnexpected(Failure{});
-    const SIMDVectorSingle captionHeight = VectorAdd(VectorAdd(VectorReplicate(caption->height), VectorReplicate(korean->height)), VectorReplicate(8.0f));
-    const f32 preferredTop = VectorGetX(VectorAdd(VectorAdd(VectorAdd(VectorReplicate(__hidden_ui_skin_preview::s_Margin), VectorReplicate(170.0f)), captionHeight), VectorReplicate(12.0f)));
+    const SIMDVectorSingle captionHeight = VectorAdd(VectorAdd(VectorReplicate(caption->height), VectorReplicate(korean->height)), VectorReplicate(s_CaptionPadding));
+    const f32 preferredTop = VectorGetX(VectorAdd(VectorAdd(VectorAdd(VectorReplicate(s_Margin), VectorReplicate(s_PanelBaseHeight)), captionHeight), VectorReplicate(s_PanelBottomGap)));
     return UiWidgetGallery::LayoutBounds(context.display, preferredTop);
 }
 
 void UiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
-    const SIMDVectorSingle margin = VectorReplicate(__hidden_ui_skin_preview::s_Margin);
-    const f32 x = VectorGetX(VectorMax(margin, VectorSubtract(VectorSubtract(VectorReplicate(context.display.logicalWidth), VectorReplicate(__hidden_ui_skin_preview::s_PanelWidth)), margin)));
-    const f32 y = __hidden_ui_skin_preview::s_Margin;
+    using namespace __hidden_ui_skin_preview;
+    const SIMDVectorSingle margin = VectorReplicate(s_Margin);
+    const f32 x = VectorGetX(VectorMax(margin, VectorSubtract(VectorSubtract(VectorReplicate(context.display.logicalWidth), VectorReplicate(s_PanelWidth)), margin)));
+    const f32 y = s_Margin;
     const auto caption = m_caption.measure(context.text, context.display);
     const auto korean = m_korean.measure(context.text, context.display);
     const auto normal = m_normal.measure(context.text, context.display);
@@ -136,45 +179,44 @@ void UiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
         NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom UI label measurement failed"));
         return;
     }
-    const SIMDVectorSingle captionHeight = VectorAdd(VectorAdd(VectorReplicate(caption->height), VectorReplicate(korean->height)), VectorReplicate(8.0f));
+    const SIMDVectorSingle captionHeight = VectorAdd(VectorAdd(VectorReplicate(caption->height), VectorReplicate(korean->height)), VectorReplicate(s_CaptionPadding));
     const auto gallery = galleryBounds(context);
     if(!gallery){
         NWB_LOGGER_ERROR(NWB_TEXT("Testbed: UI gallery measurement failed"));
         return;
     }
     m_widgets.paint(context, *gallery);
-    if(gallery->y < VectorGetX(VectorAdd(VectorAdd(VectorAdd(VectorReplicate(y), VectorReplicate(170.0f)), captionHeight), VectorReplicate(12.0f))) || x < 390.0f)
+    if(gallery->y < VectorGetX(VectorAdd(VectorAdd(VectorAdd(VectorReplicate(y), VectorReplicate(s_PanelBaseHeight)), captionHeight), VectorReplicate(s_PanelBottomGap))) || x < s_MinimumGalleryX)
         return;
-    if(!__hidden_ui_skin_preview::DrawSkinGallery(context.paint, VectorSet(x, y, 0.0f, 0.0f), captionHeight)){
+    if(!DrawSkinGallery(context.paint, VectorSet(x, y, 0.0f, 0.0f), captionHeight)){
         NWB_LOGGER_ERROR(NWB_TEXT("Testbed: default UI skin is missing a gallery region"));
         return;
     }
 
     const SIMDVectorSingle origin = VectorSet(x, y, 0.0f, 0.0f);
-    const SIMDVectorSingle captionOrigin = VectorAdd(origin, VectorSet(18.0f, 162.0f, 0.0f, 0.0f));
-    const SIMDVectorSingle koreanOffset = VectorAdd(VectorSet(18.0f, 162.0f, 0.0f, 0.0f), VectorSet(0.0f, caption->height, 0.0f, 0.0f));
+    const SIMDVectorSingle captionOrigin = VectorAdd(origin, VectorSet(s_CaptionX, s_CaptionY, 0.0f, 0.0f));
+    const SIMDVectorSingle koreanOffset = VectorAdd(VectorSet(s_CaptionX, s_CaptionY, 0.0f, 0.0f), VectorSet(0.0f, caption->height, 0.0f, 0.0f));
     const SIMDVectorSingle koreanOrigin = VectorAdd(origin, koreanOffset);
-    const SIMDVectorSingle buttonTextOffsets = VectorScale(VectorSubtract(VectorReplicate(30.0f), VectorSet(normal->height, hover->height, pressed->height, disabled->height)), 0.5f);
-    const SIMDVectorSingle buttonTextY = VectorAdd(VectorSet(12.0f, 12.0f, 50.0f, 50.0f), buttonTextOffsets);
-    const SIMDVectorSingle normalOrigin = VectorAdd(origin, VectorSet(20.0f, VectorGetX(buttonTextY), 0.0f, 0.0f));
-    const SIMDVectorSingle hoverOrigin = VectorAdd(origin, VectorSet(154.0f, VectorGetY(buttonTextY), 0.0f, 0.0f));
-    const SIMDVectorSingle pressedOrigin = VectorAdd(origin, VectorSet(20.0f, VectorGetZ(buttonTextY), 0.0f, 0.0f));
-    const SIMDVectorSingle disabledOrigin = VectorAdd(origin, VectorSet(154.0f, VectorGetW(buttonTextY), 0.0f, 0.0f));
-    const SIMDVectorSingle editOffset = VectorAdd(VectorSet(20.0f, 88.0f, 0.0f, 0.0f), VectorScale(VectorSubtract(VectorSet(0.0f, 32.0f, 0.0f, 0.0f), VectorSet(0.0f, edit->height, 0.0f, 0.0f)), 0.5f));
+    const SIMDVectorSingle buttonTextOffsets = VectorScale(VectorSubtract(VectorReplicate(s_ButtonHeight), VectorSet(normal->height, hover->height, pressed->height, disabled->height)), 0.5f);
+    const SIMDVectorSingle buttonTextY = VectorAdd(VectorSet(s_ButtonTopY, s_ButtonTopY, s_ButtonBottomY, s_ButtonBottomY), buttonTextOffsets);
+    const SIMDVectorSingle normalOrigin = VectorAdd(origin, VectorSet(s_LeftTextX, VectorGetX(buttonTextY), 0.0f, 0.0f));
+    const SIMDVectorSingle hoverOrigin = VectorAdd(origin, VectorSet(s_RightTextX, VectorGetY(buttonTextY), 0.0f, 0.0f));
+    const SIMDVectorSingle pressedOrigin = VectorAdd(origin, VectorSet(s_LeftTextX, VectorGetZ(buttonTextY), 0.0f, 0.0f));
+    const SIMDVectorSingle disabledOrigin = VectorAdd(origin, VectorSet(s_RightTextX, VectorGetW(buttonTextY), 0.0f, 0.0f));
+    const SIMDVectorSingle editOffset = VectorAdd(VectorSet(s_LeftTextX, s_EditFocusedY, 0.0f, 0.0f), VectorScale(VectorSubtract(VectorSet(0.0f, s_EditFocusedHeight, 0.0f, 0.0f), VectorSet(0.0f, edit->height, 0.0f, 0.0f)), 0.5f));
     const SIMDVectorSingle editOrigin = VectorAdd(origin, editOffset);
-    const bool captionPainted = m_caption.paint(context.text, context.paint, { VectorGetX(captionOrigin), VectorGetY(captionOrigin), 244.0f, caption->height })
-        && m_korean.paint(context.text, context.paint, { VectorGetX(koreanOrigin), VectorGetY(koreanOrigin), 244.0f, korean->height });
+    const bool captionPainted = m_caption.paint(context.text, context.paint, { VectorGetX(captionOrigin), VectorGetY(captionOrigin), s_CaptionWidth, caption->height })
+        && m_korean.paint(context.text, context.paint, { VectorGetX(koreanOrigin), VectorGetY(koreanOrigin), s_CaptionWidth, korean->height });
     if(!captionPainted){
         NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom UI caption shaping or rasterization failed"));
         return;
     }
-    const NWB::Impl::Ui::Color textColor{ 0.92f, 0.96f, 1.0f, 1.0f };
     if(
-        !m_normal.paint(context.text, context.paint, { VectorGetX(normalOrigin), VectorGetY(normalOrigin), 106.0f, normal->height }, textColor)
-        || !m_hover.paint(context.text, context.paint, { VectorGetX(hoverOrigin), VectorGetY(hoverOrigin), 106.0f, hover->height }, textColor)
-        || !m_pressed.paint(context.text, context.paint, { VectorGetX(pressedOrigin), VectorGetY(pressedOrigin), 106.0f, pressed->height }, textColor)
-        || !m_disabled.paint(context.text, context.paint, { VectorGetX(disabledOrigin), VectorGetY(disabledOrigin), 106.0f, disabled->height }, { 0.38f, 0.42f, 0.48f, 1.0f })
-        || !m_edit.paint(context.text, context.paint, { VectorGetX(editOrigin), VectorGetY(editOrigin), 178.0f, edit->height }, textColor)
+        !m_normal.paint(context.text, context.paint, { VectorGetX(normalOrigin), VectorGetY(normalOrigin), s_ButtonTextWidth, normal->height }, s_LabelTextColor)
+        || !m_hover.paint(context.text, context.paint, { VectorGetX(hoverOrigin), VectorGetY(hoverOrigin), s_ButtonTextWidth, hover->height }, s_LabelTextColor)
+        || !m_pressed.paint(context.text, context.paint, { VectorGetX(pressedOrigin), VectorGetY(pressedOrigin), s_ButtonTextWidth, pressed->height }, s_LabelTextColor)
+        || !m_disabled.paint(context.text, context.paint, { VectorGetX(disabledOrigin), VectorGetY(disabledOrigin), s_ButtonTextWidth, disabled->height }, s_DisabledLabelTextColor)
+        || !m_edit.paint(context.text, context.paint, { VectorGetX(editOrigin), VectorGetY(editOrigin), s_EditTextWidth, edit->height }, s_LabelTextColor)
     )
         NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom UI label shaping or rasterization failed"));
 }

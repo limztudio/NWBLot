@@ -156,7 +156,7 @@ protected:
     [[nodiscard]] bool acceptInitial(){
         m_search.combo().select(4u);
         m_search.combo().open();
-        if(!m_search.query().setText("Second") || !m_search.query().setSelection(1u, 4u))
+        if(!m_search.query().setText(s_SecondHalfQuery) || !m_search.query().setSelection(1u, 4u))
             return false;
         if(!declareEpochSearch(1u) || !finishPanel() || !m_context.commitFrame(1u))
             return false;
@@ -173,7 +173,7 @@ protected:
     }
 
     void expectPreservedApplicationState(const bool focusRetired = false){
-        EXPECT_EQ(m_search.query().text(), "Second");
+        EXPECT_EQ(m_search.query().text(), s_SecondHalfQuery);
         EXPECT_EQ(m_search.query().anchor(), 1u);
         EXPECT_EQ(m_search.query().caret(), 4u);
         EXPECT_EQ(m_search.query().revision(), m_queryRevision);

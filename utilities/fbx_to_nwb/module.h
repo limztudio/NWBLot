@@ -23,6 +23,8 @@ using Vec2 = Float2U;
 using Vec3 = Float3U;
 using Vec4 = Float4U;
 
+static constexpr usize s_Vector2ComponentCount = 2u;
+static constexpr usize s_Vector3ComponentCount = 3u;
 static constexpr usize s_Vector4ComponentCount = 4u;
 static constexpr usize s_MeshSkinInfluenceCount = s_Vector4ComponentCount;
 static constexpr usize s_JointMatrixRowCount = 3u;
@@ -172,6 +174,7 @@ inline constexpr AStringView s_IndicesStreamLabel = "indices";
 inline constexpr AStringView s_ImportedSourceLabel = "imported";
 inline constexpr AStringView s_DefaultSourceLabel = "default";
 inline constexpr AStringView s_SeparateAssetLayoutLabel = "separate";
+inline constexpr AStringView s_ReportLineEndText = "\n";
 
 struct ImportOptions{
     AString inputPath;

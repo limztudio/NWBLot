@@ -41,6 +41,16 @@ static constexpr usize s_JsonReportBytesPerEdge = 96u;
 static constexpr usize s_JsonReportRuntimeStatisticsBytes = 4096u;
 static constexpr usize s_JsonReportPhysicalQueueRuntimeStatisticsBytes = 2048u;
 static constexpr usize s_JsonReportPacketSubmissionStatisticsBytes = 512u;
+static constexpr AStringView s_JsonDocumentOpen = "{\n";
+static constexpr AStringView s_JsonDocumentClose = "}\n";
+static constexpr AStringView s_JsonSectionClose = "  },\n";
+static constexpr AStringView s_JsonFieldEnd = ",\n";
+static constexpr AStringView s_JsonLastFieldEnd = "\n";
+static constexpr AStringView s_JsonRecordingKey = ", \"recording\": ";
+static constexpr AStringView s_JsonSubmissionKey = ", \"submission\": ";
+static constexpr AStringView s_JsonSecondsFormat = "{:.9}";
+static constexpr AStringView s_JsonInheritedTimelineWaitElisionCountFormat = ", \"inheritedTimelineWaitElisionCount\": {}";
+static constexpr AStringView s_JsonRecordingCountsFormat = "{{\"packetCount\": {}, \"taskCount\": {}, \"commandListCount\": {}, \"barrierCount\": {}, ";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -198,17 +208,8 @@ void AppendFrameGraphCompileRuntimeStatisticsJson(AString<TelemetryArena>& out, 
 }
 
 void AppendFrameGraphRecordingRuntimeStatisticsJson(AString<TelemetryArena>& out, const Telemetry::FrameGraphRecordingRuntimeStatistics& statistics){
-    StringAppendFormat(
-        out,
-        "{{\"packetCount\": {}, \"taskCount\": {}, \"commandListCount\": {}, \"barrierCount\": {}, "
-        "\"workerRoutedPacketCount\": {}, \"parallelPacketCount\": {}",
-        statistics.packetCount,
-        statistics.taskCount,
-        statistics.commandListCount,
-        statistics.barrierCount,
-        statistics.workerRoutedPacketCount,
-        statistics.parallelPacketCount
-    );
+    StringAppendFormat(out, s_JsonRecordingCountsFormat, statistics.packetCount, statistics.taskCount, statistics.commandListCount, statistics.barrierCount);
+    StringAppendFormat(out, "\"workerRoutedPacketCount\": {}, \"parallelPacketCount\": {}", statistics.workerRoutedPacketCount, statistics.parallelPacketCount);
     StringAppendFormat(
         out,
         ", \"commandListAcquisitionSeconds\": {:.9}, \"graphBarrierRecordingSeconds\": {:.9}, "
@@ -247,7 +248,7 @@ void AppendSubmissionRuntimeStatisticsJson(AString<TelemetryArena>& out, const S
         statistics.mergedTimelineWaitCount,
         statistics.acceptedFrontierSubmissionCount
     );
-    StringAppendFormat(out, ", \"inheritedTimelineWaitElisionCount\": {}", statistics.inheritedTimelineWaitElisionCount);
+    StringAppendFormat(out, s_JsonInheritedTimelineWaitElisionCountFormat, statistics.inheritedTimelineWaitElisionCount);
     StringAppendFormat(out, ", \"recoverySubmissionCount\": {}", statistics.recoverySubmissionCount);
     StringAppendFormat(out, ", \"submissionSeconds\": {:.9}}}", statistics.submissionSeconds);
 }
@@ -289,16 +290,12 @@ void AppendFrameGraphPhysicalQueueCompileRuntimeStatisticsJson(AString<Telemetry
 }
 
 void AppendFrameGraphPhysicalQueueRecordingRuntimeStatisticsJson(AString<TelemetryArena>& out, const Telemetry::FrameGraphPhysicalQueueRecordingRuntimeStatistics& statistics){
+    StringAppendFormat(out, s_JsonRecordingCountsFormat, statistics.packetCount, statistics.taskCount, statistics.commandListCount, statistics.barrierCount);
     StringAppendFormat(
         out,
-        "{{\"packetCount\": {}, \"taskCount\": {}, \"commandListCount\": {}, \"barrierCount\": {}, "
         "\"workerRoutedPacketCount\": {}, \"parallelPacketCount\": {}, "
         "\"commandListAcquisitionSeconds\": {:.9}, \"graphBarrierRecordingSeconds\": {:.9}, "
         "\"taskRecordSeconds\": {:.9}, \"recordingSeconds\": {:.9}}}",
-        statistics.packetCount,
-        statistics.taskCount,
-        statistics.commandListCount,
-        statistics.barrierCount,
         statistics.workerRoutedPacketCount,
         statistics.parallelPacketCount,
         statistics.commandListAcquisitionSeconds,
@@ -319,9 +316,9 @@ void AppendFrameGraphPhysicalQueueRuntimeStatisticsJson(AString<TelemetryArena>&
     AppendJsonQuotedText(out, AStringView(FrameGraphQueueClassText(statistics.queueClass)));
     out += ", \"compile\": ";
     AppendFrameGraphPhysicalQueueCompileRuntimeStatisticsJson(out, statistics.compile);
-    out += ", \"recording\": ";
+    out += s_JsonRecordingKey;
     AppendFrameGraphPhysicalQueueRecordingRuntimeStatisticsJson(out, statistics.recording);
-    out += ", \"submission\": ";
+    out += s_JsonSubmissionKey;
     AppendFrameGraphPhysicalQueueSubmissionRuntimeStatisticsJson(out, statistics.submission);
     out += '}';
 }
@@ -342,7 +339,7 @@ void AppendFrameGraphPacketSubmissionStatisticsJson(AString<TelemetryArena>& out
         statistics.timelineWaitCount,
         statistics.mergedTimelineWaitCount
     );
-    StringAppendFormat(out, ", \"inheritedTimelineWaitElisionCount\": {}", statistics.inheritedTimelineWaitElisionCount);
+    StringAppendFormat(out, s_JsonInheritedTimelineWaitElisionCountFormat, statistics.inheritedTimelineWaitElisionCount);
     StringAppendFormat(
         out,
         ", \"joinsAcceptedQueueFrontier\": {}, \"recoverySubmission\": {}, \"submissionSeconds\": {:.9}}}",
@@ -376,9 +373,9 @@ void AppendFrameGraphRuntimeStatisticsJson(
         statistics.deviceGeneration
     );
     AppendFrameGraphCompileRuntimeStatisticsJson(out, statistics.compile);
-    out += ", \"recording\": ";
+    out += s_JsonRecordingKey;
     AppendFrameGraphRecordingRuntimeStatisticsJson(out, statistics.recording);
-    out += ", \"submission\": ";
+    out += s_JsonSubmissionKey;
     AppendFrameGraphSubmissionRuntimeStatisticsJson(out, statistics.submission);
     out += ", \"physicalQueues\": ";
     if(!physicalQueueRuntimeStatisticsPresent)
@@ -457,7 +454,7 @@ void BuildJson(const TelemetryReportSummary& summary, const FrameGraphReportReco
     if(!AddBinaryReserveBytes(reserveBytes, memoryRecords.size()))
         reserveBytes = Max(reserveBytes, memoryRecords.size());
     out.reserve(reserveBytes);
-    out += "{\n";
+    out += s_JsonDocumentOpen;
     StringAppendFormat(out, "  \"eventCount\": {},\n", summary.eventCount);
     out += "  \"frameRange\": {";
     StringAppendFormat(out, "\"present\": {}", summary.hasFrameRange ? DiagnosticDetail::s_TrueText : DiagnosticDetail::s_FalseText);
@@ -469,35 +466,35 @@ void BuildJson(const TelemetryReportSummary& summary, const FrameGraphReportReco
     for(usize i = 0u; i < s_TelemetryReportEventKindCount; ++i){
         out += "    ";
         AppendJsonQuotedText(out, EventKindText(static_cast<Telemetry::EventKind::Enum>(i)));
-        StringAppendFormat(out, ": {}{}", summary.eventKindCounts[i], i + 1u == s_TelemetryReportEventKindCount ? "\n" : ",\n");
+        StringAppendFormat(out, ": {}{}", summary.eventKindCounts[i], i + 1u == s_TelemetryReportEventKindCount ? s_JsonLastFieldEnd : s_JsonFieldEnd);
     }
-    out += "  },\n";
+    out += s_JsonSectionClose;
 
     out += "  \"perf\": {\n";
     StringAppendFormat(out, "    \"cpuTimingEvents\": {},\n", summary.cpuTimingEventCount);
     StringAppendFormat(out, "    \"cpuTimingSamples\": {},\n", summary.cpuTimingSampleCount);
     out += "    \"cpuTimingSeconds\": ";
     if(summary.cpuTimingSecondsValid)
-        StringAppendFormat(out, "{:.9}", summary.cpuTimingSeconds);
+        StringAppendFormat(out, s_JsonSecondsFormat, summary.cpuTimingSeconds);
     else
         out += s_JsonNullText;
-    out += ",\n";
+    out += s_JsonFieldEnd;
     StringAppendFormat(out, "    \"maxCpuTimingSeconds\": {:.9},\n", summary.maxCpuTimingSeconds);
     StringAppendFormat(out, "    \"gpuTimingEvents\": {},\n", summary.gpuTimingEventCount);
     StringAppendFormat(out, "    \"gpuTimingSamples\": {},\n", summary.gpuTimingSampleCount);
     out += "    \"gpuTimingSeconds\": ";
     if(summary.gpuTimingSecondsValid)
-        StringAppendFormat(out, "{:.9}", summary.gpuTimingSeconds);
+        StringAppendFormat(out, s_JsonSecondsFormat, summary.gpuTimingSeconds);
     else
         out += s_JsonNullText;
-    out += ",\n";
+    out += s_JsonFieldEnd;
     StringAppendFormat(out, "    \"maxGpuTimingSeconds\": {:.9},\n", summary.maxGpuTimingSeconds);
     StringAppendFormat(out, "    \"memoryEvents\": {},\n", summary.memoryEventCount);
     AppendTelemetryMemorySourcesJson(out, summary);
     out += "    \"memoryRecords\": [\n";
     out.append(memoryRecords.data(), memoryRecords.size());
     out += "\n    ]\n";
-    out += "  },\n";
+    out += s_JsonSectionClose;
 
     out += "  \"frameGraph\": {\n";
     StringAppendFormat(out, "    \"frames\": {},\n", summary.frameGraphFrameCount);
@@ -509,9 +506,9 @@ void BuildJson(const TelemetryReportSummary& summary, const FrameGraphReportReco
     for(usize graphIndex = 0u; graphIndex < graphs.size(); ++graphIndex)
         AppendFrameGraphJson(graphs[graphIndex], graphIndex, graphIndex + 1u == graphs.size(), out);
     out += "    ]\n";
-    out += "  },\n";
+    out += s_JsonSectionClose;
     StringAppendFormat(out, "  \"parseFailures\": {}\n", summary.parseFailureCount);
-    out += "}\n";
+    out += s_JsonDocumentClose;
 }
 
 

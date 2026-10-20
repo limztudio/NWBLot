@@ -28,6 +28,10 @@ namespace UiTextVisibleTests{
 using namespace Impl;
 using namespace Impl::Ui;
 
+inline constexpr AStringView s_LatinFontPath = "tests/ui/fonts/latin";
+inline constexpr AStringView s_KoreanFontPath = "tests/ui/fonts/korean";
+inline constexpr AStringView s_SkinPath = "tests/ui/skin";
+
 
 void ExpectRectangle(const Rect& actual, const Rect& expected);
 void ExpectSamePaint(const DrawSnapshot& actual, const DrawSnapshot& expected);

@@ -63,11 +63,11 @@ void ExpectSamePaint(const DrawSnapshot& actual, const DrawSnapshot& expected){
 
 TextVisibleFixture::TextVisibleFixture()
     : m_arena(Name("tests/ui/text/visible"))
-    , m_latin(m_arena, Name("tests/ui/fonts/latin"))
-    , m_korean(m_arena, Name("tests/ui/fonts/korean"))
+    , m_latin(m_arena, Name(s_LatinFontPath))
+    , m_korean(m_arena, Name(s_KoreanFontPath))
     , m_text(m_arena)
     , m_layout(m_arena)
-    , m_skin(m_arena, Name("tests/ui/skin"))
+    , m_skin(m_arena, Name(s_SkinPath))
     , m_paint(m_arena)
 {}
 
@@ -93,14 +93,14 @@ bool TextVisibleFixture::loadFont(Font& font, const StringView filename){
 bool TextVisibleFixture::installCoverageFonts(){
     Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
     const FontSource sources[]{
-        { Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_latin, 1u },
-        { Core::Assets::AssetRef<Font>("tests/ui/fonts/korean"), m_korean, 1u },
+        { Core::Assets::AssetRef<Font>(s_LatinFontPath), m_latin, 1u },
+        { Core::Assets::AssetRef<Font>(s_KoreanFontPath), m_korean, 1u },
     };
     return m_text.setFonts(fontScratchArena, sources, 2u);
 }
 
 void TextVisibleFixture::beginPaint(const u64 generation, const DisplayMetrics& display){
-    m_paint.begin(display, generation, 1u, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
+    m_paint.begin(display, generation, 1u, Core::Assets::AssetRef<UiSkin>(s_SkinPath), m_skin);
 }
 
 Expected<SharedGlyphPage> TextVisibleFixture::makePage(const u64 atlasIdentity){

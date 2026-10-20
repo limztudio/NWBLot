@@ -25,7 +25,7 @@ class PaintCase final{
 public:
     PaintCase(const u32 commands, const bool descending)
         : m_arena(Name("tests/performance/ui_input/paint"))
-        , m_skin(m_arena, Name("tests/performance/ui_input/skin"))
+        , m_skin(m_arena, Name(s_SkinPath))
         , m_builder(m_arena)
         , m_snapshot(m_arena)
         , m_commands(commands)
@@ -38,7 +38,7 @@ public:
 
 public:
     [[nodiscard]] bool operation(){
-        m_builder.begin({ 128.0f, 128.0f }, 1u, 1u, Core::Assets::AssetRef<UiSkin>("tests/performance/ui_input/skin"), m_skin);
+        m_builder.begin({ 128.0f, 128.0f }, 1u, 1u, Core::Assets::AssetRef<UiSkin>(s_SkinPath), m_skin);
         m_builder.reserve(m_commands);
         for(u32 command = 0u; command < m_commands; ++command){
             if(m_descending && !m_builder.beginOverlay(m_commands - command))

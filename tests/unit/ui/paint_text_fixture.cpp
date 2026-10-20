@@ -22,6 +22,9 @@ namespace UiPaintTextTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_PaintTextSkinPath = "tests/ui/skin";
+constexpr AStringView s_PaintTextFontPath = "tests/ui/font";
+
 void PaintTextFixture::ExpectClippedQuad(const DrawSnapshot& snapshot){
     ASSERT_EQ(snapshot.vertices().size(), 4u);
     const Vertex& first = snapshot.vertices()[0];
@@ -39,7 +42,7 @@ void PaintTextFixture::ExpectClippedQuad(const DrawSnapshot& snapshot){
 
 PaintTextFixture::PaintTextFixture()
     : m_arena(Name("tests/ui/paint_text"))
-    , m_skin(m_arena, Name("tests/ui/skin"))
+    , m_skin(m_arena, Name(s_PaintTextSkinPath))
     , m_builder(m_arena)
 {
     UiSkin::RegionVector regions(m_arena);
@@ -49,14 +52,14 @@ PaintTextFixture::PaintTextFixture()
 }
 
 void PaintTextFixture::begin(const u64 generation){
-    m_builder.begin({ 100.0f, 80.0f, 1.5f, 2.0f }, generation, 3u, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
+    m_builder.begin({ 100.0f, 80.0f, 1.5f, 2.0f }, generation, 3u, Core::Assets::AssetRef<UiSkin>(s_PaintTextSkinPath), m_skin);
     m_builder.reserve(16u);
 }
 
 Expected<SharedGlyphPage> PaintTextFixture::makeCoverage(const u64 atlasIdentity, const u64 generation){
     GlyphPage::Pixels pixels(m_arena);
     pixels.resize(4u, 128u);
-    const GlyphPageBinding binding{ .font = Core::Assets::AssetRef<Font>("tests/ui/font"), .fontGeneration = 9u, .atlasIdentity = atlasIdentity, .generation = generation, .width = 2u, .height = 2u, };
+    const GlyphPageBinding binding{ .font = Core::Assets::AssetRef<Font>(s_PaintTextFontPath), .fontGeneration = 9u, .atlasIdentity = atlasIdentity, .generation = generation, .width = 2u, .height = 2u, };
     return CreateGlyphPage(m_arena, binding, Move(pixels));
 }
 
@@ -66,14 +69,14 @@ Expected<SharedGlyphPage> PaintTextFixture::makeGlyphPage(const u64 atlasIdentit
     pixels[0] = 64u;
     if(generation > 1u)
         pixels[32] = 192u;
-    const GlyphPageBinding binding{ .font = Core::Assets::AssetRef<Font>("tests/ui/font"), .fontGeneration = 9u, .atlasIdentity = atlasIdentity, .generation = generation, .index = index, .width = 8u, .height = 8u, };
+    const GlyphPageBinding binding{ .font = Core::Assets::AssetRef<Font>(s_PaintTextFontPath), .fontGeneration = 9u, .atlasIdentity = atlasIdentity, .generation = generation, .index = index, .width = 8u, .height = 8u, };
     return CreateGlyphPage(m_arena, binding, Move(pixels));
 }
 
 Expected<SharedSdfAtlasPage> PaintTextFixture::makeDistance(){
     SdfAtlasPage::Pixels pixels(m_arena);
     pixels.resize(4u * 4u * 4u, 128u);
-    const SdfAtlasPageBinding binding{ .font = Core::Assets::AssetRef<Font>("tests/ui/font"), .fontSha256 = {}, .pixelsSha256 = {}, .fontGeneration = 9u, .atlasIdentity = 22u, .generation = 1u, .width = 4u, .height = 4u, .spreadPixels = 2u, };
+    const SdfAtlasPageBinding binding{ .font = Core::Assets::AssetRef<Font>(s_PaintTextFontPath), .fontSha256 = {}, .pixelsSha256 = {}, .fontGeneration = 9u, .atlasIdentity = 22u, .generation = 1u, .width = 4u, .height = 4u, .spreadPixels = 2u, };
     return CreateSdfAtlasPage(m_arena, binding, Move(pixels));
 }
 
@@ -85,7 +88,7 @@ Expected<SharedSdfAtlasPage> PaintTextFixture::makeSdfPage(const u64 atlasIdenti
     pixels[2u] = interior;
     pixels[3u] = 192u;
     const SdfAtlasPageBinding binding{
-        .font = Core::Assets::AssetRef<Font>("tests/ui/font"),
+        .font = Core::Assets::AssetRef<Font>(s_PaintTextFontPath),
         .fontSha256 = {},
         .pixelsSha256 = {},
         .fontGeneration = 9u,

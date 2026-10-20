@@ -28,6 +28,10 @@ namespace UiNumericEditTests{
 
 using namespace UiComboTests;
 
+inline constexpr AStringView s_NumericPanelKey = "panel";
+inline constexpr AStringView s_IntegerEditKey = "integer";
+inline constexpr AStringView s_DecimalEditKey = "decimal";
+
 namespace NumericEventKind{
     enum Enum : u8{ Text, Key, Preedit, Action };
 };
@@ -196,7 +200,7 @@ public:
 
 protected:
     [[nodiscard]] bool beginNumeric(const u64 generation){
-        return begin(generation) && m_builder.beginPanel("panel", { 20.0f, 20.0f, 740.0f, 520.0f });
+        return begin(generation) && m_builder.beginPanel(s_NumericPanelKey, { 20.0f, 20.0f, 740.0f, 520.0f });
     }
 
     [[nodiscard]] bool acceptNumeric(){

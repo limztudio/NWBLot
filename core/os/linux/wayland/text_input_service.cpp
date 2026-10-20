@@ -108,7 +108,7 @@ bool WaylandTextInputService::dispatchDirectCodePoint(const u32 codePoint){
     if(m_manager)
         return true;
 #endif
-    if(codePoint < 32u || codePoint == 127u)
+    if(codePoint < s_TextInputFirstPrintableCodePoint || codePoint == s_TextInputDeleteCodePoint)
         return true;
     char bytes[4];
     const auto length = EncodeTextInputCodePoint(codePoint, bytes);

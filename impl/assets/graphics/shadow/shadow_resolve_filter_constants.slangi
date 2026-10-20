@@ -16,6 +16,10 @@
 #define NWB_SHADOW_RESOLVE_RGB_SIGMA_SCALE 0.20
 #define NWB_SHADOW_RESOLVE_SIGMA_BASE 4.0
 #define NWB_SHADOW_RESOLVE_SIGMA_EPS_BASE 0.05
+#define NWB_SHADOW_RESOLVE_SIGMA_DISTANCE_MIN 1e-3
+// The kernel reaches this many taps to each side of the center; the tile halo covers both sides.
+#define NWB_SHADOW_RESOLVE_KERNEL_RADIUS 2
+#define NWB_SHADOW_RESOLVE_KERNEL_HALO (2 * NWB_SHADOW_RESOLVE_KERNEL_RADIUS)
 
 // 5x5 B-spline a-trous kernel shared by independent and fused visibility filters.
 static const half NWB_SHADOW_RESOLVE_KERNEL[5] = { half(1.0 / 16.0), half(4.0 / 16.0), half(6.0 / 16.0), half(4.0 / 16.0), half(1.0 / 16.0) };

@@ -18,6 +18,27 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_ui_window_paint{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr f32 s_ResizeGripMaximumThickness = 2.0f;
+inline constexpr f32 s_ResizeGripThicknessFraction = 0.125f;
+inline constexpr f32 s_ResizeGripStartFraction = 0.25f;
+inline constexpr f32 s_ResizeGripLengthFraction = 0.75f;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool Builder::paintWindow(){
     const WindowState& state = *m_scope->m_window.state;
     const WidgetStyle& style = m_scope->m_window.style;
@@ -62,7 +83,7 @@ bool Builder::paintWindowTitle(){
     const SIMDVectorSingle collapseReservation = m_scope->m_window.options.collapsible ? VectorAdd(VectorSet(metrics.collapseExtent, 0.0f, 0.0f, 0.0f), VectorSet(style.gap, 0.0f, 0.0f, 0.0f)) : VectorZero();
     const SIMDVectorSingle padding = VectorAdd(VectorSet(metrics.titlePadding.left, metrics.titlePadding.top, metrics.titlePadding.right, metrics.titlePadding.bottom), collapseReservation);
     const SIMDVectorSingle content = InsetRectValue(VectorSet(header.x, header.y, header.width, header.height), padding);
-    const SIMDVectorSingle verticalOffset = VectorMax(VectorZero(), VectorScale(VectorSubtract(VectorSet(0.0f, VectorGetW(content), 0.0f, 0.0f), VectorSet(0.0f, titleBounds.height, 0.0f, 0.0f)), 0.5f));
+    const SIMDVectorSingle verticalOffset = VectorMax(VectorZero(), VectorScale(VectorSubtract(VectorSet(0.0f, VectorGetW(content), 0.0f, 0.0f), VectorSet(0.0f, titleBounds.height, 0.0f, 0.0f)), s_RectCenterFraction));
     const SIMDVectorSingle textOrigin = VectorAdd(VectorSwizzle<0, 1, 0, 1>(content), verticalOffset);
     const SIMDVectorSingle alignedOrigin = VectorSubtract(textOrigin, VectorSet(titleBounds.x, titleBounds.y, titleBounds.x, titleBounds.y));
     const Point origin{ VectorGetX(alignedOrigin), VectorGetY(alignedOrigin) };
@@ -103,9 +124,9 @@ bool Builder::paintWindowResize(){
         painted = m_paint.drawRegion(resize->name, corner, style.text);
     else{
         // Skins may supply a resize sprite. The default atlas uses its white sprite for a logical corner grip.
-        const f32 thickness = VectorGetX(VectorMin(VectorReplicate(2.0f), VectorScale(VectorSet(corner.width, corner.height, 0.0f, 0.0f), 0.125f)));
-        const SIMDVectorSingle scaledSize = VectorMultiply(VectorSet(corner.width, corner.height, corner.width, corner.height), VectorSet(0.25f, 0.25f, 0.75f, 0.75f));
-        const SIMDVectorSingle ends = VectorMultiplyAddExpression(VectorSet(corner.width, corner.height, corner.width, corner.height), VectorSet(0.25f, 1.0f, 1.0f, 0.25f), VectorSet(corner.x, corner.y, corner.x, corner.y));
+        const f32 thickness = VectorGetX(VectorMin(VectorReplicate(__hidden_ui_window_paint::s_ResizeGripMaximumThickness), VectorScale(VectorSet(corner.width, corner.height, 0.0f, 0.0f), __hidden_ui_window_paint::s_ResizeGripThicknessFraction)));
+        const SIMDVectorSingle scaledSize = VectorMultiply(VectorSet(corner.width, corner.height, corner.width, corner.height), VectorSet(__hidden_ui_window_paint::s_ResizeGripStartFraction, __hidden_ui_window_paint::s_ResizeGripStartFraction, __hidden_ui_window_paint::s_ResizeGripLengthFraction, __hidden_ui_window_paint::s_ResizeGripLengthFraction));
+        const SIMDVectorSingle ends = VectorMultiplyAddExpression(VectorSet(corner.width, corner.height, corner.width, corner.height), VectorSet(__hidden_ui_window_paint::s_ResizeGripStartFraction, 1.0f, 1.0f, __hidden_ui_window_paint::s_ResizeGripStartFraction), VectorSet(corner.x, corner.y, corner.x, corner.y));
         const SIMDVectorSingle origins = VectorSubtract(ends, VectorSet(0.0f, thickness, thickness, 0.0f));
         const Rect horizontal{ VectorGetX(origins), VectorGetY(origins), VectorGetZ(scaledSize), thickness };
         const Rect vertical{ VectorGetZ(origins), VectorGetW(origins), thickness, VectorGetW(scaledSize) };

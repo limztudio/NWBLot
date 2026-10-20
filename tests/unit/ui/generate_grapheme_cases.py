@@ -7,12 +7,15 @@ from urllib.request import urlopen
 
 LIT_UTF_8 = "utf-8"
 
+LIT_CRLF = "\r\n"
+LIT_LF = "\n"
+
 HERE = Path(__file__).resolve().parent
 SEP = "/" * 128
 
 
 def write_cpp(path, text):
-    path.write_bytes(text.replace("\r\n", "\n").replace("\n", "\r\n").encode(LIT_UTF_8))
+    path.write_bytes(text.replace(LIT_CRLF, LIT_LF).replace(LIT_LF, LIT_CRLF).encode(LIT_UTF_8))
 
 
 def generate_cases(data):
@@ -31,7 +34,7 @@ def generate_cases(data):
         positions = ",".join(str(value) for value in boundaries)
         cases.append(f'    {{ "{encoded}", "{positions}", {len(text)}u }},')
     for index, start in enumerate(range(0, len(cases), 500)):
-        content = "\n".join(cases[start:start + 500])
+        content = LIT_LF.join(cases[start:start + 500])
         write_cpp(HERE / f"edit_grapheme_cases_{index}.inc", f"// limztudio@gmail.com\n{SEP}\n\n\n" f"// Generated Unicode 17.0.0 GraphemeBreakTest cases; see impl/ecs_ui/toolkit/edit/unicode/LICENSE.txt.\n{content}\n\n\n{SEP}\n\n")
     return len(cases)
 

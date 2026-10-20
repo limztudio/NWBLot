@@ -33,6 +33,10 @@ namespace __hidden_ui_text_font{
 
 
 inline constexpr StringView s_LifecycleCategory = "ui_font_lifecycle";
+inline constexpr f32 s_FixedPointRoundBias = 0.5f;
+// Native outline bounds grow by one font unit on each side.
+inline constexpr f64 s_OutlineBoundsMargin = 1.0;
+inline constexpr f64 s_OutlineBoundsMarginBothSides = 2.0;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -206,12 +210,12 @@ private:
         // Native outline bounds include CFF font/subfont transforms; leave HarfBuzz ink and placement unchanged.
         const SIMDVectorDouble scale = VectorDoubleDivide(VectorDoubleSet(static_cast<f64>(fontSize), static_cast<f64>(fontSize), 0.0, 0.0), VectorDoubleSet(static_cast<f64>(m_face->units_per_EM), static_cast<f64>(m_face->units_per_EM), 1.0, 1.0));
         const SIMDVectorDouble leftTopUnits = VectorDoubleSet(static_cast<f64>(box.xMin), static_cast<f64>(box.yMax), 0.0, 0.0);
-        const SIMDVectorDouble leftTopBounds = VectorDoubleSubtract(VectorDoubleSelect(leftTopUnits, VectorDoubleNegate(leftTopUnits), s_DoubleSIMDMaskY), VectorDoubleSet(1.0, 1.0, 0.0, 0.0));
+        const SIMDVectorDouble leftTopBounds = VectorDoubleSubtract(VectorDoubleSelect(leftTopUnits, VectorDoubleNegate(leftTopUnits), s_DoubleSIMDMaskY), VectorDoubleSet(__hidden_ui_text_font::s_OutlineBoundsMargin, __hidden_ui_text_font::s_OutlineBoundsMargin, 0.0, 0.0));
         const SIMDVectorDouble leftTopValue = VectorDoubleMultiply(leftTopBounds, scale);
         const f64 left = VectorDoubleGetX(leftTopValue);
         const f64 top = VectorDoubleGetY(leftTopValue);
         const SIMDVectorDouble widthHeightValue = VectorDoubleMultiply(
-            VectorDoubleAdd(VectorDoubleSubtract(VectorDoubleSet(static_cast<f64>(box.xMax), static_cast<f64>(box.yMax), 0.0, 0.0), VectorDoubleSet(static_cast<f64>(box.xMin), static_cast<f64>(box.yMin), 0.0, 0.0)), VectorDoubleSet(2.0, 2.0, 0.0, 0.0)),
+            VectorDoubleAdd(VectorDoubleSubtract(VectorDoubleSet(static_cast<f64>(box.xMax), static_cast<f64>(box.yMax), 0.0, 0.0), VectorDoubleSet(static_cast<f64>(box.xMin), static_cast<f64>(box.yMin), 0.0, 0.0)), VectorDoubleSet(__hidden_ui_text_font::s_OutlineBoundsMarginBothSides, __hidden_ui_text_font::s_OutlineBoundsMarginBothSides, 0.0, 0.0)),
             scale
         );
         const f64 width = VectorDoubleGetX(widthHeightValue);
@@ -277,7 +281,7 @@ Expected<FontMetrics> FontFace::metrics(f32 fontSize)const{
     FontMetrics metrics{};
     if(!valid() || !IsFinite(fontSize) || fontSize < 1.0f / s_TextFixedPointScale || fontSize > s_TextMaxFontSize)
         return MakeUnexpected(Failure{});
-    const i32 scale = static_cast<i32>(VectorGetX(VectorMultiplyAddExpression(VectorReplicate(fontSize), VectorReplicate(s_TextFixedPointScale), VectorReplicate(0.5f))));
+    const i32 scale = static_cast<i32>(VectorGetX(VectorMultiplyAddExpression(VectorReplicate(fontSize), VectorReplicate(s_TextFixedPointScale), VectorReplicate(__hidden_ui_text_font::s_FixedPointRoundBias))));
     hb_font_set_scale(m_state->m_scaledFont, scale, scale);
     hb_font_extents_t extents{};
     if(!hb_font_get_h_extents(m_state->m_scaledFont, &extents))
@@ -295,7 +299,7 @@ Expected<FontMetrics> FontFace::metrics(f32 fontSize)const{
 bool FontFace::shape(const ShapeRequest& request, u32 byteBegin, u32 byteEnd, PaintVector<RawShapedGlyph>& output)const{
     if(!valid() || byteBegin > byteEnd || byteEnd > request.text.size() || request.text.size() > s_TextMaxBytes || !IsFinite(request.fontSize) || request.fontSize < 1.0f / s_TextFixedPointScale || request.fontSize > s_TextMaxFontSize)
         return false;
-    const i32 scale = static_cast<i32>(VectorGetX(VectorMultiplyAddExpression(VectorReplicate(request.fontSize), VectorReplicate(s_TextFixedPointScale), VectorReplicate(0.5f))));
+    const i32 scale = static_cast<i32>(VectorGetX(VectorMultiplyAddExpression(VectorReplicate(request.fontSize), VectorReplicate(s_TextFixedPointScale), VectorReplicate(__hidden_ui_text_font::s_FixedPointRoundBias))));
     hb_font_set_scale(m_state->m_scaledFont, scale, scale);
     const hb_script_t script = hb_script_from_iso15924_tag(request.scriptTag);
     if(script == HB_SCRIPT_INVALID)

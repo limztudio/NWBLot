@@ -19,7 +19,7 @@ void BuildFontMetadata(const Impl::FontAtlasPayload& payload, MetadataString& ou
     outText += "\r\nfont_atlas atlas;\r\natlas.font = face;\r\n";
     StringAppendFormat(outText, "atlas.bake_ppem = {};\r\n", payload.bakePpem);
     StringAppendFormat(outText, "atlas.spread_pixels = {};\r\n", payload.spreadPixels);
-    StringAppendFormat(outText, "atlas.raster_mode = \"{}\";\r\n", payload.rasterMode == Impl::FontAtlasRasterMode::Bitmap ? "bitmap" : "outline");
+    StringAppendFormat(outText, "atlas.raster_mode = \"{}\";\r\n", payload.rasterMode == Impl::FontAtlasRasterMode::Bitmap ? s_RasterModeBitmapText : s_RasterModeOutlineText);
     StringAppendFormat(outText, "atlas.ascender_units = {:#.9g};\r\n", payload.ascenderUnits);
     StringAppendFormat(outText, "atlas.descender_units = {:#.9g};\r\n", payload.descenderUnits);
     StringAppendFormat(outText, "atlas.line_gap_units = {:#.9g};\r\n", payload.lineGapUnits);

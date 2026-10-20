@@ -26,6 +26,13 @@ namespace __hidden_ui_gpu{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Begin and end timestamps of the standalone frame scope.
+static constexpr u32 s_FrameTimingQueryCount = 2u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] static Core::GlobalUniquePtr<GpuRendererState> CreateState(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assets, GpuRenderer::ShaderPathResolveCallback resolver){
     Core::GlobalUniquePtr<GpuRendererState> state = Core::MakeGlobalUnique<GpuRendererState>(arena, arena, graphics, assets, Move(resolver));
     if(!state)
@@ -180,7 +187,7 @@ GpuRenderer::~GpuRenderer()noexcept{
 bool GpuRenderer::validateResources(const u32 width, const u32 height){
     if(width == 0u || height == 0u || width > static_cast<u32>(Limit<i32>::s_Max) || height > static_cast<u32>(Limit<i32>::s_Max))
         return false;
-    m_state->m_frameTimingScopePrepared = m_state->m_graphics.gpuTiming().prepareScopeQueries(GpuRendererTimingScope::s_Frame.identity, m_state->m_graphics.getDevice(), 2u);
+    m_state->m_frameTimingScopePrepared = m_state->m_graphics.gpuTiming().prepareScopeQueries(GpuRendererTimingScope::s_Frame.identity, m_state->m_graphics.getDevice(), __hidden_ui_gpu::s_FrameTimingQueryCount);
     if(!m_state->m_frameTimingScopePrepared)
         NWB_LOGGER_WARNING(NWB_TEXT("GpuRenderer: could not prepare standalone frame timing scope"));
     if(m_state->m_width == width && m_state->m_height == height && m_state->m_resources)
@@ -192,14 +199,14 @@ bool GpuRenderer::validateResources(const u32 width, const u32 height){
     Core::Framebuffer* const framebuffer = m_state->m_graphics.getFramebuffer(0u);
     if(!framebuffer || !m_state->prepareOutputPipeline(framebuffer->getFramebufferInfo()))
         return false;
-    Array<GpuFrame, 4u> frames;
+    Array<GpuFrame, s_GpuFrameCount> frames;
     for(auto& frame : frames){
         auto created = MakeGpuVersion<GpuFrameData>(m_state->m_arena, m_state->m_arena);
         if(!created)
             return false;
         frame = Move(*created);
     }
-    Array<GpuVersion<GpuTargetVersion>, 3u> targets;
+    Array<GpuVersion<GpuTargetVersion>, s_GpuTargetSlotCount> targets;
     for(auto& target : targets){
         auto created = m_state->createTarget(width, height);
         if(!created)
@@ -249,7 +256,7 @@ bool GpuRenderer::setSkin(const Core::Assets::AssetRef<UiSkin>& identity, const 
         if(existing.skin == binding.skin && existing.texture == binding.texture && existing.generation == binding.generation)
             return existing.atlasWidth == binding.atlasWidth && existing.atlasHeight == binding.atlasHeight && existing.referenceDensity == binding.referenceDensity;
     }
-    auto loadedAsset = m_state->m_assets.loadTypedSync<Texture>(binding.texture.name(), NWB_TEXT("GpuRenderer"), "UI atlas texture");
+    auto loadedAsset = m_state->m_assets.loadTypedSync<Texture>(binding.texture.name(), s_GpuRendererContext, "UI atlas texture");
     const Texture* texture = loadedAsset ? loadedAsset->get() : nullptr;
     if(!texture || !skin.validateTexture(*texture))
         return false;
@@ -258,7 +265,7 @@ bool GpuRenderer::setSkin(const Core::Assets::AssetRef<UiSkin>& identity, const 
         return false;
     GpuVersion<GpuSkinVersion> version = Move(*versionResult);
     version->m_binding = binding;
-    if(!TextureAssetLoader::Create(version->m_texture, *texture, Name("ui.atlas"), m_state->m_graphics, NWB_TEXT("GpuRenderer")))
+    if(!TextureAssetLoader::Create(version->m_texture, *texture, s_GpuAtlasTextureName, m_state->m_graphics, s_GpuRendererContext))
         return false;
     if(!version->m_texture.readinessToken.valid() || !version->m_texture.readinessToken.hasPhysicalQueueIdentity())
         return false;

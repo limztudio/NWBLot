@@ -21,7 +21,7 @@ bool nwbLightSpaceInterpolateBarycentrics(const uint2 pixel, const uint2 extent,
     const float2 q2 = clip2.xy - ndc * clip2.w;
     const float2 magnitude = max(abs(q0), max(abs(q1), abs(q2)));
     const float scale = max(magnitude.x, magnitude.y);
-    if(!isfinite(scale) || scale < 1.1754943508222875e-38)
+    if(!isfinite(scale) || scale < NWB_FLOAT_MIN_NORMAL)
         return false;
     const float2 a = q0 / scale;
     const float2 b = q1 / scale;

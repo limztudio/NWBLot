@@ -33,6 +33,7 @@ inline constexpr AStringView s_AlphaBlackKeyword = "black";
 inline constexpr f32 s_AlphaWhiteConstant = 1.0f;
 inline constexpr f32 s_AlphaBlackConstant = 0.0f;
 inline constexpr AStringView s_TemporaryOutputSuffix = ".tmp";
+inline constexpr AStringView s_BackupOutputSuffix = ".old";
 
 struct AlphaSource{
     AlphaSourceMode::Enum mode = AlphaSourceMode::Original;

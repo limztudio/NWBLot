@@ -22,19 +22,26 @@ static_assert(alignof(StringLiteralRecordHeader) <= 16);
 
 constexpr u32 s_RecordMagic = 0x474c4253;
 constexpr usize s_RecordAlignment = 16;
+constexpr usize s_MaskSeedByteIndexMask = 7;
+constexpr usize s_MaskSeedByteBits = 8;
+constexpr usize s_MaskIndexMultiplier = 0x9d;
+constexpr usize s_MaskIndexFoldShift = 8;
+#if !defined(__APPLE__)
+constexpr int s_InitializerPriority = 101;
+#endif
 
 #if defined(_WIN32)
 #pragma section(".glb$A", read, write)
 #pragma section(".glb$Z", read, write)
 
-alignas(16) static __declspec(allocate(".glb$A")) __attribute__((used)) u8 s_StringLiteralPoolBegin[16] = {};
-alignas(16) static __declspec(allocate(".glb$Z")) __attribute__((used)) u8 s_StringLiteralPoolEnd[16] = {};
+alignas(s_RecordAlignment) static __declspec(allocate(".glb$A")) __attribute__((used)) u8 s_StringLiteralPoolBegin[s_RecordAlignment] = {};
+alignas(s_RecordAlignment) static __declspec(allocate(".glb$Z")) __attribute__((used)) u8 s_StringLiteralPoolEnd[s_RecordAlignment] = {};
 #elif defined(__APPLE__)
-__attribute__((section("__DATA,__glblit"), used, aligned(16))) static u8 s_StringLiteralPoolEmpty[16] = {};
+__attribute__((section("__DATA,__glblit"), used, aligned(s_RecordAlignment))) static u8 s_StringLiteralPoolEmpty[s_RecordAlignment] = {};
 extern "C" u8 g_StringLiteralPoolBegin[] __asm("section$start$__DATA$__glblit");
 extern "C" u8 g_StringLiteralPoolEnd[] __asm("section$end$__DATA$__glblit");
 #elif defined(__ELF__)
-__attribute__((section("glb_literals"), used, retain, aligned(16))) static u8 s_StringLiteralPoolEmpty[16] = {};
+__attribute__((section("glb_literals"), used, retain, aligned(s_RecordAlignment))) static u8 s_StringLiteralPoolEmpty[s_RecordAlignment] = {};
 extern "C" __attribute__((visibility("hidden"))) u8 __start_glb_literals[];
 extern "C" __attribute__((visibility("hidden"))) u8 __stop_glb_literals[];
 #else
@@ -88,7 +95,7 @@ static void DecodeStringLiteralPool(const usize begin, const usize end)noexcept{
         const u64 seed = header.seed;
         u8* const payload = reinterpret_cast<u8*>(cursor + header.payloadOffset);
         for(usize i = 0; i < byteCount; ++i){
-            const u8 mask = static_cast<u8>((seed >> ((i & 7) * 8)) ^ (i * 0x9d + (i >> 8)));
+            const u8 mask = static_cast<u8>((seed >> ((i & s_MaskSeedByteIndexMask) * s_MaskSeedByteBits)) ^ (i * s_MaskIndexMultiplier + (i >> s_MaskIndexFoldShift)));
             payload[i] ^= mask;
         }
         cursor += recordStride;
@@ -104,9 +111,9 @@ static void DecodeStringLiteralPool(const usize begin, const usize end)noexcept{
 #if defined(__APPLE__)
 extern "C" __attribute__((constructor, used, visibility("hidden"))) void GlbInitializeStringLiteralPool()noexcept{
 #elif defined(__ELF__)
-extern "C" __attribute__((constructor(101), used, visibility("hidden"))) void GlbInitializeStringLiteralPool()noexcept{
+extern "C" __attribute__((constructor(__hidden_string_literal_runtime::s_InitializerPriority), used, visibility("hidden"))) void GlbInitializeStringLiteralPool()noexcept{
 #else
-extern "C" __attribute__((constructor(101), used)) void GlbInitializeStringLiteralPool()noexcept{
+extern "C" __attribute__((constructor(__hidden_string_literal_runtime::s_InitializerPriority), used)) void GlbInitializeStringLiteralPool()noexcept{
 #endif
     using namespace __hidden_string_literal_runtime;
 #if defined(_WIN32)

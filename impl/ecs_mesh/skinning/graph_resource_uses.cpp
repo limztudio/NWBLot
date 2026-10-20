@@ -28,6 +28,7 @@ static constexpr usize s_DeformationUseCapacity = 13u;
 static constexpr usize s_PostDispatchUseCapacity = 11u;
 static constexpr usize s_LocalBoundsUseCapacity = 3u;
 static constexpr usize s_FinalizerUseCapacity = 6u;
+static constexpr usize s_PromotedIndexCapacityFactor = 4u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -105,7 +106,7 @@ public:
 
     [[nodiscard]] bool promoteIndex(){
         NWB_ASSERT(!m_index && m_count == InlineCapacity);
-        Index index(InlineCapacity * 4u, ResourceHash{}, EqualTo<Core::GpuGraphResourceId>{}, m_scratchArena);
+        Index index(InlineCapacity * s_PromotedIndexCapacityFactor,ResourceHash{}, EqualTo<Core::GpuGraphResourceId>{}, m_scratchArena);
         for(const ResourceUseEntry& entry : m_inline){
             const auto [found, inserted] = index.emplace(entry.resource, entry.info);
             if(!inserted){

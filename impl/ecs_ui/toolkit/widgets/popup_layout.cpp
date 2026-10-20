@@ -3,6 +3,7 @@
 
 
 #include "popup.h"
+#include "../rect_math.h"
 
 #include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
@@ -104,7 +105,7 @@ Expected<PopupPlacement> PopupLayout::Place(const PopupOptions& options, const D
         break;
     case PopupPlacementSide::Center:
         origin = VectorDoubleSubtract(VectorDoubleSet(display.logicalWidth, display.logicalHeight, 0.0, 0.0), VectorDoubleSet(width, height, 0.0, 0.0));
-        origin = VectorDoubleMultiply(origin, VectorDoubleSet(0.5, 0.5, 0.0, 0.0));
+        origin = VectorDoubleMultiply(origin, VectorDoubleSet(s_RectCenterFractionF64, s_RectCenterFractionF64, 0.0, 0.0));
         break;
     }
     const SIMDVectorDouble maximum = VectorDoubleSubtract(VectorDoubleSet(display.logicalWidth, display.logicalHeight, 0.0, 0.0), VectorDoubleSet(width, height, 0.0, 0.0));

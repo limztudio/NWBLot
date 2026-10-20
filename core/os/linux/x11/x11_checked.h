@@ -23,6 +23,13 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Property format is the item width in bits. Format 32 items are passed as long values on the client side.
+inline constexpr int s_X11PropertyByteFormat = 8;
+inline constexpr int s_X11PropertyLongFormat = 32;
+// Property lengths and request sizes count 4-byte units.
+inline constexpr usize s_X11WireUnitBytes = 4u;
+
+
 struct X11Property final : NoCopy{
     Atom type = 0u;
     int format = 0;

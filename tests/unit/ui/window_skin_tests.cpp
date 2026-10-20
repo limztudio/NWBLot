@@ -19,6 +19,8 @@ using namespace NWB::Impl;
 using namespace NWB::Impl::Ui;
 using namespace NWB::UiWidgetTests;
 
+constexpr AStringView s_ApplyKey = "apply";
+
 class UiWindowSkinTests : public WidgetFixture{};
 
 
@@ -31,11 +33,11 @@ TEST_F(UiWindowSkinTests, ReplacingAtlasChangesMetricsAndBindingsWithoutChanging
     options.initialBounds = { 30.0f, 40.0f, 240.0f, 150.0f };
     ASSERT_TRUE(begin(1u));
     ASSERT_TRUE(m_builder.beginWindow("window", "Theme", state, options));
-    EXPECT_FALSE(m_builder.button("apply", "Apply"));
+    EXPECT_FALSE(m_builder.button(s_ApplyKey, "Apply"));
     ASSERT_TRUE(finishWindow());
     const DrawSnapshot first = m_paint.freeze();
     ASSERT_TRUE(m_context.commitFrame(1u));
-    const HitTarget* original = target(id("apply"));
+    const HitTarget* original = target(id(s_ApplyKey));
     ASSERT_NE(original, nullptr);
     const HitTarget oldTarget = *original;
     EXPECT_FLOAT_EQ(oldTarget.rectangle.x, 33.0f);
@@ -73,13 +75,13 @@ TEST_F(UiWindowSkinTests, ReplacingAtlasChangesMetricsAndBindingsWithoutChanging
     m_skinGeneration = 2u;
     ASSERT_TRUE(begin(2u));
     ASSERT_TRUE(m_builder.beginWindow("window", "Theme", state, options));
-    EXPECT_FALSE(m_builder.button("apply", "Apply"));
+    EXPECT_FALSE(m_builder.button(s_ApplyKey, "Apply"));
     ASSERT_TRUE(finishWindow());
     const DrawSnapshot second = m_paint.freeze();
     EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
     EXPECT_EQ(m_context.input().hitTest({ 40.0f, 86.0f }), oldTarget.id);
     ASSERT_TRUE(m_context.commitFrame(2u));
-    const HitTarget* updated = target(id("apply"));
+    const HitTarget* updated = target(id(s_ApplyKey));
     ASSERT_NE(updated, nullptr);
     EXPECT_EQ(updated->id, oldTarget.id);
     EXPECT_EQ(updated->declarationGeneration, oldTarget.declarationGeneration);

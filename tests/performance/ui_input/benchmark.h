@@ -23,6 +23,8 @@ UI_INPUT_BENCHMARK_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr AStringView s_SkinPath = "tests/performance/ui_input/skin";
+
 [[nodiscard]] inline u64 MixChecksum(const u64 hash, const u64 value)noexcept{
     return (hash ^ value) * 1099511628211u;
 }

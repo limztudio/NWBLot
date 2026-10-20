@@ -24,6 +24,7 @@ namespace __hidden_gpu_task_timing_feedback{
 
 
 inline constexpr usize s_LinearHistoryCount = 16u;
+inline constexpr usize s_HistoryIndexBucketsPerEntry = 4u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -483,7 +484,7 @@ bool GpuTaskTimingHistoryStore::promoteHistoryIndex(){
     using namespace GpuTaskTimingHistoryDetail;
 
     NWB_ASSERT(!m_historyIndex && m_histories.size() == s_LinearHistoryCount);
-    RouteIndex index(s_LinearHistoryCount * 4u, m_arena);
+    RouteIndex index(s_LinearHistoryCount * s_HistoryIndexBucketsPerEntry, m_arena);
     for(usize recordIndex = 0u; recordIndex < m_histories.size(); ++recordIndex){
         const GpuTaskTimingHistoryEntry& entry = m_histories[recordIndex].entry;
         if(!index.emplace(StoredRouteKey(entry.key, entry.physicalQueue), recordIndex).second){
@@ -501,7 +502,7 @@ bool GpuTaskTimingHistoryStore::promoteAssignmentIndex(){
     using namespace GpuTaskTimingHistoryDetail;
 
     NWB_ASSERT(!m_assignmentIndex && m_assignments.size() == s_LinearHistoryCount);
-    AssignmentIndex index(s_LinearHistoryCount * 4u, m_arena);
+    AssignmentIndex index(s_LinearHistoryCount * s_HistoryIndexBucketsPerEntry, m_arena);
     for(usize assignmentIndex = 0u; assignmentIndex < m_assignments.size(); ++assignmentIndex){
         if(!index.emplace(StoredAssignmentKey(m_assignments[assignmentIndex].key), assignmentIndex).second){
             NWB_ASSERT(false);

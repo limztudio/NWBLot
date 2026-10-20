@@ -120,6 +120,8 @@ Bool X11TextInputService::OnPreeditCaret(XIC context, const XPointer data, const
 }
 
 bool X11TextInputService::convertPreeditText(const XIMText& text){
+    constexpr usize s_InvalidSequence = static_cast<usize>(-1);
+    constexpr usize s_IncompleteSequence = static_cast<usize>(-2);
     m_insertion.clear();
     mbstate_t state{};
     const char* next = text.string.multi_byte;
@@ -130,7 +132,7 @@ bool X11TextInputService::convertPreeditText(const XIMText& text){
         else{
             wchar_t wide = 0;
             const usize bytes = ::mbrtowc(&wide, next, MB_CUR_MAX, &state);
-            if(bytes == static_cast<usize>(-1) || bytes == static_cast<usize>(-2) || bytes == 0u)
+            if(bytes == s_InvalidSequence || bytes == s_IncompleteSequence || bytes == 0u)
                 return false;
             next += bytes;
             codePoint = static_cast<u32>(wide);

@@ -215,7 +215,7 @@ TEST_F(UiTextAreaScrollTests, KnownModelRebindingResetsAndRevealsTheNewCaret){
     ASSERT_TRUE(replacement.setText(DenseText()));
     const u64 revision = m_state.revision();
     ASSERT_TRUE(beginArea(2u));
-    ASSERT_TRUE(m_builder.textArea("area", replacement, m_state, SmallOptions()).valid);
+    ASSERT_TRUE(m_builder.textArea(s_TextAreaKey, replacement, m_state, SmallOptions()).valid);
     ASSERT_TRUE(acceptArea());
     EXPECT_GT(m_state.scroll().x, 17.0f);
     EXPECT_GT(m_state.scroll().y, 19.0f);

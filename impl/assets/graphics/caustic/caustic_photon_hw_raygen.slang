@@ -51,10 +51,10 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
 #if NWB_RT_CSG_ENABLED
     const uint contextSlot = g_NwbCausticHwMaterialContextSlots.materialSlots.w;
     const uint materialSlot = g_NwbCausticHwMaterialContextSlots.sceneSlots.z;
-    const uint activeOffset = nwbHeapRawBuffer(contextSlot).Load(20u);
-    const uint activeCount = nwbHeapRawBuffer(contextSlot).Load(24u);
+    const uint activeOffset = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_BASE_OFFSET);
+    const uint activeCount = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_COUNT_OFFSET);
     for(uint index = 0u; index < activeCount; ++index){
-        const uint instance = nwbHeapRawBuffer(contextSlot).Load(activeOffset + index * 4u);
+        const uint instance = nwbHeapRawBuffer(contextSlot).Load(activeOffset + index * NWB_CSG_RAY_ACTIVE_INDEX_BYTES);
         const NwbCausticHit candidate = nwbCausticCsgInstanceClosest(contextSlot, materialSlot, instance, origin, direction, tMin, hit.t);
         if(candidate.failure != 0u)
             return candidate;

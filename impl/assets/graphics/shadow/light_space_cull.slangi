@@ -9,6 +9,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// One bit per frustum plane; a caster is culled only when every corner is outside a common plane.
+#define NWB_LIGHT_SPACE_CULL_PLANE_LEFT 1u
+#define NWB_LIGHT_SPACE_CULL_PLANE_RIGHT 2u
+#define NWB_LIGHT_SPACE_CULL_PLANE_BOTTOM 4u
+#define NWB_LIGHT_SPACE_CULL_PLANE_TOP 8u
+#define NWB_LIGHT_SPACE_CULL_PLANE_NEAR 16u
+#define NWB_LIGHT_SPACE_CULL_PLANE_FAR 32u
+#define NWB_LIGHT_SPACE_CULL_ALL_PLANES 0x3fu
+// Bound arithmetic roundoff, in float epsilons.
+#define NWB_LIGHT_SPACE_CULL_ROUNDOFF_EPSILONS 32.0
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Every clip inequality is affine in object position.
 // Eight bound corners enclose all current posed triangles.
 // Uncertain arithmetic retains the caster; only a common, strictly outside plane can remove its draw.
@@ -20,12 +35,12 @@ bool nwbLightSpaceBoundsOutside(const NwbLightSpaceView view, const uint instanc
     if(!all(isfinite(minimum)) || !all(isfinite(maximum)) || any(minimum > maximum) || !all(isfinite(transform.scale.xyz)) || !all(isfinite(transform.rotation)) || !all(isfinite(transform.translation)))
         return false;
     // A flushed subnormal endpoint need not preserve its order relative to an interior source position.
-    const uint3 minimumBits = asuint(minimum) & 0x7fffffffu;
-    const uint3 maximumBits = asuint(maximum) & 0x7fffffffu;
-    if(any((minimumBits != 0u) & (minimumBits < 0x00800000u)) || any((maximumBits != 0u) & (maximumBits < 0x00800000u)))
+    const uint3 minimumBits = asuint(minimum) & NWB_FLOAT_MAGNITUDE_BITS_MASK;
+    const uint3 maximumBits = asuint(maximum) & NWB_FLOAT_MAGNITUDE_BITS_MASK;
+    if(any((minimumBits != 0u) & (minimumBits < NWB_FLOAT_MIN_NORMAL_BITS)) || any((maximumBits != 0u) & (maximumBits < NWB_FLOAT_MIN_NORMAL_BITS)))
         return false;
-    uint outside = 0x3fu;
-    const float roundoff = 32.0 * 1.1920928955078125e-7;
+    uint outside = NWB_LIGHT_SPACE_CULL_ALL_PLANES;
+    const float roundoff = NWB_LIGHT_SPACE_CULL_ROUNDOFF_EPSILONS * NWB_FLOAT_EPSILON;
     for(uint corner = 0u; corner < 8u; ++corner){
         const float3 local = float3((corner & 1u) != 0u ? maximum.x : minimum.x, (corner & 2u) != 0u ? maximum.y : minimum.y, (corner & 4u) != 0u ? maximum.z : minimum.z);
         const float3 scaled = local * transform.scale.xyz;
@@ -34,7 +49,7 @@ bool nwbLightSpaceBoundsOutside(const NwbLightSpaceView view, const uint instanc
         const float3 magnitude = abs(scaled);
         const float3 twiceCross = 2.0 * (q.yzx * magnitude.zxy + q.zxy * magnitude.yzx);
         // Bound the actual quaternion/TRS operation terms before the projection's own dot-product rounding.
-        const float3 worldError = roundoff * (magnitude + abs(transform.rotation.w) * twiceCross + q.yzx * twiceCross.zxy + q.zxy * twiceCross.yzx + abs(transform.translation)) + float3(1.1754943508222875e-38);
+        const float3 worldError = roundoff * (magnitude + abs(transform.rotation.w) * twiceCross + q.yzx * twiceCross.zxy + q.zxy * twiceCross.yzx + abs(transform.translation)) + float3(NWB_FLOAT_MIN_NORMAL);
         const float4 clip = nwbLightSpaceProject(view, world);
         float4 error;
         for(uint row = 0u; row < 4u; ++row)
@@ -42,12 +57,12 @@ bool nwbLightSpaceBoundsOutside(const NwbLightSpaceView view, const uint instanc
         if(!all(isfinite(clip)) || !all(isfinite(error)))
             return false;
         uint mask = 0u;
-        mask |= clip.x + clip.w < -(error.x + error.w) ? 1u : 0u;
-        mask |= clip.w - clip.x < -(error.w + error.x) ? 2u : 0u;
-        mask |= clip.y + clip.w < -(error.y + error.w) ? 4u : 0u;
-        mask |= clip.w - clip.y < -(error.w + error.y) ? 8u : 0u;
-        mask |= clip.z < -error.z ? 16u : 0u;
-        mask |= clip.w - clip.z < -(error.w + error.z) ? 32u : 0u;
+        mask |= clip.x + clip.w < -(error.x + error.w) ? NWB_LIGHT_SPACE_CULL_PLANE_LEFT : 0u;
+        mask |= clip.w - clip.x < -(error.w + error.x) ? NWB_LIGHT_SPACE_CULL_PLANE_RIGHT : 0u;
+        mask |= clip.y + clip.w < -(error.y + error.w) ? NWB_LIGHT_SPACE_CULL_PLANE_BOTTOM : 0u;
+        mask |= clip.w - clip.y < -(error.w + error.y) ? NWB_LIGHT_SPACE_CULL_PLANE_TOP : 0u;
+        mask |= clip.z < -error.z ? NWB_LIGHT_SPACE_CULL_PLANE_NEAR : 0u;
+        mask |= clip.w - clip.z < -(error.w + error.z) ? NWB_LIGHT_SPACE_CULL_PLANE_FAR : 0u;
         outside &= mask;
         if(outside == 0u)
             return false;

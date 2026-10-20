@@ -233,7 +233,7 @@ void GpuTaskGraph::preparePipelineIndexes(const PipelinePointerKey& pendingPoint
             m_pipelinePointerIndex.emplace(Move(*pointers));
     }
     else if(pendingPointer.pointer && !m_pipelinePointerIndex)
-        m_pipelinePointerIndex.emplace(2u, m_arena);
+        m_pipelinePointerIndex.emplace(s_InitialPointerIndexBucketCount, m_arena);
 }
 
 Expected<GpuGraphPipelineId> GpuTaskGraph::appendPipeline(const GpuGraphPipelineDesc& desc, const PipelineBinding& binding){

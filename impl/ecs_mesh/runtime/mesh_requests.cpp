@@ -17,6 +17,24 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_runtime_mesh_requests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr usize s_IndexBucketsPerRequest = 2u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 usize RuntimeMeshRequestSet::KeyHash::operator()(const Key& key)const noexcept{
     usize hash = Hasher<NameHash>{}(key.name);
     HashCombine(hash, key.version);
@@ -50,7 +68,7 @@ RuntimeMeshRequestSet::RuntimeMeshRequestSet(Core::Alloc::ScratchArena& scratchA
     , m_expectedRequestCount(expectedRequestCount)
 {
     if(expectedRequestCount > s_InlineCapacity)
-        m_index.emplace(SizeOf<2u>(expectedRequestCount), KeyHash{}, KeyEqual{}, m_scratchArena);
+        m_index.emplace(SizeOf<__hidden_runtime_mesh_requests::s_IndexBucketsPerRequest>(expectedRequestCount), KeyHash{}, KeyEqual{}, m_scratchArena);
 }
 
 void RuntimeMeshRequestSet::add(const Name& meshKey, const u64 version){
@@ -72,7 +90,7 @@ void RuntimeMeshRequestSet::add(const Name& meshKey, const u64 version){
 }
 
 void RuntimeMeshRequestSet::promoteIndex(){
-    Index index(SizeOf<2u>(Max(m_expectedRequestCount, s_InlineCapacity + 1u)), KeyHash{}, KeyEqual{}, m_scratchArena);
+    Index index(SizeOf<__hidden_runtime_mesh_requests::s_IndexBucketsPerRequest>(Max(m_expectedRequestCount, s_InlineCapacity + 1u)), KeyHash{}, KeyEqual{}, m_scratchArena);
     for(usize entryIndex = 0u; entryIndex < m_inlineCount; ++entryIndex){
         const Entry& entry = m_inlineEntries[entryIndex];
         index[entry.key] = entry.found;

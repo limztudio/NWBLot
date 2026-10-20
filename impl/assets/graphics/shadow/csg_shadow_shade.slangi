@@ -51,12 +51,12 @@ bool nwbCsgShadowPixelRay(const NwbLightSpaceView view, const uint2 pixel, out f
 void nwbCsgShadowStoreEvent(const uint pixel, const uint index, const NwbLightSpaceEvent event){
     const uint address = (pixel * NWB_LIGHT_SPACE_EVENTS_PER_TEXEL + index) * NWB_LIGHT_SPACE_EVENT_BYTES;
     g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store4(address, uint4(asuint(event.depth), event.instanceAndFacing, event.primitive, event.absorptionRG));
-    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store(address + 16u, event.absorptionBInterface);
+    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store(address + NWB_LIGHT_SPACE_EVENT_TAIL_OFFSET, event.absorptionBInterface);
 }
 
 void nwbCsgShadowConservativeTexel(const uint pixel){
-    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.countsSlot].Store(pixel * 4u, NWB_CSG_SHADOW_CONSERVATIVE_COUNT);
-    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.csgOpaqueDepthSlot].Store(pixel * 4u, asuint(0.0));
+    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.countsSlot].Store(pixel * NWB_LIGHT_SPACE_PIXEL_WORD_BYTES, NWB_CSG_SHADOW_CONSERVATIVE_COUNT);
+    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.csgOpaqueDepthSlot].Store(pixel * NWB_LIGHT_SPACE_PIXEL_WORD_BYTES, asuint(0.0));
 }
 
 bool nwbCsgShadowCapEvent(const uint instance, const uint cutterIndex, const float depth, const bool entering, const float3 rayOrigin, const float3 rayDirection, out NwbLightSpaceEvent event){
@@ -82,8 +82,8 @@ bool nwbCsgShadowCapEvent(const uint instance, const uint cutterIndex, const flo
     event.depth = depth;
     event.instanceAndFacing = instance | (entering ? NWB_LIGHT_SPACE_EVENT_ENTERING : 0u);
     event.primitive = NWB_CSG_SHADOW_CAP_PRIMITIVE;
-    event.absorptionRG = f32tof16(float(absorption.x)) | (f32tof16(float(absorption.y)) << 16u);
-    event.absorptionBInterface = f32tof16(float(absorption.z)) | (f32tof16(float(transmission)) << 16u);
+    event.absorptionRG = f32tof16(float(absorption.x)) | (f32tof16(float(absorption.y)) << NWB_HALF_BIT_COUNT);
+    event.absorptionBInterface = f32tof16(float(absorption.z)) | (f32tof16(float(transmission)) << NWB_HALF_BIT_COUNT);
     return true;
 }
 
@@ -106,20 +106,20 @@ bool nwbCsgShadowEmitSpan(
         opaqueDepth = min(opaqueDepth, nearEvent.depth);
         return true;
     }
-    if(outputCount > NWB_LIGHT_SPACE_EVENTS_PER_TEXEL - 2u)
+    if(outputCount > NWB_LIGHT_SPACE_EVENTS_PER_TEXEL - NWB_CSG_SHADOW_SPAN_EVENT_COUNT)
         return false;
     NwbLightSpaceEvent outputFar = farEvent;
     NwbLightSpaceEvent outputNear = nearEvent;
     // The output describes retained-volume boundaries independently of the source shell's orientation.
     outputFar.instanceAndFacing = instance | NWB_LIGHT_SPACE_EVENT_ENTERING;
     outputNear.instanceAndFacing = instance;
-    if(farCutter != 0xffffffffu && !nwbCsgShadowCapEvent(instance, farCutter, farEvent.depth, true, rayOrigin, rayDirection, outputFar))
+    if(farCutter != NWB_CSG_RAY_INVALID_INDEX && !nwbCsgShadowCapEvent(instance, farCutter, farEvent.depth, true, rayOrigin, rayDirection, outputFar))
         return false;
-    if(nearCutter != 0xffffffffu && !nwbCsgShadowCapEvent(instance, nearCutter, nearEvent.depth, false, rayOrigin, rayDirection, outputNear))
+    if(nearCutter != NWB_CSG_RAY_INVALID_INDEX && !nwbCsgShadowCapEvent(instance, nearCutter, nearEvent.depth, false, rayOrigin, rayDirection, outputNear))
         return false;
     nwbCsgShadowStoreEvent(pixel, outputCount, outputFar);
     nwbCsgShadowStoreEvent(pixel, outputCount + 1u, outputNear);
-    outputCount += 2u;
+    outputCount += NWB_CSG_SHADOW_SPAN_EVENT_COUNT;
     return true;
 }
 
@@ -137,7 +137,7 @@ bool nwbCsgShadowSubtractSpan(
     inout float opaqueDepth
 ){
     NwbLightSpaceEvent cursor = farEvent;
-    uint cursorCutter = 0xffffffffu;
+    uint cursorCutter = NWB_CSG_RAY_INVALID_INDEX;
     for(uint index = 0u; index < intervalCount; ++index){
         const NwbCsgShadowInterval cut = intervals[index];
         if(cut.depth.x >= cursor.depth || cut.depth.y <= nearEvent.depth)
@@ -155,7 +155,7 @@ bool nwbCsgShadowSubtractSpan(
         if(cursor.depth <= nearEvent.depth)
             return true;
     }
-    return nwbCsgShadowEmitSpan(pixel, transparent, instance, cursor, nearEvent, cursorCutter, 0xffffffffu, rayOrigin, rayDirection, outputCount, opaqueDepth);
+    return nwbCsgShadowEmitSpan(pixel, transparent, instance, cursor, nearEvent, cursorCutter, NWB_CSG_RAY_INVALID_INDEX, rayOrigin, rayDirection, outputCount, opaqueDepth);
 }
 
 // Input records stay local while expanded cap records overwrite the same bounded global stream.
@@ -177,7 +177,7 @@ bool nwbCsgShadowConvertEvents(const uint pixel, const NwbLightSpaceView view, c
     if(!nwbCsgShadowPixelRay(view, viewPixel, rayOrigin, rayDirection))
         return false;
     uint outputCount = 0u;
-    float opaqueDepth = asfloat(0x7f7fffffu);
+    float opaqueDepth = asfloat(NWB_FLOAT_MAX_BITS);
     uint first = 0u;
     while(first < count){
         const uint instance = input[first].instanceAndFacing & NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK;
@@ -201,7 +201,7 @@ bool nwbCsgShadowConvertEvents(const uint pixel, const NwbLightSpaceView view, c
         for(uint index = 0u; index < NWB_CSG_RAY_MAX_CUTTERS; ++index)
             intervals[index] = (NwbCsgShadowInterval)0;
         uint intervalCount = 0u;
-        const uint cutterCount = nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load(12u);
+        const uint cutterCount = nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load(NWB_CSG_RAY_CONTEXT_CUTTER_COUNT_OFFSET);
         const bool bounded = range.x <= cutterCount && range.y <= cutterCount - range.x && range.y <= NWB_CSG_RAY_MAX_CUTTERS;
         bool supported = bounded && (range.z & NWB_CSG_RAY_RECEIVER_UNSUPPORTED) == 0u;
         if(supported){
@@ -295,8 +295,8 @@ bool nwbCsgShadowConvertEvents(const uint pixel, const NwbLightSpaceView view, c
             return false;
         first = end;
     }
-    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.countsSlot].Store(pixel * 4u, outputCount);
-    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.csgOpaqueDepthSlot].Store(pixel * 4u, asuint(opaqueDepth));
+    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.countsSlot].Store(pixel * NWB_LIGHT_SPACE_PIXEL_WORD_BYTES, outputCount);
+    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.csgOpaqueDepthSlot].Store(pixel * NWB_LIGHT_SPACE_PIXEL_WORD_BYTES, asuint(opaqueDepth));
     converted = true;
     return true;
 }

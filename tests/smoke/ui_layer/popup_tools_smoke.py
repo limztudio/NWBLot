@@ -14,7 +14,8 @@ from window_smoke import parse_args
 from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
     read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
 from fixture_environment import build_fixture_environment
-from checkpoint_report import accept_checkpoint, fail_checkpoint, prepare_guarded_checkpoint
+from checkpoint_report import CHECKPOINT_POLL_SECONDS, accept_checkpoint, fail_checkpoint, prepare_guarded_checkpoint
+from fixture_launch import DISPLAY_MARKER_TIMEOUT_SECONDS
 
 LIT_CURSOR = "cursor"
 LIT_RECTANGLES = "rectangles"
@@ -72,7 +73,7 @@ class PopupToolsRun:
             self.native.maintain_pointer()
             snapshot = snapshot_from_logs(self.logs())
             if snapshot is None:
-                time.sleep(0.1)
+                time.sleep(CHECKPOINT_POLL_SECONDS)
                 continue
             if snapshot[LIT_LOGICAL_EXTENT][0] < 600.0 or snapshot[LIT_LOGICAL_EXTENT][1] < 400.0:
                 raise SmokeSkip("the popup tools fixture needs a logical client of at least 600x400")
@@ -84,7 +85,7 @@ class PopupToolsRun:
             if report[LIT_PASSED]:
                 accept_checkpoint(self, name, path, snapshot, report, dynamic)
                 return
-            time.sleep(0.1)
+            time.sleep(CHECKPOINT_POLL_SECONDS)
         fail_checkpoint(self, name, path, report, "popup tools")
 
     def write_report(self, passed):
@@ -226,7 +227,7 @@ def run(args):
             backend.prepare_raw_client_window(handle)
         else:
             backend.prepare_window(handle)
-        wait_for_log_message(log_directory, log_baseline, log_pattern, "UiPopupToolsSmoke: display", min(args.timeout, 15.0))
+        wait_for_log_message(log_directory, log_baseline, log_pattern, "UiPopupToolsSmoke: display", min(args.timeout, DISPLAY_MARKER_TIMEOUT_SECONDS))
         popup_tools_run = PopupToolsRun(args, backend, handle, application, log_directory, log_baseline, log_pattern)
         popup_tools_run.execute()
     finally:

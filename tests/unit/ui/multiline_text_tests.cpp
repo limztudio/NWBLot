@@ -21,6 +21,14 @@ namespace __hidden_ui_multiline_text_tests{
 using namespace NWB;
 using namespace NWB::Impl::Ui;
 
+constexpr AStringView s_NextLine = "\xC2\x85";
+constexpr AStringView s_LineSeparator = "\xE2\x80\xA8";
+constexpr AStringView s_ParagraphSeparator = "\xE2\x80\xA9";
+constexpr AStringView s_ThreeByteScalar = "\xED\x95\x9C";
+constexpr AStringView s_FourByteScalar = "\xF0\x9F\x92\xBB";
+
+constexpr AStringView s_BorrowedSourceText = "prefix a\r\nb\tz suffix";
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -90,8 +98,8 @@ TEST(UiMultilineText, RequiresNormalizationForTabsAndEveryNoncanonicalLineSepara
         AStringView expected;
     };
     const SeparatorCase cases[]{
-        { "\t", " " }, { "\r", "\n" }, { "\r\n", "\n" }, { "\xC2\x85", "\n" },
-        { "\xE2\x80\xA8", "\n" }, { "\xE2\x80\xA9", "\n" }
+        { "\t", " " }, { "\r", "\n" }, { "\r\n", "\n" }, { s_NextLine, "\n" },
+        { s_LineSeparator, "\n" }, { s_ParagraphSeparator, "\n" }
     };
     Tests::TestArena arena;
     for(const SeparatorCase& test : cases){
@@ -177,8 +185,8 @@ TEST(UiMultilineText, LimitsNormalizedBytesAndNeverTruncatesUtf8Scalars){
     };
     const BudgetCase cases[]{
         { "a\r\nb", "a\nb" }, { "\r\n\r\n", "\n\n" }, { "\xE2\x80\xA8\xE2\x80\xA9", "\n\n" },
-        { "\xC2\x85\t", "\n " }, { "\xED\x95\x9C", "\xED\x95\x9C" },
-        { "\xF0\x9F\x92\xBB", "\xF0\x9F\x92\xBB" },
+        { "\xC2\x85\t", "\n " }, { s_ThreeByteScalar, s_ThreeByteScalar },
+        { s_FourByteScalar, s_FourByteScalar },
         { "\xED\x95\x9C\r\n\xE2\x80\xA8\t", "\xED\x95\x9C\n\n " }
     };
     Tests::TestArena arena;
@@ -195,7 +203,7 @@ TEST(UiMultilineText, LimitsNormalizedBytesAndNeverTruncatesUtf8Scalars){
 
 TEST(UiMultilineText, ZeroBudgetAcceptsEmptyInputAndRejectsEveryNonemptyNormalizedOutput){
     Tests::TestArena arena;
-    const AStringView cases[]{ "a", "\n", "\r\n", "\t", "\xC2\x85", "\xE2\x80\xA8", "\xE2\x80\xA9" };
+    const AStringView cases[]{ "a", "\n", "\r\n", "\t", s_NextLine, s_LineSeparator, s_ParagraphSeparator };
     for(const AStringView text : cases){
         SCOPED_TRACE(text);
         EXPECT_EQ(NormalizeMultilineText(arena.arena, text, 0u), MakeUnexpected(EditTextStatus::TooLarge));
@@ -218,7 +226,7 @@ TEST(UiMultilineText, SupportsBorrowedWholeAndSubviewSourcesAtExactBudgets){
     output = Move(*normalizedWhole);
     EXPECT_EQ(output, "a\nb \xED\x95\x9C\n");
 
-    output.assign("prefix a\r\nb\tz suffix");
+    output.assign(s_BorrowedSourceText);
     const AStringView middle(output.data() + 7u, 6u);
     auto normalizedMiddle = NormalizeMultilineText(arena.arena, middle, 5u);
     ASSERT_TRUE(normalizedMiddle);
@@ -241,7 +249,7 @@ TEST(UiMultilineText, SupportsBorrowedWholeAndSubviewSourcesAtExactBudgets){
 
 TEST(UiMultilineText, RejectedBorrowedViewsPreserveSourceBytesAndStorage){
     Tests::TestArena arena;
-    AString<Core::Alloc::GlobalArena> output("prefix a\r\nb\tz suffix", arena.arena);
+    AString<Core::Alloc::GlobalArena> output(s_BorrowedSourceText, arena.arena);
     output.reserve(128u);
     const AString<Core::Alloc::GlobalArena> savedAlias(output, arena.arena);
     const char* storage = output.data();

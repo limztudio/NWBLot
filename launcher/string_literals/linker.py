@@ -16,7 +16,12 @@ else:
     from compiler import driver_response_quoting, expand_response_files, run_tool
 
 
-LINK_VALUE_OPTIONS = { "-o", "-L", "-F", "-l", "-arch", "-target", "--target", "-isysroot", "--sysroot", "-syslibroot", "-u", "-e", "-T", "-Xlinker", "-framework", "-weak_framework", "-rpath", "-install_name", "-compatibility_version", "-current_version", }
+MAIN_ENTRY = "__main__"
+COMMAND_ARGUMENT = "command"
+LINK_LIBRARY_OPTION = "-l"
+LINK_RESPONSE_NAME = "link.rsp"
+OPTION_WITH_VALUE_WIDTH = 2
+LINK_VALUE_OPTIONS = { "-o", "-L", "-F", LINK_LIBRARY_OPTION, "-arch", "-target", "--target", "-isysroot", "--sysroot", "-syslibroot", "-u", "-e", "-T", "-Xlinker", "-framework", "-weak_framework", "-rpath", "-install_name", "-compatibility_version", "-current_version", }
 LINK_INPUT_SUFFIXES = {".o", ".obj", ".a", ".lib", ".so", ".dylib", ".bc", ".lo"}
 
 
@@ -31,14 +36,14 @@ def order_runtime_object(arguments: Sequence[str], runtime_object: Path, quoting
         if argument in LINK_VALUE_OPTIONS:
             if index + 1 == len(expanded):
                 raise ValueError(f"Missing link value for {argument}")
-            if argument in {"-l", "-framework", "-weak_framework"}:
+            if argument in {LINK_LIBRARY_OPTION, "-framework", "-weak_framework"}:
                 inputs.append(index)
-            index += 2
+            index += OPTION_WITH_VALUE_WIDTH
             continue
         if not argument.startswith("-") and os.path.normcase(str(Path(argument).resolve())) == expected:
             matches.append(index)
             inputs.append(index)
-        elif argument.startswith("-l") or (not argument.startswith("-") and not argument.upper().startswith(("/OUT:", "/PDB:", "/IMPLIB:", "/LIBPATH:", "/DEF:")) and Path(argument).suffix.lower() in LINK_INPUT_SUFFIXES):
+        elif argument.startswith(LINK_LIBRARY_OPTION) or (not argument.startswith("-") and not argument.upper().startswith(("/OUT:", "/PDB:", "/IMPLIB:", "/LIBPATH:", "/DEF:")) and Path(argument).suffix.lower() in LINK_INPUT_SUFFIXES):
             inputs.append(index)
         index += 1
     if len(matches) != 1:
@@ -54,7 +59,7 @@ def order_runtime_object(arguments: Sequence[str], runtime_object: Path, quoting
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--runtime-object", required=True, type=Path)
-    parser.add_argument("command", nargs=argparse.REMAINDER)
+    parser.add_argument(COMMAND_ARGUMENT, nargs=argparse.REMAINDER)
     options = parser.parse_args(argv)
     command = options.command[1:] if options.command[:1] == ["--"] else options.command
     try:
@@ -68,14 +73,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         with tempfile.TemporaryDirectory(prefix="nwb_literal_link_") as temporary:
             if wrapped:
                 separator = arguments.index("--")
-                result = run_tool(arguments[separator + 1:], Path(temporary) / "link.rsp", [command[0], *arguments[:separator + 1]])
+                result = run_tool(arguments[separator + 1:], Path(temporary) / LINK_RESPONSE_NAME, [command[0], *arguments[:separator + 1]])
                 return result.returncode
-            return run_tool([command[0], *arguments], Path(temporary) / "link.rsp").returncode
+            return run_tool([command[0], *arguments], Path(temporary) / LINK_RESPONSE_NAME).returncode
     except (OSError, ValueError) as error:
         print(f"String-literal linker: {error}", file=sys.stderr)
         return 1
 
 
-if __name__ == "__main__":
+if __name__ == MAIN_ENTRY:
     raise SystemExit(main())
 

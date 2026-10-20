@@ -18,9 +18,11 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr f32 s_TextAreaDefaultHeight = 160.0f;
+
 struct TextAreaOptions{
     LayoutSize width = { LayoutSizePolicy::Stretch, 1.0f };
-    LayoutSize height = { LayoutSizePolicy::Fixed, 160.0f };
+    LayoutSize height = { LayoutSizePolicy::Fixed, s_TextAreaDefaultHeight };
     bool enabled = true;
     bool readOnly = false;
     f32 wheelLines = s_StyleScrollWheelStep;

@@ -27,12 +27,19 @@ namespace LoggerCrashSymbolicateDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr AStringView s_ReportSectionOpen = "\n[";
+inline constexpr AStringView s_ExceptionKey = "exception=";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static void AppendOptionalTextFile(Core::Alloc::ScratchArena& scratchArena, CrashReportText& outReport, const CrashScratchPath& packageDirectory, const AStringView fileName, const AStringView label){
     AString<Core::Alloc::ScratchArena> text{scratchArena};
     const auto read = ReadTextFile(packageDirectory / fileName, text);
     if(!read){
         if(read.error() != ErrorCondition::no_such_file_or_directory){
-            outReport += "\n[";
+            outReport += s_ReportSectionOpen;
             outReport += label;
             outReport += "]\nstatus=read_failed\n";
             AppendNativeFailure(outReport, CrashSymbolicationFailure{ .operation = fileName, .code = read.error(), });
@@ -42,7 +49,7 @@ static void AppendOptionalTextFile(Core::Alloc::ScratchArena& scratchArena, Cras
     if(text.empty())
         return;
 
-    outReport += "\n[";
+    outReport += s_ReportSectionOpen;
     outReport += label;
     outReport += "]\n";
     outReport += text;
@@ -78,12 +85,12 @@ static void AppendSymbolStoreStatus(Core::Alloc::ScratchArena& arena, CrashRepor
         outReport += s_SymbolStoreErrorText;
     else
         outReport += *exists ? s_SymbolStorePresentText : s_SymbolStoreMissingText;
-    outReport += "\n";
+    outReport += s_ReportLineEnd;
 }
 
 static void AppendExceptionSummary(CrashReportText& outReport, const CrashPackageSummary& summary){
     if(summary.reasonKind == s_SignalReasonKind){
-        outReport += "exception=";
+        outReport += s_ExceptionKey;
         outReport += Core::Crash::PosixSignalName(summary.reasonCode);
         outReport += " (";
         char buffer[s_DecimalTextBufferCapacity];
@@ -92,11 +99,11 @@ static void AppendExceptionSummary(CrashReportText& outReport, const CrashPackag
         return;
     }
     if(summary.reasonKind == s_WindowsExceptionReasonKind){
-        outReport += "exception=";
+        outReport += s_ExceptionKey;
         outReport += Core::Crash::WindowsExceptionName(summary.reasonCode);
         outReport += " ";
         AppendHexAddress(outReport, summary.reasonCode);
-        outReport += "\n";
+        outReport += s_ReportLineEnd;
         return;
     }
     if(summary.reasonKind == s_TerminateReasonKind){
@@ -112,16 +119,16 @@ static void AppendExceptionSummary(CrashReportText& outReport, const CrashPackag
         return;
     }
 
-    outReport += "exception=";
+    outReport += s_ExceptionKey;
     outReport += summary.reasonKind;
-    outReport += "\n";
+    outReport += s_ReportLineEnd;
 }
 
 static void AppendEventSummary(const CrashPackageSummary& summary, CrashReportText& outReport){
     outReport += "\n[event]\n";
     outReport += "event=";
     outReport += summary.event;
-    outReport += "\n";
+    outReport += s_ReportLineEnd;
 
     if(summary.triggerExpression.empty() && summary.triggerMessage.empty() && summary.triggerFile.empty() && summary.triggerLine == 0u)
         AppendExceptionSummary(outReport, summary);
@@ -154,14 +161,14 @@ public:
         outRange.contentBegin = headerBegin + headerWithLeadingNewline.size();
     }
 
-    const usize nextSection = report.find(AStringView("\n["), outRange.contentBegin);
+    const usize nextSection = report.find(s_ReportSectionOpen, outRange.contentBegin);
     outRange.contentEnd = nextSection == AStringView::npos ? report.size() : nextSection;
     outRange.removeEnd = outRange.contentEnd;
     return outRange;
 }
 
 [[nodiscard]] static ReportSectionRange FindCallstackSection(const AStringView report)noexcept{
-    const auto callstack = FindReportSection(report, AStringView("[callstack]\n"), AStringView("\n[callstack]\n"));
+    const auto callstack = FindReportSection(report, AStringView("[callstack]\n"), s_CallstackSectionHeader);
     if(callstack)
         return *callstack;
     const auto tombstone = FindReportSection(report, AStringView("[tombstone_callstack]\n"), AStringView("\n[tombstone_callstack]\n"));
@@ -191,12 +198,12 @@ static void AppendReportWithoutSection(AString<Core::Alloc::ScratchArena>& outRe
     bool wrote = false;
     if(!summary.triggerExpression.empty()){
         outReport += summary.triggerExpression;
-        outReport += "\n";
+        outReport += s_ReportLineEnd;
         wrote = true;
     }
     if(!summary.triggerMessage.empty()){
         outReport += summary.triggerMessage;
-        outReport += "\n";
+        outReport += s_ReportLineEnd;
         wrote = true;
     }
     if(!summary.triggerFile.empty() || summary.triggerLine != 0u){
@@ -211,7 +218,7 @@ static void AppendReportWithoutSection(AString<Core::Alloc::ScratchArena>& outRe
             char buffer[s_DecimalTextBufferCapacity];
             outReport += FormatDecimal(static_cast<usize>(summary.triggerLine), buffer);
         }
-        outReport += "\n";
+        outReport += s_ReportLineEnd;
         wrote = true;
     }
     return wrote;
@@ -226,7 +233,7 @@ static void AppendVisibleCallstack(CrashReportText& outReport, const AStringView
 
     outReport.append(callstack.data(), callstack.size());
     if(outReport.back() != '\n')
-        outReport += "\n";
+        outReport += s_ReportLineEnd;
 }
 
 [[nodiscard]] static CrashReportText BuildOrderedCrashReport(Core::Alloc::ScratchArena& scratchArena, const CrashPackageSummary& summary, CrashReportText&& detailReport){
@@ -244,13 +251,13 @@ static void AppendVisibleCallstack(CrashReportText& outReport, const AStringView
     report.clear();
     report.reserve(AddSize(AddSize(detailsView.size(), callstackCopy.size()), s_CrashReportReserveBytes));
     if(AppendCrashHeadline(report, summary))
-        report += "\n";
+        report += s_ReportLineEnd;
     AppendVisibleCallstack(report, AStringView(callstackCopy.data(), callstackCopy.size()));
     report += "\ndetails:\n";
     if(!detailsView.empty()){
         report.append(detailsView.data(), detailsView.size());
         if(report.back() != '\n')
-            report += "\n";
+            report += s_ReportLineEnd;
     }
     return report;
 }
@@ -281,7 +288,7 @@ CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const CrashScratc
     detailReport += summary.reasonKind;
     detailReport += "\nartifact_strategy=";
     detailReport += summary.artifactStrategy;
-    detailReport += "\n";
+    detailReport += Symbolicate::s_ReportLineEnd;
     Symbolicate::AppendSymbolStoreStatus(scratchArena, detailReport, config);
     Symbolicate::AppendEventSummary(summary, detailReport);
 

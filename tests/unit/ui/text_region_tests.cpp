@@ -28,6 +28,17 @@ using namespace NWB::Impl;
 using namespace NWB::Impl::Ui;
 using namespace NWB::UiWidgetTests;
 
+constexpr AStringView s_OrdinaryRowText = "Next";
+constexpr AStringView s_StackedAccentText = "A\xCC\x81\xCC\x81 g\xCC\xA3";
+constexpr AStringView s_MultilineAccentText = "Previous\nA\xCC\x81\xCC\x81 g\xCC\xA3\nNext";
+constexpr AStringView s_PaddedStackedAccentSample = "A\xCC\x81\xCC\x81 g\xCC\xA3 ";
+constexpr AStringView s_CheckboxNormalRegion = "checkbox.normal";
+constexpr AStringView s_ButtonNormalRegion = "button.normal";
+constexpr AStringView s_ButtonHoverRegion = "button.hover";
+constexpr AStringView s_ButtonPressedRegion = "button.pressed";
+constexpr AStringView s_ButtonDisabledRegion = "button.disabled";
+constexpr AStringView s_PanelKey = "panel";
+
 static constexpr StringView s_OverflowText = "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM\nMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM\nMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM";
 
 
@@ -143,8 +154,8 @@ public:
 
 
 public:
-    StringView ordinaryText = "Next";
-    StringView specialText = "A\xCC\x81\xCC\x81 g\xCC\xA3";
+    StringView ordinaryText = s_OrdinaryRowText;
+    StringView specialText = s_StackedAccentText;
     u64 specialIndex = 1u;
 };
 
@@ -157,7 +168,7 @@ protected:
             return;
         UiSkin::RegionVector regions(m_arena);
         regions.assign(m_skin.regions().begin(), m_skin.regions().end());
-        const AStringView names[]{ "checkbox.normal", "checkbox.hover", "checkbox.checked", "checkbox.disabled" };
+        const AStringView names[]{ s_CheckboxNormalRegion, "checkbox.hover", "checkbox.checked", "checkbox.disabled" };
         for(u32 index = 0u; index < LengthOf(names); ++index){
             const auto regionName = Name::FromText(names[index]);
             ASSERT_TRUE(regionName);
@@ -172,7 +183,7 @@ protected:
         UiSkin::RegionVector regions(m_arena);
         regions.assign(m_skin.regions().begin(), m_skin.regions().end());
         for(UiSkinRegion& region : regions){
-            if(region.name == Name("button.normal") || region.name == Name("button.hover") || region.name == Name("button.pressed") || region.name == Name("button.disabled")){
+            if(region.name == Name(s_ButtonNormalRegion) || region.name == Name(s_ButtonHoverRegion) || region.name == Name(s_ButtonPressedRegion) || region.name == Name(s_ButtonDisabledRegion)){
                 region.padding = { 8.0f, 8.0f, 8.0f, 8.0f };
                 region.minimumHeight = 32.0f;
             }
@@ -212,8 +223,8 @@ protected:
         const ListState& state = popup ? combo.listState() : list;
         const ScrollPlacement& placement = state.placement();
         ASSERT_GT(placement.endRow, placement.firstRow);
-        const WidgetId listOwner = popup ? UiTestSupport::RequireWidgetId(MakeWidgetId(owner, "rows")) : owner;
-        const WidgetId rows = UiTestSupport::RequireWidgetId(MakeWidgetId(listOwner, "rows"));
+        const WidgetId listOwner = popup ? UiTestSupport::RequireWidgetId(MakeWidgetId(owner, UiComboTests::s_ComboRowsKey)) : owner;
+        const WidgetId rows = UiTestSupport::RequireWidgetId(MakeWidgetId(listOwner, UiComboTests::s_ListRowsKey));
         const HitTarget* first = target(UiTestSupport::RequireWidgetId(MakeWidgetPartId(rows, placement.firstRow + 1u)));
         ASSERT_NE(first, nullptr);
         const f32 rowHeight = first->rectangle.height;
@@ -233,7 +244,7 @@ protected:
         ASSERT_NE(host, nullptr);
         EXPECT_DOUBLE_EQ(host->scrollStep, VectorDoubleGetY(listExtent));
         PaintBuilder reference(m_arena);
-        reference.begin(display, generation, m_skinGeneration, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
+        reference.begin(display, generation, m_skinGeneration, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
         reference.pushClip(placement.contentClip);
         for(u64 index = placement.firstRow; index < placement.endRow; ++index){
             const HitTarget* row = target(UiTestSupport::RequireWidgetId(MakeWidgetPartId(rows, index + 1u)));
@@ -285,7 +296,7 @@ protected:
         // Lanes are the first and second button heights.
         const SIMDVectorSingle heights = fixedHeight ? VectorReplicate(32.0f) : VectorMax(VectorReplicate(32.0f), VectorAdd(VectorAdd(VectorSet(firstMeasured->height, secondMeasured->height, 0.0f, 0.0f), VectorReplicate(8.0f)), VectorReplicate(8.0f)));
         ASSERT_TRUE(begin(generation, display));
-        ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 20.0f, 740.0f, 480.0f }));
+        ASSERT_TRUE(m_builder.beginPanel(s_PanelKey, { 10.0f, 20.0f, 740.0f, 480.0f }));
         ContainerOptions row;
         if(fixedHeight)
             row.height = { LayoutSizePolicy::Fixed, 32.0f };
@@ -304,10 +315,10 @@ protected:
         ASSERT_TRUE(finishPanel());
         const DrawSnapshot actual = m_paint.freeze();
         ASSERT_TRUE(m_context.commitFrame(generation));
-        const WidgetId rowId = id("navigation", "panel");
+        const WidgetId rowId = id("navigation", s_PanelKey);
         const HitTarget* first = target(UiTestSupport::RequireWidgetId(MakeWidgetId(rowId, "previous")));
         const HitTarget* second = target(UiTestSupport::RequireWidgetId(MakeWidgetId(rowId, "next")));
-        const HitTarget* after = target(id("after", "panel"));
+        const HitTarget* after = target(id("after", s_PanelKey));
         ASSERT_NE(first, nullptr);
         ASSERT_NE(second, nullptr);
         ASSERT_NE(after, nullptr);
@@ -318,7 +329,7 @@ protected:
         ExpectRect(first->clip, first->rectangle);
         ExpectRect(second->clip, second->rectangle);
         PaintBuilder reference(m_arena);
-        reference.begin(display, generation, 1u, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
+        reference.begin(display, generation, 1u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
         const Rect controls[]{ first->rectangle, second->rectangle };
         const Rect measured[]{ *firstMeasured, *secondMeasured };
         const TextLayout* layouts[]{ &*firstLayout, &*secondLayout };
@@ -354,7 +365,7 @@ TEST_F(UiTextRegionTests, StandaloneMultilineLabelClipsNestedBoundsAfterResizeAc
     for(const f32 scale : { 1.0f, 1.5f, 2.0f }){
         usize previousIndices = 0u;
         for(const Rect& bounds : { Rect{ 20.0f, 20.0f, 80.0f, 34.0f }, Rect{ 20.0f, 20.0f, 41.0f, 19.0f } }){
-            m_paint.begin({ 300.0f, 200.0f, scale, scale }, generation++, 1u, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
+            m_paint.begin({ 300.0f, 200.0f, scale, scale }, generation++, 1u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
             m_paint.pushClip({ 12.0f, 10.0f, 210.0f, 140.0f });
             const Rect inherited{ 25.0f, 24.0f, 110.0f, 70.0f };
             m_paint.pushClip(inherited);
@@ -382,7 +393,7 @@ TEST_F(UiTextRegionTests, EmptyAndFailedStandaloneLabelRegionsRestoreClipBeforeP
     const Rect inherited{ 10.0f, 10.0f, 180.0f, 120.0f };
     u64 generation = 1u;
     for(const Rect& bounds : { Rect{ 20.0f, 20.0f, 0.0f, 40.0f }, Rect{ 20.0f, 20.0f, 40.0f, 0.0f }, Rect{ 20.0f, 20.0f, 0.0f, 0.0f }, Rect{ 220.0f, 20.0f, 40.0f, 40.0f } }){
-        m_paint.begin({ 300.0f, 200.0f, 1.0f, 1.0f }, generation++, 1u, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
+        m_paint.begin({ 300.0f, 200.0f, 1.0f, 1.0f }, generation++, 1u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
         m_paint.pushClip(inherited);
         ASSERT_TRUE(label.paint(m_text, m_paint, bounds));
         ExpectRect(m_paint.currentClip(), inherited);
@@ -394,7 +405,7 @@ TEST_F(UiTextRegionTests, EmptyAndFailedStandaloneLabelRegionsRestoreClipBeforeP
         EXPECT_TRUE(snapshot.indices().empty());
     }
     ASSERT_EQ(label.setText({ .text = "MMMMMMMMMMMM" }), TextLayoutStatus::Success);
-    m_paint.begin({ 300.0f, 200.0f, 1.0f, 1.0f }, generation, 1u, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
+    m_paint.begin({ 300.0f, 200.0f, 1.0f, 1.0f }, generation, 1u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
     m_paint.pushClip(inherited);
     EXPECT_FALSE(label.paint(m_text, m_paint, { 20.0f, 20.0f, 30.0f, 20.0f }, { 1.0f, 1.0f, 1.0f, 2.0f }));
     ExpectRect(m_paint.currentClip(), inherited);
@@ -411,7 +422,7 @@ TEST_F(UiTextRegionTests, OversizedButtonTextKeepsAsymmetricPaddingWithoutShrink
     u64 generation = 1u;
     for(const f32 scale : { 1.0f, 1.5f, 2.0f }){
         ASSERT_TRUE(begin(generation, { 800.0f, 600.0f, scale, scale }));
-        ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 20.0f, 220.0f, 130.0f }));
+        ASSERT_TRUE(m_builder.beginPanel(s_PanelKey, { 10.0f, 20.0f, 220.0f, 130.0f }));
         WidgetOptions options;
         options.width = { LayoutSizePolicy::Fixed, 80.0f };
         options.height = { LayoutSizePolicy::Fixed, 28.0f };
@@ -420,11 +431,11 @@ TEST_F(UiTextRegionTests, OversizedButtonTextKeepsAsymmetricPaddingWithoutShrink
         EXPECT_FALSE(m_paint.popClip());
         const DrawSnapshot snapshot = m_paint.freeze();
         ASSERT_TRUE(m_context.commitFrame(generation++));
-        const HitTarget* button = target(id("button", "panel"));
+        const HitTarget* button = target(id("button", s_PanelKey));
         ASSERT_NE(button, nullptr);
         ExpectRect(button->rectangle, { 13.0f, 24.0f, 80.0f, 28.0f });
         ExpectRect(button->clip, button->rectangle);
-        const auto skin = sampleSkinPaint(snapshot, Name("button.normal"));
+        const auto skin = sampleSkinPaint(snapshot, Name(s_ButtonNormalRegion));
         ASSERT_TRUE(skin);
         ExpectRect(skin->bounds, button->rectangle);
         ExpectGlyphRegion(snapshot, { 15.0f, 27.0f, 74.0f, 20.0f });
@@ -434,7 +445,7 @@ TEST_F(UiTextRegionTests, OversizedButtonTextKeepsAsymmetricPaddingWithoutShrink
 TEST_F(UiTextRegionTests, EmptyControlTextRegionsDoNotLeakIntoPaddingOrClipTheFollowingSibling){
     m_builder.listStyle().row.padding = { 7.0f, 11.0f, 13.0f, 3.0f };
     ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 20.0f, 220.0f, 240.0f }));
+    ASSERT_TRUE(m_builder.beginPanel(s_PanelKey, { 10.0f, 20.0f, 220.0f, 240.0f }));
     WidgetOptions options;
     options.width = { LayoutSizePolicy::Fixed, 4.0f };
     options.height = { LayoutSizePolicy::Fixed, 40.0f };
@@ -451,7 +462,7 @@ TEST_F(UiTextRegionTests, EmptyControlTextRegionsDoNotLeakIntoPaddingOrClipTheFo
     EXPECT_FALSE(m_paint.popClip());
     const DrawSnapshot snapshot = m_paint.freeze();
     ASSERT_TRUE(m_context.commitFrame(1u));
-    const HitTarget* sibling = target(id("sibling", "panel"));
+    const HitTarget* sibling = target(id("sibling", s_PanelKey));
     ASSERT_NE(sibling, nullptr);
     const SIMDVectorSingle regionStart = VectorAdd(VectorSet(sibling->rectangle.x, sibling->rectangle.y, 0.0f, 0.0f), VectorSet(2.0f, 3.0f, 0.0f, 0.0f));
     ExpectGlyphRegion(snapshot, { VectorGetX(regionStart), VectorGetY(regionStart), 44.0f, 24.0f });
@@ -460,7 +471,7 @@ TEST_F(UiTextRegionTests, EmptyControlTextRegionsDoNotLeakIntoPaddingOrClipTheFo
 TEST_F(UiTextRegionTests, CheckboxGlyphOverhangCannotEnterIndicatorReservationOrEscapeAncestorClip){
     m_builder.style().fontSize = 48.0f;
     ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 20.0f, 100.0f, 110.0f }));
+    ASSERT_TRUE(m_builder.beginPanel(s_PanelKey, { 10.0f, 20.0f, 100.0f, 110.0f }));
     WidgetOptions options;
     options.width = { LayoutSizePolicy::Fixed, 120.0f };
     options.height = { LayoutSizePolicy::Fixed, 36.0f };
@@ -469,12 +480,12 @@ TEST_F(UiTextRegionTests, CheckboxGlyphOverhangCannotEnterIndicatorReservationOr
     ASSERT_TRUE(finishPanel());
     const DrawSnapshot snapshot = m_paint.freeze();
     ASSERT_TRUE(m_context.commitFrame(1u));
-    const HitTarget* checkbox = target(id("checkbox", "panel"));
+    const HitTarget* checkbox = target(id("checkbox", s_PanelKey));
     ASSERT_NE(checkbox, nullptr);
     ExpectRect(checkbox->rectangle, { 13.0f, 24.0f, 120.0f, 36.0f });
     ExpectRect(checkbox->clip, { 13.0f, 24.0f, 92.0f, 36.0f });
     ExpectGlyphRegion(snapshot, { 45.0f, 24.0f, 60.0f, 36.0f });
-    const auto skin = sampleSkinPaint(snapshot, Name("checkbox.normal"));
+    const auto skin = sampleSkinPaint(snapshot, Name(s_CheckboxNormalRegion));
     ASSERT_TRUE(skin);
     ExpectRect(skin->bounds, { 13.0f, 30.0f, 24.0f, 24.0f });
 }
@@ -482,7 +493,7 @@ TEST_F(UiTextRegionTests, CheckboxGlyphOverhangCannotEnterIndicatorReservationOr
 TEST_F(UiTextRegionTests, OversizedSelectableTextKeepsAllFourPaddingEdgesAndFullRowHitBounds){
     m_builder.listStyle().row.padding = { 7.0f, 11.0f, 13.0f, 3.0f };
     ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 20.0f, 220.0f, 130.0f }));
+    ASSERT_TRUE(m_builder.beginPanel(s_PanelKey, { 10.0f, 20.0f, 220.0f, 130.0f }));
     WidgetOptions options;
     options.width = { LayoutSizePolicy::Fixed, 90.0f };
     options.height = { LayoutSizePolicy::Fixed, 34.0f };
@@ -491,11 +502,11 @@ TEST_F(UiTextRegionTests, OversizedSelectableTextKeepsAllFourPaddingEdgesAndFull
     EXPECT_FALSE(m_paint.popClip());
     const DrawSnapshot snapshot = m_paint.freeze();
     ASSERT_TRUE(m_context.commitFrame(1u));
-    const HitTarget* selectable = target(id("selectable", "panel"));
+    const HitTarget* selectable = target(id("selectable", s_PanelKey));
     ASSERT_NE(selectable, nullptr);
     ExpectRect(selectable->rectangle, { 13.0f, 24.0f, 90.0f, 34.0f });
     ExpectRect(selectable->clip, selectable->rectangle);
-    const auto skin = sampleSkinPaint(snapshot, Name("button.normal"));
+    const auto skin = sampleSkinPaint(snapshot, Name(s_ButtonNormalRegion));
     ASSERT_TRUE(skin);
     ExpectRect(skin->bounds, selectable->rectangle);
     ExpectGlyphRegion(snapshot, { 20.0f, 35.0f, 70.0f, 18.0f });
@@ -505,7 +516,7 @@ TEST_F(UiTextRegionTests, SelectableCentersWithinAsymmetricVerticalPaddingInstea
     const StringView text = "MMMMMMMMMMMMMMMM";
     m_builder.listStyle().row.padding = { 7.0f, 11.0f, 13.0f, 3.0f };
     ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 20.0f, 220.0f, 130.0f }));
+    ASSERT_TRUE(m_builder.beginPanel(s_PanelKey, { 10.0f, 20.0f, 220.0f, 130.0f }));
     WidgetOptions options;
     options.width = { LayoutSizePolicy::Fixed, 90.0f };
     options.height = { LayoutSizePolicy::Fixed, 70.0f };
@@ -521,7 +532,7 @@ TEST_F(UiTextRegionTests, SelectableCentersWithinAsymmetricVerticalPaddingInstea
     ASSERT_TRUE(measured);
     ASSERT_LT(measured->height, content.height);
     PaintBuilder reference(m_arena);
-    reference.begin(display, 2u, 1u, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
+    reference.begin(display, 2u, 1u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
     reference.pushClip(content);
     const SIMDVectorSingle contentStart = VectorSet(content.x, content.y, 0.0f, 0.0f);
     const SIMDVectorSingle centered = VectorMultiplyAddExpression(VectorSubtract(VectorReplicate(content.height), VectorReplicate(measured->height)), VectorReplicate(0.5f), contentStart);
@@ -602,7 +613,7 @@ TEST_F(UiTextRegionTests, ContentRowsPreserveDescendersStackedAccentsMultilineAn
     ASSERT_TRUE(installKoreanFallback());
     const StringView samples[]{
         "Agjpqy A\xCC\x81 e\xCC\x88 ",
-        "A\xCC\x81\xCC\x81 g\xCC\xA3 ",
+        s_PaddedStackedAccentSample,
         "Previous\nA\xCC\x81\xCC\x81 gjpqy g\xCC\xA3 ",
         "\xED\x95\x9C\xEA\xB8\x80 Agjpqy A\xCC\x81 e\xCC\x88 ",
     };
@@ -611,8 +622,8 @@ TEST_F(UiTextRegionTests, ContentRowsPreserveDescendersStackedAccentsMultilineAn
     bool sawLatin = false;
     bool sawKorean = false;
     for(const PlacedGlyph& glyph : mixed->glyphs()){
-        sawLatin = sawLatin || glyph.face->identity().name() == Name("tests/ui/fonts/latin");
-        sawKorean = sawKorean || glyph.face->identity().name() == Name("tests/ui/fonts/korean");
+        sawLatin = sawLatin || glyph.face->identity().name() == Name(s_TestLatinFontPath);
+        sawKorean = sawKorean || glyph.face->identity().name() == Name(s_TestKoreanFontPath);
     }
     ASSERT_TRUE(sawLatin);
     ASSERT_TRUE(sawKorean);
@@ -631,7 +642,7 @@ TEST_F(UiTextRegionTests, NaturalEditHeightKeepsCombiningAndFallbackInkOutsideLo
     ASSERT_TRUE(installKoreanFallback());
     m_builder.style().fontSize = 16.0f;
     m_builder.editStyle().padding = { 8.0f, 8.0f, 8.0f, 8.0f };
-    const StringView samples[]{ "A\xCC\x81\xCC\x81 g\xCC\xA3 ", "A\xCC\x81\xCC\x81 g\xCC\xA3 \xED\x95\x9C\xEA\xB8\x80 " };
+    const StringView samples[]{ s_PaddedStackedAccentSample, "A\xCC\x81\xCC\x81 g\xCC\xA3 \xED\x95\x9C\xEA\xB8\x80 " };
     u64 generation = 1u;
     for(const StringView sample : samples){
         for(const f32 scale : { 1.0f, 1.25f, 1.5f, 2.0f }){
@@ -645,7 +656,7 @@ TEST_F(UiTextRegionTests, NaturalEditHeightKeepsCombiningAndFallbackInkOutsideLo
             const auto measured = m_text.measure(*layout, display);
             ASSERT_TRUE(measured);
             ASSERT_TRUE(begin(generation, display));
-            ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 20.0f, 740.0f, 200.0f }));
+            ASSERT_TRUE(m_builder.beginPanel(s_PanelKey, { 10.0f, 20.0f, 740.0f, 200.0f }));
             EditBoxOptions options;
             options.width = { LayoutSizePolicy::Fixed, 300.0f };
             ASSERT_TRUE(m_builder.editBox("edit", model, state, options).valid);
@@ -659,7 +670,7 @@ TEST_F(UiTextRegionTests, NaturalEditHeightKeepsCombiningAndFallbackInkOutsideLo
             EXPECT_GE(VectorGetX(inkTop), VectorGetX(VectorSubtract(VectorReplicate(state.placement.content.y), VectorReplicate(0.0001f))));
             EXPECT_LE(VectorGetX(VectorAdd(inkTop, VectorReplicate(measured->height))), VectorGetX(VectorAdd(contentBottom, VectorReplicate(0.0001f))));
             PaintBuilder reference(m_arena);
-            reference.begin(display, generation++, 1u, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
+            reference.begin(display, generation++, 1u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
             ASSERT_TRUE(m_text.paint(reference, *layout, state.placement.textOrigin, m_builder.editStyle().text));
             const auto expectedCoverage = GlyphCoverageArea(reference.freeze());
             const auto actualCoverage = GlyphCoverageArea(actual);
@@ -691,23 +702,23 @@ TEST_F(UiTextRegionTests, IntrinsicListAndComboRowsPreserveActualMarksFallbackAn
 TEST_F(UiTextRegionTests, IntrinsicRowsShrinkAfterSourceFontSizeAndResolvedStyleChanges){
     IntrinsicRowSource source;
     source.count = 3u;
-    source.specialText = "Previous\nA\xCC\x81\xCC\x81 g\xCC\xA3\nNext";
+    source.specialText = s_MultilineAccentText;
     ListState list;
     ComboState combo;
     const DisplayMetrics display{ 800.0f, 600.0f, 1.0f, 1.0f };
     u64 generation = 1u;
     for(const bool popup : { false, true }){
-        source.specialText = "Previous\nA\xCC\x81\xCC\x81 g\xCC\xA3\nNext";
+        source.specialText = s_MultilineAccentText;
         ++source.contentRevision;
         m_builder.listStyle().row.padding = { 8.0f, 16.0f, 8.0f, 18.0f };
         ASSERT_NO_FATAL_FAILURE(checkIntrinsicRowCoverage(source, list, combo, popup, 22.0f, display, generation++));
         ASSERT_NO_FATAL_FAILURE(checkIntrinsicRowCoverage(source, list, combo, popup, 12.0f, display, generation++));
         m_builder.listStyle().row.padding = { 8.0f, 4.0f, 8.0f, 4.0f };
         ASSERT_NO_FATAL_FAILURE(checkIntrinsicRowCoverage(source, list, combo, popup, 12.0f, display, generation++));
-        source.specialText = "Next";
+        source.specialText = s_OrdinaryRowText;
         ++source.contentRevision;
         ASSERT_NO_FATAL_FAILURE(checkIntrinsicRowCoverage(source, list, combo, popup, 12.0f, display, generation++));
-        source.specialText = "A\xCC\x81\xCC\x81 g\xCC\xA3";
+        source.specialText = s_StackedAccentText;
         ++source.generation;
         ASSERT_NO_FATAL_FAILURE(checkIntrinsicRowCoverage(source, list, combo, popup, 16.0f, display, generation++));
     }
@@ -717,15 +728,15 @@ TEST_F(UiTextRegionTests, SelectableMetricsUseEveryStatePaddingAndMinimumWithout
     UiSkin::RegionVector regions(m_arena);
     regions.assign(m_skin.regions().begin(), m_skin.regions().end());
     for(UiSkinRegion& region : regions){
-        if(region.name == Name("button.normal"))
+        if(region.name == Name(s_ButtonNormalRegion))
             region.padding = { 9.0f, 1.0f, 2.0f, 3.0f };
-        else if(region.name == Name("button.hover"))
+        else if(region.name == Name(s_ButtonHoverRegion))
             region.padding = { 1.0f, 11.0f, 2.0f, 3.0f };
-        else if(region.name == Name("button.pressed")){
+        else if(region.name == Name(s_ButtonPressedRegion)){
             region.padding = { 1.0f, 2.0f, 13.0f, 3.0f };
             region.minimumHeight = 55.0f;
         }
-        else if(region.name == Name("button.disabled")){
+        else if(region.name == Name(s_ButtonDisabledRegion)){
             region.padding = { 1.0f, 2.0f, 3.0f, 15.0f };
             region.minimumWidth = 100.0f;
         }
@@ -750,7 +761,7 @@ TEST_F(UiTextRegionTests, SelectableMetricsUseEveryStatePaddingAndMinimumWithout
     Vector<Vertex, Core::Alloc::ScratchArena> baseline(scratch);
     u64 generation = 1u;
     for(const SelectablePaintFlags flags : { SelectablePaintFlags{}, SelectablePaintFlags{ true, false, true, false }, SelectablePaintFlags{ true, true, false, false }, SelectablePaintFlags{ false, false, false, false } }){
-        m_paint.begin({ 800.0f, 600.0f, 1.0f, 1.0f }, generation++, m_skinGeneration, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
+        m_paint.begin({ 800.0f, 600.0f, 1.0f, 1.0f }, generation++, m_skinGeneration, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
         ASSERT_TRUE(SelectablePainter::Paint(m_paint, m_text, m_skin, *layout, *textBounds, metrics->padding, { 20.0f, 30.0f, 180.0f, 70.0f }, { 0.0f, 0.0f, 800.0f, 600.0f }, style, flags, {}, {}));
         const DrawSnapshot snapshot = m_paint.freeze();
         ExpectGlyphRegion(snapshot, { 29.0f, 41.0f, 158.0f, 44.0f });

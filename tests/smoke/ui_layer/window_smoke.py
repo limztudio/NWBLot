@@ -13,6 +13,8 @@ from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, S
     read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
 from smoke_arguments import parse_ui_smoke_args
 from fixture_environment import build_fixture_environment
+from checkpoint_report import CHECKPOINT_POLL_SECONDS, CHECKPOINT_SETTLE_SECONDS, CHECKPOINT_STAGE_TIMEOUT_SECONDS
+from fixture_launch import DISPLAY_MARKER_TIMEOUT_SECONDS
 
 LIT_SCALE = "scale"
 LIT_RECTANGLES = "rectangles"
@@ -77,15 +79,15 @@ class WindowRun:
         return (finish[0] - start[0]) / scale_x, (finish[1] - start[1]) / scale_y
 
     def checkpoint(self, name, bounds, count, collapsed=False, locked=False, *, extent=None):
-        time.sleep(0.25)
+        time.sleep(CHECKPOINT_SETTLE_SECONDS)
         path = self.args.output_directory / f"{len(self.stages):02d}_{name}.bmp"
-        stage_deadline = min(self.deadline, time.monotonic() + 10.0)
+        stage_deadline = min(self.deadline, time.monotonic() + CHECKPOINT_STAGE_TIMEOUT_SECONDS)
         report = None
         while time.monotonic() < stage_deadline:
             ensure_process_running(self.process, "during window UI capture")
             snapshot = snapshot_from_logs(self.logs())
             if snapshot is None:
-                time.sleep(0.1)
+                time.sleep(CHECKPOINT_POLL_SECONDS)
                 continue
             if snapshot[LIT_LOGICAL_EXTENT][0] < 430.0 or snapshot[LIT_LOGICAL_EXTENT][1] < 270.0:
                 raise SmokeSkip("the window fixture needs a logical client of at least 430x270 for separate model markers")
@@ -97,7 +99,7 @@ class WindowRun:
                 self.stages.append(report)
                 self.write_report(False)
                 return
-            time.sleep(0.1)
+            time.sleep(CHECKPOINT_POLL_SECONDS)
         raise SmokeFailure(f"window displayed-state gate '{name}' failed: {report}")
 
     def write_report(self, passed):
@@ -191,7 +193,7 @@ def run(args):
             ensure_process_running(application, "before the window fixture appeared")
             raise SmokeFailure("custom window fixture did not appear")
         backend.prepare_window(handle)
-        wait_for_log_message(log_directory, log_baseline, log_pattern, "UiWindowSmoke: display", min(args.timeout, 15.0))
+        wait_for_log_message(log_directory, log_baseline, log_pattern, "UiWindowSmoke: display", min(args.timeout, DISPLAY_MARKER_TIMEOUT_SECONDS))
         window_run = WindowRun(args, backend, handle, application, log_directory, log_baseline, log_pattern)
         window_run.execute()
     finally:

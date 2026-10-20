@@ -38,6 +38,8 @@ inline constexpr AStringView s_GpuCrashReasonKind = "gpu_crash";
 inline constexpr AStringView s_WindowsPlatformName = "windows";
 inline constexpr AStringView s_LinuxPlatformName = "linux";
 inline constexpr AStringView s_AndroidPlatformName = "android";
+inline constexpr AStringView s_CallstackSectionHeader = "\n[callstack]\n";
+inline constexpr AStringView s_ReportLineEnd = "\n";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

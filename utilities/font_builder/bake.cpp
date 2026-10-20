@@ -20,16 +20,17 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 
 
 bool ValidateOptions(const BakeOptions& options, Core::Alloc::ScratchArena& scratch){
+    constexpr u32 s_MinExtent = 32u;
     if(
         options.ppem < Impl::s_FontAtlasMinBakePpem
         || options.ppem > Impl::s_FontAtlasMaxBakePpem
         || options.spread < Impl::s_FontAtlasMinSpreadPixels
         || options.spread > Impl::s_FontAtlasMaxSpreadPixels
-        || options.extent < 32u
+        || options.extent < s_MinExtent
         || options.extent > Impl::s_FontAtlasMaxExtent
         || options.maxGroups == 0u
         || options.maxGroups > Impl::s_FontAtlasMaxGroupCount
-        || static_cast<u64>(options.extent) * options.extent * 4u * options.maxGroups > Impl::s_FontAtlasMaxPixelBytes
+        || static_cast<u64>(options.extent) * options.extent * Impl::s_FontAtlasMaxChannelCount * options.maxGroups > Impl::s_FontAtlasMaxPixelBytes
         || options.source.empty()
         || options.output.empty()
     ){
@@ -37,7 +38,7 @@ bool ValidateOptions(const BakeOptions& options, Core::Alloc::ScratchArena& scra
         return false;
     }
     const ScratchPath output(scratch, options.output);
-    if(PathToGenericString(scratch, output.extension()) != ".nwb"){
+    if(PathToGenericString(scratch, output.extension()) != s_MetadataFileExtension){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: --output must name a .nwb font asset bunch"));
         return false;
     }
@@ -48,7 +49,7 @@ bool ValidateOptions(const BakeOptions& options, Core::Alloc::ScratchArena& scra
     }
     const ScratchPath source(scratch, options.source);
     const auto sourceExtension = ToAsciiLowerCopy(PathToGenericString(scratch, source.extension()));
-    if(sourceExtension != ".ttf" && sourceExtension != ".otf" && sourceExtension != ".font"){
+    if(sourceExtension != s_TrueTypeExtension && sourceExtension != s_OpenTypeExtension && sourceExtension != s_PreparedFontExtension){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: --font must name a .ttf, .otf, or prepared .font source"));
         return false;
     }

@@ -57,7 +57,7 @@ TEST_F(UiTextAreaBuilderTests, SingleLineIsRejectedBeforeBorrowingOrChangingView
     ASSERT_TRUE(m_state.scrollTo({ 13.0f, 17.0f }));
     const u64 revision = m_state.revision();
     ASSERT_TRUE(beginArea(1u));
-    const auto result = m_builder.textArea("area", singleLine, m_state);
+    const auto result = m_builder.textArea(s_TextAreaKey, singleLine, m_state);
     EXPECT_FALSE(result.valid);
     EXPECT_TRUE(m_context.failed());
     EXPECT_EQ(m_host.loans, 0u);
@@ -71,7 +71,7 @@ TEST_F(UiTextAreaBuilderTests, UnsupportedNavigatedHostCannotFallBackToOrdinaryE
     OrdinaryAreaHost host;
     m_builder.setEditHost(&host);
     ASSERT_TRUE(beginArea(1u));
-    const auto result = m_builder.textArea("area", m_model, m_state);
+    const auto result = m_builder.textArea(s_TextAreaKey, m_model, m_state);
     EXPECT_FALSE(result.valid);
     EXPECT_TRUE(m_context.failed());
     EXPECT_EQ(host.ordinaryLoans, 0u);
@@ -95,7 +95,7 @@ TEST_F(UiTextAreaBuilderTests, ReadOnlyNavigatedHostRejectsQueuedText){
 
 TEST_F(UiTextAreaBuilderTests, RawPointerCapturePersistsOutsideWithoutGestureRecords){
     ASSERT_TRUE(frameArea(1u));
-    const WidgetId widget = id("area", "panel");
+    const WidgetId widget = id(s_TextAreaKey, s_TextAreaPanelKey);
     const HitTarget* area = target(widget);
     ASSERT_TRUE(area);
     const SIMDVectorSingle originValue = VectorAdd(VectorSet(area->rectangle.x, area->rectangle.y, 0.0f, 0.0f), VectorReplicate(10.0f));
@@ -116,13 +116,13 @@ TEST_F(UiTextAreaBuilderTests, DisabledAreaRetainsAPointerBarrierAndDiscardsHost
     TextAreaOptions options;
     options.enabled = false;
     ASSERT_TRUE(frameArea(1u, options));
-    const WidgetId widget = id("area", "panel");
+    const WidgetId widget = id(s_TextAreaKey, s_TextAreaPanelKey);
     const HitTarget* area = target(widget);
     ASSERT_TRUE(area);
     EXPECT_FALSE(area->enabled || area->focusable || area->textEditable || area->pointerGesture);
     const SIMDVectorSingle pointValue = VectorAdd(VectorSet(area->rectangle.x, area->rectangle.y, 0.0f, 0.0f), VectorReplicate(5.0f));
     const Point point{ VectorGetX(pointValue), VectorGetY(pointValue) };
-    EXPECT_EQ(m_context.input().hitTest(point), UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), "panel")));
+    EXPECT_EQ(m_context.input().hitTest(point), UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), s_TextAreaPanelKey)));
     EXPECT_TRUE(send({ InputEventType::PrimaryDown, point }).pointerConsumed);
     EXPECT_FALSE(m_context.input().focus().valid());
     EXPECT_TRUE(send({ InputEventType::PrimaryUp, point }).pointerConsumed);
@@ -141,7 +141,7 @@ TEST_F(UiTextAreaBuilderTests, PopupAreaDefersPublicationUntilItsOwningPopupEnds
     ASSERT_TRUE(begin(1u));
     ASSERT_TRUE(m_builder.beginPopup("popup", popup, options));
     const PopupToken token = m_context.popupToken();
-    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state).valid);
+    ASSERT_TRUE(m_builder.textArea(s_TextAreaKey, m_model, m_state).valid);
     EXPECT_EQ(m_host.lastPopup, token);
     EXPECT_EQ(m_host.publishes, 0u);
     ASSERT_TRUE(m_builder.endPopup());

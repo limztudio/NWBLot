@@ -55,7 +55,7 @@ Expected<Core::GpuTaskGraphOutputLayer> GpuRendererState::declare(Core::GpuTaskG
     const Core::GpuExternalCompletionId targetReady = *targetReadyResult;
     const auto colorResult = graph.importTexture(
         frame->m_target->m_color,
-        Core::GpuGraphResourceDesc().setIdentity(Name("ui.layer")).setMarkerLabel("UI Linear Layer").setType(Core::GpuGraphResourceType::Texture)
+        Core::GpuGraphResourceDesc().setIdentity(s_GpuLayerTextureName).setMarkerLabel("UI Linear Layer").setType(Core::GpuGraphResourceType::Texture)
             .setInitialAvailabilityCompletion(targetReady).setExternalFinalState(Core::ResourceStates::ShaderResource)
     );
     const auto skinReadyResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc().setIdentity(Name("ui.atlas_ready")).setMarkerLabel("UI Atlas Upload Completion").setToken(frame->m_skin->m_texture.readinessToken));
@@ -65,7 +65,7 @@ Expected<Core::GpuTaskGraphOutputLayer> GpuRendererState::declare(Core::GpuTaskG
     const Core::GpuGraphResourceId color = *colorResult;
     const auto skinResult = graph.importTexture(
         frame->m_skin->m_texture.texture,
-        Core::GpuGraphResourceDesc().setIdentity(Name("ui.atlas")).setMarkerLabel("UI Atlas").setType(Core::GpuGraphResourceType::Texture)
+        Core::GpuGraphResourceDesc().setIdentity(s_GpuAtlasTextureName).setMarkerLabel("UI Atlas").setType(Core::GpuGraphResourceType::Texture)
             .setInitialAvailabilityCompletion(skinReady).setExternalFinalState(Core::ResourceStates::ShaderResource)
     );
     const auto versionResult = graph.declareResourceVersion(Core::GpuGraphResourceVersionDesc().setResource(color).setOrigin(Core::GpuGraphResourceVersionOrigin::TaskProduced));
@@ -80,7 +80,9 @@ Expected<Core::GpuTaskGraphOutputLayer> GpuRendererState::declare(Core::GpuTaskG
     uploadScheduling.allowParallelRecording = true;
     uploadScheduling.allowSameClassQueueRouting = true;
     uploadScheduling.preferNonPrimarySameClassQueue = true;
-    FixedVector<Core::GpuTaskId, 3u> dependencies;
+    // Vertex upload, index upload, and clear.
+    constexpr usize s_RasterDependencyCapacity = 3u;
+    FixedVector<Core::GpuTaskId, s_RasterDependencyCapacity> dependencies;
     GpuRasterResourceUses uses;
     Core::GpuGraphResourceId vertices;
     Core::GpuGraphResourceId indices;
@@ -98,9 +100,9 @@ Expected<Core::GpuTaskGraphOutputLayer> GpuRendererState::declare(Core::GpuTaskG
     if(!frame->m_snapshot.vertices().empty()){
         const auto verticesResult = graph.importBuffer(
             frame->m_vertices,
-            Core::GpuGraphResourceDesc().setIdentity(Name("ui.vertices")).setMarkerLabel("UI Vertices").setType(Core::GpuGraphResourceType::Buffer).setExternalFinalState(Core::ResourceStates::Common)
+            Core::GpuGraphResourceDesc().setIdentity(s_GpuVertexBufferName).setMarkerLabel("UI Vertices").setType(Core::GpuGraphResourceType::Buffer).setExternalFinalState(Core::ResourceStates::Common)
         );
-        const auto indicesResult = graph.importBuffer(frame->m_indices, Core::GpuGraphResourceDesc().setIdentity(Name("ui.indices")).setMarkerLabel("UI Indices").setType(Core::GpuGraphResourceType::Buffer).setExternalFinalState(Core::ResourceStates::Common));
+        const auto indicesResult = graph.importBuffer(frame->m_indices, Core::GpuGraphResourceDesc().setIdentity(s_GpuIndexBufferName).setMarkerLabel("UI Indices").setType(Core::GpuGraphResourceType::Buffer).setExternalFinalState(Core::ResourceStates::Common));
         if(!verticesResult || !indicesResult){
             if(verticesResult)
                 vertices = *verticesResult;
@@ -155,7 +157,7 @@ Expected<Core::GpuTaskGraphOutputLayer> GpuRendererState::declare(Core::GpuTaskG
         Core::GpuTaskDesc().setIdentity(Name("ui.raster")).setMarkerLabel("UI Raster").setScheduling(scheduling)
             .setDependencies(dependencies.data(), dependencies.size()).setResourceUses(uses.data(), uses.size())
             .setResourceVersionUses(&produce, 1u)
-            .setTimingMetadata({ 0u, m_width ^ (m_height << 16u), Core::GpuTaskTimingPolicy::Task }),
+            .setTimingMetadata({ 0u, m_width ^ (m_height << s_GpuTimingHeightShift), Core::GpuTaskTimingPolicy::Task }),
         GpuRasterTask::Payload{ frame, color, skin, pipeline, vertices, indices, Move(*glyphPages), Move(*sdfPages), Move(*textureImages) }
     );
     if(!rasterResult)

@@ -36,6 +36,7 @@ static constexpr AStringView s_PositionField = "position";
 static constexpr AStringView s_NormalField = "normal";
 static constexpr AStringView s_TangentField = "tangent";
 static constexpr AStringView s_ColorField = "color";
+static constexpr AStringView s_InfluencesLabelOpen = ".influences[";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -203,7 +204,7 @@ template<typename ElementT, usize ComponentCount>
         MeshSkinInfluence influence;
         for(usize componentIndex = 0u; componentIndex < s_MeshSkinInfluenceCount; ++componentIndex){
             ScratchStringStream jointLabel(s_FileOpenWrite, scratchArena);
-            jointLabel << skinVariableName << ".influences[" << i << "].joints[" << componentIndex << "]";
+            jointLabel << skinVariableName << s_InfluencesLabelOpen << i << "].joints[" << componentIndex << "]";
             const auto jointIndex = ParseU32(nwbFilePath, jointsValue->asList()[componentIndex], jointLabel.str());
             if(!jointIndex)
                 return MakeUnexpected(Failure{});
@@ -213,7 +214,7 @@ template<typename ElementT, usize ComponentCount>
             }
 
             ScratchStringStream weightLabel(s_FileOpenWrite, scratchArena);
-            weightLabel << skinVariableName << ".influences[" << i << "].weights[" << componentIndex << "]";
+            weightLabel << skinVariableName << s_InfluencesLabelOpen << i << "].weights[" << componentIndex << "]";
             influence.joint[componentIndex] = static_cast<u16>(*jointIndex);
             const auto weight = ParseFiniteF32(nwbFilePath, weightsValue->asList()[componentIndex], weightLabel.str());
             if(!weight)
@@ -339,23 +340,23 @@ template<typename ElementT, usize ComponentCount>
     if(!ValidateMeshAssetFields(nwbFilePath, meshVariableName, asset))
         return MakeUnexpected(Failure{});
     SourceMeshStreams mesh;
-    auto positions = ParseFloatListField<Vec3, 3u>(nwbFilePath, asset, s_PositionsField, scratchArena);
+    auto positions = ParseFloatListField<Vec3, s_Vector3ComponentCount>(nwbFilePath, asset, s_PositionsField, scratchArena);
     if(!positions)
         return MakeUnexpected(positions.error());
     mesh.positions = Move(*positions);
-    auto normals = ParseFloatListField<Vec3, 3u>(nwbFilePath, asset, s_NormalsField, scratchArena);
+    auto normals = ParseFloatListField<Vec3, s_Vector3ComponentCount>(nwbFilePath, asset, s_NormalsField, scratchArena);
     if(!normals)
         return MakeUnexpected(normals.error());
     mesh.normals = Move(*normals);
-    auto tangents = ParseFloatListField<Vec4, 4u>(nwbFilePath, asset, s_TangentsField, scratchArena);
+    auto tangents = ParseFloatListField<Vec4, s_Vector4ComponentCount>(nwbFilePath, asset, s_TangentsField, scratchArena);
     if(!tangents)
         return MakeUnexpected(tangents.error());
     mesh.tangents = Move(*tangents);
-    auto uv0 = ParseFloatListField<Vec2, 2u>(nwbFilePath, asset, s_Uv0Field, scratchArena);
+    auto uv0 = ParseFloatListField<Vec2, s_Vector2ComponentCount>(nwbFilePath, asset, s_Uv0Field, scratchArena);
     if(!uv0)
         return MakeUnexpected(uv0.error());
     mesh.uv0 = Move(*uv0);
-    auto colors = ParseFloatListField<Vec4, 4u>(nwbFilePath, asset, s_ColorsField, scratchArena);
+    auto colors = ParseFloatListField<Vec4, s_Vector4ComponentCount>(nwbFilePath, asset, s_ColorsField, scratchArena);
     if(!colors)
         return MakeUnexpected(colors.error());
     mesh.colors = Move(*colors);

@@ -28,7 +28,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         firstIndex = first.primitiveOffset;
         indexCount = last.primitiveOffset + nwbMeshletPrimitiveCount(last) * NWB_MESHLET_TRIANGLE_INDEX_COUNT - firstIndex;
         const ByteAddressBuffer bounds = nwbHeapRawBuffer(g_NwbLightSpacePush.meshletBoundsSlot);
-        float3 minimum = float3(asfloat(0x7f7fffffu));
+        float3 minimum = float3(asfloat(NWB_FLOAT_MAX_BITS));
         float3 maximum = -minimum;
         bool boundsValid = true;
         [loop] for(uint meshletIndex = firstMeshlet; meshletIndex < endMeshlet; ++meshletIndex){
@@ -40,9 +40,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             }
             const float3 meshletMin = asfloat(bounds.Load3(boundsAddress + NWB_RUNTIME_MESH_BOUNDS_MIN_OFFSET));
             const float3 meshletMax = asfloat(bounds.Load3(boundsAddress + NWB_RUNTIME_MESH_BOUNDS_MAX_OFFSET));
-            const uint3 minimumBits = asuint(meshletMin) & 0x7fffffffu;
-            const uint3 maximumBits = asuint(meshletMax) & 0x7fffffffu;
-            if(!all(isfinite(meshletMin)) || !all(isfinite(meshletMax)) || any(meshletMin > meshletMax) || any((minimumBits != 0u) & (minimumBits < 0x00800000u)) || any((maximumBits != 0u) & (maximumBits < 0x00800000u))){
+            const uint3 minimumBits = asuint(meshletMin) & NWB_FLOAT_MAGNITUDE_BITS_MASK;
+            const uint3 maximumBits = asuint(meshletMax) & NWB_FLOAT_MAGNITUDE_BITS_MASK;
+            if(!all(isfinite(meshletMin)) || !all(isfinite(meshletMax)) || any(meshletMin > meshletMax) || any((minimumBits != 0u) & (minimumBits < NWB_FLOAT_MIN_NORMAL_BITS)) || any((maximumBits != 0u) & (maximumBits < NWB_FLOAT_MIN_NORMAL_BITS))){
                 boundsValid = false;
                 break;
             }
@@ -61,7 +61,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint drawIndex = dispatchThreadID.y * g_NwbLightSpacePush.captureDrawCount + g_NwbLightSpacePush.casterDrawOffset + commandIndex;
     const uint address = drawIndex * NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES;
     g_NwbHeapStorageBuffers[g_NwbLightSpacePush.outputSlot].Store4(address, uint4(outside ? 0u : indexCount, 1u, firstIndex, 0u));
-    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.outputSlot].Store(address + 16u, firstIndex / NWB_MESHLET_TRIANGLE_INDEX_COUNT);
+    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.outputSlot].Store(address + NWB_LIGHT_SPACE_DRAW_FIRST_INSTANCE_OFFSET, firstIndex / NWB_MESHLET_TRIANGLE_INDEX_COUNT);
 }
 
 

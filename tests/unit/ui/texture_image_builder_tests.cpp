@@ -26,6 +26,13 @@ using namespace NWB::Impl;
 using namespace NWB::Impl::Ui;
 using namespace NWB::UiWidgetTests;
 
+constexpr AStringView s_PanelKey = "panel";
+constexpr AStringView s_BeforeKey = "before";
+constexpr AStringView s_CopiedImagePath = "tests/ui/copied_builder_image";
+constexpr AStringView s_FrozenImagePath = "tests/ui/frozen_builder_image";
+constexpr AStringView s_VersionedImagePath = "tests/ui/versioned_builder_image";
+constexpr AStringView s_CapacityImagePath = "tests/ui/capacity_image";
+
 struct TextureImagePaintSample{
     Rect bounds;
     Rect uv;
@@ -119,7 +126,7 @@ PopupOptions UiTextureImageBuilderTests::ChildOptions()noexcept{
 }
 
 bool UiTextureImageBuilderTests::panel(const u64 generation){
-    return begin(generation) && m_builder.beginPanel("panel", { 10.0f, 10.0f, 360.0f, 400.0f });
+    return begin(generation) && m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 360.0f, 400.0f });
 }
 
 
@@ -127,7 +134,7 @@ bool UiTextureImageBuilderTests::panel(const u64 generation){
 
 
 TEST_F(UiTextureImageBuilderTests, DeclarationRetainsSourceAndOptionsAcrossCallerReplacementAndRelease){
-    auto sourceResult = MakeImage(m_arena, "tests/ui/copied_builder_image", 37u);
+    auto sourceResult = MakeImage(m_arena, s_CopiedImagePath, 37u);
     ASSERT_TRUE(sourceResult);
     SharedImageSource source = Move(*sourceResult);
     ASSERT_TRUE(source);
@@ -136,7 +143,7 @@ TEST_F(UiTextureImageBuilderTests, DeclarationRetainsSourceAndOptionsAcrossCalle
     options.tint = { 2.0f, 0.8f, 0.6f, 0.5f };
     ASSERT_TRUE(panel(1u));
     ASSERT_TRUE(m_builder.image("image", source, options));
-    auto sourceReplacement = MakeImage(m_arena, "tests/ui/copied_builder_image", 73u, 9u, 7u);
+    auto sourceReplacement = MakeImage(m_arena, s_CopiedImagePath, 73u, 9u, 7u);
     ASSERT_TRUE(sourceReplacement);
     source = Move(*sourceReplacement);
     ASSERT_TRUE(source);
@@ -161,7 +168,7 @@ TEST_F(UiTextureImageBuilderTests, DeclarationRetainsSourceAndOptionsAcrossCalle
 }
 
 TEST_F(UiTextureImageBuilderTests, FrozenSnapshotsKeepVersionsAcrossBuilderResetAndSourceRelease){
-    auto sourceResult = MakeImage(m_arena, "tests/ui/frozen_builder_image", 37u);
+    auto sourceResult = MakeImage(m_arena, s_FrozenImagePath, 37u);
     ASSERT_TRUE(sourceResult);
     SharedImageSource source = Move(*sourceResult);
     ASSERT_TRUE(source);
@@ -172,7 +179,7 @@ TEST_F(UiTextureImageBuilderTests, FrozenSnapshotsKeepVersionsAcrossBuilderReset
     DrawSnapshot retained = m_paint.freeze();
     ASSERT_TRUE(m_context.commitFrame(1u));
     source.reset();
-    auto sourceReplacement = MakeImage(m_arena, "tests/ui/frozen_builder_image", 73u, 9u, 7u);
+    auto sourceReplacement = MakeImage(m_arena, s_FrozenImagePath, 73u, 9u, 7u);
     ASSERT_TRUE(sourceReplacement);
     source = Move(*sourceReplacement);
     ASSERT_TRUE(source);
@@ -204,10 +211,10 @@ TEST_F(UiTextureImageBuilderTests, FrozenSnapshotsKeepVersionsAcrossBuilderReset
 }
 
 TEST_F(UiTextureImageBuilderTests, SamePathVersionsStayDistinctAndRepeatedHandlesKeepOneBinding){
-    auto firstResult = MakeImage(m_arena, "tests/ui/versioned_builder_image", 37u);
+    auto firstResult = MakeImage(m_arena, s_VersionedImagePath, 37u);
     ASSERT_TRUE(firstResult);
     const SharedImageSource first = Move(*firstResult);
-    auto secondResult = MakeImage(m_arena, "tests/ui/versioned_builder_image", 73u, 9u, 7u);
+    auto secondResult = MakeImage(m_arena, s_VersionedImagePath, 73u, 9u, 7u);
     ASSERT_TRUE(secondResult);
     const SharedImageSource second = Move(*secondResult);
     ASSERT_TRUE(first && second);
@@ -284,11 +291,11 @@ TEST_F(UiTextureImageBuilderTests, ActiveNullSourceRejectsEvenTransparentPolicyW
     const SharedImageSource source = Move(*sourceResult);
     ASSERT_TRUE(source);
     ASSERT_TRUE(panel(1u));
-    EXPECT_FALSE(m_builder.button("before", "Before"));
+    EXPECT_FALSE(m_builder.button(s_BeforeKey, "Before"));
     ASSERT_TRUE(m_builder.image("image", source));
     ASSERT_TRUE(finishPanel());
     ASSERT_TRUE(m_context.commitFrame(1u));
-    const WidgetId before = id("before", "panel");
+    const WidgetId before = id(s_BeforeKey, s_PanelKey);
     ASSERT_NE(target(before), nullptr);
     const HitTarget accepted = *target(before);
     const usize count = m_context.input().targets().size();
@@ -314,11 +321,11 @@ TEST_F(UiTextureImageBuilderTests, InvalidOptionsDoNotReplaceTheAcceptedInputFra
     const SharedImageSource source = Move(*sourceResult);
     ASSERT_TRUE(source);
     ASSERT_TRUE(panel(1u));
-    EXPECT_FALSE(m_builder.button("before", "Before"));
+    EXPECT_FALSE(m_builder.button(s_BeforeKey, "Before"));
     ASSERT_TRUE(m_builder.image("image", source));
     ASSERT_TRUE(finishPanel());
     ASSERT_TRUE(m_context.commitFrame(1u));
-    const WidgetId before = id("before", "panel");
+    const WidgetId before = id(s_BeforeKey, s_PanelKey);
     ASSERT_NE(target(before), nullptr);
     const HitTarget accepted = *target(before);
     const usize count = m_context.input().targets().size();
@@ -404,7 +411,7 @@ TEST_F(UiTextureImageBuilderTests, AncestorClosureSuppressesEndedChildImageAndAn
 TEST_F(UiTextureImageBuilderTests, VisibleImageAtFullBindingCapacityRejectsDeferredPaint){
     FixedVector<SharedImageSource, s_PaintMaxImages> images;
     for(usize index = 0u; index < images.max_size(); ++index){
-        auto imageResult = MakeImage(m_arena, "tests/ui/capacity_image", static_cast<u8>(index), 4u, 4u);
+        auto imageResult = MakeImage(m_arena, s_CapacityImagePath, static_cast<u8>(index), 4u, 4u);
         ASSERT_TRUE(imageResult);
         SharedImageSource image = Move(*imageResult);
         ASSERT_TRUE(image);
@@ -428,7 +435,7 @@ TEST_F(UiTextureImageBuilderTests, VisibleImageAtFullBindingCapacityRejectsDefer
 TEST_F(UiTextureImageBuilderTests, FullyClippedImageAtFullBindingCapacityConsumesNoAdditionalSlot){
     FixedVector<SharedImageSource, s_PaintMaxImages> images;
     for(usize index = 0u; index < images.max_size(); ++index){
-        auto imageResult = MakeImage(m_arena, "tests/ui/capacity_image", static_cast<u8>(index), 4u, 4u);
+        auto imageResult = MakeImage(m_arena, s_CapacityImagePath, static_cast<u8>(index), 4u, 4u);
         ASSERT_TRUE(imageResult);
         SharedImageSource image = Move(*imageResult);
         ASSERT_TRUE(image);

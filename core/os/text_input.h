@@ -54,6 +54,8 @@ inline constexpr usize s_TextInputMaxEvents = 64u;
 inline constexpr usize s_TextInputMaxEventTextBytes = 64u * 1024u;
 inline constexpr usize s_TextInputMaxQueuedTextBytes = 256u * 1024u;
 inline constexpr usize s_TextInputMaxSurroundingBytes = 1024u * 1024u;
+inline constexpr u32 s_TextInputFirstPrintableCodePoint = 0x20u;
+inline constexpr u32 s_TextInputDeleteCodePoint = 0x7fu;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

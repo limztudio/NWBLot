@@ -16,6 +16,24 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_skinning_live_state_buffers{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr usize s_PromotedIndexCapacityFactor = 4u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 MeshSkinningStateBufferCollector::MeshSkinningStateBufferCollector(Core::Alloc::ScratchArena& scratchArena, Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outBuffers)noexcept
     : m_buffers(outBuffers)
     , m_scratchArena(scratchArena)
@@ -85,7 +103,7 @@ void MeshSkinningStateBufferCollector::retainBuffer(const Core::BufferHandle& bu
 
 void MeshSkinningStateBufferCollector::promoteBufferIndex(){
     NWB_ASSERT(!m_index && m_inlineCount == s_InlineBufferCount && m_buffers.size() == m_inlineCount);
-    BufferIndex index(s_InlineBufferCount * 4u, m_scratchArena);
+    BufferIndex index(s_InlineBufferCount * __hidden_skinning_live_state_buffers::s_PromotedIndexCapacityFactor, m_scratchArena);
     for(Core::Buffer* const identity : m_inlineBuffers){
         const auto [found, inserted] = index.insert(identity);
         if(!inserted)

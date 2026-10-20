@@ -37,6 +37,9 @@ inline constexpr AStringView s_EnabledKey = "enabled";
 inline constexpr AStringView s_AmountKey = "amount";
 inline constexpr AStringView s_CommandsKey = "commands";
 
+// Sample text format shared by the selection read-outs.
+inline constexpr AStringView s_SelectedTextFormat = "Selected: {}";
+
 // Default skin regions drawn by more than one sample.
 inline constexpr Name s_ButtonNormal("button.normal");
 inline constexpr Name s_ComboArrow("combo.arrow");

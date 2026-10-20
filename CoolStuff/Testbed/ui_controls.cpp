@@ -17,6 +17,9 @@ TESTBED_BEGIN
 
 
 namespace __hidden_ui_controls{
+static constexpr f32 s_OverviewInset = 18.0f;
+static constexpr f32 s_OverviewWidth = 360.0f;
+static constexpr f32 s_OverviewHeight = 160.0f;
 static constexpr StringView s_WindowTitle = "NWB Testbed";
 static constexpr StringView s_RendererLine = "Renderer: mesh / compute emulation";
 static constexpr StringView s_CharacterLine = "Character: female model";
@@ -28,7 +31,7 @@ static constexpr StringView s_CharacterLine = "Character: female model";
 
 void Project::drawUiControls(NWB::Impl::UiPaintContext& context){
     NWB::Impl::Ui::WindowOptions options;
-    options.initialBounds = { 18.0f, 18.0f, 360.0f, 160.0f };
+    options.initialBounds = { __hidden_ui_controls::s_OverviewInset, __hidden_ui_controls::s_OverviewInset, __hidden_ui_controls::s_OverviewWidth, __hidden_ui_controls::s_OverviewHeight };
     options.contentHeightFirstUse = true;
     const auto gallery = m_uiPreview.galleryBounds(context);
     if(!gallery)

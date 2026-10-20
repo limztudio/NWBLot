@@ -309,26 +309,27 @@ TEST_F(EditCaretFixture, MultilineRequiresCanonicalLfAndSingleLineRejectsHardBre
 }
 
 TEST_F(EditCaretFixture, RtlAndMalformedClusterCoverageCannotReplaceReadyLtrGeometry){
+    constexpr AStringView s_Text = "abc";
     ASSERT_TRUE(adoptText("base", EditTextMode::SingleLine));
     TextLayout rtl(m_arena);
     {
-        auto layoutResult = layout("abc", TextDirection::RightToLeft);
+        auto layoutResult = layout(s_Text, TextDirection::RightToLeft);
         ASSERT_TRUE(layoutResult);
         rtl = Move(*layoutResult);
     }
-    ASSERT_TRUE(identityMapping("abc"));
-    EXPECT_FALSE(m_geometry.adoptLayout(Move(rtl), "abc", m_mapping, 3u, EditTextMode::SingleLine));
+    ASSERT_TRUE(identityMapping(s_Text));
+    EXPECT_FALSE(m_geometry.adoptLayout(Move(rtl), s_Text, m_mapping, 3u, EditTextMode::SingleLine));
     const ShaperFault::Enum faults[]{ ShaperFault::LeadingGap, ShaperFault::TrailingGap, ShaperFault::Overlap, ShaperFault::InconsistentGlyphEnd };
     for(const auto fault : faults){
         SCOPED_TRACE(fault);
         m_shaper.fault = fault;
         TextLayout malformed(m_arena);
         {
-            auto layoutResult = layout("abc");
+            auto layoutResult = layout(s_Text);
             ASSERT_TRUE(layoutResult);
             malformed = Move(*layoutResult);
         }
-        EXPECT_FALSE(m_geometry.adoptLayout(Move(malformed), "abc", m_mapping, 3u, EditTextMode::SingleLine));
+        EXPECT_FALSE(m_geometry.adoptLayout(Move(malformed), s_Text, m_mapping, 3u, EditTextMode::SingleLine));
         EXPECT_EQ(m_geometry.layout().utf8(), "base");
         expectCaret(1u, 10.0f, 0.0f);
     }

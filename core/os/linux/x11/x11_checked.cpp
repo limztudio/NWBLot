@@ -78,7 +78,7 @@ bool X11CheckedOperation::succeeded(){
 Expected<X11Property, X11PropertyFailure> ReadX11Property(Display& display, const Window window, const Atom property, const bool remove, const usize maxBytes){
     X11Property result;
     X11CheckedOperation operation(display);
-    const int status = XGetWindowProperty(&display, window, property, 0, static_cast<long>((maxBytes + 3u) / 4u), remove ? True : False, AnyPropertyType, &result.type, &result.format, &result.count, &result.remaining, &result.bytes);
+    const int status = XGetWindowProperty(&display, window, property, 0, static_cast<long>((maxBytes + (s_X11WireUnitBytes - 1u)) / s_X11WireUnitBytes), remove ? True : False, AnyPropertyType, &result.type, &result.format, &result.count, &result.remaining, &result.bytes);
     if(!operation.succeeded() || status != 0)
         return MakeUnexpected(X11PropertyFailure{ .nativeStatus = status, .errorCode = operation.m_error, });
     return result;

@@ -18,10 +18,13 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr f32 s_TooltipDefaultDelaySeconds = 0.5f;
+inline constexpr f32 s_TooltipDefaultMaximumWidth = 320.0f;
+
 struct TooltipOptions{
     bool enabled = true;
-    f32 delaySeconds = 0.5f;
-    f32 maximumWidth = 320.0f;
+    f32 delaySeconds = s_TooltipDefaultDelaySeconds;
+    f32 maximumWidth = s_TooltipDefaultMaximumWidth;
     f32 gap = s_StyleSpacingSmall;
     PopupPlacementSide::Enum side = PopupPlacementSide::Below;
 };

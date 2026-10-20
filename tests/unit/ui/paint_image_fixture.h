@@ -31,6 +31,8 @@ namespace UiPaintImageTests{
 using namespace Impl;
 using namespace Impl::Ui;
 
+inline constexpr AStringView s_DefaultImagePath = "tests/ui/image";
+
 void ExpectSameImagePaint(const DrawSnapshot& actual, const DrawSnapshot& expected);
 
 
@@ -46,7 +48,7 @@ protected:
     void beginPaint(PaintBuilder& builder, u64 generation = 1u);
     [[nodiscard]] Expected<SharedGlyphPage> makeGlyph(u64 atlasIdentity = 11u, u64 generation = 1u);
     [[nodiscard]] Expected<SharedSdfAtlasPage> makeSdf(u64 atlasIdentity = 22u);
-    [[nodiscard]] Expected<SharedImageSource> makeImage(StringView path = "tests/ui/image", u8 seed = 37u, u32 width = 8u, u32 height = 4u);
+    [[nodiscard]] Expected<SharedImageSource> makeImage(StringView path = s_DefaultImagePath, u8 seed = 37u, u32 width = 8u, u32 height = 4u);
 
 
 protected:

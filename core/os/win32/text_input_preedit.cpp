@@ -17,7 +17,7 @@ NWB_CORE_BEGIN
 
 
 TextInputAdmission::Enum Win32TextInputService::acceptInsertedPreedit(const TextInputSessionToken token, const u32 unit, const bool moveCaret){
-    if(unit >= 0xd800u && unit <= 0xdbffu){
+    if(unit >= BasicStringDetail::s_UnicodeHighSurrogateMin && unit <= BasicStringDetail::s_UnicodeHighSurrogateMax){
         if(m_pendingPreeditHighSurrogate != 0u)
             return TextInputAdmission::InvalidText;
         m_pendingPreeditHighSurrogate = unit;
@@ -26,10 +26,10 @@ TextInputAdmission::Enum Win32TextInputService::acceptInsertedPreedit(const Text
     }
     u32 codePoint = unit;
     bool advanceCaret = moveCaret;
-    if(unit >= 0xdc00u && unit <= 0xdfffu){
+    if(unit >= BasicStringDetail::s_UnicodeLowSurrogateMin && unit <= BasicStringDetail::s_UnicodeLowSurrogateMax){
         if(m_pendingPreeditHighSurrogate == 0u)
             return TextInputAdmission::InvalidText;
-        codePoint = 0x10000u + ((m_pendingPreeditHighSurrogate - 0xd800u) << 10u) + (unit - 0xdc00u);
+        codePoint = BasicStringDetail::s_Utf8FourByteMinCodePoint + ((m_pendingPreeditHighSurrogate - BasicStringDetail::s_UnicodeHighSurrogateMin) << BasicStringDetail::s_Utf16SurrogatePayloadBits) + (unit - BasicStringDetail::s_UnicodeLowSurrogateMin);
         advanceCaret = advanceCaret && m_pendingPreeditMoveCaret;
         m_pendingPreeditHighSurrogate = 0u;
     }

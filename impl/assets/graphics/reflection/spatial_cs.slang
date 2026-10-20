@@ -18,6 +18,27 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// The FP16 position bound matches NWB_REFLECTION_POSITION_RELATIVE_ERROR in frame_constants.h.
+static const float NWB_REFLECTION_SPATIAL_POSITION_RELATIVE_ERROR = 0.0009765625;
+static const float NWB_REFLECTION_SPATIAL_FOCAL_MIN = 1e-6;
+static const float NWB_REFLECTION_SPATIAL_VIEW_COSINE_MIN = 0.05;
+static const float NWB_REFLECTION_SPATIAL_DENOMINATOR_MIN = 1e-8;
+static const float NWB_REFLECTION_SPATIAL_PLANE_TOLERANCE_MIN = 1e-4;
+static const float NWB_REFLECTION_SPATIAL_PLANE_FOOTPRINT_SCALE = 0.25;
+static const float NWB_REFLECTION_SPATIAL_TAP_DISTANCE_MARGIN = 1.5;
+// Neighbors beyond these differences are rejected before weighting.
+static const half NWB_REFLECTION_SPATIAL_ROUGHNESS_DIFFERENCE_MAX = 0.1h;
+static const half NWB_REFLECTION_SPATIAL_F0_DIFFERENCE_MAX = 0.05h;
+static const half NWB_REFLECTION_SPATIAL_NORMAL_AGREEMENT_MIN = 0.95h;
+// Falloff rates of the bilateral weight exponent.
+static const half NWB_REFLECTION_SPATIAL_NORMAL_FALLOFF = 80.0h;
+static const half NWB_REFLECTION_SPATIAL_F0_FALLOFF = 200.0h;
+static const half NWB_REFLECTION_SPATIAL_ROUGHNESS_FALLOFF = 50.0h;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct NwbReflectionSpatialPushConstants{
 #define NWB_REFLECTION_SPATIAL_FIELD(name) uint name;
     NWB_REFLECTION_SPATIAL_UINT_FIELDS(NWB_REFLECTION_SPATIAL_FIELD)
@@ -155,13 +176,13 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
     }
     const float focalX = length(g_NwbReflectionSpatialView.worldToClip[0].xyz);
     const float focalY = length(g_NwbReflectionSpatialView.worldToClip[1].xyz);
-    const float pixelFootprint = max(2.0 * abs(clip.w) / max(float(g_NwbReflectionSpatial.width) * focalX, 1e-6), 2.0 * abs(clip.w) / max(float(g_NwbReflectionSpatial.height) * focalY, 1e-6));
+    const float pixelFootprint = max(2.0 * abs(clip.w) / max(float(g_NwbReflectionSpatial.width) * focalX, NWB_REFLECTION_SPATIAL_FOCAL_MIN), 2.0 * abs(clip.w) / max(float(g_NwbReflectionSpatial.height) * focalY, NWB_REFLECTION_SPATIAL_FOCAL_MIN));
     const float3 viewDirection = nwbSafeNormalize(g_NwbReflectionSpatialView.cameraPosition.xyz - position, normal);
-    const float tangentFootprint = pixelFootprint / max(abs(dot(normal, viewDirection)), 0.05);
+    const float tangentFootprint = pixelFootprint / max(abs(dot(normal, viewDirection)), NWB_REFLECTION_SPATIAL_VIEW_COSINE_MIN);
     const half roughness = half(saturate(float(specular.a)));
     // Rougher lobes tolerate more spatial variance reduction; the mirror limit continuously approaches one texel.
     const float sigma = float(radius) * float(roughness);
-    const float spatialDenominator = max(2.0 * sigma * sigma, 1e-8);
+    const float spatialDenominator = max(2.0 * sigma * sigma, NWB_REFLECTION_SPATIAL_DENOMINATOR_MIN);
     float3 sum = float3(center.rgb);
     float weightSum = 1.0;
     for(int y = -int(radius); y <= int(radius); ++y){
@@ -186,22 +207,22 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
             const half roughnessDifference = half(abs(neighborSpecular.a - roughness));
             const half3 f0Difference = half3(abs(half3(neighborSpecular.rgb) - half3(specular.rgb)));
             const half maxF0Difference = max(max(f0Difference.x, f0Difference.y), f0Difference.z);
-            if(roughnessDifference > half(0.1h) || maxF0Difference > half(0.05h))
+            if(roughnessDifference > half(NWB_REFLECTION_SPATIAL_ROUGHNESS_DIFFERENCE_MAX) || maxF0Difference > half(NWB_REFLECTION_SPATIAL_F0_DIFFERENCE_MAX))
                 continue;
             const float3 neighborNormal = nwbSafeNormalize(g_NwbReflectionSpatialNormal[neighborIndex].xyz * 2.0 - 1.0, normal);
             // The normal-agreement gate is a (0, 1) bounded factor, so half arithmetic is sufficient here.
             const half normalAgreement = half(dot(normal, neighborNormal));
-            if(normalAgreement < half(0.95h))
+            if(normalAgreement < half(NWB_REFLECTION_SPATIAL_NORMAL_AGREEMENT_MIN))
                 continue;
             const float3 neighborPosition = g_NwbReflectionSpatialPositionDepth[neighborIndex].xyz;
             if(!all(isfinite(neighborPosition)))
                 continue;
             const float3 displacement = neighborPosition - position;
             // Bound the raster FP16 positions componentwise, then test both receiver tangent planes. This is a receiver-edge filter, not a secondary-hit reprojection or a claim of motion-vector validation.
-            const float3 positionUncertainty = (abs(position) + abs(neighborPosition)) * 0.0009765625;
-            const float planeTolerance = max(1e-4, max(dot(positionUncertainty, abs(normal)), dot(positionUncertainty, abs(neighborNormal))) + pixelFootprint * 0.25);
+            const float3 positionUncertainty = (abs(position) + abs(neighborPosition)) * NWB_REFLECTION_SPATIAL_POSITION_RELATIVE_ERROR;
+            const float planeTolerance = max(NWB_REFLECTION_SPATIAL_PLANE_TOLERANCE_MIN, max(dot(positionUncertainty, abs(normal)), dot(positionUncertainty, abs(neighborNormal))) + pixelFootprint * NWB_REFLECTION_SPATIAL_PLANE_FOOTPRINT_SCALE);
             const float planeDistance = max(abs(dot(displacement, normal)), abs(dot(displacement, neighborNormal)));
-            if(planeDistance > planeTolerance * 2.0 || length(displacement) > tangentFootprint * (length(float2(x, y)) + 1.5) + length(positionUncertainty))
+            if(planeDistance > planeTolerance * 2.0 || length(displacement) > tangentFootprint * (length(float2(x, y)) + NWB_REFLECTION_SPATIAL_TAP_DISTANCE_MARGIN) + length(positionUncertainty))
                 continue;
             const half4 neighborH = g_NwbReflectionSpatialRadiance[neighborIndex];
             const float4 neighbor = float4(neighborH);
@@ -212,9 +233,9 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
             const half weight = half(exp(
                 spatialExponent
                 -0.5 * normalizedPlaneDistance * normalizedPlaneDistance
-                -half(80.0h) * (half(1.0h) - saturate(normalAgreement))
-                -half(200.0h) * maxF0Difference * maxF0Difference
-                -half(50.0h) * roughnessDifference * roughnessDifference
+                -half(NWB_REFLECTION_SPATIAL_NORMAL_FALLOFF) * (half(1.0h) - saturate(normalAgreement))
+                -half(NWB_REFLECTION_SPATIAL_F0_FALLOFF) * maxF0Difference * maxF0Difference
+                -half(NWB_REFLECTION_SPATIAL_ROUGHNESS_FALLOFF) * roughnessDifference * roughnessDifference
             ));
             // Accumulate in FP32: weighted HDR sums can exceed FP16 range before normalization.
             // True zero samples participate normally.

@@ -20,6 +20,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Receiver geometry stores validity as 0 or 1 in its w lane; taps above this value are valid.
+#define NWB_SHADOW_GEOMETRY_VALID_THRESHOLD 0.5h
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed views of the global UniformBuffer/StorageBuffer descriptor tables.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbHeapShadowMaterialContextSlotBuffers[];

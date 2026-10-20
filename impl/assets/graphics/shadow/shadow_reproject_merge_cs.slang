@@ -63,7 +63,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint slotEnd = min(slotStart + g_NwbShadowMergePush.lightSlotCount, NWB_SCENE_SHADOW_SLOT_COUNT);
 
     const half4 gc = nwbShadowMergeGeometry(g_NwbShadowMergePush.geometryCurrSlot, texel);
-    const bool valid = gc.w > half(0.5h);
+    const bool valid = gc.w > half(NWB_SHADOW_GEOMETRY_VALID_THRESHOLD);
     const float3 Nc = nwbOctDecodeNormal(float2(gc.xy));
     const float currentCameraDistance = float(gc.z);
 

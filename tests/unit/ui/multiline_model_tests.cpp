@@ -22,11 +22,14 @@ using MultilineModelTests = MultilineFixture;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_LineSeparator = "\xE2\x80\xA8";
+constexpr AStringView s_ParagraphSeparator = "\xE2\x80\xA9";
+
 TEST_F(MultilineModelTests, SingleLineRejectsHardBreaksAndNulWithoutChangingModel){
     EditModel single(m_arena);
     ASSERT_TRUE(single.setText("a\t\x01\x7F\xC2\x85" "b"));
     const MultilineSnapshot before(m_arena, single);
-    for(const AStringView rejected : { AStringView("\n"), AStringView("\r"), AStringView("\xE2\x80\xA8"), AStringView("\xE2\x80\xA9"), AStringView("\0", 1u) }){
+    for(const AStringView rejected : { AStringView("\n"), AStringView("\r"), s_LineSeparator, s_ParagraphSeparator, AStringView("\0", 1u) }){
         EXPECT_FALSE(single.setText(rejected));
         before.expectUnchanged(single);
     }
@@ -56,7 +59,7 @@ TEST_F(MultilineModelTests, InvalidSetAndReplacementPreserveTextHistorySelection
     ASSERT_TRUE(m_model.beginComposition());
     ASSERT_TRUE(m_model.updateComposition("q\nr", 0u, 3u));
     const MultilineSnapshot before(m_arena, m_model);
-    const AStringView invalid[]{ "\r\n", "\t", "\xC2\x85", "\xE2\x80\xA8", "\xE2\x80\xA9", "\xC0\xAF", "\xED\xA0\x80", AStringView("a\0b", 3u) };
+    const AStringView invalid[]{ "\r\n", "\t", "\xC2\x85", s_LineSeparator, s_ParagraphSeparator, "\xC0\xAF", "\xED\xA0\x80", AStringView("a\0b", 3u) };
     for(const AStringView value : invalid){
         SCOPED_TRACE(value);
         EXPECT_FALSE(m_model.setText(value));

@@ -11,12 +11,15 @@ from probe_common import center
 from image_probe import observe_image, snapshot_from_logs
 from window_capture_smoke import run_smoke_main
 from passive_run import PassiveImageRun, run_passive_image
+from checkpoint_report import CHECKPOINT_STAGE_TIMEOUT_SECONDS
 
 LIT_TAB = "Tab"
 LIT_LOGICAL_EXTENT = "logical_extent"
 LIT_RECTANGLES = "rectangles"
 LIT_STRETCH = "stretch"
 LIT_ESCAPE = "Escape"
+
+FIXTURE_TIMEOUT_SECONDS = 120
 
 
 class ImageRun(PassiveImageRun):
@@ -26,7 +29,7 @@ class ImageRun(PassiveImageRun):
         self.expected = { "phase": 0, "focus_code": 0, "before_clicks": 0, "after_clicks": 0, "parent": 0, "child": 0, "popup_count": 0, "image_targets": 0, "declared_region": 1, "post_declaration_region": 2, }
 
     def checkpoint(self, name, *, extent=None, extra=None, **changes):
-        return self.capture_checkpoint(name, extent=extent, extra=extra, stage_timeout=10.0, changes=changes)
+        return self.capture_checkpoint(name, extent=extent, extra=extra, stage_timeout=CHECKPOINT_STAGE_TIMEOUT_SECONDS, changes=changes)
 
     def write_report(self, passed):
         report = { "passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "failure": self.failure_report, "input_path": "Win32 constrained physical cursor with posted pointer/key messages"
@@ -67,7 +70,7 @@ def run(args):
 
 
 def main(argv):
-    return run_smoke_main(argv, parse_args, run, default_timeout=120)
+    return run_smoke_main(argv, parse_args, run, default_timeout=FIXTURE_TIMEOUT_SECONDS)
 
 
 if __name__ == "__main__":

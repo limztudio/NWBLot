@@ -28,6 +28,12 @@ using namespace NWB;
 using namespace NWB::Impl;
 using namespace NWB::Impl::Ui;
 
+constexpr AStringView s_EditBoxSkinPath = "tests/ui/edit_box/skin";
+constexpr AStringView s_EditBoxTexturePath = "tests/ui/edit_box/texture";
+constexpr AStringView s_EditBoxFontPath = "tests/ui/edit_box/font";
+constexpr Name s_FontScratchArenaName("tests/ui/fonts/operation_scratch");
+constexpr AStringView s_LatinFontFileName = "latin.font";
+
 class FixtureShaper final : public ITextShaper{
 public:
     explicit FixtureShaper(Core::Alloc::GlobalArena& arena)noexcept
@@ -308,23 +314,23 @@ TEST_F(EditBoxLayoutTests, EmptyTextKeepsOneCaretAndCanPaintWithoutAFontOrEditSk
     ASSERT_EQ(m_view.caretStops().size(), 1u);
     EXPECT_FLOAT_EQ(m_placement.caret.x, 10.0f);
     EXPECT_FLOAT_EQ(m_placement.caret.height, 12.0f);
-    UiSkin skin(m_arena, Name("tests/ui/edit_box/skin"));
+    UiSkin skin(m_arena, Name(s_EditBoxSkinPath));
     UiSkin::RegionVector regions(m_arena);
-    skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/edit_box/texture"), 4u, 4u, 1.0f, Move(regions));
+    skin.setAtlas(Core::Assets::AssetRef<Texture>(s_EditBoxTexturePath), 4u, 4u, 1.0f, Move(regions));
     PaintBuilder paint(m_arena);
     TextService service(m_arena);
     EditBoxPaintFlags flags;
     flags.focused = true;
     flags.caretVisible = false;
-    paint.begin({ 200.0f, 100.0f, 1.0f, 1.0f }, 1u, 1u, Core::Assets::AssetRef<UiSkin>("tests/ui/edit_box/skin"), skin);
+    paint.begin({ 200.0f, 100.0f, 1.0f, 1.0f }, 1u, 1u, Core::Assets::AssetRef<UiSkin>(s_EditBoxSkinPath), skin);
     ASSERT_TRUE(m_view.paint(service, paint, skin, m_placement, {}, flags));
     EXPECT_EQ(paint.freeze().vertices().size(), 4u);
     flags.caretVisible = true;
-    paint.begin({ 200.0f, 100.0f, 1.0f, 1.0f }, 2u, 1u, Core::Assets::AssetRef<UiSkin>("tests/ui/edit_box/skin"), skin);
+    paint.begin({ 200.0f, 100.0f, 1.0f, 1.0f }, 2u, 1u, Core::Assets::AssetRef<UiSkin>(s_EditBoxSkinPath), skin);
     ASSERT_TRUE(m_view.paint(service, paint, skin, m_placement, {}, flags));
     EXPECT_EQ(paint.freeze().vertices().size(), 8u);
     flags.readOnly = true;
-    paint.begin({ 200.0f, 100.0f, 1.0f, 1.0f }, 3u, 1u, Core::Assets::AssetRef<UiSkin>("tests/ui/edit_box/skin"), skin);
+    paint.begin({ 200.0f, 100.0f, 1.0f, 1.0f }, 3u, 1u, Core::Assets::AssetRef<UiSkin>(s_EditBoxSkinPath), skin);
     ASSERT_TRUE(m_view.paint(service, paint, skin, m_placement, {}, flags));
     EXPECT_EQ(paint.freeze().vertices().size(), 4u);
 }
@@ -332,9 +338,9 @@ TEST_F(EditBoxLayoutTests, EmptyTextKeepsOneCaretAndCanPaintWithoutAFontOrEditSk
 TEST_F(EditBoxLayoutTests, EmptySelectionRejectsInvalidCaretWidthsAndRestoresClippingWithoutADrawnCaret){
     ASSERT_TRUE(shapeView());
     ASSERT_TRUE(place());
-    UiSkin skin(m_arena, Name("tests/ui/edit_box/skin"));
+    UiSkin skin(m_arena, Name(s_EditBoxSkinPath));
     UiSkin::RegionVector regions(m_arena);
-    skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/edit_box/texture"), 4u, 4u, 1.0f, Move(regions));
+    skin.setAtlas(Core::Assets::AssetRef<Texture>(s_EditBoxTexturePath), 4u, 4u, 1.0f, Move(regions));
     PaintBuilder paint(m_arena);
     TextService service(m_arena);
     EditBoxPaintFlags flags;
@@ -344,7 +350,7 @@ TEST_F(EditBoxLayoutTests, EmptySelectionRejectsInvalidCaretWidthsAndRestoresCli
     for(const f32 width : { -1.0f, Limit<f32>::s_QuietNaN, Limit<f32>::s_Infinity }){
         EditBoxPlacement placement = m_placement;
         placement.caret.width = width;
-        paint.begin({ 200.0f, 100.0f }, ++generation, 1u, Core::Assets::AssetRef<UiSkin>("tests/ui/edit_box/skin"), skin);
+        paint.begin({ 200.0f, 100.0f }, ++generation, 1u, Core::Assets::AssetRef<UiSkin>(s_EditBoxSkinPath), skin);
         EXPECT_FALSE(m_view.paint(service, paint, skin, placement, {}, flags));
         EXPECT_FALSE(paint.popClip());
         EXPECT_EQ(paint.freeze().vertices().size(), 4u);
@@ -352,15 +358,15 @@ TEST_F(EditBoxLayoutTests, EmptySelectionRejectsInvalidCaretWidthsAndRestoresCli
 }
 
 TEST_F(EditBoxLayoutTests, EmptyPreeditSelectionStillPaintsItsUnderlineAndRestoresClipping){
-    Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
-    Font font(m_arena, Name("tests/ui/edit_box/font"));
-    const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / "latin.font";
+    Core::Alloc::ScratchArena fontScratchArena(s_FontScratchArenaName);
+    Font font(m_arena, Name(s_EditBoxFontPath));
+    const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / s_LatinFontFileName;
     auto bytes = Tests::ReadBundledFontBytes(path, m_arena);
     ASSERT_TRUE(bytes);
     font.setFontBytes(Move(*bytes));
     ASSERT_TRUE(font.validatePayload());
     TextService service(m_arena);
-    const FontSource source{ Core::Assets::AssetRef<Font>("tests/ui/edit_box/font"), font, 1u };
+    const FontSource source{ Core::Assets::AssetRef<Font>(s_EditBoxFontPath), font, 1u };
     ASSERT_TRUE(service.setFonts(fontScratchArena, &source, 1u));
     ASSERT_TRUE(m_model.beginComposition());
     ASSERT_TRUE(m_model.updateComposition("IME", 3u, 3u));
@@ -369,16 +375,16 @@ TEST_F(EditBoxLayoutTests, EmptyPreeditSelectionStillPaintsItsUnderlineAndRestor
     ASSERT_EQ(m_view.selectionRange().begin, m_view.selectionRange().end);
     const auto placement = m_view.arrange({ 10.0f, 20.0f, 180.0f, 80.0f }, {}, { 0.0f, 0.0f, 200.0f, 120.0f }, {});
     ASSERT_TRUE(placement);
-    UiSkin skin(m_arena, Name("tests/ui/edit_box/skin"));
+    UiSkin skin(m_arena, Name(s_EditBoxSkinPath));
     UiSkin::RegionVector regions(m_arena);
-    skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/edit_box/texture"), 4u, 4u, 1.0f, Move(regions));
+    skin.setAtlas(Core::Assets::AssetRef<Texture>(s_EditBoxTexturePath), 4u, 4u, 1.0f, Move(regions));
     PaintBuilder paint(m_arena);
     EditBoxStyle style;
     style.preedit = { 0.0f, 1.0f, 0.0f, 1.0f };
     EditBoxPaintFlags flags;
     flags.focused = true;
     flags.preeditCaretVisible = false;
-    paint.begin({ 200.0f, 120.0f }, 1u, 1u, Core::Assets::AssetRef<UiSkin>("tests/ui/edit_box/skin"), skin);
+    paint.begin({ 200.0f, 120.0f }, 1u, 1u, Core::Assets::AssetRef<UiSkin>(s_EditBoxSkinPath), skin);
     ASSERT_TRUE(m_view.paint(service, paint, skin, *placement, style, flags));
     EXPECT_FALSE(paint.popClip());
     const DrawSnapshot snapshot = paint.freeze();
@@ -391,9 +397,9 @@ TEST_F(EditBoxLayoutTests, EmptyPreeditSelectionStillPaintsItsUnderlineAndRestor
 }
 
 TEST_F(EditBoxLayoutTests, PaintingRestoresClipStackAndBoundsVerticesAcrossDisplayScales){
-    Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
-    Font font(m_arena, Name("tests/ui/edit_box/font"));
-    const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / "latin.font";
+    Core::Alloc::ScratchArena fontScratchArena(s_FontScratchArenaName);
+    Font font(m_arena, Name(s_EditBoxFontPath));
+    const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / s_LatinFontFileName;
     Core::Assets::AssetBytes bytes(m_arena);
     auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
     ASSERT_TRUE(bytesResult);
@@ -401,22 +407,22 @@ TEST_F(EditBoxLayoutTests, PaintingRestoresClipStackAndBoundsVerticesAcrossDispl
     font.setFontBytes(Move(bytes));
     ASSERT_TRUE(font.validatePayload());
     TextService service(m_arena);
-    const FontSource source{ Core::Assets::AssetRef<Font>("tests/ui/edit_box/font"), font, 1u };
+    const FontSource source{ Core::Assets::AssetRef<Font>(s_EditBoxFontPath), font, 1u };
     ASSERT_TRUE(service.setFonts(fontScratchArena, &source, 1u));
     ASSERT_TRUE(m_model.setText("ffi"));
     ASSERT_TRUE(m_model.setSelection(1u, 2u));
     ASSERT_TRUE(m_view.snapshot(m_model));
     ASSERT_EQ(m_view.shape(service), TextLayoutStatus::Success);
     ASSERT_TRUE(place());
-    UiSkin skin(m_arena, Name("tests/ui/edit_box/skin"));
+    UiSkin skin(m_arena, Name(s_EditBoxSkinPath));
     UiSkin::RegionVector regions(m_arena);
     regions.push_back({ Name("button.normal"), { 0u, 0u, 4u, 4u }, {}, {} });
-    skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/edit_box/texture"), 4u, 4u, 1.0f, Move(regions));
+    skin.setAtlas(Core::Assets::AssetRef<Texture>(s_EditBoxTexturePath), 4u, 4u, 1.0f, Move(regions));
     PaintBuilder paint(m_arena);
     EditBoxPaintFlags flags;
     flags.focused = true;
     for(const f32 scale : { 1.0f, 2.0f }){
-        paint.begin({ 200.0f, 100.0f, scale, scale }, static_cast<u64>(scale), 1u, Core::Assets::AssetRef<UiSkin>("tests/ui/edit_box/skin"), skin);
+        paint.begin({ 200.0f, 100.0f, scale, scale }, static_cast<u64>(scale), 1u, Core::Assets::AssetRef<UiSkin>(s_EditBoxSkinPath), skin);
         ASSERT_TRUE(m_view.paint(service, paint, skin, m_placement, {}, flags));
         EXPECT_FALSE(paint.popClip());
         const auto snapshot = paint.freeze();

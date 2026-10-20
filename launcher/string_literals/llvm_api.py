@@ -18,13 +18,17 @@ SIZE = ctypes.c_size_t
 SIZE_OUT = ctypes.POINTER(SIZE)
 BOOL = ctypes.c_int
 TEXT = ctypes.c_char_p
+TEXT_ENCODING = "utf-8"
+TEXT_ERRORS = "replace"
+VERSION_PART_COUNT = 3
+LLVM_RETURN_STATUS_ACTION = 2
 
 
 class LlvmApi:
     """Load LLVM with the Python process architecture and exact compiler version."""
 
     def __init__(self, library_path: Path, expected_version: Tuple[int, int, int]) -> None:
-        if len(expected_version) != 3 or any(component < 0 for component in expected_version):
+        if len(expected_version) != VERSION_PART_COUNT or any(component < 0 for component in expected_version):
             raise ValueError("LLVM requires an explicit major/minor/patch version")
         self.library_path = Path(library_path).resolve(strict=True)
         try:
@@ -67,14 +71,14 @@ class LlvmApi:
         if not message.value:
             return ""
         try:
-            return ctypes.string_at(message).decode("utf-8", errors="replace")
+            return ctypes.string_at(message).decode(TEXT_ENCODING, errors=TEXT_ERRORS)
         finally:
             self.LLVMDisposeMessage(message)
 
     def value_name(self, value: int) -> str:
         length = SIZE()
         data = self.LLVMGetValueName2(value, ctypes.byref(length))
-        return ctypes.string_at(data, length.value).decode("utf-8", errors="replace") if length.value else ""
+        return ctypes.string_at(data, length.value).decode(TEXT_ENCODING, errors=TEXT_ERRORS) if length.value else ""
 
     def read_module(self, context: int, path: Path) -> int:
         buffer = REF()
@@ -91,7 +95,7 @@ class LlvmApi:
 
     def verify_module(self, module: int) -> None:
         message = REF()
-        invalid = self.LLVMVerifyModule(module, 2, ctypes.byref(message))
+        invalid = self.LLVMVerifyModule(module, LLVM_RETURN_STATUS_ACTION, ctypes.byref(message))
         diagnostic = self.take_message(message)
         if invalid:
             raise RuntimeError(f"LLVM module verification failed: {diagnostic}")

@@ -31,6 +31,7 @@ using FloatMipChain = basisu::vector<FloatPlanes>;
 static constexpr u32 s_EncoderWorkerCount = 1u;
 static constexpr f32 s_UnormScale = 255.0f;
 static constexpr f32 s_UnormRoundingBias = 0.5f;
+static constexpr u32 s_SeparateAlphaPayloadMultiplier = 2u;
 static constexpr AStringView s_MipFilter = "box";
 static constexpr usize s_InvalidSlice = Limit<usize>::s_Max;
 
@@ -329,9 +330,9 @@ Expected<PreparedTexture> EncodeLinearTexture(TextureEncodeInput&& input, Core::
         return MakeUnexpected(Failure{});
 
     const bool separateAlpha = alpha->mode == TextureAlphaMode::SeparateUastcLdr4x4;
-    if(primaryByteCount > Limit<usize>::s_Max / (separateAlpha ? 2u : 1u))
+    if(primaryByteCount > Limit<usize>::s_Max / (separateAlpha ? s_SeparateAlphaPayloadMultiplier : 1u))
         return MakeUnexpected(Failure{});
-    const usize payloadByteCount = static_cast<usize>(primaryByteCount) * (separateAlpha ? 2u : 1u);
+    const usize payloadByteCount = static_cast<usize>(primaryByteCount) * (separateAlpha ? s_SeparateAlphaPayloadMultiplier : 1u);
 
     PreparedTexture prepared;
     prepared.width = input.width;

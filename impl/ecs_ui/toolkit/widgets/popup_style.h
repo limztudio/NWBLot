@@ -20,11 +20,13 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr Color s_PopupBackdropColor = { 0.0f, 0.0f, 0.0f, 0.4f };
+
 struct PopupStyle{
     Name background = UiSkinToolkitRegions::s_PopupNormalRegionName;
     Name fallback = UiSkinToolkitRegions::s_PanelNormalRegionName;
     Insets padding = { s_StyleSpacingMedium, s_StyleSpacingMedium, s_StyleSpacingMedium, s_StyleSpacingMedium };
-    Color backdrop = { 0.0f, 0.0f, 0.0f, 0.4f };
+    Color backdrop = s_PopupBackdropColor;
 };
 
 

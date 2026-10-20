@@ -8,6 +8,7 @@
 #include "slider_style.h"
 
 #include <impl/ecs_ui/toolkit/layout/rectangle.h>
+#include <impl/ecs_ui/toolkit/rect_math.h>
 
 #include <global/simd/vector.h>
 #include <global/simplemath.h>
@@ -120,7 +121,7 @@ Expected<SliderPlacement> SliderLayout::Place(const Rect& bounds, const Rect& cl
     const f64 thumbHeight = VectorDoubleGetY(thumbWidthThumbHeightValue);
     const f64 trackHeight = VectorDoubleGetY(VectorDoubleMin(VectorDoubleSet(width, metrics.trackHeight, 0.0, 0.0), widthHeightValue));
     const f64 travel = VectorDoubleGetX(VectorDoubleSubtract(widthHeightValue, thumbWidthThumbHeightValue));
-    const SIMDVectorDouble offsets = VectorDoubleMultiply(VectorDoubleSet(thumbWidth, travel, 0.0, 0.0), VectorDoubleSet(0.5, normalized, 0.0, 0.0));
+    const SIMDVectorDouble offsets = VectorDoubleMultiply(VectorDoubleSet(thumbWidth, travel, 0.0, 0.0), VectorDoubleSet(s_RectCenterFractionF64, normalized, 0.0, 0.0));
     const SIMDVectorDouble centers = VectorDoubleAdd(VectorDoubleReplicate(x), offsets);
     const f64 centerStart = VectorDoubleGetX(centers);
     const f64 thumbX = normalized == 0.0 ? x : normalized == 1.0 ? VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(x), VectorDoubleReplicate(travel))) : VectorDoubleGetY(centers);
@@ -131,7 +132,7 @@ Expected<SliderPlacement> SliderLayout::Place(const Rect& bounds, const Rect& cl
     if(!centerTravel)
         return MakeUnexpected(Failure{});
     const SIMDVectorDouble verticalSpace = VectorDoubleSubtract(VectorDoubleReplicate(height), VectorDoubleSet(trackHeight, thumbHeight, height, height));
-    const SIMDVectorDouble centeredY = VectorDoubleAdd(VectorDoubleReplicate(y), VectorDoubleMultiply(verticalSpace, VectorDoubleReplicate(0.5)));
+    const SIMDVectorDouble centeredY = VectorDoubleAdd(VectorDoubleReplicate(y), VectorDoubleMultiply(verticalSpace, VectorDoubleReplicate(s_RectCenterFractionF64)));
     const auto track = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoubleSet(centerStart, VectorDoubleGetX(centeredY), travel, trackHeight));
     if(!track)
         return MakeUnexpected(Failure{});

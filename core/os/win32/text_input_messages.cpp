@@ -37,13 +37,13 @@ bool Win32TextInputService::handleMessage(const u32 message, const usize wParam,
     switch(message){
     case WM_CHAR:
     case WM_SYSCHAR:
-        admission = wParam <= 0xffffu ? acceptUtf16Unit(token, static_cast<u32>(wParam), repeatCount) : TextInputAdmission::InvalidText;
+        admission = wParam <= s_MaxU16 ? acceptUtf16Unit(token, static_cast<u32>(wParam), repeatCount) : TextInputAdmission::InvalidText;
         break;
     case WM_UNICHAR:
         if(wParam == UNICODE_NOCHAR)
             return false;
         m_pendingHighSurrogate = 0u;
-        admission = wParam <= 0x10ffffu ? acceptCodePoint(token, static_cast<u32>(wParam), repeatCount) : TextInputAdmission::InvalidText;
+        admission = wParam <= BasicStringDetail::s_UnicodeMaxCodePoint ? acceptCodePoint(token, static_cast<u32>(wParam), repeatCount) : TextInputAdmission::InvalidText;
         break;
     case WM_IME_STARTCOMPOSITION:
         m_pendingHighSurrogate = 0u;
@@ -78,7 +78,7 @@ bool Win32TextInputService::handleMessage(const u32 message, const usize wParam,
 
 TextInputAdmission::Enum Win32TextInputService::acceptCodePoint(const TextInputSessionToken token, const u32 codePoint, const u32 repeatCount){
     // Editing/navigation control keys are delivered through the ordinary key path, never committed as document text.
-    if(codePoint < 0x20u || codePoint == 0x7fu)
+    if(codePoint < s_TextInputFirstPrintableCodePoint || codePoint == s_TextInputDeleteCodePoint)
         return TextInputAdmission::Accepted;
     char bytes[4];
     const auto encoded = EncodeTextInputCodePoint(codePoint, bytes);
@@ -104,19 +104,19 @@ TextInputAdmission::Enum Win32TextInputService::acceptCodePoint(const TextInputS
 }
 
 TextInputAdmission::Enum Win32TextInputService::acceptUtf16Unit(const TextInputSessionToken token, const u32 unit, const u32 repeatCount){
-    if(unit > 0xffffu){
+    if(unit > s_MaxU16){
         m_pendingHighSurrogate = 0u;
         return TextInputAdmission::InvalidText;
     }
-    if(unit >= 0xd800u && unit <= 0xdbffu){
+    if(unit >= BasicStringDetail::s_UnicodeHighSurrogateMin && unit <= BasicStringDetail::s_UnicodeHighSurrogateMax){
         const bool interruptedPair = m_pendingHighSurrogate != 0u;
         m_pendingHighSurrogate = unit;
         return interruptedPair ? TextInputAdmission::InvalidText : TextInputAdmission::Accepted;
     }
-    if(unit >= 0xdc00u && unit <= 0xdfffu){
+    if(unit >= BasicStringDetail::s_UnicodeLowSurrogateMin && unit <= BasicStringDetail::s_UnicodeLowSurrogateMax){
         if(m_pendingHighSurrogate == 0u)
             return TextInputAdmission::InvalidText;
-        const u32 codePoint = 0x10000u + ((m_pendingHighSurrogate - 0xd800u) << 10u) + (unit - 0xdc00u);
+        const u32 codePoint = BasicStringDetail::s_Utf8FourByteMinCodePoint + ((m_pendingHighSurrogate - BasicStringDetail::s_UnicodeHighSurrogateMin) << BasicStringDetail::s_Utf16SurrogatePayloadBits) + (unit - BasicStringDetail::s_UnicodeLowSurrogateMin);
         m_pendingHighSurrogate = 0u;
         return acceptCodePoint(token, codePoint, repeatCount);
     }

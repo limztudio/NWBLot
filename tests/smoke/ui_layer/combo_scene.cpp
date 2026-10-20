@@ -33,6 +33,7 @@ namespace __hidden_ui_combo_smoke{
 
 static constexpr Impl::Ui::Rect s_Panel{ 24.0f, 24.0f, 400.0f, 160.0f };
 static constexpr Impl::Ui::Rect s_Counter{ 456.0f, 32.0f, 130.0f, 36.0f };
+static constexpr TStringView s_LogTag = NWB_TEXT("UiComboSmoke");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -198,16 +199,16 @@ void UiComboSmokeScene::observeState(){
         , m_sequence, current[0], current[1], current[2], current[3], current[4], current[5], current[6], current[7]
         , current[8], current[9], current[10], current[11], current[12], current[13], current[14], current[15]
     );
-    LogSmokeRect(NWB_TEXT("UiComboSmoke"), m_sequence, NWB_TEXT("trigger"), bounds);
-    LogSmokeRect(NWB_TEXT("UiComboSmoke"), m_sequence, NWB_TEXT("popup"), popup.bounds);
-    LogSmokeRect(NWB_TEXT("UiComboSmoke"), m_sequence, NWB_TEXT("list"), placement.bounds);
-    LogSmokeRect(NWB_TEXT("UiComboSmoke"), m_sequence, NWB_TEXT("viewport"), placement.viewport);
+    LogSmokeRect(__hidden_ui_combo_smoke::s_LogTag, m_sequence, NWB_TEXT("trigger"), bounds);
+    LogSmokeRect(__hidden_ui_combo_smoke::s_LogTag, m_sequence, NWB_TEXT("popup"), popup.bounds);
+    LogSmokeRect(__hidden_ui_combo_smoke::s_LogTag, m_sequence, NWB_TEXT("list"), placement.bounds);
+    LogSmokeRect(__hidden_ui_combo_smoke::s_LogTag, m_sequence, NWB_TEXT("viewport"), placement.viewport);
     const auto first = SmokeListRowBounds(placement, placement.firstRow);
-    LogSmokeRect(NWB_TEXT("UiComboSmoke"), m_sequence, NWB_TEXT("first_row"), first ? *first : Impl::Ui::Rect{});
-    LogSmokeRect(NWB_TEXT("UiComboSmoke"), m_sequence, NWB_TEXT("track"), placement.track);
-    LogSmokeRect(NWB_TEXT("UiComboSmoke"), m_sequence, NWB_TEXT("thumb"), placement.thumb);
-    LogSmokeRect(NWB_TEXT("UiComboSmoke"), m_sequence, NWB_TEXT("cursor_row"), cursorRow());
-    LogSmokeRect(NWB_TEXT("UiComboSmoke"), m_sequence, NWB_TEXT("counter"), __hidden_ui_combo_smoke::s_Counter);
+    LogSmokeRect(__hidden_ui_combo_smoke::s_LogTag, m_sequence, NWB_TEXT("first_row"), first ? *first : Impl::Ui::Rect{});
+    LogSmokeRect(__hidden_ui_combo_smoke::s_LogTag, m_sequence, NWB_TEXT("track"), placement.track);
+    LogSmokeRect(__hidden_ui_combo_smoke::s_LogTag, m_sequence, NWB_TEXT("thumb"), placement.thumb);
+    LogSmokeRect(__hidden_ui_combo_smoke::s_LogTag, m_sequence, NWB_TEXT("cursor_row"), cursorRow());
+    LogSmokeRect(__hidden_ui_combo_smoke::s_LogTag, m_sequence, NWB_TEXT("counter"), __hidden_ui_combo_smoke::s_Counter);
 }
 
 

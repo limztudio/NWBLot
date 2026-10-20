@@ -641,10 +641,10 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle(SIMDVectorSingle value, 
     table.val[0] = vreinterpret_u8_f32(vget_low_f32(value));
     table.val[1] = vreinterpret_u8_f32(vget_high_f32(value));
 
-    uint32x2_t idx = vcreate_u32(static_cast<u64>(s_controlElement[e0]) | (static_cast<u64>(s_controlElement[e1]) << 32));
+    uint32x2_t idx = vcreate_u32(static_cast<u64>(s_controlElement[e0]) | (static_cast<u64>(s_controlElement[e1]) << s_F32BitCount));
     const uint8x8_t lo = vtbl2_u8(table, vreinterpret_u8_u32(idx));
 
-    idx = vcreate_u32(static_cast<u64>(s_controlElement[e2]) | (static_cast<u64>(s_controlElement[e3]) << 32));
+    idx = vcreate_u32(static_cast<u64>(s_controlElement[e2]) | (static_cast<u64>(s_controlElement[e3]) << s_F32BitCount));
     const uint8x8_t hi = vtbl2_u8(table, vreinterpret_u8_u32(idx));
     return vcombine_f32(vreinterpret_f32_u8(lo), vreinterpret_f32_u8(hi));
 #elif defined(NWB_HAS_AVX)
@@ -777,10 +777,10 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleSwizzle(SIMDVectorDouble v
     const __m256d samePairs = _mm256_permutevar_pd(native, indices);
     const __m256d oppositePairs = _mm256_permutevar_pd(_mm256_permute2f128_pd(native, native, 0x01), indices);
     const __m256d pairControl = _mm256_castsi256_pd(_mm256_set_epi64x(
-        BitCast<i64>(static_cast<u64>((e3 & 2u) == 0u) << 63u),
-        BitCast<i64>(static_cast<u64>((e2 & 2u) == 0u) << 63u),
-        BitCast<i64>(static_cast<u64>((e1 & 2u) != 0u) << 63u),
-        BitCast<i64>(static_cast<u64>((e0 & 2u) != 0u) << 63u)
+        BitCast<i64>(static_cast<u64>((e3 & 2u) == 0u) << s_F64SignBitShift),
+        BitCast<i64>(static_cast<u64>((e2 & 2u) == 0u) << s_F64SignBitShift),
+        BitCast<i64>(static_cast<u64>((e1 & 2u) != 0u) << s_F64SignBitShift),
+        BitCast<i64>(static_cast<u64>((e0 & 2u) != 0u) << s_F64SignBitShift)
     ));
     return BitCast<SIMDVectorDouble>(_mm256_blendv_pd(samePairs, oppositePairs, pairControl));
 #elif defined(NWB_HAS_SSE2)
@@ -823,10 +823,10 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute(SIMDVectorSingle v0, SIM
     table.val[2] = vreinterpret_u8_f32(vget_low_f32(v1));
     table.val[3] = vreinterpret_u8_f32(vget_high_f32(v1));
 
-    uint32x2_t idx = vcreate_u32(static_cast<u64>(s_controlElement[x]) | (static_cast<u64>(s_controlElement[y]) << 32));
+    uint32x2_t idx = vcreate_u32(static_cast<u64>(s_controlElement[x]) | (static_cast<u64>(s_controlElement[y]) << s_F32BitCount));
     const uint8x8_t lo = vtbl4_u8(table, vreinterpret_u8_u32(idx));
 
-    idx = vcreate_u32(static_cast<u64>(s_controlElement[z]) | (static_cast<u64>(s_controlElement[w]) << 32));
+    idx = vcreate_u32(static_cast<u64>(s_controlElement[z]) | (static_cast<u64>(s_controlElement[w]) << s_F32BitCount));
     const uint8x8_t hi = vtbl4_u8(table, vreinterpret_u8_u32(idx));
     return vcombine_f32(vreinterpret_f32_u8(lo), vreinterpret_f32_u8(hi));
 #elif defined(NWB_HAS_AVX)
@@ -1003,10 +1003,10 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoublePermute(SIMDVectorDouble v
     const __m256d first = BitCast<__m256d>(VectorDoubleSwizzle(v0, x & 3u, y & 3u, z & 3u, w & 3u));
     const __m256d second = BitCast<__m256d>(VectorDoubleSwizzle(v1, x & 3u, y & 3u, z & 3u, w & 3u));
     const __m256d sourceControl = _mm256_castsi256_pd(_mm256_set_epi64x(
-        BitCast<i64>(static_cast<u64>((w & 4u) != 0u) << 63u),
-        BitCast<i64>(static_cast<u64>((z & 4u) != 0u) << 63u),
-        BitCast<i64>(static_cast<u64>((y & 4u) != 0u) << 63u),
-        BitCast<i64>(static_cast<u64>((x & 4u) != 0u) << 63u)
+        BitCast<i64>(static_cast<u64>((w & 4u) != 0u) << s_F64SignBitShift),
+        BitCast<i64>(static_cast<u64>((z & 4u) != 0u) << s_F64SignBitShift),
+        BitCast<i64>(static_cast<u64>((y & 4u) != 0u) << s_F64SignBitShift),
+        BitCast<i64>(static_cast<u64>((x & 4u) != 0u) << s_F64SignBitShift)
     ));
     return BitCast<SIMDVectorDouble>(_mm256_blendv_pd(first, second, sourceControl));
 #elif defined(NWB_HAS_SSE2)
@@ -1044,8 +1044,8 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSelectControl(u32 selectX, u32 s
 #if defined(NWB_HAS_SCALAR)
     return VectorSetInt(selectX ? s_SELECT_1 : 0u, selectY ? s_SELECT_1 : 0u, selectZ ? s_SELECT_1 : 0u, selectW ? s_SELECT_1 : 0u);
 #elif defined(NWB_HAS_NEON)
-    const int32x2_t lo = vcreate_s32(static_cast<u64>(selectX) | (static_cast<u64>(selectY) << 32));
-    const int32x2_t hi = vcreate_s32(static_cast<u64>(selectZ) | (static_cast<u64>(selectW) << 32));
+    const int32x2_t lo = vcreate_s32(static_cast<u64>(selectX) | (static_cast<u64>(selectY) << s_F32BitCount));
+    const int32x2_t hi = vcreate_s32(static_cast<u64>(selectZ) | (static_cast<u64>(selectW) << s_F32BitCount));
     return vreinterpretq_f32_u32(vmvnq_u32(vceqq_s32(vcombine_s32(lo, hi), vdupq_n_s32(0))));
 #else
     __m128i value = _mm_set_epi32(static_cast<i32>(selectW), static_cast<i32>(selectZ), static_cast<i32>(selectY), static_cast<i32>(selectX));

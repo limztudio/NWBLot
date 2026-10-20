@@ -87,7 +87,7 @@ TEST_F(UiTextAreaLoanTests, IdenticalScrollIntentRetiresAPreparedLoanWithoutChan
     ASSERT_TRUE(acceptBaseline());
     const AcceptedAreaFrame before = accepted();
     ASSERT_TRUE(beginArea(2u));
-    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
+    ASSERT_TRUE(m_builder.textArea(s_TextAreaKey, m_model, m_state, AreaOptions()).valid);
     const Point scroll = m_state.scroll();
     const u64 revision = m_state.revision();
     const EditNavigationSnapshot navigation = m_state.navigation().snapshot();
@@ -105,7 +105,7 @@ TEST_F(UiTextAreaLoanTests, IdenticalSelectionIntentRetiresAPreparedLoanWithoutA
     ASSERT_TRUE(acceptBaseline());
     const AcceptedAreaFrame before = accepted();
     ASSERT_TRUE(beginArea(2u));
-    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
+    ASSERT_TRUE(m_builder.textArea(s_TextAreaKey, m_model, m_state, AreaOptions()).valid);
     const u64 revision = m_model.revision();
     const u64 selection = m_model.selectionGeneration();
     ASSERT_TRUE(m_model.setSelection(m_model.anchor(), m_model.caret()));
@@ -121,7 +121,7 @@ TEST_F(UiTextAreaLoanTests, CancelledCompositionStillRetiresAPreparedLoan){
     ASSERT_TRUE(acceptBaseline());
     const AcceptedAreaFrame before = accepted();
     ASSERT_TRUE(beginArea(2u));
-    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
+    ASSERT_TRUE(m_builder.textArea(s_TextAreaKey, m_model, m_state, AreaOptions()).valid);
     const u64 revision = m_model.revision();
     const u64 composition = m_model.compositionGeneration();
     ASSERT_TRUE(m_model.beginComposition());
@@ -147,7 +147,7 @@ TEST_F(UiTextAreaLoanTests, IdenticalScrollIntentDuringHostLoanRejectsBeforePrep
         EXPECT_TRUE(m_state.scrollTo(scroll));
     };
     ASSERT_TRUE(beginArea(2u));
-    EXPECT_FALSE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
+    EXPECT_FALSE(m_builder.textArea(s_TextAreaKey, m_model, m_state, AreaOptions()).valid);
     EXPECT_EQ(attempts, 1u);
     EXPECT_EQ(m_host.loans, 1u);
     EXPECT_EQ(m_host.ordinaryLoans, 0u);
@@ -166,7 +166,7 @@ TEST_F(UiTextAreaLoanTests, FirstPublicationScrollIntentRejectsBeforeTheSecondPu
     TextAreaState secondState;
     ASSERT_TRUE(secondModel.setText("second\narea"));
     ASSERT_TRUE(beginArea(2u));
-    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
+    ASSERT_TRUE(m_builder.textArea(s_TextAreaKey, m_model, m_state, AreaOptions()).valid);
     ASSERT_TRUE(m_builder.textArea("second", secondModel, secondState, AreaOptions()).valid);
     Point scroll;
     u64 revision = 0u;
@@ -195,8 +195,8 @@ TEST_F(UiTextAreaLoanTests, EndedChildLoanRejectsLaterStateIntentBeforeAnyPublic
     m_parent.open();
     m_child.open();
     ASSERT_TRUE(beginParent(2u));
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::LargeLoanChildOptions()));
-    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
+    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::LargeLoanChildOptions()));
+    ASSERT_TRUE(m_builder.textArea(s_TextAreaKey, m_model, m_state, AreaOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     EXPECT_EQ(m_host.publishes, 0u);
     const u64 revision = m_state.revision();
@@ -215,7 +215,7 @@ TEST_F(UiTextAreaLoanTests, ParentChildModelAliasRejectsBeforeTheSecondHostLoan)
     m_child.open();
     ASSERT_TRUE(beginParent(2u));
     ASSERT_TRUE(m_builder.textArea("parentArea", m_model, m_state, AreaOptions()).valid);
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::LargeLoanChildOptions()));
+    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::LargeLoanChildOptions()));
     EXPECT_FALSE(m_builder.textArea("childArea", m_model, secondState, AreaOptions()).valid);
     EXPECT_EQ(m_host.loans, 1u);
     EXPECT_EQ(m_host.publishes, 0u);
@@ -231,8 +231,8 @@ TEST_F(UiTextAreaLoanTests, EndedChildSiblingStateAliasRejectsBeforeTheSecondHos
     m_child.open();
     sibling.open();
     ASSERT_TRUE(beginParent(2u));
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::LargeLoanChildOptions()));
-    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
+    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::LargeLoanChildOptions()));
+    ASSERT_TRUE(m_builder.textArea(s_TextAreaKey, m_model, m_state, AreaOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     ASSERT_TRUE(m_builder.beginPopup("sibling", sibling, UiWidgetTests::LargeLoanChildOptions()));
     EXPECT_FALSE(m_builder.textArea("other", secondModel, m_state, AreaOptions()).valid);
@@ -249,9 +249,9 @@ TEST_F(UiTextAreaLoanTests, ChildSourceSameTextReplacementRejectsTheAlreadyPaint
     m_parent.open();
     m_child.open();
     ASSERT_TRUE(beginParent(2u));
-    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
+    ASSERT_TRUE(m_builder.textArea(s_TextAreaKey, m_model, m_state, AreaOptions()).valid);
     const u64 external = m_model.externalRevision();
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::LargeLoanChildOptions()));
+    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::LargeLoanChildOptions()));
     ASSERT_TRUE(m_builder.virtualList("list", source, list, UiWidgetTests::LargeLoanListOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     source.rowHook = [&](){ EXPECT_TRUE(m_model.setText("alpha\nbeta")); };
@@ -273,8 +273,8 @@ TEST_F(UiTextAreaLoanTests, ParentSourceStateIntentRejectsTheEndedChildBeforePub
     m_child.open();
     ASSERT_TRUE(beginParent(2u));
     ASSERT_TRUE(m_builder.virtualList("list", source, list, UiWidgetTests::LargeLoanListOptions()).valid);
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::LargeLoanChildOptions()));
-    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
+    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::LargeLoanChildOptions()));
+    ASSERT_TRUE(m_builder.textArea(s_TextAreaKey, m_model, m_state, AreaOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     const u64 revision = m_state.revision();
     source.rowHook = [&](){ EXPECT_TRUE(m_state.scrollTo(m_state.scroll())); };
@@ -295,8 +295,8 @@ TEST_F(UiTextAreaLoanTests, LaterSiblingStateScrollABARetiresAnAlreadyPaintedEnd
     m_child.open();
     sibling.open();
     ASSERT_TRUE(beginParent(2u));
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::LargeLoanChildOptions()));
-    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
+    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::LargeLoanChildOptions()));
+    ASSERT_TRUE(m_builder.textArea(s_TextAreaKey, m_model, m_state, AreaOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     ASSERT_TRUE(m_builder.beginPopup("sibling", sibling, UiWidgetTests::LargeLoanChildOptions()));
     ASSERT_TRUE(m_builder.virtualList("list", source, list, UiWidgetTests::LargeLoanListOptions()).valid);
@@ -332,9 +332,9 @@ TEST_F(UiTextAreaLoanTests, FinalMetadataScrollIntentRejectsAfterParentAndChildP
     m_parent.open();
     m_child.open();
     ASSERT_TRUE(beginParent(2u));
-    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
+    ASSERT_TRUE(m_builder.textArea(s_TextAreaKey, m_model, m_state, AreaOptions()).valid);
     ASSERT_TRUE(m_builder.virtualList("list", parentSource, parentList, UiWidgetTests::LargeLoanListOptions()).valid);
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::LargeLoanChildOptions()));
+    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::LargeLoanChildOptions()));
     ASSERT_TRUE(m_builder.virtualList("list", childSource, childList, UiWidgetTests::LargeLoanListOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     usize publicationsAtMutation = 0u;
@@ -362,8 +362,8 @@ TEST_F(UiTextAreaLoanTests, ReopenedAncestorSuppressesItsOldAreaAndSourceCallbac
     m_parent.open();
     m_child.open();
     ASSERT_TRUE(beginParent(2u));
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::LargeLoanChildOptions()));
-    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
+    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::LargeLoanChildOptions()));
+    ASSERT_TRUE(m_builder.textArea(s_TextAreaKey, m_model, m_state, AreaOptions()).valid);
     ASSERT_TRUE(m_builder.virtualList("list", source, list, UiWidgetTests::LargeLoanListOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     source.resetAllCounters();
@@ -391,8 +391,8 @@ TEST_F(UiTextAreaLoanTests, SuccessfulOuterEndReleasesLoansBeforeMutationAndNext
     m_parent.open();
     m_child.open();
     ASSERT_TRUE(beginParent(2u));
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::LargeLoanChildOptions()));
-    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
+    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::LargeLoanChildOptions()));
+    ASSERT_TRUE(m_builder.textArea(s_TextAreaKey, m_model, m_state, AreaOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     EXPECT_EQ(m_host.publishes, 0u);
     ASSERT_TRUE(m_builder.endPopup());
@@ -407,8 +407,8 @@ TEST_F(UiTextAreaLoanTests, SuccessfulOuterEndReleasesLoansBeforeMutationAndNext
     ASSERT_TRUE(finishRoot());
     ASSERT_TRUE(m_context.commitFrame(2u));
     ASSERT_TRUE(beginParent(3u));
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::LargeLoanChildOptions()));
-    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
+    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::LargeLoanChildOptions()));
+    ASSERT_TRUE(m_builder.textArea(s_TextAreaKey, m_model, m_state, AreaOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     ASSERT_TRUE(m_builder.endPopup());
     ASSERT_TRUE(finishRoot());

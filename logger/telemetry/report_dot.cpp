@@ -22,6 +22,7 @@ namespace __hidden_telemetry_report{
 
 
 static constexpr StringView s_UnknownReportField = "unknown";
+static constexpr StringView s_DotEscapedNewline = "\\n";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -31,7 +32,7 @@ static void AppendDotQuotedText(AString<NWB::Core::Telemetry::TelemetryArena>& o
     out += '"';
     for(const char ch : text){
         if(ch == '\n'){
-            out += "\\n";
+            out += s_DotEscapedNewline;
             continue;
         }
         if(ch == '"' || ch == '\\')

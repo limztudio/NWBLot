@@ -35,7 +35,7 @@ namespace __hidden_ui_gpu_sdf{
         binding.font.valid() && binding.fontGeneration != 0u && binding.atlasIdentity != 0u && binding.generation != 0u
         && binding.index < s_FontAtlasMaxGroupCount && binding.width != 0u && binding.height != 0u
         && binding.width <= s_FontAtlasMaxExtent && binding.height <= s_FontAtlasMaxExtent
-        && binding.channelCount != 0u && binding.channelCount <= 4u
+        && binding.channelCount != 0u && binding.channelCount <= s_SdfMaxChannelCount
         && binding.spreadPixels >= s_FontAtlasMinSpreadPixels && binding.spreadPixels <= s_FontAtlasMaxSpreadPixels
         && binding.distanceEncoding == s_SdfDistanceEncodingFreeTypeU8
         && page->pixels().size() == static_cast<usize>(binding.width) * binding.height * binding.channelCount
@@ -120,10 +120,12 @@ Expected<GpuVersion<GpuSdfAtlasVersion>> GpuRendererState::prepareSdfPage(Core::
     const SdfAtlasPageBinding& binding = page->binding();
     constexpr Core::Format::Enum s_Formats[]{ Core::Format::R8_UNORM, Core::Format::RG8_UNORM, Core::Format::RGB8_UNORM, Core::Format::RGBA8_UNORM };
     Core::Format::Enum format = s_Formats[binding.channelCount - 1u];
+    constexpr u32 s_RgbChannelCount = 3u;
+    constexpr u32 s_RgbaChannelCount = 4u;
     u32 uploadChannels = binding.channelCount;
-    if(binding.channelCount == 3u && (device.queryFormatSupport(format) & s_RequiredSupport) != s_RequiredSupport){
+    if(binding.channelCount == s_RgbChannelCount && (device.queryFormatSupport(format) & s_RequiredSupport) != s_RequiredSupport){
         format = Core::Format::RGBA8_UNORM;
-        uploadChannels = 4u;
+        uploadChannels = s_RgbaChannelCount;
     }
     if((device.queryFormatSupport(format) & s_RequiredSupport) != s_RequiredSupport)
         return MakeUnexpected(Failure{});
@@ -201,7 +203,7 @@ Expected<GpuSdfGraphResources> GpuRendererState::declareSdfPages(Core::GpuTaskGr
     }
     for(usize index = 0u; index < frame->m_sdfPages.size(); ++index){
         const auto& page = frame->m_sdfPages[index];
-        char identityText[32u];
+        char identityText[TextDetail::s_DecimalTextBufferBytes];
         const AStringView suffix = FormatDecimal(index, identityText);
         const auto readyIdentity = DeriveName(Name("ui.sdf_page_ready/"), suffix);
         const auto textureIdentity = DeriveName(Name("ui.sdf_page/"), suffix);

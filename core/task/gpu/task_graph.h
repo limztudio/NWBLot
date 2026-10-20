@@ -768,6 +768,7 @@ private:
 
 private:
     static constexpr usize s_InlineImportIndexCount = 32u;
+    static constexpr usize s_InitialPointerIndexBucketCount = 2u;
     static constexpr u32 s_InvalidImportIndex = Limit<u32>::s_Max;
 
 

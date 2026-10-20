@@ -23,6 +23,10 @@ namespace __hidden_ui_popup_context_tests{
 using namespace NWB;
 using namespace NWB::Impl::Ui;
 
+constexpr AStringView s_BaseKey = "base";
+constexpr AStringView s_PopupKey = "popup";
+constexpr AStringView s_ChildKey = "child";
+
 struct PopupFrame{
     WidgetState base;
     WidgetState popup;
@@ -103,12 +107,12 @@ protected:
     [[nodiscard]] Expected<PopupFrame> prepare(const u64 generation, const bool open = false, const Rect& bounds = { 100.0f, 40.0f, 160.0f, 100.0f }, const bool keepClosedChild = false, const bool autofocus = true){
         PopupFrame frame;
         EXPECT_TRUE(begin(generation));
-        const auto frameBaseResult = button("base", { 10.0f, 10.0f, 60.0f, 24.0f });
+        const auto frameBaseResult = button(s_BaseKey, { 10.0f, 10.0f, 60.0f, 24.0f });
         EXPECT_TRUE(frameBaseResult);
         if(!frameBaseResult)
             return MakeUnexpected(frameBaseResult.error());
         frame.base = *frameBaseResult;
-        const auto framePopupResult = declare("popup", WidgetKind::Popup);
+        const auto framePopupResult = declare(s_PopupKey, WidgetKind::Popup);
         EXPECT_TRUE(framePopupResult);
         if(!framePopupResult)
             return MakeUnexpected(framePopupResult.error());
@@ -120,9 +124,9 @@ protected:
             addOwner(frame.popup, frame.scope);
         }
         if(open || keepClosedChild){
-            EXPECT_TRUE(m_context.pushScope("popup"));
+            EXPECT_TRUE(m_context.pushScope(s_PopupKey));
             const SIMDVectorSingle childOrigin = VectorAdd(VectorSet(bounds.x, bounds.y, 0.0f, 0.0f), VectorReplicate(10.0f));
-            const auto frameChildResult = button("child", { VectorGetX(childOrigin), VectorGetY(childOrigin), 60.0f, 24.0f }, open);
+            const auto frameChildResult = button(s_ChildKey, { VectorGetX(childOrigin), VectorGetY(childOrigin), 60.0f, 24.0f }, open);
             EXPECT_TRUE(frameChildResult);
             if(!frameChildResult)
                 return MakeUnexpected(frameChildResult.error());
@@ -145,12 +149,12 @@ protected:
     [[nodiscard]] Expected<PopupStack> prepareStack(const u64 generation){
         PopupStack stack;
         EXPECT_TRUE(begin(generation));
-        const auto stackLowerBaseResult = button("base", { 10.0f, 10.0f, 60.0f, 24.0f });
+        const auto stackLowerBaseResult = button(s_BaseKey, { 10.0f, 10.0f, 60.0f, 24.0f });
         EXPECT_TRUE(stackLowerBaseResult);
         if(!stackLowerBaseResult)
             return MakeUnexpected(stackLowerBaseResult.error());
         stack.lower.base = *stackLowerBaseResult;
-        const auto stackLowerPopupResult = declare("popup", WidgetKind::Popup);
+        const auto stackLowerPopupResult = declare(s_PopupKey, WidgetKind::Popup);
         EXPECT_TRUE(stackLowerPopupResult);
         if(!stackLowerPopupResult)
             return MakeUnexpected(stackLowerPopupResult.error());
@@ -158,8 +162,8 @@ protected:
         stack.lower.scope = scope(stack.lower.popup);
         EXPECT_TRUE(m_context.beginPopupScope(stack.lower.popup, stack.lower.scope));
         addOwner(stack.lower.popup, stack.lower.scope);
-        EXPECT_TRUE(m_context.pushScope("popup"));
-        const auto stackLowerChildResult = button("child", { 110.0f, 50.0f, 60.0f, 24.0f });
+        EXPECT_TRUE(m_context.pushScope(s_PopupKey));
+        const auto stackLowerChildResult = button(s_ChildKey, { 110.0f, 50.0f, 60.0f, 24.0f });
         EXPECT_TRUE(stackLowerChildResult);
         if(!stackLowerChildResult)
             return MakeUnexpected(stackLowerChildResult.error());
@@ -176,7 +180,7 @@ protected:
         EXPECT_TRUE(m_context.beginPopupScope(stack.higher.popup, stack.higher.scope));
         addOwner(stack.higher.popup, stack.higher.scope);
         EXPECT_TRUE(m_context.pushScope("higher"));
-        const auto stackHigherChildResult = button("child", { 210.0f, 130.0f, 60.0f, 24.0f });
+        const auto stackHigherChildResult = button(s_ChildKey, { 210.0f, 130.0f, 60.0f, 24.0f });
         EXPECT_TRUE(stackHigherChildResult);
         if(!stackHigherChildResult)
             return MakeUnexpected(stackHigherChildResult.error());
@@ -301,7 +305,7 @@ TEST_F(UiPopupContextTests, RemovingPopupDeclarationImmediatelyRetiresAcceptedSc
     click({ 115.0f, 55.0f });
     ASSERT_EQ(m_context.input().actions().size(), 1u);
     ASSERT_TRUE(begin(2u));
-    const auto baseResult = button("base", { 10.0f, 10.0f, 60.0f, 24.0f });
+    const auto baseResult = button(s_BaseKey, { 10.0f, 10.0f, 60.0f, 24.0f });
     ASSERT_TRUE(baseResult);
     const WidgetState base = *baseResult;
     ASSERT_TRUE(finish());
@@ -353,11 +357,11 @@ TEST_F(UiPopupContextTests, ReopeningSameWidgetCannotBorrowAnActivationFromItsPr
     click({ 115.0f, 55.0f });
     ASSERT_EQ(m_context.input().actions().size(), 1u);
     ASSERT_TRUE(begin(2u));
-    const auto baseResult = button("base", { 10.0f, 10.0f, 60.0f, 24.0f });
+    const auto baseResult = button(s_BaseKey, { 10.0f, 10.0f, 60.0f, 24.0f });
     ASSERT_TRUE(baseResult);
     const WidgetState base = *baseResult;
     EXPECT_EQ(base.id, original.base.id);
-    const auto ownerResult = declare("popup", WidgetKind::Popup);
+    const auto ownerResult = declare(s_PopupKey, WidgetKind::Popup);
     ASSERT_TRUE(ownerResult);
     const WidgetState owner = *ownerResult;
     EXPECT_EQ(owner.id, original.popup.id);
@@ -365,8 +369,8 @@ TEST_F(UiPopupContextTests, ReopeningSameWidgetCannotBorrowAnActivationFromItsPr
     const PopupScope reopened = scope(owner, original.scope.bounds, 1u, 2u);
     ASSERT_TRUE(m_context.beginPopupScope(owner, reopened));
     addOwner(owner, reopened);
-    ASSERT_TRUE(m_context.pushScope("popup"));
-    const auto childResult = button("child", { 110.0f, 50.0f, 60.0f, 24.0f });
+    ASSERT_TRUE(m_context.pushScope(s_PopupKey));
+    const auto childResult = button(s_ChildKey, { 110.0f, 50.0f, 60.0f, 24.0f });
     ASSERT_TRUE(childResult);
     const WidgetState child = *childResult;
     EXPECT_EQ(child.id, original.child.id);
@@ -379,18 +383,18 @@ TEST_F(UiPopupContextTests, ReopeningSameWidgetCannotBorrowAnActivationFromItsPr
     EXPECT_TRUE(m_context.input().actions().empty());
     click({ 115.0f, 55.0f });
     ASSERT_TRUE(begin(3u));
-    const auto freshBaseResult = button("base", { 10.0f, 10.0f, 60.0f, 24.0f });
+    const auto freshBaseResult = button(s_BaseKey, { 10.0f, 10.0f, 60.0f, 24.0f });
     ASSERT_TRUE(freshBaseResult);
     const WidgetState freshBase = *freshBaseResult;
     EXPECT_EQ(freshBase.id, original.base.id);
-    const auto freshOwnerResult = declare("popup", WidgetKind::Popup);
+    const auto freshOwnerResult = declare(s_PopupKey, WidgetKind::Popup);
     ASSERT_TRUE(freshOwnerResult);
     const WidgetState freshOwner = *freshOwnerResult;
     const PopupScope current = scope(freshOwner, original.scope.bounds, 1u, 2u);
     ASSERT_TRUE(m_context.beginPopupScope(freshOwner, current));
     addOwner(freshOwner, current);
-    ASSERT_TRUE(m_context.pushScope("popup"));
-    const auto freshChildResult = button("child", { 110.0f, 50.0f, 60.0f, 24.0f });
+    ASSERT_TRUE(m_context.pushScope(s_PopupKey));
+    const auto freshChildResult = button(s_ChildKey, { 110.0f, 50.0f, 60.0f, 24.0f });
     ASSERT_TRUE(freshChildResult);
     const WidgetState freshChild = *freshChildResult;
     EXPECT_TRUE(m_context.takeActivation(freshChild, true));
@@ -403,7 +407,7 @@ TEST_F(UiPopupContextTests, ReopeningSameWidgetCannotBorrowAnActivationFromItsPr
 
 TEST_F(UiPopupContextTests, TargetsInSequentialScopesReceiveDistinctLayersThenRestoreBaseLayer){
     ASSERT_TRUE(begin(1u));
-    const auto baseResult = declare("base", WidgetKind::Button);
+    const auto baseResult = declare(s_BaseKey, WidgetKind::Button);
     ASSERT_TRUE(baseResult);
     const WidgetState base = *baseResult;
     HitTarget spoofed;
@@ -423,7 +427,7 @@ TEST_F(UiPopupContextTests, TargetsInSequentialScopesReceiveDistinctLayersThenRe
     EXPECT_EQ(m_context.popupLayer(), 1u);
     addOwner(firstOwner, first);
     ASSERT_TRUE(m_context.pushScope("first"));
-    const auto firstChildResult = button("child", { 110.0f, 50.0f, 60.0f, 24.0f });
+    const auto firstChildResult = button(s_ChildKey, { 110.0f, 50.0f, 60.0f, 24.0f });
     ASSERT_TRUE(firstChildResult);
     const WidgetState firstChild = *firstChildResult;
     ASSERT_TRUE(m_context.popScope());
@@ -437,7 +441,7 @@ TEST_F(UiPopupContextTests, TargetsInSequentialScopesReceiveDistinctLayersThenRe
     EXPECT_EQ(m_context.popupLayer(), 2u);
     addOwner(secondOwner, second);
     ASSERT_TRUE(m_context.pushScope("second"));
-    const auto secondChildResult = button("child", { 210.0f, 130.0f, 60.0f, 24.0f });
+    const auto secondChildResult = button(s_ChildKey, { 210.0f, 130.0f, 60.0f, 24.0f });
     ASSERT_TRUE(secondChildResult);
     const WidgetState secondChild = *secondChildResult;
     ASSERT_TRUE(m_context.popScope());
@@ -474,7 +478,7 @@ TEST_F(UiPopupContextTests, NestedScopeWithoutItsParentTokenPoisonsCandidateWith
     ASSERT_TRUE(acceptedResult);
     const PopupFrame accepted = *acceptedResult;
     ASSERT_TRUE(begin(2u));
-    const auto ownerResult = declare("popup", WidgetKind::Popup);
+    const auto ownerResult = declare(s_PopupKey, WidgetKind::Popup);
     ASSERT_TRUE(ownerResult);
     const WidgetState owner = *ownerResult;
     const PopupScope popup = scope(owner);
@@ -496,7 +500,7 @@ TEST_F(UiPopupContextTests, UnbalancedPopupScopeCannotPublishItsCandidate){
     ASSERT_TRUE(acceptedResult);
     const PopupFrame accepted = *acceptedResult;
     ASSERT_TRUE(begin(2u));
-    const auto unbalancedOwnerResult = declare("popup", WidgetKind::Popup);
+    const auto unbalancedOwnerResult = declare(s_PopupKey, WidgetKind::Popup);
     ASSERT_TRUE(unbalancedOwnerResult);
     const WidgetState unbalancedOwner = *unbalancedOwnerResult;
     ASSERT_TRUE(m_context.beginPopupScope(unbalancedOwner, scope(unbalancedOwner)));
@@ -541,7 +545,7 @@ TEST_F(UiPopupContextTests, DuplicateOwnerOrMismatchedTokenCannotPublishAScope){
     ASSERT_TRUE(acceptedResult);
     const PopupFrame accepted = *acceptedResult;
     ASSERT_TRUE(begin(2u));
-    const auto ownerResult = declare("popup", WidgetKind::Popup);
+    const auto ownerResult = declare(s_PopupKey, WidgetKind::Popup);
     ASSERT_TRUE(ownerResult);
     const WidgetState owner = *ownerResult;
     const PopupScope popup = scope(owner);
@@ -556,7 +560,7 @@ TEST_F(UiPopupContextTests, DuplicateOwnerOrMismatchedTokenCannotPublishAScope){
     EXPECT_FALSE(m_context.input().hasPopup());
     m_context.abandonFrame();
     ASSERT_TRUE(begin(3u));
-    const auto currentResult = declare("popup", WidgetKind::Popup);
+    const auto currentResult = declare(s_PopupKey, WidgetKind::Popup);
     ASSERT_TRUE(currentResult);
     const WidgetState current = *currentResult;
     PopupScope stale = scope(current);
@@ -590,16 +594,16 @@ TEST_F(UiPopupContextTests, MissingOwnerTargetRejectsCommitWithoutReplacingAccep
     ASSERT_TRUE(acceptedResult);
     const PopupFrame accepted = *acceptedResult;
     ASSERT_TRUE(begin(2u));
-    const auto baseResult = button("base", { 10.0f, 10.0f, 60.0f, 24.0f });
+    const auto baseResult = button(s_BaseKey, { 10.0f, 10.0f, 60.0f, 24.0f });
     ASSERT_TRUE(baseResult);
     const WidgetState base = *baseResult;
     EXPECT_EQ(base.id, accepted.base.id);
-    const auto ownerResult = declare("popup", WidgetKind::Popup);
+    const auto ownerResult = declare(s_PopupKey, WidgetKind::Popup);
     ASSERT_TRUE(ownerResult);
     const WidgetState owner = *ownerResult;
     ASSERT_TRUE(m_context.beginPopupScope(owner, scope(owner)));
-    ASSERT_TRUE(m_context.pushScope("popup"));
-    const auto childResult = button("child", { 110.0f, 50.0f, 60.0f, 24.0f });
+    ASSERT_TRUE(m_context.pushScope(s_PopupKey));
+    const auto childResult = button(s_ChildKey, { 110.0f, 50.0f, 60.0f, 24.0f });
     ASSERT_TRUE(childResult);
     const WidgetState child = *childResult;
     EXPECT_TRUE(child.id.valid());

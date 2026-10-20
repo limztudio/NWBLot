@@ -36,6 +36,7 @@ namespace ReflectionDebugView{
 };
 
 inline constexpr u32 s_ReflectionDefaultTemporalMaxSamples = 16u;
+inline constexpr u32 s_ReflectionDefaultSpatialRadius = 2u;
 inline constexpr f32 s_ReflectionDefaultMaxRayDistance = 100.f;
 inline constexpr f32 s_ReflectionDefaultDistanceFadeStart = 80.f;
 inline constexpr f32 s_ReflectionDefaultRoughnessCutoff = 0.8f;
@@ -51,7 +52,7 @@ inline constexpr Float3U s_ReflectionDefaultEnvironmentBottom = Float3U(0.04f, 0
 struct ReflectionSettings{
     u32 temporalMaxSamples = s_ReflectionDefaultTemporalMaxSamples;
     u32 samplingSeed = 0u;
-    u32 spatialRadius = 2u;
+    u32 spatialRadius = s_ReflectionDefaultSpatialRadius;
     // Reflected-path distance in world units, not camera-to-receiver distance.
     f32 maxRayDistance = s_ReflectionDefaultMaxRayDistance;
     f32 distanceFadeStart = s_ReflectionDefaultDistanceFadeStart;

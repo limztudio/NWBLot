@@ -9,22 +9,43 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Mixing steps of the triple32 integer hash.
+#define NWB_SHADOW_HASH_SHIFT_0 17u
+#define NWB_SHADOW_HASH_MULTIPLIER_0 0xed5ad4bbu
+#define NWB_SHADOW_HASH_SHIFT_1 11u
+#define NWB_SHADOW_HASH_MULTIPLIER_1 0xac4c1b51u
+#define NWB_SHADOW_HASH_SHIFT_2 15u
+#define NWB_SHADOW_HASH_MULTIPLIER_2 0x31848babu
+#define NWB_SHADOW_HASH_SHIFT_3 14u
+// Odd per-term multipliers that spread pixel x, pixel y and frame index into one seed.
+#define NWB_SHADOW_SEED_MULTIPLIER_X 0x9e3779b1u
+#define NWB_SHADOW_SEED_MULTIPLIER_Y 0x85ebca77u
+#define NWB_SHADOW_SEED_MULTIPLIER_FRAME 0xc2b2ae3du
+// The frame index and the seed offset use 16-bit fields.
+#define NWB_SHADOW_SAMPLE_FIELD_MASK 0xffffu
+#define NWB_SHADOW_SAMPLE_FIELD_BITS 16u
+#define NWB_SHADOW_SAMPLE_FIELD_RANGE 65536.0
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // One low-discrepancy cone sample per pixel/frame feeds the soft-shadow resolve.
 
 
 uint nwbShadowHashU32(uint value){
-    value ^= value >> 17u;
-    value *= 0xed5ad4bbu;
-    value ^= value >> 11u;
-    value *= 0xac4c1b51u;
-    value ^= value >> 15u;
-    value *= 0x31848babu;
-    value ^= value >> 14u;
+    value ^= value >> NWB_SHADOW_HASH_SHIFT_0;
+    value *= NWB_SHADOW_HASH_MULTIPLIER_0;
+    value ^= value >> NWB_SHADOW_HASH_SHIFT_1;
+    value *= NWB_SHADOW_HASH_MULTIPLIER_1;
+    value ^= value >> NWB_SHADOW_HASH_SHIFT_2;
+    value *= NWB_SHADOW_HASH_MULTIPLIER_2;
+    value ^= value >> NWB_SHADOW_HASH_SHIFT_3;
     return value;
 }
 
 uint nwbShadowSeed(const uint2 pixel, const uint frameIndex){
-    return nwbShadowHashU32(pixel.x * 0x9e3779b1u + pixel.y * 0x85ebca77u + frameIndex * 0xc2b2ae3du);
+    return nwbShadowHashU32(pixel.x * NWB_SHADOW_SEED_MULTIPLIER_X + pixel.y * NWB_SHADOW_SEED_MULTIPLIER_Y + frameIndex * NWB_SHADOW_SEED_MULTIPLIER_FRAME);
 }
 
 
@@ -33,11 +54,11 @@ float2 nwbShadowLowDiscrepancy2D(const uint2 pixel, const uint frameIndex){
     const float a1 = 0.75487766624669276005; // 1 / phi2
     const float a2 = 0.56984029099805326591; // 1 / phi2^2
     // Mask before float conversion to preserve R2 fractional precision for large frame indices.
-    const float indexF = float((frameIndex & 0xffffu) + 1u);
+    const float indexF = float((frameIndex & NWB_SHADOW_SAMPLE_FIELD_MASK) + 1u);
     const float2 r2 = frac(float2(a1, a2) * indexF);
 
     const uint seed = nwbShadowSeed(pixel, frameIndex);
-    const float2 offset = float2(float(seed & 0xffffu), float((seed >> 16u) & 0xffffu)) * (1.0 / 65536.0);
+    const float2 offset = float2(float(seed & NWB_SHADOW_SAMPLE_FIELD_MASK), float((seed >> NWB_SHADOW_SAMPLE_FIELD_BITS) & NWB_SHADOW_SAMPLE_FIELD_MASK)) * (1.0 / NWB_SHADOW_SAMPLE_FIELD_RANGE);
 
     return frac(r2 + offset);
 }

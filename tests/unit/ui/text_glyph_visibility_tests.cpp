@@ -40,8 +40,8 @@ class TextGlyphVisibilityFontTests : public testing::Test{
 public:
     TextGlyphVisibilityFontTests()
         : m_arena(Name("tests/ui/text/glyph_visibility/fonts"))
-        , m_latin(m_arena, Name("tests/ui/fonts/latin"))
-        , m_korean(m_arena, Name("tests/ui/fonts/korean"))
+        , m_latin(m_arena, Name(UiWidgetTests::s_TestLatinFontPath))
+        , m_korean(m_arena, Name(UiWidgetTests::s_TestKoreanFontPath))
     {}
 
 
@@ -50,8 +50,8 @@ protected:
         Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
         ASSERT_TRUE(loadFont(m_latin, "latin.font"));
         ASSERT_TRUE(loadFont(m_korean, "korean.font"));
-        m_face = MakeFontFace(fontScratchArena, m_arena, { Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_latin, 1u });
-        m_koreanFace = MakeFontFace(fontScratchArena, m_arena, { Core::Assets::AssetRef<Font>("tests/ui/fonts/korean"), m_korean, 1u });
+        m_face = MakeFontFace(fontScratchArena, m_arena, { Core::Assets::AssetRef<Font>(UiWidgetTests::s_TestLatinFontPath), m_latin, 1u });
+        m_koreanFace = MakeFontFace(fontScratchArena, m_arena, { Core::Assets::AssetRef<Font>(UiWidgetTests::s_TestKoreanFontPath), m_korean, 1u });
         ASSERT_TRUE(m_face);
         ASSERT_TRUE(m_koreanFace);
         ASSERT_TRUE(m_face->coverageInkReliable());

@@ -22,6 +22,8 @@ namespace __hidden_metascript_lexer{
 
 inline constexpr MChar s_DigitFirst = '0';
 inline constexpr MChar s_DigitLast = '9';
+inline constexpr MStringView s_NewlineInStringMessage = MStringView("newline in string literal");
+inline constexpr MStringView s_UnterminatedStringMessage = MStringView("unterminated string literal");
 constexpr usize s_CompoundAssignmentTokenLength = 2u;
 
 
@@ -252,15 +254,15 @@ Token Lexer::readString()noexcept{
 
     while(!isAtEnd() && peek() != '"'){
         if(peek() == '\n' || peek() == '\r')
-            return makeErrorToken(MStringView("newline in string literal"), startLine, startColumn);
+            return makeErrorToken(__hidden_metascript_lexer::s_NewlineInStringMessage, startLine, startColumn);
 
         if(peek() == '\\'){
             advance();
 
             if(isAtEnd())
-                return makeErrorToken(MStringView("unterminated string literal"), startLine, startColumn);
+                return makeErrorToken(__hidden_metascript_lexer::s_UnterminatedStringMessage, startLine, startColumn);
             if(peek() == '\n' || peek() == '\r')
-                return makeErrorToken(MStringView("newline in string literal"), startLine, startColumn);
+                return makeErrorToken(__hidden_metascript_lexer::s_NewlineInStringMessage, startLine, startColumn);
         }
 
         advance();
@@ -271,7 +273,7 @@ Token Lexer::readString()noexcept{
     if(isAtEnd()){
         Token tok;
         tok.type = TokenType::Error;
-        tok.text = MStringView("unterminated string literal");
+        tok.text = __hidden_metascript_lexer::s_UnterminatedStringMessage;
         tok.line = startLine;
         tok.column = startColumn;
         return tok;

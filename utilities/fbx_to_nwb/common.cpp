@@ -25,6 +25,8 @@ namespace __hidden_common{
 
 static constexpr OutputAssetType::Enum s_OutputAssetTypeValues[] = { OutputAssetType::Bunch, OutputAssetType::Mesh, OutputAssetType::Model, OutputAssetType::Skeleton, OutputAssetType::Skin, };
 static constexpr NormalMode::Enum s_NormalModeValues[] = { NormalMode::Imported, NormalMode::Smooth, NormalMode::Regenerate, };
+static constexpr AStringView s_OptionSeparatorText = ", ";
+static constexpr AStringView s_OptionLastSeparatorText = ", or ";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,14 +37,14 @@ static ScratchString BuildOptionTexts(Core::Alloc::ScratchArena& scratchArena, c
     usize capacity = 0u;
     for(usize i = 0u; i < Count; ++i){
         if(i > 0u)
-            capacity = AddSize(capacity, i + 1u == Count ? 5u : 2u);
+            capacity = AddSize(capacity, i + 1u == Count ? s_OptionLastSeparatorText.size() : s_OptionSeparatorText.size());
         capacity = AddSize(capacity, textFunction(values[i]).size());
     }
     ScratchString text(scratchArena);
     text.reserve(capacity);
     for(usize i = 0u; i < Count; ++i){
         if(i > 0u)
-            text += i + 1u == Count ? ", or " : ", ";
+            text += i + 1u == Count ? s_OptionLastSeparatorText : s_OptionSeparatorText;
         text += textFunction(values[i]);
     }
     return text;

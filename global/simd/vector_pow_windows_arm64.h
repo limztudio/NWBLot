@@ -77,6 +77,31 @@ inline constexpr f64 s_ArmNearOverflow = 0x1.fffffffa3aae2p+6 * 32;
 inline constexpr f64 s_ArmUnderflow = -150.0 * 32;
 inline constexpr f64 s_ArmMayUnderflow = -149.0 * 32;
 
+// AArch64 FPSR/FPCR bits: cumulative input-denormal flag, flush-to-zero, input-denormal trap and the five exception trap enables.
+inline constexpr u32 s_ArmFpsrInputDenormalFlag = 0x80u;
+inline constexpr u32 s_ArmFpcrFlushToZero = 0x01000000u;
+inline constexpr u32 s_ArmFpcrInputDenormalTrap = 0x8000u;
+inline constexpr u32 s_ArmFpcrExceptionTrapMask = 0x1f00u;
+
+// powf log table (16 entries) and exp table (32 entries) index splits.
+inline constexpr u32 s_ArmLogOffsetBits = 0x3f330000u;
+inline constexpr u32 s_ArmLogTableIndexShift = 19u;
+inline constexpr u32 s_ArmLogTableIndexMask = 15u;
+inline constexpr u32 s_ArmLogExponentMask = 0xff800000u;
+inline constexpr u32 s_ArmLogExponentShift = 18u;
+inline constexpr u32 s_ArmExpTableIndexMask = 31u;
+inline constexpr u32 s_ArmExpScaleShift = 47u;
+
+// x in [2^-16, 2^16] and |y| <= 4 keep log2(x) * y within [-64, 64].
+inline constexpr u32 s_ArmBoundedXMinBits = 0x37800000u;
+inline constexpr u32 s_ArmBoundedXMaxBits = 0x47800000u;
+inline constexpr u32 s_ArmBoundedYMaxBits = 0x40800000u;
+
+// ArmCheckInt result for a binary32 exponent value.
+inline constexpr i32 s_ArmNotInteger = 0;
+inline constexpr i32 s_ArmOddInteger = 1;
+inline constexpr i32 s_ArmEvenInteger = 2;
+
 template<bool Equal>
 NWB_INLINE UInt64x4 ArmCompareMask(const SIMDVectorDouble a, const SIMDVectorDouble b)noexcept{
     const auto aLow = SIMDVectorDoubleDetail::GetLow(a), aHigh = SIMDVectorDoubleDetail::GetHigh(a);
@@ -117,13 +142,13 @@ struct ArmArithmetic{
                 __builtin_trap();
             u64 restoredNativeStatus{};
             __asm__ __volatile__("mrs %0, fpsr" : "=r"(restoredNativeStatus));
-            restoredNativeStatus |= (initialNativeStatus | operationNativeStatus) & 0x80u;
+            restoredNativeStatus |= (initialNativeStatus | operationNativeStatus) & s_ArmFpsrInputDenormalFlag;
             __asm__ __volatile__("msr fpsr, %0" : : "r"(restoredNativeStatus));
             // Exact tiny results still trap when underflow is enabled.
             i32 enabled = flags & ~static_cast<i32>(control) & FE_ALL_EXCEPT;
             if constexpr(IsSame_V<T, SIMDVectorSingle>){
-                const UInt4 magnitude = BitCast<UInt4>(value) & 0x7fffffffu;
-                if((control & FE_UNDERFLOW) == 0u && __builtin_reduce_or((magnitude != 0u) & (magnitude < 0x00800000u)) != 0u)
+                const UInt4 magnitude = BitCast<UInt4>(value) & s_F32AbsoluteBitMask;
+                if((control & FE_UNDERFLOW) == 0u && __builtin_reduce_or((magnitude != 0u) & (magnitude < s_F32MinNormalBits)) != 0u)
                     enabled |= FE_UNDERFLOW;
             }
             else{
@@ -169,7 +194,7 @@ struct ArmArithmetic{
             u64 nativeControl{};
             __asm__ __volatile__("mrs %0, fpcr" : "=r"(nativeControl));
             // FZ consumes binary64 subnormal inputs as zero.
-            const u64 minimum = (nativeControl & 0x01000000u) != 0u ? 0x0010000000000000ull : 1u;
+            const u64 minimum = (nativeControl & s_ArmFpcrFlushToZero) != 0u ? 0x0010000000000000ull : 1u;
             const auto tiny = (magnitude >= minimum) & (magnitude < 0x3810000000000000ull);
             if((control & FE_UNDERFLOW) == 0u && __builtin_reduce_or(tiny) != 0u){
                 if(!RaiseFloatingPointExceptions(FE_UNDERFLOW))
@@ -203,23 +228,23 @@ struct ArmArithmetic{
 };
 
 [[nodiscard]] NWB_INLINE i32 ArmCheckInt(const u32 bits)noexcept{
-    const u32 exponent = (bits >> 23u) & 255u;
-    if(exponent < 127u)
-        return 0;
-    if(exponent > 150u)
-        return 2;
-    const u32 shift = 150u - exponent;
+    const u32 exponent = (bits >> s_F32MantissaBitCount) & s_F32ExponentFieldMask;
+    if(exponent < s_F32ExponentBias)
+        return s_ArmNotInteger;
+    if(exponent > s_F32IntegerExponent)
+        return s_ArmEvenInteger;
+    const u32 shift = s_F32IntegerExponent - exponent;
     if((bits & ((1u << shift) - 1u)) != 0u)
-        return 0;
-    return (bits & (1u << shift)) != 0u ? 1 : 2;
+        return s_ArmNotInteger;
+    return (bits & (1u << shift)) != 0u ? s_ArmOddInteger : s_ArmEvenInteger;
 }
 
 [[nodiscard]] NWB_INLINE bool ArmSpecialBits(const u32 bits)noexcept{
-    return 2u * bits - 1u >= 2u * 0x7f800000u - 1u;
+    return 2u * bits - 1u >= 2u * s_F32InfinityBits - 1u;
 }
 
 [[nodiscard]] NWB_INLINE bool ArmSignaling(const u32 bits)noexcept{
-    return 2u * (bits ^ 0x00400000u) > 2u * 0x7fc00000u;
+    return 2u * (bits ^ s_F32QuietBit) > 2u * s_F32QuietNaNBits;
 }
 
 template<bool Ordered, bool Bounded = false>
@@ -230,7 +255,7 @@ NWB_INLINE SIMDVectorSingle ArmPackedBody(const SIMDVectorSingle x, const SIMDVe
     Int4 errors{}, special{};
     static_assert(!Ordered || !Bounded);
     if constexpr(Bounded){
-        const Int4 zeroExponent = (iy & 0x7fffffffu) == 0u;
+        const Int4 zeroExponent = (iy & s_F32AbsoluteBitMask) == 0u;
         const Int4 oneBase = ix == 0x3f800000u, oneExponent = iy == 0x3f800000u, zeroBase = ix == 0u;
         const Int4 shortcut = zeroExponent | oneBase | oneExponent | zeroBase;
         special = shortcut ? Int4{} : Int4{ 1, 1, 1, 1 };
@@ -240,8 +265,8 @@ NWB_INLINE SIMDVectorSingle ArmPackedBody(const SIMDVectorSingle x, const SIMDVe
     else{
         bool ordinary = false;
         if constexpr(!Ordered){
-            const UInt4 absoluteY = iy & 0x7fffffffu;
-            const Int4 normalInputs = (ix >= 0x00800000u) & (ix < 0x7f800000u) & (ix != 0x3f800000u) & (absoluteY != 0u) & (absoluteY < 0x7f800000u) & (iy != 0x3f800000u);
+            const UInt4 absoluteY = iy & s_F32AbsoluteBitMask;
+            const Int4 normalInputs = (ix >= s_F32MinNormalBits) & (ix < s_F32InfinityBits) & (ix != 0x3f800000u) & (absoluteY != 0u) & (absoluteY < s_F32InfinityBits) & (iy != 0x3f800000u);
             ordinary = __builtin_reduce_and(normalInputs) != 0;
         }
         if(ordinary){
@@ -259,12 +284,12 @@ NWB_INLINE SIMDVectorSingle ArmPackedBody(const SIMDVectorSingle x, const SIMDVe
                     else if(a == 0x3f800000u){
                         result[lane] = ArmSignaling(b) ? VectorGetIntX(math.Add(VectorReplicate(BitCast<f32>(a)), VectorReplicate(BitCast<f32>(b)))) : 0x3f800000u;
                     }
-                    else if(2u * a > 2u * 0x7f800000u || 2u * b > 2u * 0x7f800000u){
+                    else if(2u * a > 2u * s_F32InfinityBits || 2u * b > 2u * s_F32InfinityBits){
                         result[lane] = VectorGetIntX(math.Add(VectorReplicate(BitCast<f32>(a)), VectorReplicate(BitCast<f32>(b))));
                     }
                     else if(2u * a == 2u * 0x3f800000u)
                         result[lane] = 0x3f800000u;
-                    else if((2u * a < 2u * 0x3f800000u) == !(b & 0x80000000u))
+                    else if((2u * a < 2u * 0x3f800000u) == !(b & s_F32SignBitMask))
                         result[lane] = 0u;
                     else
                         result[lane] = VectorGetIntX(math.Multiply(VectorReplicate(BitCast<f32>(b)), VectorReplicate(BitCast<f32>(b))));
@@ -272,33 +297,33 @@ NWB_INLINE SIMDVectorSingle ArmPackedBody(const SIMDVectorSingle x, const SIMDVe
                 }
                 if(ArmSpecialBits(a)){
                     SIMDVectorSingle square = math.Multiply(VectorReplicate(BitCast<f32>(a)), VectorReplicate(BitCast<f32>(a)));
-                    const bool negative = (a & 0x80000000u) != 0u && ArmCheckInt(b) == 1;
+                    const bool negative = (a & s_F32SignBitMask) != 0u && ArmCheckInt(b) == s_ArmOddInteger;
                     if(negative)
                         square = VectorXorInt(square, s_SIMDNegativeZero);
-                    if(2u * a == 0u && (b & 0x80000000u) != 0u){
+                    if(2u * a == 0u && (b & s_F32SignBitMask) != 0u){
                         errors[lane] = ERANGE;
                         errno = ERANGE;
                         square = math.Multiply(math.Divide(s_SIMDOne, VectorZero()), negative ? VectorReplicate(-1.0f) : s_SIMDOne);
                     }
-                    else if((b & 0x80000000u) != 0u)
+                    else if((b & s_F32SignBitMask) != 0u)
                         square = math.Divide(s_SIMDOne, square);
                     result[lane] = VectorGetIntX(square);
                     continue;
                 }
-                if((a & 0x80000000u) != 0u){
+                if((a & s_F32SignBitMask) != 0u){
                     const i32 integral = ArmCheckInt(b);
-                    if(integral == 0){
+                    if(integral == s_ArmNotInteger){
                         result[lane] = VectorGetIntX(math.Invalid(VectorReplicate(BitCast<f32>(a))));
                         errors[lane] = EDOM;
                         errno = EDOM;
                         continue;
                     }
-                    if(integral == 1)
+                    if(integral == s_ArmOddInteger)
                         sign[lane] = 0x10000u;
-                    a &= 0x7fffffffu;
+                    a &= s_F32AbsoluteBitMask;
                 }
                 if(b == 0x3f800000u){
-                    if(a < 0x00800000u){
+                    if(a < s_F32MinNormalBits){
                         // The CRT normalizes subnormal x before its y == 1 return.
                         const SIMDVectorSingle normalizedShortcut = math.Multiply(VectorReplicate(BitCast<f32>(ix[lane])), VectorReplicate(0x1p23f));
                         __asm__ __volatile__("" : : "w"(normalizedShortcut));
@@ -316,14 +341,14 @@ NWB_INLINE SIMDVectorSingle ArmPackedBody(const SIMDVectorSingle x, const SIMDVe
         }
     }
     if constexpr(!Bounded){
-        const auto subnormal = admitted < 0x00800000u;
+        const auto subnormal = admitted < s_F32MinNormalBits;
         const SIMDVectorSingle normalized = math.Multiply(BitCast<SIMDVectorSingle>(subnormal ? admitted : UInt4{}), VectorReplicate(0x1p23f));
-        const UInt4 norm = BitCast<UInt4>(normalized) & 0x7fffffffu;
+        const UInt4 norm = BitCast<UInt4>(normalized) & s_F32AbsoluteBitMask;
         admitted = subnormal ? norm - (23u << 23u) : admitted;
     }
-    const UInt4 tmp = admitted - 0x3f330000u, indices = (tmp >> 19u) & 15u;
-    const UInt4 top = tmp & 0xff800000u;
-    const Int4 exponent = BitCast<Int4>(top) >> 18u;
+    const UInt4 tmp = admitted - s_ArmLogOffsetBits, indices = (tmp >> s_ArmLogTableIndexShift) & s_ArmLogTableIndexMask;
+    const UInt4 top = tmp & s_ArmLogExponentMask;
+    const Int4 exponent = BitCast<Int4>(top) >> s_ArmLogExponentShift;
     const SIMDVectorDouble z = ConvertVectorSingleToDouble(BitCast<SIMDVectorSingle>(admitted - top));
     SIMDVectorDouble invc{}, logc{};
     for(usize lane = 0u; lane < 4u; ++lane){
@@ -367,7 +392,7 @@ NWB_INLINE SIMDVectorSingle ArmPackedBody(const SIMDVectorSingle x, const SIMDVe
                     exceptional = 3;
                 if(exceptional != 0){
                     const u32 multiplier = exceptional == 1 ? 0x70000000u : (exceptional == 2 ? 0x10000000u : 0x1a200000u);
-                    const u32 signedMultiplier = multiplier | (negative ? 0x80000000u : 0u);
+                    const u32 signedMultiplier = multiplier | (negative ? s_F32SignBitMask : 0u);
                     errno = ERANGE;
                     errors[lane] = ERANGE;
                     result[lane] = VectorGetIntX(math.Multiply(VectorReplicate(BitCast<f32>(signedMultiplier)), VectorReplicate(BitCast<f32>(multiplier))));
@@ -386,7 +411,7 @@ NWB_INLINE SIMDVectorSingle ArmPackedBody(const SIMDVectorSingle x, const SIMDVe
     const SIMDVectorDouble exponential = math.DoubleFma(er2, ep, eq);
     UInt64x4 scale{};
     for(usize lane = 0u; lane < 4u; ++lane)
-        scale[lane] = s_ArmExpTable[ki[lane] & 31u] + ((static_cast<u64>(ki[lane]) + sign[lane]) << 47u);
+        scale[lane] = s_ArmExpTable[ki[lane] & s_ArmExpTableIndexMask] + ((static_cast<u64>(ki[lane]) + sign[lane]) << s_ArmExpScaleShift);
     const UInt4 narrowed = BitCast<UInt4>(math.Narrow(math.DoubleMultiply(exponential, BitCast<SIMDVectorDouble>(scale))));
     if constexpr(Bounded)
         return BitCast<SIMDVectorSingle>(special != 0 ? narrowed : result);
@@ -432,16 +457,16 @@ NWB_NOINLINE inline SIMDVectorSingle NWB_SIMD_CALL Pow(const SIMDVectorSingle x,
     u64 nativeControl{};
     __asm__ __volatile__("mrs %0, fpcr" : "=r"(nativeControl));
     // Native input-denormal traps have a different packed instruction category.
-    if((nativeControl & 0x8000u) != 0u)
+    if((nativeControl & s_ArmFpcrInputDenormalTrap) != 0u)
         return ArmIDEOriginal(x, y);
-    if((nativeControl & 0x1f00u) != 0u)
+    if((nativeControl & s_ArmFpcrExceptionTrapMask) != 0u)
         return ArmEnabledPower(x, y);
-    const UInt4 ix = BitCast<UInt4>(x), iy = BitCast<UInt4>(y), absoluteY = iy & 0x7fffffffu;
+    const UInt4 ix = BitCast<UInt4>(x), iy = BitCast<UInt4>(y), absoluteY = iy & s_F32AbsoluteBitMask;
     // These bounds keep log2(x) * y within [-64, 64].
-    const Int4 normalX = (ix >= 0x37800000u) & (ix <= 0x47800000u);
+    const Int4 normalX = (ix >= s_ArmBoundedXMinBits) & (ix <= s_ArmBoundedXMaxBits);
     const Int4 zeroY = absoluteY == 0u;
-    const Int4 normalY = (absoluteY >= 0x00800000u) & (absoluteY <= 0x40800000u);
-    const Int4 zeroX = (ix == 0u) & (((iy & 0x80000000u) == 0u) | zeroY);
+    const Int4 normalY = (absoluteY >= s_F32MinNormalBits) & (absoluteY <= s_ArmBoundedYMaxBits);
+    const Int4 zeroX = (ix == 0u) & (((iy & s_F32SignBitMask) == 0u) | zeroY);
     const Int4 bounded = (normalX | zeroX) & (normalY | zeroY);
     if(__builtin_reduce_and(bounded) != 0)
         return ArmPackedBody<false, true>(x, y, FE_ALL_EXCEPT);

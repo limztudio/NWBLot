@@ -32,6 +32,12 @@ namespace __hidden_font_builder_writer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr AStringView s_TemporarySuffix = ".tmp";
+static constexpr AStringView s_BackupSuffix = ".old";
+static constexpr AStringView s_PublicationDiagnosticTag = "font_builder_publication";
+static constexpr u32 s_OutputFileCount = 2u;
+
+
 struct OutputPaths{
     ScratchPath metadata;
     ScratchPath font;
@@ -44,7 +50,7 @@ struct OutputPaths{
 private:
     [[nodiscard]] static ScratchPath MakeFontPath(Core::Alloc::ScratchArena& scratch, const Path& output){
         ScratchPath path(scratch, output);
-        path.replaceExtension(".font");
+        path.replaceExtension(s_PreparedFontExtension);
         return path;
     }
     [[nodiscard]] static ScratchPath MakeWorkPath(Core::Alloc::ScratchArena& scratch, const ScratchPath& base, const AStringView suffix){
@@ -58,10 +64,10 @@ public:
     explicit OutputPaths(Core::Alloc::ScratchArena& scratch, const Path& output)
         : metadata(scratch, output)
         , font(MakeFontPath(scratch, output))
-        , metadataTemporary(MakeWorkPath(scratch, metadata, ".tmp"))
-        , fontTemporary(MakeWorkPath(scratch, font, ".tmp"))
-        , metadataBackup(MakeWorkPath(scratch, metadata, ".old"))
-        , fontBackup(MakeWorkPath(scratch, font, ".old"))
+        , metadataTemporary(MakeWorkPath(scratch, metadata, s_TemporarySuffix))
+        , fontTemporary(MakeWorkPath(scratch, font, s_TemporarySuffix))
+        , metadataBackup(MakeWorkPath(scratch, metadata, s_BackupSuffix))
+        , fontBackup(MakeWorkPath(scratch, font, s_BackupSuffix))
     {}
 };
 
@@ -75,7 +81,7 @@ public:
             const auto removed = RemoveFile(m_path);
             if(!removed){
                 const DiagnosticEventText diagnostic = MakeDiagnosticEventText("font_builder: cannot remove unpublished temporary '{}', error {}", m_path.c_str(), removed.error().value());
-                CaptureDiagnosticEvent("font_builder_publication", diagnostic.view(), __FILE__, __LINE__);
+                CaptureDiagnosticEvent(s_PublicationDiagnosticTag, diagnostic.view(), __FILE__, __LINE__);
             }
         }
     }
@@ -114,7 +120,8 @@ public:
 #else
         if(static_cast<u64>(count) > static_cast<u64>(Limit<off_t>::s_Max))
             return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
-        const int descriptor = open(m_path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0666u);
+        constexpr u32 s_NewFileMode = 0666u;
+        const int descriptor = open(m_path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, s_NewFileMode);
         if(descriptor < 0)
             return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
         m_owned = true;
@@ -150,7 +157,8 @@ public:
         InputFileStream stream(m_path, InputFileStream::binary);
         if(!stream.is_open())
             return false;
-        u8 buffer[4096u];
+        constexpr usize s_VerifyChunkSize = 4096u;
+        u8 buffer[s_VerifyChunkSize];
         for(usize offset = 0u; offset < count;){
             const usize remaining = count - offset;
             const usize chunk = remaining < sizeof(buffer) ? remaining : sizeof(buffer);
@@ -187,9 +195,9 @@ private:
             ++presentCount;
         }
     }
-    if(presentCount != 0u && (presentCount != 2u || !overwrite))
-        return MakeUnexpected(MakeErrorCode(presentCount != 2u ? ErrorCondition::invalid_argument : ErrorCondition::file_exists));
-    return presentCount == 2u;
+    if(presentCount != 0u && (presentCount != s_OutputFileCount || !overwrite))
+        return MakeUnexpected(MakeErrorCode(presentCount != s_OutputFileCount ? ErrorCondition::invalid_argument : ErrorCondition::file_exists));
+    return presentCount == s_OutputFileCount;
 }
 
 [[nodiscard]] static Expected<void, ErrorCode> CheckWorkPaths(const OutputPaths& paths)noexcept{
@@ -212,21 +220,21 @@ private:
     const ScratchPath* backups[] = { &paths.fontBackup, &paths.metadataBackup };
     const ScratchPath* temporaries[] = { &paths.fontTemporary, &paths.metadataTemporary };
     TemporaryFile* staged[] = { &font, &metadata };
-    ErrorCode removalErrors[2u];
-    ErrorCode restorationErrors[2u];
+    ErrorCode removalErrors[s_OutputFileCount];
+    ErrorCode restorationErrors[s_OutputFileCount];
     u32 backedUp = 0u;
     u32 published = 0u;
 
     // Restore the previous pair before any allocating failure observer can run or an unexpected exception leaves publication.
     const auto rollback = [&]()noexcept{
-        for(u32 index = 2u; index > 0u; --index){
+        for(u32 index = s_OutputFileCount; index > 0u; --index){
             const u32 current = index - 1u;
             if(current < published){
                 const auto removed = RemoveFile(*outputs[current]);
                 if(!removed){
                     removalErrors[current] = removed.error();
                     const DiagnosticEventText diagnostic = MakeDiagnosticEventText("font_builder: could not remove failed new '{}', error {}", outputs[current]->c_str(), removalErrors[current].value());
-                    CaptureDiagnosticEvent("font_builder_publication", diagnostic.view(), __FILE__, __LINE__);
+                    CaptureDiagnosticEvent(s_PublicationDiagnosticTag, diagnostic.view(), __FILE__, __LINE__);
                 }
             }
             if(current < backedUp && !removalErrors[current]){
@@ -234,7 +242,7 @@ private:
                 if(!restored){
                     restorationErrors[current] = restored.error();
                     const DiagnosticEventText diagnostic = MakeDiagnosticEventText("font_builder: could not restore previous '{}', error {}", outputs[current]->c_str(), restorationErrors[current].value());
-                    CaptureDiagnosticEvent("font_builder_publication", diagnostic.view(), __FILE__, __LINE__);
+                    CaptureDiagnosticEvent(s_PublicationDiagnosticTag, diagnostic.view(), __FILE__, __LINE__);
                 }
             }
         }
@@ -244,7 +252,7 @@ private:
     const auto failPublication = [&](const ErrorCode& error) -> Expected<void, ErrorCode>{
         rollback();
         restoreOnFailure.release();
-        for(u32 index = 0u; index < 2u; ++index){
+        for(u32 index = 0u; index < s_OutputFileCount; ++index){
             if(removalErrors[index])
                 NWB_LOGGER_ERROR(NWB_TEXT("font_builder: could not remove failed new '{}': {}"), PathToString<tchar>(*outputs[index]), StringConvert(removalErrors[index].message()));
             if(restorationErrors[index])
@@ -254,13 +262,13 @@ private:
     };
 
     if(*present){
-        for(; backedUp < 2u; ++backedUp){
+        for(; backedUp < s_OutputFileCount; ++backedUp){
             const auto preserved = RenamePath(*outputs[backedUp], *backups[backedUp]);
             if(!preserved)
                 return failPublication(preserved.error());
         }
     }
-    for(; published < 2u; ++published){
+    for(; published < s_OutputFileCount; ++published){
         const auto finalized = RenamePath(*temporaries[published], *outputs[published]);
         if(!finalized)
             return failPublication(finalized.error());

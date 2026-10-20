@@ -30,7 +30,7 @@ bool InstallLatinFixtureFont(Core::Alloc::ScratchArena& scratchArena, Core::Allo
     font.setFontBytes(Move(bytes));
     if(!font.validatePayload())
         return false;
-    const FontSource source{ Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), font, 1u };
+    const FontSource source{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), font, 1u };
     return text.setFonts(scratchArena, &source, 1u);
 }
 
@@ -83,20 +83,20 @@ Expected<SkinPaintSample> WidgetFixture::sampleSkinPaint(const DrawSnapshot& sna
 }
 
 bool WidgetFixture::installKoreanFallback(){
-    Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
+    Core::Alloc::ScratchArena fontScratchArena(s_FontScratchArenaName);
     const auto path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / "korean.font";
     Core::Assets::AssetBytes bytes(m_arena);
     auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
     if(!bytesResult)
         return false;
     bytes = Move(*bytesResult);
-    Font korean(m_arena, Name("tests/ui/fonts/korean"));
+    Font korean(m_arena, Name(s_TestKoreanFontPath));
     korean.setFontBytes(Move(bytes));
     if(!korean.validatePayload())
         return false;
     const FontSource sources[]{
-        { Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_font, 1u },
-        { Core::Assets::AssetRef<Font>("tests/ui/fonts/korean"), korean, 1u },
+        { Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_font, 1u },
+        { Core::Assets::AssetRef<Font>(s_TestKoreanFontPath), korean, 1u },
     };
     return m_text.setFonts(fontScratchArena, sources, LengthOf(sources));
 }

@@ -18,6 +18,15 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_x11_clipboard{
+static constexpr StringView s_WarningEventName = "warning";
+static constexpr StringView s_LifecycleCategory = "x11_clipboard_lifecycle";
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 X11ClipboardService::X11ClipboardService(Alloc::GlobalArena& arena, Display& display)
     : QueuedClipboardService(arena)
     , m_arena(arena)
@@ -39,7 +48,7 @@ X11ClipboardService::~X11ClipboardService()noexcept{
         X11CheckedOperation operation(m_display);
         XDestroyWindow(&m_display, m_ownerWindow);
         if(!operation.succeeded())
-            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "x11_clipboard_lifecycle", .message = "X11 clipboard: owner window destruction failed", .file = __FILE__, .line = __LINE__, });
+            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = __hidden_x11_clipboard::s_WarningEventName, .category = __hidden_x11_clipboard::s_LifecycleCategory, .message = "X11 clipboard: owner window destruction failed", .file = __FILE__, .line = __LINE__, });
     }
 }
 
@@ -60,7 +69,7 @@ bool X11ClipboardService::initialize(){
     m_propertyAtom = XInternAtom(&m_display, "NWB_CLIPBOARD_READ", False);
     m_timeProbeAtom = XInternAtom(&m_display, "NWB_CLIPBOARD_TIME", False);
     const long requestWords = XMaxRequestSize(&m_display);
-    m_chunkBytes = requestWords > 64 ? Min<usize>(65536u, static_cast<usize>(requestWords - 64) * 4u) : 1024u;
+    m_chunkBytes = requestWords > s_RequestReserveWords ? Min<usize>(s_MaxChunkBytes, static_cast<usize>(requestWords - s_RequestReserveWords) * s_X11WireUnitBytes) : s_FallbackChunkBytes;
     return operation.succeeded() && m_ownerWindow && m_clipboardAtom && m_utf8Atom && m_targetsAtom && m_timestampAtom && m_multipleAtom && m_atomPairAtom && m_textAtom && m_utf8MimeAtom && m_incrementalAtom && m_propertyAtom && m_timeProbeAtom;
 }
 
@@ -155,7 +164,7 @@ void X11ClipboardService::startNativeRequest(const ClipboardRequestToken token, 
         if(m_operationWindow){
             XSelectInput(&m_display, m_operationWindow, PropertyChangeMask | StructureNotifyMask);
             const u8 byte = 1u;
-            XChangeProperty(&m_display, m_operationWindow, m_timeProbeAtom, XA_INTEGER, 8, PropModeReplace, &byte, 1);
+            XChangeProperty(&m_display, m_operationWindow, m_timeProbeAtom, XA_INTEGER, s_X11PropertyByteFormat, PropModeReplace, &byte, 1);
         }
         succeeded = checked.succeeded();
     }
@@ -200,7 +209,7 @@ void X11ClipboardService::releaseOperation(){
         X11CheckedOperation checked(m_display);
         XDestroyWindow(&m_display, m_operationWindow);
         if(!checked.succeeded())
-            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "x11_clipboard_lifecycle", .message = "X11 clipboard: request window destruction failed", .file = __FILE__, .line = __LINE__, });
+            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = __hidden_x11_clipboard::s_WarningEventName, .category = __hidden_x11_clipboard::s_LifecycleCategory, .message = "X11 clipboard: request window destruction failed", .file = __FILE__, .line = __LINE__, });
     }
     m_operationWindow = 0u;
     m_operationToken = {};

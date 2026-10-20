@@ -33,6 +33,8 @@ inline constexpr f32 s_StyleScrollbarMinimumThumb = 20.0f;
 inline constexpr f32 s_StyleScrollWheelStep = 3.0f;
 inline constexpr f32 s_StyleMarkInset = 0.3f;
 inline constexpr f32 s_StyleDisabledIconAlpha = 0.5f;
+inline constexpr f32 s_StyleWindowCollapseExtent = 20.0f;
+inline constexpr f32 s_StyleWindowResizeExtent = 16.0f;
 inline constexpr Color s_StyleTextColor = { 0.92f, 0.94f, 0.98f, 1.0f };
 inline constexpr Color s_StyleDisabledTextColor = { 0.48f, 0.50f, 0.55f, 1.0f };
 inline constexpr Color s_StyleInsetColor = { 0.08f, 0.10f, 0.14f, 1.0f };
@@ -64,8 +66,8 @@ struct WidgetStyle{
     f32 fontSize = s_TextDefaultFontSize;
     f32 gap = s_StyleSpacingMedium;
     f32 checkboxExtent = s_StyleControlExtent;
-    f32 windowCollapseExtent = 20.0f;
-    f32 windowResizeExtent = 16.0f;
+    f32 windowCollapseExtent = s_StyleWindowCollapseExtent;
+    f32 windowResizeExtent = s_StyleWindowResizeExtent;
 };
 
 struct WidgetOptions{

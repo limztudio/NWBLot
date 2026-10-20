@@ -9,6 +9,7 @@
 
 
 #include "cook.h"
+#include "binary_payload.h"
 
 #include <core/assets/cook_entry_registry.h>
 
@@ -35,7 +36,7 @@ static Expected<UiSkinCookEntry> ParseUiSkinDocument(const Path& assetRoot, cons
 static bool RegisterUiSkinCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterSingleDocumentCookEntry<UiSkinCookEntry, UiSkin, UiSkinAssetCodec>(
         registry,
-        NWB_TEXT("UI skin"),
+        UiSkinBinaryPayload::s_UiSkinAssetKindLabel,
         &ParseUiSkinDocument,
         [](UiSkinCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){ return BuildUiSkinAsset(entry, arena); },
         false

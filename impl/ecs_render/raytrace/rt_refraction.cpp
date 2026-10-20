@@ -73,7 +73,7 @@ bool RendererRayTracingSystem::prepareRefractionResources(){
         if(!m_shaderSystem.loadShader<ComputeShader>(
             shader,
             hardware ? AssetsGraphicsRefraction::s_HwResolveShaderName : AssetsGraphicsRefraction::s_ScreenResolveShaderName,
-            hardware ? (csg ? AStringView("NWB_RT_CSG_ENABLED=1") : AStringView("NWB_RT_CSG_ENABLED=0")) : Core::ShaderArchive::s_DefaultVariant,
+            hardware ? (csg ? s_RayTracingCsgEnabledVariant : s_RayTracingCsgDisabledVariant) : Core::ShaderArchive::s_DefaultVariant,
             hardware ? "ECSRender_RefractionHw" : "ECSRender_RefractionScreen"
         )){
             failed = true;

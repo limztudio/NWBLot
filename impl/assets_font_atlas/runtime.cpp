@@ -49,7 +49,7 @@ bool FontAtlas::loadBinary(const Core::Assets::AssetBytes& binary){
 }
 
 bool FontAtlas::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
-    return checkVirtualPath(NWB_TEXT("FontAtlas::validatePayload")) && ValidateFontAtlasPayload(m_payload, scratchArena);
+    return checkVirtualPath(s_FontAtlasValidatePayloadContext) && ValidateFontAtlasPayload(m_payload, scratchArena);
 }
 
 

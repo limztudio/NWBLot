@@ -44,6 +44,10 @@ inline constexpr char s_NamesymRecordTerminator = '\n';
 inline constexpr AStringView s_NamesymProducerSuffix = "\tproducer=runtime\n";
 inline constexpr AStringView s_NamesymRuntimeSource = "\truntime\t";
 inline constexpr usize s_NamesymEscapedCharBytes = 2u;
+inline constexpr AStringView s_NamesymEscapedBackslash = "\\\\";
+inline constexpr AStringView s_NamesymEscapedNewline = "\\n";
+inline constexpr AStringView s_NamesymEscapedCarriageReturn = "\\r";
+inline constexpr AStringView s_NamesymEscapedTab = "\\t";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -61,16 +65,16 @@ void AppendEscapedNamesymText(AString<ArenaT>& outText, const AStringView text){
     for(const char ch : text){
         switch(ch){
         case '\\':
-            outText += "\\\\";
+            outText += s_NamesymEscapedBackslash;
             break;
         case '\n':
-            outText += "\\n";
+            outText += s_NamesymEscapedNewline;
             break;
         case '\r':
-            outText += "\\r";
+            outText += s_NamesymEscapedCarriageReturn;
             break;
         case '\t':
-            outText += "\\t";
+            outText += s_NamesymEscapedTab;
             break;
         default:
             outText += ch;

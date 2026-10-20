@@ -217,9 +217,9 @@ bool RadioGroupFixture::declare(const u64 generation, const RadioGroupOptions& o
 }
 
 bool RadioGroupFixture::declareSource(const u64 generation, const IListDataSource& source, RadioGroupState& state, const RadioGroupOptions& options, const Rect& bounds){
-    if(!begin(generation) || !m_builder.beginPanel("panel", bounds))
+    if(!begin(generation) || !m_builder.beginPanel(s_RadioPanelKey, bounds))
         return false;
-    m_result = m_builder.radioGroup("radio", source, state, options);
+    m_result = m_builder.radioGroup(s_RadioGroupKey, source, state, options);
     return m_result.valid;
 }
 
@@ -232,7 +232,7 @@ bool RadioGroupFixture::accept(const u64 generation, const RadioGroupOptions& op
 }
 
 WidgetId RadioGroupFixture::host()const{
-    return id("radio", "panel");
+    return id(s_RadioGroupKey, s_RadioPanelKey);
 }
 
 const RadioGroupChoicePlacement* RadioGroupFixture::choice(const u64 keyValue, const RadioGroupState& state)const noexcept{

@@ -34,6 +34,7 @@ namespace __hidden_ui_search_combo_smoke{
 
 static constexpr Impl::Ui::Rect s_Panel{ 24.0f, 24.0f, 400.0f, 160.0f };
 static constexpr Impl::Ui::Rect s_Counter{ 456.0f, 32.0f, 130.0f, 36.0f };
+static constexpr TStringView s_LogTag = NWB_TEXT("UiSearchComboSmoke");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -193,21 +194,21 @@ void UiSearchComboSmokeScene::observeState(Impl::Ui::TextService& text){
         , current[8], current[9], current[10], current[11], current[12], current[13], current[14], current[15]
         , current[16], current[17], current[18], current[19], current[20], current[21]
     );
-    LogSmokeRect(NWB_TEXT("UiSearchComboSmoke"), m_sequence, NWB_TEXT("trigger"), bounds);
-    LogSmokeRect(NWB_TEXT("UiSearchComboSmoke"), m_sequence, NWB_TEXT("popup"), popup.bounds);
-    LogSmokeRect(NWB_TEXT("UiSearchComboSmoke"), m_sequence, NWB_TEXT("list"), placement.bounds);
-    LogSmokeRect(NWB_TEXT("UiSearchComboSmoke"), m_sequence, NWB_TEXT("viewport"), placement.viewport);
+    LogSmokeRect(__hidden_ui_search_combo_smoke::s_LogTag, m_sequence, NWB_TEXT("trigger"), bounds);
+    LogSmokeRect(__hidden_ui_search_combo_smoke::s_LogTag, m_sequence, NWB_TEXT("popup"), popup.bounds);
+    LogSmokeRect(__hidden_ui_search_combo_smoke::s_LogTag, m_sequence, NWB_TEXT("list"), placement.bounds);
+    LogSmokeRect(__hidden_ui_search_combo_smoke::s_LogTag, m_sequence, NWB_TEXT("viewport"), placement.viewport);
     const auto first = SmokeListRowBounds(placement, placement.firstRow);
-    LogSmokeRect(NWB_TEXT("UiSearchComboSmoke"), m_sequence, NWB_TEXT("first_row"), first ? *first : Impl::Ui::Rect{});
-    LogSmokeRect(NWB_TEXT("UiSearchComboSmoke"), m_sequence, NWB_TEXT("track"), placement.track);
-    LogSmokeRect(NWB_TEXT("UiSearchComboSmoke"), m_sequence, NWB_TEXT("thumb"), placement.thumb);
-    LogSmokeRect(NWB_TEXT("UiSearchComboSmoke"), m_sequence, NWB_TEXT("cursor_row"), cursorRow());
-    LogSmokeRect(NWB_TEXT("UiSearchComboSmoke"), m_sequence, NWB_TEXT("counter"), __hidden_ui_search_combo_smoke::s_Counter);
+    LogSmokeRect(__hidden_ui_search_combo_smoke::s_LogTag, m_sequence, NWB_TEXT("first_row"), first ? *first : Impl::Ui::Rect{});
+    LogSmokeRect(__hidden_ui_search_combo_smoke::s_LogTag, m_sequence, NWB_TEXT("track"), placement.track);
+    LogSmokeRect(__hidden_ui_search_combo_smoke::s_LogTag, m_sequence, NWB_TEXT("thumb"), placement.thumb);
+    LogSmokeRect(__hidden_ui_search_combo_smoke::s_LogTag, m_sequence, NWB_TEXT("cursor_row"), cursorRow());
+    LogSmokeRect(__hidden_ui_search_combo_smoke::s_LogTag, m_sequence, NWB_TEXT("counter"), __hidden_ui_search_combo_smoke::s_Counter);
     const auto& editor = m_state.editorState().placement;
-    LogSmokeRect(NWB_TEXT("UiSearchComboSmoke"), m_sequence, NWB_TEXT("query"), editor.bounds);
-    LogSmokeRect(NWB_TEXT("UiSearchComboSmoke"), m_sequence, NWB_TEXT("query_content"), editor.content);
-    LogSmokeRect(NWB_TEXT("UiSearchComboSmoke"), m_sequence, NWB_TEXT("query_caret"), editor.caret);
-    LogSmokeRect(NWB_TEXT("UiSearchComboSmoke"), m_sequence, NWB_TEXT("query_selection"), CaptureEditSelection(m_arena, text, m_state.query(), editor, 12.0f));
+    LogSmokeRect(__hidden_ui_search_combo_smoke::s_LogTag, m_sequence, NWB_TEXT("query"), editor.bounds);
+    LogSmokeRect(__hidden_ui_search_combo_smoke::s_LogTag, m_sequence, NWB_TEXT("query_content"), editor.content);
+    LogSmokeRect(__hidden_ui_search_combo_smoke::s_LogTag, m_sequence, NWB_TEXT("query_caret"), editor.caret);
+    LogSmokeRect(__hidden_ui_search_combo_smoke::s_LogTag, m_sequence, NWB_TEXT("query_selection"), CaptureEditSelection(m_arena, text, m_state.query(), editor, 12.0f));
 }
 
 

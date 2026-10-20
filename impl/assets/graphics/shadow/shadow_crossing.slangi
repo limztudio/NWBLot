@@ -12,6 +12,10 @@
 #define NWB_SHADOW_CROSSING_MERGE_MIN_EPSILON 1e-4
 #define NWB_SHADOW_CROSSING_MERGE_REL_EPSILON 1e-5
 #define NWB_SHADOW_INTERFACE_FADE_DISTANCE 2e-3
+// Crossing facing bits: a cluster that reports both has no net entry or exit.
+#define NWB_SHADOW_FACING_ENTERING 1u
+#define NWB_SHADOW_FACING_EXITING 2u
+#define NWB_SHADOW_FACING_BOTH 3u
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

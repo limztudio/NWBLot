@@ -19,6 +19,8 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr f32 s_ComboArrowExtent = 20.0f;
+
 struct ComboStyle{
     Name normal = UiSkinToolkitRegions::s_ComboNormalRegionName;
     Name hover = UiSkinToolkitRegions::s_ComboHoverRegionName;
@@ -29,7 +31,7 @@ struct ComboStyle{
     Name arrow = UiSkinToolkitRegions::s_ComboArrowRegionName;
     Name arrowFallback = UiSkinToolkitRegions::s_WindowCollapseRegionName;
     Insets padding = { s_StyleSpacingMedium, s_StyleFieldPaddingY, s_StyleSpacingMedium, s_StyleFieldPaddingY };
-    f32 arrowExtent = 20.0f;
+    f32 arrowExtent = s_ComboArrowExtent;
     f32 arrowGap = s_StyleSpacingMedium;
 };
 

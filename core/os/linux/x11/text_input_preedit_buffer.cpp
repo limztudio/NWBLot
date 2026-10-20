@@ -30,7 +30,7 @@ namespace __hidden_x11_preedit{
             return position;
         }
         const auto decoded = DecodeUtf8CodePoint(text.substr(position));
-        if(!decoded || decoded->codePoint == 0u || (decoded->codePoint >= 0xD800u && decoded->codePoint <= 0xDFFFu))
+        if(!decoded || decoded->codePoint == 0u || (decoded->codePoint >= BasicStringDetail::s_UnicodeHighSurrogateMin && decoded->codePoint <= BasicStringDetail::s_UnicodeLowSurrogateMax))
             return MakeUnexpected(Failure{});
         position += static_cast<usize>(decoded->byteCount);
         ++index;
@@ -46,7 +46,7 @@ namespace __hidden_x11_preedit{
     usize position = 0u;
     while(position < text.size()){
         const auto decoded = DecodeUtf8CodePoint(text.substr(position));
-        if(!decoded || decoded->codePoint == 0u || (decoded->codePoint >= 0xD800u && decoded->codePoint <= 0xDFFFu))
+        if(!decoded || decoded->codePoint == 0u || (decoded->codePoint >= BasicStringDetail::s_UnicodeHighSurrogateMin && decoded->codePoint <= BasicStringDetail::s_UnicodeLowSurrogateMax))
             return false;
         position += static_cast<usize>(decoded->byteCount);
     }

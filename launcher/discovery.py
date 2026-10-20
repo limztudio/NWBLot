@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 from launcher.models import RepoLauncher
-from launcher.constants import (COMMAND_HELP_LONG, COMMAND_HELP_SHORT, COMMAND_PROFILES, KIND_CATEGORY, KIND_DIRECTORY, LAUNCHER_ARTIFACT_DIRECTORIES, LAUNCHER_GLOB_SUFFIX, LAUNCHER_SCRIPT_NAME, LAUNCHER_SEARCH_ROOTS, LAUNCH_COMMAND_NAME_HYPHEN,
+from launcher.constants import (COMMAND_HELP_LONG, COMMAND_HELP_SHORT, COMMAND_PROFILES, EXIT_USAGE_ERROR, KIND_CATEGORY, KIND_DIRECTORY, LAUNCHER_ARTIFACT_DIRECTORIES, LAUNCHER_GLOB_SUFFIX, LAUNCHER_SCRIPT_NAME, LAUNCHER_SEARCH_ROOTS, LAUNCH_COMMAND_NAME_HYPHEN,
     LAUNCH_COMMAND_NAME_UNDERSCORE, LAUNCH_COMMAND_PATTERN, LIST_ITEM_SEPARATOR, MSG_BUILD_USAGE, MSG_COMMAND_CONFLICT, MSG_DIR_COMMANDS, MSG_DIR_ITEM, MSG_DISAMBIGUATE, MSG_DUPLICATE_COMMAND, MSG_INVALID_COMMAND, MSG_LIST_COMMANDS,
     MSG_MISSING_LAUNCHER_PREFIX, MSG_ROUTE_ITEM, MSG_RUN_USAGE, MSG_UNKNOWN_LAUNCHER, RESERVED_LAUNCH_COMMANDS, ROUTE_SEPARATOR,)
 
@@ -154,7 +154,7 @@ class LauncherDiscovery:
         values = list(argv)
         if not values:
             _facade.list_directory_launchers(directory, launchers)
-            return 2
+            return EXIT_USAGE_ERROR
         if values[0] in (COMMAND_HELP_SHORT, COMMAND_HELP_LONG, COMMAND_PROFILES):
             _facade.list_directory_launchers(directory, launchers)
             return 0
@@ -163,7 +163,7 @@ class LauncherDiscovery:
         if repo_launcher is None:
             valid = LIST_ITEM_SEPARATOR.join(launchers)
             print(MSG_UNKNOWN_LAUNCHER.format(directory=directory, values=values, valid=valid), file=sys.stderr)
-            return 2
+            return EXIT_USAGE_ERROR
 
         forwarded_args = values[1:]
         return _facade.run_repo_script(repo_launcher.script, forwarded_args, echo=not _facade.is_help_request(forwarded_args))

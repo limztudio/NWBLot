@@ -70,11 +70,11 @@ uint nwbMeshFrameViewHeapSlot(){
 #if NWB_GI_CSG_ENABLED
 void nwbGiHwCsgClosest(const float3 origin, const float3 direction, const float minimum, inout NwbGiGeometryHit closest){
     const uint contextSlot = g_NwbGiHwMaterialContextSlots.materialSlots.w;
-    const uint activeOffset = nwbHeapRawBuffer(contextSlot).Load(20u);
-    const uint activeCount = nwbHeapRawBuffer(contextSlot).Load(24u);
+    const uint activeOffset = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_BASE_OFFSET);
+    const uint activeCount = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_COUNT_OFFSET);
     // Only active CSG receivers participate. Current-pose bounds discover caps even when their raw receiver exit is beyond the nearest ordinary hit.
     for(uint index = 0u; index < activeCount; ++index){
-        const uint instanceIndex = nwbHeapRawBuffer(contextSlot).Load(activeOffset + index * 4u);
+        const uint instanceIndex = nwbHeapRawBuffer(contextSlot).Load(activeOffset + index * NWB_CSG_RAY_ACTIVE_INDEX_BYTES);
         const NwbSwBvhInstance instance = nwbCsgRayLoadInstance(contextSlot, instanceIndex);
         const NwbBvhNode root = nwbCsgRayReceiverRoot(contextSlot, instanceIndex, instance);
         if(!nwbCsgRayBoundsIntersect(instance, root, origin, direction, minimum, closest.distance))
@@ -89,10 +89,10 @@ void nwbGiHwCsgClosest(const float3 origin, const float3 direction, const float 
 
 bool nwbGiHwCsgOccluded(const float3 origin, const float3 direction, const float minimum, const float maximum){
     const uint contextSlot = g_NwbGiHwMaterialContextSlots.materialSlots.w;
-    const uint activeOffset = nwbHeapRawBuffer(contextSlot).Load(20u);
-    const uint activeCount = nwbHeapRawBuffer(contextSlot).Load(24u);
+    const uint activeOffset = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_BASE_OFFSET);
+    const uint activeCount = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_COUNT_OFFSET);
     for(uint index = 0u; index < activeCount; ++index){
-        const uint instanceIndex = nwbHeapRawBuffer(contextSlot).Load(activeOffset + index * 4u);
+        const uint instanceIndex = nwbHeapRawBuffer(contextSlot).Load(activeOffset + index * NWB_CSG_RAY_ACTIVE_INDEX_BYTES);
         const NwbSwBvhInstance instance = nwbCsgRayLoadInstance(contextSlot, instanceIndex);
         const NwbBvhNode root = nwbCsgRayReceiverRoot(contextSlot, instanceIndex, instance);
         if(!nwbCsgRayBoundsIntersect(instance, root, origin, direction, minimum, maximum))

@@ -18,6 +18,25 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_rt_surfel_pipelines{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr AStringView s_GiCsgDisabledVariant = "NWB_GI_CSG_ENABLED=0";
+static constexpr AStringView s_GiCsgEnabledVariant = "NWB_GI_CSG_ENABLED=1";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool RendererRayTracingSystem::ensureSurfelResources(){
     // Persistent field storage survives window resizes.
     if(!hasSurfelWork())
@@ -467,7 +486,7 @@ bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
         }
     }
 
-    if(!m_shaderSystem.loadShader<ComputeShader>(shader, AssetsGraphicsGi::s_SurfelTraceShaderName, csg ? AStringView("NWB_GI_CSG_ENABLED=1") : AStringView("NWB_GI_CSG_ENABLED=0"), "ECSRender_SurfelTrace")){
+    if(!m_shaderSystem.loadShader<ComputeShader>(shader, AssetsGraphicsGi::s_SurfelTraceShaderName, csg ? __hidden_rt_surfel_pipelines::s_GiCsgEnabledVariant : __hidden_rt_surfel_pipelines::s_GiCsgDisabledVariant, "ECSRender_SurfelTrace")){
         failed = true;
         return false;
     }
@@ -529,7 +548,7 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
         }
     }
 
-    if(!m_shaderSystem.loadShader<ComputeShader>(shader, AssetsGraphicsGi::s_SurfelTraceHwShaderName, csg ? AStringView("NWB_GI_CSG_ENABLED=1") : AStringView("NWB_GI_CSG_ENABLED=0"), "ECSRender_SurfelTraceHw")){
+    if(!m_shaderSystem.loadShader<ComputeShader>(shader, AssetsGraphicsGi::s_SurfelTraceHwShaderName, csg ? __hidden_rt_surfel_pipelines::s_GiCsgEnabledVariant : __hidden_rt_surfel_pipelines::s_GiCsgDisabledVariant, "ECSRender_SurfelTraceHw")){
         failed = true;
         return false;
     }

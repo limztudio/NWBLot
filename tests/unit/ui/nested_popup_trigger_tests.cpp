@@ -21,6 +21,9 @@ using namespace NWB::Impl::Ui;
 using namespace NWB::UiPopupToolsTests;
 using namespace NWB::UiComboTests;
 
+constexpr AStringView s_MenuRowsKey = "rows";
+constexpr AStringView s_AfterKey = "after";
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -44,34 +47,34 @@ protected:
         m_child.open();
     }
 
-    [[nodiscard]] WidgetId parentId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), "parent")); }
+    [[nodiscard]] WidgetId parentId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), s_ParentPopupKey)); }
 
-    [[nodiscard]] WidgetId childId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), "child")); }
+    [[nodiscard]] WidgetId childId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), s_ChildPopupKey)); }
 
-    [[nodiscard]] WidgetId fieldId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(childId(), "combo")); }
+    [[nodiscard]] WidgetId fieldId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(childId(), s_ComboKey)); }
 
-    [[nodiscard]] WidgetId rowsId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(fieldId(), "rows")); }
+    [[nodiscard]] WidgetId rowsId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(fieldId(), s_ComboRowsKey)); }
 
-    [[nodiscard]] WidgetId anchorId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(childId(), "anchor")); }
+    [[nodiscard]] WidgetId anchorId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(childId(), s_AnchorKey)); }
 
-    [[nodiscard]] WidgetId menuRows()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeWidgetId(childId(), "menu")), "rows")); }
+    [[nodiscard]] WidgetId menuRows()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeWidgetId(childId(), s_MenuKey)), s_MenuRowsKey)); }
 
     [[nodiscard]] WidgetId comboRow(const u64 key)const{
-        return UiTestSupport::RequireWidgetId(MakeWidgetPartId(UiTestSupport::RequireWidgetId(MakeWidgetId(rowsId(), "rows")), key));
+        return UiTestSupport::RequireWidgetId(MakeWidgetPartId(UiTestSupport::RequireWidgetId(MakeWidgetId(rowsId(), s_ListRowsKey)), key));
     }
 
     [[nodiscard]] bool beginChild(const u64 generation){
-        if(!begin(generation) || !m_builder.beginPopup("parent", m_parent, UiWidgetTests::NestedParentOptions()))
+        if(!begin(generation) || !m_builder.beginPopup(s_ParentPopupKey, m_parent, UiWidgetTests::NestedParentOptions()))
             return false;
         if(m_builder.button("before", "Parent before", Control()))
             return false;
-        return m_builder.beginPopup("child", m_child, UiWidgetTests::NestedChildOptions());
+        return m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::NestedChildOptions());
     }
 
     [[nodiscard]] bool finishChild(const u64 generation){
-        if(m_builder.button("after", "Child after", Control()) || !m_builder.endPopup())
+        if(m_builder.button(s_AfterKey, "Child after", Control()) || !m_builder.endPopup())
             return false;
-        if(m_builder.button("after", "Parent after", Control()) || !m_builder.endPopup())
+        if(m_builder.button(s_AfterKey, "Parent after", Control()) || !m_builder.endPopup())
             return false;
         return m_context.endRoot() && m_context.finishFrame() && m_context.commitFrame(generation);
     }
@@ -79,15 +82,15 @@ protected:
     [[nodiscard]] bool acceptChildCombo(const u64 generation){
         if(!beginChild(generation))
             return false;
-        m_result = m_builder.comboBox("combo", m_source, m_state, Options());
+        m_result = m_builder.comboBox(s_ComboKey, m_source, m_state, Options());
         return m_result.valid && finishChild(generation);
     }
 
     [[nodiscard]] bool acceptChildMenu(const u64 generation){
         if(!beginChild(generation))
             return false;
-        m_anchorActivated = m_builder.button("anchor", "Commands", Control());
-        m_menuResult = m_builder.contextMenu("menu", "anchor", m_menuSource, m_menu);
+        m_anchorActivated = m_builder.button(s_AnchorKey, "Commands", Control());
+        m_menuResult = m_builder.contextMenu(s_MenuKey, s_AnchorKey, m_menuSource, m_menu);
         return m_menuResult.valid && finishChild(generation);
     }
 
@@ -98,8 +101,8 @@ protected:
         ASSERT_NE(target(childId()), nullptr);
         EXPECT_EQ(target(parentId())->layer, 1u);
         EXPECT_EQ(target(childId())->layer, 2u);
-        EXPECT_NE(target(UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), "after"))), nullptr);
-        EXPECT_NE(target(UiTestSupport::RequireWidgetId(MakeWidgetId(childId(), "after"))), nullptr);
+        EXPECT_NE(target(UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), s_AfterKey))), nullptr);
+        EXPECT_NE(target(UiTestSupport::RequireWidgetId(MakeWidgetId(childId(), s_AfterKey))), nullptr);
     }
 
 

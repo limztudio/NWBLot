@@ -377,8 +377,8 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::claimLocked(const CpuAffinity::En
     // Periodically admit background and normal work even while critical producers keep publishing.
     const u64 dispatch = m_dispatchCount;
     const usize firstPriority = dispatch % __hidden_cpu_scheduler_fairness::s_BackgroundAdmissionPeriod == __hidden_cpu_scheduler_fairness::s_BackgroundAdmissionTick
-        ? 2u
-        : (dispatch % __hidden_cpu_scheduler_fairness::s_NormalAdmissionPeriod == __hidden_cpu_scheduler_fairness::s_NormalAdmissionTick ? 1u : 0u)
+        ? static_cast<usize>(CpuTaskPriority::Background)
+        : (dispatch % __hidden_cpu_scheduler_fairness::s_NormalAdmissionPeriod == __hidden_cpu_scheduler_fairness::s_NormalAdmissionTick ? static_cast<usize>(CpuTaskPriority::Normal) : static_cast<usize>(CpuTaskPriority::Critical))
     ;
     const usize preferredCost = affinity == CpuAffinity::Efficiency ? CpuTaskCost::Light : CpuTaskCost::Heavy;
     const usize costs[s_CostSlotCount] = { s_MainThreadTargetSlot, preferredCost, 0u, preferredCost == CpuTaskCost::Heavy ? static_cast<usize>(CpuTaskCost::Light) : static_cast<usize>(CpuTaskCost::Heavy) };

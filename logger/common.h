@@ -67,6 +67,8 @@ inline auto ArgAddOption(CLI& cli, T& arg){
 
 
 inline constexpr TStringView s_UnknownLogLevelName = NWB_TEXT("UNKNOWN");
+inline constexpr TStringView s_TruncatedMessageError = NWB_TEXT("Received a truncated message");
+inline constexpr TStringView s_MalformedMessagePayloadError = NWB_TEXT("Received a malformed message payload");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -158,10 +160,10 @@ template<typename PayloadContainer>
 
 [[nodiscard]] inline Expected<MessageType, TStringView> ParseMessagePayload(LogArena& arena, const void* contents, const usize totalSize){
     if(totalSize < sizeof(Timer) + sizeof(Core::Common::LogType::Enum) + sizeof(tchar)){
-        return MakeUnexpected(TStringView(NWB_TEXT("Received a truncated message")));
+        return MakeUnexpected(s_TruncatedMessageError);
     }
     if(!contents){
-        return MakeUnexpected(TStringView(NWB_TEXT("Received a malformed message payload")));
+        return MakeUnexpected(s_MalformedMessagePayloadError);
     }
 
     const BinaryByteView payload{ static_cast<const u8*>(contents), totalSize };
@@ -170,7 +172,7 @@ template<typename PayloadContainer>
     const auto time = ReadPOD<Timer>(payload, cursor);
     const auto type = ReadPOD<Core::Common::LogType::Enum>(payload, cursor);
     if(!time || !type){
-        return MakeUnexpected(TStringView(NWB_TEXT("Received a truncated message")));
+        return MakeUnexpected(s_TruncatedMessageError);
     }
 
     if(!IsValidMessageType(*type)){
@@ -179,7 +181,7 @@ template<typename PayloadContainer>
 
     const usize textBytes = totalSize - cursor;
     if((textBytes % sizeof(tchar)) != 0u){
-        return MakeUnexpected(TStringView(NWB_TEXT("Received a malformed message payload")));
+        return MakeUnexpected(s_MalformedMessagePayloadError);
     }
 
     usize terminatorCursor = totalSize - sizeof(tchar);

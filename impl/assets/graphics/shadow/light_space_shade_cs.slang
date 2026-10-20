@@ -20,8 +20,8 @@
 
 
 void nwbLightSpaceInvalidateCrossing(const uint address, const uint instance, const uint primitive){
-    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store4(address, uint4(0x7fc00000u, instance, primitive, 0u));
-    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store(address + 16u, 0u);
+    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store4(address, uint4(NWB_FLOAT_QUIET_NAN_BITS, instance, primitive, 0u));
+    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store(address + NWB_LIGHT_SPACE_EVENT_TAIL_OFFSET, 0u);
 }
 
 // Receiver threads consume instance ASC, depth DESC, primitive ASC records after both shading and cap conversion.
@@ -29,7 +29,7 @@ void nwbLightSpaceSortEvents(const uint pixelIndex, const uint count){
     for(uint index = 1u; index < count; ++index){
         const uint address = (pixelIndex * NWB_LIGHT_SPACE_EVENTS_PER_TEXEL + index) * NWB_LIGHT_SPACE_EVENT_BYTES;
         const uint4 value = g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Load4(address);
-        const uint optical = g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Load(address + 16u);
+        const uint optical = g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Load(address + NWB_LIGHT_SPACE_EVENT_TAIL_OFFSET);
         const uint instance = value.y & NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK;
         uint destination = index;
         while(destination > 0u){
@@ -39,14 +39,14 @@ void nwbLightSpaceSortEvents(const uint pixelIndex, const uint count){
             const bool before = instance < previousInstance || (instance == previousInstance && (asfloat(value.x) > asfloat(previous.x) || (asfloat(value.x) == asfloat(previous.x) && value.z < previous.z)));
             if(!before)
                 break;
-            const uint previousOptical = g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Load(previousAddress + 16u);
+            const uint previousOptical = g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Load(previousAddress + NWB_LIGHT_SPACE_EVENT_TAIL_OFFSET);
             g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store4(previousAddress + NWB_LIGHT_SPACE_EVENT_BYTES, previous);
-            g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store(previousAddress + NWB_LIGHT_SPACE_EVENT_BYTES + 16u, previousOptical);
+            g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store(previousAddress + NWB_LIGHT_SPACE_EVENT_BYTES + NWB_LIGHT_SPACE_EVENT_TAIL_OFFSET, previousOptical);
             --destination;
         }
         const uint destinationAddress = (pixelIndex * NWB_LIGHT_SPACE_EVENTS_PER_TEXEL + destination) * NWB_LIGHT_SPACE_EVENT_BYTES;
         g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store4(destinationAddress, value);
-        g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store(destinationAddress + 16u, optical);
+        g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store(destinationAddress + NWB_LIGHT_SPACE_EVENT_TAIL_OFFSET, optical);
     }
 }
 
@@ -56,10 +56,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint pixelIndex = dispatchThreadID.x + dispatchThreadID.y * (NWB_LIGHT_SPACE_SHADE_MAX_GROUPS_X * NWB_LIGHT_SPACE_SHADE_GROUP_SIZE);
     if(pixelIndex >= g_NwbLightSpacePush.width)
         return;
-    const uint count = nwbHeapRawBuffer(g_NwbLightSpacePush.countsSlot).Load(pixelIndex * 4u);
+    const uint count = nwbHeapRawBuffer(g_NwbLightSpacePush.countsSlot).Load(pixelIndex * NWB_LIGHT_SPACE_PIXEL_WORD_BYTES);
 #if NWB_LIGHT_SPACE_CSG_SHADE
     if(nwbCsgShadowEnabled()){
-        g_NwbHeapStorageBuffers[g_NwbLightSpacePush.csgOpaqueDepthSlot].Store(pixelIndex * 4u, 0x7f7fffffu);
+        g_NwbHeapStorageBuffers[g_NwbLightSpacePush.csgOpaqueDepthSlot].Store(pixelIndex * NWB_LIGHT_SPACE_PIXEL_WORD_BYTES, NWB_FLOAT_MAX_BITS);
         if(count > NWB_LIGHT_SPACE_EVENTS_PER_TEXEL)
             nwbCsgShadowConservativeTexel(pixelIndex);
     }
@@ -81,7 +81,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const uint4 raw = g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Load4(address);
         const float depth = asfloat(raw.x);
         const uint instanceIndex = raw.w;
-        const uint primitive = g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Load(address + 16u);
+        const uint primitive = g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Load(address + NWB_LIGHT_SPACE_EVENT_TAIL_OFFSET);
         if(instanceIndex >= g_NwbLightSpacePush.instanceCount || !isfinite(depth) || view.depthRange.w == 0.0){
             nwbLightSpaceInvalidateCrossing(address, instanceIndex, primitive);
             continue;
@@ -92,7 +92,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             nwbLightSpaceInvalidateCrossing(address, instanceIndex, primitive);
             continue;
         }
-        const uint3 indices = nwbHeapRawBuffer(material.indexSlot).Load3(primitive * 12u);
+        const uint3 indices = nwbHeapRawBuffer(material.indexSlot).Load3(primitive * NWB_RAYTRACE_TRIANGLE_INDEX_BYTES);
         const float3 p0 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(indices.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
         const float3 p1 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(indices.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
         const float3 p2 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(indices.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
@@ -107,7 +107,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             }
             const uint facing = dot(geometric, objectDirection) < 0.0 ? NWB_LIGHT_SPACE_EVENT_ENTERING : 0u;
             g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store4(address, uint4(raw.x, instanceIndex | facing, primitive, 0u));
-            g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store(address + 16u, 0u);
+            g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store(address + NWB_LIGHT_SPACE_EVENT_TAIL_OFFSET, 0u);
             continue;
         }
 #endif
@@ -119,9 +119,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             nwbLightSpaceInvalidateCrossing(address, instanceIndex, primitive);
             continue;
         }
-        const NwbRayTraceVertexAttrib a0 = nwbSwShadowLoadVertexAttrib(material.attributeSlot, primitive * 3u);
-        const NwbRayTraceVertexAttrib a1 = nwbSwShadowLoadVertexAttrib(material.attributeSlot, primitive * 3u + 1u);
-        const NwbRayTraceVertexAttrib a2 = nwbSwShadowLoadVertexAttrib(material.attributeSlot, primitive * 3u + 2u);
+        const NwbRayTraceVertexAttrib a0 = nwbSwShadowLoadVertexAttrib(material.attributeSlot, primitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT);
+        const NwbRayTraceVertexAttrib a1 = nwbSwShadowLoadVertexAttrib(material.attributeSlot, primitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT + 1u);
+        const NwbRayTraceVertexAttrib a2 = nwbSwShadowLoadVertexAttrib(material.attributeSlot, primitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT + 2u);
         const float3 local = p0 * weights.x + p1 * weights.y + p2 * weights.z;
         const float3 world = nwbLightSpaceWorldPosition(local, instanceIndex);
         const float3 n0 = float3(a0.normal);
@@ -142,13 +142,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const NwbMeshSurface surface = nwbShadowDispatchSurface(material.surfaceDispatchId, hit);
         const half cosI = nwbShadowCosineToRay(nwbSwBvhTransformNormal(instance, geometric), towardLight);
         const half smoothCosI = nwbShadowCosineToRay(hit.worldNormal, towardLight);
-        const half fresnel = nwbShadowFresnelTransmittedFraction(surface.refractionIor, lerp(cosI, smoothCosI, half(smoothstep(1e-5, 2e-3, spread))));
+        const half fresnel = nwbShadowFresnelTransmittedFraction(surface.refractionIor, lerp(cosI, smoothCosI, half(smoothstep(NWB_SHADOW_SMOOTH_NORMAL_SPREAD_MIN, NWB_SHADOW_SMOOTH_NORMAL_SPREAD_MAX, spread))));
         const half3 absorption = nwbShadowAbsorptionCoefficient(surface.shadowAbsorptionTint);
         const bool valid = all(isfinite(world)) && isfinite(depth) && all(isfinite(float3(absorption))) && isfinite(float(fresnel));
         // A nonfinite depth invalidates this texel at resolve, with the same software fallback as capture overflow.
         const uint facing = dot(geometric, objectDirection) < 0.0 ? NWB_LIGHT_SPACE_EVENT_ENTERING : 0u;
-        g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store4(address, uint4(valid ? asuint(depth) : 0x7fc00000u, instanceIndex | facing, primitive, f32tof16(float(absorption.x)) | (f32tof16(float(absorption.y)) << 16u)));
-        g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store(address + 16u, f32tof16(float(absorption.z)) | (f32tof16(float(fresnel)) << 16u));
+        g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store4(address, uint4(valid ? asuint(depth) : NWB_FLOAT_QUIET_NAN_BITS, instanceIndex | facing, primitive, f32tof16(float(absorption.x)) | (f32tof16(float(absorption.y)) << NWB_HALF_BIT_COUNT)));
+        g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store(address + NWB_LIGHT_SPACE_EVENT_TAIL_OFFSET, f32tof16(float(absorption.z)) | (f32tof16(float(fresnel)) << NWB_HALF_BIT_COUNT));
     }
     nwbLightSpaceSortEvents(pixelIndex, count);
 #if NWB_LIGHT_SPACE_CSG_SHADE
@@ -157,7 +157,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         if(!nwbCsgShadowConvertEvents(pixelIndex, view, pixel, count, converted))
             nwbCsgShadowConservativeTexel(pixelIndex);
         else if(converted)
-            nwbLightSpaceSortEvents(pixelIndex, nwbHeapRawBuffer(g_NwbLightSpacePush.countsSlot).Load(pixelIndex * 4u));
+            nwbLightSpaceSortEvents(pixelIndex, nwbHeapRawBuffer(g_NwbLightSpacePush.countsSlot).Load(pixelIndex * NWB_LIGHT_SPACE_PIXEL_WORD_BYTES));
     }
 #endif
 }

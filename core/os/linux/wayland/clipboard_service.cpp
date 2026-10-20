@@ -190,7 +190,7 @@ void WaylandClipboardService::releaseDevices(){
     }
 #endif
     if(m_device){
-        if(wl_data_device_get_version(m_device) >= 2u)
+        if(wl_data_device_get_version(m_device) >= s_DataDeviceReleaseVersion)
             wl_data_device_release(m_device);
         else
             wl_data_device_destroy(m_device);

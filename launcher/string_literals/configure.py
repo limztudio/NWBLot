@@ -17,8 +17,15 @@ else:
     from llvm_api import LlvmApi
 
 
+MAIN_ENTRY = "__main__"
+WINDOWS_OS_NAME = "nt"
+LINUX_PLATFORM_PREFIX = "linux"
+SYSTEM_LIBRARY_DIRECTORY = "/usr/lib"
+COMPILER_VERSION_FLAG = "--version"
+
+
 def compiler_version(compiler: Path) -> tuple[int, int, int]:
-    result = subprocess.run([str(compiler), "--version"], check=True, capture_output=True, text=True)
+    result = subprocess.run([str(compiler), COMPILER_VERSION_FLAG], check=True, capture_output=True, text=True)
     match = re.search(r"\bclang version (\d+)\.(\d+)\.(\d+)", result.stdout)
     if not match:
         raise ValueError(f"Cannot identify the LLVM version of {compiler}: {result.stdout.strip()}")
@@ -26,7 +33,7 @@ def compiler_version(compiler: Path) -> tuple[int, int, int]:
 
 
 def library_version(path: Path, expected: tuple[int, int, int]) -> tuple[int, int, int]:
-    directory = os.add_dll_directory(str(path.parent)) if os.name == "nt" else None
+    directory = os.add_dll_directory(str(path.parent)) if os.name == WINDOWS_OS_NAME else None
     try:
         return LlvmApi(path, expected).version
     finally:
@@ -37,14 +44,14 @@ def library_version(path: Path, expected: tuple[int, int, int]) -> tuple[int, in
 def library_candidates(compiler: Path, major: int) -> list[Path]:
     compiler = compiler.resolve()
     directories = [compiler.parent, compiler.parent.parent / "lib", compiler.parent.parent / "lib64"]
-    llvm_config = compiler.parent / ("llvm-config.exe" if os.name == "nt" else "llvm-config")
+    llvm_config = compiler.parent / ("llvm-config.exe" if os.name == WINDOWS_OS_NAME else "llvm-config")
     if llvm_config.is_file():
         result = subprocess.run([str(llvm_config), "--libdir"], check=True, capture_output=True, text=True)
         directories.insert(0, Path(result.stdout.strip()))
-    if sys.platform.startswith("linux"):
-        directories += [Path(f"/usr/lib/llvm-{major}/lib"), Path("/usr/lib"), Path("/usr/lib64")]
-        directories += [path for path in Path("/usr/lib").glob("*-linux-gnu") if path.is_dir()]
-    patterns = ["LLVM-C.dll"] if os.name == "nt" else [f"libLLVM-{major}.so*", "libLLVM.so*", "libLLVM*.dylib"]
+    if sys.platform.startswith(LINUX_PLATFORM_PREFIX):
+        directories += [Path(f"/usr/lib/llvm-{major}/lib"), Path(SYSTEM_LIBRARY_DIRECTORY), Path("/usr/lib64")]
+        directories += [path for path in Path(SYSTEM_LIBRARY_DIRECTORY).glob("*-linux-gnu") if path.is_dir()]
+    patterns = ["LLVM-C.dll"] if os.name == WINDOWS_OS_NAME else [f"libLLVM-{major}.so*", "libLLVM.so*", "libLLVM*.dylib"]
     candidates = []
     for directory in directories:
         for pattern in patterns:
@@ -81,7 +88,7 @@ def main() -> int:
     raise ValueError("String obfuscation requires the compiler host's matching LLVM C API shared library. " "Install it with the Clang toolchain or set NWB_LLVM_C_LIBRARY to its path.\n" + details)
 
 
-if __name__ == "__main__":
+if __name__ == MAIN_ENTRY:
     try:
         raise SystemExit(main())
     except (OSError, ValueError, subprocess.CalledProcessError) as error:

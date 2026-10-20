@@ -14,6 +14,8 @@ from window_smoke import parse_args
 from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
     read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
 from fixture_environment import build_fixture_environment
+from checkpoint_report import CHECKPOINT_POLL_SECONDS, CHECKPOINT_SETTLE_SECONDS, CHECKPOINT_STAGE_TIMEOUT_SECONDS
+from fixture_launch import DISPLAY_MARKER_TIMEOUT_SECONDS
 
 LIT_MAIN_SELECTED = "main_selected"
 LIT_MAIN_CURSOR = "main_cursor"
@@ -38,6 +40,9 @@ LIT_TOGGLE_ENABLED = "toggle_enabled"
 LIT_ROW50 = "row50"
 LIT_OPEN = "open"
 LIT_UI_RADIO_FIXTURE = "UI radio fixture"
+
+FIXTURE_TIMEOUT_SECONDS = 180
+RESIZE_SETTLE_SECONDS = 0.3
 
 
 class RadioGroupRun:
@@ -87,16 +92,16 @@ class RadioGroupRun:
         if neutral:
             self.native.pointer(4, 4)
         self.native.maintain_pointer()
-        time.sleep(0.25)
+        time.sleep(CHECKPOINT_SETTLE_SECONDS)
         path = self.args.output_directory / f"{len(self.stages):02d}_{name}.bmp"
-        stage_deadline = min(self.deadline, time.monotonic() + 10.0)
+        stage_deadline = min(self.deadline, time.monotonic() + CHECKPOINT_STAGE_TIMEOUT_SECONDS)
         report = None
         while time.monotonic() < stage_deadline:
             ensure_process_running(self.process, "during radio group UI capture")
             self.native.maintain_pointer()
             snapshot = snapshot_from_logs(self.logs())
             if snapshot is None:
-                time.sleep(0.1)
+                time.sleep(CHECKPOINT_POLL_SECONDS)
                 continue
             if snapshot[LIT_LOGICAL_EXTENT][0] < 700.0 or snapshot[LIT_LOGICAL_EXTENT][1] < 400.0:
                 raise SmokeSkip("the radio fixture needs a logical client of at least 700x400")
@@ -111,7 +116,7 @@ class RadioGroupRun:
                 self.stages.append(report)
                 self.write_report(False)
                 return
-            time.sleep(0.1)
+            time.sleep(CHECKPOINT_POLL_SECONDS)
         self.failure_report = {LIT_STAGE: name, LIT_CAPTURE: str(path), LIT_NATIVE_WINDOW: self.native.observe_window(), "observation": report}
         self.write_report(False)
         raise SmokeFailure(f"radio displayed-state gate '{name}' failed: {self.failure_report}")
@@ -176,7 +181,7 @@ class RadioGroupRun:
         physical_extent = self.point(840, 640)
         self.backend.resize_client(self.handle, *physical_extent)
         self.native.pointer(4, 4)
-        time.sleep(0.3)
+        time.sleep(RESIZE_SETTLE_SECONDS)
         self.click(LIT_ROW40)
         self.checkpoint("resized_display_accepts_fresh_owned_release", extent=physical_extent, extra=lambda snapshot: abs(snapshot[LIT_LOGICAL_EXTENT][0] - 840.0) < 1.0 and abs(snapshot[LIT_LOGICAL_EXTENT][1] - 640.0) < 1.0,
             main_selected=40, main_cursor=40, **self.increments(changes=1, activations=1))
@@ -229,7 +234,7 @@ def run(args):
             backend.prepare_raw_client_window(handle)
         else:
             backend.prepare_window(handle)
-        wait_for_log_message(log_directory, log_baseline, log_pattern, "UiRadioGroupSmoke: display", min(args.timeout, 15.0))
+        wait_for_log_message(log_directory, log_baseline, log_pattern, "UiRadioGroupSmoke: display", min(args.timeout, DISPLAY_MARKER_TIMEOUT_SECONDS))
         radio_run = RadioGroupRun(args, backend, handle, application, log_directory, log_baseline, log_pattern)
         radio_run.execute()
     finally:
@@ -261,7 +266,7 @@ def run(args):
 
 
 def main(argv):
-    return run_smoke_main(argv, parse_args, run, default_timeout=180)
+    return run_smoke_main(argv, parse_args, run, default_timeout=FIXTURE_TIMEOUT_SECONDS)
 
 
 if __name__ == "__main__":

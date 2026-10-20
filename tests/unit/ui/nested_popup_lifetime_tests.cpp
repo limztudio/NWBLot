@@ -21,6 +21,12 @@ using namespace NWB::Impl::Ui;
 using namespace NWB::UiPopupToolsTests;
 using namespace NWB::UiSearchComboTests;
 
+constexpr AStringView s_MenuRowsKey = "rows";
+constexpr AStringView s_BeforeKey = "before";
+constexpr AStringView s_AfterKey = "after";
+constexpr AStringView s_DeepPopupKey = "deep";
+constexpr AStringView s_LeafKey = "leaf";
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -37,27 +43,27 @@ protected:
             state.open();
     }
 
-    [[nodiscard]] WidgetId parentId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), "parent")); }
-    [[nodiscard]] WidgetId childId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), "child")); }
-    [[nodiscard]] WidgetId fieldId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), "combo")); }
-    [[nodiscard]] WidgetId menuRows()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), "menu")), "rows")); }
+    [[nodiscard]] WidgetId parentId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), s_ParentPopupKey)); }
+    [[nodiscard]] WidgetId childId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), s_ChildPopupKey)); }
+    [[nodiscard]] WidgetId fieldId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), s_ComboKey)); }
+    [[nodiscard]] WidgetId menuRows()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), s_MenuKey)), s_MenuRowsKey)); }
 
     [[nodiscard]] bool beginParent(const u64 generation){
-        if(!begin(generation) || !m_builder.beginPopup("parent", m_parent, UiWidgetTests::NestedParentOptions()))
+        if(!begin(generation) || !m_builder.beginPopup(s_ParentPopupKey, m_parent, UiWidgetTests::NestedParentOptions()))
             return false;
-        const bool activated = m_builder.button("before", "Before");
+        const bool activated = m_builder.button(s_BeforeKey, "Before");
         return !activated;
     }
 
     [[nodiscard]] bool finishParent(const u64 generation){
-        const bool activated = m_builder.button("after", "After");
+        const bool activated = m_builder.button(s_AfterKey, "After");
         return !activated && m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame() && m_context.commitFrame(generation);
     }
 
     [[nodiscard]] bool acceptPlain(const u64 generation){
         if(!beginParent(generation))
             return false;
-        m_childVisible = m_builder.beginPopup("child", m_child, UiWidgetTests::NestedChildOptions());
+        m_childVisible = m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::NestedChildOptions());
         if(m_childVisible){
             const bool activated = m_builder.button("apply", "Child");
             if(activated || !m_builder.endPopup())
@@ -71,57 +77,57 @@ protected:
     [[nodiscard]] bool acceptCombo(const u64 generation){
         if(!beginParent(generation))
             return false;
-        m_result = m_builder.comboBox("combo", m_source, m_state, NWB::UiComboTests::Options());
+        m_result = m_builder.comboBox(s_ComboKey, m_source, m_state, NWB::UiComboTests::Options());
         return m_result.valid && finishParent(generation);
     }
 
     [[nodiscard]] bool acceptSearch(const u64 generation){
         if(!beginParent(generation))
             return false;
-        m_searchResult = m_builder.searchComboBox("combo", m_searchSource, m_search, Options());
+        m_searchResult = m_builder.searchComboBox(s_ComboKey, m_searchSource, m_search, Options());
         return m_searchResult.combo.valid && finishParent(generation);
     }
 
     [[nodiscard]] bool acceptMenu(const u64 generation){
         if(!beginParent(generation))
             return false;
-        const bool activated = m_builder.button("anchor", "Commands");
+        const bool activated = m_builder.button(s_AnchorKey, "Commands");
         if(activated)
             return false;
-        m_menuResult = m_builder.contextMenu("menu", "anchor", m_menuSource, m_menu);
+        m_menuResult = m_builder.contextMenu(s_MenuKey, s_AnchorKey, m_menuSource, m_menu);
         return m_menuResult.valid && finishParent(generation);
     }
 
     [[nodiscard]] bool declareReserved(const u64 generation, const bool overflow){
-        if(!beginParent(generation) || !m_builder.comboBox("combo", m_source, m_state, NWB::UiComboTests::Options()).valid)
+        if(!beginParent(generation) || !m_builder.comboBox(s_ComboKey, m_source, m_state, NWB::UiComboTests::Options()).valid)
             return false;
-        const bool activated = m_builder.button("anchor", "Commands");
-        if(activated || !m_builder.contextMenu("menu", "anchor", m_menuSource, m_menu).valid)
+        const bool activated = m_builder.button(s_AnchorKey, "Commands");
+        if(activated || !m_builder.contextMenu(s_MenuKey, s_AnchorKey, m_menuSource, m_menu).valid)
             return false;
-        if(!m_builder.beginPopup("child", m_child, UiWidgetTests::NestedChildOptions()) || !m_builder.comboBox("combo", m_source, m_childCombo, NWB::UiComboTests::Options()).valid)
+        if(!m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::NestedChildOptions()) || !m_builder.comboBox(s_ComboKey, m_source, m_childCombo, NWB::UiComboTests::Options()).valid)
             return false;
         for(usize index = 0u; index < 3u; ++index){
-            if(!m_builder.beginPopup("deep", m_deeper[index], UiWidgetTests::NestedChildOptions()))
+            if(!m_builder.beginPopup(s_DeepPopupKey, m_deeper[index], UiWidgetTests::NestedChildOptions()))
                 return false;
         }
         if(overflow)
-            return m_builder.beginPopup("deep", m_deeper[3u], UiWidgetTests::NestedChildOptions());
-        const bool leafActivated = m_builder.button("leaf", "Deepest");
+            return m_builder.beginPopup(s_DeepPopupKey, m_deeper[3u], UiWidgetTests::NestedChildOptions());
+        const bool leafActivated = m_builder.button(s_LeafKey, "Deepest");
         if(leafActivated)
             return false;
         for(usize index = 0u; index < 4u; ++index){
             if(!m_builder.endPopup())
                 return false;
         }
-        const bool afterActivated = m_builder.button("after", "Parent after");
+        const bool afterActivated = m_builder.button(s_AfterKey, "Parent after");
         return !afterActivated && m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame();
     }
 
     void reopenParent()noexcept{ m_parent.close(); m_parent.open(); }
 
     void expectParentControls()const{
-        const HitTarget* before = target(UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), "before")));
-        const HitTarget* after = target(UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), "after")));
+        const HitTarget* before = target(UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), s_BeforeKey)));
+        const HitTarget* after = target(UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), s_AfterKey)));
         ASSERT_NE(before, nullptr);
         ASSERT_NE(after, nullptr);
         EXPECT_EQ(before->popup, after->popup);
@@ -204,7 +210,7 @@ TEST_F(UiNestedPopupLifetimeTests, ExplicitComboOpeningAfterParentReopeningKeeps
     m_state.select(2u);
     m_state.open();
     ASSERT_TRUE(acceptCombo(1u));
-    const WidgetId rowsId = UiTestSupport::RequireWidgetId(MakeWidgetId(fieldId(), "rows"));
+    const WidgetId rowsId = UiTestSupport::RequireWidgetId(MakeWidgetId(fieldId(), s_ComboRowsKey));
     ASSERT_NE(target(rowsId), nullptr);
     const PopupToken oldCombo = target(rowsId)->popup;
     reopenParent();
@@ -221,7 +227,7 @@ TEST_F(UiNestedPopupLifetimeTests, ExplicitComboOpeningAfterParentReopeningKeeps
 
 TEST_F(UiNestedPopupLifetimeTests, SearchParentReplacementCancelsStalePreeditAndPermitsAFreshOpening){
     m_search.combo().select(2u);
-    ASSERT_TRUE(m_search.query().setText("Second"));
+    ASSERT_TRUE(m_search.query().setText(s_SecondHalfQuery));
     m_search.combo().open();
     ASSERT_TRUE(acceptSearch(1u));
     const WidgetId queryId = UiTestSupport::RequireWidgetId(MakeWidgetId(fieldId(), "query"));
@@ -235,7 +241,7 @@ TEST_F(UiNestedPopupLifetimeTests, SearchParentReplacementCancelsStalePreeditAnd
     EXPECT_TRUE(m_searchResult.combo.closed);
     EXPECT_FALSE(m_search.combo().isOpen());
     EXPECT_EQ(m_search.combo().selectedKey(), 2u);
-    EXPECT_EQ(m_search.query().text(), "Second");
+    EXPECT_EQ(m_search.query().text(), s_SecondHalfQuery);
     EXPECT_FALSE(m_search.query().composition().active);
     EXPECT_FALSE(m_search.editorState().focused);
     EXPECT_EQ(m_host.loans, loans);
@@ -266,7 +272,7 @@ TEST_F(UiNestedPopupLifetimeTests, ParentReopeningClosesTheOldContextMenuWithout
     EXPECT_FALSE(m_menu.isOpen());
     EXPECT_EQ(m_menu.cursorKey(), 0u);
     EXPECT_EQ(target(menuRows()), nullptr);
-    const HitTarget* anchor = target(UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), "anchor")));
+    const HitTarget* anchor = target(UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), s_AnchorKey)));
     ASSERT_NE(anchor, nullptr);
     EXPECT_TRUE(anchor->contextMenu);
     EXPECT_EQ(anchor->popup.openGeneration, m_parent.openGeneration());
@@ -297,9 +303,9 @@ TEST_F(UiNestedPopupLifetimeTests, AutomaticChildrenReserveTheirDeclaredLayersAn
     ASSERT_TRUE(declareReserved(1u, false));
     const DrawSnapshot snapshot = m_paint.freeze();
     ASSERT_TRUE(m_context.commitFrame(1u));
-    const WidgetId parentRows = UiTestSupport::RequireWidgetId(MakeWidgetId(fieldId(), "rows"));
-    const WidgetId childField = UiTestSupport::RequireWidgetId(MakeWidgetId(childId(), "combo"));
-    const WidgetId childRows = UiTestSupport::RequireWidgetId(MakeWidgetId(childField, "rows"));
+    const WidgetId parentRows = UiTestSupport::RequireWidgetId(MakeWidgetId(fieldId(), s_ComboRowsKey));
+    const WidgetId childField = UiTestSupport::RequireWidgetId(MakeWidgetId(childId(), s_ComboKey));
+    const WidgetId childRows = UiTestSupport::RequireWidgetId(MakeWidgetId(childField, s_ComboRowsKey));
     ASSERT_NE(target(parentId()), nullptr);
     ASSERT_NE(target(parentRows), nullptr);
     ASSERT_NE(target(menuRows()), nullptr);
@@ -312,11 +318,11 @@ TEST_F(UiNestedPopupLifetimeTests, AutomaticChildrenReserveTheirDeclaredLayersAn
     EXPECT_EQ(target(childRows)->layer, 5u);
     WidgetId deepest = childId();
     for(usize index = 0u; index < 3u; ++index)
-        deepest = UiTestSupport::RequireWidgetId(MakeWidgetId(deepest, "deep"));
+        deepest = UiTestSupport::RequireWidgetId(MakeWidgetId(deepest, s_DeepPopupKey));
     ASSERT_NE(target(deepest), nullptr);
     EXPECT_EQ(target(deepest)->layer, s_InputMaxPopups);
-    ASSERT_NE(target(UiTestSupport::RequireWidgetId(MakeWidgetId(deepest, "leaf"))), nullptr);
-    EXPECT_EQ(m_context.input().focus(), UiTestSupport::RequireWidgetId(MakeWidgetId(deepest, "leaf")));
+    ASSERT_NE(target(UiTestSupport::RequireWidgetId(MakeWidgetId(deepest, s_LeafKey))), nullptr);
+    EXPECT_EQ(m_context.input().focus(), UiTestSupport::RequireWidgetId(MakeWidgetId(deepest, s_LeafKey)));
     u32 previousLayer = 0u;
     for(const DrawCommand& command : snapshot.commands()){
         EXPECT_GE(command.layer, previousLayer);
@@ -330,7 +336,7 @@ TEST_F(UiNestedPopupLifetimeTests, AutomaticChildrenReserveTheirDeclaredLayersAn
     EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
     ASSERT_NE(target(parentRows), nullptr);
     EXPECT_EQ(target(parentRows)->layer, 2u);
-    EXPECT_EQ(m_context.input().focus(), UiTestSupport::RequireWidgetId(MakeWidgetId(deepest, "leaf")));
+    EXPECT_EQ(m_context.input().focus(), UiTestSupport::RequireWidgetId(MakeWidgetId(deepest, s_LeafKey)));
 }
 
 

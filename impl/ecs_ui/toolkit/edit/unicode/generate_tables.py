@@ -7,24 +7,33 @@ from urllib.request import urlopen
 
 HERE = Path(__file__).resolve().parent
 SEP = "/" * 128
+ENCODING = "utf-8"
+LF = "\n"
+CRLF = "\r\n"
+HEX_RADIX = 16
+MIN_RANGE_FIELDS = 2
+MIN_INCB_FIELDS = 3
+KIND_GRAPHEME = "gcb"
+KIND_INDIC_CONJUNCT = "incb"
+KIND_EMOJI = "emoji"
 
 
 def write_cpp(path, text):
-    path.write_bytes(text.replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8"))
+    path.write_bytes(text.replace(CRLF, LF).replace(LF, CRLF).encode(ENCODING))
 
 
 def parse_ranges(data, kind):
     ranges = []
-    for line in data.decode("utf-8").splitlines():
+    for line in data.decode(ENCODING).splitlines():
         fields = [item.strip() for item in line.split("#", 1)[0].split(";")]
-        if len(fields) < 2 or not fields[0]:
+        if len(fields) < MIN_RANGE_FIELDS or not fields[0]:
             continue
-        if kind == "gcb":
+        if kind == KIND_GRAPHEME:
             value = fields[1]
             if value in ("LV", "LVT"):
                 continue
-        elif kind == "incb":
-            if len(fields) < 3 or fields[1] != "InCB":
+        elif kind == KIND_INDIC_CONJUNCT:
+            if len(fields) < MIN_INCB_FIELDS or fields[1] != "InCB":
                 continue
             value = fields[2]
         else:
@@ -32,7 +41,7 @@ def parse_ranges(data, kind):
                 continue
             value = "Yes"
         span = fields[0].split("..")
-        ranges.append((int(span[0], 16), int(span[-1], 16), value))
+        ranges.append((int(span[0], HEX_RADIX), int(span[-1], HEX_RADIX), value))
     merged = []
     for first, last, value in sorted(ranges):
         if merged and merged[-1][1] + 1 == first and merged[-1][2] == value:
@@ -43,16 +52,16 @@ def parse_ranges(data, kind):
 
 
 def generate_table(kind, ranges):
-    names = {"gcb": ("GraphemeBreak", "LookupGraphemeBreak"), "incb": ("IndicConjunct", "LookupIndicConjunct")}
+    names = {KIND_GRAPHEME: ("GraphemeBreak", "LookupGraphemeBreak"), KIND_INDIC_CONJUNCT: ("IndicConjunct", "LookupIndicConjunct")}
     domain, function = names.get(kind, (None, "IsExtendedPictographic"))
     prefix = f"{domain}::" if domain else ""
-    rows = "\n".join(f"    {{ 0x{first:X}u, 0x{last:X}u, {prefix}{value if domain else '1u'} }}," for first, last, value in ranges)
+    rows = LF.join(f"    {{ 0x{first:X}u, 0x{last:X}u, {prefix}{value if domain else '1u'} }}," for first, last, value in ranges)
     return_type = f"{domain}::Enum" if domain else "bool"
     result = f"static_cast<{return_type}>(property)" if domain else "property != 0u"
-    default = f"{domain}::" + ("Other" if kind == "gcb" else "None") if domain else "0u"
+    default = f"{domain}::" + ("Other" if kind == KIND_GRAPHEME else "None") if domain else "0u"
     hangul = """    if(codePoint >= 0xAC00u && codePoint <= 0xD7A3u)
         return (codePoint - 0xAC00u) % 28u == 0u ? GraphemeBreak::LV : GraphemeBreak::LVT;
-""" if kind == "gcb" else ""
+""" if kind == KIND_GRAPHEME else ""
     output = f"""// limztudio@gmail.com
 {SEP}
 
@@ -113,14 +122,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-dir", type=Path, help="Use cached gcb/incb/emoji/license .txt files.")
     arguments = parser.parse_args()
-    manifest = json.loads((HERE / "sources.json").read_text(encoding="utf-8"))
+    manifest = json.loads((HERE / "sources.json").read_text(encoding=ENCODING))
     payloads = {}
     for key, source in manifest.items():
         payload = (arguments.source_dir / f"{key}.txt").read_bytes() if arguments.source_dir else urlopen(source["url"]).read()
         if hashlib.sha256(payload).hexdigest() != source["sha256"]:
             raise ValueError(f"Pinned Unicode source changed: {key}")
         payloads[key] = payload
-    for kind in ("gcb", "incb", "emoji"):
+    for kind in (KIND_GRAPHEME, KIND_INDIC_CONJUNCT, KIND_EMOJI):
         ranges = parse_ranges(payloads[kind], kind)
         generate_table(kind, ranges)
         print(f"{kind}: {len(ranges)} ranges")

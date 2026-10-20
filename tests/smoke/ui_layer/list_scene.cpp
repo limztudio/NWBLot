@@ -33,6 +33,7 @@ namespace __hidden_ui_list_smoke{
 
 static constexpr Impl::Ui::Rect s_Panel{ 24.0f, 24.0f, 400.0f, 340.0f };
 static constexpr Impl::Ui::Rect s_Counter{ 32.0f, 312.0f, 140.0f, 36.0f };
+static constexpr TStringView s_LogTag = NWB_TEXT("UiListSmoke");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -154,14 +155,14 @@ void UiListSmokeScene::observeState(){
         , m_sequence, current[0], current[1], current[2], current[3], current[4], current[5]
         , current[6], current[7], current[8], current[9], current[10], current[11]
     );
-    LogSmokeRect(NWB_TEXT("UiListSmoke"), m_sequence, NWB_TEXT("list"), placement.bounds);
-    LogSmokeRect(NWB_TEXT("UiListSmoke"), m_sequence, NWB_TEXT("viewport"), placement.viewport);
+    LogSmokeRect(__hidden_ui_list_smoke::s_LogTag, m_sequence, NWB_TEXT("list"), placement.bounds);
+    LogSmokeRect(__hidden_ui_list_smoke::s_LogTag, m_sequence, NWB_TEXT("viewport"), placement.viewport);
     const auto first = SmokeListRowBounds(placement, placement.firstRow);
-    LogSmokeRect(NWB_TEXT("UiListSmoke"), m_sequence, NWB_TEXT("first_row"), first ? *first : Impl::Ui::Rect{});
-    LogSmokeRect(NWB_TEXT("UiListSmoke"), m_sequence, NWB_TEXT("track"), placement.track);
-    LogSmokeRect(NWB_TEXT("UiListSmoke"), m_sequence, NWB_TEXT("thumb"), placement.thumb);
-    LogSmokeRect(NWB_TEXT("UiListSmoke"), m_sequence, NWB_TEXT("selected_row"), selectedRow());
-    LogSmokeRect(NWB_TEXT("UiListSmoke"), m_sequence, NWB_TEXT("counter"), __hidden_ui_list_smoke::s_Counter);
+    LogSmokeRect(__hidden_ui_list_smoke::s_LogTag, m_sequence, NWB_TEXT("first_row"), first ? *first : Impl::Ui::Rect{});
+    LogSmokeRect(__hidden_ui_list_smoke::s_LogTag, m_sequence, NWB_TEXT("track"), placement.track);
+    LogSmokeRect(__hidden_ui_list_smoke::s_LogTag, m_sequence, NWB_TEXT("thumb"), placement.thumb);
+    LogSmokeRect(__hidden_ui_list_smoke::s_LogTag, m_sequence, NWB_TEXT("selected_row"), selectedRow());
+    LogSmokeRect(__hidden_ui_list_smoke::s_LogTag, m_sequence, NWB_TEXT("counter"), __hidden_ui_list_smoke::s_Counter);
 }
 
 

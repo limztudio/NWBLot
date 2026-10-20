@@ -14,7 +14,8 @@ from window_smoke import parse_args
 from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
     read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
 from fixture_environment import build_fixture_environment
-from checkpoint_report import accept_checkpoint, fail_checkpoint
+from checkpoint_report import CHECKPOINT_POLL_SECONDS, CHECKPOINT_STAGE_TIMEOUT_SECONDS, accept_checkpoint, fail_checkpoint
+from fixture_launch import DISPLAY_MARKER_TIMEOUT_SECONDS
 
 LIT_FOCUS_CODE = "focus_code"
 LIT_COMBO = "combo"
@@ -38,6 +39,8 @@ LIT_ESCAPE = "Escape"
 LIT_DOWN = "Down"
 LIT_MENU_ANCHOR = "menu_anchor"
 LIT_UI_NESTED_POPUP_FIXTURE = "UI nested popup fixture"
+
+NESTED_POPUP_SETTLE_SECONDS = 0.2
 
 
 class NestedPopupRun:
@@ -72,15 +75,15 @@ class NestedPopupRun:
         self.expected.update(changes)
         for field in dynamic:
             self.expected.pop(field, None)
-        time.sleep(0.2)
+        time.sleep(NESTED_POPUP_SETTLE_SECONDS)
         path = self.args.output_directory / f"{len(self.stages):02d}_{name}.bmp"
-        stage_deadline = min(self.deadline, time.monotonic() + 10.0)
+        stage_deadline = min(self.deadline, time.monotonic() + CHECKPOINT_STAGE_TIMEOUT_SECONDS)
         report = None
         while time.monotonic() < stage_deadline:
             ensure_process_running(self.process, "during nested popup capture")
             snapshot = snapshot_from_logs(self.logs())
             if snapshot is None:
-                time.sleep(0.1)
+                time.sleep(CHECKPOINT_POLL_SECONDS)
                 continue
             if snapshot[LIT_LOGICAL_EXTENT][0] < 800.0 or snapshot[LIT_LOGICAL_EXTENT][1] < 540.0:
                 raise SmokeSkip("the nested popup fixture needs a logical client of at least 800x540")
@@ -92,7 +95,7 @@ class NestedPopupRun:
             if report[LIT_PASSED]:
                 accept_checkpoint(self, name, path, snapshot, report, dynamic)
                 return
-            time.sleep(0.1)
+            time.sleep(CHECKPOINT_POLL_SECONDS)
         fail_checkpoint(self, name, path, report, "nested popup")
 
     def write_report(self, passed):
@@ -226,7 +229,7 @@ def run(args):
             backend.prepare_raw_client_window(handle)
         else:
             backend.prepare_window(handle)
-        wait_for_log_message(log_directory, log_baseline, log_pattern, "UiNestedPopupSmoke: display", min(args.timeout, 15.0))
+        wait_for_log_message(log_directory, log_baseline, log_pattern, "UiNestedPopupSmoke: display", min(args.timeout, DISPLAY_MARKER_TIMEOUT_SECONDS))
         nested_run = NestedPopupRun(args, backend, handle, application, log_directory, log_baseline, log_pattern)
         nested_run.execute()
     finally:

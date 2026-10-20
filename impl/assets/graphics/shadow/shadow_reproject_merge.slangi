@@ -14,6 +14,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Floor of the luma divisor in the temporal gradient.
+#define NWB_SHADOW_TEMPORAL_LUMA_MIN 0.001h
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct NwbShadowMergeReprojection{
     int2 texel;
     bool onScreen;
@@ -51,7 +58,7 @@ bool nwbShadowMergeHistoryAccepted(const NwbShadowMergeReprojection reprojection
     bool historyAccepted = false;
     if(reprojection.onScreen && valid){
         const half4 gp = nwbShadowMergeGeometry(geometryPrevSlot, reprojection.texel);
-        if(gp.w > half(0.5h)){
+        if(gp.w > half(NWB_SHADOW_GEOMETRY_VALID_THRESHOLD)){
             const float3 Np = nwbOctDecodeNormal(float2(gp.xy));
             const float worldSpacing = max(currentCameraDistance * NWB_SHADOW_TEMPORAL_WORLD_SPACING_SCALE, NWB_SHADOW_TEMPORAL_WORLD_SPACING_MIN);
             const bool planeOk = abs(currentCameraDistance - float(gp.z)) < (NWB_SHADOW_TEMPORAL_PLANE_K * worldSpacing);
@@ -127,7 +134,7 @@ NwbShadowMergeResult nwbShadowMergeChannel<let UseValidTapMask : bool>(
                 if((validTapMask & tapBit) == 0u)
                     continue;
             }
-            else if(nwbShadowMergeGeometry(geometryCurrSlot, t).w <= half(0.5h))
+            else if(nwbShadowMergeGeometry(geometryCurrSlot, t).w <= half(NWB_SHADOW_GEOMETRY_VALID_THRESHOLD))
                 continue;
             // Tap visibility and its luma stay in (0, 1), so half math is sufficient here.
             const half3 s = half3(nwbHeapSampledImage2DArray(softTraceSlot).Load(int4(t, slot, 0)).rgb);
@@ -161,7 +168,7 @@ NwbShadowMergeResult nwbShadowMergeChannel<let UseValidTapMask : bool>(
     const bool temporalChangeCoherent = temporalChangeSupport >= NWB_SHADOW_TEMPORAL_ANTILAG_MIN_SUPPORT;
     // Edge signal, gradient, and effective history count feed only the (0, 1) saturate below; variance accumulators above and the float4 moments-store count below stay on float. Widen only at those uses.
     const half edgeSignal = temporalChangeCoherent ? max(half(0.0h), abs(lumaCur - lumaHist) - half(NWB_SHADOW_TEMPORAL_NOISE_SLACK) * half(sigmaLuma)) : half(0.0h);
-    const half tempGrad = edgeSignal / max(max(lumaCur, lumaHist), half(0.001h));
+    const half tempGrad = edgeSignal / max(max(lumaCur, lumaHist), half(NWB_SHADOW_TEMPORAL_LUMA_MIN));
     const half nEff = half(n) * saturate(half(1.0h) - half(NWB_SHADOW_TEMPORAL_ANTILAG) * tempGrad);
 
     // Bound the current-sample blend weight. The merge alpha and luminance moments are (0, 1) bounded factors, so half arithmetic is sufficient here.

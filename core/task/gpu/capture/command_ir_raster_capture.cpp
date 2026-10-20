@@ -240,7 +240,7 @@ bool GpuCommandIrCapture::captureBindGraphicsHeap(
 }
 
 bool GpuCommandIrCapture::capturePushConstants(const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue, const BinaryByteView bytes){
-    if(bytes.empty() || !bytes.data() || bytes.size() > Limit<u32>::s_Max || (bytes.size() & 3u) != 0u)
+    if(bytes.empty() || !bytes.data() || bytes.size() > Limit<u32>::s_Max || (bytes.size() & (s_PushConstantSizeAlignment - 1u)) != 0u)
         return false;
     GpuCommandIrSetPushConstantsRecord record;
     __hidden_gpu_command_ir_raster_capture::InitializeRecord(record, GpuCommandIrWireOpcode::SetPushConstants, task, packet, queue);

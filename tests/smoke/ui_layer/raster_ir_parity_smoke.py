@@ -15,7 +15,7 @@ sys.path.insert(0, str(SMOKE_DIRECTORY))
 
 from raster_ir_parity_probe import compare_frames, observe_scene  # noqa: E402
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows  # noqa: E402
-from fixture_environment import build_fixture_environment
+from fixture_environment import SWITCH_OFF, SWITCH_ON, build_fixture_environment
 
 LIT_EXECUTABLE = "--executable"
 LIT_WORKING_DIRECTORY = "--working-directory"
@@ -90,13 +90,13 @@ def capture_command(args, scene, mode, path, log_path=None, *, resize=False):
 def capture_environment(args, scene, mode):
     fixture = "TEXTURE_IMAGE" if scene == LIT_TEXTURE_IMAGE else None
     environment = build_fixture_environment(os.environ, fixture, skin="alternate" if fixture else "default", force_x11=True)
-    environment[args.mode_environment] = "1" if mode == LIT_REPLAY else "0"
+    environment[args.mode_environment] = SWITCH_ON if mode == LIT_REPLAY else SWITCH_OFF
     return environment
 
 
 def launch_capture(args, scene, mode, path, log_path=None, *, resize=False):
     environment = capture_environment(args, scene, mode)
-    environment["NWB_UI_LAYER_RESIZE_CAPTURE"] = "1" if resize else "0"
+    environment["NWB_UI_LAYER_RESIZE_CAPTURE"] = SWITCH_ON if resize else SWITCH_OFF
     result = subprocess.run(capture_command(args, scene, mode, path, log_path, resize=resize), env=environment, check=False, timeout=args.timeout + 45.0)
     if result.returncode == SKIP_EXIT_CODE:
         return False

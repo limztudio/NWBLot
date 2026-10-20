@@ -21,6 +21,14 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Activation values of the track parts before and after each scrollbar thumb.
+namespace TextAreaScrollTarget{
+    inline constexpr u32 s_HorizontalBefore = 1u;
+    inline constexpr u32 s_HorizontalAfter = 2u;
+    inline constexpr u32 s_VerticalBefore = 3u;
+    inline constexpr u32 s_VerticalAfter = 4u;
+};
+
 // Owns copied scroll admission, separate from preferred-column navigation and the application model.
 class TextAreaScrollState final{
     friend class Builder;

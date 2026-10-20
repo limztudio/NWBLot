@@ -78,7 +78,7 @@ protected:
 TEST_F(UiNumericEditLoanTests, SameValueExternalReplacementRetiresThePreparedLoan){
     ASSERT_TRUE(m_integer.setValue(12));
     ASSERT_TRUE(beginNumeric(1u));
-    ASSERT_TRUE(m_builder.integerEdit("integer", m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
     ASSERT_TRUE(m_integer.setValue(12));
     EXPECT_FALSE(m_builder.endPanel());
     EXPECT_EQ(m_integer.value(), 12);
@@ -89,7 +89,7 @@ TEST_F(UiNumericEditLoanTests, SameValueExternalReplacementRetiresThePreparedLoa
 TEST_F(UiNumericEditLoanTests, SameBytesExternalDraftReplacementRetiresThePreparedLoan){
     ASSERT_TRUE(m_integer.setDraft("42"));
     ASSERT_TRUE(beginNumeric(1u));
-    ASSERT_TRUE(m_builder.integerEdit("integer", m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
     ASSERT_TRUE(m_integer.setDraft("42"));
     EXPECT_FALSE(m_builder.endPanel());
     EXPECT_EQ(m_integer.value(), 0);
@@ -100,7 +100,7 @@ TEST_F(UiNumericEditLoanTests, SameBytesExternalDraftReplacementRetiresThePrepar
 TEST_F(UiNumericEditLoanTests, DirectDraftReplacementIsFencedWithoutANumericAction){
     ASSERT_TRUE(m_integer.setDraft("42"));
     ASSERT_TRUE(beginNumeric(1u));
-    ASSERT_TRUE(m_builder.integerEdit("integer", m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
     const u64 numericRevision = m_integer.revision();
     ASSERT_TRUE(m_integer.lendDraft().setText("42"));
     EXPECT_EQ(m_integer.revision(), numericRevision);
@@ -111,7 +111,7 @@ TEST_F(UiNumericEditLoanTests, DirectDraftReplacementIsFencedWithoutANumericActi
 TEST_F(UiNumericEditLoanTests, SelectionChangeWithoutADraftRevisionRetiresThePreparedLoan){
     ASSERT_TRUE(m_integer.setValue(42));
     ASSERT_TRUE(beginNumeric(1u));
-    ASSERT_TRUE(m_builder.integerEdit("integer", m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
     const u64 revision = m_integer.draft().revision();
     ASSERT_TRUE(m_integer.lendDraft().setSelection(0u, 1u));
     EXPECT_EQ(m_integer.draft().revision(), revision);
@@ -122,7 +122,7 @@ TEST_F(UiNumericEditLoanTests, SelectionChangeWithoutADraftRevisionRetiresThePre
 
 TEST_F(UiNumericEditLoanTests, BeginAndCancelCompositionStillRetireThePreparedLoan){
     ASSERT_TRUE(beginNumeric(1u));
-    ASSERT_TRUE(m_builder.integerEdit("integer", m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
     const u64 revision = m_integer.draft().revision();
     ASSERT_TRUE(m_integer.lendDraft().beginComposition());
     ASSERT_TRUE(m_integer.lendDraft().updateComposition("7", 1u, 1u));
@@ -136,8 +136,8 @@ TEST_F(UiNumericEditLoanTests, BeginAndCancelCompositionStillRetireThePreparedLo
 TEST_F(UiNumericEditLoanTests, PublishMutationRejectsAndStopsLaterEditorPublication){
     useHost();
     ASSERT_TRUE(beginNumeric(1u));
-    ASSERT_TRUE(m_builder.integerEdit("integer", m_integer, m_integerState).edit.valid);
-    ASSERT_TRUE(m_builder.floatEdit("decimal", m_float, m_floatState).edit.valid);
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.floatEdit(s_DecimalEditKey, m_float, m_floatState).edit.valid);
     m_host.onPublishInteger = &m_integer;
     EXPECT_FALSE(m_builder.endPanel());
     EXPECT_TRUE(m_host.mutationApplied);
@@ -150,7 +150,7 @@ TEST_F(UiNumericEditLoanTests, PublishMutationRejectsAndStopsLaterEditorPublicat
 TEST_F(UiNumericEditLoanTests, FloatPublishMutationRejectsAndPreservesTheNewTypedValue){
     useHost();
     ASSERT_TRUE(beginNumeric(1u));
-    ASSERT_TRUE(m_builder.floatEdit("decimal", m_float, m_floatState).edit.valid);
+    ASSERT_TRUE(m_builder.floatEdit(s_DecimalEditKey, m_float, m_floatState).edit.valid);
     m_host.onPublishFloat = &m_float;
     EXPECT_FALSE(m_builder.endPanel());
     EXPECT_TRUE(m_host.mutationApplied);
@@ -163,7 +163,7 @@ TEST_F(UiNumericEditLoanTests, LaterVirtualListCallbackRejectsAnAlreadyPaintedNu
     NumericMutationSource source;
     ListState list;
     ASSERT_TRUE(beginNumeric(1u));
-    ASSERT_TRUE(m_builder.integerEdit("integer", m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
     ASSERT_TRUE(m_builder.virtualList("list", source, list, UiWidgetTests::LargeLoanListOptions()).valid);
     source.onText = &m_integer;
     EXPECT_FALSE(m_builder.endPanel());
@@ -179,7 +179,7 @@ TEST_F(UiNumericEditLoanTests, NumericLoanRemainsLiveAfterItsChildPopupEnds){
     m_child.open();
     ASSERT_TRUE(beginParent(1u));
     ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::LargeLoanChildOptions()));
-    ASSERT_TRUE(m_builder.integerEdit("integer", m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
     ASSERT_TRUE(m_builder.endPopup());
     EXPECT_EQ(m_host.publishes, 0u);
     ASSERT_TRUE(m_integer.setValue(99));
@@ -195,7 +195,7 @@ TEST_F(UiNumericEditLoanTests, ChildSourceCallbackRejectsAnAlreadyPaintedParentN
     m_parent.open();
     m_child.open();
     ASSERT_TRUE(beginParent(1u));
-    ASSERT_TRUE(m_builder.integerEdit("integer", m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
     ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::LargeLoanChildOptions()));
     ASSERT_TRUE(m_builder.virtualList("list", source, list, UiWidgetTests::LargeLoanListOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
@@ -215,7 +215,7 @@ TEST_F(UiNumericEditLoanTests, ParentSourceCallbackRejectsTheEndedChildNumericLo
     ASSERT_TRUE(beginParent(1u));
     ASSERT_TRUE(m_builder.virtualList("list", source, list, UiWidgetTests::LargeLoanListOptions()).valid);
     ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::LargeLoanChildOptions()));
-    ASSERT_TRUE(m_builder.integerEdit("integer", m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
     ASSERT_TRUE(m_builder.endPopup());
     source.onText = &m_integer;
     EXPECT_FALSE(m_builder.endPopup());
@@ -233,7 +233,7 @@ TEST_F(UiNumericEditLoanTests, FinalSourceValidationCannotMutateAParentNumericLo
     m_parent.open();
     m_child.open();
     ASSERT_TRUE(beginParent(1u));
-    ASSERT_TRUE(m_builder.integerEdit("integer", m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
     ASSERT_TRUE(m_builder.virtualList("list", parentSource, parentList, UiWidgetTests::LargeLoanListOptions()).valid);
     ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::LargeLoanChildOptions()));
     ASSERT_TRUE(m_builder.virtualList("list", childSource, childList, UiWidgetTests::LargeLoanListOptions()).valid);
@@ -257,7 +257,7 @@ TEST_F(UiNumericEditLoanTests, LaterSiblingSourceRejectsAnAlreadyPaintedEndedChi
     sibling.open();
     ASSERT_TRUE(beginParent(1u));
     ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::LargeLoanChildOptions()));
-    ASSERT_TRUE(m_builder.integerEdit("integer", m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
     ASSERT_TRUE(m_builder.endPopup());
     ASSERT_TRUE(m_builder.beginPopup("sibling", sibling, UiWidgetTests::LargeLoanChildOptions()));
     ASSERT_TRUE(m_builder.virtualList("list", source, list, UiWidgetTests::LargeLoanListOptions()).valid);
@@ -277,7 +277,7 @@ TEST_F(UiNumericEditLoanTests, ClosedAncestorSuppressesNumericPublicationAndHidd
     m_child.open();
     ASSERT_TRUE(beginParent(1u));
     ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::LargeLoanChildOptions()));
-    ASSERT_TRUE(m_builder.integerEdit("integer", m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
     ASSERT_TRUE(m_builder.virtualList("list", source, list, UiWidgetTests::LargeLoanListOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     const usize loans = m_host.loans;
@@ -298,13 +298,13 @@ TEST_F(UiNumericEditLoanTests, SuccessfulEndReleasesNumericLoansBeforeApplicatio
     useHost();
     ASSERT_TRUE(m_integer.setValue(42));
     ASSERT_TRUE(beginNumeric(1u));
-    ASSERT_TRUE(m_builder.integerEdit("integer", m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
     ASSERT_TRUE(acceptNumeric());
     EXPECT_EQ(AStringView(m_host.displayed), AStringView("42"));
     ASSERT_TRUE(m_integer.setValue(99));
     EXPECT_EQ(AStringView(m_host.displayed), AStringView("42"));
     ASSERT_TRUE(beginNumeric(2u));
-    ASSERT_TRUE(m_builder.integerEdit("integer", m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
     ASSERT_TRUE(acceptNumeric());
     EXPECT_EQ(AStringView(m_host.displayed), AStringView("99"));
 }

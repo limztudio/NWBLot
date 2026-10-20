@@ -14,6 +14,7 @@
 #include "../global.h"
 
 #include <core/alloc/scratch.h>
+#include <core/graphics/rhi/shader.h>
 #include <core/metascript/parser.h>
 
 #include <global/span.h>
@@ -169,7 +170,7 @@ public:
     public:
         explicit ShaderEntry(CookArena& memoryArena)
             : name(memoryArena)
-            , entryPoint("main", memoryArena)
+            , entryPoint(Core::ShaderDesc::s_DefaultEntryName, memoryArena)
             , source(memoryArena)
             , includeRoots(memoryArena)
             , defineValues(memoryArena)

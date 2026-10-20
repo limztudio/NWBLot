@@ -64,6 +64,8 @@ public:
     static constexpr usize s_MaxOffers = 32u;
     static constexpr usize s_MaxWriters = 8u;
     static constexpr u32 s_TimeoutMs = 5000u;
+    static constexpr u32 s_MaxDataDeviceManagerVersion = 3u;
+    static constexpr u32 s_DataDeviceReleaseVersion = 2u;
 
 
 private:
@@ -143,8 +145,8 @@ private:
     u32 m_serial = 0u;
     bool m_focused = false;
     Vector<GlobalUniquePtr<Offer>, Alloc::GlobalArena> m_offers;
-    Array<Offer*, 2u> m_selected{};
-    Array<GlobalUniquePtr<Source>, 2u> m_sources;
+    Array<Offer*, s_ClipboardChannelCount> m_selected{};
+    Array<GlobalUniquePtr<Source>, s_ClipboardChannelCount> m_sources;
     Vector<GlobalUniquePtr<ClipboardPipeWriter>, Alloc::GlobalArena> m_writers;
     ClipboardRequestToken m_readToken;
     ClipboardTextAccumulator m_received;

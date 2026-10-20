@@ -24,6 +24,8 @@ namespace UiPaintImageTests{
 
 using namespace UiWidgetTests;
 
+constexpr AStringView s_PaintImageFontPath = "tests/ui/font";
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -105,7 +107,7 @@ void ExpectSameImagePaint(const DrawSnapshot& actual, const DrawSnapshot& expect
 
 PaintImageFixture::PaintImageFixture()
     : m_arena(Name("tests/ui/paint_image"))
-    , m_skin(m_arena, Name("tests/ui/skin"))
+    , m_skin(m_arena, Name(s_TestSkinPath))
     , m_builder(m_arena)
 {
     UiSkin::RegionVector regions(m_arena);
@@ -115,7 +117,7 @@ PaintImageFixture::PaintImageFixture()
 }
 
 void PaintImageFixture::beginPaint(PaintBuilder& builder, const u64 generation){
-    builder.begin({ 200.0f, 100.0f, 1.25f, 1.5f }, generation, 3u, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
+    builder.begin({ 200.0f, 100.0f, 1.25f, 1.5f }, generation, 3u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
     builder.reserve(16u);
 }
 
@@ -125,7 +127,7 @@ Expected<SharedGlyphPage> PaintImageFixture::makeGlyph(const u64 atlasIdentity, 
     pixels[0u] = 64u;
     if(generation > 1u)
         pixels[32u] = 192u;
-    const GlyphPageBinding binding{ .font = Core::Assets::AssetRef<Font>("tests/ui/font"), .fontGeneration = 9u, .atlasIdentity = atlasIdentity, .generation = generation, .index = 0u, .width = 8u, .height = 8u, };
+    const GlyphPageBinding binding{ .font = Core::Assets::AssetRef<Font>(s_PaintImageFontPath), .fontGeneration = 9u, .atlasIdentity = atlasIdentity, .generation = generation, .index = 0u, .width = 8u, .height = 8u, };
     return CreateGlyphPage(m_arena, binding, Move(pixels));
 }
 
@@ -137,7 +139,7 @@ Expected<SharedSdfAtlasPage> PaintImageFixture::makeSdf(const u64 atlasIdentity)
     pixels[2u] = 255u;
     pixels[3u] = 192u;
     const SdfAtlasPageBinding binding{
-        .font = Core::Assets::AssetRef<Font>("tests/ui/font"),
+        .font = Core::Assets::AssetRef<Font>(s_PaintImageFontPath),
         .fontSha256 = {},
         .pixelsSha256 = {},
         .fontGeneration = 9u,

@@ -60,7 +60,7 @@ Expected<usize, TextInputAdmission::Enum> Win32TextInputService::compositionCurs
 
 TextInputAdmission::Enum Win32TextInputService::acceptComposition(const TextInputSessionToken token, const usize wParam, const isize flags){
     if((flags & CS_INSERTCHAR) != 0 && (flags & (GCS_RESULTSTR | GCS_COMPSTR)) == 0){
-        if(wParam > 0xffffu)
+        if(wParam > s_MaxU16)
             return TextInputAdmission::InvalidText;
         return acceptInsertedPreedit(token, static_cast<u32>(wParam), (flags & CS_NOMOVECARET) == 0);
     }

@@ -81,6 +81,8 @@ namespace __hidden_gpu_packet_runtime_recorded_graph{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr usize s_MinOverlapPacketCount = 2u;
+
 template<typename StatisticsT>
 static void AccumulatePacketRecordingCounts(StatisticsT& statistics, const GpuRecordedPacket& recordedPacket, const bool overlaps)noexcept{
     ++statistics.packetCount;
@@ -765,7 +767,7 @@ void GpuRecordedGraph::cachePacketRecordingOverlaps(
     using IntervalEntry = __hidden_gpu_packet_runtime_recorded_graph::PacketRecordingIntervalEntry;
     const bool artifactAccessValid = planAccess.validFor(compiledGraph) && artifactAccess.exclusiveFor(*this) && m_activeStorage && m_activeStorage->valid;
     NWB_FATAL_ASSERT_MSG(artifactAccessValid, "Packet overlap caching requires its exact valid artifact writer");
-    if(packetIndices.size() < 2u)
+    if(packetIndices.size() < __hidden_gpu_packet_runtime_recorded_graph::s_MinOverlapPacketCount)
         return;
     ArtifactStorage& storage = *m_activeStorage;
 

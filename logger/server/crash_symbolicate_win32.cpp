@@ -34,6 +34,7 @@ namespace LoggerCrashSymbolicateDetail{
 using CrashBytes = Vector<u8, Core::Alloc::ScratchArena>;
 namespace CrashNames = ::NWB::Core::Crash::PackageNames;
 inline constexpr u32 s_MaxWindowsStackFrames = 128u;
+inline constexpr AStringView s_InvalidModuleListReport = "module_load=invalid_module_list\n";
 
 struct DumpMemoryRange{
     u64 begin = 0u;
@@ -379,7 +380,7 @@ static void InitializeStackFrameFromContext(STACKFRAME64& outFrame, const CONTEX
 static void LoadDumpModules(Core::Alloc::ScratchArena& scratchArena, const HANDLE symbolProcess, const DumpImage& dumpImage, CrashReportText& outReport){
     const auto moduleStream = ReadMinidumpStream(dumpImage, ModuleListStream);
     if(!moduleStream){
-        outReport += "module_load=invalid_module_list\n";
+        outReport += s_InvalidModuleListReport;
         return;
     }
     if(!*moduleStream){
@@ -389,12 +390,12 @@ static void LoadDumpModules(Core::Alloc::ScratchArena& scratchArena, const HANDL
     const DumpImage& stream = **moduleStream;
     const auto count = stream.read<ULONG32>(0u);
     if(!count){
-        outReport += "module_load=invalid_module_list\n";
+        outReport += s_InvalidModuleListReport;
         return;
     }
     const auto modules = ReadMinidumpRecords<MINIDUMP_MODULE>(stream, offsetof(MINIDUMP_MODULE_LIST, Modules), *count);
     if(!modules){
-        outReport += "module_load=invalid_module_list\n";
+        outReport += s_InvalidModuleListReport;
         return;
     }
 
@@ -403,7 +404,7 @@ static void LoadDumpModules(Core::Alloc::ScratchArena& scratchArena, const HANDL
         const MINIDUMP_MODULE module = modules->record(index);
         const auto moduleNameText = ReadDumpString(scratchArena, dumpImage, module.ModuleNameRva);
         if(!moduleNameText){
-            outReport += "module_load=invalid_module_list\n";
+            outReport += s_InvalidModuleListReport;
             return;
         }
         const wchar* imageName = moduleNameText->empty() ? nullptr : moduleNameText->c_str();
@@ -415,7 +416,7 @@ static void LoadDumpModules(Core::Alloc::ScratchArena& scratchArena, const HANDL
     outReport += "modules_loaded=";
     char countBuffer[s_DecimalTextBufferCapacity];
     outReport += FormatDecimal(static_cast<usize>(loadedCount), countBuffer);
-    outReport += "\n";
+    outReport += s_ReportLineEnd;
 }
 
 static void AppendResolvedSymbol(Core::Alloc::ScratchArena& scratchArena, const HANDLE symbolProcess, CrashReportText& outReport, const DWORD frameIndex, const DWORD64 address){
@@ -456,7 +457,7 @@ static void AppendResolvedSymbol(Core::Alloc::ScratchArena& scratchArena, const 
         outReport += FormatDecimal(static_cast<usize>(line.LineNumber), lineBuffer);
     }
 
-    outReport += "\n";
+    outReport += s_ReportLineEnd;
 }
 
 // Frame text may follow the leading hex digits.
@@ -489,9 +490,9 @@ static void AppendResolvedSymbol(Core::Alloc::ScratchArena& scratchArena, const 
             lineEnd = text.size();
 
         const AStringView line = text.substr(lineStart, lineEnd - lineStart);
-        const usize hexStart = line.find("0x");
+        const usize hexStart = line.find(s_HexAddressPrefix);
         if(hexStart != AStringView::npos){
-            const Expected<u64> address = ParseHexAddressText(line.substr(hexStart + 2u));
+            const Expected<u64> address = ParseHexAddressText(line.substr(hexStart + s_HexAddressPrefix.size()));
             if(address && *address != 0u){
                 AppendResolvedSymbol(scratchArena, symbolProcess, outReport, frameIndex, static_cast<DWORD64>(*address));
                 ++frameIndex;
@@ -553,9 +554,9 @@ Expected<bool, CrashSymbolicationFailure> AppendWindowsMinidumpStack(Core::Alloc
     outReport += "\nthread_id=";
     char threadBuffer[s_DecimalTextBufferCapacity];
     outReport += FormatDecimal(static_cast<usize>(crashContext->threadId), threadBuffer);
-    outReport += "\n";
+    outReport += s_ReportLineEnd;
     LoadDumpModules(scratchArena, symbolProcess, dumpImage, outReport);
-    outReport += "\n[callstack]\n";
+    outReport += s_CallstackSectionHeader;
 
     // Resolve client frames against the dump's module map; unwind server-side only when no frames were supplied.
     const auto clientFrames = AppendClientCallstack(scratchArena, symbolProcess, packageDirectory, outReport);

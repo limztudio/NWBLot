@@ -241,7 +241,8 @@ namespace TriangleDoubleTests{
             const SIMDVectorDouble magnitude = VectorDouble3Dot(VectorDoubleAbs(relative), absoluteAxis), coordinateError = VectorDouble3Dot(VectorDoubleAbs(roundoff), absoluteAxis);
 #endif
             // Three products and two additions need an absolute cancellation bound; eight epsilons also cover rounding the bound and endpoints.
-            const SIMDVectorDouble allowance = VectorDoubleMultiplyAddExpression(VectorDoubleAdd(magnitude, coordinateError), VectorDoubleReplicate(0x1p-49), coordinateError);
+            constexpr f64 s_ProjectionAllowanceFactor = 0x1p-49;
+            const SIMDVectorDouble allowance = VectorDoubleMultiplyAddExpression(VectorDoubleAdd(magnitude, coordinateError), VectorDoubleReplicate(s_ProjectionAllowanceFactor), coordinateError);
             return VectorDoubleSelect(VectorDoubleSubtract(projection, allowance), VectorDoubleAdd(projection, allowance), s_DoubleSIMDMaskY);
         };
 #if defined(NWB_HAS_AVX2)

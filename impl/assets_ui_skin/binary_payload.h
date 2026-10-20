@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "../global.h"
+#include "asset.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,6 +26,8 @@ namespace UiSkinBinaryPayload{
 inline constexpr u32 s_UiSkinMagic = 0x55495331u; // UIS1
 inline constexpr u32 s_UiSkinVersion = 3u;
 inline constexpr u32 s_UiSkinPaletteColorCount = 17u;
+inline constexpr TStringView s_UiSkinAssetKindLabel = NWB_TEXT("UI skin");
+inline constexpr TStringView s_UiSkinLoadBinaryContext = NWB_TEXT("UiSkin::loadBinary");
 
 #pragma pack(push, 1)
 struct HeaderBinary{
@@ -68,7 +70,7 @@ struct ColorBinary{
 };
 
 struct TypographyBinary{
-    f32 defaultFontSize = 16.0f;
+    f32 defaultFontSize = s_UiSkinDefaultFontSize;
 };
 #pragma pack(pop)
 

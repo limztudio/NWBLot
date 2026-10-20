@@ -47,7 +47,7 @@ NotNull<const char*> WaylandClipboardService::NativeMimeForRank(const u8 rank)no
 void WaylandClipboardService::OnRegistryGlobal(void* const data, wl_registry* const registry, const u32 name, const char* const interfaceName, const u32 version){
     auto& service = *static_cast<WaylandClipboardService*>(data);
     if(AStringView(interfaceName) == wl_data_device_manager_interface.name && !service.m_manager){
-        service.m_manager = static_cast<wl_data_device_manager*>(wl_registry_bind(registry, name, &wl_data_device_manager_interface, Min(version, 3u)));
+        service.m_manager = static_cast<wl_data_device_manager*>(wl_registry_bind(registry, name, &wl_data_device_manager_interface, Min(version, s_MaxDataDeviceManagerVersion)));
         service.m_managerName = name;
         if(service.m_seat)
             service.attachSeat(service.m_seat, service.m_seatName);

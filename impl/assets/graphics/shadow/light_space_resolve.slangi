@@ -52,11 +52,11 @@ bool nwbLightSpaceFindView(const uint lightIndex, const float3 world, out NwbLig
     for(uint index = 0u; index < g_NwbLightSpacePush.viewCount; ++index){
         // Reject unrelated lights/faces before loading projection, depth and map data.
         const uint base = index * NWB_LIGHT_SPACE_VIEW_BYTES;
-        const uint4 candidateLight = nwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + 112u);
+        const uint4 candidateLight = nwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + NWB_LIGHT_SPACE_VIEW_LIGHT_OFFSET);
         if(candidateLight.x != lightIndex)
             continue;
         if((candidateLight.w & NWB_LIGHT_SPACE_FLAG_POINT) != 0u){
-            const float3 candidateOrigin = asfloat(nwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + 64u)).xyz;
+            const float3 candidateOrigin = asfloat(nwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + NWB_LIGHT_SPACE_VIEW_ORIGIN_OFFSET)).xyz;
             const float3 direction = world - candidateOrigin;
             const float3 magnitude = abs(direction);
             const uint face = magnitude.x >= max(magnitude.y, magnitude.z) ? (direction.x >= 0.0 ? 0u : 1u) : (magnitude.y >= magnitude.z ? (direction.y >= 0.0 ? 2u : 3u) : (direction.z >= 0.0 ? 4u : 5u));
@@ -101,7 +101,7 @@ uint nwbLightSpaceAddress(const NwbLightSpaceView view, const float3 world, out 
 float nwbLightSpaceOpaqueDepth(const NwbLightSpaceView view, const uint2 pixel){
     const float depth = nwbHeapSampledImage2DArray(g_NwbLightSpacePush.depthSlot).Load(int4(pixel, view.map.w, 0)).r;
     if(depth >= 1.0)
-        return asfloat(0x7f7fffffu);
+        return asfloat(NWB_FLOAT_MAX_BITS);
     if((view.light.w & NWB_LIGHT_SPACE_FLAG_POINT) == 0u)
         return depth * view.depthRange.y;
     const float viewZ = view.depthRange.x * view.depthRange.y / (view.depthRange.y - depth * (view.depthRange.y - view.depthRange.x));
@@ -110,13 +110,13 @@ float nwbLightSpaceOpaqueDepth(const NwbLightSpaceView view, const uint2 pixel){
 }
 
 bool nwbLightSpaceNearestBlocker(const NwbLightSpaceView view, const uint2 pixel, const float receiverDepth, out float blocker){
-    blocker = asfloat(0x7f7fffffu);
+    blocker = asfloat(NWB_FLOAT_MAX_BITS);
 #if NWB_LIGHT_SPACE_CSG_ENABLED
-    if(nwbCsgShadowEnabled() && nwbHeapRawBuffer(g_NwbLightSpacePush.countsSlot).Load(nwbLightSpacePixelIndex(view, pixel) * 4u) == NWB_CSG_SHADOW_CONSERVATIVE_COUNT)
+    if(nwbCsgShadowEnabled() && nwbHeapRawBuffer(g_NwbLightSpacePush.countsSlot).Load(nwbLightSpacePixelIndex(view, pixel) * NWB_LIGHT_SPACE_PIXEL_WORD_BYTES) == NWB_CSG_SHADOW_CONSERVATIVE_COUNT)
         return false;
 #endif
 #if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
-    float depth = asfloat(0x7f7fffffu);
+    float depth = asfloat(NWB_FLOAT_MAX_BITS);
     if(!nwbCsgShadowHardwareCompose())
         depth = nwbLightSpaceOpaqueDepth(view, pixel);
     if(nwbCsgShadowEnabled())
@@ -125,7 +125,7 @@ bool nwbLightSpaceNearestBlocker(const NwbLightSpaceView view, const uint2 pixel
         blocker = depth;
 #else
     const uint pixelIndex = nwbLightSpacePixelIndex(view, pixel);
-    const uint count = nwbHeapRawBuffer(g_NwbLightSpacePush.countsSlot).Load(pixelIndex * 4u);
+    const uint count = nwbHeapRawBuffer(g_NwbLightSpacePush.countsSlot).Load(pixelIndex * NWB_LIGHT_SPACE_PIXEL_WORD_BYTES);
     if(count > NWB_LIGHT_SPACE_EVENTS_PER_TEXEL)
         return false;
     for(uint index = 0u; index < count; ++index){
@@ -167,25 +167,25 @@ void nwbLightSpaceIntegrateInstance(const uint pixelIndex, const uint end, const
         if(csg && nwbCsgShadowEventClosed(csgRange, event.primitive) != closed)
             continue;
         const float distance = receiverDepth - event.depth;
-        uint facing = (event.instanceAndFacing & NWB_LIGHT_SPACE_EVENT_ENTERING) != 0u ? 1u : 2u;
+        uint facing = (event.instanceAndFacing & NWB_LIGHT_SPACE_EVENT_ENTERING) != 0u ? NWB_SHADOW_FACING_ENTERING : NWB_SHADOW_FACING_EXITING;
         while(index < end){
             const NwbLightSpaceEvent next = nwbLightSpaceLoadEvent(pixelIndex, index);
             if((next.instanceAndFacing & NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK) != instance || !nwbShadowCrossingMatchesEndpoint(distance, receiverDepth - next.depth))
                 break;
             if(!csg || nwbCsgShadowEventClosed(csgRange, next.primitive) == closed)
-                facing |= (next.instanceAndFacing & NWB_LIGHT_SPACE_EVENT_ENTERING) != 0u ? 1u : 2u;
+                facing |= (next.instanceAndFacing & NWB_LIGHT_SPACE_EVENT_ENTERING) != 0u ? NWB_SHADOW_FACING_ENTERING : NWB_SHADOW_FACING_EXITING;
             ++index;
         }
-        if(closed && facing == 3u)
+        if(closed && facing == NWB_SHADOW_FACING_BOTH)
             continue;
         if(crossings == 0u){
-            absorption = half3(half(f16tof32(event.absorptionRG & 0xffffu)), half(f16tof32(event.absorptionRG >> 16u)), half(f16tof32(event.absorptionBInterface & 0xffffu)));
+            absorption = half3(half(f16tof32(event.absorptionRG & NWB_HALF_BITS_MASK)), half(f16tof32(event.absorptionRG >> NWB_HALF_BIT_COUNT)), half(f16tof32(event.absorptionBInterface & NWB_HALF_BITS_MASK)));
             first = distance;
-            if(closed && facing == 2u)
+            if(closed && facing == NWB_SHADOW_FACING_EXITING)
                 inside = true;
         }
         last = distance;
-        transmission *= half(f16tof32(event.absorptionBInterface >> 16u));
+        transmission *= half(f16tof32(event.absorptionBInterface >> NWB_HALF_BIT_COUNT));
         if(inside)
             chord += max(distance - start, 0.0);
         else
@@ -205,7 +205,7 @@ void nwbLightSpaceIntegrateInstance(const uint pixelIndex, const uint end, const
 bool nwbLightSpaceSample(const NwbLightSpaceView view, const uint2 pixel, const float receiverDepth, const float projectedDepth, out half3 visibility){
     visibility = half3(1.0h);
 #if NWB_LIGHT_SPACE_CSG_ENABLED
-    if(nwbCsgShadowEnabled() && nwbHeapRawBuffer(g_NwbLightSpacePush.countsSlot).Load(nwbLightSpacePixelIndex(view, pixel) * 4u) == NWB_CSG_SHADOW_CONSERVATIVE_COUNT)
+    if(nwbCsgShadowEnabled() && nwbHeapRawBuffer(g_NwbLightSpacePush.countsSlot).Load(nwbLightSpacePixelIndex(view, pixel) * NWB_LIGHT_SPACE_PIXEL_WORD_BYTES) == NWB_CSG_SHADOW_CONSERVATIVE_COUNT)
         return false;
 #endif
 #if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
@@ -219,7 +219,7 @@ bool nwbLightSpaceSample(const NwbLightSpaceView view, const uint2 pixel, const 
     return true;
 #else
     const uint pixelIndex = nwbLightSpacePixelIndex(view, pixel);
-    const uint count = nwbHeapRawBuffer(g_NwbLightSpacePush.countsSlot).Load(pixelIndex * 4u);
+    const uint count = nwbHeapRawBuffer(g_NwbLightSpacePush.countsSlot).Load(pixelIndex * NWB_LIGHT_SPACE_PIXEL_WORD_BYTES);
     if(count > NWB_LIGHT_SPACE_EVENTS_PER_TEXEL)
         return false;
     // The shade producer sorts every completed texel by instance ASC, depth DESC, primitive ASC.

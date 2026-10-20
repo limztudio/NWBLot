@@ -55,18 +55,19 @@ FontSource::FontSource(Core::Assets::AssetArena& arena)noexcept
 }
 
 FontSource::~FontSource()noexcept{
+    constexpr AStringView s_LifecycleDiagnosticTag = "font_builder_lifecycle";
     if(m_face){
         const FT_Error result = FT_Done_Face(m_face);
         if(result != 0){
             const DiagnosticEventText diagnostic = MakeDiagnosticEventText("font_builder: failed to destroy FreeType face, error {}", result);
-            CaptureDiagnosticEvent("font_builder_lifecycle", diagnostic.view(), __FILE__, __LINE__);
+            CaptureDiagnosticEvent(s_LifecycleDiagnosticTag, diagnostic.view(), __FILE__, __LINE__);
         }
     }
     if(m_library){
         const FT_Error result = FT_Done_Library(m_library);
         if(result != 0){
             const DiagnosticEventText diagnostic = MakeDiagnosticEventText("font_builder: failed to destroy FreeType library, error {}", result);
-            CaptureDiagnosticEvent("font_builder_lifecycle", diagnostic.view(), __FILE__, __LINE__);
+            CaptureDiagnosticEvent(s_LifecycleDiagnosticTag, diagnostic.view(), __FILE__, __LINE__);
         }
     }
 }

@@ -101,14 +101,14 @@ protected:
     }
 
     [[nodiscard]] WidgetId popupArea()const{
-        const WidgetId parent = UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), "parent"));
-        return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeWidgetId(parent, "child")), "area"));
+        const WidgetId parent = UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), s_ParentPopupKey));
+        return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeWidgetId(parent, s_ChildPopupKey)), s_TextAreaKey));
     }
 
     [[nodiscard]] bool popupFrame(const u64 generation){
-        if(!begin(generation) || !m_builder.beginPopup("parent", m_parent, ParentOptions()) || !m_builder.beginPopup("child", m_child, ChildOptions()))
+        if(!begin(generation) || !m_builder.beginPopup(s_ParentPopupKey, m_parent, ParentOptions()) || !m_builder.beginPopup(s_ChildPopupKey, m_child, ChildOptions()))
             return false;
-        m_result = m_builder.textArea("area", m_model, m_state, SmallOptions());
+        m_result = m_builder.textArea(s_TextAreaKey, m_model, m_state, SmallOptions());
         return m_result.valid && m_builder.endPopup() && m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame() && m_context.commitFrame(generation);
     }
 
@@ -160,7 +160,7 @@ protected:
 TEST_F(UiTextAreaScrollLifetimeTests, IdenticalExternalScrollIntentRetiresAnAcceptedTrackPage){
     ASSERT_TRUE(prepareOverflow());
     const AreaModelSnapshot model(m_arena, m_model);
-    const WidgetId afterId = UiTestSupport::RequireWidgetId(MakeWidgetId(id("area", "panel"), "scroll.y.after"));
+    const WidgetId afterId = UiTestSupport::RequireWidgetId(MakeWidgetId(id(s_TextAreaKey, s_TextAreaPanelKey), "scroll.y.after"));
     const HitTarget* after = target(afterId);
     ASSERT_NE(after, nullptr);
     click(UiWidgetTests::Center(after->rectangle));
@@ -243,14 +243,14 @@ TEST_F(UiTextAreaScrollLifetimeTests, SameTextReplacementAndModelRebindingRetire
     ASSERT_TRUE(replacement.setSelection(0u, 0u));
     const AreaModelSnapshot rebound(m_arena, replacement);
     ASSERT_TRUE(beginArea(6u));
-    ASSERT_TRUE(m_builder.textArea("area", replacement, m_state, SmallOptions()).valid);
+    ASSERT_TRUE(m_builder.textArea(s_TextAreaKey, replacement, m_state, SmallOptions()).valid);
     ASSERT_TRUE(acceptArea());
     EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
     expectModel(m_model, original);
     expectModel(replacement, rebound);
     ASSERT_TRUE(wheel());
     ASSERT_TRUE(beginArea(7u));
-    ASSERT_TRUE(m_builder.textArea("area", replacement, m_state, SmallOptions()).valid);
+    ASSERT_TRUE(m_builder.textArea(s_TextAreaKey, replacement, m_state, SmallOptions()).valid);
     ASSERT_TRUE(acceptArea());
     EXPECT_GT(m_state.scroll().y, 0.0f);
     expectModel(m_model, original);
@@ -268,7 +268,7 @@ TEST_F(UiTextAreaScrollLifetimeTests, ActualViewportResizeRetiresWheelWithUnchan
     const u64 revision = m_state.revision();
     ASSERT_TRUE(wheel());
     ASSERT_TRUE(beginArea(2u, wider));
-    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, options).valid);
+    ASSERT_TRUE(m_builder.textArea(s_TextAreaKey, m_model, m_state, options).valid);
     EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
     ASSERT_TRUE(acceptArea());
     EXPECT_GT(m_state.scrollbars().viewport.width, accepted.width);
@@ -284,7 +284,7 @@ TEST_F(UiTextAreaScrollLifetimeTests, ActualViewportResizeRetiresWheelWithUnchan
 TEST_F(UiTextAreaScrollLifetimeTests, ChangedWheelLinesRetiresTheCopiedStepAndAcceptsItsNewPolicy){
     ASSERT_TRUE(prepareOverflow());
     const AreaModelSnapshot model(m_arena, m_model);
-    const HitTarget* host = target(id("area", "panel"));
+    const HitTarget* host = target(id(s_TextAreaKey, s_TextAreaPanelKey));
     ASSERT_NE(host, nullptr);
     const f64 oldStep = host->scrollStep;
     ASSERT_GT(oldStep, 0.0);
@@ -294,7 +294,7 @@ TEST_F(UiTextAreaScrollLifetimeTests, ChangedWheelLinesRetiresTheCopiedStepAndAc
     ASSERT_TRUE(frameArea(2u, options));
     EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
     expectModel(m_model, model);
-    host = target(id("area", "panel"));
+    host = target(id(s_TextAreaKey, s_TextAreaPanelKey));
     ASSERT_NE(host, nullptr);
     EXPECT_GT(host->scrollStep, oldStep);
     ASSERT_TRUE(wheel());
@@ -313,9 +313,9 @@ TEST_F(UiTextAreaScrollLifetimeTests, ClosingAnAncestorRetiresWheelAndCaptureBef
     ASSERT_TRUE(startThumb(popupArea()));
     const Point release = UiWidgetTests::Center(m_state.scrollbars().vertical.thumb);
     ASSERT_TRUE(begin(2u));
-    ASSERT_TRUE(m_builder.beginPopup("parent", m_parent, ParentOptions()));
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
-    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, SmallOptions()).valid);
+    ASSERT_TRUE(m_builder.beginPopup(s_ParentPopupKey, m_parent, ParentOptions()));
+    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, ChildOptions()));
+    ASSERT_TRUE(m_builder.textArea(s_TextAreaKey, m_model, m_state, SmallOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     m_parent.close();
     ASSERT_TRUE(m_builder.endPopup());
@@ -328,8 +328,8 @@ TEST_F(UiTextAreaScrollLifetimeTests, ClosingAnAncestorRetiresWheelAndCaptureBef
     expectModel(m_model, model);
     m_parent.open();
     ASSERT_TRUE(begin(3u));
-    ASSERT_TRUE(m_builder.beginPopup("parent", m_parent, ParentOptions()));
-    EXPECT_FALSE(m_builder.beginPopup("child", m_child, ChildOptions()));
+    ASSERT_TRUE(m_builder.beginPopup(s_ParentPopupKey, m_parent, ParentOptions()));
+    EXPECT_FALSE(m_builder.beginPopup(s_ChildPopupKey, m_child, ChildOptions()));
     EXPECT_FALSE(m_child.isOpen());
     ASSERT_TRUE(m_builder.endPopup());
     ASSERT_TRUE(m_context.endRoot());
@@ -348,7 +348,7 @@ TEST_F(UiTextAreaScrollLifetimeTests, CaptureLossCancelsTheUnfinishedThumbAndPre
     ASSERT_TRUE(prepareOverflow());
     const AreaModelSnapshot model(m_arena, m_model);
     ASSERT_TRUE(wheel());
-    ASSERT_TRUE(startThumb(id("area", "panel")));
+    ASSERT_TRUE(startThumb(id(s_TextAreaKey, s_TextAreaPanelKey)));
     EXPECT_FALSE(send({ InputEventType::PointerCaptureLost }).capture.valid());
     ASSERT_TRUE(frameArea(2u, SmallOptions()));
     ASSERT_GT(m_state.scroll().y, 0.0f);
@@ -366,7 +366,7 @@ TEST_F(UiTextAreaScrollLifetimeTests, NativeFocusLossCancelsCopiedWheelAndAnActi
     ASSERT_TRUE(prepareOverflow());
     const AreaModelSnapshot model(m_arena, m_model);
     ASSERT_TRUE(wheel());
-    ASSERT_TRUE(startThumb(id("area", "panel")));
+    ASSERT_TRUE(startThumb(id(s_TextAreaKey, s_TextAreaPanelKey)));
     EXPECT_FALSE(send({ InputEventType::FocusLost }).wantsCommands);
     ASSERT_TRUE(frameArea(2u, SmallOptions()));
     EXPECT_FALSE(m_context.input().capture().valid());
@@ -383,7 +383,7 @@ TEST_F(UiTextAreaScrollLifetimeTests, DisablingRetiresPendingWheelAndThumbWithou
     ASSERT_TRUE(prepareOverflow());
     const AreaModelSnapshot model(m_arena, m_model);
     ASSERT_TRUE(wheel());
-    ASSERT_TRUE(startThumb(id("area", "panel")));
+    ASSERT_TRUE(startThumb(id(s_TextAreaKey, s_TextAreaPanelKey)));
     const Point release = UiWidgetTests::Center(m_state.scrollbars().vertical.thumb);
     TextAreaOptions disabled = SmallOptions();
     disabled.enabled = false;

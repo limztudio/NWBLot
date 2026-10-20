@@ -32,6 +32,13 @@ inline constexpr u32 s_PositionMember = 0u;
 inline constexpr u32 s_IndexMember = 1u;
 inline constexpr u32 s_AttributeMember = 2u;
 inline constexpr u32 s_NodeMember = 3u;
+inline constexpr AStringView s_HardwarePositionIdentitySuffix = ":shadow_trace_hw_position";
+inline constexpr AStringView s_HardwareIndexIdentitySuffix = ":shadow_trace_hw_index";
+inline constexpr AStringView s_HardwareAttributeIdentitySuffix = ":shadow_trace_hw_attribute";
+inline constexpr AStringView s_SoftwareNodeIdentitySuffix = ":shadow_trace_sw_nodes";
+inline constexpr AStringView s_SoftwarePositionIdentitySuffix = ":shadow_trace_sw_position";
+inline constexpr AStringView s_SoftwareIndexIdentitySuffix = ":shadow_trace_sw_index";
+inline constexpr AStringView s_SoftwareAttributeIdentitySuffix = ":shadow_trace_sw_attribute";
 inline constexpr Core::BufferHandle MeshSnapshot::* s_BufferMembers[] = { &MeshSnapshot::positionBuffer, &MeshSnapshot::triangleIndexBuffer, &MeshSnapshot::attributeBuffer, &MeshSnapshot::swBvhNodeBuffer, };
 
 struct BufferRecord{
@@ -198,8 +205,8 @@ bool FreezePreparedShadowTraceGeometryBuffers(
             if(!mesh.runtimeMesh && !mesh.blasBuildPending)
                 continue;
             if(
-                !appendBuffer(mesh.positionBuffer, mesh, AStringView(":shadow_trace_hw_position"), PreparedShadowTraceGeometryRole::s_HardwarePosition)
-                || !appendBuffer(mesh.triangleIndexBuffer, mesh, AStringView(":shadow_trace_hw_index"), PreparedShadowTraceGeometryRole::s_HardwareIndex)
+                !appendBuffer(mesh.positionBuffer, mesh, s_HardwarePositionIdentitySuffix, PreparedShadowTraceGeometryRole::s_HardwarePosition)
+                || !appendBuffer(mesh.triangleIndexBuffer, mesh, s_HardwareIndexIdentitySuffix, PreparedShadowTraceGeometryRole::s_HardwareIndex)
             )
                 return false;
         }
@@ -210,9 +217,9 @@ bool FreezePreparedShadowTraceGeometryBuffers(
             if(!mesh.runtimeMesh && !mesh.swBvhBuildPending)
                 continue;
             if(
-                !appendBuffer(mesh.swBvhNodeBuffer, mesh, AStringView(":shadow_trace_sw_nodes"), PreparedShadowTraceGeometryRole::s_SoftwareNode)
-                || !appendBuffer(mesh.positionBuffer, mesh, AStringView(":shadow_trace_sw_position"), PreparedShadowTraceGeometryRole::s_SoftwarePosition)
-                || !appendBuffer(mesh.triangleIndexBuffer, mesh, AStringView(":shadow_trace_sw_index"), PreparedShadowTraceGeometryRole::s_SoftwareIndex)
+                !appendBuffer(mesh.swBvhNodeBuffer, mesh, s_SoftwareNodeIdentitySuffix, PreparedShadowTraceGeometryRole::s_SoftwareNode)
+                || !appendBuffer(mesh.positionBuffer, mesh, s_SoftwarePositionIdentitySuffix, PreparedShadowTraceGeometryRole::s_SoftwarePosition)
+                || !appendBuffer(mesh.triangleIndexBuffer, mesh, s_SoftwareIndexIdentitySuffix, PreparedShadowTraceGeometryRole::s_SoftwareIndex)
             )
                 return false;
         }
@@ -222,18 +229,18 @@ bool FreezePreparedShadowTraceGeometryBuffers(
     bool collected = true;
     if(selection.includeHardware){
         collected =
-            appendSelected(selection.hardwarePositions, s_PositionMember, AStringView(":shadow_trace_hw_position"), PreparedShadowTraceGeometryRole::s_HardwarePosition)
-            && appendSelected(selection.hardwareIndices, s_IndexMember, AStringView(":shadow_trace_hw_index"), PreparedShadowTraceGeometryRole::s_HardwareIndex)
-            && appendSelected(selection.hardwareAttributes, s_AttributeMember, AStringView(":shadow_trace_hw_attribute"), PreparedShadowTraceGeometryRole::s_HardwareAttribute)
+            appendSelected(selection.hardwarePositions, s_PositionMember, s_HardwarePositionIdentitySuffix, PreparedShadowTraceGeometryRole::s_HardwarePosition)
+            && appendSelected(selection.hardwareIndices, s_IndexMember, s_HardwareIndexIdentitySuffix, PreparedShadowTraceGeometryRole::s_HardwareIndex)
+            && appendSelected(selection.hardwareAttributes, s_AttributeMember, s_HardwareAttributeIdentitySuffix, PreparedShadowTraceGeometryRole::s_HardwareAttribute)
             && appendPendingBlasBuildInputs()
         ;
     }
     if(collected && selection.includeSoftware){
         collected =
-            appendSelected(selection.softwareNodes, s_NodeMember, AStringView(":shadow_trace_sw_nodes"), PreparedShadowTraceGeometryRole::s_SoftwareNode)
-            && appendSelected(selection.softwarePositions, s_PositionMember, AStringView(":shadow_trace_sw_position"), PreparedShadowTraceGeometryRole::s_SoftwarePosition)
-            && appendSelected(selection.softwareIndices, s_IndexMember, AStringView(":shadow_trace_sw_index"), PreparedShadowTraceGeometryRole::s_SoftwareIndex)
-            && appendSelected(selection.softwareAttributes, s_AttributeMember, AStringView(":shadow_trace_sw_attribute"), PreparedShadowTraceGeometryRole::s_SoftwareAttribute)
+            appendSelected(selection.softwareNodes, s_NodeMember, s_SoftwareNodeIdentitySuffix, PreparedShadowTraceGeometryRole::s_SoftwareNode)
+            && appendSelected(selection.softwarePositions, s_PositionMember, s_SoftwarePositionIdentitySuffix, PreparedShadowTraceGeometryRole::s_SoftwarePosition)
+            && appendSelected(selection.softwareIndices, s_IndexMember, s_SoftwareIndexIdentitySuffix, PreparedShadowTraceGeometryRole::s_SoftwareIndex)
+            && appendSelected(selection.softwareAttributes, s_AttributeMember, s_SoftwareAttributeIdentitySuffix, PreparedShadowTraceGeometryRole::s_SoftwareAttribute)
             && appendPendingSwBvhBuildInputs()
         ;
     }

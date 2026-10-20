@@ -26,6 +26,11 @@ NWB_IMPL_BEGIN
 
 
 namespace __hidden_reflection_resources{
+    inline constexpr Name s_RayQueueBufferName("engine/reflection/ray_queue");
+    inline constexpr Name s_IndirectArgsBufferName("engine/reflection/indirect_args");
+    inline constexpr Name s_BuildArgsShaderName("engine/graphics/reflection/build_args_cs");
+    inline constexpr Name s_HardwareResolveShaderName("engine/graphics/reflection/resolve_hw_cs");
+
     enum DescriptorIndex : u32{
         OpaqueSampled,
         OpaqueStorage,
@@ -112,10 +117,10 @@ bool RendererReflectionSystem::prepareResources(const u32 width, const u32 heigh
         return false;
     const Core::GpuTimingScopeDefinition* const scopes[] = { &ReflectionGpuTimingScope::s_Classify, &ReflectionGpuTimingScope::s_BuildArgs, &ReflectionGpuTimingScope::s_Hardware, };
     for(const Core::GpuTimingScopeDefinition* const scope : scopes){
-        if(!m_graphics.gpuTiming().prepareScopeQueries(scope->identity, device, 2u))
+        if(!m_graphics.gpuTiming().prepareScopeQueries(scope->identity, device, s_ReflectionGpuTimingQueriesPerRange))
             return false;
     }
-    if(!m_graphics.gpuTiming().prepareScopeQueries(ReflectionGpuTimingScope::s_DepthPyramid.identity, device, 2u * ReflectionDepthPyramidSnapshot::s_MaxMipCount))
+    if(!m_graphics.gpuTiming().prepareScopeQueries(ReflectionGpuTimingScope::s_DepthPyramid.identity, device, s_ReflectionGpuTimingQueriesPerRange * ReflectionDepthPyramidSnapshot::s_MaxMipCount))
         return false;
     if(m_resources.valid() && m_resources.parameters.width == width && m_resources.parameters.height == height)
         return
@@ -155,7 +160,7 @@ bool RendererReflectionSystem::prepareResources(const u32 width, const u32 heigh
         m_resources.glassRadiance = Move(*glassRadianceResult);
     else
         m_resources.glassRadiance.reset();
-    auto queueResult = createBuffer(Name("engine/reflection/ray_queue"), static_cast<u64>(capacity) * sizeof(u32), false, false);
+    auto queueResult = createBuffer(s_RayQueueBufferName, static_cast<u64>(capacity) * sizeof(u32), false, false);
     if(queueResult)
         m_resources.queue = Move(*queueResult);
     else
@@ -166,7 +171,7 @@ bool RendererReflectionSystem::prepareResources(const u32 width, const u32 heigh
     else
         m_resources.counters.reset();
     const u32 argumentCount = csgHardwareWork && m_csgBuildArgsPipeline ? (capacity + NWB_REFLECTION_TRACE_SLICE_RAYS - 1u) / NWB_REFLECTION_TRACE_SLICE_RAYS : 1u;
-    auto indirectArgsResult = createBuffer(Name("engine/reflection/indirect_args"), static_cast<u64>(argumentCount) * NWB_REFLECTION_INDIRECT_ARGUMENT_BYTES, false, true);
+    auto indirectArgsResult = createBuffer(s_IndirectArgsBufferName, static_cast<u64>(argumentCount) * NWB_REFLECTION_INDIRECT_ARGUMENT_BYTES, false, true);
     if(indirectArgsResult)
         m_resources.indirectArgs = Move(*indirectArgsResult);
     else
@@ -469,7 +474,7 @@ bool RendererReflectionSystem::prepareQueue(const u32 capacity){
         .setByteSize(static_cast<u64>(capacity) * sizeof(u32))
         .setCanHaveUAVs(true)
         .setCanHaveRawViews(true)
-        .setDebugName(Name("engine/reflection/ray_queue"))
+        .setDebugName(s_RayQueueBufferName)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
@@ -508,7 +513,7 @@ bool RendererReflectionSystem::prepareArguments(const u32 capacity, const bool s
         .setCanHaveUAVs(true)
         .setCanHaveRawViews(true)
         .setIsDrawIndirectArgs(true)
-        .setDebugName(Name("engine/reflection/indirect_args"))
+        .setDebugName(s_IndirectArgsBufferName)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
@@ -586,17 +591,17 @@ bool RendererReflectionSystem::preparePipelines(const bool prepareHardware, cons
     };
     if(
         !preparePipeline(m_resources.classifyPipeline, m_classifyShader, Name("engine/graphics/reflection/classify_cs"), Name("ECSRender_ReflectionClassify"), false, m_bindingLayout)
-        || !preparePipeline(m_resources.buildArgsPipeline, m_buildArgsShader, Name("engine/graphics/reflection/build_args_cs"), Name("ECSRender_ReflectionBuildArgs"), false, m_bindingLayout, s_ReflectionBuildArgsVariant)
+        || !preparePipeline(m_resources.buildArgsPipeline, m_buildArgsShader, __hidden_reflection_resources::s_BuildArgsShaderName, Name("ECSRender_ReflectionBuildArgs"), false, m_bindingLayout, s_ReflectionBuildArgsVariant)
         || !preparePipeline(m_resources.depthPyramid.pipeline, m_depthShader, Name("engine/graphics/reflection/depth_reduce_cs"), Name("ECSRender_ReflectionDepthReduce"), false, m_depthBindingLayout)
     )
         return false;
     if(
         prepareHardware && m_graphics.queryFeatureSupport(Core::Feature::RayQuery) && heap.hasAccelStructLayout()
-        && (!preparePipeline(m_resources.hardwarePipeline, m_hardwareShader, Name("engine/graphics/reflection/resolve_hw_cs"), Name("ECSRender_ReflectionOpticalHardware"), true, m_bindingLayout, s_ReflectionHwOpticalVariant) || !preparePipeline(
+        && (!preparePipeline(m_resources.hardwarePipeline, m_hardwareShader, __hidden_reflection_resources::s_HardwareResolveShaderName, Name("ECSRender_ReflectionOpticalHardware"), true, m_bindingLayout, s_ReflectionHwOpticalVariant) || !preparePipeline(
             m_plainHardwarePipeline, m_plainHardwareShader,
-            Name("engine/graphics/reflection/resolve_hw_cs"), Name("ECSRender_ReflectionHardware"), true, m_bindingLayout,
+            __hidden_reflection_resources::s_HardwareResolveShaderName, Name("ECSRender_ReflectionHardware"), true, m_bindingLayout,
             s_ReflectionHwPlainVariant
-        ) || !preparePipeline(m_unspecifiedHardwarePipeline, m_unspecifiedHardwareShader, Name("engine/graphics/reflection/resolve_hw_cs"), Name("ECSRender_ReflectionUnspecifiedOpticalHardware"), true, m_bindingLayout, s_ReflectionHwUnspecifiedVariant))
+        ) || !preparePipeline(m_unspecifiedHardwarePipeline, m_unspecifiedHardwareShader, __hidden_reflection_resources::s_HardwareResolveShaderName, Name("ECSRender_ReflectionUnspecifiedOpticalHardware"), true, m_bindingLayout, s_ReflectionHwUnspecifiedVariant))
     )
         return false;
     const bool csgHardware = prepareCsgHardware && m_graphics.queryFeatureSupport(Core::Feature::RayQuery) && heap.hasAccelStructLayout();
@@ -614,13 +619,13 @@ bool RendererReflectionSystem::preparePipelines(const bool prepareHardware, cons
     }
     if(
         csgHardware
-        && (!preparePipeline(m_csgBuildArgsPipeline, m_csgBuildArgsShader, Name("engine/graphics/reflection/build_args_cs"), Name("ECSRender_ReflectionCsgBuildArgs"), false, m_csgBindingLayout, s_ReflectionCsgBuildArgsVariant) || !preparePipeline(
+        && (!preparePipeline(m_csgBuildArgsPipeline, m_csgBuildArgsShader, __hidden_reflection_resources::s_BuildArgsShaderName, Name("ECSRender_ReflectionCsgBuildArgs"), false, m_csgBindingLayout, s_ReflectionCsgBuildArgsVariant) || !preparePipeline(
             m_csgHardwarePipeline, m_csgHardwareShader,
-            Name("engine/graphics/reflection/resolve_hw_cs"), Name("ECSRender_ReflectionCsgOpticalHardware"), true, m_csgBindingLayout,
+            __hidden_reflection_resources::s_HardwareResolveShaderName, Name("ECSRender_ReflectionCsgOpticalHardware"), true, m_csgBindingLayout,
             s_ReflectionHwCsgOpticalVariant
-        ) || !preparePipeline(m_csgPlainHardwarePipeline, m_csgPlainHardwareShader, Name("engine/graphics/reflection/resolve_hw_cs"), Name("ECSRender_ReflectionCsgHardware"), true, m_csgBindingLayout, s_ReflectionHwCsgPlainVariant) || !preparePipeline(
+        ) || !preparePipeline(m_csgPlainHardwarePipeline, m_csgPlainHardwareShader, __hidden_reflection_resources::s_HardwareResolveShaderName, Name("ECSRender_ReflectionCsgHardware"), true, m_csgBindingLayout, s_ReflectionHwCsgPlainVariant) || !preparePipeline(
             m_csgUnspecifiedHardwarePipeline, m_csgUnspecifiedHardwareShader,
-            Name("engine/graphics/reflection/resolve_hw_cs"), Name("ECSRender_ReflectionCsgUnspecifiedOpticalHardware"), true, m_csgBindingLayout,
+            __hidden_reflection_resources::s_HardwareResolveShaderName, Name("ECSRender_ReflectionCsgUnspecifiedOpticalHardware"), true, m_csgBindingLayout,
             s_ReflectionHwCsgUnspecifiedVariant
         ))
     )

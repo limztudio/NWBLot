@@ -23,6 +23,10 @@ NWB_IMPL_BEGIN
 class Texture;
 
 inline constexpr u32 s_UiSkinMaxRegionCount = 4096u;
+inline constexpr f32 s_UiSkinPaletteRgbMax = 16.0f;
+inline constexpr f32 s_UiSkinDefaultFontSize = 16.0f;
+inline constexpr f32 s_UiSkinMinDefaultFontSize = 1.0f / 64.0f;
+inline constexpr f32 s_UiSkinMaxDefaultFontSize = 2048.0f;
 
 namespace UiSkinDrawMode{
     enum Enum : u8{
@@ -116,7 +120,7 @@ struct UiSkinPalette{
 };
 
 struct UiSkinTypography{
-    f32 defaultFontSize = 16.0f;
+    f32 defaultFontSize = s_UiSkinDefaultFontSize;
 };
 
 

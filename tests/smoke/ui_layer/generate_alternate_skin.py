@@ -12,6 +12,7 @@ LIT_ATLAS_NWB = "atlas.nwb"
 LIT_UTF_8 = "utf-8"
 LIT_NAME = "name"
 LIT_PADDING = "padding"
+LIT_ASSET_REGIONS_OPEN = "asset.regions = ["
 
 REPO = Path(__file__).resolve().parents[3]
 OUTPUT = Path(__file__).resolve().parent / "assets/ui/skins/alternate"
@@ -29,7 +30,7 @@ def generate(work_directory, output_directory, converter):
     artwork.ICONS = list(reversed(artwork.ICONS))
     artwork.generate(work_directory)
     metadata = (work_directory / LIT_ATLAS_NWB).read_text(encoding=LIT_UTF_8)
-    region_lines = metadata.split("asset.regions = [", 1)[1].split("];", 1)[0].splitlines()
+    region_lines = metadata.split(LIT_ASSET_REGIONS_OPEN, 1)[1].split("];", 1)[0].splitlines()
     regions = [json.loads(line.strip().rstrip(",")) for line in region_lines if line.strip().startswith("{")]
     expected_regions = len(artwork.PANELS) + len(artwork.ICONS) + 10  # Default artwork plus semantic aliases.
     if (len(regions) != expected_regions or len({region[LIT_NAME] for region in regions}) != len(regions) or any("rect" not in region for region in regions)):
@@ -43,7 +44,7 @@ def generate(work_directory, output_directory, converter):
     for color in colors:
         if color[LIT_NAME] == "text.tooltip":
             color["rgba"] = [1.0, 0.58, 0.26, 1.0]
-    lines = ["ui_skin asset;", "", 'asset.texture = "project/ui/skins/alternate/texture";', "asset.atlas_extent = [256, 256];", "asset.reference_density = 1.0;", "asset.toolkit_contract = \"widgets\";", "asset.regions = ["]
+    lines = ["ui_skin asset;", "", 'asset.texture = "project/ui/skins/alternate/texture";', "asset.atlas_extent = [256, 256];", "asset.reference_density = 1.0;", "asset.toolkit_contract = \"widgets\";", LIT_ASSET_REGIONS_OPEN]
     lines += ["    " + json.dumps(region, separators=(", ", ": ")) + "," for region in regions]
     lines += ["];", "asset.colors = ["]
     lines += ["    " + json.dumps(color, separators=(", ", ": ")) + "," for color in colors]

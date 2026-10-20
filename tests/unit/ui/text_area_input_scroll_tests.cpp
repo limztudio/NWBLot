@@ -20,6 +20,9 @@ namespace __hidden_ui_text_area_input_scroll_tests{
 using namespace NWB;
 using namespace NWB::UiTextAreaTests;
 
+constexpr AStringView s_PopupKey = "popup";
+constexpr AStringView s_VerticalThumbPart = "scroll.y.thumb";
+
 
 struct ScrollModelRecord{
     AString<Core::Alloc::GlobalArena> text;
@@ -105,16 +108,16 @@ protected:
 
     [[nodiscard]] bool wheel(const f64 x, const f64 y){ return wheel(x, y, Center(m_state.placement().content)); }
 
-    [[nodiscard]] WidgetId area()const{ return id("area", "panel"); }
+    [[nodiscard]] WidgetId area()const{ return id(s_TextAreaKey, s_TextAreaPanelKey); }
     [[nodiscard]] WidgetId part(const AStringView key)const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(area(), key)); }
 
     [[nodiscard]] bool framePopup(const u64 generation, PopupState& popup){
         PopupOptions options;
         options.anchor = { 20.0f, 20.0f, 40.0f, 20.0f };
         options.size = { 300.0f, 180.0f };
-        if(!begin(generation) || !m_builder.beginPopup("popup", popup, options))
+        if(!begin(generation) || !m_builder.beginPopup(s_PopupKey, popup, options))
             return false;
-        m_result = m_builder.textArea("area", m_model, m_state, ScrollOptions());
+        m_result = m_builder.textArea(s_TextAreaKey, m_model, m_state, ScrollOptions());
         return m_result.valid && m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame() && m_context.commitFrame(generation);
     }
 
@@ -149,7 +152,7 @@ TEST_F(UiTextAreaInputScrollTests, InvalidWheelLinesRejectTheCandidateBeforeBorr
         TextAreaOptions options = ScrollOptions();
         options.wheelLines = wheelLines;
         ASSERT_TRUE(beginArea(generation));
-        const EditBoxResult result = m_builder.textArea("area", m_model, m_state, options);
+        const EditBoxResult result = m_builder.textArea(s_TextAreaKey, m_model, m_state, options);
         EXPECT_FALSE(result.valid);
         EXPECT_TRUE(m_context.failed());
         EXPECT_FALSE(m_builder.endPanel());
@@ -188,7 +191,7 @@ TEST_F(UiTextAreaInputScrollTests, CopiedVerticalWheelAppliesOnlyAtFinalPaintAnd
     ASSERT_EQ(m_context.input().controlActions().size(), 1u);
     EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
     ASSERT_TRUE(beginArea(2u));
-    m_result = m_builder.textArea("area", m_model, m_state, ScrollOptions());
+    m_result = m_builder.textArea(s_TextAreaKey, m_model, m_state, ScrollOptions());
     ASSERT_TRUE(m_result.valid);
     EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
     ASSERT_TRUE(acceptArea());
@@ -228,7 +231,7 @@ TEST_F(UiTextAreaInputScrollTests, ReadOnlyWheelAndThumbScrollingLeaveUndoAndRed
     ASSERT_TRUE(frameArea(2u, options));
     EXPECT_GT(m_state.scroll().x, 0.0f);
     EXPECT_GT(m_state.scroll().y, 0.0f);
-    const HitTarget* found = target(part("scroll.y.thumb"));
+    const HitTarget* found = target(part(s_VerticalThumbPart));
     ASSERT_TRUE(found);
     const HitTarget thumb = *found;
     const Point origin = Center(thumb.rectangle);
@@ -252,7 +255,7 @@ TEST_F(UiTextAreaInputScrollTests, DisabledEditorUsesTheContainingPanelBarrierAn
     ASSERT_TRUE(host);
     EXPECT_FALSE(host->enabled || host->focusable || host->textEditable || host->scrollable);
     const Point point = Center(m_state.placement().content);
-    EXPECT_EQ(m_context.input().hitTest(point), UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), "panel")));
+    EXPECT_EQ(m_context.input().hitTest(point), UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), s_TextAreaPanelKey)));
     ASSERT_TRUE(wheel(1.0, -1.0, point));
     EXPECT_TRUE(m_context.input().controlActions().empty());
     click(point);
@@ -290,7 +293,7 @@ TEST_F(UiTextAreaInputScrollTests, WheelViewportPersistsUntilAnAcceptedIdentical
 TEST_F(UiTextAreaInputScrollTests, UnfocusedThumbPressPreservesGrabOffsetAndTheBaselineAcrossRepaints){
     ASSERT_TRUE(prepareScroll(ScrollOptions(), { 30.0f, 50.0f }));
     const ScrollModelRecord model(m_arena, m_model);
-    const HitTarget* found = target(part("scroll.y.thumb"));
+    const HitTarget* found = target(part(s_VerticalThumbPart));
     ASSERT_TRUE(found);
     const HitTarget thumb = *found;
     const SIMDVectorSingle travel = VectorSubtract(VectorReplicate(thumb.gestureReference.height), VectorReplicate(thumb.rectangle.height));
@@ -304,7 +307,7 @@ TEST_F(UiTextAreaInputScrollTests, UnfocusedThumbPressPreservesGrabOffsetAndTheB
     ASSERT_TRUE(frameArea(2u, ScrollOptions()));
     EXPECT_NEAR(m_state.scroll().y, 50.0, 0.001);
     EXPECT_NEAR(m_state.scroll().x, 30.0, 0.001);
-    const HitTarget* afterPress = target(part("scroll.y.thumb"));
+    const HitTarget* afterPress = target(part(s_VerticalThumbPart));
     ASSERT_TRUE(afterPress);
     EXPECT_EQ(afterPress->control, thumb.control);
     // Lanes are the quarter and half drag steps.
@@ -314,7 +317,7 @@ TEST_F(UiTextAreaInputScrollTests, UnfocusedThumbPressPreservesGrabOffsetAndTheB
     ASSERT_TRUE(send({ InputEventType::PointerMove, quarter }).pointerConsumed);
     ASSERT_TRUE(frameArea(3u, ScrollOptions()));
     EXPECT_NEAR(m_state.scroll().y, VectorDoubleGetX(expectedScroll), 0.001);
-    const HitTarget* afterMove = target(part("scroll.y.thumb"));
+    const HitTarget* afterMove = target(part(s_VerticalThumbPart));
     ASSERT_TRUE(afterMove);
     EXPECT_EQ(afterMove->control, thumb.control);
     EXPECT_GT(afterMove->rectangle.y, thumb.rectangle.y);
@@ -370,7 +373,7 @@ TEST_F(UiTextAreaInputScrollTests, TrackPagesOnlyOnReleaseByTheAcceptedViewport)
 TEST_F(UiTextAreaInputScrollTests, LaterCoalescedThumbUpdateRunsAfterAnInterveningWheelAction){
     ASSERT_TRUE(prepareScroll());
     const ScrollModelRecord model(m_arena, m_model);
-    const HitTarget* found = target(part("scroll.y.thumb"));
+    const HitTarget* found = target(part(s_VerticalThumbPart));
     ASSERT_TRUE(found);
     const HitTarget thumb = *found;
     const Point origin = Center(thumb.rectangle);
@@ -394,7 +397,7 @@ TEST_F(UiTextAreaInputScrollTests, PopupWheelUsesTheAcceptedPopupScopeAndDefersU
     PopupState popup;
     popup.open();
     ASSERT_TRUE(framePopup(1u, popup));
-    const WidgetId popupArea = id("area", "popup");
+    const WidgetId popupArea = id(s_TextAreaKey, s_PopupKey);
     const HitTarget* host = target(popupArea);
     ASSERT_TRUE(host);
     const PopupToken token = host->popup;

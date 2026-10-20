@@ -14,6 +14,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr usize s_SIMDVectorBytes = 16u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace MathTypeDetail{
 
 
@@ -25,9 +31,10 @@ inline constexpr bool s_NativeEqualityPackets = true;
 #else
 inline constexpr bool s_NativeEqualityPackets = false;
 #endif
+inline constexpr i32 s_ByteMovemaskAllEqual = 0xFFFF;
 
 template<typename Element>
-using EqualityPacket = Element __attribute__((ext_vector_type(16u / sizeof(Element))));
+using EqualityPacket = Element __attribute__((ext_vector_type(s_SIMDVectorBytes / sizeof(Element))));
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -48,7 +55,7 @@ using EqualityPacket = Element __attribute__((ext_vector_type(16u / sizeof(Eleme
 template<typename Element>
 [[nodiscard]] NWB_INLINE bool EqualIntegralPacket(const EqualityPacket<Element> lhs, const EqualityPacket<Element> rhs)noexcept{
 #if defined(NWB_HAS_SSE2)
-    return _mm_movemask_epi8(_mm_cmpeq_epi8(BitCast<__m128i>(lhs), BitCast<__m128i>(rhs))) == 0xFFFF;
+    return _mm_movemask_epi8(_mm_cmpeq_epi8(BitCast<__m128i>(lhs), BitCast<__m128i>(rhs))) == s_ByteMovemaskAllEqual;
 #elif defined(NWB_HAS_NEON)
     const uint64x2_t equal = vreinterpretq_u64_u8(vceqq_u8(BitCast<uint8x16_t>(lhs), BitCast<uint8x16_t>(rhs)));
     return vgetq_lane_u64(equal, 0) == ~u64{ 0u } && vgetq_lane_u64(equal, 1) == ~u64{ 0u };
@@ -62,7 +69,7 @@ template<typename Element, usize Count>
 #pragma STDC FENV_ACCESS ON
     // Clang bool vectors use packed bits; wide integers are not supported native lane elements.
     if constexpr(s_NativeEqualityPackets && (IsSame_V<Element, f32> || (IsIntegral_V<Element> && !IsSame_V<Element, bool> && sizeof(Element) <= sizeof(u64)))){
-        constexpr usize s_Lanes = 16u / sizeof(Element);
+        constexpr usize s_Lanes = s_SIMDVectorBytes / sizeof(Element);
         for(usize first = 0u; first < Count; first += s_Lanes){
             const usize count = Count - first < s_Lanes ? Count - first : s_Lanes;
             EqualityPacket<Element> lhsPacket{}, rhsPacket{};

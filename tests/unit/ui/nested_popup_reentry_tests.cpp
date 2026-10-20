@@ -18,6 +18,8 @@ using namespace NWB;
 using namespace NWB::Impl::Ui;
 using namespace NWB::UiComboTests;
 
+constexpr AStringView s_ListKey = "list";
+
 namespace ReentryKind{
     enum Enum : u8{ Reset, Panel };
 };
@@ -220,14 +222,14 @@ protected:
         return finishPanel() && m_context.commitFrame(1u);
     }
 
-    [[nodiscard]] bool beginParent(){ return begin(2u) && m_builder.beginPopup("parent", m_parent, UiWidgetTests::NestedParentOptions()); }
+    [[nodiscard]] bool beginParent(){ return begin(2u) && m_builder.beginPopup(s_ParentPopupKey, m_parent, UiWidgetTests::NestedParentOptions()); }
 
     [[nodiscard]] bool declareChild(){
-        return m_builder.beginPopup("child", m_child, ChildOptions()) && m_builder.virtualList("list", m_childSource, m_childList, ListOptions()).valid && m_builder.endPopup();
+        return m_builder.beginPopup(s_ChildPopupKey, m_child, ChildOptions()) && m_builder.virtualList(s_ListKey, m_childSource, m_childList, ListOptions()).valid && m_builder.endPopup();
     }
 
     [[nodiscard]] bool declareSibling(){
-        return m_builder.beginPopup("sibling", m_sibling, ChildOptions()) && m_builder.virtualList("list", m_siblingSource, m_siblingList, ListOptions()).valid && m_builder.endPopup();
+        return m_builder.beginPopup("sibling", m_sibling, ChildOptions()) && m_builder.virtualList(s_ListKey, m_siblingSource, m_siblingList, ListOptions()).valid && m_builder.endPopup();
     }
 
     [[nodiscard]] AcceptedFrame accepted()const noexcept{
@@ -400,7 +402,7 @@ TEST_F(UiNestedPopupReentryTests, LateParentRevisionScopeReentryRejectsAfterAllR
     ASSERT_TRUE(acceptBase());
     const AcceptedFrame frame = accepted();
     ASSERT_TRUE(beginParent());
-    ASSERT_TRUE(m_builder.virtualList("list", m_parentSource, m_parentList, ListOptions()).valid);
+    ASSERT_TRUE(m_builder.virtualList(s_ListKey, m_parentSource, m_parentList, ListOptions()).valid);
     ASSERT_TRUE(declareChild());
     ASSERT_TRUE(declareSibling());
     const u64 parentGeneration = m_parentList.inputGeneration();

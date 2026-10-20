@@ -43,6 +43,7 @@ inline constexpr usize s_BytesPerMebibyte = 1024u * 1024u;
 inline constexpr usize s_MaxLogMessageUploadMebibytes = 1u;
 inline constexpr usize s_MaxCrashPackageUploadMebibytes = 128u;
 inline constexpr AStringView s_UnsupportedNameSymbolUploadPath = "/namesym";
+inline constexpr AStringView s_UploadDiagnosticCategory = "logger_server_upload";
 inline constexpr int s_LocalTimeYearBase = 1900;
 inline constexpr int s_LocalTimeMonthBase = 1;
 
@@ -80,7 +81,7 @@ public:
         if(crashUploadOwned)
             discardCrashUpload();
         else if(!closeCrashUploadStream())
-            CaptureDiagnosticEvent("logger_server_upload", "Failed to close crash upload stream", __FILE__, __LINE__);
+            CaptureDiagnosticEvent(s_UploadDiagnosticCategory, "Failed to close crash upload stream", __FILE__, __LINE__);
         Core::Alloc::CoreFree(buffer);
     }
 
@@ -134,11 +135,11 @@ public:
         if(!crashUploadOwned)
             return;
         if(!closeCrashUploadStream())
-            CaptureDiagnosticEvent("logger_server_upload", "Failed to close discarded crash upload stream", __FILE__, __LINE__);
+            CaptureDiagnosticEvent(s_UploadDiagnosticCategory, "Failed to close discarded crash upload stream", __FILE__, __LINE__);
         const auto removed = RemoveFile(crashUploadPath);
         if(!removed){
             const DiagnosticEventText diagnostic = MakeDiagnosticEventText("Failed to remove discarded crash upload '{}', error {}", crashUploadPath.c_str(), removed.error().value());
-            CaptureDiagnosticEvent("logger_server_upload", diagnostic.view(), __FILE__, __LINE__);
+            CaptureDiagnosticEvent(s_UploadDiagnosticCategory, diagnostic.view(), __FILE__, __LINE__);
         }
         crashUploadOwned = false;
     }

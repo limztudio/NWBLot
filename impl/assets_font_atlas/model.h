@@ -24,6 +24,10 @@ NWB_IMPL_BEGIN
 
 inline constexpr u32 s_FontAtlasMaxGlyphCount = 65535u;
 inline constexpr u32 s_FontAtlasMaxGroupCount = 8u;
+inline constexpr u32 s_FontAtlasMaxChannelCount = 4u;
+inline constexpr u32 s_FontAtlasMaxPositioningTableCount = 3u; // kern, GPOS and GDEF.
+inline constexpr u32 s_FontAtlasMinUnitsPerEm = 16u;
+inline constexpr u32 s_FontAtlasMaxUnitsPerEm = 16384u;
 inline constexpr u32 s_FontAtlasMaxExtent = 2048u;
 inline constexpr u32 s_FontAtlasMaxPixelBytes = 128u * 1024u * 1024u;
 inline constexpr u32 s_FontAtlasMinBakePpem = 16u;
@@ -35,6 +39,7 @@ inline constexpr u32 s_FontAtlasMaxPositioningBytes = 32u * 1024u * 1024u;
 inline constexpr u32 s_FontAtlasKernTag = 0x6b65726eu;
 inline constexpr u32 s_FontAtlasGposTag = 0x47504f53u;
 inline constexpr u32 s_FontAtlasGdefTag = 0x47444546u;
+inline constexpr TStringView s_FontAtlasValidatePayloadContext = NWB_TEXT("FontAtlas::validatePayload");
 
 namespace FontAtlasRasterMode{
     enum Enum : u32{

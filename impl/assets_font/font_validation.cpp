@@ -48,6 +48,7 @@ static constexpr usize s_HheaMinBytes = 36u;
 static constexpr usize s_HmtxMinBytes = 4u;
 static constexpr StringView s_WarningEventName = "warning";
 static constexpr StringView s_NativeValidationCategory = "font_native_validation";
+static constexpr AStringView s_NativeCleanupFailedFormat = "Font native cleanup failed: native_domain=FreeType native_code={}";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -151,11 +152,11 @@ public:
         const FT_Error faceError = face ? FT_Done_Face(face) : 0;
         const FT_Error libraryError = library ? FT_Done_Library(library) : 0;
         if(faceError != 0){
-            const DiagnosticEventText diagnostic = MakeDiagnosticEventText("Font native cleanup failed: native_domain=FreeType native_code={}", faceError);
+            const DiagnosticEventText diagnostic = MakeDiagnosticEventText(s_NativeCleanupFailedFormat, faceError);
             CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_WarningEventName, .category = s_NativeValidationCategory, .expression = "FT_Done_Face", .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
         }
         if(libraryError != 0){
-            const DiagnosticEventText diagnostic = MakeDiagnosticEventText("Font native cleanup failed: native_domain=FreeType native_code={}", libraryError);
+            const DiagnosticEventText diagnostic = MakeDiagnosticEventText(s_NativeCleanupFailedFormat, libraryError);
             CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_WarningEventName, .category = s_NativeValidationCategory, .expression = "FT_Done_Library", .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
         }
     }

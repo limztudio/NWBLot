@@ -38,6 +38,9 @@ public:
 };
 
 inline constexpr f32 s_ListDefaultHeight = 240.0f;
+inline constexpr f32 s_ListMinimumWidth = 120.0f;
+// Padding left, top, right, bottom, then minimum x and y.
+inline constexpr usize s_ListRowMetricCount = 6u;
 
 struct ListOptions{
     LayoutSize width = { LayoutSizePolicy::Stretch, 1.0f };
@@ -74,7 +77,7 @@ private:
         f32 fontSize = 0.0f;
         f32 pixelScaleX = 0.0f;
         f32 pixelScaleY = 0.0f;
-        Array<f32, 6u> rowMetrics{};
+        Array<f32, s_ListRowMetricCount> rowMetrics{};
         Array<char, s_TextMaxLanguageBytes + 1u> language{};
         u32 scriptTag = 0u;
 

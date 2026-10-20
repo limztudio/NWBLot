@@ -64,6 +64,11 @@ inline constexpr AStringView s_FbxToNwbIgnoreColorsFlag = "--ignore-colors";
 inline constexpr AStringView s_FbxToNwbFlipWindingFlag = "--flip-winding";
 inline constexpr AStringView s_FbxToNwbSeparateAssetsFlag = "--separate-assets";
 inline constexpr AStringView s_FbxToNwbRefreshNwbFlag = "--refresh-nwb";
+inline constexpr AStringView s_FbxToNwbForceFlag = "--force";
+inline constexpr AStringView s_FbxToNwbYesFlag = "-y,--yes";
+inline constexpr AStringView s_FbxToNwbListMeshesFlag = "--list-meshes";
+inline constexpr AStringView s_OutputPathPromptLabel = "Output .nwb path";
+inline constexpr AStringView s_OutputPathEmptyText = "Output path is empty.";
 inline constexpr u32 s_CliOptionPresentCount = 0u;
 
 
@@ -217,7 +222,7 @@ bool ConfigurePromptsAfterLoad(ImportOptions& options, const OptionPresence& pre
 
     if(!presence.output && !options.acceptDefaults){
         const auto defaultOutput = PathToGenericString(scratchArena, DefaultOutputPath(options.inputPath, scratchArena));
-        auto output = PromptString("Output .nwb path", defaultOutput, prompted);
+        auto output = PromptString(s_OutputPathPromptLabel, defaultOutput, prompted);
         if(!output)
             return false;
         options.outputPath = Move(*output);
@@ -300,7 +305,7 @@ bool IsNwbRefreshMode(const ImportOptions& options, Core::Alloc::ScratchArena& s
 }
 
 void WriteRefreshCount(ScratchStringStream& report, const AStringView name, const usize before, const usize after){
-    report << "  " << name << ": " << before << " -> " << after << "\n";
+    report << "  " << name << ": " << before << " -> " << after << s_ReportLineEndText;
 }
 
 void WriteCanonicalizeReport(ScratchStringStream& report, const SourceMeshCanonicalizeReport& canonicalizeReport){
@@ -316,10 +321,10 @@ void WriteCanonicalizeReport(ScratchStringStream& report, const SourceMeshCanoni
 
 int RunNwbRefresh(const CLI::App& app, ImportOptions& options, const OptionPresence& presence, Core::CpuTaskScheduler& cpuScheduler, bool& prompted, Core::Alloc::ScratchArena& scratchArena){
     if(options.listMeshes)
-        return ExitValidation(app, "--list-meshes", "Only valid for FBX input.", scratchArena);
+        return ExitValidation(app, s_FbxToNwbListMeshesFlag, "Only valid for FBX input.", scratchArena);
 
     if(!presence.output && !options.acceptDefaults){
-        auto output = PromptString("Output .nwb path", options.inputPath, prompted);
+        auto output = PromptString(s_OutputPathPromptLabel, options.inputPath, prompted);
         if(!output)
             return s_FbxToNwbExitFailure;
         options.outputPath = Move(*output);
@@ -330,7 +335,7 @@ int RunNwbRefresh(const CLI::App& app, ImportOptions& options, const OptionPrese
 
     const ScratchPath outputPath(scratchArena, options.outputPath);
     if(outputPath.empty())
-        return ExitValidation(app, s_FbxToNwbOutputOption, "Output path is empty.", scratchArena);
+        return ExitValidation(app, s_FbxToNwbOutputOption, s_OutputPathEmptyText, scratchArena);
     if(!ValidateOutputOverwrite(outputPath, options, prompted, scratchArena))
         return s_FbxToNwbExitFailure;
 
@@ -342,7 +347,7 @@ int RunNwbRefresh(const CLI::App& app, ImportOptions& options, const OptionPrese
     const auto outputText = PathToGenericString(scratchArena, outputPath);
     const auto inputText = PathToGenericString(scratchArena, inputPath);
     ScratchStringStream report(s_FileOpenWrite, scratchArena);
-    report << "Refreshed " << outputText << "\n" << "  input: " << inputText << "\n";
+    report << "Refreshed " << outputText << s_ReportLineEndText << "  input: " << inputText << s_ReportLineEndText;
     WriteCanonicalizeReport(report, *canonicalizeReport);
     NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
     return s_FbxToNwbExitSuccess;
@@ -396,9 +401,9 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
     CLI::Option* flipWindingOption = app.add_flag(__hidden_command_line::s_FbxToNwbFlipWindingFlag.data(), options.flipWinding, "Swap the second and third index of every triangle");
     CLI::Option* separateAssetsOption = app.add_flag(__hidden_command_line::s_FbxToNwbSeparateAssetsFlag.data(), options.separateAssets, "Write a model package as separate .nwb files instead of one asset bunch");
     CLI::Option* refreshNwbOption = app.add_flag(__hidden_command_line::s_FbxToNwbRefreshNwbFlag.data(), options.refreshNwb, "Read a mesh .nwb, canonicalize mesh streams, and rewrite it");
-    app.add_flag("--force", options.forceOverwrite, "Overwrite an existing output file");
-    app.add_flag("-y,--yes", options.acceptDefaults, "Use defaults for any import options that were not supplied");
-    app.add_flag("--list-meshes", options.listMeshes, "List importable mesh instances and exit");
+    app.add_flag(__hidden_command_line::s_FbxToNwbForceFlag.data(), options.forceOverwrite, "Overwrite an existing output file");
+    app.add_flag(__hidden_command_line::s_FbxToNwbYesFlag.data(), options.acceptDefaults, "Use defaults for any import options that were not supplied");
+    app.add_flag(__hidden_command_line::s_FbxToNwbListMeshesFlag.data(), options.listMeshes, "List importable mesh instances and exit");
 
     return ::InvokeTerminalEntry<CLI::ParseError>([&](){
         app.parse(argc, argv);
@@ -503,7 +508,7 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
 
         const ScratchPath outputPath(scratchArena, options.outputPath);
         if(outputPath.empty())
-            return __hidden_command_line::ExitValidation(app, __hidden_command_line::s_FbxToNwbOutputOption, "Output path is empty.", scratchArena);
+            return __hidden_command_line::ExitValidation(app, __hidden_command_line::s_FbxToNwbOutputOption, __hidden_command_line::s_OutputPathEmptyText, scratchArena);
         if(!__hidden_command_line::ValidateOutputOverwrite(outputPath, options, prompted, scratchArena))
             return __hidden_command_line::s_FbxToNwbExitFailure;
 
@@ -524,22 +529,22 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
         const auto outputText = PathToGenericString(scratchArena, outputPath);
         ScratchStringStream report(s_FileOpenWrite, scratchArena);
         report
-            << "Wrote " << outputText << "\n"
-            << "  positions: " << mesh.positions.size() << "\n"
-            << "  normals: " << mesh.normals.size() << "\n"
-            << "  vertex_refs: " << mesh.vertexRefs.size() << "\n"
-            << "  triangles: " << (mesh.indices.size() / s_TriangleIndexCount) << "\n"
-            << "  asset_type: " << options.assetType << "\n"
-            << "  normal_mode: " << options.normalMode << "\n"
-            << "  tangents: " << SourceTangentModeText(tangentReport.mode) << "\n"
-            << "  vertex colors: " << (sawVertexColors ? s_ImportedSourceLabel : s_DefaultSourceLabel) << "\n";
+            << "Wrote " << outputText << s_ReportLineEndText
+            << "  positions: " << mesh.positions.size() << s_ReportLineEndText
+            << "  normals: " << mesh.normals.size() << s_ReportLineEndText
+            << "  vertex_refs: " << mesh.vertexRefs.size() << s_ReportLineEndText
+            << "  triangles: " << (mesh.indices.size() / s_TriangleIndexCount) << s_ReportLineEndText
+            << "  asset_type: " << options.assetType << s_ReportLineEndText
+            << "  normal_mode: " << options.normalMode << s_ReportLineEndText
+            << "  tangents: " << SourceTangentModeText(tangentReport.mode) << s_ReportLineEndText
+            << "  vertex colors: " << (sawVertexColors ? s_ImportedSourceLabel : s_DefaultSourceLabel) << s_ReportLineEndText;
         if(assetTypeValue == OutputAssetType::Bunch)
-            report << "  asset_layout: " << (options.separateAssets ? s_SeparateAssetLayoutLabel : s_DefaultOutputAssetTypeText) << "\n";
-        report << "  uv0: " << (sawVertexUvs ? s_ImportedSourceLabel : s_DefaultSourceLabel) << "\n";
+            report << "  asset_layout: " << (options.separateAssets ? s_SeparateAssetLayoutLabel : s_DefaultOutputAssetTypeText) << s_ReportLineEndText;
+        report << "  uv0: " << (sawVertexUvs ? s_ImportedSourceLabel : s_DefaultSourceLabel) << s_ReportLineEndText;
         if(!skeletonJoints.empty())
-            report << "  skeleton_joints: " << skeletonJoints.size() << "\n";
+            report << "  skeleton_joints: " << skeletonJoints.size() << s_ReportLineEndText;
         if(tangentReport.mode == SourceTangentMode::GeneratedFallback){
-            report << "  tangent_fallback_vertices: " << tangentReport.fallbackTangentVertexCount << "\n" << "  tangent_degenerate_uv_triangles: " << tangentReport.degenerateUvTriangleCount << "\n";
+            report << "  tangent_fallback_vertices: " << tangentReport.fallbackTangentVertexCount << s_ReportLineEndText << "  tangent_degenerate_uv_triangles: " << tangentReport.degenerateUvTriangleCount << s_ReportLineEndText;
         }
         NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
 

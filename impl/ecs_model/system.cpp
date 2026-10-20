@@ -62,6 +62,7 @@ static void ResolveAttachmentJointQueries(Core::ECS::World& world, Vector<Skelet
 }
 
 static constexpr usize s_ParallelModelObjectTransformGrainSize = 256u;
+static constexpr TStringView s_AssetLoadContext = NWB_TEXT("ModelSystem");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -214,7 +215,7 @@ void ModelSystem::ensureModelRuntime(const Core::ECS::EntityID entity, const Mod
     clearModelRuntime(entity, scratchArena);
 
     const Name modelName = component.model.name();
-    auto loadedModel = m_assetManager.loadTypedSync<Model>(modelName, NWB_TEXT("ModelSystem"), "model");
+    auto loadedModel = m_assetManager.loadTypedSync<Model>(modelName, __hidden_model_system::s_AssetLoadContext, Model::s_AssetTypeText);
     if(!loadedModel){
         runtime = ModelRuntimeComponent{};
         return;
@@ -280,7 +281,7 @@ bool ModelSystem::expandModel(const Core::ECS::EntityID owner, const Model& mode
 bool ModelSystem::spawnSkeletonObject(const Core::ECS::EntityID owner, const ModelSkeletonObject& object){
     const Name skeletonName = object.skeleton.name();
     NWB_ASSERT(skeletonName);
-    auto skeletonAsset = m_assetManager.loadTypedSync<Skeleton>(skeletonName, NWB_TEXT("ModelSystem"), "skeleton");
+    auto skeletonAsset = m_assetManager.loadTypedSync<Skeleton>(skeletonName, __hidden_model_system::s_AssetLoadContext, Skeleton::s_AssetTypeText);
     if(!skeletonAsset)
         return false;
     const Skeleton* skeleton = skeletonAsset->get();
@@ -342,7 +343,7 @@ bool ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const M
             const Name skeletonName = skeletonComponent->skeleton.name();
             if(!skeletonName)
                 return false;
-            auto skeletonAsset = m_assetManager.loadTypedSync<Skeleton>(skeletonName, NWB_TEXT("ModelSystem"), "skeleton");
+            auto skeletonAsset = m_assetManager.loadTypedSync<Skeleton>(skeletonName, __hidden_model_system::s_AssetLoadContext, Skeleton::s_AssetTypeText);
             if(!skeletonAsset)
                 return false;
             const Skeleton* skeleton = skeletonAsset->get();

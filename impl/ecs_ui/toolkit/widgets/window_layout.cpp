@@ -3,6 +3,7 @@
 
 
 #include "window.h"
+#include "../rect_math.h"
 
 #include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
@@ -80,7 +81,7 @@ Rect WindowLayout::Content(const WindowState& state, const WindowMetrics& metric
 Rect WindowLayout::Collapse(const WindowState& state, const WindowMetrics& metrics)noexcept{
     const SIMDVectorSingle origin = VectorAdd(VectorSet(state.bounds.x, state.bounds.y, state.bounds.x, state.bounds.y), VectorSet(metrics.titlePadding.left, metrics.titlePadding.top, metrics.titlePadding.left, metrics.titlePadding.top));
     const SIMDVectorSingle available = VectorSubtract(VectorSubtract(VectorSubtract(VectorSet(0.0f, metrics.titleHeight, 0.0f, 0.0f), VectorSet(0.0f, metrics.titlePadding.top, 0.0f, 0.0f)), VectorSet(0.0f, metrics.titlePadding.bottom, 0.0f, 0.0f)), VectorSet(0.0f, metrics.collapseExtent, 0.0f, 0.0f));
-    const SIMDVectorSingle centered = VectorAdd(origin, VectorMax(VectorZero(), VectorScale(available, 0.5f)));
+    const SIMDVectorSingle centered = VectorAdd(origin, VectorMax(VectorZero(), VectorScale(available, s_RectCenterFraction)));
     return { VectorGetX(centered), VectorGetY(centered), metrics.collapseExtent, metrics.collapseExtent };
 }
 

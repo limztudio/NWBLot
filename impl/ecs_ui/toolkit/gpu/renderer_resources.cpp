@@ -27,6 +27,13 @@ namespace __hidden_ui_gpu_resources{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr usize s_InitialVertexCapacity = 4096u;
+static constexpr usize s_InitialIndexCapacity = 12288u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct TargetReadyTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements{ Core::GpuQueueCapability::Graphics, true };
     struct Payload{
@@ -88,7 +95,7 @@ public:
 
 template<typename TShader>
 [[nodiscard]] static bool LoadShader(GpuRendererState& state, Core::ShaderHandle& shader, const Name& identity){
-    return ShaderAssetLoader::Load<TShader>(shader, identity, Core::ShaderArchive::s_DefaultVariant, identity, state.m_graphics, state.m_assets, state.m_resolver, NWB_TEXT("GpuRenderer"));
+    return ShaderAssetLoader::Load<TShader>(shader, identity, Core::ShaderArchive::s_DefaultVariant, identity, state.m_graphics, state.m_assets, state.m_resolver, s_GpuRendererContext);
 }
 
 
@@ -199,7 +206,7 @@ Expected<GpuVersion<GpuTargetVersion>> GpuRendererState::createTarget(const u32 
     GpuVersion<GpuTargetVersion> target = Move(*targetResult);
     Core::TextureDesc description;
     description
-        .setName(Name("ui.layer"))
+        .setName(s_GpuLayerTextureName)
         .setWidth(width).setHeight(height)
         .setFormat(Core::Format::RGBA16_FLOAT)
         .setInRenderTarget(true)
@@ -252,12 +259,12 @@ bool GpuRendererState::prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& sn
         return false;
     Core::Device& device = m_graphics.getDevice();
     if(slot.vertexCapacity < vertexCount){
-        usize capacity = NextGrowingCapacity(slot.vertexCapacity, vertexCount, 4096u);
+        usize capacity = NextGrowingCapacity(slot.vertexCapacity, vertexCount, __hidden_ui_gpu_resources::s_InitialVertexCapacity);
         if(capacity > Limit<usize>::s_Max / sizeof(Vertex))
             capacity = vertexCount;
         Core::BufferDesc description;
         description.setByteSize(static_cast<u64>(capacity * sizeof(Vertex))).setIsVertexBuffer(true)
-            .setDebugName(Name("ui.vertices")).enableAutomaticStateTracking(Core::ResourceStates::Common)
+            .setDebugName(s_GpuVertexBufferName).enableAutomaticStateTracking(Core::ResourceStates::Common)
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
         ;
         auto bufferResult = device.createBuffer(description);
@@ -268,12 +275,12 @@ bool GpuRendererState::prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& sn
         slot.vertexCapacity = capacity;
     }
     if(slot.indexCapacity < indexCount){
-        usize capacity = NextGrowingCapacity(slot.indexCapacity, indexCount, 12288u);
+        usize capacity = NextGrowingCapacity(slot.indexCapacity, indexCount, __hidden_ui_gpu_resources::s_InitialIndexCapacity);
         if(capacity > Limit<usize>::s_Max / sizeof(u32))
             capacity = indexCount;
         Core::BufferDesc description;
         description.setByteSize(static_cast<u64>(capacity * sizeof(u32))).setIsIndexBuffer(true)
-            .setDebugName(Name("ui.indices")).enableAutomaticStateTracking(Core::ResourceStates::Common)
+            .setDebugName(s_GpuIndexBufferName).enableAutomaticStateTracking(Core::ResourceStates::Common)
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
         ;
         auto bufferResult = device.createBuffer(description);

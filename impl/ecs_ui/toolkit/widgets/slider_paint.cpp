@@ -51,11 +51,11 @@ bool Builder::paintSlider(const Item& item, const LayoutBox& box){
     placement = SliderLayout::Place(box.rectangle, clip, frame.m_metrics, *normalized);
     if(!placement)
         return false;
-    const auto trackIdResult = MakeWidgetId(item.state.id, "track");
+    const auto trackIdResult = MakeWidgetId(item.state.id, WidgetPartKey::s_Track);
     if(!trackIdResult)
         return false;
     const WidgetId trackId = *trackIdResult;
-    const auto thumbIdResult = MakeWidgetId(item.state.id, "thumb");
+    const auto thumbIdResult = MakeWidgetId(item.state.id, WidgetPartKey::s_Thumb);
     if(!thumbIdResult)
         return false;
     const WidgetId thumbId = *thumbIdResult;

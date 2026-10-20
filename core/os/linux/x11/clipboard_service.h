@@ -65,6 +65,11 @@ private:
 public:
     static constexpr usize s_MaxTransfers = 8u;
     static constexpr u32 s_TransferTimeoutMs = 5000u;
+    static constexpr usize s_MaxMultipleAtoms = 256u;
+    static constexpr usize s_AtomPairLength = 2u;
+    static constexpr long s_RequestReserveWords = 64;
+    static constexpr usize s_MaxChunkBytes = 65536u;
+    static constexpr usize s_FallbackChunkBytes = 1024u;
 
 
 public:
@@ -107,7 +112,7 @@ private:
 private:
     Alloc::GlobalArena& m_arena;
     Display& m_display;
-    Array<OwnedSelection, 2u> m_owned;
+    Array<OwnedSelection, s_ClipboardChannelCount> m_owned;
     Vector<OutgoingTransfer, Alloc::GlobalArena> m_outgoing;
     ClipboardTextAccumulator m_received;
     AString<Alloc::GlobalArena> m_pendingWrite;

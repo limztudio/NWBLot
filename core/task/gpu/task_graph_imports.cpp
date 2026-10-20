@@ -398,7 +398,7 @@ void GpuTaskGraph::prepareResourceIndexes(const ResourcePointerKey& pendingPoint
             m_resourcePointerIndex.emplace(Move(*pointers));
     }
     else if(pendingPointer.pointer && !m_resourcePointerIndex)
-        m_resourcePointerIndex.emplace(2u, m_arena);
+        m_resourcePointerIndex.emplace(s_InitialPointerIndexBucketCount, m_arena);
 }
 
 void GpuTaskGraph::prepareResourceSetIndex(){

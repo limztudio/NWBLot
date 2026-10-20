@@ -36,6 +36,11 @@ namespace UiWidgetTests{
 using namespace Impl;
 using namespace Impl::Ui;
 
+inline constexpr AStringView s_TestSkinPath = "tests/ui/skin";
+inline constexpr AStringView s_TestLatinFontPath = "tests/ui/fonts/latin";
+inline constexpr AStringView s_TestKoreanFontPath = "tests/ui/fonts/korean";
+inline constexpr Name s_FontScratchArenaName("tests/ui/fonts/operation_scratch");
+
 [[nodiscard]] inline Point Center(const Rect& bounds)noexcept{
     const SIMDVectorSingle center = VectorMultiplyAddExpression(VectorSet(bounds.width, bounds.height, 0.0f, 0.0f), VectorReplicate(0.5f), VectorSet(bounds.x, bounds.y, 0.0f, 0.0f));
     return { VectorGetX(center), VectorGetY(center) };
@@ -110,6 +115,9 @@ void ExpectAcceptedInput(const Input& input, const AcceptedInputState<Capacity>&
     ExpectAcceptedTargets(input, saved.targets, saved.count, true);
 }
 
+inline constexpr AStringView s_ParentPopupKey = "parent";
+inline constexpr AStringView s_ChildPopupKey = "child";
+
 [[nodiscard]] inline PopupOptions NestedParentOptions()noexcept{
     PopupOptions options;
     options.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
@@ -178,9 +186,9 @@ class WidgetFixture : public testing::Test{
 public:
     WidgetFixture()
         : m_arena(Name("tests/ui/widgets"))
-        , m_font(m_arena, Name("tests/ui/fonts/latin"))
+        , m_font(m_arena, Name(s_TestLatinFontPath))
         , m_text(m_arena)
-        , m_skin(m_arena, Name("tests/ui/skin"))
+        , m_skin(m_arena, Name(s_TestSkinPath))
         , m_paint(m_arena)
         , m_context(m_arena)
         , m_builder(m_arena, m_context, m_paint, m_text)
@@ -189,7 +197,7 @@ public:
 
 protected:
     virtual void SetUp()override{
-        Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
+        Core::Alloc::ScratchArena fontScratchArena(s_FontScratchArenaName);
         ASSERT_TRUE(UiWidgetTests::InstallLatinFixtureFont(fontScratchArena, m_arena, m_font, m_text));
         configureSkin();
         ASSERT_TRUE(m_skin.validatePayload());
@@ -230,7 +238,7 @@ protected:
     [[nodiscard]] bool begin(const u64 generation, const DisplayMetrics& display = { 800.0f, 600.0f, 1.0f, 1.0f }){
         if(!m_context.beginFrame(generation))
             return false;
-        m_paint.begin(display, generation, m_skinGeneration, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
+        m_paint.begin(display, generation, m_skinGeneration, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
         return m_context.beginRoot(m_root);
     }
 

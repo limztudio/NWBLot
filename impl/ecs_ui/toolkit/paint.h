@@ -91,6 +91,7 @@ struct SkinBinding{
 
 inline constexpr usize s_PaintMaxImages = s_PaintMaxGlyphPages;
 inline constexpr usize s_PaintMaxOverlayDepth = 16u;
+inline constexpr usize s_PaintDefaultClipDepth = 8u;
 
 template<typename T>
 using PaintVector = Vector<T, Core::Alloc::GlobalArena>;
@@ -166,7 +167,7 @@ public:
 public:
     // Skin payload validation belongs to loading; begin captures its descriptor for this frame.
     void begin(const DisplayMetrics& metrics, u64 generation, u64 skinGeneration, const Core::Assets::AssetRef<UiSkin>& skinRef, const UiSkin& skin);
-    void reserve(usize quadCount, usize clipDepth = 8u);
+    void reserve(usize quadCount, usize clipDepth = s_PaintDefaultClipDepth);
     void pushClip(const Rect& clip);
     [[nodiscard]] bool popClip()noexcept;
     // Each bounded overlay escapes parent clipping and restores that clip and layer at its balanced end.

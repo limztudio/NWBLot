@@ -14,6 +14,8 @@ from window_smoke import parse_args
 from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
     read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
 from fixture_environment import build_fixture_environment
+from checkpoint_report import CHECKPOINT_POLL_SECONDS, CHECKPOINT_SETTLE_SECONDS, CHECKPOINT_STAGE_TIMEOUT_SECONDS
+from fixture_launch import DISPLAY_MARKER_TIMEOUT_SECONDS
 
 LIT_MODAL = "modal"
 LIT_RECTANGLES = "rectangles"
@@ -57,15 +59,15 @@ class PopupRun:
 
     def checkpoint(self, name, *, extent=None, **changes):
         self.expected.update(changes)
-        time.sleep(0.25)
+        time.sleep(CHECKPOINT_SETTLE_SECONDS)
         path = self.args.output_directory / f"{len(self.stages):02d}_{name}.bmp"
-        stage_deadline = min(self.deadline, time.monotonic() + 10.0)
+        stage_deadline = min(self.deadline, time.monotonic() + CHECKPOINT_STAGE_TIMEOUT_SECONDS)
         report = None
         while time.monotonic() < stage_deadline:
             ensure_process_running(self.process, "during popup UI capture")
             snapshot = snapshot_from_logs(self.logs())
             if snapshot is None:
-                time.sleep(0.1)
+                time.sleep(CHECKPOINT_POLL_SECONDS)
                 continue
             if snapshot[LIT_LOGICAL_EXTENT][0] < 600.0 or snapshot[LIT_LOGICAL_EXTENT][1] < 390.0:
                 raise SmokeSkip("the popup fixture needs a logical client of at least 600x390")
@@ -77,7 +79,7 @@ class PopupRun:
                 self.stages.append(report)
                 self.write_report(False)
                 return
-            time.sleep(0.1)
+            time.sleep(CHECKPOINT_POLL_SECONDS)
         raise SmokeFailure(f"popup displayed-state gate '{name}' failed: {report}")
 
     def write_report(self, passed):
@@ -171,7 +173,7 @@ def run(args):
             ensure_process_running(application, "before the popup fixture appeared")
             raise SmokeFailure("custom popup fixture did not appear")
         backend.prepare_window(handle)
-        wait_for_log_message(log_directory, log_baseline, log_pattern, "UiPopupSmoke: display", min(args.timeout, 15.0))
+        wait_for_log_message(log_directory, log_baseline, log_pattern, "UiPopupSmoke: display", min(args.timeout, DISPLAY_MARKER_TIMEOUT_SECONDS))
         popup_run = PopupRun(args, backend, handle, application, log_directory, log_baseline, log_pattern)
         popup_run.execute()
     finally:

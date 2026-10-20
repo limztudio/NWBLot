@@ -27,6 +27,8 @@ namespace __hidden_ui_text_area_navigation_tests{
 
 using namespace UiWidgetTests;
 
+constexpr AStringView s_KoreanLanguage = "ko";
+
 class UiTextAreaNavigationTests : public WidgetFixture{
 public:
     UiTextAreaNavigationTests()
@@ -336,7 +338,7 @@ TEST_F(UiTextAreaNavigationTests, ExplicitHangulPolicyKeepsVerticalTargetAligned
     ASSERT_TRUE(installKoreanFallback());
     ASSERT_TRUE(m_model.setText("\xE1\x84\x92\xE1\x85\xA1\xE1\x86\xAB\naaa"));
     ASSERT_TRUE(m_model.setSelection(9u, 9u));
-    const ShapeRequest request{ {}, 14.0f, TextDirection::LeftToRight, TextScriptTag('H', 'a', 'n', 'g'), "ko" };
+    const ShapeRequest request{ {}, 14.0f, TextDirection::LeftToRight, TextScriptTag('H', 'a', 'n', 'g'), s_KoreanLanguage };
     EditBoxView visual(m_arena);
     ASSERT_TRUE(visual.snapshot(m_model));
     ASSERT_EQ(visual.shape(m_text, request), TextLayoutStatus::Success);
@@ -346,7 +348,7 @@ TEST_F(UiTextAreaNavigationTests, ExplicitHangulPolicyKeepsVerticalTargetAligned
     ASSERT_TRUE(expected);
 
     const auto preferred = m_state.navigation().snapshot();
-    AString<Core::Alloc::GlobalArena> language("ko", m_arena);
+    AString<Core::Alloc::GlobalArena> language(s_KoreanLanguage, m_arena);
     TextAreaNavigationResolver configured(m_arena, m_text, m_context, m_state, 14.0f, TextScriptTag('H', 'a', 'n', 'g'), StringView(language.data(), language.size()));
     language.assign("!!", 2u);
     const auto matching = configured.resolve(m_model, EditNavigationDirection::Down, preferred, 0.0f);

@@ -207,7 +207,7 @@ Expected<GpuGlyphGraphResources> GpuRendererState::declareGlyphPages(Core::GpuTa
     }
     for(usize index = 0u; index < frame->m_glyphPages.size(); ++index){
         const auto& page = frame->m_glyphPages[index];
-        char identityText[32u];
+        char identityText[TextDetail::s_DecimalTextBufferBytes];
         const AStringView suffix = FormatDecimal(index, identityText);
         // Graph imports unify equal identities; every immutable snapshot page needs a distinct texture and completion name.
         const auto readyIdentity = DeriveName(Name("ui.glyph_page_ready/"), suffix);

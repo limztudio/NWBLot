@@ -41,6 +41,7 @@ inline constexpr AStringView s_AftermathSkippedReport = "status=skipped\ndetail=
 inline constexpr AStringView s_AftermathCreateDecoderFailedReport = "status=decode_failed\ndetail=create_decoder\n";
 inline constexpr AStringView s_AftermathGenerateJsonFailedReport = "status=decode_failed\ndetail=generate_json\n";
 inline constexpr AStringView s_AftermathGetJsonFailedReport = "status=decode_failed\ndetail=get_json\n";
+inline constexpr AStringView s_AftermathLoadRuntimeOperation = "load_runtime";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -76,7 +77,7 @@ public:
     [[nodiscard]] Expected<void, AftermathLoadFailure> load(Core::Alloc::ScratchArena& scratchArena){
         const auto opened = library.open(scratchArena, Core::Common::s_AftermathRuntimeName);
         if(!opened)
-            return MakeUnexpected(AftermathLoadFailure{ .operation = "load_runtime", .native = opened.error(), });
+            return MakeUnexpected(AftermathLoadFailure{ .operation = s_AftermathLoadRuntimeOperation, .native = opened.error(), });
 
         const auto create = library.resolve<PFN_GFSDK_Aftermath_GpuCrashDump_CreateDecoder>(scratchArena, "GFSDK_Aftermath_GpuCrashDump_CreateDecoder");
         const auto generate = library.resolve<PFN_GFSDK_Aftermath_GpuCrashDump_GenerateJSON>(scratchArena, "GFSDK_Aftermath_GpuCrashDump_GenerateJSON");
@@ -135,7 +136,7 @@ void AppendAftermathGpuDumpSummary(Core::Alloc::ScratchArena& scratchArena, cons
     const auto loaded = decoderLib.load(scratchArena);
     if(!loaded){
         const AftermathLoadFailure& failure = loaded.error();
-        outReport += failure.operation == "load_runtime" ? "\n[aftermath]\nstatus=skipped\n" : "\n[aftermath]\nstatus=decode_failed\n";
+        outReport += failure.operation == s_AftermathLoadRuntimeOperation ? "\n[aftermath]\nstatus=skipped\n" : "\n[aftermath]\nstatus=decode_failed\n";
         outReport += "detail=Aftermath runtime admission failed\n";
         AppendNativeFailure(outReport, CrashSymbolicationFailure{ .operation = failure.operation, .code = failure.native.code, });
         outReport += "native_detail=";

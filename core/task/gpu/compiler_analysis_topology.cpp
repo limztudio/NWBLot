@@ -206,10 +206,13 @@ bool BuildTopologicalOrder(
     if(outOrder.size() == taskCount)
         return true;
 
+    constexpr u8 s_VisitNotStarted = 0u;
+    constexpr u8 s_VisitOnStack = 1u;
+    constexpr u8 s_VisitFinished = 2u;
     Vector<u8, Alloc::ScratchArena> visitState(taskCount, scratchArena);
     Vector<TaskCycleTraversalFrame, Alloc::ScratchArena> visitStack(scratchArena);
     for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex)
-        visitState[taskIndex] = 0u;
+        visitState[taskIndex] = s_VisitNotStarted;
     visitStack.reserve(taskCount);
 
     const auto appendCycleEdge = [&](const u32 producerIndex, const u32 consumerIndex){
@@ -224,15 +227,15 @@ bool BuildTopologicalOrder(
     };
     bool foundCycle = false;
     for(u32 taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
-        if(visitState[taskIndex] != 0u)
+        if(visitState[taskIndex] != s_VisitNotStarted)
             continue;
 
-        visitState[taskIndex] = 1u;
+        visitState[taskIndex] = s_VisitOnStack;
         visitStack.push_back(TaskCycleTraversalFrame{ .nextAdjacencyIndex = adjacency.offsets[taskIndex], .taskIndex = taskIndex, });
         while(!visitStack.empty()){
             TaskCycleTraversalFrame& frame = visitStack.back();
             if(frame.nextAdjacencyIndex >= adjacency.offsets[frame.taskIndex + 1u]){
-                visitState[frame.taskIndex] = 2u;
+                visitState[frame.taskIndex] = s_VisitFinished;
                 visitStack.pop_back();
                 continue;
             }
@@ -241,7 +244,7 @@ bool BuildTopologicalOrder(
             const GpuTaskDependencyEdge& edge = edges[adjacency.edgeIndices[frame.nextAdjacencyIndex]];
             ++frame.nextAdjacencyIndex;
             const u32 consumerIndex = edge.consumer.index;
-            if(visitState[consumerIndex] == 1u){
+            if(visitState[consumerIndex] == s_VisitOnStack){
                 usize cycleStart = 0u;
                 while(visitStack[cycleStart].taskIndex != consumerIndex)
                     ++cycleStart;
@@ -256,8 +259,8 @@ bool BuildTopologicalOrder(
                 foundCycle = true;
                 break;
             }
-            if(visitState[consumerIndex] == 0u){
-                visitState[consumerIndex] = 1u;
+            if(visitState[consumerIndex] == s_VisitNotStarted){
+                visitState[consumerIndex] = s_VisitOnStack;
                 visitStack.push_back(TaskCycleTraversalFrame{ .nextAdjacencyIndex = adjacency.offsets[consumerIndex], .taskIndex = consumerIndex, });
             }
         }

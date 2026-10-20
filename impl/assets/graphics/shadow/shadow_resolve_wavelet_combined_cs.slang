@@ -102,7 +102,7 @@ float2 nwbCombinedShadowWaveletSigma(const int2 texel, const uint slot){
     [unroll] for(int dy = -1; dy <= 1; ++dy){
         [unroll] for(int dx = -1; dx <= 1; ++dx){
             const int2 tap = clamp(texel + int2(dx, dy), int2(0, 0), maximum);
-            if(nwbCombinedShadowWaveletGeometry(tap).w <= half(0.5h))
+            if(nwbCombinedShadowWaveletGeometry(tap).w <= half(NWB_SHADOW_GEOMETRY_VALID_THRESHOLD))
                 continue;
             const half4 visibility = nwbCombinedShadowWaveletVisibility(tap, slot);
             const half2 value = half2(visibility.x, nwbLuminance(visibility.yzw));
@@ -139,13 +139,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     // The host selects this pipeline only for the first wavelet with distinct retained temporal inputs.
     const int tileWidth = NWB_COMBINED_SHADOW_WAVELET_TILE_SIDE;
     const uint tileTexels = NWB_COMBINED_SHADOW_WAVELET_TILE_TEXELS;
-    const int2 tileOrigin = int2(groupID.xy) * NWB_SHADOW_RESOLVE_GROUP_SIZE - int2(2 * step, 2 * step);
+    const int2 tileOrigin = int2(groupID.xy) * NWB_SHADOW_RESOLVE_GROUP_SIZE - int2(NWB_SHADOW_RESOLVE_KERNEL_RADIUS * step, NWB_SHADOW_RESOLVE_KERNEL_RADIUS * step);
     const uint lane = groupThreadID.y * NWB_SHADOW_RESOLVE_GROUP_SIZE + groupThreadID.x;
     const uint threadCount = NWB_SHADOW_RESOLVE_GROUP_SIZE * NWB_SHADOW_RESOLVE_GROUP_SIZE;
     const uint slotEnd = min(g_NwbCombinedShadowWaveletPush.lightSlotStart + g_NwbCombinedShadowWaveletPush.lightSlotCount, NWB_SCENE_SHADOW_SLOT_COUNT);
     const half4 centerGeom = inBounds ? nwbCombinedShadowWaveletGeometry(texel) : half4(0.0h);
     const float centerDistance = float(centerGeom.z);
-    const float sigmaDistance = max(centerDistance * NWB_SHADOW_RESOLVE_WAVELET_DIST_FRAC * (float)step, 1e-3);
+    const float sigmaDistance = max(centerDistance * NWB_SHADOW_RESOLVE_WAVELET_DIST_FRAC * (float)step, NWB_SHADOW_RESOLVE_SIGMA_DISTANCE_MIN);
     const float invTwoSigmaDistanceSq = 1.0 / (2.0 * sigmaDistance * sigmaDistance);
     const float3 centerNormal = nwbOctDecodeNormal(float2(centerGeom.xy));
     for(uint slot = g_NwbCombinedShadowWaveletPush.lightSlotStart; slot < slotEnd; ++slot){
@@ -161,7 +161,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             uint valid = 0u;
             if(tap.x >= 0 && tap.y >= 0 && tap.x < hw && tap.y < hh){
                 const half4 geometry = nwbCombinedShadowWaveletGeometry(tap);
-                if(geometry.w > half(0.5h)){
+                if(geometry.w > half(NWB_SHADOW_GEOMETRY_VALID_THRESHOLD)){
                     visibility = nwbCombinedShadowWaveletVisibility(tap, slot);
                     nonLit = nonLit || any(visibility != half4(1.0h));
                     normal = geometry.xy;
@@ -179,19 +179,19 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         GroupMemoryBarrierWithGroupSync();
         if(inBounds){
             // A fully-lit halo has exact normalized visibility one; mixed tiles retain the original half-weight reduction.
-            if(centerGeom.w <= half(0.5h) || g_NwbCombinedShadowWaveletNonLit == 0u)
+            if(centerGeom.w <= half(NWB_SHADOW_GEOMETRY_VALID_THRESHOLD) || g_NwbCombinedShadowWaveletNonLit == 0u)
                 nwbCombinedShadowWaveletStore(pixel, slot, 1.0, float3(1.0));
             else{
-                const uint centerIndex = (uint)((int(groupThreadID.y) + 2 * step) * tileWidth + (int(groupThreadID.x) + 2 * step));
+                const uint centerIndex = (uint)((int(groupThreadID.y) + NWB_SHADOW_RESOLVE_KERNEL_RADIUS * step) * tileWidth + (int(groupThreadID.x) + NWB_SHADOW_RESOLVE_KERNEL_RADIUS * step));
                 const float4 center = float4(g_NwbCombinedShadowWaveletVis[centerIndex]);
                 const float2 sigma = nwbCombinedShadowWaveletSigma(texel, slot);
                 float opaqueSum = 0.0;
                 float3 rgbSum = float3(0.0);
                 half opaqueWeightSum = half(0.0h);
                 half rgbWeightSum = half(0.0h);
-                [unroll] for(int ky = -2; ky <= 2; ++ky){
-                    [unroll] for(int kx = -2; kx <= 2; ++kx){
-                        const uint index = (uint)((int(groupThreadID.y) + (ky + 2) * step) * tileWidth + (int(groupThreadID.x) + (kx + 2) * step));
+                [unroll] for(int ky = -NWB_SHADOW_RESOLVE_KERNEL_RADIUS; ky <= NWB_SHADOW_RESOLVE_KERNEL_RADIUS; ++ky){
+                    [unroll] for(int kx = -NWB_SHADOW_RESOLVE_KERNEL_RADIUS; kx <= NWB_SHADOW_RESOLVE_KERNEL_RADIUS; ++kx){
+                        const uint index = (uint)((int(groupThreadID.y) + (ky + NWB_SHADOW_RESOLVE_KERNEL_RADIUS) * step) * tileWidth + (int(groupThreadID.x) + (kx + NWB_SHADOW_RESOLVE_KERNEL_RADIUS) * step));
                         if(g_NwbCombinedShadowWaveletValid[index] == 0u)
                             continue;
                         const float4 tap = float4(g_NwbCombinedShadowWaveletVis[index]);
@@ -202,8 +202,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                         const half opaqueValueWeight = half(exp(-abs(half(tap.x) - half(center.x)) / half(sigma.x)));
                         const half rgbValueWeight = half(exp(-abs(half(nwbLuminance(tap.yzw)) - half(nwbLuminance(center.yzw))) / half(sigma.y)));
                         // Keep each half multiplication and accumulation in the original order, including separate denominators.
-                        const half opaqueWeight = NWB_SHADOW_RESOLVE_KERNEL[kx + 2] * NWB_SHADOW_RESOLVE_KERNEL[ky + 2] * distanceWeight * normalWeight * opaqueValueWeight;
-                        const half rgbWeight = NWB_SHADOW_RESOLVE_KERNEL[kx + 2] * NWB_SHADOW_RESOLVE_KERNEL[ky + 2] * distanceWeight * normalWeight * rgbValueWeight;
+                        const half opaqueWeight = NWB_SHADOW_RESOLVE_KERNEL[kx + NWB_SHADOW_RESOLVE_KERNEL_RADIUS] * NWB_SHADOW_RESOLVE_KERNEL[ky + NWB_SHADOW_RESOLVE_KERNEL_RADIUS] * distanceWeight * normalWeight * opaqueValueWeight;
+                        const half rgbWeight = NWB_SHADOW_RESOLVE_KERNEL[kx + NWB_SHADOW_RESOLVE_KERNEL_RADIUS] * NWB_SHADOW_RESOLVE_KERNEL[ky + NWB_SHADOW_RESOLVE_KERNEL_RADIUS] * distanceWeight * normalWeight * rgbValueWeight;
                         opaqueSum += opaqueWeight * tap.x;
                         rgbSum += rgbWeight * tap.yzw;
                         opaqueWeightSum += opaqueWeight;

@@ -14,6 +14,8 @@ from interaction_smoke import parse_args
 from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
     read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
 from fixture_environment import build_fixture_environment
+from checkpoint_report import CHECKPOINT_POLL_SECONDS, CHECKPOINT_SETTLE_SECONDS, CHECKPOINT_STAGE_TIMEOUT_SECONDS
+from fixture_launch import DISPLAY_MARKER_TIMEOUT_SECONDS
 
 LIT_SCALE = "scale"
 LIT_FIELDS = "fields"
@@ -42,6 +44,8 @@ LIT_Q = "q"
 LIT_F6 = "F6"
 LIT_SIMPLE = "simple"
 LIT_UI_EDIT_FIXTURE = "UI edit fixture"
+LIT_PRIMARY_INITIAL_TEXT = "Hello 한글"
+LIT_PRIMARY_BACKSPACED_TEXT = "Hello 한"
 
 
 class EditRun:
@@ -80,15 +84,15 @@ class EditRun:
 
     def checkpoint(self, name, primary, secondary, *, readonly=False, visible=True, extent=None, selection=False, scrolled=False, allowed_primary=None):
         # Settle unchanged-state gates as well, exposing replay or late clipboard delivery.
-        time.sleep(0.25)
+        time.sleep(CHECKPOINT_SETTLE_SECONDS)
         path = self.args.output_directory / f"{len(self.stages):02d}_{name}.bmp"
-        stage_deadline = min(self.deadline, time.monotonic() + 10.0)
+        stage_deadline = min(self.deadline, time.monotonic() + CHECKPOINT_STAGE_TIMEOUT_SECONDS)
         report = None
         while time.monotonic() < stage_deadline:
             ensure_process_running(self.process, "during edit-box capture")
             snapshot = snapshot_from_logs(self.logs())
             if snapshot is None:
-                time.sleep(0.1)
+                time.sleep(CHECKPOINT_POLL_SECONDS)
                 continue
             if snapshot[LIT_LOGICAL_EXTENT][0] < 390.0 or snapshot[LIT_LOGICAL_EXTENT][1] < 350.0:
                 raise SmokeSkip("the edit fixture needs a logical client of at least 390x350")
@@ -108,7 +112,7 @@ class EditRun:
                 self.stages.append(report)
                 self.write_report(False)
                 return
-            time.sleep(0.1)
+            time.sleep(CHECKPOINT_POLL_SECONDS)
         raise SmokeFailure(f"edit displayed-state gate '{name}' failed: {report}")
 
     def write_report(self, passed):
@@ -144,19 +148,19 @@ class EditRun:
         return primary
 
     def execute(self):
-        primary, secondary = "Hello 한글", LIT_TARGET
+        primary, secondary = LIT_PRIMARY_INITIAL_TEXT, LIT_TARGET
         self.checkpoint("initial", model(primary), model(secondary))
         self.focus(LIT_PRIMARY)
         self.native.tap(LIT_END)
         self.checkpoint("primary_focus", model(primary, focused=True), model(secondary))
         self.native.tap(LIT_BACKSPACE)
-        primary = "Hello 한"
+        primary = LIT_PRIMARY_BACKSPACED_TEXT
         self.checkpoint("korean_grapheme_backspace", model(primary, focused=True), model(secondary))
         self.native.text(LIT_Z)
         primary += LIT_Z
         self.checkpoint("native_text_commit", model(primary, focused=True), model(secondary))
         self.native.tap(LIT_Z, control=True)
-        self.checkpoint("undo", model("Hello 한", focused=True), model(secondary))
+        self.checkpoint("undo", model(LIT_PRIMARY_BACKSPACED_TEXT, focused=True), model(secondary))
         self.native.tap(LIT_Y, control=True)
         self.checkpoint("redo", model(primary, focused=True), model(secondary))
         self.native.tap(LIT_LEFT, shift=True)
@@ -197,7 +201,7 @@ class EditRun:
         self.native.tap(LIT_TAB, shift=True)
         self.native.tap(LIT_END)
         self.native.tap(LIT_F7)
-        primary, secondary = "Hello 한글", LIT_TARGET
+        primary, secondary = LIT_PRIMARY_INITIAL_TEXT, LIT_TARGET
         self.checkpoint("external_model_replacement", model(primary, focused=True), model(secondary))
         self.native.text(LIT_X, settle=False)
         self.native.key(LIT_LEFT, True)
@@ -214,7 +218,7 @@ class EditRun:
         self.native.text("r", settle=False)
         self.native.key(LIT_F7, True)
         self.native.key(LIT_F7, False)
-        primary = "Hello 한글"
+        primary = LIT_PRIMARY_INITIAL_TEXT
         self.checkpoint("queued_commit_replacement_fence", model(primary, focused=True), model(secondary))
         self.native.tap(LIT_F6)
         self.checkpoint("hidden_focused_owner", model(primary), model(secondary), visible=False)
@@ -241,7 +245,7 @@ class EditRun:
         primary = secondary = self.alternate_clipboard()
         if self.native.windows:
             self.native.tap(LIT_F7)
-            primary, secondary = "Hello 한글", LIT_TARGET
+            primary, secondary = LIT_PRIMARY_INITIAL_TEXT, LIT_TARGET
             self.native.tap(LIT_END)
             self.checkpoint("aggregate_repeat_baseline", model(primary, focused=True), model(secondary), extent=(800, 600))
             self.native.aggregate_tap(LIT_BACKSPACE, 3)
@@ -258,7 +262,7 @@ class EditRun:
             self.checkpoint("aggregate_repeat_without_press", model(primary, 6, 6, True), model(secondary), readonly=True, extent=(800, 600))
             self.native.tap(LIT_F5)
             self.native.tap(LIT_F7)
-            primary, secondary = "Hello 한글", LIT_TARGET
+            primary, secondary = LIT_PRIMARY_INITIAL_TEXT, LIT_TARGET
             self.native.tap(LIT_END)
             self.checkpoint("double_click_baseline", model(primary, focused=True), model(secondary), extent=(800, 600))
             content_x, content_y, _, content_height = self.snapshot[LIT_FIELDS][LIT_PRIMARY][LIT_CONTENT]
@@ -293,7 +297,7 @@ def run(args, *, run_type=EditRun, input_bindings=False):
             ensure_process_running(application, "before the edit fixture appeared")
             raise SmokeFailure("custom edit fixture did not appear")
         backend.prepare_window(handle)
-        wait_for_log_message(log_directory, log_baseline, log_pattern, "UiEditSmoke: display", min(args.timeout, 15.0))
+        wait_for_log_message(log_directory, log_baseline, log_pattern, "UiEditSmoke: display", min(args.timeout, DISPLAY_MARKER_TIMEOUT_SECONDS))
         edit_run = run_type(args, backend, handle, application, log_directory, log_baseline, log_pattern)
         edit_run.execute()
     finally:

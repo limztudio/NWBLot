@@ -34,6 +34,9 @@ namespace __hidden_ui_gpu_texture_image_validation_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_VersionedImagePath = "tests/ui/versioned_gpu_image";
+constexpr AStringView s_OverflowImagePath = "tests/ui/overflow_gpu_image";
+
 [[nodiscard]] static bool ValidImageBindings(const DrawSnapshot& snapshot)noexcept{
     return GpuRendererState::ValidateGlyphPages(snapshot) && GpuRendererState::ValidateSdfPages(snapshot) && GpuRendererState::ValidateTextureImages(snapshot);
 }
@@ -49,10 +52,10 @@ namespace __hidden_ui_gpu_texture_image_validation_tests{
 
 
 TEST_F(GpuTextureImageValidationFixture, SameIdentityDistinctGenerationsRemainValidImageBindings){
-    auto firstResult = makeImage("tests/ui/versioned_gpu_image", 37u);
+    auto firstResult = makeImage(__hidden_ui_gpu_texture_image_validation_tests::s_VersionedImagePath, 37u);
     ASSERT_TRUE(firstResult);
     const SharedImageSource first = Move(*firstResult);
-    auto secondResult = makeImage("tests/ui/versioned_gpu_image", 73u);
+    auto secondResult = makeImage(__hidden_ui_gpu_texture_image_validation_tests::s_VersionedImagePath, 73u);
     ASSERT_TRUE(secondResult);
     const SharedImageSource second = Move(*secondResult);
     ASSERT_TRUE(first && second);
@@ -125,7 +128,7 @@ TEST_F(GpuTextureImageValidationFixture, TextureBindingCountOverflowRejectsEvery
     DrawSnapshot snapshot = m_builder.freeze();
     auto& images = const_cast<PaintVector<SharedImageSource>&>(snapshot.textureImages());
     for(usize index = 1u; index <= s_PaintMaxImages; ++index){
-        auto additionResult = makeImage("tests/ui/overflow_gpu_image", static_cast<u8>(index));
+        auto additionResult = makeImage(__hidden_ui_gpu_texture_image_validation_tests::s_OverflowImagePath, static_cast<u8>(index));
         ASSERT_TRUE(additionResult);
         SharedImageSource addition = Move(*additionResult);
         ASSERT_TRUE(addition);
@@ -183,7 +186,7 @@ TEST_F(GpuTextureImageValidationFixture, SharedImageBudgetOverflowIncludesEveryI
     auto imageResult = makeImage();
     ASSERT_TRUE(imageResult);
     const SharedImageSource image = Move(*imageResult);
-    auto additionResult = makeImage("tests/ui/overflow_gpu_image", 73u);
+    auto additionResult = makeImage(__hidden_ui_gpu_texture_image_validation_tests::s_OverflowImagePath, 73u);
     ASSERT_TRUE(additionResult);
     const SharedImageSource addition = Move(*additionResult);
     ASSERT_TRUE(sdf && image && addition);

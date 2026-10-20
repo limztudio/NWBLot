@@ -17,6 +17,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Low-bit marker of each aligned bin of 2, 4, 8, 16 and 32 coverage slices.
+static const uint NWB_AVBOIT_COVERAGE_MARKER_MASK_BIN2 = 0x55555555u;
+static const uint NWB_AVBOIT_COVERAGE_MARKER_MASK_BIN4 = 0x11111111u;
+static const uint NWB_AVBOIT_COVERAGE_MARKER_MASK_BIN8 = 0x01010101u;
+static const uint NWB_AVBOIT_COVERAGE_MARKER_MASK_BIN16 = 0x00010001u;
+static const uint NWB_AVBOIT_COVERAGE_MARKER_MASK_BIN32 = 0x00000001u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 uint nwbAvboitCoverageWord(uint wordIndex){
     const uint validSliceCount = min(NWB_AVBOIT_COVERAGE_SLICES_PER_WORD, nwbAvboitVirtualSliceCount() - (wordIndex << NWB_AVBOIT_COVERAGE_WORD_SHIFT));
     return g_CoverageWords[wordIndex] & (~0u >> (NWB_AVBOIT_COVERAGE_SLICES_PER_WORD - validSliceCount));
@@ -25,15 +36,15 @@ uint nwbAvboitCoverageWord(uint wordIndex){
 uint nwbAvboitCoarsenCoverageWord(uint coverageWord, uint compressionShift){
     // Each reduction keeps one low-bit marker per occupied aligned bin.
     if(compressionShift > 0u)
-        coverageWord = (coverageWord | (coverageWord >> 1u)) & 0x55555555u;
+        coverageWord = (coverageWord | (coverageWord >> 1u)) & NWB_AVBOIT_COVERAGE_MARKER_MASK_BIN2;
     if(compressionShift > 1u)
-        coverageWord = (coverageWord | (coverageWord >> 2u)) & 0x11111111u;
+        coverageWord = (coverageWord | (coverageWord >> 2u)) & NWB_AVBOIT_COVERAGE_MARKER_MASK_BIN4;
     if(compressionShift > 2u)
-        coverageWord = (coverageWord | (coverageWord >> 4u)) & 0x01010101u;
+        coverageWord = (coverageWord | (coverageWord >> 4u)) & NWB_AVBOIT_COVERAGE_MARKER_MASK_BIN8;
     if(compressionShift > 3u)
-        coverageWord = (coverageWord | (coverageWord >> 8u)) & 0x00010001u;
+        coverageWord = (coverageWord | (coverageWord >> 8u)) & NWB_AVBOIT_COVERAGE_MARKER_MASK_BIN16;
     if(compressionShift > 4u)
-        coverageWord = (coverageWord | (coverageWord >> 16u)) & 0x00000001u;
+        coverageWord = (coverageWord | (coverageWord >> 16u)) & NWB_AVBOIT_COVERAGE_MARKER_MASK_BIN32;
     return coverageWord;
 }
 

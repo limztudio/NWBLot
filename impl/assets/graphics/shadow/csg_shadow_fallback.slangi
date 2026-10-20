@@ -137,7 +137,7 @@ uint nwbCsgShadowRayInstanceOptics(
         return NWB_CSG_RAY_FAILURE_UNSUPPORTED;
     float2 receiverSegment;
     if(nwbCsgRayReceiverSegment(instance, root, origin, direction, minimum, maximum, receiverSegment)){
-        const float cutoffMargin = 32.0 * 1.1920928955078125e-7 * (length(origin) + max(abs(receiverSegment.x), abs(receiverSegment.y)) + 1.0);
+        const float cutoffMargin = NWB_CSG_SHADOW_CUTOFF_MARGIN_EPSILONS * NWB_FLOAT_EPSILON * (length(origin) + max(abs(receiverSegment.x), abs(receiverSegment.y)) + 1.0);
         for(uint index = 0u; index < cutCount; ++index)
             if(nwbCsgRayCutCoversSegment(cuts[index].distance, receiverSegment, cutoffMargin))
                 return 0u;
@@ -192,13 +192,13 @@ half3 nwbCsgShadowRayVisibility(const float3 origin, const float3 direction, con
         return nwbCsgShadowRayFailure(NWB_CSG_RAY_FAILURE_TOPOLOGY);
     const uint contextSlot = g_NwbLightSpacePush.csgContextSlot;
     const uint materialSlot = g_NwbSwShadowMaterialContextSlots.sceneSlots.z;
-    const uint activeOffset = nwbHeapRawBuffer(contextSlot).Load(20u);
-    const uint activeCount = nwbHeapRawBuffer(contextSlot).Load(24u);
+    const uint activeOffset = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_BASE_OFFSET);
+    const uint activeCount = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_COUNT_OFFSET);
 #if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_TRANSPARENT
     NwbShadowVisibilityAccumulator accumulator = nwbShadowVisibilityBegin();
 #endif
     for(uint index = 0u; index < activeCount; ++index){
-        const uint instanceIndex = nwbHeapRawBuffer(contextSlot).Load(activeOffset + index * 4u);
+        const uint instanceIndex = nwbHeapRawBuffer(contextSlot).Load(activeOffset + index * NWB_CSG_RAY_ACTIVE_INDEX_BYTES);
         if(instanceIndex >= g_NwbLightSpacePush.instanceCount)
             return nwbCsgShadowRayFailure(NWB_CSG_RAY_FAILURE_TOPOLOGY);
         const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(materialSlot)[instanceIndex];

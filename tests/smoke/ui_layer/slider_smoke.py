@@ -14,7 +14,8 @@ from window_smoke import parse_args
 from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
     read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
 from fixture_environment import build_fixture_environment
-from checkpoint_report import accept_checkpoint, fail_checkpoint
+from checkpoint_report import CHECKPOINT_POLL_SECONDS, CHECKPOINT_SETTLE_SECONDS, CHECKPOINT_STAGE_TIMEOUT_SECONDS, accept_checkpoint, fail_checkpoint
+from fixture_launch import DISPLAY_MARKER_TIMEOUT_SECONDS
 
 LIT_FOCUS_CODE = "focus_code"
 LIT_CHANGES = "changes"
@@ -39,6 +40,10 @@ LIT_TOGGLE_ENABLED = "toggle_enabled"
 LIT_OPEN = "open"
 LIT_POPUP = "popup"
 LIT_UI_SLIDER_FIXTURE = "UI slider fixture"
+
+FIXTURE_TIMEOUT_SECONDS = 180
+HELD_INPUT_SETTLE_SECONDS = 0.15
+RESIZE_SETTLE_SECONDS = 0.3
 
 
 class SliderRun:
@@ -117,9 +122,9 @@ class SliderRun:
         if neutral:
             self.native.pointer(4, 4)
         self.native.maintain_pointer()
-        time.sleep(0.25)
+        time.sleep(CHECKPOINT_SETTLE_SECONDS)
         path = self.args.output_directory / f"{len(self.stages):02d}_{name}.bmp"
-        stage_deadline = min(self.deadline, time.monotonic() + 10.0)
+        stage_deadline = min(self.deadline, time.monotonic() + CHECKPOINT_STAGE_TIMEOUT_SECONDS)
         report = None
         while time.monotonic() < stage_deadline:
             ensure_process_running(self.process, "during slider UI capture")
@@ -127,7 +132,7 @@ class SliderRun:
             self.native.record("capture_before", name=name)
             snapshot = snapshot_from_logs(self.logs())
             if snapshot is None:
-                time.sleep(0.1)
+                time.sleep(CHECKPOINT_POLL_SECONDS)
                 continue
             if snapshot[LIT_LOGICAL_EXTENT][0] < 740.0 or snapshot[LIT_LOGICAL_EXTENT][1] < 480.0:
                 raise SmokeSkip("the slider fixture needs a logical client of at least 740x480")
@@ -140,7 +145,7 @@ class SliderRun:
             if report[LIT_PASSED]:
                 accept_checkpoint(self, name, path, snapshot, report, dynamic)
                 return
-            time.sleep(0.1)
+            time.sleep(CHECKPOINT_POLL_SECONDS)
         fail_checkpoint(self, name, path, report, "slider")
 
     def write_report(self, passed):
@@ -191,7 +196,7 @@ class SliderRun:
         value = self.drag_value(LIT_MAIN, origin, moved_again, baseline, original_rectangles)
         self.checkpoint("later_move_uses_original_baseline_and_clamps_maximum", neutral=False, modes={LIT_MAIN: LIT_PRESSED}, **self.value_changes(LIT_MAIN, value))
         self.native.pointer(*self.point(4, 4))
-        time.sleep(0.15)
+        time.sleep(HELD_INPUT_SETTLE_SECONDS)
         self.native.button(False, *self.point(4, 4))
         self.checkpoint("outside_capture_clamps_minimum_and_release_finishes", main_dragging=0, **self.value_changes(LIT_MAIN, 0.0))
         self.click("disabled_thumb")
@@ -214,7 +219,7 @@ class SliderRun:
         self.checkpoint("changed_step_retires_old_repeat", step_code=1)
         prior_changes = self.expected[LIT_CHANGES]
         self.native.key(LIT_RIGHT, True)
-        time.sleep(0.15)
+        time.sleep(HELD_INPUT_SETTLE_SECONDS)
         self.native.key(LIT_RIGHT, True, repeat=True)
         self.checkpoint("fresh_coarse_step_and_repeat_use_new_policy", main_bits=value_bits(0.75), dynamic=(LIT_CHANGES,), extra=lambda snapshot: prior_changes + 1 <= snapshot[LIT_CHANGES] <= prior_changes + 2)
         self.native.command("toggle_range")
@@ -246,7 +251,7 @@ class SliderRun:
         physical_extent = self.point(*target_extent)
         self.native.button(True, *old_thumb)
         self.backend.resize_client(self.handle, *physical_extent)
-        time.sleep(0.3)
+        time.sleep(RESIZE_SETTLE_SECONDS)
         self.native.pointer(old_thumb[0] + 40, old_thumb[1])
         self.native.button(False, old_thumb[0] + 40, old_thumb[1])
         self.checkpoint("resize_changes_admission_and_retires_old_drag", extent=physical_extent, main_dragging=0, dynamic=(LIT_FOCUS_CODE,), extra=lambda snapshot: snapshot[LIT_FOCUS_CODE] in (0, 2) and snapshot[LIT_RECTANGLES][LIT_MAIN_CENTER][2] != old_width
@@ -306,7 +311,7 @@ def run(args):
             backend.prepare_raw_client_window(handle)
         else:
             backend.prepare_window(handle)
-        wait_for_log_message(log_directory, log_baseline, log_pattern, "UiSliderSmoke: display", min(args.timeout, 15.0))
+        wait_for_log_message(log_directory, log_baseline, log_pattern, "UiSliderSmoke: display", min(args.timeout, DISPLAY_MARKER_TIMEOUT_SECONDS))
         slider_run = SliderRun(args, backend, handle, application, log_directory, log_baseline, log_pattern)
         slider_run.execute()
     finally:
@@ -338,7 +343,7 @@ def run(args):
 
 
 def main(argv):
-    return run_smoke_main(argv, parse_args, run, default_timeout=180)
+    return run_smoke_main(argv, parse_args, run, default_timeout=FIXTURE_TIMEOUT_SECONDS)
 
 
 if __name__ == "__main__":

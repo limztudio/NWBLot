@@ -33,7 +33,7 @@ void UiComboGallery::paint(NWB::Impl::UiPaintContext& context, NWB::Core::Alloc:
     const ComboResult result = ui.comboBox(s_ChoiceKey, m_source, m_state, options);
     if(result.committed)
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: custom combo selected key={}"), m_state.selectedKey());
-    const auto text = StringFormat(scratchArena, "Selected: {}", m_state.selectedKey());
+    const auto text = StringFormat(scratchArena, s_SelectedTextFormat, m_state.selectedKey());
     valid = ui.label(s_SelectedKey,{ text.data(), text.size() }) && result.valid && valid;
     valid = ui.endPanel() && valid;
     ui.style().fontSize = previousFontSize;

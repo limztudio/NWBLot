@@ -37,13 +37,13 @@ bool ValidateFontAtlasSourceMatch(const FontAtlasPayload& payload, const Font& f
         const u32 tag = sourceTable.tag;
         if(tag == s_FontSfntHeadTag){
             hasHead = true;
-            const auto unitsPerEmResult = ReadFontSfntU16(sourceTable.bytes, 18u);
+            const auto unitsPerEmResult = ReadFontSfntU16(sourceTable.bytes, s_FontSfntHeadUnitsPerEmOffset);
             if(!unitsPerEmResult || *unitsPerEmResult != payload.unitsPerEm)
                 return false;
         }
         else if(tag == s_FontSfntMaxpTag){
             hasMaxp = true;
-            const auto glyphCountResult = ReadFontSfntU16(sourceTable.bytes, 4u);
+            const auto glyphCountResult = ReadFontSfntU16(sourceTable.bytes, s_FontSfntMaxpGlyphCountOffset);
             if(!glyphCountResult || *glyphCountResult != payload.sourceGlyphCount)
                 return false;
         }

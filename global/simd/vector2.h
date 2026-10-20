@@ -17,6 +17,13 @@ namespace SIMDVectorDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Packed binary32 lane multipliers { +1, -1 } for the NEON 2D cross product.
+inline constexpr u64 s_Vector2CrossLaneSignBits = 0xBF8000003F800000ull;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL NormalizeOrV(SIMDVectorSingle value, SIMDVectorSingle fallback, SIMDVectorSingle lengthSquared, const f32 minLengthSquared, SIMDVectorSingle componentMask)noexcept{
     const SIMDVectorSingle validLength = VectorAndInt(VectorGreater(lengthSquared, VectorMax(VectorZero(), VectorReplicate(minLengthSquared))), VectorEqualInt(VectorOrInt(VectorIsNaN(lengthSquared), VectorIsInfinite(lengthSquared)), VectorFalseInt()));
     SIMDVectorSingle normalized = VectorAndInt(VectorMultiply(value, VectorReciprocalSqrt(lengthSquared)), componentMask);
@@ -237,7 +244,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector2Cross(SIMDVectorSingle v0, SIMD
 #if defined(NWB_HAS_SCALAR)
     return VectorReplicate(v0.f[0] * v1.f[1] - v0.f[1] * v1.f[0]);
 #elif defined(NWB_HAS_NEON)
-    const float32x2_t negate = vcreate_f32(0xBF8000003F800000ull);
+    const float32x2_t negate = vcreate_f32(SIMDVectorDetail::s_Vector2CrossLaneSignBits);
     float32x2_t result = vmul_f32(vget_low_f32(v0), vrev64_f32(vget_low_f32(v1)));
     result = vmul_f32(result, negate);
     result = vpadd_f32(result, result);

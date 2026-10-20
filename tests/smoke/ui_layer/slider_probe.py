@@ -20,6 +20,9 @@ LIT_LOGICAL_EXTENT = "logical_extent"
 LIT_RANGE_CODE = "range_code"
 LIT_HOVER = "hover"
 LIT_PARENT = "parent"
+STRUCT_UINT64 = "<Q"
+STRUCT_DOUBLE = "<d"
+STRUCT_FLOAT = "<f"
 
 
 NUMBER = r"[0-9.eE+-]+"
@@ -40,15 +43,15 @@ SKIN_TOLERANCE = 8
 
 
 def value_bits(value):
-    return struct.unpack("<Q", struct.pack("<d", value))[0]
+    return struct.unpack(STRUCT_UINT64, struct.pack(STRUCT_DOUBLE, value))[0]
 
 
 def bits_value(value):
-    return struct.unpack("<d", struct.pack("<Q", value))[0]
+    return struct.unpack(STRUCT_DOUBLE, struct.pack(STRUCT_UINT64, value))[0]
 
 
 def f32(value):
-    return struct.unpack("<f", struct.pack("<f", value))[0]
+    return struct.unpack(STRUCT_FLOAT, struct.pack(STRUCT_FLOAT, value))[0]
 
 
 def snapshot_from_logs(text):

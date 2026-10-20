@@ -15,7 +15,8 @@ from window_smoke import parse_args
 from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
     read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
 from fixture_environment import build_fixture_environment
-from checkpoint_report import accept_checkpoint, fail_checkpoint, prepare_guarded_checkpoint
+from checkpoint_report import CHECKPOINT_POLL_SECONDS, accept_checkpoint, fail_checkpoint, prepare_guarded_checkpoint
+from fixture_launch import DISPLAY_MARKER_TIMEOUT_SECONDS
 from probe_reference import linear_rgb_bytes
 
 LIT_ENABLED = "enabled"
@@ -52,6 +53,24 @@ LIT_F7 = "F7"
 LIT_INTEGER_CARET = "integer_caret"
 LIT_INTEGER_CONTENT = "integer_content"
 LIT_UI_NUMERIC_EDITOR_FIXTURE = "UI numeric editor fixture"
+LIT_COMMITTED_INTEGER_TEXT = "7"
+LIT_COMMITTED_FLOAT_TEXT = "1.25"
+LIT_INTEGER_OVERFLOW_TEXT = "9223372036854775808"
+LIT_SIGNED_ZERO_TEXT = "-0"
+LIT_UPPERCASE_EXPONENT_TEXT = "+1.5E+1"
+LIT_UPPER_BOUND_TEXT = "10"
+LIT_OUT_OF_RANGE_TEXT = "11"
+LIT_READONLY_DIRTY_TEXT = "3"
+LIT_IGNORED_TEXT = "9"
+LIT_DISABLE_DIRTY_TEXT = "-4"
+LIT_REPLACEMENT_DIRTY_TEXT = "8"
+LIT_ORDERED_SUBMIT_TEXT = "42"
+LIT_INTEGER_MAXIMUM_TEXT = "9223372036854775807"
+LIT_INTEGER_MINIMUM_TEXT = "-9223372036854775808"
+LIT_FOCUS_LOSS_DIRTY_TEXT = "12"
+
+CLIPBOARD_VERIFY_TIMEOUT_SECONDS = 5.0
+CLIPBOARD_VERIFY_POLL_SECONDS = 0.05
 
 
 COUNTERS = ("commits", "cancels", "rejects", "clamps", "restored")
@@ -72,7 +91,7 @@ class NumericEditRun:
         self.stages = []
         self.failure_report = None
         self.expected = {"integer_bits": integer_bits(7), "float_bits": float_bits(1.25), "i_focus": 0, "f_focus": 0, "clipboard_focus": 0, LIT_ENABLED: 1, LIT_READONLY: 0, "clamp": 1, "coherent": 1,
-            **draft_fields(LIT_I, "7", anchor=1, caret=1, status=0, dirty=False), **draft_fields(LIT_F, "1.25", anchor=4, caret=4, status=0, dirty=False), **draft_fields(LIT_CLIPBOARD, "", anchor=0, caret=0)}
+            **draft_fields(LIT_I, LIT_COMMITTED_INTEGER_TEXT, anchor=1, caret=1, status=0, dirty=False), **draft_fields(LIT_F, LIT_COMMITTED_FLOAT_TEXT, anchor=4, caret=4, status=0, dirty=False), **draft_fields(LIT_CLIPBOARD, "", anchor=0, caret=0)}
 
     def logs(self):
         return collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern)
@@ -100,7 +119,7 @@ class NumericEditRun:
             self.native.maintain_pointer()
             snapshot = snapshot_from_logs(self.logs())
             if snapshot is None:
-                time.sleep(0.1)
+                time.sleep(CHECKPOINT_POLL_SECONDS)
                 continue
             if snapshot[LIT_LOGICAL_EXTENT][0] < 640.0 or snapshot[LIT_LOGICAL_EXTENT][1] < 400.0:
                 raise SmokeSkip("the numeric editor fixture needs a logical client of at least 640x400")
@@ -118,7 +137,7 @@ class NumericEditRun:
             if report[LIT_PASSED]:
                 accept_checkpoint(self, name, path, snapshot, report, dynamic)
                 return
-            time.sleep(0.1)
+            time.sleep(CHECKPOINT_POLL_SECONDS)
         fail_checkpoint(self, name, path, report, "numeric edit")
 
     def _caret_probe_sample(self, snapshot):
@@ -140,7 +159,7 @@ class NumericEditRun:
         return None
 
     def require_clipboard(self, text):
-        deadline, observed = min(self.deadline, time.monotonic() + 5.0), None
+        deadline, observed = min(self.deadline, time.monotonic() + CLIPBOARD_VERIFY_TIMEOUT_SECONDS), None
         while time.monotonic() < deadline:
             ensure_process_running(self.process, "during numeric OS clipboard verification")
             observed = self.native.clipboard_text(timeout=min(2.0, max(0.1, deadline - time.monotonic())))
@@ -148,7 +167,7 @@ class NumericEditRun:
                 self.stages[-1][LIT_OS_CLIPBOARD] = {LIT_EXPECTED: text, "observed": observed, LIT_PASSED: True}
                 self.write_report(False)
                 return
-            time.sleep(0.05)
+            time.sleep(CLIPBOARD_VERIFY_POLL_SECONDS)
         self.failure_report = {LIT_STAGE: self.stages[-1][LIT_STAGE], LIT_OS_CLIPBOARD: {LIT_EXPECTED: text, "observed_bytes": len(observed.encode(LIT_UTF_8)) if observed is not None else None,
             "observed_hash": text_hash(observed) if observed is not None else None, LIT_PASSED: False}}
         self.write_report(False)
@@ -169,7 +188,7 @@ class NumericEditRun:
         self.native.tap(LIT_RETURN)
         self.checkpoint("integer_incomplete_submit_rejects_without_rewrite", **self.counters(rejects=1))
         self.native.tap(LIT_ESCAPE)
-        self.draft_checkpoint("integer_escape_restores_committed_text", LIT_I, "7", status=0, dirty=False, i_focus=0, **self.counters(cancels=1, restored=1))
+        self.draft_checkpoint("integer_escape_restores_committed_text", LIT_I, LIT_COMMITTED_INTEGER_TEXT, status=0, dirty=False, i_focus=0, **self.counters(cancels=1, restored=1))
         self.focus(LIT_INTEGER, "integer_refocus_after_escape_precedes_typing")
         exact_integer = "9007199254740993"
         self.native.replace_text(exact_integer)
@@ -177,7 +196,7 @@ class NumericEditRun:
         self.native.key(LIT_RETURN, True)
         self.checkpoint("numeric_submit_press_keeps_typed_value_uncommitted")
         self.native.tap(LIT_ESCAPE)
-        self.draft_checkpoint("escape_cancels_held_numeric_submit", LIT_I, "7", status=0, dirty=False, i_focus=0, **self.counters(cancels=1, restored=1))
+        self.draft_checkpoint("escape_cancels_held_numeric_submit", LIT_I, LIT_COMMITTED_INTEGER_TEXT, status=0, dirty=False, i_focus=0, **self.counters(cancels=1, restored=1))
         self.native.key(LIT_RETURN, True, repeat=True)
         self.native.key(LIT_RETURN, False)
         self.checkpoint("cancelled_numeric_submit_release_cannot_commit")
@@ -217,14 +236,14 @@ class NumericEditRun:
         self.require_clipboard(exact_integer)
         self.native.tap(LIT_V, control=True)
         self.draft_checkpoint("paste_after_cut_restores_the_accepted_draft", LIT_I, exact_integer, status=0, dirty=False)
-        self.native.replace_text("9223372036854775808")
-        self.draft_checkpoint("integer_representation_overflow_keeps_typed_value", LIT_I, "9223372036854775808", status=3, dirty=True)
+        self.native.replace_text(LIT_INTEGER_OVERFLOW_TEXT)
+        self.draft_checkpoint("integer_representation_overflow_keeps_typed_value", LIT_I, LIT_INTEGER_OVERFLOW_TEXT, status=3, dirty=True)
         self.native.tap(LIT_TAB)
         self.checkpoint("tab_rejects_overflow_and_focuses_float", i_focus=0, f_focus=1, **draft_fields(LIT_I, exact_integer, anchor=len(exact_integer), caret=len(exact_integer), status=0, dirty=False), **self.counters(rejects=1, restored=1))
         self.native.replace_text("-")
         self.draft_checkpoint("float_incomplete_sign_keeps_typed_value", LIT_F, "-", status=1, dirty=True)
         self.native.tap(LIT_ESCAPE)
-        self.draft_checkpoint("float_escape_restores_committed_decimal", LIT_F, "1.25", status=0, dirty=False, f_focus=0, **self.counters(cancels=1, restored=1))
+        self.draft_checkpoint("float_escape_restores_committed_decimal", LIT_F, LIT_COMMITTED_FLOAT_TEXT, status=0, dirty=False, f_focus=0, **self.counters(cancels=1, restored=1))
         self.focus(LIT_FLOAT, "float_refocus_after_escape_precedes_exponent")
         self.native.replace_text(LIT_N_2_5E)
         self.draft_checkpoint("float_incomplete_exponent_is_preserved", LIT_F, LIT_N_2_5E, status=1, dirty=True)
@@ -239,57 +258,57 @@ class NumericEditRun:
         self.native.tap(LIT_TAB)
         self.checkpoint("float_blur_commits_and_canonicalizes", f_focus=0, clipboard_focus=1, **draft_fields(LIT_F, "0.25", anchor=4, caret=4, status=0, dirty=False), **self.counters(commits=1))
         self.focus(LIT_FLOAT, "float_refocus_precedes_signed_zero")
-        self.native.replace_text("-0")
-        self.draft_checkpoint("signed_zero_is_a_complete_draft", LIT_F, "-0", status=0, dirty=True)
+        self.native.replace_text(LIT_SIGNED_ZERO_TEXT)
+        self.draft_checkpoint("signed_zero_is_a_complete_draft", LIT_F, LIT_SIGNED_ZERO_TEXT, status=0, dirty=True)
         self.native.tap(LIT_RETURN)
         self.checkpoint("signed_zero_commit_preserves_the_sign_bit", float_bits=float_bits(-0.0), f_dirty=0, **self.counters(commits=1))
-        self.native.replace_text("+1.5E+1")
-        self.draft_checkpoint("uppercase_exponent_and_plus_are_outside_user_bounds", LIT_F, "+1.5E+1", status=3, dirty=True)
+        self.native.replace_text(LIT_UPPERCASE_EXPONENT_TEXT)
+        self.draft_checkpoint("uppercase_exponent_and_plus_are_outside_user_bounds", LIT_F, LIT_UPPERCASE_EXPONENT_TEXT, status=3, dirty=True)
         self.native.tap(LIT_RETURN)
-        self.draft_checkpoint("clamp_commits_a_canonical_bound", LIT_F, "10", status=0, dirty=False, float_bits=float_bits(10.0), **self.counters(commits=1, clamps=1))
+        self.draft_checkpoint("clamp_commits_a_canonical_bound", LIT_F, LIT_UPPER_BOUND_TEXT, status=0, dirty=False, float_bits=float_bits(10.0), **self.counters(commits=1, clamps=1))
         self.native.tap("F8")
         self.checkpoint("reject_policy_applies_to_later_numeric_actions", clamp=0, dynamic=(LIT_RESTORED,))
-        self.native.replace_text("11")
-        self.draft_checkpoint("reject_policy_keeps_out_of_range_draft", LIT_F, "11", status=3, dirty=True)
+        self.native.replace_text(LIT_OUT_OF_RANGE_TEXT)
+        self.draft_checkpoint("reject_policy_keeps_out_of_range_draft", LIT_F, LIT_OUT_OF_RANGE_TEXT, status=3, dirty=True)
         self.native.tap(LIT_RETURN)
         self.checkpoint("reject_policy_submit_preserves_committed_value", **self.counters(rejects=1))
         self.native.tap(LIT_TAB)
-        self.checkpoint("reject_policy_blur_restores_the_committed_bound", f_focus=0, clipboard_focus=1, **draft_fields(LIT_F, "10", anchor=2, caret=2, status=0, dirty=False), **self.counters(rejects=1, restored=1))
+        self.checkpoint("reject_policy_blur_restores_the_committed_bound", f_focus=0, clipboard_focus=1, **draft_fields(LIT_F, LIT_UPPER_BOUND_TEXT, anchor=2, caret=2, status=0, dirty=False), **self.counters(rejects=1, restored=1))
         self.focus(LIT_FLOAT, "float_refocus_precedes_representation_overflow")
         self.native.replace_text(LIT_N_1E309)
         self.draft_checkpoint("float_representation_overflow_is_distinct_from_bounds", LIT_F, LIT_N_1E309, status=3, dirty=True)
         self.native.tap(LIT_RETURN)
         self.checkpoint("representation_overflow_rejects_without_clamping", **self.counters(rejects=1))
         self.native.tap(LIT_ESCAPE)
-        self.draft_checkpoint("escape_restores_after_float_representation_overflow", LIT_F, "10", status=0, dirty=False, f_focus=0, **self.counters(cancels=1, restored=1))
+        self.draft_checkpoint("escape_restores_after_float_representation_overflow", LIT_F, LIT_UPPER_BOUND_TEXT, status=0, dirty=False, f_focus=0, **self.counters(cancels=1, restored=1))
         self.focus(LIT_FLOAT, "float_refocus_after_overflow_escape_precedes_readonly")
-        self.native.replace_text("3")
-        self.draft_checkpoint("dirty_draft_precedes_readonly_policy_change", LIT_F, "3", status=0, dirty=True)
+        self.native.replace_text(LIT_READONLY_DIRTY_TEXT)
+        self.draft_checkpoint("dirty_draft_precedes_readonly_policy_change", LIT_F, LIT_READONLY_DIRTY_TEXT, status=0, dirty=True)
         self.native.tap(LIT_F5)
-        self.draft_checkpoint("readonly_transition_restores_and_keeps_focus", LIT_F, "10", status=0, dirty=False, readonly=1, dynamic=(LIT_RESTORED,))
+        self.draft_checkpoint("readonly_transition_restores_and_keeps_focus", LIT_F, LIT_UPPER_BOUND_TEXT, status=0, dirty=False, readonly=1, dynamic=(LIT_RESTORED,))
         self.native.tap(LIT_A, control=True)
         self.native.tap(LIT_C, control=True)
-        self.native.text("9")
+        self.native.text(LIT_IGNORED_TEXT)
         self.native.tap(LIT_X, control=True)
         self.native.tap(LIT_V, control=True)
         self.native.tap(LIT_Z, control=True)
         self.native.tap(LIT_RETURN)
         self.checkpoint("readonly_allows_copy_and_blocks_mutation_and_commit", f_anchor=0, f_caret=2)
-        self.require_clipboard("10")
+        self.require_clipboard(LIT_UPPER_BOUND_TEXT)
         self.native.tap(LIT_F5)
         self.checkpoint("editable_policy_restores_a_fresh_selection_epoch", readonly=0, f_anchor=2, f_caret=2, dynamic=(LIT_RESTORED,))
-        self.native.replace_text("-4")
-        self.draft_checkpoint("dirty_draft_precedes_disable", LIT_F, "-4", status=0, dirty=True)
+        self.native.replace_text(LIT_DISABLE_DIRTY_TEXT)
+        self.draft_checkpoint("dirty_draft_precedes_disable", LIT_F, LIT_DISABLE_DIRTY_TEXT, status=0, dirty=True)
         self.native.tap(LIT_F6)
-        self.native.text("9")
+        self.native.text(LIT_IGNORED_TEXT)
         self.native.tap(LIT_RETURN)
-        self.draft_checkpoint("disable_restores_and_blocks_native_text", LIT_F, "10", status=0, dirty=False, enabled=0, f_focus=0, dynamic=(LIT_RESTORED,))
+        self.draft_checkpoint("disable_restores_and_blocks_native_text", LIT_F, LIT_UPPER_BOUND_TEXT, status=0, dirty=False, enabled=0, f_focus=0, dynamic=(LIT_RESTORED,))
         self.native.tap(LIT_F6)
         self.checkpoint("enable_requires_a_fresh_numeric_focus", enabled=1)
         self.focus(LIT_INTEGER, "integer_focus_precedes_external_replacement")
-        self.native.replace_text("8")
-        self.draft_checkpoint("dirty_integer_precedes_external_replacement", LIT_I, "8", status=0, dirty=True)
-        self.native.text("9", settle=False)
+        self.native.replace_text(LIT_REPLACEMENT_DIRTY_TEXT)
+        self.draft_checkpoint("dirty_integer_precedes_external_replacement", LIT_I, LIT_REPLACEMENT_DIRTY_TEXT, status=0, dirty=True)
+        self.native.text(LIT_IGNORED_TEXT, settle=False)
         self.native.key(LIT_F7, True)
         self.native.key(LIT_F7, False)
         replacement = "9007199254740995"
@@ -297,14 +316,14 @@ class NumericEditRun:
                 status=0, dirty=False), **draft_fields(LIT_F, "2.5", anchor=3, caret=3, status=0, dirty=False), dynamic=(LIT_RESTORED,))
         self.native.tap(LIT_Z, control=True)
         self.checkpoint("external_replacement_clears_prior_draft_history")
-        self.native.replace_text("42")
-        self.draft_checkpoint("draft_precedes_ordered_submit_text_batch", LIT_I, "42", status=0, dirty=True)
+        self.native.replace_text(LIT_ORDERED_SUBMIT_TEXT)
+        self.draft_checkpoint("draft_precedes_ordered_submit_text_batch", LIT_I, LIT_ORDERED_SUBMIT_TEXT, status=0, dirty=True)
         self.native.key(LIT_RETURN, True)
         self.native.key(LIT_RETURN, False)
         self.native.text("7", settle=False)
         self.draft_checkpoint("native_submit_then_text_preserves_event_order", LIT_I, "427", status=0, dirty=True, integer_bits=integer_bits(42), **self.counters(commits=1))
         self.native.tap(LIT_ESCAPE)
-        self.draft_checkpoint("escape_restores_value_from_the_ordered_submit", LIT_I, "42", status=0, dirty=False, i_focus=0, **self.counters(cancels=1, restored=1))
+        self.draft_checkpoint("escape_restores_value_from_the_ordered_submit", LIT_I, LIT_ORDERED_SUBMIT_TEXT, status=0, dirty=False, i_focus=0, **self.counters(cancels=1, restored=1))
         self.focus(LIT_INTEGER, "canonical_refocus_precedes_native_focus_loss")
         self.native.focus_loss_and_gain()
         self.native.text("4")
@@ -312,7 +331,7 @@ class NumericEditRun:
         self.backend.resize_client(self.handle, 800, 600)
         self.checkpoint("resize_preserves_typed_and_canonical_drafts", extent=(800, 600))
         self.focus(LIT_INTEGER, "resized_focus_precedes_long_numeric_draft")
-        long_integer = "0" * 64 + "9223372036854775807"
+        long_integer = "0" * 64 + LIT_INTEGER_MAXIMUM_TEXT
         # Drain each bounded native batch before the next one; the host deliberately retires input on queue overflow rather than applying a truncated batch.
         self.native.replace_text(long_integer[:32])
         self.draft_checkpoint("long_integer_first_native_batch_is_displayed", LIT_I, long_integer[:32], status=0, dirty=True, extent=(800, 600))
@@ -327,17 +346,17 @@ class NumericEditRun:
         self.native.tap("End")
         self.checkpoint("end_restores_the_long_draft_right_edge", i_anchor=len(long_integer), i_caret=len(long_integer), extent=(800, 600), extra=lambda state: state[LIT_RECTANGLES][LIT_INTEGER_CARET][0] >= sum(state[LIT_RECTANGLES][LIT_INTEGER_CONTENT][::2]) - 2.0)
         self.native.tap(LIT_ESCAPE)
-        self.draft_checkpoint("escape_canonicalizes_the_committed_maximum", LIT_I, "9223372036854775807", status=0, dirty=False, i_focus=0, extent=(800, 600), **self.counters(cancels=1, restored=1))
+        self.draft_checkpoint("escape_canonicalizes_the_committed_maximum", LIT_I, LIT_INTEGER_MAXIMUM_TEXT, status=0, dirty=False, i_focus=0, extent=(800, 600), **self.counters(cancels=1, restored=1))
         self.focus(LIT_INTEGER, "integer_refocus_after_escape_precedes_minimum")
-        self.native.replace_text("-9223372036854775808")
-        self.draft_checkpoint("minimum_integer_draft_is_representable", LIT_I, "-9223372036854775808", status=0, dirty=True)
+        self.native.replace_text(LIT_INTEGER_MINIMUM_TEXT)
+        self.draft_checkpoint("minimum_integer_draft_is_representable", LIT_I, LIT_INTEGER_MINIMUM_TEXT, status=0, dirty=True)
         self.native.tap(LIT_RETURN)
         self.checkpoint("minimum_integer_commits_all_64_bits", integer_bits=integer_bits(-9223372036854775808), i_dirty=0, **self.counters(commits=1))
-        self.native.replace_text("12")
-        self.draft_checkpoint("dirty_numeric_draft_precedes_native_focus_loss", LIT_I, "12", status=0, dirty=True)
+        self.native.replace_text(LIT_FOCUS_LOSS_DIRTY_TEXT)
+        self.draft_checkpoint("dirty_numeric_draft_precedes_native_focus_loss", LIT_I, LIT_FOCUS_LOSS_DIRTY_TEXT, status=0, dirty=True)
         self.native.focus_loss_and_gain()
         self.native.text("3")
-        self.draft_checkpoint("native_focus_loss_abandons_without_commit_or_cancel", LIT_I, "-9223372036854775808", status=0, dirty=False, i_focus=0, **self.counters(restored=1))
+        self.draft_checkpoint("native_focus_loss_abandons_without_commit_or_cancel", LIT_I, LIT_INTEGER_MINIMUM_TEXT, status=0, dirty=False, i_focus=0, **self.counters(restored=1))
 
 
 def run(args):
@@ -360,7 +379,7 @@ def run(args):
             backend.prepare_raw_client_window(handle)
         else:
             backend.prepare_window(handle)
-        wait_for_log_message(log_directory, log_baseline, log_pattern, "UiNumericEditSmoke: display", min(args.timeout, 15.0))
+        wait_for_log_message(log_directory, log_baseline, log_pattern, "UiNumericEditSmoke: display", min(args.timeout, DISPLAY_MARKER_TIMEOUT_SECONDS))
         numeric_run = NumericEditRun(args, backend, handle, application, log_directory, log_baseline, log_pattern)
         numeric_run.execute()
     finally:

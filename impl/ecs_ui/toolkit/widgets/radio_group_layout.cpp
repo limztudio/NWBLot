@@ -8,6 +8,7 @@
 #include "radio_group_style.h"
 
 #include <impl/ecs_ui/toolkit/layout/rectangle.h>
+#include <impl/ecs_ui/toolkit/rect_math.h>
 
 #include <global/simd/vector.h>
 #include <global/simplemath.h>
@@ -28,6 +29,17 @@ namespace __hidden_ui_radio_group_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Metric rows 0..2 carry data; row 3 is padding.
+inline constexpr u32 s_MetricRowCount = 3u;
+inline constexpr f32 s_MaxMarkInset = 0.5f;
+inline constexpr f64 s_MaxMarkInsetF64 = static_cast<f64>(s_MaxMarkInset);
+// The mark loses its inset on both opposite sides.
+inline constexpr f64 s_MarkInsetSides = 2.0;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] static SIMDMatrixDouble LoadMetrics(const RadioGroupMetrics& metrics)noexcept{
     if(metrics.count > s_RadioGroupMaxChoices || !IsFinite(metrics.padding.left) || !IsFinite(metrics.padding.top) || !IsFinite(metrics.padding.right) || !IsFinite(metrics.padding.bottom) || !IsFinite(metrics.rowHeight) || !IsFinite(metrics.indicatorExtent) || !IsFinite(metrics.gap) || !IsFinite(metrics.rowGap) || !IsFinite(metrics.contentSize.x) || !IsFinite(metrics.contentSize.y) || !IsFinite(metrics.markInset))
         return SIMDMatrixDouble{ .v = { VectorDoubleReplicate(Limit<f64>::s_Infinity), VectorDoubleZero(), VectorDoubleZero(), VectorDoubleZero() } };
@@ -40,7 +52,7 @@ namespace __hidden_ui_radio_group_layout{
 }
 
 [[nodiscard]] static bool ValidMetrics(const SIMDMatrixDouble& values)noexcept{
-    for(u32 index = 0u; index < 3u; ++index){
+    for(u32 index = 0u; index < s_MetricRowCount; ++index){
         if(VectorDoubleMoveMask(VectorDoubleOrInt(VectorDoubleIsNaN(values.v[index]), VectorDoubleIsInfinite(values.v[index]))) != 0u
             || VectorDoubleMoveMask(VectorDoubleGreaterOrEqual(values.v[index], VectorDoubleZero())) != VectorDoubleComponentMask::s_DoubleXYZW)
             return false;
@@ -48,7 +60,7 @@ namespace __hidden_ui_radio_group_layout{
     const u32 count = static_cast<u32>(VectorDoubleGetW(values.v[2]));
     const f64 rowHeight = VectorDoubleGetX(values.v[1]);
     const f64 indicatorExtent = VectorDoubleGetY(values.v[1]);
-    if(count > s_RadioGroupMaxChoices || rowHeight <= 0.0 || indicatorExtent <= 0.0 || indicatorExtent > rowHeight || VectorDoubleGetZ(values.v[2]) > 0.5)
+    if(count > s_RadioGroupMaxChoices || rowHeight <= 0.0 || indicatorExtent <= 0.0 || indicatorExtent > rowHeight || VectorDoubleGetZ(values.v[2]) > s_MaxMarkInsetF64)
         return false;
     const SIMDVectorDouble padding = VectorDoubleAdd(values.v[0], VectorDoubleSwizzle<2, 3, 2, 3>(values.v[0]));
     const SIMDVectorDouble rowExtents = VectorDoubleMultiply(VectorDoubleSet(count, count == 0u ? 0u : count - 1u, 0.0, 0.0), VectorDoubleSwizzle<0, 3, 0, 3>(values.v[1]));
@@ -78,7 +90,7 @@ Expected<RadioGroupMetrics> RadioGroupLayout::Measure(const u32 count, const Poi
         || (options.width.policy == LayoutSizePolicy::Stretch && options.width.value <= 0.0f)
         || !IsFinite(style.indicatorExtent) || style.indicatorExtent <= 0.0f || !IsFinite(style.gap) || style.gap < 0.0f
         || !IsFinite(style.rowGap) || style.rowGap < 0.0f
-        || !IsFinite(style.markInset) || style.markInset < 0.0f || style.markInset > 0.5f
+        || !IsFinite(style.markInset) || style.markInset < 0.0f || style.markInset > s_MaxMarkInset
         || !IsValidUiColor(style.hoverTint) || !IsValidUiColor(style.pressedTint) || !IsValidUiColor(style.disabledTint)
     )
         return MakeUnexpected(Failure{});
@@ -150,7 +162,7 @@ Expected<RadioGroupPlacement> RadioGroupLayout::Place(const Rect& bounds, const 
         const SIMDVectorDouble rowOrigin = VectorDoubleAdd(VectorDoubleReplicate(y), rowOffset);
         const f64 rowY = VectorDoubleGetX(rowOrigin);
         const SIMDVectorDouble indicatorSpace = VectorDoubleSubtract(VectorDoubleReplicate(metrics.rowHeight), indicatorExtent);
-        const f64 indicatorY = VectorDoubleGetY(VectorDoubleAdd(rowOrigin, VectorDoubleMultiply(indicatorSpace, VectorDoubleReplicate(0.5))));
+        const f64 indicatorY = VectorDoubleGetY(VectorDoubleAdd(rowOrigin, VectorDoubleMultiply(indicatorSpace, VectorDoubleReplicate(s_RectCenterFractionF64))));
         const auto rectangle = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoubleSet(x, rowY, width, metrics.rowHeight));
         if(!rectangle)
             return MakeUnexpected(Failure{});
@@ -161,7 +173,7 @@ Expected<RadioGroupPlacement> RadioGroupLayout::Place(const Rect& bounds, const 
         if(!indicator)
             return MakeUnexpected(Failure{});
         const SIMDVectorDouble markOrigin = VectorDoubleAdd(VectorDoubleSet(x, indicatorY, 0.0, 0.0), VectorDoubleSet(markInset, markInset, 0.0, 0.0));
-        const SIMDVectorDouble markSize = VectorDoubleSubtract(VectorDoubleSet(extent, extent, 0.0, 0.0), VectorDoubleMultiply(VectorDoubleSet(2.0, 2.0, 0.0, 0.0), VectorDoubleSet(markInset, markInset, 0.0, 0.0)));
+        const SIMDVectorDouble markSize = VectorDoubleSubtract(VectorDoubleSet(extent, extent, 0.0, 0.0), VectorDoubleMultiply(VectorDoubleSet(s_MarkInsetSides, s_MarkInsetSides, 0.0, 0.0), VectorDoubleSet(markInset, markInset, 0.0, 0.0)));
         const auto mark = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoublePermute<0, 1, 4, 5>(markOrigin, markSize));
         if(!mark)
             return MakeUnexpected(Failure{});

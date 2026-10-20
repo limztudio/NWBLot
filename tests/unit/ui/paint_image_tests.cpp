@@ -20,6 +20,9 @@ namespace UiPaintImageTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_SameImagePath = "tests/ui/same_image";
+constexpr AStringView s_ReplacementImagePath = "tests/ui/replacement";
+
 TEST_F(PaintImageFixture, CropAndNestedClipTrimFullImageGeometryAndUv){
     auto imageResult = makeImage();
     ASSERT_TRUE(imageResult);
@@ -43,10 +46,10 @@ TEST_F(PaintImageFixture, CropAndNestedClipTrimFullImageGeometryAndUv){
 }
 
 TEST_F(PaintImageFixture, AdjacentBatchingIncludesImmutableImageIndexAndPreservesDeclarationOrder){
-    auto firstResult = makeImage("tests/ui/same_image", 37u);
+    auto firstResult = makeImage(s_SameImagePath, 37u);
     ASSERT_TRUE(firstResult);
     const SharedImageSource first = Move(*firstResult);
-    auto secondResult = makeImage("tests/ui/same_image", 73u);
+    auto secondResult = makeImage(s_SameImagePath, 73u);
     ASSERT_TRUE(secondResult);
     const SharedImageSource second = Move(*secondResult);
     ASSERT_TRUE(first && second);
@@ -113,7 +116,7 @@ TEST_F(PaintImageFixture, ImageCommandsKeepDistinctClipsMaterialsAndOverlayLayer
 }
 
 TEST_F(PaintImageFixture, FrozenAndMovedSnapshotsRetainExactSourceVersionsAcrossHandleReleaseAndBuilderReuse){
-    auto originalResult = makeImage("tests/ui/replacement", 37u, 9u, 5u);
+    auto originalResult = makeImage(s_ReplacementImagePath, 37u, 9u, 5u);
     ASSERT_TRUE(originalResult);
     SharedImageSource original = Move(*originalResult);
     ASSERT_TRUE(original);
@@ -124,7 +127,7 @@ TEST_F(PaintImageFixture, FrozenAndMovedSnapshotsRetainExactSourceVersionsAcross
     DrawSnapshot retained(Move(frozen));
     original.reset();
     beginPaint(m_builder, 2u);
-    auto replacementResult = makeImage("tests/ui/replacement", 73u, 4u, 4u);
+    auto replacementResult = makeImage(s_ReplacementImagePath, 73u, 4u, 4u);
     ASSERT_TRUE(replacementResult);
     SharedImageSource replacement = Move(*replacementResult);
     ASSERT_TRUE(replacement);

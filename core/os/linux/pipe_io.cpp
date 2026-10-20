@@ -26,6 +26,7 @@ namespace __hidden_clipboard_pipe{
 static constexpr usize s_PumpByteBudget = 65536u;
 static constexpr usize s_PumpCallBudget = 64u;
 static constexpr u32 s_TimeoutMs = 5000u;
+static constexpr usize s_ReadChunkBytes = 4096u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -90,7 +91,7 @@ void CloseClipboardPipe(int& fd)noexcept{
 }
 
 Expected<bool, ClipboardPipeReadFailure> ReadClipboardPipe(const int fd, ClipboardTextAccumulator& text){
-    Array<char, 4096u> bytes;
+    Array<char, __hidden_clipboard_pipe::s_ReadChunkBytes> bytes;
     usize consumed = 0u;
     usize calls = 0u;
     while(consumed < __hidden_clipboard_pipe::s_PumpByteBudget && calls < __hidden_clipboard_pipe::s_PumpCallBudget){

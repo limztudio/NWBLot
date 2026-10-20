@@ -19,6 +19,7 @@
 // Budget decisions use only accepted previous-frame data, never the current random visibility sample.
 #define NWB_SW_TRANSPARENT_STABLE_HISTORY 8.0
 #define NWB_SW_TRANSPARENT_STABLE_VARIANCE 0.0001
+#define NWB_SW_TRANSPARENT_VARIANCE_ROUNDING_SLACK 0.002h
 #define NWB_SW_TRANSPARENT_MAX_REPROJECTION_MOTION 0.25
 
 
@@ -47,7 +48,7 @@ bool nwbSwTransparentSamplingReproject(const uint2 pixel, const uint2 fullExtent
 }
 
 bool nwbSwTransparentSamplingGeometryMatches(const half4 current, const half4 previous){
-    if(!all(isfinite(float4(current))) || !all(isfinite(float4(previous))) || current.w <= 0.5h || previous.w <= 0.5h)
+    if(!all(isfinite(float4(current))) || !all(isfinite(float4(previous))) || current.w <= NWB_SHADOW_GEOMETRY_VALID_THRESHOLD || previous.w <= NWB_SHADOW_GEOMETRY_VALID_THRESHOLD)
         return false;
     const float spacing = max(float(current.z) * NWB_SHADOW_TEMPORAL_WORLD_SPACING_SCALE, NWB_SHADOW_TEMPORAL_WORLD_SPACING_MIN);
     return current.z >= 0.0h && previous.z >= 0.0h && abs(float(current.z) - float(previous.z)) < NWB_SHADOW_TEMPORAL_PLANE_K * spacing && dot(nwbOctDecodeNormal(float2(current.xy)), nwbOctDecodeNormal(float2(previous.xy))) > NWB_SHADOW_TEMPORAL_NORMAL_MIN;
@@ -61,7 +62,7 @@ uint nwbSwTransparentSamplingBudget(const bool geometryAccepted, const half3 pre
         && previousMoments.x >= half(0.0h) && previousMoments.x <= half(1.0h)
         && previousMoments.y >= half(0.0h) && previousMoments.y <= half(1.0h)
         && float(previousMoments.z) >= NWB_SW_TRANSPARENT_STABLE_HISTORY && float(previousMoments.z) <= NWB_SHADOW_TEMPORAL_MAX_HISTORY
-        && variance >= half(-0.002h) && variance <= half(NWB_SW_TRANSPARENT_STABLE_VARIANCE)
+        && variance >= half(-NWB_SW_TRANSPARENT_VARIANCE_ROUNDING_SLACK) && variance <= half(NWB_SW_TRANSPARENT_STABLE_VARIANCE)
     ;
     return settled ? 1u : maximumSamples;
 }

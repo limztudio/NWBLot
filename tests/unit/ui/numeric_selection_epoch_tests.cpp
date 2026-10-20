@@ -98,7 +98,7 @@ TEST_F(UiNumericSelectionEpochTests, LaterSourceRejectsIntegerSelectionRoundTrip
     SelectionEpochSource source;
     ListState list;
     ASSERT_TRUE(beginNumeric(1u));
-    ASSERT_TRUE(m_builder.integerEdit("integer", m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
     ASSERT_TRUE(m_builder.virtualList("list", source, list, UiWidgetTests::LargeLoanListOptions()).valid);
     const u64 numericRevision = m_integer.revision();
     const u64 draftRevision = m_integer.draft().revision();
@@ -126,7 +126,7 @@ TEST_F(UiNumericSelectionEpochTests, LaterSourceRejectsFloatSelectionRoundTripWi
     SelectionEpochSource source;
     ListState list;
     ASSERT_TRUE(beginNumeric(1u));
-    ASSERT_TRUE(m_builder.floatEdit("decimal", m_float, m_floatState).edit.valid);
+    ASSERT_TRUE(m_builder.floatEdit(s_DecimalEditKey, m_float, m_floatState).edit.valid);
     ASSERT_TRUE(m_builder.virtualList("list", source, list, UiWidgetTests::LargeLoanListOptions()).valid);
     const u64 numericRevision = m_float.revision();
     const u64 draftRevision = m_float.draft().revision();
@@ -151,7 +151,7 @@ TEST_F(UiNumericSelectionEpochTests, LaterSourceRejectsAcceptedIdenticalSelectio
     source.mutation = EpochMutation::SameSelection;
     ListState list;
     ASSERT_TRUE(beginNumeric(1u));
-    ASSERT_TRUE(m_builder.integerEdit("integer", m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
     ASSERT_TRUE(m_builder.virtualList("list", source, list, UiWidgetTests::LargeLoanListOptions()).valid);
     const u64 selectionGeneration = m_integer.draft().selectionGeneration();
     source.onText = &m_integer.lendDraft();
@@ -171,7 +171,7 @@ TEST_F(UiNumericSelectionEpochTests, LaterSourceRejectsCompositionRoundTripWithN
     source.mutation = EpochMutation::CompositionRoundTrip;
     ListState list;
     ASSERT_TRUE(beginNumeric(1u));
-    ASSERT_TRUE(m_builder.integerEdit("integer", m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
     ASSERT_TRUE(m_builder.virtualList("list", source, list, UiWidgetTests::LargeLoanListOptions()).valid);
     const u64 compositionGeneration = m_integer.draft().compositionGeneration();
     source.onText = &m_integer.lendDraft();
@@ -192,7 +192,7 @@ TEST_F(UiNumericSelectionEpochTests, ChildSourceRejectsAnAlreadyPaintedParentSel
     m_parent.open();
     m_child.open();
     ASSERT_TRUE(beginParent(1u));
-    ASSERT_TRUE(m_builder.integerEdit("integer", m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
     ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::LargeLoanChildOptions()));
     ASSERT_TRUE(m_builder.virtualList("list", source, list, UiWidgetTests::LargeLoanListOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
@@ -216,7 +216,7 @@ TEST_F(UiNumericSelectionEpochTests, ParentSourceRejectsTheEndedChildSelectionRo
     ASSERT_TRUE(beginParent(1u));
     ASSERT_TRUE(m_builder.virtualList("list", source, list, UiWidgetTests::LargeLoanListOptions()).valid);
     ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::LargeLoanChildOptions()));
-    ASSERT_TRUE(m_builder.integerEdit("integer", m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
     ASSERT_TRUE(m_builder.endPopup());
     source.onText = &m_integer.lendDraft();
     EXPECT_FALSE(m_builder.endPopup());
@@ -238,7 +238,7 @@ TEST_F(UiNumericSelectionEpochTests, LaterSiblingSourceRejectsAnAlreadyPaintedFl
     sibling.open();
     ASSERT_TRUE(beginParent(1u));
     ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::LargeLoanChildOptions()));
-    ASSERT_TRUE(m_builder.floatEdit("decimal", m_float, m_floatState).edit.valid);
+    ASSERT_TRUE(m_builder.floatEdit(s_DecimalEditKey, m_float, m_floatState).edit.valid);
     ASSERT_TRUE(m_builder.endPopup());
     ASSERT_TRUE(m_builder.beginPopup("sibling", sibling, UiWidgetTests::LargeLoanChildOptions()));
     ASSERT_TRUE(m_builder.virtualList("list", source, list, UiWidgetTests::LargeLoanListOptions()).valid);
@@ -262,7 +262,7 @@ TEST_F(UiNumericSelectionEpochTests, FinalSourceValidationRejectsTheParentSelect
     m_parent.open();
     m_child.open();
     ASSERT_TRUE(beginParent(1u));
-    ASSERT_TRUE(m_builder.integerEdit("integer", m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
     ASSERT_TRUE(m_builder.virtualList("list", parentSource, parentList, UiWidgetTests::LargeLoanListOptions()).valid);
     ASSERT_TRUE(m_builder.beginPopup("child", m_child, UiWidgetTests::LargeLoanChildOptions()));
     ASSERT_TRUE(m_builder.virtualList("list", childSource, childList, UiWidgetTests::LargeLoanListOptions()).valid);

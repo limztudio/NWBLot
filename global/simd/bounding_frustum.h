@@ -66,8 +66,8 @@ inline void NWB_SIMD_CALL BoundingFrustum::TransformFrustumValue(
     }();
     if(!fitted){
         // A reflected or collapsed cone may cross the chosen forward plane; enclose its transformed corners with a forward axis-aligned cone.
-        const SIMDVectorSingle center = VectorScale(VectorAdd(minBounds, maxBounds), 0.5f);
-        const SIMDVectorSingle extents = VectorScale(VectorSubtract(maxBounds, minBounds), 0.5f);
+        const SIMDVectorSingle center = VectorScale(VectorAdd(minBounds, maxBounds), CollisionDetail::s_Half);
+        const SIMDVectorSingle extents = VectorScale(VectorSubtract(maxBounds, minBounds), CollisionDetail::s_Half);
         const SIMDVectorSingle depth = VectorSubtract(VectorSplatZ(maxBounds), VectorSplatZ(minBounds));
         const SIMDVectorSingle padding = VectorMax(s_SIMDOne, depth);
         outOrigin = VectorSelect(center, VectorSubtract(VectorSplatZ(minBounds), padding), s_SIMDMaskZ);
@@ -154,8 +154,8 @@ inline void NWB_SIMD_CALL BoundingDoubleFrustum::TransformFrustumValue(
     }();
     if(!fitted){
         // A reflected or collapsed cone may cross the chosen forward plane; enclose its transformed corners with a forward axis-aligned cone.
-        const SIMDVectorDouble center = VectorDoubleScale(VectorDoubleAdd(minBounds, maxBounds), 0.5);
-        const SIMDVectorDouble extents = VectorDoubleScale(VectorDoubleSubtract(maxBounds, minBounds), 0.5);
+        const SIMDVectorDouble center = VectorDoubleScale(VectorDoubleAdd(minBounds, maxBounds), CollisionDoubleDetail::s_DoubleHalf);
+        const SIMDVectorDouble extents = VectorDoubleScale(VectorDoubleSubtract(maxBounds, minBounds), CollisionDoubleDetail::s_DoubleHalf);
         const SIMDVectorDouble depth = VectorDoubleSubtract(VectorDoubleSplatZ(maxBounds), VectorDoubleSplatZ(minBounds));
         const SIMDVectorDouble padding = VectorDoubleMax(s_DoubleSIMDOne, depth);
         outOrigin = VectorDoubleSelect(center, VectorDoubleSubtract(VectorDoubleSplatZ(minBounds), padding), s_DoubleSIMDMaskZ);

@@ -23,6 +23,8 @@ namespace __hidden_gpu_compiled_graph_statistics{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr u32 s_ConcurrentSharingAdviceSignatureThreshold = 2u;
+
 using OwnershipTransferKey = NotNull<const GpuCompiledOwnershipTransfer*>;
 
 struct OwnershipTransferSignatureHasher{
@@ -241,9 +243,9 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
 
         // Only the first occurrence of a signature contributes avoidability, even when later fragments differ.
         OwnershipResourceStatistics& resource = resourceInsertion.first.value();
-        if(transfer.concurrentSharingCouldAvoid && resource.avoidableSignatureCount < 2u){
+        if(transfer.concurrentSharingCouldAvoid && resource.avoidableSignatureCount < s_ConcurrentSharingAdviceSignatureThreshold){
             ++resource.avoidableSignatureCount;
-            if(resource.avoidableSignatureCount == 2u){
+            if(resource.avoidableSignatureCount == s_ConcurrentSharingAdviceSignatureThreshold){
                 NWB_ASSERT(transfer.resource.generation == graph.generation() && transfer.resource.index < graph.resourceCount() && graph.resourceAt(transfer.resource.index).id == transfer.resource);
                 ++statistics.concurrentSharingAdviceResourceCount;
             }
@@ -260,7 +262,7 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
             const auto resource = resources.find(transfer.resource);
             NWB_ASSERT(resource != resources.end());
             OwnershipResourceStatistics& resourceStatistics = resource.value();
-            if(resourceStatistics.avoidableSignatureCount < 2u || resourceStatistics.lastAdviceQueueIndex == queueIndex)
+            if(resourceStatistics.avoidableSignatureCount < s_ConcurrentSharingAdviceSignatureThreshold || resourceStatistics.lastAdviceQueueIndex == queueIndex)
                 continue;
             resourceStatistics.lastAdviceQueueIndex = queueIndex;
             ++physical.concurrentSharingAdviceResourceCount;

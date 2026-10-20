@@ -111,11 +111,11 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     frame.token = { state.inputGeneration(), source.instanceGeneration(), source.revision() };
     frame.rowCount = source.rowCount();
     frame.resultCount = results.rowCount();
-    const auto popup = m_context.declarePart(field, "popup", WidgetKind::Popup);
+    const auto popup = m_context.declarePart(field, WidgetPartKey::s_Popup, WidgetKind::Popup);
     if(!popup)
         return result;
     frame.popup = **popup;
-    const auto rows = m_context.declarePart(field, "rows", WidgetKind::VirtualList);
+    const auto rows = m_context.declarePart(field, WidgetPartKey::s_Rows, WidgetKind::VirtualList);
     if(!rows)
         return result;
     frame.rows = **rows;

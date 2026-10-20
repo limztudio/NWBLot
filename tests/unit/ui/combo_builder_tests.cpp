@@ -41,7 +41,7 @@ TEST_F(UiComboBuilderTests, SiblingComboFieldsPaintTheirOwnDeclarationStyles){
     m_source.count = 0u;
     ComboState secondState;
     ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 240.0f }));
+    ASSERT_TRUE(m_builder.beginPanel(s_ComboPanelKey, { 10.0f, 10.0f, 320.0f, 240.0f }));
     m_builder.comboStyle().normal = Name("button.normal");
     ASSERT_TRUE(m_builder.comboBox("first", m_source, m_state, Options()).valid);
     m_builder.comboStyle().normal = Name("button.hover");
@@ -59,11 +59,11 @@ TEST_F(UiComboBuilderTests, TabExitsAnExplicitlyOpenedComboRelativeToItsFieldWit
     m_source.count = 4u;
     m_state.select(1u);
     const auto acceptNeighbors = [this](const u64 generation){
-        if(!begin(generation) || !m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 240.0f }))
+        if(!begin(generation) || !m_builder.beginPanel(s_ComboPanelKey, { 10.0f, 10.0f, 320.0f, 240.0f }))
             return false;
         if(m_builder.button("before", "Before"))
             return false;
-        m_result = m_builder.comboBox("combo", m_source, m_state, Options());
+        m_result = m_builder.comboBox(s_ComboKey, m_source, m_state, Options());
         if(m_builder.button("after", "After"))
             return false;
         return m_result.valid && finishPanel() && m_context.commitFrame(generation);
@@ -80,7 +80,7 @@ TEST_F(UiComboBuilderTests, TabExitsAnExplicitlyOpenedComboRelativeToItsFieldWit
     EXPECT_FALSE(m_result.committed);
     EXPECT_EQ(m_state.selectedKey(), 1u);
     EXPECT_EQ(m_state.listState().cursorKey(), 1u);
-    EXPECT_EQ(m_context.input().focus(), id("after", "panel"));
+    EXPECT_EQ(m_context.input().focus(), id("after", s_ComboPanelKey));
     m_state.open();
     ASSERT_TRUE(acceptNeighbors(4u));
     ASSERT_EQ(m_context.input().focus(), list());
@@ -91,7 +91,7 @@ TEST_F(UiComboBuilderTests, TabExitsAnExplicitlyOpenedComboRelativeToItsFieldWit
     ASSERT_TRUE(acceptNeighbors(5u));
     EXPECT_TRUE(m_result.closed);
     EXPECT_EQ(m_state.selectedKey(), 1u);
-    EXPECT_EQ(m_context.input().focus(), id("before", "panel"));
+    EXPECT_EQ(m_context.input().focus(), id("before", s_ComboPanelKey));
 }
 
 TEST_F(UiComboBuilderTests, TabExitsAnEmptyComboWithoutASelectionOrActivation){
@@ -320,18 +320,18 @@ TEST_F(UiComboBuilderTests, MultipleFieldsHaveIndependentStableInternalIdsAndSta
     m_state.select(1u);
     other.select(2u);
     ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 240.0f }));
-    ASSERT_TRUE(m_builder.comboBox("combo", m_source, m_state, Options()).valid);
-    ASSERT_TRUE(m_builder.comboBox("other", m_source, other, Options()).valid);
+    ASSERT_TRUE(m_builder.beginPanel(s_ComboPanelKey, { 10.0f, 10.0f, 320.0f, 240.0f }));
+    ASSERT_TRUE(m_builder.comboBox(s_ComboKey, m_source, m_state, Options()).valid);
+    ASSERT_TRUE(m_builder.comboBox(s_SecondComboKey, m_source, other, Options()).valid);
     ASSERT_TRUE(finishPanel());
     ASSERT_TRUE(m_context.commitFrame(1u));
     ASSERT_NE(target(host()), nullptr);
-    ASSERT_NE(target(host("other")), nullptr);
-    click(Center(target(host("other"))->rectangle));
+    ASSERT_NE(target(host(s_SecondComboKey)), nullptr);
+    click(Center(target(host(s_SecondComboKey))->rectangle));
     ASSERT_TRUE(begin(2u));
-    ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 240.0f }));
-    ASSERT_TRUE(m_builder.comboBox("combo", m_source, m_state, Options()).valid);
-    const ComboResult result = m_builder.comboBox("other", m_source, other, Options());
+    ASSERT_TRUE(m_builder.beginPanel(s_ComboPanelKey, { 10.0f, 10.0f, 320.0f, 240.0f }));
+    ASSERT_TRUE(m_builder.comboBox(s_ComboKey, m_source, m_state, Options()).valid);
+    const ComboResult result = m_builder.comboBox(s_SecondComboKey, m_source, other, Options());
     EXPECT_TRUE(result.valid);
     EXPECT_TRUE(result.opened);
     ASSERT_TRUE(finishPanel());
@@ -341,8 +341,8 @@ TEST_F(UiComboBuilderTests, MultipleFieldsHaveIndependentStableInternalIdsAndSta
     EXPECT_EQ(m_state.selectedKey(), 1u);
     EXPECT_EQ(other.selectedKey(), 2u);
     EXPECT_EQ(target(popup()), nullptr);
-    EXPECT_NE(target(popup("other")), nullptr);
-    EXPECT_EQ(m_context.input().focus(), list("other"));
+    EXPECT_NE(target(popup(s_SecondComboKey)), nullptr);
+    EXPECT_EQ(m_context.input().focus(), list(s_SecondComboKey));
 }
 
 TEST_F(UiComboBuilderTests, NativeFocusLossCancelsPreviewAndDoesNotRestoreFocusOnCommit){
@@ -365,11 +365,11 @@ TEST_F(UiComboBuilderTests, FullyClippedFieldCannotPublishItsPopupAboveTheParent
     m_state.select(1u);
     m_state.open();
     ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 40.0f }));
+    ASSERT_TRUE(m_builder.beginPanel(s_ComboPanelKey, { 10.0f, 10.0f, 320.0f, 40.0f }));
     WidgetOptions filler;
     filler.height = { LayoutSizePolicy::Fixed, 100.0f };
     ASSERT_TRUE(m_builder.label("filler", "Clipped combo below", filler));
-    ASSERT_TRUE(m_builder.comboBox("combo", m_source, m_state, Options()).valid);
+    ASSERT_TRUE(m_builder.comboBox(s_ComboKey, m_source, m_state, Options()).valid);
     ASSERT_TRUE(finishPanel());
     ASSERT_TRUE(m_context.commitFrame(1u));
     ASSERT_NE(target(host()), nullptr);
@@ -389,7 +389,7 @@ TEST_F(UiComboBuilderTests, SharingOneStateAcrossSequentialPanelsRejectsTheSecon
     const u64 inputGeneration = m_state.inputGeneration();
     m_source.resetCounters();
     ASSERT_TRUE(m_builder.beginPanel("later", { 400.0f, 10.0f, 300.0f, 200.0f }));
-    const ComboResult result = m_builder.comboBox("other", m_source, m_state, Options());
+    const ComboResult result = m_builder.comboBox(s_SecondComboKey, m_source, m_state, Options());
     EXPECT_FALSE(result.valid);
     EXPECT_TRUE(m_context.failed());
     EXPECT_EQ(m_state.inputGeneration(), inputGeneration);
@@ -405,10 +405,10 @@ TEST_F(UiComboBuilderTests, SharingOneStateAcrossRootsRejectsBeforeLendingTheSec
     ASSERT_TRUE(m_context.endRoot());
     const WidgetRoot later{ 87u, 2u };
     ASSERT_TRUE(m_context.beginRoot(later));
-    ASSERT_TRUE(m_builder.beginPanel("panel", { 400.0f, 10.0f, 300.0f, 200.0f }));
+    ASSERT_TRUE(m_builder.beginPanel(s_ComboPanelKey, { 400.0f, 10.0f, 300.0f, 200.0f }));
     ComboSource replacement;
     replacement.generation = 703u;
-    const ComboResult result = m_builder.comboBox("combo", replacement, m_state, Options());
+    const ComboResult result = m_builder.comboBox(s_ComboKey, replacement, m_state, Options());
     EXPECT_FALSE(result.valid);
     EXPECT_TRUE(m_context.failed());
     EXPECT_EQ(m_state.selectedKey(), 1u);
@@ -427,7 +427,7 @@ TEST_F(UiComboBuilderTests, OmissionRetiresThePopupAndHeldNavigationCannotOpenIt
     held.key = Core::Key::Down;
     EXPECT_TRUE(send(held).commandConsumed);
     ASSERT_TRUE(begin(3u));
-    ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 240.0f }));
+    ASSERT_TRUE(m_builder.beginPanel(s_ComboPanelKey, { 10.0f, 10.0f, 320.0f, 240.0f }));
     ASSERT_TRUE(m_builder.label("label", "Combo hidden"));
     ASSERT_TRUE(finishPanel());
     ASSERT_TRUE(m_context.commitFrame(3u));

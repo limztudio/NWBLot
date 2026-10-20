@@ -19,6 +19,8 @@ NWB_CORE_BEGIN
 
 
 namespace __hidden_win32_clipboard{
+static constexpr StringView s_WarningEventName = "warning";
+static constexpr StringView s_LifecycleCategory = "win32_clipboard_lifecycle";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,7 +31,7 @@ public:
     ~ClipboardCloseGuard()noexcept{
         if(!CloseClipboard()){
             const DiagnosticEventText diagnostic = MakeDiagnosticEventText("Clipboard: CloseClipboard failed ({})", GetLastError());
-            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "win32_clipboard_lifecycle", .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
+            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_WarningEventName, .category = s_LifecycleCategory, .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
         }
     }
 };
@@ -43,7 +45,7 @@ public:
         SetLastError(ERROR_SUCCESS);
         if(!GlobalUnlock(m_memory) && GetLastError() != ERROR_SUCCESS){
             const DiagnosticEventText diagnostic = MakeDiagnosticEventText("Clipboard: GlobalUnlock failed ({})", GetLastError());
-            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "win32_clipboard_lifecycle", .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
+            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_WarningEventName, .category = s_LifecycleCategory, .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
         }
     }
 
@@ -60,7 +62,7 @@ public:
     ~GlobalMemoryOwner()noexcept{
         if(m_memory && GlobalFree(m_memory)){
             const DiagnosticEventText diagnostic = MakeDiagnosticEventText("Clipboard: GlobalFree failed ({})", GetLastError());
-            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "win32_clipboard_lifecycle", .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
+            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_WarningEventName, .category = s_LifecycleCategory, .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
         }
     }
 

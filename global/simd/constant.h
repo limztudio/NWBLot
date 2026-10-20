@@ -69,7 +69,7 @@ struct alignas(32) SIMDVectorDoubleConstU{
 
 struct alignas(16) SIMDVectorConstB{
     union{
-        u8 b[16];
+        u8 b[s_SIMDVectorBytes];
         SIMDVectorSingle v;
     };
 
@@ -102,6 +102,7 @@ constexpr f32 s_3PIDIV4 = 2.3561944905f;
 inline constexpr u32 s_F32SignBitMask = 0x80000000u;
 inline constexpr u32 s_F32AbsoluteBitMask = 0x7fffffffu;
 inline constexpr u32 s_F32SignBitShift = 31u;
+inline constexpr u32 s_F32BitCount = 32u;
 inline constexpr u32 s_F32InfinityBits = 0x7f800000u;
 inline constexpr u32 s_F32QuietNaNBits = 0x7fc00000u;
 inline constexpr u32 s_F32QuietBit = 0x00400000u;
@@ -113,8 +114,10 @@ inline constexpr u32 s_F32MantissaBitMask = 0x7fffffu;
 inline constexpr u32 s_F32ExponentFieldMask = 0xffu;
 inline constexpr u32 s_F32ExponentBias = 127u;
 inline constexpr u32 s_F32IntegerExponent = s_F32ExponentBias + s_F32MantissaBitCount;
+inline constexpr f32 s_F32Epsilon = 1.192092896e-7f;
 inline constexpr u64 s_F64SignBitMask = 0x8000000000000000ull;
 inline constexpr u32 s_F64SignBitShift = 63u;
+inline constexpr f64 s_F64Epsilon = 0x1p-52;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -255,8 +258,8 @@ NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDReciprocalTwoPi = { { { s_1DIV2PI, s_1DI
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDEpsilon = { { { 1.192092896e-7f, 1.192092896e-7f, 1.192092896e-7f, 1.192092896e-7f } } };
-inline const SIMDVectorDoubleConstF s_DoubleSIMDEpsilon = { { { 0x1p-52, 0x1p-52, 0x1p-52, 0x1p-52 } } };
+NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDEpsilon = { { { s_F32Epsilon, s_F32Epsilon, s_F32Epsilon, s_F32Epsilon } } };
+inline const SIMDVectorDoubleConstF s_DoubleSIMDEpsilon = { { { s_F64Epsilon, s_F64Epsilon, s_F64Epsilon, s_F64Epsilon } } };
 NWB_GLOBAL_CONST SIMDVectorConstI s_SIMDInfinity = { { { 0x7F800000, 0x7F800000, 0x7F800000, 0x7F800000 } } };
 inline const SIMDVectorDoubleConstI s_DoubleSIMDInfinity = { { { 0x7FF0000000000000, 0x7FF0000000000000, 0x7FF0000000000000, 0x7FF0000000000000 } } };
 NWB_GLOBAL_CONST SIMDVectorConstI s_SIMDQNaN = { { { 0x7FC00000, 0x7FC00000, 0x7FC00000, 0x7FC00000 } } };

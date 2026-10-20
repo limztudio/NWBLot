@@ -74,11 +74,11 @@ namespace __hidden_text_area_scroll_input{
 bool Builder::applyTextAreaScrollInput(const Item& item, const TextAreaFrame& frame, const ControlToken& token){
     TextAreaState& state = *frame.state;
     const bool enabled = item.editOptions.enabled;
-    const auto horizontalIdResult = MakeWidgetId(item.state.id, "scroll.x.thumb");
+    const auto horizontalIdResult = MakeWidgetId(item.state.id, WidgetPartKey::s_ScrollHorizontalThumb);
     if(!horizontalIdResult)
         return false;
     const WidgetId horizontalId = *horizontalIdResult;
-    const auto verticalIdResult = MakeWidgetId(item.state.id, "scroll.y.thumb");
+    const auto verticalIdResult = MakeWidgetId(item.state.id, WidgetPartKey::s_ScrollVerticalThumb);
     if(!verticalIdResult)
         return false;
     const WidgetId verticalId = *verticalIdResult;
@@ -127,10 +127,10 @@ bool Builder::applyTextAreaScrollInput(const Item& item, const TextAreaFrame& fr
                 next = { nextX, static_cast<f32>(VectorDoubleGetX(y->value)) };
                 manual = true;
             }
-            else if(action->kind == ControlActionKind::Activate && action->value >= 1u && action->value <= 4u){
+            else if(action->kind == ControlActionKind::Activate && action->value >= TextAreaScrollTarget::s_HorizontalBefore && action->value <= TextAreaScrollTarget::s_VerticalAfter){
                 const ScrollViewportPlacement& accepted = state.scrollbars();
-                const bool x = action->value <= 2u;
-                const f64 direction = action->value == 1u || action->value == 3u ? -1.0 : 1.0;
+                const bool x = action->value <= TextAreaScrollTarget::s_HorizontalAfter;
+                const f64 direction = action->value == TextAreaScrollTarget::s_HorizontalBefore || action->value == TextAreaScrollTarget::s_VerticalBefore ? -1.0 : 1.0;
                 const ScrollbarPlacement& bar = x ? accepted.horizontal : accepted.vertical;
                 const auto stepped = __hidden_text_area_scroll_input::Step(VectorDoubleReplicate(x ? scroll.x : scroll.y), VectorDoubleReplicate(direction), VectorDoubleReplicate(bar.viewportExtent), VectorDoubleReplicate(bar.maximum));
                 if(!stepped)

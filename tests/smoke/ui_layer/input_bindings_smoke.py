@@ -6,7 +6,7 @@ import ctypes
 import sys
 import time
 
-from edit_native import KEYS
+from edit_native import KEYS, TEXT_SETTLE_SECONDS
 from edit_probe import model
 from edit_smoke import EditRun, run
 from interaction_smoke import parse_args
@@ -19,6 +19,8 @@ LIT_Q = "q"
 LIT_R = "r"
 LIT_T = "t"
 LIT_A = "a"
+
+QUEUED_TEXT_SETTLE_SECONDS = 0.2
 
 
 class InputBindingsRun(EditRun):
@@ -48,7 +50,7 @@ class InputBindingsRun(EditRun):
             self.native.key(name, True, repeat=repeat)
             self.native.key(name, False)
         if settle:
-            time.sleep(0.15)
+            time.sleep(TEXT_SETTLE_SECONDS)
 
     def queued_text_keys(self):
         if not self.native.windows:
@@ -64,7 +66,7 @@ class InputBindingsRun(EditRun):
         # Both policies survive release and remain separate before either queued character is delivered.
         for _, flags, character in keys:
             self.native._post(0x0102, ord(character), flags)
-        time.sleep(0.2)
+        time.sleep(QUEUED_TEXT_SETTLE_SECONDS)
 
     def execute(self):
         primary, secondary = "Hello 한글", "Target"

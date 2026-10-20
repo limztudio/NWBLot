@@ -119,7 +119,7 @@ Expected<EditBoxPlacement> EditBoxView::arrangeViewport(const Rect& bounds, cons
         placement.textOrigin = { VectorGetX(origin), VectorGetY(origin) };
     }
     else{
-        const f32 verticalOffset = VectorGetY(VectorMax(VectorZero(), VectorScale(VectorSubtract(VectorSet(placement.content.width, placement.content.height, 0.0f, 0.0f), visualSize), 0.5f)));
+        const f32 verticalOffset = VectorGetY(VectorMax(VectorZero(), VectorScale(VectorSubtract(VectorSet(placement.content.width, placement.content.height, 0.0f, 0.0f), visualSize), s_RectCenterFraction)));
         const SIMDVectorSingle baseOrigin = VectorSubtract(VectorSet(left, top, 0.0f, 0.0f), visualBoundsOrigin);
         const SIMDVectorSingle scrolled = VectorSubtract(baseOrigin, VectorSet(placement.scroll, 0.0f, 0.0f, 0.0f));
         const SIMDVectorSingle centered = VectorAdd(baseOrigin, VectorSet(0.0f, verticalOffset, 0.0f, 0.0f));

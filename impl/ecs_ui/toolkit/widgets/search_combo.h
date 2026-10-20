@@ -28,9 +28,11 @@ public:
     [[nodiscard]] virtual const IListDataSource& filtered()const = 0;
 };
 
+inline constexpr f32 s_SearchComboQueryHeight = 36.0f;
+
 struct SearchComboOptions{
     ComboOptions combo;
-    f32 queryHeight = 36.0f;
+    f32 queryHeight = s_SearchComboQueryHeight;
     f32 queryGap = s_StyleSpacingSmall;
 };
 

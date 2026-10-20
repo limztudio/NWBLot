@@ -19,6 +19,16 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr AStringView s_MetadataFileExtension = ".nwb";
+inline constexpr AStringView s_PreparedFontExtension = ".font";
+inline constexpr AStringView s_TrueTypeExtension = ".ttf";
+inline constexpr AStringView s_OpenTypeExtension = ".otf";
+inline constexpr AStringView s_RasterModeBitmapText = "bitmap";
+inline constexpr AStringView s_RasterModeOutlineText = "outline";
+// One guard pixel on each side keeps neighbouring glyphs from bleeding into each other.
+inline constexpr u32 s_GlyphGuardExtent = 2u;
+
+
 struct BakeOptions{
     Path source;
     Path output;

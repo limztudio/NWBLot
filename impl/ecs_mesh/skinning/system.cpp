@@ -47,6 +47,13 @@ static void ResolveSkeletonComponents(Core::ECS::World& world, const Core::ECS::
 
 static constexpr bool s_RuntimeSkinningMeshletFrustumCullingEnabled = true;
 static constexpr bool s_RuntimeSkinningMeshletConeCullingEnabled = false; // Deformations make cones unsafe.
+static constexpr Name s_SerialMergeDomain("mesh_skinning.serial");
+static constexpr AStringView s_SkinnedPositionsLabel = "Runtime Skinned Positions";
+static constexpr AStringView s_SkinnedNormalsLabel = "Runtime Skinned Normals";
+static constexpr AStringView s_MeshletDescriptorsLabel = "Runtime Meshlet Descriptors";
+static constexpr AStringView s_MeshletLocalVertexRefsLabel = "Runtime Meshlet Local Vertex Refs";
+static constexpr AStringView s_MeshletPrimitiveIndicesLabel = "Runtime Meshlet Primitive Indices";
+static constexpr AStringView s_MeshletAttributeDeltasLabel = "Runtime Meshlet Attribute Deltas";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -61,7 +68,7 @@ static constexpr bool s_RuntimeSkinningMeshletConeCullingEnabled = false; // Def
     scheduling.allowPacketMerge = true;
     // The external renderer consumes one accepted skinning state on this serial timeline.
     scheduling.mergeWithPrevious = true;
-    scheduling.frontierScoredMergeDomain = Name("mesh_skinning.serial");
+    scheduling.frontierScoredMergeDomain = s_SerialMergeDomain;
     return scheduling;
 }
 
@@ -74,7 +81,7 @@ static constexpr bool s_RuntimeSkinningMeshletConeCullingEnabled = false; // Def
     scheduling.allowPacketMerge = true;
     // The external renderer consumes one accepted skinning state on this serial timeline.
     scheduling.mergeWithPrevious = true;
-    scheduling.frontierScoredMergeDomain = Name("mesh_skinning.serial");
+    scheduling.frontierScoredMergeDomain = s_SerialMergeDomain;
     return scheduling;
 }
 
@@ -547,38 +554,38 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
             restPositionResourceResult = importBuffer(instance->restPositionBuffer, "Runtime Rest Positions");
             restNormalResourceResult = importBuffer(instance->restNormalBuffer, "Runtime Rest Normals");
             restTangentResourceResult = importBuffer(instance->restTangentBuffer, "Runtime Rest Tangents");
-            skinnedPositionResourceResult = importBuffer(instance->skinnedPositionBuffer, "Runtime Skinned Positions");
-            skinnedNormalResourceResult = importBuffer(instance->skinnedNormalBuffer, "Runtime Skinned Normals");
+            skinnedPositionResourceResult = importBuffer(instance->skinnedPositionBuffer, __hidden_system::s_SkinnedPositionsLabel);
+            skinnedNormalResourceResult = importBuffer(instance->skinnedNormalBuffer, __hidden_system::s_SkinnedNormalsLabel);
             skinnedTangentResourceResult = importBuffer(instance->skinnedTangentBuffer, "Runtime Skinned Tangents");
         }
         if(updatesMeshletBounds){
             if(!skinnedPositionResourceResult.has_value())
-                skinnedPositionResourceResult = importBuffer(instance->skinnedPositionBuffer, "Runtime Skinned Positions");
-            meshletDescResourceResult = importBuffer(instance->meshletDescBuffer, "Runtime Meshlet Descriptors");
+                skinnedPositionResourceResult = importBuffer(instance->skinnedPositionBuffer, __hidden_system::s_SkinnedPositionsLabel);
+            meshletDescResourceResult = importBuffer(instance->meshletDescBuffer, __hidden_system::s_MeshletDescriptorsLabel);
             meshletPositionRefDeltaResourceResult = importBuffer(instance->meshletPositionRefDeltaBuffer, "Runtime Meshlet Position Deltas");
-            meshletLocalVertexRefResourceResult = importBuffer(instance->meshletLocalVertexRefBuffer, "Runtime Meshlet Local Vertex Refs");
-            meshletPrimitiveIndexResourceResult = importBuffer(instance->meshletPrimitiveIndexBuffer, "Runtime Meshlet Primitive Indices");
+            meshletLocalVertexRefResourceResult = importBuffer(instance->meshletLocalVertexRefBuffer, __hidden_system::s_MeshletLocalVertexRefsLabel);
+            meshletPrimitiveIndexResourceResult = importBuffer(instance->meshletPrimitiveIndexBuffer, __hidden_system::s_MeshletPrimitiveIndicesLabel);
             meshletBoundsResourceResult = importBuffer(instance->meshletBoundsBuffer, "Runtime Meshlet Bounds");
             meshletLocalBoundsResourceResult = importBuffer(instance->meshletLocalBoundsBuffer, "Runtime Meshlet Local Bounds");
             localBoundsResourceResult = importBuffer(instance->localBoundsBuffer, "Runtime Local Bounds");
         }
         if(hasActiveSkin){
-            meshletAttributeRefDeltaResourceResult = importBuffer(instance->meshletAttributeRefDeltaBuffer, "Runtime Meshlet Attribute Deltas");
+            meshletAttributeRefDeltaResourceResult = importBuffer(instance->meshletAttributeRefDeltaBuffer, __hidden_system::s_MeshletAttributeDeltasLabel);
             attributeSkinResourceResult = importBuffer(instance->attributeSkinBuffer, "Runtime Attribute Skins");
             skinResourceResult = importBuffer(resources.skinBuffer, "Skinning Influences");
             jointPaletteResourceResult = importBuffer(resources.jointPaletteBuffer, "Skinning Joint Palette");
         }
         if(plan.repacksNormals){
             if(!skinnedNormalResourceResult.has_value())
-                skinnedNormalResourceResult = importBuffer(instance->skinnedNormalBuffer, "Runtime Skinned Normals");
+                skinnedNormalResourceResult = importBuffer(instance->skinnedNormalBuffer, __hidden_system::s_SkinnedNormalsLabel);
             if(!meshletDescResourceResult.has_value())
-                meshletDescResourceResult = importBuffer(instance->meshletDescBuffer, "Runtime Meshlet Descriptors");
+                meshletDescResourceResult = importBuffer(instance->meshletDescBuffer, __hidden_system::s_MeshletDescriptorsLabel);
             if(!meshletPrimitiveIndexResourceResult.has_value())
-                meshletPrimitiveIndexResourceResult = importBuffer(instance->meshletPrimitiveIndexBuffer, "Runtime Meshlet Primitive Indices");
+                meshletPrimitiveIndexResourceResult = importBuffer(instance->meshletPrimitiveIndexBuffer, __hidden_system::s_MeshletPrimitiveIndicesLabel);
             if(!meshletAttributeRefDeltaResourceResult.has_value())
-                meshletAttributeRefDeltaResourceResult = importBuffer(instance->meshletAttributeRefDeltaBuffer, "Runtime Meshlet Attribute Deltas");
+                meshletAttributeRefDeltaResourceResult = importBuffer(instance->meshletAttributeRefDeltaBuffer, __hidden_system::s_MeshletAttributeDeltasLabel);
             if(!meshletLocalVertexRefResourceResult.has_value())
-                meshletLocalVertexRefResourceResult = importBuffer(instance->meshletLocalVertexRefBuffer, "Runtime Meshlet Local Vertex Refs");
+                meshletLocalVertexRefResourceResult = importBuffer(instance->meshletLocalVertexRefBuffer, __hidden_system::s_MeshletLocalVertexRefsLabel);
             attributeResourceResult = importBuffer(instance->attributeBuffer, "Runtime Ray Trace Attributes");
         }
 

@@ -27,6 +27,11 @@ namespace __hidden_encode{
 
 
 inline constexpr f32 s_UastcHdrMaximum = 65216.0f;
+inline constexpr f32 s_SrgbLinearSegmentScale = 12.92f;
+inline constexpr f32 s_SrgbOffset = 0.055f;
+inline constexpr f32 s_SrgbOffsetScale = 1.055f;
+inline constexpr f32 s_SrgbDecodeExponent = 2.4f;
+inline constexpr f32 s_SrgbLinearThreshold = 0.04045f;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -47,9 +52,9 @@ inline constexpr f32 s_UastcHdrMaximum = 65216.0f;
 }
 
 [[nodiscard]] static SIMDVectorSingle SrgbToLinearRgb(const SIMDVectorSingle rgb)noexcept{
-    const SIMDVectorSingle linearPart = VectorScale(rgb, 1.0f / 12.92f);
-    const SIMDVectorSingle nonlinearPart = VectorPow(VectorScale(VectorAdd(rgb, VectorReplicate(0.055f)), 1.0f / 1.055f), VectorReplicate(2.4f));
-    return VectorSelect(nonlinearPart, linearPart, VectorLessOrEqual(rgb, VectorReplicate(0.04045f)));
+    const SIMDVectorSingle linearPart = VectorScale(rgb, 1.0f / s_SrgbLinearSegmentScale);
+    const SIMDVectorSingle nonlinearPart = VectorPow(VectorScale(VectorAdd(rgb, VectorReplicate(s_SrgbOffset)), 1.0f / s_SrgbOffsetScale), VectorReplicate(s_SrgbDecodeExponent));
+    return VectorSelect(nonlinearPart, linearPart, VectorLessOrEqual(rgb, VectorReplicate(s_SrgbLinearThreshold)));
 }
 
 [[nodiscard]] static bool PrepareLinearPlane(basisu::imagef& plane, const basisu::imagef& alphaMask, const AlphaSource& alphaSource, const bool hdr, const bool srgb){

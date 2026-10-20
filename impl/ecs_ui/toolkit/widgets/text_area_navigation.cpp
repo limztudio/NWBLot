@@ -3,6 +3,7 @@
 
 
 #include "text_area_navigation.h"
+#include "../rect_math.h"
 
 #include <global/simd/vector.h>
 #include <global/simplemath.h>
@@ -76,14 +77,14 @@ private:
     const EditBoxCaretStop* current = FindStop(geometry, activeCaret);
     if(lines.empty() || !current || current->lineIndex >= lines.size())
         return MakeUnexpected(Failure{});
-    const SIMDVectorDouble center = VectorDoubleAdd(VectorDoubleReplicate(caret.y), VectorDoubleMultiply(VectorDoubleReplicate(caret.height), VectorDoubleReplicate(0.5)));
+    const SIMDVectorDouble center = VectorDoubleAdd(VectorDoubleReplicate(caret.y), VectorDoubleMultiply(VectorDoubleReplicate(caret.height), VectorDoubleReplicate(s_RectCenterFractionF64)));
     const SIMDVectorDouble pageStep = VectorDoubleReplicate(static_cast<f64>(viewportHeight));
     const f64 target = VectorDoubleGetX(VectorDoubleAdd(center, down ? pageStep : VectorDoubleNegate(pageStep)));
     const EditCaretLine& first = lines.front();
     const EditCaretLine& last = lines.back();
     const SIMDVectorDouble minimumMaximumValue = VectorDoubleMultiplyAddExpression(
         VectorDoubleSet(static_cast<f64>(first.height), static_cast<f64>(last.height), 0.0, 0.0),
-        VectorDoubleSet(0.5, 0.5, 0.0, 0.0),
+        VectorDoubleSet(s_RectCenterFractionF64, s_RectCenterFractionF64, 0.0, 0.0),
         VectorDoubleSet(static_cast<f64>(first.top), static_cast<f64>(last.top), 0.0, 0.0)
     );
     const f64 minimum = VectorDoubleGetX(minimumMaximumValue);

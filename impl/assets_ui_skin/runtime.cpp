@@ -80,7 +80,7 @@ static_assert(UiSkinColorRole::Count == UiSkinBinaryPayload::s_UiSkinPaletteColo
 
 bool UiSkin::loadBinary(const Core::Assets::AssetBytes& binary){
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<UiSkinBinaryPayload::HeaderBinary>(binary, cursor, UiSkinBinaryPayload::s_UiSkinMagic, NWB_TEXT("UiSkin::loadBinary"), NWB_TEXT("UI skin"));
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<UiSkinBinaryPayload::HeaderBinary>(binary, cursor, UiSkinBinaryPayload::s_UiSkinMagic, UiSkinBinaryPayload::s_UiSkinLoadBinaryContext, UiSkinBinaryPayload::s_UiSkinAssetKindLabel);
     if(!headerResult)
         return false;
     const UiSkinBinaryPayload::HeaderBinary& header = *headerResult;
@@ -150,7 +150,7 @@ bool UiSkin::loadBinary(const Core::Assets::AssetBytes& binary){
     }
     typography = *typographyResult;
     candidate.setTypography({ typography.defaultFontSize });
-    if(!Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("UiSkin::loadBinary")))
+    if(!Core::Assets::ReadCompletePayload(binary, cursor, UiSkinBinaryPayload::s_UiSkinLoadBinaryContext))
         return false;
     candidate.rebuildRegionIndex();
     if(!candidate.validatePayload())
@@ -193,12 +193,12 @@ bool UiSkin::validatePayload()const{
     }
     for(usize index = 0u; index < m_palette.colors.size(); ++index){
         const UiSkinColor& color = m_palette.colors[index];
-        if(!IsFinite(color.r) || color.r < 0.0f || color.r > 16.0f || !IsFinite(color.g) || color.g < 0.0f || color.g > 16.0f || !IsFinite(color.b) || color.b < 0.0f || color.b > 16.0f || !IsFinite(color.a) || color.a < 0.0f || color.a > 1.0f){
+        if(!IsFinite(color.r) || color.r < 0.0f || color.r > s_UiSkinPaletteRgbMax || !IsFinite(color.g) || color.g < 0.0f || color.g > s_UiSkinPaletteRgbMax || !IsFinite(color.b) || color.b < 0.0f || color.b > s_UiSkinPaletteRgbMax || !IsFinite(color.a) || color.a < 0.0f || color.a > 1.0f){
             NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: palette color {} needs finite RGB in [0, 16] and alpha in [0, 1]"), index);
             return false;
         }
     }
-    if(!IsFinite(m_typography.defaultFontSize) || m_typography.defaultFontSize < 1.0f / 64.0f || m_typography.defaultFontSize > 2048.0f){
+    if(!IsFinite(m_typography.defaultFontSize) || m_typography.defaultFontSize < s_UiSkinMinDefaultFontSize || m_typography.defaultFontSize > s_UiSkinMaxDefaultFontSize){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: typography needs a default font size in [1/64, 2048]"));
         return false;
     }

@@ -20,6 +20,8 @@ using namespace NWB::Impl::Ui;
 using namespace NWB::UiEditTests;
 using namespace NWB::UiMultilineTests;
 
+constexpr AStringView s_SelectionSampleText = "abcDEFghi";
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -66,7 +68,7 @@ class UiEditSurroundingSelectionTests : public EditFixture{};
 TEST_F(UiEditSurroundingSelectionTests, OneSidedCountsAddressNormalizedSelectionEdgesForEitherDirection){
     for(const bool reverse : { false, true }){
         EditModel before(m_arena);
-        ASSERT_TRUE(before.setText("abcDEFghi"));
+        ASSERT_TRUE(before.setText(s_SelectionSampleText));
         ASSERT_TRUE(before.setSelection(reverse ? 6u : 3u, reverse ? 3u : 6u));
         ASSERT_TRUE(before.eraseAroundSelection(2u, 0u));
         EXPECT_EQ(before.text(), "aDEFghi");
@@ -75,7 +77,7 @@ TEST_F(UiEditSurroundingSelectionTests, OneSidedCountsAddressNormalizedSelection
         EXPECT_EQ(before.caret(), reverse ? 1u : 4u);
 
         EditModel after(m_arena);
-        ASSERT_TRUE(after.setText("abcDEFghi"));
+        ASSERT_TRUE(after.setText(s_SelectionSampleText));
         ASSERT_TRUE(after.setSelection(reverse ? 6u : 3u, reverse ? 3u : 6u));
         ASSERT_TRUE(after.eraseAroundSelection(0u, 2u));
         EXPECT_EQ(after.text(), "abcDEFi");
@@ -101,7 +103,7 @@ TEST_F(UiEditSurroundingSelectionTests, CollapsedSelectionDeletesAroundTheCaretA
 }
 
 TEST_F(UiEditSurroundingSelectionTests, RemovingAllOutsideBytesLeavesTheCompleteSelection){
-    ASSERT_TRUE(m_model.setText("abcDEFghi"));
+    ASSERT_TRUE(m_model.setText(s_SelectionSampleText));
     ASSERT_TRUE(m_model.setSelection(3u, 6u));
     ASSERT_TRUE(m_model.eraseAroundSelection(3u, 3u));
     EXPECT_EQ(m_model.text(), "DEF");
@@ -109,7 +111,7 @@ TEST_F(UiEditSurroundingSelectionTests, RemovingAllOutsideBytesLeavesTheComplete
     EXPECT_EQ(m_model.caret(), 3u);
     EXPECT_EQ(m_model.selectedText(), "DEF");
     ASSERT_TRUE(m_model.undo());
-    EXPECT_EQ(m_model.text(), "abcDEFghi");
+    EXPECT_EQ(m_model.text(), s_SelectionSampleText);
     EXPECT_EQ(m_model.anchor(), 3u);
     EXPECT_EQ(m_model.caret(), 6u);
     ASSERT_TRUE(m_model.redo());
@@ -146,7 +148,7 @@ TEST_F(UiEditSurroundingSelectionTests, MultilineSelectionKeepsItsLfBytesAndReve
 }
 
 TEST_F(UiEditSurroundingSelectionTests, AcceptedDeletionCancelsPreeditWithoutAddingTransientHistory){
-    ASSERT_TRUE(m_model.setText("abcDEFghi"));
+    ASSERT_TRUE(m_model.setText(s_SelectionSampleText));
     ASSERT_TRUE(m_model.setSelection(3u, 6u));
     ASSERT_TRUE(m_model.beginComposition());
     ASSERT_TRUE(m_model.updateComposition("transient", 0u, 9u));
@@ -165,7 +167,7 @@ TEST_F(UiEditSurroundingSelectionTests, AcceptedDeletionCancelsPreeditWithoutAdd
     EXPECT_EQ(m_model.compositionGeneration(), composition + 1u);
     EXPECT_EQ(m_model.externalRevision(), external);
     ASSERT_TRUE(m_model.undo());
-    EXPECT_EQ(m_model.text(), "abcDEFghi");
+    EXPECT_EQ(m_model.text(), s_SelectionSampleText);
     EXPECT_EQ(m_model.anchor(), 3u);
     EXPECT_EQ(m_model.caret(), 6u);
     EXPECT_FALSE(m_model.canUndo());
@@ -173,15 +175,15 @@ TEST_F(UiEditSurroundingSelectionTests, AcceptedDeletionCancelsPreeditWithoutAdd
 }
 
 TEST_F(UiEditSurroundingSelectionTests, ZeroCountsPreserveSelectionPreeditHistoryAndAllEpochs){
-    ASSERT_TRUE(SeedHistoryAndPreedit(m_model, "abcDEFghi", 6u, 3u));
+    ASSERT_TRUE(SeedHistoryAndPreedit(m_model, s_SelectionSampleText, 6u, 3u));
     const MultilineSnapshot before(m_arena, m_model);
     ASSERT_TRUE(m_model.eraseAroundSelection(0u, 0u));
     before.expectUnchanged(m_model);
-    ExpectRetainedHistory(m_model, "abcDEFghi");
+    ExpectRetainedHistory(m_model, s_SelectionSampleText);
 }
 
 TEST_F(UiEditSurroundingSelectionTests, OutOfRangeCountsPreserveTheCompleteDraftAndRedoBranch){
-    ASSERT_TRUE(SeedHistoryAndPreedit(m_model, "abcDEFghi", 3u, 6u));
+    ASSERT_TRUE(SeedHistoryAndPreedit(m_model, s_SelectionSampleText, 3u, 6u));
     const MultilineSnapshot before(m_arena, m_model);
     EXPECT_FALSE(m_model.eraseAroundSelection(4u, 0u));
     before.expectUnchanged(m_model);
@@ -191,7 +193,7 @@ TEST_F(UiEditSurroundingSelectionTests, OutOfRangeCountsPreserveTheCompleteDraft
     before.expectUnchanged(m_model);
     EXPECT_FALSE(m_model.eraseAroundSelection(0u, Limit<usize>::s_Max));
     before.expectUnchanged(m_model);
-    ExpectRetainedHistory(m_model, "abcDEFghi");
+    ExpectRetainedHistory(m_model, s_SelectionSampleText);
 }
 
 TEST_F(UiEditSurroundingSelectionTests, OriginalCutsRejectBothUtf8SplitsAndScalarValidGraphemeSplits){

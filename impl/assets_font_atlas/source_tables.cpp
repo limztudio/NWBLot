@@ -26,7 +26,7 @@ Expected<Core::Assets::AssetVector<FontAtlasPositioningTable>> CopyFontAtlasPosi
     const FontSfntDirectory& directory = *directoryResult;
     static constexpr u32 s_Tags[] = { s_FontAtlasGdefTag, s_FontAtlasGposTag, s_FontAtlasKernTag };
     Core::Assets::AssetVector<FontAtlasPositioningTable> tables(arena);
-    tables.reserve(3u);
+    tables.reserve(s_FontAtlasMaxPositioningTableCount);
     u64 totalBytes = 0u;
     for(const u32 tag : s_Tags){
         for(u16 index = 0u; index < directory.tableCount(); ++index){

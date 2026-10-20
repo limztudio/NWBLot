@@ -176,7 +176,7 @@ bool RecordOutputCommandIr(const GpuOutputTask::Payload& payload, Core::CommandL
     push.presentationMode = payload.presentationMode;
     if(!capture.capturePushConstants(context.task, context.packet, context.queue, BinaryByteView{ reinterpret_cast<const u8*>(&push), sizeof(push) }))
         return false;
-    if(!capture.captureDraw(context.task, context.packet, context.queue, Core::DrawArguments().setVertexCount(3u), false) || !capture.captureEndRenderPass(context.task, context.packet, context.queue))
+    if(!capture.captureDraw(context.task, context.packet, context.queue, Core::DrawArguments().setVertexCount(s_GpuFullscreenTriangleVertexCount), false) || !capture.captureEndRenderPass(context.task, context.packet, context.queue))
         return false;
     return __hidden_ui_gpu_command_ir::ReplayCaptured(frame, context, commands, capture);
 }

@@ -19,6 +19,14 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Share of free space placed before an item to center it, or the midpoint of an extent.
+inline constexpr f32 s_RectCenterFraction = 0.5f;
+inline constexpr f64 s_RectCenterFractionF64 = 0.5;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Rectangle lanes are x, y, width, height; comparisons preserve scalar Min/Max ties and NaNs on every backend.
 [[nodiscard]] NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL IntersectRectBoundsValue(SIMDVectorSingle lhs, SIMDVectorSingle rhs)noexcept{
     const SIMDVectorSingle lhsOrigin = VectorSwizzle<0, 1, 0, 1>(lhs);

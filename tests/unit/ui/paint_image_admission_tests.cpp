@@ -19,6 +19,8 @@ using namespace NWB::Impl;
 using namespace NWB::Impl::Ui;
 using namespace NWB::UiPaintImageTests;
 
+constexpr AStringView s_VersionedImagePath = "tests/ui/versioned_image";
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -38,7 +40,7 @@ TEST_F(PaintImageFixture, ThreeKindsShareSixtyFourSlotsWhileCopiesDeduplicateAnd
     auto imageResult = makeImage();
     ASSERT_TRUE(imageResult);
     const SharedImageSource image = Move(*imageResult);
-    auto overflowResult = makeImage("tests/ui/image", 81u);
+    auto overflowResult = makeImage(s_DefaultImagePath, 81u);
     ASSERT_TRUE(overflowResult);
     const SharedImageSource overflow = Move(*overflowResult);
     ASSERT_TRUE(sdf && image && overflow);
@@ -89,7 +91,7 @@ TEST_F(PaintImageFixture, MixedOverflowPreservesCoverageGenerationSdfImageVersio
     auto newSdfCreationResult = makeSdf(99u);
     ASSERT_TRUE(newSdfCreationResult);
     const SharedSdfAtlasPage newSdf = Move(*newSdfCreationResult);
-    auto newImageResult = makeImage("tests/ui/image", 81u);
+    auto newImageResult = makeImage(s_DefaultImagePath, 81u);
     ASSERT_TRUE(newImageResult);
     const SharedImageSource newImage = Move(*newImageResult);
     ASSERT_TRUE(sdf && image && upgrade && newSdf && newImage);
@@ -172,10 +174,10 @@ TEST_F(PaintImageFixture, NullThirdKindRejectsEarlierCandidatesAtomicallyAndAVal
 }
 
 TEST_F(PaintImageFixture, SamePathFreshVersionsCoexistWhileCopiedHandlesUseOneSlotPerVersion){
-    auto firstResult = makeImage("tests/ui/versioned_image", 37u);
+    auto firstResult = makeImage(s_VersionedImagePath, 37u);
     ASSERT_TRUE(firstResult);
     SharedImageSource first = Move(*firstResult);
-    auto secondResult = makeImage("tests/ui/versioned_image", 81u);
+    auto secondResult = makeImage(s_VersionedImagePath, 81u);
     ASSERT_TRUE(secondResult);
     SharedImageSource second = Move(*secondResult);
     ASSERT_TRUE(first && second);

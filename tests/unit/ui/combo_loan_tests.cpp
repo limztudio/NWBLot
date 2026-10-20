@@ -315,7 +315,7 @@ TEST_F(UiComboLoanTests, ClosedUserPopupSuppressesLaterComboBeforeSourceOrModelC
     ASSERT_TRUE(m_builder.beginPopup("owner", popupState, options));
     popupState.close();
     m_callbacks.arm(MutationKind::RevisionSelect, 8u);
-    const ComboResult result = m_builder.comboBox("combo", m_callbacks, m_state, Options());
+    const ComboResult result = m_builder.comboBox(s_ComboKey, m_callbacks, m_state, Options());
     EXPECT_TRUE(result.valid);
     EXPECT_FALSE(m_context.failed());
     EXPECT_EQ(m_callbacks.mutations(), 0u);
@@ -352,9 +352,9 @@ TEST_F(UiComboLoanTests, LaterPopupTextCannotChangeAnEarlierComboAfterItsPaint){
     other.select(2u);
     other.open();
     const auto declarePair = [this, &other](const u64 generation){
-        if(!begin(generation) || !m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 240.0f }))
+        if(!begin(generation) || !m_builder.beginPanel(s_ComboPanelKey, { 10.0f, 10.0f, 320.0f, 240.0f }))
             return false;
-        return m_builder.comboBox("combo", m_source, m_state, Options()).valid && m_builder.comboBox("other", m_callbacks, other, Options()).valid;
+        return m_builder.comboBox(s_ComboKey, m_source, m_state, Options()).valid && m_builder.comboBox(s_SecondComboKey, m_callbacks, other, Options()).valid;
     };
     ASSERT_TRUE(declarePair(1u));
     ASSERT_TRUE(finishPanel());
@@ -381,9 +381,9 @@ TEST_F(UiComboLoanTests, LaterPopupTextCannotChangeTheEarlierSourceAfterItsLoanW
     other.open();
     ForeignRevisionSource source(m_source);
     const auto declarePair = [this, &other, &source](const u64 generation){
-        if(!begin(generation) || !m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 240.0f }))
+        if(!begin(generation) || !m_builder.beginPanel(s_ComboPanelKey, { 10.0f, 10.0f, 320.0f, 240.0f }))
             return false;
-        return m_builder.comboBox("combo", m_source, m_state, Options()).valid && m_builder.comboBox("other", source, other, Options()).valid;
+        return m_builder.comboBox(s_ComboKey, m_source, m_state, Options()).valid && m_builder.comboBox(s_SecondComboKey, source, other, Options()).valid;
     };
     ASSERT_TRUE(declarePair(1u));
     ASSERT_TRUE(finishPanel());

@@ -79,6 +79,9 @@ inline constexpr u32 s_RayTracingAllInstanceMask = NWB_RAY_TRACING_ALL_INSTANCE_
 // Heap geometry buffers per mesh.
 inline constexpr u32 s_HardwareRayTracingMeshBufferCount = 3u;
 inline constexpr u32 s_SoftwareRayTracingMeshBufferCount = 4u;
+// Shader variant selectors for the NWB_RT_CSG_ENABLED define.
+inline constexpr AStringView s_RayTracingCsgDisabledVariant = "NWB_RT_CSG_ENABLED=0";
+inline constexpr AStringView s_RayTracingCsgEnabledVariant = "NWB_RT_CSG_ENABLED=1";
 
 
 // Limit skinned BLAS refits before rebuilding topology.

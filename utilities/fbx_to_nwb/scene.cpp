@@ -161,7 +161,7 @@ void PrintMeshInstances(const UtilityVector<MeshInstance>& instances, Core::Allo
     for(const MeshInstance& instance : instances){
         report << "  ";
         __hidden_scene::AppendMeshDisplayName(report, instance);
-        report << "\n";
+        report << s_ReportLineEndText;
     }
     NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
 }

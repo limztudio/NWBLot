@@ -33,6 +33,12 @@ namespace __hidden_mesh_raytracing_snapshots{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr usize s_RetainedAccelerationBuffersPerMesh = 5u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] bool RuntimeMeshletBoundsReady(const MeshResources& mesh)noexcept{
     const Core::GpuDescriptorHandle descriptor = mesh.geometryHeapHandles[NWB_MESH_BINDING_MESHLET_DESC];
     const Core::GpuDescriptorHandle bounds = mesh.runtimeMeshletLocalBoundsHeapHandle;
@@ -325,7 +331,7 @@ Expected<ECSRenderDetail::MeshSoftwareBvhParentBuildStateVector> RendererMeshSys
 
 void RendererMeshSystem::collectRetainedAccelerationStateBuffers(ECSRenderDetail::MeshRetainedAccelerationStateBufferVector& outBuffers)const{
     outBuffers.clear();
-    outBuffers.reserve(m_meshState.m_meshes.size() * 5u);
+    outBuffers.reserve(m_meshState.m_meshes.size() * __hidden_mesh_raytracing_snapshots::s_RetainedAccelerationBuffersPerMesh);
     for(auto meshIt = m_meshState.m_meshes.begin(); meshIt != m_meshState.m_meshes.end(); ++meshIt){
         const MeshResources& mesh = meshIt.value();
         // Retain every live BLAS source and backing buffer across preparation packets.

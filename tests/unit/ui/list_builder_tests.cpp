@@ -24,6 +24,14 @@ using namespace NWB::Impl;
 using namespace NWB::Impl::Ui;
 using namespace NWB::UiWidgetTests;
 
+constexpr AStringView s_PanelKey = "panel";
+constexpr AStringView s_ListKey = "list";
+constexpr AStringView s_PopupKey = "popup";
+constexpr AStringView s_UpperPopupKey = "upper";
+constexpr AStringView s_RowsKey = "rows";
+constexpr AStringView s_ScrollbarKey = "scrollbar";
+constexpr AStringView s_FirstRowText = "Ax";
+
 
 // This source represents a large dataset arithmetically; no allocation or full scan depends on rowCount().
 class ArithmeticSource final : public IListDataSource{
@@ -132,9 +140,9 @@ protected:
     }
 
     [[nodiscard]] bool prepareSource(const u64 generation, const IListDataSource& source, ListState& state, const ListOptions& options = Options(), const DisplayMetrics& display = { 800.0f, 600.0f, 1.0f, 1.0f }){
-        if(!begin(generation, display) || !m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 260.0f }))
+        if(!begin(generation, display) || !m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 260.0f }))
             return false;
-        m_result = m_builder.virtualList("list", source, state, options);
+        m_result = m_builder.virtualList(s_ListKey, source, state, options);
         return m_result.valid && finishPanel();
     }
 
@@ -143,31 +151,31 @@ protected:
     }
 
     [[nodiscard]] bool preparePopups(const u64 generation, PopupState& lowerPopup, ListState& lowerState, PopupState* upperPopup = nullptr, ListState* upperState = nullptr){
-        if(!begin(generation) || !m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 260.0f }))
+        if(!begin(generation) || !m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 260.0f }))
             return false;
-        if(!m_builder.virtualList("list", m_source, m_state, Options()).valid || !m_builder.endPanel())
+        if(!m_builder.virtualList(s_ListKey, m_source, m_state, Options()).valid || !m_builder.endPanel())
             return false;
         PopupOptions popup;
         popup.anchor = { 350.0f, 10.0f, 10.0f, 10.0f };
         popup.size = { 320.0f, 180.0f };
-        if(m_builder.beginPopup("popup", lowerPopup, popup)){
-            if(!m_builder.virtualList("list", m_source, lowerState, Options()).valid || !m_builder.endPopup())
+        if(m_builder.beginPopup(s_PopupKey, lowerPopup, popup)){
+            if(!m_builder.virtualList(s_ListKey, m_source, lowerState, Options()).valid || !m_builder.endPopup())
                 return false;
         }
         if(upperPopup && upperState){
             popup.anchor = { 400.0f, 220.0f, 10.0f, 10.0f };
-            if(m_builder.beginPopup("upper", *upperPopup, popup)){
-                if(!m_builder.virtualList("list", m_source, *upperState, Options()).valid || !m_builder.endPopup())
+            if(m_builder.beginPopup(s_UpperPopupKey, *upperPopup, popup)){
+                if(!m_builder.virtualList(s_ListKey, m_source, *upperState, Options()).valid || !m_builder.endPopup())
                     return false;
             }
         }
         return m_context.endRoot() && m_context.finishFrame();
     }
 
-    [[nodiscard]] WidgetId host()const{ return id("list", "panel"); }
+    [[nodiscard]] WidgetId host()const{ return id(s_ListKey, s_PanelKey); }
 
     [[nodiscard]] WidgetId row(const u64 key)const{
-        return UiTestSupport::RequireWidgetId(MakeWidgetPartId(UiTestSupport::RequireWidgetId(MakeWidgetId(host(), "rows")), key));
+        return UiTestSupport::RequireWidgetId(MakeWidgetPartId(UiTestSupport::RequireWidgetId(MakeWidgetId(host(), s_RowsKey)), key));
     }
 
     [[nodiscard]] bool wheel(const f64 delta = -1.0){
@@ -196,7 +204,7 @@ TEST_F(UiListBuilderTests, SiblingListsPaintTheirOwnDeferredBackgroundStyles){
     m_source.count = 0u;
     ListState secondState;
     ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 260.0f }));
+    ASSERT_TRUE(m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 260.0f }));
     m_builder.listStyle().background = Name("button.normal");
     ASSERT_TRUE(m_builder.virtualList("first", m_source, m_state, Options()).valid);
     m_builder.listStyle().background = Name("button.hover");
@@ -256,7 +264,7 @@ TEST_F(UiListBuilderTests, DistantTallRowGrowsBeforePaintingAndPreservesItsPixel
 }
 
 TEST_F(UiListBuilderTests, InvisibleTallMaximumIsInvalidatedByFontShapingDisplayAndResolvedRowGeometry){
-    Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
+    Core::Alloc::ScratchArena fontScratchArena(s_FontScratchArenaName);
     const SelectableStyle originalStyle = m_builder.listStyle().row;
     u64 generation = 1u;
     for(u32 change = 0u; change < 7u; ++change){
@@ -302,7 +310,7 @@ TEST_F(UiListBuilderTests, InvisibleTallMaximumIsInvalidatedByFontShapingDisplay
         ASSERT_TRUE(metrics);
         SIMDVectorSingle expected = VectorReplicate(metrics->minimum.y);
         const StringView language = change == 3u ? "ko" : "en";
-        for(const StringView label : { StringView{}, StringView{ "Ax" } }){
+        for(const StringView label : { StringView{}, StringView{ s_FirstRowText } }){
             const auto layout = m_text.layout({ .text = label, .fontSize = m_builder.style().fontSize, .language = language });
             ASSERT_TRUE(layout);
             const auto visual = m_text.measure(*layout, display);
@@ -315,7 +323,7 @@ TEST_F(UiListBuilderTests, InvisibleTallMaximumIsInvalidatedByFontShapingDisplay
 }
 
 TEST_F(UiListBuilderTests, ReplacingTextServiceWithTheSameGenerationInvalidatesTheCachedMaximum){
-    Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
+    Core::Alloc::ScratchArena fontScratchArena(s_FontScratchArenaName);
     m_source.specialIndex = 50000u;
     ASSERT_TRUE(accept(1u));
     ASSERT_NE(target(row(1u)), nullptr);
@@ -338,8 +346,8 @@ TEST_F(UiListBuilderTests, ReplacingTextServiceWithTheSameGenerationInvalidatesT
     builder.style() = m_builder.style();
     builder.listStyle() = m_builder.listStyle();
     ASSERT_TRUE(begin(4u));
-    ASSERT_TRUE(builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 260.0f }));
-    ASSERT_TRUE(builder.virtualList("list", m_source, m_state, Options()).valid);
+    ASSERT_TRUE(builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 260.0f }));
+    ASSERT_TRUE(builder.virtualList(s_ListKey, m_source, m_state, Options()).valid);
     ASSERT_TRUE(builder.endPanel());
     ASSERT_TRUE(m_context.endRoot());
     ASSERT_TRUE(m_context.finishFrame());
@@ -356,9 +364,9 @@ TEST_F(UiListBuilderTests, SharedStateDeclarationsMergeSameMetricMaximaWithoutCo
         source.specialIndex = 2u;
         ListState state;
         ASSERT_TRUE(begin(generation));
-        ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 260.0f }));
+        ASSERT_TRUE(m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 260.0f }));
         m_builder.style().fontSize = 22.0f;
-        ASSERT_TRUE(m_builder.virtualList("list", source, state, Options()).valid);
+        ASSERT_TRUE(m_builder.virtualList(s_ListKey, source, state, Options()).valid);
         if(differentMetrics)
             m_builder.style().fontSize = 12.0f;
         ListOptions small = Options();
@@ -368,7 +376,7 @@ TEST_F(UiListBuilderTests, SharedStateDeclarationsMergeSameMetricMaximaWithoutCo
         ASSERT_TRUE(m_context.commitFrame(generation++));
         ASSERT_NE(target(row(1u)), nullptr);
         const f32 firstHeight = target(row(1u))->rectangle.height;
-        const WidgetId secondRow = UiTestSupport::RequireWidgetId(MakeWidgetPartId(UiTestSupport::RequireWidgetId(MakeWidgetId(id("second", "panel"), "rows")), 1u));
+        const WidgetId secondRow = UiTestSupport::RequireWidgetId(MakeWidgetPartId(UiTestSupport::RequireWidgetId(MakeWidgetId(id("second", s_PanelKey), s_RowsKey)), 1u));
         ASSERT_NE(target(secondRow), nullptr);
         const f32 secondHeight = target(secondRow)->rectangle.height;
         ASSERT_GT(firstHeight, secondHeight);
@@ -387,13 +395,13 @@ TEST_F(UiListBuilderTests, SharedStyledContentKeepsItsFractionalFirstRowAndInher
     ASSERT_NE(target(row(1u)), nullptr);
     const f32 naturalHeight = target(row(1u))->rectangle.height;
     ASSERT_TRUE(m_state.scrollTo(VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(static_cast<f64>(naturalHeight)), VectorDoubleReplicate(10.25)))));
-    const WidgetId earlier = UiTestSupport::RequireWidgetId(MakeWidgetId(id("clipped", "panel"), "earlier"));
-    const WidgetId earlierRows = UiTestSupport::RequireWidgetId(MakeWidgetId(earlier, "rows"));
+    const WidgetId earlier = UiTestSupport::RequireWidgetId(MakeWidgetId(id("clipped", s_PanelKey), "earlier"));
+    const WidgetId earlierRows = UiTestSupport::RequireWidgetId(MakeWidgetId(earlier, s_RowsKey));
     Rect previousRow;
     Rect previousClip;
     for(u64 generation = 2u; generation <= 3u; ++generation){
         ASSERT_TRUE(begin(generation));
-        ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 260.0f }));
+        ASSERT_TRUE(m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 260.0f }));
         ContainerOptions clipped;
         clipped.height = { LayoutSizePolicy::Fixed, 20.0f };
         ASSERT_TRUE(m_builder.beginColumn("clipped", clipped));
@@ -435,7 +443,7 @@ TEST_F(UiListBuilderTests, ContentViewportPreflightsTallSecondRowAtFractionalScr
     ListOptions options = Options();
     options.height = { LayoutSizePolicy::Content, 0.0f };
     const auto metrics = SelectablePainter::Measure(m_skin, m_builder.listStyle().row);
-    const auto ordinary = m_text.layout({ .text = "Ax", .fontSize = m_builder.style().fontSize });
+    const auto ordinary = m_text.layout({ .text = s_FirstRowText, .fontSize = m_builder.style().fontSize });
     const auto tall = m_text.layout({ .text = m_source.specialText, .fontSize = m_builder.style().fontSize });
     ASSERT_TRUE(metrics);
     ASSERT_TRUE(ordinary);
@@ -453,8 +461,8 @@ TEST_F(UiListBuilderTests, ContentViewportPreflightsTallSecondRowAtFractionalScr
     ASSERT_GT(finalHeight, initialHeight);
     ASSERT_TRUE(m_state.scrollTo(VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(static_cast<f64>(initialHeight)), VectorDoubleReplicate(0.25)))));
     ASSERT_TRUE(begin(1u, display));
-    ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 260.0f }));
-    ASSERT_TRUE(m_builder.virtualList("list", m_source, m_state, options).valid);
+    ASSERT_TRUE(m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 260.0f }));
+    ASSERT_TRUE(m_builder.virtualList(s_ListKey, m_source, m_state, options).valid);
     EXPECT_FALSE(m_builder.button("after", ""));
     ASSERT_TRUE(finishPanel());
     ASSERT_TRUE(m_context.commitFrame(1u));
@@ -464,7 +472,7 @@ TEST_F(UiListBuilderTests, ContentViewportPreflightsTallSecondRowAtFractionalScr
     EXPECT_FLOAT_EQ(target(row(1u))->rectangle.height, finalHeight);
     EXPECT_FLOAT_EQ(target(row(2u))->rectangle.height, finalHeight);
     EXPECT_GE(VectorGetX(VectorAdd(VectorReplicate(m_state.placement().viewport.height), VectorReplicate(0.0001f))), finalHeight);
-    const HitTarget* after = target(id("after", "panel"));
+    const HitTarget* after = target(id("after", s_PanelKey));
     ASSERT_NE(after, nullptr);
     EXPECT_FLOAT_EQ(after->rectangle.y, VectorGetX(VectorAdd(VectorAdd(VectorReplicate(target(host())->rectangle.y), VectorReplicate(target(host())->rectangle.height)), VectorReplicate(m_builder.style().gap))));
     EXPECT_EQ(m_source.textCalls, 2u);
@@ -723,7 +731,7 @@ TEST_F(UiListBuilderTests, DisabledAndOmittedListsRetirePartsWithoutBorrowingQue
     EXPECT_EQ(m_context.input().targets().size(), 2u);
     EXPECT_FALSE(target(host())->enabled);
     ASSERT_TRUE(begin(3u));
-    ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 260.0f }));
+    ASSERT_TRUE(m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 260.0f }));
     ASSERT_TRUE(finishPanel());
     EXPECT_EQ(target(host()), nullptr);
     EXPECT_EQ(m_context.states().entries().size(), 1u);
@@ -734,8 +742,8 @@ TEST_F(UiListBuilderTests, DisabledAndOmittedListsRetirePartsWithoutBorrowingQue
 TEST_F(UiListBuilderTests, SourceRevisionChangedDuringScopeRejectsTheDeferredLoan){
     ASSERT_TRUE(accept(1u));
     ASSERT_TRUE(begin(2u));
-    ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 260.0f }));
-    const ListResult result = m_builder.virtualList("list", m_source, m_state, Options());
+    ASSERT_TRUE(m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 260.0f }));
+    const ListResult result = m_builder.virtualList(s_ListKey, m_source, m_state, Options());
     ASSERT_TRUE(result.valid);
     ++m_source.contentRevision;
     EXPECT_FALSE(m_builder.endPanel());
@@ -749,9 +757,9 @@ TEST_F(UiListBuilderTests, ContentPreflightRowsCannotHideAChangedSourceBeforePai
     options.height = { LayoutSizePolicy::Content, 0.0f };
     ASSERT_TRUE(accept(1u, options));
     ASSERT_TRUE(begin(2u));
-    ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 260.0f }));
+    ASSERT_TRUE(m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 260.0f }));
     m_source.textCalls = 0u;
-    ASSERT_TRUE(m_builder.virtualList("list", m_source, m_state, options).valid);
+    ASSERT_TRUE(m_builder.virtualList(s_ListKey, m_source, m_state, options).valid);
     ASSERT_GT(m_source.textCalls, 0u);
     ++m_source.contentRevision;
     EXPECT_FALSE(m_builder.endPanel());
@@ -790,7 +798,7 @@ TEST_F(UiListBuilderTests, EmptyDatasetBuildsOnlyItsHostAndProvidesOneKeyboardSt
 
 TEST_F(UiListBuilderTests, ThumbUsesItsAcceptedTrackMaximumWhenCandidateHeightChanges){
     ASSERT_TRUE(accept(1u));
-    const WidgetId thumb = UiTestSupport::RequireWidgetId(MakeWidgetId(host(), "scrollbar"));
+    const WidgetId thumb = UiTestSupport::RequireWidgetId(MakeWidgetId(host(), s_ScrollbarKey));
     ASSERT_NE(target(thumb), nullptr);
     const HitTarget accepted = *target(thumb);
     const Point origin = Center(accepted.rectangle);
@@ -808,7 +816,7 @@ TEST_F(UiListBuilderTests, ThumbUsesItsAcceptedTrackMaximumWhenCandidateHeightCh
 
 TEST_F(UiListBuilderTests, LatestThumbMotionFollowsAnInterveningWheelInNativeInputOrder){
     ASSERT_TRUE(accept(1u));
-    const HitTarget accepted = *target(UiTestSupport::RequireWidgetId(MakeWidgetId(host(), "scrollbar")));
+    const HitTarget accepted = *target(UiTestSupport::RequireWidgetId(MakeWidgetId(host(), s_ScrollbarKey)));
     const Point origin = Center(accepted.rectangle);
     const SIMDVectorSingle trackEnd = VectorAdd(VectorReplicate(accepted.gestureReference.y), VectorReplicate(accepted.gestureReference.height));
     const Point destination{ origin.x, VectorGetX(VectorNegativeMultiplySubtractExpression(VectorReplicate(accepted.rectangle.height), VectorReplicate(0.5f), trackEnd)) };
@@ -858,12 +866,12 @@ TEST_F(UiListBuilderTests, PopupListsAutofocusAndRestoreEachCoveredListHost){
     lowerPopup.open();
     ASSERT_TRUE(preparePopups(2u, lowerPopup, lowerState));
     ASSERT_TRUE(m_context.commitFrame(2u));
-    const WidgetId lowerHost = id("list", "popup");
+    const WidgetId lowerHost = id(s_ListKey, s_PopupKey);
     EXPECT_EQ(m_context.input().focus(), lowerHost);
     upperPopup.open();
     ASSERT_TRUE(preparePopups(3u, lowerPopup, lowerState, &upperPopup, &upperState));
     ASSERT_TRUE(m_context.commitFrame(3u));
-    EXPECT_EQ(m_context.input().focus(), id("list", "upper"));
+    EXPECT_EQ(m_context.input().focus(), id(s_ListKey, s_UpperPopupKey));
     press(Core::Key::Down);
     ASSERT_TRUE(preparePopups(4u, lowerPopup, lowerState, &upperPopup, &upperState));
     EXPECT_EQ(upperState.selectedKey(), 4u);
@@ -889,7 +897,7 @@ TEST_F(UiListBuilderTests, PopupListsAutofocusAndRestoreEachCoveredListHost){
 
 TEST_F(UiListBuilderTests, TwoCompletedThumbDragsAreConsumedInOneDeclarationUsingTheirOwnBaseline){
     ASSERT_TRUE(accept(1u));
-    const WidgetId thumb = UiTestSupport::RequireWidgetId(MakeWidgetId(host(), "scrollbar"));
+    const WidgetId thumb = UiTestSupport::RequireWidgetId(MakeWidgetId(host(), s_ScrollbarKey));
     ASSERT_NE(target(thumb), nullptr);
     const HitTarget accepted = *target(thumb);
     const Point origin = Center(accepted.rectangle);
@@ -908,7 +916,7 @@ TEST_F(UiListBuilderTests, FullHeightMinimumThumbFocusesItsHostWithoutStartingAn
     ListOptions options = Options();
     options.height.value = 20.0f;
     ASSERT_TRUE(accept(1u, options));
-    const WidgetId thumb = UiTestSupport::RequireWidgetId(MakeWidgetId(host(), "scrollbar"));
+    const WidgetId thumb = UiTestSupport::RequireWidgetId(MakeWidgetId(host(), s_ScrollbarKey));
     ASSERT_NE(target(thumb), nullptr);
     const HitTarget accepted = *target(thumb);
     EXPECT_FLOAT_EQ(m_state.placement().track.height, m_state.placement().thumb.height);

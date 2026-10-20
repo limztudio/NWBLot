@@ -27,11 +27,15 @@ namespace __hidden_frame_graph_validators{
 
 
 #if defined(NWB_HAS_SSE2) || defined(NWB_HAS_NEON64)
+inline constexpr u64 s_DoubleMagnitudeBitsMask = 0x7FFFFFFFFFFFFFFFull;
+inline constexpr u64 s_DoubleInfinityBits = 0x7FF0000000000000ull;
+inline constexpr u64 s_DoubleMinimumNormalBits = 0x0010000000000000ull;
+
 [[nodiscard]] NWB_INLINE bool HasExceptionalDurationPack(const SIMDVectorDouble pack)noexcept{
     using DurationBits = u64 __attribute__((ext_vector_type(4)));
-    const DurationBits absoluteMask{ 0x7FFFFFFFFFFFFFFFull, 0x7FFFFFFFFFFFFFFFull, 0x7FFFFFFFFFFFFFFFull, 0x7FFFFFFFFFFFFFFFull };
-    const DurationBits infinity{ 0x7FF0000000000000ull, 0x7FF0000000000000ull, 0x7FF0000000000000ull, 0x7FF0000000000000ull };
-    const DurationBits minimumNormal{ 0x0010000000000000ull, 0x0010000000000000ull, 0x0010000000000000ull, 0x0010000000000000ull };
+    const DurationBits absoluteMask{ s_DoubleMagnitudeBitsMask, s_DoubleMagnitudeBitsMask, s_DoubleMagnitudeBitsMask, s_DoubleMagnitudeBitsMask };
+    const DurationBits infinity{ s_DoubleInfinityBits, s_DoubleInfinityBits, s_DoubleInfinityBits, s_DoubleInfinityBits };
+    const DurationBits minimumNormal{ s_DoubleMinimumNormalBits, s_DoubleMinimumNormalBits, s_DoubleMinimumNormalBits, s_DoubleMinimumNormalBits };
     const DurationBits magnitude = BitCast<DurationBits>(pack) & absoluteMask;
     const auto exceptional = (magnitude >= infinity) | ((magnitude != DurationBits{}) & (magnitude < minimumNormal));
     return __builtin_reduce_or(exceptional) != 0;

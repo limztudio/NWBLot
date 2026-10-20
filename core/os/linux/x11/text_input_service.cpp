@@ -28,6 +28,7 @@ namespace __hidden_x11_text_input{
 
 
 static constexpr Array<XIMStyle, 3u> s_PreferredStyles{ XIMPreeditCallbacks | XIMStatusNothing, XIMPreeditNothing | XIMStatusNothing, XIMPreeditNone | XIMStatusNone, };
+static constexpr usize s_InitialLookupBytes = 128u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -116,7 +117,7 @@ bool X11TextInputService::dispatchKey(XKeyEvent& event){
     }
     );
 
-    m_lookup.resize(128u);
+    m_lookup.resize(__hidden_x11_text_input::s_InitialLookupBytes);
     KeySym symbol = NoSymbol;
     Status status = XLookupNone;
     i32 bytes = Xutf8LookupString(m_context, &event, m_lookup.data(), static_cast<i32>(m_lookup.size()), &symbol, &status);
@@ -138,7 +139,7 @@ bool X11TextInputService::dispatchKey(XKeyEvent& event){
         return true;
     const AStringView text(m_lookup.data(), static_cast<usize>(bytes));
     // Editing and shortcut controls remain physical key events, rather than text commits.
-    if(text.size() == 1u && (static_cast<u8>(text[0]) < 32u || text[0] == 127))
+    if(text.size() == 1u && (static_cast<u8>(text[0]) < s_TextInputFirstPrintableCodePoint || text[0] == s_TextInputDeleteCodePoint))
         return true;
     const TextInputAdmission::Enum admission = emitCommit(token, text);
     if(admission != TextInputAdmission::Accepted && admission != TextInputAdmission::InvalidSession)
@@ -201,7 +202,7 @@ TextInputAdmission::Enum X11TextInputService::updateNativeCaret(const TextInputR
         return TextInputAdmission::Unavailable;
     if(!m_caretHintSupported)
         return TextInputAdmission::Accepted;
-    XPoint spot{ static_cast<short>(Clamp<i32>(caret.x, -32768, 32767)), static_cast<short>(Clamp<i64>(static_cast<i64>(caret.y) + caret.height, -32768, 32767)), };
+    XPoint spot{ static_cast<short>(Clamp<i32>(caret.x, s_MinI16, s_MaxI16)), static_cast<short>(Clamp<i64>(static_cast<i64>(caret.y) + caret.height, s_MinI16, s_MaxI16)), };
     // The current context already holds this spot, so skip building another native argument list.
     if(m_caretSpotApplied && m_appliedCaretSpot.x == spot.x && m_appliedCaretSpot.y == spot.y)
         return TextInputAdmission::Accepted;

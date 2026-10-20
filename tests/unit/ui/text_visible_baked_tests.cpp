@@ -61,7 +61,7 @@ protected:
             return false;
         m_layout = Move(*layout);
         FontAtlasPayload payload(m_arena);
-        payload.font = Core::Assets::AssetRef<Font>("tests/ui/fonts/latin");
+        payload.font = Core::Assets::AssetRef<Font>(s_LatinFontPath);
         const Core::Assets::AssetBytes& bytes = m_latin.fontBytes();
         payload.fontSha256 = ComputeSha256({ bytes.data(), bytes.size() });
         UiFixtureSupport::PopulateBakedFontTables(bytes, payload, m_arena);
@@ -112,8 +112,8 @@ protected:
         if(!m_baked.validatePayload(scratchArena))
             return false;
         const FontSource sources[]{
-            { Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_latin, 1u, &m_baked },
-            { Core::Assets::AssetRef<Font>("tests/ui/fonts/korean"), m_korean, 1u },
+            { Core::Assets::AssetRef<Font>(s_LatinFontPath), m_latin, 1u, &m_baked },
+            { Core::Assets::AssetRef<Font>(s_KoreanFontPath), m_korean, 1u },
         };
         if(!m_text.setFonts(scratchArena, sources, 2u))
             return false;
@@ -294,7 +294,7 @@ TEST_F(TextVisibleBakedTests, VisibleMixedCapacityFailurePreservesPriorPageVersi
     m_paint.fillRect({ 2.0f, 3.0f, 5.0f, 7.0f }, { 0.6f, 0.3f, 0.2f, 0.5f });
     ASSERT_TRUE(m_paint.drawGlyph(oldPage, { 12.0f, 13.0f, 5.0f, 7.0f }, { 0.0f, 0.0f, 0.25f, 0.25f }));
     PaintBuilder reference(m_arena);
-    reference.begin({ 800.0f, 600.0f, 1.0f, 1.0f }, 2u, 1u, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
+    reference.begin({ 800.0f, 600.0f, 1.0f, 1.0f }, 2u, 1u, Core::Assets::AssetRef<UiSkin>(s_SkinPath), m_skin);
     ASSERT_TRUE(reference.prepareGlyphPages(prior.data(), prior.size()));
     reference.fillRect({ 2.0f, 3.0f, 5.0f, 7.0f }, { 0.6f, 0.3f, 0.2f, 0.5f });
     ASSERT_TRUE(reference.drawGlyph(oldPage, { 12.0f, 13.0f, 5.0f, 7.0f }, { 0.0f, 0.0f, 0.25f, 0.25f }));

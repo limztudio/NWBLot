@@ -242,7 +242,8 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
     }
 
     // All resolve allocations belong to this target generation. Verify both history selectors once, before publication.
-    for(u32 selector = 0u; selector < 2u; ++selector){
+    constexpr u32 s_HistorySelectorCount = 2u;
+    for(u32 selector = 0u; selector < s_HistorySelectorCount; ++selector){
         const bool frontIsA = selector != 0u;
         const SoftShadowCombinedWaveletInputs waveletInputs{
             .opaqueHistory = frontIsA ? targets.shadowHistB.get() : targets.shadowHistA.get(),

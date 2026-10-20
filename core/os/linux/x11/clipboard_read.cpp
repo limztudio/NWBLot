@@ -57,7 +57,7 @@ void X11ClipboardService::receiveSelection(const XSelectionEvent& event){
         return;
     }
     if(property->type == m_incrementalAtom){
-        if(property->format != 32 || property->count != 1u || property->remaining || !property->bytes){
+        if(property->format != s_X11PropertyLongFormat || property->count != 1u || property->remaining || !property->bytes){
             finishOperation(ClipboardStatus::InvalidText);
             return;
         }
@@ -71,7 +71,7 @@ void X11ClipboardService::receiveSelection(const XSelectionEvent& event){
         XFlush(&m_display);
         return;
     }
-    if(property->type != m_operationTarget || property->format != 8){
+    if(property->type != m_operationTarget || property->format != s_X11PropertyByteFormat){
         finishOperation(ClipboardStatus::InvalidText);
         return;
     }
@@ -94,7 +94,7 @@ void X11ClipboardService::receiveChunk(){
         NWB_LOGGER_WARNING(NWB_TEXT("X11 clipboard: property read failed; native_domain=X11 native_status={} error_code={}"), property.error().nativeStatus, property.error().errorCode);
         return;
     }
-    if(property->type != m_operationTarget || property->format != 8){
+    if(property->type != m_operationTarget || property->format != s_X11PropertyByteFormat){
         finishOperation(ClipboardStatus::InvalidText);
         return;
     }

@@ -25,10 +25,14 @@ namespace EditMove{
     enum Enum : u8{ Left, Right, Home, End, WordLeft, WordRight, DocumentHome, DocumentEnd };
 };
 
+inline constexpr usize s_EditDefaultMaxBytes = 4096u;
+inline constexpr usize s_EditDefaultMaxHistoryRecords = 64u;
+inline constexpr usize s_EditDefaultMaxHistoryBytes = 131072u;
+
 struct EditLimits{
-    usize maxBytes = 4096u;
-    usize maxHistoryRecords = 64u;
-    usize maxHistoryBytes = 131072u;
+    usize maxBytes = s_EditDefaultMaxBytes;
+    usize maxHistoryRecords = s_EditDefaultMaxHistoryRecords;
+    usize maxHistoryBytes = s_EditDefaultMaxHistoryBytes;
 };
 
 struct EditWordRange{

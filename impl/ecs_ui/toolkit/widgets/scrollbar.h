@@ -20,6 +20,7 @@ NWB_IMPL_UI_BEGIN
 namespace ScrollAxis{
     enum Enum : u8{ Horizontal, Vertical };
 };
+inline constexpr u32 s_ScrollAxisCount = 2u;
 
 struct ScrollbarPlacement{
     Rect track;

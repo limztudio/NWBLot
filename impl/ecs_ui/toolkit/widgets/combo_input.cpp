@@ -92,7 +92,7 @@ bool Builder::applyComboInput(const WidgetState& field, ComboFrame& frame, Combo
 bool Builder::applyComboListInput(ComboFrame& frame, ComboResult& result){
     InputRouter& input = m_context.input();
     ComboState& state = *frame.state;
-    const auto thumbResult = MakeWidgetId(frame.rows.id, "scrollbar");
+    const auto thumbResult = MakeWidgetId(frame.rows.id, WidgetPartKey::s_Scrollbar);
     if(!thumbResult)
         return false;
     const WidgetId thumb = *thumbResult;

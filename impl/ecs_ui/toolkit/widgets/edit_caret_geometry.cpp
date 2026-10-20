@@ -5,6 +5,7 @@
 #include "edit_caret_geometry.h"
 
 #include <impl/ecs_ui/toolkit/edit/multiline_text.h>
+#include <impl/ecs_ui/toolkit/rect_math.h>
 
 #include <global/simd/result.h>
 #include <global/simd/vector.h>
@@ -198,7 +199,7 @@ namespace __hidden_ui_edit_caret_geometry{
         const EditCaretLine& stopLine = lines[stop.lineIndex];
         if(!IsFinite(stopLine.top) || !IsFinite(stopLine.height) || stopLine.height <= 0.0f || !IsFinite(VectorGetX(VectorAdd(VectorReplicate(stopLine.top), VectorReplicate(stopLine.height)))))
             return MakeUnexpected(Failure{});
-        const SIMDVectorDouble lineCenter = VectorDoubleAdd(VectorDoubleReplicate(stopLine.top), VectorDoubleMultiply(VectorDoubleReplicate(stopLine.height), VectorDoubleReplicate(0.5)));
+        const SIMDVectorDouble lineCenter = VectorDoubleAdd(VectorDoubleReplicate(stopLine.top), VectorDoubleMultiply(VectorDoubleReplicate(stopLine.height), VectorDoubleReplicate(s_RectCenterFractionF64)));
         const f64 distanceY = line.stopCount == 0u ? VectorDoubleGetX(VectorDoubleAbs(VectorDoubleSubtract(VectorDoubleReplicate(point.y), lineCenter))) : 0.0;
         const f32 distanceX = VectorGetX(VectorAbs(VectorSubtract(VectorReplicate(queryX), VectorReplicate(stop.x))));
         if(distanceY < nearestY || (distanceY == nearestY && distanceX < nearestX)){
@@ -252,10 +253,12 @@ EditCaretGeometry::EditCaretGeometry(Core::Alloc::GlobalArena& arena)noexcept
 {}
 
 bool EditCaretGeometry::adoptLayout(TextLayout&& layout, const StringView expectedText, const PaintVector<EditCaretMapping>& mapping, const usize committedBytes, const EditTextMode::Enum mode){
+    // One stop per byte boundary 0..committedBytes, plus one extra at the preedit seam.
+    constexpr usize s_MaxExtraMappingStops = 2u;
     if(
         layout.utf8() != expectedText || (mode != EditTextMode::SingleLine && mode != EditTextMode::Multiline)
         || expectedText.size() > s_TextMaxBytes || committedBytes > s_TextMaxBytes
-        || mapping.empty() || mapping.size() > committedBytes + 2u
+        || mapping.empty() || mapping.size() > committedBytes + s_MaxExtraMappingStops
         || mapping.front().committedByte != 0u || mapping.front().displayByte != 0u
         || mapping.back().committedByte != committedBytes || mapping.back().displayByte != expectedText.size()
     )
@@ -331,11 +334,11 @@ Expected<usize> EditCaretGeometry::verticalTarget(const usize displayCaret, cons
                 return stop.committedByte;
             }
         }
-        const f32 center = VectorGetX(VectorAdd(VectorReplicate(caret->y), VectorMultiply(VectorReplicate(caret->height), VectorReplicate(0.5f))));
+        const f32 center = VectorGetX(VectorAdd(VectorReplicate(caret->y), VectorMultiply(VectorReplicate(caret->height), VectorReplicate(s_RectCenterFraction))));
         return nearestStop(current, { caret->x, center });
     }
     const EditCaretLine& line = m_lines[target];
-    const f32 center = VectorGetX(VectorAdd(VectorReplicate(line.top), VectorMultiply(VectorReplicate(line.height), VectorReplicate(0.5f))));
+    const f32 center = VectorGetX(VectorAdd(VectorReplicate(line.top), VectorMultiply(VectorReplicate(line.height), VectorReplicate(s_RectCenterFraction))));
     return nearestStop(target, { preferredX, center });
 }
 

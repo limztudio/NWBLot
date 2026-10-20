@@ -149,7 +149,7 @@ GpuCommandIrReplayError::Enum ValidateRasterGraphOperation(const GpuCommandIrRas
         state.heapBound = true;
         return GpuCommandIrReplayError::None;
     case GpuCommandIrWireOpcode::SetPushConstants:
-        if(!state.active || record.blobSizeBytes == 0u || record.blobSizeBytes > s_MaxPushConstantSize || (record.blobSizeBytes & 3u) != 0u)
+        if(!state.active || record.blobSizeBytes == 0u || record.blobSizeBytes > s_MaxPushConstantSize || (record.blobSizeBytes & (s_PushConstantSizeAlignment - 1u)) != 0u)
             return GpuCommandIrReplayError::InvalidRasterState;
         state.pushConstantsSet = true;
         return GpuCommandIrReplayError::None;

@@ -272,10 +272,10 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
     // Match hardware closest-hit ordering: the current CSG receivers refine the nearest ordinary surface.
     const uint contextSlot = g_NwbCausticSwMaterialContextSlots.materialSlots.w;
     const uint materialSlot = g_NwbCausticSwMaterialContextSlots.sceneSlots.z;
-    const uint activeOffset = nwbHeapRawBuffer(contextSlot).Load(20u);
-    const uint activeCount = nwbHeapRawBuffer(contextSlot).Load(24u);
+    const uint activeOffset = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_BASE_OFFSET);
+    const uint activeCount = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_COUNT_OFFSET);
     for(uint index = 0u; index < activeCount; ++index){
-        const uint instance = nwbHeapRawBuffer(contextSlot).Load(activeOffset + index * 4u);
+        const uint instance = nwbHeapRawBuffer(contextSlot).Load(activeOffset + index * NWB_CSG_RAY_ACTIVE_INDEX_BYTES);
         const NwbCausticHit candidate = nwbCausticCsgInstanceClosest(contextSlot, materialSlot, instance, origin, direction, tMin, closest.t);
         if(candidate.failure != 0u)
             return candidate;

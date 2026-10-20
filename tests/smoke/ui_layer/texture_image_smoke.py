@@ -10,6 +10,7 @@ from window_smoke import parse_args
 from texture_image_probe import center, observe_texture_image, snapshot_from_logs
 from window_capture_smoke import run_smoke_main
 from passive_run import PassiveImageRun, run_passive_image
+from checkpoint_report import CHECKPOINT_STAGE_TIMEOUT_SECONDS
 
 LIT_GENERATIONS = "generations"
 LIT_TAB = "Tab"
@@ -23,6 +24,9 @@ LIT_RECTANGLES = "rectangles"
 LIT_FROZEN = "frozen"
 LIT_ESCAPE = "Escape"
 
+FIXTURE_TIMEOUT_SECONDS = 120
+VERSION_CHURN_STAGE_TIMEOUT_SECONDS = 30.0
+
 
 class TextureImageRun(PassiveImageRun):
     def __init__(self, args, backend, handle, process, log_directory, log_baseline, log_pattern):
@@ -31,7 +35,7 @@ class TextureImageRun(PassiveImageRun):
         self.expected = { "phase": 0, "focus_code": 0, "before_clicks": 0, "after_clicks": 0, "parent": 0, "child": 0, "popup_count": 0, "image_targets": 0, "declared_source": 1, "post_handle_empty": 1, "replacement_count": 0, "replacement_alternate": 0,
             "eviction_remaining": 0, "eviction_completed": 0, "builder_source": 1, "builder_handle_empty": 1, }
 
-    def checkpoint(self, name, *, extent=None, extra=None, stage_timeout=10.0, **changes):
+    def checkpoint(self, name, *, extent=None, extra=None, stage_timeout=CHECKPOINT_STAGE_TIMEOUT_SECONDS, **changes):
         return self.capture_checkpoint(name, extent=extent, extra=extra, stage_timeout=stage_timeout, changes=changes)
 
     def write_report(self, passed):
@@ -65,7 +69,7 @@ class TextureImageRun(PassiveImageRun):
         self.checkpoint("second_fresh_version_restores_default_payload", replacement_count=2, replacement_alternate=0, extra=lambda snapshot: snapshot[LIT_GENERATIONS][:2] == original_generations and snapshot[LIT_GENERATIONS][2] != old_generation)
         old_generation = self.snapshot[LIT_GENERATIONS][2]
         self.native.tap("F7")
-        self.checkpoint("72_accepted_versions_preserve_originals_and_final_payload", replacement_count=74, replacement_alternate=0, eviction_remaining=0, eviction_completed=72, stage_timeout=30.0,
+        self.checkpoint("72_accepted_versions_preserve_originals_and_final_payload", replacement_count=74, replacement_alternate=0, eviction_remaining=0, eviction_completed=72, stage_timeout=VERSION_CHURN_STAGE_TIMEOUT_SECONDS,
             extra=lambda snapshot: snapshot[LIT_GENERATIONS][:2] == original_generations and snapshot[LIT_GENERATIONS][2] != old_generation)
         self.native.tap(LIT_F4)
         self.checkpoint("paint_declaration_copies_source_handle_rectangle_uv_and_tint", phase=1, declared_source=2, builder_source=2)
@@ -92,7 +96,7 @@ def run(args):
 
 
 def main(argv):
-    return run_smoke_main(argv, parse_args, run, default_timeout=120)
+    return run_smoke_main(argv, parse_args, run, default_timeout=FIXTURE_TIMEOUT_SECONDS)
 
 
 if __name__ == "__main__":

@@ -33,6 +33,8 @@ inline constexpr Name s_ScopeJoin("cpu.task.scope_join");
 inline constexpr Name s_SchedulerJoin("cpu.task.scheduler_join");
 inline constexpr Name s_WorkerIdle("cpu.worker.idle");
 inline constexpr usize s_ReadBatchSize = 32u;
+// One SIMDVectorDouble holds four lanes.
+inline constexpr usize s_SecondsBatchLanes = 4u;
 inline constexpr f64 s_NanosecondsToSeconds = 1.0e-9;
 
 
@@ -74,10 +76,10 @@ void CollectCpuTaskProfile(CpuTaskScheduler& scheduler, TimingSink& timing){
         remaining -= count;
         if(!enabled)
             continue;
-        for(usize index = 0u; index < count; index += 4u){
-            const usize batchCount = Min(count - index, usize(4u));
-            const Name* scopeNames[4u] = {};
-            f64 nanoseconds[4u] = {};
+        for(usize index = 0u; index < count; index += __hidden_cpu_task_profile::s_SecondsBatchLanes){
+            const usize batchCount = Min(count - index, __hidden_cpu_task_profile::s_SecondsBatchLanes);
+            const Name* scopeNames[__hidden_cpu_task_profile::s_SecondsBatchLanes] = {};
+            f64 nanoseconds[__hidden_cpu_task_profile::s_SecondsBatchLanes] = {};
             for(usize lane = 0u; lane < batchCount; ++lane){
                 const CpuTaskProfileEvent& event = events[index + lane];
                 scopeNames[lane] = __hidden_cpu_task_profile::TimingScope(event);

@@ -61,14 +61,14 @@ bool PackGlyphs(const BakeOptions& options, const RasterGlyphs& glyphs, Impl::Fo
     outPayload.glyphs.reserve(glyphs.size());
     for(const RasterGlyph& glyph : glyphs)
         outPayload.glyphs.push_back(glyph.record);
-    __hidden_font_builder_pack::Shelf shelves[Impl::s_FontAtlasMaxGroupCount * 4u]{};
+    __hidden_font_builder_pack::Shelf shelves[Impl::s_FontAtlasMaxGroupCount * Impl::s_FontAtlasMaxChannelCount]{};
     u32 lastPage = 0u;
     for(const u32 index : order){
         const RasterGlyph& glyph = glyphs[index];
-        const u32 width = glyph.record.width + 2u;
-        const u32 height = glyph.record.height + 2u;
+        const u32 width = glyph.record.width + s_GlyphGuardExtent;
+        const u32 height = glyph.record.height + s_GlyphGuardExtent;
         bool placed = false;
-        for(u32 page = 0u; page < options.maxGroups * 4u; ++page){
+        for(u32 page = 0u; page < options.maxGroups * Impl::s_FontAtlasMaxChannelCount; ++page){
             auto next = shelves[page];
             if(next.x + width > options.extent){
                 next.x = 0u;
@@ -77,24 +77,24 @@ bool PackGlyphs(const BakeOptions& options, const RasterGlyphs& glyphs, Impl::Fo
             }
             if(next.y + height > options.extent)
                 continue;
-            const u32 groupIndex = page / 4u;
+            const u32 groupIndex = page / Impl::s_FontAtlasMaxChannelCount;
             while(outPayload.groups.size() <= groupIndex){
                 Impl::FontAtlasGroup group(outPayload.groups.get_allocator().arena());
                 group.width = options.extent;
                 group.height = options.extent;
-                group.channelCount = 4u;
-                group.pixels.resize(static_cast<usize>(options.extent) * options.extent * 4u, 0u);
+                group.channelCount = Impl::s_FontAtlasMaxChannelCount;
+                group.pixels.resize(static_cast<usize>(options.extent) * options.extent * Impl::s_FontAtlasMaxChannelCount, 0u);
                 outPayload.groups.push_back(Move(group));
             }
             auto& record = outPayload.glyphs[index];
             record.group = groupIndex;
-            record.channel = page % 4u;
+            record.channel = page % Impl::s_FontAtlasMaxChannelCount;
             record.x = next.x + 1u;
             record.y = next.y + 1u;
             auto& pixels = outPayload.groups[groupIndex].pixels;
             for(u32 y = 0u; y < glyph.record.height; ++y){
                 for(u32 x = 0u; x < glyph.record.width; ++x){
-                    const usize destination = (static_cast<usize>(record.y + y) * options.extent + record.x + x) * 4u + record.channel;
+                    const usize destination = (static_cast<usize>(record.y + y) * options.extent + record.x + x) * Impl::s_FontAtlasMaxChannelCount + record.channel;
                     pixels[destination] = glyph.pixels[static_cast<usize>(y) * glyph.record.width + x];
                 }
             }

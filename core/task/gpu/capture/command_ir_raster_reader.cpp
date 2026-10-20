@@ -187,7 +187,7 @@ Expected<GpuCommandIrDecodedRecord, GpuCommandIrStreamReadStatus::Enum> GpuComma
             break;
         }
         const GpuCommandIrSetPushConstantsRecord& record = *wireRecord;
-        valid = record.blobSizeBytes != 0u && record.blobSizeBytes <= Limit<u32>::s_Max && (record.blobSizeBytes & 3u) == 0u;
+        valid = record.blobSizeBytes != 0u && record.blobSizeBytes <= Limit<u32>::s_Max && (record.blobSizeBytes & (s_PushConstantSizeAlignment - 1u)) == 0u;
         if(valid && (record.blobOffsetBytes != m_nextBlobOffset || record.blobSizeBytes > m_bytes.size() - m_blobBegin - m_nextBlobOffset)){
             fail(GpuCommandIrStreamValidationError::InvalidBlobRange, recordOffset, m_nextRecordIndex);
             return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);

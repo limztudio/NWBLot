@@ -33,6 +33,9 @@ inline constexpr u32 s_SmallestPositiveSubnormalBits = 1u;
 inline constexpr u32 s_SmallestNegativeSubnormalBits = 0x80000001u;
 inline constexpr f64 s_SdfMinimumFilterWidth = 0.001;
 inline constexpr f64 s_SdfEncodedHalfRange = 128.0;
+inline constexpr f64 s_SdfHalfFilterScale = 0.5;
+inline constexpr f64 s_HalfTexel = 0.5;
+inline constexpr f64 s_HalfPixel = 0.5;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -119,9 +122,9 @@ inline constexpr f64 s_SdfEncodedHalfRange = 128.0;
     const SIMDVectorDouble verticalDerivative = VectorDoubleMultiply(VectorDoubleSet(gradientY, 0.0, 0.0, 0.0), verticalStep);
     const SIMDVectorDouble derivative = VectorDoubleMultiplyAddExpression(VectorDoubleSet(gradientX, 0.0, 0.0, 0.0), horizontalStep, verticalDerivative);
     const SIMDVectorDouble minimumDerivative = VectorDoubleDivide(VectorDoubleReplicate(s_SdfMinimumFilterWidth * s_SdfEncodedHalfRange), VectorDoubleReplicate(binding.spreadPixels));
-    const SIMDVectorDouble halfWidth = VectorDoubleMultiply(VectorDoubleReplicate(0.5), VectorDoubleMax(derivative, minimumDerivative));
+    const SIMDVectorDouble halfWidth = VectorDoubleMultiply(VectorDoubleReplicate(s_SdfHalfFilterScale), VectorDoubleMax(derivative, minimumDerivative));
     const SIMDVectorDouble glyphSize = VectorDoubleSet(glyph.width, glyph.height, 0.0, 0.0);
-    const SIMDVectorDouble halfTexel = VectorDoubleSet(0.5, 0.5, 0.0, 0.0);
+    const SIMDVectorDouble halfTexel = VectorDoubleSet(s_HalfTexel, s_HalfTexel, 0.0, 0.0);
     SIMDVectorDouble supportMinimum = glyphSize;
     SIMDVectorDouble supportMaximum = VectorDoubleZero();
     bool visible = false;
@@ -216,7 +219,7 @@ Expected<Rect> TextService::measure(const TextLayout& layout, const DisplayMetri
             const SIMDVectorDouble pixelOrigin = VectorDoubleSet(raster->x, raster->y, 0.0, 0.0);
             const SIMDVectorDouble pixelEnd = VectorDoubleAdd(pixelOrigin, VectorDoubleSet(raster->width, raster->height, 0.0, 0.0));
             // CoverageRectangle snaps the bitmap origin to the nearest physical pixel; every translation phase differs by at most half a pixel on each axis.
-            const SIMDVectorDouble snap = VectorDoubleDivide(VectorDoubleSet(0.5, 0.5, 0.0, 0.0), VectorDoubleSet(display.pixelScaleX, display.pixelScaleY, 1.0, 1.0));
+            const SIMDVectorDouble snap = VectorDoubleDivide(VectorDoubleSet(s_HalfPixel, s_HalfPixel, 0.0, 0.0), VectorDoubleSet(display.pixelScaleX, display.pixelScaleY, 1.0, 1.0));
             first = VectorDoubleSubtract(VectorDoubleAdd(origin, VectorDoubleDivide(pixelOrigin, scale)), snap);
             last = VectorDoubleAdd(VectorDoubleAdd(origin, VectorDoubleDivide(pixelEnd, scale)), snap);
         }

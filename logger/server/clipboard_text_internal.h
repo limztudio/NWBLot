@@ -32,6 +32,9 @@ namespace FrameDetail{
 using MessageItem = Pair<LogString, Core::Common::LogType::Enum>;
 using MessageDeque = Deque<MessageItem, LogArena>;
 
+inline constexpr AStringView s_ClipboardDiagnosticCategory = "logger_clipboard";
+inline constexpr usize s_ClipboardLineBreakCharacterCount = 2u;
+
 class ClipboardText final : NoCopy{
 public:
     explicit ClipboardText(HGLOBAL memory)noexcept
@@ -44,7 +47,7 @@ public:
         const auto closed = close();
         if(!closed){
             const DiagnosticEventText detail = MakeDiagnosticEventText("Failed to release untransferred clipboard memory: native_category={} native_code={}", closed.error().category().name(), closed.error().value());
-            CaptureDiagnosticEvent("logger_clipboard", detail.view(), __FILE__, __LINE__);
+            CaptureDiagnosticEvent(s_ClipboardDiagnosticCategory, detail.view(), __FILE__, __LINE__);
         }
     }
 
@@ -81,7 +84,7 @@ struct ClipboardTextFailure{
 [[nodiscard]] inline Expected<ClipboardText, ClipboardTextFailure> BuildClipboardText(const MessageDeque& messages)noexcept{
     usize characterCount = 0u;
     for(const auto& message : messages){
-        if(!AddBinaryReserveBytes(characterCount, message.first().size()) || !AddBinaryReserveBytes(characterCount, 2u))
+        if(!AddBinaryReserveBytes(characterCount, message.first().size()) || !AddBinaryReserveBytes(characterCount, s_ClipboardLineBreakCharacterCount))
             return MakeUnexpected(ClipboardTextFailure{ .operation = "count_clipboard_text", .code = MakeErrorCode(ErrorCondition::value_too_large), });
     }
     const auto byteSize = ClipboardByteCount(characterCount);

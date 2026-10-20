@@ -22,6 +22,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// A stored glass IOR must exceed the lower bound to count as glass; it is clamped to the upper bound.
+static const float NWB_REFLECTION_GLASS_IOR_MIN = 1.0001;
+static const float NWB_REFLECTION_GLASS_IOR_MAX = 4.0;
+// Captured glass bounds this many representable D32 depth steps.
+static const uint NWB_REFLECTION_GLASS_DEPTH_UNCERTAINTY_STEPS = 4u;
+static const half NWB_REFLECTION_SCHLICK_EXPONENT = 5.0h;
+static const float NWB_REFLECTION_SURFACE_BIAS_MIN = 0.001;
+static const float NWB_REFLECTION_SURFACE_BIAS_DISTANCE_SCALE = 1e-5;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct NwbReflectionParameters{
     // The leading std140 lane is one immutable vector: width, height, trace mode, hardware route enabled.
     uint4 dimensionsAndRoute;
@@ -118,10 +131,10 @@ bool nwbReflectionLoadSurface(const uint2 pixel, const bool glass, out NwbReflec
     half3 f0 = half3(saturate(specularRoughness.rgb));
     if(glass){
         packedNormal = nwbHeapSampledImage2DNonUniform(normalSlot).Load(texel);
-        if(!isfinite(packedNormal.w) || packedNormal.w <= 1.0001)
+        if(!isfinite(packedNormal.w) || packedNormal.w <= NWB_REFLECTION_GLASS_IOR_MIN)
             return false;
         // Glass reflection and transmission share the same optical boundary. Its IOR determines F0, so the two entry terms remain complementary even when an authored opaque-reflection parameter is absent.
-        const float ior = clamp(packedNormal.w, 1.0, 4.0);
+        const float ior = clamp(packedNormal.w, 1.0, NWB_REFLECTION_GLASS_IOR_MAX);
         const half ratio = half((ior - 1.0) / (ior + 1.0));
         f0 = half3(ratio * ratio);
     }
@@ -150,9 +163,9 @@ bool nwbReflectionLoadSurface(const uint2 pixel, const bool glass, out NwbReflec
     if(dot(surface.normal, incident) > 0.0)
         surface.normal = -surface.normal;
     // Project the component-wise FP16 raster-position bound onto the offset normal. Captured glass instead bounds four representable D32 depth steps, retaining the inverse arithmetic margin in the final bias below.
-    float originUncertainty = dot(abs(surface.position) * 0.0009765625, abs(surface.normal));
+    float originUncertainty = dot(abs(surface.position) * NWB_REFLECTION_POSITION_RELATIVE_ERROR, abs(surface.normal));
     if(glass){
-        const float nextDepth = min(asfloat(asuint(depth) + 4u), 1.0);
+        const float nextDepth = min(asfloat(asuint(depth) + NWB_REFLECTION_GLASS_DEPTH_UNCERTAINTY_STEPS), 1.0);
         const float4 nextWorld = mul(g_NwbReflectionView.clipToWorld, float4(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, nextDepth, 1.0));
         if(!all(isfinite(nextWorld)) || nextWorld.w == 0.0)
             return false;
@@ -166,9 +179,9 @@ bool nwbReflectionLoadSurface(const uint2 pixel, const bool glass, out NwbReflec
     surface.roughness = glass ? 0.0 : saturate(specularRoughness.a);
     const half cosine = half(saturate(-dot(incident, surface.normal)));
     // The Schlick weight is a (0, 1) bounded factor, so half arithmetic is sufficient here.
-    const half3 weight = half3(f0) + (half3(1.0h) - half3(f0)) * half(pow(half(1.0h) - cosine, half(5.0h)));
+    const half3 weight = half3(f0) + (half3(1.0h) - half3(f0)) * half(pow(half(1.0h) - cosine, half(NWB_REFLECTION_SCHLICK_EXPONENT)));
     surface.weight = weight;
-    surface.bias = max(0.001, originUncertainty + length(cameraRay) * 1e-5);
+    surface.bias = max(NWB_REFLECTION_SURFACE_BIAS_MIN, originUncertainty + length(cameraRay) * NWB_REFLECTION_SURFACE_BIAS_DISTANCE_SCALE);
     if(!isfinite(surface.bias) || !all(isfinite(surface.direction)) || !all(isfinite(surface.weight)) || !all(isfinite(surface.position + surface.normal * surface.bias)))
         return false;
     // The scheduling upper bound precedes stochastic VNDF outcomes, including zero or rejected samples. A prior frame's actual candidates cannot prove that a later rough sample fits the same hardware queue budget.

@@ -21,6 +21,10 @@ using namespace NWB::Impl;
 using namespace NWB::Impl::Ui;
 using namespace NWB::UiWidgetTests;
 
+constexpr AStringView s_SpriteRegionName = "image.sprite";
+constexpr AStringView s_PanelKey = "panel";
+constexpr AStringView s_BeforeKey = "before";
+
 class UiImageBuilderTests : public WidgetFixture{
 protected:
     [[nodiscard]] static ImageOptions Fixed(const f32 width = 96.0f, const f32 height = 40.0f)noexcept{
@@ -45,7 +49,7 @@ protected:
         for(const UiSkinRegion& region : m_skin.regions())
             regions.push_back(region);
         UiSkinRegion sprite;
-        sprite.name = Name("image.sprite");
+        sprite.name = Name(s_SpriteRegionName);
         sprite.rectangle = { 0u, 16u, 20u, 12u };
         sprite.padding = { 9.0f, 9.0f, 9.0f, 9.0f };
         regions.push_back(Move(sprite));
@@ -55,7 +59,7 @@ protected:
     }
 
     [[nodiscard]] bool panel(const u64 generation){
-        return begin(generation) && m_builder.beginPanel("panel", { 10.0f, 10.0f, 360.0f, 400.0f });
+        return begin(generation) && m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 360.0f, 400.0f });
     }
 
 };
@@ -66,7 +70,7 @@ protected:
 
 TEST_F(UiImageBuilderTests, CallerMutationCannotChangeDeferredImageNameSizeOrStraightTint){
     ASSERT_TRUE(panel(1u));
-    Name name("image.sprite");
+    Name name(s_SpriteRegionName);
     ImageOptions options = Fixed(80.0f, 32.0f);
     options.tint = { 0.8f, 1.0f, 0.6f, 0.5f };
     ASSERT_TRUE(m_builder.image("image", name, options));
@@ -74,7 +78,7 @@ TEST_F(UiImageBuilderTests, CallerMutationCannotChangeDeferredImageNameSizeOrStr
     options = Fixed(20.0f, 20.0f);
     ASSERT_TRUE(finishPanel());
     const DrawSnapshot snapshot = m_paint.freeze();
-    const auto sprite = sampleSkinPaint(snapshot, Name("image.sprite"));
+    const auto sprite = sampleSkinPaint(snapshot, Name(s_SpriteRegionName));
     ASSERT_TRUE(sprite);
     EXPECT_FLOAT_EQ(sprite->bounds.width, 80.0f);
     EXPECT_FLOAT_EQ(sprite->bounds.height, 32.0f);
@@ -86,13 +90,13 @@ TEST_F(UiImageBuilderTests, CallerMutationCannotChangeDeferredImageNameSizeOrStr
 
 TEST_F(UiImageBuilderTests, ExternalClipUpdatesSpriteUvsAndRestoresThePaintStack){
     ASSERT_TRUE(panel(1u));
-    ASSERT_TRUE(m_builder.image("image", Name("image.sprite"), Fixed()));
+    ASSERT_TRUE(m_builder.image("image", Name(s_SpriteRegionName), Fixed()));
     m_paint.pushClip({ 20.0f, 0.0f, 20.0f, 600.0f });
     ASSERT_TRUE(finishPanel());
     ASSERT_TRUE(m_paint.popClip());
     m_paint.fillRect({ 60.0f, 80.0f, 8.0f, 8.0f }, { 1.0f, 0.0f, 0.0f, 1.0f });
     const DrawSnapshot snapshot = m_paint.freeze();
-    const auto sprite = sampleSkinPaint(snapshot, Name("image.sprite"));
+    const auto sprite = sampleSkinPaint(snapshot, Name(s_SpriteRegionName));
     ASSERT_TRUE(sprite);
     EXPECT_FLOAT_EQ(sprite->bounds.x, 20.0f);
     EXPECT_FLOAT_EQ(sprite->bounds.width, 20.0f);
@@ -111,20 +115,20 @@ TEST_F(UiImageBuilderTests, FullyTransparentAndEmptyImagesRemainValidWithoutQuad
     ASSERT_TRUE(panel(1u));
     ImageOptions transparent = Fixed();
     transparent.tint.a = 0.0f;
-    ASSERT_TRUE(m_builder.image("transparent", Name("image.sprite"), transparent));
-    ASSERT_TRUE(m_builder.image("empty", Name("image.sprite"), Fixed(0.0f, 20.0f)));
+    ASSERT_TRUE(m_builder.image("transparent", Name(s_SpriteRegionName), transparent));
+    ASSERT_TRUE(m_builder.image("empty", Name(s_SpriteRegionName), Fixed(0.0f, 20.0f)));
     ASSERT_TRUE(finishPanel());
     const DrawSnapshot snapshot = m_paint.freeze();
-    EXPECT_FALSE(sampleSkinPaint(snapshot, Name("image.sprite")));
+    EXPECT_FALSE(sampleSkinPaint(snapshot, Name(s_SpriteRegionName)));
 }
 
 TEST_F(UiImageBuilderTests, UnknownRegionRejectsWithoutReplacingAcceptedTargets){
     ASSERT_TRUE(panel(1u));
-    EXPECT_FALSE(m_builder.button("before", "Before"));
-    ASSERT_TRUE(m_builder.image("image", Name("image.sprite")));
+    EXPECT_FALSE(m_builder.button(s_BeforeKey, "Before"));
+    ASSERT_TRUE(m_builder.image("image", Name(s_SpriteRegionName)));
     ASSERT_TRUE(finishPanel());
     ASSERT_TRUE(m_context.commitFrame(1u));
-    const WidgetId before = id("before", "panel");
+    const WidgetId before = id(s_BeforeKey, s_PanelKey);
     ASSERT_NE(target(before), nullptr);
     const HitTarget accepted = *target(before);
     ASSERT_TRUE(panel(2u));
@@ -136,17 +140,17 @@ TEST_F(UiImageBuilderTests, UnknownRegionRejectsWithoutReplacingAcceptedTargets)
 
 TEST_F(UiImageBuilderTests, NonfiniteTintRejectsWithoutReplacingAcceptedTargets){
     ASSERT_TRUE(panel(1u));
-    EXPECT_FALSE(m_builder.button("before", "Before"));
-    ASSERT_TRUE(m_builder.image("image", Name("image.sprite")));
+    EXPECT_FALSE(m_builder.button(s_BeforeKey, "Before"));
+    ASSERT_TRUE(m_builder.image("image", Name(s_SpriteRegionName)));
     ASSERT_TRUE(finishPanel());
     ASSERT_TRUE(m_context.commitFrame(1u));
-    const WidgetId before = id("before", "panel");
+    const WidgetId before = id(s_BeforeKey, s_PanelKey);
     ASSERT_NE(target(before), nullptr);
     const HitTarget accepted = *target(before);
     ASSERT_TRUE(panel(2u));
     ImageOptions options;
     options.tint.r = BitCast<f32>(0x7fc00001u);
-    EXPECT_FALSE(m_builder.image("image", Name("image.sprite"), options));
+    EXPECT_FALSE(m_builder.image("image", Name(s_SpriteRegionName), options));
     EXPECT_FALSE(m_context.commitFrame(2u));
     ASSERT_NE(target(before), nullptr);
     EXPECT_EQ(target(before)->declarationGeneration, accepted.declarationGeneration);

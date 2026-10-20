@@ -21,6 +21,11 @@
 
 
 #define NWB_SHADOW_MAX_CROSSINGS_PER_OCCLUDER 4
+// Squared-length floor of a normal or ray direction before the cosine normalization.
+#define NWB_SHADOW_COSINE_LENGTH_SQUARED_MIN 1e-20
+// Normal spread range over which the smooth-normal blend weight ramps from 0 to 1.
+#define NWB_SHADOW_SMOOTH_NORMAL_SPREAD_MIN 1e-5
+#define NWB_SHADOW_SMOOTH_NORMAL_SPREAD_MAX 2e-3
 
 struct NwbShadowVisibilityAccumulator{
     half3 transmittance;
@@ -128,13 +133,13 @@ float nwbShadowInstanceChordLength(__constref NwbShadowInstanceOptics optics){
 
 // Cosine to the ray is a saturate-bounded (0, 1) factor, so half math is sufficient here (widened at float geometry uses).
 half nwbShadowCosineToRay(const float3 normal, const float3 rayDirection){
-    return half(saturate(abs(dot(rayDirection, normal)) * rsqrt(max(dot(normal, normal), 1e-20)) * rsqrt(max(dot(rayDirection, rayDirection), 1e-20))));
+    return half(saturate(abs(dot(rayDirection, normal)) * rsqrt(max(dot(normal, normal), NWB_SHADOW_COSINE_LENGTH_SQUARED_MIN)) * rsqrt(max(dot(rayDirection, rayDirection), NWB_SHADOW_COSINE_LENGTH_SQUARED_MIN))));
 }
 
 // Smooth-normal blend weight is a smoothstep-bounded (0, 1) factor, so half math is sufficient here.
 half nwbShadowSmoothNormalWeight(const float3 n0, const float3 n1, const float3 n2){
     const float spread = max(max(dot(n0 - n1, n0 - n1), dot(n1 - n2, n1 - n2)), dot(n2 - n0, n2 - n0));
-    return half(smoothstep(1e-5, 2e-3, spread));
+    return half(smoothstep(NWB_SHADOW_SMOOTH_NORMAL_SPREAD_MIN, NWB_SHADOW_SMOOTH_NORMAL_SPREAD_MAX, spread));
 }
 
 // Finish one instance once.

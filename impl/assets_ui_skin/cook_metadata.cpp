@@ -71,10 +71,7 @@ static constexpr usize s_AtlasExtentComponentCount = 2u;
 static constexpr usize s_RgbaComponentCount = 4u;
 static constexpr usize s_AlphaComponentIndex = 3u;
 static constexpr f32 s_PaletteChannelMin = 0.0f;
-static constexpr f32 s_PaletteRgbMax = 16.0f;
 static constexpr f32 s_PaletteAlphaMax = 1.0f;
-static constexpr f32 s_MinDefaultFontSize = 1.0f / 64.0f;
-static constexpr f32 s_MaxDefaultFontSize = 2048.0f;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -213,7 +210,7 @@ template<usize Count>
             if(!indexResultValue)
                 return MakeUnexpected(Failure{});
             components[index] = *indexResultValue;
-            if(components[index] < s_PaletteChannelMin || components[index] > (index == s_AlphaComponentIndex ? s_PaletteAlphaMax : s_PaletteRgbMax)){
+            if(components[index] < s_PaletteChannelMin || components[index] > (index == s_AlphaComponentIndex ? s_PaletteAlphaMax : s_UiSkinPaletteRgbMax)){
                 NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': palette role '{}' needs RGB in [0, 16] and alpha in [0, 1]"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(path), StringConvert(name));
                 return MakeUnexpected(Failure{});
             }
@@ -238,7 +235,7 @@ template<usize Count>
     if(!defaultFontSizeResult)
         return MakeUnexpected(Failure{});
     typographyResult.defaultFontSize = *defaultFontSizeResult;
-    if(typographyResult.defaultFontSize < s_MinDefaultFontSize || typographyResult.defaultFontSize > s_MaxDefaultFontSize){
+    if(typographyResult.defaultFontSize < s_UiSkinMinDefaultFontSize || typographyResult.defaultFontSize > s_UiSkinMaxDefaultFontSize){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': typography.default_font_size must be in [1/64, 2048]"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(path));
         return MakeUnexpected(Failure{});
     }

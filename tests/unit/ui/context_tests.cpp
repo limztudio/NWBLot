@@ -23,6 +23,8 @@ namespace __hidden_ui_context_tests{
 using namespace NWB;
 using namespace NWB::Impl::Ui;
 
+constexpr AStringView s_ActionKey = "action";
+
 
 static HitTarget ButtonTarget(const Rect& rectangle = { 10.0f, 20.0f, 30.0f, 20.0f })noexcept{
     HitTarget target;
@@ -57,7 +59,7 @@ protected:
     [[nodiscard]] Expected<WidgetState> prepare(const u64 generation, const WidgetRoot& root, const WidgetKind::Enum kind = WidgetKind::Button){
         EXPECT_TRUE(m_context.beginFrame(generation));
         EXPECT_TRUE(m_context.beginRoot(root));
-        const auto state = m_context.declare("action", kind);
+        const auto state = m_context.declare(s_ActionKey, kind);
         EXPECT_TRUE(state);
         if(!state)
             return MakeUnexpected(state.error());
@@ -104,7 +106,7 @@ TEST(UiWidgetIdTests, EmbeddedNulAndScopeConcatenationDoNotAliasAndInvalidKeysAr
     ASSERT_TRUE(second);
     EXPECT_NE(*first, *second);
     EXPECT_FALSE(MakeRootId({ 7u, 0u }));
-    EXPECT_FALSE(MakeWidgetId({}, "action"));
+    EXPECT_FALSE(MakeWidgetId({}, s_ActionKey));
     EXPECT_FALSE(MakeWidgetId(*rootId, ""));
 }
 
@@ -112,11 +114,11 @@ TEST_F(UiContextTests, ReorderedDeclarationsAndScopedKeysRetainTheirExactIdentit
     const WidgetRoot root{ 11u, 1u };
     ASSERT_TRUE(m_context.beginFrame(1u));
     ASSERT_TRUE(m_context.beginRoot(root));
-    auto first = m_context.declare("action", WidgetKind::Button);
+    auto first = m_context.declare(s_ActionKey, WidgetKind::Button);
     ASSERT_TRUE(first);
     const WidgetState original = **first;
     ASSERT_TRUE(m_context.pushScope("nested"));
-    auto nested = m_context.declare("action", WidgetKind::Button);
+    auto nested = m_context.declare(s_ActionKey, WidgetKind::Button);
     ASSERT_TRUE(nested);
     const WidgetState nestedOriginal = **nested;
     EXPECT_NE(original.id, nestedOriginal.id);
@@ -127,12 +129,12 @@ TEST_F(UiContextTests, ReorderedDeclarationsAndScopedKeysRetainTheirExactIdentit
     ASSERT_TRUE(m_context.beginFrame(2u));
     ASSERT_TRUE(m_context.beginRoot(root));
     ASSERT_TRUE(m_context.pushScope("nested"));
-    nested = m_context.declare("action", WidgetKind::Button);
+    nested = m_context.declare(s_ActionKey, WidgetKind::Button);
     ASSERT_TRUE(nested);
     EXPECT_EQ((*nested)->id, nestedOriginal.id);
     EXPECT_EQ((*nested)->declarationGeneration, nestedOriginal.declarationGeneration);
     ASSERT_TRUE(m_context.popScope());
-    first = m_context.declare("action", WidgetKind::Button);
+    first = m_context.declare(s_ActionKey, WidgetKind::Button);
     ASSERT_TRUE(first);
     EXPECT_EQ((*first)->id, original.id);
     EXPECT_EQ((*first)->declarationGeneration, original.declarationGeneration);
@@ -149,8 +151,8 @@ TEST_F(UiContextTests, DuplicateStableKeysPoisonTheCurrentBuildAndCannotPublishI
     ASSERT_TRUE(m_context.commitFrame(1u));
     ASSERT_TRUE(m_context.beginFrame(2u));
     ASSERT_TRUE(m_context.beginRoot(original.root));
-    ASSERT_TRUE(m_context.declare("action", WidgetKind::Button));
-    EXPECT_FALSE(m_context.declare("action", WidgetKind::Button));
+    ASSERT_TRUE(m_context.declare(s_ActionKey, WidgetKind::Button));
+    EXPECT_FALSE(m_context.declare(s_ActionKey, WidgetKind::Button));
     EXPECT_TRUE(m_context.failed());
     EXPECT_FALSE(m_context.declare("another", WidgetKind::Label));
     EXPECT_FALSE(m_context.endRoot());
@@ -166,7 +168,7 @@ TEST_F(UiContextTests, UnbalancedOrEmptyScopesPoisonTheBuildUntilAbandonment){
     ASSERT_TRUE(m_context.beginFrame(1u));
     ASSERT_TRUE(m_context.beginRoot({ 31u, 1u }));
     ASSERT_TRUE(m_context.pushScope("panel"));
-    ASSERT_TRUE(m_context.declare("action", WidgetKind::Button));
+    ASSERT_TRUE(m_context.declare(s_ActionKey, WidgetKind::Button));
     EXPECT_FALSE(m_context.endRoot());
     EXPECT_TRUE(m_context.failed());
     EXPECT_FALSE(m_context.finishFrame());
@@ -188,7 +190,7 @@ TEST_F(UiContextTests, UnbalancedOrEmptyScopesPoisonTheBuildUntilAbandonment){
 TEST_F(UiContextTests, FinishingAnOpenRootDoesNotPublishItsPartialDeclarations){
     ASSERT_TRUE(m_context.beginFrame(1u));
     ASSERT_TRUE(m_context.beginRoot({ 41u, 1u }));
-    ASSERT_TRUE(m_context.declare("action", WidgetKind::Button));
+    ASSERT_TRUE(m_context.declare(s_ActionKey, WidgetKind::Button));
     EXPECT_FALSE(m_context.finishFrame());
     EXPECT_FALSE(m_context.ready());
     EXPECT_FALSE(m_context.commitFrame(1u));
@@ -209,7 +211,7 @@ TEST_F(UiContextTests, OnlyTheExactPreparedGenerationCanReplaceTheCommittedHitLa
     EXPECT_EQ(m_context.input().hitTest({ 15.0f, 25.0f }), original.id);
     ASSERT_TRUE(m_context.beginFrame(9u));
     ASSERT_TRUE(m_context.beginRoot(original.root));
-    const auto state = m_context.declare("action", WidgetKind::Button);
+    const auto state = m_context.declare(s_ActionKey, WidgetKind::Button);
     ASSERT_TRUE(state);
     ASSERT_TRUE(m_context.addTarget(**state, ButtonTarget({ 80.0f, 20.0f, 30.0f, 20.0f })));
     ASSERT_TRUE(m_context.endRoot());
@@ -237,7 +239,7 @@ TEST_F(UiContextTests, PendingPresentationCannotReplayConsumedActionsAndRetainsN
     ASSERT_TRUE(firstAction.valid());
     ASSERT_TRUE(m_context.beginFrame(2u));
     ASSERT_TRUE(m_context.beginRoot(original.root));
-    auto state = m_context.declare("action", WidgetKind::Button);
+    auto state = m_context.declare(s_ActionKey, WidgetKind::Button);
     ASSERT_TRUE(state);
     EXPECT_TRUE(m_context.takeActivation(**state, true));
     EXPECT_FALSE(m_context.takeActivation(**state, true));
@@ -257,7 +259,7 @@ TEST_F(UiContextTests, PendingPresentationCannotReplayConsumedActionsAndRetainsN
     ASSERT_TRUE(m_context.commitFrame(2u));
     ASSERT_TRUE(m_context.beginFrame(3u));
     ASSERT_TRUE(m_context.beginRoot(original.root));
-    state = m_context.declare("action", WidgetKind::Button);
+    state = m_context.declare(s_ActionKey, WidgetKind::Button);
     ASSERT_TRUE(state);
     EXPECT_TRUE(m_context.takeActivation(**state, true));
     EXPECT_FALSE(m_context.takeActivation(**state, true));
@@ -322,7 +324,7 @@ TEST_F(UiContextTests, ChangingWidgetKindInvalidatesQueuedActivationAndItsTypedL
     EXPECT_EQ(m_context.input().actions()[0u].id.declarationGeneration, changed.declarationGeneration);
     ASSERT_TRUE(m_context.beginFrame(3u));
     ASSERT_TRUE(m_context.beginRoot(original.root));
-    const auto current = m_context.declare("action", WidgetKind::Checkbox);
+    const auto current = m_context.declare(s_ActionKey, WidgetKind::Checkbox);
     ASSERT_TRUE(current);
     EXPECT_EQ((*current)->declarationGeneration, changed.declarationGeneration);
     EXPECT_TRUE(m_context.takeActivation(**current, true));
@@ -355,13 +357,13 @@ TEST_F(UiContextTests, RootRetentionMatchesLifetimeGenerationAndKeepsOtherRootsA
     const WidgetRoot secondRoot{ 102u, 1u };
     ASSERT_TRUE(m_context.beginFrame(1u));
     ASSERT_TRUE(m_context.beginRoot(firstRoot));
-    const auto first = m_context.declare("action", WidgetKind::Button);
+    const auto first = m_context.declare(s_ActionKey, WidgetKind::Button);
     ASSERT_TRUE(first);
     const WidgetState firstState = **first;
     ASSERT_TRUE(m_context.addTarget(firstState, ButtonTarget()));
     ASSERT_TRUE(m_context.endRoot());
     ASSERT_TRUE(m_context.beginRoot(secondRoot));
-    const auto second = m_context.declare("action", WidgetKind::Button);
+    const auto second = m_context.declare(s_ActionKey, WidgetKind::Button);
     ASSERT_TRUE(second);
     const WidgetState secondState = **second;
     ASSERT_TRUE(m_context.addTarget(secondState, ButtonTarget({ 80.0f, 20.0f, 30.0f, 20.0f })));
@@ -385,7 +387,7 @@ TEST_F(UiContextTests, DisabledDeclarationDropsOldFocusAndActionsBeforePublicati
     ASSERT_EQ(m_context.input().actions().size(), 1u);
     ASSERT_TRUE(m_context.beginFrame(2u));
     ASSERT_TRUE(m_context.beginRoot(original.root));
-    const auto state = m_context.declare("action", WidgetKind::Button);
+    const auto state = m_context.declare(s_ActionKey, WidgetKind::Button);
     ASSERT_TRUE(state);
     EXPECT_FALSE(m_context.takeActivation(**state, false));
     EXPECT_TRUE(m_context.input().actions().empty());
@@ -440,7 +442,7 @@ TEST_F(UiContextTests, StaleStateCannotConsumeAReplacementActionOrConsumeOutside
     EXPECT_EQ(m_context.input().actions().size(), 1u);
     ASSERT_TRUE(m_context.beginFrame(3u));
     ASSERT_TRUE(m_context.beginRoot(original.root));
-    const auto current = m_context.declare("action", WidgetKind::Checkbox);
+    const auto current = m_context.declare(s_ActionKey, WidgetKind::Checkbox);
     ASSERT_TRUE(current);
     EXPECT_FALSE(m_context.takeActivation(original, true));
     EXPECT_EQ(m_context.input().actions().size(), 1u);
@@ -479,7 +481,7 @@ TEST_F(UiContextTests, TargetAdmissionRejectsForeignRootPriorFrameAndReplacedLif
     m_context.abandonFrame();
     ASSERT_TRUE(m_context.beginFrame(4u));
     ASSERT_TRUE(m_context.beginRoot(original.root));
-    const auto current = m_context.declare("action", WidgetKind::Checkbox);
+    const auto current = m_context.declare(s_ActionKey, WidgetKind::Checkbox);
     ASSERT_TRUE(current);
     EXPECT_GT((*current)->declarationGeneration, original.declarationGeneration);
     WidgetState staleLifetime = original;
@@ -612,7 +614,7 @@ TEST_F(UiContextTests, RetiringAPassiveLabelPreservesLiveInputBeforeAndAfterPubl
     const WidgetRoot root{ 181u, 1u };
     ASSERT_TRUE(m_context.beginFrame(1u));
     ASSERT_TRUE(m_context.beginRoot(root));
-    auto action = m_context.declare("action", WidgetKind::Button);
+    auto action = m_context.declare(s_ActionKey, WidgetKind::Button);
     ASSERT_TRUE(action);
     const WidgetState retained = **action;
     ASSERT_TRUE(m_context.addTarget(retained, ButtonTarget()));
@@ -631,7 +633,7 @@ TEST_F(UiContextTests, RetiringAPassiveLabelPreservesLiveInputBeforeAndAfterPubl
 
     ASSERT_TRUE(m_context.beginFrame(2u));
     ASSERT_TRUE(m_context.beginRoot(root));
-    action = m_context.declare("action", WidgetKind::Button);
+    action = m_context.declare(s_ActionKey, WidgetKind::Button);
     ASSERT_TRUE(action);
     ASSERT_TRUE(m_context.addTarget(**action, ButtonTarget()));
     ASSERT_TRUE(m_context.endRoot());

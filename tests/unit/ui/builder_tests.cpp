@@ -29,13 +29,17 @@ using namespace NWB;
 using namespace NWB::Impl;
 using namespace NWB::Impl::Ui;
 
+constexpr AStringView s_PanelKey = "panel";
+constexpr AStringView s_CaptionKey = "caption";
+constexpr AStringView s_ApplyKey = "apply";
+
 class UiBuilderTests : public testing::Test{
 public:
     UiBuilderTests()
         : m_arena(Name("tests/ui/builder"))
-        , m_font(m_arena, Name("tests/ui/fonts/latin"))
+        , m_font(m_arena, Name(UiWidgetTests::s_TestLatinFontPath))
         , m_text(m_arena)
-        , m_skin(m_arena, Name("tests/ui/skin"))
+        , m_skin(m_arena, Name(UiWidgetTests::s_TestSkinPath))
         , m_paint(m_arena)
         , m_context(m_arena)
         , m_builder(m_arena, m_context, m_paint, m_text)
@@ -44,7 +48,7 @@ public:
 
 protected:
     virtual void SetUp()override{
-        Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
+        Core::Alloc::ScratchArena fontScratchArena(UiWidgetTests::s_FontScratchArenaName);
         ASSERT_TRUE(UiWidgetTests::InstallLatinFixtureFont(fontScratchArena, m_arena, m_font, m_text));
         configureSkin();
         ASSERT_TRUE(m_skin.validatePayload());
@@ -72,8 +76,8 @@ protected:
     [[nodiscard]] bool begin(const u64 generation, const Rect& bounds = { 0.0f, 0.0f, 300.0f, 200.0f }){
         if(!m_context.beginFrame(generation))
             return false;
-        m_paint.begin({ 300.0f, 200.0f, 1.0f, 1.0f }, generation, 1u, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
-        return m_context.beginRoot(m_root) && m_builder.beginPanel("panel", bounds);
+        m_paint.begin({ 300.0f, 200.0f, 1.0f, 1.0f }, generation, 1u, Core::Assets::AssetRef<UiSkin>(UiWidgetTests::s_TestSkinPath), m_skin);
+        return m_context.beginRoot(m_root) && m_builder.beginPanel(s_PanelKey, bounds);
     }
 
     [[nodiscard]] bool finish(){
@@ -81,7 +85,7 @@ protected:
     }
 
     [[nodiscard]] WidgetId id(const AStringView stableKey)const{
-        return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), "panel")), stableKey));
+        return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), s_PanelKey)), stableKey));
     }
 
     [[nodiscard]] const WidgetState* state(const WidgetId widget)const noexcept{
@@ -139,17 +143,17 @@ protected:
 
 TEST_F(UiBuilderTests, LabelTextChangesPreserveStableIdAndDeclarationLifetime){
     ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.label("caption", "A"));
+    ASSERT_TRUE(m_builder.label(s_CaptionKey, "A"));
     ASSERT_TRUE(finish());
     const DrawSnapshot first = m_paint.freeze();
     ASSERT_EQ(first.generation(), 1u);
     ASSERT_TRUE(m_context.commitFrame(1u));
-    const WidgetId caption = id("caption");
+    const WidgetId caption = id(s_CaptionKey);
     const WidgetState* original = state(caption);
     ASSERT_NE(original, nullptr);
     const u64 lifetime = original->declarationGeneration;
     ASSERT_TRUE(begin(2u));
-    ASSERT_TRUE(m_builder.label("caption", "A changed caption"));
+    ASSERT_TRUE(m_builder.label(s_CaptionKey, "A changed caption"));
     ASSERT_TRUE(finish());
     const DrawSnapshot second = m_paint.freeze();
     const WidgetState* updated = state(caption);
@@ -193,11 +197,11 @@ TEST_F(UiBuilderTests, CheckboxTogglesOncePerAcceptedActionAcrossRepeatedBuilds)
 
 TEST_F(UiBuilderTests, ButtonChecksCurrentEnabledValueBeforeTakingPendingActivation){
     ASSERT_TRUE(begin(1u));
-    EXPECT_FALSE(m_builder.button("apply", "Apply"));
+    EXPECT_FALSE(m_builder.button(s_ApplyKey, "Apply"));
     ASSERT_FALSE(m_context.failed());
     ASSERT_TRUE(finish());
     ASSERT_TRUE(m_context.commitFrame(1u));
-    const HitTarget* control = UiTestSupport::FindHitTarget(m_context.input().targets(), id("apply"));
+    const HitTarget* control = UiTestSupport::FindHitTarget(m_context.input().targets(), id(s_ApplyKey));
     ASSERT_NE(control, nullptr);
     const SIMDVectorSingle pointValue = VectorAdd(VectorSet(control->rectangle.x, control->rectangle.y, 0.0f, 0.0f), VectorReplicate(4.0f));
     const Point point{ VectorGetX(pointValue), VectorGetY(pointValue) };
@@ -206,12 +210,12 @@ TEST_F(UiBuilderTests, ButtonChecksCurrentEnabledValueBeforeTakingPendingActivat
     ASSERT_TRUE(begin(2u));
     WidgetOptions disabled;
     disabled.enabled = false;
-    EXPECT_FALSE(m_builder.button("apply", "Apply", disabled));
+    EXPECT_FALSE(m_builder.button(s_ApplyKey, "Apply", disabled));
     EXPECT_FALSE(m_context.failed());
     EXPECT_TRUE(m_context.input().actions().empty());
     ASSERT_TRUE(finish());
     ASSERT_TRUE(m_context.commitFrame(2u));
-    control = UiTestSupport::FindHitTarget(m_context.input().targets(), id("apply"));
+    control = UiTestSupport::FindHitTarget(m_context.input().targets(), id(s_ApplyKey));
     ASSERT_NE(control, nullptr);
     EXPECT_FALSE(control->enabled);
     EXPECT_FALSE(control->focusable);
@@ -220,26 +224,26 @@ TEST_F(UiBuilderTests, ButtonChecksCurrentEnabledValueBeforeTakingPendingActivat
     click(point);
     EXPECT_TRUE(m_context.input().actions().empty());
     ASSERT_TRUE(begin(3u));
-    EXPECT_FALSE(m_builder.button("apply", "Apply"));
+    EXPECT_FALSE(m_builder.button(s_ApplyKey, "Apply"));
     EXPECT_FALSE(m_context.failed());
     ASSERT_TRUE(finish());
     ASSERT_TRUE(m_context.commitFrame(3u));
-    EXPECT_TRUE(UiTestSupport::FindHitTarget(m_context.input().targets(), id("apply"))->enabled);
+    EXPECT_TRUE(UiTestSupport::FindHitTarget(m_context.input().targets(), id(s_ApplyKey))->enabled);
 }
 
 TEST_F(UiBuilderTests, MissingSkinRejectsDeclarationsWithoutPublishingCandidateTargets){
     ASSERT_TRUE(begin(1u));
-    EXPECT_FALSE(m_builder.button("apply", "Apply"));
+    EXPECT_FALSE(m_builder.button(s_ApplyKey, "Apply"));
     ASSERT_TRUE(finish());
     const DrawSnapshot first = m_paint.freeze();
     ASSERT_TRUE(m_context.commitFrame(1u));
-    const WidgetId accepted = id("apply");
+    const WidgetId accepted = id(s_ApplyKey);
     ASSERT_EQ(m_context.input().targets().size(), 2u);
     Builder noSkin(m_arena, m_context, m_paint, m_text);
     ASSERT_TRUE(m_context.beginFrame(2u));
-    m_paint.begin({ 300.0f, 200.0f, 1.0f, 1.0f }, 2u, 1u, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
+    m_paint.begin({ 300.0f, 200.0f, 1.0f, 1.0f }, 2u, 1u, Core::Assets::AssetRef<UiSkin>(UiWidgetTests::s_TestSkinPath), m_skin);
     ASSERT_TRUE(m_context.beginRoot(m_root));
-    EXPECT_FALSE(noSkin.beginPanel("panel", { 100.0f, 100.0f, 100.0f, 100.0f }));
+    EXPECT_FALSE(noSkin.beginPanel(s_PanelKey, { 100.0f, 100.0f, 100.0f, 100.0f }));
     EXPECT_TRUE(m_context.failed());
     EXPECT_FALSE(m_context.finishFrame());
     EXPECT_FALSE(m_context.commitFrame(2u));
@@ -251,19 +255,19 @@ TEST_F(UiBuilderTests, MissingSkinRejectsDeclarationsWithoutPublishingCandidateT
 
 TEST_F(UiBuilderTests, MissingBaseControlRegionRejectsFrameAndKeepsAcceptedHitLayout){
     ASSERT_TRUE(begin(1u));
-    EXPECT_FALSE(m_builder.button("apply", "Apply"));
+    EXPECT_FALSE(m_builder.button(s_ApplyKey, "Apply"));
     ASSERT_TRUE(finish());
     const DrawSnapshot first = m_paint.freeze();
     ASSERT_TRUE(m_context.commitFrame(1u));
     configureSkin(true, false);
     ASSERT_TRUE(begin(2u));
-    EXPECT_FALSE(m_builder.button("apply", "Apply"));
+    EXPECT_FALSE(m_builder.button(s_ApplyKey, "Apply"));
     EXPECT_TRUE(m_context.failed());
     EXPECT_FALSE(m_builder.endPanel());
     EXPECT_FALSE(m_context.finishFrame());
     EXPECT_FALSE(m_context.commitFrame(2u));
     EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
-    EXPECT_EQ(m_context.input().hitTest({ 15.0f, 15.0f }), id("apply"));
+    EXPECT_EQ(m_context.input().hitTest({ 15.0f, 15.0f }), id(s_ApplyKey));
     EXPECT_TRUE(regionQuad(first, 1u));
 }
 
@@ -298,16 +302,16 @@ TEST_F(UiBuilderTests, RowUsesSkinMetricsPaddingAndClipsOverflowingControlHits){
 TEST_F(UiBuilderTests, ScopedKeysRemainDistinctAndDuplicateDeclarationsRejectPublication){
     ASSERT_TRUE(begin(1u));
     ASSERT_TRUE(m_builder.beginRow("left"));
-    ASSERT_TRUE(m_builder.label("caption", "Left"));
+    ASSERT_TRUE(m_builder.label(s_CaptionKey, "Left"));
     ASSERT_TRUE(m_builder.endContainer());
     ASSERT_TRUE(m_builder.beginRow("right"));
-    ASSERT_TRUE(m_builder.label("caption", "Right"));
+    ASSERT_TRUE(m_builder.label(s_CaptionKey, "Right"));
     ASSERT_TRUE(m_builder.endContainer());
     ASSERT_TRUE(finish());
     const DrawSnapshot first = m_paint.freeze();
     ASSERT_TRUE(m_context.commitFrame(1u));
-    const WidgetId left = UiTestSupport::RequireWidgetId(MakeWidgetId(id("left"), "caption"));
-    const WidgetId right = UiTestSupport::RequireWidgetId(MakeWidgetId(id("right"), "caption"));
+    const WidgetId left = UiTestSupport::RequireWidgetId(MakeWidgetId(id("left"), s_CaptionKey));
+    const WidgetId right = UiTestSupport::RequireWidgetId(MakeWidgetId(id("right"), s_CaptionKey));
     EXPECT_NE(left, right);
     EXPECT_NE(state(left), nullptr);
     EXPECT_NE(state(right), nullptr);
@@ -327,19 +331,19 @@ TEST_F(UiBuilderTests, PreparedFrameTargetsStayInaccessibleUntilExactCommit){
     fixed.width = { LayoutSizePolicy::Fixed, 20.0f };
     fixed.height = { LayoutSizePolicy::Fixed, 20.0f };
     ASSERT_TRUE(begin(1u, { 0.0f, 0.0f, 100.0f, 100.0f }));
-    EXPECT_FALSE(m_builder.button("apply", "", fixed));
+    EXPECT_FALSE(m_builder.button(s_ApplyKey, "", fixed));
     ASSERT_TRUE(finish());
     const DrawSnapshot first = m_paint.freeze();
     ASSERT_TRUE(m_context.commitFrame(1u));
     ASSERT_TRUE(begin(2u, { 150.0f, 50.0f, 100.0f, 100.0f }));
-    EXPECT_FALSE(m_builder.button("apply", "", fixed));
+    EXPECT_FALSE(m_builder.button(s_ApplyKey, "", fixed));
     ASSERT_TRUE(finish());
     const DrawSnapshot prepared = m_paint.freeze();
     EXPECT_EQ(first.generation(), 1u);
     EXPECT_EQ(prepared.generation(), 2u);
     EXPECT_TRUE(m_context.ready());
     EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
-    EXPECT_EQ(m_context.input().hitTest({ 15.0f, 15.0f }), id("apply"));
+    EXPECT_EQ(m_context.input().hitTest({ 15.0f, 15.0f }), id(s_ApplyKey));
     EXPECT_FALSE(m_context.input().hitTest({ 160.0f, 60.0f }).valid());
     EXPECT_FALSE(send({ InputEventType::PrimaryDown, { 160.0f, 60.0f } }).pointerConsumed);
     EXPECT_FALSE(send({ InputEventType::PrimaryUp, { 160.0f, 60.0f } }).pointerConsumed);
@@ -348,16 +352,16 @@ TEST_F(UiBuilderTests, PreparedFrameTargetsStayInaccessibleUntilExactCommit){
     EXPECT_FALSE(m_context.commitFrame(1u));
     EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
     ASSERT_TRUE(m_context.commitFrame(2u));
-    EXPECT_EQ(m_context.input().hitTest({ 160.0f, 60.0f }), id("apply"));
+    EXPECT_EQ(m_context.input().hitTest({ 160.0f, 60.0f }), id(s_ApplyKey));
     EXPECT_FALSE(m_context.input().hitTest({ 15.0f, 15.0f }).valid());
 }
 
 TEST_F(UiBuilderTests, EscapeBeforeReleaseCancelsPointerAndKeyboardButtonSubmission){
     ASSERT_TRUE(begin(1u));
-    EXPECT_FALSE(m_builder.button("apply", "Apply"));
+    EXPECT_FALSE(m_builder.button(s_ApplyKey, "Apply"));
     ASSERT_TRUE(finish());
     ASSERT_TRUE(m_context.commitFrame(1u));
-    const Rect rectangle = UiTestSupport::FindHitTarget(m_context.input().targets(), id("apply"))->rectangle;
+    const Rect rectangle = UiTestSupport::FindHitTarget(m_context.input().targets(), id(s_ApplyKey))->rectangle;
     const Point point = UiWidgetTests::Center(rectangle);
     u64 generation = 1u;
     for(const i32 key : { Core::Key::Unknown, Core::Key::Enter, Core::Key::Space }){
@@ -365,14 +369,14 @@ TEST_F(UiBuilderTests, EscapeBeforeReleaseCancelsPointerAndKeyboardButtonSubmiss
             EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .key = Core::Key::Tab }).commandConsumed);
             EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .key = Core::Key::Tab }).commandConsumed);
         }
-        ASSERT_EQ(m_context.input().focus(), id("apply"));
+        ASSERT_EQ(m_context.input().focus(), id(s_ApplyKey));
         const bool pointer = key == Core::Key::Unknown;
         const InputEvent down{ .type = pointer ? InputEventType::PrimaryDown : InputEventType::KeyDown, .position = point, .key = key };
         const InputEvent up{ .type = pointer ? InputEventType::PrimaryUp : InputEventType::KeyUp, .position = point, .key = key };
         const InputRoutingResult held = send(down);
         EXPECT_TRUE(pointer ? held.pointerConsumed : held.commandConsumed);
         ASSERT_TRUE(begin(++generation));
-        EXPECT_FALSE(m_builder.button("apply", "Apply"));
+        EXPECT_FALSE(m_builder.button(s_ApplyKey, "Apply"));
         ASSERT_TRUE(finish());
         ASSERT_TRUE(m_context.commitFrame(generation));
         EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .key = Core::Key::Escape }).commandConsumed);
@@ -380,18 +384,18 @@ TEST_F(UiBuilderTests, EscapeBeforeReleaseCancelsPointerAndKeyboardButtonSubmiss
         const InputRoutingResult released = send(up);
         EXPECT_TRUE(pointer ? released.pointerConsumed : released.commandConsumed);
         ASSERT_TRUE(begin(++generation));
-        EXPECT_FALSE(m_builder.button("apply", "Apply"));
+        EXPECT_FALSE(m_builder.button(s_ApplyKey, "Apply"));
         ASSERT_TRUE(finish());
         ASSERT_TRUE(m_context.commitFrame(generation));
         EXPECT_TRUE(m_context.input().actions().empty());
     }
     EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .key = Core::Key::Tab }).commandConsumed);
     EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .key = Core::Key::Tab }).commandConsumed);
-    ASSERT_EQ(m_context.input().focus(), id("apply"));
+    ASSERT_EQ(m_context.input().focus(), id(s_ApplyKey));
     EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .key = Core::Key::Enter }).commandConsumed);
     EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .key = Core::Key::Enter }).commandConsumed);
     ASSERT_TRUE(begin(++generation));
-    EXPECT_TRUE(m_builder.button("apply", "Apply"));
+    EXPECT_TRUE(m_builder.button(s_ApplyKey, "Apply"));
     ASSERT_TRUE(finish());
     ASSERT_TRUE(m_context.commitFrame(generation));
 }
@@ -429,7 +433,7 @@ TEST_F(UiBuilderTests, FrozenPaintRetainsValuesAndFontPagesAfterModelChangeAndBu
     AString<Core::Alloc::GlobalArena> caption("A", m_arena);
     ASSERT_TRUE(begin(1u));
     EXPECT_FALSE(m_builder.checkbox("enabled", "Enabled", checked));
-    ASSERT_TRUE(m_builder.label("caption", { caption.data(), caption.size() }));
+    ASSERT_TRUE(m_builder.label(s_CaptionKey, { caption.data(), caption.size() }));
     ASSERT_TRUE(finish());
     const DrawSnapshot first = m_paint.freeze();
     const auto originalMarker = regionQuad(first, 9u);
@@ -446,7 +450,7 @@ TEST_F(UiBuilderTests, FrozenPaintRetainsValuesAndFontPagesAfterModelChangeAndBu
     caption.assign("A longer changed model caption");
     ASSERT_TRUE(begin(2u));
     EXPECT_FALSE(m_builder.checkbox("enabled", "Enabled", checked));
-    ASSERT_TRUE(m_builder.label("caption", { caption.data(), caption.size() }));
+    ASSERT_TRUE(m_builder.label(s_CaptionKey, { caption.data(), caption.size() }));
     ASSERT_TRUE(finish());
     const DrawSnapshot second = m_paint.freeze();
     EXPECT_FALSE(regionQuad(second, 9u));

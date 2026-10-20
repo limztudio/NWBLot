@@ -32,6 +32,7 @@ namespace __hidden_output{
 
 inline constexpr AStringView s_NewLine = "\r\n";
 inline constexpr AStringView s_NwbOutputExtension = ".nwb";
+inline constexpr u32 s_OutputFileCount = 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -49,7 +50,7 @@ struct PublicationPaths{
 public:
     [[nodiscard]] static ScratchPath MakeBackup(Core::Alloc::ScratchArena& scratchArena, const Path& path){
         ScratchPath backup(scratchArena, path);
-        backup += ".old";
+        backup += s_BackupOutputSuffix;
         return backup;
     }
 
@@ -184,7 +185,8 @@ Expected<ScratchString> BuildMetadata(const PreparedTexture& payload, Core::Allo
 #else
     if(static_cast<u64>(count) > static_cast<u64>(Limit<off_t>::s_Max))
         return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
-    const int descriptor = open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0666u);
+    constexpr u32 s_NewFileMode = 0666u;
+    const int descriptor = open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, s_NewFileMode);
     if(descriptor < 0)
         return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
     outOwned = true;
@@ -291,16 +293,16 @@ bool WriteOutputs(const OutputPaths& outputPaths, const PreparedTexture& payload
     const ScratchPath* backups[] = { &paths.dataBackup, &paths.metadataBackup };
     const ScratchPath* outputs[] = { &paths.data, &paths.metadata };
     const ScratchPath* temporaries[] = { &paths.dataTemporary, &paths.metadataTemporary };
-    bool ownedTemporary[2u] = {};
-    bool backedUp[2u] = {};
-    bool published[2u] = {};
-    ErrorCode removalErrors[2u];
-    ErrorCode restorationErrors[2u];
-    ErrorCode temporaryErrors[2u];
+    bool ownedTemporary[__hidden_output::s_OutputFileCount] = {};
+    bool backedUp[__hidden_output::s_OutputFileCount] = {};
+    bool published[__hidden_output::s_OutputFileCount] = {};
+    ErrorCode removalErrors[__hidden_output::s_OutputFileCount];
+    ErrorCode restorationErrors[__hidden_output::s_OutputFileCount];
+    ErrorCode temporaryErrors[__hidden_output::s_OutputFileCount];
 
     // Cleanup never allocates or logs through the throwing logger while an unexpected exception unwinds.
     const auto rollback = [&]()noexcept{
-        for(u32 index = 2u; index > 0u; --index){
+        for(u32 index = __hidden_output::s_OutputFileCount; index > 0u; --index){
             const u32 current = index - 1u;
             if(published[current]){
                 const auto removed = RemoveFile(*outputs[current]);
@@ -339,7 +341,7 @@ bool WriteOutputs(const OutputPaths& outputPaths, const PreparedTexture& payload
             return false;
         }
 
-        for(u32 index = 0u; index < 2u; ++index){
+        for(u32 index = 0u; index < __hidden_output::s_OutputFileCount; ++index){
             const auto present = FileExistsNoFollow(*outputs[index]);
             if(!present){
                 NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to inspect existing output '{}': {}"), PathToString<tchar>(*outputs[index]), StringConvert(present.error().message()));
@@ -358,7 +360,7 @@ bool WriteOutputs(const OutputPaths& outputPaths, const PreparedTexture& payload
             }
             backedUp[index] = true;
         }
-        for(u32 index = 0u; index < 2u; ++index){
+        for(u32 index = 0u; index < __hidden_output::s_OutputFileCount; ++index){
             const auto finalized = RenamePath(*temporaries[index], *outputs[index]);
             if(!finalized){
                 NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to finalize output '{}': {}"), PathToString<tchar>(*outputs[index]), StringConvert(finalized.error().message()));
@@ -372,7 +374,7 @@ bool WriteOutputs(const OutputPaths& outputPaths, const PreparedTexture& payload
     if(!publish()){
         rollback();
         restoreOnFailure.release();
-        for(u32 index = 0u; index < 2u; ++index){
+        for(u32 index = 0u; index < __hidden_output::s_OutputFileCount; ++index){
             if(backedUp[index] && (removalErrors[index] || restorationErrors[index])){
                 NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to restore '{}'; previous output retained at '{}' (remove {}, restore {})")
                     , PathToString<tchar>(*outputs[index])
@@ -392,7 +394,7 @@ bool WriteOutputs(const OutputPaths& outputPaths, const PreparedTexture& payload
     }
 
     restoreOnFailure.release();
-    for(u32 index = 0u; index < 2u; ++index){
+    for(u32 index = 0u; index < __hidden_output::s_OutputFileCount; ++index){
         if(!backedUp[index])
             continue;
         const auto removed = RemoveFile(*backups[index]);

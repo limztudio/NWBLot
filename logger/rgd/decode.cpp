@@ -38,6 +38,7 @@ namespace Rgd{
 namespace __hidden_rgd_decode{
 
 inline constexpr Name s_RgdDecodeScratch("Log/RgdDecodeScratch");
+inline constexpr StringView s_ParseFailedError = "parse_failed";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -148,7 +149,7 @@ AInteropString AssembleTextSummary(const Config& config, RgdCrashDumpContents& c
     const int chunksCloseStatus = chunks ? rdfChunkFileClose(&chunks) : rdfResultOk;
     const int streamCloseStatus = rdfStreamClose(&stream);
     if(formatStatus != rdfResultOk)
-        return MakeUnexpected(StringView("parse_failed"));
+        return MakeUnexpected(s_ParseFailedError);
     if(chunksCloseStatus != rdfResultOk || streamCloseStatus != rdfResultOk)
         return MakeUnexpected(StringView("rdf_close_failed"));
     return {};
@@ -178,7 +179,7 @@ Expected<AInteropString, StringView> DecodeCrashDumpToText(const AInteropString&
     RgdCrashDumpContents contents;
     // Keep vendor console diagnostics on their existing streams; replacing shared buffers races with the server output worker.
     if(!RgdParsingUtils::ParseCrashDump(config, contents))
-        return MakeUnexpected(StringView("parse_failed"));
+        return MakeUnexpected(__hidden_rgd_decode::s_ParseFailedError);
 
     return __hidden_rgd_decode::AssembleTextSummary(config, contents, scratchArena);
 }

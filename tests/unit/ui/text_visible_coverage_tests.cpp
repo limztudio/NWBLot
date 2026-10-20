@@ -25,6 +25,9 @@ namespace __hidden_ui_text_visible_coverage_tests{
 using namespace NWB;
 using namespace NWB::UiTextVisibleTests;
 
+constexpr AStringView s_SampleGlyphText = "A";
+constexpr AStringView s_WideGlyphText = "W";
+
 
 class TextVisibleCoverageTests : public TextVisibleFixture{
 protected:
@@ -122,7 +125,7 @@ TEST_F(TextVisibleCoverageTests, MoreThan4096DistinctHiddenHangulDoNotExhaustThe
     for(const PlacedGlyph& glyph : m_layout.glyphs()){
         if(glyph.byteBegin < 2u)
             continue;
-        EXPECT_EQ(glyph.face->identity().name(), Name("tests/ui/fonts/korean"));
+        EXPECT_EQ(glyph.face->identity().name(), Name(s_KoreanFontPath));
         EXPECT_TRUE(glyph.coverage.known);
         EXPECT_GT(glyph.coverage.ink.width, 0.0f);
         EXPECT_GT(glyph.coverage.ink.height, 0.0f);
@@ -137,7 +140,7 @@ TEST_F(TextVisibleCoverageTests, MoreThan4096DistinctHiddenHangulDoNotExhaustThe
     ASSERT_TRUE(paintClipped(m_layout, clip));
     const DrawSnapshot prefix = m_paint.freeze();
     ASSERT_EQ(prefix.glyphPages().size(), 1u);
-    EXPECT_EQ(prefix.glyphPages()[0u]->binding().font.name(), Name("tests/ui/fonts/latin"));
+    EXPECT_EQ(prefix.glyphPages()[0u]->binding().font.name(), Name(s_LatinFontPath));
     EXPECT_EQ(prefix.vertices().size(), 4u);
     EXPECT_EQ(prefix.indices().size(), 6u);
     const PlacedGlyph& reveal = m_layout.glyphs()[hiddenCount / 2u];
@@ -147,7 +150,7 @@ TEST_F(TextVisibleCoverageTests, MoreThan4096DistinctHiddenHangulDoNotExhaustThe
     ASSERT_TRUE(paintClipped(m_layout, { 20.0f, 20.0f, 80.0f, 40.0f }, origin));
     const DrawSnapshot revealed = m_paint.freeze();
     ASSERT_EQ(revealed.glyphPages().size(), 1u);
-    EXPECT_EQ(revealed.glyphPages()[0u]->binding().font.name(), Name("tests/ui/fonts/korean"));
+    EXPECT_EQ(revealed.glyphPages()[0u]->binding().font.name(), Name(s_KoreanFontPath));
     EXPECT_FALSE(revealed.vertices().empty());
     beginPaint(3u);
     ASSERT_TRUE(paintClipped(m_layout, clip));
@@ -190,13 +193,13 @@ TEST_F(TextVisibleCoverageTests, HiddenGlyphKeepsTheWarmPageExactUntilItIsReveal
 
 TEST_F(TextVisibleCoverageTests, HiddenOversizedGlyphCannotRejectOrUpgradePriorVisibleCoverage){
     {
-        auto layoutResult = m_text.layout({ "A" });
+        auto layoutResult = m_text.layout({ s_SampleGlyphText });
         ASSERT_TRUE(layoutResult);
         m_layout = Move(*layoutResult);
     }
     TextLayout oversized(m_arena);
     {
-        auto layoutResult = m_text.layout({ .text = "W", .fontSize = 1024.0f });
+        auto layoutResult = m_text.layout({ .text = s_WideGlyphText, .fontSize = 1024.0f });
         ASSERT_TRUE(layoutResult);
         oversized = Move(*layoutResult);
     }
@@ -209,7 +212,7 @@ TEST_F(TextVisibleCoverageTests, HiddenOversizedGlyphCannotRejectOrUpgradePriorV
     const DrawSnapshot hidden = m_paint.freeze();
     ExpectSamePaint(hidden, before);
     {
-        auto layoutResult = m_text.layout({ "W" });
+        auto layoutResult = m_text.layout({ s_WideGlyphText });
         ASSERT_TRUE(layoutResult);
         m_layout = Move(*layoutResult);
     }
@@ -223,7 +226,7 @@ TEST_F(TextVisibleCoverageTests, HiddenOversizedGlyphCannotRejectOrUpgradePriorV
 
 TEST_F(TextVisibleCoverageTests, EmptyIntersectedClipAndZeroAlphaNeverPrepareOversizedCoverage){
     {
-        auto layoutResult = m_text.layout({ .text = "W", .fontSize = 1024.0f });
+        auto layoutResult = m_text.layout({ .text = s_WideGlyphText, .fontSize = 1024.0f });
         ASSERT_TRUE(layoutResult);
         m_layout = Move(*layoutResult);
     }
@@ -241,7 +244,7 @@ TEST_F(TextVisibleCoverageTests, EmptyIntersectedClipAndZeroAlphaNeverPrepareOve
     EXPECT_EQ(snapshot.vertices().size(), 4u);
     EXPECT_EQ(snapshot.indices().size(), 6u);
     {
-        auto layoutResult = m_text.layout({ "W" });
+        auto layoutResult = m_text.layout({ s_WideGlyphText });
         ASSERT_TRUE(layoutResult);
         m_layout = Move(*layoutResult);
     }
@@ -254,7 +257,7 @@ TEST_F(TextVisibleCoverageTests, FractionalUnequalDpiKeepsAHintedRasterSliverOut
     const DisplayMetrics display{ 200.0f, 100.0f, 1.25f, 1.5f };
     const Point origin{ 40.375f, 20.125f };
     {
-        auto layoutResult = m_text.layout({ .text = "W", .fontSize = 17.25f });
+        auto layoutResult = m_text.layout({ .text = s_WideGlyphText, .fontSize = 17.25f });
         ASSERT_TRUE(layoutResult);
         m_layout = Move(*layoutResult);
     }
@@ -367,7 +370,7 @@ TEST_F(TextVisibleCoverageTests, SixtyThreePriorImagesLeaveRoomForOnlyTheVisible
     EXPECT_TRUE(snapshot.sdfPages().empty());
     for(usize index = 0u; index < prior.size(); ++index)
         EXPECT_EQ(snapshot.glyphPages()[index].get(), prior[index].get());
-    EXPECT_EQ(snapshot.glyphPages().back()->binding().font.name(), Name("tests/ui/fonts/latin"));
+    EXPECT_EQ(snapshot.glyphPages().back()->binding().font.name(), Name(s_LatinFontPath));
     beginPaint(2u);
     ASSERT_TRUE(m_text.paint(m_paint, m_layout, { 20.0f, 20.0f }));
     const DrawSnapshot revealed = m_paint.freeze();
@@ -379,7 +382,7 @@ TEST_F(TextVisibleCoverageTests, SixtyThreePriorImagesLeaveRoomForOnlyTheVisible
 TEST_F(TextVisibleCoverageTests, OversizedMeasurementDoesNotAdmitAtlasCoverage){
     const auto layout = m_text.layout({ .text = "Previous gyjpq A\xcc\x81\xcc\x81 g\xcc\xa3 \xed\x95\x9c\xea\xb8\x80" });
     ASSERT_TRUE(layout);
-    const auto large = m_text.layout({ .text = "W", .fontSize = 1024.0f });
+    const auto large = m_text.layout({ .text = s_WideGlyphText, .fontSize = 1024.0f });
     ASSERT_TRUE(large);
     ASSERT_TRUE(m_text.measure(*large, { 800.0f, 600.0f, 1.0f, 1.0f }));
     beginPaint(1u);
@@ -452,12 +455,12 @@ TEST_F(TextVisibleCoverageTests, NaturalMeasurementContainsNativeMarksFallbackAn
 }
 
 TEST_F(TextVisibleCoverageTests, NaturalSdfMeasurementExcludesTransparentSpreadAndContainsShaderCoverage){
-    const auto initial = m_text.layout({ .text = "A", .fontSize = 32.0f });
+    const auto initial = m_text.layout({ .text = s_SampleGlyphText, .fontSize = 32.0f });
     ASSERT_TRUE(initial);
     ASSERT_EQ(initial->glyphs().size(), 1u);
     FontAtlas baked(m_arena, Name("tests/ui/fonts/measured_sdf"));
     FontAtlasPayload payload(m_arena);
-    payload.font = Core::Assets::AssetRef<Font>("tests/ui/fonts/latin");
+    payload.font = Core::Assets::AssetRef<Font>(s_LatinFontPath);
     const Core::Assets::AssetBytes& bytes = m_latin.fontBytes();
     payload.fontSha256 = ComputeSha256({ bytes.data(), bytes.size() });
     UiFixtureSupport::PopulateBakedFontTables(bytes, payload, m_arena);
@@ -498,11 +501,11 @@ TEST_F(TextVisibleCoverageTests, NaturalSdfMeasurementExcludesTransparentSpreadA
     baked.setPayload(Move(payload));
     Core::Alloc::ScratchArena scratch(Name("tests/ui/text/measure_sdf"));
     ASSERT_TRUE(baked.validatePayload(scratch));
-    const FontSource source{ Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_latin, 1u, &baked };
+    const FontSource source{ Core::Assets::AssetRef<Font>(s_LatinFontPath), m_latin, 1u, &baked };
     ASSERT_TRUE(m_text.setFonts(scratch, &source, 1u));
     usize visibleSamples = 0u;
     for(const f32 fontSize : { 16.0f, 24.0f, 32.0f }){
-        const auto layout = m_text.layout({ .text = "A", .fontSize = fontSize });
+        const auto layout = m_text.layout({ .text = s_SampleGlyphText, .fontSize = fontSize });
         ASSERT_TRUE(layout);
         const PlacedGlyph& placed = layout->glyphs()[0u];
         ASSERT_TRUE(placed.face->bakedAtlas());

@@ -145,7 +145,7 @@ static void ResolveFlyCameraInput(
 
     const SIMDVectorSingle moveLengthSqVector = Vector2LengthSq(sanitizedAxes);
     if(Vector4Greater(moveLengthSqVector, VectorReplicate(s_CameraMoveEpsilon))){
-        const SIMDVectorSingle boostLanes = VectorSelect(s_SIMDOne, VectorReplicate(s_FlyCameraBoostMultiplier), VectorReplicateInt(boosted ? 0xFFFFFFFFu : 0u));
+        const SIMDVectorSingle boostLanes = VectorSelect(s_SIMDOne, VectorReplicate(s_FlyCameraBoostMultiplier), VectorReplicateInt(boosted ? s_SELECT_1 : s_SELECT_0));
         const SIMDVectorSingle speedLanes = VectorMultiply(VectorReplicate(s_FlyCameraMoveSpeed), boostLanes);
         const SIMDVectorSingle speedDeltaLanes = VectorMultiply(speedLanes, VectorSplatX(safeDelta));
         const SIMDVectorSingle moveScale = VectorMultiply(speedDeltaLanes, VectorReciprocalSqrt(moveLengthSqVector));

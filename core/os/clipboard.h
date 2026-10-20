@@ -41,6 +41,7 @@ namespace ClipboardPollResult{
 
 inline constexpr usize s_ClipboardMaxOutstandingRequests = 32u;
 inline constexpr usize s_ClipboardMaxTextBytes = 16u * 1024u * 1024u;
+inline constexpr usize s_ClipboardChannelCount = 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

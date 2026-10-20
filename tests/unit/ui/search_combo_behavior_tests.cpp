@@ -19,6 +19,9 @@ namespace __hidden_ui_search_combo_behavior_tests{
 using namespace NWB;
 using namespace NWB::Impl::Ui;
 
+constexpr AStringView s_CallbackQuery = "callback";
+constexpr AStringView s_PreeditText = "preedit";
+
 namespace Mutation{
     enum Enum : u8{
         None, Query, SameQuery, QuerySelection, Selection, Open, Close, PreviewScroll,
@@ -44,7 +47,7 @@ public:
     [[nodiscard]] virtual u64 rowCount()const override{
         if(changeQueryOnCount){
             changeQueryOnCount = false;
-            if(!m_state.query().setText("callback"))
+            if(!m_state.query().setText(s_CallbackQuery))
                 ADD_FAILURE() << "query callback failed";
         }
         return count;
@@ -97,7 +100,7 @@ public:
     [[nodiscard]] virtual u64 instanceGeneration()const override{
         if(changeQueryOnGeneration){
             changeQueryOnGeneration = false;
-            if(!m_state.query().setText("callback"))
+            if(!m_state.query().setText(s_CallbackQuery))
                 ADD_FAILURE() << "query callback failed";
         }
         return generation;
@@ -172,7 +175,7 @@ private:
         case Mutation::None:
             break;
         case Mutation::Query:
-            if(!m_state.query().setText("callback"))
+            if(!m_state.query().setText(s_CallbackQuery))
                 ADD_FAILURE() << "query callback failed";
             break;
         case Mutation::SameQuery:
@@ -201,14 +204,14 @@ private:
                 ADD_FAILURE() << "composition callback failed";
             break;
         case Mutation::CompositionUpdate:
-            if(!m_state.query().updateComposition("preedit", 0u, 7u))
+            if(!m_state.query().updateComposition(s_PreeditText, 0u, 7u))
                 ADD_FAILURE() << "composition callback failed";
             break;
         case Mutation::CompositionCancel:
             m_state.query().cancelComposition();
             break;
         case Mutation::CompositionCycle:
-            if(!m_state.query().beginComposition() || !m_state.query().updateComposition("preedit", 0u, 7u))
+            if(!m_state.query().beginComposition() || !m_state.query().updateComposition(s_PreeditText, 0u, 7u))
                 ADD_FAILURE() << "composition callback failed";
             m_state.query().cancelComposition();
             break;
@@ -446,12 +449,12 @@ TEST_F(UiSearchComboBehaviorTests, ReentrantQueryAssignmentPreservesTheCallbackQ
     ASSERT_TRUE(m_state.query().setText("tail"));
     m_source.onFilter = Mutation::Query;
     EXPECT_FALSE(SearchComboBehavior::Filter(m_state, m_source));
-    EXPECT_EQ(m_state.query().text(), "callback");
+    EXPECT_EQ(m_state.query().text(), s_CallbackQuery);
     EXPECT_EQ(preview.inputGeneration(), previewGeneration);
     EXPECT_EQ(preview.cursorKey(), 8u);
     EXPECT_DOUBLE_EQ(preview.scrollOffset(), 96.0);
     ASSERT_TRUE(SearchComboBehavior::Filter(m_state, m_source));
-    EXPECT_EQ(AStringView(m_source.queryBytes.data(), m_source.queryBytes.size()), "callback");
+    EXPECT_EQ(AStringView(m_source.queryBytes.data(), m_source.queryBytes.size()), s_CallbackQuery);
 }
 
 TEST_F(UiSearchComboBehaviorTests, SameQueryCallbackAssignmentStillInvalidatesTheFilterLoan){
@@ -538,12 +541,12 @@ TEST_F(UiSearchComboBehaviorTests, ReentrantPreviewScrollCannotBeOverwrittenByFi
 TEST_F(UiSearchComboBehaviorTests, FullAndViewMetadataCallbacksAreIncludedInTheQueryFence){
     m_source.changeQueryOnGeneration = true;
     EXPECT_FALSE(SearchComboBehavior::Filter(m_state, m_source));
-    EXPECT_EQ(m_state.query().text(), "callback");
+    EXPECT_EQ(m_state.query().text(), s_CallbackQuery);
     EXPECT_EQ(m_source.filterCalls, 0u);
     ASSERT_TRUE(m_state.query().setText("tail"));
     m_source.view.changeQueryOnCount = true;
     EXPECT_FALSE(SearchComboBehavior::Filter(m_state, m_source));
-    EXPECT_EQ(m_state.query().text(), "callback");
+    EXPECT_EQ(m_state.query().text(), s_CallbackQuery);
     EXPECT_EQ(m_source.filterCalls, 0u);
 }
 

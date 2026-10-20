@@ -24,6 +24,8 @@ NWB_ASSET_BUILDER_BEGIN
 
 namespace Assets = Core::Assets;
 
+static constexpr AStringView s_DefaultCacheDirectory = "__build_obj/asset_cache";
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -68,7 +70,7 @@ Expected<Assets::ResolvedCookPaths> ResolveCookPaths(const AssetBuildOptions& op
     }
     paths.outputDirectory = Move(*outputDirectory);
 
-    const Path defaultCacheDirectory = paths.repoRoot / "__build_obj/asset_cache";
+    const Path defaultCacheDirectory = paths.repoRoot / s_DefaultCacheDirectory;
     const Assets::AssetString& requestedCacheDirectory = options.cacheDirectory;
     Assets::ScratchString defaultCacheDirectoryText(scratchArena);
     if(requestedCacheDirectory.empty())

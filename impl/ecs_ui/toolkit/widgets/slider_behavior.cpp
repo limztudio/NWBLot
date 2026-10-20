@@ -25,6 +25,16 @@ namespace __hidden_ui_slider_behavior{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// The default key step is one hundredth of the range.
+inline constexpr f64 s_DefaultKeyStepDivisor = 100.0;
+// Halving each bound keeps the span finite when maximum - minimum overflows.
+inline constexpr f64 s_OverflowGuardScale = 0.5;
+inline constexpr u32 s_PageStepCount = 10u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] static bool ValidRange(const f64 minimum, const f64 maximum)noexcept{
     return IsFinite(minimum) && IsFinite(maximum) && minimum <= maximum;
 }
@@ -78,10 +88,10 @@ namespace __hidden_ui_slider_behavior{
         return configuredStep;
     const SIMDVectorDouble span = VectorDoubleSubtract(maximum, minimum);
     if(IsFinite(VectorDoubleGetX(span))){
-        const SIMDVectorDouble step = VectorDoubleDivide(span, VectorDoubleReplicate(100.0));
+        const SIMDVectorDouble step = VectorDoubleDivide(span, VectorDoubleReplicate(s_DefaultKeyStepDivisor));
         return VectorDoubleSelect(step, span, VectorDoubleEqual(step, VectorDoubleZero()));
     }
-    return VectorDoubleSubtract(VectorDoubleDivide(maximum, VectorDoubleReplicate(100.0)), VectorDoubleDivide(minimum, VectorDoubleReplicate(100.0)));
+    return VectorDoubleSubtract(VectorDoubleDivide(maximum, VectorDoubleReplicate(s_DefaultKeyStepDivisor)), VectorDoubleDivide(minimum, VectorDoubleReplicate(s_DefaultKeyStepDivisor)));
 }
 
 [[nodiscard]] static SIMDVectorDouble StepValue(const SIMDVectorDouble value, const SIMDVectorDouble minimum, const SIMDVectorDouble maximum, const SIMDVectorDouble step, const bool increasing)noexcept{
@@ -131,7 +141,7 @@ Expected<f64> SliderBehavior::Normalize(const f64 minimum, const f64 maximum, co
             if(IsFinite(VectorDoubleGetX(span)))
                 normalized = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleSubtract(VectorDoubleReplicate(value), VectorDoubleReplicate(minimum)), span));
             else{
-                const SIMDVectorDouble scaled = VectorDoubleMultiply(VectorDoubleSet(value, minimum, maximum, minimum), VectorDoubleReplicate(0.5));
+                const SIMDVectorDouble scaled = VectorDoubleMultiply(VectorDoubleSet(value, minimum, maximum, minimum), VectorDoubleReplicate(s_OverflowGuardScale));
                 normalized = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleSubtract(VectorDoubleSplatX(scaled), VectorDoubleSplatY(scaled)), VectorDoubleSubtract(VectorDoubleSplatZ(scaled), VectorDoubleSplatW(scaled))));
             }
         }
@@ -227,7 +237,7 @@ bool SliderBehavior::Apply(SliderState& state, const SliderOptions& options, con
     case ControlActionKind::PageDown:
     case ControlActionKind::PageUp:
         step = KeyStep(lower, upper, VectorDoubleReplicate(options.keyStep));
-        for(u32 index = 0u; index < 10u; ++index)
+        for(u32 index = 0u; index < s_PageStepCount; ++index)
             nextValue = StepValue(nextValue, lower, upper, step, action.kind == ControlActionKind::PageUp);
         break;
     case ControlActionKind::Home:

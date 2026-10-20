@@ -27,16 +27,16 @@ void X11ClipboardService::answerSelection(const XSelectionRequestEvent& event){
     const bool validTime = selection && (event.time == CurrentTime || static_cast<i32>(static_cast<u32>(event.time) - static_cast<u32>(selection->timestamp)) >= 0);
     if(currentOwner && validTime && destination){
         if(event.target == m_multipleAtom && event.property){
-            const auto property = ReadX11Property(m_display, event.requestor, event.property, false, 256u * 4u);
+            const auto property = ReadX11Property(m_display, event.requestor, event.property, false, s_MaxMultipleAtoms * s_X11WireUnitBytes);
             if(!property)
                 propertyFailure = property.error();
-            if(property.has_value() && (property->type == m_atomPairAtom || property->type == XA_ATOM) && property->format == 32 && property->count <= 256u && (property->count % 2u) == 0u && property->remaining == 0u){
-                Array<Atom, 256u> pairs;
+            if(property.has_value() && (property->type == m_atomPairAtom || property->type == XA_ATOM) && property->format == s_X11PropertyLongFormat && property->count <= s_MaxMultipleAtoms && (property->count % s_AtomPairLength) == 0u && property->remaining == 0u){
+                Array<Atom, s_MaxMultipleAtoms> pairs;
                 if(property->count)
                     NWB_MEMCPY(pairs.data(), pairs.size() * sizeof(Atom), property->bytes, property->count * sizeof(Atom));
-                for(usize index = 0u; index < property->count; index += 2u){
+                for(usize index = 0u; index < property->count; index += s_AtomPairLength){
                     bool usable = pairs[index] != m_multipleAtom && pairs[index + 1u] && pairs[index + 1u] != event.property;
-                    for(usize previous = 0u; previous < index; previous += 2u){
+                    for(usize previous = 0u; previous < index; previous += s_AtomPairLength){
                         if(pairs[previous + 1u] == pairs[index + 1u])
                             usable = false;
                     }
@@ -44,7 +44,7 @@ void X11ClipboardService::answerSelection(const XSelectionRequestEvent& event){
                         pairs[index + 1u] = None;
                 }
                 X11CheckedOperation checked(m_display);
-                XChangeProperty(&m_display, event.requestor, event.property, m_atomPairAtom, 32, PropModeReplace, reinterpret_cast<const unsigned char*>(pairs.data()), static_cast<int>(property->count));
+                XChangeProperty(&m_display, event.requestor, event.property, m_atomPairAtom, s_X11PropertyLongFormat, PropModeReplace, reinterpret_cast<const unsigned char*>(pairs.data()), static_cast<int>(property->count));
                 converted = checked.succeeded();
             }
         }
@@ -80,13 +80,16 @@ bool X11ClipboardService::convertTarget(const XSelectionRequestEvent& event, con
         return selection.latin1Available && sendText(event.requestor, property, XA_STRING, selection.latin1);
     X11CheckedOperation checked(m_display);
     if(target == m_targetsAtom){
-        Array<Atom, 7u> targets{ m_targetsAtom, m_timestampAtom, m_multipleAtom, m_utf8Atom, m_utf8MimeAtom, m_textAtom, XA_STRING };
-        const int count = selection.latin1Available ? 7 : 6;
-        XChangeProperty(&m_display, event.requestor, property, XA_ATOM, 32, PropModeReplace, reinterpret_cast<const unsigned char*>(targets.data()), count);
+        // XA_STRING is the last target and is offered only when Latin-1 text is available.
+        constexpr usize s_TargetCount = 7u;
+        constexpr usize s_TargetCountWithoutLatin1 = s_TargetCount - 1u;
+        Array<Atom, s_TargetCount> targets{ m_targetsAtom, m_timestampAtom, m_multipleAtom, m_utf8Atom, m_utf8MimeAtom, m_textAtom, XA_STRING };
+        const int count = static_cast<int>(selection.latin1Available ? s_TargetCount : s_TargetCountWithoutLatin1);
+        XChangeProperty(&m_display, event.requestor, property, XA_ATOM, s_X11PropertyLongFormat, PropModeReplace, reinterpret_cast<const unsigned char*>(targets.data()), count);
     }
     else if(target == m_timestampAtom){
         const unsigned long timestamp = selection.timestamp;
-        XChangeProperty(&m_display, event.requestor, property, XA_INTEGER, 32, PropModeReplace, reinterpret_cast<const unsigned char*>(&timestamp), 1);
+        XChangeProperty(&m_display, event.requestor, property, XA_INTEGER, s_X11PropertyLongFormat, PropModeReplace, reinterpret_cast<const unsigned char*>(&timestamp), 1);
     }
     else
         return false;
@@ -100,7 +103,7 @@ bool X11ClipboardService::sendText(const Window requestor, const Atom property, 
     }
     if(text.size() <= m_chunkBytes){
         X11CheckedOperation checked(m_display);
-        XChangeProperty(&m_display, requestor, property, type, 8, PropModeReplace, reinterpret_cast<const unsigned char*>(text.data()), static_cast<int>(text.size()));
+        XChangeProperty(&m_display, requestor, property, type, s_X11PropertyByteFormat, PropModeReplace, reinterpret_cast<const unsigned char*>(text.data()), static_cast<int>(text.size()));
         return checked.succeeded();
     }
     if(m_outgoing.size() == s_MaxTransfers)
@@ -128,7 +131,7 @@ bool X11ClipboardService::sendText(const Window requestor, const Atom property, 
             XSelectInput(&m_display, requestor, attributes.your_event_mask | PropertyChangeMask | StructureNotifyMask);
             changedMask = true;
             const unsigned long lowerBound = text.size();
-            XChangeProperty(&m_display, requestor, property, m_incrementalAtom, 32, PropModeReplace, reinterpret_cast<const unsigned char*>(&lowerBound), 1);
+            XChangeProperty(&m_display, requestor, property, m_incrementalAtom, s_X11PropertyLongFormat, PropModeReplace, reinterpret_cast<const unsigned char*>(&lowerBound), 1);
         }
         succeeded = checked.succeeded() && exists;
     }
@@ -151,7 +154,7 @@ void X11ClipboardService::sendChunk(const usize index){
     bool succeeded = false;
     {
         X11CheckedOperation checked(m_display);
-        XChangeProperty(&m_display, transfer.requestor, transfer.property, transfer.type, 8, PropModeReplace, reinterpret_cast<const unsigned char*>(transfer.text.data() + transfer.offset), static_cast<int>(count));
+        XChangeProperty(&m_display, transfer.requestor, transfer.property, transfer.type, s_X11PropertyByteFormat, PropModeReplace, reinterpret_cast<const unsigned char*>(transfer.text.data() + transfer.offset), static_cast<int>(count));
         succeeded = checked.succeeded();
     }
     if(!succeeded || count == 0u)

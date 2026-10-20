@@ -23,7 +23,7 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 int Run(const int argc, char** argv){
     AInteropString sourceArgument;
     AInteropString outputArgument;
-    AInteropString rendererArgument = "bitmap";
+    AInteropString rendererArgument(s_RasterModeBitmapText.data(), s_RasterModeBitmapText.size());
     BakeOptions options(UtilityDetail::Arena());
     CLI::App app{ "Build readable .nwb font declarations and a paired .font containing shaping bytes and compact SDF images." };
     app.add_option("--font", sourceArgument, "Static source .ttf/.otf or prepared .font")->required();
@@ -36,11 +36,11 @@ int Run(const int argc, char** argv){
     app.add_flag("--overwrite", options.overwrite, "Replace an existing complete .nwb/.font pair");
     return InvokeTerminalEntry<CLI::ParseError>([&](){
                 app.parse(argc, argv);
-                if(rendererArgument != "bitmap" && rendererArgument != "outline"){
+                if(rendererArgument != s_RasterModeBitmapText && rendererArgument != s_RasterModeOutlineText){
                     NWB_LOGGER_ERROR(NWB_TEXT("font_builder: unknown renderer; choose bitmap or outline"));
                     return 1;
                 }
-                options.outline = rendererArgument == "outline";
+                options.outline = rendererArgument == s_RasterModeOutlineText;
                 options.source = AStringView(sourceArgument.data(), sourceArgument.size());
                 options.output = AStringView(outputArgument.data(), outputArgument.size());
                 Core::Alloc::ScratchArena scratch(Name("utilities/font_builder/bake"));

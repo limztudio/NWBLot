@@ -58,7 +58,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint slotEnd = min(g_NwbShadowMergePush.lightSlotCount, NWB_SCENE_SHADOW_SLOT_COUNT);
 
     const half4 gc = nwbShadowMergeGeometry(g_NwbShadowMergePush.geometryCurrSlot, texel);
-    const bool valid = gc.w > half(0.5h);
+    const bool valid = gc.w > half(NWB_SHADOW_GEOMETRY_VALID_THRESHOLD);
     const float3 Nc = nwbOctDecodeNormal(float2(gc.xy));
     const float currentCameraDistance = float(gc.z);
 
@@ -75,7 +75,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         [unroll] for(int dy = -1; dy <= 1; ++dy){
             [unroll] for(int dx = -1; dx <= 1; ++dx){
                 const int2 tap = clamp(texel + int2(dx, dy), int2(0), int2(hw - 1, hh - 1));
-                if(!(nwbShadowMergeGeometry(g_NwbShadowMergePush.geometryCurrSlot, tap).w <= half(0.5h)))
+                if(!(nwbShadowMergeGeometry(g_NwbShadowMergePush.geometryCurrSlot, tap).w <= half(NWB_SHADOW_GEOMETRY_VALID_THRESHOLD)))
                     validTapMask |= 1u << uint((dy + 1) * 3 + dx + 1);
             }
         }

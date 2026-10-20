@@ -33,6 +33,8 @@ using CrashBytes = Vector<u8, Core::Alloc::ScratchArena>;
 namespace CrashNames = ::NWB::Core::Crash::PackageNames;
 
 inline constexpr usize s_GeneratedJsonNeedleReserveSlack = 4u;
+inline constexpr AStringView s_MalformedFileFooterDetail = "malformed crash archive file footer";
+inline constexpr AStringView s_ReportLineEnd = "\n";
 inline constexpr Name s_IngestScratchArenaName("logger/server/crash_ingest/scratch");
 
 struct IngestFailure{
@@ -70,12 +72,12 @@ static void ApplyRetention(Core::Alloc::ScratchArena& arena, const CrashIngestCo
 
 static void AppendAcceptedIngestDetails(Core::Alloc::ScratchArena& arena, CrashText& outReport, const CrashScratchPath& rawPath, const bool rawArchived){
     if(!outReport.empty() && outReport.back() != '\n')
-        outReport += "\n";
+        outReport += s_ReportLineEnd;
 
     outReport += "\ningest:\n";
     outReport += "ingest_status=accepted\nraw_archive=";
     outReport += PathToString<char>(arena, rawPath);
-    outReport += "\n";
+    outReport += s_ReportLineEnd;
     if(!rawArchived)
         outReport += "warning=raw upload archive could not be retained\n";
 }
@@ -171,11 +173,11 @@ struct ArchiveFileHeader{
 
         const auto separator = NextLfByteLine(archiveBytes, cursor);
         if(!separator || !separator->empty()){
-            return MakeUnexpected(IngestFailure{ .detail = "malformed crash archive file footer", });
+            return MakeUnexpected(IngestFailure{ .detail = s_MalformedFileFooterDetail, });
         }
         const auto endMarker = NextLfByteLine(archiveBytes, cursor);
         if(!endMarker || *endMarker != CrashNames::s_ArchiveEntryEndLine){
-            return MakeUnexpected(IngestFailure{ .detail = "malformed crash archive file footer", });
+            return MakeUnexpected(IngestFailure{ .detail = s_MalformedFileFooterDetail, });
         }
 
         ++fileCount;

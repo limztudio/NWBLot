@@ -19,6 +19,10 @@
 #define NWB_CSG_SHADOW_CONSERVATIVE_COUNT 0xfffffffeu
 #define NWB_CSG_SHADOW_CAP_PRIMITIVE 0xffffffffu
 #define NWB_CSG_SHADOW_RAY_FAILURE_OFFSET 28u
+// Far and near cap events written for one retained span.
+#define NWB_CSG_SHADOW_SPAN_EVENT_COUNT 2u
+// Cut coverage roundoff margin, in float epsilons.
+#define NWB_CSG_SHADOW_CUTOFF_MARGIN_EPSILONS 32.0
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

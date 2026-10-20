@@ -31,6 +31,8 @@ namespace __hidden_reflection_postprocess_resources{
 
 static constexpr AStringView s_SpatialVariants[] = { "NWB_REFLECTION_SPATIAL_RADIUS=1", "NWB_REFLECTION_SPATIAL_RADIUS=2", "NWB_REFLECTION_SPATIAL_RADIUS=3", };
 static_assert(LengthOf(s_SpatialVariants) == NWB_REFLECTION_SPATIAL_MAX_RADIUS);
+static constexpr u32 s_HistoryDescriptorIndex = 0u;
+static constexpr u32 s_SpatialDescriptorIndex = 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -80,8 +82,8 @@ bool RendererReflectionPostprocess::prepareResources(const u32 width, const u32 
     if(settings.temporalEnabled && active){
         if(
             !preparePipeline(m_temporalPipeline, m_temporalShader, Name("engine/graphics/reflection/temporal_cs"), Core::ShaderArchive::s_DefaultVariant)
-            || !prepareImage(m_history, 0u, Name("engine/reflection/opaque_history"))
-            || !m_graphics.gpuTiming().prepareScopeQueries(ReflectionGpuTimingScope::s_Temporal.identity, device, 2u)
+            || !prepareImage(m_history, __hidden_reflection_postprocess_resources::s_HistoryDescriptorIndex, Name("engine/reflection/opaque_history"))
+            || !m_graphics.gpuTiming().prepareScopeQueries(ReflectionGpuTimingScope::s_Temporal.identity, device, s_ReflectionGpuTimingQueriesPerRange)
         )
             return false;
     }
@@ -89,8 +91,8 @@ bool RendererReflectionPostprocess::prepareResources(const u32 width, const u32 
         const u32 radiusIndex = settings.spatialRadius - 1u;
         if(
             !preparePipeline(m_spatialPipelines[radiusIndex], m_spatialShaders[radiusIndex], Name("engine/graphics/reflection/spatial_cs"), __hidden_reflection_postprocess_resources::s_SpatialVariants[radiusIndex])
-            || !prepareImage(m_spatial, 2u, Name("engine/reflection/opaque_spatial"))
-            || !m_graphics.gpuTiming().prepareScopeQueries(ReflectionGpuTimingScope::s_Spatial.identity, device, 2u)
+            || !prepareImage(m_spatial, __hidden_reflection_postprocess_resources::s_SpatialDescriptorIndex, Name("engine/reflection/opaque_spatial"))
+            || !m_graphics.gpuTiming().prepareScopeQueries(ReflectionGpuTimingScope::s_Spatial.identity, device, s_ReflectionGpuTimingQueriesPerRange)
         )
             return false;
     }

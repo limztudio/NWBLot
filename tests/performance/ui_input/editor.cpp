@@ -164,7 +164,7 @@ class EmptySelectionCase final{
 public:
     explicit EmptySelectionCase(const usize lines)
         : m_arena(Name("tests/performance/ui_input/empty_selection"))
-        , m_skin(m_arena, Name("tests/performance/ui_input/skin"))
+        , m_skin(m_arena, Name(s_SkinPath))
         , m_model(m_arena, { lines, 0u, 0u }, EditTextMode::Multiline)
         , m_shaper(m_arena)
         , m_layoutBuilder(m_arena, m_shaper)
@@ -195,7 +195,7 @@ public:
     }
 
     [[nodiscard]] bool operation(){
-        m_paint.begin({ 500.0f, 200.0f }, 1u, 1u, Assets::AssetRef<UiSkin>("tests/performance/ui_input/skin"), m_skin);
+        m_paint.begin({ 500.0f, 200.0f }, 1u, 1u, Assets::AssetRef<UiSkin>(s_SkinPath), m_skin);
         if(!m_view.paint(m_text, m_paint, m_skin, m_placement))
             return false;
         m_snapshot = m_paint.freeze();

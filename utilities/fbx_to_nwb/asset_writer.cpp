@@ -43,6 +43,26 @@ inline constexpr AStringView s_SkeletonAssetKindText = "skeleton";
 inline constexpr AStringView s_SkinAssetKindText = "skin";
 inline constexpr AStringView s_AssetVariableName = "asset";
 inline constexpr AStringView s_AssetBunchDisplayName = "asset bunch";
+inline constexpr AStringView s_LineBreakText = "\r\n";
+inline constexpr AStringView s_ListOpenText = "[\n";
+inline constexpr AStringView s_EntrySuffixText = ",\n";
+inline constexpr AStringView s_RowSuffixText = "],\n";
+inline constexpr AStringView s_ListCloseText = "];\n";
+inline constexpr AStringView s_ListCloseSectionText = "];\n\n";
+inline constexpr AStringView s_FieldAccessText = ".";
+inline constexpr AStringView s_ListAssignOpenText = " = [\n";
+inline constexpr AStringView s_StatementEndText = ";\n";
+inline constexpr AStringView s_StatementEndSectionText = ";\n\n";
+inline constexpr AStringView s_TableEntryCloseText = "    },\n";
+inline constexpr AStringView s_TableCloseText = "};\n";
+inline constexpr AStringView s_TableCloseSectionText = "};\n\n";
+inline constexpr AStringView s_SkeletonPropertyText = "        \"skeleton\": ";
+inline constexpr AStringView s_AssetSectionSeparatorText = "\n\n";
+inline constexpr AStringView s_MeshNameSuffix = "/mesh";
+inline constexpr AStringView s_SkeletonNameSuffix = "/skeleton";
+inline constexpr AStringView s_SkinNameSuffix = "/skin";
+// '_' plus the decimal digits of a u32 suffix.
+inline constexpr usize s_UniqueNameSuffixReserve = 11u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -98,7 +118,7 @@ private:
 
             if(character == '\r' && i + 1u < text.size() && text[i + 1u] == '\n')
                 ++i;
-            m_stream.write("\r\n", 2);
+            m_stream.write(s_LineBreakText.data(), static_cast<StreamSize>(s_LineBreakText.size()));
             chunkBegin = i + 1u;
         }
 
@@ -136,17 +156,17 @@ void WriteSkinWeights(Stream& out, const MeshSkinInfluence& skin)noexcept(noexce
 
 template<typename Stream>
 void WriteJointMatrix(Stream& out, const JointMatrix& matrix, const AStringView indent = "")noexcept(
-    noexcept(out << "[\n")
+    noexcept(out << s_ListOpenText)
     && noexcept(out << indent << "    ")
     && noexcept(WriteVec4(out, DeclVal<const Vec4&>()))
-    && noexcept(out << ",\n")
+    && noexcept(out << s_EntrySuffixText)
     && noexcept(out << indent << "]")
 ){
-    out << "[\n";
+    out << s_ListOpenText;
     for(const Vec4& row : matrix.rows){
         out << indent << "    ";
         WriteVec4(out, row);
-        out << ",\n";
+        out << s_EntrySuffixText;
     }
     out << indent << "]";
 }
@@ -191,75 +211,75 @@ bool EnsureOutputDirectory(const ScratchPath& outputPath, const AStringView asse
 
 template<typename Stream>
 void WriteMeshAssetBody(Stream& file, const SourceMeshStreams& mesh, const AStringView variableName = s_AssetVariableName, const AStringView indent = "")noexcept(
-    noexcept(file << variableName << ".positions = [\n")
+    noexcept(file << variableName << s_FieldAccessText << s_PositionsStreamLabel << s_ListAssignOpenText)
     && noexcept(file << indent << "    ")
     && noexcept(WriteVec3(file, DeclVal<const Vec3&>()))
-    && noexcept(file << ",\n")
-    && noexcept(file << indent << "];\n\n")
-    && noexcept(file << variableName << ".normals = [\n")
-    && noexcept(file << variableName << ".tangents = [\n")
+    && noexcept(file << s_EntrySuffixText)
+    && noexcept(file << indent << s_ListCloseSectionText)
+    && noexcept(file << variableName << s_FieldAccessText << s_NormalsStreamLabel << s_ListAssignOpenText)
+    && noexcept(file << variableName << s_FieldAccessText << s_TangentsStreamLabel << s_ListAssignOpenText)
     && noexcept(WriteVec4(file, DeclVal<const Vec4&>()))
-    && noexcept(file << variableName << ".uv0 = [\n")
+    && noexcept(file << variableName << s_FieldAccessText << s_Uv0StreamLabel << s_ListAssignOpenText)
     && noexcept(WriteVec2(file, DeclVal<const Vec2&>()))
-    && noexcept(file << variableName << ".colors = [\n")
-    && noexcept(file << variableName << ".vertex_refs = [\n")
+    && noexcept(file << variableName << s_FieldAccessText << s_ColorsStreamLabel << s_ListAssignOpenText)
+    && noexcept(file << variableName << s_FieldAccessText << s_VertexRefsStreamLabel << s_ListAssignOpenText)
     && noexcept(WriteVertexRef(file, DeclVal<const SourceVertexRef&>()))
-    && noexcept(file << variableName << ".indices = [\n")
-    && noexcept(file << indent << "    [" << mesh.indices[DeclVal<usize>() + 0u] << ", " << mesh.indices[DeclVal<usize>() + 1u] << ", " << mesh.indices[DeclVal<usize>() + 2u] << "],\n")
-    && noexcept(file << indent << "];\n")
+    && noexcept(file << variableName << s_FieldAccessText << s_IndicesStreamLabel << s_ListAssignOpenText)
+    && noexcept(file << indent << "    [" << mesh.indices[DeclVal<usize>() + 0u] << ", " << mesh.indices[DeclVal<usize>() + 1u] << ", " << mesh.indices[DeclVal<usize>() + 2u] << s_RowSuffixText)
+    && noexcept(file << indent << s_ListCloseText)
 ){
-    file << variableName << ".positions = [\n";
+    file << variableName << s_FieldAccessText << s_PositionsStreamLabel << s_ListAssignOpenText;
     for(const Vec3& position : mesh.positions){
         file << indent << "    ";
         WriteVec3(file, position);
-        file << ",\n";
+        file << s_EntrySuffixText;
     }
-    file << indent << "];\n\n";
+    file << indent << s_ListCloseSectionText;
 
-    file << variableName << ".normals = [\n";
+    file << variableName << s_FieldAccessText << s_NormalsStreamLabel << s_ListAssignOpenText;
     for(const Vec3& normal : mesh.normals){
         file << indent << "    ";
         WriteVec3(file, normal);
-        file << ",\n";
+        file << s_EntrySuffixText;
     }
-    file << indent << "];\n\n";
+    file << indent << s_ListCloseSectionText;
 
-    file << variableName << ".tangents = [\n";
+    file << variableName << s_FieldAccessText << s_TangentsStreamLabel << s_ListAssignOpenText;
     for(const Vec4& tangent : mesh.tangents){
         file << indent << "    ";
         WriteVec4(file, tangent);
-        file << ",\n";
+        file << s_EntrySuffixText;
     }
-    file << indent << "];\n\n";
+    file << indent << s_ListCloseSectionText;
 
-    file << variableName << ".uv0 = [\n";
+    file << variableName << s_FieldAccessText << s_Uv0StreamLabel << s_ListAssignOpenText;
     for(const Vec2& uv0 : mesh.uv0){
         file << indent << "    ";
         WriteVec2(file, uv0);
-        file << ",\n";
+        file << s_EntrySuffixText;
     }
-    file << indent << "];\n\n";
+    file << indent << s_ListCloseSectionText;
 
-    file << variableName << ".colors = [\n";
+    file << variableName << s_FieldAccessText << s_ColorsStreamLabel << s_ListAssignOpenText;
     for(const Vec4& color : mesh.colors){
         file << indent << "    ";
         WriteVec4(file, color);
-        file << ",\n";
+        file << s_EntrySuffixText;
     }
-    file << indent << "];\n\n";
+    file << indent << s_ListCloseSectionText;
 
-    file << variableName << ".vertex_refs = [\n";
+    file << variableName << s_FieldAccessText << s_VertexRefsStreamLabel << s_ListAssignOpenText;
     for(const SourceVertexRef& ref : mesh.vertexRefs){
         file << indent << "    ";
         WriteVertexRef(file, ref);
-        file << ",\n";
+        file << s_EntrySuffixText;
     }
-    file << indent << "];\n\n";
+    file << indent << s_ListCloseSectionText;
 
-    file << variableName << ".indices = [\n";
+    file << variableName << s_FieldAccessText << s_IndicesStreamLabel << s_ListAssignOpenText;
     for(usize i = 0u; i < mesh.indices.size(); i += s_TriangleIndexCount)
-        file << indent << "    [" << mesh.indices[i + 0u] << ", " << mesh.indices[i + 1u] << ", " << mesh.indices[i + 2u] << "],\n";
-    file << indent << "];\n";
+        file << indent << "    [" << mesh.indices[i + 0u] << ", " << mesh.indices[i + 1u] << ", " << mesh.indices[i + 2u] << s_RowSuffixText;
+    file << indent << s_ListCloseText;
 }
 
 bool WriteMeshAsset(const ScratchPath& outputPath, const SourceMeshStreams& mesh){
@@ -298,7 +318,7 @@ bool NameUsed(const UtilityScratchVector<ScratchString>& names, const AStringVie
 ScratchString UniqueNodeName(const ufbx_node* node, const usize fallbackIndex, const UtilityScratchVector<ScratchString>& usedNames, Core::Alloc::ScratchArena& scratchArena){
     const ScratchString baseName = AssetWriterSkeletonDetail::NodeName(node, fallbackIndex, scratchArena);
     ScratchString name(baseName, scratchArena);
-    name.reserve(AddSize(baseName.size(), 11u));
+    name.reserve(AddSize(baseName.size(), s_UniqueNameSuffixReserve));
 
     u32 suffix = 1u;
     while(NameUsed(usedNames, name)){
@@ -364,9 +384,10 @@ ScratchString BuildVirtualBasePath(const ScratchPath& outputPath, const AStringV
 
 template<typename Stream>
 void WriteReferenceValue(Stream& file, const AStringView value, const bool quote, Core::Alloc::ScratchArena& scratchArena){
+    constexpr usize s_EscapedTextReserveFactor = 2u;
     if(quote){
         ScratchString escaped(scratchArena);
-        escaped.reserve(SizeOf<2u>(value.size()));
+        escaped.reserve(SizeOf<s_EscapedTextReserveFactor>(value.size()));
         AppendJsonEscapedText(escaped, value);
         file << "\"" << escaped << "\"";
     }
@@ -393,22 +414,22 @@ bool WriteSkeletonAssetBody(Stream& file, const AStringView variableName, const 
         file << "    {\n";
         file << "        \"name\": ";
         WriteReferenceValue(file, jointNames[jointIndex], true, scratchArena);
-        file << ",\n";
+        file << s_EntrySuffixText;
         if(joints[jointIndex] && joints[jointIndex]->parent){
             const auto foundParent = jointLookup.find(joints[jointIndex]->parent);
             if(foundParent != jointLookup.end()){
                 const ScratchString& parentName = jointNames[foundParent.value()];
                 file << "        \"parent\": ";
                 WriteReferenceValue(file, parentName, true, scratchArena);
-                file << ",\n";
+                file << s_EntrySuffixText;
             }
         }
         file << "        \"local_bind_pose\": ";
         WriteJointMatrix(file, bindPoseMatrices[jointIndex], "        ");
-        file << ",\n";
-        file << "    },\n";
+        file << s_EntrySuffixText;
+        file << s_TableEntryCloseText;
     }
-    file << "];\n";
+    file << s_ListCloseText;
     return true;
 }
 
@@ -449,10 +470,10 @@ void WriteSkinAssetBody(
 ){
     file << variableName << ".mesh = ";
     WriteReferenceValue(file, meshName, quoteReferences, scratchArena);
-    file << ";\n";
+    file << s_StatementEndText;
     file << variableName << ".skeleton = ";
     WriteReferenceValue(file, skeletonName, quoteReferences, scratchArena);
-    file << ";\n\n";
+    file << s_StatementEndSectionText;
 
     file << variableName << ".influences = [\n";
     for(const MeshSkinInfluence& influence : influences){
@@ -462,15 +483,15 @@ void WriteSkinAssetBody(
         WriteSkinWeights(file, influence);
         file << " },\n";
     }
-    file << "];\n\n";
+    file << s_ListCloseSectionText;
 
     file << variableName << ".inverse_bind_matrices = [\n";
     for(const JointMatrix& matrix : inverseBindMatrices){
         file << "    ";
         WriteJointMatrix(file, matrix, "    ");
-        file << ",\n";
+        file << s_EntrySuffixText;
     }
-    file << "];\n";
+    file << s_ListCloseText;
 }
 
 bool WriteSkinAsset(const ScratchPath& outputPath, const AStringView meshName, const AStringView skeletonName, const UtilityVector<MeshSkinInfluence>& influences, const UtilityVector<JointMatrix>& inverseBindMatrices, Core::Alloc::ScratchArena& scratchArena){
@@ -515,31 +536,31 @@ void WriteModelAssetBody(
     if(skeletonName){
         file << variableName << ".skeletons = {\n";
         file << "    \"skeleton\": {\n";
-        file << "        \"skeleton\": ";
+        file << s_SkeletonPropertyText;
         WriteReferenceValue(file, *skeletonName, quoteAssetReferences, scratchArena);
-        file << ",\n";
-        file << "    },\n";
-        file << "};\n\n";
+        file << s_EntrySuffixText;
+        file << s_TableEntryCloseText;
+        file << s_TableCloseSectionText;
 
         file << variableName << ".skinned_meshes = {\n";
         file << "    \"mesh\": {\n";
         file << "        \"skin\": ";
         WriteReferenceValue(file, *skinName, quoteAssetReferences, scratchArena);
-        file << ",\n";
-        file << "        \"skeleton\": ";
+        file << s_EntrySuffixText;
+        file << s_SkeletonPropertyText;
         WriteReferenceValue(file, skinnedMeshSkeletonName, quoteSkinnedMeshSkeletonReference, scratchArena);
-        file << ",\n";
-        file << "    },\n";
-        file << "};\n";
+        file << s_EntrySuffixText;
+        file << s_TableEntryCloseText;
+        file << s_TableCloseText;
     }
     else{
         file << variableName << ".static_meshes = {\n";
         file << "    \"base\": {\n";
         file << "        \"mesh\": ";
         WriteReferenceValue(file, meshName, quoteAssetReferences, scratchArena);
-        file << ",\n";
-        file << "    },\n";
-        file << "};\n";
+        file << s_EntrySuffixText;
+        file << s_TableEntryCloseText;
+        file << s_TableCloseText;
     }
 }
 
@@ -592,18 +613,18 @@ bool WriteAssetBunch(
     WriteMeshAssetBody(file, mesh, s_MeshAssetKindText);
 
     if(skinName && skeletonName && skinInfluences){
-        file << "\n\n";
+        file << s_AssetSectionSeparatorText;
         file << "skeleton skeleton;\n\n";
         if(!WriteSkeletonAssetBody(file, s_SkeletonAssetKindText, skeletonJoints, skeletonBindPoseMatrices, scratchArena))
             return false;
 
-        file << "\n\n";
+        file << s_AssetSectionSeparatorText;
         file << "skin skin;\n\n";
         WriteSkinAssetBody(file, s_SkinAssetKindText, s_MeshAssetKindText, s_SkeletonAssetKindText, *skinInfluences, inverseBindMatrices, scratchArena, false);
     }
 
     const bool skinnedBunch = skinName && skeletonName && skinInfluences;
-    file << "\n\n";
+    file << s_AssetSectionSeparatorText;
     file << "model model;\n\n";
     if(skinnedBunch){
         WriteModelAssetBody(file, s_ModelAssetKindText, s_MeshAssetKindText, s_SkinAssetKindText, s_SkeletonAssetKindText, scratchArena, s_SkeletonAssetKindText, false, true);
@@ -612,7 +633,7 @@ bool WriteAssetBunch(
         WriteModelAssetBody(file, s_ModelAssetKindText, s_MeshAssetKindText, {}, {}, scratchArena, s_SkeletonAssetKindText, false, false);
     }
 
-    file << "\n\n";
+    file << s_AssetSectionSeparatorText;
     file << "asset_bunch bunch = [\n";
     file << "    mesh,\n";
     if(skinName && skeletonName && skinInfluences){
@@ -620,7 +641,7 @@ bool WriteAssetBunch(
         file << "    skin,\n";
     }
     file << "    model,\n";
-    file << "];\n";
+    file << s_ListCloseText;
 
     rawFile.close();
     if(!file){
@@ -675,12 +696,12 @@ bool WriteNwbAsset(
     const ScratchPath packageDirectory = outputPath.parentPath() / outputPath.stem();
     const ScratchPath meshPath = packageDirectory / __hidden_asset_writer::s_MeshSplitFileName;
     const ScratchString virtualBase = __hidden_asset_writer::BuildVirtualBasePath(outputPath, virtualRoot);
-    const ScratchString meshName = virtualBase + "/mesh";
+    const ScratchString meshName = virtualBase + __hidden_asset_writer::s_MeshNameSuffix.data();
 
     if(assetType == OutputAssetType::Model){
         if(skinnedModel){
-            const ScratchString skeletonName = virtualBase + "/skeleton";
-            const ScratchString skinName = virtualBase + "/skin";
+            const ScratchString skeletonName = virtualBase + __hidden_asset_writer::s_SkeletonNameSuffix.data();
+            const ScratchString skinName = virtualBase + __hidden_asset_writer::s_SkinNameSuffix.data();
             return __hidden_asset_writer::WriteModelAsset(outputPath, meshName, AStringView(skinName), AStringView(skeletonName), scratchArena);
         }
         return __hidden_asset_writer::WriteModelAsset(outputPath, meshName, {}, {}, scratchArena);
@@ -717,8 +738,8 @@ bool WriteNwbAsset(
 
     const ScratchPath skeletonPath = packageDirectory / __hidden_asset_writer::s_SkeletonSplitFileName;
     const ScratchPath skinPath = packageDirectory / __hidden_asset_writer::s_SkinSplitFileName;
-    const ScratchString skeletonName = virtualBase + "/skeleton";
-    const ScratchString skinName = virtualBase + "/skin";
+    const ScratchString skeletonName = virtualBase + __hidden_asset_writer::s_SkeletonNameSuffix.data();
+    const ScratchString skinName = virtualBase + __hidden_asset_writer::s_SkinNameSuffix.data();
 
     if(assetType == OutputAssetType::Skeleton)
         return __hidden_asset_writer::WriteSkeletonAsset(outputPath, skeletonOutput.joints, skeletonOutput.bindPoseMatrices, scratchArena);

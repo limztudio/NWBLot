@@ -219,7 +219,7 @@ TEST_F(UiRadioGroupBuilderTests, WholeDisabledGroupKeepsThePanelBarrierAndRetire
     EXPECT_FALSE(target(host())->focusable);
     EXPECT_EQ(target(UiTestSupport::RequireWidgetId(MakeWidgetPartId(UiTestSupport::RequireWidgetId(MakeWidgetId(host(), "choices")), 10u))), nullptr);
     const Point point = choicePoint(10u);
-    EXPECT_EQ(m_context.input().hitTest(point), UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), "panel")));
+    EXPECT_EQ(m_context.input().hitTest(point), UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), s_RadioPanelKey)));
     EXPECT_TRUE(send({ InputEventType::PrimaryDown, point }).pointerConsumed);
     EXPECT_TRUE(send({ InputEventType::PrimaryUp, point }).pointerConsumed);
     ASSERT_TRUE(accept(3u, options));

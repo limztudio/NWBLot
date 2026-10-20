@@ -34,6 +34,9 @@ namespace __hidden_reflection_postprocess_tasks{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Extra temporal uses besides the surface reads: the radiance write and the previous-history read.
+static constexpr usize s_TemporalExtraResourceUseCount = 2u;
+
 struct TemporalParameters{
 #define NWB_REFLECTION_CPU_POST_FIELD(name) u32 name = 0u;
     NWB_REFLECTION_TEMPORAL_UINT_FIELDS(NWB_REFLECTION_CPU_POST_FIELD)
@@ -171,7 +174,7 @@ Expected<Core::GpuTaskId> DeclareReflectionPostprocessTasks(
     if(!reservation.valid() || (snapshot.history.eligible && !snapshot.temporalPipeline))
         return MakeUnexpected(Failure{});
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses{scratchArena};
-    uses.reserve(inputs.surfaceReadCount + 2u);
+    uses.reserve(inputs.surfaceReadCount + s_TemporalExtraResourceUseCount);
     if(snapshot.history.eligible){
         uses.assign(inputs.surfaceReads, inputs.surfaceReads + inputs.surfaceReadCount);
         uses.push_back(ReadWriteUse(result.opaqueRadiance, Core::ResourceStates::UnorderedAccess));

@@ -21,12 +21,12 @@ bool Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlac
     const bool enabled = item.editOptions.enabled;
     m_paint.pushClip(clip);
     bool painted = true;
-    for(u32 axis = 0u; axis < 2u && painted; ++axis){
+    for(u32 axis = 0u; axis < s_ScrollAxisCount && painted; ++axis){
         const bool horizontal = axis == 0u;
         const ScrollbarPlacement& bar = horizontal ? placement.horizontal : placement.vertical;
         if(!bar.visible)
             continue;
-        const auto thumbIdResult = MakeWidgetId(item.state.id, horizontal ? "scroll.x.thumb" : "scroll.y.thumb");
+        const auto thumbIdResult = MakeWidgetId(item.state.id, horizontal ? WidgetPartKey::s_ScrollHorizontalThumb : WidgetPartKey::s_ScrollVerticalThumb);
         if(!thumbIdResult){
             painted = false;
             break;
@@ -57,7 +57,7 @@ bool Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlac
         return false;
     if(!enabled)
         return true;
-    for(u32 axis = 0u; axis < 2u; ++axis){
+    for(u32 axis = 0u; axis < s_ScrollAxisCount; ++axis){
         const bool horizontal = axis == 0u;
         const ScrollbarPlacement& bar = horizontal ? placement.horizontal : placement.vertical;
         if(!bar.visible)
@@ -75,7 +75,7 @@ bool Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlac
         target.clip = clip;
         target.control = token;
         target.activatable = true;
-        target.value = horizontal ? 1u : 3u;
+        target.value = horizontal ? TextAreaScrollTarget::s_HorizontalBefore : TextAreaScrollTarget::s_VerticalBefore;
         target.rectangle = bar.track;
         if(horizontal)
             target.rectangle.width = before;
@@ -84,7 +84,7 @@ bool Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlac
         const auto beforeId = MakeWidgetId(item.state.id, horizontal ? "scroll.x.before" : "scroll.y.before");
         if(!beforeId || !m_context.addPartTarget(item.state, *beforeId, target))
             return false;
-        target.value = horizontal ? 2u : 4u;
+        target.value = horizontal ? TextAreaScrollTarget::s_HorizontalAfter : TextAreaScrollTarget::s_VerticalAfter;
         target.rectangle = bar.track;
         if(horizontal){
             target.rectangle.x = VectorGetX(VectorAdd(VectorReplicate(thumbStart), VectorReplicate(thumbExtent)));
@@ -103,7 +103,7 @@ bool Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlac
         target.pointerGesture = trackExtent > thumbExtent;
         target.gestureReference = bar.track;
         target.gestureMaximum = bar.maximum;
-        const auto thumbId = MakeWidgetId(item.state.id, horizontal ? "scroll.x.thumb" : "scroll.y.thumb");
+        const auto thumbId = MakeWidgetId(item.state.id, horizontal ? WidgetPartKey::s_ScrollHorizontalThumb : WidgetPartKey::s_ScrollVerticalThumb);
         if(!thumbId || !m_context.addPartTarget(item.state, *thumbId, target))
             return false;
     }

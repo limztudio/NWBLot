@@ -51,7 +51,7 @@ bool Builder::prepareContextMenu(ContextMenuFrame& frame, ContextMenuResult& res
 
 bool Builder::applyContextMenuInput(ContextMenuFrame& frame, ContextMenuResult& result){
     InputRouter& input = m_context.input();
-    const auto thumbResult = MakeWidgetId(frame.rows.id, "scrollbar");
+    const auto thumbResult = MakeWidgetId(frame.rows.id, WidgetPartKey::s_Scrollbar);
     if(!thumbResult)
         return false;
     const WidgetId thumb = *thumbResult;

@@ -32,9 +32,12 @@ struct WindowState{
     bool collapsed = false;
 };
 
+inline constexpr Rect s_WindowDefaultBounds = { 20.0f, 20.0f, 360.0f, 280.0f };
+inline constexpr Point s_WindowDefaultMinimumSize = { 160.0f, 80.0f };
+
 struct WindowOptions{
-    Rect initialBounds = { 20.0f, 20.0f, 360.0f, 280.0f };
-    Point minimumSize = { 160.0f, 80.0f };
+    Rect initialBounds = s_WindowDefaultBounds;
+    Point minimumSize = s_WindowDefaultMinimumSize;
     LayoutDirection::Enum direction = LayoutDirection::Column;
     bool contentWidthFirstUse = false;
     bool contentHeightFirstUse = false;

@@ -24,6 +24,9 @@ namespace Detail{
 CrashState g_State;
 
 inline constexpr StringView s_UnknownPlatformLabel = "unknown";
+inline constexpr StringView s_WindowsPlatformLabel = "windows";
+inline constexpr StringView s_LinuxPlatformLabel = "linux";
+inline constexpr StringView s_AndroidPlatformLabel = "android";
 inline constexpr StringView s_UnknownReasonLabel = "unknown";
 
 
@@ -45,11 +48,11 @@ static PlatformKind::Enum CurrentPlatformKind()noexcept{
 StringView PlatformKindName(const u32 platform)noexcept{
     switch(platform){
     case PlatformKind::Windows:
-        return "windows";
+        return s_WindowsPlatformLabel;
     case PlatformKind::Linux:
-        return "linux";
+        return s_LinuxPlatformLabel;
     case PlatformKind::Android:
-        return "android";
+        return s_AndroidPlatformLabel;
     default:
         return s_UnknownPlatformLabel;
     }

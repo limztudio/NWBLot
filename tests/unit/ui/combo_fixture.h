@@ -30,6 +30,7 @@ using namespace UiWidgetTests;
 inline constexpr Rect s_ComboPanelBounds{ 10.0f, 10.0f, 320.0f, 240.0f };
 inline constexpr AStringView s_ComboPanelKey = "panel";
 inline constexpr AStringView s_ComboKey = "combo";
+inline constexpr AStringView s_SecondComboKey = "other";
 // The combo popup list part and the list's own row container share the "rows" text.
 inline constexpr AStringView s_ComboRowsKey = "rows";
 inline constexpr AStringView s_ListRowsKey = "rows";

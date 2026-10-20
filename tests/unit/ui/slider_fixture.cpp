@@ -24,6 +24,8 @@ namespace UiSliderTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_LaterCallbackText = "Later callback";
+
 SliderCallbackSource::SliderCallbackSource()noexcept{
     count = 1u;
     generation = 2501u;
@@ -33,7 +35,7 @@ StringView SliderCallbackSource::text(const u64 index)const{
     static_cast<void>(index);
     ++m_calls;
     if(m_mutation == SliderCallbackMutation::None)
-        return "Later callback";
+        return s_LaterCallbackText;
     const SliderCallbackMutation::Enum mutation = m_mutation;
     m_mutation = SliderCallbackMutation::None;
     ++m_mutations;
@@ -63,7 +65,7 @@ StringView SliderCallbackSource::text(const u64 index)const{
     default:
         break;
     }
-    return "Later callback";
+    return s_LaterCallbackText;
 }
 
 void SliderCallbackSource::arm(const SliderCallbackMutation::Enum mutation, SliderState* state, Builder* builder, PopupState* popup)noexcept{
@@ -128,7 +130,7 @@ void SliderFixture::configureSliderSkin(){
 }
 
 bool SliderFixture::declare(const u64 generation, const SliderOptions& settings, const Rect& bounds){
-    return begin(generation) && m_builder.beginPanel("panel", bounds) && m_builder.slider("slider", m_state, settings);
+    return begin(generation) && m_builder.beginPanel(s_SliderPanelKey, bounds) && m_builder.slider(s_SliderKey, m_state, settings);
 }
 
 bool SliderFixture::prepare(const u64 generation, const SliderOptions& settings, const Rect& bounds){
@@ -144,7 +146,7 @@ bool SliderFixture::sibling(const AStringView key){
 }
 
 WidgetId SliderFixture::host()const{
-    return id("slider", "panel");
+    return id(s_SliderKey, s_SliderPanelKey);
 }
 
 WidgetId SliderFixture::track()const{

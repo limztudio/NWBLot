@@ -85,6 +85,7 @@ namespace __hidden_gpu_packet_runtime_recording_frontier{
 
 
 inline constexpr Name s_PacketRecordingFrontierScratchArena("core/task/gpu/packet_recording_frontier");
+inline constexpr usize s_MinParallelRecordingPacketCount = 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -204,7 +205,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
     Vector<u8, Alloc::ScratchArena> parallelResults(scratchArena);
     Vector<GpuTaskGraph::PacketRecordingAbort, Alloc::ScratchArena> parallelAborts(scratchArena);
     usize parallelPacketCount = 0u;
-    const bool usesParallelRecording = !commandIrCapture && cpuScheduler.isParallelEnabled() && range.packetCount >= 2u;
+    const bool usesParallelRecording = !commandIrCapture && cpuScheduler.isParallelEnabled() && range.packetCount >= __hidden_gpu_packet_runtime_recording_frontier::s_MinParallelRecordingPacketCount;
     bool recordingFrontiersAreMonotonic = true;
     {
         GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::TryAcquire(graph);

@@ -27,6 +27,11 @@ namespace UiSearchComboTests{
 using namespace Impl::Ui;
 using namespace UiComboTests;
 
+inline constexpr AStringView s_CallbackQuery = "callback";
+inline constexpr AStringView s_EmptyResultQuery = "None";
+inline constexpr AStringView s_SecondHalfQuery = "Second";
+inline constexpr AStringView s_PreeditText = "preedit";
+
 namespace FilterMode{
     enum Enum : u8{ All, Second, Empty };
 };
@@ -75,7 +80,7 @@ public:
         if(textMutation){
             EditModel* query = textMutation;
             textMutation = nullptr;
-            if(!query->setText("callback"))
+            if(!query->setText(s_CallbackQuery))
                 ADD_FAILURE() << "callback query change failed";
         }
         return full->text(key(index) - 1u);
@@ -85,7 +90,7 @@ public:
         if(enabledMutation){
             EditModel* query = enabledMutation;
             enabledMutation = nullptr;
-            if(!query->setText("None"))
+            if(!query->setText(s_EmptyResultQuery))
                 ADD_FAILURE() << "enabled callback query change failed";
         }
         return index < rowCount() && full->enabled(key(index) - 1u);
@@ -125,7 +130,7 @@ public:
         if(fullMutation){
             EditModel* query = fullMutation;
             fullMutation = nullptr;
-            if(!query->setText("None"))
+            if(!query->setText(s_EmptyResultQuery))
                 ADD_FAILURE() << "full source callback query change failed";
         }
         return full.enabled(index);
@@ -136,7 +141,7 @@ public:
         if(filterMutation){
             EditModel* model = filterMutation;
             filterMutation = nullptr;
-            if(!model->setText("callback"))
+            if(!model->setText(s_CallbackQuery))
                 return false;
         }
         const AStringView previous{ m_query.data(), m_query.size() };
@@ -144,7 +149,7 @@ public:
             m_query.assign(query.data(), query.size());
             ++view.contentRevision;
         }
-        view.mode = query == "Second" ? FilterMode::Second : query == "None" ? FilterMode::Empty : FilterMode::All;
+        view.mode = query == s_SecondHalfQuery ? FilterMode::Second : query == s_EmptyResultQuery ? FilterMode::Empty : FilterMode::All;
         return true;
     }
 
@@ -195,7 +200,7 @@ public:
             m_changeText = false;
         }
         if(preedit){
-            result.valid = result.valid && model.beginComposition() && model.updateComposition("preedit", 0u, 7u);
+            result.valid = result.valid && model.beginComposition() && model.updateComposition(s_PreeditText, 0u, 7u);
             preedit = false;
         }
         return result;
@@ -270,7 +275,7 @@ protected:
     [[nodiscard]] bool declareSearch(const u64 generation){
         if(!begin(generation) || !m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 280.0f }))
             return false;
-        m_searchResult = m_builder.searchComboBox("combo", m_searchSource, m_search, Options());
+        m_searchResult = m_builder.searchComboBox(s_ComboKey, m_searchSource, m_search, Options());
         return m_searchResult.combo.valid;
     }
 
@@ -280,7 +285,7 @@ protected:
         return prepareSearch(generation) && m_context.commitFrame(generation);
     }
 
-    [[nodiscard]] WidgetId query(const AStringView key = "combo")const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(host(key), "query")); }
+    [[nodiscard]] WidgetId query(const AStringView key = s_ComboKey)const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(host(key), "query")); }
 
     [[nodiscard]] bool openSearch(const u64 generation){
         const HitTarget* field = target(host());

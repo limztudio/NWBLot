@@ -22,7 +22,7 @@ Expected<RasterGlyphs> Rasterize(FontSource& font, const BakeOptions& options){
     RasterGlyphs glyphs(font.m_bytes.get_allocator().arena());
     FT_Face face = font.m_face;
     const SIMDVectorSingle designPerPixel = VectorDivide(VectorReplicate(static_cast<f32>(face->units_per_EM)), VectorReplicate(static_cast<f32>(options.ppem)));
-    const u64 capacity = static_cast<u64>(options.extent) * options.extent * 4u * options.maxGroups;
+    const u64 capacity = static_cast<u64>(options.extent) * options.extent * Impl::s_FontAtlasMaxChannelCount * options.maxGroups;
     u64 rasterBytes = 0u;
     glyphs.reserve(static_cast<usize>(face->num_glyphs));
     for(u32 glyphId = 0u; glyphId < static_cast<u32>(face->num_glyphs); ++glyphId){
@@ -56,8 +56,8 @@ Expected<RasterGlyphs> Rasterize(FontSource& font, const BakeOptions& options){
             glyphs.push_back(Move(glyph));
             continue;
         }
-        if(bitmap.pixel_mode != FT_PIXEL_MODE_GRAY || bitmap.width + 2u > options.extent || bitmap.rows + 2u > options.extent){
-            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: glyph {} footprint {}x{} exceeds page {} including guards"), glyphId, bitmap.width + 2u, bitmap.rows + 2u, options.extent);
+        if(bitmap.pixel_mode != FT_PIXEL_MODE_GRAY || bitmap.width + s_GlyphGuardExtent > options.extent || bitmap.rows + s_GlyphGuardExtent > options.extent){
+            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: glyph {} footprint {}x{} exceeds page {} including guards"), glyphId, bitmap.width + s_GlyphGuardExtent, bitmap.rows + s_GlyphGuardExtent, options.extent);
             return MakeUnexpected(Failure{});
         }
         const u64 byteCount = static_cast<u64>(bitmap.width) * bitmap.rows;

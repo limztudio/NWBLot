@@ -28,6 +28,14 @@ using namespace NWB;
 using namespace NWB::Impl;
 using namespace NWB::Impl::Ui;
 
+constexpr AStringView s_LatinFontPath = "tests/ui/fonts/latin";
+constexpr AStringView s_KoreanFontPath = "tests/ui/fonts/korean";
+constexpr AStringView s_SkinPath = "tests/ui/skin";
+constexpr Name s_FontScratchArenaName = Name("tests/ui/fonts/operation_scratch");
+constexpr AStringView s_KoreanLanguage = "ko";
+constexpr AStringView s_SampleGlyphText = "A";
+constexpr AStringView s_WideGlyphText = "W";
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -74,23 +82,23 @@ class TextFontTests : public testing::Test{
 public:
     TextFontTests()
         : m_arena(Name("tests/ui/text/font"))
-        , m_latin(m_arena, Name("tests/ui/fonts/latin"))
-        , m_korean(m_arena, Name("tests/ui/fonts/korean"))
+        , m_latin(m_arena, Name(s_LatinFontPath))
+        , m_korean(m_arena, Name(s_KoreanFontPath))
         , m_service(m_arena)
         , m_layout(m_arena)
-        , m_skin(m_arena, Name("tests/ui/skin"))
+        , m_skin(m_arena, Name(s_SkinPath))
         , m_paint(m_arena)
     {}
 
 
 protected:
     virtual void SetUp()override{
-        Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
+        Core::Alloc::ScratchArena fontScratchArena(s_FontScratchArenaName);
         ASSERT_TRUE(Tests::LoadBundledFont(m_latin, m_arena, NWB_TEST_FONT_DIRECTORY, "latin.font"));
         ASSERT_TRUE(Tests::LoadBundledFont(m_korean, m_arena, NWB_TEST_FONT_DIRECTORY, "korean.font"));
         const FontSource sources[]{
-            { Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_latin, 1u },
-            { Core::Assets::AssetRef<Font>("tests/ui/fonts/korean"), m_korean, 1u },
+            { Core::Assets::AssetRef<Font>(s_LatinFontPath), m_latin, 1u },
+            { Core::Assets::AssetRef<Font>(s_KoreanFontPath), m_korean, 1u },
         };
         ASSERT_TRUE(m_service.setFonts(fontScratchArena, sources, 2u));
         UiSkin::RegionVector regions(m_arena);
@@ -98,7 +106,7 @@ protected:
     }
 
     void beginPaint(u64 generation, f32 scale = 1.0f){
-        m_paint.begin({ 800.0f, 600.0f, scale, scale }, generation, 1u, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
+        m_paint.begin({ 800.0f, 600.0f, scale, scale }, generation, 1u, Core::Assets::AssetRef<UiSkin>(s_SkinPath), m_skin);
     }
 
 
@@ -138,7 +146,7 @@ TEST(TextFontConstruction, ThrowingNativeFaceDiagnosticReleasesAcquiredArenaMemo
 TEST_F(TextFontTests, MissingLatinHangulGlyphsUseKoreanFallbackForBothLabelClusters){
     ShapeRequest request{ "\xed\x95\x9c\xea\xb8\x80" };
     request.scriptTag = TextScriptTag('H', 'a', 'n', 'g');
-    request.language = "ko";
+    request.language = s_KoreanLanguage;
     {
         auto layoutResult = m_service.layout(request);
         ASSERT_TRUE(layoutResult);
@@ -146,7 +154,7 @@ TEST_F(TextFontTests, MissingLatinHangulGlyphsUseKoreanFallbackForBothLabelClust
     }
     ASSERT_EQ(m_layout.clusters().size(), 2u);
     for(const PlacedGlyph& glyph : m_layout.glyphs())
-        EXPECT_EQ(glyph.face->identity().name(), Name("tests/ui/fonts/korean"));
+        EXPECT_EQ(glyph.face->identity().name(), Name(s_KoreanFontPath));
 }
 
 TEST_F(TextFontTests, RtlHarfBuzzClustersUseLogicalEndRatherThanNextVisualStart){
@@ -166,7 +174,7 @@ TEST_F(TextFontTests, RtlHarfBuzzClustersUseLogicalEndRatherThanNextVisualStart)
 }
 
 TEST_F(TextFontTests, FontReplacementAndAssetMutationKeepOldCpuFaceAndLayoutUsable){
-    Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
+    Core::Alloc::ScratchArena fontScratchArena(s_FontScratchArenaName);
     {
         auto layoutResult = m_service.layout({ "AV" });
         ASSERT_TRUE(layoutResult);
@@ -175,7 +183,7 @@ TEST_F(TextFontTests, FontReplacementAndAssetMutationKeepOldCpuFaceAndLayoutUsab
     const SharedFontFace oldFace = m_layout.glyphs()[0].face;
     const f32 width = m_layout.measure().x;
     const u64 oldServiceGeneration = m_service.generation();
-    const FontSource replacement{ Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_latin, 2u };
+    const FontSource replacement{ Core::Assets::AssetRef<Font>(s_LatinFontPath), m_latin, 2u };
     ASSERT_TRUE(m_service.setFonts(fontScratchArena, &replacement, 1u));
     EXPECT_EQ(m_service.generation(), oldServiceGeneration + 1u);
     Core::Assets::AssetBytes cleared(m_arena);
@@ -193,7 +201,7 @@ TEST_F(TextFontTests, FontReplacementAndAssetMutationKeepOldCpuFaceAndLayoutUsab
 
 TEST_F(TextFontTests, AppendingGlyphKeepsEarlierCoverageBytesImmutable){
     {
-        auto layoutResult = m_service.layout({ "A" });
+        auto layoutResult = m_service.layout({ s_SampleGlyphText });
         ASSERT_TRUE(layoutResult);
         m_layout = Move(*layoutResult);
     }
@@ -244,7 +252,7 @@ TEST_F(TextFontTests, RasterDpiChangesPagesWithoutChangingLogicalMeasurement){
 }
 
 TEST_F(TextFontTests, OversizedGlyphRejectsWholeLabelBeforePaintingAnyQuads){
-    ShapeRequest request{ "W" };
+    ShapeRequest request{ s_WideGlyphText };
     request.fontSize = 1024.0f;
     {
         auto layoutResult = m_service.layout(request);
@@ -260,16 +268,16 @@ TEST_F(TextFontTests, OversizedGlyphRejectsWholeLabelBeforePaintingAnyQuads){
 }
 
 TEST_F(TextFontTests, GlyphAtlasIndexKeepsFaceSizeAndEmptyGlyphsDistinctAcrossReset){
-    Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
+    Core::Alloc::ScratchArena fontScratchArena(s_FontScratchArenaName);
     {
-        auto layoutResult = m_service.layout({ "A" });
+        auto layoutResult = m_service.layout({ s_SampleGlyphText });
         ASSERT_TRUE(layoutResult);
         m_layout = Move(*layoutResult);
     }
     ASSERT_EQ(m_layout.glyphs().size(), 1u);
     const SharedFontFace face = m_layout.glyphs()[0].face;
     const u32 glyphId = m_layout.glyphs()[0].glyphId;
-    const FontSource source{ Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_latin, 1u };
+    const FontSource source{ Core::Assets::AssetRef<Font>(s_LatinFontPath), m_latin, 1u };
     const SharedFontFace otherFace = MakeFontFace(fontScratchArena, m_arena, source);
     ASSERT_TRUE(otherFace && otherFace->valid());
     ASSERT_NE(face.get(), otherFace.get());
@@ -322,7 +330,7 @@ TEST_F(TextFontTests, GlyphAtlasIndexKeepsFaceSizeAndEmptyGlyphsDistinctAcrossRe
 
 TEST_F(TextFontTests, AtlasGrowthStaysWithinBoundsAndStopsAtSixteenPages){
     {
-        auto layoutResult = m_service.layout({ "W" });
+        auto layoutResult = m_service.layout({ s_WideGlyphText });
         ASSERT_TRUE(layoutResult);
         m_layout = Move(*layoutResult);
     }
@@ -349,10 +357,10 @@ TEST_F(TextFontTests, AtlasGrowthStaysWithinBoundsAndStopsAtSixteenPages){
 }
 
 TEST_F(TextFontTests, NativeCffCoverageAndFaceSurviveFontReplacement){
-    Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
+    Core::Alloc::ScratchArena fontScratchArena(s_FontScratchArenaName);
     ShapeRequest request{ "\xed\x95\x9c" };
     request.scriptTag = 0x48616e67u;
-    request.language = "ko";
+    request.language = s_KoreanLanguage;
     {
         auto layoutResult = m_service.layout(request);
         ASSERT_TRUE(layoutResult);
@@ -365,7 +373,7 @@ TEST_F(TextFontTests, NativeCffCoverageAndFaceSurviveFontReplacement){
     EXPECT_GT(glyph.coverage.ink.width, 0.0f);
     EXPECT_GT(glyph.coverage.ink.height, 0.0f);
     const Rect saved = glyph.coverage.ink;
-    const FontSource replacement{ Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_latin, 2u };
+    const FontSource replacement{ Core::Assets::AssetRef<Font>(s_LatinFontPath), m_latin, 2u };
     ASSERT_TRUE(m_service.setFonts(fontScratchArena, &replacement, 1u));
     EXPECT_TRUE(glyph.coverage.known);
     EXPECT_FLOAT_EQ(glyph.coverage.ink.x, saved.x);
@@ -378,7 +386,7 @@ TEST_F(TextFontTests, NativeCffBoundsCoverFractionalDpiRasterFringes){
     for(const f32 fontSize : sizes){
         ShapeRequest request{ "\xed\x95\x9c" };
         request.scriptTag = 0x48616e67u;
-        request.language = "ko";
+        request.language = s_KoreanLanguage;
         request.fontSize = fontSize;
         {
             auto layoutResult = m_service.layout(request);

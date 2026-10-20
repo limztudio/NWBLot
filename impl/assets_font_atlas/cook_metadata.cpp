@@ -34,6 +34,15 @@ namespace __hidden_font_atlas_cook_metadata{
 
 using Core::Metascript::Value;
 static constexpr AStringView s_DiagnosticPrefix = "Font atlas meta";
+static constexpr AStringView s_FontField = "font";
+static constexpr AStringView s_BakePpemField = "bake_ppem";
+static constexpr AStringView s_SpreadPixelsField = "spread_pixels";
+static constexpr AStringView s_RasterModeField = "raster_mode";
+static constexpr AStringView s_AscenderUnitsField = "ascender_units";
+static constexpr AStringView s_DescenderUnitsField = "descender_units";
+static constexpr AStringView s_LineGapUnitsField = "line_gap_units";
+static constexpr AStringView s_RasterModeBitmap = "bitmap";
+static constexpr AStringView s_RasterModeOutline = "outline";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -60,50 +69,50 @@ static constexpr AStringView s_DiagnosticPrefix = "Font atlas meta";
         if(!tableResult)
             return false;
         if(tableResult->tag == s_FontSfntHeadTag){
-            const auto unitsPerEmResult = ReadFontSfntU16(tableResult->bytes, 18u);
+            const auto unitsPerEmResult = ReadFontSfntU16(tableResult->bytes, s_FontSfntHeadUnitsPerEmOffset);
             if(!unitsPerEmResult)
                 return false;
             payload.unitsPerEm = *unitsPerEmResult;
         }
         else if(tableResult->tag == s_FontSfntMaxpTag){
-            const auto glyphCountResult = ReadFontSfntU16(tableResult->bytes, 4u);
+            const auto glyphCountResult = ReadFontSfntU16(tableResult->bytes, s_FontSfntMaxpGlyphCountOffset);
             if(!glyphCountResult)
                 return false;
             payload.sourceGlyphCount = *glyphCountResult;
         }
     }
-    return payload.unitsPerEm >= 16u && payload.unitsPerEm <= 16384u && payload.sourceGlyphCount > 0u;
+    return payload.unitsPerEm >= s_FontAtlasMinUnitsPerEm && payload.unitsPerEm <= s_FontAtlasMaxUnitsPerEm && payload.sourceGlyphCount > 0u;
 }
 
 [[nodiscard]] static bool ReadSettings(const Path& path, const Value& asset, FontAtlasPayload& payload){
-    auto bakePpemResult = ReadU32(path, asset, "bake_ppem", s_FontAtlasMinBakePpem, s_FontAtlasMaxBakePpem);
+    auto bakePpemResult = ReadU32(path, asset, s_BakePpemField, s_FontAtlasMinBakePpem, s_FontAtlasMaxBakePpem);
     if(!bakePpemResult)
         return false;
     payload.bakePpem = *bakePpemResult;
-    auto spreadPixelsResult = ReadU32(path, asset, "spread_pixels", s_FontAtlasMinSpreadPixels, s_FontAtlasMaxSpreadPixels);
+    auto spreadPixelsResult = ReadU32(path, asset, s_SpreadPixelsField, s_FontAtlasMinSpreadPixels, s_FontAtlasMaxSpreadPixels);
     if(!spreadPixelsResult)
         return false;
     payload.spreadPixels = *spreadPixelsResult;
-    auto ascenderUnitsResult = Core::Assets::ReadMetadataFiniteF32Field(path, asset, s_DiagnosticPrefix, "ascender_units", true);
+    auto ascenderUnitsResult = Core::Assets::ReadMetadataFiniteF32Field(path, asset, s_DiagnosticPrefix, s_AscenderUnitsField, true);
     if(!ascenderUnitsResult)
         return false;
     payload.ascenderUnits = *ascenderUnitsResult;
-    auto descenderUnitsResult = Core::Assets::ReadMetadataFiniteF32Field(path, asset, s_DiagnosticPrefix, "descender_units", true);
+    auto descenderUnitsResult = Core::Assets::ReadMetadataFiniteF32Field(path, asset, s_DiagnosticPrefix, s_DescenderUnitsField, true);
     if(!descenderUnitsResult)
         return false;
     payload.descenderUnits = *descenderUnitsResult;
-    auto lineGapUnitsResult = Core::Assets::ReadMetadataFiniteF32Field(path, asset, s_DiagnosticPrefix, "line_gap_units", true);
+    auto lineGapUnitsResult = Core::Assets::ReadMetadataFiniteF32Field(path, asset, s_DiagnosticPrefix, s_LineGapUnitsField, true);
     if(!lineGapUnitsResult)
         return false;
     payload.lineGapUnits = *lineGapUnitsResult;
     AStringView rasterMode;
-    auto rasterModeResult = Core::Assets::ReadMetadataStringField(path, asset, s_DiagnosticPrefix, "raster_mode", true);
+    auto rasterModeResult = Core::Assets::ReadMetadataStringField(path, asset, s_DiagnosticPrefix, s_RasterModeField, true);
     if(!rasterModeResult)
         return false;
     rasterMode = rasterModeResult->text;
-    if(rasterMode == "bitmap")
+    if(rasterMode == s_RasterModeBitmap)
         payload.rasterMode = FontAtlasRasterMode::Bitmap;
-    else if(rasterMode == "outline")
+    else if(rasterMode == s_RasterModeOutline)
         payload.rasterMode = FontAtlasRasterMode::Outline;
     else{
         NWB_LOGGER_ERROR(NWB_TEXT("Font atlas meta '{}': unsupported raster_mode"), PathToString<tchar>(path));
@@ -148,18 +157,18 @@ Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(const Name virtualP
     using namespace __hidden_font_atlas_cook_metadata;
     if(
         !virtualPath || !Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_DiagnosticPrefix)
-        || !Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_DiagnosticPrefix, { "font", "bake_ppem", "spread_pixels", "raster_mode", "ascender_units", "descender_units", "line_gap_units", "glyphs" })
+        || !Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_DiagnosticPrefix, { s_FontField, s_BakePpemField, s_SpreadPixelsField, s_RasterModeField, s_AscenderUnitsField, s_DescenderUnitsField, s_LineGapUnitsField, s_FontAtlasGlyphsField })
     )
         return MakeUnexpected(Failure{});
     FontAtlasCookEntry candidate(arena);
-    auto fontResult = Core::Assets::ReadMetadataAssetRefField<Font>(nwbFilePath, asset, s_DiagnosticPrefix, "font", true);
+    auto fontResult = Core::Assets::ReadMetadataAssetRefField<Font>(nwbFilePath, asset, s_DiagnosticPrefix, s_FontField, true);
     if(!fontResult)
         return MakeUnexpected(Failure{});
     candidate.payload.font = *fontResult;
     if(!ReadSettings(nwbFilePath, asset, candidate.payload))
         return MakeUnexpected(Failure{});
     Path fontPath = nwbFilePath;
-    fontPath.replaceExtension(".font");
+    fontPath.replaceExtension(s_PreparedFontExtension);
     auto sourceResult = ReadPreparedFontSource(fontPath, arena, true);
     if(!sourceResult)
         return MakeUnexpected(Failure{});

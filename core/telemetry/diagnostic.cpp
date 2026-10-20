@@ -26,6 +26,9 @@ namespace __hidden_telemetry_diagnostic{
 
 
 inline Atomic<DiagnosticCaptureGuard*> g_CaptureGuard{ nullptr };
+inline constexpr usize s_PayloadTextFieldCount = 5u;
+inline constexpr StringView s_WarningEventName = "warning";
+inline constexpr StringView s_LifecycleCategory = "telemetry_diagnostic_lifecycle";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -63,7 +66,7 @@ inline Atomic<DiagnosticCaptureGuard*> g_CaptureGuard{ nullptr };
 }
 
 [[nodiscard]] static Expected<usize> BuildCapturedPayload(const DiagnosticEventRecord& record, u8 (&payload)[s_DiagnosticCapturePayloadCapacity])noexcept{
-    const Array<AStringView, 5u> fields{ record.event, record.category, record.expression, record.message, record.file };
+    const Array<AStringView, s_PayloadTextFieldCount> fields{ record.event, record.category, record.expression, record.message, record.file };
     usize payloadBytes = sizeof(EncodedDiagnosticPayloadHeader);
     for(const AStringView text : fields){
         if(text.size() > sizeof(payload) - payloadBytes)
@@ -156,7 +159,7 @@ Expected<DiagnosticPayload> ParseDiagnosticPayload(TelemetryArena& arena, const 
         u32 byteCount;
         NotNull<AString<TelemetryArena>*> destination;
     };
-    const Array<TextField, 5u> textFields{{
+    const Array<TextField, __hidden_telemetry_diagnostic::s_PayloadTextFieldCount> textFields{{
         { header.eventBytes, NotNull(&parsedPayload.event) },
         { header.categoryBytes, NotNull(&parsedPayload.category) },
         { header.expressionBytes, NotNull(&parsedPayload.expression) },
@@ -226,9 +229,9 @@ DiagnosticCaptureGuard::~DiagnosticCaptureGuard()noexcept{
     ::DiagnosticDetail::g_EventActive.clear(MemoryOrder::release);
     ::DiagnosticDetail::g_EventActive.notifyAll();
     if(callbackOwnershipChanged)
-        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "telemetry_diagnostic_lifecycle", .message = "Telemetry: diagnostic callback ownership changed before capture guard destruction", .file = __FILE__, .line = __LINE__, });
+        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = __hidden_telemetry_diagnostic::s_WarningEventName, .category = __hidden_telemetry_diagnostic::s_LifecycleCategory, .message = "Telemetry: diagnostic callback ownership changed before capture guard destruction", .file = __FILE__, .line = __LINE__, });
     if(guardOwnershipChanged)
-        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "telemetry_diagnostic_lifecycle", .message = "Telemetry: diagnostic capture guard ownership changed before destruction", .file = __FILE__, .line = __LINE__, });
+        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = __hidden_telemetry_diagnostic::s_WarningEventName, .category = __hidden_telemetry_diagnostic::s_LifecycleCategory, .message = "Telemetry: diagnostic capture guard ownership changed before destruction", .file = __FILE__, .line = __LINE__, });
 }
 
 void DiagnosticCaptureGuard::capture(const DiagnosticEventRecord& record)noexcept{

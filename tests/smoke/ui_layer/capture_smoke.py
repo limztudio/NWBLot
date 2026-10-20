@@ -28,6 +28,8 @@ LIT_GPU_VALIDATION = "--gpu-validation"
 LIT_EXPECT_LOG_MESSAGE = "--expect-log-message"
 LIT_CAPTURE = "capture"
 
+SETTLE_SECONDS_ARGUMENT = "1.0"
+
 
 def parse_args(argv):
     parser = argparse.ArgumentParser(description=__doc__)
@@ -55,7 +57,7 @@ def capture_command(args, output):
     if args.mode == LIT_FRAMEBUFFER:
         command += ["--application-capture", "--application-capture-frame-count", str(args.frames), "--log-output", str(output.with_suffix(".log"))]
     else:
-        command += ["--resize-client", "800", "600", "--settle-seconds", "1.0", "--resize-settle-seconds", "1.0"]
+        command += ["--resize-client", "800", "600", "--settle-seconds", SETTLE_SECONDS_ARGUMENT, "--resize-settle-seconds", SETTLE_SECONDS_ARGUMENT]
     if args.logserver_executable:
         command += [LIT_LOGSERVER_EXECUTABLE, str(args.logserver_executable.resolve())]
     else:

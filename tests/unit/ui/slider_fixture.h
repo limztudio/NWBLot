@@ -30,6 +30,9 @@ namespace UiSliderTests{
 using namespace Impl::Ui;
 using namespace UiWidgetTests;
 
+inline constexpr AStringView s_SliderPanelKey = "panel";
+inline constexpr AStringView s_SliderKey = "slider";
+
 namespace SliderCallbackMutation{
     enum Enum : u8{ None, SameValue, AwayAndBack, SetValue, ResetBuilder, PanelBuilder, ClosePopup };
 };

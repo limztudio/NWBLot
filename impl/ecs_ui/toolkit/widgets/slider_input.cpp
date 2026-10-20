@@ -19,11 +19,11 @@ bool Builder::applySliderInput(SliderFrame& frame, const SliderPlacement& placem
         return false;
     if(!interactive || placement.centerTravel.width <= 0.0f)
         return true;
-    const auto trackResult = MakeWidgetId(frame.m_widget.id, "track");
+    const auto trackResult = MakeWidgetId(frame.m_widget.id, WidgetPartKey::s_Track);
     if(!trackResult)
         return false;
     const WidgetId track = *trackResult;
-    const auto thumbResult = MakeWidgetId(frame.m_widget.id, "thumb");
+    const auto thumbResult = MakeWidgetId(frame.m_widget.id, WidgetPartKey::s_Thumb);
     if(!thumbResult)
         return false;
     const WidgetId thumb = *thumbResult;

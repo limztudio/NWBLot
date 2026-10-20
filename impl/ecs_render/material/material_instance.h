@@ -22,6 +22,8 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr usize s_MaterialInstanceVectorComponentCount = 4u;
+
 struct MaterialInstanceParameterNames{
     Name parameterName = s_NameNone;
     Name blockName = s_NameNone;
@@ -77,7 +79,7 @@ struct MaterialInstanceValueTraits<Float4>{
 
 public:
     [[nodiscard]] static UInt4U Pack(const Float4& value)noexcept{
-        return PackMaterialInstanceBytes(value.raw, sizeof(f32) * 4u);
+        return PackMaterialInstanceBytes(value.raw, sizeof(f32) * s_MaterialInstanceVectorComponentCount);
     }
 };
 
@@ -88,7 +90,7 @@ struct MaterialInstanceValueTraits<Half4U>{
 
 public:
     [[nodiscard]] static UInt4U Pack(const Half4U& value)noexcept{
-        return PackMaterialInstanceBytes(value.raw, sizeof(Half) * 4u);
+        return PackMaterialInstanceBytes(value.raw, sizeof(Half) * s_MaterialInstanceVectorComponentCount);
     }
 };
 

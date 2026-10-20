@@ -4,8 +4,37 @@
 
 // Testbed-owned deferred lighting BXDF: smooth diffuse + spec + rim.
 // The engine supplies only scene-light and visibility/caustic transport; this project asset owns the complete BRDF, light loop, and tone-map policy.
+static const half NWB_TESTBED_LAMBERT_TONEMAP_KNEE = 0.65h;
+static const float NWB_TESTBED_LAMBERT_RIM_EXPONENT = 3.0;
+static const float NWB_TESTBED_LAMBERT_SPECULAR_TIGHT_EXPONENT = 72.0;
+static const float NWB_TESTBED_LAMBERT_SPECULAR_TIGHT_WEIGHT = 0.85;
+static const float NWB_TESTBED_LAMBERT_SPECULAR_BROAD_EXPONENT = 18.0;
+static const float NWB_TESTBED_LAMBERT_SPECULAR_BROAD_WEIGHT = 0.18;
+static const float NWB_TESTBED_LAMBERT_VIEW_SPECULAR_EXPONENT = 22.0;
+static const float NWB_TESTBED_LAMBERT_VIEW_SPECULAR_WEIGHT = 0.28;
+static const float NWB_TESTBED_LAMBERT_FRAME_LOBE_EXPONENT = 18.0;
+static const half NWB_TESTBED_LAMBERT_SPECULAR_TINT_NEUTRAL = 0.78h;
+static const half3 NWB_TESTBED_LAMBERT_SPECULAR_TINT_WARM = half3(1.0h, 0.9h, 0.68h);
+static const float NWB_TESTBED_LAMBERT_SPECULAR_TINT_WARM_MIX = 0.65;
+static const float NWB_TESTBED_LAMBERT_DIFFUSE_FLOOR = 0.02;
+static const float NWB_TESTBED_LAMBERT_DIFFUSE_KEY_WEIGHT = 0.98;
+static const float NWB_TESTBED_LAMBERT_SPECULAR_FLOOR = 0.08;
+static const float NWB_TESTBED_LAMBERT_SPECULAR_NDOTL_WEIGHT = 0.92;
+static const half3 NWB_TESTBED_LAMBERT_RIM_TINT = half3(0.12h, 0.26h, 0.52h);
+static const float NWB_TESTBED_LAMBERT_RIM_LIGHT_MIX = 0.25;
+static const float NWB_TESTBED_LAMBERT_RIM_FLOOR = 0.04;
+static const float NWB_TESTBED_LAMBERT_RIM_NDOTL_WEIGHT = 0.96;
+static const float NWB_TESTBED_LAMBERT_FRAME_CUE_SCALE = 0.16;
+static const half3 NWB_TESTBED_LAMBERT_FRAME_CUE_TANGENT_COLOR = half3(1.0h, 0.35h, 0.2h);
+static const half3 NWB_TESTBED_LAMBERT_FRAME_CUE_BITANGENT_COLOR = half3(0.2h, 0.7h, 1.0h);
+static const half3 NWB_TESTBED_LAMBERT_BACK_LIGHT_CUE_COLOR = half3(0.012h, 0.02h, 0.04h);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 half3 nwbTestbedLambertTonemap(half3 color){
-    return color / (color + half3(0.65h));
+    return color / (color + half3(NWB_TESTBED_LAMBERT_TONEMAP_KNEE));
 }
 
 half3 nwbTestbedLambertShadeLight(NwbSceneLight light, half3 baseColor, float3 normalVector, float3 tangentVector, float3 bitangentVector, float3 viewVector, half ndotv, float3 worldPosition){
@@ -18,21 +47,21 @@ half3 nwbTestbedLambertShadeLight(NwbSceneLight light, half3 baseColor, float3 n
     const float3 halfVector = nwbSafeNormalize(lightVector + viewVector, lightVector);
     const half ndotl = half(max(dot(normalVector, lightVector), 0.0));
     const half keyDiffuse = ndotl * ndotl;
-    const half rim = half(pow(max(1.0 - float(ndotv), 0.0), 3.0));
+    const half rim = half(pow(max(1.0 - float(ndotv), 0.0), NWB_TESTBED_LAMBERT_RIM_EXPONENT));
     const half halfDotNormal = half(max(dot(normalVector, halfVector), 0.0));
     const float halfDotNormalF = float(halfDotNormal);
-    const half specular = half(pow(halfDotNormalF, 72.0) * 0.85 + pow(halfDotNormalF, 18.0) * 0.18);
-    const half viewSpecular = half(pow(float(ndotv), 22.0) * 0.28);
-    const half tangentLobe = half(pow(max(abs(dot(tangentVector, halfVector)), 0.0), 18.0));
-    const half bitangentLobe = half(pow(max(abs(dot(bitangentVector, halfVector)), 0.0), 18.0));
+    const half specular = half(pow(halfDotNormalF, NWB_TESTBED_LAMBERT_SPECULAR_TIGHT_EXPONENT) * NWB_TESTBED_LAMBERT_SPECULAR_TIGHT_WEIGHT + pow(halfDotNormalF, NWB_TESTBED_LAMBERT_SPECULAR_BROAD_EXPONENT) * NWB_TESTBED_LAMBERT_SPECULAR_BROAD_WEIGHT);
+    const half viewSpecular = half(pow(float(ndotv), NWB_TESTBED_LAMBERT_VIEW_SPECULAR_EXPONENT) * NWB_TESTBED_LAMBERT_VIEW_SPECULAR_WEIGHT);
+    const half tangentLobe = half(pow(max(abs(dot(tangentVector, halfVector)), 0.0), NWB_TESTBED_LAMBERT_FRAME_LOBE_EXPONENT));
+    const half bitangentLobe = half(pow(max(abs(dot(bitangentVector, halfVector)), 0.0), NWB_TESTBED_LAMBERT_FRAME_LOBE_EXPONENT));
     const half backLight = half(max(dot(-normalVector, lightVector), 0.0));
 
-    const half3 specularTint = lerp(half3(0.78h), half3(1.0h, 0.9h, 0.68h), half(0.65));
-    const half3 diffuse = baseColor * lightRadiance * (half(0.02) + half(0.98) * keyDiffuse);
-    const half3 specularColor = lightRadiance * specularTint * (specular * (half(0.08) + half(0.92) * ndotl) + viewSpecular);
-    const half3 rimColor = lerp(half3(0.12h, 0.26h, 0.52h), lightRadiance, half(0.25)) * (rim * (half(0.04) + half(0.96) * ndotl));
-    const half3 frameCue = half(0.16) * (half3(1.0h, 0.35h, 0.2h) * half(tangentLobe) + half3(0.2h, 0.7h, 1.0h) * half(bitangentLobe));
-    const half3 backLightCue = half3(0.012h, 0.02h, 0.04h) * half(backLight);
+    const half3 specularTint = lerp(half3(NWB_TESTBED_LAMBERT_SPECULAR_TINT_NEUTRAL), NWB_TESTBED_LAMBERT_SPECULAR_TINT_WARM, half(NWB_TESTBED_LAMBERT_SPECULAR_TINT_WARM_MIX));
+    const half3 diffuse = baseColor * lightRadiance * (half(NWB_TESTBED_LAMBERT_DIFFUSE_FLOOR) + half(NWB_TESTBED_LAMBERT_DIFFUSE_KEY_WEIGHT) * keyDiffuse);
+    const half3 specularColor = lightRadiance * specularTint * (specular * (half(NWB_TESTBED_LAMBERT_SPECULAR_FLOOR) + half(NWB_TESTBED_LAMBERT_SPECULAR_NDOTL_WEIGHT) * ndotl) + viewSpecular);
+    const half3 rimColor = lerp(NWB_TESTBED_LAMBERT_RIM_TINT, lightRadiance, half(NWB_TESTBED_LAMBERT_RIM_LIGHT_MIX)) * (rim * (half(NWB_TESTBED_LAMBERT_RIM_FLOOR) + half(NWB_TESTBED_LAMBERT_RIM_NDOTL_WEIGHT) * ndotl));
+    const half3 frameCue = half(NWB_TESTBED_LAMBERT_FRAME_CUE_SCALE) * (NWB_TESTBED_LAMBERT_FRAME_CUE_TANGENT_COLOR * half(tangentLobe) + NWB_TESTBED_LAMBERT_FRAME_CUE_BITANGENT_COLOR * half(bitangentLobe));
+    const half3 backLightCue = NWB_TESTBED_LAMBERT_BACK_LIGHT_CUE_COLOR * half(backLight);
 
     return diffuse + specularColor + rimColor + frameCue + backLightCue;
 }

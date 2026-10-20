@@ -21,6 +21,9 @@ using namespace NWB;
 using namespace NWB::Impl::Ui;
 using namespace NWB::UiWidgetTests;
 
+constexpr AStringView s_PanelKey = "panel";
+constexpr AStringView s_ListKey = "list";
+
 namespace MutationKind{
     enum Enum : u8{ None, TextSelect, KeySelect, EnabledScroll, RevisionScroll };
 };
@@ -118,12 +121,12 @@ public:
 
 protected:
     [[nodiscard]] bool declareList(const u64 generation){
-        if(!begin(generation) || !m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 240.0f }))
+        if(!begin(generation) || !m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 240.0f }))
             return false;
         ListOptions options;
         options.width = { LayoutSizePolicy::Fixed, 280.0f };
         options.height = { LayoutSizePolicy::Fixed, 120.0f };
-        return m_builder.virtualList("list", m_source, m_state, options).valid;
+        return m_builder.virtualList(s_ListKey, m_source, m_state, options).valid;
     }
 
     [[nodiscard]] bool acceptFirst(){
@@ -131,7 +134,7 @@ protected:
     }
 
     [[nodiscard]] WidgetId firstRow()const{
-        return UiTestSupport::RequireWidgetId(MakeWidgetPartId(UiTestSupport::RequireWidgetId(MakeWidgetId(id("list", "panel"), "rows")), 1u));
+        return UiTestSupport::RequireWidgetId(MakeWidgetPartId(UiTestSupport::RequireWidgetId(MakeWidgetId(id(s_ListKey, s_PanelKey), "rows")), 1u));
     }
 
     [[nodiscard]] AcceptedState accepted()const noexcept{ return UiWidgetTests::CaptureAcceptedInput<16u>(m_context.input()); }

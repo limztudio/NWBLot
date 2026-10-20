@@ -47,11 +47,11 @@ protected:
     }
 
     [[nodiscard]] bool beginParent(const u64 generation){
-        return begin(generation) && m_builder.beginPopup("parent", m_parent, ParentOptions()) && m_builder.slider("slider", m_state, Options());
+        return begin(generation) && m_builder.beginPopup(s_ParentPopupKey, m_parent, ParentOptions()) && m_builder.slider(s_SliderKey, m_state, Options());
     }
 
     [[nodiscard]] bool beginChild(){
-        return m_builder.beginPopup("child", m_child, ChildOptions()) && m_builder.slider("slider", m_childState, Options());
+        return m_builder.beginPopup(s_ChildPopupKey, m_child, ChildOptions()) && m_builder.slider(s_SliderKey, m_childState, Options());
     }
 
     [[nodiscard]] bool declareFamily(const u64 generation){
@@ -138,7 +138,7 @@ TEST_F(UiSliderPopupTests, ChildCallbackRejectsTheEarlierParentLoanInTheFinalCal
 TEST_F(UiSliderPopupTests, ParentAndChildCannotBorrowTheSameSliderStateAtTheSameTime){
     ASSERT_TRUE(acceptFamily(1u));
     ASSERT_TRUE(beginParent(2u));
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
+    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, ChildOptions()));
     EXPECT_FALSE(m_builder.slider("alias", m_state, Options()));
     EXPECT_TRUE(m_context.failed());
     EXPECT_FALSE(m_state.result().valid);
@@ -166,7 +166,7 @@ TEST_F(UiSliderPopupTests, AncestorClosureBeforePaintSuppressesCallbacksAndRetir
     EXPECT_FALSE(m_context.input().capture().valid());
     m_parent.open();
     ASSERT_TRUE(beginParent(3u));
-    EXPECT_FALSE(m_builder.beginPopup("child", m_child, ChildOptions()));
+    EXPECT_FALSE(m_builder.beginPopup(s_ChildPopupKey, m_child, ChildOptions()));
     EXPECT_FALSE(m_child.isOpen());
     ASSERT_TRUE(finishParent());
     ASSERT_TRUE(m_context.commitFrame(3u));

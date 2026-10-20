@@ -48,7 +48,7 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
     result.valid = true;
     result.selectionChanged = previousSelection != state.selectedKey();
     result.focused = options.enabled && m_context.input().focus() == (*widget)->id;
-    const auto thumbResult = MakeWidgetId((*widget)->id, "scrollbar");
+    const auto thumbResult = MakeWidgetId((*widget)->id, WidgetPartKey::s_Scrollbar);
     if(!thumbResult){
         m_context.fail();
         result.valid = false;
@@ -109,7 +109,7 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
     if(options.height.policy == LayoutSizePolicy::Content && frame.rowCount != 0u){
         for(;;){
             LayoutBox provisional;
-            const SIMDVectorSingle probeMinimum = VectorMax(VectorSet(120.0f, background->minimumHeight, 0.0f, 0.0f), VectorSet(background->minimumWidth, background->minimumHeight, 0.0f, 0.0f));
+            const SIMDVectorSingle probeMinimum = VectorMax(VectorSet(s_ListMinimumWidth, background->minimumHeight, 0.0f, 0.0f), VectorSet(background->minimumWidth, background->minimumHeight, 0.0f, 0.0f));
             const SIMDVectorSingle probeWidth = VectorAdd(VectorAdd(VectorAdd(VectorSet(frame.padding.left, frame.rowHeight, 0.0f, 0.0f), VectorSet(frame.padding.right, frame.padding.top, 0.0f, 0.0f)), VectorSet(frame.style.scrollbarWidth, frame.padding.bottom, 0.0f, 0.0f)), VectorSet(frame.rowHeight, 0.0f, 0.0f, 0.0f));
             const SIMDVectorSingle probeSize = VectorMax(probeMinimum, probeWidth);
             provisional.rectangle = { 0.0f, 0.0f, VectorGetX(probeSize), VectorGetY(probeSize) };
@@ -133,7 +133,7 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    const SIMDVectorSingle preferredSize = VectorAdd(VectorAdd(VectorSet(120.0f, frame.rowHeight, 0.0f, 0.0f), VectorSet(0.0f, frame.padding.top, 0.0f, 0.0f)), VectorSet(0.0f, frame.padding.bottom, 0.0f, 0.0f));
+    const SIMDVectorSingle preferredSize = VectorAdd(VectorAdd(VectorSet(s_ListMinimumWidth, frame.rowHeight, 0.0f, 0.0f), VectorSet(0.0f, frame.padding.top, 0.0f, 0.0f)), VectorSet(0.0f, frame.padding.bottom, 0.0f, 0.0f));
     const SIMDVectorSingle minimumSize = VectorSet(background->minimumWidth, background->minimumHeight, 0.0f, 0.0f);
     const SIMDVectorSingle intrinsic = VectorSelect(minimumSize, preferredSize, VectorGreater(preferredSize, minimumSize));
     description.intrinsicSize = { VectorGetX(intrinsic), VectorGetY(intrinsic) };

@@ -31,6 +31,13 @@ namespace __hidden_ui_progress_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Metric rows 0..2 carry data; row 3 is padding.
+inline constexpr u32 s_MetricRowCount = 3u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] static SIMDMatrixDouble LoadMetrics(const ProgressMetrics& metrics)noexcept{
     if(!IsFinite(metrics.padding.left) || !IsFinite(metrics.padding.top) || !IsFinite(metrics.padding.right) || !IsFinite(metrics.padding.bottom) || !IsFinite(metrics.fillMinimum.x) || !IsFinite(metrics.fillMinimum.y) || !IsFinite(metrics.contentSize.x) || !IsFinite(metrics.contentSize.y))
         return SIMDMatrixDouble{ .v = { VectorDoubleReplicate(Limit<f64>::s_Infinity), VectorDoubleZero(), VectorDoubleZero(), VectorDoubleZero() } };
@@ -43,7 +50,7 @@ namespace __hidden_ui_progress_layout{
 }
 
 [[nodiscard]] static bool ValidMetrics(const SIMDMatrixDouble& values)noexcept{
-    for(u32 index = 0u; index < 3u; ++index){
+    for(u32 index = 0u; index < s_MetricRowCount; ++index){
         if(VectorDoubleMoveMask(VectorDoubleOrInt(VectorDoubleIsNaN(values.v[index]), VectorDoubleIsInfinite(values.v[index]))) != 0u
             || VectorDoubleMoveMask(VectorDoubleGreaterOrEqual(values.v[index], VectorDoubleZero())) != VectorDoubleComponentMask::s_DoubleXYZW)
             return false;

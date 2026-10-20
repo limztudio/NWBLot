@@ -26,6 +26,8 @@ using namespace NWB::Core::Assets;
 using namespace NWB::Impl;
 using namespace NWB::Impl::Ui;
 
+constexpr AStringView s_TexturePath = "tests/ui/image_loader/texture";
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -91,7 +93,7 @@ public:
 
 public:
     AssetBytes m_binary;
-    Name m_path = Name("tests/ui/image_loader/texture");
+    Name m_path = Name(s_TexturePath);
     mutable usize m_readCount = 0u;
     bool m_available = true;
 };
@@ -148,7 +150,7 @@ protected:
     AssetRegistry m_registry;
     MemoryImageBinarySource m_source;
     AssetManager m_assets;
-    const AssetRef<Texture> m_identity{ "tests/ui/image_loader/texture" };
+    const AssetRef<Texture> m_identity{ s_TexturePath };
 };
 
 

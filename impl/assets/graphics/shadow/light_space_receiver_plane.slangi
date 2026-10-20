@@ -9,6 +9,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Encoded normals keep 10 bits per component, so one quantization step is 2^-10.
+#define NWB_LIGHT_SPACE_PLANE_NORMAL_QUANTIZATION_STEPS 1024.0
+// Plane distance roundoff, in float epsilons.
+#define NWB_LIGHT_SPACE_PLANE_ROUNDOFF_EPSILONS 8.0
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Reconstruct the captured texel-center ray, then intersect the receiver's local plane along that ray.
 // Both projection types use the actual stored view basis; framebuffer Y increases opposite projected Y.
 bool nwbLightSpaceReceiverDepth(const NwbLightSpaceView view, const uint2 pixel, const float3 origin, const float3 receiverNormal, const float3 receiverPositionError, out float projectedDepth, out float linearDepth){
@@ -42,9 +51,9 @@ bool nwbLightSpaceReceiverDepth(const NwbLightSpaceView view, const uint2 pixel,
         footprint = min(2.0 / (sqrt(xScale) * float(view.map.x)), 2.0 / (sqrt(yScale) * float(view.map.y)));
     }
     // Encoded unit normals have at most 2^-10 error per decoded component. Normalization increases its L2 bound.
-    const float rawNormalError = sqrt(3.0) / 1024.0;
+    const float rawNormalError = sqrt(3.0) / NWB_LIGHT_SPACE_PLANE_NORMAL_QUANTIZATION_STEPS;
     const float normalError = 2.0 * rawNormalError / (1.0 - rawNormalError);
-    const float roundoff = 8.0 * 1.1920928955078125e-7;
+    const float roundoff = NWB_LIGHT_SPACE_PLANE_ROUNDOFF_EPSILONS * NWB_FLOAT_EPSILON;
     const float denominator = dot(receiverNormal, direction);
     const float denominatorError = normalError + roundoff;
     if(!all(isfinite(direction)) || abs(denominator) <= denominatorError)
@@ -127,8 +136,8 @@ bool nwbLightSpaceReceiverEstimateDepth(const NwbLightSpaceView view, const uint
         relativeAnchor = xRow * ((ndc.x - dot(view.worldToClipRows[0], float4(origin, 1.0))) / xScale) + yRow * ((ndc.y - dot(view.worldToClipRows[1], float4(origin, 1.0))) / yScale);
         direction = -view.originOrDirection.xyz;
     }
-    const float rawNormalError = sqrt(3.0) / 1024.0;
-    const float denominatorError = 2.0 * rawNormalError / (1.0 - rawNormalError) + 8.0 * 1.1920928955078125e-7;
+    const float rawNormalError = sqrt(3.0) / NWB_LIGHT_SPACE_PLANE_NORMAL_QUANTIZATION_STEPS;
+    const float denominatorError = 2.0 * rawNormalError / (1.0 - rawNormalError) + NWB_LIGHT_SPACE_PLANE_ROUNDOFF_EPSILONS * NWB_FLOAT_EPSILON;
     const float denominator = dot(receiverNormal, direction);
     if(!all(isfinite(direction)) || !all(isfinite(relativeAnchor)) || abs(denominator) <= denominatorError)
         return false;

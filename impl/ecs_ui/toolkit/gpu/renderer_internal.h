@@ -71,12 +71,23 @@ static_assert(s_SdfDistanceEncodingFreeTypeU8 == NWB_UI_SDF_DISTANCE_ENCODING_FR
 inline constexpr usize s_GpuMaxGlyphPages = s_PaintMaxImages;
 inline constexpr usize s_GpuMaxSdfPages = s_PaintMaxImages;
 inline constexpr usize s_GpuMaxTextureImages = s_PaintMaxImages;
+inline constexpr usize s_GpuTargetSlotCount = 3u;
+inline constexpr usize s_GpuFrameCount = 4u;
+// Raster uses outside the page lists: color target, skin atlas, vertex buffer, and index buffer.
+inline constexpr usize s_GpuRasterFixedResourceUses = 4u;
+inline constexpr u32 s_GpuFullscreenTriangleVertexCount = 3u;
+inline constexpr u32 s_GpuTimingHeightShift = 16u;
+inline constexpr TStringView s_GpuRendererContext = NWB_TEXT("GpuRenderer");
+inline constexpr Name s_GpuLayerTextureName("ui.layer");
+inline constexpr Name s_GpuAtlasTextureName("ui.atlas");
+inline constexpr Name s_GpuVertexBufferName("ui.vertices");
+inline constexpr Name s_GpuIndexBufferName("ui.indices");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using GpuRasterResourceUses = FixedVector<Core::GpuTaskResourceUse, s_GpuMaxGlyphPages + 4u>;
+using GpuRasterResourceUses = FixedVector<Core::GpuTaskResourceUse, s_GpuMaxGlyphPages + s_GpuRasterFixedResourceUses>;
 using GpuGlyphGraphResources = FixedVector<Core::GpuGraphResourceId, s_GpuMaxGlyphPages>;
 using GpuSdfGraphResources = FixedVector<Core::GpuGraphResourceId, s_GpuMaxSdfPages>;
 using GpuTextureGraphResources = FixedVector<Core::GpuGraphResourceId, s_GpuMaxTextureImages>;
@@ -222,7 +233,8 @@ public:
 
 public:
     [[nodiscard]] Expected<GpuPaintPushConstants> initializePushConstants(const u32 samplerSlot)const noexcept{
-        const SIMDVectorSingle projection = VectorMultiply(VectorSet(2.0f, -2.0f, 2.0f, -2.0f), pixelScale);
+        constexpr f32 s_ClipSpaceExtent = 2.0f;
+        const SIMDVectorSingle projection = VectorMultiply(VectorSet(s_ClipSpaceExtent, -s_ClipSpaceExtent, s_ClipSpaceExtent, -s_ClipSpaceExtent), pixelScale);
         const SIMDVectorSingle projectionScale = VectorDivide(projection, targetSize);
         GpuPaintPushConstants push;
         push.scale = { VectorGetX(projectionScale), VectorGetY(projectionScale) };
@@ -338,8 +350,8 @@ struct GpuRendererState final : NoCopy{
     Vector<GpuVersion<GpuGlyphVersion>, Core::Alloc::GlobalArena> m_glyphCache;
     Vector<GpuVersion<GpuSdfAtlasVersion>, Core::Alloc::GlobalArena> m_sdfCache;
     Vector<GpuVersion<GpuTextureImageVersion>, Core::Alloc::GlobalArena> m_textureCache;
-    Array<GpuFrameSlot, 3u> m_slots;
-    Array<GpuFrame, 4u> m_frames;
+    Array<GpuFrameSlot, s_GpuTargetSlotCount> m_slots;
+    Array<GpuFrame, s_GpuFrameCount> m_frames;
     GpuFrame m_pending;
     Core::AcquiredPresentationFrame m_lastAcceptedAcquired;
     Core::IGpuTaskGraphPresentationContributor* m_presentationContributor = nullptr;

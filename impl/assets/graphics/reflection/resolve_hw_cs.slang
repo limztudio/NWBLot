@@ -12,8 +12,10 @@
 #define NWB_CSG_RAY_OPTICAL_REUSE 1
 #endif
 
-// Variant 2 retains optical tracing for an exact all-Unspecified scene without closed-medium private storage.
-#if NWB_REFLECTION_OPTICAL_TRANSPORT == 2
+#define NWB_REFLECTION_OPTICAL_TRANSPORT_UNSPECIFIED 2
+
+// The unspecified variant retains optical tracing for an exact all-Unspecified scene without closed-medium private storage.
+#if NWB_REFLECTION_OPTICAL_TRANSPORT == NWB_REFLECTION_OPTICAL_TRANSPORT_UNSPECIFIED
 #define NWB_OPTICAL_CLOSED_MEDIA 0
 #endif
 
@@ -116,7 +118,7 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID){
     if(rayIndex >= rayCount)
         return;
 #endif
-    const uint packedPixel = g_NwbReflectionQueue.Load(rayIndex * 4u);
+    const uint packedPixel = g_NwbReflectionQueue.Load(rayIndex * NWB_REFLECTION_QUEUE_ENTRY_BYTES);
     const uint pixelCount = g_NwbReflectionParameters.dimensionsAndRoute.x * g_NwbReflectionParameters.dimensionsAndRoute.y;
     const bool glass = packedPixel >= pixelCount;
     const uint linearPixel = glass ? packedPixel - pixelCount : packedPixel;
@@ -146,10 +148,10 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID){
         radiance = lerp(nwbReflectionEnvironment(surface.direction), radiance, rangeWeight);
     }
     // Optical continuation supplies its accumulated radiance, including ordinary exterior misses. A capped or ambiguous in-medium path discards unresolved energy; blending sky here would leak light through glass.
-    nwbReflectionStore(pixel, glass, radiance * surface.weight, result.surfaceHit ? 3.0 : 1.0);
+    nwbReflectionStore(pixel, glass, radiance * surface.weight, result.surfaceHit ? NWB_REFLECTION_SOURCE_HARDWARE : NWB_REFLECTION_SOURCE_FALLBACK);
     if(result.surfaceHit){
         nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_HARDWARE_HITS, 1u);
-        nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_FALLBACK_PIXELS, 0xffffffffu);
+        nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_FALLBACK_PIXELS, NWB_REFLECTION_COUNTER_SUBTRACT_ONE);
     }
 #else
     // A complete scene with no transparent instances uses this separately compiled kernel. Its private storage contains no media or candidate-event arrays, so opaque-only reflection retains the simple query path.
@@ -169,13 +171,13 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID){
         const half rangeWeight = half(1.0h) - half(smoothstep(g_NwbReflectionParameters.distanceFadeStart, g_NwbReflectionParameters.maxRayDistance, hit.distance));
         radiance = lerp(radiance, nwbRayTraceSurfaceRadiance(hit, -surface.direction), rangeWeight);
         nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_HARDWARE_HITS, 1u);
-        nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_FALLBACK_PIXELS, 0xffffffffu);
+        nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_FALLBACK_PIXELS, NWB_REFLECTION_COUNTER_SUBTRACT_ONE);
     }
 #if NWB_RT_CSG_ENABLED
     if(hit.failure != 0u)
         radiance = half3(0.0h);
 #endif
-    nwbReflectionStore(pixel, glass, radiance * surface.weight, hit.hit ? 3.0 : 1.0);
+    nwbReflectionStore(pixel, glass, radiance * surface.weight, hit.hit ? NWB_REFLECTION_SOURCE_HARDWARE : NWB_REFLECTION_SOURCE_FALLBACK);
 #endif
 }
 

@@ -25,7 +25,7 @@ bool FontAtlasAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Ass
     if(!checkSerializeAssetType(asset, NWB_TEXT("FontAtlasAssetCodec::serialize")))
         return false;
     const FontAtlas& atlas = *checked_cast<const FontAtlas*>(&asset);
-    if(!atlas.checkVirtualPath(NWB_TEXT("FontAtlas::validatePayload")))
+    if(!atlas.checkVirtualPath(s_FontAtlasValidatePayloadContext))
         return false;
     Core::Alloc::ScratchArena scratchArena(AssetsFontAtlasArenaScope::s_SerializeArena);
     auto binary = SerializeFontAtlasPayload(atlas.payload(), outBinary.get_allocator().arena(), scratchArena);

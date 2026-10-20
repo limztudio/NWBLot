@@ -20,9 +20,15 @@ namespace __hidden_font_atlas_binary{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr u32 s_QwordHighWordShift = 32u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static void AppendU32(Core::Assets::AssetBytes& bytes, const u32 value){
-    for(u32 index = 0u; index < 4u; ++index)
-        bytes.push_back(static_cast<u8>(value >> (index * 8u)));
+    for(u32 index = 0u; index < sizeof(u32); ++index)
+        bytes.push_back(static_cast<u8>(value >> (index * s_BitsPerByte)));
 }
 
 static void AppendFloat(Core::Assets::AssetBytes& bytes, const f32 value){
@@ -30,10 +36,10 @@ static void AppendFloat(Core::Assets::AssetBytes& bytes, const f32 value){
 }
 
 [[nodiscard]] static Expected<u32> ReadU32(const Core::Assets::AssetBytes& bytes, usize& cursor)noexcept{
-    if(cursor > bytes.size() || bytes.size() - cursor < 4u)
+    if(cursor > bytes.size() || bytes.size() - cursor < sizeof(u32))
         return MakeUnexpected(Failure{});
-    const u32 value = static_cast<u32>(bytes[cursor]) | (static_cast<u32>(bytes[cursor + 1u]) << 8u) | (static_cast<u32>(bytes[cursor + 2u]) << 16u) | (static_cast<u32>(bytes[cursor + 3u]) << 24u);
-    cursor += 4u;
+    const u32 value = static_cast<u32>(bytes[cursor]) | (static_cast<u32>(bytes[cursor + 1u]) << s_BitsPerByte) | (static_cast<u32>(bytes[cursor + 2u]) << s_FontTwoByteBits) | (static_cast<u32>(bytes[cursor + 3u]) << s_FontThreeByteBits);
+    cursor += sizeof(u32);
     return value;
 }
 
@@ -135,7 +141,7 @@ static void AppendFloat(Core::Assets::AssetBytes& bytes, const f32 value){
         const auto high = ReadU32(bytes, cursor);
         if(!high)
             return MakeUnexpected(high.error());
-        lane = static_cast<u64>(*low) | (static_cast<u64>(*high) << 32u);
+        lane = static_cast<u64>(*low) | (static_cast<u64>(*high) << s_QwordHighWordShift);
     }
     payload.font.virtualPath = Name(identity);
     if(!ReadBytes(bytes, cursor, sizeof(payload.fontSha256.bytes), payload.fontSha256.bytes))
@@ -188,7 +194,7 @@ static void AppendFloat(Core::Assets::AssetBytes& bytes, const f32 value){
     const auto tableCount = ReadU32(bytes, cursor);
     if(!tableCount)
         return MakeUnexpected(tableCount.error());
-    if(*glyphCount == 0u || *glyphCount > s_FontAtlasMaxGlyphCount || *glyphCount != payload.sourceGlyphCount || *groupCount == 0u || *groupCount > s_FontAtlasMaxGroupCount || *tableCount > 3u || *raster > FontAtlasRasterMode::Bitmap)
+    if(*glyphCount == 0u || *glyphCount > s_FontAtlasMaxGlyphCount || *glyphCount != payload.sourceGlyphCount || *groupCount == 0u || *groupCount > s_FontAtlasMaxGroupCount || *tableCount > s_FontAtlasMaxPositioningTableCount || *raster > FontAtlasRasterMode::Bitmap)
         return MakeUnexpected(Failure{});
     payload.rasterMode = static_cast<FontAtlasRasterMode::Enum>(*raster);
     const u64 minimumRemaining = static_cast<u64>(*glyphCount) * FontAtlasBinaryPayload::s_GlyphBytes + static_cast<u64>(*groupCount) * FontAtlasBinaryPayload::s_GroupHeaderBytes + static_cast<u64>(*tableCount) * FontAtlasBinaryPayload::s_TableHeaderBytes;
@@ -222,7 +228,7 @@ static void AppendFloat(Core::Assets::AssetBytes& bytes, const f32 value){
             return MakeUnexpected(byteCount.error());
         if(!ReadBytes(bytes, cursor, sizeof(group.sha256.bytes), group.sha256.bytes))
             return MakeUnexpected(Failure{});
-        if(group.width == 0u || group.height == 0u || group.width > s_FontAtlasMaxExtent || group.height > s_FontAtlasMaxExtent || group.channelCount == 0u || group.channelCount > 4u)
+        if(group.width == 0u || group.height == 0u || group.width > s_FontAtlasMaxExtent || group.height > s_FontAtlasMaxExtent || group.channelCount == 0u || group.channelCount > s_FontAtlasMaxChannelCount)
             return MakeUnexpected(Failure{});
         const u64 expectedBytes = static_cast<u64>(group.width) * group.height * group.channelCount;
         if(expectedBytes != *byteCount || pixelBytes + *byteCount > s_FontAtlasMaxPixelBytes || cursor > bytes.size() || *byteCount > bytes.size() - cursor)
@@ -286,7 +292,7 @@ Expected<Core::Assets::AssetBytes> SerializeFontAtlasPayload(const FontAtlasPayl
     AppendU32(binary, 0u);
     for(const u64 lane : payload.font.name().hash().qwords){
         AppendU32(binary, static_cast<u32>(lane));
-        AppendU32(binary, static_cast<u32>(lane >> 32u));
+        AppendU32(binary, static_cast<u32>(lane >> s_QwordHighWordShift));
     }
     binary.insert(binary.end(), payload.fontSha256.bytes, payload.fontSha256.bytes + sizeof(payload.fontSha256.bytes));
     AppendU32(binary, payload.faceIndex);

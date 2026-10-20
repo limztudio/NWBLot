@@ -22,7 +22,7 @@ TextInputAdmission::Enum ValidateTextInputUtf8(const AStringView text, const usi
 }
 
 bool IsTextInputUtf8Boundary(const AStringView text, const usize byteOffset)noexcept{
-    return byteOffset <= text.size() && (byteOffset == text.size() || (static_cast<u8>(text[byteOffset]) & 0xc0u) != 0x80u);
+    return byteOffset <= text.size() && (byteOffset == text.size() || (static_cast<u8>(text[byteOffset]) & BasicStringDetail::s_Utf8ContinuationMask) != BasicStringDetail::s_Utf8ContinuationMarker);
 }
 
 bool IsTextInputCaretRectValid(const TextInputRect rect)noexcept{
@@ -37,28 +37,28 @@ bool IsTextInputCaretRectValid(const TextInputRect rect)noexcept{
 
 Expected<usize, TextInputAdmission::Enum> EncodeTextInputCodePoint(const u32 codePoint, char (&bytes)[4])noexcept{
     usize length = 0u;
-    if(codePoint == 0u || codePoint > 0x10ffffu || (codePoint >= 0xd800u && codePoint <= 0xdfffu))
+    if(codePoint == 0u || codePoint > BasicStringDetail::s_UnicodeMaxCodePoint || (codePoint >= BasicStringDetail::s_UnicodeHighSurrogateMin && codePoint <= BasicStringDetail::s_UnicodeLowSurrogateMax))
         return MakeUnexpected(TextInputAdmission::InvalidText);
-    if(codePoint < 0x80u){
+    if(codePoint < BasicStringDetail::s_Utf8TwoByteMinCodePoint){
         bytes[0] = static_cast<char>(codePoint);
         length = 1u;
     }
-    else if(codePoint < 0x800u){
-        bytes[0] = static_cast<char>(0xc0u | (codePoint >> 6u));
-        bytes[1] = static_cast<char>(0x80u | (codePoint & 0x3fu));
+    else if(codePoint < BasicStringDetail::s_Utf8ThreeByteMinCodePoint){
+        bytes[0] = static_cast<char>(BasicStringDetail::s_Utf8TwoByteMarker | (codePoint >> BasicStringDetail::s_Utf8ContinuationPayloadBits));
+        bytes[1] = static_cast<char>(BasicStringDetail::s_Utf8ContinuationMarker | (codePoint & BasicStringDetail::s_Utf8ContinuationPayloadMask));
         length = 2u;
     }
-    else if(codePoint < 0x10000u){
-        bytes[0] = static_cast<char>(0xe0u | (codePoint >> 12u));
-        bytes[1] = static_cast<char>(0x80u | ((codePoint >> 6u) & 0x3fu));
-        bytes[2] = static_cast<char>(0x80u | (codePoint & 0x3fu));
+    else if(codePoint < BasicStringDetail::s_Utf8FourByteMinCodePoint){
+        bytes[0] = static_cast<char>(BasicStringDetail::s_Utf8ThreeByteMarker | (codePoint >> (BasicStringDetail::s_Utf8ContinuationPayloadBits * 2u)));
+        bytes[1] = static_cast<char>(BasicStringDetail::s_Utf8ContinuationMarker | ((codePoint >> BasicStringDetail::s_Utf8ContinuationPayloadBits) & BasicStringDetail::s_Utf8ContinuationPayloadMask));
+        bytes[2] = static_cast<char>(BasicStringDetail::s_Utf8ContinuationMarker | (codePoint & BasicStringDetail::s_Utf8ContinuationPayloadMask));
         length = 3u;
     }
     else{
-        bytes[0] = static_cast<char>(0xf0u | (codePoint >> 18u));
-        bytes[1] = static_cast<char>(0x80u | ((codePoint >> 12u) & 0x3fu));
-        bytes[2] = static_cast<char>(0x80u | ((codePoint >> 6u) & 0x3fu));
-        bytes[3] = static_cast<char>(0x80u | (codePoint & 0x3fu));
+        bytes[0] = static_cast<char>(BasicStringDetail::s_Utf8FourByteMarker | (codePoint >> (BasicStringDetail::s_Utf8ContinuationPayloadBits * 3u)));
+        bytes[1] = static_cast<char>(BasicStringDetail::s_Utf8ContinuationMarker | ((codePoint >> (BasicStringDetail::s_Utf8ContinuationPayloadBits * 2u)) & BasicStringDetail::s_Utf8ContinuationPayloadMask));
+        bytes[2] = static_cast<char>(BasicStringDetail::s_Utf8ContinuationMarker | ((codePoint >> BasicStringDetail::s_Utf8ContinuationPayloadBits) & BasicStringDetail::s_Utf8ContinuationPayloadMask));
+        bytes[3] = static_cast<char>(BasicStringDetail::s_Utf8ContinuationMarker | (codePoint & BasicStringDetail::s_Utf8ContinuationPayloadMask));
         length = 4u;
     }
     return length;

@@ -129,7 +129,7 @@ Expected<void, CsgDeformViabilityReason::Enum> CsgDeformWallBuilder::ClipShell(
         const f32 distances[s_TriangleCornerCount] = { scratchDistances[triangle.indices[0u]], scratchDistances[triangle.indices[1u]], scratchDistances[triangle.indices[2u]], };
         const bool kept[s_TriangleCornerCount] = { distances[0u] >= s_KeepDistanceZero, distances[1u] >= s_KeepDistanceZero, distances[2u] >= s_KeepDistanceZero };
         const u32 keepCount = (kept[0u] ? 1u : 0u) + (kept[1u] ? 1u : 0u) + (kept[2u] ? 1u : 0u);
-        if(keepCount == 3u){
+        if(keepCount == s_TriangleCornerCount){
             CsgDeformWallBuilder::EmitTriangle(scratchKept, triangle.indices[0u], triangle.indices[1u], triangle.indices[2u]);
             continue;
         }

@@ -5,7 +5,8 @@ import time
 
 from probe_common import center
 from fixture_environment import build_fixture_environment
-from fixture_launch import admit_fixture_processes, prepare_fixture_launch
+from checkpoint_report import CHECKPOINT_POLL_SECONDS, CHECKPOINT_SETTLE_SECONDS, CHECKPOINT_STAGE_TIMEOUT_SECONDS
+from fixture_launch import DISPLAY_MARKER_TIMEOUT_SECONDS, admit_fixture_processes, prepare_fixture_launch
 from window_capture_smoke import (STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
     read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message)
 
@@ -57,15 +58,15 @@ class KeyedRun:
             self.expected.pop(field, None)
         if self.snapshot is not None:
             self.native.pointer(*self.point(*center(self.snapshot[LIT_RECTANGLES]["counter"])))
-        time.sleep(0.25)
+        time.sleep(CHECKPOINT_SETTLE_SECONDS)
         path = self.args.output_directory / f"{len(self.stages):02d}_{name}.bmp"
-        stage_deadline = min(self.deadline, time.monotonic() + 10.0)
+        stage_deadline = min(self.deadline, time.monotonic() + CHECKPOINT_STAGE_TIMEOUT_SECONDS)
         report = None
         while time.monotonic() < stage_deadline:
             ensure_process_running(self.process, self.capture_stage)
             snapshot = self.snapshot_reader(self.logs())
             if snapshot is None:
-                time.sleep(0.1)
+                time.sleep(CHECKPOINT_POLL_SECONDS)
                 continue
             if snapshot[LIT_LOGICAL_EXTENT][0] < 600.0 or snapshot[LIT_LOGICAL_EXTENT][1] < self.minimum_height:
                 raise SmokeSkip(f"the {self.fixture} fixture needs a logical client of at least 600x{self.minimum_height:g}")
@@ -79,7 +80,7 @@ class KeyedRun:
                 self.stages.append(report)
                 self.write_report(False)
                 return
-            time.sleep(0.1)
+            time.sleep(CHECKPOINT_POLL_SECONDS)
         raise SmokeFailure(f"{self.fixture} displayed-state gate '{name}' failed: {report}")
 
 
@@ -92,7 +93,7 @@ def run_keyed_fixture(args, *, fixture, display_marker, driver_type, log_name, l
             ensure_process_running(launch.application, f"before the {window_label} fixture appeared")
             raise SmokeFailure(f"custom {process_label} fixture did not appear")
         launch.backend.prepare_window(launch.handle)
-        wait_for_log_message(launch.log_directory, launch.log_baseline, launch.log_pattern, display_marker, min(args.timeout, 15.0))
+        wait_for_log_message(launch.log_directory, launch.log_baseline, launch.log_pattern, display_marker, min(args.timeout, DISPLAY_MARKER_TIMEOUT_SECONDS))
         driver = driver_type(args, launch.backend, launch.handle, launch.application, launch.log_directory, launch.log_baseline, launch.log_pattern)
         driver.execute()
     finally:

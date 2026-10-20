@@ -200,7 +200,7 @@ float nwbShadowResolveCenterSigmaLum(const int2 texel, const uint slot, const in
     [unroll] for(int dy = -1; dy <= 1; ++dy){
         [unroll] for(int dx = -1; dx <= 1; ++dx){
             const int2 t = int2(clamp(texel.x + dx, 0, hw - 1), clamp(texel.y + dy, 0, hh - 1));
-            if(nwbShadowResolveGeomAtHalf(t).w <= half(0.5h))
+            if(nwbShadowResolveGeomAtHalf(t).w <= half(NWB_SHADOW_GEOMETRY_VALID_THRESHOLD))
                 continue;
             const half4 sColor = half4(nwbHeapSampledImage2DArray(g_NwbShadowResolvePushConstants.inputColorSlot).Load(int4(t, (int)slot, 0)));
 #if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
@@ -287,7 +287,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                     continue;
                 const int2 tap = int2(clamp(baseTexel.x + dx, 0, hw - 1), clamp(baseTexel.y + dy, 0, hh - 1));
                 const half4 tapGeom = nwbShadowResolveGeomAtHalf(tap);
-                if(tapGeom.w <= half(0.5h))
+                if(tapGeom.w <= half(NWB_SHADOW_GEOMETRY_VALID_THRESHOLD))
                     continue;
                 validTapMask |= tapBit;
                 validWeightSum += spatialWeight;
@@ -369,7 +369,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
 
     const half4 centerGeom = inBounds ? nwbShadowResolveGeomAtHalf(texel) : half4(0.0h, 0.0h, 0.0h, 0.0h);
     const float centerGeomDistance = float(centerGeom.z);
-    const float sigmaDist = max(centerGeomDistance * NWB_SHADOW_RESOLVE_WAVELET_DIST_FRAC * (float)step, 1e-3);
+    const float sigmaDist = max(centerGeomDistance * NWB_SHADOW_RESOLVE_WAVELET_DIST_FRAC * (float)step, NWB_SHADOW_RESOLVE_SIGMA_DISTANCE_MIN);
     const float invTwoSigmaDistSq = 1.0 / (2.0 * sigmaDist * sigmaDist);
     const float3 centerNormalWavelet = nwbOctDecodeNormal(float2(centerGeom.xy));
 
@@ -377,8 +377,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
 
     // Every thread must reach the LDS barriers before the next slot reload.
     if(step <= NWB_SHADOW_RESOLVE_LDS_MAX_STEP){
-        const int tileW = NWB_SHADOW_RESOLVE_GROUP_SIZE + 4 * step;
-        const int2 tileOrigin = int2(groupID.xy) * NWB_SHADOW_RESOLVE_GROUP_SIZE - int2(2 * step, 2 * step);
+        const int tileW = NWB_SHADOW_RESOLVE_GROUP_SIZE + NWB_SHADOW_RESOLVE_KERNEL_HALO * step;
+        const int2 tileOrigin = int2(groupID.xy) * NWB_SHADOW_RESOLVE_GROUP_SIZE - int2(NWB_SHADOW_RESOLVE_KERNEL_RADIUS * step, NWB_SHADOW_RESOLVE_KERNEL_RADIUS * step);
         const uint threadCount = NWB_SHADOW_RESOLVE_GROUP_SIZE * NWB_SHADOW_RESOLVE_GROUP_SIZE;
         const uint threadIndex = groupThreadID.y * NWB_SHADOW_RESOLVE_GROUP_SIZE + groupThreadID.x;
         const uint tileTexels = (uint)(tileW * tileW);
@@ -392,7 +392,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 uint tapValid = 0u;
                 if(t.x >= 0 && t.y >= 0 && t.x < hw && t.y < hh){
                     const half4 g = nwbShadowResolveGeomAtHalf(t);
-                    if(g.w > half(0.5h)){
+                    if(g.w > half(NWB_SHADOW_GEOMETRY_VALID_THRESHOLD)){
                         tapVis = NwbShadowResolveVisVec(nwbShadowResolveLoadInput(t, slot));
                         tapNormal = half2(g.xy);
                         tapDist = g.z;
@@ -407,19 +407,19 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             GroupMemoryBarrierWithGroupSync();
 
             if(inBounds){
-                if(centerGeom.w <= half(0.5h)){
+                if(centerGeom.w <= half(NWB_SHADOW_GEOMETRY_VALID_THRESHOLD)){
                     g_NwbShadowResolveOutput[uint3(pixel, slot)] = float4(1.0, 1.0, 1.0, 1.0);
                 }
                 else{
-                    const uint centerIdx = (uint)((int(groupThreadID.y) + 2 * step) * tileW + (int(groupThreadID.x) + 2 * step));
+                    const uint centerIdx = (uint)((int(groupThreadID.y) + NWB_SHADOW_RESOLVE_KERNEL_RADIUS * step) * tileW + (int(groupThreadID.x) + NWB_SHADOW_RESOLVE_KERNEL_RADIUS * step));
                     const NwbShadowResolveVisFVec centerVis = (NwbShadowResolveVisFVec)g_NwbShadowResolveTileVis[centerIdx];
                     const float sigmaLum = nwbShadowResolveCenterSigmaLum(texel, slot, hw, hh, momentsValid);
                     NwbShadowResolveVisFVec sum = (NwbShadowResolveVisFVec)0.0;
                     // The bilateral weight sum is a bounded filter factor, so half arithmetic is sufficient here.
                     half weightSum = half(0.0h);
-                    [unroll] for(int ky = -2; ky <= 2; ++ky){
-                        [unroll] for(int kx = -2; kx <= 2; ++kx){
-                            const uint idx = (uint)((int(groupThreadID.y) + (ky + 2) * step) * tileW + (int(groupThreadID.x) + (kx + 2) * step));
+                    [unroll] for(int ky = -NWB_SHADOW_RESOLVE_KERNEL_RADIUS; ky <= NWB_SHADOW_RESOLVE_KERNEL_RADIUS; ++ky){
+                        [unroll] for(int kx = -NWB_SHADOW_RESOLVE_KERNEL_RADIUS; kx <= NWB_SHADOW_RESOLVE_KERNEL_RADIUS; ++kx){
+                            const uint idx = (uint)((int(groupThreadID.y) + (ky + NWB_SHADOW_RESOLVE_KERNEL_RADIUS) * step) * tileW + (int(groupThreadID.x) + (kx + NWB_SHADOW_RESOLVE_KERNEL_RADIUS) * step));
                             if(g_NwbShadowResolveTileValid[idx] == 0u)
                                 continue;
                             const NwbShadowResolveVisFVec tapVis = (NwbShadowResolveVisFVec)g_NwbShadowResolveTileVis[idx];
@@ -428,7 +428,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                             const half distWeight = half(exp(-dDist * dDist * invTwoSigmaDistSq));
                             const half normalWeight = nwbShadowResolveNormalWeightVec(centerNormalWavelet, g_NwbShadowResolveTileNormal[idx]);
                             const half valueWeight = nwbShadowResolveValueWeightVec(centerVis, tapVis, sigmaLum);
-                            const half weight = NWB_SHADOW_RESOLVE_KERNEL[kx + 2] * NWB_SHADOW_RESOLVE_KERNEL[ky + 2] * distWeight * normalWeight * valueWeight;
+                            const half weight = NWB_SHADOW_RESOLVE_KERNEL[kx + NWB_SHADOW_RESOLVE_KERNEL_RADIUS] * NWB_SHADOW_RESOLVE_KERNEL[ky + NWB_SHADOW_RESOLVE_KERNEL_RADIUS] * distWeight * normalWeight * valueWeight;
                             sum += weight * tapVis;
                             weightSum += weight;
                         }
@@ -446,7 +446,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     if(!inBounds)
         return;
     for(uint slot = slotStart; slot < slotEnd; ++slot){
-        if(centerGeom.w <= half(0.5h)){
+        if(centerGeom.w <= half(NWB_SHADOW_GEOMETRY_VALID_THRESHOLD)){
             g_NwbShadowResolveOutput[uint3(pixel, slot)] = float4(1.0, 1.0, 1.0, 1.0);
             continue;
         }
@@ -455,13 +455,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         NwbShadowResolveVisFVec sum = (NwbShadowResolveVisFVec)0.0;
         // The bilateral weight sum is a bounded filter factor, so half arithmetic is sufficient here.
         half weightSum = half(0.0h);
-        [unroll] for(int ky = -2; ky <= 2; ++ky){
-            [unroll] for(int kx = -2; kx <= 2; ++kx){
+        [unroll] for(int ky = -NWB_SHADOW_RESOLVE_KERNEL_RADIUS; ky <= NWB_SHADOW_RESOLVE_KERNEL_RADIUS; ++ky){
+            [unroll] for(int kx = -NWB_SHADOW_RESOLVE_KERNEL_RADIUS; kx <= NWB_SHADOW_RESOLVE_KERNEL_RADIUS; ++kx){
                 const int2 tap = int2(texel.x + kx * step, texel.y + ky * step);
                 if(tap.x < 0 || tap.y < 0 || tap.x >= hw || tap.y >= hh)
                     continue;
                 const half4 tapGeom = nwbShadowResolveGeomAtHalf(tap);
-                if(tapGeom.w <= half(0.5h))
+                if(tapGeom.w <= half(NWB_SHADOW_GEOMETRY_VALID_THRESHOLD))
                     continue;
                 const NwbShadowResolveVisFVec tapVis = (NwbShadowResolveVisFVec)nwbShadowResolveLoadInput(tap, slot);
                 const float dDist = float(tapGeom.z) - centerGeomDistance;
@@ -469,7 +469,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 const half distWeight = half(exp(-dDist * dDist * invTwoSigmaDistSq));
                 const half normalWeight = nwbShadowResolveNormalWeightVec(centerNormalWavelet, tapGeom.xy);
                 const half valueWeight = nwbShadowResolveValueWeightVec(centerVis, tapVis, sigmaLum);
-                const half weight = NWB_SHADOW_RESOLVE_KERNEL[kx + 2] * NWB_SHADOW_RESOLVE_KERNEL[ky + 2] * distWeight * normalWeight * valueWeight;
+                const half weight = NWB_SHADOW_RESOLVE_KERNEL[kx + NWB_SHADOW_RESOLVE_KERNEL_RADIUS] * NWB_SHADOW_RESOLVE_KERNEL[ky + NWB_SHADOW_RESOLVE_KERNEL_RADIUS] * distWeight * normalWeight * valueWeight;
                 sum += weight * tapVis;
                 weightSum += weight;
             }

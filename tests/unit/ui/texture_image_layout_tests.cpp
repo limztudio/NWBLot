@@ -28,11 +28,13 @@ using TextureImageLayoutFixture = PaintImageFixture;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_LayoutVersionImagePath = "tests/ui/layout_version";
+
 TEST_F(TextureImageLayoutFixture, SameIdentityVersionsMeasureTheirOwnImmutableDimensions){
-    auto firstResult = makeImage("tests/ui/layout_version", 37u, 20u, 12u);
+    auto firstResult = makeImage(s_LayoutVersionImagePath, 37u, 20u, 12u);
     ASSERT_TRUE(firstResult);
     const SharedImageSource first = Move(*firstResult);
-    auto secondResult = makeImage("tests/ui/layout_version", 73u, 9u, 7u);
+    auto secondResult = makeImage(s_LayoutVersionImagePath, 73u, 9u, 7u);
     ASSERT_TRUE(secondResult);
     const SharedImageSource second = Move(*secondResult);
     ASSERT_TRUE(first && second);

@@ -25,8 +25,10 @@ namespace __hidden_task_graph_telemetry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr u32 s_DependencyPairProducerShift = 32u;
+
 [[nodiscard]] static u64 DependencyPairKey(const GpuTaskDependencyEdge& edge)noexcept{
-    return (static_cast<u64>(edge.producer.index) << 32u) | edge.consumer.index;
+    return (static_cast<u64>(edge.producer.index) << s_DependencyPairProducerShift) | edge.consumer.index;
 }
 
 [[nodiscard]] static Expected<Telemetry::FrameGraphQueueClass::Enum> TranslateQueueClass(const CommandQueue::Enum queueClass)noexcept{

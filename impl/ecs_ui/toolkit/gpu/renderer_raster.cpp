@@ -123,7 +123,7 @@ bool GpuOutputTask::Record(const Payload& payload, Core::CommandList& commands, 
     push.samplerSlot = frame->m_resources->m_samplerDescriptor.slot();
     push.presentationMode = payload.presentationMode;
     commands.setPushConstants(&push, sizeof(push));
-    commands.draw(Core::DrawArguments().setVertexCount(3u));
+    commands.draw(Core::DrawArguments().setVertexCount(s_GpuFullscreenTriangleVertexCount));
     commands.endRenderPass();
     return true;
 }

@@ -5,6 +5,7 @@
 #include "bindless_resources.slangi"
 #include "constants.h"
 #include "../mesh/runtime_bounds_constants.h"
+#include "../common/math.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -24,13 +25,20 @@ groupshared uint g_NwbSkinnedMeshLocalBoundsInvalid[NWB_SKINNED_MESH_BOUNDS_GROU
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Relative float rounding allowance added around the merged bounds.
+#define NWB_SKINNED_MESH_BOUNDS_MARGIN_SCALE 4.76837158203125e-7
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [numthreads(NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X, 1, 1)]
 void main(uint3 groupThreadID : SV_GroupThreadID){
     const uint lane = groupThreadID.x;
     const uint meshletCount = g_NwbSkinnedMeshLocalBoundsPush.payload0[NWB_SKINNED_MESH_BOUNDS_PUSH_MESHLET_COUNT];
     const uint slots = g_NwbSkinnedMeshLocalBoundsPush.payload0[NWB_SKINNED_MESH_BOUNDS_PUSH_BINDLESS_RESOURCES_SLOT];
     const uint4 boundsSlots = nwbSkinnedMeshHeapBindlessResources(slots).streamSlots4;
-    const float largest = asfloat(0x7f7fffffu);
+    const float largest = asfloat(NWB_FLOAT_MAX_BITS);
     float3 minimum = float3(largest);
     float3 maximum = float3(-largest);
     uint invalid = 0u;
@@ -64,7 +72,7 @@ void main(uint3 groupThreadID : SV_GroupThreadID){
     // Cover float rounding and subnormal flush before a consumer applies an arbitrary world-space scale.
     float3 lower = g_NwbSkinnedMeshLocalBoundsMin[0u];
     float3 upper = g_NwbSkinnedMeshLocalBoundsMax[0u];
-    const float3 margin = max(max(abs(lower), abs(upper)) * 4.76837158203125e-7, float3(asfloat(0x00800000u)));
+    const float3 margin = max(max(abs(lower), abs(upper)) * NWB_SKINNED_MESH_BOUNDS_MARGIN_SCALE, float3(asfloat(NWB_FLOAT_MIN_NORMAL_BITS)));
     lower -= margin;
     upper += margin;
     const bool valid = meshletCount != 0u && g_NwbSkinnedMeshLocalBoundsInvalid[0u] == 0u && all(isfinite(lower)) && all(isfinite(upper)) && all(lower <= upper);

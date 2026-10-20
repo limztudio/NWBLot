@@ -82,7 +82,7 @@ float3 nwbHwShadowObjectDirection(const NwbMeshInstanceData instance, const floa
 
 uint nwbHwShadowFacing(const float3 geometricNormal, const float3 objectDirection){
     const float facing = dot(geometricNormal, nwbHwShadowScaleGeometryVector(objectDirection));
-    return facing < 0.0 ? 1u : (facing > 0.0 ? 2u : 0u);
+    return facing < 0.0 ? NWB_SHADOW_FACING_ENTERING : (facing > 0.0 ? NWB_SHADOW_FACING_EXITING : 0u);
 }
 
 uint nwbHwShadowCrossingFacing(const RayDesc ray, const NwbHardwareTransparentCrossing crossing){
@@ -147,13 +147,13 @@ void nwbHwShadowFinishCluster(inout NwbHardwareTransparentStream stream){
     stream.hasCluster = false;
     const bool closed = nwbHwShadowClosedBoundary(stream.boundaryMode);
     // At a closed silhouette, adjacent faces can report both signs at the same distance without entering the volume.
-    if(closed && (stream.clusterOptics.facing == 3u || stream.clusterOptics.facing == 0u))
+    if(closed && (stream.clusterOptics.facing == NWB_SHADOW_FACING_BOTH || stream.clusterOptics.facing == 0u))
         return;
     const float distance = stream.clusterDistance;
     if(stream.crossingCount == 0u){
         stream.firstDistance = distance;
         stream.instanceAbsorption = stream.clusterOptics.absorption;
-        if(closed && stream.clusterOptics.facing == 2u){
+        if(closed && stream.clusterOptics.facing == NWB_SHADOW_FACING_EXITING){
             stream.inside = true;
             stream.intervalStart = 0.0;
         }

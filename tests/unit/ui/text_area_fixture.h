@@ -28,6 +28,9 @@ namespace UiTextAreaTests{
 
 using namespace UiComboTests;
 
+inline constexpr AStringView s_TextAreaPanelKey = "panel";
+inline constexpr AStringView s_TextAreaKey = "area";
+
 namespace AreaEventKind{
     enum Enum : u8{ Text, Key, Action, Selection };
 };
@@ -264,7 +267,7 @@ public:
 
 protected:
     [[nodiscard]] bool beginArea(const u64 generation, const Rect& bounds = { 20.0f, 20.0f, 740.0f, 520.0f }){
-        return begin(generation) && m_builder.beginPanel("panel", bounds);
+        return begin(generation) && m_builder.beginPanel(s_TextAreaPanelKey, bounds);
     }
 
     [[nodiscard]] bool acceptArea(){ return finishPanel() && m_context.commitFrame(m_context.readyGeneration()); }
@@ -272,7 +275,7 @@ protected:
     [[nodiscard]] bool frameArea(const u64 generation, const TextAreaOptions& options = {}, const Rect& bounds = { 20.0f, 20.0f, 740.0f, 520.0f }){
         if(!beginArea(generation, bounds))
             return false;
-        m_result = m_builder.textArea("area", m_model, m_state, options);
+        m_result = m_builder.textArea(s_TextAreaKey, m_model, m_state, options);
         return m_result.valid && acceptArea();
     }
 
@@ -314,7 +317,7 @@ protected:
     }
 
     [[nodiscard]] bool beginParent(const u64 generation){
-        return begin(generation) && m_builder.beginPopup("parent", m_parent, UiWidgetTests::LargeLoanParentOptions());
+        return begin(generation) && m_builder.beginPopup(s_ParentPopupKey, m_parent, UiWidgetTests::LargeLoanParentOptions());
     }
 
     [[nodiscard]] bool finishRoot(){ return m_context.endRoot() && m_context.finishFrame(); }

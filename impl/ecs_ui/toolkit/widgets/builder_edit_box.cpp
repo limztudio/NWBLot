@@ -110,7 +110,7 @@ EditBoxResult Builder::declareEditBox(const AStringView stableKey, EditModel& mo
 }
 
 SIMDVectorSingle Builder::loadEditMinimumSize()const noexcept{
-    SIMDVectorSingle minimum = VectorSet(120.0f, 0.0f, 120.0f, 0.0f);
+    SIMDVectorSingle minimum = VectorSet(s_StyleMinimumFieldWidth, 0.0f, s_StyleMinimumFieldWidth, 0.0f);
     const Name names[]{ m_editStyle.normal, m_editStyle.hover, m_editStyle.focused, m_editStyle.disabled };
     for(const auto& name : names){
         const UiSkinRegion* skinRegion = region(name, m_editStyle.fallback);
@@ -136,7 +136,7 @@ bool Builder::prepareEditBox(Item& item, EditModel& model, EditBoxState& state, 
     state.caret = model.caret();
     state.focused = result.focused;
 
-    item.editFlags = { item.editOptions.enabled, m_context.input().hover() == item.state.id, result.focused, item.editOptions.readOnly, state.caretElapsed < 0.5 };
+    item.editFlags = { item.editOptions.enabled, m_context.input().hover() == item.state.id, result.focused, item.editOptions.readOnly, state.caretElapsed < s_CaretVisiblePhaseEnd };
     item.editFlags.preeditCaretVisible = result.preeditCaretVisible;
     if(!item.editView.snapshot(model) || item.editView.shape(m_text, textShapeRequest({}, m_style.fontSize)) != TextLayoutStatus::Success || !item.editView.measure(m_text, m_paint.displayMetrics())){
         m_context.fail();

@@ -37,11 +37,11 @@ bool Builder::paintCombo(const Item& item, const LayoutBox& box){
     const SIMDVectorSingle content = InsetRectValue(VectorSet(0.0f, 0.0f, box.rectangle.width, box.rectangle.height), VectorSet(item.padding.left, item.padding.top, item.padding.right, item.padding.bottom));
     const f32 contentHeight = VectorGetW(content);
     const f32 extent = VectorGetZ(VectorMin(VectorReplicate(frame.arrowExtent), VectorMin(VectorReplicate(contentHeight), content)));
-    const SIMDVectorSingle centered = VectorMax(VectorZero(), VectorScale(VectorSubtract(VectorSet(contentHeight, contentHeight, 0.0f, 0.0f), VectorSet(extent, item.textBounds.height, 0.0f, 0.0f)), 0.5f));
+    const SIMDVectorSingle centered = VectorMax(VectorZero(), VectorScale(VectorSubtract(VectorSet(contentHeight, contentHeight, 0.0f, 0.0f), VectorSet(extent, item.textBounds.height, 0.0f, 0.0f)), s_RectCenterFraction));
     const SIMDVectorSingle iconBase = VectorAdd(VectorSet(box.rectangle.x, box.rectangle.y, 0.0f, 0.0f), VectorSet(box.rectangle.width, item.padding.top, 0.0f, 0.0f));
     const SIMDVectorSingle iconOrigin = VectorSubtract(VectorSubtract(iconBase, VectorXorInt(VectorPermute<4, 0, 6, 7>(centered, VectorSet(item.padding.right, 0.0f, 0.0f, 0.0f)), s_SIMDFlipY)), VectorSet(extent, 0.0f, 0.0f, 0.0f));
     const Rect icon{ VectorGetX(iconOrigin), VectorGetY(iconOrigin), extent, extent };
-    const bool arrowPainted = fieldPainted && m_paint.drawRegion(arrow->name, icon, item.enabled ? Color{} : Color{ 1.0f, 1.0f, 1.0f, 0.5f });
+    const bool arrowPainted = fieldPainted && m_paint.drawRegion(arrow->name, icon, item.enabled ? Color{} : Color{ 1.0f, 1.0f, 1.0f, s_StyleDisabledIconAlpha });
     const SIMDVectorSingle textOrigin = VectorAdd(VectorSet(box.rectangle.x, box.rectangle.y, box.rectangle.x, box.rectangle.y), VectorSet(item.padding.left, item.padding.top, item.padding.left, item.padding.top));
     const SIMDVectorSingle textExtent = VectorMax(VectorZero(), VectorSubtract(VectorSubtract(VectorSubtract(VectorSet(icon.x, contentHeight, 0.0f, 0.0f), VectorSet(frame.style.arrowGap, 0.0f, 0.0f, 0.0f)), VectorSet(box.rectangle.x, 0.0f, 0.0f, 0.0f)), VectorSet(item.padding.left, 0.0f, 0.0f, 0.0f)));
     const Rect textClip{ VectorGetX(textOrigin), VectorGetY(textOrigin), VectorGetX(textExtent), contentHeight };

@@ -15,6 +15,14 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_clipboard_text{
+static constexpr u32 s_Latin1MaxCodePoint = 0xffu;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 ClipboardStatus::Enum ValidateClipboardUtf8Text(const AStringView text)noexcept{
     if(text.size() > s_ClipboardMaxTextBytes)
         return ClipboardStatus::TooLarge;
@@ -29,7 +37,7 @@ ClipboardStatus::Enum DecodeClipboardLatin1(const AStringView text, AString<Allo
     for(const char character : text){
         if(character == '\0')
             return ClipboardStatus::InvalidText;
-        if(static_cast<u8>(character) >= 0x80u)
+        if(static_cast<u8>(character) >= BasicStringDetail::s_Utf8OneByteMaxExclusive)
             ++outputSize;
     }
     if(outputSize > s_ClipboardMaxTextBytes)
@@ -37,9 +45,9 @@ ClipboardStatus::Enum DecodeClipboardLatin1(const AStringView text, AString<Allo
     output.reserve(outputSize);
     for(const char character : text){
         const u8 byte = static_cast<u8>(character);
-        if(byte >= 0x80u){
-            output.push_back(static_cast<char>(0xc0u | (byte >> 6u)));
-            output.push_back(static_cast<char>(0x80u | (byte & 0x3fu)));
+        if(byte >= BasicStringDetail::s_Utf8OneByteMaxExclusive){
+            output.push_back(static_cast<char>(BasicStringDetail::s_Utf8TwoByteMarker | (byte >> BasicStringDetail::s_Utf8ContinuationPayloadBits)));
+            output.push_back(static_cast<char>(BasicStringDetail::s_Utf8ContinuationMarker | (byte & BasicStringDetail::s_Utf8ContinuationPayloadMask)));
         }
         else
             output.push_back(character);
@@ -57,7 +65,7 @@ ClipboardStatus::Enum EncodeClipboardLatin1(const AStringView text, AString<Allo
         const auto codePoint = Utf8TextDetail::DecodeCodePoint(text, offset);
         if(!codePoint)
             return ClipboardStatus::InvalidText;
-        if(*codePoint > 0xffu){
+        if(*codePoint > __hidden_clipboard_text::s_Latin1MaxCodePoint){
             output.clear();
             return ClipboardStatus::Unsupported;
         }

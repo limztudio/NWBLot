@@ -27,6 +27,15 @@ namespace __hidden_ui_scrollbar{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Bar value rows 0..2 carry data; row 3 is padding.
+inline constexpr u32 s_BarValueRowCount = 3u;
+// Each axis can add a reservation once, then both axes are rechecked.
+inline constexpr u32 s_ReservationPassLimit = 3u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] static SIMDMatrixDouble LoadBarValues(const ScrollbarPlacement& bar)noexcept{
     if(!IsFinite(bar.track.x) || !IsFinite(bar.track.y) || !IsFinite(bar.track.width) || !IsFinite(bar.track.height) || !IsFinite(bar.thumb.x) || !IsFinite(bar.thumb.y) || !IsFinite(bar.thumb.width) || !IsFinite(bar.thumb.height) || !IsFinite(bar.contentExtent) || !IsFinite(bar.viewportExtent) || !IsFinite(bar.maximum) || !IsFinite(bar.offset))
         return SIMDMatrixDouble{ .v = { VectorDoubleReplicate(Limit<f64>::s_Infinity), VectorDoubleZero(), VectorDoubleZero(), VectorDoubleZero() } };
@@ -39,7 +48,7 @@ namespace __hidden_ui_scrollbar{
 }
 
 [[nodiscard]] static bool ValidBar(const SIMDMatrixDouble& values, const ScrollAxis::Enum axis)noexcept{
-    for(u32 index = 0u; index < 3u; ++index){
+    for(u32 index = 0u; index < s_BarValueRowCount; ++index){
         if(VectorDoubleMoveMask(VectorDoubleOrInt(VectorDoubleIsNaN(values.v[index]), VectorDoubleIsInfinite(values.v[index]))) != 0u)
             return false;
     }
@@ -185,7 +194,7 @@ Expected<ScrollViewportPlacement> ScrollbarLayout::Calculate(const Rect& bounds,
     bool horizontal = false;
     bool vertical = false;
     // Each axis can only add a reservation; the other axis is rechecked after either addition.
-    for(u32 iteration = 0u; iteration < 3u; ++iteration){
+    for(u32 iteration = 0u; iteration < s_ReservationPassLimit; ++iteration){
         const SIMDVectorDouble viewportSize = VectorDoubleSubtract(VectorDoubleSet(availableWidth, availableHeight, 0.0, 0.0), VectorDoubleSet(vertical ? verticalWidth : 0.0, horizontal ? horizontalHeight : 0.0, 0.0, 0.0));
         const f64 viewportWidth = static_cast<f32>(VectorDoubleGetX(viewportSize));
         const f64 viewportHeight = static_cast<f32>(VectorDoubleGetY(viewportSize));

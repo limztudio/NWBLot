@@ -9,6 +9,22 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "../common/math.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Smallest binary16 normal exponent and the binary16 mantissa width, used to size one binary16 step.
+#define NWB_LIGHT_SPACE_QUANTIZATION_MIN_EXPONENT 113u
+#define NWB_LIGHT_SPACE_QUANTIZATION_MANTISSA_BITS 10u
+// Cap position reconstruction roundoff, in float epsilons.
+#define NWB_LIGHT_SPACE_RECEIVER_ROUNDOFF_EPSILONS 64.0
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if NWB_LIGHT_SPACE_CSG_ENABLED
 #define NWB_MESH_VIEW_BUFFER_HEAP_SLOT g_NwbLightSpacePush.receiverViewSlot
 #include "../mesh/view_ray.slangi"
@@ -22,8 +38,8 @@
 
 // Image stores may truncate; preserve a full binary16 spacing for ordinary receivers.
 float3 nwbLightSpacePositionQuantization(const float3 position){
-    const uint3 exponent = (asuint(abs(position)) >> 23u) & 0xffu;
-    return asfloat((max(exponent, uint3(113u)) - 10u) << 23u);
+    const uint3 exponent = (asuint(abs(position)) >> NWB_FLOAT_MANTISSA_BIT_COUNT) & NWB_FLOAT_EXPONENT_MASK;
+    return asfloat((max(exponent, uint3(NWB_LIGHT_SPACE_QUANTIZATION_MIN_EXPONENT)) - NWB_LIGHT_SPACE_QUANTIZATION_MANTISSA_BITS) << NWB_FLOAT_MANTISSA_BIT_COUNT);
 }
 
 #if NWB_LIGHT_SPACE_CSG_ENABLED
@@ -41,7 +57,7 @@ bool nwbLightSpaceReceiverPosition(const uint2 pixel, const float depth, out flo
             const uint2 extent = uint2(g_NwbLightSpacePush.width, g_NwbLightSpacePush.height);
             position = nwbMeshViewRadialPosition(pixel, cap.pixel, extent, cap.linearDepth);
             // FP32 ray construction, radial storage and reconstruction stay bounded before the unchanged plane proof.
-            const float roundoff = 64.0 * 1.1920928955078125e-7;
+            const float roundoff = NWB_LIGHT_SPACE_RECEIVER_ROUNDOFF_EPSILONS * NWB_FLOAT_EPSILON;
             positionError = (abs(g_NwbMeshCameraPosition.xyz) + abs(position - g_NwbMeshCameraPosition.xyz) + cap.linearDepth) * roundoff;
         }
     }

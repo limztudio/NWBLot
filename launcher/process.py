@@ -15,7 +15,7 @@ from typing import Dict, Optional, Sequence
 from launcher.models import LaunchSettings, ProfileSession
 from launcher import repository_windows_process
 from launcher.constants import (APPLICATION_FORCED_STOP_TIMEOUT_SECONDS, APPLICATION_GRACEFUL_STOP_TIMEOUT_SECONDS, COMMAND_RUN, CWD_PREFIX, GPUDBG_FLAG, LOGSERVER_LABEL, LOG_PREFIX, MSG_KILLING, MSG_LAUNCHED_APP, MSG_LEAVING_APP, MSG_LEAVING_BOTH,
-    MSG_MISSING_EXECUTABLE, MSG_MISSING_WORKDIR, MSG_NO_EXIT_STATUS, MSG_NO_PKILL, MSG_PKILL_FAILED, MSG_POSITIVE_RUN_SECONDS, MSG_RUN_FORCED, MSG_RUN_GRACEFUL, MSG_RUN_REQUEST, MSG_STOPPED_APP, MSG_STOPPING, PKILL_COMMAND, PKILL_FOLLOW_FLAG, PKILL_STDERR_MAX_BYTES, PLATFORM_WINDOWS,
+    MSG_MISSING_EXECUTABLE, MSG_MISSING_WORKDIR, MSG_NO_EXIT_STATUS, MSG_NO_PKILL, MSG_PKILL_FAILED, MSG_POSITIVE_RUN_SECONDS, MSG_RUN_FORCED, MSG_RUN_GRACEFUL, MSG_RUN_REQUEST, MSG_STOPPED_APP, MSG_STOPPING, PKILL_COMMAND, PKILL_FOLLOW_FLAG, PKILL_STDERR_ENCODING, PKILL_STDERR_ERRORS, PKILL_STDERR_MAX_BYTES, PLATFORM_WINDOWS,
     PROFILE_LOGSERVER_TERMINATE_TIMEOUT_SECONDS, PROFILE_LOG_READY_POLL_SECONDS, STOP_KIND_FORCED, STOP_KIND_GRACEFUL,)
 
 
@@ -38,7 +38,7 @@ class ProcessLauncher:
         with tempfile.TemporaryFile() as diagnostic:
             completed = subprocess.run([PKILL_COMMAND, PKILL_FOLLOW_FLAG, pattern], check=False, stdout=subprocess.DEVNULL, stderr=diagnostic,)
             diagnostic.seek(0)
-            detail = diagnostic.read(PKILL_STDERR_MAX_BYTES).decode("utf-8", errors="replace").strip()
+            detail = diagnostic.read(PKILL_STDERR_MAX_BYTES).decode(PKILL_STDERR_ENCODING, errors=PKILL_STDERR_ERRORS).strip()
             if completed.returncode not in (0, 1) or detail:
                 raise SystemExit(MSG_PKILL_FAILED.format(executable=executable, exit_code=completed.returncode, detail=detail))
 

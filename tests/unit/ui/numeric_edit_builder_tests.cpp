@@ -49,7 +49,7 @@ TEST_F(UiNumericEditBuilderTests, AHostWithoutOrderedActionsRejectsTypedEditors)
     PlainHost host;
     m_builder.setEditHost(&host);
     ASSERT_TRUE(beginNumeric(1u));
-    const auto result = m_builder.integerEdit("integer", m_integer, m_integerState);
+    const auto result = m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState);
     EXPECT_FALSE(result.edit.valid);
     EXPECT_FALSE(result.numeric.valid);
     EXPECT_EQ(host.edits, 0u);
@@ -62,7 +62,7 @@ TEST_F(UiNumericEditBuilderTests, SubmitCommitsAtItsPositionBeforeLaterText){
     m_host.key(Core::Key::Enter);
     m_host.text("7");
     ASSERT_TRUE(beginNumeric(1u));
-    const auto result = m_builder.integerEdit("integer", m_integer, m_integerState);
+    const auto result = m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState);
     ASSERT_TRUE(result.edit.valid && result.numeric.valid);
     EXPECT_TRUE(result.edit.submitted && result.edit.textChanged);
     EXPECT_TRUE(result.numeric.committed && result.numeric.valueChanged);
@@ -84,7 +84,7 @@ TEST_F(UiNumericEditBuilderTests, SubmitThenCancelAggregatesActionsAndDropsRetir
     m_host.key(Core::Key::Escape);
     m_host.text("9");
     ASSERT_TRUE(beginNumeric(1u));
-    const auto result = m_builder.integerEdit("integer", m_integer, m_integerState);
+    const auto result = m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState);
     ASSERT_TRUE(result.edit.valid && result.numeric.valid);
     EXPECT_TRUE(result.edit.submitted && result.edit.cancelled);
     EXPECT_TRUE(result.numeric.committed && result.numeric.cancelled && result.numeric.restored);
@@ -101,7 +101,7 @@ TEST_F(UiNumericEditBuilderTests, IncompleteSubmitRetainsDraftAndReportsRejectio
     m_host.replace("-");
     m_host.key(Core::Key::Enter);
     ASSERT_TRUE(beginNumeric(1u));
-    const auto result = m_builder.integerEdit("integer", m_integer, m_integerState);
+    const auto result = m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState);
     ASSERT_TRUE(result.edit.valid && result.numeric.valid);
     EXPECT_TRUE(result.edit.submitted && result.numeric.rejected);
     EXPECT_FALSE(result.numeric.committed || result.numeric.restored);
@@ -117,7 +117,7 @@ TEST_F(UiNumericEditBuilderTests, InvalidBlurRestoresCurrentCommittedValueBefore
     m_host.replace("invalid");
     m_host.action(EditAction::Blur);
     ASSERT_TRUE(beginNumeric(1u));
-    const auto result = m_builder.integerEdit("integer", m_integer, m_integerState);
+    const auto result = m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState);
     ASSERT_TRUE(result.edit.valid && result.numeric.valid);
     EXPECT_TRUE(result.numeric.rejected && result.numeric.restored);
     EXPECT_FALSE(result.numeric.committed || result.numeric.cancelled);
@@ -134,7 +134,7 @@ TEST_F(UiNumericEditBuilderTests, FloatClampUsesTheBoundsOfTheOrderedAction){
     FloatEditOptions options;
     options.bounds = { -10.0, 10.0, NumericBoundsPolicy::Clamp };
     ASSERT_TRUE(beginNumeric(1u));
-    const auto result = m_builder.floatEdit("decimal", m_float, m_floatState, options);
+    const auto result = m_builder.floatEdit(s_DecimalEditKey, m_float, m_floatState, options);
     ASSERT_TRUE(result.edit.valid && result.numeric.valid);
     EXPECT_TRUE(result.numeric.committed && result.numeric.valueChanged && result.numeric.clamped);
     EXPECT_FALSE(result.numeric.rejected || result.numeric.restored);
@@ -147,12 +147,12 @@ TEST_F(UiNumericEditBuilderTests, BoundsPolicyChangePreservesDraftUntilTheNextAc
     useHost();
     ASSERT_TRUE(m_integer.setDraft("42"));
     ASSERT_TRUE(beginNumeric(1u));
-    ASSERT_TRUE(m_builder.integerEdit("integer", m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
     ASSERT_TRUE(acceptNumeric());
     IntegerEditOptions options;
     options.bounds = { -10, 10, NumericBoundsPolicy::Clamp };
     ASSERT_TRUE(beginNumeric(2u));
-    const auto unchanged = m_builder.integerEdit("integer", m_integer, m_integerState, options);
+    const auto unchanged = m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState, options);
     ASSERT_TRUE(unchanged.edit.valid && unchanged.numeric.valid);
     EXPECT_FALSE(unchanged.numeric.committed || unchanged.numeric.restored || unchanged.numeric.clamped);
     EXPECT_EQ(m_integer.value(), 0);
@@ -160,7 +160,7 @@ TEST_F(UiNumericEditBuilderTests, BoundsPolicyChangePreservesDraftUntilTheNextAc
     ASSERT_TRUE(acceptNumeric());
     m_host.key(Core::Key::Enter);
     ASSERT_TRUE(beginNumeric(3u));
-    const auto committed = m_builder.integerEdit("integer", m_integer, m_integerState, options);
+    const auto committed = m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState, options);
     ASSERT_TRUE(committed.edit.valid && committed.numeric.valid);
     EXPECT_TRUE(committed.numeric.committed && committed.numeric.clamped);
     EXPECT_EQ(m_integer.value(), 10);
@@ -177,7 +177,7 @@ TEST_F(UiNumericEditBuilderTests, ReadOnlySubmitDoesNotCommitOrAdvanceNumericRev
     IntegerEditOptions options;
     options.edit.readOnly = true;
     ASSERT_TRUE(beginNumeric(1u));
-    const auto result = m_builder.integerEdit("integer", m_integer, m_integerState, options);
+    const auto result = m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState, options);
     ASSERT_TRUE(result.edit.valid && result.numeric.valid);
     EXPECT_TRUE(result.edit.submitted);
     EXPECT_FALSE(result.numeric.committed || result.numeric.cancelled || result.numeric.restored);
@@ -195,7 +195,7 @@ TEST_F(UiNumericEditBuilderTests, ReadOnlyBlurRestoresWithoutACommitOrUserCancel
     IntegerEditOptions options;
     options.edit.readOnly = true;
     ASSERT_TRUE(beginNumeric(1u));
-    const auto result = m_builder.integerEdit("integer", m_integer, m_integerState, options);
+    const auto result = m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState, options);
     ASSERT_TRUE(result.edit.valid && result.numeric.valid);
     EXPECT_TRUE(result.numeric.restored);
     EXPECT_FALSE(result.numeric.committed || result.numeric.cancelled || result.numeric.rejected);
@@ -213,13 +213,13 @@ TEST_F(UiNumericEditBuilderTests, DisabledAbandonRestoresBeforeIgnoredInput){
     IntegerEditOptions options;
     options.edit.enabled = false;
     ASSERT_TRUE(beginNumeric(1u));
-    const auto result = m_builder.integerEdit("integer", m_integer, m_integerState, options);
+    const auto result = m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState, options);
     ASSERT_TRUE(result.edit.valid && result.numeric.valid);
     EXPECT_TRUE(result.edit.abandoned && result.numeric.restored);
     EXPECT_FALSE(result.edit.focused || result.numeric.committed || result.numeric.cancelled);
     EXPECT_EQ(m_integer.draft().text(), AStringView("12"));
     ASSERT_TRUE(acceptNumeric());
-    const HitTarget* field = target(id("integer", "panel"));
+    const HitTarget* field = target(id(s_IntegerEditKey, s_NumericPanelKey));
     ASSERT_TRUE(field);
     EXPECT_FALSE(field->enabled || field->focusable);
 }
@@ -232,7 +232,7 @@ TEST_F(UiNumericEditBuilderTests, PreeditOwnsEnterAndTheFirstEscape){
     m_host.key(Core::Key::Enter);
     m_host.key(Core::Key::Escape);
     ASSERT_TRUE(beginNumeric(1u));
-    const auto first = m_builder.integerEdit("integer", m_integer, m_integerState);
+    const auto first = m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState);
     ASSERT_TRUE(first.edit.valid && first.numeric.valid);
     EXPECT_FALSE(first.edit.submitted || first.edit.cancelled);
     EXPECT_FALSE(first.numeric.committed || first.numeric.cancelled);
@@ -242,7 +242,7 @@ TEST_F(UiNumericEditBuilderTests, PreeditOwnsEnterAndTheFirstEscape){
     ASSERT_TRUE(acceptNumeric());
     m_host.key(Core::Key::Escape);
     ASSERT_TRUE(beginNumeric(2u));
-    const auto second = m_builder.integerEdit("integer", m_integer, m_integerState);
+    const auto second = m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState);
     ASSERT_TRUE(second.edit.valid && second.numeric.valid);
     EXPECT_TRUE(second.edit.cancelled && second.numeric.cancelled && second.numeric.restored);
     EXPECT_EQ(m_integer.draft().text(), AStringView("12"));
@@ -253,7 +253,7 @@ TEST_F(UiNumericEditBuilderTests, NumericSetterDuringTheHostLoanPreservesApplica
     useHost();
     m_host.onLoanInteger = &m_integer;
     ASSERT_TRUE(beginNumeric(1u));
-    const auto result = m_builder.integerEdit("integer", m_integer, m_integerState);
+    const auto result = m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState);
     EXPECT_TRUE(m_host.mutationApplied);
     EXPECT_FALSE(result.edit.valid || result.numeric.valid);
     EXPECT_EQ(m_integer.value(), 99);
@@ -265,7 +265,7 @@ TEST_F(UiNumericEditBuilderTests, BuilderResetReentryDuringTheHostLoanRejects){
     useHost();
     m_host.resetBuilder = &m_builder;
     ASSERT_TRUE(beginNumeric(1u));
-    const auto result = m_builder.integerEdit("integer", m_integer, m_integerState);
+    const auto result = m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState);
     EXPECT_FALSE(result.edit.valid || result.numeric.valid);
     EXPECT_TRUE(m_context.failed());
     EXPECT_EQ(m_host.loans, 1u);
@@ -275,7 +275,7 @@ TEST_F(UiNumericEditBuilderTests, SharedTypedModelIsRejectedBeforeTheSecondHostL
     useHost();
     EditBoxState another;
     ASSERT_TRUE(beginNumeric(1u));
-    ASSERT_TRUE(m_builder.integerEdit("integer", m_integer, m_integerState).edit.valid);
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
     const auto duplicate = m_builder.integerEdit("duplicate", m_integer, another);
     EXPECT_FALSE(duplicate.edit.valid || duplicate.numeric.valid);
     EXPECT_EQ(m_host.loans, 1u);
@@ -285,8 +285,8 @@ TEST_F(UiNumericEditBuilderTests, SharedTypedModelIsRejectedBeforeTheSecondHostL
 TEST_F(UiNumericEditBuilderTests, SharedEditorStateIsRejectedBeforeTheSecondHostLoan){
     useHost();
     ASSERT_TRUE(beginNumeric(1u));
-    ASSERT_TRUE(m_builder.integerEdit("integer", m_integer, m_integerState).edit.valid);
-    const auto duplicate = m_builder.floatEdit("decimal", m_float, m_integerState);
+    ASSERT_TRUE(m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState).edit.valid);
+    const auto duplicate = m_builder.floatEdit(s_DecimalEditKey, m_float, m_integerState);
     EXPECT_FALSE(duplicate.edit.valid || duplicate.numeric.valid);
     EXPECT_EQ(m_host.loans, 1u);
     EXPECT_TRUE(m_context.failed());
@@ -298,7 +298,7 @@ TEST_F(UiNumericEditBuilderTests, InvalidBoundsRejectBeforeBorrowingTheHost){
     options.bounds.minimum = 20;
     options.bounds.maximum = 10;
     ASSERT_TRUE(beginNumeric(1u));
-    const auto result = m_builder.integerEdit("integer", m_integer, m_integerState, options);
+    const auto result = m_builder.integerEdit(s_IntegerEditKey, m_integer, m_integerState, options);
     EXPECT_FALSE(result.edit.valid || result.numeric.valid);
     EXPECT_EQ(m_host.loans, 0u);
     EXPECT_TRUE(m_context.failed());

@@ -12,6 +12,7 @@
 #include <core/graphics/rhi/queue_sharing.h>
 
 #include <global/exception.h>
+#include <global/scope_exit.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -312,8 +313,12 @@ StandaloneGraphWorkspace* StandaloneGraphWorkspacePool::acquire(){
 }
 
 void StandaloneGraphWorkspacePool::release(StandaloneGraphWorkspace& workspace){
+    // A throwing reset destroys this owner set during the unwind, so a stuck lease never blocks device teardown.
+    ScopeExit discardOnUnwind([this, &workspace]()noexcept{ discard(workspace); });
+
     // Reset outside the lock because payload teardown may run task callbacks.
     workspace.reset();
+    discardOnUnwind.release();
 
     ScopedLock lock(m_mutex);
     workspace.leased = false;

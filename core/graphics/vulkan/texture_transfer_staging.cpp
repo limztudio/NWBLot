@@ -23,6 +23,8 @@ namespace __hidden_texture_transfer_staging{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr TStringView s_SliceCopyContractReason = NWB_TEXT("source and destination slices violate the copy contract");
+
 [[nodiscard]] inline Expected<VkBufferImageCopy> BuildStagingTextureCopyRegion(
     const TextureSlice& stagingSlice,
     const TextureSlice& imageSlice,
@@ -73,7 +75,7 @@ void CommandList::copyTexture(StagingTexture& dest, const TextureSlice& destSlic
 
     const auto region = prepareStagingTextureCopy(dest, destSlice, src, srcSlice);
     if(!region){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination slices violate the copy contract"));
+        rejectCommandRecording(s_OperationName, __hidden_texture_transfer_staging::s_SliceCopyContractReason);
         return;
     }
     const bool depthStencilCopy = (src.m_aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0u;
@@ -109,7 +111,7 @@ void CommandList::copyTexture(Texture& dest, const TextureSlice& destSlice, Stag
 
     const auto region = prepareStagingTextureCopy(src, srcSlice, dest, destSlice);
     if(!region){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination slices violate the copy contract"));
+        rejectCommandRecording(s_OperationName, __hidden_texture_transfer_staging::s_SliceCopyContractReason);
         return;
     }
     const bool depthStencilCopy = (dest.m_aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0u;
@@ -193,7 +195,7 @@ bool CommandList::validateStagingTextureCopyResources(StagingTexture& stagingTex
         stagingTexture.m_admittedQueueFamilies.size() <= Limit<u32>::s_Max
         && (
             (stagingTexture.m_creationSharingMode == VK_SHARING_MODE_EXCLUSIVE && stagingTexture.m_admittedQueueFamilies.size() == 1u)
-            || (stagingTexture.m_creationSharingMode == VK_SHARING_MODE_CONCURRENT && stagingTexture.m_admittedQueueFamilies.size() >= 2u)
+            || (stagingTexture.m_creationSharingMode == VK_SHARING_MODE_CONCURRENT && stagingTexture.m_admittedQueueFamilies.size() >= s_MinConcurrentSharingQueueFamilyCount)
         )
     );
 

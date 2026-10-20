@@ -128,7 +128,7 @@ public:
             && !meshletAttributeRefDeltas.empty()
             && !meshletLocalVertexRefs.empty()
             && !meshletPrimitiveIndices.empty()
-            && solidTriangleWords.size() == (meshletPrimitiveIndices.size() / 3u + 31u) / 32u
+            && solidTriangleWords.size() == (meshletPrimitiveIndices.size() / s_MeshletTriangleIndexCount + s_MeshletSolidTriangleWordRoundUp) / s_MeshletSolidTriangleWordBits
             && meshletPositionRefCount > 0u
             && meshletAttributeRefCount > 0u
             && attributeSkins.size() == meshletAttributeRefCount

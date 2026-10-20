@@ -8,6 +8,7 @@
 #include <impl/ecs_render/deferred/task_graph_present_task.h>
 #include <impl/ecs_render/kernel/task_graph_frame_timing_end_task.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
+#include <impl/ecs_render/kernel/timing_names.h>
 
 #include <core/graphics/backend_selection/backend.h>
 
@@ -137,7 +138,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
     Core::GpuTaskDesc compositeDesc;
     compositeDesc
         .setIdentity(Name("render.deferred_composite"))
-        .setMarkerLabel("Deferred Composite")
+        .setMarkerLabel(RendererGpuPassText::s_DeferredCompositeLabel)
         .setScheduling(compositeScheduling)
         .setDependencies(compositeDependencies, LengthOf(compositeDependencies))
         .setResourceUses(compositeResourceUses, LengthOf(compositeResourceUses))
@@ -181,7 +182,8 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
         ReadUse(compositeBindlessSlots, Core::ResourceStates::ConstantBuffer),
         WriteTextureUse(backbuffer, presentationFramebufferDesc.colorAttachments[0].subresources, Core::ResourceStates::RenderTarget),
     };
-    usize presentResourceUseCount = 3u;
+    constexpr usize s_PresentBaseResourceUseCount = 3u;
+    usize presentResourceUseCount = s_PresentBaseResourceUseCount;
     const Core::GpuTaskResourceVersionUse outputLayerVersionUse{ .version = outputLayer.colorVersion, .role = Core::GpuTaskResourceVersionRole::Consume, };
     if(outputLayer.color.valid())
         presentResourceUses[presentResourceUseCount++] = ReadUse(outputLayer.color);
@@ -204,7 +206,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
     Core::GpuTaskDesc presentDesc;
     presentDesc
         .setIdentity(Name("render.deferred_present"))
-        .setMarkerLabel("Deferred Present")
+        .setMarkerLabel(RendererGpuPassText::s_DeferredPresentLabel)
         .setScheduling(presentScheduling)
         .setDependencies(presentDependencies, presentDependencyCount)
         .setResourceUses(presentResourceUses, presentResourceUseCount)

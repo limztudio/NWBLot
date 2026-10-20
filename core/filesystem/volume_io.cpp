@@ -111,7 +111,7 @@ static bool ForEachSegmentChunk(const AStringView volumeName, const AStringView 
     u64 endOffset = 0;
     const auto endOffsetResult = AddNoOverflow(offset, byteCount);
     if(!endOffsetResult){
-        LogFailure(volumeName, operation, "offset overflow");
+        LogFailure(volumeName, operation, FilesystemVolumeDetail::s_VolumeDetailOffsetOverflow);
         return false;
     }
     endOffset = *endOffsetResult;
@@ -425,7 +425,7 @@ Expected<u64, ErrorCode> VolumeFileSystem::computePhysicalCapacityLocked()const 
 
     const usize fullSegmentCount = m_segmentPaths.size() - 1u;
     if(static_cast<u64>(fullSegmentCount) > Limit<u64>::s_Max / m_segmentSize){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpPhysicalCapacity, "segment capacity overflow");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpPhysicalCapacity, FilesystemVolumeDetail::s_VolumeDetailSegmentCapacityOverflow);
         return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
     }
 
@@ -453,7 +453,7 @@ bool VolumeFileSystem::readBytesLocked(const u64 offset, void* data, const u64 b
     if(byteCount == 0)
         return true;
     if(data == nullptr){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpReadBytes, "invalid arguments");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpReadBytes, FilesystemVolumeDetail::s_VolumeDetailInvalidArguments);
         return false;
     }
 
@@ -465,14 +465,14 @@ bool VolumeFileSystem::writeBytesLocked(const u64 offset, const void* data, cons
     if(byteCount == 0)
         return true;
     if(data == nullptr){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpWriteBytes, "invalid arguments");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpWriteBytes, FilesystemVolumeDetail::s_VolumeDetailInvalidArguments);
         return false;
     }
 
     u64 endOffset = 0;
     const auto endOffsetResult = ::AddNoOverflow(offset, byteCount);
     if(!endOffsetResult){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpWriteBytes, "offset overflow");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpWriteBytes, FilesystemVolumeDetail::s_VolumeDetailOffsetOverflow);
         return false;
     }
     endOffset = *endOffsetResult;

@@ -23,7 +23,7 @@ struct TextAreaOptions{
     LayoutSize height = { LayoutSizePolicy::Fixed, 160.0f };
     bool enabled = true;
     bool readOnly = false;
-    f32 wheelLines = 3.0f;
+    f32 wheelLines = s_StyleScrollWheelStep;
 };
 
 // Model and viewport remain lent through the enclosing scope; public intents retire even identical prior loans.

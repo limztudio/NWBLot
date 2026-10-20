@@ -45,6 +45,9 @@ using VirtualPathHashSet = Core::Assets::CookEntryPathHashSet;
 using IncludeMetadataMap = ShaderCook::CookMap<CookString, ShaderCook::IncludeEntry>;
 using ShaderEntryVector = CookVector<ShaderCook::ShaderEntry>;
 
+inline constexpr AStringView s_DependencyRepoRootAlias = "repo";
+inline constexpr AStringView s_DependencyGeneratedCacheRootAlias = "generated_cache";
+
 struct PreparedShaderEntry{
     ShaderCook::ShaderEntry entry;
     Path sourcePath;

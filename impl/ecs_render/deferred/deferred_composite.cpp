@@ -37,8 +37,8 @@ namespace __hidden_deferred_composite{
 struct CompositePushConstants{
     u32 resourceSlots = 0u;
     u32 refractionResources = 0u;
-    u32 opaqueReflectionSlot = 0xffffffffu;
-    u32 glassReflectionSlot = 0xffffffffu;
+    u32 opaqueReflectionSlot = Core::GpuDescriptorHandle::s_Invalid;
+    u32 glassReflectionSlot = Core::GpuDescriptorHandle::s_Invalid;
     u32 reflectionDebugView = 0u;
 };
 static_assert(sizeof(CompositePushConstants) == sizeof(u32) * 5u);

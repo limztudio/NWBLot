@@ -151,9 +151,11 @@ public:
 };
 
 struct ShaderDesc{
+    static constexpr AStringView s_DefaultEntryName = "main";
+
     Name debugName;
     // Borrowed until shader creation completes; the created shader rebinds this to its own retained bytecode.
-    AStringView entryName = "main";
+    AStringView entryName = s_DefaultEntryName;
     CustomSemantic* pCustomSemantics = nullptr;
     u32* pCoordinateSwizzling = nullptr;
 

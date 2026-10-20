@@ -42,10 +42,10 @@ bool nwbOpticalClosestSurfaceHit(
 #endif
 #if NWB_RT_CSG_ENABLED
     const uint contextSlot = NWB_RT_CSG_CONTEXT_SLOT;
-    const uint activeOffset = nwbHeapRawBuffer(contextSlot).Load(20u);
-    const uint activeCount = nwbHeapRawBuffer(contextSlot).Load(24u);
+    const uint activeOffset = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_BASE_OFFSET);
+    const uint activeCount = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_COUNT_OFFSET);
     for(uint index = 0u; index < activeCount; ++index){
-        const uint instance = nwbHeapRawBuffer(contextSlot).Load(activeOffset + index * 4u);
+        const uint instance = nwbHeapRawBuffer(contextSlot).Load(activeOffset + index * NWB_CSG_RAY_ACTIVE_INDEX_BYTES);
         const NwbSwBvhInstance receiver = nwbCsgRayLoadInstance(contextSlot, instance);
         const NwbBvhNode root = nwbCsgRayReceiverRoot(contextSlot, instance, receiver);
         if(!nwbCsgRayBoundsIntersect(receiver, root, origin, direction, minimum, closest.distance))
@@ -86,7 +86,7 @@ bool nwbOpticalCheckBoundary(
 ){
     if(!nwbOpticalConsumeQuery(config, result))
         return false;
-    const float tolerance = 4.0 * max(nwbOpticsPositionUncertainty(origin), nwbOpticsPositionUncertainty(hit.position));
+    const float tolerance = NWB_OPTICS_POSITION_TOLERANCE_SCALE * max(nwbOpticsPositionUncertainty(origin), nwbOpticsPositionUncertainty(hit.position));
     RayDesc ray;
     ray.Origin = origin;
     ray.Direction = direction;
@@ -96,10 +96,10 @@ bool nwbOpticalCheckBoundary(
 #if NWB_RT_CSG_ENABLED
     bool csgFound = false;
     const uint contextSlot = NWB_RT_CSG_CONTEXT_SLOT;
-    const uint activeOffset = nwbHeapRawBuffer(contextSlot).Load(20u);
-    const uint activeCount = nwbHeapRawBuffer(contextSlot).Load(24u);
+    const uint activeOffset = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_BASE_OFFSET);
+    const uint activeCount = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_COUNT_OFFSET);
     for(uint index = 0u; index < activeCount; ++index){
-        const uint instance = nwbHeapRawBuffer(contextSlot).Load(activeOffset + index * 4u);
+        const uint instance = nwbHeapRawBuffer(contextSlot).Load(activeOffset + index * NWB_CSG_RAY_ACTIVE_INDEX_BYTES);
         const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(config.instanceMaterialHeapSlot)[instance];
         if((material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT) == 0u)
             continue;
@@ -183,7 +183,7 @@ bool nwbOpticalCheckBoundary(
         const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(config.instanceMaterialHeapSlot)[hit.instance];
         const float3 normal = nwbRayTraceTriangleGeometricNormal(material, query.CandidatePrimitiveIndex(), query.CandidateWorldToObject3x4());
         const float facing = dot(direction, normal);
-        if(!isfinite(facing) || abs(facing) <= 1e-6 || facing * dot(direction, hit.geometricNormal) <= 0.0 || !nwbRayTraceCoplanarSeam(config.instanceMaterialHeapSlot, hit.instance, hit.primitive, query.CandidatePrimitiveIndex())){
+        if(!isfinite(facing) || abs(facing) <= NWB_OPTICAL_FACING_EPSILON || facing * dot(direction, hit.geometricNormal) <= 0.0 || !nwbRayTraceCoplanarSeam(config.instanceMaterialHeapSlot, hit.instance, hit.primitive, query.CandidatePrimitiveIndex())){
             query.Abort();
             result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
             return false;
@@ -205,7 +205,7 @@ NwbOpticalTraceResult nwbOpticalTrace(const NwbOpticalTraceConfig config, const 
     result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
     if(
         !all(isfinite(initialOrigin)) || !all(isfinite(initialDirection)) || dot(initialDirection, initialDirection) <= 0.0 || !isfinite(config.minDistance) || !isfinite(config.maxDistance) || config.minDistance < 0.0
-        || config.maxDistance <= config.minDistance || config.opticalSceneHeapSlot == 0xffffffffu
+        || config.maxDistance <= config.minDistance || config.opticalSceneHeapSlot == NWB_BINDLESS_HEAP_INVALID_SLOT
     )
         return result;
     float3 direction = normalize(initialDirection);
@@ -315,7 +315,7 @@ NwbOpticalTraceResult nwbOpticalTrace(const NwbOpticalTraceConfig config, const 
                 return result;
             }
             const float facing = dot(direction, hit.geometricNormal);
-            if(abs(facing) <= 1e-6){
+            if(abs(facing) <= NWB_OPTICAL_FACING_EPSILON){
                 result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
                 return result;
             }

@@ -109,7 +109,7 @@ private:
     };
 
     struct TextAreaFrame{
-        f32 wheelLines = 3.0f;
+        f32 wheelLines = s_StyleScrollWheelStep;
         const EditModel* model = nullptr;
         TextAreaState* state = nullptr;
         EditNavigationSnapshot navigation;

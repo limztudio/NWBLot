@@ -97,6 +97,14 @@ struct NwbCsgRayResolution{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static const float NWB_CSG_RAY_ROUNDOFF_EPSILON_SCALE = 8.0;
+static const float NWB_CSG_RAY_CUTOFF_EPSILON_SCALE = 32.0;
+static const float NWB_CSG_RAY_DISTANCE_MAGNITUDE_MIN = 1e-4;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 interface NwbCsgRayOpenVisitor{
     [mutating] uint visit(const uint primitive, const float distance, const float2 barycentrics, const float minimum, const float maximum, __constref NwbCsgRayCutInterval cuts[NWB_CSG_RAY_MAX_CUTTERS], const uint cutCount);
 };
@@ -120,28 +128,28 @@ uint4 nwbCsgRayReceiverRange(const uint contextSlot, const uint instanceIndex){
 }
 
 uint nwbCsgRayValidateReceiverRange(const uint contextSlot, const uint4 range){
-    const uint cutterCount = nwbHeapRawBuffer(contextSlot).Load(12u);
+    const uint cutterCount = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_CUTTER_COUNT_OFFSET);
     return (range.z & NWB_CSG_RAY_RECEIVER_UNSUPPORTED) != 0u || range.w == 0u || range.x > cutterCount || range.y > cutterCount - range.x || range.y > NWB_CSG_RAY_MAX_CUTTERS ? NWB_CSG_RAY_FAILURE_UNSUPPORTED : 0u;
 }
 
 NwbCsgRayCutter nwbCsgRayLoadCutter(const uint contextSlot, const uint cutterIndex){
-    const uint offset = nwbHeapRawBuffer(contextSlot).Load(8u) + cutterIndex * NWB_CSG_RAY_CUTTER_BYTES;
+    const uint offset = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_CUTTER_BASE_OFFSET) + cutterIndex * NWB_CSG_RAY_CUTTER_BYTES;
     NwbCsgRayCutter cutter;
     cutter.shapeType = nwbHeapRawBuffer(contextSlot).Load(offset);
-    cutter.worldToShapeRow0 = asfloat(nwbHeapRawBuffer(contextSlot).Load4(offset + 16u));
-    cutter.worldToShapeRow1 = asfloat(nwbHeapRawBuffer(contextSlot).Load4(offset + 32u));
-    cutter.worldToShapeRow2 = asfloat(nwbHeapRawBuffer(contextSlot).Load4(offset + 48u));
-    cutter.parameter0 = asfloat(nwbHeapRawBuffer(contextSlot).Load4(offset + 64u));
+    cutter.worldToShapeRow0 = asfloat(nwbHeapRawBuffer(contextSlot).Load4(offset + NWB_CSG_RAY_CUTTER_ROW0_OFFSET));
+    cutter.worldToShapeRow1 = asfloat(nwbHeapRawBuffer(contextSlot).Load4(offset + NWB_CSG_RAY_CUTTER_ROW1_OFFSET));
+    cutter.worldToShapeRow2 = asfloat(nwbHeapRawBuffer(contextSlot).Load4(offset + NWB_CSG_RAY_CUTTER_ROW2_OFFSET));
+    cutter.parameter0 = asfloat(nwbHeapRawBuffer(contextSlot).Load4(offset + NWB_CSG_RAY_CUTTER_PARAMETER0_OFFSET));
     return cutter;
 }
 
 NwbSwBvhInstance nwbCsgRayLoadInstance(const uint contextSlot, const uint instanceIndex){
-    const uint offset = nwbHeapRawBuffer(contextSlot).Load(16u) + instanceIndex * NWB_CSG_RAY_INSTANCE_BYTES;
+    const uint offset = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_INSTANCE_BASE_OFFSET) + instanceIndex * NWB_CSG_RAY_INSTANCE_BYTES;
     NwbSwBvhInstance instance;
     instance.worldToObjectRow0 = asfloat(nwbHeapRawBuffer(contextSlot).Load4(offset));
-    instance.worldToObjectRow1 = asfloat(nwbHeapRawBuffer(contextSlot).Load4(offset + 16u));
-    instance.worldToObjectRow2 = asfloat(nwbHeapRawBuffer(contextSlot).Load4(offset + 32u));
-    const uint4 tail = nwbHeapRawBuffer(contextSlot).Load4(offset + 48u);
+    instance.worldToObjectRow1 = asfloat(nwbHeapRawBuffer(contextSlot).Load4(offset + NWB_CSG_RAY_INSTANCE_ROW1_OFFSET));
+    instance.worldToObjectRow2 = asfloat(nwbHeapRawBuffer(contextSlot).Load4(offset + NWB_CSG_RAY_INSTANCE_ROW2_OFFSET));
+    const uint4 tail = nwbHeapRawBuffer(contextSlot).Load4(offset + NWB_CSG_RAY_INSTANCE_TAIL_OFFSET);
     instance.reservedMeshIndex = tail.x;
     instance.primitiveCount = tail.y;
     instance.pad0 = tail.z;
@@ -158,16 +166,16 @@ NwbBvhNode nwbCsgRayReceiverRoot(const uint contextSlot, const uint instanceInde
         const uint4 lower = nwbHeapRawBuffer(instance.reservedMeshIndex).Load4(NWB_RUNTIME_MESH_BOUNDS_MIN_OFFSET);
         const uint4 upper = nwbHeapRawBuffer(instance.reservedMeshIndex).Load4(NWB_RUNTIME_MESH_BOUNDS_MAX_OFFSET);
         NwbBvhNode root = (NwbBvhNode)0;
-        root.aabbMin = (lower.w & NWB_RUNTIME_MESH_BOUNDS_FLAG_VALID) != 0u ? asfloat(lower.xyz) : float3(asfloat(0x7fc00000u));
+        root.aabbMin = (lower.w & NWB_RUNTIME_MESH_BOUNDS_FLAG_VALID) != 0u ? asfloat(lower.xyz) : float3(asfloat(NWB_FLOAT_QUIET_NAN_BITS));
         root.aabbMax = asfloat(upper.xyz);
         return root;
     }
     if(instance.pad0 != NWB_CSG_RAY_INVALID_INDEX)
         return nwbHeapBvhNodes(instance.pad0)[0u];
-    const uint offset = nwbHeapRawBuffer(contextSlot).Load(16u) + instanceIndex * NWB_CSG_RAY_INSTANCE_BYTES + 64u;
+    const uint offset = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_INSTANCE_BASE_OFFSET) + instanceIndex * NWB_CSG_RAY_INSTANCE_BYTES + NWB_CSG_RAY_INSTANCE_LOCAL_MIN_OFFSET;
     NwbBvhNode root = (NwbBvhNode)0;
     root.aabbMin = asfloat(nwbHeapRawBuffer(contextSlot).Load3(offset));
-    root.aabbMax = asfloat(nwbHeapRawBuffer(contextSlot).Load3(offset + 16u));
+    root.aabbMax = asfloat(nwbHeapRawBuffer(contextSlot).Load3(offset + NWB_CSG_RAY_LANE_BYTES));
     return root;
 }
 
@@ -199,7 +207,7 @@ bool nwbCsgRayBoundsIntersect(const NwbSwBvhInstance instance, const NwbBvhNode 
 }
 
 bool nwbCsgRaySameDistance(const float first, const float second){
-    return abs(first - second) <= 8.0 * 1.1920928955078125e-7 * max(max(abs(first), abs(second)), 1e-4);
+    return abs(first - second) <= NWB_CSG_RAY_ROUNDOFF_EPSILON_SCALE * NWB_FLOAT_EPSILON * max(max(abs(first), abs(second)), NWB_CSG_RAY_DISTANCE_MAGNITUDE_MIN);
 }
 
 // Outward slab uncertainty is used only to certify removed space, never as an occluder or a ray bias.
@@ -207,7 +215,7 @@ bool nwbCsgRayReceiverSegment(const NwbSwBvhInstance instance, const NwbBvhNode 
     segment = float2(minimum, maximum);
     const float3 origin = nwbSwBvhTransformPoint(instance, worldOrigin);
     const float3 direction = nwbSwBvhTransformVector(instance, worldDirection);
-    const float roundoff = 8.0 * 1.1920928955078125e-7;
+    const float roundoff = NWB_CSG_RAY_ROUNDOFF_EPSILON_SCALE * NWB_FLOAT_EPSILON;
     const float4 point = float4(abs(worldOrigin), 1.0);
     const float3 originError = float3(dot(abs(instance.worldToObjectRow0), point), dot(abs(instance.worldToObjectRow1), point), dot(abs(instance.worldToObjectRow2), point)) * roundoff;
     const float3 directionError = float3(dot(abs(instance.worldToObjectRow0.xyz), abs(worldDirection)), dot(abs(instance.worldToObjectRow1.xyz), abs(worldDirection)), dot(abs(instance.worldToObjectRow2.xyz), abs(worldDirection))) * roundoff;
@@ -283,7 +291,7 @@ NwbCsgRayTriangleHit nwbCsgRayIntersectTriangle(const NwbRtInstanceMaterial mate
         result.failure = NWB_CSG_RAY_FAILURE_TOPOLOGY;
         return result;
     }
-    const float supportEpsilon = 8.0 * 1.1920928955078125e-7;
+    const float supportEpsilon = NWB_RAYTRACE_INCIDENT_SUPPORT_EPSILON_SCALE * NWB_FLOAT_EPSILON;
     if(u < -supportEpsilon || v < -supportEpsilon || u + v > 1.0 + supportEpsilon || distance <= 0.0)
         return result;
     float2 barycentrics = max(float2(u, v), float2(0.0));

@@ -81,10 +81,11 @@ void CommandList::abandonMarker()noexcept{
 
 
 CommandMarkerRecordingToken CommandList::beginMarkerLease(const AStringView name){
-    if(!validateCommandRecordingScope(NWB_TEXT("begin command-list marker")))
+    constexpr TStringView s_OperationName = NWB_TEXT("begin command-list marker");
+    if(!validateCommandRecordingScope(s_OperationName))
         return {};
     if(m_nextMarkerSerial == Limit<u64>::s_Max){
-        rejectCommandRecording(NWB_TEXT("begin command-list marker"), NWB_TEXT("marker identity space is exhausted"));
+        rejectCommandRecording(s_OperationName, NWB_TEXT("marker identity space is exhausted"));
         return {};
     }
 

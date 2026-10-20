@@ -90,7 +90,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
 
     if(
         !targets.bindless.valid()
-        || (targets.surfelResolveFactor != 2u && targets.surfelResolveFactor != 4u)
+        || (targets.surfelResolveFactor != static_cast<u32>(SurfelGiResolveResolution::Half) && targets.surfelResolveFactor != static_cast<u32>(SurfelGiResolveResolution::Quarter))
         || !deferredLightingResources.valid()
         || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_surfelConstantsHeapHandle, Core::GpuDescriptorClass::UniformBuffer)
         || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_surfelPoolHeapHandle, Core::GpuDescriptorClass::StorageBuffer)

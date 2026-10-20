@@ -38,7 +38,7 @@ NwbCsgRayCollection nwbCsgRayCollectCrossings<T : NwbCsgRayOpenVisitor>(
     NwbCsgRayCollection result = (NwbCsgRayCollection)0;
     const NwbSwBvhInstance instance = nwbCsgRayLoadInstance(contextSlot, instanceIndex);
     const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(materialSlot)[instanceIndex];
-    NwbBvhRayIterator<NWB_CSG_RAY_SW_STACK_SIZE> iterator = nwbBvhRayBeginWalk<NWB_CSG_RAY_SW_STACK_SIZE>(material.nodeSlot, nwbSwBvhTransformPoint(instance, worldOrigin), nwbSwBvhTransformVector(instance, worldDirection), 0.0, asfloat(0x7f7fffffu));
+    NwbBvhRayIterator<NWB_CSG_RAY_SW_STACK_SIZE> iterator = nwbBvhRayBeginWalk<NWB_CSG_RAY_SW_STACK_SIZE>(material.nodeSlot, nwbSwBvhTransformPoint(instance, worldOrigin), nwbSwBvhTransformVector(instance, worldDirection), 0.0, asfloat(NWB_FLOAT_MAX_BITS));
     uint primitive;
     while(nwbBvhRayNextLeaf(iterator, primitive)){
         const bool closed = nwbCsgRayPrimitiveClosed(contextSlot, membershipOffset, primitive);

@@ -13,6 +13,7 @@
 #include "csg_shader_variants.h"
 #include "mesh_object_shader_plan.h"
 
+#include <impl/assets_csg/cook.h>
 #include <impl/assets_material/cook.h>
 #include <impl/assets_material/shader_stage_names.h>
 #include <impl/assets_shader/source_dependencies.h>
@@ -40,6 +41,8 @@ namespace __hidden_shader_cook_plan{
 using namespace AssetsGraphicsCookDetail;
 
 static constexpr AStringView s_EnabledImplicitDefineValue = "1";
+// One shader entry can expand to itself, its object-vertex entry, and its mesh-compute shadow entry.
+static constexpr usize s_MaxPreparedEntriesPerShaderEntry = 3u;
 using IncludeDirectoryScratchSet = HashSet<ScratchString, ScratchArena, Hasher<ScratchString>, EqualTo<ScratchString>>;
 using DependencyPathScratchSet = HashSet<ScratchString, ScratchArena, Hasher<ScratchString>, EqualTo<ScratchString>>;
 
@@ -294,11 +297,11 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
 ){
 
     PreparedShaderPlan plan(cookArena);
-    if(inOutShaderEntries.size() > Limit<usize>::s_Max / 3u){
+    if(inOutShaderEntries.size() > Limit<usize>::s_Max / __hidden_shader_cook_plan::s_MaxPreparedEntriesPerShaderEntry){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: prepared shader entry reserve count overflows"));
         return MakeUnexpected(Failure{});
     }
-    plan.preparedEntries.reserve(inOutShaderEntries.size() * 3u);
+    plan.preparedEntries.reserve(inOutShaderEntries.size() * __hidden_shader_cook_plan::s_MaxPreparedEntriesPerShaderEntry);
     plan.plannedFileCount = 1; // shader archive index
 
     const AssetsGraphicsCsgShaderVariants::ShaderStageKeySet materialClipShaderKeys = AssetsGraphicsCsgShaderVariants::CollectMaterialClipShaderKeys(materialEntries, scratchArena);
@@ -413,10 +416,10 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
             preparedEntry.dependencies,
             preparedEntry.includeDirectories,
             {
-                { resolvedPaths.repoRoot, "repo" },
-                { resolvedPaths.cacheDirectory, "generated_cache" },
+                { resolvedPaths.repoRoot, s_DependencyRepoRootAlias },
+                { resolvedPaths.cacheDirectory, s_DependencyGeneratedCacheRootAlias },
                 { materialBindIncludeRoot, MaterialBindNames::GeneratedIncludeCacheDirectoryText() },
-                { csgShapeIncludeRoot, "csg_modules" }
+                { csgShapeIncludeRoot, AssetsCsgCook::s_GeneratedIncludeCacheDirectory }
             },
             scratchArena
         );

@@ -45,7 +45,7 @@ Expected<LightSpacePlan> BuildLightSpacePlan(const SoftwareShadowSettings& setti
             return MakeUnexpected(Failure{});
         const bool point = request.type == Scene::LightType::Point;
         const u32 resolution = point ? settings.pointResolution : settings.directionalResolution;
-        const u32 viewCount = point ? 6u : 1u;
+        const u32 viewCount = point ? s_PointLightViewCount : 1u;
         const u64 pixelsPerView = static_cast<u64>(resolution) * resolution;
         const u64 pixels = plan.totalPixels + pixelsPerView * viewCount;
         const u32 newViewCount = plan.viewCount + viewCount;

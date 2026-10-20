@@ -20,12 +20,6 @@ namespace HalfConvertDetail{
 
 
 // IEEE-754 binary32/binary16 layout; scalar fallback documents the shared bit contract.
-inline constexpr u32 s_F32SignBitMask = 0x80000000u;
-inline constexpr u32 s_F32AbsoluteBitMask = 0x7fffffffu;
-inline constexpr u32 s_F32InfinityBits = 0x7f800000u;
-inline constexpr u32 s_F32MantissaBitCount = 23u;
-inline constexpr u32 s_F32ImplicitMantissaBit = 0x800000u;
-inline constexpr u32 s_F32MantissaBitMask = 0x7fffffu;
 inline constexpr u32 s_F32ToF16OverflowBits = 0x47800000u;
 inline constexpr u32 s_F32ToF16UnderflowBits = 0x33000000u;
 inline constexpr u32 s_F32ToF16MinNormalBits = 0x38800000u;
@@ -164,13 +158,6 @@ namespace UnsignedFloatConvertDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_F32SignBitMask = 0x80000000u;
-inline constexpr u32 s_F32AbsoluteBitMask = 0x7fffffffu;
-inline constexpr u32 s_F32InfinityBits = 0x7f800000u;
-inline constexpr u32 s_F32MantissaBitCount = 23u;
-inline constexpr u32 s_F32ExponentBias = 127u;
-inline constexpr u32 s_F32ImplicitMantissaBit = 0x800000u;
-inline constexpr u32 s_F32MantissaBitMask = 0x7fffffu;
 inline constexpr u32 s_ExponentFieldMask = 0x1fu;
 inline constexpr u32 s_ExponentBitCount = 5u;
 inline constexpr u32 s_ExponentBias = 15u;
@@ -703,36 +690,36 @@ template<u32 MANTISSA_BIT_COUNT>
     static_assert(MANTISSA_BIT_COUNT <= UnsignedFloatConvertDetail::s_MaxMantissaBitCount, "Unsupported unsigned floating-point mantissa width");
 
     u32 bits = BitCast<u32>(value);
-    const u32 absBits = bits & UnsignedFloatConvertDetail::s_F32AbsoluteBitMask;
+    const u32 absBits = bits & s_F32AbsoluteBitMask;
     const u32 targetInf = UnsignedFloatConvertDetail::s_ExponentFieldMask << MANTISSA_BIT_COUNT;
     const u32 targetMantissaMask = (1u << MANTISSA_BIT_COUNT) - 1u;
 
-    if(absBits > UnsignedFloatConvertDetail::s_F32InfinityBits){
-        const u32 payload = (absBits >> (UnsignedFloatConvertDetail::s_F32MantissaBitCount - MANTISSA_BIT_COUNT)) & targetMantissaMask;
+    if(absBits > s_F32InfinityBits){
+        const u32 payload = (absBits >> (s_F32MantissaBitCount - MANTISSA_BIT_COUNT)) & targetMantissaMask;
         return targetInf | (payload != 0u ? payload : 1u);
     }
-    if((bits & UnsignedFloatConvertDetail::s_F32SignBitMask) != 0u || absBits == 0u)
+    if((bits & s_F32SignBitMask) != 0u || absBits == 0u)
         return 0u;
 
     bits = absBits;
     if(bits >= UnsignedFloatConvertDetail::s_OverflowBits)
         return targetInf;
 
-    const u32 zeroThreshold = (UnsignedFloatConvertDetail::s_F32ExponentBias - UnsignedFloatConvertDetail::s_ExponentBias - MANTISSA_BIT_COUNT) << UnsignedFloatConvertDetail::s_F32MantissaBitCount;
+    const u32 zeroThreshold = (s_F32ExponentBias - UnsignedFloatConvertDetail::s_ExponentBias - MANTISSA_BIT_COUNT) << s_F32MantissaBitCount;
     if(bits <= zeroThreshold)
         return 0u;
 
     if(bits < UnsignedFloatConvertDetail::s_MinNormalBits){
-        const u32 sourceExponent = bits >> UnsignedFloatConvertDetail::s_F32MantissaBitCount;
-        const u32 roundShift = (UnsignedFloatConvertDetail::s_F32ExponentBias - 1u) - sourceExponent + (UnsignedFloatConvertDetail::s_MaxMantissaBitCount - MANTISSA_BIT_COUNT);
-        bits = UnsignedFloatConvertDetail::s_F32ImplicitMantissaBit | (bits & UnsignedFloatConvertDetail::s_F32MantissaBitMask);
+        const u32 sourceExponent = bits >> s_F32MantissaBitCount;
+        const u32 roundShift = (s_F32ExponentBias - 1u) - sourceExponent + (UnsignedFloatConvertDetail::s_MaxMantissaBitCount - MANTISSA_BIT_COUNT);
+        bits = s_F32ImplicitMantissaBit | (bits & s_F32MantissaBitMask);
         u32 result = bits >> roundShift;
         const u32 sticky = (bits & ((1u << (roundShift - 1u)) - 1u)) != 0u ? 1u : 0u;
         result += (result | sticky) & ((bits >> (roundShift - 1u)) & 1u);
         return result;
     }
 
-    const u32 shift = UnsignedFloatConvertDetail::s_F32MantissaBitCount - MANTISSA_BIT_COUNT;
+    const u32 shift = s_F32MantissaBitCount - MANTISSA_BIT_COUNT;
     bits += UnsignedFloatConvertDetail::s_NormalRoundingBiasBits;
     return ((bits + ((1u << (shift - 1u)) - 1u) + ((bits >> shift) & 1u)) >> shift) & ((1u << (UnsignedFloatConvertDetail::s_ExponentBitCount + MANTISSA_BIT_COUNT)) - 1u);
 }

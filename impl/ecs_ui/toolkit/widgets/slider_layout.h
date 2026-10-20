@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "style.h"
 #include "../paint.h"
 
 
@@ -22,8 +23,8 @@ struct SliderStyle;
 
 struct SliderMetrics{
     Insets padding;
-    Point thumbExtent = { 24.0f, 24.0f };
-    f32 trackHeight = 12.0f;
+    Point thumbExtent = { s_StyleControlExtent, s_StyleControlExtent };
+    f32 trackHeight = s_StyleSliderTrackHeight;
     Point contentSize;
 };
 

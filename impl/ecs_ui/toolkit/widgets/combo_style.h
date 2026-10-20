@@ -28,9 +28,9 @@ struct ComboStyle{
     Name fallback = UiSkinToolkitRegions::s_ButtonNormalRegionName;
     Name arrow = UiSkinToolkitRegions::s_ComboArrowRegionName;
     Name arrowFallback = UiSkinToolkitRegions::s_WindowCollapseRegionName;
-    Insets padding = { 8.0f, 6.0f, 8.0f, 6.0f };
+    Insets padding = { s_StyleSpacingMedium, s_StyleFieldPaddingY, s_StyleSpacingMedium, s_StyleFieldPaddingY };
     f32 arrowExtent = 20.0f;
-    f32 arrowGap = 8.0f;
+    f32 arrowGap = s_StyleSpacingMedium;
 };
 
 

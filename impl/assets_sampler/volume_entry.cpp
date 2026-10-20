@@ -9,6 +9,7 @@
 
 
 #include "cook.h"
+#include "binary_payload.h"
 
 #include <core/assets/cook_entry_registry.h>
 
@@ -35,7 +36,7 @@ static Expected<SamplerCookEntry> ParseSamplerDocument(const Path& assetRoot, co
 static bool RegisterSamplerCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterSingleDocumentCookEntry<SamplerCookEntry, Sampler, SamplerAssetCodec>(
         registry,
-        NWB_TEXT("sampler"),
+        SamplerBinaryPayload::s_SamplerAssetKindLabel,
         &ParseSamplerDocument,
         [](SamplerCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){ return BuildSamplerAsset(entry, arena); },
         false

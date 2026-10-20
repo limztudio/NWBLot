@@ -8,6 +8,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static const uint NWB_CSG_RECEIVER_SPAN_BUILD_PAIR_EVENT_COUNT = 2u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct NwbCsgReceiverSurfaceEvent{
     float depth;
     uint receiverIndex;
@@ -191,7 +197,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint eventCount = nwbCsgReceiverSpanBuildLoadEventCount(pixel, eventLayerCount, flags);
 
     uint spanCount = 0u;
-    if(eventCount == 2u && nwbCsgReceiverSpanBuildPairSingleReceiver(pixel, spanLayerCount, spanCount, flags)){
+    if(eventCount == NWB_CSG_RECEIVER_SPAN_BUILD_PAIR_EVENT_COUNT && nwbCsgReceiverSpanBuildPairSingleReceiver(pixel, spanLayerCount, spanCount, flags)){
         g_NwbCsgReceiverSpanCount[uint3(pixel, 0u)] = uint2(spanCount, flags);
         return;
     }

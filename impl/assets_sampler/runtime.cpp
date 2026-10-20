@@ -25,6 +25,8 @@ namespace __hidden_sampler_runtime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr TStringView s_SamplerValidatePayloadContext = NWB_TEXT("Sampler::validatePayload");
+
 NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SamplerAssetCodecAutoRegistrar, SamplerAssetCodec);
 
 
@@ -38,7 +40,7 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SamplerAssetCodecAutoRegistrar, SamplerAssetC
 
 
 bool Sampler::validatePayload()const{
-    if(!checkVirtualPath(NWB_TEXT("Sampler::validatePayload")))
+    if(!checkVirtualPath(__hidden_sampler_runtime::s_SamplerValidatePayloadContext))
         return false;
     if(!IsValidSamplerDescription(m_description)){
         NWB_LOGGER_ERROR(NWB_TEXT("Sampler::validatePayload failed: sampler '{}' has an invalid description"), StringConvert(virtualPath().resolvedText()));
@@ -49,7 +51,7 @@ bool Sampler::validatePayload()const{
 
 bool Sampler::loadBinary(const Core::Assets::AssetBytes& binary){
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SamplerBinaryPayload::HeaderBinary>(binary, cursor, SamplerBinaryPayload::s_SamplerMagic, NWB_TEXT("Sampler::loadBinary"), NWB_TEXT("sampler"));
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SamplerBinaryPayload::HeaderBinary>(binary, cursor, SamplerBinaryPayload::s_SamplerMagic, SamplerBinaryPayload::s_SamplerLoadBinaryContext, SamplerBinaryPayload::s_SamplerAssetKindLabel);
     if(!headerResult)
         return false;
     const SamplerBinaryPayload::HeaderBinary& header = *headerResult;
@@ -86,10 +88,10 @@ bool Sampler::loadBinary(const Core::Assets::AssetBytes& binary){
         NWB_LOGGER_ERROR(NWB_TEXT("Sampler::loadBinary failed: sampler description is invalid"));
         return false;
     }
-    if(!Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("Sampler::loadBinary")))
+    if(!Core::Assets::ReadCompletePayload(binary, cursor, SamplerBinaryPayload::s_SamplerLoadBinaryContext))
         return false;
 
-    if(!checkVirtualPath(NWB_TEXT("Sampler::validatePayload")))
+    if(!checkVirtualPath(__hidden_sampler_runtime::s_SamplerValidatePayloadContext))
         return false;
     m_description = description;
     return true;

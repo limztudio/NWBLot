@@ -29,7 +29,7 @@ struct SelectableStyle{
     Name selectedFallback = UiSkinToolkitRegions::s_ButtonPressedRegionName;
     Name disabledFallback = UiSkinToolkitRegions::s_ButtonDisabledRegionName;
     Name focus = UiSkinToolkitRegions::s_FocusOverlayRegionName;
-    Insets padding = { 8.0f, 4.0f, 8.0f, 4.0f };
+    Insets padding = { s_StyleSpacingMedium, s_StyleSpacingSmall, s_StyleSpacingMedium, s_StyleSpacingSmall };
 };
 
 struct ListStyle{
@@ -41,9 +41,9 @@ struct ListStyle{
     Name thumb = UiSkinToolkitRegions::s_ScrollThumbRegionName;
     Name thumbFallback = UiSkinToolkitRegions::s_ButtonNormalRegionName;
     Name thumbHover = UiSkinToolkitRegions::s_ButtonHoverRegionName;
-    Insets padding = { 4.0f, 4.0f, 4.0f, 4.0f };
-    f32 scrollbarWidth = 14.0f;
-    f32 minimumThumb = 20.0f;
+    Insets padding = { s_StyleSpacingSmall, s_StyleSpacingSmall, s_StyleSpacingSmall, s_StyleSpacingSmall };
+    f32 scrollbarWidth = s_StyleScrollbarThickness;
+    f32 minimumThumb = s_StyleScrollbarMinimumThumb;
 };
 
 

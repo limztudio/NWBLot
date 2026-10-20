@@ -6,6 +6,7 @@
 
 #include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/raytrace/instance_material.h>
+#include <impl/assets/graphics/bvh/constants.h>
 
 #include <core/common/log.h>
 #include <core/ecs/world.h>
@@ -114,7 +115,7 @@ void AppendLightSpaceCsgReceiver(LightSpaceCsgState& state, const Core::ECS::Ent
 
     LightSpaceCsgInstanceGpu instance;
     StoreFloat(worldToObject, instance.worldToObject);
-    instance.primitiveCount = mesh.meshletPrimitiveIndexCount / 3u;
+    instance.primitiveCount = mesh.meshletPrimitiveIndexCount / NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
     if(mesh.runtimeLocalBoundsBuffer && mesh.runtimeLocalBoundsHeapHandle.valid()){
         instance.runtimeBoundsSlot = mesh.runtimeLocalBoundsHeapHandle.slot();
         state.dynamicBounds.push_back(mesh.runtimeLocalBoundsBuffer);

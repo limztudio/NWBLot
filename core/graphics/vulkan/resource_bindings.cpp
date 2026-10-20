@@ -363,6 +363,7 @@ BindingLayout::~BindingLayout()noexcept{
 
 
 Expected<BindingLayoutHandle> Device::createBindingLayout(const BindingLayoutDesc& desc){
+    constexpr TStringView s_OperationName = NWB_TEXT("create binding layout");
     if(desc.bindings.size() > UINT32_MAX){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor set layout: binding count exceeds Vulkan limit"));
         return MakeUnexpected(Failure{});
@@ -383,7 +384,7 @@ Expected<BindingLayoutHandle> Device::createBindingLayout(const BindingLayoutDes
         if(item.type == ResourceType::None)
             continue;
         if(item.type == ResourceType::PushConstants){
-            if(!VulkanDetail::ValidatePushConstantByteSize(m_context, item.size, NWB_TEXT("create binding layout"))){
+            if(!VulkanDetail::ValidatePushConstantByteSize(m_context, item.size, s_OperationName)){
                 return MakeUnexpected(Failure{});
             }
             continue;
@@ -394,7 +395,7 @@ Expected<BindingLayoutHandle> Device::createBindingLayout(const BindingLayoutDes
     const u32 pushConstantByteSize = VulkanDetail::GetPushConstantByteSize(desc);
     layout->m_pushConstantByteSize = pushConstantByteSize;
 
-    const auto pipelineLayout = VulkanDetail::CreatePipelineLayout(m_context, nullptr, 0u, pushConstantByteSize, NWB_TEXT("create binding layout"));
+    const auto pipelineLayout = VulkanDetail::CreatePipelineLayout(m_context, nullptr, 0u, pushConstantByteSize, s_OperationName);
     if(!pipelineLayout){
         return MakeUnexpected(Failure{});
     }

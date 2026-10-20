@@ -22,14 +22,14 @@ namespace __hidden_ui_grapheme{
 
 
 [[nodiscard]] static Expected<DecodedUtf8CodePoint> Decode(const AStringView text, const usize offset)noexcept{
-    const auto decoded = DecodeUtf8CodePoint(text.substr(offset, 4u));
-    if(!decoded || (decoded->codePoint >= 0xD800u && decoded->codePoint <= 0xDFFFu))
+    const auto decoded = DecodeUtf8CodePoint(text.substr(offset, s_Utf8MaxSequenceBytes));
+    if(!decoded || (decoded->codePoint >= s_UnicodeSurrogateFirst && decoded->codePoint <= s_UnicodeSurrogateLast))
         return MakeUnexpected(Failure{});
     return *decoded;
 }
 
 static bool IsSingleLineScalar(const u32 scalar)noexcept{
-    return scalar != 0u && scalar != 0xAu && scalar != 0xDu && scalar != 0x2028u && scalar != 0x2029u;
+    return scalar != 0u && scalar != s_UnicodeLineFeed && scalar != s_UnicodeCarriageReturn && scalar != s_UnicodeLineSeparator && scalar != s_UnicodeParagraphSeparator;
 }
 
 static bool IsControl(const GraphemeBreak::Enum property)noexcept{

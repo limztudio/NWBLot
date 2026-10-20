@@ -70,6 +70,7 @@ private:
 
 private:
     static constexpr usize s_InlineCount = 32u;
+    static constexpr usize s_PromotedIndexCapacity = s_InlineCount * 4u;
 
 
 public:

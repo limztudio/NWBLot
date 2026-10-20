@@ -9,6 +9,7 @@
 #include <impl/ecs_render/raytrace/mesh_acceleration_update.h>
 #include <impl/ecs_csg/components.h>
 #include <impl/ecs_render/raytrace/rt_swbvh_helpers.h>
+#include <impl/ecs_render/renderer_frame_pipeline_graph_shared.h>
 
 #include <global/algorithm.h>
 #include <global/hash_utils.h>
@@ -69,7 +70,7 @@ bool RendererRayTracingSystem::prepareMeshBlasResources(ECSRenderDetail::MeshRay
     accelStructDesc.addBottomLevelGeometry(geometry);
     accelStructDesc.setBuildFlags(buildFlags);
     accelStructDesc.setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
-    const auto blasName = DeriveName(meshResources.meshName, AStringView(":blas"));
+    const auto blasName = DeriveName(meshResources.meshName, RendererFramePipelineDetail::s_BlasNameSuffix);
     if(!blasName){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BLAS for mesh '{}'"), StringConvert(meshResources.meshName.resolvedText()));
         return false;

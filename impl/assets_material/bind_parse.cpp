@@ -29,7 +29,7 @@ namespace MaterialBindDetail{
 Expected<Metascript::Document> ParseMaterialBindDocument(const Path& bindFilePath, MaterialCookArena& arena, ScratchArena& scratchArena){
     Metascript::Document doc(arena);
     ScratchString bindText{scratchArena};
-    if(!Core::Assets::ParseMetadataDocumentText(bindFilePath, "Material bind", bindText, doc, [&](const AStringView text){ return doc.parseWithImplicitAsset(text, s_AssetTypeMaterialBind, s_AssetVariableMaterialBind); }))
+    if(!Core::Assets::ParseMetadataDocumentText(bindFilePath, s_MaterialBindDiagnosticPrefix, bindText, doc, [&](const AStringView text){ return doc.parseWithImplicitAsset(text, s_AssetTypeMaterialBind, s_AssetVariableMaterialBind); }))
         return MakeUnexpected(Failure{});
     return doc;
 }
@@ -141,7 +141,7 @@ static Expected<MaterialCookVector<MaterialBindAttribute>> ParseMaterialBindAttr
         }
 
         MaterialBindAttribute attribute(arena);
-        const auto parsedName = ParseMaterialBindStringField(bindFilePath, attributeValue, "name", contextLabel);
+        const auto parsedName = ParseMaterialBindStringField(bindFilePath, attributeValue, s_BindNameKey, contextLabel);
         if(!parsedName)
             return MakeUnexpected(Failure{});
         attribute.name = *parsedName;
@@ -252,11 +252,11 @@ static Expected<MaterialBindField> ParseMaterialBindField(const Path& bindFilePa
         return MakeUnexpected(Failure{});
     }
 
-    const auto parsedType = ParseMaterialBindStringField(bindFilePath, fieldValue, "type", bindStruct.name);
+    const auto parsedType = ParseMaterialBindStringField(bindFilePath, fieldValue, s_BindTypeKey, bindStruct.name);
     if(!parsedType)
         return MakeUnexpected(Failure{});
     field.type = *parsedType;
-    const auto parsedName = ParseMaterialBindStringField(bindFilePath, fieldValue, "name", bindStruct.name);
+    const auto parsedName = ParseMaterialBindStringField(bindFilePath, fieldValue, s_BindNameKey, bindStruct.name);
     if(!parsedName)
         return MakeUnexpected(Failure{});
     field.name = *parsedName;
@@ -273,7 +273,7 @@ static Expected<MaterialBindField> ParseMaterialBindField(const Path& bindFilePa
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' has invalid name"), PathToString<tchar>(bindFilePath), StringConvert(bindStruct.name), StringConvert(field.name));
         return MakeUnexpected(Failure{});
     }
-    auto attributes = ParseMaterialBindAttributeList(bindFilePath, fieldValue.findField("attributes"), field.name, arena);
+    auto attributes = ParseMaterialBindAttributeList(bindFilePath, fieldValue.findField(s_BindAttributesKey), field.name, arena);
     if(!attributes)
         return MakeUnexpected(Failure{});
     field.attributes = Move(*attributes);
@@ -299,14 +299,14 @@ static Expected<MaterialBindStruct> ParseMaterialBindStruct(const Path& bindFile
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': invalid struct name '{}'"), PathToString<tchar>(bindFilePath), StringConvert(bindStruct.name));
         return MakeUnexpected(Failure{});
     }
-    auto attributes = ParseMaterialBindAttributeList(bindFilePath, structValue.findField("attributes"), bindStruct.name, arena);
+    auto attributes = ParseMaterialBindAttributeList(bindFilePath, structValue.findField(s_BindAttributesKey), bindStruct.name, arena);
     if(!attributes)
         return MakeUnexpected(Failure{});
     bindStruct.attributes = Move(*attributes);
     if(!ValidateMaterialBindStructAttributes(bindFilePath, bindStruct))
         return MakeUnexpected(Failure{});
 
-    const Metascript::Value* fieldsValue = structValue.findField("fields");
+    const Metascript::Value* fieldsValue = structValue.findField(s_BindFieldsKey);
     if(!fieldsValue || !fieldsValue->isList()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' fields must be a list"), PathToString<tchar>(bindFilePath), StringConvert(bindStruct.name));
         return MakeUnexpected(Failure{});
@@ -340,7 +340,7 @@ static Expected<MaterialBindStruct> ParseMaterialBindStruct(const Path& bindFile
 static Expected<MaterialCookVector<MaterialBindStruct>> ParseMaterialBindStructs(const Path& bindFilePath, const Metascript::Value& asset, MaterialCookArena& arena){
     MaterialCookVector<MaterialBindStruct> structs(arena);
 
-    const Metascript::Value* structsValue = asset.findField("structs");
+    const Metascript::Value* structsValue = asset.findField(s_BindStructsKey);
     if(!structsValue || !structsValue->isMap()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': asset.structs must be a map"), PathToString<tchar>(bindFilePath));
         return MakeUnexpected(Failure{});
@@ -374,7 +374,7 @@ static Expected<MaterialCookVector<MaterialBindStruct>> ParseMaterialBindStructs
 static bool ParseMaterialBindInstances(const Path& bindFilePath, const Metascript::Value& asset, MaterialCookArena& arena, MaterialBindEntry& outEntry){
     outEntry.instances.clear();
 
-    const Metascript::Value* instancesValue = asset.findField("instances");
+    const Metascript::Value* instancesValue = asset.findField(s_BindInstancesKey);
     if(!instancesValue || !instancesValue->isList()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': asset.instances must be a list"), PathToString<tchar>(bindFilePath));
         return false;
@@ -392,11 +392,11 @@ static bool ParseMaterialBindInstances(const Path& bindFilePath, const Metascrip
         }
 
         MaterialBindInstance instance(arena);
-        const auto parsedType = ParseMaterialBindStringField(bindFilePath, instanceValue, "type", "instance");
+        const auto parsedType = ParseMaterialBindStringField(bindFilePath, instanceValue, s_BindTypeKey, s_BindInstanceContextLabel);
         if(!parsedType)
             return false;
         instance.type = *parsedType;
-        const auto parsedName = ParseMaterialBindStringField(bindFilePath, instanceValue, "name", "instance");
+        const auto parsedName = ParseMaterialBindStringField(bindFilePath, instanceValue, s_BindNameKey, s_BindInstanceContextLabel);
         if(!parsedName)
             return false;
         instance.name = *parsedName;
@@ -427,13 +427,13 @@ Expected<MaterialBindEntry> ParseMaterialBindSource(const Path& bindFilePath, co
     MaterialBindEntry entry(arena);
 
     entry.source = PathToString(arena, bindFilePath);
-    if(!Core::Assets::CheckPairedSourceExtension(bindFilePath, entry.source, MaterialBindNames::SourceExtensionText(), "Material bind", scratchArena))
+    if(!Core::Assets::CheckPairedSourceExtension(bindFilePath, entry.source, MaterialBindNames::SourceExtensionText(), s_MaterialBindDiagnosticPrefix, scratchArena))
         return MakeUnexpected(Failure{});
 
-    const auto assetValue = Core::Assets::FindMetadataAssetMapValue<Metascript::Document, Metascript::Value>(bindFilePath, doc, "Material bind");
+    const auto assetValue = Core::Assets::FindMetadataAssetMapValue<Metascript::Document, Metascript::Value>(bindFilePath, doc, s_MaterialBindDiagnosticPrefix);
     if(!assetValue)
         return MakeUnexpected(assetValue.error());
-    if(!Core::Assets::ValidateMetadataAssetFields(bindFilePath, **assetValue, "Material bind", { "structs", "instances" }))
+    if(!Core::Assets::ValidateMetadataAssetFields(bindFilePath, **assetValue, s_MaterialBindDiagnosticPrefix, { s_BindStructsKey, s_BindInstancesKey }))
         return MakeUnexpected(Failure{});
 
     auto structs = ParseMaterialBindStructs(bindFilePath, **assetValue, arena);

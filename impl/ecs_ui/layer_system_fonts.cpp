@@ -19,22 +19,22 @@ NWB_IMPL_BEGIN
 bool UiLayerSystem::loadFonts(Core::Alloc::ScratchArena& scratchArena){
     if(m_fontsReady)
         return true;
-    if(m_fontRefs.empty() || m_fontRefs.size() > 8u){
+    if(m_fontRefs.empty() || m_fontRefs.size() > Ui::s_TextMaxFontSources){
         NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: the font stack requires between one and eight font assets"));
         return false;
     }
-    Array<UniquePtr<Font>, 8u> assets;
-    Array<UniquePtr<FontAtlas>, 8u> atlasAssets;
+    Array<UniquePtr<Font>, Ui::s_TextMaxFontSources> assets;
+    Array<UniquePtr<FontAtlas>, Ui::s_TextMaxFontSources> atlasAssets;
     Vector<Ui::FontSource, Core::Alloc::ScratchArena> sources(scratchArena);
     sources.reserve(m_fontRefs.size());
     for(usize index = 0u; index < m_fontRefs.size(); ++index){
-        auto font = m_assetManager.loadTypedSync<Font>(m_fontRefs[index].font.name(), NWB_TEXT("UiLayerSystem"), "UI font");
+        auto font = m_assetManager.loadTypedSync<Font>(m_fontRefs[index].font.name(), s_UiLayerSystemOwnerName, "UI font");
         if(!font)
             return false;
         assets[index] = Move(*font);
         const FontAtlas* atlas = nullptr;
         if(m_fontRefs[index].atlas.valid()){
-            auto loadedAtlas = m_assetManager.loadTypedSync<FontAtlas>(m_fontRefs[index].atlas.name(), NWB_TEXT("UiLayerSystem"), "UI font atlas");
+            auto loadedAtlas = m_assetManager.loadTypedSync<FontAtlas>(m_fontRefs[index].atlas.name(), s_UiLayerSystemOwnerName, "UI font atlas");
             if(!loadedAtlas)
                 NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: optional font atlas unavailable; using native coverage"));
             else{

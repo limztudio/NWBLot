@@ -25,6 +25,7 @@ namespace FontBinaryPayload{
 
 inline constexpr u32 s_FontMagic = 0x464f4e31u; // FON1
 inline constexpr u32 s_FontVersion = 1u;
+inline constexpr TStringView s_FontAssetKindLabel = NWB_TEXT("font");
 
 #pragma pack(push, 1)
 struct HeaderBinary{

@@ -21,8 +21,8 @@ NWB_IMPL_UI_BEGIN
 struct ComboOptions{
     LayoutSize width = { LayoutSizePolicy::Stretch, 1.0f };
     LayoutSize height;
-    f32 popupHeight = 240.0f;
-    f32 wheelRows = 3.0f;
+    f32 popupHeight = s_ListDefaultHeight;
+    f32 wheelRows = s_StyleScrollWheelStep;
     bool enabled = true;
     StringView placeholder = "Select...";
 };

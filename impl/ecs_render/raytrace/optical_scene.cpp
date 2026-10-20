@@ -116,10 +116,15 @@ Expected<OpticalWorldBounds> NWB_SIMD_CALL ComputeOpticalWorldBounds(const SIMDM
     SIMDVectorSingle laneMin = VectorReplicate(Limit<f32>::s_Infinity);
     SIMDVectorSingle laneMax = VectorReplicate(-Limit<f32>::s_Infinity);
     SIMDVectorSingle laneMagnitude = VectorZero();
-    for(u32 corner = 0u; corner < 8u; ++corner){
-        const SIMDVectorSingle selectX = ((corner & 1u) != 0u) ? localMaxVec : localMinVec;
-        const SIMDVectorSingle selectY = ((corner & 2u) != 0u) ? localMaxVec : localMinVec;
-        const SIMDVectorSingle selectZ = ((corner & 4u) != 0u) ? localMaxVec : localMinVec;
+    // Corner index bits pick the max bound of X, Y and Z.
+    constexpr u32 s_BoxCornerCount = 8u;
+    constexpr u32 s_CornerMaxXBit = 1u;
+    constexpr u32 s_CornerMaxYBit = 2u;
+    constexpr u32 s_CornerMaxZBit = 4u;
+    for(u32 corner = 0u; corner < s_BoxCornerCount; ++corner){
+        const SIMDVectorSingle selectX = ((corner & s_CornerMaxXBit) != 0u) ? localMaxVec : localMinVec;
+        const SIMDVectorSingle selectY = ((corner & s_CornerMaxYBit) != 0u) ? localMaxVec : localMinVec;
+        const SIMDVectorSingle selectZ = ((corner & s_CornerMaxZBit) != 0u) ? localMaxVec : localMinVec;
         SIMDVectorSingle point = VectorSelect(selectX, selectY, s_SIMDMaskY);
         point = VectorSelect(point, selectZ, s_SIMDMaskZ);
         const SIMDVectorSingle x = VectorSplatX(point);

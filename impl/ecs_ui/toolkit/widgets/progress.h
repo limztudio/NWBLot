@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "style.h"
 #include "progress_style.h"
 #include "progress_layout.h"
 #include "../layout/tree.h"
@@ -21,7 +22,7 @@ NWB_IMPL_UI_BEGIN
 
 struct ProgressOptions{
     LayoutSize width = { LayoutSizePolicy::Stretch, 1.0f };
-    f32 height = 32.0f;
+    f32 height = s_StyleControlHeight;
 };
 
 

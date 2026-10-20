@@ -7,6 +7,7 @@
 #include <impl/ecs_render/deferred/deferred_system.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
+#include <impl/ecs_render/kernel/timing_names.h>
 
 #include <core/graphics/backend_selection/backend.h>
 
@@ -66,7 +67,8 @@ DeferredLightingStageBuilder::DeferredLightingStageBuilder(Core::GpuTaskGraph& g
     const Core::GpuTaskId softwareLightingDependencies[] = { inputs.shadowVisibilityTask, inputs.softwareCausticsTask, inputs.surfelGiTask, inputs.avboitFinalTask, };
     // Lagged Lighting reads prefix inputs plus history; finalizer restores depth layout first.
     const Core::GpuTaskId laggedLightingDependencies[] = { inputs.graphicsPrefixTask, inputs.avboitFinalTask, };
-    const usize laggedLightingDependencyCount = hasTransparentRenderers ? 2u : 1u;
+    constexpr usize s_TransparentLaggedLightingDependencyCount = 2u;
+    const usize laggedLightingDependencyCount = hasTransparentRenderers ? s_TransparentLaggedLightingDependencyCount : 1u;
     const Core::GpuTaskId laggedLightingSelectorUploadDependencies[] = { inputs.graphicsPrefixTask };
     const bool laggedBindlessSlotsGraphOwned = useLaggedLightingHistory && !history->slotsUploaded;
     Core::GpuTaskId historySlotsUploadTask;
@@ -107,7 +109,9 @@ DeferredLightingStageBuilder::DeferredLightingStageBuilder(Core::GpuTaskGraph& g
         : (useLaggedLightingHistory ? laggedLightingDependencies : softwareLightingDependencies)
     ;
     const Core::GpuTaskId* const resolvedLightingDependencies = laggedBindlessSlotsGraphOwned ? laggedLightingWithSelectorDependencies : lightingDependencies;
-    const usize lightingDependencyCount = laggedBindlessSlotsGraphOwned ? (hasTransparentRenderers ? 3u : 2u) : (useLaggedLightingHistory ? laggedLightingDependencyCount : LengthOf(hardwareLightingDependencies));
+    constexpr usize s_TransparentLaggedSelectorDependencyCount = 3u;
+    constexpr usize s_OpaqueLaggedSelectorDependencyCount = 2u;
+    const usize lightingDependencyCount = laggedBindlessSlotsGraphOwned ? (hasTransparentRenderers ? s_TransparentLaggedSelectorDependencyCount : s_OpaqueLaggedSelectorDependencyCount) :(useLaggedLightingHistory ? laggedLightingDependencyCount : LengthOf(hardwareLightingDependencies));
 
     const Core::GpuExternalCompletionId laggedLightingExternalDependencies[] = { inputs.historyReadReadyCompletion, };
     const Core::GpuExternalCompletionId* const lightingExternalDependencies = useLaggedLightingHistory ? laggedLightingExternalDependencies : nullptr;
@@ -136,7 +140,7 @@ DeferredLightingStageBuilder::DeferredLightingStageBuilder(Core::GpuTaskGraph& g
     Core::GpuTaskDesc desc;
     desc
         .setIdentity(Name("render.deferred_lighting"))
-        .setMarkerLabel("Deferred Lighting")
+        .setMarkerLabel(RendererGpuPassText::s_DeferredLightingLabel)
         .setScheduling(scheduling)
         .setDependencies(resolvedLightingDependencies, lightingDependencyCount)
         .setExternalDependencies(lightingExternalDependencies, lightingExternalDependencyCount)

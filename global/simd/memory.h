@@ -15,6 +15,15 @@
 
 
 constexpr usize s_SIMDMemoryCopyAlignment = 16u;
+constexpr usize s_SIMDMemoryCopyWideAlignment = 32u;
+constexpr usize s_SIMDMemoryCopyCrtThreshold = 8192u;
+constexpr usize s_SIMDMemoryCopyPacketBytes = 16u;
+constexpr usize s_SIMDMemoryCopyBatchBytes = 64u;
+constexpr usize s_SIMDMemoryCopyWidePacketBytes = 32u;
+constexpr usize s_SIMDMemoryCopyWideBatchBytes = 128u;
+constexpr usize s_SIMDMemoryCopyQuadWordBytes = 8u;
+constexpr usize s_SIMDMemoryCopyWordBytes = 4u;
+constexpr usize s_SIMDMemoryCopyHalfWordBytes = 2u;
 
 #define NWB_SIMD_MEMCPY(destination, destinationCapacity, source, byteCount) ::SIMDMemoryCopy(destination, destinationCapacity, source, byteCount)
 
@@ -47,97 +56,97 @@ NWB_INLINE void SIMDMemoryCopy(void* destination, usize destinationCapacity, con
     const auto* src = static_cast<const u8*>(__builtin_assume_aligned(source, s_SIMDMemoryCopyAlignment));
 
 #if defined(NWB_HAS_NEON) || defined(NWB_HAS_SSE2)
-    if(byteCount > 8192u){
+    if(byteCount > s_SIMDMemoryCopyCrtThreshold){
         __builtin_memcpy(dst, src, byteCount);
         return;
     }
 
 #if defined(NWB_HAS_NEON)
-    while(byteCount >= 64u){
+    while(byteCount >= s_SIMDMemoryCopyBatchBytes){
         const uint8x16_t packet0 = vld1q_u8(src);
-        const uint8x16_t packet1 = vld1q_u8(src + 16u);
-        const uint8x16_t packet2 = vld1q_u8(src + 32u);
-        const uint8x16_t packet3 = vld1q_u8(src + 48u);
+        const uint8x16_t packet1 = vld1q_u8(src + s_SIMDMemoryCopyPacketBytes);
+        const uint8x16_t packet2 = vld1q_u8(src + s_SIMDMemoryCopyPacketBytes * 2u);
+        const uint8x16_t packet3 = vld1q_u8(src + s_SIMDMemoryCopyPacketBytes * 3u);
         vst1q_u8(dst, packet0);
-        vst1q_u8(dst + 16u, packet1);
-        vst1q_u8(dst + 32u, packet2);
-        vst1q_u8(dst + 48u, packet3);
-        dst += 64u;
-        src += 64u;
-        byteCount -= 64u;
+        vst1q_u8(dst + s_SIMDMemoryCopyPacketBytes, packet1);
+        vst1q_u8(dst + s_SIMDMemoryCopyPacketBytes * 2u, packet2);
+        vst1q_u8(dst + s_SIMDMemoryCopyPacketBytes * 3u, packet3);
+        dst += s_SIMDMemoryCopyBatchBytes;
+        src += s_SIMDMemoryCopyBatchBytes;
+        byteCount -= s_SIMDMemoryCopyBatchBytes;
     }
-    while(byteCount >= 16u){
+    while(byteCount >= s_SIMDMemoryCopyPacketBytes){
         vst1q_u8(dst, vld1q_u8(src));
-        dst += 16u;
-        src += 16u;
-        byteCount -= 16u;
+        dst += s_SIMDMemoryCopyPacketBytes;
+        src += s_SIMDMemoryCopyPacketBytes;
+        byteCount -= s_SIMDMemoryCopyPacketBytes;
     }
 #elif defined(NWB_HAS_SSE2)
 #if defined(NWB_HAS_AVX)
-    if(((destinationAddress | sourceAddress) & 31u) == 0u){
-        auto* dst32 = static_cast<u8*>(__builtin_assume_aligned(dst, 32u));
-        const auto* src32 = static_cast<const u8*>(__builtin_assume_aligned(src, 32u));
-        while(byteCount >= 128u){
+    if(((destinationAddress | sourceAddress) & (s_SIMDMemoryCopyWideAlignment - 1u)) == 0u){
+        auto* dst32 = static_cast<u8*>(__builtin_assume_aligned(dst, s_SIMDMemoryCopyWideAlignment));
+        const auto* src32 = static_cast<const u8*>(__builtin_assume_aligned(src, s_SIMDMemoryCopyWideAlignment));
+        while(byteCount >= s_SIMDMemoryCopyWideBatchBytes){
             const __m256i packet0 = _mm256_load_si256(reinterpret_cast<const __m256i*>(src32));
-            const __m256i packet1 = _mm256_load_si256(reinterpret_cast<const __m256i*>(src32 + 32u));
-            const __m256i packet2 = _mm256_load_si256(reinterpret_cast<const __m256i*>(src32 + 64u));
-            const __m256i packet3 = _mm256_load_si256(reinterpret_cast<const __m256i*>(src32 + 96u));
+            const __m256i packet1 = _mm256_load_si256(reinterpret_cast<const __m256i*>(src32 + s_SIMDMemoryCopyWidePacketBytes));
+            const __m256i packet2 = _mm256_load_si256(reinterpret_cast<const __m256i*>(src32 + s_SIMDMemoryCopyWidePacketBytes * 2u));
+            const __m256i packet3 = _mm256_load_si256(reinterpret_cast<const __m256i*>(src32 + s_SIMDMemoryCopyWidePacketBytes * 3u));
             _mm256_store_si256(reinterpret_cast<__m256i*>(dst32), packet0);
-            _mm256_store_si256(reinterpret_cast<__m256i*>(dst32 + 32u), packet1);
-            _mm256_store_si256(reinterpret_cast<__m256i*>(dst32 + 64u), packet2);
-            _mm256_store_si256(reinterpret_cast<__m256i*>(dst32 + 96u), packet3);
-            dst32 += 128u;
-            src32 += 128u;
-            byteCount -= 128u;
+            _mm256_store_si256(reinterpret_cast<__m256i*>(dst32 + s_SIMDMemoryCopyWidePacketBytes), packet1);
+            _mm256_store_si256(reinterpret_cast<__m256i*>(dst32 + s_SIMDMemoryCopyWidePacketBytes * 2u), packet2);
+            _mm256_store_si256(reinterpret_cast<__m256i*>(dst32 + s_SIMDMemoryCopyWidePacketBytes * 3u), packet3);
+            dst32 += s_SIMDMemoryCopyWideBatchBytes;
+            src32 += s_SIMDMemoryCopyWideBatchBytes;
+            byteCount -= s_SIMDMemoryCopyWideBatchBytes;
         }
-        while(byteCount >= 32u){
+        while(byteCount >= s_SIMDMemoryCopyWidePacketBytes){
             _mm256_store_si256(reinterpret_cast<__m256i*>(dst32), _mm256_load_si256(reinterpret_cast<const __m256i*>(src32)));
-            dst32 += 32u;
-            src32 += 32u;
-            byteCount -= 32u;
+            dst32 += s_SIMDMemoryCopyWidePacketBytes;
+            src32 += s_SIMDMemoryCopyWidePacketBytes;
+            byteCount -= s_SIMDMemoryCopyWidePacketBytes;
         }
         dst = dst32;
         src = src32;
     }
 #endif
-    while(byteCount >= 64u){
+    while(byteCount >= s_SIMDMemoryCopyBatchBytes){
         const __m128i packet0 = _mm_load_si128(reinterpret_cast<const __m128i*>(src));
-        const __m128i packet1 = _mm_load_si128(reinterpret_cast<const __m128i*>(src + 16u));
-        const __m128i packet2 = _mm_load_si128(reinterpret_cast<const __m128i*>(src + 32u));
-        const __m128i packet3 = _mm_load_si128(reinterpret_cast<const __m128i*>(src + 48u));
+        const __m128i packet1 = _mm_load_si128(reinterpret_cast<const __m128i*>(src + s_SIMDMemoryCopyPacketBytes));
+        const __m128i packet2 = _mm_load_si128(reinterpret_cast<const __m128i*>(src + s_SIMDMemoryCopyPacketBytes * 2u));
+        const __m128i packet3 = _mm_load_si128(reinterpret_cast<const __m128i*>(src + s_SIMDMemoryCopyPacketBytes * 3u));
         _mm_store_si128(reinterpret_cast<__m128i*>(dst), packet0);
-        _mm_store_si128(reinterpret_cast<__m128i*>(dst + 16u), packet1);
-        _mm_store_si128(reinterpret_cast<__m128i*>(dst + 32u), packet2);
-        _mm_store_si128(reinterpret_cast<__m128i*>(dst + 48u), packet3);
-        dst += 64u;
-        src += 64u;
-        byteCount -= 64u;
+        _mm_store_si128(reinterpret_cast<__m128i*>(dst + s_SIMDMemoryCopyPacketBytes), packet1);
+        _mm_store_si128(reinterpret_cast<__m128i*>(dst + s_SIMDMemoryCopyPacketBytes * 2u), packet2);
+        _mm_store_si128(reinterpret_cast<__m128i*>(dst + s_SIMDMemoryCopyPacketBytes * 3u), packet3);
+        dst += s_SIMDMemoryCopyBatchBytes;
+        src += s_SIMDMemoryCopyBatchBytes;
+        byteCount -= s_SIMDMemoryCopyBatchBytes;
     }
-    while(byteCount >= 16u){
+    while(byteCount >= s_SIMDMemoryCopyPacketBytes){
         _mm_store_si128(reinterpret_cast<__m128i*>(dst), _mm_load_si128(reinterpret_cast<const __m128i*>(src)));
-        dst += 16u;
-        src += 16u;
-        byteCount -= 16u;
+        dst += s_SIMDMemoryCopyPacketBytes;
+        src += s_SIMDMemoryCopyPacketBytes;
+        byteCount -= s_SIMDMemoryCopyPacketBytes;
     }
 #endif
 
-    if(byteCount >= 8u){
-        __builtin_memcpy(dst, src, 8u);
-        dst += 8u;
-        src += 8u;
-        byteCount -= 8u;
+    if(byteCount >= s_SIMDMemoryCopyQuadWordBytes){
+        __builtin_memcpy(dst, src, s_SIMDMemoryCopyQuadWordBytes);
+        dst += s_SIMDMemoryCopyQuadWordBytes;
+        src += s_SIMDMemoryCopyQuadWordBytes;
+        byteCount -= s_SIMDMemoryCopyQuadWordBytes;
     }
-    if(byteCount >= 4u){
-        __builtin_memcpy(dst, src, 4u);
-        dst += 4u;
-        src += 4u;
-        byteCount -= 4u;
+    if(byteCount >= s_SIMDMemoryCopyWordBytes){
+        __builtin_memcpy(dst, src, s_SIMDMemoryCopyWordBytes);
+        dst += s_SIMDMemoryCopyWordBytes;
+        src += s_SIMDMemoryCopyWordBytes;
+        byteCount -= s_SIMDMemoryCopyWordBytes;
     }
-    if(byteCount >= 2u){
-        __builtin_memcpy(dst, src, 2u);
-        dst += 2u;
-        src += 2u;
-        byteCount -= 2u;
+    if(byteCount >= s_SIMDMemoryCopyHalfWordBytes){
+        __builtin_memcpy(dst, src, s_SIMDMemoryCopyHalfWordBytes);
+        dst += s_SIMDMemoryCopyHalfWordBytes;
+        src += s_SIMDMemoryCopyHalfWordBytes;
+        byteCount -= s_SIMDMemoryCopyHalfWordBytes;
     }
     if(byteCount != 0u)
         __builtin_memcpy(dst, src, 1u);

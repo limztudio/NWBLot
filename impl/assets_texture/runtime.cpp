@@ -29,7 +29,6 @@ namespace __hidden_texture_runtime{
 
 static constexpr TStringView s_LoadBinaryContext = NWB_TEXT("Texture::loadBinary");
 static constexpr TStringView s_ValidatePayloadContext = NWB_TEXT("Texture::validatePayload");
-static constexpr TStringView s_AssetKindLabel = NWB_TEXT("texture");
 
 NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_TextureAssetCodecAutoRegistrar, TextureAssetCodec);
 
@@ -195,7 +194,7 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
 
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<TextureBinaryPayload::HeaderBinary>(binary, cursor, TextureBinaryPayload::s_TextureMagic, __hidden_texture_runtime::s_LoadBinaryContext, __hidden_texture_runtime::s_AssetKindLabel);
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<TextureBinaryPayload::HeaderBinary>(binary, cursor, TextureBinaryPayload::s_TextureMagic, __hidden_texture_runtime::s_LoadBinaryContext, s_TextureAssetKindLabel);
     if(!headerResult)
         return false;
     const TextureBinaryPayload::HeaderBinary& header = *headerResult;

@@ -23,6 +23,7 @@ NWB_IMPL_UI_BEGIN
 
 
 inline constexpr u32 s_SdfDistanceEncodingFreeTypeU8 = s_FontAtlasDistanceEncoding;
+inline constexpr u32 s_SdfMaxChannelCount = 4u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,7 +39,7 @@ struct SdfAtlasPageBinding{
     u32 index = 0u;
     u32 width = 0u;
     u32 height = 0u;
-    u32 channelCount = 4u;
+    u32 channelCount = s_SdfMaxChannelCount;
     u32 spreadPixels = 0u;
     u32 distanceEncoding = s_SdfDistanceEncodingFreeTypeU8;
 };

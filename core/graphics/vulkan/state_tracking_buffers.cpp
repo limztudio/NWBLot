@@ -18,6 +18,24 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_state_tracking_buffers{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr TStringView s_ByteRangeOutsideBufferReason = NWB_TEXT("byte range is empty or outside the buffer");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace VulkanStateTrackingDetail{
 
 
@@ -202,7 +220,7 @@ void CommandList::setBufferState(Buffer* bufferResource, ResourceStates::Mask st
     Buffer& buffer = *bufferResource;
     const BufferRange resolvedRange = range.resolve(buffer.m_creationDesc);
     if(!VulkanStateTrackingDetail::IsBufferStateRangeValid(range, buffer.m_creationDesc)){
-        rejectCommandRecording(s_OperationName.data(), NWB_TEXT("byte range is empty or outside the buffer"));
+        rejectCommandRecording(s_OperationName.data(), __hidden_state_tracking_buffers::s_ByteRangeOutsideBufferReason);
         return;
     }
 
@@ -258,11 +276,12 @@ void CommandList::releaseBufferOwnership(Buffer* bufferResource, const GpuPhysic
     if(!bufferResource)
         return;
     constexpr TStringView s_OperationName = NWB_TEXT("release buffer ownership");
+    constexpr TStringView s_FinalRangeStateUnknownReason = NWB_TEXT("final byte range state is unknown");
     if(!validateCommandRecordingScope(s_OperationName.data()))
         return;
     Buffer& buffer = *bufferResource;
     if(!isBufferReadyForCommandQueue(&buffer)){
-        rejectCommandRecording(s_OperationName.data(), NWB_TEXT("buffer is not ready for this exact command queue"));
+        rejectCommandRecording(s_OperationName.data(), s_BufferNotReadyForQueueReason);
         return;
     }
     if(m_stateTracker.isPermanentBuffer(buffer)){
@@ -275,11 +294,11 @@ void CommandList::releaseBufferOwnership(Buffer* bufferResource, const GpuPhysic
     }
     const BufferRange resolvedRange = range.resolve(buffer.m_creationDesc);
     if(!VulkanStateTrackingDetail::IsBufferStateRangeValid(range, buffer.m_creationDesc)){
-        rejectCommandRecording(s_OperationName.data(), NWB_TEXT("byte range is empty or outside the buffer"));
+        rejectCommandRecording(s_OperationName.data(), __hidden_state_tracking_buffers::s_ByteRangeOutsideBufferReason);
         return;
     }
     if(!m_device.getQueue(destinationQueue)){
-        rejectCommandRecording(s_OperationName.data(), NWB_TEXT("destination queue is unavailable"));
+        rejectCommandRecording(s_OperationName.data(), VulkanStateTrackingDetail::s_DestinationQueueUnavailableReason);
         return;
     }
 
@@ -295,7 +314,7 @@ void CommandList::releaseBufferOwnership(Buffer* bufferResource, const GpuPhysic
 
     const ResourceStates::Mask initialState = buffer.resolveTaskGraphImportInitialState();
     if(initialState == ResourceStates::Unknown && !m_stateTracker.hasExplicitBufferState(&buffer, resolvedRange)){
-        rejectCommandRecording(s_OperationName.data(), NWB_TEXT("final byte range state is unknown"));
+        rejectCommandRecording(s_OperationName.data(), s_FinalRangeStateUnknownReason);
         return;
     }
     if(initialState != ResourceStates::Unknown && !validateBufferForGpuState(&buffer, initialState, s_OperationName.data()))
@@ -306,7 +325,7 @@ void CommandList::releaseBufferOwnership(Buffer* bufferResource, const GpuPhysic
             if(!entry.range.overlaps(resolvedRange))
                 continue;
             if(entry.state == ResourceStates::Unknown){
-                rejectCommandRecording(s_OperationName.data(), NWB_TEXT("final byte range state is unknown"));
+                rejectCommandRecording(s_OperationName.data(), s_FinalRangeStateUnknownReason);
                 return;
             }
             if(!validateBufferForGpuState(&buffer, entry.state, s_OperationName.data()))
@@ -345,13 +364,13 @@ void CommandList::beginTrackingBufferState(Buffer* buffer, ResourceStates::Mask 
     if(!validateCommandRecordingScope(s_OperationName.data()))
         return;
     if(stateBits == ResourceStates::Unknown){
-        rejectCommandRecording(s_OperationName.data(), NWB_TEXT("initial state cannot be unknown"));
+        rejectCommandRecording(s_OperationName.data(), VulkanStateTrackingDetail::s_InitialStateUnknownReason);
         return;
     }
     if(!validateBufferForGpuState(buffer, stateBits, s_OperationName.data()))
         return;
     if(!VulkanStateTrackingDetail::IsBufferStateRangeValid(range, buffer->m_creationDesc)){
-        rejectCommandRecording(s_OperationName.data(), NWB_TEXT("byte range is empty or outside the buffer"));
+        rejectCommandRecording(s_OperationName.data(), __hidden_state_tracking_buffers::s_ByteRangeOutsideBufferReason);
         return;
     }
     const ResourceStates::Mask permanentState = m_stateTracker.getPermanentBufferState(buffer);
@@ -370,13 +389,13 @@ void CommandList::seedBufferState(Buffer* buffer, ResourceStates::Mask stateBits
     if(!validateCommandRecordingScope(s_OperationName.data()))
         return;
     if(stateBits == ResourceStates::Unknown){
-        rejectCommandRecording(s_OperationName.data(), NWB_TEXT("initial state cannot be unknown"));
+        rejectCommandRecording(s_OperationName.data(), VulkanStateTrackingDetail::s_InitialStateUnknownReason);
         return;
     }
     if(!validateBufferForGpuState(buffer, stateBits, s_OperationName.data()))
         return;
     if(!VulkanStateTrackingDetail::IsBufferStateRangeValid(range, buffer->m_creationDesc)){
-        rejectCommandRecording(s_OperationName.data(), NWB_TEXT("byte range is empty or outside the buffer"));
+        rejectCommandRecording(s_OperationName.data(), __hidden_state_tracking_buffers::s_ByteRangeOutsideBufferReason);
         return;
     }
     if(!m_stateTracker.isPermanentBuffer(*buffer))

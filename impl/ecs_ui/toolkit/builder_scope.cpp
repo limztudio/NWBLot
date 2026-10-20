@@ -14,6 +14,24 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_ui_builder_scope{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr usize s_WidgetFrameReserve = 16u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 BuilderScopeFrame::BuilderScopeFrame(Core::Alloc::GlobalArena& arena)
     : m_layout(arena)
     , m_items(arena)
@@ -33,9 +51,9 @@ BuilderScopeFrame::BuilderScopeFrame(Core::Alloc::GlobalArena& arena)
     , m_window(arena)
 {
     m_items.reserve(s_LayoutMaxNodes);
-    m_radioGroups.reserve(16u);
-    m_sliders.reserve(16u);
-    m_stack.reserve(64u);
+    m_radioGroups.reserve(__hidden_ui_builder_scope::s_WidgetFrameReserve);
+    m_sliders.reserve(__hidden_ui_builder_scope::s_WidgetFrameReserve);
+    m_stack.reserve(s_ContextMaxScopeDepth);
 }
 
 void BuilderScopeFrame::reset()noexcept{

@@ -20,6 +20,26 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_state_tracking_ownership{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr TStringView s_PermanentStateUnknownReason = NWB_TEXT("permanent state cannot be unknown");
+static constexpr TStringView s_PermanentStateConflictsInitialReason = NWB_TEXT("permanent state conflicts with the retained initial state");
+static constexpr TStringView s_PermanentStateAlreadyTrackedReason = NWB_TEXT("a different permanent state is already tracked");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace VulkanStateTrackingDetail{
 
 
@@ -118,7 +138,7 @@ void CommandList::releaseTextureOwnership(Texture* textureResource, TextureSubre
 
     Texture& texture = *textureResource;
     if(!isTextureReadyForCommandQueue(&texture)){
-        rejectCommandRecording(s_ReleaseTextureOwnershipOperation, NWB_TEXT("texture is not ready for this exact command queue"));
+        rejectCommandRecording(s_ReleaseTextureOwnershipOperation, s_TextureNotReadyForQueueReason);
         return;
     }
     if(m_stateTracker.isPermanentTexture(texture)){
@@ -132,12 +152,12 @@ void CommandList::releaseTextureOwnership(Texture* textureResource, TextureSubre
 
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture.m_creationDesc, TextureSubresourceMipResolve::Range);
     if(!VulkanDetail::IsTextureSubresourceRangeValid(resolvedSubresources)){
-        rejectCommandRecording(s_ReleaseTextureOwnershipOperation, NWB_TEXT("subresource range is empty or outside the texture"));
+        rejectCommandRecording(s_ReleaseTextureOwnershipOperation, VulkanStateTrackingDetail::s_SubresourceRangeOutsideTextureReason);
         return;
     }
 
     if(!m_device.getQueue(destinationQueue)){
-        rejectCommandRecording(s_ReleaseTextureOwnershipOperation, NWB_TEXT("destination queue is unavailable"));
+        rejectCommandRecording(s_ReleaseTextureOwnershipOperation, VulkanStateTrackingDetail::s_DestinationQueueUnavailableReason);
         return;
     }
 
@@ -178,21 +198,21 @@ void CommandList::setPermanentTextureState(Texture* texture, ResourceStates::Mas
     if(!validateCommandRecordingScope(VulkanArenaScope::s_SetPermanentTextureStateCommandLabel))
         return;
     if(stateBits == ResourceStates::Unknown){
-        rejectCommandRecording(VulkanArenaScope::s_SetPermanentTextureStateCommandLabel, NWB_TEXT("permanent state cannot be unknown"));
+        rejectCommandRecording(VulkanArenaScope::s_SetPermanentTextureStateCommandLabel, __hidden_state_tracking_ownership::s_PermanentStateUnknownReason);
         return;
     }
     if(!isTextureReadyForCommandQueue(texture)){
-        rejectCommandRecording(VulkanArenaScope::s_SetPermanentTextureStateCommandLabel, NWB_TEXT("texture is not ready for this exact command queue"));
+        rejectCommandRecording(VulkanArenaScope::s_SetPermanentTextureStateCommandLabel, s_TextureNotReadyForQueueReason);
         return;
     }
     if(texture->m_creationDesc.keepInitialState && texture->m_creationDesc.initialState != stateBits){
-        rejectCommandRecording(VulkanArenaScope::s_SetPermanentTextureStateCommandLabel, NWB_TEXT("permanent state conflicts with the retained initial state"));
+        rejectCommandRecording(VulkanArenaScope::s_SetPermanentTextureStateCommandLabel, __hidden_state_tracking_ownership::s_PermanentStateConflictsInitialReason);
         return;
     }
 
     const ResourceStates::Mask permanentState = m_stateTracker.getPermanentTextureState(texture);
     if(permanentState != ResourceStates::Unknown && permanentState != stateBits){
-        rejectCommandRecording(VulkanArenaScope::s_SetPermanentTextureStateCommandLabel, NWB_TEXT("a different permanent state is already tracked"));
+        rejectCommandRecording(VulkanArenaScope::s_SetPermanentTextureStateCommandLabel, __hidden_state_tracking_ownership::s_PermanentStateAlreadyTrackedReason);
         return;
     }
     for(auto it = m_textureOwnershipReleaseDestinations.begin(); it != m_textureOwnershipReleaseDestinations.end(); ++it){
@@ -216,19 +236,19 @@ void CommandList::setPermanentBufferState(Buffer* buffer, ResourceStates::Mask s
     if(!validateCommandRecordingScope(s_OperationName))
         return;
     if(stateBits == ResourceStates::Unknown){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("permanent state cannot be unknown"));
+        rejectCommandRecording(s_OperationName, __hidden_state_tracking_ownership::s_PermanentStateUnknownReason);
         return;
     }
     if(!validateBufferForGpuState(buffer, stateBits, s_OperationName))
         return;
     if(buffer->m_creationDesc.keepInitialState && buffer->m_creationDesc.initialState != stateBits){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("permanent state conflicts with the retained initial state"));
+        rejectCommandRecording(s_OperationName, __hidden_state_tracking_ownership::s_PermanentStateConflictsInitialReason);
         return;
     }
 
     const ResourceStates::Mask permanentState = m_stateTracker.getPermanentBufferState(buffer);
     if(permanentState != ResourceStates::Unknown && permanentState != stateBits){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("a different permanent state is already tracked"));
+        rejectCommandRecording(s_OperationName, __hidden_state_tracking_ownership::s_PermanentStateAlreadyTrackedReason);
         return;
     }
     if(m_bufferOwnershipReleaseDestinations.find(buffer) != m_bufferOwnershipReleaseDestinations.end()){

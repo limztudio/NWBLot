@@ -629,7 +629,7 @@ Expected<u64> Device::queueGetCompletedInstance(const GpuPhysicalQueueId& queue)
         completedInstance = q->m_lastFinishedID;
     }
     if(result == VK_ERROR_DEVICE_LOST)
-        captureDeviceLoss("queue timeline query");
+        captureDeviceLoss(VulkanArenaScope::s_QueueTimelineQueryContext);
     if(result != VK_SUCCESS){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to query queue timeline semaphore value: {}"), ResultToString(result));
         return MakeUnexpected(Failure{});

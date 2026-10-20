@@ -62,6 +62,34 @@ using CookHashSet = MaterialCookHashSet<T>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Symbol name pieces: the bind include generator emits them and the shadow dispatch module aliases the same names.
+inline constexpr AStringView s_MaterialBindInterfaceHashSymbolPrefix = "INTERFACE_HASH_";
+inline constexpr AStringView s_MaterialBindLayoutHashSymbol = "LAYOUT_HASH";
+inline constexpr AStringView s_MaterialBindBlockCountSymbol = "BLOCK_COUNT";
+inline constexpr AStringView s_MaterialBindFieldCountSymbol = "FIELD_COUNT";
+inline constexpr AStringView s_MaterialBindStorageConstantSymbol = "STORAGE_CONSTANT";
+inline constexpr AStringView s_MaterialBindStorageMutableSymbol = "STORAGE_MUTABLE";
+inline constexpr AStringView s_MaterialBindConstantByteSizeSymbol = "CONSTANT_BYTE_SIZE";
+inline constexpr AStringView s_MaterialBindMutableByteSizeSymbol = "MUTABLE_BYTE_SIZE";
+inline constexpr AStringView s_MaterialBindStorageSymbolSuffix = "_STORAGE";
+inline constexpr AStringView s_MaterialBindByteOffsetSymbolSuffix = "_BYTE_OFFSET";
+inline constexpr AStringView s_MaterialBindByteSizeSymbolSuffix = "_BYTE_SIZE";
+inline constexpr AStringView s_MaterialBindKeySymbolSuffix = "_KEY";
+inline constexpr AStringView s_MaterialBindDefaultSymbolSuffix = "_DEFAULT";
+
+
+// Text pieces shared by the generated Slang sources.
+inline constexpr AStringView s_GeneratedDefineDirective = "#define ";
+inline constexpr AStringView s_GeneratedUndefDirective = "#undef ";
+inline constexpr AStringView s_GeneratedIncludeDirective = "#include \"";
+inline constexpr AStringView s_GeneratedIncludeDirectiveEnd = "\"\n";
+inline constexpr AStringView s_GeneratedReturnPrefix = "    return ";
+inline constexpr AStringView s_GeneratedFunctionEnd = "}\n\n";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename StringT>
 void AppendMaterialBindGeneratedUpperIdentifier(const AStringView text, StringT& inOutText){
     const usize beginSize = inOutText.size();

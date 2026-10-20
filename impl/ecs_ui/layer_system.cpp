@@ -83,7 +83,7 @@ void UiLayerSystem::prepare(Core::ECS::World& world){
     static_cast<void>(world);
     synchronizeInput();
     const UiSkinChangeResult::Enum skinChange = m_skinSelection.applyChangeIfReady(m_resourcesReady, m_renderer.hasPendingFrame(), m_context.ready(), [this](const Core::Assets::AssetRef<UiSkin>& ref, const u64 generation){
-            auto candidateAsset = m_assetManager.loadTypedSync<UiSkin>(ref.name(), NWB_TEXT("UiLayerSystem"), "UI skin");
+            auto candidateAsset = m_assetManager.loadTypedSync<UiSkin>(ref.name(), s_UiLayerSystemOwnerName, s_UiSkinAssetKindText);
             const UiSkin* skin = candidateAsset ? candidateAsset->get() : nullptr;
             if(!skin || !ValidateUiSkinToolkitContract(*skin) || !m_renderer.setSkin(ref, *skin, generation))
                 return false;
@@ -116,7 +116,7 @@ bool UiLayerSystem::validateResources(const u32 width, const u32 height, const u
             const UiSkin* skin = Core::Assets::CastAsset<UiSkin>(m_skinAsset.get());
             return skin && ValidateUiSkinToolkitContract(*skin) && m_renderer.setSkin(ref, *skin, m_skinSelection.generation());
         }
-        auto candidateAsset = m_assetManager.loadTypedSync<UiSkin>(ref.name(), NWB_TEXT("UiLayerSystem"), "UI skin");
+        auto candidateAsset = m_assetManager.loadTypedSync<UiSkin>(ref.name(), s_UiLayerSystemOwnerName, s_UiSkinAssetKindText);
         const UiSkin* skin = candidateAsset ? candidateAsset->get() : nullptr;
         if(!skin || !ValidateUiSkinToolkitContract(*skin) || !m_renderer.setSkin(ref, *skin, m_skinSelection.generation()))
             return false;

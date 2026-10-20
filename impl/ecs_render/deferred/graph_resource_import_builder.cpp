@@ -5,7 +5,9 @@
 #include "graph_resource_import_builder.h"
 
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
+#include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/raytrace/raytracing_system.h>
+#include <impl/ecs_render/renderer_frame_pipeline_graph_shared.h>
 
 #include <core/graphics/backend_selection/backend.h>
 
@@ -42,6 +44,11 @@ DeferredGraphResourceImportBuilder::DeferredGraphResourceImportBuilder(Core::Gpu
     const DeferredLaggedLightingHistoryResources* const captureHistory = inputs.captureHistory;
     const bool clearAvboitTargets = inputs.clearAvboitTargets;
     const bool capturesLaggedLightingHistory = inputs.capturesLaggedLightingHistory;
+
+    constexpr AStringView s_CausticIrradianceLabel = "Caustic Irradiance";
+    constexpr AStringView s_SurfelIrradianceLabel = "Surfel Irradiance";
+    constexpr AStringView s_LightingBindlessSlotsName = "render.deferred_lighting.bindless_slots";
+    constexpr AStringView s_BindlessSlotsLabel = "Deferred Bindless Slots";
 
     const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
         return m_graph.importTexture(texture, RendererTaskGraphDetail::TextureResourceDesc(identity, label));
@@ -143,16 +150,16 @@ DeferredGraphResourceImportBuilder::DeferredGraphResourceImportBuilder(Core::Gpu
     csgRemovedIntervalCapNormalResult = importTexture(deferredTargets.csgRemovedIntervalCapNormal, Name("render.deferred.csg_removed_interval_cap_normal"), "CSG Removed Interval Cap Normal");
     csgRemovedIntervalDataResult = importTexture(deferredTargets.csgRemovedIntervalData, Name("render.deferred.csg_removed_interval_data"), "CSG Removed Interval Data");
     csgRemovedIntervalCountResult = importTexture(deferredTargets.csgRemovedIntervalCount, Name("render.deferred.csg_removed_interval_count"), "CSG Removed Interval Count");
-    shadowVisibilityResult = importTexture(history ? history->shadowVisibility : deferredTargets.shadowVisibility, Name("render.deferred_lighting.shadow_visibility"), history ? "Lagged Shadow Visibility" : "Shadow Visibility");
-    causticIrradianceResult = importTexture(history ? history->causticIrradiance : deferredTargets.causticIrradiance, Name("render.deferred_lighting.caustic_irradiance"), history ? "Lagged Caustic Irradiance" : "Caustic Irradiance");
-    surfelIrradianceResult = importTexture(history ? history->surfelIrradiance : deferredTargets.surfelIrradiance, Name("render.deferred_lighting.surfel_irradiance"), history ? "Lagged Surfel Irradiance" : "Surfel Irradiance");
-    currentShadowVisibilityResult = !history ? shadowVisibilityResult : importTexture(deferredTargets.shadowVisibility, Name("render.deferred_shadow_visibility.current_output"), "Shadow Visibility");
-    currentCausticIrradianceResult = !history ? causticIrradianceResult : importTexture(deferredTargets.causticIrradiance, Name("render.deferred_effects.current_caustic_irradiance"), "Caustic Irradiance");
-    currentSurfelIrradianceResult = !history ? surfelIrradianceResult : importTexture(deferredTargets.surfelIrradiance, Name("render.deferred_surfel_gi.current_irradiance"), "Surfel Irradiance");
+    shadowVisibilityResult = importTexture(history ? history->shadowVisibility : deferredTargets.shadowVisibility, Name("render.deferred_lighting.shadow_visibility"), history ? "Lagged Shadow Visibility" : RendererGpuPassText::s_ShadowVisibilityLabel);
+    causticIrradianceResult = importTexture(history ? history->causticIrradiance : deferredTargets.causticIrradiance, Name("render.deferred_lighting.caustic_irradiance"), history ? "Lagged Caustic Irradiance" : s_CausticIrradianceLabel);
+    surfelIrradianceResult = importTexture(history ? history->surfelIrradiance : deferredTargets.surfelIrradiance, Name("render.deferred_lighting.surfel_irradiance"), history ? "Lagged Surfel Irradiance" : s_SurfelIrradianceLabel);
+    currentShadowVisibilityResult = !history ? shadowVisibilityResult : importTexture(deferredTargets.shadowVisibility, Name("render.deferred_shadow_visibility.current_output"), RendererGpuPassText::s_ShadowVisibilityLabel);
+    currentCausticIrradianceResult = !history ? causticIrradianceResult : importTexture(deferredTargets.causticIrradiance, Name("render.deferred_effects.current_caustic_irradiance"), s_CausticIrradianceLabel);
+    currentSurfelIrradianceResult = !history ? surfelIrradianceResult : importTexture(deferredTargets.surfelIrradiance, Name("render.deferred_surfel_gi.current_irradiance"), s_SurfelIrradianceLabel);
     opaqueColorResult = importFirstWriteTexture(deferredTargets.opaqueColor, Name("render.deferred_lighting.opaque_color"), "Opaque Color");
     sceneShadingResult = importBuffer(deferredLightingResources.sceneShadingBuffer, Name("render.deferred_lighting.scene_shading"), "Scene Shading");
     lightsResult = importBuffer(deferredLightingResources.lightBuffer, Name("render.deferred_lighting.lights"), "Lights");
-    meshViewResult = importBuffer(meshViewBufferSnapshot.buffer, Name("render.deferred.mesh_view"), "Mesh View");
+    meshViewResult = importBuffer(meshViewBufferSnapshot.buffer, Name(RendererFramePipelineDetail::s_MeshViewName), RendererFramePipelineDetail::s_MeshViewLabel);
     if(frameBindings.instanceBuffer){
         const auto importedResource = importBuffer(frameBindings.instanceBuffer, Name("render.deferred.material_instances"), "Material Instances");
         if(!importedResource)
@@ -195,8 +202,8 @@ DeferredGraphResourceImportBuilder::DeferredGraphResourceImportBuilder(Core::Gpu
         else
             csgIntervalSampleStateResult = Optional<Core::GpuGraphResourceId>{*importedResource};
     }
-    bindlessSlotsResult = history ? importBuffer(history->slotsBuffer, Name("render.deferred_lighting.bindless_slots"), "Lagged Deferred Bindless Slots") : importCurrentBindlessSlots(Name("render.deferred_lighting.bindless_slots"), "Deferred Bindless Slots");
-    currentBindlessSlotsResult = !history || deferredTargets.bindless.slotsBuffer.get() == history->slotsBuffer.get() ? bindlessSlotsResult : importCurrentBindlessSlots(Name("render.deferred_composite.bindless_slots"), "Deferred Bindless Slots");
+    bindlessSlotsResult = history ? importBuffer(history->slotsBuffer, Name(s_LightingBindlessSlotsName), "Lagged Deferred Bindless Slots") : importCurrentBindlessSlots(Name(s_LightingBindlessSlotsName), s_BindlessSlotsLabel);
+    currentBindlessSlotsResult = !history || deferredTargets.bindless.slotsBuffer.get() == history->slotsBuffer.get() ? bindlessSlotsResult : importCurrentBindlessSlots(Name("render.deferred_composite.bindless_slots"), s_BindlessSlotsLabel);
     if(rayTracingGraphResources.materialContextSlotsBuffer){
         const auto importedResource = importBuffer(rayTracingGraphResources.materialContextSlotsBuffer, Name("render.deferred.material_context_slots"), "Ray Trace Material Context Slots");
         if(!importedResource)
@@ -231,12 +238,12 @@ DeferredGraphResourceImportBuilder::DeferredGraphResourceImportBuilder(Core::Gpu
     avboitForegroundExtinctionResult = importAvboitTexture(deferredTargets.avboit.foregroundAccumExtinction, Name("render.avboit.avboitForegroundExtinction"), "AVBOIT avboitForegroundExtinction");
     avboitTransmittanceResult = importAvboitTexture(deferredTargets.avboit.transmittanceTexture, Name("render.avboit.transmittance"), "AVBOIT Transmittance");
     avboitCoverageResult = importBuffer(deferredTargets.avboit.coverageBuffer, Name("render.avboit.coverage"), "AVBOIT Coverage");
-    avboitDepthWarpResult = importBuffer(deferredTargets.avboit.depthWarpBuffer, Name("render.avboit.depth_warp"), "AVBOIT Depth Warp");
+    avboitDepthWarpResult = importBuffer(deferredTargets.avboit.depthWarpBuffer, Name(RendererGpuPassText::s_AvboitDepthWarpName), RendererGpuPassText::s_AvboitDepthWarpLabel);
     avboitControlResult = importBuffer(deferredTargets.avboit.controlBuffer, Name("render.avboit.control"), "AVBOIT Control");
-    avboitExtinctionResult = importBuffer(deferredTargets.avboit.extinctionBuffer, Name("render.avboit.extinction"), "AVBOIT Extinction");
+    avboitExtinctionResult = importBuffer(deferredTargets.avboit.extinctionBuffer, Name(RendererGpuPassText::s_AvboitExtinctionName), RendererGpuPassText::s_AvboitExtinctionLabel);
     avboitExtinctionOverflowResult = importBuffer(deferredTargets.avboit.extinctionOverflowBuffer, Name("render.avboit.extinction_overflow"), "AVBOIT Extinction Overflow");
     avboitMaterialDomainResult = m_graph.importHazardDomain(RendererTaskGraphDetail::HazardDomainDesc(Name("render.avboit.material_domain"), "Transparent Materials and Geometry"));
-    avboitCsgDomainResult = m_graph.importHazardDomain(RendererTaskGraphDetail::HazardDomainDesc(Name("render.avboit.csg_domain"), "Transparent CSG Intervals"));
+    avboitCsgDomainResult = m_graph.importHazardDomain(RendererTaskGraphDetail::HazardDomainDesc(Name("render.avboit.csg_domain"), RendererGpuPassText::s_TransparentCsgIntervalsLabel));
     if(
         !csgIntervalSampleStateResult
         || !materialInstancesResult

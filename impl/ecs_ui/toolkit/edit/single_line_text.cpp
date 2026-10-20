@@ -29,17 +29,17 @@ struct TextStep{
 
 static Expected<TextStep> ReadStep(const AStringView source, const usize offset)noexcept{
     // Callers admit the whole source with GraphemeSegmentation::Validate first.
-    const auto decoded = DecodeUtf8CodePoint(source.substr(offset, 4u));
-    NWB_ASSERT(decoded && !(decoded->codePoint >= 0xD800u && decoded->codePoint <= 0xDFFFu));
+    const auto decoded = DecodeUtf8CodePoint(source.substr(offset, s_Utf8MaxSequenceBytes));
+    NWB_ASSERT(decoded && !(decoded->codePoint >= s_UnicodeSurrogateFirst && decoded->codePoint <= s_UnicodeSurrogateLast));
     const u32 scalar = decoded->codePoint;
-    const bool space = (scalar >= 0x9u && scalar <= 0xDu) || scalar == 0x85u || scalar == 0x2028u || scalar == 0x2029u;
-    if(!space && (scalar < 0x20u || scalar == 0x7Fu))
+    const bool space = (scalar >= s_UnicodeTab && scalar <= s_UnicodeCarriageReturn) || scalar == s_UnicodeNextLine || scalar == s_UnicodeLineSeparator || scalar == s_UnicodeParagraphSeparator;
+    if(!space && (scalar < s_UnicodeSpace || scalar == s_UnicodeDelete))
         return MakeUnexpected(Failure{});
     TextStep step;
     step.sourceBytes = static_cast<usize>(decoded->byteCount);
     step.outputBytes = space ? 1u : step.sourceBytes;
     step.space = space;
-    if(scalar == 0xDu && offset + step.sourceBytes < source.size() && source[offset + step.sourceBytes] == '\n')
+    if(scalar == s_UnicodeCarriageReturn && offset + step.sourceBytes < source.size() && source[offset + step.sourceBytes] == '\n')
         ++step.sourceBytes;
     return step;
 }

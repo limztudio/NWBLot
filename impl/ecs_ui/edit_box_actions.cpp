@@ -73,7 +73,7 @@ bool UiEditBoxHost::apply(Entry& entry, Ui::EditModel& model, const Ui::EditBoxO
     else if(event.kind == UiEditBoxEventKind::Native){
         if(options.readOnly || event.native.token == entry.rejectedNative)
             return true;
-        if(event.native.kind == Core::TextInputEventKind::Commit && event.native.text.size() == 1u && (static_cast<u8>(event.native.text.front()) < 32u || event.native.text.front() == 127))
+        if(event.native.kind == Core::TextInputEventKind::Commit && event.native.text.size() == 1u && (static_cast<u8>(event.native.text.front()) < s_UiEditBoxAsciiControlLimit || event.native.text.front() == s_UiEditBoxAsciiDelete))
             return true;
         const bool matching = model.revision() == event.surroundingModelRevision
             && model.externalRevision() == event.geometryExternalRevision

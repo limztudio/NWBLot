@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/shadow/quality_settings.h>
 
 #include <global/simdmath.h>
 
@@ -21,7 +22,7 @@ NWB_IMPL_BEGIN
 
 struct ShadowCombinedTemporalPushConstants{
     Float44U prevWorldToClip = {};
-    u32 receiverFactor = 2u;
+    u32 receiverFactor = s_ShadowReceiverFactorHalf;
     u32 lightSlotCount = 0u;
     u32 historyValid = 0u;
     u32 geometryCurrSlot = 0u;

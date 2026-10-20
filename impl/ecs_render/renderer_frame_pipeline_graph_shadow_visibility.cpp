@@ -12,6 +12,7 @@
 #include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>
 #include <impl/ecs_render/kernel/task_graph_scheduling.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
+#include <impl/ecs_render/kernel/timing_names.h>
 
 #include <core/task/gpu/capture/command_ir.h>
 #include <core/graphics/gpu_timing.h>
@@ -163,7 +164,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     const auto importBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label){
         return m_deferredLightingTaskGraph.importBuffer(buffer, BufferResourceDesc(identity, label));
     };
-    const auto sceneGeometryDomainResult = m_deferredLightingTaskGraph.importHazardDomain(HazardDomainDesc(Name("render.shadow_visibility.scene_geometry"), "Scene Acceleration and Geometry"));
+    const auto sceneGeometryDomainResult = m_deferredLightingTaskGraph.importHazardDomain(HazardDomainDesc(Name("render.shadow_visibility.scene_geometry"), RendererFramePipelineDetail::s_SceneGeometryDomainLabel));
     if(!sceneGeometryDomainResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred shadow-visibility graph resources"));
         return false;
@@ -591,7 +592,8 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         if(graphOwnsTransparentTemporalMergeEntryStates){
             // Selection is frozen with the compiled frame. The merge samples the current front pair and publishes the opposite pair, which the following wavelet receives as graph-owned sampled inputs.
             constexpr usize s_TransparentTemporalMergeResourceUseCapacity = 8u;
-            transparentTemporalMergeResourceUses.reserve(s_TransparentTemporalMergeResourceUseCapacity + (combinedSoftTemporal ? 5u : 0u));
+            constexpr usize s_CombinedSoftTemporalExtraUseCapacity = 5u;
+            transparentTemporalMergeResourceUses.reserve(s_TransparentTemporalMergeResourceUseCapacity + (combinedSoftTemporal ? s_CombinedSoftTemporalExtraUseCapacity : 0u));
             transparentTemporalMergeResourceUses.push_back(ReadUse(transparentSoftHalf, Core::ResourceStates::ShaderResource));
             transparentTemporalMergeResourceUses.push_back(ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource));
             transparentTemporalMergeResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource));
@@ -612,14 +614,17 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
                 transparentTemporalMergeResourceUses.push_back(WriteUse(opaqueHistoryFrontIsA ? opaqueMomentsB : opaqueMomentsA, Core::ResourceStates::UnorderedAccess));
             }
 
-            transparentFirstWaveletResourceUses.reserve(combinedSoftWavelet ? 7u : 4u);
+            constexpr usize s_CombinedFirstWaveletResourceUseCapacity = 7u;
+            constexpr usize s_FirstWaveletResourceUseCapacity = 4u;
+            transparentFirstWaveletResourceUses.reserve(combinedSoftWavelet ? s_CombinedFirstWaveletResourceUseCapacity : s_FirstWaveletResourceUseCapacity);
             transparentFirstWaveletResourceUses.push_back(ReadUse(transparentHistoryOut, Core::ResourceStates::ShaderResource));
             transparentFirstWaveletResourceUses.push_back(ReadUse(transparentMomentsOut, Core::ResourceStates::ShaderResource));
             transparentFirstWaveletResourceUses.push_back(WriteUse(shadowSoftHalfA, Core::ResourceStates::UnorderedAccess));
             transparentFirstWaveletResourceUses.push_back(ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource));
         }else{
             // Inactive temporal frames keep their existing trace-to-wavelet route and do not acquire stale-history declarations or a no-op merge callback.
-            transparentFirstWaveletResourceUses.reserve(3u);
+            constexpr usize s_InactiveFirstWaveletResourceUseCapacity = 3u;
+            transparentFirstWaveletResourceUses.reserve(s_InactiveFirstWaveletResourceUseCapacity);
             transparentFirstWaveletResourceUses.push_back(ReadUse(transparentSoftHalf, Core::ResourceStates::ShaderResource));
             transparentFirstWaveletResourceUses.push_back(WriteUse(shadowSoftHalfA, Core::ResourceStates::UnorderedAccess));
             transparentFirstWaveletResourceUses.push_back(ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource));
@@ -1096,7 +1101,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     Core::GpuTaskDesc desc;
     desc
         .setIdentity(Name("render.shadow_visibility"))
-        .setMarkerLabel("Shadow Visibility")
+        .setMarkerLabel(RendererGpuPassText::s_ShadowVisibilityLabel)
         .setScheduling(scheduling)
         .setDependencies(&shadowVisibilityDependency, 1u)
         .setExternalStateSources(shadowVisibilityStateSourceData, shadowVisibilityStateSourceCount)

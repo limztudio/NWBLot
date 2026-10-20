@@ -55,6 +55,8 @@ namespace __hidden_buffer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr TStringView s_DestinationRangeOutsideBufferReason = NWB_TEXT("destination range is outside the buffer");
+
 using BufferQueueFamilyVector = Vector<u32, Alloc::GlobalArena>;
 
 [[nodiscard]] static BufferQueueFamilyVector CopyBufferQueueFamilyIndices(const VulkanContext& context, const VkBufferCreateInfo& bufferInfo){
@@ -285,13 +287,13 @@ bool CommandList::tryWriteBuffer(Buffer& buffer, const void* data, usize dataSiz
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, VulkanArenaScope::s_WriteBufferCommandLabel))
         return false;
     if(!data){
-        rejectCommandRecording(VulkanArenaScope::s_WriteBufferCommandLabel, NWB_TEXT("data is null"));
+        rejectCommandRecording(VulkanArenaScope::s_WriteBufferCommandLabel, s_DataIsNullReason);
         return false;
     }
 
     const BufferDesc& desc = buffer.m_creationDesc;
     if(!VulkanDetail::IsBufferRangeInBounds(desc, destOffsetBytes, static_cast<u64>(dataSize))){
-        rejectCommandRecording(VulkanArenaScope::s_WriteBufferCommandLabel, NWB_TEXT("destination range is outside the buffer"));
+        rejectCommandRecording(VulkanArenaScope::s_WriteBufferCommandLabel, __hidden_buffer::s_DestinationRangeOutsideBufferReason);
         return false;
     }
     if((destOffsetBytes & s_BufferAlignmentMask) != 0u || (dataSize & s_BufferAlignmentMask) != 0u){
@@ -303,7 +305,7 @@ bool CommandList::tryWriteBuffer(Buffer& buffer, const void* data, usize dataSiz
 
     const auto staging = prepareUploadStaging(data, dataSize, NWB_TEXT("writeBuffer"));
     if(!staging){
-        rejectCommandRecording(VulkanArenaScope::s_WriteBufferCommandLabel, NWB_TEXT("staging allocation failed"));
+        rejectCommandRecording(VulkanArenaScope::s_WriteBufferCommandLabel, s_StagingAllocationFailedReason);
         return false;
     }
 
@@ -330,13 +332,14 @@ void CommandList::writeBuffer(Buffer& buffer, const void* data, usize dataSize, 
 }
 
 void CommandList::clearBufferUInt(Buffer& buffer, u32 clearValue){
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, NWB_TEXT("clear buffer")))
+    constexpr TStringView s_OperationName = NWB_TEXT("clear buffer");
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, s_OperationName))
         return;
     if((buffer.m_creationDesc.byteSize & s_BufferAlignmentMask) != 0u){
-        rejectCommandRecording(NWB_TEXT("clear buffer"), NWB_TEXT("buffer size is not 4-byte aligned"));
+        rejectCommandRecording(s_OperationName, NWB_TEXT("buffer size is not 4-byte aligned"));
         return;
     }
-    if(!validateBufferForGpuState(&buffer, ResourceStates::CopyDest, NWB_TEXT("clear buffer"), VK_BUFFER_USAGE_TRANSFER_DST_BIT))
+    if(!validateBufferForGpuState(&buffer, ResourceStates::CopyDest, s_OperationName, VK_BUFFER_USAGE_TRANSFER_DST_BIT))
         return;
 
     endActiveRenderPass();
@@ -358,7 +361,7 @@ void CommandList::copyBuffer(Buffer& dest, u64 destOffsetBytes, Buffer& src, u64
     const BufferDesc& srcDesc = src.m_creationDesc;
 
     if(!VulkanDetail::IsBufferRangeInBounds(destDesc, destOffsetBytes, dataSizeBytes)){
-        rejectCommandRecording(s_CopyBufferOperation, NWB_TEXT("destination range is outside the buffer"));
+        rejectCommandRecording(s_CopyBufferOperation, __hidden_buffer::s_DestinationRangeOutsideBufferReason);
         return;
     }
 
@@ -372,7 +375,7 @@ void CommandList::copyBuffer(Buffer& dest, u64 destOffsetBytes, Buffer& src, u64
         return;
     }
     if(&dest != &src && dest.m_buffer != VK_NULL_HANDLE && dest.m_buffer == src.m_buffer){
-        rejectCommandRecording(s_CopyBufferOperation, NWB_TEXT("distinct buffer objects alias the same native buffer"));
+        rejectCommandRecording(s_CopyBufferOperation, s_NativeBufferAliasReason);
         return;
     }
 

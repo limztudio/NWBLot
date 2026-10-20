@@ -87,13 +87,14 @@ static constexpr AStringView s_ParentField = "parent";
 static constexpr AStringView s_LocalBindPoseField = "local_bind_pose";
 static constexpr AStringView s_SkeletonMetaKind = "Skeleton";
 static constexpr AStringView s_SkeletonJointMetaKind = "Skeleton joint meta";
+static constexpr AStringView s_SkeletonMetaDiagnosticPrefix = "Skeleton meta";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] bool ValidateSkeletonAssetFields(const Path& nwbFilePath, const Value& asset){
-    return Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, "Skeleton meta", { s_JointsField });
+    return Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_SkeletonMetaDiagnosticPrefix, { s_JointsField });
 }
 
 [[nodiscard]] bool ValidateSkeletonJointFields(const Path& nwbFilePath, const Value& joint){
@@ -198,15 +199,15 @@ Expected<SkeletonCookEntry> ParseSkeletonCookMetadata(const Name virtualPath, co
 
     SkeletonCookEntry entry(arena);
 
-    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, "Skeleton meta"))
+    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_SkeletonMetaDiagnosticPrefix))
         return MakeUnexpected(Failure{});
 
-    if(!Core::Assets::AssignCookEntryVirtualPath(entry, virtualPath, nwbFilePath, "Skeleton meta"))
+    if(!Core::Assets::AssignCookEntryVirtualPath(entry, virtualPath, nwbFilePath, s_SkeletonMetaDiagnosticPrefix))
         return MakeUnexpected(Failure{});
     if(!ValidateSkeletonAssetFields(nwbFilePath, asset))
         return MakeUnexpected(Failure{});
 
-    const auto joints = Core::Assets::FindMetadataListField(nwbFilePath, asset, "Skeleton meta", s_JointsField);
+    const auto joints = Core::Assets::FindMetadataListField(nwbFilePath, asset, s_SkeletonMetaDiagnosticPrefix, s_JointsField);
     if(!joints)
         return MakeUnexpected(joints.error());
 

@@ -29,12 +29,24 @@ namespace __hidden_task_graph_light_space_shadow{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr Name s_DiagnosticsIdentity("render.light_space_shadow.diagnostics");
+inline constexpr AStringView s_DiagnosticsLabel = "CSG Shadow Diagnostics";
+inline constexpr Name s_ViewUploadIdentity("render.light_space_shadow.view_upload");
+inline constexpr AStringView s_ViewUploadLabel = "Light-Space View Upload";
+
+// Fixed light-space uses appended after the scene reads.
+inline constexpr usize s_FixedResourceUseCount = 5u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Capture needs one simultaneous SRV/index state for each canonical buffer. Separate set uses would describe successive states.
 [[nodiscard]] bool GatherCaptureReads(const Core::GpuTaskGraph& graph, const LightSpaceShadowGraphInputs& inputs, Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& outUses){
     const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
     if(!declarations.valid())
         return false;
-    usize capacity = inputs.sceneReadCount + inputs.snapshot.casterCount + 5u;
+    usize capacity = inputs.sceneReadCount + inputs.snapshot.casterCount + s_FixedResourceUseCount;
     for(usize index = 0u; index < inputs.sceneReadSetCount; ++index){
         const Core::GpuTaskResourceSetUse& use = inputs.sceneReadSets[index];
         if(!declarations.validResourceSet(use.resourceSet))
@@ -257,7 +269,7 @@ Expected<Core::GpuTaskId> DeclareLightSpaceShadowDiagnostics(Core::GpuTaskGraph&
         return MakeUnexpected(Failure{});
     const auto readbackResult = graph.importBuffer(
         snapshot.diagnosticReadback,
-        BufferResourceDesc(Name("render.light_space_shadow.diagnostics"), "CSG Shadow Diagnostics")
+        BufferResourceDesc(__hidden_task_graph_light_space_shadow::s_DiagnosticsIdentity, __hidden_task_graph_light_space_shadow::s_DiagnosticsLabel)
             .setInitialState(Core::ResourceStates::CopyDest).setExternalFinalState(Core::ResourceStates::CopyDest)
     );
     if(!readbackResult)
@@ -273,8 +285,8 @@ Expected<Core::GpuTaskId> DeclareLightSpaceShadowDiagnostics(Core::GpuTaskGraph&
     EnableCrossFamilyComputeEffectRouting(scheduling);
     Core::GpuTaskDesc desc;
     desc
-        .setIdentity(Name("render.light_space_shadow.diagnostics"))
-        .setMarkerLabel("CSG Shadow Diagnostics")
+        .setIdentity(__hidden_task_graph_light_space_shadow::s_DiagnosticsIdentity)
+        .setMarkerLabel(__hidden_task_graph_light_space_shadow::s_DiagnosticsLabel)
         .setScheduling(scheduling).setDependencies(&inputs.dependency, 1u)
         .setExternalStateSources(inputs.stateSources, inputs.stateSourceCount)
         .setResourceUses(uses, LengthOf(uses))
@@ -366,7 +378,7 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& 
     scheduling.mergeWithPrevious = true;
     scheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc uploadDesc;
-    uploadDesc.setIdentity(Name("render.light_space_shadow.view_upload")).setMarkerLabel("Light-Space View Upload").setScheduling(scheduling).setDependencies(&inputs.dependency, 1u).setExternalStateSources(inputs.stateSources, inputs.stateSourceCount);
+    uploadDesc.setIdentity(__hidden_task_graph_light_space_shadow::s_ViewUploadIdentity).setMarkerLabel(__hidden_task_graph_light_space_shadow::s_ViewUploadLabel).setScheduling(scheduling).setDependencies(&inputs.dependency, 1u).setExternalStateSources(inputs.stateSources, inputs.stateSourceCount);
     Core::GpuTaskId csgUpload;
     if(csg){
         if(!snapshot.diagnostics || snapshot.csgContextByteCount < NWB_CSG_RAY_CONTEXT_BYTES)
@@ -403,7 +415,7 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& 
             }
             csgUpload = *csgUploadResult2;
         }
-        uploadDesc.setIdentity(Name("render.light_space_shadow.view_upload")).setMarkerLabel("Light-Space View Upload").setDependencies(&csgUpload, 1u);
+        uploadDesc.setIdentity(__hidden_task_graph_light_space_shadow::s_ViewUploadIdentity).setMarkerLabel(__hidden_task_graph_light_space_shadow::s_ViewUploadLabel).setDependencies(&csgUpload, 1u);
     }
     const auto resultViewUploadResult = graph.addUploadBufferTask(uploadDesc, Core::GpuUploadBufferTaskDesc{ .source = upload, .destination = result.views, .finalState = Core::ResourceStates::Common, });
     if(!resultViewUploadResult){
@@ -421,7 +433,7 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& 
     result.countsClear = *resultCountsClearResult;
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses(inputs.scratchArena);
-    uses.reserve(inputs.sceneReadCount + 5u);
+    uses.reserve(inputs.sceneReadCount + __hidden_task_graph_light_space_shadow::s_FixedResourceUseCount);
     for(usize index = 0u; index < inputs.sceneReadCount; ++index)
         uses.push_back(inputs.sceneReads[index]);
     if(csg)

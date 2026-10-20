@@ -27,7 +27,7 @@ Builder::Builder(Core::Alloc::GlobalArena& arena, Context& context, PaintBuilder
     , m_scopeFrame(arena)
     , m_scope(MakeNotNull(&m_scopeFrame))
     , m_popupFrames(arena)
-    , m_textLanguage("en", arena)
+    , m_textLanguage(s_TextDefaultLanguage.data(), arena)
 {}
 
 bool Builder::beginPanel(const AStringView stableKey, const Rect& bounds, const LayoutDirection::Enum direction){
@@ -138,7 +138,7 @@ bool Builder::setTextShaping(const u32 scriptTag, const StringView language){
         m_context.fail();
         return false;
     }
-    const ShapeRequest request{ {}, 16.0f, TextDirection::LeftToRight, scriptTag, language };
+    const ShapeRequest request{ {}, s_TextDefaultFontSize, TextDirection::LeftToRight, scriptTag, language };
     if(ValidateTextRequest(request, false) != TextLayoutStatus::Success)
         return false;
     AString<Core::Alloc::GlobalArena> copied(language.data(), language.size(), m_arena);
@@ -233,7 +233,7 @@ ShapeRequest Builder::textShapeRequest(const StringView text, const f32 fontSize
 }
 
 bool Builder::beginContainer(const AStringView stableKey, const LayoutDirection::Enum direction, const ContainerOptions& options){
-    if(declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_scope->m_stack.size() >= 64u || !m_context.declare(stableKey, WidgetKind::Container)){
+    if(declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_scope->m_stack.size() >= s_ContextMaxScopeDepth || !m_context.declare(stableKey, WidgetKind::Container)){
         m_context.fail();
         return false;
     }

@@ -92,6 +92,29 @@ constexpr f32 s_PIDIV2 = 1.570796327f;
 inline constexpr f64 s_DoublePIDIV2 = 0x1.921fb54442d18p+0;
 constexpr f32 s_PIDIV4 = 0.785398163f;
 inline constexpr f64 s_DoublePIDIV4 = 0x1.921fb54442d18p-1;
+constexpr f32 s_3PIDIV4 = 2.3561944905f;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// IEEE-754 binary32/binary64 bit layout.
+inline constexpr u32 s_F32SignBitMask = 0x80000000u;
+inline constexpr u32 s_F32AbsoluteBitMask = 0x7fffffffu;
+inline constexpr u32 s_F32SignBitShift = 31u;
+inline constexpr u32 s_F32InfinityBits = 0x7f800000u;
+inline constexpr u32 s_F32QuietNaNBits = 0x7fc00000u;
+inline constexpr u32 s_F32QuietBit = 0x00400000u;
+inline constexpr u32 s_F32MinNormalBits = 0x00800000u;
+inline constexpr u32 s_F32FractionLimitBits = 0x4affffffu;
+inline constexpr u32 s_F32MantissaBitCount = 23u;
+inline constexpr u32 s_F32ImplicitMantissaBit = 0x800000u;
+inline constexpr u32 s_F32MantissaBitMask = 0x7fffffu;
+inline constexpr u32 s_F32ExponentFieldMask = 0xffu;
+inline constexpr u32 s_F32ExponentBias = 127u;
+inline constexpr u32 s_F32IntegerExponent = s_F32ExponentBias + s_F32MantissaBitCount;
+inline constexpr u64 s_F64SignBitMask = 0x8000000000000000ull;
+inline constexpr u32 s_F64SignBitShift = 63u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

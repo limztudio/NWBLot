@@ -19,6 +19,10 @@ NWB_VULKAN_BEGIN
 
 void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOperationDesc& opDesc){
     constexpr TStringView s_OperationName = NWB_TEXT("execute cluster acceleration operation");
+    constexpr TStringView s_SourceInfoRangeName = NWB_TEXT("source-info");
+    constexpr TStringView s_SizeArrayRangeName = NWB_TEXT("size-array");
+    constexpr TStringView s_AddressArrayRangeName = NWB_TEXT("address-array");
+    constexpr TStringView s_DeviceAddressRangeInvalidReason = NWB_TEXT("a required device-address range is invalid");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, s_OperationName))
         return;
     if(
@@ -171,7 +175,7 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         return;
     }
     const u64 sourceStride = sourceDesc.structStride != 0u ? sourceDesc.structStride : sourceInfoSize;
-    const auto sourceRangeSize = computeStridedRangeSize(sourceStride, sourceInfoSize, opDesc.params.maxArgCount, NWB_TEXT("source-info"));
+    const auto sourceRangeSize = computeStridedRangeSize(sourceStride, sourceInfoSize, opDesc.params.maxArgCount, s_SourceInfoRangeName);
     if(!sourceRangeSize || !VulkanDetail::IsBufferRangeInBounds(sourceDesc, opDesc.inIndirectArgsOffsetInBytes, *sourceRangeSize)){
         rejectCommandRecording(s_OperationName, NWB_TEXT("indirect source-info range is outside the buffer"));
         return;
@@ -187,7 +191,7 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
             rejectCommandRecording(s_OperationName, NWB_TEXT("size-array stride must be at least four bytes"));
             return;
         }
-        const auto sizeRange = computeStridedRangeSize(sizeStride, sizeof(u32), opDesc.params.maxArgCount, NWB_TEXT("size-array"));
+        const auto sizeRange = computeStridedRangeSize(sizeStride, sizeof(u32), opDesc.params.maxArgCount, s_SizeArrayRangeName);
         if(!sizeRange || !VulkanDetail::IsBufferRangeInBounds(outSizesBuffer->getCreationDescription(), opDesc.outSizesOffsetInBytes, *sizeRange)){
             rejectCommandRecording(s_OperationName, NWB_TEXT("size-array range is outside the buffer"));
             return;
@@ -200,7 +204,7 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
             rejectCommandRecording(s_OperationName, NWB_TEXT("address-array stride must be at least eight bytes"));
             return;
         }
-        const auto addressRange = computeStridedRangeSize(addressStride, sizeof(VkDeviceAddress), opDesc.params.maxArgCount, NWB_TEXT("address-array"));
+        const auto addressRange = computeStridedRangeSize(addressStride, sizeof(VkDeviceAddress), opDesc.params.maxArgCount, s_AddressArrayRangeName);
         if(!addressRange || !VulkanDetail::IsBufferRangeInBounds(inOutAddressesBuffer->getCreationDescription(), opDesc.inOutAddressesOffsetInBytes, *addressRange)){
             rejectCommandRecording(s_OperationName, NWB_TEXT("address-array range is outside the buffer"));
             return;
@@ -226,34 +230,34 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     )
         return;
 
-    const auto sourceAddress = getCheckedAddress(*indirectArgsBuffer, opDesc.inIndirectArgsOffsetInBytes, *sourceRangeSize, alignof(VkDeviceAddress), NWB_TEXT("source-info"));
+    const auto sourceAddress = getCheckedAddress(*indirectArgsBuffer, opDesc.inIndirectArgsOffsetInBytes, *sourceRangeSize, alignof(VkDeviceAddress), s_SourceInfoRangeName);
     if(!sourceAddress){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("a required device-address range is invalid"));
+        rejectCommandRecording(s_OperationName, s_DeviceAddressRangeInvalidReason);
         return;
     }
     VkDeviceAddress sourceCountAddress = 0u;
     if(indirectArgCountBuffer){
         const auto address = getCheckedAddress(*indirectArgCountBuffer, opDesc.inIndirectArgCountOffsetInBytes, sizeof(u32), alignof(u32), NWB_TEXT("source-info count"));
         if(!address){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("a required device-address range is invalid"));
+            rejectCommandRecording(s_OperationName, s_DeviceAddressRangeInvalidReason);
             return;
         }
         sourceCountAddress = *address;
     }
     VkDeviceAddress sizeArrayAddress = 0u;
     if(outSizesBuffer){
-        const auto address = getCheckedAddress(*outSizesBuffer, opDesc.outSizesOffsetInBytes, sizeRangeSize, alignof(u32), NWB_TEXT("size-array"));
+        const auto address = getCheckedAddress(*outSizesBuffer, opDesc.outSizesOffsetInBytes, sizeRangeSize, alignof(u32), s_SizeArrayRangeName);
         if(!address){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("a required device-address range is invalid"));
+            rejectCommandRecording(s_OperationName, s_DeviceAddressRangeInvalidReason);
             return;
         }
         sizeArrayAddress = *address;
     }
     VkDeviceAddress addressArrayAddress = 0u;
     if(inOutAddressesBuffer){
-        const auto address = getCheckedAddress(*inOutAddressesBuffer, opDesc.inOutAddressesOffsetInBytes, addressRangeSize, alignof(VkDeviceAddress), NWB_TEXT("address-array"));
+        const auto address = getCheckedAddress(*inOutAddressesBuffer, opDesc.inOutAddressesOffsetInBytes, addressRangeSize, alignof(VkDeviceAddress), s_AddressArrayRangeName);
         if(!address){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("a required device-address range is invalid"));
+            rejectCommandRecording(s_OperationName, s_DeviceAddressRangeInvalidReason);
             return;
         }
         addressArrayAddress = *address;

@@ -31,6 +31,7 @@ private:
 
 private:
     static constexpr usize s_InlineTextureCount = 32u;
+    static constexpr usize s_PromotedIndexCapacity = s_InlineTextureCount * 4u;
 
 
 public:
@@ -96,7 +97,7 @@ private:
 
     void promoteIndex(){
         NWB_ASSERT(!m_index && m_inlineCount == s_InlineTextureCount);
-        TextureIndex index(s_InlineTextureCount * 4u, m_scratchArena);
+        TextureIndex index(s_PromotedIndexCapacity, m_scratchArena);
         for(Core::Texture* const identity : m_inlineTextures){
             if(!index.insert(identity).second)
                 TerminateInvariant();

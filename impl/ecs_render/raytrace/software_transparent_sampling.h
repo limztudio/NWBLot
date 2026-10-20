@@ -7,6 +7,9 @@
 
 #include "scene_resources.h"
 
+#include <impl/ecs_render/shadow/quality_settings.h>
+#include <impl/assets/graphics/shadow/sw_binding_slots.h>
+
 #include <core/graphics/rhi/command.h>
 
 #include <global/simdmath.h>
@@ -61,13 +64,13 @@ struct SoftwareTransparentSamplingPush{
     u32 deferredResourcesHeapSlot = 0u;
     u32 materialContextSlotsHeapSlot = 0u;
     u32 transparentSoftHalfStorageSlot = 0u;
-    u32 softSampleCount = 3u;
+    u32 softSampleCount = NWB_SW_SHADOW_SOFT_SPP;
     u32 historyValid = 0u;
     u32 geometryCurrSlot = 0u;
     u32 geometryPrevSlot = 0u;
     u32 momentsInSlot = 0u;
     Float44U prevWorldToClip = {};
-    u32 receiverFactor = 2u;
+    u32 receiverFactor = s_ShadowReceiverFactorHalf;
 };
 static_assert(sizeof(SoftwareTransparentSamplingPush) == 116u);
 static_assert(offsetof(SoftwareTransparentSamplingPush, receiverFactor) == 112u);

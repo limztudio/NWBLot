@@ -33,7 +33,7 @@ NWB_IMPL_BEGIN
 
 
 bool SkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, NWB_TEXT("SkinAssetCodec::serialize")))
+    if(!checkSerializeAssetType(asset, SkinBinaryPayload::s_SkinSerializeContext))
         return false;
 
     const Skin& skin = static_cast<const Skin&>(asset);
@@ -55,8 +55,8 @@ bool SkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::
     AppendPOD(outBinary, header);
 
     return
-        Core::Assets::AppendVectorPayload(outBinary, skin.influences(), NWB_TEXT("SkinAssetCodec::serialize"), NWB_TEXT("influences"))
-        && Core::Assets::AppendVectorPayload(outBinary, skin.inverseBindMatrices(), NWB_TEXT("SkinAssetCodec::serialize"), NWB_TEXT("inverse bind matrices"))
+        Core::Assets::AppendVectorPayload(outBinary, skin.influences(), SkinBinaryPayload::s_SkinSerializeContext, SkinBinaryPayload::s_InfluencesPayloadLabel)
+        && Core::Assets::AppendVectorPayload(outBinary, skin.inverseBindMatrices(), SkinBinaryPayload::s_SkinSerializeContext, SkinBinaryPayload::s_InverseBindMatricesPayloadLabel)
     ;
 }
 
@@ -205,7 +205,7 @@ template<usize ComponentCount>
 [[nodiscard]] Expected<Core::Assets::AssetVector<SkinInfluence4>> ParseSkinInfluences(const Path& nwbFilePath, const Value& asset, Core::Assets::AssetArena& arena){
     Core::Assets::AssetVector<SkinInfluence4> values(arena);
 
-    const auto influences = Core::Assets::FindMetadataListField(nwbFilePath, asset, "Skin meta", s_InfluencesField);
+    const auto influences = Core::Assets::FindMetadataListField(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix, s_InfluencesField);
     if(!influences)
         return MakeUnexpected(influences.error());
 
@@ -234,7 +234,7 @@ template<usize ComponentCount>
 [[nodiscard]] Expected<Core::Assets::AssetVector<SkeletonJointMatrix>> ParseInverseBindMatrices(const Path& nwbFilePath, const Value& asset, Core::Assets::AssetArena& arena){
     Core::Assets::AssetVector<SkeletonJointMatrix> values(arena);
 
-    const auto matrices = Core::Assets::FindMetadataListField(nwbFilePath, asset, "Skin meta", s_InverseBindMatricesField);
+    const auto matrices = Core::Assets::FindMetadataListField(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix, s_InverseBindMatricesField);
     if(!matrices)
         return MakeUnexpected(matrices.error());
 
@@ -294,10 +294,10 @@ Expected<SkinCookEntry> ParseSkinCookMetadata(const Name virtualPath, const Path
 
     SkinCookEntry entry(arena);
 
-    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, "Skin meta"))
+    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix))
         return MakeUnexpected(Failure{});
 
-    if(!Core::Assets::AssignCookEntryVirtualPath(entry, virtualPath, nwbFilePath, "Skin meta"))
+    if(!Core::Assets::AssignCookEntryVirtualPath(entry, virtualPath, nwbFilePath, s_SkinMetaDiagnosticPrefix))
         return MakeUnexpected(Failure{});
     if(!ValidateSkinAssetFields(nwbFilePath, asset))
         return MakeUnexpected(Failure{});

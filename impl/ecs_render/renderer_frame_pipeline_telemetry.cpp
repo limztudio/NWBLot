@@ -605,7 +605,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
     }
     if(hasTransparentRenderers){
         if(hasTransparentCsgFrameWork){
-            const Handle transparentCsgIntervals = appendPass(RendererGpuTimingScope::s_TransparentCsgIntervals, "Transparent CSG Intervals");
+            const Handle transparentCsgIntervals = appendPass(RendererGpuTimingScope::s_TransparentCsgIntervals, RendererGpuPassText::s_TransparentCsgIntervalsLabel);
             builder.addEdge(deferredTargets, transparentCsgIntervals, Edge::Reads);
             builder.addEdge(transparentCsgIntervals, avboitTargets, Edge::Writes);
         }
@@ -615,15 +615,15 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
         builder.addEdge(materialBuffers, avboitOccupancy, Edge::Reads);
         builder.addEdge(avboitOccupancy, avboitTargets, Edge::Writes);
 
-        const Handle avboitDepthWarp = appendPass(RendererGpuTimingScope::s_AvboitDepthWarp, "AVBOIT Depth Warp");
+        const Handle avboitDepthWarp = appendPass(RendererGpuTimingScope::s_AvboitDepthWarp, RendererGpuPassText::s_AvboitDepthWarpLabel);
         builder.addEdge(avboitTargets, avboitDepthWarp, Edge::Reads);
         builder.addEdge(avboitDepthWarp, avboitTargets, Edge::Writes);
 
-        const Handle avboitExtinction = appendPass(RendererGpuTimingScope::s_AvboitExtinction, "AVBOIT Extinction");
+        const Handle avboitExtinction = appendPass(RendererGpuTimingScope::s_AvboitExtinction, RendererGpuPassText::s_AvboitExtinctionLabel);
         builder.addEdge(avboitTargets, avboitExtinction, Edge::Reads);
         builder.addEdge(avboitExtinction, avboitTargets, Edge::Writes);
 
-        const Handle avboitIntegration = appendPass(RendererGpuTimingScope::s_AvboitIntegration, "AVBOIT Integration");
+        const Handle avboitIntegration = appendPass(RendererGpuTimingScope::s_AvboitIntegration, RendererGpuPassText::s_AvboitIntegrationLabel);
         builder.addEdge(avboitTargets, avboitIntegration, Edge::Reads);
         builder.addEdge(avboitIntegration, avboitTargets, Edge::Writes);
 
@@ -632,14 +632,14 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
         builder.addEdge(avboitAccumulate, deferredTargets, Edge::Writes);
     }
 
-    const Handle deferredLighting = appendPass(RendererGpuTimingScope::s_DeferredLighting, "Deferred Lighting");
+    const Handle deferredLighting = appendPass(RendererGpuTimingScope::s_DeferredLighting, RendererGpuPassText::s_DeferredLightingLabel);
     builder.addEdge(deferredTargets, deferredLighting, Edge::Reads);
     builder.addEdge(deferredLighting, deferredTargets, Edge::Writes);
 
-    const Handle deferredComposite = appendPass(RendererGpuTimingScope::s_DeferredComposite, "Deferred Composite");
+    const Handle deferredComposite = appendPass(RendererGpuTimingScope::s_DeferredComposite, RendererGpuPassText::s_DeferredCompositeLabel);
     builder.addEdge(deferredTargets, deferredComposite, Edge::Reads);
 
-    const Handle deferredPresent = appendPass(RendererGpuTimingScope::s_DeferredPresent, "Deferred Present");
+    const Handle deferredPresent = appendPass(RendererGpuTimingScope::s_DeferredPresent, RendererGpuPassText::s_DeferredPresentLabel);
     builder.addEdge(deferredComposite, deferredPresent, Edge::DependsOn);
     builder.addEdge(deferredPresent, backBuffer, Edge::Writes);
 

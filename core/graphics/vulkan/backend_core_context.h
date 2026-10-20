@@ -154,9 +154,12 @@ public:
     {}
 };
 
+inline constexpr u32 s_MaxSharedQueueFamilyCount = 6u;
+inline constexpr u32 s_MinConcurrentSharingQueueFamilyCount = 2u;
+
 struct QueueFamilySharingInfo{
     VkSharingMode mode = VK_SHARING_MODE_EXCLUSIVE;
-    Array<u32, 6u> familyIndices = {};
+    Array<u32, s_MaxSharedQueueFamilyCount> familyIndices = {};
     u32 familyIndexCount = 0u;
 
 
@@ -192,7 +195,7 @@ inline QueueFamilySharingInfo ResolveQueueFamilySharing(const ResourceQueueShari
         appendFamily(context.auxiliaryTransferQueueFamilyIndex);
     }
 
-    if(result.familyIndexCount < 2u){
+    if(result.familyIndexCount < s_MinConcurrentSharingQueueFamilyCount){
         result.familyIndexCount = 0u;
         return result;
     }

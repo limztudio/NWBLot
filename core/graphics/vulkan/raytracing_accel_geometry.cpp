@@ -199,7 +199,7 @@ Expected<BlasGeometry> FillBlasGeometryForSizeQuery(const VulkanContext& context
                 return MakeUnexpected(Failure{});
             }
             const u64 vertexByteSize = *vertexByteSizeResult;
-            if(!ValidateAccelStructBuildInputRange(triangles.vertexBuffer, triangles.vertexOffset, vertexByteSize, vertexComponentAlignment, operation, NWB_TEXT("triangle vertex")))
+            if(!ValidateAccelStructBuildInputRange(triangles.vertexBuffer, triangles.vertexOffset, vertexByteSize, vertexComponentAlignment, operation, s_TriangleVertexInputName))
                 return MakeUnexpected(Failure{});
         }
 
@@ -219,7 +219,7 @@ Expected<BlasGeometry> FillBlasGeometryForSizeQuery(const VulkanContext& context
             if(requireBuffers){
                 const u64 indexElementSize = triangles.indexFormat == Format::R16_UINT ? sizeof(u16) : sizeof(u32);
                 const u64 indexByteSize = static_cast<u64>(triangles.indexCount) * indexElementSize;
-                if(!ValidateAccelStructBuildInputRange(triangles.indexBuffer, triangles.indexOffset, indexByteSize, indexElementSize, operation, NWB_TEXT("triangle index")))
+                if(!ValidateAccelStructBuildInputRange(triangles.indexBuffer, triangles.indexOffset, indexByteSize, indexElementSize, operation, s_TriangleIndexInputName))
                     return MakeUnexpected(Failure{});
             }
             primitiveCount = triangles.indexCount / s_TrianglesPerPrimitive;
@@ -250,7 +250,7 @@ Expected<BlasGeometry> FillBlasGeometryForSizeQuery(const VulkanContext& context
                 return MakeUnexpected(Failure{});
             }
             const u64 aabbByteSize = *aabbByteSizeResult;
-            if(!ValidateAccelStructBuildInputRange(aabbs.buffer, aabbs.offset, aabbByteSize, s_AabbStrideAlignment, operation, NWB_TEXT("AABB")))
+            if(!ValidateAccelStructBuildInputRange(aabbs.buffer, aabbs.offset, aabbByteSize, s_AabbStrideAlignment, operation, s_AabbInputName))
                 return MakeUnexpected(Failure{});
         }
 
@@ -332,7 +332,7 @@ Expected<BlasGeometry> FillBlasGeometryForSizeQuery(const VulkanContext& context
                 return MakeUnexpected(Failure{});
             }
             if(requireBuffers){
-                if(!ValidateStridedBuildInputRange(spheres.indexBuffer, spheres.indexOffset, spheres.indexCount, spheres.indexStride, indexElementSize, operation, NWB_TEXT("sphere index")))
+                if(!ValidateStridedBuildInputRange(spheres.indexBuffer, spheres.indexOffset, spheres.indexCount, spheres.indexStride, indexElementSize, operation, s_SphereIndexInputName))
                     return MakeUnexpected(Failure{});
             }
             primitiveCount = spheres.indexCount;
@@ -457,7 +457,7 @@ Expected<BlasGeometry> FillBlasGeometryForSizeQuery(const VulkanContext& context
                 return MakeUnexpected(Failure{});
             }
             if(requireBuffers){
-                if(!ValidateStridedBuildInputRange(lss.indexBuffer, lss.indexOffset, requiredIndexCount, lss.indexStride, indexElementSize, operation, NWB_TEXT("LSS index")))
+                if(!ValidateStridedBuildInputRange(lss.indexBuffer, lss.indexOffset, requiredIndexCount, lss.indexStride, indexElementSize, operation, s_LssIndexInputName))
                     return MakeUnexpected(Failure{});
             }
             lssData.indexStride = lss.indexStride;

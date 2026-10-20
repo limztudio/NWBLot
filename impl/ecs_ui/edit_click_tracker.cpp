@@ -17,6 +17,26 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_ui_edit_click_tracker{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr u32 s_DoubleClickMaxIntervalMs = 500u;
+inline constexpr f64 s_DoubleClickMaxDistanceSquared = 16.0;
+inline constexpr u32 s_DoubleClickCount = 2u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 UiEditClickKind::Enum UiEditClickTracker::press(const UiTextEditOwner& owner, const Ui::PopupToken& popup, const u64 revision, const u64 externalRevision, const Ui::Point position, const u64 timestampMs, const bool shift)noexcept{
     if(!owner.valid() || timestampMs == 0u || shift || !IsFinite(position.x) || !IsFinite(position.y)){
         cancel();
@@ -28,15 +48,15 @@ UiEditClickKind::Enum UiEditClickTracker::press(const UiTextEditOwner& owner, co
     const SIMDVectorDouble distanceSquared = VectorDoubleMultiplyAddExpression(horizontal, horizontal, VectorDoubleMultiply(vertical, vertical));
     const bool second = m_released && m_clickCount == 1u && owner == m_owner && popup == m_popup
         && revision == m_revision && externalRevision == m_externalRevision
-        && timestampMs >= m_pressTimestampMs && timestampMs - m_pressTimestampMs <= 500u
-        && VectorDoubleGetX(distanceSquared) <= 16.0;
+        && timestampMs >= m_pressTimestampMs && timestampMs - m_pressTimestampMs <= __hidden_ui_edit_click_tracker::s_DoubleClickMaxIntervalMs
+        && VectorDoubleGetX(distanceSquared) <= __hidden_ui_edit_click_tracker::s_DoubleClickMaxDistanceSquared;
     m_owner = owner;
     m_popup = popup;
     m_position = position;
     m_revision = revision;
     m_externalRevision = externalRevision;
     m_pressTimestampMs = timestampMs;
-    m_clickCount = second ? 2u : 1u;
+    m_clickCount = second ? __hidden_ui_edit_click_tracker::s_DoubleClickCount : 1u;
     m_down = true;
     m_released = false;
     return second ? UiEditClickKind::Word : UiEditClickKind::Caret;
@@ -53,7 +73,7 @@ void UiEditClickTracker::move(const Ui::Point position)noexcept{
     const SIMDVectorDouble horizontal = VectorDoubleSelect(VectorDoubleZero(), dxDyValue, s_DoubleSIMDMaskX);
     const SIMDVectorDouble vertical = VectorDoubleSwizzle<1, 2, 3, 3>(dxDyValue);
     const SIMDVectorDouble distanceSquared = VectorDoubleMultiplyAddExpression(horizontal, horizontal, VectorDoubleMultiply(vertical, vertical));
-    if(VectorDoubleGetX(distanceSquared) > 16.0)
+    if(VectorDoubleGetX(distanceSquared) > __hidden_ui_edit_click_tracker::s_DoubleClickMaxDistanceSquared)
         cancel();
 }
 

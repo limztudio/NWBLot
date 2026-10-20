@@ -19,8 +19,8 @@ NWB_IMPL_UI_BEGIN
 
 
 struct ContextMenuOptions{
-    Point size = { 220.0f, 160.0f };
-    f32 wheelRows = 3.0f;
+    Point size = s_PopupDefaultSize;
+    f32 wheelRows = s_StyleScrollWheelStep;
     bool enabled = true;
 };
 

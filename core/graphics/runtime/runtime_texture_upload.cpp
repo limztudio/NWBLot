@@ -27,6 +27,7 @@ namespace __hidden_graphics_texture_upload{
 
 inline constexpr Name s_UploadTextureBatchResourceIdentity("graphics.upload_texture_batch.resource");
 inline constexpr Name s_UploadTextureBatchUploadIdentity("graphics.upload_texture_batch.upload");
+inline constexpr AStringView s_UploadTextureBatchMarkerLabel = "Texture Upload Batch";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -141,7 +142,7 @@ struct TextureUploadBatchSubmissionData{
         submissionData.setupDesc.destination,
         GpuGraphResourceDesc{}
             .setIdentity(s_UploadTextureBatchResourceIdentity)
-            .setMarkerLabel("Texture Upload Batch")
+            .setMarkerLabel(s_UploadTextureBatchMarkerLabel)
             .setType(GpuGraphResourceType::Texture)
             .setInitialState(submissionData.graphInitialState)
             .setQueueSharing(submissionData.textureDesc.queueSharing)
@@ -165,7 +166,7 @@ struct TextureUploadBatchSubmissionData{
         scheduling.mergeWithPrevious = previousTask.valid();
         scheduling.preserveSameClassQueueWithDirectDependency = previousTask.valid();
         GpuTaskDesc uploadTaskDesc;
-        uploadTaskDesc.setIdentity(s_UploadTextureBatchUploadIdentity).setMarkerLabel("Texture Upload Batch").setScheduling(scheduling);
+        uploadTaskDesc.setIdentity(s_UploadTextureBatchUploadIdentity).setMarkerLabel(s_UploadTextureBatchMarkerLabel).setScheduling(scheduling);
         if(previousTask.valid())
             uploadTaskDesc.setDependencies(&previousTask, 1u);
 

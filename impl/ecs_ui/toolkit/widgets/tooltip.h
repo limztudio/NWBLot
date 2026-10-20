@@ -22,7 +22,7 @@ struct TooltipOptions{
     bool enabled = true;
     f32 delaySeconds = 0.5f;
     f32 maximumWidth = 320.0f;
-    f32 gap = 4.0f;
+    f32 gap = s_StyleSpacingSmall;
     PopupPlacementSide::Enum side = PopupPlacementSide::Below;
 };
 

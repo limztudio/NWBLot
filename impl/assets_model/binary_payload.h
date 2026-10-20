@@ -26,6 +26,12 @@ namespace ModelBinaryPayload{
 
 
 inline constexpr u32 s_ModelMagic = 0x4D444C32u; // MDL2
+inline constexpr TStringView s_ModelAssetKindLabel = NWB_TEXT("model");
+inline constexpr TStringView s_ModelLoadBinaryContext = NWB_TEXT("Model::loadBinary");
+inline constexpr TStringView s_ModelSerializeContext = NWB_TEXT("ModelAssetCodec::serialize");
+inline constexpr TStringView s_SkeletonObjectsPayloadLabel = NWB_TEXT("skeleton objects");
+inline constexpr TStringView s_StaticMeshObjectsPayloadLabel = NWB_TEXT("static mesh objects");
+inline constexpr TStringView s_SkinnedMeshObjectsPayloadLabel = NWB_TEXT("skinned mesh objects");
 
 struct ModelHeaderBinary{
     u32 magic = s_ModelMagic;

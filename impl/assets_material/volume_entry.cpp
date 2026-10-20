@@ -9,6 +9,7 @@
 
 
 #include "cook.h"
+#include "binary_payload.h"
 
 #include <core/assets/cook_entry_registry.h>
 
@@ -35,7 +36,7 @@ static Expected<MaterialCookEntry> ParseMaterialDocument(const Path& assetRoot, 
 static bool RegisterMaterialCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterSingleDocumentCookEntry<MaterialCookEntry, Material, MaterialAssetCodec>(
         registry,
-        NWB_TEXT("material"),
+        MaterialBinaryPayload::s_MaterialAssetKindLabel,
         &ParseMaterialDocument,
         [](MaterialCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){ return BuildMaterialAsset(entry, arena); },
         false

@@ -16,13 +16,15 @@
 
 
 #if NWB_MESH_EMULATION_INDEXED_OUTPUT
+static const uint NWB_MESH_EMULATION_INDEX_BYTE_SIZE = 4u;
+
 void nwbMeshStoreGeneratedIndices(const uint primitiveBase, const uint3 indices){
-    const uint byteOffset = g_NwbMeshPushConstants.emulationOutput.x + primitiveBase * 4u;
+    const uint byteOffset = g_NwbMeshPushConstants.emulationOutput.x + primitiveBase * NWB_MESH_EMULATION_INDEX_BYTE_SIZE;
     g_NwbHeapStorageBuffers[nwbMeshFrameGeneratedVertexHeapSlot()].Store3(byteOffset, indices);
 }
 
 void nwbMeshInitializeCulledVertex(){
-    nwbMeshGeneratedVertices()[NWB_MESH_EMULATION_SENTINEL_VERTEX_INDEX] = nwbMeshBuildGeneratedVertexWithRasterFlags(float4(2.0, 2.0, 0.0, 1.0), float3(0.0, 0.0, 1.0), float4(1.0, 0.0, 0.0, 1.0), float2(0.0), half4(0.0h, 0.0h, 0.0h, 0.0h), float3(0.0), 0u);
+    nwbMeshGeneratedVertices()[NWB_MESH_EMULATION_SENTINEL_VERTEX_INDEX] = nwbMeshBuildGeneratedVertexWithRasterFlags(NWB_MESH_CULLED_CLIP_POSITION, float3(0.0, 0.0, 1.0), float4(1.0, 0.0, 0.0, 1.0), float2(0.0), half4(0.0h, 0.0h, 0.0h, 0.0h), float3(0.0), 0u);
 }
 #endif
 

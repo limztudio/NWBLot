@@ -214,7 +214,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleATanEst(SIMDVectorDouble v
 
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorATan2(SIMDVectorSingle y, SIMDVectorSingle x)noexcept{
-    const SIMDVectorSingle constants = VectorSet(s_PI, s_PIDIV2, s_PIDIV4, s_PI * 0.75f);
+    const SIMDVectorSingle constants = VectorSet(s_PI, s_PIDIV2, s_PIDIV4, s_3PIDIV4);
     SIMDVectorSingle v = VectorDivide(y, x);
     return SIMDVectorDetail::VectorATan2SelectResult(y, x, VectorATan(v), constants);
 }
@@ -224,7 +224,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleATan2(SIMDVectorDouble y, 
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorATan2Est(SIMDVectorSingle y, SIMDVectorSingle x)noexcept{
-    const SIMDVectorSingle constants = VectorSet(s_PI, s_PIDIV2, s_PIDIV4, 2.3561944905f);
+    const SIMDVectorSingle constants = VectorSet(s_PI, s_PIDIV2, s_PIDIV4, s_3PIDIV4);
     SIMDVectorSingle v = VectorMultiply(y, VectorReciprocalEst(x));
     return SIMDVectorDetail::VectorATan2SelectResult(y, x, VectorATanEst(v), constants);
 }

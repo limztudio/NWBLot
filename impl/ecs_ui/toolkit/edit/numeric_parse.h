@@ -20,6 +20,8 @@ NWB_IMPL_UI_BEGIN
 
 
 inline constexpr usize s_NumericEditMaxBytes = 128u;
+inline constexpr usize s_NumericEditMaxHistoryRecords = 64u;
+inline constexpr usize s_NumericEditHistoryBytesFactor = 128u;
 
 namespace NumericParseStatus{
     enum Enum : u8{ Complete, Incomplete, Invalid, OutOfRange };

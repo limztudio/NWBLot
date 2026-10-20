@@ -163,7 +163,7 @@ struct RayTraceMaterialContextSlots{
     u32 meshInstances = 0u;
     u32 opticalScene = 0u;
     u32 opticalInstanceCount = 0u;
-    u32 csgContext = 0xffffffffu;
+    u32 csgContext = Core::GpuDescriptorHandle::s_Invalid;
 };
 static_assert(sizeof(RayTraceMaterialContextSlots) == sizeof(u32) * 8u, "Ray-trace material-context slots must stay two uint4 lanes");
 

@@ -34,6 +34,8 @@ struct TextureMipLevel{
 static_assert(IsStandardLayout_V<TextureMipLevel>, "Texture mip level must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<TextureMipLevel>, "Texture mip level must stay binary-serializable");
 
+inline constexpr TStringView s_TextureAssetKindLabel = NWB_TEXT("texture");
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

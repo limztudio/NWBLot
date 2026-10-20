@@ -147,6 +147,7 @@ OpacityMicromap::~OpacityMicromap()noexcept{
 
 
 Expected<RayTracingOpacityMicromapHandle> Device::createOpacityMicromap(const RayTracingOpacityMicromapDesc& desc){
+    constexpr TStringView s_CreateOperation = NWB_TEXT("create opacity micromap");
     VkResult res = VK_SUCCESS;
 
     if(!m_context.extensions.extOpacityMicromap || !m_context.opacityMicromapFeatureEnabled){
@@ -158,7 +159,7 @@ Expected<RayTracingOpacityMicromapHandle> Device::createOpacityMicromap(const Ra
         return MakeUnexpected(Failure{});
     }
 
-    const auto buildFlags = VulkanDetail::ConvertOpacityMicromapBuildFlags(desc.flags, NWB_TEXT("create opacity micromap"));
+    const auto buildFlags = VulkanDetail::ConvertOpacityMicromapBuildFlags(desc.flags, s_CreateOperation);
     if(!buildFlags)
         return MakeUnexpected(Failure{});
 
@@ -168,7 +169,7 @@ Expected<RayTracingOpacityMicromapHandle> Device::createOpacityMicromap(const Ra
     m_context.instanceDispatch.vkGetPhysicalDeviceProperties2(m_context.physicalDevice, &physicalDeviceProperties);
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_RayTracingArena);
-    const auto usageCounts = VulkanDetail::BuildOpacityMicromapUsageCounts(desc.counts, opacityMicromapProperties.maxOpacity2StateSubdivisionLevel, opacityMicromapProperties.maxOpacity4StateSubdivisionLevel, scratchArena, NWB_TEXT("create opacity micromap"));
+    const auto usageCounts = VulkanDetail::BuildOpacityMicromapUsageCounts(desc.counts, opacityMicromapProperties.maxOpacity2StateSubdivisionLevel, opacityMicromapProperties.maxOpacity4StateSubdivisionLevel, scratchArena, s_CreateOperation);
     if(!usageCounts)
         return MakeUnexpected(Failure{});
 
@@ -229,7 +230,8 @@ Expected<RayTracingOpacityMicromapHandle> Device::createOpacityMicromap(const Ra
 
 
 void CommandList::buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicromapResource, const RayTracingOpacityMicromapDesc& ommDesc){
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, NWB_TEXT("build opacity micromap")))
+    constexpr TStringView s_OperationName = NWB_TEXT("build opacity micromap");
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, s_OperationName))
         return;
     if(!m_context.extensions.extOpacityMicromap || !m_context.opacityMicromapFeatureEnabled){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: enabled opacity micromap feature support is unavailable"));
@@ -261,12 +263,12 @@ void CommandList::buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicroma
         triangleDescBytes += *countBytes;
     }
 
-    const auto buildFlags = VulkanDetail::ConvertOpacityMicromapBuildFlags(ommDesc.flags, NWB_TEXT("build opacity micromap"));
+    const auto buildFlags = VulkanDetail::ConvertOpacityMicromapBuildFlags(ommDesc.flags, s_OperationName);
     if(!buildFlags)
         return;
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_RayTracingArena);
-    const auto usageCounts = VulkanDetail::BuildOpacityMicromapUsageCounts(ommDesc.counts, omm->m_maxOpacity2StateSubdivisionLevel, omm->m_maxOpacity4StateSubdivisionLevel, scratchArena, NWB_TEXT("build opacity micromap"));
+    const auto usageCounts = VulkanDetail::BuildOpacityMicromapUsageCounts(ommDesc.counts, omm->m_maxOpacity2StateSubdivisionLevel, omm->m_maxOpacity4StateSubdivisionLevel, scratchArena, s_OperationName);
     if(!usageCounts)
         return;
 
@@ -278,7 +280,6 @@ void CommandList::buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicroma
     auto* dataBuffer = omm->m_dataBuffer.get();
     constexpr VkBufferUsageFlags s_BuildInputUsage = VK_BUFFER_USAGE_MICROMAP_BUILD_INPUT_READ_ONLY_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     constexpr VkBufferUsageFlags s_StorageUsage = VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-    constexpr TStringView s_OperationName = NWB_TEXT("build opacity micromap");
     if(!validateBufferForGpuState(inputBuffer, ResourceStates::OpacityMicromapBuildInput, s_OperationName, s_BuildInputUsage) || !validateBufferForGpuState(dataBuffer, ResourceStates::OpacityMicromapWrite, s_OperationName, s_StorageUsage))
         return;
 
@@ -318,7 +319,7 @@ void CommandList::buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicroma
 
     if(buildSize.buildScratchSize != 0u){
         const u64 scratchAlignment = Max<u64>(static_cast<u64>(m_context.accelStructProperties.minAccelerationStructureScratchOffsetAlignment), 1u);
-        const auto scratchAddressResult = suballocateBuildScratchAddress(buildSize.buildScratchSize, scratchAlignment, NWB_TEXT("build opacity micromap"));
+        const auto scratchAddressResult = suballocateBuildScratchAddress(buildSize.buildScratchSize, scratchAlignment, s_OperationName);
         if(!scratchAddressResult)
             return;
         buildInfo.scratchData.deviceAddress = *scratchAddressResult;

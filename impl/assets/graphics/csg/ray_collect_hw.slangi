@@ -55,7 +55,7 @@ NwbCsgRayCollection nwbCsgRayCollectCrossings<T : NwbCsgRayOpenVisitor>(
     ray.Direction = worldDirection;
 #endif
     ray.TMin = 0.0;
-    ray.TMax = asfloat(0x7f7fffffu);
+    ray.TMax = asfloat(NWB_FLOAT_MAX_BITS);
     RayQuery<RAY_FLAG_FORCE_NON_OPAQUE> query;
     query.TraceRayInline(nwbHeapAccelStruct(), RAY_FLAG_FORCE_NON_OPAQUE, NWB_RT_CSG_INSTANCE_MASK, ray);
     ++result.physicalQueries;

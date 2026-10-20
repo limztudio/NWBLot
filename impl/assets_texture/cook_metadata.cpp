@@ -39,6 +39,8 @@ static constexpr AStringView s_DimensionField = "dimension";
 static constexpr AStringView s_ResolutionField = "resolution";
 static constexpr AStringView s_AlphaModeField = "alpha_mode";
 static constexpr AStringView s_AlphaConstantField = "alpha_constant_unorm8";
+static constexpr usize s_PlanarResolutionComponentCount = 2u;
+static constexpr usize s_VolumeResolutionComponentCount = 3u;
 
 struct Resolution{
     u32 width;
@@ -107,12 +109,12 @@ struct Resolution{
 
 [[nodiscard]] static Expected<Resolution> ReadResolution(const Path& nwbFilePath, const Value& asset, const TextureDimension::Enum dimension){
     const Value* const field = Core::Metascript::FindField(asset, s_ResolutionField);
-    const usize componentCount = dimension == TextureDimension::Texture3D ? 3u : 2u;
+    const usize componentCount = dimension == TextureDimension::Texture3D ? s_VolumeResolutionComponentCount : s_PlanarResolutionComponentCount;
     if(!field || !field->isList() || field->asList().size() != componentCount){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': resolution must contain exactly {} positive integer dimensions"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), componentCount);
         return MakeUnexpected(Failure{});
     }
-    Array<u32, 3> dimensions{ 0u, 0u, 1u };
+    Array<u32, s_VolumeResolutionComponentCount> dimensions{ 0u, 0u, 1u };
     for(usize component = 0u; component < componentCount; ++component){
         const Value& value = field->asList()[component];
         if(!value.isInteger() || value.asInteger() <= 0 || static_cast<u64>(value.asInteger()) > Limit<u32>::s_Max){

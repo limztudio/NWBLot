@@ -11,6 +11,13 @@
 
 #include "optical_scene_constants.h"
 #include "../bindless/bindless_heap.slangi"
+#include "../common/math.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static const float NWB_OPTICAL_BOUNDS_SEGMENT_EPSILON_SCALE = 8.0;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,7 +40,7 @@ bool nwbOpticalSegmentOutsideBounds(const float3 origin, const float3 normalized
     // Eight binary32 epsilons conservatively cover the endpoint product/add, magnitude rounding and outward interval arithmetic, with or without contraction.
     // The unit floor also covers flushed subnormal operations.
     // Include operand magnitudes so cancellation at an endpoint cannot erase its arithmetic uncertainty.
-    const float3 margin = magnitude * (8.0 * 1.1920928955078125e-7);
+    const float3 margin = magnitude * (NWB_OPTICAL_BOUNDS_SEGMENT_EPSILON_SCALE * NWB_FLOAT_EPSILON);
     const float3 segmentMin = min(origin, endpoint) - margin;
     const float3 segmentMax = max(origin, endpoint) + margin;
     if(!all(isfinite(margin)) || !all(isfinite(segmentMin)) || !all(isfinite(segmentMax)))
@@ -50,7 +57,7 @@ bool nwbOpticalSegmentOutsideBounds(const float3 origin, const float3 normalized
 // False means unknown, never occluded.
 // Callers must retain the full optical path for every unproven segment.
 bool nwbOpticalSegmentProvenExterior(const uint opticalSceneHeapSlot, const float3 origin, const float3 initialDirection, const float minDistance, const float maxDistance, const uint maxQueries){
-    if(opticalSceneHeapSlot == 0xffffffffu || maxQueries == 0u || !all(isfinite(origin)) || !all(isfinite(initialDirection)) || !isfinite(minDistance) || !isfinite(maxDistance) || minDistance < 0.0 || maxDistance <= minDistance)
+    if(opticalSceneHeapSlot == NWB_BINDLESS_HEAP_INVALID_SLOT || maxQueries == 0u || !all(isfinite(origin)) || !all(isfinite(initialDirection)) || !isfinite(minDistance) || !isfinite(maxDistance) || minDistance < 0.0 || maxDistance <= minDistance)
         return false;
     const float directionLengthSquared = dot(initialDirection, initialDirection);
     if(!isfinite(directionLengthSquared) || directionLengthSquared <= 0.0)

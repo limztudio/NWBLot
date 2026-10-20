@@ -23,6 +23,14 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr TStringView s_TriangleVertexInputName = NWB_TEXT("triangle vertex");
+inline constexpr TStringView s_TriangleIndexInputName = NWB_TEXT("triangle index");
+inline constexpr TStringView s_AabbInputName = NWB_TEXT("AABB");
+inline constexpr TStringView s_SphereVertexInputName = NWB_TEXT("sphere vertex");
+inline constexpr TStringView s_SphereIndexInputName = NWB_TEXT("sphere index");
+inline constexpr TStringView s_LssVertexInputName = NWB_TEXT("LSS vertex");
+inline constexpr TStringView s_LssIndexInputName = NWB_TEXT("LSS index");
+
 using BlasGeometryVector = Vector<VkAccelerationStructureGeometryKHR, Alloc::ScratchArena>;
 using BlasSpheresDataVector = Vector<VkAccelerationStructureGeometrySpheresDataNV, Alloc::ScratchArena>;
 using BlasLssDataVector = Vector<VkAccelerationStructureGeometryLinearSweptSpheresDataNV, Alloc::ScratchArena>;

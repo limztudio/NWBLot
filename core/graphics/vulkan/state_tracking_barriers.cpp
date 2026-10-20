@@ -285,7 +285,7 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
     Texture& texture = *textureResource;
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture.m_creationDesc, TextureSubresourceMipResolve::Range);
     if(!VulkanDetail::IsTextureSubresourceRangeValid(resolvedSubresources)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("subresource range is empty or outside the texture"));
+        rejectCommandRecording(s_OperationName, VulkanStateTrackingDetail::s_SubresourceRangeOutsideTextureReason);
         return;
     }
 
@@ -371,7 +371,8 @@ void CommandList::setAccelStructState(RayTracingAccelStruct* accelStructResource
 }
 
 void CommandList::executePipelineBarrier(const Span<VkMemoryBarrier2> memoryBarriers, const Span<VkImageMemoryBarrier2> imageBarriers, const Span<VkBufferMemoryBarrier2> bufferBarriers){
-    if(!validateCommandRecordingScope(NWB_TEXT("pipeline barrier")))
+    constexpr TStringView s_OperationName = NWB_TEXT("pipeline barrier");
+    if(!validateCommandRecordingScope(s_OperationName))
         return;
 
     auto depInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
@@ -438,7 +439,7 @@ void CommandList::executePipelineBarrier(const Span<VkMemoryBarrier2> memoryBarr
             m_renderPassFramebuffer = resumeFramebuffer;
         }
         else
-            rejectCommandRecording(NWB_TEXT("pipeline barrier"), NWB_TEXT("dynamic rendering could not resume after the barrier"));
+            rejectCommandRecording(s_OperationName, NWB_TEXT("dynamic rendering could not resume after the barrier"));
     }
 }
 

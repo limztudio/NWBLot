@@ -55,7 +55,7 @@ float nwbCsgRayCollapsedOpticalBoundary(
         if(segment.y <= segment.x && (crossings[first - 1u].distance != distance || distance <= minimum || distance >= maximum))
             continue;
         // A nonzero unresolved span must be certified completely removed, including cutter gaps and cropped ray intervals.
-        const float margin = 8.0 * 1.1920928955078125e-7 * max(max(abs(segment.x), abs(segment.y)), 1e-4);
+        const float margin = NWB_CSG_RAY_ROUNDOFF_EPSILON_SCALE * NWB_FLOAT_EPSILON * max(max(abs(segment.x), abs(segment.y)), NWB_CSG_RAY_DISTANCE_MAGNITUDE_MIN);
         bool removed = false;
         for(uint index = 0u; index < cutCount; ++index){
             if(nwbCsgRayCutCoversSegment(cuts[index].distance, segment, margin)){
@@ -82,7 +82,7 @@ bool nwbCsgRayReceiverSegmentRemoved(
 ){
     float2 receiverSegment;
     if(cutCount != 0u && nwbCsgRayReceiverSegment(instance, root, origin, direction, minimum, maximum, receiverSegment)){
-        const float cutoffMargin = 32.0 * 1.1920928955078125e-7 * (length(origin) + max(abs(receiverSegment.x), abs(receiverSegment.y)) + 1.0);
+        const float cutoffMargin = NWB_CSG_RAY_CUTOFF_EPSILON_SCALE * NWB_FLOAT_EPSILON * (length(origin) + max(abs(receiverSegment.x), abs(receiverSegment.y)) + 1.0);
         for(uint index = 0u; index < cutCount; ++index){
             if(nwbCsgRayCutCoversSegment(cuts[index].distance, receiverSegment, cutoffMargin))
                 return true;
@@ -261,7 +261,7 @@ NwbCsgRayResolution nwbCsgRayResolveBoundary(
 #if NWB_CSG_RAY_OPTICAL_REUSE
     if(requestCertificate && result.boundary.hit && result.boundary.failure == 0u && !openVisitor.hasPositiveOpenEvent && (nwbHeapRtInstanceMaterials(materialSlot)[instanceIndex].flags & NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT) != 0u){
         const float3 position = origin + direction * result.boundary.distance;
-        const float tolerance = 4.0 * max(nwbOpticsPositionUncertainty(origin), nwbOpticsPositionUncertainty(position));
+        const float tolerance = NWB_OPTICS_POSITION_TOLERANCE_SCALE * max(nwbOpticsPositionUncertainty(origin), nwbOpticsPositionUncertainty(position));
         const float windowMinimum = max(0.0, result.boundary.distance - tolerance);
         const float windowMaximum = result.boundary.distance + tolerance;
         result.reusable = true;

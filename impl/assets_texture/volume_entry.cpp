@@ -35,7 +35,7 @@ static Expected<TextureCookEntry> ParseTextureDocument(const Path& assetRoot, co
 static bool RegisterTextureCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterSingleDocumentCookEntry<TextureCookEntry, Texture, TextureAssetCodec>(
         registry,
-        NWB_TEXT("texture"),
+        s_TextureAssetKindLabel,
         &ParseTextureDocument,
         [](TextureCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){ return BuildTextureAsset(entry, arena); },
         false

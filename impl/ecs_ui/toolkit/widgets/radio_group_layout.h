@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "style.h"
 #include "../paint.h"
 
 
@@ -25,10 +26,10 @@ struct RadioGroupStyle;
 
 struct RadioGroupMetrics{
     f32 rowHeight = 0.0f;
-    f32 indicatorExtent = 24.0f;
-    f32 gap = 8.0f;
-    f32 rowGap = 4.0f;
-    f32 markInset = 0.3f;
+    f32 indicatorExtent = s_StyleControlExtent;
+    f32 gap = s_StyleSpacingMedium;
+    f32 rowGap = s_StyleSpacingSmall;
+    f32 markInset = s_StyleMarkInset;
     Insets padding;
     // Complete intrinsic group size, including its outer padding.
     Point contentSize;

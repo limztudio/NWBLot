@@ -27,6 +27,20 @@ static constexpr StringView s_LightSpaceCsgShade1 = "NWB_LIGHT_SPACE_CSG_SHADE=1
 static constexpr StringView s_LightSpaceCsgOccluder0 = "NWB_LIGHT_SPACE_CSG_ENABLED=1;NWB_LIGHT_SPACE_OCCLUDER=0";
 static constexpr StringView s_LightSpaceCsgOccluder1 = "NWB_LIGHT_SPACE_CSG_ENABLED=1;NWB_LIGHT_SPACE_OCCLUDER=1";
 
+// Inclusive index ranges into the shader table and the pipeline output table of ensureLightSpaceShadowPipelines.
+static constexpr u32 s_FirstCsgOnlyShaderIndex = 8u;
+static constexpr u32 s_LastCsgOnlyShaderIndex = 12u;
+static constexpr u32 s_FirstCsgFallbackShaderIndex = 11u;
+static constexpr u32 s_LastCsgFallbackShaderIndex = 12u;
+static constexpr u32 s_FirstCsgOnlyPipelineIndex = 6u;
+static constexpr u32 s_LastCsgOnlyPipelineIndex = 10u;
+static constexpr u32 s_FirstCsgResolvePipelineIndex = 7u;
+static constexpr u32 s_LastCsgResolvePipelineIndex = 8u;
+static constexpr u32 s_FirstCsgFallbackPipelineIndex = 9u;
+static constexpr u32 s_LastCsgFallbackPipelineIndex = 10u;
+static constexpr u32 s_CapturePipelineKindCount = 2u;
+static constexpr u32 s_DrawArgumentsBufferIndex = 3u;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -98,9 +112,9 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
         ::__hidden_light_space::s_LightSpaceCsgOccluder0,
         ::__hidden_light_space::s_LightSpaceCsgOccluder1, ::__hidden_light_space::s_DefaultLightVariant };
     for(u32 index = 0u; index < LengthOf(state.m_shaders); ++index){
-        if(!csg && index >= 8u && index <= 12u)
+        if(!csg && index >= ::__hidden_light_space::s_FirstCsgOnlyShaderIndex && index <= ::__hidden_light_space::s_LastCsgOnlyShaderIndex)
             continue;
-        if(hardwareCsg && index >= 11u && index <= 12u)
+        if(hardwareCsg && index >= ::__hidden_light_space::s_FirstCsgFallbackShaderIndex && index <= ::__hidden_light_space::s_LastCsgFallbackShaderIndex)
             continue;
         if(!state.m_shaders[index] && !m_shaderSystem.loadShaderForStage(state.m_shaders[index], names[index], variants[index], stages[index], Name("ECSRender_LightSpaceShadow"))){
             state.m_pipelineFailed = true;
@@ -112,15 +126,15 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
         &snapshot.csgOpaqueResolve, &snapshot.csgTransparentResolve, &snapshot.csgOpaqueFallback, &snapshot.csgTransparentFallback, &snapshot.cullPipeline };
     const u32 shaderIndices[] = { 0u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 13u };
     for(u32 index = 0u; index < LengthOf(outputs); ++index){
-        if(!csg && index >= 6u && index <= 10u)
+        if(!csg && index >= ::__hidden_light_space::s_FirstCsgOnlyPipelineIndex && index <= ::__hidden_light_space::s_LastCsgOnlyPipelineIndex)
             continue;
-        if(hardwareCsg && index >= 9u && index <= 10u)
+        if(hardwareCsg && index >= ::__hidden_light_space::s_FirstCsgFallbackPipelineIndex && index <= ::__hidden_light_space::s_LastCsgFallbackPipelineIndex)
             continue;
         if(*outputs[index])
             continue;
         Core::ComputePipelineDesc desc;
         desc.setComputeShader(state.m_shaders[shaderIndices[index]]).addBindingLayout(snapshot.layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-        if(hardwareCsg && index >= 7u && index <= 8u)
+        if(hardwareCsg && index >= ::__hidden_light_space::s_FirstCsgResolvePipelineIndex && index <= ::__hidden_light_space::s_LastCsgResolvePipelineIndex)
             desc.addBindingLayout(heap.getAccelStructLayout());
         auto outputsResult = device.createComputePipeline(desc);
         if(outputsResult)
@@ -130,7 +144,7 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
         if(!outputsResult)
             return false;
     }
-    for(u32 transparent = 0u; transparent < 2u; ++transparent){
+    for(u32 transparent = 0u; transparent < ::__hidden_light_space::s_CapturePipelineKindCount; ++transparent){
         auto& output = transparent != 0u ? snapshot.transparentCapture : snapshot.opaqueCapture;
         if(output)
             continue;
@@ -192,7 +206,7 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePla
             Core::GpuDescriptorRetirementGuard retireCsg(heap, Span<const Core::GpuDescriptorHandle>(csgDescriptors));
             const u64 csgSizes[] = { contextSize, plan.countByteSize };
             const Name csgNames[] = { Name("light_space_csg_context"), Name("light_space_csg_opaque_depth") };
-            for(u32 index = 0u; index < 2u; ++index){
+            for(u32 index = 0u; index < LengthOf(csgBuffers); ++index){
                 Core::BufferDesc desc;
                 desc
                     .setByteSize(csgSizes[index]).setStructStride(sizeof(u32)).setCanHaveRawViews(true).setCanHaveUAVs(true)
@@ -241,7 +255,7 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePla
         Core::BufferDesc desc;
         desc
             .setByteSize(sizes[index]).setStructStride(sizeof(u32)).setCanHaveRawViews(true).setCanHaveUAVs(true)
-            .setIsDrawIndirectArgs(index == 3u)
+            .setIsDrawIndirectArgs(index == ::__hidden_light_space::s_DrawArgumentsBufferIndex)
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(names[index])
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
@@ -274,8 +288,8 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePla
     descriptors[4] = *depthDescriptor;
     if(!heap.write(descriptors[4], Core::DescriptorWriteItem::TextureSrv(0u, depth.get(), Core::Format::D32, Core::TextureSubresourceSet(0u, 1u, 0u, plan.viewCount), Core::TextureDimension::Texture2DArray)))
         return false;
-    Array<Core::FramebufferHandle, NWB_SCENE_SHADOW_SLOT_COUNT * 6u> opaque;
-    Array<Core::FramebufferHandle, NWB_SCENE_SHADOW_SLOT_COUNT * 6u> transparent;
+    Array<Core::FramebufferHandle, NWB_SCENE_SHADOW_SLOT_COUNT * s_PointLightViewCount> opaque;
+    Array<Core::FramebufferHandle, NWB_SCENE_SHADOW_SLOT_COUNT * s_PointLightViewCount> transparent;
     for(u32 view = 0u; view < plan.viewCount; ++view){
         Core::FramebufferAttachment attachment;
         attachment.setTexture(depth.get()).setArraySlice(view);

@@ -32,17 +32,17 @@ struct TextStep{
 
 
 [[nodiscard]] static bool IsCanonicalScalar(const u32 scalar)noexcept{
-    return scalar == '\n' || (scalar >= 0x20u && (scalar < 0x7Fu || scalar > 0x9Fu) && scalar != 0x2028u && scalar != 0x2029u);
+    return scalar == '\n' || (scalar >= s_UnicodeSpace && (scalar < s_UnicodeDelete || scalar > s_UnicodeC1Last) && scalar != s_UnicodeLineSeparator && scalar != s_UnicodeParagraphSeparator);
 }
 
 [[nodiscard]] static Expected<TextStep> ReadStep(const AStringView source, const usize offset)noexcept{
     // Callers admit the whole source with GraphemeSegmentation::Validate first.
-    const auto decoded = DecodeUtf8CodePoint(source.substr(offset, 4u));
-    NWB_ASSERT(decoded && !(decoded->codePoint >= 0xD800u && decoded->codePoint <= 0xDFFFu));
+    const auto decoded = DecodeUtf8CodePoint(source.substr(offset, s_Utf8MaxSequenceBytes));
+    NWB_ASSERT(decoded && !(decoded->codePoint >= s_UnicodeSurrogateFirst && decoded->codePoint <= s_UnicodeSurrogateLast));
     const u32 scalar = decoded->codePoint;
     TextStep step;
     step.sourceBytes = static_cast<usize>(decoded->byteCount);
-    const bool lineBreak = scalar == '\r' || scalar == 0x85u || scalar == 0x2028u || scalar == 0x2029u;
+    const bool lineBreak = scalar == '\r' || scalar == s_UnicodeNextLine || scalar == s_UnicodeLineSeparator || scalar == s_UnicodeParagraphSeparator;
     if(lineBreak || scalar == '\t'){
         step.replacement = lineBreak ? '\n' : ' ';
         step.outputBytes = 1u;
@@ -72,7 +72,7 @@ bool ValidateMultilineText(const AStringView text)noexcept{
         return false;
     usize offset = 0u;
     while(offset < text.size()){
-        const auto decoded = DecodeUtf8CodePoint(text.substr(offset, 4u));
+        const auto decoded = DecodeUtf8CodePoint(text.substr(offset, s_Utf8MaxSequenceBytes));
         NWB_ASSERT(decoded);
         if(!__hidden_ui_multiline_text::IsCanonicalScalar(decoded->codePoint))
             return false;

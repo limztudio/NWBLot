@@ -9,6 +9,7 @@
 
 
 #include "cook.h"
+#include "binary_payload.h"
 
 #include <core/assets/cook_entry_registry.h>
 
@@ -37,7 +38,7 @@ static Expected<ModelCookEntry> ParseModelValue(const Name virtualPath, const Pa
 }
 
 static bool RegisterModelCookEntry(Core::Assets::CookEntryRegistry& registry){
-    return Core::Assets::RegisterDocumentValueCookEntry<ModelCookEntry, Model, ModelAssetCodec>(registry, NWB_TEXT("model"), &ParseModelDocument, &ParseModelValue, &BuildModelAsset);
+    return Core::Assets::RegisterDocumentValueCookEntry<ModelCookEntry, Model, ModelAssetCodec>(registry, ModelBinaryPayload::s_ModelAssetKindLabel, &ParseModelDocument, &ParseModelValue, &BuildModelAsset);
 }
 
 

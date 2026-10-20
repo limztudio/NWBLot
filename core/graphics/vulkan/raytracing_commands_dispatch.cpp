@@ -57,7 +57,8 @@ bool ValidateRayDispatchDimensions(const RayTracingDispatchRaysArguments& argume
 
 
 void CommandList::setRayTracingState(const RayTracingState& state){
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, NWB_TEXT("set ray-tracing state")))
+    constexpr TStringView s_SetRayTracingStateOperation = NWB_TEXT("set ray-tracing state");
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, s_SetRayTracingStateOperation))
         return;
 
     ShaderTable* const shaderTable = state.shaderTable;
@@ -75,7 +76,7 @@ void CommandList::setRayTracingState(const RayTracingState& state){
             || !m_context.deviceDispatch.vkCmdTraceRaysKHR
         )
     ){
-        rejectCommandRecording(NWB_TEXT("set ray-tracing state"), NWB_TEXT("shader table or retained pipeline is foreign, unavailable, or not ready"));
+        rejectCommandRecording(s_SetRayTracingStateOperation, NWB_TEXT("shader table or retained pipeline is foreign, unavailable, or not ready"));
         return;
     }
 

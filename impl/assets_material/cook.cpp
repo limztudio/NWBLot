@@ -112,11 +112,11 @@ Expected<Material> BuildMaterialAsset(const MaterialCookEntry& materialEntry, Co
     asset.setMaterialInterface(*materialInterface);
     asset.setShadingModelId(materialEntry.shadingModelId);
     asset.setSurfaceDispatchId(materialEntry.surfaceDispatchId);
-    if(!SetOptionalAvboitPixelShader(materialEntry, materialEntry.avboitAccumulatePixelShaderName, AStringView("accumulate"), &Material::setAvboitAccumulatePixelShader, asset))
+    if(!SetOptionalAvboitPixelShader(materialEntry, materialEntry.avboitAccumulatePixelShaderName, MaterialBinaryPayload::s_AvboitAccumulatePassLabel,&Material::setAvboitAccumulatePixelShader, asset))
         return MakeUnexpected(Failure{});
-    if(!SetOptionalAvboitPixelShader(materialEntry, materialEntry.avboitOccupancyPixelShaderName, AStringView("occupancy"), &Material::setAvboitOccupancyPixelShader, asset))
+    if(!SetOptionalAvboitPixelShader(materialEntry, materialEntry.avboitOccupancyPixelShaderName, MaterialBinaryPayload::s_AvboitOccupancyPassLabel,&Material::setAvboitOccupancyPixelShader, asset))
         return MakeUnexpected(Failure{});
-    if(!SetOptionalAvboitPixelShader(materialEntry, materialEntry.avboitExtinctionPixelShaderName, AStringView("extinction"), &Material::setAvboitExtinctionPixelShader, asset))
+    if(!SetOptionalAvboitPixelShader(materialEntry, materialEntry.avboitExtinctionPixelShaderName, MaterialBinaryPayload::s_AvboitExtinctionPassLabel,&Material::setAvboitExtinctionPixelShader, asset))
         return MakeUnexpected(Failure{});
     asset.setTransparent(materialEntry.transparent);
     asset.setTwoSided(materialEntry.twoSided);
@@ -231,11 +231,12 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitExt
 
 
 bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, NWB_TEXT("MaterialAssetCodec::serialize")))
+    static constexpr TStringView s_SerializeFailureContext = NWB_TEXT("MaterialAssetCodec::serialize");
+    if(!checkSerializeAssetType(asset, s_SerializeFailureContext))
         return false;
 
     const Material& material = static_cast<const Material&>(asset);
-    if(!material.checkVirtualPath(NWB_TEXT("MaterialAssetCodec::serialize")))
+    if(!material.checkVirtualPath(s_SerializeFailureContext))
         return false;
     if(material.stageShaderCount() == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: material has no shader stages"));

@@ -63,7 +63,7 @@ TextShaper::TextShaper(Core::Alloc::GlobalArena& arena)noexcept
 {}
 
 bool TextShaper::setFonts(Core::Alloc::ScratchArena& scratchArena, const FontSource* sources, usize count){
-    if(!sources || count == 0u || count > 8u)
+    if(!sources || count == 0u || count > s_TextMaxFontSources)
         return false;
     PaintVector<SharedFontFace> fonts(m_arena);
     fonts.reserve(count);

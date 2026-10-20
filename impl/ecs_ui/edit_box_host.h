@@ -44,6 +44,10 @@ namespace UiEditBoxEventKind{
     enum Enum : u8{ Command, Character, Native, Selection, PastePrimary, Blur, Focus };
 };
 
+inline constexpr usize s_UiEditBoxMaxEntries = 256u;
+inline constexpr u32 s_UiEditBoxAsciiControlLimit = 32u;
+inline constexpr u32 s_UiEditBoxAsciiDelete = 127u;
+
 // The event-thread bridge owns snapshots and events. Application models are lent only by the current declaration.
 class UiEditBoxHost final : public Ui::IEditBoxHost{
 private:

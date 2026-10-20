@@ -6,6 +6,14 @@
 #include "optical_scene_constants.h"
 #include "../mesh/runtime_bounds_constants.h"
 #include "../bindless/bindless_heap.slangi"
+#include "../common/math.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static const float NWB_OPTICAL_BOUNDS_RUNTIME_EPSILON_SCALE = 16.0;
+static const uint NWB_OPTICAL_BOUNDS_RUNTIME_ROW_BYTES = 16u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,7 +43,7 @@ bool nwbOpticalTransformRuntimeBounds(const uint inputOffset, out float3 boundsM
     boundsMax = float3(0.0);
     const ByteAddressBuffer inputs = nwbHeapRawBuffer(g_NwbOpticalBoundsFinalize.runtimeInputsSlot);
     const uint localSlot = inputs.Load(inputOffset + NWB_OPTICAL_BOUNDS_RUNTIME_SLOT_OFFSET);
-    if(localSlot == 0xffffffffu)
+    if(localSlot == NWB_BINDLESS_HEAP_INVALID_SLOT)
         return false;
     const ByteAddressBuffer localBounds = nwbHeapRawBuffer(localSlot);
     if((localBounds.Load(NWB_RUNTIME_MESH_BOUNDS_FLAGS_OFFSET) & NWB_RUNTIME_MESH_BOUNDS_FLAG_VALID) == 0u)
@@ -45,7 +53,7 @@ bool nwbOpticalTransformRuntimeBounds(const uint inputOffset, out float3 boundsM
     if(!all(isfinite(localMin)) || !all(isfinite(localMax)) || any(localMin > localMax))
         return false;
     for(uint rowIndex = 0u; rowIndex < 3u; ++rowIndex){
-        const float4 row = asfloat(inputs.Load4(inputOffset + rowIndex * 16u));
+        const float4 row = asfloat(inputs.Load4(inputOffset + rowIndex * NWB_OPTICAL_BOUNDS_RUNTIME_ROW_BYTES));
         if(!all(isfinite(row)))
             return false;
         const float3 first = row.xyz * localMin;
@@ -56,7 +64,7 @@ bool nwbOpticalTransformRuntimeBounds(const uint inputOffset, out float3 boundsM
         const float magnitude = abs(row.w) + absolute.x + absolute.y + absolute.z + 1.0;
         // Enclose both the bounds arithmetic and the frozen float affine transform used by traversal.
         // The unit floor covers flushed subnormals; any overflow leaves the entire union unproven.
-        const float margin = magnitude * (16.0 * 1.1920928955078125e-7);
+        const float margin = magnitude * (NWB_OPTICAL_BOUNDS_RUNTIME_EPSILON_SCALE * NWB_FLOAT_EPSILON);
         boundsMin[rowIndex] = ((row.w + low.x) + low.y) + low.z - margin;
         boundsMax[rowIndex] = ((row.w + high.x) + high.y) + high.z + margin;
         if(!all(isfinite(first)) || !all(isfinite(second)) || !isfinite(magnitude) || !isfinite(margin) || !isfinite(boundsMin[rowIndex]) || !isfinite(boundsMax[rowIndex]))
@@ -80,7 +88,7 @@ void main(uint3 groupThreadId : SV_GroupThreadID){
     }
     DeviceMemoryBarrierWithGroupSync();
 
-    const float largest = 3.402823466e+38;
+    const float largest = NWB_FLOAT_MAX;
     float3 minimum = float3(largest);
     float3 maximum = float3(-largest);
     uint invalid = g_NwbOpticalBoundsFinalize.staticBoundsComplete == 0u ? 1u : 0u;
@@ -132,8 +140,8 @@ void main(uint3 groupThreadId : SV_GroupThreadID){
         const float3 finalMin = complete && transparentCount != 0u ? g_NwbOpticalMinimum[0] : float3(0.0);
         const float3 finalMax = complete && transparentCount != 0u ? g_NwbOpticalMaximum[0] : float3(0.0);
         const uint flags = (source.Load(NWB_RT_OPTICAL_SCENE_FLAGS_OFFSET) & ~NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID) | (complete ? NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID : 0u);
-        destination.Store4(0u, uint4(asuint(finalMin), transparentCount));
-        destination.Store4(16u, uint4(asuint(finalMax), flags));
+        destination.Store4(NWB_RT_OPTICAL_SCENE_BOUNDS_MIN_OFFSET, uint4(asuint(finalMin), transparentCount));
+        destination.Store4(NWB_RT_OPTICAL_SCENE_BOUNDS_MAX_OFFSET, uint4(asuint(finalMax), flags));
     }
 }
 

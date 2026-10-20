@@ -32,6 +32,15 @@ namespace __hidden_material_pipeline{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr Name s_SharedMeshProgramName("engine/graphics/mesh/shared_ms");
+
+// The equals sign plus the two quotes around the module include.
+inline constexpr usize s_ModuleAssignmentPunctuationSize = 3u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] Expected<Core::GraphicsString> ResolveCsgProjectEvaluatorModuleInclude(Core::GraphicsArena& arena, const CsgShapeRegistry& shapeRegistry, const Name& evaluatorVariant){
     if(!evaluatorVariant)
         return Core::GraphicsString(arena);
@@ -46,7 +55,7 @@ namespace __hidden_material_pipeline{
     if(moduleInclude.empty())
         return assignment;
 
-    assignment.reserve(ECSRenderMaterialShaderVariants::s_CsgProjectEvaluatorModuleDefineName.size() + moduleInclude.size() + 3u);
+    assignment.reserve(ECSRenderMaterialShaderVariants::s_CsgProjectEvaluatorModuleDefineName.size() + moduleInclude.size() + s_ModuleAssignmentPunctuationSize);
     assignment += ECSRenderMaterialShaderVariants::s_CsgProjectEvaluatorModuleDefineName;
     assignment += "=\"";
     assignment += moduleInclude;
@@ -206,7 +215,7 @@ Expected<MaterialPipelineResources*> RendererMaterialSystem::createRendererPipel
     const AStringView pixelShaderVariant = csgClipPipeline && !avboitCsgClipPipeline ? AStringView(csgShaderVariant) : shaderVariant;
     const AStringView meshShaderVariant = csgClipPipeline ? AStringView(csgShaderVariant) : shaderVariant;
 
-    const bool sharedObjectGeometry = materialInfo.meshShader.name() == Name("engine/graphics/mesh/shared_ms") && shaderVariant == Core::ShaderArchive::s_DefaultVariant;
+    const bool sharedObjectGeometry = materialInfo.meshShader.name() == __hidden_material_pipeline::s_SharedMeshProgramName &&shaderVariant == Core::ShaderArchive::s_DefaultVariant;
     const AStringView objectGeometryShaderVariant = sharedObjectGeometry ? shaderVariant : meshShaderVariant;
 
     Core::ShaderHandle passPixelShader;
@@ -367,7 +376,7 @@ Expected<MaterialPipelineResources*> RendererMaterialSystem::createRendererPipel
 
         resources.renderPath = RenderPath::ComputeEmulation;
         // The shared mesh_compute program is independent of authored materials.
-        resources.sharedGeometryComputeProgram = pipelineKey.csgMode == MaterialPipelineCsgMode::None && materialInfo.meshShader.name() == Name("engine/graphics/mesh/shared_ms") && meshShaderVariant == Core::ShaderArchive::s_DefaultVariant;
+        resources.sharedGeometryComputeProgram = pipelineKey.csgMode == MaterialPipelineCsgMode::None && materialInfo.meshShader.name() == __hidden_material_pipeline::s_SharedMeshProgramName && meshShaderVariant == Core::ShaderArchive::s_DefaultVariant;
         resources.indexedGeometryOutput = resources.sharedGeometryComputeProgram;
         return true;
     };

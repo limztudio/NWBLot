@@ -29,6 +29,14 @@ namespace MaterialCookDetail{
 static constexpr AStringView s_DeferredBxdfFunctionMacro = "NWB_DEFERRED_BXDF_FUNCTION";
 static constexpr AStringView s_DeferredBxdfModelPrefix = "nwbDeferredBxdfModel";
 static constexpr AStringView s_DeferredBxdfModuleSubPath = "deferred/generated/bxdf_dispatch.slangi";
+static constexpr AStringView s_GeneratedUndefBlockEnd = "\n\n";
+static constexpr AStringView s_GeneratedSwitchCaseLabel = "    case ";
+static constexpr AStringView s_GeneratedSwitchCaseReturn = "u: return ";
+static constexpr AStringView s_GeneratedSwitchEnd = "    }\n";
+static constexpr AStringView s_GeneratedDispatchEnd = "}\n\n#endif\n";
+// Shadow bind aliases per interface: the fixed layout symbols, and the symbols each instance adds (3 block suffixes plus the block accessor).
+static constexpr usize s_ShadowSurfaceBindLayoutAliasCount = 7u;
+static constexpr usize s_ShadowSurfaceBindInstanceAliasReserveCount = 4u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -152,16 +160,18 @@ Expected<Path> EmitDeferredBxdfDispatchModuleImpl(const Path& cacheDirectory, co
 
         char idText[TextDetail::s_DecimalTextBufferBytes];
         const AStringView idView = FormatDecimal(static_cast<u32>(id), idText);
-        source += "#define ";
+        source += s_GeneratedDefineDirective;
         source += s_DeferredBxdfFunctionMacro;
         source += ' ';
         source += s_DeferredBxdfModelPrefix;
         source += idView;
-        source += "\n#include \"";
+        source += '\n';
+        source += s_GeneratedIncludeDirective;
         source += sourceById[id];
-        source += "\"\n#undef ";
+        source += s_GeneratedIncludeDirectiveEnd;
+        source += s_GeneratedUndefDirective;
         source += s_DeferredBxdfFunctionMacro;
-        source += "\n\n";
+        source += s_GeneratedUndefBlockEnd;
     }
 
     source += "half3 nwbDeferredDispatchBxdf(uint shadingModel, NwbBxdfSurface surface, int2 pixel){\n";
@@ -172,16 +182,16 @@ Expected<Path> EmitDeferredBxdfDispatchModuleImpl(const Path& cacheDirectory, co
 
         char idText[TextDetail::s_DecimalTextBufferBytes];
         const AStringView idView = FormatDecimal(static_cast<u32>(id), idText);
-        source += "    case ";
+        source += s_GeneratedSwitchCaseLabel;
         source += idView;
-        source += "u: return ";
+        source += s_GeneratedSwitchCaseReturn;
         source += s_DeferredBxdfModelPrefix;
         source += idView;
         source += "(surface, pixel);\n";
     }
     source += "    default: return half3(1.0h, 0.0h, 1.0h); // no engine default BXDF: an unknown id shows magenta\n";
-    source += "    }\n";
-    source += "}\n\n#endif\n";
+    source += s_GeneratedSwitchEnd;
+    source += s_GeneratedDispatchEnd;
 
     const ScratchPath outputPath = ScratchPath(scratchArena, includeRoot) / s_DeferredBxdfModuleSubPath;
     auto ensureDirectoriesResult = EnsureDirectories(outputPath.parentPath());
@@ -237,7 +247,7 @@ static void AppendShadowSurfaceBindAlias(const AStringView symbol, const AString
     if(!inOutSeenSymbols.insert(Move(seenSymbol)).second)
         return;
 
-    inOutSource += "#define ";
+    inOutSource += s_GeneratedDefineDirective;
     inOutSource += symbol;
     inOutSource += ' ';
     inOutSource += bindNamespace;
@@ -259,17 +269,26 @@ static bool AppendShadowSurfaceBindAliases(
 ){
     inOutSeenSymbols.clear();
     outAliasSymbols.clear();
-    outAliasSymbols.reserve(static_cast<usize>(NameDetail::s_HashLaneCount) + 7u + bindEntry.structs.size() + bindEntry.instances.size() * 4u);
+    outAliasSymbols.reserve(static_cast<usize>(NameDetail::s_HashLaneCount) + s_ShadowSurfaceBindLayoutAliasCount + bindEntry.structs.size() + bindEntry.instances.size() * s_ShadowSurfaceBindInstanceAliasReserveCount);
 
     for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane){
         char laneDigits[TextDetail::s_DecimalTextBufferBytes];
-        ScratchString suffix("INTERFACE_HASH_", scratchArena);
+        ScratchString suffix(s_MaterialBindInterfaceHashSymbolPrefix, scratchArena);
         suffix += FormatDecimal(static_cast<usize>(lane), laneDigits);
         const ScratchString symbol = BuildMaterialBindGeneratedSymbol(scratchArena, {}, AStringView(suffix));
         AppendShadowSurfaceBindAlias(AStringView(symbol), bindNamespace, inOutSeenSymbols, outAliasSymbols, inOutSource, scratchArena);
     }
 
-    const AStringView layoutSymbols[] = { "LAYOUT_HASH", "BLOCK_COUNT", "FIELD_COUNT", "STORAGE_CONSTANT", "STORAGE_MUTABLE", "CONSTANT_BYTE_SIZE", "MUTABLE_BYTE_SIZE" };
+    const AStringView layoutSymbols[] = {
+        s_MaterialBindLayoutHashSymbol,
+        s_MaterialBindBlockCountSymbol,
+        s_MaterialBindFieldCountSymbol,
+        s_MaterialBindStorageConstantSymbol,
+        s_MaterialBindStorageMutableSymbol,
+        s_MaterialBindConstantByteSizeSymbol,
+        s_MaterialBindMutableByteSizeSymbol
+    };
+    static_assert(LengthOf(layoutSymbols) == s_ShadowSurfaceBindLayoutAliasCount);
     for(const AStringView suffix : layoutSymbols){
         const ScratchString symbol = BuildMaterialBindGeneratedSymbol(scratchArena, {}, suffix);
         AppendShadowSurfaceBindAlias(AStringView(symbol), bindNamespace, inOutSeenSymbols, outAliasSymbols, inOutSource, scratchArena);
@@ -287,7 +306,7 @@ static bool AppendShadowSurfaceBindAliases(
         }
 
         const AStringView instanceName(instance.name);
-        const AStringView blockSuffixes[] = { "_STORAGE", "_BYTE_OFFSET", "_BYTE_SIZE" };
+        const AStringView blockSuffixes[] = { s_MaterialBindStorageSymbolSuffix, s_MaterialBindByteOffsetSymbolSuffix, s_MaterialBindByteSizeSymbolSuffix };
         for(const AStringView suffix : blockSuffixes){
             const ScratchString symbol = BuildMaterialBindGeneratedSymbol(scratchArena, { instanceName }, suffix);
             AppendShadowSurfaceBindAlias(AStringView(symbol), bindNamespace, inOutSeenSymbols, outAliasSymbols, inOutSource, scratchArena);
@@ -298,7 +317,7 @@ static bool AppendShadowSurfaceBindAliases(
 
         for(const MaterialBindField& field : bindStruct->fields){
             const AStringView fieldName(field.name);
-            const AStringView fieldSuffixes[] = { "_BYTE_OFFSET", "_KEY", "_DEFAULT" };
+            const AStringView fieldSuffixes[] = { s_MaterialBindByteOffsetSymbolSuffix, s_MaterialBindKeySymbolSuffix, s_MaterialBindDefaultSymbolSuffix };
             for(const AStringView suffix : fieldSuffixes){
                 const ScratchString symbol = BuildMaterialBindGeneratedSymbol(scratchArena, { instanceName, fieldName }, suffix);
                 AppendShadowSurfaceBindAlias(AStringView(symbol), bindNamespace, inOutSeenSymbols, outAliasSymbols, inOutSource, scratchArena);
@@ -316,7 +335,7 @@ static void AppendShadowSurfaceBindAliasUndefines(const ShadowSurfaceBindAliasVe
     for(usize index = aliasSymbols.size(); index > 0u; ){
         --index;
         const ScratchString& symbol = aliasSymbols[index];
-        inOutSource += "#undef ";
+        inOutSource += s_GeneratedUndefDirective;
         inOutSource += AStringView(symbol);
         inOutSource += '\n';
     }
@@ -462,14 +481,16 @@ Expected<Path> EmitShadowSurfaceDispatchModuleImpl(const Path& cacheDirectory, c
         }
         if(!AppendShadowSurfaceBindAliases(*bindEntryById[id], AStringView(bindNamespace), bindAliasSeenSymbols, bindAliasSymbols, source, scratchArena))
             return MakeUnexpected(Failure{});
-        source += "#define ";
+        source += s_GeneratedDefineDirective;
         source += s_ShadowSurfaceFunctionMacro;
         source += ' ';
         source += s_ShadowSurfaceModelPrefix;
         source += idView;
-        source += "\n#include \"";
+        source += '\n';
+        source += s_GeneratedIncludeDirective;
         source += surfaceById[id];
-        source += "\"\n#undef ";
+        source += s_GeneratedIncludeDirectiveEnd;
+        source += s_GeneratedUndefDirective;
         source += s_ShadowSurfaceFunctionMacro;
         source += "\n";
         AppendShadowSurfaceBindAliasUndefines(bindAliasSymbols, source);
@@ -480,11 +501,11 @@ Expected<Path> EmitShadowSurfaceDispatchModuleImpl(const Path& cacheDirectory, c
         source += "    nwbShadowSetMaterialContext(hit);\n";
         source += "    NwbMeshSurfaceInputs in = nwbShadowBuildSurfaceInputs(hit);\n";
         source += "    nwbLoadMeshSurfaceInputs(in);\n";
-        source += "    return ";
+        source += s_GeneratedReturnPrefix;
         source += s_ShadowSurfaceModelPrefix;
         source += idView;
         source += "();\n";
-        source += "}\n\n";
+        source += s_GeneratedFunctionEnd;
     }
 
     source += "NwbMeshSurface nwbShadowDispatchSurface(uint surfaceDispatchId, NwbShadowHit hit){\n";
@@ -495,9 +516,9 @@ Expected<Path> EmitShadowSurfaceDispatchModuleImpl(const Path& cacheDirectory, c
 
         char idText[TextDetail::s_DecimalTextBufferBytes];
         const AStringView idView = FormatDecimal(static_cast<u32>(id), idText);
-        source += "    case ";
+        source += s_GeneratedSwitchCaseLabel;
         source += idView;
-        source += "u: return ";
+        source += s_GeneratedSwitchCaseReturn;
         source += s_ShadowSurfaceWrapperPrefix;
         source += idView;
         source += "(hit);\n";
@@ -505,8 +526,8 @@ Expected<Path> EmitShadowSurfaceDispatchModuleImpl(const Path& cacheDirectory, c
     // Unknown id: no material surface is available (for example, an explicit opaque-stage material).
     // Shadow consumes only the neutral optical fields; GI may consume baseColor, where the fixed mid-grey is an explicit no-surface fallback rather than an inferred project-material albedo.
     source += "    default: return nwbMakeMeshSurface(half3(0.5h, 0.5h, 0.5h), hit.worldNormal, half(0.0), half(0.0));\n";
-    source += "    }\n";
-    source += "}\n\n#endif\n";
+    source += s_GeneratedSwitchEnd;
+    source += s_GeneratedDispatchEnd;
 
     const ScratchPath outputPath = ScratchPath(scratchArena, includeRoot) / s_ShadowSurfaceModuleSubPath;
     auto ensureDirectoriesResult2 = EnsureDirectories(outputPath.parentPath());

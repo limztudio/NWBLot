@@ -8,7 +8,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if NWB_CSG_RECEIVER_SPAN_LAYER_COUNT * NWB_CSG_PEEL_LAYER_COUNT > 0xffffu
+// Each removed-interval source pair packs two span/peel source ids into one word.
+#define NWB_CSG_INTERVAL_SOURCE_BIT_COUNT 16u
+#define NWB_CSG_INTERVAL_SOURCE_MASK 0xffffu
+
+#if NWB_CSG_RECEIVER_SPAN_LAYER_COUNT * NWB_CSG_PEEL_LAYER_COUNT > NWB_CSG_INTERVAL_SOURCE_MASK
 #error "CSG interval source pairs require each span/peel index to fit 16 bits"
 #endif
 
@@ -148,7 +152,7 @@ void nwbCsgIntervalCombineAppendUnion(
     entry.sortDepth = backCapVisible ? lastDepth.w : max(spanDepth.x, firstDepth.z);
     const uint firstSource = 1u + spanIndex * NWB_CSG_PEEL_LAYER_COUNT + firstInterval;
     const uint lastSource = 1u + spanIndex * NWB_CSG_PEEL_LAYER_COUNT + lastInterval;
-    entry.sourcePair = firstSource | (lastSource << 16u);
+    entry.sourcePair = firstSource | (lastSource << NWB_CSG_INTERVAL_SOURCE_BIT_COUNT);
     nwbCsgIntervalCombineInsertEntry(entries, entry, removedIntervalLayerCount, inOutRemovedIntervalCount, inOutFlags);
 }
 
@@ -232,8 +236,8 @@ void nwbCsgIntervalCombineWriteEntries(const uint2 pixel, __constref NwbCsgRemov
             continue;
         }
 
-        const uint firstSource = sourcePair & 0xffffu;
-        const uint lastSource = sourcePair >> 16u;
+        const uint firstSource = sourcePair & NWB_CSG_INTERVAL_SOURCE_MASK;
+        const uint lastSource = sourcePair >> NWB_CSG_INTERVAL_SOURCE_BIT_COUNT;
         const uint spanIndex = (firstSource - 1u) / NWB_CSG_PEEL_LAYER_COUNT;
         const uint firstInterval = (firstSource - 1u) % NWB_CSG_PEEL_LAYER_COUNT;
         const uint lastInterval = (lastSource - 1u) % NWB_CSG_PEEL_LAYER_COUNT;

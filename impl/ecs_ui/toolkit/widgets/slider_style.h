@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "style.h"
 #include "../paint.h"
 
 #include <impl/assets_ui_skin/region_names.h>
@@ -28,12 +29,12 @@ struct SliderStyle{
     Name trackFallback = UiSkinToolkitRegions::s_ScrollbarTrackRegionName;
     Name thumbFallback = UiSkinToolkitRegions::s_ScrollbarThumbNormalRegionName;
     Name focus = UiSkinToolkitRegions::s_FocusOverlayRegionName;
-    Color hoverTint = { 1.08f, 1.08f, 1.08f, 1.0f };
-    Color pressedTint = { 0.85f, 0.85f, 0.85f, 1.0f };
-    Color disabledTint = { 0.55f, 0.55f, 0.55f, 0.6f };
-    Insets padding = { 4.0f, 4.0f, 4.0f, 4.0f };
-    Point thumbExtent = { 24.0f, 24.0f };
-    f32 trackHeight = 12.0f;
+    Color hoverTint = s_StyleHoverTint;
+    Color pressedTint = s_StylePressedTint;
+    Color disabledTint = s_StyleDisabledTint;
+    Insets padding = { s_StyleSpacingSmall, s_StyleSpacingSmall, s_StyleSpacingSmall, s_StyleSpacingSmall };
+    Point thumbExtent = { s_StyleControlExtent, s_StyleControlExtent };
+    f32 trackHeight = s_StyleSliderTrackHeight;
 };
 
 

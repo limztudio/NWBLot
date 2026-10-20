@@ -56,7 +56,7 @@ Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, Ui:
     Entry* entry = find(widget.id);
     bool abandon = false;
     if(!entry){
-        if(m_entries.size() == 256u){
+        if(m_entries.size() == s_UiEditBoxMaxEntries){
             result.valid = false;
             return result;
         }

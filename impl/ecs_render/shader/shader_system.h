@@ -58,6 +58,12 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr TStringView s_RendererAssetOwnerName = NWB_TEXT("RendererSystem");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class RendererShaderSystem final : NoCopy{
 public:
     RendererShaderSystem(Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, RendererShaderPathResolveCallback& shaderPathResolver)noexcept;
@@ -69,7 +75,7 @@ public:
         requires(IsBaseOf_V<IShader, TShader> && requires{ TShader::s_Stage; })
     [[nodiscard]] bool loadShader(Core::ShaderHandle& outShader, const Name& shaderName, const AStringView variantName, const Name& debugName, const Name* archiveStageName = nullptr){
         static_assert(Core::ShaderType::IsValid(TShader::s_Stage));
-        return ShaderAssetLoader::Load<TShader>(outShader, shaderName, variantName, debugName, m_graphics, m_assetManager, m_shaderPathResolver, NWB_TEXT("RendererSystem"), archiveStageName);
+        return ShaderAssetLoader::Load<TShader>(outShader, shaderName, variantName, debugName, m_graphics, m_assetManager, m_shaderPathResolver, s_RendererAssetOwnerName, archiveStageName);
     }
 
     [[nodiscard]] bool loadShaderForStage(Core::ShaderHandle& outShader, const Name& shaderName, AStringView variantName, Core::ShaderType::Mask shaderType, const Name& debugName, const Name* archiveStageName = nullptr);

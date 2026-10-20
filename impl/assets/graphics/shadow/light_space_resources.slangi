@@ -74,11 +74,11 @@ NwbLightSpaceView nwbLightSpaceLoadView(const uint index){
     const uint base = index * NWB_LIGHT_SPACE_VIEW_BYTES;
     NwbLightSpaceView view;
     for(uint row = 0u; row < 4u; ++row)
-        view.worldToClipRows[row] = asfloat(nwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + row * 16u));
-    view.originOrDirection = asfloat(nwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + 64u));
-    view.depthRange = asfloat(nwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + 80u));
-    view.map = nwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + 96u);
-    view.light = nwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + 112u);
+        view.worldToClipRows[row] = asfloat(nwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + row * NWB_LIGHT_SPACE_VIEW_ROW_BYTES));
+    view.originOrDirection = asfloat(nwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + NWB_LIGHT_SPACE_VIEW_ORIGIN_OFFSET));
+    view.depthRange = asfloat(nwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + NWB_LIGHT_SPACE_VIEW_DEPTH_RANGE_OFFSET));
+    view.map = nwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + NWB_LIGHT_SPACE_VIEW_MAP_OFFSET);
+    view.light = nwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + NWB_LIGHT_SPACE_VIEW_LIGHT_OFFSET);
     return view;
 }
 
@@ -103,7 +103,7 @@ NwbLightSpaceEvent nwbLightSpaceLoadEvent(const uint pixel, const uint eventInde
     event.instanceAndFacing = first.y;
     event.primitive = first.z;
     event.absorptionRG = first.w;
-    event.absorptionBInterface = nwbHeapRawBuffer(g_NwbLightSpacePush.eventsSlot).Load(address + 16u);
+    event.absorptionBInterface = nwbHeapRawBuffer(g_NwbLightSpacePush.eventsSlot).Load(address + NWB_LIGHT_SPACE_EVENT_TAIL_OFFSET);
     return event;
 }
 

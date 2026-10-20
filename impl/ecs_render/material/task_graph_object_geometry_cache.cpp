@@ -32,6 +32,9 @@ namespace __hidden_task_graph_object_geometry_cache{
 
 using namespace RendererTaskGraphDetail;
 
+// Instance read, cache write and cache raster read.
+inline constexpr usize s_DecodeExtraResourceUseCount = 3u;
+
 [[nodiscard]] bool SameDecode(const MaterialPassDrawItem& left, const MaterialPassDrawItem& right)noexcept{
     const auto& leftCache = left.meshResources.objectGeometryCache;
     const auto& rightCache = right.meshResources.objectGeometryCache;
@@ -187,7 +190,7 @@ bool ObjectGeometryCacheGraph::prepare(
                 if(!gatheredUses)
                     return false;
                 auto& uses = *gatheredUses;
-                uses.reserve(uses.size() + 3u);
+                uses.reserve(uses.size() + s_DecodeExtraResourceUseCount);
                 Core::GpuGraphResourceId instances;
                 {
                     const Core::GpuTaskGraph::DeclarationReadView declarations(m_graph);

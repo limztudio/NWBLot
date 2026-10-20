@@ -8,6 +8,7 @@
 #include <impl/ecs_render/csg/shadow_cutter_snapshot.h>
 #include <impl/assets/graphics/shadow/csg_shadow_constants.h>
 
+#include <core/graphics/rhi/gpu_descriptor_heap.h>
 #include <core/graphics/rhi/resource.h>
 
 #include <global/span.h>
@@ -31,9 +32,9 @@ namespace ECSRenderDetail{
 
 struct LightSpaceCsgInstanceGpu{
     Float34 worldToObject{};
-    u32 runtimeBoundsSlot = 0xffffffffu;
+    u32 runtimeBoundsSlot = Core::GpuDescriptorHandle::s_Invalid;
     u32 primitiveCount = 0u;
-    u32 meshRootSlot = 0xffffffffu;
+    u32 meshRootSlot = Core::GpuDescriptorHandle::s_Invalid;
     u32 padding = 0u;
     Float4 localMin{};
     Float4 localMax{};

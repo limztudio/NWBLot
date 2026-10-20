@@ -24,6 +24,9 @@ namespace __hidden_gpu_timing_metrics{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr usize s_TimestampEventsPerEnvelope = 2u;
+static constexpr usize s_MinOverlappingQueueCount = 2u;
+
 struct TimestampEvent{
     u64 ticks = 0u;
     bool begins = false;
@@ -70,7 +73,7 @@ Expected<GpuPacketEnvelopeMetrics> TryAggregateGpuPacketEnvelopeMetrics(const Gp
     GpuPacketEnvelopeMetrics metrics;
     outQueueMetrics.clear();
 
-    const auto eventCapacity = TryMultiply<usize>(packetEnvelopeCount, usize{ 2u });
+    const auto eventCapacity = TryMultiply<usize>(packetEnvelopeCount, s_TimestampEventsPerEnvelope);
     if(!eventCapacity)
         return MakeUnexpected(Failure{});
     if(packetEnvelopeCount == 0u || !packetEnvelopes)
@@ -146,7 +149,7 @@ Expected<GpuPacketEnvelopeMetrics> TryAggregateGpuPacketEnvelopeMetrics(const Gp
     usize eventIndex = 0u;
     while(eventIndex < events.size()){
         const u64 eventTicks = events[eventIndex].ticks;
-        if(activeQueueCount >= 2u){
+        if(activeQueueCount >= s_MinOverlappingQueueCount){
             const u64 intervalTicks = eventTicks - previousTicks;
             NWB_ASSERT(!AddOverflows<u64>(overlapTicks, intervalTicks));
             overlapTicks += intervalTicks;

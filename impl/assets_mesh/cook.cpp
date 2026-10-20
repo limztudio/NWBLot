@@ -176,7 +176,7 @@ Expected<Mesh> BuildMeshAsset(MeshCookEntry& meshEntry, Core::Assets::AssetArena
 
 
 bool MeshAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, NWB_TEXT("MeshAssetCodec::serialize")))
+    if(!checkSerializeAssetType(asset, MeshBinaryPayload::s_MeshSerializeContext))
         return false;
 
     Core::Alloc::ScratchArena scratchArena(AssetsMeshArenaScope::s_ValidatePayloadArena);
@@ -195,7 +195,7 @@ bool MeshAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::
     MeshAssetBinaryPayload::FillMeshBaseHeader(header, mesh);
     AppendPOD(outBinary, header);
 
-    const TStringView serializeFailureContext = NWB_TEXT("MeshAssetCodec::serialize");
+    const TStringView serializeFailureContext = MeshBinaryPayload::s_MeshSerializeContext;
     if(!MeshAssetBinaryPayload::AppendMeshAttributeStreams(outBinary, mesh, serializeFailureContext))
         return false;
     return MeshAssetBinaryPayload::AppendMeshletStreams(outBinary, mesh, serializeFailureContext);

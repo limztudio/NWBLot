@@ -292,7 +292,7 @@ void CommandList::setEnableUavBarriersForTexture(Texture* texture, bool enableBa
     if(!validateCommandRecordingScope(s_OperationName))
         return;
     if(!isTextureReadyForCommandQueue(texture)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("texture is not ready for this exact command queue"));
+        rejectCommandRecording(s_OperationName, s_TextureNotReadyForQueueReason);
         return;
     }
     m_stateTracker.setEnableUavBarriersForTexture(*texture, enableBarriers);
@@ -305,7 +305,7 @@ void CommandList::setEnableUavBarriersForBuffer(Buffer* buffer, bool enableBarri
     if(!validateCommandRecordingScope(s_OperationName))
         return;
     if(!isBufferReadyForCommandQueue(buffer)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("buffer is not ready for this exact command queue"));
+        rejectCommandRecording(s_OperationName, s_BufferNotReadyForQueueReason);
         return;
     }
     m_stateTracker.setEnableUavBarriersForBuffer(*buffer, enableBarriers);
@@ -318,7 +318,7 @@ void CommandList::beginTrackingTextureState(Texture* texture, TextureSubresource
     if(!validateCommandRecordingScope(s_OperationName))
         return;
     if(stateBits == ResourceStates::Unknown){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("initial state cannot be unknown"));
+        rejectCommandRecording(s_OperationName, VulkanStateTrackingDetail::s_InitialStateUnknownReason);
         return;
     }
     if(!validateTextureForGpuState(texture, stateBits, s_OperationName))
@@ -326,7 +326,7 @@ void CommandList::beginTrackingTextureState(Texture* texture, TextureSubresource
 
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture->m_creationDesc, TextureSubresourceMipResolve::Range);
     if(!VulkanDetail::IsTextureSubresourceRangeValid(resolvedSubresources)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("subresource range is empty or outside the texture"));
+        rejectCommandRecording(s_OperationName, VulkanStateTrackingDetail::s_SubresourceRangeOutsideTextureReason);
         return;
     }
 

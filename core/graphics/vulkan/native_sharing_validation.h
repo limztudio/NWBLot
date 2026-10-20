@@ -51,7 +51,7 @@ template<typename UsageFlags, typename CreateFlags>
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: native sharing mode is invalid"), StringConvert(logPrefix));
         return false;
     }
-    if(provenance.queueFamilyIndexCount < 2u || !provenance.queueFamilyIndices){
+    if(provenance.queueFamilyIndexCount < s_MinConcurrentSharingQueueFamilyCount || !provenance.queueFamilyIndices){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: concurrent sharing requires at least two queue-family indices"), StringConvert(logPrefix));
         return false;
     }

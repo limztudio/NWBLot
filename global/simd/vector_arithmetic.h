@@ -34,9 +34,9 @@ enum Enum : u8{
 template<Rounding::Enum Mode>
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL RoundFixed(SIMDVectorSingle value)noexcept{
     const __m128i bits = _mm_castps_si128(value);
-    const __m128i magnitude = _mm_and_si128(bits, _mm_set1_epi32(0x7FFFFFFF));
-    const __m128i sign = _mm_and_si128(bits, _mm_set1_epi32(static_cast<i32>(0x80000000u)));
-    const __m128i integral = _mm_cmpgt_epi32(magnitude, _mm_set1_epi32(0x4AFFFFFF));
+    const __m128i magnitude = _mm_and_si128(bits, _mm_set1_epi32(static_cast<i32>(s_F32AbsoluteBitMask)));
+    const __m128i sign = _mm_and_si128(bits, _mm_set1_epi32(static_cast<i32>(s_F32SignBitMask)));
+    const __m128i integral = _mm_cmpgt_epi32(magnitude, _mm_set1_epi32(static_cast<i32>(s_F32FractionLimitBits)));
     __m128i result{};
     if constexpr(Mode == Rounding::Floor || Mode == Rounding::Ceiling){
         // Only finite values below 2^23 need conversion, preserving precision exceptions without invalid conversions.
@@ -71,7 +71,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL RoundFixed(SIMDVectorSingle value)noex
 
     result = _mm_or_si128(_mm_and_si128(integral, magnitude), _mm_andnot_si128(integral, result));
     result = _mm_or_si128(result, sign);
-    const __m128i isNaN = _mm_cmpgt_epi32(magnitude, _mm_set1_epi32(0x7F800000));
+    const __m128i isNaN = _mm_cmpgt_epi32(magnitude, _mm_set1_epi32(static_cast<i32>(s_F32InfinityBits)));
     // Quiet only NaN lanes so large finite inputs cannot overflow during payload-preserving addition.
     const __m128 nan = _mm_and_ps(_mm_castsi128_ps(isNaN), value);
     const __m128 quietNaN = _mm_add_ps(nan, nan);
@@ -127,7 +127,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorNegate(SIMDVectorSingle value)no
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleNegate(SIMDVectorDouble value)noexcept{
 #if defined(NWB_HAS_NEON64)
-    const uint64x2_t sign = vdupq_n_u64(0x8000000000000000u);
+    const uint64x2_t sign = vdupq_n_u64(s_F64SignBitMask);
     return SIMDVectorDoubleDetail::FromUIntPairs(veorq_u64(SIMDVectorDoubleDetail::GetLowBits(value), sign), veorq_u64(SIMDVectorDoubleDetail::GetHighBits(value), sign));
 #elif defined(NWB_HAS_AVX)
     return BitCast<SIMDVectorDouble>(_mm256_xor_pd(BitCast<__m256d>(value), _mm256_set1_pd(-0.0)));

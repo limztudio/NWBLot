@@ -89,8 +89,8 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(Core::GpuTaskGr
         const Core::GpuTaskId preDependency[] = { inputs.occupancyTask };
         Core::GpuTaskDesc depthWarpDesc;
         depthWarpDesc
-            .setIdentity(Name("render.avboit.depth_warp"))
-            .setMarkerLabel("AVBOIT Depth Warp")
+            .setIdentity(Name(RendererGpuPassText::s_AvboitDepthWarpName))
+            .setMarkerLabel(RendererGpuPassText::s_AvboitDepthWarpLabel)
             .setScheduling(avboitComputeScheduling)
             .setTimingMetadata(avboitComputeStageTiming)
             .setDependencies(preDependency, LengthOf(preDependency))
@@ -147,7 +147,7 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(Core::GpuTaskGr
     Core::GpuTaskDesc integrationDesc;
     integrationDesc
         .setIdentity(Name("render.avboit.integration"))
-        .setMarkerLabel("AVBOIT Integration")
+        .setMarkerLabel(RendererGpuPassText::s_AvboitIntegrationLabel)
         .setScheduling(avboitComputeScheduling)
         .setTimingMetadata(avboitComputeStageTiming)
         .setDependencies(integrationDependency, LengthOf(integrationDependency))

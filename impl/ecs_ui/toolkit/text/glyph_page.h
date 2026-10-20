@@ -24,6 +24,7 @@ NWB_IMPL_UI_BEGIN
 
 
 inline constexpr u32 s_GlyphAtlasPageExtent = 512u;
+inline constexpr u32 s_GlyphAtlasGlyphGutter = 2u;
 inline constexpr usize s_GlyphAtlasMaxPages = 16u;
 inline constexpr usize s_PaintMaxGlyphPages = 64u;
 

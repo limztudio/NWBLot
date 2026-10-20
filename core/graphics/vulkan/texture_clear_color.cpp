@@ -17,9 +17,15 @@ NWB_VULKAN_BEGIN
 
 namespace __hidden_texture_clear_color{
 
+static constexpr TStringView s_ColorValueLabel = NWB_TEXT("color value");
+static constexpr TStringView s_UnsignedIntegerValueLabel = NWB_TEXT("unsigned integer value");
+static constexpr TStringView s_SignedIntegerValueLabel = NWB_TEXT("signed integer value");
+static constexpr TStringView s_BlockCompressedMultisampleReason = NWB_TEXT("block-compressed texture clears require a single-sampled texture");
+static constexpr TStringView s_BlockCompressedActiveRenderingReason = NWB_TEXT("block-compressed texture clears cannot execute during active rendering");
+
 [[nodiscard]] static TStringView ColorClearSubresourceError(const TextureDesc& description, const TextureSubresourceSet& subresources, const VkImageAspectFlags aspectMask, const bool integerValue, const bool signedIntegerValue)noexcept{
     if(!VulkanDetail::IsTextureSubresourceRangeValid(subresources))
-        return NWB_TEXT("subresource range is empty or invalid");
+        return VulkanTextureDetail::s_ClearSubresourceRangeInvalidReason;
     if(!VulkanTextureDetail::TextureColorClearAspectIsValid(aspectMask))
         return NWB_TEXT("texture format does not have a color aspect");
     if(!VulkanTextureDetail::TextureColorClearValueTypeMatchesFormat(GetFormatInfo(description.format), integerValue, signedIntegerValue))
@@ -37,21 +43,21 @@ void CommandList::clearTextureFloat(Texture& texture, TextureSubresourceSet subr
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
 
-    clearColorTexture(scratchArena, texture, subresources, NWB_TEXT("color value"), clearValue, false, false);
+    clearColorTexture(scratchArena, texture, subresources, __hidden_texture_clear_color::s_ColorValueLabel, clearValue, false, false);
 }
 
 void CommandList::clearTextureRectFloat(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, const Color& clearColor){
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
 
-    clearColorTextureBox(scratchArena, texture, subresources, Box(rect, 0, Limit<i32>::s_Max), NWB_TEXT("color value"), clearValue, false, false);
+    clearColorTextureBox(scratchArena, texture, subresources, Box(rect, 0, Limit<i32>::s_Max), __hidden_texture_clear_color::s_ColorValueLabel, clearValue, false, false);
 }
 
 void CommandList::clearTextureBoxFloat(Texture& texture, TextureSubresourceSet subresources, const Box& box, const Color& clearColor){
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
 
-    clearColorTextureBox(scratchArena, texture, subresources, box, NWB_TEXT("color value"), clearValue, false, false);
+    clearColorTextureBox(scratchArena, texture, subresources, box, __hidden_texture_clear_color::s_ColorValueLabel, clearValue, false, false);
 }
 
 void CommandList::clearTextureUInt(Texture& texture, TextureSubresourceSet subresources, u32 clearColor){
@@ -62,7 +68,7 @@ void CommandList::clearTextureUInt(Texture& texture, TextureSubresourceSet subre
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
 
-    clearColorTexture(scratchArena, texture, subresources, NWB_TEXT("unsigned integer value"), clearValue, true, false);
+    clearColorTexture(scratchArena, texture, subresources, __hidden_texture_clear_color::s_UnsignedIntegerValueLabel, clearValue, true, false);
 }
 
 void CommandList::clearTextureRectUInt(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, u32 clearColor){
@@ -73,7 +79,7 @@ void CommandList::clearTextureRectUInt(Texture& texture, TextureSubresourceSet s
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
 
-    clearColorTextureBox(scratchArena, texture, subresources, Box(rect, 0, Limit<i32>::s_Max), NWB_TEXT("unsigned integer value"), clearValue, true, false);
+    clearColorTextureBox(scratchArena, texture, subresources, Box(rect, 0, Limit<i32>::s_Max), __hidden_texture_clear_color::s_UnsignedIntegerValueLabel, clearValue, true, false);
 }
 
 void CommandList::clearTextureBoxUInt(Texture& texture, TextureSubresourceSet subresources, const Box& box, u32 clearColor){
@@ -84,7 +90,7 @@ void CommandList::clearTextureBoxUInt(Texture& texture, TextureSubresourceSet su
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
 
-    clearColorTextureBox(scratchArena, texture, subresources, box, NWB_TEXT("unsigned integer value"), clearValue, true, false);
+    clearColorTextureBox(scratchArena, texture, subresources, box, __hidden_texture_clear_color::s_UnsignedIntegerValueLabel, clearValue, true, false);
 }
 
 void CommandList::clearTextureInt(Texture& texture, TextureSubresourceSet subresources, i32 clearColor){
@@ -95,7 +101,7 @@ void CommandList::clearTextureInt(Texture& texture, TextureSubresourceSet subres
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
 
-    clearColorTexture(scratchArena, texture, subresources, NWB_TEXT("signed integer value"), clearValue, true, true);
+    clearColorTexture(scratchArena, texture, subresources, __hidden_texture_clear_color::s_SignedIntegerValueLabel, clearValue, true, true);
 }
 
 void CommandList::clearTextureRectInt(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, i32 clearColor){
@@ -106,7 +112,7 @@ void CommandList::clearTextureRectInt(Texture& texture, TextureSubresourceSet su
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
 
-    clearColorTextureBox(scratchArena, texture, subresources, Box(rect, 0, Limit<i32>::s_Max), NWB_TEXT("signed integer value"), clearValue, true, true);
+    clearColorTextureBox(scratchArena, texture, subresources, Box(rect, 0, Limit<i32>::s_Max), __hidden_texture_clear_color::s_SignedIntegerValueLabel, clearValue, true, true);
 }
 
 void CommandList::clearTextureBoxInt(Texture& texture, TextureSubresourceSet subresources, const Box& box, i32 clearColor){
@@ -117,7 +123,7 @@ void CommandList::clearTextureBoxInt(Texture& texture, TextureSubresourceSet sub
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
 
-    clearColorTextureBox(scratchArena, texture, subresources, box, NWB_TEXT("signed integer value"), clearValue, true, true);
+    clearColorTextureBox(scratchArena, texture, subresources, box, __hidden_texture_clear_color::s_SignedIntegerValueLabel, clearValue, true, true);
 }
 
 
@@ -130,12 +136,12 @@ void CommandList::clearColorTexture(Alloc::ScratchArena& scratchArena, Texture& 
     static_cast<void>(valueName);
     constexpr TStringView s_OperationName = NWB_TEXT("clear texture");
     if(&texture.m_context != &m_context || texture.m_image == VK_NULL_HANDLE){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("texture must be a live resource owned by this device"));
+        rejectCommandRecording(s_OperationName, VulkanTextureDetail::s_TextureNotLiveResourceReason);
         return;
     }
     const VkImageUsageFlags requiredUsage = m_renderPassActive ? VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT : VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     if(!isTextureReadyForCommandQueue(&texture, requiredUsage)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("texture is not ready for the requested native clear on this exact command queue"));
+        rejectCommandRecording(s_OperationName, VulkanTextureDetail::s_TextureNotReadyForNativeClearReason);
         return;
     }
     const TextureDesc& desc = texture.m_creationDesc;
@@ -149,11 +155,11 @@ void CommandList::clearColorTexture(Alloc::ScratchArena& scratchArena, Texture& 
 
     const bool blockCompressed = Format::IsBlockCompressedFormat(desc.format);
     if(blockCompressed && desc.sampleCount != 1u){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("block-compressed texture clears require a single-sampled texture"));
+        rejectCommandRecording(s_OperationName, __hidden_texture_clear_color::s_BlockCompressedMultisampleReason);
         return;
     }
     if(blockCompressed && m_renderPassActive){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("block-compressed texture clears cannot execute during active rendering"));
+        rejectCommandRecording(s_OperationName, __hidden_texture_clear_color::s_BlockCompressedActiveRenderingReason);
         return;
     }
 
@@ -196,7 +202,7 @@ void CommandList::clearColorTextureBox(Alloc::ScratchArena& scratchArena, Textur
     static_cast<void>(valueName);
     constexpr TStringView s_OperationName = s_ClearTextureBoxOperation;
     if(&texture.m_context != &m_context || texture.m_image == VK_NULL_HANDLE){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("texture must be a live resource owned by this device"));
+        rejectCommandRecording(s_OperationName, VulkanTextureDetail::s_TextureNotLiveResourceReason);
         return;
     }
     const TextureDesc& desc = texture.m_creationDesc;
@@ -219,27 +225,27 @@ void CommandList::clearColorTextureBox(Alloc::ScratchArena& scratchArena, Textur
         return;
     const VkImageUsageFlags requiredUsage = m_renderPassActive ? VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT : VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     if(!isTextureReadyForCommandQueue(&texture, requiredUsage)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("texture is not ready for the requested native clear on this exact command queue"));
+        rejectCommandRecording(s_OperationName, VulkanTextureDetail::s_TextureNotReadyForNativeClearReason);
         return;
     }
     if(blockCompressed && desc.sampleCount != 1u){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("block-compressed texture clears require a single-sampled texture"));
+        rejectCommandRecording(s_OperationName, __hidden_texture_clear_color::s_BlockCompressedMultisampleReason);
         return;
     }
     if(blockCompressed && m_renderPassActive){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("block-compressed texture clears cannot execute during active rendering"));
+        rejectCommandRecording(s_OperationName, __hidden_texture_clear_color::s_BlockCompressedActiveRenderingReason);
         return;
     }
 
     if(m_renderPassActive || desc.sampleCount != 1u){
         if(!m_renderPassActive){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("bounded multisampled clears require active rendering"));
+            rejectCommandRecording(s_OperationName, VulkanTextureDetail::s_BoundedMultisampledClearInactiveReason);
             return;
         }
 
         const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(desc, resolvedSubresources.baseMipLevel);
         if(baseResolvedBox.minZ != 0 || baseResolvedBox.maxZ != static_cast<i32>(mipExtent.depth)){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("attachment bounded clears require full attachment depth"));
+            rejectCommandRecording(s_OperationName, VulkanTextureDetail::s_BoundedClearDepthReason);
             return;
         }
 
@@ -296,7 +302,7 @@ void CommandList::clearColorTextureBox(Alloc::ScratchArena& scratchArena, Textur
         const u64 clearBlockCount = clearSliceBlockCount * clearDepth;
         const auto uploadLayout = VulkanTextureDetail::BuildTextureClearUploadLayout(clearBlockCount, clearPattern->byteCount, arrayLayerCount);
         if(!uploadLayout){
-            rejectCommandRecording(s_ClearTextureBoxOperation, NWB_TEXT("clear upload layout is not addressable"));
+            rejectCommandRecording(s_ClearTextureBoxOperation, VulkanTextureDetail::s_ClearUploadLayoutUnaddressableReason);
             return;
         }
         mipPlan.uploadLayout = *uploadLayout;
@@ -331,7 +337,7 @@ void CommandList::clearColorTextureBox(Alloc::ScratchArena& scratchArena, Textur
 
         const auto staging = prepareUploadStaging(mipPlan.uploadLayout.clearByteCount, NWB_TEXT("clearTextureBox"), mipPlan.uploadLayout.stagingAlignment);
         if(!staging){
-            rejectCommandRecording(s_ClearTextureBoxOperation, NWB_TEXT("staging allocation failed"));
+            rejectCommandRecording(s_ClearTextureBoxOperation, s_StagingAllocationFailedReason);
             return;
         }
         Buffer* const stagingBuffer = staging->buffer;
@@ -346,7 +352,7 @@ void CommandList::clearColorTextureBox(Alloc::ScratchArena& scratchArena, Textur
             || static_cast<u64>(mipPlan.uploadLayout.clearByteCount)
                 > stagingBuffer->m_creationDesc.byteSize - stagingOffset
         ){
-            rejectCommandRecording(s_ClearTextureBoxOperation, NWB_TEXT("staging allocation returned an invalid range"));
+            rejectCommandRecording(s_ClearTextureBoxOperation, VulkanTextureDetail::s_ClearStagingRangeInvalidReason);
             return;
         }
         VulkanTextureDetail::FillTextureClearBytes(stagingBytes, mipPlan.uploadLayout.clearByteCount, clearPattern->bytes.data(), clearPattern->byteCount);

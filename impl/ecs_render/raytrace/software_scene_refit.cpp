@@ -4,6 +4,7 @@
 
 #include "software_scene_refit.h"
 
+#include <impl/ecs_render/renderer_frame_pipeline_graph_shared.h>
 #include <impl/ecs_render/shader/shader_system.h>
 
 #include <core/graphics/runtime/runtime.h>
@@ -74,7 +75,7 @@ Expected<SoftwareSceneRefitHandle> SoftwareSceneRefitResources::prepare(
         return MakeUnexpected(Failure{});
     if(!m_inputBuffer || m_inputBuffer->getCreationDescription().byteSize < byteSize){
         Core::BufferDesc desc;
-        desc.setByteSize(byteSize).setCanHaveRawViews(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(Name("software_scene_refit_inputs")).enableAutomaticStateTracking(Core::ResourceStates::Common);
+        desc.setByteSize(byteSize).setCanHaveRawViews(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(Name(RendererFramePipelineDetail::s_SoftwareSceneRefitInputsName)).enableAutomaticStateTracking(Core::ResourceStates::Common);
         auto replacementResult = m_graphics.createBuffer(desc);
         if(!replacementResult)
             return MakeUnexpected(Failure{});

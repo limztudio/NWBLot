@@ -44,14 +44,14 @@ NwbBvhNode nwbLightSpaceSceneRoot(){
     if(!nwbCsgShadowEnabled())
         return nwbHeapBvhNodes(g_NwbLightSpacePush.sceneRootSlot)[0u];
     NwbBvhNode scene = (NwbBvhNode)0;
-    scene.aabbMin = float3(asfloat(0x7f7fffffu));
+    scene.aabbMin = float3(asfloat(NWB_FLOAT_MAX_BITS));
     scene.aabbMax = -scene.aabbMin;
     for(uint index = 0u; index < g_NwbLightSpacePush.instanceCount; ++index){
         if(nwbCsgShadowHardwareCompose() && !nwbCsgShadowReceiver(index))
             continue;
         const NwbBvhNode root = nwbLightSpaceMeshRoot(index);
         if(!all(isfinite(root.aabbMin)) || !all(isfinite(root.aabbMax)) || any(root.aabbMin > root.aabbMax)){
-            scene.aabbMin = float3(asfloat(0x7fc00000u));
+            scene.aabbMin = float3(asfloat(NWB_FLOAT_QUIET_NAN_BITS));
             return scene;
         }
         const NwbMeshInstanceData transform = nwbHeapMeshInstances(nwbMeshFrameInstanceHeapSlot())[nwbLightSpaceMaterial(index).meshInstanceIndex];
@@ -59,7 +59,7 @@ NwbBvhNode nwbLightSpaceSceneRoot(){
             const float3 local = float3((corner & 1u) != 0u ? root.aabbMax.x : root.aabbMin.x, (corner & 2u) != 0u ? root.aabbMax.y : root.aabbMin.y, (corner & 4u) != 0u ? root.aabbMax.z : root.aabbMin.z);
             const float3 world = nwbRotateVectorByQuaternion(local * transform.scale.xyz, transform.rotation) + transform.translation;
             if(!all(isfinite(world))){
-                scene.aabbMin = float3(asfloat(0x7fc00000u));
+                scene.aabbMin = float3(asfloat(NWB_FLOAT_QUIET_NAN_BITS));
                 return scene;
             }
             scene.aabbMin = min(scene.aabbMin, world);

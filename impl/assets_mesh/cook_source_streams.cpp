@@ -22,6 +22,7 @@ namespace __hidden_mesh_source_streams{
 
 inline constexpr usize s_VertexRefComponentCountWithSkin = 6u;
 inline constexpr usize s_VertexRefComponentCountWithoutSkin = 5u;
+inline constexpr usize s_ComponentLabelExtraCharCount = 2u;
 inline constexpr AStringView s_VertexRefPositionName = "position";
 inline constexpr AStringView s_VertexRefNormalName = "normal";
 inline constexpr AStringView s_VertexRefTangentName = "tangent";
@@ -72,7 +73,7 @@ Expected<ScratchVector<MeshVertexRef>> MeshCookSourceStreams::ParseSourceVertexR
             if(!component){
                 const ScratchString label = MeshCookMetadata::MakeIndexedLabel(scratchArena, MeshCookMetadata::s_VertexRefsFieldNameView, vertexRefIndex);
                 ScratchString componentLabel{scratchArena};
-                componentLabel.reserve(label.size() + componentNames[componentIndex].size() + 2u);
+                componentLabel.reserve(label.size() + componentNames[componentIndex].size() + __hidden_mesh_source_streams::s_ComponentLabelExtraCharCount);
                 componentLabel.append(label.data(), label.size());
                 componentLabel += '.';
                 componentLabel.append(componentNames[componentIndex].data(), componentNames[componentIndex].size());

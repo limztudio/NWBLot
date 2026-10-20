@@ -175,12 +175,12 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     };
     const Name causticEmissionTargetsIdentity = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
         && m_graphics.queryFeatureSupport(Core::Feature::RayQuery)
-            ? Name("render.hardware_caustics.emission_targets")
-            : Name("render.software_caustics.emission_targets")
+            ? Name(RendererFramePipelineDetail::s_HardwareCausticEmissionTargetsName)
+            : Name(RendererFramePipelineDetail::s_SoftwareCausticEmissionTargetsName)
     ;
     Expected<Optional<Core::GpuGraphResourceId>> causticEmissionTargetsResult = Optional<Core::GpuGraphResourceId>{};
     if(rayTracingResources.causticEmissionTargetBuffer){
-        const auto importedResource = importBuffer(rayTracingResources.causticEmissionTargetBuffer, causticEmissionTargetsIdentity, "Caustic Emission Targets");
+        const auto importedResource = importBuffer(rayTracingResources.causticEmissionTargetBuffer, causticEmissionTargetsIdentity, RendererFramePipelineDetail::s_CausticEmissionTargetsLabel);
         if(!importedResource)
             causticEmissionTargetsResult = MakeUnexpected(importedResource.error());
         else
@@ -266,7 +266,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
 
     Expected<Optional<Core::GpuGraphResourceId>> surfelFrameConstantsResult = Optional<Core::GpuGraphResourceId>{};
     if(rayTracingResources.surfelFrameConstantsBuffer){
-        const auto importedResource = importBuffer(rayTracingResources.surfelFrameConstantsBuffer, Name("render.surfel_gi.constants"), "Surfel Constants");
+        const auto importedResource = importBuffer(rayTracingResources.surfelFrameConstantsBuffer, Name(RendererFramePipelineDetail::s_SurfelConstantsName), RendererFramePipelineDetail::s_SurfelConstantsLabel);
         if(!importedResource)
             surfelFrameConstantsResult = MakeUnexpected(importedResource.error());
         else
@@ -418,7 +418,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
 
     Expected<Optional<Core::GpuGraphResourceId>> sceneBvhNodesResult = Optional<Core::GpuGraphResourceId>{};
     if(rayTracingResources.sceneBvhNodeBuffer){
-        const auto importedResource = importBuffer(rayTracingResources.sceneBvhNodeBuffer, Name("render.shadow_visibility.scene_bvh_nodes"), "Scene BVH Nodes");
+        const auto importedResource = importBuffer(rayTracingResources.sceneBvhNodeBuffer, Name(RendererFramePipelineDetail::s_SceneBvhNodesName), RendererFramePipelineDetail::s_SceneBvhNodesLabel);
         if(!importedResource)
             sceneBvhNodesResult = MakeUnexpected(importedResource.error());
         else
@@ -426,7 +426,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     }
     Expected<Optional<Core::GpuGraphResourceId>> sceneBvhInstancesResult = Optional<Core::GpuGraphResourceId>{};
     if(rayTracingResources.sceneInstanceBuffer){
-        const auto importedResource = importBuffer(rayTracingResources.sceneInstanceBuffer, Name("render.shadow_visibility.scene_instances"), "Scene Instances");
+        const auto importedResource = importBuffer(rayTracingResources.sceneInstanceBuffer, Name(RendererFramePipelineDetail::s_SceneInstancesName), RendererFramePipelineDetail::s_SceneInstancesLabel);
         if(!importedResource)
             sceneBvhInstancesResult = MakeUnexpected(importedResource.error());
         else
@@ -535,7 +535,8 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     constexpr usize s_ShadowPrepareResourceUseCapacity = 19u;
     resourceUses.reserve(s_ShadowPrepareResourceUseCapacity + (csgTraceContext.valid() ? 1u : 0u) + shadowTraceGeometryResourceCount + softwareBvhBuildStateResourceCount + liveMeshBlasGraphStates.size() + preparedMeshBlasBuilds.size() * 2u);
     accelStructFinalizeResourceUses.reserve((sceneTlasBuildGraphOwned ? 1u : 0u) + preparedMeshBlasBuilds.size());
-    resourceSetUses.reserve(3u);
+    constexpr usize s_ShadowPrepareResourceSetUseCapacity = 3u;
+    resourceSetUses.reserve(s_ShadowPrepareResourceSetUseCapacity);
     geometryResources.prepareStorage(meshBlasGeometryBuildInputStatesGraphOwned);
     // Shadow Preparation owns post-transition boundaries; Compute readers wait on this packet.
     resourceUses.push_back(ReadWriteUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
@@ -565,7 +566,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     }
     if(meshBlasBuildsGraphOwned){
         for(const PreparedMeshBlasBuild& build : preparedMeshBlasBuilds){
-            const auto blasIdentity = DeriveName(build.meshName, AStringView(":blas"));
+            const auto blasIdentity = DeriveName(build.meshName, RendererFramePipelineDetail::s_BlasNameSuffix);
             if(!blasIdentity){
                 resourcesImported = false;
                 continue;
@@ -678,7 +679,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         if(geometryResources.isPreparedMeshBlasBuild(state.meshName))
             continue;
 
-        const auto blasIdentity = DeriveName(state.meshName, AStringView(":blas"));
+        const auto blasIdentity = DeriveName(state.meshName, RendererFramePipelineDetail::s_BlasNameSuffix);
         if(!blasIdentity){
             resourcesImported = false;
             continue;

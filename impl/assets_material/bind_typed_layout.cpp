@@ -30,6 +30,10 @@ namespace MaterialBindDetail{
 
 static constexpr u64 s_MaterialParameterKeyHashLowWordMask = 0xffffffffull;
 static constexpr u32 s_MaterialParameterKeyHashHighWordBitShift = 32u;
+static constexpr AStringView s_BoolTrueTextToken = "true";
+static constexpr AStringView s_BoolTrueNumberToken = "1";
+static constexpr AStringView s_BoolFalseTextToken = "false";
+static constexpr AStringView s_BoolFalseNumberToken = "0";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -124,9 +128,9 @@ static Expected<MaterialParameterTokens> SplitMaterialParameterTokens(const AStr
 
 
 static Expected<u32> ParseMaterialBoolToken(const AStringView token)noexcept{
-    if(token == AStringView("true") || token == AStringView("1"))
+    if(token == s_BoolTrueTextToken || token == s_BoolTrueNumberToken)
         return 1u;
-    if(token == AStringView("false") || token == AStringView("0"))
+    if(token == s_BoolFalseTextToken || token == s_BoolFalseNumberToken)
         return 0u;
     return MakeUnexpected(Failure{});
 }

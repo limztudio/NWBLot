@@ -18,6 +18,7 @@
 #endif
 
 #include "light_space_resources.slangi"
+#include "../common/math.slangi"
 #include "../csg/ray_topology.slangi"
 #include "../bvh/sw_instance.slangi"
 #include "../bvh/bvh_common.slangi"
@@ -80,32 +81,32 @@ bool nwbCsgShadowEventClosed(const uint4 range, const uint primitive){
 }
 
 NwbCsgShadowCutter nwbCsgShadowLoadCutter(const uint index){
-    const uint offset = nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load(8u) + index * NWB_CSG_RAY_CUTTER_BYTES;
+    const uint offset = nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load(NWB_CSG_RAY_CONTEXT_CUTTER_BASE_OFFSET) + index * NWB_CSG_RAY_CUTTER_BYTES;
     const uint4 header = nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset);
     NwbCsgShadowCutter cutter;
     cutter.shapeType = header.x;
     cutter.worldToShapeScaleBound = asfloat(header.y);
     cutter.padding0 = header.z;
     cutter.padding1 = header.w;
-    cutter.worldToShapeRow0 = asfloat(nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset + 16u));
-    cutter.worldToShapeRow1 = asfloat(nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset + 32u));
-    cutter.worldToShapeRow2 = asfloat(nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset + 48u));
-    cutter.parameter0 = asfloat(nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset + 64u));
-    cutter.parameter1 = asfloat(nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset + 80u));
+    cutter.worldToShapeRow0 = asfloat(nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset + NWB_CSG_RAY_CUTTER_ROW0_OFFSET));
+    cutter.worldToShapeRow1 = asfloat(nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset + NWB_CSG_RAY_CUTTER_ROW1_OFFSET));
+    cutter.worldToShapeRow2 = asfloat(nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset + NWB_CSG_RAY_CUTTER_ROW2_OFFSET));
+    cutter.parameter0 = asfloat(nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset + NWB_CSG_RAY_CUTTER_PARAMETER0_OFFSET));
+    cutter.parameter1 = asfloat(nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset + NWB_CSG_RAY_CUTTER_PARAMETER1_OFFSET));
     return cutter;
 }
 
 uint nwbCsgShadowInstanceOffset(const uint index){
-    return nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load(16u) + index * NWB_CSG_RAY_INSTANCE_BYTES;
+    return nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load(NWB_CSG_RAY_CONTEXT_INSTANCE_BASE_OFFSET) + index * NWB_CSG_RAY_INSTANCE_BYTES;
 }
 
 NwbSwBvhInstance nwbCsgShadowInstance(const uint index){
     const uint offset = nwbCsgShadowInstanceOffset(index);
     NwbSwBvhInstance instance;
     instance.worldToObjectRow0 = asfloat(nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset));
-    instance.worldToObjectRow1 = asfloat(nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset + 16u));
-    instance.worldToObjectRow2 = asfloat(nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset + 32u));
-    const uint4 tail = nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset + 48u);
+    instance.worldToObjectRow1 = asfloat(nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset + NWB_CSG_RAY_INSTANCE_ROW1_OFFSET));
+    instance.worldToObjectRow2 = asfloat(nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset + NWB_CSG_RAY_INSTANCE_ROW2_OFFSET));
+    const uint4 tail = nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset + NWB_CSG_RAY_INSTANCE_TAIL_OFFSET);
     instance.reservedMeshIndex = tail.x;
     instance.primitiveCount = tail.y;
     instance.pad0 = tail.z;
@@ -115,19 +116,19 @@ NwbSwBvhInstance nwbCsgShadowInstance(const uint index){
 
 NwbBvhNode nwbCsgShadowRoot(const uint index){
     const NwbSwBvhInstance instance = nwbCsgShadowInstance(index);
-    if(instance.reservedMeshIndex != 0xffffffffu){
+    if(instance.reservedMeshIndex != NWB_CSG_RAY_INVALID_INDEX){
         const uint4 lower = nwbHeapRawBuffer(instance.reservedMeshIndex).Load4(NWB_RUNTIME_MESH_BOUNDS_MIN_OFFSET);
         const uint4 upper = nwbHeapRawBuffer(instance.reservedMeshIndex).Load4(NWB_RUNTIME_MESH_BOUNDS_MAX_OFFSET);
         NwbBvhNode root = (NwbBvhNode)0;
-        root.aabbMin = (lower.w & NWB_RUNTIME_MESH_BOUNDS_FLAG_VALID) != 0u ? asfloat(lower.xyz) : float3(asfloat(0x7fc00000u));
+        root.aabbMin = (lower.w & NWB_RUNTIME_MESH_BOUNDS_FLAG_VALID) != 0u ? asfloat(lower.xyz) : float3(asfloat(NWB_FLOAT_QUIET_NAN_BITS));
         root.aabbMax = asfloat(upper.xyz);
         return root;
     }
-    if(instance.pad0 != 0xffffffffu)
+    if(instance.pad0 != NWB_CSG_RAY_INVALID_INDEX)
         return nwbHeapBvhNodes(instance.pad0)[0u];
-    const uint offset = nwbCsgShadowInstanceOffset(index) + 64u;
+    const uint offset = nwbCsgShadowInstanceOffset(index) + NWB_CSG_RAY_INSTANCE_LOCAL_MIN_OFFSET;
     const uint4 lower = nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset);
-    const uint4 upper = nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset + 16u);
+    const uint4 upper = nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset + NWB_CSG_RAY_LANE_BYTES);
     NwbBvhNode root;
     root.aabbMin = asfloat(lower.xyz);
     root.leftChild = lower.w;
@@ -137,7 +138,7 @@ NwbBvhNode nwbCsgShadowRoot(const uint index){
 }
 
 float nwbCsgShadowOpaqueDepth(const uint pixel){
-    return asfloat(nwbHeapRawBuffer(g_NwbLightSpacePush.csgOpaqueDepthSlot).Load(pixel * 4u));
+    return asfloat(nwbHeapRawBuffer(g_NwbLightSpacePush.csgOpaqueDepthSlot).Load(pixel * NWB_LIGHT_SPACE_PIXEL_WORD_BYTES));
 }
 
 

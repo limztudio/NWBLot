@@ -20,6 +20,10 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// The caustic resolve chain works on targets reduced by this factor in each axis.
+inline constexpr u32 s_CausticResolveDownscaleFactor = 2u;
+inline constexpr Name s_CausticResolveActivityBufferNames[] = { Name("caustic_resolve_activity_a"), Name("caustic_resolve_activity_b") };
+
 struct CausticResolveActivityLayout{
     u64 bufferByteSize = 0u;
     u32 tilesX = 0u;

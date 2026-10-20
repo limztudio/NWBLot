@@ -79,7 +79,7 @@ NWB_INLINE bool NWB_SIMD_CALL AllComparisonMask(SIMDVectorDouble value)noexcept{
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorEqual(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    return VectorSetInt(VectorGetX(v0) == VectorGetX(v1) ? 0xFFFFFFFFu : 0u, VectorGetY(v0) == VectorGetY(v1) ? 0xFFFFFFFFu : 0u, VectorGetZ(v0) == VectorGetZ(v1) ? 0xFFFFFFFFu : 0u, VectorGetW(v0) == VectorGetW(v1) ? 0xFFFFFFFFu : 0u);
+    return VectorSetInt(VectorGetX(v0) == VectorGetX(v1) ? s_SELECT_1 : 0u, VectorGetY(v0) == VectorGetY(v1) ? s_SELECT_1 : 0u, VectorGetZ(v0) == VectorGetZ(v1) ? s_SELECT_1 : 0u, VectorGetW(v0) == VectorGetW(v1) ? s_SELECT_1 : 0u);
 #elif defined(NWB_HAS_NEON)
     return vreinterpretq_f32_u32(vceqq_f32(v0, v1));
 #else
@@ -119,7 +119,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleEqualR(u32& outCR, SIMDVec
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorEqualInt(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    return VectorSetInt(VectorGetIntX(v0) == VectorGetIntX(v1) ? 0xFFFFFFFFu : 0u, VectorGetIntY(v0) == VectorGetIntY(v1) ? 0xFFFFFFFFu : 0u, VectorGetIntZ(v0) == VectorGetIntZ(v1) ? 0xFFFFFFFFu : 0u, VectorGetIntW(v0) == VectorGetIntW(v1) ? 0xFFFFFFFFu : 0u);
+    return VectorSetInt(VectorGetIntX(v0) == VectorGetIntX(v1) ? s_SELECT_1 : 0u, VectorGetIntY(v0) == VectorGetIntY(v1) ? s_SELECT_1 : 0u, VectorGetIntZ(v0) == VectorGetIntZ(v1) ? s_SELECT_1 : 0u, VectorGetIntW(v0) == VectorGetIntW(v1) ? s_SELECT_1 : 0u);
 #elif defined(NWB_HAS_NEON)
     return vreinterpretq_f32_u32(vceqq_u32(vreinterpretq_u32_f32(v0), vreinterpretq_u32_f32(v1)));
 #else
@@ -165,10 +165,10 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleEqualIntR(u32& outCR, SIMD
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorNearEqual(SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle epsilon)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return VectorSetInt(
-        Abs(VectorGetX(v0) - VectorGetX(v1)) <= VectorGetX(epsilon) ? 0xFFFFFFFFu : 0u,
-        Abs(VectorGetY(v0) - VectorGetY(v1)) <= VectorGetY(epsilon) ? 0xFFFFFFFFu : 0u,
-        Abs(VectorGetZ(v0) - VectorGetZ(v1)) <= VectorGetZ(epsilon) ? 0xFFFFFFFFu : 0u,
-        Abs(VectorGetW(v0) - VectorGetW(v1)) <= VectorGetW(epsilon) ? 0xFFFFFFFFu : 0u
+        Abs(VectorGetX(v0) - VectorGetX(v1)) <= VectorGetX(epsilon) ? s_SELECT_1 : 0u,
+        Abs(VectorGetY(v0) - VectorGetY(v1)) <= VectorGetY(epsilon) ? s_SELECT_1 : 0u,
+        Abs(VectorGetZ(v0) - VectorGetZ(v1)) <= VectorGetZ(epsilon) ? s_SELECT_1 : 0u,
+        Abs(VectorGetW(v0) - VectorGetW(v1)) <= VectorGetW(epsilon) ? s_SELECT_1 : 0u
     );
 #elif defined(NWB_HAS_NEON)
     return vreinterpretq_f32_u32(vcleq_f32(vabsq_f32(vsubq_f32(v0, v1)), epsilon));
@@ -200,7 +200,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleNearEqual(SIMDVectorDouble
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorNotEqual(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    return SIMDConvertDetail::MakeU32(v0.f[0] != v1.f[0] ? 0xFFFFFFFFu : 0u, v0.f[1] != v1.f[1] ? 0xFFFFFFFFu : 0u, v0.f[2] != v1.f[2] ? 0xFFFFFFFFu : 0u, v0.f[3] != v1.f[3] ? 0xFFFFFFFFu : 0u);
+    return SIMDConvertDetail::MakeU32(v0.f[0] != v1.f[0] ? s_SELECT_1 : 0u, v0.f[1] != v1.f[1] ? s_SELECT_1 : 0u, v0.f[2] != v1.f[2] ? s_SELECT_1 : 0u, v0.f[3] != v1.f[3] ? s_SELECT_1 : 0u);
 #elif defined(NWB_HAS_NEON)
     return vreinterpretq_f32_u32(vmvnq_u32(vceqq_f32(v0, v1)));
 #else
@@ -210,7 +210,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorNotEqual(SIMDVectorSingle v0, SI
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleNotEqual(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
 #if defined(NWB_HAS_NEON64)
-    const uint64x2_t allBits = vdupq_n_u64(0xFFFFFFFFFFFFFFFFu);
+    const uint64x2_t allBits = vdupq_n_u64(s_DoubleSELECT_1);
     return SIMDVectorDoubleDetail::FromUIntPairs(veorq_u64(vceqq_f64(SIMDVectorDoubleDetail::GetLow(v0), SIMDVectorDoubleDetail::GetLow(v1)), allBits), veorq_u64(vceqq_f64(SIMDVectorDoubleDetail::GetHigh(v0), SIMDVectorDoubleDetail::GetHigh(v1)), allBits));
 #elif defined(NWB_HAS_AVX)
     return BitCast<SIMDVectorDouble>(_mm256_cmp_pd(BitCast<__m256d>(v0), BitCast<__m256d>(v1), _CMP_NEQ_UQ));
@@ -223,7 +223,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleNotEqual(SIMDVectorDouble 
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorNotEqualInt(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    return SIMDConvertDetail::MakeU32(v0.u[0] != v1.u[0] ? 0xFFFFFFFFu : 0u, v0.u[1] != v1.u[1] ? 0xFFFFFFFFu : 0u, v0.u[2] != v1.u[2] ? 0xFFFFFFFFu : 0u, v0.u[3] != v1.u[3] ? 0xFFFFFFFFu : 0u);
+    return SIMDConvertDetail::MakeU32(v0.u[0] != v1.u[0] ? s_SELECT_1 : 0u, v0.u[1] != v1.u[1] ? s_SELECT_1 : 0u, v0.u[2] != v1.u[2] ? s_SELECT_1 : 0u, v0.u[3] != v1.u[3] ? s_SELECT_1 : 0u);
 #elif defined(NWB_HAS_NEON)
     return vreinterpretq_f32_u32(vmvnq_u32(vceqq_u32(vreinterpretq_u32_f32(v0), vreinterpretq_u32_f32(v1))));
 #else
@@ -240,7 +240,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorGreater(SIMDVectorSingle v0, SIM
 #if defined(NWB_HAS_NEON)
     return vreinterpretq_f32_u32(vcgtq_f32(v0, v1));
 #elif defined(NWB_HAS_SCALAR)
-    return VectorSetInt(VectorGetX(v0) > VectorGetX(v1) ? 0xFFFFFFFFu : 0u, VectorGetY(v0) > VectorGetY(v1) ? 0xFFFFFFFFu : 0u, VectorGetZ(v0) > VectorGetZ(v1) ? 0xFFFFFFFFu : 0u, VectorGetW(v0) > VectorGetW(v1) ? 0xFFFFFFFFu : 0u);
+    return VectorSetInt(VectorGetX(v0) > VectorGetX(v1) ? s_SELECT_1 : 0u, VectorGetY(v0) > VectorGetY(v1) ? s_SELECT_1 : 0u, VectorGetZ(v0) > VectorGetZ(v1) ? s_SELECT_1 : 0u, VectorGetW(v0) > VectorGetW(v1) ? s_SELECT_1 : 0u);
 #else
     return _mm_cmpgt_ps(v0, v1);
 #endif
@@ -278,7 +278,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleGreaterR(u32& outCR, SIMDV
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorGreaterOrEqual(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    return VectorSetInt(VectorGetX(v0) >= VectorGetX(v1) ? 0xFFFFFFFFu : 0u, VectorGetY(v0) >= VectorGetY(v1) ? 0xFFFFFFFFu : 0u, VectorGetZ(v0) >= VectorGetZ(v1) ? 0xFFFFFFFFu : 0u, VectorGetW(v0) >= VectorGetW(v1) ? 0xFFFFFFFFu : 0u);
+    return VectorSetInt(VectorGetX(v0) >= VectorGetX(v1) ? s_SELECT_1 : 0u, VectorGetY(v0) >= VectorGetY(v1) ? s_SELECT_1 : 0u, VectorGetZ(v0) >= VectorGetZ(v1) ? s_SELECT_1 : 0u, VectorGetW(v0) >= VectorGetW(v1) ? s_SELECT_1 : 0u);
 #elif defined(NWB_HAS_NEON)
     return vreinterpretq_f32_u32(vcgeq_f32(v0, v1));
 #else
@@ -318,7 +318,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleGreaterOrEqualR(u32& outCR
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorLess(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    return SIMDConvertDetail::MakeU32(v0.f[0] < v1.f[0] ? 0xFFFFFFFFu : 0u, v0.f[1] < v1.f[1] ? 0xFFFFFFFFu : 0u, v0.f[2] < v1.f[2] ? 0xFFFFFFFFu : 0u, v0.f[3] < v1.f[3] ? 0xFFFFFFFFu : 0u);
+    return SIMDConvertDetail::MakeU32(v0.f[0] < v1.f[0] ? s_SELECT_1 : 0u, v0.f[1] < v1.f[1] ? s_SELECT_1 : 0u, v0.f[2] < v1.f[2] ? s_SELECT_1 : 0u, v0.f[3] < v1.f[3] ? s_SELECT_1 : 0u);
 #elif defined(NWB_HAS_NEON)
     return vreinterpretq_f32_u32(vcltq_f32(v0, v1));
 #else
@@ -340,7 +340,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleLess(SIMDVectorDouble v0, 
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorLessOrEqual(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    return SIMDConvertDetail::MakeU32(v0.f[0] <= v1.f[0] ? 0xFFFFFFFFu : 0u, v0.f[1] <= v1.f[1] ? 0xFFFFFFFFu : 0u, v0.f[2] <= v1.f[2] ? 0xFFFFFFFFu : 0u, v0.f[3] <= v1.f[3] ? 0xFFFFFFFFu : 0u);
+    return SIMDConvertDetail::MakeU32(v0.f[0] <= v1.f[0] ? s_SELECT_1 : 0u, v0.f[1] <= v1.f[1] ? s_SELECT_1 : 0u, v0.f[2] <= v1.f[2] ? s_SELECT_1 : 0u, v0.f[3] <= v1.f[3] ? s_SELECT_1 : 0u);
 #elif defined(NWB_HAS_NEON)
     return vreinterpretq_f32_u32(vcleq_f32(v0, v1));
 #else

@@ -9,6 +9,7 @@
 #include <impl/ecs_render/material/task_graph_object_geometry_cache.h>
 #include <impl/ecs_render/avboit/avboit_system.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
+#include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/csg/renderer_csg_types.h>
 #include <impl/ecs_render/mesh/renderer_mesh_types.h>
 
@@ -139,7 +140,7 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
     Core::GpuTaskDesc avboitIntervalDesc;
     avboitIntervalDesc
         .setIdentity(Name("render.avboit.intervals"))
-        .setMarkerLabel("Transparent CSG Intervals")
+        .setMarkerLabel(RendererGpuPassText::s_TransparentCsgIntervalsLabel)
         .setScheduling(avboitIntervalScheduling)
         .setDependencies(&intervalDependency, 1u)
         .setResourceUses(avboitIntervalResourceUses.data(), avboitIntervalResourceUses.size())
@@ -155,7 +156,8 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> avboitIntervalSpanResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> avboitIntervalCombineResourceUses{ scratchArena };
     if(avboitCsgReceiverSpanGraphOwned){
-        avboitIntervalSpanResourceUses.reserve(6u);
+        constexpr usize s_IntervalSpanResourceUseCapacity = 6u;
+        avboitIntervalSpanResourceUses.reserve(s_IntervalSpanResourceUseCapacity);
         avboitIntervalSpanResourceUses.push_back(ReadTextureUse(csgReceiverEventData, csgReceiverEventDataSubresources, Core::ResourceStates::UnorderedAccess));
         avboitIntervalSpanResourceUses.push_back(ReadTextureUse(csgReceiverEventCount, csgReceiverEventCountSubresources, Core::ResourceStates::UnorderedAccess));
         avboitIntervalSpanResourceUses.push_back(ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer));

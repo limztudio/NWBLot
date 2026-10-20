@@ -49,8 +49,11 @@ struct LightSpaceLightRequest{
     bool eligible = true;
 };
 
+// A point light renders one view per cube face.
+static constexpr u32 s_PointLightViewCount = 6u;
+
 struct LightSpacePlan{
-    Array<LightSpaceViewGpu, NWB_SCENE_SHADOW_SLOT_COUNT * 6u> views = {};
+    Array<LightSpaceViewGpu, NWB_SCENE_SHADOW_SLOT_COUNT * s_PointLightViewCount> views = {};
     u32 lightCount = 0u;
     u32 viewCount = 0u;
     u32 textureResolution = 0u;

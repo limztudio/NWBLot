@@ -40,7 +40,7 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SkinAssetCodecAutoRegistrar, SkinAssetCodec);
 
 bool Skin::loadBinary(const Core::Assets::AssetBytes& binary){
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SkinBinaryPayload::HeaderBinary>(binary, cursor, SkinBinaryPayload::s_SkinMagic, NWB_TEXT("Skin::loadBinary"), NWB_TEXT("skin"));
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SkinBinaryPayload::HeaderBinary>(binary, cursor, SkinBinaryPayload::s_SkinMagic, SkinBinaryPayload::s_SkinLoadBinaryContext, SkinBinaryPayload::s_SkinAssetKindLabel);
     if(!headerResult)
         return false;
     const SkinBinaryPayload::HeaderBinary& header = *headerResult;
@@ -53,12 +53,12 @@ bool Skin::loadBinary(const Core::Assets::AssetBytes& binary){
     candidate.m_mesh.virtualPath = Name(header.meshNameHash);
     candidate.m_skeleton.virtualPath = Name(header.skeletonNameHash);
 
-    if(!Core::Assets::ReadVectorPayload(binary, cursor, header.influenceCount, candidate.m_influences, NWB_TEXT("Skin::loadBinary"), NWB_TEXT("influences")))
+    if(!Core::Assets::ReadVectorPayload(binary, cursor, header.influenceCount, candidate.m_influences, SkinBinaryPayload::s_SkinLoadBinaryContext, SkinBinaryPayload::s_InfluencesPayloadLabel))
         return false;
-    if(!Core::Assets::ReadVectorPayload(binary, cursor, header.inverseBindMatrixCount, candidate.m_inverseBindMatrices, NWB_TEXT("Skin::loadBinary"), NWB_TEXT("inverse bind matrices")))
+    if(!Core::Assets::ReadVectorPayload(binary, cursor, header.inverseBindMatrixCount, candidate.m_inverseBindMatrices, SkinBinaryPayload::s_SkinLoadBinaryContext, SkinBinaryPayload::s_InverseBindMatricesPayloadLabel))
         return false;
 
-    if(!Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("Skin::loadBinary")) || !candidate.validatePayload())
+    if(!Core::Assets::ReadCompletePayload(binary, cursor, SkinBinaryPayload::s_SkinLoadBinaryContext)|| !candidate.validatePayload())
         return false;
     *this = Move(candidate);
     return true;

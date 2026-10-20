@@ -96,7 +96,7 @@ protected:
             || m_meshletAttributeRefDeltas.empty()
             || m_meshletLocalVertexRefs.empty()
             || m_meshletPrimitiveIndices.empty()
-            || m_solidTriangleWords.size() != (m_meshletPrimitiveIndices.size() / s_MeshletTriangleIndexCount + 31u) / 32u
+            || m_solidTriangleWords.size() != (m_meshletPrimitiveIndices.size() / s_MeshletTriangleIndexCount + s_MeshletSolidTriangleWordRoundUp) / s_MeshletSolidTriangleWordBits
         ;
     }
 

@@ -67,11 +67,11 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
     const auto importBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label){
         return m_graph.importBuffer(buffer, BufferResourceDesc(identity, label));
     };
-    const auto causticAccumulatorResult = importTexture(inputs.targets->causticAccumulator, Name("render.hardware_caustics.accumulator"), "Caustic Accumulator");
-    const auto causticHistoryResult = importTexture(inputs.targets->causticHistory, Name("render.hardware_caustics.history"), "Caustic History");
-    const auto causticResolveHalfResult = importTexture(inputs.targets->causticResolveHalf, Name("render.hardware_caustics.resolve_half"), "Caustic Resolve Half");
-    const auto causticResolveGeometryResult = importTexture(inputs.targets->causticResolveGeometry, Name("render.hardware_caustics.resolve_geometry"), "Caustic Resolve Geometry");
-    const auto sceneGeometryDomainResult = m_graph.importHazardDomain(HazardDomainDesc(Name("render.hardware_caustics.scene_geometry"), "Scene Acceleration and Geometry"));
+    const auto causticAccumulatorResult = importTexture(inputs.targets->causticAccumulator, Name("render.hardware_caustics.accumulator"), RendererFramePipelineDetail::s_CausticAccumulatorLabel);
+    const auto causticHistoryResult = importTexture(inputs.targets->causticHistory, Name("render.hardware_caustics.history"), RendererFramePipelineDetail::s_CausticHistoryLabel);
+    const auto causticResolveHalfResult = importTexture(inputs.targets->causticResolveHalf, Name("render.hardware_caustics.resolve_half"), RendererFramePipelineDetail::s_CausticResolveHalfLabel);
+    const auto causticResolveGeometryResult = importTexture(inputs.targets->causticResolveGeometry, Name("render.hardware_caustics.resolve_geometry"), RendererFramePipelineDetail::s_CausticResolveGeometryLabel);
+    const auto sceneGeometryDomainResult = m_graph.importHazardDomain(HazardDomainDesc(Name("render.hardware_caustics.scene_geometry"), RendererFramePipelineDetail::s_SceneGeometryDomainLabel));
     if(!causticAccumulatorResult || !causticHistoryResult || !causticResolveHalfResult || !causticResolveGeometryResult || !sceneGeometryDomainResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import hardware-caustics graph resources"));
         return MakeUnexpected(Failure{});
@@ -107,14 +107,14 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
         + (inputs.rayTracingResources->csgTraceContextBuffer ? 1u : 0u)
         + inputs.rayTracingResources->csgTraceBoundsBufferCount + (hardwareTraceAttributeStatesGraphOwned ? 0u : inputs.hardwareTraceAttributeResourceCount)
     );
-    hardwareGeometryResourceUses.reserve(3u);
-    hardwareResolvePrepareResourceUses.reserve(3u);
-    hardwareResolveWaveletResourceUses.reserve(3u);
-    hardwareResolveSecondWaveletResourceUses.reserve(3u);
-    hardwareResolveThirdWaveletResourceUses.reserve(3u);
-    hardwareResolveFourthWaveletResourceUses.reserve(3u);
-    hardwareResolveFifthWaveletResourceUses.reserve(3u);
-    hardwareResolveUpsampleResourceUses.reserve(5u);
+    hardwareGeometryResourceUses.reserve(RendererFramePipelineDetail::s_CausticResolveStageResourceUseCapacity);
+    hardwareResolvePrepareResourceUses.reserve(RendererFramePipelineDetail::s_CausticResolveStageResourceUseCapacity);
+    hardwareResolveWaveletResourceUses.reserve(RendererFramePipelineDetail::s_CausticResolveStageResourceUseCapacity);
+    hardwareResolveSecondWaveletResourceUses.reserve(RendererFramePipelineDetail::s_CausticResolveStageResourceUseCapacity);
+    hardwareResolveThirdWaveletResourceUses.reserve(RendererFramePipelineDetail::s_CausticResolveStageResourceUseCapacity);
+    hardwareResolveFourthWaveletResourceUses.reserve(RendererFramePipelineDetail::s_CausticResolveStageResourceUseCapacity);
+    hardwareResolveFifthWaveletResourceUses.reserve(RendererFramePipelineDetail::s_CausticResolveStageResourceUseCapacity);
+    hardwareResolveUpsampleResourceUses.reserve(RendererFramePipelineDetail::s_CausticResolveUpsampleResourceUseCapacity);
     hardwarePhotonResourceUses.push_back(ReadTextureUse(inputs.worldPosition, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
     hardwarePhotonResourceUses.push_back(ReadTextureUse(inputs.depth, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
     hardwarePhotonResourceUses.push_back(ReadUse(inputs.currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
@@ -182,7 +182,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
         return true;
     };
     bool optionalResourcesImported =
-        appendOptionalReadBuffer((*inputs.meshViewSnapshot).buffer, Name("render.deferred.mesh_view"), "Mesh View", Core::ResourceStates::ConstantBuffer)
+        appendOptionalReadBuffer((*inputs.meshViewSnapshot).buffer, Name(RendererFramePipelineDetail::s_MeshViewName), RendererFramePipelineDetail::s_MeshViewLabel, Core::ResourceStates::ConstantBuffer)
         && appendOptionalReadBuffer(
             inputs.rayTracingResources->shadowInstanceMaterialBuffer,
             Name(RendererFramePipelineDetail::s_SceneShadowInstanceMaterialName),
@@ -191,7 +191,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
         )
         && appendOptionalReadBuffer(inputs.rayTracingResources->shadowMaterialTypedBuffer, Name(RendererFramePipelineDetail::s_SceneShadowMaterialTypedName), RendererFramePipelineDetail::s_SceneShadowMaterialTypedLabel, Core::ResourceStates::ShaderResource)
         && appendOptionalReadBuffer(inputs.rayTracingResources->shadowInstanceBuffer, Name(RendererFramePipelineDetail::s_SceneShadowInstancesName), RendererFramePipelineDetail::s_SceneShadowInstancesLabel, Core::ResourceStates::ShaderResource)
-        && appendOptionalReadBuffer(inputs.rayTracingResources->causticEmissionTargetBuffer, Name("render.hardware_caustics.emission_targets"), "Caustic Emission Targets", Core::ResourceStates::ShaderResource)
+        && appendOptionalReadBuffer(inputs.rayTracingResources->causticEmissionTargetBuffer, Name(RendererFramePipelineDetail::s_HardwareCausticEmissionTargetsName), RendererFramePipelineDetail::s_CausticEmissionTargetsLabel, Core::ResourceStates::ShaderResource)
     ;
     if(inputs.materialContextSlots.valid()){
         hardwarePhotonResourceUses.push_back(ReadUse(inputs.materialContextSlots, Core::ResourceStates::ConstantBuffer));

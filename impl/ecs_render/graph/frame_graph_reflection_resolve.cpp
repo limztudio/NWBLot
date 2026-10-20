@@ -89,7 +89,9 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
         ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
     };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> reflectionHardwareReads{traceGeometryScratchArena};
-    reflectionHardwareReads.reserve(LengthOf(sceneReads.uses) + sceneReads.csgUses.size() + 2u);
+    // Scene shading and lights follow the scene reads.
+    constexpr usize s_ReflectionExtraHardwareReadCapacity = 2u;
+    reflectionHardwareReads.reserve(LengthOf(sceneReads.uses) + sceneReads.csgUses.size() + s_ReflectionExtraHardwareReadCapacity);
     if(sceneReads.valid()){
         for(const Core::GpuTaskResourceUse& read : sceneReads.uses)
             reflectionHardwareReads.push_back(read);
@@ -131,7 +133,9 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
             opaqueColor, reflectionGraph.opaqueRadiance, worldPosition, depth, avboitAccumColor, avboitAccumExtinction,
             avboitForegroundColor, avboitForegroundExtinction
         };
-        refractionUses.reserve(LengthOf(refractionInputs) + 5u + LengthOf(sceneReads.uses) + sceneReads.csgUses.size());
+        // Mesh view, bindless slots, scene shading, lights, and the resolve output.
+        constexpr usize s_RefractionFixedUseCapacity = 5u;
+        refractionUses.reserve(LengthOf(refractionInputs) + s_RefractionFixedUseCapacity + LengthOf(sceneReads.uses) + sceneReads.csgUses.size());
         for(const auto input : refractionInputs)
             refractionUses.push_back(ReadUse(input));
         refractionUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));

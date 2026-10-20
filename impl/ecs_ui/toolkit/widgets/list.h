@@ -37,10 +37,12 @@ public:
     [[nodiscard]] virtual bool enabled(u64 index)const = 0;
 };
 
+inline constexpr f32 s_ListDefaultHeight = 240.0f;
+
 struct ListOptions{
     LayoutSize width = { LayoutSizePolicy::Stretch, 1.0f };
-    LayoutSize height = { LayoutSizePolicy::Fixed, 240.0f };
-    f32 wheelRows = 3.0f;
+    LayoutSize height = { LayoutSizePolicy::Fixed, s_ListDefaultHeight };
+    f32 wheelRows = s_StyleScrollWheelStep;
     bool enabled = true;
     bool selectOnNavigate = true;
 };
@@ -73,7 +75,7 @@ private:
         f32 pixelScaleX = 0.0f;
         f32 pixelScaleY = 0.0f;
         Array<f32, 6u> rowMetrics{};
-        Array<char, 64u> language{};
+        Array<char, s_TextMaxLanguageBytes + 1u> language{};
         u32 scriptTag = 0u;
 
 

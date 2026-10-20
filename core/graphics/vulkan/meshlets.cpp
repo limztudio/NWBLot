@@ -34,6 +34,7 @@ Object MeshletPipeline::getNativeHandle(ObjectType objectType)noexcept{
 
 
 Expected<MeshletPipelineHandle> Device::createMeshletPipeline(const MeshletPipelineDesc& desc, FramebufferInfo const& fbinfo){
+    constexpr TStringView s_OperationName = NWB_TEXT("meshlet pipeline");
     if(!m_context.extensions.khrDynamicRendering){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Dynamic rendering extension is required to create meshlet pipelines."));
         return MakeUnexpected(Failure{});
@@ -115,7 +116,7 @@ Expected<MeshletPipelineHandle> Device::createMeshletPipeline(const MeshletPipel
     if(desc.pixelShader)
         appendPipelineShaderStage(*desc.pixelShader, VK_SHADER_STAGE_FRAGMENT_BIT, specInfos, shaderStages);
 
-    if(!configurePipelineBindings(desc.bindingLayouts, NWB_TEXT("meshlet pipeline"), *pso, scratchArena))
+    if(!configurePipelineBindings(desc.bindingLayouts, s_OperationName, *pso, scratchArena))
         return MakeUnexpected(Failure{});
 
     auto rasterizer = VulkanDetail::BuildPipelineRasterizationState(desc.renderState.rasterState, VulkanDetail::ConvertFillMode(desc.renderState.rasterState.fillMode), desc.renderState.rasterState.depthClipEnable ? VK_FALSE : VK_TRUE);
@@ -127,7 +128,7 @@ Expected<MeshletPipelineHandle> Device::createMeshletPipeline(const MeshletPipel
         VulkanDetail::PipelineStencilFaceMode::IncludeStencilFaces,
         dynamicStates,
         static_cast<u32>(LengthOf(dynamicStates)),
-        NWB_TEXT("meshlet pipeline"),
+        s_OperationName,
         scratchArena
     );
     if(!fixedState)
@@ -142,7 +143,7 @@ Expected<MeshletPipelineHandle> Device::createMeshletPipeline(const MeshletPipel
     VulkanDetail::AttachGraphicsPipelineFixedState(pipelineInfo, rasterizer, *fixedState);
     pipelineInfo.renderPass = VK_NULL_HANDLE;
 
-    if(!createPipeline(NWB_TEXT("meshlet pipeline"), *pso, pipelineInfo))
+    if(!createPipeline(s_OperationName, *pso, pipelineInfo))
         return MakeUnexpected(Failure{});
 
     return pso;
@@ -153,11 +154,11 @@ Expected<MeshletPipelineHandle> Device::createMeshletPipeline(const MeshletPipel
 
 
 void CommandList::setMeshletState(const MeshletState& state){
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("set meshlet state")))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_SetMeshletStateOperation))
         return;
     if(!validateMeshletState(state))
         return;
-    if(!prepareFramebufferForRendering(state.framebuffer, NWB_TEXT("set meshlet state")))
+    if(!prepareFramebufferForRendering(state.framebuffer, s_SetMeshletStateOperation))
         return;
 
     if(state.indirectParams)
@@ -209,7 +210,7 @@ void CommandList::dispatchMesh(u32 groupsX, u32 groupsY, u32 groupsZ){
         return;
     }
     if(!m_context.extensions.extMeshShader || m_context.meshShaderFeatures.meshShader != VK_TRUE || !m_context.deviceDispatch.vkCmdDrawMeshTasksEXT){
-        rejectCommandRecording(VulkanArenaScope::s_DispatchMeshCommandLabel, NWB_TEXT("mesh shader feature or entry point is unavailable"));
+        rejectCommandRecording(VulkanArenaScope::s_DispatchMeshCommandLabel, s_MeshShaderUnavailableReason);
         return;
     }
 

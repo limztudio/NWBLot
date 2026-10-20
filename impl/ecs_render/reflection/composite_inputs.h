@@ -7,6 +7,8 @@
 
 #include <impl/ecs_render/reflection/settings.h>
 
+#include <core/graphics/rhi/gpu_descriptor_heap.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -19,8 +21,8 @@ NWB_IMPL_BEGIN
 
 // Root wiring retains textures and declares reads; compositing sees only this contract.
 struct ReflectionCompositeInputs{
-    u32 opaqueRadianceSlot = 0xffffffffu;
-    u32 glassRadianceSlot = 0xffffffffu;
+    u32 opaqueRadianceSlot = Core::GpuDescriptorHandle::s_Invalid;
+    u32 glassRadianceSlot = Core::GpuDescriptorHandle::s_Invalid;
     ReflectionDebugView::Enum debugView = ReflectionDebugView::None;
 };
 

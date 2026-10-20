@@ -18,7 +18,7 @@ NWB_VULKAN_BEGIN
 
 
 bool CommandList::validateGraphicsState(const GraphicsState& state){
-    constexpr TStringView s_OperationName = NWB_TEXT("set graphics state");
+    constexpr TStringView s_OperationName = s_SetGraphicsStateOperation;
     if(state.pipeline && &state.pipeline->m_context != &m_context){
         rejectCommandRecording(s_OperationName, NWB_TEXT("graphics pipeline belongs to another device"));
         return false;
@@ -100,7 +100,7 @@ bool CommandList::validateGraphicsState(const GraphicsState& state){
         Buffer* buffer = nullptr;
         ResourceStates::Mask state = ResourceStates::Unknown;
     };
-    BufferStateEntry requiredBufferStates[s_MaxVertexAttributes + 2u]{};
+    BufferStateEntry requiredBufferStates[s_MaxVertexAttributes + s_GraphicsExtraBufferStateCount]{};
     u32 requiredBufferStateCount = 0u;
 
     const auto addRequiredBufferState = [&requiredBufferStates, &requiredBufferStateCount](Buffer* const buffer, const ResourceStates::Mask requiredState)noexcept -> bool{
@@ -124,12 +124,12 @@ bool CommandList::validateGraphicsState(const GraphicsState& state){
 
     for(const VertexBufferBinding& binding : state.vertexBuffers){
         if(!addRequiredBufferState(binding.buffer, ResourceStates::VertexBuffer)){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("distinct buffer objects alias the same native buffer"));
+            rejectCommandRecording(s_OperationName, s_NativeBufferAliasReason);
             return false;
         }
     }
     if(!addRequiredBufferState(state.indexBuffer.buffer, ResourceStates::IndexBuffer) || !addRequiredBufferState(state.indirectParams, ResourceStates::IndirectArgument)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("distinct buffer objects alias the same native buffer"));
+        rejectCommandRecording(s_OperationName, s_NativeBufferAliasReason);
         return false;
     }
 
@@ -142,7 +142,7 @@ bool CommandList::validateGraphicsState(const GraphicsState& state){
 }
 
 bool CommandList::validateMeshletState(const MeshletState& state){
-    constexpr TStringView s_OperationName = NWB_TEXT("set meshlet state");
+    constexpr TStringView s_OperationName = s_SetMeshletStateOperation;
     if(state.pipeline && &state.pipeline->m_context != &m_context){
         rejectCommandRecording(s_OperationName, NWB_TEXT("meshlet pipeline belongs to another device"));
         return false;
@@ -158,7 +158,7 @@ bool CommandList::validateMeshletState(const MeshletState& state){
 
     if(state.pipeline){
         if(!m_context.extensions.extMeshShader || m_context.meshShaderFeatures.meshShader != VK_TRUE || !m_context.deviceDispatch.vkCmdDrawMeshTasksEXT){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("mesh shader feature or entry point is unavailable"));
+            rejectCommandRecording(s_OperationName, s_MeshShaderUnavailableReason);
             return false;
         }
         if(state.pipeline->m_desc.amplificationShader && m_context.meshShaderFeatures.taskShader != VK_TRUE){

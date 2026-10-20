@@ -65,7 +65,7 @@ bool CausticResolveActivitySnapshot::matches(const CausticResolveActivitySnapsho
 
 CausticResolveActivitySnapshot RendererRayTracingSystem::causticResolveActivitySnapshot(const DeferredFrameTargets& targets)const noexcept{
     const auto& activity = m_rayTracingState.m_causticResolve.m_activity;
-    if(!activity.valid() || activity.halfWidth != DivideUp(targets.width, 2u) || activity.halfHeight != DivideUp(targets.height, 2u))
+    if(!activity.valid() || activity.halfWidth != DivideUp(targets.width, s_CausticResolveDownscaleFactor) || activity.halfHeight != DivideUp(targets.height, s_CausticResolveDownscaleFactor))
         return {};
     return activity;
 }
@@ -82,10 +82,9 @@ bool RendererRayTracingSystem::prepareCausticResolveActivity(const u32 halfWidth
     if(!heap.isInitialized())
         return false;
     auto& activity = m_rayTracingState.m_causticResolve.m_activity;
-    const Name names[] = { Name("caustic_resolve_activity_a"), Name("caustic_resolve_activity_b") };
     for(u32 index = 0u; index < LengthOf(activity.buffers); ++index){
         Core::BufferDesc desc;
-        desc.setByteSize(layout->bufferByteSize).setCanHaveRawViews(true).setCanHaveUAVs(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).enableAutomaticStateTracking(Core::ResourceStates::Common).setDebugName(names[index]);
+        desc.setByteSize(layout->bufferByteSize).setCanHaveRawViews(true).setCanHaveUAVs(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).enableAutomaticStateTracking(Core::ResourceStates::Common).setDebugName(s_CausticResolveActivityBufferNames[index]);
         auto buffersResult = m_graphics.createBuffer(desc);
         if(buffersResult)
             activity.buffers[index] = Move(*buffersResult);

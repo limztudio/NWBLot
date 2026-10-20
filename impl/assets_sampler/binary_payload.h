@@ -25,6 +25,8 @@ namespace SamplerBinaryPayload{
 
 inline constexpr u32 s_SamplerMagic = 0x53414D31u; // SAM1
 inline constexpr u32 s_SamplerVersion = 1u;
+inline constexpr TStringView s_SamplerAssetKindLabel = NWB_TEXT("sampler");
+inline constexpr TStringView s_SamplerLoadBinaryContext = NWB_TEXT("Sampler::loadBinary");
 
 #pragma pack(push, 1)
 struct HeaderBinary{

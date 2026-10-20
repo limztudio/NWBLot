@@ -10,7 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static const float NWB_SKINNED_MESH_BOUNDS_FLOAT_MAX = 3.402823466e+38;
 static const float NWB_SKINNED_MESH_BOUNDS_RADIUS_INFLATION = 1.25;
 
 
@@ -273,8 +272,8 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
         return;
     }
 
-    float3 localMin = float3(NWB_SKINNED_MESH_BOUNDS_FLOAT_MAX);
-    float3 localMax = float3(-NWB_SKINNED_MESH_BOUNDS_FLOAT_MAX);
+    float3 localMin = float3(NWB_FLOAT_MAX);
+    float3 localMax = float3(-NWB_FLOAT_MAX);
     uint localValidPositionCount = 0u;
     for(uint localPositionIndex = groupThreadIndex; localPositionIndex < positionCount; localPositionIndex += NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X){
         float3 position = float3(0.0);

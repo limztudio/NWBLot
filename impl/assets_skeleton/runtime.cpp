@@ -62,7 +62,7 @@ bool Skeleton::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
 bool Skeleton::loadBinary(const Core::Assets::AssetBytes& binary){
     Core::Alloc::ScratchArena scratchArena(AssetsSkeletonArenaScope::s_LoadBinaryArena);
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SkeletonBinaryPayload::HeaderBinary>(binary, cursor, SkeletonBinaryPayload::s_SkeletonMagic, NWB_TEXT("Skeleton::loadBinary"), NWB_TEXT("skeleton"));
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SkeletonBinaryPayload::HeaderBinary>(binary, cursor, SkeletonBinaryPayload::s_SkeletonMagic, SkeletonBinaryPayload::s_SkeletonLoadBinaryContext, SkeletonBinaryPayload::s_SkeletonAssetKindLabel);
     if(!headerResult)
         return false;
     const SkeletonBinaryPayload::HeaderBinary& header = *headerResult;
@@ -112,7 +112,7 @@ bool Skeleton::loadBinary(const Core::Assets::AssetBytes& binary){
         candidate.m_joints.push_back(joint);
     }
 
-    if(!Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("Skeleton::loadBinary")) || !candidate.validatePayload(scratchArena))
+    if(!Core::Assets::ReadCompletePayload(binary, cursor, SkeletonBinaryPayload::s_SkeletonLoadBinaryContext) || !candidate.validatePayload(scratchArena))
         return false;
     *this = Move(candidate);
     return true;

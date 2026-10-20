@@ -31,7 +31,7 @@ public:
 struct SearchComboOptions{
     ComboOptions combo;
     f32 queryHeight = 36.0f;
-    f32 queryGap = 4.0f;
+    f32 queryGap = s_StyleSpacingSmall;
 };
 
 struct SearchComboResult{

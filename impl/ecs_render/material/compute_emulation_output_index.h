@@ -38,6 +38,7 @@ private:
 
 private:
     static constexpr usize s_InlineCount = 32u;
+    static constexpr usize s_PromotedIndexCapacity = s_InlineCount * 4u;
 
 
 public:
@@ -85,7 +86,7 @@ private:
             ++m_inlineCount;
             return;
         }
-        Index index(s_InlineCount * 4u, m_scratchArena);
+        Index index(s_PromotedIndexCapacity, m_scratchArena);
         for(const Identity existing : m_inline){
             if(!index.insert(existing).second)
                 TerminateInvariant();

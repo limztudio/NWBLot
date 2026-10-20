@@ -73,10 +73,10 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     const auto importBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label){
         return m_deferredLightingTaskGraph.importBuffer(buffer, BufferResourceDesc(identity, label));
     };
-    const auto causticAccumulatorResult = importTexture(deferredTargets.causticAccumulator, Name("render.software_caustics.accumulator"), "Caustic Accumulator");
-    const auto causticHistoryResult = importTexture(deferredTargets.causticHistory, Name("render.software_caustics.history"), "Caustic History");
-    const auto causticResolveHalfResult = importTexture(deferredTargets.causticResolveHalf, Name("render.software_caustics.resolve_half"), "Caustic Resolve Half");
-    const auto causticResolveGeometryResult = importTexture(deferredTargets.causticResolveGeometry, Name("render.software_caustics.resolve_geometry"), "Caustic Resolve Geometry");
+    const auto causticAccumulatorResult = importTexture(deferredTargets.causticAccumulator, Name("render.software_caustics.accumulator"), RendererFramePipelineDetail::s_CausticAccumulatorLabel);
+    const auto causticHistoryResult = importTexture(deferredTargets.causticHistory, Name("render.software_caustics.history"), RendererFramePipelineDetail::s_CausticHistoryLabel);
+    const auto causticResolveHalfResult = importTexture(deferredTargets.causticResolveHalf, Name("render.software_caustics.resolve_half"), RendererFramePipelineDetail::s_CausticResolveHalfLabel);
+    const auto causticResolveGeometryResult = importTexture(deferredTargets.causticResolveGeometry, Name("render.software_caustics.resolve_geometry"), RendererFramePipelineDetail::s_CausticResolveGeometryLabel);
     const auto sceneGeometryDomainResult = m_deferredLightingTaskGraph.importHazardDomain(HazardDomainDesc(Name("render.software_caustics.scene_geometry"), "Software BVH Scene Geometry"));
     if(!worldPosition.valid() || !depth.valid() || !causticAccumulatorResult || !causticHistoryResult || !causticResolveHalfResult || !causticResolveGeometryResult || !sceneGeometryDomainResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred software-caustics graph resources"));
@@ -100,14 +100,14 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     const bool softwareTraceGeometryStatesGraphOwned = softwareTraceGeometrySet.valid();
     constexpr usize s_PhotonResourceUseCapacity = 20u;
     photonResourceUses.reserve(s_PhotonResourceUseCapacity + (rayTracingResources.csgTraceContextBuffer ? 1u : 0u) + rayTracingResources.csgTraceBoundsBufferCount + (softwareTraceGeometryStatesGraphOwned ? 0u : softwareTraceGeometryResourceCount));
-    geometryResourceUses.reserve(3u);
-    resolvePrepareResourceUses.reserve(3u);
-    resolveWaveletResourceUses.reserve(3u);
-    resolveSecondWaveletResourceUses.reserve(3u);
-    resolveThirdWaveletResourceUses.reserve(3u);
-    resolveFourthWaveletResourceUses.reserve(3u);
-    resolveFifthWaveletResourceUses.reserve(3u);
-    resolveUpsampleResourceUses.reserve(5u);
+    geometryResourceUses.reserve(RendererFramePipelineDetail::s_CausticResolveStageResourceUseCapacity);
+    resolvePrepareResourceUses.reserve(RendererFramePipelineDetail::s_CausticResolveStageResourceUseCapacity);
+    resolveWaveletResourceUses.reserve(RendererFramePipelineDetail::s_CausticResolveStageResourceUseCapacity);
+    resolveSecondWaveletResourceUses.reserve(RendererFramePipelineDetail::s_CausticResolveStageResourceUseCapacity);
+    resolveThirdWaveletResourceUses.reserve(RendererFramePipelineDetail::s_CausticResolveStageResourceUseCapacity);
+    resolveFourthWaveletResourceUses.reserve(RendererFramePipelineDetail::s_CausticResolveStageResourceUseCapacity);
+    resolveFifthWaveletResourceUses.reserve(RendererFramePipelineDetail::s_CausticResolveStageResourceUseCapacity);
+    resolveUpsampleResourceUses.reserve(RendererFramePipelineDetail::s_CausticResolveUpsampleResourceUseCapacity);
     photonResourceUses.push_back(ReadTextureUse(worldPosition, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
     // Declared layout must match the shader read.
     photonResourceUses.push_back(ReadTextureUse(depth, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
@@ -175,8 +175,8 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     };
     const ECSRenderDetail::MeshViewBufferSnapshot meshViewBufferSnapshot = m_meshSystem.meshViewBufferSnapshot();
     const bool optionalResourcesImported =
-        appendOptionalReadBuffer(rayTracingResources.causticEmissionTargetBuffer, Name("render.software_caustics.emission_targets"), "Caustic Emission Targets", Core::ResourceStates::ShaderResource)
-        && appendOptionalReadBuffer(meshViewBufferSnapshot.buffer, Name("render.deferred.mesh_view"), "Mesh View", Core::ResourceStates::ConstantBuffer)
+        appendOptionalReadBuffer(rayTracingResources.causticEmissionTargetBuffer, Name(RendererFramePipelineDetail::s_SoftwareCausticEmissionTargetsName), RendererFramePipelineDetail::s_CausticEmissionTargetsLabel, Core::ResourceStates::ShaderResource)
+        && appendOptionalReadBuffer(meshViewBufferSnapshot.buffer, Name(RendererFramePipelineDetail::s_MeshViewName), RendererFramePipelineDetail::s_MeshViewLabel, Core::ResourceStates::ConstantBuffer)
         && RendererFramePipelineDetail::AppendRayTracingSceneShadowBuffers(
             rayTracingResources,
             importBuffer,

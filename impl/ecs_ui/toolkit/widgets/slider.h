@@ -21,7 +21,7 @@ NWB_IMPL_UI_BEGIN
 
 struct SliderOptions{
     LayoutSize width = { LayoutSizePolicy::Stretch, 1.0f };
-    f32 height = 32.0f;
+    f32 height = s_StyleControlHeight;
     f64 minimum = 0.0;
     f64 maximum = 1.0;
     // Zero chooses one hundredth of the range, with a representable fallback for tiny spans.

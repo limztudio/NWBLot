@@ -166,6 +166,10 @@ Expected<usize> Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum typ
 
 void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDesc const* convertDescs, usize numDescs){
     constexpr TStringView s_OperationName = NWB_TEXT("convert cooperative-vector matrices");
+    constexpr TStringView s_EnumerateComponentTypesFailedReason = NWB_TEXT("failed to enumerate cooperative-vector component types");
+    constexpr TStringView s_MatrixQueryInvalidReason = NWB_TEXT("matrix type, layout, stride, or size query is invalid");
+    constexpr TStringView s_MatrixRangeInvalidReason = NWB_TEXT("a matrix range is undersized, out of bounds, overflowing, or not 64-byte aligned");
+    constexpr TStringView s_ConversionRangesOverlapReason = NWB_TEXT("cooperative-vector conversion memory ranges overlap");
     constexpr GpuQueueCapability::Mask s_ConvertCapabilities = static_cast<GpuQueueCapability::Mask>(static_cast<u8>(GpuQueueCapability::Graphics) | static_cast<u8>(GpuQueueCapability::Compute));
     if(!recordAndValidateAnyCommandCapability(s_ConvertCapabilities, s_OperationName))
         return;
@@ -196,7 +200,7 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
     u32 cooperativeVectorPropertyCount = 0u;
     VkResult result = m_context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV(m_context.physicalDevice, &cooperativeVectorPropertyCount, nullptr);
     if(result != VK_SUCCESS){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("failed to enumerate cooperative-vector component types"));
+        rejectCommandRecording(s_OperationName, s_EnumerateComponentTypesFailedReason);
         return;
     }
 
@@ -208,7 +212,7 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
     if(cooperativeVectorPropertyCount != 0u){
         result = m_context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV(m_context.physicalDevice, &cooperativeVectorPropertyCount, cooperativeVectorProperties.data());
         if(result != VK_SUCCESS){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("failed to enumerate cooperative-vector component types"));
+            rejectCommandRecording(s_OperationName, s_EnumerateComponentTypesFailedReason);
             return;
         }
     }
@@ -433,41 +437,41 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
 
         const auto sourceLayout = resolveMatrixLayout(convertDesc.src, convertDesc.numRows, convertDesc.numColumns);
         if(!sourceLayout){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("matrix type, layout, stride, or size query is invalid"));
+            rejectCommandRecording(s_OperationName, s_MatrixQueryInvalidReason);
             return;
         }
         const auto destinationLayout = resolveMatrixLayout(convertDesc.dst, convertDesc.numRows, convertDesc.numColumns);
         if(!destinationLayout){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("matrix type, layout, stride, or size query is invalid"));
+            rejectCommandRecording(s_OperationName, s_MatrixQueryInvalidReason);
             return;
         }
 
         const auto srcRange = getCheckedDeviceRange(*convertDesc.src.buffer, convertDesc.src.offset, convertDesc.src.size, sourceLayout->byteSize);
         if(!srcRange){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("a matrix range is undersized, out of bounds, overflowing, or not 64-byte aligned"));
+            rejectCommandRecording(s_OperationName, s_MatrixRangeInvalidReason);
             return;
         }
         const auto dstRange = getCheckedDeviceRange(*convertDesc.dst.buffer, convertDesc.dst.offset, convertDesc.dst.size, destinationLayout->byteSize);
         if(!dstRange){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("a matrix range is undersized, out of bounds, overflowing, or not 64-byte aligned"));
+            rejectCommandRecording(s_OperationName, s_MatrixRangeInvalidReason);
             return;
         }
 
         for(const DeviceAddressRange& existingRange : accessedRanges){
             if(VulkanDetail::BufferRangesOverlap(existingRange.address, existingRange.byteSize, srcRange->address, srcRange->byteSize) || VulkanDetail::BufferRangesOverlap(existingRange.address, existingRange.byteSize, dstRange->address, dstRange->byteSize)){
-                rejectCommandRecording(s_OperationName, NWB_TEXT("cooperative-vector conversion memory ranges overlap"));
+                rejectCommandRecording(s_OperationName, s_ConversionRangesOverlapReason);
                 return;
             }
         }
         if(VulkanDetail::BufferRangesOverlap(srcRange->address, srcRange->byteSize, dstRange->address, dstRange->byteSize)){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("cooperative-vector conversion memory ranges overlap"));
+            rejectCommandRecording(s_OperationName, s_ConversionRangesOverlapReason);
             return;
         }
         accessedRanges.push_back(*srcRange);
         accessedRanges.push_back(*dstRange);
 
         if(!addRequiredBufferState(*convertDesc.src.buffer, ResourceStates::ConvertCoopVecMatrixInput) || !addRequiredBufferState(*convertDesc.dst.buffer, ResourceStates::ConvertCoopVecMatrixOutput)){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("distinct buffer objects alias the same native buffer"));
+            rejectCommandRecording(s_OperationName, s_NativeBufferAliasReason);
             return;
         }
 

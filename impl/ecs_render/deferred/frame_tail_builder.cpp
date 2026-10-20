@@ -34,7 +34,9 @@ DeferredFrameTailBuilder::DeferredFrameTailBuilder(Core::GpuTaskGraph& graph)noe
 
     if(inputs.capturesLaggedLightingHistory){
         // The core built-in derives whole-resource CopySource/CopyDest declarations for these regions and retains the imports itself. The array slices stay explicit only in the native copy body.
-        Core::GpuCopyTextureTaskRegion historyCopyRegions[NWB_SCENE_SHADOW_SLOT_COUNT + 2u] = {};
+        // Caustic and surfel irradiance copy regions follow the shadow visibility slots.
+        constexpr u32 s_IrradianceHistoryCopyRegionCount = 2u;
+        Core::GpuCopyTextureTaskRegion historyCopyRegions[NWB_SCENE_SHADOW_SLOT_COUNT + s_IrradianceHistoryCopyRegionCount] = {};
         for(u32 shadowSlot = 0u; shadowSlot < NWB_SCENE_SHADOW_SLOT_COUNT; ++shadowSlot){
             Core::GpuCopyTextureTaskRegion& region = historyCopyRegions[shadowSlot];
             region.source = inputs.historyCopyShadowVisibility;

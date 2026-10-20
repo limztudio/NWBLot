@@ -27,6 +27,17 @@ static constexpr usize s_HeaderBytes = 56u;
 static constexpr usize s_GroupHeaderBytes = 48u;
 static constexpr u32 s_MaxGroupCount = 8u;
 static constexpr u32 s_MaxSide = 2048u;
+static constexpr u32 s_MaxChannelCount = 4u;
+static constexpr usize s_HeaderVersionOffset = 4u;
+static constexpr usize s_HeaderFaceIndexOffset = 8u;
+static constexpr usize s_HeaderFontByteCountOffset = 12u;
+static constexpr usize s_HeaderGroupCountOffset = 16u;
+static constexpr usize s_HeaderFlagsOffset = 20u;
+static constexpr usize s_HeaderFontSha256Offset = 24u;
+static constexpr usize s_GroupHeightOffset = 4u;
+static constexpr usize s_GroupChannelCountOffset = 8u;
+static constexpr usize s_GroupByteCountOffset = 12u;
+static constexpr usize s_GroupSha256Offset = 16u;
 static constexpr u64 s_MaxPixelBytes = 128u * 1024u * 1024u;
 static constexpr u64 s_MaxFileBytes = s_HeaderBytes + s_MaxGroupCount * s_GroupHeaderBytes + s_FontMaxSourceBytes + s_MaxPixelBytes;
 
@@ -35,16 +46,16 @@ static constexpr u64 s_MaxFileBytes = s_HeaderBytes + s_MaxGroupCount * s_GroupH
 
 
 static void AppendU32(Core::Assets::AssetBytes& bytes, const u32 value){
-    for(u32 index = 0u; index < 4u; ++index)
-        bytes.push_back(static_cast<u8>(value >> (index * 8u)));
+    for(u32 index = 0u; index < sizeof(u32); ++index)
+        bytes.push_back(static_cast<u8>(value >> (index * s_BitsPerByte)));
 }
 
 [[nodiscard]] static u32 ReadU32(const u8* bytes)noexcept{
-    return static_cast<u32>(bytes[0u]) | (static_cast<u32>(bytes[1u]) << 8u) | (static_cast<u32>(bytes[2u]) << 16u) | (static_cast<u32>(bytes[3u]) << 24u);
+    return static_cast<u32>(bytes[0u]) | (static_cast<u32>(bytes[1u]) << s_BitsPerByte) | (static_cast<u32>(bytes[2u]) << s_FontTwoByteBits) | (static_cast<u32>(bytes[3u]) << s_FontThreeByteBits);
 }
 
 [[nodiscard]] static Expected<u32> ImageByteCount(const u32 width, const u32 height, const u32 channels)noexcept{
-    if(width == 0u || width > s_MaxSide || height == 0u || height > s_MaxSide || channels == 0u || channels > 4u)
+    if(width == 0u || width > s_MaxSide || height == 0u || height > s_MaxSide || channels == 0u || channels > s_MaxChannelCount)
         return MakeUnexpected(Failure{});
     return width * height * channels;
 }
@@ -131,16 +142,16 @@ Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const Path& pat
     u8 header[s_HeaderBytes];
     if(!ReadExact(stream, header, sizeof(header)))
         return ReadFailure(path, "prepared-source header is truncated");
-    const u32 fontByteCount = ReadU32(header + 12u);
-    const u32 groupCount = ReadU32(header + 16u);
-    if(ReadU32(header) != s_Magic || ReadU32(header + 4u) != s_Version || ReadU32(header + 8u) != 0u || ReadU32(header + 20u) != 0u)
+    const u32 fontByteCount = ReadU32(header + s_HeaderFontByteCountOffset);
+    const u32 groupCount = ReadU32(header + s_HeaderGroupCountOffset);
+    if(ReadU32(header) != s_Magic || ReadU32(header + s_HeaderVersionOffset) != s_Version || ReadU32(header + s_HeaderFaceIndexOffset) != 0u || ReadU32(header + s_HeaderFlagsOffset) != 0u)
         return ReadFailure(path, "unsupported prepared-source magic, version, face index, or flags; rebuild required");
     if(fontByteCount == 0u || fontByteCount > s_FontMaxSourceBytes || groupCount == 0u || groupCount > s_MaxGroupCount)
         return ReadFailure(path, "font size or image group count is outside prepared-source limits");
 
     PreparedFontSource candidate(arena);
-    candidate.faceIndex = ReadU32(header + 8u);
-    NWB_MEMCPY(candidate.fontSha256.bytes, sizeof(candidate.fontSha256.bytes), header + 24u, sizeof(candidate.fontSha256.bytes));
+    candidate.faceIndex = ReadU32(header + s_HeaderFaceIndexOffset);
+    NWB_MEMCPY(candidate.fontSha256.bytes, sizeof(candidate.fontSha256.bytes), header + s_HeaderFontSha256Offset, sizeof(candidate.fontSha256.bytes));
     candidate.groups.reserve(groupCount);
     u32 groupByteCounts[s_MaxGroupCount];
     u64 pixelByteCount = 0u;
@@ -150,14 +161,14 @@ Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const Path& pat
             return ReadFailure(path, "image directory is truncated");
         PreparedFontImageGroup group(candidate.fontBytes.get_allocator().arena());
         group.width = ReadU32(groupHeader);
-        group.height = ReadU32(groupHeader + 4u);
-        group.channelCount = ReadU32(groupHeader + 8u);
+        group.height = ReadU32(groupHeader + s_GroupHeightOffset);
+        group.channelCount = ReadU32(groupHeader + s_GroupChannelCountOffset);
         const auto expectedBytes = ImageByteCount(group.width, group.height, group.channelCount);
-        if(!expectedBytes || ReadU32(groupHeader + 12u) != *expectedBytes || *expectedBytes > s_MaxPixelBytes - pixelByteCount)
+        if(!expectedBytes || ReadU32(groupHeader + s_GroupByteCountOffset) != *expectedBytes || *expectedBytes > s_MaxPixelBytes - pixelByteCount)
             return ReadFailure(path, "image dimensions, channels, or byte count are invalid");
         pixelByteCount += *expectedBytes;
         groupByteCounts[index] = *expectedBytes;
-        NWB_MEMCPY(group.sha256.bytes, sizeof(group.sha256.bytes), groupHeader + 16u, sizeof(group.sha256.bytes));
+        NWB_MEMCPY(group.sha256.bytes, sizeof(group.sha256.bytes), groupHeader + s_GroupSha256Offset, sizeof(group.sha256.bytes));
         candidate.groups.push_back(Move(group));
     }
 

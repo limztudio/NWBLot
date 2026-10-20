@@ -242,7 +242,7 @@ bool BackendContext::createVulkanInstance(Alloc::ScratchArena& scratchArena){
         auto ss = VulkanDetail::ScratchStringStream(s_FileOpenWrite, scratchArena);
         ss << "Vulkan GPU debug: instance setup"
            << "\n    Vulkan API: " << VulkanDetail::VulkanVersionToString(scratchArena, applicationInfo.apiVersion)
-           << "\n    validation layer enabled: " << VulkanDetail::BoolToYesNoText(isLayerEnabled("VK_LAYER_KHRONOS_validation"))
+           << "\n    validation layer enabled: " << VulkanDetail::BoolToYesNoText(isLayerEnabled(VulkanDetail::s_ValidationLayerName))
            << "\n    debug utils extension enabled: " << VulkanDetail::BoolToYesNoText(isInstanceExtensionEnabled(VK_EXT_DEBUG_UTILS_EXTENSION_NAME))
            << "\n    enabled instance extensions: " << m_enabledExtensions.instance.size()
            << "\n    enabled layers: " << m_enabledExtensions.layers.size()

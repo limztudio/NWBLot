@@ -84,7 +84,7 @@ bool AppendMeshObjectShaderEntries(ShaderCook::CookArena& cookArena, ShaderCook&
     }
     if(!ShaderSourceDependencies::Gather(prepared.sourcePath, prepared.includeDirectories, AssetsGraphicsCsgShaderVariants::s_ExternallyPlannedMacroIncludes, prepared.dependencies, scratchArena))
         return false;
-    const auto dependency = shaderCook.computeDependencyChecksum(prepared.dependencies, prepared.includeDirectories, { { resolvedPaths.repoRoot, "repo" }, { resolvedPaths.cacheDirectory, "generated_cache" } }, scratchArena);
+    const auto dependency = shaderCook.computeDependencyChecksum(prepared.dependencies, prepared.includeDirectories, { { resolvedPaths.repoRoot, s_DependencyRepoRootAlias }, { resolvedPaths.cacheDirectory, s_DependencyGeneratedCacheRootAlias } }, scratchArena);
     if(!dependency)
         return false;
     prepared.dependencyChecksum = dependency->checksum;

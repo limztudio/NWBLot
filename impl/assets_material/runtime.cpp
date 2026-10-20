@@ -273,7 +273,7 @@ static Expected<MaterialTypedLayoutPayload> ReadMaterialTypedLayout(const Core::
         payload.resourceReferences.push_back(resourceReference);
     }
 
-    if(!ValidateMaterialTypedLayout(layoutHash, payload.blocks, payload.fields, payload.blockBytes, NWB_TEXT("Material::loadBinary")))
+    if(!ValidateMaterialTypedLayout(layoutHash, payload.blocks, payload.fields, payload.blockBytes, MaterialBinaryPayload::s_MaterialLoadBinaryContext))
         return MakeUnexpected(Failure{});
     if(!MaterialBinaryPayload::ValidateMaterialResourceReferences(payload.blocks, payload.fields, payload.resourceReferences)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material resource references do not match typed layout"));
@@ -295,7 +295,7 @@ static Expected<MaterialTypedLayoutPayload> ReadMaterialTypedLayout(const Core::
 
 
 bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
-    if(!checkVirtualPath(NWB_TEXT("Material::loadBinary")))
+    if(!checkVirtualPath(MaterialBinaryPayload::s_MaterialLoadBinaryContext))
         return false;
 
     usize cursor = 0;
@@ -460,15 +460,15 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
         }
         return Core::Assets::AssetRef<PixelShader>{};
     };
-    const auto accumulateShader = readOptionalAvboitPixelShader(NWB_TEXT("accumulate"));
+    const auto accumulateShader = readOptionalAvboitPixelShader(MaterialBinaryPayload::s_AvboitAccumulatePassText);
     if(!accumulateShader)
         return false;
     candidate.m_avboitAccumulatePixelShader = *accumulateShader;
-    const auto occupancyShader = readOptionalAvboitPixelShader(NWB_TEXT("occupancy"));
+    const auto occupancyShader = readOptionalAvboitPixelShader(MaterialBinaryPayload::s_AvboitOccupancyPassText);
     if(!occupancyShader)
         return false;
     candidate.m_avboitOccupancyPixelShader = *occupancyShader;
-    const auto extinctionShader = readOptionalAvboitPixelShader(NWB_TEXT("extinction"));
+    const auto extinctionShader = readOptionalAvboitPixelShader(MaterialBinaryPayload::s_AvboitExtinctionPassText);
     if(!extinctionShader)
         return false;
     candidate.m_avboitExtinctionPixelShader = *extinctionShader;

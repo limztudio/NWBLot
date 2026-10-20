@@ -34,6 +34,8 @@ inline constexpr Name s_StandaloneTaskGraphRecoveryIdentity("graphics.standalone
 inline constexpr Name s_SetupUploadReadinessBridgeIdentity("graphics.setup_upload.readiness_bridge");
 inline constexpr Name s_FrameTimingResetIdentity("graphics.frame_timing.reset");
 inline constexpr Name s_StandaloneTaskGraphScratchArena("graphics.standalone_task_graph_scratch");
+inline constexpr u32 s_MinFrameTimingTaskCount = 2u;
+inline constexpr u32 s_MinFrameTimingPacketCount = 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -453,7 +455,7 @@ Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
     GpuTaskId frameTimingBeginTask;
     if(frameTimingTransaction){
         const GpuTaskGraph::DeclarationReadView declaredTasks(graph);
-        if(!declaredTasks.valid() || declaredTasks.taskCount() < 2u)
+        if(!declaredTasks.valid() || declaredTasks.taskCount() < __hidden_graphics_graph_setup::s_MinFrameTimingTaskCount)
             return MakeUnexpected(Failure{});
         frameTimingBeginTask = declaredTasks.taskAt(0u).id;
         if(!frameTimingBeginTask.valid() || frameTimingBeginTask == terminalTask)
@@ -499,7 +501,7 @@ Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
         !terminalPacket.valid()
         || !recoveryPacket.valid()
         || !graphicsQueue.valid()
-        || compiledPlan.packetCount() < 2u
+        || compiledPlan.packetCount() < __hidden_graphics_graph_setup::s_MinFrameTimingPacketCount
         || terminalPacket == recoveryPacket
         || recoveryPacket.index == 0u
         || recoveryPacket != compiledPlan.packetIdAt(compiledPlan.packetCount() - 1u)

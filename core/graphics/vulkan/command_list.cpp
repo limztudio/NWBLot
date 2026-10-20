@@ -18,6 +18,24 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_command_list{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr TStringView s_GraphPublicationOwnedReason = NWB_TEXT("task-graph recorder retains exclusive publication ownership");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 CommandList::CommandList(Device& device, const CommandListParameters& params)
     : RefCounter<GraphicsResource>(device.m_context.cpuScheduler)
     , m_creationDesc(params)
@@ -40,10 +58,11 @@ CommandList::~CommandList()noexcept{
 }
 
 void CommandList::open(const CommandListResourceStateHandoff* initialStates){
+    constexpr TStringView s_OperationName = NWB_TEXT("open command list");
     const u8 publicationState = m_graphPublicationState.load(MemoryOrder::acquire);
     if(publicationState != s_GraphPublicationUnowned){
         if(publicationState == s_GraphPublicationRecording && GraphRecordingOwnership::HasCapability(*this, m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire))){
-            rejectCommandRecording(NWB_TEXT("open command list"), NWB_TEXT("task-graph recorder retains exclusive publication ownership"));
+            rejectCommandRecording(s_OperationName, __hidden_command_list::s_GraphPublicationOwnedReason);
         }
         return;
     }
@@ -71,7 +90,7 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
     m_descriptorBuffersBound = false;
 
     if(!descriptionMatchesCreation()){
-        rejectCommandRecording(NWB_TEXT("open command list"), NWB_TEXT("public description differs from resolved creation identity"));
+        rejectCommandRecording(s_OperationName, NWB_TEXT("public description differs from resolved creation identity"));
         return;
     }
 
@@ -104,7 +123,7 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
     m_currentCmdBuf = Move(*commandBuffer);
     m_nativeRecordingID = m_currentCmdBuf->m_recordingID;
     if(!matchesNativeLeaseIdentity()){
-        rejectCommandRecording(NWB_TEXT("open command list"), NWB_TEXT("native lease does not match resolved creation identity"));
+        rejectCommandRecording(s_OperationName, NWB_TEXT("native lease does not match resolved creation identity"));
         m_currentCmdBuf.reset();
         m_nativeRecordingID = 0u;
         return;
@@ -133,7 +152,7 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
         Alloc::ScratchArena scratchArena(VulkanArenaScope::s_StateHandoffArena);
 
         if(!importResourceStateHandoff(scratchArena, *initialStates)){
-            rejectCommandRecording(NWB_TEXT("open command list"), NWB_TEXT("resource-state handoff is incompatible"));
+            rejectCommandRecording(s_OperationName, NWB_TEXT("resource-state handoff is incompatible"));
             discardInvalidCommandBuffer();
         }
     }
@@ -145,7 +164,7 @@ void CommandList::close(CommandListResourceStateHandoff* finalStates){
         if(finalStates)
             finalStates->reset();
         if(publicationState == s_GraphPublicationRecording && GraphRecordingOwnership::HasCapability(*this, m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire))){
-            rejectCommandRecording(s_CloseCommandListOperation, NWB_TEXT("task-graph recorder retains exclusive publication ownership"));
+            rejectCommandRecording(s_CloseCommandListOperation, __hidden_command_list::s_GraphPublicationOwnedReason);
         }
         return;
     }

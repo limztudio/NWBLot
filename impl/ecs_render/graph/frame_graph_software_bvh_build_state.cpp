@@ -45,8 +45,10 @@ Expected<FrameGraphSoftwareBvhBuildStateResult> FrameGraphSoftwareBvhBuildStateI
         const auto meshSoftwareBvhParentBuildStates = m_meshSystem.collectSoftwareBvhParentBuildStates(scratchArena);
         if(!meshSoftwareBvhParentBuildStates)
             return MakeUnexpected(Failure{});
-        softwareBvhBuildStateResources.reserve(meshSoftwareBvhParentBuildStates->size() + 3u);
-        softwareBvhBuildStateBuffers.reserve(meshSoftwareBvhParentBuildStates->size() + 3u);
+        // Sort keys, sort payload, and visit counter follow the parent build states.
+        constexpr usize s_SortBuildStateCapacity = 3u;
+        softwareBvhBuildStateResources.reserve(meshSoftwareBvhParentBuildStates->size() + s_SortBuildStateCapacity);
+        softwareBvhBuildStateBuffers.reserve(meshSoftwareBvhParentBuildStates->size() + s_SortBuildStateCapacity);
         const auto appendSoftwareBvhBuildState = [&](const Core::BufferHandle& buffer, const Name identity, const AStringView label){
             if(!buffer || !identity)
                 return false;

@@ -36,8 +36,8 @@ private:
     TextLayout m_layout;
     u64 m_serviceIdentity = 0u;
     u64 m_fontGeneration = 0u;
-    f32 m_fontSize = 16.0f;
-    u32 m_scriptTag = TextScriptTag('L', 'a', 't', 'n');
+    f32 m_fontSize = s_TextDefaultFontSize;
+    u32 m_scriptTag = s_TextDefaultScriptTag;
     TextDirection::Enum m_direction = TextDirection::LeftToRight;
     bool m_dirty = true;
 };

@@ -13,7 +13,7 @@
 
 NWB_INLINE u32 NWB_SIMD_CALL VectorMoveMask(SIMDVectorSingle value)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    return ((value.u[0] >> 31) & 1u) | (((value.u[1] >> 31) & 1u) << 1) | (((value.u[2] >> 31) & 1u) << 2) | (((value.u[3] >> 31) & 1u) << 3);
+    return ((value.u[0] >> s_F32SignBitShift) & 1u) | (((value.u[1] >> s_F32SignBitShift) & 1u) << 1) | (((value.u[2] >> s_F32SignBitShift) & 1u) << 2) | (((value.u[3] >> s_F32SignBitShift) & 1u) << 3);
 #elif defined(NWB_HAS_NEON64)
     const uint32x4_t bits = vshrq_n_u32(vreinterpretq_u32_f32(value), 31);
     const int32x4_t shifts = { 0, 1, 2, 3 };
@@ -37,7 +37,7 @@ NWB_INLINE u32 NWB_SIMD_CALL VectorDoubleMoveMask(SIMDVectorDouble value)noexcep
 #elif defined(NWB_HAS_SSE2)
     return static_cast<u32>(_mm_movemask_pd(SIMDVectorDoubleDetail::GetLow(value)) | (_mm_movemask_pd(SIMDVectorDoubleDetail::GetHigh(value)) << 2u));
 #else
-    const SIMDVectorDoubleDetail::UIntVector bits = BitCast<SIMDVectorDoubleDetail::UIntVector>(value) >> 63u;
+    const SIMDVectorDoubleDetail::UIntVector bits = BitCast<SIMDVectorDoubleDetail::UIntVector>(value) >> s_F64SignBitShift;
     return static_cast<u32>(bits[0] | (bits[1] << 1u) | (bits[2] << 2u) | (bits[3] << 3u));
 #endif
 }
@@ -172,7 +172,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleReplicateIntPtr(const u64 
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorTrueInt()noexcept{
 #if defined(NWB_HAS_SCALAR)
-    return SIMDConvertDetail::MakeU32(0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu);
+    return SIMDConvertDetail::MakeU32(s_SELECT_1, s_SELECT_1, s_SELECT_1, s_SELECT_1);
 #elif defined(NWB_HAS_NEON)
     return vreinterpretq_f32_s32(vdupq_n_s32(-1));
 #else
@@ -181,7 +181,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorTrueInt()noexcept{
 }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleTrueInt()noexcept{
-    return VectorDoubleReplicateInt(0xFFFFFFFFFFFFFFFFu);
+    return VectorDoubleReplicateInt(s_DoubleSELECT_1);
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorFalseInt()noexcept{
@@ -1042,7 +1042,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoublePermute<4, 5, 6, 7>(SIMDVe
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSelectControl(u32 selectX, u32 selectY, u32 selectZ, u32 selectW)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    return VectorSetInt(selectX ? 0xFFFFFFFFu : 0u, selectY ? 0xFFFFFFFFu : 0u, selectZ ? 0xFFFFFFFFu : 0u, selectW ? 0xFFFFFFFFu : 0u);
+    return VectorSetInt(selectX ? s_SELECT_1 : 0u, selectY ? s_SELECT_1 : 0u, selectZ ? s_SELECT_1 : 0u, selectW ? s_SELECT_1 : 0u);
 #elif defined(NWB_HAS_NEON)
     const int32x2_t lo = vcreate_s32(static_cast<u64>(selectX) | (static_cast<u64>(selectY) << 32));
     const int32x2_t hi = vcreate_s32(static_cast<u64>(selectZ) | (static_cast<u64>(selectW) << 32));
@@ -1055,7 +1055,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSelectControl(u32 selectX, u32 s
 }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleSelectControl(u32 selectX, u32 selectY, u32 selectZ, u32 selectW)noexcept{
-    return VectorDoubleSetInt(selectX ? 0xFFFFFFFFFFFFFFFFu : 0u, selectY ? 0xFFFFFFFFFFFFFFFFu : 0u, selectZ ? 0xFFFFFFFFFFFFFFFFu : 0u, selectW ? 0xFFFFFFFFFFFFFFFFu : 0u);
+    return VectorDoubleSetInt(selectX ? s_DoubleSELECT_1 : 0u, selectY ? s_DoubleSELECT_1 : 0u, selectZ ? s_DoubleSELECT_1 : 0u, selectW ? s_DoubleSELECT_1 : 0u);
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorAndInt(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{

@@ -21,17 +21,20 @@ namespace __hidden_font_source_directory{
 
 
 static constexpr usize s_TableRecordBytes = 16u;
+static constexpr usize s_HeaderTableCountFieldOffset = 4u;
+static constexpr usize s_RecordOffsetFieldOffset = 8u;
+static constexpr usize s_RecordLengthFieldOffset = 12u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] static u16 ReadBigU16(const u8* data)noexcept{
-    return static_cast<u16>((static_cast<u16>(data[0u]) << 8u) | data[1u]);
+    return static_cast<u16>((static_cast<u16>(data[0u]) << s_BitsPerByte) | data[1u]);
 }
 
 [[nodiscard]] static u32 ReadBigU32(const u8* data)noexcept{
-    return (static_cast<u32>(data[0u]) << 24u) | (static_cast<u32>(data[1u]) << 16u) | (static_cast<u32>(data[2u]) << 8u) | static_cast<u32>(data[3u]);
+    return (static_cast<u32>(data[0u]) << s_FontThreeByteBits) | (static_cast<u32>(data[1u]) << s_FontTwoByteBits) | (static_cast<u32>(data[2u]) << s_BitsPerByte) | static_cast<u32>(data[3u]);
 }
 
 
@@ -47,7 +50,7 @@ static constexpr usize s_TableRecordBytes = 16u;
 Expected<FontSfntDirectory> FontSfntDirectory::Read(const Span<const u8> bytes)noexcept{
     if(bytes.size() < s_FontSfntHeaderBytes)
         return MakeUnexpected(Failure{});
-    const u16 tableCount = __hidden_font_source_directory::ReadBigU16(bytes.data() + 4u);
+    const u16 tableCount = __hidden_font_source_directory::ReadBigU16(bytes.data() + __hidden_font_source_directory::s_HeaderTableCountFieldOffset);
     if(tableCount == 0u || tableCount > s_FontMaxTableCount || static_cast<usize>(tableCount) * __hidden_font_source_directory::s_TableRecordBytes > bytes.size() - s_FontSfntHeaderBytes)
         return MakeUnexpected(Failure{});
     return FontSfntDirectory(bytes, tableCount);
@@ -71,8 +74,8 @@ Expected<FontSfntTable> FontSfntDirectory::table(const usize index)const noexcep
     if(!recordResult)
         return MakeUnexpected(Failure{});
     const u8* data = recordResult->data();
-    const u32 offset = __hidden_font_source_directory::ReadBigU32(data + 8u);
-    const u32 length = __hidden_font_source_directory::ReadBigU32(data + 12u);
+    const u32 offset = __hidden_font_source_directory::ReadBigU32(data + __hidden_font_source_directory::s_RecordOffsetFieldOffset);
+    const u32 length = __hidden_font_source_directory::ReadBigU32(data + __hidden_font_source_directory::s_RecordLengthFieldOffset);
     if(offset > m_bytes.size() || length > m_bytes.size() - offset)
         return MakeUnexpected(Failure{});
     return FontSfntTable{ __hidden_font_source_directory::ReadBigU32(data), offset, { m_bytes.data() + offset, length } };

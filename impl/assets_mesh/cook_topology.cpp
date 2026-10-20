@@ -29,6 +29,9 @@ namespace __hidden_mesh_cook_topology{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr u32 s_EdgeKeyVertexShift = 32u;
+inline constexpr usize s_ManifoldEdgeTriangleCount = 2u;
+
 struct TriangleEdge{
     u64 positions = 0u;
     u32 triangle = 0u;
@@ -103,7 +106,7 @@ Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildSolidTriangleWords(const S
             return MakeUnexpected(Failure{});
     }
 
-    Vector<u32, Core::Alloc::ScratchArena> words(DivideUp(triangleCount, usize(32u)), 0u, scratchArena);
+    Vector<u32, Core::Alloc::ScratchArena> words(DivideUp(triangleCount, usize(s_MeshletSolidTriangleWordBits)), 0u, scratchArena);
     Vector<u32, Core::Alloc::ScratchArena> parents(triangleCount, scratchArena);
     Vector<u8, Core::Alloc::ScratchArena> ranks(triangleCount, 0u, scratchArena);
     Vector<u8, Core::Alloc::ScratchArena> invalidTriangles(triangleCount, 0u, scratchArena);
@@ -129,7 +132,7 @@ Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildSolidTriangleWords(const S
         for(u32 corner = 0u; corner < s_MeshletTriangleIndexCount; ++corner){
             const u32 first = triangleIndices[base + corner];
             const u32 second = triangleIndices[base + (corner + 1u) % s_MeshletTriangleIndexCount];
-            edges.push_back({(static_cast<u64>(Min(first, second)) << 32u) | Max(first, second), triangle, first < second});
+            edges.push_back({(static_cast<u64>(Min(first, second)) << s_EdgeKeyVertexShift) | Max(first, second), triangle, first < second});
         }
     }
     Sort(edges.begin(), edges.end(), [](const TriangleEdge& first, const TriangleEdge& second)noexcept{ return first.positions < second.positions; });
@@ -137,7 +140,7 @@ Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildSolidTriangleWords(const S
         usize end = first + 1u;
         while(end < edges.size() && edges[end].positions == edges[first].positions)
             ++end;
-        const bool validEdge = end - first == 2u && edges[first].forward != edges[first + 1u].forward;
+        const bool validEdge = end - first == s_ManifoldEdgeTriangleCount &&edges[first].forward != edges[first + 1u].forward;
         for(usize index = first; index < end; ++index){
             JoinComponents(parents, ranks, edges[first].triangle, edges[index].triangle);
             if(!validEdge)
@@ -171,7 +174,7 @@ Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildSolidTriangleWords(const S
     for(u32 triangle = 0u; triangle < static_cast<u32>(triangleCount); ++triangle){
         const u32 component = FindComponent(parents, triangle);
         if(invalidComponents[component] == 0u && componentVolumes[component] != 0.0)
-            words[triangle / 32u] |= 1u << (triangle % 32u);
+            words[triangle / s_MeshletSolidTriangleWordBits] |= 1u << (triangle % s_MeshletSolidTriangleWordBits);
     }
     return words;
 }

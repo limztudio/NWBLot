@@ -41,14 +41,14 @@ struct EditBoxStyle{
     Name disabled = UiSkinToolkitRegions::s_EditDisabledRegionName;
     Name fallback = UiSkinToolkitRegions::s_ButtonNormalRegionName;
     Name focus = UiSkinToolkitRegions::s_FocusOverlayRegionName;
-    Color background = { 0.08f, 0.10f, 0.14f, 1.0f };
-    Color text = { 0.92f, 0.94f, 0.98f, 1.0f };
-    Color disabledText = { 0.48f, 0.50f, 0.55f, 1.0f };
+    Color background = s_StyleInsetColor;
+    Color text = s_StyleTextColor;
+    Color disabledText = s_StyleDisabledTextColor;
     Color selection = { 0.20f, 0.40f, 0.78f, 0.75f };
     Color inactiveSelection = { 0.28f, 0.31f, 0.38f, 0.55f };
     Color caret = { 0.95f, 0.97f, 1.0f, 1.0f };
     Color preedit = { 0.50f, 0.72f, 1.0f, 1.0f };
-    Insets padding = { 8.0f, 4.0f, 8.0f, 4.0f };
+    Insets padding = { s_StyleSpacingMedium, s_StyleSpacingSmall, s_StyleSpacingMedium, s_StyleSpacingSmall };
 };
 
 struct EditBoxPaintFlags{

@@ -24,8 +24,14 @@ namespace __hidden_ui_text_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr usize s_CarriageReturnLineFeedBytes = 2u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] static bool ByteBoundary(StringView text, u32 offset)noexcept{
-    return offset <= text.size() && (offset == text.size() || (static_cast<u8>(text[offset]) & 0xc0u) != 0x80u);
+    return offset <= text.size() && (offset == text.size() || (static_cast<u8>(text[offset]) & s_Utf8ContinuationMask) != s_Utf8ContinuationMarker);
 }
 
 [[nodiscard]] static bool FitsCoordinate(f64 value)noexcept{
@@ -216,7 +222,7 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
             ++byteEnd;
         usize breakEnd = byteEnd;
         if(breakEnd < request.text.size())
-            breakEnd += request.text[breakEnd] == '\r' ? 2u : 1u;
+            breakEnd += request.text[breakEnd] == '\r' ? __hidden_ui_text_layout::s_CarriageReturnLineFeedBytes : 1u;
         ShapeRequest lineRequest = request;
         lineRequest.text = request.text.substr(byteBegin, byteEnd - byteBegin);
         const auto shapedRun = m_shaper.shape(lineRequest);

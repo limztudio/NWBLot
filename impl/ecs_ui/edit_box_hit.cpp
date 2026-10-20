@@ -55,7 +55,8 @@ Expected<usize> UiEditBoxHost::hitWord(const Entry& entry, const Ui::Point posit
         }
     }
     const Ui::EditCaretLine& line = geometry.lines[lineIndex];
-    if(line.stopCount < 2u)
+    constexpr u32 s_MinInterpolatedStops = 2u;
+    if(line.stopCount < s_MinInterpolatedStops)
         return *byte;
     const usize first = line.firstStop;
     const usize end = first + line.stopCount;

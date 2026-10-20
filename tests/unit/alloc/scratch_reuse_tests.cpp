@@ -23,6 +23,12 @@ namespace __hidden_scratch_reuse_tests{
 
 
 constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_TailTagOffset = 17u;
+constexpr u32 s_PathReserveBytes = 96u;
+constexpr u32 s_SentinelByte = 71u;
+constexpr u32 s_BlockBytes = 96u;
+constexpr u32 s_FirstSentinel = 17u;
+constexpr u32 s_CollectionCount = 1024u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -337,6 +343,7 @@ TEST(ScratchArenaReuse, ZeroInitialCapacityNeedsPositiveBackingBeforeRawZeroAllo
 }
 
 TEST(ScratchArenaReuse, RelocationReusesCachedBackingAndUnlinksAnEmptiedFormerTop){
+    constexpr u32 s_CachedBytes = 1024u;
     ScratchArena arena(Name{"tests/scratch_reuse/cached_relocation"}, 256u);
     auto* sentinel = static_cast<u8*>(arena.allocate(8u, 64u));
     auto* allocation = static_cast<u8*>(arena.allocate(8u, 128u));
@@ -379,6 +386,7 @@ TEST(ScratchArenaReuse, RelocationReusesCachedBackingAndUnlinksAnEmptiedFormerTo
 }
 
 TEST(ScratchArenaReuse, FailedRelocationPreservesLiveAllocationsCachedChunksAndCounters){
+    constexpr u32 s_CachedBytes = 1536u;
     ScratchArena arena(Name{"tests/scratch_reuse/failed_relocation"}, 256u);
     auto* sentinel = static_cast<u8*>(arena.allocate(1u, 64u));
     auto* allocation = static_cast<u8*>(arena.allocate(1u, 128u));

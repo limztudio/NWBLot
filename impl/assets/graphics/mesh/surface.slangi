@@ -19,10 +19,10 @@
 #define NWB_SURFACE_IOR_VACUUM        half(1.0)               // no refraction / no Fresnel
 #define NWB_SURFACE_IOR_GLASS         half(1.5)               // typical glass Fresnel -- a convenience preset a material MAY author
 #define NWB_SURFACE_ABSORPTION_NONE   half3(1.0h, 1.0h, 1.0h) // per-unit survival = perfectly clear -> casts no shadow
-#define NWB_SURFACE_ABSORPTION_TRANSMISSION_MIN 1e-4
 #define NWB_SURFACE_COVERAGE_OPAQUE   half(1.0)               // render coverage = fully opaque
 #define NWB_SURFACE_SPECULAR_F0_NONE half3(0.0h, 0.0h, 0.0h)
 #define NWB_SURFACE_ROUGHNESS_MAX    half(1.0)
+#define NWB_SURFACE_FRESNEL_SCHLICK_POWER 5.0h
 
 // Material hooks populate this shared G-buffer, shadow/caustic, and AVBOIT contract.
 // Optical trace parameters and AVBOIT render coverage deliberately remain separate.
@@ -98,12 +98,12 @@ half nwbShadowFresnelTransmittedFraction(float ior, half cosI){
     // The Schlick transmitted fraction is a (0, 1) bounded factor, so half arithmetic is sufficient here.
     const half r0base = half((ior - 1.0) / (ior + 1.0));
     const half r0 = r0base * r0base;
-    const half reflectance = r0 + (half(1.0) - r0) * half(pow(half(1.0h) - saturate(cosI), half(5.0h)));
+    const half reflectance = r0 + (half(1.0) - r0) * half(pow(half(1.0h) - saturate(cosI), half(NWB_SURFACE_FRESNEL_SCHLICK_POWER)));
     return half(1.0) - reflectance;
 }
 
 half3 nwbShadowAbsorptionCoefficient(half3 transmission){
-    return -log(clamp(transmission, half3(half(NWB_SURFACE_ABSORPTION_TRANSMISSION_MIN)), half3(1.0h)));
+    return -log(clamp(transmission, half3(half(NWB_ABSORPTION_SURVIVAL_MIN)), half3(1.0h)));
 }
 
 

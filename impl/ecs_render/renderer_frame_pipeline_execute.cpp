@@ -712,7 +712,10 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const auto& acceptedTraceGeometry = m_raytracingSystem.acceptedShadowTraceGeometryBuffers();
     const auto& preparedTraceGeometry = m_raytracingSystem.preparedShadowTraceGeometryBuffers();
     Vector<Core::BufferHandle, Core::Alloc::ScratchArena> shadowPrepareLiveStateBuffers{ shadowPrepareStateScratchArena };
-    shadowPrepareLiveStateBuffers.reserve(AddSize(AddSize(acceptedTraceGeometry.size(), preparedTraceGeometry.size()), AddSize(meshAccelerationStateBuffers.size(), rayTracingGraphResources.csgTraceContextBuffer ? 5u : 4u)));
+    // Scene TLAS backing and the three BVH sort buffers; the CSG trace context adds one.
+    constexpr usize s_ShadowPrepareFixedStateBufferCapacity = 4u;
+    constexpr usize s_ShadowPrepareCsgStateBufferCapacity = 5u;
+    shadowPrepareLiveStateBuffers.reserve(AddSize(AddSize(acceptedTraceGeometry.size(), preparedTraceGeometry.size()), AddSize(meshAccelerationStateBuffers.size(), rayTracingGraphResources.csgTraceContextBuffer ? s_ShadowPrepareCsgStateBufferCapacity : s_ShadowPrepareFixedStateBufferCapacity)));
     const auto appendShadowPrepareStateBuffer = [&](const Core::BufferHandle& buffer)noexcept{
         if(buffer)
             shadowPrepareLiveStateBuffers.push_back(buffer);

@@ -32,6 +32,7 @@ static constexpr usize s_PipelineCacheDataMaxAttempts = 4;
 static constexpr u32 s_PipelineCacheByteShift1 = 8u;
 static constexpr u32 s_PipelineCacheByteShift2 = 16u;
 static constexpr u32 s_PipelineCacheByteShift3 = 24u;
+static constexpr usize s_PipelineCacheVersionOffset = 4u;
 static constexpr usize s_PipelineCacheVendorIdOffset = 8u;
 static constexpr usize s_PipelineCacheDeviceIdOffset = 12u;
 static constexpr usize s_PipelineCacheUuidOffset = 16u;
@@ -128,7 +129,7 @@ PipelineCacheDataValidation::Enum ValidatePipelineCacheData(const BinaryByteView
     if(headerSize != s_PipelineCacheHeaderVersionOneSize)
         return PipelineCacheDataValidation::Malformed;
 
-    const u32 headerVersion = __hidden_vulkan_device_pipeline_cache::ReadPipelineCacheU32(cacheData, 4u);
+    const u32 headerVersion = __hidden_vulkan_device_pipeline_cache::ReadPipelineCacheU32(cacheData, __hidden_vulkan_device_pipeline_cache::s_PipelineCacheVersionOffset);
     if(headerVersion != static_cast<u32>(VK_PIPELINE_CACHE_HEADER_VERSION_ONE))
         return PipelineCacheDataValidation::Incompatible;
 

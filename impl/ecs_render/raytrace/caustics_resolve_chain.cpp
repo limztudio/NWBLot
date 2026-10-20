@@ -45,6 +45,9 @@ struct ResolveStageDesc{
     Expected<Core::GpuTaskId> (RendererRayTracingSystem::*declareTask)(Core::GpuTaskGraph&, const Core::GpuTaskDesc&, DeferredFrameTargets&, const bool&);
 };
 
+// One activity read of the previous stage and one activity write of this stage.
+inline constexpr usize s_ActivityUsesPerStage = 2u;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -64,9 +67,8 @@ struct ResolveStageDesc{
     const CausticResolveActivitySnapshot activity = m_raytracingSystem.causticResolveActivitySnapshot(*inputs.targets);
     Core::GpuGraphResourceId activityResources[2];
     if(activity.valid()){
-        const Name names[] = { Name("caustic_resolve_activity_a"), Name("caustic_resolve_activity_b") };
         for(u32 index = 0u; index < LengthOf(activityResources); ++index){
-            Core::GpuGraphResourceDesc desc = BufferResourceDesc(names[index], "caustic resolve activity");
+            Core::GpuGraphResourceDesc desc = BufferResourceDesc(s_CausticResolveActivityBufferNames[index], "caustic resolve activity");
             desc.setInitialState(Core::ResourceStates::Common).setExternalFinalState(Core::ResourceStates::Common);
             const auto activityResourcesIndexResult = m_graph.importBuffer(activity.buffers[index], desc);
             if(!activityResourcesIndexResult){
@@ -91,12 +93,12 @@ struct ResolveStageDesc{
         usize maximumUses = 0u;
         for(const auto& stage : stages)
             maximumUses = Max(maximumUses, static_cast<usize>(stage.stageUses->useCount));
-        activityUses.reserve(maximumUses + 2u);
+        activityUses.reserve(maximumUses + __hidden_caustics_resolve_chain::s_ActivityUsesPerStage);
     }
     Core::GpuTaskSchedulingHint stageScheduling = inputs.baseScheduling;
     stageScheduling.mergeWithPrevious = true;
     Core::GpuTaskId previousTask = inputs.geometryTask;
-    for(usize stageIndex = 0u; stageIndex < 7u; ++stageIndex){
+    for(usize stageIndex = 0u; stageIndex < LengthOf(stages); ++stageIndex){
         const __hidden_caustics_resolve_chain::ResolveStageDesc& stage = stages[stageIndex];
         Core::GpuTaskDesc stageDesc;
         stageDesc.setIdentity(stage.naming->identity).setMarkerLabel(stage.naming->label).setScheduling(stageScheduling).setDependencies(&previousTask, 1u).setResourceUses(stage.stageUses->uses, stage.stageUses->useCount);

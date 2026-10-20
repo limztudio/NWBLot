@@ -33,6 +33,21 @@ namespace __hidden_font_validation{
 
 static constexpr u32 s_TrueTypeSignature = 0x00010000u;
 static constexpr u32 s_CffSignature = 0x4f54544fu; // OTTO
+static constexpr u32 s_FvarTag = 0x66766172u; // fvar
+static constexpr u32 s_Cff2Tag = 0x43464632u; // CFF2
+static constexpr u32 s_CmapTag = 0x636d6170u; // cmap
+static constexpr u32 s_HheaTag = 0x68686561u; // hhea
+static constexpr u32 s_HmtxTag = 0x686d7478u; // hmtx
+static constexpr u32 s_GlyfTag = 0x676c7966u; // glyf
+static constexpr u32 s_LocaTag = 0x6c6f6361u; // loca
+static constexpr u32 s_CffTableTag = 0x43464620u; // "CFF " with a trailing space
+static constexpr usize s_HeadMinBytes = 54u;
+static constexpr usize s_CmapMinBytes = 4u;
+static constexpr usize s_MaxpMinBytes = 6u;
+static constexpr usize s_HheaMinBytes = 36u;
+static constexpr usize s_HmtxMinBytes = 4u;
+static constexpr StringView s_WarningEventName = "warning";
+static constexpr StringView s_NativeValidationCategory = "font_native_validation";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -62,18 +77,18 @@ static constexpr u32 s_CffSignature = 0x4f54544fu; // OTTO
             return false;
         const u32 tag = tableResult->tag;
         const usize length = tableResult->bytes.size();
-        if(tag == 0x66766172u || tag == 0x43464632u) // fvar, CFF2
+        if(tag == s_FvarTag || tag == s_Cff2Tag)
             return false;
         tags[index] = tag;
         switch(tag){
-        case s_FontSfntHeadTag: hasHead = length >= 54u; break;
-        case 0x636d6170u: hasCmap = length >= 4u; break;
-        case s_FontSfntMaxpTag: hasMaxp = length >= 6u; break;
-        case 0x68686561u: hasHhea = length >= 36u; break;
-        case 0x686d7478u: hasHmtx = length >= 4u; break;
-        case 0x676c7966u: hasGlyf = length > 0u; break;
-        case 0x6c6f6361u: hasLoca = length > 0u; break;
-        case 0x43464620u: hasCff = length > 0u; break;
+        case s_FontSfntHeadTag: hasHead = length >= s_HeadMinBytes; break;
+        case s_CmapTag: hasCmap = length >= s_CmapMinBytes; break;
+        case s_FontSfntMaxpTag: hasMaxp = length >= s_MaxpMinBytes; break;
+        case s_HheaTag: hasHhea = length >= s_HheaMinBytes; break;
+        case s_HmtxTag: hasHmtx = length >= s_HmtxMinBytes; break;
+        case s_GlyfTag: hasGlyf = length > 0u; break;
+        case s_LocaTag: hasLoca = length > 0u; break;
+        case s_CffTableTag: hasCff = length > 0u; break;
         default: break;
         }
     }
@@ -137,11 +152,11 @@ public:
         const FT_Error libraryError = library ? FT_Done_Library(library) : 0;
         if(faceError != 0){
             const DiagnosticEventText diagnostic = MakeDiagnosticEventText("Font native cleanup failed: native_domain=FreeType native_code={}", faceError);
-            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "font_native_validation", .expression = "FT_Done_Face", .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
+            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_WarningEventName, .category = s_NativeValidationCategory, .expression = "FT_Done_Face", .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
         }
         if(libraryError != 0){
             const DiagnosticEventText diagnostic = MakeDiagnosticEventText("Font native cleanup failed: native_domain=FreeType native_code={}", libraryError);
-            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "font_native_validation", .expression = "FT_Done_Library", .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
+            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_WarningEventName, .category = s_NativeValidationCategory, .expression = "FT_Done_Library", .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
         }
     }
 

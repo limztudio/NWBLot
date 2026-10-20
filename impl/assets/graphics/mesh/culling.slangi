@@ -167,7 +167,7 @@ bool nwbMeshTriangleCulled(const NwbMeshGeneratedVertex vertices[NWB_MESHLET_TRI
 }
 
 void nwbMeshStoreCulledPrimitive(const uint primitiveBase){
-    const NwbMeshGeneratedVertex vertex = nwbMeshBuildGeneratedVertexWithRasterFlags(float4(2.0, 2.0, 0.0, 1.0), float3(0.0, 0.0, 1.0), float4(1.0, 0.0, 0.0, 1.0), float2(0.0), half4(0.0h, 0.0h, 0.0h, 0.0h), float3(0.0), 0u);
+    const NwbMeshGeneratedVertex vertex = nwbMeshBuildGeneratedVertexWithRasterFlags(NWB_MESH_CULLED_CLIP_POSITION, float3(0.0, 0.0, 1.0), float4(1.0, 0.0, 0.0, 1.0), float2(0.0), half4(0.0h, 0.0h, 0.0h, 0.0h), float3(0.0), 0u);
     for(uint corner = 0u; corner < NWB_MESHLET_TRIANGLE_INDEX_COUNT; ++corner)
         nwbMeshGeneratedVertices()[primitiveBase + corner] = vertex;
 }

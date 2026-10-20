@@ -74,7 +74,7 @@ bool VolumeFileSystem::loadMetadataLocked(Alloc::ScratchArena& scratchArena){
     }
 
     if(NWB_MEMCMP(header.magic, FilesystemVolumeDetail::s_VolumeMagic, sizeof(header.magic)) != 0){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, "magic mismatch");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, FilesystemVolumeDetail::s_VolumeDetailMagicMismatch);
         return false;
     }
     if(header.segmentSize != m_segmentSize){
@@ -89,7 +89,7 @@ bool VolumeFileSystem::loadMetadataLocked(Alloc::ScratchArena& scratchArena){
     u64 headerTotalBytes = 0;
     const auto headerTotalBytesResult = ::AddNoOverflow(static_cast<u64>(sizeof(header)), header.indexBytes);
     if(!headerTotalBytesResult){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, "metadata byte overflow");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, FilesystemVolumeDetail::s_VolumeDetailMetadataByteOverflow);
         return false;
     }
     headerTotalBytes = *headerTotalBytesResult;
@@ -99,18 +99,18 @@ bool VolumeFileSystem::loadMetadataLocked(Alloc::ScratchArena& scratchArena){
     }
 
     if(header.nextFreeOffset < header.metadataBytes){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, "next free offset points inside metadata area");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, FilesystemVolumeDetail::s_VolumeDetailNextFreeInsideMetadata);
         return false;
     }
 
     const auto maxVolumeBytesResult = computeLogicalCapacityLocked();
     if(!maxVolumeBytesResult){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, "segment capacity overflow");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, FilesystemVolumeDetail::s_VolumeDetailSegmentCapacityOverflow);
         return false;
     }
     const u64 maxVolumeBytes = *maxVolumeBytesResult;
     if(header.nextFreeOffset > maxVolumeBytes){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, "next free offset exceeds volume capacity");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, FilesystemVolumeDetail::s_VolumeDetailNextFreeExceedsVolumeCapacity);
         return false;
     }
     const auto physicalCapacity = computePhysicalCapacityLocked();
@@ -197,21 +197,21 @@ bool VolumeFileSystem::loadMetadataLocked(Alloc::ScratchArena& scratchArena){
 bool VolumeFileSystem::flushMetadataLocked(Alloc::ScratchArena& scratchArena, const Name* excludedPath){
     NWB_ASSERT(excludedPath == nullptr || m_files.find(*excludedPath) != m_files.end());
     if(m_segmentPaths.empty()){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpFlushMetadata, "no segments are mounted");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpFlushMetadata, FilesystemVolumeDetail::s_VolumeDetailNoSegmentsMounted);
         return false;
     }
     if(m_nextFreeOffset < m_metadataBytes){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpFlushMetadata, "next free offset points inside metadata area");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpFlushMetadata, FilesystemVolumeDetail::s_VolumeDetailNextFreeInsideMetadata);
         return false;
     }
     const auto maxVolumeBytesResult = computeLogicalCapacityLocked();
     if(!maxVolumeBytesResult){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpFlushMetadata, "segment capacity overflow");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpFlushMetadata, FilesystemVolumeDetail::s_VolumeDetailSegmentCapacityOverflow);
         return false;
     }
     const u64 maxVolumeBytes = *maxVolumeBytesResult;
     if(m_nextFreeOffset > maxVolumeBytes){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpFlushMetadata, "next free offset exceeds volume capacity");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpFlushMetadata, FilesystemVolumeDetail::s_VolumeDetailNextFreeExceedsVolumeCapacity);
         return false;
     }
 
@@ -238,7 +238,7 @@ bool VolumeFileSystem::flushMetadataLocked(Alloc::ScratchArena& scratchArena, co
     u64 totalMetaBytes = 0;
     const auto totalMetaBytesResult = ::AddNoOverflow(static_cast<u64>(sizeof(header)), header.indexBytes);
     if(!totalMetaBytesResult){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpFlushMetadata, "metadata byte overflow");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpFlushMetadata, FilesystemVolumeDetail::s_VolumeDetailMetadataByteOverflow);
         return false;
     }
     totalMetaBytes = *totalMetaBytesResult;

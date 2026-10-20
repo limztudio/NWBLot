@@ -7,6 +7,7 @@
 
 #include <impl/global.h>
 #include <impl/assets_shader/asset.h>
+#include <impl/assets_shader/binary_payload.h>
 
 #include <core/assets/manager.h>
 #include <core/graphics/runtime/runtime.h>
@@ -94,7 +95,7 @@ template<typename ShaderPathResolver>
 
     const IShader& shaderAsset = *checked_cast<const IShader*>(loadedAsset->get());
     const Core::Assets::AssetBytes& shaderBinary = shaderAsset.bytecode();
-    NWB_ASSERT(!shaderAsset.entryPoint().empty() && !shaderBinary.empty() && (shaderBinary.size() & 3u) == 0u);
+    NWB_ASSERT(!shaderAsset.entryPoint().empty() && !shaderBinary.empty() && (shaderBinary.size() & ShaderBinaryPayload::s_SpvWordByteMask) == 0u);
 
     Core::ShaderDesc shaderDesc;
     shaderDesc.setShaderType(shaderType);

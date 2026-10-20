@@ -32,6 +32,12 @@ namespace __hidden_ui_text_font{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr StringView s_LifecycleCategory = "ui_font_lifecycle";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] static bool HasTable(hb_face_t& face, hb_tag_t tag){
     hb_blob_t* blob = hb_face_reference_table(&face, tag);
     const bool present = hb_blob_get_length(blob) != 0u;
@@ -171,13 +177,13 @@ private:
             const FT_Error error = FT_Done_Face(m_face);
             m_face = nullptr;
             if(error != 0)
-                CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "error", .category = "ui_font_lifecycle", .message = "UI FreeType face destruction failed", .file = __FILE__, .line = __LINE__, });
+                CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error, .category = __hidden_ui_text_font::s_LifecycleCategory, .message = "UI FreeType face destruction failed", .file = __FILE__, .line = __LINE__, });
         }
         if(m_library){
             const FT_Error error = FT_Done_Library(m_library);
             m_library = nullptr;
             if(error != 0)
-                CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "error", .category = "ui_font_lifecycle", .message = "UI FreeType library destruction failed", .file = __FILE__, .line = __LINE__, });
+                CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error, .category = __hidden_ui_text_font::s_LifecycleCategory, .message = "UI FreeType library destruction failed", .file = __FILE__, .line = __LINE__, });
         }
     }
 
@@ -269,14 +275,14 @@ const SharedBakedFontAtlas& FontFace::bakedAtlas()const noexcept{ return m_state
 
 Expected<FontMetrics> FontFace::metrics(f32 fontSize)const{
     FontMetrics metrics{};
-    if(!valid() || !IsFinite(fontSize) || fontSize < 1.0f / 64.0f || fontSize > 2048.0f)
+    if(!valid() || !IsFinite(fontSize) || fontSize < 1.0f / s_TextFixedPointScale || fontSize > s_TextMaxFontSize)
         return MakeUnexpected(Failure{});
-    const i32 scale = static_cast<i32>(VectorGetX(VectorMultiplyAddExpression(VectorReplicate(fontSize), VectorReplicate(64.0f), VectorReplicate(0.5f))));
+    const i32 scale = static_cast<i32>(VectorGetX(VectorMultiplyAddExpression(VectorReplicate(fontSize), VectorReplicate(s_TextFixedPointScale), VectorReplicate(0.5f))));
     hb_font_set_scale(m_state->m_scaledFont, scale, scale);
     hb_font_extents_t extents{};
     if(!hb_font_get_h_extents(m_state->m_scaledFont, &extents))
         return MakeUnexpected(Failure{});
-    const SIMDVectorSingle scaledExtents = VectorScale(VectorXorInt(VectorSet(static_cast<f32>(extents.ascender), static_cast<f32>(extents.descender), static_cast<f32>(extents.line_gap), 0.0f), s_SIMDFlipY), 1.0f / 64.0f);
+    const SIMDVectorSingle scaledExtents = VectorScale(VectorXorInt(VectorSet(static_cast<f32>(extents.ascender), static_cast<f32>(extents.descender), static_cast<f32>(extents.line_gap), 0.0f), s_SIMDFlipY), 1.0f / s_TextFixedPointScale);
     const SIMDVectorSingle positiveExtents = VectorSelect(scaledExtents, VectorZero(), VectorGreater(VectorZero(), scaledExtents));
     metrics.ascender = VectorGetX(positiveExtents);
     metrics.descender = VectorGetY(positiveExtents);
@@ -287,9 +293,9 @@ Expected<FontMetrics> FontFace::metrics(f32 fontSize)const{
 }
 
 bool FontFace::shape(const ShapeRequest& request, u32 byteBegin, u32 byteEnd, PaintVector<RawShapedGlyph>& output)const{
-    if(!valid() || byteBegin > byteEnd || byteEnd > request.text.size() || request.text.size() > s_TextMaxBytes || !IsFinite(request.fontSize) || request.fontSize < 1.0f / 64.0f || request.fontSize > 2048.0f)
+    if(!valid() || byteBegin > byteEnd || byteEnd > request.text.size() || request.text.size() > s_TextMaxBytes || !IsFinite(request.fontSize) || request.fontSize < 1.0f / s_TextFixedPointScale || request.fontSize > s_TextMaxFontSize)
         return false;
-    const i32 scale = static_cast<i32>(VectorGetX(VectorMultiplyAddExpression(VectorReplicate(request.fontSize), VectorReplicate(64.0f), VectorReplicate(0.5f))));
+    const i32 scale = static_cast<i32>(VectorGetX(VectorMultiplyAddExpression(VectorReplicate(request.fontSize), VectorReplicate(s_TextFixedPointScale), VectorReplicate(0.5f))));
     hb_font_set_scale(m_state->m_scaledFont, scale, scale);
     const hb_script_t script = hb_script_from_iso15924_tag(request.scriptTag);
     if(script == HB_SCRIPT_INVALID)
@@ -338,10 +344,10 @@ bool FontFace::shape(const ShapeRequest& request, u32 byteBegin, u32 byteEnd, Pa
             Rect ink;
             if(hb_font_get_glyph_extents(m_state->m_scaledFont, infos[index].codepoint, &extents)){
                 const SIMDVectorSingle bearing = VectorSet(static_cast<f32>(extents.x_bearing), static_cast<f32>(extents.y_bearing), static_cast<f32>(extents.x_bearing), static_cast<f32>(extents.y_bearing));
-                const SIMDVectorSingle origin = VectorScale(VectorXorInt(bearing, s_SIMDFlipYW), 1.0f / 64.0f);
+                const SIMDVectorSingle origin = VectorScale(VectorXorInt(bearing, s_SIMDFlipYW), 1.0f / s_TextFixedPointScale);
                 const SIMDVectorSingle width = VectorReplicate(static_cast<f32>(extents.width));
                 const SIMDVectorSingle height = VectorReplicate(static_cast<f32>(extents.height));
-                const SIMDVectorSingle scale = VectorReplicate(1.0f / 64.0f);
+                const SIMDVectorSingle scale = VectorReplicate(1.0f / s_TextFixedPointScale);
                 const SIMDVectorSingle end = VectorPermute<0, 5, 2, 7>(VectorMultiplyAddExpression(width, scale, origin), VectorNegativeMultiplySubtractExpression(height, scale, origin));
                 const SIMDVectorSingle minimum = VectorSelect(end, origin, VectorLess(origin, end));
                 const SIMDVectorSingle delta = VectorSubtract(end, origin);
@@ -349,7 +355,7 @@ bool FontFace::shape(const ShapeRequest& request, u32 byteBegin, u32 byteEnd, Pa
                 ink = { VectorGetX(minimum), VectorGetY(minimum), VectorGetX(size), VectorGetY(size) };
             }
             const SIMDVectorSingle placement = VectorSet(static_cast<f32>(positions[index].x_offset), static_cast<f32>(positions[index].y_offset), static_cast<f32>(positions[index].x_advance), static_cast<f32>(positions[index].y_advance));
-            const SIMDVectorSingle position = VectorScale(VectorXorInt(placement, s_SIMDFlipYW), 1.0f / 64.0f);
+            const SIMDVectorSingle position = VectorScale(VectorXorInt(placement, s_SIMDFlipYW), 1.0f / s_TextFixedPointScale);
             output.push_back({ infos[index].codepoint, clusterBegin, clusterEnd, { VectorGetX(position), VectorGetY(position) }, { VectorGetZ(position), VectorGetW(position) }, ink, m_state->coverageBounds(infos[index].codepoint, request.fontSize) });
         }
         previousBegin = clusterBegin;
@@ -359,7 +365,7 @@ bool FontFace::shape(const ShapeRequest& request, u32 byteBegin, u32 byteEnd, Pa
 }
 
 Expected<Rect> FontFace::rasterBounds(const u32 glyphId, const u32 pixelSize){
-    if(!valid() || pixelSize == 0u || pixelSize > 4096u)
+    if(!valid() || pixelSize == 0u || pixelSize > s_TextMaxRasterPpem)
         return MakeUnexpected(Failure{});
     if(FT_Set_Pixel_Sizes(m_state->m_face, 0u, pixelSize) != 0 || FT_Load_Glyph(m_state->m_face, glyphId, FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP) != 0){
         NWB_LOGGER_ERROR(NWB_TEXT("UI glyph raster measurement failed"));
@@ -377,7 +383,7 @@ Expected<Rect> FontFace::rasterBounds(const u32 glyphId, const u32 pixelSize){
 }
 
 bool FontFace::rasterize(u32 glyphId, u32 pixelSize, GlyphBitmap& output){
-    if(!valid() || pixelSize == 0u || pixelSize > 4096u)
+    if(!valid() || pixelSize == 0u || pixelSize > s_TextMaxRasterPpem)
         return false;
     if(FT_Set_Pixel_Sizes(m_state->m_face, 0u, pixelSize) != 0 || FT_Load_Glyph(m_state->m_face, glyphId, FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP) != 0 || FT_Render_Glyph(m_state->m_face->glyph, FT_RENDER_MODE_NORMAL) != 0){
         NWB_LOGGER_ERROR(NWB_TEXT("UI glyph rasterization failed"));
@@ -393,7 +399,7 @@ bool FontFace::rasterize(u32 glyphId, u32 pixelSize, GlyphBitmap& output){
     output.height = bitmap.rows;
     output.bearingX = slot->bitmap_left;
     output.bearingY = slot->bitmap_top;
-    if(bitmap.width > s_GlyphAtlasPageExtent - 2u || bitmap.rows > s_GlyphAtlasPageExtent - 2u)
+    if(bitmap.width > s_GlyphAtlasPageExtent - s_GlyphAtlasGlyphGutter || bitmap.rows > s_GlyphAtlasPageExtent - s_GlyphAtlasGlyphGutter)
         return false;
     output.pixels.resize(static_cast<usize>(bitmap.width) * bitmap.rows);
     const usize pitch = static_cast<usize>(Abs(bitmap.pitch));

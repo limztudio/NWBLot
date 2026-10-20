@@ -52,6 +52,7 @@ Object GraphicsPipeline::getNativeHandle(ObjectType objectType)noexcept{
 
 
 Expected<GraphicsPipelineHandle> Device::createGraphicsPipeline(const GraphicsPipelineDesc& desc, FramebufferInfo const& fbinfo){
+    constexpr TStringView s_OperationName = NWB_TEXT("graphics pipeline");
     if(!m_context.extensions.khrDynamicRendering){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Dynamic rendering extension is required to create graphics pipelines."));
         return MakeUnexpected(Failure{});
@@ -164,7 +165,7 @@ Expected<GraphicsPipelineHandle> Device::createGraphicsPipeline(const GraphicsPi
         return MakeUnexpected(Failure{});
     }
 
-    if(!configurePipelineBindings(desc.bindingLayouts, NWB_TEXT("graphics pipeline"), *pso, scratchArena))
+    if(!configurePipelineBindings(desc.bindingLayouts, s_OperationName, *pso, scratchArena))
         return MakeUnexpected(Failure{});
 
     auto vertexInputInfo = VulkanDetail::MakeVkStruct<VkPipelineVertexInputStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO);
@@ -204,7 +205,7 @@ Expected<GraphicsPipelineHandle> Device::createGraphicsPipeline(const GraphicsPi
         VulkanDetail::PipelineStencilFaceMode::IncludeStencilFaces,
         dynamicStates,
         static_cast<u32>(LengthOf(dynamicStates)),
-        NWB_TEXT("graphics pipeline"),
+        s_OperationName,
         scratchArena
     );
     if(!fixedState)
@@ -221,7 +222,7 @@ Expected<GraphicsPipelineHandle> Device::createGraphicsPipeline(const GraphicsPi
     pipelineInfo.renderPass = VK_NULL_HANDLE;
     pipelineInfo.subpass = 0;
 
-    if(!createPipeline(NWB_TEXT("graphics pipeline"), *pso, pipelineInfo))
+    if(!createPipeline(s_OperationName, *pso, pipelineInfo))
         return MakeUnexpected(Failure{});
 
     return pso;

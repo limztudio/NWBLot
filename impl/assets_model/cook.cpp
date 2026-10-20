@@ -32,7 +32,7 @@ NWB_IMPL_BEGIN
 
 
 bool ModelAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, NWB_TEXT("ModelAssetCodec::serialize")))
+    if(!checkSerializeAssetType(asset, ModelBinaryPayload::s_ModelSerializeContext))
         return false;
 
     const Model& model = static_cast<const Model&>(asset);
@@ -90,9 +90,9 @@ bool ModelAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
     AppendPOD(outBinary, header);
 
     return
-        Core::Assets::AppendVectorPayload(outBinary, skeletonObjectBinaries, NWB_TEXT("ModelAssetCodec::serialize"), NWB_TEXT("skeleton objects"))
-        && Core::Assets::AppendVectorPayload(outBinary, staticMeshObjectBinaries, NWB_TEXT("ModelAssetCodec::serialize"), NWB_TEXT("static mesh objects"))
-        && Core::Assets::AppendVectorPayload(outBinary, skinnedMeshObjectBinaries, NWB_TEXT("ModelAssetCodec::serialize"), NWB_TEXT("skinned mesh objects"))
+        Core::Assets::AppendVectorPayload(outBinary, skeletonObjectBinaries, ModelBinaryPayload::s_ModelSerializeContext, ModelBinaryPayload::s_SkeletonObjectsPayloadLabel)
+        && Core::Assets::AppendVectorPayload(outBinary, staticMeshObjectBinaries, ModelBinaryPayload::s_ModelSerializeContext, ModelBinaryPayload::s_StaticMeshObjectsPayloadLabel)
+        && Core::Assets::AppendVectorPayload(outBinary, skinnedMeshObjectBinaries, ModelBinaryPayload::s_ModelSerializeContext, ModelBinaryPayload::s_SkinnedMeshObjectsPayloadLabel)
     ;
 }
 
@@ -118,13 +118,14 @@ static constexpr AStringView s_MaterialField = "material";
 static constexpr AStringView s_ParentObjectField = "parent_object";
 static constexpr AStringView s_ParentJointField = "parent_joint";
 static constexpr AStringView s_TransformField = "transform";
+static constexpr AStringView s_ModelMetaDiagnosticPrefix = "Model meta";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] bool ValidateModelAssetFields(const Path& nwbFilePath, const Value& asset){
-    return Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, "Model meta", { s_SkeletonsField, s_StaticMeshesField, s_SkinnedMeshesField });
+    return Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_ModelMetaDiagnosticPrefix, { s_SkeletonsField, s_StaticMeshesField, s_SkinnedMeshesField });
 }
 
 [[nodiscard]] bool ValidateModelObjectFields(const Path& nwbFilePath, const Value& object, const AStringView objectKind, const InitializerList<AStringView> allowedFields){
@@ -267,10 +268,10 @@ Expected<ModelCookEntry> ParseModelCookMetadata(const Name virtualPath, const Pa
 
     ModelCookEntry entry(arena);
 
-    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, "Model meta"))
+    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_ModelMetaDiagnosticPrefix))
         return MakeUnexpected(Failure{});
 
-    if(!Core::Assets::AssignCookEntryVirtualPath(entry, virtualPath, nwbFilePath, "Model meta"))
+    if(!Core::Assets::AssignCookEntryVirtualPath(entry, virtualPath, nwbFilePath, s_ModelMetaDiagnosticPrefix))
         return MakeUnexpected(Failure{});
     if(!ValidateModelAssetFields(nwbFilePath, asset))
         return MakeUnexpected(Failure{});

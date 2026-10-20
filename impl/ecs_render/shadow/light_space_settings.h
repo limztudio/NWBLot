@@ -48,6 +48,8 @@ namespace SoftwareShadowCaptureCadence{
     };
 };
 
+inline constexpr u32 s_ShadowCaptureReuseLimitOneFrame = 1u;
+inline constexpr u32 s_ShadowCaptureReuseLimitTwoFrames = 2u;
 inline constexpr u32 s_ShadowDefaultDirectionalResolution = 512u;
 inline constexpr u32 s_ShadowDefaultPointResolution = 256u;
 inline constexpr u64 s_ShadowDefaultMemoryBudgetBytes = 256ull * 1024ull * 1024ull;

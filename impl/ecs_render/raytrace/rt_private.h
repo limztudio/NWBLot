@@ -10,6 +10,7 @@
 
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 #include <impl/ecs_render/shader/shader_system.h>
+#include <impl/ecs_render/shadow/quality_settings.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/avboit/avboit.h>
@@ -243,7 +244,7 @@ struct SwShadowHeapPushConstants{
     u32 edgeListStorageSlot = 0u;
     u32 indirectArgsStorageSlot = 0u;
     u32 softSampleCount = NWB_SW_SHADOW_SOFT_SPP;
-    u32 receiverFactor = 2u;
+    u32 receiverFactor = s_ShadowReceiverFactorHalf;
 };
 static_assert(NWB_SW_SHADOW_SOFT_TEMPORAL_SPP >= 1u && NWB_SW_SHADOW_SOFT_TEMPORAL_SPP <= NWB_SW_SHADOW_SOFT_SPP, "temporal soft-shadow sample budget must be within the bootstrap budget");
 static_assert(sizeof(SwShadowHeapPushConstants) == sizeof(u32) * 20u, "SwShadowHeapPushConstants must match the shader push-constant layout");
@@ -271,7 +272,7 @@ struct ShadowRqSoftPushConstants{
     u32 deferredResourcesHeapSlot = 0u;
     u32 visibilityStorageSlot = 0u;
     u32 softSampleCount = NWB_SW_SHADOW_SOFT_SPP;
-    u32 receiverFactor = 2u;
+    u32 receiverFactor = s_ShadowReceiverFactorHalf;
 };
 static_assert(sizeof(ShadowRqSoftPushConstants) == sizeof(u32) * 10u, "ShadowRqSoftPushConstants must match the shader push-constant layout");
 static_assert(offsetof(ShadowRqSoftPushConstants, receiverFactor) == 36u);
@@ -299,7 +300,7 @@ struct ShadowResolvePushConstants{
     u32 visibilityStorageSlot = 0u;
     u32 sceneShadingSlot = 0u;
     u32 opaqueInputColorSlot = 0u;
-    u32 receiverFactor = 2u;
+    u32 receiverFactor = s_ShadowReceiverFactorHalf;
 };
 static_assert(sizeof(ShadowResolvePushConstants) == sizeof(u32) * 22u, "ShadowResolvePushConstants must match the shader push-constant layout");
 static_assert(offsetof(ShadowResolvePushConstants, receiverFactor) == 84u);
@@ -337,7 +338,7 @@ struct ShadowGeometryDownsamplePushConstants{
     u32 depthSlot = 0u;
     u32 outputStorageSlot = 0u;
     u32 sceneShadingSlot = 0u;
-    u32 receiverFactor = 2u;
+    u32 receiverFactor = s_ShadowReceiverFactorHalf;
 };
 static_assert(sizeof(ShadowGeometryDownsamplePushConstants) == sizeof(u32) * 10u, "ShadowGeometryDownsamplePushConstants must match the shader push-constant layout");
 static_assert(offsetof(ShadowGeometryDownsamplePushConstants, receiverFactor) == 36u);
@@ -360,7 +361,7 @@ struct ShadowReprojectMergePushConstants{
     u32 worldPositionSlot = 0u;
     u32 historyOutputStorageSlot = 0u;
     u32 momentsOutputStorageSlot = 0u;
-    u32 receiverFactor = 2u;
+    u32 receiverFactor = s_ShadowReceiverFactorHalf;
 };
 static_assert(sizeof(ShadowReprojectMergePushConstants) == sizeof(f32) * 16u + sizeof(u32) * 16u, "ShadowReprojectMergePushConstants must match the shader push-constant layout");
 static_assert(offsetof(ShadowReprojectMergePushConstants, receiverFactor) == 124u);

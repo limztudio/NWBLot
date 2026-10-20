@@ -5,6 +5,7 @@
 #include "task_graph_software_scene_refit.h"
 
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
+#include <impl/ecs_render/renderer_frame_pipeline_graph_shared.h>
 
 #include <core/graphics/runtime/runtime.h>
 #include <core/graphics/backend_selection/backend.h>
@@ -83,14 +84,16 @@ Expected<SoftwareSceneRefitGraphTasks> DeclareSoftwareSceneRefit(Core::GpuTaskGr
     }
     const auto inputResult = graph.importBuffer(
         snapshot->inputBuffer,
-        RendererTaskGraphDetail::BufferResourceDesc(Name("software_scene_refit_inputs"), "Software Scene Refit Inputs")
+        RendererTaskGraphDetail::BufferResourceDesc(Name(RendererFramePipelineDetail::s_SoftwareSceneRefitInputsName), "Software Scene Refit Inputs")
             .setInitialState(Core::ResourceStates::Common).setExternalFinalState(Core::ResourceStates::Common)
     );
     if(!inputResult)
         return MakeUnexpected(Failure{});
     const Core::GpuGraphResourceId input = *inputResult;
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses(scratchArena);
-    uses.reserve(snapshot->meshNodes.size() + 2u);
+    // The input buffer and the scene nodes.
+    constexpr usize s_FixedUseCapacity = 2u;
+    uses.reserve(snapshot->meshNodes.size() + s_FixedUseCapacity);
     uses.push_back(RendererTaskGraphDetail::ReadUse(input, Core::ResourceStates::ShaderResource));
     uses.push_back(RendererTaskGraphDetail::ReadWriteUse(sceneNodes, Core::ResourceStates::UnorderedAccess));
     // Reuse every root's existing import, including accepted meshes without a build in this frame.

@@ -17,6 +17,10 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Base grid sides that MakeCausticPhotonBudget accepts.
+inline constexpr u32 s_CausticReducedBaseGridSide = 128u;
+inline constexpr u32 s_CausticFullBaseGridSide = 512u;
+
 struct CausticQualitySettings{
     // Divide each photon-grid dimension by 1, 2, or 4; temporal phases and filtering stay unchanged.
     u32 photonGridDivisor = 1u;

@@ -7,6 +7,7 @@
 
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/mesh/renderer_mesh_state.h>
+#include <impl/ecs_render/shader/shader_system.h>
 #include <impl/assets_mesh/asset.h>
 #include <impl/assets_mesh/meshlet_triangle_indices.h>
 #include <impl/assets_mesh/meshlet_vertex_attributes.h>
@@ -249,7 +250,7 @@ Expected<MeshResources*> RendererMeshSystem::createMeshResources(const Core::Ass
         return &foundMesh.value();
     }
 
-    auto loadedAsset = m_assetManager.loadTypedSync<Mesh>(meshPath, NWB_TEXT("RendererSystem"), Mesh::s_AssetTypeText);
+    auto loadedAsset = m_assetManager.loadTypedSync<Mesh>(meshPath, s_RendererAssetOwnerName, Mesh::s_AssetTypeText);
     if(!loadedAsset)
         return MakeUnexpected(Failure{});
 

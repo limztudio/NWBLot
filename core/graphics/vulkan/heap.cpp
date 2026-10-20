@@ -18,6 +18,24 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_vulkan_heap{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr StringView s_HeapLifecycleDiagnosticCategory = "vulkan_heap_lifecycle";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 Heap::Heap(const VulkanContext& context, VulkanAllocator& allocator)noexcept
     : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_bindingReservations(context.objectArena)
@@ -28,7 +46,7 @@ Heap::~Heap()noexcept{
     {
         ScopedLock lock(m_bindingMutex);
         if(!m_bindingReservations.empty()){
-            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "error", .category = "vulkan_heap_lifecycle", .message = "Vulkan: Refusing to free a heap with live placed-resource bindings", .file = __FILE__, .line = __LINE__, });
+            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error, .category = __hidden_vulkan_heap::s_HeapLifecycleDiagnosticCategory, .message = "Vulkan: Refusing to free a heap with live placed-resource bindings", .file = __FILE__, .line = __LINE__, });
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Heap destroyed with live placed-resource bindings"));
             return;
         }
@@ -51,7 +69,7 @@ void Heap::eraseBindingReservationLocked(const void* owner)noexcept{
         return;
     }
 
-    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "error", .category = "vulkan_heap_lifecycle", .message = "Vulkan: Failed to unregister a placed-resource heap binding", .file = __FILE__, .line = __LINE__, });
+    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error, .category = __hidden_vulkan_heap::s_HeapLifecycleDiagnosticCategory, .message = "Vulkan: Failed to unregister a placed-resource heap binding", .file = __FILE__, .line = __LINE__, });
     NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Missing placed-resource heap binding"));
 }
 

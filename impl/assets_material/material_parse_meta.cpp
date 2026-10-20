@@ -26,6 +26,12 @@ namespace MaterialCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr AStringView s_MaterialMetaDiagnosticPrefix = "Material meta";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static bool HasProjectAssetVirtualRoot(const AStringView virtualPath, ScratchArena& scratchArena){
     const auto virtualRoot = Core::Assets::AssetPathsDetail::ExtractAssetVirtualRoot(virtualPath, scratchArena);
     if(!virtualRoot)
@@ -445,7 +451,7 @@ Expected<MaterialCookEntry> ParseMaterialMeta(const Path& assetRoot, const AStri
     MaterialCookEntry entry(arena);
 
     const Core::Metascript::Value& asset = doc.asset();
-    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, "Material meta"))
+    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_MaterialMetaDiagnosticPrefix))
         return MakeUnexpected(Failure{});
 
     // Keep the material path as readable text for generated shader paths; validate its Name identity before storage.
@@ -458,7 +464,7 @@ Expected<MaterialCookEntry> ParseMaterialMeta(const Path& assetRoot, const AStri
         return MakeUnexpected(Failure{});
     }
     entry.virtualPath = Move(*derivedVirtualPath);
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, "Material meta", MaterialAssetMetadataSchema::IsAllowedAssetField))
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_MaterialMetaDiagnosticPrefix, MaterialAssetMetadataSchema::IsAllowedAssetField))
         return MakeUnexpected(Failure{});
 
     auto shaderVariant = ParseVariantField(nwbFilePath, asset, MaterialAssetMetadataSchema::s_ShaderVariantField, arena, scratchArena);

@@ -24,6 +24,12 @@ namespace __hidden_hardware_transparent_shadow{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Pipeline order matches the shader name table; the overflow args buffer is the third scratch buffer.
+inline constexpr u32 s_GatherStage = 0u;
+inline constexpr u32 s_EvaluateStage = 1u;
+inline constexpr u32 s_OverflowStage = 2u;
+inline constexpr u32 s_OverflowArgsBufferIndex = 2u;
+
 struct PushConstants{
     u32 width;
     u32 height;
@@ -118,7 +124,7 @@ bool RendererRayTracingSystem::prepareHardwareTransparentShadowResources(Deferre
                 .setByteSize(sizes[i])
                 .setStructStride(sizeof(u32))
                 .setCanHaveUAVs(true)
-                .setIsDrawIndirectArgs(i == 2u)
+                .setIsDrawIndirectArgs(i == __hidden_hardware_transparent_shadow::s_OverflowArgsBufferIndex)
                 .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
                 .setDebugName(names[i])
                 .enableAutomaticStateTracking(Core::ResourceStates::UnorderedAccess)
@@ -215,7 +221,7 @@ void RendererRayTracingSystem::dispatchHardwareTransparentShadow(Core::CommandLi
             {
                 Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowTransparentGather, device, commandList);
 
-                bind(0u, false);
+                bind(__hidden_hardware_transparent_shadow::s_GatherStage, false);
                 commandList.dispatch(groupsX, groupsY, 1u);
             }
             commandList.setBufferState(state.m_crossingsBuffer.get(), Core::ResourceStates::ShaderResource);
@@ -225,7 +231,7 @@ void RendererRayTracingSystem::dispatchHardwareTransparentShadow(Core::CommandLi
             {
                 Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowTransparentEvaluate, device, commandList);
 
-                bind(1u, false);
+                bind(__hidden_hardware_transparent_shadow::s_EvaluateStage, false);
                 commandList.dispatch(groupsX, groupsY, 1u);
             }
             // Fast evaluation and continuation write disjoint pixels, but the next sample reads their accumulated result.
@@ -234,7 +240,7 @@ void RendererRayTracingSystem::dispatchHardwareTransparentShadow(Core::CommandLi
             {
                 Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowTransparentContinuation, device, commandList);
 
-                bind(2u, true);
+                bind(__hidden_hardware_transparent_shadow::s_OverflowStage, true);
                 commandList.dispatchIndirect(0u);
             }
         }

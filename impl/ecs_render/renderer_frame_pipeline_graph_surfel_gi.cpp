@@ -123,7 +123,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         return m_deferredLightingTaskGraph.importBuffer(buffer, BufferResourceDesc(identity, label));
     };
     const auto surfelIrradianceHalfResult = importTexture(deferredTargets.surfelIrradianceHalf, Name("render.surfel_gi.irradiance_half"), "Surfel Irradiance Half");
-    const auto sceneGeometryDomainResult = m_deferredLightingTaskGraph.importHazardDomain(HazardDomainDesc(Name("render.surfel_gi.scene_geometry"), "Scene Acceleration and Geometry"));
+    const auto sceneGeometryDomainResult = m_deferredLightingTaskGraph.importHazardDomain(HazardDomainDesc(Name("render.surfel_gi.scene_geometry"), RendererFramePipelineDetail::s_SceneGeometryDomainLabel));
     if(!surfelIrradianceHalfResult || !sceneGeometryDomainResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred surfel-GI graph resources"));
         return false;
@@ -140,14 +140,21 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resolveResourceUses{ scratchArena };
     constexpr usize s_SurfelResourceUseCapacity = 29u;
     constexpr usize s_SurfelTraceResourceUseCapacity = 17u;
+    constexpr usize s_SurfelAgeFreeResourceUseCapacity = 4u;
+    constexpr usize s_SurfelHashBuildResourceUseCapacity = 3u;
+    constexpr usize s_SurfelSpawnResourceUseCapacity = 10u;
+    constexpr usize s_SurfelTraceBuildArgsResourceUseCapacity = 3u;
+    constexpr usize s_SurfelResolveResourceUseCapacity = 6u;
+    // The CSG trace context and the surfel counter it updates.
+    constexpr usize s_SurfelCsgTraceContextUseCapacity = 2u;
     const bool hasCsgTraceContext = rayTracingResources.csgTraceContextBuffer.get() != nullptr;
     resourceUses.reserve(s_SurfelResourceUseCapacity + (hasCsgTraceContext ? 1u : 0u) + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResourceCount));
-    ageFreeResourceUses.reserve(4u);
-    hashBuildResourceUses.reserve(3u);
-    spawnResourceUses.reserve(10u);
-    traceBuildArgsResourceUses.reserve(3u);
-    traceResourceUses.reserve(s_SurfelTraceResourceUseCapacity + (hasCsgTraceContext ? 2u : 0u) + rayTracingResources.csgTraceBoundsBufferCount + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResourceCount));
-    resolveResourceUses.reserve(6u);
+    ageFreeResourceUses.reserve(s_SurfelAgeFreeResourceUseCapacity);
+    hashBuildResourceUses.reserve(s_SurfelHashBuildResourceUseCapacity);
+    spawnResourceUses.reserve(s_SurfelSpawnResourceUseCapacity);
+    traceBuildArgsResourceUses.reserve(s_SurfelTraceBuildArgsResourceUseCapacity);
+    traceResourceUses.reserve(s_SurfelTraceResourceUseCapacity + (hasCsgTraceContext ? s_SurfelCsgTraceContextUseCapacity : 0u) + rayTracingResources.csgTraceBoundsBufferCount + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResourceCount));
+    resolveResourceUses.reserve(s_SurfelResolveResourceUseCapacity);
     resourceUses.push_back(ReadUse(worldPosition));
     resourceUses.push_back(ReadUse(normal));
     resourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
@@ -215,7 +222,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         if(!shadowInstancesResult)
             return MakeUnexpected(Failure{});
         shadowInstances = *shadowInstancesResult;
-        const auto surfelConstantsResult = appendOptionalReadBuffer(rayTracingSurfelResources.constantsBuffer, Name("render.surfel_gi.constants"), "Surfel Constants", Core::ResourceStates::ConstantBuffer);
+        const auto surfelConstantsResult = appendOptionalReadBuffer(rayTracingSurfelResources.constantsBuffer, Name(RendererFramePipelineDetail::s_SurfelConstantsName), RendererFramePipelineDetail::s_SurfelConstantsLabel, Core::ResourceStates::ConstantBuffer);
         if(!surfelConstantsResult)
             return MakeUnexpected(Failure{});
         surfelConstants = *surfelConstantsResult;
@@ -231,7 +238,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         if(!surfelCellHeadResult)
             return MakeUnexpected(Failure{});
         surfelCellHead = *surfelCellHeadResult;
-        const auto surfelCounterResult = appendOptionalWriteBuffer(rayTracingSurfelResources.counterBuffer, Name("render.surfel_gi.counter"), "Surfel Counter", Core::ResourceStates::UnorderedAccess);
+        const auto surfelCounterResult = appendOptionalWriteBuffer(rayTracingSurfelResources.counterBuffer, Name(RendererFramePipelineDetail::s_SurfelCounterName), RendererFramePipelineDetail::s_SurfelCounterLabel, Core::ResourceStates::UnorderedAccess);
         if(!surfelCounterResult)
             return MakeUnexpected(Failure{});
         surfelCounter = *surfelCounterResult;
@@ -266,13 +273,13 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         optionalResourcesImported = surfelTraceIndirectArgsResult.has_value();
     }
     if(optionalResourcesImported && !useHwTrace){
-        const auto sceneBvhNodesResult = appendOptionalReadBuffer(rayTracingResources.sceneBvhNodeBuffer, Name("render.shadow_visibility.scene_bvh_nodes"), "Scene BVH Nodes", Core::ResourceStates::ShaderResource);
+        const auto sceneBvhNodesResult = appendOptionalReadBuffer(rayTracingResources.sceneBvhNodeBuffer, Name(RendererFramePipelineDetail::s_SceneBvhNodesName), RendererFramePipelineDetail::s_SceneBvhNodesLabel, Core::ResourceStates::ShaderResource);
         if(sceneBvhNodesResult)
             sceneBvhNodes = *sceneBvhNodesResult;
         optionalResourcesImported = sceneBvhNodesResult.has_value();
     }
     if(optionalResourcesImported && !useHwTrace){
-        const auto sceneInstancesResult = appendOptionalReadBuffer(rayTracingResources.sceneInstanceBuffer, Name("render.shadow_visibility.scene_instances"), "Scene Instances", Core::ResourceStates::ShaderResource);
+        const auto sceneInstancesResult = appendOptionalReadBuffer(rayTracingResources.sceneInstanceBuffer, Name(RendererFramePipelineDetail::s_SceneInstancesName), RendererFramePipelineDetail::s_SceneInstancesLabel, Core::ResourceStates::ShaderResource);
         if(sceneInstancesResult)
             sceneInstances = *sceneInstancesResult;
         optionalResourcesImported = sceneInstancesResult.has_value();

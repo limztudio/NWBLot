@@ -82,7 +82,7 @@ void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(Core::CommandLi
     NWB_ASSERT(heap.isInitialized());
 
     RayTracingCausticsTaskDetail::EnableCausticResolveBarriers(commandList, targets);
-    const RayTracingDetail::DispatchGroups groups = RayTracingDetail::ResolveDispatchGroups(targets.width, targets.height, 2u, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
+    const RayTracingDetail::DispatchGroups groups = RayTracingDetail::ResolveDispatchGroups(targets.width, targets.height, s_CausticResolveDownscaleFactor, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
     const f32 temporalDecay = m_rayTracingState.m_causticTemporalDecay;
     const f32 effectiveIntensity = VectorGetX(EffectiveCausticIntensity(VectorReplicate(temporalDecay)));
     // Alternate the prepare output and its counterpart while doubling the wavelet sampling distance.
@@ -91,7 +91,9 @@ void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(Core::CommandLi
     const RayTracingCausticsTaskDetail::CausticResolvePassResources halfB{ targets.causticResolveHalf.get(), targets.bindless.causticResolveHalf.slot(), targets.bindless.causticResolveHalfStorage.slot() };
     const u32 stepWidth = 1u << passIndex;
     const CausticResolveState& resolve = m_rayTracingState.m_causticResolve;
-    const CausticResolveStageState& wavelet = stepWidth == 1u ? resolve.m_waveletStepOne : stepWidth == 2u ? resolve.m_waveletStepTwo : stepWidth > NWB_CAUSTIC_RESOLVE_LDS_MAX_STEP ? resolve.m_waveletDirect : resolve.m_wavelet;
+    constexpr u32 s_WaveletStepOneWidth = 1u;
+    constexpr u32 s_WaveletStepTwoWidth = 2u;
+    const CausticResolveStageState& wavelet = stepWidth == s_WaveletStepOneWidth ? resolve.m_waveletStepOne : stepWidth == s_WaveletStepTwoWidth ? resolve.m_waveletStepTwo : stepWidth > NWB_CAUSTIC_RESOLVE_LDS_MAX_STEP ? resolve.m_waveletDirect : resolve.m_wavelet;
     NWB_ASSERT(wavelet.m_pipeline);
     RayTracingCausticsTaskDetail::DispatchCausticResolvePass(
         commandList,

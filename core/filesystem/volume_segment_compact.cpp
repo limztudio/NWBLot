@@ -69,7 +69,7 @@ bool VolumeFileSystem::trimSegmentsForNextFreeOffsetLocked(){
         return false;
     }
     if(m_segmentPaths.empty()){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpTrimSegments, "no segments are mounted");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpTrimSegments, FilesystemVolumeDetail::s_VolumeDetailNoSegmentsMounted);
         return false;
     }
 

@@ -34,6 +34,7 @@ inline constexpr u32 s_ExpectedDualCount = 2u;
 
 
 TEST(AllocatorUsageBoundaries, GlobalArenaChargesUsableBytesAcrossOddSizeReallocations){
+    constexpr u32 s_OddBytes = 13u;
     constexpr Name s_Owner("tests/allocation_owners/odd_reallocation");
     GlobalArena arena(s_Owner);
     auto* pointer = static_cast<u8*>(arena.allocate(1u, s_OddBytes));

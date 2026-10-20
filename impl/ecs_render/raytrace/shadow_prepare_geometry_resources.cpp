@@ -127,7 +127,7 @@ ShadowPrepareGeometryResources::BufferRequest* ShadowPrepareGeometryResources::f
 }
 
 void ShadowPrepareGeometryResources::promoteRequests(){
-    RequestIndex requests(s_InlineCount * 4u, m_scratchArena);
+    RequestIndex requests(s_PromotedIndexCapacity, m_scratchArena);
     for(const InlineRequest& entry : m_inlineRequests){
         if(!requests.emplace(entry.buffer, entry.request).second)
             TerminateInvariant();
@@ -232,7 +232,7 @@ void ShadowPrepareGeometryResources::prepareNames()const{
             ++m_inlineNameCount;
             continue;
         }
-        NameIndex names(s_InlineCount * 4u, m_scratchArena);
+        NameIndex names(s_PromotedIndexCapacity, m_scratchArena);
         for(const NameHash* const existing : m_inlineNames)
             names.insert(MakeNotNull(existing));
         names.insert(MakeNotNull(&identity));

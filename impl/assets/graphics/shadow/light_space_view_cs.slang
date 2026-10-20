@@ -13,13 +13,22 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static const float NWB_LIGHT_SPACE_HELPER_AXIS_Y_MAX = 0.9;
+static const float NWB_LIGHT_SPACE_NEAR_PLANE_MIN_SCALE = 0.25;
+static const float NWB_LIGHT_SPACE_FIT_PADDING_MIN = 0.001;
+static const float NWB_LIGHT_SPACE_FIT_PADDING_SCALE = 0.00001;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void nwbLightSpaceStoreView(const uint index, const NwbLightSpaceView view){
     const uint address = index * NWB_LIGHT_SPACE_VIEW_BYTES;
     for(uint row = 0u; row < 4u; ++row)
-        g_NwbHeapStorageBuffers[g_NwbLightSpacePush.viewSlot].Store4(address + row * 16u, asuint(view.worldToClipRows[row]));
-    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.viewSlot].Store4(address + 64u, asuint(view.originOrDirection));
-    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.viewSlot].Store4(address + 80u, asuint(view.depthRange));
-    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.viewSlot].Store4(address + 112u, view.light);
+        g_NwbHeapStorageBuffers[g_NwbLightSpacePush.viewSlot].Store4(address + row * NWB_LIGHT_SPACE_VIEW_ROW_BYTES, asuint(view.worldToClipRows[row]));
+    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.viewSlot].Store4(address + NWB_LIGHT_SPACE_VIEW_ORIGIN_OFFSET, asuint(view.originOrDirection));
+    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.viewSlot].Store4(address + NWB_LIGHT_SPACE_VIEW_DEPTH_RANGE_OFFSET, asuint(view.depthRange));
+    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.viewSlot].Store4(address + NWB_LIGHT_SPACE_VIEW_LIGHT_OFFSET, view.light);
 }
 
 float3 nwbLightSpaceCorner(const NwbBvhNode root, const uint corner){
@@ -42,18 +51,18 @@ bool nwbLightSpaceBuildView(inout NwbLightSpaceView view){
     float3 up;
     if(point){
         const float3 faceDirections[6] = { float3(1, 0, 0), float3(-1, 0, 0), float3(0, 1, 0), float3(0, -1, 0), float3(0, 0, 1), float3(0, 0, -1), };
-        if(view.light.z >= 6u || !all(isfinite(light.position.xyz)))
+        if(view.light.z >= NWB_LIGHT_SPACE_CUBE_FACE_COUNT || !all(isfinite(light.position.xyz)))
             return false;
         forward = faceDirections[view.light.z];
-        const float3 helper = abs(forward.y) > 0.9 ? float3(0, 0, 1) : float3(0, 1, 0);
+        const float3 helper = abs(forward.y) > NWB_LIGHT_SPACE_HELPER_AXIS_Y_MAX ? float3(0, 0, 1) : float3(0, 1, 0);
         right = normalize(cross(helper, forward));
         up = cross(forward, right);
         view.originOrDirection = float4(light.position.xyz, 1.0);
-        const float minimumNearPlane = NWB_SHADOW_RAY_MIN_DISTANCE * 0.25;
+        const float minimumNearPlane = NWB_SHADOW_RAY_MIN_DISTANCE * NWB_LIGHT_SPACE_NEAR_PLANE_MIN_SCALE;
         float farPlane = minimumNearPlane;
         for(uint corner = 0u; corner < 8u; ++corner)
             farPlane = max(farPlane, length(nwbLightSpaceCorner(root, corner) - light.position.xyz));
-        farPlane += max(0.001, farPlane * 0.00001);
+        farPlane += max(NWB_LIGHT_SPACE_FIT_PADDING_MIN, farPlane * NWB_LIGHT_SPACE_FIT_PADDING_SCALE);
         if(!isfinite(farPlane) || farPlane <= minimumNearPlane)
             return false;
         float minimumCasterDistance = farPlane;
@@ -86,10 +95,10 @@ bool nwbLightSpaceBuildView(inout NwbLightSpaceView view){
         if(!all(isfinite(light.direction.xyz)) || dot(light.direction.xyz, light.direction.xyz) <= 0.0)
             return false;
         forward = -normalize(light.direction.xyz);
-        const float3 helper = abs(forward.y) > 0.9 ? float3(0, 0, 1) : float3(0, 1, 0);
+        const float3 helper = abs(forward.y) > NWB_LIGHT_SPACE_HELPER_AXIS_Y_MAX ? float3(0, 0, 1) : float3(0, 1, 0);
         right = normalize(cross(helper, forward));
         up = cross(forward, right);
-        float3 lower = float3(asfloat(0x7f7fffffu));
+        float3 lower = float3(asfloat(NWB_FLOAT_MAX_BITS));
         float3 upper = -lower;
         for(uint corner = 0u; corner < 8u; ++corner){
             const float3 p = nwbLightSpaceCorner(root, corner);
@@ -97,7 +106,7 @@ bool nwbLightSpaceBuildView(inout NwbLightSpaceView view){
             lower = min(lower, projected);
             upper = max(upper, projected);
         }
-        const float3 padding = max(float3(0.001), max(abs(lower), abs(upper)) * 0.00001);
+        const float3 padding = max(float3(NWB_LIGHT_SPACE_FIT_PADDING_MIN), max(abs(lower), abs(upper)) * NWB_LIGHT_SPACE_FIT_PADDING_SCALE);
         lower -= padding;
         upper += padding;
         const float3 extent = upper - lower;

@@ -80,7 +80,7 @@ bool Mesh::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
         return false;
     }
     const usize triangleCount = meshletPrimitiveIndices().size() / s_MeshletTriangleIndexCount;
-    const u32 tailBits = static_cast<u32>(triangleCount % 32u);
+    const u32 tailBits = static_cast<u32>(triangleCount % s_MeshletSolidTriangleWordBits);
     if(tailBits != 0u && (solidTriangleWords().back() >> tailBits) != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Mesh::validatePayload failed: mesh '{}' has invalid solid triangle padding"), meshPathText);
         return false;

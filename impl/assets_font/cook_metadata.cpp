@@ -61,7 +61,7 @@ Expected<FontCookEntry> ParseFontCookMetadataValue(const Name virtualPath, const
             return MakeUnexpected(Failure{});
     }
     Path fontPath = nwbFilePath;
-    fontPath.replaceExtension(".font");
+    fontPath.replaceExtension(s_PreparedFontExtension);
     auto source = ReadPreparedFontSource(fontPath, arena, false);
     if(!source || !ValidateFontSource(source->fontBytes, source->faceIndex))
         return MakeUnexpected(Failure{});

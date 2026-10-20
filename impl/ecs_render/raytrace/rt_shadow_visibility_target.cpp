@@ -21,7 +21,7 @@ NWB_IMPL_BEGIN
 
 
 bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets& targets){
-    if(targets.shadowReceiverFactor != 2u && targets.shadowReceiverFactor != 4u)
+    if(targets.shadowReceiverFactor != s_ShadowReceiverFactorHalf && targets.shadowReceiverFactor != s_ShadowReceiverFactorQuarter)
         return false;
     // Deferred lighting always samples this per-slot transmittance target.
     targets.shadowVisibilityFormat = Core::Format::RGBA16_FLOAT;

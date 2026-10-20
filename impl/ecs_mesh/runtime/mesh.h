@@ -7,6 +7,8 @@
 
 #include "../../global.h"
 
+#include <impl/assets_mesh/payload_types.h>
+
 #include <core/alloc/general.h>
 #include <core/assets/ref.h>
 #include <core/ecs/entity_id.h>
@@ -143,7 +145,7 @@ struct RuntimeMeshDesc : public RuntimeMeshBuffers{
 
 public:
     [[nodiscard]] bool valid()const noexcept{
-        return entity.valid() && meshKey != s_NameNone && buffersValid() && meshletCount > 0u && meshletPrimitiveIndexCount > 0u && solidTriangleWords.size() == (static_cast<usize>(meshletPrimitiveIndexCount) / 3u + 31u) / 32u && localBounds.valid();
+        return entity.valid() && meshKey != s_NameNone && buffersValid() && meshletCount > 0u && meshletPrimitiveIndexCount > 0u && solidTriangleWords.size() == (static_cast<usize>(meshletPrimitiveIndexCount) / s_MeshletTriangleIndexCount + s_MeshletSolidTriangleWordRoundUp) / s_MeshletSolidTriangleWordBits && localBounds.valid();
     }
 };
 

@@ -45,6 +45,15 @@ template<typename CharT>
 
 #if defined(NWB_PLATFORM_WINDOWS)
 inline constexpr usize s_PathCapacity = 32768u;
+inline constexpr usize s_DevicePrefixLength = 4u;
+inline constexpr usize s_UncPrefixLength = 2u;
+inline constexpr usize s_DeviceUncPrefixLength = 8u;
+inline constexpr usize s_DeviceUncInsertLength = s_DeviceUncPrefixLength - s_UncPrefixLength;
+inline constexpr usize s_DeviceDrivePrefixLength = 6u;
+inline constexpr usize s_DeviceDriveRootLength = 7u;
+inline constexpr usize s_UncRootComponentCount = 2u;
+inline constexpr usize s_WildcardSuffixLength = 3u;
+inline constexpr usize s_ChildNameOverhead = 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -60,23 +69,23 @@ inline constexpr usize s_PathCapacity = 32768u;
 
 [[nodiscard]] inline usize WindowsRootLength(const WStringView path)noexcept{
     usize begin = 0u;
-    if(path.size() >= 4u && path[0] == L'\\' && path[1] == L'\\' && (path[2] == L'?' || path[2] == L'.') && path[3] == L'\\'){
-        if(path.size() >= 8u && (path[4] == L'U' || path[4] == L'u') && (path[5] == L'N' || path[5] == L'n') && (path[6] == L'C' || path[6] == L'c') && path[7] == L'\\')
-            begin = 8u;
-        else if(path.size() >= 6u && path[5] == L':')
-            return path.size() >= 7u && GlobalFilesystemPathDetail::IsSeparator(path[6]) ? 7u : 6u;
+    if(path.size() >= s_DevicePrefixLength && path[0] == L'\\' && path[1] == L'\\' && (path[2] == L'?' || path[2] == L'.') && path[3] == L'\\'){
+        if(path.size() >= s_DeviceUncPrefixLength && (path[4] == L'U' || path[4] == L'u') && (path[5] == L'N' || path[5] == L'n') && (path[6] == L'C' || path[6] == L'c') && path[7] == L'\\')
+            begin = s_DeviceUncPrefixLength;
+        else if(path.size() >= s_DeviceDrivePrefixLength && path[5] == L':')
+            return path.size() >= s_DeviceDriveRootLength && GlobalFilesystemPathDetail::IsSeparator(path[6]) ? s_DeviceDriveRootLength : s_DeviceDrivePrefixLength;
         else
             return path.size();
     }
-    else if(path.size() >= 2u && GlobalFilesystemPathDetail::IsSeparator(path[0]) && GlobalFilesystemPathDetail::IsSeparator(path[1]))
-        begin = 2u;
+    else if(path.size() >= s_UncPrefixLength && GlobalFilesystemPathDetail::IsSeparator(path[0]) && GlobalFilesystemPathDetail::IsSeparator(path[1]))
+        begin = s_UncPrefixLength;
     else
         return GlobalFilesystemPathDetail::RootDirectoryLength(path);
 
     usize component = 0u;
     for(usize cursor = begin; cursor < path.size(); ++cursor){
         if(GlobalFilesystemPathDetail::IsSeparator(path[cursor])){
-            if(++component == 2u)
+            if(++component == s_UncRootComponentCount)
                 return cursor + 1u;
         }
     }
@@ -101,7 +110,7 @@ inline constexpr usize s_PathCapacity = 32768u;
             }
         }
         else{
-            if(end > s_PathCapacity - 3u)
+            if(end > s_PathCapacity - s_WildcardSuffixLength)
                 return MakeUnexpected(WindowsError(ERROR_FILENAME_EXCED_RANGE));
             path[end] = L'\\';
             path[end + 1u] = L'*';
@@ -115,7 +124,7 @@ inline constexpr usize s_PathCapacity = 32768u;
                 for(;;){
                     const WStringView name(data.cFileName);
                     if(!GlobalFilesystemPathDetail::IsDot(name) && !GlobalFilesystemPathDetail::IsDotDot(name)){
-                        if(name.size() > s_PathCapacity - end - 2u)
+                        if(name.size() > s_PathCapacity - end - s_ChildNameOverhead)
                             iterationError = WindowsError(ERROR_FILENAME_EXCED_RANGE);
                         else{
                             path[end] = L'\\';
@@ -252,14 +261,14 @@ template<typename ArenaT>
     if(end <= GlobalFilesystemCleanupDetail::WindowsRootLength(WStringView(buffer, absoluteSize)))
         return MakeUnexpected(GlobalFilesystemCleanupDetail::WindowsError(ERROR_INVALID_NAME));
     buffer[end] = 0;
-    if(end >= 4u && buffer[0] == L'\\' && buffer[1] == L'\\' && buffer[2] == L'.' && buffer[3] == L'\\')
+    if(end >= GlobalFilesystemCleanupDetail::s_DevicePrefixLength && buffer[0] == L'\\' && buffer[1] == L'\\' && buffer[2] == L'.' && buffer[3] == L'\\')
         buffer[2] = L'?';
-    if(!(end >= 4u && buffer[0] == L'\\' && buffer[1] == L'\\' && buffer[2] == L'?' && buffer[3] == L'\\')){
-        const bool unc = end >= 2u && buffer[0] == L'\\' && buffer[1] == L'\\';
-        const usize prefix = unc ? 6u : 4u;
+    if(!(end >= GlobalFilesystemCleanupDetail::s_DevicePrefixLength && buffer[0] == L'\\' && buffer[1] == L'\\' && buffer[2] == L'?' && buffer[3] == L'\\')){
+        const bool unc = end >= GlobalFilesystemCleanupDetail::s_UncPrefixLength && buffer[0] == L'\\' && buffer[1] == L'\\';
+        const usize prefix = unc ? GlobalFilesystemCleanupDetail::s_DeviceUncInsertLength : GlobalFilesystemCleanupDetail::s_DevicePrefixLength;
         if(end > GlobalFilesystemCleanupDetail::s_PathCapacity - prefix - 1u)
             return MakeUnexpected(GlobalFilesystemCleanupDetail::WindowsError(ERROR_FILENAME_EXCED_RANGE));
-        for(usize index = end + 1u; index > (unc ? 2u : 0u); --index)
+        for(usize index = end + 1u; index > (unc ? GlobalFilesystemCleanupDetail::s_UncPrefixLength : 0u); --index)
             buffer[index - 1u + prefix] = buffer[index - 1u];
         buffer[0] = L'\\'; buffer[1] = L'\\'; buffer[2] = L'?'; buffer[3] = L'\\';
         if(unc){

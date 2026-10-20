@@ -15,6 +15,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static const float3 NWB_OPTICAL_BOOTSTRAP_RAY_DIRECTION = float3(0.754877666, 0.569840291, 0.324717957);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct NwbOpticalBootstrapEvent{
     float distance;
     uint instance;
@@ -44,8 +50,8 @@ bool nwbOpticalBootstrap(const NwbOpticalTraceConfig config, const float3 origin
     }
     if(any(origin < boundsMin) || any(origin > boundsMax))
         return true;
-    const float3 bootstrapDirection = normalize(float3(0.754877666, 0.569840291, 0.324717957));
-    const float tolerance = 4.0 * max(nwbOpticsPositionUncertainty(boundsMin), nwbOpticsPositionUncertainty(boundsMax));
+    const float3 bootstrapDirection = normalize(NWB_OPTICAL_BOOTSTRAP_RAY_DIRECTION);
+    const float tolerance = NWB_OPTICS_POSITION_TOLERANCE_SCALE * max(nwbOpticsPositionUncertainty(boundsMin), nwbOpticsPositionUncertainty(boundsMax));
     const float bootstrapDistance = length(boundsMax - boundsMin) + tolerance * 2.0;
     RayDesc ray;
     ray.Origin = origin - bootstrapDirection * bootstrapDistance;
@@ -112,7 +118,7 @@ bool nwbOpticalBootstrap(const NwbOpticalTraceConfig config, const float3 origin
         const float3 normal = nwbRayTraceTriangleGeometricNormal(material, query.CandidatePrimitiveIndex(), query.CandidateWorldToObject3x4());
         const float facing = dot(bootstrapDirection, normal);
         const float distance = query.CandidateTriangleRayT();
-        if(!isfinite(facing) || abs(facing) <= 1e-6 || bootstrapDistance - distance <= tolerance){
+        if(!isfinite(facing) || abs(facing) <= NWB_OPTICAL_FACING_EPSILON || bootstrapDistance - distance <= tolerance){
             query.Abort();
             result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
             return false;
@@ -141,10 +147,10 @@ bool nwbOpticalBootstrap(const NwbOpticalTraceConfig config, const float3 origin
 #if NWB_RT_CSG_ENABLED
     // Raw receiver triangles do not describe retained containment. Replay each retained boundary, including analytic walls, with the same bounded event and query budgets.
     const uint contextSlot = NWB_RT_CSG_CONTEXT_SLOT;
-    const uint activeOffset = nwbHeapRawBuffer(contextSlot).Load(20u);
-    const uint activeCount = nwbHeapRawBuffer(contextSlot).Load(24u);
+    const uint activeOffset = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_BASE_OFFSET);
+    const uint activeCount = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_COUNT_OFFSET);
     for(uint activeIndex = 0u; activeIndex < activeCount; ++activeIndex){
-        const uint instance = nwbHeapRawBuffer(contextSlot).Load(activeOffset + activeIndex * 4u);
+        const uint instance = nwbHeapRawBuffer(contextSlot).Load(activeOffset + activeIndex * NWB_CSG_RAY_ACTIVE_INDEX_BYTES);
         NwbOpticalInstance optical;
         if(!nwbOpticalReadInstance(config, instance, optical, result))
             return false;

@@ -27,11 +27,11 @@ struct ScrollbarStyle{
     Name thumbPressed = UiSkinToolkitRegions::s_ButtonPressedRegionName;
     Name thumbDisabled = UiSkinToolkitRegions::s_ButtonDisabledRegionName;
     Name thumbFallback = UiSkinToolkitRegions::s_ButtonNormalRegionName;
-    Color trackColor = { 0.08f, 0.10f, 0.14f, 1.0f };
+    Color trackColor = s_StyleInsetColor;
     Color thumbColor = { 0.35f, 0.40f, 0.48f, 1.0f };
     Color disabledColor = { 0.25f, 0.28f, 0.32f, 1.0f };
-    f32 thickness = 14.0f;
-    f32 minimumThumb = 20.0f;
+    f32 thickness = s_StyleScrollbarThickness;
+    f32 minimumThumb = s_StyleScrollbarMinimumThumb;
 };
 
 

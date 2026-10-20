@@ -41,7 +41,7 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
     unmountLocked();
 
     if(!ValidVolumeName(desc.volumeName.view())){
-        FilesystemVolumeDetail::LogFailure(desc.volumeName.view(), FilesystemVolumeDetail::s_VolumeOpMount, "invalid volume name");
+        FilesystemVolumeDetail::LogFailure(desc.volumeName.view(), FilesystemVolumeDetail::s_VolumeOpMount, FilesystemVolumeDetail::s_VolumeDetailInvalidVolumeName);
         return false;
     }
 
@@ -118,7 +118,7 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
         }
         const auto& discoveredHeader = *decodedHeader;
         if(NWB_MEMCMP(discoveredHeader.magic, FilesystemVolumeDetail::s_VolumeMagic, sizeof(discoveredHeader.magic)) != 0){
-            FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMount, "magic mismatch");
+            FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMount, FilesystemVolumeDetail::s_VolumeDetailMagicMismatch);
             unmountLocked();
             return false;
         }
@@ -357,16 +357,16 @@ bool VolumeFileSystem::seekFile(FileCursor& cursor, const i64 offset, const File
 bool VolumeFileSystem::removeFile(const Name& virtualPath){
     ScopedLock lock(m_mutex);
     if(!m_mounted || !m_writable){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpRemoveFile, "filesystem is not mounted in writable mode");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpRemoveFile, FilesystemVolumeDetail::s_VolumeDetailNotMountedWritable);
         return false;
     }
     if(!virtualPath){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpRemoveFile, "virtual path is invalid");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpRemoveFile, FilesystemVolumeDetail::s_VolumeDetailInvalidVirtualPath);
         return false;
     }
     const auto itr = m_files.find(virtualPath);
     if(itr == m_files.end()){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpRemoveFile, "file was not found");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpRemoveFile, FilesystemVolumeDetail::s_VolumeDetailFileNotFound);
         return false;
     }
 
@@ -391,17 +391,17 @@ bool VolumeFileSystem::fileExists(const Name& virtualPath)const noexcept{
 Expected<u64> VolumeFileSystem::fileSize(const Name& virtualPath)const noexcept(!NWB_OCCUR_WARNING){
     NothrowScopedLock lock(m_mutex);
     if(!m_mounted){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpFileSize, "filesystem is not mounted");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpFileSize, FilesystemVolumeDetail::s_VolumeDetailNotMounted);
         return MakeUnexpected(Failure{});
     }
     if(!virtualPath){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpFileSize, "virtual path is invalid");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpFileSize, FilesystemVolumeDetail::s_VolumeDetailInvalidVirtualPath);
         return MakeUnexpected(Failure{});
     }
 
     const auto itr = m_files.find(virtualPath);
     if(itr == m_files.end()){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpFileSize, "file was not found");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpFileSize, FilesystemVolumeDetail::s_VolumeDetailFileNotFound);
         return MakeUnexpected(Failure{});
     }
 
@@ -424,7 +424,7 @@ Vector<Name, VolumeArena> VolumeFileSystem::listFiles()const{
 bool VolumeFileSystem::compact(const bool shrinkSegments){
     ScopedLock lock(m_mutex);
     if(!m_mounted || !m_writable){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpCompact, "filesystem is not mounted in writable mode");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpCompact, FilesystemVolumeDetail::s_VolumeDetailNotMountedWritable);
         return false;
     }
 
@@ -570,11 +570,11 @@ bool VolumeFileSystem::compact(const bool shrinkSegments){
 
 bool VolumeFileSystem::writeFileLocked(const Name& virtualPath, const void* data, const usize bytes, const MetadataFlushMode::Enum flushMode){
     if(!m_mounted || !m_writable){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpWriteFile, "filesystem is not mounted in writable mode");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpWriteFile, FilesystemVolumeDetail::s_VolumeDetailNotMountedWritable);
         return false;
     }
     if(!virtualPath){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpWriteFile, "virtual path is invalid");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpWriteFile, FilesystemVolumeDetail::s_VolumeDetailInvalidVirtualPath);
         return false;
     }
     if(bytes != 0 && data == nullptr){
@@ -678,16 +678,16 @@ bool VolumeFileSystem::scanSegmentsLocked(){
 
 Expected<VolumeFileSystem::FileRecord> VolumeFileSystem::readFileRecordLocked(const Name& virtualPath)const noexcept(!NWB_OCCUR_WARNING){
     if(!m_mounted){
-        FilesystemVolumeDetail::LogFailure(m_volumeName.view(), FilesystemVolumeDetail::s_VolumeOpReadFile, "filesystem is not mounted");
+        FilesystemVolumeDetail::LogFailure(m_volumeName.view(), FilesystemVolumeDetail::s_VolumeOpReadFile, FilesystemVolumeDetail::s_VolumeDetailNotMounted);
         return MakeUnexpected(Failure{});
     }
     if(!virtualPath){
-        FilesystemVolumeDetail::LogFailure(m_volumeName.view(), FilesystemVolumeDetail::s_VolumeOpReadFile, "virtual path is invalid");
+        FilesystemVolumeDetail::LogFailure(m_volumeName.view(), FilesystemVolumeDetail::s_VolumeOpReadFile, FilesystemVolumeDetail::s_VolumeDetailInvalidVirtualPath);
         return MakeUnexpected(Failure{});
     }
     const auto itr = m_files.find(virtualPath);
     if(itr == m_files.end()){
-        FilesystemVolumeDetail::LogFailure(m_volumeName.view(), FilesystemVolumeDetail::s_VolumeOpReadFile, "file was not found");
+        FilesystemVolumeDetail::LogFailure(m_volumeName.view(), FilesystemVolumeDetail::s_VolumeOpReadFile, FilesystemVolumeDetail::s_VolumeDetailFileNotFound);
         return MakeUnexpected(Failure{});
     }
 

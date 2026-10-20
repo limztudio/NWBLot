@@ -10,6 +10,7 @@
 #include <impl/ecs_render/material/renderer_material_state.h>
 #include <impl/assets_sampler/loader.h>
 #include <impl/assets_texture/loader.h>
+#include <impl/ecs_render/shader/shader_system.h>
 
 #include <core/assets/manager.h>
 #include <core/common/log.h>
@@ -84,7 +85,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn>
         graphics.getDevice().getDescriptorHeap(),
         &TextureGpuResource::sampledImageHeapHandle,
         [&](TextureGpuResource& outResource, const Core::Assets::AssetRef<Texture>& assetRef, const Name& assetPath){
-            if(!TextureAssetLoader::Load(outResource, assetRef, assetPath, graphics, assetManager, NWB_TEXT("RendererSystem")))
+            if(!TextureAssetLoader::Load(outResource, assetRef, assetPath, graphics, assetManager, s_RendererAssetOwnerName))
                 return false;
             if(outResource.sampledImageHeapHandle.descriptorClass() != Core::GpuDescriptorClass::SampledImage){
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: Texture2D asset '{}' has an incompatible texture dimension"), StringConvert(assetPath.resolvedText()));
@@ -107,7 +108,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn>
         graphics.getDevice().getDescriptorHeap(),
         &SamplerGpuResource::samplerHeapHandle,
         [&](SamplerGpuResource& outResource, const Core::Assets::AssetRef<Sampler>& assetRef, const Name& assetPath){
-            return SamplerAssetLoader::Load(outResource, assetRef, assetPath, graphics, assetManager, NWB_TEXT("RendererSystem"));
+            return SamplerAssetLoader::Load(outResource, assetRef, assetPath, graphics, assetManager, s_RendererAssetOwnerName);
         }
     );
     if(!samplerResourceResult)
@@ -175,7 +176,7 @@ Expected<MaterialSurfaceInfo*> RendererMaterialSystem::createMaterialSurfaceInfo
         return &info;
     }
 
-    auto loadedAsset = m_assetManager.loadTypedSync<Material>(materialPath, NWB_TEXT("RendererSystem"), "material");
+    auto loadedAsset = m_assetManager.loadTypedSync<Material>(materialPath, s_RendererAssetOwnerName, Material::s_AssetTypeText);
     if(!loadedAsset)
         return MakeUnexpected(Failure{});
 

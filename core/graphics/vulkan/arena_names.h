@@ -43,6 +43,7 @@ inline constexpr AStringView s_AcquiredImageSemaphoreBridgeContext = "acquired i
 inline constexpr AStringView s_AbandonedPresentationSignalIdleContext = "abandoned presentation signal idle";
 inline constexpr AStringView s_UnconsumedPresentationSignalIdleContext = "unconsumed presentation signal idle";
 inline constexpr AStringView s_PresentContext = "present";
+inline constexpr AStringView s_QueueTimelineQueryContext = "queue timeline query";
 inline constexpr Name s_QueueFamilyQueryArena("core/graphics/backend_queue_family_query");
 inline constexpr Name s_SwapChainPresentModeArena("core/graphics/backend_swap_chain_present_mode");
 inline constexpr Name s_DeviceExtensionSetupArena("core/graphics/backend_device_extension_setup");

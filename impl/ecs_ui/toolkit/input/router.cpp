@@ -69,10 +69,11 @@ InputRouter::InputRouter(Core::Alloc::GlobalArena& arena)
     , m_stagedPopups(arena)
     , m_popupDismissals(arena)
 {
-    m_boundSources.reserve(16u);
-    m_commandSources.reserve(16u);
-    m_pointerBindings.reserve(16u);
-    m_pointerSources.reserve(16u);
+    constexpr usize s_SourceReserve = 16u;
+    m_boundSources.reserve(s_SourceReserve);
+    m_commandSources.reserve(s_SourceReserve);
+    m_pointerBindings.reserve(s_SourceReserve);
+    m_pointerSources.reserve(s_SourceReserve);
     m_targets.reserve(s_InputMaxTargets);
     m_stagedTargets.reserve(s_InputMaxTargets);
     m_lookup.reserve(s_InputMaxTargets);

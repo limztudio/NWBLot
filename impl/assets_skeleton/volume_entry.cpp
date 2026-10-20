@@ -9,6 +9,7 @@
 
 
 #include "cook.h"
+#include "binary_payload.h"
 
 #include <core/assets/cook_entry_registry.h>
 
@@ -41,7 +42,7 @@ static Expected<Skeleton> BuildSkeletonCookedAsset(SkeletonCookEntry& entry, Cor
 }
 
 static bool RegisterSkeletonCookEntry(Core::Assets::CookEntryRegistry& registry){
-    return Core::Assets::RegisterDocumentValueCookEntry<SkeletonCookEntry, Skeleton, SkeletonAssetCodec>(registry, NWB_TEXT("skeleton"), &ParseSkeletonDocument, &ParseSkeletonValue, &BuildSkeletonCookedAsset);
+    return Core::Assets::RegisterDocumentValueCookEntry<SkeletonCookEntry, Skeleton, SkeletonAssetCodec>(registry, SkeletonBinaryPayload::s_SkeletonAssetKindLabel, &ParseSkeletonDocument, &ParseSkeletonValue, &BuildSkeletonCookedAsset);
 }
 
 

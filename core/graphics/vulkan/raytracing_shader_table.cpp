@@ -93,12 +93,14 @@ ShaderTable::ShaderTable(const VulkanContext& context, Device& device)noexcept
 ShaderTable::~ShaderTable()noexcept{}
 
 bool ShaderTable::setRayGenerationShader(const AStringView exportName){
+    constexpr TStringView s_OperationName = NWB_TEXT("set ray generation shader");
+    constexpr TStringView s_RecordName = NWB_TEXT("ray generation");
     ScopedLock lock(m_mutex);
 
-    const auto preflight = preflightShaderRecord(exportName, ShaderTableRecordKind::RayGeneration, 1u, NWB_TEXT("set ray generation shader"), NWB_TEXT("ray generation"));
+    const auto preflight = preflightShaderRecord(exportName, ShaderTableRecordKind::RayGeneration, 1u, s_OperationName, s_RecordName);
     if(!preflight)
         return false;
-    auto allocation = allocateSBTBuffer(*preflight, NWB_TEXT("set ray generation shader"), NWB_TEXT("ray generation"));
+    auto allocation = allocateSBTBuffer(*preflight, s_OperationName, s_RecordName);
     if(!allocation)
         return false;
     BufferHandle& newBuffer = allocation->buffer;

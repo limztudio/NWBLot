@@ -18,6 +18,24 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_graphics_pipeline{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr TStringView s_DynamicRenderingBeginFailedReason = NWB_TEXT("dynamic rendering could not begin");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace VulkanDetail{
 
 
@@ -70,7 +88,7 @@ void CommandList::beginRenderPass(Framebuffer& framebuffer, const RenderPassPara
             return;
     }
     if(!beginDynamicRendering(framebuffer, params)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("dynamic rendering could not begin"));
+        rejectCommandRecording(s_OperationName, __hidden_graphics_pipeline::s_DynamicRenderingBeginFailedReason);
         return;
     }
 
@@ -98,11 +116,11 @@ void CommandList::endRenderPass(){
 }
 
 void CommandList::setGraphicsState(const GraphicsState& state){
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("set graphics state")))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_SetGraphicsStateOperation))
         return;
     if(!validateGraphicsState(state))
         return;
-    if(!prepareFramebufferForRendering(state.framebuffer, NWB_TEXT("set graphics state")))
+    if(!prepareFramebufferForRendering(state.framebuffer, s_SetGraphicsStateOperation))
         return;
 
     setResourceStatesForGraphicsBuffers(state);
@@ -147,33 +165,36 @@ void CommandList::setGraphicsState(const GraphicsState& state){
 }
 
 void CommandList::draw(const DrawArguments& args){
+    constexpr TStringView s_OperationName = NWB_TEXT("draw");
     if(args.vertexCount == 0 || args.instanceCount == 0)
         return;
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("draw")))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
         return;
-    if(!validateGraphicsDrawArguments(args, false, NWB_TEXT("draw")))
+    if(!validateGraphicsDrawArguments(args, false, s_OperationName))
         return;
 
     m_context.deviceDispatch.vkCmdDraw(m_currentCmdBuf->m_cmdBuf, args.vertexCount, args.instanceCount, args.startVertexLocation, args.startInstanceLocation);
 }
 
 void CommandList::drawIndexed(const DrawArguments& args){
+    constexpr TStringView s_OperationName = NWB_TEXT("draw indexed");
     if(args.vertexCount == 0 || args.instanceCount == 0)
         return;
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("draw indexed")))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
         return;
-    if(!validateGraphicsDrawArguments(args, true, NWB_TEXT("draw indexed")))
+    if(!validateGraphicsDrawArguments(args, true, s_OperationName))
         return;
 
     m_context.deviceDispatch.vkCmdDrawIndexed(m_currentCmdBuf->m_cmdBuf, args.vertexCount, args.instanceCount, args.startIndexLocation, static_cast<i32>(args.startVertexLocation), args.startInstanceLocation);
 }
 
 void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
+    constexpr TStringView s_OperationName = NWB_TEXT("draw indirect");
     if(drawCount == 0u)
         return;
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("draw indirect")))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
         return;
-    const auto indirectBuffer = prepareDrawIndirect(offsetBytes, drawCount, sizeof(DrawIndirectArguments), NWB_TEXT("draw indirect"), NWB_TEXT("drawIndirect"), VulkanDetail::IndirectDrawIndexMode::NonIndexed);
+    const auto indirectBuffer = prepareDrawIndirect(offsetBytes, drawCount, sizeof(DrawIndirectArguments), s_OperationName, NWB_TEXT("drawIndirect"), VulkanDetail::IndirectDrawIndexMode::NonIndexed);
     if(!indirectBuffer)
         return;
 
@@ -182,11 +203,12 @@ void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
 }
 
 void CommandList::drawIndexedIndirect(u32 offsetBytes, u32 drawCount){
+    constexpr TStringView s_OperationName = NWB_TEXT("draw indexed indirect");
     if(drawCount == 0u)
         return;
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("draw indexed indirect")))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
         return;
-    const auto indirectBuffer = prepareDrawIndirect(offsetBytes, drawCount, sizeof(DrawIndexedIndirectArguments), NWB_TEXT("draw indexed indirect"), NWB_TEXT("drawIndexedIndirect"), VulkanDetail::IndirectDrawIndexMode::Indexed);
+    const auto indirectBuffer = prepareDrawIndirect(offsetBytes, drawCount, sizeof(DrawIndexedIndirectArguments), s_OperationName, NWB_TEXT("drawIndexedIndirect"), VulkanDetail::IndirectDrawIndexMode::Indexed);
     if(!indirectBuffer)
         return;
 
@@ -341,7 +363,7 @@ bool CommandList::ensureGraphicsRenderPass(Framebuffer* framebuffer){
 
     RenderPassParameters params = {};
     if(!beginDynamicRendering(*framebuffer, params)){
-        rejectCommandRecording(NWB_TEXT("begin graphics render pass"), NWB_TEXT("dynamic rendering could not begin"));
+        rejectCommandRecording(NWB_TEXT("begin graphics render pass"), __hidden_graphics_pipeline::s_DynamicRenderingBeginFailedReason);
         return false;
     }
     retainResource(framebuffer);

@@ -127,7 +127,7 @@ inline Expected<StagingTextureQueueFamilies> BuildStagingTextureQueueFamilies(Al
 
     if(result.families.empty())
         return MakeUnexpected(Failure{});
-    if(result.families.size() >= 2u)
+    if(result.families.size() >= s_MinConcurrentSharingQueueFamilyCount)
         result.mode = VK_SHARING_MODE_CONCURRENT;
     return result;
 }

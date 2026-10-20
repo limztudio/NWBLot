@@ -33,7 +33,7 @@ bool BackendContext::createInstance(){
     initDefaultExtensions();
 
     if(m_deviceParams.enableDebugRuntime){
-        m_enabledExtensions.layers.emplace("VK_LAYER_KHRONOS_validation", m_arena);
+        m_enabledExtensions.layers.emplace(VulkanDetail::s_ValidationLayerName, m_arena);
     }
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_InstanceCreateArena, s_DeviceSetupScratchArenaBytes);
@@ -162,8 +162,9 @@ bool BackendContext::createDevice(){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Scheduler queue projection references a missing native queue."));
         return false;
     }
+    constexpr u32 s_ComputeAndTransferQueueCount = 2u;
     Vector<VulkanPhysicalQueueDesc, Alloc::ScratchArena> physicalQueues{scratchArena};
-    physicalQueues.reserve(1u + m_sameClassQueues.size() + 2u);
+    physicalQueues.reserve(1u + m_sameClassQueues.size() + s_ComputeAndTransferQueueCount);
     const auto appendSameClassQueues = [this, &physicalQueues](const CommandQueue::Enum queueClass)noexcept{
         for(const VulkanPhysicalQueueDesc& queue : m_sameClassQueues){
             if(queue.queueClass == queueClass)

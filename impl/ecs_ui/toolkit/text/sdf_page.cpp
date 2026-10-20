@@ -44,7 +44,7 @@ Expected<SharedSdfAtlasPage> CreateSdfAtlasPage(Core::Alloc::GlobalArena& arena,
         !binding.font.valid() || binding.fontGeneration == 0u || binding.atlasIdentity == 0u || binding.generation == 0u
         || binding.index >= s_FontAtlasMaxGroupCount || binding.width == 0u || binding.height == 0u
         || binding.width > s_FontAtlasMaxExtent || binding.height > s_FontAtlasMaxExtent
-        || binding.channelCount == 0u || binding.channelCount > 4u
+        || binding.channelCount == 0u || binding.channelCount > s_SdfMaxChannelCount
         || binding.spreadPixels < s_FontAtlasMinSpreadPixels || binding.spreadPixels > s_FontAtlasMaxSpreadPixels
         || binding.distanceEncoding != s_SdfDistanceEncodingFreeTypeU8
         || pixels.size() != static_cast<usize>(binding.width) * binding.height * binding.channelCount

@@ -42,7 +42,8 @@ Expected<void, Core::CpuTaskAdmissionError::Enum> UiLayerSystem::update(Core::EC
     m_ui.reset();
     m_ui.setSkin(*skin);
     m_paint.begin(m_display, m_frameGeneration, m_skinSelection.generation(), m_skinSelection.selected(), *skin);
-    m_paint.reserve(256u);
+    constexpr usize s_PaintReserveQuads = 256u;
+    m_paint.reserve(s_PaintReserveQuads);
     m_ui.setDeltaSeconds(frameDelta);
     m_ui.setPointerBusy(m_pressedButtons != 0u || m_context.input().primaryDown() || m_context.input().secondaryDown());
     UiPaintContext context{ m_world, m_clipboard, m_textInput, m_paint, m_text, m_display, m_ui, Core::ECS::s_InvalidEntityId, frameDelta };

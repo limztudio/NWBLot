@@ -25,6 +25,14 @@ namespace GlobalFilesystemPathDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr usize s_DriveRootNameLength = 2u;
+inline constexpr usize s_DotDotLength = 2u;
+inline constexpr usize s_RelativeParentStepLength = 3u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename CharT>
 concept PathChar = SameAs<CharT, char> || SameAs<CharT, wchar> || SameAs<CharT, char8_t>;
 
@@ -52,8 +60,8 @@ template<typename CharT>
 template<typename CharT>
 [[nodiscard]] inline usize RootNameLength(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
 #if defined(NWB_PLATFORM_WINDOWS)
-    if(text.size() >= 2u && text[1] == static_cast<CharT>(':'))
-        return 2u;
+    if(text.size() >= s_DriveRootNameLength && text[1] == static_cast<CharT>(':'))
+        return s_DriveRootNameLength;
 #else
     static_cast<void>(text);
 #endif
@@ -77,7 +85,7 @@ template<typename CharT>
 
 template<typename CharT>
 [[nodiscard]] inline bool IsDotDot(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
-    return text.size() == 2u && text[0] == static_cast<CharT>('.') && text[1] == static_cast<CharT>('.');
+    return text.size() == s_DotDotLength && text[0] == static_cast<CharT>('.') && text[1] == static_cast<CharT>('.');
 }
 
 
@@ -408,7 +416,7 @@ public:
             return Path(arena());
 
         Path output(arena());
-        output.m_text.reserve(AddSize(AddSize(m_text.size(), SizeOf<3u>(base.m_text.empty() ? 1u : base.m_text.size())), 1u));
+        output.m_text.reserve(AddSize(AddSize(m_text.size(), SizeOf<GlobalFilesystemPathDetail::s_RelativeParentStepLength>(base.m_text.empty() ? 1u : base.m_text.size())), 1u));
         {
             const Path normalizedPath = lexicallyNormal();
             const Path normalizedBase = base.lexicallyNormal();
@@ -426,7 +434,7 @@ public:
                 const native_string_view component = baseIt.nativeComponent();
                 if(component == native_string_view(NWB_TEXT("/"), 1u))
                     continue;
-                output.appendComponent(native_string_view(NWB_TEXT(".."), 2u));
+                output.appendComponent(native_string_view(NWB_TEXT(".."), GlobalFilesystemPathDetail::s_DotDotLength));
             }
             for(; pathIt != pathEnd; ++pathIt)
                 output.appendComponent(pathIt.nativeComponent());

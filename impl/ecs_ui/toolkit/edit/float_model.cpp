@@ -55,7 +55,7 @@ void FloatEditModel::advanceRevision()noexcept{
 
 
 FloatEditModel::FloatEditModel(Core::Alloc::GlobalArena& arena)
-    : m_draft(arena, { s_NumericEditMaxBytes, 64u, s_NumericEditMaxBytes * 128u })
+    : m_draft(arena, { s_NumericEditMaxBytes, s_NumericEditMaxHistoryRecords, s_NumericEditMaxBytes * s_NumericEditHistoryBytesFactor })
     , m_acceptedDraft(arena)
 {
     m_acceptedDraft.reserve(s_NumericEditMaxBytes);

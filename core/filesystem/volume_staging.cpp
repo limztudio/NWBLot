@@ -348,7 +348,7 @@ bool PublishStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& ou
 
 bool RemoveVolumeSegments(const Path& outputDirectory, const AStringView volumeName, Alloc::ScratchArena& scratchArena){
     if(!ValidVolumeName(volumeName)){
-        FilesystemVolumeDetail::LogFailure(volumeName, FilesystemVolumeDetail::s_VolumeOpRemove, "invalid volume name");
+        FilesystemVolumeDetail::LogFailure(volumeName, FilesystemVolumeDetail::s_VolumeOpRemove, FilesystemVolumeDetail::s_VolumeDetailInvalidVolumeName);
         return false;
     }
 

@@ -8,6 +8,7 @@
 #include <impl/ecs_render/material/task_graph_object_geometry_cache.h>
 #include <impl/ecs_render/avboit/avboit_system.h>
 #include <impl/ecs_render/kernel/task_graph_scheduling.h>
+#include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/csg/task_graph_resource_utils.h>
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/material/task_graph_resource_sets.h>
@@ -426,8 +427,8 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
         const usize rasterDependencyCount = generatedGeometryReused && inputs.reusedGeometryProducer != extinctionDependency ? LengthOf(rasterDependencies) : 1u;
         Core::GpuTaskDesc extinctionDesc;
         extinctionDesc
-            .setIdentity(Name("render.avboit.extinction"))
-            .setMarkerLabel("AVBOIT Extinction")
+            .setIdentity(Name(RendererGpuPassText::s_AvboitExtinctionName))
+            .setMarkerLabel(RendererGpuPassText::s_AvboitExtinctionLabel)
             .setScheduling(avboitExtinctionScheduling)
             .setDependencies(rasterDependencies, rasterDependencyCount)
             .setResourceUses(extinctionResourceUses.data(), extinctionResourceUses.size())

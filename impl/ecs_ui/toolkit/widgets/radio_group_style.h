@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "style.h"
 #include "../paint.h"
 
 #include <impl/assets_ui_skin/region_names.h>
@@ -30,15 +31,15 @@ struct RadioGroupStyle{
     Name checkedFallback = UiSkinToolkitRegions::s_CheckboxCheckedRegionName;
     Name markFallback = UiSkinToolkitRegions::s_CheckboxMarkRegionName;
     Name focus = UiSkinToolkitRegions::s_FocusOverlayRegionName;
-    Color hoverTint = { 1.08f, 1.08f, 1.08f, 1.0f };
-    Color pressedTint = { 0.85f, 0.85f, 0.85f, 1.0f };
-    Color disabledTint = { 0.55f, 0.55f, 0.55f, 0.6f };
-    Insets padding = { 4.0f, 4.0f, 4.0f, 4.0f };
-    f32 rowGap = 4.0f;
-    f32 indicatorExtent = 24.0f;
-    f32 gap = 8.0f;
+    Color hoverTint = s_StyleHoverTint;
+    Color pressedTint = s_StylePressedTint;
+    Color disabledTint = s_StyleDisabledTint;
+    Insets padding = { s_StyleSpacingSmall, s_StyleSpacingSmall, s_StyleSpacingSmall, s_StyleSpacingSmall };
+    f32 rowGap = s_StyleSpacingSmall;
+    f32 indicatorExtent = s_StyleControlExtent;
+    f32 gap = s_StyleSpacingMedium;
     // Fraction of the indicator extent inset on each side of its checked mark.
-    f32 markInset = 0.3f;
+    f32 markInset = s_StyleMarkInset;
 };
 
 

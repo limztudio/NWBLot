@@ -17,6 +17,24 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_compute{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr TStringView s_NoComputePipelineBoundReason = NWB_TEXT("no compute pipeline is bound");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 ComputePipeline::ComputePipeline(const VulkanContext& context)noexcept
     : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_context(context)
@@ -34,6 +52,7 @@ Object ComputePipeline::getNativeHandle(ObjectType objectType)noexcept{
 
 
 Expected<ComputePipelineHandle> Device::createComputePipeline(const ComputePipelineDesc& desc){
+    constexpr TStringView s_OperationName = NWB_TEXT("compute pipeline");
     if(!desc.computeShader){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create compute pipeline: compute shader is null"));
         return MakeUnexpected(Failure{});
@@ -70,14 +89,14 @@ Expected<ComputePipelineHandle> Device::createComputePipeline(const ComputePipel
     PipelineShaderStageVector shaderStages{ scratchArena };
     shaderStages.push_back(shaderStage);
 
-    if(!configurePipelineBindings(desc.bindingLayouts, NWB_TEXT("compute pipeline"), *pso, scratchArena))
+    if(!configurePipelineBindings(desc.bindingLayouts, s_OperationName, *pso, scratchArena))
         return MakeUnexpected(Failure{});
 
     auto pipelineInfo = VulkanDetail::MakeVkStruct<VkComputePipelineCreateInfo>(VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO);
     pipelineInfo.stage = shaderStages[0];
     VulkanDetail::AttachPipelineBindingState(pipelineInfo, *pso);
 
-    if(!createPipeline(NWB_TEXT("compute pipeline"), *pso, pipelineInfo))
+    if(!createPipeline(s_OperationName, *pso, pipelineInfo))
         return MakeUnexpected(Failure{});
 
     return pso;
@@ -126,18 +145,19 @@ void CommandList::setComputeState(const ComputeState& state){
 }
 
 void CommandList::dispatch(u32 groupsX, u32 groupsY, u32 groupsZ){
+    constexpr TStringView s_OperationName = NWB_TEXT("dispatch");
     if(groupsX == 0 || groupsY == 0 || groupsZ == 0)
         return;
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, NWB_TEXT("dispatch")))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, s_OperationName))
         return;
     if(!m_currentComputeState.pipeline){
-        rejectCommandRecording(NWB_TEXT("dispatch"), NWB_TEXT("no compute pipeline is bound"));
+        rejectCommandRecording(s_OperationName, __hidden_compute::s_NoComputePipelineBoundReason);
         return;
     }
 
     const auto& limits = m_context.physicalDeviceProperties.limits;
     if(!VulkanDetail::AreDispatchGroupCountsValid(groupsX, groupsY, groupsZ, limits.maxComputeWorkGroupCount)){
-        rejectCommandRecording(NWB_TEXT("dispatch"), NWB_TEXT("group counts exceed device limits"));
+        rejectCommandRecording(s_OperationName, NWB_TEXT("group counts exceed device limits"));
         return;
     }
 
@@ -148,7 +168,7 @@ void CommandList::dispatchIndirect(u32 offsetBytes){
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, VulkanArenaScope::s_DispatchIndirectCommandLabel))
         return;
     if(!m_currentComputeState.pipeline){
-        rejectCommandRecording(VulkanArenaScope::s_DispatchIndirectCommandLabel, NWB_TEXT("no compute pipeline is bound"));
+        rejectCommandRecording(VulkanArenaScope::s_DispatchIndirectCommandLabel, __hidden_compute::s_NoComputePipelineBoundReason);
         return;
     }
     if(!m_currentComputeState.indirectParams){

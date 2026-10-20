@@ -26,6 +26,9 @@
 #define NWB_BINDLESS_HEAP_BINDING_SAMPLER        0   // SamplerState (set 1)            (GpuDescriptorClass::Sampler)
 #define NWB_BINDLESS_HEAP_BINDING_ACCEL_STRUCT   0   // RaytracingAccelerationStructure (set 2)
 
+// Marks an unbound heap slot in push constants and records.
+#define NWB_BINDLESS_HEAP_INVALID_SLOT 0xffffffffu
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

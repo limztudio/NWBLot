@@ -31,6 +31,10 @@ namespace UiLayerPresentation{
     enum Enum : u8{ Scene, Standalone };
 };
 
+inline constexpr TStringView s_UiLayerSystemOwnerName = NWB_TEXT("UiLayerSystem");
+inline constexpr AStringView s_UiSkinAssetKindText = "UI skin";
+inline constexpr usize s_UiNativeKeySlotCount = 512u;
+
 
 struct UiFontBinding{
     Core::Assets::AssetRef<Font> font;
@@ -148,7 +152,7 @@ private:
     Ui::DisplayMetrics m_display;
     Ui::Point m_pointer;
     // Native-key ownership survives focus transfer; the CPU router retains each resolved held intention.
-    Array<u8, 512u> m_nativeKeyOwners{};
+    Array<u8, s_UiNativeKeySlotCount> m_nativeKeyOwners{};
     u32 m_pressedButtons = 0u;
     u8 m_pointerOwner = 0u;
     bool m_blockNativeChars = false;

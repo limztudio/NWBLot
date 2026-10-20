@@ -23,7 +23,7 @@ bool nwbRayTraceCsgCutterNormalUnique(const NwbCsgRayCutter cutter, const float3
     const float4 point = float4(worldPosition, 1.0);
     const float3 local = float3(dot(cutter.worldToShapeRow0, point), dot(cutter.worldToShapeRow1, point), dot(cutter.worldToShapeRow2, point));
     const float3 q = abs(local) - cutter.parameter0.xyz;
-    const float3 error = 8.0 * 1.1920928955078125e-7 * (abs(cutter.parameter0.xyz) + float3(dot(abs(cutter.worldToShapeRow0), abs(point)), dot(abs(cutter.worldToShapeRow1), abs(point)), dot(abs(cutter.worldToShapeRow2), abs(point))));
+    const float3 error = NWB_CSG_RAY_ROUNDOFF_EPSILON_SCALE * NWB_FLOAT_EPSILON * (abs(cutter.parameter0.xyz) + float3(dot(abs(cutter.worldToShapeRow0), abs(point)), dot(abs(cutter.worldToShapeRow1), abs(point)), dot(abs(cutter.worldToShapeRow2), abs(point))));
     const float maximum = max(q.x, max(q.y, q.z));
     const float tolerance = 2.0 * max(error.x, max(error.y, error.z));
     // Box edges/corners have valid removed-solid membership but no unique transmitted cap normal.
@@ -90,7 +90,7 @@ NwbRayTraceGeometryHit nwbRayTraceCsgBoundaryGeometry(const uint contextSlot, co
             float3 normal;
             if(!nwbRayTraceCsgCutterNormalUnique(other, worldPosition)
                 || !nwbCsgAnalyticCutterNormal(other.shapeType, other.worldToShapeRow0, other.worldToShapeRow1, other.worldToShapeRow2, other.parameter0, worldPosition, normal)
-                || dot(normal, geometry.geometricNormal) < 1.0 - 8.0 * 1.1920928955078125e-7){
+                || dot(normal, geometry.geometricNormal) < 1.0 - NWB_CSG_RAY_ROUNDOFF_EPSILON_SCALE * NWB_FLOAT_EPSILON){
                 // Coincident cutter endpoints may share a normal; distinct normals form an unresolved union crease.
                 geometry.failure = NWB_CSG_RAY_FAILURE_AMBIGUOUS_NORMAL;
                 geometry.distance = minimum;
@@ -144,7 +144,7 @@ NwbRayTraceGeometryHit nwbRayTraceCsgGeometryHit(
 #if NWB_CSG_RAY_OPTICAL_REUSE
     if(resolution.reusable && geometry.failure == 0u){
         const float3 position = origin + direction * geometry.distance;
-        const float tolerance = 4.0 * max(nwbOpticsPositionUncertainty(origin), nwbOpticsPositionUncertainty(position));
+        const float tolerance = NWB_OPTICS_POSITION_TOLERANCE_SCALE * max(nwbOpticsPositionUncertainty(origin), nwbOpticsPositionUncertainty(position));
         const float windowMinimum = max(0.0, geometry.distance - tolerance);
         const float windowMaximum = geometry.distance + tolerance;
         // Replayed boundaries still require the same generated-cap and coincident-cutter normal audits as a fresh collection.
@@ -161,10 +161,10 @@ NwbRayTraceGeometryHit nwbRayTraceCsgGeometryHit(
 }
 
 void nwbRayTraceCsgClosestGeometryHit(const uint contextSlot, const uint materialSlot, const float3 origin, const float3 direction, const float minimum, inout NwbRayTraceGeometryHit closest){
-    const uint activeOffset = nwbHeapRawBuffer(contextSlot).Load(20u);
-    const uint activeCount = nwbHeapRawBuffer(contextSlot).Load(24u);
+    const uint activeOffset = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_BASE_OFFSET);
+    const uint activeCount = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_COUNT_OFFSET);
     for(uint index = 0u; index < activeCount; ++index){
-        const uint instanceIndex = nwbHeapRawBuffer(contextSlot).Load(activeOffset + index * 4u);
+        const uint instanceIndex = nwbHeapRawBuffer(contextSlot).Load(activeOffset + index * NWB_CSG_RAY_ACTIVE_INDEX_BYTES);
         const NwbSwBvhInstance instance = nwbCsgRayLoadInstance(contextSlot, instanceIndex);
         const NwbBvhNode root = nwbCsgRayReceiverRoot(contextSlot, instanceIndex, instance);
         if(!nwbCsgRayBoundsIntersect(instance, root, origin, direction, minimum, closest.distance))

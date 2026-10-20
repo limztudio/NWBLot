@@ -31,6 +31,9 @@ namespace ShadowReceiverResolution{
     };
 };
 
+inline constexpr u32 s_ShadowReceiverFactorHalf = static_cast<u32>(ShadowReceiverResolution::Half);
+inline constexpr u32 s_ShadowReceiverFactorQuarter = static_cast<u32>(ShadowReceiverResolution::Quarter);
+
 struct ShadowQualitySettings{
     TransparentShadowSampling::Enum transparentSampling = TransparentShadowSampling::ReferenceThree;
     ShadowReceiverResolution::Enum receiverResolution = ShadowReceiverResolution::Half;

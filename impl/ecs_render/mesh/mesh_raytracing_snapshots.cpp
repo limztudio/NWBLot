@@ -69,7 +69,7 @@ ECSRenderDetail::MeshRayTracingResourceSnapshot CaptureRayTracingResourceSnapsho
         .positionBuffer = mesh.positionBuffer,
         .triangleIndexBuffer = mesh.triangleIndexBuffer,
         .attributeBuffer = mesh.attributeBuffer,
-        .solidTriangleWords = Span<const u32>(mesh.solidTriangleWords.get(), (static_cast<usize>(mesh.meshletPrimitiveIndexCount) / 3u + 31u) / 32u),
+        .solidTriangleWords = Span<const u32>(mesh.solidTriangleWords.get(), (static_cast<usize>(mesh.meshletPrimitiveIndexCount) / s_MeshletTriangleIndexCount + s_MeshletSolidTriangleWordRoundUp) / s_MeshletSolidTriangleWordBits),
         .runtimeLocalBoundsBuffer = mesh.runtimeLocalBoundsBuffer,
         .meshletDescBuffer = {},
         .meshletLocalBoundsBuffer = {},

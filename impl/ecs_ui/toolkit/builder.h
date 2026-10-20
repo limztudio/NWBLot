@@ -245,8 +245,8 @@ private:
     const UiSkin* m_skin = nullptr;
     WidgetStyle m_style;
     AString<Core::Alloc::GlobalArena> m_textLanguage;
-    u32 m_textScriptTag = TextScriptTag('L', 'a', 't', 'n');
-    f32 m_skinDefaultFontSize = 16.0f;
+    u32 m_textScriptTag = s_TextDefaultScriptTag;
+    f32 m_skinDefaultFontSize = s_TextDefaultFontSize;
     EditBoxStyle m_editStyle;
     ScrollbarStyle m_scrollbarStyle;
     PopupStyle m_popupStyle;

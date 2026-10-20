@@ -6,6 +6,7 @@
 
 
 #include "meshlet_constants.h"
+#include "payload_types.h"
 
 #include <core/assets/binary_payload_io.h>
 
@@ -37,6 +38,13 @@ inline constexpr TStringView s_NormalsStreamLabel = NWB_TEXT("normals");
 inline constexpr TStringView s_TangentsStreamLabel = NWB_TEXT("tangents");
 inline constexpr TStringView s_Uv0StreamLabel = NWB_TEXT("uv0");
 inline constexpr TStringView s_ColorsStreamLabel = NWB_TEXT("colors");
+inline constexpr TStringView s_MeshletsStreamLabel = NWB_TEXT("meshlets");
+inline constexpr TStringView s_MeshletBoundsStreamLabel = NWB_TEXT("meshlet bounds");
+inline constexpr TStringView s_MeshletPositionRefDeltasStreamLabel = NWB_TEXT("meshlet position ref deltas");
+inline constexpr TStringView s_MeshletAttributeRefDeltasStreamLabel = NWB_TEXT("meshlet attribute ref deltas");
+inline constexpr TStringView s_MeshletLocalVertexRefsStreamLabel = NWB_TEXT("meshlet local vertex refs");
+inline constexpr TStringView s_MeshletPrimitiveIndicesStreamLabel = NWB_TEXT("meshlet primitive indices");
+inline constexpr TStringView s_SolidTriangleWordsStreamLabel = NWB_TEXT("solid triangle words");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -140,19 +148,19 @@ template<
     SolidTriangleWordContainer& outSolidTriangleWords,
     const TStringView failureContext
 ){
-    if(!Core::Assets::ReadVectorPayload(binary, inOutCursor, header.meshletCount, outMeshlets, failureContext, NWB_TEXT("meshlets")))
+    if(!Core::Assets::ReadVectorPayload(binary, inOutCursor, header.meshletCount, outMeshlets, failureContext, s_MeshletsStreamLabel))
         return false;
-    if(!Core::Assets::ReadVectorPayload(binary, inOutCursor, header.meshletBoundCount, outMeshletBounds, failureContext, NWB_TEXT("meshlet bounds")))
+    if(!Core::Assets::ReadVectorPayload(binary, inOutCursor, header.meshletBoundCount, outMeshletBounds, failureContext, s_MeshletBoundsStreamLabel))
         return false;
-    if(!Core::Assets::ReadVectorPayload(binary, inOutCursor, header.meshletPositionRefDeltaByteCount, outMeshletPositionRefDeltas, failureContext, NWB_TEXT("meshlet position ref deltas")))
+    if(!Core::Assets::ReadVectorPayload(binary, inOutCursor, header.meshletPositionRefDeltaByteCount, outMeshletPositionRefDeltas, failureContext, s_MeshletPositionRefDeltasStreamLabel))
         return false;
-    if(!Core::Assets::ReadVectorPayload(binary, inOutCursor, header.meshletAttributeRefDeltaByteCount, outMeshletAttributeRefDeltas, failureContext, NWB_TEXT("meshlet attribute ref deltas")))
+    if(!Core::Assets::ReadVectorPayload(binary, inOutCursor, header.meshletAttributeRefDeltaByteCount, outMeshletAttributeRefDeltas, failureContext, s_MeshletAttributeRefDeltasStreamLabel))
         return false;
-    if(!Core::Assets::ReadVectorPayload(binary, inOutCursor, header.meshletLocalVertexRefCount, outMeshletLocalVertexRefs, failureContext, NWB_TEXT("meshlet local vertex refs")))
+    if(!Core::Assets::ReadVectorPayload(binary, inOutCursor, header.meshletLocalVertexRefCount, outMeshletLocalVertexRefs, failureContext, s_MeshletLocalVertexRefsStreamLabel))
         return false;
-    if(!Core::Assets::ReadVectorPayload(binary, inOutCursor, header.meshletPrimitiveIndexCount, outMeshletPrimitiveIndices, failureContext, NWB_TEXT("meshlet primitive indices")))
+    if(!Core::Assets::ReadVectorPayload(binary, inOutCursor, header.meshletPrimitiveIndexCount, outMeshletPrimitiveIndices, failureContext, s_MeshletPrimitiveIndicesStreamLabel))
         return false;
-    return Core::Assets::ReadVectorPayload(binary, inOutCursor, (header.meshletPrimitiveIndexCount / 3u + 31u) / 32u, outSolidTriangleWords, failureContext, NWB_TEXT("solid triangle words"));
+    return Core::Assets::ReadVectorPayload(binary, inOutCursor, (header.meshletPrimitiveIndexCount / s_MeshletTriangleIndexCount + s_MeshletSolidTriangleWordRoundUp) / s_MeshletSolidTriangleWordBits, outSolidTriangleWords, failureContext, s_SolidTriangleWordsStreamLabel);
 }
 
 
@@ -241,13 +249,13 @@ template<typename MeshT>
 template<typename MeshT>
 [[nodiscard]] bool AppendMeshletStreams(Core::Assets::AssetBytes& outBinary, const MeshT& mesh, const TStringView failureContext){
     return
-        Core::Assets::AppendVectorPayload(outBinary, mesh.meshlets(), failureContext, NWB_TEXT("meshlets"))
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletBounds(), failureContext, NWB_TEXT("meshlet bounds"))
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletPositionRefDeltas(), failureContext, NWB_TEXT("meshlet position ref deltas"))
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletAttributeRefDeltas(), failureContext, NWB_TEXT("meshlet attribute ref deltas"))
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletLocalVertexRefs(), failureContext, NWB_TEXT("meshlet local vertex refs"))
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletPrimitiveIndices(), failureContext, NWB_TEXT("meshlet primitive indices"))
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.solidTriangleWords(), failureContext, NWB_TEXT("solid triangle words"))
+        Core::Assets::AppendVectorPayload(outBinary, mesh.meshlets(), failureContext, s_MeshletsStreamLabel)
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletBounds(), failureContext, s_MeshletBoundsStreamLabel)
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletPositionRefDeltas(), failureContext, s_MeshletPositionRefDeltasStreamLabel)
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletAttributeRefDeltas(), failureContext, s_MeshletAttributeRefDeltasStreamLabel)
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletLocalVertexRefs(), failureContext, s_MeshletLocalVertexRefsStreamLabel)
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletPrimitiveIndices(), failureContext, s_MeshletPrimitiveIndicesStreamLabel)
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.solidTriangleWords(), failureContext, s_SolidTriangleWordsStreamLabel)
     ;
 }
 

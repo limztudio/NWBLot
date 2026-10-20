@@ -60,7 +60,7 @@ void Device::runGarbageCollection(){
                 queue->collectCompletedCommandBuffers();
         }
         if(completionResult == VK_ERROR_DEVICE_LOST){
-            captureDeviceLoss("queue timeline query");
+            captureDeviceLoss(VulkanArenaScope::s_QueueTimelineQueryContext);
             return;
         }
         if(completionResult != VK_SUCCESS){

@@ -28,6 +28,15 @@ namespace MaterialBinaryPayload{
 
 inline constexpr u32 s_MaterialMagic = 0x4D544C41u; // MTLA
 inline constexpr usize s_ShaderEntryBytes = sizeof(Core::ShaderType::Enum) + sizeof(NameHash);
+inline constexpr TStringView s_MaterialLoadBinaryContext = NWB_TEXT("Material::loadBinary");
+inline constexpr TStringView s_MaterialAssetKindLabel = NWB_TEXT("material");
+// AVBOIT pass labels used in diagnostics by the cooker (narrow) and the runtime loader (tchar).
+inline constexpr AStringView s_AvboitAccumulatePassLabel = "accumulate";
+inline constexpr AStringView s_AvboitOccupancyPassLabel = "occupancy";
+inline constexpr AStringView s_AvboitExtinctionPassLabel = "extinction";
+inline constexpr TStringView s_AvboitAccumulatePassText = NWB_TEXT("accumulate");
+inline constexpr TStringView s_AvboitOccupancyPassText = NWB_TEXT("occupancy");
+inline constexpr TStringView s_AvboitExtinctionPassText = NWB_TEXT("extinction");
 // Serialized flags mirror authored booleans; Refractive classifies casters, while optical values stay shader-side.
 // All masks supported bits; loading rejects the rest.
 namespace MaterialFlag{

@@ -44,7 +44,7 @@ Context::Context(Core::Alloc::GlobalArena& arena)
     , m_commitTargets(arena)
     , m_commitPopups(arena)
 {
-    m_scopes.reserve(64u);
+    m_scopes.reserve(s_ContextMaxScopeDepth);
     m_targets.reserve(s_InputMaxTargets);
     m_commitTargets.reserve(s_InputMaxTargets);
     m_popups.reserve(s_InputMaxPopups);
@@ -95,7 +95,7 @@ bool Context::endRoot()noexcept{
 }
 
 bool Context::pushScope(const AStringView stableKey){
-    if(m_failed || !m_rootActive || m_scopes.size() >= 64u){
+    if(m_failed || !m_rootActive || m_scopes.size() >= s_ContextMaxScopeDepth){
         fail();
         return false;
     }

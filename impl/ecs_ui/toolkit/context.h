@@ -18,6 +18,9 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Builder containers and context scopes nest together, so one depth limit bounds both.
+inline constexpr usize s_ContextMaxScopeDepth = 64u;
+
 // One CPU owner coordinates declarations, input and the exact matching frozen frame's layout publication.
 class Context final : NoCopy{
 private:

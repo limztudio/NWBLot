@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/renderer_frame_pipeline.h>
+#include <impl/ecs_render/renderer_frame_pipeline_graph_shared.h>
 #include <impl/ecs_render/raytrace/task_graph_float_clear_tasks.h>
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
@@ -31,8 +32,8 @@ void RendererFramePipeline::declareDeferredSurfelCountReadbackTask(const RayTrac
     if(!m_deferredSurfelGiTask.valid() || !m_deferredFrameTimingEndTask.valid() || !m_raytracingSystem.shouldCaptureSurfelCountReadback())
         return;
 
-    const auto counterResult = m_deferredLightingTaskGraph.importBuffer(rayTracingSurfelResources.counterBuffer, BufferResourceDesc(Name("render.surfel_gi.counter"), "Surfel Counter"));
-    const auto readbackResult = m_deferredLightingTaskGraph.importBuffer(rayTracingSurfelResources.counterReadbackBuffer, BufferResourceDesc(Name("render.surfel_gi.counter_readback"), "Surfel Counter Readback"));
+    const auto counterResult = m_deferredLightingTaskGraph.importBuffer(rayTracingSurfelResources.counterBuffer, BufferResourceDesc(Name(RendererFramePipelineDetail::s_SurfelCounterName), RendererFramePipelineDetail::s_SurfelCounterLabel));
+    const auto readbackResult = m_deferredLightingTaskGraph.importBuffer(rayTracingSurfelResources.counterReadbackBuffer, BufferResourceDesc(Name(RendererFramePipelineDetail::s_SurfelCounterReadbackName), RendererFramePipelineDetail::s_SurfelCounterReadbackLabel));
     if(!counterResult || !readbackResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import surfel counter-readback graph resources"));
         return;
@@ -48,7 +49,7 @@ void RendererFramePipeline::declareDeferredSurfelCountReadbackTask(const RayTrac
     scheduling.allowPacketMerge = false;
     const Core::GpuTaskId dependencies[] = { m_deferredSurfelGiTask, m_deferredFrameTimingEndTask, };
     Core::GpuTaskDesc desc;
-    desc.setIdentity(Name("render.surfel_gi.counter_readback")).setMarkerLabel("Surfel Counter Readback").setScheduling(scheduling).setDependencies(dependencies, LengthOf(dependencies));
+    desc.setIdentity(Name(RendererFramePipelineDetail::s_SurfelCounterReadbackName)).setMarkerLabel(RendererFramePipelineDetail::s_SurfelCounterReadbackLabel).setScheduling(scheduling).setDependencies(dependencies, LengthOf(dependencies));
     const auto mDeferredSurfelGiCounterReadbackTaskResult = m_deferredLightingTaskGraph.addCopyBufferTask(desc, Core::GpuCopyBufferTaskDesc{ .regions = regions, .regionCount = LengthOf(regions), });
     if(!mDeferredSurfelGiCounterReadbackTaskResult){
         m_deferredSurfelGiCounterReadbackTask = {};

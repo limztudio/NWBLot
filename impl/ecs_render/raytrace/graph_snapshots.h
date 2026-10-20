@@ -153,7 +153,7 @@ struct RayTracingRefractionGraphResources{
     Core::GpuDescriptorHandle tlasHeapHandle = Core::GpuDescriptorHandle::Invalid();
     u32 materialContextSlotsHeapSlot = 0u;
     u32 viewHeapSlot = 0u;
-    u32 opaqueReflectionSlot = 0xffffffffu;
+    u32 opaqueReflectionSlot = Core::GpuDescriptorHandle::s_Invalid;
     bool refractionEnabled = true;
     bool usesHardwareTrace = false;
 

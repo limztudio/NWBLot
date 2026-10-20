@@ -67,6 +67,16 @@ inline constexpr f32 s_SRGBClearLinearScale = 12.92f;
 inline constexpr f32 s_SRGBClearNonlinearScale = 1.055f;
 inline constexpr f32 s_SRGBClearNonlinearExponent = 2.4f;
 inline constexpr f32 s_SRGBClearNonlinearOffset = 0.055f;
+inline constexpr u32 s_BC2AlphaNibbleSplat = 0x11111111u;
+inline constexpr u32 s_ClearHighWordShift = 32u;
+
+inline constexpr TStringView s_TextureNotLiveResourceReason = NWB_TEXT("texture must be a live resource owned by this device");
+inline constexpr TStringView s_TextureNotReadyForNativeClearReason = NWB_TEXT("texture is not ready for the requested native clear on this exact command queue");
+inline constexpr TStringView s_ClearSubresourceRangeInvalidReason = NWB_TEXT("subresource range is empty or invalid");
+inline constexpr TStringView s_BoundedMultisampledClearInactiveReason = NWB_TEXT("bounded multisampled clears require active rendering");
+inline constexpr TStringView s_BoundedClearDepthReason = NWB_TEXT("attachment bounded clears require full attachment depth");
+inline constexpr TStringView s_ClearUploadLayoutUnaddressableReason = NWB_TEXT("clear upload layout is not addressable");
+inline constexpr TStringView s_ClearStagingRangeInvalidReason = NWB_TEXT("staging allocation returned an invalid range");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -450,8 +460,8 @@ inline Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTexture
         const SIMDVectorSingle saturatedAlpha = VectorSaturate(VectorReplicate(values[3]));
         const SIMDVectorSingle scaledAlpha = VectorMultiply(saturatedAlpha, VectorReplicate(static_cast<f32>((1u << s_ClearChannelBits4444) - 1u)));
         const u64 alphaNibble = static_cast<u64>(VectorGetX(VectorMin(VectorFloor(VectorAdd(scaledAlpha, VectorReplicate(s_ClearFloatRoundingBias))), VectorReplicate(static_cast<f32>((1u << s_ClearChannelBits4444) - 1u)))));
-        const SIMDVectorSingle splatMask = VectorSetInt(0x11111111u, 0x11111111u, 0u, 0u);
-        const u64 alphaBits = (static_cast<u64>(VectorGetIntX(splatMask)) | (static_cast<u64>(VectorGetIntY(splatMask)) << 32u)) * alphaNibble;
+        const SIMDVectorSingle splatMask = VectorSetInt(s_BC2AlphaNibbleSplat, s_BC2AlphaNibbleSplat, 0u, 0u);
+        const u64 alphaBits = (static_cast<u64>(VectorGetIntX(splatMask)) | (static_cast<u64>(VectorGetIntY(splatMask)) << s_ClearHighWordShift)) * alphaNibble;
         WriteClearPatternValue(pattern, sizeof(alphaBits), &alphaBits, sizeof(alphaBits));
         WriteBC1ColorClearBlock(pattern + sizeof(alphaBits), values[0], values[1], values[2], 1.0f, srgb);
         result.byteCount = s_BCDoubleClearBlockBytes;

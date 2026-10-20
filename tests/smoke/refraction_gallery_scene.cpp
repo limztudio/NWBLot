@@ -321,88 +321,90 @@ private:
 
 
 bool CreateRefractionGalleryScene(ProjectRuntimeContext& context, Core::ECS::World& world, const AStringView caseName, const bool geometryPreview){
-    const auto camera = CreateSmokeCamera(world, 1.4f, __hidden_refraction_gallery_scene::s_GalleryCameraDistance, 0.0f);
+    using namespace __hidden_refraction_gallery_scene;
+
+    const auto camera = CreateSmokeCamera(world, s_GalleryCenterHeight, s_GalleryCameraDistance, 0.0f);
     const auto light = Impl::Scene::CreateDirectionalLightEntity(world, 0.6f, 0.4f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f);
     if(!camera.valid() || !light.valid())
         return false;
     // Tighter framing exposes overlap artifacts while preserving the same camera for every variant.
     auto& cameraComponent = world.entity(camera).getComponent<Impl::Scene::CameraComponent>();
     cameraComponent.setVerticalFovRadians(s_PI * (40.0f / 180.0f));
-    if(caseName == "identity_reference" || caseName == "identity_same_ior" || caseName == "identity_different_ior")
-        cameraComponent.setNearPlane(__hidden_refraction_gallery_scene::s_IdentityNearPlane);
-    __hidden_refraction_gallery_scene::GalleryBuilder scene(context, world, geometryPreview);
-    if(caseName == "csg_reference" || caseName == "csg_cap" || caseName == "csg_middle" || caseName == "csg_uncut"){
-        const auto slab = scene.csgSlab(caseName, Float4(0.9f, 0.98f, 1.f, geometryPreview ? 0.48f : 0.f), __hidden_refraction_gallery_scene::s_Glass, __hidden_refraction_gallery_scene::s_Interface);
+    if(caseName == s_CaseIdentityReference || caseName == s_CaseIdentitySameIor || caseName == s_CaseIdentityDifferentIor)
+        cameraComponent.setNearPlane(s_IdentityNearPlane);
+    GalleryBuilder scene(context, world, geometryPreview);
+    if(caseName == s_CaseCsgReference || caseName == s_CaseCsgCap || caseName == s_CaseCsgMiddle || caseName == s_CaseCsgUncut){
+        const auto slab = scene.csgSlab(caseName, Float4(0.9f, 0.98f, 1.f, geometryPreview ? 0.48f : 0.f), s_Glass, s_Interface);
         if(!slab)
             return false;
     }
-    else if(caseName == "identity_reference" || caseName == "identity_same_ior" || caseName == "identity_different_ior"){
+    else if(caseName == s_CaseIdentityReference || caseName == s_CaseIdentitySameIor || caseName == s_CaseIdentityDifferentIor){
         if(!scene.identitySlab(caseName))
             return false;
     }
-    else if(caseName == "crossing_overflow"){
+    else if(caseName == s_CaseCrossingOverflow){
         if(!scene.crossingOverflow())
             return false;
     }
-    else if(caseName == "near_air_ordinary" || caseName == "near_air_csg"){
-        if(!scene.nearAirSlab(caseName == "near_air_csg"))
+    else if(caseName == s_CaseNearAirOrdinary || caseName == s_CaseNearAirCsg){
+        if(!scene.nearAirSlab(caseName == s_CaseNearAirCsg))
             return false;
     }
-    else if(caseName == "single")
+    else if(caseName == s_CaseSingle)
         scene.sphere(0.0f, 0.0f, 1.15f);
-    else if(caseName == "separate"){
+    else if(caseName == s_CaseSeparate){
         scene.sphere(-1.15f, 0.0f, 0.85f);
         scene.sphere(1.15f, 0.0f, 0.85f, true);
     }
-    else if(caseName == "stacked"){
+    else if(caseName == s_CaseStacked){
         scene.sphere(-0.25f, -0.95f, 0.8f);
         scene.sphere(0.25f, 0.95f, 0.8f, true);
     }
-    else if(caseName == "intersecting"){
+    else if(caseName == s_CaseIntersecting){
         scene.sphere(-0.45f, -0.3f, 1.0f);
         scene.sphere(0.45f, 0.3f, 1.0f, true);
     }
-    else if(caseName == "nested"){
+    else if(caseName == s_CaseNested){
         scene.sphere(0.0f, 0.0f, 1.2f);
         scene.sphere(0.2f, 0.15f, 0.62f, true);
     }
-    else if(caseName == "duplicate_single_cool" || caseName == "duplicate_single_warm" || caseName == "duplicate_single_cool_tinted" || caseName == "duplicate_single_warm_tinted"){
-        const bool warm = caseName == "duplicate_single_warm" || caseName == "duplicate_single_warm_tinted";
-        const bool tinted = caseName == "duplicate_single_cool_tinted" || caseName == "duplicate_single_warm_tinted";
-        const f32 coverage = tinted ? 0.3f : 0.0f;
-        scene.sphere(0.0f, 0.0f, 1.1f, warm, coverage);
+    else if(caseName == s_CaseDuplicateSingleCool || caseName == s_CaseDuplicateSingleWarm || caseName == s_CaseDuplicateSingleCoolTinted || caseName == s_CaseDuplicateSingleWarmTinted){
+        const bool warm = caseName == s_CaseDuplicateSingleWarm || caseName == s_CaseDuplicateSingleWarmTinted;
+        const bool tinted = caseName == s_CaseDuplicateSingleCoolTinted || caseName == s_CaseDuplicateSingleWarmTinted;
+        const f32 coverage = tinted ? s_TintedCoverage : 0.0f;
+        scene.sphere(0.0f, 0.0f, s_DuplicateSphereRadius, warm, coverage);
     }
-    else if(caseName == "coincident" || caseName == "coincident_tinted" || caseName == "coincident_reversed" || caseName == "coincident_tinted_reversed" || caseName == "coincident_priority_swap" || caseName == "coincident_tinted_priority_swap"){
-        const bool tinted = caseName == "coincident_tinted" || caseName == "coincident_tinted_reversed" || caseName == "coincident_tinted_priority_swap";
-        const bool reversed = caseName == "coincident_reversed" || caseName == "coincident_tinted_reversed";
-        const bool warmWins = caseName == "coincident_priority_swap" || caseName == "coincident_tinted_priority_swap";
-        const f32 coverage = tinted ? 0.3f : 0.0f;
-        const i32 coolPriority = warmWins ? 0 : 10;
-        const i32 warmPriority = warmWins ? 10 : 0;
-        const Name opticalGroup = __hidden_refraction_gallery_scene::s_DuplicateOpticalGroup;
-        scene.sphere(0.0f, 0.0f, 1.1f, reversed, coverage, opticalGroup, reversed ? warmPriority : coolPriority, Impl::OpticalVolumeCoincidence::SharedGroup);
-        scene.sphere(0.0f, 0.0f, 1.1f, !reversed, coverage, opticalGroup, reversed ? coolPriority : warmPriority, Impl::OpticalVolumeCoincidence::SharedGroup);
+    else if(caseName == s_CaseCoincident || caseName == s_CaseCoincidentTinted || caseName == s_CaseCoincidentReversed || caseName == s_CaseCoincidentTintedReversed || caseName == s_CaseCoincidentPrioritySwap || caseName == s_CaseCoincidentTintedPrioritySwap){
+        const bool tinted = caseName == s_CaseCoincidentTinted || caseName == s_CaseCoincidentTintedReversed || caseName == s_CaseCoincidentTintedPrioritySwap;
+        const bool reversed = caseName == s_CaseCoincidentReversed || caseName == s_CaseCoincidentTintedReversed;
+        const bool warmWins = caseName == s_CaseCoincidentPrioritySwap || caseName == s_CaseCoincidentTintedPrioritySwap;
+        const f32 coverage = tinted ? s_TintedCoverage : 0.0f;
+        const i32 coolPriority = warmWins ? 0 : s_WinningOpticalPriority;
+        const i32 warmPriority = warmWins ? s_WinningOpticalPriority : 0;
+        const Name opticalGroup = s_DuplicateOpticalGroup;
+        scene.sphere(0.0f, 0.0f, s_DuplicateSphereRadius, reversed, coverage, opticalGroup, reversed ? warmPriority : coolPriority, Impl::OpticalVolumeCoincidence::SharedGroup);
+        scene.sphere(0.0f, 0.0f, s_DuplicateSphereRadius, !reversed, coverage, opticalGroup, reversed ? coolPriority : warmPriority, Impl::OpticalVolumeCoincidence::SharedGroup);
     }
-    else if(caseName == "coincident_identical" || caseName == "coincident_tinted_identical"){
-        const f32 coverage = caseName == "coincident_tinted_identical" ? 0.3f : 0.0f;
-        scene.sphere(0.0f, 0.0f, 1.1f, false, coverage, s_NameNone, 0, Impl::OpticalVolumeCoincidence::IdenticalMaterial);
-        scene.sphere(0.0f, 0.0f, 1.1f, false, coverage, s_NameNone, 0, Impl::OpticalVolumeCoincidence::IdenticalMaterial);
+    else if(caseName == s_CaseCoincidentIdentical || caseName == s_CaseCoincidentTintedIdentical){
+        const f32 coverage = caseName == s_CaseCoincidentTintedIdentical ? s_TintedCoverage : 0.0f;
+        scene.sphere(0.0f, 0.0f, s_DuplicateSphereRadius, false, coverage, s_NameNone, 0, Impl::OpticalVolumeCoincidence::IdenticalMaterial);
+        scene.sphere(0.0f, 0.0f, s_DuplicateSphereRadius, false, coverage, s_NameNone, 0, Impl::OpticalVolumeCoincidence::IdenticalMaterial);
     }
-    else if(caseName == "near_coincident"){
-        const Name opticalGroup = __hidden_refraction_gallery_scene::s_DuplicateOpticalGroup;
-        scene.sphere(0.0f, 0.0f, 1.1f, false, 0.3f, opticalGroup, 10, Impl::OpticalVolumeCoincidence::SharedGroup);
-        scene.sphere(0.04f, 0.0f, 1.1f, true, 0.3f, opticalGroup, 0, Impl::OpticalVolumeCoincidence::SharedGroup);
+    else if(caseName == s_CaseNearCoincident){
+        const Name opticalGroup = s_DuplicateOpticalGroup;
+        scene.sphere(0.0f, 0.0f, s_DuplicateSphereRadius, false, s_TintedCoverage, opticalGroup, s_WinningOpticalPriority, Impl::OpticalVolumeCoincidence::SharedGroup);
+        scene.sphere(0.04f, 0.0f, s_DuplicateSphereRadius, true, s_TintedCoverage, opticalGroup, 0, Impl::OpticalVolumeCoincidence::SharedGroup);
     }
-    else if(caseName == "coincident_preserved"){
-        scene.sphere(0.0f, 0.0f, 1.1f, false, 0.3f);
-        scene.sphere(0.0f, 0.0f, 1.1f, false, 0.3f);
+    else if(caseName == s_CaseCoincidentPreserved){
+        scene.sphere(0.0f, 0.0f, s_DuplicateSphereRadius, false, s_TintedCoverage);
+        scene.sphere(0.0f, 0.0f, s_DuplicateSphereRadius, false, s_TintedCoverage);
     }
-    else if(caseName == "torus")
-        scene.object(__hidden_refraction_gallery_scene::s_Torus, Float4(0.0f, 1.4f, 0.0f, 0.0f), Float4(1.2f, 1.2f, 1.2f, 0.0f), false, 0.0f, 1.2f, 0.23f);
-    else if(caseName == "same_mesh")
-        scene.object(__hidden_refraction_gallery_scene::s_Shells, Float4(0.0f, 1.4f, 0.0f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f), false, 0.0f, -0.20f);
-    else if(caseName == "prism")
-        scene.object(__hidden_refraction_gallery_scene::s_Prism, Float4(0.08f, 1.4f, 0.0f, 0.0f), Float4(1.15f, 1.15f, 1.15f, 0.0f), false, 0.0f, 0.95f, 0.1f, 0.2f);
+    else if(caseName == s_CaseTorus)
+        scene.object(s_Torus, Float4(0.0f, s_GalleryCenterHeight, 0.0f, 0.0f), Float4(1.2f, 1.2f, 1.2f, 0.0f), false, 0.0f, 1.2f, 0.23f);
+    else if(caseName == s_CaseSameMesh)
+        scene.object(s_Shells, Float4(0.0f, s_GalleryCenterHeight, 0.0f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f), false, 0.0f, -0.20f);
+    else if(caseName == s_CasePrism)
+        scene.object(s_Prism, Float4(0.08f, s_GalleryCenterHeight, 0.0f, 0.0f), Float4(1.15f, 1.15f, 1.15f, 0.0f), false, 0.0f, 0.95f, 0.1f, 0.2f);
     else{
         NWB_LOGGER_WARNING(NWB_TEXT("RefractionSmokeProject: unknown gallery case"));
         return false;

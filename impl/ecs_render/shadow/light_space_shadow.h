@@ -8,6 +8,7 @@
 #include "light_space_plan.h"
 #include "light_space_capture_history.h"
 #include "light_space_csg.h"
+#include "quality_settings.h"
 
 #include <core/alloc/global.h>
 #include <core/graphics/rhi/pipeline.h>
@@ -62,7 +63,7 @@ struct LightSpaceShadowPush{
     u32 csgContextSlot = 0u;
     u32 csgOpaqueDepthSlot = 0u;
     u32 csgFlags = 0u;
-    u32 receiverFactor = 2u;
+    u32 receiverFactor = s_ShadowReceiverFactorHalf;
     u32 captureDrawCount = 0u;
     u32 casterDrawOffset = 0u;
     u32 meshletDescSlot = 0u;
@@ -136,8 +137,8 @@ struct LightSpaceShadowSnapshot{
     Core::GpuDescriptorHandle csgOpaqueDepthDescriptor;
     Core::GpuDescriptorHandle depthDescriptor;
     Core::GpuDescriptorHandle csgTlasDescriptor;
-    Array<Core::FramebufferHandle, NWB_SCENE_SHADOW_SLOT_COUNT * 6u> opaqueFramebuffers;
-    Array<Core::FramebufferHandle, NWB_SCENE_SHADOW_SLOT_COUNT * 6u> transparentFramebuffers;
+    Array<Core::FramebufferHandle, NWB_SCENE_SHADOW_SLOT_COUNT * s_PointLightViewCount> opaqueFramebuffers;
+    Array<Core::FramebufferHandle, NWB_SCENE_SHADOW_SLOT_COUNT * s_PointLightViewCount> transparentFramebuffers;
     Core::BindingLayoutHandle layout;
     Core::ComputePipelineHandle viewPipeline;
     Core::ComputePipelineHandle cullPipeline;

@@ -3,6 +3,7 @@
 
 
 #include "backend.h"
+#include "arena_names.h"
 
 #include <core/common/log.h>
 
@@ -449,7 +450,7 @@ Expected<TrackedCommandBufferPtr, VkResult> Queue::getOrCreateDirectCommandBuffe
     if(completionResult != VK_SUCCESS){
         lock.unlock();
         if(completionResult == VK_ERROR_DEVICE_LOST)
-            m_device.captureDeviceLoss("queue timeline query");
+            m_device.captureDeviceLoss(VulkanArenaScope::s_QueueTimelineQueryContext);
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to query queue timeline semaphore value: {}"), ResultToString(completionResult));
         return MakeUnexpected(completionResult);
     }

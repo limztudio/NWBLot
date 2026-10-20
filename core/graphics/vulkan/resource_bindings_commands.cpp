@@ -69,7 +69,7 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
     if(byteSize == 0)
         return;
     if(!VulkanDetail::AreAllPointersValid(data)){
-        rejectCommandRecording(s_SetPushConstantsOperation, NWB_TEXT("data is null"));
+        rejectCommandRecording(s_SetPushConstantsOperation, s_DataIsNullReason);
         return;
     }
     if(byteSize > UINT32_MAX){

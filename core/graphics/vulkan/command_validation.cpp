@@ -303,7 +303,7 @@ bool CommandList::validateTextureForGpuState(Texture* const texture, const Resou
     }
     const VkImageUsageFlags requiredUsage = explicitRequiredUsage | VulkanTextureDetail::RequiredImageUsageForResourceStates(requiredState);
     if(!isTextureReadyForCommandQueue(texture, requiredUsage)){
-        rejectCommandRecording(operationName, NWB_TEXT("texture is not ready for this exact command queue"));
+        rejectCommandRecording(operationName, s_TextureNotReadyForQueueReason);
         return false;
     }
 
@@ -328,7 +328,7 @@ bool CommandList::validateBufferForGpuState(Buffer* const buffer, const Resource
     }
     const VkBufferUsageFlags requiredUsage = explicitRequiredUsage | (buffer ? VulkanBufferDetail::RequiredBufferUsageForResourceStates(buffer->m_creationDesc, requiredState) : 0u);
     if(!isBufferReadyForCommandQueue(buffer, requiredUsage)){
-        rejectCommandRecording(operationName, NWB_TEXT("buffer is not ready for this exact command queue"));
+        rejectCommandRecording(operationName, s_BufferNotReadyForQueueReason);
         return false;
     }
 

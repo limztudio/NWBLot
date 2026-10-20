@@ -23,6 +23,10 @@ namespace __hidden_texture_transfer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr TStringView s_TexturesNotOwnedReason = NWB_TEXT("source and destination textures must belong to this device");
+static constexpr TStringView s_NativeImageNullReason = NWB_TEXT("source and destination native image handles must be non-null");
+static constexpr TStringView s_NativeImageNotDistinctReason = NWB_TEXT("source and destination must be distinct native images");
+
 [[nodiscard]] inline bool TextureTransferImagesWithinFormatLimits(const VulkanContext& context, const VkImageCreateInfo& source, const VkImageCreateInfo& destination){
     VkImageFormatProperties sourceProperties{};
     const VkResult sourceResult = context.instanceDispatch.vkGetPhysicalDeviceImageFormatProperties(context.physicalDevice, source.format, source.imageType, source.tiling, source.usage, source.flags, &sourceProperties);
@@ -92,15 +96,15 @@ struct TextureUploadCopyAspect{
 void CommandList::copyTexture(Texture& dest, const TextureSlice& destSlice, Texture& src, const TextureSlice& srcSlice){
     constexpr TStringView s_OperationName = NWB_TEXT("copy texture");
     if(&src.m_context != &m_context || &dest.m_context != &m_context){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination textures must belong to this device"));
+        rejectCommandRecording(s_OperationName, __hidden_texture_transfer::s_TexturesNotOwnedReason);
         return;
     }
     if(src.m_image == VK_NULL_HANDLE || dest.m_image == VK_NULL_HANDLE){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination native image handles must be non-null"));
+        rejectCommandRecording(s_OperationName, __hidden_texture_transfer::s_NativeImageNullReason);
         return;
     }
     if(&src == &dest || src.m_image == dest.m_image){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination must be distinct native images"));
+        rejectCommandRecording(s_OperationName, __hidden_texture_transfer::s_NativeImageNotDistinctReason);
         return;
     }
     if(!validateTextureForGpuState(&src, ResourceStates::CopySource, s_OperationName, VK_IMAGE_USAGE_TRANSFER_SRC_BIT))
@@ -247,7 +251,7 @@ bool CommandList::tryWriteTexture(Texture& dest, u32 arraySlice, u32 mipLevel, c
     const usize uploadSize = static_cast<usize>(copyLayout->requiredSize);
     const auto staging = prepareUploadStaging(data, uploadSize, NWB_TEXT("writeTexture"), *uploadAlignment);
     if(!staging){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("staging allocation failed"));
+        rejectCommandRecording(s_OperationName, s_StagingAllocationFailedReason);
         return false;
     }
     Buffer* const stagingBuffer = staging->buffer;
@@ -292,15 +296,15 @@ void CommandList::resolveTexture(Texture& dest, const TextureSubresourceSet& dst
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
         return;
     if(&src.m_context != &m_context || &dest.m_context != &m_context){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination textures must belong to this device"));
+        rejectCommandRecording(s_OperationName, __hidden_texture_transfer::s_TexturesNotOwnedReason);
         return;
     }
     if(src.m_image == VK_NULL_HANDLE || dest.m_image == VK_NULL_HANDLE){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination native image handles must be non-null"));
+        rejectCommandRecording(s_OperationName, __hidden_texture_transfer::s_NativeImageNullReason);
         return;
     }
     if(&src == &dest || src.m_image == dest.m_image){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination must be distinct native images"));
+        rejectCommandRecording(s_OperationName, __hidden_texture_transfer::s_NativeImageNotDistinctReason);
         return;
     }
     if(!validateTextureForGpuState(&src, ResourceStates::ResolveSource, s_OperationName, VK_IMAGE_USAGE_TRANSFER_SRC_BIT))

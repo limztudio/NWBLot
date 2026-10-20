@@ -30,7 +30,7 @@ UiEditBoxHost::UiEditBoxHost(Core::Alloc::GlobalArena& arena, Ui::Context& conte
     , m_events(arena)
     , m_nativePublished(arena)
 {
-    m_entries.reserve(256u);
+    m_entries.reserve(s_UiEditBoxMaxEntries);
     m_events.reserve(Ui::s_InputMaxEvents);
 }
 

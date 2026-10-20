@@ -31,6 +31,8 @@ namespace __hidden_coincident_volumes{
 using Candidate = CoincidentOpticalVolumeCandidate;
 using CandidatePointer = NotNull<const Candidate*>;
 
+inline constexpr usize s_MinCoincidentCandidateCount = 2u;
+
 [[nodiscard]] bool ValidCandidateLanes(SIMDVectorSingle positionVec, SIMDVectorSingle rotationVec, SIMDVectorSingle scaleVec)noexcept{
     if(!VectorIsFinite(positionVec, VectorComponentMask::s_XYZ) || !VectorIsFinite(rotationVec, VectorComponentMask::s_XYZW) || !VectorIsFinite(scaleVec, VectorComponentMask::s_XYZ))
         return false;
@@ -128,7 +130,7 @@ RendererOpticalVolumeSelection::RendererOpticalVolumeSelection(Core::Alloc::Glob
 void RendererOpticalVolumeSelection::prepare(Core::ECS::World& world, RendererMaterialSystem& materials, Core::Alloc::ScratchArena& scratchArena){
     auto rendererView = world.view<RendererComponent>();
     const MeshSystem* meshSystemPtr = world.getSystem<MeshSystem>();
-    if(!meshSystemPtr || rendererView.candidateCount() < 2u){
+    if(!meshSystemPtr || rendererView.candidateCount() < __hidden_coincident_volumes::s_MinCoincidentCandidateCount){
         reset();
         return;
     }
@@ -142,7 +144,7 @@ void RendererOpticalVolumeSelection::prepare(Core::ECS::World& world, RendererMa
         if(mergingEnabled(renderer))
             ++candidateCapacity;
     }
-    if(candidateCapacity < 2u){
+    if(candidateCapacity < __hidden_coincident_volumes::s_MinCoincidentCandidateCount){
         reset();
         return;
     }
@@ -194,7 +196,7 @@ void RendererOpticalVolumeSelection::prepare(Core::ECS::World& world, RendererMa
 
 void RendererOpticalVolumeSelection::select(const CoincidentOpticalVolumeCandidate* candidates, const usize candidateCount, Core::Alloc::ScratchArena& scratchArena){
     reset();
-    if(!candidates || candidateCount < 2u)
+    if(!candidates || candidateCount < __hidden_coincident_volumes::s_MinCoincidentCandidateCount)
         return;
 
     using namespace __hidden_coincident_volumes;

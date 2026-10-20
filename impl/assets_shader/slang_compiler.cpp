@@ -83,6 +83,11 @@ static constexpr AStringView s_OutputArgument = "-o";
 static constexpr usize s_BaseCompilerArgumentCount = 8u + LengthOf(s_CommonCompilerArguments) + LengthOf(s_SpirvBaselineCapabilities) * 2u;
 static constexpr usize s_MaxTargetProfileCapabilityCount = 1u;
 static constexpr usize s_MaxOptimizationArgumentCount = 1u;
+static constexpr usize s_FixedOwnedArgumentCount = 2u;
+static constexpr usize s_FingerprintReadBufferBytes = 8192u;
+static constexpr usize s_QuotePairByteCount = 2u;
+static constexpr AStringView s_RootKeyPrefix = "root_";
+static constexpr AStringView s_DiagnosticWarningEventName = "warning";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -99,7 +104,7 @@ public:
             return;
 
         const DiagnosticEventText diagnostic = MakeDiagnosticEventText("ShaderCook: failed to remove temporary compiler directory '{}', error {}", m_path.c_str(), removed.error().value());
-        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "warning", .category = "shader_compiler_cleanup", .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
+        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_DiagnosticWarningEventName, .category = "shader_compiler_cleanup", .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
     }
 
 
@@ -180,10 +185,10 @@ static Expected<ScratchPath> BuildCompilerOverlayPath(const ScratchPath& overlay
         return MakeUnexpected(Failure{});
 
     const auto rootText = BuildCompilerPathText(rootPath, scratchArena);
-    if(!rootText || rootText->size() > (Limit<usize>::s_Max - 5u) / 2u)
+    if(!rootText || rootText->size() > (Limit<usize>::s_Max - s_RootKeyPrefix.size()) / 2u)
         return MakeUnexpected(Failure{});
-    ScratchString rootKey("root_", scratchArena);
-    rootKey.reserve(5u + rootText->size() * 2u);
+    ScratchString rootKey(s_RootKeyPrefix.data(), scratchArena);
+    rootKey.reserve(s_RootKeyPrefix.size() + rootText->size() * 2u);
     static constexpr AStringView s_HexDigits = "0123456789abcdef";
     for(const char ch : *rootText){
         const u8 byte = static_cast<u8>(ch);
@@ -317,9 +322,9 @@ static bool WriteBomStrippedCompilerInput(ScratchString& source, const Path& sou
             return MakeUnexpected(Failure{});
         }
         const auto capacity = CompilerPathTextCapacity(*overlayIncludePath);
-        if(!capacity || *capacity > Limit<usize>::s_Max - 2u)
+        if(!capacity || *capacity > Limit<usize>::s_Max - s_QuotePairByteCount)
             return MakeUnexpected(Failure{});
-        valueCapacity = *capacity + 2u;
+        valueCapacity = *capacity + s_QuotePairByteCount;
     }
     const usize fixedBytes = s_DefineArgument.size() + (!define.value.empty() ? 1u : 0u);
     if(define.name.size() > Limit<usize>::s_Max - fixedBytes || valueCapacity > Limit<usize>::s_Max - fixedBytes - define.name.size())
@@ -509,7 +514,7 @@ Expected<u64> SlangShaderCompiler::ComputeCompilerFingerprint(const Path& tempor
         return MakeUnexpected(Failure{});
     }
 
-    Array<char, 8192u> compilerBytes{};
+    Array<char, __hidden_slang_compiler::s_FingerprintReadBufferBytes> compilerBytes{};
     for(;;){
         compilerStream.read(compilerBytes.data(), static_cast<StreamSize>(compilerBytes.size()));
         const StreamSize bytesRead = compilerStream.gcount();
@@ -636,7 +641,7 @@ bool SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest
     }
 
     const usize argumentReserve = s_MaxFixedArgumentCount + includeDirectoryCount * 2u + defineCount;
-    const usize ownedArgumentCount = 2u + includeDirectoryCount + defineCount;
+    const usize ownedArgumentCount = __hidden_slang_compiler::s_FixedOwnedArgumentCount + includeDirectoryCount + defineCount;
     __hidden_slang_compiler::ScratchVector<AStringView> arguments(scratchArena);
     arguments.reserve(argumentReserve);
     __hidden_slang_compiler::ScratchVector<__hidden_slang_compiler::ScratchString> ownedArguments(scratchArena);

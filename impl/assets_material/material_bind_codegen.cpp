@@ -51,6 +51,11 @@ static constexpr u32 s_MaterialBindU64HighWordBitShift = static_cast<u32>(sizeof
 static constexpr usize s_MaterialBindGeneratedStructReserveBytes = 32u;
 static constexpr usize s_MaterialBindGeneratedFieldReserveBytes = 8u;
 static constexpr usize s_MaterialBindGeneratedInstanceReserveBytes = 64u;
+static constexpr u32 s_MaterialBindGeneratedSeparatorNewlineCount = 3u;
+static constexpr AStringView s_MaterialBindAccessorInstanceParameter = "(const NwbMeshInstanceData instance){\n";
+static constexpr AStringView s_MaterialBindRequirementError = "#error \"generated material bind includes require mesh/authoring.slangi\"\n";
+static constexpr AStringView s_GeneratedEndifBlock = "#endif\n\n";
+static constexpr AStringView s_GeneratedEndifBlockBeforeSeparator = "#endif\n\n\n";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -318,7 +323,7 @@ static bool AppendMaterialBindLayoutConstants(const AStringView includePath, con
 
     const NameHash& interfaceHash = interfaceName.hash();
     for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane){
-        ScratchString laneSuffix("INTERFACE_HASH_", scratchArena);
+        ScratchString laneSuffix(s_MaterialBindInterfaceHashSymbolPrefix, scratchArena);
         char laneDigits[TextDetail::s_DecimalTextBufferBytes];
         laneSuffix += FormatDecimal(static_cast<usize>(lane), laneDigits);
         const ScratchString symbol = BuildMaterialBindGeneratedSymbol(scratchArena, {}, AStringView(laneSuffix));
@@ -326,13 +331,13 @@ static bool AppendMaterialBindLayoutConstants(const AStringView includePath, con
             return false;
     }
 
-    const ScratchString layoutHashSymbol = BuildMaterialBindGeneratedSymbol(scratchArena, {}, "LAYOUT_HASH");
-    const ScratchString blockCountSymbol = BuildMaterialBindGeneratedSymbol(scratchArena, {}, "BLOCK_COUNT");
-    const ScratchString fieldCountSymbol = BuildMaterialBindGeneratedSymbol(scratchArena, {}, "FIELD_COUNT");
-    const ScratchString storageConstantSymbol = BuildMaterialBindGeneratedSymbol(scratchArena, {}, "STORAGE_CONSTANT");
-    const ScratchString storageMutableSymbol = BuildMaterialBindGeneratedSymbol(scratchArena, {}, "STORAGE_MUTABLE");
-    const ScratchString constantByteSizeSymbol = BuildMaterialBindGeneratedSymbol(scratchArena, {}, "CONSTANT_BYTE_SIZE");
-    const ScratchString mutableByteSizeSymbol = BuildMaterialBindGeneratedSymbol(scratchArena, {}, "MUTABLE_BYTE_SIZE");
+    const ScratchString layoutHashSymbol = BuildMaterialBindGeneratedSymbol(scratchArena, {}, s_MaterialBindLayoutHashSymbol);
+    const ScratchString blockCountSymbol = BuildMaterialBindGeneratedSymbol(scratchArena, {}, s_MaterialBindBlockCountSymbol);
+    const ScratchString fieldCountSymbol = BuildMaterialBindGeneratedSymbol(scratchArena, {}, s_MaterialBindFieldCountSymbol);
+    const ScratchString storageConstantSymbol = BuildMaterialBindGeneratedSymbol(scratchArena, {}, s_MaterialBindStorageConstantSymbol);
+    const ScratchString storageMutableSymbol = BuildMaterialBindGeneratedSymbol(scratchArena, {}, s_MaterialBindStorageMutableSymbol);
+    const ScratchString constantByteSizeSymbol = BuildMaterialBindGeneratedSymbol(scratchArena, {}, s_MaterialBindConstantByteSizeSymbol);
+    const ScratchString mutableByteSizeSymbol = BuildMaterialBindGeneratedSymbol(scratchArena, {}, s_MaterialBindMutableByteSizeSymbol);
 
     if(!AppendMaterialBindU64Constant(includePath, layoutHashSymbol, layout.layoutHash, inOutSymbols, scratchArena, inOutSource))
         return false;
@@ -356,9 +361,9 @@ static bool AppendMaterialBindLayoutConstants(const AStringView includePath, con
         const MaterialTypedLayoutBlock* block = generatedBlock.block;
         const u32 blockStorageByteBegin = ComputeMaterialBindBlockStorageByteBegin(layout, generatedBlock.entry.blockIndex);
 
-        const ScratchString storageSymbol = BuildMaterialBindGeneratedSymbol(scratchArena, { AStringView(instance.name) }, "_STORAGE");
-        const ScratchString offsetSymbol = BuildMaterialBindGeneratedSymbol(scratchArena, { AStringView(instance.name) }, "_BYTE_OFFSET");
-        const ScratchString sizeSymbol = BuildMaterialBindGeneratedSymbol(scratchArena, { AStringView(instance.name) }, "_BYTE_SIZE");
+        const ScratchString storageSymbol = BuildMaterialBindGeneratedSymbol(scratchArena, { AStringView(instance.name) }, s_MaterialBindStorageSymbolSuffix);
+        const ScratchString offsetSymbol = BuildMaterialBindGeneratedSymbol(scratchArena, { AStringView(instance.name) }, s_MaterialBindByteOffsetSymbolSuffix);
+        const ScratchString sizeSymbol = BuildMaterialBindGeneratedSymbol(scratchArena, { AStringView(instance.name) }, s_MaterialBindByteSizeSymbolSuffix);
         if(!AppendMaterialBindU32Constant(includePath, storageSymbol, static_cast<u32>(block->blockClass), inOutSymbols, scratchArena, inOutSource))
             return false;
         if(!AppendMaterialBindU32Constant(includePath, offsetSymbol, blockStorageByteBegin, inOutSymbols, scratchArena, inOutSource))
@@ -404,13 +409,13 @@ static void AppendMaterialBindFieldAccessor(const MaterialBindField& field, cons
     inOutSource += field.type;
     inOutSource += ' ';
     inOutSource += functionName;
-    inOutSource += "(const NwbMeshInstanceData instance){\n";
-    inOutSource += "    return ";
+    inOutSource += s_MaterialBindAccessorInstanceParameter;
+    inOutSource += s_GeneratedReturnPrefix;
     inOutSource += loadFunctionName;
     inOutSource += "(instance, ";
     inOutSource += byteOffsetSymbol;
     inOutSource += ");\n";
-    inOutSource += "}\n\n";
+    inOutSource += s_GeneratedFunctionEnd;
 }
 
 
@@ -423,13 +428,13 @@ static void AppendMaterialBindResourceFieldAccessor(const MaterialLayoutFieldTyp
     inOutSource += slangTypeName;
     inOutSource += ' ';
     inOutSource += functionName;
-    inOutSource += "(const NwbMeshInstanceData instance){\n";
-    inOutSource += "    return ";
+    inOutSource += s_MaterialBindAccessorInstanceParameter;
+    inOutSource += s_GeneratedReturnPrefix;
     inOutSource += heapAccessorName;
     inOutSource += "(nwbMaterialLoadConstantUInt(instance, ";
     inOutSource += byteOffsetSymbol;
     inOutSource += "));\n";
-    inOutSource += "}\n\n";
+    inOutSource += s_GeneratedFunctionEnd;
 }
 
 static bool AppendMaterialBindGeneratedInstance(
@@ -442,7 +447,7 @@ static bool AppendMaterialBindGeneratedInstance(
     CookString& inOutSource
 ){
     inOutSource += "\n";
-    AppendMaterialBindGeneratedSeparator(inOutSource, 3u);
+    AppendMaterialBindGeneratedSeparator(inOutSource, s_MaterialBindGeneratedSeparatorNewlineCount);
 
     const MaterialBindGeneratedLayoutBlock generatedBlock = ResolveMaterialBindGeneratedLayoutBlock(instance, layout);
     const MaterialTypedLayoutBlock* layoutBlock = generatedBlock.block;
@@ -459,7 +464,7 @@ static bool AppendMaterialBindGeneratedInstance(
         NWB_ASSERT(layoutField.offset <= Limit<u32>::s_Max - layoutBlockStorageByteBegin);
 
         const bool isResourceField = IsMaterialLayoutResourceFieldType(layoutField.fieldType);
-        const ScratchString byteOffsetSymbol = BuildMaterialBindGeneratedSymbol(scratchArena, { AStringView(instance.name), AStringView(field.name) }, "_BYTE_OFFSET");
+        const ScratchString byteOffsetSymbol = BuildMaterialBindGeneratedSymbol(scratchArena, { AStringView(instance.name), AStringView(field.name) }, s_MaterialBindByteOffsetSymbolSuffix);
         const ScratchString functionName = BuildMaterialBindAccessorName(scratchArena, { AStringView(instance.name), AStringView(field.name) });
         if(!RegisterGeneratedMaterialBindSymbol(includePath, AStringView(functionName), inOutSymbols, scratchArena))
             return false;
@@ -477,8 +482,8 @@ static bool AppendMaterialBindGeneratedInstance(
 
         const ScratchString loadFunctionName = BuildMaterialBindFieldLookupFunctionName(scratchArena, layoutField.fieldType, layoutBlock->blockClass);
         NWB_ASSERT(!loadFunctionName.empty());
-        const ScratchString keySymbol = BuildMaterialBindGeneratedSymbol(scratchArena, { AStringView(instance.name), AStringView(field.name) }, "_KEY");
-        const ScratchString defaultSymbol = BuildMaterialBindGeneratedSymbol(scratchArena, { AStringView(instance.name), AStringView(field.name) }, "_DEFAULT");
+        const ScratchString keySymbol = BuildMaterialBindGeneratedSymbol(scratchArena, { AStringView(instance.name), AStringView(field.name) }, s_MaterialBindKeySymbolSuffix);
+        const ScratchString defaultSymbol = BuildMaterialBindGeneratedSymbol(scratchArena, { AStringView(instance.name), AStringView(field.name) }, s_MaterialBindDefaultSymbolSuffix);
         if(!AppendMaterialBindFieldConstants(includePath, instance, field, keySymbol, defaultSymbol, inOutSymbols, scratchArena, inOutSource))
             return false;
         AppendMaterialBindFieldAccessor(field, byteOffsetSymbol, functionName, AStringView(loadFunctionName), inOutSource);
@@ -492,7 +497,7 @@ static bool AppendMaterialBindGeneratedInstance(
     inOutSource += bindStruct.name;
     inOutSource += ' ';
     inOutSource += blockFunctionName;
-    inOutSource += "(const NwbMeshInstanceData instance){\n";
+    inOutSource += s_MaterialBindAccessorInstanceParameter;
     inOutSource += "    ";
     inOutSource += bindStruct.name;
     inOutSource += " value;\n";
@@ -508,7 +513,7 @@ static bool AppendMaterialBindGeneratedInstance(
         inOutSource += "(instance);\n";
     }
     inOutSource += "    return value;\n";
-    inOutSource += "}\n\n";
+    inOutSource += s_GeneratedFunctionEnd;
 
     return true;
 }
@@ -535,29 +540,29 @@ Expected<CookString> BuildMaterialBindIncludeSourceImpl(CookArena& arena, const 
     ScratchHashSet<ScratchString> generatedSymbols{ 0, Hasher<ScratchString>(), EqualTo<ScratchString>(), scratchArena };
 
     source += "// generated by NWBLot material bind cook\n";
-    AppendMaterialBindGeneratedSeparator(source, 3u);
+    AppendMaterialBindGeneratedSeparator(source, s_MaterialBindGeneratedSeparatorNewlineCount);
     source += "#ifndef ";
     source += includeGuard;
     source += "\n#define ";
     source += includeGuard;
     source += "\n\n\n";
-    AppendMaterialBindGeneratedSeparator(source, 3u);
+    AppendMaterialBindGeneratedSeparator(source, s_MaterialBindGeneratedSeparatorNewlineCount);
     source += "#ifndef NWB_MATERIAL_TYPED_BINDING\n";
-    source += "#error \"generated material bind includes require mesh/authoring.slangi\"\n";
-    source += "#endif\n\n";
+    source += s_MaterialBindRequirementError;
+    source += s_GeneratedEndifBlock;
     source += "#ifndef NWB_MATERIAL_TYPED_BINDING_REQUIRED_VALUE\n";
-    source += "#error \"generated material bind includes require mesh/authoring.slangi\"\n";
-    source += "#endif\n\n";
+    source += s_MaterialBindRequirementError;
+    source += s_GeneratedEndifBlock;
     source += "#if NWB_MATERIAL_TYPED_BINDING != NWB_MATERIAL_TYPED_BINDING_REQUIRED_VALUE\n";
     source += "#error \"generated material bind accessors require NWB_MATERIAL_TYPED_BINDING to match NWB_MATERIAL_TYPED_BINDING_REQUIRED_VALUE\"\n";
-    source += "#endif\n\n\n";
-    AppendMaterialBindGeneratedSeparator(source, 3u);
+    source += s_GeneratedEndifBlockBeforeSeparator;
+    AppendMaterialBindGeneratedSeparator(source, s_MaterialBindGeneratedSeparatorNewlineCount);
 
     if(!AppendMaterialBindLayoutConstants(AStringView(includePath), entry, *interfaceName, layout, generatedSymbols, scratchArena, source))
         return MakeUnexpected(Failure{});
 
     source += "\n";
-    AppendMaterialBindGeneratedSeparator(source, 3u);
+    AppendMaterialBindGeneratedSeparator(source, s_MaterialBindGeneratedSeparatorNewlineCount);
 
     {
         usize estimatedStructBytes = 0u;
@@ -599,8 +604,8 @@ Expected<CookString> BuildMaterialBindIncludeSourceImpl(CookArena& arena, const 
     }
 
     source += "\n";
-    AppendMaterialBindGeneratedSeparator(source, 3u);
-    source += "#endif\n\n\n";
+    AppendMaterialBindGeneratedSeparator(source, s_MaterialBindGeneratedSeparatorNewlineCount);
+    source += s_GeneratedEndifBlockBeforeSeparator;
     AppendMaterialBindGeneratedSeparator(source, 1u);
     return source;
 }

@@ -18,7 +18,7 @@ NWB_IMPL_UI_BEGIN
 
 Label::Label(Core::Alloc::GlobalArena& arena)
     : m_text(arena)
-    , m_language("en", arena)
+    , m_language(s_TextDefaultLanguage.data(), arena)
     , m_layout(arena)
 {}
 

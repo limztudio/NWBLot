@@ -37,7 +37,10 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     auto rendererView = m_world.view<RendererComponent>();
     const usize candidateCount = rendererView.candidateCount();
     BeginLightSpaceCsgGather(m_lightSpaceShadow.m_csg, m_world, candidateCount, false);
-    m_lightSpaceShadow.m_sceneBuffers.reserve(candidateCount * (m_lightSpaceShadow.m_csg.gathering ? 7u : 5u));
+    // Position, index, attribute, meshlet descriptor and meshlet bounds buffers; CSG gathering adds runtime bounds and software BVH nodes.
+    constexpr u32 s_SceneBuffersPerCandidate = 5u;
+    constexpr u32 s_SceneBuffersPerCsgCandidate = 7u;
+    m_lightSpaceShadow.m_sceneBuffers.reserve(candidateCount * (m_lightSpaceShadow.m_csg.gathering ? s_SceneBuffersPerCsgCandidate : s_SceneBuffersPerCandidate));
 
     // Parallel instance records and CPU BVH build values.
     Vector<SceneSwBvhInstanceGpu, Core::Alloc::ScratchArena> instances{ scratchArena };
@@ -326,7 +329,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     m_lightSpaceShadow.m_casters.clear();
     m_lightSpaceShadow.m_casters.reserve(instanceCount);
     for(u32 index = 0u; index < instanceCount; ++index){
-        const u64 indexCount = static_cast<u64>(instances[index].primitiveCount) * 3u;
+        const u64 indexCount = static_cast<u64>(instances[index].primitiveCount) * s_RayTracingTriangleIndexCount;
         LightSpaceShadowCaster& caster = lightSpaceCasters[index];
         const Core::BufferHandle& indexBuffer = caster.triangleIndexBuffer;
         if(indexCount == 0u || indexCount > Limit<u32>::s_Max || !indexBuffer || !indexBuffer->getCreationDescription().isIndexBuffer || indexBuffer->getCreationDescription().byteSize < indexCount * sizeof(u32))

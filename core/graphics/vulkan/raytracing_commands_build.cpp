@@ -23,6 +23,8 @@ namespace __hidden_raytracing_commands_build{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr TStringView s_RetainBuildSignatureFailedReason = NWB_TEXT("failed to retain acceleration-structure build signature");
+
 AccelStructGeometryBuildSignature MakeAccelStructGeometryBuildSignature(
     const VkAccelerationStructureGeometryKHR& geometry,
     const VkAccelerationStructureGeometrySpheresDataNV* const spheresData,
@@ -111,7 +113,9 @@ bool AccelStructGeometryBuildSignaturesEqual(const AccelStructGeometryBuildSigna
 
 
 void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStructResource, const RayTracingGeometryDesc* pGeometries, usize numGeometries, RayTracingAccelStructBuildFlags::Mask buildFlags){
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, NWB_TEXT("build bottom-level acceleration structure")))
+    constexpr TStringView s_BuildBottomLevelAccelStructOperation = NWB_TEXT("build bottom-level acceleration structure");
+    constexpr TStringView s_BuildBlasOperation = NWB_TEXT("build BLAS");
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, s_BuildBottomLevelAccelStructOperation))
         return;
     if(!accelStructResource){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure is null"));
@@ -141,7 +145,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure storage is not ready"));
         return;
     }
-    const auto vkBuildFlagsResult = VulkanDetail::ConvertAccelStructBuildFlags(buildFlags, NWB_TEXT("build BLAS"));
+    const auto vkBuildFlagsResult = VulkanDetail::ConvertAccelStructBuildFlags(buildFlags, s_BuildBlasOperation);
     if(!vkBuildFlagsResult)
         return;
     const VkBuildAccelerationStructureFlagsKHR vkBuildFlags = *vkBuildFlagsResult;
@@ -221,26 +225,26 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         const RayTracingGeometryDesc& geometryDesc = pGeometries[i];
         if(geometryDesc.geometryType == RayTracingGeometryType::Triangles){
             const RayTracingGeometryTriangles& triangles = geometryDesc.geometryData.triangles;
-            if(!validateBuildInput(triangles.vertexBuffer, NWB_TEXT("triangle vertex")) || !validateBuildInput(triangles.indexBuffer, NWB_TEXT("triangle index")))
+            if(!validateBuildInput(triangles.vertexBuffer, VulkanDetail::s_TriangleVertexInputName) || !validateBuildInput(triangles.indexBuffer, VulkanDetail::s_TriangleIndexInputName))
                 return;
         }
         else if(geometryDesc.geometryType == RayTracingGeometryType::AABBs){
-            if(!validateBuildInput(geometryDesc.geometryData.aabbs.buffer, NWB_TEXT("AABB")))
+            if(!validateBuildInput(geometryDesc.geometryData.aabbs.buffer, VulkanDetail::s_AabbInputName))
                 return;
         }
         else if(geometryDesc.geometryType == RayTracingGeometryType::Spheres){
             const RayTracingGeometrySpheres& spheres = geometryDesc.geometryData.spheres;
-            if(!validateBuildInput(spheres.vertexBuffer, NWB_TEXT("sphere vertex")) || !validateBuildInput(spheres.indexBuffer, NWB_TEXT("sphere index")))
+            if(!validateBuildInput(spheres.vertexBuffer, VulkanDetail::s_SphereVertexInputName) || !validateBuildInput(spheres.indexBuffer, VulkanDetail::s_SphereIndexInputName))
                 return;
         }
         else if(geometryDesc.geometryType == RayTracingGeometryType::Lss){
             const RayTracingGeometryLss& lss = geometryDesc.geometryData.lss;
-            if(!validateBuildInput(lss.vertexBuffer, NWB_TEXT("LSS vertex")) || !validateBuildInput(lss.indexBuffer, NWB_TEXT("LSS index")))
+            if(!validateBuildInput(lss.vertexBuffer, VulkanDetail::s_LssVertexInputName) || !validateBuildInput(lss.indexBuffer, VulkanDetail::s_LssIndexInputName))
                 return;
         }
 
         blasScratch.transformOffsets[i] = Limit<usize>::s_Max;
-        const auto geometry = VulkanDetail::FillBlasGeometryForSizeQuery(m_context, pGeometries[i], NWB_TEXT("build BLAS"), true);
+        const auto geometry = VulkanDetail::FillBlasGeometryForSizeQuery(m_context, pGeometries[i], s_BuildBlasOperation, true);
         if(!geometry)
             return;
         blasScratch.geometries[i] = geometry->geometry;
@@ -386,7 +390,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         geometrySignatures.data(),
         geometrySignatures.size(),
         performUpdate,
-        performUpdate ? NWB_TEXT("update BLAS") : NWB_TEXT("build BLAS")
+        performUpdate ? NWB_TEXT("update BLAS") : s_BuildBlasOperation
     );
     if(!hasPriorBuildResult)
         return;
@@ -540,7 +544,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
 
     const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfos = blasScratch.rangeInfos.data();
     if(!m_currentCmdBuf->appendPendingAccelStructBuildCommit(*as, VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR, vkBuildFlags, geometrySignatures.data(), geometrySignatures.size())){
-        rejectCommandRecording(NWB_TEXT("build bottom-level acceleration structure"), NWB_TEXT("failed to retain acceleration-structure build signature"));
+        rejectCommandRecording(s_BuildBottomLevelAccelStructOperation, __hidden_raytracing_commands_build::s_RetainBuildSignatureFailedReason);
         return;
     }
     m_context.deviceDispatch.vkCmdBuildAccelerationStructuresKHR(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo, &pRangeInfos);
@@ -823,7 +827,7 @@ bool CommandList::buildTopLevelAccelStructFromInstanceData(
     rangeInfo.primitiveCount = primitiveCount;
     const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
     if(!m_currentCmdBuf->appendPendingAccelStructBuildCommit(as, VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR, vkBuildFlags, &geometrySignature, 1u)){
-        rejectCommandRecording(operationName, NWB_TEXT("failed to retain acceleration-structure build signature"));
+        rejectCommandRecording(operationName, __hidden_raytracing_commands_build::s_RetainBuildSignatureFailedReason);
         return false;
     }
     m_context.deviceDispatch.vkCmdBuildAccelerationStructuresKHR(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo, &pRangeInfo);

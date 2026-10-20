@@ -532,7 +532,11 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
 
     constexpr usize s_OpaqueDrawResourceUseCount = 8u;
     constexpr usize s_NoOpaqueDrawResourceUseCount = 6u;
-    gbufferResourceUses.reserve((hasOpaqueDrawItems ? s_OpaqueDrawResourceUseCount : s_NoOpaqueDrawResourceUseCount) + (hasCsgFrameGpuWork ? 5u : 0u) + (hasOpaqueCsgFrameWork ? 5u : 0u));
+    // Receiver ranges, cutters, clip context slots, interval sample state, and bindless slots.
+    constexpr usize s_CsgFrameGpuResourceUseCount = 5u;
+    // Cap back normal, interval depth, interval id, receiver event data, and receiver event count.
+    constexpr usize s_OpaqueCsgFrameResourceUseCount = 5u;
+    gbufferResourceUses.reserve((hasOpaqueDrawItems ? s_OpaqueDrawResourceUseCount : s_NoOpaqueDrawResourceUseCount) + (hasCsgFrameGpuWork ? s_CsgFrameGpuResourceUseCount : 0u) + (hasOpaqueCsgFrameWork ? s_OpaqueCsgFrameResourceUseCount : 0u));
     gbufferResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
     if(hasOpaqueDrawItems){
         gbufferResourceUses.push_back(ReadBufferUse(materialInstances, materialInstanceRange));
@@ -547,9 +551,12 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         gbufferResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
     }
     if(hasOpaqueCsgFrameWork){
-        csgReceiverSpanResourceUses.reserve(4u + (hasCsgFrameGpuWork ? 2u : 0u));
+        constexpr usize s_CsgReceiverSpanResourceUseCapacity = 4u;
+        // Clip context slots and bindless slots.
+        constexpr usize s_CsgSlotResourceUseCount = 2u;
+        csgReceiverSpanResourceUses.reserve(s_CsgReceiverSpanResourceUseCapacity + (hasCsgFrameGpuWork ? s_CsgSlotResourceUseCount : 0u));
         constexpr usize s_CsgIntervalCombineResourceUseCapacity = 9u;
-        csgIntervalCombineResourceUses.reserve(s_CsgIntervalCombineResourceUseCapacity + (hasCsgFrameGpuWork ? 2u : 0u));
+        csgIntervalCombineResourceUses.reserve(s_CsgIntervalCombineResourceUseCapacity + (hasCsgFrameGpuWork ? s_CsgSlotResourceUseCount : 0u));
         // Peel payloads and receiver-event entries never load their prior values.
         // Their paired interval ID and event count preserve the sparse-write validity contract after the preceding explicit clears, so only those two resources require ReadWrite access.
         // Keeping the payloads write-only also permits their first graph use to begin at a fresh texture's native Unknown state.
@@ -638,7 +645,8 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         opaqueComputeEmulationPayload.materialFrameStatesGraphOwned = gbufferPayload.materialFrameStatesGraphOwned;
         opaqueComputeEmulationPayload.materialGeometryStatesGraphOwned = gbufferPayload.materialGeometryStatesGraphOwned;
 
-        opaqueComputeEmulationResourceUses.reserve(3u);
+        constexpr usize s_OpaqueComputeEmulationResourceUseCapacity = 3u;
+        opaqueComputeEmulationResourceUses.reserve(s_OpaqueComputeEmulationResourceUseCapacity);
         opaqueComputeEmulationResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
         opaqueComputeEmulationResourceUses.push_back(ReadBufferUse(materialInstances, materialInstanceRange));
         opaqueComputeEmulationResourceUses.push_back(ReadBufferUse(materialTyped, materialTypedRange));
@@ -766,7 +774,8 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         // These two through five draw items target exactly one imported buffer.
         // Keep every state phase explicit so the compiler, not the material callback, owns Common -> UAV -> vertex/index -> ... -> vertex/index.
         // The immediate chain is also the semantic ordering contract for the retained persistent output alias.
-        opaqueSharedComputeEmulationGenerateResourceUses.reserve(4u);
+        constexpr usize s_OpaqueSharedComputeEmulationGenerateResourceUseCapacity = 4u;
+        opaqueSharedComputeEmulationGenerateResourceUses.reserve(s_OpaqueSharedComputeEmulationGenerateResourceUseCapacity);
         opaqueSharedComputeEmulationGenerateResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
         opaqueSharedComputeEmulationGenerateResourceUses.push_back(ReadBufferUse(materialInstances, materialInstanceRange));
         opaqueSharedComputeEmulationGenerateResourceUses.push_back(ReadBufferUse(materialTyped, materialTypedRange));
@@ -1020,7 +1029,11 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         }
         csgIntervalSamplePayload.csgComputeEmulationOutputStatesGraphOwned = opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned;
         csgIntervalSamplePayload.opaqueCsgComputeEmulationTiming = opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned ? &opaqueCsgIntervalSampleComputeEmulationTiming : nullptr;
-        csgIntervalSampleResourceUses.reserve(1u + (hasOpaqueDrawItems ? 2u : 0u) + (hasCsgFrameGpuWork ? 5u : 0u) + 4u + 4u);
+        // Material instance and typed-material reads.
+        constexpr usize s_MaterialBufferResourceUseCount = 2u;
+        constexpr usize s_CsgRemovedIntervalResourceUseCount = 4u;
+        constexpr usize s_GbufferColorResourceUseCount = 4u;
+        csgIntervalSampleResourceUses.reserve(1u + (hasOpaqueDrawItems ? s_MaterialBufferResourceUseCount : 0u) + (hasCsgFrameGpuWork ? s_CsgFrameGpuResourceUseCount : 0u) + s_CsgRemovedIntervalResourceUseCount + s_GbufferColorResourceUseCount);
         csgIntervalSampleResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
         if(hasOpaqueDrawItems){
             csgIntervalSampleResourceUses.push_back(ReadBufferUse(materialInstances, materialInstanceRange));

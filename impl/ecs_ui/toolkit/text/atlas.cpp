@@ -99,10 +99,10 @@ bool GlyphAtlas::prepare(const SharedFontFace& face, u32 glyphId, u32 pixelSize)
         appendGlyph(Move(record));
         return true;
     }
-    if(m_bitmap.width > s_GlyphAtlasPageExtent - 2u || m_bitmap.height > s_GlyphAtlasPageExtent - 2u)
+    if(m_bitmap.width > s_GlyphAtlasPageExtent - s_GlyphAtlasGlyphGutter || m_bitmap.height > s_GlyphAtlasPageExtent - s_GlyphAtlasGlyphGutter)
         return false;
-    const u32 paddedWidth = m_bitmap.width + 2u;
-    const u32 paddedHeight = m_bitmap.height + 2u;
+    const u32 paddedWidth = m_bitmap.width + s_GlyphAtlasGlyphGutter;
+    const u32 paddedHeight = m_bitmap.height + s_GlyphAtlasGlyphGutter;
     __hidden_ui_text_atlas::AtlasPlacement placement;
     usize pageIndex = 0u;
     while(pageIndex < m_pages.size()){

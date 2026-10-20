@@ -183,6 +183,13 @@ namespace SIMDVectorDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr u32 s_ByteIndexLaneScale = 0x04040404u;
+inline constexpr u32 s_ByteIndexLaneOffsets = 0x03020100u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_HAS_SSE2)
 #if defined(NWB_HAS_AVX2)
 NWB_INLINE __m128i MultiSrlEpi32(__m128i value, __m128i count)noexcept{ return _mm_srlv_epi32(value, count); }
@@ -282,7 +289,7 @@ NWB_INLINE int32x4_t GetLeadingBit(int32x4_t value)noexcept{
 #if defined(NWB_HAS_NEON64)
 NWB_INLINE uint8x16_t PermuteByteIndices(u32 x, u32 y, u32 z, u32 w)noexcept{
     const uint32x4_t lanes = vreinterpretq_u32_f32(SIMDConvertDetail::MakeU32(x, y, z, w));
-    return vreinterpretq_u8_u32(vaddq_u32(vmulq_n_u32(lanes, 0x04040404u), vdupq_n_u32(0x03020100u)));
+    return vreinterpretq_u8_u32(vaddq_u32(vmulq_n_u32(lanes, s_ByteIndexLaneScale), vdupq_n_u32(s_ByteIndexLaneOffsets)));
 }
 #endif
 
@@ -302,8 +309,8 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL SetLane(SIMDVectorSingle value, f32 co
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL SwizzleLanes(SIMDVectorSingle value, __m128i control)noexcept{
 #if defined(NWB_HAS_SSE4)
-    const __m128i byteOffsets = _mm_mullo_epi32(control, _mm_set1_epi32(0x04040404));
-    const __m128i byteIndices = _mm_add_epi32(byteOffsets, _mm_set1_epi32(0x03020100));
+    const __m128i byteOffsets = _mm_mullo_epi32(control, _mm_set1_epi32(static_cast<i32>(s_ByteIndexLaneScale)));
+    const __m128i byteIndices = _mm_add_epi32(byteOffsets, _mm_set1_epi32(static_cast<i32>(s_ByteIndexLaneOffsets)));
     return _mm_castsi128_ps(_mm_shuffle_epi8(_mm_castps_si128(value), byteIndices));
 #else
     const __m128 x = _mm_and_ps(_mm_castsi128_ps(_mm_cmpeq_epi32(control, _mm_setzero_si128())), _mm_shuffle_ps(value, value, _MM_SHUFFLE(0, 0, 0, 0)));
@@ -412,6 +419,9 @@ namespace SIMDVectorDoubleDetail{
 
 using UIntVector = u64 __attribute__((ext_vector_type(4)));
 
+inline constexpr u64 s_DoubleByteIndexLaneScale = 0x0808080808080808ull;
+inline constexpr u64 s_DoubleByteIndexLaneOffsets = 0x0706050403020100ull;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -452,8 +462,8 @@ NWB_INLINE NativeDoublePair NWB_SIMD_CALL PermutePair(SIMDVectorDouble v0, SIMDV
 
 #if defined(NWB_HAS_NEON64)
 NWB_INLINE uint8x16_t PermuteByteIndices(u32 x, u32 y)noexcept{
-    const uint64x2_t offsets = vsetq_lane_u64(static_cast<u64>(y) * 0x0808080808080808u, vdupq_n_u64(static_cast<u64>(x) * 0x0808080808080808u), 1);
-    const uint8x8_t laneBytes = vcreate_u8(0x0706050403020100u);
+    const uint64x2_t offsets = vsetq_lane_u64(static_cast<u64>(y) * s_DoubleByteIndexLaneScale, vdupq_n_u64(static_cast<u64>(x) * s_DoubleByteIndexLaneScale), 1);
+    const uint8x8_t laneBytes = vcreate_u8(s_DoubleByteIndexLaneOffsets);
     return vaddq_u8(vreinterpretq_u8_u64(offsets), vcombine_u8(laneBytes, laneBytes));
 }
 #elif defined(NWB_HAS_SSE2)

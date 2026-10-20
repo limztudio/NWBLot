@@ -29,6 +29,13 @@ namespace __hidden_renderer_gather_benchmark{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_OpaqueWorkload = "opaque";
+constexpr AStringView s_HybridWorkload = "hybrid";
+constexpr AStringView s_UniqueWorkload = "unique";
+constexpr AStringView s_OverridesWorkload = "overrides";
+constexpr AStringView s_RuntimeWorkload = "runtime";
+constexpr AStringView s_MemoryMode = "memory";
+
 using namespace NWB;
 using namespace NWB::Tests::Smoke;
 
@@ -102,13 +109,13 @@ public:
         m_workload = Move(*requestedWorkload);
         m_output = Move(*requestedOutput);
         const AStringView workload(m_workload.data(), m_workload.size());
-        if(workload != "opaque" && workload != "hybrid" && workload != "shared" && workload != "unique" && workload != "overrides" && workload != "runtime")
+        if(workload != s_OpaqueWorkload && workload != s_HybridWorkload && workload != "shared" && workload != s_UniqueWorkload && workload != s_OverridesWorkload && workload != s_RuntimeWorkload)
             return false;
         const auto mode = ReadSmokeEnvironmentText(scratchArena, "NWB_GATHER_BENCHMARK_MODE");
-        if(!mode || (*mode != "timing" && *mode != "memory"))
+        if(!mode || (*mode != "timing" && *mode != s_MemoryMode))
             return false;
-        m_memoryEnabled = *mode == "memory";
-        m_runtime = workload == "runtime";
+        m_memoryEnabled = *mode == s_MemoryMode;
+        m_runtime = workload == s_RuntimeWorkload;
         if(!m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct) || !m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery)){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererGatherBenchmark: hardware ray queries are required"));
             return false;
@@ -151,10 +158,10 @@ public:
                     return false;
                 continue;
             }
-            const bool opaque = workload == "opaque" || (workload == "hybrid" && index % 2u == 0u);
+            const bool opaque = workload == s_OpaqueWorkload || (workload == s_HybridWorkload && index % 2u == 0u);
             SmokeMeshRef mesh = s_Mesh;
             SmokeMaterialRef material = opaque ? s_Opaque : s_Glass;
-            if(workload == "unique"){
+            if(workload == s_UniqueWorkload){
                 const auto meshPath = StringFormat(scratchArena, "project/smoke/gather_benchmark/meshes/mesh_{:02}", index);
                 const auto materialPath = StringFormat(scratchArena, "project/smoke/gather_benchmark/materials/glass_{:02}", index);
                 const auto meshReference = SmokeMeshRef::FromText(AStringView(meshPath));
@@ -178,7 +185,7 @@ public:
                 ++m_transparentRenderers;
             }
             ++m_renderers;
-            if(workload == "overrides"){
+            if(workload == s_OverridesWorkload){
                 entity.addComponent<NWB::Impl::MaterialInstanceComponent>(m_context.objectArena, Name(s_Interface));
                 Float4 tint;
                 StoreFloat(VectorAdd(VectorSet(0.55f, 0.85f, 1.f, 1.f), VectorDivide(VectorSet(static_cast<f32>(index), 0.f, 0.f, 0.f), VectorReplicate(256.f))), tint);

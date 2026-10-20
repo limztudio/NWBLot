@@ -20,6 +20,8 @@ namespace __hidden_cpu_task_mpmc_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr u32 s_WatchdogTimeoutMS = 12000u;
+constexpr u32 s_PollIntervalMS = 1u;
 using namespace NWB::Core;
 
 inline constexpr u32 s_WorkerCount = 4u;
@@ -38,9 +40,9 @@ public:
         : m_watchdog([](const StopToken& stop)noexcept{
             const Timer begin = TimerNow();
             while(!stop.stop_requested()){
-                if(DurationInMS<u64>(TimerNow(), begin) >= 12000u)
+                if(DurationInMS<u64>(TimerNow(), begin) >= __hidden_cpu_task_mpmc_tests::s_WatchdogTimeoutMS)
                     TerminateInvariant();
-                SleepMS(1u);
+                SleepMS(__hidden_cpu_task_mpmc_tests::s_PollIntervalMS);
             }
         }
         )
@@ -58,7 +60,7 @@ template<typename Predicate>
     while(!predicate()){
         if(DurationInMS<u64>(TimerNow(), begin) >= s_GateTimeoutMS)
             return false;
-        SleepMS(1u);
+        SleepMS(__hidden_cpu_task_mpmc_tests::s_PollIntervalMS);
     }
     return true;
 }

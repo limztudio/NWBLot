@@ -44,6 +44,11 @@ namespace __hidden_logger_server_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_TestSourceFilename = "tests/integration/logger_server/logserver_crash_tests.cpp";
+constexpr AStringView s_ApplicationName = "logserver_crash_tests";
+constexpr AStringView s_ApplicationVersion = "1";
+constexpr AStringView s_WindowsExceptionCategory = "windows_exception";
+
 static constexpr AStringView s_PLATFORM_LINUX = "platform=linux";
 static constexpr AStringView s_SECRET_TOKEN = "secret-token";
 static constexpr AStringView s_EVENT = "[event]";
@@ -176,7 +181,7 @@ NWB_NOINLINE static void CaptureRecoverableErrorForCrashObservation(const AStrin
         .event = DiagnosticEventName::s_Error,
         .category = NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryError,
         .message = message,
-        .file = "tests/integration/logger_server/logserver_crash_tests.cpp",
+        .file = s_TestSourceFilename,
         .line = __LINE__,
     }
     );
@@ -232,8 +237,8 @@ TEST_F(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
     if(childPid == 0){
         NWB::Core::Alloc::PersistentArena installArena(s_AssertChildInstallArena, NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u));
         NWB::Core::Crash::CrashConfigT<NWB::Core::Alloc::PersistentArena> config(installArena);
-        config.applicationName = AStringView("logserver_crash_tests");
-        config.version = AStringView("1");
+        config.applicationName = AStringView(s_ApplicationName);
+        config.version = AStringView(s_ApplicationVersion);
         config.buildId = AStringView("linux-assert-observe-test");
         config.spoolDirectory = spoolDirectory;
 
@@ -257,7 +262,8 @@ TEST_F(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
 
     const CrashTestPath pendingDirectory = spoolDirectory / CrashNames::s_PendingDirectoryName;
     {
-        const auto directoryReady = WaitForDirectory(pendingDirectory, 3000u);
+        constexpr u32 s_PendingDirectoryReadyTimeoutMS = 3000u;
+        const auto directoryReady = WaitForDirectory(pendingDirectory, s_PendingDirectoryReadyTimeoutMS);
         ASSERT_TRUE(directoryReady);
         EXPECT_TRUE(*directoryReady);
     }
@@ -267,7 +273,7 @@ TEST_F(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
     AppendDecimalText(expectedAbortCode, static_cast<u64>(SIGABRT));
     EXPECT_FALSE(PendingDirectoryContainsManifestTexts(arena, pendingDirectory, AStringView("\"reason_kind\": \"signal\""), AStringView(expectedAbortCode.data(), expectedAbortCode.size())));
 
-    const auto assertPackageDirectory = WaitForTriggerPackage(arena, pendingDirectory, expectedAssertCategory, "false", AStringView(), "tests/integration/logger_server/logserver_crash_tests.cpp");
+    const auto assertPackageDirectory = WaitForTriggerPackage(arena, pendingDirectory, expectedAssertCategory, "false", AStringView(), s_TestSourceFilename);
     EXPECT_TRUE(assertPackageDirectory);
 
     ASSERT_TRUE(assertPackageDirectory);
@@ -314,8 +320,8 @@ TEST_F(LoggerServerCrash, RecoverableErrorDiagnosticProducesObservableLoggerRepo
 
     const CrashTestPath spoolDirectory = SpoolDirectory(arena, s_Group);
     NWB::Core::Crash::CrashConfigT<NWB::Core::Alloc::PersistentArena> crashConfig(installArena);
-    crashConfig.applicationName = AStringView("logserver_crash_tests");
-    crashConfig.version = AStringView("1");
+    crashConfig.applicationName = AStringView(s_ApplicationName);
+    crashConfig.version = AStringView(s_ApplicationVersion);
     crashConfig.buildId = AStringView("recoverable-error-observe-test");
     crashConfig.spoolDirectory = spoolDirectory;
 
@@ -329,7 +335,7 @@ TEST_F(LoggerServerCrash, RecoverableErrorDiagnosticProducesObservableLoggerRepo
     }
 
     const CrashTestPath pendingDirectory = spoolDirectory / CrashNames::s_PendingDirectoryName;
-    const auto errorPackageDirectory = WaitForTriggerPackage(arena, pendingDirectory, NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryError, AStringView(), s_ErrorMessage, "tests/integration/logger_server/logserver_crash_tests.cpp");
+    const auto errorPackageDirectory = WaitForTriggerPackage(arena, pendingDirectory, NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryError, AStringView(), s_ErrorMessage, s_TestSourceFilename);
     EXPECT_TRUE(errorPackageDirectory);
     EXPECT_TRUE(continuedAfterError);
     NWB::Core::Crash::UninstallCrashHandler();
@@ -455,7 +461,7 @@ TEST_F(LoggerServerCrash, WindowsCrashPackageReportsMissingMinidump){
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText archive(arena);
-    BeginArchiveWithManifest(arena, archive, "windows-missing-dump-test", s_WINDOWS, s_CRASH, "windows_exception", 0xC0000005u);
+    BeginArchiveWithManifest(arena, archive, "windows-missing-dump-test", s_WINDOWS, s_CRASH, s_WindowsExceptionCategory, 0xC0000005u);
 
     const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
 
@@ -489,7 +495,7 @@ TEST_F(LoggerServerCrash, WindowsCrashPackageDecodesGpuDetectiveCaptureInProcess
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText archive(arena);
-    BeginArchiveWithManifest(arena, archive, "gpu-detective-test", s_WINDOWS, s_CRASH, "windows_exception", 0xC0000005u);
+    BeginArchiveWithManifest(arena, archive, "gpu-detective-test", s_WINDOWS, s_CRASH, s_WindowsExceptionCategory, 0xC0000005u);
     // Malformed RGD input must report decode failure without aborting crash ingest.
     AppendArchiveFile(archive, CrashNames::s_GpuDetectiveCaptureFileName, "not a valid radeon gpu detective capture\n");
 

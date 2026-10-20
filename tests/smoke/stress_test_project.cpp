@@ -50,6 +50,8 @@ namespace __hidden_stress_test_smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr TStringView s_ProjectName = NWB_TEXT("StressTestSmokeProject");
+
 using NWB::Tests::Smoke::AddSmokeSkinnedRenderSystems;
 using NWB::Tests::Smoke::ArrowYawInputHandler;
 using NWB::Tests::Smoke::CreateSmokeCamera;
@@ -189,7 +191,7 @@ private:
     }
 
     static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("StressTestSmokeProject"));
+        auto world = CreateSmokeWorldOrDie(context, s_ProjectName);
 
         NWB::Tests::Smoke::SmokeRenderQualitySettings settings;
         settings.shadow.transparentSampling = NWB::Impl::TransparentShadowSampling::TemporalOne;
@@ -685,7 +687,7 @@ private:
     NWB::Tests::Smoke::PresentationPacingRing m_pacingRing;
     bool m_timingComplete = false;
     NWB::Tests::Smoke::SmokeCpuGpuTimingProbe m_cpuTimingProbe{ NWB_TEXT("stress"), m_context.objectArena };
-    NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ NWB_TEXT("StressTestSmokeProject") };
+    NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ s_ProjectName };
     NWB::Tests::Smoke::YawSpinController m_yaw;
     ArrowYawInputHandler m_arrowYawInput;
     u32 m_m4RenderedFrameCount = 0u;

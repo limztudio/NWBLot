@@ -39,6 +39,12 @@ namespace __hidden_assets_ui_skin_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_SkinAssetRoot = "C:/ui_skin_tests/assets";
+constexpr AStringView s_UiDirectory = "ui";
+constexpr AStringView s_AtlasMetadataFilename = "atlas.nwb";
+constexpr AStringView s_TexturePath = "project/ui/texture";
+constexpr AStringView s_AtlasPath = "project/ui/atlas";
+
 using namespace Impl;
 
 struct UiSkinTestArenaTag{};
@@ -72,8 +78,8 @@ static_assert(LengthOf(s_PaletteRoleNames) == UiSkinColorRole::Count, "UI skin p
     Core::Metascript::Document document(testArena.arena);
     if(!document.parse(metadata))
         return MakeUnexpected(Failure{});
-    const Path assetRoot(testArena.arena, "C:/ui_skin_tests/assets");
-    const Path metadataPath = assetRoot / "ui" / "atlas.nwb";
+    const Path assetRoot(testArena.arena, s_SkinAssetRoot);
+    const Path metadataPath = assetRoot / s_UiDirectory / s_AtlasMetadataFilename;
     Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
     return ParseUiSkinCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena);
 }
@@ -91,7 +97,7 @@ static_assert(LengthOf(s_PaletteRoleNames) == UiSkinColorRole::Count, "UI skin p
 
 [[nodiscard]] static UiSkinBinaryPayload::HeaderBinary ValidHeader(){
     UiSkinBinaryPayload::HeaderBinary header;
-    header.textureNameHash = Name("project/ui/texture").hash();
+    header.textureNameHash = Name(s_TexturePath).hash();
     header.atlasWidth = 64u;
     header.atlasHeight = 32u;
     header.referenceDensity = 2.0f;
@@ -165,7 +171,7 @@ TEST(AssetsUiSkin, TypographyRejectsMalformedFooterWithoutReplacingSkin){
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     SkinTestArena testArena;
     const UiSkinBinaryPayload::ColorBinary color{ 0.25f, 0.5f, 0.75f, 1.0f };
-    UiSkin skin(testArena.arena, Name("project/ui/atlas"));
+    UiSkin skin(testArena.arena, Name(s_AtlasPath));
     ASSERT_TRUE(skin.loadBinary(MakeTypographyBinary(testArena, color, 21.5f)));
 
     for(u32 variant = 0u; variant < 5u; ++variant){
@@ -201,7 +207,7 @@ TEST(AssetsUiSkin, PaletteRejectsMalformedFooterWithoutReplacingSkin){
     color.g = 0.5f;
     color.b = 0.75f;
     color.a = 1.0f;
-    UiSkin skin(testArena.arena, Name("project/ui/atlas"));
+    UiSkin skin(testArena.arena, Name(s_AtlasPath));
     ASSERT_TRUE(skin.loadBinary(MakeTypographyBinary(testArena, color, 16.0f)));
 
     for(u32 variant = 0u; variant < 6u; ++variant){
@@ -242,7 +248,7 @@ TEST(AssetsUiSkin, RejectsObsoleteBinaryVersionsWithoutReplacingCurrentSkin){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     SkinTestArena testArena;
-    UiSkin skin(testArena.arena, Name("project/ui/atlas"));
+    UiSkin skin(testArena.arena, Name(s_AtlasPath));
     ASSERT_TRUE(skin.loadBinary(MakeBinary(testArena, ValidHeader(), ValidRegion())));
     for(const u32 version : { 1u, 2u }){
         UiSkinBinaryPayload::HeaderBinary header = ValidHeader();
@@ -263,7 +269,7 @@ TEST(AssetsUiSkin, LoadRejectsMalformedHeaderAndCountWithoutReplacingSkin){
     SkinTestArena testArena;
     const UiSkinBinaryPayload::HeaderBinary validHeader = ValidHeader();
     const UiSkinBinaryPayload::RegionBinary validRegion = ValidRegion();
-    UiSkin skin(testArena.arena, Name("project/ui/atlas"));
+    UiSkin skin(testArena.arena, Name(s_AtlasPath));
     ASSERT_TRUE(skin.loadBinary(MakeBinary(testArena, validHeader, validRegion)));
 
     for(u32 variant = 0u; variant < 10u; ++variant){
@@ -320,7 +326,7 @@ TEST(AssetsUiSkin, LoadRejectsInvalidRegionBoundsMetricsAndFlags){
         case 12u: region.minimumHeight = Limit<f32>::s_Infinity; break;
         case 13u: region.drawMode = UiSkinDrawMode::Sprite; break;
         }
-        UiSkin skin(testArena.arena, Name("project/ui/atlas"));
+        UiSkin skin(testArena.arena, Name(s_AtlasPath));
         EXPECT_FALSE(skin.loadBinary(MakeBinary(testArena, header, region))) << variant;
         EXPECT_TRUE(skin.regions().empty());
     }
@@ -330,7 +336,7 @@ TEST(AssetsUiSkin, RejectsOverLimitCountsBeforeReadingOrCopyingRegions){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     SkinTestArena testArena;
-    UiSkin skin(testArena.arena, Name("project/ui/atlas"));
+    UiSkin skin(testArena.arena, Name(s_AtlasPath));
     ASSERT_TRUE(skin.loadBinary(MakeBinary(testArena, ValidHeader(), ValidRegion())));
 
     UiSkinBinaryPayload::HeaderBinary header = ValidHeader();
@@ -351,8 +357,8 @@ TEST(AssetsUiSkin, RejectsOverLimitCountsBeforeReadingOrCopyingRegions){
     regions.asList().reserve(s_UiSkinMaxRegionCount + 1u);
     for(u32 index = 0u; index <= s_UiSkinMaxRegionCount; ++index)
         regions.asList().push_back(regionTemplate);
-    const Path assetRoot(testArena.arena, "C:/ui_skin_tests/assets");
-    const Path metadataPath = assetRoot / "ui" / "atlas.nwb";
+    const Path assetRoot(testArena.arena, s_SkinAssetRoot);
+    const Path metadataPath = assetRoot / s_UiDirectory / s_AtlasMetadataFilename;
     Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
     EXPECT_FALSE(ParseUiSkinCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("regions exceed schema limit 4096")));
@@ -454,10 +460,10 @@ TEST(AssetsUiSkin, TextureValidationRejectsIdentityDimensionAndExtentMismatch){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     SkinTestArena testArena;
-    UiSkin skin(testArena.arena, Name("project/ui/atlas"));
+    UiSkin skin(testArena.arena, Name(s_AtlasPath));
     ASSERT_TRUE(skin.loadBinary(MakeBinary(testArena, ValidHeader(), ValidRegion())));
     for(u32 variant = 0u; variant < 4u; ++variant){
-        Texture texture(testArena.arena, variant == 0u ? Name("project/other") : Name("project/ui/texture"));
+        Texture texture(testArena.arena, variant == 0u ? Name("project/other") : Name(s_TexturePath));
         Texture::MipLevelVector mips(testArena.arena);
         Core::Assets::AssetBytes payload(testArena.arena);
         texture.setPayload(

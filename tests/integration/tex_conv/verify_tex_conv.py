@@ -16,6 +16,10 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "common"))
 
 from png_fixture import write_png_rows  # noqa: E402
 
+LIT_BACKUP_SUFFIX = ".old"
+LIT_METADATA_SUFFIX = ".nwb"
+LIT_TEXTURE_SUFFIX = ".tex"
+
 LIT_A = "A"
 LIT_B = "B"
 LIT_G = "G"
@@ -142,7 +146,7 @@ def write_openexr(path: pathlib.Path, pixels: tuple[tuple[float, float, float, f
 def verify_publication_failure_preserves_outputs(executable: str, source_path: pathlib.Path, metadata_path: pathlib.Path, texture_path: pathlib.Path, output_dir: pathlib.Path,) -> None:
     outputs = (texture_path, metadata_path)
     originals = tuple(path.read_bytes() for path in outputs)
-    backups = tuple(pathlib.Path(str(path) + ".old") for path in outputs)
+    backups = tuple(pathlib.Path(str(path) + LIT_BACKUP_SUFFIX) for path in outputs)
     temporaries = tuple(pathlib.Path(str(path) + LIT_TMP_SUFFIX) for path in outputs)
 
     def require_preserved_pair() -> None:
@@ -211,7 +215,7 @@ def verify_publication_failure_preserves_outputs(executable: str, source_path: p
 
 
 def read_raw_pair(path: pathlib.Path) -> dict:
-    metadata_path = path.with_suffix(".nwb")
+    metadata_path = path.with_suffix(LIT_METADATA_SUFFIX)
     metadata = metadata_path.read_text(encoding="utf-8")
     assignments = re.findall(r"asset\.(\w+)\s*=\s*([^;]+);", metadata)
     fields = dict(assignments)
@@ -269,15 +273,15 @@ def run_conversion(executable: str, output_dir: pathlib.Path, name: str, inputs:
     result = subprocess.run(command, cwd=output_dir, text=True, capture_output=True)
     if result.returncode != 0:
         raise AssertionError(f"conversion failed: {command}\n{result.stdout}\n{result.stderr}")
-    read_raw_pair(base.with_suffix(".tex"))
-    return base.with_suffix(".tex")
+    read_raw_pair(base.with_suffix(LIT_TEXTURE_SUFFIX))
+    return base.with_suffix(LIT_TEXTURE_SUFFIX)
 
 
 def decode_pixels(executable: str, prepared: pathlib.Path, level: int = 0) -> tuple[tuple[float, ...], ...]:
     description = read_raw_pair(prepared)
     extent = description[LIT_MIPS][level]
     destination = prepared.with_suffix(f".mip{level}.decoded")
-    result = subprocess.run([executable, str(prepared.with_suffix(".nwb")), str(destination), str(level)], text=True, capture_output=True)
+    result = subprocess.run([executable, str(prepared.with_suffix(LIT_METADATA_SUFFIX)), str(destination), str(level)], text=True, capture_output=True)
     if result.returncode != 0:
         raise AssertionError(f"native prepared texture decode failed: {prepared}, mip {level}\n{result.stdout}\n{result.stderr}")
     binary = destination.read_bytes()
@@ -328,7 +332,7 @@ def main() -> int:
     overwrite = subprocess.run([args.tex_conv, str(source_path)], cwd=output_dir, text=True, capture_output=True)
     if overwrite.returncode != 1 or "Output already exists:" not in overwrite.stdout + overwrite.stderr or "[ERROR]:" not in overwrite.stdout + overwrite.stderr:
         raise AssertionError("existing output was not rejected as an error without --force")
-    verify_publication_failure_preserves_outputs(args.tex_conv, source_path, prepared.with_suffix(".nwb"), prepared, output_dir)
+    verify_publication_failure_preserves_outputs(args.tex_conv, source_path, prepared.with_suffix(LIT_METADATA_SUFFIX), prepared, output_dir)
 
     gray = output_dir / "gray.png"
     write_png_pixels(gray, 2, 2, 6, ((128, 128, 128, 128),) * 4)
@@ -448,19 +452,19 @@ def main() -> int:
         require_pixels(decode_pixels(args.prepared_decode, result), pixels, absolute=0.04, relative=0.05)
 
     # Invalid float pixels must fail before forced publication replaces either accepted output.
-    original_pair = (prepared.with_suffix(".nwb").read_bytes(), prepared.read_bytes())
+    original_pair = (prepared.with_suffix(LIT_METADATA_SUFFIX).read_bytes(), prepared.read_bytes())
     invalid_path = output_dir / "invalid.exr"
     valid_pixels = ((9.0, 0.5, 2.0, 0.375),) * 8
     for channel, value in ((0, math.nan), (1, math.inf), (2, -0.125), (0, 65217.0), (3, math.nan), (3, math.inf), (3, -0.125), (3, 1.125)):
         first = list(valid_pixels[0])
         first[channel] = value
         write_openexr(invalid_path, (tuple(first), *valid_pixels[1:]))
-        invalid = subprocess.run([args.tex_conv, str(invalid_path), LIT_FORCE, LIT_OUTPUT, str(prepared.with_suffix(".nwb"))], cwd=output_dir, text=True, capture_output=True)
+        invalid = subprocess.run([args.tex_conv, str(invalid_path), LIT_FORCE, LIT_OUTPUT, str(prepared.with_suffix(LIT_METADATA_SUFFIX))], cwd=output_dir, text=True, capture_output=True)
         if invalid.returncode != 1:
             raise AssertionError(f"invalid float channel {channel}: {value} was accepted\n{invalid.stdout}\n{invalid.stderr}")
-        if (prepared.with_suffix(".nwb").read_bytes(), prepared.read_bytes()) != original_pair:
+        if (prepared.with_suffix(LIT_METADATA_SUFFIX).read_bytes(), prepared.read_bytes()) != original_pair:
             raise AssertionError("invalid source changed an accepted prepared texture pair")
-        if any(pathlib.Path(str(path) + suffix).exists() for path in (prepared.with_suffix(".nwb"), prepared) for suffix in (".tmp", ".old")):
+        if any(pathlib.Path(str(path) + suffix).exists() for path in (prepared.with_suffix(LIT_METADATA_SUFFIX), prepared) for suffix in (".tmp", LIT_BACKUP_SUFFIX)):
             raise AssertionError("invalid source retained publication work files")
     return 0
 

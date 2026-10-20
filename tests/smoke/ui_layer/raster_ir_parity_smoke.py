@@ -10,6 +10,8 @@ from pathlib import Path
 import subprocess
 import sys
 
+LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 45.0
+
 SMOKE_DIRECTORY = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SMOKE_DIRECTORY))
 
@@ -97,7 +99,7 @@ def capture_environment(args, scene, mode):
 def launch_capture(args, scene, mode, path, log_path=None, *, resize=False):
     environment = capture_environment(args, scene, mode)
     environment["NWB_UI_LAYER_RESIZE_CAPTURE"] = SWITCH_ON if resize else SWITCH_OFF
-    result = subprocess.run(capture_command(args, scene, mode, path, log_path, resize=resize), env=environment, check=False, timeout=args.timeout + 45.0)
+    result = subprocess.run(capture_command(args, scene, mode, path, log_path, resize=resize), env=environment, check=False, timeout=args.timeout + LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS)
     if result.returncode == SKIP_EXIT_CODE:
         return False
     if result.returncode:

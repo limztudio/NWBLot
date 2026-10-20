@@ -45,6 +45,10 @@ public:
 };
 
 struct RuntimeContext{
+    static constexpr AStringView s_ModelPath = "tests/model_runtime/model";
+
+
+public:
     Tests::EcsTestWorld testWorld;
     Core::Assets::AssetRegistry registry{ testWorld.arena };
     EmptyAssetSource source;
@@ -56,7 +60,7 @@ public:
     [[nodiscard]] Core::ECS::EntityID makeOwner(){
         auto entity = testWorld.world.createEntity();
         auto& component = entity.addComponent<Impl::ModelComponent>();
-        component.model = Core::Assets::AssetRef<Impl::Model>("tests/model_runtime/model");
+        component.model = Core::Assets::AssetRef<Impl::Model>(s_ModelPath);
         auto& runtime = entity.addComponent<Impl::ModelRuntimeComponent>();
         runtime.model = component.model.name();
         entity.addComponent<Impl::Scene::TransformComponent>();
@@ -67,7 +71,7 @@ public:
         auto entity = testWorld.world.createEntity();
         auto& object = entity.addComponent<Impl::ModelObjectComponent>();
         object.owner = owner;
-        object.model = Name("tests/model_runtime/model");
+        object.model = Name(s_ModelPath);
         object.object = Name("object");
         entity.addComponent<Impl::Scene::TransformComponent>();
         if(auto* const runtime = testWorld.world.tryGetComponent<Impl::ModelRuntimeComponent>(owner))

@@ -19,12 +19,18 @@ namespace CpuTaskTestSupport{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr u32 s_PollIntervalMS = 1u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] inline bool WaitUntil(const Atomic<bool>& condition, const u32 timeoutMS)noexcept{
     const Timer begin = TimerNow();
     while(!condition.load(MemoryOrder::acquire)){
         if(DurationInMS<u64>(TimerNow(), begin) >= timeoutMS)
             return false;
-        SleepMS(1u);
+        SleepMS(CpuTaskTestSupport::s_PollIntervalMS);
     }
     return true;
 }

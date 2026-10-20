@@ -19,6 +19,8 @@ from types import SimpleNamespace
 from smoke_volume_identity import file_identity
 from window_capture_smoke import STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, read_bmp_24_rows, validate_expected_log_text
 
+LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 90
+
 LIT_GPUDBG = "--gpudbg"
 LIT_GPUDBG_2 = "--gpudbg="
 LIT_POPULATED = "populated"
@@ -366,7 +368,7 @@ def main(argv=None):
                 env.update(environment(preset, enabled))
                 command = capture_command(args, image)
                 print("Qualifying actual caustic footprint: " + key, flush=True)
-                completed = subprocess.run(command, env=env, timeout=args.timeout + 90, check=False)
+                completed = subprocess.run(command, env=env, timeout=args.timeout + LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS, check=False)
                 if completed.returncode:
                     raise SmokeFailure(key + " actual capture failed: " + str(completed.returncode))
                 if benchmark.freeze_arm(arm) != identity or benchmark.binary_identity(args.logserver_executable) != logger_binaries:

@@ -32,6 +32,8 @@ namespace __hidden_task_graph_storage_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_CompletionLabel = "Storage Completion";
+
 using TestArena = ::NWB::Tests::TestArena<struct TaskGraphStorageTestsTag>;
 inline constexpr Name s_StorageScratchArena("tests/task/gpu/storage_scratch");
 
@@ -64,7 +66,7 @@ TEST(GpuTaskGraphStorage, LargeTaskChainPreservesDeclarationsAndReusesStorage){
         ASSERT_TRUE(resourceResult);
         const Core::GpuGraphResourceId resource = *resourceResult;
         ASSERT_TRUE(resource.valid());
-        const auto completionResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name("tests/graph_storage/completion")).setMarkerLabel("Storage Completion"));
+        const auto completionResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name("tests/graph_storage/completion")).setMarkerLabel(s_CompletionLabel));
         ASSERT_TRUE(completionResult);
         const Core::GpuExternalCompletionId completion = *completionResult;
         ASSERT_TRUE(completion.valid());
@@ -138,7 +140,7 @@ TEST(GpuTaskGraphStorage, MixedDeclarationsAndUploadBytesSurviveStorageGrowth){
         const auto pipelineResult = graph.importPipeline(Core::GpuGraphPipelineDesc{}.setIdentity(identities[index]).setMarkerLabel("Storage Pipeline").setType(Core::GpuGraphPipelineType::Compute));
         ASSERT_TRUE(pipelineResult);
         const Core::GpuGraphPipelineId pipeline = *pipelineResult;
-        const auto completionResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(identities[index]).setMarkerLabel("Storage Completion"));
+        const auto completionResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(identities[index]).setMarkerLabel(s_CompletionLabel));
         ASSERT_TRUE(completionResult);
         const Core::GpuExternalCompletionId completion = *completionResult;
         const u64 bytes[] = { static_cast<u64>(index), ~static_cast<u64>(index) };

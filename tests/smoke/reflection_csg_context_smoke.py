@@ -15,6 +15,10 @@ from reflection_roughness_smoke import CaptureSpec, parse_history, validate_hist
 from reflection_smoke import DEFAULT_RAY_BUDGET, capture_environment, parse_statistics
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
 
+LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 90
+
+LIT_CONTEXT_CAPTURES_COMPLETE = "ReflectionCsgContext: complete captures=5"
+
 LIT_REFLECTIONSMOKESLICEPACKETS = "ReflectionSmokeSlicePackets:"
 LIT_SOURCE_FRAME = "source_frame"
 LIT_SEQUENCE = "sequence"
@@ -86,7 +90,7 @@ def analyze_evidence(log_text):
     capture_lines = "\n".join(line for line in log_text.splitlines() if LIT_REFLECTIONCSGCONTEXT_CAPTURED in line)
     starts = records(begin_lines, "ReflectionCsgContext: ", PHASE_FIELDS)
     captures = records(capture_lines, LIT_REFLECTIONCSGCONTEXT_CAPTURED, CAPTURE_FIELDS)
-    if len(starts) != 5 or len(captures) != 5 or "ReflectionCsgContext: complete captures=5" not in log_text:
+    if len(starts) != 5 or len(captures) != 5 or LIT_CONTEXT_CAPTURES_COMPLETE not in log_text:
         raise SmokeFailure("live context transition lacks all five completed captures")
     anchors = list(map(int, re.findall(r"FramebufferCapture: graphics source frame ([0-9]+)", log_text)))
     if anchors != [capture[LIT_SOURCE_FRAME] for capture in captures]:
@@ -178,7 +182,7 @@ def main(argv):
     command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")), LIT_EXECUTABLE, str(args.executable), LIT_WORKING_DIRECTORY, str(args.working_directory),
         "--output", str(output), "--application-capture", "--application-capture-frame-count", "1", LIT_TIMEOUT, str(args.timeout), "--log-output", str(log)]
     for message in ("ReflectionSmokeProject: case " + CASE + " created", "ReflectionSmokeProject: hardware available", "ReflectionSmokeProject: reflection mode hardware", "Reflection resolve: hardware",
-        "ReflectionCsgContext: complete captures=5", "ReflectionSmokeProject: shutdown"):
+        LIT_CONTEXT_CAPTURES_COMPLETE, "ReflectionSmokeProject: shutdown"):
         command += ["--expect-log-message", message]
     if args.logserver_executable:
         command += [LIT_LOGSERVER_EXECUTABLE, str(args.logserver_executable)]
@@ -188,7 +192,7 @@ def main(argv):
     environment = capture_environment(CASE, "hardware", DEFAULT_RAY_BUDGET)
     environment.update({"NWB_REFLECTION_SMOKE_OPTICAL_QUERIES": "16", "NWB_REFLECTION_SMOKE_TEMPORAL": "0", "NWB_REFLECTION_SMOKE_SPATIAL": "0", "NWB_REFLECTION_SMOKE_HISTORY_SAMPLES": "16", "NWB_REFLECTION_SMOKE_DIAGNOSTICS": "1"})
     try:
-        result = subprocess.run(command, env=environment, check=False, timeout=args.timeout + 90)
+        result = subprocess.run(command, env=environment, check=False, timeout=args.timeout + LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS)
         if result.returncode == SKIP_EXIT_CODE:
             return SKIP_EXIT_CODE
         if result.returncode:

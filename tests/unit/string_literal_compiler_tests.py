@@ -12,6 +12,10 @@ import tempfile
 from pathlib import Path
 from typing import Sequence
 
+LIT_COMPILER_TIMEOUT_SECONDS = 45
+LIT_DEBUG_CRT_FLAG = "/MDd"
+LIT_RELEASE_CRT_FLAG = "/MD"
+
 LIT_UTF_8 = "utf-8"
 LIT_DBG = "dbg"
 LIT_OPT = "opt"
@@ -44,7 +48,7 @@ def source_file(path: Path, body: str) -> None:
 
 
 def run(command: Sequence[str], cwd: Path) -> subprocess.CompletedProcess:
-    return subprocess.run(command, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=45, check=False)
+    return subprocess.run(command, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=LIT_COMPILER_TIMEOUT_SECONDS, check=False)
 
 
 def require_success(result: subprocess.CompletedProcess, operation: str) -> None:
@@ -69,7 +73,7 @@ class LiteralQualification:
         defines = [{LIT_DBG: "NWB_DEBUG", LIT_OPT: "NWB_OPTIMIZE", LIT_FIN: "NWB_FINAL"}[self.options.configuration]]
         defines.append("_DEBUG" if self.options.configuration == LIT_DBG else "NDEBUG")
         if self.clang_cl:
-            arguments = [*self.target_flags, "/clang:" + self.optimization, "/MDd" if self.options.configuration == LIT_DBG else "/MD"]
+            arguments = [*self.target_flags, "/clang:" + self.optimization, LIT_DEBUG_CRT_FLAG if self.options.configuration == LIT_DBG else LIT_RELEASE_CRT_FLAG]
             arguments.extend("/D" + define for define in defines)
             arguments.extend(["/I" + str(self.options.source_dir), "/TC" if is_c else "/std:c++latest", "/c", str(source), "/Fo" + str(output)])
         else:
@@ -194,7 +198,7 @@ char* MutableB(){{ return g_MutableB; }}
             require_success(run(self.compiler_command(source, output, is_c), self.directory), f"Compile {source.name}")
         executable = self.directory / ("lifetime.exe" if self.windows else "lifetime")
         if self.clang_cl:
-            link_arguments = [*self.target_flags, "/MDd" if self.options.configuration == LIT_DBG else "/MD", *map(str, objects), str(self.options.runtime_object), "/Fe" + str(executable)]
+            link_arguments = [*self.target_flags, LIT_DEBUG_CRT_FLAG if self.options.configuration == LIT_DBG else LIT_RELEASE_CRT_FLAG, *map(str, objects), str(self.options.runtime_object), "/Fe" + str(executable)]
         else:
             link_arguments = [*self.target_flags, *map(str, objects), str(self.options.runtime_object), LIT_O, str(executable)]
             if self.windows:

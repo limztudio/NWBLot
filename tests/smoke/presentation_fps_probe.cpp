@@ -62,7 +62,8 @@ PresentationFpsStatus::Enum PresentationFpsProbe::observe(const u64 successfulPr
     m_total.wallSeconds = DurationInSeconds<f64>(now, m_measurementBegin);
     const f64 intervalSeconds = DurationInSeconds<f64>(now, m_intervalBegin);
     m_complete = m_measurementSeconds > 0.0 && m_total.wallSeconds >= m_measurementSeconds;
-    if(!m_complete && intervalSeconds < 0.5)
+    constexpr f64 s_ReportIntervalSeconds = 0.5;
+    if(!m_complete && intervalSeconds < s_ReportIntervalSeconds)
         return PresentationFpsStatus::Waiting;
 
     m_interval = { .firstPresentationCount = m_intervalPresentationCount, .lastPresentationCount = successfulPresentations, .wallSeconds = intervalSeconds, };

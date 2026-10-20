@@ -16,6 +16,11 @@ import smoke_cpu_gpu_timing as timing
 from smoke_volume_identity import file_identity
 from window_capture_smoke import (SmokeFailure, SmokeSkip, STRICT_LOG_FAILURE_MESSAGES, build_launch_environment, launch_logserver, launch_testbed, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text)
 
+LIT_MINIMUM_WARMUP_SECONDS = 5.0
+LIT_MILLISECONDS_PER_SECOND = 1000
+
+LIT_PYTHON_FILE_GLOB = "*.py"
+
 LIT_REFLECTIONSMOKEPROJECT_HARDWARE_AVAILA = "ReflectionSmokeProject: hardware available"
 LIT_DIAGNOSTIC = "diagnostic"
 LIT_HARDWARE = "hardware"
@@ -87,7 +92,7 @@ def parse_runtime_log(text, case):
     count, seconds, end_first, last, positive, source_end = end.groups()
     count, end_first, last, positive, source_end = map(int, (count, end_first, last, positive, source_end))
     seconds = _duration(seconds)
-    if prepared < 64 or first < prepared or source_first < prepared_source or warmup < 5.0:
+    if prepared < 64 or first < prepared or source_first < prepared_source or warmup < LIT_MINIMUM_WARMUP_SECONDS:
         raise SmokeFailure("reflection diagnostic preparation or actual warmup is insufficient")
     if end_first != first or count != last - first or count < MINIMUM_SAMPLES or seconds < MINIMUM_SECONDS:
         raise SmokeFailure("reflection diagnostic measurement count or duration is insufficient")
@@ -116,7 +121,7 @@ def parse_runtime_log(text, case):
     if not math.isclose(sum(row[LIT_SECONDS] for row in intervals), seconds, rel_tol=1e-7, abs_tol=1e-6):
         raise SmokeFailure("reflection diagnostic interval duration sum differs from the actual window")
     return dict(case=case, first=first, last=last, seconds=seconds, presentations=count, first_source=source_first, end_source=source_end, warmup_seconds=warmup, preparation_presentations=prepared,
-        positive_intervals=positive, intervals=intervals, accepted_wall_frame_ms=1000 * seconds / count, diagnostic_only=True, performance_qualification=False, runtime_signature=ab.device_material_signature(text))
+        positive_intervals=positive, intervals=intervals, accepted_wall_frame_ms=LIT_MILLISECONDS_PER_SECOND * seconds / count, diagnostic_only=True, performance_qualification=False, runtime_signature=ab.device_material_signature(text))
 
 
 def validate_publications(log_text, raw_path, measurement):
@@ -163,8 +168,8 @@ def launch_environment(base, case, raw_path):
 
 
 def identities(args):
-    helpers = sorted(Path(__file__).resolve().parent.glob("*.py"))
-    helpers += sorted((Path(__file__).resolve().parents[1] / "ab").glob("*.py"))
+    helpers = sorted(Path(__file__).resolve().parent.glob(LIT_PYTHON_FILE_GLOB))
+    helpers += sorted((Path(__file__).resolve().parents[1] / "ab").glob(LIT_PYTHON_FILE_GLOB))
     return dict(renderer=ab.binary_identity(args.executable), logger=ab.binary_identity(args.logserver_executable), runtime=ab.runtime_identity(args.working_directory), python=file_identity(Path(sys.executable)),
         helpers={str(path): file_identity(path) for path in helpers})
 

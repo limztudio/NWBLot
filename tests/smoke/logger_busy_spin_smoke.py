@@ -15,6 +15,17 @@ from types import SimpleNamespace
 from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WindowsCapture, WinRect, collect_log_delta, ensure_process_running, launch_logserver, read_bmp_24_rows, request_windows_graceful_exit, require_normal_process_exit,
     snapshot_log_files, terminate_process, validate_expected_log_text, wait_for_log_message, write_status,)
 
+LIT_IDLE_SAMPLE_POLL_SECONDS = 0.1
+LIT_MINIMUM_WAIT_SECONDS = 0.001
+
+LIT_WINDOW_MESSAGE_TIMEOUT_MS = 1000
+LIT_LOGGER_READY_TIMEOUT_SECONDS = 10.0
+LIT_GRACEFUL_EXIT_TIMEOUT_SECONDS = 10.0
+LIT_LOG_ROW_POLL_SECONDS = 0.05
+LIT_HTTP_TIMEOUT_SECONDS = 5.0
+LIT_MESSAGE_PUBLICATION_INTERVAL_SECONDS = 0.01
+LIT_RESIZE_POLL_SECONDS = 0.005
+
 LIT_LOGSERVER = "logserver"
 LIT_SINGLE_CORE_CPU_FRACTION = "single_core_cpu_fraction"
 LIT_MESSAGES = "messages"
@@ -95,7 +106,7 @@ def sample_idle_cpu(process, backend, handle):
         deadline = time.monotonic() + SAMPLE_SECONDS
         foreground_checks = 0
         while time.monotonic() < deadline:
-            time.sleep(min(0.1, max(0.0, deadline - time.monotonic())))
+            time.sleep(min(LIT_IDLE_SAMPLE_POLL_SECONDS, max(0.0, deadline - time.monotonic())))
             ensure_process_running(process, "during idle CPU sample", LIT_LOGSERVER)
             require_active_window(backend.user32, handle)
             foreground_checks += 1
@@ -114,7 +125,7 @@ def query_log_list(backend, handle, message, index=0, address=0):
     if not list_handle or not backend.user32.IsWindowVisible(list_handle):
         raise SmokeFailure("logger message list is not visible")
     result = ctypes.c_size_t()
-    if not backend.user32.SendMessageTimeoutW(list_handle, message, index, address, SMTO_ABORTIFHUNG, 1000, ctypes.byref(result),):
+    if not backend.user32.SendMessageTimeoutW(list_handle, message, index, address, SMTO_ABORTIFHUNG, LIT_WINDOW_MESSAGE_TIMEOUT_MS, ctypes.byref(result),):
         raise SmokeFailure(f"logger message list did not answer query 0x{message:x}")
     value = ctypes.c_ssize_t(result.value).value
     if value < 0:
@@ -122,20 +133,20 @@ def query_log_list(backend, handle, message, index=0, address=0):
     return value
 
 
-def wait_for_visible_log_rows(process, backend, handle, minimum_rows, timeout_seconds=10.0):
+def wait_for_visible_log_rows(process, backend, handle, minimum_rows, timeout_seconds=LIT_LOGGER_READY_TIMEOUT_SECONDS):
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
         ensure_process_running(process, "while waiting for its HTTP log row", LIT_LOGSERVER)
         if query_log_list(backend, handle, LB_GETCOUNT) >= minimum_rows:
             return
-        time.sleep(0.05)
+        time.sleep(LIT_LOG_ROW_POLL_SECONDS)
     raise SmokeFailure(f"HTTP log reached the file but fewer than {minimum_rows} rows are displayed")
 
 
 def post_log_message(port, message):
     # Current Windows log transport: packed Timer{}, u8 EssentialInfo, and null-terminated UTF-16 text.
     payload = struct.pack("<qB", 0, 1) + (message + "\0").encode("utf-16-le")
-    connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5.0)
+    connection = http.client.HTTPConnection("127.0.0.1", port, timeout=LIT_HTTP_TIMEOUT_SECONDS)
     try:
         connection.request("POST", "/", body=payload, headers={"Content-Type": "application/octet-stream"})
         response = connection.getresponse()
@@ -159,7 +170,7 @@ def exercise_resize_message_publication(process, backend, handle, port, director
             if time.monotonic() >= deadline:
                 raise SmokeFailure("HTTP resize-message publication exceeded its deadline")
             responses.append(post_log_message(port, message))
-            time.sleep(0.01)
+            time.sleep(LIT_MESSAGE_PUBLICATION_INTERVAL_SECONDS)
         return responses
 
     completions = 0
@@ -171,13 +182,13 @@ def exercise_resize_message_publication(process, backend, handle, port, director
             ensure_process_running(process, "during resize/message publication", LIT_LOGSERVER)
             backend.resize_client(handle, 920 + (index & 1) * 40, 600)
             result = ctypes.c_size_t()
-            if not backend.user32.SendMessageTimeoutW(handle, WM_EXITSIZEMOVE, 0, 0, SMTO_ABORTIFHUNG, 1000, ctypes.byref(result)):
+            if not backend.user32.SendMessageTimeoutW(handle, WM_EXITSIZEMOVE, 0, 0, SMTO_ABORTIFHUNG, LIT_WINDOW_MESSAGE_TIMEOUT_MS, ctypes.byref(result)):
                 raise SmokeFailure("logger did not process resize completion during HTTP publication")
             completions += 1
-            time.sleep(0.005)
-        responses = future.result(timeout=max(0.001, deadline - time.monotonic()))
+            time.sleep(LIT_RESIZE_POLL_SECONDS)
+        responses = future.result(timeout=max(LIT_MINIMUM_WAIT_SECONDS, deadline - time.monotonic()))
 
-    wait_for_log_message(directory, baseline, pattern, messages[-1], 10.0)
+    wait_for_log_message(directory, baseline, pattern, messages[-1], LIT_LOGGER_READY_TIMEOUT_SECONDS)
     expected_rows = before_rows + len(messages)
     wait_for_visible_log_rows(process, backend, handle, expected_rows)
     actual_rows = query_log_list(backend, handle, LB_GETCOUNT)
@@ -241,16 +252,16 @@ def main(argv):
     try:
         backend = WindowsCapture()
         bind_window_queries(backend.user32)
-        launch_args = SimpleNamespace(no_logserver=False, logserver_executable=str(args.executable), log_port=None, working_directory=args.working_directory, timeout=10.0)
+        launch_args = SimpleNamespace(no_logserver=False, logserver_executable=str(args.executable), log_port=None, working_directory=args.working_directory, timeout=LIT_LOGGER_READY_TIMEOUT_SECONDS)
         process, port, directory, baseline, pattern = launch_logserver(launch_args, args.executable, os.environ.copy())
         evidence.update({"pid": process.pid, "port": port})
-        handle = backend.wait_for_window(process.pid, 10.0)
+        handle = backend.wait_for_window(process.pid, LIT_LOGGER_READY_TIMEOUT_SECONDS)
         if not handle:
             raise SmokeFailure("logger did not create a visible window")
         evidence["window_handle"] = handle
         startup = f"Log server: listening on port {port}"
         required_messages.append(startup)
-        wait_for_log_message(directory, baseline, pattern, startup, 10.0)
+        wait_for_log_message(directory, baseline, pattern, startup, LIT_LOGGER_READY_TIMEOUT_SECONDS)
         evidence.update({LIT_STARTUP_RECEIVED: True, "startup_message": startup})
         backend.prepare_window(handle)
         require_active_window(backend.user32, handle)
@@ -259,7 +270,7 @@ def main(argv):
         required_messages.append(message)
         message_baseline = snapshot_log_files(directory, pattern)
         evidence["http_before_idle"] = post_log_message(port, message)
-        wait_for_log_message(directory, message_baseline, pattern, message, 10.0)
+        wait_for_log_message(directory, message_baseline, pattern, message, LIT_LOGGER_READY_TIMEOUT_SECONDS)
         wait_for_visible_log_rows(process, backend, handle, initial_rows + 1)
         time.sleep(SETTLE_SECONDS)
         evidence[LIT_CPU] = sample_idle_cpu(process, backend, handle)
@@ -271,7 +282,7 @@ def main(argv):
         wake_baseline = snapshot_log_files(directory, pattern)
         wake_started = time.monotonic()
         evidence["http_after_idle"] = post_log_message(port, wake_message)
-        wait_for_log_message(directory, wake_baseline, pattern, wake_message, 10.0)
+        wait_for_log_message(directory, wake_baseline, pattern, wake_message, LIT_LOGGER_READY_TIMEOUT_SECONDS)
         wait_for_visible_log_rows(process, backend, handle, rows_before_wakeup + 1)
         evidence["post_idle_wakeup_seconds"] = time.monotonic() - wake_started
         evidence["post_idle_wakeup_received"] = True
@@ -296,7 +307,7 @@ def main(argv):
                 ensure_process_running(process, "before WM_CLOSE", LIT_LOGSERVER)
                 if not request_windows_graceful_exit(process.pid):
                     raise SmokeFailure("no logger window accepted WM_CLOSE")
-                exit_code = process.wait(timeout=10.0)
+                exit_code = process.wait(timeout=LIT_GRACEFUL_EXIT_TIMEOUT_SECONDS)
                 require_normal_process_exit(exit_code, "", LIT_LOGSERVER)
                 evidence[LIT_CLEAN_WM_CLOSE_EXIT] = True
             except Exception as error:

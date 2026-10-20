@@ -11,6 +11,8 @@ import sys
 
 from capture_reference import analyze_frame, failure_description
 
+LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 45.0
+
 
 SMOKE_DIRECTORY = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SMOKE_DIRECTORY))
@@ -71,7 +73,7 @@ def run(args):
     args.output_directory.mkdir(parents=True, exist_ok=True)
     output = args.output_directory / "ui_layer.bmp"
     environment = build_fixture_environment(os.environ)
-    result = subprocess.run(capture_command(args, output), env=environment, check=False, timeout=args.timeout + 45.0)
+    result = subprocess.run(capture_command(args, output), env=environment, check=False, timeout=args.timeout + LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS)
     if result.returncode == SKIP_EXIT_CODE:
         return SKIP_EXIT_CODE
     if result.returncode:

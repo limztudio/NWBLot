@@ -23,6 +23,7 @@ namespace __hidden_cpu_task_scheduler_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr u32 s_PollIntervalMS = 1u;
 constexpr u32 s_ExpectedDualCount = 2u;
 constexpr u32 s_ThirdElementIndex = 2u;
 
@@ -52,7 +53,7 @@ public:
                         ExitTestProcess(0u);
                     TerminateInvariant();
                 }
-                SleepMS(1u);
+                SleepMS(__hidden_cpu_task_scheduler_tests::s_PollIntervalMS);
             }
         }
         )

@@ -48,6 +48,13 @@ namespace __hidden_transparent_multi_smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr TStringView s_TransparentProjectName = NWB_TEXT("TransparentMultiSmokeProject");
+#if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
+constexpr TStringView s_CausticProjectName = NWB_TEXT("CausticSphereSmokeProject");
+constexpr AStringView s_CausticTimingEnvironment = "NWB_CAUSTIC_SMOKE_TIMING";
+constexpr AStringView s_SparsePreset = "sparse";
+#endif
+
 using NWB::Tests::Smoke::AddSmokeRenderSystems;
 using NWB::Tests::Smoke::ArrowYawInputHandler;
 using NWB::Tests::Smoke::CreateSmokeCamera;
@@ -174,9 +181,9 @@ public:
 #elif defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
     return NWB_TEXT("TransparentCsgSmokeProject");
 #elif defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
-    return NWB_TEXT("CausticSphereSmokeProject");
+    return s_CausticProjectName;
 #else
-    return NWB_TEXT("TransparentMultiSmokeProject");
+    return s_TransparentProjectName;
 #endif
 }
 
@@ -300,7 +307,7 @@ static void ApplyTransparentCsgSceneTransform(
 class TransparentMultiSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("TransparentMultiSmokeProject"));
+        auto world = CreateSmokeWorldOrDie(context, s_TransparentProjectName);
 
         const bool rayQueryHardwareAvailable = context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct) && context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
         if(rayQueryHardwareAvailable){
@@ -342,7 +349,7 @@ private:
             reflectionSettings.temporalEnabled = false;
             reflectionSettings.spatialFilterEnabled = false;
         }
-        if(NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_CAUSTIC_SMOKE_TIMING")){
+        if(NWB::Tests::Smoke::ReadSmokeEnvironmentFlag(s_CausticTimingEnvironment)){
             reflectionSettings.diagnosticsEnabled = false;
             reflectionSettings.temporalEnabled = false;
             reflectionSettings.spatialFilterEnabled = false;
@@ -409,7 +416,8 @@ private:
 
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
     [[nodiscard]] bool configureFramebufferCapture(){
-        auto capture = NWB::Tests::Smoke::ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("CausticSphereSmokeProject"), 360u);
+        constexpr u32 s_DefaultCaptureFrameCount = 360u;
+        auto capture = NWB::Tests::Smoke::ConfigureSmokeFramebufferCapture(m_context, s_CausticProjectName, s_DefaultCaptureFrameCount);
         if(!capture)
             return false;
         m_framebufferCapture = Move(*capture);
@@ -453,7 +461,7 @@ public:
 
         bool causticTiming = false;
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
-        causticTiming = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_CAUSTIC_SMOKE_TIMING");
+        causticTiming = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag(s_CausticTimingEnvironment);
 #endif
         if((causticTiming || NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_AVBOIT_SMOKE_TIMING")) && !m_timingRenderPass.start(causticTiming))
             return false;
@@ -485,11 +493,11 @@ public:
                 return false;
             }
             const AStringView preset(presetText->data(), presetText->size());
-            if(preset != "populated" && preset != "sparse"){
+            if(preset != "populated" && preset != s_SparsePreset){
                 NWB_LOGGER_ERROR(NWB_TEXT("CausticTimingProbe: camera preset must be populated or sparse"));
                 return false;
             }
-            cameraDistance *= preset == "sparse" ? 2.0f : 1.0f;
+            cameraDistance *= preset == s_SparsePreset ? 2.0f : 1.0f;
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: camera {} distance {} height {}"), preset == "sparse" ? NWB_TEXT("sparse") : NWB_TEXT("populated"), cameraDistance, s_CameraTargetY);
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: fixed delta {} yaw {} sphere scale {}"), RendererBaselineFixedDelta(), EffectiveFrozenAngle(), s_CausticSphereScale);
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: photon phases {}"), NWB_CAUSTIC_TEMPORAL_PHASE_COUNT);

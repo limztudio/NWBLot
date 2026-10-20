@@ -20,6 +20,8 @@ namespace __hidden_cpu_task_range_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr u32 s_CompletionTimeoutMS = 10000u;
+constexpr u32 s_PollIntervalMS = 1u;
 using namespace NWB::Core;
 
 [[nodiscard]] CpuTaskSchedulerConfig OneWorker()noexcept{
@@ -32,10 +34,10 @@ using namespace NWB::Core;
 void PumpUntil(CpuTaskScheduler& scheduler, const Atomic<bool>& done){
     const Timer start = TimerNow();
     while(!done.load(MemoryOrder::acquire)){
-        if(DurationInMS<u64>(TimerNow(), start) > 10000u)
+        if(DurationInMS<u64>(TimerNow(), start) > __hidden_cpu_task_range_tests::s_CompletionTimeoutMS)
             TerminateInvariant();
         scheduler.pumpMainThread();
-        SleepMS(1u);
+        SleepMS(__hidden_cpu_task_range_tests::s_PollIntervalMS);
     }
 }
 

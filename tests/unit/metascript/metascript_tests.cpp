@@ -20,6 +20,10 @@ namespace __hidden_metascript_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_AssetVariable = "asset";
+constexpr AStringView s_ItemsField = "items";
+constexpr AStringView s_NameField = "name";
+
 static constexpr AStringView s_STRUCT_NWB_DUP = "struct NwbDup{\n";
 static constexpr AStringView s_FLOAT_VALUE_LINE = "    float value;\n";
 static constexpr AStringView s_NWB_DUP_RUNTIME = "NwbDup runtime;\n";
@@ -64,7 +68,7 @@ template<usize N>
 }
 
 [[nodiscard]] static bool ParseImplicitMaterialBind(Document& document, const AString& source){
-    return document.parseWithImplicitAsset(ViewOf(source), LiteralView("material_bind"), LiteralView("asset"));
+    return document.parseWithImplicitAsset(ViewOf(source), LiteralView("material_bind"), MStringView(s_AssetVariable.data(), s_AssetVariable.size()));
 }
 
 static void CheckStringListElement(const Value& value, const AString& expected){
@@ -119,7 +123,7 @@ TEST(Metascript, CrossArenaCopyAssignmentCopiesNestedValuesIntoDestinationArena)
 
     Value source(sourceArena.arena);
     source.makeMap();
-    Value& list = source.field(MStringView("items", 5u));
+    Value& list = source.field(MStringView(s_ItemsField.data(), 5u));
     MakeSingleStringList(list, sourceArena, text);
 
     Value destination(destinationArena.arena);
@@ -127,7 +131,7 @@ TEST(Metascript, CrossArenaCopyAssignmentCopiesNestedValuesIntoDestinationArena)
     destination = source;
 
     EXPECT_TRUE(source.isMap());
-    const Value* copiedList = destination.findField(MStringView("items", 5u));
+    const Value* copiedList = destination.findField(MStringView(s_ItemsField.data(), 5u));
     ASSERT_NE(copiedList, nullptr);
     CheckSingleStringListValue(*copiedList, text);
 }
@@ -313,14 +317,14 @@ TEST(Metascript, BindDeclarationsKeepFirstAssetAcrossDeclarationReallocation){
     ASSERT_NE(fields, nullptr);
     ASSERT_TRUE(fields->isList());
     ASSERT_EQ(fields->asList().size(), 1u);
-    const Value* fieldName = fields->asList()[0u].findField(LiteralView("name"));
+    const Value* fieldName = fields->asList()[0u].findField(MStringView(s_NameField.data(), s_NameField.size()));
     ASSERT_NE(fieldName, nullptr);
     EXPECT_EQ(fieldName->asString(), LiteralView("value"));
     const Value* instances = asset.findField(LiteralView("instances"));
     ASSERT_NE(instances, nullptr);
     ASSERT_TRUE(instances->isList());
     ASSERT_EQ(instances->asList().size(), 1u);
-    const Value* instanceName = instances->asList()[0u].findField(LiteralView("name"));
+    const Value* instanceName = instances->asList()[0u].findField(MStringView(s_NameField.data(), s_NameField.size()));
     ASSERT_NE(instanceName, nullptr);
     EXPECT_EQ(instanceName->asString(), LiteralView("runtime"));
 }
@@ -356,7 +360,7 @@ TEST(Metascript, InvalidAssignmentTargetsPreserveDiagnosticsAndDeclaredValue){
         EXPECT_EQ(document.errors()[0u].line, 2u);
         EXPECT_EQ(document.errors()[0u].column, 1u);
         EXPECT_EQ(MStringView(document.errors()[0u].message.data(), document.errors()[0u].message.size()), testCase.message);
-        const Value* asset = document.findVariable("asset");
+        const Value* asset = document.findVariable(s_AssetVariable);
         ASSERT_NE(asset, nullptr);
         ASSERT_TRUE(asset->isInteger());
         EXPECT_EQ(asset->asInteger(), testCase.retainedValue);

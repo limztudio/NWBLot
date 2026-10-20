@@ -36,6 +36,12 @@ namespace __hidden_ui_interactive_smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr TStringView s_IncreaseLabel = NWB_TEXT("increase");
+constexpr AStringView s_IncreaseKey = "increase";
+constexpr TStringView s_EnabledLabel = NWB_TEXT("enabled");
+constexpr AStringView s_EnabledKey = "enabled";
+constexpr TStringView s_ResetLabel = NWB_TEXT("reset");
+constexpr AStringView s_ResetKey = "reset";
 static constexpr Impl::Ui::Rect s_Panel{ 18.0f, 18.0f, 320.0f, 220.0f };
 static constexpr Impl::Ui::Color s_Off{ 0.08f, 0.01f, 0.01f, 1.0f };
 static constexpr Impl::Ui::Color s_On{ 0.02f, 0.70f, 0.12f, 1.0f };
@@ -65,19 +71,19 @@ bool UiInteractiveSmokeScene::paint(Impl::UiPaintContext& context){
     if(!ui.beginRow("actions", actions))
         return false;
     const WidgetOptions increase{ { LayoutSizePolicy::Fixed, 130.0f }, { LayoutSizePolicy::Fixed, 36.0f }, m_enabled };
-    if(ui.button("increase", "Increase", increase)){
+    if(ui.button(__hidden_ui_interactive_smoke::s_IncreaseKey, "Increase", increase)){
         m_count = Min(m_count + 1u, 255u);
-        logAction(NWB_TEXT("increase"));
+        logAction(__hidden_ui_interactive_smoke::s_IncreaseLabel);
     }
     const WidgetOptions checkbox{ { LayoutSizePolicy::Fixed, 140.0f }, { LayoutSizePolicy::Fixed, 36.0f } };
-    if(ui.checkbox("enabled", "Enabled", m_enabled, checkbox))
-        logAction(NWB_TEXT("enabled"));
+    if(ui.checkbox(__hidden_ui_interactive_smoke::s_EnabledKey, "Enabled", m_enabled, checkbox))
+        logAction(__hidden_ui_interactive_smoke::s_EnabledLabel);
     if(!ui.endContainer())
         return false;
     const WidgetOptions reset{ { LayoutSizePolicy::Fixed, 130.0f }, { LayoutSizePolicy::Fixed, 36.0f } };
-    if(ui.button("reset", "Reset", reset)){
+    if(ui.button(__hidden_ui_interactive_smoke::s_ResetKey, "Reset", reset)){
         m_count = 0u;
-        logAction(NWB_TEXT("reset"));
+        logAction(__hidden_ui_interactive_smoke::s_ResetLabel);
     }
     if(!ui.endPanel())
         return false;

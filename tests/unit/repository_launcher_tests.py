@@ -12,6 +12,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+LIT_PKILL_EXECUTABLE = "/usr/bin/pkill"
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
@@ -625,7 +627,7 @@ class LauncherProcessStopTests(unittest.TestCase):
                 server.wait.assert_not_called()
 
     def test_no_matching_posix_process_does_not_prevent_launch(self):
-        with (mock.patch(LIT_LAUNCHER_PROCESS_SHUTIL_WHICH, return_value="/usr/bin/pkill"), mock.patch.object(subprocess, LIT_RUN, return_value=mock.Mock(returncode=1)),):
+        with (mock.patch(LIT_LAUNCHER_PROCESS_SHUTIL_WHICH, return_value=LIT_PKILL_EXECUTABLE), mock.patch.object(subprocess, LIT_RUN, return_value=mock.Mock(returncode=1)),):
             launcher.stop_existing_process(Path("absent-application"), launcher.PLATFORM_LINUX)
 
     def test_posix_stop_failure_prevents_another_application_and_bounds_diagnostic(self):
@@ -637,7 +639,7 @@ class LauncherProcessStopTests(unittest.TestCase):
                     options[LIT_STDERR].write(diagnostic)
                     return mock.Mock(returncode=exit_code)
 
-                with (mock.patch(LIT_LAUNCHER_PROCESS_SHUTIL_WHICH, return_value="/usr/bin/pkill"), mock.patch.object(subprocess, LIT_RUN, side_effect=fail_stop), mock.patch.object(launcher, LIT_VALIDATE_LAUNCH_PATHS),
+                with (mock.patch(LIT_LAUNCHER_PROCESS_SHUTIL_WHICH, return_value=LIT_PKILL_EXECUTABLE), mock.patch.object(subprocess, LIT_RUN, side_effect=fail_stop), mock.patch.object(launcher, LIT_VALIDATE_LAUNCH_PATHS),
                     mock.patch.object(launcher, LIT_HOST_PLATFORM_NAME, return_value=launcher.PLATFORM_LINUX), mock.patch.object(subprocess, LIT_POPEN) as spawn,):
                     with self.assertRaisesRegex(SystemExit, "permission denied") as failure:
                         launcher.launch_process(args, Path(LIT_APPLICATION), ROOT, {}, [])

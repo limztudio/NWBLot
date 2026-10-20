@@ -20,6 +20,9 @@ namespace __hidden_filesystem_cleanup_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_ChildDirectory = "child";
+constexpr AStringView s_RetainedDirectory = "retained";
+
 using TestPath = Path<NWB::Core::Alloc::GlobalArena>;
 using TestString = NWB::Tests::TestAString;
 
@@ -61,8 +64,8 @@ TEST(GlobalFilesystemCleanup, UnwindRetiresPopulatedTreeAndRepeatedMissingCleanu
 TEST(GlobalFilesystemCleanup, DotAndDotDotLeavesAreRejectedWithoutRemovingTheirContents){
     NWB::Tests::TestArena<> arena;
     const TestPath root(arena.arena, "global_test_artifacts/cleanup_dot_rejection");
-    const TestPath child = root / "child";
-    const TestPath retained = root / "retained";
+    const TestPath child = root / s_ChildDirectory;
+    const TestPath retained = root / s_RetainedDirectory;
     ASSERT_TRUE(EnsureEmptyDirectory(root));
     ASSERT_TRUE(EnsureDirectories(child));
     ASSERT_TRUE(WriteTextFile(retained, "retained"));
@@ -82,7 +85,7 @@ TEST(GlobalFilesystemCleanup, DirectoryAndRootLinksWithTrailingSeparatorsDoNotRe
     NWB::Tests::TestArena<> arena;
     const TestPath root(arena.arena, "global_test_artifacts/cleanup_links");
     const TestPath tree = root / "tree";
-    const TestPath outside = root / "retained";
+    const TestPath outside = root / s_RetainedDirectory;
     const TestPath link = tree / "link";
     const TestPath rootLink = root / "root_link";
     ASSERT_TRUE(EnsureEmptyDirectory(root));
@@ -162,7 +165,7 @@ TEST(GlobalFilesystemCleanup, ParentLinkLoopReturnsItsNativeErrorWithoutRemoving
     ASSERT_TRUE(EnsureEmptyDirectory(root));
     ASSERT_TRUE(WriteTextFile(root / "retained", "retained"));
     ASSERT_EQ(::symlink("loop", (root / "loop").c_str()), 0);
-    const auto removed = RemoveAllForCleanup(root / "loop" / "child");
+    const auto removed = RemoveAllForCleanup(root / "loop" / s_ChildDirectory);
     ASSERT_FALSE(removed);
     EXPECT_EQ(removed.error().value(), ELOOP);
     TestString retained(arena.arena);

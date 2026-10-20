@@ -280,7 +280,8 @@ Expected<CrashTestPath, ErrorCode> WaitForTriggerPackage(Core::Alloc::GlobalAren
         const Timer now = TimerNow();
         if(now >= deadline)
             return MakeUnexpected(MakeErrorCode(ErrorCondition::timed_out));
-        const u32 remainingMilliseconds = static_cast<u32>(Max(DurationInMS<i64>(deadline, now), i64(1)));
+        constexpr i32 s_MinimumRemainingMilliseconds = 1;
+        const u32 remainingMilliseconds = static_cast<u32>(Max(DurationInMS<i64>(deadline, now), i64(s_MinimumRemainingMilliseconds)));
         SleepMS(Min(s_PollMilliseconds, remainingMilliseconds));
     }
 }

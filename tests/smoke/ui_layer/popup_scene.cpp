@@ -31,6 +31,17 @@ namespace __hidden_ui_popup_smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr TStringView s_ModalLabel = NWB_TEXT("modal");
+constexpr AStringView s_ModalKey = "modal";
+constexpr TStringView s_OutsideLabel = NWB_TEXT("outside");
+constexpr AStringView s_OutsideKey = "outside";
+constexpr TStringView s_PopupLabel = NWB_TEXT("popup");
+constexpr AStringView s_PopupKey = "popup";
+constexpr TStringView s_FirstLabel = NWB_TEXT("first");
+constexpr AStringView s_FirstKey = "first";
+constexpr TStringView s_SecondLabel = NWB_TEXT("second");
+constexpr AStringView s_SecondKey = "second";
+constexpr TStringView s_LogTag = NWB_TEXT("UiPopupSmoke");
 static constexpr Impl::Ui::Rect s_Panel{ 24.0f, 24.0f, 320.0f, 216.0f };
 static constexpr Impl::Ui::Rect s_Anchor{ 200.0f, 64.0f, 120.0f, 36.0f };
 static constexpr Impl::Ui::Rect s_Trigger{ 32.0f, 64.0f, 120.0f, 36.0f };
@@ -82,7 +93,7 @@ bool UiPopupSmokeScene::paint(Impl::UiPaintContext& context){
         m_modal = false;
         m_popup.open();
     }
-    if(ui.button("modal", "Open modal", trigger)){
+    if(ui.button(__hidden_ui_popup_smoke::s_ModalKey, "Open modal", trigger)){
         m_modal = true;
         m_popup.open();
     }
@@ -94,7 +105,7 @@ bool UiPopupSmokeScene::paint(Impl::UiPaintContext& context){
     EditBoxOptions edit;
     edit.width = { LayoutSizePolicy::Fixed, 260.0f };
     edit.height = { LayoutSizePolicy::Fixed, 32.0f };
-    const EditBoxResult outside = ui.editBox("outside", m_outsideText, m_outsideEdit, edit);
+    const EditBoxResult outside = ui.editBox(__hidden_ui_popup_smoke::s_OutsideKey, m_outsideText, m_outsideEdit, edit);
     m_outsideFocused = outside.focused;
     if(!outside.valid || !ui.endPanel())
         return false;
@@ -108,16 +119,16 @@ bool UiPopupSmokeScene::paint(Impl::UiPaintContext& context){
         options.anchor = StoreSmokeRect(VectorSubtract(VectorSet(context.display.logicalWidth, context.display.logicalHeight, 48.0f, 24.0f), VectorSet(60.0f, 48.0f, 0.0f, 0.0f)));
     options.side = m_right ? PopupPlacementSide::Right : PopupPlacementSide::Below;
     m_popupFocused = false;
-    if(m_visible && ui.beginPopup("popup", m_popup, options)){
+    if(m_visible && ui.beginPopup(__hidden_ui_popup_smoke::s_PopupKey, m_popup, options)){
         const WidgetOptions caption{ {}, { LayoutSizePolicy::Fixed, 20.0f } };
         const WidgetOptions choice{ { LayoutSizePolicy::Stretch, 1.0f }, { LayoutSizePolicy::Fixed, 32.0f } };
         if(!ui.label("caption", "Choose, edit, or dismiss", caption))
             return false;
-        if(ui.button("first", "First choice", choice)){
+        if(ui.button(__hidden_ui_popup_smoke::s_FirstKey, "First choice", choice)){
             m_selected = 1u;
             m_popup.close();
         }
-        if(ui.button("second", "Second choice", choice)){
+        if(ui.button(__hidden_ui_popup_smoke::s_SecondKey, "Second choice", choice)){
             m_selected = 2u;
             m_popup.close();
         }
@@ -195,18 +206,18 @@ void UiPopupSmokeScene::observeState(){
         , m_sequence, current[0], current[1], current[2], current[3], current[4], current[5]
         , current[6], current[7], current[8], current[9], current[10], current[11]
     );
-    LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("popup"), placement.bounds);
-    LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("viewport"), placement.viewport);
-    LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("trigger"), __hidden_ui_popup_smoke::s_Trigger);
-    LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("modal"), __hidden_ui_popup_smoke::s_ModalTrigger);
-    LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("counter"), __hidden_ui_popup_smoke::s_Counter);
-    LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("outside"), m_outsideEdit.placement.bounds);
+    LogSmokeRect(__hidden_ui_popup_smoke::s_LogTag, m_sequence, __hidden_ui_popup_smoke::s_PopupLabel, placement.bounds);
+    LogSmokeRect(__hidden_ui_popup_smoke::s_LogTag, m_sequence, NWB_TEXT("viewport"), placement.viewport);
+    LogSmokeRect(__hidden_ui_popup_smoke::s_LogTag, m_sequence, NWB_TEXT("trigger"), __hidden_ui_popup_smoke::s_Trigger);
+    LogSmokeRect(__hidden_ui_popup_smoke::s_LogTag, m_sequence, __hidden_ui_popup_smoke::s_ModalLabel, __hidden_ui_popup_smoke::s_ModalTrigger);
+    LogSmokeRect(__hidden_ui_popup_smoke::s_LogTag, m_sequence, NWB_TEXT("counter"), __hidden_ui_popup_smoke::s_Counter);
+    LogSmokeRect(__hidden_ui_popup_smoke::s_LogTag, m_sequence, __hidden_ui_popup_smoke::s_OutsideLabel, m_outsideEdit.placement.bounds);
     const Impl::Ui::Rect first = StoreSmokeRect(VectorAdd(VectorSet(placement.bounds.x, placement.bounds.y, placement.bounds.width, 0.0f), VectorSet(8.0f, 36.0f, -16.0f, 32.0f)));
     const SIMDVectorSingle laterRowsY = VectorAdd(VectorReplicate(first.y), VectorSet(40.0f, 80.0f, 0.0f, 0.0f));
-    LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("first"), first);
-    LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("second"), { first.x, VectorGetX(laterRowsY), first.width, first.height });
-    LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("check"), { first.x, VectorGetY(laterRowsY), first.width, first.height });
-    LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("edit"), m_popupEdit.placement.bounds);
+    LogSmokeRect(__hidden_ui_popup_smoke::s_LogTag, m_sequence, __hidden_ui_popup_smoke::s_FirstLabel, first);
+    LogSmokeRect(__hidden_ui_popup_smoke::s_LogTag, m_sequence, __hidden_ui_popup_smoke::s_SecondLabel, { first.x, VectorGetX(laterRowsY), first.width, first.height });
+    LogSmokeRect(__hidden_ui_popup_smoke::s_LogTag, m_sequence, NWB_TEXT("check"), { first.x, VectorGetY(laterRowsY), first.width, first.height });
+    LogSmokeRect(__hidden_ui_popup_smoke::s_LogTag, m_sequence, NWB_TEXT("edit"), m_popupEdit.placement.bounds);
 }
 
 void UiPopupSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{

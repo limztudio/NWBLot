@@ -9,6 +9,8 @@ import struct
 import sys
 import types
 
+LIT_UINT32_LITTLE_ENDIAN = "<I"
+
 LIT_IMPL = "impl"
 LIT_ASSETS = "assets"
 LIT_UI = "ui"
@@ -149,7 +151,7 @@ def _package_identities(payloads: dict[bytes, bytes]) -> tuple[bytes, bytes]:
     for identity, payload in payloads.items():
         if len(payload) < 8:
             raise AssertionError("skin package contains a truncated payload")
-        magic = struct.unpack_from("<I", payload)[0]
+        magic = struct.unpack_from(LIT_UINT32_LITTLE_ENDIAN, payload)[0]
         if magic in by_magic:
             raise AssertionError("skin package contains duplicate payload types")
         by_magic[magic] = identity
@@ -161,7 +163,7 @@ def _package_identities(payloads: dict[bytes, bytes]) -> tuple[bytes, bytes]:
     texture = payloads[texture_identity]
     if len(skin) < 80:
         raise AssertionError("skin package contains a truncated skin or texture header")
-    if struct.unpack_from("<I", skin, 4)[0] != SKIN_VERSION:
+    if struct.unpack_from(LIT_UINT32_LITTLE_ENDIAN, skin, 4)[0] != SKIN_VERSION:
         raise AssertionError("skin package did not write the current skin version")
     if skin[8:8 + NAME_HASH_BYTES] != texture_identity:
         raise AssertionError("packaged skin refers to a texture identity absent from the package")

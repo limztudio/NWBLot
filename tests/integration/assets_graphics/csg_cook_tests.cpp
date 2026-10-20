@@ -31,6 +31,13 @@ namespace __hidden_assets_graphics_csg_cook{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_CacheDirectory = "cache";
+constexpr AStringView s_AuthoredDefine = "AUTHORED";
+constexpr AStringView s_ModuleOptionDefine = "MODULE_OPTION";
+constexpr AStringView s_PixelStage = "ps";
+constexpr AStringView s_ModulePath = "project/csg/module";
+constexpr AStringView s_GeneratedModulePath = "project/csg/generated/module.slangi";
+
 using CapturingLogger = AssetsGraphicsFixture::CapturingLogger;
 using Path = AssetsGraphicsFixture::Path;
 using TestArena = AssetsGraphicsFixture::TestArena;
@@ -93,7 +100,7 @@ TEST(AssetsGraphics, ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInheritedD
     using ShaderCook = Impl::ShaderCook;
     Plan::ResolvedCookPaths paths(testArena.arena);
     paths.repoRoot = root;
-    paths.cacheDirectory = root / "cache";
+    paths.cacheDirectory = root / s_CacheDirectory;
     ShaderCook shaderCook(testArena.arena);
     Plan::IncludeMetadataMap includeMetadata(testArena.arena);
     const auto addDefine = [&](auto& defines, AStringView name, InitializerList<AStringView> values){
@@ -105,7 +112,7 @@ TEST(AssetsGraphics, ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInheritedD
     const auto addIncludeMetadata = [&](const Path& path, AStringView option, InitializerList<AStringView> values){
         ShaderCook::IncludeEntry entry(testArena.arena);
         addDefine(entry.defineValues, option, values);
-        addDefine(entry.defineValues, "AUTHORED", { "inherited" });
+        addDefine(entry.defineValues, s_AuthoredDefine, { "inherited" });
         auto key = PathToString(testArena.arena, path);
 #if defined(NWB_PLATFORM_WINDOWS)
         CanonicalizeTextInPlace(key);
@@ -113,17 +120,17 @@ TEST(AssetsGraphics, ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInheritedD
         ASSERT_TRUE(includeMetadata.emplace(Move(key), Move(entry)).second);
     };
     addIncludeMetadata(root / "common.slangi", "SHARED_OPTION", { "0", "1" });
-    addIncludeMetadata(csgRoot / "first.slangi", "MODULE_OPTION", { "0", "1" });
-    addIncludeMetadata(csgRoot / "second.slangi", "MODULE_OPTION", { "2" });
+    addIncludeMetadata(csgRoot / "first.slangi", s_ModuleOptionDefine, { "0", "1" });
+    addIncludeMetadata(csgRoot / "second.slangi", s_ModuleOptionDefine, { "2" });
     ShaderCook::CookVector<Impl::MaterialCookEntry> materials(testArena.arena);
     const auto prepare = [&](const u32 mode){
         Plan::ShaderEntryVector entries(testArena.arena);
         ShaderCook::ShaderEntry entry(testArena.arena);
         entry.name = "project/shaders/dependency_plan";
         entry.source = "shader.slang";
-        entry.stage = "ps";
-        entry.archiveStage = "ps";
-        addDefine(entry.defineValues, "AUTHORED", { "authored" });
+        entry.stage = s_PixelStage.data();
+        entry.archiveStage = s_PixelStage.data();
+        addDefine(entry.defineValues, s_AuthoredDefine, { "authored" });
         if(mode == 1u)
             addDefine(entry.defineValues, Impl::AssetsGraphicsCsgShaderVariants::s_ProjectEvaluatorModuleDefineName, { "\"../common.slangi\"" });
         else if(mode == 2u)
@@ -143,7 +150,7 @@ TEST(AssetsGraphics, ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInheritedD
         ASSERT_EQ(prepared.dependencies.size(), mode == 2u ? 4u : 2u);
         EXPECT_EQ(prepared.dependencies[0], root / "shader.slang");
         EXPECT_EQ(prepared.dependencies[1], root / "common.slangi");
-        const auto authored = prepared.entry.defineValues.find(AStringView("AUTHORED"));
+        const auto authored = prepared.entry.defineValues.find(AStringView(s_AuthoredDefine));
         ASSERT_NE(authored, prepared.entry.defineValues.end());
         ASSERT_EQ(authored.value().values.size(), 1u);
         EXPECT_EQ(authored.value().values.front(), "authored");
@@ -152,7 +159,7 @@ TEST(AssetsGraphics, ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInheritedD
         if(mode == 2u){
             EXPECT_EQ(prepared.dependencies[2], csgRoot / "first.slangi");
             EXPECT_EQ(prepared.dependencies[3], csgRoot / "second.slangi");
-            const auto inherited = prepared.entry.defineValues.find(AStringView("MODULE_OPTION"));
+            const auto inherited = prepared.entry.defineValues.find(AStringView(s_ModuleOptionDefine));
             ASSERT_NE(inherited, prepared.entry.defineValues.end());
             ASSERT_EQ(inherited.value().values.size(), 2u);
             EXPECT_EQ(inherited.value().values[0], "0");
@@ -210,8 +217,8 @@ TEST(AssetsGraphics, CsgShapeIdsRejectDuplicateCanonicalNamesBeforePublishingThe
     using namespace NWB::Impl::AssetsCsgCook;
 
     CsgShapeCookEntryVector entries(testArena.arena);
-    AppendCsgShapeCookEntry(entries, testArena.arena, Name("project/csg/duplicate"), Name("project/csg/module"), "project/csg/generated/module.slangi");
-    AppendCsgShapeCookEntry(entries, testArena.arena, Name("PROJECT/CSG/DUPLICATE"), Name("project/csg/module"), "project/csg/generated/module.slangi");
+    AppendCsgShapeCookEntry(entries, testArena.arena, Name("project/csg/duplicate"), Name(s_ModulePath), s_GeneratedModulePath);
+    AppendCsgShapeCookEntry(entries, testArena.arena, Name("PROJECT/CSG/DUPLICATE"), Name(s_ModulePath), s_GeneratedModulePath);
 
     EXPECT_FALSE(AssignCsgShapeCookIds(entries, scratchArena));
     ASSERT_EQ(entries.size(), 2u);
@@ -245,7 +252,7 @@ asset.eval = "project/csg/MixedCaseEval.slangi";
     Impl::AssetsCsgCook::CsgShapeCookEntryVector entries(testArena.arena);
     entries.push_back(Move(*cooked));
     ASSERT_TRUE(Impl::AssetsCsgCook::AssignCsgShapeCookIds(entries, scratchArena));
-    const auto generatedRoot = Impl::AssetsCsgCook::EmitCsgShapeModuleIncludes(root / "cache", "tests", entries, scratchArena);
+    const auto generatedRoot = Impl::AssetsCsgCook::EmitCsgShapeModuleIncludes(root / s_CacheDirectory, "tests", entries, scratchArena);
     ASSERT_TRUE(generatedRoot);
     const auto generatedExists = FileExists(*generatedRoot / moduleInclude);
     ASSERT_TRUE(generatedExists);

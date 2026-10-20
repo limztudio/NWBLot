@@ -5,6 +5,8 @@ from pathlib import Path
 import re
 import sys
 
+LIT_MILLISECONDS_PER_SECOND = 1000
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ab"))
 from name_symbols import known_name_symbols
 
@@ -148,8 +150,8 @@ def parse_publications(text, measurement):
     result_scopes = []
     for row in scopes.values():
         row["single_source_frame_count"] = len(row.pop(LIT_SINGLE_SOURCE_FRAMES))
-        row["sample_mean_ms"] = 1000 * row[LIT_SECONDS] / row[LIT_SAMPLES] if row[LIT_SAMPLES] else None
-        row["total_ms_per_accepted_presentation"] = 1000 * row[LIT_SECONDS] / (last - first)
+        row["sample_mean_ms"] = LIT_MILLISECONDS_PER_SECOND * row[LIT_SECONDS] / row[LIT_SAMPLES] if row[LIT_SAMPLES] else None
+        row["total_ms_per_accepted_presentation"] = LIT_MILLISECONDS_PER_SECOND * row[LIT_SECONDS] / (last - first)
         result_scopes.append(row)
     return dict(schema=1, requested=True, diagnostic_only=True, performance_qualification=False, capture=dict(cpu=True, gpu=True, memory=False), scope_decoding=dict(method="deterministic_canonical_engine_hash", decoder="tests/ab/name_symbols.py",
             known_cpu=list(KNOWN_CPU), known_gpu=list(KNOWN_GPU), unknown_labels="retained_raw", provenance="Decoder and this scope roster are bound by launch identity_before.helpers and identity_after.helpers."),

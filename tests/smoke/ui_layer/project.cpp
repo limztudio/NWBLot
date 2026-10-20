@@ -45,7 +45,8 @@ bool UiLayerSmokeProject::onStartup(){
         captureOptions.requiredWidth = 800u;
         captureOptions.requiredHeight = 600u;
     }
-    auto capture = ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("UiLayerSmokeProject"), 60u, captureOptions);
+    constexpr u32 s_DefaultCaptureFrameCount = 60u;
+    auto capture = ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("UiLayerSmokeProject"), s_DefaultCaptureFrameCount, captureOptions);
     if(!capture)
         return false;
     m_framebufferCapture = Move(*capture);

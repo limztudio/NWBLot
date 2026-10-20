@@ -25,6 +25,26 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_ui_image_smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+constexpr AStringView s_TitleKey = "title";
+constexpr AStringView s_RadioRegion = "radio.mark";
+constexpr AStringView s_ProgressRegion = "progress.fill";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 UiImageSmokeScene::UiImageSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input)
     : m_input(input)
 {
@@ -67,36 +87,36 @@ bool UiImageSmokeScene::paintMain(Impl::Ui::Builder& ui, const Impl::Ui::Rect& b
         return false;
     const WidgetOptions caption{ {}, { LayoutSizePolicy::Fixed, 16.0f } };
     const WidgetOptions button{ { LayoutSizePolicy::Stretch, 1.0f }, { LayoutSizePolicy::Fixed, 28.0f } };
-    if(!ui.label("title", "Atlas images / copied size and tint", caption))
+    if(!ui.label(__hidden_ui_image_smoke::s_TitleKey, "Atlas images / copied size and tint", caption))
         return false;
     if(ui.button("before", "Before images", button))
         ++m_beforeClicks;
     ImageOptions options;
-    if(!ui.image("natural_sprite", Name("radio.mark"), options) || !ui.image("natural_slice", Name("progress.fill")))
+    if(!ui.image("natural_sprite", Name(__hidden_ui_image_smoke::s_RadioRegion), options) || !ui.image("natural_slice", Name(__hidden_ui_image_smoke::s_ProgressRegion)))
         return false;
     const SIMDVectorSingle origin = VectorSet(bounds.x, bounds.y, 0.0f, 0.0f);
     m_declared.rectangles[2u] = StoreSmokeRect(VectorAdd(origin, VectorSet(8.0f, 68.0f, 24.0f, 24.0f)));
     m_declared.rectangles[3u] = StoreSmokeRect(VectorAdd(origin, VectorSet(8.0f, 100.0f, 24.0f, 24.0f)));
     options.width = { LayoutSizePolicy::Fixed, 96.0f };
     options.height = { LayoutSizePolicy::Fixed, 40.0f };
-    if(!ui.image("fixed_sprite", Name("radio.mark"), options) || !ui.image("fixed_slice", Name("progress.fill"), options))
+    if(!ui.image("fixed_sprite", Name(__hidden_ui_image_smoke::s_RadioRegion), options) || !ui.image("fixed_slice", Name(__hidden_ui_image_smoke::s_ProgressRegion), options))
         return false;
     m_declared.rectangles[4u] = StoreSmokeRect(VectorAdd(origin, VectorSet(8.0f, 132.0f, 96.0f, 40.0f)));
     m_declared.rectangles[5u] = StoreSmokeRect(VectorAdd(origin, VectorSet(8.0f, 180.0f, 96.0f, 40.0f)));
     options.width = { LayoutSizePolicy::Stretch, 1.0f };
     options.height = { LayoutSizePolicy::Fixed, 32.0f };
-    if(!ui.image("stretch", Name("progress.fill"), options))
+    if(!ui.image("stretch", Name(__hidden_ui_image_smoke::s_ProgressRegion), options))
         return false;
     m_declared.rectangles[6u] = StoreSmokeRect(VectorAdd(VectorSet(bounds.x, bounds.y, bounds.width, 0.0f), VectorSet(8.0f, 228.0f, -16.0f, 32.0f)));
     options.width = { LayoutSizePolicy::Fixed, 96.0f };
     options.height = { LayoutSizePolicy::Fixed, 40.0f };
     options.tint = { 0.4f, 0.7f, 0.9f, 0.5f };
-    if(!ui.image("tinted", Name("radio.mark"), options))
+    if(!ui.image("tinted", Name(__hidden_ui_image_smoke::s_RadioRegion), options))
         return false;
     m_declared.rectangles[7u] = StoreSmokeRect(VectorAdd(origin, VectorSet(8.0f, 268.0f, 96.0f, 40.0f)));
     options.height = { LayoutSizePolicy::Fixed, 24.0f };
     options.tint = { 1.0f, 1.0f, 1.0f, 0.0f };
-    if(!ui.image("transparent", Name("radio.mark"), options))
+    if(!ui.image("transparent", Name(__hidden_ui_image_smoke::s_RadioRegion), options))
         return false;
     m_declared.rectangles[8u] = StoreSmokeRect(VectorAdd(origin, VectorSet(8.0f, 316.0f, 96.0f, 24.0f)));
     if(ui.button("after", "After images", button))
@@ -109,9 +129,9 @@ bool UiImageSmokeScene::paintFrozen(Impl::Ui::Builder& ui, const Impl::Ui::Rect&
     if(!ui.beginPanel("image_frozen", bounds))
         return false;
     const WidgetOptions caption{ {}, { LayoutSizePolicy::Fixed, 16.0f } };
-    if(!ui.label("title", "Declaration retains region, options and tint", caption))
+    if(!ui.label(__hidden_ui_image_smoke::s_TitleKey, "Declaration retains region, options and tint", caption))
         return false;
-    Name region(m_phase ? "radio.mark" : "progress.fill");
+    Name region(m_phase ? __hidden_ui_image_smoke::s_RadioRegion.data() : __hidden_ui_image_smoke::s_ProgressRegion.data());
     ImageOptions options;
     options.width = { LayoutSizePolicy::Fixed, 96.0f };
     options.height = { LayoutSizePolicy::Fixed, 40.0f };
@@ -120,7 +140,7 @@ bool UiImageSmokeScene::paintFrozen(Impl::Ui::Builder& ui, const Impl::Ui::Rect&
     if(!ui.image("frozen", region, options))
         return false;
     m_declared.rectangles[9u] = StoreSmokeRect(VectorAdd(VectorSet(bounds.x, bounds.y, 0.0f, 0.0f), VectorSet(8.0f, 32.0f, 96.0f, 40.0f)));
-    region = Name(m_phase ? "progress.fill" : "radio.mark");
+    region = Name(m_phase ? __hidden_ui_image_smoke::s_ProgressRegion.data() : __hidden_ui_image_smoke::s_RadioRegion.data());
     m_declared.values[9u] = m_phase ? 1u : 2u;
     options.width = { LayoutSizePolicy::Fixed, 70.0f };
     options.height = { LayoutSizePolicy::Fixed, 70.0f };
@@ -140,7 +160,7 @@ bool UiImageSmokeScene::paintExternal(Impl::UiPaintContext& context, const Impl:
     ImageOptions options;
     options.width = { LayoutSizePolicy::Stretch, 1.0f };
     options.height = { LayoutSizePolicy::Fixed, 40.0f };
-    const bool painted = ui.beginPanel("image_external", bounds) && ui.image("external", Name("progress.fill"), options) && ui.endPanel();
+    const bool painted = ui.beginPanel("image_external", bounds) && ui.image("external", Name(__hidden_ui_image_smoke::s_ProgressRegion), options) && ui.endPanel();
     const bool popped = context.paint.popClip();
     return painted && popped;
 }
@@ -158,14 +178,14 @@ bool UiImageSmokeScene::paintPopups(Impl::Ui::Builder& ui, const f32 right){
     ImageOptions options;
     options.width = { LayoutSizePolicy::Stretch, 1.0f };
     options.height = { LayoutSizePolicy::Fixed, 40.0f };
-    if(!ui.image("parent_value", Name("progress.fill"), options))
+    if(!ui.image("parent_value", Name(__hidden_ui_image_smoke::s_ProgressRegion), options))
         return false;
     PopupOptions child;
     child.anchor = { VectorGetX(VectorAdd(VectorReplicate(right), VectorReplicate(100.0f))), 370.0f, 8.0f, 16.0f };
     child.size = { 240.0f, 128.0f };
     if(ui.beginPopup("image_child", m_child, child)){
         options.tint = { 0.5f, 1.0f, 0.5f, 0.75f };
-        if(!ui.image("child_value", Name("radio.mark"), options))
+        if(!ui.image("child_value", Name(__hidden_ui_image_smoke::s_RadioRegion), options))
             return false;
         if(ui.button("child_action", "Child action", button))
             m_child.close();

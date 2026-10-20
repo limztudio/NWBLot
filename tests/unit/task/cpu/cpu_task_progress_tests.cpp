@@ -19,6 +19,7 @@ namespace __hidden_cpu_task_progress_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr u32 s_PollIntervalMS = 1u;
 using namespace NWB::Core;
 
 inline constexpr u32 s_Rounds = 16u;
@@ -38,7 +39,7 @@ public:
             while(!stop.stop_requested()){
                 if(DurationInMS<u64>(TimerNow(), begin) >= s_TimeoutMS)
                     TerminateInvariant();
-                SleepMS(1u);
+                SleepMS(__hidden_cpu_task_progress_tests::s_PollIntervalMS);
             }
         }
         )
@@ -107,7 +108,7 @@ TEST(CpuTaskProgressTests, ScopeJoinWakesForANewlyReadyUnscopedMainThreadPrerequ
         releaser = JoiningThread([&]()noexcept{
             joining.wait(false, MemoryOrder::acquire);
             if(round % s_ReleaseSchedules == 0u)
-                SleepMS(1u);
+                SleepMS(__hidden_cpu_task_progress_tests::s_PollIntervalMS);
             release.store(true, MemoryOrder::release);
             release.notify_one();
         }

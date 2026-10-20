@@ -48,6 +48,11 @@ namespace __hidden_skinned_caustic_smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr TStringView s_ProjectName = NWB_TEXT("SkinnedCausticSmokeProject");
+constexpr AStringView s_CsgTransitionEnvironment = "NWB_SKINNED_CAUSTIC_CSG_TRANSITION";
+constexpr AStringView s_CsgLaggedEnvironment = "NWB_SKINNED_CAUSTIC_CSG_LAGGED";
+constexpr AStringView s_CsgNoPhotonsEnvironment = "NWB_SKINNED_CAUSTIC_CSG_NO_PHOTONS";
+
 using NWB::Tests::Smoke::AddSmokeSkinnedRenderSystems;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::CreateTintedModelEntity;
@@ -123,13 +128,13 @@ static constexpr f32 s_MaxAnimationDelta = 1.0f / 15.0f;
 class SkinnedCausticSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = NWB::Tests::Smoke::CreateSmokeWorldOrDie(context, NWB_TEXT("SkinnedCausticSmokeProject"));
+        auto world = NWB::Tests::Smoke::CreateSmokeWorldOrDie(context, s_ProjectName);
 
         AddSmokeSkinnedRenderSystems(*world, context);
-        if(NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_SKINNED_CAUSTIC_CSG_TRANSITION")){
+        if(NWB::Tests::Smoke::ReadSmokeEnvironmentFlag(s_CsgTransitionEnvironment)){
             auto* renderer = world->getSystem<NWB::Impl::RendererSystem>();
             NWB_ASSERT(renderer);
-            renderer->setFrameLaggedAsyncLightingEnabled(NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_SKINNED_CAUSTIC_CSG_LAGGED"));
+            renderer->setFrameLaggedAsyncLightingEnabled(NWB::Tests::Smoke::ReadSmokeEnvironmentFlag(s_CsgLaggedEnvironment));
         }
         return world;
     }
@@ -397,11 +402,11 @@ public:
         // Opt into per-pass GPU timing so m_gpuPassTimingProbe can report the caustic photon/resolve + shadow + skinning pass GPU times each interval (flips the GPU-timing double gate via the Frame).
         m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
 
-        m_transitionEnabled = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_SKINNED_CAUSTIC_CSG_TRANSITION");
+        m_transitionEnabled = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag(s_CsgTransitionEnvironment);
         if(m_transitionEnabled){
             NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
-            m_transitionLagged = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_SKINNED_CAUSTIC_CSG_LAGGED");
-            m_transitionPhotonsEnabled = !NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_SKINNED_CAUSTIC_CSG_NO_PHOTONS");
+            m_transitionLagged = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag(s_CsgLaggedEnvironment);
+            m_transitionPhotonsEnabled = !NWB::Tests::Smoke::ReadSmokeEnvironmentFlag(s_CsgNoPhotonsEnvironment);
             const auto output = NWB::Tests::Smoke::ReadSmokeEnvironmentText(scratchArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
             if(!output)
                 return false;
@@ -420,7 +425,7 @@ public:
         activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(*m_world, Float4(0.0f, s_CameraHeight, -s_CameraDistance, 0.0f));
         const auto lightEntity = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, s_DefaultDirectionalLightPitch, s_DefaultDirectionalLightYaw, 0.0f, Float4(1.0f, 0.96f, 0.88f), s_DefaultDirectionalLightIntensity);
         if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(lightEntity))
-            light->enableCaustics = !m_transitionEnabled || !NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_SKINNED_CAUSTIC_CSG_NO_PHOTONS");
+            light->enableCaustics = !m_transitionEnabled || !NWB::Tests::Smoke::ReadSmokeEnvironmentFlag(s_CsgNoPhotonsEnvironment);
 
         m_groundEntity = CreateTintedStaticMeshEntity(
             *m_world,
@@ -484,8 +489,8 @@ private:
     NWB::Core::ECS::EntityID m_groundEntity = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Core::ECS::EntityID m_character = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Core::ECS::EntityID m_skeletonEntity = NWB::Core::ECS::s_InvalidEntityId;
-    NWB::Tests::Smoke::FpsProbe m_fpsProbe{ NWB_TEXT("SkinnedCausticSmokeProject") };
-    NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ NWB_TEXT("SkinnedCausticSmokeProject") };
+    NWB::Tests::Smoke::FpsProbe m_fpsProbe{ s_ProjectName };
+    NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ s_ProjectName };
     f64 m_animationTime = 0.0;
     Vector<::Path<NWB::Core::Alloc::GlobalArena>, NWB::Core::Alloc::GlobalArena> m_capturePaths;
     UniquePtr<NWB::Tests::Smoke::FramebufferCapture> m_capture;

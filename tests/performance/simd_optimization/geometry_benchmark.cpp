@@ -28,6 +28,11 @@ namespace __hidden_simd_geometry_benchmark{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_ZeroAxisLabel = "zero_axis";
+constexpr AStringView s_ValidateMode = "validate";
+constexpr AStringView s_AbsoluteMode = "abs";
+constexpr AStringView s_GuardMode = "guard";
+
 using Intersection = bool (NWB_SIMD_CALL *)(SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble)noexcept;
 
 // Fixture storage for one triangle pair.
@@ -652,8 +657,8 @@ static i32 Benchmark(const bool validationOnly, const bool measureAbs, const boo
     const Intersection reference = measureAbs ? ZeroAxis : (guardOnly ? CurrentDot3Baseline : Baseline);
     const Intersection production = TriangleDoubleTests::Intersects;
     const Intersection selected = measureAbs ? AbsHoisted : (guardOnly ? ZeroAxis : production);
-    const StringView referenceName = measureAbs ? "zero_axis" : (guardOnly ? "current_dot3_baseline" : "baseline");
-    const StringView selectedName = measureAbs ? "abs_hoisted" : (guardOnly ? "zero_axis" : "production");
+    const StringView referenceName = measureAbs ? s_ZeroAxisLabel : (guardOnly ? "current_dot3_baseline" : "baseline");
+    const StringView selectedName = measureAbs ? "abs_hoisted" : (guardOnly ? s_ZeroAxisLabel : "production");
     NWB_COUT << "timer,TimerNow/DurationInNS\n";
     NWB_COUT << "mode," << (measureAbs ? "abs_hoisted_vs_zero_axis" : (guardOnly ? "zero_axis_vs_current_dot3" : "production_vs_original_baseline")) << '\n';
     TrianglePair pairs[s_FixtureCount];
@@ -700,9 +705,9 @@ static i32 Benchmark(const bool validationOnly, const bool measureAbs, const boo
 
 int main(int argc, char** argv){
     const StringView mode = argc > 1 ? StringView(argv[1]) : StringView{};
-    if(!mode.empty() && mode != "validate" && mode != "abs" && mode != "guard")
+    if(!mode.empty() && mode != __hidden_simd_geometry_benchmark::s_ValidateMode && mode != __hidden_simd_geometry_benchmark::s_AbsoluteMode && mode != __hidden_simd_geometry_benchmark::s_GuardMode)
         return 2;
-    return __hidden_simd_geometry_benchmark::Benchmark(mode == "validate", mode == "abs", mode == "guard");
+    return __hidden_simd_geometry_benchmark::Benchmark(mode == __hidden_simd_geometry_benchmark::s_ValidateMode, mode == __hidden_simd_geometry_benchmark::s_AbsoluteMode, mode == __hidden_simd_geometry_benchmark::s_GuardMode);
 }
 
 

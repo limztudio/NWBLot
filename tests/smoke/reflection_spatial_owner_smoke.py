@@ -15,6 +15,9 @@ from reflection_roughness_reference import mirror_cells
 from smoke_volume_identity import file_identity
 from window_capture_smoke import SmokeFailure, read_bmp_24_rows
 
+LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 90
+LIT_MAXIMUM_CAPTURE_TIMEOUT_SECONDS = 180
+
 LIT_PHASE = "Phase"
 LIT_INDEX = "index"
 LIT_RADIUS = "radius"
@@ -203,7 +206,7 @@ def capture(args, selection):
             command += [LIT_EXPECT_LOG_MESSAGE, marker]
     command.extend("--application-arg=" + value for value in args.application_arg)
     print("Capturing production spatial owner " + selection, flush=True)
-    result = subprocess.run(command, env=capture_environment_for(selection), check=False, timeout=args.timeout + 90)
+    result = subprocess.run(command, env=capture_environment_for(selection), check=False, timeout=args.timeout + LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS)
     if result.returncode:
         raise SmokeFailure(selection + " capture failed or skipped: " + str(result.returncode))
     frame = read_bmp_24_rows(output)
@@ -225,7 +228,7 @@ def main(argv=None):
     parser.add_argument(LIT_TIMEOUT, type=float, default=60)
     parser.add_argument("--application-arg", action=LIT_APPEND, default=[])
     args = parser.parse_args(argv)
-    if not 0 < args.timeout <= 180:
+    if not 0 < args.timeout <= LIT_MAXIMUM_CAPTURE_TIMEOUT_SECONDS:
         parser.error("timeout must be positive and at most180 seconds per capture")
     for key, value in vars(args).copy().items():
         if isinstance(value, Path):

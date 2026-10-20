@@ -33,6 +33,11 @@ namespace __hidden_ui_edit_smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr TStringView s_PrimaryLabel = NWB_TEXT("primary");
+constexpr AStringView s_PrimaryKey = "primary";
+constexpr TStringView s_SecondaryLabel = NWB_TEXT("secondary");
+constexpr AStringView s_SecondaryKey = "secondary";
+constexpr TStringView s_LogTag = NWB_TEXT("UiEditSmoke");
 static constexpr AStringView s_Primary = "Hello \xED\x95\x9C\xEA\xB8\x80";
 static constexpr AStringView s_Secondary = "Target";
 static constexpr Impl::Ui::Rect s_Panel{ 24.0f, 24.0f, 340.0f, 276.0f };
@@ -79,7 +84,7 @@ bool UiEditSmokeScene::paint(Impl::UiPaintContext& context){
     options.readOnly = m_readOnly;
     m_primaryFocused = false;
     if(m_visible){
-        const EditBoxResult result = ui.editBox("primary", m_primary, m_primaryState, options);
+        const EditBoxResult result = ui.editBox(__hidden_ui_edit_smoke::s_PrimaryKey, m_primary, m_primaryState, options);
         if(!result.valid)
             return false;
         m_primaryFocused = result.focused;
@@ -89,7 +94,7 @@ bool UiEditSmokeScene::paint(Impl::UiPaintContext& context){
     if(!ui.label("secondary_caption", "Clipboard destination", label))
         return false;
     options.readOnly = false;
-    const EditBoxResult secondary = ui.editBox("secondary", m_secondary, m_secondaryState, options);
+    const EditBoxResult secondary = ui.editBox(__hidden_ui_edit_smoke::s_SecondaryKey, m_secondary, m_secondaryState, options);
     if(!secondary.valid)
         return false;
     m_secondaryFocused = secondary.focused;
@@ -162,8 +167,8 @@ void UiEditSmokeScene::observeState(Impl::Ui::TextService& text){
         , m_sequence, current[0], current[1], current[2], current[3], current[4]
         , current[5], current[6], current[7], current[8], current[9], current[10], current[11]
     );
-    LogSmokeEditGeometry(NWB_TEXT("UiEditSmoke"), m_sequence, NWB_TEXT("primary"), primary, primarySelection);
-    LogSmokeEditGeometry(NWB_TEXT("UiEditSmoke"), m_sequence, NWB_TEXT("secondary"), secondary, secondarySelection);
+    LogSmokeEditGeometry(__hidden_ui_edit_smoke::s_LogTag, m_sequence, __hidden_ui_edit_smoke::s_PrimaryLabel, primary, primarySelection);
+    LogSmokeEditGeometry(__hidden_ui_edit_smoke::s_LogTag, m_sequence, __hidden_ui_edit_smoke::s_SecondaryLabel, secondary, secondarySelection);
 }
 
 void UiEditSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{

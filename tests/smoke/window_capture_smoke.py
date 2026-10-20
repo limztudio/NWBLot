@@ -14,6 +14,21 @@ import sys
 import tempfile
 import time
 
+LIT_MINIMUM_CAPTURE_SETTLE_SECONDS = 1.0
+
+LIT_PORT_PROBE_TIMEOUT_SECONDS = 0.2
+LIT_CLOSE_POLL_SECONDS = 0.2
+LIT_SHORT_POLL_SECONDS = 0.05
+LIT_CLOSE_HELPER_TIMEOUT_SECONDS = 6.0
+LIT_GRACEFUL_EXIT_TIMEOUT_SECONDS = 10.0
+LIT_FORCED_EXIT_TIMEOUT_SECONDS = 5.0
+LIT_LOGSERVER_START_TIMEOUT_SECONDS = 10.0
+LIT_LOG_POLL_SECONDS = 0.1
+LIT_WINDOW_POLL_SECONDS = 0.1
+LIT_FOCUS_SETTLE_SECONDS = 0.1
+LIT_KEY_PRESS_SECONDS = 0.05
+LIT_CAPTURE_RAISE_SETTLE_SECONDS = 0.2
+
 LIT_GPUDBG = "--gpudbg"
 LIT_B_BM = b"BM"
 LIT_FRONT = "front"
@@ -181,12 +196,12 @@ def wait_for_tcp_port(port, timeout_seconds):
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.settimeout(0.2)
+            sock.settimeout(LIT_PORT_PROBE_TIMEOUT_SECONDS)
             try:
                 sock.connect((LIT_N_127_0_0_1, port))
                 return
             except OSError:
-                time.sleep(0.05)
+                time.sleep(LIT_SHORT_POLL_SECONDS)
 
     raise SmokeFailure(f"logserver did not open port {port}")
 
@@ -237,7 +252,7 @@ def wait_for_log_message(directory, baseline, pattern, needle, timeout_seconds):
             return
         if text:
             last_text = text[-4000:]
-        time.sleep(0.1)
+        time.sleep(LIT_LOG_POLL_SECONDS)
 
     raise SmokeFailure(f"timed out waiting for log message '{needle}'\n{last_text}")
 
@@ -250,7 +265,7 @@ def wait_for_log_drain(directory, baseline, pattern, timeout_seconds=2.0, quiet_
     quiet_deadline = time.monotonic() + quiet_seconds
     previous_text = collect_log_delta(directory, baseline, pattern)
     while time.monotonic() < deadline:
-        time.sleep(0.05)
+        time.sleep(LIT_SHORT_POLL_SECONDS)
         current_text = collect_log_delta(directory, baseline, pattern)
         now = time.monotonic()
         if current_text != previous_text:
@@ -302,7 +317,7 @@ def request_linux_graceful_exit(window_handle):
     window_id = f"0x{int(window_handle):x}"
     close_helper = Path(__file__).with_name("x11_graceful_close.py")
     try:
-        result = subprocess.run([sys.executable, str(close_helper), window_id], check=False, capture_output=True, text=True, timeout=6.0,)
+        result = subprocess.run([sys.executable, str(close_helper), window_id], check=False, capture_output=True, text=True, timeout=LIT_CLOSE_HELPER_TIMEOUT_SECONDS,)
     except (OSError, subprocess.TimeoutExpired) as error:
         write_status(f"Linux graceful X11 close failed for {window_id} ({error}); terminating")
         return False
@@ -368,7 +383,7 @@ def terminate_process(process, name, window_handle=None):
                 try:
                     if request_windows_graceful_exit(process.pid):
                         try:
-                            process.wait(timeout=10.0)
+                            process.wait(timeout=LIT_GRACEFUL_EXIT_TIMEOUT_SECONDS)
                         except subprocess.TimeoutExpired:
                             write_status(f"{name}: did not exit after WM_CLOSE; terminating")
                 except OSError as error:
@@ -377,18 +392,18 @@ def terminate_process(process, name, window_handle=None):
             elif host_platform == LIT_LINUX and window_handle is not None:
                 if request_linux_graceful_exit(window_handle):
                     try:
-                        process.wait(timeout=10.0)
+                        process.wait(timeout=LIT_GRACEFUL_EXIT_TIMEOUT_SECONDS)
                     except subprocess.TimeoutExpired:
                         write_status(f"{name}: did not exit after X11 WM_DELETE_WINDOW; terminating")
 
             if process.poll() is None:
                 process.terminate()
                 try:
-                    process.wait(timeout=5.0)
+                    process.wait(timeout=LIT_FORCED_EXIT_TIMEOUT_SECONDS)
                 except subprocess.TimeoutExpired:
                     write_status(f"{name}: did not exit after terminate; killing")
                     process.kill()
-                    process.wait(timeout=5.0)
+                    process.wait(timeout=LIT_FORCED_EXIT_TIMEOUT_SECONDS)
     finally:
         exit_code = process.poll()
         if exit_code is not None:
@@ -1081,7 +1096,7 @@ class LinuxX11Capture:
             window = self.find_window_for_pid(pid, title, require_mapped=require_mapped)
             if window:
                 return window
-            time.sleep(0.1)
+            time.sleep(LIT_WINDOW_POLL_SECONDS)
 
         return None
 
@@ -1141,9 +1156,9 @@ class LinuxX11Capture:
             raise SmokeFailure(f"could not resolve keycode '{key_name}'")
 
         self.focus_window(window)
-        time.sleep(0.1)
+        time.sleep(LIT_FOCUS_SETTLE_SECONDS)
         self.send_key_event(window, self.KEY_PRESS, keycode)
-        time.sleep(0.05)
+        time.sleep(LIT_KEY_PRESS_SECONDS)
         self.send_key_event(window, self.KEY_RELEASE, keycode)
 
     def _validated_window_size(self, window):
@@ -1181,7 +1196,7 @@ class LinuxX11Capture:
     def capture_window(self, window, output_path):
         self.x11.XRaiseWindow(self.display, window)
         self.x11.XFlush(self.display)
-        time.sleep(0.2)
+        time.sleep(LIT_CAPTURE_RAISE_SETTLE_SECONDS)
         self.x11.XSync(self.display, False)
         attributes = self.get_attributes(window)
         if not attributes:
@@ -1446,7 +1461,7 @@ class WindowsCapture:
             hwnd = self.find_window_for_pid(pid, require_mapped=require_mapped)
             if hwnd:
                 return hwnd
-            time.sleep(0.1)
+            time.sleep(LIT_WINDOW_POLL_SECONDS)
         return None
 
     def _window_size(self, hwnd):
@@ -1490,7 +1505,7 @@ class WindowsCapture:
 
         self.focus_window(hwnd)
         self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_KEYDOWN, virtual_key, 0)
-        time.sleep(0.05)
+        time.sleep(LIT_KEY_PRESS_SECONDS)
         self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_KEYUP, virtual_key, 0)
 
     def _prepare_capture_window(self, hwnd):
@@ -1502,7 +1517,7 @@ class WindowsCapture:
             self.user32.ShowWindow(hwnd_ptr, self.SW_SHOW)
         self.user32.SetWindowPos(hwnd_ptr, self.HWND_TOPMOST, 0, 0, 0, 0, self.SWP_NOMOVE | self.SWP_NOSIZE)
         self.user32.SetForegroundWindow(hwnd_ptr)
-        time.sleep(0.1)
+        time.sleep(LIT_FOCUS_SETTLE_SECONDS)
 
     def _raw_client_dwmapi(self):
         if getattr(self, LIT_DWMAPI, None) is not None:
@@ -1664,7 +1679,7 @@ def launch_logserver(args, executable, env):
     port = args.log_port if args.log_port else choose_free_port()
     process = launch_captured_process([str(logserver), LIT_P, str(port)], args.working_directory, env, LIT_LOGSERVER,)
     try:
-        wait_for_tcp_port(port, min(args.timeout, 10.0))
+        wait_for_tcp_port(port, min(args.timeout, LIT_LOGSERVER_START_TIMEOUT_SECONDS))
     except Exception as error:
         tail = read_process_tail(process)
         terminate_process(process, LIT_LOGSERVER)
@@ -1694,7 +1709,7 @@ def wait_for_application_capture_exit(process, output_path, timeout_seconds):
         exit_code = process.poll()
         if exit_code is not None:
             return exit_code, artifact_observed or output_path.is_file()
-        time.sleep(0.05)
+        time.sleep(LIT_SHORT_POLL_SECONDS)
 
     artifact_state = "was written" if artifact_observed or output_path.is_file() else "was not written"
     raise SmokeFailure(f"timed out waiting for testbed to self-exit after application capture; artifact {artifact_state}")
@@ -2068,11 +2083,11 @@ def parse_args(argv):
             parser.error("--resize-client requires a launched desktop capture; application capture and existing handles are incompatible")
         if any(dimension < 1 or dimension > 16384 for dimension in args.resize_client):
             parser.error("--resize-client dimensions must be between 1 and 16384")
-        if args.settle_seconds < 1.0:
+        if args.settle_seconds < LIT_MINIMUM_CAPTURE_SETTLE_SECONDS:
             parser.error("--resize-client requires --settle-seconds to be at least 1")
         if args.resize_settle_seconds is None:
             args.resize_settle_seconds = 2.0
-        if args.resize_settle_seconds < 1.0:
+        if args.resize_settle_seconds < LIT_MINIMUM_CAPTURE_SETTLE_SECONDS:
             parser.error("--resize-settle-seconds must be at least 1")
     elif args.resize_settle_seconds is not None:
         parser.error("--resize-settle-seconds requires --resize-client")

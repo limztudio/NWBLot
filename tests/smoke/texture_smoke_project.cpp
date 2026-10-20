@@ -35,6 +35,9 @@ namespace __hidden_texture_smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_ReadbackResourcePath = "tests.smoke.texture.srgb_edges.readback";
+constexpr TStringView s_ProjectName = NWB_TEXT("TextureSmokeProject");
+
 using NWB::Tests::Smoke::AddSmokeRenderSystems;
 using NWB::Tests::Smoke::CreateSmokeCamera;
 using NWB::Tests::Smoke::CreateSmokeWorldOrDie;
@@ -149,7 +152,7 @@ struct SRGBClearEdgeInputs{
     using namespace NWB::Core;
     const auto& inputs = *static_cast<const SRGBClearEdgeInputs*>(userData);
     const auto texture = graph.importTexture(inputs.texture, GpuGraphResourceDesc{}.setIdentity(Name("tests.smoke.texture.srgb_edges")).setMarkerLabel("sRGB clear edge texture").setType(GpuGraphResourceType::Texture).setInitialState(ResourceStates::Unknown));
-    const auto readback = graph.importHazardDomain(GpuGraphResourceDesc{}.setIdentity(Name("tests.smoke.texture.srgb_edges.readback")).setMarkerLabel("sRGB clear edge staging writes").setType(GpuGraphResourceType::HazardDomain));
+    const auto readback = graph.importHazardDomain(GpuGraphResourceDesc{}.setIdentity(Name(s_ReadbackResourcePath)).setMarkerLabel("sRGB clear edge staging writes").setType(GpuGraphResourceType::HazardDomain));
     if(!texture || !readback)
         return MakeUnexpected(Failure{});
 
@@ -177,7 +180,7 @@ struct SRGBClearEdgeInputs{
         { .resource = *readback, .range = {}, .requiredState = ResourceStates::Unknown, .access = GpuTaskResourceAccess::Write },
     };
     return graph.addTask<SRGBClearEdgeReadbackTask>(
-        GpuTaskDesc{}.setIdentity(Name("tests.smoke.texture.srgb_edges.readback")).setMarkerLabel("Read back sRGB clear edge pixels").setDependencies(&*bounded, 1u).setResourceUses(readbackUses, LengthOf(readbackUses)),
+        GpuTaskDesc{}.setIdentity(Name(s_ReadbackResourcePath)).setMarkerLabel("Read back sRGB clear edge pixels").setDependencies(&*bounded, 1u).setResourceUses(readbackUses, LengthOf(readbackUses)),
         SRGBClearEdgeReadbackTask::Payload{ inputs.texture, inputs.readback }
     );
 }
@@ -244,7 +247,7 @@ struct SRGBClearEdgeInputs{
 class TextureSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("TextureSmokeProject"));
+        auto world = CreateSmokeWorldOrDie(context, s_ProjectName);
         AddSmokeRenderSystems(*world, context);
         return world;
     }
@@ -252,7 +255,7 @@ private:
 
 private:
     bool configureFramebufferCapture(){
-        auto capture = ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("TextureSmokeProject"), s_FramebufferCaptureDefaultFrameCount);
+        auto capture = ConfigureSmokeFramebufferCapture(m_context, s_ProjectName, s_FramebufferCaptureDefaultFrameCount);
         if(!capture)
             return false;
         m_framebufferCapture = Move(*capture);

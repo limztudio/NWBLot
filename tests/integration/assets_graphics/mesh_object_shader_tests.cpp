@@ -36,6 +36,9 @@ namespace __hidden_mesh_object_shader_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_MeshStage = "mesh";
+constexpr AStringView s_SharedMeshShaderFilename = "shared_ms.slang";
+
 using TestArena = AssetsGraphicsFixture::TestArena;
 using CapturingLogger = AssetsGraphicsFixture::CapturingLogger;
 namespace Plan = Impl::AssetsGraphicsCookDetail;
@@ -99,7 +102,7 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
     ASSERT_TRUE(rootResult);
     Path root = Move(*rootResult);
 
-    const Path meshRoot = root / "impl" / "assets" / "graphics" / "mesh";
+    const Path meshRoot = root / "impl" / "assets" / "graphics" / s_MeshStage;
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(meshRoot / "shared_ms.slang", "void main(){}\n"));
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(meshRoot / "object_shared.slangi", "static const uint NWB_TEST_OBJECT_SHARED_VALUE = 1u;\n"));
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(meshRoot / "object_vs.slang", "#include \"object_shared.slangi\"\nvoid main(){}\n"));
@@ -109,8 +112,8 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
     Impl::ShaderCook shaderCook(testArena.arena);
     Plan::PreparedShaderEntry mesh(testArena.arena);
     mesh.entry.name = "engine/graphics/mesh/shared_ms";
-    mesh.entry.stage = "mesh";
-    mesh.entry.archiveStage = "mesh";
+    mesh.entry.stage = s_MeshStage.data();
+    mesh.entry.archiveStage = s_MeshStage.data();
     mesh.entry.rayQuery = true;
     mesh.entry.entryPoint = "authoredEntry";
     mesh.entry.includeRoots.emplace_back("engine/graphics", testArena.arena);
@@ -119,7 +122,7 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
     authoredDefine.values.emplace_back("0", testArena.arena);
     authoredDefine.values.emplace_back("1", testArena.arena);
     ASSERT_TRUE(mesh.entry.defineValues.emplace(Impl::ShaderCook::CookString("AUTHORED_OPTION", testArena.arena), Move(authoredDefine)).second);
-    mesh.sourcePath = meshRoot / "shared_ms.slang";
+    mesh.sourcePath = meshRoot / s_SharedMeshShaderFilename;
     mesh.includeDirectories.push_back(meshRoot);
     mesh.variantCount = s_ExpectedDualCount;
     mesh.usesMaterialTypedBinding = true;
@@ -145,7 +148,7 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
         Plan::PreparedShaderEntry rejected = mesh;
         switch(mismatch){
         case 0u: rejected.entry.name = "project/mesh/shared_ms"; break;
-        case 1u: rejected.sourcePath = root / "project" / "shared_ms.slang"; break;
+        case 1u: rejected.sourcePath = root / "project" / s_SharedMeshShaderFilename; break;
         case s_ExpectedDualCount: rejected.entry.archiveStage = "mesh_compute"; break;
         case 3u: rejected.entry.stage = "cs"; break;
         case 4u: rejected.entry.emitMeshComputeShadow = false; break;

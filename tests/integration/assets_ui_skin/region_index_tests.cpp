@@ -33,6 +33,9 @@ namespace __hidden_ui_skin_region_index_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_SkinPath = "test/skin";
+constexpr AStringView s_LastRegionName = "last";
+
 using namespace Impl;
 
 
@@ -70,7 +73,7 @@ static void SetRegions(UiSkin& skin, UiSkin::RegionVector&& regions){
 TEST(AssetsUiSkinRegionIndex, MaximumCountPreservesAuthoredOrderAcrossHashOrderAndMisses){
     using namespace __hidden_ui_skin_region_index_tests;
     TestArena<> owner;
-    UiSkin skin(owner.arena, Name("test/skin"));
+    UiSkin skin(owner.arena, Name(s_SkinPath));
     UiSkin::RegionVector regions(owner.arena);
     regions.reserve(s_UiSkinMaxRegionCount);
     for(u32 index = 0u; index < s_UiSkinMaxRegionCount; ++index)
@@ -94,7 +97,7 @@ TEST(AssetsUiSkinRegionIndex, CanonicalDuplicateKeepsFirstAuthoredMatchAndFailsA
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     TestArena<> owner;
-    UiSkin skin(owner.arena, Name("test/skin"));
+    UiSkin skin(owner.arena, Name(s_SkinPath));
     UiSkin::RegionVector regions(owner.arena);
     regions.push_back(MakeRegion(Name("Button\\Normal"), 0u));
     regions.push_back(MakeRegion(Name("panel.normal"), 1u));
@@ -108,7 +111,7 @@ TEST(AssetsUiSkinRegionIndex, CanonicalDuplicateKeepsFirstAuthoredMatchAndFailsA
 TEST(AssetsUiSkinRegionIndex, EqualLeadingHashLanesStillResolveDistinctNames){
     using namespace __hidden_ui_skin_region_index_tests;
     TestArena<> owner;
-    UiSkin skin(owner.arena, Name("test/skin"));
+    UiSkin skin(owner.arena, Name(s_SkinPath));
     UiSkin::RegionVector regions(owner.arena);
     for(u32 index = 0u; index < 129u; ++index){
         NameHash hash{};
@@ -128,7 +131,7 @@ TEST(AssetsUiSkinRegionIndex, EqualLeadingHashLanesStillResolveDistinctNames){
 TEST(AssetsUiSkinRegionIndex, ReplacementAcrossSmallSkinBoundaryDoesNotKeepStaleMatches){
     using namespace __hidden_ui_skin_region_index_tests;
     TestArena<> owner;
-    UiSkin skin(owner.arena, Name("test/skin"));
+    UiSkin skin(owner.arena, Name(s_SkinPath));
     constexpr u32 s_Counts[]{ 128u, 129u, 128u };
     Name previous = s_NameNone;
     for(u32 stage = 0u; stage < LengthOf(s_Counts); ++stage){
@@ -149,7 +152,7 @@ TEST(AssetsUiSkinRegionIndex, ReplacementMovesAndCopiesDoNotRetainStaleRegionRef
     using namespace __hidden_ui_skin_region_index_tests;
     TestArena<> firstOwner;
     TestArena<> secondOwner;
-    UiSkin source(firstOwner.arena, Name("test/skin"));
+    UiSkin source(firstOwner.arena, Name(s_SkinPath));
     UiSkin::RegionVector regions(firstOwner.arena);
     regions.push_back(MakeRegion(Name("old"), 0u));
     SetRegions(source, Move(regions));
@@ -179,9 +182,9 @@ TEST(AssetsUiSkinRegionIndex, FailedBinaryLoadPreservesLookupAndAuthoredOrder){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     TestArena<> owner;
-    UiSkin source(owner.arena, Name("test/skin"));
+    UiSkin source(owner.arena, Name(s_SkinPath));
     UiSkin::RegionVector regions(owner.arena);
-    regions.push_back(MakeRegion(Name("last"), 0u));
+    regions.push_back(MakeRegion(Name(s_LastRegionName), 0u));
     regions.push_back(MakeRegion(Name("first"), 1u));
     SetRegions(source, Move(regions));
     UiSkinAssetCodec codec;
@@ -190,7 +193,7 @@ TEST(AssetsUiSkinRegionIndex, FailedBinaryLoadPreservesLookupAndAuthoredOrder){
     UiSkin loaded(owner.arena, source.virtualPath());
     ASSERT_TRUE(loaded.loadBinary(binary));
     ASSERT_EQ(loaded.findRegion(Name("first")), &loaded.regions()[1u]);
-    const UiSkinRegion* retained = loaded.findRegion(Name("last"));
+    const UiSkinRegion* retained = loaded.findRegion(Name(s_LastRegionName));
     const usize firstHash = sizeof(UiSkinBinaryPayload::HeaderBinary);
     const usize secondHash = firstHash + sizeof(UiSkinBinaryPayload::RegionBinary);
     NWB_MEMCPY(binary.data() + secondHash, sizeof(NameHash), binary.data() + firstHash, sizeof(NameHash));
@@ -205,7 +208,7 @@ TEST(AssetsUiSkinRegionIndex, OversizedInvalidSkinRemainsInspectableWithoutIndex
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     TestArena<> owner;
-    UiSkin skin(owner.arena, Name("test/skin"));
+    UiSkin skin(owner.arena, Name(s_SkinPath));
     UiSkin::RegionVector regions(owner.arena);
     regions.reserve(s_UiSkinMaxRegionCount + 1u);
     for(u32 index = 0u; index <= s_UiSkinMaxRegionCount; ++index)

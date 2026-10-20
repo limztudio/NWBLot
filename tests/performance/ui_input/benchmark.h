@@ -34,7 +34,8 @@ template<typename Operation, typename Checksum>
     constexpr usize s_Samples = 11u;
     constexpr usize s_MaxIterations = 1u << 24u;
     constexpr f64 s_MinSampleNS = 20000000.0;
-    for(usize warmup = 0u; warmup < 32u; ++warmup){
+    constexpr u32 s_WarmupIterations = 32u;
+    for(usize warmup = 0u; warmup < s_WarmupIterations; ++warmup){
         if(!operation())
             return false;
     }

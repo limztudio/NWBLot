@@ -15,9 +15,15 @@ from types import SimpleNamespace
 from unittest import mock
 
 
+LIT_UI_LAYER_DIRECTORY = "ui_layer"
+
+LIT_OUTPUT_CAPTURE_TIMEOUT_SECONDS = 5.0
+
+LIT_HELP_TIMEOUT_SECONDS = 15
+
 SMOKE_DIRECTORY = Path(__file__).resolve().parents[1] / "smoke"
 sys.path.insert(0, str(SMOKE_DIRECTORY))
-sys.path.insert(0, str(SMOKE_DIRECTORY / "ui_layer"))
+sys.path.insert(0, str(SMOKE_DIRECTORY / LIT_UI_LAYER_DIRECTORY))
 
 import window_capture_smoke  # noqa: E402
 import csg_gi_temporal_smoke  # noqa: E402
@@ -180,7 +186,7 @@ class ProcessOutputCaptureTests(unittest.TestCase):
             process = launch_captured_process([sys.executable, "-c", script], working_directory, os.environ.copy(), LIT_UNIT,)
             capture = process._nwb_output_capture
             try:
-                self.assertEqual(process.wait(timeout=5.0), 0)
+                self.assertEqual(process.wait(timeout=LIT_OUTPUT_CAPTURE_TIMEOUT_SECONDS), 0)
                 self.assertTrue(capture.path.exists())
                 self.assertIn("window-capture-output-sentinel", read_process_tail(process))
             finally:
@@ -378,7 +384,7 @@ class TemporalLaggedCapabilityTests(unittest.TestCase):
                     return application_exit, True
 
                 with mock.patch.object(window_capture_smoke, LIT_BUILD_LAUNCH_ENVIRONMENT, return_value={}), \
-                     mock.patch.object(window_capture_smoke, LIT_LAUNCH_LOGSERVER, return_value=(object(), 49152, directory, {}, "*.log")), \
+                     mock.patch.object(window_capture_smoke, LIT_LAUNCH_LOGSERVER, return_value=(object(), 49152, directory, {}, LIT_LOG)), \
                      mock.patch.object(window_capture_smoke, LIT_LAUNCH_TESTBED, return_value=object()), \
                      mock.patch.object(window_capture_smoke, LIT_WAIT_FOR_APPLICATION_CAPTURE_EXIT, side_effect=wait_for_capture), \
                      mock.patch.object(window_capture_smoke, LIT_TERMINATE_PROCESS, return_value=(application_exit, "")), \
@@ -1203,7 +1209,7 @@ class TextAreaCaretCaptureTests(unittest.TestCase):
         run.args = SimpleNamespace(output_directory=Path(LIT_UNUSED), skin="default")
         run.backend, run.handle, run.process = backend, 42, SimpleNamespace(poll=lambda: None)
         run.native = SimpleNamespace(windows=False, maintain_pointer=mock.Mock(), observe_window=lambda: {})
-        run.log_directory, run.log_baseline, run.log_pattern = Path(LIT_UNUSED), {}, "*.log"
+        run.log_directory, run.log_baseline, run.log_pattern = Path(LIT_UNUSED), {}, LIT_LOG
         run.deadline, run.snapshot, run.failure_report, run.stages, run.expected = 1.0, None, None, [], expected
         run.caret_phase_waits = 0
         run.write_report = mock.Mock()
@@ -1288,8 +1294,8 @@ class UiSmokeEntrypointBootstrapTests(unittest.TestCase):
         environment = os.environ.copy()
         environment.pop("PYTHONPATH", None)
         with tempfile.TemporaryDirectory() as directory:
-            result = subprocess.run([sys.executable, str(SMOKE_DIRECTORY / "ui_layer" / "progress_smoke.py"), "--help"],
-                cwd=directory, env=environment, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=15)
+            result = subprocess.run([sys.executable, str(SMOKE_DIRECTORY / LIT_UI_LAYER_DIRECTORY / "progress_smoke.py"), "--help"],
+                cwd=directory, env=environment, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=LIT_HELP_TIMEOUT_SECONDS)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("usage:", result.stdout)
         self.assertEqual(result.stderr, "")

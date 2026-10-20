@@ -35,10 +35,19 @@ from types import SimpleNamespace
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 from unittest import mock
 
+LIT_WAIT_POLL_SECONDS = 0.25
+LIT_SELF_TEST_TIMEOUT_SECONDS = 1.0
+LIT_SELF_TEST_MISSING_BOUNDARY_TIMEOUT_SECONDS = 0.1
+
+LIT_PROCESS_POLL_SECONDS = 0.1
+LIT_TIMING_POLL_SECONDS = 0.05
+LIT_TESTS_DIRECTORY = "tests"
+LIT_ENABLED_FLAG = "1"
+
 
 REPO = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(REPO / "tests" / "ab"))
-sys.path.insert(0, str(REPO / "tests" / "smoke"))
+sys.path.insert(0, str(REPO / LIT_TESTS_DIRECTORY / "ab"))
+sys.path.insert(0, str(REPO / LIT_TESTS_DIRECTORY / "smoke"))
 
 from gpu_timing_parse import (  # noqa: E402
     INTERVAL_RE, MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS, ScopeSummary, load_name_symbols as load_timing_name_symbols, parse_timing_file, require_scope_samples, summarize_scopes,)
@@ -199,8 +208,8 @@ def parse_lane_status(log_text: str) -> Optional[LaneStatus]:
         return None
 
     requested, effective, graphics_index, graphics_generation, compute_index, compute_generation, dedicated, supported, graphics = matches[-1]
-    return LaneStatus(requested=requested == "1", effective=effective == "1", graphics_queue=PhysicalQueueId(int(graphics_index), int(graphics_generation)), compute_queue=PhysicalQueueId(int(compute_index), int(compute_generation)),
-        compute_dedicated=dedicated == "1", compute_supported=supported == "1", compute_graphics=graphics == "1",)
+    return LaneStatus(requested=requested == LIT_ENABLED_FLAG, effective=effective == LIT_ENABLED_FLAG, graphics_queue=PhysicalQueueId(int(graphics_index), int(graphics_generation)), compute_queue=PhysicalQueueId(int(compute_index), int(compute_generation)),
+        compute_dedicated=dedicated == LIT_ENABLED_FLAG, compute_supported=supported == LIT_ENABLED_FLAG, compute_graphics=graphics == LIT_ENABLED_FLAG,)
 
 
 def wait_for_lane_status(process, log_directory: Path, log_baseline: Mapping[Path, int], log_pattern: str, timeout_seconds: float,) -> LaneStatus:
@@ -212,7 +221,7 @@ def wait_for_lane_status(process, log_directory: Path, log_baseline: Mapping[Pat
         status = parse_lane_status(latest_log)
         if status:
             return status
-        time.sleep(0.1)
+        time.sleep(LIT_PROCESS_POLL_SECONDS)
 
     detail = latest_log[-4000:]
     raise SmokeFailure(f"timed out waiting for selected async-lane capability log\n{detail}")
@@ -226,7 +235,7 @@ def wait_for_log_message(process, log_directory: Path, log_baseline: Mapping[Pat
         latest_log = collect_log_delta(log_directory, log_baseline, log_pattern)
         if message in latest_log:
             return
-        time.sleep(0.1)
+        time.sleep(LIT_PROCESS_POLL_SECONDS)
 
     detail = latest_log[-4000:]
     raise SmokeFailure(f"timed out waiting for benchmark log message '{message}'\n{detail}")
@@ -254,7 +263,7 @@ def wait_for_measurement_timing_boundary(process, timing_path: Path, timeout_sec
             # The first report can span warmup; the second header proves its append stream closed and accumulator reset.
             if header_count == 2:
                 return match.start()
-        time.sleep(0.05)
+        time.sleep(LIT_TIMING_POLL_SECONDS)
 
     raise SmokeFailure(f"GPU timing file did not publish a post-warmup interval boundary: {timing_path}")
 
@@ -374,7 +383,7 @@ def wait_while_running(process, seconds: float, stage: str) -> None:
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
         ensure_process_running(process, stage)
-        time.sleep(min(0.25, max(0.0, deadline - time.monotonic())))
+        time.sleep(min(LIT_WAIT_POLL_SECONDS, max(0.0, deadline - time.monotonic())))
 
 
 def find_forbidden_log_messages(log_text: str, needles: Sequence[str]) -> List[str]:
@@ -907,13 +916,13 @@ def run_self_test() -> int:
             pixel_offset = 14 + dib_size
             bmp = bytearray(pixel_offset + 4)
             bmp[:2] = LIT_B_BM
-            struct.pack_into("<I", bmp, 10, pixel_offset)
+            struct.pack_into(LIT_I, bmp, 10, pixel_offset)
             struct.pack_into("<IiiHHI", bmp, 14, dib_size, 1, 1, 1, 24, 0)
             bmp[pixel_offset:] = bytes((3, 2, 1, 0))
             capture_path.write_bytes(bmp)
             assert read_bmp_rgb(capture_path) == (1, 1, bytes((1, 2, 3)))
             for invalid_offset in (0, 14, pixel_offset - 1):
-                struct.pack_into("<I", bmp, 10, invalid_offset)
+                struct.pack_into(LIT_I, bmp, 10, invalid_offset)
                 capture_path.write_bytes(bmp)
                 try:
                     read_bmp_rgb(capture_path)
@@ -1039,7 +1048,7 @@ def run_self_test() -> int:
 
                     with mock.patch.object(module.time, LIT_MONOTONIC, side_effect=lambda: clock[0]), \
                          mock.patch.object(module.time, LIT_SLEEP, side_effect=append_chunk):
-                        offset = wait_for_measurement_timing_boundary(app, timing_path, 1.0)
+                        offset = wait_for_measurement_timing_boundary(app, timing_path, LIT_SELF_TEST_TIMEOUT_SECONDS)
                     assert len(writes) == 4, "an incomplete or first post-warmup header was admitted"
                     assert offset == len(full_prefix) + len(warmup_interval)
                     measured = summarize_scopes(parse_timing_file(timing_path, timing_symbols, offset))
@@ -1057,14 +1066,14 @@ def run_self_test() -> int:
         with mock.patch.object(module.time, LIT_MONOTONIC, side_effect=lambda: clock[0]), \
              mock.patch.object(module.time, LIT_SLEEP, side_effect=lambda seconds: clock.__setitem__(0, clock[0] + seconds)):
             try:
-                wait_for_measurement_timing_boundary(app, timing_path, 0.1)
+                wait_for_measurement_timing_boundary(app, timing_path, LIT_SELF_TEST_MISSING_BOUNDARY_TIMEOUT_SECONDS)
             except SmokeFailure as error:
                 assert "did not publish" in str(error)
             else:
                 raise AssertionError("missing post-warmup boundaries admitted the prefix")
         with mock.patch.object(module.time, LIT_SLEEP, side_effect=lambda seconds: timing_path.write_bytes(b"")):
             try:
-                wait_for_measurement_timing_boundary(app, timing_path, 1.0)
+                wait_for_measurement_timing_boundary(app, timing_path, LIT_SELF_TEST_TIMEOUT_SECONDS)
             except SmokeFailure as error:
                 assert "was truncated" in str(error)
             else:

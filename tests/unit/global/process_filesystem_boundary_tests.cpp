@@ -32,6 +32,10 @@ namespace __hidden_process_filesystem_boundary_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_PathEnvironment = "PATH";
+constexpr AStringView s_CombinedOutputFilename = "combined output.txt";
+constexpr AStringView s_SourceFilename = "source.txt";
+
 using AString = NWB::Tests::TestAString;
 #if defined(NWB_PLATFORM_LINUX)
 constexpr u32 s_ExpectedDualCount = 2u;
@@ -62,7 +66,7 @@ public:
 
 TEST(Global, EnvironmentVariableNamesSupportSlicesAndRejectEmbeddedNull){
     NWB::Tests::TestArena<> testArena;
-    const auto expected = ReadEnvironmentVariable(testArena.arena, AStringView("PATH"));
+    const auto expected = ReadEnvironmentVariable(testArena.arena, AStringView(s_PathEnvironment));
     const auto actual = ReadEnvironmentVariable(testArena.arena, AStringView("PATH.trailing").substr(0u, 4u));
     ASSERT_TRUE(expected);
     ASSERT_TRUE(actual);
@@ -70,13 +74,13 @@ TEST(Global, EnvironmentVariableNamesSupportSlicesAndRejectEmbeddedNull){
     EXPECT_EQ(*actual, *expected);
     auto different = **expected;
     different += 'x';
-    const auto matches = EnvironmentVariableEquals(testArena.arena, "PATH", AStringView(**expected));
+    const auto matches = EnvironmentVariableEquals(testArena.arena, s_PathEnvironment, AStringView(**expected));
     ASSERT_TRUE(matches);
     EXPECT_TRUE(*matches);
-    const auto differs = EnvironmentVariableEquals(testArena.arena, "PATH", AStringView(different));
+    const auto differs = EnvironmentVariableEquals(testArena.arena, s_PathEnvironment, AStringView(different));
     ASSERT_TRUE(differs);
     EXPECT_FALSE(*differs);
-    const auto hasValue = HasEnvironmentValue(testArena.arena, "PATH");
+    const auto hasValue = HasEnvironmentValue(testArena.arena, s_PathEnvironment);
     ASSERT_TRUE(hasValue);
     EXPECT_EQ(*hasValue, !(**expected).empty());
     const char invalidName[]{ 'P', 'A', 'T', 'H', '\0', 'X' };
@@ -192,7 +196,7 @@ TEST(Global, WindowsProcessInputsSupportBoundedViews){
     EXPECT_TRUE(*executableAvailable);
 
     const Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/bounded_process");
-    const auto outputPath = root / "combined output.txt";
+    const auto outputPath = root / s_CombinedOutputFilename;
     ASSERT_TRUE(EnsureEmptyDirectory(root));
     ::AString<NWB::Core::Alloc::GlobalArena> outputPathText = PathToString<char>(testArena.arena, outputPath);
     const usize outputPathLength = outputPathText.size();
@@ -366,7 +370,8 @@ TEST(Global, CaptureProcessOutputAppendFailureClosesPipeAndReapsChildBeforeUnwin
     const AStringView argv[] = { s_BIN_SH, s_C, "printf '%s\\n' \"$$\"; exec 1>&-; while :; do :; done" };
     NWB::Tests::TestArena<> testArena;
     ThrowingCaptureOutput output;
-    EXPECT_THROW(EXPECT_FALSE(CaptureProcessOutput(testArena.arena, output, argv, 64u, 64u, 250u)), RuntimeException);
+    constexpr u32 s_CaptureTimeoutMS = 250u;
+    EXPECT_THROW(EXPECT_FALSE(CaptureProcessOutput(testArena.arena, output, argv, 64u, 64u, s_CaptureTimeoutMS)), RuntimeException);
     ASSERT_GT(output.childPid, 0);
     int status = 0;
     errno = 0;
@@ -382,7 +387,8 @@ TEST(Global, CaptureProcessOutputReapsTruncatedChild){
     const AStringView argv[] = { s_BIN_SH, s_C, "printf '%s\\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' \"$$\"; exec 1>&-; while :; do :; done" };
     NWB::Tests::TestArena<> testArena;
     AString output(testArena.arena);
-    const auto captured = CaptureProcessOutput(testArena.arena, output, argv, 16u, 64u, 250u);
+    constexpr u32 s_CaptureTimeoutMS = 250u;
+    const auto captured = CaptureProcessOutput(testArena.arena, output, argv, 16u, 64u, s_CaptureTimeoutMS);
     ASSERT_FALSE(captured);
     EXPECT_TRUE(captured.error().outputTruncated);
 
@@ -412,7 +418,8 @@ TEST(Global, CaptureProcessOutputTimesOutWithContinuousOutput){
     AString output(testArena.arena);
     const auto startMilliseconds = ProcessExecutionDetail::MonotonicMilliseconds();
     ASSERT_TRUE(startMilliseconds);
-    const auto captured = CaptureProcessOutput(testArena.arena, output, argv, 64u, 64u, 100u);
+    constexpr u32 s_ContinuousOutputTimeoutMS = 100u;
+    const auto captured = CaptureProcessOutput(testArena.arena, output, argv, 64u, 64u, s_ContinuousOutputTimeoutMS);
     ASSERT_FALSE(captured);
     EXPECT_EQ(captured.error().kind, ProcessCaptureFailureKind::TimedOut);
     EXPECT_EQ(captured.error().nativeError, ErrorCondition::timed_out);
@@ -420,13 +427,14 @@ TEST(Global, CaptureProcessOutputTimesOutWithContinuousOutput){
     ASSERT_TRUE(finishMilliseconds);
     ASSERT_GE(*finishMilliseconds, *startMilliseconds);
     const u64 elapsedMilliseconds = *finishMilliseconds - *startMilliseconds;
-    EXPECT_LT(elapsedMilliseconds, 1000u);
+    constexpr u32 s_MaximumCaptureElapsedMS = 1000u;
+    EXPECT_LT(elapsedMilliseconds, s_MaximumCaptureElapsedMS);
 }
 
 TEST(Global, RedirectedNonzeroExitAndInvalidArgumentsPreserveCapturedStreams){
     NWB::Tests::TestArena<> testArena;
     const Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/redirected_process");
-    const Path<NWB::Core::Alloc::GlobalArena> outputPath = root / "combined output.txt";
+    const Path<NWB::Core::Alloc::GlobalArena> outputPath = root / s_CombinedOutputFilename;
     ASSERT_TRUE(EnsureEmptyDirectory(root));
     ASSERT_TRUE(WriteTextFile(outputPath, AStringView("stale")));
 
@@ -447,9 +455,9 @@ TEST(Global, RedirectedNonzeroExitAndInvalidArgumentsPreserveCapturedStreams){
 TEST(Global, MovePathReplacesExistingDestinationWithoutRetainingSource){
     NWB::Tests::TestArena<> testArena;
     const Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/move_path_to_directory");
-    const Path<NWB::Core::Alloc::GlobalArena> source = root / "source.txt";
+    const Path<NWB::Core::Alloc::GlobalArena> source = root / s_SourceFilename;
     const Path<NWB::Core::Alloc::GlobalArena> destinationDirectory = root / "moved";
-    const Path<NWB::Core::Alloc::GlobalArena> destination = destinationDirectory / "source.txt";
+    const Path<NWB::Core::Alloc::GlobalArena> destination = destinationDirectory / s_SourceFilename;
 
     EXPECT_TRUE(EnsureEmptyDirectory(root));
     EXPECT_TRUE(WriteTextFile(source, AStringView("fresh")));

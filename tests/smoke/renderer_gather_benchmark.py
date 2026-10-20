@@ -19,6 +19,10 @@ from smoke_volume_identity import file_identity
 from window_capture_smoke import (STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, create_capture_backend, launch_logserver, launch_testbed, require_normal_process_exit,
     shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, write_status,)
 
+LIT_WINDOW_TIMEOUT_SECONDS = 30.
+
+LIT_PROCESS_POLL_SECONDS = .1
+
 LIT_OPAQUE = "opaque"
 LIT_HYBRID = "hybrid"
 LIT_RUNTIME = "runtime"
@@ -329,13 +333,13 @@ def acquire(args, arm, block, position):
         backend = create_capture_backend()
         logserver, port, log_directory, baseline, pattern = launch_logserver(launch, arm.executable, env)
         process = launch_testbed(launch, arm.executable, env, port)
-        handle = backend.wait_for_window(process.pid, min(30., args.timeout))
+        handle = backend.wait_for_window(process.pid, min(LIT_WINDOW_TIMEOUT_SECONDS, args.timeout))
         if not handle:
             raise SmokeFailure("fixed benchmark window never appeared")
         backend.focus_window(handle)
         deadline = time.monotonic() + args.timeout
         while process.poll() is None and time.monotonic() < deadline:
-            time.sleep(.1)
+            time.sleep(LIT_PROCESS_POLL_SECONDS)
         if process.poll() is None:
             raise SmokeFailure("fixture did not finish its successful frame budget")
         code, tail = terminate_process(process, LIT_RENDERER_GATHER_BENCHMARK, handle)

@@ -37,6 +37,13 @@ namespace __hidden_assets_graphics_shader{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_ShadersDirectory = "shaders";
+constexpr AStringView s_CompilerProbeIncludeFilename = "bom_compiler_probe_include.slangi";
+constexpr AStringView s_AssetsDirectory = "assets";
+constexpr AStringView s_ComputeStage = "cs";
+constexpr AStringView s_ExactEntryPointShaderPath = "project/shaders/exact_entry_point_ps";
+constexpr AStringView s_CacheDirectory = "cache";
+
 static constexpr AStringView s_PS = "ps";
 static constexpr AStringView s_PROJECT_SHADERS_TEST_SHADER = "project/shaders/test_shader";
 static constexpr AStringView s_PROJECT_SHADERS_STANDALONE_PS = "project/shaders/standalone_ps";
@@ -669,10 +676,10 @@ NwbStandalonePixelOutput main(){
 
 static bool WriteStandaloneShaderProbe(const Path& assetRoot){
     const auto shaderMetadata = StringFormat(assetRoot.arena(), "{}{}", s_SHADER_ASSET_HEAD, s_ASSET_ENTRY_MAIN);
-    if(!AssetsGraphicsFixture::WriteTextFile(assetRoot / "shaders" / "standalone_ps.nwb", shaderMetadata))
+    if(!AssetsGraphicsFixture::WriteTextFile(assetRoot / s_ShadersDirectory / "standalone_ps.nwb", shaderMetadata))
         return false;
 
-    return AssetsGraphicsFixture::WriteTextFile(assetRoot / "shaders" / "standalone_ps.slang", s_StandaloneShaderProbeSource);
+    return AssetsGraphicsFixture::WriteTextFile(assetRoot / s_ShadersDirectory / "standalone_ps.slang", s_StandaloneShaderProbeSource);
 }
 
 // This reaches Slang after dependency collection.
@@ -703,12 +710,12 @@ NwbBomCompilerProbeOutput main(){
 
 static bool WriteBomCompilerProbe(const Path& assetRoot){
     const auto shaderMetadata = StringFormat(assetRoot.arena(), "{}{}", s_SHADER_ASSET_HEAD, s_ASSET_ENTRY_MAIN);
-    if(!AssetsGraphicsFixture::WriteTextFile(assetRoot / "shaders" / "bom_compiler_probe_ps.nwb", shaderMetadata))
+    if(!AssetsGraphicsFixture::WriteTextFile(assetRoot / s_ShadersDirectory / "bom_compiler_probe_ps.nwb", shaderMetadata))
         return false;
-    if(!AssetsGraphicsFixture::WriteTextFile(assetRoot / "shaders" / "bom_compiler_probe_include.slangi", s_BomCompilerProbeIncludeSource))
+    if(!AssetsGraphicsFixture::WriteTextFile(assetRoot / s_ShadersDirectory / s_CompilerProbeIncludeFilename, s_BomCompilerProbeIncludeSource))
         return false;
 
-    return AssetsGraphicsFixture::WriteTextFile(assetRoot / "shaders" / "bom_compiler_probe_ps.slang", s_BomCompilerProbeSource);
+    return AssetsGraphicsFixture::WriteTextFile(assetRoot / s_ShadersDirectory / "bom_compiler_probe_ps.slang", s_BomCompilerProbeSource);
 }
 
 static constexpr AStringView s_ExactEntryPointShaderProbeSource = R"NWB_SLANG(struct NwbExactEntryPointPixelOutput{
@@ -729,10 +736,10 @@ NwbExactEntryPointPixelOutput MainCase(){
 
 static bool WriteExactEntryPointShaderProbe(const Path& assetRoot){
     const auto shaderMetadata = StringFormat(assetRoot.arena(), "{}{}", s_SHADER_ASSET_HEAD, "asset.entry_point = \"MainCase\";\n");
-    if(!AssetsGraphicsFixture::WriteTextFile(assetRoot / "shaders" / "exact_entry_point_ps.nwb", shaderMetadata))
+    if(!AssetsGraphicsFixture::WriteTextFile(assetRoot / s_ShadersDirectory / "exact_entry_point_ps.nwb", shaderMetadata))
         return false;
 
-    return AssetsGraphicsFixture::WriteTextFile(assetRoot / "shaders" / "exact_entry_point_ps.slang", s_ExactEntryPointShaderProbeSource);
+    return AssetsGraphicsFixture::WriteTextFile(assetRoot / s_ShadersDirectory / "exact_entry_point_ps.slang", s_ExactEntryPointShaderProbeSource);
 }
 
 
@@ -745,13 +752,13 @@ TEST(AssetsGraphics, ConcreteShaderAdmissionRejectsWrongStageAndPreservesLoadedS
     Path& root = cookCase->root;
     Path& outputDirectory = cookCase->outputDirectory;
 
-    const Path assetRoot = root / "assets";
+    const Path assetRoot = root / s_AssetsDirectory;
     ASSERT_TRUE(WriteStandaloneShaderProbe(assetRoot));
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "shaders" / "stage_cs.nwb", "compute_shader asset;\nasset.entry_point = \"MainC\";\n"));
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "shaders" / "stage_cs.slang", "[numthreads(1, 1, 1)] void MainC(){}\n"));
     ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
     const Expected<Name> pixelPathResult = Core::ShaderArchive::BuildVirtualPathName(Name(s_PROJECT_SHADERS_STANDALONE_PS), Core::ShaderArchive::s_DefaultVariant, Name(s_PS));
-    const Expected<Name> computePathResult = Core::ShaderArchive::BuildVirtualPathName(Name("project/shaders/stage_cs"), Core::ShaderArchive::s_DefaultVariant, Name("cs"));
+    const Expected<Name> computePathResult = Core::ShaderArchive::BuildVirtualPathName(Name("project/shaders/stage_cs"), Core::ShaderArchive::s_DefaultVariant, Name(s_ComputeStage));
     ASSERT_TRUE(pixelPathResult);
     ASSERT_TRUE(computePathResult);
     const Name& pixelPath = *pixelPathResult;
@@ -815,8 +822,8 @@ TEST(AssetsGraphics, GatherIndependentShaderBuildsWithoutSources){
     ASSERT_TRUE(rootResult);
     Path root = Move(*rootResult);
 
-    const Path firstAssetRoot = root / "first" / "assets";
-    const Path secondAssetRoot = root / "second" / "assets";
+    const Path firstAssetRoot = root / "first" / s_AssetsDirectory;
+    const Path secondAssetRoot = root / "second" / s_AssetsDirectory;
     const Path firstBuilt = root / "first_built";
     const Path secondBuilt = root / "second_built";
     const Path conflictingBuilt = root / "conflicting_built";
@@ -845,7 +852,7 @@ TEST(AssetsGraphics, GatherIndependentShaderBuildsWithoutSources){
     ASSERT_TRUE(recordsLoadResult);
     records = Move(*recordsLoadResult);
     ASSERT_EQ(records.size(), s_ExpectedDualCount);
-    const Name shaderNames[] = { Name(s_PROJECT_SHADERS_STANDALONE_PS), Name("project/shaders/exact_entry_point_ps") };
+    const Name shaderNames[] = { Name(s_PROJECT_SHADERS_STANDALONE_PS), Name(s_ExactEntryPointShaderPath) };
     for(const Name& shaderName : shaderNames){
         Name virtualPath;
         const auto virtualPathResult4 = NWB::Core::ShaderArchive::FindVirtualPath(records, shaderName, NWB::Core::ShaderArchive::s_DefaultVariant, Name(s_PS));
@@ -898,11 +905,11 @@ TEST(AssetsGraphics, ShaderCookCompilesBomPrefixedSourceAndExternalIncludeAndCle
     Path& root = cookCase->root;
     Path& outputDirectory = cookCase->outputDirectory;
 
-    const Path assetRoot = root / "assets";
+    const Path assetRoot = root / s_AssetsDirectory;
     ASSERT_TRUE(WriteBomCompilerProbe(assetRoot));
     const Path externalIncludeRoot = root / "external" / "includes";
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(externalIncludeRoot / "bom_compiler_probe_include.slangi", s_BomCompilerProbeIncludeSource));
-    const auto removedInclude = RemoveFile(assetRoot / "shaders" / "bom_compiler_probe_include.slangi");
+    const auto removedInclude = RemoveFile(assetRoot / s_ShadersDirectory / s_CompilerProbeIncludeFilename);
     ASSERT_TRUE(removedInclude);
     ASSERT_TRUE(*removedInclude);
     const auto externalIncludeRootText = PathToString(testArena.arena, externalIncludeRoot);
@@ -910,7 +917,7 @@ TEST(AssetsGraphics, ShaderCookCompilesBomPrefixedSourceAndExternalIncludeAndCle
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "shaders" / "bom_compiler_probe_ps.nwb", shaderMetadata));
     ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
     EXPECT_EQ(logger.errorCount(), 0u);
-    ExpectNoShaderCompilerWorkDirectories(root / "cache");
+    ExpectNoShaderCompilerWorkDirectories(root / s_CacheDirectory);
     const Expected<Name> shaderPathResult = Core::ShaderArchive::BuildVirtualPathName(Name("project/shaders/bom_compiler_probe_ps"), Core::ShaderArchive::s_DefaultVariant, Name(s_PS));
     ASSERT_TRUE(shaderPathResult);
     const Name& shaderPath = *shaderPathResult;
@@ -923,12 +930,12 @@ TEST(AssetsGraphics, ShaderCookCompilesBomPrefixedSourceAndExternalIncludeAndCle
     EXPECT_FALSE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("BOM_CLEANUP_REGRESSION")));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("compiler exit code")));
-    ExpectNoShaderCompilerWorkDirectories(root / "cache");
+    ExpectNoShaderCompilerWorkDirectories(root / s_CacheDirectory);
     const usize failureErrors = logger.errorCount();
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "shaders" / "bom_compiler_probe_ps.slang", s_BomCompilerProbeSource));
     EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
     EXPECT_EQ(logger.errorCount(), failureErrors);
-    ExpectNoShaderCompilerWorkDirectories(root / "cache");
+    ExpectNoShaderCompilerWorkDirectories(root / s_CacheDirectory);
     EXPECT_TRUE(RemoveAllIfExists(root));
 }
 
@@ -944,13 +951,13 @@ TEST(AssetsGraphics, ShaderCookPreservesExactEntryPoint){
     Path& outputDirectory = cookCase->outputDirectory;
 
 
-    const Path assetRoot = root / "assets";
+    const Path assetRoot = root / s_AssetsDirectory;
     EXPECT_TRUE(WriteExactEntryPointShaderProbe(assetRoot));
 
     const bool cooked = AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot });
     EXPECT_TRUE(cooked);
     if(cooked){
-        const Expected<Name> shaderVirtualPathResult = NWB::Core::ShaderArchive::BuildVirtualPathName(Name("project/shaders/exact_entry_point_ps"), NWB::Core::ShaderArchive::s_DefaultVariant, Name(s_PS));
+        const Expected<Name> shaderVirtualPathResult = NWB::Core::ShaderArchive::BuildVirtualPathName(Name(s_ExactEntryPointShaderPath), NWB::Core::ShaderArchive::s_DefaultVariant, Name(s_PS));
         ASSERT_TRUE(shaderVirtualPathResult);
         const Name& shaderVirtualPath = *shaderVirtualPathResult;
         UniquePtr<NWB::Core::Assets::IAsset> loadedShader;
@@ -1020,22 +1027,22 @@ TEST(AssetsGraphics, ShaderCookRebuildsTruncatedMalformedAndWrongStageBytecodeCa
     Path& root = cookCase->root;
     Path& outputDirectory = cookCase->outputDirectory;
 
-    const Path assetRoot = root / "assets";
+    const Path assetRoot = root / s_AssetsDirectory;
     ASSERT_TRUE(WriteStandaloneShaderProbe(assetRoot));
     ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
-    const auto bytecodeCachePath = FindSingleShaderBytecodeCachePath(testArena, root / "cache");
+    const auto bytecodeCachePath = FindSingleShaderBytecodeCachePath(testArena, root / s_CacheDirectory);
     ASSERT_TRUE(bytecodeCachePath);
     Core::Assets::AssetBytes originalBytes(testArena.arena);
     ASSERT_TRUE(ReadBinaryFile(*bytecodeCachePath, originalBytes));
     ASSERT_GT(originalBytes.size(), sizeof(u32));
 
     const Path computeRoot = root / "compute_probe";
-    const Path computeAssets = computeRoot / "assets";
+    const Path computeAssets = computeRoot / s_AssetsDirectory;
     const Path computeOutput = computeRoot / "cooked";
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(computeAssets / "shaders" / "cache_stage_cs.nwb", "compute_shader asset;\nasset.entry_point = \"main\";\n"));
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(computeAssets / "shaders" / "cache_stage_cs.slang", "[numthreads(1, 1, 1)] void main(){}\n"));
     ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, computeRoot, computeOutput, { computeAssets }));
-    const Expected<Name> computePathResult = Core::ShaderArchive::BuildVirtualPathName(Name("project/shaders/cache_stage_cs"), Core::ShaderArchive::s_DefaultVariant, Name("cs"));
+    const Expected<Name> computePathResult = Core::ShaderArchive::BuildVirtualPathName(Name("project/shaders/cache_stage_cs"), Core::ShaderArchive::s_DefaultVariant, Name(s_ComputeStage));
     ASSERT_TRUE(computePathResult);
     const Name& computePath = *computePathResult;
     UniquePtr<Core::Assets::IAsset> computeAsset;

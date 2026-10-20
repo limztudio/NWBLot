@@ -13,6 +13,10 @@ import sys
 
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
 
+LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 45.0
+
+LIT_LOG_SUFFIX = ".log"
+
 LIT_START = "start"
 LIT_END = "end"
 LIT_CAPTURE = "capture"
@@ -111,7 +115,7 @@ def validate_capture_evidence(log, required_presentations):
 def capture_arm(args, arm):
     output = args.output_directory / f"{arm}.bmp"
     command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")), LIT_EXECUTABLE, str(args.executable), LIT_WORKING_DIRECTORY, str(args.working_directory),
-        "--output", str(output), "--application-capture", "--application-capture-frame-count", str(args.frames), LIT_TIMEOUT, str(args.timeout), "--log-output", str(output.with_suffix(".log")),
+        "--output", str(output), "--application-capture", "--application-capture-frame-count", str(args.frames), LIT_TIMEOUT, str(args.timeout), "--log-output", str(output.with_suffix(LIT_LOG_SUFFIX)),
         LIT_EXPECT_LOG_MESSAGE, f"GiTestSmokeProject: CSG GI arm={arm} overlapping_box_cutters=2 accepted_presentations={args.frames}", LIT_EXPECT_LOG_MESSAGE, "RendererSystem: dispatched surfel GI resolve",
         LIT_EXPECT_LOG_MESSAGE, "GiTestSmokeProject: mixed CSG receiver has 12 closed and 2 open triangles", LIT_EXPECT_LOG_MESSAGE, "GiTestSmokeProject: shutdown", LIT_GPU_VALIDATION if args.gpu_validation else "--no-gpu-validation"]
     if args.route == LIT_SOFTWARE:
@@ -123,12 +127,12 @@ def capture_arm(args, arm):
         command += [LIT_LOGSERVER_EXECUTABLE, str(args.logserver_executable)]
     else:
         command.append(LIT_NO_LOGSERVER)
-    result = subprocess.run(command, env=build_environment(arm, args.lagged_lighting), check=False, timeout=args.timeout + 45.0)
+    result = subprocess.run(command, env=build_environment(arm, args.lagged_lighting), check=False, timeout=args.timeout + LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS)
     if result.returncode == SKIP_EXIT_CODE:
         return None
     if result.returncode:
         raise SmokeFailure(f"CSG GI {arm} capture failed: {result.returncode}")
-    evidence = validate_capture_evidence(output.with_suffix(".log").read_text(encoding=LIT_UTF_8), args.frames)
+    evidence = validate_capture_evidence(output.with_suffix(LIT_LOG_SUFFIX).read_text(encoding=LIT_UTF_8), args.frames)
     frame = read_bmp_24_rows(output)
     if frame[:2] != EXPECTED_EXTENT:
         raise SmokeFailure("CSG GI requires the actual 1280x900 framebuffer")

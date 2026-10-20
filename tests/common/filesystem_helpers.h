@@ -68,7 +68,7 @@ template<typename ArenaT>
         const Timer now = TimerNow();
         if(now >= deadline)
             return false;
-        const u32 remainingMilliseconds = static_cast<u32>(Max(DurationInMS<i64>(deadline, now), i64(1)));
+        const u32 remainingMilliseconds = static_cast<u32>(Max(DurationInMS<i64>(deadline, now), i64(FilesystemTestDetail::s_MinimumDirectoryPollMilliseconds)));
         SleepMS(Min(stepMilliseconds, remainingMilliseconds));
     }
 }

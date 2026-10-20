@@ -25,6 +25,10 @@ namespace __hidden_asset_bunch_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_ItemsField = "items";
+constexpr AStringView s_ValuesField = "values";
+constexpr AStringView s_IdField = "id";
+
 static constexpr AStringView s_TARGET = "target";
 static constexpr AStringView s_PROJECT = "project";
 static constexpr AStringView s_PROJECT_FIXTURES_BUNDLE_FIRST = "project/fixtures/bundle/first";
@@ -77,7 +81,7 @@ static void VerifyOwnedOutput(const ExpandedAssetMetadataVector& output, const M
     ASSERT_EQ(output.size(), s_ExpectedDualCount);
     EXPECT_EQ(output[0u].virtualPath, Name("project/fixtures/bundle/second"));
     EXPECT_EQ(output[1u].virtualPath, Name(s_PROJECT_FIXTURES_BUNDLE_FIRST));
-    const Value* const items = output[0u].value.findField("items");
+    const Value* const items = output[0u].value.findField(s_ItemsField);
     ASSERT_NE(items, nullptr);
     ASSERT_TRUE(items->isList());
     ASSERT_EQ(items->asList().size(), s_ExpectedDualCount);
@@ -260,7 +264,7 @@ TEST(AssetBunchOwnership, ValuesOutliveTheirSourceDocumentWhileItsArenaRemainsAl
             VerifyOwnedOutput(output, sourceDocument);
         }
         ASSERT_EQ(output.size(), s_ExpectedDualCount);
-        const Value* const items = output[0u].value.findField("items");
+        const Value* const items = output[0u].value.findField(s_ItemsField);
         ASSERT_NE(items, nullptr);
         ASSERT_TRUE(items->isList());
         ASSERT_EQ(items->asList().size(), s_ExpectedDualCount);
@@ -433,21 +437,21 @@ ASSET_BUNCH bunch = [second, first];
         ASSERT_EQ(output.size(), s_ExpectedDualCount);
         EXPECT_EQ(output[0u].virtualPath, Name("project/fixtures/bundle/second"));
         EXPECT_EQ(output[1u].virtualPath, Name(s_PROJECT_FIXTURES_BUNDLE_FIRST));
-        const Value* const firstValues = output[1u].value.findField("values");
+        const Value* const firstValues = output[1u].value.findField(s_ValuesField);
         ASSERT_NE(firstValues, nullptr);
         ASSERT_TRUE(firstValues->isList());
         ASSERT_EQ(firstValues->asList().size(), 3u);
         const i64 expectedIds[] = { 11, 22, 11 };
         for(usize index = 0u; index < LengthOf(expectedIds); ++index){
-            const Value* const id = firstValues->asList()[index].findField("id");
+            const Value* const id = firstValues->asList()[index].findField(s_IdField);
             ASSERT_NE(id, nullptr);
             EXPECT_EQ(id->asInteger(), expectedIds[index]);
         }
-        const Value* const secondValues = output[0u].value.findField("values");
+        const Value* const secondValues = output[0u].value.findField(s_ValuesField);
         ASSERT_NE(secondValues, nullptr);
         ASSERT_TRUE(secondValues->isList());
         ASSERT_EQ(secondValues->asList().size(), 1u);
-        const Value* const secondId = secondValues->asList()[0u].findField("id");
+        const Value* const secondId = secondValues->asList()[0u].findField(s_IdField);
         ASSERT_NE(secondId, nullptr);
         EXPECT_EQ(secondId->asInteger(), 22);
         output.clear();

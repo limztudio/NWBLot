@@ -19,6 +19,8 @@ from reflection_smoke import DEFAULT_RAY_BUDGET, capture_environment, parse_stat
 from refraction_gallery_smoke import png_rgb_bytes
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
 
+LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 90
+
 LIT_OPTICAL_GROUP_ENTRY = "optical_group_entry"
 LIT_OPTICAL_CSG_GROUP_ENTRY = "optical_csg_group_entry"
 LIT_OPTICAL_CSG_CAP = "optical_csg_cap"
@@ -314,7 +316,7 @@ def capture(args, spec):
     environment = capture_environment(spec.case, LIT_HARDWARE, spec.ray_budget)
     environment.update({"NWB_REFLECTION_SMOKE_OPTICAL_QUERIES": str(spec.queries), "NWB_REFLECTION_SMOKE_TEMPORAL": "0", "NWB_REFLECTION_SMOKE_SPATIAL": "0", "NWB_REFLECTION_SMOKE_HISTORY_SAMPLES": "16", "NWB_REFLECTION_SMOKE_DIAGNOSTICS": "1"})
     print(f"Capturing {spec.name}: ray budget {spec.ray_budget}, max {spec.queries} queries per admitted optical path...", flush=True)
-    result = subprocess.run(command, env=environment, check=False, timeout=args.timeout + 90)
+    result = subprocess.run(command, env=environment, check=False, timeout=args.timeout + LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS)
     if result.returncode == SKIP_EXIT_CODE:
         return None
     if result.returncode:

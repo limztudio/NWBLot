@@ -23,6 +23,7 @@ namespace __hidden_cpu_task_fanin_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr u32 s_PollIntervalMS = 1u;
 using namespace NWB::Core;
 
 inline constexpr u32 s_GateTimeoutMS = 20000u;
@@ -40,7 +41,7 @@ public:
             while(!stop.stop_requested()){
                 if(DurationInMS<u64>(TimerNow(), begin) >= s_TestTimeoutMS)
                     TerminateInvariant();
-                SleepMS(1u);
+                SleepMS(__hidden_cpu_task_fanin_tests::s_PollIntervalMS);
             }
         }
         )

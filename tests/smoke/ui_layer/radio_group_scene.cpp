@@ -22,6 +22,25 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_ui_radio_group_smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+constexpr AStringView s_TitleKey = "title";
+constexpr AStringView s_ChoicesKey = "choices";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 UiRadioGroupSmokeScene::UiRadioGroupSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input)
     : m_input(input)
 {
@@ -86,13 +105,13 @@ bool UiRadioGroupSmokeScene::paintMain(Impl::Ui::Builder& ui){
         return false;
     const WidgetOptions caption{ {}, { LayoutSizePolicy::Fixed, 16.0f } };
     const WidgetOptions button{ { LayoutSizePolicy::Stretch, 1.0f }, { LayoutSizePolicy::Fixed, 28.0f } };
-    if(!ui.label("title", "Radio group / stable choice keys", caption))
+    if(!ui.label(__hidden_ui_radio_group_smoke::s_TitleKey, "Radio group / stable choice keys", caption))
         return false;
     if(ui.button("before", "Before group", button))
         ++m_beforeClicks;
     RadioGroupOptions options;
     options.enabled = m_enabled;
-    const RadioGroupResult result = ui.radioGroup("choices", m_source, m_state, options);
+    const RadioGroupResult result = ui.radioGroup(__hidden_ui_radio_group_smoke::s_ChoicesKey, m_source, m_state, options);
     if(!result.valid)
         return false;
     m_changes += static_cast<u32>(result.selectionChanged);
@@ -109,11 +128,11 @@ bool UiRadioGroupSmokeScene::paintDisabled(Impl::Ui::Builder& ui){
     if(!ui.beginPanel("radio_disabled", { 392.0f, 24.0f, 300.0f, 240.0f }))
         return false;
     const WidgetOptions caption{ {}, { LayoutSizePolicy::Fixed, 16.0f } };
-    if(!ui.label("title", "Disabled group keeps checked choice", caption))
+    if(!ui.label(__hidden_ui_radio_group_smoke::s_TitleKey, "Disabled group keeps checked choice", caption))
         return false;
     RadioGroupOptions options;
     options.enabled = false;
-    const RadioGroupResult result = ui.radioGroup("choices", m_source, m_disabled, options);
+    const RadioGroupResult result = ui.radioGroup(__hidden_ui_radio_group_smoke::s_ChoicesKey, m_source, m_disabled, options);
     return result.valid && ui.endPanel();
 }
 
@@ -126,9 +145,9 @@ bool UiRadioGroupSmokeScene::paintPopup(Impl::Ui::Builder& ui){
     if(!ui.beginPopup("radio_parent", m_parent, options))
         return !ui.failed();
     const WidgetOptions caption{ {}, { LayoutSizePolicy::Fixed, 16.0f } };
-    if(!ui.label("title", "Radio inside a parent popup", caption))
+    if(!ui.label(__hidden_ui_radio_group_smoke::s_TitleKey, "Radio inside a parent popup", caption))
         return false;
-    const RadioGroupResult result = ui.radioGroup("choices", m_source, m_popupRadio);
+    const RadioGroupResult result = ui.radioGroup(__hidden_ui_radio_group_smoke::s_ChoicesKey, m_source, m_popupRadio);
     if(!result.valid)
         return false;
     m_popupChanges += static_cast<u32>(result.selectionChanged);

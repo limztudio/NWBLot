@@ -38,6 +38,11 @@ namespace __hidden_assets_graphics_codec{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_AssetsDirectory = "assets";
+constexpr AStringView s_TestsConfiguration = "tests";
+constexpr AStringView s_FirstSamplerPath = "project/samplers/first";
+constexpr AStringView s_SecondSamplerPath = "project/samplers/second";
+
 static constexpr AStringView s_CACHE = "cache";
 static constexpr AStringView s_SamplerMetadata =
     "sampler asset;\n"
@@ -212,7 +217,7 @@ TEST(AssetsGraphics, AssetBuildWritesRegistryObjectCache){
     Path& outputDirectory = cookCase->outputDirectory;
 
 
-    const Path assetRoot = root / "assets";
+    const Path assetRoot = root / s_AssetsDirectory;
     const Path metaPath = assetRoot / "meshes" / "minimal_mesh.nwb";
     EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(metaPath, AssetsGraphicsFixture::s_MinimalMeshMeta));
     EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, s_ExpectedDualCount));
@@ -279,7 +284,7 @@ TEST(AssetsGraphics, SharedCodecPayloadsKeepDistinctVirtualPathsUnderLongBuildDi
     ASSERT_TRUE(cookCase);
     const Path& root = cookCase->root;
     const Path& outputDirectory = cookCase->outputDirectory;
-    const Path assetRoot = root / "assets";
+    const Path assetRoot = root / s_AssetsDirectory;
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "samplers" / "first.nwb", s_SamplerMetadata));
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "samplers" / "second.nwb", s_SamplerMetadata));
 
@@ -296,9 +301,9 @@ TEST(AssetsGraphics, SharedCodecPayloadsKeepDistinctVirtualPathsUnderLongBuildDi
     NWB::Pipeline::AssetGatherer::AssetGatherOptions options(testArena.arena);
     options.inputs.emplace_back(PathToString(testArena.arena, builtDirectory));
     options.outputDirectory = PathToString(testArena.arena, outputDirectory);
-    options.configuration = "tests";
+    options.configuration = s_TestsConfiguration.data();
     ASSERT_TRUE(NWB::Pipeline::AssetGatherer::GatherAssets(options));
-    for(const Name& virtualPath : { Name("project/samplers/first"), Name("project/samplers/second") }){
+    for(const Name& virtualPath : { Name(s_FirstSamplerPath), Name(s_SecondSamplerPath) }){
         const auto asset = AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::SamplerAssetCodec>(testArena, outputDirectory, virtualPath, s_ExpectedDualCount);
         ASSERT_TRUE(asset);
         EXPECT_EQ((*asset)->virtualPath(), virtualPath);
@@ -315,8 +320,8 @@ TEST(AssetsGraphics, BuiltArtifactsRejectMismatchedObjectCookKeys){
     auto rootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "built_object_cook_key_mismatch");
     ASSERT_TRUE(rootResult);
     const Path& root = *rootResult;
-    const Path assetRoot = root / "assets";
-    const Name virtualPath("project/samplers/first");
+    const Path assetRoot = root / s_AssetsDirectory;
+    const Name virtualPath(s_FirstSamplerPath);
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "samplers" / "first.nwb", s_SamplerMetadata));
     ASSERT_TRUE(AssetsGraphicsFixture::BuildPreparedGraphicsAssetRoots(testArena, root, root / "built", { assetRoot }, s_ExpectedDualCount));
     const auto objectPath = FindSingleAssetObjectCachePath(testArena, root / s_CACHE);
@@ -344,10 +349,10 @@ TEST(AssetsGraphics, FailedReorderedSharedPayloadBuildPreservesPublishedVirtualP
     auto cookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "failed_reordered_shared_payloads");
     ASSERT_TRUE(cookCase);
     const Path& root = cookCase->root;
-    const Path assetRoot = root / "assets";
+    const Path assetRoot = root / s_AssetsDirectory;
     const Path publishedDirectory = root / "published";
-    const Name firstPath("project/samplers/first");
-    const Name secondPath("project/samplers/second");
+    const Name firstPath(s_FirstSamplerPath);
+    const Name secondPath(s_SecondSamplerPath);
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "samplers" / "first.nwb", s_SamplerMetadata));
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "samplers" / "second.nwb", s_SamplerMetadata));
     ASSERT_TRUE(AssetsGraphicsFixture::BuildPreparedGraphicsAssetRoots(testArena, root, root / "seed_built", { assetRoot }, s_ExpectedDualCount));
@@ -397,7 +402,7 @@ TEST(AssetsGraphics, FailedReorderedSharedPayloadBuildPreservesPublishedVirtualP
     NWB::Pipeline::AssetGatherer::AssetGatherOptions options(testArena.arena);
     options.inputs.emplace_back(PathToString(testArena.arena, publishedDirectory));
     options.outputDirectory = PathToString(testArena.arena, cookCase->outputDirectory);
-    options.configuration = "tests";
+    options.configuration = s_TestsConfiguration.data();
     ASSERT_TRUE(NWB::Pipeline::AssetGatherer::GatherAssets(options));
     for(const Name& virtualPath : { firstPath, secondPath }){
         const auto asset = AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::SamplerAssetCodec>(testArena, cookCase->outputDirectory, virtualPath, s_ExpectedDualCount);

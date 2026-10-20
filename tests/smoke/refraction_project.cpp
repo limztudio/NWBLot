@@ -33,6 +33,8 @@ namespace __hidden_refraction_smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr TStringView s_ProjectName = NWB_TEXT("RefractionSmokeProject");
+
 using namespace NWB::Tests::Smoke;
 
 static constexpr SmokeMeshRef s_PlaneMesh{"project/meshes/shadow_plane"};
@@ -45,7 +47,7 @@ static constexpr AStringView s_MaterialInterface = "project/shaders/smoke_surfac
 class RefractionSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("RefractionSmokeProject"));
+        auto world = CreateSmokeWorldOrDie(context, s_ProjectName);
         auto& renderer = AddSmokeRenderSystems(*world, context);
         // These comparisons isolate transmission. Reflection has its own combined optical capture matrix.
         NWB::Impl::ReflectionSettings reflection;
@@ -64,7 +66,8 @@ private:
 
 private:
     bool configureFramebufferCapture(NWB::Core::Alloc::ScratchArena& scratchArena){
-        auto capture = ConfigureSmokeFramebufferCapture(m_context, scratchArena, NWB_TEXT("RefractionSmokeProject"), 16u);
+        constexpr u32 s_DefaultCaptureFrameCount = 16u;
+        auto capture = ConfigureSmokeFramebufferCapture(m_context, scratchArena, s_ProjectName, s_DefaultCaptureFrameCount);
         if(!capture)
             return false;
         m_framebufferCapture = Move(*capture);

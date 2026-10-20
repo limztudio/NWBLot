@@ -17,6 +17,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_rgd_decode_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+constexpr AStringView s_CleanupDiagnosticCategory = "rgd_decode_test_cleanup";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
 // Missing files fail explicit RDF admission before the throwing vendor C++ parser.
 TEST(RgdDecode, MissingFileFailsGracefully){
     const auto result = NWB::Log::Rgd::DecodeCrashDumpToText("nwb_rgd_smoke_missing.rgd");
@@ -31,7 +45,7 @@ TEST(RgdDecode, GarbageInputFailsGracefully){
     ScopeExit cleanup([&inputPath]()noexcept{
         const auto removed = RemoveFile(inputPath);
         if(!removed)
-            CaptureDiagnosticEvent("rgd_decode_test_cleanup", "Failed to remove garbage-input fixture", __FILE__, __LINE__);
+            CaptureDiagnosticEvent(__hidden_rgd_decode_tests::s_CleanupDiagnosticCategory, "Failed to remove garbage-input fixture", __FILE__, __LINE__);
     });
     ASSERT_TRUE(WriteBinaryFile(inputPath, StringView("not a valid radeon gpu detective capture\n")));
 
@@ -58,7 +72,7 @@ TEST(RgdDecode, AdmittedContainerWithoutCrashChunksFailsGracefully){
     ScopeExit cleanup([&inputPath]()noexcept{
         const auto removed = RemoveFile(inputPath);
         if(!removed)
-            CaptureDiagnosticEvent("rgd_decode_test_cleanup", "Failed to remove admitted-container fixture", __FILE__, __LINE__);
+            CaptureDiagnosticEvent(__hidden_rgd_decode_tests::s_CleanupDiagnosticCategory, "Failed to remove admitted-container fixture", __FILE__, __LINE__);
     });
     ASSERT_TRUE(WriteBinaryFile(inputPath, s_EmptyContainer));
 

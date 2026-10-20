@@ -19,6 +19,9 @@ from checkpoint_report import CHECKPOINT_POLL_SECONDS, accept_checkpoint, fail_c
 from fixture_launch import DISPLAY_MARKER_TIMEOUT_SECONDS
 from probe_reference import linear_rgb_bytes
 
+LIT_CLIPBOARD_READ_MAXIMUM_TIMEOUT_SECONDS = 2.0
+LIT_CLIPBOARD_READ_MINIMUM_TIMEOUT_SECONDS = 0.1
+
 LIT_ENABLED = "enabled"
 LIT_READONLY = "readonly"
 LIT_I = "i"
@@ -162,7 +165,7 @@ class NumericEditRun:
         deadline, observed = min(self.deadline, time.monotonic() + CLIPBOARD_VERIFY_TIMEOUT_SECONDS), None
         while time.monotonic() < deadline:
             ensure_process_running(self.process, "during numeric OS clipboard verification")
-            observed = self.native.clipboard_text(timeout=min(2.0, max(0.1, deadline - time.monotonic())))
+            observed = self.native.clipboard_text(timeout=min(LIT_CLIPBOARD_READ_MAXIMUM_TIMEOUT_SECONDS, max(LIT_CLIPBOARD_READ_MINIMUM_TIMEOUT_SECONDS, deadline - time.monotonic())))
             if observed == text:
                 self.stages[-1][LIT_OS_CLIPBOARD] = {LIT_EXPECTED: text, "observed": observed, LIT_PASSED: True}
                 self.write_report(False)

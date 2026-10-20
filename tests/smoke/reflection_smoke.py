@@ -15,6 +15,8 @@ import sys
 from refraction_gallery_smoke import png_rgb_bytes
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
 
+LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 90
+
 LIT_LOG_2 = "log"
 
 LIT_OFFSCREEN = "offscreen"
@@ -454,7 +456,7 @@ def capture(args, case, mode, budget=DEFAULT_RAY_BUDGET):
     command.extend("--application-arg=" + argument for argument in args.application_arg)
     print(f"Capturing {case}/{mode} budget={budget} ({args.frames} presentation frames)...", flush=True)
     # The child owns app/logserver cleanup: leave time for startup, graceful exit, kill fallback, and log drain.
-    result = subprocess.run(command, env=capture_environment(case, mode, budget), check=False, timeout=args.timeout + 90)
+    result = subprocess.run(command, env=capture_environment(case, mode, budget), check=False, timeout=args.timeout + LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS)
     if result.returncode == SKIP_EXIT_CODE:
         return None
     if result.returncode:

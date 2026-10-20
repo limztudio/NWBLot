@@ -19,6 +19,8 @@ from refraction_gallery_smoke import png_rgb_bytes
 from window_capture_smoke import SKIP_EXIT_CODE, read_bmp_24_rows
 from smoke_volume_identity import authored_volume_hashes, file_identity
 
+LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 90
+
 LIT_HYBRID = "hybrid"
 LIT_NPOT = "npot"
 LIT_OFFSCREEN = "offscreen"
@@ -361,7 +363,7 @@ def capture(args, spec):
         command.append("--no-logserver")
     command.extend("--application-arg=" + argument for argument in args.application_arg)
     print(f"Capturing {spec.name}: feedback={spec.enabled}, steps={spec.screen_steps}, budget={spec.hardware_budget}...", flush=True)
-    result = subprocess.run(command, env=spec_environment(spec), check=False, timeout=args.timeout + 90)
+    result = subprocess.run(command, env=spec_environment(spec), check=False, timeout=args.timeout + LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS)
     if result.returncode == SKIP_EXIT_CODE:
         return None
     if result.returncode:

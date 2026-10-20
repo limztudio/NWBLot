@@ -16,6 +16,8 @@ from csg_shadow_reference import expected_rgb, region_pixels
 from generate_csg_shadow_open_meshes import open_sheets, validate_open_sheets
 from window_capture_smoke import SmokeFailure
 
+LIT_CAPTURE_SUFFIX = ".txt"
+
 LIT_RETAINED = "retained"
 LIT_HARDWARE = "hardware"
 LIT_ENABLED = "enabled"
@@ -206,7 +208,7 @@ class CsgOpenShadowOutputTests(unittest.TestCase):
                 if case == CASES[0]:
                     self.assertFalse(any(args.output_directory.iterdir()))
                     destinations.append(args.output_directory)
-                (args.output_directory / (case + ".txt")).write_text(f"capture {len(destinations)}", encoding=LIT_UTF_8)
+                (args.output_directory / (case + LIT_CAPTURE_SUFFIX)).write_text(f"capture {len(destinations)}", encoding=LIT_UTF_8)
                 return None, {"case": case}
 
             required = [LIT_EXECUTABLE, LIT_APP_EXE, LIT_WORKING_DIRECTORY, LIT_RUNTIME, LIT_OUTPUT_ROOT, str(root), LIT_ROUTE, LIT_SOFTWARE, LIT_WARNING_POLICY, LIT_ENABLED]
@@ -217,7 +219,7 @@ class CsgOpenShadowOutputTests(unittest.TestCase):
             self.assertTrue(all(destination.parent == root for destination in destinations))
             self.assertEqual(retained.read_text(encoding=LIT_UTF_8), LIT_RETAINED_EVIDENCE)
             for index, destination in enumerate(destinations, 1):
-                self.assertEqual((destination / (CASES[0] + ".txt")).read_text(encoding=LIT_UTF_8), f"capture {index}")
+                self.assertEqual((destination / (CASES[0] + LIT_CAPTURE_SUFFIX)).read_text(encoding=LIT_UTF_8), f"capture {index}")
 
     def test_nonempty_exact_output_directory_still_rejects_without_capture_or_overwrite(self):
         with tempfile.TemporaryDirectory() as directory:

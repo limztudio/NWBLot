@@ -10,6 +10,19 @@ import sys
 import tempfile
 import unittest
 
+LIT_SFNT_UINT16_BIG_ENDIAN = ">H"
+LIT_METADATA_SUFFIX = ".nwb"
+LIT_FONT_SUFFIX = ".font"
+LIT_FLOAT32_LITTLE_ENDIAN = "<f"
+LIT_METADATA_TEMP_SUFFIX = ".nwb.tmp"
+LIT_FONT_TEMP_SUFFIX = ".font.tmp"
+LIT_METADATA_BACKUP_SUFFIX = ".nwb.old"
+LIT_FONT_BACKUP_SUFFIX = ".font.old"
+
+LIT_FONT_BUILDER_TIMEOUT_SECONDS = 180
+
+LIT_PACKAGE_PROBE_TIMEOUT_SECONDS = 120
+
 LIT_SFNT = "sfnt"
 LIT_GROUPS = "groups"
 LIT_FONT_HASH = "font_hash"
@@ -91,7 +104,7 @@ def source_bytes(path):
 
 
 def sfnt_tables(data):
-    count = struct.unpack_from(">H", data, 4)[0]
+    count = struct.unpack_from(LIT_SFNT_UINT16_BIG_ENDIAN, data, 4)[0]
     tables = {}
     for index in range(count):
         tag, _checksum, offset, length = struct.unpack_from(">4sIII", data, 12 + index * 16)
@@ -161,7 +174,7 @@ class FontBuilderCli(unittest.TestCase):
     @classmethod
     def invoke(cls, font, output, *extra, success=True):
         arguments = [str(CONFIG.executable), "--font", str(font), "--output", str(output), *extra]
-        result = subprocess.run(arguments, cwd=cls.root, capture_output=True, text=True, timeout=180)
+        result = subprocess.run(arguments, cwd=cls.root, capture_output=True, text=True, timeout=LIT_FONT_BUILDER_TIMEOUT_SECONDS)
         if (result.returncode == 0) != success:
             raise AssertionError(f"CLI exit {result.returncode}: {result.stdout}\n{result.stderr}")
         return result
@@ -170,13 +183,13 @@ class FontBuilderCli(unittest.TestCase):
     def decode_package(cls, metadata, success=True):
         with tempfile.TemporaryDirectory(prefix="decoded_", dir=cls.root) as temporary:
             destination = Path(temporary)
-            result = subprocess.run([str(CONFIG.package_probe), str(metadata), str(destination)], cwd=cls.root, capture_output=True, text=True, timeout=120)
+            result = subprocess.run([str(CONFIG.package_probe), str(metadata), str(destination)], cwd=cls.root, capture_output=True, text=True, timeout=LIT_PACKAGE_PROBE_TIMEOUT_SECONDS)
             if (result.returncode == 0) != success:
                 raise AssertionError(f"Package probe exit {result.returncode}: {result.stdout}\n{result.stderr}")
             return {path.name: path.read_bytes() for path in destination.iterdir()}
 
     def assert_pair(self, output, payloads=None):
-        self.assertEqual({path.name for path in output.parent.iterdir()}, {output.with_suffix(extension).name for extension in (".nwb", ".font")})
+        self.assertEqual({path.name for path in output.parent.iterdir()}, {output.with_suffix(extension).name for extension in (LIT_METADATA_SUFFIX, LIT_FONT_SUFFIX)})
         text = output.read_text(encoding=LIT_UTF_8)
         self.assertIn("font face;", text)
         self.assertIn("font_atlas atlas;", text)
@@ -186,29 +199,29 @@ class FontBuilderCli(unittest.TestCase):
             self.assertNotIn(obsolete, text)
         payloads = self.decode_package(output) if payloads is None else payloads
         atlas = read_atlas(payloads[LIT_ATLAS_BIN])
-        prepared = read_prepared_font(output.with_suffix(".font"))
+        prepared = read_prepared_font(output.with_suffix(LIT_FONT_SUFFIX))
         self.assertEqual(prepared[LIT_GROUPS], atlas[LIT_GROUPS])
         self.assertEqual(prepared[LIT_FONT_HASH], atlas[LIT_FONT_HASH])
         self.assertEqual(prepared[LIT_SFNT], payloads[LIT_SOURCE_SFNT])
         self.assertEqual(atlas[LIT_FACE_INDEX], prepared[LIT_FACE_INDEX])
         source_tables = sfnt_tables(prepared[LIT_SFNT])
-        self.assertEqual(atlas[LIT_UNITS_PER_EM], struct.unpack_from(">H", source_tables["head"], 18)[0])
-        self.assertEqual(len(atlas[LIT_GLYPHS]), struct.unpack_from(">H", source_tables[LIT_MAXP], 4)[0])
+        self.assertEqual(atlas[LIT_UNITS_PER_EM], struct.unpack_from(LIT_SFNT_UINT16_BIG_ENDIAN, source_tables["head"], 18)[0])
+        self.assertEqual(len(atlas[LIT_GLYPHS]), struct.unpack_from(LIT_SFNT_UINT16_BIG_ENDIAN, source_tables[LIT_MAXP], 4)[0])
         metadata_glyphs = self.metadata_list(text, LIT_GLYPHS)
         self.assertEqual(len(metadata_glyphs), len(atlas[LIT_GLYPHS]))
         float_fields = (LIT_PLANE_LEFT, LIT_PLANE_TOP, LIT_ADVANCE_UNITS)
-        units_per_pixel = struct.unpack("<f", struct.pack("<f", atlas[LIT_UNITS_PER_EM] / atlas[LIT_PPEM]))[0]
+        units_per_pixel = struct.unpack(LIT_FLOAT32_LITTLE_ENDIAN, struct.pack(LIT_FLOAT32_LITTLE_ENDIAN, atlas[LIT_UNITS_PER_EM] / atlas[LIT_PPEM]))[0]
         for index, (declared, decoded) in enumerate(zip(metadata_glyphs, atlas[LIT_GLYPHS])):
             self.assertEqual(decoded[LIT_ID], index)
             self.assertEqual(set(declared), (set(decoded) - {LIT_ID, LIT_DRAWABLE, LIT_PLANE_RIGHT, LIT_PLANE_BOTTOM}) if decoded[LIT_DRAWABLE] else {LIT_ADVANCE_UNITS})
             for origin, extent, end in ((LIT_PLANE_LEFT, LIT_WIDTH, LIT_PLANE_RIGHT), (LIT_PLANE_TOP, LIT_HEIGHT, LIT_PLANE_BOTTOM)):
-                size = struct.unpack("<f", struct.pack("<f", decoded[extent] * units_per_pixel))[0]
+                size = struct.unpack(LIT_FLOAT32_LITTLE_ENDIAN, struct.pack(LIT_FLOAT32_LITTLE_ENDIAN, decoded[extent] * units_per_pixel))[0]
                 # ARM can fuse the multiply/add; either rounding retains the same bitmap plane.
-                expected = (struct.pack("<f", decoded[origin] + size), struct.pack("<f", decoded[origin] + decoded[extent] * units_per_pixel))
-                self.assertIn(struct.pack("<f", decoded[end]), expected)
+                expected = (struct.pack(LIT_FLOAT32_LITTLE_ENDIAN, decoded[origin] + size), struct.pack(LIT_FLOAT32_LITTLE_ENDIAN, decoded[origin] + decoded[extent] * units_per_pixel))
+                self.assertIn(struct.pack(LIT_FLOAT32_LITTLE_ENDIAN, decoded[end]), expected)
             for key in declared:
                 if key in float_fields:
-                    self.assertEqual(struct.pack("<f", declared[key]), struct.pack("<f", decoded[key]))
+                    self.assertEqual(struct.pack(LIT_FLOAT32_LITTLE_ENDIAN, declared[key]), struct.pack(LIT_FLOAT32_LITTLE_ENDIAN, decoded[key]))
                 else:
                     self.assertEqual(declared[key], decoded[key])
         return atlas
@@ -244,7 +257,7 @@ class FontBuilderCli(unittest.TestCase):
                     self.assertFalse(any(pixels[begin:end:width * channels]))
 
     def pair_bytes(self, output):
-        return {extension: output.with_suffix(extension).read_bytes() for extension in (".nwb", ".font")}
+        return {extension: output.with_suffix(extension).read_bytes() for extension in (LIT_METADATA_SUFFIX, LIT_FONT_SUFFIX)}
 
     def test_non_drawable_glyphs_retain_positive_advance(self):
         self.assertTrue(any(glyph[LIT_DRAWABLE] == 0 and glyph[LIT_ADVANCE_UNITS] > 0 for glyph in self.atlas[LIT_GLYPHS]))
@@ -317,7 +330,7 @@ class FontBuilderCli(unittest.TestCase):
         self.assertFalse(output.parent.exists() and list(output.parent.iterdir()))
 
     def test_partial_pair_and_occupied_work_paths_preserve_existing_bytes(self):
-        for extension in (".nwb", ".font"):
+        for extension in (LIT_METADATA_SUFFIX, LIT_FONT_SUFFIX):
             with self.subTest(extension=extension):
                 output = self.root / f"partial_{extension[1:]}" / LIT_BODY_NWB
                 output.parent.mkdir()
@@ -326,7 +339,7 @@ class FontBuilderCli(unittest.TestCase):
                 self.invoke(self.latin, output, LIT_OVERWRITE, success=False)
                 self.assertEqual({path.name for path in output.parent.iterdir()}, {output.with_suffix(extension).name})
                 self.assertEqual(output.with_suffix(extension).read_bytes(), original)
-        for extension in (".nwb.tmp", ".font.tmp", ".nwb.old", ".font.old"):
+        for extension in (LIT_METADATA_TEMP_SUFFIX, LIT_FONT_TEMP_SUFFIX, LIT_METADATA_BACKUP_SUFFIX, LIT_FONT_BACKUP_SUFFIX):
             with self.subTest(work_path=extension):
                 output = self.root / f"occupied_{extension[1:]}" / LIT_BODY_NWB
                 output.parent.mkdir()
@@ -338,7 +351,7 @@ class FontBuilderCli(unittest.TestCase):
 
     @unittest.skipUnless(sys.platform.startswith("linux"), "Linux dangling-symlink output admission")
     def test_dangling_output_and_work_symlinks_are_preserved_without_publication(self):
-        for extension in (".nwb", ".font", ".nwb.tmp", ".font.tmp", ".nwb.old", ".font.old"):
+        for extension in (LIT_METADATA_SUFFIX, LIT_FONT_SUFFIX, LIT_METADATA_TEMP_SUFFIX, LIT_FONT_TEMP_SUFFIX, LIT_METADATA_BACKUP_SUFFIX, LIT_FONT_BACKUP_SUFFIX):
             for overwrite in (False, True):
                 with self.subTest(extension=extension, overwrite=overwrite):
                     output = self.root / f"dangling_{extension[1:]}_{int(overwrite)}" / LIT_BODY_NWB
@@ -356,13 +369,13 @@ class FontBuilderCli(unittest.TestCase):
         output = self.root / "corrupt_pair" / LIT_BODY_NWB
         output.parent.mkdir()
         original_text = self.output.read_text(encoding=LIT_UTF_8)
-        original_font = self.output.with_suffix(".font").read_bytes()
+        original_font = self.output.with_suffix(LIT_FONT_SUFFIX).read_bytes()
         output.write_text(original_text, encoding=LIT_UTF_8)
         corrupt = bytearray(original_font)
         corrupt[-1] ^= 1
-        output.with_suffix(".font").write_bytes(corrupt)
+        output.with_suffix(LIT_FONT_SUFFIX).write_bytes(corrupt)
         self.assertFalse(self.decode_package(output, success=False))
-        output.with_suffix(".font").write_bytes(original_font)
+        output.with_suffix(LIT_FONT_SUFFIX).write_bytes(original_font)
         for text in (original_text + "\nface.face_index = 0;\n", original_text + "\natlas.units_per_em = 1000;\n", original_text + "\natlas.guard_texels = 1;\n", original_text + '\natlas.groups = [{ "width": 1, "height": 1, "channels": 4 }];\n',
                      original_text.replace('"group":', '"id": 0, "group":', 1), original_text.replace('"group":', '"drawable": 1, "group":', 1), original_text.replace('"group":', '"plane_right": 0, "group":', 1),
                      original_text.replace('"group":', '"plane_bottom": 0, "group":', 1), re.sub(r'"height": \d+', '"height": 0', original_text, count=1), original_text.replace('{ "advance_units":', '{ "x": 0, "advance_units":', 1)):
@@ -376,7 +389,7 @@ class FontBuilderCli(unittest.TestCase):
         self.assert_compact_groups(atlas)
         self.assertEqual(atlas[LIT_GROUPS][-1][2], 1)
         original = source_bytes(self.korean)
-        glyph_count = struct.unpack_from(">H", sfnt_tables(original)[LIT_MAXP], 4)[0]
+        glyph_count = struct.unpack_from(LIT_SFNT_UINT16_BIG_ENDIAN, sfnt_tables(original)[LIT_MAXP], 4)[0]
         self.assertEqual(len(atlas[LIT_GLYPHS]), glyph_count)
         self.assertEqual(atlas[LIT_FONT_HASH], hashlib.sha256(original).digest())
         self.assertGreater(len(atlas[LIT_GROUPS]), 1)

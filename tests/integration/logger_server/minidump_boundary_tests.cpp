@@ -29,6 +29,8 @@ namespace __hidden_minidump_boundary_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_WindowsPlatform = "windows";
+
 using namespace NWB;
 using DumpBytes = Vector<u8, Core::Alloc::GlobalArena>;
 
@@ -88,7 +90,7 @@ protected:
         if(!WriteBinaryFile(m_directory / Core::Crash::PackageNames::s_ProcessDumpFileName, bytes))
             return MakeUnexpected(Failure{});
         Log::CrashPackageSummary summary(m_testArena.arena);
-        summary.platform = "windows";
+        summary.platform = s_WindowsPlatform;
         summary.threadId = 1u;
         Log::CrashSymbolicationConfig config(m_testArena.arena);
         const Log::CrashScratchPath scratchDirectory(m_scratchArena, m_directory);
@@ -108,7 +110,7 @@ TEST_F(MinidumpBoundaryTests, MissingDumpRetainsNativeReadFailureInReturnedRepor
     const auto missing = FileSize(m_directory / Core::Crash::PackageNames::s_ProcessDumpFileName);
     ASSERT_FALSE(missing);
     Log::CrashPackageSummary summary(m_testArena.arena);
-    summary.platform = "windows";
+    summary.platform = s_WindowsPlatform;
     Log::CrashSymbolicationConfig config(m_testArena.arena);
     const Log::CrashScratchPath scratchDirectory(m_scratchArena, m_directory);
     const auto actual = Log::BuildCrashSymbolicationReport(m_testArena.arena, scratchDirectory, summary, config, m_scratchArena);

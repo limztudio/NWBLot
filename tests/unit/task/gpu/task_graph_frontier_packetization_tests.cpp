@@ -32,6 +32,9 @@ namespace __hidden_task_graph_frontier_packetization_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_SecondMergeDomainPath = "tests/task_graph/frontier_scored_second_domain";
+constexpr AStringView s_CrossQueueMergeDomainPath = "tests/task_graph/frontier_scored_cross_queue";
+
 using namespace TaskGraphTestUtils;
 using TaskGraphTestUtils::TestArena;
 
@@ -225,7 +228,7 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationRequiresOneDomainAcrossPrecedingPa
     Graphics::GpuTaskSchedulingHint explicitScheduling;
     explicitScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
     explicitScheduling.mergeWithPrevious = true;
-    explicitScheduling.frontierScoredMergeDomain = Name("tests/task_graph/frontier_scored_second_domain");
+    explicitScheduling.frontierScoredMergeDomain = Name(s_SecondMergeDomainPath);
     Graphics::GpuTaskDesc explicitDesc;
     explicitDesc.setIdentity(Name("tests/task_graph/frontier_scored_mismatched_domain_explicit")).setMarkerLabel("Frontier Scored Mismatched Domain Explicit").setScheduling(explicitScheduling).setDependencies(&first, 1u);
     const auto explicitTaskResult = graph.addTask(explicitDesc, graphicsCommands);
@@ -235,7 +238,7 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationRequiresOneDomainAcrossPrecedingPa
 
     Graphics::GpuTaskSchedulingHint successorScheduling;
     successorScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
-    successorScheduling.frontierScoredMergeDomain = Name("tests/task_graph/frontier_scored_second_domain");
+    successorScheduling.frontierScoredMergeDomain = Name(s_SecondMergeDomainPath);
     Graphics::GpuTaskDesc successorDesc;
     successorDesc.setIdentity(Name("tests/task_graph/frontier_scored_mismatched_domain_successor")).setMarkerLabel("Frontier Scored Mismatched Domain Successor").setScheduling(successorScheduling).setDependencies(&explicitTask, 1u);
     const auto successorResult = graph.addTask(successorDesc, graphicsCommands);
@@ -271,7 +274,7 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationPreservesCrossQueueConsumerFrontie
 
     Graphics::GpuTaskSchedulingHint producerScheduling;
     producerScheduling.cost = Graphics::GpuTaskCostHint::Medium;
-    producerScheduling.frontierScoredMergeDomain = Name("tests/task_graph/frontier_scored_cross_queue");
+    producerScheduling.frontierScoredMergeDomain = Name(s_CrossQueueMergeDomainPath);
     Graphics::GpuTaskDesc producerDesc;
     producerDesc.setIdentity(Name("tests/task_graph/frontier_scored_frontier_producer")).setMarkerLabel("Frontier Scored Frontier Producer").setScheduling(producerScheduling);
     const auto producerResult = graph.addTask(producerDesc, graphicsCommands);
@@ -281,7 +284,7 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationPreservesCrossQueueConsumerFrontie
 
     Graphics::GpuTaskSchedulingHint successorScheduling;
     successorScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
-    successorScheduling.frontierScoredMergeDomain = Name("tests/task_graph/frontier_scored_cross_queue");
+    successorScheduling.frontierScoredMergeDomain = Name(s_CrossQueueMergeDomainPath);
     Graphics::GpuTaskDesc successorDesc;
     successorDesc.setIdentity(Name("tests/task_graph/frontier_scored_frontier_successor")).setMarkerLabel("Frontier Scored Frontier Successor").setScheduling(successorScheduling).setDependencies(&producer, 1u);
     const auto successorResult = graph.addTask(successorDesc, graphicsCommands);

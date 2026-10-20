@@ -12,6 +12,16 @@ import sys
 import tempfile
 from types import SimpleNamespace
 
+LIT_MINIMUM_CAPTURE_SECONDS = 30.0
+LIT_MILLISECONDS_PER_SECOND = 1000.0
+LIT_MINIMUM_TIMEOUT_SECONDS = 35
+LIT_MAXIMUM_TIMEOUT_SECONDS = 100
+LIT_MAXIMUM_FIXED_DELTA_SECONDS = .25
+
+LIT_TOKEN_FIELD_PATTERN = r"=(\S+)"
+LIT_BOUNDED_UNSIGNED_FIELD_PATTERN = r"=([0-9]{1,20})"
+LIT_ENABLED_FLAG = "1"
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ab"))
 from gpu_timing_parse import MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS
 import renderer_ab_benchmark as ab
@@ -154,7 +164,7 @@ def parse_workload(lines, characters_per_class):
     spawns = [line for line in lines if line.startswith(SPAWN)]
     if len(records) != 1 or len(spawns) != 1:
         raise SmokeFailure("exactly one workload signature and spawned-character record are required")
-    pattern = re.escape(WORKLOAD) + " ".join(re.escape(field) + r"=(\S+)" for field in WORKLOAD_FIELDS)
+    pattern = re.escape(WORKLOAD) + " ".join(re.escape(field) + LIT_TOKEN_FIELD_PATTERN for field in WORKLOAD_FIELDS)
     match = re.fullmatch(pattern, records[0])
     if not match:
         raise SmokeFailure("malformed stress workload signature")
@@ -207,8 +217,8 @@ def parse_reflection_diagnostics(lines, requested):
         raise SmokeFailure("requested reflection diagnostics require one enable marker and accepted samples")
     enabled_index = lines.index(REFLECTION_ENABLED)
     shutdown_index = lines.index(SHUTDOWN)
-    pattern = re.escape(REFLECTION_SAMPLE) + " ".join(re.escape(field) + r"=([0-9]{1,20})" for field in REFLECTION_FIELDS)
-    pattern += " " + " ".join(re.escape(field) + r"=([0-9]{1,20})" for field in REFLECTION_SCREEN_FIELDS)
+    pattern = re.escape(REFLECTION_SAMPLE) + " ".join(re.escape(field) + LIT_BOUNDED_UNSIGNED_FIELD_PATTERN for field in REFLECTION_FIELDS)
+    pattern += " " + " ".join(re.escape(field) + LIT_BOUNDED_UNSIGNED_FIELD_PATTERN for field in REFLECTION_SCREEN_FIELDS)
     sums = dict.fromkeys(REFLECTION_COUNTERS, 0)
     screen_sums = dict.fromkeys(REFLECTION_SCREEN_FIELDS, 0)
     maximum_frame_average_iterations = 0.0
@@ -323,7 +333,7 @@ def parse_runtime_log(text, exit_code, application_args=(), reflection_diagnosti
     if len(completions) != 1 or not intervals:
         raise SmokeFailure("exactly one completion and its interval evidence are required")
     total = parse_sample(completions[0], DONE, LIT_FPS, True)
-    if total[LIT_SECONDS] < 30.0:
+    if total[LIT_SECONDS] < LIT_MINIMUM_CAPTURE_SECONDS:
         raise SmokeFailure("measurement must span at least 30 actual wall seconds")
     if not lines.index(START) < lines.index(completions[0]) < lines.index(SHUTDOWN):
         raise SmokeFailure("startup, completion and shutdown order is invalid")
@@ -362,7 +372,7 @@ def parse_runtime_log(text, exit_code, application_args=(), reflection_diagnosti
     extents = re.findall(r"deferred rendering targets ready \((\d+)x(\d+),", text)
     if not extents or any(pair != ("1280", "900") for pair in extents):
         raise SmokeFailure("actual stress extent must be 1280x900")
-    return {LIT_MEASUREMENT: total | {"frame_ms": 1000.0 * total[LIT_SECONDS] / total[LIT_PRESENTATIONS]}, LIT_INTERVALS: intervals, LIT_WIDTH: 1280, LIT_HEIGHT: 900, "warmup_seconds": 5,
+    return {LIT_MEASUREMENT: total | {"frame_ms": LIT_MILLISECONDS_PER_SECOND * total[LIT_SECONDS] / total[LIT_PRESENTATIONS]}, LIT_INTERVALS: intervals, LIT_WIDTH: 1280, LIT_HEIGHT: 900, "warmup_seconds": 5,
         "requested_measurement_seconds": 30, "clock": "steady", "count": "accepted_native_present", LIT_WORKLOAD: workload, "pacing": pacing_summary, LIT_OPTICAL_REFLECTION: parse_reflection_diagnostics(lines, reflection_diagnostics)}
 
 
@@ -410,7 +420,7 @@ def verify_csg_profile(text, args):
     if requested != LIT_WAIST_BANDS or len(records) != 1 or len(dispatches) != 1:
         raise SmokeFailure("waist_bands requires exactly one profile and actual CSG shadow dispatch record")
     fields = ("profile", LIT_RECEIVERS, LIT_TRANSPARENT, LIT_OPAQUE, "cutters", "half_x", "half_y", "half_z", "center_y", "amplitude_y", LIT_FRONT_Z, LIT_BACK_Z, LIT_MOTION)
-    match = re.fullmatch(re.escape(CSG_PROFILE) + " ".join(re.escape(field) + r"=(\S+)" for field in fields), records[0])
+    match = re.fullmatch(re.escape(CSG_PROFILE) + " ".join(re.escape(field) + LIT_TOKEN_FIELD_PATTERN for field in fields), records[0])
     if not match:
         raise SmokeFailure("malformed CSG stress profile signature")
     observed = dict(zip(fields, match.groups()))
@@ -431,7 +441,7 @@ def verify_csg_profile(text, args):
     dispatch = re.fullmatch(re.escape(CSG_DISPATCH) + r"\(hardware_compose=([01]), ([0-9]+) instances\)", dispatches[0])
     if not capability or not dispatch:
         raise SmokeFailure("CSG stress requires enabled-device capability and actual map route evidence")
-    hardware = capability.groups() == ("1", "1")
+    hardware = capability.groups() == (LIT_ENABLED_FLAG, LIT_ENABLED_FLAG)
     if int(dispatch[1]) != int(hardware) or int(dispatch[2]) < observed[LIT_RECEIVERS]:
         raise SmokeFailure("CSG stress map route or instance population disagrees with the active workload")
     if "--disable-hardware-ray-tracing" in args.application_arg:
@@ -505,17 +515,17 @@ def launch_environment(base, args, output):
     result = {key: value for key, value in base.items() if not key.startswith(LIT_NWB)}
     if platform.system() == "Linux":
         result["NWB_LINUX_BACKEND"] = "x11"
-    result.update(NWB_STRESS_SMOKE_TIMING="1", NWB_STRESS_CHARACTERS_PER_CLASS=str(args.characters_per_class), NWB_STRESS_CSG_PROFILE=args.csg_profile, NWB_REFLECTION_SCREEN_STEPS=str(args.reflection_screen_steps),
+    result.update(NWB_STRESS_SMOKE_TIMING=LIT_ENABLED_FLAG, NWB_STRESS_CHARACTERS_PER_CLASS=str(args.characters_per_class), NWB_STRESS_CSG_PROFILE=args.csg_profile, NWB_REFLECTION_SCREEN_STEPS=str(args.reflection_screen_steps),
         NWB_SOFTWARE_SHADOW_BACKEND=args.software_shadow_backend, NWB_SOFTWARE_SHADOW_COVERAGE=args.software_shadow_coverage, NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH=args.software_shadow_blocker_search,
         NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE=args.software_shadow_capture_cadence, NWB_SHADOW_TRANSPARENT_SAMPLING=args.shadow_transparent_sampling, NWB_SHADOW_RECEIVER_RESOLUTION=args.shadow_receiver_resolution,
         NWB_SOFTWARE_SHADOW_BUDGET_MIB=str(args.software_shadow_budget_mib), NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION=str(args.software_shadow_directional_resolution), NWB_SOFTWARE_SHADOW_POINT_RESOLUTION=str(args.software_shadow_point_resolution),
         NWB_CAUSTIC_PHOTON_GRID_DIVISOR=str(args.caustic_photon_grid_divisor), NWB_SURFEL_GI_RESOLVE_RESOLUTION=args.surfel_gi_resolve_resolution, NWB_GPU_TIMING_FILE=str(output / LIT_GPU_TIMING_TXT))
     if args.cpu_diagnostics:
-        result.update(NWB_STRESS_CPU_DIAGNOSTICS="1", NWB_STRESS_CPU_TIMING_FILE=str(output / LIT_CPU_GPU_TIMING_TXT))
+        result.update(NWB_STRESS_CPU_DIAGNOSTICS=LIT_ENABLED_FLAG, NWB_STRESS_CPU_TIMING_FILE=str(output / LIT_CPU_GPU_TIMING_TXT))
     if not args.animate:
         result.update(NWB_STRESS_TEST_SPIN_ANGLE=str(args.spin_angle), NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS=str(args.fixed_delta_seconds))
     if args.reflection_diagnostics:
-        result["NWB_STRESS_REFLECTION_DIAGNOSTICS"] = "1"
+        result["NWB_STRESS_REFLECTION_DIAGNOSTICS"] = LIT_ENABLED_FLAG
     return result
 
 
@@ -679,7 +689,7 @@ def parse_args(argv=None):
         parser.error("existing renderer and runtime paths are required")
     if not args.no_logserver and (args.logserver_executable is None or not args.logserver_executable.is_file()):
         parser.error("an existing logger is required unless --no-logserver is selected")
-    if not math.isfinite(args.timeout) or not 35 < args.timeout <= 100:
+    if not math.isfinite(args.timeout) or not LIT_MINIMUM_TIMEOUT_SECONDS < args.timeout <= LIT_MAXIMUM_TIMEOUT_SECONDS:
         parser.error("timeout must be finite and greater than 35 through 100 seconds")
     if not math.isfinite(args.spin_angle) or not 0 <= args.spin_angle < math.tau:
         parser.error("spin angle must be finite in [0, 2pi)")
@@ -687,7 +697,7 @@ def parse_args(argv=None):
         parser.error("--animate cannot be combined with --fixed-delta-seconds")
     if args.fixed_delta_seconds is None and not args.animate:
         args.fixed_delta_seconds = .016666667
-    if args.fixed_delta_seconds is not None and (not math.isfinite(args.fixed_delta_seconds) or not 0 < args.fixed_delta_seconds <= .25):
+    if args.fixed_delta_seconds is not None and (not math.isfinite(args.fixed_delta_seconds) or not 0 < args.fixed_delta_seconds <= LIT_MAXIMUM_FIXED_DELTA_SECONDS):
         parser.error("fixed simulation delta must be finite in (0, .25]")
     if not 1 <= args.software_shadow_budget_mib <= 4095:
         parser.error("software shadow budget must be from 1 through 4095 MiB")

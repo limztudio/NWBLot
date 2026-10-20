@@ -23,6 +23,8 @@ namespace __hidden_telemetry_report_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_ReportArenaName = "tests/telemetry/report_work";
+
 static constexpr AStringView s_GBUFFER = "gbuffer";
 static constexpr AStringView s_RUNTIME_STATISTICS_NONE = "runtime_statistics=\"none\"";
 static constexpr AStringView s_RUNTIME_STATISTICS_NULL_JSON = "\"runtimeStatistics\": null";
@@ -75,7 +77,7 @@ TEST(Telemetry, TelemetryReportKeepsCaptureOrderAndCorrelatesTimingByFrame){
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, testArena.scratchArena, 42u, nodes, edges, 9u));
 
     Log::TelemetryReport report(testArena.arena);
-    NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/report_work"));
+    NWB::Core::Alloc::ScratchArena scratchArena(Name(s_ReportArenaName.data()));
     auto reportResult1 = Log::BuildTelemetryReport(testArena.arena, recorder.view(), scratchArena);
     ASSERT_TRUE(reportResult1);
     report = Move(*reportResult1);
@@ -131,7 +133,7 @@ TEST(Telemetry, TelemetryReportDoesNotAttachAggregatedTimingToOneGraph){
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, testArena.scratchArena, 44u, nodes, edges, 8u));
 
     Log::TelemetryReport report(testArena.arena);
-    NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/report_work"));
+    NWB::Core::Alloc::ScratchArena scratchArena(Name(s_ReportArenaName.data()));
     auto reportResult2 = Log::BuildTelemetryReport(testArena.arena, recorder.view(), scratchArena);
     ASSERT_TRUE(reportResult2);
     report = Move(*reportResult2);
@@ -157,7 +159,7 @@ TEST(Telemetry, TelemetryReportDistinguishesExactEmptyPacketSubmissionsFromAbsen
     exactRecorder.setCaptureOptions(Telemetry::CaptureOptions::All());
     ASSERT_TRUE(Telemetry::RecordFrameGraph(exactRecorder, testArena.scratchArena, 58u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, 18u));
     Log::TelemetryReport exactReport(testArena.arena);
-    NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/report_work"));
+    NWB::Core::Alloc::ScratchArena scratchArena(Name(s_ReportArenaName.data()));
     auto reportResult3 = Log::BuildTelemetryReport(testArena.arena, exactRecorder.view(), scratchArena);
     ASSERT_TRUE(reportResult3);
     exactReport = Move(*reportResult3);
@@ -202,7 +204,7 @@ TEST(Telemetry, TelemetryReportRejectsNonCurrentFrameGraphPayloads){
     }
 
     Log::TelemetryReport report(testArena.arena);
-    NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/report_work"));
+    NWB::Core::Alloc::ScratchArena scratchArena(Name(s_ReportArenaName.data()));
     auto reportResult5 = Log::BuildTelemetryReport(testArena.arena, recorder.view(), scratchArena);
     ASSERT_TRUE(reportResult5);
     report = Move(*reportResult5);
@@ -223,7 +225,7 @@ TEST(Telemetry, TelemetryReportMarksAbsentRuntimeStatistics){
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, testArena.scratchArena, 53u, nodes, edges, 13u));
 
     Log::TelemetryReport report(testArena.arena);
-    NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/report_work"));
+    NWB::Core::Alloc::ScratchArena scratchArena(Name(s_ReportArenaName.data()));
     auto reportResult6 = Log::BuildTelemetryReport(testArena.arena, recorder.view(), scratchArena);
     ASSERT_TRUE(reportResult6);
     report = Move(*reportResult6);

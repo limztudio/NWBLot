@@ -22,6 +22,24 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_renderer_gather_benchmark_probe{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+constexpr f64 s_MillisecondsPerSecond = 1000.0;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void RendererGatherBenchmarkProbe::WriteMemory(OutputFileStream& output, const Array<Core::Perf::MemorySnapshot, s_ArenaScopeCount>& snapshots){
     output << '{';
     for(u32 scope = 0u; scope < s_ArenaScopeCount; ++scope){
@@ -71,12 +89,12 @@ bool RendererGatherBenchmarkProbe::poll(const Core::Perf::SessionReport& report,
     }
     u32 scope = 0u;
     for(; scope + 1u < s_CpuScopeCount; scope += 2u){
-        const SIMDVectorDouble milliseconds = SIMDVectorDouble{ sample.milliseconds[scope], sample.milliseconds[scope + 1u] } * 1000.0;
+        const SIMDVectorDouble milliseconds = SIMDVectorDouble{ sample.milliseconds[scope], sample.milliseconds[scope + 1u] } * __hidden_renderer_gather_benchmark_probe::s_MillisecondsPerSecond;
         sample.milliseconds[scope] = milliseconds.x;
         sample.milliseconds[scope + 1u] = milliseconds.y;
     }
     if(scope < s_CpuScopeCount)
-        sample.milliseconds[scope] = VectorDoubleGetX(VectorDoubleScale(VectorDoubleReplicate(sample.milliseconds[scope]), 1000.0));
+        sample.milliseconds[scope] = VectorDoubleGetX(VectorDoubleScale(VectorDoubleReplicate(sample.milliseconds[scope]), __hidden_renderer_gather_benchmark_probe::s_MillisecondsPerSecond));
     if(memoryEnabled){
         for(u32 scope = 0u; scope < s_ArenaScopeCount; ++scope){
             const auto arenaName = Name::FromText(s_ArenaNames[scope]);
@@ -150,7 +168,7 @@ bool RendererGatherBenchmarkProbe::write(const AStringView path, const AStringVi
     }
     for(usize index = 0u; index < m_gpu.size(); index += 2u){
         const usize count = Min(usize{ 2u }, m_gpu.size() - index);
-        const SIMDVectorDouble milliseconds = SIMDVectorDouble{ m_gpu[index].timing.seconds, count > 1u ? m_gpu[index + 1u].timing.seconds : 0.0 } * 1000.0;
+        const SIMDVectorDouble milliseconds = SIMDVectorDouble{ m_gpu[index].timing.seconds, count > 1u ? m_gpu[index + 1u].timing.seconds : 0.0 } * __hidden_renderer_gather_benchmark_probe::s_MillisecondsPerSecond;
         for(usize lane = 0u; lane < count; ++lane){
             const GpuSample& sample = m_gpu[index + lane];
             output << "{\"type\":\"gpu\",\"scope\":\"" << s_GpuNames[sample.scope]

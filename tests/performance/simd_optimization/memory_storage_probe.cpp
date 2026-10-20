@@ -31,6 +31,10 @@ namespace __hidden_memory_storage_probe{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_QualifyOption = "--qualify";
+constexpr AStringView s_BenchCopyOption = "--bench-copy";
+constexpr AStringView s_BenchEqualityFirstWordOption = "--bench-equality-first-word";
+
 inline constexpr usize s_Alignment = 64u;
 inline constexpr usize s_StreamingBytes = 64u * 1024u * 1024u;
 inline constexpr u8 s_Poison = 0xA5u;
@@ -464,9 +468,10 @@ void BenchEquality(usize samples, bool firstWord){
                         rhs[slot * 8u + offset + (firstWord ? comparisonCase - 1u : comparisonCase == 1u ? 0u : 3u)] ^= 1u;
                 }
                 constexpr usize s_Iterations = 4u * 1024u * 1024u;
-                const u64 baselineWarmup = EqualityBatch<false>(lhs + offset, rhs + offset, slots, 8u, 1024u);
-                const u64 candidateWarmup = candidate(lhs + offset, rhs + offset, slots, 8u, 1024u);
-                const u64 expectedWarmup = comparisonCase == 0u ? 1024u : 0u;
+                constexpr u32 s_EqualityWarmupIterations = 1024u;
+                const u64 baselineWarmup = EqualityBatch<false>(lhs + offset, rhs + offset, slots, 8u, s_EqualityWarmupIterations);
+                const u64 candidateWarmup = candidate(lhs + offset, rhs + offset, slots, 8u, s_EqualityWarmupIterations);
+                const u64 expectedWarmup = comparisonCase == 0u ? s_EqualityWarmupIterations : 0u;
                 if(baselineWarmup != expectedWarmup || candidateWarmup != expectedWarmup){
                     NWB_CERR << "equality warm-up produced an incorrect result\n";
                     ::abort();
@@ -505,7 +510,7 @@ void BenchEquality(usize samples, bool firstWord){
 
 int main(int argc, char** argv){
     using namespace __hidden_memory_storage_probe;
-    if(argc < 2 || (NWB_STRCMP(argv[1], "--qualify") != 0 && NWB_STRCMP(argv[1], "--bench-copy") != 0 && NWB_STRCMP(argv[1], "--bench-equality") != 0 && NWB_STRCMP(argv[1], "--bench-equality-first-word") != 0)){
+    if(argc < 2 || (NWB_STRCMP(argv[1], s_QualifyOption.data()) != 0 && NWB_STRCMP(argv[1], s_BenchCopyOption.data()) != 0 && NWB_STRCMP(argv[1], "--bench-equality") != 0 && NWB_STRCMP(argv[1], s_BenchEqualityFirstWordOption.data()) != 0)){
         NWB_CERR << "usage: memory_storage_probe --qualify|--bench-copy|--bench-equality|--bench-equality-first-word [samples]\n";
         return 2;
     }
@@ -519,7 +524,7 @@ int main(int argc, char** argv){
         return 1;
     }
 #endif
-    if(NWB_STRCMP(argv[1], "--qualify") == 0){
+    if(NWB_STRCMP(argv[1], s_QualifyOption.data()) == 0){
         NWB_COUT << "qualification passed: exact bytes/tails, adjacent ranges, page boundaries, admission, integer bits and FENV\n";
         return 0;
     }
@@ -530,10 +535,10 @@ int main(int argc, char** argv){
             return 2;
         samples = static_cast<usize>(*parsedSamples);
     }
-    if(NWB_STRCMP(argv[1], "--bench-copy") == 0)
+    if(NWB_STRCMP(argv[1], s_BenchCopyOption.data()) == 0)
         BenchCopy(samples);
     else
-        BenchEquality(samples, NWB_STRCMP(argv[1], "--bench-equality-first-word") == 0);
+        BenchEquality(samples, NWB_STRCMP(argv[1], s_BenchEqualityFirstWordOption.data()) == 0);
     return 0;
 }
 

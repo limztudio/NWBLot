@@ -23,6 +23,8 @@ namespace __hidden_gather_input_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_OutputDirectory = "out";
+
 namespace Assets = NWB::Core::Assets;
 namespace Pack = Assets::AssetsVolumeCookDetail;
 namespace Gatherer = NWB::Pipeline::AssetGatherer;
@@ -53,7 +55,7 @@ protected:
         Assets::AssetString caseKey(m_testArena.arena);
         AppendHexU32(static_cast<u32>(ComputeFnv64Text(AStringView(testing::UnitTest::GetInstance()->current_test_info()->name()))), caseKey);
         m_root = NWB::Tests::RepoRootOf(m_testArena.arena, __FILE__) / "__build_obj" / "g" / caseKey;
-        m_options.outputDirectory = PathToString(m_testArena.arena, m_root / "out");
+        m_options.outputDirectory = PathToString(m_testArena.arena, m_root / s_OutputDirectory);
         m_options.configuration = "tests";
         s_MergeCalls = 0u;
     }
@@ -77,7 +79,7 @@ protected:
     void verifyPayloads(const usize count, const usize payloadSize, const u8 seed){
         Filesystem::VolumeMountDesc desc(m_testArena.arena);
         desc.volumeName = "graphics";
-        desc.mountDirectory = m_root / "out";
+        desc.mountDirectory = m_root / s_OutputDirectory;
         auto filesystemResult = Filesystem::CreateFilesystem(m_testArena.arena, desc);
         ASSERT_TRUE(filesystemResult);
         auto filesystem = Move(*filesystemResult);

@@ -27,6 +27,15 @@ namespace __hidden_allocation_owner_telemetry_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_ArenaSourceRecord = "\"source\": \"arena\"";
+constexpr AStringView s_ReservedBytesField = "reservedBytes";
+constexpr AStringView s_UsedBytesField = "usedBytes";
+constexpr AStringView s_PeakUsedBytesField = "peakUsedBytes";
+constexpr AStringView s_AllocationCountField = "allocationCount";
+constexpr AStringView s_ReallocationCountField = "reallocationCount";
+constexpr AStringView s_DeallocationCountField = "deallocationCount";
+constexpr AStringView s_HeapBackingSourceRecord = "\"source\": \"heapBacking\"";
+
 constexpr u32 s_ExpectedDualCount = 2u;
 
 
@@ -375,7 +384,7 @@ TEST(AllocationOwnerTelemetry, CapturesAutomaticAllocationOwnersAcrossEnableReal
     report = Move(*reportResult1);
     EXPECT_EQ(report.summary.parseFailureCount, 0u);
     const AStringView json(report.json.data(), report.json.size());
-    const AStringView ownerRecord = FindOwnerJsonRecord(json, ownerName, "\"source\": \"arena\"");
+    const AStringView ownerRecord = FindOwnerJsonRecord(json, ownerName, s_ArenaSourceRecord);
     ASSERT_FALSE(ownerRecord.empty());
     EXPECT_NE(ownerRecord.find(ownerName.resolvedText()), AStringView::npos);
     const usize deltaBegin = ownerRecord.find("\"delta\": {");
@@ -383,19 +392,19 @@ TEST(AllocationOwnerTelemetry, CapturesAutomaticAllocationOwnersAcrossEnableReal
     const AStringView ownerFields = ownerRecord.substr(0u, deltaBegin);
     const AStringView deltaFields = ownerRecord.substr(deltaBegin);
     ExpectJsonNumber(scratchArena, ownerFields, "frameIndex", 43u);
-    ExpectJsonNumber(scratchArena, ownerFields, "reservedBytes", retired.reservedBytes);
-    ExpectJsonNumber(scratchArena, ownerFields, "usedBytes", retired.usedBytes);
-    ExpectJsonNumber(scratchArena, ownerFields, "peakUsedBytes", retired.peakUsedBytes);
-    ExpectJsonNumber(scratchArena, ownerFields, "allocationCount", retired.allocationCount);
-    ExpectJsonNumber(scratchArena, ownerFields, "reallocationCount", retired.reallocationCount);
-    ExpectJsonNumber(scratchArena, ownerFields, "deallocationCount", retired.deallocationCount);
+    ExpectJsonNumber(scratchArena, ownerFields, s_ReservedBytesField, retired.reservedBytes);
+    ExpectJsonNumber(scratchArena, ownerFields, s_UsedBytesField, retired.usedBytes);
+    ExpectJsonNumber(scratchArena, ownerFields, s_PeakUsedBytesField, retired.peakUsedBytes);
+    ExpectJsonNumber(scratchArena, ownerFields, s_AllocationCountField, retired.allocationCount);
+    ExpectJsonNumber(scratchArena, ownerFields, s_ReallocationCountField, retired.reallocationCount);
+    ExpectJsonNumber(scratchArena, ownerFields, s_DeallocationCountField, retired.deallocationCount);
     ExpectJsonNumber(scratchArena, deltaFields, "previousFrameIndex", 42u);
-    ExpectJsonNumber(scratchArena, deltaFields, "reservedBytes", retiredDelta.reservedBytes);
-    ExpectJsonNumber(scratchArena, deltaFields, "usedBytes", retiredDelta.usedBytes);
-    ExpectJsonNumber(scratchArena, deltaFields, "peakUsedBytes", retiredDelta.peakUsedBytes);
-    ExpectJsonNumber(scratchArena, deltaFields, "allocationCount", retiredDelta.allocationCount);
-    ExpectJsonNumber(scratchArena, deltaFields, "reallocationCount", retiredDelta.reallocationCount);
-    ExpectJsonNumber(scratchArena, deltaFields, "deallocationCount", retiredDelta.deallocationCount);
+    ExpectJsonNumber(scratchArena, deltaFields, s_ReservedBytesField, retiredDelta.reservedBytes);
+    ExpectJsonNumber(scratchArena, deltaFields, s_UsedBytesField, retiredDelta.usedBytes);
+    ExpectJsonNumber(scratchArena, deltaFields, s_PeakUsedBytesField, retiredDelta.peakUsedBytes);
+    ExpectJsonNumber(scratchArena, deltaFields, s_AllocationCountField, retiredDelta.allocationCount);
+    ExpectJsonNumber(scratchArena, deltaFields, s_ReallocationCountField, retiredDelta.reallocationCount);
+    ExpectJsonNumber(scratchArena, deltaFields, s_DeallocationCountField, retiredDelta.deallocationCount);
     EXPECT_FALSE(FindOwnerJsonRecord(json, scratchName, "\"source\": \"arena\"").empty());
     EXPECT_FALSE(FindOwnerJsonRecord(json, heapName, "\"source\": \"heapBacking\"").empty());
 }
@@ -455,11 +464,11 @@ TEST(AllocationOwnerTelemetry, SharedNameSumsLiveUsageAndPreservesLargestIndivid
     report = Move(*reportResult2);
     EXPECT_EQ(report.summary.parseFailureCount, 0u);
     const AStringView json(report.json.data(), report.json.size());
-    const AStringView record = FindOwnerJsonRecord(json, ownerName, "\"source\": \"arena\"");
+    const AStringView record = FindOwnerJsonRecord(json, ownerName, s_ArenaSourceRecord);
     ASSERT_FALSE(record.empty());
     EXPECT_NE(record.find("\"peakBasis\": \"largestArena\""), AStringView::npos);
-    ExpectJsonNumber(scratchArena, record, "usedBytes", firstBytes);
-    ExpectJsonNumber(scratchArena, record, "peakUsedBytes", Max(firstBytes, secondBytes));
+    ExpectJsonNumber(scratchArena, record, s_UsedBytesField, firstBytes);
+    ExpectJsonNumber(scratchArena, record, s_PeakUsedBytesField, Max(firstBytes, secondBytes));
 }
 
 TEST(AllocationOwnerTelemetry, KeepsHeapBackingRecordsWithoutCountingTheirUsageAgain){
@@ -498,10 +507,10 @@ TEST(AllocationOwnerTelemetry, KeepsHeapBackingRecordsWithoutCountingTheirUsageA
     EXPECT_EQ(json.find("\"totalMemoryUsedDeltaBytes\":"), AStringView::npos);
     EXPECT_FALSE(FindOwnerJsonRecord(json, owner, "\"source\": \"explicitScope\"").empty());
     EXPECT_FALSE(FindOwnerJsonRecord(json, owner, "\"source\": \"arena\"").empty());
-    const AStringView heapRecord = FindOwnerJsonRecord(json, owner, "\"source\": \"heapBacking\"");
+    const AStringView heapRecord = FindOwnerJsonRecord(json, owner, s_HeapBackingSourceRecord);
     ASSERT_FALSE(heapRecord.empty());
-    ExpectJsonNumber(scratchArena, heapRecord, "usedBytes", 300u);
-    ExpectJsonNumber(scratchArena, heapRecord, "peakUsedBytes", 3000u);
+    ExpectJsonNumber(scratchArena, heapRecord, s_UsedBytesField, 300u);
+    ExpectJsonNumber(scratchArena, heapRecord, s_PeakUsedBytesField, 3000u);
 }
 
 TEST(AllocationOwnerTelemetry, ResolvesLoadedOwnerSymbolsByFullIdentityAndPreservesExplicitText){
@@ -539,7 +548,7 @@ TEST(AllocationOwnerTelemetry, ResolvesLoadedOwnerSymbolsByFullIdentityAndPreser
     ASSERT_TRUE(reportResult4);
     report = Move(*reportResult4);
     const AStringView beforeJson(report.json.data(), report.json.size());
-    const AStringView beforeRecord = FindOwnerJsonRecord(beforeJson, firstOwner, "\"source\": \"arena\"");
+    const AStringView beforeRecord = FindOwnerJsonRecord(beforeJson, firstOwner, s_ArenaSourceRecord);
     ASSERT_FALSE(beforeRecord.empty());
     EXPECT_EQ(NWB::Tests::CountText(beforeRecord, firstHashText), s_ExpectedDualCount);
 
@@ -551,10 +560,10 @@ TEST(AllocationOwnerTelemetry, ResolvesLoadedOwnerSymbolsByFullIdentityAndPreser
     report = Move(*reportResult5);
     EXPECT_EQ(report.summary.parseFailureCount, 0u);
     const AStringView json(report.json.data(), report.json.size());
-    const AStringView firstRecord = FindOwnerJsonRecord(json, firstOwner, "\"source\": \"arena\"");
-    const AStringView secondRecord = FindOwnerJsonRecord(json, secondOwner, "\"source\": \"arena\"");
+    const AStringView firstRecord = FindOwnerJsonRecord(json, firstOwner, s_ArenaSourceRecord);
+    const AStringView secondRecord = FindOwnerJsonRecord(json, secondOwner, s_ArenaSourceRecord);
     const AStringView explicitRecord = FindOwnerJsonRecord(json, firstOwner, "\"source\": \"explicitScope\"");
-    const AStringView unknownRecord = FindOwnerJsonRecord(json, unknownOwner, "\"source\": \"heapBacking\"");
+    const AStringView unknownRecord = FindOwnerJsonRecord(json, unknownOwner, s_HeapBackingSourceRecord);
     ASSERT_FALSE(firstRecord.empty());
     ASSERT_FALSE(secondRecord.empty());
     ASSERT_FALSE(explicitRecord.empty());

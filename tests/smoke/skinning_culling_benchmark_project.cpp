@@ -39,6 +39,9 @@ namespace __hidden_skinning_culling_benchmark{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_UnknownLabel = "unknown";
+constexpr TStringView s_ProjectName = NWB_TEXT("SkinningCullingBenchmark");
+
 using BenchmarkModelRef = NWB::Core::Assets::AssetRef<NWB::Impl::Model>;
 using BenchmarkMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 using NWB::Tests::Smoke::AddSmokeSkinnedRenderSystems;
@@ -126,7 +129,7 @@ static constexpr usize s_BenchmarkCaseCount = sizeof(s_BenchmarkCases) / sizeof(
     case BenchmarkMode::NoCulling: return "no_culling";
     case BenchmarkMode::FrustumOnly: return "frustum_only";
     case BenchmarkMode::FrustumCone: return "frustum_cone";
-    default: return "unknown";
+    default: return s_UnknownLabel;
     }
 }
 
@@ -136,7 +139,7 @@ static constexpr usize s_BenchmarkCaseCount = sizeof(s_BenchmarkCases) / sizeof(
     case BenchmarkView::Back: return "back";
     case BenchmarkView::Close: return "close";
     case BenchmarkView::Far: return "far";
-    default: return "unknown";
+    default: return s_UnknownLabel;
     }
 }
 
@@ -286,7 +289,7 @@ private:
 class SkinningCullingBenchmarkProject final : public NWB::IProjectEntryCallbacks{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = NWB::Tests::Smoke::CreateSmokeWorldOrDie(context, NWB_TEXT("SkinningCullingBenchmark"));
+        auto world = NWB::Tests::Smoke::CreateSmokeWorldOrDie(context, s_ProjectName);
 
         AddSmokeSkinnedRenderSystems(*world, context);
         return world;
@@ -624,7 +627,7 @@ private:
     Vector<NWB::Core::ECS::EntityID, NWB::Core::Alloc::GlobalArena> m_entities;
     Vector<NWB::Impl::SkeletonJointMatrix, NWB::Core::Alloc::GlobalArena> m_bindJoints;
     const bool m_gpuTimingEnabled = EnvironmentFlagEnabled(s_GpuTimingEnv);
-    NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ NWB_TEXT("SkinningCullingBenchmark") };
+    NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ s_ProjectName };
     f64 m_totalTimeSeconds = 0.0;
     usize m_caseIndex = 0u;
     NWB::Core::ECS::EntityID m_cameraEntity = NWB::Core::ECS::s_InvalidEntityId;

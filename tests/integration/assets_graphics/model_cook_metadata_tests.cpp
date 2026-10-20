@@ -23,6 +23,13 @@ namespace __hidden_model_cook_metadata_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_MeshObjectField = "mesh_0";
+constexpr AStringView s_SharedModelPath = "tests/model_cook_metadata/shared";
+constexpr AStringView s_UnknownModelPath = "tests/model_cook_metadata/unknown";
+constexpr AStringView s_StaticMeshesField = "static_meshes";
+constexpr AStringView s_PropObjectField = "prop";
+constexpr AStringView s_MeshField = "mesh";
+
 static constexpr AStringView s_SKELETON = "skeleton";
 static constexpr AStringView s_SKINNED_MESHES = "skinned_meshes";
 static constexpr AStringView s_MeshVirtualPath = "tests/model_cook_metadata/mesh";
@@ -124,11 +131,11 @@ TEST(ModelCookMetadata, UniqueAssetPathReferencesFailAndLocalObjectReferencesRec
         ASSERT_TRUE(metadata.parse());
         metadata.verifyObjectReferences();
         const AStringView assetPath = "tests/model_cook_metadata/skeleton_0";
-        metadata.asset.field(s_SKINNED_MESHES).field("mesh_0").field(s_SKELETON).setString(assetPath);
+        metadata.asset.field(s_SKINNED_MESHES).field(s_MeshObjectField).field(s_SKELETON).setString(assetPath);
         EXPECT_FALSE(metadata.parse());
         metadata.verifyObjectReferences();
         EXPECT_EQ(metadata.asset.field(s_SKINNED_MESHES).field("mesh_0").field(s_SKELETON).asString(), assetPath);
-        metadata.asset.field(s_SKINNED_MESHES).field("mesh_0").field(s_SKELETON).setString("rig_0");
+        metadata.asset.field(s_SKINNED_MESHES).field(s_MeshObjectField).field(s_SKELETON).setString("rig_0");
         ASSERT_TRUE(metadata.parse());
         metadata.verifyObjectReferences();
     }
@@ -140,9 +147,9 @@ TEST(ModelCookMetadata, SharedAssetPathCannotSelectAmongLocalSkeletonObjects){
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard registration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     ModelMetadata metadata;
-    metadata.addSkeleton(s_RIG_A, "tests/model_cook_metadata/shared");
+    metadata.addSkeleton(s_RIG_A, s_SharedModelPath);
     metadata.addSkeleton(s_RIG_B, "TESTS/MODEL_COOK_METADATA/SHARED");
-    metadata.addSkinnedMesh(s_BODY, "tests/model_cook_metadata/shared", "tests/model_cook_metadata/shared");
+    metadata.addSkinnedMesh(s_BODY, s_SharedModelPath, s_SharedModelPath);
     EXPECT_FALSE(metadata.parse());
     EXPECT_TRUE(metadata.entry.skinnedMeshObjects.empty());
     EXPECT_TRUE(logger.sawErrorContaining(s_TARGETS_A_MISSING_SKELETON_OBJECT));
@@ -158,7 +165,7 @@ TEST(ModelCookMetadata, UnknownObjectReferencesRemainValidatorErrors){
     Core::Common::LoggerRegistrationGuard registration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     ModelMetadata metadata;
     metadata.addSkeleton(s_RIG, "tests/model_cook_metadata/known");
-    metadata.addSkinnedMesh(s_BODY, "tests/model_cook_metadata/unknown", "tests/model_cook_metadata/unknown");
+    metadata.addSkinnedMesh(s_BODY, s_UnknownModelPath, s_UnknownModelPath);
     EXPECT_FALSE(metadata.parse());
     EXPECT_TRUE(metadata.entry.skinnedMeshObjects.empty());
     EXPECT_EQ(logger.errorCount(), 1u);
@@ -182,7 +189,7 @@ TEST(ModelCookMetadata, HandlesStaticOnlyAndMissingSkeletonCollections){
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard registration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     ModelMetadata metadata;
-    metadata.asset.field("static_meshes").field("prop").field("mesh").setString(s_MeshVirtualPath);
+    metadata.asset.field(s_StaticMeshesField).field(s_PropObjectField).field(s_MeshField).setString(s_MeshVirtualPath);
     ASSERT_TRUE(metadata.parse());
     EXPECT_TRUE(metadata.entry.skeletonObjects.empty());
     EXPECT_TRUE(metadata.entry.skinnedMeshObjects.empty());
@@ -203,7 +210,7 @@ TEST(ModelCookMetadata, RedundantSkinnedMeshReferenceIsRejectedAndSkinOnlyRefere
     metadata.verifyObjectReferences();
 
     Value& object = metadata.asset.field(s_SKINNED_MESHES).field(s_BODY);
-    object.field("mesh").setString(s_MeshVirtualPath);
+    object.field(s_MeshField).setString(s_MeshVirtualPath);
     EXPECT_FALSE(metadata.parse());
     metadata.verifyObjectReferences();
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported asset field 'mesh'")));
@@ -218,8 +225,8 @@ TEST(ModelCookMetadata, FourRowTransformFailsWithoutReplacingPreviousValueAndThr
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard registration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     ModelMetadata metadata;
-    Value& object = metadata.asset.field("static_meshes").field("prop");
-    object.field("mesh").setString(s_MeshVirtualPath);
+    Value& object = metadata.asset.field(s_StaticMeshesField).field(s_PropObjectField);
+    object.field(s_MeshField).setString(s_MeshVirtualPath);
     Value& transform = object.field("transform");
     transform.makeList();
     for(usize rowIndex = 0u; rowIndex < 3u; ++rowIndex){

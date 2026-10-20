@@ -12,6 +12,8 @@ import sys
 from csg_shadow_reference import ANALYTIC_ARMS, ARMS, compare_analytic_frames, compare_frames
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
 
+LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 45.0
+
 LIT_REUSE_TWO_FRAMES = 'reuse_two_frames'
 LIT_FINITE = 'finite'
 LIT_POINT = 'point'
@@ -94,7 +96,7 @@ def capture_arm(args, arm):
     command.extend("--application-arg=" + argument for argument in args.application_arg)
     print(f"Capturing CSG shadow {args.route}/{args.light}/{args.atlas}/{arm}...", flush=True)
     environment = capture_environment(arm, args.light, args.atlas, args.capture_cadence, args.map_resolution_divisor, args.blocker_search, args.light_source)
-    result = subprocess.run(command, env=environment, check=False, timeout=args.timeout + 45.0)
+    result = subprocess.run(command, env=environment, check=False, timeout=args.timeout + LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS)
     if result.returncode == SKIP_EXIT_CODE:
         return None
     if result.returncode:

@@ -10,6 +10,11 @@ import sys
 
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows, write_bmp_24
 
+LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 30
+
+LIT_ENABLED_FLAG = "1"
+LIT_DISABLED_FLAG = "0"
+
 LIT_N = "\n"
 LIT_EXECUTABLE = "--executable"
 LIT_WORKING_DIRECTORY = "--working-directory"
@@ -113,12 +118,12 @@ def capture_variant(args, name, enabled, hardware, expected_dispatch):
     env = os.environ.copy()
     env.pop("NWB_REFRACTION_SMOKE_CASE", None)
     env.pop("NWB_REFRACTION_SMOKE_GEOMETRY", None)
-    env["NWB_REFRACTION_SMOKE_ENABLED"] = "1" if enabled else "0"
-    env["NWB_REFRACTION_SMOKE_HARDWARE"] = "1" if hardware else "0"
+    env["NWB_REFRACTION_SMOKE_ENABLED"] = LIT_ENABLED_FLAG if enabled else LIT_DISABLED_FLAG
+    env["NWB_REFRACTION_SMOKE_HARDWARE"] = LIT_ENABLED_FLAG if hardware else LIT_DISABLED_FLAG
     env["NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS"] = "0.016666667"
     # A previously pinned interactive smoke frame must not suspend the readback.
     env.pop("NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", None)
-    result = subprocess.run(command, env=env, check=False, timeout=args.timeout + 30)
+    result = subprocess.run(command, env=env, check=False, timeout=args.timeout + LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS)
     if result.returncode == SKIP_EXIT_CODE:
         return None
     if result.returncode != 0:

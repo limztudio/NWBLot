@@ -27,6 +27,15 @@ namespace __hidden_metadata_extension_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_FirstMetadataName = "tests/metadata_extension/first";
+constexpr AStringView s_MovedSlotMetadataName = "tests/metadata_extension/moved_slot";
+constexpr AStringView s_ConstructorUnwindMetadataName = "tests/metadata_extension/constructor_unwind";
+constexpr AStringView s_CallerUnwindMetadataName = "tests/metadata_extension/caller_unwind";
+constexpr AStringView s_ReentrantMetadataName = "tests/metadata_extension/reentrant";
+constexpr AStringView s_RegistryLifetimeMetadataName = "tests/metadata_extension/registry_lifetime";
+constexpr AStringView s_ProjectVirtualRoot = "project";
+constexpr AStringView s_BuildDirectory = "__build_obj";
+
 constexpr u32 s_ExpectedDualCount = 2u;
 
 
@@ -311,7 +320,7 @@ TEST(MetadataExtensionOwnership, EraseClearAndGrowthDestroyEveryConcretePayloadO
     const u64 baseline = arena.memoryStats().usedBytes;
     {
         ParsedAssetMetadata metadata(arena);
-        const Name firstName("tests/metadata_extension/first");
+        const Name firstName(s_FirstMetadataName);
         AlignedExtension* const first = &RequireParsedMetadataExtension<AlignedExtension>(metadata, firstName, arena, state);
         for(usize index = 0u; index < 80u; ++index){
             const AssetString nameText = StringFormat(arena, "tests/metadata_extension/growth_{}", index);
@@ -340,7 +349,7 @@ TEST(MetadataExtensionOwnership, MapMoveAndReplacementUseEachOriginalObjectArena
     AssetArena secondOwnerArena(Name("tests/metadata_extension/owner_second"));
     ExtensionState firstState;
     ExtensionState secondState;
-    const Name firstName("tests/metadata_extension/first");
+    const Name firstName(s_FirstMetadataName);
     const Name otherName("tests/metadata_extension/other");
     {
         ParsedMetadataExtensionMap firstMap(0u, Hasher<Name>{}, EqualTo<Name>{}, firstMapArena);
@@ -373,11 +382,11 @@ TEST(MetadataExtensionOwnership, MapMoveAndReplacementUseEachOriginalObjectArena
 }
 
 TEST(MetadataExtensionOwnership, RequireRefillsAnExplicitlyMovedOutOwner){
-    AssetArena arena(Name("tests/metadata_extension/moved_slot"));
+    AssetArena arena(Name(s_MovedSlotMetadataName.data()));
     ExtensionState state;
     {
         ParsedAssetMetadata metadata(arena);
-        const Name name("tests/metadata_extension/moved_slot");
+        const Name name(s_MovedSlotMetadataName);
         AlignedExtension* const first = &RequireParsedMetadataExtension<AlignedExtension>(metadata, name, arena, state);
         ParsedMetadataExtension detached = Move(metadata.extensions.at(name));
         EXPECT_EQ(detached.get(), first);
@@ -394,11 +403,11 @@ TEST(MetadataExtensionOwnership, RequireRefillsAnExplicitlyMovedOutOwner){
 }
 
 TEST(MetadataExtensionOwnership, ConstructorUnwindReleasesStorageAndConstructedMembers){
-    AssetArena arena(Name("tests/metadata_extension/constructor_unwind"));
+    AssetArena arena(Name(s_ConstructorUnwindMetadataName.data()));
     ExtensionState state;
     {
         ParsedAssetMetadata metadata(arena);
-        const Name name("tests/metadata_extension/constructor_unwind");
+        const Name name(s_ConstructorUnwindMetadataName);
         const u64 baseline = arena.memoryStats().usedBytes;
         EXPECT_THROW({
             EXPECT_EQ(RequireParsedMetadataExtension<AlignedExtension>(metadata, name, arena, state, true).identity, 1u);
@@ -414,11 +423,11 @@ TEST(MetadataExtensionOwnership, ConstructorUnwindReleasesStorageAndConstructedM
 }
 
 TEST(MetadataExtensionOwnership, CallerUnwindDestroysPublishedExtensions){
-    AssetArena arena(Name("tests/metadata_extension/caller_unwind"));
+    AssetArena arena(Name(s_CallerUnwindMetadataName.data()));
     ExtensionState state;
     EXPECT_THROW({
         ParsedAssetMetadata metadata(arena);
-        const AlignedExtension& created = RequireParsedMetadataExtension<AlignedExtension>(metadata, Name("tests/metadata_extension/caller_unwind"), arena, state);
+        const AlignedExtension& created = RequireParsedMetadataExtension<AlignedExtension>(metadata, Name(s_CallerUnwindMetadataName), arena, state);
         EXPECT_EQ(created.identity, 1u);
         throw CallerFailure{};
     }, CallerFailure
@@ -429,11 +438,11 @@ TEST(MetadataExtensionOwnership, CallerUnwindDestroysPublishedExtensions){
 }
 
 TEST(MetadataExtensionOwnership, ReentrantInsertionReturnsTheActualStoredValue){
-    AssetArena arena(Name("tests/metadata_extension/reentrant"));
+    AssetArena arena(Name(s_ReentrantMetadataName.data()));
     ExtensionState state;
     {
         ParsedAssetMetadata metadata(arena);
-        const Name name("tests/metadata_extension/reentrant");
+        const Name name(s_ReentrantMetadataName);
         ReentrantExtension& result = RequireParsedMetadataExtension<ReentrantExtension>(metadata, name, metadata, name, state, true);
         EXPECT_EQ(result.identity, s_ExpectedDualCount);
         EXPECT_EQ(result.nested, nullptr);
@@ -472,7 +481,7 @@ TEST(MetadataExtensionOwnership, InsertionUnwindDestroysThePendingErasedOwner){
 }
 
 TEST(MetadataExtensionOwnership, ExtensionsRetireBeforeTheEntryRegistryTheyBorrow){
-    AssetArena arena(Name("tests/metadata_extension/registry_lifetime"));
+    AssetArena arena(Name(s_RegistryLifetimeMetadataName.data()));
     Alloc::ScratchArena scratchArena(Name("tests/metadata_extension/registry_lifetime_scratch"));
     usize observedBucketCount = 0u;
     usize expectedBucketCount = 0u;
@@ -481,7 +490,7 @@ TEST(MetadataExtensionOwnership, ExtensionsRetireBeforeTheEntryRegistryTheyBorro
         ASSERT_TRUE(RegisterAutoCollectedCookEntryTypes(metadata.entryRegistry, scratchArena));
         expectedBucketCount = metadata.entryRegistry.bucketCount();
         ASSERT_GE(expectedBucketCount, 7u);
-        const RegistryBorrowingExtension& created = RequireParsedMetadataExtension<RegistryBorrowingExtension>(metadata, Name("tests/metadata_extension/registry_lifetime"), metadata.entryRegistry, observedBucketCount);
+        const RegistryBorrowingExtension& created = RequireParsedMetadataExtension<RegistryBorrowingExtension>(metadata, Name(s_RegistryLifetimeMetadataName), metadata.entryRegistry, observedBucketCount);
         EXPECT_EQ(&created.registry, &metadata.entryRegistry);
     }
     EXPECT_EQ(observedBucketCount, expectedBucketCount);
@@ -498,7 +507,7 @@ TEST(MetadataExtensionOwnership, GraphicsParserFailureReleasesItsActualExtension
     ASSERT_TRUE(document.parse("compute_shader asset;"));
     const NWB::Path root(fixtureArena, "tests/metadata_extension/assets");
     const NWB::Path path = root / "invalid_shader.nwb";
-    const DiscoveredNwbFile file(fixtureArena, root, path, "tests/metadata_extension/assets/invalid_shader.nwb", ACompactString("project"));
+    const DiscoveredNwbFile file(fixtureArena, root, path, "tests/metadata_extension/assets/invalid_shader.nwb", ACompactString(s_ProjectVirtualRoot));
     for(usize iteration = 0u; iteration < 4u; ++iteration){
         {
             ParsedAssetMetadata metadata(ownerArena);
@@ -519,7 +528,7 @@ TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnu
     CpuTaskScheduler cpuScheduler(0u);
     Tests::CapturingLogger logger;
     Common::LoggerRegistrationGuard loggerGuard(logger, Common::LoggerBreakPolicy::BreakOnFatal);
-    const NWB::Path root = Tests::RepoRootOf(fixtureArena, __FILE__) / "__build_obj" / "metadata_registry_storage";
+    const NWB::Path root = Tests::RepoRootOf(fixtureArena, __FILE__) / s_BuildDirectory / "metadata_registry_storage";
     ASSERT_TRUE(EnsureDirectories(root));
     DiscoveredNwbFileVector files(fixtureArena);
     constexpr usize s_SamplerCount = 65u;
@@ -542,7 +551,7 @@ TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnu
         source += StringFormat(fixtureArena, "asset.mip_bias = {};\r\n", identity);
         ASSERT_TRUE(::WriteTextFile(path, source));
         const AssetString normalized = PathToString(fixtureArena, path.lexicallyNormal());
-        files.emplace_back(fixtureArena, root, path, normalized, ACompactString("project"));
+        files.emplace_back(fixtureArena, root, path, normalized, ACompactString(s_ProjectVirtualRoot));
     }
     for(const bool rejectDuplicate : { false, true }){
         if(rejectDuplicate)
@@ -586,7 +595,7 @@ TEST(MetadataDiscoveryAdmission, CaseDistinctNativeFilesBothReachMetadataAdmissi
 #else
     AssetArena arena(Name("tests/metadata_discovery/case_identity"));
     Alloc::ScratchArena scratchArena(Name("tests/metadata_discovery/case_identity_scratch"));
-    const NWB::Path root = Tests::RepoRootOf(arena, __FILE__) / "__build_obj" / "metadata_discovery_case_identity";
+    const NWB::Path root = Tests::RepoRootOf(arena, __FILE__) / s_BuildDirectory / "metadata_discovery_case_identity";
     ASSERT_TRUE(EnsureEmptyDirectory(root));
     const NWB::Path upperPath = root / "Case.nwb";
     const NWB::Path lowerPath = root / "case.nwb";
@@ -598,8 +607,8 @@ TEST(MetadataDiscoveryAdmission, CaseDistinctNativeFilesBothReachMetadataAdmissi
         GTEST_SKIP() << "The test filesystem does not preserve distinct native path case";
 
     CookVector<ResolvedAssetRoot> roots(arena);
-    roots.emplace_back(NWB::Path(arena, root), ACompactString("project"));
-    roots.emplace_back(NWB::Path(arena, root), ACompactString("project"));
+    roots.emplace_back(NWB::Path(arena, root), ACompactString(s_ProjectVirtualRoot));
+    roots.emplace_back(NWB::Path(arena, root), ACompactString(s_ProjectVirtualRoot));
     const auto files = DiscoverFilesWithExtension(arena, roots, s_NwbExtension, scratchArena);
     ASSERT_TRUE(files);
     ASSERT_EQ(files->size(), 2u);

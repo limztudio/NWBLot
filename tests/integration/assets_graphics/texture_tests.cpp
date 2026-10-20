@@ -36,6 +36,10 @@ namespace __hidden_assets_graphics_texture{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_AssetsDirectory = "assets";
+constexpr AStringView s_TexturesDirectory = "textures";
+constexpr AStringView s_CheckerMetadataFilename = "checker.nwb";
+
 using CapturingLogger = AssetsGraphicsFixture::CapturingLogger;
 using Path = AssetsGraphicsFixture::Path;
 using TestArena = AssetsGraphicsFixture::TestArena;
@@ -144,8 +148,8 @@ TEST(AssetsGraphics, TextureCookerPreservesImplicitRawSidecarWithoutEncodingItAg
     const auto rootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "texture_raw_pair_identity");
     ASSERT_TRUE(rootResult);
     const Path root = *rootResult;
-    const Path assetRoot = root / "assets";
-    const Path metadataPath = assetRoot / "textures" / "checker.nwb";
+    const Path assetRoot = root / s_AssetsDirectory;
+    const Path metadataPath = assetRoot / s_TexturesDirectory / s_CheckerMetadataFilename;
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, s_TextureTestMetadata));
     ASSERT_TRUE(WriteBinaryFile(assetRoot / "textures" / "checker.tex", original));
     Core::Metascript::Document document(testArena.arena);
@@ -236,8 +240,8 @@ TEST(AssetsGraphics, TextureCookerRejectsMissingImplicitSidecarInsteadOfSelectin
     const auto rootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "texture_missing_raw_pair");
     ASSERT_TRUE(rootResult);
     const Path root = *rootResult;
-    const Path assetRoot = root / "assets";
-    const Path metadataPath = assetRoot / "textures" / "checker.nwb";
+    const Path assetRoot = root / s_AssetsDirectory;
+    const Path metadataPath = assetRoot / s_TexturesDirectory / s_CheckerMetadataFilename;
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, s_TextureTestMetadata));
     ASSERT_TRUE(WriteBinaryFile(assetRoot / "textures" / "another.tex", MakeTextureTestUastcPayload(testArena)));
     Core::Metascript::Document document(testArena.arena);
@@ -304,8 +308,8 @@ TEST(AssetsGraphics, TextureCookerRejectsObsoleteAndDerivedMetadata){
         metadata.append(field.assignment);
         Core::Metascript::Document document(testArena.arena);
         ASSERT_TRUE(document.parse(metadata));
-        const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "texture_obsolete_metadata") / "assets";
-        const Path metadataPath = assetRoot / "textures" / "checker.nwb";
+        const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "texture_obsolete_metadata") / s_AssetsDirectory;
+        const Path metadataPath = assetRoot / s_TexturesDirectory / s_CheckerMetadataFilename;
         EXPECT_FALSE(Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena)) << field.assignment;
         EXPECT_TRUE(logger.sawErrorContaining(field.diagnostic)) << field.assignment;
     }
@@ -333,8 +337,8 @@ TEST(AssetsGraphics, TextureCookerRejectsMissingRequiredRawLayoutDescriptors){
         metadata.erase(fieldOffset, field.assignment.size());
         Core::Metascript::Document document(testArena.arena);
         ASSERT_TRUE(document.parse(metadata));
-        const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "texture_missing_layout") / "assets";
-        const Path metadataPath = assetRoot / "textures" / "checker.nwb";
+        const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "texture_missing_layout") / s_AssetsDirectory;
+        const Path metadataPath = assetRoot / s_TexturesDirectory / s_CheckerMetadataFilename;
         EXPECT_FALSE(Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena));
         EXPECT_TRUE(logger.sawErrorContaining(field.diagnostic)) << field.assignment;
     }
@@ -375,8 +379,8 @@ TEST(AssetsGraphics, TextureCookerRejectsInvalidRawLayoutDescriptorsBeforeReadin
         metadata.append(invalid.assignment);
         Core::Metascript::Document document(testArena.arena);
         ASSERT_TRUE(document.parse(metadata));
-        const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "texture_invalid_layout") / "assets";
-        const Path metadataPath = assetRoot / "textures" / "checker.nwb";
+        const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "texture_invalid_layout") / s_AssetsDirectory;
+        const Path metadataPath = assetRoot / s_TexturesDirectory / s_CheckerMetadataFilename;
         EXPECT_FALSE(Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena));
         EXPECT_TRUE(logger.sawErrorContaining(invalid.diagnostic)) << invalid.assignment;
         EXPECT_FALSE(logger.sawErrorContaining(NWB_TEXT("failed to read raw texture sidecar"))) << invalid.assignment;

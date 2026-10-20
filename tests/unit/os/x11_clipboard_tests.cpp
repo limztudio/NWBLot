@@ -29,6 +29,11 @@ namespace __hidden_x11_clipboard_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr u32 s_SelectionChangeTimeoutMS = 3000u;
+constexpr u32 s_ClipboardCompletionTimeoutMS = 6000u;
+constexpr u32 s_PollIntervalMS = 1u;
+constexpr AStringView s_ClipboardAtomName = "CLIPBOARD";
+
 using namespace NWB::Core;
 
 class X11ClipboardFixture : public testing::Test{
@@ -81,7 +86,7 @@ protected:
     }
 
     [[nodiscard]] bool awaitCompletion(IClipboardService& service, const ClipboardRequestToken token, ClipboardCompletion& completion){
-        const Timer deadline = TimerAddMS(TimerNow(), 6000u);
+        const Timer deadline = TimerAddMS(TimerNow(), __hidden_x11_clipboard_tests::s_ClipboardCompletionTimeoutMS);
         while(TimerNow() < deadline){
             if(!pumpAll())
                 return false;
@@ -90,7 +95,7 @@ protected:
                 return true;
             if(result != ClipboardPollResult::Pending)
                 return false;
-            SleepMS(1u);
+            SleepMS(__hidden_x11_clipboard_tests::s_PollIntervalMS);
         }
         return false;
     }
@@ -167,15 +172,15 @@ TEST_F(X11ClipboardFixture, IncrementalReadRetainsSnapshotAfterOwnerLosesSelecti
     const auto tokenAdmission = m_services[1]->requestReadText(ClipboardChannel::Clipboard);
     ASSERT_TRUE(tokenAdmission);
     const ClipboardRequestToken token = *tokenAdmission;
-    const Timer deadline = TimerAddMS(TimerNow(), 3000u);
+    const Timer deadline = TimerAddMS(TimerNow(), __hidden_x11_clipboard_tests::s_SelectionChangeTimeoutMS);
     while(!m_sawSelectionRequest && TimerNow() < deadline){
         ASSERT_TRUE(pumpAll());
-        SleepMS(1u);
+        SleepMS(__hidden_x11_clipboard_tests::s_PollIntervalMS);
     }
     ASSERT_TRUE(m_sawSelectionRequest);
     const Window replacement = XCreateSimpleWindow(m_displays[1], DefaultRootWindow(m_displays[1]), 0, 0, 1, 1, 0, 0, 0);
     ASSERT_NE(replacement, 0u);
-    const Atom clipboard = XInternAtom(m_displays[1], "CLIPBOARD", False);
+    const Atom clipboard = XInternAtom(m_displays[1], s_ClipboardAtomName.data(), False);
     XSetSelectionOwner(m_displays[1], clipboard, replacement, CurrentTime);
     XSync(m_displays[1], False);
     ASSERT_EQ(XGetSelectionOwner(m_displays[1], clipboard), replacement);
@@ -206,7 +211,7 @@ TEST_F(X11ClipboardFixture, CancelledRequestWindowCannotCompleteFreshRequest){
 
 TEST_F(X11ClipboardFixture, QueuedOwnershipLossCannotClearNewlyReacquiredText){
     ASSERT_TRUE(writeText(0u, ClipboardChannel::Clipboard, "before ownership loss"));
-    const Atom clipboard = XInternAtom(m_displays[1], "CLIPBOARD", False);
+    const Atom clipboard = XInternAtom(m_displays[1], s_ClipboardAtomName.data(), False);
     const Window temporaryOwner = XCreateSimpleWindow(m_displays[1], DefaultRootWindow(m_displays[1]), 0, 0, 1, 1, 0, 0, 0);
     ASSERT_NE(temporaryOwner, 0u);
     XSetSelectionOwner(m_displays[1], clipboard, temporaryOwner, CurrentTime);
@@ -216,11 +221,11 @@ TEST_F(X11ClipboardFixture, QueuedOwnershipLossCannotClearNewlyReacquiredText){
     // Retain the genuine loss event until the new ownership is established.
     XEvent ownershipLoss{};
     bool queuedLoss = false;
-    const Timer lossDeadline = TimerAddMS(TimerNow(), 3000u);
+    const Timer lossDeadline = TimerAddMS(TimerNow(), __hidden_x11_clipboard_tests::s_SelectionChangeTimeoutMS);
     while(!queuedLoss && TimerNow() < lossDeadline){
         queuedLoss = XCheckTypedEvent(m_displays[0], SelectionClear, &ownershipLoss) != False;
         if(!queuedLoss)
-            SleepMS(1u);
+            SleepMS(__hidden_x11_clipboard_tests::s_PollIntervalMS);
     }
     ASSERT_TRUE(queuedLoss);
     ASSERT_EQ(ownershipLoss.xselectionclear.selection, clipboard);

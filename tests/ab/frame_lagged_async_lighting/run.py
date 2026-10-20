@@ -19,6 +19,9 @@ from types import SimpleNamespace
 from typing import Mapping, Sequence
 from unittest import mock
 
+LIT_PROCESS_POLL_SECONDS = 0.1
+LIT_WINDOW_SETTLE_SECONDS = 0.1
+
 
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "tests" / "smoke"))
@@ -130,7 +133,7 @@ def wait_for_lifecycle_stage(process, log_directory: Path, log_baseline: Mapping
         events = validate_lifecycle_order(latest_log)
         if len(events) >= expected_event_count:
             return latest_log
-        time.sleep(0.1)
+        time.sleep(LIT_PROCESS_POLL_SECONDS)
 
     expected_events = tuple(event_name for event_name, _ in LAGGED_LIGHTING_LIFECYCLE)
     raise SmokeFailure(f"timed out {stage}: expected accepted lifecycle prefix {expected_events[:expected_event_count]}\n" f"{latest_log[-4000:]}")
@@ -195,7 +198,7 @@ def run(args: argparse.Namespace) -> int:
         if not window:
             raise SmokeFailure(f"lagged-lighting smoke did not expose the expected window '{args.window_title}'")
         capture_backend.prepare_window(window)
-        time.sleep(0.1)
+        time.sleep(LIT_WINDOW_SETTLE_SECONDS)
 
         final_log = wait_for_lifecycle_stage(app_process, log_directory, log_baseline, log_pattern, 1, args.startup_timeout, "while waiting for the first accepted bootstrap",)
         if NO_DEDICATED_ASYNC_COMPUTE not in final_log:

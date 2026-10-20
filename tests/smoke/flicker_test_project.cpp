@@ -36,6 +36,8 @@ namespace __hidden_flicker_test_smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr TStringView s_ProjectName = NWB_TEXT("FlickerTestSmokeProject");
+
 using NWB::Tests::Smoke::AddSmokeSkinnedRenderSystems;
 using NWB::Tests::Smoke::ArrowYawInputHandler;
 using NWB::Tests::Smoke::CreateSmokeCamera;
@@ -94,7 +96,7 @@ static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;
 class FlickerTestSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("FlickerTestSmokeProject"));
+        auto world = CreateSmokeWorldOrDie(context, s_ProjectName);
 
         AddSmokeSkinnedRenderSystems(*world, context);
         return world;
@@ -231,7 +233,7 @@ private:
     NWB::Core::ECS::EntityID m_opaqueOwner = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Core::ECS::EntityID m_transparentOwner = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Core::ECS::EntityID m_groundEntity = NWB::Core::ECS::s_InvalidEntityId;
-    NWB::Tests::Smoke::FpsProbe m_fpsProbe{ NWB_TEXT("FlickerTestSmokeProject") };
+    NWB::Tests::Smoke::FpsProbe m_fpsProbe{ s_ProjectName };
     NWB::Tests::Smoke::YawSpinController m_yaw;
     ArrowYawInputHandler m_arrowYawInput;
 };

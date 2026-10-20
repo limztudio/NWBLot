@@ -35,6 +35,10 @@ namespace __hidden_ui_window_smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr TStringView s_IncreaseLabel = NWB_TEXT("increase");
+constexpr AStringView s_IncreaseKey = "increase";
+constexpr TStringView s_LockedLabel = NWB_TEXT("locked");
+constexpr AStringView s_LockedKey = "locked";
 static constexpr Impl::Ui::Color s_TitleAnchor{ 0.70f, 0.02f, 0.35f, 1.0f };
 static constexpr Impl::Ui::Color s_ContentAnchor{ 0.02f, 0.30f, 0.75f, 1.0f };
 static constexpr f32 s_LabelHeight = 18.0f;
@@ -91,12 +95,12 @@ bool UiWindowSmokeScene::paint(Impl::UiPaintContext& context){
         if(!ui.beginRow("actions", row))
             return false;
         const WidgetOptions control{ { LayoutSizePolicy::Fixed, __hidden_ui_window_smoke::s_ControlWidth }, { LayoutSizePolicy::Fixed, __hidden_ui_window_smoke::s_ControlHeight } };
-        if(ui.button("increase", "Increase", control)){
+        if(ui.button(__hidden_ui_window_smoke::s_IncreaseKey, "Increase", control)){
             ++m_count;
-            logAction(NWB_TEXT("increase"));
+            logAction(__hidden_ui_window_smoke::s_IncreaseLabel);
         }
-        if(ui.checkbox("locked", "Lock", m_locked, control))
-            logAction(NWB_TEXT("locked"));
+        if(ui.checkbox(__hidden_ui_window_smoke::s_LockedKey, "Lock", m_locked, control))
+            logAction(__hidden_ui_window_smoke::s_LockedLabel);
         if(!ui.endContainer())
             return false;
     }

@@ -41,6 +41,8 @@ namespace __hidden_gi_test_smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr TStringView s_ProjectName = NWB_TEXT("GiTestSmokeProject");
+
 using NWB::Tests::Smoke::CreateSmokeCamera;
 using NWB::Tests::Smoke::CreateSmokeWorldOrDie;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
@@ -177,7 +179,7 @@ private:
 
 
     static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("GiTestSmokeProject"));
+        auto world = CreateSmokeWorldOrDie(context, s_ProjectName);
 
         AddSmokeRenderSystems(*world, context);
         return world;
@@ -297,7 +299,7 @@ public:
             const u32 captureFreezeFrame = RendererBaselineCaptureFreezeFrame();
             if(captureFreezeFrame != 0u){
                 const NWB::Tests::Smoke::FramebufferCaptureOptions options{ .shouldCapture = ShouldCaptureComplex, .predicateContext = this, .requiredWidth = 1280u, .requiredHeight = 900u, };
-                auto capture = NWB::Tests::Smoke::ConfigureSmokeFramebufferCapture(m_context, scratchArena, NWB_TEXT("GiTestSmokeProject"), captureFreezeFrame, options);
+                auto capture = NWB::Tests::Smoke::ConfigureSmokeFramebufferCapture(m_context, scratchArena, s_ProjectName, captureFreezeFrame, options);
                 if(!capture || !*capture){
                     NWB_LOGGER_ERROR(NWB_TEXT("GiTestSmokeProject: complex GI baseline requires application framebuffer capture"));
                     return false;
@@ -593,7 +595,7 @@ private:
     NWB::Core::ECS::EntityID m_blueWallNegX = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Core::ECS::EntityID m_whiteWallPosZ = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Tests::Smoke::PresentationFpsProbe m_presentationFpsProbe;
-    NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ NWB_TEXT("GiTestSmokeProject") };
+    NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ s_ProjectName };
     u32 m_rendererBaselineRenderedFrameCount = 0u;
     bool m_rendererBaselineCapturePaused = false;
     bool m_resolveSwitchEnabled = false;

@@ -31,6 +31,11 @@ namespace __hidden_ui_nested_popup_smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_TitleKey = "title";
+constexpr AStringView s_ActionKey = "action";
+constexpr AStringView s_EditKey = "edit";
+constexpr TStringView s_MenuAnchorLabel = NWB_TEXT("menu_anchor");
+constexpr AStringView s_MenuAnchorKey = "menu_anchor";
 static constexpr Impl::Ui::Rect s_Open{ 32.0f, 52.0f, 140.0f, 28.0f };
 static constexpr Impl::Ui::Rect s_Counter{ 176.0f, 52.0f, 140.0f, 28.0f };
 static constexpr Array<TStringView, 26u> s_RectNames{
@@ -39,7 +44,7 @@ static constexpr Array<TStringView, 26u> s_RectNames{
     NWB_TEXT("child_open"), NWB_TEXT("after_button"), NWB_TEXT("after_edit"), NWB_TEXT("after_list"),
     NWB_TEXT("after_row2"), NWB_TEXT("child_action"), NWB_TEXT("child_edit"), NWB_TEXT("close_branch"),
     NWB_TEXT("combo"), NWB_TEXT("combo_popup"), NWB_TEXT("combo_row2"), NWB_TEXT("search"),
-    NWB_TEXT("search_popup"), NWB_TEXT("search_query"), NWB_TEXT("search_row2"), NWB_TEXT("menu_anchor"),
+    NWB_TEXT("search_popup"), NWB_TEXT("search_query"), NWB_TEXT("search_row2"), __hidden_ui_nested_popup_smoke::s_MenuAnchorLabel,
     NWB_TEXT("menu"), NWB_TEXT("menu_row2")
 };
 
@@ -110,7 +115,7 @@ bool UiNestedPopupSmokeScene::paintRoot(Impl::Ui::Builder& ui){
     if(!ui.beginPanel("nested_root", { 24.0f, 24.0f, 300.0f, 80.0f }))
         return false;
     const WidgetOptions caption{ {}, { LayoutSizePolicy::Fixed, 16.0f } };
-    if(!ui.label("title", "Nested popup ownership / F8 closes ancestor", caption))
+    if(!ui.label(__hidden_ui_nested_popup_smoke::s_TitleKey, "Nested popup ownership / F8 closes ancestor", caption))
         return false;
     ContainerOptions row;
     row.height = { LayoutSizePolicy::Fixed, 28.0f };
@@ -137,20 +142,20 @@ bool UiNestedPopupSmokeScene::paintParent(Impl::Ui::Builder& ui){
     edit.height = { LayoutSizePolicy::Fixed, 32.0f };
     ListOptions list;
     list.height = { LayoutSizePolicy::Fixed, 56.0f };
-    if(!ui.label("title", "Parent scope resumes after nested child", caption) || !ui.beginRow("before", row))
+    if(!ui.label(__hidden_ui_nested_popup_smoke::s_TitleKey, "Parent scope resumes after nested child", caption) || !ui.beginRow("before", row))
         return false;
-    if(ui.button("action", "Before", button))
+    if(ui.button(__hidden_ui_nested_popup_smoke::s_ActionKey, "Before", button))
         ++m_beforeClicks;
-    const EditBoxResult before = ui.editBox("edit", m_beforeText, m_beforeEdit, edit);
+    const EditBoxResult before = ui.editBox(__hidden_ui_nested_popup_smoke::s_EditKey, m_beforeText, m_beforeEdit, edit);
     if(!before.valid || !ui.endContainer() || !ui.virtualList("before_list", m_source, m_beforeList, list).valid)
         return false;
     if(ui.button("child_open", "Open right child", wide))
         m_child.open();
     if(!paintChild(ui) || !ui.beginRow("after", row))
         return false;
-    if(ui.button("action", "After", button))
+    if(ui.button(__hidden_ui_nested_popup_smoke::s_ActionKey, "After", button))
         ++m_afterClicks;
-    const EditBoxResult after = ui.editBox("edit", m_afterText, m_afterEdit, edit);
+    const EditBoxResult after = ui.editBox(__hidden_ui_nested_popup_smoke::s_EditKey, m_afterText, m_afterEdit, edit);
     if(!after.valid || !ui.endContainer() || !ui.virtualList("after_list", m_source, m_afterList, list).valid)
         return false;
     ComboOptions combo;
@@ -163,11 +168,11 @@ bool UiNestedPopupSmokeScene::paintParent(Impl::Ui::Builder& ui){
     search.combo.popupHeight = 196.0f;
     if(!ui.searchComboBox("search", m_source, m_search, search).combo.valid)
         return false;
-    if(ui.button("menu_anchor", "Right-click for context commands", wide))
+    if(ui.button(__hidden_ui_nested_popup_smoke::s_MenuAnchorKey, "Right-click for context commands", wide))
         m_command = 0u;
     ContextMenuOptions menu;
     menu.size = { 200.0f, 172.0f };
-    const ContextMenuResult command = ui.contextMenu("commands", "menu_anchor", m_source, m_menu, menu);
+    const ContextMenuResult command = ui.contextMenu("commands", __hidden_ui_nested_popup_smoke::s_MenuAnchorKey, m_source, m_menu, menu);
     if(command.activated)
         m_command = command.key;
     return command.valid;
@@ -185,13 +190,13 @@ bool UiNestedPopupSmokeScene::paintChild(Impl::Ui::Builder& ui){
     m_childDeclared = true;
     const WidgetOptions caption{ {}, { LayoutSizePolicy::Fixed, 16.0f } };
     const WidgetOptions button{ { LayoutSizePolicy::Stretch, 1.0f }, { LayoutSizePolicy::Fixed, 32.0f } };
-    if(!ui.label("title", "Child escapes parent clip", caption))
+    if(!ui.label(__hidden_ui_nested_popup_smoke::s_TitleKey, "Child escapes parent clip", caption))
         return false;
-    if(ui.button("action", "Child action", button))
+    if(ui.button(__hidden_ui_nested_popup_smoke::s_ActionKey, "Child action", button))
         ++m_childClicks;
     EditBoxOptions edit;
     edit.height = { LayoutSizePolicy::Fixed, 32.0f };
-    const EditBoxResult text = ui.editBox("edit", m_childText, m_childEdit, edit);
+    const EditBoxResult text = ui.editBox(__hidden_ui_nested_popup_smoke::s_EditKey, m_childText, m_childEdit, edit);
     if(ui.button("close_branch", "Close whole ancestor branch", button))
         m_parent.close();
     return text.valid && ui.endPopup();

@@ -33,6 +33,10 @@ namespace __hidden_gpu_crash_marker_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_RetainedMarkerLabel = "Retained marker view";
+constexpr AStringView s_DuplicateRootLabel = "Duplicate root";
+constexpr AStringView s_DuplicateLeafLabel = "Duplicate leaf";
+
 using TestArena = ::NWB::Tests::TestArena<struct GpuCrashMarkerTestsTag>;
 
 
@@ -122,7 +126,7 @@ TEST(GpuCrashMarkerTracker, RetainedResolvedViewSurvivesConcurrentHistoryGrowthA
     usize retainedHash = 0u;
     {
         Core::GpuCrashMarkerTracker commandListTracker(crashTracker, testArena.arena);
-        retainedHash = commandListTracker.pushEvent("Retained marker view");
+        retainedHash = commandListTracker.pushEvent(s_RetainedMarkerLabel);
     }
     const Core::ResolvedMarker retained = crashTracker.resolveMarker(retainedHash);
     ASSERT_TRUE(retained.first());
@@ -176,7 +180,7 @@ TEST(GpuCrashMarkerTracker, RetainedResolvedViewSurvivesConcurrentHistoryGrowthA
 
     const auto retainedViewIsValid = [&](){
         const Core::ResolvedMarker resolved = crashTracker.resolveMarker(retainedHash);
-        return retained.second() == AStringView("Retained marker view") && resolved.first() && resolved.second() == AStringView("Retained marker view");
+        return retained.second() == AStringView(s_RetainedMarkerLabel) && resolved.first() && resolved.second() == AStringView(s_RetainedMarkerLabel);
     };
     growthStart.arrive_and_wait();
     if(!retainedViewIsValid())
@@ -204,11 +208,11 @@ TEST(GpuCrashMarkerTracker, ExactDuplicatePathsReuseIdsAndDistinctPathsResolveIn
     Core::GpuCrashTracker crashTracker(testArena.arena);
     Core::GpuCrashMarkerTracker commandListTracker(crashTracker, testArena.arena);
 
-    const usize firstRootHash = commandListTracker.pushEvent("Duplicate root");
-    const usize firstDuplicateHash = commandListTracker.pushEvent("Duplicate leaf");
+    const usize firstRootHash = commandListTracker.pushEvent(s_DuplicateRootLabel);
+    const usize firstDuplicateHash = commandListTracker.pushEvent(s_DuplicateLeafLabel);
     commandListTracker.resetEventStack();
-    const usize secondRootHash = commandListTracker.pushEvent("Duplicate root");
-    const usize secondDuplicateHash = commandListTracker.pushEvent("Duplicate leaf");
+    const usize secondRootHash = commandListTracker.pushEvent(s_DuplicateRootLabel);
+    const usize secondDuplicateHash = commandListTracker.pushEvent(s_DuplicateLeafLabel);
     commandListTracker.resetEventStack();
     const usize distinctHash = commandListTracker.pushEvent("Distinct path");
 

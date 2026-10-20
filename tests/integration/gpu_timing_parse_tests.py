@@ -6,9 +6,11 @@ import sys
 import tempfile
 import unittest
 
+LIT_TESTS_DIRECTORY = "tests"
+
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tests" / "smoke"))
-sys.path.insert(0, str(ROOT / "tests" / "ab"))
+sys.path.insert(0, str(ROOT / LIT_TESTS_DIRECTORY / "smoke"))
+sys.path.insert(0, str(ROOT / LIT_TESTS_DIRECTORY / "ab"))
 from gpu_timing_parse import NAME_SYMBOLS_HEADER, load_name_symbols, parse_timing_file, SmokeFailure
 
 LIT_UTF_8 = "utf-8"

@@ -21,6 +21,9 @@ namespace __hidden_ui_skin_selection_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_MissingSkinPath = "project/ui/skins/missing/atlas";
+constexpr AStringView s_CustomSkinPath = "project/ui/skins/custom/atlas";
+constexpr AStringView s_AlternateSkinPath = "project/ui/skins/alternate/atlas";
 using namespace NWB;
 using namespace NWB::Impl;
 
@@ -29,7 +32,7 @@ using namespace NWB::Impl;
 
 
 TEST(UiSkinSelectionTests, FailedCustomFallsBackToDefaultAndRevalidatesOnlyDefault){
-    const Core::Assets::AssetRef<UiSkin> custom{ "project/ui/skins/missing/atlas" };
+    const Core::Assets::AssetRef<UiSkin> custom{ __hidden_ui_skin_selection_tests::s_MissingSkinPath };
     UiSkinSelection selection(custom);
     u32 customCalls = 0u;
     u32 defaultCalls = 0u;
@@ -50,7 +53,7 @@ TEST(UiSkinSelectionTests, FailedCustomFallsBackToDefaultAndRevalidatesOnlyDefau
 }
 
 TEST(UiSkinSelectionTests, FailedDefaultLeavesSelectionUncommittedForRetry){
-    const Core::Assets::AssetRef<UiSkin> custom{ "project/ui/skins/missing/atlas" };
+    const Core::Assets::AssetRef<UiSkin> custom{ __hidden_ui_skin_selection_tests::s_MissingSkinPath };
     UiSkinSelection selection(custom);
     u32 calls = 0u;
     const auto reject = [&](const Core::Assets::AssetRef<UiSkin>&){ ++calls; return false; };
@@ -63,7 +66,7 @@ TEST(UiSkinSelectionTests, FailedDefaultLeavesSelectionUncommittedForRetry){
 }
 
 TEST(UiSkinSelectionTests, FailedRevalidationPreservesPreviouslySelectedCustom){
-    const Core::Assets::AssetRef<UiSkin> custom{ "project/ui/skins/custom/atlas" };
+    const Core::Assets::AssetRef<UiSkin> custom{ __hidden_ui_skin_selection_tests::s_CustomSkinPath };
     UiSkinSelection selection(custom);
     const auto acceptCustom = [&](const Core::Assets::AssetRef<UiSkin>& ref)noexcept{ return ref == custom; };
     EXPECT_EQ(selection.ensure(acceptCustom), UiSkinSelectionResult::Selected);
@@ -81,7 +84,7 @@ TEST(UiSkinSelectionTests, FailedRevalidationPreservesPreviouslySelectedCustom){
 
 TEST(UiSkinSelectionTests, ChangeWaitsForResourcesGpuFrameAndAcceptedLayout){
     UiSkinSelection selection(s_DefaultUiSkinRef);
-    const Core::Assets::AssetRef<UiSkin> alternate{ "project/ui/skins/alternate/atlas" };
+    const Core::Assets::AssetRef<UiSkin> alternate{ __hidden_ui_skin_selection_tests::s_AlternateSkinPath };
     selection.requestChange(alternate);
     u32 binds = 0u;
     const auto bind = [&](const Core::Assets::AssetRef<UiSkin>&, const u64){ ++binds; return true; };
@@ -127,7 +130,7 @@ TEST(UiSkinSelectionTests, SameReferenceReloadAdvancesGenerationAndLatestRequest
 
 TEST(UiSkinSelectionTests, FailedCandidateRetainsSkinUntilExplicitOrResourceRetry){
     UiSkinSelection selection(s_DefaultUiSkinRef);
-    const Core::Assets::AssetRef<UiSkin> alternate{ "project/ui/skins/alternate/atlas" };
+    const Core::Assets::AssetRef<UiSkin> alternate{ __hidden_ui_skin_selection_tests::s_AlternateSkinPath };
     EXPECT_EQ(selection.ensure([&](const Core::Assets::AssetRef<UiSkin>&)noexcept{ return true; }), UiSkinSelectionResult::Selected);
     selection.requestChange(alternate);
     u32 binds = 0u;
@@ -160,7 +163,7 @@ TEST(UiSkinSelectionTests, FailedCandidateRetainsSkinUntilExplicitOrResourceRetr
 }
 
 TEST(UiSkinSelectionTests, EmptyLiveRequestSelectsAndRebindsEngineDefault){
-    const Core::Assets::AssetRef<UiSkin> custom{ "project/ui/skins/custom/atlas" };
+    const Core::Assets::AssetRef<UiSkin> custom{ __hidden_ui_skin_selection_tests::s_CustomSkinPath };
     UiSkinSelection selection(custom);
     EXPECT_EQ(selection.ensure([&](const Core::Assets::AssetRef<UiSkin>&)noexcept{ return true; }), UiSkinSelectionResult::Selected);
     selection.requestChange({});

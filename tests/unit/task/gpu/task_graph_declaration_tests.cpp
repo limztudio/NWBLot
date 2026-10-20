@@ -27,6 +27,8 @@ namespace __hidden_task_graph_declaration_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_DeferredLightingPipelinePath = "tests/task_graph/deferred_lighting_pipeline";
+
 using namespace TaskGraphTestUtils;
 using TaskGraphTestUtils::TestArena;
 
@@ -271,7 +273,7 @@ TEST(GpuTaskGraph, OwnsPipelineMetadataAndInvalidatesPipelineIdsOnReset){
 
     char markerLabel[] = "Deferred Lighting Pipeline";
     Graphics::GpuGraphPipelineDesc desc;
-    desc.setIdentity(Name("tests/task_graph/deferred_lighting_pipeline")).setMarkerLabel(AStringView(markerLabel)).setType(Graphics::GpuGraphPipelineType::Compute);
+    desc.setIdentity(Name(s_DeferredLightingPipelinePath)).setMarkerLabel(AStringView(markerLabel)).setType(Graphics::GpuGraphPipelineType::Compute);
     const auto pipelineResult = graph.importPipeline(desc);
     ASSERT_TRUE(pipelineResult);
     const Graphics::GpuGraphPipelineId pipeline = *pipelineResult;
@@ -307,7 +309,7 @@ TEST(GpuTaskGraph, OwnsPipelineMetadataAndInvalidatesPipelineIdsOnReset){
         EXPECT_EQ(declarations.computePipelineFor(pipeline), nullptr);
     }
 
-    const auto replacementResult = AddPipelineMetadata(graph, Name("tests/task_graph/deferred_lighting_pipeline"), "Replacement Pipeline", Graphics::GpuGraphPipelineType::Compute);
+    const auto replacementResult = AddPipelineMetadata(graph, Name(s_DeferredLightingPipelinePath), "Replacement Pipeline", Graphics::GpuGraphPipelineType::Compute);
     ASSERT_TRUE(replacementResult);
     const Graphics::GpuGraphPipelineId replacement = *replacementResult;
     ASSERT_TRUE(replacement.valid());

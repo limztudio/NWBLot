@@ -398,7 +398,8 @@ TEST(EcsGraphics, MaterialTypedByteRangeRepeatedHitsAvoidScratchAllocations){
         const auto rangeResult1 = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(uploadBytes, ranges, bytes);
         ASSERT_TRUE(rangeResult1);
         firstRange = *rangeResult1;
-        for(usize warmup = 0u; warmup < 64u; ++warmup){
+        constexpr u32 s_WarmupIterations = 64u;
+        for(usize warmup = 0u; warmup < s_WarmupIterations; ++warmup){
             ByteRange range;
             const auto rangeResult2 = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(uploadBytes, ranges, bytes);
             ASSERT_TRUE(rangeResult2);

@@ -22,6 +22,9 @@ namespace __hidden_cpu_task_cleanup_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr u32 s_PollIntervalMS = 1u;
+constexpr u32 s_CleanupWaitIntervalMS = 20u;
+
 constexpr u32 s_ExpectedDualCount = 2u;
 constexpr int s_LoaderShutdownFailure = 73;
 
@@ -175,7 +178,7 @@ private:
     while(!condition.load(MemoryOrder::acquire)){
         if(DurationInMS<u64>(TimerNow(), begin) >= s_TaskTimeoutMS)
             return false;
-        SleepMS(1u);
+        SleepMS(__hidden_cpu_task_cleanup_tests::s_PollIntervalMS);
     }
     return true;
 }
@@ -339,7 +342,7 @@ TEST(CpuTaskCleanupTests, TerminalDrainJoinsAnActiveWorkerAndRetiresCanceledCapt
     JoiningThread releaseWorker([&]()noexcept{
         if(!WaitUntil(drainStarted))
             expired.store(true, MemoryOrder::release);
-        SleepMS(20u);
+        SleepMS(s_CleanupWaitIntervalMS);
         released.store(true, MemoryOrder::release);
     }
     );
@@ -453,7 +456,7 @@ TEST(CpuTaskCleanupTests, DescendantRetirementCanReenterSchedulerBeforeParentCom
         while(!stop.stop_requested()){
             if(DurationInMS<u64>(TimerNow(), begin) >= s_TaskTimeoutMS)
                 TerminateInvariant();
-            SleepMS(1u);
+            SleepMS(__hidden_cpu_task_cleanup_tests::s_PollIntervalMS);
         }
     }
     );

@@ -34,6 +34,14 @@ namespace __hidden_ui_skin_toolkit_contract_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_EngineDirectory = "impl";
+constexpr AStringView s_AssetsDirectory = "assets";
+constexpr AStringView s_UiDirectory = "ui";
+constexpr AStringView s_SkinsDirectory = "skins";
+constexpr AStringView s_DefaultSkinDirectory = "default";
+constexpr AStringView s_AtlasMetadataFilename = "atlas.nwb";
+constexpr AStringView s_WhiteRegionName = "white";
+
 using namespace Impl;
 
 struct ToolkitSkinArenaTag{};
@@ -84,8 +92,8 @@ TEST(AssetsUiSkinToolkitContract, RejectsMissingBasePartsButAcceptsDeclaredState
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     ToolkitSkinArena testArena;
-    const Path assetRoot = Path(testArena.arena, NWB_REPO_ROOT) / "impl" / "assets";
-    const Path atlasPath = assetRoot / "ui" / "skins" / "default" / "atlas.nwb";
+    const Path assetRoot = Path(testArena.arena, NWB_REPO_ROOT) / s_EngineDirectory / s_AssetsDirectory;
+    const Path atlasPath = assetRoot / s_UiDirectory / s_SkinsDirectory / s_DefaultSkinDirectory / s_AtlasMetadataFilename;
     auto sourceResult = LoadAuthoredSkin(testArena, assetRoot, atlasPath, "engine");
     ASSERT_TRUE(sourceResult);
     const UiSkin& source = sourceResult->skin;
@@ -107,13 +115,13 @@ TEST(AssetsUiSkinToolkitContract, RejectsMissingBasePartsButAcceptsDeclaredState
     }
 
     UiSkin noResize(testArena.arena, source.virtualPath());
-    CopyWithoutRegion(testArena, source, Name("white"), noResize);
+    CopyWithoutRegion(testArena, source, Name(s_WhiteRegionName), noResize);
     EXPECT_FALSE(ValidateUiSkinToolkitContract(noResize));
 
     UiSkin::RegionVector regions(testArena.arena);
     for(const UiSkinRegion& region : noResize.regions())
         regions.push_back(region);
-    UiSkinRegion resize = *source.findRegion(Name("white"));
+    UiSkinRegion resize = *source.findRegion(Name(s_WhiteRegionName));
     resize.name = Name("window.resize");
     regions.push_back(resize);
     UiSkin explicitResize(testArena.arena, source.virtualPath());
@@ -126,8 +134,8 @@ TEST(AssetsUiSkinToolkitContract, CookOptInRejectsIncompleteMetadataWhileGeneric
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     ToolkitSkinArena testArena;
     const Path assetRoot(testArena.arena, "C:/ui_skin_contract_tests/assets");
-    const Path atlasPath = assetRoot / "ui" / "atlas.nwb";
-    const Path defaultAtlasPath = Path(testArena.arena, NWB_REPO_ROOT) / "impl" / "assets" / "ui" / "skins" / "default" / "atlas.nwb";
+    const Path atlasPath = assetRoot / s_UiDirectory / s_AtlasMetadataFilename;
+    const Path defaultAtlasPath = Path(testArena.arena, NWB_REPO_ROOT) / s_EngineDirectory / s_AssetsDirectory / s_UiDirectory / s_SkinsDirectory / s_DefaultSkinDirectory / s_AtlasMetadataFilename;
     TestAString genericMetadata;
     ASSERT_TRUE(ReadTextFile(defaultAtlasPath, genericMetadata));
     const AStringView contractField = "asset.toolkit_contract = \"widgets\";";

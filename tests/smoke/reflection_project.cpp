@@ -48,6 +48,18 @@ namespace __hidden_reflection_smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_SmokeCaseEnvironment = "NWB_REFLECTION_SMOKE_CASE";
+constexpr TStringView s_ProjectName = NWB_TEXT("ReflectionSmokeProject");
+constexpr AStringView s_OffscreenCase = "offscreen";
+constexpr AStringView s_RoughCase = "rough";
+constexpr AStringView s_CapturePathEnvironment = "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH";
+constexpr AStringView s_OnscreenMovedCase = "onscreen_moved";
+constexpr AStringView s_BoundaryCase = "boundary";
+constexpr AStringView s_FloorCase = "floor";
+constexpr AStringView s_MovedCase = "moved";
+constexpr AStringView s_OpaqueGlassCase = "opaque_glass";
+constexpr AStringView s_HardwareRoute = "hardware";
+
 using namespace NWB::Tests::Smoke;
 
 static constexpr SmokeMeshRef s_PlaneMesh{"project/meshes/shadow_plane"};
@@ -65,7 +77,7 @@ static constexpr f32 s_GlassF0 = ((s_GlassIor - 1.0f) * (s_GlassIor - 1.0f)) / (
 
 static NWB::Impl::RendererSystem& CreateReflectionRenderer(NWB::Core::ECS::World& world, NWB::ProjectRuntimeContext& context){
     NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
-    const auto caseText = ReadSmokeEnvironmentText(scratchArena, "NWB_REFLECTION_SMOKE_CASE");
+    const auto caseText = ReadSmokeEnvironmentText(scratchArena, s_SmokeCaseEnvironment);
     const bool hasCase = caseText.has_value();
     const AStringView caseName = hasCase ? AStringView(caseText->data(), caseText->size()) : AStringView{};
     if(hasCase && (caseName == "temporal_deform" || caseName == "rough_deform")){
@@ -151,7 +163,7 @@ class ReflectionSmokeProject final : public NWB::IProjectEntryCallbacks{
 public:
     explicit ReflectionSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
-        , m_world(CreateSmokeWorldOrDie(context, NWB_TEXT("ReflectionSmokeProject")))
+        , m_world(CreateSmokeWorldOrDie(context, s_ProjectName))
         , m_renderer(CreateReflectionRenderer(*m_world, context)){}
     virtual ~ReflectionSmokeProject()noexcept override{ destroyWorld(); }
 
@@ -159,13 +171,13 @@ public:
 public:
     virtual bool onStartup()override{
         NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
-        const auto caseText = ReadSmokeEnvironmentText(scratchArena, "NWB_REFLECTION_SMOKE_CASE");
+        const auto caseText = ReadSmokeEnvironmentText(scratchArena, s_SmokeCaseEnvironment);
         const bool hasCase = caseText.has_value();
-        const AStringView caseName = hasCase ? AStringView(caseText->data(), caseText->size()) : AStringView("offscreen");
+        const AStringView caseName = hasCase ? AStringView(caseText->data(), caseText->size()) : AStringView(s_OffscreenCase);
         m_feedbackCase = caseName.starts_with("feedback_");
         m_opticalCase = caseName.starts_with("optical_");
         m_csgOpticalCase = caseName.starts_with("optical_csg_") && caseName != "optical_csg_reference";
-        m_extendedCase = m_feedbackCase || m_opticalCase || caseName.starts_with("rough") || caseName.starts_with("temporal_");
+        m_extendedCase = m_feedbackCase || m_opticalCase || caseName.starts_with(s_RoughCase) || caseName.starts_with("temporal_");
         m_opticalTir = caseName == "optical_tir";
         m_furnace = caseName == "rough_furnace";
         m_glassRoughnessCase = caseName == "rough_glass";
@@ -184,7 +196,7 @@ public:
                 m_reflectionSettings.diagnosticsEnabled || m_reflectionSettings.temporalEnabled
                 || m_reflectionSettings.spatialFilterEnabled || m_reflectionSettings.screenFeedbackEnabled
                 || m_reflectionSettings.traceMode != NWB::Impl::ReflectionTraceMode::Hardware
-                || ReadSmokeEnvironmentText(scratchArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH")
+                || ReadSmokeEnvironmentText(scratchArena, s_CapturePathEnvironment)
             ){
                 NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCpuTiming: requires raw hardware reflection without capture or path diagnostics"));
                 return false;
@@ -195,7 +207,7 @@ public:
         }
         const auto spatialOwnerSelection = ReadSmokeEnvironmentText(scratchArena, "NWB_REFLECTION_SMOKE_SPATIAL_OWNER");
         if(spatialOwnerSelection){
-            if(caseName != "rough" || m_authoredRoughness != 0.4f){
+            if(caseName != s_RoughCase || m_authoredRoughness != 0.4f){
                 NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSpatialOwner: requires the unchanged roughness0.4 scene"));
                 return false;
             }
@@ -203,8 +215,8 @@ public:
             if(!m_spatialOwnerProbe || !m_spatialOwnerProbe->configure(AStringView(spatialOwnerSelection->data(), spatialOwnerSelection->size()), m_reflectionSettings) || !m_renderer.setReflectionSettings(m_reflectionSettings))
                 return false;
         }
-        const bool screenCase = caseName == "onscreen" || caseName == "onscreen_moved" || caseName == "boundary" || caseName == "floor";
-        if(caseName != "offscreen" && caseName != "moved" && caseName != "opaque_glass" && !screenCase && !m_extendedCase){
+        const bool screenCase = caseName == "onscreen" || caseName == s_OnscreenMovedCase || caseName == s_BoundaryCase || caseName == s_FloorCase;
+        if(caseName != s_OffscreenCase && caseName != s_MovedCase && caseName != s_OpaqueGlassCase && !screenCase && !m_extendedCase){
             NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: unknown case '{}'"), StringConvert(caseName));
             return false;
         }
@@ -240,14 +252,14 @@ public:
                 return false;
             }
         }
-        else if(caseName == "opaque_glass" || m_glassRoughnessCase)
+        else if(caseName == s_OpaqueGlassCase || m_glassRoughnessCase)
             createOpaqueGlassScene();
-        else if(caseName == "floor")
+        else if(caseName == s_FloorCase)
             createFloorMirrorScene();
         else if(screenCase)
-            createOnscreenMirrorScene(caseName == "onscreen_moved", caseName == "boundary");
+            createOnscreenMirrorScene(caseName == s_OnscreenMovedCase, caseName == s_BoundaryCase);
         else
-            createMirrorScene(caseName == "moved");
+            createMirrorScene(caseName == s_MovedCase);
         if(!configureFramebufferCapture(scratchArena))
             return false;
         if(m_spatialOwnerProbe && !m_framebufferCapture){
@@ -437,14 +449,14 @@ private:
         }
         const auto routeText = ReadSmokeEnvironmentText(scratchArena, "NWB_REFLECTION_SMOKE_MODE");
         const bool hasRoute = routeText.has_value();
-        const AStringView route = hasRoute ? AStringView(routeText->data(), routeText->size()) : AStringView("hardware");
+        const AStringView route = hasRoute ? AStringView(routeText->data(), routeText->size()) : AStringView(s_HardwareRoute);
         if(route == "disabled")
             settings.traceMode = NWB::Impl::ReflectionTraceMode::Disabled;
         else if(route == "screen")
             settings.traceMode = NWB::Impl::ReflectionTraceMode::ScreenSpace;
         else if(route == "hybrid")
             settings.traceMode = NWB::Impl::ReflectionTraceMode::Hybrid;
-        else if(route != "hardware"){
+        else if(route != s_HardwareRoute){
             NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: unknown reflection mode '{}'"), StringConvert(route));
             return false;
         }
@@ -552,7 +564,7 @@ private:
         if(m_extendedCase || m_feedbackCapture){
             if(!m_reflectionSettings.diagnosticsEnabled){
                 // Timing-only extended scenes do not request completed-state capture.
-                const auto capturePath = ReadSmokeEnvironmentText(scratchArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
+                const auto capturePath = ReadSmokeEnvironmentText(scratchArena, s_CapturePathEnvironment);
                 if(capturePath){
                     NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: controlled completed-state capture requires diagnostics"));
                     return false;
@@ -564,7 +576,8 @@ private:
                 return static_cast<ReflectionSmokeProject*>(owner)->shouldCapture(graphicsFrame);
             };
         }
-        auto capture = ConfigureSmokeFramebufferCapture(m_context, scratchArena, NWB_TEXT("ReflectionSmokeProject"), 16u, options);
+        constexpr u32 s_DefaultCaptureFrameCount = 16u;
+        auto capture = ConfigureSmokeFramebufferCapture(m_context, scratchArena, s_ProjectName, s_DefaultCaptureFrameCount, options);
         if(!capture)
             return false;
         m_framebufferCapture = Move(*capture);
@@ -671,8 +684,8 @@ private:
     NWB::Impl::RendererSystem& m_renderer;
     ReflectionTimingRenderPass m_timingRenderPass{ m_context.graphics };
     UniquePtr<FramebufferCapture> m_framebufferCapture;
-    FpsProbe m_fpsProbe{ NWB_TEXT("ReflectionSmokeProject") };
-    GpuPassTimingProbe m_gpuPassTimingProbe{ NWB_TEXT("ReflectionSmokeProject") };
+    FpsProbe m_fpsProbe{ s_ProjectName };
+    GpuPassTimingProbe m_gpuPassTimingProbe{ s_ProjectName };
     u64 m_slicePacketSourceFrame = Limit<u64>::s_Max;
     u32 m_csgSliceRayCapacity = 0u;
     u64 m_statisticsSequence = 0u;

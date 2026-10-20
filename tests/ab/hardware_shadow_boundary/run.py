@@ -30,10 +30,18 @@ from types import SimpleNamespace
 from typing import Dict, List, Mapping, Optional, Sequence
 from unittest import mock
 
+LIT_WAIT_POLL_SECONDS = 0.25
+LIT_TIMING_STABLE_SECONDS = 0.1
+LIT_SELF_TEST_LOG_TIMEOUT_SECONDS = 0.1
+
+LIT_PROCESS_POLL_SECONDS = 0.1
+LIT_TIMING_POLL_SECONDS = 0.05
+LIT_TESTS_DIRECTORY = "tests"
+
 
 REPO = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(REPO / "tests" / "ab"))
-sys.path.insert(0, str(REPO / "tests" / "smoke"))
+sys.path.insert(0, str(REPO / LIT_TESTS_DIRECTORY / "ab"))
+sys.path.insert(0, str(REPO / LIT_TESTS_DIRECTORY / "smoke"))
 
 from gpu_timing_parse import (  # noqa: E402
     MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS, ScopeSummary, load_name_symbols as load_timing_name_symbols, parse_timing_file, require_scope_samples, summarize_scopes,)
@@ -165,7 +173,7 @@ def wait_for_log_message(process, log_directory: Path, log_baseline: Mapping[Pat
             return skip_message
         if message in latest_log:
             return None
-        time.sleep(0.1)
+        time.sleep(LIT_PROCESS_POLL_SECONDS)
 
     raise SmokeFailure(f"timed out waiting for benchmark log message '{message}'\n{latest_log[-4000:]}")
 
@@ -174,7 +182,7 @@ def wait_while_running(process, seconds: float, stage: str) -> None:
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
         ensure_process_running(process, stage)
-        time.sleep(min(0.25, max(0.0, deadline - time.monotonic())))
+        time.sleep(min(LIT_WAIT_POLL_SECONDS, max(0.0, deadline - time.monotonic())))
 
 
 def wait_for_measurement_timing_boundary(process, timing_path: Path, timeout_seconds: float) -> int:
@@ -189,10 +197,10 @@ def wait_for_measurement_timing_boundary(process, timing_path: Path, timeout_sec
         if current_size > initial_size:
             if current_size != latest_size:
                 stable_since = now
-            elif stable_since is not None and now - stable_since >= 0.1:
+            elif stable_since is not None and now - stable_since >= LIT_TIMING_STABLE_SECONDS:
                 return current_size
         latest_size = current_size
-        time.sleep(0.05)
+        time.sleep(LIT_TIMING_POLL_SECONDS)
 
     raise SmokeFailure(f"GPU timing file did not publish a post-warmup interval boundary: {timing_path}")
 
@@ -542,7 +550,7 @@ def run_self_test() -> int:
         capability_log = root / LIT_CAPABILITY_LOG
         capability_log.write_text(CAPABILITY_SKIP_LOG, encoding=LIT_UTF_8)
         running_process = SimpleNamespace(poll=lambda: None)
-        assert wait_for_log_message(running_process, root, {}, LIT_CAPABILITY_LOG, HEALTHY_REQUIRED_LOGS[0], 0.1, CAPABILITY_SKIP_LOG,) == CAPABILITY_SKIP_LOG
+        assert wait_for_log_message(running_process, root, {}, LIT_CAPABILITY_LOG, HEALTHY_REQUIRED_LOGS[0], LIT_SELF_TEST_LOG_TIMEOUT_SECONDS, CAPABILITY_SKIP_LOG,) == CAPABILITY_SKIP_LOG
 
         healthy_scopes = {name: replace(summary, sample_count=11, positive_sample_count=11) for name, summary in scopes.items()}
         healthy_scopes[FRAME_SCOPE] = ScopeSummary(11, 11, 4.95, 4.95, 4.9, 5.0)

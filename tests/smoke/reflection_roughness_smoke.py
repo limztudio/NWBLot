@@ -15,6 +15,8 @@ from reflection_roughness_reference import analyze_furnace, analyze_roughness, f
 from refraction_gallery_smoke import png_rgb_bytes
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
 
+LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 90
+
 LIT_SEQUENCE = "sequence"
 LIT_GENERATION = "generation"
 LIT_GRAPHICS_FRAME = "graphics_frame"
@@ -197,7 +199,7 @@ def capture(args, spec):
         command += [LIT_EXPECT_LOG_MESSAGE, "AVBOIT refraction resolve:"]
     command.extend("--application-arg=" + argument for argument in args.application_arg)
     print(f"Capturing {spec.name}: r={spec.roughness}, accepted cap={spec.samples}, seed={spec.seed}, temporal={spec.temporal}...", flush=True)
-    result = subprocess.run(command, env=spec_environment(spec), check=False, timeout=args.timeout + 90)
+    result = subprocess.run(command, env=spec_environment(spec), check=False, timeout=args.timeout + LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS)
     if result.returncode == SKIP_EXIT_CODE:
         return None
     if result.returncode:

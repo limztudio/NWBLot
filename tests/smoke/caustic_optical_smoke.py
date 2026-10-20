@@ -17,6 +17,8 @@ from caustic_optical_reference import exterior_samples, expected_environment_col
 from refraction_gallery_smoke import png_rgb_bytes
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
 
+LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 90
+
 LIT_GPU_VALIDATION = "--gpu-validation"
 
 LIT_COMBINED = "combined"
@@ -94,7 +96,7 @@ def capture(args, variant):
         command.append("--no-logserver")
     command.extend("--application-arg=" + argument for argument in args.application_arg)
     print("Capturing combined caustic scene / " + variant + " at presentation360...", flush=True)
-    result = subprocess.run(command, env=capture_environment(variant, args.software_ray_tracing, args.caustic_photon_grid_divisor), check=False, timeout=args.timeout + 90)
+    result = subprocess.run(command, env=capture_environment(variant, args.software_ray_tracing, args.caustic_photon_grid_divisor), check=False, timeout=args.timeout + LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS)
     if result.returncode == SKIP_EXIT_CODE:
         return None
     if result.returncode:

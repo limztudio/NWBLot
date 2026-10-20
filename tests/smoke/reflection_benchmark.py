@@ -19,6 +19,11 @@ import subprocess
 import sys
 import time
 
+LIT_MINIMUM_WARMUP_INTERVALS = 1
+
+LIT_WINDOW_TIMEOUT_SECONDS = 5.0
+LIT_PROCESS_POLL_SECONDS = .1
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ab"))
 from gpu_timing_parse import MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS, SCOPE_RE, load_name_symbols
 from smoke_volume_identity import authored_volume_hashes, file_identity, runtime_pipeline_cache_paths
@@ -408,7 +413,7 @@ def run_trial(args, variant, block, position, symbols, executable_identity):
         runtime = launch_testbed(args, args.executable, env, port)
         # Timing continues without a mapped window; focus is best-effort for presentation pacing.
         # Retain an unmapped window ID for graceful WM_DELETE shutdown.
-        handle = backend.wait_for_window(runtime.pid, min(args.timeout, 5.0))
+        handle = backend.wait_for_window(runtime.pid, min(args.timeout, LIT_WINDOW_TIMEOUT_SECONDS))
         if handle is None:
             handle = backend.find_window_for_pid(runtime.pid, None, require_mapped=False)
         if handle:
@@ -434,7 +439,7 @@ def run_trial(args, variant, block, position, symbols, executable_identity):
                         break
                     except SmokeFailure as error:
                         last_problem = str(error)
-            time.sleep(.1)
+            time.sleep(LIT_PROCESS_POLL_SECONDS)
         if selected is None:
             raise SmokeFailure(f"GPU benchmark timed out: {last_problem}")
         exit_code, tail = terminate_process(runtime, LIT_REFLECTION_BENCHMARK, handle)
@@ -612,7 +617,7 @@ def parse_args(argv):
     for name in ("width", "height", LIT_SAMPLE_INTERVALS, LIT_MINIMUM_FRAME_SAMPLES):
         if getattr(args, name) <= 0:
             parser.error(f"--{name.replace('_', '-')} must be positive")
-    if args.warmup_intervals < 1 or not 1 <= args.ray_budget <= 0xffffffff:
+    if args.warmup_intervals < LIT_MINIMUM_WARMUP_INTERVALS or not 1 <= args.ray_budget <= 0xffffffff:
         parser.error("warmup intervals and nonzero u32 ray budget are required")
     if not 1 <= args.history_samples <= 256 or not 1 <= args.optical_queries <= 16:
         parser.error("history samples must be 1..256 and optical queries 1..16")

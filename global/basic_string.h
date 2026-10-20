@@ -5,6 +5,9 @@
 #pragma once
 
 
+#define NWB_STRING_UTF16_CODE_UNIT_MAX 0xFFFF
+
+
 #include <string_view>
 #include <string>
 #include <sstream>
@@ -242,7 +245,7 @@ inline void WriteWideCodePoint(Out& out, u32 codePoint)noexcept(noexcept(*out++ 
     if(codePoint > s_UnicodeMaxCodePoint)
         codePoint = s_InvalidCodePointReplacement;
 
-#if WCHAR_MAX <= 0xFFFF
+#if WCHAR_MAX <= NWB_STRING_UTF16_CODE_UNIT_MAX
     if(codePoint > s_Utf8ThreeByteMaxCodePoint){
         codePoint -= s_Utf8FourByteMinCodePoint;
         *out++ = static_cast<wchar>(s_UnicodeHighSurrogateMin + (codePoint >> s_Utf16SurrogatePayloadBits));
@@ -259,7 +262,7 @@ inline void WriteWStringAsUtf8(Out& out, const WStringView src)noexcept(noexcept
     for(usize i = 0u; i < src.size(); ++i){
         u32 codePoint = static_cast<u32>(src[i]);
 
-#if WCHAR_MAX <= 0xFFFF
+#if WCHAR_MAX <= NWB_STRING_UTF16_CODE_UNIT_MAX
         if(codePoint >= s_UnicodeHighSurrogateMin && codePoint <= s_UnicodeHighSurrogateMax && (i + 1) < src.size()){
             const u32 low = static_cast<u32>(src[i + 1]);
             if(low >= s_UnicodeLowSurrogateMin && low <= s_UnicodeLowSurrogateMax){

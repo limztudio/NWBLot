@@ -33,6 +33,10 @@ namespace __hidden_task_graph_queue_routing_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_CrossFamilyBufferLabel = "Cross Family Same Class Buffer";
+constexpr AStringView s_CrossFamilyProducerLabel = "Cross Family Same Class Producer";
+constexpr AStringView s_CrossFamilyConsumerLabel = "Cross Family Same Class Consumer";
+
 using namespace TaskGraphTestUtils;
 using TaskGraphTestUtils::TestArena;
 
@@ -214,7 +218,7 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassWorkWithExclusiveOwnershipHandoffs)
 
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const auto bufferResult = AddBufferMetadata(graph, Name("tests/task_graph/cross_family_same_class_buffer"), "Cross Family Same Class Buffer");
+    const auto bufferResult = AddBufferMetadata(graph, Name("tests/task_graph/cross_family_same_class_buffer"), s_CrossFamilyBufferLabel);
     ASSERT_TRUE(bufferResult);
     const Graphics::GpuGraphResourceId buffer = *bufferResult;
     ASSERT_TRUE(buffer.valid());
@@ -228,7 +232,7 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassWorkWithExclusiveOwnershipHandoffs)
     producerScheduling.allowCrossFamilySameClassQueueRouting = true;
     const Graphics::GpuTaskResourceUse producerUse{ .resource = buffer, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write, };
     Graphics::GpuTaskDesc producerDesc;
-    producerDesc.setIdentity(Name("tests/task_graph/cross_family_same_class_producer")).setMarkerLabel("Cross Family Same Class Producer").setScheduling(producerScheduling).setResourceUses(&producerUse, 1u);
+    producerDesc.setIdentity(Name("tests/task_graph/cross_family_same_class_producer")).setMarkerLabel(s_CrossFamilyProducerLabel).setScheduling(producerScheduling).setResourceUses(&producerUse, 1u);
     const auto producerResult = graph.addTask(producerDesc, graphicsCommands);
     ASSERT_TRUE(producerResult);
     const Graphics::GpuTaskId producer = *producerResult;
@@ -243,7 +247,7 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassWorkWithExclusiveOwnershipHandoffs)
     Graphics::GpuTaskDesc consumerDesc;
     consumerDesc
         .setIdentity(Name("tests/task_graph/cross_family_same_class_consumer"))
-        .setMarkerLabel("Cross Family Same Class Consumer")
+        .setMarkerLabel(s_CrossFamilyConsumerLabel)
         .setScheduling(consumerScheduling)
         .setDependencies(consumerDependencies, LengthOf(consumerDependencies))
         .setResourceUses(&consumerUse, 1u)
@@ -384,7 +388,7 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassComputeAndTransferWorkWithOwnership
 
         TestArena testArena;
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const auto bufferResult = AddBufferMetadata(graph, resourceIdentity, "Cross Family Same Class Buffer");
+        const auto bufferResult = AddBufferMetadata(graph, resourceIdentity, s_CrossFamilyBufferLabel);
         ASSERT_TRUE(bufferResult);
         const Graphics::GpuGraphResourceId buffer = *bufferResult;
         ASSERT_TRUE(buffer.valid());
@@ -398,7 +402,7 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassComputeAndTransferWorkWithOwnership
         producerScheduling.allowCrossFamilySameClassQueueRouting = true;
         const Graphics::GpuTaskResourceUse producerUse{ .resource = buffer, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write, };
         Graphics::GpuTaskDesc producerDesc;
-        producerDesc.setIdentity(producerIdentity).setMarkerLabel("Cross Family Same Class Producer").setScheduling(producerScheduling).setResourceUses(&producerUse, 1u);
+        producerDesc.setIdentity(producerIdentity).setMarkerLabel(s_CrossFamilyProducerLabel).setScheduling(producerScheduling).setResourceUses(&producerUse, 1u);
         const auto producerResult = graph.addTask(producerDesc, commands);
         ASSERT_TRUE(producerResult);
         const Graphics::GpuTaskId producer = *producerResult;
@@ -411,7 +415,7 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassComputeAndTransferWorkWithOwnership
         const Graphics::GpuTaskId consumerDependencies[] = { producer };
         const Graphics::GpuTaskResourceUse consumerUse{ .resource = buffer, .range = {}, .requiredState = Graphics::ResourceStates::CopySource, .access = Graphics::GpuTaskResourceAccess::Read, };
         Graphics::GpuTaskDesc consumerDesc;
-        consumerDesc.setIdentity(consumerIdentity).setMarkerLabel("Cross Family Same Class Consumer").setScheduling(consumerScheduling).setDependencies(consumerDependencies, LengthOf(consumerDependencies)).setResourceUses(&consumerUse, 1u);
+        consumerDesc.setIdentity(consumerIdentity).setMarkerLabel(s_CrossFamilyConsumerLabel).setScheduling(consumerScheduling).setDependencies(consumerDependencies, LengthOf(consumerDependencies)).setResourceUses(&consumerUse, 1u);
         const auto consumerResult = graph.addTask(consumerDesc, commands);
         ASSERT_TRUE(consumerResult);
         const Graphics::GpuTaskId consumer = *consumerResult;

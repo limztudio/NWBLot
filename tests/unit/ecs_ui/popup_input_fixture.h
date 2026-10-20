@@ -102,6 +102,12 @@ protected:
     };
 
 
+private:
+    static constexpr AStringView s_PopupKey = "popup";
+    static constexpr AStringView s_EditKey = "edit";
+    static constexpr AStringView s_ChildKey = "child";
+
+
 public:
     UiPopupInputTests()
         : m_arena(Name("tests/ecs_ui/popup_input"))
@@ -121,8 +127,8 @@ protected:
     virtual void SetUp()override{
         ASSERT_TRUE(m_textInput.setFocused(true));
         ASSERT_TRUE(m_baseModel.setText("base"));
-        ASSERT_TRUE(m_popupModel.setText("popup"));
-        ASSERT_TRUE(m_childModel.setText("child"));
+        ASSERT_TRUE(m_popupModel.setText(s_PopupKey));
+        ASSERT_TRUE(m_childModel.setText(s_ChildKey));
     }
 
 
@@ -179,7 +185,7 @@ protected:
     [[nodiscard]] bool prepare(){
         if(!beginBaseFrame())
             return false;
-        const auto popup = m_context.declare("popup", Ui::WidgetKind::Popup);
+        const auto popup = m_context.declare(s_PopupKey, Ui::WidgetKind::Popup);
         if(!popup)
             return false;
         const Ui::WidgetState owner = **popup;
@@ -192,14 +198,14 @@ protected:
             scope.token = m_token;
             scope.bounds = { 230.0f, 40.0f, 240.0f, 100.0f };
             scope.viewport = m_viewport;
-            if(!m_context.beginPopupScope(owner, scope) || !m_context.pushScope("popup"))
+            if(!m_context.beginPopupScope(owner, scope) || !m_context.pushScope(s_PopupKey))
                 return false;
             Ui::HitTarget barrier;
             barrier.rectangle = scope.bounds;
             barrier.clip = m_viewport;
             if(!m_context.addTarget(owner, barrier))
                 return false;
-            const auto popupEdit = declareEdit("edit", m_popupModel, { 250.0f, 60.0f, 180.0f, 30.0f });
+            const auto popupEdit = declareEdit(s_EditKey, m_popupModel, { 250.0f, 60.0f, 180.0f, 30.0f });
             if(!popupEdit)
                 return false;
             m_popupWidget = popupEdit->widget;
@@ -215,14 +221,14 @@ protected:
     [[nodiscard]] bool prepareDeferred(){
         if(!beginPreparedFrame())
             return false;
-        auto declared = m_context.declare("popup", Ui::WidgetKind::Popup);
+        auto declared = m_context.declare(s_PopupKey, Ui::WidgetKind::Popup);
         if(!declared)
             return false;
         const Ui::WidgetState popup = **declared;
         m_token = { popup.id, popup.declarationGeneration, m_popupState.instanceGeneration(), m_popupState.openGeneration() };
         m_context.input().fencePopup(m_token);
         if(m_popupState.isOpen()){
-            declared = m_context.declarePart(popup, "edit", Ui::WidgetKind::EditBox);
+            declared = m_context.declarePart(popup, s_EditKey, Ui::WidgetKind::EditBox);
             if(!declared)
                 return false;
             m_popupWidget = **declared;
@@ -262,7 +268,7 @@ protected:
     [[nodiscard]] bool prepareNested(){
         if(!beginBaseFrame())
             return false;
-        auto declared = m_context.declare("popup", Ui::WidgetKind::Popup);
+        auto declared = m_context.declare(s_PopupKey, Ui::WidgetKind::Popup);
         if(!declared)
             return false;
         const Ui::WidgetState parent = **declared;
@@ -278,19 +284,19 @@ protected:
             scope.token = m_token;
             scope.bounds = { 230.0f, 40.0f, 240.0f, 100.0f };
             scope.viewport = m_viewport;
-            if(!m_context.beginPopupScope(parent, scope) || !m_context.pushScope("popup"))
+            if(!m_context.beginPopupScope(parent, scope) || !m_context.pushScope(s_PopupKey))
                 return false;
             Ui::HitTarget barrier;
             barrier.rectangle = scope.bounds;
             barrier.clip = m_viewport;
             if(!m_context.addTarget(parent, barrier))
                 return false;
-            const auto popupEdit = declareEdit("edit", m_popupModel, { 250.0f, 60.0f, 180.0f, 30.0f });
+            const auto popupEdit = declareEdit(s_EditKey, m_popupModel, { 250.0f, 60.0f, 180.0f, 30.0f });
             if(!popupEdit)
                 return false;
             m_popupWidget = popupEdit->widget;
             m_popupResult = popupEdit->result;
-            declared = m_context.declare("child", Ui::WidgetKind::Popup);
+            declared = m_context.declare(s_ChildKey, Ui::WidgetKind::Popup);
             if(!declared)
                 return false;
             const Ui::WidgetState child = **declared;
@@ -302,12 +308,12 @@ protected:
                 scope.token = m_childToken;
                 scope.parent = m_token;
                 scope.bounds = { 60.0f, 80.0f, 240.0f, 100.0f };
-                if(!m_context.beginPopupScope(child, scope) || !m_context.pushScope("child"))
+                if(!m_context.beginPopupScope(child, scope) || !m_context.pushScope(s_ChildKey))
                     return false;
                 barrier.rectangle = scope.bounds;
                 if(!m_context.addTarget(child, barrier))
                     return false;
-                const auto childEdit = declareEdit("edit", m_childModel, { 80.0f, 100.0f, 180.0f, 30.0f });
+                const auto childEdit = declareEdit(s_EditKey, m_childModel, { 80.0f, 100.0f, 180.0f, 30.0f });
                 if(!childEdit)
                     return false;
                 m_childWidget = childEdit->widget;
@@ -370,7 +376,7 @@ protected:
         ASSERT_EQ(m_context.input().focus(), m_popupWidget.id);
         ASSERT_TRUE(frame());
         ASSERT_TRUE(m_textInput.activeSession().valid());
-        ASSERT_EQ(m_textInput.publishedText(), "popup");
+        ASSERT_EQ(m_textInput.publishedText(), s_PopupKey);
     }
 
 

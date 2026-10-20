@@ -11,6 +11,24 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_cpu_task_profiling_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+constexpr u32 s_PollIntervalMS = 1u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 constexpr u32 s_ExpectedDualCount = 2u;
 constexpr u32 s_ThirdElementIndex = 2u;
 
@@ -27,15 +45,15 @@ TEST(CpuTaskProfilingTests, ReadyAndExecutionEventsRetainTheirOwnFramesAndLabels
     const auto taskLabel = scheduler.registerProfileLabel(taskName);
     CpuTaskScope scope(scheduler, scopeLabel);
     scheduler.setProfiling(true, 7u);
-    const auto cpuAdmission54 = scope.submit([](){ SleepMS(1u); }, { .profileLabel = taskLabel });
+    const auto cpuAdmission54 = scope.submit([](){ SleepMS(__hidden_cpu_task_profiling_tests::s_PollIntervalMS); }, { .profileLabel = taskLabel });
     ASSERT_TRUE(cpuAdmission54);
     const auto task = *cpuAdmission54;
     ASSERT_TRUE(task.valid());
-    const auto cpuAdmission55 = scope.submit([](){ SleepMS(1u); });
+    const auto cpuAdmission55 = scope.submit([](){ SleepMS(__hidden_cpu_task_profiling_tests::s_PollIntervalMS); });
     ASSERT_TRUE(cpuAdmission55);
     if(cpuAdmission55)
         ASSERT_TRUE(cpuAdmission55->valid());
-    SleepMS(1u);
+    SleepMS(__hidden_cpu_task_profiling_tests::s_PollIntervalMS);
     scheduler.setProfiling(true, 8u);
     scheduler.wait(task);
     scope.wait();
@@ -225,16 +243,16 @@ TEST(CpuTaskProfilingTests, ConcurrentCaptureChangesDoNotAffectTaskCompletionOrM
         started.store(true, MemoryOrder::release);
         for(u64 frame = 1u; frame <= 64u; ++frame){
             scheduler.setProfiling(true, frame);
-            SleepMS(1u);
+            SleepMS(__hidden_cpu_task_profiling_tests::s_PollIntervalMS);
             scheduler.setProfiling(false);
         }
     }
     );
     while(!started.load(MemoryOrder::acquire))
-        SleepMS(1u);
+        SleepMS(__hidden_cpu_task_profiling_tests::s_PollIntervalMS);
     for(u32 index = 0u; index < 256u; ++index){
         const auto cpuAdmission63 = scope.submit([&](){
-            SleepMS(1u);
+            SleepMS(__hidden_cpu_task_profiling_tests::s_PollIntervalMS);
             callbacks.fetch_add(1u, MemoryOrder::release);
         }
         );
@@ -251,7 +269,7 @@ TEST(CpuTaskProfilingTests, ConcurrentCaptureChangesDoNotAffectTaskCompletionOrM
             if(events[index].task.valid())
                 EXPECT_EQ(events[index].task.domainIdentity, scheduler.domainIdentity());
         }
-        SleepMS(1u);
+        SleepMS(__hidden_cpu_task_profiling_tests::s_PollIntervalMS);
     }
     capture.join();
     scope.wait();

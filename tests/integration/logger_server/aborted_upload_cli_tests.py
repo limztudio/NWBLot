@@ -13,8 +13,12 @@ import tempfile
 import time
 from types import SimpleNamespace
 
+LIT_UPLOAD_POLL_SECONDS = 0.02
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "smoke"))
 from window_capture_smoke import (STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, collect_log_delta, ensure_process_running, launch_logserver, require_normal_process_exit, terminate_process, validate_expected_log_text)
+
+LIT_LOOPBACK_HOST = "127.0.0.1"
 
 LIT_LOGSERVER = "logserver"
 LIT_DISCONNECT_RETIRED = "disconnect_retired"
@@ -33,12 +37,12 @@ def wait_for_condition(process, condition, timeout, description):
         value = condition()
         if value:
             return value
-        time.sleep(min(0.02, max(0.0, deadline - time.monotonic())))
+        time.sleep(min(LIT_UPLOAD_POLL_SECONDS, max(0.0, deadline - time.monotonic())))
     raise SmokeFailure(f"timed out {description}")
 
 
 def start_partial_upload(port, process, inbox, timeout, marker):
-    connection = socket.create_connection(("127.0.0.1", port), timeout=timeout)
+    connection = socket.create_connection((LIT_LOOPBACK_HOST, port), timeout=timeout)
     try:
         headers = (f"POST /crash HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n"
                    "Content-Type: application/octet-stream\r\nContent-Length: 1048576\r\n\r\n")
@@ -80,7 +84,7 @@ def run(executable, output, timeout):
             if not second_path.is_file() or not second_path.read_bytes().startswith(second_marker):
                 raise SmokeFailure("disconnecting one logger removed or altered the other logger's upload")
             evidence[LIT_CONCURRENT_UPLOADS_INDEPENDENT] = True
-            health = http.client.HTTPConnection("127.0.0.1", port, timeout=timeout)
+            health = http.client.HTTPConnection(LIT_LOOPBACK_HOST, port, timeout=timeout)
             try:
                 health.request("POST", "/namesym", body=b"")
                 response = health.getresponse()

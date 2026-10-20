@@ -19,6 +19,8 @@ namespace __hidden_cpu_task_wait_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr u32 s_WatchdogTimeoutMS = 10000u;
+constexpr u32 s_PollIntervalMS = 1u;
 constexpr u32 s_ExpectedDualCount = 2u;
 
 
@@ -33,9 +35,9 @@ public:
         : m_watchdog([](const StopToken& stop)noexcept{
             const Timer begin = TimerNow();
             while(!stop.stop_requested()){
-                if(DurationInMS<u64>(TimerNow(), begin) >= 10000u)
+                if(DurationInMS<u64>(TimerNow(), begin) >= __hidden_cpu_task_wait_tests::s_WatchdogTimeoutMS)
                     TerminateInvariant();
-                SleepMS(1u);
+                SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
             }
         }
         )
@@ -276,7 +278,7 @@ TEST(CpuTaskWaitTests, ConcurrentScopeWaitersCanSwitchTheSharedSearchCache){
     const auto cpuAdmission160 = scheduler.submit([&](){
         entered.fetch_add(1u, MemoryOrder::release);
         while(!start.load(MemoryOrder::acquire))
-            SleepMS(1u);
+            SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
         scopeA.wait();
     }
     );
@@ -285,7 +287,7 @@ TEST(CpuTaskWaitTests, ConcurrentScopeWaitersCanSwitchTheSharedSearchCache){
     const auto cpuAdmission161 = scheduler.submit([&](){
         entered.fetch_add(1u, MemoryOrder::release);
         while(!start.load(MemoryOrder::acquire))
-            SleepMS(1u);
+            SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
         scopeB.wait();
     }
     );
@@ -294,7 +296,7 @@ TEST(CpuTaskWaitTests, ConcurrentScopeWaitersCanSwitchTheSharedSearchCache){
     ASSERT_TRUE(waiterA.valid());
     ASSERT_TRUE(waiterB.valid());
     while(entered.load(MemoryOrder::acquire) != s_ExpectedDualCount)
-        SleepMS(1u);
+        SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
     for(u32 index = 0u; index < 32u; ++index){
         const auto cpuAdmission162 = scheduler.submit([]()noexcept{});
         ASSERT_TRUE(cpuAdmission162);
@@ -416,7 +418,7 @@ TEST(CpuTaskWaitTests, AnotherWorkerCanClaimAnUnrelatedAnchorDuringScopeExecutio
     const auto cpuAdmission172 = scheduler.submit([&](){
         waiterEntered.store(true, MemoryOrder::release);
         while(!startWaiter.load(MemoryOrder::acquire))
-            SleepMS(1u);
+            SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
         scope.wait();
     }
     );
@@ -424,22 +426,22 @@ TEST(CpuTaskWaitTests, AnotherWorkerCanClaimAnUnrelatedAnchorDuringScopeExecutio
     const auto waiter = *cpuAdmission172;
     ASSERT_TRUE(waiter.valid());
     while(!waiterEntered.load(MemoryOrder::acquire))
-        SleepMS(1u);
+        SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
     const auto cpuAdmission173 = scheduler.submit([&]()noexcept{
         blockerEntered.store(true, MemoryOrder::release);
         while(!releaseBlocker.load(MemoryOrder::acquire))
-            SleepMS(1u);
+            SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
     }
     );
     ASSERT_TRUE(cpuAdmission173);
     if(cpuAdmission173)
         ASSERT_TRUE(cpuAdmission173->valid());
     while(!blockerEntered.load(MemoryOrder::acquire))
-        SleepMS(1u);
+        SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
     const auto cpuAdmission174 = scheduler.submit([&]()noexcept{
         anchorEntered.store(true, MemoryOrder::release);
         while(!releaseAnchor.load(MemoryOrder::acquire))
-            SleepMS(1u);
+            SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
     }
     );
     ASSERT_TRUE(cpuAdmission174);
@@ -448,7 +450,7 @@ TEST(CpuTaskWaitTests, AnotherWorkerCanClaimAnUnrelatedAnchorDuringScopeExecutio
     const auto cpuAdmission175 = scope.submit([&]()noexcept{
         releaseBlocker.store(true, MemoryOrder::release);
         while(!anchorEntered.load(MemoryOrder::acquire))
-            SleepMS(1u);
+            SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
         joined.fetch_add(1u, MemoryOrder::relaxed);
     }
     );
@@ -487,14 +489,14 @@ TEST(CpuTaskWaitTests, DependencyCompletionAppendsScopedWorkAfterAnUnrelatedAnch
     const auto cpuAdmission178 = scheduler.submit([&]()noexcept{
         entered.store(true, MemoryOrder::release);
         while(!release.load(MemoryOrder::acquire))
-            SleepMS(1u);
+            SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
     }
     );
     ASSERT_TRUE(cpuAdmission178);
     const auto prerequisite = *cpuAdmission178;
     ASSERT_TRUE(prerequisite.valid());
     while(!entered.load(MemoryOrder::acquire))
-        SleepMS(1u);
+        SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
     CpuTaskOptions mainThread;
     mainThread.target = CpuTaskTarget::MainThread;
     u32 unrelated = 0u;

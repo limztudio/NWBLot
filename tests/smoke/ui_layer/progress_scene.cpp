@@ -26,6 +26,24 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_ui_progress_smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+constexpr AStringView s_TitleKey = "title";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 UiProgressSmokeScene::UiProgressSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input)
     : m_input(input)
 {
@@ -71,7 +89,7 @@ bool UiProgressSmokeScene::paintMain(Impl::Ui::Builder& ui, const Impl::Ui::Rect
         return false;
     const WidgetOptions caption{ {}, { LayoutSizePolicy::Fixed, 16.0f } };
     const WidgetOptions button{ { LayoutSizePolicy::Stretch, 1.0f }, { LayoutSizePolicy::Fixed, 28.0f } };
-    if(!ui.label("title", "Passive progress / bounded skin fill", caption))
+    if(!ui.label(__hidden_ui_progress_smoke::s_TitleKey, "Passive progress / bounded skin fill", caption))
         return false;
     if(ui.button("before", "Before progress", button))
         ++m_beforeClicks;
@@ -93,7 +111,7 @@ bool UiProgressSmokeScene::paintFrozen(Impl::Ui::Builder& ui, const Impl::Ui::Re
     if(!ui.beginPanel("progress_frozen", bounds))
         return false;
     const WidgetOptions caption{ {}, { LayoutSizePolicy::Fixed, 16.0f } };
-    if(!ui.label("title", "Declaration owns value, options and style", caption))
+    if(!ui.label(__hidden_ui_progress_smoke::s_TitleKey, "Declaration owns value, options and style", caption))
         return false;
     const ProgressStyle original = ui.progressStyle();
     f64 fraction = m_phase ? 0.75 : 0.25;

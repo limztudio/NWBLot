@@ -14,6 +14,11 @@ import zlib
 
 from window_capture_smoke import (SKIP_EXIT_CODE, SmokeFailure, analyze_rgb_rows, read_bmp_24_rows,)
 
+LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 30
+
+LIT_ENABLED_FLAG = "1"
+LIT_DISABLED_FLAG = "0"
+
 LIT_GALLERY_HTML = "gallery.html"
 LIT_IMAGE_COUNT = "image_count"
 
@@ -121,9 +126,9 @@ def capture_environment(case, variant, inherited=None):
         "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH", "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT",):
         env.pop(name, None)
     env[LIT_NWB_REFRACTION_SMOKE_CASE] = case
-    env[LIT_NWB_REFRACTION_SMOKE_GEOMETRY] = "1" if variant == LIT_GEOMETRY else "0"
-    env[LIT_NWB_REFRACTION_SMOKE_ENABLED] = "0" if variant in (LIT_GEOMETRY, LIT_DISABLED) else "1"
-    env[LIT_NWB_REFRACTION_SMOKE_HARDWARE] = "0" if variant == LIT_SCREEN else "1"
+    env[LIT_NWB_REFRACTION_SMOKE_GEOMETRY] = LIT_ENABLED_FLAG if variant == LIT_GEOMETRY else LIT_DISABLED_FLAG
+    env[LIT_NWB_REFRACTION_SMOKE_ENABLED] = LIT_DISABLED_FLAG if variant in (LIT_GEOMETRY, LIT_DISABLED) else LIT_ENABLED_FLAG
+    env[LIT_NWB_REFRACTION_SMOKE_HARDWARE] = LIT_DISABLED_FLAG if variant == LIT_SCREEN else LIT_ENABLED_FLAG
     env[LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECO] = "0.016666667"
     return env
 
@@ -191,7 +196,7 @@ def capture(args, case, variant):
         command += ["--reject-log-message", LIT_AVBOIT_REFRACTION_RESOLVE]
     command.extend("--application-arg=" + argument for argument in args.application_arg)
     print(f"Capturing {case}/{variant} ({args.frames} frames)...", flush=True)
-    completed = subprocess.run(command, env=capture_environment(case, variant), check=False, timeout=args.timeout + 30)
+    completed = subprocess.run(command, env=capture_environment(case, variant), check=False, timeout=args.timeout + LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS)
     if completed.returncode == SKIP_EXIT_CODE:
         return None
     if completed.returncode != 0:

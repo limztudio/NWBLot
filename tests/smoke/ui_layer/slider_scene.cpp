@@ -25,6 +25,25 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_ui_slider_smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+constexpr AStringView s_TitleKey = "title";
+constexpr AStringView s_ValueKey = "value";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 UiSliderSmokeScene::UiSliderSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input)
     : m_input(input)
 {
@@ -98,7 +117,7 @@ bool UiSliderSmokeScene::paintMain(Impl::Ui::Builder& ui, const Impl::Ui::Rect& 
         return false;
     const WidgetOptions caption{ {}, { LayoutSizePolicy::Fixed, 16.0f } };
     const WidgetOptions button{ { LayoutSizePolicy::Stretch, 1.0f }, { LayoutSizePolicy::Fixed, 28.0f } };
-    if(!ui.label("title", "Continuous slider / exact double value", caption))
+    if(!ui.label(__hidden_ui_slider_smoke::s_TitleKey, "Continuous slider / exact double value", caption))
         return false;
     if(ui.button("before", "Before slider", button))
         ++m_beforeClicks;
@@ -106,7 +125,7 @@ bool UiSliderSmokeScene::paintMain(Impl::Ui::Builder& ui, const Impl::Ui::Rect& 
     settings.maximum = m_narrowRange ? 0.5 : 1.0;
     settings.keyStep = m_coarseStep ? 0.25 : 0.125;
     settings.enabled = m_enabled;
-    if(!ui.slider("value", m_state, settings))
+    if(!ui.slider(__hidden_ui_slider_smoke::s_ValueKey, m_state, settings))
         return false;
     if(ui.button("after", "After slider", button))
         ++m_afterClicks;
@@ -148,11 +167,11 @@ bool UiSliderSmokeScene::paintPopup(Impl::Ui::Builder& ui, const f32 right){
     if(!ui.beginPopup("slider_parent", m_parent, popup))
         return !ui.failed();
     const WidgetOptions caption{ {}, { LayoutSizePolicy::Fixed, 16.0f } };
-    if(!ui.label("title", "Slider inside parent popup", caption))
+    if(!ui.label(__hidden_ui_slider_smoke::s_TitleKey, "Slider inside parent popup", caption))
         return false;
     SliderOptions settings;
     settings.keyStep = 0.125;
-    if(!ui.slider("value", m_popupSlider, settings))
+    if(!ui.slider(__hidden_ui_slider_smoke::s_ValueKey, m_popupSlider, settings))
         return false;
     const WidgetOptions button{ { LayoutSizePolicy::Stretch, 1.0f }, { LayoutSizePolicy::Fixed, 28.0f } };
     if(ui.button("close", "Close parent", button))

@@ -38,6 +38,9 @@ namespace __hidden_font_atlas_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_BodyFontPath = "project/fonts/body";
+constexpr AStringView s_BodyFontAtlasPath = "project/fonts/body_atlas";
+
 using namespace Impl;
 
 struct FontAtlasTestArenaTag{};
@@ -51,7 +54,7 @@ struct AtlasTestArena : TestArena<FontAtlasTestArenaTag>{
 
 [[nodiscard]] static FontAtlasPayload MakePayload(AtlasTestArena& testArena){
     FontAtlasPayload payload(testArena.arena);
-    payload.font = Core::Assets::AssetRef<Font>("project/fonts/body");
+    payload.font = Core::Assets::AssetRef<Font>(s_BodyFontPath);
     static constexpr AStringView s_Source = "exact source font identity fixture";
     payload.fontSha256 = ComputeSha256({ reinterpret_cast<const u8*>(s_Source.data()), s_Source.size() });
     payload.unitsPerEm = 1000u;
@@ -128,7 +131,7 @@ TEST(AssetsFontAtlas, EmptyAndPaddingBoundaryDigestsRejectMalformedText){
 TEST(AssetsFontAtlas, EmptyGlyphRetainsAdvanceAndFirstOutOfRangeLookupMissesAfterLoad){
     using namespace __hidden_font_atlas_tests;
     AtlasTestArena testArena;
-    FontAtlas atlas(testArena.arena, Name("project/fonts/body_atlas"));
+    FontAtlas atlas(testArena.arena, Name(s_BodyFontAtlasPath));
     atlas.setPayload(MakePayload(testArena));
     FontAtlasAssetCodec codec;
     Core::Assets::AssetBytes binary(testArena.arena);
@@ -147,7 +150,7 @@ TEST(AssetsFontAtlas, BuildOwnsGlyphsGroupsAndPositioningInCallerArena){
     Core::Assets::AssetArena resultArena(Name("tests/font_atlas/built_result"));
     FontAtlasCookEntry entry(testArena.arena);
     entry.payload = MakePayload(testArena);
-    entry.virtualPath = Name("project/fonts/body_atlas");
+    entry.virtualPath = Name(s_BodyFontAtlasPath);
     const auto expected = SerializeFontAtlasPayload(entry.payload, resultArena, testArena.scratchArena);
     ASSERT_TRUE(expected);
 
@@ -180,7 +183,7 @@ TEST(AssetsFontAtlas, MalformedBinaryDoesNotReplacePreviouslyLoadedAtlas){
     FontAtlasPayload payload = MakePayload(testArena);
     auto valid = SerializeFontAtlasPayload(payload, testArena.arena, testArena.scratchArena);
     ASSERT_TRUE(valid);
-    FontAtlas atlas(testArena.arena, Name("project/fonts/body_atlas"));
+    FontAtlas atlas(testArena.arena, Name(s_BodyFontAtlasPath));
     ASSERT_TRUE(atlas.loadBinary(*valid));
     const usize corruptOffsets[] = { 0u, 4u, 8u, 12u, 112u, 120u, 136u, 152u, 156u, 160u,
         FontAtlasBinaryPayload::s_HeaderBytes + 48u,
@@ -301,7 +304,7 @@ TEST(AssetsFontAtlas, CodecRejectsUnnamedOrCorruptAtlasWithoutReplacingOutput){
     EXPECT_EQ(binary, expected);
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("FontAtlas::validatePayload failed: virtual path is empty")));
 
-    FontAtlas corrupt(testArena.arena, Name("project/fonts/body_atlas"));
+    FontAtlas corrupt(testArena.arena, Name(s_BodyFontAtlasPath));
     FontAtlasPayload payload = MakePayload(testArena);
     payload.groups[0u].pixels[0u] ^= 1u;
     corrupt.setPayload(Move(payload));
@@ -446,7 +449,7 @@ TEST(AssetsFontAtlas, OriginalSourcePositioningSetAndBytesMustMatchTheShapingFon
     auto bytesResult = ReadBundledFontBytes(sourcePath, bytes.get_allocator().arena());
     ASSERT_TRUE(bytesResult);
     bytes = Move(*bytesResult);
-    Font font(testArena.arena, Name("project/fonts/body"));
+    Font font(testArena.arena, Name(s_BodyFontPath));
     font.setFontBytes(Move(bytes));
     ASSERT_TRUE(font.validatePayload());
     FontAtlasPayload payload = MakePayload(testArena);

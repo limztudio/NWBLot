@@ -22,6 +22,8 @@ namespace __hidden_name_identity_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_RecursiveInnerName = "identity/recursive_inner";
+
 #if defined(NWB_BUILD_SYMBOLS)
 constexpr u32 s_ExpectedDualCount = 2u;
 #endif
@@ -330,8 +332,8 @@ TEST(Global, RuntimeNameFactoryPreservesRecursiveRecorderGuard){
     SetNameSymbolRecordCallback([](const NameHash&, AStringView, void* context){
         auto& state = *static_cast<RecursiveProbe*>(context);
         ++state.recordCount;
-        const auto nested = Name::FromText(AStringView("identity/recursive_inner"));
-        state.nestedAccepted = nested && nested->identityHash() == ComputeNameHash(MakeNotNull("identity/recursive_inner"));
+        const auto nested = Name::FromText(AStringView(s_RecursiveInnerName));
+        state.nestedAccepted = nested && nested->identityHash() == ComputeNameHash(MakeNotNull(s_RecursiveInnerName.data()));
     }, &probe
     );
     const auto first = Name::FromText(AStringView("identity/recursive_first"));

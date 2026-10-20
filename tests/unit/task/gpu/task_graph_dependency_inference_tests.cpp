@@ -33,6 +33,8 @@ namespace __hidden_task_graph_dependency_inference_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_DeepCycleTaskLabel = "Deep Cycle Task";
+
 using namespace TaskGraphTestUtils;
 using TaskGraphTestUtils::TestArena;
 
@@ -774,7 +776,7 @@ TEST(GpuTaskGraph, RejectsDeepExplicitCyclesWithoutCallStackGrowth){
     const Graphics::GpuTaskId futureLast{ .generation = graphGeneration, .index = static_cast<u32>(s_TaskCount - 1u), };
     const auto derivedNameAt750Col44 = DeriveName(taskBaseName, FormatDecimal(0u, taskIndexBuffer));
     ASSERT_TRUE(derivedNameAt750Col44);
-    const auto firstResult = AddTask(graph, *derivedNameAt750Col44, "Deep Cycle Task", &futureLast, 1u);
+    const auto firstResult = AddTask(graph, *derivedNameAt750Col44, s_DeepCycleTaskLabel, &futureLast, 1u);
     ASSERT_TRUE(firstResult);
     const Graphics::GpuTaskId first = *firstResult;
     ASSERT_TRUE(first.valid());
@@ -783,7 +785,7 @@ TEST(GpuTaskGraph, RejectsDeepExplicitCyclesWithoutCallStackGrowth){
     for(usize taskIndex = 1u; taskIndex < s_TaskCount; ++taskIndex){
         const auto derivedNameAt757Col50 = DeriveName(taskBaseName, FormatDecimal(taskIndex, taskIndexBuffer));
         ASSERT_TRUE(derivedNameAt757Col50);
-        const auto currentResult = AddTask(graph, *derivedNameAt757Col50, "Deep Cycle Task", &previous, 1u);
+        const auto currentResult = AddTask(graph, *derivedNameAt757Col50, s_DeepCycleTaskLabel, &previous, 1u);
         ASSERT_TRUE(currentResult);
         const Graphics::GpuTaskId current = *currentResult;
         ASSERT_TRUE(current.valid());

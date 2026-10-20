@@ -28,6 +28,7 @@ namespace __hidden_ui_text_smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_LatinFontPath = "engine/ui/fonts/default/latin/face";
 static constexpr StringView s_Korean = "\xED\x95\x9C\xEA\xB8\x80 \xEC\xA1\xB0\xED\x95\xA9";
 static constexpr u64 s_CoverageAtlasIdentity = 0x5549534D4F4B45u;
 
@@ -37,7 +38,7 @@ static constexpr u64 s_CoverageAtlasIdentity = 0x5549534D4F4B45u;
 
 [[nodiscard]] static Expected<Impl::Ui::SharedGlyphPage> MakeCoveragePage(Core::Alloc::GlobalArena& arena){
     const Impl::Ui::GlyphPageBinding binding{
-        .font = Core::Assets::AssetRef<Impl::Font>("engine/ui/fonts/default/latin/face"),
+        .font = Core::Assets::AssetRef<Impl::Font>(__hidden_ui_text_smoke::s_LatinFontPath),
         .fontGeneration = 1u,
         .atlasIdentity = s_CoverageAtlasIdentity,
         .generation = 1u,
@@ -56,7 +57,7 @@ static constexpr u64 s_CoverageAtlasIdentity = 0x5549534D4F4B45u;
 
 [[nodiscard]] static Expected<Impl::Ui::SharedSdfAtlasPage> MakeSdfPage(Core::Alloc::GlobalArena& arena, const u32 channelCount){
     const Impl::Ui::SdfAtlasPageBinding binding{
-        .font = Core::Assets::AssetRef<Impl::Font>("engine/ui/fonts/default/latin/face"),
+        .font = Core::Assets::AssetRef<Impl::Font>(__hidden_ui_text_smoke::s_LatinFontPath),
         .fontSha256 = {},
         .pixelsSha256 = {},
         .fontGeneration = 1u,

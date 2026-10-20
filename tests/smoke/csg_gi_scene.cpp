@@ -31,6 +31,10 @@ namespace __hidden_csg_gi_scene{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_ReferenceArm = "reference";
+constexpr AStringView s_BoxShapePath = "engine/csg/box";
+constexpr AStringView s_CutArm = "cut";
+
 static constexpr f64 s_LiveWarmupSeconds = 30.0;
 static constexpr SmokeMeshRef s_CubeMesh{"project/meshes/cube_hard_edges"};
 static constexpr SmokeMeshRef s_MixedMesh{"project/meshes/gi_csg_mixed"};
@@ -89,7 +93,7 @@ struct Box{
 [[nodiscard]] static bool CreateSubtraction(ProjectRuntimeContext& context, Core::ECS::World& world, const Box& box, const Box& cutter, const u32 slot, const AStringView arm){
     const auto& material = slot == 0u ? s_DiffuseMaterial : s_CapMaterial;
     const Float4& tint = slot == 0u ? s_Black : s_White;
-    if(arm == "reference")
+    if(arm == s_ReferenceArm)
         return CreateReferencePieces(context, world, box, cutter, material, tint);
 
     const auto receiver = CreateBox(context, world, box, material, tint);
@@ -110,8 +114,8 @@ struct Box{
         auto entity = world.createEntity();
         auto& component = entity.addComponent<Impl::CsgCutterComponent>(context.objectArena);
         component.receiverGroup = s_Groups[slot];
-        component.shapeType = Name("engine/csg/box");
-        component.active = arm == "cut";
+        component.shapeType = Name(s_BoxShapePath);
+        component.active = arm == s_CutArm;
         Impl::CsgBoxShapeParameters parameters;
         const SIMDVectorSingle minimum = LoadFloat(cut.minimum);
         const SIMDVectorSingle maximum = LoadFloat(cut.maximum);
@@ -125,7 +129,7 @@ struct Box{
 [[nodiscard]] static bool CreateMixedSubtraction(ProjectRuntimeContext& context, Core::ECS::World& world, const AStringView arm){
     const Box box{ Float3U(-0.5f, -0.8f, -0.8f), Float3U(0.5f, 0.2f, 0.8f) };
     const Box cutter{ Float3U(-0.25f, -1.0f, -1.2f), Float3U(0.25f, 0.2f, 1.0f) };
-    if(arm == "reference"){
+    if(arm == s_ReferenceArm){
         if(!CreateReferencePieces(context, world, box, cutter, s_MixedMaterial, s_White))
             return false;
         const f32 quadCenters[] = { -0.875f, 0.875f };
@@ -144,8 +148,8 @@ struct Box{
     auto entity = world.createEntity();
     auto& component = entity.addComponent<Impl::CsgCutterComponent>(context.objectArena);
     component.receiverGroup = s_Groups[2];
-    component.shapeType = Name("engine/csg/box");
-    component.active = arm == "cut";
+    component.shapeType = Name(s_BoxShapePath);
+    component.active = arm == s_CutArm;
     Impl::CsgBoxShapeParameters parameters;
     parameters.halfExtents = Float4(0.25f, 0.6f, 1.1f, 0.0f);
     AssignCsgCutterParameters(component, parameters);
@@ -183,13 +187,14 @@ Expected<bool> CsgGiScene::start(){
     if(!configuredArm)
         return false;
     const AStringView arm(configuredArm->data(), configuredArm->size());
-    if(arm != "reference" && arm != "cut" && arm != "uncut"){
+    if(arm != __hidden_csg_gi_scene::s_ReferenceArm && arm != __hidden_csg_gi_scene::s_CutArm && arm != "uncut"){
         NWB_LOGGER_ERROR(NWB_TEXT("GiTestSmokeProject: invalid NWB_GI_CSG_ARM"));
         return MakeUnexpected(Failure{});
     }
     if(const auto value = ReadSmokeEnvironmentText(scratchArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT")){
         const auto count = ParseU64(AStringView(value->data(), value->size()));
-        if(!count || *count < 360u || *count > Limit<u32>::s_Max){
+        constexpr u32 s_MinimumWarmupPresentations = 360u;
+        if(!count || *count < s_MinimumWarmupPresentations || *count > Limit<u32>::s_Max){
             NWB_LOGGER_ERROR(NWB_TEXT("GiTestSmokeProject: CSG GI warmup requires at least 360 successful presentations"));
             return MakeUnexpected(Failure{});
         }
@@ -244,7 +249,8 @@ Expected<bool> CsgGiScene::start(){
         return MakeUnexpected(Failure{});
 
     const FramebufferCaptureOptions options{ .shouldCapture = ShouldCapture, .predicateContext = this, .requiredWidth = 1280u, .requiredHeight = 900u, };
-    auto capture = ConfigureSmokeFramebufferCapture(m_context, scratchArena, NWB_TEXT("GiTestSmokeProject"), 360u, options);
+    constexpr u32 s_DefaultCaptureFrameCount = 360u;
+    auto capture = ConfigureSmokeFramebufferCapture(m_context, scratchArena, NWB_TEXT("GiTestSmokeProject"), s_DefaultCaptureFrameCount, options);
     if(!capture)
         return MakeUnexpected(Failure{});
     m_capture = Move(*capture);

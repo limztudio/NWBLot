@@ -49,7 +49,7 @@ TEST(Telemetry, TextLogPayloadRetainsPlatformInvalidUnicodeConversion){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
 #if defined(NWB_UNICODE)
-#if WCHAR_MAX <= 0xffff
+#if WCHAR_MAX <= NWB_STRING_UTF16_CODE_UNIT_MAX
     constexpr tchar s_Message[] = { static_cast<tchar>(0xd800u), static_cast<tchar>('X'), static_cast<tchar>(0xdc00u) };
 #else
     constexpr tchar s_Message[] = { static_cast<tchar>(0x110000u), static_cast<tchar>('X'), static_cast<tchar>(0xffffffffu) };

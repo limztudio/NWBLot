@@ -31,6 +31,11 @@ namespace __hidden_ui_popup_tools_smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr TStringView s_AnchorLabel = NWB_TEXT("anchor");
+constexpr AStringView s_AnchorKey = "anchor";
+constexpr TStringView s_SentinelLabel = NWB_TEXT("sentinel");
+constexpr AStringView s_SentinelKey = "sentinel";
+constexpr TStringView s_LogTag = NWB_TEXT("UiPopupToolsSmoke");
 static constexpr Impl::Ui::Rect s_Panel{ 24.0f, 24.0f, 400.0f, 200.0f };
 static constexpr Impl::Ui::Rect s_Anchor{ 32.0f, 64.0f, 220.0f, 36.0f };
 static constexpr Impl::Ui::Rect s_Counter{ 456.0f, 32.0f, 130.0f, 36.0f };
@@ -73,15 +78,16 @@ bool UiPopupToolsSmokeScene::paint(Impl::UiPaintContext& context){
         return false;
     WidgetOptions anchor{ { LayoutSizePolicy::Fixed, 220.0f }, { LayoutSizePolicy::Fixed, 36.0f } };
     anchor.enabled = m_enabled;
-    if(ui.button("anchor", "Right-click / Menu / Shift+F10", anchor))
+    if(ui.button(__hidden_ui_popup_tools_smoke::s_AnchorKey, "Right-click / Menu / Shift+F10", anchor))
         ++m_anchorClicks;
     TooltipOptions tooltip;
-    tooltip.delaySeconds = 1.0f;
-    if(!ui.tooltip("hint", "anchor", "Open commands here; Delete is disabled.", m_tooltip, tooltip))
+    constexpr f32 s_TooltipDelaySeconds = 1.0f;
+    tooltip.delaySeconds = s_TooltipDelaySeconds;
+    if(!ui.tooltip("hint", __hidden_ui_popup_tools_smoke::s_AnchorKey, "Open commands here; Delete is disabled.", m_tooltip, tooltip))
         return false;
     ContextMenuOptions menu;
     menu.size = { 220.0f, 180.0f };
-    const ContextMenuResult result = ui.contextMenu("commands", "anchor", m_source, m_menu, menu);
+    const ContextMenuResult result = ui.contextMenu("commands", __hidden_ui_popup_tools_smoke::s_AnchorKey, m_source, m_menu, menu);
     if(!result.valid)
         return false;
     if(result.activated){
@@ -93,7 +99,7 @@ bool UiPopupToolsSmokeScene::paint(Impl::UiPaintContext& context){
     EditBoxOptions edit;
     edit.width = { LayoutSizePolicy::Fixed, 260.0f };
     edit.height = { LayoutSizePolicy::Fixed, 36.0f };
-    const EditBoxResult sentinel = ui.editBox("sentinel", m_sentinel, m_sentinelState, edit);
+    const EditBoxResult sentinel = ui.editBox(__hidden_ui_popup_tools_smoke::s_SentinelKey, m_sentinel, m_sentinelState, edit);
     m_sentinelFocused = sentinel.focused;
     if(!sentinel.valid || !ui.endPanel())
         return false;
@@ -174,18 +180,18 @@ void UiPopupToolsSmokeScene::observeState(){
         , m_sequence, current[0], current[1], current[2], current[3], current[4], current[5], current[6], current[7]
         , current[8], current[9], current[10], current[11], current[12], current[13], current[14]
     );
-    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("anchor"), __hidden_ui_popup_tools_smoke::s_Anchor);
-    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("menu"), menu.bounds);
-    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("tooltip"), tooltip.bounds);
-    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("list"), list.bounds);
-    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("viewport"), list.viewport);
-    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("first"), rowBounds(1u));
-    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("second"), rowBounds(2u));
-    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("disabled"), rowBounds(3u));
-    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("last"), rowBounds(5u));
-    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("cursor_row"), rowBounds(m_menu.cursorKey()));
-    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("sentinel"), sentinel);
-    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("counter"), __hidden_ui_popup_tools_smoke::s_Counter);
+    LogSmokeRect(__hidden_ui_popup_tools_smoke::s_LogTag, m_sequence, __hidden_ui_popup_tools_smoke::s_AnchorLabel, __hidden_ui_popup_tools_smoke::s_Anchor);
+    LogSmokeRect(__hidden_ui_popup_tools_smoke::s_LogTag, m_sequence, NWB_TEXT("menu"), menu.bounds);
+    LogSmokeRect(__hidden_ui_popup_tools_smoke::s_LogTag, m_sequence, NWB_TEXT("tooltip"), tooltip.bounds);
+    LogSmokeRect(__hidden_ui_popup_tools_smoke::s_LogTag, m_sequence, NWB_TEXT("list"), list.bounds);
+    LogSmokeRect(__hidden_ui_popup_tools_smoke::s_LogTag, m_sequence, NWB_TEXT("viewport"), list.viewport);
+    LogSmokeRect(__hidden_ui_popup_tools_smoke::s_LogTag, m_sequence, NWB_TEXT("first"), rowBounds(1u));
+    LogSmokeRect(__hidden_ui_popup_tools_smoke::s_LogTag, m_sequence, NWB_TEXT("second"), rowBounds(2u));
+    LogSmokeRect(__hidden_ui_popup_tools_smoke::s_LogTag, m_sequence, NWB_TEXT("disabled"), rowBounds(3u));
+    LogSmokeRect(__hidden_ui_popup_tools_smoke::s_LogTag, m_sequence, NWB_TEXT("last"), rowBounds(5u));
+    LogSmokeRect(__hidden_ui_popup_tools_smoke::s_LogTag, m_sequence, NWB_TEXT("cursor_row"), rowBounds(m_menu.cursorKey()));
+    LogSmokeRect(__hidden_ui_popup_tools_smoke::s_LogTag, m_sequence, __hidden_ui_popup_tools_smoke::s_SentinelLabel, sentinel);
+    LogSmokeRect(__hidden_ui_popup_tools_smoke::s_LogTag, m_sequence, NWB_TEXT("counter"), __hidden_ui_popup_tools_smoke::s_Counter);
 }
 
 

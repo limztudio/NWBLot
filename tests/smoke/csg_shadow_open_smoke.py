@@ -16,6 +16,8 @@ from csg_shadow_smoke import capture_environment
 import window_capture_smoke as capture
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, SmokeSkip, read_bmp_24_rows
 
+LIT_WARNING_TAG = "[WARNING]"
+
 LIT_ENABLED = "enabled"
 LIT_HARDWARE = "hardware"
 LIT_SOFTWARE = "software"
@@ -56,7 +58,7 @@ def validate_runtime(log_text, case, route, frames, warning_policy=LIT_ENABLED):
     if case not in CASES or route not in (LIT_HARDWARE, LIT_SOFTWARE) or warning_policy not in (LIT_ENABLED, LIT_DISABLED):
         raise SmokeFailure("unknown open-shadow case, route or warning policy")
     lines = log_text.splitlines()
-    warning_indices = [index for index, line in enumerate(lines) if "[WARNING]" in line]
+    warning_indices = [index for index, line in enumerate(lines) if LIT_WARNING_TAG in line]
     remaining = log_text
     if case == LIT_TERMINAL65 and warning_policy == LIT_ENABLED:
         if len(warning_indices) != 1:
@@ -153,7 +155,7 @@ def capture_case(args, case):
     capture_args = capture.parse_args(command)
     if case == LIT_TERMINAL65 and args.warning_policy == LIT_ENABLED:
         # Only the warning-enabled terminal arm defers WARNING validation to the exact single flags=16 check below.
-        capture_args.reject_log_message.remove("[WARNING]")
+        capture_args.reject_log_message.remove(LIT_WARNING_TAG)
     environment = capture_environment("cut", "directional", "open")
     for key in tuple(environment):
         if key.startswith(("NWB_CAUSTIC_", "NWB_REFLECTION_", "NWB_REFRACTION_", "NWB_CSG_CAUSTIC_")):

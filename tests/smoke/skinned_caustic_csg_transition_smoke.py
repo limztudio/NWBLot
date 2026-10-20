@@ -16,6 +16,11 @@ import tempfile
 
 from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, read_bmp_24_rows, validate_expected_log_text)
 
+LIT_MINIMUM_LIVE_WARMUP_SECONDS = 30
+LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 45
+
+LIT_TRANSITION_SAMPLES_COMPLETE = "SkinnedCausticTransition: complete samples=8"
+
 LIT_LAGGED = "lagged"
 LIT_NO_PHOTONS = "no_photons"
 LIT_SKINNEDCAUSTICSMOKEPROJECT_SHUTDOWN = "SkinnedCausticSmokeProject: shutdown"
@@ -62,7 +67,7 @@ def sample_path(directory, sample):
 
 def validate_series_log(log, variant):
     lagged, photons = variant == LIT_LAGGED, variant != LIT_NO_PHOTONS
-    validate_expected_log_text(log, ("SkinnedCausticTransition: complete samples=8", LIT_SKINNEDCAUSTICSMOKEPROJECT_SHUTDOWN), STRICT_LOG_FAILURE_MESSAGES)
+    validate_expected_log_text(log, (LIT_TRANSITION_SAMPLES_COMPLETE, LIT_SKINNEDCAUSTICSMOKEPROJECT_SHUTDOWN), STRICT_LOG_FAILURE_MESSAGES)
     setup = re.findall(r"SkinnedCausticTransition: setup lagged=([01]) caustics=([01]) minimum_frame=(\d+) warmup_seconds=(\d+) phase_frames=(\d+) samples=(\d+) model=(\w+)", log)
     if setup != [(str(int(lagged)), str(int(photons)), "360", "30", "64", "8", "closed_prism")]:
         raise SmokeFailure("transition setup does not match the requested public controls")
@@ -71,7 +76,7 @@ def validate_series_log(log, variant):
     if len(starts) != 1 or len(completions) != 1:
         raise SmokeFailure("transition capture requires one completed live warmup")
     elapsed, first = float(completions[0][0]), int(completions[0][1])
-    if not math.isfinite(elapsed) or elapsed < 30 or int(starts[0]) < 360 or first <= int(starts[0]):
+    if not math.isfinite(elapsed) or elapsed < LIT_MINIMUM_LIVE_WARMUP_SECONDS or int(starts[0]) < 360 or first <= int(starts[0]):
         raise SmokeFailure("transition captures must follow 360 frames and 30 steady-clock warmup seconds")
     phases = [(int(phase), int(csg), int(frame)) for phase, csg, frame in re.findall(r"SkinnedCausticTransition: phase (\d+) csg=([01]) graphics frame (\d+)", log)]
     if phases != [(phase, phase % 2, first + phase * PHASE_FRAMES) for phase in range(4)]:
@@ -185,7 +190,7 @@ def capture(args, variant):
         LIT_NWB_GPU_TIMING_FILE: str((directory / "gpu_timing.txt").resolve()), "NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION": "128"})
     command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")), LIT_EXECUTABLE, str(args.executable), LIT_WORKING_DIRECTORY, str(args.working_directory),
         "--output", str(sample_path(directory, SAMPLE_COUNT - 1)), "--application-capture", "--application-capture-frame-count", "1", LIT_TIMEOUT, str(args.timeout),
-        "--log-output", str(directory / LIT_RUNTIME_LOG), LIT_EXPECT_LOG_MESSAGE, "SkinnedCausticTransition: complete samples=8", LIT_EXPECT_LOG_MESSAGE, LIT_SKINNEDCAUSTICSMOKEPROJECT_SHUTDOWN,
+        "--log-output", str(directory / LIT_RUNTIME_LOG), LIT_EXPECT_LOG_MESSAGE, LIT_TRANSITION_SAMPLES_COMPLETE, LIT_EXPECT_LOG_MESSAGE, LIT_SKINNEDCAUSTICSMOKEPROJECT_SHUTDOWN,
         LIT_SKIP_LOG_MESSAGE, "natural software-only shadow route selected because RayQuery-capable hardware is unavailable", "--gpu-validation" if args.gpu_validation else LIT_NO_GPU_VALIDATION]
     if variant == LIT_LAGGED:
         command += [LIT_SKIP_LOG_MESSAGE, "RendererSystem: frame-lagged async lighting Graphics queue route accepted (no dedicated Compute queue",
@@ -195,7 +200,7 @@ def capture(args, variant):
     else:
         command.append("--no-logserver")
     print(f"Capturing skinned ordinary/CSG transitions: {variant}", flush=True)
-    result = subprocess.run(command, env=environment, check=False, timeout=args.timeout + 45)
+    result = subprocess.run(command, env=environment, check=False, timeout=args.timeout + LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS)
     if result.returncode not in (0, SKIP_EXIT_CODE):
         raise SmokeFailure(f"{variant} transition acquisition failed with exit {result.returncode}")
     return result.returncode

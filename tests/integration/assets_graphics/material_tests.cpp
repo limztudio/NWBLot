@@ -36,6 +36,8 @@ namespace __hidden_assets_graphics_material{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_MaterialPixelShaderPath = "project/shaders/material_ps";
+
 static constexpr AStringView s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE = "project/material_interfaces/test_surface";
 static constexpr AStringView s_PROJECT_MATERIALS_TEST_MATERIAL = "project/materials/test_material";
 #if defined(NWB_FINAL)
@@ -751,7 +753,7 @@ TEST(AssetsGraphics, MaterialBindDependencyInvalidation){
     ASSERT_TRUE(recordsLoadResult);
     records = Move(*recordsLoadResult);
     u64 initialPixelSourceChecksum = 0u;
-    auto initialPixelSourceChecksumLoadResult = AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(records, Name("project/shaders/material_ps"), Name(s_PS));
+    auto initialPixelSourceChecksumLoadResult = AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(records, Name(s_MaterialPixelShaderPath), Name(s_PS));
     ASSERT_TRUE(initialPixelSourceChecksumLoadResult);
     initialPixelSourceChecksum = *initialPixelSourceChecksumLoadResult;
 
@@ -772,7 +774,7 @@ TEST(AssetsGraphics, MaterialBindDependencyInvalidation){
     ASSERT_TRUE(recordsLoadResult2);
     records = Move(*recordsLoadResult2);
     u64 updatedPixelSourceChecksum = 0u;
-    auto updatedPixelSourceChecksumLoadResult = AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(records, Name("project/shaders/material_ps"), Name(s_PS));
+    auto updatedPixelSourceChecksumLoadResult = AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(records, Name(s_MaterialPixelShaderPath), Name(s_PS));
     ASSERT_TRUE(updatedPixelSourceChecksumLoadResult);
     updatedPixelSourceChecksum = *updatedPixelSourceChecksumLoadResult;
     EXPECT_NE(updatedPixelSourceChecksum, initialPixelSourceChecksum);

@@ -28,6 +28,12 @@ namespace __hidden_assets_graphics_sampler{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_ReductionAssignmentPrefix = "asset.reduction";
+constexpr AStringView s_UnsupportedMetadataCase = "sampler_unsupported_metadata";
+constexpr AStringView s_AssetsDirectory = "assets";
+constexpr AStringView s_SamplersDirectory = "samplers";
+constexpr AStringView s_LinearClampMetadataFilename = "linear_clamp.nwb";
+
 using AString = AssetsGraphicsFixture::AString;
 using CapturingLogger = AssetsGraphicsFixture::CapturingLogger;
 using Path = AssetsGraphicsFixture::Path;
@@ -206,7 +212,7 @@ TEST(AssetsGraphics, SamplerCookerRejectsFixedBorderColorAndUnsupportedReduction
         TestArena testArena;
         AString metadata(s_SamplerTestMetadata);
         const AStringView reductionAssignment = "asset.reduction = \"standard\";\n";
-        if(assignment.starts_with("asset.reduction")){
+        if(assignment.starts_with(s_ReductionAssignmentPrefix)){
             const usize reductionPosition = metadata.find(reductionAssignment);
             ASSERT_NE(reductionPosition, AString::npos);
             metadata.replace(reductionPosition, reductionAssignment.size(), assignment);
@@ -216,12 +222,12 @@ TEST(AssetsGraphics, SamplerCookerRejectsFixedBorderColorAndUnsupportedReduction
 
         NWB::Core::Metascript::Document document(testArena.arena);
         ASSERT_TRUE(document.parse(AStringView(metadata)));
-        const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "sampler_unsupported_metadata") / "assets";
-        const Path metadataPath = assetRoot / "samplers" / "linear_clamp.nwb";
+        const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, s_UnsupportedMetadataCase) / s_AssetsDirectory;
+        const Path metadataPath = assetRoot / s_SamplersDirectory / s_LinearClampMetadataFilename;
         NWB::Impl::SamplerCookEntry entry(testArena.arena);
         NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
         EXPECT_FALSE(NWB::Impl::ParseSamplerCookMetadata(assetRoot, "project", metadataPath, document, entry.arena, scratchArena)) << assignment;
-        const TStringView expectedDiagnostic = assignment.starts_with("asset.reduction") ? NWB_TEXT("unsupported reduction type") : NWB_TEXT("unsupported asset field 'border_color'");
+        const TStringView expectedDiagnostic = assignment.starts_with(s_ReductionAssignmentPrefix) ? NWB_TEXT("unsupported reduction type") : NWB_TEXT("unsupported asset field 'border_color'");
         EXPECT_TRUE(logger.sawErrorContaining(expectedDiagnostic)) << assignment;
     }
 }
@@ -240,8 +246,8 @@ TEST(AssetsGraphics, SamplerCookerRejectsDeprecatedVersionMetadata){
     NWB::Core::Metascript::Document document(testArena.arena);
     ASSERT_TRUE(document.parse(AStringView(metadata.data(), metadata.size())));
 
-    const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "sampler_unsupported_metadata") / "assets";
-    const Path metadataPath = assetRoot / "samplers" / "linear_clamp.nwb";
+    const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, s_UnsupportedMetadataCase) / s_AssetsDirectory;
+    const Path metadataPath = assetRoot / s_SamplersDirectory / s_LinearClampMetadataFilename;
     NWB::Impl::SamplerCookEntry entry(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
     EXPECT_FALSE(NWB::Impl::ParseSamplerCookMetadata(assetRoot, "project", metadataPath, document, entry.arena, scratchArena));

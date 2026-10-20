@@ -31,6 +31,12 @@ namespace __hidden_csg_shadow_smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr TStringView s_ProjectName = NWB_TEXT("CsgShadowSmokeProject");
+constexpr AStringView s_AnalyticAtlas = "analytic";
+constexpr AStringView s_OpenAtlas = "open";
+constexpr AStringView s_PlaneShapePath = "engine/csg/plane";
+constexpr AStringView s_CapsuleShapePath = "engine/csg/capsule";
+
 static constexpr AStringView s_ENGINE_CSG_SPHERE = "engine/csg/sphere";
 static constexpr AStringView s_DIRECTIONAL = "directional";
 static constexpr AStringView s_POINT = "point";
@@ -102,7 +108,7 @@ struct Box{
 class CsgShadowSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorld(NWB::ProjectRuntimeContext& context){
-        auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("CsgShadowSmokeProject"));
+        auto world = CreateSmokeWorldOrDie(context, s_ProjectName);
         auto& renderer = AddSmokeRenderSystems(*world, context);
         NWB::Impl::ReflectionSettings reflection;
         reflection.traceMode = NWB::Impl::ReflectionTraceMode::Disabled;
@@ -147,10 +153,10 @@ private:
         }
         if(const auto value = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_SHADOW_ATLAS")){
             const AStringView atlas(value->data(), value->size());
-            if(atlas != "boxes" && atlas != "analytic" && atlas != "open")
+            if(atlas != "boxes" && atlas != s_AnalyticAtlas && atlas != s_OpenAtlas)
                 return false;
-            m_analyticAtlas = atlas == "analytic";
-            m_openAtlas = atlas == "open";
+            m_analyticAtlas = atlas == s_AnalyticAtlas;
+            m_openAtlas = atlas == s_OpenAtlas;
         }
         if(m_openAtlas){
             const auto value = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_SHADOW_OPEN_CASE");
@@ -331,7 +337,7 @@ private:
 
         NWB::Impl::CsgPlaneShapeParameters plane;
         plane.normalDistance = Float4(0.5f, 0.0f, 1.0f, 0.0f);
-        addAnalyticCutter(0u, Name("engine/csg/plane"), plane, MatrixTranslation(-2.0f, 1.0f, -6.0f));
+        addAnalyticCutter(0u, Name(s_PlaneShapePath), plane, MatrixTranslation(-2.0f, 1.0f, -6.0f));
 
         NWB::Impl::CsgSphereShapeParameters sphere;
         sphere.radius = Float4(1.0f, 0.0f, 0.0f, 0.0f);
@@ -340,18 +346,18 @@ private:
 
         NWB::Impl::CsgCapsuleShapeParameters capsule;
         capsule.radiusHalfHeight = Float4(0.35f, 0.25f, 0.0f, 0.0f);
-        addAnalyticCutter(2u, Name("engine/csg/capsule"), capsule, MatrixTranslation(2.0f, 1.0f, -6.0f));
+        addAnalyticCutter(2u, Name(s_CapsuleShapePath), capsule, MatrixTranslation(2.0f, 1.0f, -6.0f));
         capsule.radiusHalfHeight = Float4(0.3f, 0.4f, 0.0f, 0.0f);
         // An exact axis permutation exercises the capsule's zero radial-speed branch.
         const SIMDMatrix alongLight = MatrixSet(1.0f, 0.0f, 0.0f, -2.0f, 0.0f, 0.0f, -1.0f, -1.0f, 0.0f, 1.0f, 0.0f, -6.0f, 0.0f, 0.0f, 0.0f, 1.0f);
-        addAnalyticCutter(3u, Name("engine/csg/capsule"), capsule, alongLight);
+        addAnalyticCutter(3u, Name(s_CapsuleShapePath), capsule, alongLight);
 
         sphere.radius = Float4(0.55f, 0.0f, 0.0f, 0.0f);
         addAnalyticCutter(4u, Name(s_ENGINE_CSG_SPHERE), sphere, MatrixTranslation(0.0f, -1.0f, -6.25f));
         addAnalyticCutter(4u, Name(s_ENGINE_CSG_SPHERE), sphere, MatrixTranslation(0.0f, -1.0f, -5.75f));
         // The infinite plane keeps the control in the CSG route while removing only z <= -8, outside its box.
         plane.normalDistance = Float4(0.0f, 0.0f, 1.0f, 8.0f);
-        addAnalyticCutter(5u, Name("engine/csg/plane"), plane, MatrixIdentity());
+        addAnalyticCutter(5u, Name(s_PlaneShapePath), plane, MatrixIdentity());
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: analytic atlas tiles=6 shapes=plane,sphere,capsule"));
     }
 
@@ -393,7 +399,7 @@ private:
                     return false;
                 auto& cutter = entity.addComponent<NWB::Impl::CsgCutterComponent>(m_context.objectArena);
                 cutter.receiverGroup = s_OpenGroups[tile];
-                cutter.shapeType = Name("engine/csg/plane");
+                cutter.shapeType = Name(s_PlaneShapePath);
                 NWB::Impl::CsgPlaneShapeParameters plane;
                 plane.normalDistance = Float4(0.0f, 0.0f, 1.0f, clipped ? 6.75f : 8.0f);
                 AssignCsgCutterParameters(cutter, plane);
@@ -467,7 +473,8 @@ public:
             , static_cast<u32>(m_arm), StringConvert(m_pointLight ? s_POINT : s_DIRECTIONAL), hardware ? 1u : 0u
             , static_cast<f64>(cameraX)
         );
-        auto capture = ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("CsgShadowSmokeProject"), 120u);
+        constexpr u32 s_DefaultCaptureFrameCount = 120u;
+        auto capture = ConfigureSmokeFramebufferCapture(m_context, s_ProjectName, s_DefaultCaptureFrameCount);
         if(!capture)
             return false;
         m_capture = Move(*capture);

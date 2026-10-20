@@ -13,6 +13,8 @@ from uuid import uuid4
 
 from window_capture_smoke import (finish_logserver_cleanup, SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WindowsDesktopUnavailable, build_launch_environment, launch_logserver, launch_testbed, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text,)
 
+LIT_MAXIMUM_CAPTURE_TIMEOUT_SECONDS = 600.0
+
 LIT_LOADER_PROJECT_STARTUP_COMPLETE = "Loader: project startup complete"
 LIT_PASSED_CASES = "passed_cases"
 LIT_UTF_8 = "utf-8"
@@ -117,7 +119,7 @@ def parse_args(argv=None):
             parser.error(f"{field.replace('_', '-')} must name an existing file")
     if not args.working_directory.is_dir() or not (args.working_directory / "res").is_dir():
         parser.error("working-directory must contain the current cooked res directory")
-    if not 0.0 < args.timeout <= 600.0:
+    if not 0.0 < args.timeout <= LIT_MAXIMUM_CAPTURE_TIMEOUT_SECONDS:
         parser.error("timeout must be greater than zero and at most 600 seconds")
     return args
 

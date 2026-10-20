@@ -18,6 +18,9 @@ from fixture_environment import build_fixture_environment
 from checkpoint_report import CHECKPOINT_POLL_SECONDS, CHECKPOINT_STAGE_TIMEOUT_SECONDS
 from fixture_launch import DISPLAY_MARKER_TIMEOUT_SECONDS
 
+LIT_CLIPBOARD_READ_MAXIMUM_TIMEOUT_SECONDS = 2.0
+LIT_CLIPBOARD_READ_MINIMUM_TIMEOUT_SECONDS = 0.1
+
 LIT_SCROLL = "scroll"
 LIT_ENABLED = "enabled"
 LIT_READONLY = "readonly"
@@ -181,7 +184,7 @@ class TextAreaRun:
         deadline, observed = min(self.deadline, time.monotonic() + CLIPBOARD_VERIFY_TIMEOUT_SECONDS), None
         while time.monotonic() < deadline:
             ensure_process_running(self.process, "during TextArea OS clipboard verification")
-            observed = self.native.clipboard_text(timeout=min(2.0, max(0.1, deadline - time.monotonic())))
+            observed = self.native.clipboard_text(timeout=min(LIT_CLIPBOARD_READ_MAXIMUM_TIMEOUT_SECONDS, max(LIT_CLIPBOARD_READ_MINIMUM_TIMEOUT_SECONDS, deadline - time.monotonic())))
             if observed == expected:
                 self.stages[-1][LIT_OS_CLIPBOARD] = {LIT_EXPECTED: expected, "observed": observed, LIT_PASSED: True}
                 self.write_report(False)

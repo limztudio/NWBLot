@@ -211,7 +211,8 @@ template<typename Scalar>
 [[nodiscard]] i32 Measure(const bool candidate, const bool latency, const usize iterations){
     const Timer begin = TimerNow();
     const u64 checksum = latency ? (candidate ? Workload<Scalar, true, true>(iterations) : Workload<Scalar, false, true>(iterations)) : (candidate ? Workload<Scalar, true, false>(iterations) : Workload<Scalar, false, false>(iterations));
-    const f64 seconds = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(DurationInNS<f64>(TimerNow(), begin)), VectorDoubleReplicate(1.0e9)));
+    constexpr f64 s_NanosecondsPerSecond = 1.0e9;
+    const f64 seconds = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(DurationInNS<f64>(TimerNow(), begin)), VectorDoubleReplicate(s_NanosecondsPerSecond)));
     NWB_COUT.precision(17);
     NWB_COUT << "{\"precision\":" << sizeof(Scalar) << ",\"candidate\":" << candidate << ",\"latency\":" << latency << ",\"iterations\":" << iterations << ",\"seconds\":" << seconds << ",\"checksum\":" << checksum << "}\n";
     return 0;

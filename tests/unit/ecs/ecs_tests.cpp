@@ -24,6 +24,10 @@ namespace __hidden_ecs_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr u32 s_SystemCompletionTimeoutMS = 2000u;
+constexpr u32 s_PollIntervalMS = 1u;
+constexpr u32 s_EntityWaitIntervalMS = 25u;
+
 constexpr u32 s_ExpectedDualCount = 2u;
 
 
@@ -574,8 +578,8 @@ TEST(Ecs, SystemDependentsProceedWithoutWaitingForUnrelatedWork){
     ScheduledSystem writer(arena, { { positionType, NWB::Core::ECS::AccessMode::Write } }, [&]()noexcept{ value = 5; });
     ScheduledSystem independent(arena, {}, [&]()noexcept{
         const Timer begin = TimerNow();
-        while(!dependentCompleted.load(MemoryOrder::acquire) && DurationInMS<u64>(TimerNow(), begin) < 2000u)
-            SleepMS(1u);
+        while(!dependentCompleted.load(MemoryOrder::acquire) && DurationInMS<u64>(TimerNow(), begin) < __hidden_ecs_tests::s_SystemCompletionTimeoutMS)
+            SleepMS(__hidden_ecs_tests::s_PollIntervalMS);
         independentObservedCompletion.store(dependentCompleted.load(MemoryOrder::acquire), MemoryOrder::release);
     }
     );
@@ -663,7 +667,7 @@ TEST(Ecs, SystemCompletionIncludesAsynchronousDescendants){
 
     ScheduledSystem writer(arena, { { positionType, NWB::Core::ECS::AccessMode::Write } }, [&](){
         const auto cpuAdmission2 = world.taskScope().submit([&](){
-            SleepMS(25u);
+            SleepMS(s_EntityWaitIntervalMS);
             const auto cpuAdmission3 = world.taskScope().submit([&]()noexcept{ value.store(41, MemoryOrder::release); });
             ASSERT_TRUE(cpuAdmission3);
             EXPECT_TRUE(cpuAdmission3->valid());
@@ -698,8 +702,8 @@ TEST(Ecs, WorldClearDoesNotWaitForUnrelatedSchedulerTasks){
         started.store(true, MemoryOrder::release);
         started.notify_all();
         const Timer begin = TimerNow();
-        while(!release.load(MemoryOrder::acquire) && DurationInMS<u64>(TimerNow(), begin) < 2000u)
-            SleepMS(1u);
+        while(!release.load(MemoryOrder::acquire) && DurationInMS<u64>(TimerNow(), begin) < __hidden_ecs_tests::s_SystemCompletionTimeoutMS)
+            SleepMS(__hidden_ecs_tests::s_PollIntervalMS);
         completed.store(true, MemoryOrder::release);
     }
     );

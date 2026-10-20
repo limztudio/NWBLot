@@ -21,6 +21,10 @@ namespace __hidden_telemetry_capture_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_ScopeDiagnosticCategory = "scope_diagnostic";
+constexpr AStringView s_TelemetryGuardCategory = "telemetry_guard";
+constexpr AStringView s_ErrorEvent = "error";
+
 constexpr u32 s_ExpectedDualCount = 2u;
 
 
@@ -49,13 +53,13 @@ TEST(Telemetry, CaptureScopeRestoresLoggerAndStopsDiagnosticsAfterDestruction){
             Telemetry::CaptureSessionCaptureScope captureScope(session);
 
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("scope text"));
-            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error.data(), .category = "scope_diagnostic", .message = "scope diagnostic", .file = "scope.cpp", .line = 67u, });
+            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error.data(), .category = s_ScopeDiagnosticCategory, .message = "scope diagnostic", .file = "scope.cpp", .line = 67u, });
         }
 
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("after scope"));
     }
 
-    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error.data(), .category = "scope_diagnostic", .message = "ignored after scope", });
+    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error.data(), .category = s_ScopeDiagnosticCategory, .message = "ignored after scope", });
 
     EXPECT_EQ(previousLogger.messageCount(), s_ExpectedDualCount);
     EXPECT_TRUE(previousLogger.sawMessageContaining(NWB_TEXT("scope text")));
@@ -138,10 +142,10 @@ TEST(Telemetry, DiagnosticCaptureGuardDestructionStopsGlobalCapture){
     {
         Telemetry::DiagnosticCaptureGuard guard(recorder);
         EXPECT_TRUE(guard.installed());
-        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error.data(), .category = "telemetry_guard", .message = "captured diagnostic", .file = "guard.cpp", .line = 44u, });
+        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error.data(), .category = s_TelemetryGuardCategory, .message = "captured diagnostic", .file = "guard.cpp", .line = 44u, });
     }
 
-    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error.data(), .category = "telemetry_guard", .message = "ignored after guard", });
+    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error.data(), .category = s_TelemetryGuardCategory, .message = "ignored after guard", });
 
     EXPECT_EQ(recorder.eventCount(), 1u);
 }
@@ -168,7 +172,7 @@ TEST(Telemetry, DiagnosticObserverReusesPreparedStorageAndCountsPoolOverflow){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
-    const DiagnosticEventRecord source{ .event = "error", .message = "bounded observer", };
+    const DiagnosticEventRecord source{ .event = s_ErrorEvent, .message = "bounded observer", };
     const auto prepared = testArena.arena.memoryStats();
     for(u32 iteration = 0u; iteration < 3u; ++iteration){
         recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
@@ -203,7 +207,7 @@ TEST(Telemetry, DiagnosticObserverRejectsOversizeWithoutTruncatingDirectDiagnost
     AString<Telemetry::TelemetryArena> message(testArena.arena);
     constexpr usize s_MessageCapacity = Telemetry::s_DiagnosticCapturePayloadCapacity - sizeof(Telemetry::EncodedDiagnosticPayloadHeader) - 5u;
     message.resize(s_MessageCapacity + 1u, 'x');
-    DiagnosticEventRecord source{ .event = "error", .message = AStringView(message.data(), s_MessageCapacity), };
+    DiagnosticEventRecord source{ .event = s_ErrorEvent, .message = AStringView(message.data(), s_MessageCapacity), };
     const auto prepared = testArena.arena.memoryStats();
     guard.capture(source);
     ASSERT_EQ(recorder.eventCount(), 1u);
@@ -265,7 +269,7 @@ TEST(Telemetry, DiagnosticObserverPreservesPublishedRecordsAcrossFlagTogglesAndF
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
     Telemetry::DiagnosticCaptureGuard guard(recorder);
     ASSERT_TRUE(guard.installed());
-    const DiagnosticEventRecord source{ .event = "error", .message = "retained", };
+    const DiagnosticEventRecord source{ .event = s_ErrorEvent, .message = "retained", };
     guard.capture(source);
     ASSERT_EQ(recorder.eventCount(), 1u);
     const auto* const retained = recorder.view().eventAt(0u);
@@ -303,7 +307,7 @@ TEST(Telemetry, DiagnosticObserverDoesNotGrowPublicationStorageWhenOrdinaryEvent
     for(usize eventIndex = 0u; eventIndex < Telemetry::s_DiagnosticCaptureEventCapacity; ++eventIndex)
         ASSERT_TRUE(recorder.recordBinary(Telemetry::EventKind::PerfFrame, 0u, nullptr, 0u));
     const auto filled = testArena.arena.memoryStats();
-    const DiagnosticEventRecord source{ .event = "error", .message = "publication full", };
+    const DiagnosticEventRecord source{ .event = s_ErrorEvent, .message = "publication full", };
     guard.capture(source);
     EXPECT_EQ(recorder.droppedDiagnosticCount(), 1u);
     EXPECT_EQ(testArena.arena.memoryStats().allocationCount, filled.allocationCount);
@@ -322,7 +326,7 @@ TEST(Telemetry, DiagnosticObserverPreservesOrderingAndPayloadLifetimeDuringBuild
     bool captureDidNotAllocate = false;
     ASSERT_TRUE(recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, 7u, 3u, [&](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes& payload){
         const auto before = testArena.arena.memoryStats();
-        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = "error", .message = "builder callback", });
+        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_ErrorEvent, .message = "builder callback", });
         const auto after = testArena.arena.memoryStats();
         captureDidNotAllocate = before.allocationCount == after.allocationCount && before.reallocationCount == after.reallocationCount;
         payload.push_back(17u);
@@ -350,7 +354,7 @@ TEST(Telemetry, ConcurrentDiagnosticObserversAccountForEveryAdmittedAttempt){
     Telemetry::DiagnosticCaptureGuard guard(recorder);
     ASSERT_TRUE(guard.installed());
     constexpr usize s_AttemptsPerThread = 256u;
-    const DiagnosticEventRecord source{ .event = "error", .message = "concurrent bounded observer", };
+    const DiagnosticEventRecord source{ .event = s_ErrorEvent, .message = "concurrent bounded observer", };
     AtomicFlag start;
     const auto capture = [&]()noexcept{
         while(!start.test(MemoryOrder::acquire))
@@ -389,7 +393,7 @@ TEST(Telemetry, DiagnosticCaptureGuardConcurrentLifetimeStress){
         captureThreadStarted.testAndSet(MemoryOrder::release);
         captureThreadStarted.notifyAll();
         while(!stopCaptureThread.test(MemoryOrder::acquire)){
-            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error.data(), .category = "telemetry_guard", .message = "capture during destruction", });
+            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error.data(), .category = s_TelemetryGuardCategory, .message = "capture during destruction", });
             YieldThread();
         }
     }
@@ -412,8 +416,8 @@ TEST(Telemetry, DiagnosticCaptureGuardConcurrentLifetimeStress){
                 allGuardsInstalled = false;
                 break;
             }
-
-            const auto deadline = TimerAddMS(TimerNow(), 5000);
+            constexpr i32 s_CaptureDeadlineMS = 5000;
+            const auto deadline = TimerAddMS(TimerNow(), s_CaptureDeadlineMS);
             while(recorder.eventCount() == 0u && TimerNow() < deadline)
                 YieldThread();
         }
@@ -441,7 +445,7 @@ TEST(Telemetry, DiagnosticCaptureGuardConcurrentLifetimeStress){
     }
 
     const usize eventCountAfterFinalDestruction = recorder.eventCount();
-    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error.data(), .category = "telemetry_guard", .message = "ignored after destruction", });
+    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error.data(), .category = s_TelemetryGuardCategory, .message = "ignored after destruction", });
     EXPECT_EQ(recorder.eventCount(), eventCountAfterFinalDestruction);
 
     const Telemetry::EventView events = recorder.view();

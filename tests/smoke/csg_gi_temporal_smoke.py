@@ -15,6 +15,14 @@ import sys
 
 from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, read_bmp_24_rows, validate_expected_log_text)
 
+LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 45.0
+LIT_MINIMUM_FRAME_INTERVAL = 1
+LIT_MAXIMUM_FRAME_INTERVAL = 64
+
+LIT_PARTIAL_SUFFIX = ".partial"
+LIT_TEMPORAL_WARMUP_COMPLETE = "CsgVisibleSmokeProject: temporal warmup complete elapsed_seconds="
+LIT_TEMPORAL_SERIES_COMPLETE = "CsgVisibleSmokeProject: temporal series complete samples=32"
+
 LIT_BACKGROUND = "background"
 LIT_SPHERE = "sphere"
 LIT_PIXEL = "pixel"
@@ -117,7 +125,7 @@ def capture_series(args):
         for sample in range(SAMPLE_COUNT):
             path = sample_path(args.output_directory, sample)
             path.unlink(missing_ok=True)
-            path.with_name(path.name + ".partial").unlink(missing_ok=True)
+            path.with_name(path.name + LIT_PARTIAL_SUFFIX).unlink(missing_ok=True)
         for name in (LIT_MANIFEST_JSON, LIT_RUNTIME_LOG):
             (args.output_directory / name).unlink(missing_ok=True)
     if any(sample_path(args.output_directory, index).exists() for index in range(SAMPLE_COUNT)):
@@ -139,8 +147,8 @@ def capture_series(args):
     command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")), LIT_EXECUTABLE, str(args.executable), LIT_WORKING_DIRECTORY, str(args.working_directory),
         "--output", str(output), "--application-capture", "--application-capture-frame-count", "1", LIT_TIMEOUT, str(args.timeout), "--log-output", str(args.output_directory / LIT_RUNTIME_LOG),
         LIT_EXPECT_LOG_MESSAGE, f"CsgVisibleSmokeProject: temporal scene animated={int(args.motion == LIT_ANIMATED)} view={args.view} minimum_frame=360 warmup_seconds=30 interval={args.frame_interval} samples=32",
-        LIT_EXPECT_LOG_MESSAGE, LIT_CSGVISIBLESMOKEPROJECT_TEMPORAL_WARMUP, LIT_EXPECT_LOG_MESSAGE, "CsgVisibleSmokeProject: temporal warmup complete elapsed_seconds=",
-        LIT_EXPECT_LOG_MESSAGE, "CsgVisibleSmokeProject: temporal series complete samples=32", LIT_EXPECT_LOG_MESSAGE, LIT_CSGVISIBLESMOKEPROJECT_SHUTDOWN, LIT_EXPECT_LOG_MESSAGE, LIT_RENDERERSYSTEM_DISPATCHED_SURFEL_GI_RE,
+        LIT_EXPECT_LOG_MESSAGE, LIT_CSGVISIBLESMOKEPROJECT_TEMPORAL_WARMUP, LIT_EXPECT_LOG_MESSAGE, LIT_TEMPORAL_WARMUP_COMPLETE,
+        LIT_EXPECT_LOG_MESSAGE, LIT_TEMPORAL_SERIES_COMPLETE, LIT_EXPECT_LOG_MESSAGE, LIT_CSGVISIBLESMOKEPROJECT_SHUTDOWN, LIT_EXPECT_LOG_MESSAGE, LIT_RENDERERSYSTEM_DISPATCHED_SURFEL_GI_RE,
         LIT_GPU_VALIDATION if args.gpu_validation else "--no-gpu-validation"]
     if args.route == LIT_SOFTWARE:
         command += ["--application-arg=--disable-hardware-ray-tracing", LIT_EXPECT_LOG_MESSAGE, LIT_LOADER_HARDWARE_RAY_TRACING_DISABLED_B, LIT_REJECT_LOG_MESSAGE, "RendererSystem: created surfel HW trace compute pipeline"]
@@ -161,7 +169,7 @@ def capture_series(args):
         command += [LIT_LOGSERVER_EXECUTABLE, str(args.logserver_executable)]
     else:
         command.append("--no-logserver")
-    result = subprocess.run(command, env=environment, check=False, timeout=args.timeout + 45.0)
+    result = subprocess.run(command, env=environment, check=False, timeout=args.timeout + LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS)
     if result.returncode and result.returncode != SKIP_EXIT_CODE:
         raise SmokeFailure(f"temporal capture failed with exit {result.returncode}")
     return result.returncode
@@ -207,7 +215,7 @@ def position_quantization_tolerance(rgb, decoded):
 
 def measure_series(directory, frame_interval=FRAME_INTERVAL):
     log = (directory / LIT_RUNTIME_LOG).read_text(encoding=LIT_UTF_8)
-    validate_expected_log_text(log, ("CsgVisibleSmokeProject: temporal series complete samples=32", LIT_CSGVISIBLESMOKEPROJECT_SHUTDOWN, LIT_RENDERERSYSTEM_DISPATCHED_SURFEL_GI_RE), STRICT_LOG_FAILURE_MESSAGES)
+    validate_expected_log_text(log, (LIT_TEMPORAL_SERIES_COMPLETE, LIT_CSGVISIBLESMOKEPROJECT_SHUTDOWN, LIT_RENDERERSYSTEM_DISPATCHED_SURFEL_GI_RE), STRICT_LOG_FAILURE_MESSAGES)
     setups = re.findall(r"CsgVisibleSmokeProject: temporal scene animated=([01]) view=(full|indirect|direct|normal|position|cap_state|interval_state|event_state|event_data|event_order|span_state) minimum_frame=(\d+) warmup_seconds=(\d+) interval=(\d+) samples=(\d+)", log)
     if len(setups) != 1:
         raise SmokeFailure("temporal series must have exactly one logged scene setup")
@@ -237,7 +245,7 @@ def measure_series(directory, frame_interval=FRAME_INTERVAL):
     expected = [(sample, first_frame + frame_interval * sample) for sample in range(SAMPLE_COUNT)]
     if captured != expected:
         raise SmokeFailure(f"temporal source-frame sequence differs from its deterministic schedule: {captured}")
-    if not (log.index(LIT_CSGVISIBLESMOKEPROJECT_TEMPORAL_WARMUP) < log.index("CsgVisibleSmokeProject: temporal warmup complete elapsed_seconds=") < log.index("CsgVisibleSmokeProject: temporal sample 0 graphics frame")):
+    if not (log.index(LIT_CSGVISIBLESMOKEPROJECT_TEMPORAL_WARMUP) < log.index(LIT_TEMPORAL_WARMUP_COMPLETE) < log.index("CsgVisibleSmokeProject: temporal sample 0 graphics frame")):
         raise SmokeFailure("temporal capture must follow the completed live warmup")
     if len(re.findall(r"FramebufferCapture: capture ready", log)) != SAMPLE_COUNT:
         raise SmokeFailure("temporal series did not complete all accepted framebuffer readbacks")
@@ -253,7 +261,7 @@ def measure_series(directory, frame_interval=FRAME_INTERVAL):
     files = []
     for index, frame in captured:
         path = sample_path(directory, index)
-        if path.with_name(path.name + ".partial").exists():
+        if path.with_name(path.name + LIT_PARTIAL_SUFFIX).exists():
             raise SmokeFailure("temporal series left an incomplete capture")
         width, height, rows = read_bmp_24_rows(path)
         if (width, height) != EXPECTED_EXTENT:
@@ -435,7 +443,7 @@ def main():
     parser.add_argument("--check-spans", action=LIT_STORE_TRUE, help="Check independent spans for overlapping closed receivers and three controls.")
     parser.add_argument("--overwrite", action=LIT_STORE_TRUE, help="Replace only this sequence's known capture artifacts.")
     args = parser.parse_args()
-    if not 1 <= args.frame_interval <= 64:
+    if not LIT_MINIMUM_FRAME_INTERVAL <= args.frame_interval <= LIT_MAXIMUM_FRAME_INTERVAL:
         parser.error("--frame-interval must be between 1 and 64")
     if args.check_quality and args.view in (LIT_NORMAL, LIT_POSITION, *STATE_CHANNELS):
         parser.error("diagnostic views do not support the lighting quality gate")

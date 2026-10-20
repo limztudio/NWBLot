@@ -30,6 +30,10 @@ namespace __hidden_pow_qualification{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_ExceptionalLabel = "exceptional";
+constexpr AStringView s_RandomLabel = "random";
+constexpr AStringView s_PositiveFiniteLabel = "positive_finite";
+
 using UInt4 = u32 __attribute__((ext_vector_type(4)));
 using Int4 = i32 __attribute__((ext_vector_type(4)));
 using UInt64x4 = u64 __attribute__((ext_vector_type(4)));
@@ -241,7 +245,7 @@ void PrintCounts(const StringView category, const Counts& counts){
             for(const u32 y : s_Exceptional){
                 for(usize lane = 0u; lane < 4u; ++lane){
                     const SIMDVectorSingle left = VectorSetIntByIndex(s_SIMDOne, x, lane), right = VectorSetIntByIndex(s_SIMDOne, y, lane);
-                    if(!Compare("exceptional", evaluate, left, right, exceptional))
+                    if(!Compare(s_ExceptionalLabel, evaluate, left, right, exceptional))
                         return failures + 1u;
                 }
             }
@@ -253,7 +257,7 @@ void PrintCounts(const StringView category, const Counts& counts){
                 x[lane] = static_cast<u32>(NextSeed(seed));
                 y[lane] = static_cast<u32>(NextSeed(seed));
             }
-            if(!Compare("random", evaluate, BitCast<SIMDVectorSingle>(x), BitCast<SIMDVectorSingle>(y), random))
+            if(!Compare(s_RandomLabel, evaluate, BitCast<SIMDVectorSingle>(x), BitCast<SIMDVectorSingle>(y), random))
                 return failures + 1u;
         }
         for(usize index = 0u; index < 65536u; ++index){
@@ -262,7 +266,7 @@ void PrintCounts(const StringView category, const Counts& counts){
                 x[lane] = 0x00800000u + static_cast<u32>(NextSeed(seed) % 0x7f000000u);
                 y[lane] = (0x3c000000u + static_cast<u32>(NextSeed(seed) % 0x06000000u)) | (static_cast<u32>(NextSeed(seed)) & 0x80000000u);
             }
-            if(!Compare("positive_finite", evaluate, BitCast<SIMDVectorSingle>(x), BitCast<SIMDVectorSingle>(y), positive))
+            if(!Compare(s_PositiveFiniteLabel, evaluate, BitCast<SIMDVectorSingle>(x), BitCast<SIMDVectorSingle>(y), positive))
                 return failures + 1u;
         }
         for(u32 first = 0u; first < 65536u; first += 4u){
@@ -292,9 +296,9 @@ void PrintCounts(const StringView category, const Counts& counts){
                     return failures + 1u;
             }
         }
-        PrintCounts("exceptional", exceptional);
-        PrintCounts("random", random);
-        PrintCounts("positive_finite", positive);
+        PrintCounts(s_ExceptionalLabel, exceptional);
+        PrintCounts(s_RandomLabel, random);
+        PrintCounts(s_PositiveFiniteLabel, positive);
         PrintCounts("srgb", srgb);
         for(const auto& counts : { exceptional, random, positive, srgb })
             failures += counts.bits + counts.flags + counts.errors + counts.quantized;

@@ -20,6 +20,12 @@ import time
 from types import SimpleNamespace
 from typing import Callable
 
+LIT_MILLISECONDS_PER_SECOND = 1000
+LIT_MINIMUM_WARMUP_INTERVALS = 2
+
+LIT_WINDOW_TIMEOUT_SECONDS = 30.0
+LIT_PROCESS_POLL_SECONDS = .1
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ab"))
 from gpu_timing_parse import MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS, load_name_symbols
 import reflection_benchmark as reflection
@@ -471,7 +477,7 @@ def summarize_wall_frames(text, timing_text, workload, report_range):
         frames = int(match[LIT_FRAMES])
         if frames <= 0 or any(not math.isfinite(value) or value <= 0 for value in values.values()):
             raise SmokeFailure("invalid reflection FPS report")
-        average = values[LIT_SECONDS] * 1000 / frames
+        average = values[LIT_SECONDS] * LIT_MILLISECONDS_PER_SECOND / frames
         if not (values[LIT_MINIMUM] <= values[LIT_AVERAGE] <= values[LIT_MAXIMUM]) \
             or not math.isclose(values[LIT_AVERAGE], average, rel_tol=1e-5, abs_tol=1e-6) \
             or not math.isclose(values[LIT_FPS], frames / values[LIT_SECONDS], rel_tol=1e-5, abs_tol=1e-6):
@@ -488,7 +494,7 @@ def summarize_wall_frames(text, timing_text, workload, report_range):
     frames = sum(report[LIT_FRAMES] for report in selected)
     seconds = sum(report[LIT_SECONDS] for report in selected)
     return {LIT_ELIGIBLE: True, LIT_SOURCE: "ReflectionSmokeProject FpsProbe callback delta", LIT_POLICY: WALL_FRAME_POLICY, LIT_RETAINED_REPORT_RANGE: [start, stop], LIT_REPORTS: len(selected), LIT_FRAMES: frames, LIT_SECONDS: seconds,
-        LIT_MEAN_FRAME_MS: seconds * 1000 / frames, LIT_MEAN_FPS: frames / seconds, "min_frame_ms": min(report[LIT_MINIMUM] for report in selected), "max_frame_ms": max(report[LIT_MAXIMUM] for report in selected)}
+        LIT_MEAN_FRAME_MS: seconds * LIT_MILLISECONDS_PER_SECOND / frames, LIT_MEAN_FPS: frames / seconds, "min_frame_ms": min(report[LIT_MINIMUM] for report in selected), "max_frame_ms": max(report[LIT_MAXIMUM] for report in selected)}
 
 
 def compare_trials(trials, orders, workload, seed=0, practical_ms=.02, practical_fraction=.03, control_floor_ms=.015):
@@ -565,7 +571,7 @@ def acquire_trial(args, arm, workload, block, position, symbols):
         backend = create_capture_backend()
         logserver, port, log_directory, baseline, pattern = launch_logserver(launch_args, arm.executable, env)
         process = launch_testbed(launch_args, arm.executable, env, port)
-        handle = backend.wait_for_window(process.pid, min(args.timeout, 30.0))
+        handle = backend.wait_for_window(process.pid, min(args.timeout, LIT_WINDOW_TIMEOUT_SECONDS))
         if not handle:
             raise SmokeFailure("benchmark render window did not appear")
         backend.focus_window(handle)
@@ -591,7 +597,7 @@ def acquire_trial(args, arm, workload, block, position, symbols):
                         break
                     except SmokeFailure as error:
                         problem = str(error)
-            time.sleep(.1)
+            time.sleep(LIT_PROCESS_POLL_SECONDS)
         if selected is None:
             raise SmokeFailure(f"GPU acquisition timed out: {problem}")
         exit_code, tail = terminate_process(process, LIT_RENDERER_A_B_BENCHMARK, handle)
@@ -687,7 +693,7 @@ def parse_args(argv=None):
         parser.error("caustic qualification applies only to caustic workloads")
     if args.blocks < 8 or args.blocks % 2:
         parser.error("blocks must be even and at least8, retaining complete AB/BA balance")
-    if args.warmup_intervals < 2 or args.sample_intervals <= MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS or args.minimum_frame_samples < 100:
+    if args.warmup_intervals < LIT_MINIMUM_WARMUP_INTERVALS or args.sample_intervals <= MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS or args.minimum_frame_samples < 100:
         parser.error(f"at least 2 warm-up reports, {MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS + 1} positive measured reports and 100 completed frames are required")
     for field in ("timeout", LIT_PRACTICAL_MS, LIT_PRACTICAL_FRACTION, LIT_CONTROL_FLOOR_MS):
         if not math.isfinite(getattr(args, field)) or getattr(args, field) <= 0:

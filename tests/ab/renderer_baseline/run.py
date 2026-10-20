@@ -28,6 +28,10 @@ from types import SimpleNamespace
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 from unittest import mock
 
+LIT_MINIMUM_COMPLEX_GI_SETTLE_SECONDS = 30.0
+
+LIT_ENABLED_FLAG = "1"
+
 
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "tests" / "smoke"))
@@ -222,7 +226,7 @@ def canonical_frozen_environment(profile: BaselineProfile) -> Dict[str, str]:
 
 
 def capture_mode(profile: BaselineProfile) -> str:
-    if profile.frozen_environment.get(LIT_NWB_GI_SMOKE_COMPLEX_SCENE) == "1":
+    if profile.frozen_environment.get(LIT_NWB_GI_SMOKE_COMPLEX_SCENE) == LIT_ENABLED_FLAG:
         return "settled-readback"
     return LIT_FRAME_LOCKED if profile.capture_freeze_frame != 0 else LIT_SETTLED
 
@@ -337,15 +341,15 @@ def validate_runtime_log(log_text: str, rejected_messages: Sequence[str]) -> Tup
 
 
 def validate_complex_gi_warmup(log_text: str, profile: BaselineProfile, frozen_environment: Mapping[str, str]) -> Optional[Mapping[str, object]]:
-    if profile.frozen_environment.get(LIT_NWB_GI_SMOKE_COMPLEX_SCENE) != "1":
+    if profile.frozen_environment.get(LIT_NWB_GI_SMOKE_COMPLEX_SCENE) != LIT_ENABLED_FLAG:
         return None
-    if frozen_environment.get(LIT_NWB_GI_SMOKE_COMPLEX_SCENE) != "1":
+    if frozen_environment.get(LIT_NWB_GI_SMOKE_COMPLEX_SCENE) != LIT_ENABLED_FLAG:
         raise SmokeFailure(LIT_COMPLEX_GI_PROFILE_REQUIRES_ITS_SELECT)
     try:
         requested_seconds = struct.unpack(LIT_F, struct.pack(LIT_F, float(frozen_environment.get(LIT_NWB_GI_SMOKE_MIN_SETTLE_SECONDS, "30"))))[0]
     except (ValueError, OverflowError, struct.error) as error:
         raise SmokeFailure("complex GI requires a finite live warmup of at least 30 seconds") from error
-    if not math.isfinite(requested_seconds) or requested_seconds < 30.0 or profile.capture_freeze_frame < 360:
+    if not math.isfinite(requested_seconds) or requested_seconds < LIT_MINIMUM_COMPLEX_GI_SETTLE_SECONDS or profile.capture_freeze_frame < 360:
         raise SmokeFailure("complex GI requires at least 360 presentations then 30 live warmup seconds")
     patterns = {
         LIT_START: r"GiTestSmokeProject: complex GI live warmup start graphics_frame=(\d+) presentations=(\d+) required_presentations=(\d+) required_seconds=(\S+)",
@@ -401,8 +405,8 @@ def capture_scene(args: argparse.Namespace, profile: BaselineProfile, capture_pa
         environment["NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"] = str(profile.capture_freeze_frame)
     if profile.fixed_delta_seconds != 0.0:
         environment["NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS"] = f"{profile.fixed_delta_seconds:.9g}"
-    complex_readback = profile.frozen_environment.get(LIT_NWB_GI_SMOKE_COMPLEX_SCENE) == "1"
-    if complex_readback and frozen_environment.get(LIT_NWB_GI_SMOKE_COMPLEX_SCENE) != "1":
+    complex_readback = profile.frozen_environment.get(LIT_NWB_GI_SMOKE_COMPLEX_SCENE) == LIT_ENABLED_FLAG
+    if complex_readback and frozen_environment.get(LIT_NWB_GI_SMOKE_COMPLEX_SCENE) != LIT_ENABLED_FLAG:
         raise SmokeFailure(LIT_COMPLEX_GI_PROFILE_REQUIRES_ITS_SELECT)
     if complex_readback:
         environment[LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH] = str(capture_path.resolve())
@@ -721,7 +725,7 @@ def prepare_output_directory(path: Path) -> None:
 
 def run(args: argparse.Namespace) -> int:
     profile = get_profile(args.profile)
-    if profile.frozen_environment.get(LIT_NWB_GI_SMOKE_COMPLEX_SCENE) == "1":
+    if profile.frozen_environment.get(LIT_NWB_GI_SMOKE_COMPLEX_SCENE) == LIT_ENABLED_FLAG:
         if args.settle_seconds is not None:
             raise SmokeFailure("complex GI readback uses NWB_GI_SMOKE_MIN_SETTLE_SECONDS instead of --settle-seconds")
         args.settle_seconds = 0.0

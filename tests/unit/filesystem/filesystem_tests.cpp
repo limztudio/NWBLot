@@ -28,6 +28,12 @@ namespace __hidden_filesystem_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_MountedDirectory = "mounted";
+constexpr AStringView s_RelocatedDirectory = "relocated";
+constexpr AStringView s_HeldFileSuffix = ".held";
+constexpr AStringView s_StageDirectory = "stage";
+constexpr AStringView s_BackupDirectory = "backup";
+
 constexpr u32 s_ThirdElementIndex = 2u;
 constexpr i32 s_PublishLogFailure = 47;
 
@@ -162,8 +168,8 @@ TEST_F(FilesystemVolumeTest, DeferredWritesSurviveUnmountAndReadOnlyMount){
 }
 
 TEST_F(FilesystemVolumeTest, FailedUnmountRetainsPendingWritesForExplicitRetry){
-    m_desc.mountDirectory = m_directory / "mounted";
-    const Path relocated = m_directory / "relocated";
+    m_desc.mountDirectory = m_directory / s_MountedDirectory;
+    const Path relocated = m_directory / s_RelocatedDirectory;
     auto filesystemResult = CreateFilesystem(m_arena, m_desc);
     ASSERT_TRUE(filesystemResult);
     auto filesystem = Move(*filesystemResult);
@@ -194,8 +200,8 @@ TEST_F(FilesystemVolumeTest, FailedUnmountRetainsPendingWritesForExplicitRetry){
 
 TEST_F(FilesystemVolumeTest, ExplicitFlushSurvivesResourceOnlyDestructionWithoutPersistenceRetry){
     static_assert(IsNothrowDestructible_V<VolumeFileSystem>);
-    m_desc.mountDirectory = m_directory / "mounted";
-    const Path relocated = m_directory / "relocated";
+    m_desc.mountDirectory = m_directory / s_MountedDirectory;
+    const Path relocated = m_directory / s_RelocatedDirectory;
     auto filesystemResult = CreateFilesystem(m_arena, m_desc);
     ASSERT_TRUE(filesystemResult);
     auto filesystem = Move(*filesystemResult);
@@ -276,7 +282,7 @@ TEST_F(FilesystemVolumeTest, FailedCompactionPreservesOverlappingSourcePayloadBy
     const ::Path<NWB::Core::Alloc::ScratchArena> directory(scratchArena, m_directory);
     const auto metadataSegment = MakeVolumeSegmentPath(directory, m_desc.volumeName.view(), 0u);
     auto backupSegment = metadataSegment;
-    backupSegment += ".held";
+    backupSegment += s_HeldFileSuffix;
     bool restored = false;
     {
         ASSERT_TRUE(RenamePath(metadataSegment, backupSegment));
@@ -311,7 +317,7 @@ TEST_F(FilesystemVolumeTest, ImmediateMutationUnwindPreservesIndexedPayloadsAndM
     const ::Path<NWB::Core::Alloc::ScratchArena> directory(scratchArena, m_directory);
     const auto metadataSegment = MakeVolumeSegmentPath(directory, m_desc.volumeName.view(), 0u);
     auto backupSegment = metadataSegment;
-    backupSegment += ".held";
+    backupSegment += s_HeldFileSuffix;
     Vector<u8, NWB::Core::Alloc::ScratchArena> loaded(scratchArena);
     for(u32 operation = 0u; operation < 3u; ++operation){
         bool restored = false;
@@ -481,8 +487,8 @@ TEST_F(FilesystemVolumeTest, MetadataImagePreservesCompleteHashesAndClearsRemove
 TEST_F(FilesystemVolumeTest, FailedLaterSegmentPromotionRestoresPublishedBytes){
     NWB::Core::Alloc::ScratchArena scratchArena(s_TestArena);
     NWB::Core::Filesystem::StagedDirectoryPaths stagedPaths(m_arena);
-    stagedPaths.stageDirectory = m_directory / "stage";
-    stagedPaths.backupDirectory = m_directory / "backup";
+    stagedPaths.stageDirectory = m_directory / s_StageDirectory;
+    stagedPaths.backupDirectory = m_directory / s_BackupDirectory;
     ASSERT_TRUE(EnsureDirectories(stagedPaths.stageDirectory));
     const Path firstOutput = MakeVolumeSegmentPath(m_directory, m_desc.volumeName.view(), 0u);
     const Path secondOutput = MakeVolumeSegmentPath(m_directory, m_desc.volumeName.view(), 1u);
@@ -515,8 +521,8 @@ TEST_F(FilesystemVolumeTest, FailedLaterSegmentPromotionRestoresPublishedBytes){
 TEST_F(FilesystemVolumeTest, ThrowingPromotionDiagnosticRestoresPublishedBytesDuringUnwind){
     NWB::Core::Alloc::ScratchArena scratchArena(s_TestArena);
     NWB::Core::Filesystem::StagedDirectoryPaths stagedPaths(m_arena);
-    stagedPaths.stageDirectory = m_directory / "stage";
-    stagedPaths.backupDirectory = m_directory / "backup";
+    stagedPaths.stageDirectory = m_directory / s_StageDirectory;
+    stagedPaths.backupDirectory = m_directory / s_BackupDirectory;
     ASSERT_TRUE(EnsureDirectories(stagedPaths.stageDirectory));
     const Path firstOutput = MakeVolumeSegmentPath(m_directory, m_desc.volumeName.view(), 0u);
     const Path secondOutput = MakeVolumeSegmentPath(m_directory, m_desc.volumeName.view(), 1u);

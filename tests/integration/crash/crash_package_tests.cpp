@@ -38,6 +38,10 @@ namespace __hidden_crash_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr u32 s_PackageReadyTimeoutMS = 3000u;
+constexpr AStringView s_SpoolDirectory = "spool";
+constexpr AStringView s_ApplicationVersion = "1";
+
 static constexpr AStringView s_CRASH_001 = "crash-001";
 static constexpr AStringView s_CRASH_002 = "crash-002";
 static constexpr AStringView s_CRASH_003 = "crash-003";
@@ -79,7 +83,7 @@ inline constexpr Name s_SignalChildInstallArena("tests/integration/crash/signal_
 }
 
 [[nodiscard]] static CrashTestPath SpoolDirectory(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup){
-    return TestCaseDirectory(arena, testGroup) / "spool";
+    return TestCaseDirectory(arena, testGroup) / s_SpoolDirectory;
 }
 
 [[nodiscard]] static CrashTestPath BucketDirectory(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView bucketName){
@@ -136,7 +140,7 @@ static void FillPackageRequest(NWB::Core::Alloc::GlobalArena& arena, NWB::Core::
     request.threadId = CurrentThreadId();
     CopyFixedBuffer(request.crashId, crashId);
     CopyFixedBuffer(request.applicationName, AStringView(s_CRASH_TESTS));
-    CopyFixedBuffer(request.versionText, AStringView("1"));
+    CopyFixedBuffer(request.versionText, AStringView(s_ApplicationVersion));
     CopyFixedBuffer(request.buildId, AStringView(s_TEST));
     CopyFixedBuffer(request.abi, CurrentAbiName());
     CopyPathText(arena, request.spoolDirectory, spoolDirectory);
@@ -178,7 +182,7 @@ TEST(Crash, SpoolAdmissionPreservesFilesystemCategoryAndCodeAfterUnlock){
     ASSERT_TRUE(EnsureDirectories(TestCaseDirectory(arena, s_Group)));
     const CrashTestPath blocked = TestCaseDirectory(arena, s_Group) / "blocked";
     ASSERT_TRUE(WriteTextFile(blocked, AStringView("This file cannot be a parent directory.\n")));
-    const CrashTestPath spoolDirectory = blocked / "spool";
+    const CrashTestPath spoolDirectory = blocked / s_SpoolDirectory;
     const auto expectedFailure = EnsureDirectories(spoolDirectory / CrashNames::s_PendingDirectoryName);
     ASSERT_FALSE(expectedFailure);
     char expectedCategory[64u] = {};
@@ -239,7 +243,8 @@ TEST(Crash, FailedExecutableAdmissionReleasesResourcesAndObservesFailureAfterUnl
     DWORD before = 0u;
     ASSERT_TRUE(GetProcessHandleCount(GetCurrentProcess(), &before));
 #else
-    const auto before = DirectoryIterator<NWB::Core::Alloc::GlobalArena>::Create(CrashTestPath(arena, "/proc/self/fd"));
+    constexpr AStringView s_FileDescriptorsDirectory = "/proc/self/fd";
+    const auto before = DirectoryIterator<NWB::Core::Alloc::GlobalArena>::Create(CrashTestPath(arena, s_FileDescriptorsDirectory));
     ASSERT_TRUE(before);
     const auto beforeCount = static_cast<usize>(before->end() - before->begin());
 #endif
@@ -254,7 +259,7 @@ TEST(Crash, FailedExecutableAdmissionReleasesResourcesAndObservesFailureAfterUnl
     ASSERT_TRUE(GetProcessHandleCount(GetCurrentProcess(), &after));
     EXPECT_EQ(after, before);
 #else
-    const auto after = DirectoryIterator<NWB::Core::Alloc::GlobalArena>::Create(CrashTestPath(arena, "/proc/self/fd"));
+    const auto after = DirectoryIterator<NWB::Core::Alloc::GlobalArena>::Create(CrashTestPath(arena, s_FileDescriptorsDirectory));
     ASSERT_TRUE(after);
     EXPECT_EQ(static_cast<usize>(after->end() - after->begin()), beforeCount);
 #endif
@@ -699,7 +704,7 @@ TEST(Crash, DesktopHandlerDoesNotRetainUnrelatedInheritableHandles){
 
     NWB::Core::Crash::CrashConfigT<NWB::Core::Alloc::PersistentArena> config(installArena);
     config.applicationName = AStringView(s_CRASH_TESTS);
-    config.version = AStringView("1");
+    config.version = AStringView(s_ApplicationVersion);
     config.buildId = AStringView("handle-inheritance-test");
     config.spoolDirectory = SpoolDirectory(arena, s_Group);
 
@@ -725,7 +730,7 @@ TEST(Crash, LinuxManualDumpUnwindsBeyondTheLeafWithoutFramePointers){
 
     NWB::Core::Crash::CrashConfigT<NWB::Core::Alloc::PersistentArena> config(installArena);
     config.applicationName = AStringView(s_CRASH_TESTS);
-    config.version = AStringView("1");
+    config.version = AStringView(s_ApplicationVersion);
     config.buildId = AStringView("desktop-handler-runtime-test");
     config.spoolDirectory = SpoolDirectory(arena, s_Group);
 
@@ -752,7 +757,7 @@ TEST(Crash, LinuxManualDumpUnwindsBeyondTheLeafWithoutFramePointers){
 
     const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, AStringView(crashId));
     {
-        const auto directoryReady = WaitForDirectory(packageDirectory, 3000u);
+        const auto directoryReady = WaitForDirectory(packageDirectory, s_PackageReadyTimeoutMS);
         ASSERT_TRUE(directoryReady);
         EXPECT_TRUE(*directoryReady);
     }
@@ -778,7 +783,7 @@ TEST(Crash, DesktopInstalledHandlerWritesGpuCrashTextOnlyPackage){
 
     NWB::Core::Crash::CrashConfigT<NWB::Core::Alloc::PersistentArena> config(installArena);
     config.applicationName = AStringView(s_CRASH_TESTS);
-    config.version = AStringView("1");
+    config.version = AStringView(s_ApplicationVersion);
     config.buildId = AStringView("gpu-text-only-runtime-test");
     config.spoolDirectory = SpoolDirectory(arena, s_Group);
 
@@ -805,7 +810,7 @@ TEST(Crash, DesktopInstalledHandlerWritesGpuCrashTextOnlyPackage){
 
     const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, AStringView(crashId));
     {
-        const auto directoryReady = WaitForDirectory(packageDirectory, 3000u);
+        const auto directoryReady = WaitForDirectory(packageDirectory, s_PackageReadyTimeoutMS);
         ASSERT_TRUE(directoryReady);
         EXPECT_TRUE(*directoryReady);
     }
@@ -845,7 +850,7 @@ TEST(Crash, LinuxSignalHandlerWritesCrashPackage){
         NWB::Core::Alloc::PersistentArena installArena(s_SignalChildInstallArena, NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u));
         NWB::Core::Crash::CrashConfigT<NWB::Core::Alloc::PersistentArena> config(installArena);
         config.applicationName = AStringView(s_CRASH_TESTS);
-        config.version = AStringView("1");
+        config.version = AStringView(s_ApplicationVersion);
         config.buildId = AStringView("linux-signal-runtime-test");
         config.spoolDirectory = spoolDirectory;
 
@@ -877,7 +882,8 @@ TEST(Crash, LinuxSignalHandlerWritesCrashPackage){
 
         const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, AStringView(crashId));
         {
-            const auto directoryReady = WaitForDirectory(packageDirectory, 1000u);
+            constexpr u32 s_MissingPackageReadyTimeoutMS = 1000u;
+            const auto directoryReady = WaitForDirectory(packageDirectory, s_MissingPackageReadyTimeoutMS);
             ASSERT_TRUE(directoryReady);
             EXPECT_TRUE(*directoryReady);
         }

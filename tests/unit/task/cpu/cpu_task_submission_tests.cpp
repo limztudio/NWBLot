@@ -23,6 +23,7 @@ namespace __hidden_cpu_task_submission_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr u32 s_PollIntervalMS = 1u;
 constexpr u32 s_ExpectedDualCount = 2u;
 
 
@@ -73,7 +74,7 @@ public:
                 // A watchdog timeout must fail the death test instead of passing as an unexpected worker failure.
                 if(DurationInMS<u64>(TimerNow(), begin) >= s_TestTimeoutMS)
                     ExitTestProcess(0u);
-                SleepMS(1u);
+                SleepMS(__hidden_cpu_task_submission_tests::s_PollIntervalMS);
             }
         }
         )

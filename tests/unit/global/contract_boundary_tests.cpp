@@ -152,11 +152,12 @@ public:
     }
 
     AString<NWB::Core::Alloc::GlobalArena> output(testArena.arena);
+    constexpr u32 s_CaptureTimeoutMS = 2000u;
     constexpr AStringView s_SuccessArguments[]{ "/bin/sh", "-c", "printf 'captured\\n'; printf 'discarded\\n' >&2; exit 0" };
-    if(!CaptureProcessOutput(testArena.arena, output, s_SuccessArguments, 256u, 64u, 2000u) || AStringView(output) != "captured\n")
+    if(!CaptureProcessOutput(testArena.arena, output, s_SuccessArguments, 256u, 64u, s_CaptureTimeoutMS) || AStringView(output) != "captured\n")
         ::_exit(21);
     constexpr AStringView s_FailureArguments[]{ "/bin/sh", "-c", "printf 'retained\\n'; printf 'discarded\\n' >&2; exit 23" };
-    if(CaptureProcessOutput(testArena.arena, output, s_FailureArguments, 256u, 64u, 2000u) || AStringView(output) != "retained\n")
+    if(CaptureProcessOutput(testArena.arena, output, s_FailureArguments, 256u, 64u, s_CaptureTimeoutMS) || AStringView(output) != "retained\n")
         ::_exit(22);
     ::_exit(0);
 }

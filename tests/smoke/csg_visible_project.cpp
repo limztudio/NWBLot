@@ -36,6 +36,8 @@ namespace __hidden_csg_visible_smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_GiTemporalEnvironment = "NWB_CSG_GI_TEMPORAL";
+
 using NWB::Tests::Smoke::AddSmokeRenderSystems;
 using NWB::Tests::Smoke::AddStaticCsgMeshReceiver;
 using NWB::Tests::Smoke::AssignCsgCutterParameters;
@@ -256,7 +258,7 @@ private:
         }
 
         auto& renderer = AddSmokeRenderSystems(*world, context);
-        if(NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_CSG_GI_TEMPORAL")){
+        if(NWB::Tests::Smoke::ReadSmokeEnvironmentFlag(s_GiTemporalEnvironment)){
             NWB::Impl::ReflectionSettings reflection;
             reflection.traceMode = NWB::Impl::ReflectionTraceMode::Disabled;
             NWB_FATAL_ASSERT_MSG(renderer.setReflectionSettings(reflection), NWB_TEXT("Invalid temporal reflection settings"));
@@ -355,7 +357,7 @@ public:
 
 public:
     virtual bool onStartup()override{
-        m_temporalEnabled = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_CSG_GI_TEMPORAL");
+        m_temporalEnabled = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag(s_GiTemporalEnvironment);
         const bool overlapping = m_temporalEnabled && NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_CSG_GI_TEMPORAL_OVERLAPPING");
         CsgVisibleMaterialRef material = s_SolidMaterial;
         if(m_temporalEnabled){

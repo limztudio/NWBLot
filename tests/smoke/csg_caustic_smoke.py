@@ -12,6 +12,10 @@ from csg_caustic_reference import analyze_route, compare_routes
 from csg_shadow_smoke import capture_environment
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
 
+LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 45.0
+
+LIT_LOG_SUFFIX = ".log"
+
 LIT_DISABLED = "disabled"
 LIT_EXECUTABLE = "--executable"
 LIT_WORKING_DIRECTORY = "--working-directory"
@@ -36,7 +40,7 @@ def capture(args, route, arm):
     capture_script = Path(__file__).with_name("window_capture_smoke.py") if arm != LIT_DISABLED \
         else Path(__file__).parent / "ui_layer" / "raster_ir_flat_capture.py"
     command = [sys.executable, str(capture_script), LIT_EXECUTABLE, str(args.executable), LIT_WORKING_DIRECTORY, str(args.working_directory), "--output", str(output), "--application-capture", "--application-capture-frame-count", str(args.frames),
-        LIT_TIMEOUT, str(args.timeout), "--log-output", str(output.with_suffix(".log")), LIT_EXPECT_LOG_MESSAGE, "CsgShadowSmokeProject: shutdown",
+        LIT_TIMEOUT, str(args.timeout), "--log-output", str(output.with_suffix(LIT_LOG_SUFFIX)), LIT_EXPECT_LOG_MESSAGE, "CsgShadowSmokeProject: shutdown",
         LIT_EXPECT_LOG_MESSAGE, "CsgCausticSmokeProject: split cavity has four interfaces before the receiver; control has two", LIT_EXPECT_LOG_MESSAGE, "CsgCausticSmokeProject: photons " + (LIT_DISABLED if arm == LIT_DISABLED else "enabled"),
         LIT_GPU_VALIDATION if args.gpu_validation else "--no-gpu-validation"]
     if arm != LIT_DISABLED:
@@ -62,12 +66,12 @@ def capture(args, route, arm):
     # Keep each absorbed photon above the fixed-point splat precision while preserving total emitted energy.
     environment["NWB_CAUSTIC_PHOTON_GRID_DIVISOR"] = str(PHOTON_GRID_DIVISOR)
     print(f"Capturing CSG caustics {route}/{arm} at frame {args.frames}...", flush=True)
-    result = subprocess.run(command, env=environment, check=False, timeout=args.timeout + 45.0)
+    result = subprocess.run(command, env=environment, check=False, timeout=args.timeout + LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS)
     if result.returncode == SKIP_EXIT_CODE:
         return None
     if result.returncode:
         raise SmokeFailure(f"CSG caustic {route}/{arm} capture failed: {result.returncode}")
-    verify_settings(output.with_suffix(".log").read_text(encoding=LIT_UTF_8), PHOTON_GRID_DIVISOR, producer_enabled=arm != LIT_DISABLED)
+    verify_settings(output.with_suffix(LIT_LOG_SUFFIX).read_text(encoding=LIT_UTF_8), PHOTON_GRID_DIVISOR, producer_enabled=arm != LIT_DISABLED)
     frame = read_bmp_24_rows(output)
     if frame[:2] != (960, 720):
         raise SmokeFailure("CSG caustic smoke requires the actual 960x720 framebuffer")

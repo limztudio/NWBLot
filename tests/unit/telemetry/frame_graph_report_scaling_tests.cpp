@@ -21,6 +21,8 @@ namespace __hidden_frame_graph_report_scaling_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr AStringView s_ReportArenaName = "tests/telemetry/report_work";
+
 static constexpr AStringView s_PACKET_INDEX = "\"packet\": {\"index\":";
 static constexpr AStringView s_RUNTIME_PACKET_SUBMISSION_COUNT_3 = "runtime_packet_submission_count=3";
 static constexpr AStringView s_RUNTIME_PACKET_SUBMISSION_COUNT_2 = "runtime_packet_submission_count=2";
@@ -162,7 +164,7 @@ TEST(FrameGraphReport, GroupsSparseOwnersWithoutLeakingStatisticsIntoAdjacentNod
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, testArena.scratchArena, 918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, 19u));
     Log::TelemetryReport report(testArena.arena);
-    NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/report_work"));
+    NWB::Core::Alloc::ScratchArena scratchArena(Name(s_ReportArenaName.data()));
     auto reportResult2 = Log::BuildTelemetryReport(testArena.arena, recorder.view(), scratchArena);
     ASSERT_TRUE(reportResult2);
     report = Move(*reportResult2);
@@ -216,7 +218,7 @@ TEST(FrameGraphReport, RestartsOwnerRangesForEveryCaptureAndReportRebuild){
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, testArena.scratchArena, 918u, first.nodes, first.edges, first.queues, first.packets, 19u));
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, testArena.scratchArena, 919u, second.nodes, second.edges, second.queues, second.packets, 20u));
     Log::TelemetryReport report(testArena.arena);
-    NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/report_work"));
+    NWB::Core::Alloc::ScratchArena scratchArena(Name(s_ReportArenaName.data()));
     auto reportResult3 = Log::BuildTelemetryReport(testArena.arena, recorder.view(), scratchArena);
     ASSERT_TRUE(reportResult3);
     report = Move(*reportResult3);
@@ -284,7 +286,7 @@ TEST(FrameGraphReport, RejectsMalformedOwnerTablesBeforeReportingAndRetainsTheNe
     ASSERT_TRUE(recorder.recordBinary(Telemetry::EventKind::FrameGraphFrame, 918u, original.data(), original.size(), 4u));
 
     Log::TelemetryReport report(testArena.arena);
-    NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/report_work"));
+    NWB::Core::Alloc::ScratchArena scratchArena(Name(s_ReportArenaName.data()));
     auto reportResult5 = Log::BuildTelemetryReport(testArena.arena, recorder.view(), scratchArena);
     ASSERT_TRUE(reportResult5);
     report = Move(*reportResult5);

@@ -3783,10 +3783,6 @@
     FT_Byte*           limit;
     FT_UInt volatile   num_cmaps;
     FT_Byte* volatile  p       = table;
-    FT_Library         library = FT_FACE_LIBRARY( face );
-
-    FT_UNUSED( library );
-
 
     if ( !p || face->cmap_size < 4 )
       return FT_THROW( Invalid_Table );

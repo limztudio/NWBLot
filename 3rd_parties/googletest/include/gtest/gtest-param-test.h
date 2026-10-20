@@ -513,7 +513,7 @@ auto ConvertGenerator(Gen&& gen, Func&& f) {
     void TestBody() override;                                                  \
                                                                                \
    private:                                                                    \
-    static int AddToRegistry() {                                               \
+    static void AddToRegistry() {                                               \
       ::testing::UnitTest::GetInstance()                                       \
           ->parameterized_test_registry()                                      \
           .GetTestSuitePatternHolder<test_suite_name>(                         \
@@ -524,13 +524,12 @@ auto ConvertGenerator(Gen&& gen, Func&& f) {
               new ::testing::internal::TestMetaFactory<GTEST_TEST_CLASS_NAME_( \
                   test_suite_name, test_name)>(),                              \
               ::testing::internal::CodeLocation(__FILE__, __LINE__));          \
-      return 0;                                                                \
     }                                                                          \
-    [[maybe_unused]] static int gtest_registering_dummy_;                      \
+    static const ::testing::internal::StaticTestRegistration gtest_registering_dummy_;                      \
   };                                                                           \
-  int GTEST_TEST_CLASS_NAME_(test_suite_name,                                  \
-                             test_name)::gtest_registering_dummy_ =            \
-      GTEST_TEST_CLASS_NAME_(test_suite_name, test_name)::AddToRegistry();     \
+  const ::testing::internal::StaticTestRegistration GTEST_TEST_CLASS_NAME_(test_suite_name,                                  \
+                             test_name)::gtest_registering_dummy_(              \
+      &GTEST_TEST_CLASS_NAME_(test_suite_name, test_name)::AddToRegistry);     \
   void GTEST_TEST_CLASS_NAME_(test_suite_name, test_name)::TestBody()
 
 // The last argument to INSTANTIATE_TEST_SUITE_P allows the user to specify
@@ -571,7 +570,8 @@ auto ConvertGenerator(Gen&& gen, Func&& f) {
         ::testing::internal::DefaultParamName<test_suite_name::ParamType>,    \
         DUMMY_PARAM_))))(info);                                               \
   }                                                                           \
-  [[maybe_unused]] static int gtest_##prefix##test_suite_name##_dummy_ =      \
+  static const ::testing::internal::StaticTestRegistration                      \
+      gtest_##prefix##test_suite_name##_dummy_([] {                             \
       ::testing::UnitTest::GetInstance()                                      \
           ->parameterized_test_registry()                                     \
           .GetTestSuitePatternHolder<test_suite_name>(                        \
@@ -581,7 +581,8 @@ auto ConvertGenerator(Gen&& gen, Func&& f) {
               GTEST_STRINGIFY_(prefix),                                       \
               &gtest_##prefix##test_suite_name##_EvalGenerator_,              \
               &gtest_##prefix##test_suite_name##_EvalGenerateName_, __FILE__, \
-              __LINE__)
+              __LINE__);                                                     \
+  })
 
 // Allow Marking a Parameterized test class as not needing to be instantiated.
 #define GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(T)                  \

@@ -2213,8 +2213,9 @@ static CURLcode imap_disconnect(struct Curl_easy *data,
        disconnect wait in vain and cause more problems than we need to. */
     if(!dead_connection && conn->bits.protoconnstart &&
        !Curl_pp_needs_flush(data, &imapc->pp)) {
-      if(!imap_perform_logout(data, imapc))
-        (void)imap_block_statemach(data, imapc, TRUE); /* ignore errors */
+      if(!imap_perform_logout(data, imapc) &&
+         imap_block_statemach(data, imapc, TRUE))
+        infof(data, "IMAP logout did not complete");
     }
   }
   return CURLE_OK;

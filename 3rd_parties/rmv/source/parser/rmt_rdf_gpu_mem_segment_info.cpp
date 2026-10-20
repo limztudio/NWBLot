@@ -8,6 +8,7 @@
 #include "rmt_rdf_gpu_mem_segment_info.h"
 
 #include "rmt_assert.h"
+#include "rmt_error.h"
 #include "rmt_format.h"
 #include "rmt_types.h"
 
@@ -32,7 +33,7 @@ bool RmtRdfGpuMemSegmentInfo::LoadChunk(rdfChunkFile* chunk_file)
     int        result                = kRmtRdfResultFailure;
     int        contains_chunk_result = rdfChunkFileContainsChunk(chunk_file, identifier, 0, &result);
     RMT_ASSERT(contains_chunk_result == rdfResult::rdfResultOk);
-    RMT_UNUSED(contains_chunk_result);
+    RMT_RETURN_ON_ERROR(contains_chunk_result == rdfResult::rdfResultOk, false);
 
     if (result == kRmtRdfResultSuccess)
     {

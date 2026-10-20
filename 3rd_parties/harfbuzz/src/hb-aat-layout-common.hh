@@ -1280,7 +1280,7 @@ struct StateTableDriver
 	    break;
 
 	  state = StateTableT::STATE_START_OF_TEXT;
-	  (void) buffer->next_glyph ();
+	  if (unlikely (!buffer->next_glyph ())) break;
 	  continue;
 	}
       }
@@ -1306,7 +1306,7 @@ struct StateTableDriver
 	    if (buffer->idx == buffer->len || !buffer->successful)
 	      break;
 
-	    (void) buffer->next_glyph ();
+	    if (unlikely (!buffer->next_glyph ())) break;
 
 	    klass = likely (buffer->idx < buffer->len) ?
 		     machine.get_class (buffer->cur().codepoint, num_glyphs, ac->machine_class_cache) :
@@ -1389,7 +1389,7 @@ struct StateTableDriver
 	break;
 
       if (is_not_epsilon_transition || buffer->max_ops-- <= 0)
-	(void) buffer->next_glyph ();
+	if (unlikely (!buffer->next_glyph ())) break;
     }
 
     if (!c->in_place)

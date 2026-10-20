@@ -124,7 +124,8 @@ _hb_buffer_deserialize_json (hb_buffer_t *buffer,
   const char *p = buf, *pe = buf + buf_len;
 
   /* Ensure we have positions. */
-  (void) hb_buffer_get_glyph_positions (buffer, nullptr);
+  if (!hb_buffer_get_glyph_positions (buffer, nullptr) && buffer->len)
+    return false;
 
   const char *tok = nullptr;
   int cs;

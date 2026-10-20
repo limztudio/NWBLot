@@ -326,6 +326,7 @@ static RmtErrorCode ParseRmtDataChunk(RmtDataSet* data_set, RmtFileChunkHeader* 
                                                         data_set->stream_count,
                                                         data_chunk.process_id,
                                                         data_chunk.thread_id);
+    RMT_RETURN_ON_ERROR(error_code == kRmtOk, error_code);
 
     // set the target process.
     if (data_chunk.process_id != 0 && data_set->target_process_id == 0)
@@ -333,7 +334,6 @@ static RmtErrorCode ParseRmtDataChunk(RmtDataSet* data_set, RmtFileChunkHeader* 
         data_set->target_process_id = data_chunk.process_id;
     }
 
-    RMT_UNUSED(error_code);
     // read for next allocation.
     data_set->stream_count++;
 

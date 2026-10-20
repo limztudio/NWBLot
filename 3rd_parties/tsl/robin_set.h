@@ -598,6 +598,9 @@ class robin_set {
    *  - `template<typename U> void operator()(const U& value);` where the types
    * `std::int16_t`, `std::uint32_t`, `std::uint64_t`, `float` and `Key` must be
    * supported for U.
+   *  - `template<typename U> void skip();` for `std::uint32_t`. This command
+   * must consume one serialized U, including checking its encoded bounds. It
+   * skips archived hashes when rebuilding with an incompatible hash function.
    *
    * The implementation leaves binary compatibility (endianness, IEEE 754 for
    * floats, ...) of the types it serializes in the hands of the `Serializer`

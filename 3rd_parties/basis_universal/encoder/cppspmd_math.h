@@ -529,18 +529,23 @@ inline void spmd_kernel::seed_rand(rand_context& x, vint seed)
 	store(x.c, seed ^ 0xdbadef9a);
 	store(x.d, seed);
 	for (int i = 0; i < 20; ++i)
-		(void)get_randu(x);
+		advance_rand(x);
 }
 
 // https://burtleburtle.net/bob/rand/smallprng.html
-// Returns 32-bit unsigned random numbers.
-inline vint spmd_kernel::get_randu(rand_context& x)
+inline void spmd_kernel::advance_rand(rand_context& x)
 {
 	vint e = x.a - VINT_ROT(x.b, 27);
 	store(x.a, x.b ^ VINT_ROT(x.c, 17));
 	store(x.b, x.c + x.d);
 	store(x.c, x.d + e);
 	store(x.d, e + x.a);
+}
+
+// Returns 32-bit unsigned random numbers.
+inline vint spmd_kernel::get_randu(rand_context& x)
+{
+	advance_rand(x);
 	return x.d;
 }
 

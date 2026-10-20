@@ -555,12 +555,15 @@ hb_ft_paint_glyph_colr (hb_font_t *font,
   FT_UInt  layer_glyph_index;
   FT_UInt  layer_color_index;
 
-  (void) FT_Palette_Data_Get(ft_face, &palette_data);
-  (void) FT_Palette_Select(ft_face, palette_index, &palette);
+  if (FT_Palette_Data_Get(ft_face, &palette_data))
+    return false;
+  if (FT_Palette_Select(ft_face, palette_index, &palette))
+    palette = nullptr;
   if (!palette)
   {
     // https://github.com/harfbuzz/harfbuzz/issues/5116
-    (void) FT_Palette_Select(ft_face, 0, &palette);
+    if (FT_Palette_Select(ft_face, 0, &palette))
+      palette = nullptr;
   }
 
   auto palette_array = hb_array ((const FT_Color *) palette,

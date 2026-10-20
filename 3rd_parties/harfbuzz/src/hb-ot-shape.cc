@@ -572,7 +572,7 @@ hb_insert_dotted_circle (hb_buffer_t *buffer, hb_font_t *font)
   hb_glyph_info_t info = dottedcircle;
   info.cluster = buffer->cur().cluster;
   info.mask = buffer->cur().mask;
-  (void) buffer->output_info (info);
+  if (unlikely (!buffer->output_info (info))) return;
 
   buffer->sync ();
 }
@@ -961,7 +961,8 @@ hb_ot_substitute_post (const hb_ot_shape_context_t *c)
   if (c->plan->shaper->postprocess_glyphs &&
     c->buffer->message(c->font, "start postprocess-glyphs")) {
     c->plan->shaper->postprocess_glyphs (c->plan, c->buffer, c->font);
-    (void) c->buffer->message(c->font, "end postprocess-glyphs");
+    if (unlikely (!c->buffer->message(c->font, "end postprocess-glyphs")))
+      DEBUG_MSG (APPLY, c->buffer, "Callback declined a completed-step notification");
   }
 }
 
@@ -1186,7 +1187,8 @@ hb_ot_shape_internal (hb_ot_shape_context_t *c)
       c->buffer->message(c->font, "start preprocess-text"))
   {
     c->plan->shaper->preprocess_text (c->plan, c->buffer, c->font);
-    (void) c->buffer->message(c->font, "end preprocess-text");
+    if (unlikely (!c->buffer->message(c->font, "end preprocess-text")))
+      DEBUG_MSG (APPLY, c->buffer, "Callback declined a completed-step notification");
   }
 
   hb_ot_substitute_pre (c);

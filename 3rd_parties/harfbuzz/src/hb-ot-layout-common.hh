@@ -1342,7 +1342,8 @@ struct Lookup
     unsigned int lookup_type = get_type ();
     + hb_iter (get_subtables <TSubTable> ())
     | hb_filter ([this, glyphset, lookup_type] (const Offset16To<TSubTable> &_) { return (this+_).intersects (glyphset, lookup_type); })
-    | hb_apply (subset_offset_array (c, out->get_subtables<TSubTable> (), this, lookup_type))
+    | hb_filter (subset_offset_array (c, out->get_subtables<TSubTable> (), this, lookup_type))
+    | hb_drain
     ;
 
     if (lookupFlag & LookupFlag::UseMarkFilteringSet)
@@ -1441,7 +1442,8 @@ struct LookupOffsetList : List16OfOffsetTo<TLookup, OffsetType>
     + hb_enumerate (*this)
     | hb_filter (l->lookup_index_map, hb_first)
     | hb_map (hb_second)
-    | hb_apply (subset_offset_array (c, *out, this))
+    | hb_filter (subset_offset_array (c, *out, this))
+    | hb_drain
     ;
     return_trace (true);
   }

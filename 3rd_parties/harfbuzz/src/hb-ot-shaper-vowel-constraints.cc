@@ -23,7 +23,7 @@
 static void
 _output_dotted_circle (hb_buffer_t *buffer)
 {
-  (void) buffer->output_glyph (0x25CCu);
+  if (unlikely (!buffer->output_glyph (0x25CCu))) return;
   _hb_glyph_info_clear_continuation (&buffer->prev());
 }
 
@@ -31,7 +31,7 @@ static void
 _output_with_dotted_circle (hb_buffer_t *buffer)
 {
   _output_dotted_circle (buffer);
-  (void) buffer->next_glyph ();
+  if (unlikely (!buffer->next_glyph ())) return;
 }
 
 void
@@ -96,12 +96,12 @@ _hb_preprocess_text_vowel_constraints (const hb_ot_shape_plan_t *plan HB_UNUSED,
 		buffer->idx + 2 < count &&
 		0x0907u == buffer->cur (2).codepoint)
 	    {
-	      (void) buffer->next_glyph ();
+	      if (unlikely (!buffer->next_glyph ())) return;
 	      matched = true;
 	    }
 	    break;
 	}
-	(void) buffer->next_glyph ();
+	if (unlikely (!buffer->next_glyph ())) return;
 	if (matched) _output_with_dotted_circle (buffer);
       }
       break;
@@ -122,7 +122,7 @@ _hb_preprocess_text_vowel_constraints (const hb_ot_shape_plan_t *plan HB_UNUSED,
 	    matched = 0x09E2u == buffer->cur (1).codepoint;
 	    break;
 	}
-	(void) buffer->next_glyph ();
+	if (unlikely (!buffer->next_glyph ())) return;
 	if (matched) _output_with_dotted_circle (buffer);
       }
       break;
@@ -158,7 +158,7 @@ _hb_preprocess_text_vowel_constraints (const hb_ot_shape_plan_t *plan HB_UNUSED,
 	    }
 	    break;
 	}
-	(void) buffer->next_glyph ();
+	if (unlikely (!buffer->next_glyph ())) return;
 	if (matched) _output_with_dotted_circle (buffer);
       }
       break;
@@ -182,7 +182,7 @@ _hb_preprocess_text_vowel_constraints (const hb_ot_shape_plan_t *plan HB_UNUSED,
 	    matched = 0x0ABEu == buffer->cur (1).codepoint;
 	    break;
 	}
-	(void) buffer->next_glyph ();
+	if (unlikely (!buffer->next_glyph ())) return;
 	if (matched) _output_with_dotted_circle (buffer);
       }
       break;
@@ -200,7 +200,7 @@ _hb_preprocess_text_vowel_constraints (const hb_ot_shape_plan_t *plan HB_UNUSED,
 	    matched = 0x0B57u == buffer->cur (1).codepoint;
 	    break;
 	}
-	(void) buffer->next_glyph ();
+	if (unlikely (!buffer->next_glyph ())) return;
 	if (matched) _output_with_dotted_circle (buffer);
       }
       break;
@@ -214,7 +214,7 @@ _hb_preprocess_text_vowel_constraints (const hb_ot_shape_plan_t *plan HB_UNUSED,
 	{
 	  matched = true;
 	}
-	(void) buffer->next_glyph ();
+	if (unlikely (!buffer->next_glyph ())) return;
 	if (matched) _output_with_dotted_circle (buffer);
       }
       break;
@@ -237,7 +237,7 @@ _hb_preprocess_text_vowel_constraints (const hb_ot_shape_plan_t *plan HB_UNUSED,
 	    matched = 0x0C55u == buffer->cur (1).codepoint;
 	    break;
 	}
-	(void) buffer->next_glyph ();
+	if (unlikely (!buffer->next_glyph ())) return;
 	if (matched) _output_with_dotted_circle (buffer);
       }
       break;
@@ -255,7 +255,7 @@ _hb_preprocess_text_vowel_constraints (const hb_ot_shape_plan_t *plan HB_UNUSED,
 	    matched = 0x0CCCu == buffer->cur (1).codepoint;
 	    break;
 	}
-	(void) buffer->next_glyph ();
+	if (unlikely (!buffer->next_glyph ())) return;
 	if (matched) _output_with_dotted_circle (buffer);
       }
       break;
@@ -281,7 +281,7 @@ _hb_preprocess_text_vowel_constraints (const hb_ot_shape_plan_t *plan HB_UNUSED,
 	    }
 	    break;
 	}
-	(void) buffer->next_glyph ();
+	if (unlikely (!buffer->next_glyph ())) return;
 	if (matched) _output_with_dotted_circle (buffer);
       }
       break;
@@ -316,7 +316,7 @@ _hb_preprocess_text_vowel_constraints (const hb_ot_shape_plan_t *plan HB_UNUSED,
 	    }
 	    break;
 	}
-	(void) buffer->next_glyph ();
+	if (unlikely (!buffer->next_glyph ())) return;
 	if (matched) _output_with_dotted_circle (buffer);
       }
       break;
@@ -337,7 +337,7 @@ _hb_preprocess_text_vowel_constraints (const hb_ot_shape_plan_t *plan HB_UNUSED,
 	    matched = 0x11042u == buffer->cur (1).codepoint;
 	    break;
 	}
-	(void) buffer->next_glyph ();
+	if (unlikely (!buffer->next_glyph ())) return;
 	if (matched) _output_with_dotted_circle (buffer);
       }
       break;
@@ -371,7 +371,7 @@ _hb_preprocess_text_vowel_constraints (const hb_ot_shape_plan_t *plan HB_UNUSED,
 	    matched = 0x1122Eu == buffer->cur (1).codepoint;
 	    break;
 	}
-	(void) buffer->next_glyph ();
+	if (unlikely (!buffer->next_glyph ())) return;
 	if (matched) _output_with_dotted_circle (buffer);
       }
       break;
@@ -392,7 +392,7 @@ _hb_preprocess_text_vowel_constraints (const hb_ot_shape_plan_t *plan HB_UNUSED,
 	    }
 	    break;
 	}
-	(void) buffer->next_glyph ();
+	if (unlikely (!buffer->next_glyph ())) return;
 	if (matched) _output_with_dotted_circle (buffer);
       }
       break;
@@ -418,7 +418,7 @@ _hb_preprocess_text_vowel_constraints (const hb_ot_shape_plan_t *plan HB_UNUSED,
 	    }
 	    break;
 	}
-	(void) buffer->next_glyph ();
+	if (unlikely (!buffer->next_glyph ())) return;
 	if (matched) _output_with_dotted_circle (buffer);
       }
       break;
@@ -438,7 +438,7 @@ _hb_preprocess_text_vowel_constraints (const hb_ot_shape_plan_t *plan HB_UNUSED,
 	    }
 	    break;
 	}
-	(void) buffer->next_glyph ();
+	if (unlikely (!buffer->next_glyph ())) return;
 	if (matched) _output_with_dotted_circle (buffer);
       }
       break;
@@ -461,7 +461,7 @@ _hb_preprocess_text_vowel_constraints (const hb_ot_shape_plan_t *plan HB_UNUSED,
 	    matched = 0x116B2u == buffer->cur (1).codepoint;
 	    break;
 	}
-	(void) buffer->next_glyph ();
+	if (unlikely (!buffer->next_glyph ())) return;
 	if (matched) _output_with_dotted_circle (buffer);
       }
       break;

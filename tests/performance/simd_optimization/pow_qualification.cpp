@@ -356,13 +356,13 @@ struct TrapEdgeObservation{
     friend bool operator==(const TrapEdgeObservation&, const TrapEdgeObservation&)noexcept = default;
 
 
-    u32 code{}, flags{}, control{};
+    u32 code{}, flags{}, control{}, valueBits{};
     i32 error{};
     u64 nativeStatus{}, nativeControl{};
 };
 
 [[nodiscard]] Expected<TrapEdgeObservation> ObserveTrapEdge(const Evaluate evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y, const u32 enabled){
-    u32 initial{}, control{}, exception{};
+    u32 initial{}, control{}, exception{}, valueBits{};
     if(_controlfp_s(&initial, 0u, 0u) != 0)
         return MakeUnexpected(Failure{});
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
@@ -379,7 +379,7 @@ struct TrapEdgeObservation{
     __try{
         const SIMDVectorSingle value = evaluate(x, y);
         volatile u32 sink = VectorGetIntX(value);
-        static_cast<void>(sink);
+        valueBits = sink;
     }
     __except(EXCEPTION_EXECUTE_HANDLER){
         exception = _exception_code();
@@ -399,7 +399,7 @@ struct TrapEdgeObservation{
 #if defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
     __asm__ __volatile__("msr fpcr, %0" : : "r"(initialNativeControl));
 #endif
-    return TrapEdgeObservation{ exception, flags, observedControl, observedError, nativeStatus, nativeControl };
+    return TrapEdgeObservation{ exception, flags, observedControl, valueBits, observedError, nativeStatus, nativeControl };
 }
 #endif
 
@@ -451,8 +451,8 @@ struct TrapEdgeObservation{
                     differences += different;
                     ++cases;
                     NWB_COUT << "trap_edge DN=" << denormalMode << " rounding=" << mode << " enabled=" << enabled << " case=" << index
-                             << " expected=" << expected->code << '/' << expected->flags << '/' << expected->control << '/' << expected->error << '/' << expected->nativeStatus << '/' << expected->nativeControl
-                             << " actual=" << actual->code << '/' << actual->flags << '/' << actual->control << '/' << actual->error << '/' << actual->nativeStatus << '/' << actual->nativeControl
+                             << " expected=" << expected->code << '/' << expected->flags << '/' << expected->control << '/' << expected->error << '/' << expected->nativeStatus << '/' << expected->nativeControl << '/' << expected->valueBits
+                             << " actual=" << actual->code << '/' << actual->flags << '/' << actual->control << '/' << actual->error << '/' << actual->nativeStatus << '/' << actual->nativeControl << '/' << actual->valueBits
                              << " differs=" << different << '\n';
                 }
             }

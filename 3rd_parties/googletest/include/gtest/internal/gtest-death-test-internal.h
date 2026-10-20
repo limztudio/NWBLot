@@ -267,7 +267,7 @@ GTEST_API_ bool ExitedUnsuccessfully(int exit_status);
   if (::testing::internal::AlwaysTrue()) {                             \
     GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);         \
   } else if (!::testing::internal::AlwaysTrue()) {                     \
-    (void)::testing::internal::MakeDeathTestMatcher(regex_or_matcher); \
+    (void)sizeof(::testing::internal::MakeDeathTestMatcher(regex_or_matcher)); \
   } else                                                               \
     ::testing::Message()
 

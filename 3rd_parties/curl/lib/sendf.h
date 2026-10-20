@@ -296,7 +296,7 @@ CURLcode Curl_creader_read(struct Curl_easy *data,
                            char *buf, size_t blen, size_t *nread, bool *eos);
 
 /* Tell the reader and all below that any EOS state is to be cleared */
-void Curl_creader_clear_eos(struct Curl_easy *data,
+CURLcode Curl_creader_clear_eos(struct Curl_easy *data,
                             struct Curl_creader *reader);
 
 /**

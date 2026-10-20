@@ -2226,7 +2226,7 @@ namespace astc_ldr
 		const uint32_t direct_cem_index = (cem_index == astc_helpers::CEM_LDR_RGB_BASE_PLUS_OFFSET) ? astc_helpers::CEM_LDR_RGB_DIRECT : astc_helpers::CEM_LDR_RGBA_DIRECT;
 
 		cem_encode_ldr_rgb_or_rgba_direct_result direct_res = cem_encode_ldr_rgb_or_rgba_direct(direct_cem_index, endpoint_ise_range, low_color, high_color, direct_endpoint_vals, try_blue_contract);
-		BASISU_NOTE_UNUSED(direct_res); // call populates direct_endpoint_vals (used below); its returned struct is unused - silence -Wunused-variable
+		debug_printf("ASTC direct endpoints: contracted %u, swapped %u, degenerate %u\n", (unsigned)direct_res.m_is_blue_contracted, (unsigned)direct_res.m_endpoints_are_swapped, (unsigned)direct_res.m_any_degen);
 
 		color_rgba direct_l, direct_h;
 		decode_endpoints(direct_cem_index, direct_endpoint_vals, endpoint_ise_range, direct_l, direct_h);
@@ -2551,9 +2551,7 @@ namespace astc_ldr
 			endpoint_ise_range, weight_ise_range,
 			lum_l, lum_h, a_l, a_h,
 			trial_blk_endpoints, trial_blk_weights, trial_blk_error);
-		BASISU_NOTE_UNUSED(did_improve);
-
-		if (trial_blk_error == UINT64_MAX)
+		if (!did_improve || trial_blk_error == UINT64_MAX)
 			return cur_blk_error;
 
 		if (trial_blk_error < cur_blk_error)
@@ -2594,9 +2592,7 @@ namespace astc_ldr
 				xl[0], xh[0], xl[1], xh[1],
 				trial_blk_endpoints, trial_blk_weights, trial_blk_error);
 
-			BASISU_NOTE_UNUSED(did_improve_res);
-
-			if (trial_blk_error >= cur_blk_error)
+			if (!did_improve_res || trial_blk_error >= cur_blk_error)
 				break;
 
 			cur_blk_error = trial_blk_error;
@@ -3942,7 +3938,8 @@ namespace astc_ldr
 							vl, vh,
 							trial_blk_endpoints, trial_blk_weights0, trial_blk_weights1, trial_blk_error, trial_used_blue_contraction,
 							use_blue_contraction, tried_used_blue_contraction, try_direct_encoding_flag);
-						BASISU_NOTE_UNUSED(did_improve_res);
+						if (did_improve_res)
+							debug_printf("ASTC base-offset refinement improved the candidate\n");
 
 						if ((pTry_direct_encoding_flag) && (try_direct_encoding_flag))
 							*pTry_direct_encoding_flag = true;
@@ -4061,7 +4058,7 @@ namespace astc_ldr
 		return improved_flag;
 	}
 
-	static bool try_cem6_10_dp(
+	static void try_cem6_10_dp(
 		uint32_t cem_index, uint32_t ccs_index,
 		const pixel_stats_t& pixel_stats, const cem_encode_params& enc_params,
 		uint32_t endpoint_ise_range, uint32_t weight_ise_range,
@@ -4087,15 +4084,12 @@ namespace astc_ldr
 			trial_endpoint_vals, endpoint_ise_range,
 			trial_weight_vals0, trial_weight_vals1, weight_ise_range,
 			enc_params);
-
-		bool improved_flag = false;
 		if (trial_err < trial_blk_error)
 		{
 			trial_blk_error = trial_err;
 			memcpy(pTrial_endpoint_vals, trial_endpoint_vals, astc_helpers::get_num_cem_values(cem_index));
 			memcpy(pTrial_weight_vals0, trial_weight_vals0, pixel_stats.m_num_pixels);
 			memcpy(pTrial_weight_vals1, trial_weight_vals1, pixel_stats.m_num_pixels);
-			improved_flag = true;
 		}
 
 		const uint32_t num_endpoint_vals = astc_helpers::get_num_cem_values(cem_index);
@@ -4122,11 +4116,9 @@ namespace astc_ldr
 				memcpy(pTrial_endpoint_vals, fixed_endpoint_vals, astc_helpers::get_num_cem_values(cem_index));
 				memcpy(pTrial_weight_vals0, trial_weight_vals0, pixel_stats.m_num_pixels);
 				memcpy(pTrial_weight_vals1, trial_weight_vals1, pixel_stats.m_num_pixels);
-				improved_flag = true;
 			}
 		}
 
-		return improved_flag;
 	}
 
 	// rgb/rgba base+scale
@@ -4477,7 +4469,8 @@ namespace astc_ldr
 			sp_endpoint_vals, sp_weight_vals, UINT64_MAX);
 
 		assert(sp_block_err != UINT64_MAX);
-		BASISU_NOTE_UNUSED(sp_block_err);
+		if (sp_block_err == UINT64_MAX)
+			return cur_blk_error;
 
 		// Now compute both plane's weights using the initial H/s values
 		uint8_t trial_weights0_vals[ASTC_LDR_MAX_BLOCK_PIXELS] = { 0 };
@@ -4579,13 +4572,12 @@ namespace astc_ldr
 			new_H[c] = Hc;
 		}
 
-		bool improved_flag = try_cem6_10_dp(
+		try_cem6_10_dp(
 			cem_index, ccs_index,
 			pixel_stats, enc_params,
 			endpoint_ise_range, weight_ise_range,
 			new_s, (float)actual_l[3] * (1.0f / 255.0f), vec4F(new_H[0], new_H[1], new_H[2], (float)actual_h[3] * (1.0f / 255.0f)),
 			pEndpoint_vals, pWeight_vals0, pWeight_vals1, cur_blk_error);
-		(void)improved_flag;
 
 		return cur_blk_error;
 	}

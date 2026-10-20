@@ -582,7 +582,9 @@ static CURLcode pop3_perform_apop(struct Curl_easy *data,
                   curlx_uztoui(strlen(Curl_creds_passwd(conn->creds))));
 
   /* Finalise the digest */
-  Curl_MD5_final(ctxt, digest);
+  result = Curl_MD5_final(ctxt, digest);
+  if(result)
+    return result;
 
   /* Convert the calculated 16 octet digest into a 32-byte hex string */
   for(i = 0; i < MD5_DIGEST_LEN; i++)
@@ -1623,8 +1625,9 @@ static CURLcode pop3_disconnect(struct Curl_easy *data,
 
   if(!dead_connection && conn->bits.protoconnstart &&
      !Curl_pp_needs_flush(data, &pop3c->pp)) {
-    if(!pop3_perform_quit(data, conn))
-      (void)pop3_block_statemach(data, conn, TRUE); /* ignore errors on QUIT */
+    if(!pop3_perform_quit(data, conn) &&
+       pop3_block_statemach(data, conn, TRUE))
+      infof(data, "POP3 QUIT did not complete");
   }
 
   /* Disconnect from the server */

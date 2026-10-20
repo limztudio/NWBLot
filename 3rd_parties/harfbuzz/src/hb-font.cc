@@ -1721,7 +1721,8 @@ hb_font_draw_glyph (hb_font_t *font,
 		    hb_codepoint_t glyph,
 		    hb_draw_funcs_t *dfuncs, void *draw_data)
 {
-  (void) hb_font_draw_glyph_or_fail (font, glyph, dfuncs, draw_data);
+  if (!hb_font_draw_glyph_or_fail (font, glyph, dfuncs, draw_data))
+    DEBUG_MSG (APPLY, font, "Glyph %u has no drawable outline", glyph);
 }
 
 /**

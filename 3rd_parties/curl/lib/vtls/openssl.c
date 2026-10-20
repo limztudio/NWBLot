@@ -182,7 +182,11 @@ static CURLcode push_certinfo(struct Curl_easy *data,
   char *ptr;
   long len = BIO_get_mem_data(mem, &ptr);
   CURLcode result = Curl_ssl_push_certinfo_len(data, num, label, ptr, len);
-  (void)BIO_reset(mem);
+  if(BIO_reset(mem) <= 0) {
+    failf(data, "Failed to reset certificate output buffer");
+    if(!result)
+      result = CURLE_SSL_CERTPROBLEM;
+  }
   return result;
 }
 
@@ -535,7 +539,6 @@ static long ossl_bio_cf_ctrl(BIO *bio, int cmd, long num, void *ptr)
   struct Curl_cfilter *cf = BIO_get_data(bio);
   long ret = 1;
 
-  (void)cf;
   (void)ptr;
   switch(cmd) {
   case BIO_CTRL_GET_CLOSE:
@@ -3151,7 +3154,10 @@ static CURLcode ossl_populate_x509_store(struct Curl_cfilter *cf,
        cannot do partial chains with a CRL check. */
     x509flags |= X509_V_FLAG_PARTIAL_CHAIN;
   }
-  (void)X509_STORE_set_flags(store, x509flags);
+  if(!X509_STORE_set_flags(store, x509flags)) {
+    failf(data, "Failed to set certificate verification flags");
+    return CURLE_SSL_CACERT_BADFILE;
+  }
 
   return result;
 }
@@ -3336,7 +3342,9 @@ static bool ossl_apply_session(
   Curl_ossl_init_session_reuse_cb *sess_reuse_cb,
   struct Curl_ssl_session *scs)
 {
+#ifdef HAVE_OPENSSL_EARLYDATA
   struct ssl_config_data *ssl_config = Curl_ssl_cf_get_config(cf, data);
+#endif
   struct ssl_primary_config *conn_cfg = Curl_ssl_cf_get_primary_config(cf);
   const unsigned char *der_sessionid = scs->sdata;
   size_t der_sessionid_size = scs->sdata_len;
@@ -3381,8 +3389,13 @@ static bool ossl_apply_session(
            !cf->conn->bits.connect_only &&
            (SSL_version(octx->ssl) == TLS1_3_VERSION)) {
           bool do_early_data = FALSE;
-          if(sess_reuse_cb)
-            (void)sess_reuse_cb(cf, data, alpns, scs, &do_early_data);
+          if(sess_reuse_cb) {
+            CURLcode result = sess_reuse_cb(cf, data, alpns, scs, &do_early_data);
+            if(result) {
+              infof(data, "SSL early data setup failed: %d", (int)result);
+              do_early_data = FALSE;
+            }
+          }
           if(do_early_data) {
             /* We only try the ALPN protocol the session used before,
              * otherwise we might send early data for the wrong protocol */
@@ -3391,7 +3404,6 @@ static bool ossl_apply_session(
         }
 #else
         (void)alpns;
-        (void)ssl_config;
         (void)sess_reuse_cb;
 #endif
       }
@@ -3438,7 +3450,8 @@ static CURLcode ossl_init_session_and_alpns(
 
     result = Curl_ssl_scache_take(cf, data, peer->scache_key, &scs);
     if(!result && scs && scs->sdata && scs->sdata_len) {
-      (void)ossl_apply_session(octx, cf, data, &alpns, sess_reuse_cb, scs);
+      if(!ossl_apply_session(octx, cf, data, &alpns, sess_reuse_cb, scs))
+        infof(data, "SSL continuing without a cached session");
     }
     Curl_ssl_scache_return(cf, data, peer->scache_key, scs);
   }
@@ -4640,12 +4653,20 @@ static CURLcode ossl_infof_cert(struct Curl_cfilter *cf,
   ASN1_TIME_print(mem, X509_get0_notBefore(server_cert));
   len = BIO_get_mem_data(mem, (char **)&buf);
   infof(data, "  start date: %.*s", (int)len, buf);
-  (void)BIO_reset(mem);
+  if(BIO_reset(mem) <= 0) {
+    failf(data, "Failed to reset certificate output buffer");
+    result = CURLE_SSL_CERTPROBLEM;
+    goto out;
+  }
 
   ASN1_TIME_print(mem, X509_get0_notAfter(server_cert));
   len = BIO_get_mem_data(mem, (char **)&buf);
   infof(data, "  expire date: %.*s", (int)len, buf);
-  (void)BIO_reset(mem);
+  if(BIO_reset(mem) <= 0) {
+    failf(data, "Failed to reset certificate output buffer");
+    result = CURLE_SSL_CERTPROBLEM;
+    goto out;
+  }
 
   result = x509_name_oneline(X509_get_issuer_name(server_cert), &dname);
   if(result) /* should be only fatal stuff like OOM */

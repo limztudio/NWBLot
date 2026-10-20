@@ -55,9 +55,8 @@ static std::vector<std::string> SplitIntoTestNames(const char* src) {
 }
 
 // Verifies that registered_tests match the test names in
-// registered_tests_; returns registered_tests if successful, or
-// aborts the program otherwise.
-const char* TypedTestSuitePState::VerifyRegisteredTestNames(
+// registered_tests_; aborts the program on a mismatch.
+void TypedTestSuitePState::VerifyRegisteredTestNames(
     const char* test_suite_name, const char* file, int line,
     const char* registered_tests) {
   RegisterTypeParameterizedTestSuite(test_suite_name, CodeLocation(file, line));
@@ -101,7 +100,6 @@ const char* TypedTestSuitePState::VerifyRegisteredTestNames(
     posix::Abort();
   }
 
-  return registered_tests;
 }
 
 }  // namespace internal

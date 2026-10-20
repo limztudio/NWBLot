@@ -985,7 +985,8 @@ initial_reordering_indic (const hb_ot_shape_plan_t *plan,
   foreach_syllable (buffer, start, end)
     initial_reordering_syllable_indic (plan, font->face, buffer, start, end);
 
-  (void) buffer->message (font, "end reordering indic initial");
+  if (unlikely (!buffer->message (font, "end reordering indic initial")))
+    DEBUG_MSG (APPLY, buffer, "Callback declined a completed-step notification");
 
   return ret;
 }
@@ -1446,7 +1447,8 @@ final_reordering_indic (const hb_ot_shape_plan_t *plan,
   if (buffer->message (font, "start reordering indic final")) {
     foreach_syllable (buffer, start, end)
       final_reordering_syllable_indic (plan, buffer, start, end);
-    (void) buffer->message (font, "end reordering indic final");
+    if (unlikely (!buffer->message (font, "end reordering indic final")))
+      DEBUG_MSG (APPLY, buffer, "Callback declined a completed-step notification");
   }
 
   HB_BUFFER_DEALLOCATE_VAR (buffer, indic_category);

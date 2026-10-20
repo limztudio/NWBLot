@@ -1347,7 +1347,8 @@ struct hb_ot_apply_context_t :
   void replace_glyph (hb_codepoint_t glyph_index)
   {
     _set_glyph_class (glyph_index);
-    (void) buffer->replace_glyph (glyph_index);
+    if (unlikely (!buffer->replace_glyph (glyph_index)))
+      DEBUG_MSG (APPLY, buffer, "Failed to replace glyph %u", glyph_index);
   }
   void replace_glyph_inplace (hb_codepoint_t glyph_index)
   {
@@ -1358,13 +1359,15 @@ struct hb_ot_apply_context_t :
 				    unsigned int class_guess)
   {
     _set_glyph_class (glyph_index, class_guess, true);
-    (void) buffer->replace_glyph (glyph_index);
+    if (unlikely (!buffer->replace_glyph (glyph_index)))
+      DEBUG_MSG (APPLY, buffer, "Failed to replace glyph %u", glyph_index);
   }
   void output_glyph_for_component (hb_codepoint_t glyph_index,
 				   unsigned int class_guess)
   {
     _set_glyph_class (glyph_index, class_guess, false, true);
-    (void) buffer->output_glyph (glyph_index);
+    if (unlikely (!buffer->output_glyph (glyph_index)))
+      DEBUG_MSG (APPLY, buffer, "Failed to output component glyph %u", glyph_index);
   }
 };
 
@@ -2125,7 +2128,7 @@ static inline bool ligate_input (hb_ot_apply_context_t *c,
 				    hb_min (this_comp, last_num_components);
 	  _hb_glyph_info_set_lig_props_for_mark (&buffer->cur(), lig_id, new_lig_comp);
       }
-      (void) buffer->next_glyph ();
+      if (unlikely (!buffer->next_glyph ())) return_trace (false);
     }
 
     last_lig_id = _hb_glyph_info_get_lig_id (&buffer->cur());
@@ -2831,7 +2834,8 @@ static inline void apply_lookup (hb_ot_apply_context_t *c,
   }
 
   assert (end >= 0);
-  (void) buffer->move_to (end);
+  if (unlikely (!buffer->move_to (end)))
+    DEBUG_MSG (APPLY, buffer, "Failed to restore lookup position %u", (unsigned) end);
 }
 
 

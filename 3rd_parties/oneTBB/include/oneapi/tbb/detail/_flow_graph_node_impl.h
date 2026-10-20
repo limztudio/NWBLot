@@ -524,7 +524,7 @@ protected:
 // helper templates to clear the successor edges of the output ports of an multifunction_node
 template<int N> struct clear_element {
     template<typename P> static void clear_this(P &p) {
-        (void)std::get<N-1>(p).successors().clear();
+        std::get<N-1>(p).successors().clear();
         clear_element<N-1>::clear_this(p);
     }
 #if TBB_USE_ASSERT

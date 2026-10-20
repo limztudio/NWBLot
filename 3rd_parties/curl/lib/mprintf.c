@@ -1162,7 +1162,8 @@ int curlx_dyn_vprintf(struct dynbuf *dyn, const char *format, va_list args)
   info.b = dyn;
   info.merr = MERR_OK;
 
-  (void)formatf(&info, alloc_addbyter, format, args);
+  if(formatf(&info, alloc_addbyter, format, args) < 0 && !info.merr)
+    info.merr = MERR_TOO_LARGE;
   if(info.merr) {
     curlx_dyn_free(info.b);
     return info.merr;
@@ -1178,7 +1179,8 @@ char *curl_mvaprintf(const char *format, va_list args)
   curlx_dyn_init(info.b, DYN_APRINTF);
   info.merr = MERR_OK;
 
-  (void)formatf(&info, alloc_addbyter, format, args);
+  if(formatf(&info, alloc_addbyter, format, args) < 0 && !info.merr)
+    info.merr = MERR_TOO_LARGE;
   if(info.merr) {
     curlx_dyn_free(info.b);
     return NULL;

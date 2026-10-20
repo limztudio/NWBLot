@@ -397,7 +397,7 @@
       {
         FT_Stream       stream = face->root.stream;
         FT_UInt         offset;
-        FT_UShort       ppem, resolution;
+        FT_UShort       ppem;
         TT_HoriHeader  *hori;
         FT_Fixed        scale;
 
@@ -416,10 +416,6 @@
           return error;
 
         ppem       = FT_GET_USHORT();
-        resolution = FT_GET_USHORT();
-
-        FT_UNUSED( resolution ); /* What to do with this? */
-
         FT_FRAME_EXIT();
 
         metrics->x_ppem = ppem;

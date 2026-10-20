@@ -1471,7 +1471,7 @@ run_stream (const struct corpus_entry *e,
       _MHD_sleep (SPLIT_DELAY_MS);
   }
   client_read (sk, &cr, min_resp, want_close, grace_ms);
-  (void) MHD_socket_close_ (sk);
+  MHD_socket_close_chk_ (sk);
   if (! wait_conns_closed ())
   {
     fprintf (stderr, "WARNING: timeout waiting for connection teardown.\n");
@@ -1997,7 +1997,8 @@ main (int argc, char *const *argv)
   }
 #endif /* HAVE_SIGNAL_H && SIGPIPE */
 #if defined(HAVE_SIGNAL_H) && defined(SIGABRT)
-  (void) signal (SIGABRT, &abort_handler);
+  if (SIG_ERR == signal (SIGABRT, &abort_handler))
+    return 99;
 #endif /* HAVE_SIGNAL_H && SIGABRT */
 
   /* Deliberately NOT mhd_panic_tripwire.h: this test installs its own

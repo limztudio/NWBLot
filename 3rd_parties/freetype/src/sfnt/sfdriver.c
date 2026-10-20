@@ -922,7 +922,10 @@
       /* try first to load the name string with index `postScriptNameID' */
       if ( psid == 6                      ||
            ( psid > 255 && psid < 32768 ) )
-        (void)sfnt->get_name( face, (FT_UShort)psid, &ps_name );
+      {
+        if ( sfnt->get_name( face, (FT_UShort)psid, &ps_name ) )
+          ps_name = NULL;
+      }
 
       if ( ps_name )
       {
@@ -940,7 +943,8 @@
         char*  s;
 
 
-        (void)sfnt->get_name( face, (FT_UShort)strid, &subfamily_name );
+        if ( sfnt->get_name( face, (FT_UShort)strid, &subfamily_name ) )
+          goto construct_instance_name;
 
         if ( !subfamily_name )
         {

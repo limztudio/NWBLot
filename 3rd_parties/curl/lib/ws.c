@@ -1242,7 +1242,9 @@ static CURLcode cr_ws_read(struct Curl_easy *data,
     if(!Curl_bufq_is_empty(&ws->sendbuf)) {
       /* client_read started a new frame, we disregard any eos reported */
       ctx->read_eos = FALSE;
-      Curl_creader_clear_eos(data, reader->next);
+      result = Curl_creader_clear_eos(data, reader->next);
+      if(result)
+        return result;
     }
     else if(!nread) {
       /* nothing to convert, return this right away */
@@ -1688,7 +1690,9 @@ CURLcode curl_ws_recv(CURL *curl, void *buffer,
     if(!data->set.ws_raw_mode && ws->pending.type) {
       CURLcode r2 = ws_enc_add_pending(data, ws);
       if(!r2)
-        (void)ws_flush(data, ws, Curl_api_is_in_callback(data));
+        r2 = ws_flush(data, ws, Curl_api_is_in_callback(data));
+      if(r2 && r2 != CURLE_AGAIN)
+        infof(data, "Pending WebSocket control flush failed: %d", (int)r2);
     }
     result = CURLE_OK;
   }

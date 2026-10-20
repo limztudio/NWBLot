@@ -285,11 +285,14 @@ static size_t multissl_version(char *buffer, size_t size);
 
 void Curl_ssl_version(char *buffer, size_t size)
 {
+  size_t len;
 #ifdef CURL_WITH_MULTI_SSL
-  (void)multissl_version(buffer, size);
+  len = multissl_version(buffer, size);
 #else
-  (void)Curl_ssl->version(buffer, size);
+  len = Curl_ssl->version(buffer, size);
 #endif
+  if(size && len >= size)
+    buffer[0] = '\0';
 }
 
 void Curl_ssl_free_certinfo(struct Curl_easy *data)
@@ -772,7 +775,7 @@ static size_t multissl_version(char *buffer, size_t size)
   if(size) {
     curlx_strcopy(buffer, size, backends, backends_len);
   }
-  return 0;
+  return backends_len;
 }
 
 static int multissl_setup(const struct Curl_ssl *backend)

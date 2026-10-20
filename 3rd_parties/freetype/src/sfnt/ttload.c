@@ -957,7 +957,11 @@
 
         for ( ; entry < limit; entry++ )
         {
-          (void)FT_STREAM_READ_FIELDS( langTag_record_fields, entry );
+          if ( FT_STREAM_READ_FIELDS( langTag_record_fields, entry ) )
+          {
+            FT_FRAME_EXIT();
+            goto Exit;
+          }
 
           /* check that the langTag string is within the table */
           entry->stringOffset += table_pos + table->storageOffset;
@@ -978,7 +982,8 @@
 
       FT_FRAME_EXIT();
 
-      (void)FT_STREAM_SEEK( table_pos + 6 );
+      if ( FT_STREAM_SEEK( table_pos + 6 ) )
+        goto Exit;
     }
 
     /* allocate name records array */

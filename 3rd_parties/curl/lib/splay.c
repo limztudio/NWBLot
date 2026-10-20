@@ -109,12 +109,11 @@ bool Curl_timeouts_remove(struct Curl_timeouts *timeouts,
   struct Curl_tree *node = &data->state.timeouts.splaynode;
   if(node->registered) {
     int rc = Curl_splayremove(timeouts->tree, node, &timeouts->tree);
-#ifdef DEBUGBUILD
-    if(rc)
-      curl_mfprintf(stderr, "Internal error removing splay node = %d\n", rc);
-#else
-    (void)rc;
-#endif
+    if(rc) {
+      DEBUGF(curl_mfprintf(stderr, "Internal error removing splay node = %d\n",
+                          rc));
+      return FALSE;
+    }
     return TRUE;
   }
   return FALSE;

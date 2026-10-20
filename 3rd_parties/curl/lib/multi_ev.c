@@ -623,7 +623,8 @@ void Curl_multi_ev_xfer_done(struct Curl_multi *multi,
                              struct Curl_easy *data)
 {
   DEBUGASSERT(!data->conn); /* transfer should have been detached */
-  (void)mev_assess(multi, data, NULL);
+  if(mev_assess(multi, data, NULL))
+    failf(data, "Cannot update event sockets after transfer completion");
   Curl_meta_remove(data, CURL_META_MEV_POLLSET);
 }
 
@@ -631,7 +632,8 @@ void Curl_multi_ev_conn_done(struct Curl_multi *multi,
                              struct Curl_easy *data,
                              struct connectdata *conn)
 {
-  (void)mev_assess(multi, data, conn);
+  if(mev_assess(multi, data, conn))
+    failf(data, "Cannot update event sockets after connection completion");
   Curl_conn_meta_remove(conn, CURL_META_MEV_POLLSET);
 }
 

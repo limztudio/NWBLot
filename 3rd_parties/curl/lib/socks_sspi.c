@@ -136,7 +136,8 @@ static CURLcode socks5_sspi_loop(struct Curl_cfilter *cf,
   sspi_send_token.cbBuffer = 0;
   sspi_send_token.pvBuffer = NULL;
 
-  (void)curlx_nonblock(sock, FALSE);
+  if(curlx_nonblock(sock, FALSE) < 0)
+    return CURLE_COULDNT_CONNECT;
 
   for(;;) {
     TCHAR *sname = curlx_convert_UTF8_to_tchar(service_name);
@@ -249,13 +250,11 @@ static CURLcode socks5_sspi_loop(struct Curl_cfilter *cf,
   return CURLE_OK;
 }
 
-static CURLcode socks5_free(SecBuffer *sspi_w_token,
-                            CURLcode result)
+static void socks5_free(SecBuffer *sspi_w_token)
 {
   curlx_safefree(sspi_w_token[0].pvBuffer);
   curlx_safefree(sspi_w_token[1].pvBuffer);
   curlx_safefree(sspi_w_token[2].pvBuffer);
-  return result;
 }
 
 static CURLcode socks5_sspi_encrypt(struct Curl_cfilter *cf,
@@ -322,30 +321,40 @@ static CURLcode socks5_sspi_encrypt(struct Curl_cfilter *cf,
     sspi_w_token[1].cbBuffer = 1;
     sspi_w_token[1].BufferType = SECBUFFER_DATA;
     sspi_w_token[1].pvBuffer = curlx_malloc(1);
-    if(!sspi_w_token[1].pvBuffer)
-      return socks5_free(sspi_w_token, CURLE_OUT_OF_MEMORY);
+    if(!sspi_w_token[1].pvBuffer) {
+      socks5_free(sspi_w_token);
+      return CURLE_OUT_OF_MEMORY;
+    }
 
     memcpy(sspi_w_token[1].pvBuffer, &gss_enc, 1);
     sspi_w_token[2].BufferType = SECBUFFER_PADDING;
     sspi_w_token[2].cbBuffer = sspi_sizes.cbBlockSize;
     sspi_w_token[2].pvBuffer = curlx_malloc(sspi_sizes.cbBlockSize);
-    if(!sspi_w_token[2].pvBuffer)
-      return socks5_free(sspi_w_token, CURLE_OUT_OF_MEMORY);
+    if(!sspi_w_token[2].pvBuffer) {
+      socks5_free(sspi_w_token);
+      return CURLE_OUT_OF_MEMORY;
+    }
 
     status = Curl_pSecFn->EncryptMessage(sspi_context,
                                          KERB_WRAP_NO_ENCRYPT,
                                          &wrap_desc, 0);
-    if(check_sspi_err(data, status, "EncryptMessage"))
-      return socks5_free(sspi_w_token, CURLE_COULDNT_CONNECT);
+    if(check_sspi_err(data, status, "EncryptMessage")) {
+      socks5_free(sspi_w_token);
+      return CURLE_COULDNT_CONNECT;
+    }
 
     etbuf_size = sspi_w_token[0].cbBuffer + sspi_w_token[1].cbBuffer +
       sspi_w_token[2].cbBuffer;
-    if(etbuf_size > 0xffff)
-      return socks5_free(sspi_w_token, CURLE_COULDNT_CONNECT);
+    if(etbuf_size > 0xffff) {
+      socks5_free(sspi_w_token);
+      return CURLE_COULDNT_CONNECT;
+    }
 
     etbuf = curlx_malloc(etbuf_size);
-    if(!etbuf)
-      return socks5_free(sspi_w_token, CURLE_OUT_OF_MEMORY);
+    if(!etbuf) {
+      socks5_free(sspi_w_token);
+      return CURLE_OUT_OF_MEMORY;
+    }
 
     memcpy(etbuf, sspi_w_token[0].pvBuffer, sspi_w_token[0].cbBuffer);
     memcpy(etbuf + sspi_w_token[0].cbBuffer,
@@ -353,7 +362,7 @@ static CURLcode socks5_sspi_encrypt(struct Curl_cfilter *cf,
     memcpy(etbuf + sspi_w_token[0].cbBuffer + sspi_w_token[1].cbBuffer,
            sspi_w_token[2].pvBuffer, sspi_w_token[2].cbBuffer);
 
-    (void)socks5_free(sspi_w_token, CURLE_OK);
+    socks5_free(sspi_w_token);
 
     us_length = htons((unsigned short)etbuf_size);
     memcpy(socksreq + 2, &us_length, sizeof(short));
@@ -519,13 +528,17 @@ CURLcode Curl_SOCKS5_gssapi_negotiate(struct Curl_cfilter *cf,
   if(result)
     goto error;
 
-  (void)curlx_nonblock(sock, TRUE);
+  if(curlx_nonblock(sock, TRUE) < 0) {
+    result = CURLE_COULDNT_CONNECT;
+    goto error;
+  }
   Curl_pSecFn->DeleteSecurityContext(&sspi_context);
   Curl_pSecFn->FreeCredentialsHandle(&cred_handle);
   return CURLE_OK;
 
 error:
-  (void)curlx_nonblock(sock, TRUE);
+  if(curlx_nonblock(sock, TRUE) < 0)
+    failf(data, "Cannot restore nonblocking SOCKS socket: %d", SOCKERRNO);
   curlx_free(service_name);
   Curl_pSecFn->DeleteSecurityContext(&sspi_context);
   Curl_pSecFn->FreeCredentialsHandle(&cred_handle);

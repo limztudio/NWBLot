@@ -130,7 +130,7 @@ static RmtErrorCode LoadSegmentChunk(rdfChunkFile* chunk_file, RmtDataSet* data_
     int          rdf_result            = kRmtRdfResultFailure;
     int          contains_chunk_result = rdfChunkFileContainsChunk(chunk_file, RmtRdfGpuMemSegmentInfo::ChunkIdentifier(), 0, &rdf_result);
     RMT_ASSERT(contains_chunk_result == rdfResult::rdfResultOk);
-    RMT_UNUSED(contains_chunk_result);
+    RMT_RETURN_ON_ERROR(contains_chunk_result == rdfResult::rdfResultOk, kRmtErrorMalformedData);
 
     if (rdf_result == kRmtRdfResultSuccess)
     {
@@ -254,7 +254,7 @@ static RmtErrorCode QueueDataStreamChunks(rdfChunkFile* chunk_file, RmtDataSet* 
     int rdf_result            = kRmtRdfResultFailure;
     int contains_chunk_result = rdfChunkFileContainsChunk(chunk_file, RmtRdfGpuMemSegmentInfo::ChunkIdentifier(), 0, &rdf_result);
     RMT_ASSERT(contains_chunk_result == rdfResult::rdfResultOk);
-    RMT_UNUSED(contains_chunk_result);
+    RMT_RETURN_ON_ERROR(contains_chunk_result == rdfResult::rdfResultOk, kRmtErrorMalformedData);
 
     if (rdf_result == kRmtRdfResultSuccess)
     {
@@ -483,7 +483,10 @@ RmtErrorCode RmtRdfParserLoadStream(RmtErrorCode error_code, RmtDataSet* data_se
 
             int chunk_close_result = rdfChunkFileClose(&chunk_file);
             RMT_ASSERT(chunk_close_result == rdfResult::rdfResultOk);
-            RMT_UNUSED(chunk_close_result);
+            if (chunk_close_result != rdfResult::rdfResultOk && error_code == kRmtOk)
+            {
+                error_code = kRmtErrorFileAccessFailed;
+            }
         }
     }
 

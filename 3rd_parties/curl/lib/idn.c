@@ -97,10 +97,13 @@ static CURLcode mac_idn_to_ascii(const char *in, char **out)
       if(!U_FAILURE(err)) {
         UIDNAInfo info = UIDNA_INFO_INITIALIZER;
         char buffer[MAX_HOST_LENGTH] = { 0 };
-        (void)uidna_nameToASCII_UTF8(idna, iconv_buffer, (int)iconv_outlen,
-                                     buffer, sizeof(buffer) - 1, &info, &err);
+        int32_t length = uidna_nameToASCII_UTF8(
+          idna, iconv_buffer, (int)iconv_outlen,
+          buffer, sizeof(buffer) - 1, &info, &err);
         uidna_close(idna);
-        if(!U_FAILURE(err) && !info.errors) {
+        if(!U_FAILURE(err) && !info.errors && length >= 0 &&
+           (size_t)length < sizeof(buffer)) {
+          buffer[length] = 0;
           *out = curlx_strdup(buffer);
           if(*out)
             return CURLE_OK;
@@ -125,10 +128,12 @@ static CURLcode mac_ascii_to_idn(const char *in, char **out)
     if(!U_FAILURE(err)) {
       UIDNAInfo info = UIDNA_INFO_INITIALIZER;
       char buffer[MAX_HOST_LENGTH] = { 0 };
-      (void)uidna_nameToUnicodeUTF8(idna, in, -1, buffer,
-                                    sizeof(buffer) - 1, &info, &err);
+      int32_t length = uidna_nameToUnicodeUTF8(idna, in, -1, buffer,
+                                              sizeof(buffer) - 1, &info, &err);
       uidna_close(idna);
-      if(!U_FAILURE(err)) {
+      if(!U_FAILURE(err) && !info.errors && length >= 0 &&
+         (size_t)length < sizeof(buffer)) {
+        buffer[length] = 0;
         *out = curlx_strdup(buffer);
         if(*out)
           return CURLE_OK;

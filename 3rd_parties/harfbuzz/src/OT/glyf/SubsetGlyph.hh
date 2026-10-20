@@ -40,7 +40,7 @@ struct SubsetGlyph
     pad = 0;
     while (pad_length > 0)
     {
-      (void) c->embed (pad);
+      if (unlikely (!c->embed (pad))) return_trace (false);
       pad_length--;
     }
 

@@ -1213,7 +1213,8 @@ static void init_partitions2_6x6()
 		{
 			auto res = phash.insert(p_bits, i);
 			assert(res.second);
-			BASISU_NOTE_UNUSED(res);
+			if (!res.second)
+				abort();
 		}
 	}
 		
@@ -1994,7 +1995,8 @@ static bool encode_block_3_subsets(
 						&part_pixel_index[part_iter][0], // maps this subset's pixels to block offsets
 						coptions, mode11_opt_mode);
 
-					BASISU_NOTE_UNUSED(refine_status);
+					if (refine_status)
+						debug_printf("ASTC HDR endpoint refinement improved the candidate\n");
 				}
 			}
 
@@ -5858,7 +5860,8 @@ static bool compress_strip_task(
 												mode_desc.m_endpoint_ise_range,
 												0, MAX_MODE7_SUBMODE_INDEX,
 												&enc_block_stats);
-											BASISU_NOTE_UNUSED(e);
+											if (e == BIG_FLOAT_VAL)
+												break;
 										}
 										else
 										{
@@ -5927,7 +5930,8 @@ static bool compress_strip_task(
 													(basist::half_float(*)[3])pBlock_pixels_half, (vec4F*)pBlock_pixels_q16,
 													nullptr,
 													coptions, mode11_opt_mode);
-												BASISU_NOTE_UNUSED(refine_status);
+												if (refine_status)
+													debug_printf("ASTC HDR endpoint refinement improved the candidate\n");
 											}
 										}
 									}
@@ -6306,19 +6310,20 @@ static bool compress_strip_task(
 					{
 						prev_run_len++;
 
+#ifndef NDEBUG
 						const uint32_t prev_run_bits = prev_encoding.get_total_bits_u32();
 						assert(prev_run_bits);
-						BASISU_NOTE_UNUSED(prev_run_bits);
-
 						const uint32_t num_dummy_bits = best_candidate.m_coder.get_total_bits_u32();
-						BASISU_NOTE_UNUSED(num_dummy_bits);
+#endif
 
 						// Rewrite the previous encoding to extend the run length.
 						prev_encoding.restart();
 						prev_encoding.put_bits(RUN_CODE, RUN_CODE_LEN);
 						prev_encoding.put_vlc(prev_run_len - 1, 5);
 
+#ifndef NDEBUG
 						assert(prev_encoding.get_total_bits() == prev_run_bits + num_dummy_bits);
+#endif
 					}
 				}
 				else

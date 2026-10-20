@@ -293,8 +293,8 @@
         {
           if ( FT_STREAM_SEEK( table_pos ) )
             *abearing = 0;
-          else
-            (void)FT_READ_SHORT( *abearing );
+          else if ( FT_READ_SHORT( *abearing ) )
+            *abearing = 0;
         }
       }
     }

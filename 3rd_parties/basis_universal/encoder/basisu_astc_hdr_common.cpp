@@ -1450,8 +1450,9 @@ bool pack_astc_mode11_submode(uint32_t submode, uint8_t* pEndpoints, int val_q[2
 	const int max_c_val = (1 << c_bits) - 1;
 
 	// The maximum usable value before it turns to NaN/Inf
+#ifndef NDEBUG
 	const int max_a_qlog = get_max_qlog(a_bits);
-	BASISU_NOTE_UNUSED(max_a_qlog);
+#endif
 
 	const int min_d_val = -(1 << (d_bits - 1));
 	const int max_d_val = -min_d_val - 1;

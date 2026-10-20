@@ -131,9 +131,6 @@
 #pragma GCC diagnostic ignored "-Wconversion"			// TODO fix
 #pragma GCC diagnostic ignored "-Wshadow"			// TODO fix
 #pragma GCC diagnostic ignored "-Wunused-parameter"		// TODO fix
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic ignored "-Wunused-result"		// TODO fix
-#endif
 #endif
 
 /* Ignored intentionally. */

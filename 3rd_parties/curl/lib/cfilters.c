@@ -447,17 +447,21 @@ CURLcode Curl_conn_cf_recv(struct Curl_cfilter *cf, struct Curl_easy *data,
 
 static CURLcode cf_cntrl_all(struct connectdata *conn,
                              struct Curl_easy *data,
-                             bool ignore_result,
+                             bool continue_on_error,
                              int event, int arg1, void *arg2)
 {
   CURLcode result = CURLE_OK;
   int i;
 
   for(i = 0; i < (int)CURL_ARRAYSIZE(conn->cfilter); ++i) {
-    result = Curl_conn_cf_cntrl(conn->cfilter[i], data, ignore_result,
-                                event, arg1, arg2);
-    if(!ignore_result && result)
-      break;
+    CURLcode r2 = Curl_conn_cf_cntrl(conn->cfilter[i], data, continue_on_error,
+                                     event, arg1, arg2);
+    if(r2) {
+      if(!result)
+        result = r2;
+      if(!continue_on_error)
+        break;
+    }
   }
   return result;
 }
@@ -476,16 +480,20 @@ bool Curl_conn_cf_is_ip_connected(struct Curl_cfilter *cf,
 void Curl_conn_cntrl_update_info(struct Curl_easy *data,
                                 struct connectdata *conn)
 {
-  cf_cntrl_all(conn, data, TRUE, CF_CTRL_CONN_INFO_UPDATE, 0, NULL);
+  CURLcode result = cf_cntrl_all(conn, data, TRUE,
+                                  CF_CTRL_CONN_INFO_UPDATE, 0, NULL);
+  if(result)
+    infof(data, "Connection information update failed: %d", (int)result);
 }
 
 void Curl_conn_cntrl_report_stats(struct Curl_easy *data,
                                   struct connectdata *conn,
                                   int sockindex)
 {
-  if((unsigned)sockindex < CURL_ARRAYSIZE(conn->cfilter))
-    (void)Curl_conn_cf_cntrl(conn->cfilter[sockindex], data, TRUE,
-                             CF_CTRL_REPORT_STATS, 0, NULL);
+  if((unsigned)sockindex < CURL_ARRAYSIZE(conn->cfilter) &&
+     Curl_conn_cf_cntrl(conn->cfilter[sockindex], data, TRUE,
+                        CF_CTRL_REPORT_STATS, 0, NULL))
+    infof(data, "Connection statistics reporting failed");
 }
 
 void Curl_conn_remove_setup_filters(struct Curl_easy *data,
@@ -861,17 +869,22 @@ CURLcode Curl_cf_def_cntrl(struct Curl_cfilter *cf,
 
 CURLcode Curl_conn_cf_cntrl(struct Curl_cfilter *cf,
                             struct Curl_easy *data,
-                            bool ignore_result,
+                            bool continue_on_error,
                             int event, int arg1, void *arg2)
 {
   CURLcode result = CURLE_OK;
 
   for(; cf; cf = cf->next) {
+    CURLcode r2;
     if(cf->cft->cntrl == Curl_cf_def_cntrl)
       continue;
-    result = cf->cft->cntrl(cf, data, event, arg1, arg2);
-    if(!ignore_result && result)
-      break;
+    r2 = cf->cft->cntrl(cf, data, event, arg1, arg2);
+    if(r2) {
+      if(!result)
+        result = r2;
+      if(!continue_on_error)
+        break;
+    }
   }
   return result;
 }
@@ -972,7 +985,11 @@ CURLcode Curl_conn_flush(struct Curl_easy *data, int8_t sockindex)
  */
 void Curl_conn_ev_data_done_send(struct Curl_easy *data)
 {
-  cf_cntrl_all(data->conn, data, TRUE, CF_CTRL_DATA_DONE_SEND, 0, NULL);
+  CURLcode result = cf_cntrl_all(data->conn, data, TRUE,
+                                  CF_CTRL_DATA_DONE_SEND, 0, NULL);
+  if(result)
+    infof(data, "Connection send completion notification failed: %d",
+          (int)result);
 }
 
 /**
@@ -981,7 +998,10 @@ void Curl_conn_ev_data_done_send(struct Curl_easy *data)
  */
 void Curl_conn_ev_data_done(struct Curl_easy *data, bool premature)
 {
-  cf_cntrl_all(data->conn, data, TRUE, CF_CTRL_DATA_DONE, premature, NULL);
+  CURLcode result = cf_cntrl_all(data->conn, data, TRUE,
+                                  CF_CTRL_DATA_DONE, premature, NULL);
+  if(result)
+    infof(data, "Connection completion notification failed: %d", (int)result);
 }
 
 CURLcode Curl_conn_ev_data_pause(struct Curl_easy *data, bool do_pause)

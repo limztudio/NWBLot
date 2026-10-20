@@ -101,7 +101,10 @@ void curlx_pnow(struct curltime *pnow)
 #ifdef HAVE_GETTIMEOFDAY
   else {
     struct timeval now;
-    (void)gettimeofday(&now, NULL);
+    if(gettimeofday(&now, NULL)) {
+      now.tv_sec = time(NULL);
+      now.tv_usec = 0;
+    }
     pnow->tv_sec = now.tv_sec;
     pnow->tv_usec = (int)now.tv_usec;
   }
@@ -128,8 +131,12 @@ void curlx_pnow(struct curltime *pnow)
   static mach_timebase_info_data_t timebase;
   uint64_t usecs;
 
-  if(timebase.denom == 0)
-    (void)mach_timebase_info(&timebase);
+  if(timebase.denom == 0 &&
+     mach_timebase_info(&timebase) != KERN_SUCCESS) {
+    pnow->tv_sec = time(NULL);
+    pnow->tv_usec = 0;
+    return;
+  }
 
   usecs = mach_absolute_time();
   usecs *= timebase.numer; /* spellchecker:disable-line */
@@ -150,7 +157,10 @@ void curlx_pnow(struct curltime *pnow)
    * forward or backward in time.
    */
   struct timeval now;
-  (void)gettimeofday(&now, NULL);
+  if(gettimeofday(&now, NULL)) {
+    now.tv_sec = time(NULL);
+    now.tv_usec = 0;
+  }
   pnow->tv_sec = now.tv_sec;
   pnow->tv_usec = (int)now.tv_usec;
 }

@@ -481,12 +481,21 @@ RmtErrorCode RmtMemoryEventHistoryGenerateResourceHistoryForId(RmtDataSet*      
                             // Update the bind event's heap preferences for the resource.
                             RmtErrorCode update_result =
                                 history->UpdateResourceHeapPreferences(bind_event_index, allocation_address_iterator->second.heap_preferences);
+                            if (update_result != kRmtOk)
+                            {
+                                error_code = update_result;
+                                goto history_cleanup;
+                            }
                             RMT_ASSERT(update_result == kRmtOk);
 
                             // Update the bind event's allocation virtual address.
                             update_result = history->UpdateResourceAllocationVirtualAddress(bind_event_index, allocation_address_iterator->second.base_address);
+                            if (update_result != kRmtOk)
+                            {
+                                error_code = update_result;
+                                goto history_cleanup;
+                            }
                             RMT_ASSERT(update_result == kRmtOk);
-                            RMT_UNUSED(update_result);
                         }
                     }
                     break;
@@ -594,6 +603,7 @@ RmtErrorCode RmtMemoryEventHistoryGenerateResourceHistoryForId(RmtDataSet*      
         }
     }
 
+history_cleanup:
     // Free the virtual allocation list.
     free(virtual_allocation_buffer);
 
@@ -813,12 +823,21 @@ RmtErrorCode RmtMemoryEventHistoryGenerateFullAllocationHistory(RmtDataSet*     
 
                     // Update the bind event's heap preferences for the resource.
                     RmtErrorCode update_result = history->UpdateResourceHeapPreferences(bind_event_index, virtual_allocation->heap_preferences);
+                    if (update_result != kRmtOk)
+                    {
+                        error_code = update_result;
+                        goto history_cleanup;
+                    }
                     RMT_ASSERT(update_result == kRmtOk);
 
                     // Update the bind event's allocation virtual address.
                     update_result = history->UpdateResourceAllocationVirtualAddress(bind_event_index, virtual_allocation->base_address);
+                    if (update_result != kRmtOk)
+                    {
+                        error_code = update_result;
+                        goto history_cleanup;
+                    }
                     RMT_ASSERT(update_result == kRmtOk);
-                    RMT_UNUSED(update_result);
 
                     auto virtual_allocation_bind_list = bound_resources.find(virtual_allocation->allocation_identifier);
                     if (virtual_allocation_bind_list != bound_resources.end())
@@ -944,6 +963,7 @@ RmtErrorCode RmtMemoryEventHistoryGenerateFullAllocationHistory(RmtDataSet*     
         }
     }
 
+history_cleanup:
     // Free the virtual allocation lists.
     free(virtual_allocation_buffer);
     free(virtual_allocation_buffer_for_heaps);
@@ -1247,11 +1267,20 @@ RmtErrorCode RmtMemoryEventHistoryGenerateHistoryForAllResources(RmtDataSet* dat
 
                         // Update the bind event's heap preferences for the resource.
                         RmtErrorCode update_result = history->UpdateResourceHeapPreferences(bind_event_index, virtual_allocation->heap_preferences);
+                        if (update_result != kRmtOk)
+                        {
+                            error_code = update_result;
+                            goto history_cleanup;
+                        }
                         RMT_ASSERT(update_result == kRmtOk);
 
                         // Update the bind event's allocation virtual address.
                         update_result = history->UpdateResourceAllocationVirtualAddress(bind_event_index, virtual_allocation->base_address);
-                        RMT_UNUSED(update_result);
+                        if (update_result != kRmtOk)
+                        {
+                            error_code = update_result;
+                            goto history_cleanup;
+                        }
 
                         auto virtual_allocation_bind_list = bound_resources.find(virtual_allocation->allocation_identifier);
                         if (virtual_allocation_bind_list != bound_resources.end())
@@ -1362,6 +1391,7 @@ RmtErrorCode RmtMemoryEventHistoryGenerateHistoryForAllResources(RmtDataSet* dat
         }
     }
 
+history_cleanup:
     // Free the virtual allocation list.
     free(virtual_allocation_buffer);
 

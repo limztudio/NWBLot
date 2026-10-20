@@ -568,13 +568,18 @@ MHD_socket_create_listen_ (int pf)
      * but failed to be disabled here and it is not
      * possible to disable SIGPIPE by MSG_NOSIGNAL. */
     const int err = MHD_socket_get_error_ ();
-    (void) MHD_socket_close_ (fd);
+    MHD_socket_close_chk_ (fd);
     MHD_socket_fset_error_ (err);
     return MHD_INVALID_SOCKET;
   }
 #endif /* defined(MHD_socket_nosignal_) */
-  if (! cloexec_set)
-    (void) MHD_socket_noninheritable_ (fd);
+  if ((! cloexec_set) && (! MHD_socket_noninheritable_ (fd)))
+  {
+    const int err = MHD_socket_get_error_ ();
+    MHD_socket_close_chk_ (fd);
+    MHD_socket_fset_error_ (err);
+    return MHD_INVALID_SOCKET;
+  }
 
   return fd;
 }

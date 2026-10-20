@@ -130,7 +130,14 @@ struct str_encoder_t
       hb_locale_t oldlocale HB_UNUSED;
       oldlocale = hb_uselocale (clocale = newlocale (LC_ALL_MASK, "C", NULL));
       snprintf (buf, sizeof (buf), "%.8G", v);
-      (void) hb_uselocale (((void) freelocale (clocale), oldlocale));
+      if (oldlocale && !hb_uselocale (oldlocale))
+      {
+        buff.set_error ();
+        return;
+      }
+#ifndef HB_NO_SETLOCALE
+      freelocale (clocale);
+#endif
 
       char *s = buf;
       size_t len;

@@ -1,5 +1,5 @@
 package: zlib
 version: 1.3.2.1-motley (commit 767c4c947852e143f582c85f14cf573411df1b35)
-updated_utc: 2026-09-21T03:39:44Z
+updated_utc: 2026-10-20T06:42:38Z
 source: https://github.com/madler/zlib/tree/767c4c947852e143f582c85f14cf573411df1b35
-notes: zlib compression library. Tracks madler/zlib develop because that is newer than the latest 1.3.2 release tag and carries ZLIB_VERSION 1.3.2.1-motley. NWB-local patch (validation cleanup 2026-10-19): removed 1 redundant check proven unreachable in deflate.c (the trailer path already returned for wrap <= 0, so wrap is negated unconditionally) (see .git/validation-audit-20261019 register); re-apply or drop on re-vendor.
+notes: zlib compression library. Tracks madler/zlib develop because that is newer than the latest 1.3.2 release tag and carries ZLIB_VERSION 1.3.2.1-motley. NWB-local patch (validation cleanup 2026-10-19): removed 1 redundant check proven unreachable in deflate.c (the trailer path already returned for wrap <= 0, so wrap is negated unconditionally) (see .git/validation-audit-20261019 register); re-apply or drop on re-vendor. NWB-local return handling: check formatted path/error strings, lazy input setup, compression and deflate cleanup results; propagate errors through the existing gzip status contract; call legacy void printf variants directly.

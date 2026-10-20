@@ -102,11 +102,12 @@ static CURLcode req_flush(struct Curl_easy *data);
 CURLcode Curl_req_done(struct SingleRequest *req,
                        struct Curl_easy *data, bool aborted)
 {
+  CURLcode result = CURLE_OK;
   (void)req;
   if(!aborted)
-    (void)req_flush(data);
+    result = req_flush(data);
   Curl_client_reset(data);
-  return CURLE_OK;
+  return result;
 }
 
 void Curl_req_hard_reset(struct SingleRequest *req, struct Curl_easy *data)

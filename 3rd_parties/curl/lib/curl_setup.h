@@ -1238,15 +1238,6 @@ typedef unsigned int curl_bit;
 #define CURL_O_BINARY 0
 #endif
 
-/* Requires io.h when available */
-#ifdef MSDOS
-#define CURL_BINMODE(stream) (void)setmode(fileno(stream), CURL_O_BINARY)
-#elif defined(_WIN32) || defined(__CYGWIN__)
-#define CURL_BINMODE(stream) (void)_setmode(fileno(stream), CURL_O_BINARY)
-#else
-#define CURL_BINMODE(stream) (void)(stream)
-#endif
-
 /* In Windows the default file mode is text but an application can override it.
    Therefore we specify it explicitly. https://github.com/curl/curl/pull/258 */
 #if defined(_WIN32) || defined(MSDOS)
@@ -1636,10 +1627,6 @@ typedef struct sockaddr_un {
 #else
 #define curlx_memzero_low(buf, size)  SecureZeroMemory(buf, size)
 #endif
-#elif defined(HAVE_MEMSET_S)
-#define curlx_memzero_low(buf, size)  (void)memset_s(buf, size, 0, size)
-#elif defined(HAVE_MEMSET_EXPLICIT)
-#define curlx_memzero_low(buf, size)  (void)memset_explicit(buf, 0, size)
 #elif defined(__CYGWIN__) || \
   (defined(__NEWLIB__) && !defined(__CLIB2__)) || \
   (defined(__GLIBC__) && \
@@ -1648,8 +1635,6 @@ typedef struct sockaddr_un {
   (defined(__FreeBSD__) && __FreeBSD_version >= 1100037 /* 11.0+ */) || \
   (defined(__OpenBSD__) && OpenBSD >= 201405 /* 5.5+ */)
 #define curlx_memzero_low(buf, size)  explicit_bzero(buf, size)
-#elif defined(__NetBSD__) && __NetBSD_Version__ >= 702000000 /* 7.2+ */
-#define curlx_memzero_low(buf, size)  (void)explicit_memset(buf, 0, size)
 #endif
 #endif /* !_CURL_LOCAL_MEMZERO */
 

@@ -1691,8 +1691,11 @@ CURLcode Curl_http_done(struct Curl_easy *data,
   data->state.authproxy.multipass = FALSE;
 
   if(curlx_dyn_len(&data->state.headerb)) {
-    (void)http_write_header(data, curlx_dyn_ptr(&data->state.headerb),
-                            curlx_dyn_len(&data->state.headerb));
+    CURLcode result = http_write_header(data,
+                                        curlx_dyn_ptr(&data->state.headerb),
+                                        curlx_dyn_len(&data->state.headerb));
+    if(!status)
+      status = result;
   }
   curlx_dyn_reset(&data->state.headerb);
 
@@ -3543,9 +3546,8 @@ static CURLcode http_header_r(struct Curl_easy *data,
         /* convert date to number of seconds into the future */
         retry_after = date - current;
     }
-    else
-      /* Try it as a decimal number, ignore errors */
-      (void)curlx_str_number(&v, &retry_after, CURL_OFF_T_MAX);
+    else if(curlx_str_number(&v, &retry_after, CURL_OFF_T_MAX))
+      retry_after = 0;
     /* limit to 6 hours max. this is not documented so that it can be changed
        in the future if necessary. */
     if(retry_after > 21600)

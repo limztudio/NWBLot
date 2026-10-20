@@ -37,7 +37,7 @@ bool RmtRdfLoadTimestampData(rdfChunkFile* chunk_file, uint64_t& out_timestamp, 
 
     int result = rdfChunkFileContainsChunk(chunk_file, kDDEventChunkIdentifier, 0, &rdf_result);
     RMT_ASSERT(result == rdfResult::rdfResultOk);
-    RMT_UNUSED(result);
+    RMT_RETURN_ON_ERROR(result == rdfResult::rdfResultOk, false);
 
     if (rdf_result == kRmtRdfResultSuccess)
     {

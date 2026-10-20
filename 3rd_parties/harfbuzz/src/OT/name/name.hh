@@ -149,7 +149,9 @@ struct NameRecord
 		    ) const
   {
     TRACE_SERIALIZE (this);
-    HB_UNUSED auto snap = c->snapshot ();
+#ifdef HB_EXPERIMENTAL_API
+    auto snap = c->snapshot ();
+#endif
     auto *out = c->embed (this);
     if (unlikely (!out)) return_trace (nullptr);
 #ifdef HB_EXPERIMENTAL_API

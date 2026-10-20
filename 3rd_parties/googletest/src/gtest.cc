@@ -5618,9 +5618,10 @@ int UnitTest::Run() {
     // for these assertions is to pop up a dialog and wait for user input.
     // Instead ask the CRT to dump such assertions to stderr non-interactively.
     if (!IsDebuggerPresent()) {
-      (void)_CrtSetReportMode(_CRT_ASSERT,
-                              _CRTDBG_MODE_FILE | _CRTDBG_MODE_DEBUG);
-      (void)_CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+      GTEST_CHECK_(_CrtSetReportMode(_CRT_ASSERT,
+                      _CRTDBG_MODE_FILE | _CRTDBG_MODE_DEBUG) != -1);
+      GTEST_CHECK_(_CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR) !=
+                    _CRTDBG_HFILE_ERROR);
     }
 #endif
   }

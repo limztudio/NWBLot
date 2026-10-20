@@ -20885,7 +20885,6 @@ namespace basist
 		
 	bool ktx2_transcoder::decompress_level_data(uint32_t level_index, basisu::uint8_vec& uncomp_data)
 	{
-		const uint8_t* pComp_data = m_levels[level_index].m_byte_offset.get_uint64() + m_pData;
 		const uint64_t comp_size = m_levels[level_index].m_byte_length.get_uint64();
 						
 		const uint64_t uncomp_size = m_levels[level_index].m_uncompressed_byte_length.get_uint64();
@@ -20910,6 +20909,7 @@ namespace basist
 		if (m_header.m_supercompression_scheme == KTX2_SS_ZSTANDARD)
 		{
 #if BASISD_SUPPORT_KTX2_ZSTD
+			const uint8_t* pComp_data = m_levels[level_index].m_byte_offset.get_uint64() + m_pData;
 			size_t actualUncompSize = ZSTD_decompress(uncomp_data.data(), (size_t)uncomp_size, pComp_data, (size_t)comp_size);
 			if (ZSTD_isError(actualUncompSize))
 			{
@@ -20922,8 +20922,6 @@ namespace basist
 				return false;
 			}
 #else
-			BASISU_NOTE_UNUSED(pComp_data);
-
 			BASISU_DEVEL_ERROR("ktx2_transcoder::decompress_level_data: File uses Zstd supercompression, but Zstd support was not enabled at compile time (BASISD_SUPPORT_KTX2_ZSTD is 0)\n");
 			return false;
 #endif
@@ -23101,8 +23099,9 @@ namespace basist
 
 			const auto& quant_tab = astc_helpers::g_dequant_tables.get_endpoint_tab(dst_ise_endpoint_range).m_val_to_ise;
 
+#ifndef NDEBUG
 			const auto& dequant_tab = astc_helpers::g_dequant_tables.get_endpoint_tab(dst_ise_endpoint_range).m_ISE_to_val;
-			BASISU_NOTE_UNUSED(dequant_tab);
+#endif
 
 #if 1
 			// A smarter value quantization that preserves the key upper bits. (If these bits get corrupted, the entire meaning of the encoding can get lost.)
@@ -36968,11 +36967,9 @@ namespace bc7f
 
 		uint8_t mode45_block[sizeof(basist::bc7_block)];
 		const bool mode45_valid_flag = (desired_dp_chan >= 0) ? pack_mode4_or_5(mode45_block, pPixels, desired_dp_chan, mode6_sse_est, flags, &mode45_sse_est) : false;
-		BASISU_NOTE_UNUSED(mode45_valid_flag);
 
 		uint8_t mode7_block[sizeof(basist::bc7_block)];
 		bool mode7_valid_flag = false;
-		BASISU_NOTE_UNUSED(mode7_valid_flag);
 
 		if ((flags & cPackBC7FlagUse2SubsetsRGBA) && (block_max_var4 >= MIN_BLOCK_MAX_VAR_23SUBSETS_RGBA) && (mode6_ortho_ratio > ORTHO_RATIO_23SUBSET_RATIO_THRESH_RGBA))
 		{
@@ -36987,13 +36984,13 @@ namespace bc7f
 			}
 		}
 
-		if ((mode45_sse_est < mode7_sse_est) && (mode45_sse_est < mode6_sse_est))
+		if (mode45_valid_flag && (mode45_sse_est < mode7_sse_est) && (mode45_sse_est < mode6_sse_est))
 		{
 			assert(mode45_valid_flag);
 			memcpy(pBlock, mode45_block, sizeof(basist::bc7_block));
 			return;
 		}
-		else if ((mode7_sse_est < mode45_sse_est) && (mode7_sse_est < mode6_sse_est))
+		else if (mode7_valid_flag && (mode7_sse_est < mode45_sse_est) && (mode7_sse_est < mode6_sse_est))
 		{
 			assert(mode7_valid_flag);
 			memcpy(pBlock, mode7_block, sizeof(basist::bc7_block));
@@ -45457,7 +45454,6 @@ bool basisu_lowlevel_xubc7_transcoder::transcode_slice(
 	//const uint32_t src_block_width = basis_tex_format_get_block_width(src_format), src_block_height = basis_tex_format_get_block_height(src_format);
 
 	const uint32_t dst_fmt_block_width = get_block_width(fmt), dst_fmt_block_height = get_block_height(fmt);
-	BASISU_NOTE_UNUSED(dst_fmt_block_height);
 	
 	if ((dst_fmt_block_width != 4) || (dst_fmt_block_height != 4))
 	{

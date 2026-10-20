@@ -37,8 +37,7 @@
     // Unify system calls
     #define dlopen( name, flags )   LoadLibraryEx( name, /*reserved*/NULL, flags )
     #define dlsym( handle, name )   GetProcAddress( handle, name )
-    // FreeLibrary return bool value that is not used.
-    #define dlclose( handle )       (void)( ! FreeLibrary( handle ) )
+    #define dlclose( handle )       (FreeLibrary( handle ) ? 0 : -1)
     #define dlerror()               GetLastError()
 #if !__TBB_SKIP_DEPENDENCY_SIGNATURE_VERIFICATION
     #include <Softpub.h>
@@ -511,7 +510,8 @@ namespace r1 {
         if ( !dlclose ) return;
     #endif
         if ( handle ) {
-            dlclose( handle );
+            if (dlclose( handle ) != 0)
+                DYNAMIC_LINK_WARNING( dl_sys_fail, "dlclose", dlerror() );
         }
     }
 
@@ -697,7 +697,11 @@ namespace r1 {
         report_signature_verification_error(rc, filepath);
 
         pWVTData.dwStateAction = WTD_STATEACTION_CLOSE;       // Release WVT state data
-        (void)WinVerifyTrust(NULL, &pgActionID, &pWVTData);
+        const LONG close_rc = WinVerifyTrust(NULL, &pgActionID, &pWVTData);
+        if (ERROR_SUCCESS != close_rc) {
+            report_signature_verification_error(close_rc, filepath);
+            return false;
+        }
 
         return ERROR_SUCCESS == rc;
     }

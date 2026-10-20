@@ -362,9 +362,9 @@ static CURLcode doh_probe_run(struct Curl_easy *data,
                          CURL_EASY_STR(data, STRING_SSL_EC_CURVES));
     }
 
-    (void)curl_easy_setopt(doh, CURLOPT_SSL_OPTIONS,
-                           ((long)data->set.ssl.primary.ssl_options &
-                            ~CURLSSLOPT_AUTO_CLIENT_CERT));
+    ERROR_CHECK_SETOPT(CURLOPT_SSL_OPTIONS,
+                       ((long)data->set.ssl.primary.ssl_options &
+                        ~CURLSSLOPT_AUTO_CLIENT_CERT));
   }
 
   doh->state.internal = TRUE;

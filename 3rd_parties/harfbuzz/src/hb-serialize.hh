@@ -623,8 +623,8 @@ struct hb_serialize_context_t
   void align (unsigned int alignment)
   {
     unsigned int l = length () % alignment;
-    if (l)
-      (void) allocate_size<void> (alignment - l);
+    if (l && unlikely (!allocate_size<void> (alignment - l)))
+      DEBUG_MSG (SERIALIZE, this, "Failed to align serialized data");
   }
 
   template <typename Type = void>

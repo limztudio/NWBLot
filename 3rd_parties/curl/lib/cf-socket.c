@@ -761,7 +761,8 @@ static CURLcode bindlocal(struct Curl_easy *data, struct connectdata *conn,
         dns_queries = CURL_DNSQ_AAAA;
 #endif
 
-      (void)Curl_resolv_blocking(data, dns_queries, host, 80, transport, &h);
+      if(Curl_resolv_blocking(data, dns_queries, host, 80, transport, &h))
+        return CURLE_INTERFACE_FAILED;
       if(h) {
         int h_af = h->addr->ai_family;
         /* convert the resolved address, sizeof myhost >= INET_ADDRSTRLEN */
@@ -853,7 +854,8 @@ static CURLcode bindlocal(struct Curl_easy *data, struct connectdata *conn,
     }
   }
 #ifdef IP_BIND_ADDRESS_NO_PORT
-  (void)setsockopt(sockfd, SOL_IP, IP_BIND_ADDRESS_NO_PORT, &on, sizeof(on));
+  if(setsockopt(sockfd, SOL_IP, IP_BIND_ADDRESS_NO_PORT, &on, sizeof(on)))
+    infof(data, "Cannot enable IP_BIND_ADDRESS_NO_PORT: %d", SOCKERRNO);
 #endif
   for(;;) {
     if(bind(sockfd, sock, sizeof_sa) >= 0) {
@@ -1059,7 +1061,8 @@ static CURLcode cf_socket_shutdown(struct Curl_cfilter *cf,
        ctx->transport == TRNSPRT_TCP &&
        (curlx_nonblock(ctx->sock, TRUE) >= 0)) {
       unsigned char buf[1024];
-      (void)sread(ctx->sock, buf, sizeof(buf));
+      if(sread(ctx->sock, buf, sizeof(buf)) < 0)
+        CURL_TRC_CF(data, cf, "Socket drain failed: %d", SOCKERRNO);
     }
   }
   *done = TRUE;
@@ -1176,7 +1179,7 @@ static bool targets_localhost(struct cf_socket_ctx *ctx)
 /* disable TCP SYN retransmissions for localhost connection on Windows to
    detect problems faster */
 static void tcplocalhost(struct Curl_cfilter *cf,
-                         curl_socket_t sockfd)
+                         curl_socket_t sockfd, struct Curl_easy *data)
 {
   if(targets_localhost(cf->ctx)) {
     TCP_INITIAL_RTO_PARAMETERS rto;
@@ -1184,12 +1187,13 @@ static void tcplocalhost(struct Curl_cfilter *cf,
     memset(&rto, 0, sizeof(rto));
     rto.Rtt = TCP_INITIAL_RTO_DEFAULT_RTT;
     rto.MaxSynRetransmissions = TCP_INITIAL_RTO_NO_SYN_RETRANSMISSIONS;
-    (void)WSAIoctl(sockfd, SIO_TCP_INITIAL_RTO, &rto, sizeof(rto),
-                   NULL, 0, &bytes, NULL, NULL);
+    if(WSAIoctl(sockfd, SIO_TCP_INITIAL_RTO, &rto, sizeof(rto),
+                NULL, 0, &bytes, NULL, NULL) == SOCKET_ERROR)
+      infof(data, "Cannot set localhost TCP timeout: %d", SOCKERRNO);
   }
 }
 #else
-#define tcplocalhost(x, y)
+#define tcplocalhost(x, y, z)
 #endif /* _WIN32 */
 
 static CURLcode cf_socket_open(struct Curl_cfilter *cf,
@@ -1235,8 +1239,9 @@ static CURLcode cf_socket_open(struct Curl_cfilter *cf,
      * Linux: controlled by /proc/sys/net/ipv6/bindv6only.
      */
     int on = 0;
-    (void)setsockopt(ctx->sock, IPPROTO_IPV6, IPV6_V6ONLY,
-                     (void *)&on, sizeof(on));
+    if(setsockopt(ctx->sock, IPPROTO_IPV6, IPV6_V6ONLY,
+                  (void *)&on, sizeof(on)))
+      infof(data, "Cannot disable IPV6_V6ONLY: %d", SOCKERRNO);
 #endif
 #ifdef HAVE_SOCKADDR_IN6_SIN6_SCOPE_ID
     {
@@ -1272,7 +1277,7 @@ static CURLcode cf_socket_open(struct Curl_cfilter *cf,
     if(data->set.tcp_keepalive)
       tcpkeepalive(cf, data, ctx->sock);
 
-    tcplocalhost(cf, ctx->sock);
+    tcplocalhost(cf, ctx->sock, data);
   }
 
   if(data->set.fsockopt) {
@@ -1451,7 +1456,8 @@ static CURLcode cf_tcp_connect(struct Curl_cfilter *cf,
      "clear" the error state on the socket so that we can later read it
      reliably. This is reported necessary on the MPE/iX operating
      system. */
-  (void)verifyconnect(ctx->sock, NULL);
+  if(!verifyconnect(ctx->sock, NULL))
+    CURL_TRC_CF(data, cf, "Cleared pending socket connect error");
 #endif
   /* check socket for connect */
   rc = SOCKET_WRITABLE(ctx->sock, 0);
@@ -1473,7 +1479,8 @@ static CURLcode cf_tcp_connect(struct Curl_cfilter *cf,
   }
   else if(rc & CURL_CSELECT_ERR) {
     CURL_TRC_CF(data, cf, "poll/select error on fd=%" FMT_SOCKET_T, ctx->sock);
-    (void)verifyconnect(ctx->sock, &ctx->sockerr);
+    if(verifyconnect(ctx->sock, &ctx->sockerr))
+      CURL_TRC_CF(data, cf, "Socket poll failed without a connect error");
     result = CURLE_COULDNT_CONNECT;
   }
 
@@ -1908,82 +1915,85 @@ out:
 }
 
 #ifdef __linux__
-static void linux_quic_mtu(struct cf_socket_ctx *ctx)
+static void linux_quic_mtu(struct cf_socket_ctx *ctx, struct Curl_easy *data)
 {
   int val;
   switch(ctx->addr.family) {
 #ifdef IP_MTU_DISCOVER
   case AF_INET:
     val = IP_PMTUDISC_DO;
-    (void)setsockopt(ctx->sock, IPPROTO_IP, IP_MTU_DISCOVER, &val,
-                     sizeof(val));
+    if(setsockopt(ctx->sock, IPPROTO_IP, IP_MTU_DISCOVER, &val, sizeof(val)))
+      infof(data, "Cannot enable IPv4 MTU discovery: %d", SOCKERRNO);
     break;
 #endif
 #ifdef IPV6_MTU_DISCOVER
   case AF_INET6:
     val = IPV6_PMTUDISC_DO;
-    (void)setsockopt(ctx->sock, IPPROTO_IPV6, IPV6_MTU_DISCOVER, &val,
-                     sizeof(val));
+    if(setsockopt(ctx->sock, IPPROTO_IPV6, IPV6_MTU_DISCOVER, &val, sizeof(val)))
+      infof(data, "Cannot enable IPv6 MTU discovery: %d", SOCKERRNO);
     break;
 #endif
   }
 }
 #else
-#define linux_quic_mtu(x)
+#define linux_quic_mtu(x, y)
 #endif
 
 #if defined(UDP_GRO) &&                                                 \
   (defined(HAVE_SENDMMSG) || defined(HAVE_SENDMSG)) &&                  \
   ((defined(USE_NGTCP2) && defined(USE_NGHTTP3)) || defined(USE_QUICHE))
-static void linux_quic_gro(struct cf_socket_ctx *ctx)
+static void linux_quic_gro(struct cf_socket_ctx *ctx, struct Curl_easy *data)
 {
   int one = 1;
-  (void)setsockopt(ctx->sock, IPPROTO_UDP, UDP_GRO, &one,
-                   (socklen_t)sizeof(one));
+  if(setsockopt(ctx->sock, IPPROTO_UDP, UDP_GRO, &one,
+                (socklen_t)sizeof(one)))
+    infof(data, "Cannot enable UDP GRO: %d", SOCKERRNO);
 }
 #else
-#define linux_quic_gro(x)
+#define linux_quic_gro(x, y)
 #endif
 
 #if (defined(__linux__) || defined(__APPLE__)) && defined(IP_RECVTOS)
-static void linux_quic_ecn(struct cf_socket_ctx *ctx)
+static void linux_quic_ecn(struct cf_socket_ctx *ctx, struct Curl_easy *data)
 {
   unsigned int tos = 1;
   switch(ctx->addr.family) {
   case AF_INET:
-    (void)setsockopt(ctx->sock, IPPROTO_IP, IP_RECVTOS, &tos, sizeof(tos));
+    if(setsockopt(ctx->sock, IPPROTO_IP, IP_RECVTOS, &tos, sizeof(tos)))
+      infof(data, "Cannot enable IPv4 ECN reception: %d", SOCKERRNO);
     break;
 #ifdef IPV6_RECVTCLASS
   case AF_INET6:
-    (void)setsockopt(ctx->sock, IPPROTO_IPV6, IPV6_RECVTCLASS,
-                     &tos, sizeof(tos));
+    if(setsockopt(ctx->sock, IPPROTO_IPV6, IPV6_RECVTCLASS, &tos, sizeof(tos)))
+      infof(data, "Cannot enable IPv6 ECN reception: %d", SOCKERRNO);
     break;
 #endif
   }
 }
 #else
-#define linux_quic_ecn(x)
+#define linux_quic_ecn(x, y)
 #endif
 
 #if (defined(__linux__) || defined(__APPLE__)) && defined(IP_DONTFRAG)
-static void linux_ip_dontfrag(struct cf_socket_ctx *ctx)
+static void linux_ip_dontfrag(struct cf_socket_ctx *ctx, struct Curl_easy *data)
 {
   int val = 1;
 
   switch(ctx->addr.family) {
   case AF_INET:
-    (void)setsockopt(ctx->sock, IPPROTO_IP, IP_DONTFRAG, &val, sizeof(val));
+    if(setsockopt(ctx->sock, IPPROTO_IP, IP_DONTFRAG, &val, sizeof(val)))
+      infof(data, "Cannot disable IPv4 fragmentation: %d", SOCKERRNO);
     break;
 #ifdef IPV6_DONTFRAG
   case AF_INET6:
-    (void)setsockopt(ctx->sock, IPPROTO_IPV6, IPV6_DONTFRAG,
-                     &val, sizeof(val));
+    if(setsockopt(ctx->sock, IPPROTO_IPV6, IPV6_DONTFRAG, &val, sizeof(val)))
+      infof(data, "Cannot disable IPv6 fragmentation: %d", SOCKERRNO);
     break;
 #endif
   }
 }
 #else
-#define linux_ip_dontfrag(x)
+#define linux_ip_dontfrag(x, y)
 #endif
 
 static CURLcode cf_udp_setup_quic(struct Curl_cfilter *cf,
@@ -2015,10 +2025,10 @@ static CURLcode cf_udp_setup_quic(struct Curl_cfilter *cf,
    * non-blocking socket created by cf_socket_open() to it. Thus, we
    * do not need to call curlx_nonblock() in cf_udp_setup_quic() anymore.
    */
-  linux_quic_ecn(ctx);
-  linux_quic_mtu(ctx);
-  linux_ip_dontfrag(ctx);
-  linux_quic_gro(ctx);
+  linux_quic_ecn(ctx, data);
+  linux_quic_mtu(ctx, data);
+  linux_ip_dontfrag(ctx, data);
+  linux_quic_gro(ctx, data);
 
   return CURLE_OK;
 }

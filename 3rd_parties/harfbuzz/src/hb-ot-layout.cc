@@ -140,7 +140,8 @@ hb_ot_layout_kern (const hb_ot_shape_plan_t *plan,
   c.buffer_glyph_set = accel.scratch.create_buffer_glyph_set ();
   accel.apply (&c);
   accel.scratch.destroy_buffer_glyph_set (c.buffer_glyph_set);
-  (void) buffer->message (font, "end table kern");
+  if (unlikely (!buffer->message (font, "end table kern")))
+    DEBUG_MSG (APPLY, buffer, "Callback declined a completed-step notification");
 }
 #endif
 
@@ -1949,7 +1950,7 @@ apply_forward (OT::hb_ot_apply_context_t *c,
     if (accel.apply (c, use_hot_subtable_cache))
       ret = true;
     else
-      (void) buffer->next_glyph ();
+      if (unlikely (!buffer->next_glyph ())) break;
   }
 
   if (use_hot_subtable_cache)
@@ -2065,10 +2066,12 @@ inline void hb_ot_map_t::apply (const Proxy &proxy,
 			     *accel);
       }
       else if (buffer->messaging ())
-	(void) buffer->message (font, "skipped lookup %u feature '%c%c%c%c' because no glyph matches", lookup_index, HB_UNTAG (lookup.feature_tag));
+	if (unlikely (!buffer->message (font, "skipped lookup %u feature '%c%c%c%c' because no glyph matches", lookup_index, HB_UNTAG (lookup.feature_tag))))
+	  DEBUG_MSG (APPLY, buffer, "Callback declined a completed-step notification");
 
       if (buffer->messaging ())
-	(void) buffer->message (font, "end lookup %u feature '%c%c%c%c'", lookup_index, HB_UNTAG (lookup.feature_tag));
+	if (unlikely (!buffer->message (font, "end lookup %u feature '%c%c%c%c'", lookup_index, HB_UNTAG (lookup.feature_tag))))
+	  DEBUG_MSG (APPLY, buffer, "Callback declined a completed-step notification");
     }
 
     if (stage->pause_func)
@@ -2091,7 +2094,8 @@ void hb_ot_map_t::substitute (const hb_ot_shape_plan_t *plan, hb_font_t *font, h
       !buffer->message (font, "start table GSUB script tag '%s'", tag)) return;
   apply (proxy, plan, font, buffer);
   if (buffer->messaging ())
-    (void) buffer->message (font, "end table GSUB script tag '%s'", tag);
+    if (unlikely (!buffer->message (font, "end table GSUB script tag '%s'", tag)))
+      DEBUG_MSG (APPLY, buffer, "Callback declined a completed-step notification");
 }
 
 void hb_ot_map_t::position (const hb_ot_shape_plan_t *plan, hb_font_t *font, hb_buffer_t *buffer) const
@@ -2103,7 +2107,8 @@ void hb_ot_map_t::position (const hb_ot_shape_plan_t *plan, hb_font_t *font, hb_
       !buffer->message (font, "start table GPOS script tag '%s'", tag)) return;
   apply (proxy, plan, font, buffer);
   if (buffer->messaging ())
-    (void) buffer->message (font, "end table GPOS script tag '%s'", tag);
+    if (unlikely (!buffer->message (font, "end table GPOS script tag '%s'", tag)))
+      DEBUG_MSG (APPLY, buffer, "Callback declined a completed-step notification");
 }
 
 void

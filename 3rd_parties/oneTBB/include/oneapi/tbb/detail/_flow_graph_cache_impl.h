@@ -51,7 +51,7 @@ class node_cache {
     }
 
     void clear() {
-        while( !my_q.empty()) (void)my_q.pop();
+        while( !my_q.empty()) my_q.pop();
     }
 
 protected:

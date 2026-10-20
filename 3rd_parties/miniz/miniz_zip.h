@@ -154,6 +154,7 @@ extern "C"
         MZ_ZIP_ARCHIVE_TOO_LARGE,
         MZ_ZIP_VALIDATION_FAILED,
         MZ_ZIP_WRITE_CALLBACK_FAILED,
+        MZ_ZIP_FILE_DELETE_FAILED,
         MZ_ZIP_TOTAL_ERRORS
     } mz_zip_error;
 

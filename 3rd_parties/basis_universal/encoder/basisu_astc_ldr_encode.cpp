@@ -13642,7 +13642,6 @@ static bool mutate_candidates(
 				basist::astc_ldr_t::fvec dct_temp;
 
 				const uint32_t block_size_index = astc_helpers::find_astc_block_size_index(block_width, block_height);
-				[[maybe_unused]] const uint32_t num_unique_subset_pats[2] = { basist::astc_ldr_t::get_total_unique_patterns(block_size_index, 2), basist::astc_ldr_t::get_total_unique_patterns(block_size_index, 3) };
 
 				uint64_vec sorted_candidates;
 				sorted_candidates.reserve(1024);

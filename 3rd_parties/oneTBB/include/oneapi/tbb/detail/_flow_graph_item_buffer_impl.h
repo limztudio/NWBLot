@@ -268,7 +268,7 @@ protected:
             if(my_item_valid(i)) {  // sequencer_node may have empty slots
                 // placement-new copy-construct; could be std::move
                 char *new_space = (char *)&(new_array[i&(new_size-1)].begin()->item);
-                (void)new(new_space) item_type(get_my_item(i));
+                new(new_space) item_type(get_my_item(i));
                 new_array[i&(new_size-1)].begin()->state = element(i).state;
 #if __TBB_PREVIEW_FLOW_GRAPH_TRY_PUT_AND_WAIT
                 char* meta_space = (char *)&(new_array[i&(new_size-1)].begin()->metainfo);

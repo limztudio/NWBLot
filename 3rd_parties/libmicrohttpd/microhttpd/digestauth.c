@@ -1397,8 +1397,11 @@ MHD_digest_auth_get_username3 (struct MHD_Connection *connection)
   unif_buf_ptr = (uint8_t *) (uname_info + 1);
   unif_buf_used = get_rq_uname (params, uname_type, uname_info, unif_buf_ptr,
                                 unif_buf_size);
-  mhd_assert (unif_buf_size >= unif_buf_used);
-  (void) unif_buf_used; /* Mute compiler warning on non-debug builds */
+  if (unif_buf_used > unif_buf_size)
+  {
+    free (uname_info);
+    return NULL;
+  }
   mhd_assert (MHD_DIGEST_AUTH_UNAME_TYPE_MISSING != uname_info->uname_type);
 
   if (MHD_DIGEST_AUTH_UNAME_TYPE_INVALID == uname_info->uname_type)
@@ -1468,8 +1471,11 @@ MHD_digest_auth_get_username (struct MHD_Connection *connection)
       free (username);
       return NULL;
     }
-    (void) used; /* Mute compiler warning for non-debug builds */
-    mhd_assert (buf_size >= used);
+    if (used > buf_size)
+    {
+      free (username);
+      return NULL;
+    }
   }
 
   return username;

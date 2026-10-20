@@ -79,8 +79,9 @@ void Curl_ngtcp2_ver(char *p, size_t len)
 {
   const ngtcp2_info *ng2 = ngtcp2_version(0);
   const nghttp3_info *ht3 = nghttp3_version(0);
-  (void)curl_msnprintf(p, len, "ngtcp2/%s nghttp3/%s",
-                       ng2->version_str, ht3->version_str);
+  if(curl_msnprintf(p, len, "ngtcp2/%s nghttp3/%s",
+                    ng2->version_str, ht3->version_str) < 0 && len)
+    p[0] = '\0';
 }
 
 void Curl_cf_ngtcp2_h3_stream_ctx_free(struct h3_stream_ctx *stream)
@@ -779,9 +780,12 @@ static int quic_gtls_handshake_cb(gnutls_session_t session, unsigned int htype,
         quic_tp = (unsigned char *)tpbuf;
         quic_tp_len = (size_t)tplen;
       }
-      (void)Curl_gtls_cache_session(cf, data, ctx->ssl_peer.scache_key,
-                                    session, 0, "h3", quic_tp, quic_tp_len,
-                                    NULL);
+      CURLcode result = Curl_gtls_cache_session(cf, data,
+                                                ctx->ssl_peer.scache_key,
+                                                session, 0, "h3", quic_tp,
+                                                quic_tp_len, NULL);
+      if(result)
+        infof(data, "QUIC session cache update failed: %d", (int)result);
       break;
     }
     default:
@@ -818,9 +822,13 @@ static int wssl_quic_new_session_cb(WOLFSSL *ssl, WOLFSSL_SESSION *session)
         quic_tp = (unsigned char *)tpbuf;
         quic_tp_len = (size_t)tplen;
       }
-      (void)Curl_wssl_cache_session(cf, data, ctx->ssl_peer.scache_key,
-                                    session, wolfSSL_version(ssl),
-                                    "h3", quic_tp, quic_tp_len, NULL);
+      CURLcode result = Curl_wssl_cache_session(cf, data,
+                                                ctx->ssl_peer.scache_key,
+                                                session, wolfSSL_version(ssl),
+                                                "h3", quic_tp, quic_tp_len,
+                                                NULL);
+      if(result)
+        infof(data, "QUIC session cache update failed: %d", (int)result);
     }
   }
   return 0;
@@ -976,7 +984,9 @@ static CURLcode cf_connect_start(struct Curl_cfilter *cf,
   if(result)
     return result;
 
-  (void)Curl_qlogdir(data, ctx->scid.data, NGTCP2_MAX_CIDLEN, &qfd);
+  result = Curl_qlogdir(data, ctx->scid.data, NGTCP2_MAX_CIDLEN, &qfd);
+  if(result)
+    return result;
   ctx->qlogfd = qfd; /* -1 if failure above */
   quic_settings(ctx, data, pktx);
 
@@ -1924,8 +1934,11 @@ void Curl_cf_ngtcp2_h3_stream_close(struct Curl_cfilter *cf,
     nghttp3_conn_set_stream_user_data(ctx->h3conn, stream->id, NULL);
     ngtcp2_conn_set_stream_user_data(ctx->qconn, stream->id, NULL);
     stream->closed = TRUE;
-    (void)ngtcp2_conn_shutdown_stream(ctx->qconn, 0, stream->id,
-                                      NGHTTP3_H3_REQUEST_CANCELLED);
+    int rv = ngtcp2_conn_shutdown_stream(ctx->qconn, 0, stream->id,
+                                          NGHTTP3_H3_REQUEST_CANCELLED);
+    if(rv)
+      CURL_TRC_CF(data, cf, "[%" PRId64 "] shutdown stream failed: %s",
+                  stream->id, ngtcp2_strerror(rv));
     result = Curl_cf_ngtcp2_progress_egress(cf, data, NULL);
     if(result)
       CURL_TRC_CF(data, cf, "[%" PRId64 "] cancel stream -> %d",

@@ -294,7 +294,8 @@ static CURLcode smtp_parse_address(struct Curl_easy *data, const char *fqma,
     host->name = host->name + 1;
 
     /* Attempt to convert the hostname to IDN ACE */
-    (void)Curl_idnconvert_hostname(host);
+    if(Curl_idnconvert_hostname(host))
+      infof(data, "Using UTF-8 hostname after IDN conversion failed");
 
     /* If Curl_idnconvert_hostname() fails then we shall attempt to continue
        and send the hostname using UTF-8 rather than as 7-bit ACE (which is
@@ -1923,8 +1924,9 @@ static CURLcode smtp_disconnect(struct Curl_easy *data,
 
   if(!dead_connection && conn->bits.protoconnstart &&
      !Curl_pp_needs_flush(data, &smtpc->pp)) {
-    if(!smtp_perform_quit(data, smtpc))
-      (void)smtp_block_statemach(data, smtpc, TRUE); /* ignore on QUIT */
+    if(!smtp_perform_quit(data, smtpc) &&
+       smtp_block_statemach(data, smtpc, TRUE))
+      infof(data, "SMTP QUIT did not complete");
   }
 
   CURL_TRC_SMTP(data, "smtp_disconnect(), finished");

@@ -207,8 +207,8 @@ struct queuing_rw_mutex_impl {
                     }
                     if (pred_state == STATE_ACTIVEREADER)  { // either we initially read it or CAS failed
                         // Active reader means that the predecessor already acquired the mutex and cannot notify us.
-                        // Therefore, we need to acquire the mutex ourselves by re-reading predecessor state.
-                        (void)predecessor->my_state.load(std::memory_order_acquire);
+                        // Acquire the release observed by the relaxed predecessor-state read.
+                        std::atomic_thread_fence(std::memory_order_acquire);
                     }
                 }
                 tricky_pointer::store(s.my_prev, predecessor, std::memory_order_relaxed);

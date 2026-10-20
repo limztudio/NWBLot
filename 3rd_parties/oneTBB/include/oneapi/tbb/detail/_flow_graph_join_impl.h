@@ -34,14 +34,19 @@
         using forwarding_base::forwarding_base;
         // decrement_port_count may create a forwarding task.  If we cannot handle the task
         // ourselves, ask decrement_port_count to deal with it.
-        virtual graph_task* decrement_port_count(bool handle_task) = 0;
+        virtual graph_task* decrement_port_count() = 0;
+        void decrement_port_count_and_forward() {
+            if (graph_task* task = decrement_port_count()) {
+                spawn_in_graph_arena(graph_ref, *task);
+            }
+        }
     };
 
     struct reserving_forwarding_base : forwarding_base {
         using forwarding_base::forwarding_base;
         // decrement_port_count may create a forwarding task.  If we cannot handle the task
         // ourselves, ask decrement_port_count to deal with it.
-        virtual graph_task* decrement_port_count() = 0;
+        virtual void decrement_port_count() = 0;
         virtual void increment_port_count() = 0;
     };
 
@@ -313,7 +318,7 @@
                     was_missing_predecessors = my_predecessors.empty();
                     my_predecessors.add(*(current->my_pred));
                     if ( was_missing_predecessors ) {
-                        (void) my_join->decrement_port_count(); // may try to forward
+                        my_join->decrement_port_count(); // may try to forward
                     }
                     current->status.store( SUCCEEDED, std::memory_order_release);
                     break;
@@ -521,7 +526,7 @@
 #else
                         this->push_back(current->my_val);
 #endif
-                        if (was_empty) rtask = my_join->decrement_port_count(false);
+                        if (was_empty) rtask = my_join->decrement_port_count();
                         else
                             rtask = SUCCESSFULLY_ENQUEUED;
                         current->bypass_t = rtask;
@@ -547,7 +552,7 @@
                     __TBB_ASSERT(this->my_item_valid(this->my_head), "No item to reset");
                     this->destroy_front();
                     if(this->my_item_valid(this->my_head)) {
-                        (void)my_join->decrement_port_count(true);
+                        my_join->decrement_port_count_and_forward();
                     }
                     current->status.store( SUCCEEDED, std::memory_order_release);
                     break;
@@ -740,13 +745,11 @@
 #else
                     bool find_result = this->find_with_key(my_join->current_key, *(current->my_arg));
 #endif
-#if TBB_USE_DEBUG
                     if (!find_result) {
                         __TBB_ASSERT(false, "Failed to find item corresponding to current_key.");
+                        current->status.store(FAILED, std::memory_order_release);
+                        break;
                     }
-#else
-                    tbb::detail::suppress_unused_warning(find_result);
-#endif
                     current->status.store( SUCCEEDED, std::memory_order_release);
                     }
                     break;
@@ -882,7 +885,7 @@
         }
 
         // if all input_ports have predecessors, spawn forward to try and consume tuples
-        graph_task* decrement_port_count() override {
+        void decrement_port_count() override {
             if(ports_with_no_inputs.fetch_sub(1) == 1) {
                 if(is_graph_active(this->graph_ref)) {
                     d1::small_object_allocator allocator{};
@@ -891,7 +894,6 @@
                     spawn_in_graph_arena(this->graph_ref, *t);
                 }
             }
-            return nullptr;
         }
 
         input_type &input_ports() { return my_inputs; }
@@ -960,16 +962,14 @@
         }
 
         // if all input_ports have items, spawn forward to try and consume tuples
-        graph_task* decrement_port_count(bool handle_task) override
+        graph_task* decrement_port_count() override
         {
             if(ports_with_no_items.fetch_sub(1) == 1) {
                 if(is_graph_active(this->graph_ref)) {
                     d1::small_object_allocator allocator{};
                     typedef forward_task_bypass<base_node_type> task_type;
                     graph_task* t = allocator.new_object<task_type>(graph_ref, allocator, *my_node);
-                    if( !handle_task )
-                        return t;
-                    spawn_in_graph_arena(this->graph_ref, *t);
+                    return t;
                 }
             }
             return nullptr;

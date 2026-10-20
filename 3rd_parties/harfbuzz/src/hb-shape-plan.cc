@@ -132,14 +132,15 @@ hb_shape_plan_key_t::init (bool                           copy,
 
 #undef HB_SHAPER_IMPLEMENT
   }
-  else
+  else if (HB_SHAPERS_COUNT)
   {
-    const HB_UNUSED hb_shaper_entry_t *shapers = _hb_shapers_get ();
-    for (unsigned int i = 0; i < HB_SHAPERS_COUNT; i++)
+    const hb_shaper_entry_t *shaper_entry = _hb_shapers_get ();
+    const hb_shaper_entry_t *shaper_end = shaper_entry + HB_SHAPERS_COUNT;
+    for (; shaper_entry != shaper_end; shaper_entry++)
       if (false)
 	;
 #define HB_SHAPER_IMPLEMENT(shaper) \
-      else if (shapers[i].func == _hb_##shaper##_shape) \
+      else if (shaper_entry->func == _hb_##shaper##_shape) \
 	HB_SHAPER_PLAN (shaper);
 #include "hb-shaper-list.hh"
 #undef HB_SHAPER_IMPLEMENT

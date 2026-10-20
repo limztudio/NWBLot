@@ -2301,7 +2301,7 @@ using TimeInMillis = int64_t;  // Represents time in milliseconds.
 
 #define GTEST_FLAG_GET(name) ::absl::GetFlag(GTEST_FLAG(name))
 #define GTEST_FLAG_SET(name, value) \
-  (void)(::absl::SetFlag(&GTEST_FLAG(name), value))
+  (::absl::SetFlag(&GTEST_FLAG(name), value))
 #define GTEST_USE_OWN_FLAGFILE_FLAG_ 0
 
 #undef GTEST_INTERNAL_HAS_ABSL_FLAGS

@@ -297,7 +297,8 @@ CURLcode Curl_ssh_range(struct Curl_easy *data,
   if(from_t == STRE_OVERFLOW)
     return CURLE_RANGE_ERROR;
   curlx_str_passblanks(&range);
-  (void)curlx_str_single(&range, '-');
+  if(curlx_str_single(&range, '-') && *range)
+    return CURLE_RANGE_ERROR;
 
   to_t = curlx_str_numblanks(&range, &to);
   if((to_t == STRE_OVERFLOW) || (to_t && from_t) || *range)

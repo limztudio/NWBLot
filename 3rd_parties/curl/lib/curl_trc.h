@@ -215,62 +215,62 @@ void Curl_trc_ws(struct Curl_easy *data,
 
 #define infof(data, ...) \
   do {                   \
-    (void)(data);        \
+    (void)sizeof(data);        \
   } while(0)
 #define CURL_TRC_M(data, ...) \
   do {                        \
-    (void)(data);             \
+    (void)sizeof(data);             \
   } while(0)
 #define CURL_TRC_CF(data, cf, ...) \
   do {                             \
-    (void)(data);                  \
-    (void)(cf);                    \
+    (void)sizeof(data);                  \
+    (void)sizeof(cf);                    \
   } while(0)
 #define CURL_TRC_WRITE(data, ...) \
   do {                            \
-    (void)(data);                 \
+    (void)sizeof(data);                 \
   } while(0)
 #define CURL_TRC_READ(data, ...) \
   do {                           \
-    (void)(data);                \
+    (void)sizeof(data);                \
   } while(0)
 #define CURL_TRC_DNS(data, ...) \
   do {                          \
-    (void)(data);               \
+    (void)sizeof(data);               \
   } while(0)
 #define CURL_TRC_TIMER(data, tid, ...) \
   do {                                 \
-    (void)(data);                      \
-    (void)(tid);                       \
+    (void)sizeof(data);                      \
+    (void)sizeof(tid);                       \
   } while(0)
 #ifndef CURL_DISABLE_FTP
 #define CURL_TRC_FTP(data, ...) \
   do {                          \
-    (void)(data);               \
+    (void)sizeof(data);               \
   } while(0)
 #endif /* !CURL_DISABLE_FTP */
 #ifndef CURL_DISABLE_SMTP
 #define CURL_TRC_SMTP(data, ...) \
   do {                           \
-    (void)(data);                \
+    (void)sizeof(data);                \
   } while(0)
 #endif /* !CURL_DISABLE_SMTP */
 #ifdef USE_SSL
 #define CURL_TRC_SSLS(data, ...) \
   do {                           \
-    (void)(data);                \
+    (void)sizeof(data);                \
   } while(0)
 #endif /* USE_SSL */
 #ifdef USE_SSH
 #define CURL_TRC_SSH(data, ...) \
   do {                          \
-    (void)(data);               \
+    (void)sizeof(data);               \
   } while(0)
 #endif /* USE_SSH */
 #if !defined(CURL_DISABLE_WEBSOCKETS) && !defined(CURL_DISABLE_HTTP)
 #define CURL_TRC_WS(data, ...) \
   do {                         \
-    (void)(data);              \
+    (void)sizeof(data);              \
   } while(0)
 #endif
 
@@ -340,7 +340,7 @@ extern struct curl_trc_feat Curl_trc_feat_threads;
 #define Curl_trc_is_verbose(d)        FALSE
 #define Curl_trc_cf_is_verbose(x, y)  FALSE
 #define Curl_trc_ft_is_verbose(x, y)  FALSE
-#define CURL_MSTATE_NAME(x)           ((void)(x), "-")
+#define CURL_MSTATE_NAME(x)           ((void)sizeof(x), "-")
 #define CURL_TRC_EASY_TIMERS(x)       Curl_nop_stmt
 #endif /* !CURL_DISABLE_VERBOSE_STRINGS */
 

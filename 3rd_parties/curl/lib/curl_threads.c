@@ -173,14 +173,14 @@ bool Curl_thread_is_current(curl_thread_id_t tid)
 
 void Curl_cond_signal(pthread_cond_t *c)
 {
-  /* return code defined as always 0 */
-  (void)pthread_cond_signal(c);
+  if(pthread_cond_signal(c))
+    abort();
 }
 
 void Curl_cond_wait(pthread_cond_t *c, pthread_mutex_t *m)
 {
-  /* return code defined as always 0 */
-  (void)pthread_cond_wait(c, m);
+  if(pthread_cond_wait(c, m))
+    abort();
 }
 
 CURLcode Curl_cond_timedwait(pthread_cond_t *c, pthread_mutex_t *m,
@@ -197,7 +197,8 @@ CURLcode Curl_cond_timedwait(pthread_cond_t *c, pthread_mutex_t *m,
    * concerned. */
 #ifdef HAVE_GETTIMEOFDAY
   struct timeval tv;
-  (void)gettimeofday(&tv, NULL);
+  if(gettimeofday(&tv, NULL))
+    return CURLE_FAILED_INIT;
   now.tv_sec = tv.tv_sec;
   now.tv_usec = (int)tv.tv_usec;
 #else

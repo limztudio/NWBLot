@@ -279,21 +279,18 @@ inline void poison_pointer(T&) {/*do nothing*/}
 #endif /* !TBB_USE_ASSERT */
 
 template <std::size_t alignment = 0, typename T>
-bool assert_pointer_valid(T* p, const char* comment = nullptr) {
+void assert_pointer_valid(T* p, const char* comment = nullptr) {
     suppress_unused_warning(p, comment);
     __TBB_ASSERT(p != nullptr, comment);
     __TBB_ASSERT(!is_poisoned(p), comment);
 #if !(_MSC_VER && _MSC_VER <= 1900 && !__INTEL_COMPILER)
     __TBB_ASSERT(is_aligned(p, alignment == 0 ? alignof(T) : alignment), comment);
 #endif
-    // Returns something to simplify assert_pointers_valid implementation.
-    return true;
 }
 
 template <typename... Args>
 void assert_pointers_valid(Args*... p) {
-    // suppress_unused_warning is used as an evaluation context for the variadic pack.
-    suppress_unused_warning(assert_pointer_valid(p)...);
+    (assert_pointer_valid(p), ...);
 }
 
 //! Base class for types that should not be assigned.

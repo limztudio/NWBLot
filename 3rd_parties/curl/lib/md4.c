@@ -69,15 +69,17 @@ static int my_md4_init(my_md4_ctx *ctx)
   return 1;
 }
 
-static void my_md4_update(my_md4_ctx *ctx,
+static int my_md4_update(my_md4_ctx *ctx,
                           const void *input, unsigned long len)
 {
   wc_Md4Update(ctx, input, (word32)len);
+  return 1;
 }
 
-static void my_md4_final(unsigned char *digest, my_md4_ctx *ctx)
+static int my_md4_final(unsigned char *digest, my_md4_ctx *ctx)
 {
   wc_Md4Final(ctx, digest);
+  return 1;
 }
 
 #elif (defined(__MAC_OS_X_VERSION_MAX_ALLOWED) && \
@@ -97,15 +99,15 @@ static int my_md4_init(my_md4_ctx *ctx)
   return CC_MD4_Init(ctx);
 }
 
-static void my_md4_update(my_md4_ctx *ctx,
+static int my_md4_update(my_md4_ctx *ctx,
                           const void *input, unsigned long len)
 {
-  (void)CC_MD4_Update(ctx, input, (CC_LONG)len);
+  return CC_MD4_Update(ctx, input, (CC_LONG)len);
 }
 
-static void my_md4_final(unsigned char *digest, my_md4_ctx *ctx)
+static int my_md4_final(unsigned char *digest, my_md4_ctx *ctx)
 {
-  (void)CC_MD4_Final(digest, ctx);
+  return CC_MD4_Final(digest, ctx);
 }
 
 #elif defined(USE_WIN32_CRYPTO)
@@ -135,25 +137,24 @@ static int my_md4_init(my_md4_ctx *ctx)
   return 1;
 }
 
-static void my_md4_update(my_md4_ctx *ctx,
+static int my_md4_update(my_md4_ctx *ctx,
                           const void *input, unsigned long len)
 {
-  CryptHashData(ctx->hHash, (const BYTE *)input, (unsigned int)len, 0);
+  return CryptHashData(ctx->hHash, (const BYTE *)input, (unsigned int)len, 0) != 0;
 }
 
-static void my_md4_final(unsigned char *digest, my_md4_ctx *ctx)
+static int my_md4_final(unsigned char *digest, my_md4_ctx *ctx)
 {
-  unsigned long length = 0;
-
-  CryptGetHashParam(ctx->hHash, HP_HASHVAL, NULL, &length, 0);
-  if(length == MD4_DIGEST_LENGTH)
-    CryptGetHashParam(ctx->hHash, HP_HASHVAL, digest, &length, 0);
-
-  if(ctx->hHash)
-    CryptDestroyHash(ctx->hHash);
-
-  if(ctx->hCryptProv)
-    CryptReleaseContext(ctx->hCryptProv, 0);
+  unsigned long length = MD4_DIGEST_LENGTH;
+  int result = CryptGetHashParam(ctx->hHash, HP_HASHVAL, digest, &length, 0) &&
+    length == MD4_DIGEST_LENGTH;
+  if(ctx->hHash && !CryptDestroyHash(ctx->hHash))
+    result = 0;
+  if(ctx->hCryptProv && !CryptReleaseContext(ctx->hCryptProv, 0))
+    result = 0;
+  ctx->hHash = 0;
+  ctx->hCryptProv = 0;
+  return result;
 }
 
 #elif defined(USE_GNUTLS)
@@ -168,19 +169,21 @@ static int my_md4_init(my_md4_ctx *ctx)
   return 1;
 }
 
-static void my_md4_update(my_md4_ctx *ctx,
+static int my_md4_update(my_md4_ctx *ctx,
                           const void *input, unsigned long len)
 {
   md4_update(ctx, len, input);
+  return 1;
 }
 
-static void my_md4_final(unsigned char *digest, my_md4_ctx *ctx)
+static int my_md4_final(unsigned char *digest, my_md4_ctx *ctx)
 {
 #if NETTLE_VERSION_MAJOR >= 4
   md4_digest(ctx, digest);
 #else
   md4_digest(ctx, MD4_DIGEST_SIZE, digest);
 #endif
+  return 1;
 }
 
 #else
@@ -363,7 +366,7 @@ static int my_md4_init(my_md4_ctx *ctx)
   return 1;
 }
 
-static void my_md4_update(my_md4_ctx *ctx,
+static int my_md4_update(my_md4_ctx *ctx,
                           const void *input, unsigned long len)
 {
   uint32_t saved_lo;
@@ -382,7 +385,7 @@ static void my_md4_update(my_md4_ctx *ctx,
 
     if(len < available) {
       memcpy(&ctx->buffer[used], input, len);
-      return;
+      return 1;
     }
 
     memcpy(&ctx->buffer[used], input, available);
@@ -397,9 +400,10 @@ static void my_md4_update(my_md4_ctx *ctx,
   }
 
   memcpy(ctx->buffer, input, len);
+  return 1;
 }
 
-static void my_md4_final(unsigned char *digest, my_md4_ctx *ctx)
+static int my_md4_final(unsigned char *digest, my_md4_ctx *ctx)
 {
   unsigned long used, available;
 
@@ -448,6 +452,7 @@ static void my_md4_final(unsigned char *digest, my_md4_ctx *ctx)
   digest[15] = curlx_ultouc(ctx->d >> 24);
 
   memset(ctx, 0, sizeof(*ctx));
+  return 1;
 }
 
 #endif /* CRYPTO LIBS */
@@ -458,9 +463,13 @@ CURLcode Curl_md4it(unsigned char *output,
   my_md4_ctx ctx;
   if(!my_md4_init(&ctx))
     return CURLE_FAILED_INIT;
-  my_md4_update(&ctx, input, curlx_uztoui(len));
-  my_md4_final(output, &ctx);
-  return CURLE_OK;
+  {
+    CURLcode result = my_md4_update(&ctx, input, curlx_uztoui(len)) ?
+      CURLE_OK : CURLE_FAILED_INIT;
+    if(!my_md4_final(output, &ctx))
+      result = CURLE_FAILED_INIT;
+    return result;
+  }
 }
 
 #endif /* USE_CURL_NTLM_CORE */

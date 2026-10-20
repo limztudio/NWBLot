@@ -201,7 +201,8 @@ static int wakeup_inet(curl_socket_t socks[2], bool nonblocking)
   pfd[0].fd = listener;
   pfd[0].events = POLLIN;
   pfd[0].revents = 0;
-  (void)Curl_poll(pfd, 1, 1000); /* one second */
+  if(Curl_poll(pfd, 1, 1000) < 0) /* one second */
+    goto error;
   socks[1] = CURL_ACCEPT(listener, NULL, NULL);
   if(socks[1] == CURL_SOCKET_BAD)
     goto error;
@@ -224,7 +225,8 @@ static int wakeup_inet(curl_socket_t socks[2], bool nonblocking)
       pfd[0].fd = socks[1];
       pfd[0].events = POLLIN;
       pfd[0].revents = 0;
-      (void)Curl_poll(pfd, 1, 1000); /* one second */
+      if(Curl_poll(pfd, 1, 1000) < 0) /* one second */
+        goto error;
 
       nread = sread(socks[1], p, s);
       if(nread == -1) {

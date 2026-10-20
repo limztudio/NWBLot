@@ -1030,7 +1030,8 @@ struct KerxTable
 
       if (!c->buffer_intersects_machine ())
       {
-	(void) c->buffer->message (c->font, "skipped subtable %u because no glyph matches", c->lookup_index);
+	if (unlikely (!c->buffer->message (c->font, "skipped subtable %u because no glyph matches", c->lookup_index)))
+	  DEBUG_MSG (APPLY, c->buffer, "Callback declined a completed-step notification");
 	goto skip;
       }
 
@@ -1066,7 +1067,8 @@ struct KerxTable
 	ret |= st->dispatch (c);
       }
 
-      (void) c->buffer->message (c->font, "end subtable %u", c->lookup_index);
+      if (unlikely (!c->buffer->message (c->font, "end subtable %u", c->lookup_index)))
+        DEBUG_MSG (APPLY, c->buffer, "Callback declined a completed-step notification");
 
     skip:
       st = &StructAfter<SubTable> (*st);

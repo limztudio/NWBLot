@@ -1476,8 +1476,13 @@ static CURLcode gtls_verify_ocsp_status(struct Curl_easy *data,
     goto out;
   }
 
-  (void)gnutls_ocsp_resp_get_single(ocsp_resp, 0, NULL, NULL, NULL, NULL,
-                                    &status, NULL, NULL, NULL, &reason);
+  rc = gnutls_ocsp_resp_get_single(ocsp_resp, 0, NULL, NULL, NULL, NULL,
+                                   &status, NULL, NULL, NULL, &reason);
+  if(rc < 0) {
+    failf(data, "Cannot read OCSP certificate status: %s", gnutls_strerror(rc));
+    result = CURLE_SSL_INVALIDCERTSTATUS;
+    goto out;
+  }
 
   switch(status) {
   case GNUTLS_OCSP_CERT_GOOD:

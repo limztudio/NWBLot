@@ -108,20 +108,20 @@ typedef CURLcode Curl_cft_conn_keep_alive(struct Curl_cfilter *cf,
  * Return code handling:
  * "first fail" meaning that the first filter returning != CURLE_OK, will
  *              abort further event distribution and determine the result.
- * "ignored" meaning return values are ignored and the event is distributed
- *           to all filters in the chain. Overall result is always CURLE_OK.
+ * "notify all" means every filter receives the event even after a failure.
+ *              The first failure is retained and returned to the caller.
  */
 /*      data event                            arg1       arg2     return */
 #define CF_CTRL_DATA_SETUP              4  /* 0          NULL     first fail */
 /* unused now                           5 */
 #define CF_CTRL_DATA_PAUSE              6  /* on/off     NULL     first fail */
-#define CF_CTRL_DATA_DONE               7  /* premature  NULL     ignored */
-#define CF_CTRL_DATA_DONE_SEND          8  /* 0          NULL     ignored */
+#define CF_CTRL_DATA_DONE               7  /* premature  NULL     notify all */
+#define CF_CTRL_DATA_DONE_SEND          8  /* 0          NULL     notify all */
 /* update conn info at connection and data */
-#define CF_CTRL_CONN_INFO_UPDATE (256 + 0) /* 0          NULL     ignored */
-#define CF_CTRL_FORGET_SOCKET    (256 + 1) /* 0          NULL     ignored */
+#define CF_CTRL_CONN_INFO_UPDATE (256 + 0) /* 0          NULL     notify all */
+#define CF_CTRL_FORGET_SOCKET    (256 + 1) /* 0          NULL     notify all */
 #define CF_CTRL_FLUSH            (256 + 2) /* 0          NULL     first fail */
-#define CF_CTRL_REPORT_STATS     (256 + 3) /* 0          NULL     ignored */
+#define CF_CTRL_REPORT_STATS     (256 + 3) /* 0          NULL     notify all */
 
 /**
  * Handle event/control for the filter.
@@ -332,7 +332,7 @@ CURLcode Curl_conn_cf_recv(struct Curl_cfilter *cf, struct Curl_easy *data,
                            char *buf, size_t len, size_t *pnread);
 CURLcode Curl_conn_cf_cntrl(struct Curl_cfilter *cf,
                             struct Curl_easy *data,
-                            bool ignore_result,
+                            bool continue_on_error,
                             int event, int arg1, void *arg2);
 
 /**

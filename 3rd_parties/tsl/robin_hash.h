@@ -1457,8 +1457,10 @@ class robin_hash : private Hash, private KeyEqual, private GrowthPolicy {
         if (dist_from_ideal_bucket !=
             bucket_entry::EMPTY_MARKER_DIST_FROM_IDEAL_BUCKET) {
           if (hash_stored_for_bucket) {
-            [[maybe_unused]] const std::uint32_t skipped_hash =
-                deserialize_value<std::uint32_t>(deserializer);
+            static_assert(std::is_same<
+                decltype(deserializer.template skip<std::uint32_t>()),
+                void>::value, "Deserializer::skip<U>() must return void");
+            deserializer.template skip<std::uint32_t>();
           }
 
           insert(deserialize_value<value_type>(deserializer));

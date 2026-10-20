@@ -118,7 +118,10 @@ bool RmtRdfDataStream::LoadNextChunk(const size_t offset)
                     }
                     int chunk_close_result = rdfChunkFileClose(&chunk_file);
                     RMT_ASSERT(chunk_close_result == rdfResult::rdfResultOk);
-                    RMT_UNUSED(chunk_close_result);
+                    if (chunk_close_result != rdfResult::rdfResultOk)
+                    {
+                        ret_val = false;
+                    }
                 }
             }
         }

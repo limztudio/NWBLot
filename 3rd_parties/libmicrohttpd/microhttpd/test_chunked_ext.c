@@ -391,7 +391,7 @@ connect_to_port (uint16_t port)
     return MHD_INVALID_SOCKET;
   if (! set_socket_timeouts (sk))
   {
-    (void) MHD_socket_close_ (sk);
+    MHD_socket_close_chk_ (sk);
     return MHD_INVALID_SOCKET;
   }
   memset (&sa,
@@ -404,7 +404,7 @@ connect_to_port (uint16_t port)
                     (const struct sockaddr *) &sa,
                     (socklen_t) sizeof (sa)))
   {
-    (void) MHD_socket_close_ (sk);
+    MHD_socket_close_chk_ (sk);
     return MHD_INVALID_SOCKET;
   }
   return sk;
@@ -791,14 +791,14 @@ run_subcase (const struct ChunkCase *cc,
       fprintf (stderr,
                "FAILED: sub-case '%s': cannot send the request.\n",
                cc->name);
-    (void) MHD_socket_close_ (sk);
+    MHD_socket_close_chk_ (sk);
     MHD_stop_daemon (d);
     return 0;
   }
   resp_size = recv_all (sk,
                         resp,
                         sizeof (resp));
-  (void) MHD_socket_close_ (sk);
+  MHD_socket_close_chk_ (sk);
   /* MHD_stop_daemon() joins the daemon thread, therefore all the data
      tracked by the request handler is safely visible afterwards. */
   MHD_stop_daemon (d);

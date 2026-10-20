@@ -2862,7 +2862,8 @@ namespace basisu
 							etc_block::unpack_color5(r[0], g[0], b[0], base_color5, false);
 							bool success = etc_block::unpack_color5(r[1], g[1], b[1], base_color5, delta_color3, false);
 							assert(success);
-							BASISU_NOTE_UNUSED(success);
+							if (!success)
+								abort();
 
 							r[subblock_index] = cluster_optimizer_results[0].m_block_color_unscaled.r;
 							g[subblock_index] = cluster_optimizer_results[0].m_block_color_unscaled.g;

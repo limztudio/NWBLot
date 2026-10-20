@@ -1202,7 +1202,8 @@ struct Chain
 
       if (!c->buffer_intersects_machine ())
       {
-	(void) c->buffer->message (c->font, "skipped chainsubtable %u because no glyph matches", c->lookup_index);
+	if (unlikely (!c->buffer->message (c->font, "skipped chainsubtable %u because no glyph matches", c->lookup_index)))
+	  DEBUG_MSG (APPLY, c->buffer, "Callback declined a completed-step notification");
 	goto skip;
       }
 
@@ -1246,7 +1247,8 @@ struct Chain
 
       subtable->apply (c);
 
-      (void) c->buffer->message (c->font, "end chainsubtable %u", c->lookup_index);
+      if (unlikely (!c->buffer->message (c->font, "end chainsubtable %u", c->lookup_index)))
+        DEBUG_MSG (APPLY, c->buffer, "Callback declined a completed-step notification");
 
       if (unlikely (!c->buffer->successful)) break;
 

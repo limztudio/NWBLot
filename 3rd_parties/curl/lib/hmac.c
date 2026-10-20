@@ -42,60 +42,96 @@
 static const unsigned char hmac_ipad = 0x36;
 static const unsigned char hmac_opad = 0x5C;
 
-struct HMAC_context *Curl_HMAC_init(const struct HMAC_params *hashparams,
-                                    const unsigned char *key,
-                                    unsigned int keylen)
+CURLcode Curl_HMAC_init(const struct HMAC_params *hashparams,
+                         const unsigned char *key, unsigned int keylen,
+                         struct HMAC_context **pcontext)
 {
   size_t i;
   struct HMAC_context *ctxt;
   unsigned char *hkey;
   unsigned char b;
+  CURLcode result = CURLE_OK;
+  CURLcode final_result;
+  bool initialized1 = FALSE;
+  bool initialized2 = FALSE;
+
+  *pcontext = NULL;
 
   /* Create HMAC context. */
   i = sizeof(*ctxt) + (2 * hashparams->ctxtsize) + hashparams->resultlen;
   ctxt = curlx_malloc(i);
 
   if(!ctxt)
-    return ctxt;
+    return CURLE_OUT_OF_MEMORY;
 
   ctxt->hash = hashparams;
+  ctxt->error = CURLE_OK;
   ctxt->hashctxt1 = (void *)(ctxt + 1);
   ctxt->hashctxt2 = (void *)((char *)ctxt->hashctxt1 + hashparams->ctxtsize);
+  hkey = (unsigned char *)ctxt->hashctxt2 + hashparams->ctxtsize;
 
   /* If the key is too long, replace it by its hash digest. */
   if(keylen > hashparams->maxkeylen) {
-    if(hashparams->hinit(ctxt->hashctxt1))
+    result = hashparams->hinit(ctxt->hashctxt1);
+    if(result)
       goto fail;
-    hashparams->hupdate(ctxt->hashctxt1, key, keylen);
-    hkey = (unsigned char *)ctxt->hashctxt2 + hashparams->ctxtsize;
-    hashparams->hfinal(hkey, ctxt->hashctxt1);
+    result = hashparams->hupdate(ctxt->hashctxt1, key, keylen);
+    final_result = hashparams->hfinal(hkey, ctxt->hashctxt1);
+    if(!result)
+      result = final_result;
+    if(result)
+      goto fail;
     key = hkey;
     keylen = hashparams->resultlen;
   }
 
   /* Prime the two hash contexts with the modified key. */
-  if(hashparams->hinit(ctxt->hashctxt1) ||
-     hashparams->hinit(ctxt->hashctxt2))
+  result = hashparams->hinit(ctxt->hashctxt1);
+  if(result)
     goto fail;
+  initialized1 = TRUE;
+  result = hashparams->hinit(ctxt->hashctxt2);
+  if(result)
+    goto fail;
+  initialized2 = TRUE;
 
   for(i = 0; i < keylen; i++) {
     b = (unsigned char)(*key ^ hmac_ipad);
-    hashparams->hupdate(ctxt->hashctxt1, &b, 1);
+    result = hashparams->hupdate(ctxt->hashctxt1, &b, 1);
+    if(result)
+      goto fail;
     b = (unsigned char)(*key++ ^ hmac_opad);
-    hashparams->hupdate(ctxt->hashctxt2, &b, 1);
+    result = hashparams->hupdate(ctxt->hashctxt2, &b, 1);
+    if(result)
+      goto fail;
   }
 
   for(; i < hashparams->maxkeylen; i++) {
-    hashparams->hupdate(ctxt->hashctxt1, &hmac_ipad, 1);
-    hashparams->hupdate(ctxt->hashctxt2, &hmac_opad, 1);
+    result = hashparams->hupdate(ctxt->hashctxt1, &hmac_ipad, 1);
+    if(result)
+      goto fail;
+    result = hashparams->hupdate(ctxt->hashctxt2, &hmac_opad, 1);
+    if(result)
+      goto fail;
   }
 
   /* Done, return pointer to HMAC context. */
-  return ctxt;
+  *pcontext = ctxt;
+  return CURLE_OK;
 
 fail:
+  if(initialized1) {
+    final_result = hashparams->hfinal(hkey, ctxt->hashctxt1);
+    if(!result)
+      result = final_result;
+  }
+  if(initialized2) {
+    final_result = hashparams->hfinal(hkey, ctxt->hashctxt2);
+    if(!result)
+      result = final_result;
+  }
   curlx_free(ctxt);
-  return NULL;
+  return result;
 }
 
 void Curl_HMAC_update(struct HMAC_context *ctxt,
@@ -103,12 +139,15 @@ void Curl_HMAC_update(struct HMAC_context *ctxt,
                       unsigned int len)
 {
   /* Update first hash calculation. */
-  ctxt->hash->hupdate(ctxt->hashctxt1, data, len);
+  if(!ctxt->error)
+    ctxt->error = ctxt->hash->hupdate(ctxt->hashctxt1, data, len);
 }
 
-int Curl_HMAC_final(struct HMAC_context *ctxt, unsigned char *output)
+CURLcode Curl_HMAC_final(struct HMAC_context *ctxt, unsigned char *output)
 {
   const struct HMAC_params *hashparams = ctxt->hash;
+  CURLcode result = ctxt->error;
+  CURLcode final_result;
 
   /* Do not get output if called with a null parameter: only release
      storage. */
@@ -116,11 +155,17 @@ int Curl_HMAC_final(struct HMAC_context *ctxt, unsigned char *output)
   if(!output)
     output = (unsigned char *)ctxt->hashctxt2 + ctxt->hash->ctxtsize;
 
-  hashparams->hfinal(output, ctxt->hashctxt1);
-  hashparams->hupdate(ctxt->hashctxt2, output, hashparams->resultlen);
-  hashparams->hfinal(output, ctxt->hashctxt2);
+  final_result = hashparams->hfinal(output, ctxt->hashctxt1);
+  if(!result)
+    result = final_result;
+  if(!result)
+    result = hashparams->hupdate(ctxt->hashctxt2, output,
+                                 hashparams->resultlen);
+  final_result = hashparams->hfinal(output, ctxt->hashctxt2);
+  if(!result)
+    result = final_result;
   curlx_free(ctxt);
-  return 0;
+  return result;
 }
 
 /*
@@ -146,12 +191,12 @@ CURLcode Curl_hmacit(const struct HMAC_params *hashparams,
                      unsigned char *output)
 {
   struct HMAC_context *ctxt;
+  CURLcode result;
   if(keylen > UINT_MAX) /* unlikely to ever happen */
     return CURLE_BAD_FUNCTION_ARGUMENT;
-  ctxt = Curl_HMAC_init(hashparams, key, curlx_uztoui(keylen));
-
-  if(!ctxt)
-    return CURLE_OUT_OF_MEMORY;
+  result = Curl_HMAC_init(hashparams, key, curlx_uztoui(keylen), &ctxt);
+  if(result)
+    return result;
 
   /* Update the digest with the given challenge */
   do {
@@ -162,9 +207,7 @@ CURLcode Curl_hmacit(const struct HMAC_params *hashparams,
   } while(datalen);
 
   /* Finalise the digest */
-  Curl_HMAC_final(ctxt, output);
-
-  return CURLE_OK;
+  return Curl_HMAC_final(ctxt, output);
 }
 
 #endif /* Using NTLM (without SSPI) or AWS */

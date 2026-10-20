@@ -39,7 +39,8 @@ void curlx_win32_snprintf(char *buf, size_t maxlen, const char *fmt, ...)
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
 #endif
   /* !checksrc! disable BANNEDFUNC 1 */
-  (void)vsnprintf(buf, maxlen, fmt, ap);
+  if(vsnprintf(buf, maxlen, fmt, ap) < 0)
+    buf[0] = 0;
 #ifdef CURL_HAVE_DIAG
 #pragma GCC diagnostic pop
 #endif

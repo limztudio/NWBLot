@@ -1112,12 +1112,13 @@ MHD_lookup_connection_value (struct MHD_Connection *connection,
   const char *value;
 
   value = NULL;
-  (void) MHD_lookup_connection_value_n (connection,
+  if (MHD_NO == MHD_lookup_connection_value_n (connection,
                                         kind,
                                         key,
                                         (NULL == key) ? 0 : strlen (key),
                                         &value,
-                                        NULL);
+                                        NULL))
+    return NULL;
   return value;
 }
 
@@ -8504,8 +8505,9 @@ MHD_queue_response (struct MHD_Connection *connection,
     connection->state = MHD_CONNECTION_START_REPLY;
     connection->rq.remaining_upload_size = 0;
   }
-  if (! connection->in_idle)
-    (void) MHD_connection_handle_idle (connection);
+  if ((! connection->in_idle) &&
+      (MHD_NO == MHD_connection_handle_idle (connection)))
+    return MHD_YES;
   MHD_update_last_activity_ (connection);
   return MHD_YES;
 }

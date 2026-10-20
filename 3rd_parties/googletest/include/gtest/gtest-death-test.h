@@ -317,7 +317,7 @@ class GTEST_API_ [[nodiscard]] KilledBySignal {
     GTEST_LOG_(WARNING) << "Death tests are not supported on this platform.\n" \
                         << "Statement '" #statement "' cannot be verified.";   \
   } else if (::testing::internal::AlwaysFalse()) {                             \
-    (void)::testing::internal::MakeDeathTestMatcher(regex_or_matcher);         \
+    (void)sizeof(::testing::internal::MakeDeathTestMatcher(regex_or_matcher));         \
     GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);                 \
     terminator;                                                                \
   } else                                                                       \

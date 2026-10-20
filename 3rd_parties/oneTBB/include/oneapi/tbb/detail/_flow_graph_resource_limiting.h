@@ -504,9 +504,11 @@ public:
     void remove_request(request_id id) {
         tbb::spin_mutex::scoped_lock lock(m_mutex);
         std::size_t num_removed = m_requests.erase(id);
+        if (num_removed != 1) {
+            __TBB_ASSERT(false, "Removing unregistered request");
+            return;
+        }
         this->graph_reference().release_wait();
-        __TBB_ASSERT(num_removed == 1, "Removing unregistered request");
-        tbb::detail::suppress_unused_warning(num_removed);
     }
 
     void notify(request_id id) override {

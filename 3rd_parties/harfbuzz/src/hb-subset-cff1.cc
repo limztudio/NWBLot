@@ -618,7 +618,9 @@ struct cff1_subset_plan
     if (acc.fdArray != &Null (CFF1FDArray))
       for (unsigned int i = 0; i < orig_fdcount; i++)
 	if (fdmap.has (i))
-	  (void)sidmap.add (acc.fontDicts[i].fontName);
+	  if (acc.fontDicts[i].fontName != CFF_UNDEF_SID &&
+	      sidmap.add (acc.fontDicts[i].fontName) == CFF_UNDEF_SID)
+	    return false;
 
     return true;
   }

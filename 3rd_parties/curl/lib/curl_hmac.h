@@ -32,10 +32,10 @@
 #define HMAC_MD5_LENGTH 16
 
 typedef CURLcode (*HMAC_hinit)(void *context);
-typedef void (*HMAC_hupdate)(void *context,
+typedef CURLcode (*HMAC_hupdate)(void *context,
                              const unsigned char *data,
                              unsigned int len);
-typedef void (*HMAC_hfinal)(unsigned char *result, void *context);
+typedef CURLcode (*HMAC_hfinal)(unsigned char *result, void *context);
 
 /* Per-hash function HMAC parameters. */
 struct HMAC_params {
@@ -52,16 +52,17 @@ struct HMAC_context {
   const struct HMAC_params *hash; /* Hash function definition. */
   void *hashctxt1;         /* Hash function context 1. */
   void *hashctxt2;         /* Hash function context 2. */
+  CURLcode error;
 };
 
 /* Prototypes. */
-struct HMAC_context *Curl_HMAC_init(const struct HMAC_params *hashparams,
-                                    const unsigned char *key,
-                                    unsigned int keylen);
+CURLcode Curl_HMAC_init(const struct HMAC_params *hashparams,
+                         const unsigned char *key, unsigned int keylen,
+                         struct HMAC_context **pcontext);
 void Curl_HMAC_update(struct HMAC_context *ctxt,
                       const unsigned char *data,
                       unsigned int len);
-int Curl_HMAC_final(struct HMAC_context *ctxt, unsigned char *output);
+CURLcode Curl_HMAC_final(struct HMAC_context *ctxt, unsigned char *output);
 
 CURLcode Curl_hmacit(const struct HMAC_params *hashparams,
                      const unsigned char *key, const size_t keylen,

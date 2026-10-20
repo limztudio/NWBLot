@@ -801,31 +801,19 @@ CURLcode Curl_sha512_256it(unsigned char *output, const unsigned char *input,
 
   result = Curl_sha512_256_update(&ctx, (const void *)input, input_size);
 
-  if(result != CURLE_OK) {
-    (void)Curl_sha512_256_finish(output, &ctx);
-    return result;
+  {
+    CURLcode final_result = Curl_sha512_256_finish(output, &ctx);
+    return result ? result : final_result;
   }
-
-  return Curl_sha512_256_finish(output, &ctx);
 }
 
-/* Wrapper function, takes 'unsigned int' as length type, returns void */
-static void Curl_sha512_256_update_i(void *context,
+/* Adapt the HMAC length to the digest update contract. */
+static CURLcode Curl_sha512_256_update_i(void *context,
                                      const unsigned char *data,
                                      unsigned int length)
 {
-  /* Hypothetically the function may fail, but assume it does not */
-  (void)Curl_sha512_256_update(context, data, length);
+  return Curl_sha512_256_update(context, data, length);
 }
-
-/* Wrapper function, returns void */
-static void Curl_sha512_256_finish_v(unsigned char *result, void *context)
-{
-  /* Hypothetically the function may fail, but assume it does not */
-  (void)Curl_sha512_256_finish(result, context);
-}
-
-/* Wrapper function, takes 'unsigned int' as length type, returns void */
 
 const struct HMAC_params Curl_HMAC_SHA512_256[] = {
   {
@@ -834,7 +822,7 @@ const struct HMAC_params Curl_HMAC_SHA512_256[] = {
     /* Update context with data. */
     Curl_sha512_256_update_i,
     /* Get final result procedure. */
-    Curl_sha512_256_finish_v,
+    Curl_sha512_256_finish,
     /* Context structure size. */
     sizeof(Curl_sha512_256_ctx),
     /* Maximum key length (bytes). */

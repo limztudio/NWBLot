@@ -407,7 +407,11 @@ CURLcode Curl_auth_create_digest_md5_message(struct Curl_easy *data,
   Curl_MD5_update(ctxt, (const unsigned char *)":", 1);
   Curl_MD5_update(ctxt, (const unsigned char *)passwdp,
                   curlx_uztoui(strlen(passwdp)));
-  Curl_MD5_final(ctxt, digest);
+  result = Curl_MD5_final(ctxt, digest);
+  if(result) {
+    curlx_free(spn);
+    return result;
+  }
 
   ctxt = Curl_MD5_init(&Curl_DIGEST_MD5);
   if(!ctxt)
@@ -420,7 +424,11 @@ CURLcode Curl_auth_create_digest_md5_message(struct Curl_easy *data,
   Curl_MD5_update(ctxt, (const unsigned char *)":", 1);
   Curl_MD5_update(ctxt, (const unsigned char *)cnonce,
                   curlx_uztoui(strlen(cnonce)));
-  Curl_MD5_final(ctxt, digest);
+  result = Curl_MD5_final(ctxt, digest);
+  if(result) {
+    curlx_free(spn);
+    return result;
+  }
 
   /* Convert calculated 16 octet hex into 32 bytes string */
   for(i = 0; i < MD5_DIGEST_LEN; i++)
@@ -444,7 +452,11 @@ CURLcode Curl_auth_create_digest_md5_message(struct Curl_easy *data,
   Curl_MD5_update(ctxt, (const unsigned char *)":", 1);
   Curl_MD5_update(ctxt, (const unsigned char *)spn,
                   curlx_uztoui(strlen(spn)));
-  Curl_MD5_final(ctxt, digest);
+  result = Curl_MD5_final(ctxt, digest);
+  if(result) {
+    curlx_free(spn);
+    return result;
+  }
 
   for(i = 0; i < MD5_DIGEST_LEN; i++)
     curl_msnprintf(&HA2_hex[2 * i], 3, "%02x", digest[i]);
@@ -474,7 +486,11 @@ CURLcode Curl_auth_create_digest_md5_message(struct Curl_easy *data,
   Curl_MD5_update(ctxt, (const unsigned char *)":", 1);
 
   Curl_MD5_update(ctxt, (const unsigned char *)HA2_hex, 2 * MD5_DIGEST_LEN);
-  Curl_MD5_final(ctxt, digest);
+  result = Curl_MD5_final(ctxt, digest);
+  if(result) {
+    curlx_free(spn);
+    return result;
+  }
 
   for(i = 0; i < MD5_DIGEST_LEN; i++)
     curl_msnprintf(&resp_hash_hex[2 * i], 3, "%02x", digest[i]);

@@ -482,12 +482,10 @@ static CURLcode tftp_tx(struct tftp_conn *state, tftp_event_t event)
     state->state = TFTP_STATE_FIN;
     setpacketevent(&state->spacket, TFTP_EVENT_ERROR);
     setpacketblock(&state->spacket, state->block);
-    (void)sendto(state->sockfd, (void *)state->spacket.data, 4, SEND_4TH_ARG,
-                 (struct sockaddr *)&state->remote_addr,
-                 state->remote_addrlen);
-    /* do not bother with the return code, but if the socket is still up we
-     * should be a good TFTP client and let the server know we are done */
-    state->state = TFTP_STATE_FIN;
+    if(sendto(state->sockfd, (void *)state->spacket.data, 4, SEND_4TH_ARG,
+               (struct sockaddr *)&state->remote_addr,
+               state->remote_addrlen) != 4)
+      return CURLE_SEND_ERROR;
     break;
 
   default:
@@ -617,13 +615,12 @@ static CURLcode tftp_rx(struct tftp_conn *state, tftp_event_t event)
   case TFTP_EVENT_ERROR:
     setpacketevent(&state->spacket, TFTP_EVENT_ERROR);
     setpacketblock(&state->spacket, state->block);
-    (void)sendto(state->sockfd, (void *)state->spacket.data,
-                 4, SEND_4TH_ARG,
-                 (struct sockaddr *)&state->remote_addr,
-                 state->remote_addrlen);
-    /* do not bother with the return code, but if the socket is still up we
-     * should be a good TFTP client and let the server know we are done */
     state->state = TFTP_STATE_FIN;
+    if(sendto(state->sockfd, (void *)state->spacket.data,
+               4, SEND_4TH_ARG,
+               (struct sockaddr *)&state->remote_addr,
+               state->remote_addrlen) != 4)
+      return CURLE_SEND_ERROR;
     break;
 
   default:

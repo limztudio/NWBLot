@@ -42,7 +42,7 @@ public:
         binsModifications++;
         intptr_t prev = inFlyBlocks.fetch_sub(1);
         MALLOC_ASSERT(prev > 0, ASSERT_TEXT);
-        suppress_unused_warning(prev);
+        if (prev <= 0) abort();
     }
     intptr_t getNumOfMods() const { return binsModifications.load(std::memory_order_acquire); }
     // return true if need re-do the blocks search

@@ -250,8 +250,10 @@ gnutlscli_connect (int *sock,
     return chld;
   }
   MHD_socket_close_chk_ (sp[1]);
-  (void) close (0);
-  (void) close (1);
+  if ((0 != close (0)) && (EBADF != errno))
+    externalErrorExitDesc ("close stdin failed");
+  if ((0 != close (1)) && (EBADF != errno))
+    externalErrorExitDesc ("close stdout failed");
   if (-1 == dup2 (sp[0], 0))
     externalErrorExitDesc ("dup2() failed");
   if (-1 == dup2 (sp[0], 1))
@@ -533,7 +535,7 @@ wr_create_tls_sckt (void)
     }
     else
       testErrorLogDesc ("gnutls_init() failed");
-    (void) MHD_socket_close_ (s->fd);
+    MHD_socket_close_chk_ (s->fd);
   }
   else
     testErrorLogDesc ("socket() failed");
@@ -1014,8 +1016,8 @@ wr_shutdown_tmo (struct wr_socket *s, int how, int timeout_ms)
       if (GNUTLS_E_SUCCESS == ret)
       {
 #if 0 /* Disabled to test pure behaviour */
-        if (SHUT_RDWR == how)
-          (void) shutdown (s->fd, how); /* Also shutdown the underlying transport layer */
+        if ((SHUT_RDWR == how) && (0 != shutdown (s->fd, how)))
+          return -1;
 #endif
         return 0;
       }

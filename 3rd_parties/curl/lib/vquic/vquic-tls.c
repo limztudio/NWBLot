@@ -163,7 +163,6 @@ CURLcode Curl_vquic_tls_verify_peer(struct curl_tls_ctx *ctx,
     return CURLE_FAILED_INIT;
 
 #ifdef USE_OPENSSL
-  (void)conn_config;
   result = Curl_ossl_check_peer_cert(cf, data, &ctx->ossl, peer);
 #elif defined(USE_GNUTLS)
   result = Curl_gtls_verifyserver(

@@ -38,8 +38,14 @@ static bool RgdCodeObjDbInitializeComgrHandles(RgdCodeObjectDatabase* code_objec
         if (entry.comgr_handle_ != nullptr)
         {
             // Extract the Pal PipelineData.
-            const bool [[maybe_unused]] is_contains_pal_metadata =
+            const bool is_contains_pal_metadata =
                 (amdt::kComgrUtilsStatusSuccess == entry.comgr_handle_->ExtractPalPipelineData(entry.pipeline_data_));
+            if (!is_contains_pal_metadata)
+            {
+                RgdUtils::PrintMessage("failed to extract PAL pipeline data for the code object", RgdMessageType::kError, true);
+                ret = false;
+                continue;
+            }
 
             // Now try to extract symbols.
             if (!entry.comgr_handle_->ExtractSymbolData(entry.symbol_info_))

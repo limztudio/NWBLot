@@ -60,6 +60,7 @@ inline vfloat tan_est(vfloat x);
 // https://burtleburtle.net/bob/rand/smallprng.html
 struct rand_context { vint a, b, c, d; };
 
+inline void advance_rand(rand_context& x);
 inline void seed_rand(rand_context& x, vint seed);
 
 // Returns 32-bit unsigned random numbers.

@@ -851,9 +851,8 @@ CURLcode Curl_async_take_result(struct Curl_easy *data,
   *pdns = NULL;
 
 #ifdef USE_HTTPSRR_ARES
-  /* best effort, ignore errors */
-  if(thrdd->rr.channel)
-    (void)Curl_ares_perform(thrdd->rr.channel, 0);
+  if(thrdd->rr.channel && Curl_ares_perform(thrdd->rr.channel, 0) < 0)
+    infof(data, "HTTPS record poll failed; continuing address resolution");
 #endif
 #ifndef ENABLE_INTERNAL_WAKEUP
   Curl_async_thrdd_multi_process(data->multi);

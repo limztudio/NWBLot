@@ -201,7 +201,8 @@ struct LigatureSubstFormat1_2
     // to ensure that the repacker always orders the coverage table after the LigatureSet
     // and LigatureSubtable's they will be linked to the Coverage table via a virtual link
     // the coverage table object idx is passed down to facilitate this.
-    | hb_apply (subset_offset_array (c, out->ligatureSet, this, coverage_idx))
+    | hb_filter (subset_offset_array (c, out->ligatureSet, this, coverage_idx))
+    | hb_drain
     ;
 
     return_trace (bool (new_coverage));

@@ -874,7 +874,12 @@ static CURLcode cf_ngtcp2_send(struct Curl_cfilter *cf, struct Curl_easy *data,
                 stream->id, len, (int)result, *pnwritten);
     if(result)
       goto out;
-    (void)nghttp3_conn_resume_stream(ctx->h3conn, stream->id);
+    int rv = nghttp3_conn_resume_stream(ctx->h3conn, stream->id);
+    if(rv && rv != NGHTTP3_ERR_STREAM_NOT_FOUND) {
+      failf(data, "HTTP/3 stream resume failed: %s", nghttp3_strerror(rv));
+      result = CURLE_HTTP3;
+      goto out;
+    }
   }
 
   if(*pnwritten > 0 && !ctx->tls_handshake_complete && ctx->use_earlydata)
@@ -953,7 +958,11 @@ static CURLcode cf_ngtcp2_cntrl(struct Curl_cfilter *cf,
       stream->send_closed = TRUE;
       stream->upload_left = Curl_bufq_len(&stream->sendbuf) -
         stream->tx_in_flight_size;
-      (void)nghttp3_conn_resume_stream(ctx->h3conn, stream->id);
+      int rv = nghttp3_conn_resume_stream(ctx->h3conn, stream->id);
+      if(rv && rv != NGHTTP3_ERR_STREAM_NOT_FOUND) {
+        failf(data, "HTTP/3 stream resume failed: %s", nghttp3_strerror(rv));
+        result = CURLE_HTTP3;
+      }
     }
     break;
   }

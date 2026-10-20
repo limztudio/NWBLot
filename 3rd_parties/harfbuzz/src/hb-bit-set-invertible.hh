@@ -116,7 +116,14 @@ struct hb_bit_set_invertible_t
   void add_bits (hb_codepoint_t g, uint64_t bits)
   { unlikely (inverted) ? s.del_bits (g, bits) : s.add_bits (g, bits); }
   bool add_range (hb_codepoint_t a, hb_codepoint_t b)
-  { return unlikely (inverted) ? ((void) s.del_range (a, b), true) : s.add_range (a, b); }
+  {
+    if (unlikely (inverted))
+    {
+      s.del_range (a, b);
+      return true;
+    }
+    return s.add_range (a, b);
+  }
 
   template <typename T>
   void add_array (const T *array, unsigned int count, unsigned int stride=sizeof(T))
@@ -134,7 +141,15 @@ struct hb_bit_set_invertible_t
 
   void del (hb_codepoint_t g) { unlikely (inverted) ? s.add (g) : s.del (g); }
   void del_range (hb_codepoint_t a, hb_codepoint_t b)
-  { unlikely (inverted) ? (void) s.add_range (a, b) : s.del_range (a, b); }
+  {
+    if (unlikely (inverted))
+    {
+      if (!s.add_range (a, b))
+        DEBUG_MSG (APPLY, this, "Failed to delete inverted set range %u..%u", a, b);
+    }
+    else
+      s.del_range (a, b);
+  }
 
   bool get (hb_codepoint_t g) const { return s.get (g) ^ inverted; }
   bool may_have (hb_codepoint_t g) const { return get (g); }

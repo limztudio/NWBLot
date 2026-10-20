@@ -88,9 +88,9 @@
   void __attribute__ ((constructor)) _GNUC_init_helper_ ## FI (void);  \
   void __attribute__ ((destructor)) _GNUC_deinit_helper_ ## FD (void); \
   void __attribute__ ((constructor)) _GNUC_init_helper_ ## FI (void)   \
-  { (void) (FI) (); } \
+  { (FI) (); } \
   void __attribute__ ((destructor)) _GNUC_deinit_helper_ ## FD (void)  \
-  { (void) (FD) (); } \
+  { (FD) (); } \
   struct _GNUC_dummy_str_ ## FI {int i;}
 
 #define _SET_INIT_AND_DEINIT_FUNCS(FI,FD) GNUC_SET_INIT_AND_DEINIT (FI,FD)
@@ -246,9 +246,9 @@
   void __cdecl _W32_init_helper_ ## FI (void);    \
   void __cdecl _W32_deinit_helper_ ## FD (void); \
   void __cdecl _W32_init_helper_ ## FI (void)     \
-  { (void) (FI) (); atexit (_W32_deinit_helper_ ## FD); } \
+  { (FI) (); if (0 != atexit (_W32_deinit_helper_ ## FD)) abort (); } \
   void __cdecl _W32_deinit_helper_ ## FD (void)  \
-  { (void) (FD) (); } \
+  { (FD) (); } \
   W32_REGISTER_INIT (_W32_init_helper_ ## FI)
 #else  /* _USRDLL */
 
@@ -265,8 +265,8 @@
   BOOL WINAPI DllMain (HINSTANCE hinst,DWORD reason,LPVOID unused); \
   BOOL WINAPI DllMain (HINSTANCE hinst,DWORD reason,LPVOID unused)  \
   { (void) hinst; (void) unused; \
-    if (DLL_PROCESS_ATTACH==reason) {(void) (FI) ();} \
-    else if (DLL_PROCESS_DETACH==reason) {(void) (FD) ();} \
+    if (DLL_PROCESS_ATTACH==reason) {(FI) ();} \
+    else if (DLL_PROCESS_DETACH==reason) {(FD) ();} \
     return TRUE; \
   } struct _W32_dummy_strc_ ## FI {int i;}
 #else  /* AUTOINIT_FUNCS_CALL_USR_DLLMAIN */
@@ -274,8 +274,8 @@
   BOOL WINAPI usr_DllMain (HINSTANCE hinst,DWORD reason,LPVOID unused); \
   BOOL WINAPI DllMain (HINSTANCE hinst,DWORD reason,LPVOID unused); \
   BOOL WINAPI DllMain (HINSTANCE hinst,DWORD reason,LPVOID unused)  \
-  { if (DLL_PROCESS_ATTACH==reason) {(void) (FI) ();} \
-    else if (DLL_PROCESS_DETACH==reason) {(void) (FD) ();} \
+  { if (DLL_PROCESS_ATTACH==reason) {(FI) ();} \
+    else if (DLL_PROCESS_DETACH==reason) {(FD) ();} \
     return usr_DllMain (hinst,reason,unused); \
   } struct _W32_dummy_strc_ ## FI {int i;}
 #endif /* AUTOINIT_FUNCS_CALL_USR_DLLMAIN */

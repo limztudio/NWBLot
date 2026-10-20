@@ -747,6 +747,9 @@ class robin_map {
    *  - `template<typename U> U operator()();` where the types `std::int16_t`,
    * `std::uint32_t`, `std::uint64_t`, `float` and `std::pair<Key, T>` must be
    * supported for U.
+   *  - `template<typename U> void skip();` for `std::uint32_t`. This command
+   * must consume one serialized U, including checking its encoded bounds. It
+   * skips archived hashes when rebuilding with an incompatible hash function.
    *
    * If the deserialized hash map type is hash compatible with the serialized
    * map, the deserialization process can be sped up by setting

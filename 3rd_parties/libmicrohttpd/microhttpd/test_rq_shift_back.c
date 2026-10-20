@@ -241,7 +241,7 @@ connect_to_port (uint16_t port)
     return MHD_INVALID_SOCKET;
   if (! set_socket_timeouts (sk))
   {
-    (void) MHD_socket_close_ (sk);
+    MHD_socket_close_chk_ (sk);
     return MHD_INVALID_SOCKET;
   }
   memset (&sa,
@@ -254,7 +254,7 @@ connect_to_port (uint16_t port)
                     (const struct sockaddr *) &sa,
                     (socklen_t) sizeof (sa)))
   {
-    (void) MHD_socket_close_ (sk);
+    MHD_socket_close_chk_ (sk);
     return MHD_INVALID_SOCKET;
   }
   return sk;
@@ -459,7 +459,7 @@ run_subcase (uint16_t port,
     fprintf (stderr,
              "FAILED: cannot send the request of the sub-case '%s'.\n",
              sc->name);
-    (void) MHD_socket_close_ (sk);
+    MHD_socket_close_chk_ (sk);
     return 0;
   }
   got = recv_reply (sk,
@@ -494,7 +494,7 @@ run_subcase (uint16_t port,
     printf ("PASSED: %s\n",
             sc->name);
 
-  (void) MHD_socket_close_ (sk);
+  MHD_socket_close_chk_ (sk);
   return ret;
 }
 

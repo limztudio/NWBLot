@@ -239,10 +239,7 @@ static int wssl_bio_cf_destroy(WOLFSSL_BIO *bio)
 
 static long wssl_bio_cf_ctrl(WOLFSSL_BIO *bio, int cmd, long num, void *ptr)
 {
-  struct Curl_cfilter *cf = wolfSSL_BIO_get_data(bio);
   long ret = 1;
-
-  (void)cf;
   (void)ptr;
   (void)num;
   switch(cmd) {
@@ -269,6 +266,7 @@ static long wssl_bio_cf_ctrl(WOLFSSL_BIO *bio, int cmd, long num, void *ptr)
 #ifdef WOLFSSL_BIO_CTRL_EOF
   case WOLFSSL_BIO_CTRL_EOF: {
     /* EOF has been reached on input? */
+    struct Curl_cfilter *cf = wolfSSL_BIO_get_data(bio);
     struct ssl_connect_data *connssl = cf->ctx;
     return connssl->peer_closed;
   }
@@ -483,9 +481,13 @@ static int wssl_vtls_new_session_cb(WOLFSSL *ssl, WOLFSSL_SESSION *session)
     DEBUGASSERT(connssl);
     DEBUGASSERT(data);
     if(connssl && data) {
-      (void)Curl_wssl_cache_session(cf, data, connssl->peer.scache_key,
-                                    session, wolfSSL_version(ssl),
-                                    connssl->negotiated.alpn, NULL, 0, &scs);
+      CURLcode result = Curl_wssl_cache_session(cf, data,
+                                                connssl->peer.scache_key,
+                                                session, wolfSSL_version(ssl),
+                                                connssl->negotiated.alpn,
+                                                NULL, 0, &scs);
+      if(result)
+        infof(data, "SSL session cache update failed: %d", (int)result);
       if(scs) {
         Curl_ssl_session_destroy(connssl->session);
         connssl->session = scs;

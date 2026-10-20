@@ -1248,7 +1248,7 @@ static int mz_stat64(const char *path, struct __stat64 *buffer)
 
     mz_bool mz_zip_reader_is_file_a_directory(mz_zip_archive *pZip, mz_uint file_index)
     {
-        mz_uint filename_len, attribute_mapping_id, external_attr;
+        mz_uint filename_len, external_attr;
         const mz_uint8 *p = mz_zip_get_cdh(pZip, file_index);
         if (!p)
         {
@@ -1266,9 +1266,6 @@ static int mz_stat64(const char *path, struct __stat64 *buffer)
         /* Bugfix: This code was also checking if the internal attribute was non-zero, which wasn't correct. */
         /* Most/all zip writers (hopefully) set DOS file/directory attributes in the low 16-bits, so check for the DOS directory flag and ignore the source OS ID in the created by field. */
         /* FIXME: Remove this check? Is it necessary - we already check the filename. */
-        attribute_mapping_id = MZ_READ_LE16(p + MZ_ZIP_CDH_VERSION_MADE_BY_OFS) >> 8;
-        (void)attribute_mapping_id;
-
         external_attr = MZ_READ_LE32(p + MZ_ZIP_CDH_EXTERNAL_ATTR_OFS);
         if ((external_attr & MZ_ZIP_DOS_DIR_ATTRIBUTE_BITFLAG) != 0)
         {
@@ -4596,8 +4593,8 @@ static int mz_stat64(const char *path, struct __stat64 *buffer)
         if ((!status) && (created_new_archive))
         {
             /* It's a new archive and something went wrong, so just delete it. */
-            int ignoredStatus = MZ_DELETE_FILE(pZip_filename);
-            (void)ignoredStatus;
+            if (MZ_DELETE_FILE(pZip_filename) != 0)
+                actual_err = MZ_ZIP_FILE_DELETE_FAILED;
         }
 
         if (pErr)
@@ -4773,6 +4770,8 @@ static int mz_stat64(const char *path, struct __stat64 *buffer)
                 return "validation failed";
             case MZ_ZIP_WRITE_CALLBACK_FAILED:
                 return "write callback failed";
+            case MZ_ZIP_FILE_DELETE_FAILED:
+                return "file delete failed";
             case MZ_ZIP_TOTAL_ERRORS:
                 return "total errors";
             default:

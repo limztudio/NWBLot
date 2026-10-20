@@ -441,8 +441,6 @@ CURLcode Curl_auth_create_ntlm_type1_message(struct Curl_easy *data,
                                      (*) -> Optional
   */
 
-  const char *service = Curl_creds_has_sasl_service(creds) ?
-    Curl_creds_sasl_service(creds) : default_service;
   size_t size;
 
   char *ntlmbuf;
@@ -455,7 +453,7 @@ CURLcode Curl_auth_create_ntlm_type1_message(struct Curl_easy *data,
                                          domain are empty */
   (void)data;
   (void)creds;
-  (void)service;
+  (void)default_service;
   (void)host;
 
   /* Clean up any former leftovers and initialize to defaults */

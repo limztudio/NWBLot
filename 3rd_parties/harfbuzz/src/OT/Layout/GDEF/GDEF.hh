@@ -340,7 +340,8 @@ struct LigGlyph
     if (unlikely (!c->serializer->extend_min (out))) return_trace (false);
 
     + hb_iter (carets)
-    | hb_apply (subset_offset_array (c, out->carets, this))
+    | hb_filter (subset_offset_array (c, out->carets, this))
+    | hb_drain
     ;
 
     return_trace (bool (out->carets));

@@ -42,7 +42,8 @@ hb_syllabic_insert_dotted_circles (hb_font_t *font,
   if (likely (!(buffer->scratch_flags & HB_BUFFER_SCRATCH_FLAG_HAS_BROKEN_SYLLABLE)))
   {
     if (buffer->messaging ())
-      (void) buffer->message (font, "skipped inserting dotted-circles because there is no broken syllables");
+      if (unlikely (!buffer->message (font, "skipped inserting dotted-circles because there is no broken syllables")))
+        DEBUG_MSG (APPLY, buffer, "Callback declined a completed-step notification");
     return false;
   }
 
@@ -83,18 +84,19 @@ hb_syllabic_insert_dotted_circles (hb_font_t *font,
 	while (buffer->idx < buffer->len && buffer->successful &&
 	       last_syllable == buffer->cur().syllable() &&
 	       buffer->cur().ot_shaper_var_u8_category() == (unsigned) repha_category)
-	  (void) buffer->next_glyph ();
+	  if (unlikely (!buffer->next_glyph ())) return false;
       }
 
-      (void) buffer->output_info (ginfo);
+      if (unlikely (!buffer->output_info (ginfo))) return false;
     }
     else
-      (void) buffer->next_glyph ();
+      if (unlikely (!buffer->next_glyph ())) return false;
   }
   buffer->sync ();
 
   if (buffer->messaging ())
-    (void) buffer->message (font, "end inserting dotted-circles");
+    if (unlikely (!buffer->message (font, "end inserting dotted-circles")))
+      DEBUG_MSG (APPLY, buffer, "Callback declined a completed-step notification");
 
   return true;
 }

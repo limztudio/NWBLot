@@ -442,7 +442,11 @@ hb_subset_input_pin_all_axes_to_default (hb_subset_input_t  *input,
   hb_ot_var_axis_info_t *axis_infos = (hb_ot_var_axis_info_t *) hb_calloc (axis_count, sizeof (hb_ot_var_axis_info_t));
   if (unlikely (!axis_infos)) return false;
 
-  (void) hb_ot_var_get_axis_infos (face, 0, &axis_count, axis_infos);
+  if (hb_ot_var_get_axis_infos (face, 0, &axis_count, axis_infos) < axis_count)
+  {
+    hb_free (axis_infos);
+    return false;
+  }
 
   for (unsigned i = 0; i < axis_count; i++)
   {
@@ -725,7 +729,14 @@ hb_subset_axis_range_to_string (hb_subset_input_t *input,
   s[len++] = ':';
 
   len += hb_max (0, snprintf (s + len, ARRAY_LENGTH (s) - len, "%g", (double) triple->maximum));
-  (void) hb_uselocale (((void) freelocale (clocale), oldlocale));
+  if (oldlocale && !hb_uselocale (oldlocale))
+  {
+    buf[0] = '\0';
+    return;
+  }
+#ifndef HB_NO_SETLOCALE
+  freelocale (clocale);
+#endif
 
   assert (len < ARRAY_LENGTH (s));
   len = hb_min (len, size - 1);

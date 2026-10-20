@@ -4605,7 +4605,8 @@ static void handle_opaque_block_mode6(void * pBlock, const  color_quad_i * pPixe
 	results6.m_pSelectors_temp = selectors_temp;
 
 	best_err = color_cell_compression(6, pParams, &results6, pComp_params, 16, pPixels, true);
-	NOTE_UNUSED(best_err); // mode 6 here is unconditional; the returned error isn't compared - silence clang -Wunused-but-set-variable
+	if (best_err == UINT64_MAX)
+		abort();
 						
 	opt_results.m_mode = 6;
 	opt_results.m_index_selector = 0;

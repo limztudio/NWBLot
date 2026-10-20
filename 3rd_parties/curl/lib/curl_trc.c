@@ -53,8 +53,9 @@ static void trc_write(struct Curl_easy *data, curl_infotype type,
     if(data->set.fdebug) {
       struct Curl_mapi_guard guard;
       CURL_CBAPI_START(&guard, data, easy_fdebug);
-      (void)(*data->set.fdebug)(data, type, CURL_UNCONST(ptr), size,
-                                data->set.debugdata);
+      if((*data->set.fdebug)(data, type, CURL_UNCONST(ptr), size,
+                              data->set.debugdata))
+        data->set.verbose = FALSE;
       CURL_CBAPI_END(&guard);
     }
     else {
@@ -139,13 +140,15 @@ void Curl_debug(struct Curl_easy *data, curl_infotype type,
                               (int)size, ptr);
         len = trc_end_buf(buf, len, TRC_LINE_MAX, FALSE);
         CURL_CBAPI_START(&guard, data, easy_fdebug);
-        (void)(*data->set.fdebug)(data, type, buf, len, data->set.debugdata);
+        if((*data->set.fdebug)(data, type, buf, len, data->set.debugdata))
+          data->set.verbose = FALSE;
         CURL_CBAPI_END(&guard);
       }
       else {
         CURL_CBAPI_START(&guard, data, easy_fdebug);
-        (void)(*data->set.fdebug)(data, type, CURL_UNCONST(ptr),
-                                  size, data->set.debugdata);
+        if((*data->set.fdebug)(data, type, CURL_UNCONST(ptr),
+                                size, data->set.debugdata))
+          data->set.verbose = FALSE;
         CURL_CBAPI_END(&guard);
       }
     }

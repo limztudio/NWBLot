@@ -705,8 +705,10 @@ struct hb_apply_t
 	    hb_requires (hb_is_iterator (Iter))>
   void operator () (Iter it)
   {
+    static_assert (hb_is_same (decltype (hb_invoke (a, *it)), void),
+                   "hb_apply requires a void command");
     for (; it; ++it)
-      (void) hb_invoke (a, *it);
+      hb_invoke (a, *it);
   }
 
   private:

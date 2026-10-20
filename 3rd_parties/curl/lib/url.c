@@ -194,12 +194,12 @@ static void up_free(struct Curl_easy *data)
  *
  * We ignore SIGPIPE when this is called from curl_easy_cleanup.
  */
-CURLcode Curl_close(struct Curl_easy **datap)
+void Curl_close(struct Curl_easy **datap)
 {
   struct Curl_easy *data;
 
   if(!datap || !*datap)
-    return CURLE_OK;
+    return;
 
   data = *datap;
   *datap = NULL;
@@ -301,7 +301,6 @@ CURLcode Curl_close(struct Curl_easy **datap)
 #endif
   curlx_memzero(data, sizeof(*data));
   curlx_free(data);
-  return CURLE_OK;
 }
 
 /*
@@ -2285,8 +2284,9 @@ static CURLcode url_find_or_create_conn(struct Curl_easy *data)
 
     if(result) {
       DEBUGASSERT(data->conn->scheme->run->done);
-      /* we ignore the return code for the protocol-specific DONE */
-      (void)data->conn->scheme->run->done(data, result, FALSE);
+      result = Curl_1st_fatal(result,
+                               data->conn->scheme->run->done(data, result,
+                                                             FALSE));
     }
     goto out;
   }

@@ -20,7 +20,7 @@ struct GlyphHeader
     /* Undocumented rasterizer behavior: shift glyph to the left by (lsb - xMin), i.e., xMin = lsb */
     /* extents->x_bearing = hb_min (glyph_header.xMin, glyph_header.xMax); */
     int lsb = hb_min (xMin, xMax);
-    (void) glyf_accelerator.hmtx->get_leading_bearing_without_var_unscaled (gid, &lsb);
+    glyf_accelerator.hmtx->get_leading_bearing_without_var_unscaled (gid, &lsb);
     extents->x_bearing = lsb;
     extents->y_bearing = hb_max (yMin, yMax);
     extents->width     = hb_max (xMin, xMax) - hb_min (xMin, xMax);

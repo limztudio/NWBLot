@@ -1739,7 +1739,8 @@ public:
     DEBUG_MSG (SUBSET_REPACK, nullptr, "Graph is not fully connected.");
 
     parents_invalid = true;
-    (void) update_parents();
+    if (!update_parents())
+      return;
 
     if (root().incoming_edges ()) {
       DEBUG_MSG (SUBSET_REPACK, nullptr, "Root node has incoming edges.");

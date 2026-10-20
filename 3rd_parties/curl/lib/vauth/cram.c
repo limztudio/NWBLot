@@ -51,17 +51,18 @@ CURLcode Curl_auth_create_cram_md5_message(const struct bufref *chlg,
                                            struct bufref *out)
 {
   struct HMAC_context *ctxt;
+  CURLcode result;
   unsigned char digest[MD5_DIGEST_LEN];
   char *response;
   const char *user = Curl_creds_user(creds);
   const char *passwd = Curl_creds_passwd(creds);
 
   /* Compute the digest using the password as the key */
-  ctxt = Curl_HMAC_init(&Curl_HMAC_MD5,
-                        (const unsigned char *)passwd,
-                        curlx_uztoui(strlen(passwd)));
-  if(!ctxt)
-    return CURLE_OUT_OF_MEMORY;
+  result = Curl_HMAC_init(&Curl_HMAC_MD5,
+                          (const unsigned char *)passwd,
+                          curlx_uztoui(strlen(passwd)), &ctxt);
+  if(result)
+    return result;
 
   /* Update the digest with the given challenge */
   if(Curl_bufref_len(chlg))
@@ -69,7 +70,9 @@ CURLcode Curl_auth_create_cram_md5_message(const struct bufref *chlg,
                      curlx_uztoui(Curl_bufref_len(chlg)));
 
   /* Finalise the digest */
-  Curl_HMAC_final(ctxt, digest);
+  result = Curl_HMAC_final(ctxt, digest);
+  if(result)
+    return result;
 
   /* Generate the response */
   response = curl_maprintf(

@@ -308,7 +308,8 @@ hb_aat_layout_substitute (const hb_ot_shape_plan_t *plan,
       morx.apply (&c, num_features ? map : plan->aat_map, accel);
       accel.scratch.destroy_buffer_glyph_set (c.buffer_glyph_set);
       c.buffer_glyph_set = nullptr;
-      (void) buffer->message (font, "end table morx");
+      if (unlikely (!buffer->message (font, "end table morx")))
+        DEBUG_MSG (APPLY, buffer, "Callback declined a completed-step notification");
       return;
     }
   }
@@ -321,7 +322,8 @@ hb_aat_layout_substitute (const hb_ot_shape_plan_t *plan,
       AAT::hb_aat_apply_context_t c (plan, font, buffer, accel.get_blob ());
       if (!buffer->message (font, "start table mort")) return;
       mort.apply (&c, num_features ? map : plan->aat_map, accel);
-      (void) buffer->message (font, "end table mort");
+      if (unlikely (!buffer->message (font, "end table mort")))
+        DEBUG_MSG (APPLY, buffer, "Callback declined a completed-step notification");
       return;
     }
   }
@@ -373,7 +375,8 @@ hb_aat_layout_position (const hb_ot_shape_plan_t *plan,
   accel.apply (&c);
   accel.scratch.destroy_buffer_glyph_set (c.buffer_glyph_set);
   c.buffer_glyph_set = nullptr;
-  (void) buffer->message (font, "end table kerx");
+  if (unlikely (!buffer->message (font, "end table kerx")))
+    DEBUG_MSG (APPLY, buffer, "Callback declined a completed-step notification");
 }
 
 

@@ -130,7 +130,8 @@ struct hb_kern_machine_t
       idx = skippy_iter.idx;
     }
 
-    (void) buffer->message (font, "end kern");
+    if (unlikely (!buffer->message (font, "end kern")))
+      DEBUG_MSG (APPLY, buffer, "Callback declined a completed-step notification");
   }
 
   const Driver &driver;

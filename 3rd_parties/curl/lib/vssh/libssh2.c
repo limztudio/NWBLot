@@ -1413,7 +1413,9 @@ static CURLcode ssh_state_startup(struct Curl_easy *data,
 
   if(rc) {
     char *err_msg = NULL;
-    (void)libssh2_session_last_error(sshc->ssh_session, &err_msg, NULL, 0);
+    if(!libssh2_session_last_error(sshc->ssh_session, &err_msg, NULL, 0) ||
+       !err_msg)
+      err_msg = "Unknown SSH error";
     failf(data, "Failure establishing ssh session: %d, %s", rc, err_msg);
 
     myssh_to(data, sshc, SSH_SESSION_FREE);
@@ -1507,7 +1509,9 @@ static CURLcode ssh_state_auth_pkey(struct Curl_easy *data,
       err_msg = unknown;
     }
     else {
-      (void)libssh2_session_last_error(sshc->ssh_session, &err_msg, NULL, 0);
+      if(!libssh2_session_last_error(sshc->ssh_session, &err_msg, NULL, 0) ||
+         !err_msg)
+        err_msg = "Unknown SSH error";
     }
     infof(data, "SSH: publickey authentication denied: %s", err_msg);
     myssh_to(data, sshc, SSH_AUTH_PASS_INIT);
@@ -1747,7 +1751,9 @@ static CURLcode ssh_state_sftp_init(struct Curl_easy *data,
        LIBSSH2_ERROR_EAGAIN)
       return CURLE_AGAIN;
 
-    (void)libssh2_session_last_error(sshc->ssh_session, &err_msg, NULL, 0);
+    if(!libssh2_session_last_error(sshc->ssh_session, &err_msg, NULL, 0) ||
+       !err_msg)
+      err_msg = "Unknown SSH error";
     failf(data, "Failure initializing sftp session: %s", err_msg);
     myssh_to(data, sshc, SSH_SESSION_FREE);
     return CURLE_FAILED_INIT;
@@ -2285,7 +2291,9 @@ static CURLcode ssh_state_sftp_close(struct Curl_easy *data,
 
     if(rc < 0) {
       char *err_msg = NULL;
-      (void)libssh2_session_last_error(sshc->ssh_session, &err_msg, NULL, 0);
+      if(!libssh2_session_last_error(sshc->ssh_session, &err_msg, NULL, 0) ||
+         !err_msg)
+        err_msg = "Unknown SSH error";
       infof(data, "Failed to close libssh2 file: %d %s", rc, err_msg);
     }
     sshc->sftp_handle = NULL;
@@ -2323,7 +2331,9 @@ static CURLcode ssh_state_sftp_shutdown(struct Curl_easy *data,
 
     if(rc < 0) {
       char *err_msg = NULL;
-      (void)libssh2_session_last_error(sshc->ssh_session, &err_msg, NULL, 0);
+      if(!libssh2_session_last_error(sshc->ssh_session, &err_msg, NULL, 0) ||
+         !err_msg)
+        err_msg = "Unknown SSH error";
       infof(data, "Failed to close libssh2 file: %d %s", rc, err_msg);
     }
     sshc->sftp_handle = NULL;
@@ -2438,7 +2448,9 @@ static CURLcode ssh_state_session_disconnect(struct Curl_easy *data,
 
     if(rc < 0) {
       char *err_msg = NULL;
-      (void)libssh2_session_last_error(sshc->ssh_session, &err_msg, NULL, 0);
+      if(!libssh2_session_last_error(sshc->ssh_session, &err_msg, NULL, 0) ||
+         !err_msg)
+        err_msg = "Unknown SSH error";
       infof(data, "Failed to free libssh2 scp subsystem: %d %s", rc, err_msg);
     }
     sshc->ssh_channel = NULL;
@@ -2451,7 +2463,9 @@ static CURLcode ssh_state_session_disconnect(struct Curl_easy *data,
 
     if(rc < 0) {
       char *err_msg = NULL;
-      (void)libssh2_session_last_error(sshc->ssh_session, &err_msg, NULL, 0);
+      if(!libssh2_session_last_error(sshc->ssh_session, &err_msg, NULL, 0) ||
+         !err_msg)
+        err_msg = "Unknown SSH error";
       infof(data, "Failed to disconnect libssh2 session: %d %s", rc, err_msg);
     }
   }
@@ -2476,7 +2490,9 @@ static CURLcode sshc_cleanup(struct ssh_conn *sshc, struct Curl_easy *data,
     rc = libssh2_agent_disconnect(sshc->ssh_agent);
     if((rc < 0) && data) {
       char *err_msg = NULL;
-      (void)libssh2_session_last_error(sshc->ssh_session, &err_msg, NULL, 0);
+      if(!libssh2_session_last_error(sshc->ssh_session, &err_msg, NULL, 0) ||
+         !err_msg)
+        err_msg = "Unknown SSH error";
       infof(data, "Failed to disconnect from libssh2 agent: %d %s",
             rc, err_msg);
     }
@@ -2496,7 +2512,9 @@ static CURLcode sshc_cleanup(struct ssh_conn *sshc, struct Curl_easy *data,
     rc = libssh2_sftp_close(sshc->sftp_handle);
     if((rc < 0) && data) {
       char *err_msg = NULL;
-      (void)libssh2_session_last_error(sshc->ssh_session, &err_msg, NULL, 0);
+      if(!libssh2_session_last_error(sshc->ssh_session, &err_msg, NULL, 0) ||
+         !err_msg)
+        err_msg = "Unknown SSH error";
       infof(data, "Failed to close libssh2 file: %d %s", rc, err_msg);
     }
     if(!block && (rc == LIBSSH2_ERROR_EAGAIN))
@@ -2509,7 +2527,9 @@ static CURLcode sshc_cleanup(struct ssh_conn *sshc, struct Curl_easy *data,
     rc = libssh2_channel_free(sshc->ssh_channel);
     if((rc < 0) && data) {
       char *err_msg = NULL;
-      (void)libssh2_session_last_error(sshc->ssh_session, &err_msg, NULL, 0);
+      if(!libssh2_session_last_error(sshc->ssh_session, &err_msg, NULL, 0) ||
+         !err_msg)
+        err_msg = "Unknown SSH error";
       infof(data, "Failed to free libssh2 scp subsystem: %d %s", rc, err_msg);
     }
     if(!block && (rc == LIBSSH2_ERROR_EAGAIN))
@@ -2522,7 +2542,9 @@ static CURLcode sshc_cleanup(struct ssh_conn *sshc, struct Curl_easy *data,
     rc = libssh2_sftp_shutdown(sshc->sftp_session);
     if((rc < 0) && data) {
       char *err_msg = NULL;
-      (void)libssh2_session_last_error(sshc->ssh_session, &err_msg, NULL, 0);
+      if(!libssh2_session_last_error(sshc->ssh_session, &err_msg, NULL, 0) ||
+         !err_msg)
+        err_msg = "Unknown SSH error";
       infof(data, "Failed to stop libssh2 sftp subsystem: %d %s", rc, err_msg);
     }
     if(!block && (rc == LIBSSH2_ERROR_EAGAIN))
@@ -2535,7 +2557,9 @@ static CURLcode sshc_cleanup(struct ssh_conn *sshc, struct Curl_easy *data,
     rc = libssh2_session_free(sshc->ssh_session);
     if((rc < 0) && data) {
       char *err_msg = NULL;
-      (void)libssh2_session_last_error(sshc->ssh_session, &err_msg, NULL, 0);
+      if(!libssh2_session_last_error(sshc->ssh_session, &err_msg, NULL, 0) ||
+         !err_msg)
+        err_msg = "Unknown SSH error";
       infof(data, "Failed to free libssh2 session: %d %s", rc, err_msg);
     }
     if(!block && (rc == LIBSSH2_ERROR_EAGAIN))
@@ -2775,8 +2799,9 @@ static CURLcode ssh_state_scp_send_eof(struct Curl_easy *data,
       return CURLE_AGAIN;
     if(rc) {
       char *err_msg = NULL;
-      (void)libssh2_session_last_error(sshc->ssh_session,
-                                       &err_msg, NULL, 0);
+      if(!libssh2_session_last_error(sshc->ssh_session, &err_msg, NULL, 0) ||
+         !err_msg)
+        err_msg = "Unknown SSH error";
       infof(data, "Failed to send libssh2 channel EOF: %d %s",
             rc, err_msg);
     }
@@ -2794,8 +2819,9 @@ static CURLcode ssh_state_scp_wait_eof(struct Curl_easy *data,
       return CURLE_AGAIN;
     if(rc) {
       char *err_msg = NULL;
-      (void)libssh2_session_last_error(sshc->ssh_session,
-                                       &err_msg, NULL, 0);
+      if(!libssh2_session_last_error(sshc->ssh_session, &err_msg, NULL, 0) ||
+         !err_msg)
+        err_msg = "Unknown SSH error";
       infof(data, "Failed to get channel EOF: %d %s", rc, err_msg);
     }
   }
@@ -2813,8 +2839,9 @@ static CURLcode ssh_state_scp_wait_close(struct Curl_easy *data,
       return CURLE_AGAIN;
     if(rc) {
       char *err_msg = NULL;
-      (void)libssh2_session_last_error(sshc->ssh_session,
-                                       &err_msg, NULL, 0);
+      if(!libssh2_session_last_error(sshc->ssh_session, &err_msg, NULL, 0) ||
+         !err_msg)
+        err_msg = "Unknown SSH error";
       infof(data, "Channel failed to close: %d %s", rc, err_msg);
     }
   }
@@ -2832,8 +2859,9 @@ static CURLcode ssh_state_scp_channel_free(
       return CURLE_AGAIN;
     if(rc < 0) {
       char *err_msg = NULL;
-      (void)libssh2_session_last_error(sshc->ssh_session,
-                                       &err_msg, NULL, 0);
+      if(!libssh2_session_last_error(sshc->ssh_session, &err_msg, NULL, 0) ||
+         !err_msg)
+        err_msg = "Unknown SSH error";
       infof(data, "Failed to free libssh2 scp subsystem: %d %s", rc, err_msg);
     }
     sshc->ssh_channel = NULL;
@@ -3215,8 +3243,11 @@ static CURLcode ssh_block_statemach(struct Curl_easy *data,
       if(LIBSSH2_SESSION_BLOCK_OUTBOUND & dir)
         fd_write = sock;
       /* wait for the socket to become ready */
-      (void)Curl_socket_check(fd_read, CURL_SOCKET_BAD, fd_write,
-                              left_ms > 1000 ? 1000 : left_ms);
+      if(Curl_socket_check(fd_read, CURL_SOCKET_BAD, fd_write,
+                           left_ms > 1000 ? 1000 : left_ms) < 0) {
+        failf(data, "SSH socket poll failed");
+        return CURLE_UNRECOVERABLE_POLL;
+      }
     }
   }
 
@@ -3876,7 +3907,9 @@ void Curl_ssh_cleanup(void)
 
 void Curl_ssh_version(char *buffer, size_t buflen)
 {
-  (void)curl_msnprintf(buffer, buflen, "libssh2/%s", libssh2_version(0));
+  if(curl_msnprintf(buffer, buflen, "libssh2/%s", libssh2_version(0)) < 0 &&
+     buflen)
+    buffer[0] = '\0';
 }
 
 /* The SSH session is associated with the *CONNECTION* but the callback user

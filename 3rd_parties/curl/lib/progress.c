@@ -454,14 +454,16 @@ static curl_off_t trspeed(curl_off_t size, /* number of bytes */
     return CURL_OFF_T_MAX;
 }
 
-/* returns TRUE if it is time to show the progress meter */
-static bool progress_calc(struct Curl_easy *data,
-                          const struct curltime *pnow)
+static void progress_calc(struct Curl_easy *data,
+                           const struct curltime *pnow, bool *showprogress)
 {
   struct Progress * const p = &data->progress;
   int i_next, i_oldest, i_latest;
   timediff_t duration_us, elapsed_us;
   curl_off_t amount;
+
+  if(showprogress)
+    *showprogress = FALSE;
 
   /* The time spent so far (from the start) in microseconds */
   elapsed_us = curlx_ptimediff_us(pnow, &p->start);
@@ -476,7 +478,9 @@ static bool progress_calc(struct Curl_easy *data,
     /* use the overall average at the start */
     p->current_speed = p->ul.speed + p->dl.speed;
     p->delta.lastshow_us = elapsed_us;
-    return TRUE;
+    if(showprogress)
+      *showprogress = TRUE;
+    return;
   }
   /* We have at least one record now. Where to put the next and
    * where is the latest one? */
@@ -503,7 +507,7 @@ static bool progress_calc(struct Curl_easy *data,
   }
   else {
     /* transfer ongoing, wait for more time to pass. */
-    return FALSE;
+    return;
   }
 
   i_oldest = (p->speeder_c < CURL_SPEED_RECORDS) ? 0 :
@@ -528,9 +532,10 @@ static bool progress_calc(struct Curl_easy *data,
 
   if((p->delta.lastshow_us >= 0) && !data->req.done &&
      ((elapsed_us - p->delta.lastshow_us) < (1000 * 1000)))
-    return FALSE;
+    return;
   p->delta.lastshow_us = elapsed_us;
-  return TRUE;
+  if(showprogress)
+    *showprogress = TRUE;
 }
 
 #ifndef CURL_DISABLE_PROGRESS_METER
@@ -706,7 +711,8 @@ static CURLcode pgrsupdate(struct Curl_easy *data, bool showprogress)
 static CURLcode pgrs_update(struct Curl_easy *data,
                             const struct curltime *pnow)
 {
-  bool showprogress = progress_calc(data, pnow);
+  bool showprogress;
+  progress_calc(data, pnow, &showprogress);
   return pgrsupdate(data, showprogress);
 }
 
@@ -742,7 +748,7 @@ CURLcode Curl_pgrsCheck(struct Curl_easy *data)
  */
 void Curl_pgrsUpdate_nometer(struct Curl_easy *data)
 {
-  (void)progress_calc(data, Curl_pgrs_now(data));
+  progress_calc(data, Curl_pgrs_now(data), NULL);
 }
 
 void Curl_pgrsCompleted(struct Curl_easy *data)

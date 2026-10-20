@@ -101,10 +101,10 @@ static const char* ittnotify_lib_name = "libittnotify.dylib";
 
 #ifdef ITT_ANDROID_LOG
     #define ITT_ANDROID_LOG_TAG   "INTEL_VTUNE_USERAPI"
-    #define ITT_ANDROID_LOGI(...) ((void)__android_log_print(ANDROID_LOG_INFO, ITT_ANDROID_LOG_TAG, __VA_ARGS__))
-    #define ITT_ANDROID_LOGW(...) ((void)__android_log_print(ANDROID_LOG_WARN, ITT_ANDROID_LOG_TAG, __VA_ARGS__))
-    #define ITT_ANDROID_LOGE(...) ((void)__android_log_print(ANDROID_LOG_ERROR,ITT_ANDROID_LOG_TAG, __VA_ARGS__))
-    #define ITT_ANDROID_LOGD(...) ((void)__android_log_print(ANDROID_LOG_DEBUG,ITT_ANDROID_LOG_TAG, __VA_ARGS__))
+    #define ITT_ANDROID_LOGI(...) do { if (__android_log_print(ANDROID_LOG_INFO, ITT_ANDROID_LOG_TAG, __VA_ARGS__) < 0) perror(ITT_ANDROID_LOG_TAG); } while (0)
+    #define ITT_ANDROID_LOGW(...) do { if (__android_log_print(ANDROID_LOG_WARN, ITT_ANDROID_LOG_TAG, __VA_ARGS__) < 0) perror(ITT_ANDROID_LOG_TAG); } while (0)
+    #define ITT_ANDROID_LOGE(...) do { if (__android_log_print(ANDROID_LOG_ERROR, ITT_ANDROID_LOG_TAG, __VA_ARGS__) < 0) perror(ITT_ANDROID_LOG_TAG); } while (0)
+    #define ITT_ANDROID_LOGD(...) do { if (__android_log_print(ANDROID_LOG_DEBUG, ITT_ANDROID_LOG_TAG, __VA_ARGS__) < 0) perror(ITT_ANDROID_LOG_TAG); } while (0)
 #else
     #define ITT_ANDROID_LOGI(...)
     #define ITT_ANDROID_LOGW(...)

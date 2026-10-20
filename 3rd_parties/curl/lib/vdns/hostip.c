@@ -182,14 +182,16 @@ void Curl_printable_address(const struct Curl_addrinfo *ai, char *buf,
   case AF_INET: {
     const struct sockaddr_in *sa4 = (const void *)ai->ai_addr;
     const struct in_addr *ipaddr4 = &sa4->sin_addr;
-    (void)curlx_inet_ntop(ai->ai_family, (const void *)ipaddr4, buf, bufsize);
+    if(!curlx_inet_ntop(ai->ai_family, (const void *)ipaddr4, buf, bufsize))
+      buf[0] = '\0';
     break;
   }
 #ifdef USE_IPV6
   case AF_INET6: {
     const struct sockaddr_in6 *sa6 = (const void *)ai->ai_addr;
     const struct in6_addr *ipaddr6 = &sa6->sin6_addr;
-    (void)curlx_inet_ntop(ai->ai_family, (const void *)ipaddr6, buf, bufsize);
+    if(!curlx_inet_ntop(ai->ai_family, (const void *)ipaddr6, buf, bufsize))
+      buf[0] = '\0';
     break;
   }
 #endif
@@ -224,7 +226,10 @@ static struct Curl_addrinfo *get_localhost6(uint16_t port, const char *name)
   sa6.sin6_family = AF_INET6;
   sa6.sin6_port = htons(port16);
 
-  (void)curlx_inet_pton(AF_INET6, "::1", ipv6);
+  if(curlx_inet_pton(AF_INET6, "::1", ipv6) != 1) {
+    curlx_free(ca);
+    return NULL;
+  }
   memcpy(&sa6.sin6_addr, ipv6, sizeof(ipv6));
 
   ca->ai_flags     = 0;

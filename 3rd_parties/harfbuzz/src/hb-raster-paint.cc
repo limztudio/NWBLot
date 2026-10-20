@@ -180,7 +180,11 @@ hb_raster_paint_push_transform (hb_paint_funcs_t *pfuncs HB_UNUSED,
 
   hb_transform_t<> t = c->current_transform ();
   t.multiply ({xx, yx, xy, yy, dx, dy});
-  (void) c->transform_stack.push (t);
+  if (!c->transform_stack.push_or_fail (t))
+  {
+    c->budget_remaining = -1;
+    return;
+  }
 }
 
 static void
@@ -241,7 +245,11 @@ hb_raster_paint_push_empty_clip (hb_raster_paint_t *c, unsigned w, unsigned h)
   new_clip.rect_x0 = new_clip.rect_y0 = 0;
   new_clip.rect_x1 = new_clip.rect_y1 = 0;
   new_clip.min_x = new_clip.min_y = new_clip.max_x = new_clip.max_y = 0;
-  (void) c->clip_stack.push (std::move (new_clip));
+  if (!c->clip_stack.push_or_fail (std::move (new_clip)))
+  {
+    c->pixel_remaining = -1;
+    return;
+  }
 }
 
 static bool

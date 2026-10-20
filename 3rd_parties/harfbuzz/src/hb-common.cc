@@ -372,7 +372,8 @@ hb_language_get_default ()
   if (unlikely (language == HB_LANGUAGE_INVALID))
   {
     language = hb_language_from_string (hb_setlocale (LC_CTYPE, nullptr), -1);
-    (void) default_language.cmpexch (HB_LANGUAGE_INVALID, language);
+    if (!default_language.cmpexch (HB_LANGUAGE_INVALID, language))
+      language = default_language;
   }
 
   return language;
@@ -1108,7 +1109,11 @@ hb_variation_to_string (hb_variation_t *variation,
   hb_locale_t oldlocale HB_UNUSED;
   oldlocale = hb_uselocale (get_C_locale ());
   len += hb_max (0, snprintf (s + len, ARRAY_LENGTH (s) - len, "%g", (double) variation->value));
-  (void) hb_uselocale (oldlocale);
+  if (oldlocale && !hb_uselocale (oldlocale))
+  {
+    buf[0] = '\0';
+    return;
+  }
 
   assert (len < ARRAY_LENGTH (s));
   len = hb_min (len, size - 1);

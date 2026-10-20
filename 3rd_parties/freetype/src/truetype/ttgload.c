@@ -2413,8 +2413,12 @@
 
 
           /* for the bbox we need the header only */
-          (void)tt_loader_init( &loader, size, glyph, load_flags, TRUE );
-          (void)load_truetype_glyph( &loader, glyph_index, 0, TRUE );
+          error = tt_loader_init( &loader, size, glyph, load_flags, TRUE );
+          if ( error )
+            goto Exit;
+          error = load_truetype_glyph( &loader, glyph_index, 0, TRUE );
+          if ( error )
+            goto Done;
           tt_loader_done( &loader );
           glyph->linearHoriAdvance = loader.linear;
           glyph->linearVertAdvance = loader.vadvance;

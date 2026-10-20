@@ -1387,13 +1387,11 @@ protected:
         return op_data.ltask;
     }
 
-    inline bool enqueue_forwarding_task(buffer_operation &op_data) {
+    inline void enqueue_forwarding_task(buffer_operation &op_data) {
         graph_task *ft = grab_forwarding_task(op_data);
         if(ft) {
             spawn_in_graph_arena(graph_reference(), *ft);
-            return true;
         }
-        return false;
     }
 
     //! This is executed by an enqueued task, the "forwarder"
@@ -1561,7 +1559,7 @@ public:
         buffer_operation op_data(reg_succ);
         op_data.r = &r;
         my_aggregator.execute(&op_data);
-        (void)enqueue_forwarding_task(op_data);
+        enqueue_forwarding_task(op_data);
         return true;
     }
 
@@ -1577,7 +1575,7 @@ public:
         // even though this operation does not cause a forward, if we are the handler, and
         // a forward is scheduled, we may be the first to reach this point after the aggregator,
         // and so should check for the task.
-        (void)enqueue_forwarding_task(op_data);
+        enqueue_forwarding_task(op_data);
         return true;
     }
 
@@ -1588,7 +1586,7 @@ public:
         buffer_operation op_data(req_item);
         op_data.elem = &v;
         my_aggregator.execute(&op_data);
-        (void)enqueue_forwarding_task(op_data);
+        enqueue_forwarding_task(op_data);
         return (op_data.status==SUCCEEDED);
     }
 
@@ -1597,7 +1595,7 @@ public:
         buffer_operation op_data(req_item, metainfo);
         op_data.elem = &v;
         my_aggregator.execute(&op_data);
-        (void)enqueue_forwarding_task(op_data);
+        enqueue_forwarding_task(op_data);
         return (op_data.status==SUCCEEDED);
     }
 #endif
@@ -1609,7 +1607,7 @@ public:
         buffer_operation op_data(res_item);
         op_data.elem = &v;
         my_aggregator.execute(&op_data);
-        (void)enqueue_forwarding_task(op_data);
+        enqueue_forwarding_task(op_data);
         return (op_data.status==SUCCEEDED);
     }
 
@@ -1618,7 +1616,7 @@ public:
         buffer_operation op_data(res_item, metainfo);
         op_data.elem = &v;
         my_aggregator.execute(&op_data);
-        (void)enqueue_forwarding_task(op_data);
+        enqueue_forwarding_task(op_data);
         return op_data.status==SUCCEEDED;
     }
 #endif
@@ -1628,7 +1626,7 @@ public:
     bool try_release() override {
         buffer_operation op_data(rel_res);
         my_aggregator.execute(&op_data);
-        (void)enqueue_forwarding_task(op_data);
+        enqueue_forwarding_task(op_data);
         return true;
     }
 
@@ -1637,7 +1635,7 @@ public:
     bool try_consume() override {
         buffer_operation op_data(con_res);
         my_aggregator.execute(&op_data);
-        (void)enqueue_forwarding_task(op_data);
+        enqueue_forwarding_task(op_data);
         return true;
     }
 
@@ -2047,7 +2045,10 @@ private:
     void prio_push(const T &src __TBB_FLOW_GRAPH_METAINFO_ARG(const message_metainfo& metainfo)) {
         if ( this->my_tail >= this->my_array_size )
             this->grow_my_array( this->my_tail + 1 );
-        (void) this->place_item(this->my_tail, src __TBB_FLOW_GRAPH_METAINFO_ARG(metainfo));
+        if (!this->place_item(this->my_tail, src __TBB_FLOW_GRAPH_METAINFO_ARG(metainfo))) {
+            __TBB_ASSERT(false, "priority queue tail is occupied");
+            return;
+        }
         ++(this->my_tail);
         __TBB_ASSERT(mark < this->my_tail, "mark outside bounds after push");
     }

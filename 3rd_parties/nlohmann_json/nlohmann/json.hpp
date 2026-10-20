@@ -8488,8 +8488,11 @@ scan_number_done:
                 std::array<char, 9> cs{{}};
                 const auto cs_size = (std::snprintf)(cs.data(), cs.size(), "<U+%.4X>", static_cast<unsigned char>(c)); // NOLINT(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
                 JSON_ASSERT(cs_size == 8);
-                static_cast<void>(cs_size);
-                result.append(cs.data(), 8);
+                if (cs_size != 8)
+                {
+                    JSON_THROW(other_error::create(501, "failed to format control character", nullptr));
+                }
+                result.append(cs.data(), static_cast<std::size_t>(cs_size));
             }
             else
             {
@@ -10115,8 +10118,11 @@ class binary_reader
                 std::array<char, 3> cr{{}};
                 const auto cr_size = (std::snprintf)(cr.data(), cr.size(), "%.2hhX", static_cast<unsigned char>(element_type)); // NOLINT(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
                 JSON_ASSERT(cr_size == 2);
-                static_cast<void>(cr_size);
-                const std::string cr_str{cr.data(), std::string::size_type(2)};
+                if (cr_size != 2)
+                {
+                    JSON_THROW(other_error::create(501, "failed to format BSON record type", nullptr));
+                }
+                const std::string cr_str{cr.data(), static_cast<std::string::size_type>(cr_size)};
                 return sax->parse_error(element_type_parse_position, cr_str,
                                         parse_error::create(114, element_type_parse_position, concat("Unsupported BSON record type 0x", cr_str), nullptr));
             }
@@ -12738,8 +12744,11 @@ class binary_reader
         std::array<char, 3> cr{{}};
         const auto cr_size = (std::snprintf)(cr.data(), cr.size(), "%.2hhX", static_cast<unsigned char>(current)); // NOLINT(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
         JSON_ASSERT(cr_size == 2);
-        static_cast<void>(cr_size);
-        return std::string{cr.data(), std::string::size_type(2)};
+        if (cr_size != 2)
+        {
+            JSON_THROW(other_error::create(501, "failed to format token", nullptr));
+        }
+        return std::string{cr.data(), static_cast<std::string::size_type>(cr_size)};
     }
 
     /*!
@@ -19193,8 +19202,11 @@ class serializer
                                     const auto escaped_bytes = (std::snprintf)(string_buffer.data() + bytes, 7, "\\u%04x",
                                                                                static_cast<std::uint16_t>(codepoint));
                                     JSON_ASSERT(escaped_bytes == 6);
-                                    static_cast<void>(escaped_bytes);
-                                    bytes += 6;
+                                    if (escaped_bytes != 6)
+                                    {
+                                        JSON_THROW(other_error::create(501, "failed to format Unicode escape", nullptr));
+                                    }
+                                    bytes += static_cast<std::size_t>(escaped_bytes);
                                 }
                                 else
                                 {
@@ -19203,8 +19215,11 @@ class serializer
                                                                                static_cast<std::uint16_t>(0xD7C0u + (codepoint >> 10u)),
                                                                                static_cast<std::uint16_t>(0xDC00u + (codepoint & 0x3FFu)));
                                     JSON_ASSERT(escaped_bytes == 12);
-                                    static_cast<void>(escaped_bytes);
-                                    bytes += 12;
+                                    if (escaped_bytes != 12)
+                                    {
+                                        JSON_THROW(other_error::create(501, "failed to format Unicode escape", nullptr));
+                                    }
+                                    bytes += static_cast<std::size_t>(escaped_bytes);
                                 }
                             }
                             else

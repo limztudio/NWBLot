@@ -1197,7 +1197,7 @@ run_scenario (const struct scenario *s)
   client_exchange (sk, s->raw, len, &cr,
                    s->n_resp, (0 == s->alive) && (! s->close_after_send),
                    s->close_after_send ? 0 : 1);
-  (void) MHD_socket_close_ (sk);
+  MHD_socket_close_chk_ (sk);
   /* The server side observation is complete as soon as MHD has closed the
      connection or has answered everything that was expected: the request
      handler always runs before the reply is sent.  Waiting for the whole
@@ -1388,20 +1388,21 @@ run_profile (const struct MHD_OptMatrixProfile *prof)
   const union MHD_DaemonInfo *dinfo;
   size_t i;
   int discp;
+  const char *profile_description;
 
   cur_prof = prof;
-  (void) mhd_opt_matrix_describe (prof, cur_prof_desc, sizeof(cur_prof_desc));
+  profile_description = mhd_opt_matrix_describe (prof, cur_prof_desc, sizeof(cur_prof_desc));
   if (! mhd_opt_matrix_profile_supported (prof))
   {
     prof_skipped++;
     if (verbose)
       printf ("--- profile %s SKIPPED (not supported by this build) ---\n",
-              cur_prof_desc);
+              profile_description);
     return 0;
   }
   if (verbose)
   {
-    printf ("--- profile %s ---\n", cur_prof_desc);
+    printf ("--- profile %s ---\n", profile_description);
     fflush (stdout);
   }
 
@@ -1412,7 +1413,7 @@ run_profile (const struct MHD_OptMatrixProfile *prof)
   if (NULL == d)
   {
     fprintf (stderr, "Failed to start the daemon for profile %s.\n",
-             cur_prof_desc);
+             profile_description);
     return 99;
   }
   if (mhd_opt_matrix_is_external (prof))
@@ -1422,7 +1423,7 @@ run_profile (const struct MHD_OptMatrixProfile *prof)
   {
     MHD_stop_daemon (d);
     fprintf (stderr, "Cannot get the port of the daemon for profile %s.\n",
-             cur_prof_desc);
+             profile_description);
     return 99;
   }
   global_port = dinfo->port;
@@ -1496,7 +1497,8 @@ main (int argc, char *const *argv)
   }
 #endif /* HAVE_SIGNAL_H && SIGPIPE */
 #if defined(HAVE_SIGNAL_H) && defined(SIGABRT)
-  (void) signal (SIGABRT, &abort_handler);
+  if (SIG_ERR == signal (SIGABRT, &abort_handler))
+    return 99;
 #endif /* HAVE_SIGNAL_H && SIGABRT */
 
   /* Deliberately NOT mhd_panic_tripwire.h: this test installs its own

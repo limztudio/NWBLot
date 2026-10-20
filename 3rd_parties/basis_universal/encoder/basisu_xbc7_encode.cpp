@@ -3008,7 +3008,8 @@ struct xbc7_dct_stats
 								basist::color_rgba unpacked_block[16];
 								bool as = basist::bc7u::unpack_bc7(&phys_blk, unpacked_block);
 								assert(as);
-								BASISU_NOTE_UNUSED(as);
+								if (!as)
+									abort();
 
 								raw_bc7_debug_image.set_block_clipped((color_rgba *)unpacked_block, bx * 4, by * 4, 4, 4);
 							}

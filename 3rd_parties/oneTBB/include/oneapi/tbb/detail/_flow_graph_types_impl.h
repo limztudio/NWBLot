@@ -158,7 +158,7 @@ private:
         pointer_type space;
         _unwind_space(pointer_type p) : space(p) {}
         ~_unwind_space() {
-            if(space) (void) new (space) Wrapper<default_constructed>(default_constructed());
+            if(space) new (space) Wrapper<default_constructed>(default_constructed());
         }
     };
 public:
@@ -167,7 +167,7 @@ public:
 
     void CopyTo(void* newSpace) const override {
         _unwind_space guard((pointer_type)newSpace);
-        (void) new(newSpace) Wrapper(value_space);
+        new(newSpace) Wrapper(value_space);
         guard.space = nullptr;
     }
     ~Wrapper() { }
@@ -198,7 +198,7 @@ private:
         ~_unwind_class() {
             if(space) {
                 for(size_t i = already_built; i > 0 ; --i ) space[i-1].~value_type();
-                (void) new(space) Wrapper<default_constructed>(default_constructed());
+                new(space) Wrapper<default_constructed>(default_constructed());
             }
         }
     };
@@ -216,7 +216,7 @@ public:
         _unwind_class guard((pointer_type)value_space);
         pointer_type vp = reinterpret_cast<pointer_type>(&value_space);
         for(size_t i = 0; i < N; ++i ) {
-            (void) new(vp++) value_type(other[i]);
+            new(vp++) value_type(other[i]);
             ++(guard.already_built);
         }
         guard.space = nullptr;
@@ -227,14 +227,14 @@ public:
         pointer_type dp = reinterpret_cast<pointer_type>(value_space);
         pointer_type sp = reinterpret_cast<pointer_type>(const_cast<char *>(other.value_space));
         for(size_t i = 0; i < N; ++i, ++dp, ++sp) {
-            (void) new(dp) value_type(*sp);
+            new(dp) value_type(*sp);
             ++(guard.already_built);
         }
         guard.space = nullptr;
     }
 
     void CopyTo(void* newSpace) const override {
-        (void) new(newSpace) Wrapper(*this);  // exceptions handled in copy constructor
+        new(newSpace) Wrapper(*this);  // exceptions handled in copy constructor
     }
 
     ~Wrapper() {
@@ -291,7 +291,7 @@ template<typename T, bool BUILD_IT> struct do_if;
 template<typename T>
 struct do_if<T, true> {
     static void construct(void *mySpace, const T& x) {
-        (void) new(mySpace) Wrapper<T>(x);
+        new(mySpace) Wrapper<T>(x);
     }
 };
 template<typename T>
@@ -325,7 +325,7 @@ class tagged_msg {
         static const size_t MaxSize = sizeof(SpaceType);
 
     public:
-        variant() { (void) new(&my_space) Wrapper<default_constructed>(default_constructed()); }
+        variant() { new(&my_space) Wrapper<default_constructed>(default_constructed()); }
 
         template<typename T>
         variant( const T& x ) {

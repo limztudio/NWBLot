@@ -389,7 +389,8 @@ local int gz_vacate(gz_statep state) {
     if (strm->next_in == NULL ||
         strm->next_in + strm->avail_in <= state->in + state->size)
         return 0;
-    (void)gz_comp(state, Z_NO_FLUSH);
+    if (gz_comp(state, Z_NO_FLUSH) == -1 && !state->again)
+        return 1;
     if (strm->avail_in == 0) {
         strm->next_in = state->in;
         return 0;
@@ -458,7 +459,7 @@ int ZEXPORTVA gzvprintf(gzFile file, const char *format, va_list va) {
     next[state->size - 1] = 0;
 #ifdef NO_vsnprintf
 #  ifdef HAS_vsprintf_void
-    (void)vsprintf(next, format, va);
+    vsprintf(next, format, va);
     for (len = 0; len < state->size; len++)
         if (next[len] == 0) break;
 #  else
@@ -466,7 +467,7 @@ int ZEXPORTVA gzvprintf(gzFile file, const char *format, va_list va) {
 #  endif
 #else
 #  ifdef HAS_vsnprintf_void
-    (void)vsnprintf(next, state->size, format, va);
+    vsnprintf(next, state->size, format, va);
     len = strlen(next);
 #  else
     len = vsnprintf(next, state->size, format, va);
@@ -644,7 +645,8 @@ int ZEXPORT gzflush(gzFile file, int flush) {
         return state->err;
 
     /* compress remaining data with requested flush */
-    (void)gz_comp(state, flush);
+    if (gz_comp(state, flush) == -1)
+        return state->err;
     return state->err;
 }
 
@@ -708,7 +710,9 @@ int ZEXPORT gzclose_w(gzFile file) {
         ret = state->err;
     if (state->size) {
         if (!state->direct) {
-            (void)deflateEnd(&(state->strm));
+            int end_ret = deflateEnd(&(state->strm));
+            if (end_ret != Z_OK && ret == Z_OK)
+                ret = end_ret;
             free(state->out);
         }
         free(state->in);

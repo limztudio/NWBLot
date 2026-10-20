@@ -493,7 +493,8 @@ _hb_ot_shape_fallback_mark_position (const hb_ot_shape_plan_t *plan,
     }
   position_cluster (plan, font, buffer, start, count, adjust_offsets_when_zeroing);
 
-  (void) buffer->message (font, "end fallback mark");
+  if (unlikely (!buffer->message (font, "end fallback mark")))
+    DEBUG_MSG (APPLY, buffer, "Callback declined a completed-step notification");
 }
 
 
@@ -549,7 +550,8 @@ _hb_ot_shape_fallback_kern (const hb_ot_shape_plan_t *plan,
   if (reverse)
     buffer->reverse ();
 
-  (void) buffer->message (font, "end fallback kern");
+  if (unlikely (!buffer->message (font, "end fallback kern")))
+    DEBUG_MSG (APPLY, buffer, "Callback declined a completed-step notification");
 #endif
 }
 

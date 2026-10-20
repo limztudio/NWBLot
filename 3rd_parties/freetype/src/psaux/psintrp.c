@@ -2185,7 +2185,7 @@
                 case cf2_escDROP:
                   FT_TRACE4(( " drop\n" ));
 
-                  (void)cf2_stack_popFixed( opStack );
+                  cf2_stack_pop( opStack, 1 );
                   continue; /* do not clear the stack */
 
                 case cf2_escPUT:

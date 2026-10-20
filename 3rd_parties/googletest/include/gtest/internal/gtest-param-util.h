@@ -540,13 +540,12 @@ class [[nodiscard]] ParameterizedTestSuiteInfo
   }
   // INSTANTIATE_TEST_SUITE_P macro uses AddGenerator() to record information
   // about a generator.
-  int AddTestSuiteInstantiation(std::string instantiation_name,
+  void AddTestSuiteInstantiation(std::string instantiation_name,
                                 GeneratorCreationFunc* func,
                                 ParamNameGeneratorFunc* name_func,
                                 const char* file, int line) {
     instantiations_.emplace_back(std::move(instantiation_name), func, name_func,
                                  file, line);
-    return 0;  // Return value used only to run this method in namespace scope.
   }
   // UnitTest class invokes this method to register tests in this test suite
   // right before running tests in RUN_ALL_TESTS macro.

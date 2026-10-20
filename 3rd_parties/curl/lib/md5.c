@@ -57,19 +57,21 @@ static CURLcode my_md5_init(void *ctx)
   return CURLE_OK;
 }
 
-static void my_md5_update(void *ctx,
+static CURLcode my_md5_update(void *ctx,
                           const unsigned char *input, unsigned int len)
 {
   md5_update(ctx, len, input);
+  return CURLE_OK;
 }
 
-static void my_md5_final(unsigned char *digest, void *ctx)
+static CURLcode my_md5_final(unsigned char *digest, void *ctx)
 {
 #if NETTLE_VERSION_MAJOR >= 4
   md5_digest(ctx, digest);
 #else
   md5_digest(ctx, MD5_DIGEST_LEN, digest);
 #endif
+  return CURLE_OK;
 }
 
 #elif defined(USE_OPENSSL) && \
@@ -86,15 +88,15 @@ static CURLcode my_md5_init(void *ctx)
   return CURLE_OK;
 }
 
-static void my_md5_update(void *ctx,
+static CURLcode my_md5_update(void *ctx,
                           const unsigned char *input, unsigned int len)
 {
-  (void)MD5_Update(ctx, input, len);
+  return MD5_Update(ctx, input, len) ? CURLE_OK : CURLE_FAILED_INIT;
 }
 
-static void my_md5_final(unsigned char *digest, void *ctx)
+static CURLcode my_md5_final(unsigned char *digest, void *ctx)
 {
-  (void)MD5_Final(digest, ctx);
+  return MD5_Final(digest, ctx) ? CURLE_OK : CURLE_FAILED_INIT;
 }
 
 #elif defined(USE_WOLFSSL) && !defined(NO_MD5)
@@ -109,15 +111,17 @@ static CURLcode my_md5_init(void *ctx)
   return CURLE_OK;
 }
 
-static void my_md5_update(void *ctx,
+static CURLcode my_md5_update(void *ctx,
                           const unsigned char *input, unsigned int len)
 {
-  (void)wc_Md5Update(ctx, input, (word32)len);
+  return wc_Md5Update(ctx, input, (word32)len) ? CURLE_FAILED_INIT : CURLE_OK;
 }
 
-static void my_md5_final(unsigned char *digest, void *ctx)
+static CURLcode my_md5_final(unsigned char *digest, void *ctx)
 {
-  (void)wc_Md5Final(ctx, digest);
+  int rc = wc_Md5Final(ctx, digest);
+  wc_Md5Free(ctx);
+  return rc ? CURLE_FAILED_INIT : CURLE_OK;
 }
 
 #elif defined(USE_MBEDTLS) && \
@@ -135,16 +139,22 @@ static CURLcode my_md5_init(void *ctx)
   return CURLE_OK;
 }
 
-static void my_md5_update(void *ctx,
+static CURLcode my_md5_update(void *ctx,
                           const unsigned char *input, unsigned int len)
 {
-  (void)psa_hash_update(ctx, input, len);
+  return psa_hash_update(ctx, input, len) == PSA_SUCCESS ? CURLE_OK : CURLE_FAILED_INIT;
 }
 
-static void my_md5_final(unsigned char *digest, void *ctx)
+static CURLcode my_md5_final(unsigned char *digest, void *ctx)
 {
-  size_t actual_length;
-  (void)psa_hash_finish(ctx, digest, MD5_DIGEST_LEN, &actual_length);
+  size_t actual_length = 0;
+  psa_status_t status = psa_hash_finish(ctx, digest, MD5_DIGEST_LEN,
+                                       &actual_length);
+  psa_status_t cleanup_status = psa_hash_abort(ctx);
+  if(status != PSA_SUCCESS || cleanup_status != PSA_SUCCESS ||
+     actual_length != MD5_DIGEST_LEN)
+    return CURLE_FAILED_INIT;
+  return CURLE_OK;
 }
 
 #elif (defined(__MAC_OS_X_VERSION_MAX_ALLOWED) && \
@@ -173,15 +183,15 @@ static CURLcode my_md5_init(void *ctx)
   return CURLE_OK;
 }
 
-static void my_md5_update(void *ctx,
+static CURLcode my_md5_update(void *ctx,
                           const unsigned char *input, unsigned int len)
 {
-  CC_MD5_Update(ctx, input, len);
+  return CC_MD5_Update(ctx, input, len) ? CURLE_OK : CURLE_FAILED_INIT;
 }
 
-static void my_md5_final(unsigned char *digest, void *ctx)
+static CURLcode my_md5_final(unsigned char *digest, void *ctx)
 {
-  CC_MD5_Final(digest, ctx);
+  return CC_MD5_Final(digest, ctx) ? CURLE_OK : CURLE_FAILED_INIT;
 }
 
 #elif defined(USE_WIN32_CRYPTO)
@@ -209,24 +219,28 @@ static CURLcode my_md5_init(void *in)
   return CURLE_OK;
 }
 
-static void my_md5_update(void *in,
+static CURLcode my_md5_update(void *in,
                           const unsigned char *input, unsigned int len)
 {
   my_md5_ctx *ctx = in;
-  CryptHashData(ctx->hHash, (const BYTE *)input, len, 0);
+  return CryptHashData(ctx->hHash, (const BYTE *)input, len, 0) ? CURLE_OK : CURLE_FAILED_INIT;
 }
 
-static void my_md5_final(unsigned char *digest, void *in)
+static CURLcode my_md5_final(unsigned char *digest, void *in)
 {
   my_md5_ctx *ctx = (my_md5_ctx *)in;
-  unsigned long length = 0;
-  CryptGetHashParam(ctx->hHash, HP_HASHVAL, NULL, &length, 0);
-  if(length == MD5_DIGEST_LEN)
-    CryptGetHashParam(ctx->hHash, HP_HASHVAL, digest, &length, 0);
-  if(ctx->hHash)
-    CryptDestroyHash(ctx->hHash);
-  if(ctx->hCryptProv)
-    CryptReleaseContext(ctx->hCryptProv, 0);
+  unsigned long length = MD5_DIGEST_LEN;
+  CURLcode result = CURLE_OK;
+  if(!CryptGetHashParam(ctx->hHash, HP_HASHVAL, digest, &length, 0) ||
+     length != MD5_DIGEST_LEN)
+    result = CURLE_FAILED_INIT;
+  if(ctx->hHash && !CryptDestroyHash(ctx->hHash))
+    result = CURLE_FAILED_INIT;
+  if(ctx->hCryptProv && !CryptReleaseContext(ctx->hCryptProv, 0))
+    result = CURLE_FAILED_INIT;
+  ctx->hHash = 0;
+  ctx->hCryptProv = 0;
+  return result;
 }
 
 #else
@@ -433,7 +447,7 @@ static CURLcode my_md5_init(void *in)
   return CURLE_OK;
 }
 
-static void my_md5_update(void *in,
+static CURLcode my_md5_update(void *in,
                           const unsigned char *input, unsigned int len)
 {
   uint32_t saved_lo;
@@ -453,7 +467,7 @@ static void my_md5_update(void *in,
 
     if(len < available) {
       memcpy(&ctx->buffer[used], input, len);
-      return;
+      return CURLE_OK;
     }
 
     memcpy(&ctx->buffer[used], input, available);
@@ -468,9 +482,10 @@ static void my_md5_update(void *in,
   }
 
   memcpy(ctx->buffer, input, len);
+  return CURLE_OK;
 }
 
-static void my_md5_final(unsigned char *digest, void *in)
+static CURLcode my_md5_final(unsigned char *digest, void *in)
 {
   unsigned int used, available;
   my_md5_ctx *ctx = (my_md5_ctx *)in;
@@ -520,6 +535,7 @@ static void my_md5_final(unsigned char *digest, void *in)
   digest[15] = curlx_ultouc(ctx->d >> 24);
 
   memset(ctx, 0, sizeof(*ctx));
+  return CURLE_OK;
 }
 
 #endif /* CRYPTO LIBS */
@@ -555,11 +571,17 @@ CURLcode Curl_md5it(unsigned char *output,
   if(!result) {
     do {
       unsigned int ilen = (unsigned int)CURLMIN(len, UINT_MAX);
-      my_md5_update(&ctx, input, ilen);
+      result = my_md5_update(&ctx, input, ilen);
+      if(result)
+        break;
       input += ilen;
       len -= ilen;
     } while(len);
-    my_md5_final(output, &ctx);
+    {
+      CURLcode final_result = my_md5_final(output, &ctx);
+      if(!result)
+        result = final_result;
+    }
   }
   return result;
 }
@@ -582,6 +604,7 @@ struct MD5_context *Curl_MD5_init(const struct MD5_params *md5params)
   }
 
   ctxt->md5_hash = md5params;
+  ctxt->error = CURLE_OK;
 
   if((*md5params->md5_init_func)(ctxt->md5_hashctx)) {
     curlx_free(ctxt->md5_hashctx);
@@ -592,22 +615,23 @@ struct MD5_context *Curl_MD5_init(const struct MD5_params *md5params)
   return ctxt;
 }
 
-CURLcode Curl_MD5_update(struct MD5_context *context,
+void Curl_MD5_update(struct MD5_context *context,
                          const unsigned char *input, unsigned int len)
 {
-  (*context->md5_hash->md5_update_func)(context->md5_hashctx, input, len);
-
-  return CURLE_OK;
+  if(!context->error)
+    context->error = context->md5_hash->md5_update_func(context->md5_hashctx,
+                                                       input, len);
 }
 
 CURLcode Curl_MD5_final(struct MD5_context *context, unsigned char *result)
 {
-  (*context->md5_hash->md5_final_func)(result, context->md5_hashctx);
-
+  CURLcode status = context->md5_hash->md5_final_func(result,
+                                                       context->md5_hashctx);
+  if(context->error)
+    status = context->error;
   curlx_free(context->md5_hashctx);
   curlx_free(context);
-
-  return CURLE_OK;
+  return status;
 }
 
 #endif /* Using NTLM (without SSPI) || Digest */

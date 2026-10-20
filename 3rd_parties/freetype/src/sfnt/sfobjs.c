@@ -685,7 +685,12 @@
 
         for ( i = 0; i < num_axes; i++ )
         {
-          (void)FT_STREAM_READ_AT( default_value_offset, p, 4 );
+          if ( FT_STREAM_READ_AT( default_value_offset, p, 4 ) )
+          {
+            FT_FREE( default_values );
+            FT_FREE( instance_values );
+            return error;
+          }
 
           default_value_offset += axis_size;
           p                    += 4;
@@ -695,9 +700,14 @@
 
         for ( i = 0; i < num_instances; i++ )
         {
-          (void)FT_STREAM_READ_AT( instance_offset,
-                                   instance_values,
-                                   num_axes * 4 );
+          if ( FT_STREAM_READ_AT( instance_offset,
+                                  instance_values,
+                                  num_axes * 4 ) )
+          {
+            FT_FREE( default_values );
+            FT_FREE( instance_values );
+            return error;
+          }
 
           if ( !ft_memcmp( default_values, instance_values, num_axes * 4 ) )
             break;

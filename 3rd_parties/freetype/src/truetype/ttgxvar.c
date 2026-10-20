@@ -2736,7 +2736,12 @@
           goto Exit;
 
         ns->strid       =    FT_GET_USHORT();
-        (void) /* flags = */ FT_GET_USHORT();
+        if ( FT_GET_USHORT() != 0 ) /* reserved flags */
+        {
+          FT_FRAME_EXIT();
+          error = FT_THROW( Invalid_Table );
+          goto Exit;
+        }
 
         c = ns->coords;
         for ( j = 0; j < num_axes; j++, c++ )
@@ -2762,23 +2767,31 @@
 
           if ( ns->strid != 0xFFFF )
           {
-            (void)sfnt->get_name( ttface,
-                                  (FT_UShort)ns->strid,
-                                  &strname );
+            if ( sfnt->get_name( ttface,
+                                 (FT_UShort)ns->strid,
+                                 &strname ) )
+              strname = NULL;
             if ( strname && !ft_strcmp( strname, ".notdef" ) )
               strname = NULL;
           }
 
           if ( ns->psid != 0xFFFF )
           {
-            (void)sfnt->get_name( ttface,
-                                  (FT_UShort)ns->psid,
-                                  &psname );
+            if ( sfnt->get_name( ttface,
+                                 (FT_UShort)ns->psid,
+                                 &psname ) )
+              psname = NULL;
             if ( psname && !ft_strcmp( psname, ".notdef" ) )
               psname = NULL;
           }
 
-          (void)FT_STREAM_SEEK( pos );
+          if ( FT_STREAM_SEEK( pos ) )
+          {
+            FT_FREE( strname );
+            FT_FREE( psname );
+            FT_FRAME_EXIT();
+            goto Exit;
+          }
 
           FT_TRACE5(( "  named instance %u (%s%s%s, %s%s%s)\n",
                       i,

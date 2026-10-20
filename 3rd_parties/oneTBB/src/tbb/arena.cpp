@@ -28,6 +28,7 @@
 
 #include <atomic>
 #include <cstring>
+#include <cstdlib>
 #include <functional>
 
 namespace tbb {
@@ -582,7 +583,9 @@ void __TBB_EXPORTED_FUNC exit_parallel_phase(d1::task_arena_base* ta, std::uintp
 
 void task_arena_impl::initialize(d1::task_arena_base& ta) {
     // Enforce global market initialization to properly initialize soft limit
-    (void)governor::get_thread_data();
+    if (!governor::get_thread_data()) {
+        std::abort();
+    }
     d1::constraints arena_constraints;
 
     arena_constraints = d1::constraints{}

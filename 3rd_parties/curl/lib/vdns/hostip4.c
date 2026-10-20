@@ -123,7 +123,10 @@ struct Curl_addrinfo *Curl_ipv4_resolve_r(const char *hostname,
     sbufptr = sbuf;
   }
 
-  (void)Curl_getaddrinfo_ex(hostname, sbufptr, &hints, &ai);
+  if(Curl_getaddrinfo_ex(hostname, sbufptr, &hints, &ai)) {
+    Curl_freeaddrinfo(ai);
+    return NULL;
+  }
 
 #elif defined(HAVE_GETHOSTBYNAME_R)
   /*
@@ -163,12 +166,13 @@ struct Curl_addrinfo *Curl_ipv4_resolve_r(const char *hostname,
 #elif defined(HAVE_GETHOSTBYNAME_R_6)
   /* Linux */
 
-  (void)gethostbyname_r(hostname,
-                        (struct hostent *)buf,
-                        (char *)buf + sizeof(struct hostent),
-                        CURL_HOSTENT_SIZE - sizeof(struct hostent),
-                        &h, /* DIFFERENCE */
-                        &h_errnop);
+  if(gethostbyname_r(hostname,
+                      (struct hostent *)buf,
+                      (char *)buf + sizeof(struct hostent),
+                      CURL_HOSTENT_SIZE - sizeof(struct hostent),
+                      &h, /* DIFFERENCE */
+                      &h_errnop))
+    h = NULL;
   /* Redhat 8, using glibc 2.2.93 changed the behavior. Now all of a
    * sudden this function returns EAGAIN if the given buffer size is too
    * small. Previous versions are known to return ERANGE for the same

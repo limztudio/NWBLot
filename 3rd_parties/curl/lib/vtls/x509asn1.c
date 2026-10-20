@@ -992,7 +992,9 @@ static int do_pubkey(struct Curl_easy *data, int certnum, const char *algo,
       infof(data, "   ECC Public Key (%zu bits)", len);
     if(data->set.ssl.certinfo) {
       char q[(sizeof(len) * 8 / 3) + 1];
-      (void)curl_msnprintf(q, sizeof(q), "%zu", len);
+      int written = curl_msnprintf(q, sizeof(q), "%zu", len);
+      if(written < 0 || (size_t)written >= sizeof(q))
+        return 1;
       if(ssl_push_certinfo(data, certnum, "ECC Public Key", q))
         return 1;
     }

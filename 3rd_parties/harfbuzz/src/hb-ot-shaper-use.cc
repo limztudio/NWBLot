@@ -461,7 +461,8 @@ reorder_use (const hb_ot_shape_plan_t *plan,
     foreach_syllable (buffer, start, end)
       reorder_syllable_use (buffer, start, end);
 
-    (void) buffer->message (font, "end reordering USE");
+    if (unlikely (!buffer->message (font, "end reordering USE")))
+      DEBUG_MSG (APPLY, buffer, "Callback declined a completed-step notification");
   }
 
   HB_BUFFER_DEALLOCATE_VAR (buffer, use_category);

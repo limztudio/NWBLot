@@ -3206,9 +3206,26 @@
   }
 
 
-  /* Stretch tilde vertically, if necessary, and return the height */
-  /* difference between the original and the stretched outline.    */
-  static FT_Pos
+  static AF_Point
+  af_find_contour_vertical_extremum( AF_GlyphHints  hints,
+                                    FT_Int         contour,
+                                    FT_Bool        highest )
+  {
+    AF_Point  first = hints->contours[contour];
+    AF_Point  p     = first->next;
+    AF_Point  result = first;
+
+
+    for ( ; p != first; p = p->next )
+      if ( highest ? p->y > result->y : p->y < result->y )
+        result = p;
+
+    return result;
+  }
+
+
+  /* Stretch the tilde vertically, if necessary. */
+  static void
   af_latin_stretch_top_tilde( AF_GlyphHints  hints,
                               FT_Int         tilde_contour )
   {
@@ -3227,7 +3244,7 @@
 
 
     if ( min_y == max_y )
-      return 0;
+      return;
 
     FT_TRACE4(( "af_latin_stretch_top_tilde: min y: %ld, max y: %ld\n",
                 min_y, max_y ));
@@ -3303,7 +3320,7 @@
     /*     we need a description.                         */
     target_height = min_measurement + 64;
     if ( height >= target_height )
-      return 0;
+      return;
 
     /* Do the scaling. */
     p = first_point;
@@ -3320,11 +3337,10 @@
 
     } while ( p != first_point );
 
-    return target_height - height;
   }
 
 
-  static FT_Pos
+  static void
   af_latin_stretch_bottom_tilde( AF_GlyphHints  hints,
                                  FT_Int         tilde_contour )
   {
@@ -3343,7 +3359,7 @@
 
 
     if ( min_y == max_y )
-      return 0;
+      return;
 
     FT_TRACE4(( "af_latin_stretch_bottom_tilde: min y: %ld, max y: %ld\n",
                 min_y, max_y ));
@@ -3401,7 +3417,7 @@
 
     target_height = min_measurement + 64;
     if ( height >= target_height )
-      return 0;
+      return;
 
     p = first_point;
     do
@@ -3414,7 +3430,6 @@
 
     } while ( p != first_point );
 
-    return target_height - height;
   }
 
 
@@ -3439,9 +3454,8 @@
     intervention of the vertical adjustment step, the tilde will be
     grid-aligned.
 
-    Return the vertical alignment amount.
   */
-  static FT_Pos
+  static void
   af_latin_align_top_tilde( AF_GlyphHints  hints,
                             FT_Int         tilde_contour )
   {
@@ -3479,11 +3493,10 @@
 
     af_move_contour_vertically( first_point, delta );
 
-    return delta;
   }
 
 
-  static FT_Pos
+  static void
   af_latin_align_bottom_tilde( AF_GlyphHints  hints,
                                FT_Int         tilde_contour )
   {
@@ -3517,7 +3530,6 @@
 
     af_move_contour_vertically( first_point, delta );
 
-    return delta;
   }
 
 
@@ -4944,10 +4956,16 @@
       {
         below_top_tilde_contour = af_find_second_highest_contour( hints );
 
-        y_offset = af_latin_stretch_top_tilde(
-                     hints, below_top_tilde_contour );
-        y_offset += af_latin_align_top_tilde(
-                      hints, below_top_tilde_contour );
+        {
+          AF_Point  anchor = af_find_contour_vertical_extremum(
+                               hints, below_top_tilde_contour, TRUE );
+          FT_Pos    before = anchor->y;
+
+
+          af_latin_stretch_top_tilde( hints, below_top_tilde_contour );
+          af_latin_align_top_tilde( hints, below_top_tilde_contour );
+          y_offset = SUB_LONG( anchor->y, before );
+        }
 
         limit = hints->contour_y_minima[below_top_tilde_contour];
         af_move_contours_up( hints, limit, y_offset );
@@ -4956,10 +4974,16 @@
       {
         above_bottom_tilde_contour = af_find_second_lowest_contour( hints );
 
-        y_offset = af_latin_stretch_bottom_tilde(
-                     hints, above_bottom_tilde_contour );
-        y_offset -= af_latin_align_bottom_tilde(
-                      hints, above_bottom_tilde_contour );
+        {
+          AF_Point  anchor = af_find_contour_vertical_extremum(
+                               hints, above_bottom_tilde_contour, FALSE );
+          FT_Pos    before = anchor->y;
+
+
+          af_latin_stretch_bottom_tilde( hints, above_bottom_tilde_contour );
+          af_latin_align_bottom_tilde( hints, above_bottom_tilde_contour );
+          y_offset = SUB_LONG( before, anchor->y );
+        }
 
         limit = hints->contour_y_maxima[above_bottom_tilde_contour];
         af_move_contours_down( hints, limit, y_offset );
@@ -4969,15 +4993,15 @@
       {
         top_tilde_contour = af_find_highest_contour( hints );
 
-        (void)af_latin_stretch_top_tilde( hints, top_tilde_contour );
-        (void)af_latin_align_top_tilde( hints, top_tilde_contour );
+        af_latin_stretch_top_tilde( hints, top_tilde_contour );
+        af_latin_align_top_tilde( hints, top_tilde_contour );
       }
       if ( is_bottom_tilde )
       {
         bottom_tilde_contour = af_find_lowest_contour( hints );
 
-        (void)af_latin_stretch_bottom_tilde( hints, bottom_tilde_contour );
-        (void)af_latin_align_bottom_tilde( hints, bottom_tilde_contour );
+        af_latin_stretch_bottom_tilde( hints, bottom_tilde_contour );
+        af_latin_align_bottom_tilde( hints, bottom_tilde_contour );
       }
 
       axis  = &metrics->axis[AF_DIMENSION_VERT];

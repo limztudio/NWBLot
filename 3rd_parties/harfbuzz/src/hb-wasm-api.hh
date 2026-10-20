@@ -61,7 +61,8 @@ HB_INTERNAL extern hb_user_data_key_t _hb_wasm_ref_type_key;
 #define HB_REF2OBJ(obj) \
   hb_##obj##_t *obj = nullptr; \
   HB_STMT_START { \
-    (void) wasm_externref_ref2obj (obj##ptr, (void **) &obj); \
+    if (!wasm_externref_ref2obj (obj##ptr, (void **) &obj)) \
+      obj = hb_##obj##_get_empty (); \
     /* Check object type. */ \
     /* This works because all our objects have the same hb_object_t layout. */ \
     if (unlikely (hb_##obj##_get_user_data (obj, &_hb_wasm_ref_type_key) != \
@@ -75,7 +76,8 @@ HB_INTERNAL extern hb_user_data_key_t _hb_wasm_ref_type_key;
     hb_##obj##_set_user_data (obj, &_hb_wasm_ref_type_key, \
 			      (void *) hb_wasm_ref_type_##obj, \
 			      nullptr, false); \
-    (void) wasm_externref_obj2ref (module_inst, obj, &obj##ref); \
+    if (!wasm_externref_obj2ref (module_inst, obj, &obj##ref)) \
+      obj##ref = nullref; \
   } HB_STMT_END
 
 #define HB_RETURN_STRUCT(type, name) \

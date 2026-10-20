@@ -2336,7 +2336,8 @@ static bool encode_cem_9_13(uint32_t cem_index, uint8_t* pCEM_values, uint32_t e
 	bool bc_clamped_flag, base_ofs_clamped_flag, endpoints_swapped_flag;
 			
 	bool status = basist::astc_ldr_t::pack_base_offset(cem_index, endpoint_ise_range, pCEM_values, e[0], e[1], allow_bc, true, bc_clamped_flag, base_ofs_clamped_flag, endpoints_swapped_flag);
-	BASISU_NOTE_UNUSED(status);
+	if (!status)
+		return false;
 	assert(status);
 	
 	return !base_ofs_clamped_flag;
@@ -2377,8 +2378,8 @@ bool cem_encode(uint32_t cem_index, const float pEndpoints[8], uint32_t endpoint
 			uint8_t CEM_values_plain[8];
 
 			const bool used_bc2 = encode_cem_8_12(cem_index, CEM_values_plain, endpoint_ise_range, pEndpoints, false);
-			BASISU_NOTE_UNUSED(used_bc2);
-			assert(!used_bc2);
+			if (used_bc2)
+				return false;
 
 			float ep_plain[8];
 			cem_decode(cem_index, CEM_values_plain, endpoint_ise_range, ep_plain, nullptr);
@@ -3763,10 +3764,8 @@ static bool weight_polish(
 	const uint32_t block_width = enc_state.m_block_width, block_height = enc_state.m_block_height;
 	[[maybe_unused]] const uint32_t total_block_pixels = block_width * block_height;
 
-	[[maybe_unused]] const uint32_t num_cem_endpoint_vals = astc_helpers::get_num_cem_values(lblock_to_refine.m_color_endpoint_modes[0]);
 	[[maybe_unused]] const uint32_t total_grid_weights = lblock_to_refine.m_grid_width * lblock_to_refine.m_grid_height;
 
-	[[maybe_unused]] const auto& endpoint_tab = astc_helpers::g_dequant_tables.get_endpoint_tab(lblock_to_refine.m_endpoint_ise_range);
 	const auto& weight_tab = astc_helpers::g_dequant_tables.get_weight_tab(lblock_to_refine.m_weight_ise_range);
 
 	const uint32_t num_weight_levels = astc_helpers::get_ise_levels(lblock_to_refine.m_weight_ise_range);
@@ -4189,10 +4188,8 @@ static bool weight_gradient_descent(
 	const uint32_t num_cem_endpoint_vals = astc_helpers::get_num_cem_values(best_config.m_cem);
 	const uint32_t total_grid_weights = best_config.m_grid_width * best_config.m_grid_height;
 
-	[[maybe_unused]] const auto& endpoint_tab = astc_helpers::g_dequant_tables.get_endpoint_tab(best_config.m_endpoint_range);
 	const auto& weight_tab = astc_helpers::g_dequant_tables.get_weight_tab(best_config.m_weight_range);
 
-	[[maybe_unused]] const uint32_t num_weight_levels = astc_helpers::get_ise_levels(best_config.m_weight_range);
 
 	const uint32_t num_partitions = lblock_to_refine.m_num_partitions;
 
@@ -4333,7 +4330,6 @@ static bool refine_endpoints_with_current_weights(
 
 	const uint32_t num_partitions = lblock_to_refine.m_num_partitions;
 
-	[[maybe_unused]] const auto& endpoint_tab = astc_helpers::g_dequant_tables.get_endpoint_tab(best_config.m_endpoint_range);
 	const auto& weight_tab = astc_helpers::g_dequant_tables.get_weight_tab(best_config.m_weight_range);
 
 	astc_helpers::log_astc_block trial_block(lblock_to_refine);
@@ -4675,7 +4671,6 @@ static void compress_block_2subsets_internal(
 				//const auto& endpoint_tab = astc_helpers::g_dequant_tables.get_endpoint_tab(best_config.m_endpoint_range);
 				const auto& weight_tab = astc_helpers::g_dequant_tables.get_weight_tab(best_config.m_weight_range);
 
-				[[maybe_unused]] const uint32_t num_weight_levels = astc_helpers::get_ise_levels(best_config.m_weight_range);
 
 				// ------- method 1
 				if (enc_context.m_use_method1)
@@ -5173,7 +5168,6 @@ static void compress_block_3subsets_internal(
 			//const auto& endpoint_tab = astc_helpers::g_dequant_tables.get_endpoint_tab(best_config.m_endpoint_range);
 			const auto& weight_tab = astc_helpers::g_dequant_tables.get_weight_tab(best_config.m_weight_range);
 
-			[[maybe_unused]] const uint32_t num_weight_levels = astc_helpers::get_ise_levels(best_config.m_weight_range);
 
 			// ------- method 1
 			if (enc_context.m_use_method1)

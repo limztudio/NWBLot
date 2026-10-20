@@ -208,13 +208,14 @@
     {
       FT_Byte* base     = p;
       FT_Byte* next;
-      FT_UInt  version  = FT_NEXT_USHORT( p );
-      FT_UInt  length   = FT_NEXT_USHORT( p );
-      FT_UInt  coverage = FT_NEXT_USHORT( p );
+      FT_UInt  length;
+      FT_UInt  coverage;
       FT_UInt  num_pairs;
       FT_Int   value    = 0;
 
-      FT_UNUSED( version );
+      p += 2;
+      length   = FT_NEXT_USHORT( p );
+      coverage = FT_NEXT_USHORT( p );
 
 
       next = base + length;

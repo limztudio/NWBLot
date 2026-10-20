@@ -542,13 +542,16 @@ CURLcode Curl_creader_read(struct Curl_easy *data,
   return reader->crt->do_read(data, reader, buf, blen, nread, eos);
 }
 
-void Curl_creader_clear_eos(struct Curl_easy *data,
-                            struct Curl_creader *reader)
+CURLcode Curl_creader_clear_eos(struct Curl_easy *data,
+                                struct Curl_creader *reader)
 {
   while(reader) {
-    (void)reader->crt->cntrl(data, reader, CURL_CRCNTRL_CLEAR_EOS);
+    CURLcode result = reader->crt->cntrl(data, reader, CURL_CRCNTRL_CLEAR_EOS);
+    if(result)
+      return result;
     reader = reader->next;
   }
+  return CURLE_OK;
 }
 
 CURLcode Curl_creader_def_init(struct Curl_easy *data,

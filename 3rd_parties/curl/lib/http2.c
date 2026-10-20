@@ -424,8 +424,8 @@ static void http2_data_done(struct Curl_cfilter *cf, struct Curl_easy *data)
 
   if(ctx->h2) {
     bool flush_egress = FALSE;
-    /* returns error if stream not known, which is fine here */
-    (void)nghttp2_session_set_stream_user_data(ctx->h2, stream->id, NULL);
+    if(nghttp2_session_set_stream_user_data(ctx->h2, stream->id, NULL))
+      CURL_TRC_CF(data, cf, "[%d] stream already detached", stream->id);
 
     if(!stream->closed && stream->id > 0) {
       /* RST_STREAM */
@@ -439,8 +439,13 @@ static void http2_data_done(struct Curl_cfilter *cf, struct Curl_easy *data)
     }
 
     if(flush_egress) {
-      (void)nghttp2_session_send(ctx->h2);
-      (void)nw_out_flush(cf, data);
+      if(nghttp2_session_send(ctx->h2))
+        infof(data, "HTTP/2 reset could not be queued for sending");
+      {
+        CURLcode result = nw_out_flush(cf, data);
+        if(result && result != CURLE_AGAIN)
+          infof(data, "HTTP/2 reset flush failed: %d", (int)result);
+      }
     }
   }
 
@@ -594,7 +599,8 @@ static CURLcode http2_send_ping(struct Curl_cfilter *cf,
 void Curl_http2_ver(char *p, size_t len)
 {
   nghttp2_info *h2 = nghttp2_version(0);
-  (void)curl_msnprintf(p, len, "nghttp2/%s", h2->version_str);
+  if(curl_msnprintf(p, len, "nghttp2/%s", h2->version_str) < 0 && len)
+    p[0] = 0;
 }
 
 /*
@@ -703,10 +709,16 @@ static struct Curl_easy *h2_duphandle(struct Curl_cfilter *cf,
   struct Curl_easy *second = curl_easy_init();
   if(second) {
     struct h2_stream_ctx *second_stream;
-    http2_data_setup(cf, second, &second_stream);
+    if(http2_data_setup(cf, second, &second_stream)) {
+      curl_easy_cleanup(second);
+      return NULL;
+    }
     second->state.weight = data->state.weight;
-    if(data->share)
-      (void)Curl_share_easy_link(second, data->share);
+    if(data->share && Curl_share_easy_link(second, data->share)) {
+      http2_data_done(cf, second);
+      curl_easy_cleanup(second);
+      return NULL;
+    }
   }
   return second;
 }
@@ -774,7 +786,7 @@ static void discard_newhandle(struct Curl_cfilter *cf,
                               struct Curl_easy *newhandle)
 {
   http2_data_done(cf, newhandle);
-  (void)Curl_close(&newhandle);
+  Curl_close(&newhandle);
 }
 
 static int push_promise(struct Curl_cfilter *cf,
@@ -1320,7 +1332,8 @@ static int on_stream_close(nghttp2_session *session, int32_t stream_id,
      * trigger DONE or DETACH events as it must. */
     CURL_TRC_CF(call_data, cf,
                 "[%d] on_stream_close, not a GOOD easy on stream", stream_id);
-    (void)nghttp2_session_set_stream_user_data(session, stream_id, 0);
+    if(nghttp2_session_set_stream_user_data(session, stream_id, 0))
+      failf(call_data, "Cannot detach invalid HTTP/2 stream %d", stream_id);
     return NGHTTP2_ERR_CALLBACK_FAILURE;
   }
   stream = H2_STREAM_CTX(ctx, data_s);
@@ -1447,8 +1460,9 @@ static int on_header(nghttp2_session *session, const nghttp2_frame *frame,
          * PUSH_PROMISE for which the server is not authoritative as a stream
          * error of type PROTOCOL_ERROR."
          */
-        (void)nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE,
-                                        stream_id, NGHTTP2_PROTOCOL_ERROR);
+        if(nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE,
+                                     stream_id, NGHTTP2_PROTOCOL_ERROR))
+          failf(data, "Cannot reset rejected HTTP/2 push stream %d", stream_id);
         rc = NGHTTP2_ERR_CALLBACK_FAILURE;
       }
       curlx_free(check);
@@ -1509,14 +1523,17 @@ static int on_header(nghttp2_session *session, const nghttp2_frame *frame,
   if(namelen == CURL_CSTRLEN(HTTP_PSEUDO_STATUS) &&
      !memcmp(HTTP_PSEUDO_STATUS, name, namelen)) {
     /* nghttp2 guarantees :status is received first and only once. */
+#ifndef CURL_DISABLE_HEADERS_API
     char buffer[32];
     size_t hlen;
+#endif
     result = Curl_http_decode_status(&stream->status_code,
                                      (const char *)value, valuelen);
     if(result) {
       cf_h2_header_error(cf, data, stream, result);
       return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
+#ifndef CURL_DISABLE_HEADERS_API
     hlen = curl_msnprintf(buffer, sizeof(buffer), HTTP_PSEUDO_STATUS ":%d\r",
                           stream->status_code);
     result = Curl_headers_push(data, buffer, hlen, CURLH_PSEUDO);
@@ -1524,6 +1541,7 @@ static int on_header(nghttp2_session *session, const nghttp2_frame *frame,
       cf_h2_header_error(cf, data, stream, result);
       return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
+#endif
     curlx_dyn_reset(&ctx->scratch);
     result = curlx_dyn_addn(&ctx->scratch, STRCONST("HTTP/2 "));
     if(!result)
@@ -2623,7 +2641,9 @@ static CURLcode http2_data_pause(struct Curl_cfilter *cf,
       return result;
 
     /* attempt to send the window update */
-    (void)h2_progress_egress(cf, data);
+    result = h2_progress_egress(cf, data);
+    if(result && result != CURLE_AGAIN)
+      return result;
 
     if(!pause) {
       /* Unpausing a h2 transfer, requires it to be run again. The server

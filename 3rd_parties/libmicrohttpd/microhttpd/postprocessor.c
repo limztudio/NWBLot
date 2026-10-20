@@ -1071,12 +1071,18 @@ post_process_multipart (struct MHD_PostProcessor *pp,
        * > anything that appears before the first boundary delimiter
        * > line or after the last one.
        */
-      (void) find_boundary (pp,
+      if (MHD_NO == find_boundary (pp,
                             pp->boundary,
                             pp->blen,
                             &ioff,
                             PP_ProcessEntryHeaders,
-                            PP_Done);
+                            PP_Done))
+      {
+        if (pp->state == PP_Error)
+          return MHD_NO;
+        if (0 == ioff)
+          goto END;
+      }
       break;
     case PP_NextBoundary:
       if (MHD_NO == find_boundary (pp,
@@ -1088,7 +1094,8 @@ post_process_multipart (struct MHD_PostProcessor *pp,
       {
         if (pp->state == PP_Error)
           return MHD_NO;
-        goto END;
+        if (0 == ioff)
+          goto END;
       }
       break;
     case PP_ProcessEntryHeaders:

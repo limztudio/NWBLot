@@ -1587,7 +1587,6 @@
     Colr*  colr = (Colr*)face->colr;
 
     FT_Byte*  p;
-    FT_ULong  var_index_base;
     FT_Byte*  last_entry_p = NULL;
     FT_UInt   entry_size   = COLOR_STOP_SIZE;
 
@@ -1627,10 +1626,9 @@
       /* Pointer p needs to be advanced independently of whether we intend */
       /* to take variable deltas into account or not.  Otherwise iteration */
       /* would fail due to wrong offsets.                                  */
-      var_index_base = FT_NEXT_ULONG( p );
-
 #ifdef TT_CONFIG_OPTION_GX_VAR_SUPPORT
       {
+        FT_ULong  var_index_base = FT_NEXT_ULONG( p );
         FT_Int  item_deltas[2];
 
 
@@ -1644,7 +1642,7 @@
         color_stop->color.alpha += (FT_F2Dot14)item_deltas[1];
       }
 #else
-      FT_UNUSED( var_index_base );
+      p += VAR_IDX_BASE_SIZE;
 #endif
     }
 

@@ -355,7 +355,11 @@ static int32_t GetResourceDescriptionSize(RmtParser* rmt_parser, RmtResourceType
     {
         uint32_t           pool_size_count = 0;
         const RmtErrorCode error_code      = ReadUInt32(rmt_parser, &pool_size_count, RMT_TOKEN_SIZE_RESOURCE_CREATE);
-        RMT_UNUSED(error_code);
+        if (error_code == kRmtErrorInvalidSize)
+        {
+            rmt_parser->buffer_refill_needed = true;
+        }
+        RMT_RETURN_ON_ERROR(error_code == kRmtOk, -1);
         pool_size_count = (pool_size_count >> 16) & 0xff;
         return 3 + (pool_size_count * 4);
     }
@@ -427,6 +431,7 @@ static int32_t GetTokenSize(RmtParser* rmt_parser, const uint16_t token_header)
         RMT_RETURN_ON_ERROR(error_code == kRmtOk, 0);
         const RmtResourceType resource_type                        = (RmtResourceType)resource_type_byte;
         const int32_t         size_of_resource_description_payload = GetResourceDescriptionSize(rmt_parser, resource_type);
+        RMT_RETURN_ON_ERROR(size_of_resource_description_payload >= 0, 0);
         return base_size_of_resource_description + size_of_resource_description_payload;
     }
     case kRmtTokenTypeTimeDelta:
@@ -667,7 +672,7 @@ static RmtErrorCode ParseMisc(RmtParser* rmt_parser, const uint16_t token_header
 
     uint8_t            data[RMT_TOKEN_SIZE_MISC] = {};
     const RmtErrorCode error_code                = ReadBytes(rmt_parser, data, 0, sizeof(data));
-    RMT_UNUSED(error_code);
+    RMT_RETURN_ON_ERROR(error_code == kRmtOk, error_code);
     out_misc_token->type = (RmtMiscType)ReadBitsFromBuffer(data, sizeof(data), 11, 8);
     return kRmtOk;
 }
@@ -733,15 +738,9 @@ static RmtErrorCode ParsePageReference(RmtParser* rmt_parser, const uint16_t tok
 
     uint8_t            data[RMT_TOKEN_SIZE_PAGE_REFERENCE] = {};
     const RmtErrorCode error_code                          = ReadBytes(rmt_parser, data, 0, sizeof(data));
-    RMT_UNUSED(error_code);
+    RMT_RETURN_ON_ERROR(error_code == kRmtOk, error_code);
 
     out_page_reference->page_size      = (RmtPageSize)ReadBitsFromBuffer(data, sizeof(data), 10, 8);
-    const bool     is_compressed       = (bool)ReadBitsFromBuffer(data, sizeof(data), 11, 11);
-    const uint64_t page_reference_data = ReadBitsFromBuffer(data, sizeof(data), 75, 16);
-
-    RMT_UNUSED(is_compressed);
-    RMT_UNUSED(page_reference_data);
-
     return kRmtOk;
 }
 
@@ -1058,7 +1057,7 @@ static RmtErrorCode ParseResourceDescriptionPayloadGpuEvent(RmtParser* rmt_parse
 {
     uint8_t            data[GPU_EVENT_RESOURCE_TOKEN_SIZE] = {};
     const RmtErrorCode error_code                          = ReadBytes(rmt_parser, data, RMT_TOKEN_SIZE_RESOURCE_CREATE, sizeof(data));
-    RMT_UNUSED(error_code);
+    RMT_RETURN_ON_ERROR(error_code == kRmtOk, error_code);
 
     // FLAGS [7:0] The flags used to create the GPU event.
     out_gpu_event->flags = (uint32_t)(ReadBitsFromBuffer(data, sizeof(data), 7, 0));

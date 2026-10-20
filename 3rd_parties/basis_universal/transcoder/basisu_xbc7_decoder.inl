@@ -679,18 +679,16 @@ namespace xbc7 {
 			}
 			else
 			{
-				uint8_t* pDst = m_arena.data() + arena_ofs;
-
 #if BASISD_SUPPORT_KTX2_ZSTD
+				uint8_t* pDst = m_arena.data() + arena_ofs;
 				const size_t res = ZSTD_decompress(pDst, e.uncomp_size, pBytes + e.data_ofs, e.stored_size);
 				if (ZSTD_isError(res) || (res != e.uncomp_size))
 					return false;
 #else
-				BASISU_NOTE_UNUSED(pDst);
 				return false; // zstd disabled at compile time
 #endif
 
-				m_ptrs[e.id] = pDst;
+				m_ptrs[e.id] = m_arena.data() + arena_ofs;
 				arena_ofs += e.uncomp_size;
 			}
 		}

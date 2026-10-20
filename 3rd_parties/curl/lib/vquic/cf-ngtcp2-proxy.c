@@ -790,7 +790,12 @@ static CURLcode cf_h3_proxy_send(struct Curl_cfilter *cf,
                 stream->id, len, (int)result, *pnwritten);
     if(result)
       goto out;
-    (void)nghttp3_conn_resume_stream(ctx->h3conn, stream->id);
+    int rv = nghttp3_conn_resume_stream(ctx->h3conn, stream->id);
+    if(rv && rv != NGHTTP3_ERR_STREAM_NOT_FOUND) {
+      failf(data, "HTTP/3 stream resume failed: %s", nghttp3_strerror(rv));
+      result = CURLE_HTTP3;
+      goto out;
+    }
   }
 
   if(*pnwritten > 0 && !ctx->tls_handshake_complete && ctx->use_earlydata)

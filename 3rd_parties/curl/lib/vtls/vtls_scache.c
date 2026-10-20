@@ -1001,8 +1001,11 @@ void Curl_ssl_scache_return(struct Curl_cfilter *cf,
 {
   /* See RFC 8446 C.4:
    * "Clients SHOULD NOT reuse a ticket for multiple connections." */
-  if(s && s->ietf_tls_id < 0x304)
-    (void)Curl_ssl_scache_put(cf, data, ssl_peer_key, s);
+  if(s && s->ietf_tls_id < 0x304) {
+    CURLcode result = Curl_ssl_scache_put(cf, data, ssl_peer_key, s);
+    if(result)
+      infof(data, "SSL session cache return failed: %d", (int)result);
+  }
   else
     Curl_ssl_session_destroy(s);
 }

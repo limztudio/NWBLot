@@ -1219,7 +1219,8 @@ free_callback (void *cls)
 {
   struct MHD_Response *response = cls;
 
-  (void) close (response->fd);
+  if ((0 != close (response->fd)) && (EBADF == errno))
+    MHD_PANIC (_ ("Close response file failed.\n"));
   response->fd = -1;
 }
 

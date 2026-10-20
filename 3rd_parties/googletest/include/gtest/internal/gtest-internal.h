@@ -568,6 +568,12 @@ GTEST_API_ TestInfo* MakeAndRegisterTestInfo(
     TypeId fixture_class_id, SetUpTestSuiteFunc set_up_tc,
     TearDownTestSuiteFunc tear_down_tc, TestFactoryBase* factory);
 
+// Runs namespace-scope test registration without a dummy result.
+class StaticTestRegistration {
+ public:
+  explicit StaticTestRegistration(void (*register_tests)()) { register_tests(); }
+};
+
 // If *pstr starts with the given prefix, modifies *pstr to be right
 // past the prefix and returns true; otherwise leaves *pstr unchanged
 // and returns false.  None of pstr, *pstr, and prefix can be NULL.
@@ -581,10 +587,8 @@ class GTEST_API_ [[nodiscard]] TypedTestSuitePState {
  public:
   TypedTestSuitePState() : registered_(false) {}
 
-  // Adds the given test name to defined_test_names_ and return true
-  // if the test suite hasn't been registered; otherwise aborts the
-  // program.
-  bool AddTestName(const char* file, int line, const char* case_name,
+  // Adds a test name or aborts if the suite is already registered.
+  void AddTestName(const char* file, int line, const char* case_name,
                    const char* test_name) {
     if (registered_) {
       fprintf(stderr,
@@ -595,7 +599,6 @@ class GTEST_API_ [[nodiscard]] TypedTestSuitePState {
       posix::Abort();
     }
     registered_tests_.emplace(test_name, CodeLocation(file, line));
-    return true;
   }
 
   bool TestExists(const std::string& test_name) const {
@@ -609,9 +612,8 @@ class GTEST_API_ [[nodiscard]] TypedTestSuitePState {
   }
 
   // Verifies that registered_tests match the test names in
-  // defined_test_names_; returns registered_tests if successful, or
-  // aborts the program otherwise.
-  const char* VerifyRegisteredTestNames(const char* test_suite_name,
+  // defined_test_names_; aborts the program on a mismatch.
+  void VerifyRegisteredTestNames(const char* test_suite_name,
                                         const char* file, int line,
                                         const char* registered_tests);
 
@@ -686,8 +688,7 @@ std::vector<std::string> GenerateNames() {
 
 // TypeParameterizedTest<Fixture, TestSel, Types>::Register()
 // registers a list of type-parameterized tests with Google Test.  The
-// return value is insignificant - we just need to return something
-// such that we can call this function in a namespace scope.
+// registration runs through StaticTestRegistration at namespace scope.
 //
 // Implementation note: The GTEST_TEMPLATE_ macro declares a template
 // template parameter.  It's defined in gtest-type-util.h.
@@ -698,7 +699,7 @@ class [[nodiscard]] TypeParameterizedTest {
   // specified in INSTANTIATE_TYPED_TEST_SUITE_P(Prefix, TestSuite,
   // Types).  Valid values for 'index' are [0, N - 1] where N is the
   // length of Types.
-  static bool Register(const char* prefix, CodeLocation code_location,
+  static void Register(const char* prefix, CodeLocation code_location,
                        const char* case_name, const char* test_names, int index,
                        const std::vector<std::string>& type_names =
                            GenerateNames<DefaultNameGenerator, Types>()) {
@@ -732,12 +733,12 @@ class [[nodiscard]] TypeParameterizedTest {
 template <GTEST_TEMPLATE_ Fixture, class TestSel>
 class [[nodiscard]] TypeParameterizedTest<Fixture, TestSel, internal::None> {
  public:
-  static bool Register(const char* /*prefix*/, CodeLocation,
+  static void Register(const char* /*prefix*/, CodeLocation,
                        const char* /*case_name*/, const char* /*test_names*/,
                        int /*index*/,
                        const std::vector<std::string>& =
                            std::vector<std::string>() /*type_names*/) {
-    return true;
+    return;
   }
 };
 
@@ -748,12 +749,11 @@ GTEST_API_ void RegisterTypeParameterizedTestSuiteInstantiation(
 
 // TypeParameterizedTestSuite<Fixture, Tests, Types>::Register()
 // registers *all combinations* of 'Tests' and 'Types' with Google
-// Test.  The return value is insignificant - we just need to return
-// something such that we can call this function in a namespace scope.
+// Test through StaticTestRegistration at namespace scope.
 template <GTEST_TEMPLATE_ Fixture, typename Tests, typename Types>
 class [[nodiscard]] TypeParameterizedTestSuite {
  public:
-  static bool Register(const char* prefix, CodeLocation code_location,
+  static void Register(const char* prefix, CodeLocation code_location,
                        const TypedTestSuitePState* state, const char* case_name,
                        const char* test_names,
                        const std::vector<std::string>& type_names =
@@ -791,12 +791,12 @@ class [[nodiscard]] TypeParameterizedTestSuite {
 template <GTEST_TEMPLATE_ Fixture, typename Types>
 class [[nodiscard]] TypeParameterizedTestSuite<Fixture, internal::None, Types> {
  public:
-  static bool Register(const char* /*prefix*/, const CodeLocation&,
+  static void Register(const char* /*prefix*/, const CodeLocation&,
                        const TypedTestSuitePState* /*state*/,
                        const char* /*case_name*/, const char* /*test_names*/,
                        const std::vector<std::string>& =
                            std::vector<std::string>() /*type_names*/) {
-    return true;
+    return;
   }
 };
 
@@ -1504,12 +1504,12 @@ class [[nodiscard]] NeverThrown {
                                                                                \
    private:                                                                    \
     void TestBody() override;                                                  \
-    [[maybe_unused]] static ::testing::TestInfo* const test_info_;             \
+    static const ::testing::internal::StaticTestRegistration test_info_;             \
   };                                                                           \
                                                                                \
-  ::testing::TestInfo* const GTEST_TEST_CLASS_NAME_(test_suite_name,           \
-                                                    test_name)::test_info_ =   \
-      ::testing::internal::MakeAndRegisterTestInfo(                            \
+  const ::testing::internal::StaticTestRegistration GTEST_TEST_CLASS_NAME_(test_suite_name,           \
+                                                    test_name)::test_info_([] { \
+      GTEST_CHECK_(::testing::internal::MakeAndRegisterTestInfo(                            \
           #test_suite_name, #test_name, nullptr, nullptr,                      \
           ::testing::internal::CodeLocation(__FILE__, __LINE__), (parent_id),  \
           ::testing::internal::SuiteApiResolver<                               \
@@ -1517,7 +1517,8 @@ class [[nodiscard]] NeverThrown {
           ::testing::internal::SuiteApiResolver<                               \
               parent_class>::GetTearDownCaseOrSuite(__FILE__, __LINE__),       \
           new ::testing::internal::TestFactoryImpl<GTEST_TEST_CLASS_NAME_(     \
-              test_suite_name, test_name)>);                                   \
+              test_suite_name, test_name)>) != nullptr);                       \
+  });                                                                          \
   void GTEST_TEST_CLASS_NAME_(test_suite_name, test_name)::TestBody()
 
 #endif  // GOOGLETEST_INCLUDE_GTEST_INTERNAL_GTEST_INTERNAL_H_

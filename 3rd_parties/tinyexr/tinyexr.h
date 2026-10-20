@@ -8342,29 +8342,39 @@ struct MemoryMappedFile {
   ~MemoryMappedFile() {
 #ifdef TINYEXR_USE_WIN32_MMAP
     if (data) {
-      (void)UnmapViewOfFile(data);
+      if (!UnmapViewOfFile(data)) {
+        fprintf(stderr, "TinyEXR: failed to unmap file view (%lu)\n", GetLastError());
+      }
       data = NULL;
     }
 
     if (windows_file_mapping != NULL) {
-      (void)CloseHandle(windows_file_mapping);
+      if (!CloseHandle(windows_file_mapping)) {
+        fprintf(stderr, "TinyEXR: failed to close file mapping (%lu)\n", GetLastError());
+      }
     }
 
     if (windows_file != INVALID_HANDLE_VALUE) {
-      (void)CloseHandle(windows_file);
+      if (!CloseHandle(windows_file)) {
+        fprintf(stderr, "TinyEXR: failed to close file (%lu)\n", GetLastError());
+      }
     }
 #elif defined(TINYEXR_USE_POSIX_MMAP)
     if (data) {
-      (void)munmap(data, size);
+      if (munmap(data, size) != 0) {
+        perror("TinyEXR: failed to unmap file");
+      }
       data = NULL;
     }
 
     if (posix_descriptor != -1) {
-      (void)close(posix_descriptor);
+      if (close(posix_descriptor) != 0) {
+        perror("TinyEXR: failed to close file");
+      }
     }
 #else
     if (data) {
-      (void)free(data);
+      free(data);
     }
     data = NULL;
 #endif

@@ -370,7 +370,8 @@ static void pack_mode11(
 			int e[2][3];
 			bool success = decode_mode11_to_qlog12(results.m_best_blk.m_endpoints, e, results.m_best_blk.m_endpoint_ise_range);
 			assert(success);
-			BASISU_NOTE_UNUSED(success);
+			if (!success)
+				abort();
 
 			// Transform endpoints to half float
 			half_float h_e[3][2] =
@@ -446,7 +447,8 @@ static void pack_mode7_single_part(
 			// Transcode to bc6h
 			bool status = transcode_bc6h_1subset(h_e, results.m_best_blk, results.m_bc6h_block);
 			assert(status);
-			(void)status;
+			if (!status)
+				abort();
 
 			all_results.push_back(results);
 		}
@@ -698,7 +700,8 @@ static void pack_mode7_2part(
 
 				bool status = transcode_bc6h_2subsets(part_index, results.m_best_blk, results.m_bc6h_block);
 				assert(status);
-				BASISU_NOTE_UNUSED(status);
+				if (!status)
+					abort();
 
 				all_results.push_back(results);
 			}
@@ -839,7 +842,8 @@ static void pack_mode11_2part(
 
 				bool status = transcode_bc6h_2subsets(part_index, results.m_best_blk, results.m_bc6h_block);
 				assert(status);
-				BASISU_NOTE_UNUSED(status);
+				if (!status)
+					abort();
 
 				all_results.push_back(results);
 			}
@@ -996,7 +1000,8 @@ bool astc_hdr_4x4_enc_block(
 			{
 				bool status = astc_hdr_4x4_refine_weights(pRGBPixelsHalf, all_results[i], coptions, coptions.m_bc6h_err_weight, &all_results[i].m_improved_via_refinement_flag);
 				assert(status);
-				BASISU_NOTE_UNUSED(status);
+				if (!status)
+					abort();
 			}
 		}
 
@@ -1073,7 +1078,8 @@ bool astc_hdr_4x4_refine_weights(const half_float *pSource_block,
 		half_float unpacked_bc6h_blk[4][4][3];
 		res = unpack_bc6h(&trial_bc6h_blk, unpacked_bc6h_blk, false);
 		assert(res);
-		BASISU_NOTE_UNUSED(res);
+		if (!res)
+			abort();
 
 		for (uint32_t y = 0; y < 4; y++)
 		{
@@ -1128,7 +1134,8 @@ bool astc_hdr_4x4_refine_weights(const half_float *pSource_block,
 		{
 			bool res = basist::astc_hdr_transcode_to_bc6h(cur_results.m_best_blk, cur_results.m_bc6h_block);
 			assert(res);
-			BASISU_NOTE_UNUSED(res);
+			if (!res)
+			abort();
 
 			half_float unpacked_astc_blk_rgba[4][4][4];
 			res = astc_helpers::decode_block(cur_results.m_best_blk, unpacked_astc_blk_rgba, 4, 4, astc_helpers::cDecodeModeHDR16);

@@ -298,7 +298,7 @@
 
           /* compute linear advance widths */
 
-          (void)( (SFNT_Service)face->sfnt )->get_metrics( face, 0,
+          ( (SFNT_Service)face->sfnt )->get_metrics( face, 0,
                                                            glyph_index,
                                                            &dummy,
                                                            &advance );
@@ -311,7 +311,7 @@
           /* get the vertical metrics from the vmtx table if we have one */
           if ( has_vertical_info )
           {
-            (void)( (SFNT_Service)face->sfnt )->get_metrics( face, 1,
+            ( (SFNT_Service)face->sfnt )->get_metrics( face, 1,
                                                              glyph_index,
                                                              &dummy,
                                                              &advance );

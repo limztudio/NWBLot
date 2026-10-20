@@ -1232,7 +1232,6 @@ namespace basisu
 			(void)slice_desc;
 
 			const uint32_t num_blocks_x = tex.get_blocks_x();
-			const uint32_t num_blocks_y = tex.get_blocks_y();
 			const uint32_t total_blocks = tex.get_total_blocks();
 			const imagef& source_image = m_slice_images_hdr[slice_index];
 						
@@ -1242,11 +1241,10 @@ namespace basisu
 				const uint32_t first_index = block_index_iter;
 				const uint32_t last_index = minimum<uint32_t>(total_blocks, block_index_iter + N);
 							
-				m_params.m_pJob_pool->add_job([this, first_index, last_index, num_blocks_x, num_blocks_y, total_blocks, &source_image, 
+				m_params.m_pJob_pool->add_job([this, first_index, last_index, num_blocks_x, total_blocks, &source_image,
 					&tex, &any_failures, &enc_stats, &unique_block_descs, &unique_block_desc_mutex, 
 					&status_output_mutex, &total_blocks_processed, &last_percentage_printed]
 					{
-						BASISU_NOTE_UNUSED(num_blocks_y);
 
 						basisu::vector<astc_hdr_4x4_pack_results> all_results;
 						all_results.reserve(256);
@@ -1996,7 +1994,6 @@ namespace basisu
 			(void)slice_desc;
 
 			const uint32_t num_blocks_x = tex.get_blocks_x();
-			const uint32_t num_blocks_y = tex.get_blocks_y();
 			const uint32_t total_blocks = tex.get_total_blocks();
 			const image& source_image = m_slice_images[slice_index];
 
@@ -2010,10 +2007,9 @@ namespace basisu
 				const uint32_t first_index = block_index_iter;
 				const uint32_t last_index = minimum<uint32_t>(total_blocks, block_index_iter + N);
 								
-				m_params.m_pJob_pool->add_job([this, first_index, last_index, num_blocks_x, num_blocks_y, total_blocks, &source_image, &tex,
+				m_params.m_pJob_pool->add_job([this, first_index, last_index, num_blocks_x, total_blocks, &source_image, &tex,
 					&status_output_mutex, &total_blocks_processed, &last_percentage_printed]
 					{
-						BASISU_NOTE_UNUSED(num_blocks_y);
 						
 						uint32_t uastc_flags = m_params.m_pack_uastc_ldr_4x4_flags;
 						if ((m_params.m_rdo_uastc_ldr_4x4) && (m_params.m_rdo_uastc_ldr_4x4_favor_simpler_modes_in_rdo_mode))

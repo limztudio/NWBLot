@@ -804,9 +804,10 @@ static CURLcode easy_perform(struct Curl_easy *data, bool events)
   /* run the transfer */
   result = events ? easy_events(multi) : easy_transfer(multi);
 
-  /* ignoring the return code is not nice, but atm we cannot really handle
-     a failure here, room for future improvement! */
-  (void)Curl_multi_remove_handle(multi, data);
+  mresult = Curl_multi_remove_handle(multi, data);
+  if(mresult && !result)
+    result = mresult == CURLM_OUT_OF_MEMORY ? CURLE_OUT_OF_MEMORY :
+                                           CURLE_FAILED_INIT;
 
   sigpipe_restore(&sigpipe_ctx);
 
@@ -1064,8 +1065,8 @@ CURL *curl_easy_duphandle(CURL *curl)
       if(!outcurl->asi)
         goto fail;
       str = CURL_EASY_STR(outcurl, STRING_ALTSVC);
-      if(str)
-        (void)Curl_altsvc_load(outcurl->asi, str);
+      if(str && Curl_altsvc_load(outcurl->asi, str))
+        goto fail;
     }
 #endif
 #ifndef CURL_DISABLE_HSTS
@@ -1074,9 +1075,10 @@ CURL *curl_easy_duphandle(CURL *curl)
       if(!outcurl->hsts)
         goto fail;
       str = CURL_EASY_STR(outcurl, STRING_HSTS);
-      if(str)
-        (void)Curl_hsts_loadfile(outcurl, outcurl->hsts, str);
-      (void)Curl_hsts_loadcb(outcurl, outcurl->hsts);
+      if(str && Curl_hsts_loadfile(outcurl, outcurl->hsts, str))
+        goto fail;
+      if(Curl_hsts_loadcb(outcurl, outcurl->hsts))
+        goto fail;
 
       /* Copy entries learned at runtime. (E.g. Strict-Transport-Security
          headers.) */

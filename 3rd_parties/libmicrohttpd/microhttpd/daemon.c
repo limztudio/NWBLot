@@ -798,11 +798,12 @@ urh_to_fdset (struct MHD_UpgradeResponseHandle *urh,
         ((0 != urh->in_buffer_size) ||
          (0 != urh->out_buffer_size) ||
          (0 != urh->out_buffer_used))
-        && (NULL != es))
-      (void) MHD_add_to_fd_set_ (conn_sckt,
-                                 es,
-                                 max_fd,
-                                 fd_setsize);
+        && (NULL != es)
+        && (! MHD_add_to_fd_set_ (conn_sckt,
+                                    es,
+                                    max_fd,
+                                    fd_setsize)))
+      res = false;
   }
   if (MHD_INVALID_SOCKET != mhd_sckt)
   {
@@ -1094,11 +1095,12 @@ internal_get_fdset2 (struct MHD_Daemon *daemon,
                                 fd_setsize))
         result = MHD_NO;
 #ifdef MHD_POSIX_SOCKETS
-      if (NULL != except_fd_set)
-        (void) MHD_add_to_fd_set_ (pos->socket_fd,
+      if ((NULL != except_fd_set) &&
+          (! MHD_add_to_fd_set_ (pos->socket_fd,
                                    except_fd_set,
                                    max_fd,
-                                   fd_setsize);
+                                   fd_setsize)))
+        result = MHD_NO;
 #endif /* MHD_POSIX_SOCKETS */
       break;
     case MHD_EVENT_LOOP_INFO_WRITE:
@@ -1108,11 +1110,12 @@ internal_get_fdset2 (struct MHD_Daemon *daemon,
                                 fd_setsize))
         result = MHD_NO;
 #ifdef MHD_POSIX_SOCKETS
-      if (NULL != except_fd_set)
-        (void) MHD_add_to_fd_set_ (pos->socket_fd,
+      if ((NULL != except_fd_set) &&
+          (! MHD_add_to_fd_set_ (pos->socket_fd,
                                    except_fd_set,
                                    max_fd,
-                                   fd_setsize);
+                                   fd_setsize)))
+        result = MHD_NO;
 #endif /* MHD_POSIX_SOCKETS */
       break;
     case MHD_EVENT_LOOP_INFO_PROCESS:
@@ -4214,7 +4217,7 @@ MHD_accept_connection (struct MHD_Daemon *daemon)
      * but suppression failed and SIGPIPE cannot be suppressed with send(). */
     if (! daemon->sigpipe_blocked)
     {
-      (void) MHD_socket_close_ (s);
+      MHD_socket_close_chk_ (s);
       return MHD_NO;
     }
 #endif /* MSG_NOSIGNAL */
@@ -4229,14 +4232,15 @@ MHD_accept_connection (struct MHD_Daemon *daemon)
             s);
 #endif
 #endif
-  (void) internal_add_connection (daemon,
+  if (MHD_YES == internal_add_connection (daemon,
                                   s,
                                   &addrstorage,
                                   addrlen,
                                   false,
                                   sk_nonbl,
                                   sk_spipe_supprs,
-                                  sk_non_ip);
+                                  sk_non_ip))
+    daemon->data_already_pending = true;
   return MHD_YES;
 }
 
@@ -4766,8 +4770,8 @@ internal_run_from_select (struct MHD_Daemon *daemon,
     else                                       /* Cannot check whether new connection are pending */
       need_to_accept = daemon->listen_nonblk;  /* Try to accept if non-blocking */
 
-    if (need_to_accept)
-      (void) MHD_accept_connection (daemon);
+    if (need_to_accept && (MHD_YES == MHD_accept_connection (daemon)))
+      daemon->data_already_pending = true;
   }
 
   if (! MHD_D_IS_USING_THREAD_PER_CONN_ (daemon))
@@ -5348,13 +5352,14 @@ MHD_poll_all (struct MHD_Daemon *daemon,
     if (daemon->have_new)
       new_connections_list_process_ (daemon);
 
-    /* handle 'listen' FD */
-    if ( (-1 != poll_listen) &&
-         (0 != (p[poll_listen].revents & POLLIN)) )
-      (void) MHD_accept_connection (daemon);
-
     /* Reset. New value will be set when connections are processed. */
     daemon->data_already_pending = false;
+
+    /* handle 'listen' FD */
+    if ( (-1 != poll_listen) &&
+         (0 != (p[poll_listen].revents & POLLIN)) &&
+         (MHD_YES == MHD_accept_connection (daemon)))
+      daemon->data_already_pending = true;
 
     i = 0;
     prev = daemon->connections_tail;
@@ -5461,8 +5466,9 @@ MHD_poll_listen_socket (struct MHD_Daemon *daemon,
     poll_count++;
   }
 
-  if (0 != (daemon->options & MHD_TEST_ALLOW_SUSPEND_RESUME))
-    (void) resume_suspended_connections (daemon);
+  if ((0 != (daemon->options & MHD_TEST_ALLOW_SUSPEND_RESUME)) &&
+      (MHD_YES == resume_suspended_connections (daemon)))
+    may_block = MHD_NO;
 
   if (MHD_NO == may_block)
     timeout = 0;
@@ -5498,8 +5504,9 @@ MHD_poll_listen_socket (struct MHD_Daemon *daemon,
     new_connections_list_process_ (daemon);
 
   if ( (0 <= poll_listen) &&
-       (0 != (p[poll_listen].revents & POLLIN)) )
-    (void) MHD_accept_connection (daemon);
+       (0 != (p[poll_listen].revents & POLLIN)) &&
+       (MHD_YES == MHD_accept_connection (daemon)))
+    daemon->data_already_pending = true;
   return MHD_YES;
 }
 
@@ -6074,8 +6081,7 @@ MHD_run (struct MHD_Daemon *daemon)
        MHD_D_IS_USING_THREADS_ (daemon) )
     return MHD_NO;
 
-  (void) MHD_run_wait (daemon, 0);
-  return MHD_YES;
+  return MHD_run_wait (daemon, 0);
 }
 
 
@@ -7844,7 +7850,7 @@ process_interim_params (struct MHD_Daemon *d,
                 _ ("MHD_OPTION_LISTEN_SOCKET specified for daemon "
                    "with MHD_USE_NO_LISTEN_SOCKET flag set.\n"));
 #endif /* HAVE_MESSAGES */
-      (void) MHD_socket_close_ (params->listen_fd);
+      MHD_socket_close_chk_ (params->listen_fd);
       return false;
     }
     else
@@ -7886,7 +7892,7 @@ process_interim_params (struct MHD_Daemon *d,
 #endif /* HAVE_MESSAGES */
       if (MHD_INVALID_SOCKET != d->listen_fd)
       {
-        (void) MHD_socket_close_ (params->listen_fd);
+        MHD_socket_close_chk_ (params->listen_fd);
         params->listen_fd = MHD_INVALID_SOCKET;
       }
       return false;
@@ -9311,7 +9317,7 @@ free_and_fail:
   if (MHD_ITC_IS_VALID_ (daemon->itc))
     MHD_itc_destroy_chk_ (daemon->itc);
   if (MHD_INVALID_SOCKET != daemon->listen_fd)
-    (void) MHD_socket_close_ (daemon->listen_fd);
+    MHD_socket_close_chk_ (daemon->listen_fd);
   free (daemon);
   return NULL;
 }
@@ -9596,8 +9602,9 @@ MHD_stop_daemon (struct MHD_Daemon *daemon)
 #ifdef HAVE_LISTEN_SHUTDOWN
     if (MHD_INVALID_SOCKET != fd)
     {
-      (void) shutdown (fd,
-                       SHUT_RDWR);
+      if ((0 != shutdown (fd, SHUT_RDWR)) &&
+          (! MHD_SCKT_ERR_IS_ (MHD_socket_get_error_ (), MHD_SCKT_ENOTCONN_)))
+        MHD_PANIC (_ ("Failed to shut down listening socket.\n"));
     }
 #endif /* HAVE_LISTEN_SHUTDOWN */
     for (i = 0; i < daemon->worker_pool_size; ++i)
@@ -9633,9 +9640,10 @@ MHD_stop_daemon (struct MHD_Daemon *daemon)
 #ifdef HAVE_LISTEN_SHUTDOWN
         if (MHD_INVALID_SOCKET != fd)
         {
-          if (NULL == daemon->master)
-            (void) shutdown (fd,
-                             SHUT_RDWR);
+          if ((NULL == daemon->master) &&
+              (0 != shutdown (fd, SHUT_RDWR)) &&
+              (! MHD_SCKT_ERR_IS_ (MHD_socket_get_error_ (), MHD_SCKT_ENOTCONN_)))
+            MHD_PANIC (_ ("Failed to shut down listening socket.\n"));
         }
         else
 #endif /* HAVE_LISTEN_SHUTDOWN */

@@ -81,7 +81,9 @@ static void brotli_version(char *buf, size_t bufsz)
   unsigned int major = brotli_version >> 24;
   unsigned int minor = (brotli_version & 0x00FFFFFF) >> 12;
   unsigned int patch = brotli_version & 0x00000FFF;
-  (void)curl_msnprintf(buf, bufsz, "brotli/%u.%u.%u", major, minor, patch);
+  if(curl_msnprintf(buf, bufsz, "brotli/%u.%u.%u", major, minor, patch) < 0 &&
+     bufsz)
+    buf[0] = 0;
 }
 #endif
 
@@ -92,7 +94,9 @@ static void zstd_version(char *buf, size_t bufsz)
   unsigned int major = version / (100 * 100);
   unsigned int minor = (version - (major * 100 * 100)) / 100;
   unsigned int patch = version - (major * 100 * 100) - (minor * 100);
-  (void)curl_msnprintf(buf, bufsz, "zstd/%u.%u.%u", major, minor, patch);
+  if(curl_msnprintf(buf, bufsz, "zstd/%u.%u.%u", major, minor, patch) < 0 &&
+     bufsz)
+    buf[0] = 0;
 }
 #endif
 

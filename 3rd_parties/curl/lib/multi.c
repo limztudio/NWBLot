@@ -72,7 +72,7 @@
 
 static void move_pending_to_connect(struct Curl_multi *multi,
                                     struct Curl_easy *data);
-static CURLMcode add_next_timeout(const struct curltime *pnow,
+static void add_next_timeout(const struct curltime *pnow,
                                   struct Curl_multi *multi,
                                   struct Curl_easy *data);
 static void multi_timeout(struct Curl_multi *multi,
@@ -794,11 +794,9 @@ CURLMcode Curl_multi_remove_handle(struct Curl_multi *multi,
     if(premature && (data->mstate > MSTATE_DO))
       streamclose(data->conn);
 
-    /* multi_done() clears the association between the easy handle and the
-       connection.
-       Note that this ignores the return code because there is
-       nothing really useful to do with it anyway! */
-    (void)multi_done(data, data->result, premature);
+    CURLcode done_result = multi_done(data, data->result, premature);
+    if(done_result)
+      infof(data, "Transfer removal cleanup failed: %d", (int)done_result);
   }
 
   /* The timer must be shut down before data->multi is set to NULL, else
@@ -813,8 +811,8 @@ CURLMcode Curl_multi_remove_handle(struct Curl_multi *multi,
   if(data->state.really_alive) {
     data->state.really_alive = FALSE;
     --multi->xfers_really_alive;
-    if(!multi->xfers_really_alive)
-      (void)multi_assess_wakeup(multi);
+    if(!multi->xfers_really_alive && multi_assess_wakeup(multi))
+      failf(data, "Cannot update multi wakeup sockets after removal");
   }
 
   Curl_wildcard_dtor(&data->wildcard);
@@ -832,7 +830,9 @@ CURLMcode Curl_multi_remove_handle(struct Curl_multi *multi,
       if(data->state.lastconnect_id != -1) {
         /* Mark any connect-only connection for closure */
         struct connectdata *conn;
-        (void)Curl_getconnectinfo(data, &conn);
+        curl_socket_t sock = Curl_getconnectinfo(data, &conn);
+        if(conn && sock == CURL_SOCKET_BAD)
+          infof(data, "Closing connect-only connection with an invalid socket");
         if(conn && conn->bits.connect_only)
           connclose(conn);
       }
@@ -846,7 +846,9 @@ CURLMcode Curl_multi_remove_handle(struct Curl_multi *multi,
 
          Better close the connection here, at once. */
       struct connectdata *conn;
-      (void)Curl_getconnectinfo(data, &conn);
+      curl_socket_t sock = Curl_getconnectinfo(data, &conn);
+      if(conn && sock == CURL_SOCKET_BAD)
+        infof(data, "Closing detached connection with an invalid socket");
       if(conn)
         Curl_conn_close(data, conn, TRUE);
     }
@@ -1645,7 +1647,8 @@ static CURLMcode multi_wait(struct Curl_multi *multi,
 #ifdef ENABLE_WAKEUP
     if(nevents && (wakeup_idx >= 0)) {
       if(cpfds.pfds[wakeup_idx].revents & POLLIN) {
-        (void)Curl_wakeup_consume(multi->wakeup_pair, TRUE);
+        if(Curl_wakeup_consume(multi->wakeup_pair, TRUE))
+          mresult = CURLM_WAKEUP_FAILURE;
         /* do not count the wakeup socket into the returned value */
         nevents--;
       }
@@ -1865,7 +1868,8 @@ static bool multi_handle_timeout(struct Curl_easy *data,
         streamclose(data->conn);
         *stream_error = TRUE;
       }
-      (void)multi_done(data, *result, TRUE);
+      if(multi_done(data, *result, TRUE) != *result)
+        infof(data, "Additional cleanup failure after transfer timeout");
     }
     return TRUE;
   }
@@ -2127,9 +2131,11 @@ static CURLMcode multistate_performing(struct Curl_easy *data,
       }
       else
         follow = FOLLOW_RETRY;
-      (void)multi_done(data, CURLE_OK, FALSE);
-      /* multi_done() might return CURLE_GOT_NOTHING */
-      result = multi_follow(data, handler, newurl, follow);
+      result = multi_done(data, CURLE_OK, FALSE);
+      if(!result || result == CURLE_GOT_NOTHING)
+        result = multi_follow(data, handler, newurl, follow);
+      else
+        curlx_free(newurl);
       if(!result) {
         multistate(data, MSTATE_SETUP);
         mresult = CURLM_CALL_MULTI_PERFORM;
@@ -2469,8 +2475,8 @@ static void handle_completed(struct Curl_multi *multi,
   if(data->state.really_alive) {
     data->state.really_alive = FALSE;
     --multi->xfers_really_alive;
-    if(!multi->xfers_really_alive)
-      (void)multi_assess_wakeup(multi);
+    if(!multi->xfers_really_alive && multi_assess_wakeup(multi))
+      failf(data, "Cannot update multi wakeup sockets after completion");
   }
   --multi->xfers_alive;
   if(!multi->xfers_alive)
@@ -2754,7 +2760,10 @@ static CURLMcode multi_runsingle(struct Curl_multi *multi,
 #ifdef ENABLE_INTERNAL_WAKEUP
     /* Consume any pending wakeup signals before processing.
      * This is necessary for event based processing. See #21547 */
-    (void)Curl_wakeup_consume(multi->wakeup_internal, TRUE);
+    if(Curl_wakeup_consume(multi->wakeup_internal, TRUE)) {
+      mresult = CURLM_WAKEUP_FAILURE;
+      goto out;
+    }
 #endif
 #ifdef USE_RESOLV_THREADED
     Curl_async_thrdd_multi_process(multi);
@@ -2958,7 +2967,7 @@ static CURLMcode multi_perform(struct Curl_multi *multi,
       DEBUGASSERT(0);
       continue;
     }
-    (void)add_next_timeout(&start, multi, data);
+    add_next_timeout(&start, multi, data);
     if(data->mstate == MSTATE_PENDING) {
       bool stream_unused;
       CURLcode result_unused;
@@ -3024,9 +3033,9 @@ CURLMcode curl_multi_cleanup(CURLM *m)
         if(data == multi->admin)
           continue;
 
-        if(!data->state.done && data->conn)
-          /* if DONE was never called for this handle */
-          (void)multi_done(data, CURLE_OK, TRUE);
+        if(!data->state.done && data->conn &&
+           multi_done(data, CURLE_OK, TRUE))
+          infof(data, "Transfer cleanup failed during multi cleanup");
 
         data->multi = NULL; /* clear the association */
         Curl_uint32_tbl_remove(&multi->xfers, mid);
@@ -3163,7 +3172,7 @@ static void multi_timeouts_init(struct Curl_easy *data)
  * The splay tree only has each Curl_easy as a single node and the nearest
  * timeout is used to sort it on.
  */
-static CURLMcode add_next_timeout(const struct curltime *pnow,
+static void add_next_timeout(const struct curltime *pnow,
                                   struct Curl_multi *multi,
                                   struct Curl_easy *data)
 {
@@ -3183,7 +3192,6 @@ static CURLMcode add_next_timeout(const struct curltime *pnow,
     Curl_timeouts_add(&multi->timeouts, data,
                       timeouts->offset_us[timeouts->first]);
   }
-  return CURLM_OK;
 }
 
 static void multi_mark_expired_as_dirty(struct Curl_multi *multi,
@@ -3212,7 +3220,7 @@ static void multi_mark_expired_as_dirty(struct Curl_multi *multi,
       }
     }
 #endif
-    (void)add_next_timeout(ts, multi, data);
+    add_next_timeout(ts, multi, data);
     Curl_multi_mark_dirty(data);
   }
 }

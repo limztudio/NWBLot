@@ -331,7 +331,9 @@ struct fvar
     if (!axis_index) axis_index = &i;
     *axis_index = HB_OT_VAR_NO_AXIS_INDEX;
     auto axes = get_axes ();
-    return axes.lfind (tag, axis_index) && ((void) axes[*axis_index].get_axis_deprecated (info), true);
+    if (!axes.lfind (tag, axis_index)) return false;
+    axes[*axis_index].get_axis_deprecated (info);
+    return true;
   }
 #endif
   bool
@@ -339,7 +341,9 @@ struct fvar
   {
     unsigned i;
     auto axes = get_axes ();
-    return axes.lfind (tag, &i) && ((void) axes[i].get_axis_info (i, info), true);
+    if (!axes.lfind (tag, &i)) return false;
+    axes[i].get_axis_info (i, info);
+    return true;
   }
 
   float normalize_axis_value (unsigned int axis_index, float v) const

@@ -3422,7 +3422,8 @@ namespace basisu
 
 				color_rgba decoded_uastc_block[4][4];
 				bool success = unpack_uastc(results[i].m_uastc_mode, results[i].m_common_pattern, results[i].m_solid_color.get_color32(), results[i].m_astc, (basist::color32 *)&decoded_uastc_block[0][0], false);
-				(void)success;
+				if (!success)
+					abort();
 				VALIDATE(success);
 
 				uint64_t total_uastc_rgb_err, total_uastc_rgba_err, total_uastc_la_err;
@@ -3554,7 +3555,8 @@ namespace basisu
 				
 		color_rgba decoded_uastc_block[4][4];
 		bool success = unpack_uastc(best_mode, best_results.m_common_pattern, best_results.m_solid_color.get_color32(), best_astc_results, (basist::color32 *)&decoded_uastc_block[0][0], false);
-		(void)success;
+		if (!success)
+			abort();
 		VALIDATE(success);
 
 #if BASISU_VALIDATE_UASTC_ENC
@@ -4058,7 +4060,8 @@ namespace basisu
 					bool success = unpack_uastc(results.m_uastc_mode, results.m_common_pattern, results.m_solid_color.get_color32(), results.m_astc, (basist::color32*) & decoded_trial_uastc_block[0][0], false);
 					assert(success);
 					
-					BASISU_NOTE_UNUSED(success);
+					if (!success)
+						abort();
 
 					uint64_t trial_uastc_err = 0;
 					for (uint32_t i = 0; i < 16; i++)

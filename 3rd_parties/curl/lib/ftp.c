@@ -465,6 +465,7 @@ static CURLcode ftp_check_ctrl_on_data_wait(struct Curl_easy *data,
   size_t nread;
   int ftpcode;
   bool response = FALSE;
+  CURLcode result;
 
   /* First check whether there is a cached response from server */
   if(curlx_dyn_len(&pp->recvbuf)) {
@@ -472,7 +473,9 @@ static CURLcode ftp_check_ctrl_on_data_wait(struct Curl_easy *data,
     if(!ISDIGIT(*l) || (*l > '3')) {
       /* Data connection could not be established, let's return */
       infof(data, "There is negative response in cache while serv connect");
-      (void)getftpresponse(data, &nread, &ftpcode);
+      result = getftpresponse(data, &nread, &ftpcode);
+      if(result)
+        return result;
       return CURLE_FTP_ACCEPT_FAILED;
     }
   }
@@ -519,7 +522,9 @@ static CURLcode ftp_check_ctrl_on_data_wait(struct Curl_easy *data,
       }
     }
 
-    (void)getftpresponse(data, &nread, &ftpcode);
+    result = getftpresponse(data, &nread, &ftpcode);
+    if(result)
+      return result;
 
     infof(data, "FTP code: %03d", ftpcode);
 
@@ -4338,8 +4343,7 @@ static CURLcode ftp_disconnect(struct Curl_easy *data,
     ftpc->ctl_valid = FALSE;
 
   /* The FTP session may or may not have been allocated/setup at this point! */
-  (void)ftp_quit(data, ftpc); /* ignore errors on the QUIT */
-  return CURLE_OK;
+  return ftp_quit(data, ftpc);
 }
 
 /* called from multi.c while DOing */

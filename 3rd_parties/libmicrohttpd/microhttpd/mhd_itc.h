@@ -115,7 +115,12 @@ static const uint64_t _MHD_itc_wr_data = 1;
  */
 #define MHD_itc_clear_(itc)                               \
   do { uint64_t __b;                                      \
-       (void) read ((itc).fd, (void*)&__b, sizeof(__b));  \
+       ssize_t __n;                                       \
+       do { __n = read ((itc).fd, (void*)&__b, sizeof(__b)); } \
+       while ((__n < 0) && (EINTR == errno));               \
+       if ((__n != sizeof(__b)) &&                         \
+           ! ((__n < 0) && (EAGAIN == errno)))              \
+         MHD_PANIC (_ ("Failed to clear ITC.\n"));           \
      } while (0)
 
 /**
@@ -332,9 +337,8 @@ MHD_itc_nonblocking_ (struct MHD_itc_ itc);
  * @return non-zero if succeeded, zero otherwise
  */
 #define MHD_itc_destroy_(itc)         \
-  (MHD_socket_close_ ((itc).sk[0]) ?  \
-   MHD_socket_close_ ((itc).sk[1]) :  \
-   ((void) MHD_socket_close_ ((itc).sk[1]), 0) )
+  (MHD_socket_close_ ((itc).sk[0]) &  \
+   MHD_socket_close_ ((itc).sk[1]))
 
 
 /**

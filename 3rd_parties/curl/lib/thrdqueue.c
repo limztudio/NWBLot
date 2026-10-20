@@ -43,6 +43,7 @@ struct curl_thrdq {
   struct Curl_llist sendq;
   struct Curl_llist recvq;
   struct curl_thrdpool *tpool;
+  CURLcode signal_error;
   Curl_thrdq_item_free_cb *fn_free;
   Curl_thrdq_item_process_cb *fn_process;
   Curl_thrdq_ev_cb *fn_event;
@@ -287,8 +288,14 @@ out:
    * item to the queue already, it might have been taken for processing
    * already. Any error in signalling the pool cannot be reported to
    * the caller since it needs to give up ownership of item. */
-  if(!result && signals)
-    (void)Curl_thrdpool_signal(tqueue->tpool, (uint32_t)signals);
+  if(!result && signals) {
+    CURLcode signal_error = Curl_thrdpool_signal(tqueue->tpool, signals);
+    if(signal_error) {
+      Curl_mutex_acquire(&tqueue->lock);
+      tqueue->signal_error = signal_error;
+      Curl_mutex_release(&tqueue->lock);
+    }
+  }
   return result;
 }
 
@@ -325,8 +332,13 @@ CURLcode Curl_thrdq_recv(struct curl_thrdq *tqueue, void **pitem)
     thrdq_item_destroy(qitem);
     result = CURLE_OK;
   }
-  else
+  else {
     signals = thrdq_get_signals(tqueue);
+    if(tqueue->signal_error) {
+      result = tqueue->signal_error;
+      tqueue->signal_error = CURLE_OK;
+    }
+  }
 
 out:
   Curl_mutex_release(&tqueue->lock);
@@ -335,8 +347,11 @@ out:
    * thread to work on them. An earlier thread start may have failed,
    * which `Curl_thrdq_send()` cannot report to its caller. Without
    * this, such items would sit unprocessed until the next send. */
-  if(signals)
-    (void)Curl_thrdpool_signal(tqueue->tpool, (uint32_t)signals);
+  if(signals) {
+    CURLcode signal_error = Curl_thrdpool_signal(tqueue->tpool, signals);
+    if(signal_error)
+      result = signal_error;
+  }
   return result;
 }
 

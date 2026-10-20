@@ -1766,8 +1766,12 @@ static void conn_forget_socket(struct Curl_easy *data, int8_t sockindex)
   struct connectdata *conn = data->conn;
   if(conn && CONN_SOCK_IDX_VALID(sockindex)) {
     struct Curl_cfilter *cf = conn->cfilter[sockindex];
-    if(cf)
-      (void)Curl_conn_cf_cntrl(cf, data, TRUE, CF_CTRL_FORGET_SOCKET, 0, NULL);
+    if(cf) {
+      CURLcode result = Curl_conn_cf_cntrl(cf, data, TRUE,
+                                           CF_CTRL_FORGET_SOCKET, 0, NULL);
+      if(result)
+        infof(data, "SSH socket detach failed: %d", (int)result);
+    }
     fake_sclose(conn->sock[sockindex]);
     conn->sock[sockindex] = CURL_SOCKET_BAD;
   }
@@ -2499,7 +2503,10 @@ static CURLcode myssh_block_statemach(struct Curl_easy *data,
     if(block) {
       curl_socket_t fd_read = conn->sock[FIRSTSOCKET];
       /* wait for the socket to become ready */
-      (void)SOCKET_READABLE(fd_read, left_ms > 1000 ? 1000 : left_ms);
+      if(SOCKET_READABLE(fd_read, left_ms > 1000 ? 1000 : left_ms) < 0) {
+        failf(data, "SSH socket poll failed");
+        return CURLE_UNRECOVERABLE_POLL;
+      }
     }
   }
 
@@ -3121,12 +3128,14 @@ CURLcode Curl_ssh_init(void)
 
 void Curl_ssh_cleanup(void)
 {
-  (void)ssh_finalize();
+  if(ssh_finalize() != SSH_OK)
+    DEBUGF(curl_mfprintf(stderr, "Error: libssh cleanup failed\n"));
 }
 
 void Curl_ssh_version(char *buffer, size_t buflen)
 {
-  (void)curl_msnprintf(buffer, buflen, "libssh/%s", ssh_version(0));
+  if(curl_msnprintf(buffer, buflen, "libssh/%s", ssh_version(0)) < 0 && buflen)
+    buffer[0] = '\0';
 }
 
 /*

@@ -333,7 +333,7 @@ preprocess_text_thai (const hb_ot_shape_plan_t *plan,
     }
 
     /* Is SARA AM. Decompose and reorder. */
-    (void) buffer->output_glyph (NIKHAHIT_FROM_SARA_AM (u));
+    if (unlikely (!buffer->output_glyph (NIKHAHIT_FROM_SARA_AM (u)))) return;
     _hb_glyph_info_set_continuation (&buffer->prev(), buffer);
     if (unlikely (!buffer->replace_glyph (SARA_AA_FROM_SARA_AM (u)))) break;
 

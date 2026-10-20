@@ -78,7 +78,8 @@
 static inline void
 set_glyph (hb_glyph_info_t &info, hb_font_t *font)
 {
-  (void) font->get_nominal_glyph (info.codepoint, &info.normalizer_glyph_index());
+  if (!font->get_nominal_glyph (info.codepoint, &info.normalizer_glyph_index()))
+    info.normalizer_glyph_index() = 0;
 }
 
 static inline void
@@ -86,7 +87,7 @@ output_char (hb_buffer_t *buffer, hb_codepoint_t unichar, hb_codepoint_t glyph)
 {
   /* This is very confusing indeed. */
   buffer->cur().normalizer_glyph_index() = glyph;
-  (void) buffer->output_glyph (unichar);
+  if (unlikely (!buffer->output_glyph (unichar))) return;
   _hb_glyph_info_set_unicode_props (&buffer->prev(), buffer);
 }
 
@@ -94,7 +95,7 @@ static inline void
 next_char (hb_buffer_t *buffer, hb_codepoint_t glyph)
 {
   buffer->cur().normalizer_glyph_index() = glyph;
-  (void) buffer->next_glyph ();
+  if (unlikely (!buffer->next_glyph ())) return;
 }
 
 static inline void
@@ -213,13 +214,13 @@ handle_variation_selector_cluster (const hb_ot_shape_normalize_context_t *c,
       if (font->get_variation_glyph (buffer->cur().codepoint, buffer->cur(+1).codepoint, &buffer->cur().normalizer_glyph_index()))
       {
 	hb_codepoint_t unicode = buffer->cur().codepoint;
-	(void) buffer->replace_glyphs (2, 1, &unicode);
+	if (unlikely (!buffer->replace_glyphs (2, 1, &unicode))) return;
       }
       else
       {
 	/* Just pass on the two characters separately, let GSUB do its magic. */
 	set_glyph (buffer->cur(), font);
-	(void) buffer->next_glyph ();
+	if (unlikely (!buffer->next_glyph ())) return;
 
         buffer->scratch_flags |= HB_BUFFER_SCRATCH_FLAG_HAS_VARIATION_SELECTOR_FALLBACK;
 	_hb_glyph_info_set_variation_selector (&buffer->cur(), true);
@@ -227,7 +228,7 @@ handle_variation_selector_cluster (const hb_ot_shape_normalize_context_t *c,
 	  _hb_glyph_info_clear_default_ignorable (&buffer->cur());
 
 	set_glyph (buffer->cur(), font);
-	(void) buffer->next_glyph ();
+	if (unlikely (!buffer->next_glyph ())) return;
       }
       /* Skip any further variation selectors. */
       while (buffer->idx < end &&
@@ -235,19 +236,19 @@ handle_variation_selector_cluster (const hb_ot_shape_normalize_context_t *c,
 	     unlikely (buffer->unicode->is_variation_selector (buffer->cur().codepoint)))
       {
 	set_glyph (buffer->cur(), font);
-	(void) buffer->next_glyph ();
+	if (unlikely (!buffer->next_glyph ())) return;
       }
     }
     else
     {
       set_glyph (buffer->cur(), font);
-      (void) buffer->next_glyph ();
+      if (unlikely (!buffer->next_glyph ())) return;
     }
   }
   if (likely (buffer->idx < end))
   {
     set_glyph (buffer->cur(), font);
-    (void) buffer->next_glyph ();
+    if (unlikely (!buffer->next_glyph ())) return;
   }
 }
 
@@ -365,7 +366,8 @@ _hb_ot_shape_normalize (const hb_ot_shape_plan_t *plan,
     }
     while (buffer->idx < count && buffer->successful);
     buffer->sync ();
-    (void) buffer->message (font, "end decompose");
+    if (unlikely (!buffer->message (font, "end decompose")))
+      DEBUG_MSG (APPLY, buffer, "Callback declined a completed-step notification");
   }
 
 
@@ -398,7 +400,8 @@ _hb_ot_shape_normalize (const hb_ot_shape_plan_t *plan,
 
       i = end;
     }
-    (void) buffer->message(font, "end reorder");
+    if (unlikely (!buffer->message(font, "end reorder")))
+      DEBUG_MSG (APPLY, buffer, "Callback declined a completed-step notification");
   }
   if (buffer->scratch_flags & HB_BUFFER_SCRATCH_FLAG_HAS_CGJ)
   {
@@ -431,7 +434,7 @@ _hb_ot_shape_normalize (const hb_ot_shape_plan_t *plan,
     buffer->clear_output ();
     count = buffer->len;
     unsigned int starter = 0;
-    (void) buffer->next_glyph ();
+    if (unlikely (!buffer->next_glyph ())) return;
     while (buffer->idx < count /* No need for: && buffer->successful */)
     {
       hb_codepoint_t composed, glyph;
@@ -473,7 +476,8 @@ _hb_ot_shape_normalize (const hb_ot_shape_plan_t *plan,
 	starter = buffer->out_len - 1;
     }
     buffer->sync ();
-    (void) buffer->message (font, "end compose");
+    if (unlikely (!buffer->message (font, "end compose")))
+      DEBUG_MSG (APPLY, buffer, "Callback declined a completed-step notification");
   }
 }
 

@@ -72,7 +72,8 @@
  */
 void Curl_quiche_ver(char *p, size_t len)
 {
-  (void)curl_msnprintf(p, len, "quiche/%s", quiche_version());
+  if(curl_msnprintf(p, len, "quiche/%s", quiche_version()) < 0 && len)
+    p[0] = '\0';
 }
 
 struct cf_quiche_ctx {
@@ -1344,7 +1345,9 @@ static CURLcode cf_quiche_ctx_open(struct Curl_cfilter *cf,
 #if !defined(_WIN32) && defined(HAVE_QUICHE_CONN_SET_QLOG_FD)
   {
     int qfd;
-    (void)Curl_qlogdir(data, ctx->scid, sizeof(ctx->scid), &qfd);
+    result = Curl_qlogdir(data, ctx->scid, sizeof(ctx->scid), &qfd);
+    if(result)
+      return result;
     if(qfd != -1)
       quiche_conn_set_qlog_fd(ctx->qconn, qfd, "qlog title", "curl qlog");
   }

@@ -334,7 +334,8 @@ reorder_myanmar (const hb_ot_shape_plan_t *plan,
 
     foreach_syllable (buffer, start, end)
       reorder_syllable_myanmar (plan, font->face, buffer, start, end);
-    (void) buffer->message (font, "end reordering myanmar");
+    if (unlikely (!buffer->message (font, "end reordering myanmar")))
+      DEBUG_MSG (APPLY, buffer, "Callback declined a completed-step notification");
   }
 
   HB_BUFFER_DEALLOCATE_VAR (buffer, myanmar_category);

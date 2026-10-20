@@ -149,9 +149,10 @@
     /* If we have reached this point then it is probably a mac resource */
     /* file.  Now, does it contain any interesting resources?           */
 
-    (void)FT_STREAM_SKIP( 4        /* skip handle to next resource map */
-                          + 2      /* skip file resource number */
-                          + 2 );   /* skip attributes */
+    if ( FT_STREAM_SKIP( 4        /* skip handle to next resource map */
+                         + 2      /* skip file resource number */
+                         + 2 ) )  /* skip attributes */
+      return error;
 
     if ( FT_READ_SHORT( type_list ) )
       return error;

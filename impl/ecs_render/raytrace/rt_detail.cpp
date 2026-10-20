@@ -93,7 +93,7 @@ void RetireHeapHandle(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle& 
 }
 
 // Binned-SAH binary BVH over indices[lo, hi); node 0 is the root. Splits on the minimum SAH boundary, median fallback on coincident centroids (never an empty split). Node layout matches the per-mesh build so GPU traversal is uniform.
-u32 BuildSceneBvhNode(NotNull<u32*> indices, const u32 lo, const u32 hi, NotNull<const SceneBvhPrimitiveCalculation*> primitiveBounds, Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena>& nodes, const NotNull<const u32*> instanceLeafCost){
+u32 BuildSceneBvhNode(const Span<u32> indices, const u32 lo, const u32 hi, const Span<const SceneBvhPrimitiveCalculation> primitiveBounds, Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena>& nodes, const Span<const u32> instanceLeafCost){
     const u32 nodeIndex = static_cast<u32>(nodes.size());
     nodes.push_back(SceneBvhNodeCalculation{});
 
@@ -150,9 +150,9 @@ u32 BuildSceneBvhNode(NotNull<u32*> indices, const u32 lo, const u32 hi, NotNull
             u32 b = static_cast<u32>(VectorGetX(VectorMultiply(VectorSubtract(c, loExtent), invExtent)));
             if(b >= s_SceneBvhSahBinCount)
                 b = s_SceneBvhSahBinCount - 1u;
-            binMin[b] = VectorMin(binMin[b], LoadFloat(primitiveBounds.get()[instance].aabbMin));
-            binMax[b] = VectorMax(binMax[b], LoadFloat(primitiveBounds.get()[instance].aabbMax));
-            binCost[b] = VectorGetX(VectorAdd(VectorReplicate(binCost[b]), VectorReplicate(static_cast<f32>(instanceLeafCost.get()[instance]))));
+            binMin[b] = VectorMin(binMin[b], LoadFloat(primitiveBounds[instance].aabbMin));
+            binMax[b] = VectorMax(binMax[b], LoadFloat(primitiveBounds[instance].aabbMax));
+            binCost[b] = VectorGetX(VectorAdd(VectorReplicate(binCost[b]), VectorReplicate(static_cast<f32>(instanceLeafCost[instance]))));
             ++binCount[b];
         }
 

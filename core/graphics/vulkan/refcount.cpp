@@ -17,9 +17,9 @@ NWB_VULKAN_BEGIN
 #define NWB_DEFINE_VULKAN_REFCOUNT_HOOKS(Type) \
     u32 RefCountAddReference(Type* value)noexcept{ return value->addReference(); } \
     u32 RefCountRelease(Type* value)noexcept{ return value->release(); } \
-    void DestroyArenaReference(Alloc::GlobalArena* arena, Type* value)noexcept{ \
-        value->~Type(); \
-        arena->deallocate(value, alignof(Type), sizeof(Type)); \
+    void DestroyArenaReference(Alloc::GlobalArena& arena, Type& value)noexcept{ \
+        value.~Type(); \
+        arena.deallocate(&value, alignof(Type), sizeof(Type)); \
     }
 
 NWB_DEFINE_VULKAN_REFCOUNT_HOOKS(Device)

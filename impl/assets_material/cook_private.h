@@ -145,7 +145,14 @@ template<typename ArenaT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface(CookArena& arena, const AStringView shaderName, const Path& materialBindIncludeRoot, const CookVector<Path>& dependencies, ScratchArena& scratchArena);
+Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface(
+    CookArena& arena,
+    const AStringView shaderName,
+    const Path& materialBindIncludeRoot,
+    const CookVector<MaterialBindEntry>& materialBindEntries,
+    const CookVector<Path>& dependencies,
+    ScratchArena& scratchArena
+);
 
 Expected<CookString> BuildMaterialBindIncludeSourceImpl(CookArena& arena, const MaterialBindEntry& entry, ScratchArena& scratchArena);
 

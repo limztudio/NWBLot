@@ -167,8 +167,11 @@ ReflectionStatisticsState::Slot* ReflectionStatisticsState::matchingSlot(const R
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ReflectionStatisticsControlHandle CreateReflectionStatisticsControl(Core::Alloc::GlobalArena& arena, const u16 deviceGeneration)noexcept{
-    return ReflectionStatisticsControlHandle(NewArenaObject<ReflectionStatisticsControl>(arena, deviceGeneration), ArenaRefDeleter<ReflectionStatisticsControl, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
+Expected<ReflectionStatisticsControlHandle> CreateReflectionStatisticsControl(Core::Alloc::GlobalArena& arena, const u16 deviceGeneration)noexcept{
+    auto control = ReflectionStatisticsControlHandle(NewArenaObject<ReflectionStatisticsControl>(arena, deviceGeneration), ArenaRefDeleter<ReflectionStatisticsControl, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
+    if(!control)
+        return MakeUnexpected(Failure{});
+    return control;
 }
 
 
@@ -237,11 +240,13 @@ bool ReflectionStatisticsReadback::prepareResources(){
     if(m_buffers[0])
         return true;
     const u16 deviceGeneration = m_graphics.getDevice().getDeviceGeneration();
-    if(!m_control)
-        m_control = CreateReflectionStatisticsControl(m_arena, deviceGeneration);
     if(!m_control){
-        NWB_LOGGER_ERROR(NWB_TEXT("Reflection statistics: failed to allocate readback control"));
-        return false;
+        auto controlResult = CreateReflectionStatisticsControl(m_arena, deviceGeneration);
+        if(!controlResult){
+            NWB_LOGGER_ERROR(NWB_TEXT("Reflection statistics: failed to allocate readback control"));
+            return false;
+        }
+        m_control = Move(*controlResult);
     }
     static constexpr Name s_Names[] = { Name("engine/reflection/statistics_readback_0"), Name("engine/reflection/statistics_readback_1"), Name("engine/reflection/statistics_readback_2"), };
     Core::BufferHandle buffers[ReflectionStatisticsState::s_SlotCount];

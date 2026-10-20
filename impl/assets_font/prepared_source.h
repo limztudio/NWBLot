@@ -11,6 +11,7 @@
 
 #include <global/filesystem.h>
 #include <global/sha256.h>
+#include <global/span.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -64,7 +65,7 @@ public:
 
 
 // FON2 stores the exact prepared SFNT and compact images; readable atlas mappings remain in paired .nwb metadata.
-[[nodiscard]] Expected<Core::Assets::AssetBytes, AStringView> SerializePreparedFontSource(BinaryByteView sfnt, u32 faceIndex, const PreparedFontImageView* groups, usize groupCount, Core::Assets::AssetArena& arena);
+[[nodiscard]] Expected<Core::Assets::AssetBytes, AStringView> SerializePreparedFontSource(BinaryByteView sfnt, u32 faceIndex, Span<const PreparedFontImageView> groups, Core::Assets::AssetArena& arena);
 
 // Font-only reads retain image directory metadata, with empty pixel arrays, and validate the complete file layout.
 [[nodiscard]] Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const Path& path, Core::Assets::AssetArena& arena, bool includePixels);

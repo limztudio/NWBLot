@@ -384,7 +384,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
         instanceLeafCost.reserve(instanceCount);
         for(u32 i = 0u; i < instanceCount; ++i)
             instanceLeafCost.push_back(instances[i].primitiveCount);
-        RayTracingDetail::BuildSceneBvhNode(MakeNotNull(indices.data()), 0u, instanceCount, MakeNotNull(static_cast<const SceneBvhPrimitiveCalculation*>(instanceBvhPrimitives.data())), buildNodes, NotNull<const u32*>(instanceLeafCost.data()));
+        RayTracingDetail::BuildSceneBvhNode(indices, 0u, instanceCount, instanceBvhPrimitives, buildNodes, instanceLeafCost);
         NWB_ASSERT(buildNodes.size() == requiredNodeCount);
 
         Vector<NwbBvhNodeGpu, Core::Alloc::ScratchArena> nodes{ scratchArena };

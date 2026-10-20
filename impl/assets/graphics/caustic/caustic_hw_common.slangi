@@ -67,10 +67,11 @@ uint nwbMeshFrameViewHeapSlot(){
 
 
 // Keep full-precision transport in two vector lanes; raygen reconstructs world position from the ray and returned distance.
+// instance is the hit material-record index, which also marks the hit; a miss leaves NWB_CAUSTIC_HW_MISS_INSTANCE.
 struct NwbCausticHwPayload{
     float4 normalAndDistance;
     float4 transmissionAndIor;
-    uint hit;
+    uint instance;
     uint isRefractive;
 };
 
@@ -80,6 +81,9 @@ struct NwbCausticHwPayload{
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbCausticEmissionTarget, Std430DataLayout> g_NwbHeapCausticHwEmissionTargets[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbCausticPhotonView, Std140DataLayout> g_NwbHeapCausticHwViews[];
 #pragma warning(pop)
+
+// Custom instance indices have 24 bits, so a hit never matches this value.
+#define NWB_CAUSTIC_HW_MISS_INSTANCE 0xFFFFFFFFu
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

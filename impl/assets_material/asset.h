@@ -46,6 +46,11 @@ class Texture;
     return !accumulatePixelShader.valid() && !occupancyPixelShader.valid() && !extinctionPixelShader.valid();
 }
 
+// Materials hold only mesh and pixel stages. The compute emulation shader is found by the mesh shader name, so it is never stored here.
+[[nodiscard]] inline constexpr bool IsSupportedMaterialShaderStage(const Core::ShaderType::Enum shaderType)noexcept{
+    return shaderType == Core::ShaderType::MeshStage || shaderType == Core::ShaderType::PixelStage;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -391,7 +396,7 @@ public:
     template<typename TShader>
         requires(IsBaseOf_V<IShader, TShader> && requires{ TShader::s_Stage; })
     [[nodiscard]] Expected<Core::Assets::AssetRef<TShader>> findShader()const noexcept{
-        static_assert(Core::ShaderType::IsValid(TShader::s_Stage));
+        static_assert(IsSupportedMaterialShaderStage(TShader::s_Stage));
         Core::Assets::AssetRef<TShader> shaderAsset;
         shaderAsset.virtualPath = m_stageShaders[Core::ShaderType::ToIndex(TShader::s_Stage)].virtualPath;
         if(!shaderAsset.valid())

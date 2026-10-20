@@ -42,6 +42,7 @@ private:
         const GpuCompiledGraph& compiledGraph,
         const GpuSubmissionPacketRange& range,
         GpuRecordedGraph& outRecordedGraph,
+        Alloc::ScratchArena& scratchArena,
         GpuSubmissionPacketId* outFailedPacket = nullptr,
         GpuCommandIrCapture* commandIrCapture = nullptr
     )const;
@@ -52,6 +53,7 @@ private:
         GpuTaskId firstTask,
         GpuTaskId lastTask,
         GpuRecordedGraph& outRecordedGraph,
+        Alloc::ScratchArena& scratchArena,
         GpuSubmissionPacketId* outFailedPacket = nullptr,
         GpuCommandIrCapture* commandIrCapture = nullptr
     )const;
@@ -62,6 +64,7 @@ private:
         const GpuSubmissionPacketRange& range,
         GpuRecordedGraph& outRecordedGraph,
         CpuTaskScheduler& cpuScheduler,
+        Alloc::ScratchArena& scratchArena,
         GpuSubmissionPacketId* outFailedPacket = nullptr,
         GpuCommandIrCapture* commandIrCapture = nullptr
     )const;

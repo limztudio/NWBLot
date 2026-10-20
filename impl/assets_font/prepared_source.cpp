@@ -73,15 +73,15 @@ static constexpr u64 s_MaxFileBytes = s_HeaderBytes + s_MaxGroupCount * s_GroupH
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<Core::Assets::AssetBytes, AStringView> SerializePreparedFontSource(const BinaryByteView sfnt, const u32 faceIndex, const PreparedFontImageView* groups, const usize groupCount, Core::Assets::AssetArena& arena){
+Expected<Core::Assets::AssetBytes, AStringView> SerializePreparedFontSource(const BinaryByteView sfnt, const u32 faceIndex, const Span<const PreparedFontImageView> groups, Core::Assets::AssetArena& arena){
     using namespace __hidden_prepared_source;
-    if(!sfnt.data() || sfnt.empty() || sfnt.size() > s_FontMaxSourceBytes || faceIndex != 0u || !groups || groupCount == 0u || groupCount > s_MaxGroupCount){
+    if(!sfnt.data() || sfnt.empty() || sfnt.size() > s_FontMaxSourceBytes || faceIndex != 0u || groups.empty() || groups.size() > s_MaxGroupCount){
         NWB_LOGGER_ERROR(NWB_TEXT("Prepared font serialization: invalid font bytes, face index, or image group count"));
         return MakeUnexpected(AStringView("invalid font bytes, face index, or image group count"));
     }
 
     u64 pixelByteCount = 0u;
-    for(usize index = 0u; index < groupCount; ++index){
+    for(usize index = 0u; index < groups.size(); ++index){
         const PreparedFontImageView& group = groups[index];
         const auto expectedBytes = ImageByteCount(group.width, group.height, group.channelCount);
         if(!expectedBytes || !group.pixels.data() || group.pixels.size() != *expectedBytes || *expectedBytes > s_MaxPixelBytes - pixelByteCount){
@@ -91,7 +91,7 @@ Expected<Core::Assets::AssetBytes, AStringView> SerializePreparedFontSource(cons
         pixelByteCount += *expectedBytes;
     }
 
-    const usize byteCount = s_HeaderBytes + groupCount * s_GroupHeaderBytes + sfnt.size() + static_cast<usize>(pixelByteCount);
+    const usize byteCount = s_HeaderBytes + groups.size() * s_GroupHeaderBytes + sfnt.size() + static_cast<usize>(pixelByteCount);
     Core::Assets::AssetBytes binary(arena);
     binary.reserve(byteCount);
     AppendU32LittleEndian(binary, s_Magic);
@@ -102,7 +102,7 @@ Expected<Core::Assets::AssetBytes, AStringView> SerializePreparedFontSource(cons
     AppendU32LittleEndian(binary, 0u);
     const Sha256Digest fontHash = ComputeSha256(sfnt);
     binary.insert(binary.end(), fontHash.bytes, fontHash.bytes + sizeof(fontHash.bytes));
-    for(usize index = 0u; index < groupCount; ++index){
+    for(usize index = 0u; index < groups.size(); ++index){
         const PreparedFontImageView& group = groups[index];
         AppendU32LittleEndian(binary, group.width);
         AppendU32LittleEndian(binary, group.height);
@@ -112,7 +112,7 @@ Expected<Core::Assets::AssetBytes, AStringView> SerializePreparedFontSource(cons
         binary.insert(binary.end(), imageHash.bytes, imageHash.bytes + sizeof(imageHash.bytes));
     }
     binary.insert(binary.end(), sfnt.data(), sfnt.data() + sfnt.size());
-    for(usize index = 0u; index < groupCount; ++index){
+    for(usize index = 0u; index < groups.size(); ++index){
         const BinaryByteView pixels = groups[index].pixels;
         binary.insert(binary.end(), pixels.data(), pixels.data() + pixels.size());
     }

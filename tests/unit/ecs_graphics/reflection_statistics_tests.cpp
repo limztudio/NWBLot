@@ -31,7 +31,7 @@ using namespace NWB::Impl;
 
 struct StatisticsContext{
     Core::Alloc::GlobalArena arena{Name("tests/reflection/statistics")};
-    ReflectionStatisticsControlHandle control = CreateReflectionStatisticsControl(arena, 7u);
+    ReflectionStatisticsControlHandle control = CreateReflectionStatisticsControl(arena, 7u).value_or(ReflectionStatisticsControlHandle{});
 };
 
 [[nodiscard]] ReflectionStatistics Metadata(const u32 frameIndex = 9u)noexcept{

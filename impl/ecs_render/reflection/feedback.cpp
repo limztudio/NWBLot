@@ -177,8 +177,11 @@ bool ReflectionFeedbackState::accept(const ReflectionFeedbackPlan& plan, const C
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ReflectionFeedbackControlHandle CreateReflectionFeedbackControl(Core::Alloc::GlobalArena& arena, const u16 deviceGeneration)noexcept{
-    return ReflectionFeedbackControlHandle(NewArenaObject<ReflectionFeedbackControl>(arena, deviceGeneration), ArenaRefDeleter<ReflectionFeedbackControl, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
+Expected<ReflectionFeedbackControlHandle> CreateReflectionFeedbackControl(Core::Alloc::GlobalArena& arena, const u16 deviceGeneration)noexcept{
+    auto control = ReflectionFeedbackControlHandle(NewArenaObject<ReflectionFeedbackControl>(arena, deviceGeneration), ArenaRefDeleter<ReflectionFeedbackControl, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
+    if(!control)
+        return MakeUnexpected(Failure{});
+    return control;
 }
 
 

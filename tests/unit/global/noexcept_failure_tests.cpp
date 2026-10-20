@@ -195,12 +195,12 @@ using ReferenceComparisonOwner = RefCountPtr<ComparisonReferenceTarget, Comparis
 [[nodiscard]] ThrowingComparisonResult operator<(const UniqueComparisonOwner&, const UniqueComparisonOwner&)noexcept{ return {}; }
 [[nodiscard]] ThrowingComparisonResult operator<(const UniqueComparisonOwner&, decltype(nullptr))noexcept{ return {}; }
 [[nodiscard]] ThrowingComparisonResult operator<(decltype(nullptr), const UniqueComparisonOwner&)noexcept{ return {}; }
-[[nodiscard]] ThrowingComparisonResult operator!(const UniqueComparisonOwner&)noexcept{ return {}; }
-[[nodiscard]] ThrowingComparisonResult operator!(const ReferenceComparisonOwner&)noexcept{ return {}; }
-
 [[nodiscard]] ThrowingComparisonResult operator<(const ReferenceComparisonOwner&, const ReferenceComparisonOwner&)noexcept{ return {}; }
 [[nodiscard]] ThrowingComparisonResult operator<(const ReferenceComparisonOwner&, decltype(nullptr))noexcept{ return {}; }
 [[nodiscard]] ThrowingComparisonResult operator<(decltype(nullptr), const ReferenceComparisonOwner&)noexcept{ return {}; }
+
+[[nodiscard]] ThrowingComparisonResult operator!(const UniqueComparisonOwner&)noexcept{ return {}; }
+[[nodiscard]] ThrowingComparisonResult operator!(const ReferenceComparisonOwner&)noexcept{ return {}; }
 
 template<typename OwnerT>
 void VerifyComparisonResultConversions(){

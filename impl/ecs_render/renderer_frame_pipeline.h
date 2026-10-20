@@ -337,6 +337,7 @@ private:
     );
     void declareDeferredSurfelCountReadbackTask(const RayTracingSurfelPersistentResourceSnapshot& rayTracingSurfelResources);
     void buildDeferredLightingTaskGraph(
+        Core::Alloc::ScratchArena& scratchArena,
         const ECSRenderDetail::RendererFrameGraphFeatures& features,
         DeferredFrameTargets& deferredTargets,
         const CsgFrameState& csgFrameState,

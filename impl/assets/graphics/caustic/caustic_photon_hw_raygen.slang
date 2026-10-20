@@ -31,7 +31,7 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
     NwbCausticHwPayload p;
     p.normalAndDistance = float4(0.0, 0.0, 1.0, tMax);
     p.transmissionAndIor = float4(1.0);
-    p.hit = 0u;
+    p.instance = NWB_CAUSTIC_HW_MISS_INSTANCE;
     p.isRefractive = 0u;
 
 #if NWB_RT_CSG_ENABLED
@@ -41,8 +41,9 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
 #endif
 
     NwbCausticHit hit = (NwbCausticHit)0;
-    hit.hit = (p.hit != 0u);
+    hit.hit = (p.instance != NWB_CAUSTIC_HW_MISS_INSTANCE);
     hit.isRefractive = (p.isRefractive != 0u);
+    hit.instance = p.instance;
     hit.t = p.normalAndDistance.w;
     hit.ior = p.transmissionAndIor.w;
     hit.worldPos = hit.hit ? ray.Origin + p.normalAndDistance.w * ray.Direction : float3(0.0);

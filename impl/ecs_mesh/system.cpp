@@ -98,7 +98,7 @@ void MeshSystem::registerRuntimeMeshProvider(IRuntimeMeshProvider& provider){
     m_runtimeMeshProviders.push_back(MakeNotNull(&provider));
 }
 
-void MeshSystem::unregisterRuntimeMeshProvider(IRuntimeMeshProvider& provider){
+void MeshSystem::unregisterRuntimeMeshProvider(IRuntimeMeshProvider& provider)noexcept{
     const auto found = FindIf(m_runtimeMeshProviders.begin(), m_runtimeMeshProviders.end(), [&provider](const NotNull<IRuntimeMeshProvider*> item)noexcept{ return item.get() == &provider; });
     if(found == m_runtimeMeshProviders.end())
         return;

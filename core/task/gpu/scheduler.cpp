@@ -144,7 +144,7 @@ bool GpuTaskScheduler::submitGraph(
             return false;
     }
 
-    if(!recordPacketRange(graph, compiledGraph, recorder, normalRange, recordedGraph, desc.readyFrontierScheduler, desc.commandIrCapture, &failedPacket)){
+    if(!recordPacketRange(graph, compiledGraph, recorder, normalRange, recordedGraph, desc.readyFrontierScheduler, desc.commandIrCapture, scratchArena, &failedPacket)){
         if(outFailedPacket)
             *outFailedPacket = failedPacket;
         return false;
@@ -347,7 +347,7 @@ bool GpuTaskScheduler::recordAndSubmitTaskWithinSubmissionOperation(
     }
 
     GpuSubmissionPacketId failedPacket;
-    if(!recorder.recordTaskRangeInCompileOrder(graph, compiledGraph, task, task, recordedGraph, &failedPacket, nullptr)){
+    if(!recorder.recordTaskRangeInCompileOrder(graph, compiledGraph, task, task, recordedGraph, scratchArena, &failedPacket, nullptr)){
         if(outFailedPacket)
             *outFailedPacket = failedPacket;
         rejectTask();

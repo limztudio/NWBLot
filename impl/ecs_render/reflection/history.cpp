@@ -163,8 +163,11 @@ void ReflectionHistoryState::accept(const ReflectionHistoryPlan& plan, const Cor
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ReflectionHistoryControlHandle CreateReflectionHistoryControl(Core::Alloc::GlobalArena& arena, const u16 deviceGeneration)noexcept{
-    return ReflectionHistoryControlHandle(NewArenaObject<ReflectionHistoryControl>(arena, deviceGeneration), ArenaRefDeleter<ReflectionHistoryControl, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
+Expected<ReflectionHistoryControlHandle> CreateReflectionHistoryControl(Core::Alloc::GlobalArena& arena, const u16 deviceGeneration)noexcept{
+    auto control = ReflectionHistoryControlHandle(NewArenaObject<ReflectionHistoryControl>(arena, deviceGeneration), ArenaRefDeleter<ReflectionHistoryControl, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
+    if(!control)
+        return MakeUnexpected(Failure{});
+    return control;
 }
 
 

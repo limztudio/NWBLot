@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <global/allocation_size.h>
 #include <global/assert.h>
 #include <global/limit.h>
 #include <global/type.h>
@@ -56,14 +57,6 @@ struct ArenaAllocatorTraits{
 
 usize CachelineSize()noexcept;
 [[nodiscard]] usize CacheAlignedAlignment(usize valueAlignment)noexcept;
-
-template<typename T>
-[[nodiscard]] inline usize SizeOf(usize count){
-    static_assert(sizeof(T) > 0, "value_type must be complete before calling allocate.");
-    if(count > Limit<usize>::s_Max / sizeof(T))
-        throw std::bad_array_new_length{};
-    return count * sizeof(T);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -130,7 +123,7 @@ public:
     }
 
     [[nodiscard]] constexpr pointer allocate(const size_type count){
-        const size_type bytes = AdaptorDetail::SizeOf<value_type>(count);
+        const size_type bytes = SizeOf<sizeof(value_type)>(count);
         if(bytes == 0u)
             return nullptr;
 
@@ -290,7 +283,7 @@ public:
     }
 
     [[nodiscard]] constexpr pointer allocate(const size_type count){
-        const size_type bytes = AdaptorDetail::SizeOf<value_type>(count);
+        const size_type bytes = SizeOf<sizeof(value_type)>(count);
         if(bytes == 0u)
             return nullptr;
 

@@ -28,7 +28,7 @@ inline void AabbCorners(const SIMDVectorSingle center, const SIMDVectorSingle ex
         outCorners[i] = VectorMultiplyAdd(extents, BoxCornerOffset(i), center);
 }
 
-inline void ObbCorners(const SIMDVectorSingle center, const SIMDVectorSingle extents, const SIMDVectorSingle orientation, SIMDVectorSingle (&outCorners)[BoundingBox::s_CornerCount])noexcept{
+inline void ObbCorners(const SIMDVectorSingle center, const SIMDVectorSingle extents, const SIMDVectorSingle orientation, SIMDVectorSingle (&outCorners)[BoundingOrientedBox::s_CornerCount])noexcept{
     SIMDVectorSingle axis0{};
     SIMDVectorSingle axis1{};
     SIMDVectorSingle axis2{};
@@ -45,7 +45,7 @@ inline void ObbCorners(const SIMDVectorSingle center, const SIMDVectorSingle ext
     }
 }
 
-inline void FrustumCorners(const SIMDVectorSingle origin, const SIMDVectorSingle orientation, const f32 rightSlope, const f32 leftSlope, const f32 topSlope, const f32 bottomSlope, const f32 nearPlane, const f32 farPlane, SIMDVectorSingle (&outCorners)[BoundingBox::s_CornerCount])noexcept{
+inline void FrustumCorners(const SIMDVectorSingle origin, const SIMDVectorSingle orientation, const f32 rightSlope, const f32 leftSlope, const f32 topSlope, const f32 bottomSlope, const f32 nearPlane, const f32 farPlane, SIMDVectorSingle (&outCorners)[BoundingFrustum::s_CornerCount])noexcept{
     const SIMDVectorSingle slopes = VectorSet(rightSlope, leftSlope, bottomSlope, topSlope);
     const SIMDVectorSingle depths[2] = { VectorReplicate(nearPlane), VectorReplicate(farPlane), };
     const SIMDVectorSingle zero = VectorZero();
@@ -90,7 +90,7 @@ inline void AabbCorners(const SIMDVectorDouble center, const SIMDVectorDouble ex
         outCorners[i] = VectorDoubleMultiplyAdd(extents, BoxCornerOffset(i), center);
 }
 
-inline void ObbCorners(const SIMDVectorDouble center, const SIMDVectorDouble extents, const SIMDVectorDouble orientation, SIMDVectorDouble (&outCorners)[BoundingDoubleBox::s_DoubleCornerCount])noexcept{
+inline void ObbCorners(const SIMDVectorDouble center, const SIMDVectorDouble extents, const SIMDVectorDouble orientation, SIMDVectorDouble (&outCorners)[BoundingDoubleOrientedBox::s_DoubleCornerCount])noexcept{
     SIMDVectorDouble axis0{};
     SIMDVectorDouble axis1{};
     SIMDVectorDouble axis2{};
@@ -107,7 +107,7 @@ inline void ObbCorners(const SIMDVectorDouble center, const SIMDVectorDouble ext
     }
 }
 
-inline void FrustumCorners(const SIMDVectorDouble origin, const SIMDVectorDouble orientation, const f64 rightSlope, const f64 leftSlope, const f64 topSlope, const f64 bottomSlope, const f64 nearPlane, const f64 farPlane, SIMDVectorDouble (&outCorners)[BoundingDoubleBox::s_DoubleCornerCount])noexcept{
+inline void FrustumCorners(const SIMDVectorDouble origin, const SIMDVectorDouble orientation, const f64 rightSlope, const f64 leftSlope, const f64 topSlope, const f64 bottomSlope, const f64 nearPlane, const f64 farPlane, SIMDVectorDouble (&outCorners)[BoundingDoubleFrustum::s_DoubleCornerCount])noexcept{
     const SIMDVectorDouble slopes = VectorDoubleSet(rightSlope, leftSlope, bottomSlope, topSlope);
     const SIMDVectorDouble depths[2] = { VectorDoubleReplicate(nearPlane), VectorDoubleReplicate(farPlane), };
     const SIMDVectorDouble zero = VectorDoubleZero();

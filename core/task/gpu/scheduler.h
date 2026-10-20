@@ -236,6 +236,7 @@ private:
         GpuRecordedGraph& recordedGraph,
         CpuTaskScheduler* readyFrontierScheduler,
         GpuCommandIrCapture* commandIrCapture,
+        Alloc::ScratchArena& scratchArena,
         GpuSubmissionPacketId* outFailedPacket
     )const;
     // The caller owns the transaction's exclusive SubmissionOperation. This internal path lets the accepted-frontier composite reuse the ordinary task executor without attempting forbidden same-transaction gate reentry.

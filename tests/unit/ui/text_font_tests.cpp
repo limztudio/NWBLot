@@ -135,7 +135,7 @@ TEST(TextFontConstruction, ThrowingNativeFaceDiagnosticReleasesAcquiredArenaMemo
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::ReportOnly);
     const FontSource source{ emptyFontRef, emptyFont, 1u };
     const ArenaMemoryStats before = fontArena.memoryStats();
-    EXPECT_THROW({ const SharedFontFace failed = MakeFontFace(scratchArena, fontArena, source); EXPECT_FALSE(failed && failed->valid()); }, i32);
+    EXPECT_THROW({ const auto failed = MakeFontFace(scratchArena, fontArena, source); EXPECT_FALSE(failed && (*failed)->valid()); }, i32);
     EXPECT_TRUE(logger.sawFaceFailure());
     const ArenaMemoryStats after = fontArena.memoryStats();
     EXPECT_GT(after.allocationCount, before.allocationCount);
@@ -278,8 +278,9 @@ TEST_F(TextFontTests, GlyphAtlasIndexKeepsFaceSizeAndEmptyGlyphsDistinctAcrossRe
     const SharedFontFace face = m_layout.glyphs()[0].face;
     const u32 glyphId = m_layout.glyphs()[0].glyphId;
     const FontSource source{ Core::Assets::AssetRef<Font>(s_LatinFontPath), m_latin, 1u };
-    const SharedFontFace otherFace = MakeFontFace(fontScratchArena, m_arena, source);
-    ASSERT_TRUE(otherFace && otherFace->valid());
+    auto otherFaceResult = MakeFontFace(fontScratchArena, m_arena, source);
+    ASSERT_TRUE(otherFaceResult && (*otherFaceResult)->valid());
+    const SharedFontFace otherFace = Move(*otherFaceResult);
     ASSERT_NE(face.get(), otherFace.get());
     GlyphAtlas atlas(m_arena);
     ASSERT_TRUE(atlas.prepare(face, glyphId, 24u));

@@ -35,6 +35,7 @@ NwbCausticHit nwbCausticCsgInstanceClosest(const uint contextSlot, const uint ma
     hit.t = surface.distance;
     hit.worldPos = surface.position;
     hit.isRefractive = (surface.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE) != 0u;
+    hit.instance = surface.instance;
     hit.shadingNormal = surface.shadingNormal;
     hit.ior = surface.surface.refractionIor;
     hit.transmission = surface.surface.shadowAbsorptionTint;

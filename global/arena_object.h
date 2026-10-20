@@ -133,9 +133,9 @@ namespace ArenaObjectDetail{
 
 
 template<typename ArenaT, typename ValueT>
-void DestroyArenaReference(ArenaT* arena, ValueT* value)noexcept{
-    value->~ValueT();
-    arena->deallocate(value, alignof(ValueT), sizeof(ValueT));
+void DestroyArenaReference(ArenaT& arena, ValueT& value)noexcept{
+    value.~ValueT();
+    arena.deallocate(&value, alignof(ValueT), sizeof(ValueT));
 }
 
 
@@ -168,7 +168,7 @@ public:
     void operator()(ValueT* value)const noexcept{
         if(value && arena){
             using ArenaObjectDetail::DestroyArenaReference;
-            DestroyArenaReference(arena, value);
+            DestroyArenaReference(*arena, *value);
         }
     }
 };

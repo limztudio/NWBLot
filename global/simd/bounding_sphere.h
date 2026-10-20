@@ -40,14 +40,14 @@
 
 [[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingSphere::ContainsTriangleValue(SIMDVectorSingle sphereValue, SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2)noexcept{
     const SIMDVectorSingle points[CollisionDetail::s_TriangleVertexCount] = { v0, v1, v2 };
-    if(CollisionDetail::PointsInsideSphere(points, CollisionDetail::s_TriangleVertexCount, CollisionDetail::SphereCenter(sphereValue), CollisionDetail::SphereRadius(sphereValue)))
+    if(CollisionDetail::PointsInsideSphere(points, CollisionDetail::SphereCenter(sphereValue), CollisionDetail::SphereRadius(sphereValue)))
         return ContainmentType::Contains;
     return IntersectsTriangleValue(sphereValue, v0, v1, v2) ? ContainmentType::Intersects : ContainmentType::Disjoint;
 }
 
 [[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingDoubleSphere::ContainsTriangleValue(SIMDVectorDouble sphereValue, SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)noexcept{
     const SIMDVectorDouble points[CollisionDoubleDetail::s_DoubleTriangleVertexCount] = { v0, v1, v2 };
-    if(CollisionDoubleDetail::PointsInsideSphere(points, CollisionDoubleDetail::s_DoubleTriangleVertexCount, CollisionDoubleDetail::SphereCenter(sphereValue), CollisionDoubleDetail::SphereRadius(sphereValue)))
+    if(CollisionDoubleDetail::PointsInsideSphere(points, CollisionDoubleDetail::SphereCenter(sphereValue), CollisionDoubleDetail::SphereRadius(sphereValue)))
         return ContainmentType::Contains;
     return IntersectsTriangleValue(sphereValue, v0, v1, v2) ? ContainmentType::Intersects : ContainmentType::Disjoint;
 }
@@ -204,12 +204,12 @@
     return CollisionDoubleDetail::SphereCenterRadius(centerValue, VectorDouble3Length(extentsValue));
 }
 
-[[nodiscard]] inline SIMDVectorSingle NWB_SIMD_CALL BoundingSphere::SphereFromCornersValue(const NotNull<const SIMDVectorSingle*> corners, usize cornerCount)noexcept{
-    return CollisionDetail::CreateSphereFromVectorPoints(corners, cornerCount);
+[[nodiscard]] inline SIMDVectorSingle NWB_SIMD_CALL BoundingSphere::SphereFromCornersValue(const Span<const SIMDVectorSingle> corners)noexcept{
+    return CollisionDetail::CreateSphereFromVectorPoints(corners);
 }
 
-[[nodiscard]] inline SIMDVectorDouble NWB_SIMD_CALL BoundingDoubleSphere::SphereFromCornersValue(const NotNull<const SIMDVectorDouble*> corners, usize cornerCount)noexcept{
-    return CollisionDoubleDetail::CreateSphereFromVectorPoints(corners, cornerCount);
+[[nodiscard]] inline SIMDVectorDouble NWB_SIMD_CALL BoundingDoubleSphere::SphereFromCornersValue(const Span<const SIMDVectorDouble> corners)noexcept{
+    return CollisionDoubleDetail::CreateSphereFromVectorPoints(corners);
 }
 
 
@@ -256,7 +256,7 @@
 
     SIMDVectorSingle corners[BoundingBox::s_CornerCount];
     CollisionDetail::AabbCorners(boxCenter, boxExtents, corners);
-    if(CollisionDetail::PointsInsideSphere(corners, BoundingBox::s_CornerCount, CollisionDetail::SphereCenter(sphereValue), CollisionDetail::SphereRadius(sphereValue)))
+    if(CollisionDetail::PointsInsideSphere(corners, CollisionDetail::SphereCenter(sphereValue), CollisionDetail::SphereRadius(sphereValue)))
         return ContainmentType::Contains;
     return ContainmentType::Intersects;
 }
@@ -267,7 +267,7 @@
 
     SIMDVectorDouble corners[BoundingDoubleBox::s_DoubleCornerCount];
     CollisionDoubleDetail::AabbCorners(boxCenter, boxExtents, corners);
-    if(CollisionDoubleDetail::PointsInsideSphere(corners, BoundingDoubleBox::s_DoubleCornerCount, CollisionDoubleDetail::SphereCenter(sphereValue), CollisionDoubleDetail::SphereRadius(sphereValue)))
+    if(CollisionDoubleDetail::PointsInsideSphere(corners, CollisionDoubleDetail::SphereCenter(sphereValue), CollisionDoubleDetail::SphereRadius(sphereValue)))
         return ContainmentType::Contains;
     return ContainmentType::Intersects;
 }
@@ -278,7 +278,7 @@
 
     SIMDVectorSingle corners[BoundingOrientedBox::s_CornerCount];
     CollisionDetail::ObbCorners(boxCenter, boxExtents, boxOrientation, corners);
-    if(CollisionDetail::PointsInsideSphere(corners, BoundingOrientedBox::s_CornerCount, CollisionDetail::SphereCenter(sphereValue), CollisionDetail::SphereRadius(sphereValue)))
+    if(CollisionDetail::PointsInsideSphere(corners, CollisionDetail::SphereCenter(sphereValue), CollisionDetail::SphereRadius(sphereValue)))
         return ContainmentType::Contains;
     return ContainmentType::Intersects;
 }
@@ -291,7 +291,7 @@
 
     SIMDVectorDouble corners[BoundingDoubleOrientedBox::s_DoubleCornerCount];
     CollisionDoubleDetail::ObbCorners(boxCenter, boxExtents, boxOrientation, corners);
-    if(CollisionDoubleDetail::PointsInsideSphere(corners, BoundingDoubleOrientedBox::s_DoubleCornerCount, CollisionDoubleDetail::SphereCenter(sphereValue), CollisionDoubleDetail::SphereRadius(sphereValue)))
+    if(CollisionDoubleDetail::PointsInsideSphere(corners, CollisionDoubleDetail::SphereCenter(sphereValue), CollisionDoubleDetail::SphereRadius(sphereValue)))
         return ContainmentType::Contains;
     return ContainmentType::Intersects;
 }
@@ -302,7 +302,7 @@
 )const noexcept{
     SIMDVectorSingle corners[BoundingFrustum::s_CornerCount];
     CollisionDetail::FrustumCorners(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, corners);
-    if(CollisionDetail::PointsInsideSphere(corners, BoundingFrustum::s_CornerCount, CollisionDetail::SphereCenter(sphereValue), CollisionDetail::SphereRadius(sphereValue)))
+    if(CollisionDetail::PointsInsideSphere(corners, CollisionDetail::SphereCenter(sphereValue), CollisionDetail::SphereRadius(sphereValue)))
         return ContainmentType::Contains;
     return ContainmentType::Intersects;
 }
@@ -313,7 +313,7 @@
 )const noexcept{
     SIMDVectorDouble corners[BoundingDoubleFrustum::s_DoubleCornerCount];
     CollisionDoubleDetail::FrustumCorners(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, corners);
-    if(CollisionDoubleDetail::PointsInsideSphere(corners, BoundingDoubleFrustum::s_DoubleCornerCount, CollisionDoubleDetail::SphereCenter(sphereValue), CollisionDoubleDetail::SphereRadius(sphereValue)))
+    if(CollisionDoubleDetail::PointsInsideSphere(corners, CollisionDoubleDetail::SphereCenter(sphereValue), CollisionDoubleDetail::SphereRadius(sphereValue)))
         return ContainmentType::Contains;
     return ContainmentType::Intersects;
 }
@@ -598,13 +598,13 @@ inline void BoundingDoubleSphere::CreateFromPoints(BoundingDoubleSphere& outSphe
 inline void BoundingSphere::CreateFromFrustum(BoundingSphere& outSphere, const BoundingFrustum& frustum)noexcept{
     SIMDVectorSingle corners[BoundingFrustum::s_CornerCount];
     CollisionDetail::FrustumCorners(LoadFloat(frustum.origin), LoadFloat(frustum.orientation), frustum.rightSlope, frustum.leftSlope, frustum.topSlope, frustum.bottomSlope, frustum.nearPlane, frustum.farPlane, corners);
-    StoreFloat(SphereFromCornersValue(NotNull<const SIMDVectorSingle*>(corners), BoundingFrustum::s_CornerCount), outSphere.centerRadius);
+    StoreFloat(SphereFromCornersValue(corners), outSphere.centerRadius);
 }
 
 inline void BoundingDoubleSphere::CreateFromFrustum(BoundingDoubleSphere& outSphere, const BoundingDoubleFrustum& frustum)noexcept{
     SIMDVectorDouble corners[BoundingDoubleFrustum::s_DoubleCornerCount];
     CollisionDoubleDetail::FrustumCorners(LoadDouble(frustum.origin), LoadDouble(frustum.orientation), frustum.rightSlope, frustum.leftSlope, frustum.topSlope, frustum.bottomSlope, frustum.nearPlane, frustum.farPlane, corners);
-    StoreDouble(SphereFromCornersValue(NotNull<const SIMDVectorDouble*>(corners), BoundingDoubleFrustum::s_DoubleCornerCount), outSphere.centerRadius);
+    StoreDouble(SphereFromCornersValue(corners), outSphere.centerRadius);
 }
 
 

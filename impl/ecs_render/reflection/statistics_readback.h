@@ -102,7 +102,7 @@ private:
 using ReflectionStatisticsControl = RefCounter<ReflectionStatisticsState>;
 using ReflectionStatisticsControlHandle = RefCountPtr< ReflectionStatisticsControl, ArenaRefDeleter<ReflectionStatisticsControl, Core::Alloc::GlobalArena> >;
 
-[[nodiscard]] ReflectionStatisticsControlHandle CreateReflectionStatisticsControl(Core::Alloc::GlobalArena& arena, u16 deviceGeneration)noexcept;
+[[nodiscard]] Expected<ReflectionStatisticsControlHandle> CreateReflectionStatisticsControl(Core::Alloc::GlobalArena& arena, u16 deviceGeneration)noexcept;
 
 // Destruction releases only an unaccepted reservation.
 class ReflectionStatisticsReservation final : NoCopy{

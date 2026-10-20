@@ -55,7 +55,7 @@ namespace GraphicsBackend{
 #define NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(Type) \
     u32 RefCountAddReference(Type* value)noexcept; \
     u32 RefCountRelease(Type* value)noexcept; \
-    void DestroyArenaReference(Alloc::GlobalArena* arena, Type* value)noexcept;
+    void DestroyArenaReference(Alloc::GlobalArena& arena, Type& value)noexcept;
 
     NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(Device)
     NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(Heap)

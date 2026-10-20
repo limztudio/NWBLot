@@ -24,6 +24,9 @@ RUNTIME_TEXTURE_SMOKE = "texture_smoke_runtime"
 RUNTIME_CSG_VISIBLE_SMOKE = "csg_visible_smoke_runtime"
 RUNTIME_CSG_SKINNED_VISIBLE_SMOKE = "csg_skinned_visible_smoke_runtime"
 RUNTIME_SKINNING_CULLING_BENCHMARK = "skinning_culling_benchmark_runtime"
+RUNTIME_REFLECTION_TEMPORAL_SMOKE = "reflection_temporal_smoke_runtime"
+# Reflection cases whose fixture-only materials are cooked only into a private runtime.
+REFLECTION_CASE_RUNTIMES = {"temporal_light": RUNTIME_REFLECTION_TEMPORAL_SMOKE}
 DEFAULT_SCENE = "transparent-multi"
 ENV_REFLECTION_PREFIX = "NWB_REFLECTION_SMOKE_"
 ENV_REFRACTION_CASE = "NWB_REFRACTION_SMOKE_CASE"
@@ -139,7 +142,8 @@ def smoke_command(args) -> int:
     ROOT_LAUNCHER.build_profile_targets(args, settings, env)
 
     executable = ROOT_LAUNCHER.resolve_executable_path(settings, smoke_executable.target, args.executable, args.executable_name or smoke_executable.executable, args.dry_run,)
-    working_directory = ROOT_LAUNCHER.resolve_working_directory(settings, args.working_directory, settings.build_dir / TESTING_DIR / scene.runtime / settings.config,)
+    runtime = REFLECTION_CASE_RUNTIMES.get(args.reflection_case, scene.runtime) if scene_name == "reflection" else scene.runtime
+    working_directory = ROOT_LAUNCHER.resolve_working_directory(settings, args.working_directory, settings.build_dir / TESTING_DIR / runtime / settings.config,)
     return ROOT_LAUNCHER.launch_with_optional_profile(args, settings, executable, working_directory, env, args.application_args,)
 
 

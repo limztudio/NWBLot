@@ -168,7 +168,14 @@ inline void CaptureMessageDiagnostic(const LogType::Enum type, const StringView 
 }
 
 template<typename In>
-[[nodiscard]] inline DiagnosticEventText MakeConvertedDiagnosticEventText(const BasicStringDetail::StringConvertArg<In>& message){
+[[nodiscard]] inline DiagnosticEventText MakeConvertedDiagnosticEventText(const BasicStringDetail::StringConvertArg<In>& message)noexcept([]()consteval noexcept{
+    if constexpr(BasicStringDetail::CanMakeCharView<In>)
+        return noexcept(AStringView(DeclVal<const In&>()));
+    else if constexpr(BasicStringDetail::CanMakeWCharView<In>)
+        return noexcept(WStringView(DeclVal<const In&>()));
+    else
+        return true;
+}()){
     DiagnosticEventText output;
     if constexpr(BasicStringDetail::CanMakeCharView<In>)
         DiagnosticDetail::CopyEventText(output.value, AStringView(message.value));

@@ -297,8 +297,9 @@ TEST(ReflectionFeedback, ResourceGenerationBlocksOldCallbacksWithoutDiscardingTh
 
 TEST(ReflectionFeedback, RejectedGraphAndResetReleaseTheMoveOnlyReservation){
     Core::Alloc::GlobalArena arena{Name("tests/reflection/feedback_graph")};
-    auto control = CreateReflectionFeedbackControl(arena, 1u);
-    ASSERT_TRUE(control);
+    auto controlResult = CreateReflectionFeedbackControl(arena, 1u);
+    ASSERT_TRUE(controlResult);
+    auto control = Move(*controlResult);
     Core::GpuTaskGraph graph(arena);
     const auto rejected = control->plan(Stamp(), ReflectionSettings{}, true, 1u);
     EXPECT_FALSE(graph.addTask<LeaseTask>(Core::GpuTaskDesc{}, LeaseTask::Payload{ReflectionFeedbackReservation(control, rejected)}).has_value());
@@ -319,7 +320,9 @@ TEST(ReflectionFeedback, RejectedGraphAndResetReleaseTheMoveOnlyReservation){
 
 TEST(ReflectionFeedback, MovedLeasePublishesOnceAndInvalidAcceptanceRetainsQuarantineAfterDestruction){
     Core::Alloc::GlobalArena arena{Name("tests/reflection/feedback_move")};
-    auto control = CreateReflectionFeedbackControl(arena, 1u);
+    auto controlResult = CreateReflectionFeedbackControl(arena, 1u);
+    ASSERT_TRUE(controlResult);
+    auto control = Move(*controlResult);
     const auto first = control->plan(Stamp(), ReflectionSettings{}, true, 1u);
     ReflectionFeedbackReservation original(control, first);
     ASSERT_TRUE(original.valid());

@@ -165,6 +165,7 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
                     closest.hit = true;
                     closest.t = triangleHit.t;
                     closest.isRefractive = refractive;
+                    closest.instance = instanceIndex;
                     closest.worldPos = worldOrigin + worldDirection * triangleHit.t;
                     closest.shadingNormal = float3(0.0, 0.0, 1.0); // replaced by the interpolated normal for refractive hits
                     closest.ior = 1.0;

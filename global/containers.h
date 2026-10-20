@@ -148,7 +148,7 @@ namespace ContainerDetail{
 
 
 template<typename DestinationVector, typename SourceValue>
-[[nodiscard]] inline Expected<usize> SourceAliasesDestination(const DestinationVector& destination, const SourceValue* sourceData, const usize sourceSize){
+[[nodiscard]] inline Expected<usize> SourceAliasesDestination(const DestinationVector& destination, const SourceValue* sourceData, const usize sourceSize)noexcept(noexcept(destination.empty() || sourceSize == 0u) && noexcept(destination.data()) && noexcept(sourceSize >= destination.size())){
     if(destination.empty() || sourceSize == 0u)
         return MakeUnexpected(Failure{});
 
@@ -174,7 +174,7 @@ template<typename DestinationVector, typename SourceValue>
 }
 
 template<typename DestinationVector, typename SourceVector>
-[[nodiscard]] inline Expected<usize> SourceAliasesDestination(const DestinationVector& destination, const SourceVector& source){
+[[nodiscard]] inline Expected<usize> SourceAliasesDestination(const DestinationVector& destination, const SourceVector& source)noexcept(noexcept(SourceAliasesDestination(destination, source.data(), source.size()))){
     return SourceAliasesDestination(destination, source.data(), source.size());
 }
 

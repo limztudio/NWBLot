@@ -55,12 +55,14 @@
 
 // hit == false denotes a miss; with normalized rays, t is world distance.
 // Refractive hits provide world-space shading normal, IOR, and transmission.
+// instance is the material-record index shared by HW and SW; it names the medium that a refractive hit bounds.
 struct NwbCausticHit{
     bool hit;
 #if NWB_RT_CSG_ENABLED
     uint failure;
 #endif
     bool isRefractive;
+    uint instance;
     float t;
     float ior;
     float3 worldPos;
@@ -78,7 +80,6 @@ struct NwbCausticPhoton{
     float3 origin;
     float3 direction;
     half3 flux;
-    bool inside;
 };
 
 struct NwbCausticSplat{
@@ -108,7 +109,11 @@ NwbCausticSplat nwbCausticTracePhoton(NwbCausticPhoton photon){
     float3 origin = photon.origin;
     float3 direction = photon.direction;
     half3 flux = photon.flux;
-    bool inside = photon.inside;
+    // Photons start in air and are inside at most one refractor. Its entry hit gives the medium IOR and absorption until the photon leaves through the same instance.
+    bool inside = false;
+    uint mediumInstance = 0u;
+    float mediumIor = 1.0;
+    half3 mediumAbsorption = half3(0.0h, 0.0h, 0.0h);
     // Ignore direct photons that never crossed a refractor.
     uint refractiveCrossings = 0u;
 
@@ -139,12 +144,17 @@ NwbCausticSplat nwbCausticTracePhoton(NwbCausticPhoton photon){
             return splat;
         }
 
+        // Another refractor before the exit means nested or overlapping media. Drop the photon rather than charge one medium's optics to another.
+        if(inside && hit.instance != mediumInstance)
+            return splat;
+
         // Refraction uses smooth shading normals.
         float cosI;
         const float3 normal = nwbCausticOrientNormal(direction, hit.shadingNormal, cosI);
 
-        // inside selects medium-to-air eta; otherwise use air-to-medium, and apply Beer-Lambert only on exit.
-        const float eta = inside ? hit.ior : (1.0 / max(hit.ior, NWB_CAUSTIC_MIN_IOR));
+        // Entry bends air-to-medium with the hit IOR; exit bends medium-to-air with the IOR of the medium being left.
+        const float ior = inside ? mediumIor : hit.ior;
+        const float eta = inside ? ior : (1.0 / max(ior, NWB_CAUSTIC_MIN_IOR));
 
         const float3 refracted = nwbCausticRefract(direction, normal, eta);
         if(dot(refracted, refracted) < NWB_CAUSTIC_REFRACTED_MIN_LENGTH_SQUARED)
@@ -154,10 +164,17 @@ NwbCausticSplat nwbCausticTracePhoton(NwbCausticPhoton photon){
 
         // Schlick requires the air-side cosine on both entry and exit. The Fresnel cosine is a (0, 1) bounded factor input, so half arithmetic is sufficient here.
         const half fresnelCosI = inside ? half(abs(dot(nwbSafeNormalize(refracted, direction), normal))) : half(cosI);
-        flux *= nwbShadowFresnelTransmittedFraction(hit.ior, fresnelCosI);
+        flux *= nwbShadowFresnelTransmittedFraction(ior, fresnelCosI);
 
-        if(inside)
-            flux *= exp(-nwbShadowAbsorptionCoefficient(hit.transmission) * half(hit.t));
+        if(inside){
+            // Beer-Lambert over the entry-to-exit segment. The exponent stays FP32 because t can exceed the half range; only the bounded (0, 1] transmittance narrows to half.
+            flux *= half3(exp(-float3(mediumAbsorption) * hit.t));
+        }
+        else{
+            mediumInstance = hit.instance;
+            mediumIor = hit.ior;
+            mediumAbsorption = nwbShadowAbsorptionCoefficient(hit.transmission);
+        }
 
         origin = hit.worldPos;
         direction = nwbSafeNormalize(refracted, direction);
@@ -268,7 +285,6 @@ NwbCausticPhoton nwbCausticCreatePhoton(const NwbCausticEmission emission, const
     photon.origin = emission.origin;
     photon.direction = emission.direction;
     photon.flux = half3(float3(lightColor) * perPhoton);
-    photon.inside = false;
     return photon;
 }
 

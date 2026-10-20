@@ -13,6 +13,7 @@
 
 #include <global/algorithm.h>
 #include <global/containers.h>
+#include <global/fixed_index_map.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,95 +34,9 @@ namespace __hidden_command_list_state_handoff_merge{
 using TextureStateKey = TextureSubresourceStateKey;
 
 
-// ScratchArena reclaims one most-recent allocation per alignment bucket.
-// Keep each temporary index in one fixed allocation so destruction rewinds exactly; hash containers can leave non-LIFO storage and grow the arena per query.
-template<typename Key, typename Hash, typename Equal>
-class ScratchStateIndexMap final : NoCopy{
-private:
-    struct Slot{
-        Key key{};
-        usize value = 0u;
-        bool occupied = false;
-    };
-
-
-public:
-    ScratchStateIndexMap(Alloc::ScratchArena& arena, const usize maximumEntryCount, const Hash& hash = Hash(), const Equal& equal = Equal())
-        : m_slots(arena)
-        , m_hash(hash)
-        , m_equal(equal)
-    {
-        if(maximumEntryCount == 0u)
-            return;
-
-        if(AddOverflows<usize>(maximumEntryCount, maximumEntryCount)){
-            m_valid = false;
-            return;
-        }
-        const usize doubledEntryCount = maximumEntryCount + maximumEntryCount;
-        if(AddOverflows<usize>(doubledEntryCount, 1u)){
-            m_valid = false;
-            return;
-        }
-        m_slots.resize(doubledEntryCount + 1u);
-    }
-
-
-public:
-    [[nodiscard]] bool valid()const noexcept{ return m_valid; }
-
-    [[nodiscard]] const usize* find(const Key& key)const noexcept{
-        if(m_slots.empty())
-            return nullptr;
-
-        usize slotIndex = m_hash(key) % m_slots.size();
-        for(usize probedSlotCount = 0u; probedSlotCount < m_slots.size(); ++probedSlotCount){
-            const Slot& slot = m_slots[slotIndex];
-            if(!slot.occupied)
-                return nullptr;
-            if(m_equal(slot.key, key))
-                return &slot.value;
-            if(++slotIndex == m_slots.size())
-                slotIndex = 0u;
-        }
-        return nullptr;
-    }
-
-    [[nodiscard]] bool insertOrAssign(const Key& key, const usize value)noexcept{
-        if(m_slots.empty())
-            return false;
-
-        usize slotIndex = m_hash(key) % m_slots.size();
-        for(usize probedSlotCount = 0u; probedSlotCount < m_slots.size(); ++probedSlotCount){
-            Slot& slot = m_slots[slotIndex];
-            if(!slot.occupied){
-                slot.key = key;
-                slot.value = value;
-                slot.occupied = true;
-                return true;
-            }
-            if(m_equal(slot.key, key)){
-                slot.value = value;
-                return true;
-            }
-            if(++slotIndex == m_slots.size())
-                slotIndex = 0u;
-        }
-        return false;
-    }
-
-
-private:
-    Vector<Slot, Alloc::ScratchArena> m_slots;
-    Hash m_hash;
-    Equal m_equal;
-    bool m_valid = true;
-};
-
-
-using TextureStateIndexMap = ScratchStateIndexMap< TextureStateKey, TextureSubresourceStateKeyHasher, TextureSubresourceStateKeyEqualTo >;
-using BufferStateIndexMap = ScratchStateIndexMap<Buffer*, Hasher<Buffer*>, EqualTo<Buffer*>>;
-using PermanentTextureStateIndexMap = ScratchStateIndexMap<Texture*, Hasher<Texture*>, EqualTo<Texture*>>;
+using TextureStateIndexMap = FixedIndexMap< TextureStateKey, Alloc::ScratchArena, TextureSubresourceStateKeyHasher, TextureSubresourceStateKeyEqualTo >;
+using BufferStateIndexMap = FixedIndexMap<Buffer*, Alloc::ScratchArena, Hasher<Buffer*>, EqualTo<Buffer*>>;
+using PermanentTextureStateIndexMap = FixedIndexMap<Texture*, Alloc::ScratchArena, Hasher<Texture*>, EqualTo<Texture*>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

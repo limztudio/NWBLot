@@ -4,6 +4,8 @@
 
 #include "resource_state_selection.h"
 
+#include <global/hash_utils.h>
+
 #include <new>
 
 
@@ -17,7 +19,7 @@ NWB_CORE_BEGIN
 
 
 usize CommandListResourceSelection::HashIdentity(void* const resource, const bool texture)noexcept{
-    return Hasher<void*>()(resource) ^ (texture ? static_cast<usize>(CommandListResourceSelection::s_TextureIdentitySeed) : 0u);
+    return Hasher<void*>()(resource) ^ (texture ? static_cast<usize>(s_HashCombineGoldenRatio64) : 0u);
 }
 
 void CommandListResourceSelection::InsertIndex(void* const storage, const usize capacity, const usize entryIndex)noexcept{

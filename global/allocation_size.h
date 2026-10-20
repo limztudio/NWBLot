@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "algorithm.h"
 #include "limit.h"
 #include "type.h"
 
@@ -40,14 +41,17 @@ constexpr inline usize AddSize(usize lhs, usize rhs){
 }
 
 constexpr inline usize Alignment(usize align, usize size){
-    if(align <= 1)
-        return size;
+    const auto aligned = AlignUpChecked(size, align);
+    if(!aligned)
+        throw AllocationSizeException{};
+    return *aligned;
+}
 
-    const usize remainder = size % align;
-    if(remainder == 0)
-        return size;
-
-    return AddSize(size, align - remainder);
+constexpr inline usize AlignmentPowerOfTwo(usize align, usize size){
+    const auto aligned = AlignUpPowerOfTwoChecked(size, align);
+    if(!aligned)
+        throw AllocationSizeException{};
+    return *aligned;
 }
 
 

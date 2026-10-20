@@ -197,7 +197,6 @@ bool IsSupportedSampleCount(u32 sampleCount)noexcept;
 bool ValidateTextureShape(const TextureDesc& desc, TStringView operationName);
 VkImageAspectFlags GetImageAspectMask(const FormatInfo& formatInfo)noexcept;
 Expected<TextureFormatBlockLayout> GetTextureFormatBlockLayout(const FormatInfo& formatInfo)noexcept;
-Expected<u32> TryComputeCommonAlignment(u32 firstAlignment, u32 secondAlignment)noexcept;
 Expected<u32> TryComputeUploadSuballocationAlignment(u32 requiredAlignment)noexcept;
 bool IsBufferImageCopyAspectMaskSupported(VkImageAspectFlags aspectMask)noexcept;
 VkExtent3D GetTextureMipExtent(const TextureDesc& desc, MipLevel mipLevel)noexcept;

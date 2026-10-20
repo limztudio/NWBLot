@@ -11,6 +11,7 @@
 #include <core/alloc/scratch.h>
 
 #include <global/bit.h>
+#include <global/csv_text.h>
 #include <global/hash_utils.h>
 #include <global/simd/vector.h>
 #include <global/type_properties.h>
@@ -26,34 +27,6 @@ namespace __hidden_telemetry_report{
 
 
 static constexpr StringView s_UnknownReportField = "unknown";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static void AppendCsvCell(AString<NWB::Core::Telemetry::TelemetryArena>& out, const AStringView text){
-    bool quote = false;
-    for(const char ch : text){
-        if(ch == ',' || ch == '"' || ch == '\n' || ch == '\r'){
-            quote = true;
-            break;
-        }
-    }
-
-    if(!quote){
-        out.append(text.data(), text.size());
-        return;
-    }
-
-    out += '"';
-    for(const char ch : text){
-        if(ch == '"')
-            out += "\"\"";
-        else
-            out += ch;
-    }
-    out += '"';
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -117,7 +90,7 @@ void AppendPerfCsvHeader(AString<TelemetryArena>& out){
 void AppendPerfCsvRow(AString<TelemetryArena>& out, const Telemetry::PerfTimingSource::Enum source, const Telemetry::PerfTimingPayload& payload){
     out += PerfTimingSourceText(source);
     out += ',';
-    __hidden_telemetry_report::AppendCsvCell(out, payload.scopeText);
+    AppendCsvCell(out, payload.scopeText);
     StringAppendFormat(
         out,
         ",{},{:.9},{:.9},{:.9},{:.9},{},{},{}\n",

@@ -69,6 +69,23 @@ static bool TestCsgReceiverVisible(NWB::Core::ECS::World& world, const NWB::Core
     return !filter || entity != filter->hiddenEntity;
 }
 
+TEST(Csg, ShapeIdentityRetains64BitFoldForCookedAssetsAndRejectsAnEmptyName){
+    using namespace NWB::Impl;
+    EXPECT_FALSE(CsgShapeTypeIdFromName(Name{}));
+    const auto plane = CsgShapeTypeIdFromName(s_CsgPlaneShapeName);
+    const auto box = CsgShapeTypeIdFromName(s_CsgBoxShapeName);
+    const auto sphere = CsgShapeTypeIdFromName(s_CsgSphereShapeName);
+    const auto capsule = CsgShapeTypeIdFromName(s_CsgCapsuleShapeName);
+    ASSERT_TRUE(plane);
+    ASSERT_TRUE(box);
+    ASSERT_TRUE(sphere);
+    ASSERT_TRUE(capsule);
+    EXPECT_EQ(*plane, 0x92f0021au);
+    EXPECT_EQ(*box, 0xb957a584u);
+    EXPECT_EQ(*sphere, 0x56176cbfu);
+    EXPECT_EQ(*capsule, 0xe0e38c7bu);
+}
+
 TEST(Csg, CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs){
     NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
     {

@@ -8,6 +8,7 @@
 #include "texture_clear_contract.h"
 #include "arena_names.h"
 
+#include <global/algorithm.h>
 #include <global/simd/convert.h>
 #include <global/simdmath.h>
 
@@ -192,7 +193,7 @@ inline Expected<TextureClearUploadLayout> BuildTextureClearUploadLayout(const u6
     if(elementCount == 0ull || elementSize == 0u || arrayLayerCount == 0ull || elementCount > Limit<u64>::s_Max / elementSize)
         return MakeUnexpected(Failure{});
     const u64 uploadSize = elementCount * elementSize;
-    const auto copyOffsetAlignment = VulkanDetail::TryComputeCommonAlignment(s_TextureClearUploadAlignment, elementSize);
+    const auto copyOffsetAlignment = CommonAlignmentChecked(s_TextureClearUploadAlignment, elementSize);
     if(!copyOffsetAlignment)
         return MakeUnexpected(copyOffsetAlignment.error());
     const auto stagingAlignment = VulkanDetail::TryComputeUploadSuballocationAlignment(*copyOffsetAlignment);

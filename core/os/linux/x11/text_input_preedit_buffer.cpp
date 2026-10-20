@@ -5,6 +5,7 @@
 #include "text_input_preedit.h"
 
 #include <global/text_utils.h>
+#include <global/utf8_text.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,35 +23,8 @@ namespace __hidden_x11_preedit{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<usize> ByteOffset(const AStringView text, const usize character)noexcept{
-    usize position = 0u;
-    usize index = 0u;
-    while(position < text.size()){
-        if(index == character){
-            return position;
-        }
-        const auto decoded = DecodeUtf8CodePoint(text.substr(position));
-        if(!decoded || decoded->codePoint == 0u || (decoded->codePoint >= BasicStringDetail::s_UnicodeHighSurrogateMin && decoded->codePoint <= BasicStringDetail::s_UnicodeLowSurrogateMax))
-            return MakeUnexpected(Failure{});
-        position += static_cast<usize>(decoded->byteCount);
-        ++index;
-    }
-    if(index != character)
-        return MakeUnexpected(Failure{});
-    return position;
-}
-
 [[nodiscard]] static bool ValidUtf8(const AStringView text)noexcept{
-    if(text.size() > X11PreeditBuffer::s_MaxBytes)
-        return false;
-    usize position = 0u;
-    while(position < text.size()){
-        const auto decoded = DecodeUtf8CodePoint(text.substr(position));
-        if(!decoded || decoded->codePoint == 0u || (decoded->codePoint >= BasicStringDetail::s_UnicodeHighSurrogateMin && decoded->codePoint <= BasicStringDetail::s_UnicodeLowSurrogateMax))
-            return false;
-        position += static_cast<usize>(decoded->byteCount);
-    }
-    return true;
+    return text.size() <= X11PreeditBuffer::s_MaxBytes && IsValidUtf8TextWithoutNul(text);
 }
 };
 
@@ -75,10 +49,10 @@ bool X11PreeditBuffer::replace(const usize firstCharacter, const usize character
         return false;
     if(!ValidUtf8(insertion))
         return false;
-    const auto firstByte = ByteOffset(m_text, firstCharacter);
+    const auto firstByte = Utf8ByteOffset(m_text, firstCharacter);
     if(!firstByte)
         return false;
-    const auto removedBytes = ByteOffset(AStringView(m_text).substr(*firstByte), characterCount);
+    const auto removedBytes = Utf8ByteOffset(AStringView(m_text).substr(*firstByte), characterCount);
     if(!removedBytes)
         return false;
     const usize lastByte = *firstByte + *removedBytes;
@@ -90,7 +64,7 @@ bool X11PreeditBuffer::replace(const usize firstCharacter, const usize character
     if(!insertion.empty())
         m_candidate.append(insertion.data(), insertion.size());
     m_candidate.append(m_text.data() + lastByte, m_text.size() - lastByte);
-    const auto caretByte = ByteOffset(m_candidate, caretCharacter);
+    const auto caretByte = Utf8ByteOffset(m_candidate, caretCharacter);
     if(!caretByte)
         return false;
     m_text.swap(m_candidate);
@@ -99,7 +73,7 @@ bool X11PreeditBuffer::replace(const usize firstCharacter, const usize character
 }
 
 bool X11PreeditBuffer::moveCaret(const usize caretCharacter)noexcept{
-    const auto caretByte = __hidden_x11_preedit::ByteOffset(m_text, caretCharacter);
+    const auto caretByte = Utf8ByteOffset(m_text, caretCharacter);
     if(!caretByte)
         return false;
     m_caretByte = *caretByte;

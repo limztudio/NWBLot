@@ -3,7 +3,8 @@
 
 
 #include "text_input_text.h"
-#include "utf8_text_internal.h"
+
+#include <global/utf8_text.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,7 +19,7 @@ NWB_CORE_BEGIN
 TextInputAdmission::Enum ValidateTextInputUtf8(const AStringView text, const usize maxBytes)noexcept{
     if(text.size() > maxBytes)
         return TextInputAdmission::TooLarge;
-    return Utf8TextDetail::IsValidText(text) ? TextInputAdmission::Accepted : TextInputAdmission::InvalidText;
+    return IsValidUtf8TextWithoutNul(text) ? TextInputAdmission::Accepted : TextInputAdmission::InvalidText;
 }
 
 bool IsTextInputUtf8Boundary(const AStringView text, const usize byteOffset)noexcept{

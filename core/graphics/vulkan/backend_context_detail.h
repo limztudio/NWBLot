@@ -71,26 +71,6 @@ static constexpr u32 s_Hdr10MetadataSwapChainCount = 1u;
     return static_cast<GpuQueueCapability::Mask>(capabilities);
 }
 
-template<typename Set>
-static Vector<const char*, Alloc::ScratchArena> StringSetToVector(const Set& set, Alloc::ScratchArena& arena){
-    Vector<const char*, Alloc::ScratchArena> ret(arena);
-    ret.reserve(set.size());
-    for(const auto& s : set)
-        ret.push_back(s.c_str());
-    return ret;
-}
-
-template<typename Map>
-static Vector<const char*, Alloc::ScratchArena> StringMapKeysToVector(const Map& map, Alloc::ScratchArena& arena){
-    Vector<const char*, Alloc::ScratchArena> ret(arena);
-    ret.reserve(map.size());
-    for(const auto& [key, val] : map){
-        static_cast<void>(val);
-        ret.push_back(key.c_str());
-    }
-    return ret;
-}
-
 template<typename T>
 static T MakeVkFeatureStruct(VkStructureType sType)noexcept(noexcept(T{}) && noexcept(static_cast<T*>(nullptr)->sType = sType) && noexcept(static_cast<T*>(nullptr)->pNext = nullptr) && IsNothrowMoveConstructible_V<T> && IsNothrowDestructible_V<T>){
     T feature = {};

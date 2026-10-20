@@ -480,7 +480,10 @@ bool BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
         vulkan12features.samplerFilterMinmax = supportedVulkan12Features.samplerFilterMinmax;
     vulkan12features.pNext = &vulkan11features;
 
-    auto extVec = VulkanDetail::StringMapKeysToVector(m_enabledExtensions.device, scratchArena);
+    Vector<const char*, Alloc::ScratchArena> extVec(scratchArena);
+    extVec.reserve(m_enabledExtensions.device.size());
+    for(const auto& extension : m_enabledExtensions.device)
+        extVec.push_back(extension.first.c_str());
 
     VkDeviceCreateInfo deviceCreateInfo = {};
     deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;

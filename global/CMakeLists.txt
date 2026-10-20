@@ -15,6 +15,7 @@ nwb_declare_static_library(global_foundation)
 target_sources(global_foundation PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/simd/macro.h"
     "${CMAKE_CURRENT_LIST_DIR}/simd/memory.h"
+    "${CMAKE_CURRENT_LIST_DIR}/simd/vector_clamp_ordered.h"
     "${CMAKE_CURRENT_LIST_DIR}/simd/collision_types.h"
     "${CMAKE_CURRENT_LIST_DIR}/base64.h"
     "${CMAKE_CURRENT_LIST_DIR}/allocation_size.h"
@@ -75,5 +76,17 @@ target_sources(global_foundation PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/texture_payload.h"
     "${CMAKE_CURRENT_LIST_DIR}/numeric_text.h"
     "${CMAKE_CURRENT_LIST_DIR}/json_text.h"
+    "${CMAKE_CURRENT_LIST_DIR}/unicode/emoji_properties.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/unicode/incb_properties.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/unicode/gcb_properties.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/unicode/grapheme.h"
+    "${CMAKE_CURRENT_LIST_DIR}/unicode/property_table.h"
+    "${CMAKE_CURRENT_LIST_DIR}/unicode/properties.h"
+    "${CMAKE_CURRENT_LIST_DIR}/dot_text.h"
+    "${CMAKE_CURRENT_LIST_DIR}/csv_text.h"
+    "${CMAKE_CURRENT_LIST_DIR}/binary_little_endian.h"
+    "${CMAKE_CURRENT_LIST_DIR}/binary_big_endian.h"
+    "${CMAKE_CURRENT_LIST_DIR}/utf8_text.h"
+    "${CMAKE_CURRENT_LIST_DIR}/fixed_index_map.h"
 )
 

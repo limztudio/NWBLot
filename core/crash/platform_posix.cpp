@@ -4,6 +4,7 @@
 
 #include "internal.h"
 
+#include <global/algorithm.h>
 #include <global/blocking_io.h>
 #include <global/process_execution.h>
 #include <global/scope_exit.h>
@@ -82,10 +83,6 @@ static void CleanupOwnedDescriptor(int& descriptor, Detail::PlatformCleanupObser
         observations.record(released.error());
 }
 
-[[nodiscard]] static bool IsAlignedPointer(const u64 address)noexcept{
-    return (address & (sizeof(void*) - 1u)) == 0u;
-}
-
 static void AppendCallstackFrame(Detail::CrashDumpRequestOptions& options, const u64 address)noexcept{
     if(address == 0u || options.callstackFrameCount >= Detail::s_MaxCallstackFrames)
         return;
@@ -98,7 +95,7 @@ static void AppendCallstackFrame(Detail::CrashDumpRequestOptions& options, const
 static void CaptureFramePointerCallstack(Detail::CrashDumpRequestOptions& options, const u64 instructionPointer, const u64 stackPointer, const u64 framePointer)noexcept{
     AppendCallstackFrame(options, instructionPointer);
 
-    if(stackPointer == 0u || framePointer == 0u || !IsAlignedPointer(framePointer))
+    if(stackPointer == 0u || framePointer == 0u || !IsAligned(framePointer, static_cast<u64>(sizeof(void*))))
         return;
     if(framePointer < stackPointer || framePointer - stackPointer > s_MaxFramePointerWalkBytes)
         return;
@@ -110,7 +107,7 @@ static void CaptureFramePointerCallstack(Detail::CrashDumpRequestOptions& option
         const u64 returnAddress = static_cast<u64>(reinterpret_cast<usize>(frame->returnAddress));
         AppendCallstackFrame(options, returnAddress);
 
-        if(nextFrame <= currentFrame || !IsAlignedPointer(nextFrame))
+        if(nextFrame <= currentFrame || !IsAligned(nextFrame, static_cast<u64>(sizeof(void*))))
             break;
         if(nextFrame < stackPointer || nextFrame - stackPointer > s_MaxFramePointerWalkBytes)
             break;

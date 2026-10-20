@@ -12,6 +12,7 @@
 #include <tests/common/test_context.h>
 
 #include <global/filesystem.h>
+#include <global/binary_big_endian.h>
 #include <global/simd/vector.h>
 
 #include <gtest/gtest.h>
@@ -464,12 +465,12 @@ TEST(AssetsFontAtlas, OriginalSourcePositioningSetAndBytesMustMatchTheShapingFon
         ASSERT_TRUE(sourceTableResult);
         const FontSfntTable& sourceTable = *sourceTableResult;
         if(sourceTable.tag == s_FontSfntHeadTag){
-            const auto unitsPerEmResult = ReadFontSfntU16(sourceTable.bytes, 18u);
+            const auto unitsPerEmResult = ReadU16BigEndian(sourceTable.bytes, 18u);
             ASSERT_TRUE(unitsPerEmResult);
             payload.unitsPerEm = *unitsPerEmResult;
         }
         if(sourceTable.tag == s_FontSfntMaxpTag){
-            const auto glyphCountResult = ReadFontSfntU16(sourceTable.bytes, 4u);
+            const auto glyphCountResult = ReadU16BigEndian(sourceTable.bytes, 4u);
             ASSERT_TRUE(glyphCountResult);
             payload.sourceGlyphCount = *glyphCountResult;
         }

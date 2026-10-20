@@ -6,6 +6,7 @@
 
 
 #include "compile.h"
+#include "limit.h"
 #include "text_utils.h"
 #include "type.h"
 #include "type_borrow.h"
@@ -17,6 +18,7 @@
 inline constexpr u64 s_Fnv64OffsetBasis = 14695981039346656037ull;
 inline constexpr u64 s_Fnv64Prime = 1099511628211ull;
 inline constexpr usize s_HashCombineGoldenRatio = 0x9e3779b9u;
+inline constexpr u64 s_HashCombineGoldenRatio64 = 0x9e3779b97f4a7c15ull;
 inline constexpr usize s_HashCombineLeftShift = 6u;
 inline constexpr usize s_HashCombineRightShift = 2u;
 
@@ -24,13 +26,22 @@ inline constexpr usize s_HashCombineRightShift = 2u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] inline constexpr u64 UpdateFnv64Byte(const u64 hash, const u8 byte)noexcept{
+    return (hash ^ byte) * s_Fnv64Prime;
+}
+
+[[nodiscard]] inline constexpr u64 UpdateFnv64U64LittleEndian(u64 hash, const u64 value)noexcept{
+    for(usize index = 0u; index < sizeof(value); ++index)
+        hash = UpdateFnv64Byte(hash, static_cast<u8>(value >> (index * s_BitsPerByte)));
+    return hash;
+}
+
 [[nodiscard]] inline u64 UpdateFnv64(u64 hash, const u8* bytes, const usize byteCount)noexcept{
     if(bytes == nullptr || byteCount == 0)
         return hash;
 
     for(usize i = 0u; i < byteCount; ++i){
-        hash ^= static_cast<u64>(bytes[i]);
-        hash *= s_Fnv64Prime;
+        hash = UpdateFnv64Byte(hash, bytes[i]);
     }
 
     return hash;
@@ -71,8 +82,14 @@ template<typename CharT>
     return UpdateFnv64(s_Fnv64OffsetBasis, static_cast<const u8*>(data), byteCount);
 }
 
-inline void HashCombineHash(usize& seed, const usize hash)noexcept{
-    seed ^= hash + s_HashCombineGoldenRatio + (seed << s_HashCombineLeftShift) + (seed >> s_HashCombineRightShift);
+template<typename T>
+    requires(IsSame_V<T, u32> || IsSame_V<T, u64>)
+inline constexpr void HashCombineHash(T& seed, const T hash, const T goldenRatio)noexcept{
+    seed ^= hash + goldenRatio + (seed << s_HashCombineLeftShift) + (seed >> s_HashCombineRightShift);
+}
+
+inline constexpr void HashCombineHash(usize& seed, const usize hash)noexcept{
+    HashCombineHash(seed, hash, s_HashCombineGoldenRatio);
 }
 
 template<typename T>

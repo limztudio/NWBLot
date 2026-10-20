@@ -1,0 +1,32 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "string_view.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename StringT>
+inline void AppendDotQuotedText(StringT& out, const AStringView text)noexcept(noexcept(out += '"') && noexcept(out += AStringView("\\n"))){
+    constexpr AStringView s_EscapedNewline = "\\n";
+    out += '"';
+    for(const char ch : text){
+        if(ch == '\n'){
+            out += s_EscapedNewline;
+            continue;
+        }
+        if(ch == '"' || ch == '\\')
+            out += '\\';
+        out += ch;
+    }
+    out += '"';
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

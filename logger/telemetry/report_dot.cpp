@@ -7,6 +7,7 @@
 #include "report.h"
 
 #include <global/diagnostics.h>
+#include <global/dot_text.h>
 #include <global/hash_utils.h>
 #include <global/simd/vector.h>
 #include <global/type_properties.h>
@@ -22,25 +23,6 @@ namespace __hidden_telemetry_report{
 
 
 static constexpr StringView s_UnknownReportField = "unknown";
-static constexpr StringView s_DotEscapedNewline = "\\n";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static void AppendDotQuotedText(AString<NWB::Core::Telemetry::TelemetryArena>& out, const AStringView text){
-    out += '"';
-    for(const char ch : text){
-        if(ch == '\n'){
-            out += s_DotEscapedNewline;
-            continue;
-        }
-        if(ch == '"' || ch == '\\')
-            out += '\\';
-        out += ch;
-    }
-    out += '"';
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -271,12 +253,12 @@ void AppendFrameGraphQueueAssignmentDot(AString<TelemetryArena>& out, const Tele
     AppendFrameGraphPhysicalQueueDot(out, "queue_accepted", assignment.acceptedQueue);
     AppendFrameGraphPhysicalQueueDot(out, "queue_previous_accepted", assignment.previousAcceptedQueue);
     out += ", queue_class=";
-    __hidden_telemetry_report::AppendDotQuotedText(out, AStringView(FrameGraphQueueClassText(assignment.queueClass)));
+    AppendDotQuotedText(out, AStringView(FrameGraphQueueClassText(assignment.queueClass)));
     out += ", queue_reason=";
-    __hidden_telemetry_report::AppendDotQuotedText(out, AStringView(FrameGraphQueueAssignmentReasonText(assignment.reason)));
+    AppendDotQuotedText(out, AStringView(FrameGraphQueueAssignmentReasonText(assignment.reason)));
     StringAppendFormat(out, ", queue_modifier_mask={}", static_cast<u32>(assignment.modifiers));
     out += ", queue_acceptance=";
-    __hidden_telemetry_report::AppendDotQuotedText(out, AStringView(FrameGraphQueueAssignmentAcceptanceText(assignment.acceptance)));
+    AppendDotQuotedText(out, AStringView(FrameGraphQueueAssignmentAcceptanceText(assignment.acceptance)));
     StringAppendFormat(out, ", queue_dedicated={}", assignment.dedicated ? DiagnosticDetail::s_TrueText : DiagnosticDetail::s_FalseText);
     StringAppendFormat(
         out,
@@ -299,7 +281,7 @@ void AppendFrameGraphCompiledTaskDot(AString<TelemetryArena>& out, const Telemet
 
     StringAppendFormat(out, ", compiled_task=\"present\", compiled_plan_generation={}, compiled_packet_index={}", compiledTask.planGeneration, compiledTask.packetIndex);
     out += ", packetization_decision=";
-    __hidden_telemetry_report::AppendDotQuotedText(out, AStringView(FrameGraphTaskPacketizationDecisionText(compiledTask.packetizationDecision)));
+    AppendDotQuotedText(out, AStringView(FrameGraphTaskPacketizationDecisionText(compiledTask.packetizationDecision)));
 }
 
 void AppendFrameGraphRuntimeStatisticsDot(
@@ -361,14 +343,14 @@ void AppendTimedGraphDot(Core::Alloc::ScratchArena& scratchArena, const FrameGra
             timedLabel += '\n';
             StringAppendFormat(timedLabel, "{:.3f} ms", VectorDoubleGetX(VectorDoubleScale(VectorDoubleReplicate(timed.value()), s_MillisecondsPerSecond)));
 
-            __hidden_telemetry_report::AppendDotQuotedText(out, AStringView(timedLabel.data(), timedLabel.size()));
+            AppendDotQuotedText(out, AStringView(timedLabel.data(), timedLabel.size()));
         }
         else
-            __hidden_telemetry_report::AppendDotQuotedText(out, labelView);
+            AppendDotQuotedText(out, labelView);
         out += ", identity=";
-        __hidden_telemetry_report::AppendDotQuotedText(out, identity);
+        AppendDotQuotedText(out, identity);
         out += ", kind=";
-        __hidden_telemetry_report::AppendDotQuotedText(out, AStringView(FrameGraphNodeKindText(node.kind)));
+        AppendDotQuotedText(out, AStringView(FrameGraphNodeKindText(node.kind)));
         StringAppendFormat(out, ", flags={}", static_cast<u32>(node.flags));
         AppendFrameGraphQueueAssignmentDot(out, node.queueAssignment);
         AppendFrameGraphCompiledTaskDot(out, node.compiledTask);
@@ -381,7 +363,7 @@ void AppendTimedGraphDot(Core::Alloc::ScratchArena& scratchArena, const FrameGra
 
     for(const Telemetry::FrameGraphEdgePayload& edge : graph.edges){
         StringAppendFormat(out, "  n{} -> n{} [label=", edge.fromNodeIndex, edge.toNodeIndex);
-        __hidden_telemetry_report::AppendDotQuotedText(out, AStringView(FrameGraphEdgeLabel(edge.kind)));
+        AppendDotQuotedText(out, AStringView(FrameGraphEdgeLabel(edge.kind)));
         StringAppendFormat(out, ", flags={}];\n", static_cast<u32>(edge.flags));
     }
 

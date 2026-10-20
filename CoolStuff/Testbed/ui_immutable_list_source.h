@@ -9,6 +9,8 @@
 
 #include <impl/ecs_ui/toolkit/widgets/search_combo.h>
 
+#include <global/text_utils.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -119,29 +121,6 @@ private:
     };
 
 
-private:
-    [[nodiscard]] static char Lower(const char value)noexcept{
-        return value >= 'A' && value <= 'Z' ? static_cast<char>(value - 'A' + 'a') : value;
-    }
-
-    [[nodiscard]] static bool Matches(const StringView text, const AStringView query)noexcept{
-        if(query.size() > text.size())
-            return false;
-        for(usize start = 0u; start <= text.size() - query.size(); ++start){
-            bool matched = true;
-            for(usize offset = 0u; offset < query.size(); ++offset){
-                if(Lower(text[start + offset]) != Lower(query[offset])){
-                    matched = false;
-                    break;
-                }
-            }
-            if(matched)
-                return true;
-        }
-        return false;
-    }
-
-
 public:
     explicit UiFilteredListSource(NWB::Core::Alloc::GlobalArena& arena)noexcept
         : m_query(arena)
@@ -164,7 +143,7 @@ public:
             m_query.assign(query.data(), query.size());
         m_count = 0u;
         for(u64 index = 0u; index < LabelCount; ++index){
-            if(!Matches(Source::s_Labels[index], query))
+            if(!ContainsAsciiIgnoreCase<char>(Source::s_Labels[index], query))
                 continue;
             m_indices[m_count] = index;
             ++m_count;

@@ -8,6 +8,7 @@
 #include <core/graphics/backend_selection/backend.h>
 #include <core/graphics/rhi/resource_state_selection.h>
 
+#include <global/algorithm.h>
 #include <global/containers.h>
 
 
@@ -24,25 +25,6 @@ namespace __hidden_command_list_state_handoff{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename StateVector, typename Predicate>
-void RetainSelectedStates(StateVector& states, const Predicate& selected)noexcept(
-    noexcept(static_cast<bool>(DeclVal<usize&>() < states.size()))
-    && noexcept(static_cast<bool>(!selected(states[DeclVal<usize&>()])))
-    && noexcept(states[DeclVal<usize&>()] = states[DeclVal<usize&>()])
-    && noexcept(states.resize(DeclVal<usize&>()))
-){
-    usize retainedStateCount = 0u;
-    for(usize stateIndex = 0u; stateIndex < states.size(); ++stateIndex){
-        if(!selected(states[stateIndex]))
-            continue;
-        if(retainedStateCount != stateIndex)
-            states[retainedStateCount] = states[stateIndex];
-        ++retainedStateCount;
-    }
-    states.resize(retainedStateCount);
-}
 
 
 [[nodiscard]] static bool OwnershipMatches(const GpuPhysicalQueueId ownerQueue, const GpuPhysicalQueueId releaseDestinationQueue, const GpuPhysicalQueueId expectedOwnerQueue, const GpuPhysicalQueueId expectedReleaseDestinationQueue)noexcept{
@@ -87,11 +69,11 @@ bool CommandListResourceStateHandoff::buildResourceSubset(const CommandListResou
     if(this == &source){
         using namespace __hidden_command_list_state_handoff;
         if(hasTextures){
-            RetainSelectedStates(m_textureStates, [&](const TextureState& state)noexcept{
+            RetainIf(m_textureStates, [&](const TextureState& state)noexcept{
                 return selection.containsTexture(state.texture);
             }
             );
-            RetainSelectedStates(m_permanentTextureStates, [&](const PermanentTextureState& state)noexcept{
+            RetainIf(m_permanentTextureStates, [&](const PermanentTextureState& state)noexcept{
                 return selection.containsTexture(state.texture);
             }
             );
@@ -101,11 +83,11 @@ bool CommandListResourceStateHandoff::buildResourceSubset(const CommandListResou
             m_permanentTextureStates.clear();
         }
         if(hasBuffers){
-            RetainSelectedStates(m_bufferStates, [&](const BufferState& state)noexcept{
+            RetainIf(m_bufferStates, [&](const BufferState& state)noexcept{
                 return selection.containsBuffer(state.buffer);
             }
             );
-            RetainSelectedStates(m_permanentBufferStates, [&](const BufferState& state)noexcept{
+            RetainIf(m_permanentBufferStates, [&](const BufferState& state)noexcept{
                 return selection.containsBuffer(state.buffer);
             }
             );
@@ -211,11 +193,11 @@ bool CommandListResourceStateHandoff::buildTextureRangeSubset(const CommandListR
     const u16 sourceDeviceGeneration = source.m_deviceGeneration;
     if(this == &source){
         using namespace __hidden_command_list_state_handoff;
-        RetainSelectedStates(m_textureStates, [&](const TextureState& state)noexcept{
+        RetainIf(m_textureStates, [&](const TextureState& state)noexcept{
             return state.texture == texture && contains(state.mipLevel, state.arraySlice);
         }
         );
-        RetainSelectedStates(m_permanentTextureStates, [&](const PermanentTextureState& state)noexcept{
+        RetainIf(m_permanentTextureStates, [&](const PermanentTextureState& state)noexcept{
             return state.texture == texture;
         }
         );
@@ -267,13 +249,13 @@ bool CommandListResourceStateHandoff::buildBufferRangeSubset(const CommandListRe
     const u16 sourceDeviceGeneration = source.m_deviceGeneration;
     if(this == &source){
         using namespace __hidden_command_list_state_handoff;
-        RetainSelectedStates(m_bufferStates, [&](const BufferState& state)noexcept{
+        RetainIf(m_bufferStates, [&](const BufferState& state)noexcept{
             return state.buffer == buffer && state.range.overlaps(resolvedRange);
         }
         );
         for(BufferState& state : m_bufferStates)
             state.range = state.range.intersect(resolvedRange);
-        RetainSelectedStates(m_permanentBufferStates, [&](const BufferState& state)noexcept{ return state.buffer == buffer; });
+        RetainIf(m_permanentBufferStates, [&](const BufferState& state)noexcept{ return state.buffer == buffer; });
         m_textureStates.clear();
         m_permanentTextureStates.clear();
     }

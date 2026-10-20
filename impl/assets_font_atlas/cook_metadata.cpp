@@ -16,6 +16,8 @@
 
 #include <core/assets/paths.h>
 
+#include <global/binary_big_endian.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -69,13 +71,13 @@ static constexpr AStringView s_RasterModeOutline = "outline";
         if(!tableResult)
             return false;
         if(tableResult->tag == s_FontSfntHeadTag){
-            const auto unitsPerEmResult = ReadFontSfntU16(tableResult->bytes, s_FontSfntHeadUnitsPerEmOffset);
+            const auto unitsPerEmResult = ReadU16BigEndian(tableResult->bytes, s_FontSfntHeadUnitsPerEmOffset);
             if(!unitsPerEmResult)
                 return false;
             payload.unitsPerEm = *unitsPerEmResult;
         }
         else if(tableResult->tag == s_FontSfntMaxpTag){
-            const auto glyphCountResult = ReadFontSfntU16(tableResult->bytes, s_FontSfntMaxpGlyphCountOffset);
+            const auto glyphCountResult = ReadU16BigEndian(tableResult->bytes, s_FontSfntMaxpGlyphCountOffset);
             if(!glyphCountResult)
                 return false;
             payload.sourceGlyphCount = *glyphCountResult;

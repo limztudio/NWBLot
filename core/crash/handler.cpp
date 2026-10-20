@@ -6,6 +6,7 @@
 #include "package_internal.h"
 
 #include <global/basic_string.h>
+#include <global/numeric_text.h>
 
 #include <cstdlib>
 
@@ -37,25 +38,12 @@ namespace __hidden_crash_handler{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u64 s_DecimalRadix = 10u;
-inline constexpr char s_DecimalDigitFirst = '0';
-inline constexpr char s_DecimalDigitLast = '9';
 inline constexpr int s_ProcessSuccessExitCode = 0;
 inline constexpr int s_ProcessFailureExitCode = -1;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] static u64 ParseU64(const TStringView text)noexcept{
-    u64 value = 0u;
-    for(const tchar ch : text){
-        if(ch < static_cast<tchar>(s_DecimalDigitFirst) || ch > static_cast<tchar>(s_DecimalDigitLast))
-            break;
-        value = (value * s_DecimalRadix) + static_cast<u64>(ch - static_cast<tchar>(s_DecimalDigitFirst));
-    }
-    return value;
-}
 
 static Detail::CrashAck MakeAck(const Detail::CrashRequest& request, const bool packageWritten)noexcept{
     Detail::CrashAck ack;
@@ -104,11 +92,11 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
 
     for(isize i = 1; i + 1 < argc; ++i){
         if(SafeStringView(argv[i]) == Detail::s_RequestHandleArgument)
-            requestReadHandle = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(__hidden_crash_handler::ParseU64(SafeStringView(argv[++i]))));
+            requestReadHandle = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(ParseDecimalPrefixU64(SafeStringView(argv[++i]))));
         else if(SafeStringView(argv[i]) == Detail::s_AckHandleArgument)
-            ackWriteHandle = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(__hidden_crash_handler::ParseU64(SafeStringView(argv[++i]))));
+            ackWriteHandle = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(ParseDecimalPrefixU64(SafeStringView(argv[++i]))));
         else if(SafeStringView(argv[i]) == Detail::s_AckEventArgument)
-            ackEvent = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(__hidden_crash_handler::ParseU64(SafeStringView(argv[++i]))));
+            ackEvent = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(ParseDecimalPrefixU64(SafeStringView(argv[++i]))));
     }
 
     if(requestReadHandle == INVALID_HANDLE_VALUE)
@@ -142,9 +130,9 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
     int ackWriteFd = -1;
     for(isize i = 1; i + 1 < argc; ++i){
         if(SafeStringView(argv[i]) == Detail::s_RequestFdArgument)
-            requestReadFd = static_cast<int>(__hidden_crash_handler::ParseU64(SafeStringView(argv[++i])));
+            requestReadFd = static_cast<int>(ParseDecimalPrefixU64(SafeStringView(argv[++i])));
         else if(SafeStringView(argv[i]) == Detail::s_AckFdArgument)
-            ackWriteFd = static_cast<int>(__hidden_crash_handler::ParseU64(SafeStringView(argv[++i])));
+            ackWriteFd = static_cast<int>(ParseDecimalPrefixU64(SafeStringView(argv[++i])));
     }
 
     if(requestReadFd < 0)

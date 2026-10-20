@@ -54,9 +54,6 @@ inline constexpr usize s_NameHashBytes = sizeof(u64) * s_HashLaneCount;
 inline constexpr usize s_HexDigitsPerHashLane = sizeof(u64) * 2u;
 inline constexpr usize s_EncodedNameHashLength = s_HexDigitsPerHashLane * s_HashLaneCount;
 inline constexpr usize s_DebugHashTextLength = s_EncodedNameHashLength + (s_HashLaneCount - 1u);
-inline constexpr usize s_NameHashCombineGoldenRatio = static_cast<usize>(0x9e3779b97f4a7c15ull);
-inline constexpr usize s_NameHashCombineLeftShiftBits = 6u;
-inline constexpr usize s_NameHashCombineRightShiftBits = 2u;
 inline constexpr i32 s_HashHexInitialBitShift = static_cast<i32>((s_HexU64DigitCount - 1u) * s_HexNibbleBits);
 inline constexpr i32 s_HashHexBitShiftStep = static_cast<i32>(s_HexNibbleBits);
 inline constexpr u32 s_NameHashByteBitCount = 8u;
@@ -420,7 +417,7 @@ inline void RecordNameSymbolText(const NameHash& hash, const BasicStringView<Cha
 inline constexpr usize HashValue(const NameHash& hash)noexcept{
     usize seed = static_cast<usize>(hash.qwords[0]);
     for(u32 i = 1; i < s_HashLaneCount; ++i){
-        seed ^= static_cast<usize>(hash.qwords[i]) + s_NameHashCombineGoldenRatio + (seed << s_NameHashCombineLeftShiftBits) + (seed >> s_NameHashCombineRightShiftBits);
+        HashCombineHash(seed, static_cast<usize>(hash.qwords[i]), static_cast<usize>(s_HashCombineGoldenRatio64));
     }
     return seed;
 }

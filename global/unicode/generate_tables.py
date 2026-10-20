@@ -73,13 +73,7 @@ def generate_table(kind, ranges):
 {SEP}
 
 
-NWB_IMPL_UI_BEGIN
-
-
-{SEP}
-
-
-namespace __hidden_ui_unicode_{kind}{{
+namespace __hidden_unicode_{kind}{{
 
 
 {SEP}
@@ -101,15 +95,9 @@ static constexpr UnicodePropertyRange s_Ranges[] = {{
 
 
 {return_type} {function}(const u32 codePoint)noexcept{{
-{hangul}    const u8 property = LookupUnicodePropertyRanges(__hidden_ui_unicode_{kind}::s_Ranges, codePoint, {default});
+{hangul}    const u8 property = LookupUnicodePropertyRanges(__hidden_unicode_{kind}::s_Ranges, codePoint, {default});
     return {result};
 }}
-
-
-{SEP}
-
-
-NWB_IMPL_UI_END
 
 
 {SEP}

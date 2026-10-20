@@ -7,6 +7,7 @@
 
 #include "limit.h"
 #include "expected.h"
+#include "overflow.h"
 #include "type_properties.h"
 
 #include <algorithm>
@@ -66,6 +67,30 @@ constexpr ForwardIt LowerBound(ForwardIt first, ForwardIt last, const T& value, 
     return std::lower_bound(first, last, value, Forward<Compare>(compare));
 }
 
+template<typename Sequence, typename Predicate>
+void RetainIf(Sequence& values, const Predicate& selected)noexcept(
+    noexcept(static_cast<bool>(DeclVal<usize&>() < values.size()))
+    && noexcept(static_cast<bool>(!selected(values[DeclVal<usize&>()])))
+    && noexcept(values[DeclVal<usize&>()] = values[DeclVal<usize&>()])
+    && noexcept(values.resize(DeclVal<usize&>()))
+){
+    usize retainedCount = 0u;
+    for(usize index = 0u; index < values.size(); ++index){
+        if(!selected(values[index]))
+            continue;
+        if(retainedCount != index)
+            values[retainedCount] = values[index];
+        ++retainedCount;
+    }
+    values.resize(retainedCount);
+}
+
+template<typename DestinationT, typename SourceT>
+inline void AssignVector(DestinationT& destination, const SourceT& source)noexcept(noexcept(destination.reserve(source.size())) && noexcept(destination.assign(source.begin(), source.end()))){
+    destination.reserve(source.size());
+    destination.assign(source.begin(), source.end());
+}
+
 [[nodiscard]] constexpr usize NextGrowingCapacity(const usize currentCapacity, const usize requiredCapacity, const usize initialCapacity = 1u)noexcept{
     usize capacity = currentCapacity > initialCapacity ? currentCapacity : initialCapacity;
     if(capacity == 0u)
@@ -80,8 +105,28 @@ constexpr ForwardIt LowerBound(ForwardIt first, ForwardIt last, const T& value, 
 }
 
 template<typename T>
+    requires(IsIntegral_V<T> && !IsSigned_V<T> && !IsSame_V<T, bool>)
+[[nodiscard]] constexpr Expected<T> CommonAlignmentChecked(const T firstAlignment, const T secondAlignment)noexcept{
+    if(firstAlignment == 0u || secondAlignment == 0u)
+        return MakeUnexpected(Failure{});
+    T first = firstAlignment;
+    T second = secondAlignment;
+    while(second != 0u){
+        const T remainder = static_cast<T>(first % second);
+        first = second;
+        second = remainder;
+    }
+    return TryMultiply<T>(static_cast<T>(firstAlignment / first), secondAlignment);
+}
+
+template<typename T>
 [[nodiscard]] constexpr bool IsSupportedAlignmentValue(const T align)noexcept(IsArithmetic_V<T>){
     return align <= static_cast<T>(1) || (align & (align - static_cast<T>(1))) == static_cast<T>(0);
+}
+
+template<typename T>
+[[nodiscard]] constexpr bool IsAligned(const T value, const T alignment)noexcept(IsArithmetic_V<T>){
+    return alignment == 0 || value % alignment == 0;
 }
 
 template<typename T>

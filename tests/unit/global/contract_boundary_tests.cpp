@@ -4,10 +4,18 @@
 
 #include <tests/common/test_context.h>
 
+#include <core/alloc/scratch.h>
+
+#include <global/algorithm.h>
+#include <global/allocation_size.h>
+#include <global/fixed_index_map.h>
+#include <global/hash_utils.h>
 #include <global/not_null.h>
+#include <global/numeric_text.h>
 #include <global/overflow.h>
 #include <global/process_execution.h>
 #include <global/refcount_ptr.h>
+#include <global/utf8_text.h>
 
 #include <gtest/gtest.h>
 
@@ -179,6 +187,84 @@ TEST(GlobalContractBoundaries, SignedAdditionClampsNegativeOverflowToTheLowerBou
     VerifySignedLowerSaturation<i16>();
     VerifySignedLowerSaturation<i32>();
     VerifySignedLowerSaturation<i64>();
+}
+
+TEST(GlobalContractBoundaries, AlignmentOverflowKeepsTheLastRepresentableAlignedSize){
+    constexpr usize s_Maximum = Limit<usize>::s_Max;
+    constexpr usize s_LastAligned = s_Maximum & ~usize{ 7u };
+    EXPECT_EQ(Alignment(8u, s_LastAligned), s_LastAligned);
+    EXPECT_EQ(AlignmentPowerOfTwo(8u, s_LastAligned), s_LastAligned);
+    EXPECT_THROW(Alignment(8u, s_LastAligned + 1u), AllocationSizeException);
+    EXPECT_THROW(AlignmentPowerOfTwo(8u, s_LastAligned + 1u), AllocationSizeException);
+    EXPECT_THROW(Alignment(10u, s_Maximum), AllocationSizeException);
+    EXPECT_EQ(Alignment(0u, s_Maximum), s_Maximum);
+    EXPECT_EQ(AlignmentPowerOfTwo(0u, s_Maximum), s_Maximum);
+    EXPECT_FALSE(IsAligned(s_Maximum, usize{ 8u }));
+    EXPECT_TRUE(IsAligned(s_LastAligned, usize{ 8u }));
+}
+
+TEST(GlobalContractBoundaries, CommonAlignmentRejectsZeroAndChecksOverflowAfterReducingSharedFactors){
+    constexpr u32 s_HighAlignment = u32{ 1u } << 31u;
+    const auto sharedFactor = CommonAlignmentChecked(s_HighAlignment, s_HighAlignment);
+    ASSERT_TRUE(sharedFactor);
+    EXPECT_EQ(*sharedFactor, s_HighAlignment);
+    EXPECT_FALSE(CommonAlignmentChecked(u32{ 0u }, u32{ 8u }));
+    EXPECT_FALSE(CommonAlignmentChecked(u32{ 8u }, u32{ 0u }));
+    EXPECT_FALSE(CommonAlignmentChecked(Limit<u32>::s_Max, u32{ 2u }));
+    const auto wideSharedFactor = CommonAlignmentChecked(Limit<u64>::s_Max - u64{ 1u }, u64{ 2u });
+    ASSERT_TRUE(wideSharedFactor);
+    EXPECT_EQ(*wideSharedFactor, Limit<u64>::s_Max - u64{ 1u });
+    EXPECT_FALSE(CommonAlignmentChecked(Limit<u64>::s_Max, u64{ 2u }));
+}
+
+TEST(GlobalContractBoundaries, DecimalPrefixStopsAtMalformedSuffixAndPreservesUnsignedWrap){
+    EXPECT_EQ(ParseDecimalPrefixU64(AStringView("18446744073709551616tail")), 0u);
+    EXPECT_EQ(ParseDecimalPrefixU64(WStringView(L"18446744073709551617tail")), 1u);
+    EXPECT_EQ(ParseDecimalPrefixU64(AStringView("17-9")), 17u);
+    EXPECT_EQ(ParseDecimalPrefixU64(AStringView("-17")), 0u);
+    EXPECT_EQ(ParseDecimalPrefixU64(AStringView{}), 0u);
+}
+
+TEST(GlobalContractBoundaries, WideHashCombinationRetainsHighBitsAndWraparound){
+    u64 seed = 0xfedcba9876543210ull;
+    HashCombineHash(seed, u64{ 0x8877665544332211ull }, s_HashCombineGoldenRatio64);
+    EXPECT_EQ(seed, 0xe3480e4a004b1cbaull);
+}
+
+TEST(GlobalContractBoundaries, Utf8OffsetRejectsMalformedPrefixesWithoutReadingTheSuffix){
+    const char bytes[]{ 'a', static_cast<char>(0xc3u), static_cast<char>(0xa9u), '\0', static_cast<char>(0xffu) };
+    const AStringView text(bytes, sizeof(bytes));
+    const auto boundary = Utf8ByteOffset(text, 2u);
+    ASSERT_TRUE(boundary);
+    EXPECT_EQ(*boundary, 3u);
+    EXPECT_FALSE(IsValidUtf8TextWithoutNul(text));
+    EXPECT_FALSE(Utf8ByteOffset(text, 3u));
+    EXPECT_FALSE(Utf8ByteOffset(AStringView(bytes + 1u, 1u), 1u));
+    EXPECT_FALSE(Utf8ByteOffset(AStringView{}, 1u));
+    const auto emptyBoundary = Utf8ByteOffset(AStringView{}, 0u);
+    ASSERT_TRUE(emptyBoundary);
+    EXPECT_EQ(*emptyBoundary, 0u);
+}
+
+TEST(GlobalContractBoundaries, FixedIndexMapCollisionWrapAndCapacityFailurePreserveExistingEntries){
+    NWB::Core::Alloc::ScratchArena arena(Name("tests/global/fixed_index_collision"));
+    const auto collide = [](const u32)noexcept{ return usize{ 1u }; };
+    FixedIndexMap<u32, NWB::Core::Alloc::ScratchArena, decltype(collide)> map(arena, 2u, collide);
+    ASSERT_TRUE(map.valid());
+    for(u32 key = 0u; key < 5u; ++key)
+        ASSERT_TRUE(map.insertOrAssign(key, key + 10u));
+    EXPECT_FALSE(map.insertOrAssign(5u, 99u));
+    EXPECT_EQ(map.find(5u), nullptr);
+    ASSERT_TRUE(map.insertOrAssign(4u, 77u));
+    for(u32 key = 0u; key < 5u; ++key){
+        const usize* const value = map.find(key);
+        ASSERT_NE(value, nullptr);
+        EXPECT_EQ(*value, key == 4u ? 77u : key + 10u);
+    }
+    FixedIndexMap<u32, NWB::Core::Alloc::ScratchArena> overflow(arena, Limit<usize>::s_Max);
+    EXPECT_FALSE(overflow.valid());
+    EXPECT_FALSE(overflow.insertOrAssign(0u, 0u));
+    EXPECT_EQ(overflow.find(0u), nullptr);
 }
 
 TEST(GlobalContractBoundaries, ThrowingNotNullConversionPropagatesAndPreservesThePriorPointer){

@@ -236,11 +236,6 @@ template<typename BlockVector, typename FieldVector, typename ResourceReferenceV
     return UpdateFnv64(hash, reinterpret_cast<const u8*>(&name.hash()), sizeof(NameHash));
 }
 
-template<typename ValueType>
-[[nodiscard]] inline u64 UpdateMaterialTypedLayoutHashValue(u64 hash, const ValueType& value)noexcept(noexcept(UpdateFnv64(hash, reinterpret_cast<const u8*>(&value), sizeof(value)))){
-    return UpdateFnv64(hash, reinterpret_cast<const u8*>(&value), sizeof(value));
-}
-
 template<typename BlockVector, typename FieldVector>
 [[nodiscard]] inline u64 ComputeMaterialTypedLayoutHash(const BlockVector& blocks, const FieldVector& fields){
     if(blocks.empty() && fields.empty())
@@ -249,20 +244,20 @@ template<typename BlockVector, typename FieldVector>
     u64 hash = UpdateFnv64TextExact(s_Fnv64OffsetBasis, AStringView("NWB_MATERIAL_TYPED_LAYOUT_V1"));
     const u32 blockCount = static_cast<u32>(blocks.size());
     const u32 fieldCount = static_cast<u32>(fields.size());
-    hash = UpdateMaterialTypedLayoutHashValue(hash, blockCount);
-    hash = UpdateMaterialTypedLayoutHashValue(hash, fieldCount);
+    Fnv64AppendValue(hash, blockCount);
+    Fnv64AppendValue(hash, fieldCount);
     for(const MaterialTypedLayoutBlock& block : blocks){
         hash = UpdateMaterialTypedLayoutHashName(hash, block.blockName);
-        hash = UpdateMaterialTypedLayoutHashValue(hash, static_cast<u32>(block.blockClass));
-        hash = UpdateMaterialTypedLayoutHashValue(hash, block.fieldBegin);
-        hash = UpdateMaterialTypedLayoutHashValue(hash, block.fieldCount);
-        hash = UpdateMaterialTypedLayoutHashValue(hash, block.byteSize);
+        Fnv64AppendValue(hash, static_cast<u32>(block.blockClass));
+        Fnv64AppendValue(hash, block.fieldBegin);
+        Fnv64AppendValue(hash, block.fieldCount);
+        Fnv64AppendValue(hash, block.byteSize);
     }
     for(const MaterialTypedLayoutField& field : fields){
         hash = UpdateMaterialTypedLayoutHashName(hash, field.fieldName);
-        hash = UpdateMaterialTypedLayoutHashValue(hash, static_cast<u32>(field.fieldType));
-        hash = UpdateMaterialTypedLayoutHashValue(hash, field.offset);
-        hash = UpdateMaterialTypedLayoutHashValue(hash, field.defaultValue);
+        Fnv64AppendValue(hash, static_cast<u32>(field.fieldType));
+        Fnv64AppendValue(hash, field.offset);
+        Fnv64AppendValue(hash, field.defaultValue);
     }
     return hash;
 }

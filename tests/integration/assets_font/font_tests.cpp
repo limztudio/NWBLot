@@ -14,6 +14,7 @@
 #include <tests/common/test_context.h>
 
 #include <global/binary.h>
+#include <global/binary_big_endian.h>
 #include <global/filesystem.h>
 
 #include <ft2build.h>
@@ -98,10 +99,6 @@ static constexpr usize s_HeadUnitsPerEmEnd = 20u;
     return binary;
 }
 
-[[nodiscard]] static u32 ReadBigU32(const u8* bytes)noexcept{
-    return (static_cast<u32>(bytes[0u]) << 24u) | (static_cast<u32>(bytes[1u]) << 16u) | (static_cast<u32>(bytes[2u]) << 8u) | static_cast<u32>(bytes[3u]);
-}
-
 static void WriteBigU32(u8* bytes, const u32 value)noexcept{
     bytes[0u] = static_cast<u8>(value >> 24u);
     bytes[1u] = static_cast<u8>(value >> 16u);
@@ -113,7 +110,7 @@ static void WriteBigU32(u8* bytes, const u32 value)noexcept{
     const u32 tableCount = (static_cast<u32>(bytes[s_SfntTableCountHighByte]) << 8u) | bytes[s_SfntTableCountLowByte];
     for(u32 index = 0u; index < tableCount; ++index){
         const usize record = s_FontSfntHeaderBytes + static_cast<usize>(index) * s_SfntTableRecordBytes;
-        if(ReadBigU32(bytes.data() + record) == tag)
+        if(ReadU32BigEndian(NotNull<const u8*>(bytes.data() + record)) == tag)
             return record;
     }
     return 0u;
@@ -170,7 +167,7 @@ TEST(AssetsFont, SfntTableViewsCheckBoundsWithoutCopyingOrScanningOtherRecords){
     EXPECT_EQ(tableResult->offset, s_TableDataOffset);
     EXPECT_EQ(tableResult->bytes.data(), bytes + s_TableDataOffset);
     EXPECT_EQ(tableResult->bytes.size(), s_TableDataBytes);
-    const auto valueResult = ReadFontSfntU16(tableResult->bytes, 0u);
+    const auto valueResult = ReadU16BigEndian(tableResult->bytes, 0u);
     ASSERT_TRUE(valueResult);
     EXPECT_EQ(*valueResult, 0x1234u);
     EXPECT_FALSE(directory.table(1u));
@@ -179,8 +176,8 @@ TEST(AssetsFont, SfntTableViewsCheckBoundsWithoutCopyingOrScanningOtherRecords){
     EXPECT_EQ(*secondTagResult, s_FontSfntMaxpTag);
     EXPECT_FALSE(directory.table(2u));
     EXPECT_FALSE(directory.tableTag(Limit<usize>::s_Max));
-    EXPECT_FALSE(ReadFontSfntU16(tableResult->bytes, 3u));
-    EXPECT_FALSE(ReadFontSfntU16(tableResult->bytes, Limit<usize>::s_Max));
+    EXPECT_FALSE(ReadU16BigEndian(tableResult->bytes, 3u));
+    EXPECT_FALSE(ReadU16BigEndian(tableResult->bytes, Limit<usize>::s_Max));
 }
 
 TEST(AssetsFont, SfntTableBoundsHandleOverflowAndEmptyEndSpansWithoutAddingFontPolicy){
@@ -347,7 +344,7 @@ TEST(AssetsFont, RejectsMalformedDirectoriesAndNativeFaceMetrics){
         case 1u: bytes[s_SfntTableCountHighByte] = 1u; bytes[s_SfntTableCountLowByte] = 1u; break;
         case 2u: WriteBigU32(bytes.data() + s_FirstRecordOffsetField, Limit<u32>::s_Max); break;
         case 3u: WriteBigU32(bytes.data() + s_FirstRecordLengthField, Limit<u32>::s_Max); break;
-        case 4u: WriteBigU32(bytes.data() + s_SecondRecordTagOffset, ReadBigU32(bytes.data() + s_FontSfntHeaderBytes)); break;
+        case 4u: WriteBigU32(bytes.data() + s_SecondRecordTagOffset, ReadU32BigEndian(NotNull<const u8*>(bytes.data() + s_FontSfntHeaderBytes))); break;
         case 5u: {
             const usize head = FindTableRecord(bytes, s_FontSfntHeadTag);
             ASSERT_NE(head, 0u);
@@ -357,7 +354,7 @@ TEST(AssetsFont, RejectsMalformedDirectoriesAndNativeFaceMetrics){
         case 6u: {
             const usize head = FindTableRecord(bytes, s_FontSfntHeadTag);
             ASSERT_NE(head, 0u);
-            const u32 offset = ReadBigU32(bytes.data() + head + s_SfntRecordOffsetField);
+            const u32 offset = ReadU32BigEndian(NotNull<const u8*>(bytes.data() + head + s_SfntRecordOffsetField));
             bytes[offset + s_HeadUnitsPerEmOffset] = 0u;
             bytes[offset + s_HeadUnitsPerEmOffset + 1u] = 0u;
             break;
@@ -378,7 +375,7 @@ TEST(AssetsFont, NativeFaceFailurePreservesErrorCodeAndReclaimsValidationAllocat
     Core::Assets::AssetBytes bytes(font.fontBytes().begin(), font.fontBytes().end(), testArena.arena);
     const usize head = FindTableRecord(bytes, s_FontSfntHeadTag);
     ASSERT_NE(head, 0u);
-    const u32 offset = ReadBigU32(bytes.data() + head + s_SfntRecordOffsetField);
+    const u32 offset = ReadU32BigEndian(NotNull<const u8*>(bytes.data() + head + s_SfntRecordOffsetField));
     ASSERT_LE(static_cast<usize>(offset) + s_HeadUnitsPerEmEnd, bytes.size());
     bytes[offset + s_HeadUnitsPerEmOffset] = 0u;
     bytes[offset + s_HeadUnitsPerEmOffset + 1u] = 0u;

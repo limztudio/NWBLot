@@ -3,7 +3,8 @@
 
 
 #include "clipboard_text.h"
-#include "utf8_text_internal.h"
+
+#include <global/utf8_text.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,7 +27,7 @@ static constexpr u32 s_Latin1MaxCodePoint = 0xffu;
 ClipboardStatus::Enum ValidateClipboardUtf8Text(const AStringView text)noexcept{
     if(text.size() > s_ClipboardMaxTextBytes)
         return ClipboardStatus::TooLarge;
-    return Utf8TextDetail::IsValidText(text) ? ClipboardStatus::Success : ClipboardStatus::InvalidText;
+    return IsValidUtf8TextWithoutNul(text) ? ClipboardStatus::Success : ClipboardStatus::InvalidText;
 }
 
 ClipboardStatus::Enum DecodeClipboardLatin1(const AStringView text, AString<Alloc::GlobalArena>& output){
@@ -62,14 +63,15 @@ ClipboardStatus::Enum EncodeClipboardLatin1(const AStringView text, AString<Allo
         return status;
     usize offset = 0u;
     while(offset < text.size()){
-        const auto codePoint = Utf8TextDetail::DecodeCodePoint(text, offset);
-        if(!codePoint)
+        const auto decoded = DecodeUtf8CodePoint(text.substr(offset));
+        if(!decoded)
             return ClipboardStatus::InvalidText;
-        if(*codePoint > __hidden_clipboard_text::s_Latin1MaxCodePoint){
+        if(decoded->codePoint > __hidden_clipboard_text::s_Latin1MaxCodePoint){
             output.clear();
             return ClipboardStatus::Unsupported;
         }
-        output.push_back(static_cast<char>(*codePoint));
+        output.push_back(static_cast<char>(decoded->codePoint));
+        offset += static_cast<usize>(decoded->byteCount);
     }
     return ClipboardStatus::Success;
 }

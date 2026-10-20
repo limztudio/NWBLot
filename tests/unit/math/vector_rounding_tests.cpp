@@ -10,6 +10,7 @@
 
 #include <global/floating_point_environment.h>
 #include <global/simdmath.h>
+#include <global/simd/vector_clamp_ordered.h>
 #include <global/compile.h>
 #include <global/limit.h>
 #include <global/simplemath.h>
@@ -75,6 +76,53 @@ TEST(Math, MultiplyExpressionsPreserveCompilerRoundingPolicyAndSignedZero){
         EXPECT_EQ(BitCast<u32>(VectorGetByIndex(sum, lane)), BitCast<u32>(LegacyMultiplyAddExpression(first[lane], second[lane], addend[lane]))) << lane;
         EXPECT_EQ(BitCast<u32>(VectorGetByIndex(subtraction, lane)), BitCast<u32>(LegacyNegativeMultiplySubtractExpression(first[lane], second[lane], difference[lane]))) << lane;
     }
+}
+
+TEST(Math, OrderedDoubleClampPreservesZeroNanAndSubnormalPayloads){
+#pragma STDC FENV_ACCESS ON
+#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_AVX)
+    const u32 originalControl = _mm_getcsr();
+#endif
+    const auto originalEnvironment = HoldFloatingPointExceptions();
+    ASSERT_TRUE(originalEnvironment);
+    ScopeExit restoreEnvironment([&]()noexcept{
+        if(!SetFloatingPointEnvironment(*originalEnvironment))
+            NWB_ASSERT(false);
+#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_AVX)
+        _mm_setcsr(originalControl);
+#endif
+    }
+    );
+#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_AVX)
+    constexpr u32 s_Modes[]{ 0u, 0x40u, 0x8000u, 0x8040u };
+    const u32 heldControl = _mm_getcsr();
+#else
+    constexpr u32 s_Modes[]{ 0u };
+#endif
+    volatile u64 bits[][4]{
+        { 0x8000000000000000ull, 0u, 0x7ff8123456789abcull, 0xfff8abcdef012345ull },
+        { 1u, 0x8000000000000001ull, 0x7ff0000000000000ull, 0xfff0000000000000ull },
+    };
+    const u64 expected[][4]{
+        { 0x8000000000000000ull, 0u, 0x7ff8123456789abcull, 0xfff8abcdef012345ull },
+        { 1u, 0x8000000000000001ull, 0x3ff0000000000000ull, 0xbff0000000000000ull },
+    };
+    for(const u32 mode : s_Modes){
+#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_AVX)
+        _mm_setcsr((heldControl & ~(0x8040u | 0x3fu)) | mode);
+#endif
+        for(usize row = 0u; row < LengthOf(bits); ++row){
+            const SIMDVectorDouble input = VectorDoubleSetInt(bits[row][0], bits[row][1], bits[row][2], bits[row][3]);
+            const SIMDVectorDouble result = VectorDoubleClampOrdered(input, VectorDoubleReplicate(-1.0), VectorDoubleReplicate(1.0));
+            for(usize lane = 0u; lane < 4u; ++lane)
+                EXPECT_EQ(VectorDoubleGetIntByIndex(result, lane), expected[row][lane]) << mode << ':' << row << ':' << lane;
+        }
+    }
+    const SIMDVectorDouble zeroTies = VectorDoubleClampOrdered(VectorDoubleSet(-0.0, 0.0, -Limit<f64>::s_Infinity, Limit<f64>::s_Infinity), VectorDoubleReplicate(0.0), VectorDoubleReplicate(-0.0));
+    EXPECT_EQ(VectorDoubleGetIntX(zeroTies), 0x8000000000000000ull);
+    EXPECT_EQ(VectorDoubleGetIntY(zeroTies), 0u);
+    EXPECT_EQ(VectorDoubleGetIntZ(zeroTies), 0u);
+    EXPECT_EQ(VectorDoubleGetIntW(zeroTies), 0x8000000000000000ull);
 }
 
 TEST(Math, MinMaxReturnSecondOperandForSignedZeroAndUnorderedLanes){

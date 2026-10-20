@@ -205,8 +205,15 @@ bool BackendContext::createVulkanInstance(Alloc::ScratchArena& scratchArena){
         NWB_LOGGER_INFO(StringConvert(ss.str()));
     }
 
-    auto instanceExtVec = VulkanDetail::StringSetToVector(m_enabledExtensions.instance, scratchArena);
-    auto layerVec = VulkanDetail::StringSetToVector(m_enabledExtensions.layers, scratchArena);
+    Vector<const char*, Alloc::ScratchArena> instanceExtVec(scratchArena);
+    instanceExtVec.reserve(m_enabledExtensions.instance.size());
+    for(const auto& extensionName : m_enabledExtensions.instance)
+        instanceExtVec.push_back(extensionName.c_str());
+
+    Vector<const char*, Alloc::ScratchArena> layerVec(scratchArena);
+    layerVec.reserve(m_enabledExtensions.layers.size());
+    for(const auto& layerName : m_enabledExtensions.layers)
+        layerVec.push_back(layerName.c_str());
 
     VkApplicationInfo applicationInfo = {};
     applicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;

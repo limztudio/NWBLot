@@ -7,6 +7,7 @@
 #include <impl/ecs_ui/toolkit/layout/validation.h>
 
 #include <global/simd/vector.h>
+#include <global/simd/vector_clamp_ordered.h>
 #include <global/simplemath.h>
 
 
@@ -79,10 +80,6 @@ inline constexpr u32 s_PageStepCount = 10u;
     ;
 }
 
-[[nodiscard]] static SIMDVectorDouble ClampValue(const SIMDVectorDouble value, const SIMDVectorDouble minimum, const SIMDVectorDouble maximum)noexcept{
-    return VectorDoubleSelect(VectorDoubleSelect(value, maximum, VectorDoubleGreater(value, maximum)), minimum, VectorDoubleLess(value, minimum));
-}
-
 [[nodiscard]] static SIMDVectorDouble KeyStep(const SIMDVectorDouble minimum, const SIMDVectorDouble maximum, const SIMDVectorDouble configuredStep)noexcept{
     if(VectorDoubleGetIntX(VectorDoubleGreater(configuredStep, VectorDoubleZero())) != 0u)
         return configuredStep;
@@ -95,17 +92,17 @@ inline constexpr u32 s_PageStepCount = 10u;
 }
 
 [[nodiscard]] static SIMDVectorDouble StepValue(const SIMDVectorDouble value, const SIMDVectorDouble minimum, const SIMDVectorDouble maximum, const SIMDVectorDouble step, const bool increasing)noexcept{
-    const SIMDVectorDouble current = ClampValue(value, minimum, maximum);
+    const SIMDVectorDouble current = VectorDoubleClampOrdered(value, minimum, maximum);
     if(increasing){
         const SIMDVectorDouble distance = VectorDoubleSubtract(maximum, current);
         if(VectorDoubleGetIntX(VectorDoubleGreaterOrEqual(step, distance)) != 0u)
             return maximum;
-        return ClampValue(VectorDoubleAdd(current, step), minimum, maximum);
+        return VectorDoubleClampOrdered(VectorDoubleAdd(current, step), minimum, maximum);
     }
     const SIMDVectorDouble distance = VectorDoubleSubtract(current, minimum);
     if(VectorDoubleGetIntX(VectorDoubleGreaterOrEqual(step, distance)) != 0u)
         return minimum;
-    return ClampValue(VectorDoubleSubtract(current, step), minimum, maximum);
+    return VectorDoubleClampOrdered(VectorDoubleSubtract(current, step), minimum, maximum);
 }
 
 
@@ -171,7 +168,7 @@ Expected<f64> SliderBehavior::Interpolate(const f64 minimum, const f64 maximum, 
             const SIMDVectorDouble span = VectorDoubleSubtract(upper, lower);
             value = VectorDoubleAdd(lower, VectorDoubleMultiply(span, fraction));
         }
-        value = ClampValue(value, lower, upper);
+        value = VectorDoubleClampOrdered(value, lower, upper);
     }
     const f64 result = VectorDoubleGetX(value);
     if(!IsFinite(result))

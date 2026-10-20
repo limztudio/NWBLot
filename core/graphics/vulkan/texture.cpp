@@ -5,6 +5,7 @@
 #include "backend.h"
 #include "texture_resource_detail.h"
 
+#include <global/algorithm.h>
 #include <global/scope_exit.h>
 #include <global/termination.h>
 
@@ -121,21 +122,8 @@ Expected<TextureFormatBlockLayout> GetTextureFormatBlockLayout(const FormatInfo&
     return layout;
 }
 
-Expected<u32> TryComputeCommonAlignment(const u32 firstAlignment, const u32 secondAlignment)noexcept{
-    if(firstAlignment == 0u || secondAlignment == 0u)
-        return MakeUnexpected(Failure{});
-    u32 first = firstAlignment;
-    u32 second = secondAlignment;
-    while(second != 0u){
-        const u32 remainder = first % second;
-        first = second;
-        second = remainder;
-    }
-    return TryMultiply<u32>(firstAlignment / first, secondAlignment);
-}
-
 Expected<u32> TryComputeUploadSuballocationAlignment(const u32 requiredAlignment)noexcept{
-    return TryComputeCommonAlignment(s_DefaultUploadSuballocationAlignment, requiredAlignment);
+    return CommonAlignmentChecked(s_DefaultUploadSuballocationAlignment, requiredAlignment);
 }
 
 bool IsBufferImageCopyAspectMaskSupported(const VkImageAspectFlags aspectMask)noexcept{

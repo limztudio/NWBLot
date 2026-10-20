@@ -139,11 +139,7 @@ private:
 
 private:
     [[nodiscard]] static constexpr bool IsValidAlignment(usize align)noexcept{
-        return align != 0u && align <= s_MaxAlignSize && (align & (align - 1u)) == 0u;
-    }
-    [[nodiscard]] static constexpr usize AlignedSize(usize align, usize size){
-        // All callers validate a power-of-two alignment before using this fast path.
-        return AddSize(size, align - 1u) & ~(align - 1u);
+        return align != 0u && align <= s_MaxAlignSize && IsSupportedAlignmentValue(align);
     }
 
 
@@ -160,7 +156,7 @@ public:
             auto& bucket = m_bucket[i];
             bucket.active = nullptr;
             bucket.cached = nullptr;
-            bucket.size = AlignedSize(static_cast<usize>(1) << i, initSize);
+            bucket.size = AlignmentPowerOfTwo(static_cast<usize>(1) << i, initSize);
         }
     }
     ~ScratchArena()noexcept{
@@ -186,7 +182,7 @@ public:
         const usize bucketIndex = static_cast<usize>(CountTrailingZeros(align));
         auto& bucket = m_bucket[bucketIndex];
 
-        size = AlignedSize(align, size);
+        size = AlignmentPowerOfTwo(align, size);
         if(!bucket.active || size > bucket.active->m_remaining){
             if(!acquireChunk(bucket, align, size))
                 return nullptr;
@@ -212,7 +208,7 @@ public:
         if(!bucket.active)
             return nullptr;
 
-        size = AlignedSize(align, size);
+        size = AlignmentPowerOfTwo(align, size);
 
         Chunk* chunk = bucket.active;
         const usize oldSize = chunk->lifoTopSpan(p);
@@ -252,7 +248,7 @@ public:
         if(!bucket.active)
             return;
 
-        size = AlignedSize(align, size);
+        size = AlignmentPowerOfTwo(align, size);
         Chunk* chunk = bucket.active;
         if(chunk->tryPopLifo(p, size)){
             m_memoryStats.recordDeallocation(size);

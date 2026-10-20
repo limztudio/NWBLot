@@ -140,6 +140,18 @@ template<typename NumberT>
     return TextParseDetail::ParseNumber<i64>(text);
 }
 
+// Stops at the first nondigit and wraps modulo 2^64, including overlong prefixes.
+template<typename CharT>
+[[nodiscard]] inline constexpr u64 ParseDecimalPrefixU64(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
+    u64 value = 0u;
+    for(const CharT ch : text){
+        if(ch < static_cast<CharT>('0') || ch > static_cast<CharT>('9'))
+            break;
+        value = value * 10u + static_cast<u64>(ch - static_cast<CharT>('0'));
+    }
+    return value;
+}
+
 [[nodiscard]] inline Expected<u64> ParseU64FromChars(const AStringView text)noexcept{
     return TextParseDetail::ParseNumber<u64>(text);
 }

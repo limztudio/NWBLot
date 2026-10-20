@@ -32,10 +32,10 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID){
     const float4 specular = nwbHeapSampledImage2D(g_NwbReflectionTemporal.opaqueSpecularSlot).Load(int3(pixel, 0));
     if(!isfinite(specular.a) || specular.a <= 0.0 || !any(specular.rgb > 0.0))
         return;
-    const float4 current = nwbHeapStorageImage2DFloat4(g_NwbReflectionTemporal.currentRadianceUavSlot)[pixel];
+    const half4 current = half4(nwbHeapStorageImage2DFloat4(g_NwbReflectionTemporal.currentRadianceUavSlot)[pixel]);
     if(current.a <= 0.0 || !all(isfinite(current.rgb)))
         return;
-    const float4 previous = nwbHeapSampledImage2D(g_NwbReflectionTemporal.previousRadianceSrvSlot).Load(int3(pixel, 0));
+    const half4 previous = half4(nwbHeapSampledImage2D(g_NwbReflectionTemporal.previousRadianceSrvSlot).Load(int3(pixel, 0)));
     if(previous.a <= 0.0 || !all(isfinite(previous.rgb)))
         return;
     const uint limit = max(g_NwbReflectionTemporal.maxSampleCount, 1u);
@@ -46,7 +46,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID){
     // Every pixel contributes one sample, including true zero and environment samples.
     // This pointwise update has no neighboring read/write race or spatial feedback.
     // The difference form keeps equal finite-half endpoints exact, including 65504 at the upper storage limit.
-    const half3 radiance = half3(previous.rgb) + (half3(current.rgb) - half3(previous.rgb)) * (half(1.0h) / half(float(count)));
+    const half3 radiance = half3(previous.rgb) + (half3(current.rgb) - half3(previous.rgb)) * (half(1.0h) / half(count));
     const half3 roundedRadiance = nwbReflectionRoundHistory(radiance, pixel, g_NwbReflectionTemporal.sampleIndex, g_NwbReflectionTemporal.samplingSeed);
     nwbHeapStorageImage2DFloat4(g_NwbReflectionTemporal.currentRadianceUavSlot)[pixel] = float4(roundedRadiance, current.a);
 }

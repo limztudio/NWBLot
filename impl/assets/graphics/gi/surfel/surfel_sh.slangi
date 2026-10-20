@@ -25,12 +25,12 @@
 
 
 // Real 2-band SH basis at a unit direction: (Y_00, Y_1-1, Y_10, Y_11).
-half4 nwbSurfelShBasis(const float3 dir){
+half4 nwbSurfelShBasis(const half3 dir){
     return half4(
         half(NWB_SURFEL_SH_Y00_SCALE),         // Y_00  = 1 / (2 sqrt(pi))
-        half(NWB_SURFEL_SH_Y1_SCALE) * half(dir.y),  // Y_1-1 = sqrt(3 / (4 pi)) * y
-        half(NWB_SURFEL_SH_Y1_SCALE) * half(dir.z),  // Y_10  = sqrt(3 / (4 pi)) * z
-        half(NWB_SURFEL_SH_Y1_SCALE) * half(dir.x)   // Y_11  = sqrt(3 / (4 pi)) * x
+        half(NWB_SURFEL_SH_Y1_SCALE) * dir.y,  // Y_1-1 = sqrt(3 / (4 pi)) * y
+        half(NWB_SURFEL_SH_Y1_SCALE) * dir.z,  // Y_10  = sqrt(3 / (4 pi)) * z
+        half(NWB_SURFEL_SH_Y1_SCALE) * dir.x   // Y_11  = sqrt(3 / (4 pi)) * x
     );
 }
 
@@ -41,7 +41,7 @@ half nwbSurfelShReconstructChannel(const half4 sh, const half4 basis){
 }
 
 // Reconstruct the RGB cosine-weighted mean radiance for a query normal.
-half3 nwbSurfelShReconstruct(const half4 shR, const half4 shG, const half4 shB, const float3 normal){
+half3 nwbSurfelShReconstruct(const half4 shR, const half4 shG, const half4 shB, const half3 normal){
     const half4 basis = nwbSurfelShBasis(normal);
     return half3(nwbSurfelShReconstructChannel(shR, basis), nwbSurfelShReconstructChannel(shG, basis), nwbSurfelShReconstructChannel(shB, basis));
 }

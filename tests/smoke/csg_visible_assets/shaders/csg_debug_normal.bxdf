@@ -3,7 +3,7 @@
 
 
 half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
-    return half3(surface.normal * 0.5 + 0.5);
+    return half3(surface.normal) * 0.5h + 0.5h;
 }
 
 

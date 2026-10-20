@@ -122,8 +122,8 @@ float3 nwbCsgNormalizeOr(const float3 value, const float3 fallback){
     return value * rsqrt(lengthSquared);
 }
 
-float nwbCsgNonZeroSign(const float value){
-    return value < 0.0 ? -1.0 : 1.0;
+half nwbCsgNonZeroSign(const float value){
+    return value < 0.0 ? -1.0h : 1.0h;
 }
 
 NwbCsgSample nwbInvalidCsgShapeSample(){

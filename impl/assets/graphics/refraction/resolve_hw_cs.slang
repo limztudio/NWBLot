@@ -90,14 +90,14 @@ bool nwbRefractionCachedHit(const NwbRayTraceSurfaceHit hit, const NwbRefraction
     return true;
 }
 
-float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry entry){
+half4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry entry){
     const float3 camera = g_NwbRefractionView.cameraPosition.xyz;
     const float entryDistance = length(entry.position - camera);
     const float associationTolerance = max(entry.bias * NWB_REFRACTION_BIAS_TOLERANCE_SCALE, entryDistance * NWB_REFRACTION_ASSOCIATION_DISTANCE_SCALE);
     const NwbRayTraceSurfaceHit entryHit = nwbRefractionClosestEntryInterface(g_NwbRefractionMaterialContext.sceneSlots.z, camera, entry.incident, max(entryDistance - associationTolerance, entry.bias), entryDistance + associationTolerance);
 #if NWB_RT_CSG_ENABLED
     if(entryHit.failure != 0u)
-        return float4(0.0, 0.0, 0.0, 1.0);
+        return half4(0.0h, 0.0h, 0.0h, 1.0h);
 #endif
     if(!entryHit.hit || !nwbRefractionIorEligible(float(entryHit.surface.refractionIor)))
         return nwbRefractionResolveScreen(pixel, entry);
@@ -107,7 +107,7 @@ float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry 
 
     float3 internalDirection = refract(entry.incident, entry.normal, 1.0 / float(entry.ior));
     if(dot(internalDirection, internalDirection) < NWB_REFRACTION_DIRECTION_LENGTH_SQUARED_MIN)
-        return float4(0.0, 0.0, 0.0, 1.0);
+        return half4(0.0h, 0.0h, 0.0h, 1.0h);
     NwbRayTraceSurfaceHit exitHit = (NwbRayTraceSurfaceHit)0;
     float3 internalOrigin = entryHit.position;
     float3 outgoingDirection = float3(0.0);
@@ -119,7 +119,7 @@ float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry 
         exitHit = nwbRefractionClosestExitInterface(g_NwbRefractionMaterialContext.sceneSlots.z, internalOrigin + internalDirection * entry.bias, internalDirection, entry.bias, NWB_REFRACTION_MAX_DISTANCE, entryHit.instance);
 #if NWB_RT_CSG_ENABLED
         if(exitHit.failure != 0u)
-            return float4(0.0, 0.0, 0.0, 1.0);
+            return half4(0.0h, 0.0h, 0.0h, 1.0h);
 #endif
         // A different closest instance may be a nested volume or geometry inside the primary. Do not ignore it and pretend the next same-instance intersection was the nearest interface. Open meshes take the sheet fallback.
         if(!exitHit.hit)
@@ -137,7 +137,7 @@ float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry 
     }
     // Residual internally reflected energy at the fixed cap is discarded. Returning a straight-through leak here would violate the optical boundary; a future reflected-radiance pass can supply the missing contribution.
     if(dot(outgoingDirection, outgoingDirection) < NWB_REFRACTION_DIRECTION_LENGTH_SQUARED_MIN)
-        return float4(0.0, 0.0, 0.0, 1.0);
+        return half4(0.0h, 0.0h, 0.0h, 1.0h);
     const half3 attenuation = nwbRefractionAttenuation(entry.tint, pathLength, entry.ior, entry.cosine, exitCosine);
 
     float3 origin = exitHit.position + outgoingDirection * entry.bias;
@@ -153,7 +153,7 @@ float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry 
             break;
 #if NWB_RT_CSG_ENABLED
         if(background.failure != 0u)
-            return float4(0.0, 0.0, 0.0, 1.0);
+            return half4(0.0h, 0.0h, 0.0h, 1.0h);
 #endif
         if(nwbRefractionIorEligible(float(background.surface.refractionIor)))
             break;
@@ -162,7 +162,7 @@ float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry 
             half3 radiance;
             if(!nwbRefractionCachedHit(background, entry, layer == 0u, radiance))
                 radiance = nwbRefractionShadeHit(background, outgoingDirection);
-            return float4((accumulated + transmittance * half3(radiance)) * half3(attenuation), 1.0);
+            return half4((accumulated + transmittance * half3(radiance)) * half3(attenuation), 1.0h);
         }
         accumulated += transmittance * coverage * nwbRefractionShadeHit(background, outgoingDirection);
         transmittance *= half(1.0h) - coverage;
@@ -175,7 +175,7 @@ float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry 
     half3 backgroundRadiance;
     if(!nwbRefractionScreenBackground(exitEntry, outgoingDirection, backgroundRadiance))
         backgroundRadiance = half3(nwbRefractionBackground(pixel));
-    return float4(half3(backgroundRadiance) * half3(attenuation), 1.0);
+    return half4(half3(backgroundRadiance) * half3(attenuation), 1.0h);
 }
 
 

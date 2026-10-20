@@ -225,7 +225,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
             if(planeDistance > planeTolerance * 2.0 || length(displacement) > tangentFootprint * (length(float2(x, y)) + NWB_REFLECTION_SPATIAL_TAP_DISTANCE_MARGIN) + length(positionUncertainty))
                 continue;
             const half4 neighborH = g_NwbReflectionSpatialRadiance[neighborIndex];
-            const float4 neighbor = float4(neighborH);
+            const half4 neighbor = neighborH;
             if(neighbor.a <= 0.0 || !all(isfinite(neighbor.rgb)))
                 continue;
             // The combined bilateral weight is a (0, 1) bounded filter factor, so half arithmetic is sufficient here.
@@ -240,7 +240,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
             // Accumulate in FP32: weighted HDR sums can exceed FP16 range before normalization.
             // True zero samples participate normally.
             // Rejecting black samples or clamping bright samples biases energy, and filtered output must never be used as the next temporal-history bank.
-            sum += neighbor.rgb * float(weight);
+            sum += float3(neighbor.rgb) * float(weight);
             weightSum += float(weight);
         }
     }

@@ -148,7 +148,7 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID){
         radiance = lerp(nwbReflectionEnvironment(surface.direction), radiance, rangeWeight);
     }
     // Optical continuation supplies its accumulated radiance, including ordinary exterior misses. A capped or ambiguous in-medium path discards unresolved energy; blending sky here would leak light through glass.
-    nwbReflectionStore(pixel, glass, radiance * surface.weight, result.surfaceHit ? NWB_REFLECTION_SOURCE_HARDWARE : NWB_REFLECTION_SOURCE_FALLBACK);
+    nwbReflectionStore(pixel, glass, radiance * surface.weight, half(result.surfaceHit ? NWB_REFLECTION_SOURCE_HARDWARE : NWB_REFLECTION_SOURCE_FALLBACK));
     if(result.surfaceHit){
         nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_HARDWARE_HITS, 1u);
         nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_FALLBACK_PIXELS, NWB_REFLECTION_COUNTER_SUBTRACT_ONE);
@@ -177,7 +177,7 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID){
     if(hit.failure != 0u)
         radiance = half3(0.0h);
 #endif
-    nwbReflectionStore(pixel, glass, radiance * surface.weight, hit.hit ? NWB_REFLECTION_SOURCE_HARDWARE : NWB_REFLECTION_SOURCE_FALLBACK);
+    nwbReflectionStore(pixel, glass, radiance * surface.weight, half(hit.hit ? NWB_REFLECTION_SOURCE_HARDWARE : NWB_REFLECTION_SOURCE_FALLBACK));
 #endif
 }
 

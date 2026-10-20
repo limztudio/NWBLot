@@ -163,7 +163,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
         }
 
         // Both ray classes use the same mixture PDF. Its uniform component bounds weights and continues discovering light outside previously bright cells; the 1/N factor is applied after the workgroup reduction.
-        const float4 weightedBasis = float4(nwbSurfelShBasis(rayDir)) * inversePdf;
+        const float4 weightedBasis = float4(nwbSurfelShBasis(half3(rayDir))) * inversePdf;
         g_surfelShR[rayIndex] = float(radiance.r) * weightedBasis;
         g_surfelShG[rayIndex] = float(radiance.g) * weightedBasis;
         g_surfelShB[rayIndex] = float(radiance.b) * weightedBasis;

@@ -16,7 +16,7 @@ half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
     uint eventLayers;
     if(!nwbCsgDiagnosticEventBounds(pixel, eventDataSlot, eventLayers))
         return half3(0.0h);
-    const float spanState = nwbCsgDiagnosticSpanState(pixel);
+    const half spanState = nwbCsgDiagnosticSpanState(pixel);
     const uint eventCountSlot = g_NwbDeferredBindlessResources.csgSpanSlots.x;
     const uint eventCount = nwbHeapStorageImage2DArrayUint(eventCountSlot).Load(int3(pixel, 0));
     if(eventCount != 2u || eventLayers < 2u)

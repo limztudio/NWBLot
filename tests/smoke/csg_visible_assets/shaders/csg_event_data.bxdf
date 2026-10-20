@@ -16,7 +16,7 @@ half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
     uint eventLayers;
     if(!nwbCsgDiagnosticEventBounds(pixel, eventDataSlot, eventLayers))
         return half3(0.0h);
-    const float spanState = nwbCsgDiagnosticSpanState(pixel);
+    const half spanState = nwbCsgDiagnosticSpanState(pixel);
     uint receiverIndex;
     if(!nwbCsgDiagnosticReceiverIndex(pixel, receiverIndex))
         return half3(half(spanState), 0.0h, 0.0h);

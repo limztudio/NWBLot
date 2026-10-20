@@ -123,7 +123,7 @@ float2 nwbCombinedShadowWaveletSigma(const int2 texel, const uint slot){
     return sigma;
 }
 
-void nwbCombinedShadowWaveletStore(const uint2 pixel, const uint slot, const float opaque, const float3 rgb){
+void nwbCombinedShadowWaveletStore(const uint2 pixel, const uint slot, const half opaque, const half3 rgb){
     nwbHeapStorageImage2DArrayFloat4(g_NwbCombinedShadowWaveletPush.opaqueOutputStorageSlot)[uint3(pixel, slot)] = float4(opaque, opaque, opaque, 1.0);
     nwbHeapStorageImage2DArrayFloat4(g_NwbCombinedShadowWaveletPush.outputStorageSlot)[uint3(pixel, slot)] = float4(rgb, 1.0);
 }
@@ -180,7 +180,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         if(inBounds){
             // A fully-lit halo has exact normalized visibility one; mixed tiles retain the original half-weight reduction.
             if(centerGeom.w <= half(NWB_SHADOW_GEOMETRY_VALID_THRESHOLD) || g_NwbCombinedShadowWaveletNonLit == 0u)
-                nwbCombinedShadowWaveletStore(pixel, slot, 1.0, float3(1.0));
+                nwbCombinedShadowWaveletStore(pixel, slot, 1.0h, half3(1.0h));
             else{
                 const uint centerIndex = (uint)((int(groupThreadID.y) + NWB_SHADOW_RESOLVE_KERNEL_RADIUS * step) * tileWidth + (int(groupThreadID.x) + NWB_SHADOW_RESOLVE_KERNEL_RADIUS * step));
                 const float4 center = float4(g_NwbCombinedShadowWaveletVis[centerIndex]);

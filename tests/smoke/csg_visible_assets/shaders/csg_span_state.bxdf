@@ -14,7 +14,7 @@ half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
     const uint2 spanCounts = nwbHeapStorageImage2DArrayUint2(spanCountSlot).Load(int3(pixel, 0));
     const uint eventCountSlot = g_NwbDeferredBindlessResources.csgSpanSlots.x;
     const uint eventCount = nwbHeapStorageImage2DArrayUint(eventCountSlot).Load(int3(pixel, 0));
-    return half3(float3(spanCounts.x, spanCounts.y, eventCount) / 33.0);
+    return half3(half2(spanCounts) / 33.0h, half(float(eventCount) / 33.0));
 #else
     return half3(0.0h);
 #endif

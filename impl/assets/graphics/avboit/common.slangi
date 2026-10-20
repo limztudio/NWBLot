@@ -28,7 +28,7 @@
 #endif
 
 static const float NWB_AVBOIT_ALPHA_EPSILON = 0.0001;
-static const float NWB_AVBOIT_SPLAT_WEIGHT_EPSILON = 0.00001;
+static const half NWB_AVBOIT_SPLAT_WEIGHT_EPSILON = 0.00001h;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

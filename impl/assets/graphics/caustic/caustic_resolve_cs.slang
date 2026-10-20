@@ -169,14 +169,14 @@ bool nwbCausticResolveUpsampleInactive(const int2 baseTexel){
     return true;
 }
 
-void nwbCausticResolvePublishActivity(const float3 color, const bool inBounds, const uint2 group, const uint threadIndex){
+void nwbCausticResolvePublishActivity(const half3 color, const bool inBounds, const uint2 group, const uint threadIndex){
     if(g_NwbCausticResolvePushConstants.activityOutputSlot == NWB_CAUSTIC_RESOLVE_ACTIVITY_INVALID_SLOT)
         return;
     if(threadIndex == 0u)
         g_NwbCausticResolveOutputActivity = 0u;
     GroupMemoryBarrierWithGroupSync();
-    // The filter widens its half result only for storage. Exact inequality keeps negative and nonfinite results active.
-    if(inBounds && any(color != float3(0.0)))
+    // Keep the original FP32 nonzero check after the half result.
+    if(inBounds && any(float3(color) != float3(0.0)))
         InterlockedOr(g_NwbCausticResolveOutputActivity, 1u);
     GroupMemoryBarrierWithGroupSync();
     if(threadIndex == 0u){
@@ -200,7 +200,7 @@ NwbCausticWaveletSpatialParameters nwbCausticWaveletSpatialParameters(const int2
     return parameters;
 }
 
-float4 nwbCausticResolveWavelet(const uint2 pixel, const uint3 groupThreadID, const uint3 groupID){
+half4 nwbCausticResolveWavelet(const uint2 pixel, const uint3 groupThreadID, const uint3 groupID){
     const int hw = (int)g_NwbCausticResolvePushConstants.halfWidth;
     const int hh = (int)g_NwbCausticResolvePushConstants.halfHeight;
     const int2 texel = int2(pixel);
@@ -240,13 +240,13 @@ float4 nwbCausticResolveWavelet(const uint2 pixel, const uint3 groupThreadID, co
         GroupMemoryBarrierWithGroupSync();
 
         if(g_NwbCausticResolveTileActive == 0u){
-            return float4(0.0, 0.0, 0.0, 1.0);
+            return half4(0.0h, 0.0h, 0.0h, 1.0h);
         }
 
         if(!inBounds)
-            return float4(0.0, 0.0, 0.0, 1.0);
+            return half4(0.0h, 0.0h, 0.0h, 1.0h);
         if(!nwbCausticResolveValidAtHalf(texel)){
-            return float4(0.0, 0.0, 0.0, 1.0);
+            return half4(0.0h, 0.0h, 0.0h, 1.0h);
         }
 
         const NwbCausticWaveletSpatialParameters parameters = nwbCausticWaveletSpatialParameters(texel, hw, step);
@@ -265,14 +265,14 @@ float4 nwbCausticResolveWavelet(const uint2 pixel, const uint3 groupThreadID, co
                 weightSum += weight;
             }
         }
-        return (weightSum > half(0.0h)) ? float4(float3(sum / weightSum), 1.0) : float4(0.0, 0.0, 0.0, 1.0);
+        return (weightSum > half(0.0h)) ? half4(sum / weightSum, 1.0h) : half4(0.0h, 0.0h, 0.0h, 1.0h);
     }
 #endif
 
     if(!inBounds)
-        return float4(0.0, 0.0, 0.0, 1.0);
+        return half4(0.0h, 0.0h, 0.0h, 1.0h);
     if(!nwbCausticResolveValidAtHalf(texel)){
-        return float4(0.0, 0.0, 0.0, 1.0);
+        return half4(0.0h, 0.0h, 0.0h, 1.0h);
     }
 
     const NwbCausticWaveletSpatialParameters parameters = nwbCausticWaveletSpatialParameters(texel, hw, step);
@@ -295,7 +295,7 @@ float4 nwbCausticResolveWavelet(const uint2 pixel, const uint3 groupThreadID, co
         }
     }
 
-    return (weightSum > half(0.0h)) ? float4(float3(sum / weightSum), 1.0) : float4(0.0, 0.0, 0.0, 1.0);
+    return (weightSum > half(0.0h)) ? half4(sum / weightSum, 1.0h) : half4(0.0h, 0.0h, 0.0h, 1.0h);
 }
 
 [numthreads(NWB_CAUSTIC_RESOLVE_GROUP_SIZE, NWB_CAUSTIC_RESOLVE_GROUP_SIZE, 1)]
@@ -320,7 +320,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         // Center-aligned full-to-half texel mapping; changing it shifts the upsample.
         const float2 src = (float2(pixel) + 0.5) * 0.5 - 0.5;
         const int2 baseTexel = int2(floor(src));
-        const float2 lerpFrac = src - float2(baseTexel);
+        const half2 lerpFrac = half2(src - float2(baseTexel));
         if(nwbCausticResolveUpsampleInactive(baseTexel)){
             g_NwbCausticResolveOutput[pixel] = float4(0.0, 0.0, 0.0, 1.0);
             return;
@@ -352,7 +352,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 const int2 tap = int2(clamp(baseTexel.x + i, 0, hw - 1), clamp(baseTexel.y + j, 0, hh - 1));
                 if(!nwbCausticResolveValidAtHalf(tap))
                     continue;
-                const half bilinearWeight = (i == 0 ? half(1.0 - lerpFrac.x) : half(lerpFrac.x)) * (j == 0 ? half(1.0 - lerpFrac.y) : half(lerpFrac.y));
+                const half bilinearWeight = (i == 0 ? (1.0h - lerpFrac.x) : half(lerpFrac.x)) * (j == 0 ? (1.0h - lerpFrac.y) : half(lerpFrac.y));
                 const float3 d = float3(nwbCausticResolveWorldAtHalf(tap)) - centerWorld;
                 const half weight = bilinearWeight * half(exp(-dot(d, d) * invTwoSigmaWorldSq));
                 const half3 tapColor = half3(nwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.inputColorSlot).Load(int3(tap, 0)).rgb);
@@ -372,7 +372,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
 
     // Sum 2x2 flux and divide by the corresponding half-res receiver area to preserve average irradiance.
     if(stage == NWB_CAUSTIC_RESOLVE_STAGE_PREPARE_DOWNSAMPLE){
-        float4 result = float4(0.0, 0.0, 0.0, 1.0);
+        half4 result = half4(0.0h, 0.0h, 0.0h, 1.0h);
         if(inBounds){
             if(nwbCausticResolveValidAtHalf(texel)){
                 const int fw = (int)g_NwbCausticResolvePushConstants.width;
@@ -393,7 +393,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 flux /= NWB_CAUSTIC_FIXED_POINT_SCALE;
                 const float area = nwbCausticResolveHalfPixelArea(texel);
                 const half3 irradiance = half3(flux / area * g_NwbCausticResolvePushConstants.causticIntensity);
-                result = float4(float3(irradiance), 1.0);
+                result = half4(irradiance, 1.0h);
             }
             g_NwbCausticResolveOutput[pixel] = result;
         }
@@ -406,7 +406,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         return;
 
     const uint threadIndex = groupThreadID.y * NWB_CAUSTIC_RESOLVE_GROUP_SIZE + groupThreadID.x;
-    float4 result = float4(0.0, 0.0, 0.0, 1.0);
+    half4 result = half4(0.0h, 0.0h, 0.0h, 1.0h);
     if(!nwbCausticResolveInputInactive(groupID.xy, threadIndex))
         result = nwbCausticResolveWavelet(pixel, groupThreadID, groupID);
     if(inBounds)

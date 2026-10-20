@@ -18,12 +18,12 @@ struct NwbDeferredCompositeVertexOutput{
 
 
 NwbDeferredCompositeVertexOutput main(uint vertexIndex : SV_VertexID){
-    const float2 positions[3] = float2[3](float2(-1.0, -1.0), float2( 3.0, -1.0), float2(-1.0,  3.0));
+    const half2 positions[3] = half2[3](half2(-1.0h, -1.0h), half2(3.0h, -1.0h), half2(-1.0h, 3.0h));
 
-    const float2 position = positions[vertexIndex];
+    const half2 position = positions[vertexIndex];
     NwbDeferredCompositeVertexOutput output;
     output.position = float4(position, 0.0, 1.0);
-    output.uv = position * float2(0.5, -0.5) + float2(0.5);
+    output.uv = position * half2(0.5h, -0.5h) + half2(0.5h);
     return output;
 }
 

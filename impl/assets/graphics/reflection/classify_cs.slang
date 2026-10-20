@@ -105,8 +105,8 @@ uint nwbReflectionNextFeedbackState(const NwbReflectionFeedbackTile tile, const 
     return NWB_REFLECTION_FEEDBACK_ACTIVE;
 }
 
-bool nwbReflectionClassifySurface(const uint2 pixel, const bool glass, const NwbReflectionFeedbackTile tile, out float4 result, out uint observations, out uint screenWork){
-    result = float4(0.0);
+bool nwbReflectionClassifySurface(const uint2 pixel, const bool glass, const NwbReflectionFeedbackTile tile, out half4 result, out uint observations, out uint screenWork){
+    result = half4(0.0h);
     observations = 0u;
     screenWork = 0u;
     if(g_NwbReflectionParameters.dimensionsAndRoute.z == NWB_REFLECTION_MODE_DISABLED)
@@ -124,11 +124,11 @@ bool nwbReflectionClassifySurface(const uint2 pixel, const bool glass, const Nwb
     nwbReflectionRecordDiagnostic(glass ? NWB_REFLECTION_COUNTER_GLASS_PIXELS : NWB_REFLECTION_COUNTER_OPAQUE_PIXELS, 1u);
     if(!any(surface.weight > half3(0.0h))){
         // Below-horizon VNDF samples remain true zeros, but still contributed to stable eligibility above.
-        result.a = 1.0;
+        result.a = 1.0h;
         return false;
     }
     const half3 environment = nwbReflectionEnvironment(surface.direction);
-    result = float4(float3(surface.weight * environment), 1.0);
+    result = half4(surface.weight * environment, 1.0h);
     const bool screen = g_NwbReflectionParameters.dimensionsAndRoute.z == NWB_REFLECTION_MODE_SCREEN || g_NwbReflectionParameters.dimensionsAndRoute.z == NWB_REFLECTION_MODE_HYBRID;
     if(screen && stableTraceEligible){
         if(tile.bypass && surface.roughness == 0.0)
@@ -147,8 +147,8 @@ bool nwbReflectionClassifySurface(const uint2 pixel, const bool glass, const Nwb
                 // Even provisional low-confidence radiance keeps the tile active.
                 // Hardware replaces it only through the ordinary fallback route; feedback never drops a useful screen return.
                 // Weighted blend is half color math: weight/environment/radiance/confidence all fit FP16.
-                // Widen only at the float4 store and the float threshold compare.
-                result = float4(float3(half3(surface.weight) * lerp(half3(environment), radiance, confidence)), NWB_REFLECTION_SOURCE_SCREEN + NWB_REFLECTION_SOURCE_CONFIDENCE_ENCODE_SCALE * float(confidence));
+                // Keep source encoding and the threshold comparison in FP32; the stored tag is half.
+                result = half4(half3(surface.weight) * lerp(half3(environment), radiance, confidence), half(NWB_REFLECTION_SOURCE_SCREEN + NWB_REFLECTION_SOURCE_CONFIDENCE_ENCODE_SCALE * float(confidence)));
                 if(float(confidence) >= g_NwbReflectionParameters.screenConfidenceThreshold){
                     nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_SCREEN_HITS, 1u);
                     return false;
@@ -190,8 +190,8 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint groupIndex : SV_Gro
     if(pixel.x < g_NwbReflectionParameters.dimensionsAndRoute.x && pixel.y < g_NwbReflectionParameters.dimensionsAndRoute.y){
         opaqueTile = nwbReflectionLoadFeedbackTile(pixel, false);
         glassTile = nwbReflectionLoadFeedbackTile(pixel, true);
-        float4 opaqueResult;
-        float4 glassResult;
+        half4 opaqueResult;
+        half4 glassResult;
         opaqueCandidate = nwbReflectionClassifySurface(pixel, false, opaqueTile, opaqueResult, opaqueObservations, opaqueWork);
         glassCandidate = nwbReflectionClassifySurface(pixel, true, glassTile, glassResult, glassObservations, glassWork);
         // Every surface receives exactly one dispatch-owned write, including invalid surfaces and true zeros.

@@ -30,7 +30,7 @@ half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
     }
     // Counts remain discrete after presentation; the extra raw-count level identifies overflow beyond 32 stored events.
     const uint overflowCount = NWB_CSG_RECEIVER_EVENT_LAYER_COUNT + 1u;
-    return half3(float3(min(eventCount, overflowCount), frontCount, backCount) / float(overflowCount));
+    return half3(half(min(eventCount, overflowCount)), half(frontCount), half(backCount)) / half(overflowCount);
 #else
     return half3(0.0h);
 #endif

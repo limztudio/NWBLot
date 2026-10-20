@@ -38,13 +38,13 @@ NwbCsgRefractionCapFillPixelOutput main(const NwbCsgCapFillPixelInput input){
     const NwbCsgReceiverRange receiver = g_NwbCsgReceiverRanges[cap.receiverIndex];
     const float3 incidentDirection = nwbCsgIntervalSampleNormalizeOr(cap.worldPosition - g_NwbMeshCameraPosition.xyz, -cap.normal);
     const NwbMeshSurface surface = nwbCsgCapSurface(cap, receiver, incidentDirection);
-    const float ior = float(surface.refractionIor);
+    const half ior = surface.refractionIor;
     if(!nwbRefractionIorEligible(ior))
         discard;
 
     NwbCsgRefractionCapFillPixelOutput output;
     output.normalIor = float4(nwbCsgIntervalSampleNormalizeOr(surface.normal, float3(0.0, 0.0, 1.0)), ior);
-    output.tintCoverage = float4(float3(half3(clamp(half3(surface.shadowAbsorptionTint), half3(0.0h), half3(1.0h)))), clamp(float(surface.renderCoverage), 0.0, 1.0));
+    output.tintCoverage = float4(clamp(surface.shadowAbsorptionTint, half3(0.0h), half3(1.0h)), clamp(surface.renderCoverage, half(0.0h), half(1.0h)));
     output.instance = float4(nwbAvboitPackRefractionEntityId(g_NwbMeshInstances[receiver.materialContext.z].entityId), 0.0, 0.0);
     output.specularRoughness = nwbPackMeshSurfaceReflection(surface.specularF0, surface.perceptualRoughness);
     output.depth = cap.depth;

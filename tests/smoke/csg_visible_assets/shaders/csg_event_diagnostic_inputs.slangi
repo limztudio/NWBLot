@@ -24,10 +24,10 @@ bool nwbCsgDiagnosticEventBounds(const int2 pixel, out uint eventDataSlot, out u
     return !any(pixel < 0) && !any(uint2(pixel) >= uint2(width, height));
 }
 
-float nwbCsgDiagnosticSpanState(const int2 pixel){
+half nwbCsgDiagnosticSpanState(const int2 pixel){
     const uint spanCountSlot = g_NwbDeferredBindlessResources.csgSpanSlots.z;
     const uint2 spanCounts = nwbHeapStorageImage2DArrayUint2(spanCountSlot).Load(int3(pixel, 0));
-    return spanCounts.x > 0u ? 1.0 : float(spanCounts.y) / 33.0;
+    return spanCounts.x > 0u ? 1.0h : half(spanCounts.y) / 33.0h;
 }
 
 bool nwbCsgDiagnosticReceiverIndex(const int2 pixel, out uint receiverIndex){

@@ -80,7 +80,7 @@ bool nwbSurfelGatherField(const float3 worldPosition, const float3 normal, const
                         weight = normalWeight * distanceWeight * confidence;
                         // Keep SH loads and reconstruction conditional on an actual contribution.
                         if(weight > half(0.0h)){
-                            irradianceSum += nwbSurfelShReconstruct(half4(NWB_SURFEL_GATHER_FIELD_POOL[id].shR), half4(NWB_SURFEL_GATHER_FIELD_POOL[id].shG), half4(NWB_SURFEL_GATHER_FIELD_POOL[id].shB), normal) * weight;
+                            irradianceSum += nwbSurfelShReconstruct(half4(NWB_SURFEL_GATHER_FIELD_POOL[id].shR), half4(NWB_SURFEL_GATHER_FIELD_POOL[id].shG), half4(NWB_SURFEL_GATHER_FIELD_POOL[id].shB), half3(normal)) * weight;
                         }
                     }
                     totalWeight += weight;

@@ -286,27 +286,27 @@ TEST(Metascript, NamedLookupDoesNotSelectAnAssetOrDependOnDeclarationOrder){
     EXPECT_EQ(document.declarations()[0u].variable, "first");
 
     const Document& constDocument = document;
-    const Value* first = constDocument.findField("first");
+    const Value* first = constDocument.findVariable("first");
     ASSERT_NE(first, nullptr);
     EXPECT_EQ(first->asInteger(), 9);
     const auto* declaration = constDocument.findDeclaration("asset");
     ASSERT_NE(declaration, nullptr);
     EXPECT_EQ(declaration->type, "texture");
     EXPECT_EQ(declaration->variable, "asset");
-    const Value* asset = constDocument.findField("asset");
+    const Value* asset = constDocument.findVariable("asset");
     ASSERT_NE(asset, nullptr);
     ASSERT_TRUE(asset->isMap());
     const Value* source = asset->findField("source");
     ASSERT_NE(source, nullptr);
     EXPECT_EQ(source->asString(), "albedo.png");
-    EXPECT_EQ(constDocument.findField("missing"), nullptr);
-    EXPECT_EQ(document.findField("missing"), nullptr);
+    EXPECT_EQ(constDocument.findVariable("missing"), nullptr);
+    EXPECT_EQ(document.findVariable("missing"), nullptr);
     EXPECT_EQ(constDocument.findDeclaration("missing"), nullptr);
 
-    Value* last = document.findField("last");
+    Value* last = document.findVariable("last");
     ASSERT_NE(last, nullptr);
     last->setInteger(5);
-    EXPECT_EQ(constDocument.findField("last")->asInteger(), 5);
+    EXPECT_EQ(constDocument.findVariable("last")->asInteger(), 5);
     EXPECT_EQ(document.findDeclaration("first")->type, "number");
 }
 
@@ -316,12 +316,12 @@ TEST(Metascript, EmptyAndStructOnlyDocumentsHaveNoImplicitVariables){
     ASSERT_TRUE(document.parse(LiteralView("")));
     EXPECT_TRUE(document.declarations().empty());
     EXPECT_TRUE(document.structs().empty());
-    EXPECT_EQ(document.findField("asset"), nullptr);
+    EXPECT_EQ(document.findVariable("asset"), nullptr);
 
     ASSERT_TRUE(document.parse(LiteralView("[custom(\"argument\")] struct Description{ [field] float value; };")));
     EXPECT_TRUE(document.declarations().empty());
-    EXPECT_EQ(document.findField("asset"), nullptr);
-    EXPECT_EQ(document.findField("Description"), nullptr);
+    EXPECT_EQ(document.findVariable("asset"), nullptr);
+    EXPECT_EQ(document.findVariable("Description"), nullptr);
     ASSERT_EQ(document.structs().size(), 1u);
     const auto structure = document.structs().find(LiteralView("Description"));
     ASSERT_NE(structure, document.structs().end());
@@ -353,18 +353,18 @@ TEST(Metascript, StructNamesAndVariablesUseSeparateNamespaces){
     ASSERT_TRUE(document.parse(LiteralView("number Parameters = 3; struct Parameters{ float value; }; Parameters runtime; runtime.value = 4;")));
     ASSERT_EQ(document.structs().size(), 1u);
     ASSERT_EQ(document.declarations().size(), 2u);
-    EXPECT_EQ(document.findField("Parameters")->asInteger(), 3);
+    EXPECT_EQ(document.findVariable("Parameters")->asInteger(), 3);
     const auto* declaration = document.findDeclaration("runtime");
     ASSERT_NE(declaration, nullptr);
     EXPECT_EQ(declaration->type, "Parameters");
     EXPECT_EQ(declaration->variable, "runtime");
-    const Value* runtime = document.findField("runtime");
+    const Value* runtime = document.findVariable("runtime");
     ASSERT_NE(runtime, nullptr);
     ASSERT_TRUE(runtime->isMap());
     EXPECT_EQ(runtime->findField("value")->asInteger(), 4);
-    EXPECT_EQ(document.findField("asset"), nullptr);
-    EXPECT_EQ(document.findField("structs"), nullptr);
-    EXPECT_EQ(document.findField("instances"), nullptr);
+    EXPECT_EQ(document.findVariable("asset"), nullptr);
+    EXPECT_EQ(document.findVariable("structs"), nullptr);
+    EXPECT_EQ(document.findVariable("instances"), nullptr);
 }
 
 TEST(Metascript, StructMetadataOwnsSourceAndSurvivesVariableStorageGrowth){
@@ -392,8 +392,8 @@ TEST(Metascript, StructMetadataOwnsSourceAndSurvivesVariableStorageGrowth){
     ASSERT_NE(fieldName, nullptr);
     EXPECT_EQ(fieldName->asString(), "value");
     EXPECT_EQ(document.findDeclaration("runtime")->type, "Description");
-    ASSERT_NE(document.findField("runtime"), nullptr);
-    EXPECT_TRUE(document.findField("runtime")->isNull());
+    ASSERT_NE(document.findVariable("runtime"), nullptr);
+    EXPECT_TRUE(document.findVariable("runtime")->isNull());
 }
 
 TEST(Metascript, StructAndVariableDuplicatesAreRejectedInTheirOwnNamespaces){
@@ -414,12 +414,12 @@ TEST(Metascript, ReparsingClearsStructsVariablesDeclarationsAndErrors){
     EXPECT_TRUE(document.structs().empty());
     ASSERT_EQ(document.declarations().size(), 1u);
     EXPECT_EQ(document.findDeclaration("previous"), nullptr);
-    EXPECT_EQ(document.findField("previous"), nullptr);
-    EXPECT_EQ(document.findField("value"), nullptr);
-    EXPECT_EQ(document.findField("current")->asString(), "new");
+    EXPECT_EQ(document.findVariable("previous"), nullptr);
+    EXPECT_EQ(document.findVariable("value"), nullptr);
+    EXPECT_EQ(document.findVariable("current")->asString(), "new");
     ASSERT_TRUE(document.parse(LiteralView("")));
     EXPECT_TRUE(document.declarations().empty());
-    EXPECT_EQ(document.findField("current"), nullptr);
+    EXPECT_EQ(document.findVariable("current"), nullptr);
 }
 
 
@@ -442,11 +442,11 @@ TEST(Metascript, InvalidAssignmentTargetsPreserveDiagnosticsAndDeclaredValue){
         EXPECT_EQ(document.errors()[0u].line, 2u);
         EXPECT_EQ(document.errors()[0u].column, 1u);
         EXPECT_EQ(MStringView(document.errors()[0u].message.data(), document.errors()[0u].message.size()), testCase.message);
-        const Value* asset = document.findField(s_AssetVariable);
+        const Value* asset = document.findVariable(s_AssetVariable);
         ASSERT_NE(asset, nullptr);
         ASSERT_TRUE(asset->isInteger());
         EXPECT_EQ(asset->asInteger(), testCase.retainedValue);
-        EXPECT_EQ(document.findField("missing"), nullptr);
+        EXPECT_EQ(document.findVariable("missing"), nullptr);
     }
 }
 

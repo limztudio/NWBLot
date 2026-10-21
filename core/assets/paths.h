@@ -506,7 +506,7 @@ template<typename MetadataDocument>
 
 template<typename MetadataDocument, typename MetadataValue>
 [[nodiscard]] inline Expected<NotNull<const MetadataValue*>> FindMetadataAssetValue(const Path& nwbFilePath, const MetadataDocument& doc, const AStringView diagnosticPrefix){
-    const auto* asset = doc.findField(s_MetadataAssetVariable);
+    const auto* asset = doc.findVariable(s_MetadataAssetVariable);
     if(!asset){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': missing asset declaration '{}'"), StringConvert(diagnosticPrefix), PathToString<tchar>(nwbFilePath), StringConvert(s_MetadataAssetVariable));
         return MakeUnexpected(Failure{});

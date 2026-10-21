@@ -229,7 +229,7 @@ void ApplyTextReplacements(ScratchString& inOutSource, TextReplacements& replace
             continue;
 
         const Core::Metascript::MStringView skinVariable(declaration.variable.data(), declaration.variable.size());
-        const Core::Metascript::Value* skinAsset = doc.findField(skinVariable);
+        const Core::Metascript::Value* skinAsset = doc.findVariable(skinVariable);
         if(!skinAsset || !skinAsset->isMap())
             continue;
 

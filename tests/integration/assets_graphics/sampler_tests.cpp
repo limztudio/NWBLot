@@ -209,9 +209,9 @@ TEST(AssetsGraphics, SamplerCookerRequiresTheAssetField){
     TestArena testArena;
     NWB::Core::Metascript::Document document(testArena.arena);
     ASSERT_TRUE(document.parse("sampler configuration; configuration.mip_bias = 2.0;"));
-    ASSERT_NE(document.findField("configuration"), nullptr);
+    ASSERT_NE(document.findVariable("configuration"), nullptr);
     ASSERT_NE(document.findDeclaration("configuration"), nullptr);
-    EXPECT_EQ(document.findField("asset"), nullptr);
+    EXPECT_EQ(document.findVariable("asset"), nullptr);
     const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, s_UnsupportedMetadataCase) / s_AssetsDirectory;
     const Path metadataPath = assetRoot / s_SamplersDirectory / s_LinearClampMetadataFilename;
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);

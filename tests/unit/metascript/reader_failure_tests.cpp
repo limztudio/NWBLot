@@ -111,7 +111,7 @@ TEST(Metascript, SuccessfulZeroReaderCountIsEndOfFileInsteadOfReadFailure){
     EXPECT_FALSE(document.hasErrors());
     EXPECT_TRUE(document.declarations().empty());
     EXPECT_TRUE(document.structs().empty());
-    EXPECT_EQ(document.findField("prior"), nullptr);
+    EXPECT_EQ(document.findVariable("prior"), nullptr);
 }
 
 TEST(Metascript, ReaderBufferProducesOwnedStructsAndNamedVariables){
@@ -131,10 +131,10 @@ TEST(Metascript, ReaderBufferProducesOwnedStructsAndNamedVariables){
     const auto* declaration = document.findDeclaration("runtime");
     ASSERT_NE(declaration, nullptr);
     EXPECT_EQ(declaration->type, "Description");
-    const Value* runtime = document.findField("runtime");
+    const Value* runtime = document.findVariable("runtime");
     ASSERT_NE(runtime, nullptr);
     EXPECT_EQ(runtime->findField("value")->asInteger(), 7);
-    EXPECT_EQ(document.findField("asset"), nullptr);
+    EXPECT_EQ(document.findVariable("asset"), nullptr);
 }
 
 TEST(Metascript, OversizedReaderResultIsRejectedBeforeUsingItsBuffer){

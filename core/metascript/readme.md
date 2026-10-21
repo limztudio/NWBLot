@@ -30,7 +30,7 @@ albedo.source = "textures/example.png";
 asset.albedo = albedo;
 ```
 
-A declaration has the form `<type> <variable> [= <expression>];`. Type names are recorded as text and do not constrain the stored value. Every variable is available by name through `Document::findField()`, and `findDeclaration()` returns its declared type and variable name. `declarations()` preserves source order. MetaScript gives no special meaning to `asset` or to the first declaration; a cooker may choose `asset` as its own entry convention.
+A declaration has the form `<type> <variable> [= <expression>];`. Type names are recorded as text and do not constrain the stored value. Every variable is available by name through `Document::findVariable()`, and `findDeclaration()` returns its declared type and variable name. `declarations()` preserves source order. MetaScript gives no special meaning to `asset` or to the first declaration; a cooker may choose `asset` as its own entry convention.
 
 Omitting an initializer creates a `Null` value. Assigning a dotted path creates missing fields and turns `Null` parents into maps. Assignment requires an already declared root, and traversing a scalar or list is an error. Variable names must be unique within the document.
 
@@ -101,7 +101,7 @@ bool ReadExampleWidth(Meta::MetaArena& arena, i64& outWidth){
         return false;
     }
 
-    const Meta::Value* settings = document.findField(Meta::LiteralView("settings"));
+    const Meta::Value* settings = document.findVariable(Meta::LiteralView("settings"));
     if(!settings || !settings->isMap())
         return false;
 
@@ -122,7 +122,7 @@ bool ReadExampleWidth(Meta::MetaArena& arena, i64& outWidth){
 | --- | --- |
 | `parse(MStringView)` | Parses a complete source buffer. Empty sources and sources containing only structs are valid. |
 | `parse(IMetaReader&)` | Reads the complete source, then applies the same parsing rules. |
-| `findField(name)` | Returns a borrowed pointer to a top-level variable, or `nullptr` when absent. Const and mutable overloads are available; lookup never creates a variable. |
+| `findVariable(name)` | Returns a borrowed pointer to a top-level variable, or `nullptr` when absent. Const and mutable overloads are available; lookup never creates a variable. |
 | `findDeclaration(name)` | Returns a borrowed pointer to a variable's declaration (`type`, `variable`), or `nullptr` when absent. |
 | `declarations()` | Returns every variable declaration in source order, including declarations with a struct type. |
 | `structs()` | Returns the independent struct definition map, keyed by struct name. Each value describes its attributes and fields. |
@@ -169,7 +169,7 @@ Parameters:
                            "arguments": ["half4(1.0h, 1.0h, 1.0h, 1.0h)"]}]}
 ```
 
-`Parameters runtime;` is an ordinary variable declaration: `document.findDeclaration("runtime")` records the type `Parameters`, and `document.findField("runtime")` returns its initially `Null` value. Initializers and assignments follow the same rules as any other variable. The parser does not instantiate fields, check whether a declared type names a struct, or enforce a struct's field schema. Struct definitions can appear before or after variable declarations.
+`Parameters runtime;` is an ordinary variable declaration: `document.findDeclaration("runtime")` records the type `Parameters`, and `document.findVariable("runtime")` returns its initially `Null` value. Initializers and assignments follow the same rules as any other variable. The parser does not instantiate fields, check whether a declared type names a struct, or enforce a struct's field schema. Struct definitions can appear before or after variable declarations.
 
 Duplicate struct names, field names within a struct, and variable names are errors. A struct and a variable may share a name. Struct definitions do not create variables named `structs`, `instances`, or `asset`, and variable assignments cannot change the struct definition map.
 

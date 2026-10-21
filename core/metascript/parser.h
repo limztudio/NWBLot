@@ -65,8 +65,8 @@ public:
     [[nodiscard]] bool parse(MStringView source);
     [[nodiscard]] bool parse(IMetaReader& reader);
 
-    [[nodiscard]] const Value* findField(MStringView name)const noexcept;
-    [[nodiscard]] Value* findField(MStringView name)noexcept;
+    [[nodiscard]] const Value* findVariable(MStringView name)const noexcept;
+    [[nodiscard]] Value* findVariable(MStringView name)noexcept;
     [[nodiscard]] const Declaration* findDeclaration(MStringView name)const noexcept;
     [[nodiscard]] const DeclarationList& declarations()const noexcept{ return m_declarations; }
     [[nodiscard]] const StructMap& structs()const noexcept{ return m_structs; }

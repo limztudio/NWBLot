@@ -388,7 +388,7 @@ Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const ScratchPath& in
 
         const Core::Metascript::MStringView meshVariableView(declaration.variable.data(), declaration.variable.size());
         const AStringView meshVariableName = meshVariableView;
-        const Core::Metascript::Value* meshValue = doc.findField(meshVariableView);
+        const Core::Metascript::Value* meshValue = doc.findVariable(meshVariableView);
         if(!meshValue){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: missing mesh variable '{}'"), StringConvert(meshVariableName));
             return MakeUnexpected(Failure{});

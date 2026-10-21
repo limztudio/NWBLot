@@ -377,7 +377,7 @@ static bool ParseMaterialBindInstances(const Path& bindFilePath, const Metascrip
     for(const Metascript::Document::Declaration& declaration : doc.declarations()){
         const AStringView typeName(declaration.type.data(), declaration.type.size());
         const AStringView instanceName(declaration.variable.data(), declaration.variable.size());
-        const Metascript::Value* instanceValue = doc.findField(instanceName);
+        const Metascript::Value* instanceValue = doc.findVariable(instanceName);
         if(!instanceValue || !instanceValue->isNull()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': instance '{}' must not have an initializer or assignments"), PathToString<tchar>(bindFilePath), StringConvert(instanceName));
             return false;

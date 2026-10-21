@@ -86,14 +86,14 @@ bool Document::parse(IMetaReader& reader){
     return parser.parseInto();
 }
 
-const Value* Document::findField(MStringView name)const noexcept{
+const Value* Document::findVariable(MStringView name)const noexcept{
     auto it = m_variables.find(name);
     if(it == m_variables.end())
         return nullptr;
     return &it.value();
 }
 
-Value* Document::findField(MStringView name)noexcept{
+Value* Document::findVariable(MStringView name)noexcept{
     auto it = m_variables.find(name);
     if(it == m_variables.end())
         return nullptr;

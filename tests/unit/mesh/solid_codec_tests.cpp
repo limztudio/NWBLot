@@ -124,7 +124,7 @@ asset.indices = [[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]];
     Core::Metascript::Document document(arena);
     if(!document.parse(s_MeshSource))
         return MakeUnexpected(Failure{});
-    const Core::Metascript::Value* const asset = document.findField("asset");
+    const Core::Metascript::Value* const asset = document.findVariable("asset");
     if(!asset)
         return MakeUnexpected(Failure{});
     Core::CpuTaskScheduler scheduler(1u);

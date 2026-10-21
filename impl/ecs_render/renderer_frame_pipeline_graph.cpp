@@ -657,6 +657,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             .avboitForegroundExtinction = avboitForegroundExtinction,
             .hardwareTraceGeometrySet = traceGeometry.hardwareTraceGeometrySet,
             .traceMaterialSampledTextureSet = traceGeometry.traceMaterialSampledTextureSet,
+            .traceContextUploadTask = m_rayTraceMaterialContextSlotsUploadTask,
             .lightingTask = m_deferredLightingTask,
             .avboitFinalTask = avboitFinalTask,
             .surfelGiTask = m_deferredSurfelGiTask,

@@ -26,10 +26,12 @@ class RendererRayTracingState;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-enum class PreparedShadowMaterialContextRoute : u8{
-    None,
-    Hardware,
-    Software,
+namespace PreparedShadowMaterialContextRoute{
+    enum Enum : u8{
+        None,
+        Hardware,
+        Software,
+    };
 };
 
 // The material table, instance stream, and typed bytes share indices and offsets, so preflight freezes them against one storage generation.
@@ -51,7 +53,7 @@ public:
 public:
     [[nodiscard]] bool capture(
         const RendererRayTracingState& state,
-        PreparedShadowMaterialContextRoute route,
+        PreparedShadowMaterialContextRoute::Enum route,
         bool staticScene,
         u64 hash,
         const void* instanceMaterialData,
@@ -76,7 +78,7 @@ public:
     [[nodiscard]] bool softwareSnapshotAccepted(const RendererRayTracingState& state)const noexcept;
     [[nodiscard]] bool ready()const noexcept{ return m_ready; }
     [[nodiscard]] bool uploadRequired()const noexcept{ return m_uploadRequired; }
-    [[nodiscard]] PreparedShadowMaterialContextRoute route()const noexcept{ return m_route; }
+    [[nodiscard]] PreparedShadowMaterialContextRoute::Enum route()const noexcept{ return m_route; }
 
 
 private:
@@ -100,7 +102,7 @@ private:
     Core::GpuDescriptorHandle m_instanceMaterialHeapHandle;
     Core::GpuDescriptorHandle m_instanceHeapHandle;
     Core::GpuDescriptorHandle m_materialTypedHeapHandle;
-    PreparedShadowMaterialContextRoute m_route = PreparedShadowMaterialContextRoute::None;
+    PreparedShadowMaterialContextRoute::Enum m_route = PreparedShadowMaterialContextRoute::None;
     bool m_static = false;
     bool m_ready = false;
     bool m_uploadRequired = false;

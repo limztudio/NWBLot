@@ -25,7 +25,7 @@ void RendererRayTracingSystem::confirmPreparedShadowMaterialContextUploads()noex
 
 // The frozen software traversal indexes this context, so a new context always drops it.
 bool RendererRayTracingSystem::capturePreparedShadowMaterialContext(
-    const PreparedShadowMaterialContextRoute route,
+    const PreparedShadowMaterialContextRoute::Enum route,
     const bool staticScene,
     const u64 hash,
     const void* const instanceMaterialData,

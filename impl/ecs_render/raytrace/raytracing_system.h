@@ -491,7 +491,7 @@ private:
     [[nodiscard]] bool prepareSceneSwBvhResources(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool prepareCausticEmissionTargetResources(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool capturePreparedShadowMaterialContext(
-        PreparedShadowMaterialContextRoute route,
+        PreparedShadowMaterialContextRoute::Enum route,
         bool staticScene,
         u64 hash,
         const void* instanceMaterialData,

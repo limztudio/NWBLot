@@ -37,7 +37,7 @@ bool PreparedShadowMaterialContext::StorageReady(const RendererRayTracingState& 
 
 bool PreparedShadowMaterialContext::capture(
     const RendererRayTracingState& state,
-    const PreparedShadowMaterialContextRoute route,
+    const PreparedShadowMaterialContextRoute::Enum route,
     const bool staticScene,
     const u64 hash,
     const void* const instanceMaterialData,

@@ -135,8 +135,8 @@ ReflectionCsgContextProbe::ReflectionCsgContextProbe(ProjectRuntimeContext& cont
     : m_context(context)
     , m_world(world)
     , m_renderer(renderer)
-    , m_rayCapacity(rayCapacity)
     , m_capturePaths(context.objectArena)
+    , m_rayCapacity(rayCapacity)
 {}
 
 bool ReflectionCsgContextProbe::create(Core::Alloc::ScratchArena& scratchArena){

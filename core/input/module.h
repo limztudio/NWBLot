@@ -310,9 +310,9 @@ private:
     HandlerList m_handlers;
     HandlerMutationVector m_pendingHandlerMutations;
     usize m_pendingHandlerRemovalCount = 0;
-    u32 m_dispatchDepth = 0;
     u64 m_keyboardTextPolicyEpoch = 0u;
     Array<bool, s_KeyboardScancodeCount> m_keyboardTextPolicies{};
+    u32 m_dispatchDepth = 0;
     bool m_keyboardTextBlocked = false;
     bool m_windowFocused = true;
     f32 m_mousePositionScaleX = 1.f;

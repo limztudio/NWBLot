@@ -73,7 +73,6 @@ private:
     Alloc::GlobalArena& m_arena;
     AString<Alloc::GlobalArena> m_surrounding;
     Vector<TextInputEvent, Alloc::GlobalArena> m_events;
-    const ThreadId m_ownerThread;
     const u64 m_serviceIdentity;
     TextInputSessionToken m_activeToken;
     TextInputSessionToken m_cancelledToken;
@@ -84,6 +83,7 @@ private:
     u64 m_surroundingRevision = 0u;
     u64 m_nextGeneration = 1u;
     u64 m_nextSequence = 1u;
+    const ThreadId m_ownerThread;
     bool m_focused = false;
     bool m_transitioning = false;
 };

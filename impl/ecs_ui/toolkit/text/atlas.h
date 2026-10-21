@@ -41,8 +41,8 @@ struct AtlasPage{
     u32 cursorX = 0u;
     u32 cursorY = 0u;
     u32 rowHeight = 0u;
-    u64 generation = 0u;
     bool dirty = false;
+    u64 generation = 0u;
 
 
 public:

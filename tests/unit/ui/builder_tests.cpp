@@ -121,8 +121,8 @@ protected:
     }
 
     void click(const Point& point){
-        EXPECT_TRUE(send({ InputEventType::PrimaryDown, point }).pointerConsumed);
-        EXPECT_TRUE(send({ InputEventType::PrimaryUp, point }).pointerConsumed);
+        EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = point }).pointerConsumed);
+        EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = point }).pointerConsumed);
     }
 
 
@@ -345,8 +345,8 @@ TEST_F(UiBuilderTests, PreparedFrameTargetsStayInaccessibleUntilExactCommit){
     EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
     EXPECT_EQ(m_context.input().hitTest({ 15.0f, 15.0f }), id(s_ApplyKey));
     EXPECT_FALSE(m_context.input().hitTest({ 160.0f, 60.0f }).valid());
-    EXPECT_FALSE(send({ InputEventType::PrimaryDown, { 160.0f, 60.0f } }).pointerConsumed);
-    EXPECT_FALSE(send({ InputEventType::PrimaryUp, { 160.0f, 60.0f } }).pointerConsumed);
+    EXPECT_FALSE(send({ .type = InputEventType::PrimaryDown, .position = { 160.0f, 60.0f } }).pointerConsumed);
+    EXPECT_FALSE(send({ .type = InputEventType::PrimaryUp, .position = { 160.0f, 60.0f } }).pointerConsumed);
     EXPECT_TRUE(m_context.input().actions().empty());
     EXPECT_FALSE(m_context.beginFrame(3u));
     EXPECT_FALSE(m_context.commitFrame(1u));

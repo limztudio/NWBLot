@@ -48,8 +48,8 @@ public:
 
 
 public:
-    bool allowed = true;
     RadioGroupState* state = nullptr;
+    bool allowed = true;
     mutable bool mutateState = false;
 };
 
@@ -184,21 +184,21 @@ public:
     mutable u64 generation = 41u;
     mutable u64 revisionValue = 7u;
     mutable u64 count = 4u;
-    bool badLookup = false;
-    bool missingLookup = false;
     RadioGroupState* state = nullptr;
     ReconcileGate* gate = nullptr;
     RadioGroupChoices borrowedChoices;
-    CallbackPhase::Enum phase = CallbackPhase::None;
-    CallbackMutation::Enum mutation = CallbackMutation::SelectIdentical;
-    mutable bool armed = false;
-    mutable bool nestedSucceeded = true;
     mutable u32 keyCalls = 0u;
     mutable u32 findCalls = 0u;
     mutable u32 countCalls = 0u;
     mutable u32 callbackCalls = 0u;
     mutable u32 callbacksAtMutation = 0u;
     u32 triggerCount = 0u;
+    CallbackPhase::Enum phase = CallbackPhase::None;
+    CallbackMutation::Enum mutation = CallbackMutation::SelectIdentical;
+    bool badLookup = false;
+    bool missingLookup = false;
+    mutable bool armed = false;
+    mutable bool nestedSucceeded = true;
 };
 
 

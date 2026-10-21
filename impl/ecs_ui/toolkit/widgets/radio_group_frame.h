@@ -43,11 +43,11 @@ private:
     RadioGroupChoices m_choices;
     RadioGroupSnapshot m_snapshot;
     RadioGroupOptions m_options;
+    bool m_focusOnCommit = false;
     RadioGroupStyle m_style;
     RadioGroupMetrics m_metrics;
     WidgetStyle m_widgetStyle;
     ControlToken m_token;
-    bool m_focusOnCommit = false;
 };
 
 

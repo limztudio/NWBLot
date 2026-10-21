@@ -46,6 +46,7 @@ struct DeferredGraphSuffixInputs{
     Core::GpuGraphResourceId currentBindlessSlots;
     RendererTaskGraphDetail::ReflectionGraphResult reflectionGraph;
     ReflectionCompositeInputs reflectionCompositeInputs;
+    bool useLaggedLightingHistory = false;
     Core::GpuTaskId lightingTask;
     Core::GpuTaskId avboitFinalTask;
     Core::GpuTaskId refractionResolveTask;
@@ -53,7 +54,6 @@ struct DeferredGraphSuffixInputs{
     Core::GpuTaskId hardwareCausticsTask;
     const Core::AcquiredPresentationFrame& presentationFrame;
     const Core::FramebufferDesc& presentationFramebufferDesc;
-    bool useLaggedLightingHistory = false;
 };
 
 struct DeferredGraphSuffixResult{

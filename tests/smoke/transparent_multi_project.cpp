@@ -707,22 +707,24 @@ private:
     NWB::Core::ECS::EntityID m_rightShape = {};
     NWB::Core::ECS::EntityID m_opaqueLeftShape = {};
     NWB::Core::ECS::EntityID m_opaqueRightShape = {};
+    u32 m_rendererBaselineRenderedFrameCount = 0u;
     NWB::Tests::Smoke::YawSpinController m_sceneYaw;
     ArrowYawInputHandler m_arrowYawInput;
-    u32 m_rendererBaselineRenderedFrameCount = 0u;
-    bool m_rendererBaselineCapturePaused = false;
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
     UniquePtr<NWB::Tests::Smoke::FramebufferCapture> m_framebufferCapture;
 #endif
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
     FrameLaggedAsyncLightingToggleInputHandler m_frameLaggedAsyncLightingToggleInput;
     FrameLaggedAsyncLightingUnfocusedPass m_frameLaggedAsyncLightingUnfocusedPass{ m_context.graphics };
-    bool m_frameLaggedAsyncLightingUnfocusedPassRegistered = false;
-    bool m_frameLaggedAsyncLightingEnabled = true;
 #endif
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
     NWB::Core::ECS::EntityID m_csgReceiver = {};
     NWB::Core::ECS::EntityID m_csgCutter = {};
+#endif
+    bool m_rendererBaselineCapturePaused = false;
+#if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
+    bool m_frameLaggedAsyncLightingUnfocusedPassRegistered = false;
+    bool m_frameLaggedAsyncLightingEnabled = true;
 #endif
 };
 

@@ -81,8 +81,8 @@ struct ModelObjectRendererHooks{
 struct ModelAttachmentJointQuery{
     Core::ECS::EntityID parentEntity;
     u32 parentJointIndex = s_SkeletonInvalidJointIndex;
-    SkeletonJointMatrix jointMatrix{};
     bool resolved = false;
+    SkeletonJointMatrix jointMatrix{};
 };
 
 

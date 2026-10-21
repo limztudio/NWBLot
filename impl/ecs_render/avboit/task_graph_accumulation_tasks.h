@@ -145,13 +145,13 @@ struct AvboitAccumulationGraphTask{
         ECSRenderDetail::MeshFrameBindingSnapshot frameBindings;
         ECSRenderDetail::TransparentMaterialPassGraphSnapshot accumulationSnapshot;
         ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
+        Optional<Core::GpuTimingMeasure>* accumulationComputeEmulationTiming = nullptr;
         bool accumulationPhasePrepared = false;
         bool accumulationMaterialFrameStatesGraphOwned = false;
         bool accumulationMaterialGeometryStatesGraphOwned = false;
         bool accumulationComputeEmulationOutputStatesGraphOwned = false;
         bool accumulationCsgComputeEmulationOutputStatesGraphOwned = false;
         bool generatedGeometryReused = false;
-        Optional<Core::GpuTimingMeasure>* accumulationComputeEmulationTiming = nullptr;
         bool hasTransparentRenderers = false;
 
 

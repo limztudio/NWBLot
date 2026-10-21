@@ -32,11 +32,11 @@ HitTarget Target(const u64 value, const Rect& rectangle = { 10.0f, 10.0f, 20.0f,
 }
 
 InputEvent PointerEvent(const InputEventType::Enum type, const Point& position = { 15.0f, 15.0f })noexcept{
-    return { type, position };
+    return { .type = type, .position = position };
 }
 
 InputEvent KeyEvent(const InputEventType::Enum type, const Core::Key::Enum key, const bool shift = false, const bool repeat = false)noexcept{
-    return { type, {}, key, shift, repeat };
+    return { .type = type, .position = {}, .key = key, .shift = shift, .repeat = repeat };
 }
 
 
@@ -201,7 +201,7 @@ TEST_F(UiInputTests, TransientHoverDepartureAndReentryAdvanceActivityBeforeTheNe
     const u64 returned = m_router.hoverActivityGeneration();
     EXPECT_GT(returned, stable);
 
-    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ InputEventType::PointerLeave, {} })));
+    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .type = InputEventType::PointerLeave, .position = {} })));
     ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput(PointerEvent(InputEventType::PointerMove))));
     EXPECT_EQ(m_router.process().hover, targets[0].id);
     EXPECT_GT(m_router.hoverActivityGeneration(), returned);
@@ -260,10 +260,10 @@ TEST_F(UiInputTests, PressCaptureLossFocusLossAndResetFenceHoverActivity){
     ASSERT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
     EXPECT_GT(m_router.hoverActivityGeneration(), previous);
     previous = m_router.hoverActivityGeneration();
-    send({ InputEventType::PointerCaptureLost, {} });
+    send({ .type = InputEventType::PointerCaptureLost, .position = {} });
     EXPECT_GT(m_router.hoverActivityGeneration(), previous);
     previous = m_router.hoverActivityGeneration();
-    send({ InputEventType::FocusLost, {} });
+    send({ .type = InputEventType::FocusLost, .position = {} });
     m_router.cancelDeviceInput(0u);
     EXPECT_GT(m_router.hoverActivityGeneration(), previous);
     previous = m_router.hoverActivityGeneration();
@@ -271,7 +271,7 @@ TEST_F(UiInputTests, PressCaptureLossFocusLossAndResetFenceHoverActivity){
     EXPECT_GT(m_router.hoverActivityGeneration(), previous);
     previous = m_router.hoverActivityGeneration();
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
-    send({ InputEventType::FocusGained, {} });
+    send({ .type = InputEventType::FocusGained, .position = {} });
     EXPECT_EQ(send(PointerEvent(InputEventType::PointerMove)).hover, target.id);
     EXPECT_GT(m_router.hoverActivityGeneration(), previous);
 }
@@ -304,11 +304,11 @@ TEST_F(UiInputTests, PointerLeaveClearsHoverButPreservesLogicalCaptureAndRelease
     const HitTarget target = Target(1u);
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PointerMove)).pointerConsumed);
-    const InputRoutingResult hoveredLeave = send({ InputEventType::PointerLeave, {} });
+    const InputRoutingResult hoveredLeave = send({ .type = InputEventType::PointerLeave, .position = {} });
     EXPECT_FALSE(hoveredLeave.hover.valid());
     EXPECT_FALSE(hoveredLeave.wantsPointer);
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
-    const InputRoutingResult capturedLeave = send({ InputEventType::PointerLeave, {} });
+    const InputRoutingResult capturedLeave = send({ .type = InputEventType::PointerLeave, .position = {} });
     EXPECT_TRUE(capturedLeave.pointerConsumed);
     EXPECT_TRUE(capturedLeave.wantsPointer);
     EXPECT_FALSE(capturedLeave.hover.valid());
@@ -488,7 +488,7 @@ TEST_F(UiInputTests, NativeFocusTerminationAndResetDoNotReuseActionSequences){
     const u64 firstSequence = m_router.actions()[0].id.sequence;
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
     EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Space)).commandConsumed);
-    const InputRoutingResult lost = send({ InputEventType::FocusLost, {} });
+    const InputRoutingResult lost = send({ .type = InputEventType::FocusLost, .position = {} });
     EXPECT_TRUE(lost.pointerConsumed);
     EXPECT_TRUE(lost.commandConsumed);
     EXPECT_TRUE(lost.wantsPointer);
@@ -514,7 +514,7 @@ TEST_F(UiInputTests, NativeFocusTerminationAndResetDoNotReuseActionSequences){
     EXPECT_FALSE(m_router.process().pointerConsumed);
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
     EXPECT_FALSE(send(PointerEvent(InputEventType::PrimaryUp, { 90.0f, 90.0f })).pointerConsumed);
-    send({ InputEventType::FocusGained, {} });
+    send({ .type = InputEventType::FocusGained, .position = {} });
     click();
     ASSERT_EQ(m_router.actions().size(), 1u);
     EXPECT_GT(m_router.actions()[0].id.sequence, firstSequence);
@@ -584,7 +584,7 @@ TEST_F(UiInputTests, TargetAndEventLimitsRejectOverflowAndAllowSubsequentProcess
     EXPECT_TRUE(m_router.process().pointerConsumed);
     EXPECT_EQ(m_router.hover().value, s_InputMaxTargets);
     EXPECT_FALSE(m_router.queue(UiTestSupport::NativeInput(PointerEvent(InputEventType::PointerMove, { Limit<f32>::s_QuietNaN, 1.0f }))));
-    EXPECT_FALSE(m_router.queue(UiTestSupport::NativeInput({ static_cast<InputEventType::Enum>(255u), {} })));
+    EXPECT_FALSE(m_router.queue(UiTestSupport::NativeInput({ .type = static_cast<InputEventType::Enum>(255u), .position = {} })));
     EXPECT_FALSE(m_router.queue(UiTestSupport::NativeInput(KeyEvent(InputEventType::KeyDown, Core::Key::Unknown))));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PointerMove)).pointerConsumed);
 }
@@ -638,7 +638,7 @@ TEST_F(UiInputTests, NativeCaptureLossTerminatesPointerOwnershipWithoutSubmittin
     const HitTarget target = Target(1u);
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
-    EXPECT_TRUE(send({ InputEventType::PointerCaptureLost }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PointerCaptureLost }).pointerConsumed);
     EXPECT_FALSE(m_router.capture().valid());
     EXPECT_FALSE(m_router.primaryDown());
     EXPECT_FALSE(m_router.wantsPointer());
@@ -653,7 +653,7 @@ TEST_F(UiInputTests, NativeCaptureTerminationAdmitsFreshClicksWithoutCancellingC
     click();
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
     EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Space)).commandConsumed);
-    EXPECT_TRUE(send({ InputEventType::PointerCaptureLost }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PointerCaptureLost }).pointerConsumed);
     EXPECT_FALSE(m_router.primaryDown());
     EXPECT_FALSE(m_router.secondaryDown());
     EXPECT_TRUE(m_router.ownsKey(Core::Key::Space));
@@ -676,13 +676,13 @@ TEST_F(UiInputTests, NativeFocusTerminationDropsMissingNativeReleasesButPreserve
     controller.source = { 7u, 3u };
     controller.command = InputCommand::Activate;
     EXPECT_TRUE(send(controller).commandConsumed);
-    EXPECT_TRUE(send({ InputEventType::FocusLost }).commandConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::FocusLost }).commandConsumed);
     m_router.cancelDeviceInput(0u);
     EXPECT_FALSE(m_router.primaryDown());
     EXPECT_FALSE(m_router.ownsKey(Core::Key::Space));
     EXPECT_TRUE(m_router.ownsSource(controller.source));
     EXPECT_TRUE(m_router.actions().empty());
-    send({ InputEventType::FocusGained });
+    send({ .type = InputEventType::FocusGained });
     click();
     EXPECT_TRUE(m_router.consumeActivation(target.id));
     EXPECT_TRUE(send(KeyEvent(InputEventType::KeyDown, Core::Key::Space)).commandConsumed);

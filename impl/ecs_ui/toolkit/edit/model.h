@@ -135,7 +135,6 @@ private:
     Core::Alloc::GlobalArena& m_arena;
     const u64 m_instanceGeneration;
     const EditLimits m_limits;
-    const EditTextMode::Enum m_textMode;
     AString<Core::Alloc::GlobalArena> m_text;
     Vector<usize, Core::Alloc::GlobalArena> m_boundaries;
     Vector<HistoryRecord, Core::Alloc::GlobalArena> m_history;
@@ -152,6 +151,7 @@ private:
     u64 m_externalRevision = 1u;
     u64 m_compositionGeneration = 1u;
     u64 m_selectionGeneration = 1u;
+    const EditTextMode::Enum m_textMode;
     bool m_compositionActive = false;
 };
 

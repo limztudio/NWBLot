@@ -368,9 +368,9 @@ TEST_F(UiControlInputTests, FocusHintCannotStealAnotherFocusOrSurviveDelayedFocu
     ASSERT_TRUE(m_router.commitTargets(targets.data(), targets.size(), 2u));
     EXPECT_EQ(m_router.focus(), second.id);
     const u64 preparedFocusLoss = m_router.focusLossGeneration();
-    const InputRoutingResult lost = send({ InputEventType::FocusLost, {} });
+    const InputRoutingResult lost = send({ .type = InputEventType::FocusLost, .position = {} });
     EXPECT_TRUE(lost.commandConsumed);
-    const InputRoutingResult gained = send({ InputEventType::FocusGained, {} });
+    const InputRoutingResult gained = send({ .type = InputEventType::FocusGained, .position = {} });
     EXPECT_FALSE(gained.commandConsumed);
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 3u, nullptr, 0u, preparedFocusLoss));
     EXPECT_FALSE(m_router.focus().valid());
@@ -482,7 +482,7 @@ TEST_F(UiControlInputTests, FocusLossCancelsActionsAndResetDoesNotRestartTheirSe
     EXPECT_TRUE(wheel().pointerConsumed);
     const u64 previousSequence = m_router.controlActions()[0u].id.sequence;
     focus();
-    EXPECT_TRUE(send({ InputEventType::FocusLost, {} }).commandConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::FocusLost, .position = {} }).commandConsumed);
     EXPECT_TRUE(m_router.controlActions().empty());
     m_router.reset();
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
@@ -601,7 +601,7 @@ TEST_F(UiControlInputTests, ControlActivationAndGestureActionsShareOneMonotonicS
 }
 
 TEST_F(UiControlInputTests, NativeUnfocusedAcceptanceCannotApplyAControlFocusHint){
-    const InputRoutingResult lost = send({ InputEventType::FocusLost, {} });
+    const InputRoutingResult lost = send({ .type = InputEventType::FocusLost, .position = {} });
     EXPECT_FALSE(lost.commandConsumed);
     m_targets[0u].focusOnCommit = true;
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u, nullptr, 0u, m_router.focusLossGeneration()));

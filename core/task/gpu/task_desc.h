@@ -148,7 +148,6 @@ struct GpuGraphInitialOwnerHandoffSourceDesc{
 struct GpuGraphResourceDesc{
     Name identity = s_NameNone;
     AStringView markerLabel;
-    GpuGraphResourceType::Enum type = GpuGraphResourceType::HazardDomain;
     // Packet-boundary transitions start here; Unknown needs a transitional handoff at record time.
     // Unspecified inherits the descriptor state; explicit Unknown keeps Vulkan UNDEFINED for the first writer.
     ResourceStates::Mask initialState = ResourceStates::Unknown;
@@ -161,14 +160,15 @@ struct GpuGraphResourceDesc{
     // Sources cover disjoint imported ranges and are copied into graph-owned immutable storage at declaration.
     const GpuGraphInitialOwnerHandoffSourceDesc* initialOwnerHandoffSources = nullptr;
     usize initialOwnerHandoffSourceCount = 0u;
-    ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
-    // setInitialState() distinguishes explicit Unknown from an unspecified default inherited from the native descriptor.
-    bool hasExplicitInitialState = false;
     // Pure availability is independent of queue-family ownership and native state.
     // The compiler attaches this completion to every first consumer range and lets packet submission elide same-queue waits normally.
     GpuExternalCompletionId initialAvailabilityCompletion;
     // A direct native consumer cannot acquire a graph-exported ownership handoff. Exclusive imports stay in its family.
     GpuPhysicalQueueId directConsumerQueue = {};
+    GpuGraphResourceType::Enum type = GpuGraphResourceType::HazardDomain;
+    ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
+    // setInitialState() distinguishes explicit Unknown from an unspecified default inherited from the native descriptor.
+    bool hasExplicitInitialState = false;
 
 
 public:

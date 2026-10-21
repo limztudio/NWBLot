@@ -72,7 +72,7 @@ void RayTracingOpticalSceneGather::appendRuntime(const Core::ECS::EntityID entit
     boundsCompleteExceptRuntime = staticComplete;
     if(runtimeBounds.empty())
         runtimeBounds.reserve(instances.capacity());
-    runtimeBounds.push_back({ boundsBuffer, boundsDescriptor, objectToWorld, instanceIndex });
+    runtimeBounds.push_back({ boundsBuffer, boundsDescriptor, instanceIndex, objectToWorld });
 }
 
 u64 RayTracingOpticalSceneGather::contentHash()const noexcept{

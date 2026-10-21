@@ -33,7 +33,7 @@ HitTarget GestureTarget(const u64 value = 1u)noexcept{
 }
 
 InputEvent PointerEvent(const InputEventType::Enum type, const Point& position = { 15.0f, 25.0f })noexcept{
-    return { type, position };
+    return { .type = type, .position = position };
 }
 
 
@@ -356,7 +356,7 @@ TEST_F(UiPointerGestureTests, PointerLeaveRetainsCaptureAndFinalOutsideRelease){
     const HitTarget target = GestureTarget();
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
-    const InputRoutingResult left = send({ InputEventType::PointerLeave, {} });
+    const InputRoutingResult left = send({ .type = InputEventType::PointerLeave, .position = {} });
     EXPECT_TRUE(left.pointerConsumed);
     EXPECT_TRUE(left.wantsPointer);
     EXPECT_FALSE(left.hover.valid());
@@ -383,7 +383,7 @@ TEST_F(UiPointerGestureTests, NativeFocusTerminationCancelsActiveAndCompletedGes
     const u64 firstSequence = gesture.id.sequence;
     complete();
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
-    const InputRoutingResult lost = send({ InputEventType::FocusLost, {} });
+    const InputRoutingResult lost = send({ .type = InputEventType::FocusLost, .position = {} });
     EXPECT_TRUE(lost.pointerConsumed);
     EXPECT_TRUE(lost.commandConsumed);
     EXPECT_FALSE(lost.capture.valid());
@@ -392,7 +392,7 @@ TEST_F(UiPointerGestureTests, NativeFocusTerminationCancelsActiveAndCompletedGes
     m_router.cancelDeviceInput(0u);
     EXPECT_FALSE(m_router.primaryDown());
     EXPECT_FALSE(m_router.consumePointerGesture(target.id, 1u));
-    EXPECT_FALSE(send({ InputEventType::FocusGained }).pointerConsumed);
+    EXPECT_FALSE(send({ .type = InputEventType::FocusGained }).pointerConsumed);
     complete();
     const auto gestureResult2 = m_router.consumePointerGesture(target.id, 1u);
     ASSERT_TRUE(gestureResult2);
@@ -446,7 +446,7 @@ TEST_F(UiPointerGestureTests, ActiveCaptureLossPreservesCompletedGesturesActions
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
     EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = Core::Key::Space }).commandConsumed);
     ASSERT_EQ(m_router.actions().size(), 1u);
-    const InputRoutingResult lost = send({ InputEventType::PointerCaptureLost, {} });
+    const InputRoutingResult lost = send({ .type = InputEventType::PointerCaptureLost, .position = {} });
     EXPECT_TRUE(lost.pointerConsumed);
     EXPECT_FALSE(lost.capture.valid());
     EXPECT_FALSE(lost.hover.valid());
@@ -476,7 +476,7 @@ TEST_F(UiPointerGestureTests, CaptureLossAfterOrdinaryReleaseCannotEraseAComplet
     target.activatable = true;
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
     complete({ 40.0f, 40.0f });
-    const InputRoutingResult lost = send({ InputEventType::PointerCaptureLost, {} });
+    const InputRoutingResult lost = send({ .type = InputEventType::PointerCaptureLost, .position = {} });
     EXPECT_FALSE(lost.pointerConsumed);
     EXPECT_EQ(lost.focus, target.id);
     EXPECT_EQ(lost.hover, target.id);

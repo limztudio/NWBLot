@@ -33,7 +33,6 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityTask(
     return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowVisibilityGraphTask>(
         desc,
         RayTracingShadowVisibilityTaskDetail::ShadowVisibilityGraphTask::Payload{
-            .hardwareShadowSupported = hardwareShadowSupported,
             .raytracingSystem = *this,
             .graphics = m_graphics,
             .targets = targets,
@@ -41,6 +40,7 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityTask(
             .timingTicket = timingTicket,
             .prepared = prepared,
             .graphOwnedAdaptivePlan = graphOwnedAdaptivePlan,
+            .hardwareShadowSupported = hardwareShadowSupported,
         }
     );
 }

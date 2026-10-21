@@ -46,8 +46,8 @@ static u64 AllocateServiceIdentity()noexcept{
 QueuedClipboardService::QueuedClipboardService(Alloc::GlobalArena& arena)
     : m_arena(arena)
     , m_requests(arena)
-    , m_ownerThread(QueryCurrentThreadId())
     , m_serviceIdentity(__hidden_clipboard_service::AllocateServiceIdentity())
+    , m_ownerThread(QueryCurrentThreadId())
 {
     m_requests.reserve(s_ClipboardMaxOutstandingRequests);
 }

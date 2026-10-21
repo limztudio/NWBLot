@@ -149,8 +149,8 @@ TEST_F(UiSliderPopupTests, AncestorClosureBeforePaintSuppressesCallbacksAndRetir
     ASSERT_TRUE(acceptFamily(1u));
     const Point origin = UiWidgetTests::Center(m_childState.placement().thumb);
     const Point moved{ VectorGetX(VectorAdd(VectorReplicate(origin.x), VectorReplicate(60.0f))), origin.y };
-    EXPECT_TRUE(send({ InputEventType::PrimaryDown, origin }).pointerConsumed);
-    EXPECT_TRUE(send({ InputEventType::PointerMove, moved }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = origin }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PointerMove, .position = moved }).pointerConsumed);
     ASSERT_TRUE(beginParent(2u));
     ASSERT_TRUE(beginChild());
     m_laterSource.clearCounters();
@@ -172,7 +172,7 @@ TEST_F(UiSliderPopupTests, AncestorClosureBeforePaintSuppressesCallbacksAndRetir
     ASSERT_TRUE(m_context.commitFrame(3u));
     m_child.open();
     ASSERT_TRUE(acceptFamily(4u));
-    EXPECT_TRUE(send({ InputEventType::PrimaryUp, moved }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = moved }).pointerConsumed);
     ASSERT_TRUE(acceptFamily(5u));
     EXPECT_DOUBLE_EQ(m_childState.value(), 0.5);
     EXPECT_FALSE(m_childState.result().valueChanged);

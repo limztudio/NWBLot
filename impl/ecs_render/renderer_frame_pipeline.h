@@ -481,9 +481,6 @@ private:
     Core::GpuTaskId m_deferredShadowVisibilityOpaqueTask;
     Core::GpuTaskId m_deferredShadowVisibilityOpaqueFirstWaveletTask;
     Core::GpuTaskId m_deferredShadowVisibilityOpaqueResolveTask;
-    bool m_deferredShadowCombinedUpsample = false;
-    bool m_deferredShadowCombinedWavelet = false;
-    bool m_deferredShadowCombinedTemporal = false;
     Core::GpuTaskId m_deferredShadowVisibilityTransparentTraceTask;
     Core::GpuTaskId m_deferredShadowVisibilityTransparentTemporalMergeTask;
     Core::GpuTaskId m_deferredShadowVisibilityTransparentFirstWaveletTask;
@@ -513,7 +510,6 @@ private:
     Core::GpuTaskId m_deferredCausticResolveFourthWaveletTask;
     Core::GpuTaskId m_deferredCausticResolveFifthWaveletTask;
     Core::GpuTaskId m_deferredCausticResolveUpsampleTask;
-    bool m_deferredCausticProducerDispatched = false;
     // Surfel lifecycle publishes after all four clears accept; stages share one effects packet with compiler-owned handoffs.
     Core::GpuTaskId m_deferredSurfelGiPreparationTask;
     Core::GpuTaskId m_deferredSurfelGiInitializationLifecycleTask;
@@ -546,6 +542,12 @@ private:
     // These are distinct semantic completions even when both refer to the same accepted prior history-copy token: Lighting waits for readable history, while current-frame producers wait until the prior copy stops reading.
     Core::GpuExternalCompletionId m_deferredLightingHistoryReadReadyCompletion;
     Core::GpuExternalCompletionId m_deferredLightingHistoryWriterDrainCompletion;
+    bool m_deferredShadowCombinedUpsample = false;
+    bool m_deferredShadowCombinedWavelet = false;
+    bool m_deferredShadowCombinedTemporal = false;
+    bool m_deferredCausticProducerDispatched = false;
+    // A partially accepted frame whose recovery packet cannot be submitted is not recoverable by guessing. End this device generation and rebuild resources before rendering resumes.
+    bool m_frameRenderRecoveryFailed = false;
     bool m_graphicsPrefixMeshViewSetupReady = false;
     bool m_graphicsPrefixSceneShadingSetupReady = false;
     bool m_deferredFrameRecoveryArmed = false;
@@ -553,6 +555,7 @@ private:
     bool m_deferredLightingTaskGraphDeclared = false;
     bool m_deferredLightingTaskGraphScheduled = false;
     bool m_deferredPresentationOverlayRequired = false;
+    u32 m_reflectionFrameIndex = 0u;
     f64 m_deferredLightingTaskGraphDeclarationSeconds = 0.0;
     Core::IGpuTaskGraphPresentationContributor* m_preparedTaskGraphPresentationContributor = nullptr;
     Core::IGpuTaskGraphOutputLayerContributor* m_preparedTaskGraphOutputLayerContributor = nullptr;
@@ -564,6 +567,7 @@ private:
     RendererCsgState m_csgState;
     RendererDeferredState m_deferredState;
     RendererAvboitState m_avboitState;
+    u64 m_laggedLightingReportGeneration = 0u;
     RendererRayTracingState m_rayTracingState;
     CsgFrameState m_preparedCsgFrameState;
     // Shadow scratch/history retains accepted graph packet state across frames on either compiler-selected route. Declaration-owned first-use sources restore the private scratch and its typed backings.
@@ -596,19 +600,15 @@ private:
     bool m_preparedHasTransparentRenderers = false;
     ShadowPreparationOutcome m_shadowPreparationOutcome;
     bool m_frameLaggedAsyncLightingEnabled = false;
-    ReflectionSettings m_reflectionSettings;
     SurfelGiQualitySettings m_surfelGiQualitySettings;
-    u32 m_reflectionFrameIndex = 0u;
+    ReflectionSettings m_reflectionSettings;
     RayTracingRefractionGraphResources m_preparedRefractionResources;
-    u64 m_laggedLightingReportGeneration = 0u;
     Core::QueueSubmissionToken m_laggedLightingHistorySubmissionToken;
     // The newest incomplete accepted same-generation Transfer tail protects live producer writes while graph declaration resets the normal history-read token. A later tail is its proven successor; completed tails do not keep adding redundant waits. Target recreation clears it with the normal history tracking state.
     Core::QueueSubmissionToken m_laggedLightingHistoryWriterDrainToken;
     // Deferred target creation increments this identity for every target generation. It prevents a recycled descriptor slot or allocator address from making a freshly recreated history look accepted.
     u64 m_laggedLightingHistoryGeneration = 0u;
     u64 m_laggedLightingHistoryWriterDrainGeneration = 0u;
-    // A partially accepted frame whose recovery packet cannot be submitted is not recoverable by guessing. End this device generation and rebuild resources before rendering resumes.
-    bool m_frameRenderRecoveryFailed = false;
     // The root composes this aggregate from Deferred, AVBOIT, CSG, and RayTracing resources.
     // Keep its storage before the domain systems so their service objects are destroyed before the shared frame-resource generation.
     DeferredFrameTargets m_frameTargets;

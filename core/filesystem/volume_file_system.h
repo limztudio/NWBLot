@@ -112,7 +112,6 @@ private:
     Path m_mountDirectory;
     ACompactString m_volumeName;
 
-    mutable Futex m_mutex;
 
     u64 m_segmentSize = 0;
     u64 m_metadataBytes = 0;
@@ -122,6 +121,7 @@ private:
     Alloc::GlobalArena& m_arena;
     SegmentPathVector m_segmentPaths;
     FileMap m_files;
+    mutable Futex m_mutex;
 
     VolumeUsage::Enum m_usage = VolumeUsage::RuntimeReadOnly;
     bool m_mounted = false;

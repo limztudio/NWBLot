@@ -44,7 +44,6 @@ UiLayerSystem::UiLayerSystem(
     , m_textInput(textInput)
     , m_assetManager(assetManager)
     , m_skinSelection(skin)
-    , m_presentation(presentation)
     , m_fontRefs(fonts, arena)
     , m_paint(arena)
     , m_text(arena)
@@ -54,6 +53,7 @@ UiLayerSystem::UiLayerSystem(
     , m_liveRoots(arena)
     , m_rootIdentities(arena)
     , m_renderer(arena, graphics, assetManager, Move(shaderPathResolver))
+    , m_presentation(presentation)
 {
     writeAccess<UiPaintComponent>();
     m_ui.setEditHost(&m_editHost);

@@ -40,7 +40,6 @@ struct GpuTaskGraphTaskView{
     AStringView markerLabel;
     GpuTaskCommandRequirements commands;
     GpuTaskSchedulingHint scheduling;
-    GpuTaskTimingMetadata timing;
     const GpuTaskId* dependencies = nullptr;
     usize dependencyCount = 0u;
     const GpuExternalCompletionId* externalDependencies = nullptr;
@@ -56,6 +55,7 @@ struct GpuTaskGraphTaskView{
     usize directResourceUseCount = 0u;
     usize declaredResourceSetUseCount = 0u;
     usize expandedResourceSetMemberUseCount = 0u;
+    GpuTaskTimingMetadata timing;
     bool hasPayload = false;
     bool hasRecordPayload = false;
     bool hasAcceptedPayload = false;
@@ -598,7 +598,6 @@ private:
 private:
     struct GpuTaskNode{
         Name identity = s_NameNone;
-        GpuTaskTimingMetadata timing;
         GpuTaskCommandRequirements commands;
         GpuTaskSchedulingHint scheduling;
         u32 markerLabelOffset = 0u;
@@ -629,6 +628,7 @@ private:
         mutable u64 recordingClaimGeneration = 0u;
         mutable u64 submissionClaimGeneration = 0u;
         mutable u64 discardNotificationGeneration = 0u;
+        GpuTaskTimingMetadata timing;
         mutable TaskLifecycleState lifecycleState = TaskLifecycleState::Declared;
         mutable bool recordThunkInProgress = false;
         mutable bool recordThunkCompleted = false;

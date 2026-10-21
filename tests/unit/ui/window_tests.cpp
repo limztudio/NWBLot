@@ -89,16 +89,16 @@ TEST_F(UiWindowTests, ActiveDragRetainsBaselineAcrossAcceptedLayouts){
     ASSERT_TRUE(m_builder.beginWindow("window", "Move", state, options));
     ASSERT_TRUE(finishWindow());
     ASSERT_TRUE(m_context.commitFrame(1u));
-    ASSERT_TRUE(send({ InputEventType::PrimaryDown, { 130.0f, 55.0f } }).pointerConsumed);
-    ASSERT_TRUE(send({ InputEventType::PointerMove, { 140.0f, 65.0f } }).pointerConsumed);
+    ASSERT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = { 130.0f, 55.0f } }).pointerConsumed);
+    ASSERT_TRUE(send({ .type = InputEventType::PointerMove, .position = { 140.0f, 65.0f } }).pointerConsumed);
     ASSERT_TRUE(begin(2u));
     ASSERT_TRUE(m_builder.beginWindow("window", "Move", state, options));
     EXPECT_FLOAT_EQ(state.bounds.x, 40.0f);
     EXPECT_FLOAT_EQ(state.bounds.y, 50.0f);
     ASSERT_TRUE(finishWindow());
     ASSERT_TRUE(m_context.commitFrame(2u));
-    ASSERT_TRUE(send({ InputEventType::PointerMove, { 160.0f, 80.0f } }).pointerConsumed);
-    ASSERT_TRUE(send({ InputEventType::PrimaryUp, { 160.0f, 80.0f } }).pointerConsumed);
+    ASSERT_TRUE(send({ .type = InputEventType::PointerMove, .position = { 160.0f, 80.0f } }).pointerConsumed);
+    ASSERT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = { 160.0f, 80.0f } }).pointerConsumed);
     ASSERT_TRUE(begin(3u));
     ASSERT_TRUE(m_builder.beginWindow("window", "Move", state, options));
     EXPECT_FLOAT_EQ(state.bounds.x, 60.0f);
@@ -159,15 +159,15 @@ TEST_F(UiWindowTests, ResizeMinimumDoesNotLoseOriginalPointerBaseline){
     ASSERT_TRUE(m_builder.beginWindow("window", "Resize", state, options));
     ASSERT_TRUE(finishWindow());
     ASSERT_TRUE(m_context.commitFrame(1u));
-    ASSERT_TRUE(send({ InputEventType::PrimaryDown, { 262.0f, 182.0f } }).pointerConsumed);
-    ASSERT_TRUE(send({ InputEventType::PointerMove, { 0.0f, 0.0f } }).pointerConsumed);
+    ASSERT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = { 262.0f, 182.0f } }).pointerConsumed);
+    ASSERT_TRUE(send({ .type = InputEventType::PointerMove, .position = { 0.0f, 0.0f } }).pointerConsumed);
     ASSERT_TRUE(begin(2u));
     ASSERT_TRUE(m_builder.beginWindow("window", "Resize", state, options));
     EXPECT_FLOAT_EQ(state.bounds.width, 180.0f);
     EXPECT_FLOAT_EQ(state.bounds.height, 110.0f);
     ASSERT_TRUE(finishWindow());
     ASSERT_TRUE(m_context.commitFrame(2u));
-    ASSERT_TRUE(send({ InputEventType::PrimaryUp, { 282.0f, 192.0f } }).pointerConsumed);
+    ASSERT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = { 282.0f, 192.0f } }).pointerConsumed);
     ASSERT_TRUE(begin(3u));
     ASSERT_TRUE(m_builder.beginWindow("window", "Resize", state, options));
     EXPECT_FLOAT_EQ(state.bounds.width, 260.0f);
@@ -201,8 +201,8 @@ TEST_F(UiWindowTests, CollapseKeepsHostSizeAndRequiresBalancedEnd){
     const auto skin = skinQuad(collapsed, 0u);
     ASSERT_TRUE(skin);
     EXPECT_FLOAT_EQ(skin->height, 34.0f);
-    EXPECT_FALSE(send({ InputEventType::PrimaryDown, { 100.0f, 120.0f } }).pointerConsumed);
-    EXPECT_FALSE(send({ InputEventType::PrimaryUp, { 100.0f, 120.0f } }).pointerConsumed);
+    EXPECT_FALSE(send({ .type = InputEventType::PrimaryDown, .position = { 100.0f, 120.0f } }).pointerConsumed);
+    EXPECT_FALSE(send({ .type = InputEventType::PrimaryUp, .position = { 100.0f, 120.0f } }).pointerConsumed);
 }
 
 TEST_F(UiWindowTests, KeyboardCollapseUsesTabFocusAndSuppressesRepeat){
@@ -273,8 +273,8 @@ TEST_F(UiWindowTests, FocusLossCancelsUnconsumedWindowDrag){
     ASSERT_TRUE(m_builder.beginWindow("window", "Focus", state));
     ASSERT_TRUE(finishWindow());
     ASSERT_TRUE(m_context.commitFrame(1u));
-    ASSERT_TRUE(send({ InputEventType::PrimaryDown, { 130.0f, 35.0f } }).pointerConsumed);
-    ASSERT_TRUE(send({ InputEventType::PointerMove, { 180.0f, 80.0f } }).pointerConsumed);
+    ASSERT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = { 130.0f, 35.0f } }).pointerConsumed);
+    ASSERT_TRUE(send({ .type = InputEventType::PointerMove, .position = { 180.0f, 80.0f } }).pointerConsumed);
     EXPECT_FALSE(send({ .type = InputEventType::FocusLost, .position = {} }).capture.valid());
     ASSERT_TRUE(begin(2u));
     ASSERT_TRUE(m_builder.beginWindow("window", "Focus", state));

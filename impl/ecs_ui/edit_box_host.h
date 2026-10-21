@@ -29,11 +29,11 @@ struct UiEditBoxGeometry{
     Ui::PaintVector<Ui::EditBoxCaretStop> stops;
     Ui::PaintVector<Ui::EditCaretLine> lines;
     Ui::EditBoxOptions options;
+    Ui::EditTextMode::Enum textMode = Ui::EditTextMode::SingleLine;
     u64 generation = 0u;
     u64 revision = 0u;
     u64 externalRevision = 0u;
     u64 modelGeneration = 0u;
-    Ui::EditTextMode::Enum textMode = Ui::EditTextMode::SingleLine;
 
 
 public:
@@ -91,6 +91,8 @@ private:
         Core::TextInputEvent native;
         Ui::EditCommandRequest command;
         Ui::EditNavigationDirection::Enum navigationDirection = Ui::EditNavigationDirection::Up;
+        bool completed = false;
+        bool wordSelect = false;
         usize position = 0u;
         usize wordPosition = 0u;
         u64 geometryRevision = 0u;
@@ -108,8 +110,6 @@ private:
         bool navigation = false;
         bool extend = false;
         bool dragging = false;
-        bool completed = false;
-        bool wordSelect = false;
 
 
     public:

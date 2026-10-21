@@ -132,6 +132,8 @@ struct RuntimeMeshDesc : public RuntimeMeshBuffers{
     u32 meshletCount = 0u;
     // Logical corner count; backing buffer is word-padded, never use its byte size.
     u32 meshletPrimitiveIndexCount = 0u;
+    bool dynamicMeshletBoundsFresh = false;
+    bool dynamicMeshletConesFresh = false;
     u64 version = 0u;
     // Accepted object-space geometry generation; zero requires conservative updates, including pending deformation.
     u64 geometryContentRevision = 0u;
@@ -139,8 +141,6 @@ struct RuntimeMeshDesc : public RuntimeMeshBuffers{
     Core::BufferHandle triangleIndexBuffer;   // RT-only; null when ray tracing is unsupported
     Core::BufferHandle attributeBuffer;       // RT-only flat per-triangle-corner trace attributes; null when ray tracing is unsupported
     Span<const u32> solidTriangleWords;
-    bool dynamicMeshletBoundsFresh = false;
-    bool dynamicMeshletConesFresh = false;
 
 
 public:

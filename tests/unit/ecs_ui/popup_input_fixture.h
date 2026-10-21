@@ -396,14 +396,14 @@ protected:
     Ui::PopupToken m_childToken;
     Ui::PopupToken m_nestedParentToken;
     Ui::WidgetState m_childWidget;
-    Ui::EditBoxResult m_childResult;
     Ui::PopupToken m_token;
     Ui::WidgetState m_baseWidget;
     Ui::WidgetState m_popupWidget;
+    u64 m_generation = 0u;
+    const Ui::Rect m_viewport{ 0.0f, 0.0f, 500.0f, 200.0f };
+    Ui::EditBoxResult m_childResult;
     Ui::EditBoxResult m_baseResult;
     Ui::EditBoxResult m_popupResult;
-    const Ui::Rect m_viewport{ 0.0f, 0.0f, 500.0f, 200.0f };
-    u64 m_generation = 0u;
 };
 
 

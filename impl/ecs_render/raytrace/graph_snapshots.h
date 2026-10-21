@@ -41,8 +41,8 @@ struct GraphOwnedAdaptiveShadowPlan{
 
 // Shadow Visibility freezes its domain-owned route policy before the coordinator declares target and dependency topology. Resource handles remain in the dedicated resource snapshots below.
 struct RayTracingShadowVisibilityGraphPlanSnapshot{
-    GraphOwnedAdaptiveShadowPlan adaptivePlan;
     LightSpaceShadowSnapshot lightSpace;
+    GraphOwnedAdaptiveShadowPlan adaptivePlan;
 
     bool hardwareTransparentTrace = false;
     bool softTransparentFoldReady = false;

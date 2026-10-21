@@ -775,7 +775,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             buildDesc.setIdentity(*buildIdentity).setMarkerLabel("Shadow Prepare SW-BVH Build").setScheduling(buildScheduling).setDependencies(&buildDependency, 1u).setResourceUses(buildResourceUses, LengthOf(buildResourceUses));
             const auto buildTaskResult = m_deferredLightingTaskGraph.addTask<
                 ECSRenderDetail::ShadowPrepareSoftwareBvhBuildGraphTask
-            >(buildDesc, ECSRenderDetail::ShadowPrepareSoftwareBvhBuildGraphTask::Payload{ .raytracingSystem = m_raytracingSystem, .build = build, .timingTicket = timingTicket, });
+            >(buildDesc, ECSRenderDetail::ShadowPrepareSoftwareBvhBuildGraphTask::Payload{ .raytracingSystem = m_raytracingSystem, .timingTicket = timingTicket, .build = build, });
             if(!buildTaskResult){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare pure software BVH build callback"));
                 return false;

@@ -62,6 +62,8 @@ struct ShadowVisibilityOpaqueGraphTask{
         Core::GraphicsRuntime& graphics;
         DeferredFrameTargets& targets;
         DeferredLightingGraphResources deferredLightingResources;
+        bool hardwareShadowSupported = false;
+        bool graphOwnsOpaqueTemporalMergeEntryStates = false;
         LightSpaceShadowSnapshot lightSpace;
         Core::GpuTimingSubmissionTicket& timingTicket;
         Optional<Core::GpuTimingMeasure>& asyncTiming;
@@ -69,8 +71,6 @@ struct ShadowVisibilityOpaqueGraphTask{
         const bool& prepared;
         bool& opaqueProduced;
         u32& opaqueFrameIndex;
-        bool hardwareShadowSupported = false;
-        bool graphOwnsOpaqueTemporalMergeEntryStates = false;
     };
 
 
@@ -542,7 +542,6 @@ struct ShadowVisibilityGraphTask{
 
     // All bindings are required: visibility always records against this frame's bindings.
     struct Payload{
-        bool hardwareShadowSupported = false;
         RendererRayTracingSystem& raytracingSystem;
         Core::GraphicsRuntime& graphics;
         DeferredFrameTargets& targets;
@@ -550,6 +549,7 @@ struct ShadowVisibilityGraphTask{
         Core::GpuTimingSubmissionTicket& timingTicket;
         const bool& prepared;
         GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan;
+        bool hardwareShadowSupported = false;
     };
 
 

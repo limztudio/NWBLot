@@ -83,8 +83,8 @@ struct FrameGraphReflectionResolveInputs{
 struct FrameGraphReflectionResolveResult{
     RendererTaskGraphDetail::ReflectionGraphResult reflectionGraph;
     ReflectionCompositeInputs reflectionCompositeInputs;
-    Core::GpuTaskId refractionResolveTask;
     bool declared = false;
+    Core::GpuTaskId refractionResolveTask;
 };
 
 

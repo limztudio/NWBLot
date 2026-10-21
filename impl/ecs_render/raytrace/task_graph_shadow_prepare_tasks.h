@@ -66,8 +66,8 @@ struct ShadowPrepareSoftwareBvhBuildGraphTask{
     // The raytracing system and the timing ticket are required: every enqueued software BVH build records against this frame's ticket.
     struct Payload{
         RendererRayTracingSystem& raytracingSystem;
-        PreparedMeshSwBvhBuild build;
         Core::GpuTimingSubmissionTicket& timingTicket;
+        PreparedMeshSwBvhBuild build;
     };
 
 

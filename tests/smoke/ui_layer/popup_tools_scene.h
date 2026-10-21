@@ -55,8 +55,8 @@ private:
     Impl::Ui::TooltipState m_tooltip;
     Impl::Ui::EditModel m_sentinel;
     Impl::Ui::EditBoxState m_sentinelState;
-    Impl::Ui::PopupPlacement m_lastMenu;
     Impl::Ui::ScrollPlacement m_lastList;
+    Impl::Ui::PopupPlacement m_lastMenu;
     Impl::Ui::PopupPlacement m_lastTooltip;
     Impl::Ui::Rect m_lastSentinel;
     Impl::Ui::DisplayMetrics m_lastDisplay;

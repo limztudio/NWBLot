@@ -60,9 +60,9 @@ private:
     u32 m_pendingHighSurrogate = 0u;
     u32 m_pendingPreeditHighSurrogate = 0u;
     usize m_preeditCaretByte = 0u;
+    isize m_nativeContextFlags = 0;
     bool m_pendingPreeditMoveCaret = true;
     bool m_imeAvailable = false;
-    isize m_nativeContextFlags = 0;
     bool m_nativeContextKnown = false;
     bool m_nativeContextActive = false;
     bool m_replayingContext = false;

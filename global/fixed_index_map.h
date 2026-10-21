@@ -18,8 +18,8 @@ class FixedIndexMap final : NoCopy{
 private:
     struct Slot{
         Key key{};
-        usize value = 0u;
         bool occupied = false;
+        usize value = 0u;
     };
 
 

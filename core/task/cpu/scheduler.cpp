@@ -90,7 +90,6 @@ CpuTaskScheduler::CpuTaskScheduler(const u32 workerCount)
 {}
 CpuTaskScheduler::CpuTaskScheduler(const CpuTaskSchedulerConfig& config)
     : m_domainIdentity(AllocateDomainIdentity())
-    , m_mainThread(QueryCurrentThreadId())
     , m_profileEventCapacity(config.profileEventCapacity)
     , m_arena(TaskArenaScope::s_CpuTaskScheduler)
     , m_nodes(m_arena)
@@ -102,6 +101,7 @@ CpuTaskScheduler::CpuTaskScheduler(const CpuTaskSchedulerConfig& config)
     , m_profileLabels(m_arena)
     , m_profileEvents(m_arena)
     , m_readyProfiles(m_arena)
+    , m_mainThread(QueryCurrentThreadId())
     , m_workers(m_arena)
 {
     auto placementResult = QueryCpuWorkerPlacements();

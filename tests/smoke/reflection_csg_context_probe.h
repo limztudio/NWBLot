@@ -62,7 +62,6 @@ private:
     ProjectRuntimeContext& m_context;
     Core::ECS::World& m_world;
     Impl::RendererSystem& m_renderer;
-    const u32 m_rayCapacity;
     ReflectionCsgContextEntities m_entities;
     Vector<::Path<Core::Alloc::GlobalArena>, Core::Alloc::GlobalArena> m_capturePaths;
     UniquePtr<FramebufferCapture> m_capture;
@@ -71,6 +70,7 @@ private:
     u64 m_packetSource = Limit<u64>::s_Max;
     u64 m_lastSequence = 0u;
     u64 m_lastGeneration = 0u;
+    const u32 m_rayCapacity;
     u32 m_phase = 0u;
     u32 m_completed = 0u;
     bool m_done = false;

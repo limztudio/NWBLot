@@ -838,10 +838,8 @@ private:
     RayTracingOpticalSceneResources m_hardwareOpticalScene;
     RayTracingOpticalSceneResources m_softwareOpticalScene;
     SoftwareSceneRefitResources m_sceneSwBvhRefit;
-    CausticQualitySettings m_causticQualitySettings;
+    u64 m_preparedShadowMaterialContextHash = 0u;
     LightSpaceShadowState m_lightSpaceShadow;
-    ShadowQualitySettings m_shadowQualitySettings;
-    bool m_temporalOneShadowSamplingLogged = false;
     SoftwareSceneRefitHandle m_preparedSceneSwBvhRefit;
     PreparedShadowTraceGeometryBufferVector m_preparedShadowTraceGeometryBuffers;
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_acceptedShadowTraceGeometryBuffers;
@@ -856,54 +854,35 @@ private:
     Core::BufferHandle m_preparedShadowInstanceMaterialBuffer;
     Core::BufferHandle m_preparedShadowInstanceBuffer;
     Core::BufferHandle m_preparedShadowMaterialTypedBuffer;
-    Core::GpuDescriptorHandle m_preparedShadowInstanceMaterialHeapHandle;
-    Core::GpuDescriptorHandle m_preparedShadowInstanceHeapHandle;
-    Core::GpuDescriptorHandle m_preparedShadowMaterialTypedHeapHandle;
     usize m_preparedShadowInstanceMaterialCount = 0u;
     usize m_preparedShadowInstanceCount = 0u;
     usize m_preparedShadowMaterialTypedUploadBytes = 0u;
     usize m_preparedShadowInstanceMaterialCapacity = 0u;
     usize m_preparedShadowInstanceCapacity = 0u;
     usize m_preparedShadowMaterialTypedCapacity = 0u;
-    u64 m_preparedShadowMaterialContextHash = 0u;
-    PreparedShadowMaterialContextRoute m_preparedShadowMaterialContextRoute = PreparedShadowMaterialContextRoute::None;
-    bool m_preparedShadowMaterialContextStatic = false;
-    bool m_preparedShadowMaterialContextReady = false;
-    bool m_preparedShadowMaterialContextUploadRequired = false;
     // Transient HW fallback keeps material context only (Shadow Prep already froze the TLAS/BLAS plan). Fresh SW BVH keeps node+instance bytes together (leaf ranges index that stream); cache reuse keeps identity + hash.
     Vector<u8, Core::Alloc::GlobalArena> m_preparedSceneBvhNodeBytes;
     Vector<u8, Core::Alloc::GlobalArena> m_preparedSceneBvhInstanceBytes;
     Core::BufferHandle m_preparedSceneBvhNodeBuffer;
     Core::BufferHandle m_preparedSceneBvhInstanceBuffer;
-    Core::GpuDescriptorHandle m_preparedSceneBvhNodeHeapHandle;
-    Core::GpuDescriptorHandle m_preparedSceneBvhInstanceHeapHandle;
     usize m_preparedSceneBvhNodeCount = 0u;
     usize m_preparedSceneBvhInstanceCount = 0u;
     usize m_preparedSceneBvhNodeCapacity = 0u;
     usize m_preparedSceneBvhInstanceCapacity = 0u;
     u64 m_preparedSceneBvhStaticSceneHash = 0u;
-    bool m_preparedSceneBvhStatic = false;
-    bool m_preparedSceneBvhReady = false;
-    bool m_preparedSceneBvhUploadRequired = false;
     // Fresh graph uploads and accepted static-cache reuse both freeze the matching traversal table. Recording never rebuilds CPU scene data; ECS mutation versions reject stale frozen plans.
     PreparedSceneSwBvhMeshVector m_preparedSceneSwBvhMeshes;
-    u32 m_preparedSceneSwBvhInstanceCount = 0u;
     u64 m_preparedSceneSwBvhRendererMutationVersion = 0u;
     u64 m_preparedSceneSwBvhTransformMutationVersion = 0u;
     u64 m_preparedSceneSwBvhMaterialMutationVersion = 0u;
-    bool m_preparedSceneSwBvhReady = false;
     // RayTracingInstanceDesc stores raw BLAS pointers, so the frozen TLAS plan retains every corresponding BLAS handle until Shadow Preparation accepts or discards it. The selected TLAS/backing generation is retained too.
     Vector<Core::RayTracingInstanceDesc, Core::Alloc::GlobalArena> m_preparedSceneTlasInstances;
     Vector<Core::RayTracingAccelStructHandle, Core::Alloc::GlobalArena> m_preparedSceneTlasBlases;
     Core::RayTracingAccelStructHandle m_preparedSceneTlas;
     Core::BufferHandle m_preparedSceneTlasBackingBuffer;
-    Core::GpuDescriptorHandle m_preparedSceneTlasHeapHandle;
     usize m_preparedSceneTlasMaxInstances = 0u;
     u64 m_preparedSceneTlasStaticSceneHash = 0u;
-    bool m_preparedSceneTlasStatic = false;
-    bool m_preparedSceneTlasReady = false;
     PreparedMeshBlasBuildVector m_preparedMeshBlasBuilds;
-    bool m_preparedMeshBlasBuildsReady = false;
     // Per-frame BLAS actions keyed by dirty reason.
     // Answers whether the stress scene rebuilds per-mesh geometry when only instance transforms change.
     // Logged on confirm
@@ -913,10 +892,31 @@ private:
     u64 m_blasLedgerRebuilds = 0u;
     u64 m_blasLedgerUploadedBytes = 0u;
     PreparedMeshSwBvhBuildVector m_preparedMeshSwBvhBuilds;
-    bool m_preparedMeshSwBvhBuildsReady = false;
-    bool m_preparedMeshSwBvhBuildPlanFrozen = false;
     DeferredFrameTargets* m_shadowVisibilityPreparedTargets = nullptr;
     RayTracingSceneContentStamp m_preparedSceneContentStamp;
+    CausticQualitySettings m_causticQualitySettings;
+    Core::GpuDescriptorHandle m_preparedShadowInstanceMaterialHeapHandle;
+    Core::GpuDescriptorHandle m_preparedShadowInstanceHeapHandle;
+    Core::GpuDescriptorHandle m_preparedShadowMaterialTypedHeapHandle;
+    Core::GpuDescriptorHandle m_preparedSceneBvhNodeHeapHandle;
+    Core::GpuDescriptorHandle m_preparedSceneBvhInstanceHeapHandle;
+    u32 m_preparedSceneSwBvhInstanceCount = 0u;
+    Core::GpuDescriptorHandle m_preparedSceneTlasHeapHandle;
+    ShadowQualitySettings m_shadowQualitySettings;
+    bool m_temporalOneShadowSamplingLogged = false;
+    PreparedShadowMaterialContextRoute m_preparedShadowMaterialContextRoute = PreparedShadowMaterialContextRoute::None;
+    bool m_preparedShadowMaterialContextStatic = false;
+    bool m_preparedShadowMaterialContextReady = false;
+    bool m_preparedShadowMaterialContextUploadRequired = false;
+    bool m_preparedSceneBvhStatic = false;
+    bool m_preparedSceneBvhReady = false;
+    bool m_preparedSceneBvhUploadRequired = false;
+    bool m_preparedSceneSwBvhReady = false;
+    bool m_preparedSceneTlasStatic = false;
+    bool m_preparedSceneTlasReady = false;
+    bool m_preparedMeshBlasBuildsReady = false;
+    bool m_preparedMeshSwBvhBuildsReady = false;
+    bool m_preparedMeshSwBvhBuildPlanFrozen = false;
     bool m_shadowVisibilityResourcesPreflighted = false;
     bool m_shadowVisibilityHardwareSupported = false;
     // Recording may only touch allocations selected before the shared graph is compiled.

@@ -240,7 +240,6 @@ private:
 private:
     Core::Assets::AssetRef<Font> m_identity;
     u64 m_generation;
-    u32 m_unitsPerEm = 0u;
     PaintVector<u8> m_bytes;
     SharedBakedFontAtlas m_bakedAtlas;
     FT_MemoryRec_ m_memory{};
@@ -250,6 +249,7 @@ private:
     hb_face_t* m_hbFace = nullptr;
     hb_font_t* m_scaledFont = nullptr;
     hb_buffer_t* m_shapeBuffer = nullptr;
+    u32 m_unitsPerEm = 0u;
     bool m_ready = false;
     bool m_allowOutlineBounds = false;
     bool m_coverageInkReliable = false;

@@ -148,13 +148,13 @@ struct AvboitExtinctionGraphTask{
         ECSRenderDetail::MeshFrameBindingSnapshot frameBindings;
         ECSRenderDetail::TransparentMaterialPassGraphSnapshot extinctionSnapshot;
         ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
+        Optional<Core::GpuTimingMeasure>* extinctionComputeEmulationTiming = nullptr;
         bool extinctionPhasePrepared = false;
         bool extinctionMaterialFrameStatesGraphOwned = false;
         bool extinctionMaterialGeometryStatesGraphOwned = false;
         bool extinctionComputeEmulationOutputStatesGraphOwned = false;
         bool extinctionCsgComputeEmulationOutputStatesGraphOwned = false;
         bool generatedGeometryReused = false;
-        Optional<Core::GpuTimingMeasure>* extinctionComputeEmulationTiming = nullptr;
         bool hasTransparentRenderers = false;
 
 

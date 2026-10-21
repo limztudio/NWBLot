@@ -489,12 +489,12 @@ private:
     NWB::Core::ECS::EntityID m_groundEntity = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Core::ECS::EntityID m_character = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Core::ECS::EntityID m_skeletonEntity = NWB::Core::ECS::s_InvalidEntityId;
+    NWB::Core::ECS::EntityID m_cutterEntity = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ s_ProjectName };
     NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ s_ProjectName };
     f64 m_animationTime = 0.0;
     Vector<::Path<NWB::Core::Alloc::GlobalArena>, NWB::Core::Alloc::GlobalArena> m_capturePaths;
     UniquePtr<NWB::Tests::Smoke::FramebufferCapture> m_capture;
-    NWB::Core::ECS::EntityID m_cutterEntity = NWB::Core::ECS::s_InvalidEntityId;
     Timer m_transitionWarmupStart;
     u64 m_transitionFirstFrame = 0u;
     u64 m_nextCaptureFrame = 0u;

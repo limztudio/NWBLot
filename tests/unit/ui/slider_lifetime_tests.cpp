@@ -29,9 +29,9 @@ class UiSliderLifetimeTests : public SliderFixture{};
 TEST_F(UiSliderLifetimeTests, IdenticalPublicValueIntentRetiresAlreadyCopiedKeyboardAndThumbInput){
     ASSERT_TRUE(accept(1u));
     const Point origin = thumbPoint();
-    EXPECT_TRUE(send({ InputEventType::PrimaryDown, origin }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = origin }).pointerConsumed);
     press(Core::Key::Right);
-    EXPECT_TRUE(send({ InputEventType::PointerMove, { VectorGetX(VectorAdd(VectorReplicate(origin.x), VectorReplicate(50.0f))), origin.y } }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PointerMove, .position = { VectorGetX(VectorAdd(VectorReplicate(origin.x), VectorReplicate(50.0f))), origin.y } }).pointerConsumed);
     const u64 token = m_state.inputGeneration();
     ASSERT_TRUE(m_state.setValue(0.25));
     ASSERT_TRUE(accept(2u));
@@ -88,8 +88,8 @@ TEST_F(UiSliderLifetimeTests, ChangedRangeDropsTheOldDragAndRetainsAnAuthoritati
     ASSERT_TRUE(m_state.setValue(0.75));
     ASSERT_TRUE(accept(1u));
     const Point origin = thumbPoint();
-    EXPECT_TRUE(send({ InputEventType::PrimaryDown, origin }).pointerConsumed);
-    EXPECT_TRUE(send({ InputEventType::PointerMove, { VectorGetX(VectorSubtract(VectorReplicate(origin.x), VectorReplicate(50.0f))), origin.y } }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = origin }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PointerMove, .position = { VectorGetX(VectorSubtract(VectorReplicate(origin.x), VectorReplicate(50.0f))), origin.y } }).pointerConsumed);
     SliderOptions narrow = Options();
     narrow.maximum = 0.5;
     ASSERT_TRUE(accept(2u, narrow));
@@ -105,8 +105,8 @@ TEST_F(UiSliderLifetimeTests, ChangedFinalTrackGeometryFencesTheCopiedDragBefore
     ASSERT_TRUE(accept(1u));
     const Point origin = thumbPoint();
     const u64 admission = m_state.admissionGeneration();
-    EXPECT_TRUE(send({ InputEventType::PrimaryDown, origin }).pointerConsumed);
-    EXPECT_TRUE(send({ InputEventType::PointerMove, { VectorGetX(VectorAdd(VectorReplicate(origin.x), VectorReplicate(60.0f))), origin.y } }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = origin }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PointerMove, .position = { VectorGetX(VectorAdd(VectorReplicate(origin.x), VectorReplicate(60.0f))), origin.y } }).pointerConsumed);
     SliderOptions wider = Options();
     wider.width = { LayoutSizePolicy::Fixed, 340.0f };
     ASSERT_TRUE(accept(2u, wider, { 10.0f, 10.0f, 420.0f, 240.0f }));
@@ -120,8 +120,8 @@ TEST_F(UiSliderLifetimeTests, ChangedClipRetiresOldPointerGeometryEvenWhenTheFul
     ASSERT_TRUE(accept(1u));
     const Point origin = thumbPoint();
     const SliderPlacement before = m_state.placement();
-    EXPECT_TRUE(send({ InputEventType::PrimaryDown, origin }).pointerConsumed);
-    EXPECT_TRUE(send({ InputEventType::PointerMove, { VectorGetX(VectorAdd(VectorReplicate(origin.x), VectorReplicate(30.0f))), origin.y } }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = origin }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PointerMove, .position = { VectorGetX(VectorAdd(VectorReplicate(origin.x), VectorReplicate(30.0f))), origin.y } }).pointerConsumed);
     ASSERT_TRUE(begin(2u, { 180.0f, 600.0f, 1.0f, 1.0f }));
     ASSERT_TRUE(m_builder.beginPanel(s_SliderPanelKey, { 10.0f, 10.0f, 360.0f, 240.0f }));
     ASSERT_TRUE(m_builder.slider(s_SliderKey, m_state, Options()));
@@ -136,8 +136,8 @@ TEST_F(UiSliderLifetimeTests, ChangedClipRetiresOldPointerGeometryEvenWhenTheFul
 TEST_F(UiSliderLifetimeTests, ChangedThumbExtentRetiresTheOldGrabOffset){
     ASSERT_TRUE(accept(1u));
     const Point origin = thumbPoint();
-    EXPECT_TRUE(send({ InputEventType::PrimaryDown, origin }).pointerConsumed);
-    EXPECT_TRUE(send({ InputEventType::PointerMove, { VectorGetX(VectorAdd(VectorReplicate(origin.x), VectorReplicate(40.0f))), origin.y } }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = origin }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PointerMove, .position = { VectorGetX(VectorAdd(VectorReplicate(origin.x), VectorReplicate(40.0f))), origin.y } }).pointerConsumed);
     m_builder.sliderStyle().thumbExtent.x = 40.0f;
     ASSERT_TRUE(accept(2u));
     EXPECT_FLOAT_EQ(m_state.placement().thumb.width, 40.0f);

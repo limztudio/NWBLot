@@ -70,9 +70,9 @@ private:
 private:
     Alloc::GlobalArena& m_arena;
     Vector<Request, Alloc::GlobalArena> m_requests;
-    const ThreadId m_ownerThread;
     const u64 m_serviceIdentity;
     u64 m_nextGeneration = 1u;
+    const ThreadId m_ownerThread;
     bool m_pumping = false;
 };
 

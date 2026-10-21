@@ -116,11 +116,11 @@ protected:
     HWND m_window = nullptr;
     TextInputSessionToken m_token;
     usize m_sceneCharacterCount = 0u;
-    u32 m_sceneCodePoint = 0u;
     usize m_contextForwardCount = 0u;
     isize m_lastContextForwardedFlags = 0;
     LRESULT m_lastContextDefaultResult = 0;
     TextInputSessionToken m_cancelledDuringContextToken;
+    u32 m_sceneCodePoint = 0u;
     bool m_cancelOnNextContextForward = false;
     bool m_contextFocusLossSucceeded = false;
     bool m_contextFocusRestoreSucceeded = false;

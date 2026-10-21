@@ -38,12 +38,12 @@ struct LayoutSize{
 
 struct LayoutNodeDesc{
     LayoutDirection::Enum direction = LayoutDirection::Leaf;
+    bool clipChildren = true;
     LayoutSize width;
     LayoutSize height;
     Insets padding;
     f32 gap = 0.0f;
     Point intrinsicSize;
-    bool clipChildren = true;
 };
 
 struct LayoutBox{

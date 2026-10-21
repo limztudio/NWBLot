@@ -41,23 +41,23 @@ namespace PointerGestureState{
 
 struct InputEvent{
     InputEventType::Enum type = InputEventType::PointerMove;
+    InputCommand::Enum command = InputCommand::None;
+    bool extend = false;
+    bool edit = true;
     Point position{};
     i32 key = Core::Key::Unknown;
     bool shift = false;
     bool repeat = false;
     bool control = false;
     bool alt = false;
+    bool super = false;
+    bool allowText = false;
+    bool hoverCapable = false;
     f64 scrollX = 0.0;
     f64 scrollY = 0.0;
     // Optional monotonic timestamp at native ingress; zero leaves pointer clicks ungrouped.
     u64 timestampMs = 0u;
     InputSource source{};
-    InputCommand::Enum command = InputCommand::None;
-    bool extend = false;
-    bool edit = true;
-    bool super = false;
-    bool allowText = false;
-    bool hoverCapable = false;
 };
 
 // Rectangle and clip use the same logical coordinates as painting; publication order provides the default focus traversal order.

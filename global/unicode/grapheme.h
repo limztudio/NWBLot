@@ -13,8 +13,8 @@
 
 // Unicode 17.0.0 UAX #29 revision 47 default extended grapheme boundaries, including GB9c.
 struct GraphemeBoundaryState{
-    GraphemeBreak::Enum previous = GraphemeBreak::Other;
     usize regionalRun = 0u;
+    GraphemeBreak::Enum previous = GraphemeBreak::Other;
     bool pictographExtendRun = false;
     bool previousZwjAfterPictograph = false;
     bool indicConsonantRun = false;

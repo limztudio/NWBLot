@@ -37,8 +37,8 @@ public:
         : m_arena(Name("tests/performance/ui_input/pointer"))
         , m_router(m_arena)
         , m_targets(m_arena)
-        , m_kind(kind)
         , m_contactCount(contactCount)
+        , m_kind(kind)
         , m_hoverCapable(kind == WorkloadKind::CursorHover || kind == WorkloadKind::CursorGesture || kind == WorkloadKind::PressedSweep)
     {
         m_targets.reserve(targetCount);
@@ -158,12 +158,12 @@ private:
     Core::Alloc::GlobalArena m_arena;
     InputRouter m_router;
     InputVector<HitTarget> m_targets;
-    WorkloadKind::Enum m_kind;
     usize m_contactCount;
-    bool m_hoverCapable;
     u64 m_setupChecksum = 0u;
     u64 m_generation = 0u;
     usize m_pressedCount = 0u;
+    WorkloadKind::Enum m_kind;
+    bool m_hoverCapable;
 };
 
 

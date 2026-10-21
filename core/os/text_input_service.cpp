@@ -56,8 +56,8 @@ QueuedTextInputService::QueuedTextInputService(Alloc::GlobalArena& arena)
     : m_arena(arena)
     , m_surrounding(arena)
     , m_events(arena)
-    , m_ownerThread(QueryCurrentThreadId())
     , m_serviceIdentity(__hidden_text_input_service::AllocateServiceIdentity())
+    , m_ownerThread(QueryCurrentThreadId())
 {
     m_events.reserve(s_TextInputMaxEvents);
 }

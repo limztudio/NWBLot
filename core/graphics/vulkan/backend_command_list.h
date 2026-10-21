@@ -444,15 +444,15 @@ private:
     u64 m_recordingLeaseSerial = 0u;
     Atomic<u64> m_graphRecordingOwnershipSerial{ 0u };
     mutable Atomic<u8> m_graphPublicationState{ s_GraphPublicationUnowned };
-    u64 m_nativeRecordingID = 0u;
-    u64 m_nextMarkerSerial = 0u;
-    GraphicsVector<MarkerStackEntry> m_markerStack;
-    Framebuffer* m_renderPassFramebuffer = nullptr;
     bool m_enableAutomaticBarriers = true;
     bool m_isRecording = false;
     bool m_commandRecordingFailed = false;
     bool m_renderPassActive = false;
     bool m_descriptorBuffersBound = false;
+    u64 m_nativeRecordingID = 0u;
+    u64 m_nextMarkerSerial = 0u;
+    GraphicsVector<MarkerStackEntry> m_markerStack;
+    Framebuffer* m_renderPassFramebuffer = nullptr;
 #if defined(NWB_DEBUG)
     GpuQueueCapability::Mask m_taskCapabilitiesUsed = GpuQueueCapability::None;
     GpuQueueCapability::Mask m_taskDeclaredCapabilities = GpuQueueCapability::None;

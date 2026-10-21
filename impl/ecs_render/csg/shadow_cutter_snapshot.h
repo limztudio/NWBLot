@@ -22,10 +22,10 @@ NWB_IMPL_BEGIN
 struct CsgShadowReceiverInput{
     Core::ECS::EntityID entity;
     CsgReceiverPass::Enum receiverPass = CsgReceiverPass::Opaque;
-    Float3U worldMin = Float3U(0.f, 0.f, 0.f);
-    Float3U worldMax = Float3U(0.f, 0.f, 0.f);
     // Leave false when CPU bounds cannot conservatively contain the current deformed receiver.
     bool boundsValid = false;
+    Float3U worldMin = Float3U(0.f, 0.f, 0.f);
+    Float3U worldMax = Float3U(0.f, 0.f, 0.f);
 };
 
 struct CsgShadowReceiverRangeGpu{

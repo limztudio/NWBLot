@@ -56,11 +56,11 @@ EditModel::EditModel(Core::Alloc::GlobalArena& arena, const EditLimits& limits, 
     : m_arena(arena)
     , m_instanceGeneration(NextNonWrappingIdentity(__hidden_ui_edit_model::s_NextIdentity))
     , m_limits(__hidden_ui_edit_model::BoundedLimits(limits))
-    , m_textMode(mode)
     , m_text(arena)
     , m_boundaries(arena)
     , m_history(arena)
     , m_preedit(arena)
+    , m_textMode(mode)
 {
     if(mode != EditTextMode::SingleLine && mode != EditTextMode::Multiline)
         TerminateInvariant();

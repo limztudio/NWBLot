@@ -94,12 +94,12 @@ private:
         WidgetStyle style;
         WindowOptions options;
         WindowMetrics metrics;
+        bool firstUse = false;
         WidgetState titleState;
         WidgetState collapseState;
         WidgetState resizeState;
         TextLayout title;
         Rect titleBounds;
-        bool firstUse = false;
 
 
     public:
@@ -170,11 +170,11 @@ private:
         f64 scrollOffset = 0.0;
         u64 cursorKey = 0u;
         f32 rowHeight = 0.0f;
+        bool revealCursor = false;
+        bool focusOnCommit = false;
         ControlToken token;
         Insets padding;
         u64 rowCount = 0u;
-        bool revealCursor = false;
-        bool focusOnCommit = false;
         WidgetId commandFocus;
 
 
@@ -282,7 +282,6 @@ private:
     BuilderScopeFrame* m_parent = nullptr;
     PopupState* m_popupState = nullptr;
     PopupToken m_popupToken;
-    bool m_popupVisible = false;
     PopupOptions m_popupOptions;
     PopupPlacement m_popupPlacement;
     WidgetStyle m_panelStyle;
@@ -305,6 +304,7 @@ private:
     WindowFrame m_window;
     WidgetState m_panelState;
     Rect m_bounds;
+    bool m_popupVisible = false;
     bool m_panelActive = false;
     bool m_windowActive = false;
 };

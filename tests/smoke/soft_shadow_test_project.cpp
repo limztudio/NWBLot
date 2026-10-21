@@ -338,10 +338,10 @@ private:
     NWB::Tests::Smoke::ShadowTimingRenderPass m_timingRenderPass{ m_context.graphics };
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ s_ProjectName };
     NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ s_ProjectName };
-    bool m_timingEnabled = false;
     NWB::Tests::Smoke::YawSpinController m_yaw;
     ArrowYawInputHandler m_arrowYawInput;
     u32 m_rendererBaselineRenderedFrameCount = 0u;
+    bool m_timingEnabled = false;
     bool m_rendererBaselineCapturePaused = false;
 };
 

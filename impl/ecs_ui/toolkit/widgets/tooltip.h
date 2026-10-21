@@ -23,10 +23,10 @@ inline constexpr f32 s_TooltipDefaultMaximumWidth = 320.0f;
 
 struct TooltipOptions{
     bool enabled = true;
+    PopupPlacementSide::Enum side = PopupPlacementSide::Below;
     f32 delaySeconds = s_TooltipDefaultDelaySeconds;
     f32 maximumWidth = s_TooltipDefaultMaximumWidth;
     f32 gap = s_StyleSpacingSmall;
-    PopupPlacementSide::Enum side = PopupPlacementSide::Below;
 };
 
 
@@ -72,9 +72,9 @@ private:
     u64 m_hoverActivityGeneration = 0u;
     TooltipOptions m_options;
     PopupPlacement m_placement;
-    f64 m_elapsed = 0.0;
     bool m_hovered = false;
     bool m_visible = false;
+    f64 m_elapsed = 0.0;
 };
 
 class TooltipBehavior final{

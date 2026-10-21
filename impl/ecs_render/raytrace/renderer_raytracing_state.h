@@ -83,7 +83,6 @@ struct RtSceneBvhState{
     Core::BufferHandle m_rayTraceMaterialContextSlotsBuffer;
     // Current CSG ray geometry is independent of retained light-space capture generations.
     Core::BufferHandle m_csgTraceContextBuffer;
-    Core::GpuDescriptorHandle m_csgTraceContextHeapHandle = Core::GpuDescriptorHandle::Invalid();
     // Software caustics are push-only and reuse the SW trace geometry.
     Core::BindingLayoutHandle m_swCausticBindingLayout;
     Core::ShaderHandle m_swCausticShader;
@@ -98,6 +97,7 @@ struct RtSceneBvhState{
     Core::RayTracingShaderTableHandle m_hwCausticCsgShaderTable;
 
     // Replacement TLASs get fresh handles so recorded work retains the old generation.
+    Core::GpuDescriptorHandle m_csgTraceContextHeapHandle = Core::GpuDescriptorHandle::Invalid();
     Core::GpuDescriptorHandle m_tlasHeapHandle = Core::GpuDescriptorHandle::Invalid();
     u32 m_tlasInstanceCount = 0u;
     u32 m_sceneBvhInstanceCount = 0u;

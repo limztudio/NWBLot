@@ -48,7 +48,7 @@ TEST_F(UiEditActionHostTests, EscapeCancelsConcurrentKeyboardAndControllerSubmit
     ASSERT_TRUE(replaceNative("42"));
     const Ui::InputSource controller{ 7u, 3u };
     ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::KeyDown, .key = Core::Key::Enter }));
-    ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::CommandDown, .source = controller, .command = Ui::InputCommand::Submit }));
+    ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::CommandDown, .command = Ui::InputCommand::Submit, .source = controller }));
     ASSERT_TRUE(actionFrame());
     EXPECT_TRUE(m_actions.records.empty());
     ASSERT_TRUE(key(Core::Key::Escape));

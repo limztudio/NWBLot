@@ -42,6 +42,8 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityOpaqu
             .graphics = m_graphics,
             .targets = targets,
             .deferredLightingResources = deferredLightingResources,
+            .hardwareShadowSupported = hardwareShadowSupported,
+            .graphOwnsOpaqueTemporalMergeEntryStates = graphOwnsOpaqueTemporalMergeEntryStates,
             .lightSpace = lightSpace ? *lightSpace : LightSpaceShadowSnapshot{},
             .timingTicket = timingTicket,
             .asyncTiming = asyncTiming,
@@ -49,8 +51,6 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityOpaqu
             .prepared = prepared,
             .opaqueProduced = opaqueProduced,
             .opaqueFrameIndex = opaqueFrameIndex,
-            .hardwareShadowSupported = hardwareShadowSupported,
-            .graphOwnsOpaqueTemporalMergeEntryStates = graphOwnsOpaqueTemporalMergeEntryStates,
         }
     );
 }

@@ -227,7 +227,6 @@ public:
 private:
     Context& m_context;
     AStringView m_nextText;
-    bool m_changeText = false;
 
 
 public:
@@ -242,6 +241,10 @@ public:
     bool cancelled = false;
     bool preedit = false;
     bool publishedComposing = false;
+
+
+private:
+    bool m_changeText = false;
 };
 
 

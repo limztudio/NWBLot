@@ -156,7 +156,6 @@ private:
 
 
 private:
-    ReentryKind::Enum m_kind = ReentryKind::Reset;
     const ReentrySource* m_observer = nullptr;
     mutable Builder* m_textBuilder = nullptr;
     mutable Builder* m_revisionBuilder = nullptr;
@@ -169,6 +168,7 @@ private:
     mutable u64 m_resetAttempts = 0u;
     mutable u64 m_beginAttempts = 0u;
     mutable u64 m_endAttempts = 0u;
+    ReentryKind::Enum m_kind = ReentryKind::Reset;
     mutable bool m_beginAccepted = false;
     mutable bool m_endAccepted = false;
     mutable bool m_failedAtAttempt = false;

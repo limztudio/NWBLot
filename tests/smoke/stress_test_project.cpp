@@ -685,12 +685,12 @@ private:
     NWB::Tests::Smoke::AvboitTimingRenderPass m_timingRenderPass{ m_context.graphics };
     NWB::Tests::Smoke::PresentationFpsProbe m_fpsProbe{ m_timingEnabled ? 5.0 : 0.25, m_timingEnabled ? 30.0 : 0.0 };
     NWB::Tests::Smoke::PresentationPacingRing m_pacingRing;
-    bool m_timingComplete = false;
     NWB::Tests::Smoke::SmokeCpuGpuTimingProbe m_cpuTimingProbe{ NWB_TEXT("stress"), m_context.objectArena };
     NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ s_ProjectName };
     NWB::Tests::Smoke::YawSpinController m_yaw;
     ArrowYawInputHandler m_arrowYawInput;
     u32 m_m4RenderedFrameCount = 0u;
+    bool m_timingComplete = false;
     bool m_m4PixelCapturePaused = false;
     bool m_rendererBaselineCapturePaused = false;
 #if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)

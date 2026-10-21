@@ -185,8 +185,8 @@ struct GpuFrameData : NoCopy{
     Core::QueueSubmissionToken m_raster;
     Core::QueueSubmissionToken m_finalConsumer;
     GpuCommandRecordingMode::Enum m_recordingMode = GpuCommandRecordingMode::Direct;
-    u32 m_presentationMode = NWB_UI_PRESENTATION_SDR;
     bool m_prepared = false;
+    u32 m_presentationMode = NWB_UI_PRESENTATION_SDR;
 
 
 public:

@@ -31,12 +31,12 @@ struct PointerInput{
     InputSource source;
     PointerPhase::Enum phase = PointerPhase::Move;
     PointerIntent::Enum intent = PointerIntent::Activate;
+    bool extend = false;
+    bool hoverCapable = false;
     Point position{};
     f64 scrollX = 0.0;
     f64 scrollY = 0.0;
     u64 timestampMs = 0u;
-    bool extend = false;
-    bool hoverCapable = false;
 };
 
 

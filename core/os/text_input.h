@@ -102,11 +102,11 @@ struct TextInputEvent{
     TextInputSessionToken token;
     u64 sequence = 0u;
     u64 surroundingRevision = 0u;
-    TextInputEventKind::Enum kind = TextInputEventKind::Commit;
     usize anchorByte = 0u;
     usize caretByte = 0u;
     usize deleteBeforeBytes = 0u;
     usize deleteAfterBytes = 0u;
+    TextInputEventKind::Enum kind = TextInputEventKind::Commit;
     bool caretVisible = true;
     TextInputCancelReason::Enum cancelReason = TextInputCancelReason::NativeCancelled;
     TextInputDeletionBasis::Enum deletionBasis = TextInputDeletionBasis::Caret;

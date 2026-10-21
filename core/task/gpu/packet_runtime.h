@@ -522,7 +522,6 @@ private:
     };
 
     struct PacketRuntime{
-        PacketRuntimeState state = PacketRuntimeState::Declared;
         QueueSubmissionToken token;
         // Native counters are committed only after the graph lifecycle and its Device submission both accept.
         usize nativeCommandListCount = 0u;
@@ -532,6 +531,7 @@ private:
         usize mergedTimelineWaitCount = 0u;
         usize inheritedTimelineWaitElisionCount = 0u;
         f64 submissionSeconds = 0.0;
+        PacketRuntimeState state = PacketRuntimeState::Declared;
         // A post-reservation submit-path failure is terminally rejected, but ordinary discard/rejection never sets this flag.
         // It can occur before the backend execute call, such as while validating a timing ticket.
         bool nativeSubmissionRejected = false;

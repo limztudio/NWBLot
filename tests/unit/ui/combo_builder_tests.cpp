@@ -113,8 +113,8 @@ TEST_F(UiComboBuilderTests, OutsideDismissalConsumesTheWholePointerSequence){
     m_state.select(1u);
     ASSERT_TRUE(accept(1u));
     ASSERT_TRUE(openByPointer(2u));
-    EXPECT_TRUE(send({ InputEventType::PrimaryDown, { 790.0f, 590.0f } }).pointerConsumed);
-    EXPECT_TRUE(send({ InputEventType::PrimaryUp, { 790.0f, 590.0f } }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = { 790.0f, 590.0f } }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = { 790.0f, 590.0f } }).pointerConsumed);
     EXPECT_TRUE(m_context.input().actions().empty());
     ASSERT_TRUE(accept(3u));
     EXPECT_TRUE(m_result.closed);

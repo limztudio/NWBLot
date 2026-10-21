@@ -47,20 +47,17 @@ struct TelemetryReportSummary{
     u64 eventKindCounts[s_TelemetryReportEventKindCount] = {};
     u64 parseFailureCount = 0u;
 
-    bool hasFrameRange = false;
     u64 minFrameIndex = 0u;
     u64 maxFrameIndex = 0u;
 
     u64 cpuTimingEventCount = 0u;
     u64 cpuTimingSampleCount = 0u;
     f64 cpuTimingSeconds = 0.0;
-    bool cpuTimingSecondsValid = true;
     f64 maxCpuTimingSeconds = 0.0;
 
     u64 gpuTimingEventCount = 0u;
     u64 gpuTimingSampleCount = 0u;
     f64 gpuTimingSeconds = 0.0;
-    bool gpuTimingSecondsValid = true;
     f64 maxGpuTimingSeconds = 0.0;
 
     u64 memoryEventCount = 0u;
@@ -71,6 +68,9 @@ struct TelemetryReportSummary{
     u64 frameGraphEdgeCount = 0u;
     u32 maxFrameGraphNodeCount = 0u;
     u32 maxFrameGraphEdgeCount = 0u;
+    bool gpuTimingSecondsValid = true;
+    bool cpuTimingSecondsValid = true;
+    bool hasFrameRange = false;
 };
 
 struct TelemetryReport{

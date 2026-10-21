@@ -137,7 +137,6 @@ private:
     Core::ITextInputService& m_textInput;
     Core::Assets::AssetManager& m_assetManager;
     UiSkinSelection m_skinSelection;
-    UiLayerPresentation::Enum m_presentation;
     UniquePtr<Core::Assets::IAsset> m_skinAsset;
     FontReferences m_fontRefs;
     Ui::PaintBuilder m_paint;
@@ -154,6 +153,7 @@ private:
     // Native-key ownership survives focus transfer; the CPU router retains each resolved held intention.
     Array<u8, s_UiNativeKeySlotCount> m_nativeKeyOwners{};
     u32 m_pressedButtons = 0u;
+    UiLayerPresentation::Enum m_presentation;
     u8 m_pointerOwner = 0u;
     bool m_blockNativeChars = false;
     bool m_blockCommandChars = false;

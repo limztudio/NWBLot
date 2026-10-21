@@ -236,10 +236,10 @@ protected:
     FixtureShaper m_shaper;
     Ui::TextLayoutBuilder m_layoutBuilder;
     Ui::WidgetState m_widget;
-    Ui::EditBoxResult m_result;
     Ui::EditBoxPlacement m_placement;
     Ui::WidgetState m_otherWidget;
     u64 m_generation = 0u;
+    Ui::EditBoxResult m_result;
     bool m_includeButton = false;
 };
 

@@ -687,7 +687,6 @@ private:
     FpsProbe m_fpsProbe{ s_ProjectName };
     GpuPassTimingProbe m_gpuPassTimingProbe{ s_ProjectName };
     u64 m_slicePacketSourceFrame = Limit<u64>::s_Max;
-    u32 m_csgSliceRayCapacity = 0u;
     u64 m_statisticsSequence = 0u;
     u64 m_statisticsGeneration = 0u;
     NWB::Impl::ReflectionSettings m_reflectionSettings;
@@ -698,6 +697,7 @@ private:
     UniquePtr<ReflectionCsgContextProbe> m_csgContextProbe;
     UniquePtr<ReflectionCpuTimingProbe> m_cpuTimingProbe;
     u64 m_mutationGraphicsFrame = Limit<u64>::s_Max;
+    u32 m_csgSliceRayCapacity = 0u;
     u32 m_targetSamples = 16u;
     u32 m_postResetSamples = 1u;
     u32 m_requestedSeed = 0u;

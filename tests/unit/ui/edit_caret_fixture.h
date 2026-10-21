@@ -97,8 +97,8 @@ private:
 
 
 public:
-    ShaperFault::Enum fault = ShaperFault::None;
     f32 scalarAdvance = s_CaretGlyphAdvance;
+    ShaperFault::Enum fault = ShaperFault::None;
     bool variedHeight = false;
     bool zeroAdvance = false;
 };

@@ -142,16 +142,19 @@ public:
     mutable u64 revisionValue = 1u;
     mutable u64 count = 10u;
     u64 disabledKey = 0u;
-    bool reversed = false;
-    bool badLookup = false;
-    bool wrongLookup = false;
 
 
 private:
     ComboState* m_state = nullptr;
+    u64 m_selected = 8u;
     mutable CallbackStage::Enum m_stage = CallbackStage::None;
     CallbackMutation::Enum m_mutation = CallbackMutation::Select;
-    u64 m_selected = 8u;
+
+
+public:
+    bool reversed = false;
+    bool badLookup = false;
+    bool wrongLookup = false;
 };
 
 

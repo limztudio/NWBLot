@@ -98,10 +98,10 @@ private:
 
 private:
     mutable Futex m_mutex;
+    u32 m_messageCount = 0;
     LogArena m_arena;
     Vector<LogString, LogArena> m_messages;
     Vector<LogString, LogArena> m_errors;
-    u32 m_messageCount = 0;
     u32 m_errorCount = 0;
     Core::Common::LogType::Enum m_lastType = Core::Common::LogType::Info;
 };

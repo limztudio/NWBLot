@@ -81,8 +81,8 @@ public:
     Function<void()> m_onSurrounding;
     Function<void(TextInputSessionToken)> m_onEnd;
     TextInputSessionToken m_nativeToken;
-    TextInputAdmission::Enum m_startAdmission = TextInputAdmission::Accepted;
     usize m_endCount = 0u;
+    TextInputAdmission::Enum m_startAdmission = TextInputAdmission::Accepted;
     TextInputChangeCause::Enum m_nativeCause = TextInputChangeCause::Other;
     bool m_supported = true;
 };

@@ -130,9 +130,9 @@ inline constexpr AStringView s_UploadTextureBatchMarkerLabel = "Texture Upload B
 struct TextureUploadBatchSubmissionData{
     const GraphicsRuntime::TextureUploadBatchDesc& setupDesc;
     const TextureDesc& textureDesc;
+    QueueSubmissionToken& uploadToken;
     ResourceStates::Mask graphInitialState = ResourceStates::Unknown;
     GraphicsModuleDetail::SetupUploadSameClassRouting sameClassRouting;
-    QueueSubmissionToken& uploadToken;
     GpuPhysicalQueueId directConsumerQueue;
 };
 
@@ -224,9 +224,9 @@ bool GraphicsRuntime::uploadTextureBatch(const TextureUploadBatchDesc& desc)cons
     __hidden_graphics_texture_upload::TextureUploadBatchSubmissionData submissionData{
         .setupDesc = desc,
         .textureDesc = textureDesc,
+        .uploadToken = uploadToken,
         .graphInitialState = graphInitialState,
         .sameClassRouting = sameClassRouting,
-        .uploadToken = uploadToken,
         .directConsumerQueue = device.getPrimaryPhysicalQueue(consumerQueue),
     };
     const bool submitted = GraphicsModuleDetail::SubmitGraphOwnedSetupUpload(

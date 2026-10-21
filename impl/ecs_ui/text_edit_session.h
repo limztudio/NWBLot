@@ -44,8 +44,8 @@ namespace UiTextEditStatus{
 
 struct UiTextEditResult{
     UiTextEditStatus::Enum status = UiTextEditStatus::Idle;
-    usize eventsApplied = 0u;
     bool textChanged = false;
+    usize eventsApplied = 0u;
 };
 
 // The host validates token, sequence and owner before lending a model to a copied event.

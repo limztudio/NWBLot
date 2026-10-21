@@ -346,7 +346,7 @@ TEST_F(UiCommandInputTests, ClearFocusAndNativeLossRetainReleaseOwnershipButCanc
     EXPECT_TRUE(send(Command(InputEventType::CommandUp, held, InputCommand::None)).routing.commandConsumed);
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 2u));
     EXPECT_TRUE(send(Command(InputEventType::CommandDown, held, InputCommand::Activate)).routing.commandConsumed);
-    EXPECT_TRUE(send({ InputEventType::FocusLost }).routing.commandConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::FocusLost }).routing.commandConsumed);
     EXPECT_TRUE(m_router.ownsSource(held));
     EXPECT_TRUE(m_router.wantsCommands());
     const InputSource traverse{ 5u, 2u };
@@ -354,7 +354,7 @@ TEST_F(UiCommandInputTests, ClearFocusAndNativeLossRetainReleaseOwnershipButCanc
     EXPECT_FALSE(m_router.focus().valid());
     EXPECT_TRUE(send(Command(InputEventType::CommandDown, held, InputCommand::Activate)).routing.commandConsumed);
     EXPECT_TRUE(m_router.actions().empty());
-    EXPECT_FALSE(send({ InputEventType::FocusGained }).routing.commandConsumed);
+    EXPECT_FALSE(send({ .type = InputEventType::FocusGained }).routing.commandConsumed);
     EXPECT_TRUE(send(Command(InputEventType::CommandUp, held, InputCommand::None)).routing.commandConsumed);
     EXPECT_TRUE(m_router.actions().empty());
     EXPECT_FALSE(send(Command(InputEventType::CommandDown, traverse, InputCommand::FocusNext, true)).routing.commandConsumed);
@@ -411,8 +411,8 @@ TEST_F(UiCommandInputTests, OrphanRepeatsAfterNativeLossAndResetNeedReleaseBefor
     EXPECT_TRUE(dispatchResult1.routing.commandConsumed);
     resolved = dispatchResult1.event;
     EXPECT_TRUE(m_router.canEditCommand(resolved));
-    EXPECT_TRUE(send({ InputEventType::FocusLost }).routing.commandConsumed);
-    EXPECT_FALSE(send({ InputEventType::FocusGained }).routing.commandConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::FocusLost }).routing.commandConsumed);
+    EXPECT_FALSE(send({ .type = InputEventType::FocusGained }).routing.commandConsumed);
     ASSERT_TRUE(m_router.commitTargets(&editor, 1u, 2u));
     EXPECT_TRUE(m_router.focus().valid());
     const auto dispatchResult2 = send(Command(InputEventType::CommandDown, edit, InputCommand::Left, true));
@@ -519,7 +519,7 @@ TEST_F(UiCommandInputTests, FullEventQueueCannotReleaseOrChangeAnAlreadyAdmitted
     const InputSource source{ 8u, 8u };
     EXPECT_TRUE(send(Command(InputEventType::CommandDown, source, InputCommand::Down)).routing.commandConsumed);
     for(usize index = 0u; index < s_InputMaxEvents; ++index)
-        ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ InputEventType::PointerMove })));
+        ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .type = InputEventType::PointerMove })));
     InputEvent output;
     EXPECT_FALSE(m_router.queue(UiTestSupport::NativeInput(Command(InputEventType::CommandUp, source, InputCommand::None))));
     EXPECT_FALSE(m_router.process().commandConsumed);

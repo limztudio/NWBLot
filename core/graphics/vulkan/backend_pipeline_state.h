@@ -455,6 +455,7 @@ private:
     FixedTable<SamplerHandle> m_samplerDescriptorResources;
     // Binding byte offsets within a set block.
     u32 m_classBufferOffset[GpuDescriptorClass::kCount] = {};
+    u32 m_accelStructBufferBindingOffset = 0u;
 
     SlotAllocator m_resourceSlots;
     SlotAllocator m_samplerSlots;
@@ -471,7 +472,6 @@ private:
 
     mutable Futex m_mutex;
     bool m_initialized = false;
-    u32 m_accelStructBufferBindingOffset = 0u;
 };
 
 

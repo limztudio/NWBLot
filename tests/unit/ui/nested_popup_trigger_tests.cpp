@@ -152,8 +152,8 @@ TEST_F(UiNestedPopupTriggerTests, NestedMenuSkipsDisabledCommandsWithoutActivati
     ASSERT_TRUE(acceptChildMenu(1u));
     ASSERT_NE(target(anchorId()), nullptr);
     const Point point = Center(target(anchorId())->rectangle);
-    EXPECT_TRUE(send({ InputEventType::SecondaryDown, point }).pointerConsumed);
-    EXPECT_TRUE(send({ InputEventType::SecondaryUp, point }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::SecondaryDown, .position = point }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::SecondaryUp, .position = point }).pointerConsumed);
     ASSERT_TRUE(acceptChildMenu(2u));
     EXPECT_TRUE(m_menuResult.opened);
     EXPECT_FALSE(m_anchorActivated);

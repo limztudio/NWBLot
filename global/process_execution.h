@@ -109,11 +109,11 @@ namespace ProcessCaptureFailureKind{
 
 struct ProcessCaptureFailure{
     ProcessCaptureFailureKind::Enum kind = ProcessCaptureFailureKind::InvalidArguments;
+    bool outputTruncated = false;
     ErrorCondition nativeError{};
     ErrorCondition completionError{};
     i32 exitCode = -1;
     i32 terminationSignal = 0;
-    bool outputTruncated = false;
 };
 
 
@@ -644,7 +644,7 @@ template<typename ArenaT, typename StringT>
     for(;;){
         const auto expired = ProcessExecutionDetail::TimeoutExpired(deadlineMilliseconds);
         if(!expired)
-            return MakeUnexpected(ProcessCaptureFailure{ .kind = ProcessCaptureFailureKind::ClockFailed, .nativeError = expired.error(), .outputTruncated = outputTruncated, });
+            return MakeUnexpected(ProcessCaptureFailure{ .kind = ProcessCaptureFailureKind::ClockFailed, .outputTruncated = outputTruncated, .nativeError = expired.error(), });
         if(*expired){
             timedOut = true;
             break;
@@ -656,7 +656,7 @@ template<typename ArenaT, typename StringT>
 
         const auto remainingTimeout = ProcessExecutionDetail::RemainingTimeoutMilliseconds(deadlineMilliseconds);
         if(!remainingTimeout)
-            return MakeUnexpected(ProcessCaptureFailure{ .kind = ProcessCaptureFailureKind::ClockFailed, .nativeError = remainingTimeout.error(), .outputTruncated = outputTruncated, });
+            return MakeUnexpected(ProcessCaptureFailure{ .kind = ProcessCaptureFailureKind::ClockFailed, .outputTruncated = outputTruncated, .nativeError = remainingTimeout.error(), });
         const int pollResult = ::poll(&pipePoll, 1, *remainingTimeout);
         if(pollResult == 0){
             timedOut = true;
@@ -702,7 +702,7 @@ template<typename ArenaT, typename StringT>
 
     ProcessExecutionDetail::CloseFileDescriptor(pipeFds[0]);
     if(timedOut)
-        return MakeUnexpected(ProcessCaptureFailure{ .kind = ProcessCaptureFailureKind::TimedOut, .nativeError = ErrorCondition::timed_out, .outputTruncated = outputTruncated, });
+        return MakeUnexpected(ProcessCaptureFailure{ .kind = ProcessCaptureFailureKind::TimedOut, .outputTruncated = outputTruncated, .nativeError = ErrorCondition::timed_out, });
 
     reapChild.release();
     const auto processSucceeded = ProcessExecutionDetail::WaitForProcessSuccess(childPid, deadlineMilliseconds);
@@ -721,7 +721,7 @@ template<typename ArenaT, typename StringT>
         return MakeUnexpected(failure);
     }
     if(outputTruncated)
-        return MakeUnexpected(ProcessCaptureFailure{ .kind = ProcessCaptureFailureKind::OutputTruncated, .nativeError = ErrorCondition::value_too_large, .outputTruncated = true, });
+        return MakeUnexpected(ProcessCaptureFailure{ .kind = ProcessCaptureFailureKind::OutputTruncated, .outputTruncated = true, .nativeError = ErrorCondition::value_too_large, });
     return {};
 }
 

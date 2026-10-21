@@ -37,9 +37,9 @@ namespace AreaEventKind{
 
 struct AreaEvent{
     AString<Core::Alloc::GlobalArena> text;
-    InputCommandIntent intent;
     usize anchor = 0u;
     usize caret = 0u;
+    InputCommandIntent intent;
     EditAction::Enum action = EditAction::Submit;
     AreaEventKind::Enum kind = AreaEventKind::Text;
 

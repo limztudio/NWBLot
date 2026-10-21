@@ -143,15 +143,15 @@ private:
     u32 m_managerName = 0u;
     u32 m_seatName = 0u;
     u32 m_serial = 0u;
-    bool m_focused = false;
     Vector<GlobalUniquePtr<Offer>, Alloc::GlobalArena> m_offers;
     Array<Offer*, s_ClipboardChannelCount> m_selected{};
     Array<GlobalUniquePtr<Source>, s_ClipboardChannelCount> m_sources;
     Vector<GlobalUniquePtr<ClipboardPipeWriter>, Alloc::GlobalArena> m_writers;
     ClipboardRequestToken m_readToken;
     ClipboardTextAccumulator m_received;
-    int m_readFd = -1;
     Timer m_readDeadline;
+    int m_readFd = -1;
+    bool m_focused = false;
 };
 
 

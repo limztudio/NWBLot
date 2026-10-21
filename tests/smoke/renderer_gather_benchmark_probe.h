@@ -82,10 +82,10 @@ private:
     Vector<CpuSample, Core::Alloc::GlobalArena> m_cpu;
     Vector<GpuSample, Core::Alloc::GlobalArena> m_gpu;
     Array<u64, s_GpuScopeCount> m_gpuPublish = {};
-    Array<bool, s_GpuScopeCount> m_hasGpuPublication = {};
     Array<Core::Perf::MemorySnapshot, s_ArenaScopeCount> m_memoryBaseline = {};
     u64 m_lastPublish = 0u;
     u32 m_successfulFrames = 0u;
+    Array<bool, s_GpuScopeCount> m_hasGpuPublication = {};
     bool m_hasPublication = false;
 };
 

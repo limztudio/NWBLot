@@ -22,11 +22,11 @@ NWB_IMPL_UI_BEGIN
 struct SliderOptions{
     LayoutSize width = { LayoutSizePolicy::Stretch, 1.0f };
     f32 height = s_StyleControlHeight;
+    bool enabled = true;
     f64 minimum = 0.0;
     f64 maximum = 1.0;
     // Zero chooses one hundredth of the range, with a representable fallback for tiny spans.
     f64 keyStep = 0.0;
-    bool enabled = true;
 };
 
 struct SliderResult{

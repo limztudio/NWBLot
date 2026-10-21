@@ -75,8 +75,8 @@ TEST_F(UiSliderBuilderTests, DisabledSliderKeepsAPointerBarrierWithoutApplyingQu
     ASSERT_NE(target(host()), nullptr);
     EXPECT_FALSE(target(host())->enabled);
     EXPECT_FALSE(target(host())->focusable);
-    EXPECT_TRUE(send({ InputEventType::PrimaryDown, UiWidgetTests::Center(m_state.placement().bounds) }).pointerConsumed);
-    EXPECT_TRUE(send({ InputEventType::PrimaryUp, UiWidgetTests::Center(m_state.placement().bounds) }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = UiWidgetTests::Center(m_state.placement().bounds) }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = UiWidgetTests::Center(m_state.placement().bounds) }).pointerConsumed);
     EXPECT_FALSE(m_context.input().focus().valid());
     ASSERT_TRUE(accept(3u, disabled));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.25);

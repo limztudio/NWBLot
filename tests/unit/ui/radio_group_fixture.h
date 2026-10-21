@@ -77,25 +77,28 @@ public:
     u64 m_count = 5u;
     u64 m_removed = 0u;
     u64 m_disabled = 30u;
-    bool m_reverse = false;
-    bool m_duplicate = false;
-    bool m_allDisabled = false;
     mutable u64 m_calls = 0u;
     mutable u64 m_textCalls = 0u;
     mutable u64 m_mutations = 0u;
     mutable u64 m_callbacksAfterMutation = 0u;
-    mutable bool m_beginAccepted = false;
-    mutable bool m_endAccepted = false;
 
 
 private:
-    mutable RadioCallbackSite::Enum m_site = RadioCallbackSite::None;
-    RadioMutation::Enum m_mutation = RadioMutation::None;
     RadioGroupState* m_state = nullptr;
     Builder* m_builder = nullptr;
     PopupState* m_popup = nullptr;
     u64 m_selected = 0u;
+    mutable RadioCallbackSite::Enum m_site = RadioCallbackSite::None;
+    RadioMutation::Enum m_mutation = RadioMutation::None;
     mutable Array<char, 4u> m_label{};
+
+
+public:
+    bool m_reverse = false;
+    bool m_duplicate = false;
+    bool m_allDisabled = false;
+    mutable bool m_beginAccepted = false;
+    mutable bool m_endAccepted = false;
 };
 
 struct RadioAcceptedFrame{

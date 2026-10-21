@@ -258,7 +258,6 @@ private:
 
 private:
     const u64 m_domainIdentity;
-    const ThreadId m_mainThread;
     const usize m_profileEventCapacity;
     Alloc::GlobalArena m_arena;
     Deque<TaskNode, Alloc::GlobalArena> m_nodes;
@@ -283,21 +282,22 @@ private:
     u64 m_scopeSearchGeneration = s_ScopeSearchGenerationStep;
     u64 m_scopePublicationGeneration = 1u;
     u64 m_dispatchCount = 0u;
+    const ThreadId m_mainThread;
     mutable Futex m_mutex;
     ConditionVariableAny m_changed;
     ConditionVariableAny m_workerChanged[s_AffinitySlotCount];
     usize m_outstanding = 0u;
-    bool m_aborting = false;
     u32 m_joinWaiters = 0u;
     u32 m_handleJoinWaiters = 0u;
     CpuTaskSchedulerStatistics m_statistics;
-    Atomic<bool> m_profileEnabled{ false };
     u64 m_profileEpoch = 0u;
     u64 m_profileFrameIndex = 0u;
     u64 m_profileRecordedEvents = 0u;
     u64 m_profileDroppedEvents = 0u;
     usize m_profileRead = 0u;
     usize m_profileCount = 0u;
+    bool m_aborting = false;
+    Atomic<bool> m_profileEnabled{ false };
     Vector<JoiningThread, Alloc::GlobalArena> m_workers;
 };
 

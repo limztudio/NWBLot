@@ -40,11 +40,11 @@ struct SceneShadingSetupGraphTask{
         RendererDeferredSystem& deferredSystem;
         Core::GpuTimingSubmissionTicket*& timingTicket;
         bool& ready;
-        ECSRenderDetail::SceneLightGpuData lightData[NWB_SCENE_MAX_LIGHTS] = {};
-        ECSRenderDetail::SceneShadingGpuData sceneShadingState;
         u32 lightCount = 0u;
         bool lightUploadRequired = false;
         bool sceneShadingUploadRequired = false;
+        ECSRenderDetail::SceneLightGpuData lightData[NWB_SCENE_MAX_LIGHTS] = {};
+        ECSRenderDetail::SceneShadingGpuData sceneShadingState;
     };
 
 

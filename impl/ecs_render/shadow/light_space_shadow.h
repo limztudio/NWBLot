@@ -174,20 +174,20 @@ struct LightSpaceShadowState{
 
 
 public:
+    LightSpaceShadowSnapshot m_snapshot;
     SoftwareShadowSettings m_settings;
     LightSpaceCsgState m_csg;
-    LightSpaceShadowSnapshot m_snapshot;
+    u64 m_captureSceneIdentity = 0u;
     LightSpaceCaptureHistory m_captureHistory;
     LightSpaceShadowDiagnostics m_diagnostics;
-    u64 m_captureSceneIdentity = 0u;
-    bool m_captureSceneTrusted = false;
-    bool m_captureReuseLogged = false;
     Vector<LightSpaceShadowCaster, Core::Alloc::GlobalArena> m_casters;
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_sceneBuffers;
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_captureBuffers;
     Vector<Core::TextureHandle, Core::Alloc::GlobalArena> m_sceneTextures;
     Vector<Core::TextureHandle, Core::Alloc::GlobalArena> m_captureTextures;
     Core::ShaderHandle m_shaders[s_LightSpaceShaderCount];
+    bool m_captureSceneTrusted = false;
+    bool m_captureReuseLogged = false;
     bool m_sceneEligible = false;
     bool m_resourcesPrepared = false;
     bool m_pipelineFailed = false;

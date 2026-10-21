@@ -285,22 +285,17 @@ private:
     // Exact opt-in same-class transports registered after their class primary.
     // The first entry for each class populates the per-class auxiliary family fields above; graph packets use this complete physical registry.
     GraphicsVector<VulkanPhysicalQueueDesc> m_sameClassQueues;
-    u32 m_presentNativeQueueIndex = Limit<u32>::s_Max;
     AcquireSyncSlotVector m_acquireSyncSlots;
     SemaphoreVector m_presentSemaphores;
     // Swap-chain-lifetime direct transition list.
     // Created once with swap-chain resources and reopened per use; present() never creates a command list so the frame path stays allocation-free.
     CommandListHandle m_directPresentCommandList;
     GpuPhysicalQueueId m_directPresentQueue;
-    VkSemaphore m_framePresentationSemaphore = VK_NULL_HANDLE;
     GpuPhysicalQueueId m_framePresentationQueue;
+    VkSemaphore m_framePresentationSemaphore = VK_NULL_HANDLE;
     QueueSubmissionToken m_framePresentationSubmission;
     u64 m_nextFramePresentationClaimIdentity = 0u;
     u64 m_framePresentationClaimIdentity = 0u;
-    bool m_framePresentationClaimIdentityExhausted = false;
-    bool m_frameAcquired = false;
-    bool m_frameAbandonmentComplete = false;
-    FramePresentationSignalState m_framePresentationSignalState = FramePresentationSignalState::Idle;
     ::Queue<EventQueryHandle, Alloc::GlobalArena> m_framesInFlight;
     Vector<EventQueryHandle, Alloc::GlobalArena> m_queryPool;
     u32 m_swapChainIndex = Limit<u32>::s_Max;
@@ -308,16 +303,21 @@ private:
     u32 m_activeAcquireSyncSlotIndex = Limit<u32>::s_Max;
     u32 m_maxFramesInFlight = s_MaxFramesInFlight;
     u32 m_framePresentationSwapChainIndex = Limit<u32>::s_Max;
+    u32 m_presentNativeQueueIndex = Limit<u32>::s_Max;
     Futex m_swapChainLifecycleMutex;
+    // Presentation hooks run inside queue submission and therefore cannot take the lifecycle mutex recursively.
+    // This narrower lock protects their state, while the claims-enabled gate closes before lifecycle joins begin.
+    Futex m_framePresentationMutex;
     u64 m_swapChainLifecycleEpoch = 0u;
+    ConditionVariableAny m_framePresentationCondition;
+    bool m_framePresentationClaimIdentityExhausted = false;
+    bool m_frameAcquired = false;
+    bool m_frameAbandonmentComplete = false;
+    FramePresentationSignalState m_framePresentationSignalState = FramePresentationSignalState::Idle;
     SwapChainLifecycleState m_swapChainLifecycleState = SwapChainLifecycleState::Ready;
     bool m_lifecycleDrainActive = false;
     bool m_swapChainMutableFormatSupported = false;
     bool m_hdr10ColorSpaceExtensionEnabled = false;
-    // Presentation hooks run inside queue submission and therefore cannot take the lifecycle mutex recursively.
-    // This narrower lock protects their state, while the claims-enabled gate closes before lifecycle joins begin.
-    Futex m_framePresentationMutex;
-    ConditionVariableAny m_framePresentationCondition;
     bool m_framePresentationClaimsEnabled = true;
     bool m_bufferDeviceAddressSupported = false;
     bool m_hostQueryResetFeatureEnabled = false;

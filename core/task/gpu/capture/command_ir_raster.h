@@ -128,7 +128,6 @@ struct GpuCommandIrRasterStateDesc{
 struct GpuCommandIrRasterTaskRecord{
     GpuTaskId task;
     GpuSubmissionPacketId packet;
-    GpuPhysicalQueueId queue;
     GpuGraphPipelineId pipeline;
     GpuGraphResourceId colorAttachment;
     GpuGraphResourceId indexResource;
@@ -137,6 +136,7 @@ struct GpuCommandIrRasterTaskRecord{
     Color blendConstantColor;
     FixedVector<GpuCommandIrRasterVertexBinding, s_MaxVertexAttributes> vertexBuffers;
     DrawArguments drawArguments;
+    GpuPhysicalQueueId queue;
     u64 blobOffsetBytes = 0u;
     u64 blobSizeBytes = 0u;
     u32 framebufferOwnerIndex = Limit<u32>::s_Max;

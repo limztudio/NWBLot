@@ -185,10 +185,10 @@ private:
     u64 m_defaultChunkSize;
     u64 m_memoryLimit;
     Futex m_mutex;
+    ChunkKind m_chunkKind;
     u64 m_retiredChunkBytes = 0;
 
     GraphicsDeque<QueueChunkLedger> m_queueChunkLedgers;
-    ChunkKind m_chunkKind;
 };
 
 
@@ -367,8 +367,8 @@ private:
     VulkanDetail::HeapBindingRange m_heapBindingRange;
     Futex m_memoryBindingMutex;
 
-    HashMap<TextureViewKey, VkImageView, Alloc::GlobalArena, TextureViewKeyHasher, EqualTo<TextureViewKey>> m_views;
     Futex m_viewsMutex;
+    HashMap<TextureViewKey, VkImageView, Alloc::GlobalArena, TextureViewKeyHasher, EqualTo<TextureViewKey>> m_views;
     Vector<u8, Alloc::GlobalArena> m_retainedSubresourceStates;
     mutable Futex m_retainedSubresourceStatesMutex;
 
@@ -405,12 +405,12 @@ private:
     u64 m_arrayByteSize = 0;
     u64 m_totalByteSize = 0;
     VkSharingMode m_creationSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    Futex m_mappingMutex;
     VulkanDetail::StagingTextureMipLayoutVector m_mipLayouts;
     VulkanDetail::StagingTextureQueueFamilyVector m_admittedQueueFamilies;
 
     VkBuffer m_buffer = VK_NULL_HANDLE;
     VulkanAllocationHandle m_allocation = nullptr;
-    Futex m_mappingMutex;
     void* m_mappedMemory = nullptr;
 
     u32 m_bufferOffsetAlignment = 0;

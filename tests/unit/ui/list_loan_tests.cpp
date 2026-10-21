@@ -173,7 +173,7 @@ TEST_F(UiListLoanTests, SameValueKeyCallbackRejectsTheLoanWhileDisplayedCaptureS
     ASSERT_NE(row, nullptr);
     const SIMDVectorSingle pointValue = VectorAdd(VectorSet(row->rectangle.x, row->rectangle.y, 0.0f, 0.0f), VectorSet(10.0f, 12.0f, 0.0f, 0.0f));
     const Point point{ VectorGetX(pointValue), VectorGetY(pointValue) };
-    EXPECT_TRUE(send({ InputEventType::PrimaryDown, point }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = point }).pointerConsumed);
     ASSERT_EQ(m_context.input().capture(), firstRow());
     const AcceptedState displayed = accepted();
     ASSERT_TRUE(declareList(2u));

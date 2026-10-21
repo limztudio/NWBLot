@@ -127,7 +127,7 @@ protected:
             return false;
         const Point origin = UiWidgetTests::Center(thumb->rectangle);
         const Point destination{ origin.x, VectorGetX(VectorAdd(VectorReplicate(origin.y), VectorReplicate(24.0f))) };
-        return send({ InputEventType::PrimaryDown, origin }).pointerConsumed && send({ InputEventType::PointerMove, destination }).pointerConsumed && m_context.input().capture() == thumbId;
+        return send({ .type = InputEventType::PrimaryDown, .position = origin }).pointerConsumed && send({ .type = InputEventType::PointerMove, .position = destination }).pointerConsumed && m_context.input().capture() == thumbId;
     }
 
     void expectModel(const EditModel& model, const AreaModelSnapshot& before)const{
@@ -324,7 +324,7 @@ TEST_F(UiTextAreaScrollLifetimeTests, ClosingAnAncestorRetiresWheelAndCaptureBef
     ASSERT_TRUE(m_context.commitFrame(2u));
     EXPECT_FALSE(m_context.input().capture().valid());
     EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
-    EXPECT_TRUE(send({ InputEventType::PrimaryUp, release }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = release }).pointerConsumed);
     expectModel(m_model, model);
     m_parent.open();
     ASSERT_TRUE(begin(3u));
@@ -349,7 +349,7 @@ TEST_F(UiTextAreaScrollLifetimeTests, CaptureLossCancelsTheUnfinishedThumbAndPre
     const AreaModelSnapshot model(m_arena, m_model);
     ASSERT_TRUE(wheel());
     ASSERT_TRUE(startThumb(id(s_TextAreaKey, s_TextAreaPanelKey)));
-    EXPECT_FALSE(send({ InputEventType::PointerCaptureLost }).capture.valid());
+    EXPECT_FALSE(send({ .type = InputEventType::PointerCaptureLost }).capture.valid());
     ASSERT_TRUE(frameArea(2u, SmallOptions()));
     ASSERT_GT(m_state.scroll().y, 0.0f);
     const f32 wheelOnly = m_state.scroll().y;
@@ -367,12 +367,12 @@ TEST_F(UiTextAreaScrollLifetimeTests, NativeFocusLossCancelsCopiedWheelAndAnActi
     const AreaModelSnapshot model(m_arena, m_model);
     ASSERT_TRUE(wheel());
     ASSERT_TRUE(startThumb(id(s_TextAreaKey, s_TextAreaPanelKey)));
-    EXPECT_FALSE(send({ InputEventType::FocusLost }).wantsCommands);
+    EXPECT_FALSE(send({ .type = InputEventType::FocusLost }).wantsCommands);
     ASSERT_TRUE(frameArea(2u, SmallOptions()));
     EXPECT_FALSE(m_context.input().capture().valid());
     EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
     expectModel(m_model, model);
-    EXPECT_FALSE(send({ InputEventType::FocusGained }).wantsCommands);
+    EXPECT_FALSE(send({ .type = InputEventType::FocusGained }).wantsCommands);
     ASSERT_TRUE(wheel());
     ASSERT_TRUE(frameArea(3u, SmallOptions()));
     EXPECT_GT(m_state.scroll().y, 0.0f);
@@ -390,7 +390,7 @@ TEST_F(UiTextAreaScrollLifetimeTests, DisablingRetiresPendingWheelAndThumbWithou
     ASSERT_TRUE(frameArea(2u, disabled));
     EXPECT_FALSE(m_context.input().capture().valid());
     EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
-    EXPECT_TRUE(send({ InputEventType::PrimaryUp, release }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = release }).pointerConsumed);
     expectModel(m_model, model);
     ASSERT_TRUE(frameArea(3u, SmallOptions()));
     EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);

@@ -130,12 +130,12 @@ private:
     usize m_popupDepth = 0u;
     usize m_declarationCount = 0u;
     usize m_stateClaimCount = 0u;
-    u32 m_popupLayer = 0u;
     WidgetRoot m_root;
     u64 m_frameGeneration = 0u;
     u64 m_focusLossGeneration = 0u;
     u64 m_lastFrameGeneration = 0u;
     u64 m_readyGeneration = 0u;
+    u32 m_popupLayer = 0u;
     bool m_rootActive = false;
     bool m_failed = false;
 };

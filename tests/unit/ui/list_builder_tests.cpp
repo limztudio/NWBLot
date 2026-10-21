@@ -606,12 +606,12 @@ TEST_F(UiListBuilderTests, ProgrammaticSameSelectionFencesQueuedActivationAndWhe
 TEST_F(UiListBuilderTests, SourceRevisionFencesHeldCaptureAndRestoresHostFocusAtAcceptance){
     ASSERT_TRUE(accept(1u));
     const Point point = Center(target(row(1u))->rectangle);
-    EXPECT_TRUE(send({ InputEventType::PrimaryDown, point }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = point }).pointerConsumed);
     ++m_source.contentRevision;
     ASSERT_TRUE(prepare(2u));
     EXPECT_FALSE(m_context.input().capture().valid());
     EXPECT_FALSE(m_context.input().focus().valid());
-    EXPECT_TRUE(send({ InputEventType::PrimaryUp, point }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = point }).pointerConsumed);
     EXPECT_TRUE(m_context.input().controlActions().empty());
     ASSERT_TRUE(m_context.commitFrame(2u));
     EXPECT_EQ(m_context.input().focus(), host());
@@ -624,11 +624,11 @@ TEST_F(UiListBuilderTests, EscapeBeforeReleaseCancelsRowSelectionAndHostSubmissi
     m_state.select(1u);
     ASSERT_TRUE(accept(1u));
     const Point point = Center(target(row(2u))->rectangle);
-    EXPECT_TRUE(send({ InputEventType::PrimaryDown, point }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = point }).pointerConsumed);
     ASSERT_TRUE(accept(2u));
     EXPECT_FALSE(m_result.activated);
     press(Core::Key::Escape);
-    EXPECT_TRUE(send({ InputEventType::PrimaryUp, point }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = point }).pointerConsumed);
     ASSERT_TRUE(accept(3u));
     EXPECT_EQ(m_state.selectedKey(), 1u);
     EXPECT_FALSE(m_result.activated);
@@ -820,14 +820,14 @@ TEST_F(UiListBuilderTests, LatestThumbMotionFollowsAnInterveningWheelInNativeInp
     const Point origin = Center(accepted.rectangle);
     const SIMDVectorSingle trackEnd = VectorAdd(VectorReplicate(accepted.gestureReference.y), VectorReplicate(accepted.gestureReference.height));
     const Point destination{ origin.x, VectorGetX(VectorNegativeMultiplySubtractExpression(VectorReplicate(accepted.rectangle.height), VectorReplicate(0.5f), trackEnd)) };
-    EXPECT_TRUE(send({ InputEventType::PrimaryDown, origin }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = origin }).pointerConsumed);
     InputEvent event;
     event.type = InputEventType::PointerWheel;
     event.position = origin;
     event.scrollY = 1.0;
     EXPECT_TRUE(send(event).pointerConsumed);
-    EXPECT_TRUE(send({ InputEventType::PointerMove, destination }).pointerConsumed);
-    EXPECT_TRUE(send({ InputEventType::PrimaryUp, destination }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PointerMove, .position = destination }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = destination }).pointerConsumed);
     ASSERT_TRUE(prepare(2u));
     EXPECT_DOUBLE_EQ(m_state.scrollOffset(), accepted.gestureMaximum);
     EXPECT_EQ(m_state.placement().endRow, 100000u);

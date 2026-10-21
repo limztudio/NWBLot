@@ -52,10 +52,10 @@ private:
     UiComboSmokeSource m_source;
     Impl::Ui::ComboState m_state;
     Impl::Ui::ScrollPlacement m_lastPlacement;
+    Array<u64, 16u> m_lastValues{};
     Impl::Ui::PopupPlacement m_lastPopup;
     Impl::Ui::Rect m_lastBounds;
     Impl::Ui::DisplayMetrics m_lastDisplay;
-    Array<u64, 16u> m_lastValues{};
     u32 m_sequence = 0u;
     u32 m_commits = 0u;
     u32 m_underlying = 0u;

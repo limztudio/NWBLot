@@ -77,10 +77,10 @@ private:
     const u64 m_instanceGeneration;
     u64 m_openGeneration = 0u;
     PopupPlacement m_placement;
-    PopupToken m_parent;
-    u64 m_parentOpenGeneration = 0u;
     bool m_parentBound = false;
     bool m_open = false;
+    PopupToken m_parent;
+    u64 m_parentOpenGeneration = 0u;
 };
 
 class PopupLayout final{

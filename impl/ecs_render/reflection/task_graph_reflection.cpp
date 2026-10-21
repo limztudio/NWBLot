@@ -338,8 +338,8 @@ struct StatisticsReadbackTask{
         ReflectionStatisticsReservation reservation;
         ReflectionHistoryPlan history;
         ReflectionFeedbackPlan feedback;
-        bool feedbackReserved = false;
         const bool* hardwarePreparationReady = nullptr;
+        bool feedbackReserved = false;
         bool hardwareEnabled = false;
     };
 
@@ -670,7 +670,7 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
                 copyDesc,
                 StatisticsReadbackTask::Payload{
                     resources.counters, readback, result.counters, readbackResource, Move(reservation), resources.postprocess.history,
-                    resources.feedback.plan, feedbackReserved, inputs.hardwarePreparationReady, resources.parameters.hardwareEnabled != 0u,
+                    resources.feedback.plan, inputs.hardwarePreparationReady, feedbackReserved, resources.parameters.hardwareEnabled != 0u,
                 }
             );
             if(!dependencyResult6){

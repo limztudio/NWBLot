@@ -596,14 +596,14 @@ private:
     NWB::Core::ECS::EntityID m_whiteWallPosZ = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Tests::Smoke::PresentationFpsProbe m_presentationFpsProbe;
     NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ s_ProjectName };
+    Timer m_complexLiveWarmupStartTime = {};
+    u64 m_complexLiveWarmupStartPresentations = 0u;
     u32 m_rendererBaselineRenderedFrameCount = 0u;
+    f32 m_complexMinLiveWarmupSeconds = s_ComplexMinLiveWarmupSeconds;
     bool m_rendererBaselineCapturePaused = false;
     bool m_resolveSwitchEnabled = false;
     bool m_complexSceneEnabled = false;
     bool m_coverageViewEnabled = false;
-    f32 m_complexMinLiveWarmupSeconds = s_ComplexMinLiveWarmupSeconds;
-    Timer m_complexLiveWarmupStartTime = {};
-    u64 m_complexLiveWarmupStartPresentations = 0u;
     bool m_complexLiveWarmupStarted = false;
     bool m_complexLiveWarmupComplete = false;
     bool m_complexCaptureReceiptLogged = false;

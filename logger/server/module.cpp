@@ -66,8 +66,8 @@ struct ConnectionInfo{
     usize size = 0u;
     usize capacity = 0u;
     ConnectionUploadKind::Enum uploadKind = ConnectionUploadKind::LogMessage;
-    Path crashUploadPath;
     bool crashUploadOwned = false;
+    Path crashUploadPath;
     OutputFileStream crashUploadStream;
 
 

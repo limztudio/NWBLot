@@ -191,7 +191,7 @@ TEST_F(UiRadioGroupPopupTests, AncestorClosureSuppressesMetadataAndRetiresCaptur
     const RadioGroupChoicePlacement* row = choice(20u, m_childState);
     ASSERT_NE(row, nullptr);
     const Point point = UiWidgetTests::Center(row->rectangle);
-    EXPECT_TRUE(send({ InputEventType::PrimaryDown, point }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = point }).pointerConsumed);
     EXPECT_TRUE(m_context.input().capture().valid());
     m_source.resetCounters();
     m_childSource.resetCounters();
@@ -211,7 +211,7 @@ TEST_F(UiRadioGroupPopupTests, AncestorClosureSuppressesMetadataAndRetiresCaptur
     ASSERT_TRUE(m_context.commitFrame(3u));
     m_child.open();
     ASSERT_TRUE(acceptFamily(4u));
-    EXPECT_TRUE(send({ InputEventType::PrimaryUp, point }).pointerConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = point }).pointerConsumed);
     ASSERT_TRUE(acceptFamily(5u));
     EXPECT_EQ(m_childState.selectedKey(), 20u);
     EXPECT_FALSE(m_childResult.activated);

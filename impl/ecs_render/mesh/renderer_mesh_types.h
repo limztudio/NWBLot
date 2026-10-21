@@ -54,6 +54,7 @@ using InstanceGpuDataVector = Vector<InstanceGpuData, Core::Alloc::ScratchArena>
 
 
 struct MeshResources : public RuntimeMeshBuffers{
+    CsgReceiverCpuBounds csgLocalBounds;
     Name meshName = s_NameNone;
     // Unified generated geometry: expanded vertices or compact vertices followed by u32 indices.
     Core::BufferHandle emulationVertexBuffer;
@@ -62,11 +63,11 @@ struct MeshResources : public RuntimeMeshBuffers{
     // CPU topology is copied once at admission; its primitive order matches triangleIndexBuffer.
     Core::GlobalUniquePtr<u32[]> solidTriangleWords;
     Core::BufferHandle runtimeLocalBoundsBuffer;
-    Core::GpuDescriptorHandle runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Invalid();
     Core::BufferHandle runtimeMeshletLocalBoundsBuffer;
-    Core::GpuDescriptorHandle runtimeMeshletLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Invalid();
     Core::BufferHandle attributeBuffer;     // RT-only flat per-triangle-corner trace attributes; null when ray tracing is unsupported
     Core::RayTracingAccelStructHandle blas;
+    Core::GpuDescriptorHandle runtimeMeshletLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Invalid();
     // The typed vertex and raw index UAV views share this fourth mesh push-lane selector.
     Core::GpuDescriptorHandle emulationVertexHeapHandle = Core::GpuDescriptorHandle::Invalid();
     // One heap handle per ABI slot; retired before runtime meshes are replaced.
@@ -74,6 +75,7 @@ struct MeshResources : public RuntimeMeshBuffers{
     // SW-BVH streams stay separate; triangle index is the reconstructed RT stream.
     Core::GpuDescriptorHandle swBvhPositionHeapHandle;
     Core::GpuDescriptorHandle swBvhTriangleIndexHeapHandle;
+    bool swBvhBuildAccepted = false;
     Core::BufferHandle swBvhNodeBuffer;     // per-mesh software LBVH nodes (no-hardware-RT shadow fallback)
     Core::BufferHandle swBvhParentBuffer;   // per-mesh software LBVH parent links (persist across refits)
     // Build and traversal share these descriptors; build via push constants.
@@ -84,6 +86,10 @@ struct MeshResources : public RuntimeMeshBuffers{
     u32 meshletPrimitiveIndexCount = 0;
     u32 blasRefitsSinceRebuild = 0u;
     u32 swBvhRefitsSinceRebuild = 0u;
+    u64 runtimeMeshVersion = 0u;
+    u64 runtimeGeometryContentRevision = 0u;
+    u64 blasGeometryContentRevision = 0u;
+    u64 swBvhGeometryContentRevision = 0u;
     bool runtimeMesh = false;
     bool dynamicMeshletBoundsFresh = false;
     bool dynamicMeshletConesFresh = false;
@@ -92,13 +98,7 @@ struct MeshResources : public RuntimeMeshBuffers{
     bool blasBackingFresh = false;
     bool swBvhBuildPending = false;     // static mesh awaiting its one-time software BVH build
     bool swBvhTopologyBuilt = false;    // a full software BVH build initialized the persistent topology
-    u64 runtimeMeshVersion = 0u;
-    u64 runtimeGeometryContentRevision = 0u;
-    u64 blasGeometryContentRevision = 0u;
-    u64 swBvhGeometryContentRevision = 0u;
     bool blasBuildAccepted = false;
-    bool swBvhBuildAccepted = false;
-    CsgReceiverCpuBounds csgLocalBounds;
 
 
 public:

@@ -324,6 +324,7 @@ private:
     CpuTaskProfileLabel m_frameTaskProfileLabel;
     DeviceCreationParameters m_deviceCreationParams;
     SwapChainRuntimeState m_swapChainState;
+    u32 m_frameIndex = 0;
     GpuTimingRecorder m_gpuTiming;
     // Optional and non-owning: Frame's perf Session owns this sink and outlives Graphics.
     // It is used only by the main-thread runFrame boundary; packet recording and setup workers intentionally remain outside this sink.
@@ -355,7 +356,6 @@ private:
     f32 m_prevDPIScaleFactorX = 0.f;
     f32 m_prevDPIScaleFactorY = 0.f;
 
-    u32 m_frameIndex = 0;
     u64 m_successfulPresentationCount = 0u;
 
     Vector<FramebufferHandle, Alloc::GlobalArena> m_swapChainFramebuffers;

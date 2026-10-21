@@ -23,8 +23,7 @@ bool EditModel::undo(){
     auto boundaries = buildBoundaries(value);
     if(!boundaries)
         return false;
-    AString<Core::Alloc::GlobalArena> candidate(record.before, m_arena);
-    m_text = Move(candidate);
+    m_text.assign(value.data(), value.size());
     m_boundaries = Move(*boundaries);
     m_anchor = record.beforeAnchor;
     m_caret = record.beforeCaret;
@@ -43,8 +42,7 @@ bool EditModel::redo(){
     auto boundaries = buildBoundaries(value);
     if(!boundaries)
         return false;
-    AString<Core::Alloc::GlobalArena> candidate(record.after, m_arena);
-    m_text = Move(candidate);
+    m_text.assign(value.data(), value.size());
     m_boundaries = Move(*boundaries);
     m_anchor = record.afterAnchor;
     m_caret = record.afterCaret;

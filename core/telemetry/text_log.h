@@ -41,15 +41,10 @@ static_assert(alignof(EncodedTextLogPayloadHeader) == s_TextLogPackedAlignBytes,
 static_assert(IsStandardLayout_V<EncodedTextLogPayloadHeader>, "EncodedTextLogPayloadHeader must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedTextLogPayloadHeader>, "EncodedTextLogPayloadHeader must stay binary-serializable");
 
+// messageUtf8 borrows the parsed payload bytes; keep them alive and unchanged while reading.
 struct TextLogPayload{
-    AString<TelemetryArena> messageUtf8;
+    AStringView messageUtf8;
     Common::LogType::Enum type = Common::LogType::Info;
-
-
-public:
-    explicit TextLogPayload(TelemetryArena& arena)noexcept
-        : messageUtf8(arena)
-    {}
 };
 
 
@@ -58,7 +53,7 @@ public:
 
 [[nodiscard]] bool IsValidTextLogType(Common::LogType::Enum type)noexcept;
 [[nodiscard]] bool BuildTextLogPayload(Alloc::ScratchArena& scratchArena, Common::LogType::Enum type, TStringView message, TelemetryBytes& outPayload);
-[[nodiscard]] Expected<TextLogPayload> ParseTextLogPayload(TelemetryArena& arena, const void* payload, usize payloadBytes);
+[[nodiscard]] Expected<TextLogPayload> ParseTextLogPayload(const void* payload, usize payloadBytes)noexcept;
 [[nodiscard]] bool RecordTextLog(Recorder& recorder, Common::LogType::Enum type, TStringView message, u64 frameIndex = 0u, u32 streamId = 0u);
 
 class TextLogCaptureLogger final : public Common::ILogger{

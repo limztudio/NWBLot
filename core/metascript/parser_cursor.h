@@ -25,10 +25,6 @@ class ParserCursor{
     friend class StatementParser;
 
 
-private:
-    using ScratchString = BasicString<MChar, Alloc::ScratchArena>;
-
-
 public:
     ParserCursor(MStringView source, MetaArena& arena, Alloc::ScratchArena& scratchArena, MVector<ParseError>& errors);
 
@@ -42,10 +38,6 @@ public:
     void error(MStringView message);
     void error(u32 line, u32 column, MStringView message);
     void errorExpected(MStringView expected);
-
-
-private:
-    [[nodiscard]] ScratchString tokenDescription();
 
 
 private:

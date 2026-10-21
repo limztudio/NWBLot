@@ -183,10 +183,10 @@ bool DescriptorBufferManager::initialize(){
         return failInitialization();
     }
 
-    if(!initializeSegment(m_resourceSegment, __hidden_descriptor_buffer::s_ResourceSegmentDebugName.data(), *resourceCapacityBytes))
+    if(!initializeSegment(m_resourceSegment, __hidden_descriptor_buffer::s_ResourceSegmentDebugName, *resourceCapacityBytes))
         return failInitialization();
 
-    if(!initializeSegment(m_samplerSegment, __hidden_descriptor_buffer::s_SamplerSegmentDebugName.data(), *samplerCapacityBytes))
+    if(!initializeSegment(m_samplerSegment, __hidden_descriptor_buffer::s_SamplerSegmentDebugName, *samplerCapacityBytes))
         return failInitialization();
 
     m_bindingGeneration = m_nextBindingGeneration;
@@ -281,9 +281,9 @@ bool DescriptorBufferManager::reserveInitialCapacityForBindingGeneration(const u
         m_enabled = false;
         return false;
     };
-    if(*resourceCapacityBytes != m_resourceSegment.capacityBytes && !initializeSegment(m_resourceSegment, __hidden_descriptor_buffer::s_ResourceSegmentDebugName.data(), *resourceCapacityBytes))
+    if(*resourceCapacityBytes != m_resourceSegment.capacityBytes && !initializeSegment(m_resourceSegment, __hidden_descriptor_buffer::s_ResourceSegmentDebugName, *resourceCapacityBytes))
         return failReservation();
-    if(*samplerCapacityBytes != m_samplerSegment.capacityBytes && !initializeSegment(m_samplerSegment, __hidden_descriptor_buffer::s_SamplerSegmentDebugName.data(), *samplerCapacityBytes))
+    if(*samplerCapacityBytes != m_samplerSegment.capacityBytes && !initializeSegment(m_samplerSegment, __hidden_descriptor_buffer::s_SamplerSegmentDebugName, *samplerCapacityBytes))
         return failReservation();
 
     NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Sized initial descriptor buffers to driver layouts (resource={} bytes, sampler={} bytes)."), *resourceCapacityBytes, *samplerCapacityBytes);
@@ -542,7 +542,7 @@ bool DescriptorBufferManager::isLiveSegmentLocked(const SegmentStorage& storage,
     return liveSegment.kind == segment.kind && liveSegment.offsetBytes == segment.offsetBytes && liveSegment.sizeBytes == segment.sizeBytes && liveSegment.storageIdentity == segment.storageIdentity && liveSegment.allocationSerial == segment.allocationSerial;
 }
 
-bool DescriptorBufferManager::initializeSegment(SegmentStorage& segment, const ACompactString& debugName, const u32 capacityBytes){
+bool DescriptorBufferManager::initializeSegment(SegmentStorage& segment, const AStringView debugName, const u32 capacityBytes){
     shutdownSegment(segment);
 
     VkBufferCreateInfo bufferInfo{};
@@ -556,14 +556,14 @@ bool DescriptorBufferManager::initializeSegment(SegmentStorage& segment, const A
 
     const auto allocation = m_allocator.createHostMappedBuffer(bufferInfo);
     if(!allocation){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor buffer '{}': {}"), StringConvert(debugName.view()), ResultToString(allocation.error()));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor buffer '{}': {}"), StringConvert(debugName), ResultToString(allocation.error()));
         return false;
     }
     segment.buffer = allocation->buffer;
     segment.allocation = allocation->allocation;
     segment.mappedMemory = allocation->mappedMemory;
     if(!segment.mappedMemory){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map descriptor buffer memory '{}'"), StringConvert(debugName.view()));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map descriptor buffer memory '{}'"), StringConvert(debugName));
         shutdownSegment(segment);
         return false;
     }
@@ -573,7 +573,7 @@ bool DescriptorBufferManager::initializeSegment(SegmentStorage& segment, const A
     addressInfo.buffer = segment.buffer;
     segment.deviceAddress = m_context.deviceDispatch.vkGetBufferDeviceAddress(m_context.device, &addressInfo);
     if(segment.deviceAddress == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to query descriptor buffer device address '{}'."), StringConvert(debugName.view()));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to query descriptor buffer device address '{}'."), StringConvert(debugName));
         shutdownSegment(segment);
         return false;
     }

@@ -382,7 +382,7 @@ TEST(MetadataExtensionOwnership, MapMoveAndReplacementUseEachOriginalObjectArena
 }
 
 TEST(MetadataExtensionOwnership, RequireRefillsAnExplicitlyMovedOutOwner){
-    AssetArena arena(Name(s_MovedSlotMetadataName.data()));
+    AssetArena arena{ Name(s_MovedSlotMetadataName) };
     ExtensionState state;
     {
         ParsedAssetMetadata metadata(arena);
@@ -403,7 +403,7 @@ TEST(MetadataExtensionOwnership, RequireRefillsAnExplicitlyMovedOutOwner){
 }
 
 TEST(MetadataExtensionOwnership, ConstructorUnwindReleasesStorageAndConstructedMembers){
-    AssetArena arena(Name(s_ConstructorUnwindMetadataName.data()));
+    AssetArena arena{ Name(s_ConstructorUnwindMetadataName) };
     ExtensionState state;
     {
         ParsedAssetMetadata metadata(arena);
@@ -423,7 +423,7 @@ TEST(MetadataExtensionOwnership, ConstructorUnwindReleasesStorageAndConstructedM
 }
 
 TEST(MetadataExtensionOwnership, CallerUnwindDestroysPublishedExtensions){
-    AssetArena arena(Name(s_CallerUnwindMetadataName.data()));
+    AssetArena arena{ Name(s_CallerUnwindMetadataName) };
     ExtensionState state;
     EXPECT_THROW({
         ParsedAssetMetadata metadata(arena);
@@ -438,7 +438,7 @@ TEST(MetadataExtensionOwnership, CallerUnwindDestroysPublishedExtensions){
 }
 
 TEST(MetadataExtensionOwnership, ReentrantInsertionReturnsTheActualStoredValue){
-    AssetArena arena(Name(s_ReentrantMetadataName.data()));
+    AssetArena arena{ Name(s_ReentrantMetadataName) };
     ExtensionState state;
     {
         ParsedAssetMetadata metadata(arena);
@@ -481,7 +481,7 @@ TEST(MetadataExtensionOwnership, InsertionUnwindDestroysThePendingErasedOwner){
 }
 
 TEST(MetadataExtensionOwnership, ExtensionsRetireBeforeTheEntryRegistryTheyBorrow){
-    AssetArena arena(Name(s_RegistryLifetimeMetadataName.data()));
+    AssetArena arena{ Name(s_RegistryLifetimeMetadataName) };
     Alloc::ScratchArena scratchArena(Name("tests/metadata_extension/registry_lifetime_scratch"));
     usize observedBucketCount = 0u;
     usize expectedBucketCount = 0u;

@@ -218,7 +218,7 @@ public:
 private:
     [[nodiscard]] Expected<BindingSnapshot> captureBindingSnapshotLocked()const noexcept;
     [[nodiscard]] bool isLiveSegmentLocked(const SegmentStorage& storage, const DescriptorBufferSegment& segment, DescriptorBufferSegmentKind::Enum expectedKind)const noexcept;
-    bool initializeSegment(SegmentStorage& segment, const ACompactString& debugName, u32 capacityBytes);
+    bool initializeSegment(SegmentStorage& segment, AStringView debugName, u32 capacityBytes);
     void shutdownSegment(SegmentStorage& segment)noexcept;
 
 

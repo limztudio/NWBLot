@@ -71,15 +71,14 @@ static constexpr TStringView s_RtTriangleAttributeLabel = NWB_TEXT("rt triangle 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ValidateRuntimeMeshUploadPayload(Core::Alloc::ScratchArena& scratchArena, const MeshSkinningRuntimeInstance& instance){
-    TString<Core::Alloc::ScratchArena> sourceText{scratchArena};
-    if(instance.sourceName)
-        sourceText = StringConvert(scratchArena, instance.sourceName.resolvedText());
-    else
-        sourceText.assign(NWB_TEXT("<unnamed>"));
+// Resolve the name only when a diagnostic is emitted.
+[[nodiscard]] AStringView RuntimeMeshSourceText(const MeshSkinningRuntimeInstance& instance){
+    return instance.sourceName ? instance.sourceName.resolvedText() : AStringView("<unnamed>");
+}
 
+[[nodiscard]] bool ValidateRuntimeMeshUploadPayload(const MeshSkinningRuntimeInstance& instance){
     if(!Core::Mesh::MeshClassUsesSkinning(instance.meshClass)){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' has invalid mesh class"), TStringView(sourceText));
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' has invalid mesh class"), StringConvert(RuntimeMeshSourceText(instance)));
         return false;
     }
     if(
@@ -99,7 +98,7 @@ static constexpr TStringView s_RtTriangleAttributeLabel = NWB_TEXT("rt triangle 
         || instance.meshletAttributeRefCount == 0u
         || instance.attributeSkins.size() != instance.meshletAttributeRefCount
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' has incomplete split mesh payload"), TStringView(sourceText));
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' has incomplete split mesh payload"), StringConvert(RuntimeMeshSourceText(instance)));
         return false;
     }
     if(
@@ -113,7 +112,7 @@ static constexpr TStringView s_RtTriangleAttributeLabel = NWB_TEXT("rt triangle 
         || !FitsU32(instance.meshletLocalVertexRefs.size())
         || !FitsU32(instance.meshletPrimitiveIndices.size())
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' exceeds u32 payload limits"), TStringView(sourceText));
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' exceeds u32 payload limits"), StringConvert(RuntimeMeshSourceText(instance)));
         return false;
     }
     // Skin::loadBinary already admitted the copied skin and inverse bind data.
@@ -134,7 +133,7 @@ static constexpr TStringView s_RtTriangleAttributeLabel = NWB_TEXT("rt triangle 
             if(ref && MeshMeshletRefValidation::MeshletPositionRefInRange(*ref, instance.restPositions.size(), instance.skin.size(), true))
                 continue;
 
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' meshlet {} position ref {} is out of range"), TStringView(sourceText), meshletIndex, localPositionIndex);
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' meshlet {} position ref {} is out of range"), StringConvert(RuntimeMeshSourceText(instance)), meshletIndex, localPositionIndex);
             return false;
         }
         for(u32 localAttributeIndex = 0u; localAttributeIndex < MeshletAttributeCount(meshlet); ++localAttributeIndex){
@@ -149,12 +148,12 @@ static constexpr TStringView s_RtTriangleAttributeLabel = NWB_TEXT("rt triangle 
                 continue;
             }
 
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' meshlet {} attribute ref {} is out of range"), TStringView(sourceText), meshletIndex, localAttributeIndex);
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' meshlet {} attribute ref {} is out of range"), StringConvert(RuntimeMeshSourceText(instance)), meshletIndex, localAttributeIndex);
             return false;
         }
     }
     if(logicalAttributeRefIndex != instance.attributeSkins.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' has mismatched attribute skin payload"), TStringView(sourceText));
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' has mismatched attribute skin payload"), StringConvert(RuntimeMeshSourceText(instance)));
         return false;
     }
 
@@ -272,7 +271,7 @@ template<typename PayloadVector>
 
 
 bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena){
-    if(!__hidden_runtime_cache_resources::ValidateRuntimeMeshUploadPayload(scratchArena, instance))
+    if(!__hidden_runtime_cache_resources::ValidateRuntimeMeshUploadPayload(instance))
         return false;
 
     const bool rtSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct);

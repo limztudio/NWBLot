@@ -296,7 +296,8 @@ Expected<ShaderCook::ShaderEntry> ShaderCook::parseShaderMeta(const Path& nwbFil
     if(!Assets::CheckPairedSourceExtension(nwbFilePath, entry.source, __hidden_shader_cook::s_SlangSourceExtension, __hidden_shader_cook::s_ShaderDiagnosticPrefix, scratchArena))
         return MakeUnexpected(Failure{});
 
-    if(!entry.stage.assign(Core::ShaderStageNames::ArchiveStageTextFromShaderType(shaderType))){
+    entry.stage = Core::ShaderStageNames::ArchiveStageTextFromShaderType(shaderType);
+    if(entry.stage.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': failed to derive shader stage"), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
@@ -432,7 +433,7 @@ bool ShaderCook::expandDefineCombinations(const CookMap<CookString, DefineEntry>
     initialCombo.reserve(defineValues.size());
     outCombinations.push_back(Move(initialCombo));
 
-    auto cloneComboWithEntry = [&](const DefineCombo& source, const CookString& defineName, const CookString& defineValue) -> Expected<DefineCombo>{
+    auto cloneComboWithEntry = [&](const DefineCombo& source, const AStringView defineName, const AStringView defineValue) -> Expected<DefineCombo>{
         DefineCombo copy{m_memoryArena};
         copy.reserve(defineValues.size());
         for(const auto& [sourceName, sourceValue] : source){
@@ -449,7 +450,7 @@ bool ShaderCook::expandDefineCombinations(const CookMap<CookString, DefineEntry>
     };
 
     for(const auto& entry : sortedDefineEntries(defineValues, scratchArena)){
-        const CookString& defineName = *entry.key;
+        const AStringView defineName(*entry.key);
         const CookVector<CookString>& values = entry.value->values;
         if(values.empty()){
             outCombinations.clear();
@@ -457,7 +458,7 @@ bool ShaderCook::expandDefineCombinations(const CookMap<CookString, DefineEntry>
         }
 
         if(values.size() == 1u){
-            const CookString& value = values.front();
+            const AStringView value(values.front());
             for(DefineCombo& combo : outCombinations){
                 combo.reserve(defineValues.size());
                 if(!combo.try_emplace(defineName, value).second){
@@ -489,7 +490,7 @@ bool ShaderCook::expandDefineCombinations(const CookMap<CookString, DefineEntry>
             }
 
             combo.reserve(defineValues.size());
-            if(!combo.try_emplace(defineName, values.back()).second){
+            if(!combo.try_emplace(defineName, AStringView(values.back())).second){
                 NWB_ASSERT(false);
                 outCombinations.clear();
                 return false;

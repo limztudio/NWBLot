@@ -144,10 +144,8 @@ static bool SetShaderImplicitDefine(ShaderCook::ShaderEntry& entry, const AStrin
 
 static Expected<ShaderCook::ShaderEntry> BuildMeshComputeShadowEntry(const ShaderCook::ShaderEntry& sourceEntry){
     ShaderCook::ShaderEntry entry = sourceEntry;
-    if(!entry.archiveStage.assign(MaterialShaderStageNames::s_MeshComputeArchiveStageText))
-        return MakeUnexpected(Failure{});
-    if(!entry.stage.assign(Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::ComputeStage)))
-        return MakeUnexpected(Failure{});
+    entry.archiveStage = MaterialShaderStageNames::s_MeshComputeArchiveStageText;
+    entry.stage = Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::ComputeStage);
 
     if(!SetShaderImplicitDefine(entry, MaterialShaderStageNames::s_MeshComputeImplicitDefineText, s_EnabledImplicitDefineValue))
         return MakeUnexpected(Failure{});
@@ -398,7 +396,7 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
             return MakeUnexpected(Failure{});
         preparedEntry.materialTypedBindingInterface = materialDependency->interfaceName;
         // Pixel/compute/rgen stages that read the typed .bind (surface hook, incl. the shadow dispatch) receive it when depending on a material interface; the generic mesh shader stays interface-free.
-        const AStringView preparedEntryArchiveStage = preparedEntry.entry.archiveStage.view();
+        const AStringView preparedEntryArchiveStage = preparedEntry.entry.archiveStage;
         const bool preparedEntryStageReadsTypedMaterial =
             preparedEntryArchiveStage == Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::MeshStage)
             || preparedEntryArchiveStage == Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::PixelStage)
@@ -449,7 +447,7 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
         if(!Core::Assets::AddPlannedFileCount(preparedEntry.variantCount, plan.plannedFileCount))
             return MakeUnexpected(Failure{});
 
-        const bool emitMeshComputeShadow = preparedEntry.entry.archiveStage.view() == Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::MeshStage) && preparedEntry.entry.emitMeshComputeShadow;
+        const bool emitMeshComputeShadow = preparedEntry.entry.archiveStage == Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::MeshStage) && preparedEntry.entry.emitMeshComputeShadow;
         const usize meshEntryIndex = plan.preparedEntries.size();
         plan.preparedEntries.push_back(Move(preparedEntry));
         if(!AppendMeshObjectShaderEntries(cookArena, shaderCook, resolvedPaths, plan.preparedEntries[meshEntryIndex], plan, scratchArena))

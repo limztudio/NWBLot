@@ -109,7 +109,7 @@ Expected<ShaderStageKeySet, NameTextError::Enum> CollectAvboitClipShaderKeys(con
 
 Expected<bool, NameTextError::Enum> SupportsClipVariant(const ShaderStageKeySet& shaderKeys, const ShaderCook::ShaderEntry& shaderEntry){
     const auto shaderName = ToName(shaderEntry.name);
-    const auto stageName = ToName(shaderEntry.archiveStage.view());
+    const auto stageName = ToName(shaderEntry.archiveStage);
     if(!shaderName)
         return MakeUnexpected(shaderName.error());
     if(!stageName)
@@ -144,16 +144,12 @@ Expected<ShaderCook::DefineCombo> BuildClipDefineCombo(ShaderCook::CookArena& co
         }
     }
 
-    ShaderCook::CookString csgIntervalSampleEnabledDefineName(s_IntervalSampleEnabledImplicitDefineName, cookArena);
-    ShaderCook::CookString csgIntervalSampleEnabledDefineValue(s_IntervalSampleEnabledImplicitDefineValue, cookArena);
-    if(!combo.try_emplace(Move(csgIntervalSampleEnabledDefineName), Move(csgIntervalSampleEnabledDefineValue)).second){
+    if(!combo.try_emplace(s_IntervalSampleEnabledImplicitDefineName, s_IntervalSampleEnabledImplicitDefineValue).second){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: reserved CSG shader define '{}' already exists for entry '{}'"), StringConvert(s_IntervalSampleEnabledImplicitDefineName), StringConvert(entryName));
         return MakeUnexpected(Failure{});
     }
 
-    ShaderCook::CookString csgDefineName(s_ClipImplicitDefineName, cookArena);
-    ShaderCook::CookString csgDefineValue(s_EnabledImplicitDefineValue, cookArena);
-    if(combo.try_emplace(Move(csgDefineName), Move(csgDefineValue)).second)
+    if(combo.try_emplace(s_ClipImplicitDefineName, s_EnabledImplicitDefineValue).second)
         return combo;
 
     NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: reserved CSG shader define '{}' already exists for entry '{}'"), StringConvert(s_ClipImplicitDefineName), StringConvert(entryName));

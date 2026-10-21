@@ -411,12 +411,12 @@ static Expected<CookString> ParseMaterialVirtualAssetField(const Path& nwbFilePa
         return MakeUnexpected(Failure{});
     }
 
-    ScratchString normalized(virtualPath, scratchArena);
+    CookString normalized(virtualPath, arena);
     for(char& ch : normalized){
         if(ch == '\\')
             ch = '/';
     }
-    return CookString(AStringView(normalized), arena);
+    return normalized;
 }
 
 

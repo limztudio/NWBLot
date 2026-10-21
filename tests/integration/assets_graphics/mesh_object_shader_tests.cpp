@@ -112,8 +112,8 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
     Impl::ShaderCook shaderCook(testArena.arena);
     Plan::PreparedShaderEntry mesh(testArena.arena);
     mesh.entry.name = "engine/graphics/mesh/shared_ms";
-    mesh.entry.stage = s_MeshStage.data();
-    mesh.entry.archiveStage = s_MeshStage.data();
+    mesh.entry.stage = s_MeshStage;
+    mesh.entry.archiveStage = s_MeshStage;
     mesh.entry.rayQuery = true;
     mesh.entry.entryPoint = "authoredEntry";
     mesh.entry.includeRoots.emplace_back("engine/graphics", testArena.arena);

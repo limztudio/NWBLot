@@ -123,7 +123,8 @@ public:
 
 
 public:
-    using DefineCombo = CookMap<CookString, CookString>;
+    // Combos borrow define text from the expanded entry's defineValues or static literals; use them only while that entry is unchanged.
+    using DefineCombo = CookMap<AStringView, AStringView>;
 
 
 public:
@@ -155,8 +156,9 @@ public:
 
     struct ShaderEntry{
         CookString name;
-        ACompactString stage;
-        ACompactString archiveStage;
+        // Stage texts borrow static ShaderStageNames or MaterialShaderStageNames literals.
+        AStringView stage;
+        AStringView archiveStage;
         CookString entryPoint;
         CookString source;
 

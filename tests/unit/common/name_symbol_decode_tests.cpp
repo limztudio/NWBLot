@@ -240,9 +240,9 @@ TEST(NameSymbolDecodeTests, NameSymbolsCollectArenaOwnersWithoutPerformanceCaptu
     EXPECT_STREQ(resolvedText, s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_RETIRE.data());
     EXPECT_TRUE(NameSymbols::Resolve(s_HeapHash, resolvedText, sizeof(resolvedText)));
     EXPECT_STREQ(resolvedText, s_GLOBAL_ARENA_MEMORY_HEAP_BACKING.data());
-    EXPECT_NE(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_LIVE.data()), decltype(namesymText)::npos);
-    EXPECT_NE(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_RETIRE.data()), decltype(namesymText)::npos);
-    EXPECT_NE(namesymText.find(s_GLOBAL_ARENA_MEMORY_HEAP_BACKING.data()), decltype(namesymText)::npos);
+    EXPECT_NE(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_LIVE), decltype(namesymText)::npos);
+    EXPECT_NE(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_RETIRE), decltype(namesymText)::npos);
+    EXPECT_NE(namesymText.find(s_GLOBAL_ARENA_MEMORY_HEAP_BACKING), decltype(namesymText)::npos);
 #else
     EXPECT_FALSE(NameSymbols::Resolve(s_LiveHash, resolvedText, sizeof(resolvedText)));
     EXPECT_FALSE(NameSymbols::Resolve(s_RetiredHash, resolvedText, sizeof(resolvedText)));
@@ -263,13 +263,13 @@ TEST(NameSymbolDecodeTests, NameSymbolsCollectArenaOwnersWithoutPerformanceCaptu
     namesymText.clear();
     ASSERT_TRUE(ReadTextFile(namesymPath, namesymText));
 #if defined(NWB_BUILD_SYMBOLS)
-    EXPECT_NE(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_LIVE.data()), decltype(namesymText)::npos);
-    EXPECT_NE(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_RETIRE.data()), decltype(namesymText)::npos);
-    EXPECT_NE(namesymText.find(s_GLOBAL_ARENA_MEMORY_HEAP_BACKING.data()), decltype(namesymText)::npos);
+    EXPECT_NE(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_LIVE), decltype(namesymText)::npos);
+    EXPECT_NE(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_RETIRE), decltype(namesymText)::npos);
+    EXPECT_NE(namesymText.find(s_GLOBAL_ARENA_MEMORY_HEAP_BACKING), decltype(namesymText)::npos);
 #else
-    EXPECT_EQ(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_LIVE.data()), decltype(namesymText)::npos);
-    EXPECT_EQ(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_RETIRE.data()), decltype(namesymText)::npos);
-    EXPECT_EQ(namesymText.find(s_GLOBAL_ARENA_MEMORY_HEAP_BACKING.data()), decltype(namesymText)::npos);
+    EXPECT_EQ(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_LIVE), decltype(namesymText)::npos);
+    EXPECT_EQ(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_RETIRE), decltype(namesymText)::npos);
+    EXPECT_EQ(namesymText.find(s_GLOBAL_ARENA_MEMORY_HEAP_BACKING), decltype(namesymText)::npos);
 #endif
     EXPECT_TRUE(RemoveFile(namesymPath));
 }

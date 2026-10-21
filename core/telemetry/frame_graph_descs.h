@@ -38,20 +38,15 @@ struct FrameGraphEdgeDesc{
     u8 flags = 0u;
 };
 
+// label borrows the parsed payload string table; keep the payload bytes alive and unchanged while reading.
 struct FrameGraphNodePayload{
     Name name = s_NameNone;
-    AString<TelemetryArena> label;
+    AStringView label;
     FrameGraphNodeKind::Enum kind = FrameGraphNodeKind::Unknown;
     u8 flags = 0u;
     FrameGraphQueueAssignment queueAssignment;
     FrameGraphCompiledTask compiledTask;
     FrameGraphRuntimeStatistics runtimeStatistics;
-
-
-public:
-    explicit FrameGraphNodePayload(TelemetryArena& arena)noexcept
-        : label(arena)
-    {}
 };
 
 struct FrameGraphEdgePayload{

@@ -275,15 +275,15 @@ TEST(Telemetry, DiagnosticPayloadRejectsNonCurrentVersionsAndRecovers){
     Expected<Telemetry::DiagnosticPayload> parsed = MakeUnexpected(Failure{});
     for(const u16 version : unsupportedVersions){
         SCOPED_TRACE(version);
-        ASSERT_TRUE((parsed = Telemetry::ParseDiagnosticPayload(testArena.arena, current.data(), current.size())));
+        ASSERT_TRUE((parsed = Telemetry::ParseDiagnosticPayload(current.data(), current.size())));
         usize cursor = 0u;
         const auto readHeader = ReadPOD<Telemetry::EncodedDiagnosticPayloadHeader>(current, cursor);
         ASSERT_TRUE(readHeader);
         Telemetry::EncodedDiagnosticPayloadHeader header = *readHeader;
         header.version = version;
         NWB_MEMCPY(encoded.data(), encoded.size(), &header, sizeof(header));
-        EXPECT_FALSE((parsed = Telemetry::ParseDiagnosticPayload(testArena.arena, encoded.data(), encoded.size())));
-        ASSERT_TRUE((parsed = Telemetry::ParseDiagnosticPayload(testArena.arena, current.data(), current.size())));
+        EXPECT_FALSE((parsed = Telemetry::ParseDiagnosticPayload(encoded.data(), encoded.size())));
+        ASSERT_TRUE((parsed = Telemetry::ParseDiagnosticPayload(current.data(), current.size())));
         EXPECT_EQ(AStringView(parsed->message), record.message);
     }
 }

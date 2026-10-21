@@ -63,10 +63,6 @@ static void ExpectCookFailure(TestArena& testArena, const NotNull<CookSingleMeta
 
     EXPECT_TRUE(RemoveAllIfExists(cookCase->root));
 }
-
-static void ExpectCookFailure(TestArena& testArena, const NotNull<CookSingleMetaFn> cookSingleMeta, const AString& metaText, const AStringView caseName){
-    ExpectCookFailure(testArena, cookSingleMeta, AStringView(metaText.data(), metaText.size()), caseName);
-}
 #endif
 
 

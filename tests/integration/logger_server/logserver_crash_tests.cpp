@@ -158,9 +158,9 @@ static void LinuxSilenceExpectedCrashChildConsole(){
 
 [[nodiscard]] static AStringView LinuxObservableAssertCategory()noexcept{
 #if NWB_OCCUR_ASSERT
-    return DiagnosticEventCategory::s_Assert.data();
+    return DiagnosticEventCategory::s_Assert;
 #else
-    return DiagnosticEventCategory::s_FatalAssert.data();
+    return DiagnosticEventCategory::s_FatalAssert;
 #endif
 }
 
@@ -768,7 +768,7 @@ TEST_F(LoggerServerCrash, CrashUploadAuthorizationMatchesBearerToken){
     EXPECT_TRUE(NWB::Log::CrashUploadAuthorizationMatches(AStringView(), "bad"));
     EXPECT_TRUE(NWB::Log::CrashUploadAuthorizationMatches(s_SECRET_TOKEN, "Bearer secret-token"));
     EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SECRET_TOKEN, AStringView()));
-    EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SECRET_TOKEN, s_SECRET_TOKEN.data()));
+    EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SECRET_TOKEN, s_SECRET_TOKEN));
     EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SECRET_TOKEN, "Bearer wrong"));
     EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SECRET_TOKEN, "Bearer secret-token "));
 

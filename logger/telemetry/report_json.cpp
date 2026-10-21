@@ -423,7 +423,7 @@ void AppendFrameGraphJson(const FrameGraphReportRecord& record, const usize grap
         StringAppendFormat(out, "          {{\"index\": {}, \"identity\": ", nodeIndex);
         AppendJsonQuotedText(out, identity);
         out += ", \"label\": ";
-        AppendJsonQuotedText(out, AStringView(node.label.data(), node.label.size()));
+        AppendJsonQuotedText(out, node.label);
         out += ", \"kind\": ";
         AppendJsonQuotedText(out, AStringView(FrameGraphNodeKindText(node.kind)));
         StringAppendFormat(out, ", \"flags\": {}, \"queueAssignment\": ", static_cast<u32>(node.flags));

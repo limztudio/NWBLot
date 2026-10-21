@@ -53,13 +53,13 @@ TEST(Telemetry, CaptureScopeRestoresLoggerAndStopsDiagnosticsAfterDestruction){
             Telemetry::CaptureSessionCaptureScope captureScope(session);
 
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("scope text"));
-            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error.data(), .category = s_ScopeDiagnosticCategory, .message = "scope diagnostic", .file = "scope.cpp", .line = 67u, });
+            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error, .category = s_ScopeDiagnosticCategory, .message = "scope diagnostic", .file = "scope.cpp", .line = 67u, });
         }
 
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("after scope"));
     }
 
-    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error.data(), .category = s_ScopeDiagnosticCategory, .message = "ignored after scope", });
+    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error, .category = s_ScopeDiagnosticCategory, .message = "ignored after scope", });
 
     EXPECT_EQ(previousLogger.messageCount(), s_ExpectedDualCount);
     EXPECT_TRUE(previousLogger.sawMessageContaining(NWB_TEXT("scope text")));
@@ -101,10 +101,10 @@ TEST(Telemetry, TextLogPayloadRejectsCorruptedHeaderAfterValidParse){
     ASSERT_TRUE(Telemetry::BuildTextLogPayload(testArena.scratchArena, NWB::Core::Common::LogType::Warning, NWB_TEXT("telemetry text log"), payload));
 
     Expected<Telemetry::TextLogPayload> parsed = MakeUnexpected(Failure{});
-    ASSERT_TRUE((parsed = Telemetry::ParseTextLogPayload(testArena.arena, payload.data(), payload.size())));
+    ASSERT_TRUE((parsed = Telemetry::ParseTextLogPayload(payload.data(), payload.size())));
 
     payload[0u] = 0u;
-    EXPECT_FALSE((parsed = Telemetry::ParseTextLogPayload(testArena.arena, payload.data(), payload.size())));
+    EXPECT_FALSE((parsed = Telemetry::ParseTextLogPayload(payload.data(), payload.size())));
 }
 
 TEST(Telemetry, DiagnosticPayloadPreservesBoundedTextAndRejectsCorruptedHeader){
@@ -126,12 +126,12 @@ TEST(Telemetry, DiagnosticPayloadPreservesBoundedTextAndRejectsCorruptedHeader){
     ASSERT_TRUE(Telemetry::BuildDiagnosticPayload(testArena.arena, source, payload));
 
     Expected<Telemetry::DiagnosticPayload> parsed = MakeUnexpected(Failure{});
-    ASSERT_TRUE((parsed = Telemetry::ParseDiagnosticPayload(testArena.arena, payload.data(), payload.size())));
+    ASSERT_TRUE((parsed = Telemetry::ParseDiagnosticPayload(payload.data(), payload.size())));
     EXPECT_EQ(AStringView(parsed->event), source.event);
     EXPECT_EQ(AStringView(parsed->message), source.message);
 
     payload[0u] = 0u;
-    EXPECT_FALSE((parsed = Telemetry::ParseDiagnosticPayload(testArena.arena, payload.data(), payload.size())));
+    EXPECT_FALSE((parsed = Telemetry::ParseDiagnosticPayload(payload.data(), payload.size())));
 }
 
 TEST(Telemetry, DiagnosticCaptureGuardDestructionStopsGlobalCapture){
@@ -142,10 +142,10 @@ TEST(Telemetry, DiagnosticCaptureGuardDestructionStopsGlobalCapture){
     {
         Telemetry::DiagnosticCaptureGuard guard(recorder);
         EXPECT_TRUE(guard.installed());
-        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error.data(), .category = s_TelemetryGuardCategory, .message = "captured diagnostic", .file = "guard.cpp", .line = 44u, });
+        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error, .category = s_TelemetryGuardCategory, .message = "captured diagnostic", .file = "guard.cpp", .line = 44u, });
     }
 
-    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error.data(), .category = s_TelemetryGuardCategory, .message = "ignored after guard", });
+    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error, .category = s_TelemetryGuardCategory, .message = "ignored after guard", });
 
     EXPECT_EQ(recorder.eventCount(), 1u);
 }
@@ -160,7 +160,7 @@ TEST(Telemetry, DiagnosticCaptureGuardDoesNotReplaceExistingCallback){
     {
         Telemetry::DiagnosticCaptureGuard guard(recorder);
         EXPECT_FALSE(guard.installed());
-        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error.data(), .message = "existing callback should keep ownership", });
+        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error, .message = "existing callback should keep ownership", });
     }
     ClearDiagnosticEventCallback(ExistingDiagnosticCallback);
 
@@ -225,7 +225,7 @@ TEST(Telemetry, DiagnosticObserverRejectsOversizeWithoutTruncatingDirectDiagnost
     ASSERT_TRUE(Telemetry::RecordDiagnostic(recorder, source));
     const auto* const directEvent = recorder.view().eventAt(1u);
     ASSERT_NE(directEvent, nullptr);
-    const auto parsed = Telemetry::ParseDiagnosticPayload(testArena.arena, directEvent->payload.data(), directEvent->payload.size());
+    const auto parsed = Telemetry::ParseDiagnosticPayload(directEvent->payload.data(), directEvent->payload.size());
     ASSERT_TRUE(parsed);
     EXPECT_EQ(AStringView(parsed->message), AStringView(message));
     EXPECT_EQ(boundedEvent->payload.size(), Telemetry::s_DiagnosticCapturePayloadCapacity);
@@ -258,7 +258,7 @@ TEST(Telemetry, DiagnosticObserverCapturesDuringUnwindWithoutAllocating){
     EXPECT_EQ(captured.reallocationCount, prepared.reallocationCount);
     const auto* const event = recorder.view().eventAt(0u);
     ASSERT_NE(event, nullptr);
-    const auto parsed = Telemetry::ParseDiagnosticPayload(testArena.arena, event->payload.data(), event->payload.size());
+    const auto parsed = Telemetry::ParseDiagnosticPayload(event->payload.data(), event->payload.size());
     ASSERT_TRUE(parsed);
     EXPECT_EQ(parsed->category, "unwind");
 }
@@ -342,7 +342,7 @@ TEST(Telemetry, DiagnosticObserverPreservesOrderingAndPayloadLifetimeDuringBuild
     const auto* const diagnostic = events.eventAt(0u);
     ASSERT_TRUE(recorder.recordBinary(Telemetry::EventKind::PerfFrame, 9u, nullptr, 0u));
     EXPECT_EQ(events.eventAt(0u), diagnostic);
-    const auto parsed = Telemetry::ParseDiagnosticPayload(testArena.arena, diagnostic->payload.data(), diagnostic->payload.size());
+    const auto parsed = Telemetry::ParseDiagnosticPayload(diagnostic->payload.data(), diagnostic->payload.size());
     ASSERT_TRUE(parsed);
     EXPECT_EQ(parsed->message, "builder callback");
 }
@@ -393,7 +393,7 @@ TEST(Telemetry, DiagnosticCaptureGuardConcurrentLifetimeStress){
         captureThreadStarted.testAndSet(MemoryOrder::release);
         captureThreadStarted.notifyAll();
         while(!stopCaptureThread.test(MemoryOrder::acquire)){
-            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error.data(), .category = s_TelemetryGuardCategory, .message = "capture during destruction", });
+            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error, .category = s_TelemetryGuardCategory, .message = "capture during destruction", });
             YieldThread();
         }
     }
@@ -445,7 +445,7 @@ TEST(Telemetry, DiagnosticCaptureGuardConcurrentLifetimeStress){
     }
 
     const usize eventCountAfterFinalDestruction = recorder.eventCount();
-    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error.data(), .category = s_TelemetryGuardCategory, .message = "ignored after destruction", });
+    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error, .category = s_TelemetryGuardCategory, .message = "ignored after destruction", });
     EXPECT_EQ(recorder.eventCount(), eventCountAfterFinalDestruction);
 
     const Telemetry::EventView events = recorder.view();
@@ -454,7 +454,7 @@ TEST(Telemetry, DiagnosticCaptureGuardConcurrentLifetimeStress){
         ASSERT_NE(event, nullptr);
 
         Expected<Telemetry::DiagnosticPayload> parsed = MakeUnexpected(Failure{});
-        ASSERT_TRUE((parsed = Telemetry::ParseDiagnosticPayload(testArena.arena, event->payload.data(), event->payload.size())));
+        ASSERT_TRUE((parsed = Telemetry::ParseDiagnosticPayload(event->payload.data(), event->payload.size())));
         EXPECT_EQ(parsed->event, DiagnosticEventName::s_Error);
         EXPECT_EQ(parsed->category, "telemetry_guard");
         EXPECT_EQ(parsed->message, "capture during destruction");

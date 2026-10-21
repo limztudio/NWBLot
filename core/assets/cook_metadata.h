@@ -58,7 +58,7 @@ struct DiscoveredNwbFile{
 
 public:
     template<typename FileArenaT>
-    DiscoveredNwbFile(CookArena& arena, const Path& inAssetRoot, const ::Path<FileArenaT>& inFilePath, AStringView inNormalizedPathText, ACompactString inVirtualRoot)
+    DiscoveredNwbFile(CookArena& arena, const Path& inAssetRoot, const ::Path<FileArenaT>& inFilePath, AStringView inNormalizedPathText, const ACompactString& inVirtualRoot)
         : assetRoot(arena, inAssetRoot)
         , filePath(arena, inFilePath)
         , normalizedPathText(inNormalizedPathText, arena)

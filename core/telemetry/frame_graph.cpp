@@ -660,9 +660,9 @@ Expected<FrameGraphPayload> ParseFrameGraphPayload(TelemetryArena& arena, Alloc:
         if(!labelView)
             return MakeUnexpected(Failure{});
 
-        FrameGraphNodePayload& node = parsedPayload.nodes.emplace_back(arena);
+        FrameGraphNodePayload& node = parsedPayload.nodes.emplace_back();
         node.name = Name(encodedNode.nameHash);
-        node.label.assign(labelView->data(), labelView->size());
+        node.label = *labelView;
         node.kind = static_cast<FrameGraphNodeKind::Enum>(encodedNode.kind);
         node.flags = encodedNode.flags;
     }

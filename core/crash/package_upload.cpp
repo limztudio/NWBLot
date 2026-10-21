@@ -395,8 +395,7 @@ static bool RecoverUploadingPackageDirectories(Alloc::ScratchArena& scratchArena
 #if defined(NWB_PLATFORM_ANDROID)
 static bool WriteAndroidCollectionNote(Alloc::ScratchArena& scratchArena, const CrashRequest& request){
     constexpr AStringView s_CollectionNote = "application_exit_info=not_collected_by_native_layer\n" "detail=Java/Kotlin host should attach ApplicationExitInfo tombstone data on next launch\n";
-    const CrashStringT<Alloc::ScratchArena> text(s_CollectionNote, scratchArena);
-    return WriteTextFile(RequestPendingDirectory(scratchArena, request) / PackageNames::s_AndroidCollectionFileName, AStringView(text.data(), text.size()));
+    return WriteTextFile(RequestPendingDirectory(scratchArena, request) / PackageNames::s_AndroidCollectionFileName, s_CollectionNote);
 }
 
 static void CollectAndroidEmergencyRecord(Alloc::ScratchArena& scratchArena, const CrashUploadSnapshot& snapshot){

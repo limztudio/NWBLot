@@ -128,8 +128,8 @@ TEST(AssetsGraphics, ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInheritedD
         ShaderCook::ShaderEntry entry(testArena.arena);
         entry.name = "project/shaders/dependency_plan";
         entry.source = "shader.slang";
-        entry.stage = s_PixelStage.data();
-        entry.archiveStage = s_PixelStage.data();
+        entry.stage = s_PixelStage;
+        entry.archiveStage = s_PixelStage;
         addDefine(entry.defineValues, s_AuthoredDefine, { "authored" });
         if(mode == 1u)
             addDefine(entry.defineValues, Impl::AssetsGraphicsCsgShaderVariants::s_ProjectEvaluatorModuleDefineName, { "\"../common.slangi\"" });

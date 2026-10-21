@@ -257,8 +257,8 @@ u64 ShaderCook::computeSourceChecksum(const ShaderEntry& entry, const AStringVie
 
     appendChecksumLine(s_ChecksumVersionTag);
     appendChecksumLine(AStringView(entry.name));
-    appendChecksumLine(entry.stage.view());
-    appendChecksumLine(entry.archiveStage.view());
+    appendChecksumLine(entry.stage);
+    appendChecksumLine(entry.archiveStage);
     appendChecksumLine(entry.rayQuery ? SlangShaderCompiler::s_Spirv15RayQueryTargetProfileText : SlangShaderCompiler::s_Spirv15TargetProfileText);
     appendChecksumLine(__hidden_cook_checksum::ShaderOptimizationLevelText(entry.optimizationLevel));
     appendChecksumLine(AStringView(entry.entryPoint));

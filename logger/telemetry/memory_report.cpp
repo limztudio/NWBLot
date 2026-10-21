@@ -112,7 +112,7 @@ void AppendTelemetryMemoryRecordJson(AString<Core::Alloc::ScratchArena>& out, co
     NameDetail::HashToDebugString(payload.scopeName.hash(), identityText, sizeof(identityText));
     const AStringView identity(identityText, NameDetail::s_DebugHashTextLength);
     char resolvedText[Core::Common::NameSymbols::s_MaxResolvedTextLength];
-    AStringView scopeText(payload.scopeText.data(), payload.scopeText.size());
+    AStringView scopeText = payload.scopeText;
     if(scopeText == identity && Core::Common::NameSymbols::Resolve(payload.scopeName.hash(), resolvedText, sizeof(resolvedText)))
         scopeText = AStringView(resolvedText);
     out += TelemetryMemoryReportDetail::s_MemoryRecordScopeKey;

@@ -118,7 +118,7 @@ asset_bunch bunch = [
     TestArena testArena;
     auto cookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "model_bunch_four_row_transform");
     ASSERT_TRUE(cookCase);
-    EXPECT_FALSE(AssetsGraphicsFixture::CookSingleGraphicsMeta(AStringView(meta.data(), meta.size()), "characters", s_MODEL_FIXTURE_NWB.data(), testArena, *cookCase));
+    EXPECT_FALSE(AssetsGraphicsFixture::CookSingleGraphicsMeta(AStringView(meta.data(), meta.size()), "characters", s_MODEL_FIXTURE_NWB, testArena, *cookCase));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("must be a 3x4 affine matrix")));
 #endif
 }

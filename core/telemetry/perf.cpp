@@ -189,18 +189,17 @@ bool BuildPerfTimingPayload(TelemetryArena& arena, const PerfTimingSource::Enum 
     return BuildPerfTimingPayload(arena, source, scopeName, scopeName.resolvedText(), stats, outPayload);
 }
 
-Expected<PerfTimingPayload> ParsePerfTimingPayload(TelemetryArena& arena, const void* const payload, const usize payloadBytes){
-    PerfTimingPayload parsedPayload(arena);
+Expected<PerfTimingPayload> ParsePerfTimingPayload(const void* const payload, const usize payloadBytes)noexcept{
+    PerfTimingPayload parsedPayload;
 
     const auto decoded = __hidden_telemetry_perf::ParsePerfPayloadWithScopeText<EncodedPerfTimingPayloadHeader>(payload, payloadBytes);
     if(!decoded)
         return MakeUnexpected(Failure{});
     const EncodedPerfTimingPayloadHeader& header = decoded->header;
-    const AStringView scopeText = decoded->scopeText;
 
     parsedPayload.source = static_cast<PerfTimingSource::Enum>(header.source);
     parsedPayload.scopeName = Name(header.scopeHash);
-    parsedPayload.scopeText.assign(scopeText.data(), scopeText.size());
+    parsedPayload.scopeText = decoded->scopeText;
     parsedPayload.stats.seconds = header.seconds;
     parsedPayload.stats.minSeconds = header.minSeconds;
     parsedPayload.stats.maxSeconds = header.maxSeconds;
@@ -259,17 +258,16 @@ bool BuildPerfMemoryPayload(TelemetryArena& arena, const Name& scopeName, const 
     return BuildPerfMemoryPayload(arena, scopeName, scopeName.resolvedText(), snapshot, delta, outPayload);
 }
 
-Expected<PerfMemoryPayload> ParsePerfMemoryPayload(TelemetryArena& arena, const void* const payload, const usize payloadBytes){
-    PerfMemoryPayload parsedPayload(arena);
+Expected<PerfMemoryPayload> ParsePerfMemoryPayload(const void* const payload, const usize payloadBytes)noexcept{
+    PerfMemoryPayload parsedPayload;
 
     const auto decoded = __hidden_telemetry_perf::ParsePerfPayloadWithScopeText<EncodedPerfMemoryPayloadHeader>(payload, payloadBytes);
     if(!decoded)
         return MakeUnexpected(Failure{});
     const EncodedPerfMemoryPayloadHeader& header = decoded->header;
-    const AStringView scopeText = decoded->scopeText;
 
     parsedPayload.scopeName = Name(header.scopeHash);
-    parsedPayload.scopeText.assign(scopeText.data(), scopeText.size());
+    parsedPayload.scopeText = decoded->scopeText;
     parsedPayload.snapshot.scopeName = parsedPayload.scopeName;
     parsedPayload.snapshot.source = static_cast<Perf::MemorySource::Enum>(header.source);
     parsedPayload.snapshot.frameIndex = header.frameIndex;

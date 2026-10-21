@@ -27,6 +27,48 @@ constexpr usize s_ExpectedTokenFoundSeparatorLength = s_ExpectedTokenFoundSepara
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct TokenDescription{
+    MStringView prefix;
+    MStringView text;
+    MStringView suffix;
+};
+
+
+[[nodiscard]] static TokenDescription DescribeToken(const Token& token)noexcept{
+    switch(token.type){
+    case TokenType::Identifier: return { "identifier '", token.text, "'" };
+    case TokenType::IntegerLiteral:
+    case TokenType::DoubleLiteral: return { "number '", token.text, "'" };
+    case TokenType::StringLiteral: return { "string literal", {}, {} };
+    case TokenType::Plus: return { "'+'", {}, {} };
+    case TokenType::Minus: return { "'-'", {}, {} };
+    case TokenType::Star: return { "'*'", {}, {} };
+    case TokenType::Slash: return { "'/'", {}, {} };
+    case TokenType::PlusEqual: return { "'+='", {}, {} };
+    case TokenType::MinusEqual: return { "'-='", {}, {} };
+    case TokenType::StarEqual: return { "'*='", {}, {} };
+    case TokenType::SlashEqual: return { "'/='", {}, {} };
+    case TokenType::Equal: return { "'='", {}, {} };
+    case TokenType::Semicolon: return { "';'", {}, {} };
+    case TokenType::Dot: return { "'.'", {}, {} };
+    case TokenType::Comma: return { "','", {}, {} };
+    case TokenType::Colon: return { "':'", {}, {} };
+    case TokenType::LeftBracket: return { "'['", {}, {} };
+    case TokenType::RightBracket: return { "']'", {}, {} };
+    case TokenType::LeftBrace: return { "'{'", {}, {} };
+    case TokenType::RightBrace: return { "'}'", {}, {} };
+    case TokenType::LeftParen: return { "'('", {}, {} };
+    case TokenType::RightParen: return { "')'", {}, {} };
+    case TokenType::EndOfFile: return { "end of file", {}, {} };
+    case TokenType::Error: return { "error", {}, {} };
+    default: return { "unknown token", {}, {} };
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 
@@ -70,60 +112,17 @@ void ParserCursor::error(u32 line, u32 column, MStringView message){
 void ParserCursor::errorExpected(MStringView expected){
     using namespace __hidden_metascript_parser_cursor;
 
-    const auto desc = tokenDescription();
-    ScratchString msg{m_scratchArena};
-    if(expected.size() <= Limit<usize>::s_Max - s_ExpectedTokenFoundSeparatorLength && desc.size() <= Limit<usize>::s_Max - expected.size() - s_ExpectedTokenFoundSeparatorLength)
-        msg.reserve(expected.size() + s_ExpectedTokenFoundSeparatorLength + desc.size());
-    msg.append(expected.data(), expected.size());
-    msg.append(s_ExpectedTokenFoundSeparator);
-    msg.append(desc.data(), desc.size());
-    error(m_current.line, m_current.column, MStringView(msg.data(), msg.size()));
-}
-
-
-ParserCursor::ScratchString ParserCursor::tokenDescription(){
-    switch(m_current.type){
-    case TokenType::Identifier:{
-        ScratchString d("identifier '", m_scratchArena);
-        if(m_current.text.size() <= Limit<usize>::s_Max - d.size() - 1u)
-            d.reserve(d.size() + m_current.text.size() + 1u);
-        d.append(m_current.text.data(), m_current.text.size());
-        d.push_back('\'');
-        return d;
-    }
-    case TokenType::IntegerLiteral:
-    case TokenType::DoubleLiteral:{
-        ScratchString d("number '", m_scratchArena);
-        if(m_current.text.size() <= Limit<usize>::s_Max - d.size() - 1u)
-            d.reserve(d.size() + m_current.text.size() + 1u);
-        d.append(m_current.text.data(), m_current.text.size());
-        d.push_back('\'');
-        return d;
-    }
-    case TokenType::StringLiteral: return ScratchString("string literal", m_scratchArena);
-    case TokenType::Plus: return ScratchString("'+'", m_scratchArena);
-    case TokenType::Minus: return ScratchString("'-'", m_scratchArena);
-    case TokenType::Star: return ScratchString("'*'", m_scratchArena);
-    case TokenType::Slash: return ScratchString("'/'", m_scratchArena);
-    case TokenType::PlusEqual: return ScratchString("'+='", m_scratchArena);
-    case TokenType::MinusEqual: return ScratchString("'-='", m_scratchArena);
-    case TokenType::StarEqual: return ScratchString("'*='", m_scratchArena);
-    case TokenType::SlashEqual: return ScratchString("'/='", m_scratchArena);
-    case TokenType::Equal: return ScratchString("'='", m_scratchArena);
-    case TokenType::Semicolon: return ScratchString("';'", m_scratchArena);
-    case TokenType::Dot: return ScratchString("'.'", m_scratchArena);
-    case TokenType::Comma: return ScratchString("','", m_scratchArena);
-    case TokenType::Colon: return ScratchString("':'", m_scratchArena);
-    case TokenType::LeftBracket: return ScratchString("'['", m_scratchArena);
-    case TokenType::RightBracket: return ScratchString("']'", m_scratchArena);
-    case TokenType::LeftBrace: return ScratchString("'{'", m_scratchArena);
-    case TokenType::RightBrace: return ScratchString("'}'", m_scratchArena);
-    case TokenType::LeftParen: return ScratchString("'('", m_scratchArena);
-    case TokenType::RightParen: return ScratchString("')'", m_scratchArena);
-    case TokenType::EndOfFile: return ScratchString("end of file", m_scratchArena);
-    case TokenType::Error: return ScratchString("error", m_scratchArena);
-    default: return ScratchString("unknown token", m_scratchArena);
-    }
+    const TokenDescription found = DescribeToken(m_current);
+    const usize foundSize = found.prefix.size() + found.text.size() + found.suffix.size();
+    MString message(m_arena);
+    if(foundSize >= found.text.size() && expected.size() <= Limit<usize>::s_Max - s_ExpectedTokenFoundSeparatorLength && foundSize <= Limit<usize>::s_Max - expected.size() - s_ExpectedTokenFoundSeparatorLength)
+        message.reserve(expected.size() + s_ExpectedTokenFoundSeparatorLength + foundSize);
+    message.append(expected.data(), expected.size());
+    message.append(s_ExpectedTokenFoundSeparator);
+    message.append(found.prefix.data(), found.prefix.size());
+    message.append(found.text.data(), found.text.size());
+    message.append(found.suffix.data(), found.suffix.size());
+    m_errors.push_back(ParseError{m_current.line, m_current.column, Move(message)});
 }
 
 

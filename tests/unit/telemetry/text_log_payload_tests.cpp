@@ -87,15 +87,15 @@ TEST(Telemetry, TextLogPayloadRejectsNonCurrentVersionsAndRecovers){
     Expected<Telemetry::TextLogPayload> parsed = MakeUnexpected(Failure{});
     for(const u16 version : unsupportedVersions){
         SCOPED_TRACE(version);
-        ASSERT_TRUE((parsed = Telemetry::ParseTextLogPayload(testArena.arena, current.data(), current.size())));
+        ASSERT_TRUE((parsed = Telemetry::ParseTextLogPayload(current.data(), current.size())));
         usize cursor = 0u;
         const auto readHeader = ReadPOD<Telemetry::EncodedTextLogPayloadHeader>(current, cursor);
         ASSERT_TRUE(readHeader);
         Telemetry::EncodedTextLogPayloadHeader header = *readHeader;
         header.version = version;
         NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
-        EXPECT_FALSE((parsed = Telemetry::ParseTextLogPayload(testArena.arena, payload.data(), payload.size())));
-        ASSERT_TRUE((parsed = Telemetry::ParseTextLogPayload(testArena.arena, current.data(), current.size())));
+        EXPECT_FALSE((parsed = Telemetry::ParseTextLogPayload(payload.data(), payload.size())));
+        ASSERT_TRUE((parsed = Telemetry::ParseTextLogPayload(current.data(), current.size())));
         EXPECT_EQ(AStringView(parsed->messageUtf8), AStringView("retained log"));
     }
 }

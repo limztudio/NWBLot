@@ -67,7 +67,7 @@ bool ValidateMaterials(ShaderCook& shaderCook, const PreparedShaderVector& prepa
     preparedShaderLookup.reserve(preparedEntries.size());
     for(const PreparedShaderEntry& preparedEntry : preparedEntries){
         const auto shaderName = ToName(preparedEntry.entry.name);
-        const auto stageName = ToName(preparedEntry.entry.archiveStage.view());
+        const auto stageName = ToName(preparedEntry.entry.archiveStage);
         if(!shaderName){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: prepared shader name has invalid text (failure {})"), static_cast<u32>(shaderName.error()));
             return false;
@@ -78,7 +78,7 @@ bool ValidateMaterials(ShaderCook& shaderCook, const PreparedShaderVector& prepa
         }
         const ShaderStageKey shaderKey{ *shaderName ? **shaderName : s_NameNone, *stageName ? **stageName : s_NameNone };
         if(!preparedShaderLookup.emplace(shaderKey, &preparedEntry).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: duplicate prepared shader key '{}' stage '{}'"), StringConvert(preparedEntry.entry.name), StringConvert(preparedEntry.entry.archiveStage.view()));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: duplicate prepared shader key '{}' stage '{}'"), StringConvert(preparedEntry.entry.name), StringConvert(preparedEntry.entry.archiveStage));
             return false;
         }
     }

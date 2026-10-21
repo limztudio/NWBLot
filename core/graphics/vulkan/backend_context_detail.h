@@ -36,7 +36,6 @@ namespace VulkanDetail{
 
 using ScratchString = AString<Alloc::ScratchArena>;
 using ScratchStringStream = AStringStream<Alloc::ScratchArena>;
-using ScratchStringSet = HashSet<ScratchString, Alloc::ScratchArena, Hasher<ScratchString>, EqualTo<ScratchString>>;
 
 static constexpr u64 s_BytesPerMiB = 1024ull * 1024ull;
 // HDR10 metadata mirrors the Rec.2020/ST.2084 transform.

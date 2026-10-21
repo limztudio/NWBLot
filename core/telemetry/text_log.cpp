@@ -101,8 +101,8 @@ bool BuildTextLogPayload(Alloc::ScratchArena& scratchArena, const Common::LogTyp
     return __hidden_telemetry_text_log::BuildUnaliasedPayload(type, message, outPayload);
 }
 
-Expected<TextLogPayload> ParseTextLogPayload(TelemetryArena& arena, const void* const payload, const usize payloadBytes){
-    TextLogPayload parsedPayload(arena);
+Expected<TextLogPayload> ParseTextLogPayload(const void* const payload, const usize payloadBytes)noexcept{
+    TextLogPayload parsedPayload;
 
     if(payloadBytes < sizeof(EncodedTextLogPayloadHeader) || !payload)
         return MakeUnexpected(Failure{});
@@ -124,7 +124,7 @@ Expected<TextLogPayload> ParseTextLogPayload(TelemetryArena& arena, const void* 
         return MakeUnexpected(Failure{});
 
     parsedPayload.type = static_cast<Common::LogType::Enum>(header.type);
-    parsedPayload.messageUtf8.assign(reinterpret_cast<const char*>(encoded.data() + cursor), messageBytes);
+    parsedPayload.messageUtf8 = AStringView(reinterpret_cast<const char*>(encoded.data() + cursor), messageBytes);
     return parsedPayload;
 }
 

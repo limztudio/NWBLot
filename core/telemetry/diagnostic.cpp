@@ -135,8 +135,8 @@ bool BuildDiagnosticPayload(TelemetryArena&, const DiagnosticEventRecord& record
     return outPayload.size() == payloadBytes;
 }
 
-Expected<DiagnosticPayload> ParseDiagnosticPayload(TelemetryArena& arena, const void* const payload, const usize payloadBytes){
-    DiagnosticPayload parsedPayload(arena);
+Expected<DiagnosticPayload> ParseDiagnosticPayload(const void* const payload, const usize payloadBytes)noexcept{
+    DiagnosticPayload parsedPayload;
 
     if(payloadBytes < sizeof(EncodedDiagnosticPayloadHeader) || !payload)
         return MakeUnexpected(Failure{});
@@ -157,7 +157,7 @@ Expected<DiagnosticPayload> ParseDiagnosticPayload(TelemetryArena& arena, const 
 
     struct TextField{
         u32 byteCount;
-        NotNull<AString<TelemetryArena>*> destination;
+        NotNull<AStringView*> destination;
     };
     const Array<TextField, __hidden_telemetry_diagnostic::s_PayloadTextFieldCount> textFields{{
         { header.eventBytes, NotNull(&parsedPayload.event) },
@@ -170,7 +170,7 @@ Expected<DiagnosticPayload> ParseDiagnosticPayload(TelemetryArena& arena, const 
         const auto text = __hidden_telemetry_diagnostic::ReadText(encoded, cursor, field.byteCount);
         if(!text)
             return MakeUnexpected(Failure{});
-        field.destination->assign(*text);
+        *field.destination = *text;
     }
 
     if(cursor != payloadBytes)

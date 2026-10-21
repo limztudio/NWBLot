@@ -52,25 +52,16 @@ static_assert(alignof(EncodedDiagnosticPayloadHeader) == s_DiagnosticPackedAlign
 static_assert(IsStandardLayout_V<EncodedDiagnosticPayloadHeader>, "EncodedDiagnosticPayloadHeader must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedDiagnosticPayloadHeader>, "EncodedDiagnosticPayloadHeader must stay binary-serializable");
 
+// Text fields borrow the parsed payload bytes; keep them alive and unchanged while reading.
 struct DiagnosticPayload{
-    AString<TelemetryArena> event;
-    AString<TelemetryArena> category;
-    AString<TelemetryArena> expression;
-    AString<TelemetryArena> message;
-    AString<TelemetryArena> file;
+    AStringView event;
+    AStringView category;
+    AStringView expression;
+    AStringView message;
+    AStringView file;
     u64 instructionPointer = 0u;
     u32 line = 0u;
     bool terminatesProcess = false;
-
-
-public:
-    explicit DiagnosticPayload(TelemetryArena& arena)noexcept
-        : event(arena)
-        , category(arena)
-        , expression(arena)
-        , message(arena)
-        , file(arena)
-    {}
 };
 
 
@@ -78,7 +69,7 @@ public:
 
 
 [[nodiscard]] bool BuildDiagnosticPayload(TelemetryArena& arena, const DiagnosticEventRecord& record, TelemetryBytes& outPayload);
-[[nodiscard]] Expected<DiagnosticPayload> ParseDiagnosticPayload(TelemetryArena& arena, const void* payload, usize payloadBytes);
+[[nodiscard]] Expected<DiagnosticPayload> ParseDiagnosticPayload(const void* payload, usize payloadBytes)noexcept;
 [[nodiscard]] bool RecordDiagnostic(Recorder& recorder, const DiagnosticEventRecord& record, u64 frameIndex = 0u, u32 streamId = 0u);
 
 class DiagnosticCaptureGuard final : NoCopy{

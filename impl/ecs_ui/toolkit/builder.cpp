@@ -27,7 +27,7 @@ Builder::Builder(Core::Alloc::GlobalArena& arena, Context& context, PaintBuilder
     , m_scopeFrame(arena)
     , m_scope(MakeNotNull(&m_scopeFrame))
     , m_popupFrames(arena)
-    , m_textLanguage(s_TextDefaultLanguage.data(), arena)
+    , m_textLanguage(s_TextDefaultLanguage, arena)
 {}
 
 bool Builder::beginPanel(const AStringView stableKey, const Rect& bounds, const LayoutDirection::Enum direction){
@@ -141,8 +141,7 @@ bool Builder::setTextShaping(const u32 scriptTag, const StringView language){
     const ShapeRequest request{ {}, s_TextDefaultFontSize, TextDirection::LeftToRight, scriptTag, language };
     if(ValidateTextRequest(request, false) != TextLayoutStatus::Success)
         return false;
-    AString<Core::Alloc::GlobalArena> copied(language.data(), language.size(), m_arena);
-    m_textLanguage = Move(copied);
+    m_textLanguage.assign(language.data(), language.size());
     m_textScriptTag = scriptTag;
     return true;
 }

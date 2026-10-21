@@ -174,10 +174,11 @@ bool BackendContext::pickPhysicalDevice(Alloc::ScratchArena& scratchArena){
         m_instanceDispatch.vkGetPhysicalDeviceProperties(dev, &prop);
 
         errorStream << "\n" << prop.deviceName << ":";
-        VulkanDetail::ScratchStringSet requiredExtensions(0, Hasher<VulkanDetail::ScratchString>(), EqualTo<VulkanDetail::ScratchString>(), scratchArena);
+        // Borrow enabled names; the device extension map does not change during adapter selection.
+        HashSet<AStringView, Alloc::ScratchArena, ExtensionNameHasher, ExtensionNameEqualTo> requiredExtensions(0, ExtensionNameHasher(), ExtensionNameEqualTo(), scratchArena);
         requiredExtensions.reserve(m_enabledExtensions.device.size());
         for(const auto& [name, _] : m_enabledExtensions.device)
-            requiredExtensions.insert(VulkanDetail::ScratchString(AStringView(name), scratchArena));
+            requiredExtensions.insert(AStringView(name));
         uint32_t extCount = 0;
         res = m_instanceDispatch.vkEnumerateDeviceExtensionProperties(dev, nullptr, &extCount, nullptr);
         if(res != VK_SUCCESS){
@@ -191,7 +192,7 @@ bool BackendContext::pickPhysicalDevice(Alloc::ScratchArena& scratchArena){
             continue;
         }
         for(const auto& ext : deviceExtensions)
-            requiredExtensions.erase(VulkanDetail::ScratchString(ext.extensionName, scratchArena));
+            requiredExtensions.erase(AStringView(ext.extensionName, NWB_STRNLEN(ext.extensionName, VK_MAX_EXTENSION_NAME_SIZE)));
 
         bool deviceIsGood = true;
 

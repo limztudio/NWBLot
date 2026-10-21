@@ -61,7 +61,7 @@ static ScratchPath BuildVariantCachePath(const Path& cacheDirectory, const AStri
 static CacheReadStatus::Enum TryReadCachedBytecode(const ShaderCook::ShaderEntry& entry, const ScratchPath& bytecodePath, Core::GraphicsBytes& outBytecode){
     const auto read = ReadBinaryFile(bytecodePath, outBytecode);
     if(read){
-        const auto stageName = ToName(entry.stage.view());
+        const auto stageName = ToName(entry.stage);
         if(!stageName){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: shader stage contains an embedded null for entry '{}'"), StringConvert(entry.name));
             return CacheReadStatus::Error;
@@ -112,7 +112,7 @@ static bool GetVariantBytecode(
     // Two live container sizes cannot overflow usize.
     mergedDefines.reserve(defineCombo.size() + entry.implicitDefines.size());
     for(const auto& [defineName, value] : defineCombo)
-        mergedDefines.insert_or_assign(AStringView(defineName), AStringView(value));
+        mergedDefines.insert_or_assign(defineName, value);
     for(const auto& [defineName, value] : entry.implicitDefines)
         mergedDefines.insert_or_assign(AStringView(defineName), AStringView(value));
 
@@ -138,7 +138,7 @@ static bool GetVariantBytecode(
 
     const ShaderCook::ShaderCompilerRequest compileRequest = {
         .shaderName = entry.name,
-        .stage = entry.stage.view(),
+        .stage = entry.stage,
         .entryPoint = entry.entryPoint,
         .variantName = variantName,
         .defines = compileDefines.data(),
@@ -258,9 +258,9 @@ bool AppendPreparedShadersToManifest(
     for(PreparedShaderEntry& preparedEntry : preparedEntries){
         ShaderCook::ShaderEntry& entry = preparedEntry.entry;
         const auto shaderNameResult = ToName(entry.name);
-        const auto stageNameResult = ToName(entry.archiveStage.view());
+        const auto stageNameResult = ToName(entry.archiveStage);
         if(!shaderNameResult || !stageNameResult || !*shaderNameResult || !*stageNameResult || entry.entryPoint.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shader cook failed to canonicalize shader identity for '{}' stage '{}' entry point '{}'"), StringConvert(entry.name), StringConvert(entry.archiveStage.view()), StringConvert(entry.entryPoint));
+            NWB_LOGGER_ERROR(NWB_TEXT("Shader cook failed to canonicalize shader identity for '{}' stage '{}' entry point '{}'"), StringConvert(entry.name), StringConvert(entry.archiveStage), StringConvert(entry.entryPoint));
             return false;
         }
         const Name shaderName = **shaderNameResult;
@@ -289,7 +289,7 @@ bool AppendPreparedShadersToManifest(
 
             const Expected<Name> virtualPathResult = Core::ShaderArchive::BuildVirtualPathName(shaderName, generatedVariantName, stageName);
             if(!virtualPathResult){
-                NWB_LOGGER_ERROR(NWB_TEXT("Shader cook failed to build virtual path for '{}' stage '{}' variant '{}'"), StringConvert(entry.name), StringConvert(entry.archiveStage.view()), StringConvert(generatedVariantName));
+                NWB_LOGGER_ERROR(NWB_TEXT("Shader cook failed to build virtual path for '{}' stage '{}' variant '{}'"), StringConvert(entry.name), StringConvert(entry.archiveStage), StringConvert(generatedVariantName));
                 return false;
             }
             const Name& virtualPath = *virtualPathResult;

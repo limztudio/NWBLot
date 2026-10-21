@@ -131,7 +131,7 @@ bool UiImageSmokeScene::paintFrozen(Impl::Ui::Builder& ui, const Impl::Ui::Rect&
     const WidgetOptions caption{ {}, { LayoutSizePolicy::Fixed, 16.0f } };
     if(!ui.label(__hidden_ui_image_smoke::s_TitleKey, "Declaration retains region, options and tint", caption))
         return false;
-    Name region(m_phase ? __hidden_ui_image_smoke::s_RadioRegion.data() : __hidden_ui_image_smoke::s_ProgressRegion.data());
+    Name region = m_phase ? Name(__hidden_ui_image_smoke::s_RadioRegion) : Name(__hidden_ui_image_smoke::s_ProgressRegion);
     ImageOptions options;
     options.width = { LayoutSizePolicy::Fixed, 96.0f };
     options.height = { LayoutSizePolicy::Fixed, 40.0f };
@@ -140,7 +140,7 @@ bool UiImageSmokeScene::paintFrozen(Impl::Ui::Builder& ui, const Impl::Ui::Rect&
     if(!ui.image("frozen", region, options))
         return false;
     m_declared.rectangles[9u] = StoreSmokeRect(VectorAdd(VectorSet(bounds.x, bounds.y, 0.0f, 0.0f), VectorSet(8.0f, 32.0f, 96.0f, 40.0f)));
-    region = Name(m_phase ? __hidden_ui_image_smoke::s_ProgressRegion.data() : __hidden_ui_image_smoke::s_RadioRegion.data());
+    region = m_phase ? Name(__hidden_ui_image_smoke::s_ProgressRegion) : Name(__hidden_ui_image_smoke::s_RadioRegion);
     m_declared.values[9u] = m_phase ? 1u : 2u;
     options.width = { LayoutSizePolicy::Fixed, 70.0f };
     options.height = { LayoutSizePolicy::Fixed, 70.0f };

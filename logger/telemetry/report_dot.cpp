@@ -334,7 +334,7 @@ void AppendTimedGraphDot(Core::Alloc::ScratchArena& scratchArena, const FrameGra
 
         const GraphTimingKey timingKey{ graph.frameIndex, node.name };
         const auto timed = timing.find(timingKey);
-        const AStringView labelView(node.label.data(), node.label.size());
+        const AStringView labelView = node.label;
         StringAppendFormat(out, "  n{} [shape={}, label=", i, FrameGraphNodeShape(node.kind));
         if(timed != timing.end()){
             timedLabel.clear();

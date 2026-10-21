@@ -134,7 +134,7 @@ Expected<SlangCompilerWorkspace::ScratchPath> SlangCompilerWorkspace::BuildCompi
     const auto rootText = BuildCompilerPathText(rootPath, scratchArena);
     if(!rootText || rootText->size() > (Limit<usize>::s_Max - __hidden_slang_compiler_workspace::s_RootKeyPrefix.size()) / 2u)
         return MakeUnexpected(Failure{});
-    ScratchString rootKey(__hidden_slang_compiler_workspace::s_RootKeyPrefix.data(), scratchArena);
+    ScratchString rootKey(__hidden_slang_compiler_workspace::s_RootKeyPrefix, scratchArena);
     rootKey.reserve(__hidden_slang_compiler_workspace::s_RootKeyPrefix.size() + rootText->size() * 2u);
     static constexpr AStringView s_HexDigits = "0123456789abcdef";
     for(const char ch : *rootText){

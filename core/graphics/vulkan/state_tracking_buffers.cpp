@@ -212,15 +212,15 @@ void CommandList::setBufferState(Buffer* bufferResource, ResourceStates::Mask st
     if(!bufferResource)
         return;
     constexpr TStringView s_OperationName = NWB_TEXT("set buffer state");
-    if(!validateCommandRecordingScope(s_OperationName.data()))
+    if(!validateCommandRecordingScope(s_OperationName))
         return;
-    if(!validateBufferForGpuState(bufferResource, stateBits, s_OperationName.data()))
+    if(!validateBufferForGpuState(bufferResource, stateBits, s_OperationName))
         return;
 
     Buffer& buffer = *bufferResource;
     const BufferRange resolvedRange = range.resolve(buffer.m_creationDesc);
     if(!VulkanStateTrackingDetail::IsBufferStateRangeValid(range, buffer.m_creationDesc)){
-        rejectCommandRecording(s_OperationName.data(), __hidden_state_tracking_buffers::s_ByteRangeOutsideBufferReason);
+        rejectCommandRecording(s_OperationName, __hidden_state_tracking_buffers::s_ByteRangeOutsideBufferReason);
         return;
     }
 
@@ -277,28 +277,28 @@ void CommandList::releaseBufferOwnership(Buffer* bufferResource, const GpuPhysic
         return;
     constexpr TStringView s_OperationName = NWB_TEXT("release buffer ownership");
     constexpr TStringView s_FinalRangeStateUnknownReason = NWB_TEXT("final byte range state is unknown");
-    if(!validateCommandRecordingScope(s_OperationName.data()))
+    if(!validateCommandRecordingScope(s_OperationName))
         return;
     Buffer& buffer = *bufferResource;
     if(!isBufferReadyForCommandQueue(&buffer)){
-        rejectCommandRecording(s_OperationName.data(), s_BufferNotReadyForQueueReason);
+        rejectCommandRecording(s_OperationName, s_BufferNotReadyForQueueReason);
         return;
     }
     if(m_stateTracker.isPermanentBuffer(buffer)){
-        rejectCommandRecording(s_OperationName.data(), NWB_TEXT("permanently tracked buffers cannot transfer ownership"));
+        rejectCommandRecording(s_OperationName, NWB_TEXT("permanently tracked buffers cannot transfer ownership"));
         return;
     }
     if(buffer.m_bufferInfo.sharingMode == VK_SHARING_MODE_CONCURRENT){
-        rejectCommandRecording(s_OperationName.data(), NWB_TEXT("concurrently shared buffers do not have exclusive ownership"));
+        rejectCommandRecording(s_OperationName, NWB_TEXT("concurrently shared buffers do not have exclusive ownership"));
         return;
     }
     const BufferRange resolvedRange = range.resolve(buffer.m_creationDesc);
     if(!VulkanStateTrackingDetail::IsBufferStateRangeValid(range, buffer.m_creationDesc)){
-        rejectCommandRecording(s_OperationName.data(), __hidden_state_tracking_buffers::s_ByteRangeOutsideBufferReason);
+        rejectCommandRecording(s_OperationName, __hidden_state_tracking_buffers::s_ByteRangeOutsideBufferReason);
         return;
     }
     if(!m_device.getQueue(destinationQueue)){
-        rejectCommandRecording(s_OperationName.data(), VulkanStateTrackingDetail::s_DestinationQueueUnavailableReason);
+        rejectCommandRecording(s_OperationName, VulkanStateTrackingDetail::s_DestinationQueueUnavailableReason);
         return;
     }
 
@@ -306,7 +306,7 @@ void CommandList::releaseBufferOwnership(Buffer* bufferResource, const GpuPhysic
     if(existing != m_bufferOwnershipReleaseDestinations.end()){
         for(const BufferOwnershipRelease& release : existing.value()){
             if(release.range.overlaps(resolvedRange) && release.destinationQueue != destinationQueue){
-                rejectCommandRecording(s_OperationName.data(), NWB_TEXT("byte range already targets a conflicting destination queue"));
+                rejectCommandRecording(s_OperationName, NWB_TEXT("byte range already targets a conflicting destination queue"));
                 return;
             }
         }
@@ -314,10 +314,10 @@ void CommandList::releaseBufferOwnership(Buffer* bufferResource, const GpuPhysic
 
     const ResourceStates::Mask initialState = buffer.resolveTaskGraphImportInitialState();
     if(initialState == ResourceStates::Unknown && !m_stateTracker.hasExplicitBufferState(&buffer, resolvedRange)){
-        rejectCommandRecording(s_OperationName.data(), s_FinalRangeStateUnknownReason);
+        rejectCommandRecording(s_OperationName, s_FinalRangeStateUnknownReason);
         return;
     }
-    if(initialState != ResourceStates::Unknown && !validateBufferForGpuState(&buffer, initialState, s_OperationName.data()))
+    if(initialState != ResourceStates::Unknown && !validateBufferForGpuState(&buffer, initialState, s_OperationName))
         return;
     const auto tracked = m_stateTracker.m_bufferStates.find(MakeNotNull(&buffer));
     if(tracked != m_stateTracker.m_bufferStates.end()){
@@ -325,10 +325,10 @@ void CommandList::releaseBufferOwnership(Buffer* bufferResource, const GpuPhysic
             if(!entry.range.overlaps(resolvedRange))
                 continue;
             if(entry.state == ResourceStates::Unknown){
-                rejectCommandRecording(s_OperationName.data(), s_FinalRangeStateUnknownReason);
+                rejectCommandRecording(s_OperationName, s_FinalRangeStateUnknownReason);
                 return;
             }
-            if(!validateBufferForGpuState(&buffer, entry.state, s_OperationName.data()))
+            if(!validateBufferForGpuState(&buffer, entry.state, s_OperationName))
                 return;
         }
     }
@@ -361,21 +361,21 @@ void CommandList::beginTrackingBufferState(Buffer* buffer, ResourceStates::Mask 
     if(!buffer)
         return;
     constexpr TStringView s_OperationName = NWB_TEXT("begin tracking buffer state");
-    if(!validateCommandRecordingScope(s_OperationName.data()))
+    if(!validateCommandRecordingScope(s_OperationName))
         return;
     if(stateBits == ResourceStates::Unknown){
-        rejectCommandRecording(s_OperationName.data(), VulkanStateTrackingDetail::s_InitialStateUnknownReason);
+        rejectCommandRecording(s_OperationName, VulkanStateTrackingDetail::s_InitialStateUnknownReason);
         return;
     }
-    if(!validateBufferForGpuState(buffer, stateBits, s_OperationName.data()))
+    if(!validateBufferForGpuState(buffer, stateBits, s_OperationName))
         return;
     if(!VulkanStateTrackingDetail::IsBufferStateRangeValid(range, buffer->m_creationDesc)){
-        rejectCommandRecording(s_OperationName.data(), __hidden_state_tracking_buffers::s_ByteRangeOutsideBufferReason);
+        rejectCommandRecording(s_OperationName, __hidden_state_tracking_buffers::s_ByteRangeOutsideBufferReason);
         return;
     }
     const ResourceStates::Mask permanentState = m_stateTracker.getPermanentBufferState(buffer);
     if(permanentState != ResourceStates::Unknown && permanentState != stateBits){
-        rejectCommandRecording(s_OperationName.data(), NWB_TEXT("initial state conflicts with the permanent buffer state"));
+        rejectCommandRecording(s_OperationName, NWB_TEXT("initial state conflicts with the permanent buffer state"));
         return;
     }
     m_stateTracker.beginTrackingBuffer(buffer, stateBits, range);
@@ -386,16 +386,16 @@ void CommandList::seedBufferState(Buffer* buffer, ResourceStates::Mask stateBits
     if(!buffer)
         return;
     constexpr TStringView s_OperationName = NWB_TEXT("seed buffer state");
-    if(!validateCommandRecordingScope(s_OperationName.data()))
+    if(!validateCommandRecordingScope(s_OperationName))
         return;
     if(stateBits == ResourceStates::Unknown){
-        rejectCommandRecording(s_OperationName.data(), VulkanStateTrackingDetail::s_InitialStateUnknownReason);
+        rejectCommandRecording(s_OperationName, VulkanStateTrackingDetail::s_InitialStateUnknownReason);
         return;
     }
-    if(!validateBufferForGpuState(buffer, stateBits, s_OperationName.data()))
+    if(!validateBufferForGpuState(buffer, stateBits, s_OperationName))
         return;
     if(!VulkanStateTrackingDetail::IsBufferStateRangeValid(range, buffer->m_creationDesc)){
-        rejectCommandRecording(s_OperationName.data(), __hidden_state_tracking_buffers::s_ByteRangeOutsideBufferReason);
+        rejectCommandRecording(s_OperationName, __hidden_state_tracking_buffers::s_ByteRangeOutsideBufferReason);
         return;
     }
     if(!m_stateTracker.isPermanentBuffer(*buffer))

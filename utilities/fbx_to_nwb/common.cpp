@@ -55,7 +55,7 @@ static bool ValidateOptionText(AString& inOutValue, TextFunction textFunction, P
     inOutValue = NormalizeOptionText(Move(inOutValue));
     const auto parsed = parseValue(inOutValue);
     if(parsed){
-        inOutValue = AString(textFunction(*parsed));
+        inOutValue.assign(textFunction(*parsed));
         return true;
     }
 

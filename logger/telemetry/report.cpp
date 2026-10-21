@@ -216,19 +216,19 @@ Expected<TelemetryReport> BuildTelemetryReport(TelemetryArena& arena, const Tele
 
         switch(event->header.kind){
         case Telemetry::EventKind::TextLog: {
-            const auto payload = Telemetry::ParseTextLogPayload(arena, event->payload.data(), event->payload.size());
+            const auto payload = Telemetry::ParseTextLogPayload(event->payload.data(), event->payload.size());
             if(!payload)
                 ++report.summary.parseFailureCount;
             break;
         }
         case Telemetry::EventKind::Diagnostic: {
-            const auto payload = Telemetry::ParseDiagnosticPayload(arena, event->payload.data(), event->payload.size());
+            const auto payload = Telemetry::ParseDiagnosticPayload(event->payload.data(), event->payload.size());
             if(!payload)
                 ++report.summary.parseFailureCount;
             break;
         }
         case Telemetry::EventKind::PerfFrame: {
-            const auto payload = Telemetry::ParsePerfTimingPayload(arena, event->payload.data(), event->payload.size());
+            const auto payload = Telemetry::ParsePerfTimingPayload(event->payload.data(), event->payload.size());
             if(!payload){
                 ++report.summary.parseFailureCount;
                 break;
@@ -243,7 +243,7 @@ Expected<TelemetryReport> BuildTelemetryReport(TelemetryArena& arena, const Tele
             break;
         }
         case Telemetry::EventKind::MemoryFrame: {
-            const auto payload = Telemetry::ParsePerfMemoryPayload(arena, event->payload.data(), event->payload.size());
+            const auto payload = Telemetry::ParsePerfMemoryPayload(event->payload.data(), event->payload.size());
             if(!payload){
                 ++report.summary.parseFailureCount;
                 break;

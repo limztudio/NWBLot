@@ -68,7 +68,7 @@ TEST(Telemetry, PerfTimingPayloadRejectsNonCurrentVersionsAndCorruptMagicAfterVa
     ASSERT_TRUE(Telemetry::BuildPerfTimingPayload(testArena.arena, Telemetry::PerfTimingSource::Gpu, scopeName, s_RENDERER_FRAME_TEXT, stats, payload));
 
     Expected<Telemetry::PerfTimingPayload> parsed = MakeUnexpected(Failure{});
-    ASSERT_TRUE((parsed = Telemetry::ParsePerfTimingPayload(testArena.arena, payload.data(), payload.size())));
+    ASSERT_TRUE((parsed = Telemetry::ParsePerfTimingPayload(payload.data(), payload.size())));
 
     const Telemetry::TelemetryBytes current = payload;
     const u16 unsupportedVersions[] = { 0u, static_cast<u16>(Telemetry::s_PerfTimingPayloadVersion + 1u), Limit<u16>::s_Max, };
@@ -80,13 +80,13 @@ TEST(Telemetry, PerfTimingPayloadRejectsNonCurrentVersionsAndCorruptMagicAfterVa
         Telemetry::EncodedPerfTimingPayloadHeader header = *readHeader;
         header.version = version;
         NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
-        EXPECT_FALSE((parsed = Telemetry::ParsePerfTimingPayload(testArena.arena, payload.data(), payload.size())));
-        ASSERT_TRUE((parsed = Telemetry::ParsePerfTimingPayload(testArena.arena, current.data(), current.size())));
+        EXPECT_FALSE((parsed = Telemetry::ParsePerfTimingPayload(payload.data(), payload.size())));
+        ASSERT_TRUE((parsed = Telemetry::ParsePerfTimingPayload(current.data(), current.size())));
         EXPECT_EQ(parsed->scopeName, scopeName);
     }
     payload = current;
     payload[0u] = 0u;
-    EXPECT_FALSE((parsed = Telemetry::ParsePerfTimingPayload(testArena.arena, payload.data(), payload.size())));
+    EXPECT_FALSE((parsed = Telemetry::ParsePerfTimingPayload(payload.data(), payload.size())));
 }
 
 TEST(Telemetry, PerfTimingPayloadRejectsInvalidInput){
@@ -130,8 +130,8 @@ TEST(Telemetry, PerfTimingRejectsNonfiniteDurationsAtBuildAndWireAdmission){
             auto header = *readHeader;
             header.*s_WireFields[field] = BitCast<f64>(bits);
             NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
-            EXPECT_FALSE(Telemetry::ParsePerfTimingPayload(testArena.arena, payload.data(), payload.size()));
-            const auto recovered = Telemetry::ParsePerfTimingPayload(testArena.arena, current.data(), current.size());
+            EXPECT_FALSE(Telemetry::ParsePerfTimingPayload(payload.data(), payload.size()));
+            const auto recovered = Telemetry::ParsePerfTimingPayload(current.data(), current.size());
             ASSERT_TRUE(recovered);
             EXPECT_EQ(recovered->stats.seconds, validStats.seconds);
         }
@@ -148,10 +148,10 @@ TEST(Telemetry, PerfMemoryPayloadRejectsCorruptedHeaderAfterValidParse){
     ASSERT_TRUE(Telemetry::BuildPerfMemoryPayload(testArena.arena, scopeName, s_PROJECT_ARENA_TEXT, snapshot, delta, payload));
 
     Expected<Telemetry::PerfMemoryPayload> parsed = MakeUnexpected(Failure{});
-    ASSERT_TRUE((parsed = Telemetry::ParsePerfMemoryPayload(testArena.arena, payload.data(), payload.size())));
+    ASSERT_TRUE((parsed = Telemetry::ParsePerfMemoryPayload(payload.data(), payload.size())));
 
     payload[0u] = 0u;
-    EXPECT_FALSE((parsed = Telemetry::ParsePerfMemoryPayload(testArena.arena, payload.data(), payload.size())));
+    EXPECT_FALSE((parsed = Telemetry::ParsePerfMemoryPayload(payload.data(), payload.size())));
 }
 
 TEST(Telemetry, PerfMemoryPayloadRejectsInvalidInput){
@@ -259,7 +259,7 @@ TEST(Telemetry, MemoryDifferenceOmitsUnrepresentableCountersFromTelemetry){
             const auto delta = NWB::Core::Perf::Difference(current, previous);
             EXPECT_FALSE(delta.valid());
             ASSERT_TRUE(Telemetry::BuildPerfMemoryPayload(testArena.arena, scopeName, s_PROJECT_ARENA_TEXT, current, delta, payload));
-            const auto parsed = Telemetry::ParsePerfMemoryPayload(testArena.arena, payload.data(), payload.size());
+            const auto parsed = Telemetry::ParsePerfMemoryPayload(payload.data(), payload.size());
             ASSERT_TRUE(parsed);
             EXPECT_FALSE(parsed->delta.valid());
             EXPECT_EQ(parsed->snapshot.*field, test.current);

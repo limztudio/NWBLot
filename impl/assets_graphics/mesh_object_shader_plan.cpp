@@ -54,8 +54,8 @@ bool AppendMeshObjectShaderEntries(ShaderCook::CookArena& cookArena, ShaderCook&
         return true;
     if(
         mesh.name != s_SharedMeshProgramName
-        || mesh.archiveStage.view() != Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::MeshStage)
-        || mesh.stage.view() != Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::MeshStage)
+        || mesh.archiveStage != Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::MeshStage)
+        || mesh.stage != Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::MeshStage)
         || !hasFixedSource
         || !mesh.emitMeshComputeShadow
     ){
@@ -65,8 +65,8 @@ bool AppendMeshObjectShaderEntries(ShaderCook::CookArena& cookArena, ShaderCook&
 
     PreparedShaderEntry prepared(cookArena);
     prepared.entry.name = mesh.name;
-    if(!prepared.entry.stage.assign(Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::VertexStage)) || !prepared.entry.archiveStage.assign(MaterialShaderStageNames::s_MeshObjectVertexArchiveStageText))
-        return false;
+    prepared.entry.stage = Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::VertexStage);
+    prepared.entry.archiveStage = MaterialShaderStageNames::s_MeshObjectVertexArchiveStageText;
     prepared.entry.emitMeshComputeShadow = false;
     prepared.sourcePath = meshEntry.sourcePath.parentPath() / s_ObjectVertexSourceName;
     prepared.entry.source = PathToString(cookArena, prepared.sourcePath);

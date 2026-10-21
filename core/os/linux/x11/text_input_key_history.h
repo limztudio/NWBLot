@@ -35,6 +35,8 @@ private:
     static constexpr u32 s_ZeroTimeKindOffset = 2u;
     static constexpr u32 s_HalfRange = 1u << 31u;
 
+
+private:
     [[nodiscard]] static bool Newer(u32 timestamp, u32 serial, const Stamp& previous)noexcept;
     [[nodiscard]] static bool Current(const Stamp& stamp, u64 receivedAtMs)noexcept;
 

@@ -26,6 +26,11 @@ namespace __hidden_x11_preedit{
 [[nodiscard]] static bool ValidUtf8(const AStringView text)noexcept{
     return text.size() <= X11PreeditBuffer::s_MaxBytes && IsValidUtf8TextWithoutNul(text);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

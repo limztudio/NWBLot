@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "packet_runtime_recorded_graph.h"
+
 #include "packet_runtime.h"
 #include "packet_runtime_internal.h"
 #include "task_graph.h"
@@ -16,60 +18,6 @@
 
 
 NWB_CORE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace GpuPacketRuntimeDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] bool ValidateExternalDependencyTokens(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketRange& range)noexcept{
-    if(!planAccess.validFor(declarationAccess) || !planAccess.validPacketRange(range))
-        return false;
-
-    const usize rangeEnd = static_cast<usize>(range.first.index) + range.packetCount;
-    for(usize packetIndex = range.first.index; packetIndex < rangeEnd; ++packetIndex){
-        const GpuCompiledPacketView packetView = planAccess.packet(planAccess.packetIdAt(packetIndex));
-        if(!packetView.valid())
-            return false;
-        for(u32 dependencyIndex = 0u; dependencyIndex < packetView.plan->externalDependencyCount; ++dependencyIndex){
-            if(!declarationAccess.externalCompletionToken(packetView.externalDependencies[dependencyIndex]))
-                return false;
-        }
-    }
-    return true;
-}
-
-[[nodiscard]] const GpuTaskGraphInitialOwnerHandoffSourceView* FindInitialOwnerHandoffSource(const GpuTaskGraphResourceView& resource, const GpuCompiledBarrier& barrier)noexcept{
-    if(resource.initialOwnerHandoffSourceCount == 0u || !resource.initialOwnerHandoffSources || (resource.type != GpuGraphResourceType::Texture && resource.type != GpuGraphResourceType::Buffer && resource.type != GpuGraphResourceType::AccelStruct))
-        return nullptr;
-
-    const GpuTaskGraphInitialOwnerHandoffSourceView* result = nullptr;
-    for(usize sourceIndex = 0u; sourceIndex < resource.initialOwnerHandoffSourceCount; ++sourceIndex){
-        const GpuTaskGraphInitialOwnerHandoffSourceView& source = resource.initialOwnerHandoffSources[sourceIndex];
-        if(
-            source.sourceQueue != barrier.sourceQueue
-            || source.destinationQueue != barrier.destinationQueue
-            || (resource.type == GpuGraphResourceType::Texture && !source.range.textureSubresources.contains(barrier.range.textureSubresources))
-            || (resource.type == GpuGraphResourceType::Buffer && !source.range.bufferRange.contains(barrier.range.bufferRange))
-        )
-            continue;
-        if(result)
-            return nullptr;
-        result = &source;
-    }
-    return result;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

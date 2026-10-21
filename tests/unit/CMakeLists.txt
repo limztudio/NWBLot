@@ -35,6 +35,8 @@ endif()
 
 if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Python3_Interpreter_FOUND)
     add_test(NAME nwb_launcher_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/repository_launcher_tests.py")
+    add_test(NAME nwb_launcher_process_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/repository_launcher_process_tests.py")
+    add_test(NAME nwb_launcher_pipeline_unit COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/repository_launcher_pipeline_tests.py")
     # GPU measurements remain opt-in; M4 and lagged lighting need distinct Compute queues and window capture.
     set(_nwb_ab_self_test_harnesses renderer_baseline async_shadow_m4 hardware_shadow_boundary frame_lagged_async_lighting)
     foreach(_nwb_ab_harness IN LISTS _nwb_ab_self_test_harnesses)

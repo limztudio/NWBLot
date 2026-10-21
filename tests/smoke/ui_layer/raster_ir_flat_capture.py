@@ -6,6 +6,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import window_capture_smoke  # noqa: E402
+import window_capture_validation  # noqa: E402
 
 LIT_RESIZE_BEFORE_CAPTURE = "--resize-before-capture"
 LIT_UI_RESIZE_FIXTURE = "UI resize fixture"
@@ -97,7 +98,7 @@ def main(argv):
         return _capture_after_resize(args, resize)
     # The shared capture checks readiness and logs, but its generic visual gate rejects flat images.
     # This fixture independently requires every startup pixel to be black after the readback.
-    window_capture_smoke.validate_capture_result = lambda result: None
+    window_capture_validation.validate_capture_result = lambda result: None
     return window_capture_smoke.main(argv)
 
 

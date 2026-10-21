@@ -262,7 +262,7 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(const ECSRenderDetail::S
     snapshot.push.receiverFactor = targets.shadowReceiverFactor;
     snapshot.push.height = targets.height;
     snapshot.push.deferredResourcesSlot = targets.bindless.slotsBufferDescriptor.slot();
-    snapshot.push.sceneRootSlot = m_shadowVisibilityHardwareSupported ? 0u : m_preparedSceneBvhNodeHeapHandle.slot();
+    snapshot.push.sceneRootSlot = m_shadowVisibilityHardwareSupported ? 0u : m_preparedSceneBvh.nodeHeapHandle().slot();
     snapshot.push.csgFlags = state.m_csg.snapshot.hasCsg ? NWB_CSG_SHADOW_FLAG_ENABLED | (m_shadowVisibilityHardwareSupported ? NWB_CSG_SHADOW_FLAG_HW_COMPOSE : 0u) : 0u;
     snapshot.csgTlasDescriptor = m_shadowVisibilityHardwareSupported ? m_rayTracingState.m_tlasHeapHandle : Core::GpuDescriptorHandle::Invalid();
     if(state.m_csg.snapshot.hasCsg){

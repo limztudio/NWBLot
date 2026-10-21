@@ -7,7 +7,8 @@
 
 #include "../expected.h"
 #include "matrix.h"
-#include "collision_detail.h"
+#include "collision_detail_ray.h"
+#include "collision_detail_volume.h"
 #include "collision_plane.h"
 #include "collision_sdf.h"
 #include "collision_aabb.h"
@@ -19,6 +20,7 @@
 
 #include "bounding_shape_decls.h"
 #include "bounding_corners.h"
+#include "bounding_frustum_tests.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -459,7 +461,7 @@ inline void NWB_SIMD_CALL BoundingDoubleSphere::transform(BoundingDoubleSphere& 
 }
 
 [[nodiscard]] inline bool BoundingSphere::intersects(const BoundingFrustum& frustum)const noexcept{
-    return frustum.intersectsSphereValues(LoadFloat(frustum.origin), LoadFloat(frustum.orientation), frustum.rightSlope, frustum.leftSlope, frustum.topSlope, frustum.bottomSlope, frustum.nearPlane, frustum.farPlane, LoadFloat(centerRadius));
+    return FrustumTests::IntersectsSphere(LoadFloat(frustum.origin), LoadFloat(frustum.orientation), frustum.rightSlope, frustum.leftSlope, frustum.topSlope, frustum.bottomSlope, frustum.nearPlane, frustum.farPlane, LoadFloat(centerRadius));
 }
 
 [[nodiscard]] inline bool NWB_SIMD_CALL BoundingSphere::intersects(const SIMDVectorSingle v0, const SIMDVectorSingle v1, const SIMDVectorSingle v2)const noexcept{
@@ -487,7 +489,7 @@ inline void NWB_SIMD_CALL BoundingDoubleSphere::transform(BoundingDoubleSphere& 
 }
 
 [[nodiscard]] inline bool BoundingDoubleSphere::intersects(const BoundingDoubleFrustum& frustum)const noexcept{
-    return frustum.intersectsSphereValues(LoadDouble(frustum.origin), LoadDouble(frustum.orientation), frustum.rightSlope, frustum.leftSlope, frustum.topSlope, frustum.bottomSlope, frustum.nearPlane, frustum.farPlane, LoadDouble(centerRadius));
+    return FrustumDoubleTests::IntersectsSphere(LoadDouble(frustum.origin), LoadDouble(frustum.orientation), frustum.rightSlope, frustum.leftSlope, frustum.topSlope, frustum.bottomSlope, frustum.nearPlane, frustum.farPlane, LoadDouble(centerRadius));
 }
 
 [[nodiscard]] inline bool NWB_SIMD_CALL BoundingDoubleSphere::intersects(const SIMDVectorDouble v0, const SIMDVectorDouble v1, const SIMDVectorDouble v2)const noexcept{

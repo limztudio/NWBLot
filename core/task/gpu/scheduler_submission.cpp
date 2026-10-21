@@ -81,7 +81,7 @@ public:
 
 
 public:
-    void arm(const GpuSubmissionPacketId packet, GpuTaskGraph::PacketSubmissionLease& submissionLease)noexcept{
+    void arm(const GpuSubmissionPacketId packet, GpuPacketSubmissionLease& submissionLease)noexcept{
         if(m_submissionLease)
             NWB_FATAL_ASSERT_MSG(false, "packet submission unwind scope may arm exactly once");
         m_packet = packet;
@@ -95,7 +95,7 @@ private:
     const GpuCompiledGraph& m_compiledGraph;
     const GpuCompiledGraph::ReadView& m_planAccess;
     GpuGraphSubmissionTransaction& m_transaction;
-    GpuTaskGraph::PacketSubmissionLease* m_submissionLease = nullptr;
+    GpuPacketSubmissionLease* m_submissionLease = nullptr;
     GpuSubmissionPacketId m_packet;
 };
 
@@ -227,7 +227,7 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     nativeSubmissionInfo.mergedTimelineWaitCount = waitStatistics.mergedTimelineWaitCount;
 
     // A bad dependency or external completion is a pre-submit input error. Preserve the completed native packet so the caller can retry it with corrected tokens
-    GpuTaskGraph::PacketSubmissionLease submissionLease;
+    GpuPacketSubmissionLease submissionLease;
     if(!transaction.beginPacketSubmission(graph, compiledGraph, packetID, recordedGraph.recordingAttemptGeneration(), submissionLease))
         return false;
     preparedTimingTicketsUnwind.abandonOnUnwind();

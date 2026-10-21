@@ -67,7 +67,7 @@ public:
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
         const GpuSubmissionPacketId packet,
-        const GpuTaskGraph::PacketSubmissionLease& lease
+        const GpuPacketSubmissionLease& lease
     )noexcept
         : m_transaction(transaction)
         , m_graph(graph)
@@ -90,7 +90,7 @@ private:
     const GpuTaskGraph& m_graph;
     const GpuCompiledGraph& m_compiledGraph;
     const GpuCompiledGraph::ReadView& m_planAccess;
-    const GpuTaskGraph::PacketSubmissionLease& m_lease;
+    const GpuPacketSubmissionLease& m_lease;
     const GpuSubmissionPacketId m_packet;
     const i32 m_uncaughtExceptionCount = 0;
 };
@@ -333,7 +333,7 @@ void GpuGraphSubmissionTransaction::rejectPacket(GpuTaskGraph& graph, const GpuC
     completeRejectedPacketWithinSubmissionOperation(graph, compiledGraph, planAccess, packetID, false);
 }
 
-void GpuGraphSubmissionTransaction::rejectSubmittingPacket(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packetID, GpuTaskGraph::PacketSubmissionLease& lease){
+void GpuGraphSubmissionTransaction::rejectSubmittingPacket(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packetID, GpuPacketSubmissionLease& lease){
     if(
         !SubmissionOperation::ActiveFor(*this)
         || !planAccess.validFor(compiledGraph)
@@ -375,7 +375,7 @@ void GpuGraphSubmissionTransaction::abandonSubmittingPacketAfterExceptionWithinS
     const GpuCompiledGraph& compiledGraph,
     const GpuCompiledGraph::ReadView& planAccess,
     const GpuSubmissionPacketId packetID,
-    GpuTaskGraph::PacketSubmissionLease& lease
+    GpuPacketSubmissionLease& lease
 )noexcept{
     const bool inputValid = SubmissionOperation::ActiveFor(*this)
         && planAccess.validFor(compiledGraph)

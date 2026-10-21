@@ -63,8 +63,8 @@ public:
         const GpuRecordedGraph::ArtifactOperation& artifactAccess,
         const GpuSubmissionPacketId packet,
         const u64 recordingAttemptGeneration,
-        GpuTaskGraph::PacketRecordingLease& recordingLease,
-        GpuTaskGraph::PacketRecordingAbort* const deferredAbort,
+        GpuPacketRecordingLease& recordingLease,
+        GpuPacketRecordingAbort* const deferredAbort,
         GpuCommandIrCapture* const commandIrCapture,
         const GpuCommandIrCaptureCheckpoint*& captureCheckpoint,
         CommandListResourceStateHandoff*& packetStateSeed
@@ -118,9 +118,9 @@ private:
     const GpuCompiledGraph::ReadView& m_planAccess;
     GpuRecordedGraph& m_recordedGraph;
     const GpuRecordedGraph::ArtifactOperation& m_artifactAccess;
-    GpuTaskGraph::PacketRecordingLease& m_recordingLease;
+    GpuPacketRecordingLease& m_recordingLease;
     CommandListResourceStateHandoff*& m_packetStateSeed;
-    GpuTaskGraph::PacketRecordingAbort* m_deferredAbort = nullptr;
+    GpuPacketRecordingAbort* m_deferredAbort = nullptr;
     GpuCommandIrCapture* m_commandIrCapture = nullptr;
     GpuSubmissionPacketId m_packet;
     u64 m_recordingAttemptGeneration = 0u;
@@ -144,7 +144,7 @@ bool GpuNativePacketRecorder::recordPacket(
     GpuCommandIrCapture* const commandIrCapture,
     const u64 recordingWorkerDomain,
     const u32 recordingWorkerIndex,
-    GpuTaskGraph::PacketRecordingAbort* const deferredAbort
+    GpuPacketRecordingAbort* const deferredAbort
 )const{
     if(deferredAbort && deferredAbort->valid()){
         NWB_ASSERT_MSG(false, NWB_TEXT("Packet recording abort output must be fresh"));
@@ -194,7 +194,7 @@ bool GpuNativePacketRecorder::recordPacket(
     CommandListResourceStateHandoff* packetStateSeed = nullptr;
     GpuCommandIrCaptureCheckpoint captureCheckpoint;
     const GpuCommandIrCaptureCheckpoint* capturedPrefix = nullptr;
-    GpuTaskGraph::PacketRecordingLease recordingLease;
+    GpuPacketRecordingLease recordingLease;
     const auto abortPacketRecording = [&]{
         if(deferredAbort){
             const bool abortDeferred = graph.deferPacketRecordingAbort(compiledGraph, planAccess, packetID, recordingLease, *deferredAbort);
@@ -206,7 +206,7 @@ bool GpuNativePacketRecorder::recordPacket(
     };
     if(!graph.beginPacketRecording(compiledGraph, planAccess, packetID, recordingAttemptGeneration, recordingLease))
         return false;
-    const GpuTaskGraph::PacketRecordingAccess recordingAccess(graph, compiledGraph, planAccess, recordingLease);
+    const GpuPacketRecordingAccess recordingAccess(graph, compiledGraph, planAccess, recordingLease);
     if(!recordingAccess.validFor(graph, compiledGraph, planAccess, packetID)){
         abortPacketRecording();
         return false;
@@ -530,7 +530,7 @@ bool GpuNativePacketRecorder::prepareRecordingAttempt(
     if(!outRecordedGraph.prepareRecordingStorageCandidate(compiledGraph, planAccess, m_timingRecorder))
         return false;
 
-    GpuTaskGraph::RecordingAttemptScope provisionalAttempt;
+    GpuRecordingAttemptScope provisionalAttempt;
     if(!graph.beginRecordingAttempt(compiledGraph, range.first, declarationAccess, planAccess, provisionalAttempt))
         return false;
 

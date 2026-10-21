@@ -28,7 +28,7 @@ public:
         GpuRecordedGraph& recordedGraph,
         const GpuRecordedGraph::ArtifactOperation& artifactOperation,
         const Vector<u32, Alloc::ScratchArena>& packetIndices,
-        Vector<GpuTaskGraph::PacketRecordingAbort, Alloc::ScratchArena>& aborts,
+        Vector<GpuPacketRecordingAbort, Alloc::ScratchArena>& aborts,
         const u64 recordingAttemptGeneration
     )noexcept
         : m_graph(graph)
@@ -45,7 +45,7 @@ public:
             return;
 
         for(usize parallelIndex = 0u; parallelIndex < m_aborts.size(); ++parallelIndex){
-            GpuTaskGraph::PacketRecordingAbort& abort = m_aborts[parallelIndex];
+            GpuPacketRecordingAbort& abort = m_aborts[parallelIndex];
             if(!abort.valid())
                 continue;
             const GpuSubmissionPacketId packet = m_planAccess.packetIdAt(m_packetIndices[parallelIndex]);
@@ -69,7 +69,7 @@ private:
     GpuRecordedGraph& m_recordedGraph;
     const GpuRecordedGraph::ArtifactOperation& m_artifactOperation;
     const Vector<u32, Alloc::ScratchArena>& m_packetIndices;
-    Vector<GpuTaskGraph::PacketRecordingAbort, Alloc::ScratchArena>& m_aborts;
+    Vector<GpuPacketRecordingAbort, Alloc::ScratchArena>& m_aborts;
     u64 m_recordingAttemptGeneration = 0u;
     bool m_active = true;
 };
@@ -203,7 +203,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
     recordingEntries.reserve(range.packetCount);
     Vector<u32, Alloc::ScratchArena> parallelPacketIndices(scratchArena);
     Vector<u8, Alloc::ScratchArena> parallelResults(scratchArena);
-    Vector<GpuTaskGraph::PacketRecordingAbort, Alloc::ScratchArena> parallelAborts(scratchArena);
+    Vector<GpuPacketRecordingAbort, Alloc::ScratchArena> parallelAborts(scratchArena);
     usize parallelPacketCount = 0u;
     const bool usesParallelRecording = !commandIrCapture && cpuScheduler.isParallelEnabled() && range.packetCount >= __hidden_gpu_packet_runtime_recording_frontier::s_MinParallelRecordingPacketCount;
     bool recordingFrontiersAreMonotonic = true;
@@ -381,7 +381,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
             }
             );
             for(usize parallelIndex = 0u; parallelIndex < parallelAborts.size(); ++parallelIndex){
-                GpuTaskGraph::PacketRecordingAbort& abort = parallelAborts[parallelIndex];
+                GpuPacketRecordingAbort& abort = parallelAborts[parallelIndex];
                 if(!abort.valid())
                     continue;
                 const GpuSubmissionPacketId packet = planAccess.packetIdAt(parallelPacketIndices[parallelIndex]);

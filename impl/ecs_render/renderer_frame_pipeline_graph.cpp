@@ -51,6 +51,8 @@
 #include <impl/ecs_render/avboit/extinction_record_builder.h>
 #include <impl/ecs_render/avboit/accumulation_record_builder.h>
 #include <impl/ecs_render/graph/frame_graph_software_bvh_build_state.h>
+#include <impl/ecs_render/graph/frame_graph_trace_geometry.h>
+#include <impl/ecs_render/graph/frame_graph_avboit_stage.h>
 #include <impl/ecs_render/graph/frame_graph_transparent_csg_tasks.h>
 #include <impl/ecs_render/graph/frame_graph_avboit_occupancy.h>
 #include <impl/ecs_render/graph/frame_graph_avboit_extinction.h>
@@ -203,131 +205,12 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     )
         return;
 
-    // Preflight froze the mesh tables; import each buffer once and fan out IDs.
     Core::Alloc::ScratchArena traceGeometryScratchArena(RendererArenaScope::s_TaskGraphArena);
-    if(!m_raytracingSystem.freezePreparedShadowTraceGeometryBuffers(traceGeometryScratchArena)){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain preflighted shadow-trace geometry buffers"));
+    FrameGraphTraceGeometryImporter traceGeometryImporter(m_deferredLightingTaskGraph, m_raytracingSystem, m_meshSystem);
+    const auto traceGeometryResult = traceGeometryImporter.declare(traceGeometryScratchArena, rayTracingShadowResources);
+    if(!traceGeometryResult)
         return;
-    }
-    const PreparedShadowTraceGeometryBufferVector& preparedTraceGeometry = m_raytracingSystem.preparedShadowTraceGeometryBuffers();
-    const PreparedShadowTraceMaterialSampledTextureVector& preparedTraceMaterialSampledTextures = m_raytracingSystem.preparedShadowTraceMaterialSampledTextures();
-    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> traceGeometryResources{ traceGeometryScratchArena };
-    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> hardwareTraceGeometryResources{ traceGeometryScratchArena };
-    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> hardwareTraceAttributeResources{ traceGeometryScratchArena };
-    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> softwareTraceGeometryResources{ traceGeometryScratchArena };
-    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> softwareBvhBuildStateResources{ traceGeometryScratchArena };
-    traceGeometryResources.reserve(preparedTraceGeometry.size());
-    hardwareTraceGeometryResources.reserve(preparedTraceGeometry.size());
-    hardwareTraceAttributeResources.reserve(preparedTraceGeometry.size());
-    softwareTraceGeometryResources.reserve(preparedTraceGeometry.size());
-    for(const PreparedShadowTraceGeometryBuffer& preparedBuffer : preparedTraceGeometry){
-        Core::GpuGraphResourceDesc desc = BufferResourceDesc(preparedBuffer.identity, "Prepared Shadow Trace Geometry");
-        desc.setInitialState(preparedBuffer.initialState);
-        const auto resourceResult = m_deferredLightingTaskGraph.importBuffer(preparedBuffer.buffer, desc);
-        if(!resourceResult){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import preflighted shadow-trace geometry buffer"));
-            return;
-        }
-        const Core::GpuGraphResourceId resource = *resourceResult;
-        traceGeometryResources.push_back(resource);
-        if(preparedBuffer.roles & (PreparedShadowTraceGeometryRole::s_HardwarePosition | PreparedShadowTraceGeometryRole::s_HardwareIndex | PreparedShadowTraceGeometryRole::s_HardwareAttribute))
-            hardwareTraceGeometryResources.push_back(resource);
-        if(preparedBuffer.roles & PreparedShadowTraceGeometryRole::s_HardwareAttribute)
-            hardwareTraceAttributeResources.push_back(resource);
-        if(preparedBuffer.roles & (PreparedShadowTraceGeometryRole::s_SoftwareNode | PreparedShadowTraceGeometryRole::s_SoftwarePosition | PreparedShadowTraceGeometryRole::s_SoftwareIndex | PreparedShadowTraceGeometryRole::s_SoftwareAttribute))
-            softwareTraceGeometryResources.push_back(resource);
-    }
-    // Trace dispatchers select textures via frozen material context; reuse typed preflight import when owned.
-    const auto traceMaterialSampledTextureResources = ImportMaterialSampledTextureResources(
-        m_deferredLightingTaskGraph,
-        preparedTraceMaterialSampledTextures.data(),
-        preparedTraceMaterialSampledTextures.size(),
-        "Prepared Trace Material Sampled Texture",
-        traceGeometryScratchArena
-    );
-    if(!traceMaterialSampledTextureResources){
-        switch(traceMaterialSampledTextureResources.error()){
-        case SampledTextureImportFailure::GraphUnavailable:
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared trace material texture graph was unavailable"));
-            return;
-        case SampledTextureImportFailure::MissingIdentity:
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared trace material texture has no stable identity"));
-            return;
-        case SampledTextureImportFailure::ImportFailed:
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import prepared trace material sampled texture"));
-            return;
-        }
-    }
-    Core::GpuGraphResourceSetId shadowTraceGeometrySet;
-    if(!traceGeometryResources.empty()){
-        const auto shadowTraceGeometrySetResult = m_deferredLightingTaskGraph.importResourceSet(
-            Core::GpuGraphResourceSetDesc{}
-                .setIdentity(Name("render.post_gbuffer_trace_geometry"))
-                .setMarkerLabel("Post-G-Buffer Trace Geometry")
-                .setMembers(traceGeometryResources.data(), traceGeometryResources.size())
-        );
-        if(shadowTraceGeometrySetResult)
-            shadowTraceGeometrySet = *shadowTraceGeometrySetResult;
-    }
-    Core::GpuGraphResourceSetId softwareTraceGeometrySet;
-    if(!softwareTraceGeometryResources.empty()){
-        const auto softwareTraceGeometrySetResult = m_deferredLightingTaskGraph.importResourceSet(
-            Core::GpuGraphResourceSetDesc{}
-                .setIdentity(Name("render.software_trace_geometry"))
-                .setMarkerLabel("Software Trace Geometry")
-                .setMembers(softwareTraceGeometryResources.data(), softwareTraceGeometryResources.size())
-        );
-        if(softwareTraceGeometrySetResult)
-            softwareTraceGeometrySet = *softwareTraceGeometrySetResult;
-    }
-    Core::GpuGraphResourceSetId traceMaterialSampledTextureSet;
-    if(!traceMaterialSampledTextureResources->empty()){
-        const auto traceMaterialSampledTextureSetResult = m_deferredLightingTaskGraph.importResourceSet(
-            Core::GpuGraphResourceSetDesc{}
-                .setIdentity(Name("render.trace_material_sampled_textures"))
-                .setMarkerLabel("Trace Material Sampled Textures")
-                .setMembers(traceMaterialSampledTextureResources->data(), traceMaterialSampledTextureResources->size())
-        );
-        if(!traceMaterialSampledTextureSetResult){
-            traceMaterialSampledTextureSet = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared trace material sampled textures"));
-            return;
-        }
-        traceMaterialSampledTextureSet = *traceMaterialSampledTextureSetResult;
-    }
-    Core::GpuGraphResourceSetId hardwareTraceGeometrySet;
-    if(!hardwareTraceGeometryResources.empty()){
-        const auto hardwareTraceGeometrySetResult = m_deferredLightingTaskGraph.importResourceSet(
-            Core::GpuGraphResourceSetDesc{}
-                .setIdentity(Name("render.hardware_trace_geometry"))
-                .setMarkerLabel("Hardware Trace Geometry")
-                .setMembers(hardwareTraceGeometryResources.data(), hardwareTraceGeometryResources.size())
-        );
-        if(hardwareTraceGeometrySetResult)
-            hardwareTraceGeometrySet = *hardwareTraceGeometrySetResult;
-    }
-    Core::GpuGraphResourceSetId hardwareTraceAttributeSet;
-    if(!hardwareTraceAttributeResources.empty()){
-        const auto hardwareTraceAttributeSetResult = m_deferredLightingTaskGraph.importResourceSet(
-            Core::GpuGraphResourceSetDesc{}
-                .setIdentity(Name("render.hardware_trace_attributes"))
-                .setMarkerLabel("Hardware Trace Attributes")
-                .setMembers(hardwareTraceAttributeResources.data(), hardwareTraceAttributeResources.size())
-        );
-        if(hardwareTraceAttributeSetResult)
-            hardwareTraceAttributeSet = *hardwareTraceAttributeSetResult;
-    }
-    const bool softwareTraceResourcesPrepared = !softwareTraceGeometryResources.empty();
-    FrameGraphSoftwareBvhBuildStateImporter softwareBvhBuildStateImporter(m_deferredLightingTaskGraph, m_meshSystem);
-    auto softwareBvhBuildStateResult = softwareBvhBuildStateImporter.declare(
-        FrameGraphSoftwareBvhBuildStateInputs{ .rayTracingShadowResources = rayTracingShadowResources, .softwareTraceResourcesPrepared = softwareTraceResourcesPrepared, },
-        traceGeometryScratchArena
-    );
-    if(!softwareBvhBuildStateResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import shared software BVH build state"));
-        return;
-    }
-    softwareBvhBuildStateResources = Move(softwareBvhBuildStateResult->buildStateResources);
+    const FrameGraphTraceGeometryResult& traceGeometry = *traceGeometryResult;
     DeferredGraphResourceImportBuilder deferredGraphResourceImportBuilder(m_deferredLightingTaskGraph);
     auto deferredGraphResources = deferredGraphResourceImportBuilder.declare(
         DeferredGraphResourceImportInputs{
@@ -352,17 +235,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     const Core::GpuGraphResourceId worldPosition = deferredGraphResources->worldPosition;
     const Core::GpuGraphResourceId specularRoughness = deferredGraphResources->specularRoughness;
     const Core::GpuGraphResourceId depth = deferredGraphResources->depth;
-    const Core::GpuGraphResourceId csgCapBackNormal = deferredGraphResources->csgCapBackNormal;
-    const Core::GpuGraphResourceId csgIntervalDepth = deferredGraphResources->csgIntervalDepth;
-    const Core::GpuGraphResourceId csgIntervalId = deferredGraphResources->csgIntervalId;
-    const Core::GpuGraphResourceId csgReceiverEventData = deferredGraphResources->csgReceiverEventData;
-    const Core::GpuGraphResourceId csgReceiverEventCount = deferredGraphResources->csgReceiverEventCount;
-    const Core::GpuGraphResourceId csgReceiverSpanData = deferredGraphResources->csgReceiverSpanData;
-    const Core::GpuGraphResourceId csgReceiverSpanCount = deferredGraphResources->csgReceiverSpanCount;
-    const Core::GpuGraphResourceId csgRemovedIntervalDepth = deferredGraphResources->csgRemovedIntervalDepth;
-    const Core::GpuGraphResourceId csgRemovedIntervalCapNormal = deferredGraphResources->csgRemovedIntervalCapNormal;
-    const Core::GpuGraphResourceId csgRemovedIntervalData = deferredGraphResources->csgRemovedIntervalData;
-    const Core::GpuGraphResourceId csgRemovedIntervalCount = deferredGraphResources->csgRemovedIntervalCount;
     const Core::GpuGraphResourceId shadowVisibility = deferredGraphResources->shadowVisibility;
     const Core::GpuGraphResourceId causticIrradiance = deferredGraphResources->causticIrradiance;
     const Core::GpuGraphResourceId surfelIrradiance = deferredGraphResources->surfelIrradiance;
@@ -373,12 +245,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     const Core::GpuGraphResourceId sceneShading = deferredGraphResources->sceneShading;
     const Core::GpuGraphResourceId lights = deferredGraphResources->lights;
     const Core::GpuGraphResourceId meshView = deferredGraphResources->meshView;
-    const Core::GpuGraphResourceId materialInstances = deferredGraphResources->materialInstances;
-    const Core::GpuGraphResourceId materialTyped = deferredGraphResources->materialTyped;
-    const Core::GpuGraphResourceId csgReceiverRanges = deferredGraphResources->csgReceiverRanges;
-    const Core::GpuGraphResourceId csgCutters = deferredGraphResources->csgCutters;
-    const Core::GpuGraphResourceId csgClipContextSlots = deferredGraphResources->csgClipContextSlots;
-    const Core::GpuGraphResourceId csgIntervalSampleState = deferredGraphResources->csgIntervalSampleState;
     const Core::GpuGraphResourceId bindlessSlots = deferredGraphResources->bindlessSlots;
     const Core::GpuGraphResourceId currentBindlessSlots = deferredGraphResources->currentBindlessSlots;
     const Core::GpuGraphResourceId materialContextSlots = deferredGraphResources->materialContextSlots;
@@ -388,7 +254,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     const Core::GpuGraphResourceId historyCopyDestinationShadowVisibility = deferredGraphResources->historyCopyDestinationShadowVisibility;
     const Core::GpuGraphResourceId historyCopyDestinationCausticIrradiance = deferredGraphResources->historyCopyDestinationCausticIrradiance;
     const Core::GpuGraphResourceId historyCopyDestinationSurfelIrradiance = deferredGraphResources->historyCopyDestinationSurfelIrradiance;
-    const Core::GpuGraphResourceId avboitLowRaster = deferredGraphResources->avboitLowRaster;
     const Core::GpuGraphResourceId avboitAccumColor = deferredGraphResources->avboitAccumColor;
     const Core::GpuGraphResourceId avboitAccumExtinction = deferredGraphResources->avboitAccumExtinction;
     const Core::GpuGraphResourceId refractionDepth = deferredGraphResources->refractionDepth;
@@ -399,21 +264,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     const Core::GpuGraphResourceId refractionResolve = deferredGraphResources->refractionResolve;
     const Core::GpuGraphResourceId avboitForegroundColor = deferredGraphResources->avboitForegroundColor;
     const Core::GpuGraphResourceId avboitForegroundExtinction = deferredGraphResources->avboitForegroundExtinction;
-    const Core::GpuGraphResourceId avboitTransmittance = deferredGraphResources->avboitTransmittance;
-    const Core::GpuGraphResourceId avboitCoverage = deferredGraphResources->avboitCoverage;
-    const Core::GpuGraphResourceId avboitDepthWarp = deferredGraphResources->avboitDepthWarp;
-    const Core::GpuGraphResourceId avboitControl = deferredGraphResources->avboitControl;
-    const Core::GpuGraphResourceId avboitExtinction = deferredGraphResources->avboitExtinction;
-    const Core::GpuGraphResourceId avboitExtinctionOverflow = deferredGraphResources->avboitExtinctionOverflow;
-    const Core::GpuGraphResourceId avboitMaterialDomain = deferredGraphResources->avboitMaterialDomain;
-    const Core::GpuGraphResourceId avboitCsgDomain = deferredGraphResources->avboitCsgDomain;
-    const Core::TextureSubresourceSet csgPeelSubresources = deferredGraphResources->csgPeelSubresources;
-    const Core::TextureSubresourceSet csgReceiverEventDataSubresources = deferredGraphResources->csgReceiverEventDataSubresources;
-    const Core::TextureSubresourceSet csgReceiverEventCountSubresources = deferredGraphResources->csgReceiverEventCountSubresources;
-    const Core::TextureSubresourceSet csgReceiverSpanDataSubresources = deferredGraphResources->csgReceiverSpanDataSubresources;
-    const Core::TextureSubresourceSet csgReceiverSpanCountSubresources = deferredGraphResources->csgReceiverSpanCountSubresources;
-    const Core::TextureSubresourceSet csgRemovedIntervalSubresources = deferredGraphResources->csgRemovedIntervalSubresources;
-    const Core::TextureSubresourceSet csgRemovedIntervalCountSubresources = deferredGraphResources->csgRemovedIntervalCountSubresources;
 
     if(!declareDeferredShadowPrepareTask(
         traceGeometryScratchArena,
@@ -422,11 +272,11 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         rayTracingGraphResources,
         currentBindlessSlots,
         materialContextSlots,
-        traceGeometryResources.data(),
-        traceGeometryResources.size(),
-        softwareBvhBuildStateResources.data(),
-        softwareBvhBuildStateResources.size(),
-        softwareTraceResourcesPrepared,
+        traceGeometry.traceGeometry.data(),
+        traceGeometry.traceGeometry.size(),
+        traceGeometry.softwareBvhBuildState.data(),
+        traceGeometry.softwareBvhBuildState.size(),
+        traceGeometry.softwareTraceResourcesPrepared,
         shadowPrepareTimingTicket
     )){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shared shadow-preparation packet"));
@@ -453,37 +303,10 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         meshViewAspectRatio,
         meshViewState,
         meshViewUploadRequired,
-        albedo,
-        normal,
-        worldPosition,
-        specularRoughness,
-        depth,
-        opaqueColor,
-        sceneShading,
-        lights,
-        meshView,
-        materialInstances,
-        materialTyped,
-        csgReceiverRanges,
-        csgCutters,
-        csgClipContextSlots,
-        csgIntervalSampleState,
-        csgCapBackNormal,
-        csgIntervalDepth,
-        csgIntervalId,
-        csgReceiverEventData,
-        csgReceiverEventCount,
-        csgReceiverSpanData,
-        csgReceiverSpanCount,
-        csgRemovedIntervalDepth,
-        csgRemovedIntervalCapNormal,
-        csgRemovedIntervalData,
-        csgRemovedIntervalCount,
-        currentBindlessSlots,
-        materialContextSlots,
-        traceGeometryResources.data(),
-        traceGeometryResources.size(),
-        shadowTraceGeometrySet,
+        *deferredGraphResources,
+        traceGeometry.traceGeometry.data(),
+        traceGeometry.traceGeometry.size(),
+        traceGeometry.shadowTraceGeometrySet,
         asyncPrefixTiming,
         deferredClearTiming,
         deferredClearTimingState,
@@ -579,10 +402,10 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         sceneShading,
         lights,
         materialContextSlots,
-        rayTracingShadowVisibilityPlan.hardwareTransparentTrace ? hardwareTraceGeometryResources.data() : softwareTraceGeometryResources.data(),
-        rayTracingShadowVisibilityPlan.hardwareTransparentTrace ? hardwareTraceGeometryResources.size() : softwareTraceGeometryResources.size(),
-        rayTracingShadowVisibilityPlan.hardwareTransparentTrace ? hardwareTraceGeometrySet : softwareTraceGeometrySet,
-        traceMaterialSampledTextureSet,
+        rayTracingShadowVisibilityPlan.hardwareTransparentTrace ? traceGeometry.hardwareTraceGeometry.data() : traceGeometry.softwareTraceGeometry.data(),
+        rayTracingShadowVisibilityPlan.hardwareTransparentTrace ? traceGeometry.hardwareTraceGeometry.size() : traceGeometry.softwareTraceGeometry.size(),
+        rayTracingShadowVisibilityPlan.hardwareTransparentTrace ? traceGeometry.hardwareTraceGeometrySet : traceGeometry.softwareTraceGeometrySet,
+        traceGeometry.traceMaterialSampledTextureSet,
         m_graphicsPrefixTask,
         features.laggedLightingHistoryWriterWaitPending ? m_deferredLightingHistoryWriterDrainCompletion : Core::GpuExternalCompletionId{},
         shadowVisibilityTimingTicket,
@@ -608,10 +431,10 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         sceneShading,
         lights,
         materialContextSlots,
-        softwareTraceGeometryResources.data(),
-        softwareTraceGeometryResources.size(),
-        softwareTraceGeometrySet,
-        traceMaterialSampledTextureSet,
+        traceGeometry.softwareTraceGeometry.data(),
+        traceGeometry.softwareTraceGeometry.size(),
+        traceGeometry.softwareTraceGeometrySet,
+        traceGeometry.traceMaterialSampledTextureSet,
         softwareCausticsTimingTicket,
         causticPhotonTiming,
         causticResolveTiming
@@ -632,10 +455,10 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         sceneShading,
         lights,
         materialContextSlots,
-        (rayTracingGraphResources.surfelUsesHardwareTrace ? hardwareTraceGeometryResources.data() : softwareTraceGeometryResources.data()),
-        (rayTracingGraphResources.surfelUsesHardwareTrace ? hardwareTraceGeometryResources.size() : softwareTraceGeometryResources.size()),
-        (rayTracingGraphResources.surfelUsesHardwareTrace ? hardwareTraceGeometrySet : softwareTraceGeometrySet),
-        traceMaterialSampledTextureSet,
+        (rayTracingGraphResources.surfelUsesHardwareTrace ? traceGeometry.hardwareTraceGeometry.data() : traceGeometry.softwareTraceGeometry.data()),
+        (rayTracingGraphResources.surfelUsesHardwareTrace ? traceGeometry.hardwareTraceGeometry.size() : traceGeometry.softwareTraceGeometry.size()),
+        (rayTracingGraphResources.surfelUsesHardwareTrace ? traceGeometry.hardwareTraceGeometrySet : traceGeometry.softwareTraceGeometrySet),
+        traceGeometry.traceMaterialSampledTextureSet,
         effectsTask,
         useLaggedLightingHistory,
         m_deferredSurfelGiCounterReadbackCompletion,
@@ -663,10 +486,10 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 .sceneShading = sceneShading,
                 .lights = lights,
                 .materialContextSlots = materialContextSlots,
-                .hardwareTraceAttributeSet = hardwareTraceAttributeSet,
-                .hardwareTraceAttributeResources = hardwareTraceAttributeResources.data(),
-                .hardwareTraceAttributeResourceCount = hardwareTraceAttributeResources.size(),
-                .traceMaterialSampledTextureSet = traceMaterialSampledTextureSet,
+                .hardwareTraceAttributeSet = traceGeometry.hardwareTraceAttributeSet,
+                .hardwareTraceAttributeResources = traceGeometry.hardwareTraceAttributes.data(),
+                .hardwareTraceAttributeResourceCount = traceGeometry.hardwareTraceAttributes.size(),
+                .traceMaterialSampledTextureSet = traceGeometry.traceMaterialSampledTextureSet,
                 .graphicsPrefixTask = m_graphicsPrefixTask,
                 .shadowPreparationReady = &m_shadowPreparationOutcome.ready,
                 .historyWriterDrainCompletion = &m_deferredLightingHistoryWriterDrainCompletion,
@@ -698,500 +521,42 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         m_deferredHardwareCausticsTask = hardwareCausticsStageResult->hardwareCausticsTask;
     }
 
-    AvboitPreGraphTask::Payload avboitPrePayload{ m_arena, m_avboitSystem, deferredTargets, avboitPreTimingTicket, transparentCsgIntervalsTiming, };
-    ECSRenderDetail::AvboitCsgReceiverSpanGraphTask::Payload avboitCsgReceiverSpanPayload{ m_arena, m_materialSystem, m_csgSystem, deferredTargets, avboitPreTimingTicket, transparentCsgIntervalsTiming, };
-    ECSRenderDetail::AvboitCsgIntervalCombineGraphTask::Payload avboitCsgIntervalCombinePayload{ m_arena, m_materialSystem, m_csgSystem, deferredTargets, avboitPreTimingTicket, transparentCsgIntervalsTiming, };
-    avboitPrePayload.hasTransparentRenderers = hasTransparentRenderers;
-    avboitPrePayload.frameBindings = frameBindings;
-    avboitPrePayload.csgResources = csgResources;
-    avboitCsgReceiverSpanPayload.frameBindings = frameBindings;
-    avboitCsgReceiverSpanPayload.csgResources = csgResources;
-    avboitCsgIntervalCombinePayload.frameBindings = frameBindings;
-    avboitCsgIntervalCombinePayload.csgResources = csgResources;
-
-
-    // Freeze the transparent CSG interval producer before AVBOIT recording; snapshot covers receiver work only.
-    TransparentCsgIntervalBuilder transparentCsgIntervalBuilder(m_deferredLightingTaskGraph, m_materialSystem, m_csgSystem, m_avboitSystem);
-    auto transparentCsgIntervalResult = transparentCsgIntervalBuilder.declare(
-        traceGeometryScratchArena,
-        TransparentCsgIntervalProducerInputs{
-            .targets = deferredTargets,
-            .csgFrameState = csgFrameState,
-            .frameBindings = frameBindings,
-            .csgResources = csgResources,
-            .meshViewState = meshViewState,
-            .materialInstances = materialInstances,
-            .materialTyped = materialTyped,
-            .csgReceiverRanges = csgReceiverRanges,
-            .csgCutters = csgCutters,
-            .csgClipContextSlots = csgClipContextSlots,
-            .csgIntervalSampleState = csgIntervalSampleState,
-            .csgIntervalId = csgIntervalId,
-            .csgReceiverEventCount = csgReceiverEventCount,
-            .csgPeelSubresources = csgPeelSubresources,
-            .csgReceiverEventCountSubresources = csgReceiverEventCountSubresources,
-            .prefixTask = m_graphicsPrefixTask,
-            .hasTransparentRenderers = hasTransparentRenderers,
-        },
-        avboitPrePayload,
-        avboitCsgReceiverSpanPayload,
-        avboitCsgIntervalCombinePayload,
-        transparentCsgIntervalClearTimingState
-    );
-    if(!transparentCsgIntervalResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare transparent CSG interval producer"));
-        return;
-    }
-    FrameGraphTransparentCsgTasks transparentCsgTasks(m_deferredLightingTaskGraph, m_avboitSystem);
-    auto transparentCsgTaskResult = transparentCsgTasks.declare(
-        traceGeometryScratchArena,
-        FrameGraphTransparentCsgTaskInputs{
-            .targets = deferredTargets,
-            .albedo = albedo,
-            .normal = normal,
-            .worldPosition = worldPosition,
-            .specularRoughness = specularRoughness,
-            .depth = depth,
-            .meshView = meshView,
-            .materialInstances = materialInstances,
-            .materialTyped = materialTyped,
-            .csgReceiverRanges = csgReceiverRanges,
-            .csgCutters = csgCutters,
-            .csgClipContextSlots = csgClipContextSlots,
-            .csgIntervalSampleState = csgIntervalSampleState,
-            .csgCapBackNormal = csgCapBackNormal,
-            .csgIntervalDepth = csgIntervalDepth,
-            .csgIntervalId = csgIntervalId,
-            .csgReceiverEventData = csgReceiverEventData,
-            .csgReceiverEventCount = csgReceiverEventCount,
-            .csgReceiverSpanData = csgReceiverSpanData,
-            .csgReceiverSpanCount = csgReceiverSpanCount,
-            .csgRemovedIntervalDepth = csgRemovedIntervalDepth,
-            .csgRemovedIntervalCapNormal = csgRemovedIntervalCapNormal,
-            .csgRemovedIntervalData = csgRemovedIntervalData,
-            .csgRemovedIntervalCount = csgRemovedIntervalCount,
-            .currentBindlessSlots = currentBindlessSlots,
-            .avboitMaterialDomain = avboitMaterialDomain,
-            .avboitCsgDomain = avboitCsgDomain,
-            .csgPeelSubresources = csgPeelSubresources,
-            .csgReceiverEventDataSubresources = csgReceiverEventDataSubresources,
-            .csgReceiverEventCountSubresources = csgReceiverEventCountSubresources,
-            .csgReceiverSpanDataSubresources = csgReceiverSpanDataSubresources,
-            .csgReceiverSpanCountSubresources = csgReceiverSpanCountSubresources,
-            .csgRemovedIntervalSubresources = csgRemovedIntervalSubresources,
-            .csgRemovedIntervalCountSubresources = csgRemovedIntervalCountSubresources,
-            .timingTicket = &avboitPreTimingTicket,
-            .transparentCsgIntervalsTiming = &transparentCsgIntervalsTiming,
-            .transparentCsgUploadTask = transparentCsgIntervalResult->uploadTask,
-            .transparentCsgMaterialGeometrySet = transparentCsgIntervalResult->materialGeometrySet,
-            .transparentCsgMaterialSampledTextureSet = transparentCsgIntervalResult->materialSampledTextureSet,
-        },
-        objectGeometry,
-        avboitPrePayload,
-        avboitCsgReceiverSpanPayload,
-        avboitCsgIntervalCombinePayload
-    );
-    if(!transparentCsgTaskResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare transparent CSG interval graph tasks"));
-        return;
-    }
-    const Core::GpuTaskId avboitIntervalCompletionTask = transparentCsgTaskResult->intervalCompletionTask;
-    const bool avboitIntervalOutputsGraphOwned = transparentCsgTaskResult->intervalOutputsGraphOwned;
-    AvboitOccupancyGraphTask::Payload avboitOccupancyPayload{ m_arena, m_avboitSystem, deferredTargets, avboitPreTimingTicket };
-    AvboitOccupancyComputeEmulationGraphTask::Payload avboitOccupancyComputeEmulationPayload{ m_arena, m_graphics, m_materialSystem, deferredTargets, avboitPreTimingTicket, avboitOccupancyComputeEmulationTiming };
-    avboitOccupancyPayload.frameBindings = frameBindings;
-    avboitOccupancyComputeEmulationPayload.frameBindings = frameBindings;
-    avboitOccupancyPayload.hasTransparentRenderers = hasTransparentRenderers;
-    avboitOccupancyPayload.csgResources = csgResources;
-    avboitOccupancyComputeEmulationPayload.csgResources = csgResources;
-
     const bool opticalCaptureRequested = hasTransparentRenderers && (m_refractionEnabled || m_reflectionSettings.traceMode != ReflectionTraceMode::Disabled);
     const bool refractionActive = m_preparedRefractionActive && opticalCaptureRequested;
     RayTracingRefractionGraphResources refractionResources = m_preparedRefractionResources;
-    AvboitGeneratedGeometryReuse generatedGeometry(traceGeometryScratchArena);
-    const auto refractionCaptureTaskResult = DeclareAvboitRefractionCapture(
+    FrameGraphAvboitStage avboitStage(m_deferredLightingTaskGraph, m_arena, m_graphics, m_materialSystem, m_csgSystem, m_avboitSystem, m_deferredTaskTimingFeedback);
+    const auto avboitStageResult = avboitStage.declare(
         traceGeometryScratchArena,
-        m_deferredLightingTaskGraph, m_arena, m_materialSystem, m_csgSystem, deferredTargets,
-        csgFrameState, csgResources, frameBindings, meshViewState, objectGeometry, generatedGeometry, avboitIntervalCompletionTask,
-        refractionActive && refractionResources.valid()
-    );
-    if(!refractionCaptureTaskResult)
-        return;
-    const Core::GpuTaskId refractionCaptureTask = *refractionCaptureTaskResult;
-    FrameGraphAvboitOccupancyUploadChain occupancyUploadChain(m_deferredLightingTaskGraph, m_materialSystem, m_csgSystem);
-    auto occupancyUploadChainResult = occupancyUploadChain.declare(
-        traceGeometryScratchArena,
-        FrameGraphAvboitOccupancyUploadInputs{
+        FrameGraphAvboitStageInputs{
             .targets = deferredTargets,
+            .resources = *deferredGraphResources,
             .csgFrameState = csgFrameState,
             .frameBindings = frameBindings,
             .csgResources = csgResources,
             .meshViewState = meshViewState,
-            .materialInstances = materialInstances,
-            .materialTyped = materialTyped,
-            .csgReceiverRanges = csgReceiverRanges,
-            .csgCutters = csgCutters,
-            .csgClipContextSlots = csgClipContextSlots,
-            .uploadTask = refractionCaptureTask,
-            .intervalOutputsGraphOwned = avboitIntervalOutputsGraphOwned,
+            .prefixTask = m_graphicsPrefixTask,
             .hasTransparentRenderers = hasTransparentRenderers,
-        },
-        avboitOccupancyPayload,
-        avboitOccupancyComputeEmulationPayload,
-        generatedGeometry
-    );
-    if(!occupancyUploadChainResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT occupancy upload chain"));
-        return;
-    }
-    const Core::GpuTaskId occupancyUploadTask = occupancyUploadChainResult->uploadTask;
-    const Core::GpuGraphResourceSetId occupancyMaterialGeometrySet = occupancyUploadChainResult->materialGeometrySet;
-    const Core::GpuGraphResourceSetId occupancyMaterialSampledTextureSet = occupancyUploadChainResult->materialSampledTextureSet;
-    const bool occupancyCsgStreamsUploaded = occupancyUploadChainResult->csgStreamsUploaded;
-    const bool occupancyRegularComputeEmulationPlanCaptured = occupancyUploadChainResult->regularComputeEmulationPlanCaptured;
-    const Core::GpuTaskId occupancyReusedGeometryProducer = occupancyUploadChainResult->reusedGeometryProducer;
-    const bool occupancyProducesReusableGeometry = occupancyUploadChainResult->producesReusableGeometry;
-    const bool occupancyCsgComputeEmulationPlanCaptured = occupancyUploadChainResult->csgComputeEmulationPlanCaptured;
-    const bool occupancySharedComputeEmulationPlanCaptured = occupancyUploadChainResult->sharedComputeEmulationPlanCaptured;
-    const ECSRenderDetail::RegularSharedComputeEmulationGraphPlan occupancySharedComputeEmulationPlan = occupancyUploadChainResult->sharedComputeEmulationPlan;
-    const usize occupancySharedComputeEmulationInstanceCount = occupancyUploadChainResult->sharedComputeEmulationInstanceCount;
-    const usize occupancySharedComputeEmulationMaterialTypedByteCount = occupancyUploadChainResult->sharedComputeEmulationMaterialTypedByteCount;
-
-
-    AvboitClearChainBuilder avboitClearChainBuilder(m_deferredLightingTaskGraph, m_avboitSystem);
-    auto avboitClearChainResult = avboitClearChainBuilder.declare(
-        AvboitClearChainInputs{
-            .lowRaster = avboitLowRaster,
-            .accumColor = avboitAccumColor,
-            .accumExtinction = avboitAccumExtinction,
-            .foregroundColor = avboitForegroundColor,
-            .foregroundExtinction = avboitForegroundExtinction,
-            .transmittance = avboitTransmittance,
-            .coverage = avboitCoverage,
-            .depthWarp = avboitDepthWarp,
-            .control = avboitControl,
-            .extinction = avboitExtinction,
-            .extinctionOverflow = avboitExtinctionOverflow,
-            .uploadTask = occupancyUploadTask,
             .clearTargets = clearAvboitTargets,
+            .refractionCaptureEnabled = refractionActive && refractionResources.valid(),
         },
-        avboitClearTimingState
-    );
-    if(!avboitClearChainResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned AVBOIT clear chain"));
-        return;
-    }
-    Core::GpuTaskId avboitClearTask = avboitClearChainResult->clearTask;
-
-
-    AvboitOccupancyRecordInputs avboitOccupancyRecordInputs{ m_arena, deferredTargets, avboitPreTimingTicket, avboitOccupancyComputeEmulationTiming };
-    avboitOccupancyRecordInputs.albedo = albedo;
-    avboitOccupancyRecordInputs.normal = normal;
-    avboitOccupancyRecordInputs.worldPosition = worldPosition;
-    avboitOccupancyRecordInputs.depth = depth;
-    avboitOccupancyRecordInputs.refractionInstance = refractionInstance;
-    avboitOccupancyRecordInputs.avboitLowRaster = avboitLowRaster;
-    avboitOccupancyRecordInputs.avboitCoverage = avboitCoverage;
-    avboitOccupancyRecordInputs.avboitMaterialDomain = avboitMaterialDomain;
-    avboitOccupancyRecordInputs.avboitCsgDomain = avboitCsgDomain;
-    avboitOccupancyRecordInputs.meshView = meshView;
-    avboitOccupancyRecordInputs.materialInstances = materialInstances;
-    avboitOccupancyRecordInputs.materialTyped = materialTyped;
-    avboitOccupancyRecordInputs.csgReceiverRanges = csgReceiverRanges;
-    avboitOccupancyRecordInputs.csgCutters = csgCutters;
-    avboitOccupancyRecordInputs.csgClipContextSlots = csgClipContextSlots;
-    avboitOccupancyRecordInputs.csgIntervalSampleState = csgIntervalSampleState;
-    avboitOccupancyRecordInputs.csgRemovedIntervalDepth = csgRemovedIntervalDepth;
-    avboitOccupancyRecordInputs.csgRemovedIntervalCapNormal = csgRemovedIntervalCapNormal;
-    avboitOccupancyRecordInputs.csgRemovedIntervalData = csgRemovedIntervalData;
-    avboitOccupancyRecordInputs.csgRemovedIntervalCount = csgRemovedIntervalCount;
-    avboitOccupancyRecordInputs.csgRemovedIntervalSubresources = csgRemovedIntervalSubresources;
-    avboitOccupancyRecordInputs.csgRemovedIntervalCountSubresources = csgRemovedIntervalCountSubresources;
-    avboitOccupancyRecordInputs.currentBindlessSlots = currentBindlessSlots;
-    avboitOccupancyRecordInputs.clearTask = avboitClearTask;
-    avboitOccupancyRecordInputs.uploadTask = occupancyUploadTask;
-    avboitOccupancyRecordInputs.materialGeometrySet = occupancyMaterialGeometrySet;
-    avboitOccupancyRecordInputs.materialSampledTextureSet = occupancyMaterialSampledTextureSet;
-    avboitOccupancyRecordInputs.intervalOutputsGraphOwned = avboitIntervalOutputsGraphOwned;
-    avboitOccupancyRecordInputs.csgStreamsUploaded = occupancyCsgStreamsUploaded;
-    avboitOccupancyRecordInputs.regularComputeEmulationPlanCaptured = occupancyRegularComputeEmulationPlanCaptured;
-    avboitOccupancyRecordInputs.reusedGeometryProducer = occupancyReusedGeometryProducer;
-    avboitOccupancyRecordInputs.producesReusableGeometry = occupancyProducesReusableGeometry;
-    avboitOccupancyRecordInputs.csgComputeEmulationPlanCaptured = occupancyCsgComputeEmulationPlanCaptured;
-    avboitOccupancyRecordInputs.sharedComputeEmulationPlanCaptured = occupancySharedComputeEmulationPlanCaptured;
-    avboitOccupancyRecordInputs.sharedComputeEmulationPlan = occupancySharedComputeEmulationPlan;
-    avboitOccupancyRecordInputs.sharedComputeEmulationInstanceCount = occupancySharedComputeEmulationInstanceCount;
-    avboitOccupancyRecordInputs.sharedComputeEmulationMaterialTypedByteCount = occupancySharedComputeEmulationMaterialTypedByteCount;
-    AvboitOccupancyRecordBuilder avboitOccupancyRecordBuilder(m_deferredLightingTaskGraph, m_graphics, m_materialSystem, m_avboitSystem);
-    auto avboitOccupancyRecordResult = avboitOccupancyRecordBuilder.declare(traceGeometryScratchArena, frameBindings, csgResources, objectGeometry, avboitOccupancyRecordInputs, avboitOccupancyPayload, avboitOccupancyComputeEmulationPayload);
-    if(!avboitOccupancyRecordResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT occupancy graph task"));
-        return;
-    }
-    if(occupancyProducesReusableGeometry){
-        const Core::GpuTaskId producer = m_avboitSystem.taskGraphStage().m_occupancyComputeEmulationTask;
-        if(!producer.valid())
-            generatedGeometry.reset();
-        else if(!generatedGeometry.publishProducer(producer))
-            return;
-    }
-
-
-    AvboitComputeEffectChainBuilder avboitComputeEffectChainBuilder(m_deferredLightingTaskGraph, m_avboitSystem);
-    auto avboitDepthWarpStageResult = avboitComputeEffectChainBuilder.declareDepthWarp(
-        AvboitDepthWarpStageInputs{
-            .targets = deferredTargets.avboit,
-            .coverage = avboitCoverage,
-            .depthWarp = avboitDepthWarp,
-            .control = avboitControl,
-            .currentBindlessSlots = currentBindlessSlots,
-            .occupancyTask = m_avboitSystem.taskGraphStage().m_occupancyTask,
+        FrameGraphAvboitStageTiming{
+            .preTimingTicket = avboitPreTimingTicket,
             .depthWarpTimingTicket = avboitDepthWarpTimingTicket,
-            .timingFeedback = m_deferredTaskTimingFeedback,
-            .hasTransparentRenderers = hasTransparentRenderers,
-        }
+            .extinctionTimingTicket = avboitExtinctionTimingTicket,
+            .integrationTimingTicket = avboitIntegrationTimingTicket,
+            .accumulationTimingTicket = avboitAccumulationTimingTicket,
+            .clearTimingState = avboitClearTimingState,
+            .transparentCsgIntervalClearTimingState = transparentCsgIntervalClearTimingState,
+            .transparentCsgIntervalsTiming = transparentCsgIntervalsTiming,
+            .occupancyComputeEmulationTiming = avboitOccupancyComputeEmulationTiming,
+            .extinctionComputeEmulationTiming = avboitExtinctionComputeEmulationTiming,
+            .accumulationComputeEmulationTiming = avboitAccumulationComputeEmulationTiming,
+        },
+        objectGeometry
     );
-    if(!avboitDepthWarpStageResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT depth-warp graph task"));
+    if(!avboitStageResult)
         return;
-    }
-    const Core::GpuTaskId avboitDepthWarpCompletionTask = avboitDepthWarpStageResult->completionTask;
-
-    if(hasTransparentRenderers){
-        // Snapshot Extinction after Depth Warp so phases never overwrite each other.
-        AvboitExtinctionGraphTask::Payload avboitExtinctionPayload{ m_arena, m_avboitSystem, deferredTargets, avboitExtinctionTimingTicket };
-        AvboitExtinctionComputeEmulationGraphTask::Payload avboitExtinctionComputeEmulationPayload{ m_arena, m_graphics, m_materialSystem, deferredTargets, avboitExtinctionTimingTicket, avboitExtinctionComputeEmulationTiming };
-        avboitExtinctionPayload.frameBindings = frameBindings;
-        avboitExtinctionComputeEmulationPayload.frameBindings = frameBindings;
-        avboitExtinctionPayload.hasTransparentRenderers = hasTransparentRenderers;
-        avboitExtinctionPayload.csgResources = csgResources;
-        avboitExtinctionComputeEmulationPayload.csgResources = csgResources;
-
-        FrameGraphAvboitExtinctionUploadChain extinctionUploadChain(m_deferredLightingTaskGraph, m_materialSystem, m_csgSystem);
-        auto extinctionUploadChainResult = extinctionUploadChain.declare(
-            traceGeometryScratchArena,
-            FrameGraphAvboitExtinctionUploadInputs{
-                .targets = deferredTargets,
-                .csgFrameState = csgFrameState,
-                .frameBindings = frameBindings,
-                .csgResources = csgResources,
-                .meshViewState = meshViewState,
-                .materialInstances = materialInstances,
-                .materialTyped = materialTyped,
-                .csgReceiverRanges = csgReceiverRanges,
-                .csgCutters = csgCutters,
-                .csgClipContextSlots = csgClipContextSlots,
-                .csgIntervalSampleState = csgIntervalSampleState,
-                .uploadTask = avboitDepthWarpCompletionTask,
-                .intervalOutputsGraphOwned = avboitIntervalOutputsGraphOwned,
-                .hasTransparentRenderers = hasTransparentRenderers,
-            },
-            avboitExtinctionPayload,
-            avboitExtinctionComputeEmulationPayload,
-            generatedGeometry
-        );
-        if(!extinctionUploadChainResult){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT extinction upload chain"));
-            return;
-        }
-        const Core::GpuTaskId extinctionUploadTask = extinctionUploadChainResult->uploadTask;
-        const Core::GpuGraphResourceSetId extinctionMaterialGeometrySet = extinctionUploadChainResult->materialGeometrySet;
-        const Core::GpuGraphResourceSetId extinctionMaterialSampledTextureSet = extinctionUploadChainResult->materialSampledTextureSet;
-        const bool extinctionStreamsUploaded = extinctionUploadChainResult->streamsUploaded;
-        const bool extinctionCsgStreamsUploaded = extinctionUploadChainResult->csgStreamsUploaded;
-        const bool extinctionRegularComputeEmulationPlanCaptured = extinctionUploadChainResult->regularComputeEmulationPlanCaptured;
-        const Core::GpuTaskId extinctionReusedGeometryProducer = extinctionUploadChainResult->reusedGeometryProducer;
-        const bool extinctionProducesReusableGeometry = extinctionUploadChainResult->producesReusableGeometry;
-        const bool extinctionCsgComputeEmulationPlanCaptured = extinctionUploadChainResult->csgComputeEmulationPlanCaptured;
-        const bool extinctionSharedComputeEmulationPlanCaptured = extinctionUploadChainResult->sharedComputeEmulationPlanCaptured;
-        const ECSRenderDetail::RegularSharedComputeEmulationGraphPlan extinctionSharedComputeEmulationPlan = extinctionUploadChainResult->sharedComputeEmulationPlan;
-        const usize extinctionSharedComputeEmulationInstanceCount = extinctionUploadChainResult->sharedComputeEmulationInstanceCount;
-        const usize extinctionSharedComputeEmulationMaterialTypedByteCount = extinctionUploadChainResult->sharedComputeEmulationMaterialTypedByteCount;
-        AvboitExtinctionRecordInputs avboitExtinctionRecordInputs{ m_arena, deferredTargets, avboitExtinctionTimingTicket, avboitExtinctionComputeEmulationTiming };
-        avboitExtinctionRecordInputs.albedo = albedo;
-        avboitExtinctionRecordInputs.normal = normal;
-        avboitExtinctionRecordInputs.worldPosition = worldPosition;
-        avboitExtinctionRecordInputs.depth = depth;
-        avboitExtinctionRecordInputs.refractionInstance = refractionInstance;
-        avboitExtinctionRecordInputs.avboitLowRaster = avboitLowRaster;
-        avboitExtinctionRecordInputs.avboitDepthWarp = avboitDepthWarp;
-        avboitExtinctionRecordInputs.avboitExtinction = avboitExtinction;
-        avboitExtinctionRecordInputs.avboitControl = avboitControl;
-        avboitExtinctionRecordInputs.avboitExtinctionOverflow = avboitExtinctionOverflow;
-        avboitExtinctionRecordInputs.avboitMaterialDomain = avboitMaterialDomain;
-        avboitExtinctionRecordInputs.avboitCsgDomain = avboitCsgDomain;
-        avboitExtinctionRecordInputs.meshView = meshView;
-        avboitExtinctionRecordInputs.materialInstances = materialInstances;
-        avboitExtinctionRecordInputs.materialTyped = materialTyped;
-        avboitExtinctionRecordInputs.csgReceiverRanges = csgReceiverRanges;
-        avboitExtinctionRecordInputs.csgCutters = csgCutters;
-        avboitExtinctionRecordInputs.csgClipContextSlots = csgClipContextSlots;
-        avboitExtinctionRecordInputs.csgIntervalSampleState = csgIntervalSampleState;
-        avboitExtinctionRecordInputs.csgRemovedIntervalDepth = csgRemovedIntervalDepth;
-        avboitExtinctionRecordInputs.csgRemovedIntervalCapNormal = csgRemovedIntervalCapNormal;
-        avboitExtinctionRecordInputs.csgRemovedIntervalData = csgRemovedIntervalData;
-        avboitExtinctionRecordInputs.csgRemovedIntervalCount = csgRemovedIntervalCount;
-        avboitExtinctionRecordInputs.csgRemovedIntervalSubresources = csgRemovedIntervalSubresources;
-        avboitExtinctionRecordInputs.csgRemovedIntervalCountSubresources = csgRemovedIntervalCountSubresources;
-        avboitExtinctionRecordInputs.currentBindlessSlots = currentBindlessSlots;
-        avboitExtinctionRecordInputs.depthWarpCompletionTask = avboitDepthWarpCompletionTask;
-        avboitExtinctionRecordInputs.uploadTask = extinctionUploadTask;
-        avboitExtinctionRecordInputs.materialGeometrySet = extinctionMaterialGeometrySet;
-        avboitExtinctionRecordInputs.materialSampledTextureSet = extinctionMaterialSampledTextureSet;
-        avboitExtinctionRecordInputs.intervalOutputsGraphOwned = avboitIntervalOutputsGraphOwned;
-        avboitExtinctionRecordInputs.csgStreamsUploaded = extinctionCsgStreamsUploaded;
-        avboitExtinctionRecordInputs.streamsUploaded = extinctionStreamsUploaded;
-        avboitExtinctionRecordInputs.regularComputeEmulationPlanCaptured = extinctionRegularComputeEmulationPlanCaptured;
-        avboitExtinctionRecordInputs.reusedGeometryProducer = extinctionReusedGeometryProducer;
-        avboitExtinctionRecordInputs.producesReusableGeometry = extinctionProducesReusableGeometry;
-        avboitExtinctionRecordInputs.csgComputeEmulationPlanCaptured = extinctionCsgComputeEmulationPlanCaptured;
-        avboitExtinctionRecordInputs.sharedComputeEmulationPlanCaptured = extinctionSharedComputeEmulationPlanCaptured;
-        avboitExtinctionRecordInputs.sharedComputeEmulationPlan = extinctionSharedComputeEmulationPlan;
-        avboitExtinctionRecordInputs.sharedComputeEmulationInstanceCount = extinctionSharedComputeEmulationInstanceCount;
-        avboitExtinctionRecordInputs.sharedComputeEmulationMaterialTypedByteCount = extinctionSharedComputeEmulationMaterialTypedByteCount;
-        AvboitExtinctionRecordBuilder avboitExtinctionRecordBuilder(m_deferredLightingTaskGraph, m_graphics, m_materialSystem, m_avboitSystem);
-        auto avboitExtinctionRecordResult = avboitExtinctionRecordBuilder.declare(traceGeometryScratchArena, frameBindings, csgResources, objectGeometry, avboitExtinctionRecordInputs, avboitExtinctionPayload, avboitExtinctionComputeEmulationPayload);
-        if(!avboitExtinctionRecordResult){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT extinction graph task"));
-            return;
-        }
-        if(extinctionProducesReusableGeometry){
-            const Core::GpuTaskId producer = m_avboitSystem.taskGraphStage().m_extinctionComputeEmulationTask;
-            if(!producer.valid())
-                generatedGeometry.reset();
-            else if(!generatedGeometry.publishProducer(producer))
-                return;
-        }
-
-        auto avboitIntegrationStageResult = avboitComputeEffectChainBuilder.declareIntegration(
-            AvboitIntegrationStageInputs{
-                .targets = deferredTargets.avboit,
-                .extinction = avboitExtinction,
-                .control = avboitControl,
-                .extinctionOverflow = avboitExtinctionOverflow,
-                .transmittance = avboitTransmittance,
-                .currentBindlessSlots = currentBindlessSlots,
-                .extinctionTask = m_avboitSystem.taskGraphStage().m_extinctionTask,
-                .integrationTimingTicket = avboitIntegrationTimingTicket,
-                .timingFeedback = m_deferredTaskTimingFeedback,
-            }
-        );
-        if(!avboitIntegrationStageResult){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT integration graph task"));
-            return;
-        }
-
-
-        // Accumulation is another independent write point; freeze bytes after integration.
-        AvboitAccumulationGraphTask::Payload avboitAccumulationPayload{ m_arena, m_avboitSystem, deferredTargets, avboitAccumulationTimingTicket };
-        AvboitAccumulationComputeEmulationGraphTask::Payload avboitAccumulationComputeEmulationPayload{ m_arena, m_graphics, m_materialSystem, deferredTargets, avboitAccumulationTimingTicket, avboitAccumulationComputeEmulationTiming };
-        avboitAccumulationPayload.frameBindings = frameBindings;
-        avboitAccumulationComputeEmulationPayload.frameBindings = frameBindings;
-        avboitAccumulationPayload.hasTransparentRenderers = hasTransparentRenderers;
-        avboitAccumulationPayload.csgResources = csgResources;
-        avboitAccumulationComputeEmulationPayload.csgResources = csgResources;
-
-        FrameGraphAvboitAccumulationUploadChain accumulationUploadChain(m_deferredLightingTaskGraph, m_materialSystem, m_csgSystem);
-        auto accumulationUploadChainResult = accumulationUploadChain.declare(
-            traceGeometryScratchArena,
-            FrameGraphAvboitAccumulationUploadInputs{
-                .targets = deferredTargets,
-                .csgFrameState = csgFrameState,
-                .frameBindings = frameBindings,
-                .csgResources = csgResources,
-                .meshViewState = meshViewState,
-                .materialInstances = materialInstances,
-                .materialTyped = materialTyped,
-                .csgReceiverRanges = csgReceiverRanges,
-                .csgCutters = csgCutters,
-                .csgClipContextSlots = csgClipContextSlots,
-                .csgIntervalSampleState = csgIntervalSampleState,
-                .uploadTask = m_avboitSystem.taskGraphStage().m_integrationTask,
-                .intervalOutputsGraphOwned = avboitIntervalOutputsGraphOwned,
-            },
-            avboitAccumulationPayload,
-            avboitAccumulationComputeEmulationPayload,
-            generatedGeometry
-        );
-        if(!accumulationUploadChainResult){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT accumulation upload chain"));
-            return;
-        }
-        const Core::GpuTaskId accumulationUploadTask = accumulationUploadChainResult->uploadTask;
-        const Core::GpuGraphResourceSetId accumulationMaterialGeometrySet = accumulationUploadChainResult->materialGeometrySet;
-        const Core::GpuGraphResourceSetId accumulationMaterialSampledTextureSet = accumulationUploadChainResult->materialSampledTextureSet;
-        const bool accumulationStreamsUploaded = accumulationUploadChainResult->streamsUploaded;
-        const bool accumulationCsgStreamsUploaded = accumulationUploadChainResult->csgStreamsUploaded;
-        const bool accumulationRegularComputeEmulationPlanCaptured = accumulationUploadChainResult->regularComputeEmulationPlanCaptured;
-        const Core::GpuTaskId accumulationReusedGeometryProducer = accumulationUploadChainResult->reusedGeometryProducer;
-        const bool accumulationProducesReusableGeometry = accumulationUploadChainResult->producesReusableGeometry;
-        const bool accumulationCsgComputeEmulationPlanCaptured = accumulationUploadChainResult->csgComputeEmulationPlanCaptured;
-        const bool accumulationSharedComputeEmulationPlanCaptured = accumulationUploadChainResult->sharedComputeEmulationPlanCaptured;
-        const ECSRenderDetail::RegularSharedComputeEmulationGraphPlan accumulationSharedComputeEmulationPlan = accumulationUploadChainResult->sharedComputeEmulationPlan;
-        const usize accumulationSharedComputeEmulationInstanceCount = accumulationUploadChainResult->sharedComputeEmulationInstanceCount;
-        const usize accumulationSharedComputeEmulationMaterialTypedByteCount = accumulationUploadChainResult->sharedComputeEmulationMaterialTypedByteCount;
-
-        AvboitAccumulationRecordInputs avboitAccumulationRecordInputs{ m_arena, deferredTargets, avboitAccumulationTimingTicket, avboitAccumulationComputeEmulationTiming };
-        avboitAccumulationRecordInputs.albedo = albedo;
-        avboitAccumulationRecordInputs.normal = normal;
-        avboitAccumulationRecordInputs.worldPosition = worldPosition;
-        avboitAccumulationRecordInputs.depth = depth;
-        avboitAccumulationRecordInputs.refractionInstance = refractionInstance;
-        avboitAccumulationRecordInputs.refractionDepth = refractionDepth;
-        avboitAccumulationRecordInputs.avboitDepthWarp = avboitDepthWarp;
-        avboitAccumulationRecordInputs.avboitTransmittance = avboitTransmittance;
-        avboitAccumulationRecordInputs.avboitControl = avboitControl;
-        avboitAccumulationRecordInputs.avboitForegroundColor = avboitForegroundColor;
-        avboitAccumulationRecordInputs.avboitForegroundExtinction = avboitForegroundExtinction;
-        avboitAccumulationRecordInputs.avboitAccumColor = avboitAccumColor;
-        avboitAccumulationRecordInputs.avboitAccumExtinction = avboitAccumExtinction;
-        avboitAccumulationRecordInputs.avboitMaterialDomain = avboitMaterialDomain;
-        avboitAccumulationRecordInputs.avboitCsgDomain = avboitCsgDomain;
-        avboitAccumulationRecordInputs.meshView = meshView;
-        avboitAccumulationRecordInputs.materialInstances = materialInstances;
-        avboitAccumulationRecordInputs.materialTyped = materialTyped;
-        avboitAccumulationRecordInputs.csgReceiverRanges = csgReceiverRanges;
-        avboitAccumulationRecordInputs.csgCutters = csgCutters;
-        avboitAccumulationRecordInputs.csgClipContextSlots = csgClipContextSlots;
-        avboitAccumulationRecordInputs.csgIntervalSampleState = csgIntervalSampleState;
-        avboitAccumulationRecordInputs.csgRemovedIntervalDepth = csgRemovedIntervalDepth;
-        avboitAccumulationRecordInputs.csgRemovedIntervalCapNormal = csgRemovedIntervalCapNormal;
-        avboitAccumulationRecordInputs.csgRemovedIntervalData = csgRemovedIntervalData;
-        avboitAccumulationRecordInputs.csgRemovedIntervalCount = csgRemovedIntervalCount;
-        avboitAccumulationRecordInputs.csgRemovedIntervalSubresources = csgRemovedIntervalSubresources;
-        avboitAccumulationRecordInputs.csgRemovedIntervalCountSubresources = csgRemovedIntervalCountSubresources;
-        avboitAccumulationRecordInputs.currentBindlessSlots = currentBindlessSlots;
-        avboitAccumulationRecordInputs.integrationTask = m_avboitSystem.taskGraphStage().m_integrationTask;
-        avboitAccumulationRecordInputs.uploadTask = accumulationUploadTask;
-        avboitAccumulationRecordInputs.materialGeometrySet = accumulationMaterialGeometrySet;
-        avboitAccumulationRecordInputs.materialSampledTextureSet = accumulationMaterialSampledTextureSet;
-        avboitAccumulationRecordInputs.intervalOutputsGraphOwned = avboitIntervalOutputsGraphOwned;
-        avboitAccumulationRecordInputs.csgStreamsUploaded = accumulationCsgStreamsUploaded;
-        avboitAccumulationRecordInputs.streamsUploaded = accumulationStreamsUploaded;
-        avboitAccumulationRecordInputs.regularComputeEmulationPlanCaptured = accumulationRegularComputeEmulationPlanCaptured;
-        avboitAccumulationRecordInputs.reusedGeometryProducer = accumulationReusedGeometryProducer;
-        avboitAccumulationRecordInputs.producesReusableGeometry = accumulationProducesReusableGeometry;
-        avboitAccumulationRecordInputs.csgComputeEmulationPlanCaptured = accumulationCsgComputeEmulationPlanCaptured;
-        avboitAccumulationRecordInputs.sharedComputeEmulationPlanCaptured = accumulationSharedComputeEmulationPlanCaptured;
-        avboitAccumulationRecordInputs.sharedComputeEmulationPlan = accumulationSharedComputeEmulationPlan;
-        avboitAccumulationRecordInputs.sharedComputeEmulationInstanceCount = accumulationSharedComputeEmulationInstanceCount;
-        avboitAccumulationRecordInputs.sharedComputeEmulationMaterialTypedByteCount = accumulationSharedComputeEmulationMaterialTypedByteCount;
-        AvboitAccumulationRecordBuilder avboitAccumulationRecordBuilder(m_deferredLightingTaskGraph, m_graphics, m_materialSystem, m_avboitSystem);
-        auto avboitAccumulationRecordResult = avboitAccumulationRecordBuilder.declare(traceGeometryScratchArena, frameBindings, csgResources, objectGeometry, avboitAccumulationRecordInputs, avboitAccumulationPayload, avboitAccumulationComputeEmulationPayload);
-        if(!avboitAccumulationRecordResult){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT accumulation graph task"));
-            return;
-        }
-        if(accumulationProducesReusableGeometry){
-            const Core::GpuTaskId producer = m_avboitSystem.taskGraphStage().m_accumulationComputeEmulationTask;
-            if(!producer.valid())
-                generatedGeometry.reset();
-            else if(!generatedGeometry.publishProducer(producer))
-                return;
-        }
-
-    }
-    const Core::GpuTaskId avboitFinalTask = hasTransparentRenderers ? m_avboitSystem.taskGraphStage().m_accumulationFinalizeTask : m_avboitSystem.taskGraphStage().m_occupancyTask;
+    const Core::GpuTaskId avboitFinalTask = *avboitStageResult;
 
     DeferredLightingStageBuilder deferredLightingStageBuilder(m_deferredLightingTaskGraph, m_deferredSystem);
     auto deferredLightingStageResult = deferredLightingStageBuilder.declare(
@@ -1263,8 +628,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             .avboitAccumExtinction = avboitAccumExtinction,
             .avboitForegroundColor = avboitForegroundColor,
             .avboitForegroundExtinction = avboitForegroundExtinction,
-            .hardwareTraceGeometrySet = hardwareTraceGeometrySet,
-            .traceMaterialSampledTextureSet = traceMaterialSampledTextureSet,
+            .hardwareTraceGeometrySet = traceGeometry.hardwareTraceGeometrySet,
+            .traceMaterialSampledTextureSet = traceGeometry.traceMaterialSampledTextureSet,
             .lightingTask = m_deferredLightingTask,
             .avboitFinalTask = avboitFinalTask,
             .surfelGiTask = m_deferredSurfelGiTask,

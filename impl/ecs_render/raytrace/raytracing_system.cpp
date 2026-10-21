@@ -48,14 +48,10 @@ RendererRayTracingSystem::RendererRayTracingSystem(
     , m_acceptedShadowTraceGeometryBuffers(arena)
     , m_preparedShadowTraceMaterialSampledTextures(arena)
     , m_preparedCausticEmissionTargetBytes(arena)
-    , m_preparedShadowInstanceMaterialBytes(arena)
-    , m_preparedShadowInstanceBytes(arena)
-    , m_preparedShadowMaterialTypedBytes(arena)
-    , m_preparedSceneBvhNodeBytes(arena)
-    , m_preparedSceneBvhInstanceBytes(arena)
+    , m_preparedShadowMaterialContext(arena)
+    , m_preparedSceneBvh(arena)
+    , m_preparedSceneTlas(arena)
     , m_preparedSceneSwBvhMeshes(arena)
-    , m_preparedSceneTlasInstances(arena)
-    , m_preparedSceneTlasBlases(arena)
     , m_preparedMeshBlasBuilds(arena)
     , m_preparedMeshSwBvhBuilds(arena)
 {}
@@ -87,7 +83,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(DeferredFrameT
     clearPreparedShadowTraceMaterialSampledTextures();
     clearPreparedShadowMaterialContext();
     clearPreparedSceneBvh();
-    clearPreparedSceneTlasBuild();
+    m_preparedSceneTlas.clear();
     clearPreparedMeshBlasBuilds();
     clearPreparedMeshSwBvhBuilds();
     // Surfel GI is a per-frame consumer of the scene selected below. Never let an empty or rejected preflight reuse the preceding frame's backend selection and dispatch against stale trace inputs.
@@ -130,7 +126,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(DeferredFrameT
         // Hardware shadows and optical effects share one immutable TLAS/material context.
         if(!capturePreparedMeshBlasBuilds(scratchArena)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze hardware BLAS build plan"));
-            clearPreparedSceneTlasBuild();
+            m_preparedSceneTlas.clear();
             return false;
         }
         m_shadowVisibilityTraceResourcesPreflighted = true;
@@ -282,7 +278,7 @@ Expected<bool> RendererRayTracingSystem::recordPreflightShadowVisibilityResource
     if(m_shadowVisibilityHardwareSupported){
         if(meshBlasBuildsGraphOwned && !recordPreparedMeshBlasBuilds(commandList, meshBlasGeometryBuildInputStatesGraphOwned))
             return MakeUnexpected(Failure{});
-        if(sceneTlasBuildGraphOwned && !recordPreparedSceneTlasBuild(commandList))
+        if(sceneTlasBuildGraphOwned && !m_preparedSceneTlas.record(m_rayTracingState, commandList))
             return MakeUnexpected(Failure{});
         return m_shadowVisibilityBackendPipelinePreflighted;
     }
@@ -317,7 +313,7 @@ void RendererRayTracingSystem::discardPreflightShadowVisibilityResources()noexce
     m_preparedCausticEmissionTargetBytes.clear();
     clearPreparedShadowMaterialContext();
     clearPreparedSceneBvh();
-    clearPreparedSceneTlasBuild();
+    m_preparedSceneTlas.clear();
     clearPreparedMeshBlasBuilds();
     clearPreparedMeshSwBvhBuilds();
     m_shadowVisibilityPreparedTargets = nullptr;
@@ -383,63 +379,12 @@ void RendererRayTracingSystem::invalidatePreparedShadowTraceGeometryBuffers()noe
 }
 
 Expected<PreparedSceneBvhUploads> RendererRayTracingSystem::retainPreparedSceneBvhUploads(Core::GpuTaskGraph& graph)const{
-    PreparedSceneBvhUploads result;
-    if(!m_preparedSceneBvhReady)
-        return result;
-
-    const auto& state = m_rayTracingState;
-    if(
-        state.m_sceneBvhNodeBuffer.get() != m_preparedSceneBvhNodeBuffer.get()
-        || state.m_sceneInstanceBuffer.get() != m_preparedSceneBvhInstanceBuffer.get()
-        || state.m_sceneBvhNodeCapacity != m_preparedSceneBvhNodeCapacity
-        || state.m_sceneInstanceCapacity != m_preparedSceneBvhInstanceCapacity
-        || state.m_sceneBvhNodeHeapHandle != m_preparedSceneBvhNodeHeapHandle
-        || state.m_sceneInstanceHeapHandle != m_preparedSceneBvhInstanceHeapHandle
-        || !state.m_sceneBvhNodeHeapHandle.valid()
-        || state.m_sceneBvhNodeHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
-        || !state.m_sceneInstanceHeapHandle.valid()
-        || state.m_sceneInstanceHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frozen software scene-BVH identity no longer matches preflight storage"));
-        return MakeUnexpected(Failure{});
-    }
-    if(!m_preparedSceneBvhUploadRequired){
-        if(!m_preparedSceneBvhStatic || !state.m_sceneSwBvhStaticSceneHashValid || state.m_sceneSwBvhStaticSceneHash != m_preparedSceneBvhStaticSceneHash || state.m_sceneBvhInstanceCount != m_preparedSceneBvhInstanceCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frozen software scene-BVH cache identity is no longer accepted"));
-            return MakeUnexpected(Failure{});
-        }
-        return result;
-    }
-    if(
-        m_preparedSceneBvhNodeBytes.empty()
-        || m_preparedSceneBvhInstanceBytes.empty()
-        || m_preparedSceneBvhNodeBytes.size() != m_preparedSceneBvhNodeCount * sizeof(NwbBvhNodeGpu)
-        || m_preparedSceneBvhInstanceBytes.size() != m_preparedSceneBvhInstanceCount * sizeof(SceneSwBvhInstanceGpu)
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frozen software scene-BVH payload is incomplete"));
-        return MakeUnexpected(Failure{});
-    }
-
-    const auto nodeResult = graph.copyUploadData(m_preparedSceneBvhNodeBytes.data(), m_preparedSceneBvhNodeBytes.size(), alignof(NwbBvhNodeGpu));
-    const auto instanceResult = graph.copyUploadData(m_preparedSceneBvhInstanceBytes.data(), m_preparedSceneBvhInstanceBytes.size(), alignof(SceneSwBvhInstanceGpu));
-    if(!(nodeResult && instanceResult))
-        return MakeUnexpected(Failure{});
-    result.node = *nodeResult;
-    result.instance = *instanceResult;
-    return result;
+    return m_preparedSceneBvh.retainUploads(m_rayTracingState, graph);
 }
 
 void RendererRayTracingSystem::confirmPreparedSceneBvhUploads()noexcept{
-    if(!m_preparedSceneBvhReady || !m_preparedSceneBvhUploadRequired)
-        return;
-
-    if(m_preparedSceneBvhStatic){
-        m_rayTracingState.m_sceneSwBvhStaticSceneHash = m_preparedSceneBvhStaticSceneHash;
-        m_rayTracingState.m_sceneSwBvhStaticSceneHashValid = true;
-    }
-    else
-        m_rayTracingState.m_sceneSwBvhStaticSceneHashValid = false;
-    clearPreparedSceneBvh();
+    if(m_preparedSceneBvh.publishAcceptedUpload(m_rayTracingState))
+        clearPreparedSceneBvh();
 }
 
 Core::ResourceStates::Mask RendererRayTracingSystem::sceneTlasBackingInitialState()const noexcept{
@@ -448,46 +393,11 @@ Core::ResourceStates::Mask RendererRayTracingSystem::sceneTlasBackingInitialStat
 }
 
 void RendererRayTracingSystem::confirmPreparedSceneTlasBuild()noexcept{
-    if(!m_preparedSceneTlasReady)
-        return;
-
-    auto& state = m_rayTracingState;
-    const bool preparedTlasMatchesCurrent =
-        state.m_tlas.get() == m_preparedSceneTlas.get()
-        && state.m_tlas
-        && state.m_tlas->getBackingBufferHandle().get() == m_preparedSceneTlasBackingBuffer.get()
-        && state.m_tlasMaxInstances == m_preparedSceneTlasMaxInstances
-        && state.m_tlasHeapHandle == m_preparedSceneTlasHeapHandle
-    ;
-    if(preparedTlasMatchesCurrent && m_preparedSceneTlasStatic){
-        state.m_tlasStaticSceneHash = m_preparedSceneTlasStaticSceneHash;
-        state.m_tlasStaticSceneHashValid = true;
-    }
-    else
-        state.m_tlasStaticSceneHashValid = false;
-    // This callback follows the accepted persistent-state handoff. A later graph import must use that binding rather than reasserting Common for this backing generation.
-    if(preparedTlasMatchesCurrent){
-        state.m_tlasBackingFresh = false;
-    }
-    clearPreparedSceneTlasBuild();
+    m_preparedSceneTlas.confirm(m_rayTracingState);
 }
 
 bool RendererRayTracingSystem::preparedTraversalStorageMatchesCurrent()const noexcept{
-    const auto& state = m_rayTracingState;
-    return
-        state.m_sceneBvhNodeBuffer.get() == m_preparedSceneBvhNodeBuffer.get()
-        && state.m_sceneInstanceBuffer.get() == m_preparedSceneBvhInstanceBuffer.get()
-        && state.m_sceneBvhNodeCapacity == m_preparedSceneBvhNodeCapacity
-        && state.m_sceneInstanceCapacity == m_preparedSceneBvhInstanceCapacity
-        && state.m_sceneBvhNodeHeapHandle == m_preparedSceneBvhNodeHeapHandle
-        && state.m_sceneInstanceHeapHandle == m_preparedSceneBvhInstanceHeapHandle
-        && state.m_shadowInstanceMaterialBuffer.get() == m_preparedShadowInstanceMaterialBuffer.get()
-        && state.m_shadowInstanceBuffer.get() == m_preparedShadowInstanceBuffer.get()
-        && state.m_shadowMaterialTypedBuffer.get() == m_preparedShadowMaterialTypedBuffer.get()
-        && state.m_shadowInstanceMaterialHeapHandle == m_preparedShadowInstanceMaterialHeapHandle
-        && state.m_shadowInstanceHeapHandle == m_preparedShadowInstanceHeapHandle
-        && state.m_shadowMaterialTypedHeapHandle == m_preparedShadowMaterialTypedHeapHandle
-    ;
+    return m_preparedSceneBvh.storageMatches(m_rayTracingState) && m_preparedShadowMaterialContext.storageMatches(m_rayTracingState);
 }
 
 bool RendererRayTracingSystem::appendPreparedShadowTraceMaterialSampledTextures(const MaterialSurfaceInfo& materialInfo, ShadowMaterialSampledTextureCollector& collector){
@@ -512,91 +422,18 @@ bool RendererRayTracingSystem::capturePreparedSceneBvh(
     const usize instanceByteCount
 ){
     clearPreparedSceneBvh();
-    const auto& state = m_rayTracingState;
-    const bool validStorage =
-        state.m_sceneBvhNodeBuffer
-        && state.m_sceneInstanceBuffer
-        && state.m_sceneBvhNodeCapacity >= nodeCount
-        && state.m_sceneInstanceCapacity >= instanceCount
-        && state.m_sceneBvhNodeHeapHandle.valid()
-        && state.m_sceneBvhNodeHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
-        && state.m_sceneInstanceHeapHandle.valid()
-        && state.m_sceneInstanceHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
-    ;
-    if(!nodeData || !instanceData || nodeCount == 0u || instanceCount == 0u || nodeByteCount != nodeCount * sizeof(NwbBvhNodeGpu) || instanceByteCount != instanceCount * sizeof(SceneSwBvhInstanceGpu) || !validStorage)
-        return false;
-
-    m_preparedSceneBvhNodeBytes.resize(nodeByteCount);
-    m_preparedSceneBvhInstanceBytes.resize(instanceByteCount);
-    NWB_MEMCPY(m_preparedSceneBvhNodeBytes.data(), m_preparedSceneBvhNodeBytes.size(), nodeData, nodeByteCount);
-    NWB_MEMCPY(m_preparedSceneBvhInstanceBytes.data(), m_preparedSceneBvhInstanceBytes.size(), instanceData, instanceByteCount);
-    m_preparedSceneBvhNodeBuffer = state.m_sceneBvhNodeBuffer;
-    m_preparedSceneBvhInstanceBuffer = state.m_sceneInstanceBuffer;
-    m_preparedSceneBvhNodeHeapHandle = state.m_sceneBvhNodeHeapHandle;
-    m_preparedSceneBvhInstanceHeapHandle = state.m_sceneInstanceHeapHandle;
-    m_preparedSceneBvhNodeCount = nodeCount;
-    m_preparedSceneBvhInstanceCount = instanceCount;
-    m_preparedSceneBvhNodeCapacity = state.m_sceneBvhNodeCapacity;
-    m_preparedSceneBvhInstanceCapacity = state.m_sceneInstanceCapacity;
-    m_preparedSceneBvhStaticSceneHash = staticSceneHash;
-    m_preparedSceneBvhStatic = staticScene;
-    m_preparedSceneBvhReady = true;
-    m_preparedSceneBvhUploadRequired = true;
-    return true;
+    return m_preparedSceneBvh.capture(m_rayTracingState, staticScene, staticSceneHash, nodeData, nodeCount, nodeByteCount, instanceData, instanceCount, instanceByteCount);
 }
 
 bool RendererRayTracingSystem::capturePreparedSceneBvhCacheReuse(const u64 staticSceneHash, const u32 instanceCount)noexcept{
     clearPreparedSceneBvh();
-    if(instanceCount == 0u)
-        return false;
-
-    const auto& state = m_rayTracingState;
-    const usize requiredNodeCount = static_cast<usize>(instanceCount) * 2u - 1u;
-    const bool validStorage =
-        state.m_sceneBvhNodeBuffer
-        && state.m_sceneInstanceBuffer
-        && state.m_sceneBvhNodeCapacity >= requiredNodeCount
-        && state.m_sceneInstanceCapacity >= instanceCount
-        && state.m_sceneBvhNodeHeapHandle.valid()
-        && state.m_sceneBvhNodeHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
-        && state.m_sceneInstanceHeapHandle.valid()
-        && state.m_sceneInstanceHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
-    ;
-    if(!state.m_sceneSwBvhStaticSceneHashValid || state.m_sceneSwBvhStaticSceneHash != staticSceneHash || state.m_sceneBvhInstanceCount != instanceCount || !validStorage)
-        return false;
-
-    m_preparedSceneBvhNodeBuffer = state.m_sceneBvhNodeBuffer;
-    m_preparedSceneBvhInstanceBuffer = state.m_sceneInstanceBuffer;
-    m_preparedSceneBvhNodeHeapHandle = state.m_sceneBvhNodeHeapHandle;
-    m_preparedSceneBvhInstanceHeapHandle = state.m_sceneInstanceHeapHandle;
-    m_preparedSceneBvhNodeCount = requiredNodeCount;
-    m_preparedSceneBvhInstanceCount = instanceCount;
-    m_preparedSceneBvhNodeCapacity = state.m_sceneBvhNodeCapacity;
-    m_preparedSceneBvhInstanceCapacity = state.m_sceneInstanceCapacity;
-    m_preparedSceneBvhStaticSceneHash = staticSceneHash;
-    m_preparedSceneBvhStatic = true;
-    m_preparedSceneBvhReady = true;
-    m_preparedSceneBvhUploadRequired = false;
-    return true;
+    return m_preparedSceneBvh.captureCacheReuse(m_rayTracingState, staticSceneHash, instanceCount);
 }
 
 void RendererRayTracingSystem::clearPreparedSceneBvh()noexcept{
     m_preparedSceneSwBvhRefit.reset();
     clearPreparedSceneSwBvhTraversal();
-    m_preparedSceneBvhNodeBytes.clear();
-    m_preparedSceneBvhInstanceBytes.clear();
-    m_preparedSceneBvhNodeBuffer = nullptr;
-    m_preparedSceneBvhInstanceBuffer = nullptr;
-    m_preparedSceneBvhNodeHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_preparedSceneBvhInstanceHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_preparedSceneBvhNodeCount = 0u;
-    m_preparedSceneBvhInstanceCount = 0u;
-    m_preparedSceneBvhNodeCapacity = 0u;
-    m_preparedSceneBvhInstanceCapacity = 0u;
-    m_preparedSceneBvhStaticSceneHash = 0u;
-    m_preparedSceneBvhStatic = false;
-    m_preparedSceneBvhReady = false;
-    m_preparedSceneBvhUploadRequired = false;
+    m_preparedSceneBvh.clear();
 }
 
 bool RendererRayTracingSystem::capturePreparedSceneSwBvhTraversal(const PreparedSceneSwBvhMesh* const meshes, const usize meshCount, const u32 instanceCount){
@@ -609,12 +446,8 @@ bool RendererRayTracingSystem::capturePreparedSceneSwBvhTraversal(const Prepared
         || meshCount == 0u
         || meshCount > static_cast<usize>(Limit<u32>::s_Max)
         || instanceCount == 0u
-        || !m_preparedSceneBvhReady
-        || !m_preparedShadowMaterialContextReady
-        || m_preparedShadowMaterialContextRoute != PreparedShadowMaterialContextRoute::Software
-        || m_preparedSceneBvhInstanceCount != instanceCount
-        || m_preparedShadowInstanceMaterialCount != instanceCount
-        || m_preparedShadowInstanceCount != instanceCount
+        || !m_preparedSceneBvh.covers(instanceCount)
+        || !m_preparedShadowMaterialContext.softwareSnapshotCovers(instanceCount)
         || !preparedTraversalStorageMatchesCurrent()
     )
         return false;
@@ -656,18 +489,12 @@ bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
         return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
     };
     auto& state = m_rayTracingState;
-    const bool sceneSnapshotValid =
-        m_preparedSceneBvhUploadRequired
-        || (m_preparedSceneBvhStatic && state.m_sceneSwBvhStaticSceneHashValid && state.m_sceneSwBvhStaticSceneHash == m_preparedSceneBvhStaticSceneHash && state.m_sceneBvhInstanceCount == m_preparedSceneBvhInstanceCount)
-    ;
-    const bool materialSnapshotValid =
-        m_preparedShadowMaterialContextUploadRequired
-        || (m_preparedShadowMaterialContextStatic && state.m_swShadowMaterialContextHashValid && state.m_swShadowMaterialContextHash == m_preparedShadowMaterialContextHash && state.m_sceneBvhInstanceCount == m_preparedShadowInstanceCount)
-    ;
+    const bool sceneSnapshotValid = m_preparedSceneBvh.snapshotAccepted(state);
+    const bool materialSnapshotValid = m_preparedShadowMaterialContext.softwareSnapshotAccepted(state);
     const auto rejectPreparedTraversal = [&]()noexcept{
-        if(!m_preparedSceneBvhUploadRequired)
+        if(!m_preparedSceneBvh.uploadRequired())
             state.m_sceneSwBvhStaticSceneHashValid = false;
-        if(!m_preparedShadowMaterialContextUploadRequired)
+        if(!m_preparedShadowMaterialContext.uploadRequired())
             state.m_swShadowMaterialContextHashValid = false;
         return false;
     };
@@ -675,14 +502,10 @@ bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
         !m_preparedSceneSwBvhReady
         || m_preparedSceneSwBvhMeshes.empty()
         || m_preparedSceneSwBvhInstanceCount == 0u
-        || !m_preparedSceneBvhReady
-        || !m_preparedShadowMaterialContextReady
-        || m_preparedShadowMaterialContextRoute != PreparedShadowMaterialContextRoute::Software
+        || !m_preparedSceneBvh.covers(m_preparedSceneSwBvhInstanceCount)
+        || !m_preparedShadowMaterialContext.softwareSnapshotCovers(m_preparedSceneSwBvhInstanceCount)
         || !sceneSnapshotValid
         || !materialSnapshotValid
-        || m_preparedSceneBvhInstanceCount != m_preparedSceneSwBvhInstanceCount
-        || m_preparedShadowInstanceMaterialCount != m_preparedSceneSwBvhInstanceCount
-        || m_preparedShadowInstanceCount != m_preparedSceneSwBvhInstanceCount
         || !preparedTraversalStorageMatchesCurrent()
         || !validStorageHandle(state.m_sceneBvhNodeHeapHandle)
         || !validStorageHandle(state.m_sceneInstanceHeapHandle)
@@ -783,89 +606,6 @@ void RendererRayTracingSystem::clearPreparedSceneSwBvhTraversal()noexcept{
     m_preparedSceneSwBvhMaterialMutationVersion = 0u;
     m_preparedSceneSwBvhReady = false;
 }
-
-bool RendererRayTracingSystem::capturePreparedSceneTlasBuild(
-    const bool staticScene,
-    const u64 staticSceneHash,
-    const Vector<Core::RayTracingInstanceDesc, Core::Alloc::ScratchArena>& instances,
-    const Vector<Core::RayTracingAccelStructHandle, Core::Alloc::ScratchArena>& instanceBlases
-){
-    clearPreparedSceneTlasBuild();
-    const auto& state = m_rayTracingState;
-    if(
-        instances.empty()
-        || instances.size() != instanceBlases.size()
-        || !state.m_tlas
-        || !state.m_tlas->getBackingBufferHandle()
-        || state.m_tlasMaxInstances < instances.size()
-        || !state.m_tlasHeapHandle.valid()
-        || state.m_tlasHeapHandle.descriptorClass() != Core::GpuDescriptorClass::AccelStruct
-    )
-        return false;
-
-    m_preparedSceneTlasInstances.reserve(instances.size());
-    m_preparedSceneTlasBlases.reserve(instanceBlases.size());
-    for(usize index = 0u; index < instances.size(); ++index){
-        const Core::RayTracingAccelStructHandle& blas = instanceBlases[index];
-        if(!blas || instances[index].bottomLevelAS != blas.get()){
-            clearPreparedSceneTlasBuild();
-            return false;
-        }
-        m_preparedSceneTlasInstances.push_back(instances[index]);
-        m_preparedSceneTlasBlases.push_back(blas);
-    }
-    m_preparedSceneTlas = state.m_tlas;
-    m_preparedSceneTlasBackingBuffer = state.m_tlas->getBackingBufferHandle();
-    m_preparedSceneTlasHeapHandle = state.m_tlasHeapHandle;
-    m_preparedSceneTlasMaxInstances = state.m_tlasMaxInstances;
-    m_preparedSceneTlasStaticSceneHash = staticSceneHash;
-    m_preparedSceneTlasStatic = staticScene;
-    m_preparedSceneTlasReady = true;
-    return true;
-}
-
-bool RendererRayTracingSystem::recordPreparedSceneTlasBuild(Core::CommandList& commandList){
-    const auto& state = m_rayTracingState;
-    if(
-        !m_preparedSceneTlasReady
-        || m_preparedSceneTlasInstances.empty()
-        || m_preparedSceneTlasInstances.size() != m_preparedSceneTlasBlases.size()
-        || state.m_tlas.get() != m_preparedSceneTlas.get()
-        || !state.m_tlas
-        || state.m_tlas->getBackingBufferHandle().get() != m_preparedSceneTlasBackingBuffer.get()
-        || state.m_tlasMaxInstances != m_preparedSceneTlasMaxInstances
-        || state.m_tlasHeapHandle != m_preparedSceneTlasHeapHandle
-        || !state.m_tlasHeapHandle.valid()
-        || state.m_tlasHeapHandle.descriptorClass() != Core::GpuDescriptorClass::AccelStruct
-    ){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen scene TLAS build no longer matches preflight storage"));
-        return false;
-    }
-    for(usize index = 0u; index < m_preparedSceneTlasInstances.size(); ++index){
-        if(!m_preparedSceneTlasBlases[index] || m_preparedSceneTlasInstances[index].bottomLevelAS != m_preparedSceneTlasBlases[index].get()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen scene TLAS build lost a referenced BLAS"));
-            return false;
-        }
-    }
-
-    commandList.buildTopLevelAccelStruct(m_preparedSceneTlas.get(), m_preparedSceneTlasInstances.data(), m_preparedSceneTlasInstances.size(), Core::RayTracingAccelStructBuildFlags::PreferFastTrace);
-    m_rayTracingState.m_tlasDeviceAddress = m_preparedSceneTlas->getDeviceAddress();
-    return true;
-}
-
-
-void RendererRayTracingSystem::clearPreparedSceneTlasBuild()noexcept{
-    m_preparedSceneTlasInstances.clear();
-    m_preparedSceneTlasBlases.clear();
-    m_preparedSceneTlas = nullptr;
-    m_preparedSceneTlasBackingBuffer = nullptr;
-    m_preparedSceneTlasHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_preparedSceneTlasMaxInstances = 0u;
-    m_preparedSceneTlasStaticSceneHash = 0u;
-    m_preparedSceneTlasStatic = false;
-    m_preparedSceneTlasReady = false;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

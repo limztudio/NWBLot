@@ -26,7 +26,7 @@ bool GpuGraphSubmissionTransaction::bindRecordingAttemptWithinSubmissionOperatio
     const GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const u64 recordingAttemptGeneration,
-    const GpuTaskGraph::RecordingAttemptScope* const preparationAttempt
+    const GpuRecordingAttemptScope* const preparationAttempt
 )noexcept{
     if(!SubmissionOperation::ActiveFor(*this) || recordingAttemptGeneration == 0u)
         return false;

@@ -185,6 +185,96 @@ void CommandList::buildTopLevelAccelStructFromBuffer(RayTracingAccelStruct* acce
     retainResource(instanceBuffer);
 }
 
+bool CommandList::buildTopLevelAccelStructFromInstanceData(
+    RayTracingAccelStruct& as,
+    const VkDeviceAddress instanceDataAddress,
+    const usize numInstances,
+    const RayTracingAccelStructBuildFlags::Mask buildFlags,
+    const VkBuildAccelerationStructureFlagsKHR vkBuildFlags,
+    TStringView operationName
+){
+    Buffer* const backingBuffer = as.getBackingBuffer();
+    if(!m_device.isAccelStructReadyForGpuUse(&as) || !backingBuffer || !isBufferAdmittedToCommandQueue(*backingBuffer)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: acceleration structure storage is not ready"), operationName);
+        return false;
+    }
+    if(instanceDataAddress == 0u || instanceDataAddress % s_TlasInstanceDataAlignment != 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: instance data device address must be 16-byte aligned"), operationName);
+        return false;
+    }
+
+    const bool performUpdate = (buildFlags & RayTracingAccelStructBuildFlags::PerformUpdate) != 0u;
+    if(performUpdate && !(buildFlags & RayTracingAccelStructBuildFlags::AllowUpdate)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: PerformUpdate requires AllowUpdate"), operationName);
+        return false;
+    }
+    if(performUpdate && !(as.m_desc.buildFlags & RayTracingAccelStructBuildFlags::AllowUpdate)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: acceleration structure creation did not allow updates"), operationName);
+        return false;
+    }
+
+    auto geometry = VulkanDetail::MakeVkStruct<VkAccelerationStructureGeometryKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR);
+    geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
+    geometry.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
+    geometry.geometry.instances.arrayOfPointers = VK_FALSE;
+    geometry.geometry.instances.data.deviceAddress = instanceDataAddress;
+
+    const auto primitiveCount = static_cast<u32>(numInstances);
+    const AccelStructGeometryBuildSignature geometrySignature = VulkanDetail::MakeAccelStructGeometryBuildSignature(geometry, nullptr, nullptr, primitiveCount, false);
+    const auto hasPriorBuildResult = validateAccelStructBuildSignature(as, VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR, vkBuildFlags, &geometrySignature, 1u, performUpdate, operationName);
+    if(!hasPriorBuildResult)
+        return false;
+
+    auto buildInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
+    buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
+    buildInfo.flags = vkBuildFlags;
+    buildInfo.mode = performUpdate ? VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR : VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+    buildInfo.srcAccelerationStructure = performUpdate ? as.m_accelStruct : VK_NULL_HANDLE;
+    buildInfo.dstAccelerationStructure = as.m_accelStruct;
+    buildInfo.geometryCount = 1;
+    buildInfo.pGeometries = &geometry;
+
+    auto sizeInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
+    m_context.deviceDispatch.vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &primitiveCount, &sizeInfo);
+
+    auto* asBuffer = as.m_buffer.get();
+    if(!asBuffer || asBuffer->getCreationDescription().byteSize < sizeInfo.accelerationStructureSize){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: acceleration structure storage is too small"), operationName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to build TLAS: acceleration structure storage is too small"));
+        return false;
+    }
+
+    const VkDeviceSize scratchSize = performUpdate ? sizeInfo.updateScratchSize : sizeInfo.buildScratchSize;
+    const u64 scratchAlignment = Max<u64>(static_cast<u64>(m_context.accelStructProperties.minAccelerationStructureScratchOffsetAlignment), 1u);
+    const auto scratchAddressResult = suballocateBuildScratchAddress(scratchSize, scratchAlignment, NWB_TEXT("allocate TLAS scratch buffer"));
+    if(!scratchAddressResult)
+        return false;
+    buildInfo.scratchData.deviceAddress = *scratchAddressResult;
+
+    // Order BLAS writes and prior TLAS writes before this TLAS build.
+    {
+        auto reuseBarrier = VulkanDetail::MakeVkStruct<VkMemoryBarrier2>(VK_STRUCTURE_TYPE_MEMORY_BARRIER_2);
+        reuseBarrier.srcStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+        reuseBarrier.srcAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+        reuseBarrier.dstStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+        reuseBarrier.dstAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+
+        executePipelineBarrier({ &reuseBarrier, 1u }, {}, {});
+    }
+    if(m_commandRecordingFailed)
+        return false;
+
+    VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
+    rangeInfo.primitiveCount = primitiveCount;
+    const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
+    if(!m_currentCmdBuf->appendPendingAccelStructBuildCommit(as, VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR, vkBuildFlags, &geometrySignature, 1u)){
+        rejectCommandRecording(operationName, VulkanDetail::s_RetainBuildSignatureFailedReason);
+        return false;
+    }
+    m_context.deviceDispatch.vkCmdBuildAccelerationStructuresKHR(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo, &pRangeInfo);
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

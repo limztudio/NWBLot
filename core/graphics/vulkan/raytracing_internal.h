@@ -181,6 +181,17 @@ Expected<BlasGeometry> FillBlasGeometryForSizeQuery(const VulkanContext& context
 
 [[nodiscard]] VkMemoryBarrier2 BuildOpacityMicromapWriteAfterWriteBarrier()noexcept;
 
+inline constexpr TStringView s_RetainBuildSignatureFailedReason = NWB_TEXT("failed to retain acceleration-structure build signature");
+
+[[nodiscard]] AccelStructGeometryBuildSignature MakeAccelStructGeometryBuildSignature(
+    const VkAccelerationStructureGeometryKHR& geometry,
+    const VkAccelerationStructureGeometrySpheresDataNV* spheresData,
+    const VkAccelerationStructureGeometryLinearSweptSpheresDataNV* lssData,
+    u32 primitiveCount,
+    bool transformDataPresent
+)noexcept;
+[[nodiscard]] bool AccelStructGeometryBuildSignaturesEqual(const AccelStructGeometryBuildSignature& previous, const AccelStructGeometryBuildSignature& current)noexcept;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -71,6 +71,7 @@ NWB_IMPL_BEGIN
 
 class ObjectGeometryCacheGraph;
 class Mesh;
+struct DeferredGraphResourceImportResult;
 struct GraphClearTimingRecordState;
 struct RayTracingSceneGraphReads;
 
@@ -115,6 +116,10 @@ class RendererFramePipeline final : NoCopy{
     friend class FrameExecuteCpuRestore;
     friend class FrameExecuteHistoryCopy;
     friend class FrameExecuteLifecycle;
+    friend class FrameExecutePresentTails;
+    friend class FrameExecuteRecovery;
+    friend struct FrameExecuteStateLifecycleSet;
+    friend struct FrameExecuteTimingState;
     friend class FrameExecuteSurfelReadback;
     friend class ShadowPreparePacketValidator;
     friend class SurfelCausticsMergeValidator;
@@ -241,34 +246,7 @@ private:
         f32 meshViewAspectRatio,
         const ECSRenderDetail::MeshViewGpuData& meshViewState,
         bool meshViewUploadRequired,
-        Core::GpuGraphResourceId albedo,
-        Core::GpuGraphResourceId normal,
-        Core::GpuGraphResourceId worldPosition,
-        Core::GpuGraphResourceId specularRoughness,
-        Core::GpuGraphResourceId depth,
-        Core::GpuGraphResourceId opaqueColor,
-        Core::GpuGraphResourceId sceneShading,
-        Core::GpuGraphResourceId lights,
-        Core::GpuGraphResourceId meshView,
-        Core::GpuGraphResourceId materialInstances,
-        Core::GpuGraphResourceId materialTyped,
-        Core::GpuGraphResourceId csgReceiverRanges,
-        Core::GpuGraphResourceId csgCutters,
-        Core::GpuGraphResourceId csgClipContextSlots,
-        Core::GpuGraphResourceId csgIntervalSampleState,
-        Core::GpuGraphResourceId csgCapBackNormal,
-        Core::GpuGraphResourceId csgIntervalDepth,
-        Core::GpuGraphResourceId csgIntervalId,
-        Core::GpuGraphResourceId csgReceiverEventData,
-        Core::GpuGraphResourceId csgReceiverEventCount,
-        Core::GpuGraphResourceId csgReceiverSpanData,
-        Core::GpuGraphResourceId csgReceiverSpanCount,
-        Core::GpuGraphResourceId csgRemovedIntervalDepth,
-        Core::GpuGraphResourceId csgRemovedIntervalCapNormal,
-        Core::GpuGraphResourceId csgRemovedIntervalData,
-        Core::GpuGraphResourceId csgRemovedIntervalCount,
-        Core::GpuGraphResourceId currentBindlessSlots,
-        Core::GpuGraphResourceId materialContextSlots,
+        const DeferredGraphResourceImportResult& resources,
         const Core::GpuGraphResourceId* shadowTraceGeometryResources,
         usize shadowTraceGeometryResourceCount,
         Core::GpuGraphResourceSetId shadowTraceGeometrySet,

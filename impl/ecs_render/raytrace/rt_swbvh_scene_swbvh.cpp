@@ -409,7 +409,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     }
 
     if(!staticScene){
-        auto preparedRefit = m_sceneSwBvhRefit.prepare(sceneRefitInputs.data(), sceneRefitRoots.data(), sceneRefitInputs.size(), m_preparedSceneBvhNodeBuffer, m_preparedSceneBvhNodeHeapHandle, static_cast<u32>(requiredNodeCount), m_shaderSystem);
+        auto preparedRefit = m_sceneSwBvhRefit.prepare(sceneRefitInputs.data(), sceneRefitRoots.data(), sceneRefitInputs.size(), m_preparedSceneBvh.nodeBuffer(), m_preparedSceneBvh.nodeHeapHandle(), static_cast<u32>(requiredNodeCount), m_shaderSystem);
         if(!preparedRefit){
             m_preparedSceneSwBvhRefit.reset();
             return false;
@@ -455,7 +455,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     }
 
     m_rayTracingState.m_sceneBvhInstanceCount = instanceCount;
-    const bool frozenGraphScene = m_preparedSceneBvhReady && m_preparedShadowMaterialContextReady && m_preparedShadowMaterialContextRoute == PreparedShadowMaterialContextRoute::Software;
+    const bool frozenGraphScene = m_preparedSceneBvh.ready() && m_preparedShadowMaterialContext.ready() && m_preparedShadowMaterialContext.route() == PreparedShadowMaterialContextRoute::Software;
     if(frozenGraphScene){
         if(!capturePreparedSceneSwBvhTraversal(preparedMeshes.data(), preparedMeshes.size(), instanceCount)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze software scene traversal"));

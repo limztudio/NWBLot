@@ -3,6 +3,8 @@
 
 
 #include "system.h"
+#include "frame_graph_tasks.h"
+#include "frame_plan_builder.h"
 #include "arena_names.h"
 #include "graph_resource_uses.h"
 #include "live_state_buffers.h"
@@ -39,199 +41,13 @@ namespace __hidden_system{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void ResolveSkeletonComponents(Core::ECS::World& world, const Core::ECS::EntityID fallbackEntity, const Core::ECS::EntityID skeletonEntity, const SkeletonJointPaletteComponent*& outJointPalette, const SkeletonPoseComponent*& outSkeletonPose)noexcept{
-    const Core::ECS::EntityID resolvedEntity = skeletonEntity.valid() ? skeletonEntity : fallbackEntity;
-    outJointPalette = world.tryGetComponent<SkeletonJointPaletteComponent>(resolvedEntity);
-    outSkeletonPose = world.tryGetComponent<SkeletonPoseComponent>(resolvedEntity);
-}
-
 static constexpr bool s_RuntimeSkinningMeshletFrustumCullingEnabled = true;
 static constexpr bool s_RuntimeSkinningMeshletConeCullingEnabled = false; // Deformations make cones unsafe.
-static constexpr Name s_SerialMergeDomain("mesh_skinning.serial");
-static constexpr AStringView s_SkinnedPositionsLabel = "Runtime Skinned Positions";
-static constexpr AStringView s_SkinnedNormalsLabel = "Runtime Skinned Normals";
-static constexpr AStringView s_MeshletDescriptorsLabel = "Runtime Meshlet Descriptors";
-static constexpr AStringView s_MeshletLocalVertexRefsLabel = "Runtime Meshlet Local Vertex Refs";
-static constexpr AStringView s_MeshletPrimitiveIndicesLabel = "Runtime Meshlet Primitive Indices";
-static constexpr AStringView s_MeshletAttributeDeltasLabel = "Runtime Meshlet Attribute Deltas";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Core::GpuTaskSchedulingHint JointPaletteUploadScheduling()noexcept{
-    Core::GpuTaskSchedulingHint scheduling;
-    scheduling.cost = Core::GpuTaskCostHint::Tiny;
-    scheduling.overlapPreferred = false;
-    scheduling.avoidQueueCrossing = true;
-    scheduling.forceSubmissionBoundary = false;
-    scheduling.allowPacketMerge = true;
-    // The external renderer consumes one accepted skinning state on this serial timeline.
-    scheduling.mergeWithPrevious = true;
-    scheduling.frontierScoredMergeDomain = s_SerialMergeDomain;
-    return scheduling;
-}
-
-[[nodiscard]] static Core::GpuTaskSchedulingHint SkinningDispatchScheduling()noexcept{
-    Core::GpuTaskSchedulingHint scheduling;
-    scheduling.cost = Core::GpuTaskCostHint::Small;
-    scheduling.overlapPreferred = false;
-    scheduling.avoidQueueCrossing = true;
-    scheduling.forceSubmissionBoundary = false;
-    scheduling.allowPacketMerge = true;
-    // The external renderer consumes one accepted skinning state on this serial timeline.
-    scheduling.mergeWithPrevious = true;
-    scheduling.frontierScoredMergeDomain = s_SerialMergeDomain;
-    return scheduling;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Deformation and post-dispatch share the same plan loop; only the per-plan recorder differs.
-using SkinningPlanRecorder = bool (MeshSkinningSystem::*)(const MeshSkinningGraphDispatchPlan&, Core::CommandList&, const Core::GpuTaskRecordContext&);
-
-template<SkinningPlanRecorder recorder>
-[[nodiscard]] inline bool RecordSkinningPlans(
-    MeshSkinningSystem& system,
-    Core::GpuTimingSubmissionTicket& timingTicket,
-    const Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena>& plans,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context
-){
-    static_assert(recorder != nullptr);
-    if(plans.empty())
-        return false;
-
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(timingTicket);
-    for(const MeshSkinningGraphDispatchPlan& plan : plans){
-        if(!(system.*recorder)(plan, commandList, context))
-            return false;
-    }
-    return true;
-}
-
-
-// Deformation produces UAV streams; compiler owns the UAV-to-SRV handoff.
-struct MeshSkinningSystem::TaskGraphSkinningDeformationTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
-    // The skinning system and the timing ticket are required: deformation always records against this frame's ticket.
-    struct Payload{
-        MeshSkinningSystem& system;
-        Core::GpuTimingSubmissionTicket& timingTicket;
-        Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena> plans;
-
-
-    public:
-        explicit Payload(Core::Alloc::GlobalArena& arena, MeshSkinningSystem& systemIn, Core::GpuTimingSubmissionTicket& timingTicketIn)noexcept
-            : system(systemIn)
-            , timingTicket(timingTicketIn)
-            , plans(arena)
-        {}
-    };
-
-
-public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-        return RecordSkinningPlans<&MeshSkinningSystem::recordGraphOwnedSkinningDeformation>(payload.system, payload.timingTicket, payload.plans, commandList, context);
-    }
-};
-
-
-// Bounds/repack consume deformation and publish UAV outputs for the local-bounds reduction.
-struct MeshSkinningSystem::TaskGraphSkinningPostDispatchTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
-    // The skinning system and the timing ticket are required: bounds/repack always records against this frame's ticket.
-    struct Payload{
-        MeshSkinningSystem& system;
-        Core::GpuTimingSubmissionTicket& timingTicket;
-        Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena> plans;
-
-
-    public:
-        explicit Payload(Core::Alloc::GlobalArena& arena, MeshSkinningSystem& systemIn, Core::GpuTimingSubmissionTicket& timingTicketIn)noexcept
-            : system(systemIn)
-            , timingTicket(timingTicketIn)
-            , plans(arena)
-        {}
-    };
-
-
-public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-        return RecordSkinningPlans<&MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch>(payload.system, payload.timingTicket, payload.plans, commandList, context);
-    }
-};
-
-
-// Outputs end in ShaderResource state; only complete accepted bounds/repack/reduction publish a geometry generation.
-struct MeshSkinningSystem::TaskGraphSkinningFinalizerTask{
-    // Native-state publication feeds the renderer without a separate cross-graph readiness edge.
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::None, true };
-
-    struct Payload{
-        MeshSkinningSystem& system;
-        Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena> plans;
-
-
-    public:
-        Payload(Core::Alloc::GlobalArena& arena, MeshSkinningSystem& system)noexcept
-            : system(system)
-            , plans(arena)
-        {}
-    };
-
-
-public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context)noexcept{
-        if(payload.plans.empty())
-            return false;
-
-        for(const MeshSkinningGraphDispatchPlan& plan : payload.plans){
-            if(plan.hasActiveSkin || plan.copiedRestStreams){
-                Core::Buffer* const skinnedPosition = context.declarations.bufferForResource(plan.skinnedPositionResource);
-                Core::Buffer* const skinnedNormal = context.declarations.bufferForResource(plan.skinnedNormalResource);
-                Core::Buffer* const skinnedTangent = context.declarations.bufferForResource(plan.skinnedTangentResource);
-                if(
-                    !skinnedPosition
-                    || !skinnedNormal
-                    || !skinnedTangent
-                    || commandList.getBufferState(skinnedPosition) != Core::ResourceStates::ShaderResource
-                    || commandList.getBufferState(skinnedNormal) != Core::ResourceStates::ShaderResource
-                    || commandList.getBufferState(skinnedTangent) != Core::ResourceStates::ShaderResource
-                )
-                    return false;
-            }
-            if(plan.updatesMeshletBounds){
-                Core::Buffer* const meshletBounds = context.declarations.bufferForResource(plan.meshletBoundsResource);
-                Core::Buffer* const localBounds = context.declarations.bufferForResource(plan.localBoundsResource);
-                if(!meshletBounds || !localBounds || commandList.getBufferState(meshletBounds) != Core::ResourceStates::ShaderResource || commandList.getBufferState(localBounds) != Core::ResourceStates::ShaderResource)
-                    return false;
-            }
-            if(plan.repacksNormals){
-                Core::Buffer* const attributes = context.declarations.bufferForResource(plan.attributeResource);
-                if(!attributes || commandList.getBufferState(attributes) != Core::ResourceStates::ShaderResource)
-                    return false;
-            }
-        }
-        return true;
-    }
-
-    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
-        if(!token.valid())
-            return;
-        for(const MeshSkinningGraphDispatchPlan& plan : payload.plans)
-            payload.system.confirmGraphOwnedSkinningDispatch(plan);
-    }
 };
 
 
@@ -407,7 +223,6 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     // Compiler artifacts are reused member storage reset per submission; render() never constructs graph objects.
     resetFrameTaskGraph();
     Core::GpuTaskGraph& graph = m_frameTaskGraph;
-    Core::GpuTaskId terminalTask;
     Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_FrameUploadArena);
     // Dispatch plans are reused member storage; only capacity growth may allocate, never per-frame creation.
     Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena>& dispatchPlans = m_frameDispatchPlans;
@@ -416,390 +231,13 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     dispatchPlans.reserve(skinningBindings.candidateCount());
     bool declarationFailed = false;
 
-    const auto importComputePipeline = [&](const Core::ComputePipelineHandle& pipeline, const Name identity, const AStringView label){
-        return graph.importComputePipeline(pipeline, Core::GpuGraphPipelineDesc{}.setIdentity(identity).setMarkerLabel(label).setType(Core::GpuGraphPipelineType::Compute));
-    };
-
+    FramePlanBuilder planBuilder(*this, graph, scratchArena, dispatchPlans);
     skinningBindings.each([&](Core::ECS::EntityID entity, SkinnedMeshBindingComponent& binding){
-        if(declarationFailed || !binding.runtimeMesh.valid())
-        return;
-
-        MeshSkinningRuntimeInstance* const instance = m_runtimeMeshCache.findInstance(binding.runtimeMesh);
-        if(!instance)
-        return;
-        NWB_ASSERT(instance->valid());
-        const SkeletonJointPaletteComponent* jointPalette = nullptr;
-        const SkeletonPoseComponent* skeletonPose = nullptr;
-        __hidden_system::ResolveSkeletonComponents(m_world, entity, binding.skeletonEntity, jointPalette, skeletonPose);
-        const auto foundResources = m_runtimeResources.find(instance->handle.value);
-        RuntimeSkinPayloadScratch payload{ scratchArena };
-        // Preserve the direct path's per-mesh retry semantics: an invalid pose never prevents another ready mesh from declaring its immutable packet plan.
-        if(!MeshSkinningPayload::BuildRuntimeSkinPayload(*instance, jointPalette, skeletonPose, payload)){
-            instance->deformationState.invalidateCurrent();
-            return;
-        }
-
-        const bool hasActiveSkin = payload.hasActiveSkin();
-        Span<const SkeletonJointMatrix> jointPaletteUpload;
-        if(hasActiveSkin){
-            const auto upload = MeshSkinningPayload::ResolveGpuJointPalette(*instance, payload);
-            if(!upload){
-                NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: current joint palette does not match Skin upload bounds for runtime mesh '{}'"), instance->handle.value);
-                declarationFailed = true;
-                return;
-            }
-            jointPaletteUpload = *upload;
-        }
-        const bool skinningInputDirty = (instance->dirtyFlags & RuntimeMeshDirtyFlag::SkinningInputDirty) != 0u;
-        const bool meshletBoundsDirty = (instance->dirtyFlags & RuntimeMeshDirtyFlag::MeshletBoundsDirty) != 0u;
-        if(instance->meshlets.empty())
-            return;
-
-        if(foundResources == m_runtimeResources.end()){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' has no prepared graph resources"), instance->handle.value);
+        if(!declarationFailed && !planBuilder.declare(entity, binding))
             declarationFailed = true;
-            return;
-        }
-        const RuntimeResources& resources = foundResources.value();
-        const MeshSkinningDeformationInputs deformationInputs{ .resourceSlotsBuffer = resources.bindlessResourceSlotsBuffer, .editRevision = instance->editRevision, .skinningMode = payload.resolvedSkinningMode, };
-        instance->deformationState.refreshCurrent(deformationInputs, payload.jointMatrices.data(), payload.jointMatrices.size(), skinningInputDirty || meshletBoundsDirty);
-        const bool updatesMeshletBounds = instance->deformationState.contentRevision() == 0u;
-        if(!updatesMeshletBounds)
-            return;
-        const bool copiesRestStreams = !hasActiveSkin;
-        if(
-            !resources.bindlessResourceSlotsBuffer
-            || !resources.bindlessHeapHandles.resourceSlots.valid()
-            || resources.bindlessHeapHandles.resourceSlots.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer
-            || !m_boundsComputePipeline || !m_localBoundsComputePipeline
-        ){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' has incomplete graph-owned dispatch state"), instance->handle.value);
-            declarationFailed = true;
-            return;
-        }
-        if(hasActiveSkin && (!resources.skinBuffer || !resources.jointPaletteBuffer || !m_skinningComputePipeline)){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: active runtime mesh '{}' has no graph-owned skinning pipeline or payload"), instance->handle.value);
-            declarationFailed = true;
-            return;
-        }
-
-        MeshSkinningGraphDispatchPlan plan;
-        plan.handle = instance->handle;
-        plan.submissionCommit.editRevision = instance->editRevision;
-        plan.submissionCommit.handledDirtyFlags = static_cast<RuntimeMeshDirtyFlags>(
-            (skinningInputDirty ? RuntimeMeshDirtyFlag::SkinningInputDirty : RuntimeMeshDirtyFlag::None)
-            | (meshletBoundsDirty ? RuntimeMeshDirtyFlag::MeshletBoundsDirty : RuntimeMeshDirtyFlag::None)
-        );
-        plan.hasActiveSkin = hasActiveSkin;
-        plan.copiedRestStreams = copiesRestStreams;
-        plan.updatesMeshletBounds = updatesMeshletBounds;
-        plan.repacksNormals = (hasActiveSkin || copiesRestStreams) && instance->attributeBuffer != nullptr;
-        plan.meshletCount = static_cast<u32>(instance->meshlets.size());
-        plan.skinCount = static_cast<u32>(payload.skinInfluenceCount);
-        plan.jointCount = static_cast<u32>(jointPaletteUpload.size());
-        plan.skinningMode = payload.resolvedSkinningMode;
-        plan.bindlessResourceSlots = resources.bindlessHeapHandles.resourceSlots.slot();
-        plan.bindlessResourceSlotsBuffer = resources.bindlessResourceSlotsBuffer;
-        plan.bindlessResourceSlotsDescriptor = resources.bindlessHeapHandles.resourceSlots;
-        plan.bindlessResourceSlotsPayload = resources.bindlessResourceSlots;
-
-        if(plan.repacksNormals && !m_repackComputePipeline){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' requires a missing normal-repack pipeline"), instance->handle.value);
-            declarationFailed = true;
-            return;
-        }
-
-        const auto importBuffer = [&](const Core::BufferHandle& buffer, const AStringView label) -> Expected<Core::GpuGraphResourceId>{
-            if(!buffer)
-                return MakeUnexpected(Failure{});
-            const Core::BufferDesc& description = buffer->getCreationDescription();
-            if(!description.debugName)
-                return MakeUnexpected(Failure{});
-            return graph.importBuffer(
-                buffer,
-                Core::GpuGraphResourceDesc{}
-                    .setIdentity(description.debugName)
-                    .setMarkerLabel(label)
-                    .setType(Core::GpuGraphResourceType::Buffer)
-                    .setInitialState(description.initialState)
-                    .setQueueSharing(description.queueSharing)
-            );
-        };
-
-        Expected<Core::GpuGraphResourceId> bindlessResourceSlotsResourceResult = MakeUnexpected(Failure{});
-        Expected<Core::GpuGraphResourceId> restPositionResourceResult = MakeUnexpected(Failure{});
-        Expected<Core::GpuGraphResourceId> restNormalResourceResult = MakeUnexpected(Failure{});
-        Expected<Core::GpuGraphResourceId> restTangentResourceResult = MakeUnexpected(Failure{});
-        Expected<Core::GpuGraphResourceId> skinnedPositionResourceResult = MakeUnexpected(Failure{});
-        Expected<Core::GpuGraphResourceId> skinnedNormalResourceResult = MakeUnexpected(Failure{});
-        Expected<Core::GpuGraphResourceId> skinnedTangentResourceResult = MakeUnexpected(Failure{});
-        Expected<Core::GpuGraphResourceId> meshletDescResourceResult = MakeUnexpected(Failure{});
-        Expected<Core::GpuGraphResourceId> meshletPositionRefDeltaResourceResult = MakeUnexpected(Failure{});
-        Expected<Core::GpuGraphResourceId> meshletLocalVertexRefResourceResult = MakeUnexpected(Failure{});
-        Expected<Core::GpuGraphResourceId> meshletPrimitiveIndexResourceResult = MakeUnexpected(Failure{});
-        Expected<Core::GpuGraphResourceId> meshletBoundsResourceResult = MakeUnexpected(Failure{});
-        Expected<Core::GpuGraphResourceId> meshletLocalBoundsResourceResult = MakeUnexpected(Failure{});
-        Expected<Core::GpuGraphResourceId> localBoundsResourceResult = MakeUnexpected(Failure{});
-        Expected<Core::GpuGraphResourceId> meshletAttributeRefDeltaResourceResult = MakeUnexpected(Failure{});
-        Expected<Core::GpuGraphResourceId> attributeSkinResourceResult = MakeUnexpected(Failure{});
-        Expected<Core::GpuGraphResourceId> skinResourceResult = MakeUnexpected(Failure{});
-        Expected<Core::GpuGraphResourceId> jointPaletteResourceResult = MakeUnexpected(Failure{});
-        Expected<Core::GpuGraphResourceId> attributeResourceResult = MakeUnexpected(Failure{});
-        Expected<Core::GpuGraphPipelineId> boundsPipelineResult = MakeUnexpected(Failure{});
-        Expected<Core::GpuGraphPipelineId> localBoundsPipelineResult = MakeUnexpected(Failure{});
-        Expected<Core::GpuGraphPipelineId> skinningPipelineResult = MakeUnexpected(Failure{});
-        Expected<Core::GpuGraphPipelineId> repackPipelineResult = MakeUnexpected(Failure{});
-
-        bindlessResourceSlotsResourceResult = importBuffer(plan.bindlessResourceSlotsBuffer, "Skinning Bindless Slots");
-        if(hasActiveSkin || copiesRestStreams){
-            restPositionResourceResult = importBuffer(instance->restPositionBuffer, "Runtime Rest Positions");
-            restNormalResourceResult = importBuffer(instance->restNormalBuffer, "Runtime Rest Normals");
-            restTangentResourceResult = importBuffer(instance->restTangentBuffer, "Runtime Rest Tangents");
-            skinnedPositionResourceResult = importBuffer(instance->skinnedPositionBuffer, __hidden_system::s_SkinnedPositionsLabel);
-            skinnedNormalResourceResult = importBuffer(instance->skinnedNormalBuffer, __hidden_system::s_SkinnedNormalsLabel);
-            skinnedTangentResourceResult = importBuffer(instance->skinnedTangentBuffer, "Runtime Skinned Tangents");
-        }
-        if(updatesMeshletBounds){
-            if(!skinnedPositionResourceResult.has_value())
-                skinnedPositionResourceResult = importBuffer(instance->skinnedPositionBuffer, __hidden_system::s_SkinnedPositionsLabel);
-            meshletDescResourceResult = importBuffer(instance->meshletDescBuffer, __hidden_system::s_MeshletDescriptorsLabel);
-            meshletPositionRefDeltaResourceResult = importBuffer(instance->meshletPositionRefDeltaBuffer, "Runtime Meshlet Position Deltas");
-            meshletLocalVertexRefResourceResult = importBuffer(instance->meshletLocalVertexRefBuffer, __hidden_system::s_MeshletLocalVertexRefsLabel);
-            meshletPrimitiveIndexResourceResult = importBuffer(instance->meshletPrimitiveIndexBuffer, __hidden_system::s_MeshletPrimitiveIndicesLabel);
-            meshletBoundsResourceResult = importBuffer(instance->meshletBoundsBuffer, "Runtime Meshlet Bounds");
-            meshletLocalBoundsResourceResult = importBuffer(instance->meshletLocalBoundsBuffer, "Runtime Meshlet Local Bounds");
-            localBoundsResourceResult = importBuffer(instance->localBoundsBuffer, "Runtime Local Bounds");
-        }
-        if(hasActiveSkin){
-            meshletAttributeRefDeltaResourceResult = importBuffer(instance->meshletAttributeRefDeltaBuffer, __hidden_system::s_MeshletAttributeDeltasLabel);
-            attributeSkinResourceResult = importBuffer(instance->attributeSkinBuffer, "Runtime Attribute Skins");
-            skinResourceResult = importBuffer(resources.skinBuffer, "Skinning Influences");
-            jointPaletteResourceResult = importBuffer(resources.jointPaletteBuffer, "Skinning Joint Palette");
-        }
-        if(plan.repacksNormals){
-            if(!skinnedNormalResourceResult.has_value())
-                skinnedNormalResourceResult = importBuffer(instance->skinnedNormalBuffer, __hidden_system::s_SkinnedNormalsLabel);
-            if(!meshletDescResourceResult.has_value())
-                meshletDescResourceResult = importBuffer(instance->meshletDescBuffer, __hidden_system::s_MeshletDescriptorsLabel);
-            if(!meshletPrimitiveIndexResourceResult.has_value())
-                meshletPrimitiveIndexResourceResult = importBuffer(instance->meshletPrimitiveIndexBuffer, __hidden_system::s_MeshletPrimitiveIndicesLabel);
-            if(!meshletAttributeRefDeltaResourceResult.has_value())
-                meshletAttributeRefDeltaResourceResult = importBuffer(instance->meshletAttributeRefDeltaBuffer, __hidden_system::s_MeshletAttributeDeltasLabel);
-            if(!meshletLocalVertexRefResourceResult.has_value())
-                meshletLocalVertexRefResourceResult = importBuffer(instance->meshletLocalVertexRefBuffer, __hidden_system::s_MeshletLocalVertexRefsLabel);
-            attributeResourceResult = importBuffer(instance->attributeBuffer, "Runtime Ray Trace Attributes");
-        }
-
-        boundsPipelineResult = importComputePipeline(m_boundsComputePipeline, Name("mesh_skinning.graph_bounds_pipeline"), "Skinning Bounds Pipeline");
-        localBoundsPipelineResult = importComputePipeline(m_localBoundsComputePipeline, Name("mesh_skinning.graph_local_bounds_pipeline"), "Skinning Local Bounds Pipeline");
-        if(hasActiveSkin){
-            skinningPipelineResult = importComputePipeline(m_skinningComputePipeline, Name("mesh_skinning.graph_skinning_pipeline"), "Skinning Compute Pipeline");
-        }
-        if(plan.repacksNormals){
-            repackPipelineResult = importComputePipeline(m_repackComputePipeline, Name("mesh_skinning.graph_repack_pipeline"), "Skinning Repack Pipeline");
-        }
-
-        const bool importsValid =
-            bindlessResourceSlotsResourceResult.has_value()
-            && skinnedPositionResourceResult.has_value()
-            && meshletDescResourceResult.has_value()
-            && meshletPositionRefDeltaResourceResult.has_value()
-            && meshletLocalVertexRefResourceResult.has_value()
-            && meshletPrimitiveIndexResourceResult.has_value()
-            && meshletBoundsResourceResult.has_value()
-            && boundsPipelineResult.has_value()
-            && meshletLocalBoundsResourceResult.has_value()
-            && localBoundsResourceResult.has_value()
-            && localBoundsPipelineResult.has_value()
-            && (!hasActiveSkin || (
-                restPositionResourceResult.has_value()
-                && restNormalResourceResult.has_value()
-                && restTangentResourceResult.has_value()
-                && skinnedNormalResourceResult.has_value()
-                && skinnedTangentResourceResult.has_value()
-                && meshletAttributeRefDeltaResourceResult.has_value()
-                && attributeSkinResourceResult.has_value()
-                && skinResourceResult.has_value()
-                && jointPaletteResourceResult.has_value()
-                && skinningPipelineResult.has_value()
-            ))
-            && (!copiesRestStreams || (restPositionResourceResult.has_value() && restNormalResourceResult.has_value() && restTangentResourceResult.has_value() && skinnedNormalResourceResult.has_value() && skinnedTangentResourceResult.has_value()))
-            && (!plan.repacksNormals || (skinnedNormalResourceResult.has_value() && meshletAttributeRefDeltaResourceResult.has_value() && attributeResourceResult.has_value() && repackPipelineResult.has_value()))
-        ;
-        if(!importsValid){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' has no graph-importable dispatch resource"), instance->handle.value);
-            declarationFailed = true;
-            return;
-        }
-
-        if(bindlessResourceSlotsResourceResult)
-            plan.bindlessResourceSlotsResource = *bindlessResourceSlotsResourceResult;
-        if(restPositionResourceResult)
-            plan.restPositionResource = *restPositionResourceResult;
-        if(restNormalResourceResult)
-            plan.restNormalResource = *restNormalResourceResult;
-        if(restTangentResourceResult)
-            plan.restTangentResource = *restTangentResourceResult;
-        if(skinnedPositionResourceResult)
-            plan.skinnedPositionResource = *skinnedPositionResourceResult;
-        if(skinnedNormalResourceResult)
-            plan.skinnedNormalResource = *skinnedNormalResourceResult;
-        if(skinnedTangentResourceResult)
-            plan.skinnedTangentResource = *skinnedTangentResourceResult;
-        if(meshletDescResourceResult)
-            plan.meshletDescResource = *meshletDescResourceResult;
-        if(meshletPositionRefDeltaResourceResult)
-            plan.meshletPositionRefDeltaResource = *meshletPositionRefDeltaResourceResult;
-        if(meshletLocalVertexRefResourceResult)
-            plan.meshletLocalVertexRefResource = *meshletLocalVertexRefResourceResult;
-        if(meshletPrimitiveIndexResourceResult)
-            plan.meshletPrimitiveIndexResource = *meshletPrimitiveIndexResourceResult;
-        if(meshletBoundsResourceResult)
-            plan.meshletBoundsResource = *meshletBoundsResourceResult;
-        if(meshletLocalBoundsResourceResult)
-            plan.meshletLocalBoundsResource = *meshletLocalBoundsResourceResult;
-        if(localBoundsResourceResult)
-            plan.localBoundsResource = *localBoundsResourceResult;
-        if(meshletAttributeRefDeltaResourceResult)
-            plan.meshletAttributeRefDeltaResource = *meshletAttributeRefDeltaResourceResult;
-        if(attributeSkinResourceResult)
-            plan.attributeSkinResource = *attributeSkinResourceResult;
-        if(skinResourceResult)
-            plan.skinResource = *skinResourceResult;
-        if(jointPaletteResourceResult)
-            plan.jointPaletteResource = *jointPaletteResourceResult;
-        if(attributeResourceResult)
-            plan.attributeResource = *attributeResourceResult;
-        if(boundsPipelineResult)
-            plan.boundsPipeline = *boundsPipelineResult;
-        if(localBoundsPipelineResult)
-            plan.localBoundsPipeline = *localBoundsPipelineResult;
-        if(skinningPipelineResult)
-            plan.skinningPipeline = *skinningPipelineResult;
-        if(repackPipelineResult)
-            plan.repackPipeline = *repackPipelineResult;
-
-        if(!resources.bindlessResourceSlotsUploaded){
-            const auto uploadIdentity = DeriveRuntimeResourceName(instance->sourceName, instance->handle.value, instance->editRevision, "mesh_skinning_bindless_slots_upload");
-            const auto selectorSourceResult = graph.copyUploadData(&resources.bindlessResourceSlots, sizeof(resources.bindlessResourceSlots), alignof(MeshSkinningBindlessResourceSlots));
-            if(!uploadIdentity || !selectorSourceResult){
-                NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to retain graph-owned bindless slots for runtime mesh '{}'"), instance->handle.value);
-                declarationFailed = true;
-                return;
-            }
-            const Core::GpuUploadBlobId selectorSource = *selectorSourceResult;
-
-            Core::GpuTaskDesc selectorUploadDesc;
-            selectorUploadDesc.setIdentity(*uploadIdentity).setMarkerLabel("Skinning Bindless Slots Upload").setScheduling(__hidden_system::JointPaletteUploadScheduling());
-            if(terminalTask.valid())
-                selectorUploadDesc.setDependencies(&terminalTask, 1u);
-
-            const auto selectorUploadTaskResult = graph.addUploadBufferTask(
-                selectorUploadDesc,
-                Core::GpuUploadBufferTaskDesc{
-                    .source = selectorSource,
-                    .destination = plan.bindlessResourceSlotsResource,
-                    // The following graph-owned compute task declares the descriptor-visible ConstantBuffer state.
-                    .finalState = Core::ResourceStates::Common, }
-            );
-            if(!selectorUploadTaskResult){
-                NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare graph-owned bindless slots for runtime mesh '{}'"), instance->handle.value);
-                declarationFailed = true;
-                return;
-            }
-            const Core::GpuTaskId selectorUploadTask = *selectorUploadTaskResult;
-            plan.submissionCommit.bindlessResourceSlotsUploadRecorded = true;
-            terminalTask = selectorUploadTask;
-        }
-
-        if(copiesRestStreams){
-            const auto copyByteCounts = ResolveRestToSkinnedCopyByteCounts(*instance);
-            if(!copyByteCounts || copyByteCounts->positionBytes == 0u || copyByteCounts->normalBytes == 0u || copyByteCounts->tangentBytes == 0u){
-                NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to resolve rest-to-skinned copy sizes for runtime mesh '{}'"), instance->handle.value);
-                declarationFailed = true;
-                return;
-            }
-
-            const Core::GpuCopyBufferTaskRegion copyRegions[] = {
-                Core::GpuCopyBufferTaskRegion{ .source = plan.restPositionResource, .destination = plan.skinnedPositionResource, .dataSizeBytes = copyByteCounts->positionBytes, },
-                Core::GpuCopyBufferTaskRegion{
-                    .source = plan.restNormalResource,
-                    .destination = plan.skinnedNormalResource,
-                    .dataSizeBytes = copyByteCounts->normalBytes,
-                },
-                Core::GpuCopyBufferTaskRegion{ .source = plan.restTangentResource, .destination = plan.skinnedTangentResource, .dataSizeBytes = copyByteCounts->tangentBytes, },
-            };
-            Core::GpuTaskDesc copyDesc;
-            const auto copyDescIdentity = DeriveRuntimeResourceName(instance->sourceName, instance->handle.value, instance->editRevision, "mesh_skinning_rest_to_skinned_copy");
-            if(!copyDescIdentity){
-                NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to derive graph identity for rest-to-skinned copy"));
-                declarationFailed = true;
-                return;
-            }
-            copyDesc.setIdentity(*copyDescIdentity).setMarkerLabel("Skinning Rest-to-Skinned Copy").setScheduling(__hidden_system::JointPaletteUploadScheduling());
-
-            if(terminalTask.valid())
-                copyDesc.setDependencies(&terminalTask, 1u);
-
-            const auto copyTaskResult = graph.addCopyBufferTask(copyDesc, Core::GpuCopyBufferTaskDesc{ .regions = copyRegions, .regionCount = LengthOf(copyRegions), });
-            if(!copyTaskResult){
-                NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare graph-owned rest-to-skinned copy for runtime mesh '{}'"), instance->handle.value);
-                declarationFailed = true;
-                return;
-            }
-            const Core::GpuTaskId copyTask = *copyTaskResult;
-            terminalTask = copyTask;
-        }
-
-        if(hasActiveSkin){
-            usize jointPaletteBytes = 0u;
-            if(jointPaletteUpload.size() > Limit<usize>::s_Max / sizeof(SkeletonJointMatrix) || (jointPaletteBytes = jointPaletteUpload.size() * sizeof(SkeletonJointMatrix)) == 0u){
-                NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: joint palette payload byte size overflows"));
-                declarationFailed = true;
-                return;
-            }
-            const auto jointPaletteSourceResult = graph.copyUploadData(jointPaletteUpload.data(), jointPaletteBytes, alignof(SkeletonJointMatrix));
-            if(!jointPaletteSourceResult){
-                NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to retain graph-owned joint palette data for runtime mesh '{}'"), instance->handle.value);
-                declarationFailed = true;
-                return;
-            }
-            const Core::GpuUploadBlobId jointPaletteSource = *jointPaletteSourceResult;
-
-            Core::GpuTaskDesc jointPaletteUploadDesc;
-            const auto jointPaletteUploadDescIdentity = DeriveRuntimeResourceName(instance->sourceName, instance->handle.value, instance->editRevision, "mesh_skinning_joint_palette_upload");
-            if(!jointPaletteUploadDescIdentity){
-                NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to derive graph identity for joint palette upload"));
-                declarationFailed = true;
-                return;
-            }
-            jointPaletteUploadDesc.setIdentity(*jointPaletteUploadDescIdentity).setMarkerLabel("Skinning Joint Palette Upload").setScheduling(__hidden_system::JointPaletteUploadScheduling());
-
-            if(terminalTask.valid())
-                jointPaletteUploadDesc.setDependencies(&terminalTask, 1u);
-
-            const auto jointPaletteUploadTaskResult = graph.addUploadBufferTask(
-                jointPaletteUploadDesc,
-                Core::GpuUploadBufferTaskDesc{ .source = jointPaletteSource, .destination = plan.jointPaletteResource, .finalState = Core::ResourceStates::ShaderResource, }
-            );
-            if(!jointPaletteUploadTaskResult){
-                NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare graph-owned joint palette upload for runtime mesh '{}'"), instance->handle.value);
-                declarationFailed = true;
-                return;
-            }
-            const Core::GpuTaskId jointPaletteUploadTask = *jointPaletteUploadTaskResult;
-            terminalTask = jointPaletteUploadTask;
-        }
-
-        const auto deformationCandidate = instance->deformationState.stage(deformationInputs, payload.jointMatrices.data(), payload.jointMatrices.size());
-        if(!deformationCandidate){
-            declarationFailed = true;
-            return;
-        }
-        plan.deformationCandidate = *deformationCandidate;
-        dispatchPlans.push_back(Move(plan));
     }
     );
+    Core::GpuTaskId terminalTask = planBuilder.terminalTask();
 
     if(declarationFailed)
         return false;
@@ -849,7 +287,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         deformationDesc
             .setIdentity(Name("mesh_skinning.frame_deformation"))
             .setMarkerLabel("Runtime Skinning Deformation")
-            .setScheduling(__hidden_system::SkinningDispatchScheduling())
+            .setScheduling(MeshSkinningGraphDetail::SkinningDispatchScheduling())
             .setResourceUses(resourceUses->deformation.data(), resourceUses->deformation.size())
         ;
         if(previousFrameStateSourceCount != 0u)
@@ -871,7 +309,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     postDispatchDesc
         .setIdentity(Name("mesh_skinning.frame_bounds_repack"))
         .setMarkerLabel("Runtime Skinning Bounds and Repack")
-        .setScheduling(__hidden_system::SkinningDispatchScheduling())
+        .setScheduling(MeshSkinningGraphDetail::SkinningDispatchScheduling())
         .setResourceUses(resourceUses->postDispatch.data(), resourceUses->postDispatch.size())
     ;
     if(previousFrameStateSourceCount != 0u)
@@ -889,7 +327,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     localBoundsDesc
         .setIdentity(Name("mesh_skinning.frame_local_bounds"))
         .setMarkerLabel("Runtime Skinning Local Bounds")
-        .setScheduling(__hidden_system::SkinningDispatchScheduling())
+        .setScheduling(MeshSkinningGraphDetail::SkinningDispatchScheduling())
         .setDependencies(&postDispatchTask, 1u)
         .setResourceUses(resourceUses->localBounds.data(), resourceUses->localBounds.size())
     ;
@@ -905,7 +343,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     const Core::GpuTaskDesc finalizerDesc = Core::GpuTaskDesc{}
         .setIdentity(Name("mesh_skinning.frame_finalize_states"))
         .setMarkerLabel("Runtime Skinning Finalize States")
-        .setScheduling(__hidden_system::SkinningDispatchScheduling())
+        .setScheduling(MeshSkinningGraphDetail::SkinningDispatchScheduling())
         .setDependencies(&localBoundsTask, 1u)
         .setResourceUses(resourceUses->finalizer.data(), resourceUses->finalizer.size())
     ;

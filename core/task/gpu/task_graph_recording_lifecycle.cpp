@@ -15,55 +15,12 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuTaskGraph::RecordingAttemptScope::~RecordingAttemptScope()noexcept{
-    if(m_graph)
-        m_graph->cancelRecordingAttempt(*this);
-}
-
-
-void GpuTaskGraph::RecordingAttemptScope::complete()noexcept{
-    if(m_graph){
-        m_graph->completeRecordingPreparation(*this);
-        return;
-    }
-    completeWithinLock();
-}
-
-
-void GpuTaskGraph::RecordingAttemptScope::activateWithinLock(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const u64 recordingAttemptGeneration, const u64 preparationSerial, const bool previousPlanWasActive)noexcept{
-    NWB_FATAL_ASSERT_MSG(!m_graph, "GPU task graph recording attempt scope must be fresh");
-    NWB_FATAL_ASSERT_MSG(preparationSerial != 0u, "GPU task graph recording preparation requires a nonzero serial");
-    m_graph = &graph;
-    m_compiledGraph = &compiledGraph;
-    m_recordingAttemptGeneration = recordingAttemptGeneration;
-    m_preparationSerial = preparationSerial;
-    m_previousPlanWasActive = previousPlanWasActive;
-}
-
-
-void GpuTaskGraph::RecordingAttemptScope::completeWithinLock()noexcept{
-    m_graph = nullptr;
-    m_compiledGraph = nullptr;
-    m_recordingAttemptGeneration = 0u;
-    m_preparationSerial = 0u;
-    m_previousPlanWasActive = false;
-}
-
-
-bool GpuTaskGraph::RecordingAttemptScope::validPreparationWithinLock(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const u64 recordingAttemptGeneration, const u64 preparationSerial)const noexcept{
-    return m_graph == &graph && m_compiledGraph == &compiledGraph && m_recordingAttemptGeneration == recordingAttemptGeneration && m_preparationSerial != 0u && m_preparationSerial == preparationSerial;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 u64 GpuTaskGraph::recordingAttemptGeneration()const noexcept{
     NothrowScopedLock lock(m_lifecycleMutex);
     return m_activeRecordingAttemptGeneration;
 }
 
-bool GpuTaskGraph::beginRecordingAttempt(const GpuCompiledGraph& compiledGraph, const GpuSubmissionPacketId packet, const DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, RecordingAttemptScope& outAttempt)const noexcept{
+bool GpuTaskGraph::beginRecordingAttempt(const GpuCompiledGraph& compiledGraph, const GpuSubmissionPacketId packet, const DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, GpuRecordingAttemptScope& outAttempt)const noexcept{
     if(!declarationAccess.validFor(*this) || !planAccess.validFor(compiledGraph) || !packet.valid())
         return false;
 
@@ -173,7 +130,7 @@ bool GpuTaskGraph::beginRecordingAttempt(const GpuCompiledGraph& compiledGraph, 
 }
 
 
-void GpuTaskGraph::cancelRecordingAttempt(RecordingAttemptScope& attempt)const noexcept{
+void GpuTaskGraph::cancelRecordingAttempt(GpuRecordingAttemptScope& attempt)const noexcept{
     NothrowScopedLock lock(m_lifecycleMutex);
     const bool attemptValid = attempt.m_graph == this
         && attempt.m_compiledGraph
@@ -220,7 +177,7 @@ void GpuTaskGraph::cancelRecordingAttempt(RecordingAttemptScope& attempt)const n
 }
 
 
-void GpuTaskGraph::completeRecordingPreparation(RecordingAttemptScope& attempt)const noexcept{
+void GpuTaskGraph::completeRecordingPreparation(GpuRecordingAttemptScope& attempt)const noexcept{
     NothrowScopedLock lock(m_lifecycleMutex);
     const bool preparationValid = attempt.m_compiledGraph && attempt.validPreparationWithinLock(*this, *attempt.m_compiledGraph, m_activeRecordingAttemptGeneration, m_activeRecordingPreparationSerial);
     NWB_FATAL_ASSERT_MSG(preparationValid, "Recording preparation completion requires its exact active capability");
@@ -262,7 +219,7 @@ bool GpuTaskGraph::resolveRecordingAttemptIfTerminal(const GpuCompiledGraph& com
 }
 
 
-bool GpuTaskGraph::bindSubmissionTransaction(const GpuCompiledGraph& compiledGraph, const u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding, const RecordingAttemptScope* const preparationAttempt)const noexcept{
+bool GpuTaskGraph::bindSubmissionTransaction(const GpuCompiledGraph& compiledGraph, const u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding, const GpuRecordingAttemptScope* const preparationAttempt)const noexcept{
     if(!submissionBinding.valid())
         return false;
 

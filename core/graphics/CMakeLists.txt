@@ -122,6 +122,7 @@ if(NWB_GRAPHICS_BACKEND STREQUAL "Vulkan")
         "${CMAKE_CURRENT_LIST_DIR}/vulkan/raytracing_accel_geometry.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/vulkan/raytracing_accel_resources.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/vulkan/raytracing_commands_build.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/vulkan/raytracing_build_support.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/vulkan/raytracing_commands_tlas.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/vulkan/raytracing_commands_dispatch.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/vulkan/raytracing_micromap.cpp"

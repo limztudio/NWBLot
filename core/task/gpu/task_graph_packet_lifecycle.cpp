@@ -132,7 +132,7 @@ void GpuTaskGraph::DiscardNotificationScope::adoptPacketRecordingClaimWithinLock
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<void, GpuTaskGraph::RecordTaskFailure> GpuTaskGraph::recordTask(const GpuTaskId& taskID, CommandList& commandList, const GpuTaskRecordContext& context, const PacketRecordingLease& lease)const{
+Expected<void, GpuTaskGraph::RecordTaskFailure> GpuTaskGraph::recordTask(const GpuTaskId& taskID, CommandList& commandList, const GpuTaskRecordContext& context, const GpuPacketRecordingLease& lease)const{
     const GpuCompiledTaskView compiledTaskView = context.compiledPlan.findTask(taskID);
     const GpuCompiledTask* const compiledTask = compiledTaskView.plan;
     if(
@@ -211,91 +211,7 @@ Expected<void, GpuTaskGraph::RecordTaskFailure> GpuTaskGraph::recordTask(const G
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuTaskGraph::PacketRecordingAbort::PacketRecordingAbort(PacketRecordingAbort&& other)noexcept
-    : m_packet(other.m_packet)
-    , m_planGeneration(other.m_planGeneration)
-    , m_recordingAttemptGeneration(other.m_recordingAttemptGeneration)
-    , m_claimGeneration(other.m_claimGeneration)
-{
-    other.reset();
-}
-
-GpuTaskGraph::PacketRecordingAbort::~PacketRecordingAbort()noexcept{
-    if(valid())
-        NWB_FATAL_ASSERT_MSG(false, "GPU task packet recording abort must be consumed before destruction");
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool GpuTaskGraph::PacketRecordingLease::validFor(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet)const noexcept{
-    if(!valid() || !planAccess.validFor(compiledGraph) || !planAccess.validPacket(packet) || m_packet != packet || m_planGeneration != planAccess.planGeneration())
-        return false;
-
-    const GpuCompiledPacketView packetView = planAccess.packetWithTasks(packet);
-    if(!packetView.valid())
-        return false;
-    const GpuSubmissionPacket& packetPlan = *packetView.plan;
-    const GpuTaskId* const tasks = packetView.tasks;
-
-    NothrowScopedLock lock(graph.m_lifecycleMutex);
-    if(!graph.matchesPacketAttemptWithinLock(compiledGraph, m_planGeneration, m_recordingAttemptGeneration) || graph.m_activeRecordingPreparationSerial != 0u)
-        return false;
-
-    for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
-        if(!graph.validTask(tasks[taskIndex]))
-            return false;
-        const GpuTaskNode& task = graph.m_tasks[tasks[taskIndex].index];
-        if(task.lifecycleState != TaskLifecycleState::Recording || task.lifecycleAttemptGeneration != m_recordingAttemptGeneration || task.recordingClaimGeneration != m_claimGeneration)
-            return false;
-    }
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-GpuTaskGraph::PacketRecordingAccess::PacketRecordingAccess(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const PacketRecordingLease& lease)noexcept{
-    if(!lease.validFor(graph, compiledGraph, planAccess, lease.m_packet))
-        return;
-
-    m_graph = &graph;
-    m_compiledGraph = &compiledGraph;
-    m_lease = &lease;
-    m_packet = lease.m_packet;
-    m_planGeneration = lease.m_planGeneration;
-    m_recordingAttemptGeneration = lease.m_recordingAttemptGeneration;
-    m_claimGeneration = lease.m_claimGeneration;
-}
-
-bool GpuTaskGraph::PacketRecordingAccess::validFor(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet)const noexcept{
-    return
-        m_graph == &graph
-        && m_compiledGraph == &compiledGraph
-        && m_lease->m_packet == m_packet
-        && m_lease->m_planGeneration == m_planGeneration
-        && m_lease->m_recordingAttemptGeneration == m_recordingAttemptGeneration
-        && m_lease->m_claimGeneration == m_claimGeneration
-        && planAccess.validFor(compiledGraph)
-        && m_packet == packet
-        && m_planGeneration == planAccess.planGeneration()
-    ;
-}
-
-bool GpuTaskGraph::PacketRecordingAccess::validForTask(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuTaskId& task)const noexcept{
-    if(!validFor(graph, compiledGraph, planAccess, m_packet))
-        return false;
-    const GpuCompiledTaskView compiledTask = planAccess.findTask(task);
-    return compiledTask.valid() && compiledTask.plan->packet == m_packet;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool GpuTaskGraph::beginPacketRecording(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet, const u64 recordingAttemptGeneration, PacketRecordingLease& outLease)const noexcept{
+bool GpuTaskGraph::beginPacketRecording(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet, const u64 recordingAttemptGeneration, GpuPacketRecordingLease& outLease)const noexcept{
     const auto packetView = ResolveAttemptPacketView(compiledGraph, planAccess, packet, recordingAttemptGeneration, outLease.valid());
     if(!packetView)
         return false;
@@ -333,7 +249,7 @@ bool GpuTaskGraph::beginPacketRecording(const GpuCompiledGraph& compiledGraph, c
     return true;
 }
 
-bool GpuTaskGraph::completePacketRecording(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet, PacketRecordingLease& lease)const noexcept{
+bool GpuTaskGraph::completePacketRecording(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet, GpuPacketRecordingLease& lease)const noexcept{
     const auto packetView = ResolveLeasedPacketView(compiledGraph, planAccess, packet, lease);
     if(!packetView)
         return false;
@@ -368,7 +284,7 @@ bool GpuTaskGraph::completePacketRecording(const GpuCompiledGraph& compiledGraph
     return true;
 }
 
-bool GpuTaskGraph::deferPacketRecordingAbort(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet, PacketRecordingLease& lease, PacketRecordingAbort& outAbort)const noexcept{
+bool GpuTaskGraph::deferPacketRecordingAbort(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet, GpuPacketRecordingLease& lease, GpuPacketRecordingAbort& outAbort)const noexcept{
     if(!planAccess.validFor(compiledGraph) || !planAccess.validPacket(packet) || !lease.valid() || outAbort.valid() || lease.m_packet != packet || lease.m_planGeneration != planAccess.planGeneration())
         return false;
     outAbort.m_packet = lease.m_packet;
@@ -380,7 +296,7 @@ bool GpuTaskGraph::deferPacketRecordingAbort(const GpuCompiledGraph& compiledGra
 }
 
 
-bool GpuTaskGraph::completePacketRecordingAbort(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, PacketRecordingAbort& abort)const{
+bool GpuTaskGraph::completePacketRecordingAbort(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuPacketRecordingAbort& abort)const{
     if(!planAccess.validFor(compiledGraph) || !abort.valid() || !planAccess.validPacket(abort.m_packet) || abort.m_planGeneration != planAccess.planGeneration())
         return false;
     const GpuCompiledPacketView packetView = planAccess.packetWithTasks(abort.m_packet);
@@ -417,9 +333,9 @@ bool GpuTaskGraph::completePacketRecordingAbort(const GpuCompiledGraph& compiled
 }
 
 
-void GpuTaskGraph::abortPacketRecording(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet, PacketRecordingLease& lease)const{
+void GpuTaskGraph::abortPacketRecording(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet, GpuPacketRecordingLease& lease)const{
     const u64 recordingAttemptGeneration = lease.m_recordingAttemptGeneration;
-    PacketRecordingAbort abort;
+    GpuPacketRecordingAbort abort;
     if(!deferPacketRecordingAbort(compiledGraph, planAccess, packet, lease, abort))
         NWB_FATAL_ASSERT_MSG(false, "active packet recording abort must retain its exact lease");
     RecordingAttemptResolutionGuard resolution(*this, compiledGraph, recordingAttemptGeneration);

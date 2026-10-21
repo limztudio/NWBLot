@@ -94,12 +94,12 @@ static_assert(noexcept(Impl::ForEachMeshletTriangleCorner(DeclVal<const OneMeshl
 static_assert(!noexcept(Impl::ForEachMeshletTriangleCorner(DeclVal<const OneMeshlet&>(), DeclVal<const OneLocalVertex&>(), DeclVal<const OnePrimitive&>(), DeclVal<ThrowingCornerVisitor&>())));
 static_assert(!noexcept(Impl::ForEachMeshletTriangleCorner(DeclVal<const OneMeshlet&>(), DeclVal<const OneLocalVertex&>(), DeclVal<const ThrowingPrimitiveSize&>(), DeclVal<NoThrowCornerVisitor&>())));
 static_assert(!noexcept(Impl::ForEachMeshletTriangleCorner(DeclVal<const OneMeshlet&>(), DeclVal<const OneLocalVertex&>(), DeclVal<const ThrowingPrimitiveConversion&>(), DeclVal<NoThrowCornerVisitor&>())));
-static_assert(noexcept(Impl::MeshCookMeshlets::ComputeMeshletScoreConeCutoff(DeclVal<const OneTriangle&>(), VectorZero(), 0u, false, DeclVal<const NoThrowTriangleNormal&>())));
-static_assert(!noexcept(Impl::MeshCookMeshlets::ComputeMeshletScoreConeCutoff(DeclVal<const OneTriangle&>(), VectorZero(), 0u, false, DeclVal<const ThrowingTriangleNormal&>())));
-static_assert(!noexcept(Impl::MeshCookMeshlets::ComputeMeshletScoreConeCutoff(DeclVal<const ThrowingIncrementRange&>(), VectorZero(), 0u, false, DeclVal<const NoThrowTriangleNormal&>())));
-static_assert(noexcept(Impl::MeshCookMeshlets::PredictMeshletScoreConeWidening(DeclVal<const OneTriangle&>(), DeclVal<const Impl::MeshletScoreState&>(), 0u, VectorZero(), DeclVal<const NoThrowTriangleNormal&>())));
-static_assert(!noexcept(Impl::MeshCookMeshlets::PredictMeshletScoreConeWidening(DeclVal<const OneTriangle&>(), DeclVal<const Impl::MeshletScoreState&>(), 0u, VectorZero(), DeclVal<const ThrowingTriangleNormal&>())));
-static_assert(!noexcept(Impl::MeshCookMeshlets::PredictMeshletScoreConeWidening(DeclVal<const ThrowingIncrementRange&>(), DeclVal<const Impl::MeshletScoreState&>(), 0u, VectorZero(), DeclVal<const NoThrowTriangleNormal&>())));
+static_assert(noexcept(Impl::MeshletCandidateSearch::ComputeMeshletScoreConeCutoff(DeclVal<const OneTriangle&>(), VectorZero(), 0u, false, DeclVal<const NoThrowTriangleNormal&>())));
+static_assert(!noexcept(Impl::MeshletCandidateSearch::ComputeMeshletScoreConeCutoff(DeclVal<const OneTriangle&>(), VectorZero(), 0u, false, DeclVal<const ThrowingTriangleNormal&>())));
+static_assert(!noexcept(Impl::MeshletCandidateSearch::ComputeMeshletScoreConeCutoff(DeclVal<const ThrowingIncrementRange&>(), VectorZero(), 0u, false, DeclVal<const NoThrowTriangleNormal&>())));
+static_assert(noexcept(Impl::MeshletCandidateSearch::PredictMeshletScoreConeWidening(DeclVal<const OneTriangle&>(), DeclVal<const Impl::MeshletScoreState&>(), 0u, VectorZero(), DeclVal<const NoThrowTriangleNormal&>())));
+static_assert(!noexcept(Impl::MeshletCandidateSearch::PredictMeshletScoreConeWidening(DeclVal<const OneTriangle&>(), DeclVal<const Impl::MeshletScoreState&>(), 0u, VectorZero(), DeclVal<const ThrowingTriangleNormal&>())));
+static_assert(!noexcept(Impl::MeshletCandidateSearch::PredictMeshletScoreConeWidening(DeclVal<const ThrowingIncrementRange&>(), DeclVal<const Impl::MeshletScoreState&>(), 0u, VectorZero(), DeclVal<const NoThrowTriangleNormal&>())));
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

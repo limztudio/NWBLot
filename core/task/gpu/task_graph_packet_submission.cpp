@@ -45,7 +45,7 @@ bool GpuTaskGraph::beginPacketSubmission(
     const GpuSubmissionPacketId packet,
     const u64 recordingAttemptGeneration,
     const GpuGraphSubmissionBinding& submissionBinding,
-    PacketSubmissionLease& outLease
+    GpuPacketSubmissionLease& outLease
 )const noexcept{
     Expected<GpuCompiledPacketView> packetView = MakeUnexpected(Failure{});
     if(!(packetView = ResolvePacketView(compiledGraph, planAccess, packet)) || recordingAttemptGeneration == 0u || !submissionBinding.valid() || outLease.valid())
@@ -86,7 +86,7 @@ bool GpuTaskGraph::beginPacketSubmission(
 }
 
 
-void GpuTaskGraph::beginPacketSubmissionAcceptance(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet, const QueueSubmissionToken& token, PacketSubmissionLease& lease)const noexcept{
+void GpuTaskGraph::beginPacketSubmissionAcceptance(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet, const QueueSubmissionToken& token, GpuPacketSubmissionLease& lease)const noexcept{
     const bool inputValid = !planAccess.validFor(compiledGraph) ? false : planAccess.validPacket(packet) && token.valid() && lease.valid() && lease.m_packet == packet && lease.m_planGeneration == planAccess.planGeneration();
     NWB_FATAL_ASSERT_MSG(inputValid, "native-accepted packet must retain its exact graph submission lease");
     const GpuCompiledPacketView packetView = planAccess.packet(packet);
@@ -111,7 +111,7 @@ void GpuTaskGraph::beginPacketSubmissionAcceptance(const GpuCompiledGraph& compi
         m_tasks[tasks[taskIndex].index].lifecycleState = TaskLifecycleState::Accepting;
 }
 
-void GpuTaskGraph::notifyPacketSubmissionAccepted(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet, const QueueSubmissionToken& token, const PacketSubmissionLease& lease)const{
+void GpuTaskGraph::notifyPacketSubmissionAccepted(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet, const QueueSubmissionToken& token, const GpuPacketSubmissionLease& lease)const{
     const bool inputValid = !planAccess.validFor(compiledGraph) || !planAccess.validPacket(packet) || !token.valid() || !lease.valid() ? false : true;
     NWB_FATAL_ASSERT_MSG(inputValid, "native-accepted callback publication must retain its exact graph submission lease");
 
@@ -130,7 +130,7 @@ void GpuTaskGraph::notifyPacketSubmissionAccepted(const GpuCompiledGraph& compil
     }
 }
 
-void GpuTaskGraph::completePacketSubmissionAcceptance(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet, PacketSubmissionLease& lease)const noexcept{
+void GpuTaskGraph::completePacketSubmissionAcceptance(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet, GpuPacketSubmissionLease& lease)const noexcept{
     const bool inputValid = planAccess.validFor(compiledGraph) && planAccess.validPacket(packet) && lease.valid();
     NWB_FATAL_ASSERT_MSG(inputValid, "native-accepted completion must retain its exact graph submission lease");
 
@@ -159,7 +159,7 @@ void GpuTaskGraph::completePacketSubmissionAcceptance(const GpuCompiledGraph& co
 }
 
 
-void GpuTaskGraph::abortPacketSubmission(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet, PacketSubmissionLease& lease)const{
+void GpuTaskGraph::abortPacketSubmission(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet, GpuPacketSubmissionLease& lease)const{
     if(!planAccess.validFor(compiledGraph) || !planAccess.validPacket(packet) || !lease.valid() || lease.m_packet != packet || lease.m_planGeneration != planAccess.planGeneration())
         return;
     const GpuCompiledPacketView packetView = planAccess.packetWithTasks(packet);
@@ -194,7 +194,7 @@ void GpuTaskGraph::abortPacketSubmission(const GpuCompiledGraph& compiledGraph, 
     }
 }
 
-bool GpuTaskGraph::abandonPacketSubmissionWithoutCallbacks(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet, PacketSubmissionLease& lease)const noexcept{
+bool GpuTaskGraph::abandonPacketSubmissionWithoutCallbacks(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet, GpuPacketSubmissionLease& lease)const noexcept{
     Expected<GpuCompiledPacketView> packetView = MakeUnexpected(Failure{});
     if(!(packetView = ResolvePacketView(compiledGraph, planAccess, packet)) || !lease.valid() || lease.m_packet != packet || lease.m_planGeneration != planAccess.planGeneration())
         return false;

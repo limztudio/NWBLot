@@ -6,6 +6,10 @@
 #include <impl/ecs_render/execute/frame_execute_cpu_restore.h>
 #include <impl/ecs_render/execute/frame_execute_history_copy.h>
 #include <impl/ecs_render/execute/frame_execute_lifecycle.h>
+#include <impl/ecs_render/execute/frame_execute_present_tails.h>
+#include <impl/ecs_render/execute/frame_execute_recovery.h>
+#include <impl/ecs_render/execute/frame_execute_state_lifecycles.h>
+#include <impl/ecs_render/execute/frame_execute_timing_state.h>
 #include <impl/ecs_render/execute/frame_execute_surfel_readback.h>
 #include <impl/ecs_render/execute/graphics_prefix_timing_resolver.h>
 #include <impl/ecs_render/execute/opaque_emulation_merge_validator.h>
@@ -37,8 +41,7 @@ namespace RendererFramePipelineExecuteDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Capacities, not a runtime packet-count assumption.
-inline constexpr usize s_DeferredStateLifecycleCallbackCapacity = 6u;
+// Capacity, not a runtime packet-count assumption.
 inline constexpr usize s_DeferredTimingTicketCapacity = 15u + s_AvboitTaskGraphTimingTicketCapacity;
 
 
@@ -199,100 +202,11 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     // Retain this token even if Surfel GI consumes the diagnostic.
     const Core::QueueSubmissionToken surfelCounterReadbackCompletionToken = rayTracingCpuState.surfelCountReadbackSubmissionToken;
 
-    // Prefix stages start separate; shared packets rebind to one ticket.
-    Core::GpuTimingSubmissionTicket shadowPrepareTimingTicket(m_graphics.gpuTiming());
-    Core::GpuTimingSubmissionTicket graphicsPrefixMeshViewSetupTimingTicket(m_graphics.gpuTiming());
-    Core::GpuTimingSubmissionTicket graphicsPrefixSceneShadingSetupTimingTicket(m_graphics.gpuTiming());
-    Core::GpuTimingSubmissionTicket graphicsPrefixDeferredClearTimingTicket(m_graphics.gpuTiming());
-    Core::GpuTimingSubmissionTicket graphicsPrefixGbufferTimingTicket(m_graphics.gpuTiming());
-    Core::GpuTimingSubmissionTicket graphicsPrefixCsgReceiverSpanTimingTicket(m_graphics.gpuTiming());
-    Core::GpuTimingSubmissionTicket graphicsPrefixCsgIntervalCombineTimingTicket(m_graphics.gpuTiming());
-    Core::GpuTimingSubmissionTicket graphicsPrefixCsgIntervalSampleTimingTicket(m_graphics.gpuTiming());
-    Core::GpuTimingSubmissionTicket graphicsPrefixNormalizeTimingTicket(m_graphics.gpuTiming());
-    constexpr usize s_GraphicsPrefixTimingTicketCount = static_cast<usize>(ECSRenderDetail::DeferredGraphicsPrefixTimingSlot::kCount);
-    Core::GpuTimingSubmissionTicket* graphicsPrefixTimingTickets[s_GraphicsPrefixTimingTicketCount] = {
-        &graphicsPrefixMeshViewSetupTimingTicket,
-        &graphicsPrefixSceneShadingSetupTimingTicket,
-        &graphicsPrefixDeferredClearTimingTicket,
-        &graphicsPrefixGbufferTimingTicket,
-        &graphicsPrefixCsgReceiverSpanTimingTicket,
-        &graphicsPrefixCsgIntervalCombineTimingTicket,
-        &graphicsPrefixCsgIntervalSampleTimingTicket,
-        &graphicsPrefixNormalizeTimingTicket,
-    };
-    Core::GpuTimingSubmissionTicket* const graphicsPrefixOwnedTimingTickets[s_GraphicsPrefixTimingTicketCount] = {
-        &graphicsPrefixMeshViewSetupTimingTicket,
-        &graphicsPrefixSceneShadingSetupTimingTicket,
-        &graphicsPrefixDeferredClearTimingTicket,
-        &graphicsPrefixGbufferTimingTicket,
-        &graphicsPrefixCsgReceiverSpanTimingTicket,
-        &graphicsPrefixCsgIntervalCombineTimingTicket,
-        &graphicsPrefixCsgIntervalSampleTimingTicket,
-        &graphicsPrefixNormalizeTimingTicket,
-    };
-    // AsyncPrefix is valid only when the endpoints share one submission.
-    bool asyncPrefixTimingSpansOnePacket = true;
-    Optional<Core::GpuTimingMeasure> asyncPrefixTiming;
-    Optional<Core::GpuTimingMeasure> deferredClearTiming;
-    GraphClearTimingRecordState deferredClearTimingState{
-        .graphics = &m_graphics,
-        .timing = &deferredClearTiming,
-        .rebindableTimingTicket = &graphicsPrefixTimingTickets[static_cast<usize>(ECSRenderDetail::DeferredGraphicsPrefixTimingSlot::DeferredClear)],
-        .scope = RendererGpuTimingScope::s_DeferredClear,
-    };
-    Optional<Core::GpuTimingMeasure> opaqueCsgIntervalClearTiming;
-    GraphClearTimingRecordState opaqueCsgIntervalClearTimingState{
-        .graphics = &m_graphics,
-        .timing = &opaqueCsgIntervalClearTiming,
-        .rebindableTimingTicket = &graphicsPrefixTimingTickets[static_cast<usize>(ECSRenderDetail::DeferredGraphicsPrefixTimingSlot::Gbuffer)],
-        .scope = RendererGpuTimingScope::s_CsgIntervalClear,
-    };
-    // Keep this measurement alive like CSG intervals.
-    Optional<Core::GpuTimingMeasure> opaqueRegularSharedComputeEmulationTiming;
-    // Interval-sample compute/raster may span two callbacks.
-    Optional<Core::GpuTimingMeasure> opaqueCsgIntervalSampleComputeEmulationTiming;
-    Core::GpuTimingSubmissionTicket shadowVisibilityTimingTicket(m_graphics.gpuTiming());
-    // The terminal fold still closes the Shadow Visibility range.
-    Optional<Core::GpuTimingMeasure> shadowVisibilityAsyncTiming;
-    Optional<Core::GpuTimingMeasure> shadowVisibilityTiming;
-    Optional<Core::GpuTimingMeasure> opaqueSoftResolveTiming;
-    Optional<Core::GpuTimingMeasure> transparentSoftResolveTiming;
+    FrameExecuteTimingState timing(m_graphics);
     bool shadowVisibilityOpaqueProduced = false;
     bool shadowVisibilityTransparentTraceProduced = false;
     u32 shadowVisibilityOpaqueFrameIndex = 0u;
-    Core::GpuTimingSubmissionTicket softwareCausticsTimingTicket(m_graphics.gpuTiming());
-    Core::GpuTimingSubmissionTicket surfelGiTimingTicket(m_graphics.gpuTiming());
-    // Age/free opens it; the GI callback closes it.
-    Optional<Core::GpuTimingMeasure> surfelGiAsyncTiming;
-    Core::GpuTimingSubmissionTicket hardwareCausticsTimingTicket(m_graphics.gpuTiming());
-    // Decay opens it; the photon producer closes it.
-    Optional<Core::GpuTimingMeasure> causticPhotonTiming;
-    // Downsample opens it; wavelet resolve closes it.
-    Optional<Core::GpuTimingMeasure> causticResolveTiming;
     const bool clearAvboitTargets = m_avboitSystem.shouldClearTargets(hasTransparentRenderers);
-    Core::GpuTimingSubmissionTicket avboitPreTimingTicket(m_graphics.gpuTiming());
-    Core::GpuTimingSubmissionTicket avboitDepthWarpTimingTicket(m_graphics.gpuTiming());
-    Core::GpuTimingSubmissionTicket avboitExtinctionTimingTicket(m_graphics.gpuTiming());
-    Core::GpuTimingSubmissionTicket avboitIntegrationTimingTicket(m_graphics.gpuTiming());
-    Core::GpuTimingSubmissionTicket avboitAccumulationTimingTicket(m_graphics.gpuTiming());
-    Optional<Core::GpuTimingMeasure> avboitClearTiming;
-    GraphClearTimingRecordState avboitClearTimingState{ .graphics = &m_graphics, .timing = &avboitClearTiming, .timingTicket = &avboitPreTimingTicket, .scope = RendererGpuTimingScope::s_AvboitClear, };
-    Optional<Core::GpuTimingMeasure> transparentCsgIntervalClearTiming;
-    GraphClearTimingRecordState transparentCsgIntervalClearTimingState{ .graphics = &m_graphics, .timing = &transparentCsgIntervalClearTiming, .timingTicket = &avboitPreTimingTicket, .scope = RendererGpuTimingScope::s_CsgIntervalClear, };
-    // Pre opens it; Combine closes it.
-    Optional<Core::GpuTimingMeasure> transparentCsgIntervalsTiming;
-    // Producer opens it; raster consumer closes it.
-    Optional<Core::GpuTimingMeasure> avboitOccupancyComputeEmulationTiming;
-    // Producer opens it; raster consumer closes it.
-    Optional<Core::GpuTimingMeasure> avboitExtinctionComputeEmulationTiming;
-    // Producer opens it; raster consumer closes it.
-    Optional<Core::GpuTimingMeasure> avboitAccumulationComputeEmulationTiming;
-    Core::GpuTimingSubmissionTicket deferredLightingTimingTicket(m_graphics.gpuTiming());
-    Core::GpuTimingSubmissionTicket deferredCompositeTimingTicket(m_graphics.gpuTiming());
-    Core::GpuTimingSubmissionTicket deferredPresentTimingTicket(m_graphics.gpuTiming());
-    // Publish the endpoint only after Present accepts.
-    Core::GpuTimingFrameTransaction frameTimingTransaction(m_graphics.gpuTiming());
-    Optional<Core::GpuTimingMeasure> asyncFinalTiming;
     const f32 meshViewAspectRatio = ECSRenderDetail::ResolveFramebufferAspectRatio(deferredTargets.framebuffer->getFramebufferInfo());
     Core::GpuGraphSubmissionTransaction::PayloadLifetimeScope graphPayloadLifetime(m_deferredLightingSubmissionTransaction, m_deferredLightingTaskGraph, m_deferredLightingCompiledGraph);
     const auto buildDeferredGraph = [&](const bool captureLightingHistory){
@@ -305,45 +219,45 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             hasOpaqueCsgFrameWork,
             meshViewAspectRatio,
             presentationFrame,
-            frameTimingTransaction,
-            asyncPrefixTiming,
-            deferredClearTiming,
-            deferredClearTimingState,
-            opaqueCsgIntervalClearTimingState,
-            opaqueRegularSharedComputeEmulationTiming,
-            opaqueCsgIntervalSampleComputeEmulationTiming,
-            shadowPrepareTimingTicket,
-            graphicsPrefixTimingTickets,
-            asyncPrefixTimingSpansOnePacket,
-            asyncFinalTiming,
-            avboitPreTimingTicket,
-            avboitClearTimingState,
-            transparentCsgIntervalClearTimingState,
-            transparentCsgIntervalsTiming,
-            avboitOccupancyComputeEmulationTiming,
-            avboitExtinctionComputeEmulationTiming,
-            avboitAccumulationComputeEmulationTiming,
-            avboitDepthWarpTimingTicket,
-            avboitExtinctionTimingTicket,
-            avboitIntegrationTimingTicket,
-            avboitAccumulationTimingTicket,
-            shadowVisibilityTimingTicket,
-            shadowVisibilityAsyncTiming,
-            shadowVisibilityTiming,
-            opaqueSoftResolveTiming,
-            transparentSoftResolveTiming,
+            timing.frameTimingTransaction,
+            timing.asyncPrefixTiming,
+            timing.deferredClearTiming,
+            timing.deferredClearTimingState,
+            timing.opaqueCsgIntervalClearTimingState,
+            timing.opaqueRegularSharedComputeEmulationTiming,
+            timing.opaqueCsgIntervalSampleComputeEmulationTiming,
+            timing.shadowPrepareTimingTicket,
+            timing.graphicsPrefixTimingTickets,
+            timing.asyncPrefixTimingSpansOnePacket,
+            timing.asyncFinalTiming,
+            timing.avboitPreTimingTicket,
+            timing.avboitClearTimingState,
+            timing.transparentCsgIntervalClearTimingState,
+            timing.transparentCsgIntervalsTiming,
+            timing.avboitOccupancyComputeEmulationTiming,
+            timing.avboitExtinctionComputeEmulationTiming,
+            timing.avboitAccumulationComputeEmulationTiming,
+            timing.avboitDepthWarpTimingTicket,
+            timing.avboitExtinctionTimingTicket,
+            timing.avboitIntegrationTimingTicket,
+            timing.avboitAccumulationTimingTicket,
+            timing.shadowVisibilityTimingTicket,
+            timing.shadowVisibilityAsyncTiming,
+            timing.shadowVisibilityTiming,
+            timing.opaqueSoftResolveTiming,
+            timing.transparentSoftResolveTiming,
             shadowVisibilityOpaqueProduced,
             shadowVisibilityTransparentTraceProduced,
             shadowVisibilityOpaqueFrameIndex,
-            softwareCausticsTimingTicket,
-            surfelGiTimingTicket,
-            surfelGiAsyncTiming,
-            hardwareCausticsTimingTicket,
-            causticPhotonTiming,
-            causticResolveTiming,
-            deferredLightingTimingTicket,
-            deferredCompositeTimingTicket,
-            deferredPresentTimingTicket,
+            timing.softwareCausticsTimingTicket,
+            timing.surfelGiTimingTicket,
+            timing.surfelGiAsyncTiming,
+            timing.hardwareCausticsTimingTicket,
+            timing.causticPhotonTiming,
+            timing.causticResolveTiming,
+            timing.deferredLightingTimingTicket,
+            timing.deferredCompositeTimingTicket,
+            timing.deferredPresentTimingTicket,
             surfelCounterReadbackCompletionToken,
             priorLaggedLightingHistoryReadReadyToken,
             priorLaggedLightingHistoryWriterDrainToken,
@@ -375,11 +289,11 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const bool shadowMaterialContextUploadsMergedIntoShadowPreparePacket = shadowPreparePacket.shadowMaterialContextUploadsMerged;
     const bool sceneBvhUploadsMergedIntoShadowPreparePacket = shadowPreparePacket.sceneBvhUploadsMerged;
     // CSG callbacks keep an independent anchor across FrontierSafe splits.
-    static_assert(s_GraphicsPrefixTimingTicketCount == GraphicsPrefixTimingResolver::s_TimingTaskCount);
+    static_assert(FrameExecuteTimingState::s_GraphicsPrefixTimingTicketCount == GraphicsPrefixTimingResolver::s_TimingTaskCount);
     Core::GpuTaskId graphicsPrefixTimingTasks[GraphicsPrefixTimingResolver::s_TimingTaskCount];
     GraphicsPrefixTimingResolver graphicsPrefixTimingResolver(MakeNotNull(this));
     GraphicsPrefixTimingResolutionResult graphicsPrefixTimingResolution;
-    graphicsPrefixTimingResolver.resolve(deferredCompiledPlan, graphicsPrefixTimingTickets, graphicsPrefixOwnedTimingTickets, s_GraphicsPrefixTimingTicketCount, graphicsPrefixTimingTasks, asyncPrefixTimingSpansOnePacket, graphicsPrefixTimingResolution);
+    graphicsPrefixTimingResolver.resolve(deferredCompiledPlan, timing.graphicsPrefixTimingTickets, timing.graphicsPrefixOwnedTimingTickets, FrameExecuteTimingState::s_GraphicsPrefixTimingTicketCount, graphicsPrefixTimingTasks, timing.asyncPrefixTimingSpansOnePacket, graphicsPrefixTimingResolution);
     const bool graphicsPrefixTimingBindingsValid = graphicsPrefixTimingResolution.bindingsValid;
     const usize graphicsPrefixUniquePacketCount = graphicsPrefixTimingResolution.uniquePacketCount;
     ShadowVisibilityMergeValidator shadowVisibilityMergeValidator(MakeNotNull(this));
@@ -392,7 +306,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const Core::GpuPhysicalQueueInfo* const graphicsPrefixQueue = deferredCompiledPlan.queueInfoForTask(m_graphicsPrefixTask);
     OpaqueEmulationMergeValidator opaqueEmulationMergeValidator(MakeNotNull(this));
     OpaqueEmulationMergeValidationResult opaqueEmulationMerge;
-    opaqueEmulationMergeValidator.validate(deferredCompiledPlan, graphicsPrefixTimingTasks, s_GraphicsPrefixTimingTicketCount, graphicsPrefixTimingBindingsValid, hasOpaqueCsgFrameWork, opaqueEmulationMerge);
+    opaqueEmulationMergeValidator.validate(deferredCompiledPlan, graphicsPrefixTimingTasks, FrameExecuteTimingState::s_GraphicsPrefixTimingTicketCount, graphicsPrefixTimingBindingsValid, hasOpaqueCsgFrameWork, opaqueEmulationMerge);
     const bool graphicsPrefixPacketsAreGraphics = opaqueEmulationMerge.packetsAreGraphics;
     const bool graphicsPrefixOpaqueComputeEmulationMerged = opaqueEmulationMerge.opaqueComputeEmulationMerged;
     const bool graphicsPrefixOpaqueSharedComputeEmulationMerged = opaqueEmulationMerge.opaqueSharedComputeEmulationMerged;
@@ -445,10 +359,6 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const bool surfelGiSnapshotCopyAndTimingPacketsAreDistinct = surfelCausticsMerge.surfelGiSnapshotCopyAndTimingPacketsAreDistinct;
     const bool surfelCounterReadbackFollowsPresentation = surfelCausticsMerge.surfelCounterReadbackFollowsPresentation;
     const bool laggedLightingHistoryFollowsPresentation = surfelCausticsMerge.laggedLightingHistoryFollowsPresentation;
-    const auto discardGraphicsPrefixTimingTickets = [&graphicsPrefixOwnedTimingTickets](){
-        for(Core::GpuTimingSubmissionTicket* const timingTicket : graphicsPrefixOwnedTimingTickets)
-            timingTicket->discard();
-    };
     if(
         !deferredGraphScheduled
         || !m_deferredLightingTaskGraphScheduled
@@ -630,73 +540,15 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             , deferredCompiledPlan.packetForTask(m_deferredShadowVisibilityDiagnosticsTask).index
         );
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: compiled deferred graph topology was unavailable (declared={} scheduled={})"), m_deferredLightingTaskGraphDeclared, deferredGraphScheduled);
-        deferredPresentTimingTicket.discard();
-        deferredCompositeTimingTicket.discard();
-        deferredLightingTimingTicket.discard();
-        avboitPreTimingTicket.discard();
-        avboitDepthWarpTimingTicket.discard();
-        avboitExtinctionTimingTicket.discard();
-        avboitIntegrationTimingTicket.discard();
-        avboitAccumulationTimingTicket.discard();
-        surfelGiTimingTicket.discard();
-        softwareCausticsTimingTicket.discard();
-        hardwareCausticsTimingTicket.discard();
-        shadowVisibilityTimingTicket.discard();
-        shadowPrepareTimingTicket.discard();
-        discardGraphicsPrefixTimingTickets();
+        timing.discardTickets();
         // No packet accepted yet; restore the CPU-only classification.
         m_rayTracingState.restorePreparedLightingCpuState(rayTracingCpuState);
         return;
     }
-    const auto discardTimingTickets = [
-        &shadowPrepareTimingTicket,
-        &discardGraphicsPrefixTimingTickets,
-        &shadowVisibilityTimingTicket,
-        &hardwareCausticsTimingTicket,
-        &softwareCausticsTimingTicket,
-        &surfelGiTimingTicket,
-        &avboitPreTimingTicket,
-        &avboitDepthWarpTimingTicket,
-        &avboitExtinctionTimingTicket,
-        &avboitIntegrationTimingTicket,
-        &avboitAccumulationTimingTicket,
-        &deferredLightingTimingTicket,
-        &deferredCompositeTimingTicket,
-        &deferredPresentTimingTicket
-    ](){
-        shadowPrepareTimingTicket.discard();
-        discardGraphicsPrefixTimingTickets();
-        shadowVisibilityTimingTicket.discard();
-        hardwareCausticsTimingTicket.discard();
-        softwareCausticsTimingTicket.discard();
-        surfelGiTimingTicket.discard();
-        avboitPreTimingTicket.discard();
-        avboitDepthWarpTimingTicket.discard();
-        avboitExtinctionTimingTicket.discard();
-        avboitIntegrationTimingTicket.discard();
-        avboitAccumulationTimingTicket.discard();
-        deferredLightingTimingTicket.discard();
-        deferredCompositeTimingTicket.discard();
-        deferredPresentTimingTicket.discard();
-    };
-    const auto discardUnacceptedGraphPackets = [&]() -> bool {
-        return m_deferredLightingSubmissionTransaction.discardUnaccepted(m_deferredLightingTaskGraph, m_deferredLightingCompiledGraph, m_deferredLightingRecordedGraph.recordingAttemptGeneration());
-    };
+    FrameExecuteRecovery recovery(*this, timing.frameTimingTransaction, deferredCompiledPlan);
     const auto discardRenderPackets = [&](){
-        Core::DiscardGpuTimingMeasure(&asyncPrefixTiming);
-        Core::DiscardGpuTimingMeasure(&deferredClearTiming);
-        Core::DiscardGpuTimingMeasure(&asyncFinalTiming);
-        Core::DiscardGpuTimingMeasure(&causticPhotonTiming);
-        Core::DiscardGpuTimingMeasure(&causticResolveTiming);
-        Core::DiscardGpuTimingMeasure(&transparentCsgIntervalsTiming);
-        Core::DiscardGpuTimingMeasure(&avboitOccupancyComputeEmulationTiming);
-        Core::DiscardGpuTimingMeasure(&avboitExtinctionComputeEmulationTiming);
-        Core::DiscardGpuTimingMeasure(&avboitAccumulationComputeEmulationTiming);
-        Core::DiscardGpuTimingMeasure(&opaqueRegularSharedComputeEmulationTiming);
-        Core::DiscardGpuTimingMeasure(&opaqueCsgIntervalSampleComputeEmulationTiming);
-        frameTimingTransaction.discard();
-        discardTimingTickets();
-        if(!discardUnacceptedGraphPackets()){
+        timing.discardAll();
+        if(!recovery.discardUnacceptedGraphPackets()){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: deferred graph cancellation overlapped active native work; requesting device recreation"));
             m_graphics.requestDeviceRecreation();
         }
@@ -705,317 +557,12 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         m_raytracingSystem.discardSoftShadowTemporalHistory();
     };
 
-    // Prep/prefix stay serial; later upload packets may use workers.
-    Core::Alloc::ScratchArena shadowPrepareStateScratchArena(RendererArenaScope::s_TaskGraphArena);
-    ECSRenderDetail::MeshRetainedAccelerationStateBufferVector meshAccelerationStateBuffers{ shadowPrepareStateScratchArena };
-    m_meshSystem.collectRetainedAccelerationStateBuffers(meshAccelerationStateBuffers);
-    const auto& acceptedTraceGeometry = m_raytracingSystem.acceptedShadowTraceGeometryBuffers();
-    const auto& preparedTraceGeometry = m_raytracingSystem.preparedShadowTraceGeometryBuffers();
-    Vector<Core::BufferHandle, Core::Alloc::ScratchArena> shadowPrepareLiveStateBuffers{ shadowPrepareStateScratchArena };
-    // Scene TLAS backing and the three BVH sort buffers; the CSG trace context adds one.
-    constexpr usize s_ShadowPrepareFixedStateBufferCapacity = 4u;
-    constexpr usize s_ShadowPrepareCsgStateBufferCapacity = 5u;
-    shadowPrepareLiveStateBuffers.reserve(AddSize(AddSize(acceptedTraceGeometry.size(), preparedTraceGeometry.size()), AddSize(meshAccelerationStateBuffers.size(), rayTracingGraphResources.csgTraceContextBuffer ? s_ShadowPrepareCsgStateBufferCapacity : s_ShadowPrepareFixedStateBufferCapacity)));
-    const auto appendShadowPrepareStateBuffer = [&](const Core::BufferHandle& buffer)noexcept{
-        if(buffer)
-            shadowPrepareLiveStateBuffers.push_back(buffer);
-    };
-    if(rayTracingShadowResources.sceneTlasBackingBuffer)
-        appendShadowPrepareStateBuffer(rayTracingShadowResources.sceneTlasBackingBuffer);
-    bool shadowPrepareStateCandidateRequired = static_cast<bool>(rayTracingShadowResources.sceneTlas) || m_raytracingSystem.preparedMeshSwBvhBuildsReady() || m_raytracingSystem.shadowVisibilitySoftwareResourcesPreflighted();
-    // Keep accepted trace-geometry state with the handoff, including invisible streams.
-    for(const Core::BufferHandle& acceptedBuffer : acceptedTraceGeometry){
-        appendShadowPrepareStateBuffer(acceptedBuffer);
-        shadowPrepareStateCandidateRequired = true;
-    }
-    for(const PreparedShadowTraceGeometryBuffer& preparedBuffer : preparedTraceGeometry){
-        appendShadowPrepareStateBuffer(preparedBuffer.buffer);
-        shadowPrepareStateCandidateRequired = true;
-    }
-    for(const Core::BufferHandle& buffer : meshAccelerationStateBuffers){
-        if(buffer)
-            shadowPrepareStateCandidateRequired = true;
-        appendShadowPrepareStateBuffer(buffer);
-    }
-    appendShadowPrepareStateBuffer(rayTracingShadowResources.bvhSortKeysBuffer);
-    appendShadowPrepareStateBuffer(rayTracingShadowResources.bvhSortPayloadBuffer);
-    appendShadowPrepareStateBuffer(rayTracingShadowResources.bvhVisitCounterBuffer);
-    if(rayTracingGraphResources.csgTraceContextBuffer){
-        appendShadowPrepareStateBuffer(rayTracingGraphResources.csgTraceContextBuffer);
-        shadowPrepareStateCandidateRequired = true;
-    }
-
-    // Build the sparse candidate after recording; commit on Shadow Preparation accept.
-    Core::GpuPersistentResourceStateCache::Candidate shadowPrepareAcceptedStateCandidate(m_shadowPreparePersistentState);
+    FrameExecuteStateLifecycleSet lifecycles(*this, deferredTargets, rayTracingShadowResources, rayTracingGraphResources, rayTracingSurfelResources, hardwareShadowSupported, laggedAsyncLightingSchedule);
     m_avboitSystem.markFrameTargetUsage(hasTransparentRenderers);
 
-    const auto executeFrameRecoveryTask = [&]() -> bool {
-        // Retire the scope after rejection; Graphics order needs no extra wait.
-        if(device.requiresRecreation()){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: frame recovery packet skipped because the graphics device requires recreation"));
-            m_deferredFrameRecoveryArmed = false;
-            m_deferredFrameRecoveryRetiresTiming = false;
-            frameTimingTransaction.discard();
-            return false;
-        }
-        if(!m_deferredLightingTaskGraphScheduled || !m_deferredFrameRecoveryTask.valid() || !deferredCompiledPlan.findTask(m_deferredFrameRecoveryTask).valid()){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: deferred frame recovery task was unavailable"));
-            m_deferredFrameRecoveryArmed = false;
-            m_deferredFrameRecoveryRetiresTiming = false;
-            frameTimingTransaction.discard();
-            return false;
-        }
-        bool retireTiming = frameTimingTransaction.needsRetirement();
-        if(retireTiming && !frameTimingTransaction.prepareForRecovery()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frame timing recovery preparation failed; continuing resource/frontier recovery"));
-            frameTimingTransaction.discard();
-            retireTiming = false;
-        }
-        m_deferredFrameRecoveryArmed = true;
-        m_deferredFrameRecoveryRetiresTiming = retireTiming;
-        Core::Alloc::ScratchArena recoveryScratchArena(RendererArenaScope::s_TaskGraphArena);
-        const Core::GpuTaskScheduler& scheduler = m_graphics.gpuTasks();
-        const bool recoveryAccepted = scheduler.executeAcceptedFrontierTask(
-            m_deferredLightingTaskGraph,
-            m_deferredLightingCompiledGraph,
-            m_deferredLightingRecordedGraph,
-            m_deferredFrameRecoveryTask,
-            m_deferredLightingSubmissionTransaction,
-            &m_graphics.gpuTiming(),
-            recoveryScratchArena
-        );
-        if(!recoveryAccepted){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: deferred frame recovery record/submission was rejected"));
-            return false;
-        }
-        return true;
-    };
-    const auto recoverPendingFrameSubmission = [&]() -> bool {
-        return (m_deferredLightingSubmissionTransaction.hasAcceptedPackets() || frameTimingTransaction.needsRetirement()) ? executeFrameRecoveryTask() : true;
-    };
-    const auto recoverPendingFrameThenDiscardUnaccepted = [&]() -> bool {
-        const bool recovered = recoverPendingFrameSubmission();
-        // Record/submit while Declared; then reject remaining normal packets.
-        return discardUnacceptedGraphPackets() && recovered;
-    };
-    const auto failFrameRenderRecovery = [&](){
-        if(m_frameRenderRecoveryFailed)
-            return;
-        m_frameRenderRecoveryFailed = true;
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: cannot safely continue after an unresolved frame recovery submission; requesting device recreation"));
-        // Defer recreation until accepted work is safe.
-        m_graphics.requestDeviceRecreation();
-    };
-
-    FrameExecuteLifecycle::ShadowPrepareStateLifecycleContext shadowPrepareStateLifecycle{
-        .renderer = MakeNotNull(this),
-        .scratchArena = shadowPrepareStateScratchArena,
-        .stateCandidate = MakeNotNull(&shadowPrepareAcceptedStateCandidate),
-        .buffers = shadowPrepareLiveStateBuffers.data(),
-        .bufferCount = shadowPrepareLiveStateBuffers.size(),
-        .stateCandidateRequired = shadowPrepareStateCandidateRequired,
-    };
-    Core::Alloc::ScratchArena normalExecutionScratchArena(RendererArenaScope::s_TaskGraphArena);
-    const Core::TextureHandle shadowVisibilityReturnTextures[] = { deferredTargets.shadowVisibility, };
-    // Freeze the resource generation selected during graph declaration from preflight-owned light-space storage.
-    const LightSpaceShadowSnapshot lightSpaceShadowResources = m_raytracingSystem.lightSpaceShadowSnapshot();
-    const Core::TextureHandle shadowComputeScratchTextures[] = {
-        lightSpaceShadowResources.depth,
-        deferredTargets.shadowCoarseTransmittance,
-        deferredTargets.shadowSoftHalfA,
-        deferredTargets.shadowSoftHalfB,
-        deferredTargets.shadowSoftGeometry,
-        deferredTargets.shadowSoftGeometryPrev,
-        deferredTargets.shadowHistA,
-        deferredTargets.shadowHistB,
-        deferredTargets.shadowMomentsA,
-        deferredTargets.shadowMomentsB,
-        deferredTargets.transparentSoftHalf,
-        deferredTargets.transparentHistA,
-        deferredTargets.transparentHistB,
-        deferredTargets.transparentMomentsA,
-        deferredTargets.transparentMomentsB,
-    };
-    const Core::BufferHandle shadowComputeScratchBuffers[] = {
-        lightSpaceShadowResources.counts,
-        lightSpaceShadowResources.events,
-        lightSpaceShadowResources.views,
-        lightSpaceShadowResources.drawArguments,
-        lightSpaceShadowResources.csgContext,
-        lightSpaceShadowResources.csgOpaqueDepth,
-        rayTracingShadowResources.swShadowEdgeCounterBuffer,
-        rayTracingShadowResources.swShadowEdgeListBuffer,
-        rayTracingShadowResources.swShadowIndirectArgsBuffer,
-        rayTracingGraphResources.hardwareTransparentCrossingsBuffer,
-        rayTracingGraphResources.hardwareTransparentOverflowListBuffer,
-        rayTracingGraphResources.hardwareTransparentOverflowArgsBuffer,
-    };
-    Core::GpuPersistentResourceStateCache::Candidate shadowVisibilityReturnStateCandidate(m_shadowVisibilityReturnState);
-    Core::GpuPersistentResourceStateCache::Candidate shadowComputeScratchStateCandidate(m_shadowComputePersistentState);
-    FrameExecuteLifecycle::ShadowVisibilityStateLifecycleContext shadowVisibilityStateLifecycle{
-        .scratchArena = normalExecutionScratchArena,
-        .renderer = MakeNotNull(this),
-        .targets = MakeNotNull(&deferredTargets),
-        .returnStateCandidate = MakeNotNull(&shadowVisibilityReturnStateCandidate),
-        .scratchStateCandidate = MakeNotNull(&shadowComputeScratchStateCandidate),
-        .returnTextures = shadowVisibilityReturnTextures,
-        .scratchTextures = shadowComputeScratchTextures,
-        .scratchBuffers = shadowComputeScratchBuffers,
-        .lightSpacePrepared = &m_shadowPreparationOutcome.ready,
-        .lightSpaceCaptureTicket = lightSpaceShadowResources.captureTicket,
-        .returnTextureCount = LengthOf(shadowVisibilityReturnTextures),
-        .scratchTextureCount = LengthOf(shadowComputeScratchTextures),
-        .scratchBufferCount = LengthOf(shadowComputeScratchBuffers),
-    };
-
-    const Core::TextureHandle causticsComputeScratchTextures[] = { deferredTargets.causticAccumulator, deferredTargets.causticHistory, deferredTargets.causticResolveHalf, deferredTargets.causticResolveGeometry, };
-    const Core::TextureHandle causticIrradianceTextures[] = { deferredTargets.causticIrradiance, };
-    Core::GpuPersistentResourceStateCache::Candidate causticReturnStateCandidate(m_causticIrradianceReturnState);
-    Core::GpuPersistentResourceStateCache::Candidate causticsScratchStateCandidate(m_causticsComputePersistentState);
-    FrameExecuteLifecycle::SoftwareCausticsStateLifecycleContext softwareCausticsStateLifecycle{
-        .scratchArena = normalExecutionScratchArena,
-        .renderer = MakeNotNull(this),
-        .returnStateCandidate = MakeNotNull(&causticReturnStateCandidate),
-        .scratchStateCandidate = MakeNotNull(&causticsScratchStateCandidate),
-        .irradianceTextures = causticIrradianceTextures,
-        .scratchTextures = causticsComputeScratchTextures,
-        .irradianceTextureCount = LengthOf(causticIrradianceTextures),
-        .scratchTextureCount = LengthOf(causticsComputeScratchTextures),
-    };
-
-    const Core::TextureHandle surfelIrradianceReturnTextures[] = { deferredTargets.surfelIrradiance, };
-    const Core::BufferHandle surfelGiCounterBuffers[] = { rayTracingSurfelResources.counterBuffer, };
-    const Core::TextureHandle surfelGiComputeScratchTextures[] = { deferredTargets.surfelIrradianceHalf, };
-    const Core::BufferHandle surfelGiComputeScratchBuffers[] = {
-        rayTracingSurfelResources.poolBuffer,
-        rayTracingSurfelResources.cellHeadBuffer,
-        rayTracingSurfelResources.traceIndirectArgsBuffer,
-        rayTracingSurfelResources.freeListBuffer,
-        rayTracingSurfelResources.poolSnapshotBuffer,
-        rayTracingSurfelResources.cellHeadSnapshotBuffer,
-    };
-    Core::GpuPersistentResourceStateCache::Candidate surfelIrradianceReturnStateCandidate(m_surfelIrradianceReturnState);
-    Core::GpuPersistentResourceStateCache::Candidate surfelGiCounterStateCandidate(m_surfelGiCounterPersistentState);
-    Core::GpuPersistentResourceStateCache::Candidate surfelGiComputeStateCandidate(m_surfelGiComputePersistentState);
-    FrameExecuteLifecycle::SurfelGiStateLifecycleContext surfelGiStateLifecycle{
-        .scratchArena = normalExecutionScratchArena,
-        .renderer = MakeNotNull(this),
-        .returnStateCandidate = MakeNotNull(&surfelIrradianceReturnStateCandidate),
-        .counterStateCandidate = MakeNotNull(&surfelGiCounterStateCandidate),
-        .computeStateCandidate = MakeNotNull(&surfelGiComputeStateCandidate),
-        .returnTextures = surfelIrradianceReturnTextures,
-        .counterBuffers = surfelGiCounterBuffers,
-        .computeTextures = surfelGiComputeScratchTextures,
-        .computeBuffers = surfelGiComputeScratchBuffers,
-        .returnTextureCount = LengthOf(surfelIrradianceReturnTextures),
-        .counterBufferCount = LengthOf(surfelGiCounterBuffers),
-        .computeTextureCount = LengthOf(surfelGiComputeScratchTextures),
-        .computeBufferCount = LengthOf(surfelGiComputeScratchBuffers),
-    };
-
-    const Core::TextureHandle hardwareCausticAccumulatorTextures[] = { deferredTargets.causticAccumulator, };
-    Core::GpuPersistentResourceStateCache::Candidate hardwareCausticAccumulatorStateCandidate(m_hardwareCausticAccumulatorPersistentState);
-    FrameExecuteLifecycle::HardwareCausticsStateLifecycleContext hardwareCausticsStateLifecycle{
-        .scratchArena = normalExecutionScratchArena,
-        .renderer = MakeNotNull(this),
-        .accumulatorStateCandidate = MakeNotNull(&hardwareCausticAccumulatorStateCandidate),
-        .accumulatorTextures = hardwareCausticAccumulatorTextures,
-        .accumulatorTextureCount = LengthOf(hardwareCausticAccumulatorTextures),
-    };
-
-    Core::GpuPersistentResourceStateCache::Candidate deferredLightingShadowReturnStateCandidate(m_shadowVisibilityReturnState);
-    Core::GpuPersistentResourceStateCache::Candidate deferredLightingCausticReturnStateCandidate(m_causticIrradianceReturnState);
-    Core::GpuPersistentResourceStateCache::Candidate deferredLightingSurfelReturnStateCandidate(m_surfelIrradianceReturnState);
-    FrameExecuteLifecycle::DeferredLightingStateLifecycleContext deferredLightingStateLifecycle{
-        .scratchArena = normalExecutionScratchArena,
-        .renderer = MakeNotNull(this),
-        .targets = MakeNotNull(&deferredTargets),
-        .shadowReturnStateCandidate = MakeNotNull(&deferredLightingShadowReturnStateCandidate),
-        .causticReturnStateCandidate = MakeNotNull(&deferredLightingCausticReturnStateCandidate),
-        .surfelReturnStateCandidate = MakeNotNull(&deferredLightingSurfelReturnStateCandidate),
-        .shadowReturnTextures = shadowVisibilityReturnTextures,
-        .causticReturnTextures = causticIrradianceTextures,
-        .surfelReturnTextures = surfelIrradianceReturnTextures,
-        .shadowReturnTextureCount = LengthOf(shadowVisibilityReturnTextures),
-        .causticReturnTextureCount = LengthOf(causticIrradianceTextures),
-        .surfelReturnTextureCount = LengthOf(surfelIrradianceReturnTextures),
-        .usesLaggedHistory = laggedAsyncLightingSchedule,
-    };
-
-    Core::GpuTaskGraphTaskRecordedCallback normalRecordedCallbacks[RendererFramePipelineExecuteDetail::s_DeferredStateLifecycleCallbackCapacity] = {};
-    usize normalRecordedCallbackCount = 0u;
-    normalRecordedCallbacks[normalRecordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{ .task = m_deferredShadowPrepareTask, .context = &shadowPrepareStateLifecycle, .invoke = FrameExecuteLifecycle::PrepareShadowPrepareTask, };
-    normalRecordedCallbacks[normalRecordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{ .task = m_deferredShadowVisibilityTask, .context = &shadowVisibilityStateLifecycle, .invoke = FrameExecuteLifecycle::PrepareShadowVisibilityTask, };
-    if(!hardwareShadowSupported){
-        normalRecordedCallbacks[normalRecordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{ .task = m_deferredSoftwareCausticsTask, .context = &softwareCausticsStateLifecycle, .invoke = FrameExecuteLifecycle::PrepareSoftwareCausticsTask, };
-    }
-    normalRecordedCallbacks[normalRecordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{ .task = m_deferredSurfelGiTask, .context = &surfelGiStateLifecycle, .invoke = FrameExecuteLifecycle::PrepareSurfelGiTask, };
-    if(hardwareShadowSupported){
-        normalRecordedCallbacks[normalRecordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{ .task = m_deferredHardwareCausticsTask, .context = &hardwareCausticsStateLifecycle, .invoke = FrameExecuteLifecycle::PrepareHardwareCausticsTask, };
-    }
-    normalRecordedCallbacks[normalRecordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{ .task = m_deferredLightingTask, .context = &deferredLightingStateLifecycle, .invoke = FrameExecuteLifecycle::PrepareDeferredLightingTask, };
-    NWB_ASSERT(normalRecordedCallbackCount <= LengthOf(normalRecordedCallbacks));
-
-    Core::GpuTaskGraphTaskAcceptedCallback normalAcceptedCallbacks[RendererFramePipelineExecuteDetail::s_DeferredStateLifecycleCallbackCapacity] = {};
-    usize normalAcceptedCallbackCount = 0u;
-    normalAcceptedCallbacks[normalAcceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{ .task = m_deferredShadowPrepareTask, .context = &shadowPrepareStateLifecycle, .invoke = FrameExecuteLifecycle::AcceptShadowPrepareTask, };
-    normalAcceptedCallbacks[normalAcceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{ .task = m_deferredShadowVisibilityTask, .context = &shadowVisibilityStateLifecycle, .invoke = FrameExecuteLifecycle::AcceptShadowVisibilityTask, };
-    if(!hardwareShadowSupported){
-        normalAcceptedCallbacks[normalAcceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{ .task = m_deferredSoftwareCausticsTask, .context = &softwareCausticsStateLifecycle, .invoke = FrameExecuteLifecycle::AcceptSoftwareCausticsTask, };
-    }
-    normalAcceptedCallbacks[normalAcceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{ .task = m_deferredSurfelGiTask, .context = &surfelGiStateLifecycle, .invoke = FrameExecuteLifecycle::AcceptSurfelGiTask, };
-    if(hardwareShadowSupported){
-        normalAcceptedCallbacks[normalAcceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{ .task = m_deferredHardwareCausticsTask, .context = &hardwareCausticsStateLifecycle, .invoke = FrameExecuteLifecycle::AcceptHardwareCausticsTask, };
-    }
-    normalAcceptedCallbacks[normalAcceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{ .task = m_deferredLightingTask, .context = &deferredLightingStateLifecycle, .invoke = FrameExecuteLifecycle::AcceptDeferredLightingTask, };
-    NWB_ASSERT(normalAcceptedCallbackCount <= LengthOf(normalAcceptedCallbacks));
-
     Core::GpuTaskGraphTaskTimingTicket normalTimingTickets[RendererFramePipelineExecuteDetail::s_DeferredTimingTicketCapacity] = {};
-    usize normalTimingTicketCount = 0u;
-    const auto appendNormalTimingTicket = [&](const Core::GpuTaskId task, Core::GpuTimingSubmissionTicket& timingTicket)noexcept -> bool {
-        if(!task.valid() || normalTimingTicketCount >= LengthOf(normalTimingTickets))
-            return false;
-        normalTimingTickets[normalTimingTicketCount++] = Core::GpuTaskGraphTaskTimingTicket{ .task = task, .timingTicket = &timingTicket, };
-        return true;
-    };
-    bool normalTimingTicketsReady = appendNormalTimingTicket(m_deferredShadowPrepareTask, shadowPrepareTimingTicket);
-    for(usize prefixTaskIndex = 0u; normalTimingTicketsReady && prefixTaskIndex < s_GraphicsPrefixTimingTicketCount; ++prefixTaskIndex){
-        const Core::GpuTaskId task = graphicsPrefixTimingTasks[prefixTaskIndex];
-        bool packetAlreadyTimed = false;
-        for(usize earlierTaskIndex = 0u; earlierTaskIndex < prefixTaskIndex; ++earlierTaskIndex){
-            if(deferredCompiledPlan.tasksSharePacket(task, graphicsPrefixTimingTasks[earlierTaskIndex])){
-                packetAlreadyTimed = true;
-                break;
-            }
-        }
-        if(packetAlreadyTimed)
-            continue;
-        if(!deferredCompiledPlan.findTask(task).valid() || !graphicsPrefixTimingTickets[prefixTaskIndex]){
-            normalTimingTicketsReady = false;
-            break;
-        }
-        normalTimingTicketsReady = appendNormalTimingTicket(task, *graphicsPrefixTimingTickets[prefixTaskIndex]);
-    }
-    normalTimingTicketsReady = normalTimingTicketsReady
-        && normalTimingTicketCount == 1u + graphicsPrefixUniquePacketCount
-        && appendNormalTimingTicket(m_deferredShadowVisibilityTask, shadowVisibilityTimingTicket)
-        && appendNormalTimingTicket(hardwareShadowSupported ? m_deferredHardwareCausticsTask : m_deferredSoftwareCausticsTask, hardwareShadowSupported ? hardwareCausticsTimingTicket : softwareCausticsTimingTicket)
-        && appendNormalTimingTicket(m_deferredSurfelGiTask, surfelGiTimingTicket)
-    ;
-    RendererAvboitTaskGraphTimingTickets avboitTimingTickets{
-        .m_pre = avboitPreTimingTicket,
-        .m_depthWarp = avboitDepthWarpTimingTicket,
-        .m_extinction = avboitExtinctionTimingTicket,
-        .m_integration = avboitIntegrationTimingTicket,
-        .m_accumulation = avboitAccumulationTimingTicket,
-    };
-    normalTimingTicketsReady = normalTimingTicketsReady
-        && m_avboitSystem.appendTaskGraphTimingTickets(avboitValidation, avboitTimingTickets, normalTimingTickets, LengthOf(normalTimingTickets), normalTimingTicketCount)
-        && appendNormalTimingTicket(m_deferredLightingTask, deferredLightingTimingTicket)
-        && appendNormalTimingTicket(m_deferredCompositeTask, deferredCompositeTimingTicket)
-        && appendNormalTimingTicket(m_deferredPresentTask, deferredPresentTimingTicket)
-    ;
-    if(!normalTimingTicketsReady){
+    const auto normalTimingTicketCount = timing.bindNormalTimingTickets(*this, deferredCompiledPlan, graphicsPrefixTimingTasks, graphicsPrefixUniquePacketCount, avboitValidation, hardwareShadowSupported, normalTimingTickets, LengthOf(normalTimingTickets));
+    if(!normalTimingTicketCount){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to bind normal deferred graph timing"));
         discardRenderPackets();
         return;
@@ -1026,13 +573,13 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const Core::GpuTaskGraphTaskSubmissionHook terminalPresentationSubmissionHooks[] = { Core::GpuTaskGraphTaskSubmissionHook{ .task = terminalPresentationTask, .hook = framePresentationSignal, }, };
     Core::GpuTaskGraphNormalExecutionDesc normalExecution;
     normalExecution.terminalTask = terminalPresentationTask;
-    normalExecution.taskRecordedCallbacks = normalRecordedCallbacks;
-    normalExecution.taskRecordedCallbackCount = normalRecordedCallbackCount;
+    normalExecution.taskRecordedCallbacks = lifecycles.recordedCallbacks;
+    normalExecution.taskRecordedCallbackCount = lifecycles.recordedCallbackCount;
     normalExecution.readyFrontierScheduler = &m_world.taskScheduler();
     normalExecution.taskTimingTickets = normalTimingTickets;
-    normalExecution.taskTimingTicketCount = normalTimingTicketCount;
-    normalExecution.taskAcceptedCallbacks = normalAcceptedCallbacks;
-    normalExecution.taskAcceptedCallbackCount = normalAcceptedCallbackCount;
+    normalExecution.taskTimingTicketCount = *normalTimingTicketCount;
+    normalExecution.taskAcceptedCallbacks = lifecycles.acceptedCallbacks;
+    normalExecution.taskAcceptedCallbackCount = lifecycles.acceptedCallbackCount;
     normalExecution.taskSubmissionHooks = framePresentationSignal.valid() ? terminalPresentationSubmissionHooks : nullptr;
     normalExecution.taskSubmissionHookCount = framePresentationSignal.valid() ? LengthOf(terminalPresentationSubmissionHooks) : 0u;
 
@@ -1044,7 +591,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         normalExecution,
         m_deferredLightingSubmissionTransaction,
         &m_graphics.gpuTiming(),
-        normalExecutionScratchArena
+        lifecycles.normalExecutionScratchArena
     );
 
     const Core::QueueSubmissionToken frameTimingBeginSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(deferredCompiledPlan, m_deferredFrameTimingBeginTask);
@@ -1075,7 +622,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         }
     }
 
-    const bool selectedCausticsStateReady = hardwareShadowSupported ? hardwareCausticsStateLifecycle.stateReady : softwareCausticsStateLifecycle.stateReady;
+    const bool selectedCausticsStateReady = lifecycles.selectedCausticsStateReady(hardwareShadowSupported);
     const bool normalSemanticTokensReady =
         frameTimingBeginSubmissionToken.valid()
         && frameTimingBeginSubmissionToken.matchesPhysicalQueue(primaryGraphicsQueue.index, primaryGraphicsQueue.deviceGeneration)
@@ -1091,21 +638,21 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         && deferredPresentSubmissionToken.valid()
         && finalPresentationSubmissionToken.valid()
     ;
-    const bool normalStateReady = shadowPrepareStateLifecycle.stateReady && shadowVisibilityStateLifecycle.stateReady && selectedCausticsStateReady && surfelGiStateLifecycle.stateReady && deferredLightingStateLifecycle.stateReady;
+    const bool normalStateReady = lifecycles.shadowPrepareStateLifecycle.stateReady && lifecycles.shadowVisibilityStateLifecycle.stateReady && selectedCausticsStateReady && lifecycles.surfelGiStateLifecycle.stateReady && lifecycles.deferredLightingStateLifecycle.stateReady;
     const bool acceptedStateLost =
-        (shadowPrepareSubmissionToken.valid() && !shadowPrepareStateLifecycle.stateReady)
-        || (shadowVisibilitySubmissionToken.valid() && !shadowVisibilityStateLifecycle.stateReady)
+        (shadowPrepareSubmissionToken.valid() && !lifecycles.shadowPrepareStateLifecycle.stateReady)
+        || (shadowVisibilitySubmissionToken.valid() && !lifecycles.shadowVisibilityStateLifecycle.stateReady)
         || (selectedCausticsSubmissionToken.valid() && !selectedCausticsStateReady)
-        || (surfelGiSubmissionToken.valid() && !surfelGiStateLifecycle.stateReady)
-        || (deferredLightingSubmissionToken.valid() && !deferredLightingStateLifecycle.stateReady)
+        || (surfelGiSubmissionToken.valid() && !lifecycles.surfelGiStateLifecycle.stateReady)
+        || (deferredLightingSubmissionToken.valid() && !lifecycles.deferredLightingStateLifecycle.stateReady)
     ;
 
     bool frameTimingEndReady = true;
     if(finalPresentationSubmissionToken.valid()){
-        frameTimingEndReady = frameTimingTransaction.confirmEndSubmission(finalPresentationSubmissionToken, true);
+        frameTimingEndReady = timing.frameTimingTransaction.confirmEndSubmission(finalPresentationSubmissionToken, true);
         if(!frameTimingEndReady){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to confirm frame critical-path timing"));
-            frameTimingTransaction.discard();
+            timing.frameTimingTransaction.discard();
         }
     }
     if(!normalGraphAccepted || !normalSemanticTokensReady || !normalStateReady || !presentationSignalReady){
@@ -1115,8 +662,8 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             discardRenderPackets();
         }
         else{
-            recovered = recoverPendingFrameThenDiscardUnaccepted();
-            discardTimingTickets();
+            recovered = recovery.recoverPendingFrameThenDiscardUnaccepted();
+            timing.discardTickets();
 
             if(!shadowPrepareSubmissionToken.valid()){
                 restorePostGbufferPacketCpuState(true);
@@ -1148,7 +695,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned normal deferred execution was rejected"));
         }
         if(!recovered || acceptedStateLost || (!presentationSignalReady && finalPresentationSubmissionToken.valid()))
-            failFrameRenderRecovery();
+            recovery.failFrameRenderRecovery();
         return;
     }
 
@@ -1160,128 +707,10 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         m_laggedLightingCurrentFrameAcceptancePending = false;
     }
 
-    if(m_deferredSurfelGiCounterReadbackTask.valid()){
-        // No normal-frame consumer; record only after Present.
-        const bool readbackTailAvailable =
-            finalPresentationSubmissionToken.valid()
-            && m_deferredLightingTaskGraphScheduled
-            && deferredCompiledPlan.findTask(m_deferredSurfelGiCounterReadbackTask).valid()
-            && surfelGiCounterReadbackQueue
-            && (static_cast<u8>(surfelGiCounterReadbackQueue->capabilities) & static_cast<u8>(Core::GpuQueueCapability::Transfer)) != 0u
-        ;
-        if(!readbackTailAvailable){
-            m_deferredLightingSubmissionTransaction.rejectTask(m_deferredLightingTaskGraph, m_deferredLightingCompiledGraph, m_deferredSurfelGiCounterReadbackTask, m_deferredLightingRecordedGraph.recordingAttemptGeneration());
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred surfel counter-readback tail was unavailable"));
-        }
-        else{
-            Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
-            Core::GpuPersistentResourceStateCache::Candidate readbackCounterStateCandidate(m_surfelGiCounterPersistentState);
-            // Keep the candidate private until Transfer accepts.
-            FrameExecuteSurfelReadback::Context readbackContext{ .scratchArena = scratchArena, .renderer = MakeNotNull(this), .candidate = MakeNotNull(&readbackCounterStateCandidate), .buffers = surfelGiCounterBuffers, .bufferCount = LengthOf(surfelGiCounterBuffers), };
-            const Core::GpuTaskGraphTaskRecordedCallback readbackRecordedCallback{ .task = m_deferredSurfelGiCounterReadbackTask, .context = &readbackContext, .invoke = FrameExecuteSurfelReadback::PrepareReadbackFinalState, };
-            const Core::GpuTaskGraphTaskAcceptedCallback readbackAcceptedCallback{ .task = m_deferredSurfelGiCounterReadbackTask, .context = &readbackContext, .invoke = FrameExecuteSurfelReadback::AcceptReadbackFinalState, };
-            const Core::GpuTaskScheduler& scheduler = m_graphics.gpuTasks();
-            const bool readbackAccepted = scheduler.executeTask(
-                m_deferredLightingTaskGraph,
-                m_deferredLightingCompiledGraph,
-                m_deferredLightingRecordedGraph,
-                m_deferredSurfelGiCounterReadbackTask,
-                &readbackRecordedCallback,
-                m_deferredLightingSubmissionTransaction,
-                &m_graphics.gpuTiming(),
-                scratchArena,
-                nullptr,
-                &readbackAcceptedCallback
-            );
-            const Core::QueueSubmissionToken readbackSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(deferredCompiledPlan, m_deferredSurfelGiCounterReadbackTask);
-            if(!readbackSubmissionToken.valid()){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred surfel counter-readback record/submission was rejected"));
-            }
-            else if(!readbackAccepted || !readbackContext.acceptedStateReady){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: accepted surfel counter-readback tail lost its retained state"));
-                failFrameRenderRecovery();
-                return;
-            }
-            else{
-                // Publish only after retained state commits.
-                NWB_ASSERT(m_raytracingSystem.surfelCountReadbackSubmissionMatches(readbackSubmissionToken));
-            }
-        }
-    }
-
-    if(requestsLaggedLightingHistoryCapture && !captureLaggedLightingHistory){
-        // Present already completed; force next frame through bootstrap.
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred lagged lighting-history tail was unavailable; reverting to current-frame lighting"));
-        invalidateLaggedLightingHistorySubmission();
-    }
-    else if(captureLaggedLightingHistory){
-        // The history copy depends on Present; publication needs accepted presentation.
-        if(
-            !finalPresentationSubmissionToken.valid()
-            || !m_deferredLightingTaskGraphScheduled
-            || !m_deferredLaggedLightingHistoryTask.valid()
-            || !taskIsCompiled(m_deferredLaggedLightingHistoryTask)
-            || !deferredLaggedLightingHistoryQueue
-            || (static_cast<u8>(deferredLaggedLightingHistoryQueue->capabilities) & static_cast<u8>(Core::GpuQueueCapability::Transfer)) == 0u
-        ){
-            if(m_deferredLightingTaskGraphScheduled){
-                if(!m_deferredLightingSubmissionTransaction.discardUnaccepted(m_deferredLightingTaskGraph, m_deferredLightingCompiledGraph, m_deferredLightingRecordedGraph.recordingAttemptGeneration()))
-                    m_graphics.requestDeviceRecreation();
-            }
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred lagged lighting-history tail was unavailable; reverting to current-frame lighting"));
-            invalidateLaggedLightingHistorySubmission();
-        }
-        else{
-            Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
-            Core::GpuPersistentResourceStateCache::Candidate shadowHistoryReturnStateCandidate(m_shadowVisibilityReturnState);
-            Core::GpuPersistentResourceStateCache::Candidate causticHistoryReturnStateCandidate(m_causticIrradianceReturnState);
-            Core::GpuPersistentResourceStateCache::Candidate surfelHistoryReturnStateCandidate(m_surfelIrradianceReturnState);
-            FrameExecuteHistoryCopy::Context historyCopyAcceptance{
-                .scratchArena = scratchArena,
-                .renderer = MakeNotNull(this),
-                .targets = MakeNotNull(&deferredTargets),
-                .shadowStateCandidate = MakeNotNull(&shadowHistoryReturnStateCandidate),
-                .causticStateCandidate = MakeNotNull(&causticHistoryReturnStateCandidate),
-                .surfelStateCandidate = MakeNotNull(&surfelHistoryReturnStateCandidate),
-            };
-            const Core::GpuTaskGraphTaskRecordedCallback historyCopyRecordedCallback{ .task = m_deferredLaggedLightingHistoryTask, .context = &historyCopyAcceptance, .invoke = FrameExecuteHistoryCopy::PrepareHistoryCopyFinalState, };
-            const Core::GpuTaskGraphTaskAcceptedCallback historyCopyAcceptedCallback{ .task = m_deferredLaggedLightingHistoryTask, .context = &historyCopyAcceptance, .invoke = FrameExecuteHistoryCopy::AcceptHistoryCopyFinalState, };
-            const Core::GpuTaskScheduler& scheduler = m_graphics.gpuTasks();
-            const bool historyCopyAccepted = scheduler.executeTask(
-                m_deferredLightingTaskGraph,
-                m_deferredLightingCompiledGraph,
-                m_deferredLightingRecordedGraph,
-                m_deferredLaggedLightingHistoryTask,
-                &historyCopyRecordedCallback,
-                m_deferredLightingSubmissionTransaction,
-                &m_graphics.gpuTiming(),
-                scratchArena,
-                nullptr,
-                &historyCopyAcceptedCallback
-            );
-            const Core::QueueSubmissionToken historyCopySubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(deferredCompiledPlan, m_deferredLaggedLightingHistoryTask);
-            if(historyCopySubmissionToken.valid() && (!historyCopyAccepted || !historyCopyAcceptance.acceptedStateReady)){
-                if(!executeFrameRecoveryTask())
-                    failFrameRenderRecovery();
-                // The accepted copy cannot be replayed.
-                failFrameRenderRecovery();
-                return;
-            }
-            if(!historyCopyAccepted || !historyCopySubmissionToken.valid()){
-                if(!m_deferredLightingSubmissionTransaction.discardUnaccepted(m_deferredLightingTaskGraph, m_deferredLightingCompiledGraph, m_deferredLightingRecordedGraph.recordingAttemptGeneration()))
-                    m_graphics.requestDeviceRecreation();
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: graph-owned lagged lighting-history capture record/submission was rejected; reverting to current-frame lighting"));
-                invalidateLaggedLightingHistorySubmission();
-            }
-            else{
-                // The accepted hook publishes this token; keep the assertion here.
-                NWB_ASSERT(m_laggedLightingHistorySubmissionToken.queue == historyCopySubmissionToken.queue && m_laggedLightingHistorySubmissionToken.value == historyCopySubmissionToken.value);
-                if(!laggedAsyncLightingSchedule){
-                    reportLaggedLightingTransition(LaggedLightingReport::BootstrapAccepted, deferredTargets.laggedLightingHistory.generation);
-                }
-            }
-        }
-    }
+    FrameExecutePresentTails presentTails(*this, recovery, deferredCompiledPlan, finalPresentationSubmissionToken);
+    if(!presentTails.executeSurfelCounterReadback(surfelGiCounterReadbackQueue, lifecycles.surfelGiCounterBuffers, LengthOf(lifecycles.surfelGiCounterBuffers)))
+        return;
+    presentTails.executeLaggedLightingHistoryCapture(deferredTargets, deferredLaggedLightingHistoryQueue, requestsLaggedLightingHistoryCapture, captureLaggedLightingHistory, laggedAsyncLightingSchedule);
 }
 
 

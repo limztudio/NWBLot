@@ -22,6 +22,8 @@ if(NWB_BUILD_PIPELINE)
         "${CMAKE_CURRENT_LIST_DIR}/bind.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/bind_parse.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/bind_typed_layout.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/bind_typed_value.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/bind_typed_value.h"
         "${CMAKE_CURRENT_LIST_DIR}/asset.h"
         "${CMAKE_CURRENT_LIST_DIR}/cook.h"
         "${CMAKE_CURRENT_LIST_DIR}/cook_private.h"

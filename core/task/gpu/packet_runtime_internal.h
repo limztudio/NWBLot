@@ -93,7 +93,7 @@ private:
         GpuCommandIrCapture* commandIrCapture,
         u64 recordingWorkerDomain = 0u,
         u32 recordingWorkerIndex = 0u,
-        GpuTaskGraph::PacketRecordingAbort* deferredAbort = nullptr
+        GpuPacketRecordingAbort* deferredAbort = nullptr
     )const;
     [[nodiscard]] bool prepareRecordingAttempt(
         const GpuTaskGraph& graph,
@@ -110,7 +110,7 @@ private:
         const GpuTaskGraph::DeclarationReadView& declarationAccess,
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
-        const GpuTaskGraph::PacketRecordingAccess& recordingAccess,
+        const GpuPacketRecordingAccess& recordingAccess,
         GpuSubmissionPacketId packet,
         Alloc::ScratchArena& stateFanInScratchArena,
         const CommandListResourceStateHandoff* initialStates

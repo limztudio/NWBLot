@@ -18,7 +18,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTaskGraph::applyCompiledBarrier(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const PacketRecordingAccess& recordingAccess, const GpuTaskId& task, const GpuCompiledBarrier& barrier, CommandList& commandList)const{
+bool GpuTaskGraph::applyCompiledBarrier(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuPacketRecordingAccess& recordingAccess, const GpuTaskId& task, const GpuCompiledBarrier& barrier, CommandList& commandList)const{
     if(!recordingAccess.validForTask(*this, compiledGraph, planAccess, task) || !validResource(barrier.resource) || barrier.type >= GpuCompiledBarrierType::kCount)
         return false;
 
@@ -175,7 +175,7 @@ bool GpuTaskGraph::applyCompiledBarrier(const GpuCompiledGraph& compiledGraph, c
     }
 }
 
-bool GpuTaskGraph::seedTaskRetainedResourceStates(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const PacketRecordingAccess& recordingAccess, const GpuTaskId& taskID, CommandList& commandList)const{
+bool GpuTaskGraph::seedTaskRetainedResourceStates(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuPacketRecordingAccess& recordingAccess, const GpuTaskId& taskID, CommandList& commandList)const{
     if(!recordingAccess.validForTask(*this, compiledGraph, planAccess, taskID) || !validTask(taskID))
         return false;
 

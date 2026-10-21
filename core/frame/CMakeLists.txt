@@ -10,6 +10,8 @@ target_sources(nwb_frame PRIVATE
 if(WIN32)
     target_sources(nwb_frame PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/win32.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/win32_input.h"
+        "${CMAKE_CURRENT_LIST_DIR}/win32_input.cpp"
     )
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_sources(nwb_frame PRIVATE

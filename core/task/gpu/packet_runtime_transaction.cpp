@@ -32,7 +32,7 @@ public:
         const GpuCompiledGraph::ReadView& planAccess,
         const GpuSubmissionPacketId packet,
         const QueueSubmissionToken& token,
-        GpuTaskGraph::PacketSubmissionLease& lease,
+        GpuPacketSubmissionLease& lease,
         const NativeSubmissionInfo& nativeSubmissionInfo,
         const NotNull<GpuTimingSubmissionTicket*>* const timingTickets,
         const usize timingTicketCount
@@ -78,7 +78,7 @@ private:
     GpuTaskGraph& m_graph;
     const GpuCompiledGraph& m_compiledGraph;
     const GpuCompiledGraph::ReadView& m_planAccess;
-    GpuTaskGraph::PacketSubmissionLease& m_lease;
+    GpuPacketSubmissionLease& m_lease;
     const QueueSubmissionToken m_token;
     const NativeSubmissionInfo m_nativeSubmissionInfo;
     const NotNull<GpuTimingSubmissionTicket*>* const m_timingTickets = nullptr;
@@ -220,7 +220,7 @@ void GpuGraphSubmissionTransaction::resolveSubmissionBindingIfTerminalLocked(con
         NWB_FATAL_ASSERT_MSG(false, "terminal transaction packets must resolve their exact graph binding");
 }
 
-bool GpuGraphSubmissionTransaction::beginPacketSubmission(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuSubmissionPacketId packetID, const u64 recordingAttemptGeneration, GpuTaskGraph::PacketSubmissionLease& outLease)noexcept{
+bool GpuGraphSubmissionTransaction::beginPacketSubmission(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuSubmissionPacketId packetID, const u64 recordingAttemptGeneration, GpuPacketSubmissionLease& outLease)noexcept{
     GpuCompiledGraph::ReadView planAccess(compiledGraph);
     if(
         !planAccess.valid()
@@ -260,7 +260,7 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
     const GpuCompiledGraph& compiledGraph,
     const GpuSubmissionPacketId packetID,
     const QueueSubmissionToken& token,
-    GpuTaskGraph::PacketSubmissionLease& lease,
+    GpuPacketSubmissionLease& lease,
     const NativeSubmissionInfo& nativeSubmissionInfo,
     const NotNull<GpuTimingSubmissionTicket*>* const timingTickets,
     const usize timingTicketCount,

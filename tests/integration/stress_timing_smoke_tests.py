@@ -1,24 +1,18 @@
 #!/usr/bin/env python3
 """Strict presentation measurement replay and acquisition failure retention; never launch a renderer."""
 
+
 import json
 from pathlib import Path
-import subprocess
 import sys
 from tempfile import TemporaryDirectory
-from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import stress_timing_smoke as smoke
+from stress_timing_test_support import shadow_quality_record, shadow_record, stress_arguments, valid_log, workload_record
 
-LIT_ALL_REJECTED = "all_rejected"
-LIT_QUERY_BUDGET_UNITS_PER_HARDWARE_RAY = "query_budget_units_per_hardware_ray"
-LIT_MALFORMED = "malformed"
-LIT_RESULT_JSON = "result.json"
-LIT_OBSERVED_FPS = "observed_fps"
-LIT_ERROR = "error"
 
 LIT_QUARTER = "quarter"
 LIT_REFERENCE_THREE = "reference_three"
@@ -28,8 +22,6 @@ LIT_REFERENCE_GRID9 = "reference_grid9"
 LIT_EVERY_FRAME = "every_frame"
 LIT_SURFELGIQUALITYSMOKE_REQUESTED_RESOLVE = "SurfelGiQualitySmoke: requested resolve_factor=4"
 LIT_RENDERERSYSTEM_DISPATCHED_SURFEL_GI_RE = "RendererSystem: dispatched surfel GI resolve (factor=4, source=1280x900, resolve=320x225)"
-LIT_N_96 = "96"
-LIT_FPS_16_PRESENTATIONS_480_SECONDS_30_FI = "fps=16 presentations=480 seconds=30 first=80 last=560"
 LIT_RENDERER_EXE = "renderer.exe"
 LIT_EXECUTABLE = "--executable"
 LIT_WORKING_DIRECTORY = "--working-directory"
@@ -81,7 +73,6 @@ LIT_PATH = "PATH"
 LIT_KEPT = "kept"
 LIT_EMPTY = "  "
 LIT_OBSERVED = "observed"
-LIT_FPS = "fps"
 LIT_SOFTWARE_SHADOW_SETTINGS_MISMATCH = "software shadow settings mismatch"
 LIT_CENTER1 = "center1"
 LIT_BLOCKER_SEARCH = "blocker_search"
@@ -100,26 +91,6 @@ LIT_LAUNCH_TESTBED = "launch_testbed"
 LIT_TERMINATE_PROCESS = "terminate_process"
 LIT_SHUTDOWN_LOGSERVER_AND_COLLECT = "shutdown_logserver_and_collect"
 LIT_DEVICE_MATERIAL_SIGNATURE = "device_material_signature"
-LIT_OPTICAL_REFLECTION = "optical_reflection"
-LIT_STATUS = "status"
-LIT_MEASUREMENT = "measurement"
-LIT_SAMPLE_COUNT = "sample_count"
-LIT_SUMS = "sums"
-LIT_UNSUPPORTED_RATIO = "unsupported_ratio"
-LIT_QUERIES_PER_HARDWARE_RAY = "physical_queries_per_hardware_ray"
-LIT_EXTERIOR_ELIGIBLE_RATIO = "exterior_eligible_ratio"
-LIT_RANGES_BY_GENERATION = "ranges_by_generation"
-LIT_GENERATION = "generation"
-LIT_UNSUPPORTED = "unsupported"
-LIT_HARDWARE_READY_SAMPLES = "hardware_ready_samples"
-LIT_UNSUPPORTED_PATHS_10 = " unsupported_paths=10"
-LIT_EXTRA_0 = " extra=0"
-LIT_QUERY_BUDGET_UNITS_0 = "query_budget_units=0"
-LIT_REFLECTION_SCREEN_STEPS = "--reflection-screen-steps"
-LIT_NWB_REFLECTION_SCREEN_STEPS = "NWB_REFLECTION_SCREEN_STEPS"
-LIT_SCREEN_WORK_MEASURED = "screen_work_measured"
-LIT_N_48 = "48"
-LIT_SCREEN = "screen"
 LIT_WORKLOAD = "workload"
 LIT_TOTAL = "total"
 LIT_TOTAL_20 = "total=20"
@@ -131,90 +102,7 @@ LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F = "NWB_RENDERER_BASELINE_CAPTURE_FREE
 LIT_NWB_STRESS_CHARACTERS_PER_CLASS = "NWB_STRESS_CHARACTERS_PER_CLASS"
 LIT_N_10 = "10"
 LIT_ANIMATE = "--animate"
-LIT_PACING = "pacing"
-LIT_COMPLETE_FPS_16 = "complete fps=16"
-LIT_GPUDBG = "--gpudbg"
-LIT_VUID_123 = "VUID-123"
-LIT_NWB_OTHER = "NWB_OTHER"
-LIT_NWB_STRESS_REFLECTION_DIAGNOSTICS = "NWB_STRESS_REFLECTION_DIAGNOSTICS"
-LIT_FAILURE_JSON = "failure.json"
-LIT_KEEP_ME = "keep me"
-LIT_RUNTIME = "runtime"
-LIT_FAILED_PROCESS_OUTPUT = "failed process output"
-LIT_RAW_TIMEOUT_RUNTIME_LOG = "raw timeout runtime log"
-LIT_PROCESS_TAIL_TXT = "process_tail.txt"
-LIT_CAPTURE = "capture"
-LIT_PROCESS_PRESERVED = "process preserved"
-LIT_N_60 = "60"
-LIT_MINIMUM_FPS = "--minimum-fps"
-LIT_PASSED = "passed"
-LIT_CAPTURE_VALIDATED = "capture_validated"
-LIT_PERFORMANCE_TARGET = "performance_target"
-LIT_NAN = "nan"
-LIT_CPU_DIAGNOSTICS = "--cpu-diagnostics"
-LIT_REFLECTION_DIAGNOSTICS = "--reflection-diagnostics"
-LIT_IDENTITY_BEFORE = "identity_before"
-LIT_IDENTITY_AFTER = "identity_after"
-LIT_MINIMUM_FPS_2 = "minimum_fps"
 LIT_MAIN = "__main__"
-
-
-def stress_arguments(runtime, extra=()):
-    executable = runtime / LIT_RENDERER_EXE
-    executable.write_bytes(LIT_FIXTURE.encode(LIT_UTF_8))
-    return smoke.parse_args([LIT_EXECUTABLE, str(executable), LIT_WORKING_DIRECTORY, str(runtime), LIT_NO_LOGSERVER, *extra])
-
-
-def shadow_record(backend=0, directional_resolution=512, point_resolution=256, budget_bytes=268435456, coverage=0, blocker_search=0, capture_cadence=0):
-    return (smoke.SOFTWARE_SHADOW_SETTINGS + f"backend={backend} directional_resolution={directional_resolution} "
-        f"point_resolution={point_resolution} budget_bytes={budget_bytes} coverage={coverage} blocker_search={blocker_search} capture_cadence={capture_cadence}")
-
-
-def shadow_quality_record(sampling=0, factor=4, width=1280, height=900):
-    return (smoke.SHADOW_QUALITY_SETTINGS + f"{sampling} receiver_factor={factor}\n" + smoke.SHADOW_RECEIVER_GRID + f"factor={factor} full={width}x{height} receiver={(width+factor-1)//factor}x{(height+factor-1)//factor}")
-
-
-def workload_record(characters_per_class=10):
-    if characters_per_class == 5:
-        return (smoke.WORKLOAD + "characters_per_class=5 total=10 transparent=5 opaque=5 layout=zigzag_v1 " "rows=2 columns=5 row_spacing_x=1.44 row_stagger_x=0.36 front_z=-0.55 back_z=0.55 body_scale=1 "
-            "camera_x=0 camera_y=1.8 camera_z=-4.8 camera_pitch=0.2 vertical_fov=1.0471976 " "near_plane=0.001 far_plane=10000 aspect=0")
-    return (smoke.WORKLOAD + "characters_per_class=10 total=20 transparent=10 opaque=10 layout=two_rows_v1 " "rows=2 columns=10 row_spacing_x=0.72 row_stagger_x=0.18 front_z=-0.55 back_z=0.55 body_scale=1 "
-        "camera_x=0 camera_y=2.7 camera_z=-7.2 camera_pitch=0.25 vertical_fov=1.0471976 " "near_plane=0.001 far_plane=10000 aspect=0")
-
-
-def valid_log(characters_per_class=10):
-    lines = [marker for marker in smoke.REQUIRED if marker != smoke.SHUTDOWN]
-    lines.append(smoke.SPAWN + f"{characters_per_class * 2} spinning characters ({characters_per_class} transparent + " f"{characters_per_class} opaque) over ground, directional + point light")
-    lines.append(workload_record(characters_per_class))
-    lines.append("RendererSystem: deferred rendering targets ready (1280x900, format test)")
-    # Synthetic fixed simulation delta is 1/60, while genuine wall/count evidence yields 16 FPS.
-    lines.append("Fixture: fixed simulation delta 0.016666667")
-    lines.append("CausticQualitySmoke: requested photon_grid_divisor=1")
-    lines.append(LIT_SURFELGIQUALITYSMOKE_REQUESTED_RESOLVE)
-    lines.append(LIT_RENDERERSYSTEM_DISPATCHED_SURFEL_GI_RE)
-    lines.append("RendererSystem: dispatched hardware caustic producer (131072 photons/frame, 2 temporal phases, " "262144 full-grid budget, 2 caustic lights, 10 refractive instances)")
-    lines.append(shadow_quality_record())
-    lines.append(smoke.REFLECTION_QUALITY_SETTINGS + LIT_N_96)
-    for index in range(60):
-        lines.append(smoke.INTERVAL + f"avg=16 presentations=8 seconds=0.5 first={80+8*index} last={88+8*index}")
-    lines.append(smoke.LIT_STRESSTESTSMOKEPROJECT_PRESENTATION_PA + "samples=480 p50ms=62.5 p95ms=70.0 maxms=120.0 stalls50ms=3")
-    lines.append(smoke.DONE + LIT_FPS_16_PRESENTATIONS_480_SECONDS_30_FI)
-    lines.append(smoke.SHUTDOWN)
-    return "\n\n".join(lines) + "\n"
-
-
-def reflection_record(**changes):
-    row = dict(sequence=1, generation=1, frame=10, graphics_frame=10, hardware_ready=1, transport_enabled=1, candidates=10, hardware_rays=10, exterior_eligible_rays=0, query_budget_units=0, physical_queries=0, bootstrap_events=0,
-        transparent_paths=0, unsupported_paths=10, screen_attempts=0, screen_hits=0, screen_returns=0, screen_iterations=0, screen_limit_misses=0)
-    row.update(changes)
-    return ("StressReflectionStatistics: sequence={sequence} generation={generation} frame={frame} " "graphics_frame={graphics_frame} hardware_ready={hardware_ready} transport_enabled={transport_enabled} "
-        "candidates={candidates} hardware_rays={hardware_rays} exterior_eligible_rays={exterior_eligible_rays} " "query_budget_units={query_budget_units} physical_queries={physical_queries} bootstrap_events={bootstrap_events} "
-        "transparent_paths={transparent_paths} unsupported_paths={unsupported_paths} " "screen_attempts={screen_attempts} screen_hits={screen_hits} screen_returns={screen_returns} "
-        "screen_iterations={screen_iterations} screen_limit_misses={screen_limit_misses}").format(**row)
-
-
-def reflection_log(*records):
-    return valid_log().replace(smoke.START, smoke.REFLECTION_ENABLED + "\n" + smoke.START).replace(smoke.SHUTDOWN, "\n".join(records) + "\n" + smoke.SHUTDOWN)
 
 
 class StressSoftwareShadowSettingsTests(unittest.TestCase):
@@ -438,153 +326,6 @@ class StressSoftwareShadowSettingsTests(unittest.TestCase):
         self.assertEqual((self.output / LIT_RUNTIME_LOG).read_text(encoding=LIT_UTF_8), text)
 
 
-class StressReflectionDiagnosticTests(unittest.TestCase):
-    def test_unrequested_reflection_evidence_is_rejected(self):
-        with self.assertRaisesRegex(smoke.SmokeFailure, "unrequested reflection"):
-            smoke.parse_runtime_log(reflection_log(reflection_record()), 0)
-
-    def test_all_rejected_reflections_are_exposed_without_changing_presentation_result(self):
-        text = reflection_log(reflection_record(sequence=3, frame=11, graphics_frame=14), reflection_record(sequence=7, frame=15, graphics_frame=18))
-        result = smoke.parse_runtime_log(text, 0, reflection_diagnostics=True)
-        optical = result[LIT_OPTICAL_REFLECTION]
-        self.assertEqual(optical[LIT_STATUS], LIT_ALL_REJECTED)
-        self.assertEqual(optical[LIT_SAMPLE_COUNT], 2)
-        self.assertEqual(optical[LIT_SUMS]["hardware_rays"], 20)
-        self.assertEqual(optical[LIT_SUMS]["unsupported_paths"], 20)
-        self.assertEqual(optical[LIT_UNSUPPORTED_RATIO], 1.)
-        self.assertEqual(optical[LIT_QUERIES_PER_HARDWARE_RAY], 0.)
-        self.assertEqual(optical[LIT_EXTERIOR_ELIGIBLE_RATIO], 0.)
-
-    def test_partial_unsupported_ratios_are_weighted_by_admitted_rays(self):
-        text = reflection_log(reflection_record(candidates=1, hardware_rays=1, unsupported_paths=1), reflection_record(sequence=2, frame=11, graphics_frame=11, candidates=9, hardware_rays=9,
-                query_budget_units=18, physical_queries=18, bootstrap_events=23, transparent_paths=3, exterior_eligible_rays=6, unsupported_paths=0))
-        optical = smoke.parse_runtime_log(text, 0, reflection_diagnostics=True)[LIT_OPTICAL_REFLECTION]
-        self.assertEqual(optical[LIT_STATUS], LIT_UNSUPPORTED)
-        self.assertAlmostEqual(optical[LIT_UNSUPPORTED_RATIO], .1)
-        self.assertAlmostEqual(optical[LIT_EXTERIOR_ELIGIBLE_RATIO], .6)
-        self.assertAlmostEqual(optical[LIT_QUERIES_PER_HARDWARE_RAY], 1.8)
-
-    def test_queries_are_observations_not_a_complete_optical_support_claim(self):
-        for unsupported, expected in ((0, "queries_observed"), (10, LIT_UNSUPPORTED)):
-            with self.subTest(unsupported=unsupported):
-                text = reflection_log(reflection_record(query_budget_units=20, physical_queries=20, bootstrap_events=4, transparent_paths=2, unsupported_paths=unsupported))
-                optical = smoke.parse_runtime_log(text, 0, reflection_diagnostics=True)[LIT_OPTICAL_REFLECTION]
-                self.assertEqual(optical[LIT_STATUS], expected)
-                self.assertEqual(optical[LIT_QUERIES_PER_HARDWARE_RAY], 2.)
-
-    def test_budget_reservation_cannot_be_reported_as_a_physical_query(self):
-        text = reflection_log(reflection_record(query_budget_units=10, physical_queries=0))
-        optical = smoke.parse_runtime_log(text, 0, reflection_diagnostics=True)[LIT_OPTICAL_REFLECTION]
-        self.assertEqual(optical[LIT_STATUS], LIT_ALL_REJECTED)
-        self.assertEqual(optical[LIT_QUERY_BUDGET_UNITS_PER_HARDWARE_RAY], 1.)
-        self.assertEqual(optical[LIT_QUERIES_PER_HARDWARE_RAY], 0.)
-
-    def test_zero_ray_samples_do_not_produce_false_support_or_zero_ratios(self):
-        text = reflection_log(reflection_record(hardware_ready=0, transport_enabled=0, candidates=0, hardware_rays=0, unsupported_paths=0))
-        optical = smoke.parse_runtime_log(text, 0, reflection_diagnostics=True)[LIT_OPTICAL_REFLECTION]
-        self.assertEqual(optical[LIT_STATUS], "no_queries")
-        self.assertIsNone(optical[LIT_UNSUPPORTED_RATIO])
-        self.assertIsNone(optical[LIT_EXTERIOR_ELIGIBLE_RATIO])
-        self.assertIsNone(optical[LIT_QUERIES_PER_HARDWARE_RAY])
-        self.assertEqual(optical[LIT_HARDWARE_READY_SAMPLES], 0)
-
-    def test_requested_diagnostics_require_enablement_and_samples_before_shutdown(self):
-        valid = reflection_log(reflection_record())
-        variants = (valid_log(), reflection_log(), valid.replace(smoke.REFLECTION_ENABLED, ""), valid + smoke.REFLECTION_ENABLED, valid.replace(reflection_record(), "") + reflection_record(), reflection_record() + "\n" + valid.replace(reflection_record(), ""))
-        for text in variants:
-            with self.subTest(text=text[-140:]), self.assertRaises(smoke.SmokeFailure):
-                smoke.parse_runtime_log(text, 0, reflection_diagnostics=True)
-
-    def test_duplicate_regressing_and_revisited_generations_are_rejected(self):
-        first = reflection_record()
-        variants = ((first, first), (reflection_record(sequence=4), reflection_record(sequence=3, frame=11, graphics_frame=11)), (first, reflection_record(sequence=2)),
-            (first, reflection_record(generation=2), reflection_record(sequence=2, frame=11, graphics_frame=11)))
-        for rows in variants:
-            with self.subTest(rows=rows), self.assertRaises(smoke.SmokeFailure):
-                smoke.parse_runtime_log(reflection_log(*rows), 0, reflection_diagnostics=True)
-        optical = smoke.parse_runtime_log(reflection_log(first, reflection_record(generation=2)), 0, reflection_diagnostics=True)[LIT_OPTICAL_REFLECTION]
-        self.assertEqual([row[LIT_GENERATION] for row in optical[LIT_RANGES_BY_GENERATION]], [1, 2])
-
-    def test_numeric_bounds_flags_and_impossible_counter_relationships_are_rejected(self):
-        variants = (dict(sequence=0), dict(generation=0), dict(sequence=2 ** 64), dict(frame=2 ** 32), dict(graphics_frame=2 ** 64), dict(query_budget_units=2 ** 32), dict(physical_queries=2 ** 32), dict(physical_queries=1), dict(hardware_ready=2),
-            dict(transport_enabled=2), dict(hardware_ready=0), dict(transport_enabled=0), dict(candidates=9), dict(exterior_eligible_rays=11), dict(transparent_paths=11, query_budget_units=20),
-            dict(unsupported_paths=11), dict(bootstrap_events=1), dict(transparent_paths=1), dict(hardware_rays=0, unsupported_paths=0, query_budget_units=1))
-        for change in variants:
-            with self.subTest(change=change), self.assertRaises(smoke.SmokeFailure):
-                smoke.parse_runtime_log(reflection_log(reflection_record(**change)), 0, reflection_diagnostics=True)
-
-    def test_missing_duplicate_extra_and_noninteger_fields_are_rejected(self):
-        valid = reflection_record()
-        variants = (valid.replace(LIT_UNSUPPORTED_PATHS_10, ""), valid + LIT_UNSUPPORTED_PATHS_10, valid + LIT_EXTRA_0, valid.replace(LIT_QUERY_BUDGET_UNITS_0, "query_budget_units=-1"), valid.replace(LIT_QUERY_BUDGET_UNITS_0, "query_budget_units=nan"))
-        for record in variants:
-            with self.subTest(record=record), self.assertRaises(smoke.SmokeFailure):
-                smoke.parse_runtime_log(reflection_log(record), 0, reflection_diagnostics=True)
-
-
-class StressReflectionQualityTests(unittest.TestCase):
-    def test_explicit_steps_validate_and_replace_inherited_environment(self):
-        with TemporaryDirectory() as temporary:
-            output = Path(temporary)
-            executable = output / LIT_RENDERER_EXE
-            executable.write_bytes(LIT_FIXTURE.encode(LIT_UTF_8))
-            required = [LIT_EXECUTABLE, str(executable), LIT_WORKING_DIRECTORY, str(output), LIT_NO_LOGSERVER]
-            for steps in (8, 256):
-                args = smoke.parse_args(required + [LIT_REFLECTION_SCREEN_STEPS, str(steps)])
-                env = smoke.launch_environment({LIT_NWB_REFLECTION_SCREEN_STEPS: "1"}, args, output)
-                self.assertEqual(env[LIT_NWB_REFLECTION_SCREEN_STEPS], str(steps))
-                result = smoke.verify_reflection_quality_settings(smoke.REFLECTION_QUALITY_SETTINGS + str(steps), args, {})
-                self.assertTrue(result[LIT_VERIFIED])
-            for invalid in ("0", "7", "257", LIT_N_1, "48.5", LIT_BAD):
-                with patch(LIT_SYS_STDERR), self.assertRaises(SystemExit):
-                    smoke.parse_args(required + [LIT_REFLECTION_SCREEN_STEPS, invalid])
-
-    def test_applied_budget_missing_duplicate_malformed_and_mismatch_fail(self):
-        args = SimpleNamespace(reflection_screen_steps=48, reflection_diagnostics=False)
-        good = smoke.REFLECTION_QUALITY_SETTINGS + LIT_N_48
-        for bad in ("", good + "\n" + good, good + LIT_EXTRA_0, smoke.REFLECTION_QUALITY_SETTINGS + LIT_N_96):
-            with self.subTest(bad=bad), self.assertRaises(smoke.SmokeFailure):
-                smoke.verify_reflection_quality_settings(bad, args, {})
-
-    def test_actual_software_screen_work_is_independent_of_hardware_counters(self):
-        row = reflection_record(hardware_ready=0, transport_enabled=0, candidates=0, hardware_rays=0, unsupported_paths=0, screen_attempts=20, screen_hits=2, screen_returns=4, screen_iterations=640, screen_limit_misses=10)
-        text = reflection_log(row)
-        optical = smoke.parse_runtime_log(text, 0, reflection_diagnostics=True)[LIT_OPTICAL_REFLECTION]
-        self.assertEqual(optical[LIT_HARDWARE_READY_SAMPLES], 0)
-        self.assertEqual(optical[LIT_SCREEN]["iterations_per_attempt"], 32)
-        self.assertEqual(optical[LIT_SCREEN]["limit_miss_ratio"], .5)
-        self.assertEqual(optical[LIT_SCREEN]["return_ratio"], .2)
-        args = SimpleNamespace(reflection_screen_steps=48, reflection_diagnostics=True)
-        self.assertTrue(smoke.verify_reflection_quality_settings(smoke.REFLECTION_QUALITY_SETTINGS + LIT_N_48, args, optical)[LIT_SCREEN_WORK_MEASURED])
-        args.reflection_screen_steps = 8
-        with self.assertRaisesRegex(smoke.SmokeFailure, "exceeds"):
-            smoke.verify_reflection_quality_settings(smoke.REFLECTION_QUALITY_SETTINGS + "8", args, optical)
-
-    def test_missing_screen_counters_reject_and_complete_current_records_recover(self):
-        current = reflection_record(screen_attempts=1, screen_returns=1, screen_iterations=96)
-        fields = current.split()
-        for field in smoke.REFLECTION_SCREEN_FIELDS:
-            missing = " ".join(value for value in fields if not value.startswith(field + "="))
-            with self.subTest(field=field), self.assertRaisesRegex(smoke.SmokeFailure, LIT_MALFORMED):
-                smoke.parse_runtime_log(reflection_log(missing), 0, reflection_diagnostics=True)
-        without_screen = " ".join(value for value in fields if not any(value.startswith(field + "=") for field in smoke.REFLECTION_SCREEN_FIELDS))
-        with self.assertRaisesRegex(smoke.SmokeFailure, LIT_MALFORMED):
-            smoke.parse_runtime_log(reflection_log(without_screen), 0, reflection_diagnostics=True)
-        optical = smoke.parse_runtime_log(reflection_log(current), 0, reflection_diagnostics=True)[LIT_OPTICAL_REFLECTION]
-        self.assertEqual(optical[LIT_SCREEN][LIT_SAMPLE_COUNT], 1)
-        args = SimpleNamespace(reflection_screen_steps=96, reflection_diagnostics=True)
-        self.assertTrue(smoke.verify_reflection_quality_settings(smoke.REFLECTION_QUALITY_SETTINGS + LIT_N_96, args, optical)[LIT_SCREEN_WORK_MEASURED])
-
-    def test_malformed_partial_overflow_or_impossible_screen_counters_fail(self):
-        prefix = reflection_record().split(" " + smoke.REFLECTION_SCREEN_FIELDS[0] + "=")[0]
-        tails = (" screen_attempts=1", " screen_attempts=1 screen_hits=0 screen_returns=0 screen_iterations=0", " screen_attempts=1 screen_hits=2 screen_returns=1 screen_iterations=48 screen_limit_misses=0",
-            " screen_attempts=1 screen_hits=0 screen_returns=2 screen_iterations=48 screen_limit_misses=0", " screen_attempts=1 screen_hits=0 screen_returns=0 screen_iterations=48 screen_limit_misses=2",
-            " screen_attempts=0 screen_hits=0 screen_returns=0 screen_iterations=1 screen_limit_misses=0", " screen_attempts=1 screen_hits=0 screen_returns=0 screen_iterations=257 screen_limit_misses=0",
-            " screen_attempts=4294967296 screen_hits=0 screen_returns=0 screen_iterations=0 screen_limit_misses=0", " screen_attempts=1 screen_hits=0 screen_returns=0 screen_iterations=18446744073709551616 screen_limit_misses=0")
-        for tail in tails:
-            with self.subTest(tail=tail), self.assertRaises(smoke.SmokeFailure):
-                smoke.parse_runtime_log(reflection_log(prefix + tail), 0, reflection_diagnostics=True)
-
-
 class StressWorkloadTests(unittest.TestCase):
 
 
@@ -647,224 +388,6 @@ class StressMotionTests(unittest.TestCase):
             for extra in (["--spin-angle", ".6"], ["--fixed-delta-seconds", ".016666667"]):
                 with self.subTest(extra=extra), patch(LIT_SYS_STDERR), self.assertRaises(SystemExit):
                     smoke.parse_args(argv + [LIT_ANIMATE] + extra)
-
-
-class StressMeasurementTests(unittest.TestCase):
-    def test_current_pacing_summary_requires_exactly_one_ordered_record(self):
-        paced = valid_log()
-        record = next(line for line in paced.splitlines() if line.startswith(smoke.LIT_STRESSTESTSMOKEPROJECT_PRESENTATION_PA))
-        self.assertEqual(smoke.parse_runtime_log(paced, 0)[LIT_PACING]["samples"], 480)
-        missing = paced.replace(record, "")
-        for invalid in (missing, paced + record, missing + record, missing.replace(smoke.START, record + "\n" + smoke.START), paced.replace("p50ms=62.5 p95ms=70.0", "p50ms=80.0 p95ms=70.0")):
-            with self.subTest(log=invalid), self.assertRaises(smoke.SmokeFailure):
-                smoke.parse_measurement(invalid)
-
-    def test_bad_exit_rejected_even_with_complete_log(self):
-        with self.assertRaises(smoke.SmokeFailure):
-            smoke.parse_runtime_log(valid_log(), 1)
-
-    def test_rejects_timing_sample_rate_in_place_of_presentation_rate(self):
-        with self.assertRaisesRegex(smoke.SmokeFailure, "count divided"):
-            smoke.parse_measurement(valid_log().replace(LIT_COMPLETE_FPS_16, "complete fps=10.7"))
-
-    def test_counts_positive_exact_bounded_and_rates_finite(self):
-        for old, new in (("presentations=480", "presentations=479"), (LIT_FPS_16_PRESENTATIONS_480_SECONDS_30_FI, "fps=0 presentations=0 seconds=30 first=80 last=80"), (LIT_COMPLETE_FPS_16, "complete fps=nan"), ("seconds=30", "seconds=inf"),
-            ("last=560", "last=18446744073709551616")):
-            with self.subTest(new=new), self.assertRaises(smoke.SmokeFailure):
-                smoke.parse_measurement(valid_log().replace(old, new))
-
-    def test_requires_full_wall_window(self):
-        with self.assertRaises(smoke.SmokeFailure):
-            smoke.parse_measurement(valid_log().replace("fps=16 presentations=480 seconds=30", "fps=16.551724137931034 presentations=480 seconds=29"))
-
-    def test_duplicate_missing_or_out_of_order_markers_rejected(self):
-        for text in (valid_log() + smoke.START, valid_log().replace(smoke.START, ""), valid_log() + smoke.DONE + LIT_FPS_16_PRESENTATIONS_480_SECONDS_30_FI,
-            valid_log().replace(smoke.SHUTDOWN, ""), smoke.SHUTDOWN + "\n" + valid_log().replace(smoke.SHUTDOWN, "")):
-            with self.subTest(text=text[-100:]), self.assertRaises(smoke.SmokeFailure):
-                smoke.parse_measurement(text)
-
-    def test_interval_count_chain_and_wall_sum_are_load_bearing(self):
-        for old, new in (("first=88 last=96", "first=89 last=97"), ("avg=16 presentations=8 seconds=0.5 first=80", "avg=8 presentations=8 seconds=1 first=80")):
-            with self.subTest(new=new), self.assertRaises(smoke.SmokeFailure):
-                smoke.parse_measurement(valid_log().replace(old, new))
-
-    def test_actual_gpu_debug_markers_required_only_when_requested(self):
-        with self.assertRaises(smoke.SmokeFailure):
-            smoke.parse_runtime_log(valid_log(), 0, [LIT_GPUDBG])
-        text = "\n".join("    " + marker + "   " for marker in smoke.GPU_DEBUG) + "\n" + valid_log()
-        smoke.parse_runtime_log(text, 0, [LIT_GPUDBG])
-
-    def test_errors_and_incomplete_or_suspended_measurements_rejected(self):
-        for marker in ("[ERROR] GPU broke", LIT_VUID_123, "presentation measurement incomplete", "render submission suspended"):
-            with self.subTest(marker=marker), self.assertRaises(smoke.SmokeFailure):
-                smoke.parse_measurement(valid_log() + marker)
-
-    def test_environment_replaces_inherited_capture_controls(self):
-        runtime = Path(self.enterContext(TemporaryDirectory()))
-        args = stress_arguments(runtime)
-        env = smoke.launch_environment({LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: LIT_N_96, LIT_NWB_STRESS_TEST_SPIN_ANGLE: "2", LIT_NWB_OTHER: LIT_BAD,
-            LIT_NWB_STRESS_REFLECTION_DIAGNOSTICS: "1", LIT_NWB_STRESS_CHARACTERS_PER_CLASS: "5", LIT_PATH: LIT_KEPT}, args, Path("trial"))
-        self.assertNotIn(LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F, env)
-        self.assertNotIn(LIT_NWB_OTHER, env)
-        self.assertEqual(env[LIT_NWB_STRESS_TEST_SPIN_ANGLE], "0.6")
-        self.assertEqual(env[LIT_NWB_STRESS_CHARACTERS_PER_CLASS], LIT_N_10)
-        self.assertEqual(env[LIT_PATH], LIT_KEPT)
-        self.assertNotIn(LIT_NWB_STRESS_REFLECTION_DIAGNOSTICS, env)
-
-    def test_output_guard_preserves_prior_evidence_and_rejects_input_overlap(self):
-        with TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            old = root / "old"
-            old.mkdir()
-            evidence = old / LIT_FAILURE_JSON
-            evidence.write_text(LIT_KEEP_ME, encoding=LIT_UTF_8)
-            with self.assertRaises(smoke.SmokeFailure):
-                smoke.reserve_output(old, [])
-            self.assertEqual(evidence.read_text(encoding=LIT_UTF_8), LIT_KEEP_ME)
-            protected = root / LIT_RUNTIME
-            protected.mkdir()
-            with self.assertRaises(smoke.SmokeFailure):
-                smoke.reserve_output(protected / "new", [protected])
-
-    def test_timeout_preserves_raw_failure_log_and_original_failure(self):
-        with TemporaryDirectory() as temporary:
-            output = Path(temporary)
-            args = stress_arguments(output, ["--timeout", "90"])
-            process = Mock()
-            process.wait.side_effect = subprocess.TimeoutExpired("app", 90)
-            with patch.object(smoke, LIT_IDENTITIES, return_value={}), \
-                patch.object(smoke, LIT_BUILD_LAUNCH_ENVIRONMENT, return_value={}), \
-                patch.object(smoke, LIT_LAUNCH_LOGSERVER, return_value=(None, None, output, {}, LIT_LOG)), \
-                patch.object(smoke, LIT_LAUNCH_TESTBED, return_value=process), \
-                patch.object(smoke, LIT_TERMINATE_PROCESS, return_value=(1, LIT_FAILED_PROCESS_OUTPUT)), \
-                patch.object(smoke, LIT_SHUTDOWN_LOGSERVER_AND_COLLECT, return_value=LIT_RAW_TIMEOUT_RUNTIME_LOG):
-                with self.assertRaisesRegex(smoke.SmokeFailure, "self-exit"):
-                    smoke.acquire(args, output)
-            self.assertEqual((output / LIT_RUNTIME_LOG).read_text(encoding=LIT_UTF_8), LIT_RAW_TIMEOUT_RUNTIME_LOG)
-            self.assertEqual((output / LIT_PROCESS_TAIL_TXT).read_text(encoding=LIT_UTF_8), LIT_FAILED_PROCESS_OUTPUT)
-
-
-class StressPerformanceTargetTests(unittest.TestCase):
-    def setUp(self):
-        self.temporary = TemporaryDirectory()
-        self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
-        self.runtime = self.root / LIT_RUNTIME
-        self.runtime.mkdir()
-        executable = self.runtime / LIT_RENDERER_EXE
-        executable.write_bytes(b"synthetic")
-        self.argv = [LIT_EXECUTABLE, str(executable), LIT_WORKING_DIRECTORY, str(self.runtime), LIT_NO_LOGSERVER]
-
-    def rate_log(self, fps):
-        count = int(fps / 2)
-        lines = []
-        interval = 0
-        for line in valid_log().splitlines():
-            if line.startswith(smoke.INTERVAL):
-                first = 80 + count * interval
-                line = smoke.INTERVAL + f"avg={fps} presentations={count} seconds=0.5 first={first} last={first+count}"
-                interval += 1
-            elif line.startswith(smoke.DONE):
-                line = smoke.DONE + f"fps={fps} presentations={count*60} seconds=30 first=80 last={80+count*60}"
-            lines.append(line)
-        return shadow_record() + "\n" + "\n".join(lines) + "\n"
-
-    def acquire_or_main(self, extra, text, use_main=False, identities=None):
-        output = self.root / LIT_CAPTURE
-        argv = self.argv + ["--output-directory", str(output)] + extra
-        args = smoke.parse_args(argv)
-        if not use_main:
-            output.mkdir(exist_ok=True)
-        with patch.object(smoke, LIT_IDENTITIES, side_effect=identities, return_value={LIT_VERIFIED: True}), \
-            patch.object(smoke, LIT_BUILD_LAUNCH_ENVIRONMENT, return_value={}), \
-            patch.object(smoke, LIT_LAUNCH_LOGSERVER, return_value=(None, None, output, {}, LIT_LOG)), \
-            patch.object(smoke, LIT_LAUNCH_TESTBED, return_value=Mock()), \
-            patch.object(smoke, LIT_TERMINATE_PROCESS, return_value=(0, LIT_PROCESS_PRESERVED)), \
-            patch.object(smoke, LIT_SHUTDOWN_LOGSERVER_AND_COLLECT, return_value=text), \
-            patch.object(smoke.ab, LIT_DEVICE_MATERIAL_SIGNATURE, return_value={}), patch.object(smoke, "write_status"):
-            return smoke.main(argv) if use_main else smoke.acquire(args, output)
-
-    def test_main_reports_physical_reflection_queries_and_keeps_validated_result(self):
-        row = reflection_record(query_budget_units=20, physical_queries=10, unsupported_paths=0)
-        text = shadow_record() + "\n" + reflection_log(row)
-        self.assertEqual(self.acquire_or_main([LIT_REFLECTION_DIAGNOSTICS], text, use_main=True), 0)
-        output = self.root / LIT_CAPTURE
-        result = json.loads((output / LIT_RESULT_JSON).read_text(encoding=LIT_UTF_8))
-        self.assertTrue(result[LIT_CAPTURE_VALIDATED])
-        self.assertEqual(result[LIT_OPTICAL_REFLECTION][LIT_QUERY_BUDGET_UNITS_PER_HARDWARE_RAY], 2.)
-        self.assertEqual(result[LIT_OPTICAL_REFLECTION][LIT_QUERIES_PER_HARDWARE_RAY], 1.)
-        self.assertFalse((output / LIT_FAILURE_JSON).exists())
-
-    def test_positive_finite_threshold_extremes_are_accepted(self):
-        for threshold in ("5e-324", "1e308"):
-            self.assertEqual(smoke.parse_args(self.argv + [LIT_MINIMUM_FPS, threshold]).minimum_fps, float(threshold))
-
-    def test_invalid_or_diagnostic_threshold_requests_are_rejected(self):
-        for value in ("0", LIT_N_1, LIT_NAN, "inf", "-inf", "1e309", "1e-999", LIT_INVALID):
-            with self.subTest(value=value), patch(LIT_SYS_STDERR), self.assertRaises(SystemExit):
-                smoke.parse_args(self.argv + ["--minimum-fps=" + value])
-        for flags in ([LIT_CPU_DIAGNOSTICS], [LIT_REFLECTION_DIAGNOSTICS], [LIT_CPU_DIAGNOSTICS, LIT_REFLECTION_DIAGNOSTICS]):
-            with self.subTest(flags=flags), patch(LIT_SYS_STDERR), self.assertRaises(SystemExit):
-                smoke.parse_args(self.argv + [LIT_MINIMUM_FPS, LIT_N_60] + flags)
-            self.assertIsNone(smoke.parse_args(self.argv + flags).minimum_fps)
-
-    def test_acquisition_strict_boundary_and_validated_provenance(self):
-        for fps, expected in ((58, False), (60, False), (62, True)):
-            with self.subTest(fps=fps):
-                result = self.acquire_or_main([LIT_MINIMUM_FPS, LIT_N_60], self.rate_log(fps))
-                self.assertEqual(result[LIT_PASSED], expected)
-                self.assertTrue(result[LIT_CAPTURE_VALIDATED])
-
-    def test_rounded_logged_rate_cannot_turn_equal_count_rate_into_pass(self):
-        text = self.rate_log(60).replace("complete fps=60 ", "complete fps=60.00000003 ")
-        result = self.acquire_or_main([LIT_MINIMUM_FPS, LIT_N_60], text)
-        self.assertGreater(result[LIT_MEASUREMENT][LIT_FPS], 60)
-        self.assertEqual(result[LIT_PERFORMANCE_TARGET][LIT_OBSERVED_FPS], 60)
-        self.assertFalse(result[LIT_PASSED])
-
-    def test_ten_positive_intervals_make_a_fast_target_inconclusive(self):
-        rows = iter(smoke.INTERVAL + f"avg={400 if index < 10 else 0} presentations={200 if index < 10 else 0} seconds=0.5 first={80 + 200 * min(index, 10)} last={80 + 200 * min(index + 1, 10)}" for index in range(60))
-        done = smoke.DONE + f"fps={2000 / 30!r} presentations=2000 seconds=30 first=80 last=2080"
-        text = "\n".join(next(rows) if line.startswith(smoke.INTERVAL) else done if line.startswith(smoke.DONE) else line for line in self.rate_log(62).splitlines()) + "\n"
-        self.assertEqual(self.acquire_or_main([LIT_MINIMUM_FPS, LIT_N_60], text, use_main=True), 1)
-        output = self.root / LIT_CAPTURE
-        result = json.loads((output / LIT_RESULT_JSON).read_text())
-        self.assertGreater(result[LIT_PERFORMANCE_TARGET][LIT_OBSERVED_FPS], 60)
-        self.assertTrue(result[LIT_PERFORMANCE_TARGET]["inconclusive"])
-        self.assertIsNone(result[LIT_PERFORMANCE_TARGET][LIT_PASSED])
-        self.assertFalse(result[LIT_PASSED])
-        self.assertIn("INCONCLUSIVE: 10 positive", json.loads((output / LIT_FAILURE_JSON).read_text())[LIT_ERROR])
-
-    def test_main_retains_fully_validated_result_and_separate_target_failure(self):
-        text = self.rate_log(60)
-        self.assertEqual(self.acquire_or_main([LIT_MINIMUM_FPS, LIT_N_60], text, use_main=True), 1)
-        output = self.root / LIT_CAPTURE
-        result = json.loads((output / LIT_RESULT_JSON).read_text())
-        failure = json.loads((output / LIT_FAILURE_JSON).read_text())
-        self.assertTrue(result[LIT_CAPTURE_VALIDATED])
-        self.assertFalse(result[LIT_PASSED])
-        self.assertFalse(result[LIT_PERFORMANCE_TARGET][LIT_PASSED])
-        self.assertIn("must exceed 60", failure[LIT_ERROR])
-        self.assertEqual((output / LIT_RUNTIME_LOG).read_text(), text)
-        self.assertEqual((output / LIT_PROCESS_TAIL_TXT).read_text(), LIT_PROCESS_PRESERVED)
-        self.assertEqual(result[LIT_IDENTITY_BEFORE], {LIT_VERIFIED: True})
-        self.assertEqual(result[LIT_IDENTITY_BEFORE], result[LIT_IDENTITY_AFTER])
-
-
-    def test_target_does_not_bypass_validation_or_identity_checks(self):
-        for text in (self.rate_log(62) + LIT_VUID_123, self.rate_log(62).replace("blocker_search=0", "blocker_search=1")):
-            with self.subTest(text=text[-50:]), self.assertRaises(smoke.SmokeFailure):
-                self.acquire_or_main([LIT_MINIMUM_FPS, LIT_N_60], text)
-        with self.assertRaisesRegex(smoke.SmokeFailure, "identity changed"):
-            self.acquire_or_main([LIT_MINIMUM_FPS, LIT_N_60], self.rate_log(62), identities=[{LIT_GENERATION: 1}, {LIT_GENERATION: 2}])
-
-    def test_direct_acquisition_rejects_diagnostic_or_invalid_threshold_before_launch(self):
-        for field, value in (("cpu_diagnostics", True), ("reflection_diagnostics", True), (LIT_MINIMUM_FPS_2, float(LIT_NAN))):
-            args = smoke.parse_args(self.argv + [LIT_MINIMUM_FPS, LIT_N_60])
-            setattr(args, field, value)
-            with patch.object(smoke, LIT_LAUNCH_TESTBED) as launch, self.assertRaises(smoke.SmokeFailure):
-                smoke.acquire(args, self.root / "unused")
-            launch.assert_not_called()
 
 
 if __name__ == LIT_MAIN:

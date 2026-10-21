@@ -14,6 +14,9 @@
 #include <impl/ecs_render/raytrace/optical_scene_resources.h>
 #include <impl/ecs_render/raytrace/shadow_trace_geometry.h>
 #include <impl/ecs_render/raytrace/prepared_builds.h>
+#include <impl/ecs_render/raytrace/prepared_scene_bvh_upload.h>
+#include <impl/ecs_render/raytrace/prepared_scene_tlas_build.h>
+#include <impl/ecs_render/raytrace/prepared_shadow_material_context.h>
 #include <impl/ecs_render/raytrace/software_scene_refit.h>
 #include <impl/ecs_render/shadow/light_space_shadow.h>
 #include <impl/ecs_render/shadow/quality_settings.h>
@@ -75,19 +78,6 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Soft resolve either overwrites visibility or multiplies transparent transmittance.
-namespace SoftShadowUpsampleFold{
-    static constexpr auto s_SoftShadowUpsampleFoldOverwriteBase = 0u;
-    enum Enum : u32{
-        Overwrite = s_SoftShadowUpsampleFoldOverwriteBase,
-        Multiply,
-    };
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace RayTracingSurfelGiTaskDetail{
     struct SurfelGiAgeFreeGraphTask;
     struct SurfelGiHashBuildGraphTask;
@@ -127,58 +117,11 @@ class RendererRayTracingSystem final : NoCopy{
     friend struct RayTracingSurfelGiTaskDetail::SurfelGiTraceGraphTask;
     friend struct RayTracingSurfelGiTaskDetail::SurfelGiResolveGraphTask;
     friend struct RayTracingSurfelGiTaskDetail::SurfelGiGraphTask;
+    friend class SurfelGiTaskBuilder;
 
 
 private:
     struct SurfelGiInitializationLifecycleGraphTask;
-
-    enum class PreparedShadowMaterialContextRoute : u8{
-        None,
-        Hardware,
-        Software,
-    };
-
-    // Resolve resources pair backing targets with their pushed heap slots.
-    struct SoftShadowResolvePassResources{
-        Core::Texture* softHalfTexture = nullptr;
-        Core::Texture* inputColorTexture = nullptr;
-        Core::Texture* momentsTexture = nullptr;
-        Core::Texture* outputTexture = nullptr;
-        u32 softHalf = 0u;
-        u32 inputColor = 0u;
-        u32 moments = 0u;
-        u32 outputStorage = 0u;
-    };
-    // Heap-only soft resolve dispatch description.
-    struct SoftShadowResolveDispatch{
-        Core::ComputePipeline* waveletPipeline = nullptr;
-        Core::ComputePipeline* upsamplePipeline = nullptr;
-        SoftShadowResolvePassResources firstWaveletResources;
-        SoftShadowResolvePassResources outputHalfAResources;
-        SoftShadowResolvePassResources outputHalfBResources;
-        SoftShadowResolvePassResources upsampleResources;
-        Core::Texture* visibilityTexture = nullptr;
-        u32 visibilityStorage = 0u;
-        u32 sceneShading = 0u;
-        // Must be odd so the selected upsample input is the final ping-pong result.
-        u32 waveletPassCount = 1u;
-        bool temporalMomentsValid = false;
-        // The prepared graph may already lower a transparent trace or temporal-merge output before the first wavelet.
-        bool graphOwnsFirstWaveletInputState = false;
-        // A split transparent temporal merge also publishes the selected moments input for the first wavelet.
-        bool graphOwnsWaveletMomentsEntryState = false;
-        // The split opaque first-wavelet callback inherits its output UAV state from the graph.
-        bool graphOwnsFirstWaveletOutputState = false;
-        // The transparent fold can inherit its geometry read from the graph; opaque geometry still transitions locally after its in-callback downsample.
-        bool graphOwnsWaveletGeometryEntryState = false;
-        // Both prepared opaque and transparent resolve callbacks inherit these descriptor-visible upsample reads.
-        bool graphOwnsUpsampleStaticEntryStates = false;
-        // The one-wavelet opaque resolve tail inherits both of these exact states from the preceding callback.
-        bool graphOwnsUpsampleInputColorEntryState = false;
-        bool graphOwnsUpsampleVisibilityOutputState = false;
-        bool firstWaveletWritesHalfA = true;
-        SoftShadowUpsampleFold::Enum fold = SoftShadowUpsampleFold::Overwrite;
-    };
 
 
 public:
@@ -277,7 +220,7 @@ public:
     [[nodiscard]] Expected<PreparedSceneBvhUploads> retainPreparedSceneBvhUploads(Core::GpuTaskGraph& graph)const;
     void confirmPreparedSceneBvhUploads()noexcept;
     // Hardware TLAS work records from this frozen preflight plan in Shadow Preparation. Its static cache becomes valid only after that packet accepts.
-    [[nodiscard]] bool preparedSceneTlasBuildReady()const noexcept{ return m_preparedSceneTlasReady; }
+    [[nodiscard]] bool preparedSceneTlasBuildReady()const noexcept{ return m_preparedSceneTlas.ready(); }
     // Only newly allocated backing has a descriptor-native source; graph imports observe its current accepted generation.
     [[nodiscard]] Core::ResourceStates::Mask sceneTlasBackingInitialState()const noexcept;
     void confirmPreparedSceneTlasBuild()noexcept;
@@ -521,62 +464,6 @@ public:
     // The initialization mirror commits only after the typed-clear producer packet accepts.
     void finalizeSurfelResourceInitialization()noexcept;
     void discardSurfelResourceInitialization()noexcept;
-    [[nodiscard]] Expected<Core::GpuTaskId> declareSurfelGiAgeFreeTask(
-        Core::GpuTaskGraph& graph,
-        const Core::GpuTaskDesc& desc,
-        DeferredFrameTargets& targets,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>& asyncTiming
-    );
-    [[nodiscard]] Expected<Core::GpuTaskId> declareSurfelGiHashBuildTask(
-        Core::GpuTaskGraph& graph,
-        const Core::GpuTaskDesc& desc,
-        DeferredFrameTargets& targets,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>& asyncTiming
-    );
-    [[nodiscard]] Expected<Core::GpuTaskId> declareSurfelGiSpawnTask(
-        Core::GpuTaskGraph& graph,
-        const Core::GpuTaskDesc& desc,
-        DeferredFrameTargets& targets,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>& asyncTiming
-    );
-    [[nodiscard]] Expected<Core::GpuTaskId> declareSurfelGiTraceBuildArgsTask(
-        Core::GpuTaskGraph& graph,
-        const Core::GpuTaskDesc& desc,
-        DeferredFrameTargets& targets,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>& asyncTiming
-    );
-    [[nodiscard]] Expected<Core::GpuTaskId> declareSurfelGiTraceTask(
-        Core::GpuTaskGraph& graph,
-        const Core::GpuTaskDesc& desc,
-        DeferredFrameTargets& targets,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>& asyncTiming
-    );
-    [[nodiscard]] Expected<Core::GpuTaskId> declareSurfelGiResolveTask(
-        Core::GpuTaskGraph& graph,
-        const Core::GpuTaskDesc& desc,
-        DeferredFrameTargets& targets,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>& asyncTiming
-    );
-    [[nodiscard]] Expected<Core::GpuTaskId> declareSurfelGiTask(
-        Core::GpuTaskGraph& graph,
-        const Core::GpuTaskDesc& desc,
-        DeferredFrameTargets& targets,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr
-    );
     // Persistent surfel storage survives resize.
     [[nodiscard]] bool ensureSurfelResources();
     [[nodiscard]] bool ensureSurfelSpawnPipeline();
@@ -616,8 +503,6 @@ private:
         const void* materialTypedData,
         usize materialTypedByteCount
     );
-    [[nodiscard]] bool shadowMaterialContextStorageReady(usize instanceMaterialCount, usize instanceCount, usize materialTypedByteCount)const noexcept;
-    void capturePreparedShadowMaterialContextStorage(u64 hash, usize instanceMaterialCount, usize instanceCount, usize materialTypedByteCount)noexcept;
     [[nodiscard]] bool preparedTraversalStorageMatchesCurrent()const noexcept;
     [[nodiscard]] bool capturePreparedShadowMaterialContextCacheReuse(u64 hash, usize instanceMaterialCount, usize instanceCount, usize materialTypedByteCount)noexcept;
     void clearPreparedShadowMaterialContext()noexcept;
@@ -630,14 +515,6 @@ private:
     // Preflight leaves the exact software descriptor tables populated. The frozen traversal validates those tables and retained resource identities without republishing mutable state.
     [[nodiscard]] bool recordPreparedSceneSwBvhTraversal();
     void clearPreparedSceneSwBvhTraversal()noexcept;
-    [[nodiscard]] bool capturePreparedSceneTlasBuild(
-        bool staticScene,
-        u64 staticSceneHash,
-        const Vector<Core::RayTracingInstanceDesc, Core::Alloc::ScratchArena>& instances,
-        const Vector<Core::RayTracingAccelStructHandle, Core::Alloc::ScratchArena>& instanceBlases
-    );
-    [[nodiscard]] bool recordPreparedSceneTlasBuild(Core::CommandList& commandList);
-    void clearPreparedSceneTlasBuild()noexcept;
     [[nodiscard]] bool capturePreparedMeshBlasBuilds(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool recordPreparedMeshBlasBuilds(Core::CommandList& commandList, bool meshBlasGeometryBuildInputStatesGraphOwned);
     void clearPreparedMeshBlasBuilds()noexcept;
@@ -838,7 +715,6 @@ private:
     RayTracingOpticalSceneResources m_hardwareOpticalScene;
     RayTracingOpticalSceneResources m_softwareOpticalScene;
     SoftwareSceneRefitResources m_sceneSwBvhRefit;
-    u64 m_preparedShadowMaterialContextHash = 0u;
     LightSpaceShadowState m_lightSpaceShadow;
     SoftwareSceneRefitHandle m_preparedSceneSwBvhRefit;
     PreparedShadowTraceGeometryBufferVector m_preparedShadowTraceGeometryBuffers;
@@ -846,42 +722,15 @@ private:
     PreparedShadowTraceMaterialSampledTextureVector m_preparedShadowTraceMaterialSampledTextures;
     // Retain packed NwbCausticEmissionTargetGpu bytes across declaration and recording without regathering state.
     Vector<u8, Core::Alloc::GlobalArena> m_preparedCausticEmissionTargetBytes;
-    // A fresh shadow material context retains all three ABI-coupled byte streams until Shadow Preparation accepts.
-    // Accepted software-cache reuse retains only the same immutable storage identity, counts, and hash.
-    Vector<u8, Core::Alloc::GlobalArena> m_preparedShadowInstanceMaterialBytes;
-    Vector<u8, Core::Alloc::GlobalArena> m_preparedShadowInstanceBytes;
-    Vector<u8, Core::Alloc::GlobalArena> m_preparedShadowMaterialTypedBytes;
-    Core::BufferHandle m_preparedShadowInstanceMaterialBuffer;
-    Core::BufferHandle m_preparedShadowInstanceBuffer;
-    Core::BufferHandle m_preparedShadowMaterialTypedBuffer;
-    usize m_preparedShadowInstanceMaterialCount = 0u;
-    usize m_preparedShadowInstanceCount = 0u;
-    usize m_preparedShadowMaterialTypedUploadBytes = 0u;
-    usize m_preparedShadowInstanceMaterialCapacity = 0u;
-    usize m_preparedShadowInstanceCapacity = 0u;
-    usize m_preparedShadowMaterialTypedCapacity = 0u;
-    // Transient HW fallback keeps material context only (Shadow Prep already froze the TLAS/BLAS plan). Fresh SW BVH keeps node+instance bytes together (leaf ranges index that stream); cache reuse keeps identity + hash.
-    Vector<u8, Core::Alloc::GlobalArena> m_preparedSceneBvhNodeBytes;
-    Vector<u8, Core::Alloc::GlobalArena> m_preparedSceneBvhInstanceBytes;
-    Core::BufferHandle m_preparedSceneBvhNodeBuffer;
-    Core::BufferHandle m_preparedSceneBvhInstanceBuffer;
-    usize m_preparedSceneBvhNodeCount = 0u;
-    usize m_preparedSceneBvhInstanceCount = 0u;
-    usize m_preparedSceneBvhNodeCapacity = 0u;
-    usize m_preparedSceneBvhInstanceCapacity = 0u;
-    u64 m_preparedSceneBvhStaticSceneHash = 0u;
+    // Transient HW fallback keeps material context only (Shadow Prep already froze the TLAS/BLAS plan).
+    PreparedShadowMaterialContext m_preparedShadowMaterialContext;
+    PreparedSceneBvhUpload m_preparedSceneBvh;
+    PreparedSceneTlasBuild m_preparedSceneTlas;
     // Fresh graph uploads and accepted static-cache reuse both freeze the matching traversal table. Recording never rebuilds CPU scene data; ECS mutation versions reject stale frozen plans.
     PreparedSceneSwBvhMeshVector m_preparedSceneSwBvhMeshes;
     u64 m_preparedSceneSwBvhRendererMutationVersion = 0u;
     u64 m_preparedSceneSwBvhTransformMutationVersion = 0u;
     u64 m_preparedSceneSwBvhMaterialMutationVersion = 0u;
-    // RayTracingInstanceDesc stores raw BLAS pointers, so the frozen TLAS plan retains every corresponding BLAS handle until Shadow Preparation accepts or discards it. The selected TLAS/backing generation is retained too.
-    Vector<Core::RayTracingInstanceDesc, Core::Alloc::GlobalArena> m_preparedSceneTlasInstances;
-    Vector<Core::RayTracingAccelStructHandle, Core::Alloc::GlobalArena> m_preparedSceneTlasBlases;
-    Core::RayTracingAccelStructHandle m_preparedSceneTlas;
-    Core::BufferHandle m_preparedSceneTlasBackingBuffer;
-    usize m_preparedSceneTlasMaxInstances = 0u;
-    u64 m_preparedSceneTlasStaticSceneHash = 0u;
     PreparedMeshBlasBuildVector m_preparedMeshBlasBuilds;
     // Per-frame BLAS actions keyed by dirty reason.
     // Answers whether the stress scene rebuilds per-mesh geometry when only instance transforms change.
@@ -895,25 +744,10 @@ private:
     DeferredFrameTargets* m_shadowVisibilityPreparedTargets = nullptr;
     RayTracingSceneContentStamp m_preparedSceneContentStamp;
     CausticQualitySettings m_causticQualitySettings;
-    Core::GpuDescriptorHandle m_preparedShadowInstanceMaterialHeapHandle;
-    Core::GpuDescriptorHandle m_preparedShadowInstanceHeapHandle;
-    Core::GpuDescriptorHandle m_preparedShadowMaterialTypedHeapHandle;
-    Core::GpuDescriptorHandle m_preparedSceneBvhNodeHeapHandle;
-    Core::GpuDescriptorHandle m_preparedSceneBvhInstanceHeapHandle;
     u32 m_preparedSceneSwBvhInstanceCount = 0u;
-    Core::GpuDescriptorHandle m_preparedSceneTlasHeapHandle;
     ShadowQualitySettings m_shadowQualitySettings;
     bool m_temporalOneShadowSamplingLogged = false;
-    PreparedShadowMaterialContextRoute m_preparedShadowMaterialContextRoute = PreparedShadowMaterialContextRoute::None;
-    bool m_preparedShadowMaterialContextStatic = false;
-    bool m_preparedShadowMaterialContextReady = false;
-    bool m_preparedShadowMaterialContextUploadRequired = false;
-    bool m_preparedSceneBvhStatic = false;
-    bool m_preparedSceneBvhReady = false;
-    bool m_preparedSceneBvhUploadRequired = false;
     bool m_preparedSceneSwBvhReady = false;
-    bool m_preparedSceneTlasStatic = false;
-    bool m_preparedSceneTlasReady = false;
     bool m_preparedMeshBlasBuildsReady = false;
     bool m_preparedMeshSwBvhBuildsReady = false;
     bool m_preparedMeshSwBvhBuildPlanFrozen = false;

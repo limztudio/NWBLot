@@ -387,7 +387,7 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
     }
     // Freeze the selected hardware instance stream before recording; accepted preparation publishes its cache identity.
     if(!canReuseTlas){
-        if(!capturePreparedSceneTlasBuild(staticScene, tlasStaticSceneHash, instances, instanceBlases)){
+        if(!m_preparedSceneTlas.capture(m_rayTracingState, staticScene, tlasStaticSceneHash, instances, instanceBlases)){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: could not freeze scene TLAS build after preflight"));
             return false;
         }

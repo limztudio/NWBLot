@@ -7,7 +7,8 @@
 
 #include "../expected.h"
 #include "matrix.h"
-#include "collision_detail.h"
+#include "collision_detail_ray.h"
+#include "collision_detail_volume.h"
 #include "collision_types.h"
 
 

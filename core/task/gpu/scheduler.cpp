@@ -231,7 +231,7 @@ bool GpuTaskScheduler::recordAndSubmitAcceptedFrontierTask(
             u64 recordingAttemptGeneration = recordedGraph.recordingAttemptGeneration();
             if(recordingAttemptGeneration == 0u){
                 const GpuSubmissionPacketId packet = planAccess.packetForTask(task);
-                GpuTaskGraph::RecordingAttemptScope provisionalAttempt;
+                GpuRecordingAttemptScope provisionalAttempt;
                 if(!graph.beginRecordingAttempt(compiledGraph, packet, declarationAccess, planAccess, provisionalAttempt))
                     return;
                 recordingAttemptGeneration = graph.recordingAttemptGeneration();
@@ -402,7 +402,7 @@ bool GpuTaskScheduler::prepareRecordingAttemptAndBindTransactionWithinSubmission
     if(!recordedGraph.prepareRecordingStorageCandidate(compiledGraph, planAccess, timingRecorder))
         return false;
 
-    GpuTaskGraph::RecordingAttemptScope provisionalAttempt;
+    GpuRecordingAttemptScope provisionalAttempt;
     if(!graph.beginRecordingAttempt(compiledGraph, packet, declarationAccess, planAccess, provisionalAttempt))
         return false;
     if(!provisionalAttempt.m_graph)

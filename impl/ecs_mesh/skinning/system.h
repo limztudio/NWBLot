@@ -195,6 +195,7 @@ private:
     struct TaskGraphSkinningDeformationTask;
     struct TaskGraphSkinningPostDispatchTask;
     struct TaskGraphSkinningFinalizerTask;
+    class FramePlanBuilder;
 
 
 public:

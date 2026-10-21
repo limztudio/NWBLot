@@ -11,6 +11,7 @@
 
 #include <global/simd/result.h>
 #include <global/simd/vector_arithmetic.h>
+#include <global/simd/vector_rounding.h>
 #include <global/simplemath.h>
 
 

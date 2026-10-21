@@ -6,6 +6,8 @@ target_sources(nwb_cpu_task_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/cpu_task_wait_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/cpu_task_progress_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/cpu_task_scheduler_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/cpu_task_scheduler_cancellation_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/cpu_task_scheduler_rejection_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/cpu_task_cleanup_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/cpu_task_fanin_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/cpu_task_submission_tests.cpp"
@@ -18,4 +20,5 @@ set_tests_properties(nwb_cpu_task_tests PROPERTIES TIMEOUT 120)
 target_sources(nwb_cpu_task_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/process_exit.h"
     "${CMAKE_CURRENT_LIST_DIR}/task_wait.h"
+    "${CMAKE_CURRENT_LIST_DIR}/cpu_task_scheduler_test_support.h"
 )

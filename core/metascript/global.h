@@ -56,6 +56,11 @@ public:
     [[nodiscard]] bool operator()(MStringView a, const MString& b)const noexcept{ return a == MStringView(b.data(), b.size()); }
 };
 
+template<usize N>
+[[nodiscard]] constexpr MStringView LiteralView(const MChar (&text)[N])noexcept{
+    return MStringView(text, N > 0u ? N - 1u : 0u);
+}
+
 template<typename T>
 using MVector = Vector<T, MetaArena>;
 

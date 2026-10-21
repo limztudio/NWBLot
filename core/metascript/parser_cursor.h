@@ -1,0 +1,68 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "parser.h"
+
+#include <core/alloc/scratch.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_METASCRIPT_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Token stream and parse error sink shared by the statement and expression parsers.
+class ParserCursor{
+    friend class ExpressionParser;
+    friend class StatementParser;
+
+
+private:
+    using ScratchString = BasicString<MChar, Alloc::ScratchArena>;
+
+
+public:
+    ParserCursor(MStringView source, MetaArena& arena, Alloc::ScratchArena& scratchArena, MVector<ParseError>& errors);
+
+
+public:
+    [[nodiscard]] bool failed()const noexcept{ return !m_errors.empty(); }
+
+    void advance();
+    bool expect(TokenType::Enum type, MStringView expected);
+
+    void error(MStringView message);
+    void error(u32 line, u32 column, MStringView message);
+    void errorExpected(MStringView expected);
+
+
+private:
+    [[nodiscard]] ScratchString tokenDescription();
+
+
+private:
+    Lexer m_lexer;
+    MetaArena& m_arena;
+    Alloc::ScratchArena& m_scratchArena;
+    MVector<ParseError>& m_errors;
+
+    Token m_current;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_METASCRIPT_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

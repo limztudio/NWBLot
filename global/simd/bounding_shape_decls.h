@@ -492,33 +492,6 @@ public:
 
 
 public:
-    static void NWB_SIMD_CALL TransformFrustumValue(
-        SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, const SIMDMatrix& matrix, SIMDVectorSingle& outOrigin,
-        SIMDVectorSingle& outOrientation, f32& outRightSlope, f32& outLeftSlope, f32& outTopSlope, f32& outBottomSlope, f32& outNearPlane, f32& outFarPlane
-    )noexcept;
-    static void NWB_SIMD_CALL TransformFrustumValue(
-        SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, f32 scale, SIMDVectorSingle rotation,
-        SIMDVectorSingle translation, SIMDVectorSingle& outOrigin, SIMDVectorSingle& outOrientation, f32& outRightSlope, f32& outLeftSlope, f32& outTopSlope, f32& outBottomSlope, f32& outNearPlane, f32& outFarPlane
-    )noexcept;
-    static void NWB_SIMD_CALL CornersValue(
-        SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVectorSingle (&outCorners)[BoundingBox::s_CornerCount]
-    )noexcept;
-    [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainsPointValue(
-        SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVectorSingle point
-    )noexcept;
-    [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainsTriangleValue(
-        SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2
-    )noexcept;
-    [[nodiscard]] static PlaneIntersectionType::Enum NWB_SIMD_CALL IntersectsPlaneValue(
-        SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVectorSingle plane
-    )noexcept;
-    [[nodiscard]] static Expected<f32> NWB_SIMD_CALL IntersectsRayValue(
-        SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVectorSingle rayOrigin, SIMDVectorSingle direction
-    )noexcept;
-    [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainedByValue(
-        SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVectorSingle plane0, SIMDVectorSingle plane1,
-        SIMDVectorSingle plane2, SIMDVectorSingle plane3, SIMDVectorSingle plane4, SIMDVectorSingle plane5
-    )noexcept;
     static void NWB_SIMD_CALL CreateFromMatrix(BoundingFrustum& outFrustum, const SIMDMatrix& projection, bool rightHandedCoordinates = false)noexcept;
 
 
@@ -557,40 +530,10 @@ public:
     [[nodiscard]] ContainmentType::Enum contains(const BoundingBox& box)const noexcept;
     [[nodiscard]] ContainmentType::Enum contains(const BoundingOrientedBox& box)const noexcept;
     [[nodiscard]] ContainmentType::Enum contains(const BoundingFrustum& frustum)const noexcept;
-    [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL containsSphereValues(
-        SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVectorSingle sphereValue
-    )const noexcept;
-    [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL containsBoxValues(
-        SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVectorSingle otherBoxCenter,
-        SIMDVectorSingle otherBoxExtents
-    )const noexcept;
-    [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL containsOrientedBoxValues(
-        SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVectorSingle otherBoxCenter,
-        SIMDVectorSingle otherBoxExtents, SIMDVectorSingle otherBoxOrientation
-    )const noexcept;
-    [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL containsFrustumValues(
-        SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVectorSingle otherFrustumOrigin,
-        SIMDVectorSingle otherFrustumOrientation, f32 otherRightSlope, f32 otherLeftSlope, f32 otherTopSlope, f32 otherBottomSlope, f32 otherNearPlane, f32 otherFarPlane
-    )const noexcept;
     [[nodiscard]] bool intersects(const BoundingSphere& sphere)const noexcept;
     [[nodiscard]] bool intersects(const BoundingBox& box)const noexcept;
     [[nodiscard]] bool intersects(const BoundingOrientedBox& box)const noexcept;
     [[nodiscard]] bool intersects(const BoundingFrustum& frustum)const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersectsSphereValues(
-        SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVectorSingle sphereValue
-    )const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersectsBoxValues(
-        SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVectorSingle otherBoxCenter,
-        SIMDVectorSingle otherBoxExtents
-    )const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersectsOrientedBoxValues(
-        SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVectorSingle otherBoxCenter,
-        SIMDVectorSingle otherBoxExtents, SIMDVectorSingle otherBoxOrientation
-    )const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersectsFrustumValues(
-        SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVectorSingle otherFrustumOrigin,
-        SIMDVectorSingle otherFrustumOrientation, f32 otherRightSlope, f32 otherLeftSlope, f32 otherTopSlope, f32 otherBottomSlope, f32 otherNearPlane, f32 otherFarPlane
-    )const noexcept;
     [[nodiscard]] bool NWB_SIMD_CALL intersects(SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle v2)const noexcept;
     [[nodiscard]] PlaneIntersectionType::Enum NWB_SIMD_CALL intersects(SIMDVectorSingle plane)const noexcept;
     [[nodiscard]] Expected<f32> NWB_SIMD_CALL intersects(SIMDVectorSingle rayOrigin, SIMDVectorSingle direction)const noexcept;
@@ -618,33 +561,6 @@ public:
 
 
 public:
-    static void NWB_SIMD_CALL TransformFrustumValue(
-        SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, const SIMDMatrixDouble& matrix, SIMDVectorDouble& outOrigin,
-        SIMDVectorDouble& outOrientation, f64& outRightSlope, f64& outLeftSlope, f64& outTopSlope, f64& outBottomSlope, f64& outNearPlane, f64& outFarPlane
-    )noexcept;
-    static void NWB_SIMD_CALL TransformFrustumValue(
-        SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, f64 scale, SIMDVectorDouble rotation,
-        SIMDVectorDouble translation, SIMDVectorDouble& outOrigin, SIMDVectorDouble& outOrientation, f64& outRightSlope, f64& outLeftSlope, f64& outTopSlope, f64& outBottomSlope, f64& outNearPlane, f64& outFarPlane
-    )noexcept;
-    static void NWB_SIMD_CALL CornersValue(
-        SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble (&outCorners)[BoundingDoubleBox::s_DoubleCornerCount]
-    )noexcept;
-    [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainsPointValue(
-        SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble point
-    )noexcept;
-    [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainsTriangleValue(
-        SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2
-    )noexcept;
-    [[nodiscard]] static PlaneIntersectionType::Enum NWB_SIMD_CALL IntersectsPlaneValue(
-        SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble plane
-    )noexcept;
-    [[nodiscard]] static Expected<f64> NWB_SIMD_CALL IntersectsRayValue(
-        SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble rayOrigin, SIMDVectorDouble direction
-    )noexcept;
-    [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainedByValue(
-        SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble plane0, SIMDVectorDouble plane1,
-        SIMDVectorDouble plane2, SIMDVectorDouble plane3, SIMDVectorDouble plane4, SIMDVectorDouble plane5
-    )noexcept;
     static void NWB_SIMD_CALL CreateFromMatrix(BoundingDoubleFrustum& outFrustum, const SIMDMatrixDouble& projection, bool rightHandedCoordinates = false)noexcept;
 
 
@@ -703,40 +619,10 @@ public:
     [[nodiscard]] ContainmentType::Enum contains(const BoundingDoubleBox& box)const noexcept;
     [[nodiscard]] ContainmentType::Enum contains(const BoundingDoubleOrientedBox& box)const noexcept;
     [[nodiscard]] ContainmentType::Enum contains(const BoundingDoubleFrustum& frustum)const noexcept;
-    [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL containsSphereValues(
-        SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble sphereValue
-    )const noexcept;
-    [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL containsBoxValues(
-        SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble otherBoxCenter,
-        SIMDVectorDouble otherBoxExtents
-    )const noexcept;
-    [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL containsOrientedBoxValues(
-        SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble otherBoxCenter,
-        SIMDVectorDouble otherBoxExtents, SIMDVectorDouble otherBoxOrientation
-    )const noexcept;
-    [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL containsFrustumValues(
-        SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble otherFrustumOrigin,
-        SIMDVectorDouble otherFrustumOrientation, f64 otherRightSlope, f64 otherLeftSlope, f64 otherTopSlope, f64 otherBottomSlope, f64 otherNearPlane, f64 otherFarPlane
-    )const noexcept;
     [[nodiscard]] bool intersects(const BoundingDoubleSphere& sphere)const noexcept;
     [[nodiscard]] bool intersects(const BoundingDoubleBox& box)const noexcept;
     [[nodiscard]] bool intersects(const BoundingDoubleOrientedBox& box)const noexcept;
     [[nodiscard]] bool intersects(const BoundingDoubleFrustum& frustum)const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersectsSphereValues(
-        SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble sphereValue
-    )const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersectsBoxValues(
-        SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble otherBoxCenter,
-        SIMDVectorDouble otherBoxExtents
-    )const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersectsOrientedBoxValues(
-        SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble otherBoxCenter,
-        SIMDVectorDouble otherBoxExtents, SIMDVectorDouble otherBoxOrientation
-    )const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersectsFrustumValues(
-        SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble otherFrustumOrigin,
-        SIMDVectorDouble otherFrustumOrientation, f64 otherRightSlope, f64 otherLeftSlope, f64 otherTopSlope, f64 otherBottomSlope, f64 otherNearPlane, f64 otherFarPlane
-    )const noexcept;
     [[nodiscard]] bool NWB_SIMD_CALL intersects(SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)const noexcept;
     [[nodiscard]] PlaneIntersectionType::Enum NWB_SIMD_CALL intersects(SIMDVectorDouble plane)const noexcept;
     [[nodiscard]] Expected<f64> NWB_SIMD_CALL intersects(SIMDVectorDouble rayOrigin, SIMDVectorDouble direction)const noexcept;

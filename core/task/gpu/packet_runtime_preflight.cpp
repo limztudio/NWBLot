@@ -82,7 +82,7 @@ bool GpuNativePacketRecorder::preflightPacketResources(
     const GpuTaskGraph::DeclarationReadView& declarationAccess,
     const GpuCompiledGraph& compiledGraph,
     const GpuCompiledGraph::ReadView& planAccess,
-    const GpuTaskGraph::PacketRecordingAccess& recordingAccess,
+    const GpuPacketRecordingAccess& recordingAccess,
     const GpuSubmissionPacketId packetID,
     Alloc::ScratchArena& stateFanInScratchArena,
     const CommandListResourceStateHandoff* const initialStates

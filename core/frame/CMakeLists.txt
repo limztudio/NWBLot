@@ -24,6 +24,8 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     if(TARGET nwb::wayland)
         target_sources(nwb_frame PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/linux_wayland.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/linux_wayland_input.h"
+            "${CMAKE_CURRENT_LIST_DIR}/linux_wayland_input.cpp"
         )
         target_link_libraries(nwb_frame PRIVATE nwb::wayland)
         target_compile_definitions(nwb_frame PRIVATE NWB_WITH_WAYLAND=1)

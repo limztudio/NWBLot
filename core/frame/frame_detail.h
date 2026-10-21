@@ -26,6 +26,10 @@ namespace FrameDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] inline i32 ClampBufferScale(const i32 bufferScale)noexcept{
+    return Max(bufferScale, 1);
+}
+
 // Native positive scale factors have no smaller protocol bound than i32; avoid an overflowing ceil-division numerator.
 [[nodiscard]] inline i32 LogicalDimensionForPixels(const u16 pixelDimension, const i32 bufferScale)noexcept{
     const i32 scale = Max(bufferScale, 1);

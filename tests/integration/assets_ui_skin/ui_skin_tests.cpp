@@ -351,7 +351,9 @@ TEST(AssetsUiSkin, RejectsOverLimitCountsBeforeReadingOrCopyingRegions){
 
     Core::Metascript::Document document(testArena.arena);
     ASSERT_TRUE(document.parse(PaletteMetadata()));
-    Core::Metascript::Value& regions = document.asset().field("regions");
+    Core::Metascript::Value* const asset = document.findField("asset");
+    ASSERT_NE(asset, nullptr);
+    Core::Metascript::Value& regions = asset->field("regions");
     const Core::Metascript::Value regionTemplate(regions.asList().front());
     regions.asList().clear();
     regions.asList().reserve(s_UiSkinMaxRegionCount + 1u);

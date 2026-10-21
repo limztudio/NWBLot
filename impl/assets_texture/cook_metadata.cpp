@@ -143,9 +143,10 @@ struct Resolution{
 Expected<TextureCookEntry> ParseTextureCookMetadata(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     using namespace __hidden_texture_cook_metadata;
 
-    const Value& asset = doc.asset();
-    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_DiagnosticPrefix))
-        return MakeUnexpected(Failure{});
+    const auto assetValue = Core::Assets::FindMetadataAssetMapValue<Core::Metascript::Document, Value>(nwbFilePath, doc, s_DiagnosticPrefix);
+    if(!assetValue)
+        return MakeUnexpected(assetValue.error());
+    const Value& asset = **assetValue;
     const auto alphaMode = ReadAlphaMode(nwbFilePath, asset);
     if(!alphaMode)
         return MakeUnexpected(Failure{});

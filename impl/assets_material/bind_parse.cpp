@@ -29,7 +29,7 @@ namespace MaterialBindDetail{
 Expected<Metascript::Document> ParseMaterialBindDocument(const Path& bindFilePath, MaterialCookArena& arena, ScratchArena& scratchArena){
     Metascript::Document doc(arena);
     ScratchString bindText{scratchArena};
-    if(!Core::Assets::ParseMetadataDocumentText(bindFilePath, s_MaterialBindDiagnosticPrefix, bindText, doc, [&](const AStringView text){ return doc.parseWithImplicitAsset(text, s_AssetTypeMaterialBind, s_AssetVariableMaterialBind); }))
+    if(!Core::Assets::ParseMetadataDocumentText(bindFilePath, s_MaterialBindDiagnosticPrefix, bindText, doc, [&](const AStringView text){ return doc.parse(text); }))
         return MakeUnexpected(Failure{});
     return doc;
 }
@@ -337,18 +337,12 @@ static Expected<MaterialBindStruct> ParseMaterialBindStruct(const Path& bindFile
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<MaterialCookVector<MaterialBindStruct>> ParseMaterialBindStructs(const Path& bindFilePath, const Metascript::Value& asset, MaterialCookArena& arena){
+static Expected<MaterialCookVector<MaterialBindStruct>> ParseMaterialBindStructs(const Path& bindFilePath, const Metascript::Document& doc, MaterialCookArena& arena){
     MaterialCookVector<MaterialBindStruct> structs(arena);
 
-    const Metascript::Value* structsValue = asset.findField(s_BindStructsKey);
-    if(!structsValue || !structsValue->isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': asset.structs must be a map"), PathToString<tchar>(bindFilePath));
-        return MakeUnexpected(Failure{});
-    }
-
-    const auto& structsMap = structsValue->asMap();
+    const auto& structsMap = doc.structs();
     if(structsMap.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': asset.structs must not be empty"), PathToString<tchar>(bindFilePath));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct declarations must not be empty"), PathToString<tchar>(bindFilePath));
         return MakeUnexpected(Failure{});
     }
 
@@ -371,35 +365,27 @@ static Expected<MaterialCookVector<MaterialBindStruct>> ParseMaterialBindStructs
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ParseMaterialBindInstances(const Path& bindFilePath, const Metascript::Value& asset, MaterialCookArena& arena, MaterialBindEntry& outEntry){
+static bool ParseMaterialBindInstances(const Path& bindFilePath, const Metascript::Document& doc, MaterialCookArena& arena, MaterialBindEntry& outEntry){
     outEntry.instances.clear();
 
-    const Metascript::Value* instancesValue = asset.findField(s_BindInstancesKey);
-    if(!instancesValue || !instancesValue->isList()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': asset.instances must be a list"), PathToString<tchar>(bindFilePath));
-        return false;
-    }
-    if(instancesValue->asList().empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': asset.instances must not be empty"), PathToString<tchar>(bindFilePath));
+    if(doc.declarations().empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': instance declarations must not be empty"), PathToString<tchar>(bindFilePath));
         return false;
     }
 
-    outEntry.instances.reserve(instancesValue->asList().size());
-    for(const Metascript::Value& instanceValue : instancesValue->asList()){
-        if(!instanceValue.isMap()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': asset.instances entries must be maps"), PathToString<tchar>(bindFilePath));
+    outEntry.instances.reserve(doc.declarations().size());
+    for(const Metascript::Document::Declaration& declaration : doc.declarations()){
+        const AStringView typeName(declaration.type.data(), declaration.type.size());
+        const AStringView instanceName(declaration.variable.data(), declaration.variable.size());
+        const Metascript::Value* instanceValue = doc.findField(instanceName);
+        if(!instanceValue || !instanceValue->isNull()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': instance '{}' must not have an initializer or assignments"), PathToString<tchar>(bindFilePath), StringConvert(instanceName));
             return false;
         }
 
         MaterialBindInstance instance(arena);
-        const auto parsedType = ParseMaterialBindStringField(bindFilePath, instanceValue, s_BindTypeKey, s_BindInstanceContextLabel);
-        if(!parsedType)
-            return false;
-        instance.type = *parsedType;
-        const auto parsedName = ParseMaterialBindStringField(bindFilePath, instanceValue, s_BindNameKey, s_BindInstanceContextLabel);
-        if(!parsedName)
-            return false;
-        instance.name = *parsedName;
+        instance.type = typeName;
+        instance.name = instanceName;
         if(!IsMaterialBindIdentifier(instance.type) || !outEntry.findStruct(AStringView(instance.type))){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': instance '{}' references unknown struct type '{}'"), PathToString<tchar>(bindFilePath), StringConvert(instance.name), StringConvert(instance.type));
             return false;
@@ -430,17 +416,11 @@ Expected<MaterialBindEntry> ParseMaterialBindSource(const Path& bindFilePath, co
     if(!Core::Assets::CheckPairedSourceExtension(bindFilePath, entry.source, MaterialBindNames::SourceExtensionText(), s_MaterialBindDiagnosticPrefix, scratchArena))
         return MakeUnexpected(Failure{});
 
-    const auto assetValue = Core::Assets::FindMetadataAssetMapValue<Metascript::Document, Metascript::Value>(bindFilePath, doc, s_MaterialBindDiagnosticPrefix);
-    if(!assetValue)
-        return MakeUnexpected(assetValue.error());
-    if(!Core::Assets::ValidateMetadataAssetFields(bindFilePath, **assetValue, s_MaterialBindDiagnosticPrefix, { s_BindStructsKey, s_BindInstancesKey }))
-        return MakeUnexpected(Failure{});
-
-    auto structs = ParseMaterialBindStructs(bindFilePath, **assetValue, arena);
+    auto structs = ParseMaterialBindStructs(bindFilePath, doc, arena);
     if(!structs)
         return MakeUnexpected(Failure{});
     entry.structs = Move(*structs);
-    if(!ParseMaterialBindInstances(bindFilePath, **assetValue, arena, entry))
+    if(!ParseMaterialBindInstances(bindFilePath, doc, arena, entry))
         return MakeUnexpected(Failure{});
 
     return entry;

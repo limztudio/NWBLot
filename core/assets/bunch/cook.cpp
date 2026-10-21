@@ -259,7 +259,7 @@ struct ItemVirtualPath{
             return MakeUnexpected(Failure{});
         }
 
-        const Metascript::Value* localValue = doc.findVariable(DeclarationVariableMetaView(*declaration));
+        const Metascript::Value* localValue = doc.findField(DeclarationVariableMetaView(*declaration));
         if(!localValue){
             NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': reference '{}' targets a missing local variable"), PathToString<tchar>(nwbFilePath), StringConvert(AStringView(reference.data(), reference.size())));
             return MakeUnexpected(Failure{});
@@ -364,7 +364,7 @@ Expected<ExpandedAssetMetadataVector> ExpandAssetBunch(const Path& assetRoot, co
         return MakeUnexpected(Failure{});
     }
 
-    const Metascript::Value* bunchValue = doc.findVariable(DeclarationVariableMetaView(*bunchDeclaration));
+    const Metascript::Value* bunchValue = doc.findField(DeclarationVariableMetaView(*bunchDeclaration));
     if(!bunchValue || !bunchValue->isList()){
         NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': declaration must be initialized with a list"), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
@@ -414,7 +414,7 @@ Expected<ExpandedAssetMetadataVector> ExpandAssetBunch(const Path& assetRoot, co
 
         for(const auto itemDeclaration : itemDeclarations){
             const AStringView variableName = DeclarationVariable(*itemDeclaration);
-            const Metascript::Value* assetValue = doc.findVariable(DeclarationVariableMetaView(*itemDeclaration));
+            const Metascript::Value* assetValue = doc.findField(DeclarationVariableMetaView(*itemDeclaration));
             if(!assetValue){
                 NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': references missing variable '{}'"), PathToString<tchar>(nwbFilePath), StringConvert(variableName));
                 return MakeUnexpected(Failure{});

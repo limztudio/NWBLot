@@ -3,6 +3,7 @@
 
 
 #include <core/assets/paths.h>
+#include <core/metascript/parser.h>
 
 #include <tests/common/capturing_logger.h>
 
@@ -82,6 +83,21 @@ static void PrepareWorkload(PathFixture& fixture, const usize directoryCount, co
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+TEST(AssetPaths, MetadataAssetDeclarationUsesTheCookerNameRegardlessOfDeclarationOrder){
+    AssetArena arena(Name("tests/asset_path/metadata_declaration"));
+    Metascript::Document document(arena);
+    ASSERT_TRUE(document.parse("metadata helper; sampler decoy; texture asset;"));
+    const Metascript::Document::Declaration* const asset = FindMetadataAssetDeclaration(document);
+    ASSERT_NE(asset, nullptr);
+    EXPECT_EQ(asset->variable, "asset");
+    EXPECT_EQ(asset->type, "texture");
+    EXPECT_NE(asset, &document.declarations().front());
+
+    ASSERT_TRUE(document.parse("texture entry;"));
+    ASSERT_NE(document.findDeclaration("entry"), nullptr);
+    EXPECT_EQ(FindMetadataAssetDeclaration(document), nullptr);
+}
 
 TEST(AssetPaths, RelativeComponentsPreserveDotsAndCanonicalizeOnlyAsciiText){
     AssetArena inputArena(Name("tests/asset_path/relative_inputs"));

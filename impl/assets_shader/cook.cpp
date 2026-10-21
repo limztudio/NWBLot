@@ -91,15 +91,6 @@ static Expected<ShaderOptimizationLevel::Enum> TryParseShaderOptimizationLevel(c
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static ACompactString CanonicalAssetType(const Metascript::Document& doc)noexcept{
-    const auto assetType = doc.assetType();
-    return ACompactString(AStringView(assetType.data(), assetType.size()));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 template <typename DefineMap>
 static bool ValidateVariantSignature(const AStringView contextLabel, const AStringView variantSignature, const DefineMap& defineValues, Alloc::ScratchArena& scratchArena){
     if(variantSignature.empty())
@@ -276,8 +267,12 @@ static Expected<ShaderCook::CookMap<CookString, ShaderCook::DefineEntry>> ParseD
 Expected<ShaderCook::ShaderEntry> ShaderCook::parseShaderMeta(const Path& nwbFilePath, const Metascript::Document& doc, Alloc::ScratchArena& scratchArena){
     ShaderEntry entry(m_memoryArena);
 
-    const auto declaredAssetType = doc.assetType();
-    const AStringView assetTypeText(declaredAssetType.data(), declaredAssetType.size());
+    const auto* assetDeclaration = Assets::FindMetadataAssetDeclaration(doc);
+    if(!assetDeclaration){
+        NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': missing asset declaration '{}'"), PathToString<tchar>(nwbFilePath), StringConvert(Assets::s_MetadataAssetVariable));
+        return MakeUnexpected(Failure{});
+    }
+    const AStringView assetTypeText(assetDeclaration->type.data(), assetDeclaration->type.size());
     const Core::ShaderType::Enum shaderType = ShaderAssetTypes::ShaderTypeFromAssetTypeText(assetTypeText);
     if(shaderType == Core::ShaderType::Invalid){
         NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': unsupported shader asset type '{}'"), PathToString<tchar>(nwbFilePath), StringConvert(assetTypeText));
@@ -362,7 +357,13 @@ Expected<ShaderCook::ShaderEntry> ShaderCook::parseShaderMeta(const Path& nwbFil
 Expected<ShaderCook::IncludeEntry> ShaderCook::parseIncludeMeta(const Path& nwbFilePath, const Metascript::Document& doc, Alloc::ScratchArena& scratchArena){
     IncludeEntry entry(m_memoryArena);
 
-    if(__hidden_shader_cook::CanonicalAssetType(doc).view() != __hidden_shader_cook::s_AssetTypeInclude)
+    const auto* assetDeclaration = Assets::FindMetadataAssetDeclaration(doc);
+    if(!assetDeclaration){
+        NWB_LOGGER_ERROR(NWB_TEXT("Include meta '{}': missing asset declaration '{}'"), PathToString<tchar>(nwbFilePath), StringConvert(Assets::s_MetadataAssetVariable));
+        return MakeUnexpected(Failure{});
+    }
+    const ACompactString assetType(AStringView(assetDeclaration->type.data(), assetDeclaration->type.size()));
+    if(assetType.view() != __hidden_shader_cook::s_AssetTypeInclude)
         return entry;
 
     auto pairedSource = Assets::ResolvePairedSourcePathFromMetadata(nwbFilePath, m_memoryArena, scratchArena);

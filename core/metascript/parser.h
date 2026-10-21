@@ -32,6 +32,7 @@ class Document{
 public:
     using ErrorList = MVector<ParseError>;
     using VariableMap = MStringMap<Value>;
+    using StructMap = MStringMap<Value>;
 
 
 public:
@@ -63,15 +64,12 @@ public:
 public:
     [[nodiscard]] bool parse(MStringView source);
     [[nodiscard]] bool parse(IMetaReader& reader);
-    [[nodiscard]] bool parseWithImplicitAsset(MStringView source, MStringView assetType, MStringView assetVariable);
 
-    [[nodiscard]] MStringView assetType()const noexcept{ return MStringView(m_assetType.data(), m_assetType.size()); }
-    [[nodiscard]] MStringView assetVariable()const noexcept{ return MStringView(m_assetVariable.data(), m_assetVariable.size()); }
-    [[nodiscard]] const Value& asset()const noexcept;
-    [[nodiscard]] Value& asset()noexcept;
-
-    [[nodiscard]] const Value* findVariable(MStringView name)const noexcept;
+    [[nodiscard]] const Value* findField(MStringView name)const noexcept;
+    [[nodiscard]] Value* findField(MStringView name)noexcept;
+    [[nodiscard]] const Declaration* findDeclaration(MStringView name)const noexcept;
     [[nodiscard]] const DeclarationList& declarations()const noexcept{ return m_declarations; }
+    [[nodiscard]] const StructMap& structs()const noexcept{ return m_structs; }
 
     [[nodiscard]] bool hasErrors()const noexcept{ return !m_errors.empty(); }
     [[nodiscard]] const ErrorList& errors()const noexcept{ return m_errors; }
@@ -79,10 +77,9 @@ public:
 
 private:
     MetaArena& m_arena;
-    MString m_assetType;
-    MString m_assetVariable;
     VariableMap m_variables;
     DeclarationList m_declarations;
+    StructMap m_structs;
     ErrorList m_errors;
 };
 

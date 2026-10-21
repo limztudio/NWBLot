@@ -1,6 +1,6 @@
 # MetaScript
 
-MetaScript parses NWBLot asset metadata into an arena-backed value tree. It supports declarations, nested field assignments, literal arithmetic, symbolic references, lists, dictionaries, and the struct/attribute syntax used by material `.bind` files.
+MetaScript parses metadata into arena-backed values and declarations. It supports declarations, nested field assignments, literal arithmetic, symbolic references, lists, dictionaries, and the struct/attribute syntax used by material `.bind` files.
 
 The public API lives in `NWB::Core::Metascript`. Include [parser.h](parser.h) for `Document`, [value.h](value.h) for values, or [lexer.h](lexer.h) for token-level tools. Link the `nwb_metascript` static library:
 
@@ -30,7 +30,7 @@ albedo.source = "textures/example.png";
 asset.albedo = albedo;
 ```
 
-A declaration has the form `<type> <variable> [= <expression>];`. Type names are recorded as text and do not constrain the stored value. The first ordinary declaration selects `Document::assetType()`, `assetVariable()`, and `asset()`; additional declarations remain available through `declarations()` and `findVariable()`.
+A declaration has the form `<type> <variable> [= <expression>];`. Type names are recorded as text and do not constrain the stored value. Every variable is available by name through `Document::findField()`, and `findDeclaration()` returns its declared type and variable name. `declarations()` preserves source order. MetaScript gives no special meaning to `asset` or to the first declaration; a cooker may choose `asset` as its own entry convention.
 
 Omitting an initializer creates a `Null` value. Assigning a dotted path creates missing fields and turns `Null` parents into maps. Assignment requires an already declared root, and traversing a scalar or list is an error. Variable names must be unique within the document.
 
@@ -84,7 +84,7 @@ Only the root variable must exist at parse time; the parser does not validate th
 
 ## Using the C++ API
 
-Construct a `Document` with a caller-owned `MetaArena`, which aliases `NWB::Core::Alloc::GlobalArena`. Parse before accessing the asset, then validate the expected value types:
+Construct a `Document` with a caller-owned `MetaArena`, which aliases `NWB::Core::Alloc::GlobalArena`. Parse before looking up a variable, then validate the expected value types:
 
 ```cpp
 #include <core/metascript/parser.h>
@@ -94,18 +94,18 @@ namespace Meta = NWB::Core::Metascript;
 bool ReadExampleWidth(Meta::MetaArena& arena, i64& outWidth){
     Meta::Document document(arena);
     if(!document.parse(Meta::LiteralView(R"(
-        example asset;
-        asset.width = 256 * 2;
+        example settings;
+        settings.width = 256 * 2;
     )"))){
         // Inspect document.errors() here for line, column, and message.
         return false;
     }
 
-    const Meta::Value& asset = document.asset();
-    if(!asset.isMap())
+    const Meta::Value* settings = document.findField(Meta::LiteralView("settings"));
+    if(!settings || !settings->isMap())
         return false;
 
-    const Meta::Value* width = asset.findField(Meta::LiteralView("width"));
+    const Meta::Value* width = settings->findField(Meta::LiteralView("width"));
     if(!width || !width->isInteger())
         return false;
 
@@ -120,21 +120,21 @@ bool ReadExampleWidth(Meta::MetaArena& arena, i64& outWidth){
 
 | API | Contract |
 | --- | --- |
-| `parse(MStringView)` | Parses a complete source buffer and requires at least one ordinary declaration. |
+| `parse(MStringView)` | Parses a complete source buffer. Empty sources and sources containing only structs are valid. |
 | `parse(IMetaReader&)` | Reads the complete source, then applies the same parsing rules. |
-| `parseWithImplicitAsset(source, type, variable)` | Creates the named root before parsing, allowing a declaration-free body such as a `.bind` file. Both supplied names must be nonempty. |
-| `assetType()`, `assetVariable()`, `asset()` | Access the selected root after successful parsing. The root can still be `Null` or a non-map value. |
-| `declarations()` | Returns ordinary variable declarations in source order, including the supplied implicit declaration when used. |
-| `findVariable(name)` | Returns a borrowed pointer, or `nullptr` if the name is absent. |
+| `findField(name)` | Returns a borrowed pointer to a top-level variable, or `nullptr` when absent. Const and mutable overloads are available; lookup never creates a variable. |
+| `findDeclaration(name)` | Returns a borrowed pointer to a variable's declaration (`type`, `variable`), or `nullptr` when absent. |
+| `declarations()` | Returns every variable declaration in source order, including declarations with a struct type. |
+| `structs()` | Returns the independent struct definition map, keyed by struct name. Each value describes its attributes and fields. |
 | `hasErrors()`, `errors()` | Exposes parse diagnostics containing `line`, `column`, and `message`. |
 
-Each parse call clears the previous document contents and diagnostics. A failed parse can leave partially populated values; consume the result only when parsing returns `true`. `asset()` asserts that its selected variable exists. Source diagnostics use one-based line and column positions; reader failures use `(0, 0)`.
+Each parse call clears the previous document contents and diagnostics. A failed parse can leave partially populated values; consume the result only when parsing returns `true`. Source diagnostics use one-based line and column positions; reader failures use `(0, 0)`.
 
 `IMetaReader::read(buffer, maxBytes)` returns `Expected<usize>`. Return a positive byte count for data, zero for EOF, or an unexpected result for a read failure. The document requests chunks of 4096 bytes and buffers all input before parsing. A failure reports `"read error"`; a count larger than requested reports `"reader returned more bytes than requested"`. Exceptions from readers or allocations propagate to the caller.
 
 ### Values and ownership
 
-Use `isInteger()`, `isMap()`, and the other `is*()` predicates before calling the corresponding `as*()` accessors. These accessors assert their required types. `toDouble()` accepts either numeric type. `findField(name)` requires a map and returns `nullptr` for a missing field. The free `FindField(value, AStringView)` helper forwards to that lookup.
+Use `isInteger()`, `isMap()`, and the other `is*()` predicates before calling the corresponding `as*()` accessors. These accessors assert their required types. `toDouble()` accepts either numeric type. `Value::findField(name)` requires a map and returns `nullptr` for a missing field. The free `FindField(value, AStringView)` helper forwards to that lookup.
 
 For programmatic construction, `field(name)` promotes `Null` to a map and creates missing `Null` fields; `append(Value&&)` promotes `Null` to a list. `makeMap()`, `makeList()`, and the `set*()` methods replace the current value. `copyString()` makes an owned string copy. `copyStringList(out)` first validates that every element is a string, then appends copies to the output container; it returns `false` for an incompatible value.
 
@@ -147,8 +147,6 @@ A `Value` copy constructor uses the source arena. Copy and move assignment retai
 Struct declarations describe fields and attributes as metadata:
 
 ```text
-material_bind asset;
-
 [material_mutable]
 struct Parameters {
     [default("half4(1.0h, 1.0h, 1.0h, 1.0h)")]
@@ -158,25 +156,24 @@ struct Parameters {
 Parameters runtime;
 ```
 
-When the caller uses `parseWithImplicitAsset(source, "material_bind", "asset")`, omit the first declaration from the source. Attributes can appear on structs and fields. Each attribute accepts zero or more string arguments, for example `[flag]`, `[flag()]`, or `[name("a", "b")]`; attribute argument lists do not allow a trailing comma. Field declarations consist of a type and name followed by a semicolon.
+Attributes can appear on structs and fields. Each attribute accepts zero or more string arguments, for example `[flag]`, `[flag()]`, or `[name("a", "b")]`; attribute argument lists do not allow a trailing comma. Field declarations consist of a type and name followed by a semicolon.
 
-The example records the following shape beneath the selected asset root:
+Struct definitions have their own namespace and require no variable declaration or selected root. The example records this descriptor in `document.structs()`:
 
 ```text
-structs:
-    Parameters:
-        attributes: [{"name": "material_mutable", "arguments": []}]
-        fields:
-            - {"type": "half4", "name": "tint",
-               "attributes": [{"name": "default",
-                               "arguments": ["half4(1.0h, 1.0h, 1.0h, 1.0h)"]}]}
-instances:
-    - {"type": "Parameters", "name": "runtime"}
+Parameters:
+    attributes: [{"name": "material_mutable", "arguments": []}]
+    fields:
+        - {"type": "half4", "name": "tint",
+           "attributes": [{"name": "default",
+                           "arguments": ["half4(1.0h, 1.0h, 1.0h, 1.0h)"]}]}
 ```
 
-A struct must follow the explicit or implicit asset declaration and precede its instances. Duplicate struct names, field names within a struct, and instance names are errors. The asset root must be `Null` or a map. `Null` `structs` and `instances` fields are promoted to maps and lists; existing non-`Null` fields must already have those respective types.
+`Parameters runtime;` is an ordinary variable declaration: `document.findDeclaration("runtime")` records the type `Parameters`, and `document.findField("runtime")` returns its initially `Null` value. Initializers and assignments follow the same rules as any other variable. The parser does not instantiate fields, check whether a declared type names a struct, or enforce a struct's field schema. Struct definitions can appear before or after variable declarations.
 
-Instances are records in `asset.instances`; they do not create variables returned by `findVariable()` or `declarations()`. An identifier type that has not been declared as a struct is handled as an ordinary variable type. Attribute meanings, supported field types, and binding layouts are validated by material code rather than this parser.
+Duplicate struct names, field names within a struct, and variable names are errors. A struct and a variable may share a name. Struct definitions do not create variables named `structs`, `instances`, or `asset`, and variable assignments cannot change the struct definition map.
+
+The material bind consumer uses struct descriptors and typed variable declarations to construct its own structs and instances. Attribute meanings, supported field types, instance initialization restrictions, and binding layouts are validated by material code. Its source can contain just the structs and instances shown above.
 
 ## Integration and source layout
 
@@ -190,7 +187,7 @@ MetaScript handles syntax and generic value operations. File access, UTF-8 BOM r
 | `parser.h`, `parser.cpp` | `Document`, parse entry points, and reader buffering. |
 | `parser_cursor.*` | Shared token cursor and diagnostics. |
 | `expression_parser.*`, `operation_validator.*` | Literal/reference expressions and operand validation. |
-| `statement_parser.*`, `bind_declaration_builder.*` | Declarations, assignments, attributes, and bind metadata construction. |
+| `statement_parser.*` | Variable declarations, assignments, attributes, and independent struct descriptions. |
 
 ## Build and tests
 

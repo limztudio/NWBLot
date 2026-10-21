@@ -6,7 +6,6 @@ target_sources(nwb_metascript PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/parser_cursor.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/operation_validator.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/expression_parser.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/bind_declaration_builder.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/statement_parser.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/value.h"
     "${CMAKE_CURRENT_LIST_DIR}/lexer.h"
@@ -14,7 +13,6 @@ target_sources(nwb_metascript PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/parser_cursor.h"
     "${CMAKE_CURRENT_LIST_DIR}/operation_validator.h"
     "${CMAKE_CURRENT_LIST_DIR}/expression_parser.h"
-    "${CMAKE_CURRENT_LIST_DIR}/bind_declaration_builder.h"
     "${CMAKE_CURRENT_LIST_DIR}/statement_parser.h"
     "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
 )

@@ -244,9 +244,10 @@ Expected<CsgShapeCookEntry> ParseCsgShapeCookMetadata(CookArena& cookArena, cons
 
     CsgShapeCookEntry entry(cookArena);
 
-    const Core::Metascript::Value& asset = doc.asset();
-    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_CsgShapeMetaDiagnosticPrefix))
-        return MakeUnexpected(Failure{});
+    const auto assetValue = Core::Assets::FindMetadataAssetMapValue<Core::Metascript::Document, Core::Metascript::Value>(nwbFilePath, doc, s_CsgShapeMetaDiagnosticPrefix);
+    if(!assetValue)
+        return MakeUnexpected(assetValue.error());
+    const Core::Metascript::Value& asset = **assetValue;
     if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_CsgShapeMetaDiagnosticPrefix, &IsAllowedCsgShapeAssetField))
         return MakeUnexpected(Failure{});
 

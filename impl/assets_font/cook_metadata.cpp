@@ -48,7 +48,10 @@ Expected<FontCookEntry> ParseFontCookMetadata(const Path& assetRoot, const AStri
     if(!virtualPathResult)
         return MakeUnexpected(Failure{});
     virtualPath = *virtualPathResult;
-    return ParseFontCookMetadataValue(virtualPath, nwbFilePath, doc.asset(), arena);
+    const auto asset = Core::Assets::FindMetadataAssetValue<Core::Metascript::Document, Core::Metascript::Value>(nwbFilePath, doc, __hidden_font_cook_metadata::s_DiagnosticPrefix);
+    if(!asset)
+        return MakeUnexpected(asset.error());
+    return ParseFontCookMetadataValue(virtualPath, nwbFilePath, **asset, arena);
 }
 
 Expected<FontCookEntry> ParseFontCookMetadataValue(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena){

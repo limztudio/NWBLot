@@ -133,9 +133,10 @@ Expected<SamplerCookEntry> ParseSamplerCookMetadata(const Path& assetRoot, const
     using namespace __hidden_sampler_cook;
 
     SamplerCookEntry entry(arena);
-    const Value& asset = doc.asset();
-    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_DiagnosticPrefix))
-        return MakeUnexpected(Failure{});
+    const auto assetValue = Core::Assets::FindMetadataAssetMapValue<Core::Metascript::Document, Value>(nwbFilePath, doc, s_DiagnosticPrefix);
+    if(!assetValue)
+        return MakeUnexpected(assetValue.error());
+    const Value& asset = **assetValue;
     if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_DiagnosticPrefix, { s_MinFilterField, s_MagFilterField, s_MipFilterField, s_AddressUField, s_AddressVField, s_AddressWField, s_ReductionField, s_MaxAnisotropyField, s_MipBiasField, }))
         return MakeUnexpected(Failure{});
 

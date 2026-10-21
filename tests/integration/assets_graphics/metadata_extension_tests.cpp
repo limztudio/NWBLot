@@ -519,7 +519,9 @@ TEST(MetadataExtensionOwnership, GraphicsParserFailureReleasesItsActualExtension
         EXPECT_EQ(ownerArena.memoryStats().usedBytes, 0u);
     }
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("asset is not a map")));
-    EXPECT_TRUE(document.asset().isNull());
+    const Metascript::Value* const asset = document.findField("asset");
+    ASSERT_NE(asset, nullptr);
+    EXPECT_TRUE(asset->isNull());
 }
 
 TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnusedBuckets){

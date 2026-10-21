@@ -24,11 +24,6 @@ constexpr AStringView s_AssetVariable = "asset";
 constexpr AStringView s_ItemsField = "items";
 constexpr AStringView s_NameField = "name";
 
-static constexpr AStringView s_STRUCT_NWB_DUP = "struct NwbDup{\n";
-static constexpr AStringView s_FLOAT_VALUE_LINE = "    float value;\n";
-static constexpr AStringView s_NWB_DUP_RUNTIME = "NwbDup runtime;\n";
-static constexpr AStringView s_CLOSE_BRACE = "};\n";
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -67,20 +62,16 @@ template<usize N>
     return MStringView(text, N > 0u ? N - 1u : 0u);
 }
 
-[[nodiscard]] static bool ParseImplicitMaterialBind(Document& document, const AString& source){
-    return document.parseWithImplicitAsset(ViewOf(source), LiteralView("material_bind"), MStringView(s_AssetVariable.data(), s_AssetVariable.size()));
-}
-
 static void CheckStringListElement(const Value& value, const AString& expected){
     ASSERT_TRUE(value.isString());
     EXPECT_EQ(value.asString(), ViewOf(expected));
 }
 
-static void CheckImplicitMaterialBindParseFailsWithMessage(const AString& source, MStringView expectedMessage){
+static void CheckParseFailsWithMessage(const AString& source, MStringView expectedMessage){
     DestinationArena arena;
     Document document(arena.arena);
 
-    const bool parsed = ParseImplicitMaterialBind(document, source);
+    const bool parsed = document.parse(ViewOf(source));
     EXPECT_FALSE(parsed);
     ASSERT_TRUE(document.hasErrors());
     ASSERT_FALSE(document.errors().empty());
@@ -287,57 +278,148 @@ TEST(Metascript, ConcatenatesNestedListElementsAcrossReallocation){
     }
 }
 
-TEST(Metascript, BindDeclarationsKeepFirstAssetAcrossDeclarationReallocation){
+TEST(Metascript, NamedLookupDoesNotSelectAnAssetOrDependOnDeclarationOrder){
     DestinationArena arena;
     Document document(arena.arena);
-    ASSERT_TRUE(document.parse(LiteralView("material_bind asset;")));
-    const usize originalCapacity = document.declarations().capacity();
+    ASSERT_TRUE(document.parse(LiteralView("number first = 9; texture asset; asset.source = \"albedo.png\"; number last = 2;")));
+    ASSERT_EQ(document.declarations().size(), 3u);
+    EXPECT_EQ(document.declarations()[0u].variable, "first");
 
-    AString source("material_bind asset;\n");
-    for(usize index = 0u; index <= originalCapacity; ++index){
-        char indexText[TextDetail::s_DecimalTextBufferBytes] = {};
-        const AStringView indexView = FormatDecimal(index, indexText);
-        source.append("float extra");
-        source.append(indexView.data(), indexView.size());
-        source.append(";\n");
+    const Document& constDocument = document;
+    const Value* first = constDocument.findField("first");
+    ASSERT_NE(first, nullptr);
+    EXPECT_EQ(first->asInteger(), 9);
+    const auto* declaration = constDocument.findDeclaration("asset");
+    ASSERT_NE(declaration, nullptr);
+    EXPECT_EQ(declaration->type, "texture");
+    EXPECT_EQ(declaration->variable, "asset");
+    const Value* asset = constDocument.findField("asset");
+    ASSERT_NE(asset, nullptr);
+    ASSERT_TRUE(asset->isMap());
+    const Value* source = asset->findField("source");
+    ASSERT_NE(source, nullptr);
+    EXPECT_EQ(source->asString(), "albedo.png");
+    EXPECT_EQ(constDocument.findField("missing"), nullptr);
+    EXPECT_EQ(document.findField("missing"), nullptr);
+    EXPECT_EQ(constDocument.findDeclaration("missing"), nullptr);
+
+    Value* last = document.findField("last");
+    ASSERT_NE(last, nullptr);
+    last->setInteger(5);
+    EXPECT_EQ(constDocument.findField("last")->asInteger(), 5);
+    EXPECT_EQ(document.findDeclaration("first")->type, "number");
+}
+
+TEST(Metascript, EmptyAndStructOnlyDocumentsHaveNoImplicitVariables){
+    DestinationArena arena;
+    Document document(arena.arena);
+    ASSERT_TRUE(document.parse(LiteralView("")));
+    EXPECT_TRUE(document.declarations().empty());
+    EXPECT_TRUE(document.structs().empty());
+    EXPECT_EQ(document.findField("asset"), nullptr);
+
+    ASSERT_TRUE(document.parse(LiteralView("[custom(\"argument\")] struct Description{ [field] float value; };")));
+    EXPECT_TRUE(document.declarations().empty());
+    EXPECT_EQ(document.findField("asset"), nullptr);
+    EXPECT_EQ(document.findField("Description"), nullptr);
+    ASSERT_EQ(document.structs().size(), 1u);
+    const auto structure = document.structs().find(LiteralView("Description"));
+    ASSERT_NE(structure, document.structs().end());
+    const Value* attributes = structure.value().findField("attributes");
+    ASSERT_NE(attributes, nullptr);
+    ASSERT_TRUE(attributes->isList());
+    ASSERT_EQ(attributes->asList().size(), 1u);
+    const Value* attributeName = attributes->asList()[0u].findField("name");
+    ASSERT_NE(attributeName, nullptr);
+    EXPECT_EQ(attributeName->asString(), "custom");
+    const Value* arguments = attributes->asList()[0u].findField("arguments");
+    ASSERT_NE(arguments, nullptr);
+    ASSERT_EQ(arguments->asList().size(), 1u);
+    EXPECT_EQ(arguments->asList()[0u].asString(), "argument");
+    const Value* fields = structure.value().findField("fields");
+    ASSERT_NE(fields, nullptr);
+    ASSERT_EQ(fields->asList().size(), 1u);
+    EXPECT_EQ(fields->asList()[0u].findField("type")->asString(), "float");
+    EXPECT_EQ(fields->asList()[0u].findField("name")->asString(), "value");
+    const Value* fieldAttributes = fields->asList()[0u].findField("attributes");
+    ASSERT_NE(fieldAttributes, nullptr);
+    ASSERT_EQ(fieldAttributes->asList().size(), 1u);
+    EXPECT_EQ(fieldAttributes->asList()[0u].findField("name")->asString(), "field");
+}
+
+TEST(Metascript, StructNamesAndVariablesUseSeparateNamespaces){
+    DestinationArena arena;
+    Document document(arena.arena);
+    ASSERT_TRUE(document.parse(LiteralView("number Parameters = 3; struct Parameters{ float value; }; Parameters runtime; runtime.value = 4;")));
+    ASSERT_EQ(document.structs().size(), 1u);
+    ASSERT_EQ(document.declarations().size(), 2u);
+    EXPECT_EQ(document.findField("Parameters")->asInteger(), 3);
+    const auto* declaration = document.findDeclaration("runtime");
+    ASSERT_NE(declaration, nullptr);
+    EXPECT_EQ(declaration->type, "Parameters");
+    EXPECT_EQ(declaration->variable, "runtime");
+    const Value* runtime = document.findField("runtime");
+    ASSERT_NE(runtime, nullptr);
+    ASSERT_TRUE(runtime->isMap());
+    EXPECT_EQ(runtime->findField("value")->asInteger(), 4);
+    EXPECT_EQ(document.findField("asset"), nullptr);
+    EXPECT_EQ(document.findField("structs"), nullptr);
+    EXPECT_EQ(document.findField("instances"), nullptr);
+}
+
+TEST(Metascript, StructMetadataOwnsSourceAndSurvivesVariableStorageGrowth){
+    DestinationArena arena;
+    Document document(arena.arena);
+    {
+        AString source("struct Description{ float value; }; Description runtime;\n");
+        for(usize index = 0u; index < 128u; ++index){
+            char indexText[TextDetail::s_DecimalTextBufferBytes] = {};
+            const AStringView indexView = FormatDecimal(index, indexText);
+            source.append("float extra");
+            source.append(indexView.data(), indexView.size());
+            source.append(";\n");
+        }
+        ASSERT_TRUE(document.parse(ViewOf(source)));
     }
-    source.append(s_STRUCT_NWB_DUP.data(), s_STRUCT_NWB_DUP.size());
-    source.append(s_FLOAT_VALUE_LINE.data(), s_FLOAT_VALUE_LINE.size());
-    source.append(s_CLOSE_BRACE.data(), s_CLOSE_BRACE.size());
-    source.append(s_NWB_DUP_RUNTIME.data(), s_NWB_DUP_RUNTIME.size());
-
-    ASSERT_TRUE(document.parse(ViewOf(source)));
-    ASSERT_GT(document.declarations().capacity(), originalCapacity);
-    const Value& asset = document.asset();
-    const Value* structs = asset.findField(LiteralView("structs"));
-    ASSERT_NE(structs, nullptr);
-    const Value* declaredStruct = structs->findField(LiteralView("NwbDup"));
-    ASSERT_NE(declaredStruct, nullptr);
-    const Value* fields = declaredStruct->findField(LiteralView("fields"));
+    ASSERT_EQ(document.declarations().size(), 129u);
+    const auto structure = document.structs().find(LiteralView("Description"));
+    ASSERT_NE(structure, document.structs().end());
+    const Value* fields = structure.value().findField("fields");
     ASSERT_NE(fields, nullptr);
     ASSERT_TRUE(fields->isList());
     ASSERT_EQ(fields->asList().size(), 1u);
     const Value* fieldName = fields->asList()[0u].findField(MStringView(s_NameField.data(), s_NameField.size()));
     ASSERT_NE(fieldName, nullptr);
-    EXPECT_EQ(fieldName->asString(), LiteralView("value"));
-    const Value* instances = asset.findField(LiteralView("instances"));
-    ASSERT_NE(instances, nullptr);
-    ASSERT_TRUE(instances->isList());
-    ASSERT_EQ(instances->asList().size(), 1u);
-    const Value* instanceName = instances->asList()[0u].findField(MStringView(s_NameField.data(), s_NameField.size()));
-    ASSERT_NE(instanceName, nullptr);
-    EXPECT_EQ(instanceName->asString(), LiteralView("runtime"));
+    EXPECT_EQ(fieldName->asString(), "value");
+    EXPECT_EQ(document.findDeclaration("runtime")->type, "Description");
+    ASSERT_NE(document.findField("runtime"), nullptr);
+    EXPECT_TRUE(document.findField("runtime")->isNull());
 }
 
-TEST(Metascript, BindStyleStructDuplicateRejections){
-    const AString duplicateFieldSource = AString(s_STRUCT_NWB_DUP) + s_FLOAT_VALUE_LINE.data() + s_FLOAT_VALUE_LINE.data() + s_CLOSE_BRACE.data();
-    CheckImplicitMaterialBindParseFailsWithMessage(duplicateFieldSource, LiteralView("duplicate struct field declaration"));
+TEST(Metascript, StructAndVariableDuplicatesAreRejectedInTheirOwnNamespaces){
+    CheckParseFailsWithMessage(AString("struct Duplicate{ float value; float value; };"), "duplicate struct field declaration");
+    CheckParseFailsWithMessage(AString("struct Duplicate{}; struct Duplicate{};"), "duplicate struct declaration");
+    CheckParseFailsWithMessage(AString("struct Description{}; Description runtime; Description runtime;"), "duplicate variable declaration");
+    CheckParseFailsWithMessage(AString("number value; text value;"), "duplicate variable declaration");
+}
 
-    const AString duplicateInstanceSource = AString(s_STRUCT_NWB_DUP) + s_FLOAT_VALUE_LINE.data() + s_CLOSE_BRACE.data() + s_NWB_DUP_RUNTIME.data() + s_NWB_DUP_RUNTIME.data();
-    CheckImplicitMaterialBindParseFailsWithMessage(duplicateInstanceSource, LiteralView("duplicate struct instance declaration"));
-
-    const AString existingInstanceSource = AString("asset.instances = [{ \"type\": \"NwbDup\", \"name\": \"runtime\" }];\n") + s_STRUCT_NWB_DUP.data() + s_FLOAT_VALUE_LINE.data() + s_CLOSE_BRACE.data() + s_NWB_DUP_RUNTIME.data();
-    CheckImplicitMaterialBindParseFailsWithMessage(existingInstanceSource, LiteralView("duplicate struct instance declaration"));
+TEST(Metascript, ReparsingClearsStructsVariablesDeclarationsAndErrors){
+    DestinationArena arena;
+    Document document(arena.arena);
+    ASSERT_TRUE(document.parse(LiteralView("struct Old{ float value; }; Old previous;")));
+    ASSERT_FALSE(document.parse(LiteralView("struct Partial{}; number value; number value;")));
+    ASSERT_TRUE(document.hasErrors());
+    ASSERT_TRUE(document.parse(LiteralView("text current = \"new\";")));
+    EXPECT_FALSE(document.hasErrors());
+    EXPECT_TRUE(document.structs().empty());
+    ASSERT_EQ(document.declarations().size(), 1u);
+    EXPECT_EQ(document.findDeclaration("previous"), nullptr);
+    EXPECT_EQ(document.findField("previous"), nullptr);
+    EXPECT_EQ(document.findField("value"), nullptr);
+    EXPECT_EQ(document.findField("current")->asString(), "new");
+    ASSERT_TRUE(document.parse(LiteralView("")));
+    EXPECT_TRUE(document.declarations().empty());
+    EXPECT_EQ(document.findField("current"), nullptr);
 }
 
 
@@ -360,23 +442,12 @@ TEST(Metascript, InvalidAssignmentTargetsPreserveDiagnosticsAndDeclaredValue){
         EXPECT_EQ(document.errors()[0u].line, 2u);
         EXPECT_EQ(document.errors()[0u].column, 1u);
         EXPECT_EQ(MStringView(document.errors()[0u].message.data(), document.errors()[0u].message.size()), testCase.message);
-        const Value* asset = document.findVariable(s_AssetVariable);
+        const Value* asset = document.findField(s_AssetVariable);
         ASSERT_NE(asset, nullptr);
         ASSERT_TRUE(asset->isInteger());
         EXPECT_EQ(asset->asInteger(), testCase.retainedValue);
-        EXPECT_EQ(document.findVariable("missing"), nullptr);
+        EXPECT_EQ(document.findField("missing"), nullptr);
     }
-}
-
-TEST(Metascript, BindDeclarationWithoutAssetPreservesMissingRootDiagnostic){
-    DestinationArena arena;
-    Document document(arena.arena);
-    EXPECT_FALSE(document.parse(LiteralView("struct NwbOrphan{ float value; };")));
-    ASSERT_EQ(document.errors().size(), 1u);
-    EXPECT_EQ(document.errors()[0u].line, 1u);
-    EXPECT_EQ(document.errors()[0u].column, 1u);
-    EXPECT_EQ(MStringView(document.errors()[0u].message.data(), document.errors()[0u].message.size()), LiteralView("missing declared asset variable"));
-    EXPECT_EQ(document.findVariable("asset"), nullptr);
 }
 
 

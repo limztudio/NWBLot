@@ -240,7 +240,10 @@ Expected<SkeletonCookEntry> ParseSkeletonCookMetadata(const Path& assetRoot, con
     if(!virtualPathResult)
         return MakeUnexpected(Failure{});
     virtualPath = *virtualPathResult;
-    return ParseSkeletonCookMetadata(virtualPath, nwbFilePath, doc.asset(), arena, scratchArena);
+    const auto asset = Core::Assets::FindMetadataAssetValue<Core::Metascript::Document, Core::Metascript::Value>(nwbFilePath, doc, __hidden_skeleton_cook::s_SkeletonMetaDiagnosticPrefix);
+    if(!asset)
+        return MakeUnexpected(asset.error());
+    return ParseSkeletonCookMetadata(virtualPath, nwbFilePath, **asset, arena, scratchArena);
 }
 
 Expected<Skeleton> BuildSkeletonAsset(const SkeletonCookEntry& skeletonEntry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){

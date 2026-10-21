@@ -91,7 +91,7 @@ static void VerifyOwnedOutput(const ExpandedAssetMetadataVector& output, const M
     const Value* const target = items->asList()[1u].findField(s_TARGET);
     ASSERT_NE(target, nullptr);
     EXPECT_EQ(target->asString(), s_PROJECT_FIXTURES_BUNDLE_FIRST);
-    const Value* const first = document.findVariable("first");
+    const Value* const first = document.findField("first");
     ASSERT_NE(first, nullptr);
     const Value* const sourceTarget = first->findField(s_TARGET);
     ASSERT_NE(sourceTarget, nullptr);
@@ -166,7 +166,7 @@ TEST(AssetBunchOwnership, OutputMoveAndGrowthPreserveValuesUntilTheirFinalOwnerD
         destination.reserve(destination.capacity() + 37u);
         VerifyOwnedOutput(destination, fixture.document);
         destination[1u].value.field(s_LOCAL).field(s_LABEL).setString("changed output");
-        const Value* const local = fixture.document.findVariable(s_LOCAL);
+        const Value* const local = fixture.document.findField(s_LOCAL);
         ASSERT_NE(local, nullptr);
         const Value* const label = local->findField(s_LABEL);
         ASSERT_NE(label, nullptr);

@@ -182,7 +182,10 @@ Expected<usize> DependencyProviderCatalog::resolve(const Name& virtualPath, cons
         const auto document = read(index, scratchArena);
         if(!document)
             return MakeUnexpected(Failure{});
-        const auto documentAssetType = Name::FromText(document->assetType());
+        const auto* assetDeclaration = Assets::FindMetadataAssetDeclaration(*document);
+        if(!assetDeclaration)
+            continue;
+        const auto documentAssetType = Name::FromText(AStringView(assetDeclaration->type.data(), assetDeclaration->type.size()));
         if(!documentAssetType)
             return MakeUnexpected(Failure{});
         if(*documentAssetType != assetType)

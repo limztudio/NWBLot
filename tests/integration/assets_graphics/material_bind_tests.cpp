@@ -112,8 +112,14 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
         const auto retiredFixtureBind = StringFormat(testArena.arena, "[material_constant] struct NwbResourceMaterial{{ " "[fixture(\"builtin/material_fixture/checker_rgba8\")] {} resource; }}; NwbResourceMaterial surface;", resourceType);
         expectParseFailure(retiredFixtureBind, resourceType, NWB_TEXT("has unsupported attribute 'fixture'"));
     }
-    expectParseFailure(AssetsGraphicsFixture::s_DuplicateInstanceMaterialBindSource, "material_bind_duplicate_instance", NWB_TEXT("duplicate struct instance declaration"));
-    expectParseFailure(AssetsGraphicsFixture::s_InstanceOverrideMaterialBindSource, "material_bind_instance_override", NWB_TEXT("unsupported asset field 'instance_override'"));
+    expectParseFailure(AssetsGraphicsFixture::s_DuplicateInstanceMaterialBindSource, "material_bind_duplicate_instance", NWB_TEXT("duplicate variable declaration"));
+    expectParseFailure(AssetsGraphicsFixture::s_InitializedInstanceMaterialBindSource, "material_bind_initialized_instance", NWB_TEXT("instance 'surface' must not have an initializer or assignments"));
+    constexpr AStringView s_ValidStruct = "[material_constant] struct Surface { [default(\"float(0.5)\")] float roughness; };\n";
+    expectParseFailure(s_ValidStruct, "material_bind_missing_instance", NWB_TEXT("instance declarations must not be empty"));
+    const auto unknownInstance = StringFormat(testArena.arena, "{}Unknown surface;", s_ValidStruct);
+    expectParseFailure(unknownInstance, "material_bind_unknown_instance_type", NWB_TEXT("instance 'surface' references unknown struct type 'Unknown'"));
+    const auto assignedInstance = StringFormat(testArena.arena, "{}Surface surface; surface.roughness = 0.5;", s_ValidStruct);
+    expectParseFailure(assignedInstance, "material_bind_assigned_instance", NWB_TEXT("instance 'surface' must not have an initializer or assignments"));
 
     auto float1DefaultRootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "material_bind_float1_default");
     ASSERT_TRUE(float1DefaultRootResult);

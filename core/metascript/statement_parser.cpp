@@ -45,53 +45,25 @@ constexpr usize s_InitialStructFieldCount = 8u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-StatementParser::StatementParser(MStringView source, MetaArena& arena, Alloc::ScratchArena& scratchArena, MVector<ParseError>& errors, MStringMap<Value>& variables, Document::DeclarationList& declarations)
+StatementParser::StatementParser(MStringView source, MetaArena& arena, Alloc::ScratchArena& scratchArena, MVector<ParseError>& errors, MStringMap<Value>& variables, Document::DeclarationList& declarations, Document::StructMap& structs)
     : m_cursor(source, arena, scratchArena, errors)
     , m_validator(m_cursor)
     , m_expressions(m_cursor, m_validator, variables)
-    , m_bindDeclarations(m_cursor, arena, variables)
     , m_arena(arena)
     , m_scratchArena(scratchArena)
     , m_variables(variables)
     , m_declarations(declarations)
-    , m_declaredStructs(scratchArena)
+    , m_structs(structs)
 {}
 
 
-bool StatementParser::parseInto(MString& outAssetType, MString& outAssetVariable){
-    if(!parseStatements())
-        return false;
-    return finalizeExplicitDeclaration(outAssetType, outAssetVariable);
-}
-
-bool StatementParser::parseWithImplicitAsset(MString& outAssetType, MString& outAssetVariable, const MStringView assetType, const MStringView assetVariable){
-    if(!declareImplicitAsset(outAssetType, outAssetVariable, assetType, assetVariable))
-        return false;
-    return parseStatements();
-}
-
-
-bool StatementParser::parseStatements(){
+bool StatementParser::parseInto(){
     while(m_cursor.m_current.type != TokenType::EndOfFile){
         if(!parseStatement())
             return false;
     }
 
     return !m_cursor.failed();
-}
-
-bool StatementParser::finalizeExplicitDeclaration(MString& outAssetType, MString& outAssetVariable){
-    if(m_declarations.empty()){
-        m_cursor.error(1u, 1u, "expected declaration");
-        return false;
-    }
-
-    const Document::Declaration& declaration = m_declarations.front();
-    outAssetType.assign(declaration.type.data(), declaration.type.size());
-    outAssetVariable.assign(declaration.variable.data(), declaration.variable.size());
-    if(m_declaredAssetVariable.empty())
-        m_declaredAssetVariable = MStringView(outAssetVariable.data(), outAssetVariable.size());
-    return true;
 }
 
 bool StatementParser::parseDeclaration(const MStringView typeName, const u32 typeLine, const u32 typeColumn){
@@ -134,27 +106,6 @@ bool StatementParser::declareVariable(const MStringView typeName, const MStringV
         return false;
     }
     m_declarations.emplace_back(typeName, variableName, m_arena);
-    if(m_declaredAssetVariable.empty())
-        m_declaredAssetVariable = variableName;
-    return true;
-}
-
-bool StatementParser::declareImplicitAsset(MString& outAssetType, MString& outAssetVariable, const MStringView assetType, const MStringView assetVariable){
-    if(assetType.empty() || assetVariable.empty()){
-        m_cursor.error(1u, 1u, "implicit asset declaration requires asset type and variable");
-        return false;
-    }
-
-    outAssetType.assign(assetType.data(), assetType.size());
-    outAssetVariable.assign(assetVariable.data(), assetVariable.size());
-    m_declaredAssetVariable = MStringView(outAssetVariable.data(), outAssetVariable.size());
-
-    MString key(outAssetVariable.data(), outAssetVariable.size(), m_arena);
-    if(!m_variables.emplace(Move(key), Value(m_arena)).second){
-        m_cursor.error(1u, 1u, "duplicate variable declaration");
-        return false;
-    }
-    m_declarations.emplace_back(assetType, assetVariable, m_arena);
     return true;
 }
 
@@ -181,12 +132,8 @@ bool StatementParser::parseStatement(){
         return false;
     }
 
-    if(m_cursor.m_current.type == TokenType::Identifier){
-        if(__hidden_metascript_statement_parser::IsNameInList(m_declaredStructs, firstName))
-            return parseStructInstanceDeclaration(firstName);
-
+    if(m_cursor.m_current.type == TokenType::Identifier)
         return parseDeclaration(firstName, firstLine, firstColumn);
-    }
 
     return parseAssignment(firstName, firstLine, firstColumn);
 }
@@ -321,7 +268,7 @@ bool StatementParser::parseStructDeclaration(Value&& attributes, const u32 struc
     const MStringView structName = m_cursor.m_current.text;
     m_cursor.advance();
 
-    if(__hidden_metascript_statement_parser::IsNameInList(m_declaredStructs, structName)){
+    if(m_structs.find(structName) != m_structs.end()){
         m_cursor.error(structLine, structColumn, "duplicate struct declaration");
         return false;
     }
@@ -364,10 +311,12 @@ bool StatementParser::parseStructDeclaration(Value&& attributes, const u32 struc
     if(!m_cursor.expect(TokenType::Semicolon, "expected ';' after struct declaration"))
         return false;
 
-    if(!m_bindDeclarations.addStruct(m_declaredAssetVariable, structName, Move(attributes), Move(fields), structLine, structColumn))
-        return false;
-
-    m_declaredStructs.push_back(structName);
+    Value description(m_arena);
+    description.makeMap();
+    description.field(LiteralView("attributes")) = Move(attributes);
+    description.field(LiteralView("fields")) = Move(fields);
+    MString key(structName.data(), structName.size(), m_arena);
+    m_structs.emplace(Move(key), Move(description));
     return true;
 }
 
@@ -405,19 +354,6 @@ Value StatementParser::parseStructField(Value&& attributes, ScratchNameList& fie
     field.field(LiteralView("attributes")) = Move(attributes);
     return field;
 }
-
-bool StatementParser::parseStructInstanceDeclaration(MStringView typeName){
-    const MStringView instanceName = m_cursor.m_current.text;
-    const u32 instanceLine = m_cursor.m_current.line;
-    const u32 instanceColumn = m_cursor.m_current.column;
-    m_cursor.advance();
-
-    if(!m_cursor.expect(TokenType::Semicolon, "expected ';' after instance declaration"))
-        return false;
-
-    return m_bindDeclarations.addInstance(m_declaredAssetVariable, typeName, instanceName, instanceLine, instanceColumn);
-}
-
 
 Expected<NotNull<Value*>> StatementParser::resolveTarget(const ExpressionParser::ScratchPath& path, const u32 errorLine, const u32 errorColumn){
     NWB_ASSERT(!path.empty());

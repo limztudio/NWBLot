@@ -329,7 +329,10 @@ Expected<SkinCookEntry> ParseSkinCookMetadata(const Path& assetRoot, const AStri
     if(!virtualPathResult)
         return MakeUnexpected(Failure{});
     virtualPath = *virtualPathResult;
-    return ParseSkinCookMetadata(virtualPath, nwbFilePath, doc.asset(), arena);
+    const auto asset = Core::Assets::FindMetadataAssetValue<Core::Metascript::Document, Core::Metascript::Value>(nwbFilePath, doc, __hidden_skin_cook::s_SkinMetaDiagnosticPrefix);
+    if(!asset)
+        return MakeUnexpected(asset.error());
+    return ParseSkinCookMetadata(virtualPath, nwbFilePath, **asset, arena);
 }
 
 Expected<Skin> BuildSkinAsset(SkinCookEntry& skinEntry, Core::Assets::AssetArena& arena){

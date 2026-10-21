@@ -313,7 +313,10 @@ Expected<ModelCookEntry> ParseModelCookMetadata(const Path& assetRoot, const ASt
     if(!virtualPathResult)
         return MakeUnexpected(Failure{});
     virtualPath = *virtualPathResult;
-    return ParseModelCookMetadata(virtualPath, nwbFilePath, doc.asset(), arena, scratchArena);
+    const auto asset = Core::Assets::FindMetadataAssetValue<Core::Metascript::Document, Core::Metascript::Value>(nwbFilePath, doc, __hidden_model_cook::s_ModelMetaDiagnosticPrefix);
+    if(!asset)
+        return MakeUnexpected(asset.error());
+    return ParseModelCookMetadata(virtualPath, nwbFilePath, **asset, arena, scratchArena);
 }
 
 Expected<Model> BuildModelAsset(ModelCookEntry& modelEntry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){

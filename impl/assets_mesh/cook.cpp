@@ -103,7 +103,10 @@ static Expected<MeshCookEntry> ParseMeshMeta(const DiscoveredNwbFile& discovered
     if(!virtualPathResult)
         return MakeUnexpected(Failure{});
     virtualPath = *virtualPathResult;
-    return ParseMeshMeta(discoveredFile, doc.asset(), virtualPath, arena, cpuScheduler, scratchArena);
+    const auto asset = Core::Assets::FindMetadataAssetValue<Core::Metascript::Document, Core::Metascript::Value>(discoveredFile.filePath, doc, s_MeshMetaText);
+    if(!asset)
+        return MakeUnexpected(asset.error());
+    return ParseMeshMeta(discoveredFile, **asset, virtualPath, arena, cpuScheduler, scratchArena);
 }
 
 

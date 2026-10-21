@@ -450,9 +450,10 @@ static Expected<bool> ParseMaterialBoolProperty(const Path& nwbFilePath, const C
 Expected<MaterialCookEntry> ParseMaterialMeta(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, ScratchArena& scratchArena){
     MaterialCookEntry entry(arena);
 
-    const Core::Metascript::Value& asset = doc.asset();
-    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_MaterialMetaDiagnosticPrefix))
-        return MakeUnexpected(Failure{});
+    const auto assetValue = Core::Assets::FindMetadataAssetMapValue<Core::Metascript::Document, Core::Metascript::Value>(nwbFilePath, doc, s_MaterialMetaDiagnosticPrefix);
+    if(!assetValue)
+        return MakeUnexpected(assetValue.error());
+    const Core::Metascript::Value& asset = **assetValue;
 
     // Keep the material path as readable text for generated shader paths; validate its Name identity before storage.
     auto derivedVirtualPath = Core::Assets::BuildDerivedAssetVirtualPath(arena, assetRoot, virtualRoot, nwbFilePath, scratchArena);

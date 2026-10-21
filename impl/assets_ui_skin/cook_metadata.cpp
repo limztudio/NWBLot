@@ -256,9 +256,10 @@ Expected<UiSkinCookEntry> ParseUiSkinCookMetadata(const Path& assetRoot, const A
     using namespace __hidden_ui_skin_cook_metadata;
 
     UiSkinCookEntry parsed(arena);
-    const Value& asset = doc.asset();
-    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_DiagnosticPrefix))
-        return MakeUnexpected(Failure{});
+    const auto assetValue = Core::Assets::FindMetadataAssetMapValue<Core::Metascript::Document, Value>(nwbFilePath, doc, s_DiagnosticPrefix);
+    if(!assetValue)
+        return MakeUnexpected(assetValue.error());
+    const Value& asset = **assetValue;
     if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_DiagnosticPrefix, { s_TextureField, s_AtlasExtentField, s_ReferenceDensityField, s_ToolkitContractField, s_RegionsField, s_ColorsField, s_TypographyField }))
         return MakeUnexpected(Failure{});
 

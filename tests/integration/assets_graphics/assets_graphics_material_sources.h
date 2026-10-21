@@ -341,15 +341,13 @@ struct AssetsGraphicsMaterialSources{
 
     )NWB_BIND";
     #endif
-    static constexpr AStringView s_InstanceOverrideMaterialBindSource = R"NWB_BIND(asset.instance_override = "unsupported";
-
-    [material_constant]
+    static constexpr AStringView s_InitializedInstanceMaterialBindSource = R"NWB_BIND([material_constant]
     struct NwbTestSurfaceMaterial{
     [default("float(0.5)")]
     float roughness;
     };
 
-    NwbTestSurfaceMaterial surface;
+    NwbTestSurfaceMaterial surface = { "roughness": 0.5 };
 
     )NWB_BIND";
     static constexpr AStringView s_Float1DefaultMaterialBindSource = R"NWB_BIND([material_constant]

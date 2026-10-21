@@ -96,7 +96,12 @@ struct AutoMetadataParser{
     Core::CpuTaskScheduler& cpuScheduler,
     ScratchArena& scratchArena
 ){
-    const AStringView rawAssetTypeText(doc.assetType().data(), doc.assetType().size());
+    const auto* assetDeclaration = FindMetadataAssetDeclaration(doc);
+    if(!assetDeclaration){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: meta '{}' is missing asset declaration '{}'"), PathToString<tchar>(discoveredNwbFile.filePath), StringConvert(s_MetadataAssetVariable));
+        return false;
+    }
+    const AStringView rawAssetTypeText(assetDeclaration->type.data(), assetDeclaration->type.size());
     const auto assetTypeResult = ToName(rawAssetTypeText);
     if(!assetTypeResult){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: asset type contains an embedded null in meta '{}'"), PathToString<tchar>(discoveredNwbFile.filePath));

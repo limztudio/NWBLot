@@ -106,14 +106,14 @@ static_assert(!noexcept(Impl::MeshletCandidateSearch::PredictMeshletScoreConeWid
 
 
 inline constexpr Name s_MeshName("tests/mesh/solid_codec");
-inline constexpr AStringView s_MeshSource = R"(mesh fixture;
-fixture.positions = [[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]];
-fixture.normals = [[0, 0, 1]];
-fixture.tangents = [[1, 0, 0, 1]];
-fixture.uv0 = [[0, 0]];
-fixture.colors = [[1, 1, 1, 1]];
-fixture.vertex_refs = [[0, 0, 0, 0, 0], [1, 0, 0, 0, 0], [2, 0, 0, 0, 0], [3, 0, 0, 0, 0]];
-fixture.indices = [[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]];
+inline constexpr AStringView s_MeshSource = R"(mesh asset;
+asset.positions = [[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]];
+asset.normals = [[0, 0, 1]];
+asset.tangents = [[1, 0, 0, 1]];
+asset.uv0 = [[0, 0]];
+asset.colors = [[1, 1, 1, 1]];
+asset.vertex_refs = [[0, 0, 0, 0, 0], [1, 0, 0, 0, 0], [2, 0, 0, 0, 0], [3, 0, 0, 0, 0]];
+asset.indices = [[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]];
 )";
 
 
@@ -124,10 +124,13 @@ fixture.indices = [[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]];
     Core::Metascript::Document document(arena);
     if(!document.parse(s_MeshSource))
         return MakeUnexpected(Failure{});
+    const Core::Metascript::Value* const asset = document.findField("asset");
+    if(!asset)
+        return MakeUnexpected(Failure{});
     Core::CpuTaskScheduler scheduler(1u);
     Core::Alloc::ScratchArena scratch(Name("tests/mesh/solid_codec/cook"));
     const Path sourcePath(arena, "tests/mesh/solid_codec.nwb");
-    auto entry = Impl::ParseMeshCookMetadata(s_MeshName, sourcePath, document.asset(), arena, scheduler, scratch);
+    auto entry = Impl::ParseMeshCookMetadata(s_MeshName, sourcePath, *asset, arena, scheduler, scratch);
     if(!entry)
         return MakeUnexpected(Failure{});
     auto mesh = Impl::BuildMeshAsset(*entry, arena, scratch);

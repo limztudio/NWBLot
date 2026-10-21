@@ -152,7 +152,10 @@ Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadata(const Path& assetRoot, c
     if(!virtualPathResult)
         return MakeUnexpected(Failure{});
     virtualPath = *virtualPathResult;
-    return ParseFontAtlasCookMetadataValue(virtualPath, nwbFilePath, doc.asset(), arena, scratchArena);
+    const auto asset = Core::Assets::FindMetadataAssetValue<Core::Metascript::Document, Core::Metascript::Value>(nwbFilePath, doc, __hidden_font_atlas_cook_metadata::s_DiagnosticPrefix);
+    if(!asset)
+        return MakeUnexpected(asset.error());
+    return ParseFontAtlasCookMetadataValue(virtualPath, nwbFilePath, **asset, arena, scratchArena);
 }
 
 Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){

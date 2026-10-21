@@ -239,11 +239,13 @@ def run_skin_dependency_tests(args: argparse.Namespace, root: pathlib.Path, help
     shared_skin = project_root / LIT_UI / "shared.nwb"
     texture = engine_root / LIT_UI / LIT_TEXTURE_NWB
     unrelated = project_root / "samplers" / "unrelated.nwb"
+    bunch = project_root / "bundles" / "selected.nwb"
     manifest = fixture / "dependencies.txt"
     sidecar = _copy_texture(args.repo_root, texture)
     _write_skin(skin, TEXTURE_IDENTITY)
     _write_skin(shared_skin, TEXTURE_IDENTITY)
     helpers.write_sampler(unrelated, LIT_LINEAR)
+    _write_metadata(bunch, "sampler child; asset_bunch bundle = [child];\n")
     _write_metadata(project_root / "unrelated_bad.nwb", "unrelated malformed metadata {{{\n")
     _write_metadata(project_root / "shaders" / "unrelated_bad.bind", "unrelated malformed bind metadata {{{\n")
 
@@ -254,7 +256,7 @@ def run_skin_dependency_tests(args: argparse.Namespace, root: pathlib.Path, help
     _expect_manifest(manifest, original, [texture])
     good_manifest = manifest.read_bytes()
 
-    cases = (([str(skin), str(shared_skin), str(skin)], roots, [texture]), ([str(skin), "impl/assets/ui/../ui/texture.nwb", str(skin)], roots, []), ([str(unrelated), str(unrelated)], roots, []),
+    cases = (([str(skin), str(shared_skin), str(skin)], roots, [texture]), ([str(skin), "impl/assets/ui/../ui/texture.nwb", str(skin)], roots, []), ([str(unrelated), str(unrelated)], roots, []), ([str(bunch)], roots, []),
         ([str(skin)], [project_root, engine_root, engine_root, engine_root / LIT_UI], [texture]), ([LIT_PROJECT_ASSETS_UI_UI], roots, [texture]), ([LIT_PROJECT_ASSETS_UI_UI, "impl/assets/ui"], roots, []),)
     scratch_manifest = fixture / "case.txt"
     for inputs, asset_roots, appended in cases:

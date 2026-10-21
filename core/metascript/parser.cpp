@@ -38,32 +38,29 @@ constexpr usize s_DocumentReaderChunkBytes = 4096u;
 
 Document::Document(MetaArena& arena)
     : m_arena(arena)
-    , m_assetType(arena)
-    , m_assetVariable(arena)
     , m_variables(0, MStringHash(), MStringEqual(), arena)
     , m_declarations(arena)
+    , m_structs(0, MStringHash(), MStringEqual(), arena)
     , m_errors(arena)
 {}
 
 
 bool Document::parse(MStringView source){
     m_errors.clear();
-    m_assetType.clear();
-    m_assetVariable.clear();
     m_variables.clear();
     m_declarations.clear();
+    m_structs.clear();
 
     Alloc::ScratchArena scratchArena(MetascriptArenaScope::s_ParserScratch, __hidden_metascript_parser::s_ParserScratchArenaBytes);
-    StatementParser parser(source, m_arena, scratchArena, m_errors, m_variables, m_declarations);
-    return parser.parseInto(m_assetType, m_assetVariable);
+    StatementParser parser(source, m_arena, scratchArena, m_errors, m_variables, m_declarations, m_structs);
+    return parser.parseInto();
 }
 
 bool Document::parse(IMetaReader& reader){
     m_errors.clear();
-    m_assetType.clear();
-    m_assetVariable.clear();
     m_variables.clear();
     m_declarations.clear();
+    m_structs.clear();
 
     Alloc::ScratchArena scratchArena(MetascriptArenaScope::s_DocumentReaderScratch, __hidden_metascript_parser::s_DocumentReaderChunkBytes);
     BasicString<MChar, Alloc::ScratchArena> buffer{scratchArena};
@@ -85,47 +82,30 @@ bool Document::parse(IMetaReader& reader){
         buffer.append(chunk, *bytesRead);
     }
 
-    m_errors.clear();
-    m_assetType.clear();
-    m_assetVariable.clear();
-    m_variables.clear();
-    m_declarations.clear();
-
-    StatementParser parser(MStringView(buffer.data(), buffer.size()), m_arena, scratchArena, m_errors, m_variables, m_declarations);
-    return parser.parseInto(m_assetType, m_assetVariable);
+    StatementParser parser(MStringView(buffer.data(), buffer.size()), m_arena, scratchArena, m_errors, m_variables, m_declarations, m_structs);
+    return parser.parseInto();
 }
 
-bool Document::parseWithImplicitAsset(MStringView source, MStringView assetType, MStringView assetVariable){
-    m_errors.clear();
-    m_assetType.clear();
-    m_assetVariable.clear();
-    m_variables.clear();
-    m_declarations.clear();
-
-    Alloc::ScratchArena scratchArena(MetascriptArenaScope::s_ParserScratch, __hidden_metascript_parser::s_ParserScratchArenaBytes);
-    StatementParser parser(source, m_arena, scratchArena, m_errors, m_variables, m_declarations);
-    return parser.parseWithImplicitAsset(m_assetType, m_assetVariable, assetType, assetVariable);
-}
-
-const Value& Document::asset()const noexcept{
-    const MStringView key(m_assetVariable.data(), m_assetVariable.size());
-    auto it = m_variables.find(key);
-    NWB_ASSERT(it != m_variables.end());
-    return it.value();
-}
-
-Value& Document::asset()noexcept{
-    const MStringView key(m_assetVariable.data(), m_assetVariable.size());
-    auto it = m_variables.find(key);
-    NWB_ASSERT(it != m_variables.end());
-    return it.value();
-}
-
-const Value* Document::findVariable(MStringView name)const noexcept{
+const Value* Document::findField(MStringView name)const noexcept{
     auto it = m_variables.find(name);
     if(it == m_variables.end())
         return nullptr;
     return &it.value();
+}
+
+Value* Document::findField(MStringView name)noexcept{
+    auto it = m_variables.find(name);
+    if(it == m_variables.end())
+        return nullptr;
+    return &it.value();
+}
+
+const Document::Declaration* Document::findDeclaration(MStringView name)const noexcept{
+    for(const Declaration& declaration : m_declarations){
+        if(MStringView(declaration.variable.data(), declaration.variable.size()) == name)
+            return &declaration;
+    }
+    return nullptr;
 }
 
 

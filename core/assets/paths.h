@@ -27,6 +27,7 @@ static constexpr AStringView s_AssetsDirectoryName = "assets";
 static constexpr AStringView s_EngineVirtualRoot = "engine";
 static constexpr AStringView s_ProjectVirtualRoot = "project";
 static constexpr AStringView s_NwbExtension = ".nwb";
+static constexpr AStringView s_MetadataAssetVariable = "asset";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -498,17 +499,29 @@ template<typename MetadataValue>
     return false;
 }
 
+template<typename MetadataDocument>
+[[nodiscard]] inline const typename MetadataDocument::Declaration* FindMetadataAssetDeclaration(const MetadataDocument& doc)noexcept{
+    return doc.findDeclaration(s_MetadataAssetVariable);
+}
+
 template<typename MetadataDocument, typename MetadataValue>
-[[nodiscard]] inline Expected<NotNull<const MetadataValue*>> FindMetadataAssetMapValue(const Path& nwbFilePath, const MetadataDocument& doc, const AStringView diagnosticPrefix){
-    const auto assetVariable = doc.assetVariable();
-    const auto* asset = doc.findVariable(assetVariable);
+[[nodiscard]] inline Expected<NotNull<const MetadataValue*>> FindMetadataAssetValue(const Path& nwbFilePath, const MetadataDocument& doc, const AStringView diagnosticPrefix){
+    const auto* asset = doc.findField(s_MetadataAssetVariable);
     if(!asset){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': asset variable '{}' has no assignments"), StringConvert(diagnosticPrefix), PathToString<tchar>(nwbFilePath), StringConvert(AStringView(assetVariable.data(), assetVariable.size())));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': missing asset declaration '{}'"), StringConvert(diagnosticPrefix), PathToString<tchar>(nwbFilePath), StringConvert(s_MetadataAssetVariable));
         return MakeUnexpected(Failure{});
     }
-    if(!CheckMetadataAssetMap(nwbFilePath, *asset, diagnosticPrefix))
-        return MakeUnexpected(Failure{});
     return MakeNotNull(asset);
+}
+
+template<typename MetadataDocument, typename MetadataValue>
+[[nodiscard]] inline Expected<NotNull<const MetadataValue*>> FindMetadataAssetMapValue(const Path& nwbFilePath, const MetadataDocument& doc, const AStringView diagnosticPrefix){
+    const auto asset = FindMetadataAssetValue<MetadataDocument, MetadataValue>(nwbFilePath, doc, diagnosticPrefix);
+    if(!asset)
+        return MakeUnexpected(asset.error());
+    if(!CheckMetadataAssetMap(nwbFilePath, **asset, diagnosticPrefix))
+        return MakeUnexpected(Failure{});
+    return *asset;
 }
 
 template<typename NamedEnumT, typename MetadataValue>

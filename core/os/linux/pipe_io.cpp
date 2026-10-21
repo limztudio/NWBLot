@@ -23,6 +23,11 @@ NWB_CORE_BEGIN
 
 
 namespace __hidden_clipboard_pipe{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr usize s_PumpByteBudget = 65536u;
 static constexpr usize s_PumpCallBudget = 64u;
 static constexpr u32 s_TimeoutMs = 5000u;
@@ -55,6 +60,11 @@ static ssize_t WriteWithoutSigpipe(const int fd, const AStringView bytes)noexcep
     errno = writeError;
     return count;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

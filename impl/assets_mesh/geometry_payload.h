@@ -24,16 +24,27 @@ NWB_IMPL_BEGIN
 class MeshGeometryPayload{
 public:
     [[nodiscard]] const Core::Assets::AssetVector<Float3U>& positionStream()const noexcept{ return m_positionStream; }
+
     [[nodiscard]] const Core::Assets::AssetVector<Half4U>& normalStream()const noexcept{ return m_normalStream; }
+
     [[nodiscard]] const Core::Assets::AssetVector<Half4U>& tangentStream()const noexcept{ return m_tangentStream; }
+
     [[nodiscard]] const Core::Assets::AssetVector<Float2U>& uv0Stream()const noexcept{ return m_uv0Stream; }
+
     [[nodiscard]] const Core::Assets::AssetVector<Half4U>& colorStream()const noexcept{ return m_colorStream; }
+
     [[nodiscard]] const Core::Assets::AssetVector<MeshletDesc>& meshlets()const noexcept{ return m_meshlets; }
+
     [[nodiscard]] const Core::Assets::AssetVector<MeshletBounds>& meshletBounds()const noexcept{ return m_meshletBounds; }
+
     [[nodiscard]] const Core::Assets::AssetVector<u8>& meshletPositionRefDeltas()const noexcept{ return m_meshletPositionRefDeltas; }
+
     [[nodiscard]] const Core::Assets::AssetVector<u8>& meshletAttributeRefDeltas()const noexcept{ return m_meshletAttributeRefDeltas; }
+
     [[nodiscard]] const Core::Assets::AssetVector<MeshletLocalVertexRef>& meshletLocalVertexRefs()const noexcept{ return m_meshletLocalVertexRefs; }
+
     [[nodiscard]] const Core::Assets::AssetVector<u8>& meshletPrimitiveIndices()const noexcept{ return m_meshletPrimitiveIndices; }
+
     [[nodiscard]] const Core::Assets::AssetVector<u32>& solidTriangleWords()const noexcept{ return m_solidTriangleWords; }
 
 

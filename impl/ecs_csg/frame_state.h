@@ -114,6 +114,7 @@ public:
 
 public:
     [[nodiscard]] bool empty()const noexcept{ return m_cutterRanges.empty(); }
+
     [[nodiscard]] u32 cutterCount()const noexcept{ return static_cast<u32>(m_cutterRefs.size()); }
     [[nodiscard]] Expected<CsgReceiverDrawState> resolveReceiverDrawState(Core::ECS::EntityID entity, CsgReceiverPass::Enum receiverPass)const noexcept;
     template<typename CutterHandler>
@@ -139,8 +140,9 @@ public:
             handler(cutterRef.entity, cutter);
         }
     }
+
     template<typename CutterHandler>
-    void forEachReceiverCutter(const Core::ECS::EntityID entity, CutterHandler&& handler)const{
+    void forEachReceiverCutter(const Core::ECS::EntityID entity, CutterHandler&& handler)const noexcept(noexcept(forEachReceiverCutter(DeclVal<const CsgReceiverDrawState&>(), handler))){
         const auto range = resolveReceiverCutterRange(entity);
         if(!range)
             return;

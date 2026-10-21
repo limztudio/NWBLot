@@ -60,6 +60,7 @@ protected:
         ASSERT_TRUE(RemoveAllIfExists(m_root));
         ASSERT_TRUE(EnsureDirectories(m_root));
     }
+
     virtual void TearDown()override{
         if(m_rootReady)
             EXPECT_TRUE(RemoveAllIfExists(m_root));

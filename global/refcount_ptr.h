@@ -334,6 +334,7 @@ public:
 
 public:
     u32 addReference()noexcept{ return m_referenceCount.fetch_add(1, MemoryOrder::relaxed) + 1; }
+
     u32 release()noexcept{
         u32 old = m_referenceCount.fetch_sub(1, MemoryOrder::release);
         if(old == 1){
@@ -355,7 +356,7 @@ private:
 
 
 template<typename T, typename... Args>
-inline typename EnableIf<!IsArray<T>::value, RefCountPtr<T>>::type MakeRefCount(Args&&... args){
+inline typename EnableIf<!IsArray<T>::value, RefCountPtr<T>>::type MakeRefCount(Args&&... args)noexcept(noexcept(RefCountPtr<T>(new T(Forward<Args>(args)...), s_AdoptRef))){
     return RefCountPtr<T>(new T(Forward<Args>(args)...), s_AdoptRef);
 }
 template<typename T, typename... Args>

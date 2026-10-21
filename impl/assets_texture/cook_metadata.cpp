@@ -152,7 +152,8 @@ Expected<TextureCookEntry> ParseTextureCookMetadata(const Path& assetRoot, const
         return MakeUnexpected(Failure{});
     if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_DiagnosticPrefix, [alphaMode = *alphaMode](const AStringView fieldName)noexcept{
         return fieldName == s_FormatField || fieldName == s_DimensionField || fieldName == s_ResolutionField || fieldName == s_AlphaModeField || (alphaMode == TextureAlphaMode::ConstantUnorm8 && fieldName == s_AlphaConstantField);
-    }))
+    }
+    ))
         return MakeUnexpected(Failure{});
 
     const auto format = ReadFormat(nwbFilePath, asset);

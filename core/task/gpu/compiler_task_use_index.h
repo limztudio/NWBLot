@@ -40,9 +40,11 @@ public:
     [[nodiscard]] bool validResource(const GpuGraphResourceId resource)const noexcept{
         return resource.valid() && resource.generation == m_graphGeneration && resource.index < m_firstUses.size();
     }
+
     [[nodiscard]] usize first(const GpuGraphResourceId resource)const noexcept{
         return m_valid && validResource(resource) ? m_firstUses[resource.index] : Limit<usize>::s_Max;
     }
+
     [[nodiscard]] usize next(const usize useIndex)const noexcept{
         return m_valid && useIndex < m_nextUses.size() ? m_nextUses[useIndex] : Limit<usize>::s_Max;
     }

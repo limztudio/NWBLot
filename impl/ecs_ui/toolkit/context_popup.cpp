@@ -32,12 +32,7 @@ namespace __hidden_ui_context_popup{
         return false;
     // Lanes are bounds right, bounds bottom, viewport right, viewport bottom. All inputs are finite here.
     const SIMDVectorSingle end = VectorAdd(VectorSet(scope.bounds.x, scope.bounds.y, scope.viewport.x, scope.viewport.y), VectorSet(scope.bounds.width, scope.bounds.height, scope.viewport.width, scope.viewport.height));
-    return
-        VectorIsFinite(end, VectorComponentMask::s_XYZW)
-        && scope.bounds.x >= scope.viewport.x && scope.bounds.y >= scope.viewport.y
-        && VectorGetX(end) <= VectorGetZ(end)
-        && VectorGetY(end) <= VectorGetW(end)
-    ;
+    return VectorIsFinite(end, VectorComponentMask::s_XYZW) && scope.bounds.x >= scope.viewport.x && scope.bounds.y >= scope.viewport.y && VectorGetX(end) <= VectorGetZ(end) && VectorGetY(end) <= VectorGetW(end);
 }
 
 

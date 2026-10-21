@@ -111,6 +111,7 @@ public:
             m_dispatcher.pointerLeave();
         throw s_Failure;
     }
+
     virtual void pointerLeave()override{ throw s_Failure; }
 
 

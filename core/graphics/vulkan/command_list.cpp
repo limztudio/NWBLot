@@ -51,6 +51,7 @@ CommandList::CommandList(Device& device, const CommandListParameters& params)
     , m_textureOwnershipReleaseDestinations(0u, TextureSubresourceStateKeyHasher(), TextureSubresourceStateKeyEqualTo(), device.m_context.objectArena)
     , m_bufferOwnershipReleaseDestinations(0u, Hasher<NotNull<Buffer*>>(), EqualTo<NotNull<Buffer*>>(), device.m_context.objectArena)
 {}
+
 CommandList::~CommandList()noexcept{
     abortRecordingAttemptWithoutCallbacks();
     m_graphRecordingOwnershipSerial.store(0u, MemoryOrder::release);

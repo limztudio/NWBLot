@@ -45,7 +45,7 @@ u64 RadioSource::key(const u64 index)const{
     return rawKey(index);
 }
 
-Expected<u64> RadioSource::indexOf(const u64 value)const{
+Expected<u64> RadioSource::indexOf(const u64 value)const noexcept{
     u64 index = 0u;
     callback(RadioCallbackSite::None);
     const u64 count = rawCount();
@@ -58,7 +58,7 @@ Expected<u64> RadioSource::indexOf(const u64 value)const{
     return MakeUnexpected(Failure{});
 }
 
-Expected<u64> RadioSource::findEnabled(const u64 start, const bool reverse)const{
+Expected<u64> RadioSource::findEnabled(const u64 start, const bool reverse)const noexcept{
     u64 index = 0u;
     callback(RadioCallbackSite::None);
     const u64 count = rawCount();

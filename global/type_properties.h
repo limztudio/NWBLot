@@ -89,16 +89,19 @@ using RemoveReferenceWrapper_T = typename RemoveReferenceWrapper<T>::type;
 
 template<typename CONTAINER>
 constexpr BackInsertIterator<CONTAINER> BackInserter(CONTAINER& container)noexcept{ return BackInsertIterator<CONTAINER>(container); }
+
 template<typename CONTAINER>
 constexpr FrontInsertIterator<CONTAINER> FrontInserter(CONTAINER& container)noexcept{ return FrontInsertIterator<CONTAINER>(container); }
 
 template<typename CONTAINER>
 constexpr auto LengthOf(const CONTAINER& container)noexcept(noexcept(container.size()))->decltype(container.size()){ return container.size(); }
+
 template<typename T, size_t Size>
 constexpr auto LengthOf(const T(&)[Size])noexcept{ return Size; }
 
 template<typename T>
 constexpr T&& Forward(RemoveReference_T<T>& v)noexcept{ return static_cast<T&&>(v); }
+
 template<typename T>
 constexpr T&& Forward(RemoveReference_T<T>&& v)noexcept{
     static_assert(!IsLValueReference_V<T>, "bad forward call");

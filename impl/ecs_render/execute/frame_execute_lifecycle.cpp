@@ -177,7 +177,7 @@ NWB_IMPL_BEGIN
     const bool computeStateReady = renderer.m_surfelGiComputePersistentState.commit(*context->computeStateCandidate);
     context->stateReady = returnStateReady && counterStateReady && computeStateReady;
     if(context->stateReady)
-        renderer.m_raytracingSystem.confirmCsgTraceContextReadSubmission(token);
+        renderer.m_raytracingSystem.confirmRayTraceContextReadSubmission(token);
     return context->stateReady;
 }
 

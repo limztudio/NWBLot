@@ -40,31 +40,43 @@ public:
 
 public:
     void setCaptureOptions(const CaptureOptions& options){ m_recorder.setCaptureOptions(options); }
+
     void setFrameIndex(const u64 frameIndex)noexcept{
         m_frameIndex = frameIndex;
         m_textLogCapture.setFrameIndex(frameIndex);
     }
+
     void setStreamId(const u32 streamId)noexcept{
         m_streamId = streamId;
         m_textLogCapture.setStreamId(streamId);
     }
+
     void clear()noexcept{ m_recorder.clear(); }
 
     [[nodiscard]] Recorder& recorder()noexcept{ return m_recorder; }
+
     [[nodiscard]] const Recorder& recorder()const noexcept{ return m_recorder; }
+
     [[nodiscard]] CaptureOptions captureOptions()const noexcept{ return m_recorder.captureOptions(); }
+
     [[nodiscard]] bool enabled()const noexcept{ return m_recorder.enabled(); }
+
     [[nodiscard]] u64 frameIndex()const noexcept{ return m_frameIndex; }
+
     [[nodiscard]] u32 streamId()const noexcept{ return m_streamId; }
+
     [[nodiscard]] usize eventCount()const noexcept{ return m_recorder.eventCount(); }
+
     [[nodiscard]] EventView view()const noexcept{ return m_recorder.view(); }
 
     [[nodiscard]] bool recordFrameGraph(Alloc::ScratchArena& scratchArena, const FrameGraphNodeDescs& nodes, const FrameGraphEdgeDescs& edges){
         return RecordFrameGraph(m_recorder, scratchArena, m_frameIndex, nodes, edges, m_streamId);
     }
+
     [[nodiscard]] bool recordFrameGraph(Alloc::ScratchArena& scratchArena, const FrameGraphNodeDescs& nodes, const FrameGraphEdgeDescs& edges, const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics){
         return RecordFrameGraph(m_recorder, scratchArena, m_frameIndex, nodes, edges, physicalQueueRuntimeStatistics, m_streamId);
     }
+
     [[nodiscard]] bool recordFrameGraph(
         Alloc::ScratchArena& scratchArena,
         const FrameGraphNodeDescs& nodes,
@@ -74,6 +86,7 @@ public:
     ){
         return RecordFrameGraph(m_recorder, scratchArena, m_frameIndex, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, m_streamId);
     }
+
     [[nodiscard]] PerfSessionRecordResult recordPerfReport(const Perf::SessionReport& report, const u32 streamId = 0u){
         return RecordPerfSessionReport(m_recorder, report, streamId);
     }
@@ -81,6 +94,7 @@ public:
 
 private:
     void setForwardLogger(Common::ILogger* const forwardLogger)noexcept{ m_textLogCapture.setForwardLogger(forwardLogger); }
+
     [[nodiscard]] TextLogCaptureLogger& textLogCaptureLogger()noexcept{ return m_textLogCapture; }
 
 

@@ -103,6 +103,7 @@ template<usize N>
 
 
 inline std::ios_base& StreamHex(std::ios_base& stream)noexcept(noexcept(stream.setf(std::ios_base::hex, std::ios_base::basefield))){ return std::hex(stream); }
+
 inline std::ios_base& StreamDec(std::ios_base& stream)noexcept(noexcept(stream.setf(std::ios_base::dec, std::ios_base::basefield))){ return std::dec(stream); }
 
 
@@ -145,7 +146,21 @@ template<typename NumberT>
 // Keeps the std::sto* rules: current C locale, leading space, sign, base prefix and a partial parse.
 // The caller's errno is left unchanged.
 template<typename NumberT, typename ParseT>
-[[nodiscard]] inline Expected<NumericTextPrefix<NumberT>, ErrorCode> ParseNumberPrefix(const char* const begin, ParseT&& parse)noexcept(noexcept(parse(begin, DeclVal<char**>()))){
+[[nodiscard]] inline Expected<NumericTextPrefix<NumberT>, ErrorCode> ParseNumberPrefix(const char* const begin, ParseT&& parse)noexcept([]()consteval noexcept{
+    using ParsedT = decltype(DeclVal<ParseT&>()(DeclVal<const char* const&>(), DeclVal<char**>()));
+    constexpr bool s_ResultIsNothrow =
+        noexcept(DeclVal<ParseT&>()(DeclVal<const char* const&>(), DeclVal<char**>()))
+        && IsNothrowDestructible_V<ParsedT>
+        && noexcept(Expected<NumericTextPrefix<NumberT>, ErrorCode>(NumericTextPrefix<NumberT>{ .value = static_cast<NumberT>(DeclVal<const ParsedT&>()), .consumed = DeclVal<usize>() }))
+    ;
+    if constexpr(IsIntegral_V<NumberT> && sizeof(NumberT) < sizeof(ParsedT)){
+        return s_ResultIsNothrow && noexcept(
+            false || DeclVal<const ParsedT&>() < static_cast<ParsedT>(Limit<NumberT>::s_Min) || DeclVal<const ParsedT&>() > static_cast<ParsedT>(Limit<NumberT>::s_Max)
+        );
+    }
+    else
+        return s_ResultIsNothrow;
+}()){
     using ParsedT = decltype(parse(begin, DeclVal<char**>()));
 
     const i32 previousErrno = errno;
@@ -340,6 +355,7 @@ template<typename CharT, typename ArenaT>
 inline void AppendHexU32(const u32 value, BasicString<CharT, ArenaT>& outText)noexcept(noexcept(NumericTextDetail::AppendHexU32Impl(value, outText))){
     NumericTextDetail::AppendHexU32Impl(value, outText);
 }
+
 template<typename StringT>
     requires requires(StringT& text){
         typename StringT::value_type;
@@ -368,6 +384,7 @@ template<typename CharT, typename ArenaT>
 inline void AppendHexU64(const u64 value, BasicString<CharT, ArenaT>& outText)noexcept(noexcept(NumericTextDetail::AppendHexU64Impl(value, outText))){
     NumericTextDetail::AppendHexU64Impl(value, outText);
 }
+
 template<typename StringT>
     requires requires(StringT& text){
         typename StringT::value_type;

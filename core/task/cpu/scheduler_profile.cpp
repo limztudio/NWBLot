@@ -28,6 +28,7 @@ CpuTaskScheduler::ProfileMeasure::ProfileMeasure(CpuTaskScheduler& scheduler, co
         m_sample->begin = TimerNow();
     }
 }
+
 CpuTaskScheduler::ProfileMeasure::~ProfileMeasure()noexcept{
     if(!m_sample)
         return;

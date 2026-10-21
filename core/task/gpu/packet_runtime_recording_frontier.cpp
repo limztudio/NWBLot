@@ -40,6 +40,7 @@ public:
         , m_aborts(aborts)
         , m_recordingAttemptGeneration(recordingAttemptGeneration)
     {}
+
     ~ReadyFrontierRecordingUnwindScope()noexcept{
         if(!m_active)
             return;

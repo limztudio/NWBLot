@@ -83,6 +83,7 @@ private:
 
     public:
         void setFailedPacket(GpuSubmissionPacketId packet)noexcept{ m_failedPacket = packet; }
+
         void complete()noexcept{ m_active = false; }
 
 

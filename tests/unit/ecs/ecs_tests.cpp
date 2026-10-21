@@ -59,6 +59,7 @@ public:
 
 public:
     [[nodiscard]] AddressTrapComponent* operator&(){ ++addressCalls; throw 37u; }
+
     [[nodiscard]] const AddressTrapComponent* operator&()const{ ++addressCalls; throw 41u; }
 };
 

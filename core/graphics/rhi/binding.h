@@ -83,7 +83,9 @@ public:
 
 public:
     constexpr BindingLayoutItem& setSlot(u32 value)noexcept{ slot = value; return *this; }
+
     constexpr BindingLayoutItem& setType(ResourceType::Enum value)noexcept{ type = value; return *this; }
+
     constexpr BindingLayoutItem& setSize(u32 value)noexcept{ size = static_cast<u16>(value); return *this; }
 
     constexpr u32 getArraySize()const noexcept{ return (type == ResourceType::PushConstants) ? 1 : size; }
@@ -93,6 +95,7 @@ public:
 inline bool operator==(const BindingLayoutItem& lhs, const BindingLayoutItem& rhs)noexcept{
     return lhs.slot == rhs.slot && lhs.type == rhs.type && lhs.size == rhs.size;
 }
+
 inline bool operator!=(const BindingLayoutItem& lhs, const BindingLayoutItem& rhs)noexcept{ return !(lhs == rhs); }
 static_assert(sizeof(BindingLayoutItem) == BindingLayoutItem::s_ByteSize, "sizeof(BindingLayoutItem) is supposed to be 8 bytes");
 
@@ -109,6 +112,7 @@ public:
 
 public:
     constexpr BindingLayoutDesc& setVisibility(ShaderType::Mask value)noexcept{ visibility = value; return *this; }
+
     BindingLayoutDesc& addItem(const BindingLayoutItem& value){ bindings.push_back(value); return *this; }
 };
 
@@ -141,9 +145,13 @@ struct BindlessLayoutDesc{
 
 public:
     constexpr BindlessLayoutDesc& setVisibility(ShaderType::Mask value)noexcept{ visibility = value; return *this; }
+
     constexpr BindlessLayoutDesc& setMaxCapacity(u32 value)noexcept{ maxCapacity = value; return *this; }
+
     constexpr BindlessLayoutDesc& addRegisterSpace(const BindingLayoutItem& value){ registerSpaces.push_back(value); return *this; }
+
     constexpr BindlessLayoutDesc& setLayoutType(BindlessLayoutType::Enum value)noexcept{ layoutType = value; return *this; }
+
     constexpr BindlessLayoutDesc& setDescriptorSetIndex(u32 value)noexcept{ descriptorSetIndex = value; return *this; }
 };
 
@@ -154,6 +162,10 @@ typedef GraphicsBackend::Handle<BindingLayout> BindingLayoutHandle;
 
 
 struct DescriptorWriteItem{
+    static constexpr usize s_ByteSize = 40u;
+
+
+public:
     union{
         TextureSubresourceSet subresources; // valid for Texture_SRV, Texture_UAV
         BufferRange range; // valid for Buffer_SRV, Buffer_UAV, ConstantBuffer
@@ -164,10 +176,6 @@ struct DescriptorWriteItem{
 public:
     static_assert(sizeof(TextureSubresourceSet) == TextureSubresourceSet::s_ByteSize, "sizeof(TextureSubresourceSet) is supposed to be 16 bytes");
     static_assert(sizeof(BufferRange) == BufferRange::s_ByteSize, "sizeof(BufferRange) is supposed to be 16 bytes");
-
-
-public:
-    static constexpr usize s_ByteSize = 40u;
 
 
 public:
@@ -304,6 +312,7 @@ inline bool operator==(const DescriptorWriteItem& lhs, const DescriptorWriteItem
         && lhs.rawData[1] == rhs.rawData[1]
     ;
 }
+
 inline bool operator!=(const DescriptorWriteItem& lhs, const DescriptorWriteItem& rhs)noexcept{ return !(lhs == rhs); }
 static_assert(sizeof(DescriptorWriteItem) == DescriptorWriteItem::s_ByteSize, "sizeof(DescriptorWriteItem) is supposed to be 40 bytes");
 

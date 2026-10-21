@@ -334,6 +334,7 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
 
 void RendererAvboitSystem::dispatchAvboitDepthWarp(Core::CommandList& commandList, AvboitFrameTargets& targets, const Core::GpuTimingSampleAttribution timingAttribution, bool* const timingRecorded){
     Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_AvboitDepthWarp, m_graphics.getDevice(), commandList, timingAttribution);
+
     if(timingRecorded)
         *timingRecorded = timing.valid();
 
@@ -345,6 +346,7 @@ void RendererAvboitSystem::dispatchAvboitDepthWarp(Core::CommandList& commandLis
 void RendererAvboitSystem::dispatchAvboitIntegration(Core::CommandList& commandList, AvboitFrameTargets& targets, const Core::GpuTimingSampleAttribution timingAttribution, bool* const timingRecorded){
     const u32 pixelCount = targets.lowWidth * targets.lowHeight;
     Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_AvboitIntegration, m_graphics.getDevice(), commandList, timingAttribution);
+
     if(timingRecorded)
         *timingRecorded = timing.valid();
 

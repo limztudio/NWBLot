@@ -334,6 +334,7 @@ Texture::Texture(const VulkanContext& context, VulkanAllocator& allocator, const
     const bool retainedInitialStateKnown = m_creationDesc.keepInitialState && initialStateKnown;
     m_retainedSubresourceStates.assign(subresourceCount, retainedInitialStateKnown ? 1u : 0u);
 }
+
 Texture::~Texture()noexcept{
     const VkImage registeredNativeImage = m_image;
 
@@ -541,6 +542,7 @@ StagingTexture::StagingTexture(const VulkanContext& context, VulkanAllocator& al
     , m_context(context)
     , m_allocator(allocator)
 {}
+
 StagingTexture::~StagingTexture()noexcept{
     ScopedLock lock(m_mappingMutex);
 

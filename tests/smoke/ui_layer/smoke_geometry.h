@@ -63,6 +63,7 @@ template<typename Source>
     const SIMDVectorSingle color = VectorDivide(channels, VectorReplicate(15.0f));
     return { VectorGetX(color), VectorGetY(color), VectorGetZ(color), 1.0f };
 }
+
 [[nodiscard]] inline Impl::Ui::Color EncodeSmokeColor(const u32 value)noexcept{
     return EncodeSmokeColor(static_cast<u64>(value));
 }

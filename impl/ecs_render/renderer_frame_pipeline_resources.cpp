@@ -121,8 +121,6 @@ bool RendererFramePipeline::validateResources(const u32 width, const u32 height,
 
     if(!m_csgSystem.createCsgIntervalPeelResources(*deferredTargets, true))
         return false;
-    if(deferredTargets->avboit.refractionFramebuffer && !m_csgSystem.prepareRefractionIntervalCapResources(*deferredTargets))
-        return false;
 
     return true;
 }
@@ -276,6 +274,9 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     // Refraction pipelines load shaders and create GPU pipelines. Hoist that creation into preparation so the render-time graph build only consumes the prepared snapshot and never creates resources.
     const bool opticalCaptureRequested = m_preparedHasTransparentRenderers && (m_refractionEnabled || m_reflectionSettings.traceMode != ReflectionTraceMode::Disabled);
     m_preparedRefractionActive = opticalCaptureRequested && m_raytracingSystem.prepareRefractionResources();
+    const bool hasTransparentCsgFrameWork = m_preparedCsgFrameState.hasTransparentStaticWork || m_preparedCsgFrameState.hasTransparentSkinnedWork;
+    if(m_preparedRefractionActive && hasTransparentCsgFrameWork && !m_csgSystem.prepareRefractionIntervalCapResources(deferredTargets))
+        return false;
     m_preparedRefractionResources = m_raytracingSystem.snapshotRefractionGraphResources();
     m_preparedRefractionResources.refractionEnabled = m_refractionEnabled;
     if(!m_refractionEnabled){

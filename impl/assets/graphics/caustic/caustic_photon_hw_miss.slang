@@ -2,18 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#ifdef NWB_BINDLESS_TLAS
-#error "NWB_BINDLESS_TLAS is fixed by this hardware shader source"
-#endif
-#define NWB_BINDLESS_TLAS 1
-
-#include "caustic_hw_common.slangi"
+#include "caustic_hw_payload.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Clear hit even when raygen seeds the payload, so an escaped segment always drops its photon.
 [shader("miss")] void main(inout NwbCausticHwPayload payload){
     payload.instance = NWB_CAUSTIC_HW_MISS_INSTANCE;
 }

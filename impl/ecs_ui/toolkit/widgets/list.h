@@ -98,10 +98,15 @@ public:
 
 public:
     [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_scroll.instanceGeneration(); }
+
     [[nodiscard]] u64 inputGeneration()const noexcept{ return m_inputGeneration; }
+
     [[nodiscard]] u64 selectedKey()const noexcept{ return m_selected; }
+
     [[nodiscard]] u64 cursorKey()const noexcept{ return m_cursor; }
+
     [[nodiscard]] f64 scrollOffset()const noexcept{ return m_scroll.offset(); }
+
     [[nodiscard]] const ScrollPlacement& placement()const noexcept{ return m_placement; }
     // Explicit application changes start a new input lifetime even when the value is unchanged.
     void select(u64 key)noexcept;

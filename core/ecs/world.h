@@ -200,11 +200,13 @@ public:
     }
 
     void swapMessageBuffers(){ m_messageBus.swapBuffers(); }
+
     void clearMessages(){ m_messageBus.clear(); }
 
 
 public:
     [[nodiscard]] CpuTaskScope& taskScope()noexcept{ return m_tasks; }
+
     [[nodiscard]] CpuTaskScheduler& taskScheduler()noexcept{ return m_tasks.scheduler(); }
 
     [[nodiscard]] Expected<void, CpuTaskAdmissionError::Enum> tick(f32 delta);
@@ -244,6 +246,7 @@ private:
         }
         return *checked_cast<ComponentPool<T>*>(pool.get());
     }
+
     template<typename T>
     ComponentPool<T>& requirePool()noexcept{
         auto& pool = *MakeNotNull(getPool<T>());

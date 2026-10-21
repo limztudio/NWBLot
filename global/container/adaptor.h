@@ -145,6 +145,7 @@ public:
         NWB_ASSERT_MSG(m_arena != nullptr, NWB_TEXT("ArenaAllocator has no arena"));
         return *m_arena;
     }
+
     [[nodiscard]] ArenaT* arenaPtr()const noexcept{ return m_arena; }
 
 
@@ -305,6 +306,7 @@ public:
         NWB_ASSERT_MSG(m_arena != nullptr, NWB_TEXT("ArenaCacheAlignedAllocator has no arena"));
         return *m_arena;
     }
+
     [[nodiscard]] ArenaT* arenaPtr()const noexcept{ return m_arena; }
 
 

@@ -35,7 +35,9 @@ public:
     }
 
     [[nodiscard]] u32 getNumAttributes()const noexcept{ return static_cast<u32>(m_attributes.size()); }
+
     [[nodiscard]] u32 getNumBindings()const noexcept{ return static_cast<u32>(m_bindings.size()); }
+
     [[nodiscard]] const VkVertexInputBindingDescription* getBindingDescription(u32 index)const noexcept{
         return index < m_bindings.size() ? &m_bindings[index] : nullptr;
     }

@@ -337,10 +337,12 @@ bool Frame::init(){
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Frame: Using Windows backend."));
     return true;
 }
+
 bool Frame::showFrame(){
     ShowWindow(data<Common::WinFrame>().hwnd(), SW_SHOW);
     return true;
 }
+
 bool Frame::mainLoop(){
     if(quitRequested())
         return true;
@@ -408,6 +410,7 @@ void Frame::setupPlatform(void* inst)noexcept{
     frameData.setHwnd(nullptr);
     frameData.setWindowClass(0u);
 }
+
 void Frame::cleanupPlatform()noexcept{
     if(FrameDetail::s_Frame == this)
         FrameDetail::s_Frame = nullptr;

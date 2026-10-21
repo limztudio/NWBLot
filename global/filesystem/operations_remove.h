@@ -40,6 +40,11 @@ template<typename ArenaT>
             return MakeUnexpected(FileRemovalFailure{ removed.error(), 0u });
         return *removed ? 1u : 0u;
     }
+    if((*attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u){
+        if(RemoveDirectory(path.c_str()))
+            return 1u;
+        return MakeUnexpected(FileRemovalFailure{ LastSystemError(), 0u });
+    }
     u64 removedCount = 0u;
     const Path<ArenaT> pattern = path / NWB_TEXT("*");
     WIN32_FIND_DATA data = {};

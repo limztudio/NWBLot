@@ -57,6 +57,7 @@ public:
     {
         static_assert(noexcept(SampleListenerRecordPtr(record)), "GPU timing listener completion must retain its callback record without throwing");
     }
+
     ~SampleCallbackCompletionScope()noexcept{
         {
             NothrowScopedLock listenerLock(m_recorder.m_sampleListenerMutex);

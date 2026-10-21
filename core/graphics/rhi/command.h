@@ -49,6 +49,7 @@ public:
 inline constexpr bool operator==(const GpuPhysicalQueueId& lhs, const GpuPhysicalQueueId& rhs)noexcept{
     return lhs.index == rhs.index && lhs.deviceGeneration == rhs.deviceGeneration;
 }
+
 inline constexpr bool operator!=(const GpuPhysicalQueueId& lhs, const GpuPhysicalQueueId& rhs)noexcept{
     return !(lhs == rhs);
 }
@@ -65,9 +66,11 @@ public:
     [[nodiscard]] constexpr bool valid()const noexcept{
         return static_cast<u32>(queue) < static_cast<u32>(CommandQueue::kCount) && value != 0u;
     }
+
     [[nodiscard]] constexpr bool hasPhysicalQueueIdentity()const noexcept{
         return physicalQueueIndex != Limit<u16>::s_Max && deviceGeneration != 0u;
     }
+
     [[nodiscard]] constexpr bool matchesPhysicalQueue(const u16 index, const u16 generation)const noexcept{
         return hasPhysicalQueueIdentity() && physicalQueueIndex == index && deviceGeneration == generation;
     }
@@ -84,6 +87,7 @@ public:
     [[nodiscard]] constexpr bool valid()const noexcept{
         return queue.valid() && completedValue <= submittedValue;
     }
+
     [[nodiscard]] constexpr u64 pendingSubmissionCount()const noexcept{
         return valid() ? submittedValue - completedValue : 0u;
     }
@@ -214,12 +218,15 @@ public:
     [[nodiscard]] bool valid()const noexcept{
         return timestampValidBits > 0u && timestampValidBits <= s_FullWidthBits && secondsPerTick > 0.0;
     }
+
     [[nodiscard]] u64 timestampMask()const noexcept{
         if(!valid())
             return 0u;
         return timestampValidBits == s_FullWidthBits ? Limit<u64>::s_Max : (static_cast<u64>(1u) << timestampValidBits) - 1u;
     }
+
     [[nodiscard]] u64 maskedBeginTicks()const noexcept{ return beginTicks & timestampMask(); }
+
     [[nodiscard]] u64 durationTicks()const noexcept{
         const u64 mask = timestampMask();
         if(mask == 0u)
@@ -228,10 +235,12 @@ public:
         const u64 duration = (endTicks & mask) - (beginTicks & mask);
         return timestampValidBits == s_FullWidthBits ? duration : duration & mask;
     }
+
     [[nodiscard]] f64 durationSeconds()const noexcept{
         const SIMDVectorDouble ticks = VectorDoubleReplicate(static_cast<f64>(durationTicks()));
         return VectorDoubleGetX(VectorDoubleMultiply(ticks, VectorDoubleReplicate(secondsPerTick)));
     }
+
     [[nodiscard]] bool hasComparableRange()const noexcept{
         return valid() && comparableAcrossSubmissions && timestampValidBits == s_FullWidthBits && physicalQueue.valid() && beginTicks <= endTicks;
     }
@@ -296,7 +305,9 @@ public:
         m_deviceGeneration = 0u;
         m_valid = false;
     }
+
     [[nodiscard]] bool valid()const noexcept{ return m_valid; }
+
     [[nodiscard]] u16 deviceGeneration()const noexcept{ return m_deviceGeneration; }
     // State snapshots retain raw backend-resource pointers.  Preserve the producer Device identity so a stale snapshot can be rejected before any of those pointers are inspected after device recreation.
     [[nodiscard]] bool validForDeviceGeneration(const u16 deviceGeneration)const noexcept{
@@ -386,12 +397,15 @@ struct VertexBufferBinding{
 
 public:
     constexpr VertexBufferBinding& setBuffer(Buffer* value)noexcept{ buffer = value; return *this; }
+
     constexpr VertexBufferBinding& setSlot(u32 value)noexcept{ slot = value; return *this; }
+
     constexpr VertexBufferBinding& setOffset(u64 value)noexcept{ offset = value; return *this; }
 };
 inline bool operator==(const VertexBufferBinding& lhs, const VertexBufferBinding& rhs)noexcept{
     return lhs.buffer == rhs.buffer && lhs.offset == rhs.offset && lhs.slot == rhs.slot;
 }
+
 inline bool operator!=(const VertexBufferBinding& lhs, const VertexBufferBinding& rhs)noexcept{ return !(lhs == rhs); }
 
 struct IndexBufferBinding{
@@ -402,12 +416,15 @@ struct IndexBufferBinding{
 
 public:
     constexpr IndexBufferBinding& setBuffer(Buffer* value)noexcept{ buffer = value; return *this; }
+
     constexpr IndexBufferBinding& setFormat(Format::Enum value)noexcept{ format = value; return *this; }
+
     constexpr IndexBufferBinding& setOffset(u32 value)noexcept{ offset = value; return *this; }
 };
 inline bool operator==(const IndexBufferBinding& lhs, const IndexBufferBinding& rhs)noexcept{
     return lhs.buffer == rhs.buffer && lhs.offset == rhs.offset && lhs.format == rhs.format;
 }
+
 inline bool operator!=(const IndexBufferBinding& lhs, const IndexBufferBinding& rhs)noexcept{ return !(lhs == rhs); }
 
 struct GraphicsState{
@@ -425,13 +442,21 @@ struct GraphicsState{
 
 public:
     constexpr GraphicsState& setPipeline(GraphicsPipeline* value)noexcept{ pipeline = value; return *this; }
+
     constexpr GraphicsState& setFramebuffer(Framebuffer* value)noexcept{ framebuffer = value; return *this; }
+
     constexpr GraphicsState& setViewport(const ViewportState& value)noexcept{ viewport = value; return *this; }
+
     constexpr GraphicsState& setShadingRateState(const VariableRateShadingState& value)noexcept{ shadingRateState = value; return *this; }
+
     constexpr GraphicsState& setBlendColor(const Color& value)noexcept{ blendConstantColor = value; return *this; }
+
     constexpr GraphicsState& setDynamicStencilRefValue(u8 value)noexcept{ dynamicStencilRefValue = value; return *this; }
+
     GraphicsState& addVertexBuffer(const VertexBufferBinding& value){ vertexBuffers.push_back(value); return *this; }
+
     constexpr GraphicsState& setIndexBuffer(const IndexBufferBinding& value)noexcept{ indexBuffer = value; return *this; }
+
     constexpr GraphicsState& setIndirectParams(Buffer* value)noexcept{ indirectParams = value; return *this; }
 };
 
@@ -445,9 +470,13 @@ struct DrawArguments{
 
 public:
     constexpr DrawArguments& setVertexCount(u32 value)noexcept{ vertexCount = value; return *this; }
+
     constexpr DrawArguments& setInstanceCount(u32 value)noexcept{ instanceCount = value; return *this; }
+
     constexpr DrawArguments& setStartIndexLocation(u32 value)noexcept{ startIndexLocation = value; return *this; }
+
     constexpr DrawArguments& setStartVertexLocation(u32 value)noexcept{ startVertexLocation = value; return *this; }
+
     constexpr DrawArguments& setStartInstanceLocation(u32 value)noexcept{ startInstanceLocation = value; return *this; }
 };
 
@@ -460,8 +489,11 @@ struct DrawIndirectArguments{
 
 public:
     constexpr DrawIndirectArguments& setVertexCount(u32 value)noexcept{ vertexCount = value; return *this; }
+
     constexpr DrawIndirectArguments& setInstanceCount(u32 value)noexcept{ instanceCount = value; return *this; }
+
     constexpr DrawIndirectArguments& setStartVertexLocation(u32 value)noexcept{ startVertexLocation = value; return *this; }
+
     constexpr DrawIndirectArguments& setStartInstanceLocation(u32 value)noexcept{ startInstanceLocation = value; return *this; }
 };
 
@@ -475,9 +507,13 @@ struct DrawIndexedIndirectArguments{
 
 public:
     constexpr DrawIndexedIndirectArguments& setIndexCount(u32 value)noexcept{ indexCount = value; return *this; }
+
     constexpr DrawIndexedIndirectArguments& setInstanceCount(u32 value)noexcept{ instanceCount = value; return *this; }
+
     constexpr DrawIndexedIndirectArguments& setStartIndexLocation(u32 value)noexcept{ startIndexLocation = value; return *this; }
+
     constexpr DrawIndexedIndirectArguments& setBaseVertexLocation(i32 value)noexcept{ baseVertexLocation = value; return *this; }
+
     constexpr DrawIndexedIndirectArguments& setStartInstanceLocation(u32 value)noexcept{ startInstanceLocation = value; return *this; }
 };
 
@@ -489,6 +525,7 @@ struct ComputeState{
 
 public:
     constexpr ComputeState& setPipeline(ComputePipeline* value)noexcept{ pipeline = value; return *this; }
+
     constexpr ComputeState& setIndirectParams(Buffer* value)noexcept{ indirectParams = value; return *this; }
 };
 
@@ -500,9 +537,13 @@ struct DispatchIndirectArguments{
 
 public:
     constexpr DispatchIndirectArguments& setGroupsX(u32 value)noexcept{ groupsX = value; return *this; }
+
     constexpr DispatchIndirectArguments& setGroupsY(u32 value)noexcept{ groupsY = value; return *this; }
+
     constexpr DispatchIndirectArguments& setGroupsZ(u32 value)noexcept{ groupsZ = value; return *this; }
+
     constexpr DispatchIndirectArguments& setGroups2D(u32 x, u32 y)noexcept{ groupsX = x; groupsY = y; return *this; }
+
     constexpr DispatchIndirectArguments& setGroups3D(u32 x, u32 y, u32 z)noexcept{ groupsX = x; groupsY = y; groupsZ = z; return *this; }
 };
 
@@ -517,10 +558,15 @@ struct MeshletState{
 
 public:
     constexpr MeshletState& setPipeline(MeshletPipeline* value)noexcept{ pipeline = value; return *this; }
+
     constexpr MeshletState& setFramebuffer(Framebuffer* value)noexcept{ framebuffer = value; return *this; }
+
     constexpr MeshletState& setViewport(const ViewportState& value)noexcept{ viewport = value; return *this; }
+
     constexpr MeshletState& setBlendColor(const Color& value)noexcept{ blendConstantColor = value; return *this; }
+
     constexpr MeshletState& setIndirectParams(Buffer* value)noexcept{ indirectParams = value; return *this; }
+
     constexpr MeshletState& setDynamicStencilRefValue(u8 value)noexcept{ dynamicStencilRefValue = value; return *this; }
 };
 
@@ -546,8 +592,11 @@ struct RayTracingDispatchRaysArguments{
 
 public:
     constexpr RayTracingDispatchRaysArguments& setWidth(u32 value)noexcept{ width = value; return *this; }
+
     constexpr RayTracingDispatchRaysArguments& setHeight(u32 value)noexcept{ height = value; return *this; }
+
     constexpr RayTracingDispatchRaysArguments& setDepth(u32 value)noexcept{ depth = value; return *this; }
+
     constexpr RayTracingDispatchRaysArguments& setDimensions(u32 w, u32 h = 1, u32 d = 1)noexcept{ width = w; height = h; depth = d; return *this; }
 };
 

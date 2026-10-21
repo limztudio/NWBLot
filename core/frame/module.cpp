@@ -67,6 +67,7 @@ Frame::Frame(void* inst, u16 width, u16 height, const CpuTaskSchedulerConfig& cp
     setupPlatform(inst);
     m_graphics.setPointerScaleChangedCallback(&Frame::ApplyPointerScale, this);
 }
+
 Frame::~Frame()noexcept(false){
     // Teardown can invoke throwing callbacks; during unwind quiesce only, keep the original exception.
     if(UncaughtExceptionCount() > 0){
@@ -119,6 +120,7 @@ bool Frame::startup(){
 
     return true;
 }
+
 void Frame::cleanup(){
     if(m_telemetryUploadCallback){
         if(!flushTelemetryUpload(true))
@@ -126,6 +128,7 @@ void Frame::cleanup(){
     }
     NWB_FATAL_ASSERT_MSG(m_graphics.destroy(), NWB_TEXT("Frame cleanup requires either a completed graphics join or terminal device loss"));
 }
+
 bool Frame::update(f32 delta){
     const u64 frameIndex = m_graphics.getFrameIndex();
     m_perfSession.beginFrame(frameIndex);
@@ -139,15 +142,18 @@ bool Frame::update(f32 delta){
 
     return updateFrame(delta);
 }
+
 void Frame::setTelemetryCapture(const Telemetry::CaptureOptions& options){
     m_telemetrySession.setCaptureOptions(options);
     if(options.perfEnabled())
         setPerfCapture(Perf::CaptureOptions::All());
 }
+
 void Frame::setTelemetryUploadCallback(TelemetryUploadCallback callback, void* userData)noexcept{
     m_telemetryUploadCallback = callback;
     m_telemetryUploadUserData = userData;
 }
+
 bool Frame::flushTelemetryUpload(const bool clearAfterUpload){
     if(m_telemetrySession.eventCount() == 0u)
         return true;
@@ -164,11 +170,13 @@ bool Frame::flushTelemetryUpload(const bool clearAfterUpload){
         m_telemetrySession.clear();
     return true;
 }
+
 void Frame::setPerfCapture(const Perf::CaptureOptions& options){
     m_perfSession.setCaptureOptions(options);
     m_cpuTasks.setProfiling(options.cpuTimingActive(), m_perfSession.frameIndex());
     m_graphics.gpuTiming().setQueryCollectionEnabled(options.gpuTimingActive());
 }
+
 IClipboardService& Frame::clipboard()noexcept{
     NWB_FATAL_ASSERT_MSG(m_clipboard, NWB_TEXT("Frame clipboard service requires completed startup"));
     return *m_clipboard;

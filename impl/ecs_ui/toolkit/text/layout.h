@@ -76,6 +76,7 @@ public:
 
 public:
     TextLayout& operator=(TextLayout&&)noexcept = default;
+
     TextLayout& operator=(const TextLayout&) = delete;
 
 

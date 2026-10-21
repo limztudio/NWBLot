@@ -137,8 +137,11 @@ alignas(MaxAlign) static u8 g_ForeignSignalStack[256u * 1024u] = {};
 
 
 static void OriginalSignalOwner(const int signalNumber)noexcept{ static_cast<void>(signalNumber); }
+
 static void ForeignSignalOwner(const int signalNumber)noexcept{ static_cast<void>(signalNumber); }
+
 [[noreturn]] static void OriginalTerminateOwner()noexcept{ _exit(123); }
+
 [[noreturn]] static void ForeignTerminateOwner()noexcept{ _exit(124); }
 
 TEST(Crash, UninstallRestoresDisabledAlternateStackAndPriorSignalAndTerminateOwners){

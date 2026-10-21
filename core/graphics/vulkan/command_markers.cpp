@@ -35,6 +35,7 @@ public:
 
 public:
     void arm()noexcept{ m_armed = true; }
+
     void disarm()noexcept{ m_armed = false; }
 
 

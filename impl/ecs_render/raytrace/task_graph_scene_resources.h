@@ -48,7 +48,13 @@ public:
 // Import common scene reads once per physical resource.
 // Geometry buffers and material sampled textures belong to the existing frozen resource sets supplied separately by the caller.
 // A failure returns Unexpected without publishing a scene-read bundle.
-[[nodiscard]] Expected<RayTracingSceneGraphReads> ImportRayTracingSceneGraphReads(Core::GpuTaskGraph& graph, const RayTracingSceneGraphResources& resources, Core::ResourceStates::Mask tlasInitialState, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<RayTracingSceneGraphReads> ImportRayTracingSceneGraphReads(
+    Core::GpuTaskGraph& graph,
+    const RayTracingSceneGraphResources& resources,
+    Core::ResourceStates::Mask tlasInitialState,
+    Core::GpuTaskId priorReadersDrained,
+    Core::Alloc::ScratchArena& scratchArena
+);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

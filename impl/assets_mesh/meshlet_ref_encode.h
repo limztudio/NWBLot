@@ -114,6 +114,22 @@ template<
     const AttributeDeltaVectorT& attributeDeltas,
     const bool skinRequired,
     FailureHandlerT onFailure
+)noexcept(
+    IsNothrowDestructible_V<FailureHandlerT>
+    && noexcept(DeclVal<void(*)(bool)noexcept>()(onFailure(meshletIndex, NWB_TEXT("encoded ref width is invalid"))))
+    && noexcept(DeclVal<void(*)(bool)noexcept>()(
+        meshlet.positionRefOffset > positionDeltas.size()
+        || DeclVal<const usize&>() != positionDeltas.size() - meshlet.positionRefOffset
+        || meshlet.attributeRefOffset > attributeDeltas.size()
+        || DeclVal<const usize&>() != attributeDeltas.size() - meshlet.attributeRefOffset
+    ))
+    && noexcept(DeclVal<void(*)(bool)noexcept>()(onFailure(meshletIndex, NWB_TEXT("encoded ref byte count mismatch"))))
+    && noexcept(DeclVal<void(*)(const MeshletPositionStreamRef&)noexcept>()(positionRefs[sourcePositionRefOffset + u32{}]))
+    && noexcept(DecodeMeshletPositionRef(positionDeltas.data(), positionDeltas.size(), meshlet, DeclVal<u32&>(), skinRequired))
+    && noexcept(DeclVal<void(*)(bool)noexcept>()(onFailure(meshletIndex, NWB_TEXT("encoded position ref decode mismatch"))))
+    && noexcept(DeclVal<void(*)(const MeshletAttributeStreamRef&)noexcept>()(attributeRefs[sourceAttributeRefOffset + u32{}]))
+    && noexcept(DecodeMeshletAttributeRef(attributeDeltas.data(), attributeDeltas.size(), meshlet, DeclVal<u32&>()))
+    && noexcept(DeclVal<void(*)(bool)noexcept>()(onFailure(meshletIndex, NWB_TEXT("encoded attribute ref decode mismatch"))))
 ){
     const auto encodedPositionBytes = MeshletEncodedPositionRefByteCount(meshlet, skinRequired);
     const auto encodedAttributeBytes = MeshletEncodedAttributeRefByteCount(meshlet);

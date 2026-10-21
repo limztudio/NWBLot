@@ -34,12 +34,14 @@ public:
 
 public:
     virtual void retain()noexcept override{ m_references.fetch_add(1u, MemoryOrder::relaxed); }
+
     virtual void release()noexcept override{
         if(m_references.fetch_sub(1u, MemoryOrder::release) == 1u){
             AtomicThreadFence(MemoryOrder::acquire);
             DestroyArenaObjectNoexcept(m_arena, this);
         }
     }
+
     [[nodiscard]] bool valid()const noexcept{ return m_lease.valid(); }
 
 

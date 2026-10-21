@@ -161,7 +161,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool Navigate(ComboState& state, const ComboSource& source, const ControlActionKind::Enum kind){
+[[nodiscard]] static bool Navigate(ComboState& state, const ComboSource& source, const ControlActionKind::Enum kind)noexcept{
     ListState& preview = ComboBehavior::Preview(state);
     if(!ListBehavior::Reconcile(preview, source))
         return false;

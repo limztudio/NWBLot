@@ -121,11 +121,8 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
             buildVkInstance(i);
     }
 
-    if(!buildTopLevelAccelStructFromInstanceData(as, instanceDataAddress, numInstances, buildFlags, vkBuildFlags, s_BuildTlasOperation))
+    if(!buildTopLevelAccelStructFromInstanceData(*as, instanceDataAddress, numInstances, buildFlags, vkBuildFlags, s_BuildTlasOperation, pInstances))
         return;
-
-    for(usize i = 0u; i < numInstances; ++i)
-        retainResource(pInstances[i].bottomLevelAS);
 }
 
 void CommandList::buildTopLevelAccelStructFromBuffer(RayTracingAccelStruct* accelStructResource, Buffer* instanceBuffer, u64 instanceBufferOffset, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags){

@@ -284,7 +284,7 @@ bool RendererReflectionSystem::prepareResources(const u32 width, const u32 heigh
 Expected<ReflectionCsgDispatchHandle> RendererReflectionSystem::acquireCsgDispatchState(const ReflectionFrameSnapshot& resources)noexcept{
     if(!resources.hasHardwareWork() || !resources.scene.csgTraceContextBuffer)
         return ReflectionCsgDispatchHandle{};
-    ReflectionCsgDispatchControl* const control = Exchange(m_preparedCsgDispatch, nullptr);
+    ReflectionCsgDispatchControl* const control = m_preparedCsgDispatch;
     if(!control || control->getReferenceCount() != 1u)
         return MakeUnexpected(Failure{});
     AtomicThreadFence(MemoryOrder::acquire);

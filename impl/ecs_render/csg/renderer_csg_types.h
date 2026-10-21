@@ -40,6 +40,7 @@ struct CsgBoundsGpuData{
 
 public:
     [[nodiscard]] bool valid()const noexcept{ return (minBounds.w & s_CsgBoundsValidFlag) != 0; }
+
     [[nodiscard]] bool finite()const noexcept{ return (minBounds.w & s_CsgBoundsFiniteFlag) != 0; }
 };
 
@@ -140,12 +141,16 @@ struct CsgFrameWorkRegion{
 
 public:
     [[nodiscard]] bool bounded()const noexcept{ return !fullFrame && minX < maxX && minY < maxY; }
+
     [[nodiscard]] bool valid()const noexcept{ return fullFrame || bounded(); }
+
     [[nodiscard]] u32 width()const noexcept{ return bounded() ? maxX - minX : 0u; }
+
     [[nodiscard]] u32 height()const noexcept{ return bounded() ? maxY - minY : 0u; }
 
     void expandWorldBounds(const SIMDMatrix& worldToClip, SIMDVectorSingle minBounds, SIMDVectorSingle maxBounds, u32 frameWidth, u32 frameHeight)noexcept;
     void expandFull()noexcept{ fullFrame = true; }
+
     void expandClamped(const i32 rectMinX, const i32 rectMaxX, const i32 rectMinY, const i32 rectMaxY, const u32 frameWidth, const u32 frameHeight)noexcept{
         if(fullFrame || frameWidth == 0u || frameHeight == 0u)
             return;
@@ -167,6 +172,7 @@ public:
         maxX = static_cast<u32>(VectorGetX(accumulatedMax));
         maxY = static_cast<u32>(VectorGetY(accumulatedMax));
     }
+
     [[nodiscard]] Core::Rect resolveRect(const u32 frameWidth, const u32 frameHeight)const noexcept{
         if(!bounded())
             return Core::Rect(static_cast<i32>(frameWidth), static_cast<i32>(frameHeight));
@@ -196,6 +202,7 @@ public:
 
 public:
     [[nodiscard]] bool hasWork()const noexcept{ return !receiverRanges.empty() && !cutters.empty(); }
+
     void reserve(const usize receiverCapacity, const usize cutterCapacity){
         receiverRanges.reserve(receiverCapacity);
         cutters.reserve(cutterCapacity);

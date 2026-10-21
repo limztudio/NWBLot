@@ -28,6 +28,7 @@ public:
     [[nodiscard]] bool valid()const noexcept{
         return instanceGeneration != 0u && contentGeneration != 0u && contentRevision != 0u;
     }
+
     [[nodiscard]] bool empty()const noexcept{
         return instanceGeneration == 0u && contentGeneration == 0u && contentRevision == 0u;
     }

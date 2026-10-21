@@ -17,7 +17,7 @@
 // Reuses SW shadow geometry.
 #include "../shadow/sw_binding_slots.h"
 
-// Overflow drops the far child.
+// Scene stack overflow uses the complete instance list. Mesh LBVH depth is bounded by its Morton key and primitive-index bit prefixes.
 #define NWB_CAUSTIC_SW_SCENE_STACK_SIZE 16
 #define NWB_CAUSTIC_SW_MESH_STACK_SIZE 64
 

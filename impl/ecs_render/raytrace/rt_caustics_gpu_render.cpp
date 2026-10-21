@@ -55,6 +55,7 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandLi
     }
     else{
         Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_CausticPhotons, m_graphics.getDevice(), commandList);
+
         recordPhotons();
     }
 

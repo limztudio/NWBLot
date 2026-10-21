@@ -47,6 +47,7 @@ public:
         ++m_count;
         return true;
     }
+
     [[nodiscard]] virtual bool current()const noexcept override{
         if(m_context.failed())
             return false;

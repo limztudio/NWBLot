@@ -58,6 +58,7 @@ GpuCompiledGraph::CompilationScope::CompilationScope(GpuCompiledGraph& graph)noe
     graph.resetPlanStorageWithinPlanWriteScope();
     m_graph = &graph;
 }
+
 GpuCompiledGraph::CompilationScope::~CompilationScope()noexcept{
     if(!m_graph)
         return;

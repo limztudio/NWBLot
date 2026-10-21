@@ -2,6 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#ifdef NWB_CAUSTIC_PHOTON_TRANSPORT
+#error "NWB_CAUSTIC_PHOTON_TRANSPORT is fixed by this photon shader source"
+#endif
+#define NWB_CAUSTIC_PHOTON_TRANSPORT 1
+
 #ifdef NWB_BINDLESS_TLAS
 #error "NWB_BINDLESS_TLAS is fixed by this hardware shader source"
 #endif
@@ -20,7 +25,66 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// HW closest-hit hook per bounce segment: one TraceRay commits nearest (FORCE_OPAQUE); refractive/opaque is a material flag, not a traversal decision (as in the SW min-t trace). Loop-driven bounces, recursion stays 1.
+NwbOpticalTraceConfig nwbCausticOpticalConfig(){
+    NwbOpticalTraceConfig config;
+    config.instanceMaterialHeapSlot = g_NwbCausticHwMaterialContextSlots.sceneSlots.z;
+    config.opticalSceneHeapSlot = g_NwbCausticHwMaterialContextSlots.materialSlots.y;
+    config.opticalInstanceCount = g_NwbCausticHwMaterialContextSlots.materialSlots.z;
+    config.maxQueries = NWB_OPTICAL_MAX_QUERIES;
+    config.minDistance = 0.0;
+    config.maxDistance = NWB_FLOAT_MAX;
+    return config;
+}
+
+bool nwbCausticCollectRefractiveEvents(
+    const NwbOpticalTraceConfig config, const float3 origin, const float3 direction, const float minimum, const float maximum, const bool reverse,
+    __ref NwbOpticalBootstrapEvent events[NWB_OPTICAL_MAX_CANDIDATE_EVENTS], out uint eventCount, out NwbCausticBoundary boundary, out float tolerance, inout NwbOpticalTraceResult result
+){
+    eventCount = 0u;
+    boundary = (NwbCausticBoundary)0;
+    tolerance = NWB_OPTICS_POSITION_TOLERANCE_SCALE * nwbOpticsPositionUncertainty(origin);
+    if(!nwbOpticalConsumeQuery(config, result))
+        return false;
+    RayDesc ray;
+    ray.Origin = origin;
+    ray.Direction = direction;
+    ray.TMin = minimum;
+    ray.TMax = maximum;
+    RayQuery<RAY_FLAG_FORCE_NON_OPAQUE> query;
+    query.TraceRayInline(nwbHeapAccelStruct(), RAY_FLAG_FORCE_NON_OPAQUE, NWB_RT_REFRACTIVE_INSTANCE_MASK, ray);
+    bool complete = false;
+    [loop] for(uint candidate = 0u; candidate <= NWB_OPTICAL_MAX_CANDIDATE_EVENTS; ++candidate){
+        if(!query.Proceed()){
+            complete = true;
+            break;
+        }
+        if(query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE){
+            result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
+            query.Abort();
+            return false;
+        }
+        const uint instance = query.CandidateInstanceID();
+        const uint primitive = query.CandidatePrimitiveIndex();
+        const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(config.instanceMaterialHeapSlot)[instance];
+        const float3 normal = nwbRayTraceTriangleGeometricNormal(material, primitive, query.CandidateWorldToObject3x4());
+        if(!nwbCausticAppendBoundary(config, origin, direction, query.CandidateTriangleRayT(), instance, primitive, normal, reverse, events, eventCount, boundary, tolerance, result)){
+            query.Abort();
+            return false;
+        }
+    }
+    if(!complete){
+        result.termination = NWB_OPTICAL_TERMINATION_EVENT_LIMIT;
+        query.Abort();
+        return false;
+    }
+#if NWB_RT_CSG_ENABLED
+    return nwbCausticCollectCsgEvents(config, g_NwbCausticHwMaterialContextSlots.materialSlots.w, origin, direction, minimum, maximum, reverse, events, eventCount, boundary, tolerance, result);
+#else
+    return true;
+#endif
+}
+
+// Complete the nearest ordinary-geometry query before CSG refinement; the same custom instance record supplies its refractive classification.
 NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin, float tMax){
     RayDesc ray;
     ray.Origin = origin;
@@ -29,26 +93,29 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
     ray.TMax = tMax;
 
     NwbCausticHwPayload p;
-    p.normalAndDistance = float4(0.0, 0.0, 1.0, tMax);
-    p.transmissionAndIor = float4(1.0);
+    p.distance = tMax;
     p.instance = NWB_CAUSTIC_HW_MISS_INSTANCE;
-    p.isRefractive = 0u;
 
 #if NWB_RT_CSG_ENABLED
-    TraceRay(nwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE, NWB_RT_SHADOW_BASE_INSTANCE_MASK, 0u, 0u, 0u, ray, p);
+    // Keep live optical state within the inline CSG query path instead of a native TraceRay continuation.
+    RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
+    query.TraceRayInline(nwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE, NWB_RT_SHADOW_BASE_INSTANCE_MASK, ray);
+    while(query.Proceed()){}
+    if(query.CommittedStatus() == COMMITTED_TRIANGLE_HIT){
+        p.distance = query.CommittedRayT();
+        p.instance = query.CommittedInstanceID();
+    }
 #else
     TraceRay(nwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE, NWB_RAY_TRACING_ALL_INSTANCE_MASK, 0u, 0u, 0u, ray, p);
 #endif
 
     NwbCausticHit hit = (NwbCausticHit)0;
     hit.hit = (p.instance != NWB_CAUSTIC_HW_MISS_INSTANCE);
-    hit.isRefractive = (p.isRefractive != 0u);
+    if(hit.hit)
+        hit.isRefractive = (nwbHeapRtInstanceMaterials(g_NwbCausticHwMaterialContextSlots.sceneSlots.z)[p.instance].flags & NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE) != 0u;
     hit.instance = p.instance;
-    hit.t = p.normalAndDistance.w;
-    hit.ior = p.transmissionAndIor.w;
-    hit.worldPos = hit.hit ? ray.Origin + p.normalAndDistance.w * ray.Direction : float3(0.0);
-    hit.shadingNormal = p.normalAndDistance.xyz;
-    hit.transmission = half3(p.transmissionAndIor.xyz);
+    hit.t = p.distance;
+    hit.worldPos = hit.hit ? ray.Origin + p.distance * ray.Direction : float3(0.0);
 #if NWB_RT_CSG_ENABLED
     const uint contextSlot = g_NwbCausticHwMaterialContextSlots.materialSlots.w;
     const uint materialSlot = g_NwbCausticHwMaterialContextSlots.sceneSlots.z;
@@ -97,7 +164,10 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
     if(!emission.valid)
         return;
 
-    const NwbCausticPhoton photon = nwbCausticCreatePhoton(emission, nwbCausticLightColor(light.colorIntensity), g_NwbCausticHwPushConstants.emissionTargetCount, g_NwbCausticHwPushConstants.photonCount);
+    const NwbCausticPhoton photon = nwbCausticCreatePhoton(
+        emission, nwbCausticLightColor(light.colorIntensity), g_NwbCausticHwPushConstants.emissionTargetCount,
+        g_NwbCausticHwPushConstants.photonCount, light.params.y >= NWB_SCENE_LIGHT_TYPE_DIRECTIONAL_MAX, light.position.xyz
+    );
 
     const NwbCausticSplat splat = nwbCausticTracePhoton(photon);
     if(!splat.valid)

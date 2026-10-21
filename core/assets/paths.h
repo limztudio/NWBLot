@@ -45,7 +45,9 @@ struct ConvertedPathByteCounter{
 
 public:
     ConvertedPathByteCounter& operator*()noexcept{ return *this; }
+
     ConvertedPathByteCounter& operator++(int)noexcept{ return *this; }
+
     ConvertedPathByteCounter& operator=(const char){
         byteCount = AddSize(byteCount, 1u);
         return *this;

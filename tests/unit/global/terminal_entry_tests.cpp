@@ -65,7 +65,7 @@ TEST(TerminalEntry, UnknownFailureUsesItsTerminalHandlerAfterReverseOrderCleanup
         ScopeExit second([&]()noexcept{ order[count] = s_ExpectedDualCount; ++count; });
 
         throw 42;
-    }, [&](const TerminalTestError&){ typedHandled = true; return 0; }, [&](){
+    }, [&](const TerminalTestError&)noexcept{ typedHandled = true; return 0; }, [&]()noexcept{
         order[count] = 3u;
         ++count;
         return -1;

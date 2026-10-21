@@ -57,11 +57,7 @@ void InputRouter::appendContextMenu(const HitTarget& target, const Point& positi
         result.activationOverflow = true;
         return;
     }
-    m_contextMenuActions.push_back({
-        { target.id, target.declarationGeneration, m_layoutGeneration, m_nextActionSequence },
-        target.popup, target.control, position, origin, inputSource
-    }
-    );
+    m_contextMenuActions.push_back({ { target.id, target.declarationGeneration, m_layoutGeneration, m_nextActionSequence }, target.popup, target.control, position, origin, inputSource });
     ++m_nextActionSequence;
 }
 

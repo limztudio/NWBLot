@@ -109,6 +109,7 @@ protected:
     [[nodiscard]] bool wheel(const f64 x, const f64 y){ return wheel(x, y, Center(m_state.placement().content)); }
 
     [[nodiscard]] WidgetId area()const{ return id(s_TextAreaKey, s_TextAreaPanelKey); }
+
     [[nodiscard]] WidgetId part(const AStringView key)const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(area(), key)); }
 
     [[nodiscard]] bool framePopup(const u64 generation, PopupState& popup){

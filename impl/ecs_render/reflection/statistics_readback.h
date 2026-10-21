@@ -118,6 +118,7 @@ public:
 
 public:
     [[nodiscard]] bool valid()const noexcept{ return m_key.valid(); }
+
     [[nodiscard]] u32 slotIndex()const noexcept{ return m_key.slot; }
     void accept(const Core::QueueSubmissionToken& token, bool hardwareReady, const ReflectionHistoryOutcome* history = nullptr, const ReflectionFeedbackOutcome* feedback = nullptr)noexcept;
     void discard()noexcept;

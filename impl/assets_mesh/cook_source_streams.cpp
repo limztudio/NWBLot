@@ -20,15 +20,13 @@ namespace __hidden_mesh_source_streams{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_VertexRefComponentCountWithSkin = 6u;
-inline constexpr usize s_VertexRefComponentCountWithoutSkin = 5u;
+inline constexpr usize s_VertexRefComponentCount = 5u;
 inline constexpr usize s_ComponentLabelExtraCharCount = 2u;
 inline constexpr AStringView s_VertexRefPositionName = "position";
 inline constexpr AStringView s_VertexRefNormalName = "normal";
 inline constexpr AStringView s_VertexRefTangentName = "tangent";
 inline constexpr AStringView s_VertexRefUvName = "uv0";
 inline constexpr AStringView s_VertexRefColorName = "color";
-inline constexpr AStringView s_VertexRefSkinName = "skin";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,7 +38,7 @@ inline constexpr AStringView s_VertexRefSkinName = "skin";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<ScratchVector<MeshVertexRef>> MeshCookSourceStreams::ParseSourceVertexRefs(const Path& nwbFilePath, const Core::Metascript::Value& asset, const TStringView metaKind, const bool includeSkin, Core::Alloc::ScratchArena& scratchArena){
+Expected<ScratchVector<MeshVertexRef>> MeshCookSourceStreams::ParseSourceVertexRefs(const Path& nwbFilePath, const Core::Metascript::Value& asset, const TStringView metaKind, Core::Alloc::ScratchArena& scratchArena){
     ScratchVector<MeshVertexRef> vertexRefs(scratchArena);
 
     const auto field = MeshCookMetadata::FindRequiredMetadataListField(nwbFilePath, asset, metaKind, MeshCookMetadata::s_VertexRefsFieldNameView);
@@ -48,7 +46,7 @@ Expected<ScratchVector<MeshVertexRef>> MeshCookSourceStreams::ParseSourceVertexR
         return MakeUnexpected(field.error());
 
     const auto& list = (*field)->asList();
-    const usize expectedComponentCount = includeSkin ? __hidden_mesh_source_streams::s_VertexRefComponentCountWithSkin : __hidden_mesh_source_streams::s_VertexRefComponentCountWithoutSkin;
+    const usize expectedComponentCount = __hidden_mesh_source_streams::s_VertexRefComponentCount;
     vertexRefs.reserve(list.size());
     for(usize vertexRefIndex = 0u; vertexRefIndex < list.size(); ++vertexRefIndex){
         const Core::Metascript::Value& value = list[vertexRefIndex];
@@ -65,7 +63,6 @@ Expected<ScratchVector<MeshVertexRef>> MeshCookSourceStreams::ParseSourceVertexR
             __hidden_mesh_source_streams::s_VertexRefTangentName,
             __hidden_mesh_source_streams::s_VertexRefUvName,
             __hidden_mesh_source_streams::s_VertexRefColorName,
-            __hidden_mesh_source_streams::s_VertexRefSkinName,
         };
         const NotNull<u32*> componentValues[] = { MakeNotNull(&ref.position), MakeNotNull(&ref.normal), MakeNotNull(&ref.tangent), MakeNotNull(&ref.uv0), MakeNotNull(&ref.color), MakeNotNull(&ref.skin), };
         for(usize componentIndex = 0u; componentIndex < expectedComponentCount; ++componentIndex){
@@ -118,7 +115,7 @@ bool MeshCookSourceStreams::ValidateSourceIndexStream(const Path& nwbFilePath, c
 }
 
 
-bool MeshCookSourceStreams::ValidateSourceVertexRefs(const Path& nwbFilePath, const TStringView metaKind, const bool includeSkin, const SourceMeshStreams& streams, const usize skinCount){
+bool MeshCookSourceStreams::ValidateSourceVertexRefs(const Path& nwbFilePath, const TStringView metaKind, const SourceMeshStreams& streams){
     for(const MeshVertexRef& ref : streams.vertexRefs){
         if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_source_streams::s_VertexRefPositionName, ref.position, streams.positions.size()))
             return false;
@@ -130,11 +127,7 @@ bool MeshCookSourceStreams::ValidateSourceVertexRefs(const Path& nwbFilePath, co
             return false;
         if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_source_streams::s_VertexRefColorName, ref.color, streams.colors.size()))
             return false;
-        if(includeSkin){
-            if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_source_streams::s_VertexRefSkinName, ref.skin, skinCount))
-                return false;
-        }
-        else if(ref.skin != s_MeshMissingStreamIndex){
+        if(ref.skin != s_MeshMissingStreamIndex){
             NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': static vertex_ref cannot contain a skin index"), metaKind, PathToString<tchar>(nwbFilePath));
             return false;
         }
@@ -147,9 +140,7 @@ Expected<SourceMeshStreams> MeshCookSourceStreams::ParseCommonSourceMeshStreams(
     const DiscoveredNwbFile& discoveredFile,
     const Core::Metascript::Value& asset,
     const TStringView metaKind,
-    const bool includeSkin,
     Core::Assets::AssetArena& assetArena,
-    const usize skinCount,
     Core::Alloc::ScratchArena& scratchArena
 ){
     SourceMeshStreams streams(assetArena, scratchArena);
@@ -179,7 +170,7 @@ Expected<SourceMeshStreams> MeshCookSourceStreams::ParseCommonSourceMeshStreams(
         return MakeUnexpected(Failure{});
     streams.colors = Move(*colorsResult);
 
-    auto vertexRefsResult = ParseSourceVertexRefs(discoveredFile.filePath, asset, metaKind, includeSkin, scratchArena);
+    auto vertexRefsResult = ParseSourceVertexRefs(discoveredFile.filePath, asset, metaKind, scratchArena);
     if(!vertexRefsResult)
         return MakeUnexpected(Failure{});
     streams.vertexRefs = Move(*vertexRefsResult);
@@ -189,7 +180,7 @@ Expected<SourceMeshStreams> MeshCookSourceStreams::ParseCommonSourceMeshStreams(
     streams.indices = Move(*indicesResult);
     if(!ValidateSourceIndexStream(discoveredFile.filePath, metaKind, streams.indices, streams.vertexRefs.size()))
         return MakeUnexpected(Failure{});
-    if(!ValidateSourceVertexRefs(discoveredFile.filePath, metaKind, includeSkin, streams, skinCount))
+    if(!ValidateSourceVertexRefs(discoveredFile.filePath, metaKind, streams))
         return MakeUnexpected(Failure{});
     return streams;
 }

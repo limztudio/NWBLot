@@ -98,6 +98,7 @@ public:
 
 public:
     [[nodiscard]] explicit operator bool()const noexcept{ return static_cast<bool>(m_stream); }
+
     [[nodiscard]] bool operator!()const noexcept{ return !m_stream; }
 
 

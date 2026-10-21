@@ -46,6 +46,7 @@ public:
 
 public:
     [[nodiscard]] const Core::Assets::AssetBytes& fontBytes()const noexcept{ return m_fontBytes; }
+
     [[nodiscard]] u32 faceIndex()const noexcept{ return m_faceIndex; }
 
 

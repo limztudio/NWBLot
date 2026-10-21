@@ -24,6 +24,7 @@ public:
 
 public:
     [[nodiscard]] const Path<ArenaT>& path()const noexcept{ return m_path; }
+
     [[nodiscard]] Expected<bool, ErrorCode> isRegularFile()const noexcept{ return IsRegularFile(m_path); }
 
 
@@ -47,6 +48,7 @@ protected:
 
 public:
     [[nodiscard]] iterator begin()const noexcept{ return m_entries.begin(); }
+
     [[nodiscard]] iterator end()const noexcept{ return m_entries.end(); }
 
 

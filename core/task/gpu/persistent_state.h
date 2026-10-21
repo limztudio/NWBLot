@@ -40,7 +40,9 @@ public:
 
     public:
         [[nodiscard]] bool valid()const noexcept{ return !m_consumed && m_states.valid(); }
+
         [[nodiscard]] bool empty()const noexcept{ return !valid() || m_states.empty(); }
+
         [[nodiscard]] const CommandListResourceStateHandoff* source()const noexcept{ return valid() ? &m_states : nullptr; }
 
 
@@ -73,9 +75,13 @@ public:
     void reset()noexcept;
 
     [[nodiscard]] bool valid()const noexcept{ return m_states.valid(); }
+
     [[nodiscard]] bool empty()const noexcept{ return !m_states.valid() || m_states.empty(); }
+
     [[nodiscard]] const CommandListResourceStateHandoff* source()const noexcept{ return m_states.valid() ? &m_states : nullptr; }
+
     [[nodiscard]] usize retainedTextureCount()const noexcept{ return m_textures.size(); }
+
     [[nodiscard]] usize retainedBufferCount()const noexcept{ return m_buffers.size(); }
 
     // Replaces the accepted cache with `source` filtered to the supplied live imported resources for resource pruning that removes a runtime generation the prior snapshot referenced.

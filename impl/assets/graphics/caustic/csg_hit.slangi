@@ -18,6 +18,50 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool nwbCausticCollectCsgEvents(
+    const NwbOpticalTraceConfig config, const uint contextSlot, const float3 origin, const float3 direction, const float minimum, const float maximum, const bool reverse,
+    __ref NwbOpticalBootstrapEvent events[NWB_OPTICAL_MAX_CANDIDATE_EVENTS], inout uint eventCount, inout NwbCausticBoundary boundary, inout float tolerance, inout NwbOpticalTraceResult result
+){
+    const uint activeOffset = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_BASE_OFFSET);
+    const uint activeCount = nwbHeapRawBuffer(contextSlot).Load(NWB_CSG_RAY_CONTEXT_ACTIVE_COUNT_OFFSET);
+    [loop] for(uint index = 0u; index < activeCount; ++index){
+        const uint instance = nwbHeapRawBuffer(contextSlot).Load(activeOffset + index * NWB_CSG_RAY_ACTIVE_INDEX_BYTES);
+        const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(config.instanceMaterialHeapSlot)[instance];
+        if((material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE) == 0u)
+            continue;
+        const NwbSwBvhInstance receiver = nwbCsgRayLoadInstance(contextSlot, instance);
+        const NwbBvhNode root = nwbCsgRayReceiverRoot(contextSlot, instance, receiver);
+        if(!nwbCsgRayBoundsIntersect(receiver, root, origin, direction, minimum, maximum))
+            continue;
+        float nextMinimum = minimum;
+        bool complete = false;
+        [loop] for(uint crossing = 0u; crossing <= NWB_OPTICAL_MAX_CANDIDATE_EVENTS; ++crossing){
+            if(!nwbOpticalConsumeQuery(config, result))
+                return false;
+            const NwbRayTraceGeometryHit geometry = nwbRayTraceCsgGeometryHit(contextSlot, config.instanceMaterialHeapSlot, instance, origin, direction, nextMinimum, maximum);
+            result.physicalQueries += geometry.physicalQueries;
+            if(geometry.failure != 0u){
+                result.termination = (geometry.failure & NWB_CSG_RAY_FAILURE_AMBIGUOUS_NORMAL) != 0u ? NWB_OPTICAL_TERMINATION_AMBIGUOUS : NWB_OPTICAL_TERMINATION_UNSUPPORTED;
+                return false;
+            }
+            if(!geometry.hit){
+                complete = true;
+                break;
+            }
+            const float3 normal = geometry.cutter == NWB_CSG_RAY_INVALID_INDEX ? nwbRayTraceTriangleGeometricNormal(material, geometry.primitive, geometry.worldToObject) : geometry.geometricNormal;
+            if(!nwbCausticAppendBoundary(config, origin, direction, geometry.distance, instance, geometry.primitive, normal, reverse, events, eventCount, boundary, tolerance, result))
+                return false;
+            nextMinimum = geometry.distance;
+        }
+        if(!complete){
+            result.termination = NWB_OPTICAL_TERMINATION_EVENT_LIMIT;
+            return false;
+        }
+    }
+    return true;
+}
+
+
 NwbCausticHit nwbCausticCsgInstanceClosest(const uint contextSlot, const uint materialSlot, const uint instance, const float3 origin, const float3 direction, const float minimum, const float maximum){
     NwbCausticHit hit = (NwbCausticHit)0;
     hit.t = maximum;
@@ -29,16 +73,11 @@ NwbCausticHit nwbCausticCsgInstanceClosest(const uint contextSlot, const uint ma
     hit.failure = geometry.failure;
     if(hit.failure != 0u || !geometry.hit)
         return hit;
-    const NwbRayTraceSurfaceHit surface = nwbRayTraceReconstructSurfaceHit(materialSlot, origin, direction, geometry);
-    hit.hit = surface.hit;
-    hit.failure = surface.failure;
-    hit.t = surface.distance;
-    hit.worldPos = surface.position;
-    hit.isRefractive = (surface.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE) != 0u;
-    hit.instance = surface.instance;
-    hit.shadingNormal = surface.shadingNormal;
-    hit.ior = surface.surface.refractionIor;
-    hit.transmission = surface.surface.shadowAbsorptionTint;
+    hit.hit = true;
+    hit.t = geometry.distance;
+    hit.worldPos = origin + direction * geometry.distance;
+    hit.isRefractive = (nwbHeapRtInstanceMaterials(materialSlot)[instance].flags & NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE) != 0u;
+    hit.instance = instance;
     return hit;
 }
 

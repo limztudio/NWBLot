@@ -188,12 +188,14 @@ public:
         bool preparedMeshSwBvhBuildsRecordedByGraph
     );
     [[nodiscard]] bool shadowVisibilityResourcesPreflighted()const noexcept{ return m_shadowVisibilityResourcesPreflighted; }
+
     [[nodiscard]] bool shadowVisibilityHardwareSupported()const noexcept{ return m_shadowVisibilityHardwareSupported; }
     [[nodiscard]] bool shadowVisibilitySoftwareResourcesPreflighted()const noexcept;
     void discardPreflightShadowVisibilityResources()noexcept;
     // These are retained handles for the current frozen trace plan. The graph imports each physical buffer once and uses the shared IDs for every packet that manually stages it.
     [[nodiscard]] bool freezePreparedShadowTraceGeometryBuffers(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] const PreparedShadowTraceGeometryBufferVector& preparedShadowTraceGeometryBuffers()const noexcept{ return m_preparedShadowTraceGeometryBuffers; }
+
     [[nodiscard]] const PreparedShadowTraceMaterialSampledTextureVector& preparedShadowTraceMaterialSampledTextures()const noexcept{ return m_preparedShadowTraceMaterialSampledTextures; }
     // Includes accepted but currently invisible mesh streams, which must retain their state source until their owning mesh is removed or a later preparation packet supersedes it.
     [[nodiscard]] const Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& acceptedShadowTraceGeometryBuffers()const noexcept{ return m_acceptedShadowTraceGeometryBuffers; }
@@ -208,7 +210,8 @@ public:
     // The shared graph retains this POD as an immutable upload blob before recording begins.
     [[nodiscard]] Expected<RayTraceMaterialContextSlots> snapshotRayTraceMaterialContextSlots();
     [[nodiscard]] Expected<Optional<Core::GpuUploadBlobId>> retainPreparedCsgTraceContextUpload(Core::GpuTaskGraph& graph)const;
-    void confirmCsgTraceContextReadSubmission(const Core::QueueSubmissionToken& token)noexcept;
+    [[nodiscard]] bool prepareCausticOpticalReadTracking(const ECSRenderDetail::MeshViewBufferSnapshot& meshView);
+    void confirmRayTraceContextReadSubmission(const Core::QueueSubmissionToken& token)noexcept;
     // Retain the exact preflight-gathered caustic AABB stream as an immutable graph blob. A valid empty result authoritatively represents a frame without refractive emission targets.
     [[nodiscard]] Expected<Optional<Core::GpuUploadBlobId>> retainPreparedCausticEmissionTargetUpload(Core::GpuTaskGraph& graph)const;
     // Retain the exact per-frame surfel constant payload before graph recording. A valid empty result represents an inactive surfel frame
@@ -228,12 +231,16 @@ public:
     // Hardware BLAS build/refit choices retain their selected handles through recording.
     // Only Shadow Preparation acceptance publishes a frozen plan's mesh-cache progress.
     [[nodiscard]] bool preparedMeshBlasBuildsReady()const noexcept{ return m_preparedMeshBlasBuildsReady; }
+
     [[nodiscard]] const PreparedMeshBlasBuildVector& preparedMeshBlasBuilds()const noexcept{ return m_preparedMeshBlasBuilds; }
     void confirmPreparedMeshBlasBuilds();
     // Software frames freeze selected build/refit work against its shared scratch generation; scene and material snapshots remain independently graph-owned.
     [[nodiscard]] const SoftwareSceneRefitHandle& preparedSceneSwBvhRefit()const noexcept{ return m_preparedSceneSwBvhRefit; }
+
     [[nodiscard]] bool preparedMeshSwBvhBuildPlanFrozen()const noexcept{ return m_preparedMeshSwBvhBuildPlanFrozen; }
+
     [[nodiscard]] bool preparedMeshSwBvhBuildsReady()const noexcept{ return m_preparedMeshSwBvhBuildsReady; }
+
     [[nodiscard]] const PreparedMeshSwBvhBuildVector& preparedMeshSwBvhBuilds()const noexcept{ return m_preparedMeshSwBvhBuilds; }
     // The pure-software Shadow Preparation packet records each frozen build after graph-owned typed sentinel clears. Revalidate this immutable snapshot immediately before its native compute sequence
     [[nodiscard]] bool recordPreparedMeshSwBvhBuildAfterGraphClears(Core::CommandList& commandList, const PreparedMeshSwBvhBuild& build);
@@ -692,6 +699,7 @@ private:
     void releaseLightSpaceShadowResources();
     [[nodiscard]] bool ensureSceneBvhBuffers(u32 instanceCount);
     [[nodiscard]] bool ensureRayTraceMaterialContextSlotsBuffer();
+    [[nodiscard]] bool ensureRayTraceContextReadTracking(bool opticalCausticReader);
     [[nodiscard]] bool ensureCsgTraceContextResources();
     [[nodiscard]] bool ensureRayTraceMaterialContextSlotsHeapHandle();
     [[nodiscard]] bool ensureRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle);
@@ -753,6 +761,7 @@ private:
     bool m_preparedMeshSwBvhBuildPlanFrozen = false;
     bool m_shadowVisibilityResourcesPreflighted = false;
     bool m_shadowVisibilityHardwareSupported = false;
+    bool m_opticalCausticReaderAdmitted = false;
     // Recording may only touch allocations selected before the shared graph is compiled.
     // These flags distinguish a usable frozen trace plan from a non-fatal preflight fallback that leaves the effect black for this frame.
     bool m_shadowVisibilityTraceResourcesPreflighted = false;

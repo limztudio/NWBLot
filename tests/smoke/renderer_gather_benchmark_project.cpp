@@ -358,7 +358,9 @@ private:
 
 
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){ return { 960u, 720u }; }
+
 TStringView NWB::QueryProjectWindowTitle()noexcept{ return NWB_TEXT("NWB Renderer Gather Benchmark"); }
+
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<__hidden_renderer_gather_benchmark::RendererGatherBenchmarkProject>(context);
 }

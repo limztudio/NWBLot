@@ -87,6 +87,10 @@ static constexpr NWB::Core::Color s_SRGBClearEdgeColors[]{
     { -0.25f, 1.25f, 0.0f, -0.5f },
 };
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] static u8 ExpectedSRGBClearByte(const f32 value, const bool srgb)noexcept{
     const f32 clamped = Clamp(value, 0.0f, 1.0f);
     f32 encoded = clamped;
@@ -102,9 +106,7 @@ static constexpr NWB::Core::Color s_SRGBClearEdgeColors[]{
 }
 
 struct SRGBClearEdgeTask{
-    static constexpr NWB::Core::GpuTaskCommandRequirements s_CommandRequirements{
-        .alternativeCapabilities = NWB::Core::GpuQueueCapability::Compute | NWB::Core::GpuQueueCapability::Graphics,
-    };
+    static constexpr NWB::Core::GpuTaskCommandRequirements s_CommandRequirements{ .alternativeCapabilities = NWB::Core::GpuQueueCapability::Compute | NWB::Core::GpuQueueCapability::Graphics, };
 
 
 public:

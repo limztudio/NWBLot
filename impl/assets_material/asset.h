@@ -380,14 +380,23 @@ public:
 
 public:
     void setShaderVariant(AStringView variantName){ m_shaderVariant.assign(variantName); }
+
     void setMaterialInterface(const Name& materialInterface)noexcept{ m_materialInterface = materialInterface; }
+
     void setShadingModelId(const u32 shadingModelId)noexcept{ m_shadingModelId = shadingModelId; }
+
     void setSurfaceDispatchId(const u32 surfaceDispatchId)noexcept{ m_surfaceDispatchId = surfaceDispatchId; }
+
     void setAvboitAccumulatePixelShader(const Core::Assets::AssetRef<PixelShader>& shaderAsset)noexcept{ m_avboitAccumulatePixelShader = shaderAsset; }
+
     void setAvboitOccupancyPixelShader(const Core::Assets::AssetRef<PixelShader>& shaderAsset)noexcept{ m_avboitOccupancyPixelShader = shaderAsset; }
+
     void setAvboitExtinctionPixelShader(const Core::Assets::AssetRef<PixelShader>& shaderAsset)noexcept{ m_avboitExtinctionPixelShader = shaderAsset; }
+
     void setTransparent(const bool transparent)noexcept{ m_transparent = transparent; }
+
     void setTwoSided(const bool twoSided)noexcept{ m_twoSided = twoSided; }
+
     void setRefractive(const bool refractive)noexcept{ m_refractive = refractive; }
     void setTypedLayout(u64 layoutHash, const TypedLayoutBlockVector& blocks, const TypedLayoutFieldVector& fields, const TypedBlockByteVector& blockBytes);
     void setResourceReferences(const ResourceReferenceVector& resourceReferences);
@@ -406,15 +415,25 @@ public:
 
 public:
     [[nodiscard]] const Core::Assets::AssetString& shaderVariant()const noexcept{ return m_shaderVariant; }
+
     [[nodiscard]] const Name& materialInterface()const noexcept{ return m_materialInterface; }
+
     [[nodiscard]] u32 shadingModelId()const noexcept{ return m_shadingModelId; }
+
     [[nodiscard]] u32 surfaceDispatchId()const noexcept{ return m_surfaceDispatchId; }
+
     [[nodiscard]] u64 typedLayoutHash()const noexcept{ return m_typedLayoutHash; }
+
     [[nodiscard]] const TypedLayoutBlockVector& typedLayoutBlocks()const noexcept{ return m_typedLayoutBlocks; }
+
     [[nodiscard]] const TypedLayoutFieldVector& typedLayoutFields()const noexcept{ return m_typedLayoutFields; }
+
     [[nodiscard]] const TypedBlockByteVector& typedBlockBytes()const noexcept{ return m_typedBlockBytes; }
+
     [[nodiscard]] const ResourceReferenceVector& resourceReferences()const noexcept{ return m_resourceReferences; }
+
     [[nodiscard]] const StageShaderArray& stageShaders()const noexcept{ return m_stageShaders; }
+
     [[nodiscard]] u32 stageShaderCount()const noexcept{ return m_stageShaderCount; }
     // Cook-generated AVBOIT accumulate pixel shader for this material's transparent draw.
     // Valid only for surface-authored transparent materials; missing means a cook/runtime contract failure.
@@ -422,8 +441,11 @@ public:
     [[nodiscard]] const Core::Assets::AssetRef<PixelShader>& avboitAccumulatePixelShader()const noexcept{ return m_avboitAccumulatePixelShader; }
     // Occupancy/extinction twins of the accumulate shader, so all three AVBOIT passes read the same surface renderCoverage. Same validity contract as above.
     [[nodiscard]] const Core::Assets::AssetRef<PixelShader>& avboitOccupancyPixelShader()const noexcept{ return m_avboitOccupancyPixelShader; }
+
     [[nodiscard]] const Core::Assets::AssetRef<PixelShader>& avboitExtinctionPixelShader()const noexcept{ return m_avboitExtinctionPixelShader; }
+
     [[nodiscard]] bool transparent()const noexcept{ return m_transparent; }
+
     [[nodiscard]] bool twoSided()const noexcept{ return m_twoSided; }
     // Refractive-caster flag, separate from `transparent`. Refraction values stay shader-side (NwbMeshSurface).
     [[nodiscard]] bool refractive()const noexcept{ return m_refractive; }

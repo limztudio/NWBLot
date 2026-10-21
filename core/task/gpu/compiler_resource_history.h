@@ -59,18 +59,23 @@ public:
     [[nodiscard]] bool validFor(const Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& states)const noexcept{
         return &states == &m_states && states.size() == m_links.size();
     }
+
     [[nodiscard]] bool validResource(const GpuGraphResourceId resource)const noexcept{
         return resource.valid() && resource.generation == m_graphGeneration && resource.index < m_resources.size();
     }
+
     [[nodiscard]] usize first(const GpuGraphResourceId resource)const noexcept{
         return validResource(resource) ? m_resources[resource.index].first : Limit<usize>::s_Max;
     }
+
     [[nodiscard]] usize last(const GpuGraphResourceId resource)const noexcept{
         return validResource(resource) ? m_resources[resource.index].last : Limit<usize>::s_Max;
     }
+
     [[nodiscard]] usize previous(const usize stateIndex)const noexcept{
         return stateIndex < m_links.size() ? m_links[stateIndex].previous : Limit<usize>::s_Max;
     }
+
     [[nodiscard]] usize next(const usize stateIndex)const noexcept{
         return stateIndex < m_links.size() ? m_links[stateIndex].next : Limit<usize>::s_Max;
     }

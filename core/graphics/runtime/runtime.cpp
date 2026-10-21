@@ -169,6 +169,7 @@ GraphicsRuntime::GraphicsRuntime(GraphicsAllocator& allocator, CpuTaskScheduler&
     m_deviceCreationParams.hardwareRayTracingPolicy = HardwareRayTracingPolicy::Automatic;
     m_swapChainState.backBufferFormat = m_deviceCreationParams.swapChainFormat;
 }
+
 GraphicsRuntime::~GraphicsRuntime()noexcept(false){
     // An active unwind is already terminal.
     // Detach the borrowed device binding without native callbacks or a GPU join, so the original exception reaches the application-entry boundary.
@@ -407,6 +408,7 @@ bool GraphicsRuntime::destroy(){
     m_deviceRecreationRequested = false;
     return true;
 }
+
 bool GraphicsRuntime::waitForIdle(){
     if(auto* device = m_backend->getDevice()){
         if(m_gpuTasks.isAttachedTo(*device))

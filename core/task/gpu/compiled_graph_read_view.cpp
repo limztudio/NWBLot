@@ -50,6 +50,7 @@ GpuCompiledGraph::ReadView::ReadView(const GpuCompiledGraph& graph)noexcept{
     m_ownsAdmission = true;
     s_ActiveView = this;
 }
+
 GpuCompiledGraph::ReadView::~ReadView()noexcept{
     release();
 }
@@ -75,31 +76,43 @@ bool GpuCompiledGraph::ReadView::validFor(const GpuTaskGraphDeclarationReadView&
 }
 
 u64 GpuCompiledGraph::ReadView::generation()const noexcept{ return m_graph ? m_graph->generation() : 0u; }
+
 u64 GpuCompiledGraph::ReadView::planGeneration()const noexcept{ return m_graph ? m_graph->planGeneration() : 0u; }
+
 u16 GpuCompiledGraph::ReadView::deviceGeneration()const noexcept{ return m_graph ? m_graph->deviceGeneration() : 0u; }
+
 usize GpuCompiledGraph::ReadView::taskCount()const noexcept{ return m_graph ? m_graph->taskCount() : 0u; }
+
 usize GpuCompiledGraph::ReadView::packetCount()const noexcept{ return m_graph ? m_graph->packetCount() : 0u; }
+
 bool GpuCompiledGraph::ReadView::validPacket(const GpuSubmissionPacketId& packet)const noexcept{
     return m_graph && m_graph->validPacket(packet);
 }
+
 bool GpuCompiledGraph::ReadView::validPacketRange(const GpuSubmissionPacketRange& range)const noexcept{
     return m_graph && m_graph->validPacketRange(range);
 }
+
 GpuSubmissionPacketId GpuCompiledGraph::ReadView::packetIdAt(const usize index)const noexcept{
     return m_graph ? m_graph->packetIdAt(index) : GpuSubmissionPacketId{};
 }
+
 GpuSubmissionPacketRange GpuCompiledGraph::ReadView::packetRange(const GpuSubmissionPacketId& first, const GpuSubmissionPacketId& last)const noexcept{
     return m_graph ? m_graph->packetRange(first, last) : GpuSubmissionPacketRange{};
 }
+
 GpuSubmissionPacketRange GpuCompiledGraph::ReadView::packetRangeForTasks(const GpuTaskId& first, const GpuTaskId& last)const noexcept{
     return m_graph ? m_graph->packetRangeForTasks(first, last) : GpuSubmissionPacketRange{};
 }
+
 GpuSubmissionPacketRange GpuCompiledGraph::ReadView::allPacketRange()const noexcept{
     return m_graph ? m_graph->allPacketRange() : GpuSubmissionPacketRange{};
 }
+
 GpuSubmissionPacketRange GpuCompiledGraph::ReadView::packetTimingEnvelopeRange()const noexcept{
     return m_graph ? m_graph->packetTimingEnvelopeRange() : GpuSubmissionPacketRange{};
 }
+
 GpuCompiledTaskView GpuCompiledGraph::ReadView::findTask(const GpuTaskId& task)const & noexcept{
     if(!m_graph)
         return {};
@@ -116,30 +129,39 @@ GpuCompiledTaskView GpuCompiledGraph::ReadView::findTask(const GpuTaskId& task)c
         .epilogueBarriers = plan->epilogueBarrierCount != 0u ? m_graph->m_epilogueBarriers.data() + plan->epilogueBarrierOffset : nullptr,
     };
 }
+
 GpuSubmissionPacketId GpuCompiledGraph::ReadView::packetForTask(const GpuTaskId& task)const noexcept{
     return m_graph ? m_graph->packetForTask(task) : GpuSubmissionPacketId{};
 }
+
 GpuTaskPacketizationDecision::Enum GpuCompiledGraph::ReadView::packetizationDecisionForTask(const GpuTaskId& task)const noexcept{
     return m_graph ? m_graph->packetizationDecisionForTask(task) : GpuTaskPacketizationDecision::Unknown;
 }
+
 bool GpuCompiledGraph::ReadView::tasksSharePacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept{
     return m_graph && m_graph->tasksSharePacket(first, second);
 }
+
 bool GpuCompiledGraph::ReadView::taskPrecedesOrSharesPacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept{
     return m_graph && m_graph->taskPrecedesOrSharesPacket(first, second);
 }
+
 bool GpuCompiledGraph::ReadView::taskPrecedesInSamePacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept{
     return m_graph && m_graph->taskPrecedesInSamePacket(first, second);
 }
+
 bool GpuCompiledGraph::ReadView::tasksFormContiguousPacketSequence(const GpuTaskId* const tasks, const usize taskCount)const noexcept{
     return m_graph && m_graph->tasksFormContiguousPacketSequence(tasks, taskCount);
 }
+
 bool GpuCompiledGraph::ReadView::taskJoinsAcceptedQueueFrontier(const GpuTaskId& task)const noexcept{
     return m_graph && m_graph->taskJoinsAcceptedQueueFrontier(task);
 }
+
 const GpuPhysicalQueueInfo* GpuCompiledGraph::ReadView::queueInfoForTask(const GpuTaskId& task)const & noexcept{
     return m_graph ? m_graph->queueInfoForTask(task) : nullptr;
 }
+
 GpuCompiledPacketView GpuCompiledGraph::ReadView::packet(const GpuSubmissionPacketId& packet)const & noexcept{
     if(!m_graph || !m_graph->validPacket(packet))
         return {};
@@ -155,6 +177,7 @@ GpuCompiledPacketView GpuCompiledGraph::ReadView::packet(const GpuSubmissionPack
         .externalDependencies = plan.externalDependencyCount != 0u ? m_graph->m_packetExternalDependencies.data() + plan.externalDependencyOffset : nullptr,
     };
 }
+
 GpuCompiledPacketView GpuCompiledGraph::ReadView::packetWithTasks(const GpuSubmissionPacketId& packetId)const & noexcept{
     const GpuCompiledPacketView packetView = packet(packetId);
     if(!packetView.valid())
@@ -162,15 +185,19 @@ GpuCompiledPacketView GpuCompiledGraph::ReadView::packetWithTasks(const GpuSubmi
     NWB_ASSERT(packetView.plan->taskCount != 0u);
     return packetView;
 }
+
 usize GpuCompiledGraph::ReadView::logicalOwnershipTransferCount()const noexcept{
     return m_graph ? m_graph->m_ownershipTransfers.size() : 0u;
 }
+
 const GpuCompiledOwnershipTransfer* GpuCompiledGraph::ReadView::logicalOwnershipTransfers()const & noexcept{
     return m_graph ? m_graph->logicalOwnershipTransfers() : nullptr;
 }
+
 const GpuCompiledOwnershipTransfer* GpuCompiledGraph::ReadView::logicalOwnershipTransferAt(const usize index)const & noexcept{
     return m_graph ? m_graph->logicalOwnershipTransferAt(index) : nullptr;
 }
+
 GpuCompiledExternalResourceExportView GpuCompiledGraph::ReadView::externalResourceExport(const GpuGraphResourceId& resource)const & noexcept{
     if(!m_graph)
         return {};
@@ -179,12 +206,15 @@ GpuCompiledExternalResourceExportView GpuCompiledGraph::ReadView::externalResour
         return {};
     return GpuCompiledExternalResourceExportView{ .plan = plan, .sources = m_graph->externalResourceExportSources(*plan), };
 }
+
 const GpuCompiledPresentEndpoint* GpuCompiledGraph::ReadView::presentEndpoint()const & noexcept{
     return m_graph && m_graph->m_hasPresentEndpoint ? &m_graph->m_presentEndpoint : nullptr;
 }
+
 GpuTaskGraphCompileStatistics GpuCompiledGraph::ReadView::compileStatistics()const noexcept{
     return m_graph ? m_graph->m_compileStatistics : GpuTaskGraphCompileStatistics{};
 }
+
 GpuCompiledExternalResourceExportView GpuCompiledGraph::ReadView::externalResourceExportAt(const usize index)const & noexcept{
     if(!m_graph)
         return {};
@@ -193,12 +223,15 @@ GpuCompiledExternalResourceExportView GpuCompiledGraph::ReadView::externalResour
         return {};
     return GpuCompiledExternalResourceExportView{ .plan = plan, .sources = m_graph->externalResourceExportSources(*plan), };
 }
+
 GpuTaskGraphPhysicalQueueCompileStatistics GpuCompiledGraph::ReadView::physicalQueueCompileStatistics(const GpuPhysicalQueueId& queue)const noexcept{
     return m_graph ? m_graph->physicalQueueCompileStatistics(queue) : GpuTaskGraphPhysicalQueueCompileStatistics{};
 }
+
 const GpuPhysicalQueueInfo* GpuCompiledGraph::ReadView::queueInfo(const GpuPhysicalQueueId& queue)const & noexcept{
     return m_graph ? m_graph->queueInfo(queue) : nullptr;
 }
+
 GpuPhysicalQueueTopology GpuCompiledGraph::ReadView::queueTopology()const & noexcept{
     return m_graph ? m_graph->queueTopology() : GpuPhysicalQueueTopology{};
 }

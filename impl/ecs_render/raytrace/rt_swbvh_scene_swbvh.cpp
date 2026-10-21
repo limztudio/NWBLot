@@ -466,7 +466,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     }
     else
         clearPreparedSceneSwBvhTraversal();
-    if(!m_softwareOpticalScene.prepare(opticalScene))
+    if(!m_softwareOpticalScene.prepare(opticalScene) || !m_softwareOpticalScene.prepareRuntimeBounds(opticalScene, m_shaderSystem))
         return false;
     u64 opticalMaterialContentHash = swMaterialContextHash;
     Fnv64AppendValue(opticalMaterialContentHash, opticalScene.contentHash());

@@ -24,6 +24,7 @@ public:
     void record(const u32 slotMask)noexcept{ m_pendingSlots |= slotMask; }
     void accept()noexcept;
     void discardPending()noexcept{ m_pendingSlots = 0u; }
+
     [[nodiscard]] bool covers(const u32 slotMask)const noexcept{ return slotMask != 0u && (m_acceptedSlots & slotMask) == slotMask; }
 
 

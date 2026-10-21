@@ -105,13 +105,7 @@ UiTextSmokeSamples::UiTextSmokeSamples(Core::Alloc::GlobalArena& arena)
             m_sdf[channels - 1u] = Move(*pageResult);
     }
     const bool configured = m_latin.setText({ .text = "office ffi e\xCC\x81 gqyp", .fontSize = 22.0f }) == Impl::Ui::TextLayoutStatus::Success && m_clipped.setText({ .text = "Clipped coverage label", .fontSize = 22.0f }) == Impl::Ui::TextLayoutStatus::Success
-        && m_korean.setText({
-            .text = __hidden_ui_text_smoke::s_Korean,
-            .fontSize = 22.0f,
-            .scriptTag = Impl::Ui::TextScriptTag('H', 'a', 'n', 'g'),
-            .language = "ko"
-        }
-        ) == Impl::Ui::TextLayoutStatus::Success;
+        && m_korean.setText({ .text = __hidden_ui_text_smoke::s_Korean, .fontSize = 22.0f, .scriptTag = Impl::Ui::TextScriptTag('H', 'a', 'n', 'g'), .language = "ko" }) == Impl::Ui::TextLayoutStatus::Success;
     NWB_FATAL_ASSERT_MSG(configured && m_coverage, NWB_TEXT("UI smoke text and coverage fixture must be valid"));
     for(const Impl::Ui::SharedSdfAtlasPage& page : m_sdf)
         NWB_FATAL_ASSERT_MSG(page, NWB_TEXT("UI smoke compact SDF fixtures must be valid"));

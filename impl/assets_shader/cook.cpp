@@ -212,8 +212,9 @@ static Expected<ShaderCook::CookMap<CookString, ShaderCook::DefineEntry>> ParseD
     const auto& definesMap = definesVal->asMap();
     defines.reserve(definesMap.size());
     for(const auto& [key, val] : definesMap){
-        if(AStringView(key.data(), key.size()) == "NWB_BINDLESS_TLAS"){
-            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define 'NWB_BINDLESS_TLAS' is an engine transport feature selected in shader source"), PathToString<tchar>(nwbFilePath));
+        const AStringView authoredName(key.data(), key.size());
+        if(authoredName == "NWB_BINDLESS_TLAS" || authoredName == "NWB_CAUSTIC_PHOTON_TRANSPORT"){
+            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' is an engine transport feature selected in shader source"), PathToString<tchar>(nwbFilePath), StringConvert(authoredName));
             return MakeUnexpected(Failure{});
         }
         CookString defineName(key.data(), key.size(), arena);

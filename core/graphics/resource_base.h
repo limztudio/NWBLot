@@ -53,6 +53,7 @@ static_assert(IsStandardLayout_V<Object>, "Object must remain layout-stable acro
 static_assert(IsTriviallyCopyable_V<Object>, "Object must remain trivially copyable across graphics module boundaries");
 
 NWB_INLINE bool operator==(const Object& lhs, const Object& rhs)noexcept{ return lhs.integer == rhs.integer; }
+
 NWB_INLINE bool operator!=(const Object& lhs, const Object& rhs)noexcept{ return lhs.integer != rhs.integer; }
 
 
@@ -76,6 +77,7 @@ public:
 
 public:
     GraphicsResource& operator=(const GraphicsResource&) = delete;
+
     GraphicsResource& operator=(GraphicsResource&&) = delete;
 
 

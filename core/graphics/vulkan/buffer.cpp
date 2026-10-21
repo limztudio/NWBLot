@@ -100,6 +100,7 @@ Buffer::Buffer(const VulkanContext& context, VulkanAllocator& allocator, const B
     , m_context(context)
     , m_allocator(allocator)
 {}
+
 Buffer::~Buffer()noexcept{
     const VkBuffer registeredNativeBuffer = m_buffer;
 
@@ -157,10 +158,6 @@ Object Buffer::getNativeHandle(ObjectType objectType)noexcept{
 bool Buffer::isRetainedStateKnown()const noexcept{
     return m_retainedStateKnown.load(MemoryOrder::acquire);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void Buffer::setRetainedStateKnown(const bool known)noexcept{
     if(m_creationDesc.keepInitialState)

@@ -42,7 +42,10 @@ template<typename Operation, typename Checksum>
     const Expected<u64> behaviorChecksum = checksum();
     if(!behaviorChecksum)
         return false;
-    const auto batch = [&](const usize iterations) -> Expected<f64>{
+    const auto batch = [&](const usize iterations)noexcept(
+        noexcept(static_cast<bool>(!operation()))
+        && noexcept(DeclVal<void(*)(Expected<u64>)noexcept>()(checksum()))
+    ) -> Expected<f64>{
         const Timer begin = TimerNow();
         for(usize iteration = 0u; iteration < iterations; ++iteration){
             if(!operation())

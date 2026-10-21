@@ -169,6 +169,7 @@ GpuTaskGraphExternalResourceHandoffSnapshot::GpuTaskGraphExternalResourceHandoff
     , m_activeStorage(MakeGlobalUnique<Storage>(arena, arena))
     , m_candidateStorage(MakeGlobalUnique<Storage>(arena, arena))
 {}
+
 GpuTaskGraphExternalResourceHandoffSnapshot::~GpuTaskGraphExternalResourceHandoffSnapshot()noexcept = default;
 
 

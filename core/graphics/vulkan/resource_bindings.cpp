@@ -345,6 +345,7 @@ BindingLayout::BindingLayout(const VulkanContext& context)
     , m_descriptorBufferBindingOffsets(0, Hasher<u32>(), EqualTo<u32>(), context.objectArena)
     , m_context(context)
 {}
+
 BindingLayout::~BindingLayout()noexcept{
     if(m_pipelineLayout){
         m_context.deviceDispatch.vkDestroyPipelineLayout(m_context.device, m_pipelineLayout, m_context.allocationCallbacks);

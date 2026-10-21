@@ -42,6 +42,7 @@ public:
 
 public:
     [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return generation; }
+
     [[nodiscard]] virtual u64 revision()const noexcept override{ return revisionValue; }
 
     [[nodiscard]] virtual u64 rowCount()const override{
@@ -72,6 +73,7 @@ public:
     }
 
     [[nodiscard]] virtual StringView text(u64)const noexcept override{ return "match"; }
+
     [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{ return index < count; }
 
 
@@ -107,6 +109,7 @@ public:
     }
 
     [[nodiscard]] virtual u64 revision()const noexcept override{ return revisionValue; }
+
     [[nodiscard]] virtual u64 rowCount()const noexcept override{ return count; }
 
     [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
@@ -130,6 +133,7 @@ public:
     }
 
     [[nodiscard]] virtual StringView text(u64)const noexcept override{ return "full row"; }
+
     [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{ return index < count; }
 
     [[nodiscard]] virtual bool filter(const AStringView query)override{

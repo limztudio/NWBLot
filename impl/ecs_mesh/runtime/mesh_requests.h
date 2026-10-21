@@ -76,6 +76,7 @@ public:
             --m_remainingCount;
         }
     }
+
     [[nodiscard]] bool containsLive(const Name& meshKey, u64 version)const noexcept{
         if(!meshKey)
             return false;
@@ -84,6 +85,7 @@ public:
         const usize index = findInline(meshKey.identityHash(), version);
         return index < m_inlineCount && m_inlineEntries[index].found;
     }
+
     [[nodiscard]] bool complete()const noexcept{ return m_remainingCount == 0u; }
 
 

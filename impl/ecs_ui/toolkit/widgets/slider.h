@@ -69,11 +69,17 @@ public:
 
 public:
     [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_instanceGeneration; }
+
     [[nodiscard]] u64 inputGeneration()const noexcept{ return m_inputGeneration; }
+
     [[nodiscard]] u64 revision()const noexcept{ return m_revision; }
+
     [[nodiscard]] u64 admissionGeneration()const noexcept{ return m_admissionGeneration; }
+
     [[nodiscard]] f64 value()const noexcept{ return m_value; }
+
     [[nodiscard]] SliderResult result()const noexcept{ return m_result; }
+
     [[nodiscard]] const SliderPlacement& placement()const noexcept{ return m_placement; }
     [[nodiscard]] ControlToken controlToken()const noexcept;
     [[nodiscard]] SliderSnapshot snapshot()const noexcept;

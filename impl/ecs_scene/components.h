@@ -77,13 +77,19 @@ struct alignas(Float4) CameraComponent{
 
 public:
     [[nodiscard]] f32 verticalFovRadians()const noexcept{ return projection.x; }
+
     [[nodiscard]] f32 nearPlane()const noexcept{ return projection.y; }
+
     [[nodiscard]] f32 farPlane()const noexcept{ return projection.z; }
+
     [[nodiscard]] f32 aspectRatio()const noexcept{ return projection.w; }
 
     void setVerticalFovRadians(const f32 value)noexcept{ projection.x = value; }
+
     void setNearPlane(const f32 value)noexcept{ projection.y = value; }
+
     void setFarPlane(const f32 value)noexcept{ projection.z = value; }
+
     void setAspectRatio(const f32 value)noexcept{ projection.w = value; }
 };
 
@@ -146,6 +152,7 @@ public:
     [[nodiscard]] Float4 color()const noexcept{
         return Float4(colorIntensity.x, colorIntensity.y, colorIntensity.z, 0.0f);
     }
+
     [[nodiscard]] f32 intensity()const noexcept{ return colorIntensity.w; }
 
     void setColor(const Float4& value)noexcept{
@@ -153,6 +160,7 @@ public:
         colorIntensity.y = value.y;
         colorIntensity.z = value.z;
     }
+
     void setIntensity(const f32 value)noexcept{ colorIntensity.w = value; }
 };
 

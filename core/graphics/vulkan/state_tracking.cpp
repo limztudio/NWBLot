@@ -32,6 +32,7 @@ StateTracker::StateTracker(const VulkanContext& context)
     , m_bufferUavBarriers(0, Hasher<NotNull<Buffer*>>(), EqualTo<NotNull<Buffer*>>(), context.objectArena)
     , m_context(context)
 {}
+
 StateTracker::~StateTracker()noexcept{}
 
 void StateTracker::reset()noexcept{

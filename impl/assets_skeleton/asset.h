@@ -64,7 +64,9 @@ public:
 
 public:
     [[nodiscard]] const JointVector& joints()const noexcept{ return m_joints; }
+
     [[nodiscard]] const JointIndexMap& jointIndices()const noexcept{ return m_jointIndices; }
+
     [[nodiscard]] u32 jointCount()const noexcept{ return static_cast<u32>(m_joints.size()); }
     [[nodiscard]] u32 findJointIndex(Name jointName)const noexcept;
 

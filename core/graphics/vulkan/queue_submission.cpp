@@ -333,9 +333,13 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Native submission cannot publish acceleration-structure signatures across allocator domains"));
             return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
         }
+        if(!tracked.m_referencedTopLevelAccelStructs.empty()){
+            // Trace packets retain the selected BLAS sets until their own queue completion.
+            tracked.retainAcceptedTopLevelAccelStructReferences();
+            for(usize buildIndex = 0u; buildIndex < numCmd; ++buildIndex)
+                tracked.retainPendingTopLevelAccelStructReferences(*ppCmd[buildIndex]->m_currentCmdBuf);
+        }
         for(const auto heap : tracked.m_referencedDescriptorHeaps){
-
-
             const auto heapUseIndex = heap->validateCommandBufferUseSubmissionLocked(tracked, submissionToken);
             if(!heapUseIndex)
                 return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });

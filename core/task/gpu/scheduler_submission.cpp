@@ -36,6 +36,7 @@ public:
         : m_tickets(tickets)
         , m_preparedTicketCount(preparedTicketCount)
     {}
+
     ~PreparedTimingTicketsUnwindScope()noexcept{
         static_assert(noexcept(static_cast<GpuTimingSubmissionTicket*>(nullptr)->rollbackPreparedSubmission()));
         static_assert(noexcept(static_cast<GpuTimingSubmissionTicket*>(nullptr)->abandonWithoutCallbacks()));
@@ -53,6 +54,7 @@ public:
 
 public:
     void abandonOnUnwind()noexcept{ m_mode = Mode::Abandon; }
+
     void release()noexcept{ m_mode = Mode::Released; }
 
 
@@ -71,6 +73,7 @@ public:
         , m_planAccess(planAccess)
         , m_transaction(transaction)
     {}
+
     ~SubmittingPacketUnwindScope()noexcept{
         if(!m_submissionLease)
             return;
@@ -87,6 +90,7 @@ public:
         m_packet = packet;
         m_submissionLease = &submissionLease;
     }
+
     void release()noexcept{ m_submissionLease = nullptr; }
 
 

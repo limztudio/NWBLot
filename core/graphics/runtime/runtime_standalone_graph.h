@@ -77,7 +77,7 @@ public:
 
 
 public:
-    explicit StandaloneGraphWorkspacePool(GraphicsArena& arena)
+    explicit StandaloneGraphWorkspacePool(GraphicsArena& arena)noexcept
         : m_arena(arena)
         , m_workspaces(arena)
     {}

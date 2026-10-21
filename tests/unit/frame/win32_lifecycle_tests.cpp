@@ -49,8 +49,11 @@ public:
 
 public:
     virtual LogArena& arena()noexcept override{ return m_arena; }
+
     virtual void enqueue(LogString&& text, NWB::Core::Common::LogType::Enum)override{ record(text); }
+
     virtual void enqueue(const LogString& text, NWB::Core::Common::LogType::Enum)override{ record(text); }
+
     [[nodiscard]] u32 clampCount()const noexcept{ return m_clampCount; }
 
 

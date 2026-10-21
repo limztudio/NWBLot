@@ -228,6 +228,8 @@ public:
         m_csgSliceRayCapacity = Min(m_reflectionSettings.maxHardwareRaysPerFrame, 2u * extent.width * extent.height);
         const auto light = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, 0.6f, 0.4f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f);
         NWB_FATAL_ASSERT_MSG(cameraId.valid() && light.valid(), NWB_TEXT("ReflectionSmokeProject: camera/light creation failed"));
+        if(m_opticalCase)
+            m_world->entity(light).getComponent<NWB::Impl::Scene::LightComponent>().enableCaustics = false;
 
         if(m_feedbackCase){
             m_feedbackScene = MakeUnique<ReflectionFeedbackScene>(m_context, *m_world);
@@ -734,7 +736,9 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     NWB_FATAL_ASSERT_MSG(*extent == "npot", NWB_TEXT("ReflectionSmokeProject: extent must be native or npot"));
     return { 953, 713 };
 }
+
 TStringView NWB::QueryProjectWindowTitle()noexcept{ return NWB_TEXT("NWB Reflection Smoke"); }
+
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<__hidden_reflection_smoke::ReflectionSmokeProject>(context);
 }

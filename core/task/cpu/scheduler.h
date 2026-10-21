@@ -200,9 +200,13 @@ public:
     void setProfiling(bool enabled, u64 frameIndex = 0u);
     [[nodiscard]] usize readProfileEvents(CpuTaskProfileEvent* output, usize capacity)noexcept;
     [[nodiscard]] u64 domainIdentity()const noexcept{ return m_domainIdentity; }
+
     [[nodiscard]] u32 workerThreadCount()const noexcept{ return m_workerCount; }
+
     [[nodiscard]] bool isParallelEnabled()const noexcept{ return m_workerCount != 0u; }
+
     [[nodiscard]] usize currentWorkerIndex()const noexcept{ return s_Execution && &s_Execution->scheduler == this ? s_Execution->workerIndex : 0u; }
+
     [[nodiscard]] CpuAffinity::Enum currentWorkerAffinity()const noexcept{ return s_Execution && &s_Execution->scheduler == this ? s_Execution->affinity : CpuAffinity::Any; }
 
 

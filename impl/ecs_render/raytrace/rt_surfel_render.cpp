@@ -140,6 +140,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
     // Age-free recycles unseen surfels before the graph-owned cell-head reset and hash rebuild.
     if(dispatchAgeFree){
         Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_SurfelAgeFree, m_graphics.getDevice(), commandList);
+
         commandList.commitBarriers();
         Core::ComputeState state;
         state.setPipeline(m_rayTracingState.m_surfelAgeFreePipeline.get());
@@ -155,6 +156,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
     // Rebuild bucket lists before spawning uncovered surface representatives.
     if(dispatchHashBuild){
         Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_SurfelHashBuild, m_graphics.getDevice(), commandList);
+
         commandList.commitBarriers();
         Core::ComputeState state;
         state.setPipeline(m_rayTracingState.m_surfelHashBuildPipeline.get());
@@ -170,6 +172,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
     // Spawn retains compatible surfaces and inserts uncovered candidates into bounded bucket lists.
     if(dispatchSpawn){
         Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_SurfelSpawn, m_graphics.getDevice(), commandList);
+
         commandList.commitBarriers();
 
         surfelPush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
@@ -204,6 +207,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
 
     if(dispatchTrace){
         Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_SurfelTrace, m_graphics.getDevice(), commandList);
+
         commandList.commitBarriers();
         Core::ComputeState state;
         state.setPipeline(tracePipeline);
@@ -228,6 +232,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
         const SurfelGiResolveSize resolveSize = MakeSurfelGiResolveSize(targets.width, targets.height, targets.surfelResolveFactor);
         {
             Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_SurfelResolve, m_graphics.getDevice(), commandList);
+
             commandList.commitBarriers();
 
             surfelPush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
@@ -256,6 +261,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
     // Surface-aware upsample preserves coverage across edges.
     {
         Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_SurfelUpsample, m_graphics.getDevice(), commandList);
+
         commandList.commitBarriers();
 
         surfelPush.halfIrradianceSlot = targets.bindless.surfelIrradianceHalf.slot();

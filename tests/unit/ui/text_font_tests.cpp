@@ -55,8 +55,11 @@ public:
 
 public:
     virtual Core::Common::LogArena& arena()noexcept override{ return m_arena; }
+
     virtual void enqueue(Core::Common::LogString&& text, Core::Common::LogType::Enum)override{ observe(text); }
+
     virtual void enqueue(const Core::Common::LogString& text, Core::Common::LogType::Enum)override{ observe(text); }
+
     [[nodiscard]] bool sawFaceFailure()const noexcept{ return m_sawFaceFailure; }
 
 

@@ -36,7 +36,9 @@ public:
     [[nodiscard]] bool loadBinary(const Core::Assets::AssetBytes& binary);
     [[nodiscard]] bool validatePayload(Core::Alloc::ScratchArena& scratchArena)const;
     void setPayload(FontAtlasPayload&& payload)noexcept{ m_payload = Move(payload); }
+
     [[nodiscard]] const FontAtlasPayload& payload()const noexcept{ return m_payload; }
+
     [[nodiscard]] const FontAtlasGlyph* glyph(const u32 glyphId)const noexcept{ return glyphId < m_payload.glyphs.size() ? &m_payload.glyphs[glyphId] : nullptr; }
 
 

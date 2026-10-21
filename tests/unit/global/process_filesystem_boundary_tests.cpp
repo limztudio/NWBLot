@@ -60,7 +60,9 @@ struct OversizedBinarySource{
 
 public:
     [[nodiscard]] u64 size()const noexcept{ return static_cast<u64>(Limit<StreamSize>::s_Max) + 1u; }
+
     [[nodiscard]] bool empty()const noexcept{ return false; }
+
     [[nodiscard]] const u8* data()const noexcept{ return &s_Byte; }
 };
 
@@ -329,8 +331,11 @@ public:
         byteCount = 0u;
         childPid = 0;
     }
+
     [[nodiscard]] usize size()const noexcept{ return byteCount; }
+
     [[nodiscard]] bool empty()const noexcept{ return byteCount == 0u; }
+
     void append(const char* data, const usize length){
         if(length > bytes.size() - byteCount)
             throw RuntimeException("child PID output exceeded the bounded fixture buffer");

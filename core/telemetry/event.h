@@ -52,23 +52,29 @@ namespace CaptureFlag{
 constexpr CaptureFlag::Mask operator|(const CaptureFlag::Mask lhs, const CaptureFlag::Mask rhs)noexcept{
     return static_cast<CaptureFlag::Mask>(static_cast<u32>(lhs) | static_cast<u32>(rhs));
 }
+
 constexpr CaptureFlag::Mask operator&(const CaptureFlag::Mask lhs, const CaptureFlag::Mask rhs)noexcept{
     return static_cast<CaptureFlag::Mask>(static_cast<u32>(lhs) & static_cast<u32>(rhs));
 }
+
 constexpr CaptureFlag::Mask& operator|=(CaptureFlag::Mask& lhs, const CaptureFlag::Mask rhs)noexcept{
     lhs = lhs | rhs;
     return lhs;
 }
+
 constexpr CaptureFlag::Mask& operator&=(CaptureFlag::Mask& lhs, const CaptureFlag::Mask rhs)noexcept{
     lhs = lhs & rhs;
     return lhs;
 }
+
 constexpr CaptureFlag::Mask operator~(const CaptureFlag::Mask value)noexcept{
     return static_cast<CaptureFlag::Mask>(~static_cast<u32>(value));
 }
+
 [[nodiscard]] constexpr bool AnyCapture(const CaptureFlag::Mask value)noexcept{
     return static_cast<u32>(value) != 0u;
 }
+
 [[nodiscard]] constexpr bool HasCapture(const CaptureFlag::Mask value, const CaptureFlag::Mask flag)noexcept{
     return AnyCapture(value & flag);
 }
@@ -105,9 +111,13 @@ public:
     }
 
     [[nodiscard]] constexpr bool enabled()const noexcept{ return AnyCapture(flags); }
+
     [[nodiscard]] constexpr bool textLogEnabled()const noexcept{ return HasCapture(flags, CaptureFlag::TextLog); }
+
     [[nodiscard]] constexpr bool diagnosticEnabled()const noexcept{ return HasCapture(flags, CaptureFlag::Diagnostic); }
+
     [[nodiscard]] constexpr bool perfEnabled()const noexcept{ return HasCapture(flags, CaptureFlag::Perf); }
+
     [[nodiscard]] constexpr bool frameGraphEnabled()const noexcept{ return HasCapture(flags, CaptureFlag::FrameGraph); }
 };
 

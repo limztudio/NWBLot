@@ -40,6 +40,7 @@ public:
 
 public:
     inline Param& frameParam()noexcept{ return m_data; }
+
     inline const Param& frameParam()const noexcept{ return m_data; }
 
 

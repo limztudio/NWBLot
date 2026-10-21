@@ -75,7 +75,7 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
     if(!reflectionResources.valid())
         return MakeUnexpected(Failure{});
     if(!sceneReads.valid() && (reflectionResources.hasHardwareWork() || (refractionActive && refractionResources.valid() && refractionResources.usesHardwareTrace))){
-        auto sceneReadsResult = ImportRayTracingSceneGraphReads(m_graph, sceneResources, m_raytracingSystem.sceneTlasBackingInitialState(), traceGeometryScratchArena);
+        auto sceneReadsResult = ImportRayTracingSceneGraphReads(m_graph, sceneResources, m_raytracingSystem.sceneTlasBackingInitialState(), inputs.traceContextUploadTask, traceGeometryScratchArena);
         if(!sceneReadsResult){
             sceneReads = RayTracingSceneGraphReads(scratchArena);
             return MakeUnexpected(Failure{});

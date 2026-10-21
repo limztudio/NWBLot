@@ -30,6 +30,7 @@ public:
 
 public:
     [[nodiscard]] const ShaderDesc& getDescription()const noexcept{ return m_desc; }
+
     void getBytecode(const void*& outBytecode, usize& outSize)const noexcept{
         outBytecode = m_spirvWords.data();
         outSize = m_spirvWords.size() * sizeof(u32);

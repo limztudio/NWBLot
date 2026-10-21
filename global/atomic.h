@@ -60,22 +60,29 @@ public:
 };
 
 [[nodiscard]] inline bool AtomicFlagTest(const AtomicFlag& flag)noexcept{ return flag.test(); }
+
 [[nodiscard]] inline bool AtomicFlagTestExplicit(const AtomicFlag& flag, const MemoryOrder order)noexcept{
     return flag.test(order);
 }
 
 inline bool AtomicFlagTestAndSet(AtomicFlag& flag)noexcept{ return flag.testAndSet(); }
+
 inline bool AtomicFlagTestAndSetExplicit(AtomicFlag& flag, const MemoryOrder order)noexcept{
     return flag.testAndSet(order);
 }
+
 inline void AtomicFlagClear(AtomicFlag& flag)noexcept{ flag.clear(); }
+
 inline void AtomicFlagClearExplicit(AtomicFlag& flag, const MemoryOrder order)noexcept{ flag.clear(order); }
 
 inline void AtomicFlagWait(const AtomicFlag& flag, const bool expected)noexcept{ flag.wait(expected); }
+
 inline void AtomicFlagWaitExplicit(const AtomicFlag& flag, const bool expected, const MemoryOrder order)noexcept{
     flag.wait(expected, order);
 }
+
 inline void AtomicFlagNotifyOne(AtomicFlag& flag)noexcept{ flag.notifyOne(); }
+
 inline void AtomicFlagNotifyAll(AtomicFlag& flag)noexcept{ flag.notifyAll(); }
 
 

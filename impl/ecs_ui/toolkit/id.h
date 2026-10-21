@@ -34,7 +34,9 @@ struct WidgetRoot{
 };
 
 [[nodiscard]] inline bool operator==(const WidgetId& lhs, const WidgetId& rhs)noexcept{ return lhs.value == rhs.value; }
+
 [[nodiscard]] inline bool operator!=(const WidgetId& lhs, const WidgetId& rhs)noexcept{ return lhs.value != rhs.value; }
+
 [[nodiscard]] inline bool operator==(const WidgetRoot& lhs, const WidgetRoot& rhs)noexcept{
     return lhs.value == rhs.value && lhs.generation == rhs.generation;
 }

@@ -47,29 +47,29 @@ template<typename ArenaT, typename PredicateT>
     if(!*exists)
         return {};
 
-    Vector<Path<ArenaT>, ArenaT> entries{arena};
-    auto directoryIt = DirectoryIterator<ArenaT>::Create(directory);
+    const auto directoryIt = DirectoryIterator<ArenaT>::Create(directory);
     if(!directoryIt)
         return MakeUnexpected(directoryIt.error());
 
+    Vector<const Path<ArenaT>*, ArenaT> entries{arena};
     entries.reserve(static_cast<usize>(directoryIt->end() - directoryIt->begin()));
     for(const auto& entry : *directoryIt){
         const auto retained = shouldRetainPath(entry.path());
         if(!retained)
             return MakeUnexpected(retained.error());
         if(*retained)
-            entries.emplace_back(arena, entry.path());
+            entries.push_back(&entry.path());
     }
 
     if(entries.size() <= maxEntries)
         return {};
 
-    Sort(entries.begin(), entries.end());
+    Sort(entries.begin(), entries.end(), [](const Path<ArenaT>* lhs, const Path<ArenaT>* rhs)noexcept{ return *lhs < *rhs; });
 
     ErrorCode firstError;
     const usize removeCount = entries.size() - maxEntries;
     for(usize i = 0u; i < removeCount; ++i){
-        const auto removed = RemoveAllIfExists(entries[i]);
+        const auto removed = RemoveAllIfExists(*entries[i]);
         if(!removed && !firstError)
             firstError = removed.error();
     }

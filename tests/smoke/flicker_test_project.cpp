@@ -61,6 +61,7 @@ using FlickerMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 
 // Spinning opaque/glass bodies expose shadow flicker; arrows scrub yaw and the title reports it.
 static constexpr FlickerModelRef s_Model{"project/characters/body/model"};
+static constexpr FlickerModelRef s_CausticModel{"project/characters/caustic_closed_body/model"};
 static constexpr FlickerMaterialRef s_OpaqueMaterial{"project/smoke/transparent_multi/materials/ground"};
 static constexpr FlickerMaterialRef s_TransparentMaterial{"project/smoke/transparent_multi/materials/shared"};
 static constexpr FlickerMeshRef s_GroundMesh{"project/meshes/shadow_plane"};
@@ -185,7 +186,7 @@ public:
         m_transparentOwner = CreateTintedModelEntity(
             *m_world,
             m_context.objectArena,
-            s_Model,
+            s_CausticModel,
             s_TransparentMaterial,
             s_SmokeSurfaceMaterialInterface,
             Float4(0.72f, 0.86f, 1.00f, 0.42f),
@@ -197,6 +198,13 @@ public:
             NWB_LOGGER_ERROR(NWB_TEXT("FlickerTestSmokeProject: failed to set character tint (opaque {}, transparent {})"), opaqueTintApplied, transparentTintApplied);
 
         SyncSmokeModelRuntimes(*m_world);
+        const auto meshEntity = NWB::Tests::Smoke::FindSpawnedModelObject(*m_world, m_transparentOwner, Name("mesh"), NWB::Impl::ModelObjectKind::SkinnedMesh);
+        auto* const renderer = m_world->tryGetComponent<NWB::Impl::RendererComponent>(meshEntity);
+        if(!renderer){
+            NWB_LOGGER_ERROR(NWB_TEXT("FlickerTestSmokeProject: closed refractor renderer is unavailable"));
+            return false;
+        }
+        renderer->opticalBoundaryMode = NWB::Impl::OpticalBoundaryMode::ClosedNested;
 
         NWB_FATAL_ASSERT_MSG(activeCamera.valid() && m_groundEntity.valid() && m_opaqueOwner.valid() && m_transparentOwner.valid(), NWB_TEXT("FlickerTestSmokeProject failed to create all scene entities"));
 

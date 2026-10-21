@@ -29,6 +29,7 @@ public:
 
 public:
     [[nodiscard]] const FramebufferDesc& getDescription()const noexcept{ return m_desc; }
+
     [[nodiscard]] const FramebufferInfoEx& getFramebufferInfo()const noexcept{ return m_framebufferInfo; }
 
 

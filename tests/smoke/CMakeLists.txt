@@ -54,7 +54,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         set(_nwb_testbed_smoke_asset_stamp "${_nwb_testbed_smoke_runtime_root}/res/.nwb_testbed_smoke_assets_$<CONFIG>.stamp")
         add_custom_command(OUTPUT "${_nwb_testbed_smoke_asset_stamp}" COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_testbed_smoke_runtime_root}/res" COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/launch.py" --skip-build
                 --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>" --repo-root "${PROJECT_SOURCE_DIR}" --asset-root "impl/assets" --asset-root "CoolStuff/Testbed/assets" --output-directory "${_nwb_testbed_smoke_runtime_root}/res"
-                --cache-directory "${_nwb_smoke_asset_cache_directory}" --configuration "$<CONFIG>" COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_testbed_smoke_asset_stamp}" DEPENDS nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer
+                --cache-directory "${_nwb_smoke_asset_cache_directory}/smoke_catalogs/testbed" --configuration "$<CONFIG>" COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_testbed_smoke_asset_stamp}" DEPENDS nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer
                 "${PROJECT_SOURCE_DIR}/pipeline/launch.py" ${_nwb_testbed_smoke_asset_inputs} WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}" COMMENT "Cooking NWB Testbed smoke assets for $<CONFIG>..." VERBATIM USES_TERMINAL)
         add_custom_target(nwb_testbed_smoke_assets DEPENDS "${_nwb_testbed_smoke_asset_stamp}")
         add_dependencies(testbed nwb_testbed_smoke_assets)
@@ -102,7 +102,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         add_custom_command(OUTPUT "${_nwb_fixture_asset_stamp}" COMMAND "${CMAKE_COMMAND}" -E make_directory "${RUNTIME_ROOT}/res" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/prepare_fixture_asset_root.py"
                 --output-root "${_nwb_fixture_generated_root}" ${_nwb_fixture_source_args}
             COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/launch.py" --skip-build --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>" --repo-root "${PROJECT_SOURCE_DIR}" --asset-root "impl/assets"
-                --asset-root "${_nwb_fixture_generated_root}" --output-directory "${RUNTIME_ROOT}/res" --cache-directory "${_nwb_smoke_asset_cache_directory}" --configuration "$<CONFIG>"
+                --asset-root "${_nwb_fixture_generated_root}" --output-directory "${RUNTIME_ROOT}/res" --cache-directory "${_nwb_smoke_asset_cache_directory}/smoke_catalogs/${FIXTURE_NAME}" --configuration "$<CONFIG>"
             COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_fixture_asset_stamp}" DEPENDS nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer "${PROJECT_SOURCE_DIR}/pipeline/launch.py" "${CMAKE_CURRENT_LIST_DIR}/prepare_fixture_asset_root.py"
                 ${_nwb_fixture_asset_inputs} WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}" COMMENT "Cooking NWB ${DESCRIPTION} smoke assets for $<CONFIG>..." VERBATIM USES_TERMINAL)
         add_custom_target("${TARGET_NAME}" DEPENDS "${_nwb_fixture_asset_stamp}")
@@ -134,7 +134,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         set(_nwb_transparent_multi_asset_stamp "${_nwb_transparent_multi_runtime_root}/res/.nwb_transparent_multi_assets_$<CONFIG>.stamp")
         add_custom_command(OUTPUT "${_nwb_transparent_multi_asset_stamp}" COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_transparent_multi_runtime_root}/res" COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/launch.py" --skip-build
                 --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>" --repo-root "${PROJECT_SOURCE_DIR}" --asset-root "impl/assets" --asset-root "tests/smoke/assets" --output-directory "${_nwb_transparent_multi_runtime_root}/res"
-                --cache-directory "${_nwb_smoke_asset_cache_directory}" --configuration "$<CONFIG>" COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_transparent_multi_asset_stamp}" DEPENDS nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer
+                --cache-directory "${_nwb_smoke_asset_cache_directory}/smoke_catalogs/shared" --configuration "$<CONFIG>" COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_transparent_multi_asset_stamp}" DEPENDS nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer
                 "${PROJECT_SOURCE_DIR}/pipeline/launch.py" ${_nwb_transparent_multi_asset_inputs} WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}" COMMENT "Cooking NWB transparent smoke assets for $<CONFIG>..." VERBATIM USES_TERMINAL)
         add_custom_target(nwb_transparent_multi_smoke_assets DEPENDS "${_nwb_transparent_multi_asset_stamp}")
         add_dependencies(nwb_transparent_multi_smoke nwb_transparent_multi_smoke_assets)
@@ -201,6 +201,12 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         target_sources(nwb_csg_caustic_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_project.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/framebuffer_capture.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/csg_caustic_timing_probe.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/csg_caustic_timing_probe.h"
+            "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"
+            "${CMAKE_CURRENT_LIST_DIR}/smoke_cpu_gpu_timing_probe.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/smoke_cpu_gpu_timing_probe.h"
         )
         target_compile_definitions(nwb_csg_caustic_smoke PRIVATE NWB_CSG_CAUSTIC_SMOKE=1 NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
         nwb_configure_runtime_smoke_target(nwb_csg_caustic_smoke "${_nwb_csg_caustic_runtime_root}" nwb_ecs_csg)
@@ -209,7 +215,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         add_custom_command(OUTPUT "${_nwb_csg_caustic_asset_stamp}" COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_csg_caustic_runtime_root}/res" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/prepare_fixture_asset_root.py"
                 --output-root "${_nwb_csg_caustic_generated_root}" --source-root "${CMAKE_CURRENT_LIST_DIR}/assets" --source-root "${CMAKE_CURRENT_LIST_DIR}/csg_caustic_assets"
             COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/launch.py" --skip-build --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>" --repo-root "${PROJECT_SOURCE_DIR}" --asset-root "impl/assets"
-                --asset-root "${_nwb_csg_caustic_generated_root}" --output-directory "${_nwb_csg_caustic_runtime_root}/res" --cache-directory "${_nwb_smoke_asset_cache_directory}" --configuration "$<CONFIG>"
+                --asset-root "${_nwb_csg_caustic_generated_root}" --output-directory "${_nwb_csg_caustic_runtime_root}/res" --cache-directory "${_nwb_smoke_asset_cache_directory}/smoke_catalogs/csg_caustic" --configuration "$<CONFIG>"
             COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_csg_caustic_asset_stamp}" DEPENDS nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer "${PROJECT_SOURCE_DIR}/pipeline/launch.py" "${CMAKE_CURRENT_LIST_DIR}/prepare_fixture_asset_root.py"
                 ${_nwb_csg_caustic_asset_inputs} WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}" COMMENT "Cooking NWB CSG caustic smoke assets for $<CONFIG>..." VERBATIM USES_TERMINAL)
         add_custom_target(nwb_csg_caustic_smoke_assets DEPENDS "${_nwb_csg_caustic_asset_stamp}")
@@ -438,7 +444,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             set(_nwb_texture_smoke_asset_stamp "${_nwb_texture_smoke_runtime_root}/res/.nwb_texture_smoke_assets_$<CONFIG>.stamp")
             add_custom_command(OUTPUT "${_nwb_texture_smoke_asset_stamp}" COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_texture_smoke_runtime_root}/res" COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/launch.py" --skip-build
                     --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>" --repo-root "${PROJECT_SOURCE_DIR}" --asset-root "impl/assets" --asset-root "tests/smoke/assets" --asset-root "${_nwb_texture_smoke_generated_asset_root}"
-                    --output-directory "${_nwb_texture_smoke_runtime_root}/res" --cache-directory "${_nwb_smoke_asset_cache_directory}" --configuration "$<CONFIG>" COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_texture_smoke_asset_stamp}" DEPENDS
+                    --output-directory "${_nwb_texture_smoke_runtime_root}/res" --cache-directory "${_nwb_smoke_asset_cache_directory}/smoke_catalogs/texture" --configuration "$<CONFIG>" COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_texture_smoke_asset_stamp}" DEPENDS
                     nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer "${PROJECT_SOURCE_DIR}/pipeline/launch.py" "${_nwb_texture_smoke_source_nwb}" "${_nwb_texture_smoke_source_tex}" ${_nwb_texture_smoke_asset_inputs}
                 WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}" COMMENT "Cooking NWB texture smoke assets for $<CONFIG>..." VERBATIM USES_TERMINAL)
             add_custom_target(nwb_texture_smoke_assets DEPENDS "${_nwb_texture_smoke_asset_stamp}")
@@ -477,7 +483,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         add_custom_command(OUTPUT "${_nwb_csg_visible_asset_stamp}" COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_csg_visible_runtime_root}/res" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/prepare_fixture_asset_root.py"
                 --output-root "${_nwb_csg_visible_generated_root}" --source-root "${CMAKE_CURRENT_LIST_DIR}/assets" --source-root "${CMAKE_CURRENT_LIST_DIR}/csg_visible_assets"
             COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/launch.py" --skip-build --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>" --repo-root "${PROJECT_SOURCE_DIR}" --asset-root "impl/assets"
-                --asset-root "${_nwb_csg_visible_generated_root}" --output-directory "${_nwb_csg_visible_runtime_root}/res" --cache-directory "${_nwb_smoke_asset_cache_directory}" --configuration "$<CONFIG>"
+                --asset-root "${_nwb_csg_visible_generated_root}" --output-directory "${_nwb_csg_visible_runtime_root}/res" --cache-directory "${_nwb_smoke_asset_cache_directory}/smoke_catalogs/csg_visible" --configuration "$<CONFIG>"
             COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_csg_visible_asset_stamp}" DEPENDS nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer "${PROJECT_SOURCE_DIR}/pipeline/launch.py" "${CMAKE_CURRENT_LIST_DIR}/prepare_fixture_asset_root.py"
                 ${_nwb_csg_visible_asset_inputs} WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}" COMMENT "Cooking NWB CSG visible smoke assets for $<CONFIG>..." VERBATIM USES_TERMINAL)
         add_custom_target(nwb_csg_visible_smoke_assets DEPENDS "${_nwb_csg_visible_asset_stamp}")
@@ -536,7 +542,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         set(_nwb_csg_skinned_visible_asset_stamp "${_nwb_csg_skinned_visible_runtime_root}/res/.nwb_csg_skinned_visible_assets_$<CONFIG>.stamp")
         add_custom_command(OUTPUT "${_nwb_csg_skinned_visible_asset_stamp}" COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_csg_skinned_visible_runtime_root}/res" COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/launch.py" --skip-build
                 --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>" --repo-root "${PROJECT_SOURCE_DIR}" --asset-root "impl/assets" --asset-root "tests/smoke/assets" --output-directory "${_nwb_csg_skinned_visible_runtime_root}/res"
-                --cache-directory "${_nwb_smoke_asset_cache_directory}" --configuration "$<CONFIG>" COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_csg_skinned_visible_asset_stamp}" DEPENDS nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer
+                --cache-directory "${_nwb_smoke_asset_cache_directory}/smoke_catalogs/csg_skinned_visible" --configuration "$<CONFIG>" COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_csg_skinned_visible_asset_stamp}" DEPENDS nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer
                 "${PROJECT_SOURCE_DIR}/pipeline/launch.py" ${_nwb_csg_skinned_visible_asset_inputs} WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}" COMMENT "Cooking NWB skinned CSG visible smoke assets for $<CONFIG>..." VERBATIM USES_TERMINAL)
         add_custom_target(nwb_csg_skinned_visible_smoke_assets DEPENDS "${_nwb_csg_skinned_visible_asset_stamp}")
         add_dependencies(nwb_csg_skinned_visible_smoke nwb_csg_skinned_visible_smoke_assets)
@@ -566,6 +572,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
 
     if(TARGET nwb_loader AND TARGET nwb_asset_builder AND EXISTS "${_nwb_skinning_culling_model_nwb}")
         set(_nwb_skinning_culling_runtime_root "${CMAKE_BINARY_DIR}/Testing/skinning_culling_benchmark_runtime/$<CONFIG>")
+        set(_nwb_skinning_culling_asset_root "${CMAKE_BINARY_DIR}/Testing/skinning_culling_generated/$<CONFIG>")
         if(TARGET nwb_logserver)
             set(_nwb_skinning_culling_logserver_args "--logserver-executable" "$<TARGET_FILE:nwb_logserver>")
         else()
@@ -581,15 +588,17 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         file(GLOB_RECURSE _nwb_skinning_culling_asset_inputs CONFIGURE_DEPENDS LIST_DIRECTORIES false "${PROJECT_SOURCE_DIR}/impl/assets/*" "${CMAKE_CURRENT_LIST_DIR}/assets/*")
 
         set(_nwb_skinning_culling_asset_stamp "${_nwb_skinning_culling_runtime_root}/res/.nwb_skinning_culling_benchmark_assets_$<CONFIG>.stamp")
-        add_custom_command(OUTPUT "${_nwb_skinning_culling_asset_stamp}" COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_skinning_culling_runtime_root}/res" COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/launch.py" --skip-build
-                --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>" --repo-root "${PROJECT_SOURCE_DIR}" --asset-root "impl/assets" --asset-root "tests/smoke/assets" --output-directory "${_nwb_skinning_culling_runtime_root}/res"
-                --cache-directory "${_nwb_smoke_asset_cache_directory}" --configuration "$<CONFIG>" COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_skinning_culling_asset_stamp}" DEPENDS nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer
-                "${PROJECT_SOURCE_DIR}/pipeline/launch.py" "${_nwb_skinning_culling_model_nwb}" ${_nwb_skinning_culling_asset_inputs} WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}" COMMENT "Cooking NWB Skinning Culling Benchmark assets for $<CONFIG>..." VERBATIM
+        add_custom_command(OUTPUT "${_nwb_skinning_culling_asset_stamp}" COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_skinning_culling_runtime_root}/res" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/prepare_caustic_fixture_assets.py"
+                --source-root "${CMAKE_CURRENT_LIST_DIR}/assets" --output-root "${_nwb_skinning_culling_asset_root}" COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/launch.py" --skip-build
+                --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>" --repo-root "${PROJECT_SOURCE_DIR}" --asset-root "impl/assets" --asset-root "${_nwb_skinning_culling_asset_root}" --output-directory "${_nwb_skinning_culling_runtime_root}/res"
+                --cache-directory "${_nwb_smoke_asset_cache_directory}/smoke_catalogs/skinning_culling" --configuration "$<CONFIG>" COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_skinning_culling_asset_stamp}" DEPENDS nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer
+                "${PROJECT_SOURCE_DIR}/pipeline/launch.py" "${CMAKE_CURRENT_LIST_DIR}/prepare_caustic_fixture_assets.py" "${CMAKE_CURRENT_LIST_DIR}/prepare_fixture_asset_root.py"
+                "${_nwb_skinning_culling_model_nwb}" ${_nwb_skinning_culling_asset_inputs} WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}" COMMENT "Cooking NWB Skinning Culling Benchmark assets for $<CONFIG>..." VERBATIM
             USES_TERMINAL)
         add_custom_target(nwb_skinning_culling_benchmark_assets DEPENDS "${_nwb_skinning_culling_asset_stamp}")
         add_dependencies(nwb_skinning_culling_benchmark nwb_skinning_culling_benchmark_assets)
 
-        # Shadows and caustics must follow live deformed normals rather than bind pose.
+        # Shadows and caustics must follow live deformed geometry rather than bind pose.
         nwb_declare_executable(nwb_skinned_caustic_smoke)
         target_sources(nwb_skinned_caustic_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/skinned_caustic_project.cpp"
@@ -750,6 +759,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         unset(_nwb_csg_gi_lighting_args)
         unset(_nwb_gi_runtime_root)
 
+        unset(_nwb_skinning_culling_asset_root)
         unset(_nwb_skinning_culling_asset_stamp)
         unset(_nwb_skinning_culling_model_nwb)
         unset(_nwb_skinning_culling_runtime_root)

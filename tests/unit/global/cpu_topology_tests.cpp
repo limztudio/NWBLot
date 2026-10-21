@@ -33,7 +33,7 @@ TEST(CpuTopologyTests, DiscoveryHonorsAProcessAffinityRestriction){
         GROUP_AFFINITY original{};
         if(!placements || !GetThreadGroupAffinity(GetCurrentThread(), &original))
             ExitProcess(1u);
-        const auto selected = FindIf(placements->begin(), placements->end(), [&original](const CpuWorkerPlacement& placement){
+        const auto selected = FindIf(placements->begin(), placements->end(), [&original](const CpuWorkerPlacement& placement)noexcept{
             return placement.processorGroup == original.Group;
         }
         );

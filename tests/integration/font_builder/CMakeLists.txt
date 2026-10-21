@@ -4,7 +4,7 @@ target_sources(nwb_font_builder_bake_tests PRIVATE
 )
 target_link_libraries(nwb_font_builder_bake_tests PRIVATE nwb_font_builder_bake)
 
-if(Python3_Interpreter_FOUND)
+if(Python3_Interpreter_FOUND AND TARGET nwb_assets_font_atlas_cook AND TARGET nwb_assets_bunch_cook)
     nwb_declare_executable(nwb_font_builder_package_probe)
     target_sources(nwb_font_builder_package_probe PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/package_probe.cpp"

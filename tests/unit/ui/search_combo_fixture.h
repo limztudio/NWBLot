@@ -39,7 +39,9 @@ namespace FilterMode{
 class FilterView final : public IListDataSource{
 public:
     [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return generation; }
+
     [[nodiscard]] virtual u64 revision()const noexcept override{ return contentRevision; }
+
     [[nodiscard]] virtual u64 rowCount()const noexcept override{
         return mode == FilterMode::Empty ? 0u : mode == FilterMode::Second ? full->count / 2u : full->count;
     }
@@ -118,14 +120,21 @@ public:
 
 public:
     [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return full.instanceGeneration(); }
+
     [[nodiscard]] virtual u64 revision()const noexcept override{ return full.revision(); }
+
     [[nodiscard]] virtual u64 rowCount()const noexcept override{ return full.rowCount(); }
+
     [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{ return full.key(index); }
+
     [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const noexcept override{ return full.indexOf(key); }
+
     [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const noexcept override{
         return full.findEnabled(start, reverse);
     }
+
     [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{ return full.text(index); }
+
     [[nodiscard]] virtual bool enabled(const u64 index)const override{
         if(fullMutation){
             EditModel* query = fullMutation;
@@ -207,6 +216,7 @@ public:
     }
 
     [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&, IEditActionSink&)noexcept override{ return {}; }
+
     [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&)noexcept override{ return {}; }
 
     [[nodiscard]] virtual bool publish(const WidgetState&, const EditBoxView& view, const EditBoxPlacement&, const EditBoxOptions&)override{

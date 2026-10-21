@@ -35,6 +35,7 @@ RendererSystem::RendererSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World
     readAccess<SkinnedCsgMeshComponent>();
     readAccess<CsgCutterComponent>();
 }
+
 RendererSystem::~RendererSystem()noexcept = default;
 
 
@@ -46,7 +47,7 @@ void RendererSystem::invalidateResources(){
     m_pipeline->invalidateResources();
 }
 
-Expected<void, Core::CpuTaskAdmissionError::Enum> RendererSystem::update(Core::ECS::World& world, const f32 delta){
+Expected<void, Core::CpuTaskAdmissionError::Enum> RendererSystem::update(Core::ECS::World& world, const f32 delta)noexcept{
     m_pipeline->update(world, delta);
     return {};
 }

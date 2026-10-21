@@ -222,10 +222,12 @@ public:
     void setTaskGraphPresentationContributor(IGpuTaskGraphPresentationContributor* contributor)noexcept{
         m_taskGraphPresentationContributor = contributor;
     }
+
     void clearTaskGraphPresentationContributor(const IGpuTaskGraphPresentationContributor& contributor)noexcept{
         if(m_taskGraphPresentationContributor == &contributor)
             m_taskGraphPresentationContributor = nullptr;
     }
+
     [[nodiscard]] IGpuTaskGraphPresentationContributor* taskGraphPresentationContributor()const noexcept{
         return m_taskGraphPresentationContributor;
     }
@@ -234,10 +236,12 @@ public:
     void setTaskGraphOutputLayerContributor(IGpuTaskGraphOutputLayerContributor* contributor)noexcept{
         m_taskGraphOutputLayerContributor = contributor;
     }
+
     void clearTaskGraphOutputLayerContributor(const IGpuTaskGraphOutputLayerContributor& contributor)noexcept{
         if(m_taskGraphOutputLayerContributor == &contributor)
             m_taskGraphOutputLayerContributor = nullptr;
     }
+
     [[nodiscard]] IGpuTaskGraphOutputLayerContributor* taskGraphOutputLayerContributor()const noexcept{
         return m_taskGraphOutputLayerContributor;
     }
@@ -249,11 +253,17 @@ public:
     [[nodiscard]] u64 getSuccessfulPresentationCount()const noexcept{ return m_successfulPresentationCount; }
     // Last actual native present attempt, matched by the complete acquisition identity rather than a later frame.
     [[nodiscard]] const PresentationReceipt& lastPresentationReceipt()const noexcept{ return m_lastPresentationReceipt; }
+
     [[nodiscard]] GpuTimingRecorder& gpuTiming()noexcept{ return m_gpuTiming; }
+
     [[nodiscard]] const GpuTimingRecorder& gpuTiming()const noexcept{ return m_gpuTiming; }
+
     [[nodiscard]] bool isVsyncEnabled()const noexcept{ return m_swapChainState.vsyncEnabled; }
+
     [[nodiscard]] bool isHDR10OutputActive()const noexcept{ return m_swapChainState.outputMode == SwapChainOutputMode::HDR10; }
+
     [[nodiscard]] bool isSwapChainReadbackAvailable()const noexcept{ return m_swapChainState.swapChainReadbackAvailable; }
+
     void setVSyncEnabled(bool enabled)noexcept{ m_requestedVSync = enabled; }
 
     void getWindowDimensions(i32& width, i32& height)const noexcept;

@@ -228,9 +228,11 @@ bool Frame::init(){
     NWB_LOGGER_FATAL(NWB_TEXT("Frame: Failed to initialize any Linux window backend."));
     return false;
 }
+
 bool Frame::showFrame(){
     return FrameDetail::ShowBackendFrame(*this, data<Common::LinuxFrame>().backend());
 }
+
 bool Frame::mainLoop(){
     return FrameDetail::RunBackendFrame(*this, data<Common::LinuxFrame>().backend());
 }
@@ -274,6 +276,7 @@ void Frame::setupPlatform(void* inst)noexcept{
     frameData.nativeState() = nullptr;
     frameData.nativeAuxValue() = 0;
 }
+
 void Frame::cleanupPlatform()noexcept{
     auto& frameData = data<Common::LinuxFrame>();
     FrameDetail::CleanupBackendFrame(*this, frameData.backend());

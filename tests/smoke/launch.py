@@ -142,7 +142,7 @@ def smoke_command(args) -> int:
     ROOT_LAUNCHER.build_profile_targets(args, settings, env)
 
     executable = ROOT_LAUNCHER.resolve_executable_path(settings, smoke_executable.target, args.executable, args.executable_name or smoke_executable.executable, args.dry_run,)
-    runtime = REFLECTION_CASE_RUNTIMES.get(args.reflection_case, scene.runtime) if scene_name == "reflection" else scene.runtime
+    runtime = REFLECTION_CASE_RUNTIMES.get(env.get(ENV_REFLECTION_PREFIX + "CASE"), scene.runtime) if scene_name == "reflection" else scene.runtime
     working_directory = ROOT_LAUNCHER.resolve_working_directory(settings, args.working_directory, settings.build_dir / TESTING_DIR / runtime / settings.config,)
     return ROOT_LAUNCHER.launch_with_optional_profile(args, settings, executable, working_directory, env, args.application_args,)
 

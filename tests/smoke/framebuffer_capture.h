@@ -76,6 +76,7 @@ public:
     void update();
     [[nodiscard]] bool rearm(::Path<Core::Alloc::GlobalArena>&& outputPath)noexcept;
     [[nodiscard]] bool captureReady()const noexcept{ return m_captureReady; }
+
     [[nodiscard]] u64 capturedGraphicsFrameIndex()const noexcept{ return m_completionState->graphicsFrameIndex; }
     void finish();
 

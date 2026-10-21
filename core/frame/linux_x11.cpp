@@ -375,12 +375,7 @@ static Expected<X11WindowState> QueryWindowState(Frame& frame){
     }
 
     const bool windowVisible = attributes.map_state == IsViewable && attributes.width > 0 && attributes.height > 0;
-    return X11WindowState{
-        .width = windowVisible ? static_cast<u32>(attributes.width) : 0u,
-        .height = windowVisible ? static_cast<u32>(attributes.height) : 0u,
-        .windowVisible = windowVisible,
-        .windowIsInFocus = frameData.isActive()
-    };
+    return X11WindowState{ .width = windowVisible ? static_cast<u32>(attributes.width) : 0u, .height = windowVisible ? static_cast<u32>(attributes.height) : 0u, .windowVisible = windowVisible, .windowIsInFocus = frameData.isActive() };
 }
 
 static void ResetFrameData(Common::LinuxFrame& frameData)noexcept{

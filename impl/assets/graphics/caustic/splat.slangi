@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Backend-independent receiver splat. The including producer supplies its view, push constants, G-buffer, and shared R32_UINT accumulator through the macros below; both HW TraceRay and SW BVH paths therefore project, reject, weight, and atomically deposit a surviving photon identically.
+// Backend-independent receiver splat. The including producer supplies its view, push constants, G-buffer, and shared R32_UINT accumulator through the macros below; both HW and SW paths therefore project, reject, weight, and atomically deposit a surviving photon identically.
 
 
 #include "resolve_binding_slots.h"

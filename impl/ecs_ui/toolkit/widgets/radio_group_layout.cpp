@@ -41,7 +41,20 @@ inline constexpr f64 s_MarkInsetSides = 2.0;
 
 
 [[nodiscard]] static SIMDMatrixDouble LoadMetrics(const RadioGroupMetrics& metrics)noexcept{
-    if(metrics.count > s_RadioGroupMaxChoices || !IsFinite(metrics.padding.left) || !IsFinite(metrics.padding.top) || !IsFinite(metrics.padding.right) || !IsFinite(metrics.padding.bottom) || !IsFinite(metrics.rowHeight) || !IsFinite(metrics.indicatorExtent) || !IsFinite(metrics.gap) || !IsFinite(metrics.rowGap) || !IsFinite(metrics.contentSize.x) || !IsFinite(metrics.contentSize.y) || !IsFinite(metrics.markInset))
+    if(
+        metrics.count > s_RadioGroupMaxChoices
+        || !IsFinite(metrics.padding.left)
+        || !IsFinite(metrics.padding.top)
+        || !IsFinite(metrics.padding.right)
+        || !IsFinite(metrics.padding.bottom)
+        || !IsFinite(metrics.rowHeight)
+        || !IsFinite(metrics.indicatorExtent)
+        || !IsFinite(metrics.gap)
+        || !IsFinite(metrics.rowGap)
+        || !IsFinite(metrics.contentSize.x)
+        || !IsFinite(metrics.contentSize.y)
+        || !IsFinite(metrics.markInset)
+    )
         return SIMDMatrixDouble{ .v = { VectorDoubleReplicate(Limit<f64>::s_Infinity), VectorDoubleZero(), VectorDoubleZero(), VectorDoubleZero() } };
     return SIMDMatrixDouble{ .v = {
         VectorDoubleSet(metrics.padding.left, metrics.padding.top, metrics.padding.right, metrics.padding.bottom),
@@ -53,8 +66,10 @@ inline constexpr f64 s_MarkInsetSides = 2.0;
 
 [[nodiscard]] static bool ValidMetrics(const SIMDMatrixDouble& values)noexcept{
     for(u32 index = 0u; index < s_MetricRowCount; ++index){
-        if(VectorDoubleMoveMask(VectorDoubleOrInt(VectorDoubleIsNaN(values.v[index]), VectorDoubleIsInfinite(values.v[index]))) != 0u
-            || VectorDoubleMoveMask(VectorDoubleGreaterOrEqual(values.v[index], VectorDoubleZero())) != VectorDoubleComponentMask::s_DoubleXYZW)
+        if(
+            VectorDoubleMoveMask(VectorDoubleOrInt(VectorDoubleIsNaN(values.v[index]), VectorDoubleIsInfinite(values.v[index]))) != 0u
+            || VectorDoubleMoveMask(VectorDoubleGreaterOrEqual(values.v[index], VectorDoubleZero())) != VectorDoubleComponentMask::s_DoubleXYZW
+        )
             return false;
     }
     const u32 count = static_cast<u32>(VectorDoubleGetW(values.v[2]));

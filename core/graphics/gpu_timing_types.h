@@ -104,6 +104,7 @@ private:
 inline constexpr bool operator==(const GpuTimingSampleAttribution& lhs, const GpuTimingSampleAttribution& rhs)noexcept{
     return lhs.m_identity == rhs.m_identity;
 }
+
 inline constexpr bool operator!=(const GpuTimingSampleAttribution& lhs, const GpuTimingSampleAttribution& rhs)noexcept{
     return !(lhs == rhs);
 }
@@ -166,6 +167,7 @@ private:
 inline constexpr bool operator==(const GpuTimingSampleSubscription& lhs, const GpuTimingSampleSubscription& rhs)noexcept{
     return lhs.m_identity == rhs.m_identity;
 }
+
 inline constexpr bool operator!=(const GpuTimingSampleSubscription& lhs, const GpuTimingSampleSubscription& rhs)noexcept{
     return !(lhs == rhs);
 }

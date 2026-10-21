@@ -48,7 +48,9 @@ public:
     }
 
     [[nodiscard]] bool cpuTimingActive()const noexcept{ return enabled && cpuTiming; }
+
     [[nodiscard]] bool gpuTimingActive()const noexcept{ return enabled && gpuTiming; }
+
     [[nodiscard]] bool memoryActive()const noexcept{ return enabled && memory; }
 };
 

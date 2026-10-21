@@ -102,6 +102,10 @@ inline constexpr i32 s_ArmNotInteger = 0;
 inline constexpr i32 s_ArmOddInteger = 1;
 inline constexpr i32 s_ArmEvenInteger = 2;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<bool Equal>
 NWB_INLINE UInt64x4 ArmCompareMask(const SIMDVectorDouble a, const SIMDVectorDouble b)noexcept{
     const auto aLow = SIMDVectorDoubleDetail::GetLow(a), aHigh = SIMDVectorDoubleDetail::GetHigh(a);

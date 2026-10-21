@@ -110,7 +110,7 @@ TEST(GpuTaskGraph, ForcesMergedSameStateWriteDependenciesAcrossResourceKinds){
     for(u32 barrierIndex = 0u; barrierIndex < compiledProducer->prologueBarrierCount; ++barrierIndex)
         EXPECT_FALSE(producerBarriers[barrierIndex].forceMemoryDependency);
 
-    const auto findConsumerBarrier = [&](const Graphics::GpuGraphResourceId resource){
+    const auto findConsumerBarrier = [&](const Graphics::GpuGraphResourceId resource)noexcept{
         for(u32 barrierIndex = 0u; barrierIndex < compiledConsumer->prologueBarrierCount; ++barrierIndex){
             if(consumerBarriers[barrierIndex].resource == resource)
                 return consumerBarriers + barrierIndex;

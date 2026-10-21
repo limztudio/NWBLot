@@ -210,6 +210,7 @@ NwbOpticalTraceResult nwbOpticalTrace(const NwbOpticalTraceConfig config, const 
         return result;
     float3 direction = normalize(initialDirection);
     float3 origin = initialOrigin;
+    float3 physicalOrigin = initialOrigin;
     NwbOpticalMedia media;
     if(!nwbOpticalBootstrap(config, origin, direction, media, result))
         return result;
@@ -259,9 +260,18 @@ NwbOpticalTraceResult nwbOpticalTrace(const NwbOpticalTraceConfig config, const 
             result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
             return result;
         }
-        result.distance += hit.distance;
+        const float segmentDistance = length(hit.position - physicalOrigin);
+        if(!isfinite(segmentDistance) || segmentDistance <= 0.0){
+            result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
+            return result;
+        }
+        if(segmentDistance > remaining){
+            result.termination = NWB_OPTICAL_TERMINATION_RANGE;
+            return result;
+        }
+        result.distance += segmentDistance;
         const NwbOpticalMedium incidentMedium = nwbOpticalDominantMedium(media);
-        throughput *= nwbDielectricBeerTransmission(incidentMedium.absorption, hit.distance);
+        throughput *= nwbDielectricBeerTransmission(incidentMedium.absorption, segmentDistance);
         NwbOpticalInstance optical;
         if(!nwbOpticalReadInstance(config, hit.instance, optical, result))
             return result;
@@ -340,6 +350,7 @@ NwbOpticalTraceResult nwbOpticalTrace(const NwbOpticalTraceConfig config, const 
         // Reconstructed hits have FP32 world-position uncertainty, independent of the receiver's FP16 G-buffer bias.
         // Offset to the next geometric half-space and require progress on the next query.
         // Near-coincident crossings within the same uncertainty band were checked before changing direction; no instance is ignored.
+        physicalOrigin = hit.position;
         continuationUncertainty = nwbOpticsPositionUncertainty(hit.position);
         const float3 offsetNormal = dot(direction, hit.geometricNormal) >= 0.0 ? hit.geometricNormal : -hit.geometricNormal;
         origin = hit.position + offsetNormal * continuationUncertainty;

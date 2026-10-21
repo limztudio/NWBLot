@@ -47,6 +47,7 @@ public:
 
 public:
     void arm()noexcept{ m_armed = m_hook.resolved != nullptr; }
+
     void resolve(const QueueSubmissionToken& token)noexcept{
         if(!m_armed)
             return;

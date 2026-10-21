@@ -57,6 +57,7 @@ CpuTaskScheduler::Execution::Execution(CpuTaskScheduler& owner, TaskHandle handl
 {
     s_Execution = this;
 }
+
 CpuTaskScheduler::Execution::~Execution()noexcept{
     s_Execution = previous;
 }
@@ -88,6 +89,7 @@ usize CpuTaskScheduler::QueueIndex(const CpuTaskOptions& options)noexcept{
 CpuTaskScheduler::CpuTaskScheduler(const u32 workerCount)
     : CpuTaskScheduler(WorkerConfig(workerCount))
 {}
+
 CpuTaskScheduler::CpuTaskScheduler(const CpuTaskSchedulerConfig& config)
     : m_domainIdentity(AllocateDomainIdentity())
     , m_profileEventCapacity(config.profileEventCapacity)
@@ -145,6 +147,7 @@ CpuTaskScheduler::CpuTaskScheduler(const CpuTaskSchedulerConfig& config)
         );
     }
 }
+
 CpuTaskScheduler::~CpuTaskScheduler()noexcept(false){
     if(UncaughtExceptionCount() > 0){
         drain();

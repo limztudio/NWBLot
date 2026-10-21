@@ -141,6 +141,7 @@ using ConstTString = ConstString<N>;
 
 template<usize N>
 constexpr auto MakeConstString(const char(&str)[N])noexcept{ return ConstString<N>(str); }
+
 template<usize N>
 constexpr auto MakeConstWString(const wchar(&str)[N])noexcept{ return ConstWString<N>(str); }
 #if defined(NWB_UNICODE)
@@ -465,12 +466,14 @@ inline AString<ArenaT> StringFormat(ArenaT& arena, AFormatString<T...> fmt, T&&.
     std::vformat_to(std::back_inserter(output), fmt.get(), std::make_format_args<AFormatContext>(args...));
     return output;
 }
+
 template<typename ArenaT, typename... T>
 inline WString<ArenaT> StringFormat(ArenaT& arena, WFormatString<T...> fmt, T&&... args){
     WString<ArenaT> output{arena};
     std::vformat_to(std::back_inserter(output), fmt.get(), std::make_format_args<WFormatContext>(args...));
     return output;
 }
+
 template<typename ArenaT, typename... T>
 inline void StringAppendFormat(AString<ArenaT>& output, AFormatString<T...> fmt, T&&... args){
     std::vformat_to(std::back_inserter(output), fmt.get(), std::make_format_args<AFormatContext>(args...));
@@ -493,7 +496,13 @@ struct formatter<BasicStringDetail::StringConvertArg<In>, CharT>{
     }
 
     template<typename FormatContext>
-    auto format(const BasicStringDetail::StringConvertArg<In>& arg, FormatContext& ctx)const{
+    auto format(const BasicStringDetail::StringConvertArg<In>& arg, FormatContext& ctx)const noexcept([]()consteval noexcept{
+        using Output = Decay_T<decltype(DeclVal<FormatContext&>().out())>;
+        return noexcept(DeclVal<void(*)(Output)noexcept>()(DeclVal<FormatContext&>().out()))
+            && noexcept(BasicStringDetail::WriteConvertedText<CharT>(DeclVal<Output&>(), DeclVal<const In&>()))
+            && IsNothrowMoveConstructible_V<Output> && IsNothrowDestructible_V<Output>
+        ;
+    }()){
         auto out = ctx.out();
         BasicStringDetail::WriteConvertedText<CharT>(out, arg.value);
         return out;

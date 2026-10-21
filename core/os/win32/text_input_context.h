@@ -35,11 +35,7 @@ public:
     {}
     ~Win32TextInputContextGuard()noexcept{
         if(!release()){
-            CaptureDiagnosticEvent(DiagnosticEventRecord{
-                .event = s_WarningEventName,
-                .category = "win32_text_input_context_release",
-                .message = "Text input: ImmReleaseContext failed",
-            });
+            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_WarningEventName, .category = "win32_text_input_context_release", .message = "Text input: ImmReleaseContext failed", });
         }
     }
 

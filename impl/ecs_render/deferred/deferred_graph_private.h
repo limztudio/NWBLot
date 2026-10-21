@@ -31,7 +31,10 @@ namespace ECSRenderDetail{
 
 
 template<typename Record>
-[[nodiscard]] bool RecordDeferredGraphTask(RendererDeferredSystem& deferredSystem, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, Core::CommandList& commandList, Record&& record)noexcept(noexcept(record(deferredSystem, targets, commandList)) && IsNothrowConvertible_V<decltype(record(deferredSystem, targets, commandList)), bool>){
+[[nodiscard]] bool RecordDeferredGraphTask(RendererDeferredSystem& deferredSystem, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, Core::CommandList& commandList, Record&& record)noexcept(
+    noexcept(record(deferredSystem, targets, commandList))
+    && IsNothrowConvertible_V<decltype(record(deferredSystem, targets, commandList)), bool>
+){
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(timingTicket);
     return record(deferredSystem, targets, commandList);
 }

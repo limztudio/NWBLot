@@ -204,6 +204,7 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
     }
     else{
         Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), __hidden_material_pass::MaterialPassGpuTimingScope(pass), m_graphics.getDevice(), commandList);
+
         recordPreparedDraws();
     }
 }

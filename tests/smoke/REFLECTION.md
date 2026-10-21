@@ -474,7 +474,14 @@ Ambiguous seams, repeated TIR and exhausted paths elsewhere retain the defined
 conservative termination behavior.
 
 Closed homogeneous volumes explicitly use `OpticalBoundaryMode::ClosedNested`
-or `ClosedPriority`. Priority media select the highest `opticalMediumPriority`
+or `ClosedPriority`. Volume caustics require the same explicit watertight, outward,
+homogeneous contract. `Unspecified` keeps its alpha/surface meaning; it does not
+prove an optical interior. With active caustic lights, an unsupported refractive
+volume prevents that photon producer and emits a diagnostic when its scene
+signature changes; unrelated reflection, refraction and shadow effects retain
+their own admission. Refraction-only and ordinary transparent-shadow fixtures
+disable caustics explicitly, while the closed caustic sphere and CSG slab
+fixtures author their volume mode. Priority media select the highest `opticalMediumPriority`
 and then the smallest full entity ID. This is independent of
 `opticalVolumePriority`, which selects a duplicate representative.
 `IdenticalMaterial` and `SharedGroup` coincidence opt-ins retain their existing

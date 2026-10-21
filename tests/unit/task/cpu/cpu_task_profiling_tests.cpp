@@ -45,11 +45,11 @@ TEST(CpuTaskProfilingTests, ReadyAndExecutionEventsRetainTheirOwnFramesAndLabels
     const auto taskLabel = scheduler.registerProfileLabel(taskName);
     CpuTaskScope scope(scheduler, scopeLabel);
     scheduler.setProfiling(true, 7u);
-    const auto cpuAdmission54 = scope.submit([](){ SleepMS(__hidden_cpu_task_profiling_tests::s_PollIntervalMS); }, { .profileLabel = taskLabel });
+    const auto cpuAdmission54 = scope.submit([]()noexcept{ SleepMS(__hidden_cpu_task_profiling_tests::s_PollIntervalMS); }, { .profileLabel = taskLabel });
     ASSERT_TRUE(cpuAdmission54);
     const auto task = *cpuAdmission54;
     ASSERT_TRUE(task.valid());
-    const auto cpuAdmission55 = scope.submit([](){ SleepMS(__hidden_cpu_task_profiling_tests::s_PollIntervalMS); });
+    const auto cpuAdmission55 = scope.submit([]()noexcept{ SleepMS(__hidden_cpu_task_profiling_tests::s_PollIntervalMS); });
     ASSERT_TRUE(cpuAdmission55);
     if(cpuAdmission55)
         ASSERT_TRUE(cpuAdmission55->valid());
@@ -251,7 +251,7 @@ TEST(CpuTaskProfilingTests, ConcurrentCaptureChangesDoNotAffectTaskCompletionOrM
     while(!started.load(MemoryOrder::acquire))
         SleepMS(__hidden_cpu_task_profiling_tests::s_PollIntervalMS);
     for(u32 index = 0u; index < 256u; ++index){
-        const auto cpuAdmission63 = scope.submit([&](){
+        const auto cpuAdmission63 = scope.submit([&]()noexcept{
             SleepMS(__hidden_cpu_task_profiling_tests::s_PollIntervalMS);
             callbacks.fetch_add(1u, MemoryOrder::release);
         }

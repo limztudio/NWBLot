@@ -51,7 +51,9 @@ public:
 
 public:
     void setMesh(const Core::Assets::AssetRef<Mesh>& mesh)noexcept{ m_mesh = mesh; }
+
     void setSkeleton(const Core::Assets::AssetRef<Skeleton>& skeleton)noexcept{ m_skeleton = skeleton; }
+
     void setPayload(InfluenceVector&& influences, InverseBindMatrixVector&& inverseBindMatrices)noexcept{
         m_influences = Move(influences);
         m_inverseBindMatrices = Move(inverseBindMatrices);
@@ -59,8 +61,11 @@ public:
 
 public:
     [[nodiscard]] const Core::Assets::AssetRef<Mesh>& mesh()const noexcept{ return m_mesh; }
+
     [[nodiscard]] const Core::Assets::AssetRef<Skeleton>& skeleton()const noexcept{ return m_skeleton; }
+
     [[nodiscard]] const InfluenceVector& influences()const noexcept{ return m_influences; }
+
     [[nodiscard]] const InverseBindMatrixVector& inverseBindMatrices()const noexcept{ return m_inverseBindMatrices; }
 
 

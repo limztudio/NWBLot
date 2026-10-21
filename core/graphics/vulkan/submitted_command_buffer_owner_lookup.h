@@ -57,6 +57,7 @@ private:
         value ^= value >> s_OwnerHashFinalShift;
         return static_cast<usize>(value);
     }
+
     [[nodiscard]] static usize ResolveTableCapacity(const usize ownerCount)noexcept{
         if(ownerCount <= s_LinearSearchThreshold || ownerCount > Limit<usize>::s_Max / 2u)
             return 0u;
@@ -96,6 +97,7 @@ public:
         m_ownerEntryMask = tableCapacity - 1u;
         m_indexed = true;
     }
+
     void add(TrackedCommandBuffer& owner, const u64 nativeRecordingID)noexcept{
         if(!m_indexed || nativeRecordingID == 0u)
             return;
@@ -112,7 +114,9 @@ public:
         }
         m_indexed = false;
     }
+
     [[nodiscard]] bool indexed()const noexcept{ return m_indexed; }
+
     [[nodiscard]] bool contains(TrackedCommandBuffer& owner, const u64 nativeRecordingID)const noexcept{
         if(!m_indexed || !m_ownerEntriesData || nativeRecordingID == 0u)
             return false;

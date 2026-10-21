@@ -157,10 +157,6 @@ static Expected<f32> ParseMaterialParameterF32Token(const AStringView token)noex
     return static_cast<f32>(*parsed);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static Expected<u32> ParseMaterialParameterSignedToken(const AStringView token, const i64 minValue, const i64 maxValue, const u32 storageMask)noexcept{
     const auto parsed = ParseI64FromChars(token);
     if(!parsed)
@@ -170,10 +166,6 @@ static Expected<u32> ParseMaterialParameterSignedToken(const AStringView token, 
 
     return static_cast<u32>(static_cast<u64>(*parsed) & storageMask);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 static Expected<u32> ParseMaterialParameterUnsignedToken(const AStringView token, const u64 maxValue)noexcept{
     const auto parsed = ParseU64FromChars(token);

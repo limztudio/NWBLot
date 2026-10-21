@@ -2,6 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#ifdef NWB_CAUSTIC_PHOTON_TRANSPORT
+#error "NWB_CAUSTIC_PHOTON_TRANSPORT is fixed by this photon shader source"
+#endif
+#define NWB_CAUSTIC_PHOTON_TRANSPORT 1
+
 #include "sw_binding_slots.h"
 #include "photon_push_constants.slangi"
 #include "photon_types.slangi"
@@ -50,14 +55,9 @@ uint nwbMeshFrameViewHeapSlot(){
 #include "../bvh/bvh_common.slangi"
 #include "../bvh/ray_intersect.slangi"
 #include "../bvh/sw_instance.slangi"
-#include "../bvh/ray_vertex_attrib.slangi"
 #include "../common/math.slangi"
 
 #include "../bvh/bindless_heap_bvh.slangi"
-
-// Caustics and shadows share per-hit surface dispatch.
-#include "../shadow/shadow_surface.slangi"
-#include "shadow/generated/surface_dispatch.slangi"
 
 #include "caustic_trace.slangi"
 #include "light_pick.slangi"
@@ -115,13 +115,163 @@ ConstantBuffer<NwbCausticPhotonView, Std140DataLayout> nwbCausticSwView(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NwbRayTraceVertexAttrib nwbCausticSwLoadVertexAttrib(const uint attributeSlot, const uint attributeIndex){
-    // Per-mesh attribute slots are non-uniform heap indices.
-    return nwbRayTraceDecodeVertexAttrib(nwbHeapRawBuffer(attributeSlot).Load4(attributeIndex * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
+NwbOpticalTraceConfig nwbCausticOpticalConfig(){
+    NwbOpticalTraceConfig config;
+    config.instanceMaterialHeapSlot = g_NwbCausticSwMaterialContextSlots.sceneSlots.z;
+    config.opticalSceneHeapSlot = g_NwbCausticSwMaterialContextSlots.materialSlots.y;
+    config.opticalInstanceCount = g_NwbCausticSwMaterialContextSlots.materialSlots.z;
+    config.maxQueries = NWB_OPTICAL_MAX_QUERIES;
+    config.minDistance = 0.0;
+    config.maxDistance = NWB_FLOAT_MAX;
+    return config;
 }
 
+bool nwbCausticSwInstanceEvents(
+    const NwbOpticalTraceConfig config, const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, const float maximum, const bool reverse,
+    __ref NwbOpticalBootstrapEvent events[NWB_OPTICAL_MAX_CANDIDATE_EVENTS], inout uint eventCount, inout NwbCausticBoundary boundary, inout float tolerance, inout NwbOpticalTraceResult result
+){
+    const NwbSwBvhInstance instance = nwbHeapCausticSwInstances(g_NwbCausticSwMaterialContextSlots.sceneSlots.y)[instanceIndex];
+    const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(g_NwbCausticSwMaterialContextSlots.sceneSlots.z)[instanceIndex];
+#if NWB_RT_CSG_ENABLED
+    if((material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_CSG_SHADOW) != 0u)
+        return true;
+#endif
+    const bool refractive = (material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE) != 0u;
+    if(!refractive)
+        return true;
+    // Per-mesh geometry slots must remain non-uniform at every access.
+    const float3 origin = nwbSwBvhTransformPoint(instance, worldOrigin);
+    const float3 direction = nwbSwBvhTransformVector(instance, worldDirection);
+    const float3 invDir = nwbBvhSafeInvDir(direction);
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Near-first descent tightens maximum before far-subtree tests.
+    uint stack[NWB_CAUSTIC_SW_MESH_STACK_SIZE];
+    stack[0u] = 0u;
+    uint stackPointer = 1u;
+
+    [loop] while(stackPointer > 0u){
+        --stackPointer;
+        NwbBvhNode node = nwbHeapBvhNodes(material.nodeSlot)[stack[stackPointer]];
+        if(!nwbBvhRayAabb(origin, invDir, tMin, maximum, node.aabbMin, node.aabbMax, 0.0))
+            continue;
+
+        [loop] while(true){
+            if(nwbBvhNodeIsLeaf(node)){
+                const uint triangle = nwbBvhLeafPrimitive(node);
+                const uint indexBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
+                const uint3 triIndices = nwbHeapRawBuffer(material.indexSlot).Load3(indexBase * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
+                const uint i0 = triIndices.x;
+                const uint i1 = triIndices.y;
+                const uint i2 = triIndices.z;
+                const float3 v0 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(i0 * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+                const float3 v1 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(i1 * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+                const float3 v2 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(i2 * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+                const NwbRayTriangleHit triangleHit = nwbRayTriangleMollerTrumbore(origin, direction, tMin, maximum, v0, v1, v2);
+                if(triangleHit.hit){
+                    const float3 objectNormal = nwbRayTraceNormalizeGeometryVector(cross(nwbRayTraceScaleGeometryVector(v1 - v0), nwbRayTraceScaleGeometryVector(v2 - v0)));
+                    const float3 normal = nwbRayTraceNormalizeGeometryVector(nwbSwBvhTransformNormal(instance, objectNormal));
+                    if(!nwbCausticAppendBoundary(config, worldOrigin, worldDirection, triangleHit.t, instanceIndex, triangle, normal, reverse, events, eventCount, boundary, tolerance, result))
+                        return false;
+                }
+                break;
+            }
+            else{
+                const NwbBvhNode leftNode = nwbHeapBvhNodes(material.nodeSlot)[node.leftChild];
+                const uint right = nwbBvhNodeRightChildIndex(node);
+                const NwbBvhNode rightNode = nwbHeapBvhNodes(material.nodeSlot)[right];
+                NwbBvhNode descendNode;
+                uint farChild;
+                bool bothHit;
+                if(nwbBvhPickNearChild(origin, invDir, tMin, maximum, node, leftNode, right, rightNode, descendNode, farChild, bothHit)){
+                    if(bothHit){
+                        if(stackPointer == NWB_CAUSTIC_SW_MESH_STACK_SIZE){
+                            result.termination = NWB_OPTICAL_TERMINATION_EVENT_LIMIT;
+                            return false;
+                        }
+                        stack[stackPointer] = farChild;
+                        ++stackPointer;
+                    }
+                    node = descendNode;
+                    continue;
+                }
+                break;
+            }
+        }
+    }
+    return true;
+}
+
+bool nwbCausticCollectRefractiveEvents(
+    const NwbOpticalTraceConfig config, const float3 origin, const float3 direction, const float minimum, const float maximum, const bool reverse,
+    __ref NwbOpticalBootstrapEvent events[NWB_OPTICAL_MAX_CANDIDATE_EVENTS], out uint eventCount, out NwbCausticBoundary boundary, out float tolerance, inout NwbOpticalTraceResult result
+){
+    eventCount = 0u;
+    boundary = (NwbCausticBoundary)0;
+    tolerance = NWB_OPTICS_POSITION_TOLERANCE_SCALE * nwbOpticsPositionUncertainty(origin);
+    if(!nwbOpticalConsumeQuery(config, result))
+        return false;
+    if(g_NwbCausticSwPushConstants.instanceCount == 0u)
+        return true;
+    const float3 invDir = nwbBvhSafeInvDir(direction);
+
+    uint stack[NWB_CAUSTIC_SW_SCENE_STACK_SIZE];
+    stack[0u] = 0u;
+    uint stackPointer = 1u;
+
+    bool sceneOverflow = false;
+    [loop] while(stackPointer > 0u && !sceneOverflow){
+        --stackPointer;
+        NwbBvhNode node = nwbHeapBvhNodes(g_NwbCausticSwMaterialContextSlots.sceneSlots.x)[stack[stackPointer]];
+        if(!nwbBvhRayAabb(origin, invDir, minimum, maximum, node.aabbMin, node.aabbMax, 0.0))
+            continue;
+
+        [loop] while(true){
+            if(nwbBvhNodeIsLeaf(node)){
+                if(!nwbCausticSwInstanceEvents(config, nwbBvhLeafPrimitive(node), origin, direction, minimum, maximum, reverse, events, eventCount, boundary, tolerance, result))
+                    return false;
+                break;
+            }
+            else{
+                const NwbBvhNode leftNode = nwbHeapBvhNodes(g_NwbCausticSwMaterialContextSlots.sceneSlots.x)[node.leftChild];
+                const uint right = nwbBvhNodeRightChildIndex(node);
+                const NwbBvhNode rightNode = nwbHeapBvhNodes(g_NwbCausticSwMaterialContextSlots.sceneSlots.x)[right];
+                NwbBvhNode descendNode;
+                uint farChild;
+                bool bothHit;
+                if(nwbBvhPickNearChild(origin, invDir, minimum, maximum, node, leftNode, right, rightNode, descendNode, farChild, bothHit)){
+                    if(bothHit){
+                        if(stackPointer == NWB_CAUSTIC_SW_SCENE_STACK_SIZE){
+                            sceneOverflow = true;
+                            break;
+                        }
+                        stack[stackPointer] = farChild;
+                        ++stackPointer;
+                    }
+                    node = descendNode;
+                    continue;
+                }
+                break;
+            }
+        }
+    }
+
+    if(sceneOverflow){
+        // Instance order is independent of SAH depth; keep every candidate when the fast traversal exceeds its local stack.
+        eventCount = 0u;
+        boundary = (NwbCausticBoundary)0;
+        tolerance = NWB_OPTICS_POSITION_TOLERANCE_SCALE * nwbOpticsPositionUncertainty(origin);
+        [loop] for(uint instance = 0u; instance < g_NwbCausticSwPushConstants.instanceCount; ++instance){
+            if(!nwbCausticSwInstanceEvents(config, instance, origin, direction, minimum, maximum, reverse, events, eventCount, boundary, tolerance, result))
+                return false;
+        }
+    }
+
+#if NWB_RT_CSG_ENABLED
+    return nwbCausticCollectCsgEvents(config, g_NwbCausticSwMaterialContextSlots.materialSlots.w, origin, direction, minimum, maximum, reverse, events, eventCount, boundary, tolerance, result);
+#else
+    return true;
+#endif
+}
 
 
 // Per-instance traversal refines the nearest triangle hit.
@@ -167,33 +317,6 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
                     closest.isRefractive = refractive;
                     closest.instance = instanceIndex;
                     closest.worldPos = worldOrigin + worldDirection * triangleHit.t;
-                    closest.shadingNormal = float3(0.0, 0.0, 1.0); // replaced by the interpolated normal for refractive hits
-                    closest.ior = 1.0;
-                    closest.transmission = half3(1.0h, 1.0h, 1.0h);
-
-                    if(refractive){
-                        const uint attributeBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
-                        const NwbRayTraceVertexAttrib a0 = nwbCausticSwLoadVertexAttrib(material.attributeSlot, attributeBase);
-                        const NwbRayTraceVertexAttrib a1 = nwbCausticSwLoadVertexAttrib(material.attributeSlot, attributeBase + 1u);
-                        const NwbRayTraceVertexAttrib a2 = nwbCausticSwLoadVertexAttrib(material.attributeSlot, attributeBase + 2u);
-                        const float3 objectShadingNormal = float3(a0.normal) * triangleHit.w + float3(a1.normal) * triangleHit.u + float3(a2.normal) * triangleHit.v;
-
-                        const float3 worldShadingNormal = nwbSafeNormalize(nwbSwBvhTransformNormal(instance, objectShadingNormal), float3(0.0, 0.0, 1.0));
-                        closest.shadingNormal = worldShadingNormal;
-
-                        NwbShadowHit hit;
-                        hit.meshInstanceIndex = material.meshInstanceIndex;
-                        hit.surfaceDispatchId = material.surfaceDispatchId;
-                        hit.materialConstantByteOffset = material.materialConstantByteOffset;
-                        hit.uv0 = a0.uv0 * triangleHit.w + a1.uv0 * triangleHit.u + a2.uv0 * triangleHit.v;
-                        hit.worldNormal = worldShadingNormal;
-                        hit.worldPosition = closest.worldPos;
-                        hit.rayDirection = worldDirection;
-
-                        const NwbMeshSurface surface = nwbShadowDispatchSurface(material.surfaceDispatchId, hit);
-                        closest.ior = surface.refractionIor;
-                        closest.transmission = surface.shadowAbsorptionTint;
-                    }
                 }
                 break;
             }
@@ -224,10 +347,7 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
     closest.hit = false;
     closest.isRefractive = false;
     closest.t = tMax;
-    closest.ior = 1.0;
     closest.worldPos = float3(0.0, 0.0, 0.0);
-    closest.shadingNormal = float3(0.0, 0.0, 1.0);
-    closest.transmission = half3(1.0h, 1.0h, 1.0h);
 
     if(g_NwbCausticSwPushConstants.instanceCount == 0u)
         return closest;
@@ -238,7 +358,8 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
     stack[0u] = 0u;
     uint stackPointer = 1u;
 
-    [loop] while(stackPointer > 0u){
+    bool sceneOverflow = false;
+    [loop] while(stackPointer > 0u && !sceneOverflow){
         --stackPointer;
         NwbBvhNode node = nwbHeapBvhNodes(g_NwbCausticSwMaterialContextSlots.sceneSlots.x)[stack[stackPointer]];
         if(!nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0))
@@ -257,7 +378,11 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
                 uint farChild;
                 bool bothHit;
                 if(nwbBvhPickNearChild(origin, invDir, tMin, closest.t, node, leftNode, right, rightNode, descendNode, farChild, bothHit)){
-                    if(bothHit && stackPointer < NWB_CAUSTIC_SW_SCENE_STACK_SIZE){
+                    if(bothHit){
+                        if(stackPointer == NWB_CAUSTIC_SW_SCENE_STACK_SIZE){
+                            sceneOverflow = true;
+                            break;
+                        }
                         stack[stackPointer] = farChild;
                         ++stackPointer;
                     }
@@ -267,6 +392,12 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
                 break;
             }
         }
+    }
+
+    if(sceneOverflow){
+        // Instance order is independent of SAH depth; keep every candidate when the fast traversal exceeds its local stack.
+        [loop] for(uint instance = 0u; instance < g_NwbCausticSwPushConstants.instanceCount; ++instance)
+            nwbCausticSwInstanceClosest(instance, origin, direction, tMin, closest);
     }
 
 #if NWB_RT_CSG_ENABLED
@@ -332,7 +463,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     if(!emission.valid)
         return;
 
-    const NwbCausticPhoton photon = nwbCausticCreatePhoton(emission, nwbCausticLightColor(light.colorIntensity), g_NwbCausticSwPushConstants.emissionTargetCount, g_NwbCausticSwPushConstants.photonCount);
+    const NwbCausticPhoton photon = nwbCausticCreatePhoton(
+        emission, nwbCausticLightColor(light.colorIntensity), g_NwbCausticSwPushConstants.emissionTargetCount,
+        g_NwbCausticSwPushConstants.photonCount, light.params.y >= NWB_SCENE_LIGHT_TYPE_DIRECTIONAL_MAX, light.position.xyz
+    );
 
     const NwbCausticSplat splat = nwbCausticTracePhoton(photon);
     if(!splat.valid)

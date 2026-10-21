@@ -40,9 +40,11 @@ GraphicsPipeline::GraphicsPipeline(const VulkanContext& context)noexcept
     : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_context(context)
 {}
+
 GraphicsPipeline::~GraphicsPipeline()noexcept{
     VulkanDetail::DestroyPipelineResource(m_context, *this, m_pipeline);
 }
+
 Object GraphicsPipeline::getNativeHandle(ObjectType objectType)noexcept{
     return VulkanDetail::GetPipelineNativeHandle(m_pipeline, objectType);
 }
@@ -199,15 +201,7 @@ Expected<GraphicsPipelineHandle> Device::createGraphicsPipeline(const GraphicsPi
         VK_DYNAMIC_STATE_STENCIL_WRITE_MASK,
         VK_DYNAMIC_STATE_STENCIL_REFERENCE,
     };
-    const auto fixedState = VulkanDetail::BuildGraphicsPipelineFixedState(
-        fbinfo,
-        desc.renderState,
-        VulkanDetail::PipelineStencilFaceMode::IncludeStencilFaces,
-        dynamicStates,
-        static_cast<u32>(LengthOf(dynamicStates)),
-        s_OperationName,
-        scratchArena
-    );
+    const auto fixedState = VulkanDetail::BuildGraphicsPipelineFixedState(fbinfo, desc.renderState, VulkanDetail::PipelineStencilFaceMode::IncludeStencilFaces, dynamicStates, static_cast<u32>(LengthOf(dynamicStates)), s_OperationName, scratchArena);
     if(!fixedState)
         return MakeUnexpected(Failure{});
 

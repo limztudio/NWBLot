@@ -55,7 +55,7 @@ TEST(CommonLoggingBoundaries, CapturingLoggerSerializesConcurrentWritersAndReade
     Atomic<u32> observedMessages{ 0u };
     Atomic<u32> observedErrors{ 0u };
     Atomic<bool> invalidObservation{ false };
-    Thread reader([&](){
+    Thread reader([&]()noexcept{
         startGate.arrive_and_wait();
         // Wait for the first writer burst so reads overlap live writes.
         while(activeWriters.load(MemoryOrder::acquire) == s_ThreadCount)

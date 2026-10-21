@@ -73,7 +73,14 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     if(glassReflection.a > half(0.0h))
         reflectionSource = glassReflection.a;
     if(g_NwbDeferredCompositePushConstants.reflectionDebugView == NWB_REFLECTION_DEBUG_VIEW_TRACE_SOURCE){
-        compositeColor = reflectionSource >= half(NWB_REFLECTION_SOURCE_HARDWARE) ? NWB_DEFERRED_REFLECTION_DEBUG_HARDWARE_COLOR : reflectionSource >= half(NWB_REFLECTION_SOURCE_SCREEN) ? NWB_DEFERRED_REFLECTION_DEBUG_SCREEN_COLOR : reflectionSource > half(0.0h) ? NWB_DEFERRED_REFLECTION_DEBUG_FALLBACK_COLOR : half3(0.0h);
+        compositeColor = reflectionSource >= half(NWB_REFLECTION_SOURCE_HARDWARE)
+            ? NWB_DEFERRED_REFLECTION_DEBUG_HARDWARE_COLOR
+            : reflectionSource >= half(NWB_REFLECTION_SOURCE_SCREEN)
+                ? NWB_DEFERRED_REFLECTION_DEBUG_SCREEN_COLOR
+                : reflectionSource > half(0.0h)
+                    ? NWB_DEFERRED_REFLECTION_DEBUG_FALLBACK_COLOR
+                    : half3(0.0h)
+        ;
     }
     else if(g_NwbDeferredCompositePushConstants.reflectionDebugView == NWB_REFLECTION_DEBUG_VIEW_CONFIDENCE)
         compositeColor = half3(reflectionSource >= half(NWB_REFLECTION_SOURCE_HARDWARE) ? half(1.0h) : saturate((reflectionSource - half(NWB_REFLECTION_SOURCE_SCREEN)) * half(NWB_REFLECTION_SOURCE_CONFIDENCE_DECODE_SCALE)));

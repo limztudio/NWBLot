@@ -11,6 +11,7 @@
 #include <impl/ecs_render/raytrace/task_graph_float_clear_tasks.h>
 #include <impl/ecs_render/raytrace/task_graph_refraction_resolve.h>
 #include <impl/ecs_render/raytrace/task_graph_scene_resources.h>
+#include <impl/ecs_render/raytrace/task_graph_optical_scene_upload.h>
 #include <impl/ecs_render/reflection/task_graph_reflection.h>
 #include <impl/ecs_render/avboit/task_graph_refraction_capture.h>
 #include <impl/ecs_render/avboit/generated_geometry_reuse.h>
@@ -323,6 +324,38 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     }
     reflectionContentStamp.lighting = *graphicsPrefixResult;
 
+    if(!m_raytracingSystem.prepareCausticOpticalReadTracking(meshViewBufferSnapshot)){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not prepare accepted optical reader tracking"));
+        return;
+    }
+    const bool causticOpticalReader = declaresHardwareCaustics ? m_raytracingSystem.hasHwCausticWork(meshViewBufferSnapshot) : m_raytracingSystem.hasCausticWork(meshViewBufferSnapshot);
+
+    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> causticTraceGeometryResources{ scratchArena };
+    Core::GpuGraphResourceSetId causticTraceGeometrySet;
+    if(causticOpticalReader){
+        causticTraceGeometryResources.reserve(declaresHardwareCaustics ? hardwareTraceGeometryResources.size() : softwareTraceGeometryResources.size());
+        constexpr u8 s_HardwareCausticGeometryRoles = PreparedShadowTraceGeometryRole::s_HardwarePosition | PreparedShadowTraceGeometryRole::s_HardwareIndex;
+        constexpr u8 s_SoftwareCausticGeometryRoles = PreparedShadowTraceGeometryRole::s_SoftwareNode | PreparedShadowTraceGeometryRole::s_SoftwarePosition | PreparedShadowTraceGeometryRole::s_SoftwareIndex;
+        const u8 causticGeometryRoles = declaresHardwareCaustics ? s_HardwareCausticGeometryRoles : s_SoftwareCausticGeometryRoles;
+        for(usize index = 0u; index < preparedTraceGeometry.size(); ++index){
+            if(preparedTraceGeometry[index].roles & causticGeometryRoles)
+                causticTraceGeometryResources.push_back(traceGeometryResources[index]);
+        }
+        if(!causticTraceGeometryResources.empty()){
+            const auto causticGeometrySet = m_deferredLightingTaskGraph.importResourceSet(
+                Core::GpuGraphResourceSetDesc{}
+                    .setIdentity(Name("render.caustic_trace_geometry"))
+                    .setMarkerLabel("Caustic Trace Geometry")
+                    .setMembers(causticTraceGeometryResources.data(), causticTraceGeometryResources.size())
+            );
+            if(!causticGeometrySet){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare caustic traversal geometry reads"));
+                return;
+            }
+            causticTraceGeometrySet = *causticGeometrySet;
+        }
+    }
+
     // Freeze shadow routing after prefix handoff so transparent folding never sees the prior mask.
     RayTracingShadowVisibilityGraphPlanSnapshot rayTracingShadowVisibilityPlan = m_raytracingSystem.snapshotShadowVisibilityGraphPlan(declaresHardwareCaustics);
     if(rayTracingShadowVisibilityPlan.lightSpace.ready && hasOpaqueCsgFrameWork){
@@ -338,14 +371,28 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     }
     const RayTracingSceneGraphResources sceneResources = m_raytracingSystem.snapshotSceneGraphResources();
     RayTracingSceneGraphReads sceneReads(scratchArena);
-    if(rayTracingShadowVisibilityPlan.hardwareTransparentTrace){
-        auto sceneReadsResult = ImportRayTracingSceneGraphReads(m_deferredLightingTaskGraph, sceneResources, m_raytracingSystem.sceneTlasBackingInitialState(), scratchArena);
+    if(rayTracingShadowVisibilityPlan.hardwareTransparentTrace || (declaresHardwareCaustics && causticOpticalReader)){
+        auto sceneReadsResult = ImportRayTracingSceneGraphReads(m_deferredLightingTaskGraph, sceneResources, m_raytracingSystem.sceneTlasBackingInitialState(), m_rayTraceMaterialContextSlotsUploadTask, scratchArena);
         if(!sceneReadsResult){
             sceneReads = RayTracingSceneGraphReads(scratchArena);
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import hardware transparent shadow scene reads"));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import shared hardware optical scene reads"));
             return;
         }
         sceneReads = Move(*sceneReadsResult);
+    }
+
+    Core::GpuGraphResourceId causticOpticalScene;
+    if(causticOpticalReader){
+        if(declaresHardwareCaustics)
+            causticOpticalScene = sceneReads.uses[LengthOf(sceneReads.uses) - 1u].resource;
+        else{
+            const auto optical = ImportRayTracingOpticalSceneBuffer(m_deferredLightingTaskGraph, sceneResources.opticalScene, m_rayTraceMaterialContextSlotsUploadTask, scratchArena);
+            if(!optical){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import software caustic optical scene reads"));
+                return;
+            }
+            causticOpticalScene = optical->resource;
+        }
     }
 
     if(useLaggedLightingHistory){

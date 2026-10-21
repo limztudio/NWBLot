@@ -92,11 +92,15 @@ public:
     }
 
     [[nodiscard]] const Core::Assets::AssetRef<UiSkin>& requested()const noexcept{ return m_requested; }
+
     [[nodiscard]] const Core::Assets::AssetRef<UiSkin>& selected()const noexcept{ return m_selected; }
     // The latest desired reference may be empty (engine default) or differ from the last accepted selection.
     [[nodiscard]] const Core::Assets::AssetRef<UiSkin>& requestedChange()const noexcept{ return m_requestedChange; }
+
     [[nodiscard]] u64 generation()const noexcept{ return m_generation; }
+
     [[nodiscard]] bool changePending()const noexcept{ return m_changePending; }
+
     [[nodiscard]] bool changeFailed()const noexcept{ return m_changeFailed; }
 
 

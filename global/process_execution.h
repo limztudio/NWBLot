@@ -150,7 +150,7 @@ public:
         , argv(owner)
         , arena(owner)
     {}
-    NativeProcessArguments(const NativeProcessArguments&) = default;
+    NativeProcessArguments(const NativeProcessArguments&) = delete;
     NativeProcessArguments(NativeProcessArguments&&)noexcept = default;
     ~NativeProcessArguments()noexcept{
         // Argument bytes sit above both vector blocks in a scratch arena; retire them before member storage in reverse allocation order.

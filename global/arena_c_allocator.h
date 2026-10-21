@@ -53,7 +53,7 @@ inline void DeallocateArenaTyped(ArenaT& arena, void* const ptr, const usize cou
 
 
 template<typename ArenaT>
-[[nodiscard]] inline void* AllocateArenaCMemory(ArenaT& arena, const usize size)noexcept(noexcept(arena.allocate(alignof(MaxAlign), size)) && IsNothrowConvertible_V<decltype(arena.allocate(alignof(MaxAlign), size)), void*>){
+[[nodiscard]] inline void* AllocateArenaCMemory(ArenaT& arena, const usize size)noexcept(noexcept(arena.allocate(alignof(MaxAlign), size == 0u ? 1u : size)) && IsNothrowConvertible_V<decltype(arena.allocate(alignof(MaxAlign), size == 0u ? 1u : size)), void*>){
     return arena.allocate(alignof(MaxAlign), size == 0u ? 1u : size);
 }
 

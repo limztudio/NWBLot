@@ -72,6 +72,7 @@ public:
 
 public:
     [[nodiscard]] const Name& assetType()const noexcept{ return m_assetType; }
+
     [[nodiscard]] const Name& virtualPath()const noexcept{ return m_virtualPath; }
 
 

@@ -76,7 +76,7 @@ struct ShadowOccluderMaterialContext{
 };
 
 struct MaterialInstanceOverrideField{
-    const MaterialTypedLayoutField* field = nullptr;
+    const MaterialTypedLayoutField& field;
     u32 blockByteBegin = 0u;
     bool mutableBlock = false;
 };
@@ -121,15 +121,15 @@ public:
 
 public:
     void invalidateResources();
-    [[nodiscard]] Expected<MaterialSurfaceInfo*> createMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset);
+    [[nodiscard]] Expected<NotNull<MaterialSurfaceInfo*>> createMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset);
     // Prepared-only lookup: creation and descriptor-backed resource resolution belong to preparation.
-    [[nodiscard]] virtual Expected<MaterialSurfaceInfo*> findMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset)noexcept override;
+    [[nodiscard]] virtual Expected<NotNull<MaterialSurfaceInfo*>> findMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset)noexcept override;
     [[nodiscard]] bool resolveMaterialResourceReferences(MaterialSurfaceInfo& materialInfo);
     [[nodiscard]] bool prepareVisibleMaterialSurfaceInfos();
     void prepareVisibleMaterialInstanceMutableCache(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] Expected<Core::BindingLayoutHandle> prepareMaterialPassBindingLayout();
-    [[nodiscard]] Expected<MaterialPipelineResources*> createRendererPipeline(const MaterialSurfaceInfo& materialInfo, const MaterialPipelineKey& pipelineKey, Core::Framebuffer& framebuffer);
-    [[nodiscard]] Expected<MaterialPipelineResources*> findRendererPipeline(const MaterialPipelineKey& pipelineKey)noexcept;
+    [[nodiscard]] Expected<NotNull<MaterialPipelineResources*>> createRendererPipeline(const MaterialSurfaceInfo& materialInfo, const MaterialPipelineKey& pipelineKey, Core::Framebuffer& framebuffer);
+    [[nodiscard]] Expected<NotNull<MaterialPipelineResources*>> findRendererPipeline(const MaterialPipelineKey& pipelineKey)noexcept;
     void invalidateRendererPipelines()noexcept;
     [[nodiscard]] bool hasTransparentRenderers(RendererResourceLookupMode::Enum lookupMode);
     void logMaterialRenderPathDecision(const Name& materialKey, RenderPath::Enum renderPath, bool meshSupported);
@@ -180,13 +180,13 @@ public:
         const ECSRenderDetail::MeshViewGpuData* csgWorkRegionMeshViewState
     );
     // Creation and override application belong to preparation; render paths only use the prepared lookup below.
-    [[nodiscard]] Expected<const MaterialTypedByteVector*> prepareMaterialInstanceMutableTypedBytes(
+    [[nodiscard]] Expected<NotNull<const MaterialTypedByteVector*>> prepareMaterialInstanceMutableTypedBytes(
         Core::Alloc::ScratchArena& scratchArena,
         Core::ECS::EntityID entity,
         const MaterialSurfaceInfo& materialInfo,
         const MaterialInstanceComponent* materialInstance
     );
-    [[nodiscard]] Expected<const MaterialTypedByteVector*> findPreparedMaterialInstanceMutableTypedBytes(Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent* materialInstance)const noexcept;
+    [[nodiscard]] Expected<NotNull<const MaterialTypedByteVector*>> findPreparedMaterialInstanceMutableTypedBytes(Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent* materialInstance)const noexcept;
     // Shadow-owned copy of one occluder's constants context (draw-pass buffers hold one transparency class at trace time).
     // Mirrors gatherMaterialPassDrawItems packing so the trace hook reads rasterizer-identical bytes.
     [[nodiscard]] Expected<ShadowOccluderMaterialContext> appendShadowOccluderMaterialContext(

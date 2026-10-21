@@ -43,9 +43,9 @@ struct PacketMergeSummary{
     const GpuTaskGraphSchedulingTaskIndexView consumers = analysis.schedulingConsumers(task);
     for(usize consumerIndex = 0u; consumerIndex < consumers.taskCount; ++consumerIndex){
         const GpuTaskId consumer{ .generation = task.generation, .index = static_cast<u32>(consumers[consumerIndex]) };
-        const GpuTaskQueueAssignment* const consumerAssignment = assignments.find(consumer);
-        NWB_ASSERT(consumerAssignment && consumerAssignment->queue.valid());
-        if(consumerAssignment->queue != packetQueue)
+        auto& consumerAssignment = *MakeNotNull(assignments.find(consumer));
+        NWB_ASSERT(consumerAssignment.queue.valid());
+        if(consumerAssignment.queue != packetQueue)
             return true;
     }
     return false;
@@ -202,8 +202,8 @@ namespace GpuTaskGraphCompilerDetail{
         );
         const u32 compiledTaskIndex = static_cast<u32>(compiledPlan.tasks.size());
 
-        const GpuTaskQueueAssignment* const assignment = assignments.find(taskID);
-        NWB_ASSERT(assignment && assignment->queue.valid());
+        auto& assignment = *MakeNotNull(assignments.find(taskID));
+        NWB_ASSERT(assignment.queue.valid());
 
         const GpuTaskGraphTaskView task = graph.taskAt(taskID.index);
         const bool taskRecordsTiming = task.timing.policy != GpuTaskTimingPolicy::None;
@@ -215,7 +215,7 @@ namespace GpuTaskGraphCompilerDetail{
             packetizationDecision = GpuTaskPacketizationDecision::TaskForcesBoundary;
         if(mergeRequested){
             GpuSubmissionPacket& precedingPacket = compiledPlan.packets.back();
-            bool precedingPacketAllowsMerge = precedingPacket.queue == assignment->queue;
+            bool precedingPacketAllowsMerge = precedingPacket.queue == assignment.queue;
             if(!precedingPacketAllowsMerge)
                 packetizationDecision = GpuTaskPacketizationDecision::QueueChanged;
             if(precedingPacketAllowsMerge && !precedingPacketSummary.allTasksAllowMerge){
@@ -273,25 +273,25 @@ namespace GpuTaskGraphCompilerDetail{
             compiledPlan.packets.push_back(GpuSubmissionPacket{
                 .taskOffset = static_cast<u32>(compiledPlan.packetTasks.size()),
                 .taskCount = 1u,
-                .queue = assignment->queue,
+                .queue = assignment.queue,
                 .joinsAcceptedQueueFrontier = task.scheduling.joinsAcceptedQueueFrontier,
                 .isRecoverySubmission = task.scheduling.isRecoverySubmission,
                 .recordsTiming = taskRecordsTiming,
             }
             );
-            __hidden_gpu_task_graph_compiler_packetization::InitializePacketMergeSummary(task, assignment->queue, analysis, assignments, trackConsumerFrontiers, precedingPacketSummary);
+            __hidden_gpu_task_graph_compiler_packetization::InitializePacketMergeSummary(task, assignment.queue, analysis, assignments, trackConsumerFrontiers, precedingPacketSummary);
         }
         else{
-            __hidden_gpu_task_graph_compiler_packetization::AccumulatePacketMergeSummary(task, assignment->queue, analysis, assignments, trackConsumerFrontiers, precedingPacketSummary);
+            __hidden_gpu_task_graph_compiler_packetization::AccumulatePacketMergeSummary(task, assignment.queue, analysis, assignments, trackConsumerFrontiers, precedingPacketSummary);
         }
         compiledPlan.packetTasks.push_back(taskID);
         compiledPlan.tasks.push_back(GpuCompiledTask{
             .task = taskID,
             .packet = packetID,
-            .queue = assignment->queue,
+            .queue = assignment.queue,
             .packetizationDecision = packetizationDecision,
             .timingPolicy = task.timing.policy,
-            .recordsNonCommittingTimingSample = static_cast<bool>(assignment->modifiers & GpuTaskQueueAssignmentModifier::TimingCalibration),
+            .recordsNonCommittingTimingSample = static_cast<bool>(assignment.modifiers & GpuTaskQueueAssignmentModifier::TimingCalibration),
         }
         );
         compiledPlan.compiledTaskIndexByTask[taskID.index] = compiledTaskIndex;

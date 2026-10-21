@@ -270,7 +270,7 @@ Expected<bool, PresentationFailure> BackendContext::present(){
         }
         if(!recordDirectPresentTransition(transitionPolicy, swapChainImage.rhiHandle.get()))
             return MakeUnexpected(PresentationFailure{ presentationAccepted });
-        CommandList* const directCommandList = m_directPresentCommandList.get();
+        auto& directCommandList = *MakeNotNull(m_directPresentCommandList.get());
 
         const QueueSubmissionPreSubmitHook presentationSignalHook = claimFramePresentationSignal();
         if(!presentationSignalHook.valid()){
@@ -284,7 +284,7 @@ Expected<bool, PresentationFailure> BackendContext::present(){
 
         QueueSubmissionDesc submitDesc;
         submitDesc.setPreSubmitHook(presentationSignalHook);
-        CommandList* const directCommandLists[] = { directCommandList };
+        CommandList* const directCommandLists[] = { &directCommandList };
         const auto directSubmission = m_rhiDevice->executeCommandListsInternal(directCommandLists, LengthOf(directCommandLists), primaryGraphicsQueue, submitDesc, false, Device::DeviceLossDiagnosticPolicy::Defer);
         if(!directSubmission){
             if(!cancelFramePresentationSignalDeferred(&presentationSignalHook, lifecycleLock))

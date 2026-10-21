@@ -42,13 +42,16 @@ struct AvboitOccupancyRecordInputs : public AvboitRecordInputsBase{
     Core::GpuGraphResourceId avboitLowRaster;
     Core::GpuGraphResourceId avboitCoverage;
     Core::GpuTaskId clearTask;
-    Core::GpuTimingSubmissionTicket* preTimingTicket = nullptr;
-    Optional<Core::GpuTimingMeasure>* occupancyComputeEmulationTiming = nullptr;
+    Core::GpuTimingSubmissionTicket& preTimingTicket;
+    Optional<Core::GpuTimingMeasure>& occupancyComputeEmulationTiming;
 
 
 public:
-    explicit AvboitOccupancyRecordInputs(Core::Alloc::GlobalArena& arena)noexcept
-        : AvboitRecordInputsBase(arena){
+    AvboitOccupancyRecordInputs(Core::Alloc::GlobalArena& arena, DeferredFrameTargets& targetsIn, Core::GpuTimingSubmissionTicket& timingTicketIn, Optional<Core::GpuTimingMeasure>& computeEmulationTimingIn)noexcept
+        : AvboitRecordInputsBase(arena, targetsIn)
+        , preTimingTicket(timingTicketIn)
+        , occupancyComputeEmulationTiming(computeEmulationTimingIn)
+    {
     }
 };
 

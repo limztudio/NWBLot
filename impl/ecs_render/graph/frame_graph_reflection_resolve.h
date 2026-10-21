@@ -38,13 +38,13 @@ class RendererReflectionSystem;
 
 // Reflection resolve owns reflection snapshot plus reflection/refraction task declaration.
 struct FrameGraphReflectionResolveInputs{
-    DeferredFrameTargets* targets = nullptr;
-    const ECSRenderDetail::MeshViewBufferSnapshot* meshViewSnapshot = nullptr;
-    const RayTracingSceneGraphResources* sceneResources = nullptr;
-    const ReflectionSettings* reflectionSettings = nullptr;
-    const ReflectionSceneContentStamp* contentStamp = nullptr;
-    const CsgFrameState* csgFrameState = nullptr;
-    const RayTracingRefractionGraphResources* refractionResources = nullptr;
+    DeferredFrameTargets& targets;
+    const ECSRenderDetail::MeshViewBufferSnapshot& meshViewSnapshot;
+    const RayTracingSceneGraphResources& sceneResources;
+    const ReflectionSettings& reflectionSettings;
+    const ReflectionSceneContentStamp& contentStamp;
+    const CsgFrameState& csgFrameState;
+    const RayTracingRefractionGraphResources& refractionResources;
     u32 reflectionFrameIndex = 0u;
     bool reflectionSceneAvailable = false;
     bool refractionActive = false;

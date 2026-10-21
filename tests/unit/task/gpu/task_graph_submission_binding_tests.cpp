@@ -127,7 +127,7 @@ TEST(GpuTaskSubmissionBindings, PreservesMergedAliasesAndReversedBindingOrderWit
     Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
     Graphics::GpuTaskSubmissionDetail::TaskSubmissionBindings resolved(scratch);
     ASSERT_TRUE(resolved.resolve(declarations, plan, plan.allPacketRange(), timingBindings.data(), timingBindings.size(), hookBindings.data(), hookBindings.size()));
-    Vector<Graphics::GpuTimingSubmissionTicket*, Graphics::Alloc::ScratchArena> packetTickets(scratch);
+    Vector<NotNull<Graphics::GpuTimingSubmissionTicket*>, Graphics::Alloc::ScratchArena> packetTickets(scratch);
     packetTickets.reserve(resolved.timingTickets.size());
     const usize collectAllocationCount = scratch.memoryStats().allocationCount;
     for(usize packetIndex = 0u; packetIndex < plan.packetCount(); ++packetIndex){
@@ -137,8 +137,8 @@ TEST(GpuTaskSubmissionBindings, PreservesMergedAliasesAndReversedBindingOrderWit
         const Graphics::QueueSubmissionPreSubmitHook* hook = nullptr;
         hook = resolved.collectPacket(packet, packetTickets);
         ASSERT_EQ(packetTickets.size(), 2u);
-        EXPECT_EQ(packetTickets[0u], fixture.tickets[first].get());
-        EXPECT_EQ(packetTickets[1u], fixture.tickets[first + 1u].get());
+        EXPECT_EQ(packetTickets[0u].get(), fixture.tickets[first].get());
+        EXPECT_EQ(packetTickets[1u].get(), fixture.tickets[first + 1u].get());
         ASSERT_NE(hook, nullptr);
         EXPECT_EQ(hook->context, &fixture.hookInvocationCount);
         EXPECT_EQ(hook->identity, first + 2u);
@@ -161,7 +161,7 @@ TEST(GpuTaskSubmissionBindings, PreservesMergedAliasesAndReversedBindingOrderWit
     ASSERT_TRUE(resolved.resolve(declarations, plan, plan.allPacketRange(), &singleTiming, 1u, &singleHook, 1u));
     hook = resolved.collectPacket(plan.packetIdAt(0u), packetTickets);
     ASSERT_EQ(packetTickets.size(), 1u);
-    EXPECT_EQ(packetTickets[0u], fixture.tickets[0u].get());
+    EXPECT_EQ(packetTickets[0u].get(), fixture.tickets[0u].get());
     ASSERT_NE(hook, nullptr);
     EXPECT_EQ(hook->identity, 99u);
     hook = resolved.collectPacket(plan.packetIdAt(15u), packetTickets);

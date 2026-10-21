@@ -235,9 +235,9 @@ Expected<GpuTaskId> GpuTaskGraph::appendTaskWithinMutation(
     for(usize dependencyIndex = 0u; dependencyIndex < desc.externalDependencyCount; ++dependencyIndex)
         m_externalDependencies.push_back(desc.externalDependencies[dependencyIndex]);
     for(usize sourceIndex = 0u; sourceIndex < desc.externalStateSourceCount; ++sourceIndex){
-        const CommandListResourceStateHandoff* const snapshot = (*externalStateSnapshots)[sourceIndex].get();
-        m_externalStateSources.push_back(GpuTaskExternalStateSource{ .states = snapshot, .applicableConsumerQueueClass = desc.externalStateSources[sourceIndex].applicableConsumerQueueClass, });
-        m_externalStateSnapshots.push_back((*externalStateSnapshots)[sourceIndex].get());
+        const CommandListResourceStateHandoff& snapshot = *(*externalStateSnapshots)[sourceIndex];
+        m_externalStateSources.push_back(GpuTaskExternalStateSource{ .states = &snapshot, .applicableConsumerQueueClass = desc.externalStateSources[sourceIndex].applicableConsumerQueueClass, });
+        m_externalStateSnapshots.push_back(MakeNotNull((*externalStateSnapshots)[sourceIndex].get()));
     }
     for(usize useIndex = 0u; useIndex < desc.resourceUseCount; ++useIndex)
         m_resourceUses.push_back(desc.resourceUses[useIndex]);
@@ -411,7 +411,7 @@ Expected<GpuGraphResourceId> GpuTaskGraph::appendResourceWithinMutation(const Gp
             .stateSource = (*initialOwnerHandoffStateSnapshots)[sourceIndex].get(),
         }
         );
-        m_initialOwnerHandoffStateSnapshots.push_back((*initialOwnerHandoffStateSnapshots)[sourceIndex].get());
+        m_initialOwnerHandoffStateSnapshots.push_back(MakeNotNull((*initialOwnerHandoffStateSnapshots)[sourceIndex].get()));
     }
 
     GpuGraphResourceNode resource;

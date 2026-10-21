@@ -159,11 +159,11 @@ Expected<GraphicsBytes> ShaderArchive::SerializeIndex(GraphicsArena& arena, cons
         return MakeUnexpected(Failure{});
     }
 
-    Vector<const Record*, Alloc::ScratchArena> sortedRecords{scratchArena};
+    Vector<NotNull<const Record*>, Alloc::ScratchArena> sortedRecords{scratchArena};
     sortedRecords.reserve(records.size());
     for(const Record& record : records)
-        sortedRecords.push_back(&record);
-    Sort(sortedRecords.begin(), sortedRecords.end(), [](const Record* lhs, const Record* rhs){ return __hidden_shader_archive::LessRecordPointer(MakeNotNull(lhs), MakeNotNull(rhs)); });
+        sortedRecords.push_back(MakeNotNull(&record));
+    Sort(sortedRecords.begin(), sortedRecords.end(), [](NotNull<const Record*> lhs, NotNull<const Record*> rhs){ return __hidden_shader_archive::LessRecordPointer(lhs, rhs); });
 
     usize variantTextBinaryBytes = 0;
     for(usize i = 0u; i < sortedRecords.size(); ++i){
@@ -216,7 +216,7 @@ Expected<GraphicsBytes> ShaderArchive::SerializeIndex(GraphicsArena& arena, cons
     binary.reserve(headerAndRecordBytes + variantTextBinaryBytes);
     AppendPOD(binary, header);
 
-    for(const Record* sortedRecord : sortedRecords){
+    for(const auto sortedRecord : sortedRecords){
         const Record& record = *sortedRecord;
         __hidden_shader_archive::RecordHeaderDisk recordHeader;
         recordHeader.shaderName = record.shaderName.hash();

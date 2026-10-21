@@ -39,7 +39,7 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
 ){
     FrameGraphTransparentCsgTaskResult result{};
     using namespace RendererTaskGraphDetail;
-    DeferredFrameTargets& deferredTargets = *inputs.targets;
+    DeferredFrameTargets& deferredTargets = inputs.targets;
     const Core::GpuGraphResourceId albedo = inputs.albedo;
     const Core::GpuGraphResourceId normal = inputs.normal;
     const Core::GpuGraphResourceId worldPosition = inputs.worldPosition;

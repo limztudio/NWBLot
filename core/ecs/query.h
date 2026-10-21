@@ -50,9 +50,8 @@ struct ViewTupleAccess{
         if(I == anchorPoolIndex)
             return static_cast<u32>(anchorDenseIndex);
 
-        auto* pool = Get<I>(pools);
-        NWB_ASSERT(pool);
-        return pool->findDenseIndex(entityId);
+        auto& pool = *MakeNotNull(Get<I>(pools));
+        return pool.findDenseIndex(entityId);
     }
 
     template<usize I, typename... Ts>

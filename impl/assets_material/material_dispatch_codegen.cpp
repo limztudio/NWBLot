@@ -232,7 +232,7 @@ static Path BuildShadowSurfaceIncludeRoot(const Path& cacheDirectory, const AStr
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using ShadowSurfaceBindEntryLookup = HashMap<Name, const MaterialBindEntry*, ScratchArena, Hasher<Name>, EqualTo<Name>>;
+using ShadowSurfaceBindEntryLookup = HashMap<Name, NotNull<const MaterialBindEntry*>, ScratchArena, Hasher<Name>, EqualTo<Name>>;
 
 using ShadowSurfaceBindNamespaceLookup = HashMap<Name, u32, ScratchArena, Hasher<Name>, EqualTo<Name>>;
 
@@ -351,7 +351,7 @@ static Expected<ShadowSurfaceBindEntryLookup> BuildShadowSurfaceBindEntryLookup(
             return MakeUnexpected(Failure{});
         }
         const Name interfaceName = *interfaceNameResult;
-        if(!lookup.emplace(interfaceName, &bindEntry).second){
+        if(!lookup.emplace(interfaceName, MakeNotNull(&bindEntry)).second){
             NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: duplicate material bind interface '{}'"), StringConvert(bindEntry.virtualPath));
             return MakeUnexpected(Failure{});
         }
@@ -435,7 +435,7 @@ Expected<Path> EmitShadowSurfaceDispatchModuleImpl(const Path& cacheDirectory, c
             NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: model id {} references unknown material interface '{}'"), id, StringConvert(interfaceById[id]));
             return MakeUnexpected(Failure{});
         }
-        bindEntryById[id] = bindEntryIt.value();
+        bindEntryById[id] = bindEntryIt.value().get();
 
         const auto namespaceIt = bindNamespaceLookup.find(interfaceName);
         if(namespaceIt == bindNamespaceLookup.end()){

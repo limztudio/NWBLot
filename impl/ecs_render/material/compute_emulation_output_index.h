@@ -30,10 +30,11 @@ template<typename Identity>
 class MaterialPassEmulationOutputIndex final : NoCopy{
 private:
     using Index = HashSet<Identity, Core::Alloc::ScratchArena>;
+    using InlineIdentity = Conditional_T<IsSame_V<Identity, u32>, u32, Core::Buffer*>;
 
 
 private:
-    static_assert(IsSame_V<Identity, Core::Buffer*> || IsSame_V<Identity, u32>);
+    static_assert(IsSame_V<Identity, NotNull<Core::Buffer*>> || IsSame_V<Identity, u32>);
 
 
 private:
@@ -72,7 +73,11 @@ public:
         if(m_index)
             return m_index->find(identity) != m_index->end();
         for(usize index = 0u; index < m_inlineCount; ++index){
-            if(m_inline[index] == identity)
+            if constexpr(IsSame_V<Identity, u32>){
+                if(m_inline[index] == identity)
+                    return true;
+            }
+            else if(m_inline[index] == identity.get())
                 return true;
         }
         return false;
@@ -82,12 +87,21 @@ public:
 private:
     void appendNew(const Identity identity){
         if(m_inlineCount < s_InlineCount){
-            m_inline[m_inlineCount] = identity;
+            if constexpr(IsSame_V<Identity, u32>)
+                m_inline[m_inlineCount] = identity;
+            else
+                m_inline[m_inlineCount] = identity.get();
             ++m_inlineCount;
             return;
         }
         Index index(s_PromotedIndexCapacity, m_scratchArena);
-        for(const Identity existing : m_inline){
+        for(const InlineIdentity stored : m_inline){
+            const Identity existing = [&]()noexcept{
+                if constexpr(IsSame_V<Identity, u32>)
+                    return stored;
+                else
+                    return MakeNotNull(stored);
+            }();
             if(!index.insert(existing).second)
                 TerminateInvariant();
         }
@@ -100,7 +114,7 @@ private:
 
 private:
     Core::Alloc::ScratchArena& m_scratchArena;
-    Identity m_inline[s_InlineCount];
+    InlineIdentity m_inline[s_InlineCount];
     usize m_inlineCount = 0u;
     Optional<Index> m_index;
 };

@@ -20,12 +20,14 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const Mesh* MeshSkinningRuntimeCache::MeshSkinningSource::mesh()const noexcept{
-    return Core::Assets::CastAsset<Mesh>(meshAsset.get());
+const Mesh& MeshSkinningRuntimeCache::MeshSkinningSource::mesh()const noexcept{
+    const auto asset = MakeNotNull(Core::Assets::CastAsset<Mesh>(meshAsset.get()));
+    return *asset;
 }
 
-const Skin* MeshSkinningRuntimeCache::MeshSkinningSource::skin()const noexcept{
-    return Core::Assets::CastAsset<Skin>(skinAsset.get());
+const Skin& MeshSkinningRuntimeCache::MeshSkinningSource::skin()const noexcept{
+    const auto asset = MakeNotNull(Core::Assets::CastAsset<Skin>(skinAsset.get()));
+    return *asset;
 }
 
 

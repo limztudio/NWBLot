@@ -325,7 +325,7 @@ public:
         if(!initialized)
             return false;
 
-        m_thread = Thread(T::GlobalUpdate, checked_cast<T*>(this));
+        m_thread = Thread([this](){ T::GlobalUpdate(*checked_cast<T*>(this)); });
 
         return true;
     }
@@ -366,10 +366,10 @@ private:
 
 
 private:
-    static void GlobalUpdate(T* self){
+    static void GlobalUpdate(T& self){
         for(;;){
             const Timer currentTime = TimerNow();
-            const f32 elapsedSeconds = DurationInSeconds<f32>(currentTime, self->m_lastUpdateTime);
+            const f32 elapsedSeconds = DurationInSeconds<f32>(currentTime, self.m_lastUpdateTime);
             if(elapsedSeconds < updateIntervalSeconds){
                 // Sleep until the next update deadline; the cadence bounds message and shutdown latency.
                 const SIMDVectorSingle remainingSeconds = VectorSubtract(VectorReplicate(updateIntervalSeconds), VectorReplicate(elapsedSeconds));
@@ -380,9 +380,9 @@ private:
                 continue;
             }
 
-            self->m_lastUpdateTime = currentTime;
+            self.m_lastUpdateTime = currentTime;
 
-            if(self->internalUpdate() && self->m_exit.load(MemoryOrder::acquire))
+            if(self.internalUpdate() && self.m_exit.load(MemoryOrder::acquire))
                 break;
         }
     }
@@ -416,18 +416,18 @@ private:
 
 
 private:
-    static void GlobalUpdate(T* self){
+    static void GlobalUpdate(T& self){
         for(;;){
-            self->m_semaphore.acquire();
+            self.m_semaphore.acquire();
 
-            bool updateSucceeded = self->internalUpdate();
+            bool updateSucceeded = self.internalUpdate();
 
             if(!updateSucceeded){
-                self->m_exit.store(true, MemoryOrder::release);
+                self.m_exit.store(true, MemoryOrder::release);
                 break;
             }
 
-            if(self->m_exit.load(MemoryOrder::acquire) && self->workerCanExit())
+            if(self.m_exit.load(MemoryOrder::acquire) && self.workerCanExit())
                 break;
         }
     }

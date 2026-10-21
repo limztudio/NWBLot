@@ -340,17 +340,16 @@ void CommandList::clearColorTextureBox(Alloc::ScratchArena& scratchArena, Textur
             rejectCommandRecording(s_ClearTextureBoxOperation, s_StagingAllocationFailedReason);
             return;
         }
-        Buffer* const stagingBuffer = staging->buffer;
+        Buffer& stagingBuffer = *staging->buffer;
         const u64 stagingOffset = staging->offset;
         void* const stagingBytes = staging->cpuAddress;
         if(
-            !stagingBuffer
-            || !stagingBytes
+            !stagingBytes
             || (stagingOffset % mipPlan.uploadLayout.stagingAlignment) != 0u
             || (stagingOffset % mipPlan.uploadLayout.copyOffsetAlignment) != 0u
-            || stagingOffset > stagingBuffer->m_creationDesc.byteSize
+            || stagingOffset > stagingBuffer.m_creationDesc.byteSize
             || static_cast<u64>(mipPlan.uploadLayout.clearByteCount)
-                > stagingBuffer->m_creationDesc.byteSize - stagingOffset
+                > stagingBuffer.m_creationDesc.byteSize - stagingOffset
         ){
             rejectCommandRecording(s_ClearTextureBoxOperation, VulkanTextureDetail::s_ClearStagingRangeInvalidReason);
             return;
@@ -363,7 +362,7 @@ void CommandList::clearColorTextureBox(Alloc::ScratchArena& scratchArena, Textur
             region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(VK_IMAGE_ASPECT_COLOR_BIT, mipLevel, 0u, 1u);
             region.imageOffset = { mipPlan.resolvedBox.minX, mipPlan.resolvedBox.minY, mipPlan.resolvedBox.minZ };
             region.imageExtent = { static_cast<u32>(clearWidth), static_cast<u32>(clearHeight), static_cast<u32>(clearDepth) };
-            m_context.deviceDispatch.vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1u, &region);
+            m_context.deviceDispatch.vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer.m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1u, &region);
         }
         else if(mipPlan.uploadLayout.mergeArrayLayerCopies){
             Vector<VkBufferImageCopy, Alloc::ScratchArena> regions(resolvedSubresources.numArraySlices, scratchArena);
@@ -379,7 +378,7 @@ void CommandList::clearColorTextureBox(Alloc::ScratchArena& scratchArena, Textur
             }
 
             if(!regions.empty())
-                m_context.deviceDispatch.vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<u32>(regions.size()), regions.data());
+                m_context.deviceDispatch.vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer.m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<u32>(regions.size()), regions.data());
         }
         else{
             Vector<VkBufferImageCopy, Alloc::ScratchArena> regions(resolvedSubresources.numArraySlices, scratchArena);
@@ -395,10 +394,10 @@ void CommandList::clearColorTextureBox(Alloc::ScratchArena& scratchArena, Textur
             }
 
             if(!regions.empty())
-                m_context.deviceDispatch.vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<u32>(regions.size()), regions.data());
+                m_context.deviceDispatch.vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer.m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<u32>(regions.size()), regions.data());
         }
 
-        retainStagingBuffer(*stagingBuffer);
+        retainStagingBuffer(stagingBuffer);
     }
 
     retainResource(&texture);

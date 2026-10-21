@@ -236,14 +236,13 @@ bool GpuTaskGraphDeclarationReadView::appendFrameGraphTelemetry(Telemetry::Frame
             metadata.compiledTask = *compiledTask;
         }
         if(options.queueAssignments){
-            const GpuTaskQueueAssignment* const assignment = options.queueAssignments->find(task.id);
-            NWB_ASSERT(assignment);
+            auto& assignment = *MakeNotNull(options.queueAssignments->find(task.id));
             const GpuTaskQueueAssignmentTelemetry* const accepted = options.queueAssignmentTelemetry ? options.queueAssignmentTelemetry->find(task.id) : nullptr;
-            const auto queueAssignment = __hidden_task_graph_telemetry::BuildQueueAssignment(*assignment, accepted);
+            const auto queueAssignment = __hidden_task_graph_telemetry::BuildQueueAssignment(assignment, accepted);
             if(!queueAssignment)
                 return false;
             metadata.queueAssignment = *queueAssignment;
-            switch(assignment->queueClass){
+            switch(assignment.queueClass){
             case CommandQueue::Graphics:
                 flags |= GpuTaskGraphTelemetryNodeFlag::AssignedGraphicsQueue;
                 break;
@@ -257,16 +256,16 @@ bool GpuTaskGraphDeclarationReadView::appendFrameGraphTelemetry(Telemetry::Frame
                 NWB_ASSERT(false);
                 break;
             }
-            if(assignment->dedicated)
+            if(assignment.dedicated)
                 flags |= GpuTaskGraphTelemetryNodeFlag::AssignedDedicatedQueue;
             if(
-                (assignment->modifiers & GpuTaskQueueAssignmentModifier::DirectDependencyAffinity)
-                || (assignment->modifiers & GpuTaskQueueAssignmentModifier::SameClassLoadBalance)
-                || (assignment->modifiers & GpuTaskQueueAssignmentModifier::NonPrimaryRouting)
-                || assignment->initialQueue != assignment->queue
+                (assignment.modifiers & GpuTaskQueueAssignmentModifier::DirectDependencyAffinity)
+                || (assignment.modifiers & GpuTaskQueueAssignmentModifier::SameClassLoadBalance)
+                || (assignment.modifiers & GpuTaskQueueAssignmentModifier::NonPrimaryRouting)
+                || assignment.initialQueue != assignment.queue
             )
                 flags |= GpuTaskGraphTelemetryNodeFlag::QueueAssignmentRerouted;
-            if((assignment->modifiers & GpuTaskQueueAssignmentModifier::TimingCalibration) || (assignment->modifiers & GpuTaskQueueAssignmentModifier::TimingFeedback))
+            if((assignment.modifiers & GpuTaskQueueAssignmentModifier::TimingCalibration) || (assignment.modifiers & GpuTaskQueueAssignmentModifier::TimingFeedback))
                 flags |= GpuTaskGraphTelemetryNodeFlag::QueueAssignmentTimingRouting;
         }
         taskNodes.push_back(builder.addPass(task.identity, task.markerLabel, metadata, flags));

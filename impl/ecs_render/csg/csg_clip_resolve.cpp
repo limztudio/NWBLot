@@ -38,20 +38,18 @@ struct CsgResolvedClipCutter{
     SIMDMatrix worldToShape;
     CsgClipWorkBounds workBounds;
     CsgShapeTypeInfo shapeType;
-    const CsgCutterComponent* cutter = nullptr;
+    const CsgCutterComponent& cutter;
 
 
 public:
     [[nodiscard]] const u8* parameterBytes()const noexcept{
-        NWB_ASSERT(cutter);
-        if(!cutter->parameterBytes.empty())
-            return cutter->parameterBytes.data();
+        if(!cutter.parameterBytes.empty())
+            return cutter.parameterBytes.data();
         return shapeType.desc.defaultParameterBytes.empty() ? nullptr : shapeType.desc.defaultParameterBytes.data();
     }
 
     [[nodiscard]] usize parameterByteSize()const noexcept{
-        NWB_ASSERT(cutter);
-        return cutter->parameterBytes.empty() ? shapeType.desc.defaultParameterBytes.size() : cutter->parameterBytes.size();
+        return cutter.parameterBytes.empty() ? shapeType.desc.defaultParameterBytes.size() : cutter.parameterBytes.size();
     }
 };
 
@@ -157,7 +155,6 @@ public:
 }
 
 static void BuildResolvedClipCutterGpuData(const CsgResolvedClipCutter& resolvedCutter, const f32 worldToShapeScaleBound, CsgCutterGpuData& outCutter)noexcept{
-    NWB_ASSERT(resolvedCutter.cutter);
     NWB_ASSERT(resolvedCutter.parameterByteSize() == static_cast<usize>(resolvedCutter.shapeType.desc.parameterByteSize));
     NWB_ASSERT(resolvedCutter.parameterByteSize() == 0u || resolvedCutter.parameterBytes());
 
@@ -182,7 +179,7 @@ static void BuildResolvedClipCutterGpuData(const CsgResolvedClipCutter& resolved
     auto shapeType = shapeRegistry.findShapeType(cutter.shapeType);
     if(!shapeType)
         return MakeUnexpected(Failure{});
-    CsgResolvedClipCutter resolvedCutter{ .worldToShape = cutterWorldToShape, .workBounds = {}, .shapeType = Move(*shapeType), .cutter = &cutter };
+    CsgResolvedClipCutter resolvedCutter{ .worldToShape = cutterWorldToShape, .workBounds = {}, .shapeType = Move(*shapeType), .cutter = cutter };
     const auto parameterBytes = ResolveCsgCutterParameterBytes(resolvedCutter.shapeType, cutter);
     if(!parameterBytes)
         return MakeUnexpected(Failure{});

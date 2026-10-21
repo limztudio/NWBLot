@@ -127,8 +127,7 @@ bool GpuTaskGraphCompiler::assignQueues(
     // Establish every legal route before scoring.
     // Explicit compatible merge chains share one provisional queue; their command union and external ownership facts constrain the whole chain, while packetization retains its frontier checks.
     for(const GpuTaskQueuePlacementGroup& group : groups){
-        const GpuPhysicalQueueInfo* const selectedQueue = FindBestLegalQueuePlacementGroupCandidate(graph, analysis, topology, group);
-        NWB_ASSERT(selectedQueue);
+        auto& selectedQueue = *MakeNotNull(FindBestLegalQueuePlacementGroupCandidate(graph, analysis, topology, group));
         for(usize taskOffset = 0u; taskOffset < group.assignmentCount; ++taskOffset){
             const GpuTaskId taskID = analysis.topologicalOrder()[group.assignmentOffset + taskOffset];
             // Groups partition the unique topological order of current graph tasks.
@@ -142,12 +141,12 @@ bool GpuTaskGraphCompiler::assignQueues(
             const u32 assignmentIndex = static_cast<u32>(outAssignments.m_assignments.size());
             outAssignments.m_assignments.push_back(GpuTaskQueueAssignment{
                 .task = taskID,
-                .initialQueue = selectedQueue->id,
-                .queue = selectedQueue->id,
+                .initialQueue = selectedQueue.id,
+                .queue = selectedQueue.id,
                 .score = {},
-                .queueClass = selectedQueue->queueClass,
+                .queueClass = selectedQueue.queueClass,
                 .reason = HasCapabilities(group.requiredCapabilities, GpuQueueCapability::Graphics) ? GpuTaskQueueAssignmentReason::RequiredGraphics : GpuTaskQueueAssignmentReason::Scored,
-                .dedicated = selectedQueue->dedicated,
+                .dedicated = selectedQueue.dedicated,
             }
             );
             outAssignments.m_assignmentIndicesByTask[taskID.index] = assignmentIndex;
@@ -229,15 +228,14 @@ bool GpuTaskGraphCompiler::assignQueues(
     }
     for(usize groupIndex = 0u; groupIndex < groups.size(); ++groupIndex){
         const GpuTaskQueuePlacementGroup& group = groups[groupIndex];
-        const GpuPhysicalQueueInfo* const selectedQueue = FindPhysicalQueueInfo(topology, scoredQueues[groupIndex]);
-        NWB_ASSERT(selectedQueue);
+        auto& selectedQueue = *MakeNotNull(FindPhysicalQueueInfo(topology, scoredQueues[groupIndex]));
         for(usize taskOffset = 0u; taskOffset < group.assignmentCount; ++taskOffset){
             GpuTaskQueueAssignment& assignment = outAssignments.m_assignments[group.assignmentOffset + taskOffset];
-            assignment.initialQueue = selectedQueue->id;
-            assignment.queue = selectedQueue->id;
-            assignment.queueClass = selectedQueue->queueClass;
+            assignment.initialQueue = selectedQueue.id;
+            assignment.queue = selectedQueue.id;
+            assignment.queueClass = selectedQueue.queueClass;
             assignment.reason = scoredReasons[groupIndex];
-            assignment.dedicated = selectedQueue->dedicated;
+            assignment.dedicated = selectedQueue.dedicated;
         }
     }
 
@@ -257,8 +255,7 @@ bool GpuTaskGraphCompiler::assignQueues(
         for(const GpuTaskQueuePlacementGroup& group : groups){
             const usize assignmentIndex = group.assignmentOffset;
             GpuTaskQueueAssignment& assignment = outAssignments.m_assignments[assignmentIndex];
-            const GpuPhysicalQueueInfo* selectedQueue = FindPhysicalQueueInfo(topology, assignment.queue);
-            NWB_ASSERT(selectedQueue);
+            auto selectedQueue = MakeNotNull(FindPhysicalQueueInfo(topology, assignment.queue));
             if(group.assignmentCount == 1u && !group.initialOwnershipQueue.valid()){
                 const GpuTaskGraphTaskView task = graph.taskAt(assignment.task.index);
                 if(task.scheduling.allowSameClassQueueRouting && task.scheduling.overlapPreferred && !task.scheduling.avoidQueueCrossing){
@@ -296,7 +293,7 @@ bool GpuTaskGraphCompiler::assignQueues(
                 assignment.initialQueue = selectedQueue->id;
             }
             // Fixed and merged groups contribute the same prefix cost as routed singletons.
-            u64& prefixQueueCost = prefixQueueCosts[static_cast<usize>(selectedQueue - topology.queues)];
+            u64& prefixQueueCost = prefixQueueCosts[static_cast<usize>(selectedQueue.get() - topology.queues)];
             for(usize taskOffset = 0u; taskOffset < group.assignmentCount; ++taskOffset){
                 const GpuTaskId task = outAssignments.m_assignments[group.assignmentOffset + taskOffset].task;
                 const u64 cost = scoringData.m_taskCosts[task.index];
@@ -312,13 +309,12 @@ bool GpuTaskGraphCompiler::assignQueues(
                 continue;
 
             GpuTaskQueueAssignment& assignment = outAssignments.m_assignments[group.assignmentOffset];
-            const GpuPhysicalQueueInfo* const staticQueue = FindPhysicalQueueInfo(topology, assignment.queue);
-            NWB_ASSERT(staticQueue);
+            auto& staticQueue = *MakeNotNull(FindPhysicalQueueInfo(topology, assignment.queue));
             const GpuTaskGraphTaskView task = graph.taskAt(assignment.task.index);
             const GpuTaskTimingAssignmentKey key{ .task = task.identity, .variant = task.timing.variant, .resolutionClass = task.timing.resolutionClass };
-            const GpuPhysicalQueueInfo* selectedQueue = staticQueue;
-            const GpuPhysicalQueueInfo* const incumbent = FindTimingFeedbackIncumbent(graph, topology, task, *staticQueue, key, *options.timingHistory);
-            const GpuPhysicalQueueInfo* const calibrationQueue = FindTimingFeedbackCalibrationQueue(graph, topology, task, *incumbent, key, *options.timingHistory, options.timingFeedbackPolicy, options.timingFrameIndex);
+            auto selectedQueue = MakeNotNull(&staticQueue);
+            const GpuPhysicalQueueInfo& incumbent = FindTimingFeedbackIncumbent(graph, topology, task, staticQueue, key, *options.timingHistory);
+            const GpuPhysicalQueueInfo* const calibrationQueue = FindTimingFeedbackCalibrationQueue(graph, topology, task, incumbent, key, *options.timingHistory, options.timingFeedbackPolicy, options.timingFrameIndex);
             if(calibrationQueue){
                 selectedQueue = calibrationQueue;
                 assignment.modifiers |= GpuTaskQueueAssignmentModifier::TimingCalibration;
@@ -332,7 +328,7 @@ bool GpuTaskGraphCompiler::assignQueues(
                 schedulingReachability,
                 scoringData,
                 task,
-                *incumbent,
+                incumbent,
                 key,
                 *options.timingHistory,
                 options.timingFeedbackPolicy,
@@ -341,8 +337,8 @@ bool GpuTaskGraphCompiler::assignQueues(
                 selectedQueue = timingQueue;
                 assignment.modifiers |= GpuTaskQueueAssignmentModifier::TimingFeedback;
             }
-            else if(incumbent != staticQueue){
-                selectedQueue = incumbent;
+            else if(&incumbent != &staticQueue){
+                selectedQueue = &incumbent;
                 assignment.modifiers |= GpuTaskQueueAssignmentModifier::TimingFeedback;
             }
             scoringData.updateAssignmentLoads(assignment.task, assignment.queue, selectedQueue->id);
@@ -355,9 +351,8 @@ bool GpuTaskGraphCompiler::assignQueues(
     scoringData.rebuildAssignmentLoads(outAssignments.m_assignments, topology);
     for(GpuTaskQueueAssignment& assignment : outAssignments.m_assignments){
         const GpuTaskGraphTaskView task = graph.taskAt(assignment.task.index);
-        const GpuPhysicalQueueInfo* const selectedQueue = FindPhysicalQueueInfo(topology, assignment.queue);
-        NWB_ASSERT(selectedQueue);
-        assignment.score = BuildQueueAssignmentScore(graph, analysis, outAssignments.m_assignments, outAssignments.m_assignmentIndicesByTask, topology, schedulingReachability, scoringData, task, *selectedQueue);
+        auto& selectedQueue = *MakeNotNull(FindPhysicalQueueInfo(topology, assignment.queue));
+        assignment.score = BuildQueueAssignmentScore(graph, analysis, outAssignments.m_assignments, outAssignments.m_assignmentIndicesByTask, topology, schedulingReachability, scoringData, task, selectedQueue);
     }
     outAssignments.m_diagnostic.status = GpuTaskGraphQueueAssignmentStatus::Success;
     outAssignments.m_valid = true;

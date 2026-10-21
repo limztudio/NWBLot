@@ -248,10 +248,11 @@ bool Device::bindBufferMemory(Buffer& buffer, Heap& heap, u64 offset){
     if(!bindingRange)
         return false;
 
-    Heap::BindingReservation reservation;
-    reservation.owner = &buffer;
-    reservation.resourceClass = VulkanDetail::HeapBindingResourceClass::Buffer;
-    reservation.range = *bindingRange;
+    const Heap::BindingReservation reservation{
+        .owner = MakeNotNull<const void*>(&buffer),
+        .range = *bindingRange,
+        .resourceClass = VulkanDetail::HeapBindingResourceClass::Buffer,
+    };
     memoryHeap.m_bindingReservations.push_back(reservation);
 
     const VkResult res = m_allocator.bindHeapBufferMemory(buffer, memoryHeap, offset);

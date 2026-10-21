@@ -458,7 +458,7 @@ bool GpuDescriptorHeap::writeDescriptorBuffer(const DescriptorWriteItem& writeIt
         DescriptorBufferSegment& retainedBlock = m_accelStructBufferBlocks[writeItem.arrayElement];
         DescriptorBufferSegment candidateBlock{};
         const bool allocateBlock = !retainedBlock.valid();
-        DescriptorBufferSegment* block = &retainedBlock;
+        auto block = MakeNotNull(&retainedBlock);
         if(allocateBlock){
             const Expected<DescriptorBufferSegment> allocatedBlock = m_context.descriptorBufferManager->allocateForBindingGeneration(m_accelStructLayout->getDescriptorBufferSegmentKind(), setSizeBytes, m_context.descriptorBufferManager->getOffsetAlignmentBytes(), m_descriptorBufferGeneration);
             if(!allocatedBlock){

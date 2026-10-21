@@ -3,6 +3,7 @@
 
 
 #include <global/floating_point_environment.h>
+#include <global/not_null.h>
 #include <global/simdmath.h>
 #include <global/scope_exit.h>
 
@@ -44,7 +45,7 @@ NWB_NOINLINE SIMDVectorSingle CurrentPower(const SIMDVectorSingle x, const SIMDV
     return VectorPow(x, y);
 }
 
-[[nodiscard]] Expected<PowerObservation> ObservePower(const PowerEvaluate evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y, const i32 initialFlags, const u64 initialNativeFlags)noexcept{
+[[nodiscard]] Expected<PowerObservation> ObservePower(const NotNull<PowerEvaluate> evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y, const i32 initialFlags, const u64 initialNativeFlags)noexcept{
 #pragma STDC FENV_ACCESS ON
 #if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
     const u64 clearNativeStatus = 0u;
@@ -64,7 +65,7 @@ NWB_NOINLINE SIMDVectorSingle CurrentPower(const SIMDVectorSingle x, const SIMDV
     __asm__ __volatile__("msr fpsr, %0" : : "r"(seededNativeStatus));
 #endif
     errno = E2BIG;
-    const SIMDVectorSingle value = evaluate(x, y);
+    const SIMDVectorSingle value = evaluate.get()(x, y);
     const i32 error = errno;
     const i32 flags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
     u32 nativeStatus = 0u;
@@ -135,7 +136,7 @@ TEST(Math, VectorPowerPreservesMixedSpecialsAndAdjacentSrgbRoundingWithSeededSta
                 for(const i32 seed : s_InitialFlags){
                     for(usize index = 0u; index < LengthOf(s_Cases); ++index){
                         const SIMDVectorSingle x = BitCast<SIMDVectorSingle>(s_Cases[index].x), y = BitCast<SIMDVectorSingle>(s_Cases[index].y);
-                        const auto expected = ObservePower(FrozenPower, x, y, seed, nativeSeed), actual = ObservePower(CurrentPower, x, y, seed, nativeSeed);
+                        const auto expected = ObservePower(MakeNotNull<PowerEvaluate>(FrozenPower), x, y, seed, nativeSeed), actual = ObservePower(MakeNotNull<PowerEvaluate>(CurrentPower), x, y, seed, nativeSeed);
                         ASSERT_TRUE(expected);
                         ASSERT_TRUE(actual);
                         EXPECT_EQ(actual->flags, expected->flags) << denormalMode << ':' << mode << ':' << seed << ':' << index;
@@ -182,7 +183,7 @@ TEST(Math, VectorPowerKeepsDenormalInputStatusWithInvalidTrapEnabled){
             ASSERT_TRUE(SetFloatingPointRoundingMode(mode));
             for(const u64 nativeSeed : s_NativeSeeds){
                 for(const i32 seed : s_InitialFlags){
-                    const auto expected = ObservePower(FrozenPower, x, y, seed, nativeSeed), actual = ObservePower(CurrentPower, x, y, seed, nativeSeed);
+                    const auto expected = ObservePower(MakeNotNull<PowerEvaluate>(FrozenPower), x, y, seed, nativeSeed), actual = ObservePower(MakeNotNull<PowerEvaluate>(CurrentPower), x, y, seed, nativeSeed);
                     ASSERT_TRUE(expected);
                     ASSERT_TRUE(actual);
                     EXPECT_EQ(actual->flags, expected->flags) << denormalMode << ':' << mode << ':' << seed;

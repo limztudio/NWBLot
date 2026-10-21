@@ -1131,7 +1131,7 @@ private:
     GpuTaskId m_normalExecutionPrelude;
     GraphicsVector<GpuExternalCompletionId> m_externalDependencies;
     GraphicsVector<GpuTaskExternalStateSource> m_externalStateSources;
-    GraphicsVector<CommandListResourceStateHandoff*> m_externalStateSnapshots;
+    GraphicsVector<NotNull<CommandListResourceStateHandoff*>> m_externalStateSnapshots;
     GraphicsVector<GpuTaskResourceUse> m_resourceUses;
     GraphicsVector<GpuTaskResourceVersionUse> m_resourceVersionUses;
     GraphicsVector<GpuGraphResourceNode> m_resources;
@@ -1140,7 +1140,7 @@ private:
     Optional<ResourcePointerIndex> m_resourcePointerIndex;
     GraphicsVector<GpuGraphResourceVersionNode> m_resourceVersions;
     GraphicsVector<GpuTaskGraphInitialOwnerHandoffSourceView> m_initialOwnerHandoffSources;
-    GraphicsVector<CommandListResourceStateHandoff*> m_initialOwnerHandoffStateSnapshots;
+    GraphicsVector<NotNull<CommandListResourceStateHandoff*>> m_initialOwnerHandoffStateSnapshots;
     GraphicsVector<u32> m_queueFamilyIndices;
     GraphicsVector<GpuGraphResourceSetNode> m_resourceSets;
     Optional<ImportIdentityIndex> m_resourceSetIdentityIndex;

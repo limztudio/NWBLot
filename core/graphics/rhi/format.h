@@ -189,7 +189,7 @@ struct FormatInfo{
     static constexpr usize s_ByteSize = 16u;
 
     // Literal backing and a bounded length preserve the compact format metadata layout.
-    const char* m_name;
+    NotNull<const char*> m_name;
     Format::Enum format;
     u8 bytesPerBlock;
     u8 blockSize;
@@ -242,7 +242,7 @@ public:
 
 
 public:
-    [[nodiscard]] constexpr AStringView getName()const noexcept{ return AStringView(m_name, m_nameLength); }
+    [[nodiscard]] constexpr AStringView getName()const noexcept{ return AStringView(m_name.get(), m_nameLength); }
 };
 static_assert(sizeof(FormatInfo) == FormatInfo::s_ByteSize, "FormatInfo should remain tightly packed");
 static_assert(alignof(FormatInfo) == alignof(void*), "FormatInfo should retain pointer alignment");

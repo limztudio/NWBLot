@@ -38,22 +38,14 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(Core::GpuTaskGraph& graph, Re
 [[nodiscard]] Expected<PrefixSceneUploadResult> PrefixSceneUploadBuilder::declare(const PrefixSceneUploadInputs& inputs){
     PrefixSceneUploadResult result{};
     if(
-        !inputs.meshViewState
-        || !inputs.meshView.valid()
+        !inputs.meshView.valid()
         || !inputs.lights.valid()
         || !inputs.sceneShading.valid()
         || !inputs.shadowPrepareTask.valid()
-        || !inputs.asyncPrefixTiming
-        || !inputs.meshViewSetupTimingTicket
-        || !inputs.sceneShadingSetupTimingTicket
-        || !inputs.asyncPrefixTimingSpansOnePacket
-        || !inputs.shadowVisibilityTask
-        || !inputs.meshViewSetupReady
-        || !inputs.sceneShadingSetupReady
     )
         return MakeUnexpected(Failure{});
 
-    const ECSRenderDetail::MeshViewGpuData& meshViewState = *inputs.meshViewState;
+    const ECSRenderDetail::MeshViewGpuData& meshViewState = inputs.meshViewState;
     const bool meshViewUploadRequired = inputs.meshViewUploadRequired;
 
     const SceneShadingBufferUploads uploads = m_deferredSystem.prepareSceneShadingBufferUploads(inputs.meshViewAspectRatio, inputs.rayTracingLightingInput);
@@ -75,10 +67,10 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(Core::GpuTaskGraph& graph, Re
         meshViewSetupDesc,
         ECSRenderDetail::MeshViewSetupGraphTask::Payload{
             .graphics = m_graphics,
-            .asyncPrefixTiming = *inputs.asyncPrefixTiming,
-            .timingTicket = *inputs.meshViewSetupTimingTicket,
-            .asyncPrefixTimingSpansOnePacket = *inputs.asyncPrefixTimingSpansOnePacket,
-            .shadowVisibilityTask = inputs.shadowVisibilityTask,
+            .asyncPrefixTiming = inputs.asyncPrefixTiming,
+            .timingTicket = inputs.meshViewSetupTimingTicket,
+            .asyncPrefixTimingSpansOnePacket = inputs.asyncPrefixTimingSpansOnePacket,
+            .shadowVisibilityTask = &inputs.shadowVisibilityTask,
         }
     );
     if(!resultMeshViewSetupTaskResult){
@@ -122,7 +114,7 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(Core::GpuTaskGraph& graph, Re
     meshViewCommitDesc.setIdentity(Name("render.graphics_prefix.mesh_view_upload_commit")).setMarkerLabel("Mesh View Upload Commit").setScheduling(meshViewCommitScheduling).setDependencies(&meshViewUploadTask, 1u);
     const auto meshViewCommitTaskResult = m_graph.addTask<ECSRenderDetail::MeshViewUploadCommitGraphTask>(
         meshViewCommitDesc,
-        ECSRenderDetail::MeshViewUploadCommitGraphTask::Payload{ .meshSystem = m_meshSystem, .viewState = meshViewState, .uploadRequired = meshViewUploadRequired, .ready = *inputs.meshViewSetupReady, }
+        ECSRenderDetail::MeshViewUploadCommitGraphTask::Payload{ .meshSystem = m_meshSystem, .viewState = meshViewState, .uploadRequired = meshViewUploadRequired, .ready = inputs.meshViewSetupReady, }
     );
     if(!meshViewCommitTaskResult)
         return MakeUnexpected(Failure{});
@@ -182,7 +174,7 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(Core::GpuTaskGraph& graph, Re
     sceneShadingSetupScheduling.mergeWithPrevious = true;
     Core::GpuTaskDesc sceneShadingSetupDesc;
     sceneShadingSetupDesc.setIdentity(Name("render.graphics_prefix.scene_shading_setup")).setMarkerLabel("Scene Shading Setup").setScheduling(sceneShadingSetupScheduling).setDependencies(&sceneUploadTask, 1u);
-    ECSRenderDetail::SceneShadingSetupGraphTask::Payload sceneShadingSetupPayload{ .deferredSystem = m_deferredSystem, .timingTicket = *inputs.sceneShadingSetupTimingTicket, .ready = *inputs.sceneShadingSetupReady, .sceneShadingState = sceneShadingState, };
+    ECSRenderDetail::SceneShadingSetupGraphTask::Payload sceneShadingSetupPayload{ .deferredSystem = m_deferredSystem, .timingTicket = inputs.sceneShadingSetupTimingTicket, .ready = inputs.sceneShadingSetupReady, .sceneShadingState = sceneShadingState, };
     NWB_SIMD_MEMCPY(sceneShadingSetupPayload.lightData, sizeof(sceneShadingSetupPayload.lightData), sceneLightData, sizeof(sceneLightData));
     sceneShadingSetupPayload.lightCount = sceneLightCount;
     sceneShadingSetupPayload.lightUploadRequired = sceneLightUploadRequired;

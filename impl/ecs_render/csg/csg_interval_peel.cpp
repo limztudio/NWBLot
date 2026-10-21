@@ -70,16 +70,16 @@ static void DispatchCsgIntervalCompute(
     Core::GpuDescriptorHeap& heap,
     DeferredFrameTargets& targets,
     const CsgFrameGpuData& csgFrameData,
-    Core::ComputePipeline* pipeline,
+    Core::ComputePipeline& pipeline,
     const u32 csgContextHeapSlot,
     const u32 meshViewHeapSlot = 0u
 ){
     Core::ComputeState computeState;
-    computeState.setPipeline(pipeline);
+    computeState.setPipeline(&pipeline);
     // Push-only layout; the rest is heap-selected.
     commandList.setComputeState(computeState);
     // Bind after setComputeState so the StorageImage table resolves.
-    heap.bindCompute(commandList, *pipeline);
+    heap.bindCompute(commandList, pipeline);
 
     const CsgIntervalDispatchPushConstants pushConstants = BuildCsgIntervalDispatchPushConstants(targets, csgFrameData, meshViewHeapSlot, csgContextHeapSlot);
     if(pushConstants.workExtentX == 0u || pushConstants.workExtentY == 0u)
@@ -118,7 +118,7 @@ void RendererCsgSystem::dispatchCsgIntervalPeels(
         m_graphics.getDevice().getDescriptorHeap(),
         targets,
         csgFrameData,
-        m_csgState.m_intervalPeelPipeline.get(),
+        *m_csgState.m_intervalPeelPipeline,
         csgResources.clipContextSlotsHeapHandle.slot(),
         frameBindings.meshView.heapHandle.slot()
     );
@@ -133,7 +133,7 @@ void RendererCsgSystem::dispatchCsgReceiverSpanBuild(Core::CommandList& commandL
     Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_CsgReceiverSpanBuild, m_graphics.getDevice(), commandList);
 
     commandList.endRenderPass();
-    CsgIntervalDetail::DispatchCsgIntervalCompute(commandList, m_graphics.getDevice().getDescriptorHeap(), targets, csgFrameData, m_csgState.m_receiverSpanBuildPipeline.get(), csgResources.clipContextSlotsHeapHandle.slot());
+    CsgIntervalDetail::DispatchCsgIntervalCompute(commandList, m_graphics.getDevice().getDescriptorHeap(), targets, csgFrameData, *m_csgState.m_receiverSpanBuildPipeline, csgResources.clipContextSlotsHeapHandle.slot());
 }
 
 void RendererCsgSystem::dispatchCsgIntervalCombine(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources){
@@ -145,7 +145,7 @@ void RendererCsgSystem::dispatchCsgIntervalCombine(Core::CommandList& commandLis
     Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_CsgIntervalCombine, m_graphics.getDevice(), commandList);
 
     commandList.endRenderPass();
-    CsgIntervalDetail::DispatchCsgIntervalCompute(commandList, m_graphics.getDevice().getDescriptorHeap(), targets, csgFrameData, m_csgState.m_intervalCombinePipeline.get(), csgResources.clipContextSlotsHeapHandle.slot());
+    CsgIntervalDetail::DispatchCsgIntervalCompute(commandList, m_graphics.getDevice().getDescriptorHeap(), targets, csgFrameData, *m_csgState.m_intervalCombinePipeline, csgResources.clipContextSlotsHeapHandle.slot());
 }
 
 void RendererCsgSystem::renderCsgIntervalCaps(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources){

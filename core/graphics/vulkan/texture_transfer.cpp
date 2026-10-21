@@ -254,14 +254,13 @@ bool CommandList::tryWriteTexture(Texture& dest, u32 arraySlice, u32 mipLevel, c
         rejectCommandRecording(s_OperationName, s_StagingAllocationFailedReason);
         return false;
     }
-    Buffer* const stagingBuffer = staging->buffer;
+    Buffer& stagingBuffer = *staging->buffer;
     const u64 stagingOffset = staging->offset;
     if(
-        !stagingBuffer
-        || (stagingOffset % *uploadAlignment) != 0u
+        (stagingOffset % *uploadAlignment) != 0u
         || (stagingOffset % uploadAlignmentRequirement) != 0u
-        || stagingOffset > stagingBuffer->m_creationDesc.byteSize
-        || static_cast<u64>(uploadSize) > stagingBuffer->m_creationDesc.byteSize - stagingOffset
+        || stagingOffset > stagingBuffer.m_creationDesc.byteSize
+        || static_cast<u64>(uploadSize) > stagingBuffer.m_creationDesc.byteSize - stagingOffset
     ){
         rejectCommandRecording(s_OperationName, NWB_TEXT("staging allocation returned an invalid offset or range"));
         return false;
@@ -279,10 +278,10 @@ bool CommandList::tryWriteTexture(Texture& dest, u32 arraySlice, u32 mipLevel, c
     region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(copyAspectMask, mipLevel, arraySlice);
     region.imageExtent = mipExtent;
 
-    m_context.deviceDispatch.vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, dest.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    m_context.deviceDispatch.vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer.m_buffer, dest.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
     retainResource(&dest);
-    retainStagingBuffer(*stagingBuffer);
+    retainStagingBuffer(stagingBuffer);
     return true;
 }
 

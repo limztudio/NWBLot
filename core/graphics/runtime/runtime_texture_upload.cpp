@@ -235,7 +235,7 @@ bool GraphicsRuntime::uploadTextureBatch(const TextureUploadBatchDesc& desc)cons
         textureDesc.queueSharing,
         consumerQueue,
         &submissionData,
-        &__hidden_graphics_texture_upload::DeclareTextureUploadBatch,
+        MakeNotNull(&__hidden_graphics_texture_upload::DeclareTextureUploadBatch),
         uploadToken,
         sameClassRouting.enabled ? sameClassRouting.primaryQueue : GpuPhysicalQueueId{}
     );

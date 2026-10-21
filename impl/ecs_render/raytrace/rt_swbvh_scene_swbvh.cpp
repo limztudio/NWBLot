@@ -66,7 +66,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     preparedMeshes.reserve(candidateCount);
     shadowConstantTypedRanges.reserve(candidateCount);
     shadowMutableTypedRanges.reserve(candidateCount);
-    MeshBufferSlotLookup meshSlotLookup(0, Hasher<const Core::Buffer*>(), EqualTo<const Core::Buffer*>(), scratchArena);
+    MeshBufferSlotLookup meshSlotLookup(0, Hasher<NotNull<Core::Buffer*>>(), EqualTo<NotNull<Core::Buffer*>>(), scratchArena);
     meshSlotLookup.reserve(candidateCount);
 
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
@@ -121,7 +121,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
             staticScene = false;
 
         // Reuse one table slot for instances sharing geometry.
-        Core::Buffer* meshNodeBuffer = meshResult->meshResources.swBvhNodeBuffer.get();
+        const NotNull<Core::Buffer*> meshNodeBuffer(meshResult->meshResources.swBvhNodeBuffer.get());
         u32 meshSlot = 0u;
         const auto foundMeshSlot = meshSlotLookup.find(meshNodeBuffer);
         if(foundMeshSlot != meshSlotLookup.end())
@@ -170,9 +170,9 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
 
             meshSlot = m_rayTracingState.m_swShadowMeshCount;
             m_rayTracingState.m_swShadowMeshNodeBuffers.push_back(meshNodeBuffer);
-            m_rayTracingState.m_swShadowMeshPositionBuffers.push_back(meshResult->meshResources.positionBuffer.get());
-            m_rayTracingState.m_swShadowMeshIndexBuffers.push_back(meshResult->meshResources.triangleIndexBuffer.get());
-            m_rayTracingState.m_swShadowMeshAttributeBuffers.push_back(meshResult->meshResources.attributeBuffer.get());
+            m_rayTracingState.m_swShadowMeshPositionBuffers.push_back(MakeNotNull(meshResult->meshResources.positionBuffer.get()));
+            m_rayTracingState.m_swShadowMeshIndexBuffers.push_back(MakeNotNull(meshResult->meshResources.triangleIndexBuffer.get()));
+            m_rayTracingState.m_swShadowMeshAttributeBuffers.push_back(MakeNotNull(meshResult->meshResources.attributeBuffer.get()));
             m_rayTracingState.m_swShadowMeshNodeHandles.push_back(nodeHandle);
             m_rayTracingState.m_swShadowMeshPositionHandles.push_back(positionHandle);
             m_rayTracingState.m_swShadowMeshIndexHandles.push_back(indexHandle);
@@ -212,7 +212,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
         InstanceGpuData shadowInstance;
         MaterialSurfaceInfo* materialInfo = nullptr;
         if(const auto materialInfoResult = m_materialSystem.findMaterialSurfaceInfo(renderer.material); materialInfoResult){
-            materialInfo = *materialInfoResult;
+            materialInfo = materialInfoResult->get();
             // Software shadow, caustic, and surfel traversal evaluate the same material surface dispatcher as the hardware path. Freeze its sampled textures alongside the scene-BVH material context.
             if(materialInfo->surfaceDispatchId != Limit<u32>::s_Max && !appendPreparedShadowTraceMaterialSampledTextures(*materialInfo, sampledTextureCollector))
                 return false;
@@ -384,7 +384,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
         instanceLeafCost.reserve(instanceCount);
         for(u32 i = 0u; i < instanceCount; ++i)
             instanceLeafCost.push_back(instances[i].primitiveCount);
-        RayTracingDetail::BuildSceneBvhNode(indices.data(), 0u, instanceCount, instanceBvhPrimitives.data(), buildNodes, NotNull<const u32*>(instanceLeafCost.data()));
+        RayTracingDetail::BuildSceneBvhNode(MakeNotNull(indices.data()), 0u, instanceCount, MakeNotNull(static_cast<const SceneBvhPrimitiveCalculation*>(instanceBvhPrimitives.data())), buildNodes, NotNull<const u32*>(instanceLeafCost.data()));
         NWB_ASSERT(buildNodes.size() == requiredNodeCount);
 
         Vector<NwbBvhNodeGpu, Core::Alloc::ScratchArena> nodes{ scratchArena };

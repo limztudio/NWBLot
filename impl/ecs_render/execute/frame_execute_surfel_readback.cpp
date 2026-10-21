@@ -16,7 +16,7 @@ NWB_IMPL_BEGIN
 
 [[nodiscard]] bool FrameExecuteSurfelReadback::PrepareReadbackFinalState(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
     FrameExecuteSurfelReadback::Context* const context = static_cast<Context*>(rawContext);
-    if(!context || !context->renderer || !context->candidate || !context->buffers)
+    if(!context || !context->buffers)
         return false;
     context->finalStateReady = finalState && context->renderer->m_surfelGiCounterPersistentState.buildFilteredBufferSubset(*context->candidate, *finalState, context->buffers, context->bufferCount, context->scratchArena);
     return context->finalStateReady;
@@ -26,7 +26,7 @@ NWB_IMPL_BEGIN
 [[nodiscard]] bool FrameExecuteSurfelReadback::AcceptReadbackFinalState(void* const rawContext, const Core::QueueSubmissionToken& token)noexcept{
     static_cast<void>(token);
     FrameExecuteSurfelReadback::Context* const context = static_cast<Context*>(rawContext);
-    if(!context || !context->renderer || !context->candidate || !context->finalStateReady)
+    if(!context || !context->finalStateReady)
         return false;
     context->acceptedStateReady = context->renderer->m_surfelGiCounterPersistentState.commit(*context->candidate);
     if(context->acceptedStateReady)

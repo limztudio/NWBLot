@@ -180,9 +180,9 @@ private:
 };
 
 [[nodiscard]] static Expected<bool, ErrorCode> CheckOutputs(const OutputPaths& paths, const bool overwrite)noexcept{
-    const ScratchPath* files[] = { &paths.metadata, &paths.font };
+    const NotNull<const ScratchPath*> files[] = { MakeNotNull(&paths.metadata), MakeNotNull(&paths.font) };
     u32 presentCount = 0u;
-    for(const ScratchPath* file : files){
+    for(const auto file : files){
         const auto exists = FileExistsNoFollow(*file);
         if(!exists)
             return MakeUnexpected(exists.error());
@@ -201,8 +201,8 @@ private:
 }
 
 [[nodiscard]] static Expected<void, ErrorCode> CheckWorkPaths(const OutputPaths& paths)noexcept{
-    const ScratchPath* files[] = { &paths.metadataTemporary, &paths.fontTemporary, &paths.metadataBackup, &paths.fontBackup, };
-    for(const ScratchPath* file : files){
+    const NotNull<const ScratchPath*> files[] = { MakeNotNull(&paths.metadataTemporary), MakeNotNull(&paths.fontTemporary), MakeNotNull(&paths.metadataBackup), MakeNotNull(&paths.fontBackup), };
+    for(const auto file : files){
         const auto exists = FileExistsNoFollow(*file);
         if(!exists)
             return MakeUnexpected(exists.error());
@@ -216,10 +216,10 @@ private:
     const auto present = CheckOutputs(paths, overwrite);
     if(!present)
         return MakeUnexpected(present.error());
-    const ScratchPath* outputs[] = { &paths.font, &paths.metadata };
-    const ScratchPath* backups[] = { &paths.fontBackup, &paths.metadataBackup };
-    const ScratchPath* temporaries[] = { &paths.fontTemporary, &paths.metadataTemporary };
-    TemporaryFile* staged[] = { &font, &metadata };
+    const NotNull<const ScratchPath*> outputs[] = { MakeNotNull(&paths.font), MakeNotNull(&paths.metadata) };
+    const NotNull<const ScratchPath*> backups[] = { MakeNotNull(&paths.fontBackup), MakeNotNull(&paths.metadataBackup) };
+    const NotNull<const ScratchPath*> temporaries[] = { MakeNotNull(&paths.fontTemporary), MakeNotNull(&paths.metadataTemporary) };
+    const NotNull<TemporaryFile*> staged[] = { MakeNotNull(&font), MakeNotNull(&metadata) };
     ErrorCode removalErrors[s_OutputFileCount];
     ErrorCode restorationErrors[s_OutputFileCount];
     u32 backedUp = 0u;
@@ -327,18 +327,18 @@ bool WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payl
 
     __hidden_font_builder_writer::TemporaryFile stagedFont(paths.fontTemporary);
     __hidden_font_builder_writer::TemporaryFile stagedMetadata(paths.metadataTemporary);
-    const u8* metadataBytes = reinterpret_cast<const u8*>(metadata.data());
+    const auto metadataBytes = MakeNotNull(reinterpret_cast<const u8*>(metadata.data()));
     const auto fontStaged = stagedFont.stage(fontBinary->data(), fontBinary->size());
     if(!fontStaged){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: failed to stage font temporary: {}"), StringConvert(fontStaged.error().message()));
         return false;
     }
-    const auto metadataStaged = stagedMetadata.stage(metadataBytes, metadata.size());
+    const auto metadataStaged = stagedMetadata.stage(metadataBytes.get(), metadata.size());
     if(!metadataStaged){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: failed to stage metadata temporary: {}"), StringConvert(metadataStaged.error().message()));
         return false;
     }
-    if(!stagedFont.verify(fontBinary->data(), fontBinary->size()) || !stagedMetadata.verify(metadataBytes, metadata.size())){
+    if(!stagedFont.verify(fontBinary->data(), fontBinary->size()) || !stagedMetadata.verify(metadataBytes.get(), metadata.size())){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: staging or verification failed; previous pair remains in place"));
         return false;
     }

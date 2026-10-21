@@ -99,11 +99,11 @@ static constexpr usize s_HeadUnitsPerEmEnd = 20u;
     return binary;
 }
 
-static void WriteBigU32(u8* bytes, const u32 value)noexcept{
-    bytes[0u] = static_cast<u8>(value >> 24u);
-    bytes[1u] = static_cast<u8>(value >> 16u);
-    bytes[2u] = static_cast<u8>(value >> 8u);
-    bytes[3u] = static_cast<u8>(value);
+static void WriteBigU32(const NotNull<u8*> bytes, const u32 value)noexcept{
+    bytes.get()[0u] = static_cast<u8>(value >> 24u);
+    bytes.get()[1u] = static_cast<u8>(value >> 16u);
+    bytes.get()[2u] = static_cast<u8>(value >> 8u);
+    bytes.get()[3u] = static_cast<u8>(value);
 }
 
 [[nodiscard]] static usize FindTableRecord(const Core::Assets::AssetBytes& bytes, const u32 tag)noexcept{
@@ -122,7 +122,7 @@ static void WriteBigU32(u8* bytes, const u32 value)noexcept{
 
 TEST(AssetsFont, SfntDirectoryRejectsTruncatedRecordsAndUnsupportedTableCounts){
     u8 bytes[s_OneTableDirectoryBytes] = {};
-    WriteBigU32(bytes, s_TrueTypeSignature);
+    WriteBigU32(MakeNotNull(bytes), s_TrueTypeSignature);
     bytes[s_SfntTableCountLowByte] = 1u;
     for(usize size = 0u; size < sizeof(bytes); ++size)
         EXPECT_FALSE(FontSfntDirectory::Read({ bytes, size })) << size;
@@ -146,15 +146,15 @@ TEST(AssetsFont, SfntTableViewsCheckBoundsWithoutCopyingOrScanningOtherRecords){
     constexpr u32 s_TableDataOffset = 44u;
     constexpr u32 s_TableDataBytes = 4u;
     u8 bytes[s_TableDataOffset + s_TableDataBytes] = {};
-    WriteBigU32(bytes, s_TrueTypeSignature);
+    WriteBigU32(MakeNotNull(bytes), s_TrueTypeSignature);
     bytes[s_SfntTableCountLowByte] = 2u;
-    WriteBigU32(bytes + s_FontSfntHeaderBytes, s_FontSfntHeadTag);
-    WriteBigU32(bytes + s_FirstRecordOffsetField, s_TableDataOffset);
-    WriteBigU32(bytes + s_FirstRecordLengthField, s_TableDataBytes);
-    WriteBigU32(bytes + s_SecondRecordTagOffset, s_FontSfntMaxpTag);
-    WriteBigU32(bytes + s_SecondRecordOffsetField, Limit<u32>::s_Max);
-    WriteBigU32(bytes + s_SecondRecordLengthField, 2u);
-    WriteBigU32(bytes + s_TableDataOffset, 0x12345678u);
+    WriteBigU32(MakeNotNull(bytes + s_FontSfntHeaderBytes), s_FontSfntHeadTag);
+    WriteBigU32(MakeNotNull(bytes + s_FirstRecordOffsetField), s_TableDataOffset);
+    WriteBigU32(MakeNotNull(bytes + s_FirstRecordLengthField), s_TableDataBytes);
+    WriteBigU32(MakeNotNull(bytes + s_SecondRecordTagOffset), s_FontSfntMaxpTag);
+    WriteBigU32(MakeNotNull(bytes + s_SecondRecordOffsetField), Limit<u32>::s_Max);
+    WriteBigU32(MakeNotNull(bytes + s_SecondRecordLengthField), 2u);
+    WriteBigU32(MakeNotNull(bytes + s_TableDataOffset), 0x12345678u);
     const auto directoryResult = FontSfntDirectory::Read({ bytes, sizeof(bytes) });
     ASSERT_TRUE(directoryResult);
     const FontSfntDirectory& directory = *directoryResult;
@@ -182,25 +182,25 @@ TEST(AssetsFont, SfntTableViewsCheckBoundsWithoutCopyingOrScanningOtherRecords){
 
 TEST(AssetsFont, SfntTableBoundsHandleOverflowAndEmptyEndSpansWithoutAddingFontPolicy){
     u8 bytes[32u] = {};
-    WriteBigU32(bytes, s_CollectionSignature); // Signature admission remains with Font validation.
+    WriteBigU32(MakeNotNull(bytes), s_CollectionSignature); // Signature admission remains with Font validation.
     bytes[s_SfntTableCountLowByte] = 1u;
-    WriteBigU32(bytes + s_FontSfntHeaderBytes, s_FontSfntHeadTag);
-    WriteBigU32(bytes + s_FirstRecordOffsetField, s_OneTableDirectoryBytes);
-    WriteBigU32(bytes + s_FirstRecordLengthField, Limit<u32>::s_Max);
+    WriteBigU32(MakeNotNull(bytes + s_FontSfntHeaderBytes), s_FontSfntHeadTag);
+    WriteBigU32(MakeNotNull(bytes + s_FirstRecordOffsetField), s_OneTableDirectoryBytes);
+    WriteBigU32(MakeNotNull(bytes + s_FirstRecordLengthField), Limit<u32>::s_Max);
     {
         const auto directoryResult = FontSfntDirectory::Read({ bytes, sizeof(bytes) });
         ASSERT_TRUE(directoryResult);
         EXPECT_EQ(directoryResult->signature(), s_CollectionSignature);
         EXPECT_FALSE(directoryResult->table(0u));
     }
-    WriteBigU32(bytes + s_FirstRecordLengthField, 5u);
+    WriteBigU32(MakeNotNull(bytes + s_FirstRecordLengthField), 5u);
     {
         const auto directoryResult = FontSfntDirectory::Read({ bytes, sizeof(bytes) });
         ASSERT_TRUE(directoryResult);
         EXPECT_FALSE(directoryResult->table(0u));
     }
-    WriteBigU32(bytes + s_FirstRecordOffsetField, sizeof(bytes));
-    WriteBigU32(bytes + s_FirstRecordLengthField, 0u);
+    WriteBigU32(MakeNotNull(bytes + s_FirstRecordOffsetField), sizeof(bytes));
+    WriteBigU32(MakeNotNull(bytes + s_FirstRecordLengthField), 0u);
     {
         const auto directoryResult = FontSfntDirectory::Read({ bytes, sizeof(bytes) });
         ASSERT_TRUE(directoryResult);
@@ -209,8 +209,8 @@ TEST(AssetsFont, SfntTableBoundsHandleOverflowAndEmptyEndSpansWithoutAddingFontP
         EXPECT_TRUE(emptyTableResult->bytes.empty());
         EXPECT_EQ(emptyTableResult->bytes.data(), bytes + sizeof(bytes));
     }
-    WriteBigU32(bytes + s_FirstRecordOffsetField, 0u); // Directory-overlap admission remains with Font validation.
-    WriteBigU32(bytes + s_FirstRecordLengthField, 4u);
+    WriteBigU32(MakeNotNull(bytes + s_FirstRecordOffsetField), 0u); // Directory-overlap admission remains with Font validation.
+    WriteBigU32(MakeNotNull(bytes + s_FirstRecordLengthField), 4u);
     {
         const auto directoryResult = FontSfntDirectory::Read({ bytes, sizeof(bytes) });
         ASSERT_TRUE(directoryResult);
@@ -318,13 +318,13 @@ TEST(AssetsFont, RejectsCollectionsCompressedFontsAndVariableTables){
     static constexpr u32 s_UnsupportedSignatures[] = { s_CollectionSignature, 0x774f4646u, 0x774f4632u, 0x74727565u };
     for(const u32 signature : s_UnsupportedSignatures){
         Core::Assets::AssetBytes bytes(font.fontBytes().begin(), font.fontBytes().end(), testArena.arena);
-        WriteBigU32(bytes.data(), signature);
+        WriteBigU32(MakeNotNull(bytes.data()), signature);
         EXPECT_FALSE(ValidateFontSource(bytes, 0u));
     }
     static constexpr u32 s_VariableTags[] = { 0x66766172u, 0x43464632u };
     for(const u32 tag : s_VariableTags){
         Core::Assets::AssetBytes bytes(font.fontBytes().begin(), font.fontBytes().end(), testArena.arena);
-        WriteBigU32(bytes.data() + s_FontSfntHeaderBytes, tag);
+        WriteBigU32(MakeNotNull(bytes.data() + s_FontSfntHeaderBytes), tag);
         EXPECT_FALSE(ValidateFontSource(bytes, 0u));
     }
     EXPECT_FALSE(ValidateFontSource(font.fontBytes(), 1u));
@@ -342,13 +342,13 @@ TEST(AssetsFont, RejectsMalformedDirectoriesAndNativeFaceMetrics){
         switch(variant){
         case 0u: bytes[s_SfntTableCountHighByte] = 0u; bytes[s_SfntTableCountLowByte] = 0u; break;
         case 1u: bytes[s_SfntTableCountHighByte] = 1u; bytes[s_SfntTableCountLowByte] = 1u; break;
-        case 2u: WriteBigU32(bytes.data() + s_FirstRecordOffsetField, Limit<u32>::s_Max); break;
-        case 3u: WriteBigU32(bytes.data() + s_FirstRecordLengthField, Limit<u32>::s_Max); break;
-        case 4u: WriteBigU32(bytes.data() + s_SecondRecordTagOffset, ReadU32BigEndian(NotNull<const u8*>(bytes.data() + s_FontSfntHeaderBytes))); break;
+        case 2u: WriteBigU32(MakeNotNull(bytes.data() + s_FirstRecordOffsetField), Limit<u32>::s_Max); break;
+        case 3u: WriteBigU32(MakeNotNull(bytes.data() + s_FirstRecordLengthField), Limit<u32>::s_Max); break;
+        case 4u: WriteBigU32(MakeNotNull(bytes.data() + s_SecondRecordTagOffset), ReadU32BigEndian(NotNull<const u8*>(bytes.data() + s_FontSfntHeaderBytes))); break;
         case 5u: {
             const usize head = FindTableRecord(bytes, s_FontSfntHeadTag);
             ASSERT_NE(head, 0u);
-            WriteBigU32(bytes.data() + head, 0x62616421u);
+            WriteBigU32(MakeNotNull(bytes.data() + head), 0x62616421u);
             break;
         }
         case 6u: {

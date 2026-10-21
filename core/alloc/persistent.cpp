@@ -346,8 +346,8 @@ void* PersistentArena::allocate(const usize align, usize size){
     const auto allocation = allocateLocked(align, size);
     if(!allocation)
         return nullptr;
-    const auto* const allocatedBlock = static_cast<__hidden_persistent::Block*>(allocation->block.get());
-    m_memoryStats.recordAllocation(static_cast<u64>(allocatedBlock->spanBytes));
+    const auto& allocatedBlock = *static_cast<__hidden_persistent::Block*>(allocation->block.get());
+    m_memoryStats.recordAllocation(static_cast<u64>(allocatedBlock.spanBytes));
     return allocation->pointer.get();
 }
 
@@ -412,10 +412,10 @@ void* PersistentArena::reallocate(void* const p, const usize align, usize size){
     if(!replacement)
         return nullptr;
 
-    auto* const replacementBlock = static_cast<__hidden_persistent::Block*>(replacement->block.get());
-    NWB_MEMCPY(replacement->pointer.get(), replacementBlock->requestedBytes, p, copyBytes);
+    auto& replacementBlock = *static_cast<__hidden_persistent::Block*>(replacement->block.get());
+    NWB_MEMCPY(replacement->pointer.get(), replacementBlock.requestedBytes, p, copyBytes);
     deallocateBlockLocked(MakeNotNull(static_cast<void*>(block)));
-    m_memoryStats.recordReallocation(oldSpanBytes, static_cast<u64>(replacementBlock->spanBytes));
+    m_memoryStats.recordReallocation(oldSpanBytes, static_cast<u64>(replacementBlock.spanBytes));
     return replacement->pointer.get();
 }
 
@@ -447,23 +447,23 @@ Expected<PersistentArena::Allocation> PersistentArena::allocateLocked(const usiz
     }
     if(!selection)
         return MakeUnexpected(Failure{});
-    auto* const selected = selection->block;
+    auto& selected = *selection->block;
     const auto& selectedLayout = selection->layout;
 
-    __hidden_persistent::RemoveFreeBlock(m_freeHead, *selected);
-    __hidden_persistent::SplitUsedBlock(m_freeHead, *selected, selectedLayout.spanBytes);
-    selected->requestedBytes = size;
-    void* const p = __hidden_persistent::BlockData(*selected).get() + selectedLayout.userOffset;
-    __hidden_persistent::StoreBlockForAllocation(MakeNotNull(p), *selected);
-    return Allocation{ .pointer = MakeNotNull(p), .block = MakeNotNull(static_cast<void*>(selected)) };
+    __hidden_persistent::RemoveFreeBlock(m_freeHead, selected);
+    __hidden_persistent::SplitUsedBlock(m_freeHead, selected, selectedLayout.spanBytes);
+    selected.requestedBytes = size;
+    const auto p = MakeNotNull(__hidden_persistent::BlockData(selected).get() + selectedLayout.userOffset);
+    __hidden_persistent::StoreBlockForAllocation(MakeNotNull(static_cast<void*>(p.get())), selected);
+    return Allocation{ .pointer = MakeNotNull(static_cast<void*>(p.get())), .block = MakeNotNull(static_cast<void*>(&selected)) };
 }
 
 void PersistentArena::deallocateBlockLocked(NotNull<void*> blockPointer)noexcept{
-    auto* const block = static_cast<__hidden_persistent::Block*>(blockPointer.get());
-    block->requestedBytes = 0u;
+    auto& block = *static_cast<__hidden_persistent::Block*>(blockPointer.get());
+    block.requestedBytes = 0u;
     // Keep exact blocks for reuse; coalesce only when a request needs it.
-    block->isFree = true;
-    __hidden_persistent::InsertFreeBlock(m_freeHead, *block);
+    block.isFree = true;
+    __hidden_persistent::InsertFreeBlock(m_freeHead, block);
 }
 
 

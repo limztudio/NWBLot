@@ -137,7 +137,7 @@ void World::removeEntityComponentType(EntityID entityId, ComponentTypeId typeId)
     if(index >= m_entityComponentHeads.size())
         return;
 
-    u32* nextNodeSlot = &m_entityComponentHeads[index];
+    auto nextNodeSlot = MakeNotNull(&m_entityComponentHeads[index]);
     while(*nextNodeSlot != s_InvalidEntityComponentNode){
         EntityComponentNode& node = m_entityComponentNodes[*nextNodeSlot];
         if(node.typeId == typeId){

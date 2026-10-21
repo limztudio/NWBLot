@@ -99,7 +99,7 @@ private:
     void resetPendingReadback();
     [[nodiscard]] bool stagingMatches(const Core::TextureDesc& description)const noexcept;
     [[nodiscard]] bool prepareReadback(const Core::TextureDesc& description);
-    [[nodiscard]] bool writeCapture(const u8* sourceBytes, usize sourceRowPitch, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] bool writeCapture(NotNull<const u8*> sourceBytes, usize sourceRowPitch, Core::Alloc::ScratchArena& scratchArena);
 
 
 private:

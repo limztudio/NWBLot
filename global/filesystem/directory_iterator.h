@@ -109,7 +109,7 @@ private:
         DIR* const directory = opendir(path.c_str());
         if(directory == nullptr)
             return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
-        ScopeExit close([&]()noexcept{ GlobalFilesystemDetail::CloseDirectory(directory, iterationError); });
+        ScopeExit close([&]()noexcept{ GlobalFilesystemDetail::CloseDirectory(MakeNotNull(directory), iterationError); });
         for(;;){
             errno = 0;
             dirent* const entry = readdir(directory);
@@ -122,7 +122,7 @@ private:
                 continue;
             this->m_entries.emplace_back(path / fileName);
         }
-        GlobalFilesystemDetail::CloseDirectory(directory, iterationError);
+        GlobalFilesystemDetail::CloseDirectory(MakeNotNull(directory), iterationError);
 #endif
         close.release();
         if(iterationError)

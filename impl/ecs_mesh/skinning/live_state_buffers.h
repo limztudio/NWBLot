@@ -30,7 +30,7 @@ struct MeshSkinningStateBufferResources{
 // One collection visits live bindings in world order; collector retains no state.
 class MeshSkinningStateBufferCollector final : NoCopy{
 private:
-    using BufferIndex = HashSet<Core::Buffer*, Core::Alloc::ScratchArena>;
+    using BufferIndex = HashSet<NotNull<Core::Buffer*>, Core::Alloc::ScratchArena>;
 
 
 private:

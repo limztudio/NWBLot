@@ -149,7 +149,7 @@ void InputDispatcher::mouseScrollUpdate(f64 xoffset, f64 yoffset){
 
 void InputDispatcher::queueOrApplyHandlerMutation(HandlerMutationType::Enum type, IInputEventHandler& handler){
     if(m_dispatchDepth > 0){
-        m_pendingHandlerMutations.push_back({ &handler, type });
+        m_pendingHandlerMutations.push_back({ MakeNotNull(&handler), type });
         if(type == HandlerMutationType::Remove)
             ++m_pendingHandlerRemovalCount;
         return;
@@ -157,22 +157,21 @@ void InputDispatcher::queueOrApplyHandlerMutation(HandlerMutationType::Enum type
 
     switch(type){
     case HandlerMutationType::AddFront:
-        m_handlers.remove(&handler);
-        m_handlers.push_front(&handler);
+        m_handlers.remove(MakeNotNull(&handler));
+        m_handlers.push_front(MakeNotNull(&handler));
         break;
     case HandlerMutationType::AddBack:
-        m_handlers.remove(&handler);
-        m_handlers.push_back(&handler);
+        m_handlers.remove(MakeNotNull(&handler));
+        m_handlers.push_back(MakeNotNull(&handler));
         break;
     case HandlerMutationType::Remove:
-        m_handlers.remove(&handler);
+        m_handlers.remove(MakeNotNull(&handler));
         break;
     }
 }
 
 void InputDispatcher::applyPendingHandlerMutations(){
     for(const HandlerMutation& mutation : m_pendingHandlerMutations){
-        NWB_ASSERT(mutation.handler);
         queueOrApplyHandlerMutation(mutation.type, *mutation.handler);
     }
     m_pendingHandlerMutations.clear();
@@ -181,7 +180,7 @@ void InputDispatcher::applyPendingHandlerMutations(){
 
 bool InputDispatcher::isHandlerPendingRemoval(const IInputEventHandler& handler)const noexcept{
     for(const HandlerMutation& mutation : m_pendingHandlerMutations){
-        if(mutation.handler == &handler && mutation.type == HandlerMutationType::Remove)
+        if(mutation.handler.get() == &handler && mutation.type == HandlerMutationType::Remove)
             return true;
     }
     return false;

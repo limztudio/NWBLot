@@ -46,8 +46,8 @@ private:
 
 
 private:
-    using RequestIndex = HashMap<Core::Buffer*, BufferRequest, Core::Alloc::ScratchArena>;
-    using ResourceIndex = HashMap<u32, BufferRequest*, Core::Alloc::ScratchArena>;
+    using RequestIndex = HashMap<NotNull<Core::Buffer*>, BufferRequest, Core::Alloc::ScratchArena>;
+    using ResourceIndex = HashMap<u32, NotNull<BufferRequest*>, Core::Alloc::ScratchArena>;
     using NameReference = NotNull<const NameHash*>;
 
 

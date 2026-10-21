@@ -70,9 +70,9 @@ namespace VectorScalarDetail{
 
 
 template<typename T>
-NWB_INLINE T* StridePointer(T* pointer, usize stride, usize index)noexcept{
+NWB_INLINE NotNull<T*> StridePointer(NotNull<T*> pointer, usize stride, usize index)noexcept{
     using ByteT = Conditional_T<IsConst_V<T>, const u8, u8>;
-    return reinterpret_cast<T*>(reinterpret_cast<ByteT*>(pointer) + stride * index);
+    return MakeNotNull(reinterpret_cast<T*>(reinterpret_cast<ByteT*>(pointer.get()) + stride * index));
 }
 
 template<typename T> requires(IsIntegral_V<T>)
@@ -105,7 +105,7 @@ template<typename T> requires(IsSame_V<T, f32> || IsSame_V<T, f64>)
             return integer + 1.0f;
 
         f32 intPart{};
-        const f32 fractionalPart = ModF(integer * s_RoundHalfBias, &intPart);
+        const f32 fractionalPart = ModF(integer * s_RoundHalfBias, intPart);
         if(fractionalPart == 0.0f)
             return integer;
         return integer + 1.0f;

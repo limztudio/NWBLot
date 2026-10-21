@@ -244,13 +244,13 @@ private:
 
 private:
     struct HandlerMutation{
-        IInputEventHandler* handler = nullptr;
+        NotNull<IInputEventHandler*> handler;
         HandlerMutationType::Enum type = HandlerMutationType::Remove;
     };
 
 
 private:
-    using HandlerList = List<IInputEventHandler*, Alloc::GlobalArena>;
+    using HandlerList = List<NotNull<IInputEventHandler*>, Alloc::GlobalArena>;
     using HandlerMutationVector = Vector<HandlerMutation, Alloc::GlobalArena>;
 
 
@@ -289,10 +289,10 @@ private:
             ScopeExit restoreDispatchDepth([this]()noexcept{ --m_dispatchDepth; });
 
             for(auto it = m_handlers.crbegin(); it != m_handlers.crend(); ++it){
-                IInputEventHandler* handler = *it;
-                if(m_pendingHandlerRemovalCount > 0 && isHandlerPendingRemoval(*handler))
+                IInputEventHandler& handler = **it;
+                if(m_pendingHandlerRemovalCount > 0 && isHandlerPendingRemoval(handler))
                     continue;
-                if(dispatchFunc(*handler))
+                if(dispatchFunc(handler))
                     break;
             }
         }

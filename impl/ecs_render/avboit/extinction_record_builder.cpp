@@ -73,12 +73,6 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
     using namespace RendererTaskGraphDetail;
     static_cast<void>(csgResources);
     AvboitExtinctionRecordResult result{};
-    if(!inputs.targets)
-        return MakeUnexpected(Failure{});
-    if(!inputs.extinctionTimingTicket)
-        return MakeUnexpected(Failure{});
-    if(!inputs.extinctionComputeEmulationTiming)
-        return MakeUnexpected(Failure{});
     if(!inputs.depthWarpCompletionTask.valid() || !inputs.uploadTask.valid())
         return MakeUnexpected(Failure{});
 
@@ -137,7 +131,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
         return MakeUnexpected(Failure{});
     extinctionPayload.extinctionComputeEmulationOutputStatesGraphOwned = inputs.regularComputeEmulationPlanCaptured && extinctionComputeEmulationOutputStatesGraphOwned;
     extinctionPayload.extinctionCsgComputeEmulationOutputStatesGraphOwned = inputs.csgComputeEmulationPlanCaptured && extinctionComputeEmulationOutputStatesGraphOwned;
-    extinctionPayload.extinctionComputeEmulationTiming = extinctionComputeEmulationOutputStatesGraphOwned ? inputs.extinctionComputeEmulationTiming : nullptr;
+    extinctionPayload.extinctionComputeEmulationTiming = extinctionComputeEmulationOutputStatesGraphOwned ? &inputs.extinctionComputeEmulationTiming : nullptr;
     const Core::BufferRange extinctionInstanceRange(0u, extinctionPayload.extinctionSnapshot.instanceCount * sizeof(InstanceGpuData));
     const Core::BufferRange extinctionMaterialTypedRange(0u, extinctionPayload.extinctionSnapshot.materialTypedByteCount);
     const Core::BufferRange extinctionReceiverRange(0u, extinctionPayload.extinctionSnapshot.csgReceiverRanges.size() * sizeof(CsgReceiverRangeGpuData));
@@ -221,13 +215,13 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
     if(inputs.streamsUploaded && !objectGeometry.prepare(
         extinctionPayload.extinctionSnapshot.regularIndexedDrawItems.data(),
         extinctionPayload.extinctionSnapshot.regularIndexedDrawItems.size(),
-        frameBindings, *inputs.targets, extinctionDependency, extinctionResourceUses, scratchArena, inputs.extinctionTimingTicket
+        frameBindings, inputs.targets, extinctionDependency, extinctionResourceUses, scratchArena, &inputs.extinctionTimingTicket
     ))
         return MakeUnexpected(Failure{});
     if(inputs.streamsUploaded && !objectGeometry.prepare(
         extinctionPayload.extinctionSnapshot.csgIndexedDrawItems.data(),
         extinctionPayload.extinctionSnapshot.csgIndexedDrawItems.size(),
-        frameBindings, *inputs.targets, extinctionDependency, extinctionResourceUses, scratchArena, inputs.extinctionTimingTicket
+        frameBindings, inputs.targets, extinctionDependency, extinctionResourceUses, scratchArena, &inputs.extinctionTimingTicket
     ))
         return MakeUnexpected(Failure{});
 
@@ -310,15 +304,15 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
         extinctionSharedRasterResourceUses.assign(extinctionResourceUses.begin(), extinctionResourceUses.end());
         extinctionSharedRasterResourceUses.push_back(ReadUse(extinctionSharedComputeEmulationOutput, ECSRenderDetail::s_GeneratedGeometryRasterState));
 
-        Optional<Core::GpuTimingMeasure>& avboitExtinctionComputeEmulationTiming = *inputs.extinctionComputeEmulationTiming;
+        Optional<Core::GpuTimingMeasure>& avboitExtinctionComputeEmulationTiming = inputs.extinctionComputeEmulationTiming;
         ECSRenderDetail::RegularSharedComputeEmulationGraphPlan& planAlias = inputs.sharedComputeEmulationPlan;
         const usize countAlias = inputs.sharedComputeEmulationInstanceCount;
         const usize bytesAlias = inputs.sharedComputeEmulationMaterialTypedByteCount;
         const bool streamsUploaded = inputs.streamsUploaded;
-        Core::GpuTaskGraph* graphAlias = &m_graph;
-        DeferredFrameTargets* deferredTargetsPtr = inputs.targets;
-        Core::GraphicsRuntime* graphicsAlias = &m_graphics;
-        RendererMaterialSystem* materialSystemAlias = &m_materialSystem;
+        const NotNull<Core::GpuTaskGraph*> graphAlias(&m_graph);
+        const NotNull<DeferredFrameTargets*> deferredTargetsPtr(&inputs.targets);
+        const NotNull<Core::GraphicsRuntime*> graphicsAlias(&m_graphics);
+        const NotNull<RendererMaterialSystem*> materialSystemAlias(&m_materialSystem);
         const auto addExtinctionSharedComputeEmulationPhase = [
             deferredTargetsPtr,
             graphAlias,

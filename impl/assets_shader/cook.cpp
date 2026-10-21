@@ -391,7 +391,7 @@ bool ShaderCook::validateVariantSignature(const AStringView contextLabel, const 
 }
 
 void ShaderCook::mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector<Path>& dependencies, const CookMap<CookString, IncludeEntry>& includeMetadata, Alloc::ScratchArena& scratchArena){
-    __hidden_shader_cook::ScratchVector<const IncludeEntry*> inheritedEntries{scratchArena};
+    __hidden_shader_cook::ScratchVector<NotNull<const IncludeEntry*>> inheritedEntries{scratchArena};
     inheritedEntries.reserve(dependencies.size());
 
     usize defineReserveCount = inOutEntry.defineValues.size();
@@ -406,7 +406,7 @@ void ShaderCook::mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector
             continue;
 
         const IncludeEntry& includeEntry = found.value();
-        inheritedEntries.push_back(&includeEntry);
+        inheritedEntries.push_back(MakeNotNull(&includeEntry));
 
         if(includeEntry.defineValues.size() > Limit<usize>::s_Max - defineReserveCount)
             canReserveDefineValues = false;
@@ -417,7 +417,7 @@ void ShaderCook::mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector
     if(canReserveDefineValues && defineReserveCount > inOutEntry.defineValues.size())
         inOutEntry.defineValues.reserve(defineReserveCount);
 
-    for(const IncludeEntry* includeEntry : inheritedEntries){
+    for(const NotNull<const IncludeEntry*> includeEntry : inheritedEntries){
         for(const auto& [defineName, defineEntry] : includeEntry->defineValues){
             auto [defineIt, inserted] = inOutEntry.defineValues.try_emplace(defineName, m_memoryArena);
             if(inserted)

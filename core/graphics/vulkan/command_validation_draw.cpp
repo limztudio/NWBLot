@@ -294,7 +294,7 @@ bool CommandList::validateIndirectBuffer(Buffer* const buffer, const u64 offsetB
     return true;
 }
 
-Expected<Buffer*> CommandList::prepareDrawIndirect(const u32 offsetBytes, const u32 drawCount, const u64 commandSizeBytes, const TStringView operationLabel, const TStringView commandName, const VulkanDetail::IndirectDrawIndexMode::Enum indexMode){
+Expected<NotNull<Buffer*>> CommandList::prepareDrawIndirect(const u32 offsetBytes, const u32 drawCount, const u64 commandSizeBytes, const TStringView operationLabel, const TStringView commandName, const VulkanDetail::IndirectDrawIndexMode::Enum indexMode){
     if(drawCount == 0u)
         return MakeUnexpected(Failure{});
 
@@ -312,7 +312,7 @@ Expected<Buffer*> CommandList::prepareDrawIndirect(const u32 offsetBytes, const 
     if(!validateIndirectBuffer(m_currentGraphicsState.indirectParams, offsetBytes, commandSizeBytes, drawCount, commandName))
         return MakeUnexpected(Failure{});
 
-    return m_currentGraphicsState.indirectParams;
+    return MakeNotNull(m_currentGraphicsState.indirectParams);
 }
 
 

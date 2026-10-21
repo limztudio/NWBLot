@@ -50,7 +50,7 @@ struct MaterialParameterTokens{
 };
 
 struct MaterialTypedFieldBytes{
-    const u8* data = nullptr;
+    NotNull<const u8*> data;
     u32 size = 0u;
 };
 
@@ -239,12 +239,12 @@ static Expected<u32> ParseMaterialParameterToken(const AStringView token, const 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool StoreMaterialTypedValueBytes(MaterialTypedValueData& outParameter, const usize byteOffset, const void* bytes, const usize byteSize)noexcept{
+static bool StoreMaterialTypedValueBytes(MaterialTypedValueData& outParameter, const usize byteOffset, const NotNull<const void*> bytes, const usize byteSize)noexcept{
     if(byteOffset > sizeof(outParameter.data) || byteSize > sizeof(outParameter.data) - byteOffset)
         return false;
 
-    u8* outBytes = reinterpret_cast<u8*>(&outParameter.data);
-    NWB_MEMCPY(outBytes + byteOffset, sizeof(outParameter.data) - byteOffset, bytes, byteSize);
+    const NotNull<u8*> outBytes(reinterpret_cast<u8*>(&outParameter.data));
+    NWB_MEMCPY(outBytes.get() + byteOffset, sizeof(outParameter.data) - byteOffset, bytes.get(), byteSize);
     return true;
 }
 
@@ -256,7 +256,7 @@ template<typename ValueType>
 static bool StoreMaterialTypedValueScalar(MaterialTypedValueData& outParameter, const u32 componentIndex, const u32 value)noexcept(IsArithmetic_V<ValueType>){
     const usize byteOffset = static_cast<usize>(componentIndex) * sizeof(ValueType);
     const ValueType typedValue = static_cast<ValueType>(value);
-    return StoreMaterialTypedValueBytes(outParameter, byteOffset, &typedValue, sizeof(typedValue));
+    return StoreMaterialTypedValueBytes(outParameter, byteOffset, NotNull<const void*>(&typedValue), sizeof(typedValue));
 }
 
 
@@ -410,7 +410,7 @@ static Expected<MaterialTypedFieldBytes> GetMaterialTypedLayoutFieldBytes(const 
     const u32 byteSize = MaterialLayoutFieldByteSize(fieldType);
     if(byteSize == 0u || byteSize > sizeof(value))
         return MakeUnexpected(Failure{});
-    return MaterialTypedFieldBytes{ reinterpret_cast<const u8*>(&value), byteSize };
+    return MaterialTypedFieldBytes{ MakeNotNull(reinterpret_cast<const u8*>(&value)), byteSize };
 }
 
 
@@ -422,7 +422,7 @@ static void AppendMaterialTypedLayoutFieldBytes(Material::TypedBlockByteVector& 
     const auto fieldBytes = GetMaterialTypedLayoutFieldBytes(fieldType, value);
     NWB_ASSERT(fieldBytes);
     outBlockBytes.reserve(outBlockBytes.size() + fieldBytes->size);
-    outBlockBytes.insert(outBlockBytes.end(), fieldBytes->data, fieldBytes->data + fieldBytes->size);
+    outBlockBytes.insert(outBlockBytes.end(), fieldBytes->data.get(), fieldBytes->data.get() + fieldBytes->size);
 }
 
 
@@ -441,10 +441,10 @@ static void PadMaterialTypedLayoutBytesTo(Material::TypedBlockByteVector& outBlo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ReserveMaterialBindTypedLayoutVectors(const MaterialBindEntry& bindEntry, const Name& contextName, const ScratchVector<const MaterialBindInstance*>& sortedInstances, MaterialBindTypedLayout& outLayout){
+static bool ReserveMaterialBindTypedLayoutVectors(const MaterialBindEntry& bindEntry, const Name& contextName, const ScratchVector<NotNull<const MaterialBindInstance*>>& sortedInstances, MaterialBindTypedLayout& outLayout){
     usize fieldReserveCount = 0u;
     usize byteReserveCount = 0u;
-    for(const MaterialBindInstance* instance : sortedInstances){
+    for(const NotNull<const MaterialBindInstance*> instance : sortedInstances){
         const MaterialBindStruct* bindStruct = bindEntry.findStruct(AStringView(instance->type));
         if(!bindStruct)
             continue;
@@ -482,12 +482,12 @@ static bool ReserveMaterialBindTypedLayoutVectors(const MaterialBindEntry& bindE
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<ScratchVector<const MaterialBindInstance*>> BuildSortedMaterialBindInstances(const MaterialBindEntry& bindEntry, const Name& contextName, ScratchArena& arena){
-    ScratchVector<const MaterialBindInstance*> instances(arena);
+static Expected<ScratchVector<NotNull<const MaterialBindInstance*>>> BuildSortedMaterialBindInstances(const MaterialBindEntry& bindEntry, const Name& contextName, ScratchArena& arena){
+    ScratchVector<NotNull<const MaterialBindInstance*>> instances(arena);
     instances.reserve(bindEntry.instances.size());
     for(const MaterialBindInstance& instance : bindEntry.instances)
-        instances.push_back(&instance);
-    Sort(instances.begin(), instances.end(), [](const MaterialBindInstance* lhs, const MaterialBindInstance* rhs)noexcept{
+        instances.push_back(MakeNotNull(&instance));
+    Sort(instances.begin(), instances.end(), [](const NotNull<const MaterialBindInstance*> lhs, const NotNull<const MaterialBindInstance*> rhs)noexcept{
         return lhs->name < rhs->name;
     }
     );
@@ -610,7 +610,7 @@ static bool WriteMaterialTypedLayoutFieldBytes(Material::TypedBlockByteVector& i
     if(byteOffset > inOutBlockBytes.size() || static_cast<usize>(fieldBytes->size) > inOutBlockBytes.size() - byteOffset)
         return false;
 
-    NWB_MEMCPY(inOutBlockBytes.data() + byteOffset, fieldBytes->size, fieldBytes->data, fieldBytes->size);
+    NWB_MEMCPY(inOutBlockBytes.data() + byteOffset, fieldBytes->size, fieldBytes->data.get(), fieldBytes->size);
     return true;
 }
 
@@ -708,7 +708,7 @@ Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayoutImpl(const Materia
         return MakeUnexpected(Failure{});
 
     u32 constantTypedByteSize = 0u;
-    for(const MaterialBindInstance* instance : *sortedInstances){
+    for(const NotNull<const MaterialBindInstance*> instance : *sortedInstances){
         const MaterialBindStruct* bindStruct = bindEntry.findStruct(AStringView(instance->type));
         if(!bindStruct){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' instance '{}' references unknown " "struct type '{}' for '{}'")
@@ -861,12 +861,12 @@ Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayoutImpl(const Materia
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<const MaterialBindTypedLayout*> FindOrBuildMaterialBindTypedLayoutImpl(const Name& materialInterface, const MaterialBindEntry& bindEntry, MaterialBindTypedLayoutCache& inOutCache, ScratchArena& scratchArena){
+Expected<NotNull<const MaterialBindTypedLayout*>> FindOrBuildMaterialBindTypedLayoutImpl(const Name& materialInterface, const MaterialBindEntry& bindEntry, MaterialBindTypedLayoutCache& inOutCache, ScratchArena& scratchArena){
     const auto cacheIt = inOutCache.lookup.find(materialInterface);
     if(cacheIt != inOutCache.lookup.end()){
         const usize cacheIndex = cacheIt.value();
         NWB_ASSERT(cacheIndex < inOutCache.entries.size());
-        return &inOutCache.entries[cacheIndex];
+        return MakeNotNull(&inOutCache.entries[cacheIndex]);
     }
 
     const usize cacheIndex = inOutCache.entries.size();
@@ -881,7 +881,7 @@ Expected<const MaterialBindTypedLayout*> FindOrBuildMaterialBindTypedLayoutImpl(
     }
 
     inOutCache.entries.push_back(Move(*layout));
-    return &inOutCache.entries.back();
+    return MakeNotNull(&inOutCache.entries.back());
 }
 
 

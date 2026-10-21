@@ -112,10 +112,10 @@ bool ShaderTable::setRayGenerationShader(const AStringView exportName){
         return false;
     }
 
-    auto* const recordBytes = static_cast<u8*>(*mapped) + static_cast<usize>(newOffset);
-    NWB_MEMSET(recordBytes, 0, static_cast<usize>(preflight->recordByteSize));
-    const u8* const handle = m_pipeline->m_shaderGroupHandles.data() + preflight->handleOffset;
-    NWB_MEMCPY(recordBytes, preflight->handleSizeAligned, handle, preflight->handleSize);
+    const auto recordBytes = MakeNotNull(static_cast<u8*>(*mapped) + static_cast<usize>(newOffset));
+    NWB_MEMSET(recordBytes.get(), 0, static_cast<usize>(preflight->recordByteSize));
+    const auto handle = MakeNotNull(m_pipeline->m_shaderGroupHandles.data() + preflight->handleOffset);
+    NWB_MEMCPY(recordBytes.get(), preflight->handleSizeAligned, handle.get(), preflight->handleSize);
     m_device.unmapBuffer(*newBuffer);
 
     m_raygenBuffer = Move(newBuffer);
@@ -355,13 +355,13 @@ Expected<u32> ShaderTable::appendShaderRecord(
         return MakeUnexpected(Failure{});
     }
 
-    auto* const newRecordBytes = static_cast<u8*>(*newMapped) + static_cast<usize>(newOffset);
-    NWB_MEMSET(newRecordBytes, 0, static_cast<usize>(preflight->recordByteSize));
+    const auto newRecordBytes = MakeNotNull(static_cast<u8*>(*newMapped) + static_cast<usize>(newOffset));
+    NWB_MEMSET(newRecordBytes.get(), 0, static_cast<usize>(preflight->recordByteSize));
     usize recordOffset = 0u;
     for(const u32 groupIndex : candidateGroupIndices){
         const usize handleOffset = static_cast<usize>(groupIndex) * static_cast<usize>(preflight->handleSize);
-        const u8* const handle = m_pipeline->m_shaderGroupHandles.data() + handleOffset;
-        NWB_MEMCPY(newRecordBytes + recordOffset, preflight->handleSizeAligned, handle, preflight->handleSize);
+        const auto handle = MakeNotNull(m_pipeline->m_shaderGroupHandles.data() + handleOffset);
+        NWB_MEMCPY(newRecordBytes.get() + recordOffset, preflight->handleSizeAligned, handle.get(), preflight->handleSize);
         recordOffset += preflight->handleSizeAligned;
     }
     m_device.unmapBuffer(*newBuffer);

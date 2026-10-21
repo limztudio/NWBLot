@@ -5,6 +5,7 @@
 #include <tests/common/test_context.h>
 
 #include <global/floating_point_environment.h>
+#include <global/not_null.h>
 #include <global/scope_exit.h>
 #include <global/simdmath.h>
 
@@ -365,14 +366,14 @@ TEST(CurrentMathContractBoundaries, TransformStreamCallbackFailureDoesNotTermina
     const SIMDMatrix matrix = MatrixIdentity();
     const SIMDMatrixDouble doubleMatrix = MatrixDoubleIdentity();
 
-    static_assert(!noexcept(SIMDVectorDetail::VectorTransformStreamImpl(&output, sizeof(output), &input, sizeof(input), 1u, matrix, singleFailure)));
-    static_assert(noexcept(SIMDVectorDetail::VectorTransformStreamImpl(&output, sizeof(output), &input, sizeof(input), 1u, matrix, singleControl)));
-    static_assert(!noexcept(SIMDVectorDoubleDetail::VectorDoubleTransformStreamImpl(&doubleOutput, sizeof(doubleOutput), &doubleInput, sizeof(doubleInput), 1u, doubleMatrix, doubleFailure)));
-    static_assert(noexcept(SIMDVectorDoubleDetail::VectorDoubleTransformStreamImpl(&doubleOutput, sizeof(doubleOutput), &doubleInput, sizeof(doubleInput), 1u, doubleMatrix, doubleControl)));
+    static_assert(!noexcept(SIMDVectorDetail::VectorTransformStreamImpl(MakeNotNull(&output), sizeof(output), MakeNotNull(&input), sizeof(input), 1u, matrix, singleFailure)));
+    static_assert(noexcept(SIMDVectorDetail::VectorTransformStreamImpl(MakeNotNull(&output), sizeof(output), MakeNotNull(&input), sizeof(input), 1u, matrix, singleControl)));
+    static_assert(!noexcept(SIMDVectorDoubleDetail::VectorDoubleTransformStreamImpl(MakeNotNull(&doubleOutput), sizeof(doubleOutput), MakeNotNull(&doubleInput), sizeof(doubleInput), 1u, doubleMatrix, doubleFailure)));
+    static_assert(noexcept(SIMDVectorDoubleDetail::VectorDoubleTransformStreamImpl(MakeNotNull(&doubleOutput), sizeof(doubleOutput), MakeNotNull(&doubleInput), sizeof(doubleInput), 1u, doubleMatrix, doubleControl)));
 
-    EXPECT_THROW(SIMDVectorDetail::VectorTransformStreamImpl(&output, sizeof(output), &input, sizeof(input), 1u, matrix, singleFailure), u32);
+    EXPECT_THROW(SIMDVectorDetail::VectorTransformStreamImpl(MakeNotNull(&output), sizeof(output), MakeNotNull(&input), sizeof(input), 1u, matrix, singleFailure), u32);
     EXPECT_EQ(output, Float4U(11.0f, 12.0f, 13.0f, 14.0f));
-    EXPECT_THROW(SIMDVectorDoubleDetail::VectorDoubleTransformStreamImpl(&doubleOutput, sizeof(doubleOutput), &doubleInput, sizeof(doubleInput), 1u, doubleMatrix, doubleFailure), u32);
+    EXPECT_THROW(SIMDVectorDoubleDetail::VectorDoubleTransformStreamImpl(MakeNotNull(&doubleOutput), sizeof(doubleOutput), MakeNotNull(&doubleInput), sizeof(doubleInput), 1u, doubleMatrix, doubleFailure), u32);
     EXPECT_EQ(doubleOutput, Double4U(21.0, 22.0, 23.0, 24.0));
 }
 
@@ -390,12 +391,12 @@ TEST(CurrentMathContractBoundaries, StreamLoadConversionFailureUnwindsBeforePubl
 
     static_assert(noexcept(LoadFloat(input)));
     static_assert(noexcept(LoadDouble(doubleInput)));
-    static_assert(!noexcept(SIMDVectorDetail::VectorTransformStreamImpl(&output, sizeof(output), &input, sizeof(input), 1u, matrix, singleControl)));
-    static_assert(!noexcept(SIMDVectorDoubleDetail::VectorDoubleTransformStreamImpl(&doubleOutput, sizeof(doubleOutput), &doubleInput, sizeof(doubleInput), 1u, doubleMatrix, doubleControl)));
+    static_assert(!noexcept(SIMDVectorDetail::VectorTransformStreamImpl(MakeNotNull(&output), sizeof(output), MakeNotNull(&input), sizeof(input), 1u, matrix, singleControl)));
+    static_assert(!noexcept(SIMDVectorDoubleDetail::VectorDoubleTransformStreamImpl(MakeNotNull(&doubleOutput), sizeof(doubleOutput), MakeNotNull(&doubleInput), sizeof(doubleInput), 1u, doubleMatrix, doubleControl)));
 
-    EXPECT_THROW(SIMDVectorDetail::VectorTransformStreamImpl(&output, sizeof(output), &input, sizeof(input), 1u, matrix, singleControl), u32);
+    EXPECT_THROW(SIMDVectorDetail::VectorTransformStreamImpl(MakeNotNull(&output), sizeof(output), MakeNotNull(&input), sizeof(input), 1u, matrix, singleControl), u32);
     EXPECT_EQ(output, Float4U(11.0f, 12.0f, 13.0f, 14.0f));
-    EXPECT_THROW(SIMDVectorDoubleDetail::VectorDoubleTransformStreamImpl(&doubleOutput, sizeof(doubleOutput), &doubleInput, sizeof(doubleInput), 1u, doubleMatrix, doubleControl), u32);
+    EXPECT_THROW(SIMDVectorDoubleDetail::VectorDoubleTransformStreamImpl(MakeNotNull(&doubleOutput), sizeof(doubleOutput), MakeNotNull(&doubleInput), sizeof(doubleInput), 1u, doubleMatrix, doubleControl), u32);
     EXPECT_EQ(doubleOutput, Double4U(21.0, 22.0, 23.0, 24.0));
 }
 

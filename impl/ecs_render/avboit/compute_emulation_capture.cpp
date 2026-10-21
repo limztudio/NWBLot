@@ -25,9 +25,7 @@ NWB_IMPL_BEGIN
     usize materialTypedByteCount
 ){
     AvboitComputeEmulationCaptureResult result{};
-    if(!inputs.drawItems || !inputs.csgFrameData)
-        return MakeUnexpected(Failure{});
-    const MaterialPassDrawItemPartitions& drawItems = *inputs.drawItems;
+    const MaterialPassDrawItemPartitions& drawItems = inputs.drawItems;
     // A phase owns one alias-free stream; mixed work keeps local interleaving.
     result.regularCaptured = drawItems.csg.computeDrawItems.empty() && inputs.geometryOwned && inputs.sampledTexturesCollected && plan.capture(drawItems.regular, scratchArena);
     result.csgCaptured = drawItems.regular.computeDrawItems.empty()
@@ -35,7 +33,7 @@ NWB_IMPL_BEGIN
         && inputs.intervalOutputsGraphOwned
         && inputs.geometryOwned
         && inputs.sampledTexturesCollected
-        && csgPlan.capture(drawItems.csg, *inputs.csgFrameData, scratchArena)
+        && csgPlan.capture(drawItems.csg, inputs.csgFrameData, scratchArena)
     ;
     // All-compute draws share one output only as an explicit D/R sequence; mixed raster routes keep their main callback.
     result.sharedCaptured = !result.regularCaptured

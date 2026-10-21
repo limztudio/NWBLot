@@ -63,17 +63,13 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(Core::GpuTaskGr
 [[nodiscard]] Expected<AvboitDepthWarpStageResult> AvboitComputeEffectChainBuilder::declareDepthWarp(const AvboitDepthWarpStageInputs& inputs){
     using namespace RendererTaskGraphDetail;
     AvboitDepthWarpStageResult result{};
-    if(!inputs.targets)
-        return MakeUnexpected(Failure{});
-    if(!inputs.timingFeedback)
-        return MakeUnexpected(Failure{});
-    if(!inputs.depthWarpTimingTicket)
-        return MakeUnexpected(Failure{});
+
+
     if(!inputs.occupancyTask.valid())
         return MakeUnexpected(Failure{});
 
     const Core::GpuTaskSchedulingHint avboitComputeScheduling = __hidden_avboit_compute_effect_chain::ComputeEffectScheduling();
-    const Core::GpuTaskTimingMetadata avboitComputeStageTiming = AvboitComputeStageTimingMetadata(*inputs.targets);
+    const Core::GpuTaskTimingMetadata avboitComputeStageTiming = AvboitComputeStageTimingMetadata(inputs.targets);
     Core::GpuTaskId completionTask = inputs.occupancyTask;
     if(inputs.hasTransparentRenderers){
         if(!inputs.coverage.valid() || !inputs.depthWarp.valid() || !inputs.control.valid())
@@ -98,7 +94,7 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(Core::GpuTaskGr
         ;
         const auto mAvboitSystemTaskGraphStageMDepthWarpTaskResult = m_graph.addTask<AvboitDepthWarpGraphTask>(
             depthWarpDesc,
-            AvboitDepthWarpGraphTask::Payload{ .avboitSystem = m_avboitSystem, .targets = *inputs.targets, .timingTicket = *inputs.depthWarpTimingTicket, .timingFeedback = inputs.timingFeedback, .timingScope = &RendererGpuTimingScope::s_AvboitDepthWarp, }
+            AvboitDepthWarpGraphTask::Payload{ .avboitSystem = m_avboitSystem, .targets = inputs.targets, .timingTicket = inputs.depthWarpTimingTicket, .timingFeedback = &inputs.timingFeedback, .timingScope = &RendererGpuTimingScope::s_AvboitDepthWarp, }
         );
         if(!mAvboitSystemTaskGraphStageMDepthWarpTaskResult){
             m_avboitSystem.taskGraphStage().m_depthWarpTask = {};
@@ -120,12 +116,8 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(Core::GpuTaskGr
 [[nodiscard]] Expected<AvboitIntegrationStageResult> AvboitComputeEffectChainBuilder::declareIntegration(const AvboitIntegrationStageInputs& inputs){
     using namespace RendererTaskGraphDetail;
     AvboitIntegrationStageResult result{};
-    if(!inputs.targets)
-        return MakeUnexpected(Failure{});
-    if(!inputs.timingFeedback)
-        return MakeUnexpected(Failure{});
-    if(!inputs.integrationTimingTicket)
-        return MakeUnexpected(Failure{});
+
+
     if(!inputs.extinctionTask.valid())
         return MakeUnexpected(Failure{});
     if(!inputs.extinction.valid() || !inputs.control.valid() || !inputs.extinctionOverflow.valid())
@@ -134,7 +126,7 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(Core::GpuTaskGr
         return MakeUnexpected(Failure{});
 
     const Core::GpuTaskSchedulingHint avboitComputeScheduling = __hidden_avboit_compute_effect_chain::ComputeEffectScheduling();
-    const Core::GpuTaskTimingMetadata avboitComputeStageTiming = AvboitComputeStageTimingMetadata(*inputs.targets);
+    const Core::GpuTaskTimingMetadata avboitComputeStageTiming = AvboitComputeStageTimingMetadata(inputs.targets);
     // Integration retains packet affinity; the compiler lowers its queue and resource states.
     const Core::GpuTaskResourceUse integrationResourceUses[] = {
         ReadUse(inputs.extinction),
@@ -155,7 +147,7 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(Core::GpuTaskGr
     ;
     const auto mAvboitSystemTaskGraphStageMIntegrationTaskResult = m_graph.addTask<AvboitIntegrationGraphTask>(
         integrationDesc,
-        AvboitIntegrationGraphTask::Payload{ .avboitSystem = m_avboitSystem, .targets = *inputs.targets, .timingTicket = *inputs.integrationTimingTicket, .timingFeedback = inputs.timingFeedback, .timingScope = &RendererGpuTimingScope::s_AvboitIntegration, }
+        AvboitIntegrationGraphTask::Payload{ .avboitSystem = m_avboitSystem, .targets = inputs.targets, .timingTicket = inputs.integrationTimingTicket, .timingFeedback = &inputs.timingFeedback, .timingScope = &RendererGpuTimingScope::s_AvboitIntegration, }
     );
     if(!mAvboitSystemTaskGraphStageMIntegrationTaskResult){
         m_avboitSystem.taskGraphStage().m_integrationTask = {};

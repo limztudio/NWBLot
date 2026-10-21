@@ -246,16 +246,14 @@ private:
     }
     template<typename T>
     ComponentPool<T>& requirePool()noexcept{
-        auto* pool = getPool<T>();
-        NWB_ASSERT(pool);
-        return *pool;
+        auto& pool = *MakeNotNull(getPool<T>());
+        return pool;
     }
 
     template<typename T>
     const ComponentPool<T>& requirePool()const noexcept{
-        auto* pool = getPool<T>();
-        NWB_ASSERT(pool);
-        return *pool;
+        auto& pool = *MakeNotNull(getPool<T>());
+        return pool;
     }
 
     void destroyEntityComponents(EntityID entityId);

@@ -92,7 +92,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     Optional<Core::GpuTimingMeasure>& opaqueRegularSharedComputeEmulationTiming,
     Optional<Core::GpuTimingMeasure>& opaqueCsgIntervalSampleComputeEmulationTiming,
     Core::GpuTimingSubmissionTicket** const timingTickets,
-    const bool* const asyncPrefixTimingSpansOnePacket
+    const bool& asyncPrefixTimingSpansOnePacket
 ){
     using namespace RendererTaskGraphDetail;
     namespace PrefixTimingSlotNs = ECSRenderDetail::DeferredGraphicsPrefixTimingSlot;
@@ -139,7 +139,6 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             || !csgRemovedIntervalCount.valid()
         ))
         || !timingTickets
-        || !asyncPrefixTimingSpansOnePacket
         || !deferredClearTimingState.graphics
         || deferredClearTimingState.timing != &deferredClearTiming
         || !deferredClearTimingState.rebindableTimingTicket
@@ -166,20 +165,20 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     auto prefixSceneUploadResult = prefixSceneUploadBuilder.declare(
         PrefixSceneUploadInputs{
             .rayTracingLightingInput = rayTracingLightingInput,
-            .meshViewState = &meshViewState,
+            .meshViewState = meshViewState,
             .meshView = meshView,
             .lights = lights,
             .sceneShading = sceneShading,
             .shadowPrepareTask = shadowPrepareTask,
             .meshViewAspectRatio = meshViewAspectRatio,
             .meshViewUploadRequired = meshViewUploadRequired,
-            .asyncPrefixTiming = &asyncPrefixTiming,
-            .meshViewSetupTimingTicket = timingTicketSlot(PrefixTimingSlotNs::MeshViewSetup),
-            .sceneShadingSetupTimingTicket = timingTicketSlot(PrefixTimingSlotNs::SceneShadingSetup),
+            .asyncPrefixTiming = asyncPrefixTiming,
+            .meshViewSetupTimingTicket = *timingTicketSlot(PrefixTimingSlotNs::MeshViewSetup),
+            .sceneShadingSetupTimingTicket = *timingTicketSlot(PrefixTimingSlotNs::SceneShadingSetup),
             .asyncPrefixTimingSpansOnePacket = asyncPrefixTimingSpansOnePacket,
-            .shadowVisibilityTask = &m_deferredShadowVisibilityTask,
-            .meshViewSetupReady = &m_graphicsPrefixMeshViewSetupReady,
-            .sceneShadingSetupReady = &m_graphicsPrefixSceneShadingSetupReady,
+            .shadowVisibilityTask = m_deferredShadowVisibilityTask,
+            .meshViewSetupReady = m_graphicsPrefixMeshViewSetupReady,
+            .sceneShadingSetupReady = m_graphicsPrefixSceneShadingSetupReady,
         }
     );
     if(!prefixSceneUploadResult){
@@ -254,16 +253,16 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     OpaqueUploadChainBuilder opaqueUploadChainBuilder(m_deferredLightingTaskGraph, m_materialSystem, m_csgSystem);
     auto opaqueUploadChainResult = opaqueUploadChainBuilder.declare(
         OpaqueUploadChainInputs{
-            .targets = &deferredTargets,
-            .frameBindings = &frameBindings,
-            .csgResources = &csgResources,
-            .drawItems = &opaqueDrawItems,
-            .instanceData = &instanceData,
-            .csgFrameData = &csgFrameData,
+            .targets = deferredTargets,
+            .frameBindings = frameBindings,
+            .csgResources = csgResources,
+            .drawItems = opaqueDrawItems,
+            .instanceData = instanceData,
+            .csgFrameData = csgFrameData,
 #if defined(NWB_DEBUG)
-            .materialTypedRanges = &materialTypedRanges,
+            .materialTypedRanges = materialTypedRanges,
 #endif
-            .materialTypedBytes = &materialTypedBytes,
+            .materialTypedBytes = materialTypedBytes,
             .materialInstances = materialInstances,
             .materialTyped = materialTyped,
             .csgReceiverRanges = csgReceiverRanges,
@@ -357,8 +356,8 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     OpaqueCsgIntervalClearBuilder opaqueCsgIntervalClearBuilder(m_deferredLightingTaskGraph);
     auto opaqueCsgIntervalClearResult = opaqueCsgIntervalClearBuilder.declare(
         OpaqueCsgIntervalClearInputs{
-            .targets = &deferredTargets,
-            .csgFrameData = &csgFrameData,
+            .targets = deferredTargets,
+            .csgFrameData = csgFrameData,
             .csgIntervalId = csgIntervalId,
             .csgReceiverEventCount = csgReceiverEventCount,
             .csgPeelSubresources = csgPeelSubresources,

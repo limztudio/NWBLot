@@ -117,10 +117,9 @@ namespace __hidden_gpu_command_ir_raster_lowering{
     const bool indexed = record.opcode == GpuCommandIrWireOpcode::DrawIndexed;
     if(indexed){
         // Graph preflight requires an index resource for indexed draws, and the state owner check admitted its buffer.
-        Buffer* const index = owner.indexBuffer.get();
-        NWB_ASSERT(index);
+        auto& index = *MakeNotNull(owner.indexBuffer.get());
         const u32 indexBytes = GraphicsBackend::GetIndexElementByteSize(stateRecord.indexFormat);
-        if(!GraphicsBackend::IsIndexDrawRangeValid(index->getDescription(), stateRecord.indexOffset, record.drawArguments.startIndexLocation, record.drawArguments.vertexCount, indexBytes))
+        if(!GraphicsBackend::IsIndexDrawRangeValid(index.getDescription(), stateRecord.indexOffset, record.drawArguments.startIndexLocation, record.drawArguments.vertexCount, indexBytes))
             return GpuCommandIrReplayError::InvalidRasterDraw;
     }
 
@@ -228,9 +227,9 @@ GpuCommandIrReplayError::Enum ValidateRasterBackendOperand(
         if(!state.active)
             return GpuCommandIrReplayError::InvalidRasterState;
         // An active state was admitted with this owner and its pipeline.
-        const GpuCommandIrRasterStateOwner* const owner = stream.rasterStateOwner(state.graphicsState.framebufferOwnerIndex);
-        NWB_ASSERT(owner && owner->pipeline);
-        if(record.blobSizeBytes > owner->pipeline->m_pushConstantByteSize)
+        auto& owner = *MakeNotNull(stream.rasterStateOwner(state.graphicsState.framebufferOwnerIndex));
+        NWB_ASSERT(owner.pipeline);
+        if(record.blobSizeBytes > owner.pipeline->m_pushConstantByteSize)
             return GpuCommandIrReplayError::InvalidRasterState;
         state.pushConstantsSet = true;
         return GpuCommandIrReplayError::None;
@@ -239,9 +238,8 @@ GpuCommandIrReplayError::Enum ValidateRasterBackendOperand(
     case GpuCommandIrWireOpcode::DrawIndexed:{
         if(!state.active || !state.heapBound || !state.pushConstantsSet)
             return GpuCommandIrReplayError::InvalidRasterState;
-        const GpuCommandIrRasterStateOwner* const owner = stream.rasterStateOwner(state.graphicsState.framebufferOwnerIndex);
-        NWB_ASSERT(owner);
-        return __hidden_gpu_command_ir_raster_lowering::ValidateDraw(record, state.graphicsState, *owner);
+        auto& owner = *MakeNotNull(stream.rasterStateOwner(state.graphicsState.framebufferOwnerIndex));
+        return __hidden_gpu_command_ir_raster_lowering::ValidateDraw(record, state.graphicsState, owner);
     }
     case GpuCommandIrWireOpcode::EndRenderPass:
         state.active = false;
@@ -257,28 +255,28 @@ GpuCommandIrReplayError::Enum ValidateRasterBackendOperand(
 bool LowerRasterOperation(const GpuCommandIrRasterTaskRecord& record, const GpuCommandIrOwnedStream& stream, const BinaryByteView blobBytes, CommandList& commandList){
     switch(record.opcode){
     case GpuCommandIrWireOpcode::SetGraphicsState:{
-        const GpuCommandIrRasterStateOwner* const owner = stream.rasterStateOwner(record.framebufferOwnerIndex);
-        NWB_ASSERT(owner && owner->pipeline && owner->framebuffer);
+        auto& owner = *MakeNotNull(stream.rasterStateOwner(record.framebufferOwnerIndex));
+        NWB_ASSERT(owner.pipeline && owner.framebuffer);
         ViewportState viewport;
         viewport.addViewport(record.viewport);
         if(record.hasScissor)
             viewport.addScissorRect(record.scissor);
         GraphicsState state;
-        state.setPipeline(owner->pipeline.get()).setFramebuffer(owner->framebuffer.get()).setViewport(viewport).setBlendColor(record.blendConstantColor).setDynamicStencilRefValue(record.dynamicStencilRefValue);
+        state.setPipeline(owner.pipeline.get()).setFramebuffer(owner.framebuffer.get()).setViewport(viewport).setBlendColor(record.blendConstantColor).setDynamicStencilRefValue(record.dynamicStencilRefValue);
         for(usize index = 0u; index < record.vertexBuffers.size(); ++index){
             const GpuCommandIrRasterVertexBinding& binding = record.vertexBuffers[index];
-            state.addVertexBuffer(VertexBufferBinding().setBuffer(owner->vertexBuffers[index].get()).setSlot(binding.slot).setOffset(binding.offset));
+            state.addVertexBuffer(VertexBufferBinding().setBuffer(owner.vertexBuffers[index].get()).setSlot(binding.slot).setOffset(binding.offset));
         }
         if(record.indexResource.valid()){
-            state.setIndexBuffer(IndexBufferBinding().setBuffer(owner->indexBuffer.get()).setFormat(record.indexFormat).setOffset(record.indexOffset));
+            state.setIndexBuffer(IndexBufferBinding().setBuffer(owner.indexBuffer.get()).setFormat(record.indexFormat).setOffset(record.indexOffset));
         }
         commandList.setGraphicsState(state);
         return !commandList.commandRecordingFailed();
     }
     case GpuCommandIrWireOpcode::BindGraphicsHeap:{
-        const GpuCommandIrRasterHeapOwner* const owner = stream.rasterHeapOwner(record.heapOwnerIndex);
-        NWB_ASSERT(owner && owner->heap && owner->pipeline);
-        owner->heap->bindGraphics(commandList, *owner->pipeline);
+        auto& owner = *MakeNotNull(stream.rasterHeapOwner(record.heapOwnerIndex));
+        NWB_ASSERT(owner.heap && owner.pipeline);
+        owner.heap->bindGraphics(commandList, *owner.pipeline);
         return !commandList.commandRecordingFailed();
     }
     case GpuCommandIrWireOpcode::SetPushConstants:

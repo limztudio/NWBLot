@@ -46,13 +46,16 @@ struct AvboitExtinctionRecordInputs : public AvboitRecordInputsBase{
     Core::GpuGraphResourceId avboitExtinctionOverflow;
     Core::GpuTaskId depthWarpCompletionTask;
     bool streamsUploaded = false;
-    Core::GpuTimingSubmissionTicket* extinctionTimingTicket = nullptr;
-    Optional<Core::GpuTimingMeasure>* extinctionComputeEmulationTiming = nullptr;
+    Core::GpuTimingSubmissionTicket& extinctionTimingTicket;
+    Optional<Core::GpuTimingMeasure>& extinctionComputeEmulationTiming;
 
 
 public:
-    explicit AvboitExtinctionRecordInputs(Core::Alloc::GlobalArena& arena)noexcept
-        : AvboitRecordInputsBase(arena){
+    AvboitExtinctionRecordInputs(Core::Alloc::GlobalArena& arena, DeferredFrameTargets& targetsIn, Core::GpuTimingSubmissionTicket& timingTicketIn, Optional<Core::GpuTimingMeasure>& computeEmulationTimingIn)noexcept
+        : AvboitRecordInputsBase(arena, targetsIn)
+        , extinctionTimingTicket(timingTicketIn)
+        , extinctionComputeEmulationTiming(computeEmulationTimingIn)
+    {
     }
 };
 

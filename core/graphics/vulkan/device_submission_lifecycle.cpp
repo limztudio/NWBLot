@@ -118,7 +118,7 @@ Expected<VkResult> Device::presentNativeQueue(const u32 nativeQueueIndex, const 
         return MakeUnexpected(Failure{});
     }
 
-    NWB_ASSERT(m_nativeQueueStates[nativeQueueIndex] && m_nativeQueueStates[nativeQueueIndex]->queue != VK_NULL_HANDLE);
+    NWB_ASSERT(m_nativeQueueStates[nativeQueueIndex]->queue != VK_NULL_HANDLE);
     NativeQueueState& nativeQueue = *m_nativeQueueStates[nativeQueueIndex];
     ScopedLock hostLock(nativeQueue.hostMutex);
     if(submissionsBlocked())

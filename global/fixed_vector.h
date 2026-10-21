@@ -179,10 +179,10 @@ public:
         if(m_currentSize >= s_MaxElements)
             throw RuntimeException("FixedVector capacity exceeded");
 
-        T* slot = data() + m_currentSize;
-        *slot = T(Forward<Args>(args)...);
+        T& slot = data()[m_currentSize];
+        slot = T(Forward<Args>(args)...);
         ++m_currentSize;
-        return *slot;
+        return slot;
     }
 
 

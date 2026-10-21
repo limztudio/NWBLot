@@ -17,6 +17,7 @@
 #include <core/graphics/rhi/shader.h>
 #include <core/metascript/parser.h>
 
+#include <global/not_null.h>
 #include <global/span.h>
 
 
@@ -182,8 +183,8 @@ public:
 private:
     template<typename MapT>
     struct DefineEntryPtr{
-        const typename MapT::key_type* key;
-        const typename MapT::mapped_type* value;
+        NotNull<const typename MapT::key_type*> key;
+        NotNull<const typename MapT::mapped_type*> value;
     };
 
 
@@ -232,7 +233,7 @@ private:
         ScratchDefineEntryVector<MapT> entries{scratchArena};
         entries.reserve(map.size());
         for(const auto& [name, value] : map)
-            entries.push_back(EntryPtr{ &name, &value });
+            entries.push_back(EntryPtr{ MakeNotNull(&name), MakeNotNull(&value) });
         Sort(entries.begin(), entries.end(), [](const EntryPtr& lhs, const EntryPtr& rhs)noexcept(noexcept(*lhs.key < *rhs.key)){ return *lhs.key < *rhs.key; });
         return entries;
     }

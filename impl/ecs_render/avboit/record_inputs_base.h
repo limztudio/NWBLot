@@ -29,7 +29,7 @@ struct DeferredFrameTargets;
 
 
 struct AvboitRecordInputsBase{
-    DeferredFrameTargets* targets = nullptr;
+    DeferredFrameTargets& targets;
     Core::GpuGraphResourceId albedo;
     Core::GpuGraphResourceId normal;
     Core::GpuGraphResourceId worldPosition;
@@ -71,7 +71,9 @@ struct AvboitRecordInputsBase{
 
 
 public:
-    explicit AvboitRecordInputsBase(Core::Alloc::GlobalArena& arena)noexcept{
+    AvboitRecordInputsBase(Core::Alloc::GlobalArena& arena, DeferredFrameTargets& targetsIn)noexcept
+        : targets(targetsIn)
+    {
         static_cast<void>(arena);
     }
 

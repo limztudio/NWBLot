@@ -5,6 +5,7 @@
 #include <global/floating_point_environment.h>
 #include <global/error_code.h>
 #include <global/expected.h>
+#include <global/not_null.h>
 #include <global/simd/collision_triangle.h>
 #include <global/string_view.h>
 #include <global/scope_exit.h>
@@ -359,11 +360,11 @@ NWB_NOINLINE bool NWB_SIMD_CALL AbsHoisted(const SIMDVectorDouble a0, const SIMD
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_NOINLINE u64 Run(const Intersection implementation, const TrianglePair (&pairs)[s_FixtureCount], const u32 passes)noexcept{
+NWB_NOINLINE u64 Run(const NotNull<Intersection> implementation, const TrianglePair (&pairs)[s_FixtureCount], const u32 passes)noexcept{
     u64 result = 0u;
     for(u32 pass = 0u; pass < passes; ++pass){
         for(const TrianglePair& pair : pairs)
-            result += implementation(LoadDouble(pair.first[0]), LoadDouble(pair.first[1]), LoadDouble(pair.first[2]), LoadDouble(pair.second[0]), LoadDouble(pair.second[1]), LoadDouble(pair.second[2])) ? 1u : 0u;
+            result += implementation.get()(LoadDouble(pair.first[0]), LoadDouble(pair.first[1]), LoadDouble(pair.first[2]), LoadDouble(pair.second[0]), LoadDouble(pair.second[1]), LoadDouble(pair.second[2])) ? 1u : 0u;
     }
     s_Checksum = result;
     return result;
@@ -423,10 +424,10 @@ static void Fill(const u32 kind, TrianglePair (&pairs)[s_FixtureCount])noexcept{
     for(const auto& firstOrder : s_Permutations){
         for(const auto& secondOrder : s_Permutations){
             for(const bool reverse : { false, true }){
-                const SIMDVectorDouble* first = reverse ? pair.second : pair.first;
-                const SIMDVectorDouble* second = reverse ? pair.first : pair.second;
-                const u32* firstIndices = reverse ? secondOrder : firstOrder;
-                const u32* secondIndices = reverse ? firstOrder : secondOrder;
+                const auto& first = reverse ? pair.second : pair.first;
+                const auto& second = reverse ? pair.first : pair.second;
+                const auto& firstIndices = reverse ? secondOrder : firstOrder;
+                const auto& secondIndices = reverse ? firstOrder : secondOrder;
                 const bool baseline = Baseline(first[firstIndices[0]], first[firstIndices[1]], first[firstIndices[2]], second[secondIndices[0]], second[secondIndices[1]], second[secondIndices[2]]);
                 const bool candidate = ZeroAxis(first[firstIndices[0]], first[firstIndices[1]], first[firstIndices[2]], second[secondIndices[0]], second[secondIndices[1]], second[secondIndices[2]]);
                 const bool production = TriangleDoubleTests::Intersects(first[firstIndices[0]], first[firstIndices[1]], first[firstIndices[2]], second[secondIndices[0]], second[secondIndices[1]], second[secondIndices[2]]);
@@ -478,7 +479,7 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
     _exit(32 + information->si_code);
 }
 
-[[nodiscard]] static Expected<i32, ErrorCode> TrapResult(const Intersection implementation, const TrianglePairVectors& pair, const i32 mask)noexcept{
+[[nodiscard]] static Expected<i32, ErrorCode> TrapResult(const NotNull<Intersection> implementation, const TrianglePairVectors& pair, const i32 mask)noexcept{
     const pid_t child = fork();
     if(child < 0)
         return MakeUnexpected(MakeErrorCode(static_cast<ErrorCondition>(errno)));
@@ -491,7 +492,7 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
         const auto environment = HoldFloatingPointExceptions();
         if(!environment || feenableexcept(mask) < 0)
             _exit(127);
-        const bool result = implementation(pair.first[0], pair.first[1], pair.first[2], pair.second[0], pair.second[1], pair.second[2]);
+        const bool result = implementation.get()(pair.first[0], pair.first[1], pair.first[2], pair.second[0], pair.second[1], pair.second[2]);
         _exit(result ? 1 : 0);
     }
     i32 status = 0;
@@ -505,12 +506,12 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
 
 [[nodiscard]] static bool CheckTrapEquivalence(const TrianglePairVectors& pair)noexcept{
 #if defined(NWB_PLATFORM_LINUX)
-    const Intersection production = TriangleDoubleTests::Intersects;
+    const auto production = MakeNotNull<Intersection>(TriangleDoubleTests::Intersects);
     for(const i32 mask : { FE_INVALID, FE_OVERFLOW, FE_INVALID | FE_OVERFLOW, FE_INVALID | FE_OVERFLOW | FE_UNDERFLOW | FE_INEXACT }){
-        const auto original = TrapResult(Baseline, pair, mask);
+        const auto original = TrapResult(MakeNotNull<Intersection>(Baseline), pair, mask);
         if(!original || *original == 127)
             return false;
-        for(const Intersection implementation : { ZeroAxis, AbsHoisted, production }){
+        for(const auto implementation : { MakeNotNull<Intersection>(ZeroAxis), MakeNotNull<Intersection>(AbsHoisted), production }){
             const auto observed = TrapResult(implementation, pair, mask);
             if(!observed || *observed != *original)
                 return false;
@@ -654,9 +655,9 @@ static i32 Benchmark(const bool validationOnly, const bool measureAbs, const boo
     if(validationOnly)
         return 0;
     static constexpr StringView s_Names[] = { "coplanar", "point_hull", "segment_hull", "noncoplanar", "noncoplanar_miss", "aabb_miss", "point_point" };
-    const Intersection reference = measureAbs ? ZeroAxis : (guardOnly ? CurrentDot3Baseline : Baseline);
-    const Intersection production = TriangleDoubleTests::Intersects;
-    const Intersection selected = measureAbs ? AbsHoisted : (guardOnly ? ZeroAxis : production);
+    const auto reference = MakeNotNull<Intersection>(measureAbs ? ZeroAxis : (guardOnly ? CurrentDot3Baseline : Baseline));
+    const auto production = MakeNotNull<Intersection>(TriangleDoubleTests::Intersects);
+    const auto selected = measureAbs ? MakeNotNull<Intersection>(AbsHoisted) : (guardOnly ? MakeNotNull<Intersection>(ZeroAxis) : production);
     const StringView referenceName = measureAbs ? s_ZeroAxisLabel : (guardOnly ? "current_dot3_baseline" : "baseline");
     const StringView selectedName = measureAbs ? "abs_hoisted" : (guardOnly ? s_ZeroAxisLabel : "production");
     NWB_COUT << "timer,TimerNow/DurationInNS\n";
@@ -671,7 +672,7 @@ static i32 Benchmark(const bool validationOnly, const bool measureAbs, const boo
         for(u32 round = 0u; round < s_Rounds; ++round){
             for(u32 step = 0u; step < 2u; ++step){
                 const bool candidate = ((round + step) & 1u) != 0u;
-                const Intersection implementation = candidate ? selected : reference;
+                const auto implementation = candidate ? selected : reference;
                 const Timer begin = TimerNow();
                 const u64 checksum = Run(implementation, pairs, s_Passes);
                 const Timer end = TimerNow();

@@ -40,7 +40,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble4Transform(SIMDVectorDoubl
     return VectorDoubleMergeX(VectorDouble4Dot(matrix.v[0], value), VectorDouble4Dot(matrix.v[1], value), VectorDouble4Dot(matrix.v[2], value), VectorDouble4Dot(matrix.v[3], value));
 }
 
-NWB_INLINE Float4U* NWB_SIMD_CALL Vector4TransformStream(Float4U* outputStream, usize outputStride, const Float4U* inputStream, usize inputStride, usize vectorCount, const SIMDMatrix& matrix)noexcept{
+NWB_INLINE NotNull<Float4U*> NWB_SIMD_CALL Vector4TransformStream(NotNull<Float4U*> outputStream, usize outputStride, NotNull<const Float4U*> inputStream, usize inputStride, usize vectorCount, const SIMDMatrix& matrix)noexcept{
     return SIMDVectorDetail::VectorTransformStreamImpl(outputStream, outputStride, inputStream, inputStride, vectorCount, matrix, [](SIMDVectorSingle value, const SIMDMatrix& transposedMatrix)noexcept{
             return SIMDVectorDetail::Vector4TransformTransposed(value, transposedMatrix);
         }
@@ -49,7 +49,7 @@ NWB_INLINE Float4U* NWB_SIMD_CALL Vector4TransformStream(Float4U* outputStream, 
 
 template<typename OutputT, typename InputT>
     requires ((IsSame_V<OutputT, Double4> || IsSame_V<OutputT, Double4U>) && (IsSame_V<InputT, Double4> || IsSame_V<InputT, Double4U>))
-NWB_INLINE OutputT* NWB_SIMD_CALL VectorDouble4TransformStream(OutputT* outputStream, usize outputStride, const InputT* inputStream, usize inputStride, usize vectorCount, const SIMDMatrixDouble& matrix)noexcept{
+NWB_INLINE NotNull<OutputT*> NWB_SIMD_CALL VectorDouble4TransformStream(NotNull<OutputT*> outputStream, usize outputStride, NotNull<const InputT*> inputStream, usize inputStride, usize vectorCount, const SIMDMatrixDouble& matrix)noexcept{
     return SIMDVectorDoubleDetail::VectorDoubleTransformStreamImpl(outputStream, outputStride, inputStream, inputStride, vectorCount, matrix, [](SIMDVectorDouble value, const SIMDMatrixDouble& transposedMatrix)noexcept{
             return SIMDVectorDoubleDetail::VectorDouble4TransformTransposed(value, transposedMatrix);
         }
@@ -73,7 +73,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble2Transform(SIMDVectorDoubl
     return VectorDouble4Transform(VectorDoubleSetW(VectorDoubleSetZ(value, 0.0), 1.0), matrix);
 }
 
-NWB_INLINE Float4U* NWB_SIMD_CALL Vector2TransformStream(Float4U* outputStream, usize outputStride, const Float2U* inputStream, usize inputStride, usize vectorCount, const SIMDMatrix& matrix)noexcept{
+NWB_INLINE NotNull<Float4U*> NWB_SIMD_CALL Vector2TransformStream(NotNull<Float4U*> outputStream, usize outputStride, NotNull<const Float2U*> inputStream, usize inputStride, usize vectorCount, const SIMDMatrix& matrix)noexcept{
     return SIMDVectorDetail::VectorTransformStreamImpl(outputStream, outputStride, inputStream, inputStride, vectorCount, matrix, [](SIMDVectorSingle value, const SIMDMatrix& transposedMatrix)noexcept{
             return SIMDVectorDetail::Vector4TransformTransposed(VectorSetW(VectorSetZ(value, 0.0f), 1.0f), transposedMatrix);
         }
@@ -82,7 +82,7 @@ NWB_INLINE Float4U* NWB_SIMD_CALL Vector2TransformStream(Float4U* outputStream, 
 
 template<typename OutputT, typename InputT>
     requires ((IsSame_V<OutputT, Double4> || IsSame_V<OutputT, Double4U>) && (IsSame_V<InputT, Double2> || IsSame_V<InputT, Double2U>))
-NWB_INLINE OutputT* NWB_SIMD_CALL VectorDouble2TransformStream(OutputT* outputStream, usize outputStride, const InputT* inputStream, usize inputStride, usize vectorCount, const SIMDMatrixDouble& matrix)noexcept{
+NWB_INLINE NotNull<OutputT*> NWB_SIMD_CALL VectorDouble2TransformStream(NotNull<OutputT*> outputStream, usize outputStride, NotNull<const InputT*> inputStream, usize inputStride, usize vectorCount, const SIMDMatrixDouble& matrix)noexcept{
     return SIMDVectorDoubleDetail::VectorDoubleTransformStreamImpl(outputStream, outputStride, inputStream, inputStride, vectorCount, matrix, [](SIMDVectorDouble value, const SIMDMatrixDouble& transposedMatrix)noexcept{
             return SIMDVectorDoubleDetail::VectorDouble4TransformTransposed(VectorDoubleSetW(VectorDoubleSetZ(value, 0.0), 1.0), transposedMatrix);
         }
@@ -103,7 +103,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble2TransformCoord(SIMDVector
     return VectorDoubleSetW(VectorDoubleDivide(result, VectorDoubleSplatW(result)), 1.0);
 }
 
-NWB_INLINE Float2U* NWB_SIMD_CALL Vector2TransformCoordStream(Float2U* outputStream, usize outputStride, const Float2U* inputStream, usize inputStride, usize vectorCount, const SIMDMatrix& matrix)noexcept{
+NWB_INLINE NotNull<Float2U*> NWB_SIMD_CALL Vector2TransformCoordStream(NotNull<Float2U*> outputStream, usize outputStride, NotNull<const Float2U*> inputStream, usize inputStride, usize vectorCount, const SIMDMatrix& matrix)noexcept{
     return SIMDVectorDetail::VectorTransformStreamImpl(outputStream, outputStride, inputStream, inputStride, vectorCount, matrix, [](SIMDVectorSingle value, const SIMDMatrix& transposedMatrix)noexcept{
             SIMDVectorSingle result = SIMDVectorDetail::Vector4TransformTransposed(VectorSetW(VectorSetZ(value, 0.0f), 1.0f), transposedMatrix);
             result = VectorSetW(VectorDivide(result, VectorSplatW(result)), 1.0f);
@@ -114,7 +114,7 @@ NWB_INLINE Float2U* NWB_SIMD_CALL Vector2TransformCoordStream(Float2U* outputStr
 
 template<typename OutputT, typename InputT>
     requires ((IsSame_V<OutputT, Double2> || IsSame_V<OutputT, Double2U>) && (IsSame_V<InputT, Double2> || IsSame_V<InputT, Double2U>))
-NWB_INLINE OutputT* NWB_SIMD_CALL VectorDouble2TransformCoordStream(OutputT* outputStream, usize outputStride, const InputT* inputStream, usize inputStride, usize vectorCount, const SIMDMatrixDouble& matrix)noexcept{
+NWB_INLINE NotNull<OutputT*> NWB_SIMD_CALL VectorDouble2TransformCoordStream(NotNull<OutputT*> outputStream, usize outputStride, NotNull<const InputT*> inputStream, usize inputStride, usize vectorCount, const SIMDMatrixDouble& matrix)noexcept{
     return SIMDVectorDoubleDetail::VectorDoubleTransformStreamImpl(outputStream, outputStride, inputStream, inputStride, vectorCount, matrix, [](SIMDVectorDouble value, const SIMDMatrixDouble& transposedMatrix)noexcept{
             SIMDVectorDouble result = SIMDVectorDoubleDetail::VectorDouble4TransformTransposed(VectorDoubleSetW(VectorDoubleSetZ(value, 0.0), 1.0), transposedMatrix);
             result = VectorDoubleSetW(VectorDoubleDivide(result, VectorDoubleSplatW(result)), 1.0);
@@ -140,7 +140,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble2TransformNormal(SIMDVecto
     return VectorDouble4Transform(VectorDoubleAndInt(value, s_DoubleSIMDMaskXY), matrix);
 }
 
-NWB_INLINE Float2U* NWB_SIMD_CALL Vector2TransformNormalStream(Float2U* outputStream, usize outputStride, const Float2U* inputStream, usize inputStride, usize vectorCount, const SIMDMatrix& matrix)noexcept{
+NWB_INLINE NotNull<Float2U*> NWB_SIMD_CALL Vector2TransformNormalStream(NotNull<Float2U*> outputStream, usize outputStride, NotNull<const Float2U*> inputStream, usize inputStride, usize vectorCount, const SIMDMatrix& matrix)noexcept{
     return SIMDVectorDetail::VectorTransformStreamImpl(outputStream, outputStride, inputStream, inputStride, vectorCount, matrix, [](SIMDVectorSingle value, const SIMDMatrix& transposedMatrix)noexcept{
             return SIMDVectorDetail::Vector4TransformTransposed(VectorAndInt(value, s_SIMDMaskXY), transposedMatrix);
         }
@@ -149,7 +149,7 @@ NWB_INLINE Float2U* NWB_SIMD_CALL Vector2TransformNormalStream(Float2U* outputSt
 
 template<typename OutputT, typename InputT>
     requires ((IsSame_V<OutputT, Double2> || IsSame_V<OutputT, Double2U>) && (IsSame_V<InputT, Double2> || IsSame_V<InputT, Double2U>))
-NWB_INLINE OutputT* NWB_SIMD_CALL VectorDouble2TransformNormalStream(OutputT* outputStream, usize outputStride, const InputT* inputStream, usize inputStride, usize vectorCount, const SIMDMatrixDouble& matrix)noexcept{
+NWB_INLINE NotNull<OutputT*> NWB_SIMD_CALL VectorDouble2TransformNormalStream(NotNull<OutputT*> outputStream, usize outputStride, NotNull<const InputT*> inputStream, usize inputStride, usize vectorCount, const SIMDMatrixDouble& matrix)noexcept{
     return SIMDVectorDoubleDetail::VectorDoubleTransformStreamImpl(outputStream, outputStride, inputStream, inputStride, vectorCount, matrix, [](SIMDVectorDouble value, const SIMDMatrixDouble& transposedMatrix)noexcept{
             return SIMDVectorDoubleDetail::VectorDouble4TransformTransposed(VectorDoubleAndInt(value, s_DoubleSIMDMaskXY), transposedMatrix);
         }
@@ -173,7 +173,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble3Transform(SIMDVectorDoubl
     return VectorDouble4Transform(VectorDoubleSetW(value, 1.0), matrix);
 }
 
-NWB_INLINE Float4U* NWB_SIMD_CALL Vector3TransformStream(Float4U* outputStream, usize outputStride, const Float3U* inputStream, usize inputStride, usize vectorCount, const SIMDMatrix& matrix)noexcept{
+NWB_INLINE NotNull<Float4U*> NWB_SIMD_CALL Vector3TransformStream(NotNull<Float4U*> outputStream, usize outputStride, NotNull<const Float3U*> inputStream, usize inputStride, usize vectorCount, const SIMDMatrix& matrix)noexcept{
     return SIMDVectorDetail::VectorTransformStreamImpl(outputStream, outputStride, inputStream, inputStride, vectorCount, matrix, [](SIMDVectorSingle value, const SIMDMatrix& transposedMatrix)noexcept{
             return SIMDVectorDetail::Vector4TransformTransposed(VectorSetW(value, 1.0f), transposedMatrix);
         }
@@ -182,7 +182,7 @@ NWB_INLINE Float4U* NWB_SIMD_CALL Vector3TransformStream(Float4U* outputStream, 
 
 template<typename OutputT, typename InputT>
     requires ((IsSame_V<OutputT, Double4> || IsSame_V<OutputT, Double4U>) && (IsSame_V<InputT, Double3> || IsSame_V<InputT, Double3U>))
-NWB_INLINE OutputT* NWB_SIMD_CALL VectorDouble3TransformStream(OutputT* outputStream, usize outputStride, const InputT* inputStream, usize inputStride, usize vectorCount, const SIMDMatrixDouble& matrix)noexcept{
+NWB_INLINE NotNull<OutputT*> NWB_SIMD_CALL VectorDouble3TransformStream(NotNull<OutputT*> outputStream, usize outputStride, NotNull<const InputT*> inputStream, usize inputStride, usize vectorCount, const SIMDMatrixDouble& matrix)noexcept{
     return SIMDVectorDoubleDetail::VectorDoubleTransformStreamImpl(outputStream, outputStride, inputStream, inputStride, vectorCount, matrix, [](SIMDVectorDouble value, const SIMDMatrixDouble& transposedMatrix)noexcept{
             return SIMDVectorDoubleDetail::VectorDouble4TransformTransposed(VectorDoubleSetW(value, 1.0), transposedMatrix);
         }
@@ -203,7 +203,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble3TransformCoord(SIMDVector
     return VectorDoubleSetW(VectorDoubleDivide(result, VectorDoubleSplatW(result)), 1.0);
 }
 
-NWB_INLINE Float3U* NWB_SIMD_CALL Vector3TransformCoordStream(Float3U* outputStream, usize outputStride, const Float3U* inputStream, usize inputStride, usize vectorCount, const SIMDMatrix& matrix)noexcept{
+NWB_INLINE NotNull<Float3U*> NWB_SIMD_CALL Vector3TransformCoordStream(NotNull<Float3U*> outputStream, usize outputStride, NotNull<const Float3U*> inputStream, usize inputStride, usize vectorCount, const SIMDMatrix& matrix)noexcept{
     return SIMDVectorDetail::VectorTransformStreamImpl(outputStream, outputStride, inputStream, inputStride, vectorCount, matrix, [](SIMDVectorSingle value, const SIMDMatrix& transposedMatrix)noexcept{
             SIMDVectorSingle result = SIMDVectorDetail::Vector4TransformTransposed(VectorSetW(value, 1.0f), transposedMatrix);
             result = VectorSetW(VectorDivide(result, VectorSplatW(result)), 1.0f);
@@ -214,7 +214,7 @@ NWB_INLINE Float3U* NWB_SIMD_CALL Vector3TransformCoordStream(Float3U* outputStr
 
 template<typename OutputT, typename InputT>
     requires ((IsSame_V<OutputT, Double3> || IsSame_V<OutputT, Double3U>) && (IsSame_V<InputT, Double3> || IsSame_V<InputT, Double3U>))
-NWB_INLINE OutputT* NWB_SIMD_CALL VectorDouble3TransformCoordStream(OutputT* outputStream, usize outputStride, const InputT* inputStream, usize inputStride, usize vectorCount, const SIMDMatrixDouble& matrix)noexcept{
+NWB_INLINE NotNull<OutputT*> NWB_SIMD_CALL VectorDouble3TransformCoordStream(NotNull<OutputT*> outputStream, usize outputStride, NotNull<const InputT*> inputStream, usize inputStride, usize vectorCount, const SIMDMatrixDouble& matrix)noexcept{
     return SIMDVectorDoubleDetail::VectorDoubleTransformStreamImpl(outputStream, outputStride, inputStream, inputStride, vectorCount, matrix, [](SIMDVectorDouble value, const SIMDMatrixDouble& transposedMatrix)noexcept{
             SIMDVectorDouble result = SIMDVectorDoubleDetail::VectorDouble4TransformTransposed(VectorDoubleSetW(value, 1.0), transposedMatrix);
             result = VectorDoubleSetW(VectorDoubleDivide(result, VectorDoubleSplatW(result)), 1.0);
@@ -240,7 +240,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble3TransformNormal(SIMDVecto
     return VectorDouble4Transform(VectorDoubleAndInt(value, s_DoubleSIMDMask3), matrix);
 }
 
-NWB_INLINE Float3U* NWB_SIMD_CALL Vector3TransformNormalStream(Float3U* outputStream, usize outputStride, const Float3U* inputStream, usize inputStride, usize vectorCount, const SIMDMatrix& matrix)noexcept{
+NWB_INLINE NotNull<Float3U*> NWB_SIMD_CALL Vector3TransformNormalStream(NotNull<Float3U*> outputStream, usize outputStride, NotNull<const Float3U*> inputStream, usize inputStride, usize vectorCount, const SIMDMatrix& matrix)noexcept{
     return SIMDVectorDetail::VectorTransformStreamImpl(outputStream, outputStride, inputStream, inputStride, vectorCount, matrix, [](SIMDVectorSingle value, const SIMDMatrix& transposedMatrix)noexcept{
             return SIMDVectorDetail::Vector4TransformTransposed(VectorAndInt(value, s_SIMDMask3), transposedMatrix);
         }
@@ -249,7 +249,7 @@ NWB_INLINE Float3U* NWB_SIMD_CALL Vector3TransformNormalStream(Float3U* outputSt
 
 template<typename OutputT, typename InputT>
     requires ((IsSame_V<OutputT, Double3> || IsSame_V<OutputT, Double3U>) && (IsSame_V<InputT, Double3> || IsSame_V<InputT, Double3U>))
-NWB_INLINE OutputT* NWB_SIMD_CALL VectorDouble3TransformNormalStream(OutputT* outputStream, usize outputStride, const InputT* inputStream, usize inputStride, usize vectorCount, const SIMDMatrixDouble& matrix)noexcept{
+NWB_INLINE NotNull<OutputT*> NWB_SIMD_CALL VectorDouble3TransformNormalStream(NotNull<OutputT*> outputStream, usize outputStride, NotNull<const InputT*> inputStream, usize inputStride, usize vectorCount, const SIMDMatrixDouble& matrix)noexcept{
     return SIMDVectorDoubleDetail::VectorDoubleTransformStreamImpl(outputStream, outputStride, inputStream, inputStride, vectorCount, matrix, [](SIMDVectorDouble value, const SIMDMatrixDouble& transposedMatrix)noexcept{
             return SIMDVectorDoubleDetail::VectorDouble4TransformTransposed(VectorDoubleAndInt(value, s_DoubleSIMDMask3), transposedMatrix);
         }

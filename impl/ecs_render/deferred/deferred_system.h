@@ -113,7 +113,7 @@ public:
     [[nodiscard]] bool createDeferredFrameTargetResources(DeferredFrameTargets& targets, Core::Sampler& avboitLinearSampler);
     [[nodiscard]] bool createDeferredCompositeResources();
     [[nodiscard]] bool createDeferredCompositePipeline();
-    [[nodiscard]] bool createDeferredPresentPipeline(Core::Framebuffer* presentationFramebuffer);
+    [[nodiscard]] bool createDeferredPresentPipeline(Core::Framebuffer& presentationFramebuffer);
     void resetDeferredFrameTargets(DeferredFrameTargets& targets);
     [[nodiscard]] Expected<Core::GpuTaskId> declareDeferredCompositeTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, const ReflectionCompositeInputs& reflectionInputs);
     [[nodiscard]] bool renderDeferredComposite(Core::CommandList& commandList, DeferredFrameTargets& targets, const ReflectionCompositeInputs& reflectionInputs);

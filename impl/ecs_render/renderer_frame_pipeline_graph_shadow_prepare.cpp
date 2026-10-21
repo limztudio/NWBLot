@@ -815,7 +815,6 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     scheduling.mergeWithPrevious = true;
     // A pure-software per-mesh chain is an explicit immediate predecessor of this semantic endpoint. Retain the complete accepting packet even when later trace consumers form a FrontierSafe consumer frontier.
     scheduling.allowMergeAcrossConsumerFrontier = pureSoftwareMeshSwBvhBuildsGraphOwned || m_deferredShadowPrepareSceneRefitTask.valid();
-    const Core::GpuTaskId* const dependencies = &shadowPrepareDependency;
     constexpr usize s_DependencyCount = 1u;
     const Core::GpuTaskExternalStateSource shadowPrepareStateSource{ .states = m_shadowPreparePersistentState.source(), };
     Core::GpuTaskDesc desc;
@@ -823,7 +822,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         .setIdentity(Name("render.shadow_prepare"))
         .setMarkerLabel("Shadow Preparation")
         .setScheduling(scheduling)
-        .setDependencies(dependencies, s_DependencyCount)
+        .setDependencies(&shadowPrepareDependency, s_DependencyCount)
         .setExternalStateSources(shadowPrepareStateSource.states ? &shadowPrepareStateSource : nullptr, shadowPrepareStateSource.states ? 1u : 0u)
         .setResourceUses(resourceUses.data(), resourceUses.size())
         .setResourceSetUses(resourceSetUses.data(), resourceSetUses.size())

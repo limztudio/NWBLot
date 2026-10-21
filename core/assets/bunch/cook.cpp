@@ -76,7 +76,7 @@ using ScratchNameHashSet = HashSet<NameHash, ScratchArena, Hasher<NameHash>, Equ
 class DeclarationLookup final : NoCopy{
 private:
     using Declaration = Metascript::Document::Declaration;
-    using LookupTable = HashMap<AStringView, const Declaration*, ScratchArena>;
+    using LookupTable = HashMap<AStringView, NotNull<const Declaration*>, ScratchArena>;
 
 
 private:
@@ -96,7 +96,7 @@ public:
             if(*isBunch)
                 continue;
             if(declarations.m_table){
-                if(!declarations.m_table->try_emplace(DeclarationVariable(declaration), &declaration).second){
+                if(!declarations.m_table->try_emplace(DeclarationVariable(declaration), MakeNotNull(&declaration)).second){
                     NWB_ASSERT(false);
                     continue;
                 }
@@ -116,7 +116,7 @@ public:
     [[nodiscard]] const Declaration* find(const AStringView reference)const noexcept{
         if(m_table){
             const auto found = m_table->find(reference);
-            return found == m_table->end() ? nullptr : found.value();
+            return found == m_table->end() ? nullptr : found.value().get();
         }
         for(usize index = 0u; index < m_inlineCount; ++index){
             if(DeclarationVariable(*m_inline[index]) == reference)
@@ -389,7 +389,7 @@ Expected<ExpandedAssetMetadataVector> ExpandAssetBunch(const Path& assetRoot, co
         const auto declarations = DeclarationLookup::Create(doc, scratchArena);
         if(!declarations)
             return MakeUnexpected(Failure{});
-        Vector<const Metascript::Document::Declaration*, ScratchArena> itemDeclarations(scratchArena);
+        Vector<NotNull<const Metascript::Document::Declaration*>, ScratchArena> itemDeclarations(scratchArena);
         itemDeclarations.reserve(list.size());
         for(usize itemIndex = 0u; itemIndex < list.size(); ++itemIndex){
             const auto itemDeclaration = FindBunchItemDeclaration(nwbFilePath, *declarations, list[itemIndex], itemIndex);
@@ -407,12 +407,12 @@ Expected<ExpandedAssetMetadataVector> ExpandAssetBunch(const Path& assetRoot, co
                 return MakeUnexpected(Failure{});
             }
 
-            itemDeclarations.push_back(&**itemDeclaration);
+            itemDeclarations.push_back(MakeNotNull(&**itemDeclaration));
         }
 
         ScratchNameHashSet resolvingVariableHashes(AddSize(doc.declarations().size(), doc.declarations().size()), Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
 
-        for(const Metascript::Document::Declaration* itemDeclaration : itemDeclarations){
+        for(const auto itemDeclaration : itemDeclarations){
             const AStringView variableName = DeclarationVariable(*itemDeclaration);
             const Metascript::Value* assetValue = doc.findVariable(DeclarationVariableMetaView(*itemDeclaration));
             if(!assetValue){

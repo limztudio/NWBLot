@@ -38,7 +38,7 @@ struct BufferAllocation{
 };
 
 struct BufferSuballocation{
-    Buffer* buffer = nullptr;
+    NotNull<Buffer*> buffer;
     u64 offset = 0u;
     void* cpuAddress = nullptr;
 };
@@ -94,8 +94,8 @@ private:
 private:
     const VulkanContext& m_context;
     VulkanAllocatorHandle m_allocator = nullptr;
-    HashMap<u64, Buffer*, Alloc::GlobalArena, Hasher<u64>, EqualTo<u64>> m_bufferNativeIdentities;
-    HashMap<VkImage, Texture*, Alloc::GlobalArena, Hasher<VkImage>, EqualTo<VkImage>> m_textureNativeIdentities;
+    HashMap<u64, NotNull<Buffer*>, Alloc::GlobalArena, Hasher<u64>, EqualTo<u64>> m_bufferNativeIdentities;
+    HashMap<VkImage, NotNull<Texture*>, Alloc::GlobalArena, Hasher<VkImage>, EqualTo<VkImage>> m_textureNativeIdentities;
     mutable Futex m_bufferNativeIdentityMutex;
     mutable Futex m_textureNativeIdentityMutex;
 };
@@ -129,7 +129,7 @@ private:
 
 
     public:
-        BufferChunk(CpuTaskScheduler& pool, BufferHandle buf, TrackedCommandBuffer* chunkOwner, u64 chunkNativeRecordingID, GpuPhysicalQueueId queue, u64 sz)noexcept;
+        BufferChunk(CpuTaskScheduler& pool, BufferHandle buf, TrackedCommandBuffer& chunkOwner, u64 chunkNativeRecordingID, GpuPhysicalQueueId queue, u64 sz)noexcept;
         ~BufferChunk()noexcept;
     };
 
@@ -173,7 +173,7 @@ private:
     void collectCompletedChunks();
     void trimRetiredChunksLocked(GpuPhysicalQueueId queue, u64 completedVersion)noexcept;
     [[nodiscard]] QueueChunkLedger* findQueueLedgerLocked(GpuPhysicalQueueId queue)noexcept;
-    [[nodiscard]] QueueChunkLedger* findOrCreateQueueLedgerLocked(GpuPhysicalQueueId queue);
+    [[nodiscard]] QueueChunkLedger& findOrCreateQueueLedgerLocked(GpuPhysicalQueueId queue);
     void linkActiveChunkLocked(QueueChunkLedger& ledger, BufferChunk& chunk)noexcept;
     void retireChunkLocked(QueueChunkLedger& ledger, BufferChunk& chunk, u64 version, bool resetAllocated)noexcept;
     void retireSubmittedChunksLocked(GpuPhysicalQueueId queue, u64 version, const Queue::SubmissionCommandListIdentity* submittedCommandLists, usize submittedCommandListCount, const VulkanDetail::SubmittedCommandBufferOwnerLookup& submittedOwners)noexcept;
@@ -264,10 +264,10 @@ private:
 };
 
 
-inline UploadManager::BufferChunk::BufferChunk(CpuTaskScheduler& pool, BufferHandle buf, TrackedCommandBuffer* chunkOwner, u64 chunkNativeRecordingID, GpuPhysicalQueueId queue, u64 sz)noexcept
+inline UploadManager::BufferChunk::BufferChunk(CpuTaskScheduler& pool, BufferHandle buf, TrackedCommandBuffer& chunkOwner, u64 chunkNativeRecordingID, GpuPhysicalQueueId queue, u64 sz)noexcept
     : RefCounter<GraphicsResource>(pool)
     , buffer(Move(buf))
-    , owner(chunkOwner)
+    , owner(&chunkOwner)
     , previousActiveChunk(nullptr)
     , nextActiveChunk(nullptr)
     , nativeRecordingID(chunkNativeRecordingID)

@@ -213,7 +213,7 @@ public:
         else
             commandList.setPushConstants(&resources.frameParametersSlot, sizeof(resources.frameParametersSlot));
 
-        const Core::GpuTimingScopeDefinition* scope = &ReflectionGpuTimingScope::s_BuildArgs;
+        NotNull<const Core::GpuTimingScopeDefinition*> scope(&ReflectionGpuTimingScope::s_BuildArgs);
         if(hardware)
             scope = &ReflectionGpuTimingScope::s_Hardware;
         else if(payload.stage == DispatchStage::Classify)

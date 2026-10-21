@@ -79,12 +79,11 @@ namespace GpuTaskGraphCompilerDetail{
             continue;
         const GpuTaskQueueAssignment& assignment = assignments[producerAssignmentIndex];
         NWB_ASSERT(assignment.task.generation == task.id.generation && assignment.task.index == producerTaskIndex);
-        const GpuPhysicalQueueInfo* const candidate = FindPhysicalQueueInfo(topology, assignment.queue);
-        NWB_ASSERT(candidate);
-        if(candidate->queueClass != baseQueue.queueClass || (!allowCrossFamilyRouting && candidate->familyIndex != baseQueue.familyIndex) || !IsLegalQueueAssignmentCandidate(graph, topology, task, *candidate))
+        auto& candidate = *MakeNotNull(FindPhysicalQueueInfo(topology, assignment.queue));
+        if(candidate.queueClass != baseQueue.queueClass || (!allowCrossFamilyRouting && candidate.familyIndex != baseQueue.familyIndex) || !IsLegalQueueAssignmentCandidate(graph, topology, task, candidate))
             continue;
         if(!result || producerAssignmentIndex > resultAssignmentIndex){
-            result = candidate;
+            result = &candidate;
             resultAssignmentIndex = producerAssignmentIndex;
         }
     }
@@ -114,7 +113,7 @@ namespace GpuTaskGraphCompilerDetail{
     return GpuTaskTimingKey{ .task = assignmentKey.task, .variant = assignmentKey.variant, .resolutionClass = assignmentKey.resolutionClass, .queue = queueClass, };
 }
 
-[[nodiscard]] const GpuPhysicalQueueInfo* FindTimingFeedbackIncumbent(
+[[nodiscard]] const GpuPhysicalQueueInfo& FindTimingFeedbackIncumbent(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuPhysicalQueueTopology& topology,
     const GpuTaskGraphTaskView& task,
@@ -124,12 +123,12 @@ namespace GpuTaskGraphCompilerDetail{
 )noexcept{
     const GpuTaskTimingAssignmentState* const assignmentState = historySnapshot.findAssignment(key);
     if(!assignmentState || assignmentState->lastAcceptedQueue == staticQueue.id)
-        return &staticQueue;
+        return staticQueue;
 
     const GpuPhysicalQueueInfo* const acceptedQueue = FindPhysicalQueueInfo(topology, assignmentState->lastAcceptedQueue);
     if(!acceptedQueue || !IsLegalTimingFeedbackRoute(graph, topology, task, staticQueue, *acceptedQueue))
-        return &staticQueue;
-    return acceptedQueue;
+        return staticQueue;
+    return *acceptedQueue;
 }
 
 [[nodiscard]] bool HasUsableTimingFeedback(const GpuTaskGraphQueueAssignmentOptions& options, const u16 deviceGeneration)noexcept{
@@ -224,7 +223,7 @@ namespace GpuTaskGraphCompilerDetail{
         return history ? history->sampleCount : 0u;
     };
 
-    const GpuPhysicalQueueInfo* result = &incumbent;
+    auto result = MakeNotNull(&incumbent);
     u32 resultSampleCount = sampleCountFor(incumbent);
     bool needsCalibration = resultSampleCount < policy.minimumSampleCount;
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
@@ -237,12 +236,12 @@ namespace GpuTaskGraphCompilerDetail{
             continue;
 
         needsCalibration = true;
-        if(candidateSampleCount < resultSampleCount || (candidateSampleCount == resultSampleCount && result != &incumbent && IsBetterQueue(candidate, result))){
+        if(candidateSampleCount < resultSampleCount || (candidateSampleCount == resultSampleCount && result.get() != &incumbent && IsBetterQueue(candidate, result.get()))){
             result = &candidate;
             resultSampleCount = candidateSampleCount;
         }
     }
-    return needsCalibration ? result : nullptr;
+    return needsCalibration ? result.get() : nullptr;
 }
 
 

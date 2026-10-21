@@ -703,7 +703,7 @@ bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
     }
 
     const auto matchesMesh = [this, &validStorageHandle](const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh, const PreparedSceneSwBvhMesh& prepared)noexcept{
-        const auto attributeCache = m_rayTracingState.m_swMeshHeapHandleCache.find(prepared.attributeBuffer.get());
+        const auto attributeCache = m_rayTracingState.m_swMeshHeapHandleCache.find(NotNull<const Core::Buffer*>(prepared.attributeBuffer.get()));
         const bool topologyReady = mesh.swBvhTopologyBuilt || preparedMeshSwBvhBuildProducesTopology(mesh);
         return
             mesh.meshName == prepared.meshName
@@ -759,10 +759,10 @@ bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
     for(usize index = 0u; index < m_preparedSceneSwBvhMeshes.size(); ++index){
         const PreparedSceneSwBvhMesh& prepared = m_preparedSceneSwBvhMeshes[index];
         if(
-            state.m_swShadowMeshNodeBuffers[index] != prepared.nodeBuffer.get()
-            || state.m_swShadowMeshPositionBuffers[index] != prepared.positionBuffer.get()
-            || state.m_swShadowMeshIndexBuffers[index] != prepared.triangleIndexBuffer.get()
-            || state.m_swShadowMeshAttributeBuffers[index] != prepared.attributeBuffer.get()
+            state.m_swShadowMeshNodeBuffers[index].get() != prepared.nodeBuffer.get()
+            || state.m_swShadowMeshPositionBuffers[index].get() != prepared.positionBuffer.get()
+            || state.m_swShadowMeshIndexBuffers[index].get() != prepared.triangleIndexBuffer.get()
+            || state.m_swShadowMeshAttributeBuffers[index].get() != prepared.attributeBuffer.get()
             || state.m_swShadowMeshNodeHandles[index] != prepared.nodeHeapHandle
             || state.m_swShadowMeshPositionHandles[index] != prepared.positionHeapHandle
             || state.m_swShadowMeshIndexHandles[index] != prepared.triangleIndexHeapHandle

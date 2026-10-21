@@ -55,10 +55,9 @@ Expected<CreatedPipelineLayout> Device::createPipelineLayoutForBindingLayouts(co
     }
 
     if(bindingLayouts.size() == 1 && descriptorSetLayoutCount == 0u){
-        const BindingLayout* const layout = bindingLayouts[0].get();
-        NWB_ASSERT(layout);
-        result.layout = layout->m_pipelineLayout;
-        result.pushConstantByteSize = layout->m_pushConstantByteSize;
+        const BindingLayout& layout = *bindingLayouts[0];
+        result.layout = layout.m_pipelineLayout;
+        result.pushConstantByteSize = layout.m_pushConstantByteSize;
         return result;
     }
 
@@ -79,9 +78,8 @@ Expected<CreatedPipelineLayout> Device::createPipelineLayoutForBindingLayouts(co
         const usize setCount = layout.m_descriptorSetLayouts.size();
         if(setCount == 0u)
             continue;
-        const BindlessLayoutDesc* const bindlessDesc = layout.getBindlessDesc();
-        NWB_ASSERT(bindlessDesc);
-        const u32 base = bindlessDesc->descriptorSetIndex;
+        const BindlessLayoutDesc& bindlessDesc = *layout.getBindlessDesc();
+        const u32 base = bindlessDesc.descriptorSetIndex;
         maxSetIndex = Max<u32>(maxSetIndex, base + static_cast<u32>(setCount) - 1u);
     }
 
@@ -99,9 +97,8 @@ Expected<CreatedPipelineLayout> Device::createPipelineLayoutForBindingLayouts(co
         const BindingLayout& layout = *bindingLayout.get();
         if(layout.m_descriptorSetLayouts.empty())
             continue;
-        const BindlessLayoutDesc* const bindlessDesc = layout.getBindlessDesc();
-        NWB_ASSERT(bindlessDesc);
-        const u32 base = bindlessDesc->descriptorSetIndex;
+        const BindlessLayoutDesc& bindlessDesc = *layout.getBindlessDesc();
+        const u32 base = bindlessDesc.descriptorSetIndex;
         for(usize localSetIndex = 0u; localSetIndex < layout.m_descriptorSetLayouts.size(); ++localSetIndex){
             const u32 setIndex = base + static_cast<u32>(localSetIndex);
             if(descriptorSetLayouts[setIndex] != VK_NULL_HANDLE){
@@ -146,9 +143,8 @@ Expected<PipelineBindingState> Device::buildPipelineBindings(const BindingLayout
 
     bindings.m_bindingLayoutsAtCreation = bindingLayouts;
     for(u32 layoutIndex = 0u; layoutIndex < static_cast<u32>(bindingLayouts.size()); ++layoutIndex){
-        const BindingLayout* const layout = bindingLayouts[layoutIndex].get();
-        NWB_ASSERT(layout != nullptr);
-        const BindlessLayoutDesc* const bindlessDesc = layout->getBindlessDesc();
+        const BindingLayout& bindingLayout = *bindingLayouts[layoutIndex];
+        const BindlessLayoutDesc* const bindlessDesc = bindingLayout.getBindlessDesc();
         bindings.m_bindingLayoutSetIndicesAtCreation[layoutIndex] = bindlessDesc ? bindlessDesc->descriptorSetIndex : Limit<u32>::s_Max;
     }
     return bindings;

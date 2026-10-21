@@ -163,14 +163,12 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector4TransformTransposed(SIMDVectorS
 }
 
 template<typename OutputT, typename InputT, typename TransformT>
-NWB_INLINE OutputT* NWB_SIMD_CALL VectorTransformStreamImpl(OutputT* outputStream, usize outputStride, const InputT* inputStream, usize inputStride, usize vectorCount, const SIMDMatrix& matrix, TransformT transform)noexcept(
+NWB_INLINE NotNull<OutputT*> NWB_SIMD_CALL VectorTransformStreamImpl(NotNull<OutputT*> outputStream, usize outputStride, NotNull<const InputT*> inputStream, usize inputStride, usize vectorCount, const SIMDMatrix& matrix, TransformT transform)noexcept(
     IsNothrowDestructible_V<TransformT>
     && noexcept(MatrixTransposeForTransform(matrix))
     && noexcept(DeclVal<void(*)(SIMDVectorSingle)noexcept>()(LoadFloat(*VectorScalarDetail::StridePointer(inputStream, inputStride, 0u))))
     && noexcept(StoreFloat(transform(DeclVal<const SIMDVectorSingle&>(), DeclVal<const SIMDMatrix&>()), *VectorScalarDetail::StridePointer(outputStream, outputStride, 0u)))
 ){
-    NWB_ASSERT(outputStream != nullptr);
-    NWB_ASSERT(inputStream != nullptr);
     NWB_ASSERT(inputStride >= sizeof(InputT));
     NWB_ASSERT(outputStride >= sizeof(OutputT));
 
@@ -335,14 +333,12 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble4TransformTransposed(SIMDV
 }
 
 template<typename OutputT, typename InputT, typename TransformT>
-NWB_INLINE OutputT* NWB_SIMD_CALL VectorDoubleTransformStreamImpl(OutputT* outputStream, usize outputStride, const InputT* inputStream, usize inputStride, usize vectorCount, const SIMDMatrixDouble& matrix, TransformT transform)noexcept(
+NWB_INLINE NotNull<OutputT*> NWB_SIMD_CALL VectorDoubleTransformStreamImpl(NotNull<OutputT*> outputStream, usize outputStride, NotNull<const InputT*> inputStream, usize inputStride, usize vectorCount, const SIMDMatrixDouble& matrix, TransformT transform)noexcept(
     IsNothrowDestructible_V<TransformT>
     && noexcept(MatrixDoubleTransposeForTransform(matrix))
     && noexcept(DeclVal<void(*)(SIMDVectorDouble)noexcept>()(LoadDouble(*VectorScalarDetail::StridePointer(inputStream, inputStride, 0u))))
     && noexcept(StoreDouble(transform(DeclVal<const SIMDVectorDouble&>(), DeclVal<const SIMDMatrixDouble&>()), *VectorScalarDetail::StridePointer(outputStream, outputStride, 0u)))
 ){
-    NWB_ASSERT(outputStream != nullptr);
-    NWB_ASSERT(inputStream != nullptr);
     NWB_ASSERT(inputStride >= sizeof(InputT));
     NWB_ASSERT(outputStride >= sizeof(OutputT));
     NWB_ASSERT(inputStride % alignof(InputT) == 0u);

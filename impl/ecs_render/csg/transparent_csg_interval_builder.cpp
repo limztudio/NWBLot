@@ -51,14 +51,14 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
 ){
     using namespace RendererTaskGraphDetail;
     TransparentCsgIntervalProducerResult result{};
-    if(!inputs.targets || !inputs.csgFrameState || !inputs.frameBindings || !inputs.csgResources || !inputs.meshViewState || !inputs.prefixTask.valid())
+    if(!inputs.prefixTask.valid())
         return MakeUnexpected(Failure{});
 
     // Freeze the transparent CSG interval producer before AVBOIT recording; snapshot covers receiver work only.
     result.uploadTask = inputs.prefixTask;
     Core::GpuGraphResourceSetId transparentCsgMaterialGeometrySet;
     Core::GpuGraphResourceSetId transparentCsgMaterialSampledTextureSet;
-    const bool hasTransparentCsgFrameWork = inputs.hasTransparentRenderers && (inputs.csgFrameState->hasTransparentStaticWork || inputs.csgFrameState->hasTransparentSkinnedWork);
+    const bool hasTransparentCsgFrameWork = inputs.hasTransparentRenderers && (inputs.csgFrameState.hasTransparentStaticWork || inputs.csgFrameState.hasTransparentSkinnedWork);
     if(hasTransparentCsgFrameWork){
         MaterialPassDrawItemPartitions transparentCsgDrawItems{ scratchArena };
         InstanceGpuDataVector transparentCsgInstanceData{ scratchArena };
@@ -68,17 +68,17 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
 #endif
         MaterialTypedByteDataVector transparentCsgMaterialTypedBytes{ scratchArena };
         m_materialSystem.gatherMaterialPassDrawItems(
-            inputs.targets->framebuffer.get(),
+            inputs.targets.framebuffer.get(),
             MaterialPipelinePass::CsgReceiverSurface,
             true,
-            (*inputs.csgFrameState),
+            (inputs.csgFrameState),
             transparentCsgDrawItems,
             transparentCsgInstanceData,
             transparentCsgFrameData,
 #if defined(NWB_DEBUG)
             transparentCsgMaterialTypedRanges,
 #endif
-            transparentCsgMaterialTypedBytes, RendererResourceLookupMode::PreparedOnly, inputs.meshViewState
+            transparentCsgMaterialTypedBytes, RendererResourceLookupMode::PreparedOnly, &inputs.meshViewState
         );
 
         if(!transparentCsgDrawItems.csgReceiverSurface.empty() && transparentCsgFrameData.hasWork()){
@@ -89,9 +89,9 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
                 || !inputs.csgCutters.valid()
                 || !inputs.csgClipContextSlots.valid()
                 || !inputs.csgIntervalSampleState.valid()
-                || !(*inputs.frameBindings).frameReady(transparentCsgInstanceData.size(), transparentCsgMaterialTypedBytes.size())
-                || !(*inputs.csgResources).frameReady(transparentCsgFrameData)
-                || !m_materialSystem.materialPassDrawResourcesReady(transparentCsgDrawItems.csgReceiverSurface, (*inputs.frameBindings))
+                || !(inputs.frameBindings).frameReady(transparentCsgInstanceData.size(), transparentCsgMaterialTypedBytes.size())
+                || !(inputs.csgResources).frameReady(transparentCsgFrameData)
+                || !m_materialSystem.materialPassDrawResourcesReady(transparentCsgDrawItems.csgReceiverSurface, (inputs.frameBindings))
             ){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared transparent CSG interval resources were unavailable during graph declaration"));
                 return MakeUnexpected(Failure{});
@@ -127,7 +127,7 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
             }
             transparentCsgMaterialSampledTextureSet = *sampledTextureSetResult;
 
-            m_materialSystem.prepareMaterialPassInstanceUploadData(transparentCsgInstanceData, (*inputs.csgResources));
+            m_materialSystem.prepareMaterialPassInstanceUploadData(transparentCsgInstanceData, (inputs.csgResources));
 #if defined(NWB_DEBUG)
             if(
                 transparentCsgInstanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData)
@@ -141,12 +141,12 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
             ECSRenderDetail::AssertMaterialTypedUploadRanges(transparentCsgMaterialTypedRanges, transparentCsgMaterialTypedBytes);
 #endif
 
-            const auto clipContextSlotResult = m_csgSystem.prepareCsgClipContextSlotData(*inputs.targets, transparentCsgFrameData, *inputs.csgResources, *inputs.frameBindings);
+            const auto clipContextSlotResult = m_csgSystem.prepareCsgClipContextSlotData(inputs.targets, transparentCsgFrameData, inputs.csgResources, inputs.frameBindings);
             if(!clipContextSlotResult){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not snapshot transparent CSG interval auxiliary upload data"));
                 return MakeUnexpected(Failure{});
             }
-            const auto intervalSampleStateResult = m_csgSystem.prepareCsgIntervalSampleStateData(*inputs.targets, transparentCsgFrameData, *inputs.csgResources, *inputs.frameBindings);
+            const auto intervalSampleStateResult = m_csgSystem.prepareCsgIntervalSampleStateData(inputs.targets, transparentCsgFrameData, inputs.csgResources, inputs.frameBindings);
             if(!intervalSampleStateResult){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not snapshot transparent CSG interval auxiliary upload data"));
                 return MakeUnexpected(Failure{});
@@ -313,7 +313,7 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
             clearDesc.setIdentity(identity).setMarkerLabel(markerLabel).setScheduling(transparentCsgIntervalClearScheduling).setDependencies(&dependency, 1u);
             return clearDesc;
         };
-        const Core::Rect transparentCsgClearRect = avboitPrePayload.transparentCsgSnapshot.csgWorkRegion.resolveRect(inputs.targets->width, inputs.targets->height);
+        const Core::Rect transparentCsgClearRect = avboitPrePayload.transparentCsgSnapshot.csgWorkRegion.resolveRect(inputs.targets.width, inputs.targets.height);
         const Core::GpuClearTextureTaskRecordHooks transparentCsgIntervalClearBeginHooks{ .context = &intervalClearTimingState, .beforeClear = &BeginGraphClearTimingRecord, .discarded = &DiscardGraphClearTimingRecord, };
         const Core::GpuClearTextureTaskRecordHooks transparentCsgIntervalClearEndHooks{ .context = &intervalClearTimingState, .afterClear = &EndGraphClearTimingRecord, .discarded = &DiscardGraphClearTimingRecord, };
         const auto mAvboitSystemTaskGraphStageMTransparentCsgIntervalClearFirstTaskResult = m_graph.addClearTextureRectUIntTask(

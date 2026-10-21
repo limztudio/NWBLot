@@ -3,6 +3,7 @@
 
 
 #include <global/cpu_topology.h>
+#include <global/not_null.h>
 #include <global/platform.h>
 #include <global/thread.h>
 
@@ -65,8 +66,8 @@ TEST(CpuTopologyTests, DiscoveryHonorsProcessDefaultCpuSets){
         if(byteCount == 0u)
             ExitProcess(3u);
         InteropVector<u64> storage((static_cast<usize>(byteCount) + sizeof(u64) - 1u) / sizeof(u64));
-        auto* information = reinterpret_cast<PSYSTEM_CPU_SET_INFORMATION>(storage.data());
-        if(!GetSystemCpuSetInformation(information, byteCount, &byteCount, GetCurrentProcess(), 0u))
+        auto information = MakeNotNull(reinterpret_cast<PSYSTEM_CPU_SET_INFORMATION>(storage.data()));
+        if(!GetSystemCpuSetInformation(information.get(), byteCount, &byteCount, GetCurrentProcess(), 0u))
             ExitProcess(4u);
         ULONG selectedId = Limit<ULONG>::s_Max;
         for(usize offset = 0u; offset < byteCount; offset += information->Size){

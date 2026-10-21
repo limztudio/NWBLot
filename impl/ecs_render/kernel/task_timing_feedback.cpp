@@ -195,9 +195,8 @@ RendererTaskTimingFeedback::RendererTaskTimingFeedback(Core::Alloc::GlobalArena&
     , m_feedbackCollectionScopes(arena)
 {
     NWB_ASSERT(feedbackCollectionScopeCount != 0u);
-    const Name* const scopeNames = feedbackCollectionScopes.get();
     m_feedbackCollectionScopes.reserve(feedbackCollectionScopeCount);
-    m_feedbackCollectionScopes.assign(scopeNames, scopeNames + feedbackCollectionScopeCount);
+    m_feedbackCollectionScopes.assign(feedbackCollectionScopes.get(), feedbackCollectionScopes.get() + feedbackCollectionScopeCount);
 }
 RendererTaskTimingFeedback::~RendererTaskTimingFeedback()noexcept{
     deactivate();

@@ -41,11 +41,11 @@ Expected<FrameGraphAvboitOccupancyUploadResult> FrameGraphAvboitOccupancyUploadC
     FrameGraphAvboitOccupancyUploadResult result{};
     RendererTaskGraphDetail::AvboitOccupancyGraphTask::Payload& avboitOccupancyPayload = occupancyPayload;
     RendererTaskGraphDetail::AvboitOccupancyComputeEmulationGraphTask::Payload& avboitOccupancyComputeEmulationPayload = computeEmulationPayload;
-    DeferredFrameTargets& deferredTargets = *inputs.targets;
-    const CsgFrameState& csgFrameState = *inputs.csgFrameState;
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings = *inputs.frameBindings;
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources = *inputs.csgResources;
-    const ECSRenderDetail::MeshViewGpuData& meshViewState = *inputs.meshViewState;
+    DeferredFrameTargets& deferredTargets = inputs.targets;
+    const CsgFrameState& csgFrameState = inputs.csgFrameState;
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings = inputs.frameBindings;
+    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources = inputs.csgResources;
+    const ECSRenderDetail::MeshViewGpuData& meshViewState = inputs.meshViewState;
     const Core::GpuGraphResourceId materialInstances = inputs.materialInstances;
     const Core::GpuGraphResourceId materialTyped = inputs.materialTyped;
     const Core::GpuGraphResourceId csgReceiverRanges = inputs.csgReceiverRanges;
@@ -77,12 +77,12 @@ Expected<FrameGraphAvboitOccupancyUploadResult> FrameGraphAvboitOccupancyUploadC
         AvboitPassUploadHelper occupancyUploadHelper(m_materialSystem);
         auto occupancyUploadResult = occupancyUploadHelper.gather(
             AvboitPassUploadInputs{
-                .framebuffer = deferredTargets.avboit.lowFramebuffer.get(),
+                .framebuffer = *deferredTargets.avboit.lowFramebuffer,
                 .pass = MaterialPipelinePass::AvboitOccupancy,
-                .csgFrameState = &csgFrameState,
-                .frameBindings = &frameBindings,
-                .csgResources = &csgResources,
-                .meshViewState = &meshViewState,
+                .csgFrameState = csgFrameState,
+                .frameBindings = frameBindings,
+                .csgResources = csgResources,
+                .meshViewState = meshViewState,
                 .materialInstances = materialInstances,
                 .materialTyped = materialTyped,
                 .csgReceiverRanges = csgReceiverRanges,
@@ -139,9 +139,9 @@ Expected<FrameGraphAvboitOccupancyUploadResult> FrameGraphAvboitOccupancyUploadC
             AvboitMaterialUploadBuilder occupancyMaterialUploadBuilder(m_graph, m_csgSystem);
             auto occupancyCsgStreamsUploadedResult = occupancyMaterialUploadBuilder.declare(
                 AvboitMaterialUploadInputs{
-                    .targets = &deferredTargets,
-                    .csgResources = &csgResources,
-                    .frameBindings = &frameBindings,
+                    .targets = deferredTargets,
+                    .csgResources = csgResources,
+                    .frameBindings = frameBindings,
                     .materialInstances = materialInstances,
                     .materialTyped = materialTyped,
                     .csgReceiverRanges = csgReceiverRanges,
@@ -169,8 +169,8 @@ Expected<FrameGraphAvboitOccupancyUploadResult> FrameGraphAvboitOccupancyUploadC
             AvboitComputeEmulationCapture occupancyComputeEmulationCapture;
             auto occupancyComputeEmulationCaptureResult = occupancyComputeEmulationCapture.capture(
                 AvboitComputeEmulationCaptureInputs{
-                    .drawItems = &occupancyDrawItems,
-                    .csgFrameData = &occupancyCsgFrameData,
+                    .drawItems = occupancyDrawItems,
+                    .csgFrameData = occupancyCsgFrameData,
                     .geometryOwned = avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned,
                     .sampledTexturesCollected = occupancyMaterialSampledTexturesCollected,
                     .csgStreamsUploaded = occupancyCsgStreamsUploaded,

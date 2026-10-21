@@ -48,16 +48,16 @@ volatile u64 g_Checksum = 0u;
 
 
 struct AlignedBytes final{
-    void* storage;
-    u8* data;
+    NotNull<void*> storage;
+    NotNull<u8*> data;
 
 
 public:
     explicit AlignedBytes(usize count)
-        : storage(::operator new(count, AlignValT{ s_Alignment }))
-        , data(::new(storage) u8[count])
+        : storage(MakeNotNull(::operator new(count, AlignValT{ s_Alignment })))
+        , data(MakeNotNull(::new(storage.get()) u8[count]))
     {}
-    ~AlignedBytes()noexcept{ ::operator delete(storage, AlignValT{ s_Alignment }); }
+    ~AlignedBytes()noexcept{ ::operator delete(storage.get(), AlignValT{ s_Alignment }); }
     AlignedBytes(const AlignedBytes&) = delete;
 
 
@@ -85,66 +85,66 @@ NWB_INLINE void CandidateCopy(void* destination, usize capacity, const void* sou
     if(separation < count)
         ::abort();
 
-    auto* dst = static_cast<u8*>(__builtin_assume_aligned(destination, s_SIMDMemoryCopyAlignment));
-    const auto* src = static_cast<const u8*>(__builtin_assume_aligned(source, s_SIMDMemoryCopyAlignment));
+    auto dst = MakeNotNull(static_cast<u8*>(__builtin_assume_aligned(destination, s_SIMDMemoryCopyAlignment)));
+    auto src = MakeNotNull(static_cast<const u8*>(__builtin_assume_aligned(source, s_SIMDMemoryCopyAlignment)));
     if(count > 8192u){
-        __builtin_memcpy(dst, src, count);
+        __builtin_memcpy(dst.get(), src.get(), count);
         return;
     }
     while(count >= 128u){
-        const __m256i packet0 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(src));
-        const __m256i packet1 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(src + 32u));
-        const __m256i packet2 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(src + 64u));
-        const __m256i packet3 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(src + 96u));
-        _mm256_storeu_si256(reinterpret_cast<__m256i*>(dst), packet0);
-        _mm256_storeu_si256(reinterpret_cast<__m256i*>(dst + 32u), packet1);
-        _mm256_storeu_si256(reinterpret_cast<__m256i*>(dst + 64u), packet2);
-        _mm256_storeu_si256(reinterpret_cast<__m256i*>(dst + 96u), packet3);
-        dst += 128u;
-        src += 128u;
+        const __m256i packet0 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(src.get()));
+        const __m256i packet1 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(src.get() + 32u));
+        const __m256i packet2 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(src.get() + 64u));
+        const __m256i packet3 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(src.get() + 96u));
+        _mm256_storeu_si256(reinterpret_cast<__m256i*>(dst.get()), packet0);
+        _mm256_storeu_si256(reinterpret_cast<__m256i*>(dst.get() + 32u), packet1);
+        _mm256_storeu_si256(reinterpret_cast<__m256i*>(dst.get() + 64u), packet2);
+        _mm256_storeu_si256(reinterpret_cast<__m256i*>(dst.get() + 96u), packet3);
+        dst = dst.get() + 128u;
+        src = src.get() + 128u;
         count -= 128u;
     }
     while(count >= 32u){
-        _mm256_storeu_si256(reinterpret_cast<__m256i*>(dst), _mm256_loadu_si256(reinterpret_cast<const __m256i*>(src)));
-        dst += 32u;
-        src += 32u;
+        _mm256_storeu_si256(reinterpret_cast<__m256i*>(dst.get()), _mm256_loadu_si256(reinterpret_cast<const __m256i*>(src.get())));
+        dst = dst.get() + 32u;
+        src = src.get() + 32u;
         count -= 32u;
     }
     if(count >= 16u){
-        _mm_store_si128(reinterpret_cast<__m128i*>(dst), _mm_load_si128(reinterpret_cast<const __m128i*>(src)));
-        dst += 16u;
-        src += 16u;
+        _mm_store_si128(reinterpret_cast<__m128i*>(dst.get()), _mm_load_si128(reinterpret_cast<const __m128i*>(src.get())));
+        dst = dst.get() + 16u;
+        src = src.get() + 16u;
         count -= 16u;
     }
     if(count >= 8u){
-        __builtin_memcpy(dst, src, 8u);
-        dst += 8u;
-        src += 8u;
+        __builtin_memcpy(dst.get(), src.get(), 8u);
+        dst = dst.get() + 8u;
+        src = src.get() + 8u;
         count -= 8u;
     }
     if(count >= 4u){
-        __builtin_memcpy(dst, src, 4u);
-        dst += 4u;
-        src += 4u;
+        __builtin_memcpy(dst.get(), src.get(), 4u);
+        dst = dst.get() + 4u;
+        src = src.get() + 4u;
         count -= 4u;
     }
     if(count >= 2u){
-        __builtin_memcpy(dst, src, 2u);
-        dst += 2u;
-        src += 2u;
+        __builtin_memcpy(dst.get(), src.get(), 2u);
+        dst = dst.get() + 2u;
+        src = src.get() + 2u;
         count -= 2u;
     }
     if(count != 0u)
-        __builtin_memcpy(dst, src, 1u);
+        __builtin_memcpy(dst.get(), src.get(), 1u);
 #else
     SIMDMemoryCopy(destination, capacity, source, count);
 #endif
 }
 
-NWB_INLINE bool CandidateEqual(const u64* lhs, const u64* rhs)noexcept{
+NWB_INLINE bool CandidateEqual(const NotNull<const u64*> lhs, const NotNull<const u64*> rhs)noexcept{
 #if defined(NWB_HAS_AVX)
-    const __m256i left = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(lhs));
-    const __m256i right = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(rhs));
+    const __m256i left = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(lhs.get()));
+    const __m256i right = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(rhs.get()));
     const __m256 difference = _mm256_xor_ps(_mm256_castsi256_ps(left), _mm256_castsi256_ps(right));
     const __m256i bits = _mm256_castps_si256(difference);
     // Integer VPTEST covers every bit; floating VTESTPS only examines sign bits.
@@ -155,8 +155,8 @@ NWB_INLINE bool CandidateEqual(const u64* lhs, const u64* rhs)noexcept{
 }
 
 // Preserve an inexpensive first-word rejection before the full-width exact-bit reduction.
-NWB_INLINE bool CandidateEqualFirstWord(const u64* lhs, const u64* rhs)noexcept{
-    if(lhs[0] != rhs[0])
+NWB_INLINE bool CandidateEqualFirstWord(const NotNull<const u64*> lhs, const NotNull<const u64*> rhs)noexcept{
+    if(lhs.get()[0] != rhs.get()[0])
         return false;
     return CandidateEqual(lhs, rhs);
 }
@@ -178,35 +178,35 @@ NWB_INLINE bool CandidateEqualFirstWord(const u64* lhs, const u64* rhs)noexcept{
     constexpr usize s_Bytes = 16640u;
     AlignedBytes source(s_Bytes), destination(s_Bytes);
     for(usize index = 0u; index < s_Bytes; ++index)
-        source.data[index] = PatternByte(index);
+        source.data.get()[index] = PatternByte(index);
     for(const usize count : s_QualifyLengths){
         for(usize sourceOffset = 0u; sourceOffset < 128u; sourceOffset += 16u){
             for(usize destinationOffset = 0u; destinationOffset < 128u; destinationOffset += 16u){
-                NWB_MEMSET(destination.data, s_Poison, s_Bytes);
-                CandidateCopy(destination.data + destinationOffset, count, source.data + sourceOffset, count);
-                if(!CheckRange(destination.data, s_Bytes, destinationOffset, count, sourceOffset))
+                NWB_MEMSET(destination.data.get(), s_Poison, s_Bytes);
+                CandidateCopy(destination.data.get() + destinationOffset, count, source.data.get() + sourceOffset, count);
+                if(!CheckRange(destination.data.get(), s_Bytes, destinationOffset, count, sourceOffset))
                     return false;
             }
         }
     }
     for(usize index = 0u; index < s_Bytes; ++index){
-        if(source.data[index] != PatternByte(index))
+        if(source.data.get()[index] != PatternByte(index))
             return false;
     }
     for(const usize count : { 16u, 32u, 48u, 64u, 128u, 4096u }){
         for(const bool destinationFirst : { false, true }){
             for(usize index = 0u; index < s_Bytes; ++index)
-                destination.data[index] = PatternByte(index);
+                destination.data.get()[index] = PatternByte(index);
             const usize destinationStart = destinationFirst ? 0u : count, sourceStart = destinationFirst ? count : 0u;
-            CandidateCopy(destination.data + destinationStart, count, destination.data + sourceStart, count);
+            CandidateCopy(destination.data.get() + destinationStart, count, destination.data.get() + sourceStart, count);
             for(usize index = 0u; index < count; ++index){
-                if(destination.data[destinationStart + index] != PatternByte(sourceStart + index))
+                if(destination.data.get()[destinationStart + index] != PatternByte(sourceStart + index))
                     return false;
             }
         }
     }
     CandidateCopy(nullptr, 0u, nullptr, 0u);
-    CandidateCopy(destination.data + 1u, 0u, source.data + 3u, 0u);
+    CandidateCopy(destination.data.get() + 1u, 0u, source.data.get() + 3u, 0u);
     return true;
 }
 
@@ -283,13 +283,13 @@ static void ExitOnAbort(int)noexcept{ _exit(s_AbortExit); }
     }
     for(const bool sourceAtEnd : { false, true }){
         for(const bool destinationAtEnd : { false, true }){
-            auto* left = ::new(sourceAtEnd ? source.upperGuard - 32u : source.data) u64[4u];
-            auto* right = ::new(destinationAtEnd ? destination.upperGuard - 32u : destination.data) u64[4u];
+            const auto left = MakeNotNull(::new(sourceAtEnd ? source.upperGuard - 32u : source.data) u64[4u]);
+            const auto right = MakeNotNull(::new(destinationAtEnd ? destination.upperGuard - 32u : destination.data) u64[4u]);
             for(usize lane = 0u; lane < 4u; ++lane)
-                left[lane] = right[lane] = 0x7FF0000000000001ull + lane;
+                left.get()[lane] = right.get()[lane] = 0x7FF0000000000001ull + lane;
             if(!CandidateEqual(left, right) || !CandidateEqualFirstWord(left, right))
                 return false;
-            right[3u] ^= 1u;
+            right.get()[3u] ^= 1u;
             if(CandidateEqual(left, right) || CandidateEqualFirstWord(left, right))
                 return false;
         }
@@ -324,12 +324,12 @@ static void ExitOnAbort(int)noexcept{ _exit(s_AbortExit); }
         for(usize offset = 0u; offset < 4u; ++offset){
             for(usize lane = 0u; lane < 4u; ++lane)
                 lhs[offset + lane] = rhs[offset + lane] = pattern ^ static_cast<u64>(lane);
-            if(!CandidateEqual(lhs + offset, rhs + offset) || !CandidateEqualFirstWord(lhs + offset, rhs + offset))
+            if(!CandidateEqual(MakeNotNull(lhs + offset), MakeNotNull(rhs + offset)) || !CandidateEqualFirstWord(MakeNotNull(lhs + offset), MakeNotNull(rhs + offset)))
                 valid = false;
             for(usize lane = 0u; lane < 4u; ++lane){
                 for(u32 bit = 0u; bit < 64u; ++bit){
                     rhs[offset + lane] ^= u64{ 1u } << bit;
-                    if(CandidateEqual(lhs + offset, rhs + offset) || CandidateEqualFirstWord(lhs + offset, rhs + offset) || MathTypeDetail::EqualElements<u64, 4u>(lhs + offset, rhs + offset))
+                    if(CandidateEqual(MakeNotNull(lhs + offset), MakeNotNull(rhs + offset)) || CandidateEqualFirstWord(MakeNotNull(lhs + offset), MakeNotNull(rhs + offset)) || MathTypeDetail::EqualElements<u64, 4u>(MakeNotNull(lhs + offset), MakeNotNull(rhs + offset)))
                         valid = false;
                     rhs[offset + lane] ^= u64{ 1u } << bit;
                 }
@@ -339,11 +339,11 @@ static void ExitOnAbort(int)noexcept{ _exit(s_AbortExit); }
     if(TestFloatingPointExceptions(FE_ALL_EXCEPT) != 0 || !RaiseFloatingPointExceptions(FE_DIVBYZERO))
         valid = false;
     // Opaque call targets prevent either predicate from being removed between the pre-existing flag and its observation.
-    bool(*volatile wideFunction)(const u64*, const u64*)noexcept = CandidateEqual;
-    bool(*volatile firstWordFunction)(const u64*, const u64*)noexcept = CandidateEqualFirstWord;
-    const bool wideEqual = wideFunction(lhs, rhs);
+    bool(*volatile wideFunction)(NotNull<const u64*>, NotNull<const u64*>)noexcept = CandidateEqual;
+    bool(*volatile firstWordFunction)(NotNull<const u64*>, NotNull<const u64*>)noexcept = CandidateEqualFirstWord;
+    const bool wideEqual = wideFunction(MakeNotNull(lhs), MakeNotNull(rhs));
     const i32 wideFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    const bool firstWordEqual = firstWordFunction(lhs, rhs);
+    const bool firstWordEqual = firstWordFunction(MakeNotNull(lhs), MakeNotNull(rhs));
     const i32 firstWordFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
     if(!wideEqual || !firstWordEqual || wideFlags != FE_DIVBYZERO || firstWordFlags != FE_DIVBYZERO)
         valid = false;
@@ -380,12 +380,12 @@ NWB_NOINLINE u64 EqualityBatch(const u64* lhs, const u64* rhs, usize slots, usiz
         AtomicSignalFence(MemoryOrder::seq_cst);
         if constexpr(Candidate){
             if constexpr(FirstWord)
-                total += CandidateEqualFirstWord(lhs + slot * stride, rhs + slot * stride) ? 1u : 0u;
+                total += CandidateEqualFirstWord(MakeNotNull(lhs + slot * stride), MakeNotNull(rhs + slot * stride)) ? 1u : 0u;
             else
-                total += CandidateEqual(lhs + slot * stride, rhs + slot * stride) ? 1u : 0u;
+                total += CandidateEqual(MakeNotNull(lhs + slot * stride), MakeNotNull(rhs + slot * stride)) ? 1u : 0u;
         }
         else
-            total += MathTypeDetail::EqualElements<u64, 4u>(lhs + slot * stride, rhs + slot * stride) ? 1u : 0u;
+            total += MathTypeDetail::EqualElements<u64, 4u>(MakeNotNull(lhs + slot * stride), MakeNotNull(rhs + slot * stride)) ? 1u : 0u;
         if(++slot == slots)
             slot = 0u;
     }
@@ -395,17 +395,17 @@ NWB_NOINLINE u64 EqualityBatch(const u64* lhs, const u64* rhs, usize slots, usiz
 using CopyBatchFunction = void(*)(u8*, const u8*, usize, usize, usize, usize)noexcept;
 using EqualityBatchFunction = u64(*)(const u64*, const u64*, usize, usize, usize)noexcept;
 
-[[nodiscard]] f64 TimeCopy(CopyBatchFunction function, u8* destination, const u8* source, usize slots, usize stride, usize bytes, usize iterations)noexcept{
+[[nodiscard]] f64 TimeCopy(const NotNull<CopyBatchFunction> function, const NotNull<u8*> destination, const NotNull<const u8*> source, usize slots, usize stride, usize bytes, usize iterations)noexcept{
     const Timer start = TimerNow();
-    function(destination, source, slots, stride, bytes, iterations);
+    function.get()(destination.get(), source.get(), slots, stride, bytes, iterations);
     const Timer end = TimerNow();
-    g_Checksum = g_Checksum + destination[(iterations - 1u) % slots * stride];
+    g_Checksum = g_Checksum + destination.get()[(iterations - 1u) % slots * stride];
     return VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(DurationInNS<f64>(end, start)), VectorDoubleReplicate(static_cast<f64>(iterations))));
 }
 
-[[nodiscard]] f64 TimeEquality(EqualityBatchFunction function, const u64* lhs, const u64* rhs, usize slots, usize stride, usize iterations)noexcept{
+[[nodiscard]] f64 TimeEquality(const NotNull<EqualityBatchFunction> function, const u64* lhs, const u64* rhs, usize slots, usize stride, usize iterations)noexcept{
     const Timer start = TimerNow();
-    const u64 result = function(lhs, rhs, slots, stride, iterations);
+    const u64 result = function.get()(lhs, rhs, slots, stride, iterations);
     const Timer end = TimerNow();
     g_Checksum = g_Checksum + result;
     return VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(DurationInNS<f64>(end, start)), VectorDoubleReplicate(static_cast<f64>(iterations))));
@@ -419,26 +419,26 @@ void BenchCopy(usize samples){
             const usize slots = streaming ? s_StreamingBytes / stride : 1u;
             AlignedBytes source(slots * stride + 128u), destination(slots * stride + 128u);
             for(usize index = 0u; index < slots * stride + 128u; ++index)
-                source.data[index] = PatternByte(index);
-            NWB_MEMSET(destination.data, s_Poison, slots * stride + 128u);
+                source.data.get()[index] = PatternByte(index);
+            NWB_MEMSET(destination.data.get(), s_Poison, slots * stride + 128u);
             usize iterations = s_StreamingBytes / bytes;
             if(iterations < 65536u)
                 iterations = 65536u;
-            const CopyBatchFunction baseline = bytes == 5120u ? CopyBatch<false, 5120u> : CopyBatch<false>;
-            const CopyBatchFunction candidate = bytes == 5120u ? CopyBatch<true, 5120u> : CopyBatch<true>;
+            const auto baseline = MakeNotNull<CopyBatchFunction>(bytes == 5120u ? CopyBatch<false, 5120u> : CopyBatch<false>);
+            const auto candidate = MakeNotNull<CopyBatchFunction>(bytes == 5120u ? CopyBatch<true, 5120u> : CopyBatch<true>);
             for(const usize sourceOffset : { 16u, 32u }){
                 for(const usize destinationOffset : { 16u, 32u }){
-                    baseline(destination.data + destinationOffset, source.data + sourceOffset, slots, stride, bytes, 1024u);
-                    candidate(destination.data + destinationOffset, source.data + sourceOffset, slots, stride, bytes, 1024u);
+                    baseline.get()(destination.data.get() + destinationOffset, source.data.get() + sourceOffset, slots, stride, bytes, 1024u);
+                    candidate.get()(destination.data.get() + destinationOffset, source.data.get() + sourceOffset, slots, stride, bytes, 1024u);
                     for(usize sample = 0u; sample < samples; ++sample){
                         f64 baselineNs, candidateNs;
                         if((sample & 1u) == 0u){
-                            baselineNs = TimeCopy(baseline, destination.data + destinationOffset, source.data + sourceOffset, slots, stride, bytes, iterations);
-                            candidateNs = TimeCopy(candidate, destination.data + destinationOffset, source.data + sourceOffset, slots, stride, bytes, iterations);
+                            baselineNs = TimeCopy(baseline, MakeNotNull(destination.data.get() + destinationOffset), MakeNotNull(source.data.get() + sourceOffset), slots, stride, bytes, iterations);
+                            candidateNs = TimeCopy(candidate, MakeNotNull(destination.data.get() + destinationOffset), MakeNotNull(source.data.get() + sourceOffset), slots, stride, bytes, iterations);
                         }
                         else{
-                            candidateNs = TimeCopy(candidate, destination.data + destinationOffset, source.data + sourceOffset, slots, stride, bytes, iterations);
-                            baselineNs = TimeCopy(baseline, destination.data + destinationOffset, source.data + sourceOffset, slots, stride, bytes, iterations);
+                            candidateNs = TimeCopy(candidate, MakeNotNull(destination.data.get() + destinationOffset), MakeNotNull(source.data.get() + sourceOffset), slots, stride, bytes, iterations);
+                            baselineNs = TimeCopy(baseline, MakeNotNull(destination.data.get() + destinationOffset), MakeNotNull(source.data.get() + sourceOffset), slots, stride, bytes, iterations);
                         }
                         const f64 candidateOverBaseline = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(candidateNs), VectorDoubleReplicate(baselineNs)));
                         NWB_COUT << (bytes == 5120u ? "copy_fixed" : "copy_dynamic") << ',' << (streaming ? "streaming" : "warm") << ',' << bytes << ',' << sourceOffset << ',' << destinationOffset << ',' << sample << ',';
@@ -452,25 +452,25 @@ void BenchCopy(usize samples){
 }
 
 void BenchEquality(usize samples, bool firstWord){
-    const EqualityBatchFunction candidate = firstWord ? EqualityBatch<true, true> : EqualityBatch<true>;
+    const auto candidate = MakeNotNull<EqualityBatchFunction>(firstWord ? EqualityBatch<true, true> : EqualityBatch<true>);
     NWB_COUT << "kind,cache,case,offset,sample,baseline_ns,candidate_ns,candidate_over_baseline\n";
     for(const bool streaming : { false, true }){
         const usize slots = streaming ? s_StreamingBytes / 64u : 1u;
         AlignedBytes left(slots * 64u + 64u), right(slots * 64u + 64u);
-        auto* lhs = ::new(left.data) u64[slots * 8u + 8u];
-        auto* rhs = ::new(right.data) u64[slots * 8u + 8u];
+        const auto lhs = MakeNotNull(::new(left.data.get()) u64[slots * 8u + 8u]);
+        const auto rhs = MakeNotNull(::new(right.data.get()) u64[slots * 8u + 8u]);
         for(usize comparisonCase = 0u; comparisonCase < (firstWord ? 5u : 3u); ++comparisonCase){
             for(const usize offset : { 0u, 1u, 2u, 3u }){
                 for(usize slot = 0u; slot < slots; ++slot){
                     for(usize lane = 0u; lane < 4u; ++lane)
-                        lhs[slot * 8u + offset + lane] = rhs[slot * 8u + offset + lane] = static_cast<u64>(slot) * 0x0123456789ABCDEFull + lane;
+                        lhs.get()[slot * 8u + offset + lane] = rhs.get()[slot * 8u + offset + lane] = static_cast<u64>(slot) * 0x0123456789ABCDEFull + lane;
                     if(comparisonCase != 0u)
-                        rhs[slot * 8u + offset + (firstWord ? comparisonCase - 1u : comparisonCase == 1u ? 0u : 3u)] ^= 1u;
+                        rhs.get()[slot * 8u + offset + (firstWord ? comparisonCase - 1u : comparisonCase == 1u ? 0u : 3u)] ^= 1u;
                 }
                 constexpr usize s_Iterations = 4u * 1024u * 1024u;
                 constexpr u32 s_EqualityWarmupIterations = 1024u;
-                const u64 baselineWarmup = EqualityBatch<false>(lhs + offset, rhs + offset, slots, 8u, s_EqualityWarmupIterations);
-                const u64 candidateWarmup = candidate(lhs + offset, rhs + offset, slots, 8u, s_EqualityWarmupIterations);
+                const u64 baselineWarmup = EqualityBatch<false>(lhs.get() + offset, rhs.get() + offset, slots, 8u, s_EqualityWarmupIterations);
+                const u64 candidateWarmup = candidate.get()(lhs.get() + offset, rhs.get() + offset, slots, 8u, s_EqualityWarmupIterations);
                 const u64 expectedWarmup = comparisonCase == 0u ? s_EqualityWarmupIterations : 0u;
                 if(baselineWarmup != expectedWarmup || candidateWarmup != expectedWarmup){
                     NWB_CERR << "equality warm-up produced an incorrect result\n";
@@ -480,12 +480,12 @@ void BenchEquality(usize samples, bool firstWord){
                 for(usize sample = 0u; sample < samples; ++sample){
                     f64 baselineNs, candidateNs;
                     if((sample & 1u) == 0u){
-                        baselineNs = TimeEquality(EqualityBatch<false>, lhs + offset, rhs + offset, slots, 8u, s_Iterations);
-                        candidateNs = TimeEquality(candidate, lhs + offset, rhs + offset, slots, 8u, s_Iterations);
+                        baselineNs = TimeEquality(MakeNotNull<EqualityBatchFunction>(EqualityBatch<false>), lhs.get() + offset, rhs.get() + offset, slots, 8u, s_Iterations);
+                        candidateNs = TimeEquality(candidate, lhs.get() + offset, rhs.get() + offset, slots, 8u, s_Iterations);
                     }
                     else{
-                        candidateNs = TimeEquality(candidate, lhs + offset, rhs + offset, slots, 8u, s_Iterations);
-                        baselineNs = TimeEquality(EqualityBatch<false>, lhs + offset, rhs + offset, slots, 8u, s_Iterations);
+                        candidateNs = TimeEquality(candidate, lhs.get() + offset, rhs.get() + offset, slots, 8u, s_Iterations);
+                        baselineNs = TimeEquality(MakeNotNull<EqualityBatchFunction>(EqualityBatch<false>), lhs.get() + offset, rhs.get() + offset, slots, 8u, s_Iterations);
                     }
                     constexpr StringView s_FirstWordCases[]{ "equal", "word0_mismatch", "word1_mismatch", "word2_mismatch", "word3_mismatch" };
                     const StringView caseName = firstWord ? s_FirstWordCases[comparisonCase] : comparisonCase == 0u ? "equal" : comparisonCase == 1u ? "early_mismatch" : "late_mismatch";

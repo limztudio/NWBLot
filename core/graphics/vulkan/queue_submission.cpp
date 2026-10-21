@@ -165,27 +165,27 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
     if(hasCommands){
         validatedTimerQueryCommandBuffers.reserve(numCmd);
         for(usize i = 0u; i < numCmd; ++i){
-            TrackedCommandBuffer* const tracked = ppCmd[i]->m_currentCmdBuf.get();
-            if(!tracked->validateTimerQueryRecordingClaims(*this, localWaits, localWaitCount, validatedTimerQueryCommandBuffers.empty() ? nullptr : validatedTimerQueryCommandBuffers.data(), validatedTimerQueryCommandBuffers.size())){
+            auto& tracked = *MakeNotNull(ppCmd[i]->m_currentCmdBuf.get());
+            if(!tracked.validateTimerQueryRecordingClaims(*this, localWaits, localWaitCount, validatedTimerQueryCommandBuffers.empty() ? nullptr : validatedTimerQueryCommandBuffers.data(), validatedTimerQueryCommandBuffers.size())){
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: timer-query recording order is stale or unresolved"));
                 return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
             }
-            validatedTimerQueryCommandBuffers.push_back(tracked);
+            validatedTimerQueryCommandBuffers.push_back(MakeNotNull(&tracked));
         }
     }
 
     bool requiresDescriptorBufferLifecycle = false;
     if(hasCommands){
         for(usize i = 0u; i < numCmd; ++i){
-            TrackedCommandBuffer* const tracked = ppCmd[i]->m_currentCmdBuf.get();
-            requiresDescriptorBufferLifecycle |= tracked->m_descriptorBufferManager != nullptr;
-            for(GpuDescriptorHeap* const heap : tracked->m_referencedDescriptorHeaps){
-                NWB_ASSERT(heap);
-                if(heap != &m_device.m_gpuDescriptorHeap){
+            auto& tracked = *MakeNotNull(ppCmd[i]->m_currentCmdBuf.get());
+            requiresDescriptorBufferLifecycle |= tracked.m_descriptorBufferManager != nullptr;
+            for(const auto heap : tracked.m_referencedDescriptorHeaps){
+
+                if(heap.get() != &m_device.m_gpuDescriptorHeap){
                     NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Command buffer references a foreign descriptor heap."));
                     return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
                 }
-                submissionDescriptorHeap = heap;
+                submissionDescriptorHeap = heap.get();
             }
         }
     }
@@ -198,21 +198,21 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
 
     if(hasCommands){
         for(usize i = 0u; i < numCmd; ++i){
-            CommandList* const cmdList = ppCmd[i];
-            TrackedCommandBuffer* const tracked = cmdList->m_currentCmdBuf.get();
+            auto& cmdList = *MakeNotNull(ppCmd[i]);
+            auto& tracked = *MakeNotNull(cmdList.m_currentCmdBuf.get());
             if(
-                (cmdList->m_descriptorBuffersBound && !tracked->m_descriptorBufferManager)
-                || (!tracked->m_descriptorBufferManager && tracked->m_descriptorBufferGeneration != 0u)
-                || (tracked->m_descriptorBufferManager && tracked->m_descriptorBufferGeneration == 0u)
+                (cmdList.m_descriptorBuffersBound && !tracked.m_descriptorBufferManager)
+                || (!tracked.m_descriptorBufferManager && tracked.m_descriptorBufferGeneration != 0u)
+                || (tracked.m_descriptorBufferManager && tracked.m_descriptorBufferGeneration == 0u)
                 || (
-                    tracked->m_descriptorBufferManager
+                    tracked.m_descriptorBufferManager
                     && (
-                        tracked->m_descriptorBufferManager != descriptorBufferManager
+                        tracked.m_descriptorBufferManager != descriptorBufferManager
                         || descriptorBufferManager != &m_device.m_descriptorBufferManager
                         || !descriptorBufferManager->m_enabled
                         || descriptorBufferManager->m_lifecycleTransitioning
                         || descriptorBufferManager->m_bindingGeneration == 0u
-                        || tracked->m_descriptorBufferGeneration != descriptorBufferManager->m_bindingGeneration
+                        || tracked.m_descriptorBufferGeneration != descriptorBufferManager->m_bindingGeneration
                     )
                 )
             ){
@@ -262,8 +262,8 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
                 }
             }
             if(!acceptedWait){
-                for(const Queue* const producerQueue : m_device.m_physicalQueues){
-                    NWB_ASSERT(producerQueue);
+                for(const auto producerQueue : m_device.m_physicalQueues){
+
                     if(producerQueue->m_trackingSemaphore == wait.semaphore){
                         m_acceptedTimelineWaits.reserve(m_device.m_physicalQueues.size());
                         m_acceptedTimelineWaits.push_back(SubmissionWait{ wait.semaphore, 0u });
@@ -318,25 +318,25 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
         descriptorHeapUseCommitTickets.reserve(numCmd);
         cmdBufInfos.reserve(numCmd);
         for(usize i = 0u; i < numCmd; ++i){
-            CommandList* const commandList = ppCmd[i];
+            auto& commandList = *MakeNotNull(ppCmd[i]);
             auto commandBufferInfo = VulkanDetail::MakeVkStruct<VkCommandBufferSubmitInfo>(VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO);
-            commandBufferInfo.commandBuffer = commandList->m_currentCmdBuf->m_cmdBuf;
+            commandBufferInfo.commandBuffer = commandList.m_currentCmdBuf->m_cmdBuf;
             cmdBufInfos.push_back(commandBufferInfo);
         }
     }
     NWB_ASSERT(preparedCommandBuffers.get_allocator() == m_commandBuffersInFlight.get_allocator());
     for(usize i = 0u; i < numCmd; ++i){
-        TrackedCommandBuffer* const tracked = ppCmd[i]->m_currentCmdBuf.get();
-        if(!validateCommandBufferSubmissionState(*tracked))
+        auto& tracked = *MakeNotNull(ppCmd[i]->m_currentCmdBuf.get());
+        if(!validateCommandBufferSubmissionState(tracked))
             return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
-        if(!tracked->validatePendingAccelStructBuildCommits()){
+        if(!tracked.validatePendingAccelStructBuildCommits()){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Native submission cannot publish acceleration-structure signatures across allocator domains"));
             return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
         }
-        for(GpuDescriptorHeap* const heap : tracked->m_referencedDescriptorHeaps){
-            NWB_ASSERT(heap);
+        for(const auto heap : tracked.m_referencedDescriptorHeaps){
 
-            const auto heapUseIndex = heap->validateCommandBufferUseSubmissionLocked(*tracked, submissionToken);
+
+            const auto heapUseIndex = heap->validateCommandBufferUseSubmissionLocked(tracked, submissionToken);
             if(!heapUseIndex)
                 return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
             for(const DescriptorHeapUseCommitTicket& ticket : descriptorHeapUseCommitTickets){
@@ -345,7 +345,7 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
                     return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
                 }
             }
-            descriptorHeapUseCommitTickets.push_back(DescriptorHeapUseCommitTicket{ .heap = heap, .commandBuffer = tracked, .heapUseIndex = *heapUseIndex, });
+            descriptorHeapUseCommitTickets.push_back(DescriptorHeapUseCommitTicket{ .heap = heap, .commandBuffer = MakeNotNull(&tracked), .heapUseIndex = *heapUseIndex, });
         }
     }
 
@@ -373,17 +373,15 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
         if(!descriptorBufferLifecycleLock.owns_lock())
             return;
 
-        Futex* const lifecycleMutex = descriptorBufferLifecycleLock.release();
-        NWB_ASSERT(lifecycleMutex);
-        lifecycleMutex->unlock();
+        auto& lifecycleMutex = *MakeNotNull(descriptorBufferLifecycleLock.release());
+        lifecycleMutex.unlock();
     };
     const auto releaseDescriptorHeap = [&]()noexcept{
         if(!descriptorHeapLock.owns_lock())
             return;
 
-        Futex* const heapMutex = descriptorHeapLock.release();
-        NWB_ASSERT(heapMutex);
-        heapMutex->unlock();
+        auto& heapMutex = *MakeNotNull(descriptorHeapLock.release());
+        heapMutex.unlock();
     };
 
     auto submittedBatchBegin = m_commandBuffersInFlight.end();
@@ -395,11 +393,11 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
     }
     auto detachedCommandBuffer = submittedBatchBegin;
     for(usize i = 0u; i < numCmd; ++i, ++detachedCommandBuffer){
-        CommandList* const commandList = ppCmd[i];
+        auto& commandList = *MakeNotNull(ppCmd[i]);
         TrackedCommandBufferPtr& tracked = *detachedCommandBuffer;
         tracked->m_submissionID = submissionID;
-        commandList->m_currentCmdBuf = nullptr;
-        commandList->m_nativeRecordingID = 0u;
+        commandList.m_currentCmdBuf = nullptr;
+        commandList.m_nativeRecordingID = 0u;
     }
 
     VkResult res = VK_SUCCESS;
@@ -564,8 +562,8 @@ bool Queue::coversTimerQueryPrerequisite(const QueueSubmissionToken& prerequisit
     if(!prerequisite.hasPhysicalQueueIdentity() || prerequisite.deviceGeneration != m_device.m_deviceGeneration || prerequisite.physicalQueueIndex >= m_device.m_physicalQueues.size())
         return false;
 
-    const Queue* const producerQueue = m_device.m_physicalQueues[prerequisite.physicalQueueIndex];
-    NWB_ASSERT(producerQueue && producerQueue->m_physicalQueue.deviceGeneration == prerequisite.deviceGeneration);
+    const auto producerQueue = m_device.m_physicalQueues[prerequisite.physicalQueueIndex];
+    NWB_ASSERT(producerQueue->m_physicalQueue.deviceGeneration == prerequisite.deviceGeneration);
     if(producerQueue->m_queueID != prerequisite.queue || producerQueue->m_trackingSemaphore == VK_NULL_HANDLE)
         return false;
 

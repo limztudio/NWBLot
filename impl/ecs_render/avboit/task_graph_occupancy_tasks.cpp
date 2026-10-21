@@ -66,10 +66,10 @@ namespace RendererTaskGraphDetail{
 [[nodiscard]] bool AvboitOccupancyComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
 
     static_cast<void>(context);
-    const AvboitComputeEmulationRecordTrait trait{ &RendererGpuTimingScope::s_AvboitOccupancy, MaterialPipelinePass::AvboitOccupancy, &AvboitFrameTargets::lowFramebuffer, };
+    const AvboitComputeEmulationRecordTrait trait{ RendererGpuTimingScope::s_AvboitOccupancy, MaterialPipelinePass::AvboitOccupancy, &AvboitFrameTargets::lowFramebuffer, };
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
 
-    return RecordAvboitComputeEmulationFromPayload(scratchArena, payload, commandList, context, &payload.occupancyTiming, trait);
+    return RecordAvboitComputeEmulationFromPayload(scratchArena, payload, commandList, context, payload.occupancyTiming, trait);
 }
 
 
@@ -79,10 +79,10 @@ namespace RendererTaskGraphDetail{
 [[nodiscard]] bool AvboitOccupancySharedComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
 
     static_cast<void>(context);
-    const AvboitSharedComputeEmulationRecordTrait trait{ &RendererGpuTimingScope::s_AvboitOccupancy, MaterialPipelinePass::AvboitOccupancy, &AvboitFrameTargets::lowFramebuffer, };
+    const AvboitSharedComputeEmulationRecordTrait trait{ RendererGpuTimingScope::s_AvboitOccupancy, MaterialPipelinePass::AvboitOccupancy, &AvboitFrameTargets::lowFramebuffer, };
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
 
-    return RecordAvboitSharedComputeEmulationFromPayload(scratchArena, payload, commandList, context, &payload.occupancyTiming, payload.phase == AvboitOccupancySharedComputeEmulationGraphTask::Phase::Raster, trait);
+    return RecordAvboitSharedComputeEmulationFromPayload(scratchArena, payload, commandList, context, payload.occupancyTiming, payload.phase == AvboitOccupancySharedComputeEmulationGraphTask::Phase::Raster, trait);
 }
 
 

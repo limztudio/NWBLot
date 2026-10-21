@@ -34,7 +34,7 @@ class ObjectGeometryCacheGraph;
 
 // Transparent-CSG interval tasks own the AVBOIT interval, receiver-span, and interval-combine graph task declarations.
 struct FrameGraphTransparentCsgTaskInputs{
-    DeferredFrameTargets* targets = nullptr;
+    DeferredFrameTargets& targets;
     Core::GpuGraphResourceId albedo;
     Core::GpuGraphResourceId normal;
     Core::GpuGraphResourceId worldPosition;

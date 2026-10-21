@@ -106,14 +106,14 @@ Buffer::~Buffer()noexcept{
     {
         ScopedLock bindingLock(m_memoryBindingMutex);
         if(m_boundHeap){
-            Heap* const boundHeap = m_boundHeap.get();
+            auto& boundHeap = *MakeNotNull(m_boundHeap.get());
             {
-                ScopedLock heapLock(boundHeap->m_bindingMutex);
+                ScopedLock heapLock(boundHeap.m_bindingMutex);
                 if(m_buffer != VK_NULL_HANDLE){
                     m_context.deviceDispatch.vkDestroyBuffer(m_context.device, m_buffer, m_context.allocationCallbacks);
                     m_buffer = VK_NULL_HANDLE;
                 }
-                boundHeap->eraseBindingReservationLocked(this);
+                boundHeap.eraseBindingReservationLocked(MakeNotNull<const void*>(this));
             }
             m_heapBindingRange = {};
             m_mappedMemory = nullptr;

@@ -474,17 +474,17 @@ private:
             NWB_LOGGER_ERROR(NWB_TEXT("AvboitDepthWarpProbe: readback mapping failed at case {}"), payload.firstCase);
             return false;
         }
-        const auto* mapped = static_cast<const u32*>(*mappedResult);
+        const auto mapped = MakeNotNull(static_cast<const u32*>(*mappedResult));
         bool passed = true;
         for(u32 index = 0u; passed && index < payload.caseCount; ++index){
             const ProbeCase& probe = payload.cases[index];
             const u32 ordinal = payload.firstCase + index;
             const auto oracle = BuildOracle(probe, BuildPush(probe, ordinal, payload.slotsIndex));
-            const u32* result = mapped + index * s_ResultWords;
+            const auto result = MakeNotNull(mapped.get() + index * s_ResultWords);
             for(u32 word = 0u; word < s_ResultWords; ++word){
                 const u32 expected = word < probe.virtualCount ? oracle.warp[word] : word >= s_WarpWords && word < s_WarpWords + NWB_AVBOIT_CONTROL_WORD_COUNT ? oracle.control[word - s_WarpWords] : s_Sentinel;
-                if(result[word] != expected){
-                    NWB_LOGGER_ERROR(NWB_TEXT("AvboitDepthWarpProbe: mismatch case {} scenario {} virtual {} physical {} word {} expected {} observed {}"), ordinal, probe.scenario, probe.virtualCount, probe.physicalCount, word, expected, result[word]);
+                if(result.get()[word] != expected){
+                    NWB_LOGGER_ERROR(NWB_TEXT("AvboitDepthWarpProbe: mismatch case {} scenario {} virtual {} physical {} word {} expected {} observed {}"), ordinal, probe.scenario, probe.virtualCount, probe.physicalCount, word, expected, result.get()[word]);
                     passed = false;
                     break;
                 }

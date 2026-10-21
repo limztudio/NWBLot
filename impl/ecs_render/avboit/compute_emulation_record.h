@@ -38,21 +38,21 @@ struct DeferredFrameTargets;
 
 // Pass traits select timing, pipeline and framebuffer for the common alias-free/CSG record sequence.
 struct AvboitComputeEmulationRecordTrait{
-    const Core::GpuTimingScopeDefinition* timingScope = nullptr;
+    const Core::GpuTimingScopeDefinition& timingScope;
     MaterialPipelinePass::Enum pipelinePass = MaterialPipelinePass::AvboitOccupancy;
     Core::FramebufferHandle AvboitFrameTargets::* framebuffer = nullptr;
 };
 
 struct AvboitComputeEmulationRecordInputs{
-    Core::GraphicsRuntime* graphics = nullptr;
-    RendererMaterialSystem* materialSystem = nullptr;
-    DeferredFrameTargets* targets = nullptr;
-    Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
-    Optional<Core::GpuTimingMeasure>* timing = nullptr;
-    const ECSRenderDetail::MeshFrameBindingSnapshot* frameBindings = nullptr;
-    const ECSRenderDetail::CsgGraphResourceSnapshot* csgResources = nullptr;
-    const ECSRenderDetail::AvboitAliasFreeComputeEmulationGraphPlan* plan = nullptr;
-    const ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphPlan* csgPlan = nullptr;
+    Core::GraphicsRuntime& graphics;
+    RendererMaterialSystem& materialSystem;
+    DeferredFrameTargets& targets;
+    Core::GpuTimingSubmissionTicket& timingTicket;
+    Optional<Core::GpuTimingMeasure>& timing;
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings;
+    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources;
+    const ECSRenderDetail::AvboitAliasFreeComputeEmulationGraphPlan& plan;
+    const ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphPlan& csgPlan;
     usize instanceCount = 0u;
     usize materialTypedByteCount = 0u;
     bool materialDrawBuffersUploaded = false;
@@ -80,13 +80,13 @@ namespace AvboitSharedComputeEmulationPhase{
 };
 
 struct AvboitSharedComputeEmulationRecordInputs{
-    Core::GraphicsRuntime* graphics = nullptr;
-    RendererMaterialSystem* materialSystem = nullptr;
-    DeferredFrameTargets* targets = nullptr;
-    Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
-    Optional<Core::GpuTimingMeasure>* timing = nullptr;
-    const ECSRenderDetail::MeshFrameBindingSnapshot* frameBindings = nullptr;
-    const ECSRenderDetail::RegularSharedComputeEmulationGraphPlan* plan = nullptr;
+    Core::GraphicsRuntime& graphics;
+    RendererMaterialSystem& materialSystem;
+    DeferredFrameTargets& targets;
+    Core::GpuTimingSubmissionTicket& timingTicket;
+    Optional<Core::GpuTimingMeasure>& timing;
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings;
+    const ECSRenderDetail::RegularSharedComputeEmulationGraphPlan& plan;
     usize drawIndex = 0u;
     usize instanceCount = 0u;
     usize materialTypedByteCount = 0u;
@@ -99,7 +99,7 @@ struct AvboitSharedComputeEmulationRecordInputs{
 };
 
 struct AvboitSharedComputeEmulationRecordTrait{
-    const Core::GpuTimingScopeDefinition* timingScope = nullptr;
+    const Core::GpuTimingScopeDefinition& timingScope;
     MaterialPipelinePass::Enum pipelinePass = MaterialPipelinePass::AvboitOccupancy;
     Core::FramebufferHandle AvboitFrameTargets::* framebuffer = nullptr;
 };
@@ -116,20 +116,20 @@ template<typename PayloadT>
     const PayloadT& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context,
-    Optional<Core::GpuTimingMeasure>* timing,
+    Optional<Core::GpuTimingMeasure>& timing,
     const AvboitComputeEmulationRecordTrait& trait
 ){
     static_cast<void>(context);
     const AvboitComputeEmulationRecordInputs inputs{
-        &payload.graphics,
-        &payload.materialSystem,
-        &payload.targets,
-        &payload.timingTicket,
+        payload.graphics,
+        payload.materialSystem,
+        payload.targets,
+        payload.timingTicket,
         timing,
-        &payload.frameBindings,
-        &payload.csgResources,
-        &payload.plan,
-        &payload.csgPlan,
+        payload.frameBindings,
+        payload.csgResources,
+        payload.plan,
+        payload.csgPlan,
         payload.instanceCount,
         payload.materialTypedByteCount,
         payload.materialDrawBuffersUploaded,
@@ -182,19 +182,19 @@ template<typename PayloadT>
     const PayloadT& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context,
-    Optional<Core::GpuTimingMeasure>* timing,
+    Optional<Core::GpuTimingMeasure>& timing,
     const bool isRasterPhase,
     const AvboitSharedComputeEmulationRecordTrait& trait
 ){
     static_cast<void>(context);
     const AvboitSharedComputeEmulationRecordInputs inputs{
-        &payload.graphics,
-        &payload.materialSystem,
-        &payload.targets,
-        &payload.timingTicket,
+        payload.graphics,
+        payload.materialSystem,
+        payload.targets,
+        payload.timingTicket,
         timing,
-        &payload.frameBindings,
-        &payload.plan,
+        payload.frameBindings,
+        payload.plan,
         payload.drawIndex,
         payload.instanceCount,
         payload.materialTypedByteCount,

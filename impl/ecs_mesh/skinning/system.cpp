@@ -98,14 +98,15 @@ static constexpr AStringView s_MeshletAttributeDeltasLabel = "Runtime Meshlet At
 // Deformation and post-dispatch share the same plan loop; only the per-plan recorder differs.
 using SkinningPlanRecorder = bool (MeshSkinningSystem::*)(const MeshSkinningGraphDispatchPlan&, Core::CommandList&, const Core::GpuTaskRecordContext&);
 
+template<SkinningPlanRecorder recorder>
 [[nodiscard]] inline bool RecordSkinningPlans(
     MeshSkinningSystem& system,
     Core::GpuTimingSubmissionTicket& timingTicket,
     const Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena>& plans,
     Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context,
-    const SkinningPlanRecorder recorder
+    const Core::GpuTaskRecordContext& context
 ){
+    static_assert(recorder != nullptr);
     if(plans.empty())
         return false;
 
@@ -140,7 +141,7 @@ struct MeshSkinningSystem::TaskGraphSkinningDeformationTask{
 
 public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-        return RecordSkinningPlans(payload.system, payload.timingTicket, payload.plans, commandList, context, &MeshSkinningSystem::recordGraphOwnedSkinningDeformation);
+        return RecordSkinningPlans<&MeshSkinningSystem::recordGraphOwnedSkinningDeformation>(payload.system, payload.timingTicket, payload.plans, commandList, context);
     }
 };
 
@@ -167,7 +168,7 @@ struct MeshSkinningSystem::TaskGraphSkinningPostDispatchTask{
 
 public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-        return RecordSkinningPlans(payload.system, payload.timingTicket, payload.plans, commandList, context, &MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch);
+        return RecordSkinningPlans<&MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch>(payload.system, payload.timingTicket, payload.plans, commandList, context);
     }
 };
 
@@ -954,32 +955,32 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     collectLiveSkinningStateBuffers(liveBuffers, scratchArena);
     Core::GpuPersistentResourceStateCache::Candidate acceptedStateCandidate(m_acceptedSkinningState);
     struct SkinningStateContext{
-        Core::GpuPersistentResourceStateCache* cache = nullptr;
+        Core::GpuPersistentResourceStateCache& cache;
         Core::Alloc::ScratchArena& scratchArena;
-        Core::GpuPersistentResourceStateCache::Candidate* candidate = nullptr;
+        Core::GpuPersistentResourceStateCache::Candidate& candidate;
         const Core::BufferHandle* buffers = nullptr;
         usize bufferCount = 0u;
         bool preparationInvoked = false;
         bool statePrepared = false;
         bool stateAccepted = false;
-    } skinningState{ .cache = &m_acceptedSkinningState, .scratchArena = scratchArena, .candidate = &acceptedStateCandidate, .buffers = liveBuffers.data(), .bufferCount = liveBuffers.size(), };
+    } skinningState{ .cache = m_acceptedSkinningState, .scratchArena = scratchArena, .candidate = acceptedStateCandidate, .buffers = liveBuffers.data(), .bufferCount = liveBuffers.size(), };
     const auto prepareSkinningState = [](void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState) -> bool {
         SkinningStateContext* const context = static_cast<SkinningStateContext*>(rawContext);
         if(!context)
             return false;
         context->preparationInvoked = true;
-        if(!context->cache || !context->candidate || !finalState || (context->bufferCount != 0u && !context->buffers))
+        if(!finalState || (context->bufferCount != 0u && !context->buffers))
             return false;
-        context->statePrepared = context->cache->buildMergedBufferSubset(*context->candidate, *finalState, context->buffers, context->bufferCount, context->scratchArena);
+        context->statePrepared = context->cache.buildMergedBufferSubset(context->candidate, *finalState, context->buffers, context->bufferCount, context->scratchArena);
         return context->statePrepared;
     };
     const Core::GpuTaskGraphTaskRecordedCallback recordedCallback{ .task = terminalTask, .context = &skinningState, .invoke = prepareSkinningState, };
     const auto acceptSkinningTask = [](void* const rawContext, const Core::QueueSubmissionToken& token)noexcept -> bool {
         static_cast<void>(token);
         SkinningStateContext* const context = static_cast<SkinningStateContext*>(rawContext);
-        if(!context || !context->cache || !context->candidate || !context->statePrepared)
+        if(!context || !context->statePrepared)
             return false;
-        context->stateAccepted = context->cache->commit(*context->candidate);
+        context->stateAccepted = context->cache.commit(context->candidate);
         return context->stateAccepted;
     };
     const Core::GpuTaskGraphTaskAcceptedCallback acceptedCallback{ .task = terminalTask, .context = &skinningState, .invoke = acceptSkinningTask, };

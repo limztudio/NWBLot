@@ -395,7 +395,7 @@ private:
     void invalidateCommandRecording()noexcept;
     void discardInvalidCommandBuffer();
     [[nodiscard]] bool validateIndirectBuffer(Buffer* buffer, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, TStringView commandName);
-    [[nodiscard]] Expected<Buffer*> prepareDrawIndirect(u32 offsetBytes, u32 drawCount, u64 commandSizeBytes, TStringView operationLabel, TStringView commandName, VulkanDetail::IndirectDrawIndexMode::Enum indexMode);
+    [[nodiscard]] Expected<NotNull<Buffer*>> prepareDrawIndirect(u32 offsetBytes, u32 drawCount, u64 commandSizeBytes, TStringView operationLabel, TStringView commandName, VulkanDetail::IndirectDrawIndexMode::Enum indexMode);
     void clearColorTexture(Alloc::ScratchArena& scratchArena, Texture& texture, TextureSubresourceSet subresources, TStringView valueName, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
     void clearColorTextureBox(Alloc::ScratchArena& scratchArena, Texture& texture, TextureSubresourceSet subresources, const Box& box, TStringView valueName, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
     bool clearActiveRenderPassColorTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const VkClearColorValue& clearValue, TStringView valueName);
@@ -471,7 +471,7 @@ private:
     Vector<VkImageMemoryBarrier2, Alloc::GlobalArena> m_pendingImageBarriers;
     Vector<VkBufferMemoryBarrier2, Alloc::GlobalArena> m_pendingBufferBarriers;
     HashMap<TextureSubresourceStateKey, GpuPhysicalQueueId, Alloc::GlobalArena, TextureSubresourceStateKeyHasher, TextureSubresourceStateKeyEqualTo> m_textureOwnershipReleaseDestinations;
-    HashMap<Buffer*, Vector<BufferOwnershipRelease, Alloc::GlobalArena>, Alloc::GlobalArena, Hasher<Buffer*>, EqualTo<Buffer*>> m_bufferOwnershipReleaseDestinations;
+    HashMap<NotNull<Buffer*>, Vector<BufferOwnershipRelease, Alloc::GlobalArena>, Alloc::GlobalArena, Hasher<NotNull<Buffer*>>, EqualTo<NotNull<Buffer*>>> m_bufferOwnershipReleaseDestinations;
 };
 
 

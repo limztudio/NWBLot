@@ -38,20 +38,18 @@ AvboitPassUploadHelper::AvboitPassUploadHelper(RendererMaterialSystem& materialS
     MaterialTypedByteDataVector& materialTypedBytes
 ){
     AvboitPassUploadResult result{};
-    if(!inputs.framebuffer || !inputs.csgFrameState || !inputs.frameBindings || !inputs.csgResources || !inputs.meshViewState)
-        return MakeUnexpected(Failure{});
     m_materialSystem.gatherMaterialPassDrawItems(
-        inputs.framebuffer,
+        &inputs.framebuffer,
         inputs.pass,
         true,
-        (*inputs.csgFrameState),
+        inputs.csgFrameState,
         drawItems,
         instanceData,
         csgFrameData,
 #if defined(NWB_DEBUG)
         materialTypedRanges,
 #endif
-        materialTypedBytes, RendererResourceLookupMode::PreparedOnly, inputs.meshViewState
+        materialTypedBytes, RendererResourceLookupMode::PreparedOnly, &inputs.meshViewState
     );
 
     result.hasDrawItems = !drawItems.empty();
@@ -66,14 +64,14 @@ AvboitPassUploadHelper::AvboitPassUploadHelper(RendererMaterialSystem& materialS
         && inputs.csgCutters.valid()
         && inputs.csgClipContextSlots.valid()
         && (inputs.pass != MaterialPipelinePass::AvboitExtinction || inputs.csgIntervalSampleState.valid())
-        && inputs.csgResources->frameReady(csgFrameData)
-        && m_materialSystem.materialPassDrawResourcesReady(drawItems.csg, (*inputs.frameBindings))
+        && inputs.csgResources.frameReady(csgFrameData)
+        && m_materialSystem.materialPassDrawResourcesReady(drawItems.csg, inputs.frameBindings)
     );
     if(
         !inputs.materialInstances.valid()
         || !inputs.materialTyped.valid()
-        || !inputs.frameBindings->frameReady(instanceData.size(), materialTypedBytes.size())
-        || !m_materialSystem.materialPassDrawResourcesReady(drawItems.regular, (*inputs.frameBindings))
+        || !inputs.frameBindings.frameReady(instanceData.size(), materialTypedBytes.size())
+        || !m_materialSystem.materialPassDrawResourcesReady(drawItems.regular, inputs.frameBindings)
         || !csgReady
     )
         return MakeUnexpected(Failure{});

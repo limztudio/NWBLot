@@ -36,9 +36,9 @@ namespace __hidden_model_system{
 
 using AttachmentJointQuery = ModelAttachmentJointQuery;
 
-static void ResolveAttachmentJointQueries(Core::ECS::World& world, Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena>& jointPalette, AttachmentJointQuery* const queries, const usize queryCount, const usize* const parentOrder){
+static void ResolveAttachmentJointQueries(Core::ECS::World& world, Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena>& jointPalette, const NotNull<AttachmentJointQuery*> queries, const usize queryCount, const usize* const parentOrder){
     const auto queryAt = [&](const usize index)noexcept -> AttachmentJointQuery&{
-        return queries[parentOrder ? parentOrder[index] : index];
+        return queries.get()[parentOrder ? parentOrder[index] : index];
     };
     usize groupBegin = 0u;
     while(groupBegin < queryCount){
@@ -284,7 +284,7 @@ bool ModelSystem::spawnSkeletonObject(const Core::ECS::EntityID owner, const Mod
     auto skeletonAsset = m_assetManager.loadTypedSync<Skeleton>(skeletonName, __hidden_model_system::s_AssetLoadContext, Skeleton::s_AssetTypeText);
     if(!skeletonAsset)
         return false;
-    const Skeleton* skeleton = skeletonAsset->get();
+    const Skeleton& skeleton = **skeletonAsset;
 
     Core::ECS::Entity entity = m_world.createEntity();
     __hidden_model_system::TagObject(entity, owner, m_world.entity(owner).getComponent<ModelRuntimeComponent>().model, object.name, object.transform, ModelObjectKind::Skeleton);
@@ -295,9 +295,9 @@ bool ModelSystem::spawnSkeletonObject(const Core::ECS::EntityID owner, const Mod
     auto& pose = entity.addComponent<SkeletonPoseComponent>(m_arena);
     pose.parentJoints.clear();
     pose.localJoints.clear();
-    pose.parentJoints.reserve(skeleton->joints().size());
-    pose.localJoints.reserve(skeleton->joints().size());
-    for(const SkeletonJoint& joint : skeleton->joints()){
+    pose.parentJoints.reserve(skeleton.joints().size());
+    pose.localJoints.reserve(skeleton.joints().size());
+    for(const SkeletonJoint& joint : skeleton.joints()){
         pose.parentJoints.push_back(joint.parentIndex);
         pose.localJoints.push_back(joint.localBindPose);
     }
@@ -346,9 +346,9 @@ bool ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const M
             auto skeletonAsset = m_assetManager.loadTypedSync<Skeleton>(skeletonName, __hidden_model_system::s_AssetLoadContext, Skeleton::s_AssetTypeText);
             if(!skeletonAsset)
                 return false;
-            const Skeleton* skeleton = skeletonAsset->get();
+            const Skeleton& skeleton = **skeletonAsset;
 
-            attachment.parentJointIndex = skeleton->findJointIndex(object.parentJoint);
+            attachment.parentJointIndex = skeleton.findJointIndex(object.parentJoint);
             if(attachment.parentJointIndex == s_SkeletonInvalidJointIndex){
                 NWB_LOGGER_ERROR(NWB_TEXT("ModelSystem: static mesh object '{}' targets missing joint '{}' on skeleton object '{}'")
                     , StringConvert(object.name.resolvedText())
@@ -431,7 +431,7 @@ void ModelSystem::updateStaticMeshAttachments(){
             jointQueries.push_back(ModelAttachmentJointQuery{ .parentEntity = attachment.parentEntity, .parentJointIndex = attachment.parentJointIndex, });
         }
         );
-        auto* const queries = jointQueries.data();
+        const NotNull<ModelAttachmentJointQuery*> queries(jointQueries.data());
         if(sharedParent){
             __hidden_model_system::ResolveAttachmentJointQueries(m_world, m_scratchJoints, queries, queryCount, nullptr);
         }

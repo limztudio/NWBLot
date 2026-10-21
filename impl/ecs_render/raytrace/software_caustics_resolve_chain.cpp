@@ -30,8 +30,7 @@ SoftwareCausticsResolveChainBuilder::SoftwareCausticsResolveChainBuilder(Core::G
 
 [[nodiscard]] Expected<SoftwareCausticsResolveChainResult> SoftwareCausticsResolveChainBuilder::declare(const SoftwareCausticsResolveChainInputs& inputs, Core::Alloc::ScratchArena& scratchArena){
     SoftwareCausticsResolveChainResult result{};
-    CausticsResolveChainInputs sharedInputs;
-    sharedInputs.targets = inputs.targets;
+    CausticsResolveChainInputs sharedInputs(inputs.targets, inputs.producerDispatched, inputs.timingTicket, inputs.resolveTiming);
     sharedInputs.geometryTask = inputs.geometryTask;
     sharedInputs.baseScheduling = inputs.baseScheduling;
     sharedInputs.prepare = inputs.prepare;
@@ -43,9 +42,6 @@ SoftwareCausticsResolveChainBuilder::SoftwareCausticsResolveChainBuilder(Core::G
     sharedInputs.upsample = inputs.upsample;
     sharedInputs.stateSources = inputs.stateSources;
     sharedInputs.stateSourceCount = inputs.stateSourceCount;
-    sharedInputs.producerDispatched = inputs.producerDispatched;
-    sharedInputs.timingTicket = inputs.timingTicket;
-    sharedInputs.resolveTiming = inputs.resolveTiming;
     const CausticsResolveChainNaming naming{
         {Name("render.software_caustics.resolve_prepare"), "Software Caustics Resolve Prepare", NWB_TEXT("RendererSystem: could not declare deferred software-caustics resolve-prepare graph task")},
         {Name("render.software_caustics.resolve_wavelet"), "Software Caustics Resolve Wavelet", NWB_TEXT("RendererSystem: could not declare deferred software-caustics first-wavelet graph task")},

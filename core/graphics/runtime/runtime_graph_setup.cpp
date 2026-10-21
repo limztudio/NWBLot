@@ -159,14 +159,14 @@ public:
 struct SetupUploadSubmissionData{
     GraphicsBackend::Device& device;
     void* userData = nullptr;
-    GraphicsModuleDetail::GraphTaskDeclaration declareTask = nullptr;
+    NotNull<GraphicsModuleDetail::GraphTaskDeclaration> declareTask;
     ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
     CommandQueue::Enum consumerQueue = CommandQueue::Graphics;
 };
 
 [[nodiscard]] static Expected<GpuTaskId> DeclareSetupUploadGraph(void* const userData, GpuTaskGraph& graph){
     auto& submissionData = *static_cast<SetupUploadSubmissionData*>(userData);
-    const auto uploadTask = submissionData.declareTask(submissionData.userData, graph);
+    const auto uploadTask = submissionData.declareTask.get()(submissionData.userData, graph);
     if(!uploadTask)
         return MakeUnexpected(uploadTask.error());
     return DeclareSetupUploadReadinessBridgeTasks(graph, submissionData.device, submissionData.queueSharing, submissionData.consumerQueue, *uploadTask);
@@ -177,27 +177,24 @@ struct FrameTimingResetGraphTask{
     inline static constexpr GpuTaskCommandRequirements s_CommandRequirements{ GpuQueueCapability::None, true, GpuQueueCapability::Compute | GpuQueueCapability::Graphics, };
 
     struct Payload{
-        GpuTimingRecorder* timing = nullptr;
+        NotNull<GpuTimingRecorder*> timing;
     };
 
 
 public:
     [[nodiscard]] static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context){
         static_cast<void>(context);
-        NWB_ASSERT(payload.timing);
 
         payload.timing->recordFrameReset(commandList);
         return true;
     }
 
     static void Accepted(Payload& payload, const QueueSubmissionToken& token){
-        NWB_ASSERT(payload.timing);
         if(token.valid())
             payload.timing->confirmFrameReset(token);
     }
 
     static void Discarded(Payload& payload)noexcept{
-        NWB_ASSERT(payload.timing);
         payload.timing->discardFrameReset();
     }
 };
@@ -220,7 +217,7 @@ struct FrameTimingResetSubmissionData{
     auto& submissionData = *static_cast<FrameTimingResetSubmissionData*>(userData);
     GpuTaskDesc resetDesc;
     resetDesc.setIdentity(s_FrameTimingResetIdentity).setMarkerLabel("Frame GPU-Timing Reset").setScheduling(FrameTimingResetScheduling());
-    const auto taskResult = graph.addTask<FrameTimingResetGraphTask>(resetDesc, FrameTimingResetGraphTask::Payload{ .timing = &submissionData.timing, });
+    const auto taskResult = graph.addTask<FrameTimingResetGraphTask>(resetDesc, FrameTimingResetGraphTask::Payload{ .timing = MakeNotNull(&submissionData.timing), });
     if(!taskResult)
         return MakeUnexpected(Failure{});
     const GpuTaskId task = *taskResult;
@@ -308,10 +305,10 @@ StandaloneGraphWorkspace* StandaloneGraphWorkspacePool::acquire(){
     WorkspaceOwner created = MakeGlobalUnique<StandaloneGraphWorkspace>(m_arena, m_arena);
     if(!created)
         return nullptr;
-    StandaloneGraphWorkspace* const workspace = created.get();
+    StandaloneGraphWorkspace& workspace = *created;
     m_workspaces.push_back(Move(created));
-    workspace->leased = true;
-    return workspace;
+    workspace.leased = true;
+    return &workspace;
 }
 
 void StandaloneGraphWorkspacePool::release(StandaloneGraphWorkspace& workspace){
@@ -428,13 +425,12 @@ Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
     const GraphicsRuntime& graphics,
     StandaloneGraphWorkspacePool& workspaces,
     void* const userData,
-    const GraphTaskDeclaration declareTask,
+    const NotNull<GraphTaskDeclaration> declareTask,
     const GpuPhysicalQueueId requiredTerminalQueue,
     CpuTaskScheduler* const readyFrontierScheduler,
     GpuTimingRecorder* const timingRecorder,
     GpuTimingFrameTransaction* const frameTimingTransaction
 ){
-    NWB_ASSERT(declareTask);
     if(frameTimingTransaction && !timingRecorder)
         return MakeUnexpected(Failure{});
 
@@ -446,7 +442,7 @@ Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
     if(!workspace)
         return MakeUnexpected(Failure{});
     GpuTaskGraph& graph = workspace->graph;
-    const auto declaredTerminal = declareTask(userData, graph);
+    const auto declaredTerminal = declareTask.get()(userData, graph);
     if(!declaredTerminal)
         return MakeUnexpected(declaredTerminal.error());
     if(!declaredTerminal->valid())
@@ -588,16 +584,15 @@ bool SubmitGraphOwnedSetupUpload(
     const ResourceQueueSharing::Mask queueSharing,
     const CommandQueue::Enum consumerQueue,
     void* const userData,
-    const GraphTaskDeclaration declareTask,
+    const NotNull<GraphTaskDeclaration> declareTask,
     QueueSubmissionToken& inOutUploadToken,
     const GpuPhysicalQueueId requiredTerminalQueue
 ){
     inOutUploadToken = {};
-    NWB_ASSERT(declareTask);
 
     auto& device = graphics.getDevice();
     __hidden_graphics_graph_setup::SetupUploadSubmissionData submissionData{ .device = device, .userData = userData, .declareTask = declareTask, .queueSharing = queueSharing, .consumerQueue = consumerQueue, };
-    const auto terminalToken = SubmitGraphOwnedStandaloneTask(graphics, workspaces, &submissionData, &__hidden_graphics_graph_setup::DeclareSetupUploadGraph, requiredTerminalQueue);
+    const auto terminalToken = SubmitGraphOwnedStandaloneTask(graphics, workspaces, &submissionData, MakeNotNull(&__hidden_graphics_graph_setup::DeclareSetupUploadGraph), requiredTerminalQueue);
     if(!terminalToken)
         return false;
 
@@ -615,7 +610,7 @@ bool SubmitGraphOwnedFrameTimingReset(const GraphicsRuntime& graphics, Standalon
         return false;
 
     __hidden_graphics_graph_setup::FrameTimingResetSubmissionData submissionData{ .timing = timing, };
-    const auto acceptedToken = SubmitGraphOwnedStandaloneTask(graphics, workspaces, &submissionData, &__hidden_graphics_graph_setup::DeclareFrameTimingResetGraph, graphicsQueue);
+    const auto acceptedToken = SubmitGraphOwnedStandaloneTask(graphics, workspaces, &submissionData, MakeNotNull(&__hidden_graphics_graph_setup::DeclareFrameTimingResetGraph), graphicsQueue);
     if(!acceptedToken)
         return false;
 
@@ -642,7 +637,7 @@ Expected<QueueSubmissionToken> GraphicsRuntime::submitStandaloneTaskGraph(
     if(!declareTask)
         return MakeUnexpected(Failure{});
 
-    return GraphicsModuleDetail::SubmitGraphOwnedStandaloneTask(*this, *m_standaloneGraphWorkspaces, userData, declareTask, requiredTerminalQueue, &m_cpuScheduler, timingRecorder, frameTimingTransaction);
+    return GraphicsModuleDetail::SubmitGraphOwnedStandaloneTask(*this, *m_standaloneGraphWorkspaces, userData, MakeNotNull(declareTask), requiredTerminalQueue, &m_cpuScheduler, timingRecorder, frameTimingTransaction);
 }
 
 

@@ -181,8 +181,8 @@ bool GpuDescriptorHeap::trackCommandBufferUseLocked(TrackedCommandBuffer& comman
     if(!m_initialized || !m_device.getPhysicalQueueInfo(physicalQueue))
         return false;
 
-    for(GpuDescriptorHeap* trackedHeap : commandBuffer.m_referencedDescriptorHeaps){
-        if(trackedHeap != this)
+    for(const auto trackedHeap : commandBuffer.m_referencedDescriptorHeaps){
+        if(trackedHeap.get() != this)
             continue;
 
         for(const HeapUse& heapUse : m_heapUses){
@@ -194,7 +194,7 @@ bool GpuDescriptorHeap::trackCommandBufferUseLocked(TrackedCommandBuffer& comman
     if(m_lastHeapUseID == UINT64_MAX)
         return false;
 
-    commandBuffer.m_referencedDescriptorHeaps.push_back(this);
+    commandBuffer.m_referencedDescriptorHeaps.push_back(MakeNotNull(this));
     ScopeExit rollbackHeapReference([&commandBuffer]()noexcept{ commandBuffer.m_referencedDescriptorHeaps.pop_back(); });
     m_heapUses.push_back(HeapUse{ .commandBuffer = &commandBuffer, .submissionToken = {}, .id = ++m_lastHeapUseID, .physicalQueue = physicalQueue, });
     rollbackHeapReference.release();

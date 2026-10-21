@@ -42,7 +42,7 @@ struct RtMeshHeapHandleCacheEntry{
     bool seenThisFrame = false;
 };
 
-using RtMeshHeapHandleCache = HashMap<const Core::Buffer*, RtMeshHeapHandleCacheEntry, Core::Alloc::GlobalArena, Hasher<const Core::Buffer*>, EqualTo<const Core::Buffer*>>;
+using RtMeshHeapHandleCache = HashMap<NotNull<const Core::Buffer*>, RtMeshHeapHandleCacheEntry, Core::Alloc::GlobalArena, Hasher<NotNull<const Core::Buffer*>>, EqualTo<NotNull<const Core::Buffer*>>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -177,17 +177,17 @@ struct RtShadowState{
     // CSG ray readers may occupy several physical transports in one queue class.
     Vector<Core::QueueSubmissionToken, Core::Alloc::GlobalArena> m_csgTraceContextReadSubmissionTokens;
     // HW distinct meshes and heap views shared with caustic/GI.
-    Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_shadowMeshIndexBuffers;
-    Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_shadowMeshAttributeBuffers;
-    Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_shadowMeshPositionBuffers;
+    Vector<NotNull<Core::Buffer*>, Core::Alloc::GlobalArena> m_shadowMeshIndexBuffers;
+    Vector<NotNull<Core::Buffer*>, Core::Alloc::GlobalArena> m_shadowMeshAttributeBuffers;
+    Vector<NotNull<Core::Buffer*>, Core::Alloc::GlobalArena> m_shadowMeshPositionBuffers;
     Vector<Core::GpuDescriptorHandle, Core::Alloc::GlobalArena> m_shadowMeshIndexHandles;
     Vector<Core::GpuDescriptorHandle, Core::Alloc::GlobalArena> m_shadowMeshAttributeHandles;
     Vector<Core::GpuDescriptorHandle, Core::Alloc::GlobalArena> m_shadowMeshPositionHandles;
     // SW distinct-mesh tables; matching entries share an index.
-    Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_swShadowMeshNodeBuffers;
-    Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_swShadowMeshPositionBuffers;
-    Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_swShadowMeshIndexBuffers;
-    Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_swShadowMeshAttributeBuffers; // Packed normal/uv0.
+    Vector<NotNull<Core::Buffer*>, Core::Alloc::GlobalArena> m_swShadowMeshNodeBuffers;
+    Vector<NotNull<Core::Buffer*>, Core::Alloc::GlobalArena> m_swShadowMeshPositionBuffers;
+    Vector<NotNull<Core::Buffer*>, Core::Alloc::GlobalArena> m_swShadowMeshIndexBuffers;
+    Vector<NotNull<Core::Buffer*>, Core::Alloc::GlobalArena> m_swShadowMeshAttributeBuffers; // Packed normal/uv0.
     Vector<Core::GpuDescriptorHandle, Core::Alloc::GlobalArena> m_swShadowMeshNodeHandles;
     Vector<Core::GpuDescriptorHandle, Core::Alloc::GlobalArena> m_swShadowMeshPositionHandles;
     Vector<Core::GpuDescriptorHandle, Core::Alloc::GlobalArena> m_swShadowMeshIndexHandles;

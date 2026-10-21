@@ -315,12 +315,12 @@ concept TextureApi = DescribedResourceApi<T, TextureDesc> && requires(T& texture
 };
 
 template<typename T>
-concept ShaderApi = DescribedResourceApi<T, ShaderDesc> && requires(const T& shader, const void** bytecode, usize* bytecodeSize){
+concept ShaderApi = DescribedResourceApi<T, ShaderDesc> && requires(const T& shader, const void*& bytecode, usize& bytecodeSize){
     shader.getBytecode(bytecode, bytecodeSize);
 };
 
 template<typename T>
-concept ShaderLibraryApi = requires(const T& constLibrary, T& library, const void** bytecode, usize* bytecodeSize){
+concept ShaderLibraryApi = requires(const T& constLibrary, T& library, const void*& bytecode, usize& bytecodeSize){
     constLibrary.getBytecode(bytecode, bytecodeSize);
     { library.getShader(AStringView{}, ShaderType::All) }->SameAs<Expected<ShaderHandle>>;
 };
@@ -379,7 +379,7 @@ concept RayTracingShaderTableApi = requires(T& shaderTable, AStringView exportNa
     shaderTable.clearMissShaders();
     shaderTable.clearHitShaders();
     shaderTable.clearCallableShaders();
-    { shaderTable.getPipeline() }->SameAs<RayTracingPipeline*>;
+    { shaderTable.getPipeline() }->SameAs<RayTracingPipeline&>;
 };
 
 

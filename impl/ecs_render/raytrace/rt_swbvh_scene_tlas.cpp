@@ -56,7 +56,7 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
     shadowInstanceData.reserve(candidateCount);
     shadowConstantTypedRanges.reserve(candidateCount);
     shadowMutableTypedRanges.reserve(candidateCount);
-    MeshBufferSlotLookup meshSlotLookup(0, Hasher<const Core::Buffer*>(), EqualTo<const Core::Buffer*>(), scratchArena);
+    MeshBufferSlotLookup meshSlotLookup(0, Hasher<NotNull<Core::Buffer*>>(), EqualTo<NotNull<Core::Buffer*>>(), scratchArena);
     meshSlotLookup.reserve(candidateCount);
 
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
@@ -99,7 +99,7 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
             staticScene = false;
 
         // Reuse one table slot for instances sharing geometry.
-        Core::Buffer* meshIndexBuffer = meshResult->meshResources.triangleIndexBuffer.get();
+        const NotNull<Core::Buffer*> meshIndexBuffer(meshResult->meshResources.triangleIndexBuffer.get());
         u32 meshSlot = 0u;
         const auto foundMeshSlot = meshSlotLookup.find(meshIndexBuffer);
         if(foundMeshSlot != meshSlotLookup.end())
@@ -130,8 +130,8 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
 
             meshSlot = m_rayTracingState.m_shadowMeshCount;
             m_rayTracingState.m_shadowMeshIndexBuffers.push_back(meshIndexBuffer);
-            m_rayTracingState.m_shadowMeshAttributeBuffers.push_back(meshResult->meshResources.attributeBuffer.get());
-            m_rayTracingState.m_shadowMeshPositionBuffers.push_back(meshResult->meshResources.positionBuffer.get());
+            m_rayTracingState.m_shadowMeshAttributeBuffers.push_back(MakeNotNull(meshResult->meshResources.attributeBuffer.get()));
+            m_rayTracingState.m_shadowMeshPositionBuffers.push_back(MakeNotNull(meshResult->meshResources.positionBuffer.get()));
             m_rayTracingState.m_shadowMeshIndexHandles.push_back(*indexHandle);
             m_rayTracingState.m_shadowMeshAttributeHandles.push_back(*attributeHandle);
             m_rayTracingState.m_shadowMeshPositionHandles.push_back(*positionHandle);
@@ -160,7 +160,7 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
         InstanceGpuData shadowInstance;
         MaterialSurfaceInfo* materialInfo = nullptr;
         if(const auto materialInfoResult = m_materialSystem.findMaterialSurfaceInfo(renderer.material); materialInfoResult){
-            materialInfo = *materialInfoResult;
+            materialInfo = materialInfoResult->get();
             if(materialInfo->transparent)
                 m_rayTracingState.m_sceneHasTransparentOccluder = true;
             // The trace surface dispatcher reads this material's Texture2D fields through non-uniform bindless slots. Retain the exact resolved handles during preflight

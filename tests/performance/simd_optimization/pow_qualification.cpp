@@ -3,6 +3,7 @@
 
 
 #include <global/floating_point_environment.h>
+#include <global/not_null.h>
 #include <global/numeric_text.h>
 #include <global/simdmath.h>
 #include <global/scope_exit.h>
@@ -153,7 +154,7 @@ NWB_NOINLINE SIMDVectorSingle PackedDouble(const SIMDVectorSingle x, const SIMDV
     return BitCast<SIMDVectorSingle>(result);
 }
 
-[[nodiscard]] Expected<Observation> Observe(const Evaluate evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
+[[nodiscard]] Expected<Observation> Observe(const NotNull<Evaluate> evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
 #pragma STDC FENV_ACCESS ON
 #if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
     const u64 clearNativeStatus = 0u;
@@ -165,7 +166,7 @@ NWB_NOINLINE SIMDVectorSingle PackedDouble(const SIMDVectorSingle x, const SIMDV
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return MakeUnexpected(Failure{});
     errno = E2BIG;
-    const SIMDVectorSingle result = evaluate(x, y);
+    const SIMDVectorSingle result = evaluate.get()(x, y);
     const i32 error = errno;
     const i32 flags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
     u32 mappedStatus{};
@@ -179,9 +180,9 @@ NWB_NOINLINE SIMDVectorSingle PackedDouble(const SIMDVectorSingle x, const SIMDV
     return Observation{ result, { flags, mappedStatus, nativeStatus }, error };
 }
 
-[[nodiscard]] SIMDVectorSingle Encode(const SIMDVectorSingle linear, const Evaluate evaluate)noexcept{
+[[nodiscard]] SIMDVectorSingle Encode(const SIMDVectorSingle linear, const NotNull<Evaluate> evaluate)noexcept{
     const SIMDVectorSingle clamped = VectorSaturate(linear);
-    const SIMDVectorSingle nonlinear = VectorSubtract(VectorScale(evaluate(clamped, VectorReplicate(s_EncodeExponent)), 1.055f), VectorReplicate(0.055f));
+    const SIMDVectorSingle nonlinear = VectorSubtract(VectorScale(evaluate.get()(clamped, VectorReplicate(s_EncodeExponent)), 1.055f), VectorReplicate(0.055f));
     const SIMDVectorSingle encoded = VectorSelect(nonlinear, VectorScale(clamped, 12.92f), VectorLessOrEqual(clamped, VectorReplicate(0.0031308f)));
     return VectorMin(VectorFloor(VectorAdd(VectorScale(VectorSaturate(encoded), 255.0f), VectorReplicate(0.5f))), VectorReplicate(255.0f));
 }
@@ -193,8 +194,8 @@ NWB_NOINLINE SIMDVectorSingle PackedDouble(const SIMDVectorSingle x, const SIMDV
     return seed;
 }
 
-[[nodiscard]] bool Compare(const StringView category, const Evaluate evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y, Counts& counts, const bool quantize = false){
-    const auto expected = Observe(Reference, x, y), actual = Observe(evaluate, x, y);
+[[nodiscard]] bool Compare(const StringView category, const NotNull<Evaluate> evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y, Counts& counts, const bool quantize = false){
+    const auto expected = Observe(MakeNotNull<Evaluate>(Reference), x, y), actual = Observe(evaluate, x, y);
     if(!expected || !actual)
         return false;
     ++counts.vectors;
@@ -214,7 +215,7 @@ NWB_NOINLINE SIMDVectorSingle PackedDouble(const SIMDVectorSingle x, const SIMDV
     if(errorDiffers && counts.errors <= 2u)
         NWB_COUT << "errno category=" << category << " x0=0x" << StreamHex << VectorGetIntX(x) << " y0=0x" << VectorGetIntX(y) << StreamDec << " expected=" << expected->error << " actual=" << actual->error << '\n';
     if(quantize){
-        const SIMDVectorSingle expectedQuantized = Encode(x, Reference), actualQuantized = Encode(x, evaluate);
+        const SIMDVectorSingle expectedQuantized = Encode(x, MakeNotNull<Evaluate>(Reference)), actualQuantized = Encode(x, evaluate);
         for(usize lane = 0u; lane < 4u; ++lane){
             if(VectorGetIntByIndex(expectedQuantized, lane) != VectorGetIntByIndex(actualQuantized, lane)){
                 if(counts.quantized < 4u)
@@ -230,7 +231,7 @@ void PrintCounts(const StringView category, const Counts& counts){
     NWB_COUT << "summary category=" << category << " vectors=" << counts.vectors << " lanes=" << counts.vectors * 4u << " bits=" << counts.bits << " flags=" << counts.flags << " errno=" << counts.errors << " quantized=" << counts.quantized << '\n';
 }
 
-[[nodiscard]] u64 Verify(const Evaluate evaluate){
+[[nodiscard]] u64 Verify(const NotNull<Evaluate> evaluate){
 #pragma STDC FENV_ACCESS ON
     constexpr u32 s_Exceptional[]{ 0u, 0x80000000u, 1u, 0x80000001u, 0x007fffffu, 0x00800000u, 0x80800000u, 0x7f7fffffu, 0xff7fffffu, 0x7f800000u, 0xff800000u, 0x7fc00123u, 0xffc00124u, 0x7f800125u, 0xff800126u,
         0x3f800000u, 0xbf800000u, 0x40000000u, 0xc0000000u, 0x3f000000u, 0xbf000000u, 0x40400000u, 0xc0400000u, 0x4b7fffffu, 0x4b800000u, 0x4b800001u, 0x3eaaaaabu, 0x42fe0000u, 0xc3160000u };
@@ -285,7 +286,7 @@ void PrintCounts(const StringView category, const Counts& counts){
             u32 lower = 0u, upper = 0x3f800000u;
             while(lower < upper){
                 const u32 midpoint = lower + (upper - lower) / 2u;
-                if(VectorGetX(Encode(VectorReplicate(BitCast<f32>(midpoint)), Reference)) < static_cast<f32>(transition))
+                if(VectorGetX(Encode(VectorReplicate(BitCast<f32>(midpoint)), MakeNotNull<Evaluate>(Reference))) < static_cast<f32>(transition))
                     lower = midpoint + 1u;
                 else
                     upper = midpoint;
@@ -307,7 +308,7 @@ void PrintCounts(const StringView category, const Counts& counts){
 }
 
 #if defined(NWB_PLATFORM_WINDOWS)
-[[nodiscard]] u32 ObserveTrap(const Evaluate evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y){
+[[nodiscard]] u32 ObserveTrap(const NotNull<Evaluate> evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y){
     u32 initial{}, control{}, exception{};
     if(_controlfp_s(&initial, 0u, 0u) != 0)
         return 1u;
@@ -315,7 +316,7 @@ void PrintCounts(const StringView category, const Counts& counts){
     if(_controlfp_s(&control, initial & ~(_EM_INVALID | _EM_OVERFLOW | _EM_ZERODIVIDE), _MCW_EM) != 0)
         return 2u;
     __try{
-        const SIMDVectorSingle value = evaluate(x, y);
+        const SIMDVectorSingle value = evaluate.get()(x, y);
         volatile u32 sink = VectorGetIntX(value);
         if(sink == previousFlags)
             exception = 0u;
@@ -331,7 +332,7 @@ void PrintCounts(const StringView category, const Counts& counts){
 }
 #endif
 
-[[nodiscard]] i32 VerifyTraps([[maybe_unused]] const Evaluate evaluate){
+[[nodiscard]] i32 VerifyTraps([[maybe_unused]] const NotNull<Evaluate> evaluate){
 #if defined(NWB_PLATFORM_WINDOWS)
     const SIMDVectorSingle x[]{ VectorSet(-1.0f, 1.0f, 1.0f, 1.0f), VectorSet(0x1.fffffep127f, 1.0f, 1.0f, 1.0f), VectorSet(0.0f, 1.0f, 1.0f, 1.0f), VectorSet(0x1.fffffep127f, -1.0f, 1.0f, 1.0f), VectorSet(-1.0f, 0x1.fffffep127f, 1.0f, 1.0f) };
     const SIMDVectorSingle y[]{ VectorSet(0.5f, 1.0f, 1.0f, 1.0f), VectorSet(2.0f, 1.0f, 1.0f, 1.0f), VectorSet(-1.0f, 1.0f, 1.0f, 1.0f), VectorSet(2.0f, 0.5f, 1.0f, 1.0f), VectorSet(0.5f, 2.0f, 1.0f, 1.0f) };
@@ -340,7 +341,7 @@ void PrintCounts(const StringView category, const Counts& counts){
     bool delivered = true;
     for(usize index = 0u; index < LengthOf(x); ++index){
         NWB_COUT << "trap case=" << index << " reference\n";
-        const u32 expected = ObserveTrap(Reference, x[index], y[index]);
+        const u32 expected = ObserveTrap(MakeNotNull<Evaluate>(Reference), x[index], y[index]);
         NWB_COUT << "trap case=" << index << " candidate\n";
         const u32 actual = ObserveTrap(evaluate, x[index], y[index]);
         delivered = delivered && (index < LengthOf(s_ReferenceCategories) ? expected == s_ReferenceCategories[index] : (expected == EXCEPTION_FLT_INVALID_OPERATION || expected == EXCEPTION_FLT_OVERFLOW));
@@ -365,7 +366,7 @@ struct TrapEdgeObservation{
     u64 nativeStatus{}, nativeControl{};
 };
 
-[[nodiscard]] Expected<TrapEdgeObservation> ObserveTrapEdge(const Evaluate evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y, const u32 enabled){
+[[nodiscard]] Expected<TrapEdgeObservation> ObserveTrapEdge(const NotNull<Evaluate> evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y, const u32 enabled){
     u32 initial{}, control{}, exception{}, valueBits{};
     if(_controlfp_s(&initial, 0u, 0u) != 0)
         return MakeUnexpected(Failure{});
@@ -381,7 +382,7 @@ struct TrapEdgeObservation{
         return MakeUnexpected(Failure{});
     errno = E2BIG;
     __try{
-        const SIMDVectorSingle value = evaluate(x, y);
+        const SIMDVectorSingle value = evaluate.get()(x, y);
         volatile u32 sink = VectorGetIntX(value);
         valueBits = sink;
     }
@@ -407,7 +408,7 @@ struct TrapEdgeObservation{
 }
 #endif
 
-[[nodiscard]] i32 VerifyTrapEdges(const Evaluate evaluate){
+[[nodiscard]] i32 VerifyTrapEdges(const NotNull<Evaluate> evaluate){
 #if defined(NWB_PLATFORM_WINDOWS)
     const i32 savedError = errno;
 #if defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
@@ -446,7 +447,7 @@ struct TrapEdgeObservation{
                 return 2;
             for(const u32 enabled : { _EM_UNDERFLOW, _EM_UNDERFLOW | _EM_INEXACT }){
                 for(usize index = 0u; index < LengthOf(x); ++index){
-                    const auto expected = ObserveTrapEdge(Reference, x[index], y[index], enabled), actual = ObserveTrapEdge(evaluate, x[index], y[index], enabled);
+                    const auto expected = ObserveTrapEdge(MakeNotNull<Evaluate>(Reference), x[index], y[index], enabled), actual = ObserveTrapEdge(evaluate, x[index], y[index], enabled);
                     if(!expected || !actual)
                         return 2;
                     if(index < 2u && denormalMode == _DN_SAVE)
@@ -490,11 +491,12 @@ int main(const int argc, const char* const* argv){
     const Evaluate evaluate = variant == "production" ? Production : (variant == "packed_single" ? PackedSingle : (variant == "packed_double" ? PackedDouble : nullptr));
     if(!evaluate)
         return 2;
+    const auto admittedEvaluate = MakeNotNull(evaluate);
     if(argc == 3){
         if(StringView(argv[2]) != "traps")
             return 2;
-        const i32 originalTraps = VerifyTraps(evaluate);
-        return originalTraps == 0 ? VerifyTrapEdges(evaluate) : originalTraps;
+        const i32 originalTraps = VerifyTraps(admittedEvaluate);
+        return originalTraps == 0 ? VerifyTrapEdges(admittedEvaluate) : originalTraps;
     }
     const i32 originalError = errno;
 #if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
@@ -513,7 +515,7 @@ int main(const int argc, const char* const* argv){
         errno = originalError;
     });
     NWB_COUT << "variant=" << variant << '\n';
-    const u64 failures = Verify(evaluate);
+    const u64 failures = Verify(admittedEvaluate);
     NWB_COUT << "qualification differences=" << failures << " admitted=" << (failures == 0u) << '\n';
     return failures == 0u ? 0 : 1;
 }

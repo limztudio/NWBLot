@@ -293,7 +293,7 @@ private:
         const GpuSubmissionPacketId& packet,
         GpuGraphSubmissionTransaction& transaction,
         Alloc::ScratchArena& scratchArena,
-        GpuTimingSubmissionTicket* const* timingTickets,
+        const NotNull<GpuTimingSubmissionTicket*>* timingTickets,
         usize timingTicketCount,
         const QueueSubmissionPreSubmitHook* preSubmitHook,
         const GpuTaskSubmissionDetail::TaskCallbackBindings<GpuTaskGraphTaskAcceptedCallback>& taskAcceptedCallbacks

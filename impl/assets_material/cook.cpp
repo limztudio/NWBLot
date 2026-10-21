@@ -63,7 +63,9 @@ Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface(Material
 
 using OptionalAvboitPixelShaderSetter = void(Material::*)(const Core::Assets::AssetRef<PixelShader>&);
 
-static bool SetOptionalAvboitPixelShader(const MaterialCookEntry& materialEntry, const AStringView shaderNameText, const AStringView passLabel, const OptionalAvboitPixelShaderSetter setter, Material& outMaterial){
+template<OptionalAvboitPixelShaderSetter Setter>
+static bool SetOptionalAvboitPixelShader(const MaterialCookEntry& materialEntry, const AStringView shaderNameText, const AStringView passLabel, Material& outMaterial){
+    static_assert(Setter != nullptr);
     if(shaderNameText.empty())
         return true;
 
@@ -75,7 +77,7 @@ static bool SetOptionalAvboitPixelShader(const MaterialCookEntry& materialEntry,
 
     Core::Assets::AssetRef<PixelShader> shaderRef;
     shaderRef.virtualPath = **shaderName;
-    (outMaterial.*setter)(shaderRef);
+    (outMaterial.*Setter)(shaderRef);
     return true;
 }
 
@@ -112,11 +114,11 @@ Expected<Material> BuildMaterialAsset(const MaterialCookEntry& materialEntry, Co
     asset.setMaterialInterface(*materialInterface);
     asset.setShadingModelId(materialEntry.shadingModelId);
     asset.setSurfaceDispatchId(materialEntry.surfaceDispatchId);
-    if(!SetOptionalAvboitPixelShader(materialEntry, materialEntry.avboitAccumulatePixelShaderName, MaterialBinaryPayload::s_AvboitAccumulatePassLabel,&Material::setAvboitAccumulatePixelShader, asset))
+    if(!SetOptionalAvboitPixelShader<&Material::setAvboitAccumulatePixelShader>(materialEntry, materialEntry.avboitAccumulatePixelShaderName, MaterialBinaryPayload::s_AvboitAccumulatePassLabel, asset))
         return MakeUnexpected(Failure{});
-    if(!SetOptionalAvboitPixelShader(materialEntry, materialEntry.avboitOccupancyPixelShaderName, MaterialBinaryPayload::s_AvboitOccupancyPassLabel,&Material::setAvboitOccupancyPixelShader, asset))
+    if(!SetOptionalAvboitPixelShader<&Material::setAvboitOccupancyPixelShader>(materialEntry, materialEntry.avboitOccupancyPixelShaderName, MaterialBinaryPayload::s_AvboitOccupancyPassLabel, asset))
         return MakeUnexpected(Failure{});
-    if(!SetOptionalAvboitPixelShader(materialEntry, materialEntry.avboitExtinctionPixelShaderName, MaterialBinaryPayload::s_AvboitExtinctionPassLabel,&Material::setAvboitExtinctionPixelShader, asset))
+    if(!SetOptionalAvboitPixelShader<&Material::setAvboitExtinctionPixelShader>(materialEntry, materialEntry.avboitExtinctionPixelShaderName, MaterialBinaryPayload::s_AvboitExtinctionPassLabel, asset))
         return MakeUnexpected(Failure{});
     asset.setTransparent(materialEntry.transparent);
     asset.setTwoSided(materialEntry.twoSided);

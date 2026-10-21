@@ -350,8 +350,8 @@ void Queue::unregisterCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept
 void Queue::collectCompletedCommandBuffers(){
     auto it = m_commandBuffersInFlight.begin();
     while(it != m_commandBuffersInFlight.end()){
-        TrackedCommandBuffer* cmdBuf = it->get();
-        if(cmdBuf->m_submissionID > m_lastFinishedID)
+        auto& cmdBuf = *MakeNotNull(it->get());
+        if(cmdBuf.m_submissionID > m_lastFinishedID)
             break;
 
         it = recycleCommandBuffer(m_commandBuffersInFlight, it);
@@ -399,16 +399,16 @@ Queue::WorkerCommandArena* Queue::findWorkerCommandArena(const u64 recordingWork
 }
 
 
-Expected<Queue::WorkerCommandArena*, VkResult> Queue::getOrCreateWorkerCommandArena(const u64 recordingWorkerDomain, const u32 recordingWorkerIndex){
+Expected<NotNull<Queue::WorkerCommandArena*>, VkResult> Queue::getOrCreateWorkerCommandArena(const u64 recordingWorkerDomain, const u32 recordingWorkerIndex){
     if(recordingWorkerIndex == 0u)
         return MakeUnexpected(VK_ERROR_INITIALIZATION_FAILED);
 
     if(WorkerCommandArena* const arena = findWorkerCommandArena(recordingWorkerDomain, recordingWorkerIndex))
-        return arena;
+        return MakeNotNull(arena);
 
     ScopedLock lock(m_workerCommandArenasMutex);
     if(WorkerCommandArena* const arena = findWorkerCommandArena(recordingWorkerDomain, recordingWorkerIndex))
-        return arena;
+        return MakeNotNull(arena);
 
     auto* const arena = NewArenaObject<WorkerCommandArena>(m_context.objectArena, m_context.objectArena, recordingWorkerDomain, recordingWorkerIndex);
     if(!arena){
@@ -434,12 +434,12 @@ Expected<Queue::WorkerCommandArena*, VkResult> Queue::getOrCreateWorkerCommandAr
         return MakeUnexpected(createResult);
     }
 
-    m_workerCommandArenas.push_back(arena);
+    m_workerCommandArenas.push_back(MakeNotNull(arena));
     arena->next.store(m_workerCommandArenaHead.load(MemoryOrder::relaxed), MemoryOrder::relaxed);
     m_workerCommandArenaHead.store(arena, MemoryOrder::release);
     m_explicitWorkerArenaCount.fetch_add(1u, MemoryOrder::relaxed);
     destroyArena.release();
-    return arena;
+    return MakeNotNull(arena);
 }
 
 
@@ -493,7 +493,7 @@ Expected<TrackedCommandBufferPtr, VkResult> Queue::getOrCreateWorkerCommandBuffe
     const auto arenaResult = getOrCreateWorkerCommandArena(recordingWorkerDomain, recordingWorkerIndex);
     if(!arenaResult)
         return MakeUnexpected(arenaResult.error());
-    WorkerCommandArena* const arena = *arenaResult;
+    const auto arena = *arenaResult;
 
     // Each explicit worker owns this native pool shard.
     // Do not take m_mutex here: submission/timeline retirement remains serialized there, while allocation and reset stay independent for ready-frontier recording workers.
@@ -532,8 +532,8 @@ Expected<TrackedCommandBufferPtr, VkResult> Queue::getOrCreateWorkerCommandBuffe
 
 void Queue::destroyWorkerCommandArenas()noexcept{
     NothrowScopedLock workerArenasLock(m_workerCommandArenasMutex);
-    for(WorkerCommandArena* const arena : m_workerCommandArenas){
-        NWB_ASSERT(arena);
+    for(const auto arena : m_workerCommandArenas){
+
 
         {
             NothrowScopedLock arenaLock(arena->mutex);
@@ -552,9 +552,9 @@ void Queue::destroyWorkerCommandArenas()noexcept{
     }
 
     m_workerCommandArenaHead.store(nullptr, MemoryOrder::release);
-    for(WorkerCommandArena* const arena : m_workerCommandArenas){
-        NWB_ASSERT(arena);
-        DestroyArenaObject(m_context.objectArena, arena);
+    for(const auto arena : m_workerCommandArenas){
+
+        DestroyArenaObject(m_context.objectArena, arena.get());
     }
     m_workerCommandArenas.clear();
 }

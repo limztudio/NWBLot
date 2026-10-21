@@ -34,10 +34,10 @@ namespace RendererTaskGraphDetail{
 [[nodiscard]] bool AvboitExtinctionComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
 
     static_cast<void>(context);
-    const AvboitComputeEmulationRecordTrait trait{ &RendererGpuTimingScope::s_AvboitExtinction, MaterialPipelinePass::AvboitExtinction, &AvboitFrameTargets::lowFramebuffer, };
+    const AvboitComputeEmulationRecordTrait trait{ RendererGpuTimingScope::s_AvboitExtinction, MaterialPipelinePass::AvboitExtinction, &AvboitFrameTargets::lowFramebuffer, };
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
 
-    return RecordAvboitComputeEmulationFromPayload(scratchArena, payload, commandList, context, &payload.extinctionTiming, trait);
+    return RecordAvboitComputeEmulationFromPayload(scratchArena, payload, commandList, context, payload.extinctionTiming, trait);
 }
 
 
@@ -47,10 +47,10 @@ namespace RendererTaskGraphDetail{
 [[nodiscard]] bool AvboitExtinctionSharedComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
 
     static_cast<void>(context);
-    const AvboitSharedComputeEmulationRecordTrait trait{ &RendererGpuTimingScope::s_AvboitExtinction, MaterialPipelinePass::AvboitExtinction, &AvboitFrameTargets::lowFramebuffer, };
+    const AvboitSharedComputeEmulationRecordTrait trait{ RendererGpuTimingScope::s_AvboitExtinction, MaterialPipelinePass::AvboitExtinction, &AvboitFrameTargets::lowFramebuffer, };
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
 
-    return RecordAvboitSharedComputeEmulationFromPayload(scratchArena, payload, commandList, context, &payload.extinctionTiming, payload.phase == AvboitExtinctionSharedComputeEmulationGraphTask::Phase::Raster, trait);
+    return RecordAvboitSharedComputeEmulationFromPayload(scratchArena, payload, commandList, context, payload.extinctionTiming, payload.phase == AvboitExtinctionSharedComputeEmulationGraphTask::Phase::Raster, trait);
 }
 
 

@@ -201,7 +201,7 @@ Device::Device(const DeviceDesc& desc)
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate canonical native queue state."));
             return;
         }
-        m_nativeQueueStates.push_back(nativeQueueState);
+        m_nativeQueueStates.push_back(MakeNotNull(nativeQueueState));
     }
     for(usize queueIndex = 0u; queueIndex < desc.physicalQueueCount; ++queueIndex){
         const VulkanPhysicalQueueDesc& physicalQueue = desc.physicalQueues[queueIndex];
@@ -580,16 +580,16 @@ void Device::releaseOwnedResources()noexcept{
     m_gpuDescriptorHeap.shutdownForDeviceTeardown();
     m_descriptorBufferManager.shutdownForDeviceTeardown();
 
-    for(Queue* queue : m_physicalQueues){
-        NWB_ASSERT(queue);
-        DestroyArenaObjectNoexcept(m_context.objectArena, queue);
+    for(const auto queue : m_physicalQueues){
+
+        DestroyArenaObjectNoexcept(m_context.objectArena, queue.get());
     }
     m_physicalQueues.clear();
     m_physicalQueueInfos.clear();
 
-    for(NativeQueueState* nativeQueueState : m_nativeQueueStates){
-        NWB_ASSERT(nativeQueueState);
-        DestroyArenaObjectNoexcept(m_context.objectArena, nativeQueueState);
+    for(const auto nativeQueueState : m_nativeQueueStates){
+
+        DestroyArenaObjectNoexcept(m_context.objectArena, nativeQueueState.get());
     }
     m_nativeQueueStates.clear();
 

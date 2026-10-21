@@ -30,14 +30,14 @@ class RendererTaskTimingFeedback;
 
 // Shared AVBOIT compute-effect chain owns depth-warp plus integration task declaration.
 struct AvboitDepthWarpStageInputs{
-    AvboitFrameTargets* targets = nullptr;
+    AvboitFrameTargets& targets;
     Core::GpuGraphResourceId coverage;
     Core::GpuGraphResourceId depthWarp;
     Core::GpuGraphResourceId control;
     Core::GpuGraphResourceId currentBindlessSlots;
     Core::GpuTaskId occupancyTask;
-    Core::GpuTimingSubmissionTicket* depthWarpTimingTicket = nullptr;
-    RendererTaskTimingFeedback* timingFeedback = nullptr;
+    Core::GpuTimingSubmissionTicket& depthWarpTimingTicket;
+    RendererTaskTimingFeedback& timingFeedback;
     bool hasTransparentRenderers = false;
 };
 
@@ -46,15 +46,15 @@ struct AvboitDepthWarpStageResult{
 };
 
 struct AvboitIntegrationStageInputs{
-    AvboitFrameTargets* targets = nullptr;
+    AvboitFrameTargets& targets;
     Core::GpuGraphResourceId extinction;
     Core::GpuGraphResourceId control;
     Core::GpuGraphResourceId extinctionOverflow;
     Core::GpuGraphResourceId transmittance;
     Core::GpuGraphResourceId currentBindlessSlots;
     Core::GpuTaskId extinctionTask;
-    Core::GpuTimingSubmissionTicket* integrationTimingTicket = nullptr;
-    RendererTaskTimingFeedback* timingFeedback = nullptr;
+    Core::GpuTimingSubmissionTicket& integrationTimingTicket;
+    RendererTaskTimingFeedback& timingFeedback;
 };
 
 struct AvboitIntegrationStageResult{

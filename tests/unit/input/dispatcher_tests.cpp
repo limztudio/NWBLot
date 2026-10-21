@@ -137,7 +137,7 @@ TEST(InputDispatcher, WindowFocusTransitionsReachEveryHandlerAndDeduplicate){
     dispatcher.windowFocusUpdate(true);
     dispatcher.windowFocusUpdate(true);
     EXPECT_TRUE(dispatcher.windowFocused());
-    for(const FocusHandler* handler : { &scene, &legacyUi, &customUi }){
+    for(const auto handler : { MakeNotNull(&scene), MakeNotNull(&legacyUi), MakeNotNull(&customUi) }){
         ASSERT_EQ(handler->m_focusCount, 2u);
         EXPECT_FALSE(handler->m_focusValues[0u]);
         EXPECT_TRUE(handler->m_focusValues[1u]);

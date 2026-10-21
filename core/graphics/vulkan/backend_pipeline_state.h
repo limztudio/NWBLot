@@ -672,7 +672,7 @@ public:
     void clearMissShaders()noexcept;
     void clearHitShaders()noexcept;
     void clearCallableShaders()noexcept;
-    [[nodiscard]] RayTracingPipeline* getPipeline()noexcept{ return m_pipeline.get(); }
+    [[nodiscard]] RayTracingPipeline& getPipeline()noexcept{ return *m_pipeline; }
     Object getNativeHandle(ObjectType objectType)noexcept;
 
 

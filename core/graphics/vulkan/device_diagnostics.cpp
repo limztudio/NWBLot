@@ -57,8 +57,8 @@ void Device::captureDeviceLoss(const AStringView context){
         u32 remainingEntries = s_MaxGpuCrashCaptureEntries;
 
         if(hasCheckpoints){
-            for(Queue* physicalQueue : m_physicalQueues){
-                NWB_ASSERT(physicalQueue);
+            for(const auto physicalQueue : m_physicalQueues){
+
                 if(remainingEntries == 0u)
                     continue;
 
@@ -94,7 +94,7 @@ void Device::captureDeviceLoss(const AStringView context){
 
         if(hasBufferMarker && remainingEntries > 0u){
             NWB_ASSERT(m_amdBreadcrumb.mappedMemory && m_amdBreadcrumb.metadata && m_amdBreadcrumb.metadata->slotRecordCount == m_amdBreadcrumb.layout.totalSlotCount && m_amdBreadcrumb.metadata->nextSerialCount == m_amdBreadcrumb.layout.physicalQueueCount);
-            const u32* breadcrumbSlots = static_cast<const u32*>(m_amdBreadcrumb.mappedMemory);
+            const auto breadcrumbSlots = MakeNotNull(static_cast<const u32*>(m_amdBreadcrumb.mappedMemory));
             // Select each exact queue independently because physical queues remain unordered globally.
             for(usize queueIndex = 0u; queueIndex < m_amdBreadcrumb.layout.physicalQueueCount && remainingEntries > 0u; ++queueIndex){
                 const GpuPhysicalQueueId& queue = m_physicalQueueInfos[queueIndex].id;
@@ -109,7 +109,7 @@ void Device::captureDeviceLoss(const AStringView context){
                     ScopedLock lock(m_amdBreadcrumb.slotMutex);
                     for(usize localSlot = 0u; localSlot < m_amdBreadcrumb.layout.slotsPerQueue; ++localSlot){
                         const usize flatSlot = firstSlot->flatSlot + localSlot;
-                        const u32 observedMarker = breadcrumbSlots[flatSlot];
+                        const u32 observedMarker = breadcrumbSlots.get()[flatSlot];
                         if(observedMarker == 0u)
                             continue;
 

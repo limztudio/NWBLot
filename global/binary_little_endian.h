@@ -31,8 +31,7 @@ inline void AppendF32LittleEndian(Container& bytes, const f32 value)noexcept(noe
 
 // The caller has admitted four readable bytes.
 [[nodiscard]] inline u32 ReadU32LittleEndian(const NotNull<const u8*> bytes)noexcept{
-    const u8* const data = bytes.get();
-    return static_cast<u32>(data[0u]) | (static_cast<u32>(data[1u]) << s_BitsPerByte) | (static_cast<u32>(data[2u]) << (s_BitsPerByte * 2u)) | (static_cast<u32>(data[3u]) << (s_BitsPerByte * 3u));
+    return static_cast<u32>(bytes.get()[0u]) | (static_cast<u32>(bytes.get()[1u]) << s_BitsPerByte) | (static_cast<u32>(bytes.get()[2u]) << (s_BitsPerByte * 2u)) | (static_cast<u32>(bytes.get()[3u]) << (s_BitsPerByte * 3u));
 }
 
 template<typename Container>

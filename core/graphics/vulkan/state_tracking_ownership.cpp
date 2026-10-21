@@ -251,7 +251,7 @@ void CommandList::setPermanentBufferState(Buffer* buffer, ResourceStates::Mask s
         rejectCommandRecording(s_OperationName, __hidden_state_tracking_ownership::s_PermanentStateAlreadyTrackedReason);
         return;
     }
-    if(m_bufferOwnershipReleaseDestinations.find(buffer) != m_bufferOwnershipReleaseDestinations.end()){
+    if(m_bufferOwnershipReleaseDestinations.find(MakeNotNull(buffer)) != m_bufferOwnershipReleaseDestinations.end()){
         rejectCommandRecording(s_OperationName, NWB_TEXT("buffer already has a pending ownership release"));
         return;
     }

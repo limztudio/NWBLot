@@ -4,6 +4,7 @@
 
 #include "cpu_topology.h"
 
+#include "not_null.h"
 #include "platform.h"
 #include "simplemath.h"
 #include "thread.h"
@@ -119,13 +120,13 @@ static constexpr u32 s_QueryRetryCount = 4u;
     if(!informationReady || informationBytes == 0u)
         return MakeUnexpected(Failure{});
 
-    const auto* bytes = reinterpret_cast<const u8*>(informationStorage.data());
+    const auto bytes = MakeNotNull(reinterpret_cast<const u8*>(informationStorage.data()));
     usize offset = 0u;
     placements.reserve(informationBytes / sizeof(SYSTEM_CPU_SET_INFORMATION));
     while(offset < informationBytes){
         if(informationBytes - offset < sizeof(DWORD) + sizeof(CPU_SET_INFORMATION_TYPE))
             return MakeUnexpected(Failure{});
-        const auto* information = reinterpret_cast<const SYSTEM_CPU_SET_INFORMATION*>(bytes + offset);
+        const auto information = MakeNotNull(reinterpret_cast<const SYSTEM_CPU_SET_INFORMATION*>(bytes.get() + offset));
         if(information->Size < sizeof(DWORD) + sizeof(CPU_SET_INFORMATION_TYPE) || information->Size > informationBytes - offset)
             return MakeUnexpected(Failure{});
         if(information->Type == CpuSetInformation){
@@ -213,14 +214,14 @@ static constexpr usize s_MaxCpuAffinityBytes = 1024u * 1024u;
     if(!affinityWords)
         return MakeUnexpected(affinityWords.error());
     const usize byteCount = affinityWords->size() * sizeof(usize);
-    const auto* affinity = reinterpret_cast<const cpu_set_t*>(affinityWords->data());
-    const int processorCount = CPU_COUNT_S(byteCount, affinity);
+    const auto affinity = MakeNotNull(reinterpret_cast<const cpu_set_t*>(affinityWords->data()));
+    const int processorCount = CPU_COUNT_S(byteCount, affinity.get());
     if(processorCount <= 0)
         return MakeUnexpected(Failure{});
     placements.reserve(static_cast<usize>(processorCount));
     bool allCapacitiesKnown = true;
     for(usize processorIndex = 0u; processorIndex < byteCount * __hidden_cpu_topology::s_BitsPerByte; ++processorIndex){
-        if(!CPU_ISSET_S(processorIndex, byteCount, affinity))
+        if(!CPU_ISSET_S(processorIndex, byteCount, affinity.get()))
             continue;
         const u32 capacity = QueryLinuxCapacity(static_cast<u32>(processorIndex));
         allCapacitiesKnown = allCapacitiesKnown && capacity != 0u;
@@ -286,12 +287,12 @@ bool SetCurrentThreadCpuPlacement(const CpuWorkerPlacement& placement){
     if(!affinityWords)
         return false;
     const usize byteCount = affinityWords->size() * sizeof(usize);
-    auto* affinity = reinterpret_cast<cpu_set_t*>(affinityWords->data());
-    if(placement.logicalProcessorIndex >= byteCount * __hidden_cpu_topology::s_BitsPerByte || !CPU_ISSET_S(placement.logicalProcessorIndex, byteCount, affinity))
+    const auto affinity = MakeNotNull(reinterpret_cast<cpu_set_t*>(affinityWords->data()));
+    if(placement.logicalProcessorIndex >= byteCount * __hidden_cpu_topology::s_BitsPerByte || !CPU_ISSET_S(placement.logicalProcessorIndex, byteCount, affinity.get()))
         return false;
-    CPU_ZERO_S(byteCount, affinity);
-    CPU_SET_S(placement.logicalProcessorIndex, byteCount, affinity);
-    return ::sched_setaffinity(0, byteCount, affinity) == 0;
+    CPU_ZERO_S(byteCount, affinity.get());
+    CPU_SET_S(placement.logicalProcessorIndex, byteCount, affinity.get());
+    return ::sched_setaffinity(0, byteCount, affinity.get()) == 0;
 #else
     return false;
 #endif

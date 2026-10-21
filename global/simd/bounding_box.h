@@ -74,11 +74,11 @@ inline void NWB_SIMD_CALL BoundingDoubleBox::TransformBoxValue(SIMDVectorDouble 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void NWB_SIMD_CALL BoundingBox::CornersValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle* outCorners)noexcept{
+inline void NWB_SIMD_CALL BoundingBox::CornersValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle (&outCorners)[BoundingBox::s_CornerCount])noexcept{
     CollisionDetail::AabbCorners(boxCenter, boxExtents, outCorners);
 }
 
-inline void NWB_SIMD_CALL BoundingDoubleBox::CornersValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble* outCorners)noexcept{
+inline void NWB_SIMD_CALL BoundingDoubleBox::CornersValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble (&outCorners)[BoundingDoubleBox::s_DoubleCornerCount])noexcept{
     CollisionDoubleDetail::AabbCorners(boxCenter, boxExtents, outCorners);
 }
 
@@ -416,8 +416,7 @@ inline void NWB_SIMD_CALL BoundingDoubleBox::transform(BoundingDoubleBox& outBox
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void BoundingBox::getCorners(Float3U* corners)const noexcept{
-    NWB_ASSERT(corners != nullptr);
+inline void BoundingBox::getCorners(Float3U (&corners)[s_CornerCount])const noexcept{
     SIMDVectorSingle cornerVectors[s_CornerCount];
     CornersValue(LoadFloat(center), LoadFloat(extents), cornerVectors);
     for(u32 i = 0u; i < s_CornerCount; ++i)
@@ -425,8 +424,7 @@ inline void BoundingBox::getCorners(Float3U* corners)const noexcept{
 }
 
 template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
-inline void BoundingDoubleBox::getCorners(PointT* corners)const noexcept{
-    NWB_ASSERT(corners != nullptr);
+inline void BoundingDoubleBox::getCorners(PointT (&corners)[s_DoubleCornerCount])const noexcept{
     SIMDVectorDouble cornerVectors[s_DoubleCornerCount];
     CornersValue(LoadDouble(center), LoadDouble(extents), cornerVectors);
     for(u64 i = 0u; i < s_DoubleCornerCount; ++i)
@@ -597,13 +595,12 @@ inline void NWB_SIMD_CALL BoundingBox::CreateFromPoints(BoundingBox& outBox, con
     StoreFloat(extentsVector, outBox.extents);
 }
 
-inline void BoundingBox::CreateFromPoints(BoundingBox& outBox, const usize count, const Float3U* points, const usize stride)noexcept{
-    NWB_ASSERT(points != nullptr);
+inline void BoundingBox::CreateFromPoints(BoundingBox& outBox, const usize count, const Float3U& points, const usize stride)noexcept{
     NWB_ASSERT(count > 0u);
-    SIMDVectorSingle minBounds = LoadFloat(*VectorScalarDetail::StridePointer(points, stride, 0u));
+    SIMDVectorSingle minBounds = LoadFloat(*VectorScalarDetail::StridePointer(MakeNotNull(&points), stride, 0u));
     SIMDVectorSingle maxBounds = minBounds;
     for(usize i = 1u; i < count; ++i)
-        CollisionDetail::ExpandMinMax(LoadFloat(*VectorScalarDetail::StridePointer(points, stride, i)), minBounds, maxBounds);
+        CollisionDetail::ExpandMinMax(LoadFloat(*VectorScalarDetail::StridePointer(MakeNotNull(&points), stride, i)), minBounds, maxBounds);
     SIMDVectorSingle centerVector{};
     SIMDVectorSingle extentsVector{};
     CollisionDetail::CenterExtentsFromMinMax(minBounds, maxBounds, centerVector, extentsVector);
@@ -620,15 +617,14 @@ inline void NWB_SIMD_CALL BoundingDoubleBox::CreateFromPoints(BoundingDoubleBox&
 }
 
 template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
-inline void BoundingDoubleBox::CreateFromPoints(BoundingDoubleBox& outBox, const usize count, const PointT* points, const usize stride)noexcept{
-    NWB_ASSERT(points != nullptr);
+inline void BoundingDoubleBox::CreateFromPoints(BoundingDoubleBox& outBox, const usize count, const PointT& points, const usize stride)noexcept{
     NWB_ASSERT(count > 0u);
     NWB_ASSERT(stride >= sizeof(PointT));
     NWB_ASSERT(stride % alignof(PointT) == 0u);
-    SIMDVectorDouble minBounds = LoadDouble(*VectorScalarDetail::StridePointer(points, stride, 0u));
+    SIMDVectorDouble minBounds = LoadDouble(*VectorScalarDetail::StridePointer(MakeNotNull(&points), stride, 0u));
     SIMDVectorDouble maxBounds = minBounds;
     for(usize i = 1u; i < count; ++i)
-        CollisionDoubleDetail::ExpandMinMax(LoadDouble(*VectorScalarDetail::StridePointer(points, stride, i)), minBounds, maxBounds);
+        CollisionDoubleDetail::ExpandMinMax(LoadDouble(*VectorScalarDetail::StridePointer(MakeNotNull(&points), stride, i)), minBounds, maxBounds);
     SIMDVectorDouble centerVector{};
     SIMDVectorDouble extentsVector{};
     CollisionDoubleDetail::CenterExtentsFromMinMax(minBounds, maxBounds, centerVector, extentsVector);

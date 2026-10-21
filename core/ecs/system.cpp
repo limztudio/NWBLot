@@ -80,16 +80,16 @@ SystemScheduler::SystemScheduler(Alloc::GlobalArena& arena)noexcept
 
 
 void SystemScheduler::addSystem(ISystem& system){
-    if(FindIf(m_allSystems.begin(), m_allSystems.end(), [&system](ISystem* iterSystem)noexcept{ return iterSystem == &system; }) != m_allSystems.end())
+    if(FindIf(m_allSystems.begin(), m_allSystems.end(), [&system](NotNull<ISystem*> iterSystem)noexcept{ return iterSystem.get() == &system; }) != m_allSystems.end())
         return;
 
-    m_allSystems.push_back(&system);
+    m_allSystems.push_back(MakeNotNull(&system));
     m_dirty = true;
 }
 
 
 void SystemScheduler::removeSystem(ISystem& system)noexcept{
-    auto itr = FindIf(m_allSystems.begin(), m_allSystems.end(), [&system](ISystem* iterSystem)noexcept{ return iterSystem == &system; });
+    auto itr = FindIf(m_allSystems.begin(), m_allSystems.end(), [&system](NotNull<ISystem*> iterSystem)noexcept{ return iterSystem.get() == &system; });
     if(itr != m_allSystems.end()){
         m_allSystems.erase(itr);
         m_dirty = true;
@@ -130,7 +130,7 @@ Expected<void, CpuTaskAdmissionError::Enum> SystemScheduler::execute(World& worl
         rebuild();
 
     // Preparation can change storage; it stays on the caller before updates start.
-    for(ISystem* system : m_allSystems)
+    for(const auto system : m_allSystems)
         system->prepare(world);
 
     if(m_allSystems.empty())
@@ -155,7 +155,7 @@ Expected<void, CpuTaskAdmissionError::Enum> SystemScheduler::execute(World& worl
         for(const usize predecessor : m_dependencies[systemIndex])
             dependencies.push_back(handles[predecessor]);
 
-        ISystem* const system = m_allSystems[systemIndex];
+        const auto system = m_allSystems[systemIndex];
         const auto admitted = tasks.submit([this, system, systemIndex, &world, delta](){
             for(const usize predecessor : m_dependencies[systemIndex]){
                 if(!m_executionResults[predecessor]){

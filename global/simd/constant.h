@@ -12,22 +12,28 @@
 
 
 struct alignas(16) SIMDVectorConstF{
+    using ScalarArray = f32[4];
+
+
     union{
         f32 f[4];
         SIMDVectorSingle v;
     };
 
-    NWB_INLINE operator const f32*()const noexcept{ return f; }
+    NWB_INLINE operator const ScalarArray&()const noexcept{ return f; }
     NWB_SIMD_VECTOR_CONST_SELECTED_CONVERSIONS
 };
 
 struct alignas(32) SIMDVectorDoubleConstF{
+    using ScalarArray = f64[4];
+
+
     union{
         f64 f[4];
         SIMDVectorDouble v;
     };
 
-    NWB_INLINE operator const f64*()const noexcept{ return f; }
+    NWB_INLINE operator const ScalarArray&()const noexcept{ return f; }
     NWB_SIMD_VECTOR_DOUBLE_CONST_CONVERSION
 };
 

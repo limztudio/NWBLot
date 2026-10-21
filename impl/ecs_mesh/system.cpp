@@ -52,8 +52,7 @@ Expected<Core::Assets::AssetRef<Mesh>> MeshSystem::resolveMesh(const Core::ECS::
 Expected<RenderableMeshDesc, RenderableMeshResolution::Enum> MeshSystem::resolveRenderableMeshStatus(const Core::ECS::EntityID entity)const{
     RenderableMeshDesc mesh;
 
-    for(IRuntimeMeshProvider* provider : m_runtimeMeshProviders){
-        NWB_ASSERT(provider);
+    for(const NotNull<IRuntimeMeshProvider*> provider : m_runtimeMeshProviders){
         const auto runtimeMesh = provider->resolveRuntimeMesh(entity);
         if(runtimeMesh && runtimeMesh->valid()){
             mesh.runtimeMesh = *runtimeMesh;
@@ -76,8 +75,7 @@ Expected<RenderableMeshDesc, RenderableMeshResolution::Enum> MeshSystem::resolve
 bool MeshSystem::hasRuntimeMeshBinding(const Core::ECS::EntityID entity)const{
     if(m_world.tryGetComponent<SkinnedMeshBindingComponent>(entity))
         return true;
-    for(const IRuntimeMeshProvider* provider : m_runtimeMeshProviders){
-        NWB_ASSERT(provider);
+    for(const NotNull<IRuntimeMeshProvider*> provider : m_runtimeMeshProviders){
         if(provider->hasRuntimeMeshBinding(entity))
             return true;
     }
@@ -85,24 +83,23 @@ bool MeshSystem::hasRuntimeMeshBinding(const Core::ECS::EntityID entity)const{
 }
 
 void MeshSystem::markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests)const{
-    for(IRuntimeMeshProvider* provider : m_runtimeMeshProviders){
+    for(const NotNull<IRuntimeMeshProvider*> provider : m_runtimeMeshProviders){
         if(requests.complete())
             return;
 
-        NWB_ASSERT(provider);
         provider->markLiveRuntimeMeshes(requests);
     }
 }
 
 void MeshSystem::registerRuntimeMeshProvider(IRuntimeMeshProvider& provider){
-    if(FindIf(m_runtimeMeshProviders.begin(), m_runtimeMeshProviders.end(), [&provider](IRuntimeMeshProvider* item)noexcept{ return item == &provider; }) != m_runtimeMeshProviders.end())
+    if(FindIf(m_runtimeMeshProviders.begin(), m_runtimeMeshProviders.end(), [&provider](const NotNull<IRuntimeMeshProvider*> item)noexcept{ return item.get() == &provider; }) != m_runtimeMeshProviders.end())
         return;
 
-    m_runtimeMeshProviders.push_back(&provider);
+    m_runtimeMeshProviders.push_back(MakeNotNull(&provider));
 }
 
 void MeshSystem::unregisterRuntimeMeshProvider(IRuntimeMeshProvider& provider){
-    const auto found = FindIf(m_runtimeMeshProviders.begin(), m_runtimeMeshProviders.end(), [&provider](IRuntimeMeshProvider* item)noexcept{ return item == &provider; });
+    const auto found = FindIf(m_runtimeMeshProviders.begin(), m_runtimeMeshProviders.end(), [&provider](const NotNull<IRuntimeMeshProvider*> item)noexcept{ return item.get() == &provider; });
     if(found == m_runtimeMeshProviders.end())
         return;
 

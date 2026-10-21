@@ -40,16 +40,16 @@ static constexpr usize s_SourceBytesPerPixel = 4u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void WriteU16LE(u8* const destination, const u16 value)noexcept{
-    destination[0] = static_cast<u8>(value & 0xffu);
-    destination[1] = static_cast<u8>((value >> 8u) & 0xffu);
+static void WriteU16LE(const NotNull<u8*> destination, const u16 value)noexcept{
+    destination.get()[0] = static_cast<u8>(value & 0xffu);
+    destination.get()[1] = static_cast<u8>((value >> 8u) & 0xffu);
 }
 
-static void WriteU32LE(u8* const destination, const u32 value)noexcept{
-    destination[0] = static_cast<u8>(value & 0xffu);
-    destination[1] = static_cast<u8>((value >> 8u) & 0xffu);
-    destination[2] = static_cast<u8>((value >> 16u) & 0xffu);
-    destination[3] = static_cast<u8>((value >> 24u) & 0xffu);
+static void WriteU32LE(const NotNull<u8*> destination, const u32 value)noexcept{
+    destination.get()[0] = static_cast<u8>(value & 0xffu);
+    destination.get()[1] = static_cast<u8>((value >> 8u) & 0xffu);
+    destination.get()[2] = static_cast<u8>((value >> 16u) & 0xffu);
+    destination.get()[3] = static_cast<u8>((value >> 24u) & 0xffu);
 }
 
 static bool IsSupportedSdrFormat(const Core::Format::Enum format)noexcept{
@@ -229,7 +229,7 @@ void FramebufferCapture::update(){
     }
 
     Core::Alloc::ScratchArena scratchArena(__hidden_framebuffer_capture::s_BitmapScratchArena);
-    const bool captureWritten = writeCapture(static_cast<const u8*>(mapping->data), mapping->rowPitch, scratchArena);
+    const bool captureWritten = writeCapture(MakeNotNull(static_cast<const u8*>(mapping->data)), mapping->rowPitch, scratchArena);
     device.unmapStagingTexture(*m_readback);
     if(!captureWritten){
         markFailed(NWB_TEXT("failed to write the framebuffer capture atomically"));
@@ -485,7 +485,7 @@ bool FramebufferCapture::prepareReadback(const Core::TextureDesc& description){
     return true;
 }
 
-bool FramebufferCapture::writeCapture(const u8* const sourceBytes, const usize sourceRowPitch, Core::Alloc::ScratchArena& scratchArena){
+bool FramebufferCapture::writeCapture(const NotNull<const u8*> sourceBytes, const usize sourceRowPitch, Core::Alloc::ScratchArena& scratchArena){
     const u32 width = m_captureDescription.width;
     const u32 height = m_captureDescription.height;
     if(width > static_cast<u32>(Limit<i32>::s_Max) || height > static_cast<u32>(Limit<i32>::s_Max))
@@ -512,14 +512,14 @@ bool FramebufferCapture::writeCapture(const u8* const sourceBytes, const usize s
     Vector<u8, Core::Alloc::ScratchArena> bitmapBytes(bitmapFileBytes, 0u, scratchArena);
     bitmapBytes[0] = static_cast<u8>('B');
     bitmapBytes[1] = static_cast<u8>('M');
-    __hidden_framebuffer_capture::WriteU32LE(bitmapBytes.data() + 2u, static_cast<u32>(bitmapFileBytes));
-    __hidden_framebuffer_capture::WriteU32LE(bitmapBytes.data() + 10u, static_cast<u32>(__hidden_framebuffer_capture::s_BitmapPixelOffset));
-    __hidden_framebuffer_capture::WriteU32LE(bitmapBytes.data() + __hidden_framebuffer_capture::s_BitmapFileHeaderSize, static_cast<u32>(__hidden_framebuffer_capture::s_BitmapInfoHeaderSize));
-    __hidden_framebuffer_capture::WriteU32LE(bitmapBytes.data() + 18u, width);
-    __hidden_framebuffer_capture::WriteU32LE(bitmapBytes.data() + 22u, height);
-    __hidden_framebuffer_capture::WriteU16LE(bitmapBytes.data() + 26u, 1u);
-    __hidden_framebuffer_capture::WriteU16LE(bitmapBytes.data() + 28u, 24u);
-    __hidden_framebuffer_capture::WriteU32LE(bitmapBytes.data() + 34u, static_cast<u32>(*bitmapPixelBytes));
+    __hidden_framebuffer_capture::WriteU32LE(MakeNotNull(bitmapBytes.data() + 2u), static_cast<u32>(bitmapFileBytes));
+    __hidden_framebuffer_capture::WriteU32LE(MakeNotNull(bitmapBytes.data() + 10u), static_cast<u32>(__hidden_framebuffer_capture::s_BitmapPixelOffset));
+    __hidden_framebuffer_capture::WriteU32LE(MakeNotNull(bitmapBytes.data() + __hidden_framebuffer_capture::s_BitmapFileHeaderSize), static_cast<u32>(__hidden_framebuffer_capture::s_BitmapInfoHeaderSize));
+    __hidden_framebuffer_capture::WriteU32LE(MakeNotNull(bitmapBytes.data() + 18u), width);
+    __hidden_framebuffer_capture::WriteU32LE(MakeNotNull(bitmapBytes.data() + 22u), height);
+    __hidden_framebuffer_capture::WriteU16LE(MakeNotNull(bitmapBytes.data() + 26u), 1u);
+    __hidden_framebuffer_capture::WriteU16LE(MakeNotNull(bitmapBytes.data() + 28u), 24u);
+    __hidden_framebuffer_capture::WriteU32LE(MakeNotNull(bitmapBytes.data() + 34u), static_cast<u32>(*bitmapPixelBytes));
 
     const bool sourceIsBgra = __hidden_framebuffer_capture::IsBgraFormat(m_captureDescription.format);
     for(u32 bitmapY = 0u; bitmapY < height; ++bitmapY){
@@ -527,14 +527,14 @@ bool FramebufferCapture::writeCapture(const u8* const sourceBytes, const usize s
         const auto sourceRowOffset = TryMultiply<usize>(sourceY, sourceRowPitch);
         if(!sourceRowOffset)
             return false;
-        const u8* const sourceRow = sourceBytes + *sourceRowOffset;
-        u8* const bitmapRow = bitmapBytes.data() + __hidden_framebuffer_capture::s_BitmapPixelOffset + static_cast<usize>(bitmapY) * bitmapRowPitch;
+        const auto sourceRow = MakeNotNull(sourceBytes.get() + *sourceRowOffset);
+        const auto bitmapRow = MakeNotNull(bitmapBytes.data() + __hidden_framebuffer_capture::s_BitmapPixelOffset + static_cast<usize>(bitmapY) * bitmapRowPitch);
         for(u32 x = 0u; x < width; ++x){
-            const u8* const sourcePixel = sourceRow + static_cast<usize>(x) * __hidden_framebuffer_capture::s_SourceBytesPerPixel;
-            u8* const bitmapPixel = bitmapRow + static_cast<usize>(x) * __hidden_framebuffer_capture::s_BitmapBytesPerPixel;
-            bitmapPixel[0] = sourceIsBgra ? sourcePixel[0] : sourcePixel[2];
-            bitmapPixel[1] = sourcePixel[1];
-            bitmapPixel[2] = sourceIsBgra ? sourcePixel[2] : sourcePixel[0];
+            const auto sourcePixel = MakeNotNull(sourceRow.get() + static_cast<usize>(x) * __hidden_framebuffer_capture::s_SourceBytesPerPixel);
+            const auto bitmapPixel = MakeNotNull(bitmapRow.get() + static_cast<usize>(x) * __hidden_framebuffer_capture::s_BitmapBytesPerPixel);
+            bitmapPixel.get()[0] = sourceIsBgra ? sourcePixel.get()[0] : sourcePixel.get()[2];
+            bitmapPixel.get()[1] = sourcePixel.get()[1];
+            bitmapPixel.get()[2] = sourceIsBgra ? sourcePixel.get()[2] : sourcePixel.get()[0];
         }
     }
 

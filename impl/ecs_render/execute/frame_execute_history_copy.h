@@ -30,11 +30,11 @@ class FrameExecuteHistoryCopy final{
 public:
     struct Context{
         Core::Alloc::ScratchArena& scratchArena;
-        RendererFramePipeline* renderer = nullptr;
-        DeferredFrameTargets* targets = nullptr;
-        Core::GpuPersistentResourceStateCache::Candidate* shadowStateCandidate = nullptr;
-        Core::GpuPersistentResourceStateCache::Candidate* causticStateCandidate = nullptr;
-        Core::GpuPersistentResourceStateCache::Candidate* surfelStateCandidate = nullptr;
+        NotNull<RendererFramePipeline*> renderer;
+        NotNull<DeferredFrameTargets*> targets;
+        NotNull<Core::GpuPersistentResourceStateCache::Candidate*> shadowStateCandidate;
+        NotNull<Core::GpuPersistentResourceStateCache::Candidate*> causticStateCandidate;
+        NotNull<Core::GpuPersistentResourceStateCache::Candidate*> surfelStateCandidate;
         bool finalStateReady = false;
         bool acceptedStateReady = false;
     };

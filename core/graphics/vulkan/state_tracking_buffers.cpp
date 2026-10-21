@@ -75,13 +75,13 @@ ResourceStates::Mask StateTracker::getBufferState(Buffer* buffer, const BufferRa
     if(!buffer || !VulkanStateTrackingDetail::IsBufferStateRangeValid(range, buffer->m_creationDesc))
         return ResourceStates::Unknown;
 
-    const auto permanent = m_permanentBufferStates.find(buffer);
+    const auto permanent = m_permanentBufferStates.find(MakeNotNull(buffer));
     if(permanent != m_permanentBufferStates.end())
         return permanent.value().state;
 
     const BufferRange resolvedRange = range.resolve(buffer->m_creationDesc);
     const ResourceStates::Mask fallbackState = buffer->isRetainedStateKnown() ? buffer->m_creationDesc.initialState : ResourceStates::Unknown;
-    const auto found = m_bufferStates.find(buffer);
+    const auto found = m_bufferStates.find(MakeNotNull(buffer));
     if(found == m_bufferStates.end())
         return fallbackState;
 
@@ -117,9 +117,9 @@ bool StateTracker::hasExplicitBufferState(Buffer* buffer, const BufferRange rang
     const BufferRange resolvedRange = range.resolve(buffer->m_creationDesc);
     if(!resolvedRange.hasExtent())
         return false;
-    if(m_permanentBufferStates.find(buffer) != m_permanentBufferStates.end())
+    if(m_permanentBufferStates.find(MakeNotNull(buffer)) != m_permanentBufferStates.end())
         return true;
-    const auto found = m_bufferStates.find(buffer);
+    const auto found = m_bufferStates.find(MakeNotNull(buffer));
     if(found == m_bufferStates.end())
         return false;
 
@@ -137,7 +137,7 @@ bool StateTracker::hasExplicitBufferState(Buffer* buffer, const BufferRange rang
 }
 
 void StateTracker::beginTrackingBuffer(Buffer* buffer, ResourceStates::Mask state, const BufferRange range){
-    if(!buffer || m_permanentBufferStates.find(buffer) != m_permanentBufferStates.end())
+    if(!buffer || m_permanentBufferStates.find(MakeNotNull(buffer)) != m_permanentBufferStates.end())
         return;
     beginTrackingTransientBuffer(*buffer, state, range);
 }
@@ -149,7 +149,7 @@ void StateTracker::beginTrackingTransientBuffer(Buffer& buffer, ResourceStates::
     if(!resolvedRange.hasExtent())
         return;
 
-    auto found = m_bufferStates.find(&buffer);
+    auto found = m_bufferStates.find(MakeNotNull(&buffer));
     if(found != m_bufferStates.end()){
         if(hasExplicitBufferState(&buffer, resolvedRange)){
             if(seedOnly || (state != ResourceStates::Unknown && getBufferState(&buffer, resolvedRange) == state))
@@ -201,7 +201,7 @@ void StateTracker::beginTrackingTransientBuffer(Buffer& buffer, ResourceStates::
     }
     if(cursor < resolvedRange.end())
         append(BufferRange(cursor, resolvedRange.end() - cursor), state);
-    m_bufferStates.insert_or_assign(&buffer, Move(updated));
+    m_bufferStates.insert_or_assign(MakeNotNull(&buffer), Move(updated));
 }
 
 
@@ -238,7 +238,7 @@ void CommandList::setBufferState(Buffer* bufferResource, ResourceStates::Mask st
         }
     };
 
-    const auto found = m_stateTracker.m_bufferStates.find(&buffer);
+    const auto found = m_stateTracker.m_bufferStates.find(MakeNotNull(&buffer));
     if(permanentState != ResourceStates::Unknown)
         append(resolvedRange, permanentState);
     else{
@@ -302,7 +302,7 @@ void CommandList::releaseBufferOwnership(Buffer* bufferResource, const GpuPhysic
         return;
     }
 
-    const auto existing = m_bufferOwnershipReleaseDestinations.find(&buffer);
+    const auto existing = m_bufferOwnershipReleaseDestinations.find(MakeNotNull(&buffer));
     if(existing != m_bufferOwnershipReleaseDestinations.end()){
         for(const BufferOwnershipRelease& release : existing.value()){
             if(release.range.overlaps(resolvedRange) && release.destinationQueue != destinationQueue){
@@ -319,7 +319,7 @@ void CommandList::releaseBufferOwnership(Buffer* bufferResource, const GpuPhysic
     }
     if(initialState != ResourceStates::Unknown && !validateBufferForGpuState(&buffer, initialState, s_OperationName.data()))
         return;
-    const auto tracked = m_stateTracker.m_bufferStates.find(&buffer);
+    const auto tracked = m_stateTracker.m_bufferStates.find(MakeNotNull(&buffer));
     if(tracked != m_stateTracker.m_bufferStates.end()){
         for(const StateTracker::BufferRangeState& entry : tracked.value()){
             if(!entry.range.overlaps(resolvedRange))
@@ -353,7 +353,7 @@ void CommandList::releaseBufferOwnership(Buffer* bufferResource, const GpuPhysic
         return lhs.range.byteOffset < rhs.range.byteOffset;
     }
     );
-    m_bufferOwnershipReleaseDestinations.insert_or_assign(&buffer, Move(releases));
+    m_bufferOwnershipReleaseDestinations.insert_or_assign(MakeNotNull(&buffer), Move(releases));
     retainResource(&buffer);
 }
 

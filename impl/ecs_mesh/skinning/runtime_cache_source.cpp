@@ -208,9 +208,8 @@ bool MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Ski
     if(!sourceResult)
         return false;
     MeshSkinningSource& source = **sourceResult;
-    const Mesh* mesh = source.mesh();
-    const Skin* skin = source.skin();
-    NWB_ASSERT(mesh && skin);
+    const Mesh& mesh = source.mesh();
+    const Skin& skin = source.skin();
 
     MeshSkinningRuntimeInstance instance(m_arena);
     instance.entity = entity;
@@ -222,17 +221,17 @@ bool MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Ski
     instance.handle = *handleResult;
     instance.sourceName = sourceName;
     instance.meshClass = Core::Mesh::MeshClass::Skinned;
-    instance.uv0 = mesh->uv0Stream();
-    instance.colors = mesh->colorStream();
-    instance.skin = skin->influences();
-    instance.skeletonJointCount = static_cast<u32>(skin->inverseBindMatrices().size());
-    instance.inverseBindMatrices = skin->inverseBindMatrices();
-    instance.meshletBounds = mesh->meshletBounds();
-    instance.meshletLocalVertexRefs = mesh->meshletLocalVertexRefs();
-    instance.meshletPrimitiveIndices = mesh->meshletPrimitiveIndices();
-    instance.solidTriangleWords = mesh->solidTriangleWords();
+    instance.uv0 = mesh.uv0Stream();
+    instance.colors = mesh.colorStream();
+    instance.skin = skin.influences();
+    instance.skeletonJointCount = static_cast<u32>(skin.inverseBindMatrices().size());
+    instance.inverseBindMatrices = skin.inverseBindMatrices();
+    instance.meshletBounds = mesh.meshletBounds();
+    instance.meshletLocalVertexRefs = mesh.meshletLocalVertexRefs();
+    instance.meshletPrimitiveIndices = mesh.meshletPrimitiveIndices();
+    instance.solidTriangleWords = mesh.solidTriangleWords();
     instance.dirtyFlags = RuntimeMeshDirtyFlag::All;
-    if(!__hidden_runtime_cache_source::BuildRuntimeZippedPayload(*mesh, skin->influences(), instance, scratchArena)){
+    if(!__hidden_runtime_cache_source::BuildRuntimeZippedPayload(mesh, skin.influences(), instance, scratchArena)){
         eraseUnusedSource(sourceName);
         return false;
     }
@@ -272,15 +271,14 @@ bool MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Ski
     return true;
 }
 
-Expected<MeshSkinningRuntimeCache::MeshSkinningSource*> MeshSkinningRuntimeCache::ensureSourceLoaded(const Core::Assets::AssetRef<Skin>& skinAsset){
+Expected<NotNull<MeshSkinningRuntimeCache::MeshSkinningSource*>> MeshSkinningRuntimeCache::ensureSourceLoaded(const Core::Assets::AssetRef<Skin>& skinAsset){
     NWB_ASSERT(skinAsset.valid());
 
     const Name& sourceName = skinAsset.name();
     const auto foundSource = m_sources.find(sourceName);
     if(foundSource != m_sources.end()){
         MeshSkinningSource& cachedSource = foundSource.value();
-        NWB_ASSERT(cachedSource.mesh() && cachedSource.skin());
-        return &cachedSource;
+        return MakeNotNull(&cachedSource);
     }
 
     auto loadedSkinAsset = m_assetManager.loadTypedSync<Skin>(skinAsset.name(), __hidden_runtime_cache_source::s_AssetLoadContext, Skin::s_AssetTypeText);
@@ -301,8 +299,7 @@ Expected<MeshSkinningRuntimeCache::MeshSkinningSource*> MeshSkinningRuntimeCache
         return MakeUnexpected(Failure{});
     }
     MeshSkinningSource& storedSource = stored.value();
-    NWB_ASSERT(storedSource.mesh() && storedSource.skin());
-    return &storedSource;
+    return MakeNotNull(&storedSource);
 }
 
 

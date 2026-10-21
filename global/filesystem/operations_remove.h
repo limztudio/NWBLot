@@ -84,7 +84,7 @@ template<typename ArenaT>
     if(directory == nullptr)
         return MakeUnexpected(FileRemovalFailure{ LastSystemError(), 0u });
     ErrorCode iterationError;
-    ScopeExit close([&]()noexcept{ CloseDirectory(directory, iterationError); });
+    ScopeExit close([&]()noexcept{ CloseDirectory(MakeNotNull(directory), iterationError); });
     u64 removedCount = 0u;
     for(;;){
         errno = 0;
@@ -101,7 +101,7 @@ template<typename ArenaT>
             return MakeUnexpected(FileRemovalFailure{ removed.error().code, removedCount + removed.error().removedCount });
         removedCount += *removed;
     }
-    CloseDirectory(directory, iterationError);
+    CloseDirectory(MakeNotNull(directory), iterationError);
     close.release();
     if(iterationError)
         return MakeUnexpected(FileRemovalFailure{ iterationError, removedCount });

@@ -117,25 +117,25 @@ inline void QueryPhysicalDeviceFeatureSupport(const VolkInstanceTable& instanceD
     outSupport.maintenance4.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_FEATURES;
 
     void* featureChain = nullptr;
-    const auto appendFeature = [&featureChain](void* const feature)noexcept{
-        VkBaseOutStructure* const featureBase = reinterpret_cast<VkBaseOutStructure*>(feature);
-        featureBase->pNext = reinterpret_cast<VkBaseOutStructure*>(featureChain);
-        featureChain = feature;
+    const auto appendFeature = [&featureChain](const NotNull<void*> feature)noexcept{
+        auto& featureBase = *reinterpret_cast<VkBaseOutStructure*>(feature.get());
+        featureBase.pNext = reinterpret_cast<VkBaseOutStructure*>(featureChain);
+        featureChain = feature.get();
     };
-    appendFeature(&outSupport.vulkan11);
-    appendFeature(&outSupport.vulkan12);
+    appendFeature(MakeNotNull(&outSupport.vulkan11));
+    appendFeature(MakeNotNull(&outSupport.vulkan12));
     if(options.apiSupportsVulkan13)
-        appendFeature(&outSupport.vulkan13);
+        appendFeature(MakeNotNull(&outSupport.vulkan13));
     else{
         if(options.dynamicRenderingExtensionAvailable)
-            appendFeature(&outSupport.dynamicRendering);
+            appendFeature(MakeNotNull(&outSupport.dynamicRendering));
         if(options.synchronization2ExtensionAvailable)
-            appendFeature(&outSupport.synchronization2);
+            appendFeature(MakeNotNull(&outSupport.synchronization2));
         if(options.maintenance4ExtensionAvailable)
-            appendFeature(&outSupport.maintenance4);
+            appendFeature(MakeNotNull(&outSupport.maintenance4));
     }
     if(options.descriptorBufferExtensionAvailable)
-        appendFeature(&outSupport.descriptorBuffer);
+        appendFeature(MakeNotNull(&outSupport.descriptorBuffer));
 
     outSupport.features.pNext = featureChain;
     instanceDispatch.vkGetPhysicalDeviceFeatures2(physicalDevice, &outSupport.features);

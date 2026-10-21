@@ -32,12 +32,12 @@ FrameGraphReflectionResolve::FrameGraphReflectionResolve(Core::GpuTaskGraph& gra
 Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare(const FrameGraphReflectionResolveInputs& inputs, RayTracingSceneGraphReads& sceneReads, Core::Alloc::ScratchArena& scratchArena){
     FrameGraphReflectionResolveResult result{};
     using namespace RendererTaskGraphDetail;
-    DeferredFrameTargets& deferredTargets = *inputs.targets;
-    const ECSRenderDetail::MeshViewBufferSnapshot& meshViewBufferSnapshot = *inputs.meshViewSnapshot;
-    const RayTracingSceneGraphResources& sceneResources = *inputs.sceneResources;
-    const ReflectionSettings& reflectionSettings = *inputs.reflectionSettings;
-    const CsgFrameState& csgFrameState = *inputs.csgFrameState;
-    RayTracingRefractionGraphResources refractionResources = *inputs.refractionResources;
+    DeferredFrameTargets& deferredTargets = inputs.targets;
+    const ECSRenderDetail::MeshViewBufferSnapshot& meshViewBufferSnapshot = inputs.meshViewSnapshot;
+    const RayTracingSceneGraphResources& sceneResources = inputs.sceneResources;
+    const ReflectionSettings& reflectionSettings = inputs.reflectionSettings;
+    const CsgFrameState& csgFrameState = inputs.csgFrameState;
+    RayTracingRefractionGraphResources refractionResources = inputs.refractionResources;
     const bool refractionActive = inputs.refractionActive;
     const bool useLaggedLightingHistory = inputs.useLaggedLightingHistory;
     const Core::GpuGraphResourceId specularRoughness = inputs.specularRoughness;
@@ -61,7 +61,7 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
     const Core::GpuGraphResourceId avboitForegroundExtinction = inputs.avboitForegroundExtinction;
     const Core::GpuGraphResourceSetId hardwareTraceGeometrySet = inputs.hardwareTraceGeometrySet;
     const Core::GpuGraphResourceSetId traceMaterialSampledTextureSet = inputs.traceMaterialSampledTextureSet;
-    ReflectionSceneContentStamp reflectionContentStamp = *inputs.contentStamp;
+    ReflectionSceneContentStamp reflectionContentStamp = inputs.contentStamp;
     Core::Alloc::ScratchArena& traceGeometryScratchArena = scratchArena;
     reflectionContentStamp.geometry = sceneResources.contentStamp.geometry;
     reflectionContentStamp.material = sceneResources.contentStamp.material;

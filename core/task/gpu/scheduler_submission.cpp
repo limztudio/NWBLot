@@ -32,7 +32,7 @@ private:
 
 
 public:
-    PreparedTimingTicketsUnwindScope(GpuTimingSubmissionTicket* const* const tickets, usize& preparedTicketCount)noexcept
+    PreparedTimingTicketsUnwindScope(const NotNull<GpuTimingSubmissionTicket*>* const tickets, usize& preparedTicketCount)noexcept
         : m_tickets(tickets)
         , m_preparedTicketCount(preparedTicketCount)
     {}
@@ -57,7 +57,7 @@ public:
 
 
 private:
-    GpuTimingSubmissionTicket* const* m_tickets = nullptr;
+    const NotNull<GpuTimingSubmissionTicket*>* m_tickets = nullptr;
     usize& m_preparedTicketCount;
     Mode m_mode = Mode::Rollback;
 };
@@ -112,7 +112,7 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     const GpuSubmissionPacketId& packetID,
     GpuGraphSubmissionTransaction& transaction,
     Alloc::ScratchArena& scratchArena,
-    GpuTimingSubmissionTicket* const* const timingTickets,
+    const NotNull<GpuTimingSubmissionTicket*>* const timingTickets,
     const usize timingTicketCount,
     const QueueSubmissionPreSubmitHook* const preSubmitHook,
     const GpuTaskSubmissionDetail::TaskCallbackBindings<GpuTaskGraphTaskAcceptedCallback>& taskAcceptedCallbacks
@@ -142,12 +142,12 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     if(packet.recordsTiming != static_cast<bool>(ownedTimingTicket))
         return false;
     // Range admission resolved unique nonnull tickets and checked every artifact owner under this same lease.
-    Vector<GpuTimingSubmissionTicket*, Alloc::ScratchArena> submissionTimingTickets(scratchArena);
+    Vector<NotNull<GpuTimingSubmissionTicket*>, Alloc::ScratchArena> submissionTimingTickets(scratchArena);
     submissionTimingTickets.reserve(timingTicketCount + (ownedTimingTicket ? 1u : 0u));
     if(ownedTimingTicket)
-        submissionTimingTickets.push_back(ownedTimingTicket);
+        submissionTimingTickets.push_back(MakeNotNull(ownedTimingTicket));
     for(usize timingTicketIndex = 0u; timingTicketIndex < timingTicketCount; ++timingTicketIndex){
-        if(timingTickets[timingTicketIndex] != ownedTimingTicket)
+        if(timingTickets[timingTicketIndex].get() != ownedTimingTicket)
             submissionTimingTickets.push_back(timingTickets[timingTicketIndex]);
     }
     if(!graph.packetReadyForSubmission(compiledGraph, planAccess, packetID, recordedGraph.recordingAttemptGenerationWithinArtifactOperation(artifactAccess)))
@@ -264,7 +264,7 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
 
     if(!token.valid()){
         bool timingResolved = true;
-        for(GpuTimingSubmissionTicket* const timingTicket : submissionTimingTickets){
+        for(const auto timingTicket : submissionTimingTickets){
             if(!timingTicket->resolveSubmission({}))
                 timingResolved = false;
         }

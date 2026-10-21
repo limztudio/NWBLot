@@ -249,7 +249,7 @@ static bool AppendMaterialBindU64Constant(const AStringView includePath, const A
 
 struct MaterialBindGeneratedLayoutBlock{
     MaterialBindTypedLayoutBlockLookupEntry entry;
-    const MaterialTypedLayoutBlock* block = nullptr;
+    const MaterialTypedLayoutBlock& block;
 };
 
 // The layout was built from the same entry, so every instance has a block.
@@ -261,15 +261,15 @@ static MaterialBindGeneratedLayoutBlock ResolveMaterialBindGeneratedLayoutBlock(
 
     const auto& blockEntry = blockIt.value();
     NWB_ASSERT(blockEntry.blockIndex < layout.typedLayoutBlocks.size());
-    return MaterialBindGeneratedLayoutBlock{ blockEntry, &layout.typedLayoutBlocks[blockEntry.blockIndex] };
+    return MaterialBindGeneratedLayoutBlock{ blockEntry, layout.typedLayoutBlocks[blockEntry.blockIndex] };
 }
 
 
-static u32* MaterialBindStorageByteSizePointer(const MaterialBlockClass::Enum blockClass, u32& inOutConstantByteSize, u32& inOutMutableByteSize)noexcept{
+static u32& MaterialBindStorageByteSize(const MaterialBlockClass::Enum blockClass, u32& inOutConstantByteSize, u32& inOutMutableByteSize)noexcept{
     switch(blockClass){
-    case MaterialBlockClass::MaterialConstant: return &inOutConstantByteSize;
-    case MaterialBlockClass::MaterialMutable: return &inOutMutableByteSize;
-    default: return nullptr;
+    case MaterialBlockClass::MaterialConstant: return inOutConstantByteSize;
+    case MaterialBlockClass::MaterialMutable: return inOutMutableByteSize;
+    default: NWB_FATAL_ASSERT(false); return inOutConstantByteSize;
     }
 }
 
@@ -283,14 +283,13 @@ static Expected<MaterialBindStorageByteSizes> ComputeMaterialBindStorageByteSize
     MaterialBindStorageByteSizes sizes;
 
     for(const MaterialTypedLayoutBlock& block : layout.typedLayoutBlocks){
-        u32* storageByteSize = MaterialBindStorageByteSizePointer(block.blockClass, sizes.constantBytes, sizes.mutableBytes);
-        NWB_ASSERT(storageByteSize);
-        if(block.byteSize > Limit<u32>::s_Max - *storageByteSize){
+        u32& storageByteSize = MaterialBindStorageByteSize(block.blockClass, sizes.constantBytes, sizes.mutableBytes);
+        if(block.byteSize > Limit<u32>::s_Max - storageByteSize){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': typed layout storage byte size exceeds u32"), StringConvert(includePath));
             return MakeUnexpected(Failure{});
         }
 
-        *storageByteSize += block.byteSize;
+        storageByteSize += block.byteSize;
     }
 
     return sizes;
@@ -358,17 +357,17 @@ static bool AppendMaterialBindLayoutConstants(const AStringView includePath, con
 
     for(const MaterialBindInstance& instance : entry.instances){
         const MaterialBindGeneratedLayoutBlock generatedBlock = ResolveMaterialBindGeneratedLayoutBlock(instance, layout);
-        const MaterialTypedLayoutBlock* block = generatedBlock.block;
+        const MaterialTypedLayoutBlock& block = generatedBlock.block;
         const u32 blockStorageByteBegin = ComputeMaterialBindBlockStorageByteBegin(layout, generatedBlock.entry.blockIndex);
 
         const ScratchString storageSymbol = BuildMaterialBindGeneratedSymbol(scratchArena, { AStringView(instance.name) }, s_MaterialBindStorageSymbolSuffix);
         const ScratchString offsetSymbol = BuildMaterialBindGeneratedSymbol(scratchArena, { AStringView(instance.name) }, s_MaterialBindByteOffsetSymbolSuffix);
         const ScratchString sizeSymbol = BuildMaterialBindGeneratedSymbol(scratchArena, { AStringView(instance.name) }, s_MaterialBindByteSizeSymbolSuffix);
-        if(!AppendMaterialBindU32Constant(includePath, storageSymbol, static_cast<u32>(block->blockClass), inOutSymbols, scratchArena, inOutSource))
+        if(!AppendMaterialBindU32Constant(includePath, storageSymbol, static_cast<u32>(block.blockClass), inOutSymbols, scratchArena, inOutSource))
             return false;
         if(!AppendMaterialBindU32Constant(includePath, offsetSymbol, blockStorageByteBegin, inOutSymbols, scratchArena, inOutSource))
             return false;
-        if(!AppendMaterialBindU32Constant(includePath, sizeSymbol, block->byteSize, inOutSymbols, scratchArena, inOutSource))
+        if(!AppendMaterialBindU32Constant(includePath, sizeSymbol, block.byteSize, inOutSymbols, scratchArena, inOutSource))
             return false;
     }
 
@@ -450,12 +449,12 @@ static bool AppendMaterialBindGeneratedInstance(
     AppendMaterialBindGeneratedSeparator(inOutSource, s_MaterialBindGeneratedSeparatorNewlineCount);
 
     const MaterialBindGeneratedLayoutBlock generatedBlock = ResolveMaterialBindGeneratedLayoutBlock(instance, layout);
-    const MaterialTypedLayoutBlock* layoutBlock = generatedBlock.block;
-    NWB_ASSERT(layoutBlock->fieldCount == bindStruct.fields.size());
+    const MaterialTypedLayoutBlock& layoutBlock = generatedBlock.block;
+    NWB_ASSERT(layoutBlock.fieldCount == bindStruct.fields.size());
 
     const u32 layoutBlockStorageByteBegin = ComputeMaterialBindBlockStorageByteBegin(layout, generatedBlock.entry.blockIndex);
-    for(u32 fieldOffset = 0u; fieldOffset < layoutBlock->fieldCount; ++fieldOffset){
-        const usize layoutFieldIndex = static_cast<usize>(layoutBlock->fieldBegin) + fieldOffset;
+    for(u32 fieldOffset = 0u; fieldOffset < layoutBlock.fieldCount; ++fieldOffset){
+        const usize layoutFieldIndex = static_cast<usize>(layoutBlock.fieldBegin) + fieldOffset;
         NWB_ASSERT(layoutFieldIndex < layout.typedLayoutFields.size());
 
         const MaterialBindField& field = bindStruct.fields[fieldOffset];
@@ -474,13 +473,13 @@ static bool AppendMaterialBindGeneratedInstance(
             return false;
         inOutSource += '\n';
         if(isResourceField){
-            NWB_ASSERT(layoutBlock->blockClass == MaterialBlockClass::MaterialConstant);
+            NWB_ASSERT(layoutBlock.blockClass == MaterialBlockClass::MaterialConstant);
             AppendMaterialBindResourceFieldAccessor(layoutField.fieldType, byteOffsetSymbol, functionName, inOutSource);
             inOutSource += '\n';
             continue;
         }
 
-        const ScratchString loadFunctionName = BuildMaterialBindFieldLookupFunctionName(scratchArena, layoutField.fieldType, layoutBlock->blockClass);
+        const ScratchString loadFunctionName = BuildMaterialBindFieldLookupFunctionName(scratchArena, layoutField.fieldType, layoutBlock.blockClass);
         NWB_ASSERT(!loadFunctionName.empty());
         const ScratchString keySymbol = BuildMaterialBindGeneratedSymbol(scratchArena, { AStringView(instance.name), AStringView(field.name) }, s_MaterialBindKeySymbolSuffix);
         const ScratchString defaultSymbol = BuildMaterialBindGeneratedSymbol(scratchArena, { AStringView(instance.name), AStringView(field.name) }, s_MaterialBindDefaultSymbolSuffix);

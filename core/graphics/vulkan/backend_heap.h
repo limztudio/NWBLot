@@ -27,7 +27,7 @@ class Heap final : public RefCounter<GraphicsResource>, NoCopy{
 
 private:
     struct BindingReservation{
-        const void* owner = nullptr;
+        NotNull<const void*> owner;
         VulkanDetail::HeapBindingRange range;
         VulkanDetail::HeapBindingResourceClass::Enum resourceClass = VulkanDetail::HeapBindingResourceClass::Buffer;
     };
@@ -44,7 +44,7 @@ public:
 
 
 private:
-    void eraseBindingReservationLocked(const void* owner)noexcept;
+    void eraseBindingReservationLocked(NotNull<const void*> owner)noexcept;
 
 
 private:

@@ -174,22 +174,22 @@ public:
     template<typename T>
     void post(const T& message){
         using MessageT = Decay_T<T>;
-        auto* channel = getOrCreateChannel<MessageT>();
-        channel->post(message);
+        auto& channel = getOrCreateChannel<MessageT>();
+        channel.post(message);
     }
 
     template<typename T>
     void post(T&& message){
         using MessageT = Decay_T<T>;
-        auto* channel = getOrCreateChannel<MessageT>();
-        channel->post(Forward<T>(message));
+        auto& channel = getOrCreateChannel<MessageT>();
+        channel.post(Forward<T>(message));
     }
 
     template<typename T, typename... Args>
     void emplace(Args&&... args){
         using MessageT = Decay_T<T>;
-        auto* channel = getOrCreateChannel<MessageT>();
-        channel->emplace(Forward<Args>(args)...);
+        auto& channel = getOrCreateChannel<MessageT>();
+        channel.emplace(Forward<Args>(args)...);
     }
 
     template<typename T, typename Func>
@@ -240,7 +240,7 @@ private:
     }
 
     template<typename T>
-    MessageChannel<T>* getOrCreateChannel(){
+    MessageChannel<T>& getOrCreateChannel(){
         const MessageTypeId typeId = MessageType<T>();
 
         if(m_hasChannels.load(MemoryOrder::acquire)){
@@ -248,7 +248,7 @@ private:
             if(typeId < m_channels.size()){
                 auto& channel = m_channels[typeId];
                 if(channel)
-                    return checked_cast<MessageChannel<T>*>(channel.get());
+                    return *checked_cast<MessageChannel<T>*>(channel.get());
             }
         }
 
@@ -258,15 +258,15 @@ private:
 
         auto& slot = m_channels[typeId];
         if(slot)
-            return checked_cast<MessageChannel<T>*>(slot.get());
+            return *checked_cast<MessageChannel<T>*>(slot.get());
 
         auto channel = MakeGlobalUnique<MessageChannel<T>>(m_arena, m_arena);
         if(!channel)
             throw AllocationException{};
-        auto* raw = channel.get();
+        auto& created = *channel;
         slot = Move(channel);
         m_hasChannels.store(true, MemoryOrder::release);
-        return raw;
+        return created;
     }
 
     template<typename T>

@@ -219,7 +219,7 @@ void CommandList::clearDepthStencilTextureBox(Texture& texture, TextureSubresour
     if(m_commandRecordingFailed)
         return;
 
-    const auto copyAspect = [&](const VkImageAspectFlagBits aspect, const u8* clearPattern, const u32 clearPatternSize) -> bool {
+    const auto copyAspect = [&](const VkImageAspectFlagBits aspect, const NotNull<const u8*> clearPattern, const u32 clearPatternSize) -> bool {
         u32 planIndex = 0u;
         for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel, ++planIndex){
             const MipClearPlan& mipPlan = mipClearPlans[planIndex];
@@ -232,22 +232,21 @@ void CommandList::clearDepthStencilTextureBox(Texture& texture, TextureSubresour
                 rejectCommandRecording(s_OperationName, s_StagingAllocationFailedReason);
                 return false;
             }
-            Buffer* const stagingBuffer = staging->buffer;
+            Buffer& stagingBuffer = *staging->buffer;
             const u64 stagingOffset = staging->offset;
             void* const stagingBytes = staging->cpuAddress;
             if(
-                !stagingBuffer
-                || !stagingBytes
+                !stagingBytes
                 || (stagingOffset % uploadLayout.stagingAlignment) != 0u
                 || (stagingOffset % uploadLayout.copyOffsetAlignment) != 0u
-                || stagingOffset > stagingBuffer->m_creationDesc.byteSize
+                || stagingOffset > stagingBuffer.m_creationDesc.byteSize
                 || static_cast<u64>(uploadLayout.clearByteCount)
-                    > stagingBuffer->m_creationDesc.byteSize - stagingOffset
+                    > stagingBuffer.m_creationDesc.byteSize - stagingOffset
             ){
                 rejectCommandRecording(s_OperationName, VulkanTextureDetail::s_ClearStagingRangeInvalidReason);
                 return false;
             }
-            VulkanTextureDetail::FillTextureClearBytes(stagingBytes, uploadLayout.clearByteCount, clearPattern, clearPatternSize);
+            VulkanTextureDetail::FillTextureClearBytes(stagingBytes, uploadLayout.clearByteCount, clearPattern.get(), clearPatternSize);
 
             if(uploadLayout.mergeArrayLayerCopies){
                 Vector<VkBufferImageCopy, Alloc::ScratchArena> regions(resolvedSubresources.numArraySlices, scratchArena);
@@ -263,7 +262,7 @@ void CommandList::clearDepthStencilTextureBox(Texture& texture, TextureSubresour
                 }
 
                 if(!regions.empty())
-                    m_context.deviceDispatch.vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<u32>(regions.size()), regions.data());
+                    m_context.deviceDispatch.vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer.m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<u32>(regions.size()), regions.data());
             }
             else{
                 Vector<VkBufferImageCopy, Alloc::ScratchArena> regions(resolvedSubresources.numArraySlices, scratchArena);
@@ -279,18 +278,18 @@ void CommandList::clearDepthStencilTextureBox(Texture& texture, TextureSubresour
                 }
 
                 if(!regions.empty())
-                    m_context.deviceDispatch.vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<u32>(regions.size()), regions.data());
+                    m_context.deviceDispatch.vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer.m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<u32>(regions.size()), regions.data());
             }
 
-            retainStagingBuffer(*stagingBuffer);
+            retainStagingBuffer(stagingBuffer);
         }
 
         return true;
     };
 
-    if(clearDepth && !copyAspect(VK_IMAGE_ASPECT_DEPTH_BIT, depthPattern->bytes.data(), depthPattern->byteCount))
+    if(clearDepth && !copyAspect(VK_IMAGE_ASPECT_DEPTH_BIT, MakeNotNull(depthPattern->bytes.data()), depthPattern->byteCount))
         return;
-    if(clearStencil && !copyAspect(VK_IMAGE_ASPECT_STENCIL_BIT, stencilPattern->bytes.data(), stencilPattern->byteCount))
+    if(clearStencil && !copyAspect(VK_IMAGE_ASPECT_STENCIL_BIT, MakeNotNull(stencilPattern->bytes.data()), stencilPattern->byteCount))
         return;
 
     retainResource(&texture);

@@ -137,8 +137,7 @@ Expected<CsgReceiverDrawState> CsgFrameReceiverLookup::resolveReceiverDrawState(
     const auto resolvedReceiver = ResolveCsgReceiverComponent(m_world, entity);
     if(!resolvedReceiver)
         return MakeUnexpected(Failure{});
-    const CsgReceiverComponent* receiver = resolvedReceiver->receiver;
-    NWB_ASSERT(receiver);
+    const NotNull<const CsgReceiverComponent*> receiver = resolvedReceiver->receiver;
     if(!receiver->enabled || !__hidden_frame_state::ReceiverPassEnabled(*receiver, receiverPass))
         return MakeUnexpected(Failure{});
 
@@ -161,8 +160,7 @@ Expected<CsgFrameCutterRange> CsgFrameReceiverLookup::resolveReceiverCutterRange
     const auto resolvedReceiver = ResolveCsgReceiverComponent(m_world, entity);
     if(!resolvedReceiver)
         return MakeUnexpected(Failure{});
-    const CsgReceiverComponent* receiver = resolvedReceiver->receiver;
-    NWB_ASSERT(receiver);
+    const NotNull<const CsgReceiverComponent*> receiver = resolvedReceiver->receiver;
     if(!receiver->enabled)
         return MakeUnexpected(Failure{});
 
@@ -183,9 +181,9 @@ bool HasCsgFrameCandidates(Core::ECS::World& world)noexcept{
 
 Expected<CsgResolvedReceiver> ResolveCsgReceiverComponent(Core::ECS::World& world, const Core::ECS::EntityID entity)noexcept{
     if(const StaticCsgMeshComponent* receiver = world.tryGetComponent<StaticCsgMeshComponent>(entity))
-        return CsgResolvedReceiver{ receiver, CsgReceiverKind::Static };
+        return CsgResolvedReceiver{ MakeNotNull(static_cast<const CsgReceiverComponent*>(receiver)), CsgReceiverKind::Static };
     if(const SkinnedCsgMeshComponent* receiver = world.tryGetComponent<SkinnedCsgMeshComponent>(entity))
-        return CsgResolvedReceiver{ receiver, CsgReceiverKind::Skinned };
+        return CsgResolvedReceiver{ MakeNotNull(static_cast<const CsgReceiverComponent*>(receiver)), CsgReceiverKind::Skinned };
     return MakeUnexpected(Failure{});
 }
 

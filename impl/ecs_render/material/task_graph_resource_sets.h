@@ -118,10 +118,10 @@ namespace RendererTaskGraphDetail{
     Vector<BufferRef, Core::Alloc::ScratchArena> sourceBuffers{ scratchArena };
     sourceBuffers.reserve(sourceBufferCapacity);
     {
-        HashSet<Core::Buffer*, Core::Alloc::ScratchArena, Hasher<Core::Buffer*>, EqualTo<Core::Buffer*>> sourceBufferIdentities(AddSize(sourceBufferCapacity, sourceBufferCapacity), Hasher<Core::Buffer*>(), EqualTo<Core::Buffer*>(), scratchArena);
+        HashSet<NotNull<Core::Buffer*>, Core::Alloc::ScratchArena, Hasher<NotNull<Core::Buffer*>>, EqualTo<NotNull<Core::Buffer*>>> sourceBufferIdentities(AddSize(sourceBufferCapacity, sourceBufferCapacity), Hasher<NotNull<Core::Buffer*>>(), EqualTo<NotNull<Core::Buffer*>>(), scratchArena);
         for(const MeshSourceRef& mesh : uniqueMeshes){
             ForEachMaterialPassMeshSourceBuffer(*mesh, [&](const Core::BufferHandle& buffer){
-                if(sourceBufferIdentities.insert(buffer.get()).second)
+                if(sourceBufferIdentities.insert(MakeNotNull(buffer.get())).second)
                     sourceBuffers.push_back(BufferRef(&buffer));
             }
             );

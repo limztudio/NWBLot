@@ -60,7 +60,7 @@ Object Heap::getNativeHandle(ObjectType objectType)noexcept{
     return Object(nullptr);
 }
 
-void Heap::eraseBindingReservationLocked(const void* owner)noexcept{
+void Heap::eraseBindingReservationLocked(const NotNull<const void*> owner)noexcept{
     for(auto reservation = m_bindingReservations.begin(); reservation != m_bindingReservations.end(); ++reservation){
         if(reservation->owner != owner)
             continue;

@@ -89,9 +89,9 @@ template<typename T>
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE T ModF(const T value, T* outInteger)noexcept(IsArithmetic_V<T>){
+[[nodiscard]] NWB_INLINE T ModF(const T value, T& outInteger)noexcept(IsArithmetic_V<T>){
     using std::modf;
-    return static_cast<T>(modf(value, outInteger));
+    return static_cast<T>(modf(value, &outInteger));
 }
 
 template<typename T>

@@ -368,7 +368,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         const auto materialInfoResult = lookupMode == RendererResourceLookupMode::CreateMissing ? createMaterialSurfaceInfo(material) : findMaterialSurfaceInfo(material);
         if(!materialInfoResult)
             return false;
-        MaterialSurfaceInfo* const materialInfo = *materialInfoResult;
+        const NotNull<MaterialSurfaceInfo*> materialInfo = *materialInfoResult;
         if(materialInfo->transparent != transparent)
             return false;
 
@@ -429,7 +429,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         const auto pipelineResult = lookupMode == RendererResourceLookupMode::CreateMissing ? createRendererPipeline(*materialInfo, pipelineKey, *framebuffer) : findRendererPipeline(pipelineKey);
         if(!pipelineResult)
             return false;
-        MaterialPipelineResources* const pipelineResources = *pipelineResult;
+        const NotNull<MaterialPipelineResources*> pipelineResources = *pipelineResult;
         const auto prepareGeometryResources = [&](const MaterialPipelineResources& resources){
             switch(resources.renderPath){
             case RenderPath::MeshShader:
@@ -467,13 +467,13 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         if(csgReceiverSurfaceActive){
             csgReceiverSurfacePipelineKey.pass = MaterialPipelinePass::CsgReceiverSurface;
             if(pass == MaterialPipelinePass::CsgReceiverSurface){
-                csgReceiverSurfacePipelineResources = pipelineResources;
+                csgReceiverSurfacePipelineResources = pipelineResources.get();
             }
             else{
                 const auto csgReceiverSurfacePipeline = lookupMode == RendererResourceLookupMode::CreateMissing ? createRendererPipeline(*materialInfo, csgReceiverSurfacePipelineKey, *framebuffer) : findRendererPipeline(csgReceiverSurfacePipelineKey);
                 if(!csgReceiverSurfacePipeline)
                     return false;
-                csgReceiverSurfacePipelineResources = *csgReceiverSurfacePipeline;
+                csgReceiverSurfacePipelineResources = csgReceiverSurfacePipeline->get();
             }
             if(!prepareGeometryResources(*csgReceiverSurfacePipelineResources))
                 return false;
@@ -562,7 +562,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         ;
         if(!meshResult)
             continue;
-        MeshResources* const mesh = *meshResult;
+        const NotNull<MeshResources*> mesh = *meshResult;
 
         CsgReceiverDrawState csgReceiverState;
         if(csgReceiverLookupPtr){

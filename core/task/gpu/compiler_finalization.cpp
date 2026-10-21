@@ -256,9 +256,8 @@ namespace GpuTaskGraphCompilerDetail{
         compiledTask.epilogueBarrierCount = 0u;
     // Every pending barrier belongs to a task that packetization already published.
     for(const PendingCompiledEpilogueBarrier& pending : plan.pendingEpilogueBarriers){
-        GpuCompiledTask* const compiledTask = FindCompiledTask(compiledPlan, pending.task);
-        NWB_ASSERT(compiledTask);
-        ++compiledTask->epilogueBarrierCount;
+        auto& compiledTask = *MakeNotNull(FindCompiledTask(compiledPlan, pending.task));
+        ++compiledTask.epilogueBarrierCount;
     }
 
     usize barrierCount = compiledPlan.epilogueBarriers.size();
@@ -272,11 +271,10 @@ namespace GpuTaskGraphCompilerDetail{
     // Reuse each task's count as its fill cursor.
     // Traversing discovery order keeps exports before their paired ownership releases without allocating a separate grouping table.
     for(const PendingCompiledEpilogueBarrier& pending : plan.pendingEpilogueBarriers){
-        GpuCompiledTask* const compiledTask = FindCompiledTask(compiledPlan, pending.task);
-        NWB_ASSERT(compiledTask);
-        const usize barrierIndex = static_cast<usize>(compiledTask->epilogueBarrierOffset) + compiledTask->epilogueBarrierCount;
+        auto& compiledTask = *MakeNotNull(FindCompiledTask(compiledPlan, pending.task));
+        const usize barrierIndex = static_cast<usize>(compiledTask.epilogueBarrierOffset) + compiledTask.epilogueBarrierCount;
         compiledPlan.epilogueBarriers[barrierIndex] = pending.barrier;
-        ++compiledTask->epilogueBarrierCount;
+        ++compiledTask.epilogueBarrierCount;
     }
     return true;
 }

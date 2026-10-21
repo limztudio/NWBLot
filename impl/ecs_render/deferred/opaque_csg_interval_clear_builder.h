@@ -27,8 +27,8 @@ struct CsgFrameGpuData;
 
 // Opaque CSG interval clears own the interval-id plus receiver-event-count clears.
 struct OpaqueCsgIntervalClearInputs{
-    DeferredFrameTargets* targets = nullptr;
-    const CsgFrameGpuData* csgFrameData = nullptr;
+    DeferredFrameTargets& targets;
+    const CsgFrameGpuData& csgFrameData;
     Core::GpuGraphResourceId csgIntervalId;
     Core::GpuGraphResourceId csgReceiverEventCount;
     Core::TextureSubresourceSet csgPeelSubresources{};

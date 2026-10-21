@@ -216,7 +216,7 @@ struct SRGBClearEdgeInputs{
             NWB_LOGGER_ERROR(NWB_TEXT("TextureSmokeProject: sRGB clear edge mapping has an invalid extent"));
             return false;
         }
-        const auto* bytes = static_cast<const u8*>(mapping->data);
+        const auto bytes = MakeNotNull(static_cast<const u8*>(mapping->data));
         for(u32 y = 0u; y < s_SRGBClearEdgeHeight; ++y){
             for(u32 x = 0u; x < s_SRGBClearEdgeWidth; ++x){
                 u8 expected[]{ 0u, 0u, 0u, 255u };
@@ -230,7 +230,7 @@ struct SRGBClearEdgeInputs{
                         Swap(expected[0], expected[2]);
                 }
                 for(u32 channel = 0u; channel < s_SRGBClearEdgeBytesPerPixel; ++channel){
-                    const u8 actual = bytes[static_cast<usize>(y) * mapping->rowPitch + static_cast<usize>(x) * s_SRGBClearEdgeBytesPerPixel + channel];
+                    const u8 actual = bytes.get()[static_cast<usize>(y) * mapping->rowPitch + static_cast<usize>(x) * s_SRGBClearEdgeBytesPerPixel + channel];
                     if(actual != expected[channel]){
                         NWB_LOGGER_ERROR(NWB_TEXT("TextureSmokeProject: sRGB bounded clear changed format {} pixel ({}, {}) channel {}: {} != {}"), static_cast<u32>(format), x, y, channel, actual, expected[channel]);
                         return false;

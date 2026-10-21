@@ -31,7 +31,7 @@ template<typename Plan, typename AcceptMode>
     plan.outputBuffers.reserve(source.computeDrawItems.size());
     plan.outputLayouts.reserve(source.computeDrawItems.size());
     plan.outputHeapSlots.reserve(source.computeDrawItems.size());
-    MaterialPassEmulationOutputIndex<Core::Buffer*> outputs(scratchArena);
+    MaterialPassEmulationOutputIndex<NotNull<Core::Buffer*>> outputs(scratchArena);
     MaterialPassEmulationOutputIndex<u32> slots(scratchArena);
     for(const MaterialPassDrawItem& drawItem : source.computeDrawItems){
         if(!acceptMode(drawItem.pipelineKey.csgMode))
@@ -39,7 +39,7 @@ template<typename Plan, typename AcceptMode>
         const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
         if(!mesh.emulationVertexBuffer || !mesh.emulationVertexHeapHandle.valid())
             return false;
-        if(!outputs.insert(mesh.emulationVertexBuffer.get()) || !slots.insert(mesh.emulationVertexHeapHandle.slot()))
+        if(!outputs.insert(MakeNotNull(mesh.emulationVertexBuffer.get())) || !slots.insert(mesh.emulationVertexHeapHandle.slot()))
             return false;
         plan.drawItems.push_back(drawItem);
         plan.outputBuffers.push_back(mesh.emulationVertexBuffer);

@@ -25,6 +25,7 @@
 #include "../expected.h"
 #include "../scope_exit.h"
 #include "../limit.h"
+#include "../not_null.h"
 #include "../type.h"
 #include "path.h"
 
@@ -90,8 +91,8 @@ inline void SetLastSystemError(ErrorCode& outError)noexcept{
     outError = ErrorCode(errno, std::generic_category());
 }
 
-inline void CloseDirectory(DIR* const directory, ErrorCode& outError)noexcept{
-    if(closedir(directory) != 0 && !outError)
+inline void CloseDirectory(const NotNull<DIR*> directory, ErrorCode& outError)noexcept{
+    if(closedir(directory.get()) != 0 && !outError)
         SetLastSystemError(outError);
 }
 

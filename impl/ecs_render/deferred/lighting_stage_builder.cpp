@@ -34,8 +34,7 @@ DeferredLightingStageBuilder::DeferredLightingStageBuilder(Core::GpuTaskGraph& g
     using namespace RendererTaskGraphDetail;
     DeferredLightingStageResult result{};
     if(
-        !inputs.targets
-        || !inputs.albedo.valid()
+        !inputs.albedo.valid()
         || !inputs.normal.valid()
         || !inputs.worldPosition.valid()
         || !inputs.depth.valid()
@@ -55,7 +54,7 @@ DeferredLightingStageBuilder::DeferredLightingStageBuilder(Core::GpuTaskGraph& g
     )
         return MakeUnexpected(Failure{});
 
-    DeferredFrameTargets& deferredTargets = *inputs.targets;
+    DeferredFrameTargets& deferredTargets = inputs.targets;
     const bool useLaggedLightingHistory = inputs.useLaggedLightingHistory;
     const DeferredLaggedLightingHistoryResources* const history = inputs.history;
     if(useLaggedLightingHistory && !history)

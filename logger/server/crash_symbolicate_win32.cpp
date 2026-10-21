@@ -428,12 +428,12 @@ static void AppendResolvedSymbol(Core::Alloc::ScratchArena& scratchArena, const 
     outReport += FormatHex64A(scratchArena, address);
 
     alignas(SYMBOL_INFOW) u8 symbolBuffer[sizeof(SYMBOL_INFOW) + (MAX_SYM_NAME * sizeof(wchar))] = {};
-    auto* symbol = reinterpret_cast<SYMBOL_INFOW*>(symbolBuffer);
+    const auto symbol = MakeNotNull(reinterpret_cast<SYMBOL_INFOW*>(symbolBuffer));
     symbol->SizeOfStruct = sizeof(SYMBOL_INFOW);
     symbol->MaxNameLen = MAX_SYM_NAME;
 
     DWORD64 displacement = 0u;
-    if(SymFromAddrW(symbolProcess, address, &displacement, symbol)){
+    if(SymFromAddrW(symbolProcess, address, &displacement, symbol.get())){
         const AString<Core::Alloc::ScratchArena> name = BasicStringDetail::WideToUtf8(scratchArena, WStringView(symbol->Name, symbol->NameLen));
         outReport += " ";
         outReport += name;

@@ -424,9 +424,7 @@ bool GraphicsRuntime::isDeviceLost()const noexcept{
 }
 
 GraphicsBackend::Device& GraphicsRuntime::getDevice()const noexcept{
-    GraphicsBackend::Device* const device = m_backend->getDevice();
-    NWB_ASSERT(device);
-    return *device;
+    return *MakeNotNull(m_backend->getDevice());
 }
 
 Expected<GraphicsVector<AdapterInfo>> GraphicsRuntime::enumerateAdapters(){
@@ -478,7 +476,7 @@ void GraphicsRuntime::setPointerScaleChangedCallback(PointerScaleChangedCallback
 }
 
 void GraphicsRuntime::animate(f64 elapsedTime){
-    for(auto* renderPass : m_renderPasses)
+    for(const auto renderPass : m_renderPasses)
         renderPass->animate(static_cast<f32>(elapsedTime));
 }
 
@@ -532,7 +530,7 @@ Expected<void, CpuTaskAdmissionError::Enum> GraphicsRuntime::renderWithPhaseTimi
     CpuTaskScope frameTasks(m_cpuScheduler, m_frameTaskProfileLabel);
     const CpuTaskOptions options{ .priority = CpuTaskPriority::Critical, .target = CpuTaskTarget::MainThread, };
     CpuTaskHandle previous;
-    for(auto* renderPass : m_renderPasses){
+    for(const auto renderPass : m_renderPasses){
         const auto admitted = frameTasks.submit([this, &device, framebuffer, renderPass, phaseTiming](){
             if(m_deviceRecreationRequested || device.requiresRecreation()){
                 if(device.requiresRecreation())

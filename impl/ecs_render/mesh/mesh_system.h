@@ -175,12 +175,12 @@ public:
 
 public:
     void invalidateResources();
-    [[nodiscard]] Expected<MeshResources*> createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] Expected<MeshResources*> findMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset)noexcept;
+    [[nodiscard]] Expected<NotNull<MeshResources*>> createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] Expected<NotNull<MeshResources*>> findMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset)noexcept;
     // Graph declaration resolves prepared keys without touching assets or mesh state.
-    [[nodiscard]] Expected<MeshResources*> findMeshResources(const Name& meshKey)noexcept;
-    [[nodiscard]] Expected<MeshResources*> createRuntimeMeshResources(const RuntimeMeshDesc& desc);
-    [[nodiscard]] Expected<MeshResources*> findRuntimeMeshResources(const RuntimeMeshDesc& desc)noexcept;
+    [[nodiscard]] Expected<NotNull<MeshResources*>> findMeshResources(const Name& meshKey)noexcept;
+    [[nodiscard]] Expected<NotNull<MeshResources*>> createRuntimeMeshResources(const RuntimeMeshDesc& desc);
+    [[nodiscard]] Expected<NotNull<MeshResources*>> findRuntimeMeshResources(const RuntimeMeshDesc& desc)noexcept;
     [[nodiscard]] bool prepareComputeEmulationResources(MeshResources& mesh);
     [[nodiscard]] bool prepareObjectGeometryCache(MeshResources& mesh, const Core::ComputePipelineHandle& decoderPipeline);
     [[nodiscard]] bool confirmObjectGeometryCache(const Name& meshKey, const RuntimeMeshBuffers& sourceBuffers, const ECSRenderDetail::ObjectGeometryCacheSnapshot& expected, bool runtimeMesh)noexcept;

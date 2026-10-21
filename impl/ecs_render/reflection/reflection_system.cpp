@@ -115,8 +115,8 @@ bool RendererReflectionSystem::prepareResources(const u32 width, const u32 heigh
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || !preparePipelines(prepareHardware, csgHardwareWork))
         return false;
-    const Core::GpuTimingScopeDefinition* const scopes[] = { &ReflectionGpuTimingScope::s_Classify, &ReflectionGpuTimingScope::s_BuildArgs, &ReflectionGpuTimingScope::s_Hardware, };
-    for(const Core::GpuTimingScopeDefinition* const scope : scopes){
+    const NotNull<const Core::GpuTimingScopeDefinition*> scopes[] = { MakeNotNull(&ReflectionGpuTimingScope::s_Classify), MakeNotNull(&ReflectionGpuTimingScope::s_BuildArgs), MakeNotNull(&ReflectionGpuTimingScope::s_Hardware), };
+    for(const NotNull<const Core::GpuTimingScopeDefinition*> scope : scopes){
         if(!m_graphics.gpuTiming().prepareScopeQueries(scope->identity, device, s_ReflectionGpuTimingQueriesPerRange))
             return false;
     }

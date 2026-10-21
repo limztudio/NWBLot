@@ -171,8 +171,8 @@ template<typename CharT>
 [[nodiscard]] inline constexpr NameHash ComputeNameHash(const NotNull<const CharT*> text)noexcept(IsArithmetic_V<CharT>){
     NameHash hash;
     NameDetail::InitializeNameHash(hash);
-    for(const CharT* cursor = text.get(); *cursor != CharT{}; ++cursor)
-        NameDetail::UpdateCanonicalNameHashLanes(hash, *cursor);
+    for(usize index = 0u; text.get()[index] != CharT{}; ++index)
+        NameDetail::UpdateCanonicalNameHashLanes(hash, text.get()[index]);
     return hash;
 }
 
@@ -339,10 +339,10 @@ inline constexpr usize s_SymbolTextBufferCount = 8u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline char* NextSymbolTextBuffer()noexcept{
+[[nodiscard]] inline auto NextSymbolTextBuffer()noexcept -> char(&)[s_SymbolTextBufferLength]{
     thread_local static char s_buffers[s_SymbolTextBufferCount][s_SymbolTextBufferLength];
     thread_local static usize s_next = 0u;
-    char* const buffer = s_buffers[s_next];
+    auto& buffer = s_buffers[s_next];
     s_next = (s_next + 1u) % s_SymbolTextBufferCount;
     return buffer;
 }
@@ -638,7 +638,7 @@ public:
         const AStringView text(m_debugName, sizeof(m_debugName));
         return text.substr(0u, text.find('\0'));
 #else
-        char* const buf = NameDetail::NextSymbolTextBuffer();
+        auto& buf = NameDetail::NextSymbolTextBuffer();
         if(NameDetail::ResolveNameSymbolText(m_hash, buf, NameDetail::s_SymbolTextBufferLength)){
             buf[NameDetail::s_SymbolTextBufferLength - 1u] = '\0';
             const AStringView text(buf, NameDetail::s_SymbolTextBufferLength);
@@ -657,7 +657,7 @@ public:
 #if defined(NWB_DEBUG)
         return m_debugName;
 #else
-        char* const buf = NameDetail::NextSymbolTextBuffer();
+        auto& buf = NameDetail::NextSymbolTextBuffer();
         if(NameDetail::ResolveNameSymbolText(m_hash, buf, NameDetail::s_SymbolTextBufferLength)){
             buf[NameDetail::s_SymbolTextBufferLength - 1u] = '\0';
             return buf;
@@ -673,7 +673,7 @@ public:
 #if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
         return AStringView(m_debugName);
 #else
-        char* const buf = NameDetail::NextSymbolTextBuffer();
+        auto& buf = NameDetail::NextSymbolTextBuffer();
         NameDetail::HashToDebugString(m_hash, buf, NameDetail::s_SymbolTextBufferLength);
         return AStringView(buf, NameDetail::s_DebugHashTextLength);
 #endif

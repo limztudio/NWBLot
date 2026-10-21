@@ -7,6 +7,7 @@
 
 #include "containers.h"
 #include "name.h"
+#include "not_null.h"
 #include "sync.h"
 
 
@@ -36,12 +37,20 @@ public:
     }
 
     template<typename OutputVectorT>
-    void copyTo(OutputVectorT& outValues)noexcept(noexcept(AssignTriviallyCopyableVector(outValues, m_values))){
+    void copyTo(OutputVectorT& outValues)noexcept([]()constexpr noexcept{
+        if constexpr(IsDefaultConstructible_V<ValueT>)
+            return noexcept(AssignTriviallyCopyableVector(DeclVal<OutputVectorT&>(), DeclVal<const Vector<ValueT, ArenaT>&>()));
+        else
+            return noexcept(DeclVal<OutputVectorT&>().assign(DeclVal<const Vector<ValueT, ArenaT>&>().begin(), DeclVal<const Vector<ValueT, ArenaT>&>().end()));
+    }()){
         static_assert(IsSame_V<typename OutputVectorT::value_type, ValueT>, "auto-registration queue value types must match");
         static_assert(IsTriviallyCopyable_V<ValueT>, "auto-registration queue values must be trivially copyable");
 
         ScopedLock lock(m_mutex);
-        AssignTriviallyCopyableVector(outValues, m_values);
+        if constexpr(IsDefaultConstructible_V<ValueT>)
+            AssignTriviallyCopyableVector(outValues, m_values);
+        else
+            outValues.assign(m_values.begin(), m_values.end());
     }
 
 
@@ -56,6 +65,19 @@ private:
 
 
 namespace AutoRegistrationDetail{
+
+
+template<typename FactoryT>
+struct CollectedFactory{
+    static constexpr bool s_Nullable = true;
+    [[nodiscard]] static constexpr const FactoryT& Callable(const FactoryT& factory)noexcept{ return factory; }
+};
+
+template<typename FactoryT>
+struct CollectedFactory<NotNull<FactoryT>>{
+    static constexpr bool s_Nullable = false;
+    [[nodiscard]] static constexpr decltype(auto) Callable(const NotNull<FactoryT>& factory)noexcept{ return *factory; }
+};
 
 
 template<typename FactoryT>
@@ -85,6 +107,14 @@ inline void RegisterAutoFactory(QueueT& queue, const FactoryT factory)noexcept(I
     queue.appendUnique(factory, AutoRegistrationDetail::MakeFactoryEqual<FactoryT>());
 }
 
+template<typename FactoryT, typename ArenaT>
+inline void RegisterAutoFactory(AutoRegistrationQueue<NotNull<FactoryT>, ArenaT>& queue, const FactoryT factory)noexcept(noexcept(queue.appendUnique(MakeNotNull(factory), AutoRegistrationDetail::MakeFactoryEqual<NotNull<FactoryT>>()))){
+    if(factory == nullptr)
+        return;
+
+    queue.appendUnique(MakeNotNull(factory), AutoRegistrationDetail::MakeFactoryEqual<NotNull<FactoryT>>());
+}
+
 template<typename QueueT, typename ContextT, typename FunctionVectorT, typename LogNullT, typename LogFailureT>
 [[nodiscard]] inline bool RunAutoCollectedFunctions(QueueT& queue, ContextT& context, FunctionVectorT& scratchFunctions, LogNullT&& logNull, LogFailureT&& logFailure)noexcept(
     noexcept(queue.copyTo(scratchFunctions))
@@ -108,8 +138,13 @@ template<typename QueueT, typename ContextT, typename FunctionVectorT, typename 
                 && noexcept(*DeclVal<Iterator&>())
                 && (!IsReference_V<Returned> || IsNothrowConvertible_V<Returned, Value>)
                 && IsNothrowDestructible_V<Value>
-                && noexcept(static_cast<bool>(!DeclVal<Item>()))
-                && noexcept(static_cast<bool>(DeclVal<Item>()(DeclVal<ContextT&>())))
+                && []()constexpr noexcept{
+                    if constexpr(AutoRegistrationDetail::CollectedFactory<Value>::s_Nullable)
+                        return noexcept(static_cast<bool>(!DeclVal<Item>()));
+                    else
+                        return true;
+                }()
+                && noexcept(static_cast<bool>(AutoRegistrationDetail::CollectedFactory<Value>::Callable(DeclVal<Item>())(DeclVal<ContextT&>())))
             ;
         }
         else
@@ -119,11 +154,14 @@ template<typename QueueT, typename ContextT, typename FunctionVectorT, typename 
     queue.copyTo(scratchFunctions);
 
     for(const auto function : scratchFunctions){
-        if(!function){
-            logNull();
-            return false;
+        using Function = Decay_T<decltype(function)>;
+        if constexpr(AutoRegistrationDetail::CollectedFactory<Function>::s_Nullable){
+            if(!function){
+                logNull();
+                return false;
+            }
         }
-        if(function(context))
+        if(AutoRegistrationDetail::CollectedFactory<Function>::Callable(function)(context))
             continue;
 
         logFailure();
@@ -156,7 +194,12 @@ inline void RegisterAutoFactoryProducts(const FactoryVectorT& factories, CreateP
                 && noexcept(*DeclVal<Iterator&>())
                 && (!IsReference_V<Returned> || IsNothrowConvertible_V<Returned, Value>)
                 && IsNothrowDestructible_V<Value>
-                && noexcept(static_cast<bool>(DeclVal<Item>() == nullptr))
+                && []()constexpr noexcept{
+                    if constexpr(AutoRegistrationDetail::CollectedFactory<Value>::s_Nullable)
+                        return noexcept(static_cast<bool>(DeclVal<Item>() == nullptr));
+                    else
+                        return true;
+                }()
                 && []()constexpr noexcept{
                     using ReturnedProduct = decltype(DeclVal<CreateProductT&>()(DeclVal<Item>()));
                     using Product = Decay_T<ReturnedProduct>;
@@ -175,8 +218,11 @@ inline void RegisterAutoFactoryProducts(const FactoryVectorT& factories, CreateP
     }()
 ){
     for(const auto factory : factories){
-        if(factory == nullptr)
-            continue;
+        using Factory = Decay_T<decltype(factory)>;
+        if constexpr(AutoRegistrationDetail::CollectedFactory<Factory>::s_Nullable){
+            if(factory == nullptr)
+                continue;
+        }
 
         auto product = createProduct(factory);
         if(!product){

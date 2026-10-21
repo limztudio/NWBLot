@@ -41,11 +41,11 @@ Expected<FrameGraphAvboitExtinctionUploadResult> FrameGraphAvboitExtinctionUploa
     FrameGraphAvboitExtinctionUploadResult result{};
     RendererTaskGraphDetail::AvboitExtinctionGraphTask::Payload& avboitExtinctionPayload = extinctionPayload;
     RendererTaskGraphDetail::AvboitExtinctionComputeEmulationGraphTask::Payload& avboitExtinctionComputeEmulationPayload = computeEmulationPayload;
-    DeferredFrameTargets& deferredTargets = *inputs.targets;
-    const CsgFrameState& csgFrameState = *inputs.csgFrameState;
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings = *inputs.frameBindings;
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources = *inputs.csgResources;
-    const ECSRenderDetail::MeshViewGpuData& meshViewState = *inputs.meshViewState;
+    DeferredFrameTargets& deferredTargets = inputs.targets;
+    const CsgFrameState& csgFrameState = inputs.csgFrameState;
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings = inputs.frameBindings;
+    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources = inputs.csgResources;
+    const ECSRenderDetail::MeshViewGpuData& meshViewState = inputs.meshViewState;
     const Core::GpuGraphResourceId materialInstances = inputs.materialInstances;
     const Core::GpuGraphResourceId materialTyped = inputs.materialTyped;
     const Core::GpuGraphResourceId csgReceiverRanges = inputs.csgReceiverRanges;
@@ -79,12 +79,12 @@ Expected<FrameGraphAvboitExtinctionUploadResult> FrameGraphAvboitExtinctionUploa
         AvboitPassUploadHelper extinctionUploadHelper(m_materialSystem);
         auto extinctionUploadResult = extinctionUploadHelper.gather(
             AvboitPassUploadInputs{
-                .framebuffer = deferredTargets.avboit.lowFramebuffer.get(),
+                .framebuffer = *deferredTargets.avboit.lowFramebuffer,
                 .pass = MaterialPipelinePass::AvboitExtinction,
-                .csgFrameState = &csgFrameState,
-                .frameBindings = &frameBindings,
-                .csgResources = &csgResources,
-                .meshViewState = &meshViewState,
+                .csgFrameState = csgFrameState,
+                .frameBindings = frameBindings,
+                .csgResources = csgResources,
+                .meshViewState = meshViewState,
                 .materialInstances = materialInstances,
                 .materialTyped = materialTyped,
                 .csgReceiverRanges = csgReceiverRanges,
@@ -141,9 +141,9 @@ Expected<FrameGraphAvboitExtinctionUploadResult> FrameGraphAvboitExtinctionUploa
             AvboitMaterialUploadBuilder extinctionMaterialUploadBuilder(m_graph, m_csgSystem);
             auto extinctionCsgStreamsUploadedResult = extinctionMaterialUploadBuilder.declare(
                 AvboitMaterialUploadInputs{
-                    .targets = &deferredTargets,
-                    .csgResources = &csgResources,
-                    .frameBindings = &frameBindings,
+                    .targets = deferredTargets,
+                    .csgResources = csgResources,
+                    .frameBindings = frameBindings,
                     .materialInstances = materialInstances,
                     .materialTyped = materialTyped,
                     .csgReceiverRanges = csgReceiverRanges,
@@ -171,8 +171,8 @@ Expected<FrameGraphAvboitExtinctionUploadResult> FrameGraphAvboitExtinctionUploa
             AvboitComputeEmulationCapture extinctionComputeEmulationCapture;
             auto extinctionComputeEmulationCaptureResult = extinctionComputeEmulationCapture.capture(
                 AvboitComputeEmulationCaptureInputs{
-                    .drawItems = &extinctionDrawItems,
-                    .csgFrameData = &extinctionCsgFrameData,
+                    .drawItems = extinctionDrawItems,
+                    .csgFrameData = extinctionCsgFrameData,
                     .geometryOwned = avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned,
                     .sampledTexturesCollected = extinctionMaterialSampledTexturesCollected,
                     .csgStreamsUploaded = extinctionCsgStreamsUploaded,

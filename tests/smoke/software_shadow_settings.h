@@ -67,10 +67,10 @@ namespace NWB::Tests::Smoke{
         else
             return false;
     }
-    struct ResolutionOverride{ AStringView name; u32* destination; };
+    struct ResolutionOverride{ AStringView name; u32& destination; };
     const ResolutionOverride overrides[] = {
-        { "NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION", &settings.directionalResolution },
-        { "NWB_SOFTWARE_SHADOW_POINT_RESOLUTION", &settings.pointResolution },
+        { "NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION", settings.directionalResolution },
+        { "NWB_SOFTWARE_SHADOW_POINT_RESOLUTION", settings.pointResolution },
     };
     for(const auto& setting : overrides){
         const auto value = ReadSmokeEnvironmentText(arena, setting.name);
@@ -79,7 +79,7 @@ namespace NWB::Tests::Smoke{
         const auto parsed = ParseU64FromChars(AStringView(value->data(), value->size()));
         if(!parsed || *parsed > Limit<u32>::s_Max)
             return false;
-        *setting.destination = static_cast<u32>(*parsed);
+        setting.destination = static_cast<u32>(*parsed);
     }
     if(const auto value = ReadSmokeEnvironmentText(arena, "NWB_SOFTWARE_SHADOW_BUDGET_MIB")){
         const auto parsed = ParseU64FromChars(AStringView(value->data(), value->size()));

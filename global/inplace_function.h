@@ -24,9 +24,9 @@ private:
 
 
 private:
-    using InvokeFn = void(*)(void*);
-    using DestroyFn = void(*)(void*)noexcept;
-    using MoveFn = void(*)(void*, void*)noexcept;
+    using InvokeFn = void(*)(Storage&);
+    using DestroyFn = void(*)(Storage&)noexcept;
+    using MoveFn = void(*)(Storage&, Storage&)noexcept;
 
 
 public:
@@ -81,7 +81,7 @@ public:
 
     inline void operator()(){
         NWB_ASSERT_MSG(m_invoke != nullptr, NWB_TEXT("InplaceFunction invoked without target"));
-        m_invoke(storagePtr());
+        m_invoke(m_storage);
     }
 
 
@@ -90,7 +90,7 @@ public:
         if(!m_destroy)
             return;
 
-        m_destroy(storagePtr());
+        m_destroy(m_storage);
         m_invoke = nullptr;
         m_destroy = nullptr;
         m_move = nullptr;
@@ -99,7 +99,7 @@ public:
 
 private:
     template<typename Func>
-    inline void assign(Func&& func)noexcept(noexcept(new(storagePtr()) Decay_T<Func>(Forward<Func>(func)))){
+    inline void assign(Func&& func)noexcept(noexcept(new(static_cast<void*>(m_storage.data)) Decay_T<Func>(Forward<Func>(func)))){
         using FuncType = Decay_T<Func>;
 
         static_assert(sizeof(FuncType) <= InlineStorageSize, "InplaceFunction capture size exceeds inline storage");
@@ -107,20 +107,20 @@ private:
         static_assert(IsNothrowMoveConstructible_V<FuncType>, "InplaceFunction targets must be nothrow move constructible");
         static_assert(IsNothrowDestructible_V<FuncType>, "InplaceFunction targets must be nothrow destructible");
 
-        new(storagePtr()) FuncType(Forward<Func>(func));
+        new(static_cast<void*>(m_storage.data)) FuncType(Forward<Func>(func));
 
-        m_invoke = [](void* storage)noexcept(noexcept((*static_cast<FuncType*>(storage))())){
-            FuncType* f = static_cast<FuncType*>(storage);
-            (*f)();
+        m_invoke = [](Storage& storage)noexcept(noexcept((*reinterpret_cast<FuncType*>(storage.data))())){
+            FuncType& f = *reinterpret_cast<FuncType*>(storage.data);
+            f();
         };
-        m_destroy = [](void* storage)noexcept{
-            FuncType* f = static_cast<FuncType*>(storage);
-            f->~FuncType();
+        m_destroy = [](Storage& storage)noexcept{
+            FuncType& f = *reinterpret_cast<FuncType*>(storage.data);
+            f.~FuncType();
         };
-        m_move = [](void* dst, void* src)noexcept{
-            FuncType* source = static_cast<FuncType*>(src);
-            ::new(dst) FuncType(Move(*source));
-            source->~FuncType();
+        m_move = [](Storage& dst, Storage& src)noexcept{
+            FuncType& source = *reinterpret_cast<FuncType*>(src.data);
+            ::new(static_cast<void*>(dst.data)) FuncType(Move(source));
+            source.~FuncType();
         };
     }
 
@@ -128,7 +128,7 @@ private:
         if(!rhs.m_invoke)
             return;
 
-        rhs.m_move(storagePtr(), rhs.storagePtr());
+        rhs.m_move(m_storage, rhs.m_storage);
         m_invoke = rhs.m_invoke;
         m_destroy = rhs.m_destroy;
         m_move = rhs.m_move;
@@ -136,10 +136,6 @@ private:
         rhs.m_invoke = nullptr;
         rhs.m_destroy = nullptr;
         rhs.m_move = nullptr;
-    }
-
-    inline void* storagePtr()noexcept{
-        return static_cast<void*>(m_storage.data);
     }
 
 

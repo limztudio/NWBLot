@@ -171,14 +171,11 @@ bool RendererDeferredSystem::createDeferredCompositePipeline(){
     return true;
 }
 
-bool RendererDeferredSystem::createDeferredPresentPipeline(Core::Framebuffer* presentationFramebuffer){
-    if(!presentationFramebuffer)
-        return false;
-
+bool RendererDeferredSystem::createDeferredPresentPipeline(Core::Framebuffer& presentationFramebuffer){
     if(!createDeferredCompositeResources())
         return false;
 
-    const Core::FramebufferInfo& framebufferInfo = presentationFramebuffer->getFramebufferInfo();
+    const Core::FramebufferInfo& framebufferInfo = presentationFramebuffer.getFramebufferInfo();
     if(m_deferredState.m_presentPipeline && m_deferredState.m_presentPipeline->getFramebufferInfo() == framebufferInfo)
         return true;
 

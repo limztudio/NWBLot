@@ -119,12 +119,11 @@ bool EncodeEventStream(const EventView& events, TelemetryBytes& outBytes){
     const usize eventCount = events.eventCount();
     usize payloadBytes = 0u;
     for(usize i = 0u; i < eventCount; ++i){
-        const EventRecord* event = events.eventAt(i);
-        NWB_ASSERT(event);
-        NWB_ASSERT(__hidden_telemetry_codec::ValidateEventPayload(event->header, event->payload.data(), event->payload.size()));
+        auto& event = *MakeNotNull(events.eventAt(i));
+        NWB_ASSERT(__hidden_telemetry_codec::ValidateEventPayload(event.header, event.payload.data(), event.payload.size()));
         if(!AddBinaryReserveBytes(payloadBytes, sizeof(EncodedEventHeader)))
             return false;
-        if(!AddBinaryReserveBytes(payloadBytes, event->payload.size()))
+        if(!AddBinaryReserveBytes(payloadBytes, event.payload.size()))
             return false;
     }
 
@@ -141,8 +140,8 @@ bool EncodeEventStream(const EventView& events, TelemetryBytes& outBytes){
     AppendPOD(outBytes, streamHeader);
 
     for(usize i = 0u; i < eventCount; ++i){
-        const EventRecord* event = events.eventAt(i);
-        __hidden_telemetry_codec::AppendEncodedEvent(outBytes, event->header, event->payload.data(), event->payload.size());
+        const EventRecord& event = *events.eventAt(i);
+        __hidden_telemetry_codec::AppendEncodedEvent(outBytes, event.header, event.payload.data(), event.payload.size());
     }
 
     NWB_ASSERT(outBytes.size() == encodedBytes);

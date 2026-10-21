@@ -41,11 +41,11 @@ Expected<FrameGraphAvboitAccumulationUploadResult> FrameGraphAvboitAccumulationU
     FrameGraphAvboitAccumulationUploadResult result{};
     RendererTaskGraphDetail::AvboitAccumulationGraphTask::Payload& avboitAccumulationPayload = accumulationPayload;
     RendererTaskGraphDetail::AvboitAccumulationComputeEmulationGraphTask::Payload& avboitAccumulationComputeEmulationPayload = computeEmulationPayload;
-    DeferredFrameTargets& deferredTargets = *inputs.targets;
-    const CsgFrameState& csgFrameState = *inputs.csgFrameState;
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings = *inputs.frameBindings;
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources = *inputs.csgResources;
-    const ECSRenderDetail::MeshViewGpuData& meshViewState = *inputs.meshViewState;
+    DeferredFrameTargets& deferredTargets = inputs.targets;
+    const CsgFrameState& csgFrameState = inputs.csgFrameState;
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings = inputs.frameBindings;
+    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources = inputs.csgResources;
+    const ECSRenderDetail::MeshViewGpuData& meshViewState = inputs.meshViewState;
     const Core::GpuGraphResourceId materialInstances = inputs.materialInstances;
     const Core::GpuGraphResourceId materialTyped = inputs.materialTyped;
     const Core::GpuGraphResourceId csgReceiverRanges = inputs.csgReceiverRanges;
@@ -78,12 +78,12 @@ Expected<FrameGraphAvboitAccumulationUploadResult> FrameGraphAvboitAccumulationU
         AvboitPassUploadHelper accumulationUploadHelper(m_materialSystem);
         auto accumulationUploadResult = accumulationUploadHelper.gather(
             AvboitPassUploadInputs{
-                .framebuffer = deferredTargets.avboit.accumulationFramebuffer.get(),
+                .framebuffer = *deferredTargets.avboit.accumulationFramebuffer,
                 .pass = MaterialPipelinePass::AvboitAccumulate,
-                .csgFrameState = &csgFrameState,
-                .frameBindings = &frameBindings,
-                .csgResources = &csgResources,
-                .meshViewState = &meshViewState,
+                .csgFrameState = csgFrameState,
+                .frameBindings = frameBindings,
+                .csgResources = csgResources,
+                .meshViewState = meshViewState,
                 .materialInstances = materialInstances,
                 .materialTyped = materialTyped,
                 .csgReceiverRanges = csgReceiverRanges,
@@ -140,9 +140,9 @@ Expected<FrameGraphAvboitAccumulationUploadResult> FrameGraphAvboitAccumulationU
             AvboitMaterialUploadBuilder accumulationMaterialUploadBuilder(m_graph, m_csgSystem);
             auto accumulationCsgStreamsUploadedResult = accumulationMaterialUploadBuilder.declare(
                 AvboitMaterialUploadInputs{
-                    .targets = &deferredTargets,
-                    .csgResources = &csgResources,
-                    .frameBindings = &frameBindings,
+                    .targets = deferredTargets,
+                    .csgResources = csgResources,
+                    .frameBindings = frameBindings,
                     .materialInstances = materialInstances,
                     .materialTyped = materialTyped,
                     .csgReceiverRanges = csgReceiverRanges,
@@ -170,8 +170,8 @@ Expected<FrameGraphAvboitAccumulationUploadResult> FrameGraphAvboitAccumulationU
             AvboitComputeEmulationCapture accumulationComputeEmulationCapture;
             auto accumulationComputeEmulationCaptureResult = accumulationComputeEmulationCapture.capture(
                 AvboitComputeEmulationCaptureInputs{
-                    .drawItems = &accumulationDrawItems,
-                    .csgFrameData = &accumulationCsgFrameData,
+                    .drawItems = accumulationDrawItems,
+                    .csgFrameData = accumulationCsgFrameData,
                     .geometryOwned = avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned,
                     .sampledTexturesCollected = accumulationMaterialSampledTexturesCollected,
                     .csgStreamsUploaded = accumulationCsgStreamsUploaded,

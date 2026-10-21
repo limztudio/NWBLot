@@ -55,7 +55,7 @@ namespace ECSRenderDetail{
     const bool deferredResourcesReady = hasDeferredDrawItems && payload.materialDrawBuffersUploaded && payload.frameBindings.frameReady(payload.opaqueDrawSnapshot.instanceCount, payload.opaqueDrawSnapshot.materialTypedByteCount);
     const bool regularDrawResourcesReady = deferredResourcesReady && materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.regular, payload.frameBindings);
     MaterialPassDrawItems regularMeshDrawItems{ scratchArena };
-    const MaterialPassDrawItems* regularDrawItemsForGbuffer = &opaqueDrawItems.regular;
+    NotNull<const MaterialPassDrawItems*> regularDrawItemsForGbuffer(&opaqueDrawItems.regular);
     if(payload.regularSharedComputeEmulationDrawsGraphOwned){
         regularMeshDrawItems.meshDrawItems = Move(opaqueDrawItems.regular.meshDrawItems);
         regularMeshDrawItems.indexedDrawItems = Move(opaqueDrawItems.regular.indexedDrawItems);

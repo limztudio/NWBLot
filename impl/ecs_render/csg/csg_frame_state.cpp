@@ -64,7 +64,7 @@ CsgFrameState RendererCsgSystem::buildFrameState(Core::Alloc::ScratchArena& scra
         const auto resolvedReceiver = ResolveCsgReceiverComponent(m_world, entity);
         if(!resolvedReceiver || !resolvedReceiver->receiver->enabled)
             continue;
-        const CsgReceiverComponent* receiver = resolvedReceiver->receiver;
+        const NotNull<const CsgReceiverComponent*> receiver = resolvedReceiver->receiver;
         const CsgReceiverKind::Enum receiverKind = resolvedReceiver->receiverKind;
 
         const auto resolvedMeshResult = ecsMeshSystem.resolveRenderableMeshStatus(entity);
@@ -81,14 +81,14 @@ CsgFrameState RendererCsgSystem::buildFrameState(Core::Alloc::ScratchArena& scra
             frameStateCacheable = false;
             continue;
         }
-        MeshResources* const mesh = *meshResult;
+        const NotNull<MeshResources*> mesh = *meshResult;
 
         const auto materialInfoResult = materialSurfaceLookup.findMaterialSurfaceInfo(renderer.material);
         if(!materialInfoResult){
             frameStateCacheable = false;
             continue;
         }
-        MaterialSurfaceInfo* const materialInfo = *materialInfoResult;
+        const NotNull<MaterialSurfaceInfo*> materialInfo = *materialInfoResult;
 
         const Scene::TransformComponent* transform = m_world.tryGetComponent<Scene::TransformComponent>(entity);
 

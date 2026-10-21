@@ -32,20 +32,20 @@ class RendererMeshSystem;
 // Graphics-prefix scene uploads own mesh-view plus scene light/shading upload chain.
 struct PrefixSceneUploadInputs{
     RayTracingLightingClassificationInput rayTracingLightingInput;
-    const ECSRenderDetail::MeshViewGpuData* meshViewState = nullptr;
+    const ECSRenderDetail::MeshViewGpuData& meshViewState;
     Core::GpuGraphResourceId meshView;
     Core::GpuGraphResourceId lights;
     Core::GpuGraphResourceId sceneShading;
     Core::GpuTaskId shadowPrepareTask;
     f32 meshViewAspectRatio = 1.f;
     bool meshViewUploadRequired = false;
-    Optional<Core::GpuTimingMeasure>* asyncPrefixTiming = nullptr;
-    Core::GpuTimingSubmissionTicket** meshViewSetupTimingTicket = nullptr;
-    Core::GpuTimingSubmissionTicket** sceneShadingSetupTimingTicket = nullptr;
-    const bool* asyncPrefixTimingSpansOnePacket = nullptr;
-    const Core::GpuTaskId* shadowVisibilityTask = nullptr;
-    bool* meshViewSetupReady = nullptr;
-    bool* sceneShadingSetupReady = nullptr;
+    Optional<Core::GpuTimingMeasure>& asyncPrefixTiming;
+    Core::GpuTimingSubmissionTicket*& meshViewSetupTimingTicket;
+    Core::GpuTimingSubmissionTicket*& sceneShadingSetupTimingTicket;
+    const bool& asyncPrefixTimingSpansOnePacket;
+    const Core::GpuTaskId& shadowVisibilityTask;
+    bool& meshViewSetupReady;
+    bool& sceneShadingSetupReady;
 };
 
 struct PrefixSceneUploadResult{

@@ -4,6 +4,8 @@
 
 #include "telemetry_test_helpers.h"
 
+#include <global/not_null.h>
+
 #include <gtest/gtest.h>
 
 #include "frame_graph_test_helpers.h"
@@ -25,75 +27,75 @@ using namespace TelemetryTestDetail;
 
 using EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation = void(*)(Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics&);
 
-static constexpr EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutations[] = { [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
+static constexpr NotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation> s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutations[] = { MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.reserved[6u] = 1u;
-    },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
+    }),
+    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.ownerNodeIndex = 1u;
-    },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
+    }),
+    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.queue.deviceGeneration = 18u;
-    },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
+    }),
+    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.queueClass = Telemetry::FrameGraphQueueClass::Unknown;
-    },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
+    }),
+    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.recording.recordingSeconds = -1.0;
-    },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
+    }),
+    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.submission.submissionSeconds = Limit<f64>::s_QuietNaN;
-    },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
+    }),
+    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.submission.inheritedTimelineWaitElisionCount = Limit<u64>::s_Max;
-    },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
+    }),
+    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         --statistics.submission.timelineWaitCount;
         ++statistics.submission.inheritedTimelineWaitElisionCount;
-    },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
+    }),
+    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.submission = {};
         statistics.submission.plannedWaitTokenCount = 1u;
         statistics.submission.inheritedTimelineWaitElisionCount = 1u;
-    },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
+    }),
+    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.submission.recoverySubmissionCount = statistics.submission.acceptedFrontierSubmissionCount + 1u;
-    },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
+    }),
+    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.compile.taskCount = 79u;
         statistics.compile.packetCount = 78u;
         statistics.compile.mergedTaskCount = 1u;
-    },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
+    }),
+    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.compile.taskCount = 51u;
         statistics.compile.packetCount = 50u;
         statistics.compile.mergedTaskCount = 1u;
-    },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
+    }),
+    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.compile.prologueBarrierCount = 0u;
-    },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
+    }),
+    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.recording.barrierCount = 24u;
-    },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
+    }),
+    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.recording.taskCount = 22u;
-    },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
+    }),
+    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.submission.rejectedPacketCount = 23u;
         statistics.submission.rejectedTaskCount = 24u;
         statistics.submission.rejectedSubmissionCount = 23u;
-    },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
+    }),
+    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.compile.incomingLogicalOwnershipTransferSignatureCount = 0u;
         statistics.compile.outgoingLogicalOwnershipTransferSignatureCount = 0u;
         statistics.compile.incomingRepeatedOwnershipTransferSignatureCount = 0u;
         statistics.compile.outgoingRepeatedOwnershipTransferSignatureCount = 0u;
-    },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
+    }),
+    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.recording = {};
         statistics.recording.commandListCount = 1u;
         statistics.submission = {};
-    },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
+    }),
+    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.submission.nativeSubmissionCount = 0u;
         statistics.submission.nativeCommandListCount = 0u;
         statistics.submission.plannedWaitTokenCount = 1u;
@@ -103,8 +105,8 @@ static constexpr EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation s_Encod
         statistics.submission.acceptedFrontierSubmissionCount = 0u;
         statistics.submission.recoverySubmissionCount = 0u;
         statistics.submission.submissionSeconds = 0.0;
-    },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
+    }),
+    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.submission.acceptedPacketCount = 0u;
         statistics.submission.acceptedTaskCount = 1u;
         statistics.submission.nativeSubmissionCount = 0u;
@@ -116,13 +118,13 @@ static constexpr EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation s_Encod
         statistics.submission.acceptedFrontierSubmissionCount = 0u;
         statistics.submission.recoverySubmissionCount = 0u;
         statistics.submission.submissionSeconds = 0.0;
-    },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
+    }),
+    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.submission.rejectedPacketCount = 0u;
         statistics.submission.rejectedTaskCount = 1u;
         statistics.submission.rejectedSubmissionCount = 0u;
-    },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
+    }),
+    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.compile.taskCount = 0u;
         statistics.compile.packetCount = 0u;
         statistics.compile.mergedTaskCount = 0u;
@@ -132,7 +134,7 @@ static constexpr EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation s_Encod
         statistics.compile.ownershipAcquireBarrierCount = 0u;
         statistics.recording = {};
         statistics.submission = {};
-    },
+    }),
 };
 
 
@@ -254,7 +256,7 @@ TEST(Telemetry, FrameGraphPhysicalQueueRuntimeStatisticsPayloadRejectsMalformedR
         ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 917u, nodes, edges, records, payload));
         Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics encodedStatistics;
         NWB_MEMCPY(&encodedStatistics, sizeof(encodedStatistics), payload.data() + statisticsOffset, sizeof(encodedStatistics));
-        s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutations[mutationIndex](encodedStatistics);
+        s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutations[mutationIndex].get()(encodedStatistics);
         NWB_MEMCPY(payload.data() + statisticsOffset, payload.size() - statisticsOffset, &encodedStatistics, sizeof(encodedStatistics));
         EXPECT_FALSE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size())));
     }

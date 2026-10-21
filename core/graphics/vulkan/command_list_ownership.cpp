@@ -132,9 +132,9 @@ void CommandList::GraphRecordingOwnership::detachCapability()noexcept{
     if(!m_capabilityAttached)
         return;
 
-    Capability** capability = &CurrentCapability();
+    auto capability = MakeNotNull(&CurrentCapability());
     while(*capability && *capability != &m_capability)
-        capability = &(*capability)->previous;
+        capability = MakeNotNull(&(*capability)->previous);
     const bool capabilityFound = *capability == &m_capability;
     NWB_FATAL_ASSERT_MSG(capabilityFound, "task-graph recording capability left its owning thread-local stack");
     *capability = m_capability.previous;

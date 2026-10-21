@@ -86,7 +86,7 @@ struct TrackedResourceAccessLists{
 
 // Store stable edge ordinals so the deduplication index does not copy complete dependency keys.
 struct InferredDependencyHasher{
-    const GraphicsVector<GpuTaskDependencyEdge>* edges = nullptr;
+    NotNull<const GraphicsVector<GpuTaskDependencyEdge>*> edges;
 
 
 public:
@@ -102,7 +102,7 @@ public:
 };
 
 struct InferredDependencyEqual{
-    const GraphicsVector<GpuTaskDependencyEdge>* edges = nullptr;
+    NotNull<const GraphicsVector<GpuTaskDependencyEdge>*> edges;
 
 
 public:
@@ -315,7 +315,7 @@ bool GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& grap
     };
     HashMap<u64, DependencyPairIndices, Alloc::ScratchArena, GpuTaskDependencyPairHasher, EqualTo<u64>> dependencyPairs(0, GpuTaskDependencyPairHasher(), EqualTo<u64>(), scratchArena);
     Vector<usize, Alloc::ScratchArena> nextInferredEdges(scratchArena);
-    HashSet<usize, Alloc::ScratchArena, InferredDependencyHasher, InferredDependencyEqual> inferredEdgeIndices(0u, InferredDependencyHasher{ &outAnalysis.m_inferredEdges }, InferredDependencyEqual{ &outAnalysis.m_inferredEdges }, scratchArena);
+    HashSet<usize, Alloc::ScratchArena, InferredDependencyHasher, InferredDependencyEqual> inferredEdgeIndices(0u, InferredDependencyHasher{ MakeNotNull(&outAnalysis.m_inferredEdges) }, InferredDependencyEqual{ MakeNotNull(&outAnalysis.m_inferredEdges) }, scratchArena);
     usize expectedEdgeCount = resourceVersionDependencyEdges.size();
     for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
         const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);

@@ -109,7 +109,7 @@ bool CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, 
             return false;
     }
 
-    Vector<const CommandListResourceStateHandoff::BufferState*, Alloc::ScratchArena> orderedBufferStates{scratchArena};
+    Vector<NotNull<const CommandListResourceStateHandoff::BufferState*>, Alloc::ScratchArena> orderedBufferStates{scratchArena};
     orderedBufferStates.reserve(states.m_bufferStates.size());
     for(const CommandListResourceStateHandoff::BufferState& state : states.m_bufferStates){
         if(!state.buffer)
@@ -118,9 +118,9 @@ bool CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, 
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Imported buffer byte range is empty or invalid"));
             return false;
         }
-        orderedBufferStates.push_back(&state);
+        orderedBufferStates.push_back(MakeNotNull(&state));
     }
-    Sort(orderedBufferStates.begin(), orderedBufferStates.end(), [](const auto* lhs, const auto* rhs)noexcept{
+    Sort(orderedBufferStates.begin(), orderedBufferStates.end(), [](const auto lhs, const auto rhs)noexcept{
         return lhs->buffer != rhs->buffer ? LessThan<Buffer*>()(lhs->buffer, rhs->buffer) : lhs->range.byteOffset < rhs->range.byteOffset;
     }
     );
@@ -408,13 +408,12 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
 
     states.m_bufferStates.reserve(m_stateTracker.m_bufferStates.size());
     for(auto it = m_stateTracker.m_bufferStates.begin(); it != m_stateTracker.m_bufferStates.end(); ++it){
-        Buffer* const buffer = it->first;
-        NWB_ASSERT(buffer);
-        const GpuPhysicalQueueId ownerQueue = getBufferOwnership(*buffer);
-        const auto releases = m_bufferOwnershipReleaseDestinations.find(buffer);
+        auto& buffer = *MakeNotNull(it->first.get());
+        const GpuPhysicalQueueId ownerQueue = getBufferOwnership(buffer);
+        const auto releases = m_bufferOwnershipReleaseDestinations.find(MakeNotNull(&buffer));
         const auto append = [&](const BufferRange range, const ResourceStates::Mask state, const GpuPhysicalQueueId destination){
             if(range.hasExtent()){
-                states.m_bufferStates.push_back(CommandListResourceStateHandoff::BufferState{ buffer, state, buffer->m_creationDesc.queueSharing, ownerQueue, destination, range });
+                states.m_bufferStates.push_back(CommandListResourceStateHandoff::BufferState{ &buffer, state, buffer.m_creationDesc.queueSharing, ownerQueue, destination, range });
             }
         };
         for(const StateTracker::BufferRangeState& state : it.value()){
@@ -437,21 +436,19 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
 
     states.m_permanentTextureStates.reserve(m_stateTracker.m_permanentTextureStates.size());
     for(auto it = m_stateTracker.m_permanentTextureStates.begin(); it != m_stateTracker.m_permanentTextureStates.end(); ++it){
-        Texture* const texture = it.value().texture.get();
-        NWB_ASSERT(texture);
+        auto& texture = *MakeNotNull(it.value().texture.get());
 
-        const TextureSubresourceStateKey key{ texture, 0u, 0u };
+        const TextureSubresourceStateKey key{ &texture, 0u, 0u };
         const auto [ownerQueue, releaseDestinationQueue] = getTextureOwnership(key);
-        states.m_permanentTextureStates.push_back(CommandListResourceStateHandoff::PermanentTextureState{ texture, it.value().state, texture->m_creationDesc.queueSharing, ownerQueue, releaseDestinationQueue });
+        states.m_permanentTextureStates.push_back(CommandListResourceStateHandoff::PermanentTextureState{ &texture, it.value().state, texture.m_creationDesc.queueSharing, ownerQueue, releaseDestinationQueue });
     }
 
     states.m_permanentBufferStates.reserve(m_stateTracker.m_permanentBufferStates.size());
     for(auto it = m_stateTracker.m_permanentBufferStates.begin(); it != m_stateTracker.m_permanentBufferStates.end(); ++it){
-        Buffer* const buffer = it.value().buffer.get();
-        NWB_ASSERT(buffer);
+        auto& buffer = *MakeNotNull(it.value().buffer.get());
 
-        const GpuPhysicalQueueId ownerQueue = getBufferOwnership(*buffer);
-        states.m_permanentBufferStates.push_back(CommandListResourceStateHandoff::BufferState{ buffer, it.value().state, buffer->m_creationDesc.queueSharing, ownerQueue, {} });
+        const GpuPhysicalQueueId ownerQueue = getBufferOwnership(buffer);
+        states.m_permanentBufferStates.push_back(CommandListResourceStateHandoff::BufferState{ &buffer, it.value().state, buffer.m_creationDesc.queueSharing, ownerQueue, {} });
     }
 
     states.m_deviceGeneration = m_context.deviceGeneration;
@@ -473,26 +470,25 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
 
     // Validate all pending releases first so a late failure never partially mutates the transaction.
     for(auto it = m_bufferOwnershipReleaseDestinations.begin(); it != m_bufferOwnershipReleaseDestinations.end(); ++it){
-        Buffer* const buffer = it->first;
-        NWB_ASSERT(buffer);
-        if(buffer->m_bufferInfo.sharingMode == VK_SHARING_MODE_CONCURRENT || m_stateTracker.isPermanentBuffer(*buffer)){
+        auto& buffer = *MakeNotNull(it->first.get());
+        if(buffer.m_bufferInfo.sharingMode == VK_SHARING_MODE_CONCURRENT || m_stateTracker.isPermanentBuffer(buffer)){
             rejectCommandRecording(s_OwnershipReleaseBarriersOperation, NWB_TEXT("pending buffer release has an invalid resource contract"));
             return;
         }
-        const auto tracked = m_stateTracker.m_bufferStates.find(buffer);
+        const auto tracked = m_stateTracker.m_bufferStates.find(MakeNotNull(&buffer));
         for(const BufferOwnershipRelease& release : it.value()){
             if(m_device.getQueueFamilyIndex(release.destinationQueue) == VK_QUEUE_FAMILY_IGNORED){
                 rejectCommandRecording(s_OwnershipReleaseBarriersOperation, NWB_TEXT("buffer destination queue family is unavailable"));
                 return;
             }
-            if(!m_stateTracker.hasExplicitBufferState(buffer, release.range)){
+            if(!m_stateTracker.hasExplicitBufferState(&buffer, release.range)){
                 rejectCommandRecording(s_OwnershipReleaseBarriersOperation, NWB_TEXT("buffer final byte range state is unknown"));
                 return;
             }
             for(const StateTracker::BufferRangeState& state : tracked.value()){
                 if(!state.range.overlaps(release.range))
                     continue;
-                if(state.state == ResourceStates::Unknown || !validateBufferForGpuState(buffer, state.state, s_OwnershipReleaseBarriersOperation)){
+                if(state.state == ResourceStates::Unknown || !validateBufferForGpuState(&buffer, state.state, s_OwnershipReleaseBarriersOperation)){
                     rejectCommandRecording(s_OwnershipReleaseBarriersOperation, NWB_TEXT("buffer byte range state is incompatible with its creation contract"));
                     return;
                 }
@@ -502,13 +498,12 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
 
     for(auto it = m_textureOwnershipReleaseDestinations.begin(); it != m_textureOwnershipReleaseDestinations.end(); ++it){
         const TextureSubresourceStateKey& key = it->first;
-        Texture* const texture = key.texture;
-        NWB_ASSERT(texture);
-        if(texture->m_imageInfo.sharingMode == VK_SHARING_MODE_CONCURRENT){
+        auto& texture = *MakeNotNull(key.texture);
+        if(texture.m_imageInfo.sharingMode == VK_SHARING_MODE_CONCURRENT){
             rejectCommandRecording(s_OwnershipReleaseBarriersOperation, NWB_TEXT("concurrent texture has a pending exclusive release"));
             return;
         }
-        if(m_stateTracker.isPermanentTexture(*texture)){
+        if(m_stateTracker.isPermanentTexture(texture)){
             rejectCommandRecording(s_OwnershipReleaseBarriersOperation, NWB_TEXT("permanent texture has a pending ownership release"));
             return;
         }
@@ -520,7 +515,7 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
             return;
         }
 
-        const ResourceStates::Mask state = m_stateTracker.getTextureState(texture, key.arraySlice, key.mipLevel);
+        const ResourceStates::Mask state = m_stateTracker.getTextureState(&texture, key.arraySlice, key.mipLevel);
         if(state == ResourceStates::Unknown){
             rejectCommandRecording(s_OwnershipReleaseBarriersOperation, NWB_TEXT("texture final state is unknown"));
             return;
@@ -529,20 +524,20 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
             continue;
 
         m_pendingImageBarriers.push_back(VulkanStateTrackingDetail::BuildTextureOwnershipReleaseBarrier(
-            texture->m_image,
-            texture->m_aspectMask,
+            texture.m_image,
+            texture.m_aspectMask,
             TextureSubresourceSet(key.mipLevel, 1u, key.arraySlice, 1u),
             state,
             sourceQueueFamily,
             destinationQueueFamily,
             m_context.extensions.khrRayTracingPipeline
         ));
-        retainResource(texture);
+        retainResource(&texture);
     }
 
     for(auto it = m_bufferOwnershipReleaseDestinations.begin(); it != m_bufferOwnershipReleaseDestinations.end(); ++it){
-        Buffer* const buffer = it->first;
-        const auto tracked = m_stateTracker.m_bufferStates.find(buffer);
+        auto& buffer = *MakeNotNull(it->first.get());
+        const auto tracked = m_stateTracker.m_bufferStates.find(MakeNotNull(&buffer));
         for(const BufferOwnershipRelease& release : it.value()){
             const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(release.destinationQueue);
             if(destinationQueueFamily == sourceQueueFamily)
@@ -551,10 +546,10 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
                 const BufferRange overlap = state.range.intersect(release.range);
                 if(!overlap.hasExtent())
                     continue;
-                m_pendingBufferBarriers.push_back(VulkanStateTrackingDetail::BuildBufferOwnershipReleaseBarrier(buffer->m_buffer, state.state, sourceQueueFamily, destinationQueueFamily, m_context.extensions.khrRayTracingPipeline, overlap));
+                m_pendingBufferBarriers.push_back(VulkanStateTrackingDetail::BuildBufferOwnershipReleaseBarrier(buffer.m_buffer, state.state, sourceQueueFamily, destinationQueueFamily, m_context.extensions.khrRayTracingPipeline, overlap));
             }
         }
-        retainResource(buffer);
+        retainResource(&buffer);
     }
 
     commitBarriers();

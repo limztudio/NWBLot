@@ -91,13 +91,13 @@ void AccumulateStats(ArenaMemoryStats& total, const ArenaMemoryStats& contributi
     void* const storage = std::malloc(sizeof(ArenaMemoryOwnerRecord));
     if(!storage)
         throw std::bad_alloc{};
-    auto* const record = new(storage) ArenaMemoryOwnerRecord;
-    record->ownerName = ownerName;
-    record->next = s_OwnerHead.load(MemoryOrder::relaxed);
-    record->bucketNext = s_OwnerBuckets[bucketIndex];
-    s_OwnerBuckets[bucketIndex] = record;
-    s_OwnerHead.store(record, MemoryOrder::release);
-    return *record;
+    auto& record = *new(storage) ArenaMemoryOwnerRecord;
+    record.ownerName = ownerName;
+    record.next = s_OwnerHead.load(MemoryOrder::relaxed);
+    record.bucketNext = s_OwnerBuckets[bucketIndex];
+    s_OwnerBuckets[bucketIndex] = &record;
+    s_OwnerHead.store(&record, MemoryOrder::release);
+    return record;
 }
 
 [[nodiscard]] HeapMemoryShard& ThreadHeapShard()noexcept{
@@ -112,13 +112,13 @@ void AccumulateStats(ArenaMemoryStats& total, const ArenaMemoryStats& contributi
         s_ThreadHeapShard = &s_HeapFallback;
         return s_HeapFallback;
     }
-    auto* const shard = new(storage) HeapMemoryShard;
+    auto& shard = *new(storage) HeapMemoryShard;
     const HeapMemoryShard* head = s_HeapHead.load(MemoryOrder::relaxed);
     do{
-        shard->next = head;
-    }while(!s_HeapHead.compare_exchange_weak(head, shard, MemoryOrder::release, MemoryOrder::relaxed));
-    s_ThreadHeapShard = shard;
-    return *shard;
+        shard.next = head;
+    }while(!s_HeapHead.compare_exchange_weak(head, &shard, MemoryOrder::release, MemoryOrder::relaxed));
+    s_ThreadHeapShard = &shard;
+    return shard;
 }
 
 

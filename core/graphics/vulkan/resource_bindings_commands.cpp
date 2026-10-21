@@ -96,21 +96,20 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
     };
 
     if(m_currentGraphicsState.pipeline){
-        auto* gp = m_currentGraphicsState.pipeline;
-        selectPipeline(gp->m_pipelineLayout, gp->m_pushConstantByteSize, GpuQueueCapability::Graphics);
+        auto& gp = *MakeNotNull(m_currentGraphicsState.pipeline);
+        selectPipeline(gp.m_pipelineLayout, gp.m_pushConstantByteSize, GpuQueueCapability::Graphics);
     }
     if(m_currentComputeState.pipeline){
-        auto* cp = m_currentComputeState.pipeline;
-        selectPipeline(cp->m_pipelineLayout, cp->m_pushConstantByteSize, GpuQueueCapability::Compute);
+        auto& cp = *MakeNotNull(m_currentComputeState.pipeline);
+        selectPipeline(cp.m_pipelineLayout, cp.m_pushConstantByteSize, GpuQueueCapability::Compute);
     }
     if(m_currentMeshletState.pipeline){
-        auto* mp = m_currentMeshletState.pipeline;
-        selectPipeline(mp->m_pipelineLayout, mp->m_pushConstantByteSize, GpuQueueCapability::Graphics);
+        auto& mp = *MakeNotNull(m_currentMeshletState.pipeline);
+        selectPipeline(mp.m_pipelineLayout, mp.m_pushConstantByteSize, GpuQueueCapability::Graphics);
     }
     if(m_currentRayTracingState.shaderTable){
-        auto* rtp = m_currentRayTracingState.shaderTable->getPipeline();
-        NWB_ASSERT(rtp);
-        selectPipeline(rtp->m_pipelineLayout, rtp->m_pushConstantByteSize, GpuQueueCapability::Compute);
+        auto& rtp = m_currentRayTracingState.shaderTable->getPipeline();
+        selectPipeline(rtp.m_pipelineLayout, rtp.m_pushConstantByteSize, GpuQueueCapability::Compute);
     }
 
     if(activePipelineCount != 1u || layout == VK_NULL_HANDLE){

@@ -414,8 +414,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     m_deferredCausticGeometryTask = *mDeferredCausticGeometryTaskResult;
 
     SoftwareCausticsResolveChainBuilder resolveChainBuilder(m_deferredLightingTaskGraph, m_raytracingSystem);
-    SoftwareCausticsResolveChainInputs resolveChainInputs;
-    resolveChainInputs.targets = &deferredTargets;
+    SoftwareCausticsResolveChainInputs resolveChainInputs(deferredTargets, m_deferredCausticProducerDispatched, timingTicket, causticResolveTiming);
     resolveChainInputs.geometryTask = m_deferredCausticGeometryTask;
     resolveChainInputs.baseScheduling = geometryScheduling;
     resolveChainInputs.prepare = {resolvePrepareResourceUses.data(), resolvePrepareResourceUses.size()};
@@ -427,9 +426,6 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     resolveChainInputs.upsample = {resolveUpsampleResourceUses.data(), resolveUpsampleResourceUses.size()};
     resolveChainInputs.stateSources = scratchStateSources;
     resolveChainInputs.stateSourceCount = scratchStateSourceCount;
-    resolveChainInputs.producerDispatched = &m_deferredCausticProducerDispatched;
-    resolveChainInputs.timingTicket = &timingTicket;
-    resolveChainInputs.resolveTiming = &causticResolveTiming;
     auto resolveChainResult = resolveChainBuilder.declare(resolveChainInputs, scratchArena);
     if(!resolveChainResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred software-caustics resolve chain"));

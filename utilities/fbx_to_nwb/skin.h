@@ -31,7 +31,7 @@ struct ExportContext{
     UtilityVector<ufbx_node*> joints;
     UtilityVector<JointMatrix> bindPoseMatrices;
     UtilityVector<JointMatrix> inverseBindMatrices;
-    UtilityScratchMap<ufbx_node*, u16> jointLookup;
+    UtilityScratchMap<NotNull<ufbx_node*>, u16> jointLookup;
 
 
 public:

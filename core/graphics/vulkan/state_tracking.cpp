@@ -22,14 +22,14 @@ NWB_VULKAN_BEGIN
 
 
 StateTracker::StateTracker(const VulkanContext& context)
-    : m_permanentTextureStates(0, Hasher<Texture*>(), EqualTo<Texture*>(), context.objectArena)
-    , m_permanentBufferStates(0, Hasher<Buffer*>(), EqualTo<Buffer*>(), context.objectArena)
+    : m_permanentTextureStates(0, Hasher<NotNull<Texture*>>(), EqualTo<NotNull<Texture*>>(), context.objectArena)
+    , m_permanentBufferStates(0, Hasher<NotNull<Buffer*>>(), EqualTo<NotNull<Buffer*>>(), context.objectArena)
     , m_attemptPermanentTextures(context.objectArena)
     , m_attemptPermanentBuffers(context.objectArena)
     , m_textureStates(0, TextureSubresourceStateKeyHasher(), TextureSubresourceStateKeyEqualTo(), context.objectArena)
-    , m_bufferStates(0, Hasher<Buffer*>(), EqualTo<Buffer*>(), context.objectArena)
-    , m_textureUavBarriers(0, Hasher<Texture*>(), EqualTo<Texture*>(), context.objectArena)
-    , m_bufferUavBarriers(0, Hasher<Buffer*>(), EqualTo<Buffer*>(), context.objectArena)
+    , m_bufferStates(0, Hasher<NotNull<Buffer*>>(), EqualTo<NotNull<Buffer*>>(), context.objectArena)
+    , m_textureUavBarriers(0, Hasher<NotNull<Texture*>>(), EqualTo<NotNull<Texture*>>(), context.objectArena)
+    , m_bufferUavBarriers(0, Hasher<NotNull<Buffer*>>(), EqualTo<NotNull<Buffer*>>(), context.objectArena)
     , m_context(context)
 {}
 StateTracker::~StateTracker()noexcept{}
@@ -61,12 +61,12 @@ void StateTracker::rollbackRecordingAttempt()noexcept{
         return;
 
     // Journaling precedes the throwing insertion, so a missing key is the valid unwind state for an unpublished entry.
-    for(Texture* texture : m_attemptPermanentTextures){
+    for(const auto texture : m_attemptPermanentTextures){
         const auto found = m_permanentTextureStates.find(texture);
         if(found != m_permanentTextureStates.end())
             m_permanentTextureStates.erase(found);
     }
-    for(Buffer* buffer : m_attemptPermanentBuffers){
+    for(const auto buffer : m_attemptPermanentBuffers){
         const auto found = m_permanentBufferStates.find(buffer);
         if(found != m_permanentBufferStates.end())
             m_permanentBufferStates.erase(found);
@@ -81,14 +81,14 @@ void StateTracker::setPermanentTextureState(Texture& texture, ResourceStates::Ma
     if(state == ResourceStates::Unknown)
         return;
 
-    const auto existing = m_permanentTextureStates.find(&texture);
+    const auto existing = m_permanentTextureStates.find(MakeNotNull(&texture));
     if(existing != m_permanentTextureStates.end())
         return;
 
     if(m_recordingAttemptActive)
-        m_attemptPermanentTextures.push_back(&texture);
+        m_attemptPermanentTextures.push_back(MakeNotNull(&texture));
 
-    if(!m_permanentTextureStates.emplace(&texture, PermanentTextureStateValue{ TextureHandle(&texture, TextureHandle::deleter_type(&texture.m_context.objectArena)), state }).second){
+    if(!m_permanentTextureStates.emplace(MakeNotNull(&texture), PermanentTextureStateValue{ TextureHandle(&texture, TextureHandle::deleter_type(&texture.m_context.objectArena)), state }).second){
         if(m_recordingAttemptActive)
             m_attemptPermanentTextures.pop_back();
         NWB_ASSERT(false);
@@ -99,14 +99,14 @@ void StateTracker::setPermanentBufferState(Buffer& buffer, ResourceStates::Mask 
     if(state == ResourceStates::Unknown)
         return;
 
-    const auto existing = m_permanentBufferStates.find(&buffer);
+    const auto existing = m_permanentBufferStates.find(MakeNotNull(&buffer));
     if(existing != m_permanentBufferStates.end())
         return;
 
     if(m_recordingAttemptActive)
-        m_attemptPermanentBuffers.push_back(&buffer);
+        m_attemptPermanentBuffers.push_back(MakeNotNull(&buffer));
 
-    if(!m_permanentBufferStates.emplace(&buffer, PermanentBufferStateValue{ BufferHandle(&buffer, BufferHandle::deleter_type(&buffer.m_context.objectArena)), state }).second){
+    if(!m_permanentBufferStates.emplace(MakeNotNull(&buffer), PermanentBufferStateValue{ BufferHandle(&buffer, BufferHandle::deleter_type(&buffer.m_context.objectArena)), state }).second){
         if(m_recordingAttemptActive)
             m_attemptPermanentBuffers.pop_back();
         NWB_ASSERT(false);
@@ -114,18 +114,18 @@ void StateTracker::setPermanentBufferState(Buffer& buffer, ResourceStates::Mask 
 }
 
 bool StateTracker::isPermanentTexture(Texture& texture)const noexcept{
-    return m_permanentTextureStates.find(&texture) != m_permanentTextureStates.end();
+    return m_permanentTextureStates.find(MakeNotNull(&texture)) != m_permanentTextureStates.end();
 }
 
 bool StateTracker::isPermanentBuffer(Buffer& buffer)const noexcept{
-    return m_permanentBufferStates.find(&buffer) != m_permanentBufferStates.end();
+    return m_permanentBufferStates.find(MakeNotNull(&buffer)) != m_permanentBufferStates.end();
 }
 
 ResourceStates::Mask StateTracker::getPermanentTextureState(Texture* texture)const noexcept{
     if(!texture)
         return ResourceStates::Unknown;
 
-    const auto existing = m_permanentTextureStates.find(texture);
+    const auto existing = m_permanentTextureStates.find(MakeNotNull(texture));
     return existing != m_permanentTextureStates.end() ? existing.value().state : ResourceStates::Unknown;
 }
 
@@ -133,7 +133,7 @@ ResourceStates::Mask StateTracker::getPermanentBufferState(Buffer* buffer)const 
     if(!buffer)
         return ResourceStates::Unknown;
 
-    const auto existing = m_permanentBufferStates.find(buffer);
+    const auto existing = m_permanentBufferStates.find(MakeNotNull(buffer));
     return existing != m_permanentBufferStates.end() ? existing.value().state : ResourceStates::Unknown;
 }
 
@@ -141,7 +141,7 @@ ResourceStates::Mask StateTracker::getTextureState(Texture* texture, ArraySlice 
     if(!texture)
         return ResourceStates::Unknown;
 
-    auto permIt = m_permanentTextureStates.find(texture);
+    auto permIt = m_permanentTextureStates.find(MakeNotNull(texture));
     if(permIt != m_permanentTextureStates.end())
         return permIt.value().state;
 
@@ -152,13 +152,13 @@ ResourceStates::Mask StateTracker::getTextureState(Texture* texture, ArraySlice 
 bool StateTracker::hasExplicitTextureSubresourceState(Texture* const texture, const ArraySlice arraySlice, const MipLevel mipLevel)const noexcept{
     if(!texture)
         return false;
-    if(m_permanentTextureStates.find(texture) != m_permanentTextureStates.end())
+    if(m_permanentTextureStates.find(MakeNotNull(texture)) != m_permanentTextureStates.end())
         return true;
     return m_textureStates.find(TextureSubresourceStateKey{ texture, mipLevel, arraySlice }) != m_textureStates.end();
 }
 
 void StateTracker::beginTrackingTexture(Texture& texture, TextureSubresourceSet subresources, ResourceStates::Mask state){
-    if(m_permanentTextureStates.find(&texture) != m_permanentTextureStates.end())
+    if(m_permanentTextureStates.find(MakeNotNull(&texture)) != m_permanentTextureStates.end())
         return;
 
     beginTrackingTransientTexture(texture, subresources, state);
@@ -174,73 +174,72 @@ void StateTracker::appendKeepInitialStateBarriers(TrackedCommandBuffer& commandB
         if(!desc.keepInitialState)
             continue;
 
-        auto* texture = key.texture;
+        auto& texture = *MakeNotNull(key.texture);
         if(currentState == desc.initialState){
-            commandBuffer.appendRetainedTextureStateCommit(*texture, key.mipLevel, key.arraySlice);
+            commandBuffer.appendRetainedTextureStateCommit(texture, key.mipLevel, key.arraySlice);
             continue;
         }
 
         imageBarriers.push_back(VulkanStateTrackingDetail::BuildTextureStateBarrier(
-            texture->m_image,
-            texture->m_aspectMask,
+            texture.m_image,
+            texture.m_aspectMask,
             TextureSubresourceSet(key.mipLevel, 1u, key.arraySlice, 1u),
             currentState,
             desc.initialState,
             m_context.extensions.khrRayTracingPipeline
         ));
         it.value() = desc.initialState;
-        commandBuffer.appendRetainedTextureStateCommit(*texture, key.mipLevel, key.arraySlice);
+        commandBuffer.appendRetainedTextureStateCommit(texture, key.mipLevel, key.arraySlice);
     }
 
     for(auto it = m_bufferStates.begin(); it != m_bufferStates.end(); ++it){
-        Buffer* const buffer = it->first;
-        NWB_ASSERT(buffer);
-        if(!buffer->m_creationDesc.keepInitialState)
+        auto& buffer = *MakeNotNull(it->first.get());
+        if(!buffer.m_creationDesc.keepInitialState)
             continue;
 
-        const BufferDesc& desc = buffer->m_creationDesc;
+        const BufferDesc& desc = buffer.m_creationDesc;
         for(BufferRangeState& entry : it.value()){
             if(entry.state != desc.initialState){
-                bufferBarriers.push_back(VulkanStateTrackingDetail::BuildBufferStateBarrier(buffer->m_buffer, entry.range, entry.state, desc.initialState, m_context.extensions.khrRayTracingPipeline));
+                bufferBarriers.push_back(VulkanStateTrackingDetail::BuildBufferStateBarrier(buffer.m_buffer, entry.range, entry.state, desc.initialState, m_context.extensions.khrRayTracingPipeline));
                 entry.state = desc.initialState;
             }
         }
         // The retained resource flag describes the entire allocation.
         // Restoring a partial native import must not claim that bytes whose state was never known have also reached the initial state.
-        if(buffer->isRetainedStateKnown() || hasExplicitBufferState(buffer))
-            commandBuffer.m_resourceReferences.appendBufferStateCommit(*buffer);
+        if(buffer.isRetainedStateKnown() || hasExplicitBufferState(&buffer))
+            commandBuffer.m_resourceReferences.appendBufferStateCommit(buffer);
     }
 }
 
 bool StateTracker::isUavBarrierEnabledForTexture(Texture& texture)const noexcept{
-    const auto found = m_textureUavBarriers.find(&texture);
+    const auto found = m_textureUavBarriers.find(MakeNotNull(&texture));
     return found == m_textureUavBarriers.end() || found.value().enableBarriers;
 }
 
 bool StateTracker::isUavBarrierEnabledForBuffer(Buffer& buffer)const noexcept{
-    const auto found = m_bufferUavBarriers.find(&buffer);
+    const auto found = m_bufferUavBarriers.find(MakeNotNull(&buffer));
     return found == m_bufferUavBarriers.end() || found.value().enableBarriers;
 }
 
 void StateTracker::setEnableUavBarriersForTexture(Texture& texture, bool enableBarriers){
-    auto found = m_textureUavBarriers.find(&texture);
+    auto found = m_textureUavBarriers.find(MakeNotNull(&texture));
     if(found != m_textureUavBarriers.end()){
         found.value().enableBarriers = enableBarriers;
         return;
     }
 
-    if(!m_textureUavBarriers.emplace(&texture, TextureUavBarrierPolicyValue{ TextureHandle(&texture, TextureHandle::deleter_type(&m_context.objectArena)), enableBarriers }).second)
+    if(!m_textureUavBarriers.emplace(MakeNotNull(&texture), TextureUavBarrierPolicyValue{ TextureHandle(&texture, TextureHandle::deleter_type(&m_context.objectArena)), enableBarriers }).second)
         NWB_ASSERT(false);
 }
 
 void StateTracker::setEnableUavBarriersForBuffer(Buffer& buffer, bool enableBarriers){
-    auto found = m_bufferUavBarriers.find(&buffer);
+    auto found = m_bufferUavBarriers.find(MakeNotNull(&buffer));
     if(found != m_bufferUavBarriers.end()){
         found.value().enableBarriers = enableBarriers;
         return;
     }
 
-    if(!m_bufferUavBarriers.emplace(&buffer, BufferUavBarrierPolicyValue{ BufferHandle(&buffer, BufferHandle::deleter_type(&m_context.objectArena)), enableBarriers }).second)
+    if(!m_bufferUavBarriers.emplace(MakeNotNull(&buffer), BufferUavBarrierPolicyValue{ BufferHandle(&buffer, BufferHandle::deleter_type(&m_context.objectArena)), enableBarriers }).second)
         NWB_ASSERT(false);
 }
 

@@ -33,7 +33,7 @@ namespace RayTracingSoftwareBvhDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using MeshBufferSlotLookup = HashMap<const Core::Buffer*, u32, Core::Alloc::ScratchArena, Hasher<const Core::Buffer*>, EqualTo<const Core::Buffer*>>;
+using MeshBufferSlotLookup = HashMap<NotNull<Core::Buffer*>, u32, Core::Alloc::ScratchArena, Hasher<NotNull<Core::Buffer*>>, EqualTo<NotNull<Core::Buffer*>>>;
 
 
 // Hash semantic scene inputs, not padded object representations.
@@ -104,7 +104,7 @@ inline void AppendTlasInstanceStaticCacheInput(u64& inOutHash, const Core::RayTr
         return MakeUnexpected(Failure{});
 
     Core::Buffer& buffer = *bufferHandle;
-    const Core::Buffer* const bufferKey = &buffer;
+    const NotNull<const Core::Buffer*> bufferKey(&buffer);
     auto found = cache.find(bufferKey);
     if(found != cache.end()){
         NWB_ASSERT(found.value().handle.valid());

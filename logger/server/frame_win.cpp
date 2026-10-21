@@ -317,12 +317,12 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
         case WM_MEASUREITEM:
         {
-            auto* mis = reinterpret_cast<LPMEASUREITEMSTRUCT>(lParam);
+            auto& mis = *reinterpret_cast<LPMEASUREITEMSTRUCT>(lParam);
             ScopedLock lock(s_ListMutex);
-            if(IsMessageIndexValid(mis->itemID)){
-                const auto& curStr = s_Store->messages[static_cast<usize>(mis->itemID)];
+            if(IsMessageIndexValid(mis.itemID)){
+                const auto& curStr = s_Store->messages[static_cast<usize>(mis.itemID)];
 
-                mis->itemHeight = static_cast<UINT>(s_LogFontHeight);
+                mis.itemHeight = static_cast<UINT>(s_LogFontHeight);
                 RECT rect = {};
                 if(!GetClientRect(hwnd, &rect)){
                     CaptureDiagnosticEvent(s_LayoutDiagnosticCategory, "Log server: failed to query its text measurement rectangle", __FILE__, __LINE__);
@@ -364,7 +364,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                     if(DrawText(hdc, curStr.first().c_str(), -1, &rect, DT_WORDBREAK | DT_LEFT | DT_CALCRECT) == 0)
                         CaptureDiagnosticEvent(s_PaintDiagnosticCategory, "Log server: failed to measure its log text", __FILE__, __LINE__);
                     else
-                        mis->itemHeight = static_cast<UINT>(rect.bottom - rect.top);
+                        mis.itemHeight = static_cast<UINT>(rect.bottom - rect.top);
                 }
             }
         }
@@ -377,15 +377,15 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
         case WM_DRAWITEM:
         {
-            auto* dis = reinterpret_cast<LPDRAWITEMSTRUCT>(lParam);
+            auto& dis = *reinterpret_cast<LPDRAWITEMSTRUCT>(lParam);
             ScopedLock lock(s_ListMutex);
-            if(IsMessageIndexValid(dis->itemID)){
-                const auto& curData = s_Store->messages[static_cast<usize>(dis->itemID)];
+            if(IsMessageIndexValid(dis.itemID)){
+                const auto& curData = s_Store->messages[static_cast<usize>(dis.itemID)];
 
-                HDC hdc = dis->hDC;
-                RECT rect = dis->rcItem;
+                HDC hdc = dis.hDC;
+                RECT rect = dis.rcItem;
 
-                const LogRowColors colors = ResolveLogRowColors(curData.second(), (dis->itemID & 1) != 0);
+                const LogRowColors colors = ResolveLogRowColors(curData.second(), (dis.itemID & 1) != 0);
                 const HBRUSH brush = CreateSolidBrush(colors.background);
                 if(!brush){
                     CaptureDiagnosticEvent(s_PaintDiagnosticCategory, "Log server: failed to create its row background brush", __FILE__, __LINE__);

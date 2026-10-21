@@ -41,11 +41,11 @@ class AvboitGeneratedGeometryReuse;
 
 // Occupancy upload chain owns AVBOIT occupancy gather plus geometry, material-upload, snapshot, and emulation capture.
 struct FrameGraphAvboitOccupancyUploadInputs{
-    DeferredFrameTargets* targets = nullptr;
-    const CsgFrameState* csgFrameState = nullptr;
-    const ECSRenderDetail::MeshFrameBindingSnapshot* frameBindings = nullptr;
-    const ECSRenderDetail::CsgGraphResourceSnapshot* csgResources = nullptr;
-    const ECSRenderDetail::MeshViewGpuData* meshViewState = nullptr;
+    DeferredFrameTargets& targets;
+    const CsgFrameState& csgFrameState;
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings;
+    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources;
+    const ECSRenderDetail::MeshViewGpuData& meshViewState;
     Core::GpuGraphResourceId materialInstances;
     Core::GpuGraphResourceId materialTyped;
     Core::GpuGraphResourceId csgReceiverRanges;

@@ -57,7 +57,7 @@ static void ReleaseMaterialResourceState(Core::GraphicsRuntime& graphics, Render
 }
 
 template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn>
-[[nodiscard]] static Expected<ResourceT*> FindOrCreateCachedAsset(CacheT& cache, const Core::Assets::AssetRef<AssetT>& assetRef, Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle ResourceT::* descriptorMember, LoadFn&& loadResource){
+[[nodiscard]] static Expected<NotNull<ResourceT*>> FindOrCreateCachedAsset(CacheT& cache, const Core::Assets::AssetRef<AssetT>& assetRef, Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle ResourceT::* descriptorMember, LoadFn&& loadResource){
     NWB_ASSERT(assetRef.valid());
     const Name& assetPath = assetRef.name();
     auto assetIt = cache.find(assetPath);
@@ -75,7 +75,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn>
             retireUnpublished.release();
     }
     NWB_ASSERT(assetIt.value());
-    return assetIt.value().get();
+    return MakeNotNull(assetIt.value().get());
 }
 
 [[nodiscard]] static Expected<u32> ResolveTextureAssetSlot(RendererMaterialResourceState& resources, const Core::Assets::AssetRef<Texture>& textureAsset, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager){
@@ -96,7 +96,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn>
     );
     if(!textureResourceResult)
         return MakeUnexpected(textureResourceResult.error());
-    TextureGpuResource* const textureResource = *textureResourceResult;
+    const NotNull<TextureGpuResource*> textureResource = *textureResourceResult;
     NWB_ASSERT(textureResource->valid() && textureResource->sampledImageHeapHandle.descriptorClass() == Core::GpuDescriptorClass::SampledImage);
     return textureResource->sampledImageHeapHandle.slot();
 }
@@ -113,7 +113,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn>
     );
     if(!samplerResourceResult)
         return MakeUnexpected(samplerResourceResult.error());
-    SamplerGpuResource* const samplerResource = *samplerResourceResult;
+    const NotNull<SamplerGpuResource*> samplerResource = *samplerResourceResult;
     NWB_ASSERT(samplerResource->valid() && samplerResource->samplerHeapHandle.descriptorClass() == Core::GpuDescriptorClass::Sampler);
     return samplerResource->samplerHeapHandle.slot();
 }
@@ -161,7 +161,7 @@ void RendererMaterialSystem::SplitMaterialTypedBytesByClass(const Material& mate
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<MaterialSurfaceInfo*> RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset){
+Expected<NotNull<MaterialSurfaceInfo*>> RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset){
     const Name materialPath = materialAsset.name();
     if(!materialPath){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: renderer material is empty"));
@@ -173,7 +173,7 @@ Expected<MaterialSurfaceInfo*> RendererMaterialSystem::createMaterialSurfaceInfo
         MaterialSurfaceInfo& info = foundInfo.value();
         if(!resolveMaterialResourceReferences(info))
             return MakeUnexpected(Failure{});
-        return &info;
+        return MakeNotNull(&info);
     }
 
     auto loadedAsset = m_assetManager.loadTypedSync<Material>(materialPath, s_RendererAssetOwnerName, Material::s_AssetTypeText);
@@ -238,10 +238,10 @@ Expected<MaterialSurfaceInfo*> RendererMaterialSystem::createMaterialSurfaceInfo
 
     auto result = m_materialState.m_surfaceInfos.try_emplace(materialPath, Move(createdInfo));
     auto it = result.first;
-    return &it.value();
+    return MakeNotNull(&it.value());
 }
 
-Expected<MaterialSurfaceInfo*> RendererMaterialSystem::findMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset)noexcept{
+Expected<NotNull<MaterialSurfaceInfo*>> RendererMaterialSystem::findMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset)noexcept{
     const Name materialPath = materialAsset.name();
     if(!materialPath)
         return MakeUnexpected(Failure{});
@@ -254,7 +254,7 @@ Expected<MaterialSurfaceInfo*> RendererMaterialSystem::findMaterialSurfaceInfo(c
     if(!materialInfo.resourceReferencesResolved)
         return MakeUnexpected(Failure{});
 
-    return &materialInfo;
+    return MakeNotNull(&materialInfo);
 }
 
 bool RendererMaterialSystem::resolveMaterialResourceReferences(MaterialSurfaceInfo& materialInfo){
@@ -317,7 +317,7 @@ bool RendererMaterialSystem::prepareVisibleMaterialSurfaceInfos(){
         const auto materialInfoResult = createMaterialSurfaceInfo(renderer.material);
         if(!materialInfoResult)
             continue;
-        MaterialSurfaceInfo* const materialInfo = *materialInfoResult;
+        const NotNull<MaterialSurfaceInfo*> materialInfo = *materialInfoResult;
         if(materialInfo->transparent)
             hasTransparentRenderers = true;
     }
@@ -340,7 +340,7 @@ void RendererMaterialSystem::prepareVisibleMaterialInstanceMutableCache(Core::Al
         const auto materialInfoResult = findMaterialSurfaceInfo(renderer.material);
         if(!materialInfoResult)
             continue;
-        MaterialSurfaceInfo* const materialInfo = *materialInfoResult;
+        const NotNull<MaterialSurfaceInfo*> materialInfo = *materialInfoResult;
 
         if(!prepareMaterialInstanceMutableTypedBytes(scratchArena, entity, *materialInfo, materialInstance))
             continue;
@@ -352,7 +352,7 @@ bool RendererMaterialSystem::hasTransparentRenderers(const RendererResourceLooku
         const auto materialInfoResult = lookupMode == RendererResourceLookupMode::CreateMissing ? createMaterialSurfaceInfo(material) : findMaterialSurfaceInfo(material);
         if(!materialInfoResult)
             return false;
-        MaterialSurfaceInfo* const materialInfo = *materialInfoResult;
+        const NotNull<MaterialSurfaceInfo*> materialInfo = *materialInfoResult;
         return materialInfo->transparent;
     };
 

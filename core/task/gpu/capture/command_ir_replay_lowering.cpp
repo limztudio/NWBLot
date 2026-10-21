@@ -78,36 +78,32 @@ namespace __hidden_gpu_command_ir_replay_lowering{
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateBackendOperands(const GpuCommandIrBuiltinTaskRecord& record, const GpuTaskGraphDeclarationReadView& graph, CommandList& commandList, const GpuPhysicalQueueInfo& commandQueue)noexcept{
     switch(record.opcode){
     case GpuCommandIrOpcode::CopyBuffer:{
-        Buffer* const source = graph.bufferForResource(record.source);
-        Buffer* const destination = graph.bufferForResource(record.destination);
-        NWB_ASSERT(source && destination);
-        if(source == destination)
-            return ValidateBufferBackendOperand(*source, ResourceStates::CopySource | ResourceStates::CopyDest, commandList, commandQueue);
+        auto& source = *MakeNotNull(graph.bufferForResource(record.source));
+        auto& destination = *MakeNotNull(graph.bufferForResource(record.destination));
+        if(&source == &destination)
+            return ValidateBufferBackendOperand(source, ResourceStates::CopySource | ResourceStates::CopyDest, commandList, commandQueue);
 
-        const GpuCommandIrReplayError::Enum sourceError = ValidateBufferBackendOperand(*source, ResourceStates::CopySource, commandList, commandQueue);
+        const GpuCommandIrReplayError::Enum sourceError = ValidateBufferBackendOperand(source, ResourceStates::CopySource, commandList, commandQueue);
         if(sourceError != GpuCommandIrReplayError::None)
             return sourceError;
-        return ValidateBufferBackendOperand(*destination, ResourceStates::CopyDest, commandList, commandQueue);
+        return ValidateBufferBackendOperand(destination, ResourceStates::CopyDest, commandList, commandQueue);
     }
     case GpuCommandIrOpcode::CopyTexture:{
-        Texture* const source = graph.textureForResource(record.source);
-        Texture* const destination = graph.textureForResource(record.destination);
-        NWB_ASSERT(source && destination);
-        const GpuCommandIrReplayError::Enum sourceError = ValidateTextureBackendOperand(*source, ResourceStates::CopySource, commandList, commandQueue);
+        auto& source = *MakeNotNull(graph.textureForResource(record.source));
+        auto& destination = *MakeNotNull(graph.textureForResource(record.destination));
+        const GpuCommandIrReplayError::Enum sourceError = ValidateTextureBackendOperand(source, ResourceStates::CopySource, commandList, commandQueue);
         if(sourceError != GpuCommandIrReplayError::None)
             return sourceError;
-        return ValidateTextureBackendOperand(*destination, ResourceStates::CopyDest, commandList, commandQueue);
+        return ValidateTextureBackendOperand(destination, ResourceStates::CopyDest, commandList, commandQueue);
     }
     case GpuCommandIrOpcode::ClearBuffer:{
-        Buffer* const destination = graph.bufferForResource(record.destination);
-        NWB_ASSERT(destination);
-        return ValidateBufferBackendOperand(*destination, ResourceStates::CopyDest, commandList, commandQueue);
+        auto& destination = *MakeNotNull(graph.bufferForResource(record.destination));
+        return ValidateBufferBackendOperand(destination, ResourceStates::CopyDest, commandList, commandQueue);
     }
     case GpuCommandIrOpcode::ClearTexture:
     case GpuCommandIrOpcode::ClearTextureRectUInt:{
-        Texture* const destination = graph.textureForResource(record.destination);
-        NWB_ASSERT(destination);
-        return ValidateTextureBackendOperand(*destination, ResourceStates::CopyDest, commandList, commandQueue);
+        auto& destination = *MakeNotNull(graph.textureForResource(record.destination));
+        return ValidateTextureBackendOperand(destination, ResourceStates::CopyDest, commandList, commandQueue);
     }
     case GpuCommandIrOpcode::UploadBuffer:
     case GpuCommandIrOpcode::UploadTexture:
@@ -222,8 +218,7 @@ static void LowerOperation(const GpuCommandIrBuiltinTaskRecord& record, const Gp
     const GpuCompiledPacketView packetView = compiledGraph.packet(packet);
     NWB_ASSERT(packetView.valid());
     const GpuSubmissionPacket& packetPlan = *packetView.plan;
-    const GpuPhysicalQueueInfo* const queue = compiledGraph.queueInfo(packetPlan.queue);
-    NWB_ASSERT(queue);
+    auto& queue = *MakeNotNull(compiledGraph.queueInfo(packetPlan.queue));
     if(!commandList.isRecording()){
         return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(GpuCommandIrReplayError::CommandListNotRecording, result.streamValidation);
     }
@@ -234,7 +229,7 @@ static void LowerOperation(const GpuCommandIrBuiltinTaskRecord& record, const Gp
         return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(GpuCommandIrReplayError::CommandListRenderPassActive, result.streamValidation);
     }
     const CommandListParameters commandListDescription = commandList.getResolvedDescription();
-    const GpuCommandIrReplayError::Enum commandListQueueError = GpuCommandIrDetail::ValidateReplayCommandListQueue(commandListDescription, packetPlan.queue, queue->queueClass);
+    const GpuCommandIrReplayError::Enum commandListQueueError = GpuCommandIrDetail::ValidateReplayCommandListQueue(commandListDescription, packetPlan.queue, queue.queueClass);
     if(commandListQueueError != GpuCommandIrReplayError::None){
         return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(commandListQueueError, result.streamValidation);
     }

@@ -7,6 +7,7 @@
 
 #include "binary.h"
 #include "expected.h"
+#include "not_null.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -98,8 +99,8 @@ inline constexpr u32 s_InitialState[s_StateWordCount] = { 0x6a09e667u, 0xbb67ae8
 inline void Compress(u32 (&state)[s_StateWordCount], const u8 (&block)[s_BlockByteCount])noexcept{
     u32 words[s_RoundCount];
     for(u32 index = 0u; index < s_BlockWordCount; ++index){
-        const u8* bytes = block + index * s_WordByteCount;
-        words[index] = (static_cast<u32>(bytes[0u]) << s_FirstByteShift) | (static_cast<u32>(bytes[1u]) << s_SecondByteShift) | (static_cast<u32>(bytes[2u]) << s_ThirdByteShift) | static_cast<u32>(bytes[3u]);
+        const auto bytes = MakeNotNull(block + index * s_WordByteCount);
+        words[index] = (static_cast<u32>(bytes.get()[0u]) << s_FirstByteShift) | (static_cast<u32>(bytes.get()[1u]) << s_SecondByteShift) | (static_cast<u32>(bytes.get()[2u]) << s_ThirdByteShift) | static_cast<u32>(bytes.get()[3u]);
     }
     for(u32 index = s_BlockWordCount; index < s_RoundCount; ++index){
         const u32 a = words[index - s_ScheduleLagSigma0];

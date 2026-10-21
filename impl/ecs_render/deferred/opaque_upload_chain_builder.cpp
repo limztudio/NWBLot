@@ -36,28 +36,16 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(Core::GpuTaskGraph& graph, Re
 
 [[nodiscard]] Expected<OpaqueUploadChainResult> OpaqueUploadChainBuilder::declare(const OpaqueUploadChainInputs& inputs){
     OpaqueUploadChainResult result{};
-    if(
-        !inputs.targets
-        || !inputs.frameBindings
-        || !inputs.csgResources
-        || !inputs.drawItems
-        || !inputs.instanceData
-        || !inputs.csgFrameData
-#if defined(NWB_DEBUG)
-        || !inputs.materialTypedRanges
-#endif
-        || !inputs.materialTypedBytes
-        || !inputs.dependencyTask.valid()
-    )
+    if(!inputs.dependencyTask.valid())
         return MakeUnexpected(Failure{});
 
-    DeferredFrameTargets& deferredTargets = *inputs.targets;
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings = *inputs.frameBindings;
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources = *inputs.csgResources;
-    const MaterialPassDrawItemPartitions& opaqueDrawItems = *inputs.drawItems;
-    InstanceGpuDataVector& instanceData = *inputs.instanceData;
-    const CsgFrameGpuData& csgFrameData = *inputs.csgFrameData;
-    const MaterialTypedByteDataVector& materialTypedBytes = *inputs.materialTypedBytes;
+    DeferredFrameTargets& deferredTargets = inputs.targets;
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings = inputs.frameBindings;
+    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources = inputs.csgResources;
+    const MaterialPassDrawItemPartitions& opaqueDrawItems = inputs.drawItems;
+    InstanceGpuDataVector& instanceData = inputs.instanceData;
+    const CsgFrameGpuData& csgFrameData = inputs.csgFrameData;
+    const MaterialTypedByteDataVector& materialTypedBytes = inputs.materialTypedBytes;
 
     Core::GpuTaskSchedulingHint immutableUploadScheduling;
     immutableUploadScheduling.cost = Core::GpuTaskCostHint::Tiny;
@@ -75,8 +63,8 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(Core::GpuTaskGraph& graph, Re
 #if defined(NWB_DEBUG)
         if(instanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData))
             return MakeUnexpected(Failure{});
-        NWB_ASSERT(instanceData.size() == inputs.materialTypedRanges->size());
-        ECSRenderDetail::AssertMaterialTypedUploadRanges(*inputs.materialTypedRanges, materialTypedBytes);
+        NWB_ASSERT(instanceData.size() == inputs.materialTypedRanges.size());
+        ECSRenderDetail::AssertMaterialTypedUploadRanges(inputs.materialTypedRanges, materialTypedBytes);
 #endif
 
         const auto instanceBlobResult = m_graph.copyUploadData(instanceData.data(), instanceData.size() * sizeof(InstanceGpuData), alignof(InstanceGpuData));

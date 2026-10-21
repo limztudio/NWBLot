@@ -16,7 +16,7 @@ NWB_IMPL_BEGIN
 
 [[nodiscard]] bool FrameExecuteLifecycle::PrepareShadowPrepareTask(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
     FrameExecuteLifecycle::ShadowPrepareStateLifecycleContext* const context = static_cast<ShadowPrepareStateLifecycleContext*>(rawContext);
-    if(!context || !context->renderer || !context->stateCandidate || !finalState)
+    if(!context || !finalState)
         return false;
     if(context->bufferCount != 0u && !context->buffers)
         return false;
@@ -34,7 +34,7 @@ NWB_IMPL_BEGIN
 [[nodiscard]] bool FrameExecuteLifecycle::AcceptShadowPrepareTask(void* const rawContext, const Core::QueueSubmissionToken& token){
     static_cast<void>(token);
     FrameExecuteLifecycle::ShadowPrepareStateLifecycleContext* const context = static_cast<ShadowPrepareStateLifecycleContext*>(rawContext);
-    if(!context || !context->renderer || !context->stateCandidate || !context->statePrepared)
+    if(!context || !context->statePrepared)
         return false;
 
     RendererFramePipeline& renderer = *context->renderer;
@@ -61,7 +61,7 @@ NWB_IMPL_BEGIN
 
 [[nodiscard]] bool FrameExecuteLifecycle::PrepareShadowVisibilityTask(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
     FrameExecuteLifecycle::ShadowVisibilityStateLifecycleContext* const context = static_cast<ShadowVisibilityStateLifecycleContext*>(rawContext);
-    if(!context || !context->renderer || !context->returnStateCandidate || !context->scratchStateCandidate || !context->returnTextures || !context->scratchTextures || !context->scratchBuffers || !finalState)
+    if(!context || !context->returnTextures || !context->scratchTextures || !context->scratchBuffers || !finalState)
         return false;
 
     // An inactive route retains its live allocation and accepted native state until that route runs again.
@@ -86,7 +86,7 @@ NWB_IMPL_BEGIN
 [[nodiscard]] bool FrameExecuteLifecycle::AcceptShadowVisibilityTask(void* const rawContext, const Core::QueueSubmissionToken& token){
     static_cast<void>(token);
     FrameExecuteLifecycle::ShadowVisibilityStateLifecycleContext* const context = static_cast<ShadowVisibilityStateLifecycleContext*>(rawContext);
-    if(!context || !context->renderer || !context->targets || !context->returnStateCandidate || !context->scratchStateCandidate || !context->statePrepared)
+    if(!context || !context->statePrepared)
         return false;
 
     const bool returnStateReady = context->renderer->m_shadowVisibilityReturnState.commit(*context->returnStateCandidate);
@@ -104,7 +104,7 @@ NWB_IMPL_BEGIN
 
 [[nodiscard]] bool FrameExecuteLifecycle::PrepareSoftwareCausticsTask(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
     FrameExecuteLifecycle::SoftwareCausticsStateLifecycleContext* const context = static_cast<SoftwareCausticsStateLifecycleContext*>(rawContext);
-    if(!context || !context->renderer || !context->returnStateCandidate || !context->scratchStateCandidate || !context->irradianceTextures || !context->scratchTextures || !finalState)
+    if(!context || !context->irradianceTextures || !context->scratchTextures || !finalState)
         return false;
 
     const bool returnStateReady = context->renderer->m_causticIrradianceReturnState.buildFilteredResourceSubset(*context->returnStateCandidate, *finalState, context->irradianceTextures, context->irradianceTextureCount, nullptr, 0u, context->scratchArena);
@@ -120,7 +120,7 @@ NWB_IMPL_BEGIN
 [[nodiscard]] bool FrameExecuteLifecycle::AcceptSoftwareCausticsTask(void* const rawContext, const Core::QueueSubmissionToken& token)noexcept{
     static_cast<void>(token);
     FrameExecuteLifecycle::SoftwareCausticsStateLifecycleContext* const context = static_cast<SoftwareCausticsStateLifecycleContext*>(rawContext);
-    if(!context || !context->renderer || !context->returnStateCandidate || !context->scratchStateCandidate || !context->statePrepared)
+    if(!context || !context->statePrepared)
         return false;
 
     const bool returnStateReady = context->renderer->m_causticIrradianceReturnState.commit(*context->returnStateCandidate);
@@ -137,10 +137,6 @@ NWB_IMPL_BEGIN
     FrameExecuteLifecycle::SurfelGiStateLifecycleContext* const context = static_cast<SurfelGiStateLifecycleContext*>(rawContext);
     if(
         !context
-        || !context->renderer
-        || !context->returnStateCandidate
-        || !context->counterStateCandidate
-        || !context->computeStateCandidate
         || !context->returnTextures
         || !context->counterBuffers
         || !context->computeTextures
@@ -172,7 +168,7 @@ NWB_IMPL_BEGIN
 
 [[nodiscard]] bool FrameExecuteLifecycle::AcceptSurfelGiTask(void* const rawContext, const Core::QueueSubmissionToken& token)noexcept{
     FrameExecuteLifecycle::SurfelGiStateLifecycleContext* const context = static_cast<SurfelGiStateLifecycleContext*>(rawContext);
-    if(!context || !context->renderer || !context->returnStateCandidate || !context->counterStateCandidate || !context->computeStateCandidate || !context->statePrepared)
+    if(!context || !context->statePrepared)
         return false;
 
     RendererFramePipeline& renderer = *context->renderer;
@@ -191,7 +187,7 @@ NWB_IMPL_BEGIN
 
 [[nodiscard]] bool FrameExecuteLifecycle::PrepareHardwareCausticsTask(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
     FrameExecuteLifecycle::HardwareCausticsStateLifecycleContext* const context = static_cast<HardwareCausticsStateLifecycleContext*>(rawContext);
-    if(!context || !context->renderer || !context->accumulatorStateCandidate || !context->accumulatorTextures || !finalState)
+    if(!context || !context->accumulatorTextures || !finalState)
         return false;
 
     const bool accumulatorStateReady =
@@ -208,7 +204,7 @@ NWB_IMPL_BEGIN
 [[nodiscard]] bool FrameExecuteLifecycle::AcceptHardwareCausticsTask(void* const rawContext, const Core::QueueSubmissionToken& token)noexcept{
     static_cast<void>(token);
     FrameExecuteLifecycle::HardwareCausticsStateLifecycleContext* const context = static_cast<HardwareCausticsStateLifecycleContext*>(rawContext);
-    if(!context || !context->renderer || !context->accumulatorStateCandidate || !context->statePrepared)
+    if(!context || !context->statePrepared)
         return false;
 
     const bool accumulatorStateReady = context->renderer->m_hardwareCausticAccumulatorPersistentState.commit(*context->accumulatorStateCandidate);
@@ -224,10 +220,6 @@ NWB_IMPL_BEGIN
     FrameExecuteLifecycle::DeferredLightingStateLifecycleContext* const context = static_cast<DeferredLightingStateLifecycleContext*>(rawContext);
     if(
         !context
-        || !context->renderer
-        || !context->shadowReturnStateCandidate
-        || !context->causticReturnStateCandidate
-        || !context->surfelReturnStateCandidate
         || !context->shadowReturnTextures
         || !context->causticReturnTextures
         || !context->surfelReturnTextures
@@ -262,7 +254,7 @@ NWB_IMPL_BEGIN
 [[nodiscard]] bool FrameExecuteLifecycle::AcceptDeferredLightingTask(void* const rawContext, const Core::QueueSubmissionToken& token){
     static_cast<void>(token);
     FrameExecuteLifecycle::DeferredLightingStateLifecycleContext* const context = static_cast<DeferredLightingStateLifecycleContext*>(rawContext);
-    if(!context || !context->renderer || !context->targets || !context->shadowReturnStateCandidate || !context->causticReturnStateCandidate || !context->surfelReturnStateCandidate || !context->statePrepared)
+    if(!context || !context->statePrepared)
         return false;
 
     RendererFramePipeline& renderer = *context->renderer;

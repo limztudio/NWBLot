@@ -169,7 +169,7 @@ private:
 
 [[nodiscard]] bool HasCsgFrameCandidates(Core::ECS::World& world)noexcept;
 struct CsgResolvedReceiver{
-    const CsgReceiverComponent* receiver = nullptr;
+    NotNull<const CsgReceiverComponent*> receiver;
     CsgReceiverKind::Enum receiverKind = CsgReceiverKind::Static;
 };
 

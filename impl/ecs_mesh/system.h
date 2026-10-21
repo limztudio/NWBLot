@@ -64,7 +64,7 @@ public:
 
 private:
     Core::ECS::World& m_world;
-    Vector<IRuntimeMeshProvider*, Core::Alloc::GlobalArena> m_runtimeMeshProviders;
+    Vector<NotNull<IRuntimeMeshProvider*>, Core::Alloc::GlobalArena> m_runtimeMeshProviders;
 };
 
 

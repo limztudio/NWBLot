@@ -96,7 +96,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     Optional<Core::GpuTimingMeasure>& opaqueCsgIntervalSampleComputeEmulationTiming,
     Core::GpuTimingSubmissionTicket& shadowPrepareTimingTicket,
     Core::GpuTimingSubmissionTicket** const graphicsPrefixTimingTickets,
-    const bool* const asyncPrefixTimingSpansOnePacket,
+    const bool& asyncPrefixTimingSpansOnePacket,
     Optional<Core::GpuTimingMeasure>& asyncFinalTiming,
     Core::GpuTimingSubmissionTicket& avboitPreTimingTicket,
     GraphClearTimingRecordState& avboitClearTimingState,
@@ -320,7 +320,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     const bool softwareTraceResourcesPrepared = !softwareTraceGeometryResources.empty();
     FrameGraphSoftwareBvhBuildStateImporter softwareBvhBuildStateImporter(m_deferredLightingTaskGraph, m_meshSystem);
     auto softwareBvhBuildStateResult = softwareBvhBuildStateImporter.declare(
-        FrameGraphSoftwareBvhBuildStateInputs{ .rayTracingShadowResources = &rayTracingShadowResources, .softwareTraceResourcesPrepared = softwareTraceResourcesPrepared, },
+        FrameGraphSoftwareBvhBuildStateInputs{ .rayTracingShadowResources = rayTracingShadowResources, .softwareTraceResourcesPrepared = softwareTraceResourcesPrepared, },
         traceGeometryScratchArena
     );
     if(!softwareBvhBuildStateResult){
@@ -331,12 +331,12 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     DeferredGraphResourceImportBuilder deferredGraphResourceImportBuilder(m_deferredLightingTaskGraph);
     auto deferredGraphResources = deferredGraphResourceImportBuilder.declare(
         DeferredGraphResourceImportInputs{
-            .targets = &deferredTargets,
-            .lightingResources = &deferredLightingResources,
-            .frameBindings = &frameBindings,
-            .meshViewSnapshot = &meshViewBufferSnapshot,
-            .csgResources = &csgResources,
-            .rayTracingResources = &rayTracingGraphResources,
+            .targets = deferredTargets,
+            .lightingResources = deferredLightingResources,
+            .frameBindings = frameBindings,
+            .meshViewSnapshot = meshViewBufferSnapshot,
+            .csgResources = csgResources,
+            .rayTracingResources = rayTracingGraphResources,
             .history = history,
             .captureHistory = captureHistory,
             .clearAvboitTargets = clearAvboitTargets,
@@ -715,11 +715,11 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     auto transparentCsgIntervalResult = transparentCsgIntervalBuilder.declare(
         traceGeometryScratchArena,
         TransparentCsgIntervalProducerInputs{
-            .targets = &deferredTargets,
-            .csgFrameState = &csgFrameState,
-            .frameBindings = &frameBindings,
-            .csgResources = &csgResources,
-            .meshViewState = &meshViewState,
+            .targets = deferredTargets,
+            .csgFrameState = csgFrameState,
+            .frameBindings = frameBindings,
+            .csgResources = csgResources,
+            .meshViewState = meshViewState,
             .materialInstances = materialInstances,
             .materialTyped = materialTyped,
             .csgReceiverRanges = csgReceiverRanges,
@@ -746,7 +746,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     auto transparentCsgTaskResult = transparentCsgTasks.declare(
         traceGeometryScratchArena,
         FrameGraphTransparentCsgTaskInputs{
-            .targets = &deferredTargets,
+            .targets = deferredTargets,
             .albedo = albedo,
             .normal = normal,
             .worldPosition = worldPosition,
@@ -822,11 +822,11 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     auto occupancyUploadChainResult = occupancyUploadChain.declare(
         traceGeometryScratchArena,
         FrameGraphAvboitOccupancyUploadInputs{
-            .targets = &deferredTargets,
-            .csgFrameState = &csgFrameState,
-            .frameBindings = &frameBindings,
-            .csgResources = &csgResources,
-            .meshViewState = &meshViewState,
+            .targets = deferredTargets,
+            .csgFrameState = csgFrameState,
+            .frameBindings = frameBindings,
+            .csgResources = csgResources,
+            .meshViewState = meshViewState,
             .materialInstances = materialInstances,
             .materialTyped = materialTyped,
             .csgReceiverRanges = csgReceiverRanges,
@@ -884,8 +884,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     Core::GpuTaskId avboitClearTask = avboitClearChainResult->clearTask;
 
 
-    AvboitOccupancyRecordInputs avboitOccupancyRecordInputs{ m_arena };
-    avboitOccupancyRecordInputs.targets = &deferredTargets;
+    AvboitOccupancyRecordInputs avboitOccupancyRecordInputs{ m_arena, deferredTargets, avboitPreTimingTicket, avboitOccupancyComputeEmulationTiming };
     avboitOccupancyRecordInputs.albedo = albedo;
     avboitOccupancyRecordInputs.normal = normal;
     avboitOccupancyRecordInputs.worldPosition = worldPosition;
@@ -923,8 +922,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     avboitOccupancyRecordInputs.sharedComputeEmulationPlan = occupancySharedComputeEmulationPlan;
     avboitOccupancyRecordInputs.sharedComputeEmulationInstanceCount = occupancySharedComputeEmulationInstanceCount;
     avboitOccupancyRecordInputs.sharedComputeEmulationMaterialTypedByteCount = occupancySharedComputeEmulationMaterialTypedByteCount;
-    avboitOccupancyRecordInputs.preTimingTicket = &avboitPreTimingTicket;
-    avboitOccupancyRecordInputs.occupancyComputeEmulationTiming = &avboitOccupancyComputeEmulationTiming;
     AvboitOccupancyRecordBuilder avboitOccupancyRecordBuilder(m_deferredLightingTaskGraph, m_graphics, m_materialSystem, m_avboitSystem);
     auto avboitOccupancyRecordResult = avboitOccupancyRecordBuilder.declare(traceGeometryScratchArena, frameBindings, csgResources, objectGeometry, avboitOccupancyRecordInputs, avboitOccupancyPayload, avboitOccupancyComputeEmulationPayload);
     if(!avboitOccupancyRecordResult){
@@ -943,14 +940,14 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     AvboitComputeEffectChainBuilder avboitComputeEffectChainBuilder(m_deferredLightingTaskGraph, m_avboitSystem);
     auto avboitDepthWarpStageResult = avboitComputeEffectChainBuilder.declareDepthWarp(
         AvboitDepthWarpStageInputs{
-            .targets = &deferredTargets.avboit,
+            .targets = deferredTargets.avboit,
             .coverage = avboitCoverage,
             .depthWarp = avboitDepthWarp,
             .control = avboitControl,
             .currentBindlessSlots = currentBindlessSlots,
             .occupancyTask = m_avboitSystem.taskGraphStage().m_occupancyTask,
-            .depthWarpTimingTicket = &avboitDepthWarpTimingTicket,
-            .timingFeedback = &m_deferredTaskTimingFeedback,
+            .depthWarpTimingTicket = avboitDepthWarpTimingTicket,
+            .timingFeedback = m_deferredTaskTimingFeedback,
             .hasTransparentRenderers = hasTransparentRenderers,
         }
     );
@@ -974,11 +971,11 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         auto extinctionUploadChainResult = extinctionUploadChain.declare(
             traceGeometryScratchArena,
             FrameGraphAvboitExtinctionUploadInputs{
-                .targets = &deferredTargets,
-                .csgFrameState = &csgFrameState,
-                .frameBindings = &frameBindings,
-                .csgResources = &csgResources,
-                .meshViewState = &meshViewState,
+                .targets = deferredTargets,
+                .csgFrameState = csgFrameState,
+                .frameBindings = frameBindings,
+                .csgResources = csgResources,
+                .meshViewState = meshViewState,
                 .materialInstances = materialInstances,
                 .materialTyped = materialTyped,
                 .csgReceiverRanges = csgReceiverRanges,
@@ -1010,8 +1007,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         const ECSRenderDetail::RegularSharedComputeEmulationGraphPlan extinctionSharedComputeEmulationPlan = extinctionUploadChainResult->sharedComputeEmulationPlan;
         const usize extinctionSharedComputeEmulationInstanceCount = extinctionUploadChainResult->sharedComputeEmulationInstanceCount;
         const usize extinctionSharedComputeEmulationMaterialTypedByteCount = extinctionUploadChainResult->sharedComputeEmulationMaterialTypedByteCount;
-        AvboitExtinctionRecordInputs avboitExtinctionRecordInputs{ m_arena };
-        avboitExtinctionRecordInputs.targets = &deferredTargets;
+        AvboitExtinctionRecordInputs avboitExtinctionRecordInputs{ m_arena, deferredTargets, avboitExtinctionTimingTicket, avboitExtinctionComputeEmulationTiming };
         avboitExtinctionRecordInputs.albedo = albedo;
         avboitExtinctionRecordInputs.normal = normal;
         avboitExtinctionRecordInputs.worldPosition = worldPosition;
@@ -1053,8 +1049,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         avboitExtinctionRecordInputs.sharedComputeEmulationPlan = extinctionSharedComputeEmulationPlan;
         avboitExtinctionRecordInputs.sharedComputeEmulationInstanceCount = extinctionSharedComputeEmulationInstanceCount;
         avboitExtinctionRecordInputs.sharedComputeEmulationMaterialTypedByteCount = extinctionSharedComputeEmulationMaterialTypedByteCount;
-        avboitExtinctionRecordInputs.extinctionTimingTicket = &avboitExtinctionTimingTicket;
-        avboitExtinctionRecordInputs.extinctionComputeEmulationTiming = &avboitExtinctionComputeEmulationTiming;
         AvboitExtinctionRecordBuilder avboitExtinctionRecordBuilder(m_deferredLightingTaskGraph, m_graphics, m_materialSystem, m_avboitSystem);
         auto avboitExtinctionRecordResult = avboitExtinctionRecordBuilder.declare(traceGeometryScratchArena, frameBindings, csgResources, objectGeometry, avboitExtinctionRecordInputs, avboitExtinctionPayload, avboitExtinctionComputeEmulationPayload);
         if(!avboitExtinctionRecordResult){
@@ -1071,15 +1065,15 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
 
         auto avboitIntegrationStageResult = avboitComputeEffectChainBuilder.declareIntegration(
             AvboitIntegrationStageInputs{
-                .targets = &deferredTargets.avboit,
+                .targets = deferredTargets.avboit,
                 .extinction = avboitExtinction,
                 .control = avboitControl,
                 .extinctionOverflow = avboitExtinctionOverflow,
                 .transmittance = avboitTransmittance,
                 .currentBindlessSlots = currentBindlessSlots,
                 .extinctionTask = m_avboitSystem.taskGraphStage().m_extinctionTask,
-                .integrationTimingTicket = &avboitIntegrationTimingTicket,
-                .timingFeedback = &m_deferredTaskTimingFeedback,
+                .integrationTimingTicket = avboitIntegrationTimingTicket,
+                .timingFeedback = m_deferredTaskTimingFeedback,
             }
         );
         if(!avboitIntegrationStageResult){
@@ -1101,11 +1095,11 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         auto accumulationUploadChainResult = accumulationUploadChain.declare(
             traceGeometryScratchArena,
             FrameGraphAvboitAccumulationUploadInputs{
-                .targets = &deferredTargets,
-                .csgFrameState = &csgFrameState,
-                .frameBindings = &frameBindings,
-                .csgResources = &csgResources,
-                .meshViewState = &meshViewState,
+                .targets = deferredTargets,
+                .csgFrameState = csgFrameState,
+                .frameBindings = frameBindings,
+                .csgResources = csgResources,
+                .meshViewState = meshViewState,
                 .materialInstances = materialInstances,
                 .materialTyped = materialTyped,
                 .csgReceiverRanges = csgReceiverRanges,
@@ -1137,8 +1131,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         const usize accumulationSharedComputeEmulationInstanceCount = accumulationUploadChainResult->sharedComputeEmulationInstanceCount;
         const usize accumulationSharedComputeEmulationMaterialTypedByteCount = accumulationUploadChainResult->sharedComputeEmulationMaterialTypedByteCount;
 
-        AvboitAccumulationRecordInputs avboitAccumulationRecordInputs{ m_arena };
-        avboitAccumulationRecordInputs.targets = &deferredTargets;
+        AvboitAccumulationRecordInputs avboitAccumulationRecordInputs{ m_arena, deferredTargets, avboitAccumulationTimingTicket, avboitAccumulationComputeEmulationTiming };
         avboitAccumulationRecordInputs.albedo = albedo;
         avboitAccumulationRecordInputs.normal = normal;
         avboitAccumulationRecordInputs.worldPosition = worldPosition;
@@ -1183,8 +1176,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         avboitAccumulationRecordInputs.sharedComputeEmulationPlan = accumulationSharedComputeEmulationPlan;
         avboitAccumulationRecordInputs.sharedComputeEmulationInstanceCount = accumulationSharedComputeEmulationInstanceCount;
         avboitAccumulationRecordInputs.sharedComputeEmulationMaterialTypedByteCount = accumulationSharedComputeEmulationMaterialTypedByteCount;
-        avboitAccumulationRecordInputs.accumulationTimingTicket = &avboitAccumulationTimingTicket;
-        avboitAccumulationRecordInputs.accumulationComputeEmulationTiming = &avboitAccumulationComputeEmulationTiming;
         AvboitAccumulationRecordBuilder avboitAccumulationRecordBuilder(m_deferredLightingTaskGraph, m_graphics, m_materialSystem, m_avboitSystem);
         auto avboitAccumulationRecordResult = avboitAccumulationRecordBuilder.declare(traceGeometryScratchArena, frameBindings, csgResources, objectGeometry, avboitAccumulationRecordInputs, avboitAccumulationPayload, avboitAccumulationComputeEmulationPayload);
         if(!avboitAccumulationRecordResult){
@@ -1205,7 +1196,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     DeferredLightingStageBuilder deferredLightingStageBuilder(m_deferredLightingTaskGraph, m_deferredSystem);
     auto deferredLightingStageResult = deferredLightingStageBuilder.declare(
         DeferredLightingStageInputs{
-            .targets = &deferredTargets,
+            .targets = deferredTargets,
             .albedo = albedo,
             .normal = normal,
             .worldPosition = worldPosition,
@@ -1242,13 +1233,13 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     FrameGraphReflectionResolve reflectionResolve(m_deferredLightingTaskGraph, m_graphics, m_raytracingSystem, m_reflectionSystem);
     auto reflectionResolveResult = reflectionResolve.declare(
         FrameGraphReflectionResolveInputs{
-            .targets = &deferredTargets,
-            .meshViewSnapshot = &meshViewBufferSnapshot,
-            .sceneResources = &sceneResources,
-            .reflectionSettings = &m_reflectionSettings,
-            .contentStamp = &reflectionContentStamp,
-            .csgFrameState = &csgFrameState,
-            .refractionResources = &refractionResources,
+            .targets = deferredTargets,
+            .meshViewSnapshot = meshViewBufferSnapshot,
+            .sceneResources = sceneResources,
+            .reflectionSettings = m_reflectionSettings,
+            .contentStamp = reflectionContentStamp,
+            .csgFrameState = csgFrameState,
+            .refractionResources = refractionResources,
             .reflectionFrameIndex = m_reflectionFrameIndex,
             .reflectionSceneAvailable = m_preparedReflectionSceneAvailable,
             .refractionActive = refractionActive,
@@ -1298,7 +1289,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     DeferredGraphSuffixBuilder suffixBuilder(m_deferredLightingTaskGraph, m_deferredSystem, m_graphics, m_preparedTaskGraphPresentationContributor, m_preparedTaskGraphOutputLayerContributor);
     auto suffixResult = suffixBuilder.declare(
         DeferredGraphSuffixInputs{
-            .targets = &deferredTargets,
+            .targets = deferredTargets,
             .opaqueColor = opaqueColor,
             .avboitAccumColor = avboitAccumColor,
             .avboitAccumExtinction = avboitAccumExtinction,
@@ -1313,8 +1304,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             .refractionResolveTask = refractionResolveTask,
             .surfelGiTask = m_deferredSurfelGiTask,
             .hardwareCausticsTask = declaresHardwareCaustics ? m_deferredHardwareCausticsTask : Core::GpuTaskId{},
-            .presentationFrame = &presentationFrame,
-            .presentationFramebufferDesc = &presentationFramebufferDesc,
+            .presentationFrame = presentationFrame,
+            .presentationFramebufferDesc = presentationFramebufferDesc,
             .useLaggedLightingHistory = useLaggedLightingHistory,
         },
         deferredTargets,

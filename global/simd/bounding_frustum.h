@@ -205,13 +205,13 @@ inline void NWB_SIMD_CALL BoundingDoubleFrustum::TransformFrustumValue(
 
 
 inline void NWB_SIMD_CALL BoundingFrustum::CornersValue(
-    SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVectorSingle* outCorners
+    SIMDVectorSingle frustumOrigin, SIMDVectorSingle frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVectorSingle (&outCorners)[BoundingBox::s_CornerCount]
 )noexcept{
     CollisionDetail::FrustumCorners(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, outCorners);
 }
 
 inline void NWB_SIMD_CALL BoundingDoubleFrustum::CornersValue(
-    SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble* outCorners
+    SIMDVectorDouble frustumOrigin, SIMDVectorDouble frustumOrientation, f64 rightSlopeValue, f64 leftSlopeValue, f64 topSlopeValue, f64 bottomSlopeValue, f64 nearPlaneValue, f64 farPlaneValue, SIMDVectorDouble (&outCorners)[BoundingDoubleBox::s_DoubleCornerCount]
 )noexcept{
     CollisionDoubleDetail::FrustumCorners(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, outCorners);
 }
@@ -273,7 +273,7 @@ inline void NWB_SIMD_CALL BoundingDoubleFrustum::CornersValue(
     CollisionDetail::FrustumCorners(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, corners);
     SIMDVectorSingle outside{};
     SIMDVectorSingle inside{};
-    CollisionDetail::FastIntersectPointsPlane(corners, s_CornerCount, plane, outside, inside);
+    CollisionDetail::FastIntersectPointsPlane(NotNull<const SIMDVectorSingle*>(corners), s_CornerCount, plane, outside, inside);
     if(CollisionDetail::Vector4AllTrue(inside))
         return PlaneIntersectionType::Front;
     if(CollisionDetail::Vector4AllTrue(outside))
@@ -288,7 +288,7 @@ inline void NWB_SIMD_CALL BoundingDoubleFrustum::CornersValue(
     CollisionDoubleDetail::FrustumCorners(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, corners);
     SIMDVectorDouble outside{};
     SIMDVectorDouble inside{};
-    CollisionDoubleDetail::FastIntersectPointsPlane(corners, s_DoubleCornerCount, plane, outside, inside);
+    CollisionDoubleDetail::FastIntersectPointsPlane(NotNull<const SIMDVectorDouble*>(corners), s_DoubleCornerCount, plane, outside, inside);
     if(CollisionDoubleDetail::VectorDouble4AllTrue(inside))
         return PlaneIntersectionType::Front;
     if(CollisionDoubleDetail::VectorDouble4AllTrue(outside))
@@ -462,7 +462,7 @@ inline void NWB_SIMD_CALL BoundingDoubleFrustum::CornersValue(
     SIMDVectorSingle thisCorners[BoundingFrustum::s_CornerCount];
     CollisionDetail::FrustumPlanes(otherFrustumOrigin, otherFrustumOrientation, otherRightSlope, otherLeftSlope, otherTopSlope, otherBottomSlope, otherNearPlane, otherFarPlane, otherPlanes);
     CollisionDetail::FrustumCorners(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, thisCorners);
-    return CollisionDetail::FrustumPlanesIntersectPoints(otherPlanes, thisCorners, BoundingFrustum::s_CornerCount) ? ContainmentType::Intersects : ContainmentType::Disjoint;
+    return CollisionDetail::FrustumPlanesIntersectPoints(otherPlanes, NotNull<const SIMDVectorSingle*>(thisCorners), BoundingFrustum::s_CornerCount) ? ContainmentType::Intersects : ContainmentType::Disjoint;
 }
 
 [[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingDoubleFrustum::containsFrustumValues(
@@ -481,7 +481,7 @@ inline void NWB_SIMD_CALL BoundingDoubleFrustum::CornersValue(
     SIMDVectorDouble thisCorners[BoundingDoubleFrustum::s_DoubleCornerCount];
     CollisionDoubleDetail::FrustumPlanes(otherFrustumOrigin, otherFrustumOrientation, otherRightSlope, otherLeftSlope, otherTopSlope, otherBottomSlope, otherNearPlane, otherFarPlane, otherPlanes);
     CollisionDoubleDetail::FrustumCorners(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, thisCorners);
-    return CollisionDoubleDetail::FrustumPlanesIntersectPoints(otherPlanes, thisCorners, BoundingDoubleFrustum::s_DoubleCornerCount) ? ContainmentType::Intersects : ContainmentType::Disjoint;
+    return CollisionDoubleDetail::FrustumPlanesIntersectPoints(otherPlanes, NotNull<const SIMDVectorDouble*>(thisCorners), BoundingDoubleFrustum::s_DoubleCornerCount) ? ContainmentType::Intersects : ContainmentType::Disjoint;
 }
 
 
@@ -556,7 +556,7 @@ inline void NWB_SIMD_CALL BoundingDoubleFrustum::CornersValue(
     CollisionDetail::FrustumCorners(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, corners);
     CollisionDetail::FrustumCorners(otherFrustumOrigin, otherFrustumOrientation, otherRightSlope, otherLeftSlope, otherTopSlope, otherBottomSlope, otherNearPlane, otherFarPlane, otherCorners);
 
-    return CollisionDetail::FrustumPlanesIntersectPoints(planes, otherCorners, s_CornerCount) && CollisionDetail::FrustumPlanesIntersectPoints(otherPlanes, corners, s_CornerCount);
+    return CollisionDetail::FrustumPlanesIntersectPoints(planes, NotNull<const SIMDVectorSingle*>(otherCorners), s_CornerCount) && CollisionDetail::FrustumPlanesIntersectPoints(otherPlanes, NotNull<const SIMDVectorSingle*>(corners), s_CornerCount);
 }
 
 [[nodiscard]] inline bool NWB_SIMD_CALL BoundingDoubleFrustum::intersectsFrustumValues(
@@ -573,7 +573,7 @@ inline void NWB_SIMD_CALL BoundingDoubleFrustum::CornersValue(
     CollisionDoubleDetail::FrustumCorners(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, corners);
     CollisionDoubleDetail::FrustumCorners(otherFrustumOrigin, otherFrustumOrientation, otherRightSlope, otherLeftSlope, otherTopSlope, otherBottomSlope, otherNearPlane, otherFarPlane, otherCorners);
 
-    return CollisionDoubleDetail::FrustumPlanesIntersectPoints(planes, otherCorners, s_DoubleCornerCount) && CollisionDoubleDetail::FrustumPlanesIntersectPoints(otherPlanes, corners, s_DoubleCornerCount);
+    return CollisionDoubleDetail::FrustumPlanesIntersectPoints(planes, NotNull<const SIMDVectorDouble*>(otherCorners), s_DoubleCornerCount) && CollisionDoubleDetail::FrustumPlanesIntersectPoints(otherPlanes, NotNull<const SIMDVectorDouble*>(corners), s_DoubleCornerCount);
 }
 
 
@@ -640,8 +640,7 @@ inline void NWB_SIMD_CALL BoundingDoubleFrustum::transform(BoundingDoubleFrustum
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void BoundingFrustum::getCorners(Float3U* corners)const noexcept{
-    NWB_ASSERT(corners != nullptr);
+inline void BoundingFrustum::getCorners(Float3U (&corners)[s_CornerCount])const noexcept{
     SIMDVectorSingle cornerVectors[s_CornerCount];
     CornersValue(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, cornerVectors);
     for(u32 i = 0u; i < s_CornerCount; ++i)
@@ -649,8 +648,7 @@ inline void BoundingFrustum::getCorners(Float3U* corners)const noexcept{
 }
 
 template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
-inline void BoundingDoubleFrustum::getCorners(PointT* corners)const noexcept{
-    NWB_ASSERT(corners != nullptr);
+inline void BoundingDoubleFrustum::getCorners(PointT (&corners)[s_DoubleCornerCount])const noexcept{
     SIMDVectorDouble cornerVectors[s_DoubleCornerCount];
     CornersValue(LoadDouble(origin), LoadDouble(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, cornerVectors);
     for(u64 i = 0u; i < s_DoubleCornerCount; ++i)

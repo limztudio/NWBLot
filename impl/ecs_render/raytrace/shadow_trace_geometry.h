@@ -46,13 +46,13 @@ struct PreparedShadowTraceGeometryBuffer{
 using PreparedShadowTraceGeometryBufferVector = Vector<PreparedShadowTraceGeometryBuffer, Core::Alloc::GlobalArena>;
 
 struct ShadowTraceGeometrySelection{
-    const Vector<Core::Buffer*, Core::Alloc::GlobalArena>& hardwarePositions;
-    const Vector<Core::Buffer*, Core::Alloc::GlobalArena>& hardwareIndices;
-    const Vector<Core::Buffer*, Core::Alloc::GlobalArena>& hardwareAttributes;
-    const Vector<Core::Buffer*, Core::Alloc::GlobalArena>& softwareNodes;
-    const Vector<Core::Buffer*, Core::Alloc::GlobalArena>& softwarePositions;
-    const Vector<Core::Buffer*, Core::Alloc::GlobalArena>& softwareIndices;
-    const Vector<Core::Buffer*, Core::Alloc::GlobalArena>& softwareAttributes;
+    const Vector<NotNull<Core::Buffer*>, Core::Alloc::GlobalArena>& hardwarePositions;
+    const Vector<NotNull<Core::Buffer*>, Core::Alloc::GlobalArena>& hardwareIndices;
+    const Vector<NotNull<Core::Buffer*>, Core::Alloc::GlobalArena>& hardwareAttributes;
+    const Vector<NotNull<Core::Buffer*>, Core::Alloc::GlobalArena>& softwareNodes;
+    const Vector<NotNull<Core::Buffer*>, Core::Alloc::GlobalArena>& softwarePositions;
+    const Vector<NotNull<Core::Buffer*>, Core::Alloc::GlobalArena>& softwareIndices;
+    const Vector<NotNull<Core::Buffer*>, Core::Alloc::GlobalArena>& softwareAttributes;
     bool includeHardware = false;
     bool includeSoftware = false;
 };

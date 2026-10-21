@@ -422,8 +422,8 @@ private:
     Path m_pipelineCacheDirectory;
     Filesystem::FilesystemFactory m_filesystemFactory;
     AStringView m_pipelineCacheVolumeName;
-    GraphicsVector<NativeQueueState*> m_nativeQueueStates;
-    GraphicsVector<Queue*> m_physicalQueues;
+    GraphicsVector<NotNull<NativeQueueState*>> m_nativeQueueStates;
+    GraphicsVector<NotNull<Queue*>> m_physicalQueues;
     GraphicsVector<GpuPhysicalQueueInfo> m_physicalQueueInfos;
     Array<Queue*, static_cast<u32>(CommandQueue::kCount)> m_primaryQueues = {};
     Array<bool, static_cast<u32>(CommandQueue::kCount)> m_explicitPrimaryQueues = {};

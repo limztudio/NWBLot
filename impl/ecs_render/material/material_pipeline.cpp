@@ -122,7 +122,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<MaterialPipelineResources*> RendererMaterialSystem::createRendererPipeline(const MaterialSurfaceInfo& materialInfo, const MaterialPipelineKey& pipelineKey, Core::Framebuffer& framebuffer){
+Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRendererPipeline(const MaterialSurfaceInfo& materialInfo, const MaterialPipelineKey& pipelineKey, Core::Framebuffer& framebuffer){
     const Name& materialKey = materialInfo.materialName;
     const MaterialPipelinePass::Enum pass = pipelineKey.pass;
     NWB_ASSERT(materialKey);
@@ -132,17 +132,17 @@ Expected<MaterialPipelineResources*> RendererMaterialSystem::createRendererPipel
     switch(resources.renderPath){
     case RenderPath::MeshShader:
         if(resources.meshletPipeline){
-            return &resources;
+            return MakeNotNull(&resources);
         }
         break;
     case RenderPath::VertexIndexed:
         if(resources.indexedPipeline && resources.objectGeometryDecodePipeline){
-            return &resources;
+            return MakeNotNull(&resources);
         }
         break;
     case RenderPath::ComputeEmulation:
         if(resources.computePipeline && resources.emulationPipeline){
-            return &resources;
+            return MakeNotNull(&resources);
         }
         break;
     default:
@@ -393,7 +393,7 @@ Expected<MaterialPipelineResources*> RendererMaterialSystem::createRendererPipel
         }
 
         logMaterialRenderPathDecision(materialKey, resources.renderPath, meshSupported);
-        return &resources;
+        return MakeNotNull(&resources);
     }
 
     const bool indexedAvailable = (pipelineKey.csgMode == MaterialPipelineCsgMode::None || sharedObjectGeometry)
@@ -409,10 +409,10 @@ Expected<MaterialPipelineResources*> RendererMaterialSystem::createRendererPipel
     }
 
     logMaterialRenderPathDecision(materialKey, resources.renderPath, meshSupported);
-    return &resources;
+    return MakeNotNull(&resources);
 }
 
-Expected<MaterialPipelineResources*> RendererMaterialSystem::findRendererPipeline(const MaterialPipelineKey& pipelineKey)noexcept{
+Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::findRendererPipeline(const MaterialPipelineKey& pipelineKey)noexcept{
     const auto foundPipeline = m_materialState.m_pipelines.find(pipelineKey);
     if(foundPipeline == m_materialState.m_pipelines.end())
         return MakeUnexpected(Failure{});
@@ -435,7 +435,7 @@ Expected<MaterialPipelineResources*> RendererMaterialSystem::findRendererPipelin
         return MakeUnexpected(Failure{});
     }
 
-    return &resources;
+    return MakeNotNull(&resources);
 }
 
 void RendererMaterialSystem::invalidateRendererPipelines()noexcept{

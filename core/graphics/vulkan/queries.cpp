@@ -349,7 +349,7 @@ Expected<TimerQueryRecordingEndpoints> CommandList::inspectExactTimerQueryRecord
         return endpoints;
 
     for(const TrackedCommandBuffer::TimerQueryRecordingClaim& claim : m_currentCmdBuf->m_timerQueryRecordingClaims){
-        if(claim.query != token.query || claim.queryIncarnation != token.queryIncarnation || claim.generation != token.generation || claim.recordingID != m_currentCmdBuf->m_recordingID || claim.queue != token.physicalQueue)
+        if(claim.query.get() != token.query || claim.queryIncarnation != token.queryIncarnation || claim.generation != token.generation || claim.recordingID != m_currentCmdBuf->m_recordingID || claim.queue != token.physicalQueue)
             continue;
 
         endpoints.recordsBegin = claim.recordsBegin;

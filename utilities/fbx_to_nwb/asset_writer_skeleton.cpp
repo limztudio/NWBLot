@@ -157,7 +157,7 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const UtilityVector<ufbx_no
         return MakeUnexpected(Failure{});
     }
 
-    UtilityScratchMap<const ufbx_node*, usize> sourceJointLookup(scratchArena);
+    UtilityScratchMap<NotNull<const ufbx_node*>, usize> sourceJointLookup(scratchArena);
     sourceJointLookup.reserve(joints.size());
     UtilityScratchVector<ScratchString> sortNames(scratchArena);
     sortNames.reserve(joints.size());
@@ -167,7 +167,7 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const UtilityVector<ufbx_no
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: skeleton joint {} is null"), jointIndex);
             return MakeUnexpected(Failure{});
         }
-        const auto inserted = sourceJointLookup.emplace(joint, jointIndex);
+        const auto inserted = sourceJointLookup.emplace(MakeNotNull<const ufbx_node*>(joint), jointIndex);
         if(!inserted.second){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: skeleton contains duplicate joint node at index {}"), jointIndex);
             return MakeUnexpected(Failure{});
@@ -182,7 +182,7 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const UtilityVector<ufbx_no
         if(!parent)
             continue;
 
-        const auto foundParent = sourceJointLookup.find(parent);
+        const auto foundParent = sourceJointLookup.find(MakeNotNull(parent));
         if(foundParent != sourceJointLookup.end())
             parentIndices[jointIndex] = static_cast<u32>(foundParent.value());
     }

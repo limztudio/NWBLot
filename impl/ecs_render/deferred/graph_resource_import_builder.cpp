@@ -31,15 +31,13 @@ DeferredGraphResourceImportBuilder::DeferredGraphResourceImportBuilder(Core::Gpu
 
 [[nodiscard]] Expected<DeferredGraphResourceImportResult> DeferredGraphResourceImportBuilder::declare(const DeferredGraphResourceImportInputs& inputs)const{
     DeferredGraphResourceImportResult result{};
-    if(!inputs.targets || !inputs.lightingResources || !inputs.frameBindings || !inputs.meshViewSnapshot || !inputs.csgResources || !inputs.rayTracingResources)
-        return MakeUnexpected(Failure{});
 
-    DeferredFrameTargets& deferredTargets = *inputs.targets;
-    const DeferredLightingGraphResources& deferredLightingResources = *inputs.lightingResources;
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings = *inputs.frameBindings;
-    const ECSRenderDetail::MeshViewBufferSnapshot& meshViewBufferSnapshot = *inputs.meshViewSnapshot;
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources = *inputs.csgResources;
-    const RayTracingDeferredGraphResourceSnapshot& rayTracingGraphResources = *inputs.rayTracingResources;
+    DeferredFrameTargets& deferredTargets = inputs.targets;
+    const DeferredLightingGraphResources& deferredLightingResources = inputs.lightingResources;
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings = inputs.frameBindings;
+    const ECSRenderDetail::MeshViewBufferSnapshot& meshViewBufferSnapshot = inputs.meshViewSnapshot;
+    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources = inputs.csgResources;
+    const RayTracingDeferredGraphResourceSnapshot& rayTracingGraphResources = inputs.rayTracingResources;
     const DeferredLaggedLightingHistoryResources* const history = inputs.history;
     const DeferredLaggedLightingHistoryResources* const captureHistory = inputs.captureHistory;
     const bool clearAvboitTargets = inputs.clearAvboitTargets;

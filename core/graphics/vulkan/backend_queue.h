@@ -40,8 +40,8 @@ private:
 
 private:
     struct DescriptorHeapUseCommitTicket{
-        GpuDescriptorHeap* heap = nullptr;
-        TrackedCommandBuffer* commandBuffer = nullptr;
+        NotNull<GpuDescriptorHeap*> heap;
+        NotNull<TrackedCommandBuffer*> commandBuffer;
         usize heapUseIndex = Limit<usize>::s_Max;
     };
 
@@ -144,7 +144,7 @@ private:
     // Explicit graph workers use one Vulkan pool shard per physical queue and worker identity.
     [[nodiscard]] Expected<TrackedCommandBufferPtr, VkResult> createCommandBuffer(VkCommandPool commandPool, Futex* sharedCommandPoolMutex, u64 recordingWorkerDomain, u32 recordingWorkerIndex);
     [[nodiscard]] WorkerCommandArena* findWorkerCommandArena(u64 recordingWorkerDomain, u32 recordingWorkerIndex)const noexcept;
-    [[nodiscard]] Expected<WorkerCommandArena*, VkResult> getOrCreateWorkerCommandArena(u64 recordingWorkerDomain, u32 recordingWorkerIndex);
+    [[nodiscard]] Expected<NotNull<WorkerCommandArena*>, VkResult> getOrCreateWorkerCommandArena(u64 recordingWorkerDomain, u32 recordingWorkerIndex);
     [[nodiscard]] Expected<TrackedCommandBufferPtr, VkResult> getOrCreateDirectCommandBuffer();
     [[nodiscard]] Expected<TrackedCommandBufferPtr, VkResult> getOrCreateWorkerCommandBuffer(u64 recordingWorkerDomain, u32 recordingWorkerIndex);
     void destroyWorkerCommandArenas()noexcept;
@@ -176,7 +176,7 @@ private:
     Vector<SubmissionWait, Alloc::GlobalArena> m_acceptedTimelineWaits;
     // Queue::submit holds m_mutex throughout, so this persistent high-water workspace can be reused without allocation or deallocation after vkQueueSubmit2 accepts the submission.
     Vector<DescriptorHeapUseCommitTicket, Alloc::GlobalArena> m_submitDescriptorHeapUseCommitTickets;
-    Vector<TrackedCommandBuffer*, Alloc::GlobalArena> m_submitValidatedTimerQueryCommandBuffers;
+    Vector<NotNull<TrackedCommandBuffer*>, Alloc::GlobalArena> m_submitValidatedTimerQueryCommandBuffers;
     Vector<VkSemaphoreSubmitInfo, Alloc::GlobalArena> m_submitWaitInfos;
     Vector<VkSemaphoreSubmitInfo, Alloc::GlobalArena> m_submitSignalInfos;
     Vector<VkCommandBufferSubmitInfo, Alloc::GlobalArena> m_submitCommandBufferInfos;
@@ -189,7 +189,7 @@ private:
     u64 m_lastFinishedID = 0;
     CommandBufferList m_commandBuffersInFlight;
     CommandBufferList m_commandBuffersPool;
-    Vector<WorkerCommandArena*, Alloc::GlobalArena> m_workerCommandArenas;
+    Vector<NotNull<WorkerCommandArena*>, Alloc::GlobalArena> m_workerCommandArenas;
     // Published worker nodes are append-only while the queue is usable.
     // Device teardown joins recording clients before destroyWorkerCommandArenas() clears the head and reclaims the stable nodes.
     Atomic<WorkerCommandArena*> m_workerCommandArenaHead = nullptr;

@@ -95,7 +95,7 @@ Expected<MaterialInstanceOverrideField> RendererMaterialSystem::FindMaterialInst
             if(field.fieldName != parameter.fieldName)
                 continue;
 
-            return MaterialInstanceOverrideField{ &field, blockByteBegin, mutableBlock };
+            return MaterialInstanceOverrideField{ field, blockByteBegin, mutableBlock };
         }
         break;
     }
@@ -129,7 +129,7 @@ bool RendererMaterialSystem::ApplyMaterialInstanceOverrides(const Core::ECS::Ent
         if(!resolvedField)
             return false;
 
-        const MaterialTypedLayoutField& field = *resolvedField->field;
+        const MaterialTypedLayoutField& field = resolvedField->field;
         if(!resolvedField->mutableBlock){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override '{}' for entity {} targets material-constant storage"), StringConvert(parameter.parameterName.resolvedText()), entity.id);
             return false;
@@ -152,7 +152,7 @@ bool RendererMaterialSystem::ApplyMaterialInstanceOverrides(const Core::ECS::Ent
     return true;
 }
 
-Expected<const MaterialTypedByteVector*> RendererMaterialSystem::prepareMaterialInstanceMutableTypedBytes(
+Expected<NotNull<const MaterialTypedByteVector*>> RendererMaterialSystem::prepareMaterialInstanceMutableTypedBytes(
     Core::Alloc::ScratchArena& scratchArena,
     const Core::ECS::EntityID entity,
     const MaterialSurfaceInfo& materialInfo,
@@ -161,13 +161,13 @@ Expected<const MaterialTypedByteVector*> RendererMaterialSystem::prepareMaterial
     pruneMaterialInstanceMutableCache();
 
     if(!materialInstance || materialInstance->overrides.empty()){
-        return &materialInfo.mutableDefaultTypedBytes;
+        return MakeNotNull(&materialInfo.mutableDefaultTypedBytes);
     }
 
     auto it = m_materialState.m_instanceMutableCache.try_emplace(entity, m_arena).first;
     MaterialInstanceMutableCacheEntry& cacheEntry = it.value();
     if(__hidden_material_instance::MaterialInstanceMutableCacheEntryMatches(cacheEntry, materialInfo, *materialInstance)){
-        return &cacheEntry.mutableTypedBytes;
+        return NotNull<const MaterialTypedByteVector*>(&cacheEntry.mutableTypedBytes);
     }
 
     MaterialTypedByteDataVector mutableTypedBytes{scratchArena};
@@ -184,12 +184,12 @@ Expected<const MaterialTypedByteVector*> RendererMaterialSystem::prepareMaterial
     cacheEntry.typedLayoutHash = materialInfo.typedLayoutHash;
     cacheEntry.revision = materialInstance->revision;
 
-    return &cacheEntry.mutableTypedBytes;
+    return NotNull<const MaterialTypedByteVector*>(&cacheEntry.mutableTypedBytes);
 }
 
-Expected<const MaterialTypedByteVector*> RendererMaterialSystem::findPreparedMaterialInstanceMutableTypedBytes(const Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent* materialInstance)const noexcept{
+Expected<NotNull<const MaterialTypedByteVector*>> RendererMaterialSystem::findPreparedMaterialInstanceMutableTypedBytes(const Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent* materialInstance)const noexcept{
     if(!materialInstance || materialInstance->overrides.empty()){
-        return &materialInfo.mutableDefaultTypedBytes;
+        return MakeNotNull(&materialInfo.mutableDefaultTypedBytes);
     }
 
     const auto found = m_materialState.m_instanceMutableCache.find(entity);
@@ -200,7 +200,7 @@ Expected<const MaterialTypedByteVector*> RendererMaterialSystem::findPreparedMat
     if(!__hidden_material_instance::MaterialInstanceMutableCacheEntryMatches(cacheEntry, materialInfo, *materialInstance))
         return MakeUnexpected(Failure{});
 
-    return &cacheEntry.mutableTypedBytes;
+    return NotNull<const MaterialTypedByteVector*>(&cacheEntry.mutableTypedBytes);
 }
 
 Expected<ShadowOccluderMaterialContext> RendererMaterialSystem::appendShadowOccluderMaterialContext(

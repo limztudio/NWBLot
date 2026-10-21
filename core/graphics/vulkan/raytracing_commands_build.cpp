@@ -135,13 +135,13 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
     if(!m_context.extensions.khrAccelerationStructure || !m_context.accelerationStructureFeatureEnabled)
         return;
 
-    auto* as = accelStructResource;
-    if(!as || as->m_isTopLevelAtCreation){
+    auto& as = *MakeNotNull(accelStructResource);
+    if(as.m_isTopLevelAtCreation){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure is not bottom-level"));
         return;
     }
-    Buffer* const backingBuffer = as->getBackingBuffer();
-    if(!m_device.isAccelStructReadyForGpuUse(as) || !backingBuffer || !isBufferAdmittedToCommandQueue(*backingBuffer)){
+    Buffer* const backingBuffer = as.getBackingBuffer();
+    if(!m_device.isAccelStructReadyForGpuUse(&as) || !backingBuffer || !isBufferAdmittedToCommandQueue(*backingBuffer)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure storage is not ready"));
         return;
     }
@@ -155,7 +155,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to update BLAS: PerformUpdate requires AllowUpdate"));
         return;
     }
-    if(performUpdate && !(as->m_desc.buildFlags & RayTracingAccelStructBuildFlags::AllowUpdate)){
+    if(performUpdate && !(as.m_desc.buildFlags & RayTracingAccelStructBuildFlags::AllowUpdate)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to update BLAS: acceleration structure creation did not allow updates"));
         return;
     }
@@ -384,7 +384,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
     }
 
     const auto hasPriorBuildResult = validateAccelStructBuildSignature(
-        *as,
+        as,
         VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
         vkBuildFlags,
         geometrySignatures.data(),
@@ -418,7 +418,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         const auto transformInput = suballocateBuildInput(static_cast<u64>(transformBufferSize), s_TransformDeviceAddressAlignment, NWB_TEXT("allocate BLAS transform input"));
         if(!transformInput)
             return;
-        auto* mappedTransforms = static_cast<u8*>(transformInput->cpuAddress);
+        const auto mappedTransforms = MakeNotNull(static_cast<u8*>(transformInput->cpuAddress));
 
         usize transformIndex = 0;
         for(usize i = 0u; i < numGeometries; ++i){
@@ -426,12 +426,12 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
                 continue;
 
             const usize transformOffset = transformIndex * sizeof(VkTransformMatrixKHR);
-            NWB_MEMCPY(mappedTransforms + transformOffset, sizeof(VkTransformMatrixKHR), &pGeometries[i].transform, sizeof(VkTransformMatrixKHR));
+            NWB_MEMCPY(mappedTransforms.get() + transformOffset, sizeof(VkTransformMatrixKHR), &pGeometries[i].transform, sizeof(VkTransformMatrixKHR));
             blasScratch.transformOffsets[i] = transformOffset;
             ++transformIndex;
         }
 
-        transformBaseAddress = VulkanDetail::GetBufferDeviceAddress(transformInput->buffer, transformInput->offset);
+        transformBaseAddress = VulkanDetail::GetBufferDeviceAddress(transformInput->buffer.get(), transformInput->offset);
     }
 
     auto buildGeometry = [&](usize i)noexcept{
@@ -497,15 +497,15 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
     buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
     buildInfo.flags = vkBuildFlags;
     buildInfo.mode = performUpdate ? VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR : VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-    buildInfo.srcAccelerationStructure = performUpdate ? as->m_accelStruct : VK_NULL_HANDLE;
-    buildInfo.dstAccelerationStructure = as->m_accelStruct;
+    buildInfo.srcAccelerationStructure = performUpdate ? as.m_accelStruct : VK_NULL_HANDLE;
+    buildInfo.dstAccelerationStructure = as.m_accelStruct;
     buildInfo.geometryCount = static_cast<u32>(blasScratch.geometries.size());
     buildInfo.pGeometries = blasScratch.geometries.data();
 
     auto sizeInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
     m_context.deviceDispatch.vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, blasScratch.primitiveCounts.data(), &sizeInfo);
 
-    auto* asBuffer = as->m_buffer.get();
+    auto* asBuffer = as.m_buffer.get();
     if(!asBuffer || asBuffer->getCreationDescription().byteSize < sizeInfo.accelerationStructureSize){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure storage is too small"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure storage is too small"));
@@ -543,7 +543,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         return;
 
     const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfos = blasScratch.rangeInfos.data();
-    if(!m_currentCmdBuf->appendPendingAccelStructBuildCommit(*as, VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR, vkBuildFlags, geometrySignatures.data(), geometrySignatures.size())){
+    if(!m_currentCmdBuf->appendPendingAccelStructBuildCommit(as, VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR, vkBuildFlags, geometrySignatures.data(), geometrySignatures.size())){
         rejectCommandRecording(s_BuildBottomLevelAccelStructOperation, __hidden_raytracing_commands_build::s_RetainBuildSignatureFailedReason);
         return;
     }
@@ -609,13 +609,13 @@ Expected<VkDeviceAddress> CommandList::suballocateBuildScratchAddress(const u64 
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: scratch-buffer suballocation failed"), operationName);
         return MakeUnexpected(Failure{});
     }
-    if(!isBufferReadyForCommandQueue(allocation->buffer, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)){
+    if(!isBufferReadyForCommandQueue(allocation->buffer.get(), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)){
         invalidateCommandRecording();
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: scratch buffer is not ready for device-address access"), operationName);
         return MakeUnexpected(Failure{});
     }
 
-    const VkDeviceAddress scratchBaseAddress = VulkanDetail::GetBufferDeviceAddress(allocation->buffer, allocation->offset);
+    const VkDeviceAddress scratchBaseAddress = VulkanDetail::GetBufferDeviceAddress(allocation->buffer.get(), allocation->offset);
     const auto alignedScratchAddress = AlignUpChecked(scratchBaseAddress, scratchAlignment);
     if(scratchBaseAddress == 0u || !alignedScratchAddress){
         invalidateCommandRecording();
@@ -655,13 +655,13 @@ Expected<BufferSuballocation> CommandList::suballocateBuildInput(const u64 byteC
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: build-input suballocation failed"), operationName);
         return MakeUnexpected(Failure{});
     }
-    if(!allocation->cpuAddress || !isBufferReadyForCommandQueue(allocation->buffer, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)){
+    if(!allocation->cpuAddress || !isBufferReadyForCommandQueue(allocation->buffer.get(), VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)){
         invalidateCommandRecording();
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: build-input buffer is not mapped or not ready for device-address access"), operationName);
         return MakeUnexpected(Failure{});
     }
 
-    const VkDeviceAddress inputBaseAddress = VulkanDetail::GetBufferDeviceAddress(allocation->buffer, allocation->offset);
+    const VkDeviceAddress inputBaseAddress = VulkanDetail::GetBufferDeviceAddress(allocation->buffer.get(), allocation->offset);
     const auto alignedInputAddress = AlignUpChecked(inputBaseAddress, deviceAddressAlignment);
     if(inputBaseAddress == 0u || !alignedInputAddress){
         invalidateCommandRecording();

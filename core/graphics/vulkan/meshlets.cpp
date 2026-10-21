@@ -177,15 +177,15 @@ void CommandList::setMeshletState(const MeshletState& state){
     m_currentRayTracingState = {};
     m_currentMeshletState = state;
 
-    auto* pipeline = state.pipeline;
-    if(pipeline){
-        m_context.deviceDispatch.vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipeline);
-        retainResource(pipeline);
+    if(state.pipeline){
+        auto& pipeline = *MakeNotNull(state.pipeline);
+        m_context.deviceDispatch.vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.m_pipeline);
+        retainResource(&pipeline);
 
         const f32 blendConstants[] = { state.blendConstantColor.r, state.blendConstantColor.g, state.blendConstantColor.b, state.blendConstantColor.a, };
         m_context.deviceDispatch.vkCmdSetBlendConstants(m_currentCmdBuf->m_cmdBuf, blendConstants);
 
-        const DepthStencilState& depthStencilState = pipeline->m_desc.renderState.depthStencilState;
+        const DepthStencilState& depthStencilState = pipeline.m_desc.renderState.depthStencilState;
         const u8 stencilReference = depthStencilState.dynamicStencilRef ? state.dynamicStencilRefValue : depthStencilState.stencilRefValue;
         m_context.deviceDispatch.vkCmdSetStencilReference(m_currentCmdBuf->m_cmdBuf, VK_STENCIL_FACE_FRONT_AND_BACK, stencilReference);
     }

@@ -101,7 +101,7 @@ void ShadowPrepareGeometryResources::addRequest(const Core::BufferHandle& buffer
         if(!m_requests && m_inlineRequestCount == s_InlineCount)
             promoteRequests();
         if(m_requests){
-            request = &m_requests->try_emplace(buffer.get()).first.value();
+            request = &m_requests->try_emplace(MakeNotNull(buffer.get())).first.value();
             request->source = &buffer;
         }
         else{
@@ -115,8 +115,10 @@ void ShadowPrepareGeometryResources::addRequest(const Core::BufferHandle& buffer
 }
 
 ShadowPrepareGeometryResources::BufferRequest* ShadowPrepareGeometryResources::findRequest(Core::Buffer* const buffer)noexcept{
+    if(!buffer)
+        return nullptr;
     if(m_requests){
-        const auto found = m_requests->find(buffer);
+        const auto found = m_requests->find(MakeNotNull(buffer));
         return found == m_requests->end() ? nullptr : &found.value();
     }
     for(usize index = 0u; index < m_inlineRequestCount; ++index){
@@ -129,7 +131,7 @@ ShadowPrepareGeometryResources::BufferRequest* ShadowPrepareGeometryResources::f
 void ShadowPrepareGeometryResources::promoteRequests(){
     RequestIndex requests(s_PromotedIndexCapacity, m_scratchArena);
     for(const InlineRequest& entry : m_inlineRequests){
-        if(!requests.emplace(entry.buffer, entry.request).second)
+        if(!requests.emplace(MakeNotNull(entry.buffer), entry.request).second)
             TerminateInvariant();
     }
     static_assert(IsNothrowMoveConstructible_V<RequestIndex>);
@@ -160,7 +162,7 @@ bool ShadowPrepareGeometryResources::resolveRequests(const Core::GpuTaskGraph& g
         ResourceIndex resources(m_requests->bucket_count(), m_scratchArena);
         for(auto request = m_requests->begin(); request != m_requests->end(); ++request){
             if(request.value().resource.valid())
-                resources.emplace(request.value().resource.index, &request.value());
+                resources.emplace(request.value().resource.index, MakeNotNull(&request.value()));
         }
         static_assert(IsNothrowMoveConstructible_V<ResourceIndex>);
         m_resources.emplace(Move(resources));
@@ -178,7 +180,7 @@ ShadowPrepareGeometryResources::BufferRequest* ShadowPrepareGeometryResources::f
         return nullptr;
     if(m_resources){
         const auto found = m_resources->find(resource.index);
-        return found == m_resources->end() ? nullptr : found.value();
+        return found == m_resources->end() ? nullptr : found.value().get();
     }
     for(usize index = 0u; index < m_inlineRequestCount; ++index){
         BufferRequest& request = m_inlineRequests[index].request;

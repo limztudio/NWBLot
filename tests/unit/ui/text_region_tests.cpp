@@ -332,7 +332,7 @@ protected:
         reference.begin(display, generation, 1u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
         const Rect controls[]{ first->rectangle, second->rectangle };
         const Rect measured[]{ *firstMeasured, *secondMeasured };
-        const TextLayout* layouts[]{ &*firstLayout, &*secondLayout };
+        const NotNull<const TextLayout*> layouts[]{ MakeNotNull(&*firstLayout), MakeNotNull(&*secondLayout) };
         for(u32 index = 0u; index < 2u; ++index){
             const Rect& bounds = controls[index];
             const Rect& visual = measured[index];

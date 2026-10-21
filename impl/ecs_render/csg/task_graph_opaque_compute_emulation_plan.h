@@ -113,7 +113,7 @@ public:
         outputLayouts.reserve(receiverSurfaceDrawItems.computeDrawItems.size());
         regularOutputBuffers.reserve(regularDrawItems.size());
         regularOutputLayouts.reserve(regularDrawItems.size());
-        MaterialPassEmulationOutputIndex<Core::Buffer*> outputs(scratchArena);
+        MaterialPassEmulationOutputIndex<NotNull<Core::Buffer*>> outputs(scratchArena);
         for(const MaterialPassDrawItem& regularDrawItem : regularDrawItems){
             const MaterialPassMeshResourceSnapshot& regularMesh = regularDrawItem.meshResources;
             if(!regularMesh.emulationVertexBuffer || !regularMesh.emulationVertexHeapHandle.valid()){
@@ -122,7 +122,7 @@ public:
             }
             regularOutputBuffers.push_back(regularMesh.emulationVertexBuffer);
             regularOutputLayouts.push_back({ regularMesh.emulationIndexByteOffset, regularDrawItem.pipelineResources.indexedGeometryOutput });
-            outputs.include(regularMesh.emulationVertexBuffer.get());
+            outputs.include(MakeNotNull(regularMesh.emulationVertexBuffer.get()));
         }
         for(const MaterialPassDrawItem& drawItem : receiverSurfaceDrawItems.computeDrawItems){
             if(drawItem.pipelineKey.csgMode == MaterialPipelineCsgMode::None){
@@ -135,7 +135,7 @@ public:
                 return false;
             }
             // Earlier ownership and receiver outputs both exclude this receiver.
-            if(!outputs.insert(mesh.emulationVertexBuffer.get())){
+            if(!outputs.insert(MakeNotNull(mesh.emulationVertexBuffer.get()))){
                 reset();
                 return false;
             }
@@ -155,7 +155,7 @@ public:
     [[nodiscard]] bool matches(Core::Alloc::ScratchArena& scratchArena)const{
         if(!captured || outputBuffers.size() != drawItems.size() || outputLayouts.size() != drawItems.size() || regularOutputBuffers.size() != regularDrawItems.size() || regularOutputLayouts.size() != regularDrawItems.size())
             return false;
-        MaterialPassEmulationOutputIndex<Core::Buffer*> receiverOutputs(scratchArena);
+        MaterialPassEmulationOutputIndex<NotNull<Core::Buffer*>> receiverOutputs(scratchArena);
         for(usize drawIndex = 0u; drawIndex < drawItems.size(); ++drawIndex){
             const MaterialPassMeshResourceSnapshot& mesh = drawItems[drawIndex].meshResources;
             if(
@@ -165,7 +165,7 @@ public:
                 || !outputLayouts[drawIndex].matches(mesh.emulationIndexByteOffset, drawItems[drawIndex].pipelineResources.indexedGeometryOutput)
             )
                 return false;
-            receiverOutputs.include(mesh.emulationVertexBuffer.get());
+            receiverOutputs.include(MakeNotNull(mesh.emulationVertexBuffer.get()));
         }
         for(usize drawIndex = 0u; drawIndex < regularDrawItems.size(); ++drawIndex){
             const MaterialPassMeshResourceSnapshot& mesh = regularDrawItems[drawIndex].meshResources;
@@ -176,7 +176,7 @@ public:
                 || !regularOutputLayouts[drawIndex].matches(mesh.emulationIndexByteOffset, regularDrawItems[drawIndex].pipelineResources.indexedGeometryOutput)
             )
                 return false;
-            if(receiverOutputs.contains(mesh.emulationVertexBuffer.get()))
+            if(receiverOutputs.contains(MakeNotNull(mesh.emulationVertexBuffer.get())))
                 return false;
         }
         return true;

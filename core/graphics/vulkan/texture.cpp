@@ -344,14 +344,14 @@ Texture::~Texture()noexcept{
     {
         ScopedLock bindingLock(m_memoryBindingMutex);
         if(m_boundHeap){
-            Heap* const boundHeap = m_boundHeap.get();
+            auto& boundHeap = *MakeNotNull(m_boundHeap.get());
             {
-                ScopedLock heapLock(boundHeap->m_bindingMutex);
+                ScopedLock heapLock(boundHeap.m_bindingMutex);
                 if(m_image != VK_NULL_HANDLE){
                     m_context.deviceDispatch.vkDestroyImage(m_context.device, m_image, m_context.allocationCallbacks);
                     m_image = VK_NULL_HANDLE;
                 }
-                boundHeap->eraseBindingReservationLocked(this);
+                boundHeap.eraseBindingReservationLocked(MakeNotNull<const void*>(this));
             }
             m_heapBindingRange = {};
             m_boundHeap.reset();

@@ -290,9 +290,9 @@ bool WriteOutputs(const OutputPaths& outputPaths, const PreparedTexture& payload
         return false;
 
     const __hidden_output::PublicationPaths paths(scratchArena, outputPaths);
-    const ScratchPath* backups[] = { &paths.dataBackup, &paths.metadataBackup };
-    const ScratchPath* outputs[] = { &paths.data, &paths.metadata };
-    const ScratchPath* temporaries[] = { &paths.dataTemporary, &paths.metadataTemporary };
+    const NotNull<const ScratchPath*> backups[] = { MakeNotNull(&paths.dataBackup), MakeNotNull(&paths.metadataBackup) };
+    const NotNull<const ScratchPath*> outputs[] = { MakeNotNull(&paths.data), MakeNotNull(&paths.metadata) };
+    const NotNull<const ScratchPath*> temporaries[] = { MakeNotNull(&paths.dataTemporary), MakeNotNull(&paths.metadataTemporary) };
     bool ownedTemporary[__hidden_output::s_OutputFileCount] = {};
     bool backedUp[__hidden_output::s_OutputFileCount] = {};
     bool published[__hidden_output::s_OutputFileCount] = {};

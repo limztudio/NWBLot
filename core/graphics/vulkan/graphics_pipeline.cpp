@@ -139,11 +139,11 @@ void CommandList::setGraphicsState(const GraphicsState& state){
     m_currentRayTracingState = {};
     m_currentGraphicsState = state;
 
-    auto* pipeline = state.pipeline;
-    if(pipeline){
-        m_context.deviceDispatch.vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipeline);
-        retainResource(pipeline);
-        VulkanDetail::SetGraphicsDynamicState(m_context.deviceDispatch, m_currentCmdBuf->m_cmdBuf, pipeline->m_desc, state);
+    if(state.pipeline){
+        auto& pipeline = *MakeNotNull(state.pipeline);
+        m_context.deviceDispatch.vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.m_pipeline);
+        retainResource(&pipeline);
+        VulkanDetail::SetGraphicsDynamicState(m_context.deviceDispatch, m_currentCmdBuf->m_cmdBuf, pipeline.m_desc, state);
     }
 
     setViewportState(state.viewport);
@@ -156,10 +156,10 @@ void CommandList::setGraphicsState(const GraphicsState& state){
     }
 
     if(state.indexBuffer.buffer){
-        auto* ib = state.indexBuffer.buffer;
+        auto& ib = *MakeNotNull(state.indexBuffer.buffer);
         const VkIndexType indexType = state.indexBuffer.format == Format::R16_UINT ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
-        m_context.deviceDispatch.vkCmdBindIndexBuffer(m_currentCmdBuf->m_cmdBuf, ib->m_buffer, state.indexBuffer.offset, indexType);
-        retainResource(ib);
+        m_context.deviceDispatch.vkCmdBindIndexBuffer(m_currentCmdBuf->m_cmdBuf, ib.m_buffer, state.indexBuffer.offset, indexType);
+        retainResource(&ib);
     }
     retainResource(state.indirectParams);
 }
@@ -265,12 +265,11 @@ bool CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPa
     NWB_ASSERT(numColorAttachments <= s_MaxColorAttachments);
 
     for(u32 i = 0u; i < numColorAttachments; ++i){
-        auto* const tex = fbDesc.colorAttachments[i].texture;
-        NWB_ASSERT(tex);
+        auto& tex = *fbDesc.colorAttachments[i].texture;
 
-        const TextureSubresourceSet resolvedColorSubresources = fbDesc.colorAttachments[i].subresources.resolve(tex->m_creationDesc, TextureSubresourceMipResolve::Single);
-        const TextureDimension::Enum viewDimension = VulkanDetail::GetFramebufferAttachmentViewDimension(tex->m_creationDesc, resolvedColorSubresources);
-        const auto view = tex->getView(fbDesc.colorAttachments[i].subresources, viewDimension, fbDesc.colorAttachments[i].format);
+        const TextureSubresourceSet resolvedColorSubresources = fbDesc.colorAttachments[i].subresources.resolve(tex.m_creationDesc, TextureSubresourceMipResolve::Single);
+        const TextureDimension::Enum viewDimension = VulkanDetail::GetFramebufferAttachmentViewDimension(tex.m_creationDesc, resolvedColorSubresources);
+        const auto view = tex.getView(fbDesc.colorAttachments[i].subresources, viewDimension, fbDesc.colorAttachments[i].format);
         if(!view){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to begin dynamic rendering: color attachment view is invalid"));
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to begin dynamic rendering: color attachment view is invalid"));
@@ -295,10 +294,10 @@ bool CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPa
     bool hasStencil = false;
 
     if(fbDesc.depthAttachment.texture){
-        auto* depthTex = fbDesc.depthAttachment.texture;
-        const TextureSubresourceSet resolvedDepthSubresources = fbDesc.depthAttachment.subresources.resolve(depthTex->m_creationDesc, TextureSubresourceMipResolve::Single);
-        const TextureDimension::Enum depthViewDimension = VulkanDetail::GetFramebufferAttachmentViewDimension(depthTex->m_creationDesc, resolvedDepthSubresources);
-        const auto depthView = depthTex->getView(fbDesc.depthAttachment.subresources, depthViewDimension, fbDesc.depthAttachment.format);
+        auto& depthTex = *MakeNotNull(fbDesc.depthAttachment.texture);
+        const TextureSubresourceSet resolvedDepthSubresources = fbDesc.depthAttachment.subresources.resolve(depthTex.m_creationDesc, TextureSubresourceMipResolve::Single);
+        const TextureDimension::Enum depthViewDimension = VulkanDetail::GetFramebufferAttachmentViewDimension(depthTex.m_creationDesc, resolvedDepthSubresources);
+        const auto depthView = depthTex.getView(fbDesc.depthAttachment.subresources, depthViewDimension, fbDesc.depthAttachment.format);
         if(!depthView){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to begin dynamic rendering: depth/stencil attachment view is invalid"));
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to begin dynamic rendering: depth/stencil attachment view is invalid"));
@@ -306,7 +305,7 @@ bool CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPa
         }
 
         const VkImageLayout depthStencilLayout = fbDesc.depthAttachment.isReadOnly ? VulkanDetail::s_ReadOnlyImageLayout : VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-        if((depthTex->m_aspectMask & VK_IMAGE_ASPECT_DEPTH_BIT) != 0){
+        if((depthTex.m_aspectMask & VK_IMAGE_ASPECT_DEPTH_BIT) != 0){
             const VulkanDetail::RenderPassAttachmentOperations operations = VulkanDetail::ConvertRenderPassAttachmentActions(params.depthAttachmentActions);
             depthAttachment.imageView = *depthView;
             depthAttachment.imageLayout = depthStencilLayout;
@@ -315,7 +314,7 @@ bool CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPa
             depthAttachment.clearValue.depthStencil.depth = params.depthClearValue;
             hasDepth = true;
         }
-        if((depthTex->m_aspectMask & VK_IMAGE_ASPECT_STENCIL_BIT) != 0){
+        if((depthTex.m_aspectMask & VK_IMAGE_ASPECT_STENCIL_BIT) != 0){
             const VulkanDetail::RenderPassAttachmentOperations operations = VulkanDetail::ConvertRenderPassAttachmentActions(params.stencilAttachmentActions);
             stencilAttachment.imageView = *depthView;
             stencilAttachment.imageLayout = depthStencilLayout;

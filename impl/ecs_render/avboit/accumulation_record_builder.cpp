@@ -73,12 +73,6 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
     using namespace RendererTaskGraphDetail;
     static_cast<void>(csgResources);
     AvboitAccumulationRecordResult result{};
-    if(!inputs.targets)
-        return MakeUnexpected(Failure{});
-    if(!inputs.accumulationTimingTicket)
-        return MakeUnexpected(Failure{});
-    if(!inputs.accumulationComputeEmulationTiming)
-        return MakeUnexpected(Failure{});
     if(!inputs.integrationTask.valid() || !inputs.uploadTask.valid())
         return MakeUnexpected(Failure{});
 
@@ -127,7 +121,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
         return MakeUnexpected(Failure{});
     accumulationPayload.accumulationComputeEmulationOutputStatesGraphOwned = inputs.regularComputeEmulationPlanCaptured && accumulationComputeEmulationOutputStatesGraphOwned;
     accumulationPayload.accumulationCsgComputeEmulationOutputStatesGraphOwned = inputs.csgComputeEmulationPlanCaptured && accumulationComputeEmulationOutputStatesGraphOwned;
-    accumulationPayload.accumulationComputeEmulationTiming = accumulationComputeEmulationOutputStatesGraphOwned ? inputs.accumulationComputeEmulationTiming : nullptr;
+    accumulationPayload.accumulationComputeEmulationTiming = accumulationComputeEmulationOutputStatesGraphOwned ? &inputs.accumulationComputeEmulationTiming : nullptr;
     Core::GpuGraphResourceId accumulationSharedComputeEmulationOutput;
     bool accumulationSharedComputeEmulationOutputStatesGraphOwned = false;
     if(inputs.sharedComputeEmulationPlanCaptured){
@@ -233,13 +227,13 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
     if(inputs.streamsUploaded && !objectGeometry.prepare(
         accumulationPayload.accumulationSnapshot.regularIndexedDrawItems.data(),
         accumulationPayload.accumulationSnapshot.regularIndexedDrawItems.size(),
-        frameBindings, *inputs.targets, accumulationDependency, accumulationResourceUses, scratchArena, inputs.accumulationTimingTicket
+        frameBindings, inputs.targets, accumulationDependency, accumulationResourceUses, scratchArena, &inputs.accumulationTimingTicket
     ))
         return MakeUnexpected(Failure{});
     if(inputs.streamsUploaded && !objectGeometry.prepare(
         accumulationPayload.accumulationSnapshot.csgIndexedDrawItems.data(),
         accumulationPayload.accumulationSnapshot.csgIndexedDrawItems.size(),
-        frameBindings, *inputs.targets, accumulationDependency, accumulationResourceUses, scratchArena, inputs.accumulationTimingTicket
+        frameBindings, inputs.targets, accumulationDependency, accumulationResourceUses, scratchArena, &inputs.accumulationTimingTicket
     ))
         return MakeUnexpected(Failure{});
 
@@ -343,9 +337,9 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
             AvboitAccumulationSharedComputeEmulationGraphTask::Payload payload{
                 .graphics = m_graphics,
                 .materialSystem = m_materialSystem,
-                .targets = *inputs.targets,
-                .timingTicket = *inputs.accumulationTimingTicket,
-                .accumulationTiming = *inputs.accumulationComputeEmulationTiming,
+                .targets = inputs.targets,
+                .timingTicket = inputs.accumulationTimingTicket,
+                .accumulationTiming = inputs.accumulationComputeEmulationTiming,
                 .frameBindings = frameBindings,
                 .plan = inputs.sharedComputeEmulationPlan,
             };

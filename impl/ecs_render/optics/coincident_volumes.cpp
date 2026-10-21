@@ -157,7 +157,7 @@ void RendererOpticalVolumeSelection::prepare(Core::ECS::World& world, RendererMa
         const bool closed = renderer.opticalBoundaryMode == OpticalBoundaryMode::ClosedNested || renderer.opticalBoundaryMode == OpticalBoundaryMode::ClosedPriority;
         if(!materialResult)
             continue;
-        MaterialSurfaceInfo* const material = *materialResult;
+        const NotNull<MaterialSurfaceInfo*> material = *materialResult;
         if(!material->transparent || (!material->refractive && !closed))
             continue;
 

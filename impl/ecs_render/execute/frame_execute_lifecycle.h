@@ -28,9 +28,9 @@ struct DeferredFrameTargets;
 class FrameExecuteLifecycle final{
 public:
     struct ShadowPrepareStateLifecycleContext{
-        RendererFramePipeline* renderer = nullptr;
+        NotNull<RendererFramePipeline*> renderer;
         Core::Alloc::ScratchArena& scratchArena;
-        Core::GpuPersistentResourceStateCache::Candidate* stateCandidate = nullptr;
+        NotNull<Core::GpuPersistentResourceStateCache::Candidate*> stateCandidate;
         const Core::BufferHandle* buffers = nullptr;
         usize bufferCount = 0u;
         bool stateCandidateRequired = false;
@@ -39,10 +39,10 @@ public:
     };
     struct ShadowVisibilityStateLifecycleContext{
         Core::Alloc::ScratchArena& scratchArena;
-        RendererFramePipeline* renderer = nullptr;
-        DeferredFrameTargets* targets = nullptr;
-        Core::GpuPersistentResourceStateCache::Candidate* returnStateCandidate = nullptr;
-        Core::GpuPersistentResourceStateCache::Candidate* scratchStateCandidate = nullptr;
+        NotNull<RendererFramePipeline*> renderer;
+        NotNull<DeferredFrameTargets*> targets;
+        NotNull<Core::GpuPersistentResourceStateCache::Candidate*> returnStateCandidate;
+        NotNull<Core::GpuPersistentResourceStateCache::Candidate*> scratchStateCandidate;
         const Core::TextureHandle* returnTextures = nullptr;
         const Core::TextureHandle* scratchTextures = nullptr;
         const Core::BufferHandle* scratchBuffers = nullptr;
@@ -56,9 +56,9 @@ public:
     };
     struct SoftwareCausticsStateLifecycleContext{
         Core::Alloc::ScratchArena& scratchArena;
-        RendererFramePipeline* renderer = nullptr;
-        Core::GpuPersistentResourceStateCache::Candidate* returnStateCandidate = nullptr;
-        Core::GpuPersistentResourceStateCache::Candidate* scratchStateCandidate = nullptr;
+        NotNull<RendererFramePipeline*> renderer;
+        NotNull<Core::GpuPersistentResourceStateCache::Candidate*> returnStateCandidate;
+        NotNull<Core::GpuPersistentResourceStateCache::Candidate*> scratchStateCandidate;
         const Core::TextureHandle* irradianceTextures = nullptr;
         const Core::TextureHandle* scratchTextures = nullptr;
         usize irradianceTextureCount = 0u;
@@ -68,10 +68,10 @@ public:
     };
     struct SurfelGiStateLifecycleContext{
         Core::Alloc::ScratchArena& scratchArena;
-        RendererFramePipeline* renderer = nullptr;
-        Core::GpuPersistentResourceStateCache::Candidate* returnStateCandidate = nullptr;
-        Core::GpuPersistentResourceStateCache::Candidate* counterStateCandidate = nullptr;
-        Core::GpuPersistentResourceStateCache::Candidate* computeStateCandidate = nullptr;
+        NotNull<RendererFramePipeline*> renderer;
+        NotNull<Core::GpuPersistentResourceStateCache::Candidate*> returnStateCandidate;
+        NotNull<Core::GpuPersistentResourceStateCache::Candidate*> counterStateCandidate;
+        NotNull<Core::GpuPersistentResourceStateCache::Candidate*> computeStateCandidate;
         const Core::TextureHandle* returnTextures = nullptr;
         const Core::BufferHandle* counterBuffers = nullptr;
         const Core::TextureHandle* computeTextures = nullptr;
@@ -85,8 +85,8 @@ public:
     };
     struct HardwareCausticsStateLifecycleContext{
         Core::Alloc::ScratchArena& scratchArena;
-        RendererFramePipeline* renderer = nullptr;
-        Core::GpuPersistentResourceStateCache::Candidate* accumulatorStateCandidate = nullptr;
+        NotNull<RendererFramePipeline*> renderer;
+        NotNull<Core::GpuPersistentResourceStateCache::Candidate*> accumulatorStateCandidate;
         const Core::TextureHandle* accumulatorTextures = nullptr;
         usize accumulatorTextureCount = 0u;
         bool statePrepared = false;
@@ -94,11 +94,11 @@ public:
     };
     struct DeferredLightingStateLifecycleContext{
         Core::Alloc::ScratchArena& scratchArena;
-        RendererFramePipeline* renderer = nullptr;
-        DeferredFrameTargets* targets = nullptr;
-        Core::GpuPersistentResourceStateCache::Candidate* shadowReturnStateCandidate = nullptr;
-        Core::GpuPersistentResourceStateCache::Candidate* causticReturnStateCandidate = nullptr;
-        Core::GpuPersistentResourceStateCache::Candidate* surfelReturnStateCandidate = nullptr;
+        NotNull<RendererFramePipeline*> renderer;
+        NotNull<DeferredFrameTargets*> targets;
+        NotNull<Core::GpuPersistentResourceStateCache::Candidate*> shadowReturnStateCandidate;
+        NotNull<Core::GpuPersistentResourceStateCache::Candidate*> causticReturnStateCandidate;
+        NotNull<Core::GpuPersistentResourceStateCache::Candidate*> surfelReturnStateCandidate;
         const Core::TextureHandle* shadowReturnTextures = nullptr;
         const Core::TextureHandle* causticReturnTextures = nullptr;
         const Core::TextureHandle* surfelReturnTextures = nullptr;

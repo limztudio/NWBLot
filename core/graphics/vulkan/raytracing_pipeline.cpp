@@ -187,14 +187,14 @@ Expected<RayTracingPipelineHandle> Device::createRayTracingPipeline(const RayTra
     };
 
     for(const auto& shaderDesc : desc.shaders){
-        auto* s = shaderDesc.shader.get();
+        auto& s = *MakeNotNull(shaderDesc.shader.get());
 
         auto stageInfo = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
-        stageInfo.module = s->m_shaderModule;
-        stageInfo.pName = s->m_entryPointName.data();
+        stageInfo.module = s.m_shaderModule;
+        stageInfo.pName = s.m_entryPointName.data();
 
         ShaderTableRecordKind::Enum recordKind = ShaderTableRecordKind::Invalid;
-        switch(s->m_desc.shaderType){
+        switch(s.m_desc.shaderType){
         case ShaderType::RayGeneration:
             stageInfo.stage = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
             recordKind = ShaderTableRecordKind::RayGeneration;
@@ -211,7 +211,7 @@ Expected<RayTracingPipelineHandle> Device::createRayTracingPipeline(const RayTra
             NWB_ASSERT(false);
             continue;
         }
-        addShaderSpecialization(*s, stageInfo);
+        addShaderSpecialization(s, stageInfo);
 
         auto group = VulkanDetail::MakeVkStruct<VkRayTracingShaderGroupCreateInfoKHR>(VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR);
         group.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
@@ -223,7 +223,7 @@ Expected<RayTracingPipelineHandle> Device::createRayTracingPipeline(const RayTra
         stages.push_back(stageInfo);
         groups.push_back(group);
 
-        const AStringView exportName = !shaderDesc.exportName.empty() ? shaderDesc.exportName : s->m_entryPointName;
+        const AStringView exportName = !shaderDesc.exportName.empty() ? shaderDesc.exportName : s.m_entryPointName;
         pso->m_shaderGroups.emplace_back(m_context.objectArena);
         ShaderTableGroupMetadata& metadata = pso->m_shaderGroups.back();
         metadata.exportName.assign(exportName);
@@ -240,32 +240,32 @@ Expected<RayTracingPipelineHandle> Device::createRayTracingPipeline(const RayTra
         group.intersectionShader = VK_SHADER_UNUSED_KHR;
 
         if(hitGroup.closestHitShader){
-            auto* s = hitGroup.closestHitShader.get();
+            auto& s = *MakeNotNull(hitGroup.closestHitShader.get());
             auto stageInfo = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
             stageInfo.stage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
-            stageInfo.module = s->m_shaderModule;
-            stageInfo.pName = s->m_entryPointName.data();
-            addShaderSpecialization(*s, stageInfo);
+            stageInfo.module = s.m_shaderModule;
+            stageInfo.pName = s.m_entryPointName.data();
+            addShaderSpecialization(s, stageInfo);
             group.closestHitShader = static_cast<u32>(stages.size());
             stages.push_back(stageInfo);
         }
         if(hitGroup.anyHitShader){
-            auto* s = hitGroup.anyHitShader.get();
+            auto& s = *MakeNotNull(hitGroup.anyHitShader.get());
             auto stageInfo = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
             stageInfo.stage = VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
-            stageInfo.module = s->m_shaderModule;
-            stageInfo.pName = s->m_entryPointName.data();
-            addShaderSpecialization(*s, stageInfo);
+            stageInfo.module = s.m_shaderModule;
+            stageInfo.pName = s.m_entryPointName.data();
+            addShaderSpecialization(s, stageInfo);
             group.anyHitShader = static_cast<u32>(stages.size());
             stages.push_back(stageInfo);
         }
         if(hitGroup.intersectionShader){
-            auto* s = hitGroup.intersectionShader.get();
+            auto& s = *MakeNotNull(hitGroup.intersectionShader.get());
             auto stageInfo = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
             stageInfo.stage = VK_SHADER_STAGE_INTERSECTION_BIT_KHR;
-            stageInfo.module = s->m_shaderModule;
-            stageInfo.pName = s->m_entryPointName.data();
-            addShaderSpecialization(*s, stageInfo);
+            stageInfo.module = s.m_shaderModule;
+            stageInfo.pName = s.m_entryPointName.data();
+            addShaderSpecialization(s, stageInfo);
             group.intersectionShader = static_cast<u32>(stages.size());
             stages.push_back(stageInfo);
         }

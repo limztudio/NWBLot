@@ -279,7 +279,7 @@ private:
         Optional<Core::GpuTimingMeasure>& opaqueRegularSharedComputeEmulationTiming,
         Optional<Core::GpuTimingMeasure>& opaqueCsgIntervalSampleComputeEmulationTiming,
         Core::GpuTimingSubmissionTicket** timingTickets,
-        const bool* asyncPrefixTimingSpansOnePacket
+        const bool& asyncPrefixTimingSpansOnePacket
     );
     [[nodiscard]] bool declareDeferredShadowVisibilityTask(
         Core::Alloc::ScratchArena& scratchArena,
@@ -376,7 +376,7 @@ private:
         Optional<Core::GpuTimingMeasure>& opaqueCsgIntervalSampleComputeEmulationTiming,
         Core::GpuTimingSubmissionTicket& shadowPrepareTimingTicket,
         Core::GpuTimingSubmissionTicket** graphicsPrefixTimingTickets,
-        const bool* asyncPrefixTimingSpansOnePacket,
+        const bool& asyncPrefixTimingSpansOnePacket,
         Optional<Core::GpuTimingMeasure>& asyncFinalTiming,
         Core::GpuTimingSubmissionTicket& avboitPreTimingTicket,
         GraphClearTimingRecordState& avboitClearTimingState,

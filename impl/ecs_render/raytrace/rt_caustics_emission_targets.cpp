@@ -176,8 +176,8 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc
         const auto materialInfoResult = m_materialSystem.findMaterialSurfaceInfo(renderer.material);
         if(!materialInfoResult)
             continue;
-        MaterialSurfaceInfo* const materialInfo = *materialInfoResult;
-        if(!materialInfo || !materialInfo->refractive)
+        const NotNull<MaterialSurfaceInfo*> materialInfo = *materialInfoResult;
+        if(!materialInfo->refractive)
             continue;
 
         const auto meshResult = RayTracingDetail::ResolveRenderableMeshResources(*meshSystemPtr, m_meshSystem, entity);

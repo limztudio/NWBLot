@@ -268,22 +268,22 @@ static void EnqueueServerMessage(Server& server, const TStringView message, cons
         return MakeUnexpected(MakeErrorCode(ErrorCondition::not_enough_memory));
 
     ScopeExit releaseMemory([&]()noexcept{ Core::Alloc::CoreFree(memory); });
-    auto* info = new(memory) ConnectionInfo(server.arena());
+    auto& info = *new(memory) ConnectionInfo(server.arena());
     releaseMemory.release();
     ScopeExit releaseInfo([&]()noexcept{
-        info->~ConnectionInfo();
-        Core::Alloc::CoreFree(info);
+        info.~ConnectionInfo();
+        Core::Alloc::CoreFree(&info);
     }
     );
-    info->uploadKind = uploadKind;
+    info.uploadKind = uploadKind;
     if(uploadKind == ConnectionUploadKind::Crash){
         Core::Alloc::ScratchArena scratchArena(Name("logger/server/crash_upload/scratch"));
-        const auto opened = OpenCrashUploadStream(server, *info, scratchArena);
+        const auto opened = OpenCrashUploadStream(server, info, scratchArena);
         if(!opened)
             return MakeUnexpected(opened.error());
     }
     releaseInfo.release();
-    return MakeNotNull(info);
+    return MakeNotNull(&info);
 }
 
 static void DestroyConnectionInfo(ConnectionInfo*& info, void*& connectionContext)noexcept{
@@ -442,24 +442,24 @@ MHD_Result Server::RequestCallback(void* serverContext, MHD_Connection* connecti
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void Server::CrashIngestUpdate(Server* self){
+void Server::CrashIngestUpdate(Server& self){
     for(;;){
-        self->m_crashIngestSemaphore.acquire();
+        self.m_crashIngestSemaphore.acquire();
 
-        while(const auto crashUpload = self->tryDequeueCrashUpload()){
+        while(const auto crashUpload = self.tryDequeueCrashUpload()){
             LogArena ingestArena(__hidden_logger_server::s_CrashIngestArena);
 
             CrashIngestConfig ingestConfig(ingestArena);
-            ingestConfig.storageDirectory = self->m_crashIngestConfig.storageDirectory;
-            ingestConfig.symbolication.symbolStoreDirectory = self->m_crashIngestConfig.symbolication.symbolStoreDirectory;
-            ingestConfig.retention = self->m_crashIngestConfig.retention;
+            ingestConfig.storageDirectory = self.m_crashIngestConfig.storageDirectory;
+            ingestConfig.symbolication.symbolStoreDirectory = self.m_crashIngestConfig.symbolication.symbolStoreDirectory;
+            ingestConfig.retention = self.m_crashIngestConfig.retention;
 
             const Path archivePath(ingestArena, AStringView(crashUpload->path));
             CrashIngestResult ingestResult = ProcessCrashUpload(ingestArena, archivePath, ingestConfig);
-            self->enqueue(Move(ingestResult.message), ingestResult.type);
+            self.enqueue(Move(ingestResult.message), ingestResult.type);
         }
 
-        if(self->m_crashIngestExit.load(MemoryOrder::acquire))
+        if(self.m_crashIngestExit.load(MemoryOrder::acquire))
             break;
     }
 }
@@ -537,7 +537,7 @@ bool Server::internalInit(u16 port, BasicStringView<tchar> logFileNameBase, AStr
         return false;
 
     m_crashIngestExit.store(false, MemoryOrder::release);
-    m_crashIngestThread = Thread(Server::CrashIngestUpdate, this);
+    m_crashIngestThread = Thread([this](){ CrashIngestUpdate(*this); });
     return true;
 }
 

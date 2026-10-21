@@ -67,7 +67,7 @@ Expected<ScratchVector<MeshVertexRef>> MeshCookSourceStreams::ParseSourceVertexR
             __hidden_mesh_source_streams::s_VertexRefColorName,
             __hidden_mesh_source_streams::s_VertexRefSkinName,
         };
-        u32* const componentValues[] = { &ref.position, &ref.normal, &ref.tangent, &ref.uv0, &ref.color, &ref.skin, };
+        const NotNull<u32*> componentValues[] = { MakeNotNull(&ref.position), MakeNotNull(&ref.normal), MakeNotNull(&ref.tangent), MakeNotNull(&ref.uv0), MakeNotNull(&ref.color), MakeNotNull(&ref.skin), };
         for(usize componentIndex = 0u; componentIndex < expectedComponentCount; ++componentIndex){
             const auto component = MeshCookMetadata::ValidateMetadataU32Value(components[componentIndex]);
             if(!component){

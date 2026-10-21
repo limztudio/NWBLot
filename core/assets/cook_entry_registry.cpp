@@ -31,8 +31,8 @@ namespace __hidden_cook_entry_registry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-::AutoRegistrationQueue<CookEntryRegistrationFunction, AssetArena>& QueryAutoRegistrationQueue(){
-    static ::AutoRegistrationQueue<CookEntryRegistrationFunction, AssetArena> s_Queue(AssetsArenaScope::s_AutoRegistrationQueueArena);
+::AutoRegistrationQueue<NotNull<CookEntryRegistrationFunction>, AssetArena>& QueryAutoRegistrationQueue(){
+    static ::AutoRegistrationQueue<NotNull<CookEntryRegistrationFunction>, AssetArena> s_Queue(AssetsArenaScope::s_AutoRegistrationQueueArena);
     return s_Queue;
 }
 
@@ -82,7 +82,7 @@ bool CookEntryRegistry::registerBucket(const Name& assetType, BucketPtr owner){
 
 
 bool RegisterAutoCollectedCookEntryTypes(CookEntryRegistry& registry, ScratchArena& scratchArena){
-    Vector<CookEntryRegistrationFunction, Core::Alloc::ScratchArena> functions{scratchArena};
+    Vector<NotNull<CookEntryRegistrationFunction>, Core::Alloc::ScratchArena> functions{scratchArena};
     return RunAutoCollectedFunctions(
         __hidden_cook_entry_registry::QueryAutoRegistrationQueue(), registry, functions, [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: collected null cook entry registration function")); },
         [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to register auto-collected cook entry type")); }

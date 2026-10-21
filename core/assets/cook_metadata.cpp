@@ -42,8 +42,8 @@ struct AutoMetadataParser{
     return s_Queue;
 }
 
-::AutoRegistrationQueue<AssetBunchExpandFunction, AssetArena>& QueryAutoAssetBunchExpanderQueue(){
-    static ::AutoRegistrationQueue<AssetBunchExpandFunction, AssetArena> s_Queue(AssetsArenaScope::s_BunchExpanderQueueArena);
+::AutoRegistrationQueue<NotNull<AssetBunchExpandFunction>, AssetArena>& QueryAutoAssetBunchExpanderQueue(){
+    static ::AutoRegistrationQueue<NotNull<AssetBunchExpandFunction>, AssetArena> s_Queue(AssetsArenaScope::s_BunchExpanderQueueArena);
     return s_Queue;
 }
 
@@ -260,13 +260,11 @@ AssetMetadataParseResult::Enum TryAutoCollectedValueMetadataParsers(AssetValueMe
 }
 
 Expected<ExpandedAssetMetadataVector, AssetBunchExpandFailure::Enum> TryAutoCollectedAssetBunchExpanders(const AssetBunchExpandContext& context){
-    Vector<AssetBunchExpandFunction, Core::Alloc::ScratchArena> functions{context.scratchArena};
+    Vector<NotNull<AssetBunchExpandFunction>, Core::Alloc::ScratchArena> functions{context.scratchArena};
     __hidden_cook_metadata::QueryAutoAssetBunchExpanderQueue().copyTo(functions);
 
-    for(const AssetBunchExpandFunction function : functions){
-        NWB_ASSERT(function);
-
-        auto result = function(context);
+    for(const NotNull<AssetBunchExpandFunction> function : functions){
+        auto result = (*function)(context);
         if(!result && result.error() == AssetBunchExpandFailure::Unsupported)
             continue;
         return result;

@@ -14,7 +14,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(const usize begin, const usize end, const usize grainSize, const CpuTaskOptions options, const void* const context, const RangeFunction invoke){
+Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(const usize begin, const usize end, const usize grainSize, const CpuTaskOptions options, const NotNull<const void*> context, const NotNull<RangeFunction> invoke){
     CpuTaskScope chunks(*this);
     chunks.m_allowCallerWork = true;
     const usize count = end - begin;
@@ -51,19 +51,19 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(cons
             const auto reserved = reserveTaskLocked();
             if(!reserved)
                 return MakeUnexpected(reserved.error());
-            const TaskHandle handle = *reserved;
+            const TaskHandle handle = reserved->handle;
             if(reservedTail != TaskHandle::s_InvalidIndex)
                 m_nodes[reservedTail].next = handle.index;
             else
                 reservedHead = handle.index;
             reservedTail = handle.index;
-            TaskNode& node = m_nodes[handle.index];
+            TaskNode& node = reserved->node;
             if(node.latestCanceledGeneration != 0u)
                 ContainerDetail::ReserveGrowingCapacity(node.olderCanceledGenerations, AddSize(node.olderCanceledGenerations.size(), 1u));
             const usize first = begin + chunk * chunkSize + Min(chunk, remainder);
             const usize last = first + chunkSize + (chunk < remainder ? 1u : 0u);
             // Internal captures are trivial; no user callable runs under the lock.
-            node.function = [context, invoke, first, last](){ invoke(context, first, last); };
+            node.function = [context, invoke, first, last](){ invoke.get()(context, first, last); };
         }
         const usize outstanding = AddSize(m_outstanding, chunkCount);
         const TaskHandle parentHandle = s_Execution && &s_Execution->scheduler == this ? s_Execution->task : TaskHandle{};

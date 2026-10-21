@@ -62,7 +62,7 @@ void CommandBufferResourceReferences::retainResource(GraphicsResource& resource)
         promoteMembershipIndex();
     }
 
-    u8& membership = m_membership->try_emplace(&resource, 0u).first.value();
+    u8& membership = m_membership->try_emplace(MakeNotNull<GraphicsResource*>(&resource), 0u).first.value();
     if((membership & s_Owned) != 0u)
         return;
     m_resources.emplace_back(&resource, Handle<GraphicsResource>::deleter_type(&m_arena));
@@ -77,13 +77,13 @@ void CommandBufferResourceReferences::retainBuffer(Buffer& buffer){
         return;
     }
 
-    u8& membership = m_membership->try_emplace(&buffer, 0u).first.value();
+    u8& membership = m_membership->try_emplace(MakeNotNull<GraphicsResource*>(&buffer), 0u).first.value();
     if((membership & s_Owned) == 0u){
         m_resources.emplace_back(&buffer, Handle<GraphicsResource>::deleter_type(&m_arena));
         membership |= s_Owned;
     }
     if((membership & s_Buffer) == 0u){
-        m_buffers.push_back(&buffer);
+        m_buffers.push_back(MakeNotNull(&buffer));
         membership |= s_Buffer;
     }
 }
@@ -91,21 +91,21 @@ void CommandBufferResourceReferences::retainBuffer(Buffer& buffer){
 void CommandBufferResourceReferences::trackRetainedBuffer(Buffer& buffer){
     using namespace __hidden_command_buffer_resource_references;
     if(!m_membership){
-        for(Buffer* const retainedBuffer : m_buffers){
-            if(retainedBuffer == &buffer)
+        for(const auto retainedBuffer : m_buffers){
+            if(retainedBuffer.get() == &buffer)
                 return;
         }
         if(m_buffers.size() < s_LinearCapacity){
-            m_buffers.push_back(&buffer);
+            m_buffers.push_back(MakeNotNull(&buffer));
             return;
         }
         promoteMembershipIndex();
     }
 
-    u8& membership = m_membership->try_emplace(&buffer, 0u).first.value();
+    u8& membership = m_membership->try_emplace(MakeNotNull<GraphicsResource*>(&buffer), 0u).first.value();
     if((membership & s_Buffer) != 0u)
         return;
-    m_buffers.push_back(&buffer);
+    m_buffers.push_back(MakeNotNull(&buffer));
     membership |= s_Buffer;
 }
 
@@ -116,26 +116,26 @@ void CommandBufferResourceReferences::appendBufferStateCommit(Buffer& buffer){
         trackRetainedBuffer(buffer);
         if(!m_membership){
             for(const RetainedBufferStateCommit& commit : m_bufferStateCommits){
-                if(commit.buffer == &buffer)
+                if(commit.buffer.get() == &buffer)
                     return;
             }
-            m_bufferStateCommits.push_back(RetainedBufferStateCommit{ .buffer = &buffer });
+            m_bufferStateCommits.push_back(RetainedBufferStateCommit{ .buffer = MakeNotNull(&buffer) });
             return;
         }
     }
 
-    u8& membership = m_membership->try_emplace(&buffer, 0u).first.value();
+    u8& membership = m_membership->try_emplace(MakeNotNull<GraphicsResource*>(&buffer), 0u).first.value();
     if((membership & s_Owned) == 0u){
         m_resources.emplace_back(&buffer, Handle<GraphicsResource>::deleter_type(&m_arena));
         membership |= s_Owned;
     }
     if((membership & s_Buffer) == 0u){
-        m_buffers.push_back(&buffer);
+        m_buffers.push_back(MakeNotNull(&buffer));
         membership |= s_Buffer;
     }
     if((membership & s_BufferStateCommit) != 0u)
         return;
-    m_bufferStateCommits.push_back(RetainedBufferStateCommit{ .buffer = &buffer });
+    m_bufferStateCommits.push_back(RetainedBufferStateCommit{ .buffer = MakeNotNull(&buffer) });
     membership |= s_BufferStateCommit;
 }
 
@@ -143,7 +143,7 @@ void CommandBufferResourceReferences::discardBufferStateCommits()noexcept{
     using namespace __hidden_command_buffer_resource_references;
     if(m_membership){
         for(const RetainedBufferStateCommit& commit : m_bufferStateCommits){
-            const auto found = m_membership->find(commit.buffer);
+            const auto found = m_membership->find(NotNull<GraphicsResource*>(commit.buffer.get()));
             if(found == m_membership->end() || (found.value() & s_BufferStateCommit) == 0u)
                 TerminateInvariant();
             found.value() &= static_cast<u8>(~s_BufferStateCommit);
@@ -160,13 +160,13 @@ void CommandBufferResourceReferences::retainTexture(Texture& texture){
         return;
     }
 
-    u8& membership = m_membership->try_emplace(&texture, 0u).first.value();
+    u8& membership = m_membership->try_emplace(MakeNotNull<GraphicsResource*>(&texture), 0u).first.value();
     if((membership & s_Owned) == 0u){
         m_resources.emplace_back(&texture, Handle<GraphicsResource>::deleter_type(&m_arena));
         membership |= s_Owned;
     }
     if((membership & s_Texture) == 0u){
-        m_textures.push_back(&texture);
+        m_textures.push_back(MakeNotNull(&texture));
         membership |= s_Texture;
     }
 }
@@ -174,21 +174,21 @@ void CommandBufferResourceReferences::retainTexture(Texture& texture){
 void CommandBufferResourceReferences::trackRetainedTexture(Texture& texture){
     using namespace __hidden_command_buffer_resource_references;
     if(!m_membership){
-        for(Texture* const retainedTexture : m_textures){
-            if(retainedTexture == &texture)
+        for(const auto retainedTexture : m_textures){
+            if(retainedTexture.get() == &texture)
                 return;
         }
         if(m_textures.size() < s_LinearCapacity){
-            m_textures.push_back(&texture);
+            m_textures.push_back(MakeNotNull(&texture));
             return;
         }
         promoteMembershipIndex();
     }
 
-    u8& membership = m_membership->try_emplace(&texture, 0u).first.value();
+    u8& membership = m_membership->try_emplace(MakeNotNull<GraphicsResource*>(&texture), 0u).first.value();
     if((membership & s_Texture) != 0u)
         return;
-    m_textures.push_back(&texture);
+    m_textures.push_back(MakeNotNull(&texture));
     membership |= s_Texture;
 }
 
@@ -210,13 +210,13 @@ void CommandBufferResourceReferences::promoteMembershipIndex(){
     const usize maximumEntries = m_resources.size() + m_buffers.size() + m_textures.size();
     MembershipIndex membership(maximumEntries * 2u, MembershipIndex::allocator_type(m_arena));
     for(const Handle<GraphicsResource>& resource : m_resources)
-        membership[resource.get()] |= s_Owned;
-    for(Buffer* const buffer : m_buffers)
-        membership[buffer] |= s_Buffer;
-    for(Texture* const texture : m_textures)
-        membership[texture] |= s_Texture;
+        membership[NotNull<GraphicsResource*>(resource.get())] |= s_Owned;
+    for(const auto buffer : m_buffers)
+        membership[NotNull<GraphicsResource*>(buffer.get())] |= s_Buffer;
+    for(const auto texture : m_textures)
+        membership[NotNull<GraphicsResource*>(texture.get())] |= s_Texture;
     for(const RetainedBufferStateCommit& commit : m_bufferStateCommits)
-        membership[commit.buffer] |= s_BufferStateCommit;
+        membership[NotNull<GraphicsResource*>(commit.buffer.get())] |= s_BufferStateCommit;
 
     // Build membership off to the side; on failure the ordered lists stay authoritative.
     static_assert(IsNothrowMoveConstructible_V<MembershipIndex>);

@@ -209,7 +209,7 @@ TEST(GpuTimingPacketEnvelopeMetrics, PreservesPartialFramesAcrossGrowthRejectedP
         { .physicalQueue = firstQueue, .internalIdleScopeName = Name("tests/timing/growing_idle_0") },
         { .physicalQueue = secondQueue, .internalIdleScopeName = Name("tests/timing/growing_idle_1") },
     };
-    const auto prepare = [&](const u64 frameIndex, const Core::GpuPacketEnvelopeMetricScope* const scopeInputs){
+    const auto prepare = [&](const u64 frameIndex, const Core::GpuPacketEnvelopeMetricScope (&scopeInputs)[LengthOf(scopes)]){
         return correlator.preparePacketEnvelopeMetrics(frameIndex, MakeNotNull(scopeInputs), LengthOf(scopes), overlapScope, MakeNotNull(&outputs[0u]), LengthOf(outputs));
     };
     EXPECT_FALSE(prepare(100u, duplicateScopes));

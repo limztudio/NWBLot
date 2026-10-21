@@ -49,10 +49,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
     using namespace RendererTaskGraphDetail;
     DeferredGraphSuffixResult result{};
     if(
-        !inputs.targets
-        || !inputs.presentationFrame
-        || !inputs.presentationFramebufferDesc
-        || !inputs.opaqueColor.valid()
+        !inputs.opaqueColor.valid()
         || !inputs.avboitAccumColor.valid()
         || !inputs.avboitAccumExtinction.valid()
         || !inputs.refractionResolve.valid()
@@ -61,7 +58,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
         || !inputs.avboitFinalTask.valid()
         || !inputs.refractionResolveTask.valid()
         || !inputs.reflectionGraph.valid()
-        || !inputs.presentationFrame->valid()
+        || !inputs.presentationFrame.valid()
     )
         return MakeUnexpected(Failure{});
 
@@ -87,7 +84,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
             if(!texture || version.resource != outputLayer.color || version.origin != Core::GpuGraphResourceVersionOrigin::TaskProduced)
                 return MakeUnexpected(Failure{});
             const Core::TextureDesc& desc = texture->getDescription();
-            const Core::TextureDesc& outputDesc = inputs.presentationFrame->backBuffer.texture->getDescription();
+            const Core::TextureDesc& outputDesc = inputs.presentationFrame.backBuffer.texture->getDescription();
             if(
                 outputLayer.sampledImage.descriptorClass() != Core::GpuDescriptorClass::SampledImage
                 || desc.width != outputDesc.width
@@ -152,8 +149,8 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
     }
     result.compositeTask = *resultCompositeTaskResult;
 
-    const Core::AcquiredPresentationFrame& presentationFrame = *inputs.presentationFrame;
-    const Core::FramebufferDesc& presentationFramebufferDesc = *inputs.presentationFramebufferDesc;
+    const Core::AcquiredPresentationFrame& presentationFrame = inputs.presentationFrame;
+    const Core::FramebufferDesc& presentationFramebufferDesc = inputs.presentationFramebufferDesc;
     const auto backBufferAvailabilityResult =
         m_graph.importExternalCompletion(
             Core::GpuExternalCompletionDesc{}

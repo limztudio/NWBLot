@@ -92,7 +92,7 @@ void MeshSkinningStateBufferCollector::retainBuffer(const Core::BufferHandle& bu
         }
         promoteBufferIndex();
     }
-    const auto [found, inserted] = m_index->insert(identity);
+    const auto [found, inserted] = m_index->insert(MakeNotNull(identity));
     if(!inserted)
         return;
     ScopeExit discardIdentity([&]()noexcept{ m_index->erase(found); });
@@ -105,7 +105,7 @@ void MeshSkinningStateBufferCollector::promoteBufferIndex(){
     NWB_ASSERT(!m_index && m_inlineCount == s_InlineBufferCount && m_buffers.size() == m_inlineCount);
     BufferIndex index(s_InlineBufferCount * __hidden_skinning_live_state_buffers::s_PromotedIndexCapacityFactor, m_scratchArena);
     for(Core::Buffer* const identity : m_inlineBuffers){
-        const auto [found, inserted] = index.insert(identity);
+        const auto [found, inserted] = index.insert(MakeNotNull(identity));
         if(!inserted)
             TerminateInvariant();
     }

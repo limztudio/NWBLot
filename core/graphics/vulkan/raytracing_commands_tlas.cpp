@@ -39,8 +39,8 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
     if(!m_context.extensions.khrAccelerationStructure || !m_context.accelerationStructureFeatureEnabled)
         return;
 
-    auto* as = accelStructResource;
-    if(!as || !as->m_isTopLevelAtCreation){
+    auto& as = *MakeNotNull(accelStructResource);
+    if(!as.m_isTopLevelAtCreation){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS: acceleration structure is not top-level"));
         return;
     }
@@ -78,8 +78,8 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
     const auto instanceInput = suballocateBuildInput(instanceDataSize, s_TlasInstanceDataAlignment, NWB_TEXT("allocate TLAS instance input"));
     if(!instanceInput)
         return;
-    const VkDeviceAddress instanceDataAddress = VulkanDetail::GetBufferDeviceAddress(instanceInput->buffer, instanceInput->offset);
-    auto* mappedInstanceData = static_cast<u8*>(instanceInput->cpuAddress);
+    const VkDeviceAddress instanceDataAddress = VulkanDetail::GetBufferDeviceAddress(instanceInput->buffer.get(), instanceInput->offset);
+    const auto mappedInstanceData = MakeNotNull(static_cast<u8*>(instanceInput->cpuAddress));
 
     auto buildVkInstance = [&](usize i)noexcept{
         const auto& inst = pInstances[i];
@@ -105,7 +105,7 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
         vkInst.accelerationStructureReference = blas ? blas->m_deviceAddress : 0;
 
         const u64 destinationOffset = static_cast<u64>(i) * sizeof(VkAccelerationStructureInstanceKHR);
-        NWB_MEMCPY(mappedInstanceData + static_cast<usize>(destinationOffset), sizeof(VkAccelerationStructureInstanceKHR), &vkInst, sizeof(VkAccelerationStructureInstanceKHR));
+        NWB_MEMCPY(mappedInstanceData.get() + static_cast<usize>(destinationOffset), sizeof(VkAccelerationStructureInstanceKHR), &vkInst, sizeof(VkAccelerationStructureInstanceKHR));
     };
 
     if(taskScheduler().isParallelEnabled() && numInstances >= s_ParallelTlasInstanceThreshold){
@@ -121,7 +121,7 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
             buildVkInstance(i);
     }
 
-    if(!buildTopLevelAccelStructFromInstanceData(*as, instanceDataAddress, numInstances, buildFlags, vkBuildFlags, s_BuildTlasOperation))
+    if(!buildTopLevelAccelStructFromInstanceData(as, instanceDataAddress, numInstances, buildFlags, vkBuildFlags, s_BuildTlasOperation))
         return;
 
     for(usize i = 0u; i < numInstances; ++i)
@@ -150,8 +150,8 @@ void CommandList::buildTopLevelAccelStructFromBuffer(RayTracingAccelStruct* acce
     if(!m_context.extensions.khrAccelerationStructure || !m_context.accelerationStructureFeatureEnabled)
         return;
 
-    auto* as = accelStructResource;
-    if(!as || !as->m_isTopLevelAtCreation){
+    auto& as = *MakeNotNull(accelStructResource);
+    if(!as.m_isTopLevelAtCreation){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: acceleration structure is not top-level"));
         return;
     }
@@ -160,17 +160,13 @@ void CommandList::buildTopLevelAccelStructFromBuffer(RayTracingAccelStruct* acce
         return;
     const VkBuildAccelerationStructureFlagsKHR vkBuildFlags = *vkBuildFlagsResult;
 
-    auto* instanceBufferImpl = instanceBuffer;
-    if(!instanceBufferImpl){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: instance buffer is invalid"));
-        return;
-    }
+    auto& instanceBufferImpl = *MakeNotNull(instanceBuffer);
     constexpr VkBufferUsageFlags s_BuildInputUsage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-    if(!isBufferReadyForCommandQueue(instanceBufferImpl, s_BuildInputUsage)){
+    if(!isBufferReadyForCommandQueue(&instanceBufferImpl, s_BuildInputUsage)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: instance buffer is foreign or not ready"));
         return;
     }
-    const BufferDesc& instanceBufferCreationDesc = instanceBufferImpl->getCreationDescription();
+    const BufferDesc& instanceBufferCreationDesc = instanceBufferImpl.getCreationDescription();
     if(!instanceBufferCreationDesc.isAccelStructBuildInput){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: instance buffer was not created with acceleration-structure build input usage"));
         return;
@@ -183,7 +179,7 @@ void CommandList::buildTopLevelAccelStructFromBuffer(RayTracingAccelStruct* acce
     }
 
     const VkDeviceAddress instanceDataAddress = VulkanDetail::GetBufferDeviceAddress(instanceBuffer, instanceBufferOffset);
-    if(!buildTopLevelAccelStructFromInstanceData(*as, instanceDataAddress, numInstances, buildFlags, vkBuildFlags, s_BuildTlasFromBufferOperation))
+    if(!buildTopLevelAccelStructFromInstanceData(as, instanceDataAddress, numInstances, buildFlags, vkBuildFlags, s_BuildTlasFromBufferOperation))
         return;
 
     retainResource(instanceBuffer);

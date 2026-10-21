@@ -24,6 +24,7 @@
 #include <global/fixed_buffer.h>
 #include <global/hash_utils.h>
 #include <global/limit.h>
+#include <global/not_null.h>
 #include <global/overflow.h>
 #include <global/process_execution.h>
 #include <global/process_memory_map.h>
@@ -553,14 +554,14 @@ TEST(Global, BoundedRuntimeWrappersTerminateTruncatedText){
 TEST(Global, DiagnosticEventHookRejectsReentryAndHonorsBoundedText){
     ResetDiagnosticEventCapture();
 
-    const DiagnosticEventCallback callback = [](const DiagnosticEventRecord& record)noexcept{
+    const auto callback = MakeNotNull<DiagnosticEventCallback>([](const DiagnosticEventRecord& record)noexcept{
         RecordDiagnosticEvent(record);
         CaptureDiagnosticEvent("recursive", "ignored");
-    };
+    });
 
-    SetDiagnosticEventCallback(callback);
+    SetDiagnosticEventCallback(callback.get());
     CaptureDiagnosticEvent(AStringView("unit.trailing").substr(0u, 4u), AStringView("message.trailing").substr(0u, 7u), "diagnostics_test.cpp", 42u);
-    ClearDiagnosticEventCallback(callback);
+    ClearDiagnosticEventCallback(callback.get());
     CaptureDiagnosticEvent(s_UNIT, "ignored");
 
     EXPECT_EQ(s_DiagnosticEventCaptureCount, 1u);

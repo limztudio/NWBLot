@@ -35,9 +35,9 @@ FrameGraphSoftwareBvhBuildStateImporter::FrameGraphSoftwareBvhBuildStateImporter
 Expected<FrameGraphSoftwareBvhBuildStateResult> FrameGraphSoftwareBvhBuildStateImporter::declare(const FrameGraphSoftwareBvhBuildStateInputs& inputs, Core::Alloc::ScratchArena& scratchArena){
     FrameGraphSoftwareBvhBuildStateResult result(scratchArena);
     using namespace RendererTaskGraphDetail;
-    const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources = *inputs.rayTracingShadowResources;
+    const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources = inputs.rayTracingShadowResources;
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> softwareBvhBuildStateResources{ scratchArena };
-    Vector<Core::Buffer*, Core::Alloc::ScratchArena> softwareBvhBuildStateBuffers{ scratchArena };
+    Vector<NotNull<Core::Buffer*>, Core::Alloc::ScratchArena> softwareBvhBuildStateBuffers{ scratchArena };
     const auto importBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label){
         return m_graph.importBuffer(buffer, BufferResourceDesc(identity, label));
     };
@@ -52,15 +52,15 @@ Expected<FrameGraphSoftwareBvhBuildStateResult> FrameGraphSoftwareBvhBuildStateI
         const auto appendSoftwareBvhBuildState = [&](const Core::BufferHandle& buffer, const Name identity, const AStringView label){
             if(!buffer || !identity)
                 return false;
-            for(Core::Buffer* const existing : softwareBvhBuildStateBuffers){
-                if(existing == buffer.get())
+            for(const NotNull<Core::Buffer*> existing : softwareBvhBuildStateBuffers){
+                if(existing.get() == buffer.get())
                     return true;
             }
             const auto resourceResult = importBuffer(buffer, identity, label);
             if(!resourceResult)
                 return false;
             const Core::GpuGraphResourceId resource = *resourceResult;
-            softwareBvhBuildStateBuffers.push_back(buffer.get());
+            softwareBvhBuildStateBuffers.push_back(MakeNotNull(buffer.get()));
             softwareBvhBuildStateResources.push_back(resource);
             return true;
         };

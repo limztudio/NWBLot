@@ -307,11 +307,11 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
     if(!initializeDescriptorBufferBlocks(offsetAlignmentBytes))
         return failInitialization();
 
-    DescriptorBufferManager* const manager = m_context.descriptorBufferManager;
+    auto& manager = *MakeNotNull(m_context.descriptorBufferManager);
     bool managerGenerationReady = false;
     {
-        ScopedLock lifecycleLock(manager->m_lifecycleMutex);
-        managerGenerationReady = manager->m_enabled && !manager->m_lifecycleTransitioning && manager->m_bindingGeneration == m_descriptorBufferGeneration;
+        ScopedLock lifecycleLock(manager.m_lifecycleMutex);
+        managerGenerationReady = manager.m_enabled && !manager.m_lifecycleTransitioning && manager.m_bindingGeneration == m_descriptorBufferGeneration;
     }
     if(!managerGenerationReady)
         return failInitialization();
@@ -590,7 +590,7 @@ void GpuDescriptorHeap::resetStateForShutdownLocked()noexcept{
 
         auto& referencedHeaps = heapUse.commandBuffer->m_referencedDescriptorHeaps;
         for(usize heapIndex = 0u; heapIndex < referencedHeaps.size(); ++heapIndex){
-            if(referencedHeaps[heapIndex] != this)
+            if(referencedHeaps[heapIndex].get() != this)
                 continue;
 
             referencedHeaps.erase(referencedHeaps.begin() + heapIndex);

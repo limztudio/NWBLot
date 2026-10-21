@@ -49,7 +49,7 @@ CommandList::CommandList(Device& device, const CommandListParameters& params)
     , m_pendingImageBarriers(device.m_context.objectArena)
     , m_pendingBufferBarriers(device.m_context.objectArena)
     , m_textureOwnershipReleaseDestinations(0u, TextureSubresourceStateKeyHasher(), TextureSubresourceStateKeyEqualTo(), device.m_context.objectArena)
-    , m_bufferOwnershipReleaseDestinations(0u, Hasher<Buffer*>(), EqualTo<Buffer*>(), device.m_context.objectArena)
+    , m_bufferOwnershipReleaseDestinations(0u, Hasher<NotNull<Buffer*>>(), EqualTo<NotNull<Buffer*>>(), device.m_context.objectArena)
 {}
 CommandList::~CommandList()noexcept{
     abortRecordingAttemptWithoutCallbacks();
@@ -470,8 +470,8 @@ bool CommandList::isBufferReadyForCommandQueue(Buffer* const buffer, const VkBuf
 }
 
 bool CommandList::validateTrackedTexturesReadyForClose(){
-    for(Texture* const texture : m_currentCmdBuf->m_resourceReferences.m_textures){
-        if(!isTextureReadyForCommandQueue(texture)){
+    for(const auto texture : m_currentCmdBuf->m_resourceReferences.m_textures){
+        if(!isTextureReadyForCommandQueue(texture.get())){
             rejectCommandRecording(s_CloseCommandListOperation, NWB_TEXT("referenced texture is not ready for this exact command queue"));
             return false;
         }
@@ -484,8 +484,8 @@ bool CommandList::validateTrackedTexturesReadyForClose(){
         }
     }
     for(auto it = m_stateTracker.m_permanentTextureStates.begin(); it != m_stateTracker.m_permanentTextureStates.end(); ++it){
-        Texture* const texture = it.value().texture.get();
-        if(!isTextureReadyForCommandQueue(texture)){
+        auto& texture = *MakeNotNull(it.value().texture.get());
+        if(!isTextureReadyForCommandQueue(&texture)){
             rejectCommandRecording(s_CloseCommandListOperation, NWB_TEXT("permanent texture is not ready for this exact command queue"));
             return false;
         }
@@ -497,8 +497,8 @@ bool CommandList::validateTrackedTexturesReadyForClose(){
             return false;
         }
     }
-    for(GpuDescriptorHeap* const heap : m_currentCmdBuf->m_referencedDescriptorHeaps){
-        NWB_ASSERT(heap);
+    for(const auto heap : m_currentCmdBuf->m_referencedDescriptorHeaps){
+
         if(!heap->retainedResourcesReadyForQueue(m_creationDesc.physicalQueue)){
             rejectCommandRecording(s_CloseCommandListOperation, NWB_TEXT("descriptor heap contains a resource unavailable to this exact command queue"));
             return false;
@@ -509,29 +509,29 @@ bool CommandList::validateTrackedTexturesReadyForClose(){
 }
 
 bool CommandList::validateTrackedBuffersReadyForClose(){
-    for(Buffer* const buffer : m_currentCmdBuf->m_resourceReferences.m_buffers){
-        if(!isBufferReadyForCommandQueue(buffer)){
+    for(const auto buffer : m_currentCmdBuf->m_resourceReferences.m_buffers){
+        if(!isBufferReadyForCommandQueue(buffer.get())){
             rejectCommandRecording(s_CloseCommandListOperation, NWB_TEXT("referenced buffer is not ready for this exact command queue"));
             return false;
         }
     }
     for(auto it = m_stateTracker.m_bufferStates.begin(); it != m_stateTracker.m_bufferStates.end(); ++it){
-        Buffer* const buffer = it->first;
-        if(!isBufferReadyForCommandQueue(buffer)){
+        auto& buffer = *MakeNotNull(it->first.get());
+        if(!isBufferReadyForCommandQueue(&buffer)){
             rejectCommandRecording(s_CloseCommandListOperation, NWB_TEXT("tracked buffer is not ready for this exact command queue"));
             return false;
         }
     }
     for(auto it = m_stateTracker.m_permanentBufferStates.begin(); it != m_stateTracker.m_permanentBufferStates.end(); ++it){
-        Buffer* const buffer = it.value().buffer.get();
-        if(!isBufferReadyForCommandQueue(buffer)){
+        auto& buffer = *MakeNotNull(it.value().buffer.get());
+        if(!isBufferReadyForCommandQueue(&buffer)){
             rejectCommandRecording(s_CloseCommandListOperation, NWB_TEXT("permanent buffer is not ready for this exact command queue"));
             return false;
         }
     }
     for(auto it = m_bufferOwnershipReleaseDestinations.begin(); it != m_bufferOwnershipReleaseDestinations.end(); ++it){
-        Buffer* const buffer = it->first;
-        if(!isBufferReadyForCommandQueue(buffer)){
+        auto& buffer = *MakeNotNull(it->first.get());
+        if(!isBufferReadyForCommandQueue(&buffer)){
             rejectCommandRecording(s_CloseCommandListOperation, NWB_TEXT("released buffer is not ready for this exact command queue"));
             return false;
         }
@@ -563,32 +563,32 @@ void CommandList::discardUnsubmittedUploadChunks(){
     if(!m_currentCmdBuf)
         return;
 
-    TrackedCommandBuffer* owner = m_currentCmdBuf.get();
+    auto& owner = *MakeNotNull(m_currentCmdBuf.get());
     const u64 nativeRecordingID = m_nativeRecordingID;
-    const GpuPhysicalQueueId ownerQueue = owner->m_queue.m_physicalQueue;
+    const GpuPhysicalQueueId ownerQueue = owner.m_queue.m_physicalQueue;
     const Expected<u64> reusableVersion = m_device.queueGetCompletedInstance(ownerQueue);
     if(!reusableVersion){
-        m_device.m_uploadManager.abandonChunks(ownerQueue, owner, nativeRecordingID);
-        m_device.m_scratchManager.abandonChunks(ownerQueue, owner, nativeRecordingID);
-        m_device.m_accelStructInputManager.abandonChunks(ownerQueue, owner, nativeRecordingID);
+        m_device.m_uploadManager.abandonChunks(ownerQueue, &owner, nativeRecordingID);
+        m_device.m_scratchManager.abandonChunks(ownerQueue, &owner, nativeRecordingID);
+        m_device.m_accelStructInputManager.abandonChunks(ownerQueue, &owner, nativeRecordingID);
         return;
     }
 
-    m_device.m_uploadManager.discardChunks(ownerQueue, owner, nativeRecordingID, *reusableVersion);
-    m_device.m_scratchManager.discardChunks(ownerQueue, owner, nativeRecordingID, *reusableVersion);
-    m_device.m_accelStructInputManager.discardChunks(ownerQueue, owner, nativeRecordingID, *reusableVersion);
+    m_device.m_uploadManager.discardChunks(ownerQueue, &owner, nativeRecordingID, *reusableVersion);
+    m_device.m_scratchManager.discardChunks(ownerQueue, &owner, nativeRecordingID, *reusableVersion);
+    m_device.m_accelStructInputManager.discardChunks(ownerQueue, &owner, nativeRecordingID, *reusableVersion);
 }
 
 void CommandList::abandonUnsubmittedUploadChunks()noexcept{
     if(!m_currentCmdBuf)
         return;
 
-    TrackedCommandBuffer* const owner = m_currentCmdBuf.get();
+    auto& owner = *MakeNotNull(m_currentCmdBuf.get());
     const u64 nativeRecordingID = m_nativeRecordingID;
-    const GpuPhysicalQueueId ownerQueue = owner->m_queue.m_physicalQueue;
-    m_device.m_uploadManager.abandonChunks(ownerQueue, owner, nativeRecordingID);
-    m_device.m_scratchManager.abandonChunks(ownerQueue, owner, nativeRecordingID);
-    m_device.m_accelStructInputManager.abandonChunks(ownerQueue, owner, nativeRecordingID);
+    const GpuPhysicalQueueId ownerQueue = owner.m_queue.m_physicalQueue;
+    m_device.m_uploadManager.abandonChunks(ownerQueue, &owner, nativeRecordingID);
+    m_device.m_scratchManager.abandonChunks(ownerQueue, &owner, nativeRecordingID);
+    m_device.m_accelStructInputManager.abandonChunks(ownerQueue, &owner, nativeRecordingID);
 }
 
 

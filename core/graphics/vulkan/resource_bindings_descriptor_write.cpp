@@ -69,8 +69,7 @@ bool DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, c
 
     ScopedLock lock(storage.mutex);
 
-    auto* dstBytes = static_cast<u8*>(storage.mappedMemory);
-    NWB_ASSERT(dstBytes);
+    const auto dstBytes = MakeNotNull(static_cast<u8*>(storage.mappedMemory));
     if(dstOffsetBytes > storage.capacityBytes || descriptorSize > storage.capacityBytes - dstOffsetBytes){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: offset {} + size {} exceeds segment capacity {}."), dstOffsetBytes, descriptorSize, storage.capacityBytes);
         return false;
@@ -282,7 +281,7 @@ bool DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, c
         }
     }
 
-    m_context.deviceDispatch.vkGetDescriptorEXT(m_context.device, &getInfo, descriptorSize, dstBytes + dstOffsetBytes);
+    m_context.deviceDispatch.vkGetDescriptorEXT(m_context.device, &getInfo, descriptorSize, dstBytes.get() + dstOffsetBytes);
     return true;
 }
 

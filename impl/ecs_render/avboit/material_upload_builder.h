@@ -43,9 +43,9 @@ namespace AvboitMaterialUploadPhase{ enum Enum : u8{
 
 // Shared AVBOIT material upload owns instance plus typed plus CSG buffer uploads.
 struct AvboitMaterialUploadInputs{
-    const DeferredFrameTargets* targets = nullptr;
-    const ECSRenderDetail::CsgGraphResourceSnapshot* csgResources = nullptr;
-    const ECSRenderDetail::MeshFrameBindingSnapshot* frameBindings = nullptr;
+    const DeferredFrameTargets& targets;
+    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources;
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings;
     Core::GpuGraphResourceId materialInstances;
     Core::GpuGraphResourceId materialTyped;
     Core::GpuGraphResourceId csgReceiverRanges;

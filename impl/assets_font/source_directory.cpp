@@ -63,12 +63,12 @@ Expected<FontSfntTable> FontSfntDirectory::table(const usize index)const noexcep
     const auto recordResult = record(index);
     if(!recordResult)
         return MakeUnexpected(Failure{});
-    const u8* data = recordResult->data();
-    const u32 offset = ReadU32BigEndian(NotNull<const u8*>(data + __hidden_font_source_directory::s_RecordOffsetFieldOffset));
-    const u32 length = ReadU32BigEndian(NotNull<const u8*>(data + __hidden_font_source_directory::s_RecordLengthFieldOffset));
+    const NotNull<const u8*> data(recordResult->data());
+    const u32 offset = ReadU32BigEndian(NotNull<const u8*>(data.get() + __hidden_font_source_directory::s_RecordOffsetFieldOffset));
+    const u32 length = ReadU32BigEndian(NotNull<const u8*>(data.get() + __hidden_font_source_directory::s_RecordLengthFieldOffset));
     if(offset > m_bytes.size() || length > m_bytes.size() - offset)
         return MakeUnexpected(Failure{});
-    return FontSfntTable{ ReadU32BigEndian(NotNull<const u8*>(data)), offset, { m_bytes.data() + offset, length } };
+    return FontSfntTable{ ReadU32BigEndian(data), offset, { m_bytes.data() + offset, length } };
 }
 
 Expected<u32> FontSfntDirectory::tableTag(const usize index)const noexcept{

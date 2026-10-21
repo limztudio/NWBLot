@@ -57,13 +57,13 @@ Expected<SwapChainTransitionTicket> GraphicsRuntime::backBufferResizing(){
     invalidateRenderPassResources();
     m_swapChainFramebuffers.clear();
 
-    for(auto* renderPass : m_renderPasses)
+    for(const auto renderPass : m_renderPasses)
         renderPass->backBufferResizing();
     return Move(*ticket);
 }
 
 bool GraphicsRuntime::backBufferResized(){
-    for(auto* renderPass : m_renderPasses)
+    for(const auto renderPass : m_renderPasses)
         renderPass->backBufferResized(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
 
     const u32 backBufferCount = getBackBufferCount();
@@ -93,7 +93,7 @@ bool GraphicsRuntime::backBufferResized(){
 void GraphicsRuntime::displayScaleChanged(){
     notifyPointerScaleChanged();
 
-    for(auto* renderPass : m_renderPasses)
+    for(const auto renderPass : m_renderPasses)
         renderPass->displayScaleChanged(m_dpiScaleFactorX, m_dpiScaleFactorY);
 }
 

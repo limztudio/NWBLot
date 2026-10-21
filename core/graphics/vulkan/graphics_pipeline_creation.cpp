@@ -170,12 +170,12 @@ Expected<GraphicsPipelineHandle> Device::createGraphicsPipeline(const GraphicsPi
 
     auto vertexInputInfo = VulkanDetail::MakeVkStruct<VkPipelineVertexInputStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO);
     if(desc.inputLayout){
-        auto* layout = desc.inputLayout.get();
+        auto& layout = *MakeNotNull(desc.inputLayout.get());
 
-        vertexInputInfo.vertexBindingDescriptionCount = static_cast<uint32_t>(layout->m_bindings.size());
-        vertexInputInfo.pVertexBindingDescriptions = layout->m_bindings.data();
-        vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(layout->m_vkAttributes.size());
-        vertexInputInfo.pVertexAttributeDescriptions = layout->m_vkAttributes.data();
+        vertexInputInfo.vertexBindingDescriptionCount = static_cast<uint32_t>(layout.m_bindings.size());
+        vertexInputInfo.pVertexBindingDescriptions = layout.m_bindings.data();
+        vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(layout.m_vkAttributes.size());
+        vertexInputInfo.pVertexAttributeDescriptions = layout.m_vkAttributes.data();
     }
 
     auto inputAssembly = VulkanDetail::MakeVkStruct<VkPipelineInputAssemblyStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO);

@@ -40,9 +40,8 @@ inline constexpr Name s_ProjectUpdateCpuTimingScope("frame.project_update");
 
 
 void Frame::ApplyPointerScale(void* userData, f32 scaleX, f32 scaleY)noexcept{
-    auto* frame = static_cast<Frame*>(userData);
-    NWB_ASSERT(frame);
-    frame->m_input.setMousePositionScale(scaleX, scaleY);
+    auto& frame = *MakeNotNull(static_cast<Frame*>(userData));
+    frame.m_input.setMousePositionScale(scaleX, scaleY);
 }
 
 

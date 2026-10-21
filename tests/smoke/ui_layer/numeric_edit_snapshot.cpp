@@ -78,7 +78,7 @@ void UiNumericEditSmokeScene::observeState(const Impl::Ui::DisplayMetrics& displ
     UiNumericEditSnapshot current;
     current.values = values();
     current.display = display;
-    const EditModel* const models[]{ &m_integer.draft(), &m_float.draft(), &m_clipboard };
+    const NotNull<const EditModel*> models[]{ MakeNotNull(&m_integer.draft()), MakeNotNull(&m_float.draft()), MakeNotNull(&m_clipboard) };
     for(usize index = 0u; index < m_states.size(); ++index){
         const auto& placement = m_states[index].placement;
         current.rectangles[index * 4u] = placement.bounds;

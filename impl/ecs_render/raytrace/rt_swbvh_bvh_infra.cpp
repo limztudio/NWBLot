@@ -195,15 +195,15 @@ bool RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u3
     if(paddedCount < static_cast<u32>(NWB_BVH_SORT_GROUP_SIZE))
         return false;
 
-    Core::Buffer* keysBuffer = m_rayTracingState.m_bvhSortKeysBuffer.get();
-    Core::Buffer* payloadBuffer = m_rayTracingState.m_bvhSortPayloadBuffer.get();
+    const NotNull<Core::Buffer*> keysBuffer(m_rayTracingState.m_bvhSortKeysBuffer.get());
+    const NotNull<Core::Buffer*> payloadBuffer(m_rayTracingState.m_bvhSortPayloadBuffer.get());
 
     // Sort scratch is allocated for the maximum mesh size. Fence only this dispatch's padded lanes, including sentinel entries that participate in the sorting network.
     const Core::BufferRange sortRange(0u, static_cast<u64>(paddedCount) * sizeof(u32));
-    commandList.setEnableUavBarriersForBuffer(keysBuffer, true);
-    commandList.setEnableUavBarriersForBuffer(payloadBuffer, true);
-    commandList.setBufferState(keysBuffer, Core::ResourceStates::UnorderedAccess, false, sortRange);
-    commandList.setBufferState(payloadBuffer, Core::ResourceStates::UnorderedAccess, false, sortRange);
+    commandList.setEnableUavBarriersForBuffer(keysBuffer.get(), true);
+    commandList.setEnableUavBarriersForBuffer(payloadBuffer.get(), true);
+    commandList.setBufferState(keysBuffer.get(), Core::ResourceStates::UnorderedAccess, false, sortRange);
+    commandList.setBufferState(payloadBuffer.get(), Core::ResourceStates::UnorderedAccess, false, sortRange);
     commandList.commitBarriers();
 
     const u32 groupCount = paddedCount / static_cast<u32>(NWB_BVH_SORT_GROUP_SIZE);
@@ -219,8 +219,8 @@ bool RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u3
         commandList.dispatch(groups, 1u, 1u);
     };
     const auto bvhSortBarrier = [&commandList, keysBuffer, payloadBuffer, sortRange](){
-        commandList.setBufferState(keysBuffer, Core::ResourceStates::UnorderedAccess, false, sortRange);
-        commandList.setBufferState(payloadBuffer, Core::ResourceStates::UnorderedAccess, false, sortRange);
+        commandList.setBufferState(keysBuffer.get(), Core::ResourceStates::UnorderedAccess, false, sortRange);
+        commandList.setBufferState(payloadBuffer.get(), Core::ResourceStates::UnorderedAccess, false, sortRange);
         commandList.commitBarriers();
     };
 
@@ -531,11 +531,11 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     while(paddedCount < primitiveCount)
         paddedCount <<= 1u;
 
-    Core::Buffer* keysBuffer = m_rayTracingState.m_bvhSortKeysBuffer.get();
-    Core::Buffer* payloadBuffer = m_rayTracingState.m_bvhSortPayloadBuffer.get();
-    Core::Buffer* visitCounterBuffer = m_rayTracingState.m_bvhVisitCounterBuffer.get();
-    Core::Buffer* meshNodeBuffer = nodeBuffer.get();
-    Core::Buffer* meshParentBuffer = parentBuffer.get();
+    const NotNull<Core::Buffer*> keysBuffer(m_rayTracingState.m_bvhSortKeysBuffer.get());
+    const NotNull<Core::Buffer*> payloadBuffer(m_rayTracingState.m_bvhSortPayloadBuffer.get());
+    const NotNull<Core::Buffer*> visitCounterBuffer(m_rayTracingState.m_bvhVisitCounterBuffer.get());
+    const NotNull<Core::Buffer*> meshNodeBuffer(nodeBuffer.get());
+    const NotNull<Core::Buffer*> meshParentBuffer(parentBuffer.get());
 
     BvhBuildPushConstants pushConstants;
     pushConstants.primitiveCount = primitiveCount;
@@ -550,18 +550,18 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     pushConstants.aabbMin = Float3U(aabbMin.x, aabbMin.y, aabbMin.z);
     pushConstants.aabbMax = Float3U(aabbMax.x, aabbMax.y, aabbMax.z);
 
-    commandList.setEnableUavBarriersForBuffer(keysBuffer, true);
-    commandList.setEnableUavBarriersForBuffer(payloadBuffer, true);
-    commandList.setEnableUavBarriersForBuffer(meshNodeBuffer, true);
-    commandList.setEnableUavBarriersForBuffer(meshParentBuffer, true);
-    commandList.setEnableUavBarriersForBuffer(visitCounterBuffer, true);
+    commandList.setEnableUavBarriersForBuffer(keysBuffer.get(), true);
+    commandList.setEnableUavBarriersForBuffer(payloadBuffer.get(), true);
+    commandList.setEnableUavBarriersForBuffer(meshNodeBuffer.get(), true);
+    commandList.setEnableUavBarriersForBuffer(meshParentBuffer.get(), true);
+    commandList.setEnableUavBarriersForBuffer(visitCounterBuffer.get(), true);
 
     const auto bvhBuildBarrier = [&commandList, keysBuffer, payloadBuffer, meshNodeBuffer, meshParentBuffer, visitCounterBuffer](){
-        commandList.setBufferState(keysBuffer, Core::ResourceStates::UnorderedAccess);
-        commandList.setBufferState(payloadBuffer, Core::ResourceStates::UnorderedAccess);
-        commandList.setBufferState(meshNodeBuffer, Core::ResourceStates::UnorderedAccess);
-        commandList.setBufferState(meshParentBuffer, Core::ResourceStates::UnorderedAccess);
-        commandList.setBufferState(visitCounterBuffer, Core::ResourceStates::UnorderedAccess);
+        commandList.setBufferState(keysBuffer.get(), Core::ResourceStates::UnorderedAccess);
+        commandList.setBufferState(payloadBuffer.get(), Core::ResourceStates::UnorderedAccess);
+        commandList.setBufferState(meshNodeBuffer.get(), Core::ResourceStates::UnorderedAccess);
+        commandList.setBufferState(meshParentBuffer.get(), Core::ResourceStates::UnorderedAccess);
+        commandList.setBufferState(visitCounterBuffer.get(), Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
     };
 
@@ -608,11 +608,11 @@ bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
     if(primitiveCount == 0u || positionHeapSlot == Limit<u32>::s_Max || triangleIndexHeapSlot == Limit<u32>::s_Max || !meshSwBvhResourcesReady(nodeBuffer, parentBuffer, nodeHeapHandle, parentHeapHandle))
         return false;
 
-    Core::Buffer* keysBuffer = m_rayTracingState.m_bvhSortKeysBuffer.get();
-    Core::Buffer* payloadBuffer = m_rayTracingState.m_bvhSortPayloadBuffer.get();
-    Core::Buffer* meshNodeBuffer = nodeBuffer.get();
-    Core::Buffer* meshParentBuffer = parentBuffer.get();
-    Core::Buffer* visitCounterBuffer = m_rayTracingState.m_bvhVisitCounterBuffer.get();
+    const NotNull<Core::Buffer*> keysBuffer(m_rayTracingState.m_bvhSortKeysBuffer.get());
+    const NotNull<Core::Buffer*> payloadBuffer(m_rayTracingState.m_bvhSortPayloadBuffer.get());
+    const NotNull<Core::Buffer*> meshNodeBuffer(nodeBuffer.get());
+    const NotNull<Core::Buffer*> meshParentBuffer(parentBuffer.get());
+    const NotNull<Core::Buffer*> visitCounterBuffer(m_rayTracingState.m_bvhVisitCounterBuffer.get());
 
     BvhBuildPushConstants pushConstants;
     pushConstants.primitiveCount = primitiveCount;
@@ -626,11 +626,11 @@ bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
     pushConstants.parentHeapSlot = parentHeapHandle.slot();
     pushConstants.visitCounterHeapSlot = m_rayTracingState.m_bvhVisitCounterHeapHandle.slot();
 
-    commandList.setEnableUavBarriersForBuffer(keysBuffer, true);
-    commandList.setEnableUavBarriersForBuffer(payloadBuffer, true);
-    commandList.setEnableUavBarriersForBuffer(meshNodeBuffer, true);
-    commandList.setEnableUavBarriersForBuffer(meshParentBuffer, true);
-    commandList.setEnableUavBarriersForBuffer(visitCounterBuffer, true);
+    commandList.setEnableUavBarriersForBuffer(keysBuffer.get(), true);
+    commandList.setEnableUavBarriersForBuffer(payloadBuffer.get(), true);
+    commandList.setEnableUavBarriersForBuffer(meshNodeBuffer.get(), true);
+    commandList.setEnableUavBarriersForBuffer(meshParentBuffer.get(), true);
+    commandList.setEnableUavBarriersForBuffer(visitCounterBuffer.get(), true);
     Core::ComputeState computeState;
     computeState.setPipeline(m_rayTracingState.m_bvhFitPipeline.get());
     commandList.setComputeState(computeState);

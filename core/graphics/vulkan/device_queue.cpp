@@ -116,15 +116,15 @@ void Device::prepareSubmissionCommandListWorkspaceLocked(Queue& queue, CommandLi
     if(pCommandLists && numCommandLists > 0u){
         expectedCommandLists.reserve(numCommandLists);
         for(usize i = 0u; i < numCommandLists; ++i){
-            CommandList* const commandList = pCommandLists[i];
-            TrackedCommandBuffer* const owner = commandList->m_currentCmdBuf.get();
+            auto& commandList = *MakeNotNull(pCommandLists[i]);
+            TrackedCommandBuffer& owner = *commandList.m_currentCmdBuf;
             expectedCommandLists.push_back(Queue::SubmissionCommandListIdentity{
-                .owner = owner,
-                .recordingLeaseSerial = commandList->m_recordingLeaseSerial,
-                .nativeRecordingID = commandList->m_nativeRecordingID,
-                .recordingWorkerDomain = commandList->m_creationDesc.recordingWorkerDomain,
-                .graphRecordingOwnershipSerial = graphSubmissionAuthorized ? commandList->m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire) : 0u,
-                .recordingWorkerIndex = commandList->m_creationDesc.recordingWorkerIndex,
+                .owner = &owner,
+                .recordingLeaseSerial = commandList.m_recordingLeaseSerial,
+                .nativeRecordingID = commandList.m_nativeRecordingID,
+                .recordingWorkerDomain = commandList.m_creationDesc.recordingWorkerDomain,
+                .graphRecordingOwnershipSerial = graphSubmissionAuthorized ? commandList.m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire) : 0u,
+                .recordingWorkerIndex = commandList.m_creationDesc.recordingWorkerIndex,
                 .graphSubmissionAuthorized = graphSubmissionAuthorized,
             }
             );
@@ -267,8 +267,8 @@ Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
                 return MakeUnexpected(Failure{});
             }
 
-            Queue* const producerQueue = m_physicalQueues[token.physicalQueueIndex];
-            NWB_ASSERT(producerQueue);
+            const auto producerQueue = m_physicalQueues[token.physicalQueueIndex];
+
 
             // Queue order already covers same-queue dependencies.
             if(token.matchesPhysicalQueue(executionQueue.index, executionQueue.deviceGeneration))
@@ -349,8 +349,8 @@ bool Device::validateSubmissionWaitToken(const QueueSubmissionToken& token)const
     if(!token.valid() || !token.hasPhysicalQueueIdentity() || !matchesPhysicalQueueIdentity(token.queue, token.physicalQueueIndex, token.deviceGeneration) || token.physicalQueueIndex >= m_physicalQueues.size())
         return false;
 
-    Queue* const producerQueue = m_physicalQueues[token.physicalQueueIndex];
-    NWB_ASSERT(producerQueue && producerQueue->m_queueID == token.queue && token.matchesPhysicalQueue(producerQueue->m_physicalQueue.index, producerQueue->m_physicalQueue.deviceGeneration));
+    const auto producerQueue = m_physicalQueues[token.physicalQueueIndex];
+    NWB_ASSERT(producerQueue->m_queueID == token.queue && token.matchesPhysicalQueue(producerQueue->m_physicalQueue.index, producerQueue->m_physicalQueue.deviceGeneration));
 
     NothrowScopedLock producerLock(producerQueue->m_mutex);
     return producerQueue->m_trackingSemaphore != VK_NULL_HANDLE && token.value <= producerQueue->m_lastSubmittedID;
@@ -373,8 +373,8 @@ bool Device::waitForSubmissionTokenInternal(const QueueSubmissionToken& token, c
     if(!token.valid() || !token.hasPhysicalQueueIdentity() || !matchesPhysicalQueueIdentity(token.queue, token.physicalQueueIndex, token.deviceGeneration) || token.physicalQueueIndex >= m_physicalQueues.size())
         return false;
 
-    Queue* const producerQueue = m_physicalQueues[token.physicalQueueIndex];
-    NWB_ASSERT(producerQueue && producerQueue->m_queueID == token.queue);
+    const auto producerQueue = m_physicalQueues[token.physicalQueueIndex];
+    NWB_ASSERT(producerQueue->m_queueID == token.queue);
 
     VkResult result = VK_SUCCESS;
     {
@@ -457,7 +457,7 @@ bool Device::registerPhysicalQueue(const VulkanPhysicalQueueDesc& desc, NativeQu
         return false;
 
     m_physicalQueueInfos.push_back(info);
-    m_physicalQueues.push_back(queue);
+    m_physicalQueues.push_back(MakeNotNull(queue));
     if(desc.primaryForClass){
         m_primaryQueues[queueClassIndex] = queue;
         m_explicitPrimaryQueues[queueClassIndex] = true;
@@ -476,8 +476,8 @@ void Device::configureQueueSharingContext()noexcept{
     const auto resolveAuxiliaryFamily = [this](const Queue* const primaryQueue, const CommandQueue::Enum queueClass)noexcept{
         if(!primaryQueue)
             return s_InvalidQueueFamilyIndex;
-        for(const Queue* const physicalQueue : m_physicalQueues){
-            NWB_ASSERT(physicalQueue);
+        for(const auto physicalQueue : m_physicalQueues){
+
             if(physicalQueue->m_queueID == queueClass && physicalQueue->m_queueFamilyIndex != primaryQueue->m_queueFamilyIndex)
                 return static_cast<i32>(physicalQueue->m_queueFamilyIndex);
         }

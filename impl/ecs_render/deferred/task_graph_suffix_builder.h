@@ -36,7 +36,7 @@ class RendererDeferredSystem;
 
 // Composite/present suffix owns terminal color resolve and presentation handoff.
 struct DeferredGraphSuffixInputs{
-    DeferredFrameTargets* targets = nullptr;
+    DeferredFrameTargets& targets;
     Core::GpuGraphResourceId opaqueColor;
     Core::GpuGraphResourceId avboitAccumColor;
     Core::GpuGraphResourceId avboitAccumExtinction;
@@ -51,8 +51,8 @@ struct DeferredGraphSuffixInputs{
     Core::GpuTaskId refractionResolveTask;
     Core::GpuTaskId surfelGiTask;
     Core::GpuTaskId hardwareCausticsTask;
-    const Core::AcquiredPresentationFrame* presentationFrame = nullptr;
-    const Core::FramebufferDesc* presentationFramebufferDesc = nullptr;
+    const Core::AcquiredPresentationFrame& presentationFrame;
+    const Core::FramebufferDesc& presentationFramebufferDesc;
     bool useLaggedLightingHistory = false;
 };
 

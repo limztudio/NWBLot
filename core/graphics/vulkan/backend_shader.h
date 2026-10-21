@@ -30,9 +30,9 @@ public:
 
 public:
     [[nodiscard]] const ShaderDesc& getDescription()const noexcept{ return m_desc; }
-    void getBytecode(const void** ppBytecode, usize* pSize)const noexcept{
-        *ppBytecode = m_spirvWords.data();
-        *pSize = m_spirvWords.size() * sizeof(u32);
+    void getBytecode(const void*& bytecode, usize& size)const noexcept{
+        bytecode = m_spirvWords.data();
+        size = m_spirvWords.size() * sizeof(u32);
     }
 
 
@@ -87,7 +87,7 @@ public:
 
 
 public:
-    void getBytecode(const void** ppBytecode, usize* pSize)const noexcept;
+    void getBytecode(const void*& bytecode, usize& size)const noexcept;
     [[nodiscard]] Expected<ShaderHandle> getShader(AStringView entryName, ShaderType::Mask shaderType);
 
 

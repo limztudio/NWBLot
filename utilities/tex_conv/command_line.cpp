@@ -98,7 +98,7 @@ int Run(const int argc, char** argv){
     app.add_option(TexConvCliDetail::s_CubeOptionName.data(), cubeArguments, "Six cubemap faces: +X -X +Y -Y +Z -Z")->expected(static_cast<int>(TextureFormat::s_TextureCubeFaceCount));
     app.add_option(TexConvCliDetail::s_VolumeOptionName.data(), volumeArguments, "Ordered volume Z slices: z0 z1 ... zN")->expected(TexConvCliDetail::s_MinVolumeSliceCount, TexConvCliDetail::s_UnboundedOptionCount);
     app.add_option(TexConvCliDetail::s_OutputOptionName.data(), outputArgument, "Output base name or .nwb filename");
-    CLI::Option* alphaOption = app.add_option(TexConvCliDetail::s_AlphaOptionName.data(), alphaArgument, "Alpha source: mask image red channel, white, or black");
+    CLI::Option& alphaOption = *app.add_option(TexConvCliDetail::s_AlphaOptionName.data(), alphaArgument, "Alpha source: mask image red channel, white, or black");
     app.add_flag(TexConvCliDetail::s_LinearFlagName.data(), linear, "Treat LDR input as linear data instead of sRGB color (HDR input is always linear)");
     app.add_flag(TexConvCliDetail::s_ForceFlagName.data(), force, "Replace existing .nwb and .tex output files");
 
@@ -140,7 +140,7 @@ int Run(const int argc, char** argv){
                 }
             }
 
-            if(alphaOption->count() > TexConvCliDetail::s_AlphaOptionPresentCount){
+            if(alphaOption.count() > TexConvCliDetail::s_AlphaOptionPresentCount){
                 const AStringView alphaText(alphaArgument);
                 if(EqualsAsciiIgnoreCase(alphaText, s_AlphaWhiteKeyword)){
                     alphaSource.mode = AlphaSourceMode::Constant;

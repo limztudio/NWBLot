@@ -26,8 +26,8 @@ namespace __hidden_auto_registration{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-::AutoRegistrationQueue<AssetCodecFactory, AssetArena>& QueryAutoCodecFactoryQueue(){
-    static ::AutoRegistrationQueue<AssetCodecFactory, AssetArena> s_Queue(AssetsArenaScope::s_AutoCodecFactoryQueueArena);
+::AutoRegistrationQueue<NotNull<AssetCodecFactory>, AssetArena>& QueryAutoCodecFactoryQueue(){
+    static ::AutoRegistrationQueue<NotNull<AssetCodecFactory>, AssetArena> s_Queue(AssetsArenaScope::s_AutoCodecFactoryQueueArena);
     return s_Queue;
 }
 
@@ -52,11 +52,11 @@ bool AssetCodecAutoRegistrar::initialize(){
 
 void RegisterAutoCollectedAssetCodecs(AssetRegistry& outRegistry){
     Alloc::ScratchArena scratchArena(AssetsArenaScope::s_RegisterCodecsScratch);
-    Vector<AssetCodecFactory, Alloc::ScratchArena> codecFactories{scratchArena};
+    Vector<NotNull<AssetCodecFactory>, Alloc::ScratchArena> codecFactories{scratchArena};
     __hidden_auto_registration::QueryAutoCodecFactoryQueue().copyTo(codecFactories);
 
     ::RegisterAutoFactoryProducts(
-        codecFactories, [](const AssetCodecFactory factory){ return factory(); },
+        codecFactories, [](const NotNull<AssetCodecFactory> factory){ return (*factory)(); },
         [&](UniquePtr<IAssetCodec> codec){ return outRegistry.registerCodec(Move(codec)); },
         [](){ NWB_LOGGER_ERROR(NWB_TEXT("RegisterAutoCollectedAssetCodecs: codec factory returned null codec")); },
         [](){ NWB_LOGGER_ERROR(NWB_TEXT("RegisterAutoCollectedAssetCodecs: failed to register codec")); }

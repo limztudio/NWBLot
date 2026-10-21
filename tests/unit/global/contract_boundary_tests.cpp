@@ -273,6 +273,8 @@ TEST(GlobalContractBoundaries, ThrowingNotNullConversionPropagatesAndPreservesTh
     int replacement = 29;
     ThrowingPointerConversion conversion{ &replacement };
     static_assert(!noexcept(NotNull<int*>(conversion)));
+    static_assert(!IsConstructible_V<NotNull<int*>, NotNull<const int*>>);
+    static_assert(!IsConstructible_V<NotNull<ReferenceProbeDerived*>, NotNull<ReferenceProbeBase*>>);
     NotNull<int*> stored(&original);
     static_assert(!noexcept(stored = conversion));
     EXPECT_THROW((NotNull<int*>(conversion)), u32);

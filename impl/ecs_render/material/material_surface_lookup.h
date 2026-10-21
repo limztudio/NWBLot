@@ -32,7 +32,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual Expected<MaterialSurfaceInfo*> findMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset) = 0;
+    [[nodiscard]] virtual Expected<NotNull<MaterialSurfaceInfo*>> findMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset) = 0;
 };
 
 

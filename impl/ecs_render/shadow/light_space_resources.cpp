@@ -121,9 +121,9 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
             return false;
         }
     }
-    Core::ComputePipelineHandle* outputs[] = { &snapshot.viewPipeline, &snapshot.opaqueResolve, &snapshot.transparentResolve,
-        &snapshot.opaqueFallback, &snapshot.transparentFallback, &snapshot.shadePipeline, &snapshot.csgShadePipeline,
-        &snapshot.csgOpaqueResolve, &snapshot.csgTransparentResolve, &snapshot.csgOpaqueFallback, &snapshot.csgTransparentFallback, &snapshot.cullPipeline };
+    const NotNull<Core::ComputePipelineHandle*> outputs[] = { MakeNotNull(&snapshot.viewPipeline), MakeNotNull(&snapshot.opaqueResolve), MakeNotNull(&snapshot.transparentResolve),
+        MakeNotNull(&snapshot.opaqueFallback), MakeNotNull(&snapshot.transparentFallback), MakeNotNull(&snapshot.shadePipeline), MakeNotNull(&snapshot.csgShadePipeline),
+        MakeNotNull(&snapshot.csgOpaqueResolve), MakeNotNull(&snapshot.csgTransparentResolve), MakeNotNull(&snapshot.csgOpaqueFallback), MakeNotNull(&snapshot.csgTransparentFallback), MakeNotNull(&snapshot.cullPipeline) };
     const u32 shaderIndices[] = { 0u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 13u };
     for(u32 index = 0u; index < LengthOf(outputs); ++index){
         if(!csg && index >= ::__hidden_light_space::s_FirstCsgOnlyPipelineIndex && index <= ::__hidden_light_space::s_LastCsgOnlyPipelineIndex)

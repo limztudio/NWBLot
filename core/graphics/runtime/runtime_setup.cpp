@@ -350,7 +350,7 @@ Expected<BufferHandle> GraphicsRuntime::setupBuffer(const BufferSetupDesc& desc)
         uploadDesc.queueSharing,
         consumerQueue,
         &submissionData,
-        &__hidden_graphics_setup::DeclareBufferSetupUpload,
+        MakeNotNull(&__hidden_graphics_setup::DeclareBufferSetupUpload),
         uploadToken,
         sameClassRouting.enabled ? sameClassRouting.primaryQueue : GpuPhysicalQueueId{}
     );
@@ -410,7 +410,7 @@ Expected<TextureHandle> GraphicsRuntime::setupTexture(const TextureSetupDesc& de
         uploadDesc.queueSharing,
         consumerQueue,
         &submissionData,
-        &__hidden_graphics_setup::DeclareTextureSetupUpload,
+        MakeNotNull(&__hidden_graphics_setup::DeclareTextureSetupUpload),
         uploadToken,
         sameClassRouting.enabled ? sameClassRouting.primaryQueue : GpuPhysicalQueueId{}
     );

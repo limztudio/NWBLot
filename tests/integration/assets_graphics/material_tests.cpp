@@ -541,7 +541,6 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
     validCacheEntry.virtualPath = s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE;
     const auto cachedLayout = NWB::Impl::FindOrBuildMaterialBindTypedLayout(cacheInterface, validCacheEntry, layoutCache, scratchArena);
     ASSERT_TRUE(cachedLayout);
-    EXPECT_NE(*cachedLayout, nullptr);
     EXPECT_EQ(layoutCache.entries.size(), 1u);
     EXPECT_EQ(layoutCache.lookup.size(), 1u);
     EXPECT_EQ(logger.errorCount(), 0u);

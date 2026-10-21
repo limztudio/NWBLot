@@ -42,7 +42,7 @@ private:
 
 private:
     using TaskFunction = InplaceFunction<s_TaskFunctionBytes>;
-    using RangeFunction = void(*)(const void*, usize, usize);
+    using RangeFunction = void(*)(NotNull<const void*>, usize, usize);
 
 
 private:
@@ -80,6 +80,11 @@ private:
         // Intrusive MPMC links: every producer publication and consumer claim holds m_mutex.
         u32 head = TaskHandle::s_InvalidIndex;
         u32 tail = TaskHandle::s_InvalidIndex;
+    };
+
+    struct TaskReservation{
+        TaskHandle handle;
+        TaskNode& node;
     };
 
     struct ReadyProfile{
@@ -210,9 +215,9 @@ public:
 
 
 private:
-    [[nodiscard]] Expected<TaskHandle, CpuTaskAdmissionError::Enum> reserveTaskLocked();
+    [[nodiscard]] Expected<TaskReservation, CpuTaskAdmissionError::Enum> reserveTaskLocked();
     [[nodiscard]] Expected<TaskHandle, CpuTaskAdmissionError::Enum> submitTask(TaskFunction&& function, CpuTaskScope* scope, CpuTaskOptions options, const TaskHandle* dependencies, usize dependencyCount);
-    [[nodiscard]] Expected<void, CpuTaskAdmissionError::Enum> parallelRange(usize begin, usize end, usize grainSize, CpuTaskOptions options, const void* context, RangeFunction invoke);
+    [[nodiscard]] Expected<void, CpuTaskAdmissionError::Enum> parallelRange(usize begin, usize end, usize grainSize, CpuTaskOptions options, NotNull<const void*> context, NotNull<RangeFunction> invoke);
     void releaseReservation(TaskHandle handle)noexcept;
     [[nodiscard]] TaskNode* resolveLocked(TaskHandle handle)noexcept;
     [[nodiscard]] const TaskNode* resolveLocked(TaskHandle handle)const noexcept;
@@ -398,10 +403,10 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelFor(usize 
         for(usize index = first; index < last; ++index)
             function(index);
     };
-    return parallelRange(begin, end, grainSize, options, &range, [](const void* context, const usize first, const usize last)noexcept(noexcept((*static_cast<const decltype(range)*>(context))(first, last))){
-        (*static_cast<const decltype(range)*>(context))(first, last);
+    return parallelRange(begin, end, grainSize, options, MakeNotNull(static_cast<const void*>(&range)), NotNull<RangeFunction>([](NotNull<const void*> context, const usize first, const usize last)noexcept(noexcept((*static_cast<const decltype(range)*>(context.get()))(first, last))){
+        (*static_cast<const decltype(range)*>(context.get()))(first, last);
     }
-    );
+    ));
 }
 
 

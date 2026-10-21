@@ -457,7 +457,7 @@ bool VulkanAllocator::tryRegisterBufferNativeIdentity(Buffer& buffer){
 
     const u64 nativeIdentity = Object(buffer.m_buffer).integer;
     NothrowScopedLock lock(m_bufferNativeIdentityMutex);
-    return m_bufferNativeIdentities.emplace(nativeIdentity, &buffer).second;
+    return m_bufferNativeIdentities.emplace(nativeIdentity, MakeNotNull(&buffer)).second;
 }
 
 void VulkanAllocator::unregisterBufferNativeIdentity(const VkBuffer nativeBuffer, Buffer& buffer)noexcept{
@@ -467,7 +467,7 @@ void VulkanAllocator::unregisterBufferNativeIdentity(const VkBuffer nativeBuffer
     const u64 nativeIdentity = Object(nativeBuffer).integer;
     NothrowScopedLock lock(m_bufferNativeIdentityMutex);
     const auto found = m_bufferNativeIdentities.find(nativeIdentity);
-    if(found != m_bufferNativeIdentities.end() && found.value() == &buffer)
+    if(found != m_bufferNativeIdentities.end() && found.value().get() == &buffer)
         m_bufferNativeIdentities.erase(found);
 }
 
@@ -478,7 +478,7 @@ bool VulkanAllocator::isBufferNativeIdentityRegistered(const Buffer& buffer)cons
     const u64 nativeIdentity = Object(buffer.m_buffer).integer;
     NothrowScopedLock lock(m_bufferNativeIdentityMutex);
     const auto found = m_bufferNativeIdentities.find(nativeIdentity);
-    return found != m_bufferNativeIdentities.end() && found.value() == &buffer;
+    return found != m_bufferNativeIdentities.end() && found.value().get() == &buffer;
 }
 
 bool VulkanAllocator::tryRegisterTextureNativeIdentity(Texture& texture){
@@ -486,7 +486,7 @@ bool VulkanAllocator::tryRegisterTextureNativeIdentity(Texture& texture){
         return false;
 
     NothrowScopedLock lock(m_textureNativeIdentityMutex);
-    return m_textureNativeIdentities.emplace(texture.m_image, &texture).second;
+    return m_textureNativeIdentities.emplace(texture.m_image, MakeNotNull(&texture)).second;
 }
 
 void VulkanAllocator::unregisterTextureNativeIdentity(const VkImage nativeImage, Texture& texture)noexcept{
@@ -495,7 +495,7 @@ void VulkanAllocator::unregisterTextureNativeIdentity(const VkImage nativeImage,
 
     NothrowScopedLock lock(m_textureNativeIdentityMutex);
     const auto found = m_textureNativeIdentities.find(nativeImage);
-    if(found != m_textureNativeIdentities.end() && found.value() == &texture)
+    if(found != m_textureNativeIdentities.end() && found.value().get() == &texture)
         m_textureNativeIdentities.erase(found);
 }
 
@@ -505,7 +505,7 @@ bool VulkanAllocator::isTextureNativeIdentityRegistered(const VkImage nativeImag
 
     NothrowScopedLock lock(m_textureNativeIdentityMutex);
     const auto found = m_textureNativeIdentities.find(nativeImage);
-    return found != m_textureNativeIdentities.end() && found.value() == &texture;
+    return found != m_textureNativeIdentities.end() && found.value().get() == &texture;
 }
 
 

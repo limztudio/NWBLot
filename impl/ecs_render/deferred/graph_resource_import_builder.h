@@ -27,12 +27,12 @@ struct RayTracingDeferredGraphResourceSnapshot;
 
 // Deferred graph resource imports own G-buffer, CSG, lighting-history, and AVBOIT target imports.
 struct DeferredGraphResourceImportInputs{
-    DeferredFrameTargets* targets = nullptr;
-    const DeferredLightingGraphResources* lightingResources = nullptr;
-    const ECSRenderDetail::MeshFrameBindingSnapshot* frameBindings = nullptr;
-    const ECSRenderDetail::MeshViewBufferSnapshot* meshViewSnapshot = nullptr;
-    const ECSRenderDetail::CsgGraphResourceSnapshot* csgResources = nullptr;
-    const RayTracingDeferredGraphResourceSnapshot* rayTracingResources = nullptr;
+    DeferredFrameTargets& targets;
+    const DeferredLightingGraphResources& lightingResources;
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings;
+    const ECSRenderDetail::MeshViewBufferSnapshot& meshViewSnapshot;
+    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources;
+    const RayTracingDeferredGraphResourceSnapshot& rayTracingResources;
     const DeferredLaggedLightingHistoryResources* history = nullptr;
     const DeferredLaggedLightingHistoryResources* captureHistory = nullptr;
     bool clearAvboitTargets = false;

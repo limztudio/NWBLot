@@ -39,8 +39,7 @@ Expected<BufferSuballocation> UploadManager::suballocateBuffer(const u64 size, T
         return MakeUnexpected(Failure{});
 
     ScopedLock lock(m_mutex);
-    QueueChunkLedger* const ledger = findOrCreateQueueLedgerLocked(queue);
-    NWB_ASSERT(ledger);
+    auto& activeLedger = findOrCreateQueueLedgerLocked(queue);
 
     const auto trySuballocateFromChunk = [&](BufferChunk& chunk)noexcept -> Expected<BufferSuballocation>{
         const auto alignedOffset = AlignUpU64Checked(chunk.allocated, static_cast<u64>(alignment));
@@ -49,14 +48,14 @@ Expected<BufferSuballocation> UploadManager::suballocateBuffer(const u64 size, T
         if(*alignedOffset > chunk.size || size > chunk.size - *alignedOffset)
             return MakeUnexpected(Failure{});
 
-        Buffer* buffer = chunk.buffer.get();
-        void* const cpuAddress = buffer->m_mappedMemory ? static_cast<u8*>(buffer->m_mappedMemory) + *alignedOffset : nullptr;
+        Buffer& buffer = *chunk.buffer;
+        void* const cpuAddress = buffer.m_mappedMemory ? static_cast<u8*>(buffer.m_mappedMemory) + *alignedOffset : nullptr;
 
         chunk.allocated = *alignedOffset + size;
-        return BufferSuballocation{ buffer, *alignedOffset, cpuAddress };
+        return BufferSuballocation{ MakeNotNull(&buffer), *alignedOffset, cpuAddress };
     };
 
-    for(BufferChunk* chunk = ledger->firstActiveChunk; chunk; chunk = chunk->nextActiveChunk){
+    for(BufferChunk* chunk = activeLedger.firstActiveChunk; chunk; chunk = chunk->nextActiveChunk){
         if(chunk->owner == owner && chunk->nativeRecordingID == nativeRecordingID){
             const auto result = trySuballocateFromChunk(*chunk);
             if(result)
@@ -64,7 +63,7 @@ Expected<BufferSuballocation> UploadManager::suballocateBuffer(const u64 size, T
         }
     }
 
-    for(BufferChunkPtr& retiredChunk : ledger->chunks){
+    for(BufferChunkPtr& retiredChunk : activeLedger.chunks){
         NWB_ASSERT(retiredChunk);
         NWB_ASSERT(retiredChunk->physicalQueue == queue && (retiredChunk->owner == nullptr) == (retiredChunk->nativeRecordingID == 0u));
         if(!retiredChunk->owner && retiredChunk->size >= size && retiredChunk->version <= completedVersion){
@@ -76,7 +75,7 @@ Expected<BufferSuballocation> UploadManager::suballocateBuffer(const u64 size, T
             retiredChunk->nativeRecordingID = nativeRecordingID;
             retiredChunk->allocated = 0u;
             retiredChunk->version = completedVersion;
-            linkActiveChunkLocked(*ledger, *retiredChunk);
+            linkActiveChunkLocked(activeLedger, *retiredChunk);
 
             return trySuballocateFromChunk(*retiredChunk);
         }
@@ -110,10 +109,10 @@ Expected<BufferSuballocation> UploadManager::suballocateBuffer(const u64 size, T
         return MakeUnexpected(Failure{});
     BufferHandle bufferHandle = Move(*bufferHandleResult);
 
-    ledger->chunks.push_back(MakeRefCount<BufferChunk>(m_device.m_context.cpuScheduler, Move(bufferHandle), owner, nativeRecordingID, queue, chunkSize));
-    BufferChunkPtr& currentChunk = ledger->chunks.back();
+    activeLedger.chunks.push_back(MakeRefCount<BufferChunk>(m_device.m_context.cpuScheduler, Move(bufferHandle), *owner, nativeRecordingID, queue, chunkSize));
+    BufferChunkPtr& currentChunk = activeLedger.chunks.back();
     currentChunk->version = completedVersion;
-    linkActiveChunkLocked(*ledger, *currentChunk);
+    linkActiveChunkLocked(activeLedger, *currentChunk);
 
     return trySuballocateFromChunk(*currentChunk);
 }
@@ -197,13 +196,13 @@ UploadManager::QueueChunkLedger* UploadManager::findQueueLedgerLocked(const GpuP
     return nullptr;
 }
 
-UploadManager::QueueChunkLedger* UploadManager::findOrCreateQueueLedgerLocked(const GpuPhysicalQueueId queue){
-    QueueChunkLedger* const ledger = findQueueLedgerLocked(queue);
-    if(ledger || !queue.valid())
-        return ledger;
+UploadManager::QueueChunkLedger& UploadManager::findOrCreateQueueLedgerLocked(const GpuPhysicalQueueId queue){
+    NWB_ASSERT(queue.valid());
+    if(QueueChunkLedger* const ledger = findQueueLedgerLocked(queue))
+        return *ledger;
 
     m_queueChunkLedgers.emplace_back(m_device.m_context.objectArena, queue);
-    return &m_queueChunkLedgers.back();
+    return m_queueChunkLedgers.back();
 }
 
 void UploadManager::linkActiveChunkLocked(QueueChunkLedger& ledger, BufferChunk& chunk)noexcept{

@@ -8,6 +8,7 @@
 #include "../type.h"
 #include "../bit.h"
 #include "../hash_utils.h"
+#include "../not_null.h"
 #include "macro.h"
 
 
@@ -65,7 +66,7 @@ template<typename Element>
 }
 
 template<typename Element, usize Count>
-[[nodiscard]] NWB_INLINE bool EqualElements(const Element* lhs, const Element* rhs)noexcept{
+[[nodiscard]] NWB_INLINE bool EqualElements(const NotNull<const Element*> lhs, const NotNull<const Element*> rhs)noexcept{
 #pragma STDC FENV_ACCESS ON
     // Clang bool vectors use packed bits; wide integers are not supported native lane elements.
     if constexpr(s_NativeEqualityPackets && (IsSame_V<Element, f32> || (IsIntegral_V<Element> && !IsSame_V<Element, bool> && sizeof(Element) <= sizeof(u64)))){
@@ -74,8 +75,8 @@ template<typename Element, usize Count>
             const usize count = Count - first < s_Lanes ? Count - first : s_Lanes;
             EqualityPacket<Element> lhsPacket{}, rhsPacket{};
             // Exact-sized loads support borrowed unaligned arrays and two/three-lane tails.
-            __builtin_memcpy(&lhsPacket, lhs + first, count * sizeof(Element));
-            __builtin_memcpy(&rhsPacket, rhs + first, count * sizeof(Element));
+            __builtin_memcpy(&lhsPacket, lhs.get() + first, count * sizeof(Element));
+            __builtin_memcpy(&rhsPacket, rhs.get() + first, count * sizeof(Element));
             if constexpr(IsSame_V<Element, f32>){
                 using UInt4 = EqualityPacket<u32>;
                 const UInt4 lhsMagnitude = BitCast<UInt4>(lhsPacket) & UInt4{ 0x7FFFFFFFu, 0x7FFFFFFFu, 0x7FFFFFFFu, 0x7FFFFFFFu };
@@ -86,7 +87,7 @@ template<typename Element, usize Count>
                 if(__builtin_reduce_or(exceptional) != 0){
                     // Preserve skipped NaN/denormal flags and traps after an earlier mismatch.
                     for(usize lane = 0u; lane < count; ++lane){
-                        if(lhs[first + lane] != rhs[first + lane])
+                        if(lhs.get()[first + lane] != rhs.get()[first + lane])
                             return false;
                     }
                 }
@@ -100,7 +101,7 @@ template<typename Element, usize Count>
     }
     else{
         for(usize i = 0u; i < Count; ++i){
-            if(lhs[i] != rhs[i])
+            if(lhs.get()[i] != rhs.get()[i])
                 return false;
         }
         return true;
@@ -110,7 +111,7 @@ template<typename Element, usize Count>
 template<typename Value, usize Count>
 [[nodiscard]] NWB_INLINE bool EqualArray(const Value& lhs, const Value& rhs)noexcept{
     using Element = RemoveCVRef_T<decltype(lhs.raw[0])>;
-    return EqualElements<Element, Count>(lhs.raw, rhs.raw);
+    return EqualElements<Element, Count>(MakeNotNull<const Element*>(lhs.raw), MakeNotNull<const Element*>(rhs.raw));
 }
 
 template<typename Value>
@@ -119,7 +120,7 @@ template<typename Value>
     // Copy XYZ as storage so an unused signaling NaN never crosses a scalar FP ABI.
     __builtin_memcpy(lhsValues, &lhs, sizeof(lhsValues));
     __builtin_memcpy(rhsValues, &rhs, sizeof(rhsValues));
-    return EqualElements<f32, 3u>(lhsValues, rhsValues) && lhs.w == rhs.w;
+    return EqualElements<f32, 3u>(MakeNotNull<const f32*>(lhsValues), MakeNotNull<const f32*>(rhsValues)) && lhs.w == rhs.w;
 }
 
 
@@ -369,7 +370,7 @@ struct alignas(32) Double2{
         , y(yValue)
     {
     }
-    explicit constexpr Double2(const f64* pArray)noexcept
+    explicit constexpr Double2(const f64 (&pArray)[2])noexcept
         : x(pArray[0])
         , y(pArray[1])
     {
@@ -406,7 +407,7 @@ struct alignas(32) Double3{
         , z(zValue)
     {
     }
-    explicit constexpr Double3(const f64* pArray)noexcept
+    explicit constexpr Double3(const f64 (&pArray)[3])noexcept
         : x(pArray[0])
         , y(pArray[1])
         , z(pArray[2])
@@ -446,7 +447,7 @@ struct alignas(16) Float4{
         : x(xValue), y(yValue), z(zValue), w(wValue)
     {
     }
-    explicit constexpr Float4(const f32* pArray)noexcept
+    explicit constexpr Float4(const f32 (&pArray)[4])noexcept
         : x(pArray[0]), y(pArray[1]), z(pArray[2]), w(pArray[3])
     {
     }
@@ -481,7 +482,7 @@ struct alignas(32) Double4{
         : x(xValue), y(yValue), z(zValue), w(wValue)
     {
     }
-    explicit constexpr Double4(const f64* pArray)noexcept
+    explicit constexpr Double4(const f64 (&pArray)[4])noexcept
         : x(pArray[0]), y(pArray[1]), z(pArray[2]), w(pArray[3])
     {
     }
@@ -712,7 +713,7 @@ struct Float2U{
         : x(xValue), y(yValue)
     {
     }
-    explicit constexpr Float2U(const f32* pArray)noexcept
+    explicit constexpr Float2U(const f32 (&pArray)[2])noexcept
         : x(pArray[0]), y(pArray[1])
     {
     }
@@ -739,7 +740,7 @@ struct Double2U{
         : x(xValue), y(yValue)
     {
     }
-    explicit constexpr Double2U(const f64* pArray)noexcept
+    explicit constexpr Double2U(const f64 (&pArray)[2])noexcept
         : x(pArray[0]), y(pArray[1])
     {
     }
@@ -768,7 +769,7 @@ struct Float3U{
         : x(xValue), y(yValue), z(zValue)
     {
     }
-    explicit constexpr Float3U(const f32* pArray)noexcept
+    explicit constexpr Float3U(const f32 (&pArray)[3])noexcept
         : x(pArray[0]), y(pArray[1]), z(pArray[2])
     {
     }
@@ -797,7 +798,7 @@ struct Double3U{
         : x(xValue), y(yValue), z(zValue)
     {
     }
-    explicit constexpr Double3U(const f64* pArray)noexcept
+    explicit constexpr Double3U(const f64 (&pArray)[3])noexcept
         : x(pArray[0]), y(pArray[1]), z(pArray[2])
     {
     }
@@ -828,7 +829,7 @@ struct Float4U{
         : x(xValue), y(yValue), z(zValue), w(wValue)
     {
     }
-    explicit constexpr Float4U(const f32* pArray)noexcept
+    explicit constexpr Float4U(const f32 (&pArray)[4])noexcept
         : x(pArray[0]), y(pArray[1]), z(pArray[2]), w(pArray[3])
     {
     }
@@ -859,7 +860,7 @@ struct Double4U{
         : x(xValue), y(yValue), z(zValue), w(wValue)
     {
     }
-    explicit constexpr Double4U(const f64* pArray)noexcept
+    explicit constexpr Double4U(const f64 (&pArray)[4])noexcept
         : x(pArray[0]), y(pArray[1]), z(pArray[2]), w(pArray[3])
     {
     }

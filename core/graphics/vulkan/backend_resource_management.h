@@ -192,10 +192,10 @@ private:
 
 
 private:
-    using PermanentTextureStateMap = HashMap<Texture*, PermanentTextureStateValue, Alloc::GlobalArena, Hasher<Texture*>, EqualTo<Texture*>>;
-    using PermanentBufferStateMap = HashMap<Buffer*, PermanentBufferStateValue, Alloc::GlobalArena, Hasher<Buffer*>, EqualTo<Buffer*>>;
-    using BufferUavBarrierPolicyMap = HashMap<Buffer*, BufferUavBarrierPolicyValue, Alloc::GlobalArena, Hasher<Buffer*>, EqualTo<Buffer*>>;
-    using TextureUavBarrierPolicyMap = HashMap<Texture*, TextureUavBarrierPolicyValue, Alloc::GlobalArena, Hasher<Texture*>, EqualTo<Texture*>>;
+    using PermanentTextureStateMap = HashMap<NotNull<Texture*>, PermanentTextureStateValue, Alloc::GlobalArena, Hasher<NotNull<Texture*>>, EqualTo<NotNull<Texture*>>>;
+    using PermanentBufferStateMap = HashMap<NotNull<Buffer*>, PermanentBufferStateValue, Alloc::GlobalArena, Hasher<NotNull<Buffer*>>, EqualTo<NotNull<Buffer*>>>;
+    using BufferUavBarrierPolicyMap = HashMap<NotNull<Buffer*>, BufferUavBarrierPolicyValue, Alloc::GlobalArena, Hasher<NotNull<Buffer*>>, EqualTo<NotNull<Buffer*>>>;
+    using TextureUavBarrierPolicyMap = HashMap<NotNull<Texture*>, TextureUavBarrierPolicyValue, Alloc::GlobalArena, Hasher<NotNull<Texture*>>, EqualTo<NotNull<Texture*>>>;
 
 
 public:
@@ -244,10 +244,10 @@ private:
 private:
     PermanentTextureStateMap m_permanentTextureStates;
     PermanentBufferStateMap m_permanentBufferStates;
-    Vector<Texture*, Alloc::GlobalArena> m_attemptPermanentTextures;
-    Vector<Buffer*, Alloc::GlobalArena> m_attemptPermanentBuffers;
+    Vector<NotNull<Texture*>, Alloc::GlobalArena> m_attemptPermanentTextures;
+    Vector<NotNull<Buffer*>, Alloc::GlobalArena> m_attemptPermanentBuffers;
     HashMap<TextureSubresourceStateKey, ResourceStates::Mask, Alloc::GlobalArena, TextureSubresourceStateKeyHasher, TextureSubresourceStateKeyEqualTo> m_textureStates;
-    HashMap<Buffer*, BufferRangeStates, Alloc::GlobalArena, Hasher<Buffer*>, EqualTo<Buffer*>> m_bufferStates;
+    HashMap<NotNull<Buffer*>, BufferRangeStates, Alloc::GlobalArena, Hasher<NotNull<Buffer*>>, EqualTo<NotNull<Buffer*>>> m_bufferStates;
     TextureUavBarrierPolicyMap m_textureUavBarriers;
     BufferUavBarrierPolicyMap m_bufferUavBarriers;
 

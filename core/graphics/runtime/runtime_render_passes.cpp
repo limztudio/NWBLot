@@ -25,8 +25,8 @@ NWB_CORE_BEGIN
 
 
 void GraphicsRuntime::addRenderPassToFront(IRenderPass& pass){
-    m_renderPasses.remove(&pass);
-    m_renderPasses.push_front(&pass);
+    m_renderPasses.remove(MakeNotNull(&pass));
+    m_renderPasses.push_front(MakeNotNull(&pass));
 
     pass.backBufferResizing();
     pass.backBufferResized(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
@@ -35,8 +35,8 @@ void GraphicsRuntime::addRenderPassToFront(IRenderPass& pass){
 }
 
 void GraphicsRuntime::addRenderPassToBack(IRenderPass& pass){
-    m_renderPasses.remove(&pass);
-    m_renderPasses.push_back(&pass);
+    m_renderPasses.remove(MakeNotNull(&pass));
+    m_renderPasses.push_back(MakeNotNull(&pass));
 
     pass.backBufferResizing();
     pass.backBufferResized(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
@@ -50,7 +50,7 @@ void GraphicsRuntime::removeRenderPass(IRenderPass& pass){
     NWB_FATAL_ASSERT_MSG(deviceIdle || (device && device->isDeviceLost()), NWB_TEXT("Render-pass removal requires either a completed device join or terminal device loss"));
 
     pass.invalidateResources();
-    m_renderPasses.remove(&pass);
+    m_renderPasses.remove(MakeNotNull(&pass));
 }
 
 
@@ -58,13 +58,13 @@ void GraphicsRuntime::removeRenderPass(IRenderPass& pass){
 
 
 void GraphicsRuntime::invalidateRenderPassResources(){
-    for(auto* renderPass : m_renderPasses)
+    for(const auto renderPass : m_renderPasses)
         renderPass->invalidateResources();
 }
 
 bool GraphicsRuntime::validateRenderPassResources(){
     bool valid = true;
-    for(auto* renderPass : m_renderPasses){
+    for(const auto renderPass : m_renderPasses){
         valid = renderPass->validateResources(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount) && valid;
     }
     return valid;

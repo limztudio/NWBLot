@@ -182,7 +182,7 @@ CpuTaskSchedulerStatistics CpuTaskScheduler::statistics()const noexcept{
 }
 
 
-Expected<CpuTaskScheduler::TaskHandle, CpuTaskAdmissionError::Enum> CpuTaskScheduler::reserveTaskLocked(){
+Expected<CpuTaskScheduler::TaskReservation, CpuTaskAdmissionError::Enum> CpuTaskScheduler::reserveTaskLocked(){
     u32 index = m_freeNode;
     if(index == TaskHandle::s_InvalidIndex){
         if(m_nodes.size() >= TaskHandle::s_InvalidIndex)
@@ -200,7 +200,7 @@ Expected<CpuTaskScheduler::TaskHandle, CpuTaskAdmissionError::Enum> CpuTaskSched
     TaskNode& node = m_nodes[index];
     node.state = TaskState::Preparing;
     node.next = TaskHandle::s_InvalidIndex;
-    return TaskHandle{ m_domainIdentity, index, node.generation };
+    return TaskReservation{ TaskHandle{ m_domainIdentity, index, node.generation }, node };
 }
 
 Expected<CpuTaskScheduler::TaskHandle, CpuTaskAdmissionError::Enum> CpuTaskScheduler::submitTask(TaskFunction&& function, CpuTaskScope* const scope, const CpuTaskOptions options, const TaskHandle* const dependencies, const usize dependencyCount){
@@ -211,11 +211,9 @@ Expected<CpuTaskScheduler::TaskHandle, CpuTaskAdmissionError::Enum> CpuTaskSched
     if(options.cost > CpuTaskCost::Light || options.priority > CpuTaskPriority::Background || options.target > CpuTaskTarget::MainThread)
         return MakeUnexpected(CpuTaskAdmissionError::InvalidOptions);
 
-    TaskHandle handle;
-    TaskNode* node;
     u32 wakeMask;
     bool wakeJoiners;
-    {
+    const auto reservation = [&]() -> Expected<TaskReservation, CpuTaskAdmissionError::Enum>{
         ScopedLock lock(m_mutex);
         if(m_aborting)
             return MakeUnexpected(CpuTaskAdmissionError::Aborting);
@@ -225,23 +223,23 @@ Expected<CpuTaskScheduler::TaskHandle, CpuTaskAdmissionError::Enum> CpuTaskSched
             if(dependencies[index].valid() && dependencies[index].domainIdentity != m_domainIdentity)
                 return MakeUnexpected(CpuTaskAdmissionError::ForeignDependency);
         }
-        const auto reserved = reserveTaskLocked();
-        if(!reserved)
-            return MakeUnexpected(reserved.error());
-        handle = *reserved;
-        node = &m_nodes[handle.index];
-    }
+        return reserveTaskLocked();
+    }();
+    if(!reservation)
+        return MakeUnexpected(reservation.error());
+    const TaskHandle handle = reservation->handle;
+    TaskNode& node = reservation->node;
     ScopeExit release([&]()noexcept{ releaseReservation(handle); });
 
-    node->function = Move(function);
+    node.function = Move(function);
     {
         ScopedLock lock(m_mutex);
         if(m_aborting)
             return MakeUnexpected(CpuTaskAdmissionError::Aborting);
         if(scope && scope->m_canceled)
             return MakeUnexpected(CpuTaskAdmissionError::ScopeCanceled);
-        if(node->latestCanceledGeneration != 0u)
-            ContainerDetail::ReserveGrowingCapacity(node->olderCanceledGenerations, AddSize(node->olderCanceledGenerations.size(), 1u));
+        if(node.latestCanceledGeneration != 0u)
+            ContainerDetail::ReserveGrowingCapacity(node.olderCanceledGenerations, AddSize(node.olderCanceledGenerations.size(), 1u));
         u64 dependencySearchGeneration = 0u;
         if(dependencyCount != 0u && s_Execution && &s_Execution->scheduler == this && s_Execution->task.valid()){
             beginLockedSearch();
@@ -281,35 +279,35 @@ Expected<CpuTaskScheduler::TaskHandle, CpuTaskAdmissionError::Enum> CpuTaskSched
             ContainerDetail::ReserveGrowingCapacity(dependents, AddSize(dependents.size(), last - first));
             first = last;
         }
-        node->scope = scope;
-        node->options = options;
-        node->parent = {};
-        node->dependencies = 0u;
-        node->children = 0u;
-        node->canceled = false;
+        node.scope = scope;
+        node.options = options;
+        node.parent = {};
+        node.dependencies = 0u;
+        node.children = 0u;
+        node.canceled = false;
         if(s_Execution && &s_Execution->scheduler == this){
             if(TaskNode* parent = resolveLocked(s_Execution->task)){
-                node->parent = s_Execution->task;
+                node.parent = s_Execution->task;
                 ++parent->children;
-                node->canceled = parent->canceled;
+                node.canceled = parent->canceled;
             }
         }
         for(usize index = 0u; index < dependencyCount; ++index){
             if(TaskNode* dependency = resolveLocked(dependencies[index])){
                 dependency->dependents.push_back(handle);
-                ++node->dependencies;
-                node->canceled = node->canceled || dependency->canceled;
+                ++node.dependencies;
+                node.canceled = node.canceled || dependency->canceled;
             }
             else
-                node->canceled = node->canceled || wasCanceledLocked(dependencies[index]);
+                node.canceled = node.canceled || wasCanceledLocked(dependencies[index]);
         }
         ++m_outstanding;
         m_statistics.peakOutstandingTasks = Max(m_statistics.peakOutstandingTasks, m_outstanding);
         if(scope)
             scope->m_pending.fetch_add(1u, MemoryOrder::release);
         invalidateScopeSearchLocked(true);
-        node->state = TaskState::Waiting;
-        if(node->dependencies == 0u)
+        node.state = TaskState::Waiting;
+        if(node.dependencies == 0u)
             enqueueLocked(handle.index);
         wakeMask = workerWakeMaskLocked();
         wakeJoiners = m_joinWaiters != 0u;
@@ -320,16 +318,14 @@ Expected<CpuTaskScheduler::TaskHandle, CpuTaskAdmissionError::Enum> CpuTaskSched
 }
 
 void CpuTaskScheduler::releaseReservation(const TaskHandle handle)noexcept{
-    TaskNode* node;
-    {
+    TaskNode& node = [&]()noexcept -> TaskNode&{
         ScopedLock lock(m_mutex);
-        node = resolveLocked(handle);
-    }
-    NWB_ASSERT(node);
-    node->function.reset();
+        return *MakeNotNull(resolveLocked(handle));
+    }();
+    node.function.reset();
     ScopedLock lock(m_mutex);
-    node->state = TaskState::Free;
-    node->next = m_freeNode;
+    node.state = TaskState::Free;
+    node.next = m_freeNode;
     m_freeNode = handle.index;
 }
 

@@ -154,7 +154,7 @@ template<typename ElementT, usize ComponentCount>
 
         SourceVertexRef ref;
         const auto& components = value.asList();
-        u32* const componentValues[] = { &ref.position, &ref.normal, &ref.tangent, &ref.uv0, &ref.color, };
+        const NotNull<u32*> componentValues[] = { MakeNotNull(&ref.position), MakeNotNull(&ref.normal), MakeNotNull(&ref.tangent), MakeNotNull(&ref.uv0), MakeNotNull(&ref.color), };
         for(usize componentIndex = 0u; componentIndex < s_AuthoredVertexRefComponentCount; ++componentIndex){
             ScratchStringStream label(s_FileOpenWrite, scratchArena);
             label << "vertex_refs[" << i << "][" << componentIndex << "]";

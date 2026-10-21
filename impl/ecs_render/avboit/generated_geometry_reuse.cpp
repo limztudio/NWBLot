@@ -34,7 +34,7 @@ namespace __hidden_generated_geometry_reuse{
     )
         return false;
 
-    ECSRenderDetail::MaterialPassEmulationOutputIndex<Core::Buffer*> outputs(arena);
+    ECSRenderDetail::MaterialPassEmulationOutputIndex<NotNull<Core::Buffer*>> outputs(arena);
     ECSRenderDetail::MaterialPassEmulationOutputIndex<u32> slots(arena);
     for(const MaterialPassDrawItem& draw : draws.regular.computeDrawItems){
         const MaterialPassMeshResourceSnapshot& mesh = draw.meshResources;
@@ -43,7 +43,7 @@ namespace __hidden_generated_geometry_reuse{
             || !draw.pipelineResources.sharedGeometryComputeProgram || draw.instanceIndex >= instances.size()
             || !mesh.valid() || !mesh.emulationVertexBuffer || !mesh.emulationVertexHeapHandle.valid()
             || mesh.emulationVertexHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
-            || !outputs.insert(mesh.emulationVertexBuffer.get()) || !slots.insert(mesh.emulationVertexHeapHandle.slot())
+            || !outputs.insert(MakeNotNull(mesh.emulationVertexBuffer.get())) || !slots.insert(mesh.emulationVertexHeapHandle.slot())
         )
             return false;
     }

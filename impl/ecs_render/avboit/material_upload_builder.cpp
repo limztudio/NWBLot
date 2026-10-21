@@ -111,7 +111,7 @@ struct UploadIdentities{
     bool hasCsgDrawItems,
     Core::GpuTaskId& inOutUploadTask
 ){
-    if(!inputs.targets || !inputs.csgResources || !inputs.frameBindings || !inOutUploadTask.valid())
+    if(!inOutUploadTask.valid())
         return MakeUnexpected(Failure{});
     if(instanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData) || csgFrameData.receiverRanges.size() > Limit<usize>::s_Max / sizeof(CsgReceiverRangeGpuData) || csgFrameData.cutters.size() > Limit<usize>::s_Max / sizeof(CsgCutterGpuData)){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: AVBOIT upload size overflows graph blob capacity"));
@@ -157,7 +157,7 @@ struct UploadIdentities{
     if(!hasCsgDrawItems)
         return false;
 
-    const auto clipContextSlotData = m_csgSystem.prepareCsgClipContextSlotData(*inputs.targets, csgFrameData, *inputs.csgResources, *inputs.frameBindings);
+    const auto clipContextSlotData = m_csgSystem.prepareCsgClipContextSlotData(inputs.targets, csgFrameData, inputs.csgResources, inputs.frameBindings);
     if(!clipContextSlotData){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not snapshot AVBOIT CSG context data"));
         return MakeUnexpected(Failure{});

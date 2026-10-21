@@ -343,7 +343,7 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
     };
 
     struct BufferStateEntry{
-        Buffer* buffer = nullptr;
+        NotNull<Buffer*> buffer;
         ResourceStates::Mask state = ResourceStates::Unknown;
     };
     Vector<BufferStateEntry, Alloc::ScratchArena> requiredBufferStates{scratchArena};
@@ -361,14 +361,14 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
 
     const auto addRequiredBufferState = [&requiredBufferStates](Buffer& buffer, const ResourceStates::Mask requiredState)noexcept -> bool{
         for(BufferStateEntry& state : requiredBufferStates){
-            if(state.buffer == &buffer){
+            if(state.buffer.get() == &buffer){
                 state.state |= requiredState;
                 return true;
             }
             if(buffer.m_buffer != VK_NULL_HANDLE && state.buffer->m_buffer == buffer.m_buffer)
                 return false;
         }
-        requiredBufferStates.push_back(BufferStateEntry{ &buffer, requiredState });
+        requiredBufferStates.push_back(BufferStateEntry{ MakeNotNull(&buffer), requiredState });
         return true;
     };
 
@@ -493,14 +493,14 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
     }
 
     for(const BufferStateEntry& state : requiredBufferStates){
-        if(!validateBufferForGpuState(state.buffer, state.state, s_OperationName, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT))
+        if(!validateBufferForGpuState(state.buffer.get(), state.state, s_OperationName, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT))
             return;
     }
 
     endActiveRenderPass();
     if(m_enableAutomaticBarriers){
         for(const BufferStateEntry& state : requiredBufferStates){
-            setBufferState(state.buffer, state.state);
+            setBufferState(state.buffer.get(), state.state);
             if(m_commandRecordingFailed)
                 return;
         }

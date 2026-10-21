@@ -157,10 +157,11 @@ bool Device::bindTextureMemory(Texture& texture, Heap& heap, u64 offset){
     if(!bindingRange)
         return false;
 
-    Heap::BindingReservation reservation;
-    reservation.owner = &texture;
-    reservation.resourceClass = VulkanDetail::HeapBindingResourceClass::OptimalImage;
-    reservation.range = *bindingRange;
+    const Heap::BindingReservation reservation{
+        .owner = MakeNotNull<const void*>(&texture),
+        .range = *bindingRange,
+        .resourceClass = VulkanDetail::HeapBindingResourceClass::OptimalImage,
+    };
     memoryHeap.m_bindingReservations.push_back(reservation);
 
     const VkResult res = m_allocator.bindHeapTextureMemory(texture, memoryHeap, offset);

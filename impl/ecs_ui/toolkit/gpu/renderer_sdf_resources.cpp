@@ -147,17 +147,17 @@ Expected<GpuVersion<GpuSdfAtlasVersion>> GpuRendererState::prepareSdfPage(Core::
     if(!textureResult)
         return MakeUnexpected(Failure{});
     Vector<u8, Core::Alloc::ScratchArena> expanded(scratchArena);
-    const u8* uploadData = page->pixels().data();
+    NotNull<const u8*> uploadData(page->pixels().data());
     usize uploadBytes = page->pixels().size();
     if(uploadChannels != binding.channelCount){
         const usize texels = static_cast<usize>(binding.width) * binding.height;
         expanded.resize(texels * uploadChannels, 0u);
         for(usize texel = 0u; texel < texels; ++texel)
-            NWB_MEMCPY(expanded.data() + texel * uploadChannels, uploadChannels, uploadData + texel * binding.channelCount, binding.channelCount);
+            NWB_MEMCPY(expanded.data() + texel * uploadChannels, uploadChannels, uploadData.get() + texel * binding.channelCount, binding.channelCount);
         uploadData = expanded.data();
         uploadBytes = expanded.size();
     }
-    const Core::GraphicsRuntime::TextureUploadRegion region{ .data = uploadData, .dataSize = uploadBytes, .rowPitch = static_cast<usize>(binding.width) * uploadChannels, .depthPitch = uploadBytes, };
+    const Core::GraphicsRuntime::TextureUploadRegion region{ .data = uploadData.get(), .dataSize = uploadBytes, .rowPitch = static_cast<usize>(binding.width) * uploadChannels, .depthPitch = uploadBytes, };
     if(!m_graphics.uploadTextureBatch(Core::GraphicsRuntime::TextureUploadBatchDesc{
         .destination = version->m_texture,
         .regions = &region,

@@ -237,8 +237,8 @@ template<typename... Pointers>
     return byteSize != 0u && (byteSize & s_BufferAlignmentMask) == 0u && byteSize <= maximumByteSize;
 }
 
-[[nodiscard]] constexpr bool AreDispatchGroupCountsValid(const u32 groupsX, const u32 groupsY, const u32 groupsZ, const u32* const maximumGroupCounts)noexcept{
-    return maximumGroupCounts && groupsX <= maximumGroupCounts[0u] && groupsY <= maximumGroupCounts[1u] && groupsZ <= maximumGroupCounts[2u];
+[[nodiscard]] constexpr bool AreDispatchGroupCountsValid(const u32 groupsX, const u32 groupsY, const u32 groupsZ, const u32 (&maximumGroupCounts)[3u])noexcept{
+    return groupsX <= maximumGroupCounts[0u] && groupsY <= maximumGroupCounts[1u] && groupsZ <= maximumGroupCounts[2u];
 }
 
 bool BufferRangesOverlap(u64 firstOffsetBytes, u64 firstSizeBytes, u64 secondOffsetBytes, u64 secondSizeBytes)noexcept;
@@ -450,13 +450,13 @@ void ConfigurePipelineDepthStencilState(const DepthStencilState& state, Pipeline
     const usize effectiveChunkSize = chunkSize > 0 ? chunkSize : 1;
 
     if(cpuScheduler.isParallelEnabled() && size >= effectiveParallelThreshold){
-        auto* dstBytes = static_cast<u8*>(dst);
-        auto* srcBytes = static_cast<const u8*>(src);
+        const auto dstBytes = MakeNotNull(static_cast<u8*>(dst));
+        const auto srcBytes = MakeNotNull(static_cast<const u8*>(src));
         const usize chunkCount = DivideUp(size, effectiveChunkSize);
         return cpuScheduler.parallelFor(static_cast<usize>(0), chunkCount, [&](usize chunkIndex)noexcept{
             const usize chunkOffset = chunkIndex * effectiveChunkSize;
             const usize chunkBytes = Min(effectiveChunkSize, size - chunkOffset);
-            NWB_MEMCPY(dstBytes + chunkOffset, chunkBytes, srcBytes + chunkOffset, chunkBytes);
+            NWB_MEMCPY(dstBytes.get() + chunkOffset, chunkBytes, srcBytes.get() + chunkOffset, chunkBytes);
         }
         );
     }

@@ -16,7 +16,7 @@ NWB_IMPL_BEGIN
 
 [[nodiscard]] bool FrameExecuteHistoryCopy::PrepareHistoryCopyFinalState(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
     FrameExecuteHistoryCopy::Context* const context = static_cast<Context*>(rawContext);
-    if(!context || !context->renderer || !context->targets || !context->shadowStateCandidate || !context->causticStateCandidate || !context->surfelStateCandidate || !finalState)
+    if(!context || !finalState)
         return false;
 
     const bool shadowStateReady = context->renderer->m_shadowVisibilityReturnState.buildFilteredResourceSubset(*context->shadowStateCandidate, *finalState, &context->targets->shadowVisibility, 1u, nullptr, 0u, context->scratchArena);
@@ -30,7 +30,7 @@ NWB_IMPL_BEGIN
 [[nodiscard]] bool FrameExecuteHistoryCopy::AcceptHistoryCopyFinalState(void* const rawContext, const Core::QueueSubmissionToken& token)noexcept{
     static_cast<void>(token);
     FrameExecuteHistoryCopy::Context* const context = static_cast<Context*>(rawContext);
-    if(!context || !context->renderer || !context->shadowStateCandidate || !context->causticStateCandidate || !context->surfelStateCandidate || !context->finalStateReady)
+    if(!context || !context->finalStateReady)
         return false;
 
     const bool shadowStateReady = context->renderer->m_shadowVisibilityReturnState.commit(*context->shadowStateCandidate);

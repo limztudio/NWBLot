@@ -141,15 +141,15 @@ void GpuTaskGraph::destroyTaskPayloadObjects()noexcept{
 
 void GpuTaskGraph::destroyTaskStateSnapshots()noexcept{
     static_assert(IsNothrowDestructible_V<CommandListResourceStateHandoff>);
-    for(CommandListResourceStateHandoff* const states : m_externalStateSnapshots)
-        DestroyArenaObjectNoexcept(m_arena, states);
+    for(const auto states : m_externalStateSnapshots)
+        DestroyArenaObjectNoexcept(m_arena, states.get());
     m_externalStateSnapshots.clear();
 }
 
 void GpuTaskGraph::destroyResourceStateSnapshots()noexcept{
     static_assert(IsNothrowDestructible_V<CommandListResourceStateHandoff>);
-    for(CommandListResourceStateHandoff* const states : m_initialOwnerHandoffStateSnapshots)
-        DestroyArenaObjectNoexcept(m_arena, states);
+    for(const auto states : m_initialOwnerHandoffStateSnapshots)
+        DestroyArenaObjectNoexcept(m_arena, states.get());
     m_initialOwnerHandoffStateSnapshots.clear();
     m_initialOwnerHandoffSources.clear();
 }

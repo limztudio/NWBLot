@@ -28,7 +28,7 @@ OpaqueCsgIntervalClearBuilder::OpaqueCsgIntervalClearBuilder(Core::GpuTaskGraph&
 
 [[nodiscard]] Expected<OpaqueCsgIntervalClearResult> OpaqueCsgIntervalClearBuilder::declare(const OpaqueCsgIntervalClearInputs& inputs, GraphClearTimingRecordState& clearTimingState){
     OpaqueCsgIntervalClearResult result{};
-    if(!inputs.targets || !inputs.csgFrameData || !inputs.dependencyTask.valid())
+    if(!inputs.dependencyTask.valid())
         return MakeUnexpected(Failure{});
     if(!inputs.hasOpaqueCsgFrameWork)
         return result;
@@ -45,7 +45,7 @@ OpaqueCsgIntervalClearBuilder::OpaqueCsgIntervalClearBuilder(Core::GpuTaskGraph&
         clearDesc.setIdentity(identity).setMarkerLabel(markerLabel).setScheduling(csgIntervalClearScheduling).setDependencies(&dependency, 1u);
         return clearDesc;
     };
-    const Core::Rect csgClearRect = inputs.csgFrameData->workRegion.resolveRect(inputs.targets->width, inputs.targets->height);
+    const Core::Rect csgClearRect = inputs.csgFrameData.workRegion.resolveRect(inputs.targets.width, inputs.targets.height);
     const Core::GpuClearTextureTaskRecordHooks csgIntervalClearBeginHooks{ .context = &clearTimingState, .beforeClear = &BeginGraphClearTimingRecord, .discarded = &DiscardGraphClearTimingRecord, };
     const Core::GpuClearTextureTaskRecordHooks csgIntervalClearEndHooks{ .context = &clearTimingState, .afterClear = &EndGraphClearTimingRecord, .discarded = &DiscardGraphClearTimingRecord, };
     auto clearTaskResult = m_graph.addClearTextureRectUIntTask(

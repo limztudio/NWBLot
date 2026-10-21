@@ -235,7 +235,7 @@ template<typename PositionVector>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<MeshResources*> RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, Core::Alloc::ScratchArena& scratchArena){
+Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, Core::Alloc::ScratchArena& scratchArena){
 
     const Name meshPath = meshAsset.name();
     if(!meshPath){
@@ -247,7 +247,7 @@ Expected<MeshResources*> RendererMeshSystem::createMeshResources(const Core::Ass
     if(foundMesh != m_meshState.m_meshes.end()){
         NWB_ASSERT(meshRenderBindingsReady(foundMesh.value()));
         NWB_ASSERT(foundMesh.value().valid());
-        return &foundMesh.value();
+        return MakeNotNull(&foundMesh.value());
     }
 
     auto loadedAsset = m_assetManager.loadTypedSync<Mesh>(meshPath, s_RendererAssetOwnerName, Mesh::s_AssetTypeText);
@@ -427,16 +427,16 @@ Expected<MeshResources*> RendererMeshSystem::createMeshResources(const Core::Ass
     auto it = result.first;
 
     NWB_ASSERT(it.value().valid());
-    return &it.value();
+    return MakeNotNull(&it.value());
 }
 
-Expected<MeshResources*> RendererMeshSystem::findMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset)noexcept{
+Expected<NotNull<MeshResources*>> RendererMeshSystem::findMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset)noexcept{
 
     const Name meshPath = meshAsset.name();
     return findMeshResources(meshPath);
 }
 
-Expected<MeshResources*> RendererMeshSystem::findMeshResources(const Name& meshKey)noexcept{
+Expected<NotNull<MeshResources*>> RendererMeshSystem::findMeshResources(const Name& meshKey)noexcept{
     if(!meshKey)
         return MakeUnexpected(Failure{});
 
@@ -446,10 +446,10 @@ Expected<MeshResources*> RendererMeshSystem::findMeshResources(const Name& meshK
 
     NWB_ASSERT(meshRenderBindingsReady(foundMesh.value()));
     NWB_ASSERT(foundMesh.value().valid());
-    return &foundMesh.value();
+    return MakeNotNull(&foundMesh.value());
 }
 
-Expected<MeshResources*> RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc){
+Expected<NotNull<MeshResources*>> RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc){
 
     NWB_ASSERT(desc.valid());
 
@@ -468,7 +468,7 @@ Expected<MeshResources*> RendererMeshSystem::createRuntimeMeshResources(const Ru
             MeshResources& mesh = foundMesh.value();
             __hidden_mesh::RefreshRuntimeMeshContent(mesh, desc);
             NWB_ASSERT(mesh.valid());
-            return &mesh;
+            return MakeNotNull(&mesh);
         }
     }
 
@@ -518,10 +518,10 @@ Expected<MeshResources*> RendererMeshSystem::createRuntimeMeshResources(const Ru
     auto it = result.first;
 
     NWB_ASSERT(it.value().valid());
-    return &it.value();
+    return MakeNotNull(&it.value());
 }
 
-Expected<MeshResources*> RendererMeshSystem::findRuntimeMeshResources(const RuntimeMeshDesc& desc)noexcept{
+Expected<NotNull<MeshResources*>> RendererMeshSystem::findRuntimeMeshResources(const RuntimeMeshDesc& desc)noexcept{
     NWB_ASSERT(desc.valid());
 
     const auto foundMesh = m_meshState.m_meshes.find(desc.meshKey);
@@ -535,7 +535,7 @@ Expected<MeshResources*> RendererMeshSystem::findRuntimeMeshResources(const Runt
     NWB_ASSERT(meshRenderBindingsReady(mesh));
     __hidden_mesh::RefreshRuntimeMeshContent(mesh, desc);
     NWB_ASSERT(mesh.valid());
-    return &mesh;
+    return MakeNotNull(&mesh);
 }
 
 void RendererMeshSystem::pruneRuntimeMeshResources(){

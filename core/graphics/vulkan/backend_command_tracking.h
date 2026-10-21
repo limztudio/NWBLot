@@ -29,7 +29,7 @@ NWB_VULKAN_BEGIN
 
 
 struct RetainedTextureStateCommit{
-    Texture* texture = nullptr;
+    NotNull<Texture*> texture;
     MipLevel mipLevel = 0;
     ArraySlice arraySlice = 0;
 };
@@ -64,14 +64,14 @@ public:
 };
 
 struct PendingAccelStructBuildCommit{
-    AccelStruct* accelStruct = nullptr;
+    NotNull<AccelStruct*> accelStruct;
     AccelStructBuildSignatureRole* preparedRole = nullptr;
     AccelStructBuildSignatureRole* displacedRole = nullptr;
 };
 static_assert(IsTriviallyCopyable_V<PendingAccelStructBuildCommit>, "accepted acceleration-structure publication must remain scalar-only");
 
 struct PendingOpacityMicromapBuildCommit{
-    OpacityMicromap* opacityMicromap = nullptr;
+    NotNull<OpacityMicromap*> opacityMicromap;
 };
 
 namespace TrackedCommandBufferArenaState{
@@ -99,7 +99,7 @@ class TrackedCommandBuffer final : public RefCounter<GraphicsResource>, NoCopy{
 
 private:
     struct TimerQueryRecordingClaim{
-        TimerQuery* query = nullptr;
+        NotNull<TimerQuery*> query;
         GpuPhysicalQueueId queue;
         QueueSubmissionToken resetAuthorizationSubmission;
         QueueSubmissionToken prerequisiteSubmission;
@@ -128,7 +128,7 @@ private:
     [[nodiscard]] TimerQueryRecordingClaim& findOrAppendTimerQueryRecordingClaim(TimerQuery& query);
     [[nodiscard]] TimerQueryRecordingClaim* findTimerQueryRecordingClaim(TimerQuery& query, u64 generation)noexcept;
     [[nodiscard]] bool recordsTimerQueryBegin(const TimerQuery& query, u64 generation)const noexcept;
-    [[nodiscard]] bool validateTimerQueryRecordingClaims(const Queue& submissionQueue, const QueueSubmissionWait* localWaits, usize localWaitCount, TrackedCommandBuffer* const* precedingCommandBuffers, usize precedingCommandBufferCount)const noexcept;
+    [[nodiscard]] bool validateTimerQueryRecordingClaims(const Queue& submissionQueue, const QueueSubmissionWait* localWaits, usize localWaitCount, const NotNull<TrackedCommandBuffer*>* precedingCommandBuffers, usize precedingCommandBufferCount)const noexcept;
     void commitTimerQueryRecordingClaims(const QueueSubmissionToken& submissionToken)noexcept;
     void discardTimerQueryRecordingClaims()noexcept;
     void commitRetainedBufferStateCommits()noexcept;
@@ -142,7 +142,7 @@ private:
         const AccelStructGeometryBuildSignature* geometrySignatures,
         usize geometrySignatureCount
     );
-    [[nodiscard]] Expected<const AccelStructBuildSignatureRole*> getPendingAccelStructBuildSignature(const AccelStruct& accelStruct)const noexcept;
+    [[nodiscard]] Expected<NotNull<const AccelStructBuildSignatureRole*>> getPendingAccelStructBuildSignature(const AccelStruct& accelStruct)const noexcept;
     [[nodiscard]] bool validatePendingAccelStructBuildCommits()const noexcept;
     void commitPendingAccelStructBuildCommits()noexcept;
     void releasePendingAccelStructBuildCommits()noexcept;
@@ -161,7 +161,7 @@ private:
 
     CommandBufferResourceReferences m_resourceReferences;
     Vector<BufferHandle, Alloc::GlobalArena> m_referencedStagingBuffers;
-    Vector<GpuDescriptorHeap*, Alloc::GlobalArena> m_referencedDescriptorHeaps;
+    Vector<NotNull<GpuDescriptorHeap*>, Alloc::GlobalArena> m_referencedDescriptorHeaps;
     Vector<RetainedTextureStateCommit, Alloc::GlobalArena> m_retainedTextureStateCommits;
     Vector<PendingAccelStructBuildCommit, Alloc::GlobalArena> m_pendingAccelStructBuildCommits;
     Vector<PendingOpacityMicromapBuildCommit, Alloc::GlobalArena> m_pendingOpacityMicromapBuildCommits;

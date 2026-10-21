@@ -186,7 +186,7 @@ struct GpuTaskQueueScoringData{
     Vector<u8, Alloc::ScratchArena> m_taskCostGroups;
     Array<u64, GpuTaskCostHint::kCount> m_costGroupWeights;
     Vector<usize, Alloc::ScratchArena> m_ownershipEdgeOffsets;
-    Vector<const GpuTaskDependencyEdge*, Alloc::ScratchArena> m_ownershipEdges;
+    Vector<NotNull<const GpuTaskDependencyEdge*>, Alloc::ScratchArena> m_ownershipEdges;
     Vector<GpuTaskQueueLoad, Alloc::ScratchArena> m_assignedQueueLoads;
     // Cost-group bitsets: all assigned tasks first, then one block per topology queue, never sparse queue IDs.
     Vector<u64, Alloc::ScratchArena> m_assignedCostWords;
@@ -294,7 +294,7 @@ struct GpuTaskQueuePlacementGroup{
     const bool allowCrossFamilyRouting
 )noexcept;
 
-[[nodiscard]] const GpuPhysicalQueueInfo* FindTimingFeedbackIncumbent(
+[[nodiscard]] const GpuPhysicalQueueInfo& FindTimingFeedbackIncumbent(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuPhysicalQueueTopology& topology,
     const GpuTaskGraphTaskView& task,

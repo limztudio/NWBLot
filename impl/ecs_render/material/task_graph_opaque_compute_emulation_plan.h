@@ -66,7 +66,7 @@ public:
         indexedDrawItems.assign(sourceDrawItems.indexedDrawItems.begin(), sourceDrawItems.indexedDrawItems.end());
         drawItems.reserve(sourceDrawItems.computeDrawItems.size());
         outputBuffers.reserve(sourceDrawItems.computeDrawItems.size());
-        MaterialPassEmulationOutputIndex<Core::Buffer*> outputs(scratchArena);
+        MaterialPassEmulationOutputIndex<NotNull<Core::Buffer*>> outputs(scratchArena);
         for(const MaterialPassDrawItem& drawItem : sourceDrawItems.computeDrawItems){
             // First split is opaque-only; CSG stays on the combined callback.
             if(drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None){
@@ -79,7 +79,7 @@ public:
                 return false;
             }
             // Decline aliasing producers rather than moving draws across them.
-            if(!outputs.insert(mesh.emulationVertexBuffer.get())){
+            if(!outputs.insert(MakeNotNull(mesh.emulationVertexBuffer.get()))){
                 reset();
                 return false;
             }

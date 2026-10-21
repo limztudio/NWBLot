@@ -52,7 +52,7 @@ using GraphTaskDeclaration = GraphicsRuntime::StandaloneTaskGraphDeclaration;
     const GraphicsRuntime& graphics,
     StandaloneGraphWorkspacePool& workspaces,
     void* userData,
-    GraphTaskDeclaration declareTask,
+    NotNull<GraphTaskDeclaration> declareTask,
     GpuPhysicalQueueId requiredTerminalQueue = {},
     CpuTaskScheduler* readyFrontierScheduler = nullptr,
     GpuTimingRecorder* timingRecorder = nullptr,
@@ -64,7 +64,7 @@ using GraphTaskDeclaration = GraphicsRuntime::StandaloneTaskGraphDeclaration;
     ResourceQueueSharing::Mask queueSharing,
     CommandQueue::Enum consumerQueue,
     void* userData,
-    GraphTaskDeclaration declareTask,
+    NotNull<GraphTaskDeclaration> declareTask,
     QueueSubmissionToken& inOutUploadToken,
     GpuPhysicalQueueId requiredTerminalQueue = {}
 );

@@ -83,8 +83,8 @@ private:
 
 
     public:
-        [[nodiscard]] const Mesh* mesh()const noexcept;
-        [[nodiscard]] const Skin* skin()const noexcept;
+        [[nodiscard]] const Mesh& mesh()const noexcept;
+        [[nodiscard]] const Skin& skin()const noexcept;
     };
 
 
@@ -102,7 +102,7 @@ public:
 
 private:
     [[nodiscard]] bool ensureRuntimeMesh(Core::ECS::EntityID entity, SkinnedMeshBindingComponent& component, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] Expected<MeshSkinningSource*> ensureSourceLoaded(const Core::Assets::AssetRef<Skin>& skinAsset);
+    [[nodiscard]] Expected<NotNull<MeshSkinningSource*>> ensureSourceLoaded(const Core::Assets::AssetRef<Skin>& skinAsset);
     [[nodiscard]] bool uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] Expected<RuntimeMeshHandle> allocateHandle();
     void releaseRuntimeMesh(Core::ECS::EntityID entity)noexcept;

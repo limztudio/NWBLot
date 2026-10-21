@@ -426,8 +426,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
     result.causticGeometryTask = *resultCausticGeometryTaskResult;
 
     HardwareCausticsResolveChainBuilder resolveChainBuilder(m_graph, m_raytracingSystem);
-    HardwareCausticsResolveChainInputs resolveChainInputs;
-    resolveChainInputs.targets = inputs.targets;
+    HardwareCausticsResolveChainInputs resolveChainInputs(*inputs.targets, *inputs.producerDispatched, *inputs.timingTicket, *inputs.resolveTiming);
     resolveChainInputs.geometryTask = result.causticGeometryTask;
     resolveChainInputs.baseScheduling = hardwareGeometryScheduling;
     resolveChainInputs.prepare = {hardwareResolvePrepareResourceUses.data(), hardwareResolvePrepareResourceUses.size()};
@@ -437,9 +436,6 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
     resolveChainInputs.fourthWavelet = {hardwareResolveFourthWaveletResourceUses.data(), hardwareResolveFourthWaveletResourceUses.size()};
     resolveChainInputs.fifthWavelet = {hardwareResolveFifthWaveletResourceUses.data(), hardwareResolveFifthWaveletResourceUses.size()};
     resolveChainInputs.upsample = {hardwareResolveUpsampleResourceUses.data(), hardwareResolveUpsampleResourceUses.size()};
-    resolveChainInputs.producerDispatched = inputs.producerDispatched;
-    resolveChainInputs.timingTicket = inputs.timingTicket;
-    resolveChainInputs.resolveTiming = inputs.resolveTiming;
     auto resolveChainResult = resolveChainBuilder.declare(resolveChainInputs, scratchArena);
     if(!resolveChainResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare hardware-caustics resolve chain"));

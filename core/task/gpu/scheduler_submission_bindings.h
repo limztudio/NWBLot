@@ -25,7 +25,7 @@ namespace GpuTaskSubmissionDetail{
 
 struct ResolvedTimingTicket{
     GpuSubmissionPacketId packet;
-    GpuTimingSubmissionTicket* timingTicket = nullptr;
+    NotNull<GpuTimingSubmissionTicket*> timingTicket;
 };
 
 struct ResolvedSubmissionHook{
@@ -43,7 +43,7 @@ struct TaskSubmissionBindings : NoCopy{
     Vector<ResolvedTimingTicket, Alloc::ScratchArena> timingTickets;
     Vector<ResolvedSubmissionHook, Alloc::ScratchArena> submissionHooks;
     Vector<usize, Alloc::ScratchArena> nextTimingTicket;
-    Optional<HashMap<GpuTimingSubmissionTicket*, usize, Alloc::ScratchArena>> timingTicketIndices;
+    Optional<HashMap<NotNull<GpuTimingSubmissionTicket*>, usize, Alloc::ScratchArena>> timingTicketIndices;
     Optional<HashMap<u32, TimingPacketChain, Alloc::ScratchArena>> timingPacketChains;
     Optional<HashMap<u32, usize, Alloc::ScratchArena>> submissionHookIndices;
     u64 packetGeneration = 0u;
@@ -68,7 +68,7 @@ public:
         usize taskSubmissionHookCount
     );
     [[nodiscard]] bool validateOwnedTimingTicket(GpuSubmissionPacketId packet, GpuTimingSubmissionTicket* timingTicket)const noexcept;
-    [[nodiscard]] const QueueSubmissionPreSubmitHook* collectPacket(GpuSubmissionPacketId packet, Vector<GpuTimingSubmissionTicket*, Alloc::ScratchArena>& inOutTimingTickets)const;
+    [[nodiscard]] const QueueSubmissionPreSubmitHook* collectPacket(GpuSubmissionPacketId packet, Vector<NotNull<GpuTimingSubmissionTicket*>, Alloc::ScratchArena>& inOutTimingTickets)const;
 };
 
 

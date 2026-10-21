@@ -38,7 +38,7 @@ TEST(Math, SignedZeroStorageEqualityProducesEqualHashes){
 }
 
 template<typename Storage, usize LogicalCount, typename Source>
-static void CheckDoubleStoresIgnoreInactiveLanesAndPreserveObjectPadding(const Source& source, const f64* expected){
+static void CheckDoubleStoresIgnoreInactiveLanesAndPreserveObjectPadding(const Source& source, const f64 (&expected)[LogicalCount]){
     struct StorageRecord{
         Storage value;
         u64 neighbor[4];
@@ -58,9 +58,9 @@ static void CheckDoubleStoresIgnoreInactiveLanesAndPreserveObjectPadding(const S
         }
         else
             StoreDouble(source, record.value);
-        const u8* bytes = reinterpret_cast<const u8*>(&record);
+        const auto bytes = MakeNotNull(reinterpret_cast<const u8*>(&record));
         for(usize index = logicalBytes; index < sizeof(record); ++index)
-            EXPECT_EQ(bytes[index], original[index]) << stream << ':' << index;
+            EXPECT_EQ(bytes.get()[index], original[index]) << stream << ':' << index;
         for(usize lane = 0u; lane < LogicalCount; ++lane)
             EXPECT_EQ(BitCast<u64>(record.value.raw[lane]), BitCast<u64>(expected[lane])) << stream << ':' << lane;
 
@@ -156,32 +156,32 @@ TEST(Math, DoubleTransformStreamsPreservePaddedStridesDuringAlignedUnalignedAndI
     NWB_MEMCPY(alignedOriginal.data(), alignedOriginal.size(), aligned, sizeof(aligned));
     NWB_MEMCPY(unalignedOriginal.data(), unalignedOriginal.size(), unaligned, sizeof(unaligned));
     const SIMDMatrixDouble matrix = MatrixDoubleTranslation(0.25, 0.0, 0.0);
-    EXPECT_EQ(VectorDouble3TransformCoordStream(&unaligned[0].value, sizeof(UnalignedRecord), &aligned[0].value, sizeof(AlignedRecord), LengthOf(aligned), matrix), &unaligned[0].value);
+    EXPECT_EQ(VectorDouble3TransformCoordStream(MakeNotNull(&unaligned[0].value), sizeof(UnalignedRecord), MakeNotNull<const Double3*>(&aligned[0].value), sizeof(AlignedRecord), LengthOf(aligned), matrix).get(), &unaligned[0].value);
     EXPECT_EQ(NWB_MEMCMP(aligned, alignedOriginal.data(), sizeof(aligned)), 0);
     for(usize index = 0u; index < LengthOf(aligned); ++index)
         EXPECT_EQ(unaligned[index].value.x, 0x1p+40 + 0.5 + 0.25 * static_cast<f64>(index)) << index;
 
-    EXPECT_EQ(VectorDouble3TransformCoordStream(&unaligned[0].value, sizeof(UnalignedRecord), &unaligned[0].value, sizeof(UnalignedRecord), LengthOf(unaligned), matrix), &unaligned[0].value);
-    EXPECT_EQ(VectorDouble3TransformCoordStream(&aligned[0].value, sizeof(AlignedRecord), &unaligned[0].value, sizeof(UnalignedRecord), LengthOf(aligned), matrix), &aligned[0].value);
-    EXPECT_EQ(VectorDouble3TransformCoordStream(&aligned[0].value, sizeof(AlignedRecord), &aligned[0].value, sizeof(AlignedRecord), LengthOf(aligned), matrix), &aligned[0].value);
+    EXPECT_EQ(VectorDouble3TransformCoordStream(MakeNotNull(&unaligned[0].value), sizeof(UnalignedRecord), MakeNotNull<const Double3U*>(&unaligned[0].value), sizeof(UnalignedRecord), LengthOf(unaligned), matrix).get(), &unaligned[0].value);
+    EXPECT_EQ(VectorDouble3TransformCoordStream(MakeNotNull(&aligned[0].value), sizeof(AlignedRecord), MakeNotNull<const Double3U*>(&unaligned[0].value), sizeof(UnalignedRecord), LengthOf(aligned), matrix).get(), &aligned[0].value);
+    EXPECT_EQ(VectorDouble3TransformCoordStream(MakeNotNull(&aligned[0].value), sizeof(AlignedRecord), MakeNotNull<const Double3*>(&aligned[0].value), sizeof(AlignedRecord), LengthOf(aligned), matrix).get(), &aligned[0].value);
     for(usize index = 0u; index < LengthOf(aligned); ++index){
         EXPECT_EQ(aligned[index].value.x, 0x1p+40 + 1.25 + 0.25 * static_cast<f64>(index)) << index;
         EXPECT_EQ(unaligned[index].value.x, 0x1p+40 + 0.75 + 0.25 * static_cast<f64>(index)) << index;
         EXPECT_EQ(aligned[index].value.y, (static_cast<f64>(index) - 1.0) * 0x1p-40) << index;
         EXPECT_EQ(aligned[index].value.z, 1.0 + 0x1p-52) << index;
-        const u8* alignedBytes = reinterpret_cast<const u8*>(&aligned[index]);
-        const u8* unalignedBytes = reinterpret_cast<const u8*>(&unaligned[index]);
+        const auto alignedBytes = MakeNotNull(reinterpret_cast<const u8*>(&aligned[index]));
+        const auto unalignedBytes = MakeNotNull(reinterpret_cast<const u8*>(&unaligned[index]));
         for(usize offset = 3u * sizeof(f64); offset < sizeof(AlignedRecord); ++offset)
-            EXPECT_EQ(alignedBytes[offset], alignedOriginal[index * sizeof(AlignedRecord) + offset]) << index << ':' << offset;
+            EXPECT_EQ(alignedBytes.get()[offset], alignedOriginal[index * sizeof(AlignedRecord) + offset]) << index << ':' << offset;
         for(usize offset = 0u; offset < sizeof(UnalignedRecord); ++offset){
             if(offset >= offsetof(UnalignedRecord, value) && offset < offsetof(UnalignedRecord, value) + sizeof(Double3U))
                 continue;
-            EXPECT_EQ(unalignedBytes[offset], unalignedOriginal[index * sizeof(UnalignedRecord) + offset]) << index << ':' << offset;
+            EXPECT_EQ(unalignedBytes.get()[offset], unalignedOriginal[index * sizeof(UnalignedRecord) + offset]) << index << ':' << offset;
         }
     }
 
     BoundingDoubleBox bounds;
-    BoundingDoubleBox::CreateFromPoints(bounds, LengthOf(aligned), &aligned[0].value, sizeof(AlignedRecord));
+    BoundingDoubleBox::CreateFromPoints(bounds, LengthOf(aligned), aligned[0].value, sizeof(AlignedRecord));
     EXPECT_EQ(bounds.center.x, 0x1p+40 + 1.5);
     EXPECT_EQ(bounds.center.y, 0.0);
     EXPECT_EQ(bounds.center.z, 1.0 + 0x1p-52);
@@ -202,13 +202,13 @@ TEST(Math, DoubleTransformStreamsPreservePaddedStridesDuringAlignedUnalignedAndI
     }
     Array<u8, sizeof(pairs)> pairOriginal{};
     NWB_MEMCPY(pairOriginal.data(), pairOriginal.size(), pairs, sizeof(pairs));
-    EXPECT_EQ(VectorDouble2TransformCoordStream(&pairs[0].value, sizeof(PairRecord), &pairs[0].value, sizeof(PairRecord), LengthOf(pairs), matrix), &pairs[0].value);
+    EXPECT_EQ(VectorDouble2TransformCoordStream(MakeNotNull(&pairs[0].value), sizeof(PairRecord), MakeNotNull<const Double2*>(&pairs[0].value), sizeof(PairRecord), LengthOf(pairs), matrix).get(), &pairs[0].value);
     for(usize index = 0u; index < LengthOf(pairs); ++index){
         EXPECT_EQ(pairs[index].value.x, 0x1p+40 + 0.5) << index;
         EXPECT_EQ(pairs[index].value.y, 1.0 + 0x1p-52) << index;
-        const u8* bytes = reinterpret_cast<const u8*>(&pairs[index]);
+        const auto bytes = MakeNotNull(reinterpret_cast<const u8*>(&pairs[index]));
         for(usize offset = 2u * sizeof(f64); offset < sizeof(PairRecord); ++offset)
-            EXPECT_EQ(bytes[offset], pairOriginal[index * sizeof(PairRecord) + offset]) << index << ':' << offset;
+            EXPECT_EQ(bytes.get()[offset], pairOriginal[index * sizeof(PairRecord) + offset]) << index << ':' << offset;
     }
 }
 

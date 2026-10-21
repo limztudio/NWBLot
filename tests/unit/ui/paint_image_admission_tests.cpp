@@ -46,8 +46,8 @@ TEST_F(PaintImageFixture, ThreeKindsShareSixtyFourSlotsWhileCopiesDeduplicateAnd
     ASSERT_TRUE(sdf && image && overflow);
     PaintBuilder reference(m_arena);
     beginPaint(reference);
-    const Array<PaintBuilder*, 2u> builders{ &m_builder, &reference };
-    for(PaintBuilder* builder : builders){
+    const Array<NotNull<PaintBuilder*>, 2u> builders{ MakeNotNull(&m_builder), MakeNotNull(&reference) };
+    for(const auto builder : builders){
         ASSERT_TRUE(builder->prepareImages(glyphs.data(), glyphs.size(), &sdf, 1u, &image, 1u));
         builder->fillRect({ 2.0f, 3.0f, 4.0f, 5.0f }, { 0.8f, 0.4f, 0.2f, 0.5f });
         ASSERT_TRUE(builder->drawGlyph(glyphs[0u], { 12.0f, 3.0f, 4.0f, 5.0f }, { 0.125f, 0.25f, 0.5f, 0.5f }));
@@ -97,8 +97,8 @@ TEST_F(PaintImageFixture, MixedOverflowPreservesCoverageGenerationSdfImageVersio
     ASSERT_TRUE(sdf && image && upgrade && newSdf && newImage);
     PaintBuilder reference(m_arena);
     beginPaint(reference);
-    const Array<PaintBuilder*, 2u> builders{ &m_builder, &reference };
-    for(PaintBuilder* builder : builders){
+    const Array<NotNull<PaintBuilder*>, 2u> builders{ MakeNotNull(&m_builder), MakeNotNull(&reference) };
+    for(const auto builder : builders){
         ASSERT_TRUE(builder->prepareImages(glyphs.data(), glyphs.size(), &sdf, 1u, &image, 1u));
         builder->fillRect({ 2.0f, 3.0f, 5.0f, 7.0f }, { 0.6f, 0.3f, 0.2f, 0.5f });
         ASSERT_TRUE(builder->drawGlyph(glyphs[0u], { 12.0f, 13.0f, 5.0f, 7.0f }, { 0.125f, 0.25f, 0.5f, 0.5f }));
@@ -144,11 +144,11 @@ TEST_F(PaintImageFixture, NullThirdKindRejectsEarlierCandidatesAtomicallyAndAVal
     ASSERT_TRUE(glyph && upgrade && sdf && image && addition);
     const Array<SharedImageSource, 2u> invalidImages{ addition, SharedImageSource{} };
     PaintBuilder reference(m_arena);
-    const Array<PaintBuilder*, 2u> builders{ &m_builder, &reference };
+    const Array<NotNull<PaintBuilder*>, 2u> builders{ MakeNotNull(&m_builder), MakeNotNull(&reference) };
     for(u64 pass = 0u; pass < 2u; ++pass){
         beginPaint(m_builder, pass + 1u);
         beginPaint(reference, pass + 1u);
-        for(PaintBuilder* builder : builders){
+        for(const auto builder : builders){
             ASSERT_TRUE(builder->prepareImages(&glyph, 1u, nullptr, 0u, &image, 1u));
             ASSERT_TRUE(builder->drawGlyph(glyph, { 2.0f, 3.0f, 4.0f, 5.0f }, { 0.125f, 0.25f, 0.5f, 0.5f }));
             ASSERT_TRUE(builder->drawImage(image, { 12.0f, 3.0f, 8.0f, 4.0f }));
@@ -156,7 +156,7 @@ TEST_F(PaintImageFixture, NullThirdKindRejectsEarlierCandidatesAtomicallyAndAVal
         EXPECT_FALSE(m_builder.prepareImages(&upgrade, 1u, &sdf, 1u, invalidImages.data(), invalidImages.size()));
         // The first pass freezes rejection; the second retries in the same recording before either builder freezes.
         if(pass != 0u){
-            for(PaintBuilder* builder : builders){
+            for(const auto builder : builders){
                 ASSERT_TRUE(builder->prepareImages(&upgrade, 1u, &sdf, 1u, &addition, 1u));
                 ASSERT_TRUE(builder->drawSdfGlyph(sdf, 1u, { 22.0f, 3.0f, 4.0f, 5.0f }, { 0.0f, 0.0f, 0.5f, 0.5f }));
                 ASSERT_TRUE(builder->drawImage(addition, { 32.0f, 3.0f, 8.0f, 4.0f }));

@@ -53,8 +53,8 @@ static constexpr u64 s_MaxFileBytes = s_HeaderBytes + s_MaxGroupCount * s_GroupH
     return width * height * channels;
 }
 
-[[nodiscard]] static bool ReadExact(GlobalFilesystemDetail::InputFileStream& stream, void* destination, const usize byteCount){
-    stream.read(reinterpret_cast<char*>(destination), static_cast<GlobalFilesystemDetail::StreamSize>(byteCount));
+[[nodiscard]] static bool ReadExact(GlobalFilesystemDetail::InputFileStream& stream, const NotNull<void*> destination, const usize byteCount){
+    stream.read(reinterpret_cast<char*>(destination.get()), static_cast<GlobalFilesystemDetail::StreamSize>(byteCount));
     return stream.gcount() == static_cast<GlobalFilesystemDetail::StreamSize>(byteCount) && !stream.bad();
 }
 
@@ -133,7 +133,7 @@ Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const Path& pat
         return ReadFailure(path, "could not seek prepared-source header");
 
     u8 header[s_HeaderBytes];
-    if(!ReadExact(stream, header, sizeof(header)))
+    if(!ReadExact(stream, NotNull<void*>(header), sizeof(header)))
         return ReadFailure(path, "prepared-source header is truncated");
     const u32 fontByteCount = ReadU32LittleEndian(NotNull<const u8*>(header + s_HeaderFontByteCountOffset));
     const u32 groupCount = ReadU32LittleEndian(NotNull<const u8*>(header + s_HeaderGroupCountOffset));
@@ -155,7 +155,7 @@ Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const Path& pat
     u64 pixelByteCount = 0u;
     for(u32 index = 0u; index < groupCount; ++index){
         u8 groupHeader[s_GroupHeaderBytes];
-        if(!ReadExact(stream, groupHeader, sizeof(groupHeader)))
+        if(!ReadExact(stream, NotNull<void*>(groupHeader), sizeof(groupHeader)))
             return ReadFailure(path, "image directory is truncated");
         PreparedFontImageGroup group(candidate.fontBytes.get_allocator().arena());
         group.width = ReadU32LittleEndian(NotNull<const u8*>(groupHeader));
@@ -174,7 +174,7 @@ Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const Path& pat
     if(expectedFileBytes != static_cast<u64>(fileEnd))
         return ReadFailure(path, "prepared-source layout is truncated or has trailing bytes");
     candidate.fontBytes.resize(fontByteCount);
-    if(!ReadExact(stream, candidate.fontBytes.data(), candidate.fontBytes.size()))
+    if(!ReadExact(stream, NotNull<void*>(candidate.fontBytes.data()), candidate.fontBytes.size()))
         return ReadFailure(path, "prepared SFNT bytes are truncated");
     if(ComputeSha256({ candidate.fontBytes.data(), candidate.fontBytes.size() }) != candidate.fontSha256)
         return ReadFailure(path, "prepared SFNT content hash differs from its directory");
@@ -183,7 +183,7 @@ Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const Path& pat
         for(u32 index = 0u; index < groupCount; ++index){
             PreparedFontImageGroup& group = candidate.groups[index];
             group.pixels.resize(groupByteCounts[index]);
-            if(!ReadExact(stream, group.pixels.data(), group.pixels.size()))
+            if(!ReadExact(stream, NotNull<void*>(group.pixels.data()), group.pixels.size()))
                 return ReadFailure(path, "prepared image bytes are truncated");
             if(ComputeSha256({ group.pixels.data(), group.pixels.size() }) != group.sha256)
                 return ReadFailure(path, "prepared image content hash differs from its directory");

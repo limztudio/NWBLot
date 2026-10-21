@@ -259,8 +259,8 @@ namespace __hidden_gpu_command_ir_replay_preflight{
 }
 
 struct TextureClearDestination{
-    Texture* texture;
-    const GpuTaskResourceUse* use;
+    Texture& texture;
+    const GpuTaskResourceUse& use;
 };
 
 [[nodiscard]] static Expected<TextureClearDestination, GpuCommandIrReplayError::Enum> ResolveTextureClearDestination(const GpuCommandIrBuiltinTaskRecord& record, const GpuTaskGraphDeclarationReadView& graph, const GpuTaskGraphTaskView& task)noexcept{
@@ -278,22 +278,22 @@ struct TextureClearDestination{
     const GpuTaskResourceUse* const destinationUse = FindTaskResourceUse(task, record.destination, ResourceStates::CopyDest, GpuTaskResourceAccess::Write);
     if(!destinationUse)
         return MakeUnexpected(GpuCommandIrReplayError::ResourceUseMismatch);
-    return TextureClearDestination{ .texture = destination, .use = destinationUse, };
+    return TextureClearDestination{ .texture = *destination, .use = *destinationUse, };
 }
 
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateTextureClearRecord(const GpuCommandIrBuiltinTaskRecord& record, const GpuTaskGraphDeclarationReadView& graph, const GpuTaskGraphTaskView& task, const GpuPhysicalQueueInfo& queue)noexcept{
     const auto resolvedDestination = ResolveTextureClearDestination(record, graph, task);
     if(!resolvedDestination)
         return resolvedDestination.error();
-    Texture* const destination = resolvedDestination->texture;
-    const GpuTaskResourceUse* const destinationUse = resolvedDestination->use;
+    Texture& destination = resolvedDestination->texture;
+    const GpuTaskResourceUse& destinationUse = resolvedDestination->use;
 
-    const TextureDesc& description = destination->getCreationDescription();
+    const TextureDesc& description = destination.getCreationDescription();
     const auto valueKind = GpuTaskGraphClearDetail::TryMapTextureClearValueKind(record.clearTextureValueType);
     Expected<GraphicsBackend::TextureClearContract> clearContract = MakeUnexpected(Failure{});
     if(
         !TextureSubresourcesAreCanonical(description, record.destinationSubresources)
-        || !TextureSubresourcesContain(destinationUse->range.textureSubresources, description, record.destinationSubresources)
+        || !TextureSubresourcesContain(destinationUse.range.textureSubresources, description, record.destinationSubresources)
         || !valueKind
         || !(clearContract = GraphicsBackend::ResolveTextureClearContract(description, record.destinationSubresources, *valueKind, record.clearDepth, record.clearStencil))
         || clearContract->subresources != record.destinationSubresources
@@ -307,10 +307,10 @@ struct TextureClearDestination{
     const auto resolvedDestination = ResolveTextureClearDestination(record, graph, task);
     if(!resolvedDestination)
         return resolvedDestination.error();
-    Texture* const destination = resolvedDestination->texture;
-    const GpuTaskResourceUse* const destinationUse = resolvedDestination->use;
+    Texture& destination = resolvedDestination->texture;
+    const GpuTaskResourceUse& destinationUse = resolvedDestination->use;
 
-    const TextureDesc& description = destination->getCreationDescription();
+    const TextureDesc& description = destination.getCreationDescription();
     Expected<GraphicsBackend::TextureClearContract> clearContract = MakeUnexpected(Failure{});
     const Box clearBox(record.clearRect, 0, Limit<i32>::s_Max);
     if(
@@ -318,7 +318,7 @@ struct TextureClearDestination{
         || record.clearRect.maxY <= record.clearRect.minY
         || description.sampleCount != 1u
         || !TextureSubresourcesAreCanonical(description, record.destinationSubresources)
-        || !TextureSubresourcesContain(destinationUse->range.textureSubresources, description, record.destinationSubresources)
+        || !TextureSubresourcesContain(destinationUse.range.textureSubresources, description, record.destinationSubresources)
         || !(clearContract = GraphicsBackend::ResolveTextureClearContract(description, record.destinationSubresources, GraphicsBackend::TextureClearValueKind::UInt, false, false))
         || clearContract->subresources != record.destinationSubresources
         || !GraphicsBackend::TextureClearQueueRequirementSatisfied(GraphicsBackend::TextureClearBoxQueueRequirement(description, clearContract->subresources, clearBox), task.commands.allowedCapabilities(), queue.capabilities)

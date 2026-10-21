@@ -29,8 +29,8 @@ class FrameExecuteSurfelReadback final{
 public:
     struct Context{
         Core::Alloc::ScratchArena& scratchArena;
-        RendererFramePipeline* renderer = nullptr;
-        Core::GpuPersistentResourceStateCache::Candidate* candidate = nullptr;
+        NotNull<RendererFramePipeline*> renderer;
+        NotNull<Core::GpuPersistentResourceStateCache::Candidate*> candidate;
         const Core::BufferHandle* buffers = nullptr;
         usize bufferCount = 0u;
         bool finalStateReady = false;

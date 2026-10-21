@@ -246,7 +246,7 @@ struct RenderPassAttachmentOperations{
     return drawCount != 0u && drawCount <= maximumDrawCount && (drawCount == 1u || multiDrawIndirectEnabled);
 }
 
-[[nodiscard]] constexpr bool AreMeshDispatchGroupCountsValid(const u32 groupsX, const u32 groupsY, const u32 groupsZ, const u32* const maximumGroupCounts, const u32 maximumTotalGroupCount)noexcept{
+[[nodiscard]] constexpr bool AreMeshDispatchGroupCountsValid(const u32 groupsX, const u32 groupsY, const u32 groupsZ, const u32 (&maximumGroupCounts)[3], const u32 maximumTotalGroupCount)noexcept{
     if(groupsX == 0u || groupsY == 0u || groupsZ == 0u || groupsX > maximumGroupCounts[0u] || groupsY > maximumGroupCounts[1u] || groupsZ > maximumGroupCounts[2u])
         return false;
 
@@ -255,7 +255,7 @@ struct RenderPassAttachmentOperations{
 }
 
 struct MeshDispatchLimits{
-    const u32* maximumGroupCounts = nullptr;
+    const u32 (&maximumGroupCounts)[3];
     u32 maximumTotalGroupCount = 0u;
 };
 

@@ -122,7 +122,7 @@ Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const Me
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin cluster bind pose matrix is not finite"));
             return MakeUnexpected(Failure{});
         }
-        auto foundJoint = context.jointLookup.find(cluster->bone_node);
+        auto foundJoint = context.jointLookup.find(MakeNotNull(cluster->bone_node));
         if(foundJoint != context.jointLookup.end()){
             const usize jointIndex = static_cast<usize>(foundJoint.value());
             NWB_ASSERT(jointIndex < context.inverseBindMatrices.size());
@@ -149,7 +149,7 @@ Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const Me
         context.joints.push_back(cluster->bone_node);
         context.bindPoseMatrices.push_back(storedBindPose);
         context.inverseBindMatrices.push_back(storedInverseBind);
-        const auto inserted = context.jointLookup.emplace(cluster->bone_node, joint);
+        const auto inserted = context.jointLookup.emplace(MakeNotNull(cluster->bone_node), joint);
         if(!inserted.second){
             NWB_ASSERT(false);
             return MakeUnexpected(Failure{});

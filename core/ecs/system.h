@@ -92,7 +92,7 @@ private:
 
 class SystemScheduler{
 private:
-    using SystemList = Vector<ISystem*, Alloc::GlobalArena>;
+    using SystemList = Vector<NotNull<ISystem*>, Alloc::GlobalArena>;
     using DependencyList = Vector<usize, Alloc::GlobalArena>;
 
 

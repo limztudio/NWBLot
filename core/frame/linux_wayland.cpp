@@ -1034,115 +1034,115 @@ bool InitWaylandFrame(Frame& frame){
         NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland context allocation failed"));
         return false;
     }
-    auto* context = contextOwner.get();
-    SetWaylandContext(frameData, context);
+    auto& context = *contextOwner;
+    SetWaylandContext(frameData, &context);
     contextOwner.release();
 
-    context->display = wl_display_connect(nullptr);
-    if(!context->display){
+    context.display = wl_display_connect(nullptr);
+    if(!context.display){
         CleanupWaylandFrame(frame);
         cleanupOnFailure.release();
         NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland display connection failed"));
         return false;
     }
-    SetWaylandDisplay(frameData, context->display);
+    SetWaylandDisplay(frameData, context.display);
 
-    context->xkbContext = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-    if(!context->xkbContext){
+    context.xkbContext = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+    if(!context.xkbContext){
         CleanupWaylandFrame(frame);
         cleanupOnFailure.release();
         NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland xkb context creation failed"));
         return false;
     }
 
-    context->registry = wl_display_get_registry(context->display);
-    if(!context->registry){
+    context.registry = wl_display_get_registry(context.display);
+    if(!context.registry){
         CleanupWaylandFrame(frame);
         cleanupOnFailure.release();
         NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland registry acquisition failed"));
         return false;
     }
-    if(wl_registry_add_listener(context->registry, &s_RegistryListener, context) != 0){
+    if(wl_registry_add_listener(context.registry, &s_RegistryListener, &context) != 0){
         CleanupWaylandFrame(frame);
         cleanupOnFailure.release();
         NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland registry listener registration failed"));
         return false;
     }
 
-    if(const auto roundtrip = RoundtripDisplay(*context->display); !roundtrip){
+    if(const auto roundtrip = RoundtripDisplay(*context.display); !roundtrip){
         CleanupWaylandFrame(frame);
         cleanupOnFailure.release();
         NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland registry roundtrip failed; native_domain=POSIX native_code={}"), roundtrip.error());
         return false;
     }
 
-    if(!context->compositor || !context->wmBase){
+    if(!context.compositor || !context.wmBase){
         CleanupWaylandFrame(frame);
         cleanupOnFailure.release();
         NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland compositor/xdg-shell globals are unavailable"));
         return false;
     }
 
-    if(xdg_wm_base_add_listener(context->wmBase, &s_WmBaseListener, context) != 0){
+    if(xdg_wm_base_add_listener(context.wmBase, &s_WmBaseListener, &context) != 0){
         CleanupWaylandFrame(frame);
         cleanupOnFailure.release();
         NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland xdg-shell listener registration failed"));
         return false;
     }
 
-    context->surface = wl_compositor_create_surface(context->compositor);
-    if(!context->surface){
+    context.surface = wl_compositor_create_surface(context.compositor);
+    if(!context.surface){
         CleanupWaylandFrame(frame);
         cleanupOnFailure.release();
         NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland surface creation failed"));
         return false;
     }
-    ApplyBufferScale(*context, context->bufferScale);
-    SetWaylandSurface(frameData, context->surface);
+    ApplyBufferScale(context, context.bufferScale);
+    SetWaylandSurface(frameData, context.surface);
 
-    context->xdgSurface = xdg_wm_base_get_xdg_surface(context->wmBase, context->surface);
-    if(!context->xdgSurface){
+    context.xdgSurface = xdg_wm_base_get_xdg_surface(context.wmBase, context.surface);
+    if(!context.xdgSurface){
         CleanupWaylandFrame(frame);
         cleanupOnFailure.release();
         NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland xdg_surface creation failed"));
         return false;
     }
-    if(xdg_surface_add_listener(context->xdgSurface, &s_XdgSurfaceListener, context) != 0){
+    if(xdg_surface_add_listener(context.xdgSurface, &s_XdgSurfaceListener, &context) != 0){
         CleanupWaylandFrame(frame);
         cleanupOnFailure.release();
         NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland xdg_surface listener registration failed"));
         return false;
     }
 
-    context->toplevel = xdg_surface_get_toplevel(context->xdgSurface);
-    if(!context->toplevel){
+    context.toplevel = xdg_surface_get_toplevel(context.xdgSurface);
+    if(!context.toplevel){
         CleanupWaylandFrame(frame);
         cleanupOnFailure.release();
         NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland toplevel creation failed"));
         return false;
     }
-    if(xdg_toplevel_add_listener(context->toplevel, &s_ToplevelListener, context) != 0){
+    if(xdg_toplevel_add_listener(context.toplevel, &s_ToplevelListener, &context) != 0){
         CleanupWaylandFrame(frame);
         cleanupOnFailure.release();
         NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland toplevel listener registration failed"));
         return false;
     }
-    xdg_toplevel_set_title(context->toplevel, windowTitle.data());
-    xdg_toplevel_set_app_id(context->toplevel, windowTitle.data());
-    xdg_toplevel_set_min_size(context->toplevel, LogicalDimensionForPixels(frameData.width(), context->bufferScale), LogicalDimensionForPixels(frameData.height(), context->bufferScale));
-    xdg_toplevel_set_max_size(context->toplevel, LogicalDimensionForPixels(frameData.width(), context->bufferScale), LogicalDimensionForPixels(frameData.height(), context->bufferScale));
-    context->initialSizeConstrained = true;
+    xdg_toplevel_set_title(context.toplevel, windowTitle.data());
+    xdg_toplevel_set_app_id(context.toplevel, windowTitle.data());
+    xdg_toplevel_set_min_size(context.toplevel, LogicalDimensionForPixels(frameData.width(), context.bufferScale), LogicalDimensionForPixels(frameData.height(), context.bufferScale));
+    xdg_toplevel_set_max_size(context.toplevel, LogicalDimensionForPixels(frameData.width(), context.bufferScale), LogicalDimensionForPixels(frameData.height(), context.bufferScale));
+    context.initialSizeConstrained = true;
 
-    wl_surface_commit(context->surface);
-    if(const auto flushed = FlushDisplay(*context->display); !flushed){
+    wl_surface_commit(context.surface);
+    if(const auto flushed = FlushDisplay(*context.display); !flushed){
         CleanupWaylandFrame(frame);
         cleanupOnFailure.release();
         NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland initial display flush failed; native_domain=POSIX native_code={}"), flushed.error());
         return false;
     }
 
-    for(u32 i = 0u; i < s_InitialConfigureRoundtripLimit && !context->configured; ++i){
-        if(const auto roundtrip = RoundtripDisplay(*context->display); !roundtrip){
+    for(u32 i = 0u; i < s_InitialConfigureRoundtripLimit && !context.configured; ++i){
+        if(const auto roundtrip = RoundtripDisplay(*context.display); !roundtrip){
             CleanupWaylandFrame(frame);
             cleanupOnFailure.release();
             NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland initial configure roundtrip failed; native_domain=POSIX native_code={}"), roundtrip.error());
@@ -1150,14 +1150,14 @@ bool InitWaylandFrame(Frame& frame){
         }
     }
 
-    if(!context->configured){
+    if(!context.configured){
         CleanupWaylandFrame(frame);
         cleanupOnFailure.release();
         NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland compositor did not send an initial configure"));
         return false;
     }
 
-    context->visible = true;
+    context.visible = true;
     cleanupOnFailure.release();
     return true;
 }

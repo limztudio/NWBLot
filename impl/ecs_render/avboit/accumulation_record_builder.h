@@ -49,13 +49,16 @@ struct AvboitAccumulationRecordInputs : public AvboitRecordInputsBase{
     Core::GpuGraphResourceId avboitAccumExtinction;
     Core::GpuTaskId integrationTask;
     bool streamsUploaded = false;
-    Core::GpuTimingSubmissionTicket* accumulationTimingTicket = nullptr;
-    Optional<Core::GpuTimingMeasure>* accumulationComputeEmulationTiming = nullptr;
+    Core::GpuTimingSubmissionTicket& accumulationTimingTicket;
+    Optional<Core::GpuTimingMeasure>& accumulationComputeEmulationTiming;
 
 
 public:
-    explicit AvboitAccumulationRecordInputs(Core::Alloc::GlobalArena& arena)noexcept
-        : AvboitRecordInputsBase(arena){
+    AvboitAccumulationRecordInputs(Core::Alloc::GlobalArena& arena, DeferredFrameTargets& targetsIn, Core::GpuTimingSubmissionTicket& timingTicketIn, Optional<Core::GpuTimingMeasure>& computeEmulationTimingIn)noexcept
+        : AvboitRecordInputsBase(arena, targetsIn)
+        , accumulationTimingTicket(timingTicketIn)
+        , accumulationComputeEmulationTiming(computeEmulationTimingIn)
+    {
     }
 };
 

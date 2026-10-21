@@ -749,7 +749,7 @@ private:
             return MakeUnexpected(Failure{});
         }
 
-        Value* current = &rootIt.value();
+        auto current = MakeNotNull(&rootIt.value());
         for(usize i = 1; i < path.size(); ++i){
             if(current->isNull())
                 current->makeMap();
@@ -761,7 +761,7 @@ private:
             current = &current->field(path[i]);
         }
 
-        return MakeNotNull(current);
+        return current;
     }
 
     Value makeReference(const ScratchPath& path){

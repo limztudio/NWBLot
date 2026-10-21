@@ -30,16 +30,16 @@ class RendererMaterialSystem;
 
 // Opaque upload chain owns material plus CSG frame buffer uploads feeding G-buffer.
 struct OpaqueUploadChainInputs{
-    DeferredFrameTargets* targets = nullptr;
-    const ECSRenderDetail::MeshFrameBindingSnapshot* frameBindings = nullptr;
-    const ECSRenderDetail::CsgGraphResourceSnapshot* csgResources = nullptr;
-    const MaterialPassDrawItemPartitions* drawItems = nullptr;
-    InstanceGpuDataVector* instanceData = nullptr;
-    const CsgFrameGpuData* csgFrameData = nullptr;
+    DeferredFrameTargets& targets;
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings;
+    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources;
+    const MaterialPassDrawItemPartitions& drawItems;
+    InstanceGpuDataVector& instanceData;
+    const CsgFrameGpuData& csgFrameData;
 #if defined(NWB_DEBUG)
-    const ECSRenderDetail::MaterialTypedInstanceRangeVector* materialTypedRanges = nullptr;
+    const ECSRenderDetail::MaterialTypedInstanceRangeVector& materialTypedRanges;
 #endif
-    const MaterialTypedByteDataVector* materialTypedBytes = nullptr;
+    const MaterialTypedByteDataVector& materialTypedBytes;
     Core::GpuGraphResourceId materialInstances;
     Core::GpuGraphResourceId materialTyped;
     Core::GpuGraphResourceId csgReceiverRanges;

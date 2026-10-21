@@ -186,11 +186,8 @@ bool FreezePreparedShadowTraceGeometryBuffers(
         return true;
     };
     const auto appendSelected = [&]<typename SelectedBuffersT>(const SelectedBuffersT& selectedBuffers, const u32 memberIndex, const AStringView identitySuffix, const u8 role){
-        for(Core::Buffer* const selectedBuffer : selectedBuffers){
-            if(!selectedBuffer)
-                return false;
-
-            const BufferRecord* const record = bufferIndex.find(selectedBuffer);
+        for(const NotNull<Core::Buffer*> selectedBuffer : selectedBuffers){
+            const BufferRecord* const record = bufferIndex.find(selectedBuffer.get());
             if(!record || record->firstMesh[memberIndex] == s_MissingIndex)
                 return false;
             const MeshSnapshot& mesh = meshes[record->firstMesh[memberIndex]];

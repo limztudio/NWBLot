@@ -108,7 +108,7 @@ TaskSubmissionBindings::TaskSubmissionBindings(Alloc::ScratchArena& scratchArena
 
         bool ticketAlreadyBound = false;
         if(timingTicketIndices){
-            auto [it, inserted] = timingTicketIndices->try_emplace(binding.timingTicket, timingTickets.size());
+            auto [it, inserted] = timingTicketIndices->try_emplace(MakeNotNull(binding.timingTicket), timingTickets.size());
             if(!inserted){
                 if(timingTickets[it.value()].packet != packet)
                     return false;
@@ -117,7 +117,7 @@ TaskSubmissionBindings::TaskSubmissionBindings(Alloc::ScratchArena& scratchArena
         }
         else{
             for(const ResolvedTimingTicket& existing : timingTickets){
-                if(existing.timingTicket != binding.timingTicket)
+                if(existing.timingTicket.get() != binding.timingTicket)
                     continue;
                 // One one-shot ticket may have semantic aliases only within the same merged packet.
                 if(existing.packet != packet)
@@ -130,7 +130,7 @@ TaskSubmissionBindings::TaskSubmissionBindings(Alloc::ScratchArena& scratchArena
             continue;
 
         const usize ticketIndex = timingTickets.size();
-        timingTickets.push_back(ResolvedTimingTicket{ .packet = packet, .timingTicket = binding.timingTicket });
+        timingTickets.push_back(ResolvedTimingTicket{ .packet = packet, .timingTicket = MakeNotNull(binding.timingTicket) });
         if(timingPacketChains){
             nextTimingTicket.push_back(Limit<usize>::s_Max);
             auto [it, inserted] = timingPacketChains->try_emplace(packet.index, TimingPacketChain{ ticketIndex, ticketIndex });
@@ -173,17 +173,17 @@ TaskSubmissionBindings::TaskSubmissionBindings(Alloc::ScratchArena& scratchArena
     if(!timingTicket)
         return true;
     if(timingTicketIndices){
-        const auto it = timingTicketIndices->find(timingTicket);
+        const auto it = timingTicketIndices->find(MakeNotNull(timingTicket));
         return it == timingTicketIndices->end() || timingTickets[it.value()].packet == packet;
     }
     for(const ResolvedTimingTicket& ticket : timingTickets){
-        if(ticket.packet != packet && ticket.timingTicket == timingTicket)
+        if(ticket.packet != packet && ticket.timingTicket.get() == timingTicket)
             return false;
     }
     return true;
 }
 
-const QueueSubmissionPreSubmitHook* TaskSubmissionBindings::collectPacket(const GpuSubmissionPacketId packet, Vector<GpuTimingSubmissionTicket*, Alloc::ScratchArena>& inOutTimingTickets)const{
+const QueueSubmissionPreSubmitHook* TaskSubmissionBindings::collectPacket(const GpuSubmissionPacketId packet, Vector<NotNull<GpuTimingSubmissionTicket*>, Alloc::ScratchArena>& inOutTimingTickets)const{
     inOutTimingTickets.clear();
     const QueueSubmissionPreSubmitHook* preSubmitHook = nullptr;
     if(timingTickets.empty() && submissionHooks.empty())

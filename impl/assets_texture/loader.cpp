@@ -123,8 +123,8 @@ static void InitializeBasisTranscoder(){
     return MakeUnexpected(texture.error());
 }
 
-[[nodiscard]] static Core::GraphicsRuntime::TextureUploadRegion MakeMipUploadRegion(const u8* data, const usize dataSize, const usize rowPitch, const usize sliceByteCount, const u32 arraySlice, const u32 mipLevel)noexcept{
-    return Core::GraphicsRuntime::TextureUploadRegion{ .data = data, .dataSize = dataSize, .rowPitch = rowPitch, .depthPitch = sliceByteCount, .arraySlice = arraySlice, .mipLevel = mipLevel, };
+[[nodiscard]] static Core::GraphicsRuntime::TextureUploadRegion MakeMipUploadRegion(const NotNull<const u8*> data, const usize dataSize, const usize rowPitch, const usize sliceByteCount, const u32 arraySlice, const u32 mipLevel)noexcept{
+    return Core::GraphicsRuntime::TextureUploadRegion{ .data = data.get(), .dataSize = dataSize, .rowPitch = rowPitch, .depthPitch = sliceByteCount, .arraySlice = arraySlice, .mipLevel = mipLevel, };
 }
 
 [[nodiscard]] static Core::TextureDimension::Enum ToCoreTextureDimension(const TextureDimension::Enum dimension)noexcept{
@@ -251,13 +251,13 @@ bool TextureAssetLoader::Create(TextureGpuResource& outResource, const Texture& 
         NWB_ASSERT(!decoded.bytes.empty() && decoded.rowPitch != 0u && decoded.sliceByteCount != 0u && mip.sliceCount != 0u);
 
         if(textureAsset.dimension() == TextureDimension::Texture3D){
-            uploadRegions.emplace_back(__hidden_texture_loader::MakeMipUploadRegion(decoded.bytes.data(), decoded.bytes.size(), decoded.rowPitch, decoded.sliceByteCount, 0u, static_cast<u32>(mipIndex)));
+            uploadRegions.emplace_back(__hidden_texture_loader::MakeMipUploadRegion(MakeNotNull(decoded.bytes.data()), decoded.bytes.size(), decoded.rowPitch, decoded.sliceByteCount, 0u, static_cast<u32>(mipIndex)));
             continue;
         }
 
         for(u32 sliceIndex = 0u; sliceIndex < mip.sliceCount; ++sliceIndex){
             uploadRegions.emplace_back(__hidden_texture_loader::MakeMipUploadRegion(
-                decoded.bytes.data() + static_cast<usize>(sliceIndex) * decoded.sliceByteCount,
+                MakeNotNull(decoded.bytes.data() + static_cast<usize>(sliceIndex) * decoded.sliceByteCount),
                 decoded.sliceByteCount,
                 decoded.rowPitch,
                 decoded.sliceByteCount,

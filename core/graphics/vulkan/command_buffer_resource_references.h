@@ -18,7 +18,7 @@ NWB_VULKAN_BEGIN
 
 
 struct RetainedBufferStateCommit{
-    Buffer* buffer = nullptr;
+    NotNull<Buffer*> buffer;
 };
 
 class CommandBufferResourceReferences final : NoCopy{
@@ -27,7 +27,7 @@ class CommandBufferResourceReferences final : NoCopy{
 
 
 private:
-    using MembershipIndex = HashMap<GraphicsResource*, u8, Alloc::GlobalArena>;
+    using MembershipIndex = HashMap<NotNull<GraphicsResource*>, u8, Alloc::GlobalArena>;
 
 
 public:
@@ -52,8 +52,8 @@ private:
 
 private:
     Vector<Handle<GraphicsResource>, Alloc::GlobalArena> m_resources;
-    Vector<Buffer*, Alloc::GlobalArena> m_buffers;
-    Vector<Texture*, Alloc::GlobalArena> m_textures;
+    Vector<NotNull<Buffer*>, Alloc::GlobalArena> m_buffers;
+    Vector<NotNull<Texture*>, Alloc::GlobalArena> m_textures;
     Vector<RetainedBufferStateCommit, Alloc::GlobalArena> m_bufferStateCommits;
     Optional<MembershipIndex> m_membership;
     Alloc::GlobalArena& m_arena;

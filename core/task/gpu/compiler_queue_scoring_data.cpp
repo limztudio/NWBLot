@@ -51,16 +51,16 @@ GpuTaskQueueScoringData::GpuTaskQueueScoringData(
 
     // Hazard kinds and ranges remain available in analysis for diagnostics.
     // Queue ownership scoring counts each producer/consumer/resource only once, so build that immutable index once for all candidate evaluations.
-    Vector<const GpuTaskDependencyEdge*, Alloc::ScratchArena> uniqueEdges(scratchArena);
+    Vector<NotNull<const GpuTaskDependencyEdge*>, Alloc::ScratchArena> uniqueEdges(scratchArena);
     uniqueEdges.reserve(analysis.inferredEdges().size());
     for(const GpuTaskDependencyEdge& edge : analysis.inferredEdges()){
         if(edge.hazard == GpuTaskHazardType::VersionDependency || edge.hazard == GpuTaskHazardType::VersionLifetime || !edge.resource.valid())
             continue;
-        uniqueEdges.push_back(&edge);
+        uniqueEdges.push_back(MakeNotNull(&edge));
     }
     if(uniqueEdges.empty())
         return;
-    Sort(uniqueEdges.begin(), uniqueEdges.end(), [](const GpuTaskDependencyEdge* lhs, const GpuTaskDependencyEdge* rhs)noexcept{
+    Sort(uniqueEdges.begin(), uniqueEdges.end(), [](NotNull<const GpuTaskDependencyEdge*> lhs, NotNull<const GpuTaskDependencyEdge*> rhs)noexcept{
         if(lhs->producer.index != rhs->producer.index)
             return lhs->producer.index < rhs->producer.index;
         if(lhs->consumer.index != rhs->consumer.index)
@@ -70,7 +70,7 @@ GpuTaskQueueScoringData::GpuTaskQueueScoringData(
     );
 
     usize uniqueEdgeCount = 0u;
-    for(const GpuTaskDependencyEdge* const edge : uniqueEdges){
+    for(const auto edge : uniqueEdges){
         if(uniqueEdgeCount != 0u){
             const GpuTaskDependencyEdge& previous = *uniqueEdges[uniqueEdgeCount - 1u];
             if(previous.producer == edge->producer && previous.consumer == edge->consumer && previous.resource == edge->resource)
@@ -81,15 +81,15 @@ GpuTaskQueueScoringData::GpuTaskQueueScoringData(
         ++m_ownershipEdgeOffsets[edge->producer.index + 1u];
         ++m_ownershipEdgeOffsets[edge->consumer.index + 1u];
     }
-    uniqueEdges.resize(uniqueEdgeCount);
+    uniqueEdges.erase(uniqueEdges.begin() + uniqueEdgeCount, uniqueEdges.end());
     for(usize taskIndex = 1u; taskIndex < m_ownershipEdgeOffsets.size(); ++taskIndex)
         m_ownershipEdgeOffsets[taskIndex] += m_ownershipEdgeOffsets[taskIndex - 1u];
 
-    m_ownershipEdges.resize(m_ownershipEdgeOffsets.back());
+    m_ownershipEdges.resize(m_ownershipEdgeOffsets.back(), uniqueEdges.front());
     Vector<usize, Alloc::ScratchArena> writeOffsets(graph.taskCount(), scratchArena);
     for(usize taskIndex = 0u; taskIndex < writeOffsets.size(); ++taskIndex)
         writeOffsets[taskIndex] = m_ownershipEdgeOffsets[taskIndex];
-    for(const GpuTaskDependencyEdge* const edge : uniqueEdges){
+    for(const auto edge : uniqueEdges){
         m_ownershipEdges[writeOffsets[edge->producer.index]] = edge;
         m_ownershipEdges[writeOffsets[edge->consumer.index]] = edge;
         ++writeOffsets[edge->producer.index];

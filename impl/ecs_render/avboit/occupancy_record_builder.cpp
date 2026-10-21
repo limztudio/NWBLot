@@ -73,12 +73,6 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
     using namespace RendererTaskGraphDetail;
     static_cast<void>(csgResources);
     AvboitOccupancyRecordResult result{};
-    if(!inputs.targets)
-        return MakeUnexpected(Failure{});
-    if(!inputs.preTimingTicket)
-        return MakeUnexpected(Failure{});
-    if(!inputs.occupancyComputeEmulationTiming)
-        return MakeUnexpected(Failure{});
     if(!inputs.clearTask.valid() || !inputs.uploadTask.valid())
         return MakeUnexpected(Failure{});
 
@@ -120,7 +114,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
         return MakeUnexpected(Failure{});
     occupancyPayload.occupancyComputeEmulationOutputStatesGraphOwned = inputs.regularComputeEmulationPlanCaptured && occupancyComputeEmulationOutputStatesGraphOwned;
     occupancyPayload.occupancyCsgComputeEmulationOutputStatesGraphOwned = inputs.csgComputeEmulationPlanCaptured && occupancyComputeEmulationOutputStatesGraphOwned;
-    occupancyPayload.occupancyComputeEmulationTiming = occupancyComputeEmulationOutputStatesGraphOwned ? inputs.occupancyComputeEmulationTiming : nullptr;
+    occupancyPayload.occupancyComputeEmulationTiming = occupancyComputeEmulationOutputStatesGraphOwned ? &inputs.occupancyComputeEmulationTiming : nullptr;
     Core::GpuGraphResourceId occupancySharedComputeEmulationOutput;
     bool occupancySharedComputeEmulationOutputStatesGraphOwned = false;
     if(inputs.sharedComputeEmulationPlanCaptured){
@@ -208,13 +202,13 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
     if(occupancyPayload.occupancyStreamsUploaded && !objectGeometry.prepare(
         occupancyPayload.occupancySnapshot.regularIndexedDrawItems.data(),
         occupancyPayload.occupancySnapshot.regularIndexedDrawItems.size(),
-        frameBindings, *inputs.targets, occupancyDependency, avboitPreResourceUses, scratchArena, inputs.preTimingTicket
+        frameBindings, inputs.targets, occupancyDependency, avboitPreResourceUses, scratchArena, &inputs.preTimingTicket
     ))
         return MakeUnexpected(Failure{});
     if(occupancyPayload.occupancyStreamsUploaded && !objectGeometry.prepare(
         occupancyPayload.occupancySnapshot.csgIndexedDrawItems.data(),
         occupancyPayload.occupancySnapshot.csgIndexedDrawItems.size(),
-        frameBindings, *inputs.targets, occupancyDependency, avboitPreResourceUses, scratchArena, inputs.preTimingTicket
+        frameBindings, inputs.targets, occupancyDependency, avboitPreResourceUses, scratchArena, &inputs.preTimingTicket
     ))
         return MakeUnexpected(Failure{});
 
@@ -290,9 +284,9 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
         occupancyDependency = m_avboitSystem.taskGraphStage().m_occupancyComputeEmulationTask;
         avboitOccupancyScheduling.allowMergeAcrossConsumerFrontier = true;
     }
-    DeferredFrameTargets& deferredTargets = *inputs.targets;
-    Core::GpuTimingSubmissionTicket& avboitPreTimingTicket = *inputs.preTimingTicket;
-    Optional<Core::GpuTimingMeasure>& avboitOccupancyComputeEmulationTiming = *inputs.occupancyComputeEmulationTiming;
+    DeferredFrameTargets& deferredTargets = inputs.targets;
+    Core::GpuTimingSubmissionTicket& avboitPreTimingTicket = inputs.preTimingTicket;
+    Optional<Core::GpuTimingMeasure>& avboitOccupancyComputeEmulationTiming = inputs.occupancyComputeEmulationTiming;
     static_cast<void>(frameBindings);
     const ECSRenderDetail::RegularSharedComputeEmulationGraphPlan& occupancySharedComputeEmulationPlan = inputs.sharedComputeEmulationPlan;
     const usize occupancySharedComputeEmulationInstanceCount = inputs.sharedComputeEmulationInstanceCount;

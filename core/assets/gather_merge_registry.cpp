@@ -27,8 +27,8 @@ namespace __hidden_gather_merge_registry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-::AutoRegistrationQueue<AssetGatherMergeFunction, AssetArena>& QueryAutoMergeQueue(){
-    static ::AutoRegistrationQueue<AssetGatherMergeFunction, AssetArena> s_Queue(AssetsArenaScope::s_GatherMergeQueueArena);
+::AutoRegistrationQueue<NotNull<AssetGatherMergeFunction>, AssetArena>& QueryAutoMergeQueue(){
+    static ::AutoRegistrationQueue<NotNull<AssetGatherMergeFunction>, AssetArena> s_Queue(AssetsArenaScope::s_GatherMergeQueueArena);
     return s_Queue;
 }
 
@@ -51,14 +51,13 @@ AssetGatherMergeAutoRegistrar::AssetGatherMergeAutoRegistrar(const AssetGatherMe
 
 
 AssetGatherMergeFunction QueryAutoCollectedAssetGatherMerge(Alloc::ScratchArena& scratchArena){
-    Vector<AssetGatherMergeFunction, Core::Alloc::ScratchArena> functions{scratchArena};
+    Vector<NotNull<AssetGatherMergeFunction>, Core::Alloc::ScratchArena> functions{scratchArena};
     __hidden_gather_merge_registry::QueryAutoMergeQueue().copyTo(functions);
 
     if(functions.empty())
         return nullptr;
 
-    NWB_ASSERT(functions.front());
-    return functions.front();
+    return functions.front().get();
 }
 
 

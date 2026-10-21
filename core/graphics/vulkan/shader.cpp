@@ -115,9 +115,9 @@ ShaderLibrary::ShaderLibrary(const VulkanContext& context)
 {}
 ShaderLibrary::~ShaderLibrary()noexcept{}
 
-void ShaderLibrary::getBytecode(const void** ppBytecode, usize* pSize)const noexcept{
-    *ppBytecode = m_spirvWords.data();
-    *pSize = __hidden_vulkan_shader::SpirvByteSize(m_spirvWords);
+void ShaderLibrary::getBytecode(const void*& bytecode, usize& size)const noexcept{
+    bytecode = m_spirvWords.data();
+    size = __hidden_vulkan_shader::SpirvByteSize(m_spirvWords);
 }
 
 Expected<ShaderHandle> ShaderLibrary::getShader(const AStringView entryName, ShaderType::Mask shaderType){
@@ -216,9 +216,9 @@ Expected<ShaderHandle> Device::createShaderSpecialization(Shader& baseShader, co
     NWB_ASSERT(!base.m_spirvWords.empty());
     shader->m_spirvWords = base.m_spirvWords;
     // The validated name starts at a SPIR-V word and keeps its offset in the byte-for-byte module copy.
-    const u32* const entryPointWords = reinterpret_cast<const u32*>(base.m_entryPointName.data());
-    NWB_ASSERT(entryPointWords >= base.m_spirvWords.data() && entryPointWords < base.m_spirvWords.data() + base.m_spirvWords.size());
-    const usize entryPointWordOffset = static_cast<usize>(entryPointWords - base.m_spirvWords.data());
+    const auto entryPointWords = MakeNotNull(reinterpret_cast<const u32*>(base.m_entryPointName.data()));
+    NWB_ASSERT(entryPointWords.get() >= base.m_spirvWords.data() && entryPointWords.get() < base.m_spirvWords.data() + base.m_spirvWords.size());
+    const usize entryPointWordOffset = static_cast<usize>(entryPointWords.get() - base.m_spirvWords.data());
     NWB_ASSERT(entryPointWordOffset < shader->m_spirvWords.size());
     NWB_ASSERT(base.m_entryPointName.size() < (shader->m_spirvWords.size() - entryPointWordOffset) * sizeof(u32));
     shader->m_entryPointName = AStringView(reinterpret_cast<const char*>(shader->m_spirvWords.data() + entryPointWordOffset), base.m_entryPointName.size());

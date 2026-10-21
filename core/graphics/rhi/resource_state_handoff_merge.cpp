@@ -173,7 +173,7 @@ bool CommandListResourceStateHandoff::buildFanIn(const CommandListResourceStateH
 
     {
         struct BufferRangeEvent{
-            const BufferState* state = nullptr;
+            NotNull<const BufferState*> state;
             usize bufferIndex = 0u;
             usize branchIndex = 0u;
             u64 offset = 0u;
@@ -201,8 +201,8 @@ bool CommandListResourceStateHandoff::buildFanIn(const CommandListResourceStateH
                     return false;
                 ++bufferCount;
             }
-            events.push_back({ &state, bufferIndex, branchIndex, state.range.byteOffset, true });
-            events.push_back({ &state, bufferIndex, branchIndex, state.range.end(), false });
+            events.push_back({ MakeNotNull(&state), bufferIndex, branchIndex, state.range.byteOffset, true });
+            events.push_back({ MakeNotNull(&state), bufferIndex, branchIndex, state.range.end(), false });
             return true;
         };
         for(const BufferState& state : base.m_bufferStates){
@@ -277,7 +277,7 @@ bool CommandListResourceStateHandoff::buildFanIn(const CommandListResourceStateH
                     reset();
                     return false;
                 }
-                activeState = event.state;
+                activeState = event.state.get();
             }
             else
                 activeState = nullptr;

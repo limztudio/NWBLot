@@ -26,7 +26,7 @@ class RendererDeferredSystem;
 
 // Deferred lighting stage owns lagged-history selector upload plus lighting task declaration.
 struct DeferredLightingStageInputs{
-    DeferredFrameTargets* targets = nullptr;
+    DeferredFrameTargets& targets;
     Core::GpuGraphResourceId albedo;
     Core::GpuGraphResourceId normal;
     Core::GpuGraphResourceId worldPosition;

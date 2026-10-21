@@ -50,8 +50,8 @@ TEST(OpaqueCsgIntervalClearBuilder, NoOpaqueWorkDoesNotPublishDependencyAsClear)
     Impl::CsgFrameGpuData csgFrameData(scratchArena);
     Impl::GraphClearTimingRecordState clearTimingState;
     const Impl::OpaqueCsgIntervalClearInputs inputs{
-        .targets = &targets,
-        .csgFrameData = &csgFrameData,
+        .targets = targets,
+        .csgFrameData = csgFrameData,
         .csgIntervalId = {},
         .csgReceiverEventCount = {},
         .csgPeelSubresources = {},

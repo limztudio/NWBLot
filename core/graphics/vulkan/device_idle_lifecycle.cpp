@@ -33,8 +33,8 @@ bool Device::waitForIdle(){
         return false;
     }
 
-    for(Queue* queue : m_physicalQueues){
-        NWB_ASSERT(queue);
+    for(const auto queue : m_physicalQueues){
+
         ScopedLock lock(queue->m_mutex);
         queue->collectCompletedCommandBuffers();
     }
@@ -50,8 +50,8 @@ void Device::runGarbageCollection(){
     if(isDeviceLost())
         return;
 
-    for(Queue* queue : m_physicalQueues){
-        NWB_ASSERT(queue);
+    for(const auto queue : m_physicalQueues){
+
         VkResult completionResult = VK_SUCCESS;
         {
             ScopedLock lock(queue->m_mutex);
@@ -74,18 +74,18 @@ void Device::runGarbageCollection(){
 }
 
 VkResult Device::waitForNativeIdle()noexcept{
-    for(Queue* queue : m_physicalQueues){
-        NWB_ASSERT(queue);
+    for(const auto queue : m_physicalQueues){
+
         queue->m_mutex.lock();
     }
-    for(NativeQueueState* nativeQueueState : m_nativeQueueStates){
-        NWB_ASSERT(nativeQueueState);
+    for(const auto nativeQueueState : m_nativeQueueStates){
+
         nativeQueueState->hostMutex.lock();
     }
 
     const VkResult result = isDeviceLost() ? VK_ERROR_DEVICE_LOST : m_context.deviceDispatch.vkDeviceWaitIdle(m_context.device);
     if(result == VK_SUCCESS){
-        for(Queue* queue : m_physicalQueues)
+        for(const auto queue : m_physicalQueues)
             queue->m_lastFinishedID = queue->m_lastSubmittedID;
     }
 

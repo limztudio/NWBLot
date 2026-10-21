@@ -345,7 +345,7 @@ private:
     mutable bool m_deviceRecreationRequested = false;
     bool m_frameSubmissionSuspended = false;
 
-    List<IRenderPass*, Alloc::GlobalArena> m_renderPasses;
+    List<NotNull<IRenderPass*>, Alloc::GlobalArena> m_renderPasses;
     // Non-owning: the contributing system unregisters before its lifetime ends.
     IGpuTaskGraphPresentationContributor* m_taskGraphPresentationContributor = nullptr;
     IGpuTaskGraphOutputLayerContributor* m_taskGraphOutputLayerContributor = nullptr;

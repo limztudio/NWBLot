@@ -169,13 +169,13 @@ template<typename ParameterT>
 }
 
 template<typename ParameterT>
-[[nodiscard]] CsgShapeTypeDesc BuiltInShapeDesc(Core::Alloc::GlobalArena& arena, const Name& name, const ParameterT& defaultParameters, const CsgShapeBoundsCallback boundsCallback){
+[[nodiscard]] CsgShapeTypeDesc BuiltInShapeDesc(Core::Alloc::GlobalArena& arena, const Name& name, const ParameterT& defaultParameters, decltype(*DeclVal<CsgShapeBoundsCallback>()) boundsCallback){
     CsgShapeTypeDesc desc(arena);
     desc.name = name;
     desc.parameterByteSize = sizeof(ParameterT);
     desc.defaultParameterBytes.resize(sizeof(ParameterT));
     NWB_MEMCPY(desc.defaultParameterBytes.data(), desc.defaultParameterBytes.size(), &defaultParameters, sizeof(ParameterT));
-    desc.boundsCallback = boundsCallback;
+    desc.boundsCallback = &boundsCallback;
     return desc;
 }
 
@@ -356,10 +356,10 @@ bool RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry){
     Core::Alloc::GlobalArena& arena = registry.m_shapeTypes.get_allocator().arena();
     bool result = true;
 
-    result = registry.registerShapeType(__hidden_shape_registry::BuiltInShapeDesc(arena, s_CsgBoxShapeName, CsgBoxShapeParameters{}, &__hidden_shape_registry::BoxBounds), true) && result;
-    result = registry.registerShapeType(__hidden_shape_registry::BuiltInShapeDesc(arena, s_CsgCapsuleShapeName, CsgCapsuleShapeParameters{}, &__hidden_shape_registry::CapsuleBounds), true) && result;
-    result = registry.registerShapeType(__hidden_shape_registry::BuiltInShapeDesc(arena, s_CsgPlaneShapeName, CsgPlaneShapeParameters{}, &__hidden_shape_registry::PlaneBounds), true) && result;
-    result = registry.registerShapeType(__hidden_shape_registry::BuiltInShapeDesc(arena, s_CsgSphereShapeName, CsgSphereShapeParameters{}, &__hidden_shape_registry::SphereBounds), true) && result;
+    result = registry.registerShapeType(__hidden_shape_registry::BuiltInShapeDesc(arena, s_CsgBoxShapeName, CsgBoxShapeParameters{}, __hidden_shape_registry::BoxBounds), true) && result;
+    result = registry.registerShapeType(__hidden_shape_registry::BuiltInShapeDesc(arena, s_CsgCapsuleShapeName, CsgCapsuleShapeParameters{}, __hidden_shape_registry::CapsuleBounds), true) && result;
+    result = registry.registerShapeType(__hidden_shape_registry::BuiltInShapeDesc(arena, s_CsgPlaneShapeName, CsgPlaneShapeParameters{}, __hidden_shape_registry::PlaneBounds), true) && result;
+    result = registry.registerShapeType(__hidden_shape_registry::BuiltInShapeDesc(arena, s_CsgSphereShapeName, CsgSphereShapeParameters{}, __hidden_shape_registry::SphereBounds), true) && result;
 
     return result;
 }

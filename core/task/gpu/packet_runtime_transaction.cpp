@@ -34,7 +34,7 @@ public:
         const QueueSubmissionToken& token,
         GpuTaskGraph::PacketSubmissionLease& lease,
         const NativeSubmissionInfo& nativeSubmissionInfo,
-        GpuTimingSubmissionTicket* const* const timingTickets,
+        const NotNull<GpuTimingSubmissionTicket*>* const timingTickets,
         const usize timingTicketCount
     )noexcept
         : m_transaction(transaction)
@@ -81,7 +81,7 @@ private:
     GpuTaskGraph::PacketSubmissionLease& m_lease;
     const QueueSubmissionToken m_token;
     const NativeSubmissionInfo m_nativeSubmissionInfo;
-    GpuTimingSubmissionTicket* const* const m_timingTickets = nullptr;
+    const NotNull<GpuTimingSubmissionTicket*>* const m_timingTickets = nullptr;
     const GpuSubmissionPacketId m_packet;
     const usize m_timingTicketCount = 0u;
     bool m_active = true;
@@ -262,7 +262,7 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
     const QueueSubmissionToken& token,
     GpuTaskGraph::PacketSubmissionLease& lease,
     const NativeSubmissionInfo& nativeSubmissionInfo,
-    GpuTimingSubmissionTicket* const* const timingTickets,
+    const NotNull<GpuTimingSubmissionTicket*>* const timingTickets,
     const usize timingTicketCount,
     const GpuTaskSubmissionDetail::TaskCallbackBindings<GpuTaskGraphTaskAcceptedCallback>& taskAcceptedCallbacks
 ){
@@ -288,10 +288,6 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
         NWB_FATAL_ASSERT_MSG(false, "native-accepted packet token must match its exact compiled physical queue");
     if(timingTicketCount != 0u && !timingTickets)
         NWB_FATAL_ASSERT_MSG(false, "native-accepted packet observer arrays must remain valid through publication");
-    for(usize timingTicketIndex = 0u; timingTicketIndex < timingTicketCount; ++timingTicketIndex){
-        if(!timingTickets[timingTicketIndex])
-            NWB_FATAL_ASSERT_MSG(false, "native-accepted packet timing tickets must remain valid through publication");
-    }
     const GpuTaskId* const tasks = packetView.tasks;
 
     graph.beginPacketSubmissionAcceptance(compiledGraph, planAccess, packetID, token, lease);
@@ -390,12 +386,10 @@ void GpuGraphSubmissionTransaction::commitAcceptedPacket(const GpuTaskGraph& gra
     resolveSubmissionBindingIfTerminalLocked(graph, compiledGraph);
 }
 
-void GpuGraphSubmissionTransaction::abandonTimingTicketsWithoutCallbacks(GpuTimingSubmissionTicket* const* const timingTickets, const usize timingTicketCount)noexcept{
+void GpuGraphSubmissionTransaction::abandonTimingTicketsWithoutCallbacks(const NotNull<GpuTimingSubmissionTicket*>* const timingTickets, const usize timingTicketCount)noexcept{
     if(timingTicketCount != 0u && !timingTickets)
         NWB_FATAL_ASSERT_MSG(false, "accepted packet cleanup requires its timing ticket array");
     for(usize timingTicketIndex = 0u; timingTicketIndex < timingTicketCount; ++timingTicketIndex){
-        if(!timingTickets[timingTicketIndex])
-            NWB_FATAL_ASSERT_MSG(false, "accepted packet cleanup requires every timing ticket");
         timingTickets[timingTicketIndex]->abandonWithoutCallbacks();
     }
 }

@@ -19,6 +19,11 @@ NWB_CORE_BEGIN
 
 
 namespace __hidden_win32_clipboard{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr StringView s_WarningEventName = "warning";
 static constexpr StringView s_LifecycleCategory = "win32_clipboard_lifecycle";
 

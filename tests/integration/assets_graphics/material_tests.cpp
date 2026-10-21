@@ -37,6 +37,16 @@ namespace __hidden_assets_graphics_material{
 
 
 static constexpr AStringView s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE = "project/material_interfaces/test_surface";
+static constexpr AStringView s_PROJECT_MATERIALS_TEST_MATERIAL = "project/materials/test_material";
+static constexpr AStringView s_MaterialPixelShaderPath = "project/shaders/material_ps";
+static constexpr AStringView s_PS = "ps";
+static constexpr AStringView s_MATERIAL_BIND_INCLUDES = "material_bind_includes";
+static constexpr AStringView s_MATERIAL_INTERFACES = "material_interfaces";
+static constexpr AStringView s_TEST_SURFACE_BIND = "test_surface.bind";
+static constexpr AStringView s_SHADERS = "shaders";
+static constexpr AStringView s_ENGINE_SAMPLERS_LINEAR_CLAMP = "engine/samplers/linear_clamp";
+static constexpr AStringView s_CACHE = "cache";
+static constexpr AStringView s_TESTS = "tests";
 #if defined(NWB_FINAL)
 static constexpr AStringView s_GENERATED_AVBOIT_ACCUMULATE_PS_PROJECT_M = "generated/avboit_accumulate_ps/project/materials/test_material";
 static constexpr AStringView s_GENERATED_AVBOIT_OCCUPANCY_PS_PROJECT_MA = "generated/avboit_occupancy_ps/project/materials/test_material";

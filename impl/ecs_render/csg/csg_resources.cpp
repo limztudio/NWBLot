@@ -221,10 +221,7 @@ bool RendererCsgSystem::prepareCsgFrameResources(const usize receiverRangeCount,
     return true;
 }
 
-ECSRenderDetail::CsgGraphResourceSnapshot RendererCsgSystem::csgGraphResourceSnapshot(const CsgFrameState& csgFrameState, const bool retainRefractionCapPipeline)const noexcept{
-    // Frames without CSG work retain no CSG handles, so the graph imports none.
-    if(csgFrameState.empty())
-        return {};
+ECSRenderDetail::CsgGraphResourceSnapshot RendererCsgSystem::csgGraphResourceSnapshot(const bool retainRefractionCapPipeline)const noexcept{
     return {
         .receiverRanges = m_csgState.m_receiverRangeBuffer,
         .cutters = m_csgState.m_cutterBuffer,

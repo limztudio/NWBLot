@@ -188,7 +188,8 @@ bool CommandList::buildTopLevelAccelStructFromInstanceData(
     const usize numInstances,
     const RayTracingAccelStructBuildFlags::Mask buildFlags,
     const VkBuildAccelerationStructureFlagsKHR vkBuildFlags,
-    TStringView operationName
+    TStringView operationName,
+    const RayTracingInstanceDesc* instances
 ){
     Buffer* const backingBuffer = as.getBackingBuffer();
     if(!m_device.isAccelStructReadyForGpuUse(&as) || !backingBuffer || !isBufferAdmittedToCommandQueue(*backingBuffer)){

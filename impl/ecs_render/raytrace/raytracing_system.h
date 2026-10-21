@@ -762,6 +762,12 @@ private:
     bool m_shadowVisibilityResourcesPreflighted = false;
     bool m_shadowVisibilityHardwareSupported = false;
     bool m_opticalCausticReaderAdmitted = false;
+    // Dedupe for the refractive-volume optical-boundary diagnostic: count, hash, first entity, reporting latch.
+    u32 m_unsupportedCausticVolumeCount = 0u;
+    u64 m_unsupportedCausticVolumeHash = 0u;
+    u64 m_reportedUnsupportedCausticVolumeHash = 0u;
+    u32 m_firstUnsupportedCausticVolumeEntity = 0u;
+    bool m_unsupportedCausticVolumeReported = false;
     // Recording may only touch allocations selected before the shared graph is compiled.
     // These flags distinguish a usable frozen trace plan from a non-fatal preflight fallback that leaves the effect black for this frame.
     bool m_shadowVisibilityTraceResourcesPreflighted = false;

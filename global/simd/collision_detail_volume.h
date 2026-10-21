@@ -64,13 +64,13 @@ NWB_INLINE void FastIntersectOrientedBoxPlane(
     outInside = VectorGreaterOrEqual(distance, radius);
 }
 
-inline void FastIntersectPointsPlane(const NotNull<const SIMDVectorSingle*> points, const usize pointCount, const SIMDVectorSingle plane, SIMDVectorSingle& outOutside, SIMDVectorSingle& outInside)noexcept{
-    NWB_ASSERT(pointCount > 0u);
+inline void FastIntersectPointsPlane(const Span<const SIMDVectorSingle> points, const SIMDVectorSingle plane, SIMDVectorSingle& outOutside, SIMDVectorSingle& outInside)noexcept{
+    NWB_ASSERT(!points.empty());
 
-    SIMDVectorSingle minDistance = PlaneDistance(plane, points.get()[0]);
+    SIMDVectorSingle minDistance = PlaneDistance(plane, points[0]);
     SIMDVectorSingle maxDistance = minDistance;
-    for(usize pointIndex = 1u; pointIndex < pointCount; ++pointIndex){
-        const SIMDVectorSingle distance = PlaneDistance(plane, points.get()[pointIndex]);
+    for(usize pointIndex = 1u; pointIndex < points.size(); ++pointIndex){
+        const SIMDVectorSingle distance = PlaneDistance(plane, points[pointIndex]);
         minDistance = VectorMin(minDistance, distance);
         maxDistance = VectorMax(maxDistance, distance);
     }
@@ -97,8 +97,8 @@ NWB_INLINE void ObbAxes(const SIMDVectorSingle orientation, SIMDVectorSingle& ou
     return Vector3LessOrEqual(VectorAbs(PointToObbLocal(point, center, orientation)), extents);
 }
 
-[[nodiscard]] inline bool PointsInsideObb(const SIMDVectorSingle* points, const usize pointCount, const SIMDVectorSingle center, const SIMDVectorSingle extents, const SIMDVectorSingle orientation)noexcept{
-    for(usize pointIndex = 0u; pointIndex < pointCount; ++pointIndex){
+[[nodiscard]] inline bool PointsInsideObb(const Span<const SIMDVectorSingle> points, const SIMDVectorSingle center, const SIMDVectorSingle extents, const SIMDVectorSingle orientation)noexcept{
+    for(usize pointIndex = 0u; pointIndex < points.size(); ++pointIndex){
         if(Vector3AnyTrue(VectorGreater(VectorAbs(PointToObbLocal(points[pointIndex], center, orientation)), extents)))
             return false;
     }
@@ -109,12 +109,12 @@ NWB_INLINE void ObbAxes(const SIMDVectorSingle orientation, SIMDVectorSingle& ou
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline ContainmentType::Enum ContainmentFromPlaneTests(const SIMDVectorSingle* points, const usize pointCount, const SIMDVectorSingle* planes, const usize planeCount)noexcept{
+[[nodiscard]] inline ContainmentType::Enum ContainmentFromPlaneTests(const Span<const SIMDVectorSingle> points, const Span<const SIMDVectorSingle> planes)noexcept{
     SIMDVectorSingle anyIntersecting = VectorFalseInt();
-    for(usize planeIndex = 0u; planeIndex < planeCount; ++planeIndex){
+    for(usize planeIndex = 0u; planeIndex < planes.size(); ++planeIndex){
         SIMDVectorSingle outside{};
         SIMDVectorSingle inside{};
-        FastIntersectPointsPlane(NotNull<const SIMDVectorSingle*>(points), pointCount, planes[planeIndex], outside, inside);
+        FastIntersectPointsPlane(points, planes[planeIndex], outside, inside);
         if(Vector4AllTrue(outside))
             return ContainmentType::Disjoint;
         anyIntersecting = VectorOrInt(anyIntersecting, VectorEqualInt(inside, VectorFalseInt()));
@@ -174,11 +174,11 @@ inline void FrustumPlanes(const SIMDVectorSingle origin, const SIMDVectorSingle 
     return true;
 }
 
-[[nodiscard]] inline bool FrustumPlanesIntersectPoints(const SIMDVectorSingle (&planes)[CollisionDetail::s_FrustumPlaneCount], const NotNull<const SIMDVectorSingle*> points, const usize pointCount)noexcept{
+[[nodiscard]] inline bool FrustumPlanesIntersectPoints(const SIMDVectorSingle (&planes)[CollisionDetail::s_FrustumPlaneCount], const Span<const SIMDVectorSingle> points)noexcept{
     for(u32 planeIndex = 0u; planeIndex < s_FrustumPlaneCount; ++planeIndex){
         SIMDVectorSingle outside{};
         SIMDVectorSingle inside{};
-        FastIntersectPointsPlane(points, pointCount, planes[planeIndex], outside, inside);
+        FastIntersectPointsPlane(points, planes[planeIndex], outside, inside);
         if(Vector4AllTrue(outside))
             return false;
     }
@@ -396,13 +396,13 @@ NWB_INLINE void FastIntersectOrientedBoxPlane(
     outInside = VectorDoubleGreaterOrEqual(distance, radius);
 }
 
-inline void FastIntersectPointsPlane(const NotNull<const SIMDVectorDouble*> points, const usize pointCount, const SIMDVectorDouble plane, SIMDVectorDouble& outOutside, SIMDVectorDouble& outInside)noexcept{
-    NWB_ASSERT(pointCount > 0u);
+inline void FastIntersectPointsPlane(const Span<const SIMDVectorDouble> points, const SIMDVectorDouble plane, SIMDVectorDouble& outOutside, SIMDVectorDouble& outInside)noexcept{
+    NWB_ASSERT(!points.empty());
 
-    SIMDVectorDouble minDistance = PlaneDoubleDistance(plane, points.get()[0]);
+    SIMDVectorDouble minDistance = PlaneDoubleDistance(plane, points[0]);
     SIMDVectorDouble maxDistance = minDistance;
-    for(usize pointIndex = 1u; pointIndex < pointCount; ++pointIndex){
-        const SIMDVectorDouble distance = PlaneDoubleDistance(plane, points.get()[pointIndex]);
+    for(usize pointIndex = 1u; pointIndex < points.size(); ++pointIndex){
+        const SIMDVectorDouble distance = PlaneDoubleDistance(plane, points[pointIndex]);
         minDistance = VectorDoubleMin(minDistance, distance);
         maxDistance = VectorDoubleMax(maxDistance, distance);
     }
@@ -429,8 +429,8 @@ NWB_INLINE void ObbAxes(const SIMDVectorDouble orientation, SIMDVectorDouble& ou
     return VectorDouble3LessOrEqual(VectorDoubleAbs(PointToObbLocal(point, center, orientation)), extents);
 }
 
-[[nodiscard]] inline bool PointsInsideObb(const SIMDVectorDouble* points, const usize pointCount, const SIMDVectorDouble center, const SIMDVectorDouble extents, const SIMDVectorDouble orientation)noexcept{
-    for(usize pointIndex = 0u; pointIndex < pointCount; ++pointIndex){
+[[nodiscard]] inline bool PointsInsideObb(const Span<const SIMDVectorDouble> points, const SIMDVectorDouble center, const SIMDVectorDouble extents, const SIMDVectorDouble orientation)noexcept{
+    for(usize pointIndex = 0u; pointIndex < points.size(); ++pointIndex){
         if(VectorDouble3AnyTrue(VectorDoubleGreater(VectorDoubleAbs(PointToObbLocal(points[pointIndex], center, orientation)), extents)))
             return false;
     }
@@ -441,12 +441,12 @@ NWB_INLINE void ObbAxes(const SIMDVectorDouble orientation, SIMDVectorDouble& ou
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline ContainmentType::Enum ContainmentFromPlaneTests(const SIMDVectorDouble* points, const usize pointCount, const SIMDVectorDouble* planes, const usize planeCount)noexcept{
+[[nodiscard]] inline ContainmentType::Enum ContainmentFromPlaneTests(const Span<const SIMDVectorDouble> points, const Span<const SIMDVectorDouble> planes)noexcept{
     SIMDVectorDouble anyIntersecting = VectorDoubleFalseInt();
-    for(usize planeIndex = 0u; planeIndex < planeCount; ++planeIndex){
+    for(usize planeIndex = 0u; planeIndex < planes.size(); ++planeIndex){
         SIMDVectorDouble outside{};
         SIMDVectorDouble inside{};
-        FastIntersectPointsPlane(NotNull<const SIMDVectorDouble*>(points), pointCount, planes[planeIndex], outside, inside);
+        FastIntersectPointsPlane(points, planes[planeIndex], outside, inside);
         if(VectorDouble4AllTrue(outside))
             return ContainmentType::Disjoint;
         anyIntersecting = VectorDoubleOrInt(anyIntersecting, VectorDoubleEqualInt(inside, VectorDoubleFalseInt()));
@@ -506,11 +506,11 @@ inline void FrustumPlanes(const SIMDVectorDouble origin, const SIMDVectorDouble 
     return true;
 }
 
-[[nodiscard]] inline bool FrustumPlanesIntersectPoints(const SIMDVectorDouble (&planes)[CollisionDetail::s_FrustumPlaneCount], const NotNull<const SIMDVectorDouble*> points, const usize pointCount)noexcept{
+[[nodiscard]] inline bool FrustumPlanesIntersectPoints(const SIMDVectorDouble (&planes)[CollisionDetail::s_FrustumPlaneCount], const Span<const SIMDVectorDouble> points)noexcept{
     for(u64 planeIndex = 0u; planeIndex < s_DoubleFrustumPlaneCount; ++planeIndex){
         SIMDVectorDouble outside{};
         SIMDVectorDouble inside{};
-        FastIntersectPointsPlane(points, pointCount, planes[planeIndex], outside, inside);
+        FastIntersectPointsPlane(points, planes[planeIndex], outside, inside);
         if(VectorDouble4AllTrue(outside))
             return false;
     }

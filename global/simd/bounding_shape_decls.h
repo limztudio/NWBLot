@@ -6,6 +6,7 @@
 
 
 #include "../expected.h"
+#include "../span.h"
 #include "matrix.h"
 #include "collision_detail.h"
 #include "collision_plane.h"

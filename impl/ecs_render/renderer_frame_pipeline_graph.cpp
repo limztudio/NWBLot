@@ -190,7 +190,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     const DeferredLightingGraphResources deferredLightingResources = m_deferredSystem.lightingGraphResources();
     const ECSRenderDetail::MeshFrameBindingSnapshot frameBindings = m_meshSystem.meshFrameBindingSnapshot();
     const bool retainRefractionCapPipeline = m_preparedRefractionActive && (csgFrameState.hasTransparentStaticWork || csgFrameState.hasTransparentSkinnedWork);
-    const ECSRenderDetail::CsgGraphResourceSnapshot csgResources = m_csgSystem.csgGraphResourceSnapshot(csgFrameState, retainRefractionCapPipeline);
+    const ECSRenderDetail::CsgGraphResourceSnapshot csgResources = m_csgSystem.csgGraphResourceSnapshot(retainRefractionCapPipeline);
     const ECSRenderDetail::MeshViewBufferSnapshot& meshViewBufferSnapshot = frameBindings.meshView;
     if(
         !deferredTargets.valid()
@@ -330,31 +330,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     }
     const bool causticOpticalReader = declaresHardwareCaustics ? m_raytracingSystem.hasHwCausticWork(meshViewBufferSnapshot) : m_raytracingSystem.hasCausticWork(meshViewBufferSnapshot);
 
-    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> causticTraceGeometryResources{ scratchArena };
-    Core::GpuGraphResourceSetId causticTraceGeometrySet;
-    if(causticOpticalReader){
-        causticTraceGeometryResources.reserve(declaresHardwareCaustics ? hardwareTraceGeometryResources.size() : softwareTraceGeometryResources.size());
-        constexpr u8 s_HardwareCausticGeometryRoles = PreparedShadowTraceGeometryRole::s_HardwarePosition | PreparedShadowTraceGeometryRole::s_HardwareIndex;
-        constexpr u8 s_SoftwareCausticGeometryRoles = PreparedShadowTraceGeometryRole::s_SoftwareNode | PreparedShadowTraceGeometryRole::s_SoftwarePosition | PreparedShadowTraceGeometryRole::s_SoftwareIndex;
-        const u8 causticGeometryRoles = declaresHardwareCaustics ? s_HardwareCausticGeometryRoles : s_SoftwareCausticGeometryRoles;
-        for(usize index = 0u; index < preparedTraceGeometry.size(); ++index){
-            if(preparedTraceGeometry[index].roles & causticGeometryRoles)
-                causticTraceGeometryResources.push_back(traceGeometryResources[index]);
-        }
-        if(!causticTraceGeometryResources.empty()){
-            const auto causticGeometrySet = m_deferredLightingTaskGraph.importResourceSet(
-                Core::GpuGraphResourceSetDesc{}
-                    .setIdentity(Name("render.caustic_trace_geometry"))
-                    .setMarkerLabel("Caustic Trace Geometry")
-                    .setMembers(causticTraceGeometryResources.data(), causticTraceGeometryResources.size())
-            );
-            if(!causticGeometrySet){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare caustic traversal geometry reads"));
-                return;
-            }
-            causticTraceGeometrySet = *causticGeometrySet;
-        }
-    }
+    const Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena>& causticTraceGeometryResources = declaresHardwareCaustics ? traceGeometry.hardwareTraceGeometry : traceGeometry.softwareTraceGeometry;
+    const Core::GpuGraphResourceSetId causticTraceGeometrySet = declaresHardwareCaustics ? traceGeometry.hardwareTraceGeometrySet : traceGeometry.softwareTraceGeometrySet;
 
     // Freeze shadow routing after prefix handoff so transparent folding never sees the prior mask.
     RayTracingShadowVisibilityGraphPlanSnapshot rayTracingShadowVisibilityPlan = m_raytracingSystem.snapshotShadowVisibilityGraphPlan(declaresHardwareCaustics);
@@ -479,6 +456,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         sceneShading,
         lights,
         materialContextSlots,
+        causticOpticalScene,
         traceGeometry.softwareTraceGeometry.data(),
         traceGeometry.softwareTraceGeometry.size(),
         traceGeometry.softwareTraceGeometrySet,
@@ -534,9 +512,10 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 .sceneShading = sceneShading,
                 .lights = lights,
                 .materialContextSlots = materialContextSlots,
-                .hardwareTraceAttributeSet = traceGeometry.hardwareTraceAttributeSet,
-                .hardwareTraceAttributeResources = traceGeometry.hardwareTraceAttributes.data(),
-                .hardwareTraceAttributeResourceCount = traceGeometry.hardwareTraceAttributes.size(),
+                .opticalScene = causticOpticalScene,
+                .hardwareTraceGeometrySet = causticTraceGeometrySet,
+                .hardwareTraceGeometryResources = causticTraceGeometryResources.data(),
+                .hardwareTraceGeometryResourceCount = causticTraceGeometryResources.size(),
                 .traceMaterialSampledTextureSet = traceGeometry.traceMaterialSampledTextureSet,
                 .graphicsPrefixTask = m_graphicsPrefixTask,
                 .shadowPreparationReady = &m_shadowPreparationOutcome.ready,

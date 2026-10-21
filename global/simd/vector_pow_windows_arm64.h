@@ -7,7 +7,7 @@
 
 #include "vector_arithmetic.h"
 
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC) && !defined(_DEBUG)
+#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC) && !defined(NWB_DEBUG)
 #include "../floating_point_environment.h"
 
 #include <cerrno>

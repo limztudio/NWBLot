@@ -299,7 +299,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleLog(SIMDVectorDouble value
 
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPow(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC) && !defined(_DEBUG)
+#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC) && !defined(NWB_DEBUG)
     return SIMDVectorPowWindowsArm64Detail::Pow(v0, v1);
 #else
 #if defined(NWB_HAS_SCALAR)

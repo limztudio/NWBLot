@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Test-only view of the full-resolution surfel resolve alpha. Red means covered, green means missing; blue marks the -X face so the checker can assess faces independently.
+// Test-only view of the full-resolution surfel resolve alpha. Red means covered, green means missing; blue marks the -X face so the checker can assess faces separately.
 half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
 #ifdef NWB_GRAPHICS_DEFERRED_LIGHTING_FRAMEWORK_SLANGI
     const half coverage = saturate(half(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.lightingSlots.z).Load(int3(pixel, 0)).a));

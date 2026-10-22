@@ -225,7 +225,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     gbufferPayload.csgResources = csgResources;
 
     const bool hasOpaqueDrawItems = !opaqueDrawItems.empty();
-    // G-buffer and the optional opaque CSG follow-up both declare the shared material entry batch whenever their immutable draw stream exists. The selected source-geometry batch is retained and declared separately below.
+    // G-buffer and the optional opaque CSG follow-up both declare the shared material entry batch whenever their draw stream exists. The selected source-geometry batch is retained and declared separately below.
     gbufferPayload.materialFrameStatesGraphOwned = hasOpaqueDrawItems;
     OpaqueUploadChainBuilder opaqueUploadChainBuilder(m_deferredLightingTaskGraph, m_materialSystem, m_csgSystem);
     auto opaqueUploadChainResult = opaqueUploadChainBuilder.declare(
@@ -276,7 +276,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     opaqueCsgIntervalStage.capturePayloads(frameBindings, csgResources, opaqueDrawItems, csgFrameData, instanceData.size(), materialTypedBytes.size(), gbufferPayload.materialDrawBuffersUploaded, gbufferPayload.csgFrameBuffersUploaded, hasOpaqueDrawItems, hasOpaqueCsgFrameWork);
 
 
-    // The G-buffer produces peel/event images, span build consumes its event aliases and publishes spans, Combine consumes the five prior-stage aliases and publishes removed-interval images, then Sample consumes those outputs.
+    // The G-buffer produces peel/event images, span build consumes its event aliases and publishes spans, Combine consumes the prior-stage aliases and publishes removed-interval images, then Sample consumes those outputs.
     // Their native thunks consume graph-owned StorageImage state without staging target transitions.
 
     // The semantic opaque-CSG flag admits this clear before native readiness checks.
@@ -606,7 +606,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         .setResourceUses(gbufferResourceUses.data(), gbufferResourceUses.size())
         .setResourceSetUses(gbufferMaterialResourceSetUseCount != 0u ? gbufferMaterialResourceSetUses : nullptr, gbufferMaterialResourceSetUseCount)
     ;
-    // The shared-output successors are declared after G-buffer has moved its payload into the graph. Keep their frozen readiness/state bits by value instead of reading a moved-from payload below.
+    // The shared-output successors are declared after G-buffer has moved its payload into the graph. Keep their frozen readiness/state bits by value instead of reading a moved payload below.
     const bool opaqueSharedMaterialDrawBuffersUploaded = gbufferPayload.materialDrawBuffersUploaded;
     const bool opaqueSharedMaterialFrameStatesGraphOwned = gbufferPayload.materialFrameStatesGraphOwned;
     const bool opaqueSharedMaterialGeometryStatesGraphOwned = gbufferPayload.materialGeometryStatesGraphOwned;

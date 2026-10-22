@@ -122,7 +122,7 @@ struct GpuTaskGraphExternalCompletionView{
     QueueSubmissionToken token;
 };
 
-// Graph-declared presentation completion: retained backbuffer in Unknown/Present, exported to Present only. Users reach the Graphics producer on its exact queue; producer may skip direct use for terminal publish.
+// Graph-declared presentation completion: retained backbuffer in Unknown/Present, exported to Present only. Users reach the producer on its exact queue; producers may skip direct use for publish.
 struct GpuPresentEndpoint{
     GpuTaskId producer;
     GpuGraphResourceId backBuffer;

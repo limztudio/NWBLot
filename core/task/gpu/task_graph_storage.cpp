@@ -148,7 +148,7 @@ Expected<GpuTaskId> GpuTaskGraph::appendTaskWithinMutation(
     }
 
     // Resource sets are immutable graph data.
-    // Expand them now rather than introducing an opaque aggregate into hazard analysis or barrier lowering; every later stage sees the same concrete member uses as an explicit declaration would have supplied.
+    // Expand them now rather than introducing an opaque aggregate into hazard analysis or barrier lowering; later stages see the same concrete member uses an explicit declaration would supply.
     usize expandedResourceUseCount = desc.resourceUseCount;
     const usize remainingResourceUseCapacity = static_cast<usize>(Limit<u32>::s_Max) - m_resourceUses.size();
     if(expandedResourceUseCount > remainingResourceUseCapacity)

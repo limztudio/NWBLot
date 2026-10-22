@@ -658,7 +658,7 @@ private:
         const GpuCompiledBarrier& barrier,
         CommandList& commandList
     )const;
-    // Materializes retained resource states in the native tracker after barriers lower. This preserves graph-owned packet handoffs when a required state already matches an imported resource and needs no transition.
+    // Materializes retained resource states after barriers lower. This preserves graph-owned packet handoffs when a required state already matches an imported resource and needs no transition.
     [[nodiscard]] bool seedTaskRetainedResourceStates(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuPacketRecordingAccess& recordingAccess, const GpuTaskId& task, CommandList& commandList)const;
 
 private:

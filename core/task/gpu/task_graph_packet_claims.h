@@ -141,7 +141,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Authenticates one exact recording claim once, then carries the lexical graph/plan read proof through packet preflight and native barrier/state lowering without repeatedly taking the graph lifecycle mutex.
+// Authenticates one exact recording claim once, then carries the lexical graph/plan read proof through preflight and barrier/state lowering without repeatedly taking the lifecycle mutex.
 class GpuPacketRecordingAccess final : NoCopy{
     friend class GpuTaskGraph;
     friend class GpuNativePacketRecorder;
@@ -170,7 +170,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Native submission has the same exclusive ownership rule as native recording: cancellation cannot discard graph payload Device::executeCommandLists() owns the packet, and only the owning transaction resolves it.
+// Native submission has the same exclusive ownership rule as recording: cancellation cannot discard payload while Device::executeCommandLists() owns the packet, and only the transaction resolves it.
 class GpuPacketSubmissionLease final : NoCopy{
     friend class GpuTaskGraph;
     friend class GpuGraphSubmissionTransaction;

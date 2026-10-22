@@ -125,7 +125,7 @@ Expected<GpuGraphResourceId> GpuTaskGraph::importTexture(const TextureHandle& te
 
     GpuGraphResourceDesc resolvedDesc = desc;
     if(!resolvedDesc.hasExplicitInitialState && resolvedDesc.initialState == ResourceStates::Unknown){
-        // The backend preserves managed-fresh descriptor semantics while retaining Unknown for native or partially published textures whose current state is not established by their creation description.
+        // The backend preserves managed-fresh descriptor semantics while retaining Unknown for native or partially published textures whose current state is not set by their creation description.
         resolvedDesc.initialState = texture->resolveTaskGraphImportInitialState();
     }
     if(resolvedDesc.queueSharing != ResourceQueueSharing::Exclusive && resolvedDesc.queueSharing != textureDesc.queueSharing)

@@ -100,7 +100,7 @@ static constexpr f32 s_MaxAnimationDelta = 1.0f / 15.0f;
 
 
 // Oscillate each joint around its bind pose so the skinned surface deforms every frame.
-// The root joint (index 0) is left at bind so the body stays planted over the ground while the limbs/torso undulate -- enough deformation to move the refractive shadow + caustic footprint visibly.
+// The root joint (index 0) stays at bind so the body stays planted over the ground while the limbs/torso undulate -- enough deformation to move the refractive shadow + caustic footprint visibly.
 [[nodiscard]] static SIMDMatrix BuildWaveJointMatrix(const SIMDMatrix& bindJoint, const SIMDVectorSingle jointIndex, const SIMDVectorSingle timeSeconds, const SIMDVectorSingle animationSpeed)noexcept{
     const SIMDVectorSingle phase = VectorScale(jointIndex, 0.7f);
     const SIMDVectorSingle wavePhases = VectorMultiplyAddExpression(timeSeconds, animationSpeed, phase);
@@ -399,7 +399,7 @@ public:
 
 public:
     virtual bool onStartup()override{
-        // Opt into per-pass GPU timing so m_gpuPassTimingProbe can report the caustic photon/resolve + shadow + skinning pass GPU times each interval (flips the GPU-timing double gate via the Frame).
+        // Opt into per-pass GPU timing so m_gpuPassTimingProbe can report the caustic photon/resolve + shadow + skinning pass times each interval (flips the GPU-timing double gate via the Frame).
         m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
 
         m_transitionEnabled = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag(s_CsgTransitionEnvironment);

@@ -45,7 +45,7 @@ static const uint NWB_REFLECTION_SCREEN_WORK_LIMIT_SHIFT = 16u;
 static const uint NWB_REFLECTION_SCREEN_WORK_LIMIT_MASK = 255u;
 static const uint NWB_REFLECTION_SCREEN_WORK_BYPASS_SHIFT = 24u;
 
-// Shared integer operations need no subgroup ballot or 64-bit atomics. Screen work packs iterations in 16 bits (at most 128*256), misses and bypassed pixels in 8 bits each (at most 128 each).
+// Shared integer operations need no subgroup ballot or 64-bit atomics. Screen work packs iterations in 16 bits (at most 128*256), misses and bypassed pixels in 8 bits each (at most 128).
 groupshared uint g_NwbReflectionCandidateMasks[NWB_REFLECTION_CANDIDATE_MASK_COUNT];
 groupshared uint g_NwbReflectionCandidateBase;
 groupshared uint g_NwbReflectionObservations[NWB_REFLECTION_OBSERVATION_SURFACE_COUNT];

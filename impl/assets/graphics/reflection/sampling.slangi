@@ -44,7 +44,7 @@ uint nwbReflectionSamplingHash(uint value){
 
 float2 nwbReflectionSample2D(const uint2 pixel, const uint2 sampleBase, const uint seed){
     const uint pixelSeed = nwbReflectionSamplingHash(pixel.x ^ nwbReflectionSamplingHash(pixel.y ^ seed));
-    // Reflection preparation computes this sample-index-only Sobol pair once on the CPU. Classify and hardware consume the same immutable pair; no queue-order dependence or per-invocation loop remains.
+    // Reflection preparation computes this sample-index-only Sobol pair once on the CPU. Classify and hardware consume the same immutable pair; no queue-order dependence or per-invocation loop.
     const uint first = sampleBase.x ^ nwbReflectionSamplingHash(pixelSeed);
     const uint second = sampleBase.y ^ nwbReflectionSamplingHash(pixelSeed ^ NWB_REFLECTION_SAMPLING_GOLDEN_RATIO_SEED);
     // A 23-bit midpoint is exactly representable in float and strictly inside (0, 1), including the final bin.

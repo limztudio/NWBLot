@@ -128,7 +128,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
         uint bin = 0u;
         float inversePdf = NWB_GI_FULL_TURN_RADIANS;
         if(rayIndex < uniformRayCount){
-            // The odd stride visits each equal-solid-angle cell once before repeating; frame/surfel phase decorrelates the reduced four-ray subset and gives the fresh 64-ray estimate four samples per cell.
+            // The odd stride visits each equal-solid-angle cell once before repeating; frame/surfel phase decorrelates the four-ray subset and gives the fresh 64-ray estimate four samples per cell.
             const uint phase = nwbSurfelGuideHash(frameIndex * NWB_SURFEL_TRACE_PHASE_FRAME_MULTIPLIER ^ surfelIndex) % NWB_SURFEL_GUIDE_BIN_COUNT;
             bin = (rayIndex * NWB_SURFEL_TRACE_UNIFORM_BIN_STRIDE + phase) % NWB_SURFEL_GUIDE_BIN_COUNT;
         }

@@ -79,7 +79,7 @@ struct NwbReflectionView{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Candidate allocation and the feedback bound are scheduling inputs. This helper is only for optional counters; disabling their writes never changes eligibility, queue contents, or decisions.
+// Candidate allocation and the feedback bound are scheduling inputs. This helper is only for optional counters; disabling writes never changes eligibility, queue contents, or decisions.
 void nwbReflectionRecordDiagnostic(const uint byteOffset, const uint value){
     if(g_NwbReflectionParameters.diagnosticsEnabled != 0u && value != 0u){
         uint previousCount;

@@ -131,7 +131,7 @@ struct GpuTaskGraphQueueAssignmentOptions{
     const GpuTaskQueueLoad* queueLoads = nullptr;
     usize queueLoadCount = 0u;
     // Scalar policy is copied into one compile request so concurrent runtime policy changes cannot mutate an in-progress queue assignment.
-    // The history remains an explicitly immutable snapshot owned by its producer.
+    // The history stays an immutable snapshot owned by its producer.
     GpuTaskTimingFeedbackPolicy timingFeedbackPolicy;
     u64 timingFrameIndex = 0u;
 };

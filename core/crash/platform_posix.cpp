@@ -188,7 +188,7 @@ static void CaptureSignalContext(Detail::CrashDumpRequestOptions& options, const
 #endif
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-    // backtrace() crosses the kernel signal trampoline into the interrupted frame, so the fault instruction pointer aligns the trace and a frame-pointer-omitting final build still gets the full faulting callstack.
+    // backtrace() crosses the signal trampoline into the interrupted frame, so the fault IP aligns the trace even in frame-pointer-omitting final builds.
     if(CaptureEhFrameCallstack(options, options.instructionPointer))
         return;
 #endif
@@ -480,7 +480,7 @@ void CaptureManualDumpContext(CrashDumpRequestOptions& outOptions, ManualDumpCon
 CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, const u32 waitMilliseconds)noexcept{
     static_cast<void>(waitMilliseconds);
 
-    // Re-entrancy guard + concurrent-writer serialization, matching the Win32 transport: a fault while inside the transport bails, and only one faulting thread owns the channel (the Android emergency fd is a shared append target, so it needs the same guard against interleaved writes).
+    // Re-entrancy guard + writer serialization, matching Win32: a fault inside the transport bails, and one faulting thread owns the channel.
     // Async-safe (atomic CAS, no Futex).
     static thread_local bool s_inTransport = false;
     if(s_inTransport)

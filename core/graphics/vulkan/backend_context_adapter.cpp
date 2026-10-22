@@ -357,7 +357,7 @@ bool BackendContext::findQueueFamilies(Alloc::ScratchArena& scratchArena, VkPhys
         return false;
 
     // Every active primary family may expose its extra queues through the low-overhead same-class route.
-    // The cross-family opt-in may also register one deterministic alternate family for every already-enabled class; task-level scheduling still has to opt in before compiler routing can cross its ownership boundary.
+    // The cross-family opt-in may also register one deterministic alternate family per enabled class; tasks still opt in before compiler routing crosses its ownership boundary.
     if(m_deviceParams.enableSameClassMultiQueue && m_deviceParams.enableCrossFamilySameClassQueueRouting){
         for(i32 i = 0; i < static_cast<i32>(props.size()); ++i){
             const VkQueueFamilyProperties& queueFamily = props[i];

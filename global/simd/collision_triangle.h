@@ -208,7 +208,7 @@ namespace TriangleDoubleTests{
     const SIMDVectorDouble relativeA1 = VectorDoubleSubtract(first1, first0), relativeA2 = VectorDoubleSubtract(first2, first0);
     const SIMDVectorDouble relativeB0 = VectorDoubleSubtract(second0, first0), relativeB1 = VectorDoubleSubtract(second1, first0), relativeB2 = VectorDoubleSubtract(second2, first0);
     const auto differenceRoundoff = [](const SIMDVectorDouble point, const SIMDVectorDouble origin, const SIMDVectorDouble difference)noexcept{
-        // TwoDiff recovers the subtraction residual without expanding the allowance with a large common translation.
+        // TwoDiff recovers the residual without widening the allowance by a large common translation.
         const SIMDVectorDouble virtualOrigin = VectorDoubleSubtract(point, difference), virtualPoint = VectorDoubleAdd(difference, virtualOrigin);
         return VectorDoubleAdd(VectorDoubleSubtract(point, virtualPoint), VectorDoubleSubtract(virtualOrigin, origin));
     };
@@ -223,7 +223,7 @@ namespace TriangleDoubleTests{
     const SIMDVectorDouble edgeA0 = relativeA1, edgeA1 = VectorDoubleSubtract(first2, first1), edgeA2 = VectorDoubleNegate(relativeA2);
     const SIMDVectorDouble edgeB0 = VectorDoubleSubtract(second1, second0), edgeB1 = VectorDoubleSubtract(second2, second1), edgeB2 = VectorDoubleSubtract(second0, second2);
     const auto crossAxis = [](const SIMDVectorDouble first, const SIMDVectorDouble second)noexcept{
-        // Separate products make parallel directions produce a zero axis instead of an explicit-FMA residual.
+        // Separate products yield a zero axis for parallel directions, not an FMA residual.
         const SIMDVectorDouble positive = VectorDoubleMultiply(VectorDoubleSwizzle<1, 2, 0, 3>(first), VectorDoubleSwizzle<2, 0, 1, 3>(second));
         const SIMDVectorDouble negative = VectorDoubleMultiply(VectorDoubleSwizzle<2, 0, 1, 3>(first), VectorDoubleSwizzle<1, 2, 0, 3>(second));
         return VectorDoubleSubtract(positive, negative);
@@ -241,7 +241,7 @@ namespace TriangleDoubleTests{
             const SIMDVectorDouble projection = VectorDouble3Dot(relative, axis);
             const SIMDVectorDouble magnitude = VectorDouble3Dot(VectorDoubleAbs(relative), absoluteAxis), coordinateError = VectorDouble3Dot(VectorDoubleAbs(roundoff), absoluteAxis);
 #endif
-            // Three products and two additions need an absolute cancellation bound; eight epsilons also cover rounding the bound and endpoints.
+            // Three products plus two additions need an absolute cancellation bound; eight epsilons also cover bound and endpoint rounding.
             constexpr f64 s_ProjectionAllowanceFactor = 0x1p-49;
             const SIMDVectorDouble allowance = VectorDoubleMultiplyAddExpression(VectorDoubleAdd(magnitude, coordinateError), VectorDoubleReplicate(s_ProjectionAllowanceFactor), coordinateError);
             return VectorDoubleSelect(VectorDoubleSubtract(projection, allowance), VectorDoubleAdd(projection, allowance), s_DoubleSIMDMaskY);
@@ -267,7 +267,7 @@ namespace TriangleDoubleTests{
         return false;
 
     if(VectorDouble3Equal(normalA, zero) && VectorDouble3Equal(normalB, zero)){
-        // Closed degenerate triangles retain their point/segment hulls, including collinear endpoint contact.
+        // Closed degenerate triangles keep point/segment hulls, including collinear endpoint contact.
         const SIMDVectorDouble directionA = VectorDouble3Equal(edgeA0, zero) ? edgeA1 : edgeA0, directionB = VectorDouble3Equal(edgeB0, zero) ? edgeB1 : edgeB0;
         const SIMDVectorDouble normal = crossAxis(directionA, directionB);
         if(separated(directionA) || separated(directionB) || separated(normal) || separated(crossAxis(directionA, normal)) || separated(crossAxis(directionB, normal)))
@@ -279,7 +279,7 @@ namespace TriangleDoubleTests{
     }
 
     const auto edgeSeparated = [&](const SIMDVectorDouble edge)noexcept{
-        // In-plane edge normals are necessary when the triangles are coplanar or one hull is degenerate.
+        // In-plane edge normals cover coplanar triangles and degenerate hulls.
         return separated(crossAxis(edge, normalA)) || separated(crossAxis(edge, normalB)) || separated(crossAxis(edge, edgeB0)) || separated(crossAxis(edge, edgeB1)) || separated(crossAxis(edge, edgeB2));
     };
     if(edgeSeparated(edgeA0) || edgeSeparated(edgeA1) || edgeSeparated(edgeA2))

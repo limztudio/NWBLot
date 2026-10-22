@@ -105,7 +105,7 @@ struct NwbMeshGBufferDrawConstants{
 uint nwbMeshShadingModelId(){
     return (g_NwbMeshGBufferDrawConstants.dispatch[NWB_MESH_PUSH_DISPATCH_FLAGS] >> NWB_MESH_DISPATCH_SHADING_MODEL_SHIFT) & NWB_MESH_DISPATCH_SHADING_MODEL_MASK;
 }
-// The pixel stage reads the same per-draw push constant the mesh stage saw (it is visible to amplification, mesh, and pixel), so a material's surface hook can load its typed .bind constants per-pixel via the instance index + material-constant byte offset, exactly as the mesh runtime does.
+// The pixel stage reads the same per-draw push constant the mesh stage saw, so a surface hook can load typed .bind constants per-pixel via instance index + byte offset, exactly as the mesh runtime does.
 uint nwbMeshInstanceIndex(){
     return g_NwbMeshGBufferDrawConstants.dispatch[NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX];
 }

@@ -229,7 +229,7 @@ def compare_exact_scene(left, right, maximum_mean_error=0.15):
 
 
 def compare_smooth_glass_scene(left, right, maximum_mean_error=0.30):
-    # Rough glass keeps the complementary smooth interface: the authored roughness parameter only affects non-glass receivers, so both glass captures must show the same stripe geometry with bounded stochastic GGX sampling noise instead of byte-identical pixels.
+    # Rough glass keeps the complementary smooth interface: roughness only affects non-glass receivers, so both glass captures must show the same stripe geometry with bounded GGX noise, not byte-identical pixels.
     if left[:2] != right[:2]:
         raise SmokeFailure(LIT_MATCHED_SCENE_CAPTURES_HAVE_DIFFERENT_)
     width, height, rows = validate_frame(left)

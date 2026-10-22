@@ -20,7 +20,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint internalCount = g_NwbBvhBuildPushConstants.internalCount;
     const uint leafNodeIndex = internalCount + leaf;
 
-    // A full build reads the triangle from the freshly sorted payload and stores it in the leaf; a refit keeps the build-pose topology and reuses the primitive the leaf already holds, so it only recomputes boxes from the new (e.g. skinned) positions and leaves the child links untouched.
+    // A full build reads the triangle from the sorted payload; a refit reuses the leaf's primitive and only recomputes boxes.
     const bool refit = g_NwbBvhBuildPushConstants.refitMode != NWB_BVH_BUILD_MODE_FULL;
     const uint triangle = refit ? (g_NwbHeapBvhWritableNodeBuffers[g_NwbBvhBuildPushConstants.nodeHeapSlot][leafNodeIndex].leftChild & ~NWB_BVH_LEAF_FLAG) : g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBuildPushConstants.payloadHeapSlot][leaf];
     float3 p0;

@@ -71,7 +71,7 @@ void OpaqueCsgIntervalStage::capturePayloads(
     if(!hasOpaqueCsgFrameWork)
         return;
 
-    // The graph owns the receiver-surface producer fence and each preceding producer fence. Normal prefix compilation merges these callbacks with G-buffer, while a FrontierSafe boundary retains each submission-local timing ticket.
+    // The graph owns the producer fence and each preceding producer fence. Normal prefix compilation merges these callbacks with G-buffer; a FrontierSafe boundary retains each timing ticket.
     m_receiverSpanPayload.materialDrawBuffersUploaded = materialDrawBuffersUploaded;
     m_receiverSpanPayload.csgFrameBuffersUploaded = csgFrameBuffersUploaded;
     m_receiverSpanPayload.csgResources = csgResources;

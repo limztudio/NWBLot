@@ -201,7 +201,7 @@ public:
 
     [[nodiscard]] bool frameLaggedAsyncLightingEnabled()const noexcept{ return m_frameLaggedAsyncLightingEnabled; }
     [[nodiscard]] bool setTaskGraphTimingFeedbackPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy);
-    // Immutable-by-value telemetry for the current deferred graph artifacts. It remains meaningful until the next graph/recording/transaction reset, matching the existing compiled graph diagnostic lifetime. Callers serialize this inspection with deferred native recording/reset just as they do other recorded-graph diagnostics.
+    // Immutable-by-value telemetry for the current deferred graph artifacts. It stays meaningful until the next graph/recording/transaction reset, matching the compiled graph diagnostic lifetime. Callers serialize this inspection with deferred native recording/reset just as they do other recorded-graph diagnostics.
     [[nodiscard]] Core::GpuTaskGraphRuntimeStatistics deferredTaskGraphRuntimeStatistics()const noexcept;
 
 

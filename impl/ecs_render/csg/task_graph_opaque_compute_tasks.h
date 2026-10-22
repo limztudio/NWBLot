@@ -88,7 +88,7 @@ public:
 struct OpaqueCsgIntervalSampleComputeEmulationGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
-    // The graphics runtime, the material system, the frame targets, the timing-ticket slot, the setup readiness flags, and the CSG timing slot are required: interval-sample emulation always brackets its dispatch with the frame timing.
+    // The runtime, material system, targets, ticket slot, setup flags, and CSG timing slot are required: emulation always brackets its dispatch with the frame timing.
     struct Payload{
         Core::GraphicsRuntime& graphics;
         RendererMaterialSystem& materialSystem;

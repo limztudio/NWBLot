@@ -46,7 +46,7 @@ private:
         GpuSubmissionPacketId* outFailedPacket = nullptr,
         GpuCommandIrCapture* commandIrCapture = nullptr
     )const;
-    // Semantic companion to the packet-range recorder. Task endpoints resolve only after compilation, keeping renderer record spans independent from packet splitting and merging while preserving intentional late tails.
+    // Semantic companion to the packet-range recorder. Task endpoints resolve after compilation, keeping record spans independent of packet splitting while preserving intentional late tails.
     [[nodiscard]] bool recordTaskRangeInCompileOrder(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,

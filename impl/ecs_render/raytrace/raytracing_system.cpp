@@ -157,13 +157,13 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(DeferredFrameT
 
         prepareSoftCombinedResolvePipelines();
 
-        // Build the hardware caustic producer resources alongside the shadow ones. Non-fatal to shadows: a failure leaves the caustic buffer black (the additive no-op), mirroring the SW-branch prepareGpuBvhCausticResources call below.
+        // Build the hardware caustic producer resources alongside the shadow ones. Non-fatal to shadows: a failure leaves the caustic buffer black (the additive no-op), mirroring the SW-branch call below.
         if(!prepareHwCausticResources(targets))
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hardware caustic producer resource preparation failed"));
 
-        // Enable surfel GI on the HW path: the HW RayQuery trace twin reuses the TLAS + the HW-resident per-mesh geometry + InstanceID-material record the shadow/caustic path already built -- this is the ONLY place surfels run on real RT hardware.
+        // Enable surfel GI on the HW path: the RayQuery twin reuses the TLAS + per-mesh geometry + InstanceID-material record the shadow/caustic path already built — the ONLY place surfels run on real RT hardware.
         // Gated on the HW shadow backend being ready + a non-empty TLAS.
-        // Non-fatal: a failure leaves GI off this frame (the lighting uses hemiAmbient).
+        // Non-fatal: a failure leaves GI off this frame (lighting uses hemiAmbient).
         if(backendReady && m_rayTracingState.m_tlasInstanceCount > 0u && m_rayTracingState.m_shadowMeshCount > 0u){
             m_rayTracingState.m_surfelEnabled = true;
             m_rayTracingState.m_surfelUseHwTrace = true;

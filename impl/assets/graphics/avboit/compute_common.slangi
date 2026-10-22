@@ -32,7 +32,7 @@ struct NwbAvboitComputePushConstants{
 #include "push_constants.slangi"
 #undef NWB_AVBOIT_PUSH_CONSTANTS
 
-// Compute dispatches select the same target-generation slot payload as the transparent material draws. The resulting helper functions expose every AVBOIT work buffer through the global StorageBuffer heap.
+// Compute dispatches use the same slot payload as transparent draws; the helpers below expose every work buffer through the global heap.
 #define NWB_AVBOIT_DEFERRED_SLOTS_DESCRIPTOR_SLOT g_NwbAvboitCompute.nwbAvboitHeapSlots[NWB_AVBOIT_PUSH_HEAP_SLOT_DEFERRED_BINDLESS_RESOURCES]
 #include "heap_resources.slangi"
 

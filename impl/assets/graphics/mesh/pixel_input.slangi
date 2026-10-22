@@ -61,7 +61,7 @@ struct NwbMeshSurfaceInputs{
     float4 tangent;
     float2 uv0;
     float3 worldPosition;
-    // World-space direction of the ray arriving at this surface. Raster paths supply the normalized camera-to-surface direction from their mesh-frame view; the shadow trace supplies the occlusion ray (NwbShadowHit.rayDirection).
+    // World-space direction of the ray arriving at this surface. Raster supplies normalized camera-to-surface direction from the mesh-frame view; the shadow trace supplies the occlusion ray.
     float3 incidentDirection;
 };
 

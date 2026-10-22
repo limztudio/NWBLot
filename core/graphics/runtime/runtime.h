@@ -130,8 +130,8 @@ public:
 public:
     using PointerScaleChangedCallback = void(*)(void* userData, f32 scaleX, f32 scaleY);
     // A synchronous caller may declare one isolated graph through this callback.
-    // The graph owns all native command recording and submission; the callback must only retain declaration-time inputs and return its terminal task.
-    // `userData` remains caller-owned for the duration of this synchronous call.
+    // The graph owns all native recording and submission; the callback keeps only declaration-time inputs and returns its terminal task.
+    // `userData` stays caller-owned during the call.
     using StandaloneTaskGraphDeclaration = Expected<GpuTaskId>(*)(void* userData, GpuTaskGraph& graph);
 
 
@@ -154,8 +154,7 @@ public:
     bool setDebugRuntimeEnabled(bool enabled)noexcept;
     // Controls actual hardware RT extensions/features for the next logical device. Must precede instance creation.
     bool setHardwareRayTracingPolicy(HardwareRayTracingPolicy::Enum policy)noexcept;
-    // Selects the native mesh-shader path when the backend supports it.
-    // Disabled configurations use the renderer's compute-emulation path.
+    // Selects the native mesh-shader path when the backend supports it. Disabled configs use compute emulation.
     // Must be configured before instance creation.
     bool setNativeMeshShadersEnabled(bool enabled)noexcept;
     // Must be configured before device creation. Unsupported adapters retain the Graphics-only path.
@@ -163,13 +162,13 @@ public:
     // Must be configured before device creation. Unsupported adapters retain the Graphics/Compute copy fallback.
     bool setTransferQueueEnabled(bool enabled)noexcept;
     // Must be configured before device creation.
-    // It may expose every safe additional queue from each active primary family and, with cross-family routing enabled, one auxiliary family for each class; only explicitly opted-in graph tasks may route to them.
+    // It may expose every safe extra queue from each active primary family plus one auxiliary family per class when cross-family routing is on; only opted-in tasks may route to them.
     bool setSameClassMultiQueueEnabled(bool enabled)noexcept;
     // Extends optional same-class discovery to distinct compatible Vulkan families.
     // Individual graph tasks must still explicitly accept the resulting ownership-transfer route.
     bool setCrossFamilySameClassQueueRoutingEnabled(bool enabled)noexcept;
-    // Selects a Vulkan adapter enumeration index, or -1 for the backend default.
-    // Must be configured before device creation so target-hardware probes can reproduce a multi-adapter route on paired processes.
+    // Selects a Vulkan adapter index, or -1 for the backend default.
+    // Must be configured before device creation so paired processes can reproduce a multi-adapter route.
     bool setAdapterIndex(i32 index)noexcept;
     // Requests HDR10/PQ presentation where the current display surface supports it.
     // Unsupported surfaces automatically retain the normal SDR swap chain.

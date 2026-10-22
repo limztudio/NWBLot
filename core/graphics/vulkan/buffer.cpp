@@ -406,7 +406,7 @@ void CommandList::copyBuffer(Buffer& dest, u64 destOffsetBytes, Buffer& src, u64
 Expected<BufferSuballocation> CommandList::prepareUploadStaging(const usize dataSize, TStringView operationName, const u32 alignment){
     UploadManager& uploadMgr = m_device.m_uploadManager;
 
-    // Without a completed value, no retired chunk is reused.
+    // Reuse only retired chunks with a completed value.
     const Expected<u64> completedUploadVersion = m_device.queueGetCompletedInstance(m_creationDesc.physicalQueue);
     const auto staging = uploadMgr.suballocateBuffer(static_cast<u64>(dataSize), m_currentCmdBuf.get(), m_nativeRecordingID, m_creationDesc.physicalQueue, completedUploadVersion ? *completedUploadVersion : 0u, alignment);
     if(!staging){

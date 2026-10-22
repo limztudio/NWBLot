@@ -137,16 +137,16 @@ void GpuTimingAccumulator::recordFrameReset(CommandList& commandList){
     const bool canReset = commandList.canResetTimerQueryHere();
     const CommandListParameters commandListDescription = commandList.getResolvedDescription();
     // Retain pending pools until their result is observable instead of erasing a late GPU sample.
-    // Pools that are already available this frame are reset on the device timeline, but do not become usable by dynamic-rendering scopes until the caller confirms this command list submitted successfully.
+    // Pools available this frame reset on the device timeline but stay unusable to dynamic-rendering scopes until the caller confirms this command list submitted.
     for(QueryRecord& record : m_queries){
         record.frameResetRecorded = false;
         record.frameResetRecordingQueue = {};
-        // A newly recorded frame preamble supersedes any dependency retained from a rejected scope in an older frame.
-        // Inline-reset-capable positions do not need that stale dependency if this preamble fails; external-reset-required positions remain unavailable until the new reset submission is accepted below.
+        // A new frame preamble supersedes any dependency kept from a rejected scope in an older frame.
+        // Inline-reset-capable positions drop that stale dependency if this preamble fails; external-reset-required positions stay unavailable until the new reset is accepted below.
         if(record.state == QueryState::Available)
             record.frameResetSubmission = {};
-        // An external-reset-required scope must observe this frame's reset, not merely a reset that happened during an earlier frame.
-        // Leave the pool unavailable until confirmFrameReset() observes a successful preamble.
+        // An external-reset-required scope must observe this frame's reset, not an earlier frame's.
+        // Leave the pool unavailable until confirmFrameReset() sees a successful preamble.
         record.deviceReady = false;
         if(!canReset || !record.query || record.state != QueryState::Available)
             continue;
@@ -498,7 +498,7 @@ void GpuTimingAccumulator::releaseQuery(QueryRecord& record)noexcept{
 }
 
 void GpuTimingAccumulator::releaseUnacceptedQuery(QueryRecord& record)noexcept{
-    // Never restore deviceReady: even though the timing ticket rejected this submission, the recorded command buffer still contains query writes and must not authorize an external-reset-required retry without a fresh preamble.
+    // Never restore deviceReady: a rejected ticket still leaves query writes behind, so a retry needs a fresh preamble.
     // Keep the accepted reset token only so an inline-reset-capable retry remains ordered after it.
     const QueueSubmissionToken frameResetSubmission = record.frameResetSubmission;
     releaseQuery(record);

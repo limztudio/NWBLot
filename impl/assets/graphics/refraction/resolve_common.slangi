@@ -49,7 +49,7 @@ struct NwbRefractionView{
 
 static const float NWB_REFRACTION_MAX_DISTANCE = 10000.0;
 static const float NWB_REFRACTION_MIN_DISTANCE = 0.001;
-// Without a geometric exit, treat the captured boundary as a unit-thickness sheet. This fallback is explicit and stable; it must not use the distance to the background as glass thickness, which would darken distant backgrounds.
+// Without a geometric exit, treat the boundary as a unit-thickness sheet. Never use the background distance as glass thickness; it darkens distant backgrounds.
 static const float NWB_REFRACTION_FALLBACK_THICKNESS = 1.0;
 static const float NWB_REFRACTION_MIN_CLIP_W = 1e-6;
 static const half NWB_REFRACTION_FRONT_TRANSMITTANCE_MIN = 1e-4h;

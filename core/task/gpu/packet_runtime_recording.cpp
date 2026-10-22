@@ -325,7 +325,7 @@ bool GpuNativePacketRecorder::recordPacket(
             else
                 recorded = graph.applyCompiledBarrier(compiledGraph, planAccess, recordingAccess, task, barrier, *commandList);
         }
-        // A retained state that already matches the compiler plan still needs a native tracker entry. Otherwise a later packet cannot import that graph-declared resource state, and a renderer thunk would need a redundantdirect transition merely to publish its handoff.
+        // A retained state matching the compiler plan still needs a native tracker entry. Otherwise a later packet cannot import that graph-declared state.
         if(recorded)
             recorded = graph.seedTaskRetainedResourceStates(compiledGraph, planAccess, recordingAccess, task, *commandList);
         if(recorded)

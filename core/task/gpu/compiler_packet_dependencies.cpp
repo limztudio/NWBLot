@@ -216,7 +216,7 @@ namespace GpuTaskGraphCompilerDetail{
             if(packetDependencyConsumerMarkers[producerPacketID.index] == consumerPacketID.index)
                 continue;
             if(packetReachabilityWordsPerPacket == 0u && (consumerDependsOnNonRoot || compiledPlan.packets[producerPacketID.index].dependencyCount != 0u)){
-                // Root producers cannot form an indirect path; allocate closure only when that proof no longer holds.
+                // Root producers cannot form an indirect path; allocate closure only when that stops holding.
                 if(!initializePacketReachability(consumerPacketIndex))
                     return false;
             }
@@ -240,7 +240,7 @@ namespace GpuTaskGraphCompilerDetail{
         return false;
 
     // Packet dependencies are already constrained to earlier compiler-order packets and remain the authoritative GPU submission order.
-    // Native recording only needs prior packets that export a state snapshot consumed by a prologue seed, so retain the longest such chain as immutable ready-frontier depth without unnecessarily serializing explicit ordering-only packet dependencies on the CPU.
+    // Native recording only needs prior packets that export a state snapshot used by a prologue seed, so keep the longest such chain as ready-frontier depth.
     for(usize packetIndex = 0u; packetIndex < compiledPlan.packets.size(); ++packetIndex){
         GpuSubmissionPacket& packet = compiledPlan.packets[packetIndex];
         const GpuSubmissionPacketId packetID{ .generation = compiledPlan.planGeneration, .index = static_cast<u32>(packetIndex), };

@@ -251,7 +251,7 @@ VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask states, bool 
         flags |= VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT;
     if(states & (ResourceStates::ConstantBuffer | ResourceStates::ShaderResource | ResourceStates::UnorderedAccess)){
         // ALL_GRAPHICS omits ray tracing, so add that stage explicitly when its pipeline is enabled.
-        // Without this, a UAV/SRV/CB touched by a ray-tracing shader stays unsynchronized against later access.
+        // Without this, a UAV/SRV/CB touched by ray tracing stays unsynchronized against later access.
         flags |= VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
         if(rayTracingStageAvailable)
             flags |= VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR;

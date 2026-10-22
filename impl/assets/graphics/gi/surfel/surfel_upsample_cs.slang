@@ -57,7 +57,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const half3 centerWorldSample = half3(nwbSurfelUpsampleGbufferWorldPosition().Load(fullCoord).xyz);
     const float3 centerWorld = float3(centerWorldSample);
 
-    // World-distance edge-stop sigma from this pixel's own world spacing (max of +x/+y to survive a grazing/foreshortened surface). A few pixels of tolerance keeps same-surface taps but rejects a silhouette jump to a far surface.
+    // Edge-stop sigma from this pixel's own world spacing (max of +x/+y for grazing surfaces). A few pixels of tolerance keeps same-surface taps but rejects silhouette jumps.
     const int2 rightFull = int2(min(int(pixel.x) + 1, int(fullWidth) - 1), int(pixel.y));
     const int2 downFull = int2(int(pixel.x), min(int(pixel.y) + 1, int(fullHeight) - 1));
     const half3 rightWorldSample = half3(nwbSurfelUpsampleGbufferWorldPosition().Load(int3(rightFull, 0)).xyz);

@@ -163,8 +163,8 @@ static void AppendResourceRangeRemainder(const ResourceRangeBounds& outer, const
     }
 }
 
-// One task owns transitions between its own commands, but only for subresources it already declared earlier in that task.
-// A later overlapping range can also introduce previously untouched cells, which still need the graph's packet-boundary state source or declared initial state before native task recording begins.
+// One task owns transitions between its own commands, but only for subresources it declared earlier in that task.
+// A later overlapping range can introduce untouched cells, which still need the packet-boundary state source or declared initial state before recording begins.
 [[nodiscard]] bool CollectResourceFirstUseRangesWithinTask(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphTaskView& task,
@@ -262,7 +262,7 @@ static void AppendResourceStateFragmentsInStateOrder(const Vector<TrackedResourc
 }
 
 // Walk newest-to-oldest and consume only still-uncovered portions of the requested ranges.
-// A selected state therefore owns exactly the terminal cells that it actually produced; the remaining cells retain their declared graph initial state rather than inheriting an unrelated adjacent producer.
+// A selected state owns exactly the terminal cells it produced; remaining cells keep their declared graph initial state.
 [[nodiscard]] bool CollectLatestResourceStateFragments(
     const Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& trackedStates,
     const TrackedResourceStateHistory& history,

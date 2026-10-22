@@ -92,7 +92,7 @@ void RetireHeapHandle(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle& 
     handle = Core::GpuDescriptorHandle::Invalid();
 }
 
-// Binned-SAH binary BVH over indices[lo, hi); node 0 is the root. Splits on the minimum SAH boundary, median fallback on coincident centroids (never an empty split). Node layout matches the per-mesh build so GPU traversal is uniform.
+// Binned-SAH binary BVH over indices[lo, hi); node 0 is the root. Splits on the minimum SAH boundary, median fallback on coincident centroids. Node layout matches the per-mesh build so GPU traversal is uniform.
 u32 BuildSceneBvhNode(const Span<u32> indices, const u32 lo, const u32 hi, const Span<const SceneBvhPrimitiveCalculation> primitiveBounds, Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena>& nodes, const Span<const u32> instanceLeafCost){
     const u32 nodeIndex = static_cast<u32>(nodes.size());
     nodes.push_back(SceneBvhNodeCalculation{});
@@ -180,7 +180,7 @@ u32 BuildSceneBvhNode(const Span<u32> indices, const u32 lo, const u32 hi, const
         }
 
         // Boundary k splits at bin k: left = bins [0, k), right = bins [k, end).
-        // The parent AABB is the union of every bin (suffix at index 0); the SAH parent-area divisor is folded out by comparing costs on the same slice, so the un-normalized cost ct*SA + SA_L*cost_L + SA_R*cost_R is minimized directly.
+        // The parent AABB is the union of every bin (suffix at index 0); the SAH parent-area divisor folds out by comparing costs on the same slice, so the un-normalized cost is minimized directly.
         const SIMDVectorSingle parentMin = suffixMin[0u];
         const SIMDVectorSingle parentMax = suffixMax[0u];
         const SIMDVectorSingle parentArea = AabbTests::SurfaceArea(parentMin, parentMax);

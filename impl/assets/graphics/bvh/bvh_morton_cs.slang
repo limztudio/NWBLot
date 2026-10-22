@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// One thread per triangle: quantize the triangle centroid into a 30-bit Morton code over the mesh bounds and emit the (code, original-triangle-index) sort pair. Padding slots beyond primitiveCount keep whatever sentinel the host cleared them to, so they sort to the end.
+// One thread per triangle: emit the (code, original-triangle-index) sort pair. Padding slots keep the host-cleared sentinel, so they sort to the end.
 [numthreads(NWB_BVH_BUILD_GROUP_SIZE, 1, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint triangle = dispatchThreadID.x;

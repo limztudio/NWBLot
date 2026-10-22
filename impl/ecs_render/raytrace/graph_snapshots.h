@@ -128,7 +128,7 @@ struct RayTracingDeferredGraphResourceSnapshot{
 };
 
 
-// Persistent surfel resources outlive resizable targets. The accepted readback token belongs to the same resource generation as the counter/readback pair and is captured with it for graph dependency and rollback planning.
+// Persistent surfel resources outlive resizable targets. The accepted readback token belongs to the same resource generation as the counter/readback pair.
 struct RayTracingSurfelPersistentResourceSnapshot{
     Core::BufferHandle constantsBuffer;
     Core::BufferHandle poolBuffer;
@@ -143,7 +143,7 @@ struct RayTracingSurfelPersistentResourceSnapshot{
     Core::QueueSubmissionToken countReadbackSubmissionToken;
 };
 
-// Prepared once before graph compilation. Recording only consumes these retained handles and slot values, so a hardware failure cannot switch the graph to a different resource set after its dependencies have been declared.
+// Prepared once before graph compilation. Recording only consumes these retained handles and slots, so a hardware failure cannot switch resource sets after dependencies are declared.
 struct RayTracingRefractionGraphResources{
     Core::ComputePipelineHandle pipeline;
     Core::ComputePipelineHandle screenFallbackPipeline;

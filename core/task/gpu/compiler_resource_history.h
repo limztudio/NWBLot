@@ -36,7 +36,7 @@ struct TrackedCompiledResourceState{
 };
 
 // This compilation-local index retains global vector indices, never element pointers.
-// Only append() mutates the indexed history; collectors may borrow state pointers until the next append, as before.
+// Only append() mutates the indexed history; collectors may borrow state pointers until the next append.
 class TrackedResourceStateHistory final : NoCopy{
 private:
     struct ResourceLinks{

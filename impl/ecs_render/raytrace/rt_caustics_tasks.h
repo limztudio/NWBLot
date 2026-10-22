@@ -51,7 +51,7 @@ static void ConfirmCausticAccumulatorClears(Payload& payload)noexcept(
         payload.raytracingSystem.confirmCausticAccumulatorBootstrapClear();
 }
 
-// A warm temporal accumulator decays before either photon route writes its atomic splats.  This remains a separate graph task so the compiler lowers the accumulator's UAV dependency into the producer callback rather than depending on a packet-local state reassertion after the decay dispatch.
+// A warm temporal accumulator decays before either photon route writes its atomic splats. Separate task so the compiler lowers the UAV dependency into the producer callback, not a packet-local reassertion after decay.
 struct CausticAccumulatorDecayGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 

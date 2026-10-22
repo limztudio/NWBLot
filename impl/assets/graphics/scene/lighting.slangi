@@ -16,7 +16,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Engine-owned scene-light transport limits. Keep these tunables here rather than in binding_slots.h: the latter is included by C++ as well, while these values intentionally use Slang half/half3 expressions. Project BXDFs own BRDF and tone-map policy.
+// Engine-owned scene-light limits. Keep these here, not in binding_slots.h: the latter is also included by C++, while these use Slang half/half3. Project BXDFs own BRDF and tone-map policy.
 #ifndef NWB_SCENE_LIGHT_RADIANCE_COLOR_MAX
 #define NWB_SCENE_LIGHT_RADIANCE_COLOR_MAX 1.5h
 #endif

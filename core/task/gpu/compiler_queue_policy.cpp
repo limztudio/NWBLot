@@ -140,7 +140,7 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
             const GpuPhysicalQueueInfo& previous = topology.queues[previousIndex];
             if(
                 previous.id == queue.id
-                // Queue IDs are graph-facing handles, but one ownership-domain/index pair must still name exactly one native transport. Otherwise same-class routing could manufacture distinct packet identities for the same native queue and incorrectly turn ordinary queue order into a timeline edge.
+                // One domain/index pair names exactly one native transport; otherwise same-class routing could split one native queue into distinct packet identities.
                 || (previous.familyIndex == queue.familyIndex && previous.queueIndex == queue.queueIndex)
             )
                 return false;

@@ -38,7 +38,7 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
     scratch.externalMergedStateSeed.reset();
 
     // State snapshots include inherited state as well as resources a producer changed.
-    // Preserve the established base-plus-branches fan-in rule while deriving every filtered branch from graph declarations: a later source may replace the base, but two independent sources may not leave incompatible final state for one resource.
+    // Preserve the base-plus-branches fan-in rule while deriving every filtered branch from declarations: a later source may replace the base, but two independent sources may not leave incompatible final state.
     const auto appendSourceSubset = [&]{
         if(scratch.stateSubsetScratch.empty())
             return true;

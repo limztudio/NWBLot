@@ -74,7 +74,7 @@ struct SetupUploadReadinessBridgeGraphTask{
 
 // A standalone graph owns no renderer finalization packet.
 // Predeclare this no-op Graphics tail so a later rejection can join every accepted physical queue before this call returns.
-// The retirement variant below owns the frame-timing reservation by reference; the plain variant covers graphs without frame timing, so no task carries a nullable transaction pointer with a silent no-op guard.
+// The retirement variant below owns the frame-timing reservation by reference; the plain variant covers graphs without frame timing, so no task carries a nullable pointer with a silent no-op guard.
 struct StandaloneTaskGraphRecoveryTask{
     inline static constexpr GpuTaskCommandRequirements s_CommandRequirements{ GpuQueueCapability::None, true };
 
@@ -598,7 +598,7 @@ bool SubmitGraphOwnedSetupUpload(
         return false;
 
     if(!inOutUploadToken.valid()){
-        // The producer's accepted callback supplies the public token. A successful bridge graph without that token would weaken the existing setup API contract, so reject it rather than returning a falsely ready handle.
+        // The producer's accepted callback supplies the public token. A successful bridge graph without it breaks the setup API contract, so reject it.
         return false;
     }
     return true;

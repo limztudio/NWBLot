@@ -52,7 +52,7 @@ inline void RecoverOpaqueSoftShadowAllLit(const PayloadT& payload, Core::Command
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A prepared soft-transparent frame records opaque production, opaque resolve, transparent trace, and terminal fold as one native packet. The shared state is stack-owned by the renderer for this graph transaction; it never survives acceptance or a retry.
+// A prepared soft-transparent frame records production, resolve, transparent trace, and fold as one native packet. Shared state is stack-owned for this transaction; it never survives acceptance or a retry.
 struct ShadowVisibilityOpaqueGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 

@@ -40,7 +40,7 @@ static const half3 NWB_DEFERRED_REFLECTION_DEBUG_FALLBACK_COLOR = half3(1.0h, 0.
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Composite stays in linear RGBA16F on Compute. The following Graphics present pass alone handles the swapchain framebuffer/sRGB boundary, so this dispatch never requires storage-capable surface images.
+// Composite stays in linear RGBA16F on Compute. The following Graphics present pass handles the swapchain/sRGB boundary, so this dispatch needs no storage-capable surface images.
 [numthreads(NWB_DEFERRED_COMPOSITE_GROUP_SIZE, NWB_DEFERRED_COMPOSITE_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     uint width;
@@ -51,7 +51,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     if(pixel.x >= width || pixel.y >= height)
         return;
 
-    // Every composite input is a full-resolution point-sampled target. Use direct mip-0 loads so this Compute shader stays free of implicit derivatives and therefore needs no compute-derivative Vulkan extension or feature.
+    // Every composite input is a full-resolution point-sampled target. Use direct mip-0 loads so this Compute shader needs no implicit derivatives or compute-derivative extension.
     const int3 texel = int3(pixel, 0);
     const half4 opaqueReflection = g_NwbDeferredCompositePushConstants.opaqueReflectionSlot != NWB_DEFERRED_INVALID_HEAP_SLOT ? half4(nwbHeapSampledImage2D(g_NwbDeferredCompositePushConstants.opaqueReflectionSlot).Load(texel)) : half4(0.0h);
     const half4 glassReflection = g_NwbDeferredCompositePushConstants.glassReflectionSlot != NWB_DEFERRED_INVALID_HEAP_SLOT ?half4(nwbHeapSampledImage2D(g_NwbDeferredCompositePushConstants.glassReflectionSlot).Load(texel)) : half4(0.0h);

@@ -116,7 +116,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
     }
 
-    // Pop a recycled id first (pushes quiescent this pass, so no underflow); else capped bump-alloc (BUMP_TOP never overshoots: undoing an over-bump could alias a live slot). On exhaustion release the claim for a later retry.
+    // Pop a recycled id first (pushes stay quiescent this pass, so no underflow); else capped bump-alloc. On exhaustion release the claim for a later retry.
     uint slot = 0u;
     bool allocated = false;
     {
@@ -150,7 +150,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
     }
 
-    // Seed only from the immutable frame-start snapshot. Live neighbours may be locked or newly published by other spawn groups; the snapshot also prevents seed-from-seed feedback. Exclude records expiring in this frame.
+    // Seed only from the immutable frame-start snapshot. It stops seed-from-seed feedback. Exclude records expiring this frame.
     half4 seedShR = half4(0.0h, 0.0h, 0.0h, 0.0h);
     half4 seedShG = half4(0.0h, 0.0h, 0.0h, 0.0h);
     half4 seedShB = half4(0.0h, 0.0h, 0.0h, 0.0h);

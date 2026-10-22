@@ -197,7 +197,7 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     if(packet.joinsAcceptedQueueFrontier && !transaction.appendAcceptedQueueFrontierWaitTokens(packet.queue, waitTokens))
         return false;
 
-    // Freeze every timing ticket before validating the complete wait frontier: a query reservation may contribute the accepted frame-reset token that ordered this pool on another physical queue. Preparation remains retryable until the graph packet lease is acquired.
+    // Freeze every timing ticket before validating the wait frontier: a reservation may carry the frame-reset token that ordered this pool on another queue. Preparation stays retryable until the packet lease is acquired.
     SubmittingPacketUnwindScope submittingPacketUnwind(graph, compiledGraph, planAccess, transaction);
     usize preparedTimingTicketCount = 0u;
     PreparedTimingTicketsUnwindScope preparedTimingTicketsUnwind(submissionTimingTickets.data(), preparedTimingTicketCount);

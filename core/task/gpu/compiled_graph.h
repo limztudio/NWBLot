@@ -260,7 +260,7 @@ public:
 
 
 // Immutable accepted-plan telemetry for one concrete task-graph plan.
-// Core compiler counters and the sanitized caller-provided declaration duration publish only after success; failed or superseded plans retain an empty snapshot, so tooling never has to reconcile partial barrier/packet data with a later generation.
+// Core counters and the caller-provided declaration duration publish only after success; failed or superseded plans keep an empty snapshot.
 struct GpuTaskGraphCompileStatistics{
     static constexpr usize s_QueueClassCount = static_cast<usize>(CommandQueue::kCount);
     static constexpr usize s_PacketizationDecisionCount = static_cast<usize>(GpuTaskPacketizationDecision::kCount);
@@ -274,7 +274,7 @@ struct GpuTaskGraphCompileStatistics{
     usize resourceVersionCount = 0u;
     // Counts both producer-to-consumer dependencies and consumer-to-overwriter lifetime edges.
     usize resourceVersionEdgeCount = 0u;
-    // These are analysis categories, not a disjoint scheduling-edge partition: one task pair can have both an explicit declaration and inferred resource reason, so callers must not sum them as a final edge count.
+    // Analysis categories, not a disjoint edge partition: one pair can carry both reasons, so callers must not sum them as a final edge count.
     usize explicitDependencyCount = 0u;
     usize inferredDependencyCount = 0u;
     usize declaredExternalDependencyCount = 0u;
@@ -421,7 +421,7 @@ private:
 
 
 public:
-    // Runtime entry points use a short nonblocking read claim while they derive packet identities or initialize plan-indexed storage before an exact graph attempt can provide the persistent immutable-plan lease.
+    // Runtime entry points take a short nonblocking read claim while deriving packet identities or plan-indexed storage before an exact graph attempt provides the immutable-plan lease.
     // The view is deliberately nonmovable because its address participates in the thread-local lexical proof chain.
     class ReadView final : NoCopy{
         friend class GpuCompiledGraph;

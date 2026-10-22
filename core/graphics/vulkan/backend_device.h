@@ -275,10 +275,10 @@ public:
     [[nodiscard]] bool matchesPhysicalQueueIdentity(CommandQueue::Enum queue, u16 physicalQueueIndex, u16 deviceGeneration)const noexcept;
     [[nodiscard]] bool matchesPhysicalQueueIdentity(const GpuPhysicalQueueId& queue)const noexcept;
     // Validates an accepted token as a current submission wait without changing queue state.
-    // The producer timeline is sampled under its queue mutex so a failed submit cannot expose its tentative value as available work.
+    // The producer timeline is sampled under its queue mutex so a failed submit cannot expose a tentative value as available work.
     [[nodiscard]] bool validateSubmissionWaitToken(const QueueSubmissionToken& token)const noexcept;
     // Blocks until one exact accepted queue timeline value completes.
-    // This is used to prove that a bridged WSI binary semaphore wait has consumed its signal before the acquire slot is reset and reused.
+    // This proves that a bridged WSI binary semaphore wait consumed its signal before the acquire slot is reset and reused.
     [[nodiscard]] bool waitForSubmissionToken(const QueueSubmissionToken& token);
     // Native device loss permits loss-aware teardown. Logical quarantine still requires an idle join before freeing.
     [[nodiscard]] bool isDeviceLost()const noexcept{ return m_deviceLost.load(MemoryOrder::acquire); }

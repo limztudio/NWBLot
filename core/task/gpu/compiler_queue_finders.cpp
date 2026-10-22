@@ -20,7 +20,7 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Physical queues in one Vulkan family can exchange work through a timeline semaphore without a queue-family ownership transfer. Cross-family balancing is deliberately separate: opted-in tasks may use it, and resource planning below then emits the paired exclusive ownership handoff when required.
+// Queues in one Vulkan family exchange work through a timeline semaphore with no ownership transfer. Cross-family use stays opt-in; planning emits the paired handoff when needed.
 [[nodiscard]] const GpuPhysicalQueueInfo* FindLeastLoadedSameClassQueue(
     const GpuTaskGraph::DeclarationReadView& graph,
     const Vector<u64, Alloc::ScratchArena>& prefixQueueCosts,
@@ -170,7 +170,7 @@ namespace GpuTaskGraphCompilerDetail{
         if(!candidateHistory)
             continue;
 
-        // A fresh store can finish bounded calibration without committing any probe as an incumbent. In that state the deterministic static route is the baseline and the first evidence-backed choice has no prior switch whose dwell must elapse.
+        // A fresh store may finish calibration with no probe committed as incumbent. The static route is then the baseline, with no prior switch dwell to elapse.
         const bool canSwitch = assignmentState ? GpuTaskTimingFeedbackCanSwitch(*incumbentHistory, *candidateHistory, *assignmentState, incumbent.id, candidate.id, frameIndex, policy) : GpuTaskTimingHistoryMeetsMinimumSamples(*incumbentHistory, policy)
                 && GpuTaskTimingHistoryMeetsMinimumSamples(*candidateHistory, policy)
                 && GpuTaskTimingBenefitExceedsHysteresis(*incumbentHistory, *candidateHistory, policy)
@@ -204,7 +204,7 @@ namespace GpuTaskGraphCompilerDetail{
     return result;
 }
 
-// Calibration is deliberately bounded and narrower than adaptive selection. It only visits already-legal opted-in routes until each has enough accepted samples, then ordinary hysteresis resumes. Returning the incumbent is meaningful: it reserves this frame for a baseline sample instead of switching on incomplete data.
+// Calibration is bounded and narrower than selection. It visits only legal opted-in routes until each has enough samples, then hysteresis resumes. The incumbent reserves this frame for a baseline sample.
 [[nodiscard]] const GpuPhysicalQueueInfo* FindTimingFeedbackCalibrationQueue(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuPhysicalQueueTopology& topology,

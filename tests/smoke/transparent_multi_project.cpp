@@ -140,7 +140,7 @@ private:
 };
 
 // Windows may deny a harness process foreground ownership even after SetForegroundWindow succeeds locally.
-// The target-hardware lifecycle needs actual post-bootstrap submissions, so use Graphics' existing render-pass opt-in only in this dedicated smoke executable; production projects retain their normal focus throttling policy.
+// Target-hardware lifecycle needs real post-bootstrap submissions, so this smoke uses Graphics' render-pass opt-in; production projects keep normal focus throttling.
 class FrameLaggedAsyncLightingUnfocusedPass final : public NWB::Core::IRenderPass{
 public:
     explicit FrameLaggedAsyncLightingUnfocusedPass(NWB::Core::GraphicsRuntime& graphics)noexcept

@@ -35,7 +35,7 @@ namespace CommandQueue{
     };
 };
 
-// Native recording names the exact backend queue owning the command pool and completion timeline. IDs are scoped to one logical-device generation; an invalid ID is never an ownership or retirement key.
+// Native recording names the backend queue owning the pool and timeline. IDs are scoped to one device generation; an invalid ID is never an ownership or retirement key.
 struct GpuPhysicalQueueId{
     u16 index = Limit<u16>::s_Max;
     u16 deviceGeneration = 0u;
@@ -264,7 +264,7 @@ private:
         ArraySlice arraySlice = 0;
         ResourceStates::Mask state = ResourceStates::Unknown;
         ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
-        // An invalid ID means concurrently shared (or not yet claimed). Otherwise this is the exact native queue that last owned the exclusive resource. A valid release destination requires a paired acquire there.
+        // An invalid ID means concurrently shared (or not yet claimed). Otherwise this is the native queue that last owned the exclusive resource; a valid release destination needs a paired acquire there.
         GpuPhysicalQueueId ownerQueue;
         GpuPhysicalQueueId releaseDestinationQueue;
     };

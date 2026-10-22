@@ -85,21 +85,21 @@ struct GpuTaskSchedulingHint{
     // The default retains the current one-transport-per-class behavior; callers that opt in accept explicit timeline waits when a producer and consumer land on different queues in that family.
     bool allowSameClassQueueRouting = false;
     // When same-class routing finds an equal-cost alternative, prefer a non-primary physical queue.
-    // This remains opt-in because broad CommandQueue callers retain the primary transport by default; upload/offload work can use it to create real overlap even when it is the first task in an otherwise-empty standalone graph.
+    // Opt-in: broad callers keep the primary transport by default; upload/offload work can use this to create real overlap in an otherwise-empty standalone graph.
     bool preferNonPrimarySameClassQueue = false;
     // Retains the exact physical queue selected for the last compatible direct dependency.
-    // This is for explicitly serial same-class chains (for example, multi-mip uploads): the first task may offload, while later tasks stay with it instead of creating avoidable timeline/ownership crossings at every stage.
+    // For explicitly serial same-class chains (e.g. multi-mip uploads): the first task may offload, while later tasks stay with it instead of crossing timelines at every stage.
     bool preserveSameClassQueueWithDirectDependency = false;
     // Extends physical routing to another Vulkan family.
-    // This remains separately opt-in because exclusive resource uses cross that boundary through compiler-owned release/acquire ownership pairs.
+    // Separately opt-in: exclusive uses cross that boundary through compiler-owned release/acquire pairs.
     // Same-class routing still requires allowSameClassQueueRouting; cross-class timing also requires its stronger opt-in below.
     bool allowCrossFamilySameClassQueueRouting = false;
     // Enables timing-history routing and bounded calibration for this task.
-    // This is separate from ordinary same-class routing so an application can keep historical measurement scoped to a small, proven-safe subset.
-    // Another Vulkan family additionally requires allowCrossFamilySameClassQueueRouting, preserving a deliberate dual opt-in before the compiler plans any ownership-transfer route.
+    // Separate from ordinary same-class routing so measurement stays scoped to a proven-safe subset.
+    // Another Vulkan family additionally requires allowCrossFamilySameClassQueueRouting, preserving a dual opt-in before the compiler plans any ownership-transfer route.
     bool allowTimingFeedbackRouting = false;
-    // Extends timing feedback to another queue class that the command contract and resource declarations already permit.
-    // This never relaxes command capabilities or external timeline constraints; it only lets accepted, class-specific history replace an otherwise legal static Graphics/Compute/Transfer placement.
+    // Extends timing feedback to another queue class already permitted by the command contract.
+    // Never relaxes capabilities or timeline constraints; accepted history only replaces an otherwise legal static placement.
     bool allowCrossClassTimingFeedbackRouting = false;
     // FrontierScored automatic coalescing requires this nonempty domain to match every task already in the preceding packet.
     // Empty domains are never scored-merge eligible; explicit mergeWithPrevious ignores it.
@@ -342,7 +342,7 @@ struct GpuCopyBufferTaskRegion{
 struct GpuCopyBufferTaskDesc{
     const GpuCopyBufferTaskRegion* regions = nullptr;
     usize regionCount = 0u;
-    // Optional lifecycle output. It is written only after the containing packet submission has been accepted.
+    // Optional lifecycle output, written only after the containing packet submission is accepted.
     QueueSubmissionToken* acceptedToken = nullptr;
 };
 
@@ -356,7 +356,7 @@ struct GpuCopyTextureTaskRegion{
 struct GpuCopyTextureTaskDesc{
     const GpuCopyTextureTaskRegion* regions = nullptr;
     usize regionCount = 0u;
-    // Optional lifecycle output. It is written only after the containing packet submission has been accepted.
+    // Optional lifecycle output, written only after the containing packet submission is accepted.
     QueueSubmissionToken* acceptedToken = nullptr;
 };
 
@@ -372,7 +372,7 @@ struct GpuResolveTextureTaskRegion{
 struct GpuResolveTextureTaskDesc{
     const GpuResolveTextureTaskRegion* regions = nullptr;
     usize regionCount = 0u;
-    // Optional lifecycle output. It is written only after the containing packet submission has been accepted.
+    // Optional lifecycle output, written only after the containing packet submission is accepted.
     QueueSubmissionToken* acceptedToken = nullptr;
 };
 
@@ -410,7 +410,7 @@ struct GpuUploadTextureTaskDesc{
 struct GpuClearBufferTaskDesc{
     GpuGraphResourceId destination;
     u32 clearValue = 0u;
-    // Optional lifecycle output. It is written only after the containing packet submission has been accepted.
+    // Optional lifecycle output, written only after the containing packet submission is accepted.
     QueueSubmissionToken* acceptedToken = nullptr;
 };
 
@@ -440,7 +440,7 @@ struct GpuClearTextureTaskRecordHooks{
 };
 
 struct GpuClearTextureTaskDesc{
-    // Optional lifecycle output. It is written only after the containing packet submission has been accepted.
+    // Optional lifecycle output, written only after the containing packet submission is accepted.
     QueueSubmissionToken* acceptedToken = nullptr;
     GpuGraphResourceId destination;
     // Optional recording-local hooks.
@@ -468,7 +468,7 @@ struct GpuClearTextureRectUIntTaskDesc{
     UIntColor uintValue;
     // Optional recording-local hooks use the same bracket contract as whole-texture clears.
     GpuClearTextureTaskRecordHooks recordHooks;
-    // Optional lifecycle output. It is written only after the containing packet submission has been accepted.
+    // Optional lifecycle output, written only after the containing packet submission is accepted.
     QueueSubmissionToken* acceptedToken = nullptr;
 };
 

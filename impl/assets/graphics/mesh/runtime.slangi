@@ -128,7 +128,7 @@ half4 nwbMeshGeneratedVertexColor(const NwbMeshGeneratedVertex generatedVertex){
 }
 
 groupshared uint g_NwbMeshletRasterFlags;
-// Every invocation in a meshlet group renders one draw item, so all source-stream slots are identical. Load them once from the local per-draw instance record before any heap access instead of rereading that record at every vertex/attribute fetch.
+// Every invocation in a meshlet group renders one draw item, so all source-stream slots match. Load them once from the local per-draw record before any heap access.
 groupshared uint g_NwbMeshGeometryHeapSlots[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT];
 
 

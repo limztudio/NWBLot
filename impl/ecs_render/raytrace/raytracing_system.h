@@ -432,7 +432,7 @@ public:
         bool graphOwnsNonTemporalAccumulatorClear = false
     );
     [[nodiscard]] bool renderHwCaustics(Core::CommandList& commandList, const ECSRenderDetail::MeshViewBufferSnapshot& meshView, DeferredFrameTargets& targets, Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr);
-    // The normal deferred graph records geometry downsample, resolve prepare, all five wavelet passes, and upsample after the selected photon producer. Their exact resource uses own the immutable and ping-pong UAV-to-SRV handoffs
+    // The normal deferred graph records downsample, resolve prepare, five wavelet passes, and upsample after the selected photon producer. Their resource uses own the immutable and ping-pong UAV-to-SRV handoffs
     [[nodiscard]] Expected<Core::GpuTaskId> declareCausticGeometryDownsampleTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
@@ -600,7 +600,7 @@ private:
         bool graphOwnsOpaqueTemporalMergeEntryStates
     );
     // Denoise either backend's soft trace and optionally run the transparent trace and resolve phases.
-    // The shared deferred graph supplies the first geometry-downsample entry states, the opaque geometry-to-resolve handoff, and prepared transparent trace-to-merge/first-wavelet plus temporal-merge-to-wavelet handoffs; later lifecycle transitions remain task-local.
+    // The shared deferred graph supplies the first downsample entry states, the opaque-to-resolve handoff, and prepared transparent trace-to-merge/first-wavelet plus temporal handoffs; later transitions stay task-local.
     void dispatchSoftShadowDenoiseAndTransparentFold(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,

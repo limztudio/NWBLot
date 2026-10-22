@@ -127,7 +127,7 @@ Expected<VkDeviceAddress> CommandList::suballocateBuildScratchAddress(const u64 
     const u64 scratchAllocationSize = buildScratchSize + scratchPadding;
 
     const GpuPhysicalQueueId physicalQueue = m_currentCmdBuf->m_queue.m_physicalQueue;
-    // Without a completed value, no retired chunk is reused.
+    // Reuse only retired chunks with a completed value.
     const Expected<u64> completedVersion = m_device.queueGetCompletedInstance(physicalQueue);
     const auto allocation = m_device.m_scratchManager.suballocateBuffer(scratchAllocationSize, m_currentCmdBuf.get(), m_nativeRecordingID, physicalQueue, completedVersion ? *completedVersion : 0u, 1u);
     if(!allocation){
@@ -173,7 +173,7 @@ Expected<BufferSuballocation> CommandList::suballocateBuildInput(const u64 byteC
     const u64 inputAllocationSize = byteCount + inputPadding;
 
     const GpuPhysicalQueueId physicalQueue = m_currentCmdBuf->m_queue.m_physicalQueue;
-    // Without a completed value, no retired chunk is reused.
+    // Reuse only retired chunks with a completed value.
     const Expected<u64> completedVersion = m_device.queueGetCompletedInstance(physicalQueue);
     const auto allocation = m_device.m_accelStructInputManager.suballocateBuffer(inputAllocationSize, m_currentCmdBuf.get(), m_nativeRecordingID, physicalQueue, completedVersion ? *completedVersion : 0u, 1u);
     if(!allocation){

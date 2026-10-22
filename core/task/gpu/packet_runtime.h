@@ -64,7 +64,7 @@ struct GpuTaskGraphTaskTimingTicket{
     GpuTimingSubmissionTicket* timingTicket = nullptr;
 };
 
-// Semantic pre-submit binding for one declared task. The scheduler resolves the task during admission and attaches the hook to its exact native packet. Multiple task bindings that resolve to one packet are rejected: one native submission has only one unambiguous pre-submit hook.
+// Semantic pre-submit binding for one declared task. Admission attaches the hook to its native packet; multiple bindings resolving to one packet are rejected.
 struct GpuTaskGraphTaskSubmissionHook{
     GpuTaskId task;
     QueueSubmissionPreSubmitHook hook;
@@ -81,7 +81,7 @@ struct GpuTaskGraphTaskAcceptedCallback{
     [[nodiscard]] bool (*invoke)(void* context, const QueueSubmissionToken& token) = nullptr;
 };
 
-// Runs after a semantic task records and exports its packet state, but before that packet submits. The task anchor lets whole-graph execution validate immutable final-state candidates without rebuilding its record/submit sequence around compiler packet IDs.
+// Runs after a task records and exports its packet state, before that packet submits. The anchor validates final-state candidates without rebuilding around packet IDs.
 struct GpuTaskGraphTaskRecordedCallback{
     GpuTaskId task;
     void* context = nullptr;
@@ -108,7 +108,7 @@ struct GpuTaskGraphNormalExecutionDesc{
 };
 
 
-// Transaction-owned native submission telemetry. Wait counts describe graph-provided timeline tokens after applying the same physical-queue elision and per-producer merge rules as Device::executeCommandLists()
+// Transaction-owned native submission telemetry. Wait counts describe graph-provided timeline tokens after the same queue elision and merge rules as Device::executeCommandLists().
 struct GpuTaskGraphSubmissionStatistics{
     static constexpr usize s_QueueClassCount = static_cast<usize>(CommandQueue::kCount);
 
@@ -143,8 +143,8 @@ public:
 };
 
 
-// Immutable-by-value native submission telemetry for one compiler packet.
-// The query accepts only an exact current compiled-plan handle whose packet reached Accepted through Device::executeCommandLists() Planned wait tokens equal same-queue elisions, duplicate merges, inherited wait elisions, and emitted timeline waits.
+// Immutable native submission telemetry for one compiler packet.
+// The query takes only the current compiled-plan handle whose packet reached Accepted. Planned tokens count elisions, merges, and emitted timeline waits.
 struct GpuTaskGraphPacketSubmissionStatistics{
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
@@ -183,7 +183,7 @@ public:
 };
 
 
-// Per-queue per-transaction submission telemetry (queue id includes device generation: no aliasing across recreates). Accepted = native submissions; rejected counted separately incl. pre-execute failures.
+// Per-queue per-transaction submission telemetry (queue id carries device generation, so no aliasing across recreates).
 struct GpuTaskGraphPhysicalQueueSubmissionStatistics{
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
@@ -402,7 +402,7 @@ public:
     [[nodiscard]] bool tryReset(const GpuCompiledGraph& compiledGraph);
 
     [[nodiscard]] bool validFor(const GpuCompiledGraph::ReadView& planAccess)const noexcept;
-    // Semantic task rejection resolves the current packet only inside the transaction, so renderer recovery code can revoke unaccepted graph work without mirroring compiler packet identities.
+    // Semantic task rejection resolves the current packet only inside the transaction, so recovery can revoke unaccepted work without mirroring packet identities.
     void rejectTask(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, GpuTaskId task, u64 recordingAttemptGeneration);
     // Returns false when a packet is actively recording/submitting or the transaction no longer owns this attempt.
     // Callers must retain the graph until a true result confirms that every unaccepted packet was resolved.
@@ -410,18 +410,18 @@ public:
 
     [[nodiscard]] bool hasAcceptedPackets()const noexcept;
     [[nodiscard]] GpuTaskGraphSubmissionStatistics submissionStatistics()const noexcept;
-    // Copies one accepted native packet's exact wait decomposition and compiler role while holding the transaction mutex.
+    // Copies one accepted native packet's wait decomposition and compiler role under the transaction mutex.
     // The result owns every field; the required plan proof protects metadata during the copy.
     [[nodiscard]] GpuTaskGraphPacketSubmissionStatistics packetSubmissionStatistics(const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId& packet)const noexcept;
-    // Aggregates one full physical-queue snapshot while holding the transaction mutex. Invalid/stale queue IDs and a transaction from another compiled plan return an empty owned result.
+    // Aggregates one physical-queue snapshot under the transaction mutex. Invalid/stale queue IDs and a transaction from another plan return an empty owned result.
     [[nodiscard]] GpuTaskGraphPhysicalQueueSubmissionStatistics physicalQueueSubmissionStatistics(const GpuCompiledGraph::ReadView& planAccess, const GpuPhysicalQueueId& queue)const noexcept;
-    // Packet tokens and acceptance revisions are copied under one transaction lock. Scratch storage is allocated before locking.
+    // Packet tokens and acceptance revisions are copied under one lock. Scratch storage is allocated before locking.
     [[nodiscard]] Expected<GpuGraphSubmissionAcceptanceSnapshot> copyAcceptedPacketTokens(const GpuCompiledGraph::ReadView& compiledPlan, Alloc::ScratchArena& scratchArena)const;
     [[nodiscard]] QueueSubmissionToken packetToken(const GpuSubmissionPacketId& packet)const noexcept;
-    // Resolves the current compiler packet for semantic graph work before returning its accepted submission token.
-    // This is generation-checked renderer lifecycle code cannot treat a task from an older compiled graph as an accepted submission on a replacement device or packetization.
+    // Resolves the current compiler packet for semantic graph work before returning its accepted token.
+    // Generation-checked: a task from an older compiled graph is never an accepted submission on a replacement device or packetization.
     [[nodiscard]] QueueSubmissionToken taskToken(const GpuCompiledGraph::ReadView& planAccess, GpuTaskId task)const noexcept;
-    // Publishes the exact external final-state/ownership handoff only after every compiler-selected terminal producer packet accepted. The caller-owned snapshot retains every state, producer, range, and wait token after transaction and recorded-artifact read admission ends. Failure leaves a prior snapshot unchanged.
+    // Publishes the external final-state/ownership handoff only after every terminal producer packet accepted. The caller-owned snapshot keeps all state after admission ends.
     [[nodiscard]] bool externalResourceHandoff(
         const GpuTaskGraph& graph,
         const GpuTaskGraph::DeclarationReadView& declarationAccess,

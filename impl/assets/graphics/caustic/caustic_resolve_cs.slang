@@ -71,7 +71,7 @@ struct NwbCausticResolvePushConstants{
 #if NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_DIRECT
 // Groupshared tile for small-dilation wavelet passes.
 groupshared half3  g_NwbCausticResolveTileColor[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
-// The geometry cache is RGBA16F. Keep its sampled world positions compact in LDS and widen only for the edge-stop arithmetic below; storing them as float3 here would double the shared-memory footprint without adding precision.
+// The geometry cache is RGBA16F. Keep sampled world positions compact in LDS and widen only for the edge-stop math; float3 storage would double shared memory with no added precision.
 groupshared half3  g_NwbCausticResolveTileWorld[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
 groupshared uint   g_NwbCausticResolveTileValid[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
 groupshared uint   g_NwbCausticResolveTileActive;

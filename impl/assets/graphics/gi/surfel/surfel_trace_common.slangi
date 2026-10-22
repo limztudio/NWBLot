@@ -106,14 +106,14 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
         return;
     const uint sampleCount = nwbSurfelSampleCount(sampleState);
 
-    // Fresh surfels train all 16 directional cells with 64 rays. Mature surfels keep four uniform rays for exploration and use up to eight guided rays. Counts are group-uniform and need not be powers of two.
+    // Fresh surfels train all 16 cells with 64 rays. Mature surfels keep four uniform rays for exploration plus up to eight guided rays.
     uint rayCount = maximumRayCount;
     if(sampleCount >= NWB_SURFEL_CONVERGED_SAMPLE_COUNT)
         rayCount = min(rayCount, NWB_SURFEL_CONVERGED_RAYS_PER_SURFEL);
     const uint uniformRayCount = sampleCount >= NWB_SURFEL_CONVERGED_SAMPLE_COUNT ? min(rayCount, NWB_SURFEL_CONVERGED_UNIFORM_RAYS_PER_SURFEL) : rayCount;
     const uint guidedRayCount = rayCount - uniformRayCount;
     // The dispatch visits each surfel once per updateDivisor frames.
-    // Stagger workgroups over four visits rather than using sampleCount, which saturates at 0xFFFF and would eventually stop guide training.
+    // Stagger workgroups over four visits rather than sampleCount, which saturates at 0xFFFF and would stop guide training.
     // Train on the first mature update as well as every fresh update.
     const bool updateGuide = sampleCount <= NWB_SURFEL_CONVERGED_SAMPLE_COUNT || ((frameIndex / updateDivisor + groupID.x) % NWB_SURFEL_GUIDE_MATURE_UPDATE_INTERVAL == 0u);
 

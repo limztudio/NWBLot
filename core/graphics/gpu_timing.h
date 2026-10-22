@@ -253,20 +253,20 @@ public:
     void collect(Device& device, u64 publishFrameIndex);
     void beginFrame(u64 frameIndex)noexcept;
     // Declares the capacity a scope needs.
-    // When capture is inactive this records the request without allocating GPU query pools, so a later capture activation can materialize them before its first frame preamble.
+    // When capture is inactive this only records the request; a later activation materializes pools before its first frame preamble.
     [[nodiscard]] bool prepareScopeQueries(const Name& scopeName, Device& device, u32 queryCount);
     // Declares the capacity a scope needs without touching the device.
-    // Packet recording runs inside the render/submission path, so it must use this: GPU query pools are created only in the frame preamble via materializeRequestedQueries().
-    // A newly declared scope skips its samples until the next preamble materializes its pool (see QueryCapacityUnavailable).
+    // Packet recording runs in the render/submission path, so it must use this: pools are created only in the frame preamble via materializeRequestedQueries().
+    // A newly declared scope skips samples until the next preamble materializes its pool (see QueryCapacityUnavailable).
     [[nodiscard]] bool requestScopeQueries(const Name& scopeName, u32 queryCount);
     // Publishes the timestamp intersection of an unordered pair of packet envelopes.
     // Reversed exact duplicates are idempotent.
-    // An output name is exclusive: it cannot be an input or query scope, and an input cannot later become an output.
-    // A zero-valued sample means both packets completed but did not overlap; no sample is published when either packet was rejected.
+    // An output name is exclusive: not an input or query scope, and an input cannot later become an output.
+    // A zero sample means both completed without overlap; no sample publishes when either was rejected.
     [[nodiscard]] bool prepareOverlapMetric(const Name& firstScope, const Name& secondScope, const Name& outputScope);
     // Correlates one compiler-selected packet envelope by source frame.
-    // Inputs and output mappings are copied before returning because graph plans and caller scratch storage may be rebuilt immediately.
-    // Publication requires one accepted comparable range for every declared packet; queue idle covers internal holes only.
+    // Inputs and outputs are copied before returning because plans and caller scratch may be rebuilt immediately.
+    // Publication needs one accepted comparable range per declared packet; queue idle covers internal holes only.
     [[nodiscard]] bool preparePacketEnvelopeMetrics(
         u64 sourceFrameIndex,
         NotNull<const GpuPacketEnvelopeMetricScope*> scopeInputs,

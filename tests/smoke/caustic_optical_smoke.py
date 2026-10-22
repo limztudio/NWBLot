@@ -169,7 +169,7 @@ def analyze_frames(frames, software_ray_tracing=False):
                     gain = sum(a) - sum(b)
                     ground_gain += gain
                     if gain > 0:
-                        # 8x8 focus cells over the ground strip: a sphere-lens caustic converges into a smooth crescent, so its positive photon gain must concentrate in a few cells instead of spreading uniformly like run-to-run quantization noise.
+                        # 8x8 focus cells: a sphere-lens caustic converges into a crescent, so positive gain must concentrate in a few cells, not spread like quantization noise.
                         key = (x // (width // 8 + 1), y // (height // 8 + 1))
                         ground_cells[key] = ground_cells.get(key, 0) + gain
         if variant == LIT_REFLECTION_DISABLED:

@@ -282,7 +282,7 @@ struct GpuTaskResourceUse{
     GpuTaskResourceRange range;
     ResourceStates::Mask requiredState = ResourceStates::Unknown;
     GpuTaskResourceAccess::Enum access = GpuTaskResourceAccess::Read;
-    // The consumer supplies an equivalent externally synchronized state source, so a matching concurrent read may omit a graph-internal producer seed and its submission dependency.
+    // The consumer supplies an equivalent externally synchronized state source, so a matching concurrent read may omit a producer seed and its dependency.
     // The compiler accepts this only for a same-state Read-to-Read handoff on compatible concurrent queues.
     bool hasIndependentStateSource = false;
 };
@@ -295,7 +295,7 @@ struct GpuTaskResourceVersionUse{
 };
 
 // The range/state/access contract applies to every member of `resourceSet`.
-// Sets deliberately do not retain an independent pseudo-resource: GpuTaskGraph expands them in declaration order into concrete GpuTaskResourceUse records, preserving the normal exact-resource hazard and barrier machinery.
+// Sets keep no independent pseudo-resource: GpuTaskGraph expands them in declaration order into concrete GpuTaskResourceUse records, keeping the normal hazard and barrier machinery.
 struct GpuTaskResourceSetUse{
     GpuGraphResourceSetId resourceSet;
     GpuTaskResourceRange range;

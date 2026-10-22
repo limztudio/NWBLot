@@ -85,8 +85,7 @@ Expected<GpuPacketEnvelopeMetrics> TryAggregateGpuPacketEnvelopeMetrics(const Gp
     if(packetEnvelopeCount > sortedRanges.max_size() || queueCapacity > outQueueMetrics.max_size() || *eventCapacity > events.max_size())
         return MakeUnexpected(Failure{});
 
-    // Reserve escaping output first.
-    // When all vectors share one LIFO scratch arena, the temporary buffers can then pop cleanly in reverse construction order instead of remaining pinned below the caller-owned output.
+    // Reserve escaping output first so shared-arena temporaries pop cleanly instead of pinning below the caller-owned output.
     outQueueMetrics.reserve(queueCapacity);
     sortedRanges.reserve(packetEnvelopeCount);
     events.reserve(*eventCapacity);

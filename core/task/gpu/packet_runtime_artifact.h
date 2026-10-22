@@ -30,8 +30,8 @@ struct GpuTaskGraphExternalResourceHandoffProducer{
     QueueSubmissionToken token;
 };
 
-// One exact terminal range that contributes to a graph-to-external handoff.
-// A later graph can turn each range into an immutable initial-owner source with the corresponding graph-local completion token; direct native consumers normally use the compact `waitTokens` frontier instead.
+// One exact terminal range contributing to a graph-to-external handoff.
+// A later graph can turn each range into an immutable initial-owner source; direct native consumers normally use the compact `waitTokens` frontier instead.
 struct GpuTaskGraphExternalResourceHandoffRange{
     GpuTaskResourceRange range;
     GpuTaskId producerTask;

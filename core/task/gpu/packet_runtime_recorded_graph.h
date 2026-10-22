@@ -119,7 +119,7 @@ public:
 };
 
 
-// Immutable-by-value native recording telemetry for one exact physical queue in one compiled graph recording attempt. The queue identity includes its device generation, so an auxiliary same-class queue or a recreated device cannot alias this result. Counts include only successfully published native packet slots.
+// Immutable native recording telemetry for one physical queue in one recording attempt. Queue identity carries the device generation, so a recreated device cannot alias it.
 struct GpuTaskGraphPhysicalQueueRecordingStatistics{
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
@@ -288,7 +288,7 @@ public:
     // Returns an owned physical-queue aggregate. Invalid/stale queue IDs and a recorded artifact from another exact compiled object return an empty result.
     [[nodiscard]] GpuTaskGraphPhysicalQueueRecordingStatistics physicalQueueRecordingStatistics(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuPhysicalQueueId& queue)const noexcept;
     [[nodiscard]] Optional<GpuRecordedPacket> packetSnapshot(const GpuSubmissionPacketId& packet)const noexcept;
-    // Validates this recorded graph against the current compiler output and resolves the declared task's containing packet. The result is that packet's actual native final state, not a task-local intermediate snapshot; merged tasks therefore resolve to the same state.
+    // Validates this recorded graph against current compiler output and resolves the declared task's packet. The result is that packet's native final state.
     [[nodiscard]] bool hasTaskFinalStateSeed(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuTaskId task)const noexcept;
     [[nodiscard]] bool copyTaskFinalStateSeed(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuTaskId task, CommandListResourceStateHandoff& outStateSeed)const;
 

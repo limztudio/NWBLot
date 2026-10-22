@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// HW backend of the GI trace seam: inline RayQuery reconstructing NwbGiTraceHit identically to SW (sub-ULP; same edge order/cross sign, same InstanceID-indexed material context). Shares hit + Lambert via gi_trace_common.slangi.
+// HW backend of the GI trace seam: inline RayQuery matching SW (sub-ULP; same edge order, same material context). Shares hit + Lambert via gi_trace_common.slangi.
 
 
 #include "constants.h"

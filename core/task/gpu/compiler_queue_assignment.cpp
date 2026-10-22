@@ -200,7 +200,7 @@ bool GpuTaskGraphCompiler::assignQueues(
                 }
             }
             // Finite crossing costs permit useful async overlap.
-            // Without independent work, graph-load estimates must not scatter a serial chain merely because its ancestors and descendants occupy the same queue.
+            // Without independent work, keep serial chains on one queue instead of scattering them by graph load.
             const bool compareTotalScore = !conservative && hasIndependentOverlap;
             for(const Candidate& candidate : candidates){
                 if(!candidate.queue)

@@ -318,7 +318,7 @@ bool BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
             appendSameClassQueue(queueClass, primaryFamily, queueIndex);
     };
 
-    // Preserve the old auxiliary identity when a cross-family route exists: it remains the first non-primary entry for that class, while every extra queue from the primary family is still registered after it.
+    // Preserve the old auxiliary identity when a cross-family route exists: it stays the first non-primary entry, with primary-family extra queues registered after it.
     if(createCrossFamilySecondaryGraphicsQueue)
         appendSameClassQueue(CommandQueue::Graphics, m_secondaryGraphicsQueueFamily, s_GraphicsQueueIndex);
     appendPrimaryFamilyQueues(CommandQueue::Graphics, m_graphicsQueueFamily, s_SecondaryGraphicsQueueIndex);

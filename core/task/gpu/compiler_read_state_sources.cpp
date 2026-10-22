@@ -196,7 +196,7 @@ bool AppendOverlappingReaderDependencies(GpuTaskGraphResourceStatePlan& plan, co
             continue;
         }
         if(!__hidden_gpu_task_graph_compiler_read_state_sources::ReadStatesCompatible(resource, reader.state, previousState.state)){
-            // The newer covering read state already joined this older epoch. Partial or task-local changes need full history.
+            // The newer covering read already joined this older epoch. Partial or task-local changes need full history.
             if(mayBoundReadEpoch && newerOverlappingTask.valid() && reader.task != newerOverlappingTask && RangeContains(resource, reader.range, range))
                 return true;
             mayBoundReadEpoch = false;

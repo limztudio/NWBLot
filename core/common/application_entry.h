@@ -232,50 +232,30 @@ NWB_COMMON_END
 
 
 #define NWB_DEFINE_APPLICATION_ENTRY_POINT(entryPoint) \
-    int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow)noexcept( \
-        noexcept(::NWB::Core::Common::ApplicationEntryDetail::InvokeWindowsUnicodeEntryPoint( \
-            static_cast<::NWB::Core::Common::ApplicationEntryDetail::UnicodeEntryPointFn>(entryPoint), hInstance \
-        )) \
-    ){ \
+    int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow){ \
         static_cast<void>(hPrevInstance); \
         static_cast<void>(lpCmdLine); \
         static_cast<void>(nCmdShow); \
         return ::NWB::Core::Common::ApplicationEntryDetail::InvokeWindowsUnicodeEntryPoint(static_cast<::NWB::Core::Common::ApplicationEntryDetail::UnicodeEntryPointFn>(entryPoint), hInstance); \
     } \
-    int main(int, char**)noexcept( \
-        noexcept(::NWB::Core::Common::ApplicationEntryDetail::InvokeWindowsUnicodeConsoleEntryPoint( \
-            static_cast<::NWB::Core::Common::ApplicationEntryDetail::UnicodeEntryPointFn>(entryPoint) \
-        )) \
-    ){ \
+    int main(int, char**){ \
         return ::NWB::Core::Common::ApplicationEntryDetail::InvokeWindowsUnicodeConsoleEntryPoint(static_cast<::NWB::Core::Common::ApplicationEntryDetail::UnicodeEntryPointFn>(entryPoint)); \
     }
 #else
 #define NWB_DEFINE_APPLICATION_ENTRY_POINT(entryPoint) \
-    int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow)noexcept( \
-        noexcept(::NWB::Core::Common::ApplicationEntryDetail::InvokeEntryPoint( \
-            static_cast<::NWB::Core::Common::ApplicationEntryDetail::AnsiEntryPointFn>(entryPoint), static_cast<isize>(__argc), __argv, hInstance \
-        )) \
-    ){ \
+    int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow){ \
         static_cast<void>(hPrevInstance); \
         static_cast<void>(lpCmdLine); \
         static_cast<void>(nCmdShow); \
         return ::NWB::Core::Common::ApplicationEntryDetail::InvokeEntryPoint(static_cast<::NWB::Core::Common::ApplicationEntryDetail::AnsiEntryPointFn>(entryPoint), static_cast<isize>(__argc), __argv, hInstance); \
     } \
-    int main(int argc, char** argv)noexcept( \
-        noexcept(::NWB::Core::Common::ApplicationEntryDetail::InvokeEntryPoint( \
-            static_cast<::NWB::Core::Common::ApplicationEntryDetail::AnsiEntryPointFn>(entryPoint), static_cast<isize>(argc), argv, GetModuleHandleA(nullptr) \
-        )) \
-    ){ \
+    int main(int argc, char** argv){ \
         return ::NWB::Core::Common::ApplicationEntryDetail::InvokeEntryPoint(static_cast<::NWB::Core::Common::ApplicationEntryDetail::AnsiEntryPointFn>(entryPoint), static_cast<isize>(argc), argv, GetModuleHandleA(nullptr)); \
     }
 #endif
 #elif defined(NWB_PLATFORM_LINUX)
 #define NWB_DEFINE_APPLICATION_ENTRY_POINT(entryPoint) \
-    int main(int argc, char** argv)noexcept( \
-        noexcept(::NWB::Core::Common::ApplicationEntryDetail::InvokeEntryPoint( \
-            static_cast<::NWB::Core::Common::ApplicationEntryDetail::AnsiEntryPointFn>(entryPoint), static_cast<isize>(argc), argv, nullptr \
-        )) \
-    ){ \
+    int main(int argc, char** argv){ \
         return ::NWB::Core::Common::ApplicationEntryDetail::InvokeEntryPoint(static_cast<::NWB::Core::Common::ApplicationEntryDetail::AnsiEntryPointFn>(entryPoint), static_cast<isize>(argc), argv, nullptr); \
     }
 #endif

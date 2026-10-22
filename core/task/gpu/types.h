@@ -159,7 +159,7 @@ inline constexpr bool operator!=(const GpuGraphResourceVersionId& lhs, const Gpu
 }
 
 // A resource set is a graph-owned immutable collection of imported resources.
-// Task declarations may apply one uniform access contract to every member; the graph freezes that into ordinary per-resource uses before analysis, so sets never become an opaque sync domain.
+// Task declarations may apply one uniform access contract to every member; the graph freezes that into ordinary per-resource uses before analysis, so sets never become a sync domain.
 struct GpuGraphResourceSetId{
     u64 generation = 0u;
     u32 index = Limit<u32>::s_Max;
@@ -322,7 +322,7 @@ struct GpuTaskExternalDependencyEdge{
 
 
 // A compiled barrier is a graph-level transition or ownership request.
-// It deliberately names only engine resources, resource states, and resolved physical queues; the packet recorder lowers it through CommandList so the task graph stays free of Vulkan barriers.
+// It deliberately names only engine resources, states, and resolved physical queues; the packet recorder lowers it through CommandList so the task graph stays free of Vulkan barriers.
 namespace GpuCompiledBarrierType{
     enum Enum : u8{
         TextureTransition,

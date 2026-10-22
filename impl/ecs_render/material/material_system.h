@@ -152,12 +152,12 @@ public:
         bool materialFrameStatesGraphOwned = false,
         // The graph can also retain the per-mesh source buffer batch selected by the prepared draw stream.
         bool materialGeometryStatesGraphOwned = false,
-        // An immediately preceding graph task generated every regular emulation output. Consume those buffers as Combined vertex/index inputs instead of replaying the local UAV-to-vertex/index bridge.
+        // An immediately preceding graph task generated every regular emulation output. Consume those buffers as Combined vertex/index inputs instead of replaying the local UAV bridge.
         bool emulationOutputEntryStateGraphOwned = false,
         // The producer opens this established pass measure before its dispatches; the prepared raster closes it.
         // A missing measure means the producer intentionally no-op'd, so this consumer must not raster stale data.
         Optional<Core::GpuTimingMeasure>* emulationOutputTiming = nullptr,
-        // AVBOIT may instead freeze a CSG-only alias-free producer. Keep this separate from the regular handoff so a mixed CSG stream cannot accidentally suppress its required local dispatch/raster interleaving.
+        // AVBOIT may instead freeze a CSG-only alias-free producer. Keep this separate from the regular handoff so a mixed CSG stream cannot suppress its required local dispatch/raster interleaving.
         bool csgEmulationOutputEntryStateGraphOwned = false,
         // A matching earlier producer permits raster timing independent of this pass.
         bool emulationOutputReused = false
@@ -224,7 +224,7 @@ public:
     [[nodiscard]] bool recordObjectGeometryDecode(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem);
     // Graph-only producer half. The graph owns generated output UAV states; this method records only the dispatch.
     void generateComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
-    // Graph-only raster half. The graph must provide each generated output in the combined vertex/index state; this method records the graphics state, descriptor heap, push constants, and draws without an output transition.
+    // Graph-only raster half. The graph must provide each generated output in the combined vertex/index state; this method records the graphics state, descriptor heap, push constants, and draws with no output transition.
     void renderComputeMaterialPassDrawItemsRasterOnly(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
     // Per-draw generation and rasterization retain the local UAV-to-vertex/index handoff when outputs alias.
     void renderComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
@@ -234,7 +234,7 @@ public:
     [[nodiscard]] bool materialPassDrawBuffersReady(const InstanceGpuDataVector& instanceData, const MaterialTypedByteDataVector& materialTypedBytes)const noexcept;
     [[nodiscard]] bool materialPassDrawBuffersReady(usize instanceCount, usize materialTypedByteCount)const noexcept;
     [[nodiscard]] ECSRenderDetail::MaterialPassBufferSnapshot materialPassBufferSnapshot()const noexcept;
-    // The CSG context descriptor is selected through every instance's retained heap-slot lane. Graph declaration patches the immutable upload copy before the packet is recorded so every prepared phase keeps the same ABI.
+    // The CSG context descriptor is selected through every instance's retained heap-slot lane. Graph declaration patches the immutable upload copy before the packet is recorded so every phase keeps the same ABI.
     void prepareMaterialPassInstanceUploadData(InstanceGpuDataVector& instanceData, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources)noexcept;
     [[nodiscard]] bool prepareMaterialPassResourceBindingsImpl(const MaterialPassDrawItemVector& drawItems, bool computeEmulation)noexcept;
 

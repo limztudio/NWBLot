@@ -115,7 +115,7 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareCsgRecei
     opaqueCsgReceiverComputeEmulationScheduling.forceSubmissionBoundary = false;
     opaqueCsgReceiverComputeEmulationScheduling.allowPacketMerge = true;
     opaqueCsgReceiverComputeEmulationScheduling.mergeWithPrevious = true;
-    // This immediate successor stays with G-buffer under FrontierSafe so its compiler-owned output boundary, existing prefix timing ticket, and accepted range all remain one primary Graphics packet.
+    // This successor stays with G-buffer under FrontierSafe so its compiler-owned output boundary, existing prefix timing ticket, and accepted range all remain one primary Graphics packet.
     opaqueCsgReceiverComputeEmulationScheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc opaqueCsgReceiverComputeEmulationDesc;
     opaqueCsgReceiverComputeEmulationDesc

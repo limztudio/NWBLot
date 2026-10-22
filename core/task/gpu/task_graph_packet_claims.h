@@ -170,7 +170,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Native submission has the same exclusive ownership rule as recording: cancellation cannot discard payload while Device owns the packet in executeCommandLists(), and only the transaction resolves it.
+// Native submission has the same exclusive ownership rule as recording: cancellation cannot discard payload while Device owns the packet in execute, and only the transaction resolves it.
 class GpuPacketSubmissionLease final : NoCopy{
     friend class GpuTaskGraph;
     friend class GpuGraphSubmissionTransaction;

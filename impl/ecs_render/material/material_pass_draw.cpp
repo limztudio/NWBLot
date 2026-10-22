@@ -157,7 +157,7 @@ bool RendererMaterialSystem::setMaterialPassDrawPushConstants(const MaterialPass
         return true;
     }
 
-    // CSG pixel-only variants reuse the otherwise-unused generated-vertex lane as their global context selector. Mesh/compute geometry still reads the same selector from its per-instance retained slot.
+    // CSG pixel-only variants reuse the otherwise-unused generated-vertex lane as their global context selector. Mesh/compute geometry reads the same selector from its per-instance slot.
     frameHeapSlots.generatedVertex = csgContextHeapSlot;
 
     ECSRenderDetail::SetShaderDrivenPushConstants(context.commandList, mesh.meshletCount, drawItem.instanceIndex, drawItem.materialConstantByteOffset, context.viewportState, frameHeapSlots, dispatchFlags);

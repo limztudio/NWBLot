@@ -459,7 +459,7 @@ struct GpuClearTextureTaskDesc{
 static constexpr usize s_GpuClearTextureTaskDescByteSize = 136u;
 static_assert(sizeof(GpuClearTextureTaskDesc) == s_GpuClearTextureTaskDescByteSize, "GpuClearTextureTaskDesc should keep its compact runtime layout");
 
-// A rectangular unsigned-integer clear keeps the same graph-owned CopyDest/lifecycle contract as the general texture clear, while keeping the work-region bounds a whole-image clear cannot represent.
+// A rectangular unsigned-integer clear keeps the same graph-owned CopyDest/lifecycle contract as the general texture clear, while keeping work-region bounds a whole-image clear cannot express.
 // It is kept deliberately narrow until another renderer path needs a different typed rectangle operation.
 struct GpuClearTextureRectUIntTaskDesc{
     GpuGraphResourceId destination;

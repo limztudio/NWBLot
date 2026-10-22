@@ -45,7 +45,7 @@ bool GpuTaskGraph::applyCompiledBarrier(const GpuCompiledGraph& compiledGraph, c
             for(ArraySlice arraySlice = subresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
                 for(MipLevel mipLevel = subresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
                     // CommandList::open can seed this exact subresource from an external handoff.
-                    // Preserve that producer truth, but do not mistake a keep-initial-state descriptor fallback for a packet handoff: the graph declaration is authoritative when no explicit tracker state exists.
+                    // Keep that producer truth, but do not mistake a keep-initial-state descriptor fallback for a packet handoff: the declaration is authoritative when no explicit tracker state exists.
                     if(commandList.hasExplicitTextureSubresourceState(resource.texture.get(), arraySlice, mipLevel))
                         continue;
                     commandList.beginTrackingTextureState(resource.texture.get(), TextureSubresourceSet(mipLevel, 1u, arraySlice, 1u), barrier.before);

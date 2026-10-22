@@ -462,13 +462,13 @@ public:
     // Adds a graph-owned buffer copy. The helper derives requirements and CopySource/CopyDest uses from its regions and retains the buffers through recording. The caller provides no uses.
     [[nodiscard]] Expected<GpuTaskId> addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopyBufferTaskDesc& copyDesc);
 
-    // Adds a graph-owned native texture copy. The helper derives requirements and CopySource/CopyDest uses from its regions and retains the textures through recording. The caller must not provide separate uses.
+    // Adds a graph-owned texture copy. The helper derives requirements and CopySource/CopyDest uses from its regions and retains the textures through recording. The caller provides no uses.
     [[nodiscard]] Expected<GpuTaskId> addCopyTextureTask(const GpuTaskDesc& desc, const GpuCopyTextureTaskDesc& copyDesc);
 
-    // Adds a graph-owned native texture resolve. The helper derives Graphics requirements and ResolveSource/ResolveDest uses, retaining the textures through recording. The caller must not provide separate uses.
+    // Adds a graph-owned texture resolve. The helper derives Graphics requirements and ResolveSource/ResolveDest uses, retaining the textures through recording. The caller provides no uses.
     [[nodiscard]] Expected<GpuTaskId> addResolveTextureTask(const GpuTaskDesc& desc, const GpuResolveTextureTaskDesc& resolveDesc);
 
-    // Copies caller-owned bytes into graph-owned CPU storage. `alignment` must be a nonzero power of two; blobs expose only an opaque byte view. Built-in upload tasks resolve the blob while recording.
+    // Copies caller-owned bytes into graph-owned storage. `alignment` must be a nonzero power of two; blobs expose only an opaque byte view. Upload tasks resolve the blob while recording.
     [[nodiscard]] Expected<GpuUploadBlobId> copyUploadData(const void* data, usize byteSize, usize alignment = alignof(u8));
 
     // Adds graph-owned buffer/texture uploads.
@@ -479,7 +479,7 @@ public:
     // Adds a graph-owned native uint-buffer clear. The helper retains the imported buffer and derives Transfer requirements and its CopyDest write. No separate uses.
     [[nodiscard]] Expected<GpuTaskId> addClearBufferTask(const GpuTaskDesc& desc, const GpuClearBufferTaskDesc& clearDesc);
 
-    // Adds a graph-owned texture clear. The helper retains the texture and derives its CopyDest write and command requirements, including Compute/Graphics shader-clear alternatives. No separate uses.
+    // Adds a graph-owned texture clear. The helper retains the texture and derives its CopyDest write and requirements, including Compute/Graphics shader-clear options. No separate uses.
     [[nodiscard]] Expected<GpuTaskId> addClearTextureTask(const GpuTaskDesc& desc, const GpuClearTextureTaskDesc& clearDesc);
 
     // Adds a graph-owned rectangular uint texture clear. The helper retains the texture and derives its subresource CopyDest write and requirements. No separate uses.
@@ -561,7 +561,7 @@ public:
     [[nodiscard]] Expected<GpuGraphPipelineId> importMeshletPipeline(const MeshletPipelineHandle& pipeline, const GpuGraphPipelineDesc& desc);
     [[nodiscard]] Expected<GpuGraphPipelineId> importRayTracingPipeline(const RayTracingPipelineHandle& pipeline, const GpuGraphPipelineDesc& desc);
     [[nodiscard]] Expected<GpuExternalCompletionId> importExternalCompletion(const GpuExternalCompletionDesc& desc);
-    // One graph may publish one presentation completion. The compiler validates the typed backbuffer, its single-sink contract, writer deps, and exact Graphics routing before native policy sees it.
+    // One graph may publish one presentation completion. The compiler validates the typed backbuffer, its single-sink contract, writer deps, and exact Graphics routing before policy sees it.
     [[nodiscard]] bool declarePresentEndpoint(const GpuPresentEndpoint& endpoint);
 
     // Reset is externally serialized against *starting* native recording/submission entrypoints.
@@ -606,7 +606,7 @@ private:
         }
     }
 
-    // Claim packet tasks before recording. One attempt has exactly one artifact per packet even with concurrent outputs. The lease names the one recorder that may run thunks, complete, or abort.
+    // Claim packet tasks before recording. One attempt has exactly one artifact per packet even with concurrent outputs. The lease names the recorder that may run thunks, complete, or abort.
     [[nodiscard]] bool beginPacketRecording(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, u64 recordingAttemptGeneration, GpuPacketRecordingLease& outLease)const noexcept;
     // A claimed packet becomes submission-eligible only after all its thunks complete.
     [[nodiscard]] bool completePacketRecording(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, GpuPacketRecordingLease& lease)const noexcept;
@@ -649,7 +649,7 @@ private:
     )const noexcept;
 
 private:
-    // Lowers a compiler-owned packet-boundary barrier through the existing CommandList state tracker.  Task thunks retain responsibility only for barriers internal to their own command sequence.
+    // Lowers a compiler-owned packet-boundary barrier through the existing state tracker.  Task thunks retain responsibility only for barriers internal to their own sequence.
     [[nodiscard]] bool applyCompiledBarrier(
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
@@ -658,7 +658,7 @@ private:
         const GpuCompiledBarrier& barrier,
         CommandList& commandList
     )const;
-    // Materializes retained resource states in the native tracker after barriers lower. This preserves graph-owned packet handoffs when a required state already matches an imported resource and needs no Vulkan transition.
+    // Materializes retained resource states in the native tracker after barriers lower. This preserves graph-owned packet handoffs when a required state already matches an imported resource and needs no transition.
     [[nodiscard]] bool seedTaskRetainedResourceStates(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuPacketRecordingAccess& recordingAccess, const GpuTaskId& task, CommandList& commandList)const;
 
 private:

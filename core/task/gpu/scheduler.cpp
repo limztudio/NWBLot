@@ -23,7 +23,7 @@ namespace __hidden_gpu_packet_runtime_execution{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A frontier packet is only a recovery/finalization tail. The compiler keeps it out of ordinary work, but does not force declaration order, so execution rejects one inside its endpoint or prefix.
+// A frontier packet is only a recovery/finalization tail. The compiler keeps it out of ordinary work, but does not force declaration order, so execution rejects one inside its endpoint.
 [[nodiscard]] Expected<GpuSubmissionPacketRange, GpuSubmissionPacketId> FindNormalGraphPacketRange(const GpuTaskGraph::DeclarationReadView& declarations, const GpuCompiledGraph::ReadView& planAccess, const GpuTaskId& terminalTask)noexcept{
     const usize packetCount = planAccess.packetCount();
     if(packetCount == 0u)

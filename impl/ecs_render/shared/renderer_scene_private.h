@@ -80,7 +80,7 @@ inline SIMDVectorSingle ShadowSlotImportance(const SIMDVectorSingle colorIntensi
     return VectorMultiply(radiantImportance, VectorMin(coverageSquared, s_SIMDOne));
 }
 
-// Caustic importance: pure radiant power (luminance * intensity), the same proxy ShadowSlotImportance uses, but WITHOUT screen-coverage weighting (the budget is aimed at occluders, not the camera).
+// Caustic importance: pure radiant power (luminance * intensity), the same proxy ShadowSlotImportance uses, but WITHOUT screen weighting (the budget is aimed at occluders, not the camera).
 // Higher = more worth a scarce caustic slot.
 inline SIMDVectorSingle CausticSlotImportance(const SIMDVectorSingle colorIntensity)noexcept{
     const SIMDVectorSingle luminance = Vector3Dot(colorIntensity, VectorSet(s_Rec709LuminanceRed, s_Rec709LuminanceGreen, s_Rec709LuminanceBlue, 0.0f));

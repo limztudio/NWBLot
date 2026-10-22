@@ -310,7 +310,7 @@ public:
 };
 
 
-// The transparent trace publishes RGB half-resolution visibility. On temporal frames this task freezes the selected history pair, publishes the next pair for the wavelet, and starts the resolve.
+// The transparent trace publishes RGB half-resolution visibility. On temporal frames this task freezes the selected history pair, publishes the next pair, and starts the resolve.
 struct ShadowTransparentSoftTemporalMergeGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 

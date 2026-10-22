@@ -24,7 +24,7 @@ NWB_IMPL_BEGIN
 using PreparedShadowTraceMaterialSampledTextureVector = Vector< Core::TextureHandle, Core::Alloc::GlobalArena >;
 
 
-// A BLAS build derives its geometry directly from retained buffers. Keep the resolved operation, not a MeshResources pointer: meshes can be replaced or pruned between preflight and recording.
+// A BLAS build derives its geometry directly from retained buffers. Keep the resolved operation, not a MeshResources pointer: meshes can be replaced or pruned between preflight and record.
 struct PreparedMeshBlasBuild{
     Name meshName = s_NameNone;
     Core::BufferHandle positionBuffer;

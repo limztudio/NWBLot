@@ -100,7 +100,7 @@ static constexpr f32 s_MaxAnimationDelta = 1.0f / 15.0f;
 
 
 // Oscillate each joint around its bind pose so the skinned surface deforms every frame.
-// The root joint (index 0) stays at bind so the body stays planted over the ground while the limbs/torso undulate -- enough deformation to move the refractive shadow + caustic footprint visibly.
+// The root joint (index 0) stays at bind so the body stays planted over the ground while the limbs/torso undulate -- enough deformation to move the shadow + caustic footprint visibly.
 [[nodiscard]] static SIMDMatrix BuildWaveJointMatrix(const SIMDMatrix& bindJoint, const SIMDVectorSingle jointIndex, const SIMDVectorSingle timeSeconds, const SIMDVectorSingle animationSpeed)noexcept{
     const SIMDVectorSingle phase = VectorScale(jointIndex, 0.7f);
     const SIMDVectorSingle wavePhases = VectorMultiplyAddExpression(timeSeconds, animationSpeed, phase);

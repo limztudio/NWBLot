@@ -80,7 +80,7 @@ inline SIMDVectorSingle ShadowSlotImportance(const SIMDVectorSingle colorIntensi
     return VectorMultiply(radiantImportance, VectorMin(coverageSquared, s_SIMDOne));
 }
 
-// Caustic importance: pure radiant power (luminance * intensity), the same proxy ShadowSlotImportance uses, but WITHOUT screen-coverage weighting (the caustic budget is aimed at the refractive occluders, not the camera).
+// Caustic importance: pure radiant power (luminance * intensity), the same proxy ShadowSlotImportance uses, but WITHOUT screen-coverage weighting (the budget is aimed at the refractive occluders, not the camera).
 // Higher = more worth a scarce caustic slot.
 inline SIMDVectorSingle CausticSlotImportance(const SIMDVectorSingle colorIntensity)noexcept{
     const SIMDVectorSingle luminance = Vector3Dot(colorIntensity, VectorSet(s_Rec709LuminanceRed, s_Rec709LuminanceGreen, s_Rec709LuminanceBlue, 0.0f));
@@ -112,7 +112,7 @@ inline u32 ResolveSceneLights(Core::ECS::World& world, SceneLightGpuData* outLig
         outCausticImportance[i] = VectorGetX(CausticSlotImportance(LoadFloat(src.colorIntensity)));
     }
 
-    // Importance-ranked shadow-slot allocator: hand the bounded pool of NWB_SCENE_SHADOW_SLOT_COUNT slots to the most important lights this frame (slot index -> params.z; lights that miss keep -1 and stay lit).
+    // Importance-ranked shadow-slot allocator: hand the bounded pool of NWB_SCENE_SHADOW_SLOT_COUNT slots to the most important lights this frame (slot index -> params.z; lights that miss stay lit).
     // Selection over <= NWB_SCENE_MAX_LIGHTS lights stays cheap.
     const u32 lightCount = static_cast<u32>(gatheredCount);
     const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(world, NWB::Impl::Scene::CameraDefaults::s_FallbackAspectRatio);
@@ -164,7 +164,7 @@ inline u32 ResolveCausticLights(SceneLightGpuData* outLights, const f32* caustic
     if(refractiveInstanceCount == 0u || lightCount == 0u)
         return 0u;
 
-    // Importance-ranked caustic-slot allocator (mirrors the shadow-slot selection in ResolveSceneLights): hand each slot to the highest-importance eligible light without one yet. Point lights never qualify.
+    // Importance-ranked caustic-slot allocator (mirrors the shadow-slot selection in ResolveSceneLights): hand each slot to the highest eligible light without one yet. Point lights never qualify.
     u32 assignedCount = 0u;
     for(u32 slot = 0u; slot < NWB_SCENE_CAUSTIC_SLOT_COUNT; ++slot){
         f32 bestImportance = -1.f;

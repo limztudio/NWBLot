@@ -423,19 +423,19 @@ private:
     Core::GpuTaskId m_shadowInstanceMaterialUploadTask;
     Core::GpuTaskId m_shadowInstanceUploadTask;
     Core::GpuTaskId m_shadowMaterialTypedUploadTask;
-    // Optional CPU-built software scene-BVH pair. Nodes address the companion leaf-instance stream, both must merge into Shadow Preparation's packet before it owns the later ShaderResource handoff.
+    // Optional CPU-built software scene-BVH pair. Nodes address the companion leaf-instance stream, both must merge into Shadow Preparation's packet before it owns the later handoff.
     Core::GpuTaskId m_sceneBvhNodesUploadTask;
     Core::GpuTaskId m_sceneBvhInstancesUploadTask;
     // Optional lagged-history selector upload. It must merge into Deferred Lighting's packet, which already owns history acceptance and the external completion wait for the prior-frame images.
     Core::GpuTaskId m_deferredLaggedLightingHistorySlotsUploadTask;
     Core::GpuTaskId m_deferredFrameTimingBeginTask;
     Core::GpuTaskId m_deferredShadowPrepareTask;
-    // Pure-software prepared per-mesh builds lower their typed sentinel clears and compute callbacks before Shadow Preparation's existing scene-build/acceptance endpoint. Both bounds must remain in that packet.
+    // Pure-software prepared per-mesh builds lower their sentinel clears and compute callbacks before Shadow Preparation's existing scene-build/acceptance endpoint. Both bounds must remain in that packet.
     Core::GpuTaskId m_deferredShadowPrepareSoftwareBvhBuildFirstTask;
     Core::GpuTaskId m_deferredShadowPrepareSoftwareBvhBuildLastTask;
     Core::GpuTaskId m_deferredShadowPrepareSceneRefitTask;
     Core::GpuTaskId m_sceneBvhRefitInputsUploadTask;
-    // Prepared TLAS/BLAS builds record in Shadow Preparation, while this adjacent state-only callback publishes their AccelStructRead boundaries. It must remain in the same first Graphics packet.
+    // Prepared TLAS/BLAS builds record in Shadow Preparation, while this adjacent state-only callback publishes their AccelStructRead boundaries. It must remain in the same first packet.
     Core::GpuTaskId m_deferredShadowPrepareAccelStructFinalizeTask;
     Core::GpuTaskId m_graphicsPrefixMeshViewSetupTask;
     Core::GpuTaskId m_graphicsPrefixSceneShadingSetupTask;
@@ -444,7 +444,7 @@ private:
     // The opaque CSG work-region clear is a two-value typed rectangle chain. Both tasks must remain in one Graphics packet so its first/last hooks retain the existing CSG-clear timing interval.
     Core::GpuTaskId m_graphicsPrefixCsgIntervalClearFirstTask;
     Core::GpuTaskId m_graphicsPrefixCsgIntervalClearTask;
-    // Pairwise-distinct opaque compute-emulation outputs dispatch before G-buffer rasterization. This producer must share G-buffer's primary-Graphics packet for the handoff to stay in the range.
+    // Pairwise-distinct opaque compute-emulation outputs dispatch before G-buffer rasterization. This producer must share G-buffer's primary packet for the handoff to stay in the range.
     Core::GpuTaskId m_graphicsPrefixOpaqueComputeEmulationTask;
     // Small shared-output regular paths keep dispatch/raster alternation in the same packet.
     // Retain every phase ID so runtime validation can prove the strict D(A) -> R(A) -> ... packet order, rather than merely proving that the two endpoint callbacks coalesced.
@@ -478,13 +478,13 @@ private:
     Core::GpuTaskId m_deferredSoftwareCausticsTask;
     // The HW/SW caustic producer shares this clear's packet to preserve timing and acceptance.
     Core::GpuTaskId m_deferredCausticIrradianceClearTask;
-    // The temporal accumulator bootstrap is conditional, but when present it must remain in the same packet as the selected caustic producer; that producer commits initialization only on acceptance.
+    // The temporal accumulator bootstrap is conditional, but when present it must remain in the same packet as the selected caustic producer; that producer commits only on acceptance.
     Core::GpuTaskId m_deferredCausticAccumulatorBootstrapClearTask;
     // Non-temporal caustics reset the accumulator every frame through the selected producer packet; the producer commits the matching CPU reset only after that packet accepts.
     Core::GpuTaskId m_deferredCausticAccumulatorNonTemporalClearTask;
     // A warm temporal accumulator decays in a mergeable graph task before its selected photon producer.
     Core::GpuTaskId m_deferredCausticAccumulatorDecayTask;
-    // Photon, downsample, resolve prepare, five wavelets, upsample, and timing close are distinct tasks, but must stay in the selected caustics packet so the compiler owns immutable and ping-pong handoffs without changing the endpoint.
+    // Photon, downsample, resolve prepare, five wavelets, upsample, and timing close are distinct tasks, but must stay in the selected caustics packet so the compiler owns handoffs without changing the endpoint.
     Core::GpuTaskId m_deferredCausticPhotonTask;
     Core::GpuTaskId m_deferredCausticGeometryTask;
     Core::GpuTaskId m_deferredCausticResolvePrepareTask;
@@ -519,7 +519,7 @@ private:
     // The graph-owned terminal Graphics task records the published frame-timing endpoint and owns the swap-chain signal after Deferred Present and any optional presentation contributor.
     Core::GpuTaskId m_deferredFrameTimingEndTask;
     Core::GpuTaskId m_deferredLaggedLightingHistoryTask;
-    // Recovery stays unrecorded until a later packet rejects. Its graph-owned submission join waits for every latest accepted non-Graphics physical queue while Graphics queue order covers the accepted prefix.
+    // Recovery stays unrecorded until a later packet rejects. Its graph-owned submission join waits for every latest accepted non-Graphics queue while Graphics order covers the accepted prefix.
     Core::GpuTaskId m_deferredFrameRecoveryTask;
     // Imported only while the preceding frame's diagnostic Transfer readback remains in flight.
     Core::GpuExternalCompletionId m_deferredSurfelGiCounterReadbackCompletion;

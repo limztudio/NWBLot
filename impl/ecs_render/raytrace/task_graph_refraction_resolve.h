@@ -56,7 +56,7 @@ public:
     }
 
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
-        // Only an accepted packet may publish a dispatch diagnostic. Rejected recording retries leave the latch untouched, and the resource-selection/recording path stays free of mutable renderer state.
+        // Only an accepted packet may publish a dispatch diagnostic. Rejected recording retries leave the latch untouched, and the resource-selection/recording path stays free of renderer state.
         const bool usedHardware = payload.resources.usesHardwareTrace && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
         if(usedHardware)
             payload.system.confirmRayTraceContextReadSubmission(token);

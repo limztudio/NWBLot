@@ -39,7 +39,8 @@ inline constexpr u32 s_QueueWords = s_TileCount + s_GuardWords;
 inline constexpr u32 s_VisitWords = NWB_SMOKE_REFRACTION_PROBE_HEADER_WORDS + s_TileCount + s_PixelCount + s_GuardWords;
 inline constexpr u32 s_ReadbackWords = s_ArgumentWords + s_QueueWords + s_VisitWords;
 inline constexpr u32 s_Sentinel = 0xa573d91bu;
-inline constexpr u32 s_PhaseCount = 5u;
+inline constexpr u32 s_PhaseCount = 6u;
+inline constexpr u32 s_MissingTile = (s_TilesY / 2u) * s_TilesX + s_TilesX / 2u;
 inline constexpr Array<u32, 6u> s_SparseTiles{ 0u, s_TilesX - 1u, (s_TilesY - 1u) * s_TilesX, s_TileCount - 1u, 65534u, 65535u };
 inline constexpr Name s_ProbeName("RefractionTileProbe");
 inline constexpr Name s_VerifyShaderName("project/shaders/refraction_tile_probe_cs");
@@ -51,6 +52,7 @@ struct ProbePushConstants{
 };
 
 static_assert(s_TileCount == 66049u && s_TileCount > NWB_REFRACTION_MAX_GROUP_COUNT_X);
+static_assert(NWB_REFRACTION_TILE_ARGUMENT_BYTES == 32u && NWB_REFRACTION_TILE_COUNTER_OFFSET == 12u && NWB_REFRACTION_DENSE_ARGUMENT_OFFSET == 16u);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -68,26 +70,32 @@ static_assert(s_TileCount == 66049u && s_TileCount > NWB_REFRACTION_MAX_GROUP_CO
         }
         return false;
     }
+    if(phase == 5u)
+        return tile != s_MissingTile;
     return tile < (phase == 3u ? NWB_REFRACTION_MAX_GROUP_COUNT_X : NWB_REFRACTION_MAX_GROUP_COUNT_X + 1u);
 }
 
 [[nodiscard]] static u32 ExpectedTileCount(const u32 phase)noexcept{
-    return phase == 0u ? s_TileCount : phase == 1u ? 0u : phase == 2u ? static_cast<u32>(s_SparseTiles.size()) : phase == 3u ? NWB_REFRACTION_MAX_GROUP_COUNT_X : NWB_REFRACTION_MAX_GROUP_COUNT_X + 1u;
+    return phase == 0u ? s_TileCount : phase == 1u ? 0u : phase == 2u ? static_cast<u32>(s_SparseTiles.size()) : phase == 3u ? NWB_REFRACTION_MAX_GROUP_COUNT_X : phase == 4u ? NWB_REFRACTION_MAX_GROUP_COUNT_X + 1u : s_TileCount - 1u;
 }
 
 struct ProbeTask{
     struct Payload{
         Core::TextureHandle depth;
         Core::BufferHandle queue;
+        Core::BufferHandle reversedQueue;
         Core::BufferHandle arguments;
         Core::BufferHandle visits;
         Core::BufferHandle slots;
         Core::BufferHandle readback;
         Core::ComputePipelineHandle classify;
-        Core::ComputePipelineHandle verify;
+        Core::ComputePipelineHandle finalize;
+        Core::ComputePipelineHandle verifyCompact;
+        Core::ComputePipelineHandle verifyDense;
         Core::GpuDescriptorHeap& heap;
         TStringView& stage;
         ProbePushConstants push;
+        u32 denseTileListSlot = 0u;
         u32 phase = 0u;
     };
 
@@ -101,7 +109,7 @@ public:
         payload.stage = NWB_TEXT("resource initialization");
         if(context.commandIrCapture)
             return false;
-        commands.clearTextureFloat(*payload.depth, Core::TextureSubresourceSet{}, Core::Color(payload.phase == 0u ? 0.5f : 1.f));
+        commands.clearTextureFloat(*payload.depth, Core::TextureSubresourceSet{}, Core::Color(payload.phase == 0u || payload.phase == 5u ? 0.5f : 1.f));
         commands.setTextureState(payload.depth.get(), Core::TextureSubresourceSet{}, Core::ResourceStates::CopyDest, true);
         commands.commitBarriers();
         if(payload.phase == 2u){
@@ -111,7 +119,7 @@ public:
                 commands.clearTextureRectFloat(*payload.depth, Core::TextureSubresourceSet{}, Core::Rect(x, x + 1, y, y + 1), Core::Color(0.5f));
             }
         }
-        else if(payload.phase >= 3u){
+        else if(payload.phase == 3u || payload.phase == 4u){
             const u32 count = ExpectedTileCount(payload.phase);
             const u32 fullRows = count / s_TilesX;
             commands.clearTextureRectFloat(*payload.depth, Core::TextureSubresourceSet{}, Core::Rect(0, static_cast<i32>(s_Width), 0, static_cast<i32>(fullRows * NWB_REFRACTION_GROUP_SIZE)), Core::Color(0.5f));
@@ -120,6 +128,11 @@ public:
                 const i32 y = static_cast<i32>(fullRows * NWB_REFRACTION_GROUP_SIZE);
                 commands.clearTextureRectFloat(*payload.depth, Core::TextureSubresourceSet{}, Core::Rect(0, static_cast<i32>(remainder * NWB_REFRACTION_GROUP_SIZE), y, y + NWB_REFRACTION_GROUP_SIZE), Core::Color(0.5f));
             }
+        }
+        else if(payload.phase == 5u){
+            const i32 x = static_cast<i32>((s_MissingTile % s_TilesX) * NWB_REFRACTION_GROUP_SIZE);
+            const i32 y = static_cast<i32>((s_MissingTile / s_TilesX) * NWB_REFRACTION_GROUP_SIZE);
+            commands.clearTextureRectFloat(*payload.depth, Core::TextureSubresourceSet{}, Core::Rect(x, x + NWB_REFRACTION_GROUP_SIZE, y, y + NWB_REFRACTION_GROUP_SIZE), Core::Color(1.f));
         }
         Array<u32, s_ArgumentWords> arguments;
         arguments.fill(s_Sentinel);
@@ -147,16 +160,39 @@ public:
         commands.setPushConstants(&payload.push, sizeof(payload.push));
         commands.dispatch(s_TilesX, s_TilesY, 1u);
 
-        payload.stage = NWB_TEXT("indirect shared mapping verification");
+        payload.stage = NWB_TEXT("production indirect route finalization");
+        commands.setBufferState(payload.arguments.get(), Core::ResourceStates::UnorderedAccess, true);
+        commands.commitBarriers();
+        Core::ComputeState finalize;
+        finalize.setPipeline(payload.finalize.get());
+        commands.setComputeState(finalize);
+        payload.heap.bindCompute(commands, *payload.finalize);
+        commands.setPushConstants(&payload.push, sizeof(payload.push));
+        commands.dispatch(1u, 1u, 1u);
+
+        payload.stage = NWB_TEXT("compact indirect mapping verification");
         commands.setBufferState(payload.queue.get(), Core::ResourceStates::ShaderResource);
         commands.setBufferState(payload.arguments.get(), Core::ResourceStates::ShaderResource | Core::ResourceStates::IndirectArgument);
         commands.commitBarriers();
-        Core::ComputeState verify;
-        verify.setPipeline(payload.verify.get()).setIndirectParams(payload.arguments.get());
-        commands.setComputeState(verify);
-        payload.heap.bindCompute(commands, *payload.verify);
+        Core::ComputeState verifyCompact;
+        verifyCompact.setPipeline(payload.verifyCompact.get()).setIndirectParams(payload.arguments.get());
+        commands.setComputeState(verifyCompact);
+        payload.heap.bindCompute(commands, *payload.verifyCompact);
         commands.setPushConstants(&payload.push, sizeof(payload.push));
         commands.dispatchIndirect(0u);
+
+        payload.stage = NWB_TEXT("dense indirect mapping verification");
+        commands.setBufferState(payload.visits.get(), Core::ResourceStates::UnorderedAccess, true);
+        commands.commitBarriers();
+        Core::ComputeState verifyDense;
+        verifyDense.setPipeline(payload.verifyDense.get()).setIndirectParams(payload.arguments.get());
+        commands.setComputeState(verifyDense);
+        payload.heap.bindCompute(commands, *payload.verifyDense);
+        // A valid reversed list distinguishes direct dense mapping from queue traversal without changing classifier output.
+        ProbePushConstants verifyPush = payload.push;
+        verifyPush.tileListSlot = payload.denseTileListSlot;
+        commands.setPushConstants(&verifyPush, sizeof(verifyPush));
+        commands.dispatchIndirect(NWB_REFRACTION_DENSE_ARGUMENT_OFFSET);
 
         payload.stage = NWB_TEXT("counter and queue readback");
         const Array<Core::BufferHandle, 3u> buffers{ payload.arguments, payload.queue, payload.visits };
@@ -185,12 +221,13 @@ public:
     const auto importBuffer = [&graph](const Core::BufferHandle& buffer, const AStringView label, const Core::ResourceStates::Mask state){
         return graph.importBuffer(buffer, Core::GpuGraphResourceDesc{}.setIdentity(buffer->getCreationDescription().debugName).setMarkerLabel(label).setType(Core::GpuGraphResourceType::Buffer).setInitialState(state).setExternalFinalState(state));
     };
-    const Array<Expected<Core::GpuGraphResourceId>, 5u> buffers{
+    const Array<Expected<Core::GpuGraphResourceId>, 6u> buffers{
         importBuffer(payload.queue, "Refraction probe tile queue", Core::ResourceStates::CopyDest),
         importBuffer(payload.arguments, "Refraction probe indirect arguments", Core::ResourceStates::CopyDest),
         importBuffer(payload.visits, "Refraction probe visit counters", Core::ResourceStates::CopyDest),
         importBuffer(payload.slots, "Refraction probe heap selectors", Core::ResourceStates::ConstantBuffer),
         importBuffer(payload.readback, "Refraction probe readback", Core::ResourceStates::CopyDest),
+        importBuffer(payload.reversedQueue, "Refraction probe reversed dense tile list", Core::ResourceStates::ShaderResource),
     };
     for(const auto& buffer : buffers){
         if(!buffer)
@@ -206,6 +243,7 @@ public:
         { .resource = *buffers[2], .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::Write },
         { .resource = *buffers[3], .range = {}, .requiredState = Core::ResourceStates::ConstantBuffer, .access = Core::GpuTaskResourceAccess::Read },
         { .resource = *buffers[4], .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::Write },
+        { .resource = *buffers[5], .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read },
         { .resource = *depth, .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::Write },
     };
     payload.stage = NWB_TEXT("task declaration");
@@ -222,9 +260,12 @@ public:
     ScopeExit unmap([&]()noexcept{ device.unmapBuffer(*payload.readback); });
     const auto words = MakeNotNull(static_cast<const u32*>(*mapping));
     const u32 count = ExpectedTileCount(payload.phase);
-    const u32 groupsX = Min(count, NWB_REFRACTION_MAX_GROUP_COUNT_X);
-    const u32 groupsY = Max(1u, DivideUp(count, NWB_REFRACTION_MAX_GROUP_COUNT_X));
-    const Array<u32, 4u> expectedArguments{ groupsX, groupsY, 1u, count };
+    const bool dense = count == s_TileCount;
+    const u32 compactX = dense ? 0u : Min(count, NWB_REFRACTION_MAX_GROUP_COUNT_X);
+    const u32 compactY = dense ? 1u : Max(1u, DivideUp(count, NWB_REFRACTION_MAX_GROUP_COUNT_X));
+    const u32 denseX = dense ? s_TilesX : 0u;
+    const u32 denseY = dense ? s_TilesY : 1u;
+    const Array<u32, 8u> expectedArguments{ compactX, compactY, 1u, count, denseX, denseY, 1u, 0u };
     for(u32 word = 0u; word < s_ArgumentWords; ++word){
         const u32 expected = word < expectedArguments.size() ? expectedArguments[word] : s_Sentinel;
         if(words.get()[word] != expected){
@@ -270,7 +311,10 @@ public:
         const u32 height = Min(static_cast<u32>(NWB_REFRACTION_GROUP_SIZE), s_Height - (tile / s_TilesX) * NWB_REFRACTION_GROUP_SIZE);
         pixelCount += width * height * expected;
     }
-    const Array<u32, NWB_SMOKE_REFRACTION_PROBE_HEADER_WORDS> expectedHeader{ groupsX * groupsY, groupsX * groupsY - count, 0u, count * NWB_REFRACTION_GROUP_SIZE * NWB_REFRACTION_GROUP_SIZE - pixelCount };
+    const u32 compactGroups = compactX * compactY;
+    const u32 denseGroups = denseX * denseY;
+    const u32 groups = compactGroups + denseGroups;
+    const Array<u32, NWB_SMOKE_REFRACTION_PROBE_HEADER_WORDS> expectedHeader{ groups, groups - count, 0u, count * NWB_REFRACTION_GROUP_SIZE * NWB_REFRACTION_GROUP_SIZE - pixelCount, compactGroups, denseGroups };
     for(u32 word = 0u; word < expectedHeader.size(); ++word){
         if(visits.get()[word] != expectedHeader[word]){
             NWB_LOGGER_ERROR(NWB_TEXT("RefractionTileProbe: phase {} counter {} expected {} observed {}"), payload.phase, word, expectedHeader[word], visits.get()[word]);
@@ -291,7 +335,7 @@ public:
             return false;
         }
     }
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionTileProbe: phase {} active_tiles={} arguments={}x{} pixels={} tail_groups={} edge_lanes={}"), payload.phase, count, groupsX, groupsY, pixelCount, expectedHeader[1], expectedHeader[3]);
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionTileProbe: phase {} active_tiles={} compact={}x{} dense={}x{} pixels={} tail_groups={} edge_lanes={} argument_bytes={}"), payload.phase, count, compactX, compactY, denseX, denseY, pixelCount, expectedHeader[1], expectedHeader[3], NWB_REFRACTION_TILE_ARGUMENT_BYTES);
     return true;
 }
 
@@ -313,10 +357,14 @@ bool RunRefractionTileProbe(NWB::ProjectRuntimeContext& context){
     auto& heap = device.getDescriptorHeap();
     Core::Alloc::ScratchArena scratch("tests/smoke/refraction_tile_probe");
     Core::ShaderHandle classifyShader;
-    Core::ShaderHandle verifyShader;
+    Core::ShaderHandle finalizeShader;
+    Core::ShaderHandle verifyCompactShader;
+    Core::ShaderHandle verifyDenseShader;
     if(
         !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(classifyShader, Impl::AssetsGraphicsRefraction::s_ClassifyTilesShaderName, Core::ShaderArchive::s_DefaultVariant, s_ProbeName, graphics, context.assetManager, context.shaderPathResolver, NWB_TEXT("RefractionTileProbe"))
-        || !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(verifyShader, s_VerifyShaderName, Core::ShaderArchive::s_DefaultVariant, s_ProbeName, graphics, context.assetManager, context.shaderPathResolver, NWB_TEXT("RefractionTileProbe"))
+        || !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(finalizeShader, Impl::AssetsGraphicsRefraction::s_FinalizeTilesShaderName, Core::ShaderArchive::s_DefaultVariant, s_ProbeName, graphics, context.assetManager, context.shaderPathResolver, NWB_TEXT("RefractionTileProbe"))
+        || !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(verifyCompactShader, s_VerifyShaderName, AStringView("NWB_REFRACTION_DENSE_GRID=0"), s_ProbeName, graphics, context.assetManager, context.shaderPathResolver, NWB_TEXT("RefractionTileProbe"))
+        || !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(verifyDenseShader, s_VerifyShaderName, AStringView("NWB_REFRACTION_DENSE_GRID=1"), s_ProbeName, graphics, context.assetManager, context.shaderPathResolver, NWB_TEXT("RefractionTileProbe"))
     )
         return false;
     Core::BindingLayoutDesc layoutDesc(context.objectArena);
@@ -326,15 +374,31 @@ bool RunRefractionTileProbe(NWB::ProjectRuntimeContext& context){
         return false;
     Core::ComputePipelineDesc classifyDesc;
     classifyDesc.setComputeShader(classifyShader).addBindingLayout(*layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    Core::ComputePipelineDesc verifyDesc;
-    verifyDesc.setComputeShader(verifyShader).addBindingLayout(*layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
+    Core::ComputePipelineDesc finalizeDesc;
+    finalizeDesc.setComputeShader(finalizeShader).addBindingLayout(*layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
+    Core::ComputePipelineDesc verifyCompactDesc;
+    verifyCompactDesc.setComputeShader(verifyCompactShader).addBindingLayout(*layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
+    Core::ComputePipelineDesc verifyDenseDesc;
+    verifyDenseDesc.setComputeShader(verifyDenseShader).addBindingLayout(*layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
     const auto classify = device.createComputePipeline(classifyDesc);
-    const auto verify = device.createComputePipeline(verifyDesc);
+    const auto finalize = device.createComputePipeline(finalizeDesc);
+    const auto verifyCompact = device.createComputePipeline(verifyCompactDesc);
+    const auto verifyDense = device.createComputePipeline(verifyDenseDesc);
     const auto createBuffer = [&graphics](const Name name, const u32 words, const bool indirect, const bool readback){
         Core::BufferDesc desc;
         desc.setDebugName(name).setByteSize(static_cast<u64>(words) * sizeof(u32)).setStructStride(sizeof(u32)).setCanHaveUAVs(!readback).setCanHaveRawViews(!readback).setIsDrawIndirectArgs(indirect).setCpuAccess(readback ? Core::CpuAccessMode::Read : Core::CpuAccessMode::None).enableAutomaticStateTracking(Core::ResourceStates::CopyDest);
         return graphics.createBuffer(desc);
     };
+    Vector<u32, Core::Alloc::ScratchArena> reversedTiles{ scratch };
+    reversedTiles.resize(s_QueueWords, s_Sentinel);
+    for(u32 tile = 0u; tile < s_TileCount; ++tile)
+        reversedTiles[tile] = s_TileCount - 1u - tile;
+    Core::GraphicsRuntime::BufferSetupDesc reversedSetup;
+    reversedSetup.bufferDesc.setDebugName(Name("RefractionTileProbeReversedQueue")).setByteSize(static_cast<u64>(s_QueueWords) * sizeof(u32)).setStructStride(sizeof(u32)).setCanHaveUAVs(true).setCanHaveRawViews(true).enableAutomaticStateTracking(Core::ResourceStates::ShaderResource);
+    reversedSetup.data = reversedTiles.data();
+    reversedSetup.dataSize = static_cast<u64>(s_QueueWords) * sizeof(u32);
+    reversedSetup.queue = Core::CommandQueue::Graphics;
+    const auto reversedQueue = graphics.setupBuffer(reversedSetup);
     const auto queue = createBuffer(Name("RefractionTileProbeQueue"), s_QueueWords, false, false);
     const auto arguments = createBuffer(Name("RefractionTileProbeArguments"), s_ArgumentWords, true, false);
     const auto visits = createBuffer(Name("RefractionTileProbeVisits"), s_VisitWords, false, false);
@@ -342,12 +406,12 @@ bool RunRefractionTileProbe(NWB::ProjectRuntimeContext& context){
     Core::TextureDesc depthDesc;
     depthDesc.setWidth(s_Width).setHeight(s_Height).setFormat(Core::Format::R32_FLOAT).setName(s_ProbeName).setInitialState(Core::ResourceStates::CopyDest).setKeepInitialState(true);
     const auto depth = graphics.createTexture(depthDesc);
-    if(!classify || !verify || !queue || !arguments || !visits || !readback || !depth)
+    if(!classify || !finalize || !verifyCompact || !verifyDense || !queue || !reversedQueue || !arguments || !visits || !readback || !depth)
         return false;
     Core::BufferHandle slotsBuffer;
-    Array<Core::GpuDescriptorHandle, 5u> descriptors{};
+    Array<Core::GpuDescriptorHandle, 6u> descriptors{};
     Core::GpuDescriptorRetirementGuard retire(heap, Span<const Core::GpuDescriptorHandle>(descriptors.data(), descriptors.size()));
-    const Array<Core::BufferHandle, 3u> storageBuffers{ *queue, *arguments, *visits };
+    const Array<Core::BufferHandle, 4u> storageBuffers{ *queue, *arguments, *visits, *reversedQueue };
     for(u32 index = 0u; index < storageBuffers.size(); ++index){
         const auto descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
         if(!descriptor)
@@ -359,7 +423,7 @@ bool RunRefractionTileProbe(NWB::ProjectRuntimeContext& context){
     const auto sampled = heap.allocate(Core::GpuDescriptorClass::SampledImage);
     if(!sampled)
         return false;
-    descriptors[3] = *sampled;
+    descriptors[4] = *sampled;
     if(!heap.write(*sampled, Core::DescriptorWriteItem::TextureSrv(0u, depth->get(), depthDesc.format, Core::TextureSubresourceSet{}, Core::TextureDimension::Texture2D)))
         return false;
     Impl::DeferredBindlessResourceSlots slots;
@@ -376,11 +440,12 @@ bool RunRefractionTileProbe(NWB::ProjectRuntimeContext& context){
     const auto uniform = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
     if(!uniform)
         return false;
-    descriptors[4] = *uniform;
+    descriptors[5] = *uniform;
     if(!heap.write(*uniform, Core::DescriptorWriteItem::ConstantBuffer(0u, slotsBuffer.get())))
         return false;
     TStringView stage = NWB_TEXT("probe initialization");
-    ProbeTask::Payload payload{ *depth, *queue, *arguments, *visits, slotsBuffer, *readback, *classify, *verify, heap, stage, {} };
+    ProbeTask::Payload payload{ *depth, *queue, *reversedQueue, *arguments, *visits, slotsBuffer, *readback, *classify, *finalize, *verifyCompact, *verifyDense, heap, stage, {} };
+    payload.denseTileListSlot = descriptors[3].slot();
     payload.push.width = s_Width;
     payload.push.height = s_Height;
     payload.push.deferredResourcesHeapSlot = uniform->slot();
@@ -401,7 +466,7 @@ bool RunRefractionTileProbe(NWB::ProjectRuntimeContext& context){
         if(!CompareReadback(device, scratch, payload))
             return false;
     }
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionTileProbe: passed 5 phases at 2049x2049 with 66049 tiles, queue uniqueness, 65535/65536 boundary, indirect Y tail, pixel visits and guards"));
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionTileProbe: passed 6 phases at 2049x2049 with 66049 tiles, production finalizer, specialized dense/compact mapping, all 32 argument bytes, all-but-one sparse boundary, queue uniqueness, 65535/65536 boundary, indirect Y tail, 25190406 pixel checks and guards"));
     return true;
 }
 

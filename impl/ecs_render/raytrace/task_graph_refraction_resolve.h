@@ -85,6 +85,7 @@ public:
         if(resources.usesHardwareTrace && (!payload.hardwarePreparationReady || !*payload.hardwarePreparationReady)){
             // Shared preparation can accept a nonfatal TLAS miss. Use the already prepared screen pipeline, whose inputs are a subset of this task's declared resources, instead of tracing a stale/unbuilt TLAS.
             resources.pipeline = resources.screenFallbackPipeline;
+            resources.densePipeline = resources.denseScreenFallbackPipeline;
             resources.usesHardwareTrace = false;
             resources.tlasHeapHandle = Core::GpuDescriptorHandle::Invalid();
             resources.materialContextSlotsHeapSlot = 0u;

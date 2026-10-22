@@ -5,6 +5,28 @@ front of an opaque stripe wall. A red transparent panel sits in front of the gla
 a blue transparent panel sits behind it. The fixed camera and unlit authored BXDF
 make the image comparison independent of lighting histories.
 
+Refraction classification uses the current full-resolution capture depth: an
+8x8 tile is active when any in-bounds pixel has depth below one. This preserves
+clear glass with zero AVBOIT opacity. Active tiles append to a GPU queue, with
+compact indirect rows capped at 65,535 workgroups. The sparse kernel clips the
+final row to the active count and partial tiles to the framebuffer extent.
+
+A one-group finalizer runs after the classifier's UAV dependency within the same
+graph task and classification timing scope. Its 32-byte argument buffer contains
+sparse XYZ at byte 0, the active count at byte 12, dense XYZ at byte 16, and a
+reserved zero word at byte 28. When every tile is active and the framebuffer tile
+width fits the dispatch X limit, the finalizer enables the dense record and
+zeros sparse X. Otherwise it enables the compact record and zeros dense X.
+An empty capture has both X counts zero.
+
+Both records are submitted inside the existing resolve task and timing scope.
+The selected record runs its separately cooked sparse or dense kernel; the other
+launches zero workgroups. The dense kernel maps workgroup IDs directly to
+framebuffer tiles and has no queue lookup or runtime occupancy branch. Selection
+uses exact current-frame occupancy, with no CPU readback or density threshold.
+Both screen-space and hardware tracing prepare both kernels, including the
+screen fallback pair for unavailable hardware preparation.
+
 Build the scene and its cooked runtime assets through the repository launcher:
 
 ```powershell
@@ -71,6 +93,31 @@ the source graphics-frame identity for each phase and are retained under
 `NWB_REFRACTION_SMOKE_LIFECYCLE=1` and `NWB_REFRACTION_SMOKE_EXTENT=npot`.
 `refraction_lifecycle_smoke.py --require-hardware` additionally requires a hardware
 resolve in its automatic run.
+
+For direct GPU scheduling coverage, build `nwb_avboit_depth_warp_probe_smoke`
+and `nwb_logserver` in the same configuration, then run:
+
+```powershell
+ctest --test-dir __cmake/build/windows-clang-arm64 -C opt -R "^nwb_avboit_depth_warp_probe_smoke$" --output-on-failure
+```
+
+The refraction portion uses the cooked production classifier, its one-group
+argument finalizer, and both specialized shared resolver mappings at 2049x2049,
+including the partial edge tiles. Its six phases reuse the
+same resources with 66,049, zero, six sparse, 65,535, 65,536, and 66,048 active
+tiles; the last case omits an interior tile while keeping the final tile active.
+It checks every byte of the 32-byte indirect argument layout, queue membership
+and uniqueness, every tile and pixel visit, row tails, edge lanes, and sentinel
+guards with GPU validation. Each phase records both indirect dispatches and
+separate route counters: the inactive route has zero groups, and the empty phase
+has no verifier groups. Exactly full occupancy selects the native 257x257 dense
+grid; every nonempty sparse phase uses the compact grid capped at 65,535 groups
+per row. The dense verifier receives a separate list of valid reversed tile IDs,
+while the CPU still validates the classifier's original list. Requiring the
+mapped tile to equal the dispatch index proves that the dense path bypasses
+queue order. The all-but-one case must retain sparse queue mapping, including
+its bounded indirect tail. The smoke
+requires all six phases and 25,190,406 pixel checks before reporting success.
 
 For uncaptured timing acquisition, set `NWB_REFRACTION_SMOKE_TIMING=1` and
 `NWB_GPU_TIMING_FILE` to an output path. The fixture uses the shared AVBOIT timing
@@ -203,8 +250,10 @@ the same fixture and toolchain before launching either arm:
 2. Check and apply `tests/smoke/refraction_direct_reference.patch` to the same
    renderer sources, rebuild and recook with the same configuration, and copy
    those outputs into a distinct baseline directory. The patch removes tile
-   clear/classification graph tasks and replaces indirect mapping/dispatch with
-   the full framebuffer grid. Optical shaders, AVBOIT, current-depth compositing,
+   clear/classification graph tasks and their queue/argument resource uses. It
+   directly dispatches the prepared dense kernel over the full framebuffer grid,
+   retaining both arms' pipeline preparation, snapshots, and resource lifetimes.
+   Optical shaders, AVBOIT, current-depth compositing,
    the density fixture, and target allocation remain common to both arms.
 3. Save each arm's compiled source bytes and a manifest with a nonempty
    `revision` string and `files` object mapping relative paths to SHA256 hashes.

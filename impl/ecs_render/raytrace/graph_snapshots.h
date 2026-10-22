@@ -146,8 +146,11 @@ struct RayTracingSurfelPersistentResourceSnapshot{
 // Prepared once before graph compilation. Recording only consumes these retained handles and slot values, so a hardware failure cannot switch the graph to a different resource set after its dependencies have been declared.
 struct RayTracingRefractionGraphResources{
     Core::ComputePipelineHandle pipeline;
+    Core::ComputePipelineHandle densePipeline;
     Core::ComputePipelineHandle screenFallbackPipeline;
+    Core::ComputePipelineHandle denseScreenFallbackPipeline;
     Core::ComputePipelineHandle classifyTilesPipeline;
+    Core::ComputePipelineHandle finalizeTilesPipeline;
     Core::BufferHandle materialContextSlotsBuffer;
     Core::BufferHandle viewBuffer;
     Core::RayTracingAccelStructHandle sceneTlas;
@@ -161,7 +164,7 @@ struct RayTracingRefractionGraphResources{
 
 public:
     [[nodiscard]] bool valid()const noexcept{
-        return pipeline && classifyTilesPipeline && viewBuffer && (!usesHardwareTrace || (sceneTlas && tlasHeapHandle.valid() && materialContextSlotsBuffer));
+        return pipeline && densePipeline && classifyTilesPipeline && finalizeTilesPipeline && viewBuffer && (!usesHardwareTrace || (sceneTlas && tlasHeapHandle.valid() && materialContextSlotsBuffer));
     }
 };
 

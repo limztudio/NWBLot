@@ -20,12 +20,23 @@
 void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID){
     uint2 pixel;
     const bool accepted = nwbRefractionResolvePixel(groupId, groupThreadId, pixel);
+    const uint tilesX = (g_NwbRefractionPush.width + NWB_REFRACTION_GROUP_SIZE - 1u) / NWB_REFRACTION_GROUP_SIZE;
+#if NWB_REFRACTION_DENSE_GRID
+    const uint queueIndex = groupId.y * tilesX + groupId.x;
+#else
     const uint queueIndex = groupId.y * NWB_REFRACTION_MAX_GROUP_COUNT_X + groupId.x;
+#endif
     const uint count = g_NwbRefractionTileArguments.Load(NWB_REFRACTION_TILE_COUNTER_OFFSET);
     const bool firstLane = all(groupThreadId == uint3(0u));
     uint unused;
-    if(firstLane)
+    if(firstLane){
         g_NwbRefractionProbeVisits.InterlockedAdd(NWB_SMOKE_REFRACTION_PROBE_GROUP_COUNT * 4u, 1u, unused);
+#if NWB_REFRACTION_DENSE_GRID
+        g_NwbRefractionProbeVisits.InterlockedAdd(NWB_SMOKE_REFRACTION_PROBE_DENSE_GROUP_COUNT * 4u, 1u, unused);
+#else
+        g_NwbRefractionProbeVisits.InterlockedAdd(NWB_SMOKE_REFRACTION_PROBE_COMPACT_GROUP_COUNT * 4u, 1u, unused);
+#endif
+    }
 
     if(queueIndex >= count){
         if(firstLane)
@@ -46,12 +57,18 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID){
         return;
     }
 
-    const uint tilesX = (g_NwbRefractionPush.width + NWB_REFRACTION_GROUP_SIZE - 1u) / NWB_REFRACTION_GROUP_SIZE;
     const uint tilesY = (g_NwbRefractionPush.height + NWB_REFRACTION_GROUP_SIZE - 1u) / NWB_REFRACTION_GROUP_SIZE;
     const uint tileCount = tilesX * tilesY;
     const uint tile = (pixel.y / NWB_REFRACTION_GROUP_SIZE) * tilesX + pixel.x / NWB_REFRACTION_GROUP_SIZE;
-    if(firstLane)
+    if(firstLane){
+#if NWB_REFRACTION_DENSE_GRID
+        if(count != tileCount || tile != queueIndex)
+#else
+        if(count == tileCount && tilesX <= NWB_REFRACTION_MAX_GROUP_COUNT_X)
+#endif
+            g_NwbRefractionProbeVisits.InterlockedAdd(NWB_SMOKE_REFRACTION_PROBE_MAPPING_ERROR_COUNT * 4u, 1u, unused);
         g_NwbRefractionProbeVisits.InterlockedAdd((NWB_SMOKE_REFRACTION_PROBE_HEADER_WORDS + tile) * 4u, 1u, unused);
+    }
     const uint pixelIndex = pixel.y * g_NwbRefractionPush.width + pixel.x;
     g_NwbRefractionProbeVisits.InterlockedAdd((NWB_SMOKE_REFRACTION_PROBE_HEADER_WORDS + tileCount + pixelIndex) * 4u, 1u, unused);
 }

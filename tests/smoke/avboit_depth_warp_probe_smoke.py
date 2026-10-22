@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the cooked AVBOIT depth-warp boundary probe through the normal loader."""
+"""Run native AVBOIT and refraction probes, including specialized dense/compact indirect routes."""
 
 import argparse
 from datetime import datetime, timezone
@@ -34,7 +34,29 @@ MANIFEST = re.compile(r"AvboitDepthWarpProbe: manifest boundary=(\d+) exhaustive
 COMPLETION = re.compile(r"AvboitDepthWarpProbe: passed (\d+) cases with full LUT/control comparison and sentinel tails")
 SHUTDOWN = "AvboitDepthWarpProbe: shutdown completed=1"
 INTEGRATION_COMPLETION = "AvboitIntegrationProbe: passed 5 phases with empty, late, partial, saturation, wrapped overflow and active-to-empty clear checks"
-REFRACTION_COMPLETION = "RefractionTileProbe: passed 5 phases at 2049x2049 with 66049 tiles, queue uniqueness, 65535/65536 boundary, indirect Y tail, pixel visits and guards"
+REFRACTION_COMPLETION = "RefractionTileProbe: passed 6 phases at 2049x2049 with 66049 tiles, production finalizer, specialized dense/compact mapping, all 32 argument bytes, all-but-one sparse boundary, queue uniqueness, 65535/65536 boundary, indirect Y tail, 25190406 pixel checks and guards"
+REFRACTION_PHASE = re.compile(r"RefractionTileProbe: phase (\d+) active_tiles=(\d+) compact=(\d+)x(\d+) dense=(\d+)x(\d+) pixels=(\d+) tail_groups=(\d+) edge_lanes=(\d+) argument_bytes=(\d+)")
+
+
+def validate_refraction_phases(text):
+    phases = list(REFRACTION_PHASE.finditer(text))
+    if len(phases) != 6:
+        raise SmokeFailure("refraction tile probe requires exactly six finalized route records")
+    counts = (66049, 0, 6, 65535, 65536, 66048)
+    sparse = (0, 256, 256 * 257, 66048, 65534, 65535)
+    for phase, match in enumerate(phases):
+        count = counts[phase]
+        dense = phase == 0
+        compact_x = 0 if dense else min(count, 65535)
+        compact_y = 1 if dense else max(1, (count + 65534) // 65535)
+        dense_x, dense_y = (257, 257) if dense else (0, 1)
+        active = range(count) if phase not in (2, 5) else sparse if phase == 2 else (tile for tile in range(66049) if tile != 33024)
+        pixels = sum(min(8, 2049 - (tile % 257) * 8) * min(8, 2049 - (tile // 257) * 8) for tile in active)
+        groups = compact_x * compact_y + dense_x * dense_y
+        expected = (phase, count, compact_x, compact_y, dense_x, dense_y, pixels, groups - count, count * 64 - pixels, 32)
+        if tuple(map(int, match.groups())) != expected:
+            raise SmokeFailure(f"refraction tile probe phase {phase} does not match its finalized route, pixel, tail and argument contract")
+    return phases
 
 
 def validate_runtime_log(text):
@@ -51,12 +73,15 @@ def validate_runtime_log(text):
     if text.count(INTEGRATION_COMPLETION) != 1:
         raise SmokeFailure("AVBOIT integration probe requires its complete five-phase volume comparison")
     if text.count(REFRACTION_COMPLETION) != 1:
-        raise SmokeFailure("refraction tile probe requires all five queue and pixel-visit comparisons")
+        raise SmokeFailure("refraction tile probe requires all six finalized dense, sparse, queue and pixel-visit comparisons")
+    refraction_phases = validate_refraction_phases(text)
+    if refraction_phases[-1].end() >= text.index(REFRACTION_COMPLETION):
+        raise SmokeFailure("refraction tile probe completion precedes its six route records")
     startup = text.index(LIT_LOADER_PROJECT_STARTUP_COMPLETE)
     shutdown = text.index(SHUTDOWN)
     if not manifests[0].start() < startup < completions[0].start() < shutdown:
         raise SmokeFailure("depth-warp probe manifest, startup, completion and shutdown order is invalid")
-    return { "boundary_cases": EXPECTED_COUNTS[0], "exhaustive_cases": EXPECTED_COUNTS[1], "randomized_cases": EXPECTED_COUNTS[2], LIT_PASSED_CASES: EXPECTED_COUNTS[3], "integration_phases": 5, "refraction_tile_phases": 5, "gpu_validation_enabled": True, "full_output_and_sentinel_validation": True, }
+    return { "boundary_cases": EXPECTED_COUNTS[0], "exhaustive_cases": EXPECTED_COUNTS[1], "randomized_cases": EXPECTED_COUNTS[2], LIT_PASSED_CASES: EXPECTED_COUNTS[3], "integration_phases": 5, "refraction_tile_phases": 6, "refraction_tile_pixel_checks": 25190406, "refraction_argument_bytes": 32, "refraction_finalizer_and_both_specialized_variants": True, "gpu_validation_enabled": True, "full_output_and_sentinel_validation": True, }
 
 
 def write_json(path, value):

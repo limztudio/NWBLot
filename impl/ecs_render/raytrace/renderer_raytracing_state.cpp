@@ -62,15 +62,26 @@ void RendererRayTracingState::invalidateResources()noexcept{
     m_refractionBindingLayout.reset();
     m_refractionClassifyTilesShader.reset();
     m_refractionClassifyTilesPipeline.reset();
+    m_refractionFinalizeTilesShader.reset();
+    m_refractionFinalizeTilesPipeline.reset();
     m_refractionScreenShader.reset();
     m_refractionHwShader.reset();
     m_refractionCsgHwShader.reset();
+    m_refractionDenseScreenShader.reset();
+    m_refractionDenseHwShader.reset();
+    m_refractionDenseCsgHwShader.reset();
     m_refractionScreenPipeline.reset();
     m_refractionHwPipeline.reset();
     m_refractionCsgHwPipeline.reset();
+    m_refractionDenseScreenPipeline.reset();
+    m_refractionDenseHwPipeline.reset();
+    m_refractionDenseCsgHwPipeline.reset();
     m_refractionScreenPipelineFailed = false;
     m_refractionHwPipelineFailed = false;
     m_refractionCsgHwPipelineFailed = false;
+    m_refractionDenseScreenPipelineFailed = false;
+    m_refractionDenseHwPipelineFailed = false;
+    m_refractionDenseCsgHwPipelineFailed = false;
     m_refractionUseHardwareTrace = false;
     // Scene TLAS is GPU state released on teardown; per-mesh BLAS lives on the mesh cache.
     m_tlas.reset();

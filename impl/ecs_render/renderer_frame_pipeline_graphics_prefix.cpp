@@ -225,7 +225,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     gbufferPayload.csgResources = csgResources;
 
     const bool hasOpaqueDrawItems = !opaqueDrawItems.empty();
-    // G-buffer and the optional opaque CSG follow-up both declare the shared material entry batch whenever their stream exists. The selected source-geometry batch is retained and declared below.
+    // G-buffer and the opaque CSG follow-up both declare the shared material entry batch whenever their stream exists. The selected source-geometry batch is retained and declared below.
     gbufferPayload.materialFrameStatesGraphOwned = hasOpaqueDrawItems;
     OpaqueUploadChainBuilder opaqueUploadChainBuilder(m_deferredLightingTaskGraph, m_materialSystem, m_csgSystem);
     auto opaqueUploadChainResult = opaqueUploadChainBuilder.declare(
@@ -276,7 +276,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     opaqueCsgIntervalStage.capturePayloads(frameBindings, csgResources, opaqueDrawItems, csgFrameData, instanceData.size(), materialTypedBytes.size(), gbufferPayload.materialDrawBuffersUploaded, gbufferPayload.csgFrameBuffersUploaded, hasOpaqueDrawItems, hasOpaqueCsgFrameWork);
 
 
-    // The G-buffer produces peel/event images, span build consumes its event aliases and publishes spans, Combine consumes the prior-stage aliases and publishes removed-interval images, then Sample consumes output.
+    // The G-buffer produces peel/event images, span build consumes its event aliases and publishes spans, Combine consumes the aliases and publishes removed-interval images, then Sample consumes output.
     // Their native thunks consume graph-owned StorageImage state without staging target transitions.
 
     // The semantic opaque-CSG flag admits this clear before native readiness checks.

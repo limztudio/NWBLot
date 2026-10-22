@@ -23,7 +23,7 @@ struct NwbMeshViewBuffer{
     float4 g_NwbMeshFrustumPlanes[NWB_MESH_VIEW_FRUSTUM_PLANE_COUNT];
 };
 
-// Most mesh consumers select the global view descriptor from per-draw frame slots. Narrower consumers such as CSG interval passes can supply their own uniform slot without a local binding.
+// Most mesh consumers select the global view descriptor from per-draw slots. Narrower consumers such as interval passes can supply their own uniform slot without a local binding.
 #if defined(NWB_MESH_VIEW_BUFFER_HEAP_SLOT)
 #define g_NwbMeshViewBuffer nwbHeapMeshViewBuffer(NWB_MESH_VIEW_BUFFER_HEAP_SLOT)
 #else

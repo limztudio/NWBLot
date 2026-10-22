@@ -12,7 +12,7 @@
 #include "surface_hit.slangi"
 #include "../deferred/bxdf_surface.slangi"
 
-// A traced surface has no opaque G-buffer texel. Its light loop must never read the primary camera's visibility or caustics, even in the viewport. Include before scene/lighting.slangi; caller supplies heap-slot macros.
+// A traced surface has no opaque G-buffer texel. Its light loop must never read the primary camera's visibility or caustics, even in the viewport. Include before scene/lighting.slangi; caller supplies macros.
 #ifdef NWB_GRAPHICS_SCENE_LIGHTING_SLANGI
 #error "Include raytrace/surface_lighting.slangi before scene/lighting.slangi"
 #endif

@@ -193,8 +193,7 @@ template<typename Value, typename WriteValue>
 void ApplyTextReplacements(ScratchString& inOutSource, TextReplacements& replacements){
     Sort(replacements.begin(), replacements.end(), [](const TextReplacement& lhs, const TextReplacement& rhs)noexcept{
         return lhs.begin > rhs.begin;
-    }
-    );
+    });
 
     usize capacity = inOutSource.size();
     for(const TextReplacement& replacement : replacements){

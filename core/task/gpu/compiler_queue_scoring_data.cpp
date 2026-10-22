@@ -66,8 +66,7 @@ GpuTaskQueueScoringData::GpuTaskQueueScoringData(
         if(lhs->consumer.index != rhs->consumer.index)
             return lhs->consumer.index < rhs->consumer.index;
         return lhs->resource.index < rhs->resource.index;
-    }
-    );
+    });
 
     usize uniqueEdgeCount = 0u;
     for(const auto edge : uniqueEdges){

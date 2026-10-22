@@ -356,8 +356,7 @@ static Expected<MaterialCookVector<MaterialBindStruct>> ParseMaterialBindStructs
 
     Sort(structs.begin(), structs.end(), [](const MaterialBindStruct& lhs, const MaterialBindStruct& rhs)noexcept{
         return lhs.name < rhs.name;
-    }
-    );
+    });
     return structs;
 }
 

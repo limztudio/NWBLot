@@ -56,8 +56,7 @@ bool PackGlyphs(const BakeOptions& options, const RasterGlyphs& glyphs, Impl::Fo
         if(a.width != b.width)
             return a.width > b.width;
         return a.glyphId < b.glyphId;
-    }
-    );
+    });
     outPayload.glyphs.reserve(glyphs.size());
     for(const RasterGlyph& glyph : glyphs)
         outPayload.glyphs.push_back(glyph.record);

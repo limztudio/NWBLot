@@ -157,8 +157,7 @@ DrawSnapshot PaintBuilder::freeze(){
     if(!m_commandsOrdered){
         Sort(m_snapshot.m_commands.begin(), m_snapshot.m_commands.end(), [](const DrawCommand& lhs, const DrawCommand& rhs)noexcept{
             return lhs.layer != rhs.layer ? lhs.layer < rhs.layer : lhs.firstIndex < rhs.firstIndex;
-        }
-        );
+        });
     }
     m_recording = false;
     m_clips.clear();

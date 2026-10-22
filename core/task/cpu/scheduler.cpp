@@ -110,8 +110,7 @@ CpuTaskScheduler::CpuTaskScheduler(const CpuTaskSchedulerConfig& config)
     InteropVector<CpuWorkerPlacement> topology = placementResult ? Move(*placementResult) : InteropVector<CpuWorkerPlacement>{};
     Sort(topology.begin(), topology.end(), [](const CpuWorkerPlacement& lhs, const CpuWorkerPlacement& rhs)noexcept{
         return lhs.performanceClass > rhs.performanceClass;
-    }
-    );
+    });
     const u32 available = topology.empty() ? Max(QueryCpuCoreCount(CpuAffinity::Any), 1u) : static_cast<u32>(topology.size());
     const u32 reserved = Min(config.reservedThreadCount, available);
     m_workerCount = config.workerCount == CpuTaskSchedulerConfig::s_AutomaticWorkerCount ? available - reserved : config.workerCount;

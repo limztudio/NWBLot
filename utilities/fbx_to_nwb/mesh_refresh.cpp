@@ -146,8 +146,7 @@ template<typename Value>
         if(LessValue(rhs.value, lhs.value))
             return false;
         return lhs.sourceIndex < rhs.sourceIndex;
-    }
-    );
+    });
 
     usize uniqueCount = 0u;
     for(usize sortedIndex = 0u; sortedIndex < sortedEntries.size(); ++sortedIndex){

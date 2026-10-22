@@ -177,8 +177,7 @@ bool ApplyMaterialBindTypedLayoutParameters(const MaterialBindTypedLayout& layou
 
     Sort(outResourceReferences.begin(), outResourceReferences.end(), [](const MaterialResourceReference& lhs, const MaterialResourceReference& rhs)noexcept{
         return lhs.constantByteOffset < rhs.constantByteOffset;
-    }
-    );
+    });
 
     return true;
 }

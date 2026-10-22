@@ -141,8 +141,7 @@ public:
 
         Sort(records.begin(), records.end(), [](const SymbolRecordView& lhs, const SymbolRecordView& rhs)noexcept{
             return LessNameHash(lhs.hash, rhs.hash);
-        }
-        );
+        });
 
         usize requiredSize = AddSize(outText.size(), NameSymbols::s_FileHeader.size());
         requiredSize = AddSize(requiredSize, s_NamesymProducerSuffix.size());

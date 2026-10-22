@@ -213,8 +213,7 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const UtilityVector<ufbx_no
         if(sortNames[lhs] != sortNames[rhs])
             return sortNames[lhs] < sortNames[rhs];
         return lhs < rhs;
-    }
-    );
+    });
 
     outData.oldToNewJointIndices.resize(joints.size(), 0u);
     outData.joints.reserve(joints.size());

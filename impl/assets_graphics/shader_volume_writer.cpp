@@ -126,8 +126,7 @@ static bool GetVariantBytecode(
         compileDefines.push_back(ShaderCook::ShaderMacroDefinition{ defineName, value });
     Sort(compileDefines.begin(), compileDefines.end(), [](const ShaderCook::ShaderMacroDefinition& lhs, const ShaderCook::ShaderMacroDefinition& rhs)noexcept{
         return lhs.name < rhs.name;
-    }
-    );
+    });
 
     const ScratchPath cacheParentPath = bytecodeCachePath.parentPath();
     auto ensureDirectoriesResult = EnsureDirectories(cacheParentPath);

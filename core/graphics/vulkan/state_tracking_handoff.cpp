@@ -122,8 +122,7 @@ bool CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, 
     }
     Sort(orderedBufferStates.begin(), orderedBufferStates.end(), [](const auto lhs, const auto rhs)noexcept{
         return lhs->buffer != rhs->buffer ? LessThan<Buffer*>()(lhs->buffer, rhs->buffer) : lhs->range.byteOffset < rhs->range.byteOffset;
-    }
-    );
+    });
     for(usize index = 1u; index < orderedBufferStates.size(); ++index){
         const auto& previous = *orderedBufferStates[index - 1u];
         const auto& current = *orderedBufferStates[index];

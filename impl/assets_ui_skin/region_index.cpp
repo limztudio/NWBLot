@@ -37,8 +37,7 @@ static constexpr usize s_LinearLookupRegionLimit = 128u;
         const Name& a = regions[left].name;
         const Name& b = regions[right].name;
         return a == b ? left < right : a < b;
-    }
-    );
+    });
     return index;
 }
 

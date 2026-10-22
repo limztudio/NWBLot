@@ -146,6 +146,16 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
   - `    a,`
   - `    b,`
   - `);`
+- For multiline calls whose final argument is a lambda or another braced block, keep the block closing brace and the call closing parentheses together on the same line:
+  - Correct:
+  - `Sort(files.begin(), files.end(), [](const Item& lhs, const Item& rhs)noexcept{`
+  - `    return lhs.key < rhs.key;`
+  - `});`
+  - Wrong:
+  - `Sort(files.begin(), files.end(), [](const Item& lhs, const Item& rhs)noexcept{`
+  - `    return lhs.key < rhs.key;`
+  - `}`
+  - `);`
 - For multiline guard clauses whose condition is a single negated function call, keep the control opener compact and put the single guard statement on the next line without braces:
   - Correct:
   - `if(!foobar(`

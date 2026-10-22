@@ -65,8 +65,7 @@ namespace GpuTaskGraphCompilerDetail{
             if(lhs.consumer.index != rhs.consumer.index)
                 return lhs.consumer.index < rhs.consumer.index;
             return lhs.producer.index > rhs.producer.index;
-        }
-        );
+        });
     }
 
     Vector<u32, Alloc::ScratchArena> packetDependencyConsumerMarkers(packetCount, scratchArena);

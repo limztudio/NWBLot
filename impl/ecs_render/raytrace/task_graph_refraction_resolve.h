@@ -6,9 +6,12 @@
 
 
 #include <impl/ecs_render/raytrace/raytracing_system.h>
+#include <impl/ecs_render/kernel/timing_names.h>
 
 #include <core/common/log.h>
+#include <core/graphics/runtime/runtime.h>
 #include <core/task/gpu/task_graph.h>
+#include <core/task/gpu/capture/command_ir.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -24,6 +27,26 @@ namespace RendererTaskGraphDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct RefractionClearTileArgumentsGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Transfer };
+    struct Payload{
+        Core::GraphicsRuntime& graphics;
+        Core::BufferHandle destination;
+        Core::GpuGraphResourceId resource;
+    };
+
+    static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+        if(context.commandIrCapture && !context.commandIrCapture->captureClearBuffer(context.task, context.packet, context.queue, payload.resource, 0u))
+            return false;
+        commandList.endRenderPass();
+        Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_RefractionClearTileArguments, payload.graphics.getDevice(), commandList);
+
+        commandList.clearBufferUInt(*payload.destination, 0u);
+        return true;
+    }
+};
 
 
 struct RefractionClassifyTilesGraphTask{

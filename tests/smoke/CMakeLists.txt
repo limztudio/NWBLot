@@ -123,6 +123,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         target_sources(nwb_avboit_depth_warp_probe_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/avboit_depth_warp_probe.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/avboit_integration_probe.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/refraction_tile_probe.cpp"
         )
         nwb_configure_runtime_smoke_target(nwb_avboit_depth_warp_probe_smoke "${_nwb_transparent_multi_runtime_root}")
         add_dependencies(nwb_avboit_depth_warp_probe_smoke nwb_transparent_multi_smoke_assets)
@@ -292,6 +293,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.h"
             "${CMAKE_CURRENT_LIST_DIR}/refraction_gallery_scene.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/refraction_gallery_scene.h"
+            "${CMAKE_CURRENT_LIST_DIR}/stress_frame_graph_snapshot.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/stress_frame_graph_snapshot.h"
             "${CMAKE_CURRENT_LIST_DIR}/framebuffer_capture.cpp"
         )
         target_compile_definitions(nwb_refraction_smoke PRIVATE NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
@@ -312,6 +315,9 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         add_test(NAME nwb_refraction_lifecycle_capture_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/refraction_lifecycle_smoke.py" "--executable" "$<TARGET_FILE:nwb_refraction_smoke>"
                 "--working-directory" "${_nwb_transparent_multi_runtime_root}" "--output-directory" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/refraction_lifecycle" ${_nwb_refraction_logserver_args})
         set_tests_properties(nwb_refraction_lifecycle_capture_smoke PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT 360)
+        add_test(NAME nwb_refraction_density_capture_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/refraction_density_capture_smoke.py" "--executable" "$<TARGET_FILE:nwb_refraction_smoke>"
+                "--working-directory" "${_nwb_transparent_multi_runtime_root}" "--output-directory" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/refraction_density" ${_nwb_refraction_logserver_args})
+        set_tests_properties(nwb_refraction_density_capture_smoke PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT 600)
         add_test(NAME nwb_refraction_lifecycle_gpudbg_capture_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/refraction_lifecycle_smoke.py" "--executable" "$<TARGET_FILE:nwb_refraction_smoke>"
                 "--working-directory" "${_nwb_transparent_multi_runtime_root}" "--output-directory" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/refraction_lifecycle_gpudbg" "--application-arg=--gpudbg" ${_nwb_refraction_logserver_args} CONFIGURATIONS dbg)
         set_tests_properties(nwb_refraction_lifecycle_gpudbg_capture_smoke PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT 360)

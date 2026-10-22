@@ -87,6 +87,8 @@ bool RendererRayTracingSystem::prepareRefractionResources(){
     }
     if(!m_graphics.gpuTiming().prepareScopeQueries(RendererGpuTimingScope::s_RefractionClassifyTiles.identity, device, 32u))
         return false;
+    if(!m_graphics.gpuTiming().prepareScopeQueries(RendererGpuTimingScope::s_RefractionClearTileArguments.identity, device, 32u))
+        return false;
 
     const bool csg = m_lightSpaceShadow.m_csg.snapshot.hasCsg;
     const auto ensurePipeline = [&](const bool hardware) -> bool{

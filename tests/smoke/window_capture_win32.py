@@ -85,6 +85,7 @@ class WindowsCapture:
     SWP_NOMOVE = 0x0002
     SWP_NOZORDER = 0x0004
     SWP_SHOWWINDOW = 0x0040
+    SWP_NOSENDCHANGING = 0x0400
     SWP_ASYNCWINDOWPOS = 0x4000
     VK_RETURN = 0x0D
     VIRTUAL_KEYS = { **{str(index): 0x30 + index for index in range(0, 10)}, **{chr(ord("A") + index): 0x41 + index for index in range(0, 26)}, **{f"F{index}": 0x6F + index for index in range(1, 13)}, }
@@ -231,7 +232,9 @@ class WindowsCapture:
             raise SmokeFailure(LIT_HWND_CLIENT_RECT_UNAVAILABLE.format(hwnd=hwnd))
         return rect.right - rect.left, rect.bottom - rect.top
 
-    def resize_client(self, hwnd, width, height):
+    def resize_client(self, hwnd, width, height, *, allow_outside_work_area=False):
+        if allow_outside_work_area and any(value < 1 or value > 16384 for value in (width, height)):
+            raise SmokeFailure("exact framebuffer extent must remain within 1..16384 pixels")
         client_width, client_height = self.client_size(hwnd)
         window_width, window_height = self._window_size(hwnd)
         # Preserve the current nonclient frame without guessing caption/border dimensions.
@@ -239,7 +242,11 @@ class WindowsCapture:
         outer_height = height + window_height - client_height
         if outer_width < width or outer_height < height:
             raise SmokeFailure("window/client rectangles disagree while calculating the requested resize")
-        if not self.user32.SetWindowPos(ctypes.c_void_p(hwnd), None, 0, 0, outer_width, outer_height, self.SWP_NOMOVE | self.SWP_NOZORDER | self.SWP_SHOWWINDOW | self.SWP_ASYNCWINDOWPOS,):
+        flags = self.SWP_NOMOVE | self.SWP_NOZORDER | self.SWP_SHOWWINDOW | self.SWP_ASYNCWINDOWPOS
+        if allow_outside_work_area:
+            # Exact framebuffer tests may exceed the desktop work area; keep WM_SIZE while bypassing default tracking bounds.
+            flags |= self.SWP_NOSENDCHANGING
+        if not self.user32.SetWindowPos(ctypes.c_void_p(hwnd), None, 0, 0, outer_width, outer_height, flags):
             raise SmokeFailure(f"SetWindowPos failed while resizing HWND 0x{hwnd:x}")
 
     def send_named_key(self, hwnd, key_name):

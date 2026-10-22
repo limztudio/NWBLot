@@ -347,7 +347,7 @@ bool Frame::mainLoop(){
 
     bool gracefulQuit = false;
     const bool loopResult = __hidden_win32_message_loop::RunWin32TimedFrameLoop(
-        [&]()noexcept{ return data<Common::WinFrame>().isActive(); },
+        [&](){ return data<Common::WinFrame>().isActive() || m_graphics.shouldRenderUnfocused(); },
         [&](){
             RECT rect = {};
             if(!GetClientRect(data<Common::WinFrame>().hwnd(), &rect)){

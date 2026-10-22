@@ -275,7 +275,7 @@ class LinuxX11Capture:
     def client_size(self, window):
         return self._validated_window_size(window)
 
-    def resize_client(self, window, width, height):
+    def resize_client(self, window, width, height, *, allow_outside_work_area=False):
         if not self.x11.XResizeWindow(self.display, window, width, height):
             raise SmokeFailure(f"XResizeWindow failed for window 0x{window:x}")
         self.x11.XFlush(self.display)

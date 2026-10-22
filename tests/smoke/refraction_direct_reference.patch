@@ -1,0 +1,107 @@
+--- a/impl/assets/graphics/refraction/resolve_common.slangi
++++ b/impl/assets/graphics/refraction/resolve_common.slangi
+@@ -45,16 +45,9 @@
+ #define g_NwbRefractionTileList g_NwbHeapStorageBuffers[g_NwbRefractionPush.tileListSlot]
+ #define g_NwbRefractionTileArguments g_NwbHeapStorageBuffers[g_NwbRefractionPush.tileArgumentsSlot]
+
+-// One indirect workgroup resolves one compacted 8x8 tile at full pixel resolution.
+-// A second dispatch dimension covers target generations with more than 65535 tiles.
++// Full-frame experimental reference; optical shading and current-depth compositing are unchanged.
+ bool nwbRefractionResolvePixel(const uint3 groupId, const uint3 groupThreadId, out uint2 pixel){
+-    pixel = uint2(0u);
+-    const uint queueIndex = groupId.y * NWB_REFRACTION_MAX_GROUP_COUNT_X + groupId.x;
+-    if(queueIndex >= g_NwbRefractionTileArguments.Load(NWB_REFRACTION_TILE_COUNTER_OFFSET))
+-        return false;
+-    const uint tilesX = (g_NwbRefractionPush.width + NWB_REFRACTION_GROUP_SIZE - 1u) / NWB_REFRACTION_GROUP_SIZE;
+-    const uint tile = g_NwbRefractionTileList.Load(queueIndex * 4u);
+-    pixel = uint2(tile % tilesX, tile / tilesX) * NWB_REFRACTION_GROUP_SIZE + groupThreadId.xy;
++    pixel = groupId.xy * NWB_REFRACTION_GROUP_SIZE + groupThreadId.xy;
+     return pixel.x < g_NwbRefractionPush.width && pixel.y < g_NwbRefractionPush.height;
+ }
+
+--- a/impl/ecs_render/raytrace/rt_refraction.cpp
++++ b/impl/ecs_render/raytrace/rt_refraction.cpp
+@@ -185,14 +185,14 @@
+     // The graph owns transitions and frozen declarations; this records without rebuilds.
+     const auto push = __hidden_rt_refraction::MakePushConstants(targets, resources);
+     Core::ComputeState state;
+-    state.setPipeline(resources.pipeline.get()).setIndirectParams(targets.avboit.refractionTileArguments.get());
++    state.setPipeline(resources.pipeline.get());
+     commandList.setComputeState(state);
+     m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *resources.pipeline.get(), resources.tlasHeapHandle);
+     commandList.setPushConstants(&push, sizeof(push));
+     {
+         Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_RefractionResolve, m_graphics.getDevice(), commandList);
+
+-        commandList.dispatchIndirect(0u);
++        commandList.dispatch((targets.width + NWB_REFRACTION_GROUP_SIZE - 1u) / NWB_REFRACTION_GROUP_SIZE, (targets.height + NWB_REFRACTION_GROUP_SIZE - 1u) / NWB_REFRACTION_GROUP_SIZE, 1u);
+     }
+     return true;
+ }
+--- a/impl/ecs_render/graph/frame_graph_reflection_resolve.cpp
++++ b/impl/ecs_render/graph/frame_graph_reflection_resolve.cpp
+@@ -127,40 +127,14 @@
+
+     Expected<Core::GpuTaskId> refractionResolveTask = MakeUnexpected(Failure{});
+     if(refractionActive && refractionResources.valid()){
+-        const auto tileListResult = m_graph.importBuffer(deferredTargets.avboit.refractionTileList, BufferResourceDesc(Name("render.refraction.tile_list"), "Refraction Tile List"));
+-        const auto tileArgumentsResult = m_graph.importBuffer(deferredTargets.avboit.refractionTileArguments, BufferResourceDesc(Name("render.refraction.tile_arguments"), "Refraction Tile Arguments"));
+-        if(!tileListResult || !tileArgumentsResult)
+-            return MakeUnexpected(Failure{});
+-        const Core::GpuGraphResourceId tileList = *tileListResult;
+-        const Core::GpuGraphResourceId tileArguments = *tileArgumentsResult;
+-        const Core::GpuTaskResourceUse tileClearUse = WriteUse(tileArguments, Core::ResourceStates::CopyDest);
+-        Core::GpuTaskDesc tileClearDesc;
+-        tileClearDesc.setIdentity(Name("render.avboit.refraction_tile_arguments_clear")).setMarkerLabel("Refraction Tile Arguments Clear").setDependencies(&inputs.avboitFinalTask, 1u).setResourceUses(&tileClearUse, 1u);
+-        const auto tileClearTask = m_graph.addTask<RefractionClearTileArgumentsGraphTask>(tileClearDesc, RefractionClearTileArgumentsGraphTask::Payload{ m_graphics, deferredTargets.avboit.refractionTileArguments, tileArguments });
+-        if(!tileClearTask)
+-            return MakeUnexpected(Failure{});
+-        const Core::GpuTaskResourceUse tileUses[] = {
+-            ReadUse(refractionDepth), ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
+-            WriteUse(tileList, Core::ResourceStates::UnorderedAccess), ReadWriteUse(tileArguments, Core::ResourceStates::UnorderedAccess),
+-        };
+-        Core::GpuTaskSchedulingHint refractionTileScheduling;
+-        refractionTileScheduling.mergeWithPrevious = true;
+-        refractionTileScheduling.allowMergeAcrossConsumerFrontier = true;
+-        Core::GpuTaskDesc tileDesc;
+-        tileDesc.setIdentity(Name("render.avboit.refraction_classify_tiles")).setMarkerLabel("Refraction Classify Tiles")
+-            .setScheduling(refractionTileScheduling)
+-            .setDependencies(&*tileClearTask, 1u).setResourceUses(tileUses, LengthOf(tileUses));
+-        const auto tileTask = m_graph.addTask<RefractionClassifyTilesGraphTask>(tileDesc, RefractionClassifyTilesGraphTask::Payload{ m_raytracingSystem, deferredTargets, refractionResources });
+-        if(!tileTask)
+-            return MakeUnexpected(Failure{});
+         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> refractionUses{scratchArena};
+         const Core::GpuGraphResourceId refractionInputs[] = {
+             refractionDepth, refractionNormalIor, refractionTintCoverage, refractionInstance,
+             opaqueColor, reflectionGraph.opaqueRadiance, worldPosition, depth, avboitAccumColor, avboitAccumExtinction,
+             avboitForegroundColor, avboitForegroundExtinction
+         };
+-        // Mesh view, bindless slots, scene shading, lights, the resolve output, and tile scheduling buffers.
+-        constexpr usize s_RefractionFixedUseCapacity = 7u;
++        // Mesh view, bindless slots, scene shading, lights, and the resolve output.
++        constexpr usize s_RefractionFixedUseCapacity = 5u;
+         refractionUses.reserve(LengthOf(refractionInputs) + s_RefractionFixedUseCapacity + LengthOf(sceneReads.uses) + sceneReads.csgUses.size());
+         for(const auto input : refractionInputs)
+             refractionUses.push_back(ReadUse(input));
+@@ -169,8 +143,6 @@
+         refractionUses.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
+         refractionUses.push_back(ReadUse(lights));
+         refractionUses.push_back(WriteUse(refractionResolve, Core::ResourceStates::UnorderedAccess));
+-        refractionUses.push_back(ReadUse(tileList));
+-        refractionUses.push_back(ReadUse(tileArguments, Core::ResourceStates::ShaderResource | Core::ResourceStates::IndirectArgument));
+         Core::GpuTaskResourceSetUse refractionSets[3] = {};
+         usize refractionSetCount = 0;
+         if(refractionResources.usesHardwareTrace){
+@@ -184,11 +156,10 @@
+                     refractionSets[refractionSetCount++] = Core::GpuTaskResourceSetUse{ .resourceSet = set, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
+             }
+         }
+-        const Core::GpuTaskId refractionDependencies[] = { reflectionGraph.completion, *tileTask, inputs.surfelGiTask };
++        const Core::GpuTaskId refractionDependencies[] = { reflectionGraph.completion, inputs.avboitFinalTask, inputs.surfelGiTask };
+         Core::GpuTaskDesc refractionDesc;
+         refractionDesc.setIdentity(Name("render.avboit.refraction_resolve"))
+             .setMarkerLabel("AVBOIT Refraction Resolve")
+-            .setScheduling(refractionTileScheduling)
+             .setDependencies(refractionDependencies, LengthOf(refractionDependencies))
+             .setResourceUses(refractionUses.data(), refractionUses.size())
+             .setResourceSetUses(refractionSets, refractionSetCount)

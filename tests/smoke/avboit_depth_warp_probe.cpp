@@ -3,6 +3,7 @@
 
 
 #include "avboit_integration_probe.h"
+#include "refraction_tile_probe.h"
 
 #include <loader/project_entry.h>
 
@@ -449,6 +450,8 @@ public:
                 return false;
         }
         if(!RunAvboitIntegrationProbe(m_context))
+            return false;
+        if(!RunRefractionTileProbe(m_context))
             return false;
         m_completed = true;
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("AvboitDepthWarpProbe: passed {} cases with full LUT/control comparison and sentinel tails"), s_TotalCaseCount);

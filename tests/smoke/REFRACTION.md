@@ -82,6 +82,208 @@ with matched binaries, packed assets, extent, trace route, and acquisition
 conditions. The normal fixture uses 960x720; `NWB_REFRACTION_SMOKE_EXTENT=npot`
 selects 967x727 for either capture or timing.
 
+The density fixture is opt-in through `NWB_REFRACTION_SMOKE_DENSITY`, which accepts
+exactly `0`, `1`, `10`, `50`, or `100`. It requires an explicit
+`NWB_REFRACTION_SMOKE_EXTENT=960x720`, `1600x900`, or `1920x1080`, and rejects density combined
+with a gallery case or lifecycle capture. Empty or unknown density/extent values
+are errors. Refraction stays enabled; `NWB_REFRACTION_SMOKE_ENABLED` must be absent
+or exactly `1`. Hardware preference must be absent, `0`, or `1`, with the existing
+`NWB_REFRACTION_SMOKE_HARDWARE=0` selecting screen-space tracing. The ordinary
+sphere and lifecycle fixtures retain their existing defaults when density is not
+selected; `native` and `npot` remain extent options for those fixtures.
+
+Each density uses one closed, hard-edge clear glass slab with IOR 1.5, zero AVBOIT
+coverage, and thickness 0.2. The eye is at `(0, 1.4, -6)`, the vertical FOV is
+60 degrees, and the aspect ratio is set explicitly from the requested extent.
+The visible slab starts at Z=0. Its centered front-face dimensions derive from
+the perspective projection and even integer pixel counts nearest
+`width * sqrt(percent / 100)` and `height * sqrt(percent / 100)`. This puts the
+projected rectangle on integer pixel boundaries. The 100% slab extends one pixel
+past every framebuffer edge, ensuring full coverage. The 0% slab instead starts
+at Z=4 behind the fully opaque Z=2.8 backdrop, while remaining in the frustum.
+It preserves one submitted refractor and a live refraction path with an empty
+capture, rather than measuring the renderer's no-transparent-object bypass.
+
+The camera, directional light, unlit opaque backdrop, and 24 light stripe panels
+are the same for each paired comparison. An opaque base closes possible stripe
+seams and guarantees full occlusion in the empty case. There are no additional
+transparent panels in this fixture, reflection stays disabled, and simulation
+always advances by 1/60 second. The finite closed slab has a valid exit and a
+fixed 12-triangle mesh, keeping dense hardware traversal bounded.
+
+`RefractionDensity:` diagnostics report requested extent/percentage, the admitted
+pixel rectangle, its pixel count, the corresponding 8x8 tile count, one glass
+instance, and `capture_mode visible` or `occluded`. These counts are analytical
+admission from the authored projected rectangle, not GPU counter readbacks.
+The tracing diagnostic distinguishes requested route from RayQuery capability;
+the normal resolve diagnostic remains the evidence for actual hardware or
+screen-space dispatch. Run capture and GPU validation separately from timing and
+verify the framebuffer extent before accepting a density result.
+
+| Requested density | 960x720 admitted pixels / tiles | 1600x900 admitted pixels / tiles | 1920x1080 admitted pixels / tiles |
+| --- | ---: | ---: | ---: |
+| 0% | 0 / 0 | 0 / 0 | 0 / 0 |
+| 1% | 6,912 / 120 | 14,400 / 240 | 20,736 / 360 |
+| 10% | 69,312 / 1,140 | 143,704 / 2,304 | 207,936 / 3,268 |
+| 50% | 345,780 / 5,504 | 719,952 / 11,360 | 1,037,512 / 16,490 |
+| 100% | 691,200 / 10,800 | 1,440,000 / 22,600 | 2,073,600 / 32,400 |
+
+`refraction_density_capture_smoke.py` independently qualifies the rendered density
+before timing. Supply the normal executable, working-directory, output-directory,
+and optional logserver paths. Its defaults capture all 20 density/extent/route
+combinations at 960x720 and 1600x900; `--densities`, `--extents`, and `--routes` accept comma-separated
+subsets. Each extent/route always captures its 0% occluded reference even when
+zero is absent from the requested subset. `--application-arg=--gpudbg` enables
+validation for every captured process.
+
+1920x1080 remains available through explicit `--extents=1920x1080` on hosts with
+adequate resource-allocation limits. The renderer allocates its full 32-layer CSG
+target independently of glass coverage; that target can exceed a device's single
+allocation limit at this extent. Exact window sizing does not establish resource
+admission. A runtime allocation warning rejects the capture, and an extent with
+such a warning remains unqualified rather than falling back to a smaller image.
+
+Capture protocol 2 sets the observer's required width/height to the requested
+extent and keeps the process alive after readback. The harness inspects the
+actual native client size and uses the test backend's `resize_client` operation
+when startup clamps the window to the desktop work area. The density harness
+opts into sizing this test window beyond the work area; it does not change the
+display mode. It requires both the exact client size and the matching runtime
+framebuffer-resize diagnostic before accepting readback, then closes the
+application through its normal window shutdown. The final log and image must
+confirm the target extent. An initial clamped size is retained as evidence and
+accepted only after that confirmed transition; it never substitutes for the
+requested image size. Metrics record the protocol, initial and confirmed client
+extents, runtime framebuffer extents, and whether a resize was requested.
+
+The zero reference must match the default unlit neutral stripe levels and remain
+constant vertically. Positive captures report actual changed pixel bounds/counts
+against independent projected-rectangle math, rather than using the fixture's
+logged count as image evidence. Pixels outside a one-pixel rectangle boundary
+guard must remain exactly unchanged. At least 99% of the inset rectangle must
+change, and every sufficiently populated 8x8 block must have at least 90% changed
+pixels, rejecting a missing local tile even when global coverage remains high.
+The interior must retain both nonblack neutral stripe polarities and match the
+IOR 1.5 Schlick factors through default Reinhard/sRGB presentation within two
+encoded levels. Hardware uses the closed slab's entry/exit cosines; screen-space
+uses its existing single-interface sheet factors. Per-block physical checks also
+reject small black or tinted holes.
+
+Only the flat front/back Fresnel comparison excludes a separate, analytically
+derived inner edge band: near a finite slab's silhouette, a ray may exit its side
+and undergo total internal reflection. This band derives from thickness, FOV,
+view angle, and pixel extent and is recorded in the metrics. All pixels in that
+band still participate in the changed-mask and local coverage checks. This is
+distinct from the one-pixel outside-mask allowance. Captures, runtime logs, and
+`density_capture_metrics.json` retain the measured bounds, coverage, and physical
+acceptance counts. CPU oracle tests reject absent or partial glass, one missing
+tile, output outside the mask, a wrong-pitch footprint, black/tinted/excessively
+attenuated output, and a corrupted zero reference.
+
+For a separate frame-graph diagnostic, set
+`NWB_REFRACTION_FRAME_GRAPH_SNAPSHOT_PATH` to a nonempty output JSON path whose
+parent directory already exists. This mode rejects simultaneous timing,
+lifecycle, framebuffer readback, or frame freeze. It waits until the runtime has
+held the requested extent for at least 360 completed graphics frames, resetting
+that interval if the extent changes. On the next update it snapshots the public
+registry's preceding accepted frame before submitting more scene work, writes
+the JSON and companion `.nwbs` capture, and requests normal application shutdown
+after the single capture. The `RefractionFrameGraphSnapshot:` marker records the
+target extent and completed-frame interval; `StressFrameGraphSnapshot:` records
+the captured source-frame identity and graph counts. Acquire this diagnostic
+separately from image qualification and measured timing.
+
+Use `refraction_density_benchmark.py` for matched continuous timing after the
+independent image and GPU-validation gates pass. Prepare two frozen arms from
+the same fixture and toolchain before launching either arm:
+
+1. Build and cook the tiled candidate normally, then copy its executable,
+   sibling loader dependencies and crash helper, logserver, name-symbol file,
+   and complete runtime `res` tree into a separate candidate directory.
+2. Check and apply `tests/smoke/refraction_direct_reference.patch` to the same
+   renderer sources, rebuild and recook with the same configuration, and copy
+   those outputs into a distinct baseline directory. The patch removes tile
+   clear/classification graph tasks and replaces indirect mapping/dispatch with
+   the full framebuffer grid. Optical shaders, AVBOIT, current-depth compositing,
+   the density fixture, and target allocation remain common to both arms.
+3. Save each arm's compiled source bytes and a manifest with a nonempty
+   `revision` string and `files` object mapping relative paths to SHA256 hashes.
+   Include the exact renderer patch and the compiled fixture files
+   `tests/smoke/refraction_project.cpp` and
+   `tests/smoke/avboit_timing_render_pass.cpp`. Restore the tiled sources with
+   `git apply -R tests/smoke/refraction_direct_reference.patch` after freezing the
+   reference. Keep compilation and cooking separate from measured acquisition.
+
+Use `git apply --check tests/smoke/refraction_direct_reference.patch` before
+applying the reference; a context failure requires updating and reviewing that
+experimental patch against the current renderer. Git attributes keep the reference
+patch in LF format for application on Windows. The manifest records the compiled
+source state, including the reference differences. Source manifests
+are checked against saved file bytes. The runner also requires identical
+compiled density fixture hashes, distinct executable/runtime directories, and
+stable executable/dependency, packed-volume, logserver, and optional name-symbol
+identities before and after each trial. Mutable pipeline caches are recorded
+separately. A frozen source directory should contain the ordinary repository
+paths below its `source/` directory so fixture identity admission can resolve
+those paths unambiguously.
+
+For a scheduling-only comparison, retain a frozen unmerged tiled arm as the
+baseline, freeze a separately built tiled candidate with the proposed scheduling
+change, and pass `--baseline-scheduling=tiled`. Do not apply the full-frame patch
+to that baseline. Both arms must publish tile clear and classification, and both
+costs remain in the aggregate. The default `--baseline-scheduling=full-frame`
+requires the full-frame reference to omit those scopes. Choosing the wrong mode,
+missing a required tiled scope, or mixing declared strategies rejects the
+comparison. The plan, launch, trial, and comparison metadata record the strategy
+and reference contract alongside frozen identities.
+
+For example, with each frozen arm containing `bin/`, `runtime/`, and
+`source_manifest.json`, the following PowerShell command acquires the complete
+default twenty-cell matrix in two exploratory balanced blocks:
+
+```powershell
+python tests/smoke/refraction_density_benchmark.py `
+  --baseline-executable frozen/baseline/bin/refraction_smoke.exe `
+  --baseline-runtime frozen/baseline/runtime `
+  --baseline-logserver frozen/baseline/bin/logserver.exe `
+  --baseline-source-manifest frozen/baseline/source_manifest.json `
+  --candidate-executable frozen/candidate/bin/refraction_smoke.exe `
+  --candidate-runtime frozen/candidate/runtime `
+  --candidate-logserver frozen/candidate/bin/logserver.exe `
+  --candidate-source-manifest frozen/candidate/source_manifest.json `
+  --output-directory density-timing `
+  --blocks 2
+```
+
+Add `--baseline-namesym` and `--candidate-namesym` with the actual generated
+symbol paths when the build's timing output requires symbol resolution. Add `--plan-only` to
+validate frozen inputs and inspect the cell/order plan without launching the
+applications. Repeated `--extent`, `--coverage`, and `--trace-route` arguments
+select subsets. Two blocks alternate reference/candidate order and are
+descriptive; the default is four blocks, and an even count of at least six
+enables paired bootstrap intervals. An interval for one selected metric does
+not establish simultaneous confidence across the whole density matrix.
+
+Each trial confirms the native client and final deferred-target extent, discards
+startup and unsealed GPU reports, then requires at least two target-only warmup
+intervals and 100 completed GPU frames. It retains at least twelve positive,
+sealed report intervals. It uses fixed simulation delta and continuous
+render-unfocused behavior, with framebuffer readback, frame-graph snapshots,
+and GPU validation absent during measurement. Runtime warnings, an incorrect
+actual trace route, or missing scope coverage reject acquisition.
+
+Compare argument clear + classifier + resolve + compositor GPU duration per
+completed GPU frame. A full-frame reference omits tile-only clear/classifier
+scopes; a tiled reference and every candidate must publish both, including at 0% coverage. Keep
+individual scopes and whole-frame timing alongside the aggregate; resolve alone
+does not account for scheduling cost. Report opaque, shadow, lighting, and
+presentation controls to expose drift. A callback stall over the declared
+threshold rejects wall-time eligibility while retaining the raw evidence;
+callback timing includes pacing and does not establish CPU cost or presentation
+cadence. GPU acquisition success, clean wall acquisition, and a performance
+conclusion are separate decisions. Retain `plan.json`, all per-trial logs and GPU
+reports, summaries, and failures when reporting the result.
+
 The complex-case gallery is an additional visual inspection fixture. It covers
 `single`, `separate`, `stacked`, `intersecting`, `nested`, `coincident`,
 `coincident_tinted`, `torus`, `same_mesh`, and `prism`, plus twelve exact-duplicate

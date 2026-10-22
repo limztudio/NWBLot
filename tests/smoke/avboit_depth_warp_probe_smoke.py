@@ -34,6 +34,7 @@ MANIFEST = re.compile(r"AvboitDepthWarpProbe: manifest boundary=(\d+) exhaustive
 COMPLETION = re.compile(r"AvboitDepthWarpProbe: passed (\d+) cases with full LUT/control comparison and sentinel tails")
 SHUTDOWN = "AvboitDepthWarpProbe: shutdown completed=1"
 INTEGRATION_COMPLETION = "AvboitIntegrationProbe: passed 5 phases with empty, late, partial, saturation, wrapped overflow and active-to-empty clear checks"
+REFRACTION_COMPLETION = "RefractionTileProbe: passed 5 phases at 2049x2049 with 66049 tiles, queue uniqueness, 65535/65536 boundary, indirect Y tail, pixel visits and guards"
 
 
 def validate_runtime_log(text):
@@ -49,11 +50,13 @@ def validate_runtime_log(text):
         raise SmokeFailure("depth-warp probe requires exactly one successful shutdown record")
     if text.count(INTEGRATION_COMPLETION) != 1:
         raise SmokeFailure("AVBOIT integration probe requires its complete five-phase volume comparison")
+    if text.count(REFRACTION_COMPLETION) != 1:
+        raise SmokeFailure("refraction tile probe requires all five queue and pixel-visit comparisons")
     startup = text.index(LIT_LOADER_PROJECT_STARTUP_COMPLETE)
     shutdown = text.index(SHUTDOWN)
     if not manifests[0].start() < startup < completions[0].start() < shutdown:
         raise SmokeFailure("depth-warp probe manifest, startup, completion and shutdown order is invalid")
-    return { "boundary_cases": EXPECTED_COUNTS[0], "exhaustive_cases": EXPECTED_COUNTS[1], "randomized_cases": EXPECTED_COUNTS[2], LIT_PASSED_CASES: EXPECTED_COUNTS[3], "integration_phases": 5, "gpu_validation_enabled": True, "full_output_and_sentinel_validation": True, }
+    return { "boundary_cases": EXPECTED_COUNTS[0], "exhaustive_cases": EXPECTED_COUNTS[1], "randomized_cases": EXPECTED_COUNTS[2], LIT_PASSED_CASES: EXPECTED_COUNTS[3], "integration_phases": 5, "refraction_tile_phases": 5, "gpu_validation_enabled": True, "full_output_and_sentinel_validation": True, }
 
 
 def write_json(path, value):

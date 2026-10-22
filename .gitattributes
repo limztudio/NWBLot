@@ -18,6 +18,7 @@
 CMakeLists.txt text eol=crlf whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof
 *.vcxitems text eol=crlf whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof
 *.vcxproj text eol=crlf whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof
+tests/smoke/refraction_direct_reference.patch text eol=lf
 
 3rd_parties/** -text whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof
 3rd_parties/**/*.dll filter=lfs diff=lfs merge=lfs -text

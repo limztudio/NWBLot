@@ -121,6 +121,8 @@ def capture_variant(args, name, enabled, hardware, expected_dispatch):
     env.pop("NWB_REFRACTION_SMOKE_LIFECYCLE", None)
     env.pop("NWB_REFRACTION_SMOKE_EXTENT", None)
     env.pop("NWB_REFRACTION_SMOKE_TIMING", None)
+    env.pop("NWB_REFRACTION_SMOKE_DENSITY", None)
+    env.pop("NWB_REFRACTION_FRAME_GRAPH_SNAPSHOT_PATH", None)
     env["NWB_REFRACTION_SMOKE_ENABLED"] = LIT_ENABLED_FLAG if enabled else LIT_DISABLED_FLAG
     env["NWB_REFRACTION_SMOKE_HARDWARE"] = LIT_ENABLED_FLAG if hardware else LIT_DISABLED_FLAG
     env["NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS"] = "0.016666667"

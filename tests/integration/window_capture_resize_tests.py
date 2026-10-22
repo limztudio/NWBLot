@@ -205,6 +205,24 @@ class ResizeCaptureBackendTests(unittest.TestCase):
         with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "XResizeWindow failed"):
             backend.resize_client(42, 1001, 701)
 
+    def test_exact_framebuffer_resize_bypasses_tracking_bounds_only_with_explicit_opt_in(self):
+        backend = object.__new__(window_capture_smoke.WindowsCapture)
+        backend.user32 = mock.Mock()
+        backend.user32.SetWindowPos.return_value = 1
+        backend.client_size = mock.Mock(return_value=(1280, 900))
+        backend._window_size = mock.Mock(return_value=(1296, 939))
+        backend.resize_client(42, 1920, 1080)
+        self.assertFalse(backend.user32.SetWindowPos.call_args.args[6] & backend.SWP_NOSENDCHANGING)
+        backend.resize_client(42, 1920, 1080, allow_outside_work_area=True)
+        received = backend.user32.SetWindowPos.call_args.args
+        self.assertEqual(received[4:6], (1936, 1119))
+        self.assertTrue(received[6] & backend.SWP_NOSENDCHANGING)
+        backend.user32.SetWindowPos.reset_mock()
+        for width, height in ((0, 1080), (1920, 16385)):
+            with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "1..16384"):
+                backend.resize_client(42, width, height, allow_outside_work_area=True)
+        backend.user32.SetWindowPos.assert_not_called()
+
 
 if __name__ == LIT_MAIN:
     unittest.main()

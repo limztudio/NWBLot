@@ -297,7 +297,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
             VectorDoubleGetY(frontierCapacityMsAndPercent)
         );
 
-        // Borrows immutable plan topology + packet slots under the renderer serialization contract; no overlap with recording/reset/recompile, and never the mutable live registry (recompile can move the owning plan).
+        // Borrows immutable plan topology + packet slots under the renderer serialization contract; no overlap with recording/reset/recompile, and never the live registry (recompile can move the owning plan).
         for(usize queueIndex = 0u; queueIndex < physicalQueueRuntimeStatistics.size(); ++queueIndex){
             const Core::GpuPhysicalQueueInfo& queueInfo = runtimeQueueTopology.queues[queueIndex];
             const Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics& queueRuntimeStatistics = physicalQueueRuntimeStatistics[queueIndex];
@@ -395,7 +395,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
                 __hidden_frame_graph_export::AppendCommandArenaWorkerStatistics(m_frameGraphRendererLabel, directCommandArenaStatistics);
 
             // Recorded packets retain the exact worker domain/index used for native allocation.
-            // Walk the immutable compiled order and reject any identity already seen on this queue; telemetry packet counts are small, so this allocation-free quadratic pass is preferable to persistent mutable enumeration storage.
+            // Walk the immutable compiled order and reject any identity already seen on this queue; packet counts are small, so this allocation-free quadratic pass is preferable to persistent enumeration storage.
             for(usize packetIndex = 0u; packetIndex < deferredCompiledPlan.packetCount(); ++packetIndex){
                 const Core::GpuSubmissionPacketId packet = deferredCompiledPlan.packetIdAt(packetIndex);
                 const Core::GpuCompiledPacketView packetView = deferredCompiledPlan.packet(packet);

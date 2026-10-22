@@ -152,7 +152,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     // A frame with no clear/copy work still owns its tick through the semantic task's accepted hook without gaining empty graph nodes.
     const bool graphOwnedAdaptiveCandidate = !splitSoftTransparentFold && rayTracingPlan.adaptivePlan.enabled;
     GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan = graphOwnedAdaptiveCandidate ? rayTracingPlan.adaptivePlan : GraphOwnedAdaptiveShadowPlan{};
-    // The merge pipeline is ready before its retained history has an accepted frame. Bootstrap still publishes the selected output pair, but only a usable history may be sampled with previous geometry.
+    // The merge pipeline is ready before its retained history has an accepted frame. Bootstrap still publishes the selected output pair, but only a usable history may sample with previous geometry.
     const bool softShadowHistoryReadable = rayTracingPlan.softShadowHistoryReadable;
     // The opaque temporal merge runs before the transparent tail and shares its history selector. Freeze its exact input/output pair while the compiled packet owns the prepared temporal route.
     const bool graphOwnsOpaqueTemporalMergeEntryStates = splitSoftTransparentFold && rayTracingPlan.opaqueTemporalMergeReady;
@@ -257,7 +257,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     };
     bool optionalResourcesImported =
         (
-            // The retained monolith selects its adaptive fallback only after runtime slot checks. Declare coarse as an output across that whole adaptive route, while prepared split callbacks omit it completely.
+            // The retained monolith selects its adaptive fallback only after runtime slot checks. Declare coarse as an output across that whole route, while prepared split callbacks omit it completely.
             splitSoftTransparentFold
             || appendOptionalWriteTexture(deferredTargets.shadowCoarseTransmittance, Name("render.shadow_visibility.coarse_transmittance"), "Shadow Coarse Transmittance")
         )
@@ -356,7 +356,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     const Core::GpuTaskResourceSetUse traceGeometrySetUse = traceResourceSets.useCount != 0u ? traceResourceSets.uses[0u] : Core::GpuTaskResourceSetUse{};
 
     if(splitSoftTransparentFold){
-        // The prepared soft path keeps the opaque first wavelet, optional resolve tail, transparent trace, and temporal/RGB resolve as adjacent callbacks. Re-importing retains shared graph identities while making each graph-owned handoff explicit.
+        // The prepared soft path keeps the opaque first wavelet, optional resolve tail, transparent trace, and temporal/RGB resolve as adjacent callbacks. Re-importing retains shared identities while making each handoff explicit.
         const SoftShadowSplitRoute splitRoute{
             .hardwareShadowSupported = hardwareShadowSupported,
             .hardwareCsgShadow = hardwareCsgShadow,

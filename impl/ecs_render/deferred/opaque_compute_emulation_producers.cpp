@@ -53,7 +53,7 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareRegular(
     opaqueComputeEmulationScheduling.forceSubmissionBoundary = false;
     opaqueComputeEmulationScheduling.allowPacketMerge = true;
     opaqueComputeEmulationScheduling.mergeWithPrevious = true;
-    // This explicit immediate successor must stay with the preceding Graphics prefix work: CSG clear timing and the G-buffer range both require one accepting command list under FrontierSafe packetization.
+    // This explicit immediate successor must stay with the preceding Graphics prefix work: CSG clear timing and the G-buffer range require one command list under FrontierSafe packetization.
     opaqueComputeEmulationScheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc opaqueComputeEmulationDesc;
     opaqueComputeEmulationDesc
@@ -84,7 +84,7 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareCsgRecei
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
     payload.csgResources = csgResources;
-    // The receiver producer is an early part of G-buffer's one semantic Graphics submission; its dispatch timing shares the existing ticket while the receiver raster keeps its own scope in G-buffer.
+    // The receiver producer is an early part of G-buffer's one Graphics submission; its dispatch timing shares the existing ticket while the receiver raster keeps its own scope in G-buffer.
     payload.instanceCount = inputs.instanceCount;
     payload.materialTypedByteCount = inputs.materialTypedByteCount;
     payload.materialDrawBuffersUploaded = inputs.materialDrawBuffersUploaded;
@@ -97,7 +97,7 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareCsgRecei
     resourceUses.push_back(ReadUse(inputs.resources.meshView, Core::ResourceStates::ConstantBuffer));
     resourceUses.push_back(ReadBufferUse(inputs.resources.materialInstances, inputs.materialInstanceRange));
     resourceUses.push_back(ReadBufferUse(inputs.resources.materialTyped, inputs.materialTypedRange));
-    // The compute pipeline shares CSG's descriptor-visible clip context. It does not write receiver-event images; those stay G-buffer raster outputs absent from this producer's uses.
+    // The compute pipeline shares CSG's clip context. It does not write receiver-event images; those stay G-buffer raster outputs absent from this producer's uses.
     resourceUses.push_back(ReadBufferUse(inputs.resources.csgReceiverRanges, inputs.csgReceiverRange));
     resourceUses.push_back(ReadBufferUse(inputs.resources.csgCutters, inputs.csgCutterRange));
     resourceUses.push_back(ReadUse(inputs.resources.csgClipContextSlots, Core::ResourceStates::ConstantBuffer));

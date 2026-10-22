@@ -159,7 +159,7 @@ inline constexpr bool operator!=(const GpuGraphResourceVersionId& lhs, const Gpu
 }
 
 // A resource set is a graph-owned immutable collection of imported resources.
-// Task declarations may apply one uniform access contract to every member; the graph freezes that into ordinary per-resource uses before analysis, so sets never become an opaque runtime sync domain.
+// Task declarations may apply one uniform access contract to every member; the graph freezes that into ordinary per-resource uses before analysis, so sets never become an opaque sync domain.
 struct GpuGraphResourceSetId{
     u64 generation = 0u;
     u32 index = Limit<u32>::s_Max;
@@ -322,7 +322,7 @@ struct GpuTaskExternalDependencyEdge{
 
 
 // A compiled barrier is a graph-level transition or ownership request.
-// It deliberately names only engine resources, resource states, and resolved physical queues; the packet recorder lowers it through CommandList so the task graph stays independent of Vulkan barriers.
+// It deliberately names only engine resources, resource states, and resolved physical queues; the packet recorder lowers it through CommandList so the task graph stays free of Vulkan barriers.
 namespace GpuCompiledBarrierType{
     enum Enum : u8{
         TextureTransition,
@@ -359,7 +359,7 @@ struct GpuCompiledBarrier{
     GpuCompiledBarrierType::Enum type = GpuCompiledBarrierType::TextureTransition;
     // A first-use marker.
     // A known graph declaration initializes an otherwise unknown native tracker from `before`.
-    // An Unknown Read/ReadWrite first use instead requires an explicit native source at recording time; an imported packet state handoff stays authoritative when CommandList::open already supplied one.
+    // An Unknown Read/ReadWrite first use instead requires an explicit native source at recording time; an imported packet state handoff stays authoritative when CommandList::open supplied one.
     bool isGraphInitialState = false;
     // Only the first use of an imported external ownership handoff consumes the descriptor-owned state source.
     // Later graph-internal ownership acquires use their producer packet snapshot instead.

@@ -41,7 +41,7 @@ namespace ECSRenderDetail{
 struct GbufferGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute };
 
-    // The runtime, material/CSG systems, frame targets, timing-ticket slot, and setup flags are required: G-buffer always records the opaque pass against this frame's bindings.
+    // The runtime, material/CSG systems, frame targets, timing-ticket slot, and setup flags are required: G-buffer records the opaque pass against this frame's bindings.
     struct Payload{
         Core::GraphicsRuntime& graphics;
         RendererMaterialSystem& materialSystem;

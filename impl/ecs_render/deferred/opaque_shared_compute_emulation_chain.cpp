@@ -77,7 +77,7 @@ Expected<OpaqueSharedComputeEmulationChainResult> OpaqueSharedComputeEmulationCh
     scheduling.forceSubmissionBoundary = false;
     scheduling.allowPacketMerge = true;
     scheduling.mergeWithPrevious = true;
-    // Each phase has an explicit immediate predecessor. Let that serial chain stay in the existing primary-Graphics packet when FrontierSafe sees the normal downstream Compute consumer frontier.
+    // Each phase has an explicit immediate predecessor. Let that serial chain stay in the existing primary-Graphics packet when FrontierSafe sees the normal downstream Compute consumer.
     scheduling.allowMergeAcrossConsumerFrontier = true;
 
     const Name phaseIdentities[] = {

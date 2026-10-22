@@ -107,7 +107,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
     }
 
     // The indirection payload is itself heap-addressable.
-    // Every consumer receives this one slot in push constants instead of binding a local selector, keeping the descriptor heap as the only binding surface for ordinary passes.
+    // Every consumer receives this one slot in push constants instead of binding a local selector, keeping the descriptor heap as the binding surface for passes.
     const Expected<Core::GpuDescriptorHandle> slotsBufferDescriptor = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
     bindless.slotsBufferDescriptor = slotsBufferDescriptor ? *slotsBufferDescriptor : Core::GpuDescriptorHandle::Invalid();
     if(!slotsBufferDescriptor || !heap.write(bindless.slotsBufferDescriptor, Core::DescriptorWriteItem::ConstantBuffer(0u, bindless.slotsBuffer.get()))){

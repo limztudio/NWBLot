@@ -163,7 +163,6 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(DeferredFrameT
 
         // Enable surfel GI on the HW path: the HW RayQuery trace twin reuses the TLAS + the HW-resident per-mesh geometry + InstanceID-material record the shadow/caustic path already built -- this is the ONLY place surfels run on real RT hardware.
         // Gated on the HW shadow backend being ready + a non-empty TLAS.
-        // m_tlasInstanceCount is the HW instance count.
         // Non-fatal: a failure leaves GI off this frame (the lighting uses hemiAmbient).
         if(backendReady && m_rayTracingState.m_tlasInstanceCount > 0u && m_rayTracingState.m_shadowMeshCount > 0u){
             m_rayTracingState.m_surfelEnabled = true;

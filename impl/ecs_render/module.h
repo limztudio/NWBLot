@@ -11,6 +11,7 @@
 #include <impl/ecs_render/material/material_instance.h>
 #include <impl/ecs_render/reflection/settings.h>
 #include <impl/ecs_render/reflection/statistics.h>
+#include <impl/ecs_render/refraction/statistics.h>
 #include <impl/ecs_render/deferred/presentation_settings.h>
 #include <impl/ecs_render/shadow/light_space_settings.h>
 #include <impl/ecs_render/shadow/quality_settings.h>
@@ -80,6 +81,8 @@ public:
 
     void setRefractionEnabled(bool enabled)noexcept;
     void setRefractionHardwareTracingEnabled(bool enabled)noexcept;
+    void setRefractionDiagnosticsEnabled(bool enabled)noexcept;
+    [[nodiscard]] Expected<RefractionStatistics> tryGetLatestRefractionStatistics()const noexcept;
     [[nodiscard]] bool setCausticQualitySettings(const CausticQualitySettings& settings)noexcept;
     [[nodiscard]] bool setSurfelGiQualitySettings(const SurfelGiQualitySettings& settings)noexcept;
     [[nodiscard]] bool setSoftwareShadowSettings(const SoftwareShadowSettings& settings)noexcept;

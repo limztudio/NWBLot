@@ -49,6 +49,59 @@ struct RefractionClearTileArgumentsGraphTask{
 };
 
 
+// Diagnostic work stays on the resolve's primary Graphics queue. Shared counter writes and
+// the bounded copy serialize there; accepted readbacks never introduce a renderer wait.
+struct RefractionClearStatisticsGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Transfer, true };
+    struct Payload{
+        Core::BufferHandle destination;
+        Core::GpuGraphResourceId resource;
+    };
+
+    static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+        if(!payload.destination)
+            return false;
+        if(context.commandIrCapture && !context.commandIrCapture->captureClearBuffer(context.task, context.packet, context.queue, payload.resource, 0u))
+            return false;
+        commandList.endRenderPass();
+        commandList.clearBufferUInt(*payload.destination, 0u);
+        return !commandList.commandRecordingFailed();
+    }
+};
+
+struct RefractionStatisticsReadbackGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Transfer, true };
+    struct Payload{
+        Core::BufferHandle source;
+        Core::BufferHandle destination;
+        Core::GpuGraphResourceId sourceResource;
+        Core::GpuGraphResourceId destinationResource;
+        RefractionStatisticsReservation reservation;
+        const bool* hardwarePreparationReady = nullptr;
+        bool hardwareEnabled = false;
+    };
+
+    static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+        if(!payload.source || !payload.destination || !payload.reservation.valid())
+            return false;
+        if(context.commandIrCapture && !context.commandIrCapture->captureCopyBuffer(context.task, context.packet, context.queue, payload.sourceResource, 0u, payload.destinationResource, 0u, NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE))
+            return false;
+        commandList.endRenderPass();
+        commandList.copyBuffer(*payload.destination, 0u, *payload.source, 0u, NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE);
+        return !commandList.commandRecordingFailed();
+    }
+
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
+        const bool hardwareReady = payload.hardwareEnabled && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
+        payload.reservation.accept(token, hardwareReady);
+    }
+
+    static void Discarded(Payload& payload)noexcept{
+        payload.reservation.discard();
+    }
+};
+
+
 struct RefractionClassifyTilesGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
     struct Payload{
@@ -103,6 +156,21 @@ public:
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("AVBOIT refraction resolve: {}"), usedHardware ? NWB_TEXT("hardware") : NWB_TEXT("screen-space"));
             *dispatchLogged = true;
         }
+    }
+};
+
+// Diagnostic counter reuse has an explicit physical-queue contract across frame rejection.
+// Keep ordinary resolve scheduling unchanged when diagnostics are disabled.
+struct RefractionDiagnosticResolveGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute, true };
+    using Payload = RefractionResolveGraphTask::Payload;
+
+    static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+        return RefractionResolveGraphTask::Record(payload, commandList, context);
+    }
+
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+        RefractionResolveGraphTask::Accepted(payload, token);
     }
 };
 

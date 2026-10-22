@@ -35,6 +35,7 @@ void RendererRayTracingSystem::invalidateResources(){
     releaseSurfelGiHeapHandles();
     releaseHardwareTransparentShadowResources();
     releaseLightSpaceShadowResources();
+    m_refractionStatistics.invalidateResources();
     m_rayTracingState.invalidateResources();
 }
 

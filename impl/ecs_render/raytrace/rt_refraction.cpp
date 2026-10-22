@@ -26,17 +26,21 @@ namespace __hidden_rt_refraction{
 
 inline constexpr AStringView s_ScreenSparseVariant = "NWB_REFRACTION_DENSE_GRID=0";
 inline constexpr AStringView s_ScreenDenseVariant = "NWB_REFRACTION_DENSE_GRID=1";
-inline constexpr AStringView s_HardwareSparseVariant = "NWB_REFRACTION_DENSE_GRID=0;NWB_RT_CSG_ENABLED=0";
-inline constexpr AStringView s_HardwareDenseVariant = "NWB_REFRACTION_DENSE_GRID=1;NWB_RT_CSG_ENABLED=0";
-inline constexpr AStringView s_CsgHardwareSparseVariant = "NWB_REFRACTION_DENSE_GRID=0;NWB_RT_CSG_ENABLED=1";
-inline constexpr AStringView s_CsgHardwareDenseVariant = "NWB_REFRACTION_DENSE_GRID=1;NWB_RT_CSG_ENABLED=1";
+inline constexpr AStringView s_HardwareSparseVariant = "NWB_REFRACTION_DENSE_GRID=0;NWB_REFRACTION_DIAGNOSTICS=0;NWB_RT_CSG_ENABLED=0";
+inline constexpr AStringView s_HardwareDenseVariant = "NWB_REFRACTION_DENSE_GRID=1;NWB_REFRACTION_DIAGNOSTICS=0;NWB_RT_CSG_ENABLED=0";
+inline constexpr AStringView s_CsgHardwareSparseVariant = "NWB_REFRACTION_DENSE_GRID=0;NWB_REFRACTION_DIAGNOSTICS=0;NWB_RT_CSG_ENABLED=1";
+inline constexpr AStringView s_CsgHardwareDenseVariant = "NWB_REFRACTION_DENSE_GRID=1;NWB_REFRACTION_DIAGNOSTICS=0;NWB_RT_CSG_ENABLED=1";
+inline constexpr AStringView s_DiagnosticHardwareVariants[2][2] = {
+    { "NWB_REFRACTION_DENSE_GRID=0;NWB_REFRACTION_DIAGNOSTICS=1;NWB_RT_CSG_ENABLED=0", "NWB_REFRACTION_DENSE_GRID=1;NWB_REFRACTION_DIAGNOSTICS=1;NWB_RT_CSG_ENABLED=0", },
+    { "NWB_REFRACTION_DENSE_GRID=0;NWB_REFRACTION_DIAGNOSTICS=1;NWB_RT_CSG_ENABLED=1", "NWB_REFRACTION_DENSE_GRID=1;NWB_REFRACTION_DIAGNOSTICS=1;NWB_RT_CSG_ENABLED=1", },
+};
 
 struct RefractionPushConstants{
 #define NWB_REFRACTION_CPU_FIELD(name, defaultValue) u32 name = defaultValue;
     NWB_REFRACTION_PUSH_CONSTANTS_FIELDS(NWB_REFRACTION_CPU_FIELD)
 #undef NWB_REFRACTION_CPU_FIELD
 };
-static_assert(sizeof(RefractionPushConstants) == 9u * sizeof(u32));
+static_assert(sizeof(RefractionPushConstants) == 10u * sizeof(u32));
 static_assert(NWB_REFRACTION_DENSE_ARGUMENT_OFFSET == 4u * sizeof(u32));
 static_assert(NWB_REFRACTION_TILE_ARGUMENT_BYTES == 8u * sizeof(u32));
 
@@ -51,6 +55,7 @@ static RefractionPushConstants MakePushConstants(const DeferredFrameTargets& tar
     push.refractionEnabled = resources.refractionEnabled ? 1u : 0u;
     push.tileListSlot = targets.avboit.refractionTileListDescriptor.slot();
     push.tileArgumentsSlot = targets.avboit.refractionTileArgumentsDescriptor.slot();
+    push.diagnosticsSlot = resources.statistics.counterDescriptor.slot();
     return push;
 }
 
@@ -109,11 +114,17 @@ bool RendererRayTracingSystem::prepareRefractionResources(){
     if(!m_graphics.gpuTiming().prepareScopeQueries(RendererGpuTimingScope::s_RefractionClearTileArguments.identity, device, 32u))
         return false;
 
+    if(m_refractionDiagnosticsEnabled && !m_refractionStatistics.prepareResources())
+        return false;
     const bool csg = m_lightSpaceShadow.m_csg.snapshot.hasCsg;
     const auto ensurePipeline = [&](const bool hardware, const bool dense) -> bool{
-        Core::ComputePipelineHandle& hardwarePipeline = csg ? (dense ? m_rayTracingState.m_refractionDenseCsgHwPipeline : m_rayTracingState.m_refractionCsgHwPipeline) : (dense ? m_rayTracingState.m_refractionDenseHwPipeline : m_rayTracingState.m_refractionHwPipeline);
-        Core::ShaderHandle& hardwareShader = csg ? (dense ? m_rayTracingState.m_refractionDenseCsgHwShader : m_rayTracingState.m_refractionCsgHwShader) : (dense ? m_rayTracingState.m_refractionDenseHwShader : m_rayTracingState.m_refractionHwShader);
-        bool& hardwareFailed = csg ? (dense ? m_rayTracingState.m_refractionDenseCsgHwPipelineFailed : m_rayTracingState.m_refractionCsgHwPipelineFailed) : (dense ? m_rayTracingState.m_refractionDenseHwPipelineFailed : m_rayTracingState.m_refractionHwPipelineFailed);
+        const bool diagnostics = m_refractionDiagnosticsEnabled;
+        Core::ComputePipelineHandle& hardwarePipeline = diagnostics ? m_rayTracingState.m_refractionDiagnosticHwPipelines[csg ? 1u : 0u][dense ? 1u : 0u]
+            : (csg ? (dense ? m_rayTracingState.m_refractionDenseCsgHwPipeline : m_rayTracingState.m_refractionCsgHwPipeline) : (dense ? m_rayTracingState.m_refractionDenseHwPipeline : m_rayTracingState.m_refractionHwPipeline));
+        Core::ShaderHandle& hardwareShader = diagnostics ? m_rayTracingState.m_refractionDiagnosticHwShaders[csg ? 1u : 0u][dense ? 1u : 0u]
+            : (csg ? (dense ? m_rayTracingState.m_refractionDenseCsgHwShader : m_rayTracingState.m_refractionCsgHwShader) : (dense ? m_rayTracingState.m_refractionDenseHwShader : m_rayTracingState.m_refractionHwShader));
+        bool& hardwareFailed = diagnostics ? m_rayTracingState.m_refractionDiagnosticHwPipelineFailed[csg ? 1u : 0u][dense ? 1u : 0u]
+            : (csg ? (dense ? m_rayTracingState.m_refractionDenseCsgHwPipelineFailed : m_rayTracingState.m_refractionCsgHwPipelineFailed) : (dense ? m_rayTracingState.m_refractionDenseHwPipelineFailed : m_rayTracingState.m_refractionHwPipelineFailed));
         Core::ComputePipelineHandle& pipeline = hardware ? hardwarePipeline : (dense ? m_rayTracingState.m_refractionDenseScreenPipeline : m_rayTracingState.m_refractionScreenPipeline);
         Core::ShaderHandle& shader = hardware ? hardwareShader : (dense ? m_rayTracingState.m_refractionDenseScreenShader : m_rayTracingState.m_refractionScreenShader);
         bool& failed = hardware ? hardwareFailed : (dense ? m_rayTracingState.m_refractionDenseScreenPipelineFailed : m_rayTracingState.m_refractionScreenPipelineFailed);
@@ -122,7 +133,8 @@ bool RendererRayTracingSystem::prepareRefractionResources(){
         if(failed)
             return false;
         const AStringView variant = hardware
-            ? (csg ? (dense ? __hidden_rt_refraction::s_CsgHardwareDenseVariant : __hidden_rt_refraction::s_CsgHardwareSparseVariant) : (dense ? __hidden_rt_refraction::s_HardwareDenseVariant : __hidden_rt_refraction::s_HardwareSparseVariant))
+            ? (diagnostics ? __hidden_rt_refraction::s_DiagnosticHardwareVariants[csg ? 1u : 0u][dense ? 1u : 0u]
+                : (csg ? (dense ? __hidden_rt_refraction::s_CsgHardwareDenseVariant : __hidden_rt_refraction::s_CsgHardwareSparseVariant) : (dense ? __hidden_rt_refraction::s_HardwareDenseVariant : __hidden_rt_refraction::s_HardwareSparseVariant)))
             : (dense ? __hidden_rt_refraction::s_ScreenDenseVariant : __hidden_rt_refraction::s_ScreenSparseVariant);
         if(!m_shaderSystem.loadShader<ComputeShader>(
             shader,
@@ -168,7 +180,19 @@ void RendererRayTracingSystem::setRefractionHardwareTracingEnabled(const bool en
     m_rayTracingState.m_refractionHardwareTracingEnabled = enabled;
 }
 
-RayTracingRefractionGraphResources RendererRayTracingSystem::snapshotRefractionGraphResources()const noexcept{
+void RendererRayTracingSystem::setRefractionDiagnosticsEnabled(const bool enabled)noexcept{
+    m_refractionDiagnosticsEnabled = enabled;
+}
+
+void RendererRayTracingSystem::pollRefractionStatistics(){
+    m_refractionStatistics.pollCompleted();
+}
+
+Expected<RefractionStatistics> RendererRayTracingSystem::tryGetLatestRefractionStatistics()const noexcept{
+    return m_refractionStatistics.tryGetLatestStatistics();
+}
+
+RayTracingRefractionGraphResources RendererRayTracingSystem::snapshotRefractionGraphResources(const u32 width, const u32 height, const u32 frameIndex)const noexcept{
     RayTracingRefractionGraphResources resources;
     const ECSRenderDetail::MeshViewBufferSnapshot view = m_meshSystem.meshViewBufferSnapshot();
     if(!view.bindingValid())
@@ -180,8 +204,26 @@ RayTracingRefractionGraphResources RendererRayTracingSystem::snapshotRefractionG
     resources.finalizeTilesPipeline = m_rayTracingState.m_refractionFinalizeTilesPipeline;
     resources.viewHeapSlot = view.heapHandle.slot();
     resources.usesHardwareTrace = m_rayTracingState.m_refractionUseHardwareTrace;
-    resources.pipeline = resources.usesHardwareTrace ? (m_lightSpaceShadow.m_csg.snapshot.hasCsg ? m_rayTracingState.m_refractionCsgHwPipeline : m_rayTracingState.m_refractionHwPipeline) : m_rayTracingState.m_refractionScreenPipeline;
-    resources.densePipeline = resources.usesHardwareTrace ? (m_lightSpaceShadow.m_csg.snapshot.hasCsg ? m_rayTracingState.m_refractionDenseCsgHwPipeline : m_rayTracingState.m_refractionDenseHwPipeline) : m_rayTracingState.m_refractionDenseScreenPipeline;
+    const bool csg = m_lightSpaceShadow.m_csg.snapshot.hasCsg;
+    resources.pipeline = resources.usesHardwareTrace
+        ? (m_refractionDiagnosticsEnabled ? m_rayTracingState.m_refractionDiagnosticHwPipelines[csg ? 1u : 0u][0]
+            : (csg ? m_rayTracingState.m_refractionCsgHwPipeline : m_rayTracingState.m_refractionHwPipeline))
+        : m_rayTracingState.m_refractionScreenPipeline;
+    resources.densePipeline = resources.usesHardwareTrace
+        ? (m_refractionDiagnosticsEnabled ? m_rayTracingState.m_refractionDiagnosticHwPipelines[csg ? 1u : 0u][1]
+            : (csg ? m_rayTracingState.m_refractionDenseCsgHwPipeline : m_rayTracingState.m_refractionDenseHwPipeline))
+        : m_rayTracingState.m_refractionDenseScreenPipeline;
+    if(m_refractionDiagnosticsEnabled){
+        RefractionStatistics metadata;
+        metadata.frameIndex = frameIndex;
+        metadata.graphicsFrameIndex = m_graphics.getFrameIndex();
+        metadata.width = width;
+        metadata.height = height;
+        metadata.hardwareRequested = m_rayTracingState.m_refractionHardwareTracingEnabled;
+        metadata.hardwareAvailable = resources.usesHardwareTrace;
+        metadata.csgHardwareEnabled = resources.usesHardwareTrace && csg;
+        resources.statistics = m_refractionStatistics.snapshot(metadata);
+    }
     if(resources.usesHardwareTrace){
         resources.sceneTlas = m_rayTracingState.m_tlas;
         resources.tlasHeapHandle = m_rayTracingState.m_tlasHeapHandle;

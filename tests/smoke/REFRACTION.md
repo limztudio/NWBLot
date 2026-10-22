@@ -333,6 +333,140 @@ cadence. GPU acquisition success, clean wall acquisition, and a performance
 conclusion are separate decisions. Retain `plan.json`, all per-trial logs and GPU
 reports, summaries, and failures when reporting the result.
 
+`refraction_query_profile_benchmark.py` profiles one frozen renderer at hardware
+refraction coverage 50% and 100%, each at 960x720 and 1600x900. Its default eight
+blocks comprise two complete four-treatment Williams cycles. Every treatment
+appears twice at each position and follows each other treatment twice within
+blocks. The plan also records the predecessor across block boundaries. This
+balances workload order while preserving every trial; it does not prove that
+thermal or power state has reached equilibrium.
+
+```powershell
+python tests/smoke/refraction_query_profile_benchmark.py `
+  --executable frozen/bin/refraction_smoke.exe `
+  --runtime frozen/runtime `
+  --logserver frozen/bin/logserver.exe `
+  --source-manifest frozen/source-manifest.json `
+  --output-directory refraction-query-profile
+```
+
+Use `--plan-only` to validate identities and save the complete trial order before
+launch. Source manifests must include both compiled density fixture files. Each
+trial confirms the actual extent, discards the startup/unsealed boundary, then
+discards at least 30 seconds of target-only sealed publication intervals and
+100 completed GPU frames. It retains twelve or more positive sealed reports
+with at least 100 GPU frames. Warmup is fixed before acquisition; the runner does
+not select a favorable plateau or remove slow trials. Existing GPU timing
+instrumentation remains enabled, while shader query counters, image readbacks,
+frame-graph capture, and validation are acquired separately. Inherited smoke
+diagnostic settings are cleared by timing environment preparation.
+
+On Windows, a persistent PDH query records GPU Engine utilization at 1 Hz for
+both the fixture PID and other processes. Raw counter instances, statuses,
+monotonic/UTC observation times, and publication-header observations are saved.
+Initial invalid data, missing fixture instances, and gaps remain visible; at
+least two valid fixture samples must overlap the approximate retained
+publication window. Per-engine process sums remain separate because concurrent
+engines cannot be added into one utilization percentage. Header publication may
+lag GPU execution, so load associations are observational. Before acquisition,
+the host inventory records the adapter/driver, exposed GPU counter paths,
+clock/frequency counter candidates, and whether `nvidia-smi` is present. The
+sampler collects engine utilization only; clock measurements require separate
+supported instrumentation. Anonymous ACPI thermal zones do not identify GPU
+temperature. The output records these limitations explicitly and does not infer
+clock state from load.
+
+The report keeps whole-frame, resolve, scheduling/compositor aggregate, AVBOIT,
+opaque, shadow, lighting, presentation, per-position, and per-block values.
+Coverage scaling uses paired independent blocks with individual bootstrap
+intervals. A coverage change changes the optical workload; these values guide
+diagnostic attribution and do not establish an optimization speedup. Keep shader
+query/fallback counts in a separate diagnostic acquisition against the same
+scene and route, and measure timing with the uninstrumented frozen arm.
+
+When the calling terminal has a shorter lifetime than a complete campaign, use
+`run_refraction_profile_supervised.ps1` from PowerShell 7 in a detached hidden
+process. First save a separate `--plan-only` output for the original eight-block,
+32-trial protocol. Pass that plan and the same frozen arm explicitly; use a fresh
+output directory for actual acquisition:
+
+```powershell
+$profileRoot = (Get-Location).Path
+$profileSupervisor = (Resolve-Path tests/smoke/run_refraction_profile_supervised.ps1).Path
+$profileArm = (Resolve-Path frozen).Path
+$profilePlan = (Resolve-Path refraction-query-plan/plan.json).Path
+$profileOutput = Join-Path $profileRoot refraction-query-profile
+$profileSupervisorArguments = @(
+  '-NoProfile', '-NonInteractive', '-File', ('"{0}"' -f $profileSupervisor),
+  '-RepositoryRoot', ('"{0}"' -f $profileRoot),
+  '-FrozenArm', ('"{0}"' -f $profileArm),
+  '-ExpectedPlan', ('"{0}"' -f $profilePlan),
+  '-OutputDirectory', ('"{0}"' -f $profileOutput)
+) -join ' '
+Start-Process -FilePath (Get-Command pwsh.exe).Source `
+  -ArgumentList $profileSupervisorArguments -WindowStyle Hidden
+```
+
+The supervisor checks acquisition-script hashes and original protocol/arm paths
+before launching Python, retains the native child handle, and records a running
+heartbeat plus final exit code in `<output>-supervisor/process-status.json`.
+The same control directory retains `stdout.log` and `stderr.log`. `-ProbeOnly`
+with a separate output name verifies that the hidden supervisor survives its
+originating command, without starting Python or GPU rendering. An interrupted
+campaign remains incomplete; a new complete schedule uses a new output directory
+and does not combine selectively replayed trials with partial data.
+
+The public renderer diagnostic opt-in is
+`RendererSystem::setRefractionDiagnosticsEnabled(true)`. It selects separately
+cooked hardware kernels with counters and asynchronous completed readback.
+`tryGetLatestRefractionStatistics()` returns a completed accepted copy, or failure
+until one is available; it does not wait for the GPU or promise the current
+frame. The latest publication may remain available while newer work is pending.
+Use its sequence/generation, graphics source frame, extent, hardware readiness
+and accepted physical submission token to establish freshness and route. An
+accepted diagnostic copy does not establish that a later presentation succeeded.
+
+The three-slot readback ring skips a new sample when full while rendering
+continues. Statistics expose entry association, volume exit, internal reflection,
+background continuation, cache and fallback work. Counters are 32-bit, and any
+nonzero `overflowFlags` invalidates that sample. Ordinary logical stage queries
+each issue one physical inline query; CSG may perform additional physical work,
+so `physicalQueries` and `queryBudgetUnits` remain separate. Counter shares do
+not establish GPU-time shares. In particular, `materialShadeCalls` counts calls
+to the refraction lighting helper; accepted hits can already reconstruct their
+material surface before the lighting cache is consulted.
+
+`refraction_query_diagnostics_smoke.py` acquires diagnostic counts and optical
+checks separately from timing:
+
+```powershell
+python tests/smoke/refraction_query_diagnostics_smoke.py `
+  --executable __exec/windows/arm64/full/opt/refraction_smoke.exe `
+  --working-directory __cmake/build/windows-clang-arm64/Testing/smoke_runtime/opt `
+  --logserver-executable __exec/windows/arm64/full/opt/logserver.exe `
+  --reference-directory uninstrumented-density `
+  --output-directory refraction-query-diagnostics `
+  --application-arg=--gpudbg
+```
+
+The default matrix captures ordinary hardware density 0%, 50% and 100% at
+960x720 and 1600x900. `--extents` and `--densities` accept comma-separated
+subsets; every selected extent still captures its zero-density reference.
+`--reference-directory` enables exact RGB parity against uninstrumented captures
+arranged as `<extent>/hardware/NNN.bmp`. Without it, independent projected-mask,
+stripe and Fresnel checks still apply, while exact parity is unqualified. The
+oracle also requires valid hardware-ready completed statistics, no counter
+overflow, bounded loop counts and ordinary query/terminal-path conservation.
+These ordinary captures do not qualify CSG physical-query counts.
+
+The smoke-only selector `NWB_REFRACTION_SMOKE_DIAGNOSTICS=1` requires a hardware
+density framebuffer capture with timing, lifecycle and frame freeze disabled.
+The fixture waits at least sixteen graphics frames at the requested target
+extent and requires a statistics source after that boundary. Its later image
+source follows statistics publication. Both describe the same static scene;
+they are not claimed to be the same GPU frame. The JSON retains both identities,
+raw counters, token/readiness metadata, extent evidence and optical checks.
+
 The complex-case gallery is an additional visual inspection fixture. It covers
 `single`, `separate`, `stacked`, `intersecting`, `nested`, `coincident`,
 `coincident_tinted`, `torus`, `same_mesh`, and `prism`, plus twelve exact-duplicate

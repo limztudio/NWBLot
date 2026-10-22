@@ -153,6 +153,26 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
         const auto tileTask = m_graph.addTask<RefractionClassifyTilesGraphTask>(tileDesc, RefractionClassifyTilesGraphTask::Payload{ m_raytracingSystem, deferredTargets, refractionResources });
         if(!tileTask)
             return MakeUnexpected(Failure{});
+        Core::GpuGraphResourceId refractionCounters;
+        Core::GpuTaskId refractionDiagnosticClear;
+        if(refractionResources.statistics.control){
+            const auto counters = m_graph.importBuffer(
+                refractionResources.statistics.counters,
+                BufferResourceDesc(Name("render.refraction.diagnostic_counters"), "Refraction Diagnostic Counters")
+                    .setExternalFinalState(Core::ResourceStates::UnorderedAccess)
+            );
+            if(!counters)
+                return MakeUnexpected(Failure{});
+            refractionCounters = *counters;
+            const Core::GpuTaskResourceUse clearUse = WriteUse(refractionCounters, Core::ResourceStates::CopyDest);
+            Core::GpuTaskDesc clearDesc;
+            clearDesc.setIdentity(Name("render.refraction.diagnostics_clear")).setMarkerLabel("Refraction Diagnostics Clear")
+                .setScheduling(refractionTileScheduling).setDependencies(&*tileTask, 1u).setResourceUses(&clearUse, 1u);
+            const auto clearTask = m_graph.addTask<RefractionClearStatisticsGraphTask>(clearDesc, RefractionClearStatisticsGraphTask::Payload{ refractionResources.statistics.counters, refractionCounters });
+            if(!clearTask)
+                return MakeUnexpected(Failure{});
+            refractionDiagnosticClear = *clearTask;
+        }
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> refractionUses{scratchArena};
         const Core::GpuGraphResourceId refractionInputs[] = {
             refractionDepth, refractionNormalIor, refractionTintCoverage, refractionInstance,
@@ -160,7 +180,7 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
             avboitForegroundColor, avboitForegroundExtinction
         };
         // Mesh view, bindless slots, scene shading, lights, the resolve output, and tile scheduling buffers.
-        constexpr usize s_RefractionFixedUseCapacity = 7u;
+        constexpr usize s_RefractionFixedUseCapacity = 8u;
         refractionUses.reserve(LengthOf(refractionInputs) + s_RefractionFixedUseCapacity + LengthOf(sceneReads.uses) + sceneReads.csgUses.size());
         for(const auto input : refractionInputs)
             refractionUses.push_back(ReadUse(input));
@@ -171,6 +191,8 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
         refractionUses.push_back(WriteUse(refractionResolve, Core::ResourceStates::UnorderedAccess));
         refractionUses.push_back(ReadUse(tileList));
         refractionUses.push_back(ReadUse(tileArguments, Core::ResourceStates::ShaderResource | Core::ResourceStates::IndirectArgument));
+        if(refractionCounters.valid())
+            refractionUses.push_back(ReadWriteUse(refractionCounters, Core::ResourceStates::UnorderedAccess));
         Core::GpuTaskResourceSetUse refractionSets[3] = {};
         usize refractionSetCount = 0;
         if(refractionResources.usesHardwareTrace){
@@ -184,7 +206,7 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
                     refractionSets[refractionSetCount++] = Core::GpuTaskResourceSetUse{ .resourceSet = set, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
             }
         }
-        const Core::GpuTaskId refractionDependencies[] = { reflectionGraph.completion, *tileTask, inputs.surfelGiTask };
+        const Core::GpuTaskId refractionDependencies[] = { reflectionGraph.completion, refractionDiagnosticClear.valid() ? refractionDiagnosticClear : *tileTask, inputs.surfelGiTask };
         Core::GpuTaskDesc refractionDesc;
         refractionDesc.setIdentity(Name("render.avboit.refraction_resolve"))
             .setMarkerLabel("AVBOIT Refraction Resolve")
@@ -193,16 +215,49 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
             .setResourceUses(refractionUses.data(), refractionUses.size())
             .setResourceSetUses(refractionSets, refractionSetCount)
         ;
-        refractionResolveTask = m_graph.addTask<RefractionResolveGraphTask>(
-            refractionDesc,
-            RefractionResolveGraphTask::Payload{
-                .system = m_raytracingSystem, .targets = deferredTargets, .resources = refractionResources,
-                .hardwarePreparationReady = inputs.hardwarePreparationReady,
-                .dispatchLogged = refractionResources.usesHardwareTrace
-                    ? inputs.refractionHardwareLogged : inputs.refractionScreenLogged,
-                .screenFallbackDispatchLogged = inputs.refractionScreenLogged,
+        RefractionResolveGraphTask::Payload resolvePayload{
+            .system = m_raytracingSystem, .targets = deferredTargets, .resources = refractionResources,
+            .hardwarePreparationReady = inputs.hardwarePreparationReady,
+            .dispatchLogged = refractionResources.usesHardwareTrace
+                ? inputs.refractionHardwareLogged : inputs.refractionScreenLogged,
+            .screenFallbackDispatchLogged = inputs.refractionScreenLogged,
+        };
+        refractionResolveTask = refractionCounters.valid()
+            ? m_graph.addTask<RefractionDiagnosticResolveGraphTask>(refractionDesc, Move(resolvePayload))
+            : m_graph.addTask<RefractionResolveGraphTask>(refractionDesc, Move(resolvePayload));
+        if(!refractionResolveTask)
+            return MakeUnexpected(Failure{});
+        if(refractionCounters.valid()){
+            RefractionStatisticsReservation reservation(refractionResources.statistics.control, refractionResources.statistics.metadata);
+            // All slots may still be in flight; diagnostic collection is lossy rather than blocking rendering.
+            if(reservation.valid()){
+                const Core::BufferHandle& readback = refractionResources.statistics.buffers[reservation.slotIndex()];
+                if(!readback)
+                    return MakeUnexpected(Failure{});
+                const auto readbackResource = m_graph.importBuffer(
+                    readback,
+                    BufferResourceDesc(readback->getCreationDescription().debugName, "Refraction Statistics Readback")
+                        .setExternalFinalState(Core::ResourceStates::CopyDest)
+                );
+                if(!readbackResource)
+                    return MakeUnexpected(Failure{});
+                const Core::GpuTaskResourceUse copyUses[] = {
+                    ReadUse(refractionCounters, Core::ResourceStates::CopySource),
+                    WriteUse(*readbackResource, Core::ResourceStates::CopyDest),
+                };
+                Core::GpuTaskDesc copyDesc;
+                copyDesc.setIdentity(Name("render.refraction.statistics")).setMarkerLabel("Refraction Statistics Readback")
+                    .setScheduling(refractionTileScheduling).setDependencies(&*refractionResolveTask, 1u)
+                    .setResourceUses(copyUses, LengthOf(copyUses));
+                refractionResolveTask = m_graph.addTask<RefractionStatisticsReadbackGraphTask>(
+                    copyDesc,
+                    RefractionStatisticsReadbackGraphTask::Payload{
+                        refractionResources.statistics.counters, readback, refractionCounters, *readbackResource,
+                        Move(reservation), inputs.hardwarePreparationReady, refractionResources.usesHardwareTrace,
+                    }
+                );
             }
-        );
+        }
     }
     else{
         Core::GpuTaskDesc clearDesc;

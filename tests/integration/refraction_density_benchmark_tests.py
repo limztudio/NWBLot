@@ -210,6 +210,29 @@ class RefractionDensityBenchmarkTests(unittest.TestCase):
         self.assertEqual(benchmark.startup_report_boundary(text), 2)
         self.assertEqual(benchmark.startup_report_boundary(""), 1)
 
+    def test_elapsed_warmup_excludes_old_extent_and_requires_the_complete_target_interval(self):
+        sample = {benchmark.FRAME: benchmark.timing.ScopeSample(1, 100)}
+        reports = [sample] * 10
+        durations = [100., 100., .5, .5, .5, .5, .5, .5, .5, .5]
+        start, retained = benchmark.retain_target_reports(reports, 2, 2, 100, 3, durations)
+        self.assertEqual(start, 8)
+        self.assertEqual(retained, reports[8:])
+        start, retained = benchmark.retain_target_reports(reports[:7], 2, 2, 100, 3, durations[:7])
+        self.assertEqual(start, 7)
+        self.assertEqual(retained, [])
+
+    def test_elapsed_warmup_does_not_override_completed_gpu_frame_minimum(self):
+        reports = [{benchmark.FRAME: benchmark.timing.ScopeSample(1, 10)}] * 13
+        start, retained = benchmark.retain_target_reports(reports, 2, 2, 100, 1, [.5] * len(reports))
+        self.assertEqual(start, 12)
+        self.assertEqual(retained, reports[12:])
+
+    def test_missing_or_invalid_publication_durations_cannot_establish_elapsed_warmup(self):
+        reports = [{benchmark.FRAME: benchmark.timing.ScopeSample(1, 100)}] * 4
+        for durations in (None, [.5] * 3, [.5, .5, float("nan"), .5], [.5, 0., .5, .5]):
+            with self.subTest(durations=durations), self.assertRaisesRegex(benchmark.SmokeFailure, "positive durations"):
+                benchmark.retain_target_reports(reports, 0, 2, 100, 1, durations)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -22,8 +22,14 @@ NwbRayTraceSurfaceHit nwbRefractionClosestEntryInterface(const uint instanceMate
     if(geometry.failure != 0u)
         return nwbRayTraceReconstructSurfaceHit(instanceMaterialHeapSlot, origin, direction, geometry);
 #endif
-    if(!geometry.hit || !geometry.frontFace)
-        return (NwbRayTraceSurfaceHit)0;
+    if(!geometry.hit || !geometry.frontFace){
+        NwbRayTraceSurfaceHit rejected = (NwbRayTraceSurfaceHit)0;
+#if NWB_RT_CSG_ENABLED && NWB_REFRACTION_DIAGNOSTICS
+        rejected.queryBudgetUnits = geometry.queryBudgetUnits;
+        rejected.physicalQueries = geometry.physicalQueries;
+#endif
+        return rejected;
+    }
     return nwbRayTraceReconstructSurfaceHit(instanceMaterialHeapSlot, origin, direction, geometry);
 }
 
@@ -33,8 +39,14 @@ NwbRayTraceSurfaceHit nwbRefractionClosestExitInterface(const uint instanceMater
     if(geometry.failure != 0u)
         return nwbRayTraceReconstructSurfaceHit(instanceMaterialHeapSlot, origin, direction, geometry);
 #endif
-    if(!geometry.hit || geometry.instance != primaryInstance || geometry.frontFace)
-        return (NwbRayTraceSurfaceHit)0;
+    if(!geometry.hit || geometry.instance != primaryInstance || geometry.frontFace){
+        NwbRayTraceSurfaceHit rejected = (NwbRayTraceSurfaceHit)0;
+#if NWB_RT_CSG_ENABLED && NWB_REFRACTION_DIAGNOSTICS
+        rejected.queryBudgetUnits = geometry.queryBudgetUnits;
+        rejected.physicalQueries = geometry.physicalQueries;
+#endif
+        return rejected;
+    }
     return nwbRayTraceReconstructSurfaceHit(instanceMaterialHeapSlot, origin, direction, geometry);
 }
 

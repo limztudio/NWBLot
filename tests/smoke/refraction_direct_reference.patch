@@ -1,6 +1,6 @@
 --- a/impl/ecs_render/raytrace/rt_refraction.cpp
 +++ b/impl/ecs_render/raytrace/rt_refraction.cpp
-@@ -221,22 +221,14 @@
+@@ -263,22 +263,14 @@
      // The graph owns transitions and frozen declarations; this records without rebuilds.
      const auto push = __hidden_rt_refraction::MakePushConstants(targets, resources);
      Core::ComputeState state;
@@ -28,7 +28,7 @@
  }
 --- a/impl/ecs_render/graph/frame_graph_reflection_resolve.cpp
 +++ b/impl/ecs_render/graph/frame_graph_reflection_resolve.cpp
-@@ -127,40 +127,14 @@
+@@ -127,32 +127,9 @@
 
      Expected<Core::GpuTaskId> refractionResolveTask = MakeUnexpected(Failure{});
      if(refractionActive && refractionResources.valid()){
@@ -58,34 +58,47 @@
 -        const auto tileTask = m_graph.addTask<RefractionClassifyTilesGraphTask>(tileDesc, RefractionClassifyTilesGraphTask::Payload{ m_raytracingSystem, deferredTargets, refractionResources });
 -        if(!tileTask)
 -            return MakeUnexpected(Failure{});
-         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> refractionUses{scratchArena};
-         const Core::GpuGraphResourceId refractionInputs[] = {
-             refractionDepth, refractionNormalIor, refractionTintCoverage, refractionInstance,
++        Core::GpuTaskSchedulingHint refractionDiagnosticScheduling;
++        refractionDiagnosticScheduling.mergeWithPrevious = true;
++        refractionDiagnosticScheduling.allowMergeAcrossConsumerFrontier = true;
+         Core::GpuGraphResourceId refractionCounters;
+         Core::GpuTaskId refractionDiagnosticClear;
+         if(refractionResources.statistics.control){
+@@ -167,7 +144,7 @@
+             const Core::GpuTaskResourceUse clearUse = WriteUse(refractionCounters, Core::ResourceStates::CopyDest);
+             Core::GpuTaskDesc clearDesc;
+             clearDesc.setIdentity(Name("render.refraction.diagnostics_clear")).setMarkerLabel("Refraction Diagnostics Clear")
+-                .setScheduling(refractionTileScheduling).setDependencies(&*tileTask, 1u).setResourceUses(&clearUse, 1u);
++                .setScheduling(refractionDiagnosticScheduling).setDependencies(&inputs.avboitFinalTask, 1u).setResourceUses(&clearUse, 1u);
+             const auto clearTask = m_graph.addTask<RefractionClearStatisticsGraphTask>(clearDesc, RefractionClearStatisticsGraphTask::Payload{ refractionResources.statistics.counters, refractionCounters });
+             if(!clearTask)
+                 return MakeUnexpected(Failure{});
+@@ -179,8 +156,8 @@
              opaqueColor, reflectionGraph.opaqueRadiance, worldPosition, depth, avboitAccumColor, avboitAccumExtinction,
              avboitForegroundColor, avboitForegroundExtinction
          };
 -        // Mesh view, bindless slots, scene shading, lights, the resolve output, and tile scheduling buffers.
--        constexpr usize s_RefractionFixedUseCapacity = 7u;
-+        // Mesh view, bindless slots, scene shading, lights, and the resolve output.
-+        constexpr usize s_RefractionFixedUseCapacity = 5u;
+-        constexpr usize s_RefractionFixedUseCapacity = 8u;
++        // Mesh view, bindless slots, scene shading, lights, the resolve output, and optional diagnostic counters.
++        constexpr usize s_RefractionFixedUseCapacity = 6u;
          refractionUses.reserve(LengthOf(refractionInputs) + s_RefractionFixedUseCapacity + LengthOf(sceneReads.uses) + sceneReads.csgUses.size());
          for(const auto input : refractionInputs)
              refractionUses.push_back(ReadUse(input));
-@@ -169,8 +143,6 @@
+@@ -189,8 +166,6 @@
          refractionUses.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
          refractionUses.push_back(ReadUse(lights));
          refractionUses.push_back(WriteUse(refractionResolve, Core::ResourceStates::UnorderedAccess));
 -        refractionUses.push_back(ReadUse(tileList));
 -        refractionUses.push_back(ReadUse(tileArguments, Core::ResourceStates::ShaderResource | Core::ResourceStates::IndirectArgument));
+         if(refractionCounters.valid())
+             refractionUses.push_back(ReadWriteUse(refractionCounters, Core::ResourceStates::UnorderedAccess));
          Core::GpuTaskResourceSetUse refractionSets[3] = {};
-         usize refractionSetCount = 0;
-         if(refractionResources.usesHardwareTrace){
-@@ -184,11 +156,10 @@
+@@ -206,15 +181,16 @@
                      refractionSets[refractionSetCount++] = Core::GpuTaskResourceSetUse{ .resourceSet = set, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
              }
          }
--        const Core::GpuTaskId refractionDependencies[] = { reflectionGraph.completion, *tileTask, inputs.surfelGiTask };
-+        const Core::GpuTaskId refractionDependencies[] = { reflectionGraph.completion, inputs.avboitFinalTask, inputs.surfelGiTask };
+-        const Core::GpuTaskId refractionDependencies[] = { reflectionGraph.completion, refractionDiagnosticClear.valid() ? refractionDiagnosticClear : *tileTask, inputs.surfelGiTask };
++        const Core::GpuTaskId refractionDependencies[] = { reflectionGraph.completion, refractionDiagnosticClear.valid() ? refractionDiagnosticClear : inputs.avboitFinalTask, inputs.surfelGiTask };
          Core::GpuTaskDesc refractionDesc;
          refractionDesc.setIdentity(Name("render.avboit.refraction_resolve"))
              .setMarkerLabel("AVBOIT Refraction Resolve")
@@ -93,3 +106,18 @@
              .setDependencies(refractionDependencies, LengthOf(refractionDependencies))
              .setResourceUses(refractionUses.data(), refractionUses.size())
              .setResourceSetUses(refractionSets, refractionSetCount)
+         ;
++        if(refractionCounters.valid())
++            refractionDesc.setScheduling(refractionDiagnosticScheduling);
+         RefractionResolveGraphTask::Payload resolvePayload{
+             .system = m_raytracingSystem, .targets = deferredTargets, .resources = refractionResources,
+             .hardwarePreparationReady = inputs.hardwarePreparationReady,
+@@ -247,7 +223,7 @@
+                 };
+                 Core::GpuTaskDesc copyDesc;
+                 copyDesc.setIdentity(Name("render.refraction.statistics")).setMarkerLabel("Refraction Statistics Readback")
+-                    .setScheduling(refractionTileScheduling).setDependencies(&*refractionResolveTask, 1u)
++                    .setScheduling(refractionDiagnosticScheduling).setDependencies(&*refractionResolveTask, 1u)
+                     .setResourceUses(copyUses, LengthOf(copyUses));
+                 refractionResolveTask = m_graph.addTask<RefractionStatisticsReadbackGraphTask>(
+                     copyDesc,

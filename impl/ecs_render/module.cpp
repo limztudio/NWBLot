@@ -71,6 +71,14 @@ void RendererSystem::setRefractionHardwareTracingEnabled(const bool enabled)noex
     m_pipeline->setRefractionHardwareTracingEnabled(enabled);
 }
 
+void RendererSystem::setRefractionDiagnosticsEnabled(const bool enabled)noexcept{
+    m_pipeline->setRefractionDiagnosticsEnabled(enabled);
+}
+
+Expected<RefractionStatistics> RendererSystem::tryGetLatestRefractionStatistics()const noexcept{
+    return m_pipeline->tryGetLatestRefractionStatistics();
+}
+
 bool RendererSystem::setCausticQualitySettings(const CausticQualitySettings& settings)noexcept{
     return m_pipeline->setCausticQualitySettings(settings);
 }

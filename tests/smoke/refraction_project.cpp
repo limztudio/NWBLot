@@ -120,12 +120,81 @@ private:
             return true;
         const auto readback = ReadEnvironmentVariable(arena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
         const auto freeze = ReadEnvironmentVariable(arena, "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME");
-        if(!readback || !freeze || (**path).empty() || m_timingEnabled || m_lifecycleEnabled || *readback || *freeze){
+        if(!readback || !freeze || (**path).empty() || m_timingEnabled || m_lifecycleEnabled || m_diagnosticsEnabled || *readback || *freeze){
             NWB_LOGGER_ERROR(NWB_TEXT("RefractionSmokeProject: a nonempty frame-graph snapshot path requires timing, lifecycle, framebuffer readback, and frame freeze disabled"));
             return false;
         }
         m_frameGraphSnapshotPath = SmokeEnvironmentString(**path, m_context.objectArena);
         return true;
+    }
+
+    bool configureQueryDiagnostics(NWB::Core::Alloc::ScratchArena& arena){
+        const auto configured = ReadEnvironmentVariable(arena, "NWB_REFRACTION_SMOKE_DIAGNOSTICS");
+        if(!configured || (*configured && **configured != "0" && **configured != "1")){
+            NWB_LOGGER_ERROR(NWB_TEXT("RefractionSmokeProject: diagnostics must be absent, 0, or 1"));
+            return false;
+        }
+        m_diagnosticsEnabled = *configured && **configured == "1";
+        if(!m_diagnosticsEnabled)
+            return true;
+        const auto freeze = ReadEnvironmentVariable(arena, "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME");
+        const auto readback = ReadSmokeEnvironmentText(arena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
+        const auto hardware = ReadEnvironmentVariable(arena, "NWB_REFRACTION_SMOKE_HARDWARE");
+        if(!freeze || !hardware || *freeze || !readback || !m_densityEnabled || m_lifecycleEnabled || m_timingEnabled || (*hardware && **hardware != "1")){
+            NWB_LOGGER_ERROR(NWB_TEXT("RefractionSmokeProject: query diagnostics require a hardware density framebuffer capture with timing, lifecycle, and frame freeze disabled"));
+            return false;
+        }
+        auto* const renderer = m_world->getSystem<NWB::Impl::RendererSystem>();
+        NWB_FATAL_ASSERT(renderer);
+        renderer->setRefractionDiagnosticsEnabled(true);
+        return true;
+    }
+
+    void reportQueryDiagnostics(){
+        if(!m_diagnosticsEnabled || m_diagnosticsReported)
+            return;
+        i32 width = 0;
+        i32 height = 0;
+        m_context.graphics.getWindowDimensions(width, height);
+        const auto target = NWB::QueryProjectFrameClientSize();
+        const u64 currentFrame = m_context.graphics.getFrameIndex();
+        if(width != target.width || height != target.height || (m_diagnosticsTargetStart && currentFrame < *m_diagnosticsTargetStart)){
+            m_diagnosticsTargetStart.reset();
+            return;
+        }
+        if(!m_diagnosticsTargetStart){
+            m_diagnosticsTargetStart = currentFrame;
+            return;
+        }
+        constexpr u64 s_RequiredTargetFrames = 16u;
+        if(currentFrame - *m_diagnosticsTargetStart < s_RequiredTargetFrames)
+            return;
+        const auto* const renderer = m_world->getSystem<NWB::Impl::RendererSystem>();
+        NWB_FATAL_ASSERT(renderer);
+        const auto result = renderer->tryGetLatestRefractionStatistics();
+        if(!result)
+            return;
+        const auto& statistics = *result;
+        if(statistics.width != target.width || statistics.height != target.height || statistics.graphicsFrameIndex < *m_diagnosticsTargetStart || statistics.graphicsFrameIndex - *m_diagnosticsTargetStart < s_RequiredTargetFrames || statistics.graphicsFrameIndex > currentFrame)
+            return;
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionQueryDiagnostics: sequence={} generation={} graphics_frame={} observed_frame={} target_start_frame={} completed_target_frames={} frame_index={} width={} height={}")
+            NWB_TEXT(" hardware_requested={} hardware_available={} hardware_ready={} csg_enabled={} token_valid={} physical_valid={} token_queue={} token_value={} physical_queue={} device_generation={}")
+            , statistics.sequence, statistics.generation, statistics.graphicsFrameIndex, currentFrame, *m_diagnosticsTargetStart
+            , statistics.graphicsFrameIndex - *m_diagnosticsTargetStart, statistics.frameIndex, statistics.width, statistics.height
+            , statistics.hardwareRequested ? 1u : 0u, statistics.hardwareAvailable ? 1u : 0u, statistics.hardwareReady ? 1u : 0u, statistics.csgHardwareEnabled ? 1u : 0u
+            , statistics.acceptedToken.valid() ? 1u : 0u, statistics.acceptedToken.hasPhysicalQueueIdentity() ? 1u : 0u
+            , static_cast<u32>(statistics.acceptedToken.queue), statistics.acceptedToken.value, statistics.acceptedToken.physicalQueueIndex, statistics.acceptedToken.deviceGeneration
+        );
+#define NWB_SMOKE_REFRACTION_LOG_COUNTER(name, offset) \
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionQueryCounter: sequence={} generation={} name={} value={}"), statistics.sequence, statistics.generation, NWB_TEXT(#name), statistics.name);
+        NWB_REFRACTION_DIAGNOSTIC_COUNTER_FIELDS(NWB_SMOKE_REFRACTION_LOG_COUNTER)
+#undef NWB_SMOKE_REFRACTION_LOG_COUNTER
+#define NWB_SMOKE_REFRACTION_COUNT_COUNTER(name, offset) + 1u
+        constexpr u32 s_CounterCount = 0u NWB_REFRACTION_DIAGNOSTIC_COUNTER_FIELDS(NWB_SMOKE_REFRACTION_COUNT_COUNTER);
+#undef NWB_SMOKE_REFRACTION_COUNT_COUNTER
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionQueryDiagnostics: complete sequence={} generation={} counters={}"), statistics.sequence, statistics.generation, s_CounterCount);
+        m_diagnosticsSourceFrame = statistics.graphicsFrameIndex;
+        m_diagnosticsReported = true;
     }
 
     bool updateFrameGraphSnapshot(){
@@ -189,6 +258,13 @@ private:
             options.requiredHeight = extent.height;
             // The density harness confirms the exact client/framebuffer extent and readback, then closes normally.
             options.quitWhenReady = false;
+        }
+        if(m_diagnosticsEnabled){
+            options.predicateContext = this;
+            options.shouldCapture = [](void* owner, const u64 graphicsFrame)noexcept{
+                const auto& project = *static_cast<RefractionSmokeProject*>(owner);
+                return project.m_diagnosticsReported && graphicsFrame > project.m_diagnosticsSourceFrame;
+            };
         }
         auto capture = ConfigureSmokeFramebufferCapture(m_context, scratchArena, s_ProjectName, s_DefaultCaptureFrameCount, options);
         if(!capture)
@@ -330,6 +406,8 @@ public:
         if(!density)
             return false;
         m_densityEnabled = density->has_value();
+        if(!configureQueryDiagnostics(scratchArena))
+            return false;
         if(!configureFrameGraphSnapshot(scratchArena))
             return false;
         if(m_timingEnabled){
@@ -385,6 +463,7 @@ public:
     }
 
     virtual bool onUpdate(const f32 delta)override{
+        reportQueryDiagnostics();
         if(m_framebufferCapture)
             m_framebufferCapture->update();
         if(!advanceLifecycleCapture())
@@ -417,11 +496,15 @@ private:
     Vector<::Path<NWB::Core::Alloc::GlobalArena>, NWB::Core::Alloc::GlobalArena> m_lifecyclePaths;
     SmokeEnvironmentString m_frameGraphSnapshotPath{ m_context.objectArena };
     Optional<u64> m_frameGraphTargetStart;
+    Optional<u64> m_diagnosticsTargetStart;
+    u64 m_diagnosticsSourceFrame = 0u;
     NWB::Core::ECS::EntityID m_glass = {};
     usize m_lifecyclePhase = 0u;
     bool m_lifecycleEnabled = false;
     bool m_timingEnabled = false;
     bool m_densityEnabled = false;
+    bool m_diagnosticsEnabled = false;
+    bool m_diagnosticsReported = false;
     bool m_frameGraphSnapshotCompleted = false;
 };
 

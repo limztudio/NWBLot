@@ -94,6 +94,10 @@ bool RendererFramePipeline::setReflectionSettings(const ReflectionSettings& sett
     return true;
 }
 
+Expected<RefractionStatistics> RendererFramePipeline::tryGetLatestRefractionStatistics()const noexcept{
+    return m_raytracingSystem.tryGetLatestRefractionStatistics();
+}
+
 Expected<ReflectionStatistics> RendererFramePipeline::tryGetLatestReflectionStatistics()const noexcept{
     return m_reflectionSystem.tryGetLatestStatistics();
 }

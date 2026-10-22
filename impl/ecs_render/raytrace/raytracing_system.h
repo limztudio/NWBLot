@@ -7,6 +7,7 @@
 
 #include <impl/ecs_render/shared/renderer_frame_types.h>
 #include <impl/ecs_render/raytrace/graph_snapshots.h>
+#include <impl/ecs_render/refraction/statistics_readback.h>
 #include <impl/ecs_render/raytrace/soft_shadow_wavelet.h>
 #include <impl/ecs_render/caustic/settings.h>
 #include <impl/ecs_render/raytrace/caustic_resolve_activity.h>
@@ -173,7 +174,10 @@ public:
 
     [[nodiscard]] bool prepareRefractionResources();
     void setRefractionHardwareTracingEnabled(bool enabled)noexcept;
-    [[nodiscard]] RayTracingRefractionGraphResources snapshotRefractionGraphResources()const noexcept;
+    void setRefractionDiagnosticsEnabled(bool enabled)noexcept;
+    void pollRefractionStatistics();
+    [[nodiscard]] Expected<RefractionStatistics> tryGetLatestRefractionStatistics()const noexcept;
+    [[nodiscard]] RayTracingRefractionGraphResources snapshotRefractionGraphResources(u32 width, u32 height, u32 frameIndex)const noexcept;
     [[nodiscard]] bool recordRefractionTileClassification(Core::CommandList& commandList, const DeferredFrameTargets& targets, const RayTracingRefractionGraphResources& resources)const;
     [[nodiscard]] bool recordRefractionResolve(Core::CommandList& commandList, const DeferredFrameTargets& targets, const RayTracingRefractionGraphResources& resources)const;
 
@@ -717,6 +721,8 @@ private:
     RayTracingOpticalSceneResources m_softwareOpticalScene;
     SoftwareSceneRefitResources m_sceneSwBvhRefit;
     LightSpaceShadowState m_lightSpaceShadow;
+    RefractionStatisticsReadback m_refractionStatistics;
+    bool m_refractionDiagnosticsEnabled = false;
     SoftwareSceneRefitHandle m_preparedSceneSwBvhRefit;
     PreparedShadowTraceGeometryBufferVector m_preparedShadowTraceGeometryBuffers;
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_acceptedShadowTraceGeometryBuffers;

@@ -44,6 +44,7 @@ RendererRayTracingSystem::RendererRayTracingSystem(
     , m_softwareOpticalScene(arena, graphics, Name("raytrace_optical_scene_sw"))
     , m_sceneSwBvhRefit(arena, graphics)
     , m_lightSpaceShadow(arena)
+    , m_refractionStatistics(arena, graphics)
     , m_preparedShadowTraceGeometryBuffers(arena)
     , m_acceptedShadowTraceGeometryBuffers(arena)
     , m_preparedShadowTraceMaterialSampledTextures(arena)

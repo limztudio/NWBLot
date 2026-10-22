@@ -59,6 +59,13 @@ void RendererRayTracingState::restorePreparedLightingCpuState(const RayTracingFr
 
 void RendererRayTracingState::invalidateResources()noexcept{
     m_hardwareTransparentShadow = HardwareTransparentShadowState{};
+    for(u32 csg = 0u; csg < 2u; ++csg){
+        for(u32 dense = 0u; dense < 2u; ++dense){
+            m_refractionDiagnosticHwShaders[csg][dense].reset();
+            m_refractionDiagnosticHwPipelines[csg][dense].reset();
+            m_refractionDiagnosticHwPipelineFailed[csg][dense] = false;
+        }
+    }
     m_refractionBindingLayout.reset();
     m_refractionClassifyTilesShader.reset();
     m_refractionClassifyTilesPipeline.reset();

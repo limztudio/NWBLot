@@ -25,7 +25,8 @@
     FIELD(opaqueReflectionSlot, 0xffffffffu) \
     FIELD(refractionEnabled, 1u) \
     FIELD(tileListSlot, 0u) \
-    FIELD(tileArgumentsSlot, 0u)
+    FIELD(tileArgumentsSlot, 0u) \
+    FIELD(diagnosticsSlot, 0xffffffffu)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

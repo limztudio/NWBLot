@@ -225,6 +225,7 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     DeferredFrameTargets& deferredTargets = m_frameTargets;
 
     m_reflectionSystem.pollStatistics();
+    m_raytracingSystem.pollRefractionStatistics();
     if(m_preparedHasTransparentRenderers)
         m_opticalVolumes.prepare(m_world, m_materialSystem, scratchArena);
     else
@@ -276,10 +277,11 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     // Refraction pipelines load shaders and create GPU pipelines. Hoist that creation into preparation so the render-time graph build only consumes the prepared snapshot and never creates resources.
     const bool opticalCaptureRequested = m_preparedHasTransparentRenderers && (m_refractionEnabled || m_reflectionSettings.traceMode != ReflectionTraceMode::Disabled);
     m_preparedRefractionActive = opticalCaptureRequested && m_raytracingSystem.prepareRefractionResources();
-    m_preparedRefractionResources = m_raytracingSystem.snapshotRefractionGraphResources();
+    m_preparedRefractionResources = m_raytracingSystem.snapshotRefractionGraphResources(deferredTargets.width, deferredTargets.height, m_reflectionFrameIndex);
     m_preparedRefractionResources.refractionEnabled = m_refractionEnabled;
     if(!m_refractionEnabled){
         m_preparedRefractionResources.pipeline = m_preparedRefractionResources.screenFallbackPipeline;
+        m_preparedRefractionResources.densePipeline = m_preparedRefractionResources.denseScreenFallbackPipeline;
         m_preparedRefractionResources.usesHardwareTrace = false;
         m_preparedRefractionResources.tlasHeapHandle = Core::GpuDescriptorHandle::Invalid();
     }

@@ -410,6 +410,9 @@ struct RtSurfelGiState{
 
 
 struct RtRefractionState{
+    Core::ShaderHandle m_refractionDiagnosticHwShaders[2][2];
+    Core::ComputePipelineHandle m_refractionDiagnosticHwPipelines[2][2];
+    bool m_refractionDiagnosticHwPipelineFailed[2][2] = {};
     Core::BindingLayoutHandle m_refractionBindingLayout;
     Core::ShaderHandle m_refractionClassifyTilesShader;
     Core::ComputePipelineHandle m_refractionClassifyTilesPipeline;

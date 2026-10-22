@@ -51,6 +51,7 @@ struct ProbePushConstants{
 #undef NWB_SMOKE_REFRACTION_CPU_FIELD
 };
 
+static_assert(sizeof(ProbePushConstants) == 10u * sizeof(u32));
 static_assert(s_TileCount == 66049u && s_TileCount > NWB_REFRACTION_MAX_GROUP_COUNT_X);
 static_assert(NWB_REFRACTION_TILE_ARGUMENT_BYTES == 32u && NWB_REFRACTION_TILE_COUNTER_OFFSET == 12u && NWB_REFRACTION_DENSE_ARGUMENT_OFFSET == 16u);
 

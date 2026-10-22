@@ -193,11 +193,20 @@ def prepare_target_extent(backend, handle, process, cell, read_log, timeout):
     raise SmokeFailure("requested density client/framebuffer extent was not confirmed before startup deadline")
 
 
-def retain_target_reports(reports, startup_headers, warmup_intervals, minimum_warmup_frames):
+def retain_target_reports(reports, startup_headers, warmup_intervals, minimum_warmup_frames, minimum_warmup_seconds=0, report_durations=None):
     # Headers present at target confirmation include an unsealed report that may
     # mix old-extent GPU observations. Discard it before any target-only warmup.
     relative, retained = timing.retain_after_warmup(reports[startup_headers:], warmup_intervals, minimum_warmup_frames)
-    return startup_headers + relative, retained
+    start = startup_headers + relative
+    if minimum_warmup_seconds:
+        if report_durations is None or len(report_durations) < len(reports) or any(not math.isfinite(value) or value <= 0 for value in report_durations[:len(reports)]):
+            raise SmokeFailure("elapsed target warmup requires positive durations for every sealed report")
+        seconds = sum(report_durations[startup_headers:start])
+        while start < len(reports) and seconds < minimum_warmup_seconds:
+            seconds += report_durations[start]
+            start += 1
+        retained = reports[start:] if seconds >= minimum_warmup_seconds else []
+    return start, retained
 
 
 def startup_report_boundary(text):
@@ -255,8 +264,8 @@ def acquire(args, arm, cell, block, position):
         env.pop(name, None)
     write(directory / "launch.json", {"arm": arm.name, "scheduling": scheduling_for(arm), "baseline_scheduling": args.baseline_scheduling,
         "reference_contract": reference_contract(args.baseline_scheduling), "block": block, "position": position, "executable": str(arm.executable), "runtime": str(arm.runtime),
-        "environment_overrides": overrides, "validation": False, "capture": False, "cell": cell.key, "trace_route": cell.route, "cache_before": ab.cache_identity(arm.runtime)})
-    backend = logserver = process = handle = log_directory = None
+        "environment_overrides": overrides, "validation": False, "capture": False, "diagnostic_instrumentation": False, "cell": cell.key, "trace_route": cell.route, "cache_before": ab.cache_identity(arm.runtime)})
+    backend = logserver = process = handle = log_directory = telemetry = None
     log_baseline, pattern = {}, ""
     selected = None
     collected = False
@@ -266,6 +275,9 @@ def acquire(args, arm, cell, block, position):
         backend = create_capture_backend()
         logserver, port, log_directory, log_baseline, pattern = launch_logserver(launch, arm.executable, env)
         process = launch_testbed(launch, arm.executable, env, port)
+        telemetry_factory = getattr(args, "telemetry_factory", None)
+        if telemetry_factory is not None:
+            telemetry = telemetry_factory(directory, process.pid)
         handle = backend.wait_for_window(process.pid, min(30, args.timeout))
         if handle is None:
             raise SmokeFailure("density timing window did not become visible before the startup deadline")
@@ -286,10 +298,15 @@ def acquire(args, arm, cell, block, position):
         while time.monotonic() < deadline:
             ensure_process_running(process, "during continuous refraction timing")
             if sidecar.is_file():
-                reports = timing.parse_intervals(sidecar.read_text(encoding="utf-8"), symbols)
+                timing_text = sidecar.read_text(encoding="utf-8")
+                reports = timing.parse_intervals(timing_text, symbols)
+                report_durations = [float(match[2]) for match in timing.HEADER.finditer(timing_text)]
+                if telemetry is not None:
+                    telemetry.observe_timing_headers(report_durations)
                 if len(reports) > startup_headers and first_report_seconds is None:
                     first_report_seconds = time.monotonic() - started
-                retained_start, warmed = retain_target_reports(reports, startup_headers, args.warmup_intervals, args.warmup_minimum_frames)
+                retained_start, warmed = retain_target_reports(reports, startup_headers, args.warmup_intervals, args.warmup_minimum_frames,
+                    getattr(args, "warmup_minimum_seconds", 0), report_durations)
                 retained = warmed[:args.sample_intervals]
                 problem = (f"{len(reports)} sealed reports; {len(retained)}/{args.sample_intervals} retained reports, "
                     f"{timing.positive_frame_reports(retained)} positive; {startup_headers} startup headers and {retained_start - startup_headers} target warmup reports discarded")
@@ -307,6 +324,7 @@ def acquire(args, arm, cell, block, position):
             time.sleep(.1)
         if selected is None:
             raise SmokeFailure("inconclusive timing acquisition: " + problem)
+        telemetry_result = telemetry.finish(retained_start, retained_start + len(selected), report_durations) if telemetry is not None else None
         code, tail = terminate_process(process, "refraction timing", handle)
         process = None
         require_normal_process_exit(code, tail, "refraction timing")
@@ -333,13 +351,21 @@ def acquire(args, arm, cell, block, position):
                 "target_confirmed_after_launch_seconds": target_confirmed_seconds, "startup_resize": startup_resize, "discarded_startup_report_headers": startup_headers,
                 "measurement_ready_after_launch_seconds": retained_ready_seconds, "retained_gpu_interval_seconds": sum(retained_durations),
                 "retained_interval_durations_seconds": retained_durations, "maximum_retained_interval_seconds": max(retained_durations),
-                "startup_policy": "confirm actual target client and renderer extent, discard all existing report headers including the unsealed tail, then satisfy report and GPU-frame warmup minima using only new target reports"},
+                "warmup_minimum_seconds": getattr(args, "warmup_minimum_seconds", 0), "discarded_target_warmup_seconds": sum(float(match[2]) for match in list(timing.HEADER.finditer(text))[startup_headers:start]),
+                "startup_policy": "confirm actual target client and renderer extent, discard all existing report headers including the unsealed tail, then satisfy report, elapsed interval, and GPU-frame warmup minima using only new target reports"},
             "cache_after": ab.cache_identity(arm.runtime), "artifacts": str(directory)}
+        if telemetry_result is not None:
+            result["telemetry"] = telemetry_result
         write(directory / "summary.json", result)
         return result
     finally:
         active_error = sys.exc_info()[0] is not None
         failures = []
+        if telemetry is not None:
+            try:
+                telemetry.close()
+            except Exception as error:
+                failures.append("telemetry cleanup: " + str(error))
         try:
             terminate_process(process, "refraction timing", handle)
         except Exception as error:
@@ -415,6 +441,7 @@ def parse_args(argv=None):
     parser.add_argument("--sample-intervals", type=int, default=12)
     parser.add_argument("--warmup-intervals", type=int, default=2)
     parser.add_argument("--warmup-minimum-frames", type=int, default=100)
+    parser.add_argument("--warmup-minimum-seconds", type=float, default=0, help="Additionally discard this many seconds of sealed, target-only publication intervals before measuring.")
     parser.add_argument("--minimum-frames", type=int, default=100)
     parser.add_argument("--timeout", type=float, default=120)
     parser.add_argument("--stall-threshold-ms", type=float, default=1000, help="Reject wall callback timing if a retained frame exceeds this threshold; retain raw evidence and GPU summaries.")
@@ -425,7 +452,8 @@ def parse_args(argv=None):
     parser.add_argument("--plan-only", action="store_true", help="Validate and freeze input identities and write the matrix plan without launching a process.")
     args = parser.parse_args(argv)
     if args.blocks < 2 or args.blocks % 2 or args.sample_intervals < 12 or args.warmup_intervals < 2 or args.minimum_frames < 1 or args.warmup_minimum_frames < 1 \
-        or not math.isfinite(args.timeout) or args.timeout <= 0 or not math.isfinite(args.stall_threshold_ms) or args.stall_threshold_ms <= 0:
+        or not math.isfinite(args.timeout) or args.timeout <= 0 or not math.isfinite(args.stall_threshold_ms) or args.stall_threshold_ms <= 0 \
+        or not math.isfinite(args.warmup_minimum_seconds) or args.warmup_minimum_seconds < 0:
         parser.error("use an even block count >=2, >=12 measured intervals, >=2 warmup intervals, positive frame minima, finite positive timeout and stall threshold")
     for field, defaults in (("extent", DEFAULT_EXTENTS), ("coverage", DENSITIES), ("trace_route", ROUTES)):
         values = getattr(args, field) or list(defaults)
@@ -471,6 +499,7 @@ def run(args):
             "identities": frozen, "fixture_sources": fixture_sources, "blocks": args.blocks, "trial_count": trial_count, "minimum_interval_runtime_seconds": trial_count * (args.sample_intervals + args.warmup_intervals) * .5,
             "startup_estimate_seconds_per_trial": [5, 10], "capture": False, "validation": False, "sample_intervals": args.sample_intervals, "warmup_intervals": args.warmup_intervals,
             "warmup_minimum_frames": args.warmup_minimum_frames, "wall_stall_rejection_ms": args.stall_threshold_ms,
+            "warmup_minimum_seconds": args.warmup_minimum_seconds,
             "baseline_scheduling": args.baseline_scheduling, "candidate_scheduling": "tiled", "reference_contract": reference_contract(args.baseline_scheduling),
             "policy": "Balanced independent blocks; <6 blocks descriptive only; no CPU, presentation-cadence, portable, or arbitrary-scene performance inference."}
         write(args.output_directory / "plan.json", plan)

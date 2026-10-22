@@ -1,0 +1,87 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_REFRACTION_DIAGNOSTICS_SLANGI
+#define NWB_GRAPHICS_REFRACTION_DIAGNOSTICS_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "diagnostics_layout.h"
+
+#ifndef NWB_REFRACTION_DIAGNOSTICS
+#define NWB_REFRACTION_DIAGNOSTICS 0
+#endif
+
+#define NWB_REFRACTION_DIAGNOSTIC_OFFSET(name, offset) static const uint NWB_REFRACTION_COUNTER_##name = offset;
+NWB_REFRACTION_DIAGNOSTIC_COUNTER_FIELDS(NWB_REFRACTION_DIAGNOSTIC_OFFSET)
+#undef NWB_REFRACTION_DIAGNOSTIC_OFFSET
+
+#if NWB_REFRACTION_DIAGNOSTICS
+#define g_NwbRefractionDiagnostics g_NwbHeapStorageBuffers[g_NwbRefractionPush.diagnosticsSlot]
+groupshared uint g_NwbRefractionLocalDiagnostics[NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE / 4u];
+
+void nwbRefractionInitializeDiagnostics(const uint groupIndex){
+    if(groupIndex < NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE / 4u)
+        g_NwbRefractionLocalDiagnostics[groupIndex] = 0u;
+    GroupMemoryBarrierWithGroupSync();
+}
+
+void nwbRefractionFlushDiagnostics(const uint groupIndex){
+    GroupMemoryBarrierWithGroupSync();
+    if(groupIndex >= NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE / 4u)
+        return;
+    const uint offset = groupIndex * 4u;
+    const uint amount = g_NwbRefractionLocalDiagnostics[groupIndex];
+    if(amount == 0u)
+        return;
+    uint previous;
+    if(offset == NWB_REFRACTION_COUNTER_overflowFlags)
+        g_NwbRefractionDiagnostics.InterlockedOr(offset, amount, previous);
+    else{
+        g_NwbRefractionDiagnostics.InterlockedAdd(offset, amount, previous);
+        if(previous > 0xffffffffu - amount){
+            uint unused;
+            g_NwbRefractionDiagnostics.InterlockedOr(NWB_REFRACTION_COUNTER_overflowFlags, 1u, unused);
+        }
+    }
+}
+#endif
+
+// Group-local atomics preserve divergent-path counts; each word is published once per tile.
+void nwbRefractionCount(const uint offset, const uint amount = 1u){
+#if NWB_REFRACTION_DIAGNOSTICS
+    if(amount == 0u)
+        return;
+    uint previous;
+    InterlockedAdd(g_NwbRefractionLocalDiagnostics[offset / 4u], amount, previous);
+    if(previous > 0xffffffffu - amount){
+        uint unused;
+        InterlockedOr(g_NwbRefractionLocalDiagnostics[NWB_REFRACTION_COUNTER_overflowFlags / 4u], 1u, unused);
+    }
+#endif
+}
+
+void nwbRefractionCountQueryWork(const NwbRayTraceSurfaceHit hit){
+#if NWB_REFRACTION_DIAGNOSTICS
+#if NWB_RT_CSG_ENABLED
+    nwbRefractionCount(NWB_REFRACTION_COUNTER_physicalQueries, hit.physicalQueries);
+    nwbRefractionCount(NWB_REFRACTION_COUNTER_queryBudgetUnits, hit.queryBudgetUnits);
+#else
+    nwbRefractionCount(NWB_REFRACTION_COUNTER_physicalQueries);
+    nwbRefractionCount(NWB_REFRACTION_COUNTER_queryBudgetUnits);
+#endif
+#endif
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

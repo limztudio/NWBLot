@@ -7,6 +7,7 @@
 
 #include <impl/global.h>
 #include <impl/ecs_render/shadow/light_space_shadow.h>
+#include <impl/ecs_render/refraction/statistics_readback.h>
 
 #include <core/task/gpu/task_graph.h>
 
@@ -145,6 +146,7 @@ struct RayTracingSurfelPersistentResourceSnapshot{
 
 // Prepared once before graph compilation. Recording only consumes these retained handles and slot values, so a hardware failure cannot switch the graph to a different resource set after its dependencies have been declared.
 struct RayTracingRefractionGraphResources{
+    RefractionStatisticsReadbackSnapshot statistics;
     Core::ComputePipelineHandle pipeline;
     Core::ComputePipelineHandle densePipeline;
     Core::ComputePipelineHandle screenFallbackPipeline;

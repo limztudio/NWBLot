@@ -158,6 +158,8 @@ public:
     [[nodiscard]] bool appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder);
     // Trades one frame of effect latency for overlap; off by default, self-bootstraps on toggle.
     void setRefractionEnabled(const bool enabled)noexcept{ m_refractionEnabled = enabled; }
+    void setRefractionDiagnosticsEnabled(const bool enabled)noexcept{ m_raytracingSystem.setRefractionDiagnosticsEnabled(enabled); }
+    [[nodiscard]] Expected<RefractionStatistics> tryGetLatestRefractionStatistics()const noexcept;
     void setRefractionHardwareTracingEnabled(const bool enabled)noexcept{
         m_raytracingSystem.setRefractionHardwareTracingEnabled(enabled);
     }

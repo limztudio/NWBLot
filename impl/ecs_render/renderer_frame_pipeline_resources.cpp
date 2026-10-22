@@ -236,7 +236,7 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     if(hasCsgFrameWork && !deferredTargets.csgIntervalTargetsValid())
         return false;
 
-    // CSG receiver ranges are addressed by material-pass instance index.  A CSG-active material pass reserves one range for every compatible renderer, not only those that receive clipping, so the complete view is the safe prepass capacity for either pass.
+    // CSG receiver ranges are addressed by material-pass instance index.  A CSG-active material pass reserves one range for every compatible renderer, not only those that receive clipping, so the complete view is the safe capacity for either pass.
     const usize csgReceiverRangeCount = hasCsgFrameWork ? m_world.view<RendererComponent>().candidateCount() : 0u;
 
     if(!m_materialSystem.prepareMaterialPassResources(scratchArena, deferredTargets.framebuffer.get(), MaterialPipelinePass::Opaque, false, m_preparedCsgFrameState, nullptr))
@@ -245,7 +245,7 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     if(m_preparedHasTransparentRenderers && !m_avboitSystem.prepareAvboitPassResources(scratchArena, deferredTargets, m_preparedCsgFrameState))
         return false;
 
-    // Material owns capacity growth. Once every material domain pass is prepared, publish exactly one matching Mesh-owned generation for the frame and retain the prior generation on any failed refresh.
+    // Material owns capacity growth. Once every material domain pass is prepared, publish exactly one matching Mesh-owned generation for the frame and retain the prior generation on failed refresh.
     const ECSRenderDetail::MaterialPassBufferSnapshot materialBuffers = m_materialSystem.materialPassBufferSnapshot();
     if(materialBuffers.valid() && !m_meshSystem.prepareMeshFrameBindings(materialBuffers))
         return false;

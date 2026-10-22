@@ -373,7 +373,7 @@ bool TrackedCommandBuffer::appendPendingAccelStructBuildCommit(
 
     m_resourceReferences.retainResource(accelStruct);
     retainBottomLevelReferenceSet(preparedRole->bottomLevelReferences);
-    m_pendingAccelStructBuildCommits.push_back(PendingAccelStructBuildCommit{ .accelStruct = &accelStruct, .preparedRole = preparedRole.get(), });
+    m_pendingAccelStructBuildCommits.push_back(PendingAccelStructBuildCommit{ .accelStruct = MakeNotNull(&accelStruct), .preparedRole = preparedRole.get(), });
     preparedRole.release();
     return true;
 }
@@ -459,7 +459,7 @@ void TrackedCommandBuffer::retainPendingTopLevelAccelStructReferences(const Trac
         if(!commit.preparedRole || !commit.preparedRole->bottomLevelReferences)
             continue;
         for(const RayTracingAccelStructHandle& accelStruct : m_referencedTopLevelAccelStructs){
-            if(commit.accelStruct == accelStruct.get()){
+            if(commit.accelStruct.get() == accelStruct.get()){
                 retainBottomLevelReferenceSet(commit.preparedRole->bottomLevelReferences);
                 break;
             }

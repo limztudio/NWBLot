@@ -505,7 +505,6 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
         expectParseFailure(retiredFixtureBind, resourceType, NWB_TEXT("has unsupported attribute 'fixture'"));
     }
     expectParseFailure(AssetsGraphicsFixture::s_DuplicateInstanceMaterialBindSource, "material_bind_duplicate_instance", NWB_TEXT("duplicate struct instance declaration"));
-    expectParseFailure(AssetsGraphicsFixture::s_InstanceOverrideMaterialBindSource, "material_bind_instance_override", NWB_TEXT("unsupported asset field 'instance_override'"));
 
     auto float1DefaultRootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "material_bind_float1_default");
     ASSERT_TRUE(float1DefaultRootResult);

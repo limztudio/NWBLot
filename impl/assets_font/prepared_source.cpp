@@ -98,7 +98,7 @@ Expected<Core::Assets::AssetBytes, AStringView> SerializePreparedFontSource(cons
     AppendU32LittleEndian(binary, s_Version);
     AppendU32LittleEndian(binary, faceIndex);
     AppendU32LittleEndian(binary, static_cast<u32>(sfnt.size()));
-    AppendU32LittleEndian(binary, static_cast<u32>(groupCount));
+    AppendU32LittleEndian(binary, static_cast<u32>(groups.size()));
     AppendU32LittleEndian(binary, 0u);
     const Sha256Digest fontHash = ComputeSha256(sfnt);
     binary.insert(binary.end(), fontHash.bytes, fontHash.bytes + sizeof(fontHash.bytes));

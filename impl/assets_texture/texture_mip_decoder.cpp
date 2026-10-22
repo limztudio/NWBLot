@@ -224,10 +224,10 @@ template<typename StoreTexelT>
 
     if(!VisitDecodedUastcTexels(mip, source->bytes, [outUploadBytes](const basist::color32& sourceTexel, const usize destinationTexelIndex)noexcept{
         const usize destinationByteOffset = destinationTexelIndex * s_RgbaBytesPerTexel;
-        outUploadBytes.get()[destinationByteOffset + 0u] = sourceTexel.r;
-        outUploadBytes.get()[destinationByteOffset + 1u] = sourceTexel.g;
-        outUploadBytes.get()[destinationByteOffset + 2u] = sourceTexel.b;
-        outUploadBytes.get()[destinationByteOffset + 3u] = sourceTexel.a;
+        outUploadBytes[destinationByteOffset + 0u] = sourceTexel.r;
+        outUploadBytes[destinationByteOffset + 1u] = sourceTexel.g;
+        outUploadBytes[destinationByteOffset + 2u] = sourceTexel.b;
+        outUploadBytes[destinationByteOffset + 3u] = sourceTexel.a;
     }
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: UASTC-to-RGBA8 decoding failed"));

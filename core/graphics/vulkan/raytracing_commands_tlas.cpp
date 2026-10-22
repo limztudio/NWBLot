@@ -121,7 +121,7 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
             buildVkInstance(i);
     }
 
-    if(!buildTopLevelAccelStructFromInstanceData(*as, instanceDataAddress, numInstances, buildFlags, vkBuildFlags, s_BuildTlasOperation, pInstances))
+    if(!buildTopLevelAccelStructFromInstanceData(as, instanceDataAddress, numInstances, buildFlags, vkBuildFlags, s_BuildTlasOperation, pInstances))
         return;
 }
 

@@ -46,6 +46,7 @@ public:
 inline bool operator==(const Color& lhs, const Color& rhs)noexcept{
     return (lhs.r == rhs.r) && (lhs.g == rhs.g) && (lhs.b == rhs.b) && (lhs.a == rhs.a);
 }
+
 inline bool operator!=(const Color& lhs, const Color& rhs)noexcept{ return !(lhs == rhs); }
 
 struct UIntColor{
@@ -75,6 +76,7 @@ public:
 inline bool operator==(const UIntColor& lhs, const UIntColor& rhs)noexcept{
     return (lhs.r == rhs.r) && (lhs.g == rhs.g) && (lhs.b == rhs.b) && (lhs.a == rhs.a);
 }
+
 inline bool operator!=(const UIntColor& lhs, const UIntColor& rhs)noexcept{ return !(lhs == rhs); }
 
 struct IntColor{
@@ -104,6 +106,7 @@ public:
 inline bool operator==(const IntColor& lhs, const IntColor& rhs)noexcept{
     return (lhs.r == rhs.r) && (lhs.g == rhs.g) && (lhs.b == rhs.b) && (lhs.a == rhs.a);
 }
+
 inline bool operator!=(const IntColor& lhs, const IntColor& rhs)noexcept{ return !(lhs == rhs); }
 
 
@@ -142,11 +145,13 @@ public:
 
 public:
     [[nodiscard]] f32 width()const noexcept{ return VectorGetX(VectorSubtract(VectorReplicate(maxX), VectorReplicate(minX))); }
+
     [[nodiscard]] f32 height()const noexcept{ return VectorGetX(VectorSubtract(VectorReplicate(maxY), VectorReplicate(minY))); }
 };
 inline bool operator==(const Viewport& lhs, const Viewport& rhs)noexcept{
     return (lhs.minX == rhs.minX) && (lhs.maxX == rhs.maxX) && (lhs.minY == rhs.minY) && (lhs.maxY == rhs.maxY) && (lhs.minZ == rhs.minZ) && (lhs.maxZ == rhs.maxZ);
 }
+
 inline bool operator!=(const Viewport& lhs, const Viewport& rhs)noexcept{ return !(lhs == rhs); }
 
 
@@ -196,6 +201,7 @@ public:
 inline bool operator==(const Rect& lhs, const Rect& rhs)noexcept{
     return (lhs.minX == rhs.minX) && (lhs.maxX == rhs.maxX) && (lhs.minY == rhs.minY) && (lhs.maxY == rhs.maxY);
 }
+
 inline bool operator!=(const Rect& lhs, const Rect& rhs)noexcept{ return !(lhs == rhs); }
 
 struct Box{
@@ -241,12 +247,15 @@ public:
 
 public:
     [[nodiscard]] constexpr i32 width()const noexcept{ return maxX - minX; }
+
     [[nodiscard]] constexpr i32 height()const noexcept{ return maxY - minY; }
+
     [[nodiscard]] constexpr i32 depth()const noexcept{ return maxZ - minZ; }
 };
 inline bool operator==(const Box& lhs, const Box& rhs)noexcept{
     return (lhs.minX == rhs.minX) && (lhs.maxX == rhs.maxX) && (lhs.minY == rhs.minY) && (lhs.maxY == rhs.maxY) && (lhs.minZ == rhs.minZ) && (lhs.maxZ == rhs.maxZ);
 }
+
 inline bool operator!=(const Box& lhs, const Box& rhs)noexcept{ return !(lhs == rhs); }
 
 

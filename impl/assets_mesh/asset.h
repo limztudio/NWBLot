@@ -46,6 +46,7 @@ public:
     void setPayload(GeometryPayloadArgT&&... geometryPayloadArgs)noexcept(noexcept(setGeometryPayload(Forward<GeometryPayloadArgT>(geometryPayloadArgs)...))){
         setGeometryPayload(Forward<GeometryPayloadArgT>(geometryPayloadArgs)...);
     }
+
     [[nodiscard]] u32 meshClass()const noexcept{ return Core::Mesh::MeshClass::Static; }
 };
 

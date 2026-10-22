@@ -406,7 +406,9 @@ TEST(AssetsGraphics, MaterialFailedReloadPreservesTypedLayoutStagesFlagsAndAvboi
     }
     const auto layoutOffsets = AssetsGraphicsFixture::FindMaterialBinaryTypedLayoutOffsets(binary);
     ASSERT_TRUE(layoutOffsets);
-    for(u32 invalidCase = 0u; invalidCase < 4u; ++invalidCase){
+    // The first stage entry follows the block bytes, resource references, and stage count.
+    const usize firstStageOffset = layoutOffsets->blockByteCountOffset + sizeof(u32) + material.typedBlockBytes().size() + sizeof(u32) + material.resourceReferences().size() * NWB::Impl::MaterialBinaryPayload::s_ResourceReferenceBytes + sizeof(u32);
+    for(u32 invalidCase = 0u; invalidCase < 5u; ++invalidCase){
         NWB::Core::Assets::AssetBytes malformed(binary);
         switch(invalidCase){
         case 0u:
@@ -421,19 +423,19 @@ TEST(AssetsGraphics, MaterialFailedReloadPreservesTypedLayoutStagesFlagsAndAvboi
         case 3u:
             malformed.push_back(0u);
             break;
+        case 4u:
+            // A vertex stage is a real shader stage, but materials only hold mesh and pixel.
+            ASSERT_TRUE(AssetsGraphicsFixture::OverwritePOD(malformed, firstStageOffset, NWB::Core::ShaderType::VertexStage));
+            break;
         }
         EXPECT_FALSE(material.loadBinary(malformed)) << invalidCase;
         NWB::Core::Assets::AssetBytes retained(testArena.arena);
         ASSERT_TRUE(codec.serialize(material, retained));
         EXPECT_EQ(retained, binary) << invalidCase;
     }
-    EXPECT_EQ(logger.errorCount(), binary.size() + 4u);
+    EXPECT_EQ(logger.errorCount(), binary.size() + 5u);
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("is not a material stage")));
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 

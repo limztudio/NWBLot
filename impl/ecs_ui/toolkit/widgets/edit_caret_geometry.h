@@ -66,6 +66,7 @@ public:
 
 public:
     EditCaretGeometry& operator=(EditCaretGeometry&&)noexcept = default;
+
     EditCaretGeometry& operator=(const EditCaretGeometry&) = delete;
 
 

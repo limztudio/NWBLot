@@ -44,11 +44,17 @@ public:
 
 public:
     [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_navigation.instanceGeneration(); }
+
     [[nodiscard]] u64 revision()const noexcept{ return m_revision; }
+
     [[nodiscard]] const EditBoxPlacement& placement()const noexcept{ return m_visual.placement; }
+
     [[nodiscard]] const ScrollViewportPlacement& scrollbars()const noexcept{ return m_scrollInput.m_placement; }
+
     [[nodiscard]] Point scroll()const noexcept{ return { m_visual.scroll, m_scrollY }; }
+
     [[nodiscard]] const EditNavigationState& navigation()const noexcept{ return m_navigation; }
+
     [[nodiscard]] bool focused()const noexcept{ return m_visual.focused; }
     // Explicit scrolling suppresses caret reveal until a later accepted text, selection or ownership intent.
     [[nodiscard]] bool scrollTo(Point scroll)noexcept;

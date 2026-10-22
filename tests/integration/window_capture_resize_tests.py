@@ -16,6 +16,7 @@ sys.path.insert(0, str(SMOKE_DIRECTORY))
 sys.path.insert(0, str(SMOKE_DIRECTORY / LIT_UI_LAYER_DIRECTORY))
 
 import window_capture_smoke  # noqa: E402
+import window_capture_environment  # noqa: E402
 
 
 LIT_RENDER_READY_TIMEOUT = "--render-ready-timeout"
@@ -78,7 +79,8 @@ class ResizeCaptureConfigurationTests(unittest.TestCase):
         args = SimpleNamespace(resize_client=[1001, 701], software_vulkan=LIT_OFF)
         with mock.patch.dict(os.environ, {LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: "6"}, clear=True), \
              mock.patch.object(window_capture_smoke.platform, LIT_SYSTEM, return_value=LIT_WINDOWS), \
-             mock.patch.object(window_capture_smoke, "require_windows_interactive_desktop"):
+             mock.patch.object(window_capture_smoke, "require_windows_interactive_desktop"), \
+             mock.patch.object(window_capture_environment, "require_windows_interactive_desktop"):
             with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "active or invalid"):
                 window_capture_smoke.build_launch_environment(args)
             args.resize_client = None

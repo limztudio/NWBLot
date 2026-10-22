@@ -116,7 +116,7 @@ TEST(PreparedFontSource, ImageCorruptionRejectsFullReadWhileFontOnlySkipsCompact
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     SourceTestArena testArena;
     SourceFixture fixture(testArena.arena);
-    auto binaryResult = SerializePreparedFontSource({ fixture.sfnt, sizeof(fixture.sfnt) }, 0u, fixture.views, s_GroupCount, testArena.arena);
+    auto binaryResult = SerializePreparedFontSource({ fixture.sfnt, sizeof(fixture.sfnt) }, 0u, fixture.views, testArena.arena);
     ASSERT_TRUE(binaryResult);
     Core::Assets::AssetBytes& binary = *binaryResult;
     ASSERT_EQ(binary.size(), s_PixelOffset + 150u);
@@ -164,7 +164,7 @@ TEST(PreparedFontSource, SfntByteAndDigestCorruptionRejectBothReadModes){
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     SourceTestArena testArena;
     SourceFixture fixture(testArena.arena);
-    auto binaryResult = SerializePreparedFontSource({ fixture.sfnt, sizeof(fixture.sfnt) }, 0u, fixture.views, s_GroupCount, testArena.arena);
+    auto binaryResult = SerializePreparedFontSource({ fixture.sfnt, sizeof(fixture.sfnt) }, 0u, fixture.views, testArena.arena);
     ASSERT_TRUE(binaryResult);
     Core::Assets::AssetBytes& binary = *binaryResult;
     auto pathResult = WriteCase(testArena, "font_integrity_control.font", binary);
@@ -194,7 +194,7 @@ TEST(PreparedFontSource, MalformedDirectoryCountsAndOverflowRejectBeforePayloadA
     SourceTestArena testArena;
     Core::Alloc::GlobalArena outputArena(Name("tests/integration/assets_font/prepared_output"));
     SourceFixture fixture(testArena.arena);
-    auto binaryResult = SerializePreparedFontSource({ fixture.sfnt, sizeof(fixture.sfnt) }, 0u, fixture.views, s_GroupCount, testArena.arena);
+    auto binaryResult = SerializePreparedFontSource({ fixture.sfnt, sizeof(fixture.sfnt) }, 0u, fixture.views, testArena.arena);
     ASSERT_TRUE(binaryResult);
     Core::Assets::AssetBytes& binary = *binaryResult;
     auto pathResult = WriteCase(testArena, "directory_control.font", binary);
@@ -269,7 +269,7 @@ TEST(PreparedFontSource, TruncatedSectionsAndTrailingBytesRejectBothReadModes){
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     SourceTestArena testArena;
     SourceFixture fixture(testArena.arena);
-    auto binaryResult = SerializePreparedFontSource({ fixture.sfnt, sizeof(fixture.sfnt) }, 0u, fixture.views, s_GroupCount, testArena.arena);
+    auto binaryResult = SerializePreparedFontSource({ fixture.sfnt, sizeof(fixture.sfnt) }, 0u, fixture.views, testArena.arena);
     ASSERT_TRUE(binaryResult);
     Core::Assets::AssetBytes& binary = *binaryResult;
     auto pathResult = WriteCase(testArena, "length_control.font", binary);
@@ -309,15 +309,15 @@ TEST(PreparedFontSource, InvalidSerializationInputsRejectWithoutAllocating){
     SourceTestArena testArena;
     Core::Alloc::GlobalArena outputArena(Name("tests/integration/assets_font/prepared_serialize_output"));
     SourceFixture fixture(testArena.arena);
-    auto outputResult = SerializePreparedFontSource({ fixture.sfnt, sizeof(fixture.sfnt) }, 0u, fixture.views, s_GroupCount, outputArena);
+    auto outputResult = SerializePreparedFontSource({ fixture.sfnt, sizeof(fixture.sfnt) }, 0u, fixture.views, outputArena);
     ASSERT_TRUE(outputResult);
-    constexpr u32 s_InvalidCaseCount = 20u;
+    constexpr u32 s_InvalidCaseCount = 18u;
+    constexpr usize s_OverLimitGroupCount = 9u;
     for(u32 variant = 0u; variant < s_InvalidCaseCount; ++variant){
         BinaryByteView sfnt{ fixture.sfnt, sizeof(fixture.sfnt) };
-        PreparedFontImageView views[s_GroupCount];
+        PreparedFontImageView views[s_OverLimitGroupCount];
         for(usize index = 0u; index < s_GroupCount; ++index)
             views[index] = fixture.views[index];
-        const PreparedFontImageView* groups = views;
         usize groupCount = s_GroupCount;
         u32 faceIndex = 0u;
         switch(variant){
@@ -326,24 +326,22 @@ TEST(PreparedFontSource, InvalidSerializationInputsRejectWithoutAllocating){
         case 2u: sfnt.byteCount = s_FontMaxSourceBytes + 1u; break;
         case 3u: faceIndex = 1u; break;
         case 4u: groupCount = 0u; break;
-        case 5u: groupCount = 9u; break;
-        case 6u: groupCount = Limit<usize>::s_Max; break;
-        case 7u: groups = nullptr; break;
-        case 8u: views[0u].width = 0u; break;
-        case 9u: views[0u].width = 2049u; break;
-        case 10u: views[0u].width = Limit<u32>::s_Max; break;
-        case 11u: views[0u].height = 0u; break;
-        case 12u: views[0u].height = 2049u; break;
-        case 13u: views[0u].height = Limit<u32>::s_Max; break;
-        case 14u: views[0u].channelCount = 0u; break;
-        case 15u: views[0u].channelCount = 5u; break;
-        case 16u: views[0u].channelCount = Limit<u32>::s_Max; break;
-        case 17u: views[0u].pixels.bytes = nullptr; break;
-        case 18u: --views[0u].pixels.byteCount; break;
-        case 19u: ++views[0u].pixels.byteCount; break;
+        case 5u: groupCount = s_OverLimitGroupCount; break;
+        case 6u: views[0u].width = 0u; break;
+        case 7u: views[0u].width = 2049u; break;
+        case 8u: views[0u].width = Limit<u32>::s_Max; break;
+        case 9u: views[0u].height = 0u; break;
+        case 10u: views[0u].height = 2049u; break;
+        case 11u: views[0u].height = Limit<u32>::s_Max; break;
+        case 12u: views[0u].channelCount = 0u; break;
+        case 13u: views[0u].channelCount = 5u; break;
+        case 14u: views[0u].channelCount = Limit<u32>::s_Max; break;
+        case 15u: views[0u].pixels.bytes = nullptr; break;
+        case 16u: --views[0u].pixels.byteCount; break;
+        case 17u: ++views[0u].pixels.byteCount; break;
         }
         const ArenaMemoryStats before = outputArena.memoryStats();
-        EXPECT_FALSE(SerializePreparedFontSource(sfnt, faceIndex, groups, groupCount, outputArena)) << variant;
+        EXPECT_FALSE(SerializePreparedFontSource(sfnt, faceIndex, Span<const PreparedFontImageView>(views, groupCount), outputArena)) << variant;
         EXPECT_EQ(outputArena.memoryStats().allocationCount, before.allocationCount);
     }
     EXPECT_EQ(logger.errorCount(), s_InvalidCaseCount);

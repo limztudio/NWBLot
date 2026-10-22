@@ -102,7 +102,7 @@ private:
 using RefractionStatisticsControl = RefCounter<RefractionStatisticsState>;
 using RefractionStatisticsControlHandle = RefCountPtr< RefractionStatisticsControl, ArenaRefDeleter<RefractionStatisticsControl, Core::Alloc::GlobalArena> >;
 
-[[nodiscard]] RefractionStatisticsControlHandle CreateRefractionStatisticsControl(Core::Alloc::GlobalArena& arena, u16 deviceGeneration)noexcept;
+[[nodiscard]] Expected<RefractionStatisticsControlHandle> CreateRefractionStatisticsControl(Core::Alloc::GlobalArena& arena, u16 deviceGeneration)noexcept;
 
 // Destruction releases only an unaccepted reservation.
 class RefractionStatisticsReservation final : NoCopy{
@@ -118,6 +118,7 @@ public:
 
 public:
     [[nodiscard]] bool valid()const noexcept{ return m_key.valid(); }
+
     [[nodiscard]] u32 slotIndex()const noexcept{ return m_key.slot; }
     void accept(const Core::QueueSubmissionToken& token, bool hardwareReady)noexcept;
     void discard()noexcept;

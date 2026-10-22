@@ -173,19 +173,29 @@ struct GpuGraphResourceDesc{
 
 public:
     constexpr GpuGraphResourceDesc& setIdentity(const Name& value)noexcept{ identity = value; return *this; }
+
     constexpr GpuGraphResourceDesc& setMarkerLabel(const AStringView value)noexcept{ markerLabel = value; return *this; }
+
     constexpr GpuGraphResourceDesc& setType(const GpuGraphResourceType::Enum value)noexcept{ type = value; return *this; }
+
     constexpr GpuGraphResourceDesc& setInitialState(const ResourceStates::Mask value)noexcept{ initialState = value; hasExplicitInitialState = true; return *this; }
+
     constexpr GpuGraphResourceDesc& setExternalFinalState(const ResourceStates::Mask value)noexcept{ externalFinalState = value; return *this; }
+
     constexpr GpuGraphResourceDesc& setExternalFinalReleaseDestinationQueue(const GpuPhysicalQueueId value)noexcept{ externalFinalReleaseDestinationQueue = value; return *this; }
+
     constexpr GpuGraphResourceDesc& setInitialOwnerQueue(const GpuPhysicalQueueId value)noexcept{ initialOwnerQueue = value; return *this; }
+
     constexpr GpuGraphResourceDesc& setInitialOwnerHandoffSources(const GpuGraphInitialOwnerHandoffSourceDesc* const values, const usize count)noexcept{
         initialOwnerHandoffSources = values;
         initialOwnerHandoffSourceCount = count;
         return *this;
     }
+
     constexpr GpuGraphResourceDesc& setQueueSharing(const ResourceQueueSharing::Mask value)noexcept{ queueSharing = value; return *this; }
+
     constexpr GpuGraphResourceDesc& setInitialAvailabilityCompletion(const GpuExternalCompletionId value)noexcept{ initialAvailabilityCompletion = value; return *this; }
+
     constexpr GpuGraphResourceDesc& setDirectConsumerQueue(const GpuPhysicalQueueId value)noexcept{ directConsumerQueue = value; return *this; }
 };
 
@@ -199,7 +209,9 @@ struct GpuGraphResourceVersionDesc{
 
 public:
     constexpr GpuGraphResourceVersionDesc& setResource(const GpuGraphResourceId value)noexcept{ resource = value; return *this; }
+
     constexpr GpuGraphResourceVersionDesc& setRange(const GpuTaskResourceRange& value)noexcept{ range = value; return *this; }
+
     constexpr GpuGraphResourceVersionDesc& setOrigin(const GpuGraphResourceVersionOrigin::Enum value)noexcept{ origin = value; return *this; }
 };
 
@@ -214,7 +226,9 @@ struct GpuGraphResourceSetDesc{
 
 public:
     constexpr GpuGraphResourceSetDesc& setIdentity(const Name& value)noexcept{ identity = value; return *this; }
+
     constexpr GpuGraphResourceSetDesc& setMarkerLabel(const AStringView value)noexcept{ markerLabel = value; return *this; }
+
     constexpr GpuGraphResourceSetDesc& setMembers(const GpuGraphResourceId* values, const usize count)noexcept{
         members = values;
         memberCount = count;
@@ -232,7 +246,9 @@ struct GpuGraphPipelineDesc{
 
 public:
     constexpr GpuGraphPipelineDesc& setIdentity(const Name& value)noexcept{ identity = value; return *this; }
+
     constexpr GpuGraphPipelineDesc& setMarkerLabel(const AStringView value)noexcept{ markerLabel = value; return *this; }
+
     constexpr GpuGraphPipelineDesc& setType(const GpuGraphPipelineType::Enum value)noexcept{ type = value; return *this; }
 };
 
@@ -246,7 +262,9 @@ struct GpuExternalCompletionDesc{
 
 public:
     constexpr GpuExternalCompletionDesc& setIdentity(const Name& value)noexcept{ identity = value; return *this; }
+
     constexpr GpuExternalCompletionDesc& setMarkerLabel(const AStringView value)noexcept{ markerLabel = value; return *this; }
+
     constexpr GpuExternalCompletionDesc& setToken(const QueueSubmissionToken& value)noexcept{ token = value; return *this; }
 };
 
@@ -271,30 +289,39 @@ struct GpuTaskDesc{
 
 public:
     constexpr GpuTaskDesc& setIdentity(const Name& value)noexcept{ identity = value; return *this; }
+
     constexpr GpuTaskDesc& setMarkerLabel(const AStringView value)noexcept{ markerLabel = value; return *this; }
+
     constexpr GpuTaskDesc& setScheduling(const GpuTaskSchedulingHint& value)noexcept{ scheduling = value; return *this; }
+
     constexpr GpuTaskDesc& setDependencies(const GpuTaskId* values, const usize count)noexcept{ dependencies = values; dependencyCount = count; return *this; }
+
     constexpr GpuTaskDesc& setExternalDependencies(const GpuExternalCompletionId* values, const usize count)noexcept{
         externalDependencies = values;
         externalDependencyCount = count;
         return *this;
     }
+
     constexpr GpuTaskDesc& setExternalStateSources(const GpuTaskExternalStateSource* values, const usize count)noexcept{
         externalStateSources = values;
         externalStateSourceCount = count;
         return *this;
     }
+
     constexpr GpuTaskDesc& setResourceUses(const GpuTaskResourceUse* values, const usize count)noexcept{
         resourceUses = values;
         resourceUseCount = count;
         return *this;
     }
+
     constexpr GpuTaskDesc& setResourceSetUses(const GpuTaskResourceSetUse* values, const usize count)noexcept{
         resourceSetUses = values;
         resourceSetUseCount = count;
         return *this;
     }
+
     constexpr GpuTaskDesc& setTimingMetadata(const GpuTaskTimingMetadata& value)noexcept{ timing = value; return *this; }
+
     constexpr GpuTaskDesc& setResourceVersionUses(const GpuTaskResourceVersionUse* values, const usize count)noexcept{
         resourceVersionUses = values;
         resourceVersionUseCount = count;

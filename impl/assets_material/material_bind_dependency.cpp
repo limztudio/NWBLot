@@ -56,11 +56,27 @@ static bool TryResolveMaterialBindDependencyInterface(const ScratchPath& normali
     return true;
 }
 
+static const MaterialBindEntry* FindMaterialBindEntry(const CookVector<MaterialBindEntry>& materialBindEntries, const Name& interfaceName){
+    for(const MaterialBindEntry& bindEntry : materialBindEntries){
+        const auto bindInterfaceName = Name::FromText(AStringView(bindEntry.virtualPath));
+        if(bindInterfaceName && *bindInterfaceName == interfaceName)
+            return &bindEntry;
+    }
+    return nullptr;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface(CookArena& arena, const AStringView shaderName, const Path& materialBindIncludeRoot, const CookVector<Path>& dependencies, ScratchArena& scratchArena){
+Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface(
+    CookArena& arena,
+    const AStringView shaderName,
+    const Path& materialBindIncludeRoot,
+    const CookVector<MaterialBindEntry>& materialBindEntries,
+    const CookVector<Path>& dependencies,
+    ScratchArena& scratchArena
+){
     MaterialBindDependency result(arena);
 
     ScratchPath normalizedMaterialBindIncludeRoot(scratchArena);
@@ -87,6 +103,14 @@ Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface(CookAren
             return MakeUnexpected(Failure{});
         }
         const Name dependencyInterfaceName = *dependencyInterfaceNameResult;
+
+        // Each generated include comes from one authored file, and Gather already drops repeated paths, so this list has no repeats.
+        const MaterialBindEntry* bindEntry = FindMaterialBindEntry(materialBindEntries, dependencyInterfaceName);
+        if(!bindEntry){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind dependency: shader '{}' includes generated material bind interface '{}' with no authored source"), StringConvert(shaderName), StringConvert(dependencyInterfacePath));
+            return MakeUnexpected(Failure{});
+        }
+        result.interfaceSources.emplace_back(arena, AStringView(bindEntry->source));
 
         // Reads typed material constants, so it needs the typed binding.
         result.dependsOnMaterialBind = true;

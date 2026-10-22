@@ -27,9 +27,13 @@ namespace Tests::Smoke{
 class UiComboSmokeSource final : public Impl::Ui::IListDataSource, NoCopy{
 public:
     virtual u64 instanceGeneration()const noexcept override{ return m_generation; }
+
     virtual u64 revision()const noexcept override{ return m_revision + m_rows.revision(); }
+
     virtual u64 rowCount()const noexcept override{ return m_empty ? 0u : m_rows.rowCount(); }
+
     virtual u64 key(u64 index)const noexcept override{ return m_empty ? 0u : m_rows.key(index); }
+
     virtual Expected<u64> indexOf(u64 key)const noexcept override{
         if(m_empty)
             return MakeUnexpected(Failure{});
@@ -37,17 +41,25 @@ public:
     }
     virtual Expected<u64> findEnabled(u64 start, bool reverse)const noexcept override;
     virtual StringView text(u64 index)const noexcept override{ return m_empty ? StringView{} : m_rows.text(index); }
+
     virtual bool enabled(u64 index)const noexcept override{ return !m_empty && m_rows.enabled(index); }
 
 
 public:
     void reverse()noexcept{ m_rows.reverse(); }
+
     void remove(u64 key)noexcept{ m_rows.remove(key); }
+
     void beginFrame()noexcept{ m_rows.beginFrame(); }
+
     void toggleEmpty()noexcept{ m_empty = !m_empty; ++m_revision; }
+
     void replace()noexcept{ ++m_generation; }
+
     [[nodiscard]] bool reversed()const noexcept{ return m_rows.reversed(); }
+
     [[nodiscard]] u64 removedKey()const noexcept{ return m_rows.removedKey(); }
+
     [[nodiscard]] u32 labelReads()const noexcept{ return m_rows.labelReads(); }
 
 

@@ -41,6 +41,7 @@ struct DoubleStreamLoadInput{};
 
 
 [[nodiscard]] ThrowingStreamLoadResult<SIMDVectorSingle> LoadFloat(const SingleStreamLoadInput&)noexcept{ return {}; }
+
 [[nodiscard]] ThrowingStreamLoadResult<SIMDVectorDouble> LoadDouble(const DoubleStreamLoadInput&)noexcept{ return {}; }
 
 void ExpectSingleDirectionNear(SIMDVectorSingle actual, SIMDVectorSingle expected){

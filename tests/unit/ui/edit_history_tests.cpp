@@ -4,6 +4,9 @@
 
 #include "edit_fixture.h"
 
+#include <impl/ecs_ui/toolkit/edit/multiline_text.h>
+#include <impl/ecs_ui/toolkit/edit/single_line_text.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -94,6 +97,18 @@ TEST_F(UiEditHistoryTests, DisabledHistoryAndCopiedReplacementHaveBoundedOwnersh
     EXPECT_EQ(limited.text(), "owned");
     EXPECT_FALSE(limited.undo());
     EXPECT_FALSE(limited.redo());
+}
+
+TEST_F(UiEditHistoryTests, NormalizedMultilinePasteUndoRestoresPriorDocument){
+    EditModel multiline(m_arena, {}, EditTextMode::Multiline);
+    ASSERT_TRUE(multiline.setText("abcdef\nx\nabcdef\n???"));
+    ASSERT_TRUE(multiline.selectAll());
+    auto canonical = Impl::Ui::NormalizeMultilineText(m_arena, "ab\r\ncdef\r\nxy", multiline.limits().maxBytes);
+    ASSERT_TRUE(canonical);
+    ASSERT_TRUE(multiline.replaceSelection(*canonical));
+    EXPECT_EQ(multiline.text(), "ab\ncdef\nxy");
+    ASSERT_TRUE(multiline.undo());
+    EXPECT_EQ(multiline.text(), "abcdef\nx\nabcdef\n???");
 }
 
 

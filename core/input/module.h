@@ -216,14 +216,21 @@ public:
 
 public:
     virtual void windowFocusUpdate(bool){}
+
     virtual void pointerLeave(){}
+
     virtual void pointerCaptureLost(){}
+
     virtual bool keyboardUpdate(i32, i32, i32, i32){ return false; }
     // Queried immediately from the consuming press/repeat handler before native ordinary text is admitted.
     [[nodiscard]] virtual bool blocksKeyboardText()const{ return false; }
+
     virtual bool keyboardCharInput(u32, i32){ return false; }
+
     virtual bool mousePosUpdate(f64, f64){ return false; }
+
     virtual bool mouseButtonUpdate(i32, i32, i32){ return false; }
+
     virtual bool mouseScrollUpdate(f64, f64){ return false; }
 };
 

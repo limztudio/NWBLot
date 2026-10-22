@@ -43,6 +43,7 @@ struct PresentationFpsSample{
 
 public:
     [[nodiscard]] u64 presentations()const noexcept{ return lastPresentationCount - firstPresentationCount; }
+
     [[nodiscard]] f64 averageFps()const noexcept{ return wallSeconds > 0.0 ? VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(static_cast<f64>(presentations())), VectorDoubleReplicate(wallSeconds))) : 0.0; }
 };
 
@@ -57,7 +58,9 @@ public:
 public:
     [[nodiscard]] PresentationFpsStatus::Enum observe(u64 successfulPresentations, Timer now)noexcept;
     [[nodiscard]] const PresentationFpsSample& interval()const noexcept{ return m_interval; }
+
     [[nodiscard]] const PresentationFpsSample& total()const noexcept{ return m_total; }
+
     [[nodiscard]] bool measurementStarted()const noexcept{ return m_measuring; }
 
 

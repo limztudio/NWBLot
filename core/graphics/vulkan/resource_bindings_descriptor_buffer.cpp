@@ -43,6 +43,7 @@ DescriptorBufferManager::DescriptorBufferManager(Device& device, const VulkanCon
     , m_resourceSegment(context.objectArena, VulkanDetail::AllocateDescriptorBufferStorageIdentity())
     , m_samplerSegment(context.objectArena, VulkanDetail::AllocateDescriptorBufferStorageIdentity())
 {}
+
 DescriptorBufferManager::~DescriptorBufferManager()noexcept{
     shutdownForDeviceTeardown();
 }

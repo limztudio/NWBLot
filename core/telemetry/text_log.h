@@ -64,12 +64,17 @@ public:
 
 public:
     void setFrameIndex(u64 frameIndex)noexcept{ m_frameIndex = frameIndex; }
+
     void setStreamId(u32 streamId)noexcept{ m_streamId = streamId; }
+
     void setForwardLogger(Common::ILogger* forwardLogger)noexcept{ m_forwardLogger = forwardLogger; }
 
     [[nodiscard]] u64 droppedTextLogCount()const noexcept{ return m_droppedTextLogCount.load(MemoryOrder::relaxed); }
+
     [[nodiscard]] u64 frameIndex()const noexcept{ return m_frameIndex; }
+
     [[nodiscard]] u32 streamId()const noexcept{ return m_streamId; }
+
     [[nodiscard]] Common::ILogger* forwardLogger()const noexcept{ return m_forwardLogger; }
 
     virtual Common::LogArena& arena()override;

@@ -106,7 +106,9 @@ inline void SkipProcMapWhitespace(const AStringView line, usize& cursor)noexcept
 }
 
 template<typename EntryVectorT>
-inline void ParseLinuxProcessMemoryMaps(const AStringView mapsText, EntryVectorT& outEntries){
+inline void ParseLinuxProcessMemoryMaps(const AStringView mapsText, EntryVectorT& outEntries)noexcept(
+    noexcept(outEntries.clear()) && noexcept(outEntries.push_back(DeclVal<const LinuxProcessMemoryMapEntry&>()))
+){
     outEntries.clear();
 
     usize cursor = 0u;
@@ -118,7 +120,10 @@ inline void ParseLinuxProcessMemoryMaps(const AStringView mapsText, EntryVectorT
 }
 
 template<typename EntryRangeT>
-[[nodiscard]] inline Expected<LinuxProcessMemoryMapEntry> FindLinuxProcessMemoryMapForAddress(const EntryRangeT& entries, const u64 address){
+[[nodiscard]] inline Expected<LinuxProcessMemoryMapEntry> FindLinuxProcessMemoryMapForAddress(const EntryRangeT& entries, const u64 address)noexcept(
+    IsNothrowRangeFor<const EntryRangeT, decltype([](const LinuxProcessMemoryMapEntry&)noexcept{})>()
+    && noexcept(Expected<LinuxProcessMemoryMapEntry>(DeclVal<const LinuxProcessMemoryMapEntry&>()))
+){
     for(const LinuxProcessMemoryMapEntry& entry : entries){
         if(address < entry.begin || address >= entry.end)
             continue;

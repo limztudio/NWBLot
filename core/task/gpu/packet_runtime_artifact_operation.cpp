@@ -90,6 +90,7 @@ GpuRecordedGraph::ArtifactOperation::ArtifactOperation(const GpuRecordedGraph& r
     m_ownsAdmission = true;
     s_ActiveOperation = this;
 }
+
 GpuRecordedGraph::ArtifactOperation::~ArtifactOperation()noexcept{
     if(!m_recordedGraph)
         return;

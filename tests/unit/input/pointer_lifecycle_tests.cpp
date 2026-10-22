@@ -27,6 +27,7 @@ public:
 
 public:
     virtual void windowFocusUpdate(bool)noexcept override{ ++m_focusChanges; }
+
     virtual void pointerLeave()override{
         ++m_leaves;
         if(m_addOnLeave){
@@ -34,6 +35,7 @@ public:
             m_addOnLeave = nullptr;
         }
     }
+
     virtual void pointerCaptureLost()override{
         ++m_captureLosses;
         if(m_removeOnCaptureLoss){
@@ -41,6 +43,7 @@ public:
             m_removeOnCaptureLoss = nullptr;
         }
     }
+
     virtual bool keyboardUpdate(i32, i32, const i32 action, i32)noexcept override{
         if(action == InputAction::Release)
             ++m_keyReleases;

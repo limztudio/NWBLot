@@ -38,12 +38,6 @@ namespace __hidden_mesh{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_RuntimeMeshPruningArena("impl/ecs_render/runtime_mesh_pruning");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class UnpublishedMeshDescriptors final : NoCopy{
 public:
     UnpublishedMeshDescriptors(RendererMeshSystem& meshSystem, MeshResources& mesh)noexcept
@@ -538,12 +532,11 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::findRuntimeMeshResources(c
     return MakeNotNull(&mesh);
 }
 
-void RendererMeshSystem::pruneRuntimeMeshResources(){
+void RendererMeshSystem::pruneRuntimeMeshResources(Core::Alloc::ScratchArena& scratchArena){
     if(m_meshState.m_meshes.empty())
         return;
 
     const auto* meshSystemPtr = m_world.getSystem<NWB::Impl::MeshSystem>();
-    Core::Alloc::ScratchArena scratchArena(__hidden_mesh::s_RuntimeMeshPruningArena);
     if(meshSystemPtr){
         const NWB::Impl::MeshSystem& meshSystem = *meshSystemPtr;
         ECSRenderDetail::PruneRuntimeMeshResources(m_meshState.m_meshes, meshSystem, [this](MeshResources& mesh){ releaseMeshGeometryHeapHandles(mesh); }, scratchArena);

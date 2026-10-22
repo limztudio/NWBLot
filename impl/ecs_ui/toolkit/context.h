@@ -89,7 +89,9 @@ public:
     void discardPopupScope(const PopupToken& token)noexcept;
     [[nodiscard]] bool hasPopupScope(const PopupToken& token)const noexcept;
     [[nodiscard]] WidgetId scopeId()const noexcept{ return m_scopes.empty() ? WidgetId{} : m_scopes.back(); }
+
     [[nodiscard]] PopupToken popupToken()const noexcept{ return m_currentPopup; }
+
     [[nodiscard]] u32 popupLayer()const noexcept{ return m_popupLayer; }
     [[nodiscard]] u32 popupLayer(const PopupToken& token)const noexcept;
     [[nodiscard]] PopupToken topPopupToken()const noexcept{ return m_popups.empty() ? PopupToken{} : m_popups.back().scope.token; }
@@ -101,11 +103,17 @@ public:
     // Retire removed/hidden host roots even while a GPU frame is pending.
     void retainRoots(const WidgetRoot* roots, usize count);
     void fail()noexcept{ m_failed = true; }
+
     [[nodiscard]] bool failed()const noexcept{ return m_failed; }
+
     [[nodiscard]] bool ready()const noexcept{ return m_readyGeneration != 0u; }
+
     [[nodiscard]] u64 readyGeneration()const noexcept{ return m_readyGeneration; }
+
     [[nodiscard]] InputRouter& input()noexcept{ return m_input; }
+
     [[nodiscard]] const InputRouter& input()const noexcept{ return m_input; }
+
     [[nodiscard]] const WidgetStateStore& states()const noexcept{ return m_states; }
 
 

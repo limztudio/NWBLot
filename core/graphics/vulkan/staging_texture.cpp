@@ -292,7 +292,7 @@ Expected<StagingTextureHandle> Device::createStagingTexture(const TextureDesc& d
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: invalid texture format"));
         return MakeUnexpected(Failure{});
     }
-    const auto bufferOffsetAlignment = CommonAlignmentChecked(static_cast<u32>(s_BufferAlignmentBytes), formatLayout->bytesPerBlock);
+    const auto bufferOffsetAlignment = CommonAlignmentChecked<u32>(s_BufferAlignmentBytes, formatLayout->bytesPerBlock);
     if(!bufferOffsetAlignment){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: invalid buffer offset alignment"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: invalid buffer offset alignment"));

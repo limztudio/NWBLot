@@ -34,7 +34,15 @@ public:
 
 
 public:
-    [[nodiscard]] virtual bool apply(EditModel& draft, const EditAction::Enum action, const bool readOnly)override{
+    [[nodiscard]] virtual bool apply(EditModel& draft, const EditAction::Enum action, const bool readOnly)noexcept(
+        noexcept(static_cast<bool>(DeclVal<const Context&>().failed() || &draft != &DeclVal<Model&>().draft() || DeclVal<Model&>().revision() != DeclVal<u64&>()))
+        && noexcept(DeclVal<NumericEditResult&>() = DeclVal<Model&>().submit(DeclVal<const Bounds&>()))
+        && noexcept(DeclVal<NumericEditResult&>() = DeclVal<Model&>().cancel())
+        && noexcept(DeclVal<NumericEditResult&>() = DeclVal<Model&>().abandon())
+        && noexcept(DeclVal<NumericEditResult&>() = DeclVal<Model&>().blur(DeclVal<const Bounds&>()))
+        && noexcept(DeclVal<NumericEditResult&>() = (readOnly ? DeclVal<Model&>().abandon() : DeclVal<Model&>().blur(DeclVal<const Bounds&>())))
+        && noexcept(DeclVal<u64&>() = DeclVal<Model&>().revision())
+    )override{
         if(m_context.failed() || &draft != &m_model.draft() || m_model.revision() != m_revision){
             m_result.valid = false;
             return false;

@@ -58,11 +58,13 @@ bool RendererReflectionFeedback::prepareResources(const u32 width, const u32 hei
     const ReflectionFeedbackExtent& extent = *extentResult;
     auto& device = m_graphics.getDevice();
     const u16 deviceGeneration = device.getDeviceGeneration();
-    if(!m_control)
-        m_control = CreateReflectionFeedbackControl(m_arena, deviceGeneration);
     if(!m_control){
-        NWB_LOGGER_ERROR(NWB_TEXT("Reflection feedback: failed to allocate acceptance control"));
-        return false;
+        auto controlResult = CreateReflectionFeedbackControl(m_arena, deviceGeneration);
+        if(!controlResult){
+            NWB_LOGGER_ERROR(NWB_TEXT("Reflection feedback: failed to allocate acceptance control"));
+            return false;
+        }
+        m_control = Move(*controlResult);
     }
     const bool changed = width != m_extent.width || height != m_extent.height || deviceGeneration != m_deviceGeneration;
     const bool active = enabled && settings.traceMode == ReflectionTraceMode::Hybrid && settings.maxHardwareRaysPerFrame > 0u;

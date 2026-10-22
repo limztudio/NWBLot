@@ -58,9 +58,12 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
         || !inputs.sceneShading.valid()
         || !inputs.lights.valid()
         || !inputs.graphicsPrefixTask.valid()
-        || (inputs.hardwareTraceAttributeResourceCount != 0u && !inputs.hardwareTraceAttributeResources)
+        || (inputs.hardwareTraceGeometryResourceCount != 0u && !inputs.hardwareTraceGeometryResources)
     )
         return MakeUnexpected(Failure{});
+    if(m_raytracingSystem.hasHwCausticWork(*inputs.meshViewSnapshot) && !inputs.opticalScene.valid())
+        return MakeUnexpected(Failure{});
+
     const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
         return m_graph.importTexture(texture, TextureResourceDesc(identity, label));
     };
@@ -91,13 +94,13 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwareResolveFourthWaveletResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwareResolveFifthWaveletResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwareResolveUpsampleResourceUses{ scratchArena };
-    const bool hardwareTraceAttributeStatesGraphOwned = inputs.hardwareTraceAttributeSet.valid();
-    const Core::GpuTaskResourceSetUse hardwareTraceAttributeSetUse{ .resourceSet = inputs.hardwareTraceAttributeSet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
+    const bool hardwareTraceGeometryStatesGraphOwned = inputs.hardwareTraceGeometrySet.valid();
+    const Core::GpuTaskResourceSetUse hardwareTraceGeometrySetUse{ .resourceSet = inputs.hardwareTraceGeometrySet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
     const Core::GpuTaskResourceSetUse traceMaterialSampledTextureSetUse{ .resourceSet = inputs.traceMaterialSampledTextureSet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
     Core::GpuTaskResourceSetUse hardwarePhotonResourceSetUses[2u] = {};
     usize hardwarePhotonResourceSetUseCount = 0u;
-    if(hardwareTraceAttributeStatesGraphOwned){
-        hardwarePhotonResourceSetUses[hardwarePhotonResourceSetUseCount++] = hardwareTraceAttributeSetUse;
+    if(hardwareTraceGeometryStatesGraphOwned){
+        hardwarePhotonResourceSetUses[hardwarePhotonResourceSetUseCount++] = hardwareTraceGeometrySetUse;
     }
     if(inputs.traceMaterialSampledTextureSet.valid()){
         hardwarePhotonResourceSetUses[hardwarePhotonResourceSetUseCount++] = traceMaterialSampledTextureSetUse;
@@ -105,7 +108,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
     constexpr usize s_HardwarePhotonResourceUseCapacity = 15u;
     hardwarePhotonResourceUses.reserve(s_HardwarePhotonResourceUseCapacity
         + (inputs.rayTracingResources->csgTraceContextBuffer ? 1u : 0u)
-        + inputs.rayTracingResources->csgTraceBoundsBufferCount + (hardwareTraceAttributeStatesGraphOwned ? 0u : inputs.hardwareTraceAttributeResourceCount)
+        + inputs.rayTracingResources->csgTraceBoundsBufferCount + (hardwareTraceGeometryStatesGraphOwned ? 0u : inputs.hardwareTraceGeometryResourceCount)
     );
     hardwareGeometryResourceUses.reserve(RendererFramePipelineDetail::s_CausticResolveStageResourceUseCapacity);
     hardwareResolvePrepareResourceUses.reserve(RendererFramePipelineDetail::s_CausticResolveStageResourceUseCapacity);
@@ -120,6 +123,8 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
     hardwarePhotonResourceUses.push_back(ReadUse(inputs.currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
     hardwarePhotonResourceUses.push_back(ReadUse(inputs.sceneShading, Core::ResourceStates::ConstantBuffer));
     hardwarePhotonResourceUses.push_back(ReadUse(inputs.lights, Core::ResourceStates::ShaderResource));
+    if(inputs.opticalScene.valid())
+        hardwarePhotonResourceUses.push_back(ReadUse(inputs.opticalScene));
     hardwarePhotonResourceUses.push_back(ReadUse(sceneGeometryDomain));
     hardwarePhotonResourceUses.push_back(ReadWriteTextureUse(causticAccumulator, ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::UnorderedAccess));
 
@@ -196,14 +201,14 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
     if(inputs.materialContextSlots.valid()){
         hardwarePhotonResourceUses.push_back(ReadUse(inputs.materialContextSlots, Core::ResourceStates::ConstantBuffer));
     }
-    // Declare retained attribute handles here for the Prefix -> Caustics SRV handoff.
-    for(usize resourceIndex = 0u; resourceIndex < inputs.hardwareTraceAttributeResourceCount; ++resourceIndex){
-        const Core::GpuGraphResourceId resource = inputs.hardwareTraceAttributeResources[resourceIndex];
+    // Candidate normal and seam checks read the frozen position and index streams.
+    for(usize resourceIndex = 0u; resourceIndex < inputs.hardwareTraceGeometryResourceCount; ++resourceIndex){
+        const Core::GpuGraphResourceId resource = inputs.hardwareTraceGeometryResources[resourceIndex];
         if(!resource.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: invalid prepared hardware-caustics attribute resource"));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: invalid prepared hardware-caustics geometry resource"));
             return MakeUnexpected(Failure{});
         }
-        if(!hardwareTraceAttributeStatesGraphOwned)
+        if(!hardwareTraceGeometryStatesGraphOwned)
             hardwarePhotonResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
     }
     if(inputs.rayTracingResources->sceneTlas){

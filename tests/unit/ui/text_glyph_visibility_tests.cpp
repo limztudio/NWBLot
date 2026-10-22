@@ -50,10 +50,12 @@ protected:
         Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
         ASSERT_TRUE(loadFont(m_latin, "latin.font"));
         ASSERT_TRUE(loadFont(m_korean, "korean.font"));
-        m_face = MakeFontFace(fontScratchArena, m_arena, { Core::Assets::AssetRef<Font>(UiWidgetTests::s_TestLatinFontPath), m_latin, 1u });
-        m_koreanFace = MakeFontFace(fontScratchArena, m_arena, { Core::Assets::AssetRef<Font>(UiWidgetTests::s_TestKoreanFontPath), m_korean, 1u });
-        ASSERT_TRUE(m_face);
-        ASSERT_TRUE(m_koreanFace);
+        auto faceResult = MakeFontFace(fontScratchArena, m_arena, { Core::Assets::AssetRef<Font>(UiWidgetTests::s_TestLatinFontPath), m_latin, 1u });
+        auto koreanFaceResult = MakeFontFace(fontScratchArena, m_arena, { Core::Assets::AssetRef<Font>(UiWidgetTests::s_TestKoreanFontPath), m_korean, 1u });
+        ASSERT_TRUE(faceResult);
+        ASSERT_TRUE(koreanFaceResult);
+        m_face = Move(*faceResult);
+        m_koreanFace = Move(*koreanFaceResult);
         ASSERT_TRUE(m_face->coverageInkReliable());
         ASSERT_FALSE(m_koreanFace->coverageInkReliable());
     }

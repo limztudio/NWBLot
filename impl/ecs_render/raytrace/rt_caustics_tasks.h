@@ -153,7 +153,7 @@ public:
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
         ConfirmCausticAccumulatorClears(payload);
         if(payload.causticProducerDispatched)
-            payload.raytracingSystem.confirmCsgTraceContextReadSubmission(token);
+            payload.raytracingSystem.confirmRayTraceContextReadSubmission(token);
     }
 
     static void Discarded(Payload& payload){
@@ -222,7 +222,7 @@ public:
 
 
 public:
-    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context)noexcept(noexcept((payload.raytracingSystem.*Dispatch)(commandList, payload.targets))){
         static_cast<void>(context);
         if(!payload.activity.matches(payload.raytracingSystem.causticResolveActivitySnapshot(payload.targets)))
             return false;

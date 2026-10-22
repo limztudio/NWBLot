@@ -193,7 +193,7 @@ inline Expected<TextureClearUploadLayout> BuildTextureClearUploadLayout(const u6
     if(elementCount == 0ull || elementSize == 0u || arrayLayerCount == 0ull || elementCount > Limit<u64>::s_Max / elementSize)
         return MakeUnexpected(Failure{});
     const u64 uploadSize = elementCount * elementSize;
-    const auto copyOffsetAlignment = CommonAlignmentChecked(s_TextureClearUploadAlignment, elementSize);
+    const auto copyOffsetAlignment = CommonAlignmentChecked<u32>(s_TextureClearUploadAlignment, elementSize);
     if(!copyOffsetAlignment)
         return MakeUnexpected(copyOffsetAlignment.error());
     const auto stagingAlignment = VulkanDetail::TryComputeUploadSuballocationAlignment(*copyOffsetAlignment);

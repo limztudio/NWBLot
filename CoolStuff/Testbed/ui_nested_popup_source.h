@@ -41,6 +41,7 @@ public:
     }
 
     void beginFrame()noexcept{ m_labelReads = 0u; }
+
     [[nodiscard]] u32 labelReads()const noexcept{ return m_labelReads; }
 
 

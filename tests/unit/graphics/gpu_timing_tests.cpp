@@ -58,6 +58,7 @@ public:
 
 public:
     [[nodiscard]] virtual bool enabled()const noexcept override{ return true; }
+
     [[nodiscard]] virtual Expected<Core::Perf::TimingScopeId> registerScope(const Name& scopeName)noexcept override{
         static_cast<void>(scopeName);
         const usize attempt = m_registrationAttempt;
@@ -69,11 +70,13 @@ public:
         ++m_nextScopeIndex;
         return Core::Perf::TimingScopeId{ .index = index, .generation = 1u };
     }
+
     virtual void recordSample(const Core::Perf::TimingScopeId scope, const f64 seconds, const u64 sampleFrameIndex)noexcept override{
         static_cast<void>(scope);
         static_cast<void>(seconds);
         static_cast<void>(sampleFrameIndex);
     }
+
     virtual void publishFrame(const u64 publishFrameIndex)noexcept override{ static_cast<void>(publishFrameIndex); }
 
 

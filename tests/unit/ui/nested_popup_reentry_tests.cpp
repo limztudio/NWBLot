@@ -122,14 +122,23 @@ public:
     }
 
     [[nodiscard]] u64 metadataCalls()const noexcept{ return m_metadataCalls; }
+
     [[nodiscard]] u64 callbacksAfterAttempt()const noexcept{ return m_callbacksAfterAttempt; }
+
     [[nodiscard]] u64 arms()const noexcept{ return m_arms; }
+
     [[nodiscard]] u64 attempts()const noexcept{ return m_attempts; }
+
     [[nodiscard]] u64 resetAttempts()const noexcept{ return m_resetAttempts; }
+
     [[nodiscard]] u64 beginAttempts()const noexcept{ return m_beginAttempts; }
+
     [[nodiscard]] u64 endAttempts()const noexcept{ return m_endAttempts; }
+
     [[nodiscard]] bool beginAccepted()const noexcept{ return m_beginAccepted; }
+
     [[nodiscard]] bool endAccepted()const noexcept{ return m_endAccepted; }
+
     [[nodiscard]] bool failedAtAttempt()const noexcept{ return m_failedAtAttempt; }
 
 

@@ -64,6 +64,7 @@ public:
 [[nodiscard]] NWB_INLINE bool operator==(const RuntimeMeshHandle& lhs, const RuntimeMeshHandle& rhs)noexcept{
     return lhs.value == rhs.value;
 }
+
 [[nodiscard]] NWB_INLINE bool operator!=(const RuntimeMeshHandle& lhs, const RuntimeMeshHandle& rhs)noexcept{
     return !(lhs == rhs);
 }
@@ -145,7 +146,15 @@ struct RuntimeMeshDesc : public RuntimeMeshBuffers{
 
 public:
     [[nodiscard]] bool valid()const noexcept{
-        return entity.valid() && meshKey != s_NameNone && buffersValid() && meshletCount > 0u && meshletPrimitiveIndexCount > 0u && solidTriangleWords.size() == (static_cast<usize>(meshletPrimitiveIndexCount) / s_MeshletTriangleIndexCount + s_MeshletSolidTriangleWordRoundUp) / s_MeshletSolidTriangleWordBits && localBounds.valid();
+        return
+            entity.valid()
+            && meshKey != s_NameNone
+            && buffersValid()
+            && meshletCount > 0u
+            && meshletPrimitiveIndexCount > 0u
+            && solidTriangleWords.size() == (static_cast<usize>(meshletPrimitiveIndexCount) / s_MeshletTriangleIndexCount + s_MeshletSolidTriangleWordRoundUp) / s_MeshletSolidTriangleWordBits
+            && localBounds.valid()
+        ;
     }
 };
 

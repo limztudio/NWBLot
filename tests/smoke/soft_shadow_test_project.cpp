@@ -186,15 +186,13 @@ public:
         const NWB::Core::ECS::EntityID directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, s_DirectionalLightPitch, s_DirectionalLightYaw, 0.0f, Float4(1.00f, 0.96f, 0.88f), s_DirectionalLightIntensity);
         if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(directionalLight)){
             light->angularRadius = ConfiguredAngularRadius();
-            if(m_timingEnabled)
-                light->enableCaustics = false;
+            light->enableCaustics = false;
         }
 
         const NWB::Core::ECS::EntityID pointLight = NWB::Impl::Scene::CreatePointLightEntity(*m_world, Float4(1.5f, 2.2f, 0.3f, 0.0f), Float4(1.00f, 0.35f, 0.30f), s_PointLightIntensity, s_PointLightRange);
         if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(pointLight)){
             light->sourceRadius = ConfiguredSourceRadius();
-            if(m_timingEnabled)
-                light->enableCaustics = false;
+            light->enableCaustics = false;
         }
 
         const NWB::Core::ECS::EntityID spotLight = NWB::Impl::Scene::CreateSpotLightEntity(
@@ -211,8 +209,7 @@ public:
         );
         if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(spotLight)){
             light->sourceRadius = ConfiguredSourceRadius();
-            if(m_timingEnabled)
-                light->enableCaustics = false;
+            light->enableCaustics = false;
         }
 
         // These project-owned BXDFs preserve direct shadow response and ignore only the stochastic surfel contribution.

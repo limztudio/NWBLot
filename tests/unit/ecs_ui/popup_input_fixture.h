@@ -42,12 +42,15 @@ public:
 
 public:
     [[nodiscard]] virtual TextInputCapabilities capabilities()const noexcept override{ return { true, true, true, true }; }
+
     [[nodiscard]] TextInputAdmission::Enum commit(const TextInputSessionToken token, const AStringView text){
         return emitCommit(token, text);
     }
+
     [[nodiscard]] TextInputAdmission::Enum preedit(const AStringView text){
         return emitPreedit(activeSession(), text, 0u, text.size());
     }
+
     [[nodiscard]] AStringView publishedText()const noexcept{ return surroundingText(); }
 
 
@@ -77,6 +80,7 @@ public:
     [[nodiscard]] virtual ClipboardCapabilities capabilities(const ClipboardChannel::Enum channel)const noexcept override{
         return channel == ClipboardChannel::Clipboard ? ClipboardCapabilities{ true, true } : ClipboardCapabilities{};
     }
+
     [[nodiscard]] bool complete(const ClipboardRequestToken token, const AStringView text){
         return completeNativeRequest(token, ClipboardStatus::Success, text);
     }

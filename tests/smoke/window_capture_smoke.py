@@ -10,6 +10,7 @@ import platform
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from window_capture_outcome import SmokeSkip, WindowsDesktopUnavailable, SmokeFailure, write_status  # noqa: E402
 from window_capture_image import TransparentCsgAnalysis, TextureSmokeAnalysis, write_bmp_24, capture_result_from_rgb_rows, write_capture_rows, read_bmp_24, read_bmp_24_rows, validate_surfel_coverage_probe, analyze_rgb_rows, transparent_csg_regions, analyze_transparent_csg_rows, analyze_texture_smoke_rows, estimate_background_rgb, count_foreground_pixels_in_region, ximage_rgb_rows, bgra_rgb_rows  # noqa: E402
@@ -490,10 +491,12 @@ def launch_and_capture(args, backend):
         wait_for_log_drain(log_directory, log_baseline, log_pattern)
         skip_reason = validate_expected_log_messages(log_directory, log_baseline, log_pattern, args.expect_log_message, args.reject_log_message, args.skip_log_message, args.skip_blocking_log_message,)
     finally:
-        if testbed_process is not None:
-            terminate_process(testbed_process, LIT_TESTBED, handle)
-        if logserver_process is not None:
-            terminate_process(logserver_process, LIT_LOGSERVER)
+        try:
+            if testbed_process is not None:
+                terminate_process(testbed_process, LIT_TESTBED, handle)
+        finally:
+            if logserver_process is not None:
+                terminate_process(logserver_process, LIT_LOGSERVER)
 
     if skip_reason:
         raise SmokeSkip(skip_reason)
@@ -527,10 +530,12 @@ def launch_and_capture_application(args):
         log_text = shutdown_logserver_and_collect(logserver_process, log_directory, log_baseline, log_pattern,)
         logserver_process = None
     finally:
-        if testbed_process is not None:
-            terminate_process(testbed_process, LIT_TESTBED)
-        if logserver_process is not None:
-            terminate_process(logserver_process, LIT_LOGSERVER)
+        try:
+            if testbed_process is not None:
+                terminate_process(testbed_process, LIT_TESTBED)
+        finally:
+            if logserver_process is not None:
+                terminate_process(logserver_process, LIT_LOGSERVER)
 
     log_output = getattr(args, "log_output", None)
     if log_output:

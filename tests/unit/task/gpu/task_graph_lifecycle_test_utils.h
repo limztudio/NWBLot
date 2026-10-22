@@ -61,10 +61,12 @@ struct PacketLifecycleTask{
 
 public:
     static Graphics::GpuTaskCommandRequirements CommandRequirements(const Payload& payload)noexcept{ return Graphics::GpuTaskCommandRequirements{ payload.requiredCapabilities }; }
+
     static void Accepted(Payload& payload, const Graphics::QueueSubmissionToken&)noexcept{
         if(payload.acceptedCount)
             ++*payload.acceptedCount;
     }
+
     static void Discarded(Payload& payload)noexcept{
         if(payload.discardedCount)
             ++*payload.discardedCount;
@@ -191,11 +193,13 @@ public:
             ++*payload.recordCount;
         return true;
     }
+
     static bool Accepted(Payload& payload, const Graphics::QueueSubmissionToken&)noexcept{
         if(payload.acceptedCount)
             ++*payload.acceptedCount;
         return true;
     }
+
     static void Discarded(const Payload& payload)noexcept{
         if(payload.discardedCount)
             ++*payload.discardedCount;

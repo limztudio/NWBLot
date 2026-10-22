@@ -5,7 +5,7 @@ import math
 import re
 
 from window_capture_smoke import SmokeFailure
-from probe_common import center, snapshot_from_patterns
+from probe_common import snapshot_from_patterns
 from probe_reference import compose, encoded_marker, linear_channels, sampled_tile
 
 LIT_LABEL_READS = "label_reads"

@@ -56,7 +56,9 @@ public:
 
 public:
     virtual NWB::Core::Common::LogArena& arena()noexcept override{ return m_arena; }
+
     virtual void enqueue(NWB::Core::Common::LogString&&, NWB::Core::Common::LogType::Enum)override{ throw s_PublishLogFailure; }
+
     virtual void enqueue(const NWB::Core::Common::LogString&, NWB::Core::Common::LogType::Enum)override{ throw s_PublishLogFailure; }
 
 
@@ -88,6 +90,7 @@ protected:
         m_desc.createIfMissing = true;
         m_desc.usage = VolumeUsage::CookWrite;
     }
+
     virtual void TearDown()override{
         EXPECT_TRUE(RemoveAllIfExists(m_directory));
     }

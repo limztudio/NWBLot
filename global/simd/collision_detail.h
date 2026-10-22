@@ -6,6 +6,7 @@
 
 
 #include "../expected.h"
+#include "../span.h"
 #include "matrix.h"
 #include "collision_types.h"
 
@@ -89,17 +90,17 @@ namespace FrustumPlaneIndex{
     return VectorSelect(center, radius, s_SIMDMaskW);
 }
 
-[[nodiscard]] inline SIMDVectorSingle CreateSphereFromVectorPoints(const NotNull<const SIMDVectorSingle*> points, const usize count)noexcept{
-    NWB_ASSERT(count > 0u);
+[[nodiscard]] inline SIMDVectorSingle CreateSphereFromVectorPoints(const Span<const SIMDVectorSingle> points)noexcept{
+    NWB_ASSERT(!points.empty());
 
     SIMDVectorSingle centerVector = VectorZero();
-    for(usize pointIndex = 0u; pointIndex < count; ++pointIndex)
-        centerVector = VectorAdd(centerVector, points.get()[pointIndex]);
-    centerVector = VectorDivide(centerVector, VectorReplicate(static_cast<f32>(count)));
+    for(usize pointIndex = 0u; pointIndex < points.size(); ++pointIndex)
+        centerVector = VectorAdd(centerVector, points[pointIndex]);
+    centerVector = VectorDivide(centerVector, VectorReplicate(static_cast<f32>(points.size())));
 
     SIMDVectorSingle radiusSq = VectorZero();
-    for(usize pointIndex = 0u; pointIndex < count; ++pointIndex){
-        const SIMDVectorSingle delta = VectorSubtract(points.get()[pointIndex], centerVector);
+    for(usize pointIndex = 0u; pointIndex < points.size(); ++pointIndex){
+        const SIMDVectorSingle delta = VectorSubtract(points[pointIndex], centerVector);
         radiusSq = VectorMax(radiusSq, Vector3LengthSq(delta));
     }
 
@@ -135,8 +136,8 @@ namespace FrustumPlaneIndex{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool PointsInsideMinMax(const SIMDVectorSingle* points, const usize pointCount, const SIMDVectorSingle minBounds, const SIMDVectorSingle maxBounds)noexcept{
-    for(usize pointIndex = 0u; pointIndex < pointCount; ++pointIndex){
+[[nodiscard]] inline bool PointsInsideMinMax(const Span<const SIMDVectorSingle> points, const SIMDVectorSingle minBounds, const SIMDVectorSingle maxBounds)noexcept{
+    for(usize pointIndex = 0u; pointIndex < points.size(); ++pointIndex){
         const SIMDVectorSingle outside = VectorOrInt(VectorLess(points[pointIndex], minBounds), VectorGreater(points[pointIndex], maxBounds));
         if(Vector3AnyTrue(outside))
             return false;
@@ -144,9 +145,9 @@ namespace FrustumPlaneIndex{
     return true;
 }
 
-[[nodiscard]] inline bool PointsInsideSphere(const SIMDVectorSingle* points, const usize pointCount, const SIMDVectorSingle center, const SIMDVectorSingle radius)noexcept{
+[[nodiscard]] inline bool PointsInsideSphere(const Span<const SIMDVectorSingle> points, const SIMDVectorSingle center, const SIMDVectorSingle radius)noexcept{
     const SIMDVectorSingle radiusSq = VectorMultiply(radius, radius);
-    for(usize pointIndex = 0u; pointIndex < pointCount; ++pointIndex){
+    for(usize pointIndex = 0u; pointIndex < points.size(); ++pointIndex){
         const SIMDVectorSingle delta = VectorSubtract(points[pointIndex], center);
         if(Vector4AnyTrue(VectorGreater(Vector3LengthSq(delta), radiusSq)))
             return false;
@@ -268,17 +269,17 @@ namespace FrustumPlaneIndex{
     return VectorDoubleSelect(center, radius, s_DoubleSIMDMaskW);
 }
 
-[[nodiscard]] inline SIMDVectorDouble CreateSphereFromVectorPoints(const NotNull<const SIMDVectorDouble*> points, const usize count)noexcept{
-    NWB_ASSERT(count > 0u);
+[[nodiscard]] inline SIMDVectorDouble CreateSphereFromVectorPoints(const Span<const SIMDVectorDouble> points)noexcept{
+    NWB_ASSERT(!points.empty());
 
     SIMDVectorDouble centerVector = VectorDoubleZero();
-    for(usize pointIndex = 0u; pointIndex < count; ++pointIndex)
-        centerVector = VectorDoubleAdd(centerVector, points.get()[pointIndex]);
-    centerVector = VectorDoubleDivide(centerVector, VectorDoubleReplicate(static_cast<f64>(count)));
+    for(usize pointIndex = 0u; pointIndex < points.size(); ++pointIndex)
+        centerVector = VectorDoubleAdd(centerVector, points[pointIndex]);
+    centerVector = VectorDoubleDivide(centerVector, VectorDoubleReplicate(static_cast<f64>(points.size())));
 
     SIMDVectorDouble radiusSq = VectorDoubleZero();
-    for(usize pointIndex = 0u; pointIndex < count; ++pointIndex){
-        const SIMDVectorDouble delta = VectorDoubleSubtract(points.get()[pointIndex], centerVector);
+    for(usize pointIndex = 0u; pointIndex < points.size(); ++pointIndex){
+        const SIMDVectorDouble delta = VectorDoubleSubtract(points[pointIndex], centerVector);
         radiusSq = VectorDoubleMax(radiusSq, VectorDouble3LengthSq(delta));
     }
 
@@ -314,8 +315,8 @@ namespace FrustumPlaneIndex{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool PointsInsideMinMax(const SIMDVectorDouble* points, const usize pointCount, const SIMDVectorDouble minBounds, const SIMDVectorDouble maxBounds)noexcept{
-    for(usize pointIndex = 0u; pointIndex < pointCount; ++pointIndex){
+[[nodiscard]] inline bool PointsInsideMinMax(const Span<const SIMDVectorDouble> points, const SIMDVectorDouble minBounds, const SIMDVectorDouble maxBounds)noexcept{
+    for(usize pointIndex = 0u; pointIndex < points.size(); ++pointIndex){
         const SIMDVectorDouble outside = VectorDoubleOrInt(VectorDoubleLess(points[pointIndex], minBounds), VectorDoubleGreater(points[pointIndex], maxBounds));
         if(VectorDouble3AnyTrue(outside))
             return false;
@@ -323,9 +324,9 @@ namespace FrustumPlaneIndex{
     return true;
 }
 
-[[nodiscard]] inline bool PointsInsideSphere(const SIMDVectorDouble* points, const usize pointCount, const SIMDVectorDouble center, const SIMDVectorDouble radius)noexcept{
+[[nodiscard]] inline bool PointsInsideSphere(const Span<const SIMDVectorDouble> points, const SIMDVectorDouble center, const SIMDVectorDouble radius)noexcept{
     const SIMDVectorDouble radiusSq = VectorDoubleMultiply(radius, radius);
-    for(usize pointIndex = 0u; pointIndex < pointCount; ++pointIndex){
+    for(usize pointIndex = 0u; pointIndex < points.size(); ++pointIndex){
         const SIMDVectorDouble delta = VectorDoubleSubtract(points[pointIndex], center);
         if(VectorDouble4AnyTrue(VectorDoubleGreater(VectorDouble3LengthSq(delta), radiusSq)))
             return false;

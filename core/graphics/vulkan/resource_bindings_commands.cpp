@@ -386,6 +386,9 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
             trackedCommandBuffer.m_resourceReferences.trackRetainedTexture(*retainedTexture);
     }
 
+    if(bindAccelStruct)
+        trackedCommandBuffer.retainTopLevelAccelStruct(*heap.m_accelStructResources[accelStructHandle.slot()]);
+
     ensureDescriptorBuffersBound(*manager, *managerSnapshot);
 
     // Resource, sampler, and TLAS heap sets are contiguous at 0/1/2.

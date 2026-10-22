@@ -321,44 +321,49 @@ TEST(AssetsGraphics, ShaderMetadataRejectsEngineTransportDefinesAndRecoversWithR
     Impl::ShaderCook::ShaderEntry shaderEntry(testArena.arena);
     Impl::ShaderCook::IncludeEntry includeEntry(testArena.arena);
 
-    for(const AStringView retiredValue : { AStringView("0"), AStringView("1") }){
-        SCOPED_TRACE(retiredValue);
-        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(shaderPath, validShaderMetadata));
-        auto metadataResult5 = AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(testArena, shaderCook, shaderPath, scratchArena);
-        ASSERT_TRUE(metadataResult5);
-        if(metadataResult5)
-            shaderEntry = Move(*metadataResult5);
-        ASSERT_FALSE(shaderEntry.defineValues.empty());
-        const auto obsoleteShaderMetadata = StringFormat(testArena.arena, "{}asset.defines = {{ \"NWB_BINDLESS_TLAS\": [\"{}\"] }};\n", s_ShaderDeclaration, retiredValue);
-        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(shaderPath, obsoleteShaderMetadata));
-        EXPECT_FALSE(AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(testArena, shaderCook, shaderPath, scratchArena));
-        EXPECT_FALSE(shaderEntry.defineValues.empty());
-        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("define 'NWB_BINDLESS_TLAS' is an engine transport feature")));
-        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(shaderPath, validShaderMetadata));
-        auto metadataResult4 = AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(testArena, shaderCook, shaderPath, scratchArena);
-        ASSERT_TRUE(metadataResult4);
-        if(metadataResult4)
-            shaderEntry = Move(*metadataResult4);
-        EXPECT_TRUE(shaderCook.validateVariantSignature("project/shader", "PROJECT_QUALITY=0", shaderEntry.defineValues, scratchArena));
-        EXPECT_TRUE(shaderCook.validateVariantSignature("project/shader", "PROJECT_QUALITY=1", shaderEntry.defineValues, scratchArena));
-        EXPECT_FALSE(shaderCook.validateVariantSignature("project/shader", "NWB_BINDLESS_TLAS=1;PROJECT_QUALITY=1", shaderEntry.defineValues, scratchArena));
+    for(const AStringView transportName : { AStringView("NWB_BINDLESS_TLAS"), AStringView("NWB_CAUSTIC_PHOTON_TRANSPORT") }){
+        SCOPED_TRACE(transportName);
+        for(const AStringView retiredValue : { AStringView("0"), AStringView("1") }){
+            SCOPED_TRACE(retiredValue);
+            ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(shaderPath, validShaderMetadata));
+            auto metadataResult5 = AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(testArena, shaderCook, shaderPath, scratchArena);
+            ASSERT_TRUE(metadataResult5);
+            if(metadataResult5)
+                shaderEntry = Move(*metadataResult5);
+            ASSERT_FALSE(shaderEntry.defineValues.empty());
+            const auto obsoleteShaderMetadata = StringFormat(testArena.arena, "{}asset.defines = {{ \"{}\": [\"{}\"] }};\n", s_ShaderDeclaration, transportName, retiredValue);
+            ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(shaderPath, obsoleteShaderMetadata));
+            EXPECT_FALSE(AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(testArena, shaderCook, shaderPath, scratchArena));
+            EXPECT_FALSE(shaderEntry.defineValues.empty());
+            const auto expectedDiagnostic = StringFormat(testArena.arena, NWB_TEXT("define '{}' is an engine transport feature"), StringConvert(transportName));
+            EXPECT_TRUE(logger.sawErrorContaining(expectedDiagnostic));
+            ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(shaderPath, validShaderMetadata));
+            auto metadataResult4 = AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(testArena, shaderCook, shaderPath, scratchArena);
+            ASSERT_TRUE(metadataResult4);
+            if(metadataResult4)
+                shaderEntry = Move(*metadataResult4);
+            EXPECT_TRUE(shaderCook.validateVariantSignature("project/shader", "PROJECT_QUALITY=0", shaderEntry.defineValues, scratchArena));
+            EXPECT_TRUE(shaderCook.validateVariantSignature("project/shader", "PROJECT_QUALITY=1", shaderEntry.defineValues, scratchArena));
+            const auto invalidSignature = StringFormat(testArena.arena, "{}=1;PROJECT_QUALITY=1", transportName);
+            EXPECT_FALSE(shaderCook.validateVariantSignature("project/shader", invalidSignature, shaderEntry.defineValues, scratchArena));
 
-        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(includePath, validIncludeMetadata));
-        auto metadataResult3 = AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::IncludeEntry>(testArena, shaderCook, includePath, scratchArena);
-        ASSERT_TRUE(metadataResult3);
-        if(metadataResult3)
-            includeEntry = Move(*metadataResult3);
-        ASSERT_FALSE(includeEntry.defineValues.empty());
-        const auto obsoleteIncludeMetadata = StringFormat(testArena.arena, "include asset;\nasset.defines = {{ \"NWB_BINDLESS_TLAS\": [\"{}\"] }};\n", retiredValue);
-        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(includePath, obsoleteIncludeMetadata));
-        EXPECT_FALSE(AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::IncludeEntry>(testArena, shaderCook, includePath, scratchArena));
-        EXPECT_FALSE(includeEntry.defineValues.empty());
-        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(includePath, validIncludeMetadata));
-        auto metadataResult2 = AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::IncludeEntry>(testArena, shaderCook, includePath, scratchArena);
-        ASSERT_TRUE(metadataResult2);
-        if(metadataResult2)
-            includeEntry = Move(*metadataResult2);
-        EXPECT_TRUE(shaderCook.validateVariantSignature("project/include", "PROJECT_QUALITY=1", includeEntry.defineValues, scratchArena));
+            ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(includePath, validIncludeMetadata));
+            auto metadataResult3 = AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::IncludeEntry>(testArena, shaderCook, includePath, scratchArena);
+            ASSERT_TRUE(metadataResult3);
+            if(metadataResult3)
+                includeEntry = Move(*metadataResult3);
+            ASSERT_FALSE(includeEntry.defineValues.empty());
+            const auto obsoleteIncludeMetadata = StringFormat(testArena.arena, "include asset;\nasset.defines = {{ \"{}\": [\"{}\"] }};\n", transportName, retiredValue);
+            ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(includePath, obsoleteIncludeMetadata));
+            EXPECT_FALSE(AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::IncludeEntry>(testArena, shaderCook, includePath, scratchArena));
+            EXPECT_FALSE(includeEntry.defineValues.empty());
+            ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(includePath, validIncludeMetadata));
+            auto metadataResult2 = AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::IncludeEntry>(testArena, shaderCook, includePath, scratchArena);
+            ASSERT_TRUE(metadataResult2);
+            if(metadataResult2)
+                includeEntry = Move(*metadataResult2);
+            EXPECT_TRUE(shaderCook.validateVariantSignature("project/include", "PROJECT_QUALITY=1", includeEntry.defineValues, scratchArena));
+        }
     }
     EXPECT_TRUE(RemoveAllIfExists(root));
 }

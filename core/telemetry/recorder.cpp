@@ -187,7 +187,7 @@ bool Recorder::appendPayloadUnlocked(EventSlotLease& lease, const EventHeader& h
     return true;
 }
 
-Recorder::EventSlotPtr Recorder::acquireSlotUnlocked(){
+Recorder::EventSlotPtr Recorder::acquireSlotUnlocked()noexcept{
     if(!m_availableSlots)
         return MakeGlobalUnique<EventSlot>(m_arena, m_arena);
 

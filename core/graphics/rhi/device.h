@@ -97,6 +97,7 @@ public:
         waitTokenCount = count;
         return *this;
     }
+
     constexpr QueueSubmissionDesc& setPreSubmitHook(const QueueSubmissionPreSubmitHook value)noexcept{
         preSubmitHook = value;
         return *this;
@@ -138,15 +139,18 @@ public:
         physicalQueue = {};
         return *this;
     }
+
     constexpr CommandListParameters& setPhysicalQueue(GpuPhysicalQueueId value)noexcept{
         physicalQueue = value;
         return *this;
     }
+
     constexpr CommandListParameters& setRecordingWorkerIndex(const u32 value)noexcept{
         recordingWorkerDomain = 0u;
         recordingWorkerIndex = value;
         return *this;
     }
+
     constexpr CommandListParameters& setRecordingWorker(const u64 domain, const u32 index)noexcept{
         recordingWorkerDomain = index == 0u ? 0u : domain;
         recordingWorkerIndex = index;

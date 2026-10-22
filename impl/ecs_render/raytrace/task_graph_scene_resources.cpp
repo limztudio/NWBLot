@@ -20,7 +20,13 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<RayTracingSceneGraphReads> ImportRayTracingSceneGraphReads(Core::GpuTaskGraph& graph, const RayTracingSceneGraphResources& resources, const Core::ResourceStates::Mask tlasInitialState, Core::Alloc::ScratchArena& scratchArena){
+Expected<RayTracingSceneGraphReads> ImportRayTracingSceneGraphReads(
+    Core::GpuTaskGraph& graph,
+    const RayTracingSceneGraphResources& resources,
+    const Core::ResourceStates::Mask tlasInitialState,
+    const Core::GpuTaskId priorReadersDrained,
+    Core::Alloc::ScratchArena& scratchArena
+){
     if(!resources.valid())
         return MakeUnexpected(Failure{});
 
@@ -58,7 +64,7 @@ Expected<RayTracingSceneGraphReads> ImportRayTracingSceneGraphReads(Core::GpuTas
         return MakeUnexpected(Failure{});
     const Core::GpuGraphResourceId tlas = *tlasResult;
 
-    auto opticalResult = ImportRayTracingOpticalSceneBuffer(graph, resources.opticalScene, scratchArena);
+    auto opticalResult = ImportRayTracingOpticalSceneBuffer(graph, resources.opticalScene, priorReadersDrained, scratchArena);
     if(!opticalResult)
         return MakeUnexpected(Failure{});
     const RayTracingOpticalSceneGraphBuffer optical = Move(*opticalResult);

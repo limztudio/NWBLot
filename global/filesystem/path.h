@@ -37,7 +37,7 @@ template<typename CharT>
 concept PathChar = SameAs<CharT, char> || SameAs<CharT, wchar> || SameAs<CharT, char8_t>;
 
 template<typename SourceT>
-concept PathSourceLike = BasicStringDetail::CanMakeCharView<SourceT> || BasicStringDetail::CanMakeWCharView<SourceT>;
+concept PathSourceLike = BasicStringDetail::CanMakeCharView<SourceT> || BasicStringDetail::CanMakeWCharView<SourceT> || requires(const SourceT& source){ BasicStringView<char8_t>(source); };
 
 template<typename CharT>
 [[nodiscard]] inline bool IsSeparator(const CharT ch)noexcept(IsArithmetic_V<CharT>){
@@ -62,6 +62,12 @@ template<typename CharT>
 #if defined(NWB_PLATFORM_WINDOWS)
     if(text.size() >= s_DriveRootNameLength && text[1] == static_cast<CharT>(':'))
         return s_DriveRootNameLength;
+    if(text.size() > 2u && IsSeparator(text[0]) && IsSeparator(text[1]) && !IsSeparator(text[2])){
+        usize end = 2u;
+        while(end < text.size() && !IsSeparator(text[end]))
+            ++end;
+        return end;
+    }
 #else
     static_cast<void>(text);
 #endif
@@ -315,19 +321,28 @@ public:
 
 public:
     [[nodiscard]] ArenaT& arena()const noexcept{ return m_text.get_allocator().arena(); }
+
     [[nodiscard]] bool empty()const noexcept{ return m_text.empty(); }
+
     [[nodiscard]] usize size()const noexcept{ return m_text.size(); }
+
     [[nodiscard]] const value_type* c_str()const noexcept{ return m_text.c_str(); }
+
     [[nodiscard]] const value_type* data()const noexcept{ return m_text.data(); }
+
     [[nodiscard]] native_string_view native()const noexcept{ return native_string_view(m_text.data(), m_text.size()); }
 
 
 public:
     [[nodiscard]] std::string string()const{ return toStdString<char>(false); }
+
     [[nodiscard]] std::string genericString()const{ return toStdString<char>(true); }
+
     template<typename OutCharT>
     [[nodiscard]] std::basic_string<OutCharT> genericString()const{ return toStdString<OutCharT>(true); }
+
     [[nodiscard]] std::wstring genericWString()const{ return toStdString<wchar>(true); }
+
     [[nodiscard]] auto genericU8String()const{
         const std::string text = genericString();
         return std::u8string(reinterpret_cast<const char8_t*>(text.data()), text.size());
@@ -356,18 +371,19 @@ public:
             return Path(arena());
 
         const usize rootDirectoryLength = rootDirectoryLengthInText();
+        const usize rootLength = rootDirectoryLength != 0u ? rootDirectoryLength : rootNameLengthInText();
         usize end = trimTrailingSeparators(m_text.size());
-        if(rootDirectoryLength != 0u && end <= rootDirectoryLength)
-            return Path(arena(), native_string_view(m_text.data(), rootDirectoryLength));
+        if(rootLength != 0u && end <= rootLength)
+            return Path(arena(), native_string_view(m_text.data(), rootLength));
 
         usize separator = end;
-        while(separator > rootDirectoryLength && !GlobalFilesystemPathDetail::IsSeparator(m_text[separator - 1u]))
+        while(separator > rootLength && !GlobalFilesystemPathDetail::IsSeparator(m_text[separator - 1u]))
             --separator;
 
         if(separator == 0u)
             return Path(arena());
-        if(rootDirectoryLength != 0u && separator <= rootDirectoryLength)
-            return Path(arena(), native_string_view(m_text.data(), rootDirectoryLength));
+        if(rootLength != 0u && separator <= rootLength)
+            return Path(arena(), native_string_view(m_text.data(), rootLength));
 
         return Path(arena(), native_string_view(m_text.data(), trimTrailingSeparators(separator - 1u)));
     }
@@ -414,6 +430,10 @@ public:
     [[nodiscard]] Path lexicallyRelative(const Path& base)const{
         if(isAbsolute() != base.isAbsolute())
             return Path(arena());
+#if defined(NWB_PLATFORM_WINDOWS)
+        if(native().substr(0u, rootNameLengthInText()) != base.native().substr(0u, base.rootNameLengthInText()))
+            return Path(arena());
+#endif
 
         Path output(arena());
         output.m_text.reserve(AddSize(AddSize(m_text.size(), SizeOf<GlobalFilesystemPathDetail::s_RelativeParentStepLength>(base.m_text.empty() ? 1u : base.m_text.size())), 1u));
@@ -446,6 +466,7 @@ public:
     }
 
     [[nodiscard]] iterator begin()const noexcept{ return iterator(*this, false); }
+
     [[nodiscard]] iterator end()const noexcept{ return iterator(*this, true); }
 
 
@@ -483,6 +504,9 @@ private:
         if constexpr(SameAs<CharT, value_type>){
             m_text.assign(source.data(), source.size());
         }
+        else if constexpr(SameAs<CharT, char8_t>){
+            assignSource(AStringView(reinterpret_cast<const char*>(source.data()), source.size()));
+        }
         else{
             m_text = StringConvert(arena(), source);
         }
@@ -492,8 +516,10 @@ private:
     void assignSource(const SourceT& source){
         if constexpr(BasicStringDetail::CanMakeCharView<SourceT>)
             assignSource(AStringView(source));
-        else
+        else if constexpr(BasicStringDetail::CanMakeWCharView<SourceT>)
             assignSource(WStringView(source));
+        else
+            assignSource(BasicStringView<char8_t>(source));
     }
 
     void appendComponent(const native_string_view component){
@@ -501,7 +527,7 @@ private:
             return;
         if(!m_text.empty() && !GlobalFilesystemPathDetail::IsSeparator(m_text.back())){
 #if defined(NWB_PLATFORM_WINDOWS)
-            if(m_text.size() == rootNameLengthInText()){
+            if(m_text.size() == GlobalFilesystemPathDetail::s_DriveRootNameLength && m_text[1] == static_cast<value_type>(':')){
                 m_text.append(component.data(), component.size());
                 return;
             }
@@ -609,11 +635,20 @@ private:
     [[nodiscard]] std::basic_string<OutCharT> toStdString(const bool generic)const{
         std::basic_string<OutCharT> output;
         output.reserve(m_text.size());
-        for(const value_type ch : m_text){
-            value_type normalized = ch;
-            if(generic && GlobalFilesystemPathDetail::IsSeparator(normalized))
-                normalized = static_cast<value_type>('/');
-            output.push_back(static_cast<OutCharT>(normalized));
+        auto destination = BackInserter(output);
+        if constexpr(SameAs<value_type, wchar> && !SameAs<OutCharT, wchar>)
+            BasicStringDetail::WriteWStringAsUtf8(destination, native());
+        else if constexpr(!SameAs<value_type, wchar> && SameAs<OutCharT, wchar>)
+            BasicStringDetail::WriteUtf8AsWString(destination, native());
+        else{
+            for(const value_type ch : m_text)
+                output.push_back(static_cast<OutCharT>(ch));
+        }
+        if(generic){
+            for(OutCharT& ch : output){
+                if(GlobalFilesystemPathDetail::IsSeparator(ch))
+                    ch = static_cast<OutCharT>('/');
+            }
         }
         return output;
     }
@@ -629,8 +664,10 @@ private:
 
 template<typename LhsArenaT, typename RhsArenaT>
 [[nodiscard]] inline bool operator==(const Path<LhsArenaT>& lhs, const Path<RhsArenaT>& rhs)noexcept{ return lhs.native() == rhs.native(); }
+
 template<typename LhsArenaT, typename RhsArenaT>
 [[nodiscard]] inline bool operator!=(const Path<LhsArenaT>& lhs, const Path<RhsArenaT>& rhs)noexcept{ return !(lhs == rhs); }
+
 template<typename LhsArenaT, typename RhsArenaT>
 [[nodiscard]] inline bool operator<(const Path<LhsArenaT>& lhs, const Path<RhsArenaT>& rhs)noexcept{ return lhs.native() < rhs.native(); }
 

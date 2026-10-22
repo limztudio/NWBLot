@@ -38,9 +38,13 @@ public:
     [[nodiscard]] SessionReport report()const noexcept;
 
     [[nodiscard]] TimingSink& cpuTimingSink()noexcept{ return m_cpuTiming; }
+
     [[nodiscard]] TimingSink& gpuTimingSink()noexcept{ return m_gpuTiming; }
+
     [[nodiscard]] TimingView cpuTimingView()const noexcept{ return TimingView(m_cpuTiming); }
+
     [[nodiscard]] TimingView gpuTimingView()const noexcept{ return TimingView(m_gpuTiming); }
+
     [[nodiscard]] MemoryView memoryView()const noexcept{ return MemoryView(m_memory); }
 
     template<typename Arena>

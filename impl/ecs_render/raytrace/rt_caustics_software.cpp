@@ -61,7 +61,12 @@ bool RendererRayTracingSystem::hasCausticWork(const ECSRenderDetail::MeshViewBuf
     const bool hardwareShadowSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct) && m_graphics.queryFeatureSupport(Core::Feature::RayQuery);
     return
         !hardwareShadowSupported
+        && m_shadowVisibilityTraceResourcesPreflighted
+        && m_shadowVisibilityPreparedTargets
+        && (m_lightSpaceShadow.m_csg.snapshot.hasCsg ? m_rayTracingState.m_swCausticCsgPipeline : m_rayTracingState.m_swCausticPipeline)
+        && causticResolveResourcesReady(*m_shadowVisibilityPreparedTargets, m_rayTracingState.m_causticTemporalDecay)
         && m_rayTracingState.m_causticLightCount > 0u
+        && m_unsupportedCausticVolumeCount == 0u
         && m_rayTracingState.m_causticRefractiveInstanceCount > 0u
         && m_rayTracingState.m_sceneBvhInstanceCount > 0u
         && m_rayTracingState.m_swShadowMeshCount > 0u

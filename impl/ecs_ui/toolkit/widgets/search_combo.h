@@ -61,9 +61,13 @@ public:
 
 public:
     [[nodiscard]] const ComboState& combo()const noexcept{ return m_combo; }
+
     [[nodiscard]] ComboState& combo()noexcept{ return m_combo; }
+
     [[nodiscard]] const EditModel& query()const noexcept{ return m_query; }
+
     [[nodiscard]] EditModel& query()noexcept{ return m_query; }
+
     [[nodiscard]] const EditBoxState& editorState()const noexcept{ return m_editor; }
 
 

@@ -63,6 +63,7 @@ public:
 
 public:
     ThrowingMoveAssignmentComponent& operator=(const ThrowingMoveAssignmentComponent&) = delete;
+
     ThrowingMoveAssignmentComponent& operator=(ThrowingMoveAssignmentComponent&& rhs){
         if(rejectMove)
             throw 67u;
@@ -98,6 +99,7 @@ public:
 
 public:
     ThrowingMoveMessage& operator=(const ThrowingMoveMessage&) = delete;
+
     ThrowingMoveMessage& operator=(ThrowingMoveMessage&&) = delete;
 };
 

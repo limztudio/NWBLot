@@ -56,7 +56,7 @@ TEST(UiSkinSelectionTests, FailedDefaultLeavesSelectionUncommittedForRetry){
     const Core::Assets::AssetRef<UiSkin> custom{ __hidden_ui_skin_selection_tests::s_MissingSkinPath };
     UiSkinSelection selection(custom);
     u32 calls = 0u;
-    const auto reject = [&](const Core::Assets::AssetRef<UiSkin>&){ ++calls; return false; };
+    const auto reject = [&](const Core::Assets::AssetRef<UiSkin>&)noexcept{ ++calls; return false; };
     EXPECT_EQ(selection.ensure(reject), UiSkinSelectionResult::Failed);
     EXPECT_FALSE(selection.selected().valid());
     EXPECT_EQ(calls, 2u);
@@ -87,7 +87,7 @@ TEST(UiSkinSelectionTests, ChangeWaitsForResourcesGpuFrameAndAcceptedLayout){
     const Core::Assets::AssetRef<UiSkin> alternate{ __hidden_ui_skin_selection_tests::s_AlternateSkinPath };
     selection.requestChange(alternate);
     u32 binds = 0u;
-    const auto bind = [&](const Core::Assets::AssetRef<UiSkin>&, const u64){ ++binds; return true; };
+    const auto bind = [&](const Core::Assets::AssetRef<UiSkin>&, const u64)noexcept{ ++binds; return true; };
     EXPECT_EQ(selection.applyChangeIfReady(false, false, false, bind), UiSkinChangeResult::Deferred);
     EXPECT_TRUE(selection.changePending());
     EXPECT_EQ(selection.ensure([&](const Core::Assets::AssetRef<UiSkin>&)noexcept{ return true; }), UiSkinSelectionResult::Selected);

@@ -209,8 +209,11 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const bool clearAvboitTargets = m_avboitSystem.shouldClearTargets(hasTransparentRenderers);
     const f32 meshViewAspectRatio = ECSRenderDetail::ResolveFramebufferAspectRatio(deferredTargets.framebuffer->getFramebufferInfo());
     Core::GpuGraphSubmissionTransaction::PayloadLifetimeScope graphPayloadLifetime(m_deferredLightingSubmissionTransaction, m_deferredLightingTaskGraph, m_deferredLightingCompiledGraph);
+    // Graph build, its retry, and scheduling share one scratch arena.
+    Core::Alloc::ScratchArena deferredGraphScratchArena(RendererArenaScope::s_TaskGraphArena);
     const auto buildDeferredGraph = [&](const bool captureLightingHistory){
         buildDeferredLightingTaskGraph(
+            deferredGraphScratchArena,
             frameGraphFeatures,
             deferredTargets,
             csgFrameState,
@@ -269,8 +272,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred graph build with optional lagged lighting-history capture failed; retrying without the tail"));
         buildDeferredGraph(false);
     }
-    Core::Alloc::ScratchArena deferredGraphSchedulingScratchArena(RendererArenaScope::s_TaskGraphArena);
-    const bool deferredGraphScheduled = scheduleDeferredLightingTaskGraphForExecution(deferredGraphSchedulingScratchArena);
+    const bool deferredGraphScheduled = scheduleDeferredLightingTaskGraphForExecution(deferredGraphScratchArena);
     const Core::GpuTaskGraph::DeclarationReadView deferredTaskGraphView(m_deferredLightingTaskGraph);
     const Core::GpuCompiledGraph::ReadView deferredCompiledPlan(m_deferredLightingCompiledGraph);
     const bool captureLaggedLightingHistory = m_deferredLaggedLightingHistoryTask.valid();

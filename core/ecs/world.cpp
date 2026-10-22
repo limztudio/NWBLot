@@ -30,6 +30,7 @@ World::World(Alloc::GlobalArena& arena, CpuTaskScheduler& taskScheduler)
     , m_messageBus(m_arena)
     , m_freeEntityComponentNode(s_InvalidEntityComponentNode)
 {}
+
 World::~World()noexcept(false){
     bool joined = false;
     ScopeExit retireOwned([this, &joined]()noexcept{

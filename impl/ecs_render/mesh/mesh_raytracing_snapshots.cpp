@@ -320,11 +320,7 @@ Expected<ECSRenderDetail::MeshSoftwareBvhParentBuildStateVector> RendererMeshSys
         const auto identity = DeriveName(mesh.meshName, AStringView(":shadow_trace_sw_parent"));
         if(!identity)
             return MakeUnexpected(Failure{});
-        states.push_back({
-            .buffer = mesh.swBvhParentBuffer,
-            .identity = *identity,
-        }
-        );
+        states.push_back({ .buffer = mesh.swBvhParentBuffer, .identity = *identity, });
     }
     return states;
 }
@@ -360,13 +356,7 @@ void RendererMeshSystem::collectBlasGraphStates(ECSRenderDetail::MeshBlasGraphSt
         snapshot.runtimeMesh = mesh.runtimeMesh;
         snapshot.blasBuildPending = mesh.blasBuildPending;
         snapshot.blasBuildAccepted = mesh.blasBuildAccepted;
-        outStates.push_back({
-            .meshName = mesh.meshName,
-            .blas = mesh.blas,
-            .backingFresh = mesh.blasBackingFresh,
-            .nativeBuildsBlas = RequiresMeshBlasUpdate(snapshot),
-        }
-        );
+        outStates.push_back({ .meshName = mesh.meshName, .blas = mesh.blas, .backingFresh = mesh.blasBackingFresh, .nativeBuildsBlas = RequiresMeshBlasUpdate(snapshot), });
     }
 }
 

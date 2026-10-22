@@ -54,6 +54,7 @@ private:
             // Logical capacity excludes the header so cache sizing and arena telemetry keep their contract.
             return new(backing) Chunk(payloadSize, MakeNotNull(static_cast<u8*>(backing) + payloadOffset));
         }
+
         static inline void Destroy(Chunk& chunk)noexcept{
             chunk.~Chunk();
             CoreFreeAligned(&chunk);
@@ -79,6 +80,7 @@ private:
             m_remaining -= size;
             return ret;
         }
+
         inline bool tryPopLifo(void* p, usize size)noexcept{
             const usize available = reinterpret_cast<usize>(m_available.get());
             const usize allocationBegin = reinterpret_cast<usize>(p);
@@ -98,6 +100,7 @@ private:
             m_remaining += size;
             return true;
         }
+
         inline usize lifoTopSpan(void* p)const noexcept{
             const usize bufferBegin = reinterpret_cast<usize>(m_buffer.get());
             const usize allocationBegin = reinterpret_cast<usize>(p);
@@ -106,6 +109,7 @@ private:
                 return 0;
             return available - allocationBegin;
         }
+
         inline bool tryResizeLifoTop(NotNull<void*> p, usize newSize)noexcept{
             const usize bufferBegin = reinterpret_cast<usize>(m_buffer.get());
             const usize allocationBegin = reinterpret_cast<usize>(p.get());

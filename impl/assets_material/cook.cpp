@@ -53,8 +53,15 @@ Expected<Path> EmitMaterialBindIncludes(MaterialCookArena& arena, const Path& ca
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface(MaterialCookArena& arena, const AStringView shaderName, const Path& materialBindIncludeRoot, const MaterialCookVector<Path>& dependencies, Core::Alloc::ScratchArena& scratchArena){
-    return MaterialCookDetail::ResolveMaterialBindDependencyInterface(arena, shaderName, materialBindIncludeRoot, dependencies, scratchArena);
+Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface(
+    MaterialCookArena& arena,
+    const AStringView shaderName,
+    const Path& materialBindIncludeRoot,
+    const MaterialCookVector<MaterialBindEntry>& materialBindEntries,
+    const MaterialCookVector<Path>& dependencies,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    return MaterialCookDetail::ResolveMaterialBindDependencyInterface(arena, shaderName, materialBindIncludeRoot, materialBindEntries, dependencies, scratchArena);
 }
 
 
@@ -366,7 +373,7 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
             continue;
 
         const Core::ShaderType::Enum shaderType = static_cast<Core::ShaderType::Enum>(shaderIndex);
-        NWB_ASSERT(Core::ShaderType::IsValid(shaderType));
+        NWB_ASSERT(IsSupportedMaterialShaderStage(shaderType));
 
         AppendPOD(outBinary, shaderType);
         AppendPOD(outBinary, shaderAsset.name().hash());

@@ -31,8 +31,37 @@ struct SkinnedRuntimeMeshIdentity{
 // Success retains raster and optional RT roles.
 [[nodiscard]] Expected<RuntimeMeshDesc> BuildSkinnedRuntimeMeshDesc(Core::ECS::EntityID entity, RuntimeMeshHandle runtimeMesh, const MeshSkinningRuntimeInstance* instance, bool boundsFresh, bool conesFresh);
 
+namespace RuntimeMeshLivenessExceptionDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename ResolveIdentity>
-void MarkLiveSkinnedRuntimeMeshes(Core::ECS::World& world, RuntimeMeshRequestSet& requests, ResolveIdentity&& resolveIdentity){
+consteval bool ResolveIdentityIsNothrow()noexcept{
+    using Result = decltype(DeclVal<ResolveIdentity&>()(DeclVal<Core::ECS::EntityID&>(), DeclVal<SkinnedMeshBindingComponent&>()));
+    using Identity = Decay_T<Result>;
+    return
+        noexcept(DeclVal<ResolveIdentity&>()(DeclVal<Core::ECS::EntityID&>(), DeclVal<SkinnedMeshBindingComponent&>()))
+        && (!IsReference_V<Result> || IsNothrowConstructible_V<Identity, Result>)
+        && IsNothrowDestructible_V<Identity>
+        && noexcept(static_cast<bool>(DeclVal<const Identity&>()))
+        && noexcept(DeclVal<RuntimeMeshRequestSet&>().markLive(DeclVal<const Identity&>()->meshKey, DeclVal<const Identity&>()->version))
+    ;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename ResolveIdentity>
+void MarkLiveSkinnedRuntimeMeshes(Core::ECS::World& world, RuntimeMeshRequestSet& requests, ResolveIdentity&& resolveIdentity)noexcept(RuntimeMeshLivenessExceptionDetail::ResolveIdentityIsNothrow<ResolveIdentity>()){
     if(requests.complete())
         return;
     for(auto&& [entity, binding] : world.view<SkinnedMeshBindingComponent>()){

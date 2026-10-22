@@ -39,9 +39,11 @@ using FrameData = BasicFrameData<s_FrameStoragePointerSlotCount>;
 class WinFrame : public FrameData{
 public:
     inline HINSTANCE instance()const noexcept{ return static_cast<HINSTANCE>(m_data.ptr[0]); }
+
     inline void setInstance(HINSTANCE value)noexcept{ m_data.ptr[0] = value; }
 
     inline HWND hwnd()const noexcept{ return static_cast<HWND>(m_data.ptr[1]); }
+
     inline void setHwnd(HWND value)noexcept{ m_data.ptr[1] = value; }
 };
 #endif

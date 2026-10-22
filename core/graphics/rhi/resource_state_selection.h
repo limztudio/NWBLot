@@ -50,11 +50,17 @@ public:
     [[nodiscard]] bool addTexture(Texture* texture, usize inputIndex)noexcept;
     [[nodiscard]] bool addBuffer(Buffer* buffer, usize inputIndex)noexcept;
     [[nodiscard]] bool containsTexture(Texture* texture)const noexcept{ return texture && containsResource(texture, true); }
+
     [[nodiscard]] bool containsBuffer(Buffer* buffer)const noexcept{ return buffer && containsResource(buffer, false); }
+
     [[nodiscard]] bool valid()const noexcept{ return m_valid; }
+
     [[nodiscard]] const Entry* entries()const noexcept{ return m_storage ? static_cast<const Entry*>(m_storage) : m_inlineEntries; }
+
     [[nodiscard]] usize size()const noexcept{ return m_size; }
+
     [[nodiscard]] usize textureCount()const noexcept{ return m_textureCount; }
+
     [[nodiscard]] usize bufferCount()const noexcept{ return m_size - m_textureCount; }
 
 

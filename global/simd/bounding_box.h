@@ -76,11 +76,11 @@ inline void NWB_SIMD_CALL BoundingDoubleBox::TransformBoxValue(SIMDVectorDouble 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void NWB_SIMD_CALL BoundingBox::CornersValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle (&outCorners)[BoundingBox::s_CornerCount])noexcept{
+inline void NWB_SIMD_CALL BoundingBox::CornersValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle (&outCorners)[s_CornerCount])noexcept{
     CollisionDetail::AabbCorners(boxCenter, boxExtents, outCorners);
 }
 
-inline void NWB_SIMD_CALL BoundingDoubleBox::CornersValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble (&outCorners)[BoundingDoubleBox::s_DoubleCornerCount])noexcept{
+inline void NWB_SIMD_CALL BoundingDoubleBox::CornersValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble (&outCorners)[s_DoubleCornerCount])noexcept{
     CollisionDoubleDetail::AabbCorners(boxCenter, boxExtents, outCorners);
 }
 
@@ -107,7 +107,7 @@ inline void NWB_SIMD_CALL BoundingDoubleBox::CornersValue(SIMDVectorDouble boxCe
     SIMDVectorSingle maxBounds{};
     const SIMDVectorSingle points[CollisionDetail::s_TriangleVertexCount] = { v0, v1, v2 };
     CollisionDetail::MinMaxFromCenterExtents(boxCenter, boxExtents, minBounds, maxBounds);
-    if(CollisionDetail::PointsInsideMinMax(points, CollisionDetail::s_TriangleVertexCount, minBounds, maxBounds))
+    if(CollisionDetail::PointsInsideMinMax(points, minBounds, maxBounds))
         return ContainmentType::Contains;
     return IntersectsTriangleValue(boxCenter, boxExtents, v0, v1, v2) ? ContainmentType::Intersects : ContainmentType::Disjoint;
 }
@@ -117,7 +117,7 @@ inline void NWB_SIMD_CALL BoundingDoubleBox::CornersValue(SIMDVectorDouble boxCe
     SIMDVectorDouble maxBounds{};
     const SIMDVectorDouble points[CollisionDoubleDetail::s_DoubleTriangleVertexCount] = { v0, v1, v2 };
     CollisionDoubleDetail::MinMaxFromCenterExtents(boxCenter, boxExtents, minBounds, maxBounds);
-    if(CollisionDoubleDetail::PointsInsideMinMax(points, CollisionDoubleDetail::s_DoubleTriangleVertexCount, minBounds, maxBounds))
+    if(CollisionDoubleDetail::PointsInsideMinMax(points, minBounds, maxBounds))
         return ContainmentType::Contains;
     return IntersectsTriangleValue(boxCenter, boxExtents, v0, v1, v2) ? ContainmentType::Intersects : ContainmentType::Disjoint;
 }
@@ -186,7 +186,7 @@ inline void NWB_SIMD_CALL BoundingDoubleBox::CornersValue(SIMDVectorDouble boxCe
     SIMDVectorSingle points[s_CornerCount];
     CollisionDetail::AabbCorners(boxCenter, boxExtents, points);
     const SIMDVectorSingle planes[CollisionDetail::s_FrustumPlaneCount] = { plane0, plane1, plane2, plane3, plane4, plane5 };
-    return CollisionDetail::ContainmentFromPlaneTests(points, s_CornerCount, planes, CollisionDetail::s_FrustumPlaneCount);
+    return CollisionDetail::ContainmentFromPlaneTests(points, planes);
 }
 
 [[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingDoubleBox::ContainedByValue(
@@ -195,7 +195,7 @@ inline void NWB_SIMD_CALL BoundingDoubleBox::CornersValue(SIMDVectorDouble boxCe
     SIMDVectorDouble points[s_DoubleCornerCount];
     CollisionDoubleDetail::AabbCorners(boxCenter, boxExtents, points);
     const SIMDVectorDouble planes[CollisionDoubleDetail::s_DoubleFrustumPlaneCount] = { plane0, plane1, plane2, plane3, plane4, plane5 };
-    return CollisionDoubleDetail::ContainmentFromPlaneTests(points, s_DoubleCornerCount, planes, CollisionDoubleDetail::s_DoubleFrustumPlaneCount);
+    return CollisionDoubleDetail::ContainmentFromPlaneTests(points, planes);
 }
 
 
@@ -292,7 +292,7 @@ inline void NWB_SIMD_CALL BoundingDoubleBox::MergeBoxValues(SIMDVectorDouble box
     SIMDVectorSingle minBounds{};
     SIMDVectorSingle maxBounds{};
     CollisionDetail::MinMaxFromCenterExtents(boxCenter, boxExtents, minBounds, maxBounds);
-    if(CollisionDetail::PointsInsideMinMax(corners, BoundingOrientedBox::s_CornerCount, minBounds, maxBounds))
+    if(CollisionDetail::PointsInsideMinMax(corners, minBounds, maxBounds))
         return ContainmentType::Contains;
     return intersectsOrientedBoxValues(boxCenter, boxExtents, otherBoxCenter, otherBoxExtents, otherBoxOrientation) ? ContainmentType::Intersects : ContainmentType::Disjoint;
 }
@@ -305,7 +305,7 @@ inline void NWB_SIMD_CALL BoundingDoubleBox::MergeBoxValues(SIMDVectorDouble box
     SIMDVectorDouble minBounds{};
     SIMDVectorDouble maxBounds{};
     CollisionDoubleDetail::MinMaxFromCenterExtents(boxCenter, boxExtents, minBounds, maxBounds);
-    if(CollisionDoubleDetail::PointsInsideMinMax(corners, BoundingDoubleOrientedBox::s_DoubleCornerCount, minBounds, maxBounds))
+    if(CollisionDoubleDetail::PointsInsideMinMax(corners, minBounds, maxBounds))
         return ContainmentType::Contains;
     return intersectsOrientedBoxValues(boxCenter, boxExtents, otherBoxCenter, otherBoxExtents, otherBoxOrientation) ? ContainmentType::Intersects : ContainmentType::Disjoint;
 }
@@ -319,7 +319,7 @@ inline void NWB_SIMD_CALL BoundingDoubleBox::MergeBoxValues(SIMDVectorDouble box
     SIMDVectorSingle minBounds{};
     SIMDVectorSingle maxBounds{};
     CollisionDetail::MinMaxFromCenterExtents(boxCenter, boxExtents, minBounds, maxBounds);
-    if(CollisionDetail::PointsInsideMinMax(corners, BoundingFrustum::s_CornerCount, minBounds, maxBounds))
+    if(CollisionDetail::PointsInsideMinMax(corners, minBounds, maxBounds))
         return ContainmentType::Contains;
     SIMDVectorSingle planes[CollisionDetail::s_FrustumPlaneCount];
     CollisionDetail::FrustumPlanes(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, planes);
@@ -335,7 +335,7 @@ inline void NWB_SIMD_CALL BoundingDoubleBox::MergeBoxValues(SIMDVectorDouble box
     SIMDVectorDouble minBounds{};
     SIMDVectorDouble maxBounds{};
     CollisionDoubleDetail::MinMaxFromCenterExtents(boxCenter, boxExtents, minBounds, maxBounds);
-    if(CollisionDoubleDetail::PointsInsideMinMax(corners, BoundingDoubleFrustum::s_DoubleCornerCount, minBounds, maxBounds))
+    if(CollisionDoubleDetail::PointsInsideMinMax(corners, minBounds, maxBounds))
         return ContainmentType::Contains;
     SIMDVectorDouble planes[CollisionDoubleDetail::s_DoubleFrustumPlaneCount];
     CollisionDoubleDetail::FrustumPlanes(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, planes);

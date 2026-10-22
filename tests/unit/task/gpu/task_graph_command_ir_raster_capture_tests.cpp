@@ -51,9 +51,9 @@ TEST(GpuCommandIrRasterCapture, RetainedOwnerAnchorOutlivesIndependentCaptureAre
     {
         TaskGraphTestUtils::TestArena captureArena;
         Graphics::GpuCommandIrCapture capture(captureArena.arena);
-        Graphics::GpuCommandIrOwnerAnchor source = Graphics::MakeGpuCommandIrOwnerAnchor(ownerArena.arena, OwnerReleaseProbe(releases));
-        ASSERT_TRUE(source.valid());
-        exported = source;
+        const auto source = Graphics::MakeGpuCommandIrOwnerAnchor(ownerArena.arena, OwnerReleaseProbe(releases));
+        ASSERT_TRUE(source);
+        exported = *source;
         capture.reset();
         EXPECT_EQ(releases, 0u);
     }

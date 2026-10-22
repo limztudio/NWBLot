@@ -62,11 +62,15 @@ public:
 
 public:
     inline constexpr u32 index()const noexcept{ return id & ECSDetail::s_EntityIndexMask; }
+
     inline constexpr u32 generation()const noexcept{ return (id >> ECSDetail::s_EntityIndexBits) & ECSDetail::s_EntityGenerationMask; }
+
     inline constexpr bool valid()const noexcept{ return index() != ECSDetail::s_EntityInvalidIndex; }
 };
 inline constexpr bool operator==(const EntityID& lhs, const EntityID& rhs)noexcept{ return lhs.id == rhs.id; }
+
 inline constexpr bool operator!=(const EntityID& lhs, const EntityID& rhs)noexcept{ return lhs.id != rhs.id; }
+
 inline constexpr bool operator<(const EntityID& lhs, const EntityID& rhs)noexcept{ return lhs.id < rhs.id; }
 
 inline constexpr EntityID s_InvalidEntityId = EntityID{};

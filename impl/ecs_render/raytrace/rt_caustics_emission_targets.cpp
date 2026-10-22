@@ -10,6 +10,7 @@
 #include <core/task/gpu/compiled_graph.h>
 
 #include <global/algorithm.h>
+#include <global/hash_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -155,6 +156,8 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc
     // Photon emission targets are world bounds of refractive instances. Freeze the gathered bytes here, preflight still owns capacity/descriptor selection; graph declaration retains only this immutable snapshot.
     m_preparedCausticEmissionTargetBytes.clear();
     m_rayTracingState.m_causticRefractiveInstanceCount = 0u;
+    m_unsupportedCausticVolumeCount = 0u;
+    m_unsupportedCausticVolumeHash = s_Fnv64OffsetBasis;
 
     auto* meshSystemPtr = m_world.getSystem<NWB::Impl::MeshSystem>();
     if(!meshSystemPtr)
@@ -181,7 +184,16 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc
             continue;
 
         const auto meshResult = RayTracingDetail::ResolveRenderableMeshResources(*meshSystemPtr, m_meshSystem, entity);
-        if(!meshResult || !meshResult->meshResources.csgLocalBounds.valid())
+        if(!meshResult)
+            continue;
+        if(renderer.opticalBoundaryMode != OpticalBoundaryMode::ClosedNested && renderer.opticalBoundaryMode != OpticalBoundaryMode::ClosedPriority){
+            if(m_unsupportedCausticVolumeCount == 0u)
+                m_firstUnsupportedCausticVolumeEntity = entity.id;
+            ++m_unsupportedCausticVolumeCount;
+            Fnv64AppendValue(m_unsupportedCausticVolumeHash, entity.id);
+            Fnv64AppendValue(m_unsupportedCausticVolumeHash, renderer.opticalBoundaryMode);
+        }
+        if(!meshResult->meshResources.csgLocalBounds.valid())
             continue;
 
         const NWB::Impl::Scene::TransformComponent* transformPtr = m_world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);

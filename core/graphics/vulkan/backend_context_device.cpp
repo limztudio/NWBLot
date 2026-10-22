@@ -156,7 +156,7 @@ bool BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
 
     VkPhysicalDeviceCooperativeVectorFeaturesNV cooperativeVectorFeatures = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceCooperativeVectorFeaturesNV>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_VECTOR_FEATURES_NV);
     if(coopVecExtensionEnabled)
-        VulkanDetail::AppendFeatureStruct(pNext, MakeNotNull(&cooperativeVectorFeatures));
+        VulkanDetail::AppendFeatureStruct(pNext, cooperativeVectorFeatures);
 
     bool queriedOptionalFeatures[s_OptionalDeviceFeatureCount] = {};
     for(const auto& [_, feature] : m_enabledExtensions.device){
@@ -405,28 +405,28 @@ bool BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
     }
 
     if(!apiSupportsVulkan13 && dynamicRenderingEnabled)
-        VulkanDetail::AppendFeatureStruct(pNext, MakeNotNull(&dynamicRenderingFeatures));
+        VulkanDetail::AppendFeatureStruct(pNext, dynamicRenderingFeatures);
 
     if(!apiSupportsVulkan13 && synchronization2Enabled)
-        VulkanDetail::AppendFeatureStruct(pNext, MakeNotNull(&synchronization2Features));
+        VulkanDetail::AppendFeatureStruct(pNext, synchronization2Features);
 
     if(coopVecExtensionEnabled && cooperativeVectorFeatures.cooperativeVector)
-        VulkanDetail::AppendFeatureStruct(pNext, MakeNotNull(&cooperativeVectorFeatures));
+        VulkanDetail::AppendFeatureStruct(pNext, cooperativeVectorFeatures);
 
     m_cooperativeVectorFeatureEnabled = coopVecExtensionEnabled && cooperativeVectorFeatures.cooperativeVector == VK_TRUE;
     m_cooperativeVectorTrainingFeatureEnabled = m_cooperativeVectorFeatureEnabled && cooperativeVectorFeatures.cooperativeVectorTraining == VK_TRUE;
 
     if(apiSupportsVulkan13)
-        VulkanDetail::AppendFeatureStruct(pNext, MakeNotNull(&vulkan13features));
+        VulkanDetail::AppendFeatureStruct(pNext, vulkan13features);
     else if(maintenance4Enabled && maintenance4Features.maintenance4 == VK_TRUE)
-        VulkanDetail::AppendFeatureStruct(pNext, MakeNotNull(&maintenance4Features));
+        VulkanDetail::AppendFeatureStruct(pNext, maintenance4Features);
 
     // Aftermath configuration must outlive vkCreateDevice.
     VkPhysicalDeviceDiagnosticsConfigFeaturesNV diagnosticsConfigFeatures = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceDiagnosticsConfigFeaturesNV>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DIAGNOSTICS_CONFIG_FEATURES_NV);
     VkDeviceDiagnosticsConfigCreateInfoNV diagnosticsConfigCreateInfo = VulkanDetail::MakeVkStruct<VkDeviceDiagnosticsConfigCreateInfoNV>(VK_STRUCTURE_TYPE_DEVICE_DIAGNOSTICS_CONFIG_CREATE_INFO_NV);
     if(aftermathActive && diagnosticsConfigExtensionEnabled){
         diagnosticsConfigFeatures.diagnosticsConfig = VK_TRUE;
-        VulkanDetail::AppendFeatureStruct(pNext, MakeNotNull(&diagnosticsConfigFeatures));
+        VulkanDetail::AppendFeatureStruct(pNext, diagnosticsConfigFeatures);
 
         diagnosticsConfigCreateInfo.flags =
             VK_DEVICE_DIAGNOSTICS_CONFIG_ENABLE_SHADER_DEBUG_INFO_BIT_NV
@@ -434,7 +434,7 @@ bool BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
             | VK_DEVICE_DIAGNOSTICS_CONFIG_ENABLE_AUTOMATIC_CHECKPOINTS_BIT_NV
             | VK_DEVICE_DIAGNOSTICS_CONFIG_ENABLE_SHADER_ERROR_REPORTING_BIT_NV
         ;
-        VulkanDetail::AppendFeatureStruct(pNext, MakeNotNull(&diagnosticsConfigCreateInfo));
+        VulkanDetail::AppendFeatureStruct(pNext, diagnosticsConfigCreateInfo);
     }
 
     VkPhysicalDeviceFeatures coreDeviceFeatures = {};
@@ -546,7 +546,7 @@ bool BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
         }
     }
 
-    const auto capabilitiesForSameClassQueue = [&physicalQueueFamilies](const i32 queueFamily){
+    const auto capabilitiesForSameClassQueue = [&physicalQueueFamilies](const i32 queueFamily)noexcept(!NWB_OCCUR_ASSERT){
         if(queueFamily == s_InvalidQueueFamilyIndex || static_cast<usize>(queueFamily) >= physicalQueueFamilies.size()){
             NWB_ASSERT(false);
             return GpuQueueCapability::None;

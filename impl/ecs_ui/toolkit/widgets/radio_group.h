@@ -77,10 +77,15 @@ public:
 
 public:
     [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_instanceGeneration; }
+
     [[nodiscard]] u64 inputGeneration()const noexcept{ return m_inputGeneration; }
+
     [[nodiscard]] u64 revision()const noexcept{ return m_revision; }
+
     [[nodiscard]] u64 selectedKey()const noexcept{ return m_selected; }
+
     [[nodiscard]] u64 cursorKey()const noexcept{ return m_cursor; }
+
     [[nodiscard]] const RadioGroupPlacement& placement()const noexcept{ return m_placement; }
     [[nodiscard]] RadioGroupSnapshot snapshot()const noexcept;
     [[nodiscard]] bool matches(const RadioGroupSnapshot& snapshot)const noexcept;

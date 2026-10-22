@@ -38,14 +38,19 @@ public:
 
 public:
     [[nodiscard]] virtual TextInputCapabilities capabilities()const noexcept override{ return { true, true, true, true }; }
+
     [[nodiscard]] TextInputAdmission::Enum commit(AStringView text){ return emitCommit(activeSession(), text); }
+
     [[nodiscard]] TextInputAdmission::Enum commitFor(TextInputSessionToken token, AStringView text){ return emitCommit(token, text); }
+
     [[nodiscard]] TextInputAdmission::Enum preedit(AStringView text, usize anchor, usize caret, bool visible = true){
         return emitPreedit(activeSession(), text, anchor, caret, visible);
     }
+
     [[nodiscard]] TextInputAdmission::Enum erase(usize before, usize after, u64 revision, TextInputDeletionBasis::Enum basis){
         return emitDeleteSurrounding(activeSession(), before, after, revision, basis);
     }
+
     [[nodiscard]] TextInputRect nativeCaret()const noexcept{ return caretRect(); }
 };
 

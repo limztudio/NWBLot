@@ -106,6 +106,7 @@ public:
     }
 
     void arm()noexcept{ m_armed = true; }
+
     [[nodiscard]] u64 mutations()const noexcept{ return m_mutations; }
 
 

@@ -69,8 +69,11 @@ struct SpirvWordSource{
 
 public:
     [[nodiscard]] bool valid()const noexcept{ return words != nullptr; }
+
     [[nodiscard]] usize size()const noexcept{ return wordCount; }
+
     [[nodiscard]] u32 word(const usize index)const noexcept{ return words[index]; }
+
     [[nodiscard]] AStringView nameBytes(const usize index, const usize count)const noexcept{
         return AStringView(reinterpret_cast<const char*>(words + index), count * sizeof(u32));
     }
@@ -82,12 +85,15 @@ struct SpirvByteSource{
 
 public:
     [[nodiscard]] bool valid()const noexcept{ return bytecode.data() != nullptr && bytecode.size() % sizeof(u32) == 0u; }
+
     [[nodiscard]] usize size()const noexcept{ return bytecode.size() / sizeof(u32); }
+
     [[nodiscard]] u32 word(const usize index)const noexcept{
         const u8* const wordBytes = bytecode.data() + index * sizeof(u32);
         const u8 bytes[sizeof(u32)]{ wordBytes[0u], wordBytes[1u], wordBytes[2u], wordBytes[3u] };
         return BitCast<u32>(bytes);
     }
+
     [[nodiscard]] AStringView nameBytes(const usize index, const usize count)const noexcept{
         return AStringView(reinterpret_cast<const char*>(bytecode.data() + index * sizeof(u32)), count * sizeof(u32));
     }
@@ -176,12 +182,12 @@ template<typename Source>
 
     bool found = false;
     const bool validModule = ScanSpirvEntryPoints(source, [&](const SpirvEntryPointInstruction& entryPoint)noexcept{
-            if(found || entryPoint.shaderType == ShaderType::None || entryPoint.shaderType != shaderType || entryPoint.name != entryName)
-                return;
+        if(found || entryPoint.shaderType == ShaderType::None || entryPoint.shaderType != shaderType || entryPoint.name != entryName)
+            return;
 
-            entryPointName = entryPoint.name;
-            found = true;
-        }
+        entryPointName = entryPoint.name;
+        found = true;
+    }
     );
     if(!validModule)
         return MakeUnexpected(SpirvEntryPointLookupResult::InvalidSpirv);

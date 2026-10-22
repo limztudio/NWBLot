@@ -45,15 +45,15 @@ template<typename PointerT, typename OperationT>
 
 [[nodiscard]] inline bool ReadAllFileDescriptor(const int fd, void* const data, const usize byteCount)noexcept{
     return TransferAllPosix(static_cast<u8*>(data), byteCount, [fd](u8* const cursor, const usize remaining)noexcept{
-            return read(fd, cursor, remaining);
-        }
+        return read(fd, cursor, remaining);
+    }
     );
 }
 
 [[nodiscard]] inline bool WriteAllFileDescriptor(const int fd, const void* const data, const usize byteCount)noexcept{
     return TransferAllPosix(static_cast<const u8*>(data), byteCount, [fd](const u8* const cursor, const usize remaining)noexcept{
-            return write(fd, cursor, remaining);
-        }
+        return write(fd, cursor, remaining);
+    }
     );
 }
 #endif

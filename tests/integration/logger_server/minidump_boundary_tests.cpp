@@ -83,9 +83,11 @@ protected:
     virtual void SetUp()override{
         ASSERT_TRUE(EnsureEmptyDirectory(m_directory));
     }
+
     virtual void TearDown()override{
         EXPECT_TRUE(RemoveAllIfExists(m_directory));
     }
+
     [[nodiscard]] Expected<Log::CrashReportText> report(const DumpBytes& bytes){
         if(!WriteBinaryFile(m_directory / Core::Crash::PackageNames::s_ProcessDumpFileName, bytes))
             return MakeUnexpected(Failure{});

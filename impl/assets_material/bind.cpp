@@ -43,10 +43,6 @@ const MaterialBindAttribute* MaterialBindField::findAttribute(const AStringView 
     return nullptr;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 AStringView MaterialBindField::defaultArgument()const noexcept{
     const MaterialBindAttribute* attribute = findAttribute(MaterialBindDetail::s_DefaultAttribute);
     return (attribute && attribute->arguments.size() == 1u) ? AStringView(attribute->arguments[0u]) : AStringView();
@@ -63,10 +59,6 @@ const MaterialBindField* MaterialBindStruct::findField(const AStringView fieldNa
     }
     return nullptr;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 const MaterialBindAttribute* MaterialBindStruct::findAttribute(const AStringView attributeName)const noexcept{
     for(const MaterialBindAttribute& attribute : attributes){

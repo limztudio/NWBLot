@@ -97,10 +97,6 @@ bool AssetsGraphicsFixture::PrepareCleanDirectory(const AssetsGraphicsFixture::P
     return EnsureDirectories(directory).has_value();
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool AssetsGraphicsFixture::WriteTextFile(const AssetsGraphicsFixture::Path& filePath, const AStringView text){
     if(!EnsureDirectories(filePath.parentPath()))
         return false;
@@ -223,10 +219,6 @@ bool AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(
     gatherOptions.mergePayloads = &NWB::Impl::MergeGatheredGraphicsAsset;
     return NWB::Pipeline::AssetGatherer::GatherAssets(gatherOptions);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool AssetsGraphicsFixture::CookSingleGraphicsMeta(const AStringView metaText, AStringView assetDirectory, AStringView assetFilename, AssetsGraphicsFixture::TestArena& testArena, const AssetsGraphicsFixture::CookCase& cookCase){
     const Path assetRoot = cookCase.root / __hidden_assets_graphics_fixture::s_AssetsDirectory;
@@ -398,10 +390,6 @@ bool AssetsGraphicsFixture::WriteMaterialBindShaderProbeSource(
     return WriteTextFile(assetRoot / __hidden_assets_graphics_fixture::s_ShadersDirectory / sourceFilename, sourceText);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool AssetsGraphicsFixture::WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(
     AssetsGraphicsFixture::TestArena& testArena,
     const AssetsGraphicsFixture::Path& assetRoot,
@@ -420,17 +408,9 @@ bool AssetsGraphicsFixture::WriteMaterialBindMaterialIntegrationAssetsWithPixelS
     return WriteTextFile(assetRoot / "materials" / "test_material.nwb", materialText);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool AssetsGraphicsFixture::WriteMaterialBindMaterialIntegrationAssets(AssetsGraphicsFixture::TestArena& testArena, const AssetsGraphicsFixture::Path& assetRoot, const AStringView bindText, const AStringView materialText){
     return WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(testArena, assetRoot, bindText, materialText, s_MaterialBindShaderProbeSource);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool AssetsGraphicsFixture::CookMaterialBindMaterialIntegrationWithPixelSource(
     const AStringView bindText,

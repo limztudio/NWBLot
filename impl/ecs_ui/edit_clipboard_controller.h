@@ -47,7 +47,9 @@ public:
     [[nodiscard]] UiEditClipboardResult drain(const UiTextEditOwner& owner, Ui::EditModel& model, bool readOnly = false);
     [[nodiscard]] bool cancel();
     [[nodiscard]] bool pending()const noexcept{ return m_token.valid(); }
+
     [[nodiscard]] Core::ClipboardRequestToken token()const noexcept{ return m_token; }
+
     [[nodiscard]] Ui::EditClipboardAction::Enum action()const noexcept{ return m_action; }
 
 

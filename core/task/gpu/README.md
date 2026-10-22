@@ -25,7 +25,9 @@ struct ExampleComputeTask{
     static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context);
 };
 
-const GpuTaskId task = graph.addTask<ExampleComputeTask>(taskDesc, Move(payload));
+const Expected<GpuTaskId> task = graph.addTask<ExampleComputeTask>(taskDesc, Move(payload));
+if(!task)
+    return MakeUnexpected(Failure{});
 ```
 
 When a task implementation records different command kinds depending on its payload, provide `static GpuTaskCommandRequirements CommandRequirements(const Payload&)` instead. Every required capability must be supported; each nonempty alternative mask additionally requires at least one alternative. Built-ins preserve native and hook alternatives independently. A task that records native commands must declare one of these contracts. The metadata-only `addTask` overload accepts command requirements for analysis and tooling.

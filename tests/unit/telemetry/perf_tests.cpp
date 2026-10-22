@@ -48,6 +48,7 @@ public:
 
 struct ThrowingScopeName{
     explicit operator Name() & noexcept{ return s_NameNone; }
+
     operator const Name&()const&{ throw s_ScopeNameConversionFailure; }
 };
 

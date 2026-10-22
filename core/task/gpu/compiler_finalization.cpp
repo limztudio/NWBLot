@@ -131,11 +131,7 @@ namespace GpuTaskGraphCompilerDetail{
                     if(earlierPacket.index >= terminalPacket.index)
                         return false;
 
-                    appendTerminalFinalizationDependency({
-                        .producer = earlierPacket,
-                        .consumer = terminalPacket,
-                    }
-                    );
+                    appendTerminalFinalizationDependency({ .producer = earlierPacket, .consumer = terminalPacket, });
                 }
             }
 

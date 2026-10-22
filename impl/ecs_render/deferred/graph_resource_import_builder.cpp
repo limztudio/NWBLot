@@ -42,6 +42,7 @@ DeferredGraphResourceImportBuilder::DeferredGraphResourceImportBuilder(Core::Gpu
     const DeferredLaggedLightingHistoryResources* const captureHistory = inputs.captureHistory;
     const bool clearAvboitTargets = inputs.clearAvboitTargets;
     const bool capturesLaggedLightingHistory = inputs.capturesLaggedLightingHistory;
+    const bool hasCsgFrameWork = inputs.hasCsgFrameWork;
 
     constexpr AStringView s_CausticIrradianceLabel = "Caustic Irradiance";
     constexpr AStringView s_SurfelIrradianceLabel = "Surfel Irradiance";
@@ -136,18 +137,20 @@ DeferredGraphResourceImportBuilder::DeferredGraphResourceImportBuilder(Core::Gpu
     depthResult = importFirstWriteTexture(deferredTargets.depth, Name("render.deferred_lighting.depth"), "G-Buffer Depth");
 
 
-    // CSG working set declared here; wider target lifecycle stays in native producers.
-    csgCapBackNormalResult = importTexture(deferredTargets.csgCapBackNormal, Name("render.deferred.csg_cap_back_normal"), "CSG Cap Back Normal");
-    csgIntervalDepthResult = importTexture(deferredTargets.csgIntervalDepth, Name("render.deferred.csg_interval_depth"), "CSG Interval Depth");
-    csgIntervalIdResult = importTexture(deferredTargets.csgIntervalId, Name("render.deferred.csg_interval_id"), "CSG Interval ID");
-    csgReceiverEventDataResult = importTexture(deferredTargets.csgReceiverEventData, Name("render.deferred.csg_receiver_event_data"), "CSG Receiver Event Data");
-    csgReceiverEventCountResult = importTexture(deferredTargets.csgReceiverEventCount, Name("render.deferred.csg_receiver_event_count"), "CSG Receiver Event Count");
-    csgReceiverSpanDataResult = importTexture(deferredTargets.csgReceiverSpanData, Name("render.deferred.csg_receiver_span_data"), "CSG Receiver Span Data");
-    csgReceiverSpanCountResult = importTexture(deferredTargets.csgReceiverSpanCount, Name("render.deferred.csg_receiver_span_count"), "CSG Receiver Span Count");
-    csgRemovedIntervalDepthResult = importTexture(deferredTargets.csgRemovedIntervalDepth, Name("render.deferred.csg_removed_interval_depth"), "CSG Removed Interval Depth");
-    csgRemovedIntervalCapNormalResult = importTexture(deferredTargets.csgRemovedIntervalCapNormal, Name("render.deferred.csg_removed_interval_cap_normal"), "CSG Removed Interval Cap Normal");
-    csgRemovedIntervalDataResult = importTexture(deferredTargets.csgRemovedIntervalData, Name("render.deferred.csg_removed_interval_data"), "CSG Removed Interval Data");
-    csgRemovedIntervalCountResult = importTexture(deferredTargets.csgRemovedIntervalCount, Name("render.deferred.csg_removed_interval_count"), "CSG Removed Interval Count");
+    // CSG working set is declared only for frames with CSG work; wider target lifecycle stays in native producers.
+    if(hasCsgFrameWork){
+        csgCapBackNormalResult = importTexture(deferredTargets.csgCapBackNormal, Name("render.deferred.csg_cap_back_normal"), "CSG Cap Back Normal");
+        csgIntervalDepthResult = importTexture(deferredTargets.csgIntervalDepth, Name("render.deferred.csg_interval_depth"), "CSG Interval Depth");
+        csgIntervalIdResult = importTexture(deferredTargets.csgIntervalId, Name("render.deferred.csg_interval_id"), "CSG Interval ID");
+        csgReceiverEventDataResult = importTexture(deferredTargets.csgReceiverEventData, Name("render.deferred.csg_receiver_event_data"), "CSG Receiver Event Data");
+        csgReceiverEventCountResult = importTexture(deferredTargets.csgReceiverEventCount, Name("render.deferred.csg_receiver_event_count"), "CSG Receiver Event Count");
+        csgReceiverSpanDataResult = importTexture(deferredTargets.csgReceiverSpanData, Name("render.deferred.csg_receiver_span_data"), "CSG Receiver Span Data");
+        csgReceiverSpanCountResult = importTexture(deferredTargets.csgReceiverSpanCount, Name("render.deferred.csg_receiver_span_count"), "CSG Receiver Span Count");
+        csgRemovedIntervalDepthResult = importTexture(deferredTargets.csgRemovedIntervalDepth, Name("render.deferred.csg_removed_interval_depth"), "CSG Removed Interval Depth");
+        csgRemovedIntervalCapNormalResult = importTexture(deferredTargets.csgRemovedIntervalCapNormal, Name("render.deferred.csg_removed_interval_cap_normal"), "CSG Removed Interval Cap Normal");
+        csgRemovedIntervalDataResult = importTexture(deferredTargets.csgRemovedIntervalData, Name("render.deferred.csg_removed_interval_data"), "CSG Removed Interval Data");
+        csgRemovedIntervalCountResult = importTexture(deferredTargets.csgRemovedIntervalCount, Name("render.deferred.csg_removed_interval_count"), "CSG Removed Interval Count");
+    }
     shadowVisibilityResult = importTexture(history ? history->shadowVisibility : deferredTargets.shadowVisibility, Name("render.deferred_lighting.shadow_visibility"), history ? "Lagged Shadow Visibility" : RendererGpuPassText::s_ShadowVisibilityLabel);
     causticIrradianceResult = importTexture(history ? history->causticIrradiance : deferredTargets.causticIrradiance, Name("render.deferred_lighting.caustic_irradiance"), history ? "Lagged Caustic Irradiance" : s_CausticIrradianceLabel);
     surfelIrradianceResult = importTexture(history ? history->surfelIrradiance : deferredTargets.surfelIrradiance, Name("render.deferred_lighting.surfel_irradiance"), history ? "Lagged Surfel Irradiance" : s_SurfelIrradianceLabel);
@@ -262,17 +265,19 @@ DeferredGraphResourceImportBuilder::DeferredGraphResourceImportBuilder(Core::Gpu
         || !specularRoughnessResult
         || !refractionSpecularRoughnessResult
         || !depthResult
-        || !csgCapBackNormalResult
-        || !csgIntervalDepthResult
-        || !csgIntervalIdResult
-        || !csgReceiverEventDataResult
-        || !csgReceiverEventCountResult
-        || !csgReceiverSpanDataResult
-        || !csgReceiverSpanCountResult
-        || !csgRemovedIntervalDepthResult
-        || !csgRemovedIntervalCapNormalResult
-        || !csgRemovedIntervalDataResult
-        || !csgRemovedIntervalCountResult
+        || (hasCsgFrameWork && (
+            !csgCapBackNormalResult
+            || !csgIntervalDepthResult
+            || !csgIntervalIdResult
+            || !csgReceiverEventDataResult
+            || !csgReceiverEventCountResult
+            || !csgReceiverSpanDataResult
+            || !csgReceiverSpanCountResult
+            || !csgRemovedIntervalDepthResult
+            || !csgRemovedIntervalCapNormalResult
+            || !csgRemovedIntervalDataResult
+            || !csgRemovedIntervalCountResult
+        ))
         || !shadowVisibilityResult
         || !causticIrradianceResult
         || !surfelIrradianceResult
@@ -313,17 +318,19 @@ DeferredGraphResourceImportBuilder::DeferredGraphResourceImportBuilder(Core::Gpu
     result.worldPosition = *worldPositionResult;
     result.specularRoughness = *specularRoughnessResult;
     result.depth = *depthResult;
-    result.csgCapBackNormal = *csgCapBackNormalResult;
-    result.csgIntervalDepth = *csgIntervalDepthResult;
-    result.csgIntervalId = *csgIntervalIdResult;
-    result.csgReceiverEventData = *csgReceiverEventDataResult;
-    result.csgReceiverEventCount = *csgReceiverEventCountResult;
-    result.csgReceiverSpanData = *csgReceiverSpanDataResult;
-    result.csgReceiverSpanCount = *csgReceiverSpanCountResult;
-    result.csgRemovedIntervalDepth = *csgRemovedIntervalDepthResult;
-    result.csgRemovedIntervalCapNormal = *csgRemovedIntervalCapNormalResult;
-    result.csgRemovedIntervalData = *csgRemovedIntervalDataResult;
-    result.csgRemovedIntervalCount = *csgRemovedIntervalCountResult;
+    if(hasCsgFrameWork){
+        result.csgCapBackNormal = *csgCapBackNormalResult;
+        result.csgIntervalDepth = *csgIntervalDepthResult;
+        result.csgIntervalId = *csgIntervalIdResult;
+        result.csgReceiverEventData = *csgReceiverEventDataResult;
+        result.csgReceiverEventCount = *csgReceiverEventCountResult;
+        result.csgReceiverSpanData = *csgReceiverSpanDataResult;
+        result.csgReceiverSpanCount = *csgReceiverSpanCountResult;
+        result.csgRemovedIntervalDepth = *csgRemovedIntervalDepthResult;
+        result.csgRemovedIntervalCapNormal = *csgRemovedIntervalCapNormalResult;
+        result.csgRemovedIntervalData = *csgRemovedIntervalDataResult;
+        result.csgRemovedIntervalCount = *csgRemovedIntervalCountResult;
+    }
     result.shadowVisibility = *shadowVisibilityResult;
     result.causticIrradiance = *causticIrradianceResult;
     result.surfelIrradiance = *surfelIrradianceResult;

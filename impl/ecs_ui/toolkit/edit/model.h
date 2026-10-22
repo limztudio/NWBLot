@@ -75,19 +75,33 @@ public:
 
 public:
     [[nodiscard]] AStringView text()const noexcept{ return { m_text.data(), m_text.size() }; }
+
     [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_instanceGeneration; }
+
     [[nodiscard]] u64 externalRevision()const noexcept{ return m_externalRevision; }
+
     [[nodiscard]] u64 revision()const noexcept{ return m_revision; }
+
     [[nodiscard]] u64 compositionGeneration()const noexcept{ return m_compositionGeneration; }
+
     [[nodiscard]] u64 selectionGeneration()const noexcept{ return m_selectionGeneration; }
+
     [[nodiscard]] usize anchor()const noexcept{ return m_anchor; }
+
     [[nodiscard]] usize caret()const noexcept{ return m_caret; }
+
     [[nodiscard]] usize selectionStart()const noexcept{ return Min(m_anchor, m_caret); }
+
     [[nodiscard]] usize selectionEnd()const noexcept{ return Max(m_anchor, m_caret); }
+
     [[nodiscard]] bool hasSelection()const noexcept{ return m_anchor != m_caret; }
-    [[nodiscard]] AStringView selectedText()const{ return text().substr(selectionStart(), selectionEnd() - selectionStart()); }
+
+    [[nodiscard]] AStringView selectedText()const noexcept{ return text().substr(selectionStart(), selectionEnd() - selectionStart()); }
+
     [[nodiscard]] const Vector<usize, Core::Alloc::GlobalArena>& graphemeBoundaries()const noexcept{ return m_boundaries; }
+
     [[nodiscard]] const EditLimits& limits()const noexcept{ return m_limits; }
+
     [[nodiscard]] EditTextMode::Enum textMode()const noexcept{ return m_textMode; }
     [[nodiscard]] bool setText(AStringView text);
     [[nodiscard]] bool setSelection(usize anchor, usize caret)noexcept;
@@ -107,6 +121,7 @@ public:
     [[nodiscard]] bool undo();
     [[nodiscard]] bool redo();
     [[nodiscard]] bool canUndo()const noexcept{ return m_historyCursor != 0u; }
+
     [[nodiscard]] bool canRedo()const noexcept{ return m_historyCursor < m_history.size(); }
     [[nodiscard]] bool beginComposition()noexcept;
     // Preedit positions are validated UTF8 scalar boundaries, because native IMEs may select part of a grapheme.

@@ -94,6 +94,10 @@ public:
 
 class ThrowingHandler final : public IInputEventHandler{
 public:
+    static constexpr u32 s_Failure = 0xD15A7C4u;
+
+
+public:
     ThrowingHandler(InputDispatcher& dispatcher, const bool nestedDispatch)noexcept
         : m_dispatcher(dispatcher)
         , m_nestedDispatch(nestedDispatch)
@@ -107,11 +111,11 @@ public:
             m_dispatcher.pointerLeave();
         throw s_Failure;
     }
+
     virtual void pointerLeave()override{ throw s_Failure; }
 
 
 public:
-    static constexpr u32 s_Failure = 0xD15A7C4u;
     InputDispatcher& m_dispatcher;
     usize m_keyUpdates = 0u;
     const bool m_nestedDispatch;

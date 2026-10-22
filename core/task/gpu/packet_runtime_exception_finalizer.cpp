@@ -61,6 +61,7 @@ GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::SubmissionAttemptExceptio
     s_ActiveFinalizer = this;
     m_installed = true;
 }
+
 GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::~SubmissionAttemptExceptionFinalizer()noexcept{
     if(!m_installed)
         return;
@@ -150,6 +151,7 @@ GpuTaskScheduler::SubmissionAttemptExceptionScope::SubmissionAttemptExceptionSco
     , m_outFailedPacket(outFailedPacket)
     , m_uncaughtExceptionCount(UncaughtExceptionCount())
 {}
+
 GpuTaskScheduler::SubmissionAttemptExceptionScope::~SubmissionAttemptExceptionScope()noexcept{
     if(!m_active || UncaughtExceptionCount() <= m_uncaughtExceptionCount)
         return;

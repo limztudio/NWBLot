@@ -95,6 +95,7 @@ Expected<u64> ComputeStridedRangeByteSize(u32 elementCount, u64 stride, u64 elem
 
     return spanCount * stride + elementSize;
 }
+
 u64 GetRayTracingVertexComponentAlignment(const FormatInfo& formatInfo)noexcept{
     const u32 componentCount = static_cast<u32>(formatInfo.hasRed) + static_cast<u32>(formatInfo.hasGreen) + static_cast<u32>(formatInfo.hasBlue) + static_cast<u32>(formatInfo.hasAlpha);
     if(componentCount == 0u || formatInfo.bytesPerBlock == 0u)
@@ -102,6 +103,7 @@ u64 GetRayTracingVertexComponentAlignment(const FormatInfo& formatInfo)noexcept{
 
     return Max<u64>(static_cast<u64>(formatInfo.bytesPerBlock) / componentCount, 1u);
 }
+
 bool ValidateAccelStructBuildInputRange(Buffer* bufferResource, u64 offset, u64 byteSize, u64 requiredAddressAlignment, TStringView operation, TStringView resourceName){
     auto* buffer = bufferResource;
     if(!buffer){

@@ -79,6 +79,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(DeferredFrameT
     m_softwareOpticalScene.resetPrepared();
     m_shadowVisibilityResourcesPreflighted = false;
     m_shadowVisibilityHardwareSupported = false;
+    m_opticalCausticReaderAdmitted = false;
     m_shadowVisibilityTraceResourcesPreflighted = false;
     m_shadowVisibilityBackendPipelinePreflighted = false;
     clearPreparedShadowTraceMaterialSampledTextures();
@@ -323,6 +324,7 @@ void RendererRayTracingSystem::discardPreflightShadowVisibilityResources()noexce
     m_softwareOpticalScene.resetPrepared();
     m_shadowVisibilityResourcesPreflighted = false;
     m_shadowVisibilityHardwareSupported = false;
+    m_opticalCausticReaderAdmitted = false;
     m_shadowVisibilityTraceResourcesPreflighted = false;
     m_shadowVisibilityBackendPipelinePreflighted = false;
 

@@ -126,8 +126,11 @@ RefractionStatisticsState::Slot* RefractionStatisticsState::matchingSlot(const R
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RefractionStatisticsControlHandle CreateRefractionStatisticsControl(Core::Alloc::GlobalArena& arena, const u16 deviceGeneration)noexcept{
-    return RefractionStatisticsControlHandle(NewArenaObject<RefractionStatisticsControl>(arena, deviceGeneration), ArenaRefDeleter<RefractionStatisticsControl, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
+Expected<RefractionStatisticsControlHandle> CreateRefractionStatisticsControl(Core::Alloc::GlobalArena& arena, const u16 deviceGeneration)noexcept{
+    auto control = RefractionStatisticsControlHandle(NewArenaObject<RefractionStatisticsControl>(arena, deviceGeneration), ArenaRefDeleter<RefractionStatisticsControl, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
+    if(!control)
+        return MakeUnexpected(Failure{});
+    return control;
 }
 
 
@@ -203,11 +206,13 @@ bool RefractionStatisticsReadback::prepareResources(){
     if(m_counters && m_counterDescriptor.valid() && m_buffers[0])
         return true;
     const u16 deviceGeneration = m_graphics.getDevice().getDeviceGeneration();
-    if(!m_control)
-        m_control = CreateRefractionStatisticsControl(m_arena, deviceGeneration);
     if(!m_control){
-        NWB_LOGGER_ERROR(NWB_TEXT("Refraction statistics: failed to allocate readback control"));
-        return false;
+        auto controlResult = CreateRefractionStatisticsControl(m_arena, deviceGeneration);
+        if(!controlResult){
+            NWB_LOGGER_ERROR(NWB_TEXT("Refraction statistics: failed to allocate readback control"));
+            return false;
+        }
+        m_control = Move(*controlResult);
     }
     static constexpr Name s_Names[] = { Name("engine/refraction/statistics_readback_0"), Name("engine/refraction/statistics_readback_1"), Name("engine/refraction/statistics_readback_2"), };
     Core::BufferDesc counterDesc;

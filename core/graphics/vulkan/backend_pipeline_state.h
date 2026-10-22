@@ -276,14 +276,20 @@ private:
             m_count = count;
             return true;
         }
+
         void clear()noexcept{
             m_storage.reset();
             m_count = 0u;
         }
+
         [[nodiscard]] usize size()const noexcept{ return m_count; }
+
         [[nodiscard]] T* begin()noexcept{ return m_storage.get(); }
+
         [[nodiscard]] const T* begin()const noexcept{ return m_storage.get(); }
+
         [[nodiscard]] T* end()noexcept{ return m_count == 0u ? begin() : begin() + m_count; }
+
         [[nodiscard]] const T* end()const noexcept{ return m_count == 0u ? begin() : begin() + m_count; }
 
 
@@ -345,6 +351,7 @@ public:
 
     public:
         PendingRecordingLease& operator=(const PendingRecordingLease&) = delete;
+
         PendingRecordingLease& operator=(PendingRecordingLease&&) = delete;
 
 
@@ -399,9 +406,11 @@ public:
 
     // Resource and sampler layouts at sets 0 and 1.
     [[nodiscard]] const BindingLayoutHandle& getResourceLayout()const noexcept{ return m_resourceLayout; }
+
     [[nodiscard]] const BindingLayoutHandle& getSamplerLayout()const noexcept{ return m_samplerLayout; }
     // Per-generation one-descriptor TLAS layout at set 2.
     [[nodiscard]] const BindingLayoutHandle& getAccelStructLayout()const noexcept{ return m_accelStructLayout; }
+
     [[nodiscard]] bool hasAccelStructLayout()const noexcept{ return m_accelStructLayout != nullptr; }
     // SPIR-V binding number for a descriptor class.
     [[nodiscard]] u32 getRegisterSlot(GpuDescriptorClass::Enum descriptorClass)const noexcept;
@@ -490,7 +499,9 @@ public:
 
 public:
     [[nodiscard]] const GraphicsPipelineDesc& getDescription()const noexcept{ return m_desc; }
+
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
+
     [[nodiscard]] const FramebufferInfo& getFramebufferInfo()const noexcept{ return m_framebufferInfo; }
     Object getNativeHandle(ObjectType objectType)noexcept;
 
@@ -519,6 +530,7 @@ public:
 
 public:
     [[nodiscard]] const ComputePipelineDesc& getDescription()const noexcept{ return m_desc; }
+
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
     Object getNativeHandle(ObjectType objectType)noexcept;
 
@@ -546,7 +558,9 @@ public:
 
 public:
     [[nodiscard]] const MeshletPipelineDesc& getDescription()const noexcept{ return m_desc; }
+
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
+
     [[nodiscard]] const FramebufferInfo& getFramebufferInfo()const noexcept{ return m_framebufferInfo; }
     Object getNativeHandle(ObjectType objectType)noexcept;
 
@@ -600,7 +614,9 @@ public:
 
 public:
     [[nodiscard]] const RayTracingPipelineDesc& getDescription()const noexcept{ return m_desc; }
+
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
+
     [[nodiscard]] bool allowsClusterAccelerationStructures()const noexcept{ return m_allowClusterAccelerationStructuresAtCreation; }
     [[nodiscard]] Expected<RayTracingShaderTableHandle> createShaderTable();
     Object getNativeHandle(ObjectType objectType)noexcept;

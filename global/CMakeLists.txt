@@ -91,6 +91,7 @@ target_sources(global_foundation PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/simd/vector.h"
     "${CMAKE_CURRENT_LIST_DIR}/scope_exit.h"
     "${CMAKE_CURRENT_LIST_DIR}/span.h"
+    "${CMAKE_CURRENT_LIST_DIR}/range_traits.h"
     "${CMAKE_CURRENT_LIST_DIR}/string_view.h"
     "${CMAKE_CURRENT_LIST_DIR}/sha256.h"
     "${CMAKE_CURRENT_LIST_DIR}/error_code.h"

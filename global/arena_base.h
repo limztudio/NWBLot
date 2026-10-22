@@ -45,7 +45,7 @@ protected:
 
 public:
     template<typename T>
-    inline T* allocate(usize count){
+    inline T* allocate(usize count)noexcept(noexcept(::AllocateArenaTyped<T>(DeclVal<Arena&>(), count))){
         if constexpr(requires{ Arena::s_MaxAlignSize; })
             static_assert(alignof(T) <= Arena::s_MaxAlignSize, "Arena cannot allocate types with alignment greater than s_MaxAlignSize.");
 
@@ -53,7 +53,7 @@ public:
     }
 
     template<typename T>
-    inline void deallocate(void* p, usize count){
+    inline void deallocate(void* p, usize count)noexcept(noexcept(::DeallocateArenaTyped<T>(DeclVal<Arena&>(), p, count))){
         if constexpr(requires{ Arena::s_MaxAlignSize; })
             static_assert(alignof(T) <= Arena::s_MaxAlignSize, "Arena cannot deallocate types with alignment greater than s_MaxAlignSize.");
 

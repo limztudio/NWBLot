@@ -80,7 +80,7 @@ void nwbCsgShadowAccumulateOpenOptics(inout NwbShadowVisibilityAccumulator accum
     const float chord = max(endpoint - optics.crossingT[0u], 0.0);
     const half interfaceWeight = half(smoothstep(0.0, NWB_SHADOW_INTERFACE_FADE_DISTANCE, chord));
     accumulator.interfaceTransmittance *= lerp(half(1.0h), optics.interfaceTransmittance, interfaceWeight);
-    accumulator.opticalDepth += half3(optics.absorptionCoeff) * half(chord);
+    accumulator.opticalDepth += half3(float3(optics.absorptionCoeff) * chord);
 }
 
 struct NwbCsgShadowRayOpenVisitor : NwbCsgRayOpenVisitor{

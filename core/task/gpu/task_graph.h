@@ -53,6 +53,7 @@ class GpuTaskGraph final : NoCopy{
 public:
     using DeclarationReadView = GpuTaskGraphDeclarationReadView;
 
+
     // Declare this operation owner after every object borrowed by its task payloads.
     // It retires CPU payloads after synchronous recording/submission has joined, while keeping graph declarations, resource owners and diagnostic metadata available.
     // Reset the graph before another execution; every declaration/read/packet claim must finish before this scope ends.
@@ -94,16 +95,19 @@ private:
 
     public:
         [[nodiscard]] PayloadT& operator*()const noexcept{ return *m_payload; }
+
         [[nodiscard]] PayloadT* operator->()const noexcept{ return m_payload; }
 
 
     public:
         [[nodiscard]] PayloadT* get()const noexcept{ return m_payload; }
+
         [[nodiscard]] PayloadT* release()noexcept{
             PayloadT* const payload = m_payload;
             m_payload = nullptr;
             return payload;
         }
+
         void publish()noexcept{ m_payload = nullptr; }
 
 
@@ -137,6 +141,7 @@ private:
 
     public:
         [[nodiscard]] bool valid()const noexcept{ return m_valid; }
+
         [[nodiscard]] bool validFor(const GpuTaskGraph& graph)const noexcept{ return m_valid && &m_graph == &graph; }
 
 
@@ -423,16 +428,19 @@ private:
         using Payload = typename TaskT::Payload;
         return TaskT::Record(*static_cast<const Payload*>(payload), commandList, context);
     }
+
     template<typename TaskT>
     static void AcceptTaskPayload(void* const payload, const QueueSubmissionToken& token)noexcept(noexcept(TaskT::Accepted(*static_cast<typename TaskT::Payload*>(payload), token))){
         using Payload = typename TaskT::Payload;
         TaskT::Accepted(*static_cast<Payload*>(payload), token);
     }
+
     template<typename TaskT>
     static void DiscardTaskPayload(void* const payload)noexcept(noexcept(TaskT::Discarded(*static_cast<typename TaskT::Payload*>(payload)))){
         using Payload = typename TaskT::Payload;
         TaskT::Discarded(*static_cast<Payload*>(payload));
     }
+
     template<typename PayloadT>
     static void DestroyTaskPayload(GraphicsArena& arena, void* payload)noexcept{
         static_assert(noexcept(DestroyArenaObjectNoexcept(arena, static_cast<PayloadT*>(payload))));

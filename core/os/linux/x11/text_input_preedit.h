@@ -29,6 +29,7 @@ public:
 
 public:
     [[nodiscard]] AStringView text()const noexcept{ return m_text; }
+
     [[nodiscard]] usize caretByte()const noexcept{ return m_caretByte; }
     void clear()noexcept;
     [[nodiscard]] bool replace(usize firstCharacter, usize characterCount, AStringView insertion, usize caretCharacter);

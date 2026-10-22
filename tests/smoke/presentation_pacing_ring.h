@@ -111,6 +111,7 @@ public:
     }
 
     [[nodiscard]] usize sampleCount()const noexcept{ return m_count; }
+
     [[nodiscard]] u64 stallCount()const noexcept{ return m_stalls; }
 
 

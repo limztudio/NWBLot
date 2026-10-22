@@ -141,6 +141,7 @@ AccelStruct::AccelStruct(const VulkanContext& context, const ResourceQueueSharin
 {
     m_desc.queueSharing = creationQueueSharing;
 }
+
 AccelStruct::~AccelStruct()noexcept{
     collectRetiredBuildSignatureRoles();
     if(m_acceptedBuildSignatureRole){

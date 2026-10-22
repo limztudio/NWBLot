@@ -90,6 +90,7 @@ ShaderTable::ShaderTable(const VulkanContext& context, Device& device)noexcept
     , m_context(context)
     , m_device(device)
 {}
+
 ShaderTable::~ShaderTable()noexcept{}
 
 bool ShaderTable::setRayGenerationShader(const AStringView exportName){

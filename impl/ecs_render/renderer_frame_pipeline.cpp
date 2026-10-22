@@ -80,6 +80,7 @@ RendererFramePipeline::RendererFramePipeline(Core::Alloc::GlobalArena& arena, Co
 
     m_deferredTaskTimingFeedback.activate();
 }
+
 RendererFramePipeline::~RendererFramePipeline(){
     // Resolve payloads eagerly while owners are alive.
     m_deferredLightingTaskGraph.reset();

@@ -57,7 +57,9 @@ public:
 
 public:
     [[nodiscard]] const Core::Assets::AssetRef<Texture>& identity()const noexcept{ return m_identity; }
+
     [[nodiscard]] u64 generation()const noexcept{ return m_generation; }
+
     [[nodiscard]] const Texture& texture()const noexcept{ return m_texture; }
 
 

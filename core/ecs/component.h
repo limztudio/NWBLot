@@ -127,15 +127,18 @@ public:
     inline T& get(EntityID entityId)noexcept{
         return m_components[requireDenseIndex(entityId)];
     }
+
     inline const T& get(EntityID entityId)const noexcept{
         return m_components[requireDenseIndex(entityId)];
     }
+
     inline T* tryGet(EntityID entityId)noexcept{
         const auto denseIndex = findDenseIndex(entityId);
         if(!denseIndex)
             return nullptr;
         return AddressOf(m_components[*denseIndex]);
     }
+
     inline const T* tryGet(EntityID entityId)const noexcept{
         const auto denseIndex = findDenseIndex(entityId);
         if(!denseIndex)
@@ -179,6 +182,7 @@ public:
     }
 
     inline virtual usize size()const noexcept override{ return m_dense.size(); }
+
     inline virtual u64 mutationVersion()const noexcept override{ return m_mutationVersion; }
 
 

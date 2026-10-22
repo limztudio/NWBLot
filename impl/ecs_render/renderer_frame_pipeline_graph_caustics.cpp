@@ -39,6 +39,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     const Core::GpuGraphResourceId sceneShading,
     const Core::GpuGraphResourceId lights,
     const Core::GpuGraphResourceId materialContextSlots,
+    const Core::GpuGraphResourceId opticalScene,
     const Core::GpuGraphResourceId* const softwareTraceGeometryResources,
     const usize softwareTraceGeometryResourceCount,
     const Core::GpuGraphResourceSetId softwareTraceGeometrySet,
@@ -174,6 +175,10 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         return true;
     };
     const ECSRenderDetail::MeshViewBufferSnapshot meshViewBufferSnapshot = m_meshSystem.meshViewBufferSnapshot();
+    if(m_raytracingSystem.hasCausticWork(meshViewBufferSnapshot) && !opticalScene.valid())
+        return false;
+    if(opticalScene.valid())
+        photonResourceUses.push_back(ReadUse(opticalScene));
     const bool optionalResourcesImported =
         appendOptionalReadBuffer(rayTracingResources.causticEmissionTargetBuffer, Name(RendererFramePipelineDetail::s_SoftwareCausticEmissionTargetsName), RendererFramePipelineDetail::s_CausticEmissionTargetsLabel, Core::ResourceStates::ShaderResource)
         && appendOptionalReadBuffer(meshViewBufferSnapshot.buffer, Name(RendererFramePipelineDetail::s_MeshViewName), RendererFramePipelineDetail::s_MeshViewLabel, Core::ResourceStates::ConstantBuffer)

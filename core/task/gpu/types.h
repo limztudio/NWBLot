@@ -125,6 +125,7 @@ public:
 inline constexpr bool operator==(const GpuTaskId& lhs, const GpuTaskId& rhs)noexcept{
     return lhs.index == rhs.index && lhs.generation == rhs.generation;
 }
+
 inline constexpr bool operator!=(const GpuTaskId& lhs, const GpuTaskId& rhs)noexcept{ return !(lhs == rhs); }
 
 struct GpuGraphResourceId{
@@ -138,6 +139,7 @@ public:
 inline constexpr bool operator==(const GpuGraphResourceId& lhs, const GpuGraphResourceId& rhs)noexcept{
     return lhs.index == rhs.index && lhs.generation == rhs.generation;
 }
+
 inline constexpr bool operator!=(const GpuGraphResourceId& lhs, const GpuGraphResourceId& rhs)noexcept{ return !(lhs == rhs); }
 
 struct GpuGraphResourceVersionId{
@@ -151,6 +153,7 @@ public:
 inline constexpr bool operator==(const GpuGraphResourceVersionId& lhs, const GpuGraphResourceVersionId& rhs)noexcept{
     return lhs.index == rhs.index && lhs.generation == rhs.generation;
 }
+
 inline constexpr bool operator!=(const GpuGraphResourceVersionId& lhs, const GpuGraphResourceVersionId& rhs)noexcept{
     return !(lhs == rhs);
 }
@@ -168,6 +171,7 @@ public:
 inline constexpr bool operator==(const GpuGraphResourceSetId& lhs, const GpuGraphResourceSetId& rhs)noexcept{
     return lhs.index == rhs.index && lhs.generation == rhs.generation;
 }
+
 inline constexpr bool operator!=(const GpuGraphResourceSetId& lhs, const GpuGraphResourceSetId& rhs)noexcept{ return !(lhs == rhs); }
 
 // Upload bytes belong to one graph generation just like task/resource handles.
@@ -183,6 +187,7 @@ public:
 inline constexpr bool operator==(const GpuUploadBlobId& lhs, const GpuUploadBlobId& rhs)noexcept{
     return lhs.index == rhs.index && lhs.generation == rhs.generation;
 }
+
 inline constexpr bool operator!=(const GpuUploadBlobId& lhs, const GpuUploadBlobId& rhs)noexcept{
     return !(lhs == rhs);
 }
@@ -211,6 +216,7 @@ public:
 inline constexpr bool operator==(const GpuGraphPipelineId& lhs, const GpuGraphPipelineId& rhs)noexcept{
     return lhs.index == rhs.index && lhs.generation == rhs.generation;
 }
+
 inline constexpr bool operator!=(const GpuGraphPipelineId& lhs, const GpuGraphPipelineId& rhs)noexcept{
     return !(lhs == rhs);
 }
@@ -226,6 +232,7 @@ public:
 inline constexpr bool operator==(const GpuExternalCompletionId& lhs, const GpuExternalCompletionId& rhs)noexcept{
     return lhs.index == rhs.index && lhs.generation == rhs.generation;
 }
+
 inline constexpr bool operator!=(const GpuExternalCompletionId& lhs, const GpuExternalCompletionId& rhs)noexcept{
     return !(lhs == rhs);
 }
@@ -243,6 +250,7 @@ public:
 inline constexpr bool operator==(const GpuSubmissionPacketId& lhs, const GpuSubmissionPacketId& rhs)noexcept{
     return lhs.index == rhs.index && lhs.generation == rhs.generation;
 }
+
 inline constexpr bool operator!=(const GpuSubmissionPacketId& lhs, const GpuSubmissionPacketId& rhs)noexcept{
     return !(lhs == rhs);
 }

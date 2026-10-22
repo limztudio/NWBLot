@@ -42,7 +42,9 @@ public:
     [[nodiscard]] bool accept(const LightSpaceCaptureTicket& ticket)noexcept;
     void invalidate()noexcept;
     [[nodiscard]] u64 acceptedCaptures()const noexcept{ return m_acceptedCaptures; }
+
     [[nodiscard]] u64 acceptedReuses()const noexcept{ return m_acceptedReuses; }
+
     [[nodiscard]] u32 acceptedReuseAge()const noexcept{ return m_acceptedReuseCount; }
 
 

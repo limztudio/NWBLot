@@ -21,6 +21,7 @@ template<typename T>
 
 template<typename T>
 [[nodiscard]] constexpr NWB_INLINE T FloorLog2(const T x)noexcept(IsArithmetic_V<T>){ return (x == 1) ? 0 : (1 + FloorLog2<T>(x >> 1)); }
+
 template<typename T>
 [[nodiscard]] constexpr NWB_INLINE T CeilLog2(const T x)noexcept(IsArithmetic_V<T>){ return (x == 1) ? 0 : (FloorLog2<T>(x - 1) + 1); }
 

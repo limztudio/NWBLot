@@ -29,9 +29,9 @@ public:
     [[nodiscard]] bool valid()const noexcept{ return resource.valid() && (reused || uploadTask.valid()); }
 };
 
-// Declare once in the serial renderer frame graph; terminal presentation/recovery joins async readers before replacement.
+// Declare once per frame; persistent metadata writes follow the shared selector reader drain.
 // Returned reads retain Common at packet close and carry the latest accepted writer's availability completion.
-[[nodiscard]] Expected<RayTracingOpticalSceneGraphBuffer> ImportRayTracingOpticalSceneBuffer(Core::GpuTaskGraph& graph, const RayTracingOpticalSceneSnapshot& resources, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<RayTracingOpticalSceneGraphBuffer> ImportRayTracingOpticalSceneBuffer(Core::GpuTaskGraph& graph, const RayTracingOpticalSceneSnapshot& resources, Core::GpuTaskId priorReadersDrained, Core::Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

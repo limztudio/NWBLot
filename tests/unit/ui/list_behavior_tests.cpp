@@ -26,7 +26,9 @@ using namespace NWB::Impl::Ui;
 class RangeSource final : public IListDataSource{
 public:
     [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return generation; }
+
     [[nodiscard]] virtual u64 revision()const noexcept override{ return revisionValue; }
+
     [[nodiscard]] virtual u64 rowCount()const noexcept override{ return count; }
 
     [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{

@@ -106,8 +106,8 @@ struct RayTracingShadowPreparationResourceSnapshot{
 struct RayTracingDeferredGraphResourceSnapshot{
     Core::BufferHandle materialContextSlotsBuffer;
     Core::BufferHandle csgTraceContextBuffer;
-    const Core::QueueSubmissionToken* csgTraceContextReadSubmissionTokens = nullptr;
-    usize csgTraceContextReadSubmissionTokenCount = 0u;
+    const Core::QueueSubmissionToken* rayTraceContextReadSubmissionTokens = nullptr;
+    usize rayTraceContextReadSubmissionTokenCount = 0u;
     const Core::BufferHandle* csgTraceBoundsBuffers = nullptr;
     usize csgTraceBoundsBufferCount = 0u;
     Core::BufferHandle shadowInstanceMaterialBuffer;

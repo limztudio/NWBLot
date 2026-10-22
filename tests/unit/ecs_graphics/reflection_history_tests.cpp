@@ -73,8 +73,9 @@ TEST(ReflectionHistory, AcceptedSampleCountCapsWhileSamplingIndexContinues){
 
 TEST(ReflectionHistory, SingleSampleLimitStillPublishesBanksAndAdvancesAcceptedSampling){
     Core::Alloc::GlobalArena arena{Name("tests/reflection/single_sample_history")};
-    auto control = CreateReflectionHistoryControl(arena, 1u);
-    ASSERT_TRUE(control);
+    auto controlResult = CreateReflectionHistoryControl(arena, 1u);
+    ASSERT_TRUE(controlResult);
+    auto control = Move(*controlResult);
     ReflectionSettings settings;
     settings.temporalMaxSamples = 1u;
     u64 epoch = 0u;
@@ -103,8 +104,9 @@ TEST(ReflectionHistory, SingleSampleLimitStillPublishesBanksAndAdvancesAcceptedS
 
 TEST(ReflectionHistory, DiscardedLateHardwareResetKeepsHistoryUntilAnAcceptedRetry){
     Core::Alloc::GlobalArena arena{Name("tests/reflection/late_reset_history")};
-    auto control = CreateReflectionHistoryControl(arena, 1u);
-    ASSERT_TRUE(control);
+    auto controlResult = CreateReflectionHistoryControl(arena, 1u);
+    ASSERT_TRUE(controlResult);
+    auto control = Move(*controlResult);
     const ReflectionSettings settings;
     const auto first = control->plan(Stamp(), settings, 10u);
     ReflectionHistoryReservation initial(control, first);
@@ -314,8 +316,9 @@ TEST(ReflectionHistory, ResourceGenerationRejectsOldAcceptanceAndResetsEpoch){
 
 TEST(ReflectionHistory, GraphRejectionAndResetReleaseUnacceptedLease){
     Core::Alloc::GlobalArena arena{Name("tests/reflection/history_lease")};
-    auto control = CreateReflectionHistoryControl(arena, 1u);
-    ASSERT_TRUE(control);
+    auto controlResult = CreateReflectionHistoryControl(arena, 1u);
+    ASSERT_TRUE(controlResult);
+    auto control = Move(*controlResult);
     Core::GpuTaskGraph graph(arena);
     const auto rejected = control->plan(Stamp(), ReflectionSettings{}, 1u);
     EXPECT_FALSE(graph.addTask<LeaseTask>(Core::GpuTaskDesc{}, LeaseTask::Payload{ReflectionHistoryReservation(control, rejected)}).has_value());

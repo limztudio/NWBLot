@@ -11,7 +11,9 @@
 #include "limit.h"
 #include "simplemath.h"
 
+#include <cerrno>
 #include <charconv>
+#include <cstdlib>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -101,7 +103,19 @@ template<usize N>
 
 
 inline std::ios_base& StreamHex(std::ios_base& stream)noexcept(noexcept(stream.setf(std::ios_base::hex, std::ios_base::basefield))){ return std::hex(stream); }
+
 inline std::ios_base& StreamDec(std::ios_base& stream)noexcept(noexcept(stream.setf(std::ios_base::dec, std::ios_base::basefield))){ return std::dec(stream); }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// `consumed` counts every character used by the parsed prefix, including leading space.
+template<typename NumberT>
+struct NumericTextPrefix{
+    NumberT value = NumberT(0);
+    usize consumed = 0u;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -127,6 +141,42 @@ template<typename NumberT>
     if(parsed.ec != std::errc() || parsed.ptr != end)
         return MakeUnexpected(Failure{});
     return value;
+}
+
+// Keeps the std::sto* rules: current C locale, leading space, sign, base prefix and a partial parse.
+// The caller's errno is left unchanged.
+template<typename NumberT, typename ParseT>
+[[nodiscard]] inline Expected<NumericTextPrefix<NumberT>, ErrorCode> ParseNumberPrefix(const char* const begin, ParseT&& parse)noexcept([]()consteval noexcept{
+    using ParsedT = decltype(DeclVal<ParseT&>()(DeclVal<const char* const&>(), DeclVal<char**>()));
+    constexpr bool s_ResultIsNothrow =
+        noexcept(DeclVal<ParseT&>()(DeclVal<const char* const&>(), DeclVal<char**>()))
+        && IsNothrowDestructible_V<ParsedT>
+        && noexcept(Expected<NumericTextPrefix<NumberT>, ErrorCode>(NumericTextPrefix<NumberT>{ .value = static_cast<NumberT>(DeclVal<const ParsedT&>()), .consumed = DeclVal<usize>() }))
+    ;
+    if constexpr(IsIntegral_V<NumberT> && sizeof(NumberT) < sizeof(ParsedT)){
+        return s_ResultIsNothrow && noexcept(
+            false || DeclVal<const ParsedT&>() < static_cast<ParsedT>(Limit<NumberT>::s_Min) || DeclVal<const ParsedT&>() > static_cast<ParsedT>(Limit<NumberT>::s_Max)
+        );
+    }
+    else
+        return s_ResultIsNothrow;
+}()){
+    using ParsedT = decltype(parse(begin, DeclVal<char**>()));
+
+    const i32 previousErrno = errno;
+    errno = 0;
+    char* end = nullptr;
+    const ParsedT parsed = parse(begin, &end);
+    bool outOfRange = errno == ERANGE;
+    errno = previousErrno;
+    // An unsupported base can leave `end` unset.
+    if(!end || end == begin)
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
+    if constexpr(IsIntegral_V<NumberT> && sizeof(NumberT) < sizeof(ParsedT))
+        outOfRange = outOfRange || parsed < static_cast<ParsedT>(Limit<NumberT>::s_Min) || parsed > static_cast<ParsedT>(Limit<NumberT>::s_Max);
+    if(outOfRange)
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::result_out_of_range));
+    return NumericTextPrefix<NumberT>{ .value = static_cast<NumberT>(parsed), .consumed = static_cast<usize>(end - begin) };
 }
 
 
@@ -174,15 +224,29 @@ template<typename CharT>
 
 
 template<typename ArenaT>
-[[nodiscard]] inline i32 Stoi(const AString<ArenaT>& str, usize* pos = nullptr, i32 base = TextDetail::s_DefaultNumericTextBase){ return std::stoi(str, pos, base); }
+[[nodiscard]] inline Expected<NumericTextPrefix<i32>, ErrorCode> Stoi(const AString<ArenaT>& str, const i32 base = TextDetail::s_DefaultNumericTextBase)noexcept{
+    return TextParseDetail::ParseNumberPrefix<i32>(str.c_str(), [base](const char* const text, char** const end)noexcept{ return std::strtol(text, end, base); });
+}
+
 template<typename ArenaT>
-[[nodiscard]] inline i64 Stoll(const AString<ArenaT>& str, usize* pos = nullptr, i32 base = TextDetail::s_DefaultNumericTextBase){ return std::stoll(str, pos, base); }
+[[nodiscard]] inline Expected<NumericTextPrefix<i64>, ErrorCode> Stoll(const AString<ArenaT>& str, const i32 base = TextDetail::s_DefaultNumericTextBase)noexcept{
+    return TextParseDetail::ParseNumberPrefix<i64>(str.c_str(), [base](const char* const text, char** const end)noexcept{ return std::strtoll(text, end, base); });
+}
+
 template<typename ArenaT>
-[[nodiscard]] inline u64 Stoull(const AString<ArenaT>& str, usize* pos = nullptr, i32 base = TextDetail::s_DefaultNumericTextBase){ return std::stoull(str, pos, base); }
+[[nodiscard]] inline Expected<NumericTextPrefix<u64>, ErrorCode> Stoull(const AString<ArenaT>& str, const i32 base = TextDetail::s_DefaultNumericTextBase)noexcept{
+    return TextParseDetail::ParseNumberPrefix<u64>(str.c_str(), [base](const char* const text, char** const end)noexcept{ return std::strtoull(text, end, base); });
+}
+
 template<typename ArenaT>
-[[nodiscard]] inline f32 Stof(const AString<ArenaT>& str, usize* pos = nullptr){ return std::stof(str, pos); }
+[[nodiscard]] inline Expected<NumericTextPrefix<f32>, ErrorCode> Stof(const AString<ArenaT>& str)noexcept{
+    return TextParseDetail::ParseNumberPrefix<f32>(str.c_str(), [](const char* const text, char** const end)noexcept{ return std::strtof(text, end); });
+}
+
 template<typename ArenaT>
-[[nodiscard]] inline f64 Stod(const AString<ArenaT>& str, usize* pos = nullptr){ return std::stod(str, pos); }
+[[nodiscard]] inline Expected<NumericTextPrefix<f64>, ErrorCode> Stod(const AString<ArenaT>& str)noexcept{
+    return TextParseDetail::ParseNumberPrefix<f64>(str.c_str(), [](const char* const text, char** const end)noexcept{ return std::strtod(text, end); });
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -291,6 +355,7 @@ template<typename CharT, typename ArenaT>
 inline void AppendHexU32(const u32 value, BasicString<CharT, ArenaT>& outText)noexcept(noexcept(NumericTextDetail::AppendHexU32Impl(value, outText))){
     NumericTextDetail::AppendHexU32Impl(value, outText);
 }
+
 template<typename StringT>
     requires requires(StringT& text){
         typename StringT::value_type;
@@ -319,6 +384,7 @@ template<typename CharT, typename ArenaT>
 inline void AppendHexU64(const u64 value, BasicString<CharT, ArenaT>& outText)noexcept(noexcept(NumericTextDetail::AppendHexU64Impl(value, outText))){
     NumericTextDetail::AppendHexU64Impl(value, outText);
 }
+
 template<typename StringT>
     requires requires(StringT& text){
         typename StringT::value_type;

@@ -173,7 +173,7 @@ uint nwbCsgShadowRayInstanceOptics(
                 return NWB_CSG_RAY_FAILURE_TOPOLOGY;
         }
     }
-    accumulator.opticalDepth += optics.absorption * half(optics.chord);
+    accumulator.opticalDepth += half3(float3(optics.absorption) * optics.chord);
     accumulator.interfaceTransmittance *= lerp(half(1.0h), optics.interfaceTransmission, half(smoothstep(0.0, NWB_SHADOW_INTERFACE_FADE_DISTANCE, optics.chord)));
     nwbCsgShadowAccumulateOpenOptics(accumulator, visitor.optics);
     return 0u;

@@ -76,9 +76,13 @@ public:
     // Releases native state without a model pointer. The host clears transient preedit on its next synchronous lend.
     [[nodiscard]] bool cancel();
     [[nodiscard]] Core::TextInputSessionToken token()const noexcept{ return m_token; }
+
     [[nodiscard]] const UiTextEditOwner& owner()const noexcept{ return m_owner; }
+
     [[nodiscard]] bool preeditCaretVisible()const noexcept{ return m_preeditCaretVisible; }
+
     [[nodiscard]] u64 surroundingRevision()const noexcept{ return m_token.valid() ? m_surroundingRevision : 0u; }
+
     [[nodiscard]] bool matchesPublished(const UiTextEditOwner& owner, const Ui::EditModel& model)const noexcept{
         return m_token.valid() && m_owner == owner && m_expectedModel.matches(model) && matchesPublishedModel(model);
     }

@@ -324,6 +324,7 @@ private:
         const auto light = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, 0.6f, 0.4f, 0.f, Float4(1.f, 1.f, 1.f, 1.f), 1.f);
         if(!light.valid())
             return false;
+        m_world->entity(light).getComponent<NWB::Impl::Scene::LightComponent>().enableCaustics = false;
 
         // The opaque base closes stripe seams and fully occludes the in-frustum zero-coverage slab.
         // All density cases retain this same unlit backdrop, camera, and light.
@@ -434,6 +435,7 @@ public:
         const auto light = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, 0.6f, 0.4f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f);
         m_glass = CreateTintedStaticMeshEntity(*m_world, m_context.objectArena, s_SphereMesh, s_ClearMaterial, s_MaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f), Float4(0.0f, 1.4f, 0.0f, 0.0f), Float4(1.15f, 1.15f, 1.15f, 0.0f));
         NWB_FATAL_ASSERT_MSG(camera.valid() && m_glass.valid() && light.valid(), NWB_TEXT("RefractionSmokeProject: camera/glass/light creation failed"));
+        m_world->entity(light).getComponent<NWB::Impl::Scene::LightComponent>().enableCaustics = false;
 
         // Fixed opaque stripes make displaced edges measurable.
         // Unlit materials keep the comparison independent of GI, shadows, and caustic histories.
@@ -531,7 +533,9 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     NWB_FATAL_ASSERT_MSG(**extent == "npot", NWB_TEXT("RefractionSmokeProject: extent must be native, npot, 960x720, 1600x900, or 1920x1080"));
     return { 967, 727 };
 }
+
 TStringView NWB::QueryProjectWindowTitle()noexcept{ return NWB_TEXT("NWB Refraction Smoke"); }
+
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<__hidden_refraction_smoke::RefractionSmokeProject>(context);
 }

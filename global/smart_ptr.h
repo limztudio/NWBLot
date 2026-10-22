@@ -11,6 +11,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<typename T, typename POOL>
+struct ArenaDeleter;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace SmartPtrInternalDetail{
 
 
@@ -33,6 +40,18 @@ struct IsArrayCvConvertibleImplementation<P1, P2, false> : public FalseType{};
 
 
 namespace SmartPtrDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename Source, typename Target>
+struct IsArenaDeleterConversion : FalseType{};
+template<typename U, typename T, typename POOL>
+struct IsArenaDeleterConversion<ArenaDeleter<U, POOL>, ArenaDeleter<T, POOL>> : IntegralConstant<bool, !IsArray_V<U> && !IsArray_V<T> && !IsSame_V<RemoveCV_T<U>, RemoveCV_T<T>> && IsConvertible_V<U*, T*>>{};
+
+template<typename Source, typename Target>
+inline constexpr bool IsArenaDeleterConversion_V = IsArenaDeleterConversion<RemoveCVRef_T<Source>, RemoveCVRef_T<Target>>::value;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -208,7 +227,33 @@ struct DefaultDeleter<T[]>{
 
 template<typename T, typename POOL>
 struct ArenaDeleter{
+    template<typename, typename> friend struct ArenaDeleter;
+
+
+private:
+    using DeallocateFunction = void (*)(POOL& pool, void* allocation)noexcept;
+
+
+public:
     POOL* m_pool = nullptr;
+
+
+private:
+    DeallocateFunction m_deallocate = nullptr;
+    usize m_offset = 0u;
+
+
+private:
+    static consteval bool CanDeallocate()noexcept{
+        return requires(POOL& pool, void* allocation){ pool.template deallocate<T>(static_cast<T*>(allocation), 1); } || requires(POOL& pool, void* allocation){ pool.template deallocate<T>(static_cast<RemoveCV_T<T>*>(allocation), 1); };
+    }
+
+    static void Deallocate(POOL& pool, void* allocation)noexcept{
+        if constexpr(requires{ pool.template deallocate<T>(static_cast<T*>(allocation), 1); })
+            pool.template deallocate<T>(static_cast<T*>(allocation), 1);
+        else
+            pool.template deallocate<T>(static_cast<RemoveCV_T<T>*>(allocation), 1);
+    }
 
 
 public:
@@ -217,15 +262,48 @@ public:
         : m_pool(&pool)
     {}
     template<typename U>
-    ArenaDeleter(const ArenaDeleter<U, POOL>& other, typename EnableIf<IsConvertible<U*, T*>::value>::type* = 0)noexcept
-        : m_pool(other.m_pool){}
+    ArenaDeleter(const ArenaDeleter<U, POOL>& other, typename EnableIf<IsConvertible<U*, T*>::value && IsSame_V<RemoveCV_T<U>, RemoveCV_T<T>>>::type* = 0)noexcept
+        : m_pool(other.m_pool)
+        , m_deallocate(other.m_deallocate)
+        , m_offset(other.m_offset)
+    {}
+    // Cross-type ownership needs the live source pointer before its base adjustment is erased.
+    template<typename U>
+    ArenaDeleter(const ArenaDeleter<U, POOL>& other, TypeIdentity<U*> source, typename EnableIf<IsConvertible<U*, T*>::value && !IsSame_V<RemoveCV_T<U>, RemoveCV_T<T>>>::type* = 0)noexcept
+        : m_pool(other.m_pool)
+    {
+        if(source){
+            m_deallocate = other.m_deallocate;
+            // Callable source policies retain the allocation type; other private pools keep their existing target-operator contract.
+            if(!m_deallocate){
+                if constexpr(ArenaDeleter<U, POOL>::CanDeallocate())
+                    m_deallocate = &ArenaDeleter<U, POOL>::Deallocate;
+            }
+            if(m_deallocate){
+                const usize allocation = reinterpret_cast<usize>(source) - other.m_offset;
+                m_offset = reinterpret_cast<usize>(static_cast<T*>(source)) - allocation;
+            }
+        }
+    }
 
 
 public:
+    // Raw reset or copied-functor reuse must match the retained concrete public-pool allocation policy.
     void operator()(T* p)const noexcept{
         static_assert(IsCompleteType_V<T>, "Attempting to call the destructor of an incomplete type");
+        // Destruction can reenter a surviving owner and replace its deleter.
+        POOL* const pool = m_pool;
+        const DeallocateFunction deallocate = m_deallocate;
+        void* const allocation = reinterpret_cast<void*>(reinterpret_cast<usize>(p) - m_offset);
         p->~T();
-        m_pool->template deallocate<T>(p, 1);
+        if(deallocate)
+            deallocate(*pool, allocation);
+        else{
+            if constexpr(requires{ pool->template deallocate<T>(p, 1); })
+                pool->template deallocate<T>(p, 1);
+            else
+                pool->template deallocate<T>(const_cast<RemoveCV_T<T>*>(p), 1);
+        }
     }
 };
 template<typename T, typename POOL>
@@ -236,6 +314,7 @@ struct ArenaDeleter<T[], POOL>{
 
 public:
     constexpr ArenaDeleter()noexcept = default;
+
     constexpr ArenaDeleter(POOL& pool, usize size)noexcept
         : m_pool(&pool)
         , m_size(size)
@@ -249,9 +328,11 @@ public:
 
 public:
     void operator()(T* p)const noexcept{
-        for(usize i = 0u; i < m_size; ++i)
+        POOL* const pool = m_pool;
+        const usize size = m_size;
+        for(usize i = 0u; i < size; ++i)
             p[i].~T();
-        m_pool->template deallocate<T>(p, m_size);
+        pool->template deallocate<T>(p, size);
     }
 };
 
@@ -273,14 +354,18 @@ struct EmptyDeleter<T[]>{
 
 public:
     constexpr EmptyDeleter()noexcept = default;
+
     constexpr EmptyDeleter(usize size)noexcept
         : m_size(size)
     {}
     template<typename U>
-    EmptyDeleter(const EmptyDeleter<U[]>&, typename EnableIf<SmartPtrDetail::IsArrayCvConvertible<U*, T*>::value>::type* = 0)noexcept{}
+    EmptyDeleter(const EmptyDeleter<U[]>& other, typename EnableIf<SmartPtrDetail::IsArrayCvConvertible<U*, T*>::value>::type* = 0)noexcept
+        : m_size(other.m_size)
+    {}
 
     void operator()(T* p)const noexcept{
-        for(usize i = 0u; i < m_size; ++i)
+        const usize size = m_size;
+        for(usize i = 0u; i < size; ++i)
             p[i].~T();
     }
 };
@@ -298,6 +383,7 @@ struct BlankDeleter{
 template<typename T>
 struct BlankDeleter<T[]>{
     constexpr BlankDeleter()noexcept = default;
+
     constexpr BlankDeleter(usize size)noexcept{
         static_cast<void>(size);
     }

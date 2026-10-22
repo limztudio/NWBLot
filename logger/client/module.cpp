@@ -88,6 +88,7 @@ Client::Client()
     , m_telemetryCount(0)
     , m_telemetryQueue(BaseType::arena())
 {}
+
 Client::~Client()noexcept{
     stopWorker();
 
@@ -96,6 +97,7 @@ Client::~Client()noexcept{
         m_curl = nullptr;
     }
 }
+
 bool Client::enqueueTelemetry(const void* const bytes, const usize byteCount){
     if(!bytes || byteCount == 0u)
         return false;
@@ -149,6 +151,7 @@ bool Client::internalInit(const AStringView url){
 
     return true;
 }
+
 bool Client::internalUpdate(){
     if(!m_hasPendingPayload){
         if(m_telemetryCount.load(MemoryOrder::relaxed)){
@@ -232,6 +235,7 @@ ClientStandalone::ClientStandalone()
     : ClientBaseType("NWB::Log::ClientStandalone")
     , m_processedMessageFile(BaseType::arena())
 {}
+
 ClientStandalone::~ClientStandalone()noexcept{
     stopWorker();
     m_processedMessageFile.close();
@@ -244,6 +248,7 @@ bool ClientStandalone::internalInit(BasicStringView<tchar> logFileNameBase){
 
     return m_processedMessageFile.open(logFileNameBase);
 }
+
 bool ClientStandalone::internalUpdate(){
     MessageType msg = MakeMessageType(BaseType::arena());
     while(tryDequeue(msg)){

@@ -51,8 +51,11 @@ public:
 public:
     void reset()noexcept;
     [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_instanceGeneration; }
+
     [[nodiscard]] u64 revision()const noexcept{ return m_revision; }
+
     [[nodiscard]] bool visible()const noexcept{ return m_visible; }
+
     [[nodiscard]] const PopupPlacement& placement()const noexcept{ return m_placement; }
 
 

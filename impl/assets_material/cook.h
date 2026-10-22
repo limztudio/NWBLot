@@ -134,6 +134,8 @@ public:
 [[nodiscard]] Expected<Path> EmitMaterialBindIncludes(MaterialCookArena& arena, const Path& cacheDirectory, AStringView configurationSafeName, const MaterialCookVector<MaterialBindEntry>& materialBindEntries, Core::Alloc::ScratchArena& scratchArena);
 struct MaterialBindDependency{
     MaterialCookString interfacePath;
+    // Authored `.bind` files behind the generated includes. They are not compiler inputs, but their edits must recook the shader.
+    MaterialCookVector<Path> interfaceSources;
     Name interfaceName = s_NameNone;
     bool dependsOnMaterialBind = false;
 
@@ -141,10 +143,18 @@ struct MaterialBindDependency{
 public:
     explicit MaterialBindDependency(MaterialCookArena& arena)noexcept
         : interfacePath(arena)
+        , interfaceSources(arena)
     {}
 };
 
-[[nodiscard]] Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface(MaterialCookArena& arena, AStringView shaderName, const Path& materialBindIncludeRoot, const MaterialCookVector<Path>& dependencies, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface(
+    MaterialCookArena& arena,
+    AStringView shaderName,
+    const Path& materialBindIncludeRoot,
+    const MaterialCookVector<MaterialBindEntry>& materialBindEntries,
+    const MaterialCookVector<Path>& dependencies,
+    Core::Alloc::ScratchArena& scratchArena
+);
 [[nodiscard]] Expected<Material> BuildMaterialAsset(const MaterialCookEntry& materialEntry, Core::Assets::AssetArena& arena);
 
 // Deterministic shading-model id (unique `bxdf`) + surface dispatch id (unique `surface`); shared sources share ids.

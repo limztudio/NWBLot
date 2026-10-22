@@ -33,7 +33,7 @@ inline void AppendCsgRemovedIntervalUses(
     const Core::GpuGraphResourceId removedIntervalCount,
     const Core::TextureSubresourceSet& subresources,
     const Core::TextureSubresourceSet& countSubresources
-){
+)noexcept(noexcept(resourceUses.push_back(ReadTextureUse(removedIntervalDepth, subresources, Core::ResourceStates::UnorderedAccess)))){
     resourceUses.push_back(ReadTextureUse(removedIntervalDepth, subresources, Core::ResourceStates::UnorderedAccess));
     resourceUses.push_back(ReadTextureUse(removedIntervalCapNormal, subresources, Core::ResourceStates::UnorderedAccess));
     resourceUses.push_back(ReadTextureUse(removedIntervalData, subresources, Core::ResourceStates::UnorderedAccess));

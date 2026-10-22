@@ -26,7 +26,9 @@ namespace Tests::Smoke{
 class UiPopupToolsSmokeSource final : public Impl::Ui::IListDataSource, NoCopy{
 public:
     virtual u64 instanceGeneration()const noexcept override{ return m_generation; }
+
     virtual u64 revision()const noexcept override{ return m_revision; }
+
     virtual u64 rowCount()const noexcept override{ return 5u; }
     virtual u64 key(u64 index)const noexcept override;
     virtual Expected<u64> indexOf(u64 key)const noexcept override;
@@ -37,9 +39,13 @@ public:
 
 public:
     void reverse()noexcept{ m_reversed = !m_reversed; ++m_revision; }
+
     void replace()noexcept{ ++m_generation; ++m_revision; }
+
     void beginFrame()noexcept{ m_labelReads = 0u; }
+
     [[nodiscard]] bool reversed()const noexcept{ return m_reversed; }
+
     [[nodiscard]] u32 labelReads()const noexcept{ return m_labelReads; }
 
 

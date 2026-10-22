@@ -38,6 +38,7 @@ inline constexpr AStringView s_MenuKey = "menu";
 class PopupToolsSource final : public IListDataSource{
 public:
     [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return generation; }
+
     [[nodiscard]] virtual u64 revision()const noexcept override{
         if(closeComboOnRevision){
             ComboState* state = closeComboOnRevision;
@@ -46,7 +47,9 @@ public:
         }
         return contentRevision;
     }
+
     [[nodiscard]] virtual u64 rowCount()const noexcept override{ return count; }
+
     [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{ return index < count ? index + 1u : 0u; }
 
     [[nodiscard]] virtual Expected<u64> indexOf(const u64 value)const noexcept override{

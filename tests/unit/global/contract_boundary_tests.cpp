@@ -93,6 +93,7 @@ public:
 
 public:
     [[nodiscard]] u32 addReference()noexcept{ return ++referenceCount; }
+
     [[nodiscard]] u32 release()noexcept{ return --referenceCount; }
 };
 

@@ -333,7 +333,7 @@ namespace TriangleDoubleTests{
 )noexcept{
     const SIMDVectorSingle points[CollisionDetail::s_TriangleVertexCount] = { v0, v1, v2 };
     const SIMDVectorSingle planes[CollisionDetail::s_FrustumPlaneCount] = { plane0, plane1, plane2, plane3, plane4, plane5 };
-    return CollisionDetail::ContainmentFromPlaneTests(points, CollisionDetail::s_TriangleVertexCount, planes, CollisionDetail::s_FrustumPlaneCount);
+    return CollisionDetail::ContainmentFromPlaneTests(points, planes);
 }
 
 [[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL TriangleDoubleTests::ContainedBy(
@@ -349,7 +349,7 @@ namespace TriangleDoubleTests{
 )noexcept{
     const SIMDVectorDouble points[CollisionDoubleDetail::s_DoubleTriangleVertexCount] = { v0, v1, v2 };
     const SIMDVectorDouble planes[CollisionDoubleDetail::s_DoubleFrustumPlaneCount] = { plane0, plane1, plane2, plane3, plane4, plane5 };
-    return CollisionDoubleDetail::ContainmentFromPlaneTests(points, CollisionDoubleDetail::s_DoubleTriangleVertexCount, planes, CollisionDoubleDetail::s_DoubleFrustumPlaneCount);
+    return CollisionDoubleDetail::ContainmentFromPlaneTests(points, planes);
 }
 
 

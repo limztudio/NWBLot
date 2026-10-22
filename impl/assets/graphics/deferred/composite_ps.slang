@@ -46,9 +46,8 @@ NwbDeferredCompositePixelOutput main(NwbDeferredCompositePixelInput input){
     // Composite color is linear RGBA16F. Exposure and display mapping happen once, after every transport effect.
     const half3 compositeColor = half3(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.avboitWorkSlots1.z).Sample(sampler, input.uv).rgb);
     // Bound extreme finite exposure controls to the representable scene range before HDR conversion or division.
-    // Exposure color math stays in FP16: inputs/outputs are RGBA16F and the 65504 clamp matches half max.
-    const half3 exposedColor = min(clamp(compositeColor, half3(0.0h), half3(NWB_DEFERRED_FINITE_HALF_MAX)) * half(g_NwbDeferredCompositePushConstants.exposure), half3(NWB_DEFERRED_FINITE_HALF_MAX));
-    const half3 sdrColor = g_NwbDeferredCompositePushConstants.toneMap == NWB_DEFERRED_TONE_MAP_REINHARD ? exposedColor / (exposedColor + half(g_NwbDeferredCompositePushConstants.shoulder)) : saturate(exposedColor);
+    const float3 exposedColor = min(float3(clamp(compositeColor, half3(0.0h), half3(NWB_DEFERRED_FINITE_HALF_MAX))) * g_NwbDeferredCompositePushConstants.exposure, float3(NWB_DEFERRED_FINITE_HALF_MAX));
+    const float3 sdrColor = g_NwbDeferredCompositePushConstants.toneMap == NWB_DEFERRED_TONE_MAP_REINHARD ? exposedColor / (exposedColor + g_NwbDeferredCompositePushConstants.shoulder) : saturate(exposedColor);
 
     // The optional layer is display-linear premultiplied Rec.709; it joins after scene mapping and before encoding.
     float4 outputLayer = float4(0.0);

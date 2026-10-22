@@ -1,4 +1,4 @@
-if(Python3_Interpreter_FOUND)
+if(Python3_Interpreter_FOUND AND TARGET nwb_assets_texture_cook)
     nwb_declare_executable(nwb_tex_conv_prepared_decode)
     target_compile_definitions(nwb_tex_conv_prepared_decode PRIVATE NWB_COOK=1)
     target_sources(nwb_tex_conv_prepared_decode PRIVATE "${CMAKE_CURRENT_LIST_DIR}/prepared_decode.cpp")

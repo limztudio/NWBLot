@@ -72,6 +72,7 @@ public:
     [[nodiscard]] const StructMap& structs()const noexcept{ return m_structs; }
 
     [[nodiscard]] bool hasErrors()const noexcept{ return !m_errors.empty(); }
+
     [[nodiscard]] const ErrorList& errors()const noexcept{ return m_errors; }
 
 

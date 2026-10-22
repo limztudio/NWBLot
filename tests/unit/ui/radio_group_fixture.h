@@ -54,8 +54,8 @@ public:
     [[nodiscard]] virtual u64 revision()const override;
     [[nodiscard]] virtual u64 rowCount()const override;
     [[nodiscard]] virtual u64 key(u64 index)const override;
-    [[nodiscard]] virtual Expected<u64> indexOf(u64 key)const override;
-    [[nodiscard]] virtual Expected<u64> findEnabled(u64 start, bool reverse)const override;
+    [[nodiscard]] virtual Expected<u64> indexOf(u64 key)const noexcept override;
+    [[nodiscard]] virtual Expected<u64> findEnabled(u64 start, bool reverse)const noexcept override;
     [[nodiscard]] virtual StringView text(u64 index)const override;
     [[nodiscard]] virtual bool enabled(u64 index)const override;
     void resetCounters()const noexcept;

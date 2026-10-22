@@ -72,23 +72,32 @@ public:
 
 public:
     [[nodiscard]] virtual u64 instanceGeneration()const override{ return m_source.instanceGeneration(); }
+
     [[nodiscard]] virtual u64 revision()const override{ return m_source.revision(); }
+
     [[nodiscard]] virtual u64 rowCount()const override{ return m_source.rowCount(); }
+
     [[nodiscard]] virtual u64 key(const u64 index)const override{ return m_source.key(index); }
+
     [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const override{ return m_source.indexOf(key); }
+
     [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const override{
         return m_source.findEnabled(start, reverse);
     }
+
     [[nodiscard]] virtual StringView text(const u64 index)const override{
         ++m_textCalls;
         if(!m_probe.apply())
             ADD_FAILURE() << "row callback selection change failed";
         return m_source.text(index);
     }
+
     [[nodiscard]] virtual bool enabled(const u64 index)const override{ return m_source.enabled(index); }
 
     void arm(const SelectionMutation::Enum mutation)noexcept{ m_probe.arm(mutation); }
+
     [[nodiscard]] u64 mutationCalls()const noexcept{ return m_probe.calls(); }
+
     [[nodiscard]] u64 textCalls()const noexcept{ return m_textCalls; }
 
 
@@ -109,22 +118,33 @@ public:
 
 public:
     [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return m_source.instanceGeneration(); }
+
     [[nodiscard]] virtual u64 revision()const noexcept override{ return m_source.revision(); }
+
     [[nodiscard]] virtual u64 rowCount()const noexcept override{ return m_source.rowCount(); }
+
     [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{ return m_source.key(index); }
+
     [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const noexcept override{ return m_source.indexOf(key); }
+
     [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const noexcept override{
         return m_source.findEnabled(start, reverse);
     }
+
     [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{ return m_source.text(index); }
+
     [[nodiscard]] virtual bool enabled(const u64 index)const override{ return m_source.enabled(index); }
+
     [[nodiscard]] virtual bool filter(const AStringView query)override{
         return m_probe.apply() && m_source.filter(query);
     }
+
     [[nodiscard]] virtual const IListDataSource& filtered()const noexcept override{ return m_view; }
 
     void armFilter(const SelectionMutation::Enum mutation)noexcept{ m_probe.arm(mutation); }
+
     [[nodiscard]] u64 filterMutationCalls()const noexcept{ return m_probe.calls(); }
+
     [[nodiscard]] SelectionView& view()noexcept{ return m_view; }
 
 

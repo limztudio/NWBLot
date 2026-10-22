@@ -238,6 +238,7 @@ VulkanAllocator::VulkanAllocator(const VulkanContext& context)
     , m_bufferNativeIdentities(0u, Hasher<u64>(), EqualTo<u64>(), context.objectArena)
     , m_textureNativeIdentities(0u, Hasher<VkImage>(), EqualTo<VkImage>(), context.objectArena)
 {}
+
 VulkanAllocator::~VulkanAllocator()noexcept{
     if(m_allocator){
         vmaDestroyAllocator(__hidden_vulkan_allocator::ToVmaAllocator(m_allocator));

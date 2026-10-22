@@ -42,7 +42,9 @@ protected:
 public:
     using BaseType::enqueue;
     virtual LogArena& arena()noexcept override{ return BaseType::arena(); }
+
     virtual void enqueue(LogString&& str, Core::Common::LogType::Enum type = Core::Common::LogType::Info)override{ BaseType::enqueue(Move(str), type); }
+
     virtual void enqueue(const LogString& str, Core::Common::LogType::Enum type = Core::Common::LogType::Info)override{ BaseType::enqueue(str, type); }
 };
 
@@ -95,6 +97,7 @@ protected:
         m_messageCount.fetch_add(1, MemoryOrder::relaxed);
         this->m_semaphore.release();
     }
+
     inline void enqueue(const MessageType& data){
         this->m_messageQueue.emplace(data);
         m_messageCount.fetch_add(1, MemoryOrder::relaxed);

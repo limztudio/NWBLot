@@ -54,7 +54,9 @@ public:
 
 public:
     [[nodiscard]] HGLOBAL native()const noexcept{ return m_memory; }
+
     void release()noexcept{ m_memory = nullptr; }
+
     [[nodiscard]] Expected<void, ErrorCode> close()noexcept{
         if(!m_memory)
             return {};

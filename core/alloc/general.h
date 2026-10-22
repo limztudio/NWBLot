@@ -96,6 +96,7 @@ template<typename T, typename... Args>
 inline typename EnableIf<!IsArray<T>::value, GlobalUniquePtr<T>>::type MakeGlobalUnique(NWB::Core::Alloc::GlobalArena& arena, Args&&... args)noexcept(ArenaObjectDetail::IsNothrowArenaObjectConstruction<T, Args...>()){
     return ::MakeArenaUnique<T>(arena, Forward<Args>(args)...);
 }
+
 template<typename T>
 inline typename EnableIf<IsUnboundedArray<T>::value, GlobalUniquePtr<T>>::type MakeGlobalUnique(NWB::Core::Alloc::GlobalArena& arena, usize n)noexcept(sizeof(RemoveExtent_T<T>) == 1u && ArenaObjectDetail::IsNothrowArenaArrayConstruction<RemoveExtent_T<T>>()){
     return ::MakeArenaUnique<T>(arena, n);

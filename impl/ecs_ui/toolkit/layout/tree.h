@@ -94,7 +94,9 @@ public:
     // Root sizing follows its policies against the viewport. All geometry stays in logical units.
     [[nodiscard]] bool arrange(const Rect& viewport);
     [[nodiscard]] u32 nodeCount()const noexcept{ return static_cast<u32>(m_nodes.size()); }
+
     [[nodiscard]] const LayoutBox* box(u32 index)const noexcept{ return index < m_boxes.size() ? &m_boxes[index] : nullptr; }
+
     [[nodiscard]] const PaintVector<LayoutBox>& boxes()const noexcept{ return m_boxes; }
 
 

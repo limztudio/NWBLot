@@ -52,6 +52,8 @@ python -m launcher renderer-baseline surfel-gi-complex --no-gpu-validation -- --
 Run this from a clean source revision to create an immutable reference, then repeat with `--reference-dir` pointing
 at that reference. Keep the settle override and GPU-validation choice identical for both runs. The formal
 `current-renderer-v1` corpus retains the original open-box `surfel-gi` profile; the complex A/B profile is separate.
+Its fixture-only GI materials are cooked only into `Testing/gi_smoke_runtime/<config>`, so `surfel-gi-complex` runs from
+that runtime while `surfel-gi` keeps the shared `skinning_culling_benchmark_runtime` cook.
 Older complex-scene artifacts labeled `surfel-gi` cannot be used as references for `surfel-gi-complex` because the
 profile identity is part of each capture manifest.
 

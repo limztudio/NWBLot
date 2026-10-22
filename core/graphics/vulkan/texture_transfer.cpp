@@ -221,14 +221,7 @@ bool CommandList::tryWriteTexture(Texture& dest, u32 arraySlice, u32 mipLevel, c
     const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(texDesc, mipLevel);
     NWB_ASSERT(VulkanDetail::IsBufferImageCopyAspectMaskSupported(copyAspectMask));
 
-    const auto copyLayout = VulkanDetail::BuildBufferImageCopyLayout(
-            mipExtent,
-            copyFormatLayout,
-            static_cast<u64>(rowPitch),
-            static_cast<u64>(depthPitch),
-            VulkanDetail::BufferImageCopyRequiredSize::PaddedSlices,
-            VulkanDetail::BufferImageCopyPitchFields::EmitExplicit
-    );
+    const auto copyLayout = VulkanDetail::BuildBufferImageCopyLayout(mipExtent, copyFormatLayout, static_cast<u64>(rowPitch), static_cast<u64>(depthPitch), VulkanDetail::BufferImageCopyRequiredSize::PaddedSlices, VulkanDetail::BufferImageCopyPitchFields::EmitExplicit);
     if(!copyLayout){
         rejectCommandRecording(s_OperationName, NWB_TEXT("source pitches do not define a valid buffer-image copy layout"));
         return false;
@@ -329,10 +322,7 @@ void CommandList::resolveTexture(Texture& dest, const TextureSubresourceSet& dst
         return;
     }
     NWB_ASSERT(src.m_imageInfo.format == dest.m_imageInfo.format);
-    NWB_ASSERT(
-        VulkanTextureDetail::TextureFormatMetadataMatches(src.m_creationDesc.format, src.m_aspectMask, src.m_formatLayout)
-        && VulkanTextureDetail::TextureFormatMetadataMatches(dest.m_creationDesc.format, dest.m_aspectMask, dest.m_formatLayout)
-    );
+    NWB_ASSERT(VulkanTextureDetail::TextureFormatMetadataMatches(src.m_creationDesc.format, src.m_aspectMask, src.m_formatLayout) && VulkanTextureDetail::TextureFormatMetadataMatches(dest.m_creationDesc.format, dest.m_aspectMask, dest.m_formatLayout));
 
     if(src.m_aspectMask != VK_IMAGE_ASPECT_COLOR_BIT){
         rejectCommandRecording(s_OperationName, NWB_TEXT("resolve requires a color format"));

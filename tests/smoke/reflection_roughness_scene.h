@@ -39,6 +39,7 @@ public:
 public:
     [[nodiscard]] bool create(AStringView caseName, bool finalState);
     [[nodiscard]] bool mutationCase()const noexcept{ return m_case >= ReflectionRoughnessCase::Camera && m_case <= ReflectionRoughnessCase::Deform; }
+
     [[nodiscard]] bool deforming()const noexcept{ return m_case == ReflectionRoughnessCase::Deform || m_case == ReflectionRoughnessCase::StaticDeform; }
     [[nodiscard]] bool applyMutation();
 

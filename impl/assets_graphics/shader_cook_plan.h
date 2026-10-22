@@ -100,6 +100,7 @@ public:
     const Path& shadowSurfaceIncludeRoot,
     const IncludeMetadataMap& includeMetadata,
     ShaderEntryVector& inOutShaderEntries,
+    const ShaderCook::CookVector<MaterialBindEntry>& materialBindEntries,
     const ShaderCook::CookVector<MaterialCookEntry>& materialEntries,
     ScratchArena& scratchArena
 );

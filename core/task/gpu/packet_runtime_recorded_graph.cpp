@@ -188,6 +188,7 @@ void GpuRecordedGraph::RetireStorageWithoutCallbacks(ArtifactStorage& storage)no
     storage.deviceGeneration = 0u;
     storage.valid = false;
 }
+
 GpuRecordedGraph::GpuRecordedGraph(GraphicsArena& arena)noexcept
     : m_arena(arena)
     , m_activeStorage(MakeGlobalUnique<ArtifactStorage>(arena, arena))

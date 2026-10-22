@@ -66,20 +66,24 @@ public:
         callback(CallbackPhase::Generation);
         return generation;
     }
+
     [[nodiscard]] virtual u64 revision()const noexcept override{
         callback(CallbackPhase::Revision);
         return revisionValue;
     }
+
     [[nodiscard]] virtual u64 rowCount()const noexcept override{
         ++countCalls;
         callback(CallbackPhase::Count);
         return count;
     }
+
     [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
         callback(CallbackPhase::Key);
         ++keyCalls;
         return index < s_RadioGroupMaxChoices ? rows[static_cast<usize>(index)].key : 0u;
     }
+
     [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const noexcept override{
         u64 index = 0u;
         callback(CallbackPhase::Lookup);
@@ -91,6 +95,7 @@ public:
         }
         return MakeUnexpected(Failure{});
     }
+
     [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const noexcept override{
         u64 index = 0u;
         ++findCalls;
@@ -113,7 +118,9 @@ public:
         }
         return MakeUnexpected(Failure{});
     }
+
     [[nodiscard]] virtual StringView text(u64)const noexcept override{ return "choice"; }
+
     [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{
         callback(CallbackPhase::Enabled);
         return index < s_RadioGroupMaxChoices && rows[static_cast<usize>(index)].enabled;

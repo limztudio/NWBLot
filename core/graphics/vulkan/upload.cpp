@@ -21,6 +21,7 @@ UploadManager::UploadManager(Device& pParent, u64 defaultChunkSize, u64 memoryLi
     , m_chunkKind(chunkKind)
     , m_queueChunkLedgers(m_device.m_context.objectArena)
 {}
+
 UploadManager::~UploadManager()noexcept{
     clear();
 }

@@ -30,6 +30,7 @@ public:
         , m_scope(scope)
         , m_publicationIndex(publicationIndex)
     {}
+
     ~BeginQueryPublicationUnwindScope()noexcept{
         if(!m_active)
             return;
@@ -64,6 +65,7 @@ public:
         : m_recorder(recorder)
         , m_scope(scope)
     {}
+
     ~PrerequisiteTrackingUnwindScope()noexcept{
         if(!m_active)
             return;

@@ -24,7 +24,7 @@ using namespace NWB::Impl;
 
 struct StatisticsContext{
     Core::Alloc::GlobalArena arena{Name("tests/refraction/statistics")};
-    RefractionStatisticsControlHandle control = CreateRefractionStatisticsControl(arena, 7u);
+    RefractionStatisticsControlHandle control = CreateRefractionStatisticsControl(arena, 7u).value_or(RefractionStatisticsControlHandle{});
 };
 
 [[nodiscard]] RefractionStatistics Metadata(const u32 frameIndex = 9u)noexcept{
@@ -48,6 +48,8 @@ struct LeaseTask{
         RefractionStatisticsReservation reservation;
     };
 
+
+public:
     static void Discarded(Payload& payload)noexcept{ payload.reservation.discard(); }
 };
 

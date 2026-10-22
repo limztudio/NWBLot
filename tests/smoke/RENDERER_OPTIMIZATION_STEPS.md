@@ -41,6 +41,8 @@ Invoke the runner from the repository root, supplying independently frozen build
 python tests/smoke/renderer_ab_benchmark.py --baseline-executable <baseline-exe> --baseline-runtime <baseline-runtime> --baseline-source-manifest <baseline-source.json> --candidate-executable <candidate-exe> --candidate-runtime <candidate-runtime> --candidate-source-manifest <candidate-source.json> --logserver-executable <logserver-exe> --output-directory <new-empty-result-directory> --require-hardware
 ```
 
+The `shadow-*` workloads set `NWB_SOFT_SHADOW_TEST_TIMING=1`. Their timing materials are cooked only into `Testing/soft_shadow_timing_smoke_runtime/<configuration>` by `nwb_soft_shadow_timing_smoke_assets`, so give both arms that runtime.
+
 Each source manifest contains `revision` and a nonempty `files` object mapping physical snapshot paths (relative to the manifest, or absolute) to SHA256 strings. Freeze the changed sources as well as the base revision. `--plan-only` validates identities and writes a plan without launching; acquisition requires another empty output directory.
 
 ## Step 1: coverage atomic experiment rejected

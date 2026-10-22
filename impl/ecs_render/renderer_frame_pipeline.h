@@ -158,11 +158,14 @@ public:
     [[nodiscard]] bool appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder);
     // Trades one frame of effect latency for overlap; off by default, self-bootstraps on toggle.
     void setRefractionEnabled(const bool enabled)noexcept{ m_refractionEnabled = enabled; }
+
     void setRefractionDiagnosticsEnabled(const bool enabled)noexcept{ m_raytracingSystem.setRefractionDiagnosticsEnabled(enabled); }
     [[nodiscard]] Expected<RefractionStatistics> tryGetLatestRefractionStatistics()const noexcept;
+
     void setRefractionHardwareTracingEnabled(const bool enabled)noexcept{
         m_raytracingSystem.setRefractionHardwareTracingEnabled(enabled);
     }
+
     [[nodiscard]] bool setCausticQualitySettings(const CausticQualitySettings& settings)noexcept{
         return m_raytracingSystem.setCausticQualitySettings(settings);
     }
@@ -177,6 +180,7 @@ public:
     [[nodiscard]] bool setSoftwareShadowSettings(const SoftwareShadowSettings& settings)noexcept{
         return m_raytracingSystem.setSoftwareShadowSettings(settings);
     }
+
     [[nodiscard]] bool setShadowQualitySettings(const ShadowQualitySettings& settings)noexcept{
         return m_raytracingSystem.setShadowQualitySettings(settings);
     }
@@ -197,6 +201,7 @@ public:
         m_laggedLightingReportGeneration = 0u;
         resetLaggedLightingHistoryReadTracking();
     }
+
     [[nodiscard]] bool frameLaggedAsyncLightingEnabled()const noexcept{ return m_frameLaggedAsyncLightingEnabled; }
     [[nodiscard]] bool setTaskGraphTimingFeedbackPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy);
     // Immutable-by-value telemetry for the current deferred graph artifacts. It remains meaningful until the next graph/recording/transaction reset, matching the existing compiled graph diagnostic lifetime. Callers serialize this inspection with deferred native recording/reset just as they do other recorded-graph diagnostics.
@@ -306,6 +311,7 @@ private:
         Core::GpuGraphResourceId sceneShading,
         Core::GpuGraphResourceId lights,
         Core::GpuGraphResourceId materialContextSlots,
+        Core::GpuGraphResourceId opticalScene,
         const Core::GpuGraphResourceId* softwareTraceGeometryResources,
         usize softwareTraceGeometryResourceCount,
         Core::GpuGraphResourceSetId softwareTraceGeometrySet,
@@ -339,6 +345,7 @@ private:
     );
     void declareDeferredSurfelCountReadbackTask(const RayTracingSurfelPersistentResourceSnapshot& rayTracingSurfelResources);
     void buildDeferredLightingTaskGraph(
+        Core::Alloc::ScratchArena& scratchArena,
         const ECSRenderDetail::RendererFrameGraphFeatures& features,
         DeferredFrameTargets& deferredTargets,
         const CsgFrameState& csgFrameState,

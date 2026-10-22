@@ -50,10 +50,23 @@ struct AccelStructGeometryBuildSignature{
     bool transformDataPresent = false;
 };
 
+struct AccelStructBottomLevelReferences{
+    Vector<RayTracingAccelStructHandle, Alloc::GlobalArena> resources;
+
+
+public:
+    explicit AccelStructBottomLevelReferences(Alloc::GlobalArena& arena)noexcept
+        : resources(arena)
+    {}
+};
+using AccelStructBottomLevelReferenceControl = RefCounter<AccelStructBottomLevelReferences>;
+using AccelStructBottomLevelReferenceHandle = RefCountPtr<AccelStructBottomLevelReferenceControl, ArenaRefDeleter<AccelStructBottomLevelReferenceControl, Alloc::GlobalArena>>;
+
 struct AccelStructBuildSignatureRole{
     VkAccelerationStructureTypeKHR accelStructType = VK_ACCELERATION_STRUCTURE_TYPE_MAX_ENUM_KHR;
     VkBuildAccelerationStructureFlagsKHR buildFlags = 0u;
     Vector<AccelStructGeometryBuildSignature, Alloc::GlobalArena> geometrySignatures;
+    AccelStructBottomLevelReferenceHandle bottomLevelReferences;
     AccelStructBuildSignatureRole* nextRetiredRole = nullptr;
 
 
@@ -140,12 +153,18 @@ private:
         VkAccelerationStructureTypeKHR accelStructType,
         VkBuildAccelerationStructureFlagsKHR buildFlags,
         const AccelStructGeometryBuildSignature* geometrySignatures,
-        usize geometrySignatureCount
+        usize geometrySignatureCount,
+        const RayTracingInstanceDesc* instances = nullptr,
+        usize instanceCount = 0u
     );
     [[nodiscard]] Expected<NotNull<const AccelStructBuildSignatureRole*>> getPendingAccelStructBuildSignature(const AccelStruct& accelStruct)const noexcept;
     [[nodiscard]] bool validatePendingAccelStructBuildCommits()const noexcept;
     void commitPendingAccelStructBuildCommits()noexcept;
     void releasePendingAccelStructBuildCommits()noexcept;
+    void retainTopLevelAccelStruct(AccelStruct& accelStruct);
+    void retainBottomLevelReferenceSet(const AccelStructBottomLevelReferenceHandle& references);
+    void retainAcceptedTopLevelAccelStructReferences();
+    void retainPendingTopLevelAccelStructReferences(const TrackedCommandBuffer& buildCommandBuffer);
     void abandonPendingAccelStructBuildCommits()noexcept;
     void appendPendingOpacityMicromapBuildCommit(OpacityMicromap& opacityMicromap);
     [[nodiscard]] bool hasPendingOpacityMicromapBuild(const OpacityMicromap& opacityMicromap)const noexcept;
@@ -164,6 +183,8 @@ private:
     Vector<NotNull<GpuDescriptorHeap*>, Alloc::GlobalArena> m_referencedDescriptorHeaps;
     Vector<RetainedTextureStateCommit, Alloc::GlobalArena> m_retainedTextureStateCommits;
     Vector<PendingAccelStructBuildCommit, Alloc::GlobalArena> m_pendingAccelStructBuildCommits;
+    Vector<RayTracingAccelStructHandle, Alloc::GlobalArena> m_referencedTopLevelAccelStructs;
+    Vector<AccelStructBottomLevelReferenceHandle, Alloc::GlobalArena> m_referencedBottomLevelReferenceSets;
     Vector<PendingOpacityMicromapBuildCommit, Alloc::GlobalArena> m_pendingOpacityMicromapBuildCommits;
     Vector<TimerQueryRecordingClaim, Alloc::GlobalArena> m_timerQueryRecordingClaims;
     DescriptorBufferManager* m_descriptorBufferManager = nullptr;

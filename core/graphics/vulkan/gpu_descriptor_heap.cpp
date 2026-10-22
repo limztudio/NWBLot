@@ -84,6 +84,7 @@ GpuDescriptorHeap::PendingRecordingLease::PendingRecordingLease(GpuDescriptorHea
     m_heap = &heap;
     m_descriptorBufferGeneration = heap.m_descriptorBufferGeneration;
 }
+
 GpuDescriptorHeap::PendingRecordingLease::~PendingRecordingLease()noexcept{
     if(m_heap)
         m_heap->releasePendingRecordingLease(m_descriptorBufferGeneration);
@@ -98,6 +99,7 @@ GpuDescriptorHeap::GpuDescriptorHeap(Device& device)noexcept
     , m_context(device.m_context)
     , m_heapUses(device.m_context.objectArena)
 {}
+
 GpuDescriptorHeap::~GpuDescriptorHeap()noexcept{
     shutdownForDeviceTeardown();
 }

@@ -85,6 +85,14 @@ Build `nwb_gi_test_smoke` through the launcher, then run:
 ctest --test-dir <build-directory> -C opt -L csg_gi --output-on-failure
 ```
 
+The GI fixture owns its diagnostic materials and BXDF families under
+`tests/smoke/gi_assets`. Building `nwb_gi_test_smoke` also runs
+`nwb_gi_smoke_assets`, which prepares the disjoint union of that root and
+`tests/smoke/assets` with `tests/smoke/prepare_fixture_asset_root.py` and cooks
+it into `<build-directory>/Testing/gi_smoke_runtime/<config>/res`. These
+captures and the coverage probe run from that directory; the formal surfel-GI
+baseline scene keeps the shared `skinning_culling_benchmark_runtime` cook.
+
 The natural and disabled hardware ray tracing policies use the same static scene
 and image oracle after normal backend selection. Each compares ordinary carved
 mesh geometry, equivalent CSG with two overlapping box cutters, and an uncut

@@ -55,7 +55,13 @@ struct formatter<GlobalFilesystemUtilityDetail::PathToStringArg<RequestedCharT, 
     }
 
     template<typename FormatContext>
-    auto format(const GlobalFilesystemUtilityDetail::PathToStringArg<RequestedCharT, PathT>& arg, FormatContext& ctx)const{
+    auto format(const GlobalFilesystemUtilityDetail::PathToStringArg<RequestedCharT, PathT>& arg, FormatContext& ctx)const noexcept([]()consteval noexcept{
+        using Output = Decay_T<decltype(DeclVal<FormatContext&>().out())>;
+        return noexcept(DeclVal<void(*)(Output)noexcept>()(DeclVal<FormatContext&>().out()))
+            && noexcept(BasicStringDetail::WriteConvertedText<FormatCharT>(DeclVal<Output&>(), DeclVal<const PathT&>().native()))
+            && IsNothrowMoveConstructible_V<Output> && IsNothrowDestructible_V<Output>
+        ;
+    }()){
         auto out = ctx.out();
         BasicStringDetail::WriteConvertedText<FormatCharT>(out, arg.path.native());
         return out;
@@ -144,7 +150,14 @@ inline constexpr bool IsSafeCacheNameChar(CharT ch)noexcept(IsArithmetic_V<CharT
 }
 
 template<bool Canonical, typename StringT>
-inline void SanitizeSafeCacheName(StringT& text){
+inline void SanitizeSafeCacheName(StringT& text)noexcept(IsNothrowRangeFor<StringT, decltype([](typename StringT::value_type&)noexcept([]()consteval noexcept{
+    using CharT = typename StringT::value_type;
+    constexpr bool s_ReplacementIsNothrow = noexcept(IsSafeCacheNameChar(DeclVal<CharT&>())) && noexcept(DeclVal<CharT&>() = CharT('_'));
+    if constexpr(Canonical)
+        return s_ReplacementIsNothrow && noexcept(DeclVal<CharT&>() = Canonicalize(DeclVal<CharT&>()));
+    else
+        return s_ReplacementIsNothrow;
+}()){})>()){
     using CharT = typename StringT::value_type;
     for(CharT& ch : text){
         if constexpr(Canonical)
@@ -166,7 +179,10 @@ template<typename CharT, typename ArenaT, bool Canonical>
 }
 
 template<bool Canonical, typename StringT>
-[[nodiscard]] inline StringT BuildSafeCacheNameCopy(const StringT& text){
+[[nodiscard]] inline StringT BuildSafeCacheNameCopy(const StringT& text)noexcept(
+    noexcept(static_cast<bool>(text.empty())) && noexcept(StringT(text.get_allocator())) && noexcept(StringT(text.data(), text.size(), text.get_allocator()))
+    && noexcept(SanitizeSafeCacheName<Canonical>(DeclVal<StringT&>())) && IsNothrowMoveConstructible_V<StringT> && IsNothrowDestructible_V<StringT>
+){
     if(text.empty())
         return StringT(text.get_allocator());
 
@@ -189,10 +205,12 @@ template<typename CharT, typename ArenaT>
 [[nodiscard]] inline BasicString<CharT, ArenaT> BuildSafeCacheName(ArenaT& arena, const BasicStringView<CharT> text){
     return GlobalFilesystemUtilityDetail::BuildSafeCacheNameImpl<CharT, ArenaT, false>(arena, text);
 }
+
 template<typename CharT, typename ArenaT>
 [[nodiscard]] inline BasicString<CharT, ArenaT> BuildSafeCacheName(const BasicString<CharT, ArenaT>& text){
     return GlobalFilesystemUtilityDetail::BuildSafeCacheNameCopy<false>(text);
 }
+
 template<typename StringT>
     requires requires(const StringT& text){
         typename StringT::value_type;
@@ -201,7 +219,7 @@ template<typename StringT>
         text.size();
         text.get_allocator();
     }
-[[nodiscard]] inline StringT BuildSafeCacheName(const StringT& text){
+[[nodiscard]] inline StringT BuildSafeCacheName(const StringT& text)noexcept(noexcept(GlobalFilesystemUtilityDetail::BuildSafeCacheNameCopy<false>(text))){
     return GlobalFilesystemUtilityDetail::BuildSafeCacheNameCopy<false>(text);
 }
 
@@ -210,10 +228,12 @@ template<typename CharT, typename ArenaT>
 [[nodiscard]] inline BasicString<CharT, ArenaT> BuildCanonicalSafeCacheName(ArenaT& arena, const BasicStringView<CharT> text){
     return GlobalFilesystemUtilityDetail::BuildSafeCacheNameImpl<CharT, ArenaT, true>(arena, text);
 }
+
 template<typename CharT, typename ArenaT>
 [[nodiscard]] inline BasicString<CharT, ArenaT> BuildCanonicalSafeCacheName(const BasicString<CharT, ArenaT>& text){
     return GlobalFilesystemUtilityDetail::BuildSafeCacheNameCopy<true>(text);
 }
+
 template<typename StringT>
     requires requires(const StringT& text){
         typename StringT::value_type;
@@ -222,7 +242,7 @@ template<typename StringT>
         text.size();
         text.get_allocator();
     }
-[[nodiscard]] inline StringT BuildCanonicalSafeCacheName(const StringT& text){
+[[nodiscard]] inline StringT BuildCanonicalSafeCacheName(const StringT& text)noexcept(noexcept(GlobalFilesystemUtilityDetail::BuildSafeCacheNameCopy<true>(text))){
     return GlobalFilesystemUtilityDetail::BuildSafeCacheNameCopy<true>(text);
 }
 
@@ -231,12 +251,25 @@ template<typename StringT>
 
 
 template<typename StringT, typename PathT>
-[[nodiscard]] inline StringT LowerPathExtension(const PathT& path){
+[[nodiscard]] inline StringT LowerPathExtension(const PathT& path)noexcept(noexcept(ToAsciiLowerCopy(PathToGenericString<StringT>(path.extension())))){
     return ToAsciiLowerCopy(PathToGenericString<StringT>(path.extension()));
 }
 
 template<typename PathT, typename ExtensionArray>
-[[nodiscard]] inline bool PathHasListedExtension(const PathT& path, const ExtensionArray& extensions){
+[[nodiscard]] inline bool PathHasListedExtension(const PathT& path, const ExtensionArray& extensions)noexcept([]()consteval noexcept{
+    using PathChar = typename PathT::value_type;
+    using ExtensionPath = Decay_T<decltype(DeclVal<const PathT&>().extension())>;
+    using Extension = Decay_T<decltype(DeclVal<const ExtensionPath&>().native())>;
+    return
+        noexcept(DeclVal<void(*)(ExtensionPath)noexcept>()(DeclVal<const PathT&>().extension())) && IsNothrowDestructible_V<ExtensionPath>
+        && noexcept(DeclVal<void(*)(Extension)noexcept>()(DeclVal<const ExtensionPath&>().native())) && IsNothrowDestructible_V<Extension>
+        && noexcept(static_cast<bool>(DeclVal<usize&>() < LengthOf(DeclVal<const ExtensionArray&>())))
+        && noexcept(AStringView(DeclVal<const ExtensionArray&>()[DeclVal<usize&>()].data(), DeclVal<const ExtensionArray&>()[DeclVal<usize&>()].size()))
+        && noexcept(static_cast<bool>(DeclVal<const Extension&>().size() != DeclVal<usize>()))
+        && noexcept(static_cast<bool>(DeclVal<usize&>() < DeclVal<const Extension&>().size()))
+        && noexcept(static_cast<bool>(ToAsciiLower(DeclVal<const Extension&>()[DeclVal<usize&>()]) != static_cast<PathChar>(ToAsciiLower(DeclVal<const AStringView&>()[DeclVal<usize&>()]))))
+    ;
+}()){
     using PathChar = typename PathT::value_type;
     const auto extensionPath = path.extension();
     const auto extension = extensionPath.native();

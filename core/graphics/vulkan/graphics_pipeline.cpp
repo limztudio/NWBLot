@@ -101,10 +101,6 @@ void CommandList::beginRenderPass(Framebuffer& framebuffer, const RenderPassPara
     m_renderPassFramebuffer = &framebuffer;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void CommandList::endRenderPass(){
     if(!publicCommandStateAccessible())
         return;
@@ -114,6 +110,10 @@ void CommandList::endRenderPass(){
         return;
     endActiveRenderPass();
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 void CommandList::setGraphicsState(const GraphicsState& state){
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_SetGraphicsStateOperation))

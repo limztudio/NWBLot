@@ -120,6 +120,7 @@ namespace CookEntryRegistryDetail{
         return Optional<Name>{};
     return Optional<Name>{ virtualPath };
 }
+
 template<typename StringT>
     requires requires(const StringT& text){ text.data(); text.size(); }
 [[nodiscard]] inline Expected<Optional<Name>, NameTextError::Enum> ToCookEntryName(const StringT& virtualPath){
@@ -129,6 +130,7 @@ template<typename StringT>
 [[nodiscard]] inline AStringView ToCookEntryText(const Name& virtualPath){
     return virtualPath.resolvedText();
 }
+
 template<typename StringT>
     requires requires(const StringT& text){ typename StringT::value_type; text.data(); text.size(); }
 [[nodiscard]] inline BasicStringView<typename StringT::value_type> ToCookEntryText(const StringT& virtualPath)noexcept(noexcept(BasicStringView<typename StringT::value_type>(virtualPath.data(), virtualPath.size()))){
@@ -197,7 +199,9 @@ public:
 
 public:
     [[nodiscard]] virtual usize size()const noexcept override{ return m_entries.size(); }
+
     [[nodiscard]] virtual CookVector<EntryT>& entries()noexcept override{ return m_entries; }
+
     [[nodiscard]] virtual const CookVector<EntryT>& entries()const noexcept override{ return m_entries; }
 
 

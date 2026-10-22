@@ -42,10 +42,12 @@ public:
 
 public:
     [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return 91u; }
-    [[nodiscard]] virtual u64 revision()const override{ mutate(MutationKind::RevisionScroll); return 1u; }
+
+    [[nodiscard]] virtual u64 revision()const noexcept override{ mutate(MutationKind::RevisionScroll); return 1u; }
+
     [[nodiscard]] virtual u64 rowCount()const noexcept override{ return 50u; }
 
-    [[nodiscard]] virtual u64 key(const u64 index)const override{
+    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
         mutate(MutationKind::KeySelect);
         return index < 50u ? index + 1u : 0u;
     }
@@ -66,12 +68,12 @@ public:
         return index;
     }
 
-    [[nodiscard]] virtual StringView text(u64)const override{
+    [[nodiscard]] virtual StringView text(u64)const noexcept override{
         mutate(MutationKind::TextSelect);
         return "row";
     }
 
-    [[nodiscard]] virtual bool enabled(const u64 index)const override{
+    [[nodiscard]] virtual bool enabled(const u64 index)const noexcept override{
         mutate(MutationKind::EnabledScroll);
         return index < 50u;
     }
@@ -85,7 +87,7 @@ public:
 
 
 private:
-    void mutate(const MutationKind::Enum kind)const{
+    void mutate(const MutationKind::Enum kind)const noexcept{
         if(m_kind != kind)
             return;
         m_kind = MutationKind::None;

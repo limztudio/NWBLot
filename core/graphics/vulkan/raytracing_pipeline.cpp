@@ -77,6 +77,7 @@ RayTracingPipeline::RayTracingPipeline(const VulkanContext& context, Device& dev
     , m_context(context)
     , m_device(device)
 {}
+
 RayTracingPipeline::~RayTracingPipeline()noexcept{
     VulkanDetail::DestroyPipelineResource(m_context, *this, m_pipeline);
 }

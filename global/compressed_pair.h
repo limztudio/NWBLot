@@ -119,9 +119,11 @@ public:
 
 public:
     typename Types::first_reference first()noexcept{ return m_first; }
+
     typename Types::first_const_reference first()const noexcept{ return m_first; }
 
     typename Types::second_reference second()noexcept{ return m_second; }
+
     typename Types::second_const_reference second()const noexcept{ return m_second; }
 
     void swap(::CompressedPair<T1, T2>& y)noexcept(noexcept(InternalSwap(m_first, y.first())) && noexcept(InternalSwap(m_second, y.second()))){
@@ -143,9 +145,11 @@ private:
 
 public:
     typename Types::first_reference first()noexcept{ return static_cast<Derived&>(*this); }
+
     typename Types::first_const_reference first()const noexcept{ return static_cast<const Derived&>(*this); }
 
     typename Types::second_reference second()noexcept{ return static_cast<Derived&>(*this); }
+
     typename Types::second_const_reference second()const noexcept{ return static_cast<const Derived&>(*this); }
 
     void swap(::CompressedPair<T1, T2>&)noexcept{}
@@ -165,12 +169,15 @@ private:
 
 public:
     Implementation()noexcept(noexcept(Base())){}
+
     Implementation(typename Base::first_param_type x, typename Base::second_param_type y)noexcept(noexcept(Base(BothValuesTag{}, x, y)) && IsNothrowDestructible_V<typename Base::first_param_type> && IsNothrowDestructible_V<typename Base::second_param_type>)
         : Base(BothValuesTag{}, x, y)
     {}
+
     Implementation(typename Base::first_param_type x)noexcept(noexcept(Base(FirstValueTag{}, x)) && IsNothrowDestructible_V<typename Base::first_param_type>)
         : Base(FirstValueTag{}, x)
     {}
+
     Implementation(typename Base::second_param_type y)noexcept(noexcept(Base(SecondValueTag{}, y)) && IsNothrowDestructible_V<typename Base::second_param_type>)
         : Base(SecondValueTag{}, y)
     {}
@@ -183,6 +190,7 @@ private:
 
 public:
     Implementation()noexcept(IsNothrowConstructible_V<typename Types::first_type> && IsNothrowConstructible_V<typename Types::second_type> && IsNothrowDestructible_V<typename Types::first_type> && IsNothrowDestructible_V<typename Types::second_type>){}
+
     Implementation(typename Types::first_param_type x, typename Types::second_param_type y)noexcept(
         IsNothrowConstructible_V<typename Types::first_type, decltype((x))>
         && IsNothrowConstructible_V<typename Types::second_type, decltype((y))>
@@ -194,6 +202,7 @@ public:
         : T1(x)
         , m_second(y)
     {}
+
     Implementation(typename Types::first_param_type x)noexcept(
         IsNothrowConstructible_V<typename Types::first_type, decltype((x))>
         && IsNothrowConstructible_V<typename Types::second_type>
@@ -203,6 +212,7 @@ public:
     )
         : T1(x)
     {}
+
     Implementation(typename Types::second_param_type y)noexcept(
         IsNothrowConstructible_V<typename Types::first_type>
         && IsNothrowConstructible_V<typename Types::second_type, decltype((y))>
@@ -216,9 +226,11 @@ public:
 
 public:
     typename Types::first_reference first()noexcept{ return *this; }
+
     typename Types::first_const_reference first()const noexcept{ return *this; }
 
     typename Types::second_reference second()noexcept{ return m_second; }
+
     typename Types::second_const_reference second()const noexcept{ return m_second; }
 
     void swap(::CompressedPair<T1,T2>& y)noexcept(noexcept(InternalSwap(m_second, y.second()))){
@@ -237,6 +249,7 @@ private:
 
 public:
     Implementation()noexcept(IsNothrowConstructible_V<typename Types::first_type> && IsNothrowConstructible_V<typename Types::second_type> && IsNothrowDestructible_V<typename Types::first_type> && IsNothrowDestructible_V<typename Types::second_type>){}
+
     Implementation(typename Types::first_param_type x, typename Types::second_param_type y)noexcept(
         IsNothrowConstructible_V<typename Types::first_type, decltype((x))>
         && IsNothrowConstructible_V<typename Types::second_type, decltype((y))>
@@ -248,6 +261,7 @@ public:
         : T2(y)
         , m_first(x)
     {}
+
     Implementation(typename Types::first_param_type x)noexcept(
         IsNothrowConstructible_V<typename Types::first_type, decltype((x))>
         && IsNothrowConstructible_V<typename Types::second_type>
@@ -257,6 +271,7 @@ public:
     )
         : m_first(x)
     {}
+
     Implementation(typename Types::second_param_type y)noexcept(
         IsNothrowConstructible_V<typename Types::first_type>
         && IsNothrowConstructible_V<typename Types::second_type, decltype((y))>
@@ -270,9 +285,11 @@ public:
 
 public:
     typename Types::first_reference first()noexcept{ return m_first; }
+
     typename Types::first_const_reference first()const noexcept{ return m_first; }
 
     typename Types::second_reference second()noexcept{ return *this; }
+
     typename Types::second_const_reference second()const noexcept{ return *this; }
 
     void swap(::CompressedPair<T1,T2>& y)noexcept(noexcept(InternalSwap(m_first, y.first()))){
@@ -297,6 +314,7 @@ private:
 
 public:
     Implementation()noexcept(IsNothrowConstructible_V<typename Types::first_type> && IsNothrowConstructible_V<typename Types::second_type> && IsNothrowDestructible_V<typename Types::first_type> && IsNothrowDestructible_V<typename Types::second_type>){}
+
     Implementation(typename Types::first_param_type x, typename Types::second_param_type y)noexcept(
         IsNothrowConstructible_V<typename Types::first_type, decltype((x))>
         && IsNothrowConstructible_V<typename Types::second_type, decltype((y))>
@@ -308,6 +326,7 @@ public:
         : T1(x)
         , T2(y)
     {}
+
     Implementation(typename Types::first_param_type x)noexcept(
         IsNothrowConstructible_V<typename Types::first_type, decltype((x))>
         && IsNothrowConstructible_V<typename Types::second_type>
@@ -317,6 +336,7 @@ public:
     )
         : T1(x)
     {}
+
     Implementation(typename Types::second_param_type y)noexcept(
         IsNothrowConstructible_V<typename Types::first_type>
         && IsNothrowConstructible_V<typename Types::second_type, decltype((y))>
@@ -340,6 +360,7 @@ private:
 
 public:
     Implementation()noexcept(IsNothrowConstructible_V<typename Types::first_type> && IsNothrowDestructible_V<typename Types::first_type>){}
+
     Implementation(typename Types::first_param_type x, typename Types::second_param_type)noexcept(
         IsNothrowConstructible_V<typename Types::first_type, decltype((x))>
         && IsNothrowDestructible_V<typename Types::first_type>
@@ -348,6 +369,7 @@ public:
     )
         : T1(x)
     {}
+
     Implementation(typename Types::first_param_type x)noexcept(IsNothrowConstructible_V<typename Types::first_type, decltype((x))> && IsNothrowDestructible_V<typename Types::first_type> && IsNothrowDestructible_V<typename Types::first_param_type>)
         : T1(x)
     {}
@@ -360,9 +382,11 @@ private:
 
 public:
     Implementation()noexcept(noexcept(Base())){}
+
     Implementation(typename Base::first_param_type x, typename Base::second_param_type y)noexcept(noexcept(Base(BothValuesTag{}, x, y)) && IsNothrowDestructible_V<typename Base::first_param_type> && IsNothrowDestructible_V<typename Base::second_param_type>)
         : Base(BothValuesTag{}, x, y)
     {}
+
     Implementation(typename Base::first_param_type x)noexcept(noexcept(Base(BothValuesTag{}, x, x)) && IsNothrowDestructible_V<typename Base::first_param_type>)
         : Base(BothValuesTag{}, x, x)
     {}
@@ -408,13 +432,9 @@ public:
 
 
 public:
-    first_reference first()noexcept{ return Base::first(); }
-    first_const_reference first()const noexcept{ return Base::first(); }
-
-    second_reference second()noexcept{ return Base::second(); }
-    second_const_reference second()const noexcept{ return Base::second(); }
-
-    void swap(CompressedPair& y)noexcept(noexcept(Base::swap(y))){ Base::swap(y); }
+    using Base::first;
+    using Base::second;
+    using Base::swap;
 };
 
 

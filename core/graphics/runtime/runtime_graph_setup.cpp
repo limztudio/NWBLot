@@ -267,6 +267,7 @@ StandaloneGraphWorkspacePool::Lease::Lease(StandaloneGraphWorkspacePool& pool)
     , m_workspace(pool.acquire())
     , m_exceptionCount(UncaughtExceptionCount())
 {}
+
 StandaloneGraphWorkspacePool::Lease::~Lease()noexcept(false){
     if(!m_workspace)
         return;

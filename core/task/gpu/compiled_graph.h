@@ -441,6 +441,7 @@ public:
         // Pointer- and slice-bearing results borrow immutable plan storage.
         // They require a live lvalue ReadView and deliberately reject calls on a temporary proof.
         [[nodiscard]] bool valid()const noexcept{ return m_graph != nullptr; }
+
         [[nodiscard]] bool validFor(const GpuCompiledGraph& graph)const noexcept{ return m_graph == &graph; }
         [[nodiscard]] bool validFor(const GpuTaskGraphDeclarationReadView& graph)const noexcept;
         [[nodiscard]] u64 generation()const noexcept;
@@ -522,10 +523,15 @@ public:
 private:
     // Compilation writes these helpers while holding CompilationScope; ReadView is the only read-side API surface.
     [[nodiscard]] bool valid()const noexcept{ return m_valid && m_planGeneration != 0u; }
+
     [[nodiscard]] u64 generation()const noexcept{ return m_generation; }
+
     [[nodiscard]] u64 planGeneration()const noexcept{ return m_planGeneration; }
+
     [[nodiscard]] u16 deviceGeneration()const noexcept{ return m_deviceGeneration; }
+
     [[nodiscard]] usize taskCount()const noexcept{ return m_tasks.size(); }
+
     [[nodiscard]] usize packetCount()const noexcept{ return m_packets.size(); }
     [[nodiscard]] bool validPacket(const GpuSubmissionPacketId& packet)const noexcept;
     [[nodiscard]] bool validPacketRange(const GpuSubmissionPacketRange& range)const noexcept;

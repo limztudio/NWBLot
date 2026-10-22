@@ -256,6 +256,7 @@ public:
     // The registry owns every active native VkQueue.
     // Broad CommandQueue calls resolve through the designated primary record for class-based callers; graph recording/submission selects a concrete ID directly.
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_deviceGeneration; }
+
     [[nodiscard]] const VkPhysicalDeviceLimits& getPhysicalDeviceLimits()const noexcept{ return m_context.physicalDeviceProperties.limits; }
     [[nodiscard]] u16 getPhysicalQueueIndex(CommandQueue::Enum queue)const noexcept;
     [[nodiscard]] GpuPhysicalQueueId getPrimaryPhysicalQueue(CommandQueue::Enum queue)const noexcept;
@@ -281,9 +282,11 @@ public:
     [[nodiscard]] bool waitForSubmissionToken(const QueueSubmissionToken& token);
     // Native device loss permits loss-aware teardown. Logical quarantine still requires an idle join before freeing.
     [[nodiscard]] bool isDeviceLost()const noexcept{ return m_deviceLost.load(MemoryOrder::acquire); }
+
     [[nodiscard]] bool requiresRecreation()const noexcept{
         return isDeviceLost() || m_deviceQuarantined.load(MemoryOrder::acquire);
     }
+
     void quarantineDevice()noexcept{ m_deviceQuarantined.store(true, MemoryOrder::release); }
     [[nodiscard]] u32 getQueueFamilyIndex(CommandQueue::Enum queue)const noexcept;
     [[nodiscard]] u32 getQueueFamilyIndex(const GpuPhysicalQueueId& queue)const noexcept;
@@ -304,9 +307,11 @@ public:
     [[nodiscard]] Object getNativeQueue(ObjectType objectType, CommandQueue::Enum queue)noexcept;
     [[nodiscard]] Object getNativeQueue(ObjectType objectType, const GpuPhysicalQueueId& queue)noexcept;
     bool isGpuCrashDiagnosticsEnabled()const noexcept{ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.nvDeviceDiagnosticCheckpoints; }
+
     bool isAmdBreadcrumbEnabled()const noexcept{ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.amdBufferMarker && m_amdBreadcrumb.metadata && m_amdBreadcrumb.buffer != VK_NULL_HANDLE; }
     // NV and AMD marker paths share one command-list tracker.
     bool isAnyGpuMarkerEnabled()const noexcept{ return isGpuCrashDiagnosticsEnabled() || isAmdBreadcrumbEnabled(); }
+
     [[nodiscard]] GpuCrashTracker& getGpuCrashTracker()noexcept{ return m_gpuCrashTracker; }
     void captureDeviceLoss(AStringView context);
 
@@ -376,6 +381,7 @@ private:
         }
         return false;
     }
+
     template<typename PipelineT>
     [[nodiscard]] bool createPipeline(TStringView operationName, PipelineT& pipeline, const VkComputePipelineCreateInfo& pipelineInfo)const{
         const VkResult res = m_context.deviceDispatch.vkCreateComputePipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pipeline.m_pipeline);
@@ -385,6 +391,7 @@ private:
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: {}"), operationName, ResultToString(res));
         return false;
     }
+
     template<typename PipelineT>
     [[nodiscard]] bool createPipeline(TStringView operationName, PipelineT& pipeline, const VkGraphicsPipelineCreateInfo& pipelineInfo)const{
         const VkResult res = m_context.deviceDispatch.vkCreateGraphicsPipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pipeline.m_pipeline);

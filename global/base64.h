@@ -95,7 +95,13 @@ inline constexpr u32 s_SinglePaddingUnusedMask = 3u;
 
 // The returned candidate owns its bytes; borrowed input may alias a caller-owned destination.
 template<typename ByteContainer>
-[[nodiscard]] inline Expected<ByteContainer> DecodeBase64(const AStringView source, const typename ByteContainer::allocator_type& allocator, const usize maxBytes){
+[[nodiscard]] inline Expected<ByteContainer> DecodeBase64(const AStringView source, const typename ByteContainer::allocator_type& allocator, const usize maxBytes)noexcept(
+    noexcept(ByteContainer(allocator)) && noexcept(static_cast<bool>(DeclVal<const usize&>() > DeclVal<ByteContainer&>().max_size()))
+    && noexcept(DeclVal<ByteContainer&>().resize(DeclVal<const usize&>()))
+    && noexcept(DeclVal<ByteContainer&>()[DeclVal<usize&>()] = static_cast<typename ByteContainer::value_type>(DeclVal<const u32&>() >> Base64Detail::s_FirstByteShift))
+    && noexcept(DeclVal<ByteContainer&>()[DeclVal<usize&>()] = static_cast<typename ByteContainer::value_type>(DeclVal<const u32&>()))
+    && noexcept(Expected<ByteContainer>(DeclVal<ByteContainer&&>())) && IsNothrowDestructible_V<ByteContainer>
+){
     BinaryDetail::RequireByteContainer<ByteContainer>();
     const auto parsedSize = Base64DecodedSize(source, maxBytes);
     if(!parsedSize)
@@ -127,7 +133,13 @@ template<typename ByteContainer>
 }
 
 template<typename StringType>
-[[nodiscard]] inline Expected<StringType> EncodeBase64(const BinaryByteView source, const typename StringType::allocator_type& allocator){
+[[nodiscard]] inline Expected<StringType> EncodeBase64(const BinaryByteView source, const typename StringType::allocator_type& allocator)noexcept(
+    noexcept(StringType(allocator)) && noexcept(static_cast<bool>(DeclVal<usize>() > DeclVal<StringType&>().max_size()))
+    && noexcept(DeclVal<StringType&>().resize(DeclVal<usize>()))
+    && noexcept(DeclVal<StringType&>()[DeclVal<usize&>()] = DeclVal<const char&>()) && noexcept(DeclVal<StringType&>()[DeclVal<usize>()] = DeclVal<const char&>())
+    && noexcept(DeclVal<StringType&>()[DeclVal<usize>()] = DeclVal<char>())
+    && noexcept(Expected<StringType>(DeclVal<StringType&&>())) && IsNothrowDestructible_V<StringType>
+){
     static_assert(sizeof(typename StringType::value_type) == 1u, "base64 output requires a byte-sized string");
     if(!source.data() && !source.empty())
         return MakeUnexpected(Failure{});

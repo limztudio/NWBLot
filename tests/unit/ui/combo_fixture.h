@@ -44,7 +44,9 @@ public:
 
 public:
     [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return generation; }
+
     [[nodiscard]] virtual u64 revision()const override{ return contentRevision; }
+
     [[nodiscard]] virtual u64 rowCount()const noexcept override{ return count; }
 
     [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
@@ -143,7 +145,9 @@ protected:
     }
 
     [[nodiscard]] WidgetId host(const AStringView key = s_ComboKey)const{ return id(key, s_ComboPanelKey); }
+
     [[nodiscard]] WidgetId popup(const AStringView key = s_ComboKey)const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(host(key), "popup")); }
+
     [[nodiscard]] WidgetId list(const AStringView key = s_ComboKey)const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(host(key), s_ComboRowsKey)); }
 
     [[nodiscard]] WidgetId row(const u64 key, const AStringView combo = s_ComboKey)const{

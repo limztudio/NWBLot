@@ -80,14 +80,7 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
     GpuTaskGraphCompileStatistics& statistics = m_compileStatistics;
     m_physicalQueueCompileStatistics.reserve(m_queueTopology.size());
     for(const GpuPhysicalQueueInfo& queue : m_queueTopology){
-        m_physicalQueueCompileStatistics.push_back({
-            .graphGeneration = m_generation,
-            .planGeneration = m_planGeneration,
-            .queue = queue.id,
-            .queueClass = queue.queueClass,
-            .deviceGeneration = m_deviceGeneration,
-        }
-        );
+        m_physicalQueueCompileStatistics.push_back({ .graphGeneration = m_generation, .planGeneration = m_planGeneration, .queue = queue.id, .queueClass = queue.queueClass, .deviceGeneration = m_deviceGeneration, });
     }
     const auto countOwnershipBarriers = [](GpuTaskGraphPhysicalQueueCompileStatistics& physical, const GraphicsVector<GpuCompiledBarrier>& barriers, const u32 barrierOffset, const u32 barrierCount)noexcept{
         if(barrierCount == 0u)

@@ -122,6 +122,7 @@ TEST(AssetsGraphics, ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInheritedD
     addIncludeMetadata(root / "common.slangi", "SHARED_OPTION", { "0", "1" });
     addIncludeMetadata(csgRoot / "first.slangi", s_ModuleOptionDefine, { "0", "1" });
     addIncludeMetadata(csgRoot / "second.slangi", s_ModuleOptionDefine, { "2" });
+    ShaderCook::CookVector<Impl::MaterialBindEntry> materialBinds(testArena.arena);
     ShaderCook::CookVector<Impl::MaterialCookEntry> materials(testArena.arena);
     const auto prepare = [&](const u32 mode){
         Plan::ShaderEntryVector entries(testArena.arena);
@@ -137,7 +138,7 @@ TEST(AssetsGraphics, ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInheritedD
             addDefine(entry.defineValues, Impl::AssetsGraphicsCsgShaderVariants::s_ProjectEvaluatorModuleDefineName, { "\"first.slangi\"", "\"second.slangi\"" });
         entries.push_back(Move(entry));
         const Path emptyPath(testArena.arena);
-        return Plan::PrepareShaderEntriesForCook(testArena.arena, shaderCook, paths, bindRoot, csgRoot, emptyPath, emptyPath, includeMetadata, entries, materials, scratchArena);
+        return Plan::PrepareShaderEntriesForCook(testArena.arena, shaderCook, paths, bindRoot, csgRoot, emptyPath, emptyPath, includeMetadata, entries, materialBinds, materials, scratchArena);
     };
 
     for(u32 mode = 0u; mode < 3u; ++mode){

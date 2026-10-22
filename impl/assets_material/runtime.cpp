@@ -385,8 +385,12 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
         const Name shaderName(shaderNameHash);
         Core::Assets::AssetRef<IShader> shaderAsset;
         shaderAsset.virtualPath = shaderName;
-        if(!Core::ShaderType::IsValid(shaderType) || !shaderAsset.valid()){
+        if(!shaderAsset.valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: shader stage entries must not be empty"));
+            return false;
+        }
+        if(!IsSupportedMaterialShaderStage(shaderType)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: shader stage {} is not a material stage; only mesh and pixel are allowed"), static_cast<u32>(shaderType));
             return false;
         }
 
@@ -502,7 +506,7 @@ void Material::setResourceReferences(const ResourceReferenceVector& resourceRefe
 }
 
 bool Material::setShaderForStage(const Core::ShaderType::Enum shaderType, const Core::Assets::AssetRef<IShader>& shaderAsset)noexcept{
-    if(!Core::ShaderType::IsValid(shaderType) || !shaderAsset.valid())
+    if(!IsSupportedMaterialShaderStage(shaderType) || !shaderAsset.valid())
         return false;
 
     Core::Assets::AssetRef<IShader>& storedShader = m_stageShaders[Core::ShaderType::ToIndex(shaderType)];

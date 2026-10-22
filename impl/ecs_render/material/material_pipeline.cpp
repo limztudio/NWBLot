@@ -83,6 +83,7 @@ struct MaterialPipelineAvboitPixelShaderSelection{
 
 public:
     [[nodiscard]] bool materialDriven()const noexcept{ return materialShader != nullptr && materialShader->valid(); }
+
     [[nodiscard]] Name shaderName()const noexcept{ return materialDriven() ? materialShader->name() : s_NameNone; }
 };
 

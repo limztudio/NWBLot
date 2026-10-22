@@ -88,6 +88,7 @@ public:
 
 public:
     ConnectionInfo& operator=(ConnectionInfo&&) = delete;
+
     ConnectionInfo& operator=(const ConnectionInfo&) = delete;
 
 
@@ -476,6 +477,7 @@ Server::Server()
     , m_crashIngestSemaphore(0)
     , m_crashIngestExit(false)
 {}
+
 Server::~Server()noexcept{
     if(m_daemon){
         MHD_stop_daemon(m_daemon);

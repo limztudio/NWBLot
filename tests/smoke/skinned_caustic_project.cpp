@@ -68,10 +68,8 @@ using SkinnedCausticMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// SKINNED glass refractor over ground: per-frame pose validates the skinned-normal repack (shadow + caustic must bend on live deformed normals, not bind pose).
-// Reuses glass + ground materials.
-static constexpr SkinnedCausticModelRef s_Model{"project/characters/body/model"};
-static constexpr SkinnedCausticModelRef s_TransitionModel{"project/characters/skinned_caustic_prism/model"};
+// Closed skinned glass keeps shadow and caustic boundaries on live deformed geometry.
+static constexpr SkinnedCausticModelRef s_Model{"project/characters/skinned_caustic_prism/model"};
 static constexpr SkinnedCausticMaterialRef s_GlassMaterial{"project/smoke/transparent_multi/materials/shared"};
 static constexpr SkinnedCausticMaterialRef s_GroundMaterial{"project/smoke/transparent_multi/materials/ground"};
 static constexpr SkinnedCausticMeshRef s_GroundMesh{"project/meshes/shadow_plane"};
@@ -88,7 +86,7 @@ static constexpr u32 s_TransitionSampleCount = 8u;
 
 static constexpr f32 s_CameraDistance = 2.6f;
 static constexpr f32 s_CameraHeight = 1.15f;
-static constexpr f32 s_CharacterLift = 0.35f;
+static constexpr f32 s_CharacterLift = 0.85f;
 static constexpr f32 s_GroundScale = 4.0f;
 static constexpr f32 s_DefaultDirectionalLightPitch = 0.9f;
 static constexpr f32 s_DefaultDirectionalLightYaw = 0.65f;
@@ -314,7 +312,7 @@ private:
     }
 
     [[nodiscard]] bool loadSkeletonBindJoints(){
-        const auto modelAsset = m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), (m_transitionEnabled ? s_TransitionModel : s_Model).name());
+        const auto modelAsset = m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), s_Model.name());
         if(!modelAsset){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: failed to load model for skeleton bind joints"));
             return false;
@@ -358,11 +356,11 @@ private:
         const NWB::Core::ECS::EntityID entity = CreateTintedModelEntity(
             *m_world,
             m_context.objectArena,
-            m_transitionEnabled ? s_TransitionModel : s_Model,
+            s_Model,
             s_GlassMaterial,
             s_SmokeSurfaceMaterialInterface,
             Float4(0.72f, 0.86f, 1.0f, 0.42f),
-            Float4(0.0f, m_transitionEnabled ? 0.85f : s_CharacterLift, 0.0f, 0.0f),
+            Float4(0.0f, s_CharacterLift, 0.0f, 0.0f),
             Float4(1.0f, 1.0f, 1.0f, 0.0f),
             tintApplied
         );
@@ -440,6 +438,13 @@ public:
 
         m_character = createGlassCharacter();
         SyncSmokeModelRuntimes(*m_world);
+        const auto meshEntity = FindSpawnedModelObject(*m_world, m_character, s_ModelMeshObject, NWB::Impl::ModelObjectKind::SkinnedMesh);
+        auto* const renderer = m_world->tryGetComponent<NWB::Impl::RendererComponent>(meshEntity);
+        if(!renderer){
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: closed refractor renderer is unavailable"));
+            return false;
+        }
+        renderer->opticalBoundaryMode = NWB::Impl::OpticalBoundaryMode::ClosedNested;
 
         m_skeletonEntity = FindSpawnedModelObject(*m_world, m_character, s_ModelSkeletonObject, NWB::Impl::ModelObjectKind::Skeleton);
 

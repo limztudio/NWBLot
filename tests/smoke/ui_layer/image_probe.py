@@ -1,7 +1,6 @@
 """Decode passive image snapshots and qualify sprite, nine-slice, tint and clip pixels."""
 from __future__ import annotations
 
-import math
 import re
 
 from window_capture_smoke import SmokeFailure

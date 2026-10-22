@@ -61,6 +61,7 @@ private:
 
 private:
     [[nodiscard]] static SIMDVectorSingle LoadRectangle(const Rect& rectangle)noexcept{ return VectorSet(rectangle.x, rectangle.y, rectangle.width, rectangle.height); }
+
     [[nodiscard]] static Rect StoreRectangle(const SIMDVectorSingle rectangle)noexcept{ return { VectorGetX(rectangle), VectorGetY(rectangle), VectorGetZ(rectangle), VectorGetW(rectangle) }; }
 
 
@@ -120,6 +121,7 @@ public:
     void reset()noexcept;
     // Observe accepted input without retaining target pointers across frame publication.
     [[nodiscard]] const InputRouter& input()const noexcept{ return m_context.input(); }
+
     [[nodiscard]] bool failed()const noexcept{ return m_context.failed(); }
     void setSkin(const UiSkin& skin)noexcept;
     // One explicit left-to-right script/language policy applies to every widget declaration and its deferred paint.

@@ -113,6 +113,7 @@ public:
 
 public:
     DrawSnapshot& operator=(DrawSnapshot&&)noexcept = default;
+
     DrawSnapshot& operator=(const DrawSnapshot&) = delete;
 
 

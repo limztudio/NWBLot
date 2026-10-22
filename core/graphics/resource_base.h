@@ -53,6 +53,7 @@ static_assert(IsStandardLayout_V<Object>, "Object must remain layout-stable acro
 static_assert(IsTriviallyCopyable_V<Object>, "Object must remain trivially copyable across graphics module boundaries");
 
 NWB_INLINE bool operator==(const Object& lhs, const Object& rhs)noexcept{ return lhs.integer == rhs.integer; }
+
 NWB_INLINE bool operator!=(const Object& lhs, const Object& rhs)noexcept{ return lhs.integer != rhs.integer; }
 
 
@@ -61,7 +62,7 @@ NWB_INLINE bool operator!=(const Object& lhs, const Object& rhs)noexcept{ return
 
 class GraphicsResource{
     template<typename, typename> friend struct ::ArenaRefDeleter;
-    template<typename ArenaT, typename ValueT> friend void ::ArenaObjectDetail::DestroyArenaReference(ArenaT* arena, ValueT* value)noexcept;
+    template<typename ArenaT, typename ValueT> friend void ::ArenaObjectDetail::DestroyArenaReference(ArenaT& arena, ValueT& value)noexcept;
 
 
 protected:
@@ -76,6 +77,7 @@ public:
 
 public:
     GraphicsResource& operator=(const GraphicsResource&) = delete;
+
     GraphicsResource& operator=(GraphicsResource&&) = delete;
 
 

@@ -342,12 +342,13 @@ inline void FinalizeOptionalDeviceFeatureEnablement(OptionalDeviceFeatureSet& en
     enabled.deviceFault.deviceFaultVendorBinary = supported.deviceFault.deviceFaultVendorBinary;
 }
 
-inline void AppendFeatureStruct(void*& pNext, const NotNull<void*> feature)noexcept{
-    reinterpret_cast<VkBaseOutStructure*>(feature.get())->pNext = reinterpret_cast<VkBaseOutStructure*>(pNext);
-    pNext = feature.get();
+template<typename FeatureT>
+inline void AppendFeatureStruct(void*& pNext, FeatureT& feature)noexcept{
+    reinterpret_cast<VkBaseOutStructure&>(feature).pNext = reinterpret_cast<VkBaseOutStructure*>(pNext);
+    pNext = &feature;
 }
 
-inline void AppendOptionalDeviceFeature(void*& pNext, OptionalDeviceFeatureSet& features, DeviceExtensionFeature::Enum feature, bool (&appended)[DeviceExtensionFeature::Count])noexcept{
+inline void AppendOptionalDeviceFeature(void*& pNext, OptionalDeviceFeatureSet& features, DeviceExtensionFeature::Enum feature, bool (&appended)[static_cast<usize>(DeviceExtensionFeature::Count)])noexcept{
     if(feature == DeviceExtensionFeature::None || feature == DeviceExtensionFeature::Count)
         return;
 
@@ -356,7 +357,7 @@ inline void AppendOptionalDeviceFeature(void*& pNext, OptionalDeviceFeatureSet& 
         return;
 
     if(void* featureStruct = GetOptionalDeviceFeatureStruct(features, feature)){
-        AppendFeatureStruct(pNext, MakeNotNull(featureStruct));
+        AppendFeatureStruct(pNext, *static_cast<VkBaseOutStructure*>(featureStruct));
         appended[featureIndex] = true;
     }
 }

@@ -12,7 +12,7 @@
 #include "surface_hit.slangi"
 #include "../deferred/bxdf_surface.slangi"
 
-// A traced surface has no opaque G-buffer texel. Its light loop must never read the primary camera's visibility or caustics, even in the viewport. Include before scene/lighting.slangi; caller supplies macros.
+// A traced surface has no opaque G-buffer texel. Its light loop must never read the primary camera's visibility or caustics, even in the viewport. Include before lighting; caller supplies macros.
 #ifdef NWB_GRAPHICS_SCENE_LIGHTING_SLANGI
 #error "Include raytrace/surface_lighting.slangi before scene/lighting.slangi"
 #endif
@@ -31,7 +31,7 @@ bool nwbBxdfRequiresLinearOutput(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// observerDirection points from the hit back along the incident ray. Material BXDFs consume this view vector and return linear radiance. Uses direct-light loop and fallback; no secondary shadow, GI, or recursive rays.
+// observerDirection points from the hit back along the incident ray. Materials consume this view vector and return linear radiance. Uses direct-light loop and fallback; no secondary shadow, GI, or recursive rays.
 half3 nwbRayTraceSurfaceRadiance(const NwbRayTraceSurfaceHit hit, const float3 observerDirection){
     if(!hit.hit)
         return half3(0.0h);

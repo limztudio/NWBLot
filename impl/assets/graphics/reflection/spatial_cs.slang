@@ -71,7 +71,7 @@ struct NwbReflectionSpatialView{
 #define NWB_REFLECTION_SPATIAL_TILE_WIDTH (NWB_REFLECTION_SPATIAL_GROUP_SIZE + 2u * NWB_REFLECTION_SPATIAL_CACHE_RADIUS)
 #define NWB_REFLECTION_SPATIAL_TILE_TEXELS (NWB_REFLECTION_SPATIAL_TILE_WIDTH * NWB_REFLECTION_SPATIAL_TILE_WIDTH)
 
-// Two color caches (radiance/specular) are half4: every input/output is RGBA16F, so FP16 matches storage and halves the tile to 3,200/4,608/6,272 bytes. Geometry caches stay float4 for plane/edge math; depth shares the position lane.
+// Two color caches (radiance/specular) are half4: every input/output is RGBA16F, so FP16 matches storage and halves the tile to 3,200/4,608/6,272 bytes. Geometry caches stay float4 for plane/edge math; depth shares a lane.
 groupshared half4 g_NwbReflectionSpatialRadiance[NWB_REFLECTION_SPATIAL_TILE_TEXELS];
 groupshared half4 g_NwbReflectionSpatialSpecular[NWB_REFLECTION_SPATIAL_TILE_TEXELS];
 groupshared float4 g_NwbReflectionSpatialPositionDepth[NWB_REFLECTION_SPATIAL_TILE_TEXELS];
@@ -190,7 +190,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
             if(x == 0 && y == 0)
                 continue;
             const float spatialExponent = -float(x * x + y * y) / spatialDenominator;
-            // Every other exponent term is nonpositive, so an exactly zero Gaussian cannot contribute. Keep the original combined exponent below; this shortcut introduces no epsilon or altered weight rounding.
+            // Every other exponent term is nonpositive, so an exactly zero Gaussian cannot contribute. Keep the original combined exponent below; this shortcut adds no epsilon or altered weight rounding.
             if(exp(spatialExponent) == 0.0)
                 continue;
             const int2 neighborPixel = int2(pixel) + int2(x, y);

@@ -15,7 +15,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The consuming effect supplies terminal illumination. This walker owns neither project BXDF selection nor environment assets, reflection outputs, screen caches, or feature statistics buffers.
+// The consuming effect supplies terminal illumination. This walker owns neither project selection nor environment assets, reflection outputs, screen caches, or statistics buffers.
 half3 nwbOpticalSurfaceRadiance(const NwbRayTraceSurfaceHit hit, const float3 observerDirection);
 half3 nwbOpticalEnvironmentRadiance(const float3 direction);
 
@@ -73,7 +73,7 @@ bool nwbOpticalClosestSurfaceHit(
     return true;
 }
 
-// Resolve ties around the nearest boundary before changing membership. One committed hit cannot reveal coincident volumes, so a second bounded query is needed. Shared boundaries were removed.
+// Resolve ties around the nearest boundary before changing membership. One committed hit cannot reveal coincident volumes, so a second bounded query is needed. Shared boundaries removed.
 bool nwbOpticalCheckBoundary(
     const NwbOpticalTraceConfig config,
     const float3 origin,
@@ -199,7 +199,7 @@ bool nwbOpticalCheckBoundary(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// One dominant transmitted path; radiance preserved on every termination. Secondary Fresnel is an omitted branch; TIR keeps membership. No tree escapes the budget; in-medium miss adds no env.
+// One dominant transmitted path; radiance preserved on every termination. Secondary Fresnel is an omitted branch; TIR keeps membership. No tree escapes the budget; miss adds no env.
 NwbOpticalTraceResult nwbOpticalTrace(const NwbOpticalTraceConfig config, const float3 initialOrigin, const float3 initialDirection){
     NwbOpticalTraceResult result = (NwbOpticalTraceResult)0;
     result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;

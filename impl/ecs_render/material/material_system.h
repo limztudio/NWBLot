@@ -224,7 +224,7 @@ public:
     [[nodiscard]] bool recordObjectGeometryDecode(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem);
     // Graph-only producer half. The graph owns generated output UAV states; this method records only the dispatch.
     void generateComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
-    // Graph-only raster half. The graph must provide each generated output in the combined vertex/index state; this records the graphics state, descriptor heap, push constants, and draws with no output transition.
+    // Graph-only raster half. The graph must provide each generated output in combined vertex/index state; this records the graphics state, descriptor heap, push constants, and draws with no output transition.
     void renderComputeMaterialPassDrawItemsRasterOnly(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
     // Per-draw generation and rasterization retain the local UAV-to-vertex/index handoff when outputs alias.
     void renderComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
@@ -234,7 +234,7 @@ public:
     [[nodiscard]] bool materialPassDrawBuffersReady(const InstanceGpuDataVector& instanceData, const MaterialTypedByteDataVector& materialTypedBytes)const noexcept;
     [[nodiscard]] bool materialPassDrawBuffersReady(usize instanceCount, usize materialTypedByteCount)const noexcept;
     [[nodiscard]] ECSRenderDetail::MaterialPassBufferSnapshot materialPassBufferSnapshot()const noexcept;
-    // The CSG context descriptor is selected through every instance's retained heap-slot lane. Graph declaration patches the upload copy before the packet is recorded so every phase keeps the same ABI.
+    // The CSG context descriptor is selected through every instance's heap-slot lane. Graph declaration patches the upload copy before the packet is recorded so every phase keeps the same ABI.
     void prepareMaterialPassInstanceUploadData(InstanceGpuDataVector& instanceData, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources)noexcept;
     [[nodiscard]] bool prepareMaterialPassResourceBindingsImpl(const MaterialPassDrawItemVector& drawItems, bool computeEmulation)noexcept;
 

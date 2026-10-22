@@ -95,7 +95,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(DeferredFrameT
     m_rayTracingState.m_surfelUseHwTrace = false;
     if(!targets.shadowVisibility)
         return false;
-    // The trace material-context selector is itself a global UniformBuffer heap entry. Establish it before gathering: the deferred graph imports the backing handle rather than a recording-time replacement.
+    // The trace material-context selector is a global UniformBuffer heap entry. Establish it before gathering: the deferred graph imports the backing handle rather than a recording-time replacement.
     if(!ensureRayTraceMaterialContextSlotsBuffer())
         return false;
 
@@ -161,7 +161,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(DeferredFrameT
         if(!prepareHwCausticResources(targets))
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hardware caustic producer resource preparation failed"));
 
-        // Enable surfel GI on the HW path: the RayQuery twin reuses the TLAS + per-mesh geometry + InstanceID-material record the shadow/caustic path built — the ONLY place surfels run on hardware.
+        // Enable surfel GI on the HW path: the RayQuery twin reuses the TLAS + per-mesh geometry + InstanceID record the shadow/caustic path built — the ONLY place surfels run on hardware.
         // Gated on the HW shadow backend being ready + a non-empty TLAS.
         // Non-fatal: a failure leaves GI off this frame (lighting uses hemiAmbient).
         if(backendReady && m_rayTracingState.m_tlasInstanceCount > 0u && m_rayTracingState.m_shadowMeshCount > 0u){

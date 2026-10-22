@@ -187,7 +187,7 @@ public:
     void setFrameLaggedAsyncLightingEnabled(const bool enabled)noexcept{
         if(m_frameLaggedAsyncLightingEnabled == enabled)
             return;
-        // Preserve a one-shot proof when the opt-in mode is explicitly turned off: the next accepted normal frame confirms that the renderer returned to its established current-frame path instead of merely planning it.
+        // Preserve a one-shot proof when the opt-in mode is turned off: the next accepted normal frame confirms that the renderer returned to its current-frame path instead of merely planning it.
         m_laggedLightingCurrentFrameAcceptancePending = m_frameLaggedAsyncLightingEnabled && !enabled;
         if(m_frameLaggedAsyncLightingEnabled && !enabled && m_laggedLightingHistorySubmissionToken.valid()){
             m_laggedLightingHistoryWriterDrainToken = m_laggedLightingHistorySubmissionToken;
@@ -201,7 +201,7 @@ public:
 
     [[nodiscard]] bool frameLaggedAsyncLightingEnabled()const noexcept{ return m_frameLaggedAsyncLightingEnabled; }
     [[nodiscard]] bool setTaskGraphTimingFeedbackPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy);
-    // Immutable-by-value telemetry for the current deferred graph artifacts. It stays meaningful until the next graph/recording/transaction reset, matching the compiled graph diagnostic lifetime. Callers serialize this inspection with deferred native recording/reset just as they do other recorded-graph diagnostics.
+    // Immutable-by-value telemetry for the current deferred graph artifacts. It stays meaningful until the next graph/recording/transaction reset, matching the compiled graph diagnostic lifetime.
     [[nodiscard]] Core::GpuTaskGraphRuntimeStatistics deferredTaskGraphRuntimeStatistics()const noexcept;
 
 
@@ -410,12 +410,12 @@ private:
     u64 m_frameGraphSourceFrameIndex = Limit<u64>::s_Max;
     // FrameGraphBuilder retains labels by view until the capture payload is encoded, so this storage must outlive appendFrameGraph() rather than using its task-graph scratch arena.
     AString<Core::Alloc::GlobalArena> m_frameGraphRendererLabel;
-    // Optional immutable target-generation selector upload. It must merge into Shadow Preparation's first Graphics packet its acceptance commits the CPU residency bit atomically with the first consumer.
+    // Optional selector upload. It must merge into Shadow Preparation's first Graphics packet; its acceptance commits the CPU residency bit with the first consumer.
     Core::GpuTaskId m_deferredBindlessSlotsUploadTask;
-    // Immutable ray-trace descriptor-slot snapshot. It must merge into the same first Graphics packet later Compute trace consumers inherit Shadow Preparation's ConstantBuffer handoff rather than an upload frontier.
+    // Immutable descriptor-slot snapshot. It must merge into the same first Graphics packet; later Compute trace consumers inherit Shadow Preparation's handoff rather than an upload frontier.
     Core::GpuTaskId m_rayTraceMaterialContextSlotsUploadTask;
     Core::GpuTaskId m_csgTraceContextUploadTask;
-    // Optional immutable refractive-AABB stream. It must merge into that same first Graphics packet caustic Compute consumers inherit Shadow Preparation's ShaderResource handoff rather than an upload frontier.
+    // Optional refractive-AABB stream. It must merge into that same first Graphics packet; caustic consumers inherit Shadow Preparation's handoff rather than an upload frontier.
     Core::GpuTaskId m_causticEmissionTargetsUploadTask;
     // Optional per-frame surfel constant payload. It must merge into that same first Graphics packet the later asynchronous GI pass inherits Shadow Preparation's ConstantBuffer handoff rather than an upload frontier.
     Core::GpuTaskId m_surfelFrameConstantsUploadTask;

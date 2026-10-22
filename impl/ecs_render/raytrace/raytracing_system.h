@@ -600,7 +600,7 @@ private:
         bool graphOwnsOpaqueTemporalMergeEntryStates
     );
     // Denoise either backend's soft trace and optionally run the transparent trace and resolve phases.
-    // The shared deferred graph supplies the first downsample entry states, the opaque-to-resolve handoff, and prepared transparent trace-to-merge/first-wavelet plus handoffs; later transitions stay local.
+    // The shared deferred graph supplies the first downsample entry states, the opaque-to-resolve handoff, and prepared trace-to-merge/first-wavelet plus handoffs; later transitions stay local.
     void dispatchSoftShadowDenoiseAndTransparentFold(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,

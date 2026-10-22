@@ -52,7 +52,7 @@ inline void RecoverOpaqueSoftShadowAllLit(const PayloadT& payload, Core::Command
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A prepared soft-transparent frame records production, resolve, transparent trace, and fold as one native packet. Shared state is stack-owned for this transaction; it never survives acceptance or a retry.
+// A prepared soft-transparent frame records production, resolve, trace, and fold as one native packet. Shared state is stack-owned for this transaction; it never survives acceptance or a retry.
 struct ShadowVisibilityOpaqueGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
@@ -267,7 +267,7 @@ public:
 };
 
 
-// The prepared path keeps trace and resolve as separate callbacks so the graph lowers the transparent half output from UAV to shader-read between them. The terminal resolve task owns shared timing and acceptance.
+// The prepared path keeps trace and resolve as separate callbacks so the graph lowers the transparent output from UAV to shader-read between them. The terminal task owns shared timing and acceptance.
 struct ShadowTransparentSoftTraceGraphTask{
     // Transparent hardware fallback also initializes its indirect dispatch arguments through a buffer upload.
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer, };
@@ -310,7 +310,7 @@ public:
 };
 
 
-// The transparent trace publishes RGB half-resolution visibility. On temporal frames this task freezes the selected history pair, publishes the next pair for the wavelet, and starts the resolve timing envelope.
+// The transparent trace publishes RGB half-resolution visibility. On temporal frames this task freezes the selected history pair, publishes the next pair for the wavelet, and starts the resolve envelope.
 struct ShadowTransparentSoftTemporalMergeGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 

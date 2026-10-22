@@ -356,7 +356,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     const Core::GpuTaskResourceSetUse traceGeometrySetUse = traceResourceSets.useCount != 0u ? traceResourceSets.uses[0u] : Core::GpuTaskResourceSetUse{};
 
     if(splitSoftTransparentFold){
-        // The prepared soft path keeps the opaque first wavelet, resolve tail, transparent trace, and temporal/RGB resolve as callbacks. Re-importing keeps identities while each handoff is explicit.
+        // The prepared soft path keeps the opaque first wavelet, resolve tail, transparent trace, and temporal/RGB resolve as callbacks. Re-importing keeps identities while each handoff is set.
         const SoftShadowSplitRoute splitRoute{
             .hardwareShadowSupported = hardwareShadowSupported,
             .hardwareCsgShadow = hardwareCsgShadow,

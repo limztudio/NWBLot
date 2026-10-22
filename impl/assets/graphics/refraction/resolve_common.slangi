@@ -106,7 +106,7 @@ half3 nwbRefractionBackground(const uint2 pixel){
     // Transmittances are (0, 1) bounded factors, so half arithmetic is sufficient here.
     const half frontTransmittance = exp(-min(frontExtinction, half(NWB_AVBOIT_EXTINCTION_SATURATION)));
     const half backTransmittance = exp(-min(behindExtinction, half(NWB_AVBOIT_EXTINCTION_SATURATION)));
-    // AVBOIT weights contain transmittance from fragments in front of the retained primary. Undo that prefix here; the final compositor applies it once. Clamp only the ill-conditioned, visually occluded tail.
+    // AVBOIT weights contain transmittance from fragments in front of the retained primary. Undo that prefix here; the final compositor applies it once. Clamp only the ill-conditioned occluded tail.
     return behind / max(frontTransmittance, half(NWB_REFRACTION_FRONT_TRANSMITTANCE_MIN)) + opaque * backTransmittance;
 }
 
@@ -163,7 +163,7 @@ half3 nwbRefractionBackgroundForEntry(const uint2 pixel, const NwbRefractionEntr
     const int3 texel = int3(pixel, 0);
     const float primaryDepth = nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.x).Load(texel).r;
     const uint samplePrimary = nwbAvboitUnpackRefractionEntityId(nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots1.w).Load(texel).rg);
-    // A displaced pixel outside this primary's silhouette has a different AVBOIT depth partition. Reusing its transparent accumulation could pull a camera-foreground object behind the glass. Only the opaque cache is reusable there; the hardware path can still evaluate transparent geometry actually intersected by its ray.
+    // A displaced pixel outside this primary's silhouette has a different AVBOIT depth partition. Reusing its transparent accumulation could pull a camera-foreground object behind the glass. Only the opaque cache is reusable there; the hardware path can still evaluate geometry actually intersected by its ray.
     return primaryDepth < 1.0 && samplePrimary == entry.primaryEntityId ? nwbRefractionBackground(pixel) : nwbRefractionOpaqueBackground(pixel);
 }
 
@@ -171,7 +171,7 @@ half3 nwbRefractionStraightFallback(const uint2 pixel, const NwbRefractionEntry 
     return half3(nwbRefractionBackground(pixel)) * nwbRefractionAttenuation(entry.tint, NWB_REFRACTION_FALLBACK_THICKNESS, entry.ior, entry.cosine, entry.cosine);
 }
 
-// Fixed-cost screen-space continuation, also used when hardware cannot recover a closed primary volume. It is a single-boundary approximation; no guessed second normal or unbounded march is used. Depth crossing must lie close to the ray, otherwise foreground silhouettes and offscreen rays keep the stable straight-through fallback.
+// Fixed-cost screen-space continuation, also used when hardware cannot recover a closed primary volume. It is a single-boundary approximation; no guessed second normal or unbounded march is used. Depth crossing must lie close to the ray, otherwise foreground silhouettes and offscreen rays keep the straight-through fallback.
 bool nwbRefractionScreenBackground(const NwbRefractionEntry entry, const float3 direction, out half3 radiance){
     radiance = half3(0.0h);
     uint2 sourcePixel;

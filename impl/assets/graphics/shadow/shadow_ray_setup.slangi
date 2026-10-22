@@ -16,7 +16,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Builds the shared shadow segment. Both traversals use this direction, extent, bias, and back-face early-out so coverage stays in lockstep. Include scene/buffer.slangi and shadow_sampling.slangi first.
+// Builds the shared shadow segment. Both traversals use this direction, extent, bias, and back-face early-out so coverage stays in lockstep. Include scene/buffer.slangi and shadow_sampling.slangi.
 bool nwbShadowBuildLightRay(const float3 worldPosition, const float3 normal, const NwbSceneLight light, const float2 jitter, out float3 outDirection, out float outTMin, out float outTEnd){
     outDirection = float3(0.0, 1.0, 0.0);
     outTMin = NWB_SHADOW_RAY_MIN_DISTANCE;

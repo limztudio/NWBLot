@@ -47,7 +47,7 @@ struct NwbShadowInstanceOptics{
     float crossingT[NWB_SHADOW_MAX_CROSSINGS_PER_OCCLUDER];
 };
 
-// Traversal outcome for one instance: the caller combines completed optics once, zeroes visibility on an opaque block, keeps the all-blocked fallback on overflow, and adds nothing on a clean miss.
+// Traversal outcome for one instance: the caller combines completed optics once, zeroes visibility on an opaque block, keeps the all-blocked fallback on overflow, and adds nothing on a miss.
 enum class NwbShadowInstanceStatus : uint{
     Completed,
     NoIntersection,

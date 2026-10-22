@@ -19,7 +19,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Frame counter for cone jitter. Seeds the per-pixel sample so the jittered ray walks the light's disk/sphere across frames. A zero-radius light jitters to the axis and keeps the hard-shadow result.
+// Counter for cone jitter. Seeds the per-pixel sample so the jittered ray walks the light's disk/sphere across frames. A zero-radius light jitters to the axis and keeps the hard result.
 struct NwbShadowRqPushConstants{
     uint frameIndex;
     uint worldPositionSlot;
@@ -41,7 +41,7 @@ struct NwbShadowRqPushConstants{
 
 [numthreads(NWB_SHADOW_RT_GROUP_SIZE, NWB_SHADOW_RT_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
-    // FULL-RESOLUTION: one occlusion ray per output pixel, written into the full-res visibility array the deferred lighting samples. The software stage folds colored transmittance onto this result.
+    // FULL-RESOLUTION: one occlusion ray per pixel, written into the full-res visibility array the deferred lighting samples. The software stage folds colored transmittance onto this result.
     uint width;
     uint height;
     uint slotElems;

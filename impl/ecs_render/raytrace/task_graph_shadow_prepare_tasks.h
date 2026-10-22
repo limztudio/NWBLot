@@ -59,7 +59,7 @@ public:
 };
 
 
-// Pure-software preparation shares scratch between every frozen mesh build. Keep each sentinel next to its matching compute callback so a later mesh cannot clear a prior mesh's rendezvous state.
+// Pure-software preparation shares scratch between every frozen mesh build. Keep each sentinel next to its compute callback so a later mesh cannot clear a prior mesh's rendezvous state.
 struct ShadowPrepareSoftwareBvhBuildGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 

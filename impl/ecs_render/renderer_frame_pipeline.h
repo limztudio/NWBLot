@@ -201,7 +201,7 @@ public:
 
     [[nodiscard]] bool frameLaggedAsyncLightingEnabled()const noexcept{ return m_frameLaggedAsyncLightingEnabled; }
     [[nodiscard]] bool setTaskGraphTimingFeedbackPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy);
-    // Immutable-by-value telemetry for the current deferred graph artifacts. It stays meaningful until the next graph/recording/transaction reset, matching the compiled graph diagnostic lifetime.
+    // Immutable-by-value telemetry for the current deferred graph artifacts. It stays meaningful until the next graph/recording/transaction reset, matching the compiled diagnostic lifetime.
     [[nodiscard]] Core::GpuTaskGraphRuntimeStatistics deferredTaskGraphRuntimeStatistics()const noexcept;
 
 
@@ -417,34 +417,34 @@ private:
     Core::GpuTaskId m_csgTraceContextUploadTask;
     // Optional refractive-AABB stream. It must merge into that same first Graphics packet; caustic consumers inherit Shadow Preparation's handoff rather than an upload frontier.
     Core::GpuTaskId m_causticEmissionTargetsUploadTask;
-    // Optional per-frame surfel constant payload. It must merge into that same first Graphics packet the later asynchronous GI pass inherits Shadow Preparation's ConstantBuffer handoff rather than an upload frontier.
+    // Optional per-frame surfel constant payload. It must merge into that same first Graphics packet the later GI pass inherits Shadow Preparation's handoff from rather than an upload frontier.
     Core::GpuTaskId m_surfelFrameConstantsUploadTask;
-    // Optional ABI-coupled shadow material context batch. Every upload must merge into Shadow Preparation its SRV handoff, rather than any individual upload, owns the later asynchronous trace consumers.
+    // Optional ABI-coupled shadow material context batch. Every upload must merge into Shadow Preparation its SRV handoff, rather than any individual upload, owns the later trace consumers.
     Core::GpuTaskId m_shadowInstanceMaterialUploadTask;
     Core::GpuTaskId m_shadowInstanceUploadTask;
     Core::GpuTaskId m_shadowMaterialTypedUploadTask;
-    // Optional CPU-built software scene-BVH pair. Nodes address the companion leaf-instance stream, both must merge into Shadow Preparation's packet before it owns the later asynchronous ShaderResource handoff.
+    // Optional CPU-built software scene-BVH pair. Nodes address the companion leaf-instance stream, both must merge into Shadow Preparation's packet before it owns the later ShaderResource handoff.
     Core::GpuTaskId m_sceneBvhNodesUploadTask;
     Core::GpuTaskId m_sceneBvhInstancesUploadTask;
-    // Optional lagged-history selector upload. It must merge into Deferred Lighting's packet, which already owns both history acceptance and the external completion wait for the prior-frame images.
+    // Optional lagged-history selector upload. It must merge into Deferred Lighting's packet, which already owns history acceptance and the external completion wait for the prior-frame images.
     Core::GpuTaskId m_deferredLaggedLightingHistorySlotsUploadTask;
     Core::GpuTaskId m_deferredFrameTimingBeginTask;
     Core::GpuTaskId m_deferredShadowPrepareTask;
-    // Pure-software prepared per-mesh builds lower their typed sentinel clears and native compute callbacks before Shadow Preparation's existing scene-build/acceptance endpoint. Both bounds must remain in that same packet.
+    // Pure-software prepared per-mesh builds lower their typed sentinel clears and compute callbacks before Shadow Preparation's existing scene-build/acceptance endpoint. Both bounds must remain in that packet.
     Core::GpuTaskId m_deferredShadowPrepareSoftwareBvhBuildFirstTask;
     Core::GpuTaskId m_deferredShadowPrepareSoftwareBvhBuildLastTask;
     Core::GpuTaskId m_deferredShadowPrepareSceneRefitTask;
     Core::GpuTaskId m_sceneBvhRefitInputsUploadTask;
-    // Prepared TLAS/BLAS builds record in Shadow Preparation, while this adjacent state-only callback publishes their descriptor-visible AccelStructRead boundaries. It must remain in the same first Graphics packet.
+    // Prepared TLAS/BLAS builds record in Shadow Preparation, while this adjacent state-only callback publishes their AccelStructRead boundaries. It must remain in the same first Graphics packet.
     Core::GpuTaskId m_deferredShadowPrepareAccelStructFinalizeTask;
     Core::GpuTaskId m_graphicsPrefixMeshViewSetupTask;
     Core::GpuTaskId m_graphicsPrefixSceneShadingSetupTask;
-    // Attachment LOAD_OP_CLEAR work is attributed to G-buffer timing. Deferred-clear timing belongs only to this standalone opaque-color UAV clear, whose before/after hooks share one graph task.
+    // Attachment LOAD_OP_CLEAR work is attributed to G-buffer timing. Deferred-clear timing belongs only to this opaque-color UAV clear, whose before/after hooks share one graph task.
     Core::GpuTaskId m_graphicsPrefixDeferredClearTask;
     // The opaque CSG work-region clear is a two-value typed rectangle chain. Both tasks must remain in one Graphics packet so its first/last hooks retain the existing CSG-clear timing interval.
     Core::GpuTaskId m_graphicsPrefixCsgIntervalClearFirstTask;
     Core::GpuTaskId m_graphicsPrefixCsgIntervalClearTask;
-    // Pairwise-distinct opaque compute-emulation outputs dispatch before G-buffer rasterization. This producer must share G-buffer's primary-Graphics packet for the handoff to stay in the prefix range.
+    // Pairwise-distinct opaque compute-emulation outputs dispatch before G-buffer rasterization. This producer must share G-buffer's primary-Graphics packet for the handoff to stay in the range.
     Core::GpuTaskId m_graphicsPrefixOpaqueComputeEmulationTask;
     // Small shared-output regular paths keep dispatch/raster alternation in the same packet.
     // Retain every phase ID so runtime validation can prove the strict D(A) -> R(A) -> ... packet order, rather than merely proving that the two endpoint callbacks coalesced.

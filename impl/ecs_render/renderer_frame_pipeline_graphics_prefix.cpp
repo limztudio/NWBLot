@@ -276,7 +276,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     opaqueCsgIntervalStage.capturePayloads(frameBindings, csgResources, opaqueDrawItems, csgFrameData, instanceData.size(), materialTypedBytes.size(), gbufferPayload.materialDrawBuffersUploaded, gbufferPayload.csgFrameBuffersUploaded, hasOpaqueDrawItems, hasOpaqueCsgFrameWork);
 
 
-    // The G-buffer produces peel/event images, span build consumes its event aliases and publishes spans, Combine consumes the aliases and publishes removed-interval images, then Sample consumes output.
+    // The G-buffer produces peel/event images, span build consumes its aliases and publishes spans, Combine consumes the aliases and publishes removed-interval images, then Sample consumes output.
     // Their native thunks consume graph-owned StorageImage state without staging target transitions.
 
     // The semantic opaque-CSG flag admits this clear before native readiness checks.

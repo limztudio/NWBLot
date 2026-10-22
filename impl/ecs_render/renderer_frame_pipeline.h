@@ -484,7 +484,7 @@ private:
     Core::GpuTaskId m_deferredCausticAccumulatorNonTemporalClearTask;
     // A warm temporal accumulator decays in a mergeable graph task before its selected photon producer.
     Core::GpuTaskId m_deferredCausticAccumulatorDecayTask;
-    // Photon, downsample, resolve prepare, five wavelets, upsample, and timing close are distinct tasks, but stay in the selected packet so the compiler owns handoffs without changing that endpoint.
+    // Photon, downsample, resolve prepare, five wavelets, upsample, and timing close are distinct tasks, but stay in the selected packet so the compiler owns handoffs without changing that one.
     Core::GpuTaskId m_deferredCausticPhotonTask;
     Core::GpuTaskId m_deferredCausticGeometryTask;
     Core::GpuTaskId m_deferredCausticResolvePrepareTask;
@@ -557,7 +557,7 @@ private:
     // Shadow scratch/history retains accepted packet state across frames on either compiler route. Declaration-owned first-use sources restore the private scratch and its typed backings.
     Core::GpuPersistentResourceStateCache m_shadowComputePersistentState;
     Core::GpuPersistentResourceStateCache m_shadowVisibilityReturnState;
-    // Native TLAS/BLAS, software-BVH build storage, and normalized trace geometry change inside Shadow Preparation. Keep only live generations so the next frame's first packet seeds their states.
+    // Native TLAS/BLAS, software-BVH build storage, and normalized trace geometry change inside Shadow Preparation. Keep only live generations so the next frame's first packet seeds states.
     Core::GpuPersistentResourceStateCache m_shadowPreparePersistentState;
     // Software caustics retain their temporal scratch on either compiler-selected route.
     // Hardware dispatch-rays caustics retain their temporal accumulator only after the Graphics hardware-caustics packet accepts
@@ -565,7 +565,7 @@ private:
     Core::GpuPersistentResourceStateCache m_hardwareCausticAccumulatorPersistentState;
     // Retain only the accepted cross-queue return state needed when irradiance moves from Graphics lighting back to a Compute-routed caustics packet. Producer/lighting flow is compiler-seeded.
     Core::GpuPersistentResourceStateCache m_causticIrradianceReturnState;
-    // Surfel GI retains its field/history on either compiler-selected route, including its RayQuery trace variant. The resolved full-resolution irradiance is consumed on that route or snapshotted for optional frame-lagged lighting. Retain only accepted scratch and its typed backings.
+    // Surfel GI retains its field/history on either compiler route, including its RayQuery trace variant. The resolved full-resolution irradiance is consumed on that route or snapshotted for lagged lighting. Retain only accepted scratch and its typed backings.
     Core::GpuPersistentResourceStateCache m_surfelGiComputePersistentState;
     // The counter can continue into a late Transfer readback, so retain the accepted tail state and its typed backing separately.
     // The next Surfel-GI packet imports this cache through its first-use declaration.
@@ -588,7 +588,7 @@ private:
     ReflectionSettings m_reflectionSettings;
     RayTracingRefractionGraphResources m_preparedRefractionResources;
     Core::QueueSubmissionToken m_laggedLightingHistorySubmissionToken;
-    // The newest incomplete accepted same-generation Transfer tail protects live producer writes while graph declaration resets the normal history-read token. A later tail is its proven successor; completed tails do not keep adding waits. Target recreation clears it with normal tracking state.
+    // The newest incomplete accepted same-generation Transfer tail protects live producer writes while declaration resets the normal history-read token. A later tail is its proven successor; completed tails do not keep adding waits. Target recreation clears it with normal tracking state.
     Core::QueueSubmissionToken m_laggedLightingHistoryWriterDrainToken;
     // Deferred target creation increments this identity for every target generation. It prevents a recycled slot or allocator address from making a freshly recreated history look accepted.
     u64 m_laggedLightingHistoryGeneration = 0u;
@@ -608,7 +608,7 @@ private:
     RendererRayTracingSystem m_raytracingSystem;
 
 private:
-    // Declare every callback owner before graph storage. Reverse member destruction keeps graph storage lifetime strictly inside those owners during normal destruction and unwinding. Active graph lifecycle is quiesced before pipeline teardown.
+    // Declare every callback owner before graph storage. Reverse member destruction keeps graph storage lifetime inside those owners during normal destruction and unwinding. Active graph lifecycle is quiesced before pipeline teardown.
     RendererTaskTimingFeedback m_deferredTaskTimingFeedback;
     // All renderer stages, presentation, optional history copies, and recovery share one packet graph.
     Core::GpuTaskGraph m_deferredLightingTaskGraph;

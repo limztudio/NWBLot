@@ -236,7 +236,7 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     if(hasCsgFrameWork && !deferredTargets.csgIntervalTargetsValid())
         return false;
 
-    // CSG receiver ranges are addressed by material-pass instance index.  A CSG-active material pass reserves one range for every compatible renderer, not only the renderers that receive CSG clipping, so the complete renderer view is the safe prepass capacity bound for either material pass.
+    // CSG receiver ranges are addressed by material-pass instance index.  A CSG-active material pass reserves one range for every compatible renderer, not only those that receive CSG clipping, so the complete view is the safe prepass capacity for either material pass.
     const usize csgReceiverRangeCount = hasCsgFrameWork ? m_world.view<RendererComponent>().candidateCount() : 0u;
 
     if(!m_materialSystem.prepareMaterialPassResources(scratchArena, deferredTargets.framebuffer.get(), MaterialPipelinePass::Opaque, false, m_preparedCsgFrameState, nullptr))

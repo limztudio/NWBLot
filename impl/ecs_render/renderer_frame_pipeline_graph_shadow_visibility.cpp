@@ -152,7 +152,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     // A frame with no clear/copy work still owns its tick through the semantic task's accepted hook without gaining empty graph nodes.
     const bool graphOwnedAdaptiveCandidate = !splitSoftTransparentFold && rayTracingPlan.adaptivePlan.enabled;
     GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan = graphOwnedAdaptiveCandidate ? rayTracingPlan.adaptivePlan : GraphOwnedAdaptiveShadowPlan{};
-    // The merge pipeline is ready before its retained history has an accepted frame. Bootstrap still publishes the selected output pair, but only usable history may sample with previous geometry.
+    // The merge pipeline is ready before its retained history has an accepted frame. Bootstrap still publishes the selected output pair, but only usable history may sample with prior geometry.
     const bool softShadowHistoryReadable = rayTracingPlan.softShadowHistoryReadable;
     // The opaque temporal merge runs before the transparent tail and shares its history selector. Freeze its exact input/output pair while the compiled packet owns the prepared temporal route.
     const bool graphOwnsOpaqueTemporalMergeEntryStates = splitSoftTransparentFold && rayTracingPlan.opaqueTemporalMergeReady;
@@ -356,7 +356,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     const Core::GpuTaskResourceSetUse traceGeometrySetUse = traceResourceSets.useCount != 0u ? traceResourceSets.uses[0u] : Core::GpuTaskResourceSetUse{};
 
     if(splitSoftTransparentFold){
-        // The prepared soft path keeps the opaque first wavelet, optional resolve tail, transparent trace, and temporal/RGB resolve as adjacent callbacks. Re-importing retains identities while making each handoff explicit.
+        // The prepared soft path keeps the opaque first wavelet, optional resolve tail, transparent trace, and temporal/RGB resolve as adjacent callbacks. Re-importing keeps identities while making each handoff explicit.
         const SoftShadowSplitRoute splitRoute{
             .hardwareShadowSupported = hardwareShadowSupported,
             .hardwareCsgShadow = hardwareCsgShadow,
@@ -468,7 +468,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
 
 
     // Preparedness is established while Shadow Prepare records, after this graph is declared.
-    // The normal monolithic path begins with an unconditional all-lit clear: real shadow producers overwrite it, while a missing producer retains the same white fallback without a callback-local state bridge.
+    // The normal monolithic path begins with an unconditional all-lit clear: real shadow producers overwrite it, while a missing producer keeps the same white fallback without a callback-local state bridge.
     // Keep this Compute-native clear on the selected Compute packet with Shadow Visibility.
     Core::GpuTaskSchedulingHint allLitClearScheduling;
     allLitClearScheduling.cost = Core::GpuTaskCostHint::Tiny;

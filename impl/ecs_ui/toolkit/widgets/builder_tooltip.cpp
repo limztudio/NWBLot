@@ -108,7 +108,7 @@ bool Builder::paintTooltips(){
         const SIMDVectorSingle paddedSize = VectorAdd(VectorAdd(VectorSet(measured.x, measured.y, measured.x, measured.y), VectorSwizzle<0, 1, 0, 1>(paddingValue)), VectorSwizzle<2, 3, 2, 3>(paddingValue));
         const SIMDVectorSingle minimumSize = VectorSet(background->minimumWidth, background->minimumHeight, background->minimumWidth, background->minimumHeight);
         const SIMDVectorSingle size = VectorSelect(paddedSize, minimumSize, VectorGreater(minimumSize, paddedSize));
-        const SIMDVectorSingle boundedSize = VectorMin(VectorSet(frame.options.maximumWidth, VectorGetY(size), 0.0f, 0.0f), size);
+        const SIMDVectorSingle boundedSize = VectorMin(VectorSelect(size, VectorReplicate(frame.options.maximumWidth), s_SIMDMaskX), size);
         options.size = { VectorGetX(boundedSize), VectorGetY(boundedSize) };
         options.gap = frame.options.gap;
         options.side = frame.options.side;

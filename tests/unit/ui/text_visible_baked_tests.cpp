@@ -25,14 +25,17 @@ using namespace NWB::UiTextVisibleTests;
 
 class TextVisibleBakedTests : public TextVisibleFixture{
 protected:
+    [[nodiscard]] static SIMDVectorSingle LoadOutlinePosition(const PlacedGlyph& glyph, const Point origin)noexcept{
+        return VectorAdd(VectorAdd(VectorSet(origin.x, origin.y, 0.0f, 0.0f), VectorSet(glyph.position.x, glyph.position.y, 0.0f, 0.0f)), VectorSet(glyph.ink.x, glyph.ink.y, 0.0f, 0.0f));
+    }
+
     [[nodiscard]] static Rect OutlineRectangle(const PlacedGlyph& glyph, const Point origin)noexcept{
-        const SIMDVectorSingle position = VectorAdd(VectorAdd(VectorSet(origin.x, origin.y, 0.0f, 0.0f), VectorSet(glyph.position.x, glyph.position.y, 0.0f, 0.0f)), VectorSet(glyph.ink.x, glyph.ink.y, 0.0f, 0.0f));
+        const SIMDVectorSingle position = LoadOutlinePosition(glyph, origin);
         return Rect{ VectorGetX(position), VectorGetY(position), glyph.ink.width, glyph.ink.height };
     }
 
     [[nodiscard]] static Rect OutlineCenterClip(const PlacedGlyph& glyph, const Point origin)noexcept{
-        const Rect outline = OutlineRectangle(glyph, origin);
-        const SIMDVectorSingle center = VectorMultiplyAddExpression(VectorSet(outline.width, outline.height, 0.0f, 0.0f), VectorReplicate(0.5f), VectorSet(outline.x, outline.y, 0.0f, 0.0f));
+        const SIMDVectorSingle center = VectorMultiplyAddExpression(VectorSet(glyph.ink.width, glyph.ink.height, 0.0f, 0.0f), VectorReplicate(0.5f), LoadOutlinePosition(glyph, origin));
         return { VectorGetX(center), VectorGetY(center), 1.0f, 1.0f };
     }
 
@@ -95,7 +98,7 @@ protected:
             glyph.width = width;
             glyph.height = height;
             const SIMDVectorSingle planeStart = VectorMultiply(start, unitsPerPixel);
-            const SIMDVectorSingle planeEnd = VectorMultiplyAddExpression(VectorSet(static_cast<f32>(width), static_cast<f32>(height), 0.0f, 0.0f), unitsPerPixel, planeStart);
+            const SIMDVectorSingle planeEnd = VectorMultiplyAddExpression(extent, unitsPerPixel, planeStart);
             glyph.planeLeft = VectorGetX(planeStart);
             glyph.planeTop = VectorGetY(planeStart);
             glyph.planeRight = VectorGetX(planeEnd);

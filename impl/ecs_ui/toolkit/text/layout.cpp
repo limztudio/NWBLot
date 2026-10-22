@@ -38,14 +38,20 @@ inline constexpr usize s_CarriageReturnLineFeedBytes = 2u;
     return IsFinite(value) && value >= -static_cast<f64>(Limit<f32>::s_Max) && value <= static_cast<f64>(Limit<f32>::s_Max);
 }
 
+[[nodiscard]] static bool FitsCoordinateXY(const SIMDVectorDouble value)noexcept{
+    const SIMDVectorDouble limit = VectorDoubleReplicate(static_cast<f64>(Limit<f32>::s_Max));
+    return VectorDoubleIsFinite(value, VectorDoubleComponentMask::s_DoubleXY)
+        && (VectorDoubleMoveMask(VectorDoubleInBounds(value, limit)) & VectorDoubleComponentMask::s_DoubleXY) == VectorDoubleComponentMask::s_DoubleXY;
+}
+
 [[nodiscard]] static Expected<SIMDVectorDoubleResult> TranslateInk(const SIMDVectorDouble position, const SIMDVectorDouble ink)noexcept{
     const SIMDVectorDouble origin = VectorDoubleAdd(position, ink);
     const SIMDVectorDouble end = VectorDoubleAdd(origin, VectorDoubleSwizzle<2, 3, 2, 3>(ink));
-    if(!FitsCoordinate(VectorDoubleGetX(origin)) || !FitsCoordinate(VectorDoubleGetY(origin)) || !FitsCoordinate(VectorDoubleGetX(end)) || !FitsCoordinate(VectorDoubleGetY(end)))
+    if(!FitsCoordinateXY(origin) || !FitsCoordinateXY(end))
         return MakeUnexpected(Failure{});
     const SIMDVectorSingle rectangle = ConvertVectorDoubleToSingle(VectorDoubleSelect(ink, origin, s_DoubleSIMDMaskXY));
     const SIMDVectorSingle roundedEnd = VectorAdd(VectorSelect(VectorZero(), rectangle, s_SIMDMaskXY), VectorSwizzle<2, 3, 2, 3>(rectangle));
-    if(!IsFinite(VectorGetX(roundedEnd)) || !IsFinite(VectorGetY(roundedEnd)))
+    if(!VectorIsFinite(roundedEnd, VectorComponentMask::s_XY))
         return MakeUnexpected(Failure{});
     return SIMDVectorDoubleResult{ ConvertVectorSingleToDouble(rectangle) };
 }
@@ -87,7 +93,7 @@ inline constexpr usize s_CarriageReturnLineFeedBytes = 2u;
 }
 
 [[nodiscard]] static bool IncludeInk(SIMDVectorDouble& bounds, bool& hasInk, const SIMDVectorDouble ink)noexcept{
-    if(VectorDoubleGetZ(ink) <= 0.0 || VectorDoubleGetW(ink) <= 0.0)
+    if((VectorDoubleMoveMask(VectorDoubleLessOrEqual(VectorDoubleSwizzle<2, 3, 2, 3>(ink), VectorDoubleZero())) & VectorDoubleComponentMask::s_DoubleXY) != 0u)
         return true;
     if(!hasInk){
         bounds = ink;
@@ -99,12 +105,12 @@ inline constexpr usize s_CarriageReturnLineFeedBytes = 2u;
     const SIMDVectorDouble inkEnd = VectorDoubleAdd(ink, VectorDoubleSwizzle<2, 3, 2, 3>(ink));
     const SIMDVectorDouble end = VectorDoubleSelect(inkEnd, boundsEnd, VectorDoubleGreater(boundsEnd, inkEnd));
     const SIMDVectorDouble size = VectorDoubleSubtract(end, origin);
-    if(!FitsCoordinate(VectorDoubleGetX(size)) || !FitsCoordinate(VectorDoubleGetY(size)))
+    if(!FitsCoordinateXY(size))
         return false;
     const SIMDVectorDouble rectangle = VectorDoubleSelect(VectorDoubleSwizzle<0, 1, 0, 1>(size), origin, s_DoubleSIMDMaskXY);
     const SIMDVectorSingle rounded = ConvertVectorDoubleToSingle(rectangle);
     const SIMDVectorSingle roundedEnd = VectorAdd(VectorSelect(VectorZero(), rounded, s_SIMDMaskXY), VectorSwizzle<2, 3, 2, 3>(rounded));
-    if(!IsFinite(VectorGetX(roundedEnd)) || !IsFinite(VectorGetY(roundedEnd)))
+    if(!VectorIsFinite(roundedEnd, VectorComponentMask::s_XY))
         return false;
     bounds = ConvertVectorSingleToDouble(rounded);
     return true;

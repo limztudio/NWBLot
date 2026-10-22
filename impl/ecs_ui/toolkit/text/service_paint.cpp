@@ -77,16 +77,17 @@ inline constexpr f64 s_HalfPixel = 0.5;
 }
 
 [[nodiscard]] static Expected<SIMDVectorDoubleResult> LoadSdfSupport(const PlacedGlyph& placed, const BakedFontAtlas& atlas, const f32 fontSize, const DisplayMetrics& display)noexcept{
-    const auto plane = TextGlyphVisibility::AtlasRectangle(placed, atlas, fontSize, {});
+    const auto plane = TextGlyphVisibility::LoadAtlasRectangle(placed, atlas, fontSize, {});
     if(!plane)
         return MakeUnexpected(Failure{});
-    if(plane->width <= 0.0f || plane->height <= 0.0f)
-        return SIMDVectorDoubleResult{ VectorDoubleSet(plane->x, plane->y, plane->width, plane->height) };
+    const SIMDVectorDouble planeSize = VectorDoubleSwizzle<2, 3, 2, 3>(plane->value);
+    if((VectorDoubleMoveMask(VectorDoubleLessOrEqual(planeSize, VectorDoubleZero())) & VectorDoubleComponentMask::s_DoubleXY) != 0u)
+        return plane;
     const FontAtlasGlyph& glyph = *atlas.glyph(placed.glyphId);
     const SdfAtlasPage& page = *atlas.page(glyph.group);
     const SdfAtlasPageBinding& binding = page.binding();
     const auto& pixels = page.pixels();
-    const SIMDVectorDouble texelSize = VectorDoubleDivide(VectorDoubleSet(plane->width, plane->height, 1.0, 1.0), VectorDoubleSet(glyph.width, glyph.height, 1.0, 1.0));
+    const SIMDVectorDouble texelSize = VectorDoubleDivide(VectorDoubleSelect(VectorDoubleSplatOne(), planeSize, s_DoubleSIMDMaskXY), VectorDoubleSet(glyph.width, glyph.height, 1.0, 1.0));
     const SIMDVectorDouble physicalStep = VectorDoubleDivide(VectorDoubleReplicate(1.0), VectorDoubleMultiply(texelSize, VectorDoubleSet(display.pixelScaleX, display.pixelScaleY, 1.0, 1.0)));
     const f64 physicalStepX = VectorDoubleGetX(physicalStep);
     const f64 physicalStepY = VectorDoubleGetY(physicalStep);
@@ -149,7 +150,7 @@ inline constexpr f64 s_HalfPixel = 0.5;
     }
     if(!visible)
         return SIMDVectorDoubleResult{ VectorDoubleZero() };
-    const SIMDVectorDouble origin = VectorDoubleSet(plane->x, plane->y, 0.0, 0.0);
+    const SIMDVectorDouble origin = VectorDoubleAndInt(plane->value, s_DoubleSIMDMaskXY);
     const SIMDVectorDouble scale = VectorDoubleSelect(VectorDoubleZero(), texelSize, s_DoubleSIMDMaskXY);
     const SIMDVectorDouble minimum = VectorDoubleMultiplyAddExpression(supportMinimum, scale, origin);
     const SIMDVectorDouble maximum = VectorDoubleMultiplyAddExpression(supportMaximum, scale, origin);
@@ -180,10 +181,11 @@ Expected<Rect> TextService::measure(const TextLayout& layout, const DisplayMetri
         return MakeUnexpected(Failure{});
     const SIMDVectorSingle physicalSizes = VectorMultiply(VectorReplicate(layout.fontSize()), VectorMax(VectorSet(display.pixelScaleX, display.pixelScaleY, 1.0f, 1.0f), VectorSet(display.pixelScaleY, display.pixelScaleX, 1.0f, 1.0f)));
     const f32 physicalSize = VectorGetX(physicalSizes);
-    const f32 rasterPpem = VectorGetX(VectorCeiling(physicalSizes));
+    const SIMDVectorSingle rasterPpemVector = VectorCeiling(physicalSizes);
+    const f32 rasterPpem = VectorGetX(rasterPpemVector);
     if(!IsFinite(rasterPpem) || rasterPpem < 1.0f || rasterPpem > s_TextMaxRasterPpemF32)
         return MakeUnexpected(Failure{});
-    const f32 rasterScale = VectorGetX(VectorDivide(VectorReplicate(rasterPpem), VectorReplicate(layout.fontSize())));
+    const f32 rasterScale = VectorGetX(VectorDivide(rasterPpemVector, VectorReplicate(layout.fontSize())));
     const u32 pixelSize = static_cast<u32>(rasterPpem);
     const Point logical = layout.measure();
     const Rect ink = layout.inkBounds();
@@ -236,8 +238,10 @@ Expected<Rect> TextService::measure(const TextLayout& layout, const DisplayMetri
 bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point topLeft, const Color& color){
     const DisplayMetrics& metrics = paint.displayMetrics();
     const SIMDVectorSingle pixelScales = VectorMax(VectorSet(metrics.pixelScaleX, metrics.pixelScaleY, 1.0f, 1.0f), VectorSet(metrics.pixelScaleY, metrics.pixelScaleX, 1.0f, 1.0f));
-    const f32 physicalSize = VectorGetX(VectorMultiply(VectorReplicate(layout.fontSize()), pixelScales));
-    const f32 rasterPpem = VectorGetX(VectorCeiling(VectorReplicate(physicalSize)));
+    const SIMDVectorSingle physicalSizes = VectorMultiply(VectorReplicate(layout.fontSize()), pixelScales);
+    const f32 physicalSize = VectorGetX(physicalSizes);
+    const SIMDVectorSingle rasterPpemVector = VectorCeiling(physicalSizes);
+    const f32 rasterPpem = VectorGetX(rasterPpemVector);
     if(
         layout.lines().empty() || !IsFinite(layout.fontSize())
         || layout.fontSize() < 1.0f / s_TextFixedPointScale || layout.fontSize() > s_TextMaxFontSize
@@ -253,7 +257,7 @@ bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point top
     if(clipStatus == TextGlyphIntersection::Invisible || color.a == 0.0f)
         return true;
     const u32 pixelSize = static_cast<u32>(rasterPpem);
-    const f32 rasterScale = VectorGetX(VectorDivide(VectorReplicate(rasterPpem), VectorReplicate(layout.fontSize())));
+    const f32 rasterScale = VectorGetX(VectorDivide(rasterPpemVector, VectorReplicate(layout.fontSize())));
     const Point deviceScale{ metrics.pixelScaleX, metrics.pixelScaleY };
     Core::Alloc::ScratchArena scratchArena(Name("impl/ecs_ui/toolkit/text/paint_candidates"));
     Vector<usize, Core::Alloc::ScratchArena> candidates(scratchArena);

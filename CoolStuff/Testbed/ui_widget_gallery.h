@@ -36,7 +36,7 @@ TESTBED_BEGIN
 
 class UiWidgetGallery final : NoCopy{
 public:
-    [[nodiscard]] static NWB::Impl::Ui::Rect LayoutBounds(const NWB::Impl::Ui::DisplayMetrics& display, f32 preferredTop)noexcept;
+    [[nodiscard]] static SIMDVectorSingle LayoutBounds(SIMDVectorSingle displaySize, SIMDVectorSingle preferredTop)noexcept;
 
 
 public:

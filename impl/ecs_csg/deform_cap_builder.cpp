@@ -114,8 +114,7 @@ bool CsgDeformCapBuilder::OrderBoundaryLoop(ScratchArena& scratchArena, const Ve
 }
 
 Expected<SIMDVectorSingleResult> CsgDeformCapBuilder::CapNormal(const SIMDVectorSingle areaVec)noexcept{
-    const f32 areaLengthSq = VectorGetX(Vector3LengthSq(areaVec));
-    if(!(areaLengthSq > s_LoopAreaEpsilonSq))
+    if(!Vector4Greater(Vector3LengthSq(areaVec), VectorReplicate(s_LoopAreaEpsilonSq)))
         return MakeUnexpected(Failure{});
     const SIMDVectorSingle normalized = Vector3Normalize(areaVec);
     return SIMDVectorSingleResult{ VectorSelect(normalized, CsgDeformWallBuilder::UpAxisVec(), s_SIMDMaskW) };

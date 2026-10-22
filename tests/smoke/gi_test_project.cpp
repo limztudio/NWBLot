@@ -510,7 +510,7 @@ private:
             const f32 shade = VectorGetY(heightShade);
             const f32 yawDegrees = VectorGetZ(yawSteps);
             Float4 position;
-            StoreFloat(VectorMultiply(VectorSet(x, height, z, 0.0f), VectorSet(1.0f, 0.5f, 1.0f, 1.0f)), position);
+            StoreFloat(VectorMultiply(VectorPermute<0, 4, 1, 6>(footprint, heightShade), VectorSet(1.0f, 0.5f, 1.0f, 1.0f)), position);
             const ComplexSceneBox body{ position, Float4(width, height, depth, 0.0f), Float4(shade, shade, shade, 1.0f), yawDegrees };
             // Leave the line from the camera through the front doorway clear.
             if(z < -1.8f && VectorGetX(VectorAbs(footprint)) < 0.72f)

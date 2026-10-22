@@ -124,22 +124,15 @@ private:
     bool m_manualControl = false;
 };
 
-struct SmokeYawDisplay{
-    f32 wrappedRadians;
-    f32 degrees;
-};
+[[nodiscard]] inline SIMDVectorSingle CalculateSmokeYawDisplay(const SIMDVectorSingle yaw, const SIMDVectorSingle turn)noexcept{
+    SIMDVectorSingle wrapped = VectorMod(yaw, turn);
+    wrapped = VectorSelect(wrapped, VectorAdd(wrapped, turn), VectorLess(wrapped, VectorZero()));
 
-[[nodiscard]] inline SmokeYawDisplay MakeSmokeYawDisplay(const f32 yaw, const f32 twoPi)noexcept{
-    const SIMDVectorSingle turn = VectorReplicate(twoPi);
-    SIMDVectorSingle wrapped = VectorMod(VectorReplicate(yaw), turn);
-    if(VectorGetX(wrapped) < 0.0f)
-        wrapped = VectorAdd(wrapped, turn);
-
-    return { VectorGetX(wrapped), VectorGetX(VectorMultiply(wrapped, VectorDivide(VectorReplicate(s_DegreesPerTurn), turn))), };
+    return VectorSelect(wrapped, VectorMultiply(wrapped, VectorDivide(VectorReplicate(s_DegreesPerTurn), turn)), s_SIMDMaskY);
 }
 
 inline void SetSmokeYawWindowTitle(ProjectRuntimeContext& context, const f32 yaw, const bool manualControl, const f32 twoPi){
-    const SmokeYawDisplay display = MakeSmokeYawDisplay(yaw, twoPi);
+    const SIMDVectorSingle display = CalculateSmokeYawDisplay(VectorReplicate(yaw), VectorReplicate(twoPi));
 
     static constexpr usize s_TitleCapacity = 192u;
     tchar title[s_TitleCapacity];
@@ -149,8 +142,8 @@ inline void SetSmokeYawWindowTitle(ProjectRuntimeContext& context, const f32 yaw
         NWB_TEXT("%.*s  |  yaw %.4f rad (%.2f deg)%s"),
         static_cast<i32>(QueryProjectWindowTitle().size()),
         QueryProjectWindowTitle().data(),
-        display.wrappedRadians,
-        display.degrees,
+        VectorGetX(display),
+        VectorGetY(display),
         manualControl ? NWB_TEXT("  [manual: <- ->]") : NWB_TEXT("")
     );
     context.graphics.setWindowTitle(TStringView(title));

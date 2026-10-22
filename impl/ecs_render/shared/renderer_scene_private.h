@@ -67,7 +67,7 @@ inline SIMDVectorSingle ShadowSlotImportance(const SIMDVectorSingle colorIntensi
     const SIMDVectorSingle intensity = VectorMax(VectorSplatW(colorIntensity), VectorZero());
     const SIMDVectorSingle radiantImportance = VectorMultiply(luminance, intensity);
 
-    if(VectorGetY(params) < s_LightTypeDirectionalMax)
+    if(Vector4Less(VectorSplatY(params), VectorReplicate(s_LightTypeDirectionalMax)))
         return VectorMultiplyAdd(radiantImportance, VectorReplicate(s_DirectionalShadowImportanceBoost), s_SIMDOne);
 
     const SIMDVectorSingle delta = VectorSubtract(lightPosition, cameraPosition);

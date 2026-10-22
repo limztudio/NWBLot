@@ -277,8 +277,7 @@ inline SIMDVectorSingle LinearToSRGBClearVector(const SIMDVectorSingle linear)no
     return VectorSelect(nonlinearPart, linearPart, VectorLessOrEqual(clamped, threshold));
 }
 
-inline void WriteBC1ColorClearBlock(NotNull<u8*> outPattern, const f32 r, const f32 g, const f32 b, const f32 a, const bool srgb)noexcept{
-    const SIMDVectorSingle sourceRgba = VectorSet(r, g, b, a);
+inline void WriteBC1ColorClearBlock(NotNull<u8*> outPattern, const SIMDVectorSingle sourceRgba, const bool srgb)noexcept{
     const SIMDVectorSingle srgbEncodedTriple = LinearToSRGBClearVector(sourceRgba);
     const SIMDVectorSingle srgbSelectMask = srgb ? VectorTrueInt() : VectorFalseInt();
     const SIMDVectorSingle encodedRgb = VectorSelect(sourceRgba, srgbEncodedTriple, srgbSelectMask);
@@ -298,16 +297,16 @@ inline void WriteBC1ColorClearBlock(NotNull<u8*> outPattern, const f32 r, const 
     WriteClearPatternValue(MakeNotNull(outPattern.get() + sizeof(color0) + sizeof(color1)), indices);
 }
 
-inline void WriteBC4UNormClearBlock(NotNull<u8*> outPattern, const f32 value)noexcept{
-    const u8 endpoint = static_cast<u8>(VectorGetX(QuantizeUNormClearVector(VectorReplicate(value), VectorReplicate(static_cast<f32>(Limit<u8>::s_Max)))));
+inline void WriteBC4UNormClearBlock(NotNull<u8*> outPattern, const SIMDVectorSingle value)noexcept{
+    const u8 endpoint = static_cast<u8>(VectorGetX(QuantizeUNormClearVector(value, VectorReplicate(static_cast<f32>(Limit<u8>::s_Max)))));
     outPattern.get()[0] = endpoint;
     outPattern.get()[1] = endpoint;
     for(u32 byteIndex = s_BC4EndpointByteCount; byteIndex < s_BCSingleClearBlockBytes; ++byteIndex)
         outPattern.get()[byteIndex] = 0u;
 }
 
-inline void WriteBC4SNormClearBlock(NotNull<u8*> outPattern, const f32 value)noexcept{
-    const i8 endpoint = static_cast<i8>(VectorGetX(QuantizeSNormClearVector(VectorReplicate(value), VectorReplicate(static_cast<f32>(Limit<i8>::s_Max)))));
+inline void WriteBC4SNormClearBlock(NotNull<u8*> outPattern, const SIMDVectorSingle value)noexcept{
+    const i8 endpoint = static_cast<i8>(VectorGetX(QuantizeSNormClearVector(value, VectorReplicate(static_cast<f32>(Limit<i8>::s_Max)))));
     outPattern.get()[0] = static_cast<u8>(endpoint);
     outPattern.get()[1] = static_cast<u8>(endpoint);
     for(u32 byteIndex = s_BC4EndpointByteCount; byteIndex < s_BCSingleClearBlockBytes; ++byteIndex)
@@ -324,11 +323,11 @@ inline Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTexture
     TextureClearPattern<s_TextureClearMaxPatternBytes> result{};
     const auto pattern = MakeNotNull(result.bytes.data());
     const f32 values[] = { clearValue.float32[0], clearValue.float32[1], clearValue.float32[2], clearValue.float32[3], };
+    const SIMDVectorSingle sourceValues = VectorSet(values[0], values[1], values[2], values[3]);
 
     auto writeUNorm8Components = [&](const u32 componentCount, const bool srgb)noexcept{
-        const SIMDVectorSingle sourceValues = VectorSet(values[0], values[1], values[2], values[3]);
         const SIMDVectorSingle encodedValues = LinearToSRGBClearVector(sourceValues);
-        const SIMDVectorSingle selectedValues = srgb ? VectorSet(VectorGetX(encodedValues), VectorGetY(encodedValues), VectorGetZ(encodedValues), VectorGetW(sourceValues)) : sourceValues;
+        const SIMDVectorSingle selectedValues = srgb ? VectorSelect(encodedValues, sourceValues, s_SIMDMaskW) : sourceValues;
         const SIMDVectorSingle quantized = QuantizeUNormClearVector(selectedValues, VectorReplicate(static_cast<f32>(Limit<u8>::s_Max)));
         for(u32 component = 0u; component < componentCount; ++component){
             const u8 packed = static_cast<u8>(VectorGetByIndex(quantized, static_cast<usize>(component)));
@@ -338,9 +337,9 @@ inline Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTexture
         return result;
     };
     auto writeUNorm8BGRAComponents = [&](const bool srgb)noexcept{
-        const SIMDVectorSingle orderedValues = VectorSet(values[2], values[1], values[0], values[3]);
+        const SIMDVectorSingle orderedValues = VectorSwizzle<2, 1, 0, 3>(sourceValues);
         const SIMDVectorSingle encodedOrderedValues = LinearToSRGBClearVector(orderedValues);
-        const SIMDVectorSingle selectedValues = srgb ? VectorSet(VectorGetX(encodedOrderedValues), VectorGetY(encodedOrderedValues), VectorGetZ(encodedOrderedValues), VectorGetW(orderedValues)) : orderedValues;
+        const SIMDVectorSingle selectedValues = srgb ? VectorSelect(encodedOrderedValues, orderedValues, s_SIMDMaskW) : orderedValues;
         const SIMDVectorSingle quantized = QuantizeUNormClearVector(selectedValues, VectorReplicate(static_cast<f32>(Limit<u8>::s_Max)));
         for(u32 component = 0u; component < s_TextureClearRGBAComponentCount; ++component){
             const u8 packed = static_cast<u8>(VectorGetByIndex(quantized, static_cast<usize>(component)));
@@ -350,7 +349,7 @@ inline Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTexture
         return result;
     };
     auto writeSNorm8Components = [&](const u32 componentCount)noexcept{
-        const SIMDVectorSingle signedMagnitude = QuantizeSNormClearVector(VectorSet(values[0], values[1], values[2], values[3]), VectorReplicate(static_cast<f32>(Limit<i8>::s_Max)));
+        const SIMDVectorSingle signedMagnitude = QuantizeSNormClearVector(sourceValues, VectorReplicate(static_cast<f32>(Limit<i8>::s_Max)));
         for(u32 component = 0u; component < componentCount; ++component){
             const i8 packed = static_cast<i8>(VectorGetByIndex(signedMagnitude, static_cast<usize>(component)));
             WriteClearPatternValue(MakeNotNull(pattern.get() + component * sizeof(packed)), packed);
@@ -359,7 +358,7 @@ inline Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTexture
         return result;
     };
     auto writeUNorm16Components = [&](const u32 componentCount)noexcept{
-        const SIMDVectorSingle quantized = QuantizeUNormClearVector(VectorSet(values[0], values[1], values[2], values[3]), VectorReplicate(static_cast<f32>(Limit<u16>::s_Max)));
+        const SIMDVectorSingle quantized = QuantizeUNormClearVector(sourceValues, VectorReplicate(static_cast<f32>(Limit<u16>::s_Max)));
         for(u32 component = 0u; component < componentCount; ++component){
             const u16 packed = static_cast<u16>(VectorGetByIndex(quantized, static_cast<usize>(component)));
             WriteClearPatternValue(MakeNotNull(pattern.get() + component * sizeof(packed)), packed);
@@ -368,7 +367,7 @@ inline Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTexture
         return result;
     };
     auto writeSNorm16Components = [&](const u32 componentCount)noexcept{
-        const SIMDVectorSingle signedMagnitude = QuantizeSNormClearVector(VectorSet(values[0], values[1], values[2], values[3]), VectorReplicate(static_cast<f32>(Limit<i16>::s_Max)));
+        const SIMDVectorSingle signedMagnitude = QuantizeSNormClearVector(sourceValues, VectorReplicate(static_cast<f32>(Limit<i16>::s_Max)));
         for(u32 component = 0u; component < componentCount; ++component){
             const i16 packed = static_cast<i16>(VectorGetByIndex(signedMagnitude, static_cast<usize>(component)));
             WriteClearPatternValue(MakeNotNull(pattern.get() + component * sizeof(packed)), packed);
@@ -392,7 +391,7 @@ inline Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTexture
         return result;
     };
     auto writeUNorm4BGRAComponents = [&]()noexcept{
-        const SIMDVectorSingle quantized4444 = QuantizeUNormClearVector(VectorSet(values[2], values[1], values[0], values[3]), VectorReplicate(static_cast<f32>((1u << s_ClearChannelBits4444) - 1u)));
+        const SIMDVectorSingle quantized4444 = QuantizeUNormClearVector(VectorSwizzle<2, 1, 0, 3>(sourceValues), VectorReplicate(static_cast<f32>((1u << s_ClearChannelBits4444) - 1u)));
         const u16 packed = static_cast<u16>(
             (static_cast<u32>(VectorGetX(quantized4444)) << s_ClearShift12)
             | (static_cast<u32>(VectorGetY(quantized4444)) << s_ClearShift8)
@@ -404,7 +403,7 @@ inline Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTexture
         return result;
     };
     auto writeUNorm565BGRComponents = [&]()noexcept{
-        const SIMDVectorSingle source565 = VectorSet(values[2], values[1], values[0], 0.0f);
+        const SIMDVectorSingle source565 = VectorAndInt(VectorSwizzle<2, 1, 0, 3>(sourceValues), s_SIMDMask3);
         const SIMDVectorSingle max565 = VectorSet(static_cast<f32>((1u << s_ClearChannelBits565R) - 1u), static_cast<f32>((1u << s_ClearChannelBits565G) - 1u), static_cast<f32>((1u << s_ClearChannelBits565R) - 1u), 0.0f);
         const SIMDVectorSingle quantized565 = VectorMin(VectorFloor(VectorAdd(VectorMultiply(VectorSaturate(source565), max565), VectorReplicate(s_ClearFloatRoundingBias))), max565);
         const u16 packed = static_cast<u16>((static_cast<u32>(VectorGetX(quantized565)) << s_ClearShift11) | (static_cast<u32>(VectorGetY(quantized565)) << s_ClearShift5) | static_cast<u32>(VectorGetZ(quantized565)));
@@ -413,7 +412,7 @@ inline Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTexture
         return result;
     };
     auto writeUNorm5551BGRComponents = [&]()noexcept{
-        const SIMDVectorSingle source5551 = VectorSet(values[2], values[1], values[0], values[3]);
+        const SIMDVectorSingle source5551 = VectorSwizzle<2, 1, 0, 3>(sourceValues);
         const SIMDVectorSingle max5551 = VectorSet(static_cast<f32>((1u << s_ClearChannelBits565R) - 1u), static_cast<f32>((1u << s_ClearChannelBits555) - 1u), static_cast<f32>((1u << s_ClearChannelBits565R) - 1u), 1.0f);
         const SIMDVectorSingle quantized5551 = VectorMin(VectorFloor(VectorAdd(VectorMultiply(VectorSaturate(source5551), max5551), VectorReplicate(s_ClearFloatRoundingBias))), max5551);
         const u16 packed = static_cast<u16>(
@@ -427,14 +426,13 @@ inline Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTexture
         return result;
     };
     auto writeUNorm1010102RGBComponents = [&]()noexcept{
-        const SIMDVectorSingle source1010102 = VectorSet(values[0], values[1], values[2], values[3]);
         const SIMDVectorSingle max1010102 = VectorSet(
             static_cast<f32>((1u << s_ClearChannelBits101010) - 1u),
             static_cast<f32>((1u << s_ClearChannelBits101010) - 1u),
             static_cast<f32>((1u << s_ClearChannelBits101010) - 1u),
             static_cast<f32>((1u << s_ClearChannelBits21030) - 1u)
         );
-        const SIMDVectorSingle quantized1010102 = VectorMin(VectorFloor(VectorAdd(VectorMultiply(VectorSaturate(source1010102), max1010102), VectorReplicate(s_ClearFloatRoundingBias))), max1010102);
+        const SIMDVectorSingle quantized1010102 = VectorMin(VectorFloor(VectorAdd(VectorMultiply(VectorSaturate(sourceValues), max1010102), VectorReplicate(s_ClearFloatRoundingBias))), max1010102);
         const u32 packed =
             static_cast<u32>(VectorGetX(quantized1010102))
             | (static_cast<u32>(VectorGetY(quantized1010102)) << s_ClearShift10)
@@ -454,46 +452,46 @@ inline Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTexture
         return result;
     };
     auto writeBC1Components = [&](const bool srgb)noexcept{
-        WriteBC1ColorClearBlock(pattern, values[0], values[1], values[2], values[3], srgb);
+        WriteBC1ColorClearBlock(pattern, sourceValues, srgb);
         result.byteCount = s_BCSingleClearBlockBytes;
         return result;
     };
     auto writeBC2Components = [&](const bool srgb)noexcept{
-        const SIMDVectorSingle saturatedAlpha = VectorSaturate(VectorReplicate(values[3]));
+        const SIMDVectorSingle saturatedAlpha = VectorSaturate(VectorSplatW(sourceValues));
         const SIMDVectorSingle scaledAlpha = VectorMultiply(saturatedAlpha, VectorReplicate(static_cast<f32>((1u << s_ClearChannelBits4444) - 1u)));
         const u64 alphaNibble = static_cast<u64>(VectorGetX(VectorMin(VectorFloor(VectorAdd(scaledAlpha, VectorReplicate(s_ClearFloatRoundingBias))), VectorReplicate(static_cast<f32>((1u << s_ClearChannelBits4444) - 1u)))));
         const SIMDVectorSingle splatMask = VectorSetInt(s_BC2AlphaNibbleSplat, s_BC2AlphaNibbleSplat, 0u, 0u);
         const u64 alphaBits = (static_cast<u64>(VectorGetIntX(splatMask)) | (static_cast<u64>(VectorGetIntY(splatMask)) << s_ClearHighWordShift)) * alphaNibble;
         WriteClearPatternValue(pattern, alphaBits);
-        WriteBC1ColorClearBlock(MakeNotNull(pattern.get() + sizeof(alphaBits)), values[0], values[1], values[2], 1.0f, srgb);
+        WriteBC1ColorClearBlock(MakeNotNull(pattern.get() + sizeof(alphaBits)), VectorSetW(sourceValues, 1.0f), srgb);
         result.byteCount = s_BCDoubleClearBlockBytes;
         return result;
     };
     auto writeBC3Components = [&](const bool srgb)noexcept{
-        WriteBC4UNormClearBlock(pattern, values[3]);
-        WriteBC1ColorClearBlock(MakeNotNull(pattern.get() + s_BCSingleClearBlockBytes), values[0], values[1], values[2], 1.0f, srgb);
+        WriteBC4UNormClearBlock(pattern, VectorSplatW(sourceValues));
+        WriteBC1ColorClearBlock(MakeNotNull(pattern.get() + s_BCSingleClearBlockBytes), VectorSetW(sourceValues, 1.0f), srgb);
         result.byteCount = s_BCDoubleClearBlockBytes;
         return result;
     };
     auto writeBC4UNormComponents = [&]()noexcept{
-        WriteBC4UNormClearBlock(pattern, values[0]);
+        WriteBC4UNormClearBlock(pattern, VectorSplatX(sourceValues));
         result.byteCount = s_BCSingleClearBlockBytes;
         return result;
     };
     auto writeBC4SNormComponents = [&]()noexcept{
-        WriteBC4SNormClearBlock(pattern, values[0]);
+        WriteBC4SNormClearBlock(pattern, VectorSplatX(sourceValues));
         result.byteCount = s_BCSingleClearBlockBytes;
         return result;
     };
     auto writeBC5UNormComponents = [&]()noexcept{
-        WriteBC4UNormClearBlock(pattern, values[0]);
-        WriteBC4UNormClearBlock(MakeNotNull(pattern.get() + s_BCSingleClearBlockBytes), values[1]);
+        WriteBC4UNormClearBlock(pattern, VectorSplatX(sourceValues));
+        WriteBC4UNormClearBlock(MakeNotNull(pattern.get() + s_BCSingleClearBlockBytes), VectorSplatY(sourceValues));
         result.byteCount = s_BCDoubleClearBlockBytes;
         return result;
     };
     auto writeBC5SNormComponents = [&]()noexcept{
-        WriteBC4SNormClearBlock(pattern, values[0]);
-        WriteBC4SNormClearBlock(MakeNotNull(pattern.get() + s_BCSingleClearBlockBytes), values[1]);
+        WriteBC4SNormClearBlock(pattern, VectorSplatX(sourceValues));
+        WriteBC4SNormClearBlock(MakeNotNull(pattern.get() + s_BCSingleClearBlockBytes), VectorSplatY(sourceValues));
         result.byteCount = s_BCDoubleClearBlockBytes;
         return result;
     };

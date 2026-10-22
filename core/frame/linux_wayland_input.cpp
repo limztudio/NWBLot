@@ -64,8 +64,8 @@ static constexpr StringView s_KeymapLifecycleCategory = "frame_keymap_lifecycle"
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static f64 SurfaceCoordinateToPixels(wl_fixed_t value, i32 bufferScale)noexcept{
-    return VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(wl_fixed_to_double(value)), VectorDoubleReplicate(static_cast<f64>(FrameDetail::ClampBufferScale(bufferScale)))));
+static SIMDVectorDouble SurfaceCoordinatesToPixels(const SIMDVectorDouble surfaceCoordinates, const SIMDVectorDouble bufferScale)noexcept{
+    return VectorDoubleMultiply(surfaceCoordinates, bufferScale);
 }
 
 static i32 TranslatePointerButton(u32 button)noexcept{
@@ -198,7 +198,11 @@ void WaylandFrameInput::OnPointerEnter(void* data, wl_pointer* pointer, u32 seri
     static_cast<void>(surface);
 
     auto& frameInput = *static_cast<WaylandFrameInput*>(data);
-    frameInput.m_frame.input().mousePosUpdate(SurfaceCoordinateToPixels(sx, frameInput.m_bufferScale), SurfaceCoordinateToPixels(sy, frameInput.m_bufferScale));
+    const SIMDVectorDouble pixelCoordinates = SurfaceCoordinatesToPixels(
+        VectorDoubleSet(wl_fixed_to_double(sx), wl_fixed_to_double(sy), 0.0, 0.0),
+        VectorDoubleReplicate(static_cast<f64>(FrameDetail::ClampBufferScale(frameInput.m_bufferScale)))
+    );
+    frameInput.m_frame.input().mousePosUpdate(VectorDoubleGetX(pixelCoordinates), VectorDoubleGetY(pixelCoordinates));
 }
 
 void WaylandFrameInput::OnPointerLeave(void* data, wl_pointer* pointer, u32 serial, wl_surface* surface){
@@ -219,7 +223,11 @@ void WaylandFrameInput::OnPointerMotion(void* data, wl_pointer* pointer, u32 tim
     static_cast<void>(time);
 
     auto& frameInput = *static_cast<WaylandFrameInput*>(data);
-    frameInput.m_frame.input().mousePosUpdate(SurfaceCoordinateToPixels(sx, frameInput.m_bufferScale), SurfaceCoordinateToPixels(sy, frameInput.m_bufferScale));
+    const SIMDVectorDouble pixelCoordinates = SurfaceCoordinatesToPixels(
+        VectorDoubleSet(wl_fixed_to_double(sx), wl_fixed_to_double(sy), 0.0, 0.0),
+        VectorDoubleReplicate(static_cast<f64>(FrameDetail::ClampBufferScale(frameInput.m_bufferScale)))
+    );
+    frameInput.m_frame.input().mousePosUpdate(VectorDoubleGetX(pixelCoordinates), VectorDoubleGetY(pixelCoordinates));
 }
 
 void WaylandFrameInput::OnPointerButton(void* data, wl_pointer* pointer, u32 serial, u32 time, u32 button, u32 state){

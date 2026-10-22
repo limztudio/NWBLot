@@ -42,12 +42,19 @@ Expected<usize> UiEditBoxHost::hit(const Entry& entry, const Ui::Point position)
 }
 
 Expected<usize> UiEditBoxHost::hitWord(const Entry& entry, const Ui::Point position)const noexcept{
-    const auto byte = hit(entry, position);
-    if(!byte)
-        return MakeUnexpected(byte.error());
     const UiEditBoxGeometry& geometry = entry.displayed;
+    if(
+        geometry.generation == 0u || geometry.stops.empty() || geometry.lines.empty()
+        || geometry.modelGeneration != entry.owner.modelGeneration || geometry.popup != entry.popup
+        || (geometry.textMode != Ui::EditTextMode::SingleLine && geometry.textMode != Ui::EditTextMode::Multiline)
+        || (geometry.textMode == Ui::EditTextMode::SingleLine && geometry.lines.size() != 1u)
+    )
+        return MakeUnexpected(Failure{});
     const SIMDVectorSingle localPosition = VectorSubtract(VectorSet(position.x, position.y, position.x, position.y), VectorSet(geometry.placement.textOrigin.x, geometry.placement.textOrigin.y, geometry.placement.textOrigin.x, geometry.placement.textOrigin.y));
     const Ui::Point local{ VectorGetX(localPosition), VectorGetY(localPosition) };
+    const auto byte = Ui::HitEditCaretGeometry(geometry.lines, geometry.stops, local);
+    if(!byte)
+        return MakeUnexpected(byte.error());
     u32 lineIndex = static_cast<u32>(geometry.lines.size() - 1u);
     for(u32 index = 0u; index < geometry.lines.size(); ++index){
         if(local.y < VectorGetX(VectorAdd(VectorReplicate(geometry.lines[index].top), VectorReplicate(geometry.lines[index].height)))){

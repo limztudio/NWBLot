@@ -101,12 +101,9 @@ static constexpr f32 s_MaxAnimationDelta = 1.0f / 15.0f;
 
 // Oscillate each joint around its bind pose so the skinned surface deforms every frame.
 // The root joint (index 0) is left at bind so the body stays planted over the ground while the limbs/torso undulate -- enough deformation to move the refractive shadow + caustic footprint visibly.
-[[nodiscard]] static SIMDMatrix BuildWaveJointMatrix(const SIMDMatrix& bindJoint, const u32 jointIndex, const f32 timeSeconds)noexcept{
-    if(jointIndex == 0u)
-        return bindJoint;
-
-    const SIMDVectorSingle phase = VectorScale(VectorSet(static_cast<f32>(jointIndex), 0.0f, 0.0f, 0.0f), 0.7f);
-    const SIMDVectorSingle wavePhases = VectorMultiplyAddExpression(VectorSet(timeSeconds, 0.0f, 0.0f, 0.0f), VectorReplicate(s_PoseAnimationSpeed), phase);
+[[nodiscard]] static SIMDMatrix BuildWaveJointMatrix(const SIMDMatrix& bindJoint, const SIMDVectorSingle jointIndex, const SIMDVectorSingle timeSeconds, const SIMDVectorSingle animationSpeed)noexcept{
+    const SIMDVectorSingle phase = VectorScale(jointIndex, 0.7f);
+    const SIMDVectorSingle wavePhases = VectorMultiplyAddExpression(timeSeconds, animationSpeed, phase);
     const SIMDVectorSingle waves = VectorSin(wavePhases);
     const SIMDVectorSingle angle = VectorScale(waves, s_PoseAnimationAngle);
     const SIMDVectorSingle rotationAngles = VectorMergeX(VectorScale(angle, 0.4f), angle, VectorScale(angle, 0.25f), VectorZero());
@@ -375,9 +372,14 @@ private:
         if(!pose)
             return;
 
-        const f32 timeSeconds = static_cast<f32>(m_animationTime);
+        const SIMDVectorSingle timeSeconds = VectorSet(static_cast<f32>(m_animationTime), 0.0f, 0.0f, 0.0f);
+        const SIMDVectorSingle animationSpeed = VectorReplicate(s_PoseAnimationSpeed);
         for(u32 jointIndex = 0u; jointIndex < pose->localJoints.size() && jointIndex < m_bindJoints.size(); ++jointIndex){
-            const SIMDMatrix animatedJoint = BuildWaveJointMatrix(LoadFloat(m_bindJoints[jointIndex]), jointIndex, timeSeconds);
+            if(jointIndex == 0u){
+                pose->localJoints[jointIndex] = m_bindJoints[jointIndex];
+                continue;
+            }
+            const SIMDMatrix animatedJoint = BuildWaveJointMatrix(LoadFloat(m_bindJoints[jointIndex]), VectorSet(static_cast<f32>(jointIndex), 0.0f, 0.0f, 0.0f), timeSeconds, animationSpeed);
             StoreFloat(animatedJoint, pose->localJoints[jointIndex]);
         }
     }
@@ -472,8 +474,8 @@ public:
             m_animationTime = VectorDoubleGetX(VectorDoubleDivide(phaseAngle, VectorDoubleReplicate(static_cast<f64>(s_TransitionPhaseFrames) * s_PoseAnimationSpeed)));
             updateTransitionState();
         }else{
-            const f32 animationStep = VectorGetX(VectorScale(VectorMin(VectorReplicate(safeDelta), VectorReplicate(s_MaxAnimationDelta)), s_PoseAnimationSpeed));
-            m_animationTime = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(m_animationTime), VectorDoubleReplicate(static_cast<f64>(animationStep))));
+            const SIMDVectorSingle animationStep = VectorScale(VectorMin(VectorReplicate(safeDelta), VectorReplicate(s_MaxAnimationDelta)), s_PoseAnimationSpeed);
+            m_animationTime = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(m_animationTime), ConvertVectorSingleToDouble(animationStep)));
         }
         animatePoses();
         const auto updated = m_world->tick(m_transitionEnabled ? 1.0f / 60.0f : safeDelta);

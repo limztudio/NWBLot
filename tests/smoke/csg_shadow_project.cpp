@@ -259,16 +259,15 @@ private:
         const SIMDVectorSingle maximum = LoadFloat(cutterBox.maximum);
         StoreFloat(VectorScale(VectorSubtract(maximum, minimum), 0.5f), parameters.halfExtents);
         AssignCsgCutterParameters(cutter, parameters);
-        Float4 finalCenter;
-        StoreFloat(VectorScale(VectorAdd(minimum, maximum), 0.5f), finalCenter);
-        Float4 initialCenter = finalCenter;
+        const SIMDVectorSingle finalCenter = VectorScale(VectorAdd(minimum, maximum), 0.5f);
+        SIMDVectorSingle initialCenter = finalCenter;
         if(moving && m_arm == Arm::Moved)
-            StoreFloat(VectorSubtract(LoadFloat(initialCenter), VectorScale(VectorSet(0.6f, 0.0f, 0.0f, 0.0f), m_pointLight ? 0.5f : 1.0f)), initialCenter);
-        AssignCsgCutterTransform(cutter, LoadFloat(initialCenter), QuaternionIdentity());
+            initialCenter = VectorSubtract(initialCenter, VectorScale(VectorSet(0.6f, 0.0f, 0.0f, 0.0f), m_pointLight ? 0.5f : 1.0f));
+        AssignCsgCutterTransform(cutter, initialCenter, QuaternionIdentity());
         if(moving){
             NWB_ASSERT(m_movingCount < LengthOf(m_movingCutters));
             m_movingCutters[m_movingCount] = cutterEntity.id();
-            m_finalCutterCenters[m_movingCount] = finalCenter;
+            StoreFloat(finalCenter, m_finalCutterCenters[m_movingCount]);
             ++m_movingCount;
         }
     }
@@ -290,31 +289,26 @@ private:
             const SIMDVectorSingle grid = VectorSubtract(VectorSet(static_cast<f32>(slot % 3u), slot < 3u ? 1.0f : -1.0f, 0.0f, 0.0f), VectorSet(1.0f, 0.0f, 0.0f, 0.0f));
             const SIMDVectorSingle center = VectorScale(VectorMultiply(grid, VectorSet(2.0f, 1.0f, 0.0f, 0.0f)), xyScale);
             const SIMDVectorSingle halfExtent = VectorScale(VectorSet(0.7f, 0.7f, 0.0f, 0.0f), xyScale);
-            const Box box = StoreBoxBounds(VectorSetZ(VectorSubtract(center, halfExtent), -7.0f), VectorSetZ(VectorAdd(center, halfExtent), -5.0f));
+            const SIMDVectorSingle boxMin = VectorSetZ(VectorSubtract(center, halfExtent), -7.0f);
+            const SIMDVectorSingle boxMax = VectorSetZ(VectorAdd(center, halfExtent), -5.0f);
             const bool hole = slot == 0u || slot == 3u;
             const f32 holeHalfWidth = m_pointLight ? 0.36f : 0.24f;
             const SIMDVectorSingle holeOffsets = VectorScale(VectorSet(0.3f, 0.4f, 0.0f, 0.0f), xyScale);
             const SIMDVectorSingle holeCenter = VectorAdd(center, VectorAndInt(holeOffsets, s_SIMDMaskX));
             const SIMDVectorSingle holeExtent = VectorSetX(holeOffsets, holeHalfWidth);
             const SIMDVectorSingle solidExtent = VectorSet(1.0f, 1.0f, 0.0f, 0.0f);
-            Box cutter = hole
-                ? StoreBoxBounds(VectorSetZ(VectorSubtract(holeCenter, holeExtent), -7.2f), VectorSetZ(VectorAdd(holeCenter, holeExtent), -4.8f))
-                : StoreBoxBounds(VectorSetZ(VectorSubtract(center, solidExtent), -6.0f), VectorSetZ(VectorAdd(center, solidExtent), -4.8f));
+            SIMDVectorSingle cutterMin = hole ? VectorSetZ(VectorSubtract(holeCenter, holeExtent), -7.2f) : VectorSetZ(VectorSubtract(center, solidExtent), -6.0f);
+            SIMDVectorSingle cutterMax = hole ? VectorSetZ(VectorAdd(holeCenter, holeExtent), -4.8f) : VectorSetZ(VectorAdd(center, solidExtent), -4.8f);
             if(slot == 5u){
                 const SIMDVectorSingle shift = VectorSet(20.0f, 0.0f, 0.0f, 0.0f);
-                StoreFloat(VectorAdd(LoadFloat(cutter.minimum), shift), cutter.minimum);
-                StoreFloat(VectorAdd(LoadFloat(cutter.maximum), shift), cutter.maximum);
+                cutterMin = VectorAdd(cutterMin, shift);
+                cutterMax = VectorAdd(cutterMax, shift);
             }
             const u32 groupIndex = slot == 5u ? 6u : slot;
-            addCaster(box, cutter, groupIndex, slot >= 2u, hole);
+            addCaster(StoreBoxBounds(boxMin, boxMax), StoreBoxBounds(cutterMin, cutterMax), groupIndex, slot >= 2u, hole);
             if(slot == 4u){
-                Box second = box;
                 const SIMDVectorSingle shift = VectorSet(0.0f, 0.0f, 0.5f, 0.0f);
-                StoreFloat(VectorSubtract(LoadFloat(second.minimum), shift), second.minimum);
-                StoreFloat(VectorSubtract(LoadFloat(second.maximum), shift), second.maximum);
-                StoreFloat(VectorSubtract(LoadFloat(cutter.minimum), shift), cutter.minimum);
-                StoreFloat(VectorSubtract(LoadFloat(cutter.maximum), shift), cutter.maximum);
-                addCaster(second, cutter, 5u, true, false);
+                addCaster(StoreBoxBounds(VectorSubtract(boxMin, shift), VectorSubtract(boxMax, shift)), StoreBoxBounds(VectorSubtract(cutterMin, shift), VectorSubtract(cutterMax, shift)), 5u, true, false);
             }
         }
 #endif
@@ -378,7 +372,7 @@ private:
             for(u32 pair = 0u; pair < 3u; ++pair){
                 const SIMDVectorSingle lower = VectorAdd(VectorReplicate(-7.0f), VectorScale(VectorReplicate(static_cast<f32>(pair)), 0.8f));
                 const SIMDVectorSingle depths = VectorAdd(lower, VectorSet(0.0f, 0.4f, 0.0f, 0.0f));
-                if(!createBox(StoreBoxBounds(VectorSet(0.5f, -0.7f, VectorGetX(depths), 0.0f), VectorSet(1.9f, 0.7f, VectorGetY(depths), 0.0f)), true, s_OpenPairMesh).valid())
+                if(!createBox(StoreBoxBounds(VectorPermute<0, 1, 4, 3>(VectorSet(0.5f, -0.7f, 0.0f, 0.0f), depths), VectorPermute<0, 1, 5, 3>(VectorSet(1.9f, 0.7f, 0.0f, 0.0f), depths)), true, s_OpenPairMesh).valid())
                     return false;
             }
         }
@@ -386,7 +380,7 @@ private:
             for(u32 pair = 0u; pair < 2u; ++pair){
                 const SIMDVectorSingle lower = VectorAdd(VectorReplicate(-6.5f), VectorReplicate(static_cast<f32>(pair)));
                 const SIMDVectorSingle depths = VectorAdd(lower, VectorSet(0.0f, 0.5f, 0.0f, 0.0f));
-                if(!createBox(StoreBoxBounds(VectorSet(-1.9f, -0.7f, VectorGetX(depths), 0.0f), VectorSet(-0.5f, 0.7f, VectorGetY(depths), 0.0f)), true, s_OpenPairMesh).valid())
+                if(!createBox(StoreBoxBounds(VectorPermute<0, 1, 4, 3>(VectorSet(-1.9f, -0.7f, 0.0f, 0.0f), depths), VectorPermute<0, 1, 5, 3>(VectorSet(-0.5f, 0.7f, 0.0f, 0.0f), depths)), true, s_OpenPairMesh).valid())
                     return false;
             }
             if(!createBox({ Float3U(0.5f, -0.7f, -6.6f), Float3U(1.9f, 0.7f, -5.0f) }, true, s_OpenFiveMesh).valid())

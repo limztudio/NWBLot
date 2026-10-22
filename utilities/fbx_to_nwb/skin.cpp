@@ -32,19 +32,28 @@ static constexpr f32 s_JointMatrixRowEpsilon = 0.0001f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool FiniteUfbxMatrix(const ufbx_matrix& matrix)noexcept{
-    for(usize i = 0u; i < s_JointMatrixElementCount; i += s_Vector4ComponentCount){
-        if(!VectorDoubleIsFinite(VectorDoubleSet(static_cast<f64>(matrix.v[i + 0u]), static_cast<f64>(matrix.v[i + 1u]), static_cast<f64>(matrix.v[i + 2u]), static_cast<f64>(matrix.v[i + 3u])), VectorComponentMask::s_XYZW))
+SIMDMatrixDouble LoadUfbxMatrix(const ufbx_matrix& matrix)noexcept{
+    SIMDMatrixDouble result{};
+    result.v[0u] = VectorDoubleSet(static_cast<f64>(matrix.m00), static_cast<f64>(matrix.m01), static_cast<f64>(matrix.m02), static_cast<f64>(matrix.m03));
+    result.v[1u] = VectorDoubleSet(static_cast<f64>(matrix.m10), static_cast<f64>(matrix.m11), static_cast<f64>(matrix.m12), static_cast<f64>(matrix.m13));
+    result.v[2u] = VectorDoubleSet(static_cast<f64>(matrix.m20), static_cast<f64>(matrix.m21), static_cast<f64>(matrix.m22), static_cast<f64>(matrix.m23));
+    result.v[3u] = VectorDoubleSet(0.0, 0.0, 0.0, 1.0);
+    return result;
+}
+
+bool FiniteUfbxMatrix(const SIMDMatrixDouble& matrix)noexcept{
+    for(usize rowIndex = 0u; rowIndex < 3u; ++rowIndex){
+        if(!VectorDoubleIsFinite(matrix.v[rowIndex], VectorComponentMask::s_XYZW))
             return false;
     }
     return true;
 }
 
-SIMDMatrix LoadJointMatrix(const ufbx_matrix& matrix)noexcept{
+SIMDMatrix ConvertJointMatrix(const SIMDMatrixDouble& matrix)noexcept{
     SIMDMatrix result{};
-    result.v[0u] = ConvertVectorDoubleToSingle(VectorDoubleSet(static_cast<f64>(matrix.m00), static_cast<f64>(matrix.m01), static_cast<f64>(matrix.m02), static_cast<f64>(matrix.m03)));
-    result.v[1u] = ConvertVectorDoubleToSingle(VectorDoubleSet(static_cast<f64>(matrix.m10), static_cast<f64>(matrix.m11), static_cast<f64>(matrix.m12), static_cast<f64>(matrix.m13)));
-    result.v[2u] = ConvertVectorDoubleToSingle(VectorDoubleSet(static_cast<f64>(matrix.m20), static_cast<f64>(matrix.m21), static_cast<f64>(matrix.m22), static_cast<f64>(matrix.m23)));
+    result.v[0u] = ConvertVectorDoubleToSingle(matrix.v[0u]);
+    result.v[1u] = ConvertVectorDoubleToSingle(matrix.v[1u]);
+    result.v[2u] = ConvertVectorDoubleToSingle(matrix.v[2u]);
     result.v[3u] = VectorSet(0.0f, 0.0f, 0.0f, 1.0f);
     return result;
 }
@@ -111,14 +120,16 @@ Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const Me
             return MakeUnexpected(Failure{});
         }
         const ufbx_matrix inverseBind = ufbx_matrix_mul(&cluster->geometry_to_bone, &meshFromOutput);
-        if(!FiniteUfbxMatrix(inverseBind) || VectorDoubleGetX(VectorDoubleAbs(VectorDoubleReplicate(static_cast<f64>(ufbx_matrix_determinant(&inverseBind))))) <= s_InvertibleMatrixDeterminantEpsilon){
+        const SIMDMatrixDouble inverseBindDouble = LoadUfbxMatrix(inverseBind);
+        if(!FiniteUfbxMatrix(inverseBindDouble) || VectorDoubleGetX(VectorDoubleAbs(VectorDoubleReplicate(static_cast<f64>(ufbx_matrix_determinant(&inverseBind))))) <= s_InvertibleMatrixDeterminantEpsilon){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin cluster inverse bind matrix is not finite and invertible"));
             return MakeUnexpected(Failure{});
         }
 
-        const SIMDMatrix inverseBindValue = LoadJointMatrix(inverseBind);
+        const SIMDMatrix inverseBindValue = ConvertJointMatrix(inverseBindDouble);
         const ufbx_matrix bindPose = ufbx_matrix_invert(&inverseBind);
-        if(!FiniteUfbxMatrix(bindPose)){
+        const SIMDMatrixDouble bindPoseDouble = LoadUfbxMatrix(bindPose);
+        if(!FiniteUfbxMatrix(bindPoseDouble)){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin cluster bind pose matrix is not finite"));
             return MakeUnexpected(Failure{});
         }
@@ -144,7 +155,7 @@ Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const Me
         JointMatrix storedInverseBind{};
         JointMatrix storedBindPose{};
         StoreFloat(inverseBindValue, storedInverseBind);
-        StoreFloat(LoadJointMatrix(bindPose), storedBindPose);
+        StoreFloat(ConvertJointMatrix(bindPoseDouble), storedBindPose);
         const u16 joint = static_cast<u16>(context.joints.size());
         context.joints.push_back(cluster->bone_node);
         context.bindPoseMatrices.push_back(storedBindPose);

@@ -165,8 +165,8 @@ public:
         if(clampedMinX >= clampedMaxX || clampedMinY >= clampedMaxY)
             return;
 
-        const SIMDVectorSingle accumulatedMin = VectorMin(VectorSet(static_cast<f32>(minX), static_cast<f32>(minY), 0.0f, 0.0f), VectorSet(static_cast<f32>(clampedMinX), static_cast<f32>(clampedMinY), 0.0f, 0.0f));
-        const SIMDVectorSingle accumulatedMax = VectorMax(VectorSet(static_cast<f32>(maxX), static_cast<f32>(maxY), 0.0f, 0.0f), VectorSet(static_cast<f32>(clampedMaxX), static_cast<f32>(clampedMaxY), 0.0f, 0.0f));
+        const SIMDVectorSingle accumulatedMin = VectorMin(VectorSet(static_cast<f32>(minX), static_cast<f32>(minY), 0.0f, 0.0f), VectorSwizzle<0, 2, 0, 2>(clampedLanes));
+        const SIMDVectorSingle accumulatedMax = VectorMax(VectorSet(static_cast<f32>(maxX), static_cast<f32>(maxY), 0.0f, 0.0f), VectorSwizzle<1, 3, 1, 3>(clampedLanes));
         minX = static_cast<u32>(VectorGetX(accumulatedMin));
         minY = static_cast<u32>(VectorGetY(accumulatedMin));
         maxX = static_cast<u32>(VectorGetX(accumulatedMax));

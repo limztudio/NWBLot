@@ -67,7 +67,7 @@ bool SelectablePainter::Paint(
     if(painted && flags.enabled && flags.focused && skin.findRegion(style.focus))
         painted = paint.drawRegion(style.focus, bounds);
     const SIMDVectorSingle content = InsetRectValue(VectorSet(bounds.x, bounds.y, bounds.width, bounds.height), VectorSet(padding.left, padding.top, padding.right, padding.bottom));
-    const SIMDVectorSingle verticalOffset = VectorMax(VectorZero(), VectorScale(VectorSubtract(VectorSet(0.0f, VectorGetW(content), 0.0f, 0.0f), VectorSet(0.0f, textBounds.height, 0.0f, 0.0f)), s_RectCenterFraction));
+    const SIMDVectorSingle verticalOffset = VectorMax(VectorZero(), VectorScale(VectorSubtract(VectorAndInt(VectorSwizzle<2, 3, 2, 3>(content), s_SIMDMaskY), VectorSet(0.0f, textBounds.height, 0.0f, 0.0f)), s_RectCenterFraction));
     const SIMDVectorSingle textOrigin = VectorAdd(content, verticalOffset);
     const SIMDVectorSingle alignedOrigin = VectorSubtract(VectorSwizzle<0, 1, 0, 1>(textOrigin), VectorSet(textBounds.x, textBounds.y, textBounds.x, textBounds.y));
     const Point origin{ VectorGetX(alignedOrigin), VectorGetY(alignedOrigin) };

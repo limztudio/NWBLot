@@ -325,9 +325,9 @@ void CsgFrameWorkRegion::expandWorldBounds(const SIMDMatrix& worldToClip, const 
     if(maxPixelX < 0.0f || maxPixelY < 0.0f || minPixelX > static_cast<f32>(frameWidth) || minPixelY > static_cast<f32>(frameHeight))
         return;
 
-    const SIMDVectorSingle workPixelMin = VectorMax(VectorSet(minPixelX, minPixelY, 0.0f, 0.0f), VectorZero());
+    const SIMDVectorSingle workPixelMin = VectorMax(VectorAndInt(minPixel, s_SIMDMaskXY), VectorZero());
     const SIMDVectorSingle workFrameExtent = VectorSet(static_cast<f32>(frameWidth), static_cast<f32>(frameHeight), 0.0f, 0.0f);
-    const SIMDVectorSingle workPixelMax = VectorMin(VectorSet(maxPixelX, maxPixelY, 0.0f, 0.0f), workFrameExtent);
+    const SIMDVectorSingle workPixelMax = VectorMin(VectorAndInt(maxPixel, s_SIMDMaskXY), workFrameExtent);
     const SIMDVectorSingle flooredWorkMin = VectorFloor(workPixelMin);
     const SIMDVectorSingle ceiledWorkMax = VectorCeiling(workPixelMax);
     const SIMDVectorSingle endpoints = VectorSetInt(

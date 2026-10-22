@@ -46,7 +46,7 @@ using NWB::Tests::Smoke::CreateSmokeWorldOrDie;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::CreateTintedModelEntity;
 using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
-using NWB::Tests::Smoke::MakeSmokeYawDisplay;
+using NWB::Tests::Smoke::CalculateSmokeYawDisplay;
 using NWB::Tests::Smoke::ReadSmokeEnvironmentF32;
 using NWB::Tests::Smoke::RendererBaselineCaptureFreezeFrame;
 using NWB::Tests::Smoke::RendererBaselineFixedDelta;
@@ -311,7 +311,7 @@ public:
     }
 
     void updateWindowTitle(){
-        const auto yawDisplay = MakeSmokeYawDisplay(m_yaw.yaw(), s_TwoPi);
+        const SIMDVectorSingle yawDisplay = CalculateSmokeYawDisplay(VectorReplicate(m_yaw.yaw()), VectorReplicate(s_TwoPi));
         const f32 angleDegrees = VectorGetX(VectorScale(VectorReplicate(ConfiguredAngularRadius()), 360.0f / s_TwoPi));
 
         static constexpr usize s_TitleCapacity = 256u;
@@ -319,7 +319,7 @@ public:
         NWB_TSPRINTF(
             title, s_TitleCapacity,
             NWB_TEXT("%.*s  |  yaw %.2f deg  |  sun %.2f deg  |  src r %.3f%s"),
-            static_cast<i32>(NWB::QueryProjectWindowTitle().size()), NWB::QueryProjectWindowTitle().data(), yawDisplay.degrees, angleDegrees, ConfiguredSourceRadius(),
+            static_cast<i32>(NWB::QueryProjectWindowTitle().size()), NWB::QueryProjectWindowTitle().data(), VectorGetY(yawDisplay), angleDegrees, ConfiguredSourceRadius(),
             m_yaw.manualControl() ? NWB_TEXT("  [manual: <- ->]") : NWB_TEXT("")
         );
         m_context.graphics.setWindowTitle(TStringView(title));

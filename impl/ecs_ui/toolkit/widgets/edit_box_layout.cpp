@@ -97,25 +97,31 @@ Expected<EditBoxPlacement> EditBoxView::arrangeViewport(const Rect& bounds, cons
     const f32 caretEndX = VectorGetX(caretEnds);
     if(!IsFinite(maximumScroll) || !IsFinite(caretEndX))
         return MakeUnexpected(Failure{});
-    placement.scroll = VectorGetX(VectorSelect(VectorZero(), VectorMin(maximumScrolls, VectorSet(previousScroll.x, previousScroll.y, 0.0f, 0.0f)), VectorGreater(VectorSet(previousScroll.x, previousScroll.y, 0.0f, 0.0f), VectorZero())));
-    if(revealCaret && caret->x < placement.scroll)
-        placement.scroll = caret->x;
-    if(revealCaret && caretEndX > VectorGetX(VectorAdd(VectorReplicate(placement.scroll), VectorReplicate(placement.content.width))))
-        placement.scroll = VectorGetX(VectorSubtract(VectorReplicate(caretEndX), VectorReplicate(placement.content.width)));
-    placement.scroll = VectorGetX(VectorSelect(VectorZero(), VectorMin(maximumScrolls, VectorReplicate(placement.scroll)), VectorGreater(VectorReplicate(placement.scroll), VectorZero())));
+    const SIMDVectorSingle previousScrollVector = VectorSet(previousScroll.x, previousScroll.y, 0.0f, 0.0f);
+    const SIMDVectorSingle clampedPreviousScroll = VectorSelect(VectorZero(), VectorMin(maximumScrolls, previousScrollVector), VectorGreater(previousScrollVector, VectorZero()));
+    const SIMDVectorSingle contentWidth = VectorReplicate(placement.content.width);
+    SIMDVectorSingle scrollX = VectorSplatX(clampedPreviousScroll);
+    if(revealCaret && caret->x < VectorGetX(scrollX))
+        scrollX = VectorReplicate(caret->x);
+    if(revealCaret && caretEndX > VectorGetX(VectorAdd(scrollX, contentWidth)))
+        scrollX = VectorSubtract(VectorReplicate(caretEndX), contentWidth);
+    scrollX = VectorSelect(VectorZero(), VectorMin(maximumScrolls, scrollX), VectorGreater(scrollX, VectorZero()));
+    placement.scroll = VectorGetX(scrollX);
     if(m_textMode == EditTextMode::Multiline){
         const f32 maximumScrollY = VectorGetY(maximumScrolls);
         const f32 caretEndY = VectorGetY(caretEnds);
         if(!IsFinite(maximumScrollY) || !IsFinite(caretEndY))
             return MakeUnexpected(Failure{});
-        placement.scrollY = VectorGetY(VectorSelect(VectorZero(), VectorMin(maximumScrolls, VectorSet(previousScroll.x, previousScroll.y, 0.0f, 0.0f)), VectorGreater(VectorSet(previousScroll.x, previousScroll.y, 0.0f, 0.0f), VectorZero())));
-        if(revealCaret && caret->y < placement.scrollY)
-            placement.scrollY = caret->y;
-        if(revealCaret && caretEndY > VectorGetX(VectorAdd(VectorReplicate(placement.scrollY), VectorReplicate(placement.content.height))))
-            placement.scrollY = VectorGetX(VectorSubtract(VectorReplicate(caretEndY), VectorReplicate(placement.content.height)));
-        placement.scrollY = VectorGetY(VectorSelect(VectorZero(), VectorMin(maximumScrolls, VectorReplicate(placement.scrollY)), VectorGreater(VectorReplicate(placement.scrollY), VectorZero())));
+        const SIMDVectorSingle contentHeight = VectorReplicate(placement.content.height);
+        SIMDVectorSingle scrollY = VectorSplatY(clampedPreviousScroll);
+        if(revealCaret && caret->y < VectorGetX(scrollY))
+            scrollY = VectorReplicate(caret->y);
+        if(revealCaret && caretEndY > VectorGetX(VectorAdd(scrollY, contentHeight)))
+            scrollY = VectorSubtract(VectorReplicate(caretEndY), contentHeight);
+        scrollY = VectorSelect(VectorZero(), VectorMin(VectorSplatY(maximumScrolls), scrollY), VectorGreater(scrollY, VectorZero()));
+        placement.scrollY = VectorGetX(scrollY);
         const SIMDVectorSingle visualOrigin = VectorSubtract(VectorSet(left, top, left, top), VectorSet(m_visualBounds.x, m_visualBounds.y, m_visualBounds.x, m_visualBounds.y));
-        const SIMDVectorSingle origin = VectorSubtract(visualOrigin, VectorSet(placement.scroll, placement.scrollY, placement.scroll, placement.scrollY));
+        const SIMDVectorSingle origin = VectorSubtract(visualOrigin, VectorSelect(scrollX, scrollY, s_SIMDMaskY));
         placement.textOrigin = { VectorGetX(origin), VectorGetY(origin) };
     }
     else{

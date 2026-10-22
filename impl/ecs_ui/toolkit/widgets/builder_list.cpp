@@ -213,12 +213,10 @@ bool Builder::applyListGesture(ListState& state, const PointerGesture& gesture)n
         VectorDoubleSet(static_cast<f64>(gesture.targetRectangle.y), static_cast<f64>(gesture.position.y), 0.0, 0.0),
         VectorDoubleSet(static_cast<f64>(gesture.referenceRectangle.y), static_cast<f64>(gesture.origin.y), 0.0, 0.0)
     );
-    const f64 start = VectorDoubleGetX(startDeltaValue);
-    const f64 delta = VectorDoubleGetY(startDeltaValue);
-    const SIMDVectorDouble fractionValue = VectorDoubleDivide(VectorDoubleAdd(VectorDoubleReplicate(start), VectorDoubleReplicate(delta)), travelValue);
-    const f64 fraction = VectorDoubleGetX(VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(VectorDoubleSplatOne(), fractionValue), VectorDoubleGreater(fractionValue, VectorDoubleZero())));
+    const SIMDVectorDouble fractionValue = VectorDoubleDivide(VectorDoubleAdd(VectorDoubleSplatX(startDeltaValue), VectorDoubleSplatY(startDeltaValue)), travelValue);
+    const SIMDVectorDouble fraction = VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(VectorDoubleSplatOne(), fractionValue), VectorDoubleGreater(fractionValue, VectorDoubleZero()));
     state.m_ensureCursor = false;
-    return state.m_scroll.setOffset(VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(fraction), VectorDoubleReplicate(gesture.maximum))));
+    return state.m_scroll.setOffset(VectorDoubleGetX(VectorDoubleMultiply(fraction, VectorDoubleReplicate(gesture.maximum))));
 }
 
 

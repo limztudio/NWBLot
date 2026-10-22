@@ -159,14 +159,16 @@ Expected<NWB::Impl::Ui::Rect> UiSkinPreview::galleryBounds(NWB::Impl::UiPaintCon
     if(!caption || !korean)
         return MakeUnexpected(Failure{});
     const SIMDVectorSingle captionHeight = VectorAdd(VectorAdd(VectorReplicate(caption->height), VectorReplicate(korean->height)), VectorReplicate(s_CaptionPadding));
-    const f32 preferredTop = VectorGetX(VectorAdd(VectorAdd(VectorAdd(VectorReplicate(s_Margin), VectorReplicate(s_PanelBaseHeight)), captionHeight), VectorReplicate(s_PanelBottomGap)));
-    return UiWidgetGallery::LayoutBounds(context.display, preferredTop);
+    const SIMDVectorSingle preferredTop = VectorAdd(VectorAdd(VectorAdd(VectorReplicate(s_Margin), VectorReplicate(s_PanelBaseHeight)), captionHeight), VectorReplicate(s_PanelBottomGap));
+    const SIMDVectorSingle bounds = UiWidgetGallery::LayoutBounds(VectorSet(context.display.logicalWidth, context.display.logicalHeight, 0.0f, 0.0f), preferredTop);
+    return NWB::Impl::Ui::Rect{ VectorGetX(bounds), VectorGetY(bounds), VectorGetZ(bounds), VectorGetW(bounds) };
 }
 
 void UiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
     using namespace __hidden_ui_skin_preview;
     const SIMDVectorSingle margin = VectorReplicate(s_Margin);
-    const f32 x = VectorGetX(VectorMax(margin, VectorSubtract(VectorSubtract(VectorReplicate(context.display.logicalWidth), VectorReplicate(s_PanelWidth)), margin)));
+    const SIMDVectorSingle origin = VectorAndInt(VectorSelect(VectorMax(margin, VectorSubtract(VectorSubtract(VectorReplicate(context.display.logicalWidth), VectorReplicate(s_PanelWidth)), margin)), margin, s_SIMDMaskY), s_SIMDMaskXY);
+    const f32 x = VectorGetX(origin);
     const f32 y = s_Margin;
     const auto caption = m_caption.measure(context.text, context.display);
     const auto korean = m_korean.measure(context.text, context.display);
@@ -180,29 +182,26 @@ void UiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
         return;
     }
     const SIMDVectorSingle captionHeight = VectorAdd(VectorAdd(VectorReplicate(caption->height), VectorReplicate(korean->height)), VectorReplicate(s_CaptionPadding));
-    const auto gallery = galleryBounds(context);
-    if(!gallery){
-        NWB_LOGGER_ERROR(NWB_TEXT("Testbed: UI gallery measurement failed"));
+    const SIMDVectorSingle preferredTop = VectorAdd(VectorAdd(VectorAdd(VectorReplicate(y), VectorReplicate(s_PanelBaseHeight)), captionHeight), VectorReplicate(s_PanelBottomGap));
+    const SIMDVectorSingle gallery = UiWidgetGallery::LayoutBounds(VectorSet(context.display.logicalWidth, context.display.logicalHeight, 0.0f, 0.0f), preferredTop);
+    m_widgets.paint(context, { VectorGetX(gallery), VectorGetY(gallery), VectorGetZ(gallery), VectorGetW(gallery) });
+    if(VectorGetY(gallery) < VectorGetX(preferredTop) || x < s_MinimumGalleryX)
         return;
-    }
-    m_widgets.paint(context, *gallery);
-    if(gallery->y < VectorGetX(VectorAdd(VectorAdd(VectorAdd(VectorReplicate(y), VectorReplicate(s_PanelBaseHeight)), captionHeight), VectorReplicate(s_PanelBottomGap))) || x < s_MinimumGalleryX)
-        return;
-    if(!DrawSkinGallery(context.paint, VectorSet(x, y, 0.0f, 0.0f), captionHeight)){
+    if(!DrawSkinGallery(context.paint, origin, captionHeight)){
         NWB_LOGGER_ERROR(NWB_TEXT("Testbed: default UI skin is missing a gallery region"));
         return;
     }
 
-    const SIMDVectorSingle origin = VectorSet(x, y, 0.0f, 0.0f);
     const SIMDVectorSingle captionOrigin = VectorAdd(origin, VectorSet(s_CaptionX, s_CaptionY, 0.0f, 0.0f));
     const SIMDVectorSingle koreanOffset = VectorAdd(VectorSet(s_CaptionX, s_CaptionY, 0.0f, 0.0f), VectorSet(0.0f, caption->height, 0.0f, 0.0f));
     const SIMDVectorSingle koreanOrigin = VectorAdd(origin, koreanOffset);
     const SIMDVectorSingle buttonTextOffsets = VectorScale(VectorSubtract(VectorReplicate(s_ButtonHeight), VectorSet(normal->height, hover->height, pressed->height, disabled->height)), 0.5f);
     const SIMDVectorSingle buttonTextY = VectorAdd(VectorSet(s_ButtonTopY, s_ButtonTopY, s_ButtonBottomY, s_ButtonBottomY), buttonTextOffsets);
-    const SIMDVectorSingle normalOrigin = VectorAdd(origin, VectorSet(s_LeftTextX, VectorGetX(buttonTextY), 0.0f, 0.0f));
-    const SIMDVectorSingle hoverOrigin = VectorAdd(origin, VectorSet(s_RightTextX, VectorGetY(buttonTextY), 0.0f, 0.0f));
-    const SIMDVectorSingle pressedOrigin = VectorAdd(origin, VectorSet(s_LeftTextX, VectorGetZ(buttonTextY), 0.0f, 0.0f));
-    const SIMDVectorSingle disabledOrigin = VectorAdd(origin, VectorSet(s_RightTextX, VectorGetW(buttonTextY), 0.0f, 0.0f));
+    const SIMDVectorSingle buttonTextX = VectorSet(s_LeftTextX, s_RightTextX, 0.0f, 0.0f);
+    const SIMDVectorSingle normalOrigin = VectorAdd(origin, VectorPermute<0, 4, 2, 3>(buttonTextX, buttonTextY));
+    const SIMDVectorSingle hoverOrigin = VectorAdd(origin, VectorPermute<1, 5, 2, 3>(buttonTextX, buttonTextY));
+    const SIMDVectorSingle pressedOrigin = VectorAdd(origin, VectorPermute<0, 6, 2, 3>(buttonTextX, buttonTextY));
+    const SIMDVectorSingle disabledOrigin = VectorAdd(origin, VectorPermute<1, 7, 2, 3>(buttonTextX, buttonTextY));
     const SIMDVectorSingle editOffset = VectorAdd(VectorSet(s_LeftTextX, s_EditFocusedY, 0.0f, 0.0f), VectorScale(VectorSubtract(VectorSet(0.0f, s_EditFocusedHeight, 0.0f, 0.0f), VectorSet(0.0f, edit->height, 0.0f, 0.0f)), 0.5f));
     const SIMDVectorSingle editOrigin = VectorAdd(origin, editOffset);
     const bool captionPainted = m_caption.paint(context.text, context.paint, { VectorGetX(captionOrigin), VectorGetY(captionOrigin), s_CaptionWidth, caption->height })

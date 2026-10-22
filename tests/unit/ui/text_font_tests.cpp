@@ -400,10 +400,11 @@ TEST_F(TextFontTests, NativeCffBoundsCoverFractionalDpiRasterFringes){
         ASSERT_EQ(m_layout.glyphs().size(), 1u);
         const PlacedGlyph& glyph = m_layout.glyphs()[0];
         ASSERT_TRUE(glyph.coverage.known);
-        const u32 pixelSize = static_cast<u32>(VectorGetX(VectorCeiling(VectorMultiply(VectorReplicate(fontSize), VectorReplicate(1.375f)))));
+        const SIMDVectorSingle pixelSizeVector = VectorCeiling(VectorMultiply(VectorReplicate(fontSize), VectorReplicate(1.375f)));
+        const u32 pixelSize = static_cast<u32>(VectorGetX(pixelSizeVector));
         GlyphBitmap bitmap(m_arena);
         ASSERT_TRUE(glyph.face->rasterize(glyph.glyphId, pixelSize, bitmap));
-        const SIMDVectorSingle scale = VectorDivide(VectorReplicate(static_cast<f32>(pixelSize)), VectorReplicate(fontSize));
+        const SIMDVectorSingle scale = VectorDivide(pixelSizeVector, VectorReplicate(fontSize));
         const SIMDVectorSingle fringe = VectorDivide(VectorReplicate(2.0f), scale);
         const Rect& bounds = glyph.coverage.ink;
         const SIMDVectorSingle boundsStart = VectorSet(bounds.x, bounds.y, 0.0f, 0.0f);

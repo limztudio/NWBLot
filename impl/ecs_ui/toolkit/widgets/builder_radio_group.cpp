@@ -175,7 +175,7 @@ RadioGroupResult Builder::radioGroup(const AStringView stableKey, const IListDat
 bool Builder::prepareRadioGroup(RadioGroupFrame& frame){
     if(!radioGroupMatches(frame))
         return false;
-    Point maximumLabel;
+    SIMDVectorSingle maximumLabelSize = VectorZero();
     frame.m_labels.reserve(frame.m_choices.count);
     for(u32 index = 0u; index < frame.m_choices.count; ++index){
         if(!radioGroupStateMatches(frame))
@@ -190,11 +190,8 @@ bool Builder::prepareRadioGroup(RadioGroupFrame& frame){
         const auto textBounds = m_text.measure(*label, m_paint.displayMetrics());
         if(!textBounds)
             return false;
-        const Point measured{ textBounds->width, textBounds->height };
-        const SIMDVectorSingle currentSize = VectorSet(maximumLabel.x, maximumLabel.y, maximumLabel.x, maximumLabel.y);
-        const SIMDVectorSingle labelSize = VectorSet(measured.x, measured.y, measured.x, measured.y);
-        const SIMDVectorSingle maximumSize = VectorSelect(labelSize, currentSize, VectorGreater(currentSize, labelSize));
-        maximumLabel = { VectorGetX(maximumSize), VectorGetY(maximumSize) };
+        const SIMDVectorSingle labelSize = VectorSet(textBounds->width, textBounds->height, 0.0f, 0.0f);
+        maximumLabelSize = VectorSelect(labelSize, maximumLabelSize, VectorGreater(maximumLabelSize, labelSize));
         frame.m_labels.push_back({ Move(*label), *textBounds });
     }
     const UiSkinRegion* normal = region(frame.m_style.normal, frame.m_style.fallback);
@@ -203,16 +200,20 @@ bool Builder::prepareRadioGroup(RadioGroupFrame& frame){
     if(!normal || !checked || !mark || !IsFinite(m_skin->referenceDensity()) || m_skin->referenceDensity() <= 0.0f)
         return false;
     const UiSkinRegion* states[] = { normal, checked, m_skin->findRegion(frame.m_style.hover), m_skin->findRegion(frame.m_style.pressed), m_skin->findRegion(frame.m_style.disabled) };
+    const SIMDVectorSingle referenceDensity = VectorReplicate(m_skin->referenceDensity());
+    SIMDVectorSingle indicatorExtent = VectorReplicate(frame.m_style.indicatorExtent);
     for(const UiSkinRegion* skinRegion : states){
         if(!skinRegion)
             continue;
         const SIMDVectorSingle sliceSize = VectorSet(static_cast<f32>(static_cast<u64>(skinRegion->sliceInsets.left) + skinRegion->sliceInsets.right), static_cast<f32>(static_cast<u64>(skinRegion->sliceInsets.top) + skinRegion->sliceInsets.bottom), 0.0f, 0.0f);
-        const SIMDVectorSingle logicalSize = VectorDivide(sliceSize, VectorReplicate(m_skin->referenceDensity()));
+        const SIMDVectorSingle logicalSize = VectorDivide(sliceSize, referenceDensity);
         const SIMDVectorSingle regionMinimum = VectorSet(skinRegion->minimumWidth, skinRegion->minimumHeight, 0.0f, 0.0f);
         const SIMDVectorSingle minimum = VectorMax(regionMinimum, VectorSplatY(regionMinimum));
         const SIMDVectorSingle sliceMinimum = VectorMax(logicalSize, VectorSplatY(logicalSize));
-        frame.m_style.indicatorExtent = VectorGetX(VectorMax(VectorReplicate(frame.m_style.indicatorExtent), VectorMax(minimum, sliceMinimum)));
+        indicatorExtent = VectorMax(indicatorExtent, VectorMax(minimum, sliceMinimum));
     }
+    frame.m_style.indicatorExtent = VectorGetX(indicatorExtent);
+    const Point maximumLabel{ VectorGetX(maximumLabelSize), VectorGetY(maximumLabelSize) };
     const auto metrics = RadioGroupLayout::Measure(frame.m_choices.count, maximumLabel, frame.m_options, frame.m_style);
     if(!metrics)
         return false;

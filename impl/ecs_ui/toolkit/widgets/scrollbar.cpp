@@ -65,14 +65,16 @@ inline constexpr u32 s_ReservationPassLimit = 3u;
         if(VectorDoubleMoveMask(VectorDoubleOrInt(VectorDoubleIsNaN(values.v[index]), VectorDoubleIsInfinite(values.v[index]))) != 0u)
             return false;
     }
-    const f32 trackX = static_cast<f32>(VectorDoubleGetX(values.v[0]));
-    const f32 trackY = static_cast<f32>(VectorDoubleGetY(values.v[0]));
-    const f32 trackWidth = static_cast<f32>(VectorDoubleGetZ(values.v[0]));
-    const f32 trackHeight = static_cast<f32>(VectorDoubleGetW(values.v[0]));
-    const f32 thumbX = static_cast<f32>(VectorDoubleGetX(values.v[1]));
-    const f32 thumbY = static_cast<f32>(VectorDoubleGetY(values.v[1]));
-    const f32 thumbWidth = static_cast<f32>(VectorDoubleGetZ(values.v[1]));
-    const f32 thumbHeight = static_cast<f32>(VectorDoubleGetW(values.v[1]));
+    const SIMDVectorSingle trackSingle = ConvertVectorDoubleToSingle(values.v[0]);
+    const SIMDVectorSingle thumbSingle = ConvertVectorDoubleToSingle(values.v[1]);
+    const f32 trackX = VectorGetX(trackSingle);
+    const f32 trackY = VectorGetY(trackSingle);
+    const f32 trackWidth = VectorGetZ(trackSingle);
+    const f32 trackHeight = VectorGetW(trackSingle);
+    const f32 thumbX = VectorGetX(thumbSingle);
+    const f32 thumbY = VectorGetY(thumbSingle);
+    const f32 thumbWidth = VectorGetZ(thumbSingle);
+    const f32 thumbHeight = VectorGetW(thumbSingle);
     const f64 contentExtent = VectorDoubleGetX(values.v[2]);
     const f64 viewportExtent = VectorDoubleGetY(values.v[2]);
     const f64 maximum = VectorDoubleGetZ(values.v[2]);
@@ -80,10 +82,11 @@ inline constexpr u32 s_ReservationPassLimit = 3u;
     if(contentExtent < 0.0 || viewportExtent < 0.0)
         return false;
     const SIMDVectorDouble expectedMaximum = VectorDoubleMax(VectorDoubleZero(), VectorDoubleSubtract(VectorDoubleSplatX(values.v[2]), VectorDoubleSplatY(values.v[2])));
+    // Lanes are track right, track bottom, thumb right, thumb bottom.
+    const SIMDVectorSingle end = VectorAdd(VectorPermute<0, 1, 4, 5>(trackSingle, thumbSingle), VectorPermute<2, 3, 6, 7>(trackSingle, thumbSingle));
     if(
         trackWidth < 0.0f || trackHeight < 0.0f || thumbWidth < 0.0f || thumbHeight < 0.0f
-        || !IsFinite(VectorGetX(VectorAdd(VectorReplicate(trackX), VectorReplicate(trackWidth)))) || !IsFinite(VectorGetX(VectorAdd(VectorReplicate(trackY), VectorReplicate(trackHeight))))
-        || !IsFinite(VectorGetX(VectorAdd(VectorReplicate(thumbX), VectorReplicate(thumbWidth)))) || !IsFinite(VectorGetX(VectorAdd(VectorReplicate(thumbY), VectorReplicate(thumbHeight))))
+        || !VectorIsFinite(end, VectorComponentMask::s_XYZW)
         || contentExtent < 0.0 || viewportExtent < 0.0 || maximum != VectorDoubleGetX(expectedMaximum)
         || offset < 0.0 || offset > maximum || (viewportExtent > 0.0 && maximum > 0.0 && maximum >= contentExtent)
     )
@@ -92,8 +95,6 @@ inline constexpr u32 s_ReservationPassLimit = 3u;
         return trackX == 0.0f && trackY == 0.0f && trackWidth == 0.0f && trackHeight == 0.0f && thumbX == 0.0f && thumbY == 0.0f && thumbWidth == 0.0f && thumbHeight == 0.0f;
     if(maximum <= 0.0 || trackWidth <= 0.0f || trackHeight <= 0.0f)
         return false;
-    // Lanes are track right, track bottom, thumb right, thumb bottom. The checks above proved these sums finite.
-    const SIMDVectorSingle end = VectorAdd(VectorSet(trackX, trackY, thumbX, thumbY), VectorSet(trackWidth, trackHeight, thumbWidth, thumbHeight));
     if(axis == ScrollAxis::Horizontal){
         return viewportExtent == static_cast<f64>(trackWidth) && thumbY == trackY && thumbHeight == trackHeight && thumbX >= trackX && thumbWidth <= trackWidth && VectorGetZ(end) <= VectorGetX(end);
     }
@@ -143,12 +144,12 @@ inline constexpr u32 s_ReservationPassLimit = 3u;
         const SIMDVectorDouble lengthValue = VectorDoubleReplicate(length);
         const SIMDVectorDouble proportional = VectorDoubleMultiply(lengthValue, VectorDoubleDivide(VectorDoubleReplicate(viewportExtent), VectorDoubleReplicate(contentExtent)));
         const SIMDVectorDouble minimum = VectorDoubleMin(VectorDoubleReplicate(minThumb), lengthValue);
-        const f32 thumbExtent = static_cast<f32>(VectorDoubleGetX(VectorDoubleSelect(minimum, VectorDoubleMin(lengthValue, proportional), VectorDoubleGreater(proportional, minimum))));
+        const SIMDVectorSingle thumbExtent = ConvertVectorDoubleToSingle(VectorDoubleSelect(minimum, VectorDoubleMin(lengthValue, proportional), VectorDoubleGreater(proportional, minimum)));
         candidate.thumb = track;
         if(axis == ScrollAxis::Horizontal)
-            candidate.thumb.width = VectorGetX(VectorMin(VectorReplicate(thumbExtent), VectorReplicate(track.width)));
+            candidate.thumb.width = VectorGetX(VectorMin(thumbExtent, VectorReplicate(track.width)));
         else
-            candidate.thumb.height = VectorGetX(VectorMin(VectorReplicate(thumbExtent), VectorReplicate(track.height)));
+            candidate.thumb.height = VectorGetX(VectorMin(thumbExtent, VectorReplicate(track.height)));
     }
     if(!StoreBarOffset(VectorDoubleReplicate(offset), axis, candidate) || !ValidBar(LoadBarValues(candidate), axis))
         return MakeUnexpected(Failure{});
@@ -180,17 +181,13 @@ Expected<ScrollViewportPlacement> ScrollbarLayout::Calculate(const Rect& bounds,
         VectorDoubleSet(static_cast<f64>(bounds.x), static_cast<f64>(bounds.y), 0.0, 0.0),
         VectorDoubleSelect(geometryPair2Operand1, geometryPair2Operand0, VectorDoubleLess(geometryPair2Operand0, geometryPair2Operand1))
     );
-    const f64 x = VectorDoubleGetX(xYValue);
-    const f64 y = VectorDoubleGetY(xYValue);
     const SIMDVectorDouble geometryPair3Operand0 = VectorDoubleZero();
     const SIMDVectorDouble geometryPair3Operand1 = VectorDoubleSubtract(
         VectorDoubleSubtract(VectorDoubleSet(static_cast<f64>(bounds.width), static_cast<f64>(bounds.height), 0.0, 0.0), VectorDoubleSet(padding.left, padding.top, 0.0, 0.0)),
         VectorDoubleSet(padding.right, padding.bottom, 0.0, 0.0)
     );
     const SIMDVectorDouble widthHeightValue = VectorDoubleSelect(geometryPair3Operand1, geometryPair3Operand0, VectorDoubleGreater(geometryPair3Operand0, geometryPair3Operand1));
-    const f64 width = VectorDoubleGetX(widthHeightValue);
-    const f64 height = VectorDoubleGetY(widthHeightValue);
-    const auto padded = MakeUiRect<UiRectPrecision::RoundedEndpoints>(VectorDoubleSet(x, y, width, height));
+    const auto padded = MakeUiRect<UiRectPrecision::RoundedEndpoints>(VectorDoublePermute<0, 1, 4, 5>(xYValue, widthHeightValue));
     if(!padded)
         return MakeUnexpected(Failure{});
     const f64 availableWidth = padded->width;
@@ -221,8 +218,10 @@ Expected<ScrollViewportPlacement> ScrollbarLayout::Calculate(const Rect& bounds,
     const f64 barWidth = vertical ? verticalWidth : 0.0;
     const f64 barHeight = horizontal ? horizontalHeight : 0.0;
     ScrollViewportPlacement candidate;
-    const SIMDVectorDouble viewportSize = VectorDoubleSubtract(VectorDoubleSet(availableWidth, availableHeight, 0.0, 0.0), VectorDoubleSet(barWidth, barHeight, 0.0, 0.0));
-    const auto viewport = MakeUiRect<UiRectPrecision::RoundedEndpoints>(VectorDoubleSet(padded->x, padded->y, VectorDoubleGetX(viewportSize), VectorDoubleGetY(viewportSize)));
+    const SIMDVectorDouble paddedOrigin = VectorDoubleSet(padded->x, padded->y, 0.0, 0.0);
+    const SIMDVectorDouble barSize = VectorDoubleSet(barWidth, barHeight, 0.0, 0.0);
+    const SIMDVectorDouble viewportSize = VectorDoubleSubtract(geometryPair4Operand1, barSize);
+    const auto viewport = MakeUiRect<UiRectPrecision::RoundedEndpoints>(VectorDoublePermute<0, 1, 4, 5>(paddedOrigin, viewportSize));
     if(!viewport)
         return MakeUnexpected(Failure{});
     candidate.viewport = *viewport;
@@ -234,23 +233,23 @@ Expected<ScrollViewportPlacement> ScrollbarLayout::Calculate(const Rect& bounds,
     candidate.contentClip = *contentClip;
     const f64 viewportWidth = candidate.viewport.width;
     const f64 viewportHeight = candidate.viewport.height;
+    const SIMDVectorDouble cornerOrigin = VectorDoubleAdd(paddedOrigin, VectorDoubleSet(viewportWidth, viewportHeight, 0.0, 0.0));
     Rect horizontalTrack;
     Rect verticalTrack;
     if(horizontal && viewportWidth > 0.0 && barHeight > 0.0){
-        const auto track = MakeUiRect<UiRectPrecision::RoundedEndpoints>(VectorDoubleSet(padded->x, VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(padded->y), VectorDoubleReplicate(viewportHeight))), viewportWidth, barHeight));
+        const auto track = MakeUiRect<UiRectPrecision::RoundedEndpoints>(VectorDoubleSelect(VectorDoubleSet(padded->x, 0.0, viewportWidth, barHeight), cornerOrigin, s_DoubleSIMDMaskY));
         if(!track)
             return MakeUnexpected(Failure{});
         horizontalTrack = *track;
     }
     if(vertical && viewportHeight > 0.0 && barWidth > 0.0){
-        const auto track = MakeUiRect<UiRectPrecision::RoundedEndpoints>(VectorDoubleSet(VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(padded->x), VectorDoubleReplicate(viewportWidth))), padded->y, barWidth, viewportHeight));
+        const auto track = MakeUiRect<UiRectPrecision::RoundedEndpoints>(VectorDoubleSelect(VectorDoubleSet(0.0, padded->y, barWidth, viewportHeight), cornerOrigin, s_DoubleSIMDMaskX));
         if(!track)
             return MakeUnexpected(Failure{});
         verticalTrack = *track;
     }
     if(barWidth > 0.0 && barHeight > 0.0){
-        const SIMDVectorDouble cornerOrigin = VectorDoubleAdd(VectorDoubleSet(padded->x, padded->y, 0.0, 0.0), VectorDoubleSet(viewportWidth, viewportHeight, 0.0, 0.0));
-        const auto corner = MakeUiRect<UiRectPrecision::RoundedEndpoints>(VectorDoubleSet(VectorDoubleGetX(cornerOrigin), VectorDoubleGetY(cornerOrigin), barWidth, barHeight));
+        const auto corner = MakeUiRect<UiRectPrecision::RoundedEndpoints>(VectorDoublePermute<0, 1, 4, 5>(cornerOrigin, barSize));
         if(!corner)
             return MakeUnexpected(Failure{});
         candidate.corner = *corner;

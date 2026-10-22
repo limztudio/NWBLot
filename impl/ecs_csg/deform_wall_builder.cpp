@@ -46,10 +46,9 @@ SIMDVectorSingle CsgDeformWallBuilder::UpAxisVec()noexcept{
 
 void CsgDeformWallBuilder::NormalizeDeformVertex(SIMDVectorSingle& normal, SIMDVectorSingle& tangent)noexcept{
     // Preview and commit share the same degenerate fallback and tangent handedness.
-    const f32 normalLengthSq = VectorGetX(Vector3LengthSq(normal));
-    normal = normalLengthSq > s_NormalizeEpsilonSq ? KeepWVec(Vector3Normalize(normal), normal) : VectorSelect(normal, UpAxisVec(), s_SIMDMask3);
-    const f32 tangentLengthSq = VectorGetX(Vector3LengthSq(tangent));
-    tangent = tangentLengthSq > s_NormalizeEpsilonSq ? TangentHandednessVec(Vector3Normalize(tangent), tangent) : VectorSet(1.0f, 0.0f, 0.0f, 1.0f);
+    const SIMDVectorSingle epsilonSq = VectorReplicate(s_NormalizeEpsilonSq);
+    normal = Vector4Greater(Vector3LengthSq(normal), epsilonSq) ? KeepWVec(Vector3Normalize(normal), normal) : VectorSelect(normal, UpAxisVec(), s_SIMDMask3);
+    tangent = Vector4Greater(Vector3LengthSq(tangent), epsilonSq) ? TangentHandednessVec(Vector3Normalize(tangent), tangent) : VectorSet(1.0f, 0.0f, 0.0f, 1.0f);
 }
 
 Expected<u32> CsgDeformWallBuilder::SplitEdgeVertex(CsgDeformVertexVector<ScratchArena>& vertices, CsgDeformEdgeSplitMap& edgeSplits, const u32 first, const u32 second, const f32 firstDistance, const f32 secondDistance){

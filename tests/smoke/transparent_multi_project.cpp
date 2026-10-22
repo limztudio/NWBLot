@@ -197,29 +197,29 @@ public:
 }
 
 
-[[nodiscard]] static Float4 TransparentLeftShapeBasePosition()noexcept{
-    return Float4(-0.68f, s_CameraTargetY, 0.02f, 0.0f);
+[[nodiscard]] static SIMDVectorSingle TransparentLeftShapeBasePosition()noexcept{
+    return VectorSet(-0.68f, s_CameraTargetY, 0.02f, 0.0f);
 }
 
-[[nodiscard]] static Float4 TransparentCenterShapeBasePosition()noexcept{
-    return Float4(0.0f, s_CameraTargetY, 0.0f, 0.0f);
+[[nodiscard]] static SIMDVectorSingle TransparentCenterShapeBasePosition()noexcept{
+    return VectorSet(0.0f, s_CameraTargetY, 0.0f, 0.0f);
 }
 
-[[nodiscard]] static Float4 TransparentRightShapeBasePosition()noexcept{
-    return Float4(0.68f, s_CameraTargetY, 0.04f, 0.0f);
+[[nodiscard]] static SIMDVectorSingle TransparentRightShapeBasePosition()noexcept{
+    return VectorSet(0.68f, s_CameraTargetY, 0.04f, 0.0f);
 }
 
 // Opaque occluders orbit through colored shadows to exercise their multiplicative combination.
-[[nodiscard]] static Float4 OpaqueLeftShapeBasePosition()noexcept{
-    return Float4(-0.34f, s_CameraTargetY, 0.30f, 0.0f);
+[[nodiscard]] static SIMDVectorSingle OpaqueLeftShapeBasePosition()noexcept{
+    return VectorSet(-0.34f, s_CameraTargetY, 0.30f, 0.0f);
 }
 
-[[nodiscard]] static Float4 OpaqueRightShapeBasePosition()noexcept{
-    return Float4(0.34f, s_CameraTargetY, 0.30f, 0.0f);
+[[nodiscard]] static SIMDVectorSingle OpaqueRightShapeBasePosition()noexcept{
+    return VectorSet(0.34f, s_CameraTargetY, 0.30f, 0.0f);
 }
 
-[[nodiscard]] static SIMDVectorSingle BuildTransparentSceneRotation(const f32 time)noexcept{
-    return QuaternionRotationRollPitchYaw(0.0f, time, 0.0f);
+[[nodiscard]] static SIMDVectorSingle BuildTransparentSceneRotation(const SIMDVectorSingle time)noexcept{
+    return QuaternionRotationRollPitchYawFromVector(VectorAndInt(time, s_SIMDMaskY));
 }
 
 [[nodiscard]] static SIMDVectorSingle RotateTransparentBasePosition(const SIMDVectorSingle basePosition, const SIMDVectorSingle sceneRotation)noexcept{
@@ -237,8 +237,8 @@ static void ApplyTransparentSceneTransform(NWB::Core::ECS::World& world, const N
 
 
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
-[[nodiscard]] static SIMDVectorSingle BuildTransparentCsgRotation(const f32 time)noexcept{
-    const SIMDVectorSingle angles = VectorMultiply(VectorSet(time, time, time, 0.0f), VectorSet(0.32f, 1.0f, 0.16f, 0.0f));
+[[nodiscard]] static SIMDVectorSingle BuildTransparentCsgRotation(const SIMDVectorSingle time)noexcept{
+    const SIMDVectorSingle angles = VectorMultiply(time, VectorSet(0.32f, 1.0f, 0.16f, 0.0f));
     return QuaternionRotationRollPitchYawFromVector(angles);
 }
 
@@ -517,13 +517,15 @@ public:
 
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
         // A static sphere lens lets temporal photon accumulation converge without motion artifacts.
+        Float4 centerBasePosition;
+        StoreFloat(TransparentCenterShapeBasePosition(), centerBasePosition);
         const auto centerShapeEntity = CreateTransparentStaticMeshEntity(
             *m_world,
             m_context.objectArena,
             s_TransparentShapeMesh,
             s_TransparentSharedMaterial,
             Float4(0.55f, 0.78f, 1.0f, 0.30f),
-            TransparentCenterShapeBasePosition(),
+            centerBasePosition,
             Float4(s_CausticSphereScale, s_CausticSphereScale, s_CausticSphereScale)
         );
         m_centerShape = centerShapeEntity;
@@ -531,7 +533,17 @@ public:
         if(shapesValid)
             m_world->entity(centerShapeEntity).getComponent<NWB::Impl::RendererComponent>().opticalBoundaryMode = NWB::Impl::OpticalBoundaryMode::ClosedNested;
 #else
-        const auto shapeEntity = CreateTransparentStaticMeshEntity(*m_world, m_context.objectArena, s_TransparentLeftMesh, s_TransparentSharedMaterial, Float4(1.0f, 0.42f, 0.20f, 0.42f), TransparentLeftShapeBasePosition(), Float4(0.62f, 0.62f, 0.62f));
+        Float4 leftBasePosition;
+        Float4 centerBasePosition;
+        Float4 rightBasePosition;
+        Float4 opaqueLeftBasePosition;
+        Float4 opaqueRightBasePosition;
+        StoreFloat(TransparentLeftShapeBasePosition(), leftBasePosition);
+        StoreFloat(TransparentCenterShapeBasePosition(), centerBasePosition);
+        StoreFloat(TransparentRightShapeBasePosition(), rightBasePosition);
+        StoreFloat(OpaqueLeftShapeBasePosition(), opaqueLeftBasePosition);
+        StoreFloat(OpaqueRightShapeBasePosition(), opaqueRightBasePosition);
+        const auto shapeEntity = CreateTransparentStaticMeshEntity(*m_world, m_context.objectArena, s_TransparentLeftMesh, s_TransparentSharedMaterial, Float4(1.0f, 0.42f, 0.20f, 0.42f), leftBasePosition, Float4(0.62f, 0.62f, 0.62f));
         const auto centerShapeEntity = CreateTransparentStaticMeshEntity(
             *m_world,
             m_context.objectArena,
@@ -544,9 +556,9 @@ public:
             s_TransparentSharedMaterial,
             Float4(0.10f, 1.0f, 0.45f, 0.42f),
 #endif
-            TransparentCenterShapeBasePosition(), Float4(0.78f, 0.78f, 0.78f), TransparentCenterCsgReceiverGroup()
+            centerBasePosition, Float4(0.78f, 0.78f, 0.78f), TransparentCenterCsgReceiverGroup()
         );
-        const auto rightShapeEntity = CreateTransparentStaticMeshEntity(*m_world, m_context.objectArena, s_TransparentRightMesh, s_TransparentSharedMaterial, Float4(0.12f, 0.44f, 1.0f, 0.42f), TransparentRightShapeBasePosition(), Float4(0.68f, 0.68f, 0.68f));
+        const auto rightShapeEntity = CreateTransparentStaticMeshEntity(*m_world, m_context.objectArena, s_TransparentRightMesh, s_TransparentSharedMaterial, Float4(0.12f, 0.44f, 1.0f, 0.42f), rightBasePosition, Float4(0.68f, 0.68f, 0.68f));
         m_leftShape = shapeEntity;
         m_centerShape = centerShapeEntity;
         m_rightShape = rightShapeEntity;
@@ -559,7 +571,7 @@ public:
             s_GroundMaterial,
             s_SmokeSurfaceMaterialInterface,
             Float4(0.66f, 0.66f, 0.70f, 1.0f),
-            OpaqueLeftShapeBasePosition(),
+            opaqueLeftBasePosition,
             Float4(0.26f, 0.26f, 0.26f)
         );
         const auto opaqueRightEntity = CreateTintedStaticMeshEntity(
@@ -569,7 +581,7 @@ public:
             s_GroundMaterial,
             s_SmokeSurfaceMaterialInterface,
             Float4(0.72f, 0.68f, 0.62f, 1.0f),
-            OpaqueRightShapeBasePosition(),
+            opaqueRightBasePosition,
             Float4(0.26f, 0.26f, 0.26f)
         );
         m_opaqueLeftShape = opaqueLeftEntity;
@@ -684,17 +696,17 @@ public:
 
 private:
     void updateTransparentSceneTransforms()noexcept{
-        const f32 sceneYaw = m_sceneYaw.yaw();
+        const SIMDVectorSingle sceneYaw = VectorReplicate(m_sceneYaw.yaw());
         const SIMDVectorSingle sceneRotation = BuildTransparentSceneRotation(sceneYaw);
-        ApplyTransparentSceneTransform(*m_world, m_leftShape, LoadFloat(TransparentLeftShapeBasePosition()), sceneRotation, QuaternionIdentity());
+        ApplyTransparentSceneTransform(*m_world, m_leftShape, TransparentLeftShapeBasePosition(), sceneRotation, QuaternionIdentity());
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
-        ApplyTransparentCsgSceneTransform(*m_world, m_csgReceiver, m_csgCutter, LoadFloat(TransparentCenterShapeBasePosition()), sceneRotation, BuildTransparentCsgRotation(sceneYaw));
+        ApplyTransparentCsgSceneTransform(*m_world, m_csgReceiver, m_csgCutter, TransparentCenterShapeBasePosition(), sceneRotation, BuildTransparentCsgRotation(sceneYaw));
 #else
-        ApplyTransparentSceneTransform(*m_world, m_centerShape, LoadFloat(TransparentCenterShapeBasePosition()), sceneRotation, QuaternionIdentity());
+        ApplyTransparentSceneTransform(*m_world, m_centerShape, TransparentCenterShapeBasePosition(), sceneRotation, QuaternionIdentity());
 #endif
-        ApplyTransparentSceneTransform(*m_world, m_rightShape, LoadFloat(TransparentRightShapeBasePosition()), sceneRotation, QuaternionIdentity());
-        ApplyTransparentSceneTransform(*m_world, m_opaqueLeftShape, LoadFloat(OpaqueLeftShapeBasePosition()), sceneRotation, QuaternionIdentity());
-        ApplyTransparentSceneTransform(*m_world, m_opaqueRightShape, LoadFloat(OpaqueRightShapeBasePosition()), sceneRotation, QuaternionIdentity());
+        ApplyTransparentSceneTransform(*m_world, m_rightShape, TransparentRightShapeBasePosition(), sceneRotation, QuaternionIdentity());
+        ApplyTransparentSceneTransform(*m_world, m_opaqueLeftShape, OpaqueLeftShapeBasePosition(), sceneRotation, QuaternionIdentity());
+        ApplyTransparentSceneTransform(*m_world, m_opaqueRightShape, OpaqueRightShapeBasePosition(), sceneRotation, QuaternionIdentity());
     }
 
 

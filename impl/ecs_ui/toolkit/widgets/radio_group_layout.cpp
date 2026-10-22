@@ -119,8 +119,8 @@ Expected<RadioGroupMetrics> RadioGroupLayout::Measure(const u32 count, const Poi
     candidate.count = count;
     const SIMDVectorDouble padding = VectorDoubleAdd(VectorDoubleSet(style.padding.left, style.padding.top, 0.0, 0.0), VectorDoubleSet(style.padding.right, style.padding.bottom, 0.0, 0.0));
     const SIMDVectorDouble rowExtents = VectorDoubleMultiply(VectorDoubleSet(count, count == 0u ? 0u : count - 1u, 0.0, 0.0), VectorDoubleSet(candidate.rowHeight, style.rowGap, 0.0, 0.0));
-    const f64 labelWidth = count == 0u ? 0.0 : VectorDoubleGetX(VectorDoubleAdd(VectorDoubleAdd(VectorDoubleReplicate(style.indicatorExtent), VectorDoubleReplicate(style.gap)), VectorDoubleReplicate(maximumLabel.x)));
-    const SIMDVectorDouble size = VectorDoubleAdd(VectorDoubleAdd(padding, VectorDoubleSet(labelWidth, VectorDoubleGetX(rowExtents), 0.0, 0.0)), VectorDoubleSwizzle<2, 1, 2, 3>(rowExtents));
+    const SIMDVectorDouble labelWidth = count == 0u ? VectorDoubleZero() : VectorDoubleAdd(VectorDoubleAdd(VectorDoubleReplicate(style.indicatorExtent), VectorDoubleReplicate(style.gap)), VectorDoubleReplicate(maximumLabel.x));
+    const SIMDVectorDouble size = VectorDoubleAdd(VectorDoubleAdd(padding, VectorDoublePermute<0, 4, 2, 3>(labelWidth, rowExtents)), VectorDoubleSwizzle<2, 1, 2, 3>(rowExtents));
     const f64 width = VectorDoubleGetX(size);
     const f64 height = VectorDoubleGetY(size);
     if(!IsFinite(width) || width > Limit<f32>::s_Max || !IsFinite(height) || height > Limit<f32>::s_Max)
@@ -149,20 +149,19 @@ Expected<RadioGroupPlacement> RadioGroupLayout::Place(const Rect& bounds, const 
     const SIMDVectorDouble geometryPair3Operand1 = VectorDoubleSubtract(VectorDoubleSet(static_cast<f64>(bounds.width), static_cast<f64>(bounds.height), 0.0, 0.0), VectorDoubleSelect(VectorDoubleZero(), leftTopValue, s_DoubleSIMDMaskXY));
     const SIMDVectorDouble rightBottomValue = VectorDoubleSelect(geometryPair3Operand1, geometryPair3Operand0, VectorDoubleLess(geometryPair3Operand0, geometryPair3Operand1));
     const SIMDVectorDouble xYValue = VectorDoubleAdd(VectorDoubleSet(static_cast<f64>(bounds.x), static_cast<f64>(bounds.y), 0.0, 0.0), VectorDoubleSelect(VectorDoubleZero(), leftTopValue, s_DoubleSIMDMaskXY));
-    const f64 x = VectorDoubleGetX(xYValue);
-    const f64 y = VectorDoubleGetY(xYValue);
     const SIMDVectorDouble contentSize = VectorDoubleSubtract(geometryPair3Operand1, rightBottomValue);
-    const f64 width = VectorDoubleGetX(contentSize);
-    const auto content = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoubleSet(x, y, width, VectorDoubleGetY(contentSize)));
+    const SIMDVectorDouble widthVector = VectorDoubleSplatX(contentSize);
+    const auto content = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoublePermute<0, 1, 4, 5>(xYValue, contentSize));
     if(!content)
         return MakeUnexpected(Failure{});
     candidate.content = *content;
-    const SIMDVectorDouble indicatorExtent = VectorDoubleMin(VectorDoubleReplicate(metrics.indicatorExtent), VectorDoubleReplicate(width));
-    const f64 extent = VectorDoubleGetX(indicatorExtent);
-    const SIMDVectorDouble labelOffset = VectorDoubleMin(VectorDoubleReplicate(width), VectorDoubleAdd(indicatorExtent, VectorDoubleReplicate(metrics.gap)));
+    const SIMDVectorDouble indicatorExtent = VectorDoubleMin(VectorDoubleReplicate(metrics.indicatorExtent), widthVector);
+    const SIMDVectorDouble labelOffset = VectorDoubleMin(widthVector, VectorDoubleAdd(indicatorExtent, VectorDoubleReplicate(metrics.gap)));
     const SIMDVectorDouble labelStart = VectorDoubleSelect(VectorDoubleZero(), labelOffset, s_DoubleSIMDMaskXY);
     const SIMDVectorDouble labelShift = VectorDoubleSelect(labelStart, VectorDoubleNegate(labelStart), s_DoubleSIMDMaskY);
-    const f64 markInset = VectorDoubleGetX(VectorDoubleMultiply(indicatorExtent, VectorDoubleReplicate(metrics.markInset)));
+    const SIMDVectorDouble markInset = VectorDoubleAndInt(VectorDoubleMultiply(indicatorExtent, VectorDoubleReplicate(metrics.markInset)), s_DoubleSIMDMaskXY);
+    const SIMDVectorDouble rowHeightVector = VectorDoubleReplicate(metrics.rowHeight);
+    const SIMDVectorDouble baseRowRect = VectorDoublePermute<0, 1, 4, 7>(xYValue, VectorDoubleSelect(widthVector, rowHeightVector, s_DoubleSIMDMaskW));
     for(u32 index = 0u; index < candidate.count; ++index){
         if(choices.rows[index].key == 0u)
             return MakeUnexpected(Failure{});
@@ -173,27 +172,27 @@ Expected<RadioGroupPlacement> RadioGroupLayout::Place(const Rect& bounds, const 
         RadioGroupChoicePlacement& row = candidate.rows[index];
         row.key = choices.rows[index].key;
         row.enabled = choices.rows[index].enabled;
-        const SIMDVectorDouble rowOffset = VectorDoubleMultiply(VectorDoubleReplicate(index), VectorDoubleAdd(VectorDoubleReplicate(metrics.rowHeight), VectorDoubleReplicate(metrics.rowGap)));
-        const SIMDVectorDouble rowOrigin = VectorDoubleAdd(VectorDoubleReplicate(y), rowOffset);
-        const f64 rowY = VectorDoubleGetX(rowOrigin);
-        const SIMDVectorDouble indicatorSpace = VectorDoubleSubtract(VectorDoubleReplicate(metrics.rowHeight), indicatorExtent);
-        const f64 indicatorY = VectorDoubleGetY(VectorDoubleAdd(rowOrigin, VectorDoubleMultiply(indicatorSpace, VectorDoubleReplicate(s_RectCenterFractionF64))));
-        const auto rectangle = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoubleSet(x, rowY, width, metrics.rowHeight));
+        const SIMDVectorDouble rowOffset = VectorDoubleMultiply(VectorDoubleReplicate(index), VectorDoubleAdd(rowHeightVector, VectorDoubleReplicate(metrics.rowGap)));
+        const SIMDVectorDouble rowOrigin = VectorDoubleAdd(VectorDoubleSplatY(xYValue), rowOffset);
+        const SIMDVectorDouble indicatorSpace = VectorDoubleSubtract(rowHeightVector, indicatorExtent);
+        const SIMDVectorDouble indicatorY = VectorDoubleAdd(rowOrigin, VectorDoubleMultiply(indicatorSpace, VectorDoubleReplicate(s_RectCenterFractionF64)));
+        const auto rectangle = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoubleSelect(baseRowRect, rowOrigin, s_DoubleSIMDMaskY));
         if(!rectangle)
             return MakeUnexpected(Failure{});
         const auto rowClip = IntersectUiRects<UiRectPrecision::PreciseExtents>(*rectangle, candidate.clip);
         if(!rowClip)
             return MakeUnexpected(Failure{});
-        const auto indicator = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoubleSet(x, indicatorY, extent, extent));
+        const SIMDVectorDouble indicatorOrigin = VectorDoubleSelect(xYValue, indicatorY, s_DoubleSIMDMaskY);
+        const auto indicator = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoublePermute<0, 1, 4, 5>(indicatorOrigin, indicatorExtent));
         if(!indicator)
             return MakeUnexpected(Failure{});
-        const SIMDVectorDouble markOrigin = VectorDoubleAdd(VectorDoubleSet(x, indicatorY, 0.0, 0.0), VectorDoubleSet(markInset, markInset, 0.0, 0.0));
-        const SIMDVectorDouble markSize = VectorDoubleSubtract(VectorDoubleSet(extent, extent, 0.0, 0.0), VectorDoubleMultiply(VectorDoubleSet(s_MarkInsetSides, s_MarkInsetSides, 0.0, 0.0), VectorDoubleSet(markInset, markInset, 0.0, 0.0)));
+        const SIMDVectorDouble markOrigin = VectorDoubleAdd(VectorDoubleAndInt(indicatorOrigin, s_DoubleSIMDMaskXY), markInset);
+        const SIMDVectorDouble markSize = VectorDoubleSubtract(VectorDoubleAndInt(indicatorExtent, s_DoubleSIMDMaskXY), VectorDoubleMultiply(VectorDoubleSet(s_MarkInsetSides, s_MarkInsetSides, 0.0, 0.0), markInset));
         const auto mark = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoublePermute<0, 1, 4, 5>(markOrigin, markSize));
         if(!mark)
             return MakeUnexpected(Failure{});
-        const SIMDVectorDouble labelBounds = VectorDoubleAdd(VectorDoubleSet(x, width, 0.0, 0.0), labelShift);
-        const auto label = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoubleSet(VectorDoubleGetX(labelBounds), rowY, VectorDoubleGetY(labelBounds), metrics.rowHeight));
+        const SIMDVectorDouble labelBounds = VectorDoubleAdd(VectorDoublePermute<0, 4, 2, 3>(xYValue, widthVector), labelShift);
+        const auto label = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoublePermute<0, 4, 1, 7>(labelBounds, VectorDoubleSelect(rowOrigin, rowHeightVector, s_DoubleSIMDMaskW)));
         if(!label)
             return MakeUnexpected(Failure{});
         const auto textClip = IntersectUiRects<UiRectPrecision::PreciseExtents>(*label, *rowClip);

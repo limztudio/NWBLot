@@ -53,7 +53,7 @@ namespace ECSRenderDetail{
 struct MeshViewSetupGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
 
-    // The graphics runtime, the async-prefix timing slot, the timing-ticket slot, and the single-packet span flag are required: mesh-view setup always records the prefix timing decision for this frame.
+    // The graphics runtime, the async-prefix timing slot, the timing-ticket slot, and the single-packet span flag are required: mesh-view setup always records the prefix timing for this frame.
     // Only the shadow-visibility task stays optional: the queue lookup may be absent when no visibility pass runs.
     struct Payload{
         Core::GraphicsRuntime& graphics;

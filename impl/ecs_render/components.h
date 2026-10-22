@@ -45,10 +45,10 @@ namespace OpticalBoundaryMode{
 struct RendererComponent{
     Core::Assets::AssetRef<Material> material;
     bool visible = true;
-    // Opt-in merging: hooks ID-independent; mesh/material/transform must match. IdenticalMaterial compares all mutable bytes; SharedGroup needs a common group + same boundary. CSG stays independent.
+    // Opt-in merging: hooks ID-independent; mesh/material/transform must match. IdenticalMaterial compares all mutable bytes; SharedGroup needs a common group + same boundary. CSG independent.
     OpticalVolumeCoincidence::Enum opticalVolumeCoincidence = OpticalVolumeCoincidence::Independent;
     Name opticalVolumeGroup = s_NameNone;
-    // Higher priority wins; equal priority uses the lowest full EntityID. The selected material supplies every optical and shading property to raster, RT and caustics, even with screen refraction off.
+    // Higher priority wins; equal priority uses the lowest full EntityID. The selected material supplies every optical and shading property to raster, RT and caustics, even with refraction off.
     i32 opticalVolumePriority = 0;
     // Volume caustics require a closed mode: watertight outward geometry, homogeneous IOR/absorption (UV/normal/position/direction invariant).
     // Same-instance shells union; priority wins overlaps; co-active volumes share the mode.

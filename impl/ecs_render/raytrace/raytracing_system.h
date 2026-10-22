@@ -219,7 +219,7 @@ public:
     // The material table, instance stream, and typed bytes share indices and offsets. A fresh context retains one all-or-nothing upload batch
     [[nodiscard]] Expected<PreparedShadowMaterialContextUploads> retainPreparedShadowMaterialContextUploads(Core::GpuTaskGraph& graph)const;
     void confirmPreparedShadowMaterialContextUploads()noexcept;
-    // The software scene hierarchy and its leaf instances share topology and leaf indices; keep them as one preflight batch and publish both only when the accepting Shadow Preparation packet submits.
+    // The software scene hierarchy and its leaf instances share topology and leaf indices; keep them as one preflight batch and publish both only when the Shadow Preparation packet submits.
     [[nodiscard]] Expected<PreparedSceneBvhUploads> retainPreparedSceneBvhUploads(Core::GpuTaskGraph& graph)const;
     void confirmPreparedSceneBvhUploads()noexcept;
     // Hardware TLAS work records from this frozen preflight plan in Shadow Preparation. Its static cache becomes valid only after that packet accepts.
@@ -376,7 +376,7 @@ public:
     void confirmCausticAccumulatorNonTemporalClear()noexcept;
     // The temporal bootstrap clear is recorded by a graph task, but this mirror changes only when the containing caustic producer packet accepts.
     void confirmCausticAccumulatorBootstrapClear()noexcept;
-    // A warm temporal accumulator decays in its own graph task before the selected photon producer. The task shares the producer packet, so the compiler owns the UAV handoff between the dispatches.
+    // A warm temporal accumulator decays in its own graph task before the selected photon producer. The task shares the producer packet, so the compiler owns the UAV handoff between dispatches.
     [[nodiscard]] Expected<Core::GpuTaskId> declareCausticAccumulatorDecayTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
@@ -600,7 +600,7 @@ private:
         bool graphOwnsOpaqueTemporalMergeEntryStates
     );
     // Denoise either backend's soft trace and optionally run the transparent trace and resolve phases.
-    // The shared deferred graph supplies the first downsample entry states, the opaque-to-resolve handoff, and prepared transparent trace-to-merge/first-wavelet plus handoffs; later transitions stay task-local.
+    // The shared deferred graph supplies the first downsample entry states, the opaque-to-resolve handoff, and prepared transparent trace-to-merge/first-wavelet plus handoffs; later transitions stay local.
     void dispatchSoftShadowDenoiseAndTransparentFold(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,

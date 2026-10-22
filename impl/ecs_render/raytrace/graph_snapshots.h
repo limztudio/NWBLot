@@ -87,7 +87,7 @@ struct RayTracingFrameCpuStateSnapshot{
 };
 
 
-// Shadow Preparation retains native state for the scene TLAS, software-BVH scratch, and adaptive-shadow scratch across packets. The coordinator receives handles without touching domain state.
+// Shadow Preparation retains native state for the scene TLAS, software-BVH scratch, and adaptive-shadow scratch across packets. The coordinator receives handles without domain state.
 struct RayTracingShadowPreparationResourceSnapshot{
     Core::RayTracingAccelStructHandle sceneTlas;
     Core::BufferHandle sceneTlasBackingBuffer;

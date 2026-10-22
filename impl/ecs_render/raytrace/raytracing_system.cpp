@@ -95,7 +95,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(DeferredFrameT
     m_rayTracingState.m_surfelUseHwTrace = false;
     if(!targets.shadowVisibility)
         return false;
-    // The trace material-context selector is itself a global UniformBuffer heap entry. Establish it before gathering the deferred graph imports the backing handle rather than a recording-time replacement.
+    // The trace material-context selector is itself a global UniformBuffer heap entry. Establish it before gathering: the deferred graph imports the backing handle rather than a recording-time replacement.
     if(!ensureRayTraceMaterialContextSlotsBuffer())
         return false;
 
@@ -161,7 +161,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(DeferredFrameT
         if(!prepareHwCausticResources(targets))
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hardware caustic producer resource preparation failed"));
 
-        // Enable surfel GI on the HW path: the RayQuery twin reuses the TLAS + per-mesh geometry + InstanceID-material record the shadow/caustic path already built — the ONLY place surfels run on hardware.
+        // Enable surfel GI on the HW path: the RayQuery twin reuses the TLAS + per-mesh geometry + InstanceID-material record the shadow/caustic path built — the ONLY place surfels run on hardware.
         // Gated on the HW shadow backend being ready + a non-empty TLAS.
         // Non-fatal: a failure leaves GI off this frame (lighting uses hemiAmbient).
         if(backendReady && m_rayTracingState.m_tlasInstanceCount > 0u && m_rayTracingState.m_shadowMeshCount > 0u){
@@ -335,7 +335,7 @@ void RendererRayTracingSystem::discardPreflightShadowVisibilityResources()noexce
     m_rayTracingState.m_surfelEnabled = false;
     m_rayTracingState.m_surfelUseHwTrace = false;
 
-    // Recording updates these flags optimistically.  If the shared packet never submits, keep every retained structure rebuildable instead of letting a later frame consume its unrecorded contents.
+    // Recording updates these flags optimistically.  If the shared packet never submits, keep every retained structure rebuildable instead of letting a later frame consume its contents.
     m_meshSystem.discardRayTracingBuildState();
 }
 

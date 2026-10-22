@@ -162,7 +162,7 @@ struct MaterialSurfaceInfo{
     MaterialTypedByteVector mutableDefaultTypedBytes;
     u32 shadingModelId = 0u;
     u32 surfaceDispatchId = 0u;
-    // CSG caps evaluate the cook-generated surface hook with this material's typed constants and mutable instance storage. Explicit opaque stage shaders have no hook, so clipping is disabled for them.
+    // CSG caps evaluate the cook-generated surface hook with this material's typed constants and mutable instance storage. Opaque stage shaders have no hook, so clipping is disabled for them.
     bool csgCapSurfaceDispatchAvailable = false;
     bool csgCapSurfaceDispatchUnavailableLogged = false;
     bool resourceReferencesResolved = false;

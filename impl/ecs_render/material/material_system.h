@@ -224,7 +224,7 @@ public:
     [[nodiscard]] bool recordObjectGeometryDecode(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem);
     // Graph-only producer half. The graph owns generated output UAV states; this method records only the dispatch.
     void generateComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
-    // Graph-only raster half. The graph must provide each generated output in combined vertex/index state; this records graphics state, descriptor heap, push constants, and draws with no transition.
+    // Graph-only raster half. The graph must provide each generated output in combined vertex/index state; this records graphics state, heap, push constants, and draws with no transition.
     void renderComputeMaterialPassDrawItemsRasterOnly(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
     // Per-draw generation and rasterization retain the local UAV-to-vertex/index handoff when outputs alias.
     void renderComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);

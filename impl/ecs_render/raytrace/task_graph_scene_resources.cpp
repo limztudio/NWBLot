@@ -54,7 +54,7 @@ Expected<RayTracingSceneGraphReads> ImportRayTracingSceneGraphReads(
         importedBuffers[index] = *importedBuffersIndexResult;
     }
 
-    // Other shared scene consumers use this identity. Reimporting the same TLAS with matching metadata returns its existing graph identity, preserving the preparation producer and cross-effect read dependencies.
+    // Other shared scene consumers use this identity. Reimporting the same TLAS with matching metadata returns its existing identity, preserving the producer and cross-effect read dependencies.
     const auto tlasResult = graph.importAccelStruct(
         resources.sceneTlas,
         RendererTaskGraphDetail::AccelStructResourceDesc(Name(RendererFramePipelineDetail::s_SceneTlasResourceName), RendererFramePipelineDetail::s_SceneTlasResourceLabel)

@@ -430,7 +430,7 @@ private:
     Core::GpuTaskId m_deferredLaggedLightingHistorySlotsUploadTask;
     Core::GpuTaskId m_deferredFrameTimingBeginTask;
     Core::GpuTaskId m_deferredShadowPrepareTask;
-    // Pure-software prepared per-mesh builds lower their sentinel clears and callbacks before Shadow Preparation's existing scene-build/acceptance endpoint. Both bounds must remain in that packet.
+    // Pure-software prepared per-mesh builds lower their sentinel clears and callbacks before Shadow Preparation's scene-build/acceptance endpoint. Both bounds must remain in that packet.
     Core::GpuTaskId m_deferredShadowPrepareSoftwareBvhBuildFirstTask;
     Core::GpuTaskId m_deferredShadowPrepareSoftwareBvhBuildLastTask;
     Core::GpuTaskId m_deferredShadowPrepareSceneRefitTask;
@@ -461,7 +461,7 @@ private:
     Core::GpuTaskId m_graphicsPrefixCsgIntervalCombineTask;
     Core::GpuTaskId m_graphicsPrefixCsgIntervalSampleTask;
     Core::GpuTaskId m_graphicsPrefixTask;
-    // Prepared soft-transparent shadow frames split opaque production, first wavelet, resolve tail, transparent trace, optional temporal merge, transparent first wavelet, and terminal resolve tail. Every active task must compile into one packet
+    // Prepared soft-transparent shadow frames split opaque production, wavelet, resolve tails, transparent trace, temporal merge, and terminal tail. Every active task must compile into one packet
     Core::GpuTaskId m_deferredShadowVisibilityOpaqueTask;
     Core::GpuTaskId m_deferredShadowVisibilityOpaqueFirstWaveletTask;
     Core::GpuTaskId m_deferredShadowVisibilityOpaqueResolveTask;
@@ -484,7 +484,7 @@ private:
     Core::GpuTaskId m_deferredCausticAccumulatorNonTemporalClearTask;
     // A warm temporal accumulator decays in a mergeable graph task before its selected photon producer.
     Core::GpuTaskId m_deferredCausticAccumulatorDecayTask;
-    // Photon, downsample, resolve prepare, five wavelets, upsample, and timing close are distinct tasks, but must stay in the selected caustics packet so the compiler owns handoffs without changing the endpoint.
+    // Photon, downsample, resolve prepare, five wavelets, upsample, and timing close are distinct tasks, but must stay in the selected packet so the compiler owns handoffs without changing that endpoint.
     Core::GpuTaskId m_deferredCausticPhotonTask;
     Core::GpuTaskId m_deferredCausticGeometryTask;
     Core::GpuTaskId m_deferredCausticResolvePrepareTask;
@@ -523,7 +523,7 @@ private:
     Core::GpuTaskId m_deferredFrameRecoveryTask;
     // Imported only while the preceding frame's diagnostic Transfer readback remains in flight.
     Core::GpuExternalCompletionId m_deferredSurfelGiCounterReadbackCompletion;
-    // These are distinct semantic completions even when both refer to the same accepted prior history-copy token: Lighting waits for readable history, while current producers wait until the prior copy stops reading.
+    // These are distinct completions even when both refer to the same accepted prior history-copy token: Lighting waits for readable history, while producers wait until the prior copy stops reading.
     Core::GpuExternalCompletionId m_deferredLightingHistoryReadReadyCompletion;
     Core::GpuExternalCompletionId m_deferredLightingHistoryWriterDrainCompletion;
     bool m_deferredShadowCombinedUpsample = false;
@@ -554,16 +554,16 @@ private:
     u64 m_laggedLightingReportGeneration = 0u;
     RendererRayTracingState m_rayTracingState;
     CsgFrameState m_preparedCsgFrameState;
-    // Shadow scratch/history retains accepted packet state across frames on either compiler-selected route. Declaration-owned first-use sources restore the private scratch and its typed backings.
+    // Shadow scratch/history retains accepted packet state across frames on either compiler route. Declaration-owned first-use sources restore the private scratch and its typed backings.
     Core::GpuPersistentResourceStateCache m_shadowComputePersistentState;
     Core::GpuPersistentResourceStateCache m_shadowVisibilityReturnState;
-    // Native TLAS/BLAS, software-BVH build storage, and normalized trace geometry change inside Shadow Preparation. Keep only live generations so the next frame's first packet seeds their real acceleration, UAV, and states.
+    // Native TLAS/BLAS, software-BVH build storage, and normalized trace geometry change inside Shadow Preparation. Keep only live generations so the next frame's first packet seeds their acceleration, UAV, and states.
     Core::GpuPersistentResourceStateCache m_shadowPreparePersistentState;
     // Software caustics retain their temporal scratch on either compiler-selected route.
     // Hardware dispatch-rays caustics retain their temporal accumulator only after the Graphics hardware-caustics packet accepts
     Core::GpuPersistentResourceStateCache m_causticsComputePersistentState;
     Core::GpuPersistentResourceStateCache m_hardwareCausticAccumulatorPersistentState;
-    // Retain only the accepted cross-queue return state needed when resolved irradiance moves from Graphics lighting back to a Compute-routed caustics packet. Current producer/lighting flow is compiler-seeded.
+    // Retain only the accepted cross-queue return state needed when irradiance moves from Graphics lighting back to a Compute-routed caustics packet. Current producer/lighting flow is compiler-seeded.
     Core::GpuPersistentResourceStateCache m_causticIrradianceReturnState;
     // Surfel GI retains its field/history on either compiler-selected route, including its RayQuery trace variant. The resolved full-resolution irradiance is consumed on that route or snapshotted for optional frame-lagged lighting. Retain only accepted scratch and its typed backings.
     Core::GpuPersistentResourceStateCache m_surfelGiComputePersistentState;

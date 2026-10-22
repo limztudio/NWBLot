@@ -48,7 +48,7 @@ void Shutdown();
 
 [[nodiscard]] bool IsActive();
 
-// On device-lost, block (bounded) until Aftermath has finished collecting the crash dump, then return a view of the collected dump bytes (empty if Aftermath is inactive or produced no dump).
+// On device-lost, block (bounded) until Aftermath finishes collecting the crash dump, then return a view of the dump bytes (empty if Aftermath is inactive or produced no dump).
 [[nodiscard]] GpuCrashDumpView WaitForCrashDump();
 
 

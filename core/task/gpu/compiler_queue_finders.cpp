@@ -204,7 +204,7 @@ namespace GpuTaskGraphCompilerDetail{
     return result;
 }
 
-// Calibration is bounded and narrower than selection. It visits only legal opted-in routes until each has enough samples, then hysteresis resumes. The incumbent reserves this frame for a baseline sample.
+// Calibration is bounded and narrower than selection. It visits only legal opted-in routes until each has enough samples, then hysteresis resumes. The incumbent reserves this frame.
 [[nodiscard]] const GpuPhysicalQueueInfo* FindTimingFeedbackCalibrationQueue(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuPhysicalQueueTopology& topology,

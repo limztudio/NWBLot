@@ -253,7 +253,7 @@ namespace GpuTaskGraphCompilerDetail{
             // Acceleration structures retain their whole-resource path.
             const bool alreadyPlannedByTask = resource.type == GpuGraphResourceType::AccelStruct && taskUseHistory.first(use.resource) < useIndex;
             if(alreadyPlannedByTask){
-                // The task thunk owns this local transition, but the declared final state/access must still become the source for later tasks, packet seeds, ownership handoffs, and terminal exports.
+                // The task thunk owns this local transition, but the declared final state/access must still source later tasks, packet seeds, ownership handoffs, and terminal exports.
                 // Do not emit another packet-boundary barrier for it here.
                 if(!resourceHistory.append(TrackedCompiledResourceState{ .resource = use.resource, .range = (*plannedRange), .task = taskID, .state = use.requiredState, .access = use.access, .queue = compiledTask.queue, }))
                     return false;

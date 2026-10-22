@@ -44,7 +44,7 @@ struct GpuSubmissionPacket{
     u32 externalDependencyOffset = 0u;
     u32 externalDependencyCount = 0u;
     // Compiler-derived ready-frontier depth for native recording.
-    // Packets in one depth have no recorded-state-seed producer relationship, so the runtime may record opted-in packets concurrently while retaining deterministic compile-order submission.
+    // Packets in one depth have no seed producer relationship, so the runtime may record opted-in packets concurrently while keeping deterministic compile-order submission.
     u32 recordingFrontier = 0u;
     GpuPhysicalQueueId queue;
     // A late recovery/finalization packet receives waits for the latest accepted packet on every other physical queue directly from GpuGraphSubmissionTransaction.
@@ -171,7 +171,7 @@ public:
 };
 
 // Immutable presentation completion resolved from a strict typed-texture declaration.
-// It retains the semantic producer/backbuffer pair along with the compiler-owned packet and exact physical queue shared by every backbuffer user before the one native present signal.
+// It retains the semantic producer/backbuffer pair plus the compiler-owned packet and exact physical queue shared by every backbuffer user before the one native present signal.
 struct GpuCompiledPresentEndpoint{
     GpuTaskId producer;
     GpuGraphResourceId backBuffer;
@@ -187,7 +187,7 @@ public:
 
 
 // One semantic exclusive-ownership movement.
-// Internal moves remain one record even though native lowering emits a release and an acquire barrier; external routes deliberately leave the task and packet on the external side invalid.
+// Internal moves stay one record even though native lowering emits a release and an acquire barrier; external routes leave the task and packet on the external side invalid.
 // Queue-family indices and sharing intent are captured by value so telemetry never has to reinterpret a later topology or resource declaration.
 namespace GpuOwnershipTransferRoute{
     enum Enum : u8{
@@ -349,7 +349,7 @@ public:
 
 
 // Immutable-by-value accepted-plan telemetry for one exact physical queue.
-// Barrier counts belong to the compiled task that lowers them: a cross-queue ownership release therefore belongs to its producer queue, while the matching acquire belongs to its consumer queue.
+// Barrier counts belong to the compiled task that lowers them: a cross-queue release belongs to its producer queue, while the matching acquire belongs to its consumer queue.
 struct GpuTaskGraphPhysicalQueueCompileStatistics{
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
@@ -421,7 +421,7 @@ private:
 
 
 public:
-    // Runtime entry points take a short nonblocking read claim while deriving packet identities or plan-indexed storage before an exact graph attempt provides the immutable-plan lease.
+    // Runtime entry points take a short nonblocking read claim while deriving packet identities or plan storage before an exact graph attempt provides the immutable-plan lease.
     // The view is deliberately nonmovable because its address participates in the thread-local lexical proof chain.
     class ReadView final : NoCopy{
         friend class GpuCompiledGraph;

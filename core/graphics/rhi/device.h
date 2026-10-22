@@ -51,7 +51,7 @@ namespace Feature{
     };
 };
 
-// One opaque binary semaphore signal from a submission-local hook. Only the owning native Device may decode it; presentation takes one binary signal while timeline deps stay token-based.
+// One opaque binary semaphore signal from a submission-local hook. Only the owning Device may decode it; presentation takes one binary signal while timeline deps stay token-based.
 struct QueueSubmissionNativeSignal{
     Object semaphore = Object(u64{0u});
     u64 value = 0u;
@@ -82,7 +82,7 @@ public:
     [[nodiscard]] constexpr bool valid()const noexcept{ return invoke != nullptr && resolved != nullptr; }
 };
 
-// Submission-local cross-queue dependencies. Same-queue tokens collapse to queue order; prior accepted waits may cover distinct-queue tokens. The caller owns the token array until submit returns.
+// Local cross-queue dependencies. Same-queue tokens collapse to queue order; prior accepted waits may cover distinct-queue tokens. The caller owns the token array until submit returns.
 struct QueueSubmissionDesc{
     const QueueSubmissionToken* waitTokens = nullptr;
     usize waitTokenCount = 0;
@@ -123,7 +123,7 @@ struct CommandListParameters{
     // Type of the queue that this command list is to be executed on.
     // Dedicated Compute and Transfer queues expose only the command subsets their Vulkan families support.
     CommandQueue::Enum queueType = CommandQueue::Graphics;
-    // Device resolves queueType to its primary physical queue unless an exact queue is supplied. Explicit graph packets set it directly, so pools, uploads, and handoffs never collapse same-class queues.
+    // Device resolves queueType to its primary physical queue unless an exact queue is supplied. Explicit packets set it directly, so pools, uploads, and handoffs never collapse same-class queues.
     GpuPhysicalQueueId physicalQueue;
     // Worker zero is the ordinary serial/direct lease.
     // Ready-frontier graph recording combines a stable nonzero CpuTaskScheduler domain with its local nonzero worker index so different pools cannot alias one native arena shard.
@@ -361,7 +361,7 @@ struct DeviceCreationParameters : public InstanceParameters{
     // The backend registers every safe extra queue from each active primary family and one deterministic alternate family per supported class when cross-family routing is on.
     // Graph tasks must allow same-class routing before ordinary work leaves the primary transport.
     bool enableSameClassMultiQueue = false;
-    // Permits an auxiliary same-class transport to come from a different compatible Vulkan family. Tasks must separately opt in before the compiler can route across that ownership boundary.
+    // Permits an auxiliary same-class transport from a different compatible Vulkan family. Tasks must separately opt in before the compiler can route across that ownership boundary.
     bool enableCrossFamilySameClassQueueRouting = false;
     bool supportExplicitDisplayScaling = false;
     bool resizeWindowWithDisplayScale = false;

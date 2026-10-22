@@ -211,7 +211,7 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
     if(g_State.requestWriteHandle == INVALID_HANDLE_VALUE)
         return CrashDumpTransportStatus::Failed;
 
-    // Re-entrancy guard: a fault while already inside the transport (e.g. the SEH filter itself faulting) must not re-enter and corrupt the in-flight request or self-deadlock on the channel.
+    // Re-entrancy guard: a fault while already inside the transport (e.g. the SEH filter itself faulting) must not re-enter and corrupt the request or self-deadlock on the channel.
     static thread_local bool s_inTransport = false;
     if(s_inTransport)
         return CrashDumpTransportStatus::Failed;

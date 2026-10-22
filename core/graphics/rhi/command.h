@@ -249,7 +249,7 @@ public:
 
 // Final tracked state of one primary list for the next to begin from (scheduler orders producer < consumer). Caller-owned lifetimes: refs stay alive until the consumer opens.
 
-// It carries both transient and permanent state. UAV-barrier policy stays local to each command list; keepInitialState resources are captured after their close-time restore barriers.
+// It carries both transient and permanent state. UAV-barrier policy stays local to each command list; keepInitialState resources are captured after their close-time restore.
 // Before the producer is accepted, this handoff is the only valid cross-list source for that restored native state.
 class CommandListResourceStateHandoff final : NoCopy{
     friend class GraphicsBackend::CommandList;
@@ -264,7 +264,7 @@ private:
         ArraySlice arraySlice = 0;
         ResourceStates::Mask state = ResourceStates::Unknown;
         ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
-        // An invalid ID means concurrently shared (or not yet claimed). Otherwise this is the native queue that last owned the resource; a valid release destination needs a paired acquire there.
+        // An invalid ID means concurrently shared (or not yet claimed). Otherwise this is the native queue that last owned the resource; a valid release destination needs a paired acquire.
         GpuPhysicalQueueId ownerQueue;
         GpuPhysicalQueueId releaseDestinationQueue;
     };
@@ -309,7 +309,7 @@ public:
     [[nodiscard]] bool valid()const noexcept{ return m_valid; }
 
     [[nodiscard]] u16 deviceGeneration()const noexcept{ return m_deviceGeneration; }
-    // State snapshots retain raw backend-resource pointers.  Preserve the producer Device identity so a stale snapshot is rejected before those pointers are used after device recreation.
+    // State snapshots retain raw backend-resource pointers.  Preserve the producer Device identity so a stale snapshot is rejected before those pointers are used after recreation.
     [[nodiscard]] bool validForDeviceGeneration(const u16 deviceGeneration)const noexcept{
         return m_valid && deviceGeneration != 0u && m_deviceGeneration == deviceGeneration;
     }
@@ -339,7 +339,7 @@ public:
     // Compares immutable snapshot contents rather than the address of a producer-owned snapshot.
     // This is suitable for declaration deduplication across producer-storage retirement and same-address allocator reuse.
     [[nodiscard]] bool equivalentTo(const CommandListResourceStateHandoff& snapshot)const noexcept;
-    // Exchanges complete snapshot storage without allocating. Both snapshots must use the same arena so each vector stays paired with the allocator that owns its storage after the exchange.
+    // Exchanges complete snapshot storage without allocating. Both snapshots must use the same arena so each vector stays paired with the allocator that owns storage after the exchange.
     [[nodiscard]] bool exchangeSnapshot(CommandListResourceStateHandoff& snapshot)noexcept;
     [[nodiscard]] bool hasPendingBufferReleases()const noexcept;
     [[nodiscard]] bool empty()const noexcept;

@@ -23,7 +23,7 @@ class GpuGraphSubmissionTransaction;
 
 
 // One accepted terminal packet that contributes to a graph-to-external resource handoff.
-// Several disjoint texture subresource ranges may be published by different packets; a consumer waits on the returned compact token frontier before opening the handoff's merged native state source.
+// Several disjoint texture ranges may be published by different packets; a consumer waits on the returned token frontier before opening the handoff's merged state source.
 struct GpuTaskGraphExternalResourceHandoffProducer{
     GpuTaskId producerTask;
     GpuPhysicalQueueId sourceQueue;

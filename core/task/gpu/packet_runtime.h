@@ -58,7 +58,7 @@ inline constexpr Name s_ExternalResourceHandoffScratchArena("core/task/gpu/exter
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Timing ticket bound to semantic work (scheduler resolves to packet at admission). Same-packet aliases coalesce; one ticket never spans packets. Graph may own an automatic ticket.
+// Timing ticket bound to semantic work (scheduler resolves to packet at admission). Same-packet aliases coalesce; one ticket never spans packets.
 struct GpuTaskGraphTaskTimingTicket{
     GpuTaskId task;
     GpuTimingSubmissionTicket* timingTicket = nullptr;
@@ -89,14 +89,14 @@ struct GpuTaskGraphTaskRecordedCallback{
 };
 
 
-// One graph-owned ordinary-packet prefix in compiler order; optional terminal task includes its packet, rest stay declared for late-tail policy. Semantic bindings survive packet re-splitting.
+// One graph-owned ordinary-packet prefix in compiler order; optional terminal task includes its packet, rest stay declared for late-tail policy. Bindings survive re-splitting.
 struct GpuTaskGraphNormalExecutionDesc{
     GpuTaskId terminalTask;
     // Invoked in compiler task order after the complete ordinary prefix records and before its first native submit.
     // A false result leaves every packet unaccepted so the caller can discard or recover transactionally.
     const GpuTaskGraphTaskRecordedCallback* taskRecordedCallbacks = nullptr;
     usize taskRecordedCallbackCount = 0u;
-    // A null scheduler preserves serial compile-order recording. A supplied scheduler enables the recorder's per-packet ready-frontier policy; packets without declaration opt-in still record serially.
+    // A null scheduler keeps serial compile-order recording. A supplied scheduler enables per-packet ready-frontier policy; packets without opt-in still record serially.
     CpuTaskScheduler* readyFrontierScheduler = nullptr;
     GpuCommandIrCapture* commandIrCapture = nullptr;
     const GpuTaskGraphTaskTimingTicket* taskTimingTickets = nullptr;
@@ -122,7 +122,7 @@ struct GpuTaskGraphSubmissionStatistics{
     usize rejectedPacketCount = 0u;
     usize rejectedTaskCount = 0u;
     usize nativeSubmissionCount = 0u;
-    // The narrower native-submit failure subset of rejectedPacketCount. This can occur before the backend sees a native submit, so it is deliberately not labelled as a Vulkan rejection.
+    // The narrower native-submit failure subset of rejectedPacketCount. This can occur before the backend sees a native submit, so it is not labelled as a Vulkan rejection.
     usize rejectedSubmissionCount = 0u;
     usize nativeCommandListCount = 0u;
     usize plannedWaitTokenCount = 0u;
@@ -464,7 +464,7 @@ private:
     void resolveSubmissionBindingIfTerminalLocked(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph)noexcept;
     void rejectTaskWithinSubmissionOperation(GpuTaskGraph& graph, const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuTaskId task, u64 recordingAttemptGeneration);
 
-    // Reserves native submission before Device::executeCommandLists() begins. While a packet is Submitting, transaction cancellation cannot run its discarded callback or claim the graph for a retry.
+    // Reserves native submission before Device::executeCommandLists() begins. While a packet is Submitting, cancellation cannot run its discarded callback or claim the graph for retry.
     [[nodiscard]] bool beginPacketSubmission(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, GpuSubmissionPacketId packet, u64 recordingAttemptGeneration, GpuPacketSubmissionLease& outLease)noexcept;
     [[nodiscard]] bool acceptSubmittingPacket(
         GpuTaskGraph& graph,

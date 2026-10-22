@@ -432,7 +432,7 @@ public:
 
 
 public:
-    // Validates that every supplied command list still owns a ready command buffer, submits them together in their supplied order, and resolves every timing scope recorded under this ticket.
+    // Validates that every supplied command list still owns a ready buffer, submits them together in their supplied order, and resolves every timing scope recorded under this ticket.
     // A partial split submission is rejected before reaching Vulkan so a cross-list timing scope can never be left waiting for a missing endpoint.
     // A rejected submission discards its query reservations; an accepted submission produces its completion token.
     [[nodiscard]] Expected<QueueSubmissionToken> submit(Device& device, CommandList* const* commandLists, usize commandListCount, CommandQueue::Enum executionQueue = CommandQueue::Graphics, const QueueSubmissionDesc& submitDesc = {});
@@ -444,7 +444,7 @@ public:
 private:
     // Rejects incomplete batches before they can partially submit a split timing scope.
     // Invalid command-list input releases reservations.
-    // Successful preparation atomically blocks recording and any competing submission until the caller either resolves the native attempt or rolls preparation back before reaching the device.
+    // Successful prep atomically blocks recording and any competing submission until the caller either resolves the attempt or rolls it back before reaching the device.
     [[nodiscard]] bool prepareSubmission(CommandList* const* commandLists, usize commandListCount, Vector<QueueSubmissionToken, Alloc::ScratchArena>& waitTokens);
     [[nodiscard]] bool prepareSubmissionAfterCommandListValidation(CommandList* const* commandLists, usize commandListCount, Vector<QueueSubmissionToken, Alloc::ScratchArena>& waitTokens);
     [[nodiscard]] bool prepareSubmissionState(Vector<QueueSubmissionToken, Alloc::ScratchArena>& waitTokens);

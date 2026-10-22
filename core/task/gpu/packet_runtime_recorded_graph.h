@@ -61,7 +61,7 @@ struct GpuRecordedPacket{
     // Native recording retains its acquired lists through submission.
     CommandListHandle ownedCommandLists[s_MaxCommandLists] = {};
     CommandList* commandLists[s_MaxCommandLists] = {};
-    // Exact graph-publication identities let reset/destruction revoke an unsubmitted list without touching a later recording that happens to reuse the same retained CommandList object.
+    // Exact publication identities let reset/destruction revoke an unsubmitted list without touching a later recording that reuses the same retained CommandList object.
     u64 commandListRecordingLeaseSerials[s_MaxCommandLists] = {};
     // These fields are written before commandListCount publishes the slot.
     // They intentionally describe the packet after graph lowering, compile tooling can distinguish declared work from the native work that was recorded.
@@ -283,7 +283,7 @@ public:
     [[nodiscard]] bool validFor(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept;
     [[nodiscard]] bool validFor(const GpuTaskGraph& graph, const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept;
     [[nodiscard]] u64 recordingAttemptGeneration()const noexcept;
-    // Returns an owned aggregate from packet slots published under artifact admission. The exact plan proof keeps packet metadata alive and rejects a recorded artifact from another compiled object.
+    // Returns an owned aggregate from packet slots published under artifact admission. The exact plan proof keeps packet metadata alive and rejects an artifact from another compiled object.
     [[nodiscard]] GpuTaskGraphRecordingStatistics recordingStatistics(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept;
     // Returns an owned physical-queue aggregate. Invalid/stale queue IDs and a recorded artifact from another exact compiled object return an empty result.
     [[nodiscard]] GpuTaskGraphPhysicalQueueRecordingStatistics physicalQueueRecordingStatistics(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuPhysicalQueueId& queue)const noexcept;
@@ -325,7 +325,7 @@ private:
     GraphicsArena& m_arena;
     GlobalUniquePtr<ArtifactStorage> m_activeStorage;
     GlobalUniquePtr<ArtifactStorage> m_candidateStorage;
-    // Submission readers may overlap on independent queues. Conflicting record/submit/reset admission is nonblocking, while destruction alone joins operations that already own the artifact.
+    // Submission readers may overlap on independent queues. Conflicting record/submit/reset admission is nonblocking, while destruction alone joins operations that own the artifact.
     mutable Atomic<u32> m_operationState{ 0u };
 };
 

@@ -21,10 +21,10 @@ NWB_CORE_BEGIN
 
 class GpuTaskGraphCompiler final : NoCopy{
 public:
-    // Graph validation and hazards remain independent from physical queue policy, so later packet, barrier, recording, and submission stages can consume one validated, immutable analysis result.
+    // Graph validation and hazards stay independent from physical queue policy, so later packet, barrier, recording, and submission stages can consume one validated analysis result.
     [[nodiscard]] bool analyze(const GpuTaskGraph::DeclarationReadView& graph, GpuTaskGraphAnalysis& outAnalysis, Alloc::ScratchArena& scratchArena)const;
 
-    // This produces only a physical-queue decision. It never creates a command list or changes submission; the scheduler supplies the concrete topology discovered from its current device.
+    // This produces only a physical-queue decision. It never creates a command list or changes submission; the scheduler supplies the topology found from its current device.
     [[nodiscard]] bool assignQueues(
         const GpuTaskGraph::DeclarationReadView& graph,
         const GpuTaskGraphAnalysis& analysis,
@@ -34,7 +34,7 @@ public:
         const GpuTaskGraphQueueAssignmentOptions& options = {}
     )const;
 
-    // The packet compiler reuses the independently exposed analysis and queue-assignment results scheduler admission, telemetry, and packet creation consume exactly the same immutable decisions.
+    // The packet compiler reuses the exposed analysis and queue-assignment results scheduler admission, telemetry, and packet creation consume as the same decisions.
     // Tasks retain one packet by default
     [[nodiscard]] bool compile(
         const GpuTaskGraph::DeclarationReadView& graph,

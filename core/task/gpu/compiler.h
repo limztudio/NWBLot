@@ -262,7 +262,7 @@ private:
     bool m_valid = false;
 };
 
-// Queue assignment is a separate immutable compile result. Renderer integrations may use it for native-recording selection; graph core never creates a command list or submits work.
+// Queue assignment is a separate immutable compile result. Renderer integrations may use it for recording selection; graph core never creates a command list or submits work.
 class GpuTaskGraphQueueAssignments final : NoCopy{
     friend class GpuTaskGraphCompiler;
 

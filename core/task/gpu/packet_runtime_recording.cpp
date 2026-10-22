@@ -317,7 +317,7 @@ bool GpuNativePacketRecorder::recordPacket(
                     break;
                 }
 
-                // The immutable marker made record-time validation mandatory. The imported source is now authoritative, so lower a local copy without asking graph-initial lowering to seed Unknown.
+                // The immutable marker made record-time validation mandatory. The imported source is now authoritative, so lower a local copy without asking lowering to seed Unknown.
                 GpuCompiledBarrier loweredBarrier = barrier;
                 loweredBarrier.isGraphInitialState = false;
                 recorded = graph.applyCompiledBarrier(compiledGraph, planAccess, recordingAccess, task, loweredBarrier, *commandList);
@@ -500,7 +500,7 @@ bool GpuNativePacketRecorder::recordPacket(
     recordedPacket.recordingSeconds = DurationInSeconds<f64>(recordingEnd, recordingBegin);
     recordedPacket.recordingWorkerDomain = recordingWorkerDomain;
     recordedPacket.recordingWorkerIndex = recordingWorkerIndex;
-    // Publish the slot only after its owned native list is retained. Frontier workers are joined before callers can submit, but this order also keeps the slot self-consistent for diagnostic reads.
+    // Publish the slot only after its owned native list is retained. Frontier workers are joined before callers submit, but this order also keeps the slot self-consistent for diagnostic reads.
     graphRecordingOwnership.publish();
     recordedPacket.commandListCount = 1u;
     PacketArtifactPublicationScope artifactPublication(outRecordedGraph, packetID, artifactAccess);

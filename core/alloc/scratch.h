@@ -240,7 +240,7 @@ public:
         return next;
     }
 
-    // LIFO reclaim spans chunks: empty chunks are cached and expose the previous live allocation; any out-of-order free is a no-op and is reclaimed in bulk when the arena is destroyed.
+    // LIFO reclaim spans chunks: empty chunks are cached and expose the previous live allocation; any out-of-order free is a no-op and is reclaimed in bulk when destroyed.
     inline void deallocate(void* p, usize align, usize size){
         NWB_ASSERT_MSG(IsValidAlignment(align), NWB_TEXT("ScratchArena alignment must be a non-zero power of two up to s_MaxAlignSize"));
         if(!IsValidAlignment(align) || size == 0u)

@@ -34,7 +34,26 @@ void nwbAvboitIntegrateMain(uint lowPixelIndex){
     uint cachedWordIndex = NWB_AVBOIT_OVERFLOW_INVALID;
     uint cachedPackedWord = 0u;
 
-    for(uint physicalSlice = 0u; physicalSlice < physicalSliceCount; ++physicalSlice){
+    // The frame clear leaves neutral transmittance in empty XY cells and leading slices.
+    // Overflow remains an independent activity signal because packed additions can wrap a word back to zero.
+    uint firstPhysicalSlice = min(activePhysicalSlices, overflowSlice);
+    for(uint physicalSlice = 0u; physicalSlice < firstPhysicalSlice; physicalSlice += NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD){
+        const uint wordIndex = nwbAvboitExtinctionWordIndex(lowPixel, physicalSlice);
+        if(wordIndex >= nwbAvboitExtinctionWordCount())
+            continue;
+
+        const uint packedWord = g_Extinction[wordIndex];
+        if(packedWord != 0u){
+            firstPhysicalSlice = physicalSlice;
+            cachedWordIndex = wordIndex;
+            cachedPackedWord = packedWord;
+            break;
+        }
+    }
+    if(firstPhysicalSlice >= activePhysicalSlices)
+        return;
+
+    for(uint physicalSlice = firstPhysicalSlice; physicalSlice < physicalSliceCount; ++physicalSlice){
         const half transmittance = exp(-min(accumulatedExtinction, saturatedExtinction));
         g_Transmittance[uint3(lowPixel.x, lowPixel.y, physicalSlice)] = float(transmittance);
 

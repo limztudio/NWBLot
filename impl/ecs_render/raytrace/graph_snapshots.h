@@ -147,6 +147,7 @@ struct RayTracingSurfelPersistentResourceSnapshot{
 struct RayTracingRefractionGraphResources{
     Core::ComputePipelineHandle pipeline;
     Core::ComputePipelineHandle screenFallbackPipeline;
+    Core::ComputePipelineHandle classifyTilesPipeline;
     Core::BufferHandle materialContextSlotsBuffer;
     Core::BufferHandle viewBuffer;
     Core::RayTracingAccelStructHandle sceneTlas;
@@ -160,7 +161,7 @@ struct RayTracingRefractionGraphResources{
 
 public:
     [[nodiscard]] bool valid()const noexcept{
-        return pipeline && viewBuffer && (!usesHardwareTrace || (sceneTlas && tlasHeapHandle.valid() && materialContextSlotsBuffer));
+        return pipeline && classifyTilesPipeline && viewBuffer && (!usesHardwareTrace || (sceneTlas && tlasHeapHandle.valid() && materialContextSlotsBuffer));
     }
 };
 

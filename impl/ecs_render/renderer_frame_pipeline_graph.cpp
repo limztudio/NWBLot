@@ -661,6 +661,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             .avboitForegroundColor = avboitForegroundColor,
             .avboitForegroundExtinction = avboitForegroundExtinction,
             .refractionResolve = refractionResolve,
+            .refractionDepth = refractionDepth,
             .currentBindlessSlots = currentBindlessSlots,
             .reflectionGraph = reflectionGraph,
             .reflectionCompositeInputs = reflectionCompositeInputs,

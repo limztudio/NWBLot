@@ -411,6 +411,8 @@ struct RtSurfelGiState{
 
 struct RtRefractionState{
     Core::BindingLayoutHandle m_refractionBindingLayout;
+    Core::ShaderHandle m_refractionClassifyTilesShader;
+    Core::ComputePipelineHandle m_refractionClassifyTilesPipeline;
     Core::ShaderHandle m_refractionScreenShader;
     Core::ShaderHandle m_refractionHwShader;
     Core::ShaderHandle m_refractionCsgHwShader;

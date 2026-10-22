@@ -43,6 +43,7 @@ struct DeferredGraphSuffixInputs{
     Core::GpuGraphResourceId avboitForegroundColor;
     Core::GpuGraphResourceId avboitForegroundExtinction;
     Core::GpuGraphResourceId refractionResolve;
+    Core::GpuGraphResourceId refractionDepth;
     Core::GpuGraphResourceId currentBindlessSlots;
     RendererTaskGraphDetail::ReflectionGraphResult reflectionGraph;
     ReflectionCompositeInputs reflectionCompositeInputs;

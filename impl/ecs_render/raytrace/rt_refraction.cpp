@@ -29,7 +29,21 @@ struct RefractionPushConstants{
     NWB_REFRACTION_PUSH_CONSTANTS_FIELDS(NWB_REFRACTION_CPU_FIELD)
 #undef NWB_REFRACTION_CPU_FIELD
 };
-static_assert(sizeof(RefractionPushConstants) == 7u * sizeof(u32));
+static_assert(sizeof(RefractionPushConstants) == 9u * sizeof(u32));
+
+static RefractionPushConstants MakePushConstants(const DeferredFrameTargets& targets, const RayTracingRefractionGraphResources& resources)noexcept{
+    RefractionPushConstants push;
+    push.width = targets.width;
+    push.height = targets.height;
+    push.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
+    push.materialContextSlotsHeapSlot = resources.materialContextSlotsHeapSlot;
+    push.viewHeapSlot = resources.viewHeapSlot;
+    push.opaqueReflectionSlot = resources.opaqueReflectionSlot;
+    push.refractionEnabled = resources.refractionEnabled ? 1u : 0u;
+    push.tileListSlot = targets.avboit.refractionTileListDescriptor.slot();
+    push.tileArgumentsSlot = targets.avboit.refractionTileArgumentsDescriptor.slot();
+    return push;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -60,6 +74,19 @@ bool RendererRayTracingSystem::prepareRefractionResources(){
         if(!refractionBindingLayoutResult)
             return false;
     }
+
+    if(!m_rayTracingState.m_refractionClassifyTilesPipeline){
+        if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_refractionClassifyTilesShader, AssetsGraphicsRefraction::s_ClassifyTilesShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_RefractionClassifyTiles"))
+            return false;
+        Core::ComputePipelineDesc desc;
+        desc.setComputeShader(m_rayTracingState.m_refractionClassifyTilesShader).addBindingLayout(m_rayTracingState.m_refractionBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
+        auto pipeline = device.createComputePipeline(desc);
+        if(!pipeline)
+            return false;
+        m_rayTracingState.m_refractionClassifyTilesPipeline = Move(*pipeline);
+    }
+    if(!m_graphics.gpuTiming().prepareScopeQueries(RendererGpuTimingScope::s_RefractionClassifyTiles.identity, device, 32u))
+        return false;
 
     const bool csg = m_lightSpaceShadow.m_csg.snapshot.hasCsg;
     const auto ensurePipeline = [&](const bool hardware) -> bool{
@@ -121,6 +148,7 @@ RayTracingRefractionGraphResources RendererRayTracingSystem::snapshotRefractionG
         return resources;
     resources.viewBuffer = view.buffer;
     resources.screenFallbackPipeline = m_rayTracingState.m_refractionScreenPipeline;
+    resources.classifyTilesPipeline = m_rayTracingState.m_refractionClassifyTilesPipeline;
     resources.viewHeapSlot = view.heapHandle.slot();
     resources.usesHardwareTrace = m_rayTracingState.m_refractionUseHardwareTrace;
     resources.pipeline = resources.usesHardwareTrace ? (m_lightSpaceShadow.m_csg.snapshot.hasCsg ? m_rayTracingState.m_refractionCsgHwPipeline : m_rayTracingState.m_refractionHwPipeline) : m_rayTracingState.m_refractionScreenPipeline;
@@ -133,28 +161,36 @@ RayTracingRefractionGraphResources RendererRayTracingSystem::snapshotRefractionG
     return resources;
 }
 
+bool RendererRayTracingSystem::recordRefractionTileClassification(Core::CommandList& commandList, const DeferredFrameTargets& targets, const RayTracingRefractionGraphResources& resources)const{
+    if(!resources.valid() || !targets.bindless.valid() || !targets.avboit.refractionTileListDescriptor.valid() || !targets.avboit.refractionTileArgumentsDescriptor.valid() || targets.width == 0u || targets.height == 0u)
+        return false;
+    const auto push = __hidden_rt_refraction::MakePushConstants(targets, resources);
+    Core::ComputeState state;
+    state.setPipeline(resources.classifyTilesPipeline.get());
+    commandList.setComputeState(state);
+    m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *resources.classifyTilesPipeline);
+    commandList.setPushConstants(&push, sizeof(push));
+    Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_RefractionClassifyTiles, m_graphics.getDevice(), commandList);
+
+    commandList.dispatch((targets.width + NWB_REFRACTION_GROUP_SIZE - 1u) / NWB_REFRACTION_GROUP_SIZE, (targets.height + NWB_REFRACTION_GROUP_SIZE - 1u) / NWB_REFRACTION_GROUP_SIZE, 1u);
+    return true;
+}
+
 bool RendererRayTracingSystem::recordRefractionResolve(Core::CommandList& commandList, const DeferredFrameTargets& targets, const RayTracingRefractionGraphResources& resources)const{
     if(!resources.valid() || !targets.bindless.valid() || targets.width == 0u || targets.height == 0u)
         return false;
 
     // The graph owns transitions and frozen declarations; this records without rebuilds.
-    __hidden_rt_refraction::RefractionPushConstants push;
-    push.width = targets.width;
-    push.height = targets.height;
-    push.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
-    push.materialContextSlotsHeapSlot = resources.materialContextSlotsHeapSlot;
-    push.viewHeapSlot = resources.viewHeapSlot;
-    push.opaqueReflectionSlot = resources.opaqueReflectionSlot;
-    push.refractionEnabled = resources.refractionEnabled ? 1u : 0u;
+    const auto push = __hidden_rt_refraction::MakePushConstants(targets, resources);
     Core::ComputeState state;
-    state.setPipeline(resources.pipeline.get());
+    state.setPipeline(resources.pipeline.get()).setIndirectParams(targets.avboit.refractionTileArguments.get());
     commandList.setComputeState(state);
     m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *resources.pipeline.get(), resources.tlasHeapHandle);
     commandList.setPushConstants(&push, sizeof(push));
     {
         Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_RefractionResolve, m_graphics.getDevice(), commandList);
 
-        commandList.dispatch((targets.width + NWB_REFRACTION_GROUP_SIZE - 1u) / NWB_REFRACTION_GROUP_SIZE, (targets.height + NWB_REFRACTION_GROUP_SIZE - 1u) / NWB_REFRACTION_GROUP_SIZE, 1u);
+        commandList.dispatchIndirect(0u);
     }
     return true;
 }

@@ -42,6 +42,21 @@ struct NwbRefractionView{
 #define g_NwbRefractionResources g_NwbHeapDeferredBindlessResources[g_NwbRefractionPush.deferredResourcesHeapSlot]
 #define g_NwbRefractionView g_NwbHeapRefractionViews[g_NwbRefractionPush.viewHeapSlot]
 #define g_NwbRefractionOutput nwbHeapStorageImage2DFloat4(g_NwbRefractionResources.refractionSlots0.w)
+#define g_NwbRefractionTileList g_NwbHeapStorageBuffers[g_NwbRefractionPush.tileListSlot]
+#define g_NwbRefractionTileArguments g_NwbHeapStorageBuffers[g_NwbRefractionPush.tileArgumentsSlot]
+
+// One indirect workgroup resolves one compacted 8x8 tile at full pixel resolution.
+// A second dispatch dimension covers target generations with more than 65535 tiles.
+bool nwbRefractionResolvePixel(const uint3 groupId, const uint3 groupThreadId, out uint2 pixel){
+    pixel = uint2(0u);
+    const uint queueIndex = groupId.y * NWB_REFRACTION_MAX_GROUP_COUNT_X + groupId.x;
+    if(queueIndex >= g_NwbRefractionTileArguments.Load(NWB_REFRACTION_TILE_COUNTER_OFFSET))
+        return false;
+    const uint tilesX = (g_NwbRefractionPush.width + NWB_REFRACTION_GROUP_SIZE - 1u) / NWB_REFRACTION_GROUP_SIZE;
+    const uint tile = g_NwbRefractionTileList.Load(queueIndex * 4u);
+    pixel = uint2(tile % tilesX, tile / tilesX) * NWB_REFRACTION_GROUP_SIZE + groupThreadId.xy;
+    return pixel.x < g_NwbRefractionPush.width && pixel.y < g_NwbRefractionPush.height;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

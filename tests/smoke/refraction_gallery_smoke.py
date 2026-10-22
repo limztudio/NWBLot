@@ -122,6 +122,8 @@ def parse_selection(text, allowed, option):
 
 def capture_environment(case, variant, inherited=None):
     env = dict(os.environ if inherited is None else inherited)
+    for name in ("NWB_REFRACTION_SMOKE_LIFECYCLE", "NWB_REFRACTION_SMOKE_EXTENT", "NWB_REFRACTION_SMOKE_TIMING"):
+        env.pop(name, None)
     for name in (LIT_NWB_REFRACTION_SMOKE_CASE, LIT_NWB_REFRACTION_SMOKE_GEOMETRY, LIT_NWB_REFRACTION_SMOKE_ENABLED, LIT_NWB_REFRACTION_SMOKE_HARDWARE, "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECO,
         "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH", "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT",):
         env.pop(name, None)

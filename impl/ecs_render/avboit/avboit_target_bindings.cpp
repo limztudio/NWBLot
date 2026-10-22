@@ -57,12 +57,16 @@ static void RetireTargetDescriptors(Core::GpuDescriptorHeap& heap, AvboitFrameTa
     heap.free(targets.extinctionBufferDescriptor);
     heap.free(targets.extinctionOverflowBufferDescriptor);
     heap.free(targets.transmittanceTextureStorageDescriptor);
+    heap.free(targets.refractionTileListDescriptor);
+    heap.free(targets.refractionTileArgumentsDescriptor);
     targets.coverageBufferDescriptor = Core::GpuDescriptorHandle::Invalid();
     targets.depthWarpBufferDescriptor = Core::GpuDescriptorHandle::Invalid();
     targets.controlBufferDescriptor = Core::GpuDescriptorHandle::Invalid();
     targets.extinctionBufferDescriptor = Core::GpuDescriptorHandle::Invalid();
     targets.extinctionOverflowBufferDescriptor = Core::GpuDescriptorHandle::Invalid();
     targets.transmittanceTextureStorageDescriptor = Core::GpuDescriptorHandle::Invalid();
+    targets.refractionTileListDescriptor = Core::GpuDescriptorHandle::Invalid();
+    targets.refractionTileArgumentsDescriptor = Core::GpuDescriptorHandle::Invalid();
 }
 
 
@@ -91,12 +95,16 @@ bool RendererAvboitSystem::registerAvboitFrameTargetDescriptors(DeferredFrameTar
     NWB_ASSERT(avboitTargets.extinctionBuffer);
     NWB_ASSERT(avboitTargets.extinctionOverflowBuffer);
     NWB_ASSERT(avboitTargets.transmittanceTexture);
+    NWB_ASSERT(avboitTargets.refractionTileList);
+    NWB_ASSERT(avboitTargets.refractionTileArguments);
     NWB_ASSERT(!avboitTargets.coverageBufferDescriptor.valid());
     NWB_ASSERT(!avboitTargets.depthWarpBufferDescriptor.valid());
     NWB_ASSERT(!avboitTargets.controlBufferDescriptor.valid());
     NWB_ASSERT(!avboitTargets.extinctionBufferDescriptor.valid());
     NWB_ASSERT(!avboitTargets.extinctionOverflowBufferDescriptor.valid());
     NWB_ASSERT(!avboitTargets.transmittanceTextureStorageDescriptor.valid());
+    NWB_ASSERT(!avboitTargets.refractionTileListDescriptor.valid());
+    NWB_ASSERT(!avboitTargets.refractionTileArgumentsDescriptor.valid());
 
     const auto targetResourcesRegistered = [&]() -> Expected<void>{
         if(const auto descriptor = __hidden_avboit_target_bindings::RegisterWorkBuffer(heap, *avboitTargets.coverageBuffer); descriptor)
@@ -121,6 +129,14 @@ bool RendererAvboitSystem::registerAvboitFrameTargetDescriptors(DeferredFrameTar
             return MakeUnexpected(Failure{});
         if(const auto descriptor = __hidden_avboit_target_bindings::RegisterTransmittanceStorageTexture(heap, *avboitTargets.transmittanceTexture, avboitTargets.transmittanceFormat); descriptor)
             avboitTargets.transmittanceTextureStorageDescriptor = *descriptor;
+        else
+            return MakeUnexpected(Failure{});
+        if(const auto descriptor = __hidden_avboit_target_bindings::RegisterWorkBuffer(heap, *avboitTargets.refractionTileList); descriptor)
+            avboitTargets.refractionTileListDescriptor = *descriptor;
+        else
+            return MakeUnexpected(Failure{});
+        if(const auto descriptor = __hidden_avboit_target_bindings::RegisterWorkBuffer(heap, *avboitTargets.refractionTileArguments); descriptor)
+            avboitTargets.refractionTileArgumentsDescriptor = *descriptor;
         else
             return MakeUnexpected(Failure{});
         return {};

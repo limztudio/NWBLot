@@ -53,11 +53,32 @@ unbounded loop.
 
 Capture and resolve use full resolution for sharp glass. The new default-format
 targets use approximately 42 bytes per pixel (capture, resolved radiance, and the
-foreground accumulators), in addition to existing AVBOIT resources. Every resolve
-thread first checks the capture mask, so pixels without a refractor issue no rays.
-There is no tile compaction or adaptive resolution yet. Measure capture, resolve,
-composition, and shared acceleration-structure work together when selecting a
-shipping quality tier.
+foreground accumulators), in addition to existing AVBOIT resources. A compute
+classifier ORs the current full-resolution capture depth into 8x8 tile activity,
+compacts active tile indices, and publishes indirect resolve arguments. Current
+capture depth gates the final optical composite: pixels outside captured glass
+use ordinary AVBOIT composition without reading resolved radiance. Empty tiles
+may retain prior contents; every current captured pixel is queued and rewritten
+before composition. This validity contract avoids a full-frame radiance clear.
+Each active tile still evaluates full-resolution pixels and retains the optical
+entry check. Clear zero-coverage glass and partial edge tiles remain
+eligible without a new material pass or reduced-resolution material sampling.
+
+The target generation owns a four-byte entry per possible tile and a 16-byte
+indirect argument/counter buffer. Counts beyond 65,535 tiles use a second dispatch
+dimension with explicit tail rejection. The graph declares counter clear,
+classifier UAV writes, shader/indirect reads, and the output dependency. Resizing
+replaces these resources with the capture targets. Material pass routing and the
+existing reflection candidate compaction remain independent of tile scheduling.
+Measure classifier, argument clear, resolve, composition, and shared
+acceleration-structure work together when selecting a shipping quality tier.
+
+AVBOIT integration reuses its packed extinction words to find the first active
+depth word in each low-resolution XY cell. The mandatory transmittance clear
+leaves empty cells and leading slices at neutral one, so integration skips their
+exponentials and volume stores. A finite overflow slice remains an independent
+activity signal even when packed additions wrapped a word to zero. This adds no
+producer atomics, material pass, or persistent mask allocation.
 
 The frame graph declares all capture uploads, emulated mesh generation/raster
 boundaries, attachment transitions, trace inputs, and the resolve/composite

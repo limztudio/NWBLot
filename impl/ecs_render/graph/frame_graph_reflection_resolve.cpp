@@ -127,14 +127,35 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
 
     Expected<Core::GpuTaskId> refractionResolveTask = MakeUnexpected(Failure{});
     if(refractionActive && refractionResources.valid()){
+        const auto tileListResult = m_graph.importBuffer(deferredTargets.avboit.refractionTileList, BufferResourceDesc(Name("render.refraction.tile_list"), "Refraction Tile List"));
+        const auto tileArgumentsResult = m_graph.importBuffer(deferredTargets.avboit.refractionTileArguments, BufferResourceDesc(Name("render.refraction.tile_arguments"), "Refraction Tile Arguments"));
+        if(!tileListResult || !tileArgumentsResult)
+            return MakeUnexpected(Failure{});
+        const Core::GpuGraphResourceId tileList = *tileListResult;
+        const Core::GpuGraphResourceId tileArguments = *tileArgumentsResult;
+        Core::GpuTaskDesc tileClearDesc;
+        tileClearDesc.setIdentity(Name("render.avboit.refraction_tile_arguments_clear")).setMarkerLabel("Refraction Tile Arguments Clear").setDependencies(&inputs.avboitFinalTask, 1u);
+        const auto tileClearTask = m_graph.addClearBufferTask(tileClearDesc, Core::GpuClearBufferTaskDesc{ .destination = tileArguments, .clearValue = 0u });
+        if(!tileClearTask)
+            return MakeUnexpected(Failure{});
+        const Core::GpuTaskResourceUse tileUses[] = {
+            ReadUse(refractionDepth), ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
+            WriteUse(tileList, Core::ResourceStates::UnorderedAccess), ReadWriteUse(tileArguments, Core::ResourceStates::UnorderedAccess),
+        };
+        Core::GpuTaskDesc tileDesc;
+        tileDesc.setIdentity(Name("render.avboit.refraction_classify_tiles")).setMarkerLabel("Refraction Classify Tiles")
+            .setDependencies(&*tileClearTask, 1u).setResourceUses(tileUses, LengthOf(tileUses));
+        const auto tileTask = m_graph.addTask<RefractionClassifyTilesGraphTask>(tileDesc, RefractionClassifyTilesGraphTask::Payload{ m_raytracingSystem, deferredTargets, refractionResources });
+        if(!tileTask)
+            return MakeUnexpected(Failure{});
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> refractionUses{scratchArena};
         const Core::GpuGraphResourceId refractionInputs[] = {
             refractionDepth, refractionNormalIor, refractionTintCoverage, refractionInstance,
             opaqueColor, reflectionGraph.opaqueRadiance, worldPosition, depth, avboitAccumColor, avboitAccumExtinction,
             avboitForegroundColor, avboitForegroundExtinction
         };
-        // Mesh view, bindless slots, scene shading, lights, and the resolve output.
-        constexpr usize s_RefractionFixedUseCapacity = 5u;
+        // Mesh view, bindless slots, scene shading, lights, the resolve output, and tile scheduling buffers.
+        constexpr usize s_RefractionFixedUseCapacity = 7u;
         refractionUses.reserve(LengthOf(refractionInputs) + s_RefractionFixedUseCapacity + LengthOf(sceneReads.uses) + sceneReads.csgUses.size());
         for(const auto input : refractionInputs)
             refractionUses.push_back(ReadUse(input));
@@ -143,6 +164,8 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
         refractionUses.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
         refractionUses.push_back(ReadUse(lights));
         refractionUses.push_back(WriteUse(refractionResolve, Core::ResourceStates::UnorderedAccess));
+        refractionUses.push_back(ReadUse(tileList));
+        refractionUses.push_back(ReadUse(tileArguments, Core::ResourceStates::ShaderResource | Core::ResourceStates::IndirectArgument));
         Core::GpuTaskResourceSetUse refractionSets[3] = {};
         usize refractionSetCount = 0;
         if(refractionResources.usesHardwareTrace){
@@ -156,7 +179,7 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
                     refractionSets[refractionSetCount++] = Core::GpuTaskResourceSetUse{ .resourceSet = set, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
             }
         }
-        const Core::GpuTaskId refractionDependencies[] = { reflectionGraph.completion, inputs.avboitFinalTask, inputs.surfelGiTask };
+        const Core::GpuTaskId refractionDependencies[] = { reflectionGraph.completion, *tileTask, inputs.surfelGiTask };
         Core::GpuTaskDesc refractionDesc;
         refractionDesc.setIdentity(Name("render.avboit.refraction_resolve"))
             .setMarkerLabel("AVBOIT Refraction Resolve")

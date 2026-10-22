@@ -39,6 +39,49 @@ Interactive fixture controls are `NWB_REFRACTION_SMOKE_ENABLED=0` for the baseli
 and `NWB_REFRACTION_SMOKE_HARDWARE=0` for screen-space tracing. They call public
 renderer settings and exist only in the smoke project.
 
+The lifecycle smoke runs seven completed application framebuffer captures in one
+process: refraction disabled, active centered glass, glass moved to other tiles,
+glass intersecting the right framebuffer edge, glass moved offscreen, refraction
+disabled again, and refraction reenabled. It uses a 967x727 framebuffer and a wider
+stripe backdrop so the last seven columns of the partial 8x8 tile contain a
+measurable refracted image. The checks require both stripe-displacement directions
+in the broad edge region and displacement of each sufficiently represented
+baseline stripe polarity inside the partial tile, restoration of the old glass region after movement,
+neutral empty and disabled frames, repeatable reactivation, and preservation of
+the foreground red AVBOIT panel throughout.
+
+The moved and edge comparisons cover the projected sphere bounds. A separate
+moved-region check beyond the original sphere silhouette proves that new tiles
+became active. Hardware tracing must displace the partial tile's available stripe
+polarity. When the runtime explicitly reports screen-space tracing, the partial
+tile may instead match the clear sheet's bounded straight fallback: the screen
+march rejects offscreen or inconsistent depth crossings, then preserves the
+background with two Fresnel factors. The fallback check reconstructs the fixed
+fixture's IOR 1.5 Schlick transmission and default Reinhard/sRGB presentation from
+the disabled reference. It requires neutral, nonblack attenuation within 1.5
+encoded levels at at least 95% of eligible tail pixels, with a change of at least
+one level; unchanged, black, colored, or excessively darkened tails fail. The full
+edge region still requires stripe displacement in both directions on every route.
+
+Run `nwb_refraction_lifecycle_capture_smoke` after building the same target;
+`nwb_refraction_lifecycle_gpudbg_capture_smoke` enables GPU validation in `dbg`.
+Both run automatic and explicitly selected screen-space tracing. Captures include
+the source graphics-frame identity for each phase and are retained under
+`Testing/smoke/<config>/refraction_lifecycle`. The test-only fixture controls are
+`NWB_REFRACTION_SMOKE_LIFECYCLE=1` and `NWB_REFRACTION_SMOKE_EXTENT=npot`.
+`refraction_lifecycle_smoke.py --require-hardware` additionally requires a hardware
+resolve in its automatic run.
+
+For uncaptured timing acquisition, set `NWB_REFRACTION_SMOKE_TIMING=1` and
+`NWB_GPU_TIMING_FILE` to an output path. The fixture uses the shared AVBOIT timing
+observer, including refraction classification and resolve, AVBOIT stages, frame
+time, and unaffected control passes. It keeps rendering unfocused through the
+existing render-pass policy. Keep timing runs separate from serialized framebuffer
+lifecycle captures and compare classification plus resolve and whole-frame cost
+with matched binaries, packed assets, extent, trace route, and acquisition
+conditions. The normal fixture uses 960x720; `NWB_REFRACTION_SMOKE_EXTENT=npot`
+selects 967x727 for either capture or timing.
+
 The complex-case gallery is an additional visual inspection fixture. It covers
 `single`, `separate`, `stacked`, `intersecting`, `nested`, `coincident`,
 `coincident_tinted`, `torus`, `same_mesh`, and `prism`, plus twelve exact-duplicate

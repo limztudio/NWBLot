@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "avboit_integration_probe.h"
+
 #include <loader/project_entry.h>
 
 #include <impl/assets_graphics/avboit/names.h>
@@ -446,6 +448,8 @@ public:
             if(!compareBatch(payload))
                 return false;
         }
+        if(!RunAvboitIntegrationProbe(m_context))
+            return false;
         m_completed = true;
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("AvboitDepthWarpProbe: passed {} cases with full LUT/control comparison and sentinel tails"), s_TotalCaseCount);
         m_context.requestQuit();

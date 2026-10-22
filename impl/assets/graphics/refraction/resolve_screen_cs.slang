@@ -9,9 +9,9 @@
 
 
 [numthreads(NWB_REFRACTION_GROUP_SIZE, NWB_REFRACTION_GROUP_SIZE, 1)]
-void main(uint3 dispatchThreadID : SV_DispatchThreadID){
-    const uint2 pixel = dispatchThreadID.xy;
-    if(pixel.x >= g_NwbRefractionPush.width || pixel.y >= g_NwbRefractionPush.height)
+void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID){
+    uint2 pixel;
+    if(!nwbRefractionResolvePixel(groupId, groupThreadId, pixel))
         return;
     NwbRefractionEntry entry;
     if(!nwbRefractionLoadEntry(pixel, entry)){

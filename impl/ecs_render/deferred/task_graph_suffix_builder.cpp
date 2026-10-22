@@ -53,6 +53,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
         || !inputs.avboitAccumColor.valid()
         || !inputs.avboitAccumExtinction.valid()
         || !inputs.refractionResolve.valid()
+        || !inputs.refractionDepth.valid()
         || !inputs.currentBindlessSlots.valid()
         || !inputs.lightingTask.valid()
         || !inputs.avboitFinalTask.valid()
@@ -122,6 +123,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
         ReadUse(inputs.avboitForegroundColor),
         ReadUse(inputs.avboitForegroundExtinction),
         ReadUse(inputs.refractionResolve),
+        ReadUse(inputs.refractionDepth),
         ReadUse(compositeBindlessSlots, Core::ResourceStates::ConstantBuffer),
         WriteUse(compositeColor, Core::ResourceStates::UnorderedAccess),
     };

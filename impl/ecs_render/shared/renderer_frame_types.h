@@ -45,6 +45,8 @@ struct AvboitFrameTargets{
     Core::GpuDescriptorHandle extinctionBufferDescriptor = Core::GpuDescriptorHandle::Invalid();
     Core::GpuDescriptorHandle extinctionOverflowBufferDescriptor = Core::GpuDescriptorHandle::Invalid();
     Core::GpuDescriptorHandle transmittanceTextureStorageDescriptor = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle refractionTileListDescriptor = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle refractionTileArgumentsDescriptor = Core::GpuDescriptorHandle::Invalid();
     // Borrowed shared target-slot payload; AVBOIT does not own it.
     Core::GpuDescriptorHandle deferredSlotsBufferDescriptor = Core::GpuDescriptorHandle::Invalid();
     Core::TextureHandle lowRasterTarget;
@@ -67,6 +69,8 @@ struct AvboitFrameTargets{
     Core::BufferHandle controlBuffer;
     Core::BufferHandle extinctionBuffer;
     Core::BufferHandle extinctionOverflowBuffer;
+    Core::BufferHandle refractionTileList;
+    Core::BufferHandle refractionTileArguments;
 
 
 public:
@@ -94,12 +98,16 @@ public:
             && controlBuffer != nullptr
             && extinctionBuffer != nullptr
             && extinctionOverflowBuffer != nullptr
+            && refractionTileList != nullptr
+            && refractionTileArguments != nullptr
             && coverageBufferDescriptor.valid()
             && depthWarpBufferDescriptor.valid()
             && controlBufferDescriptor.valid()
             && extinctionBufferDescriptor.valid()
             && extinctionOverflowBufferDescriptor.valid()
             && transmittanceTextureStorageDescriptor.valid()
+            && refractionTileListDescriptor.valid()
+            && refractionTileArgumentsDescriptor.valid()
             && deferredSlotsBufferDescriptor.valid()
         ;
 #else
@@ -107,7 +115,7 @@ public:
 #endif
     }
 };
-static_assert(sizeof(AvboitFrameTargets) == 232u + 8u * sizeof(Core::TextureHandle) + sizeof(Core::FramebufferHandle), "AvboitFrameTargets should keep its compact CPU-only layout");
+static_assert(sizeof(AvboitFrameTargets) == 232u + 8u * sizeof(Core::TextureHandle) + sizeof(Core::FramebufferHandle) + 2u * sizeof(Core::BufferHandle) + 2u * sizeof(Core::GpuDescriptorHandle), "AvboitFrameTargets should keep its compact CPU-only layout");
 
 struct MaterialPassDrawContext{
     Core::CommandList& commandList;

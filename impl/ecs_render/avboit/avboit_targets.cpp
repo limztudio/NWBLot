@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/avboit/avboit_private.h>
+#include <impl/assets/graphics/refraction/push_constants.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -83,6 +84,8 @@ void RendererAvboitSystem::resetAvboitFrameTargets(AvboitFrameTargets& targets){
         heap.free(targets.extinctionBufferDescriptor);
         heap.free(targets.extinctionOverflowBufferDescriptor);
         heap.free(targets.transmittanceTextureStorageDescriptor);
+        heap.free(targets.refractionTileListDescriptor);
+        heap.free(targets.refractionTileArgumentsDescriptor);
     }
 
     targets.lowFramebuffer.reset();
@@ -99,6 +102,8 @@ void RendererAvboitSystem::resetAvboitFrameTargets(AvboitFrameTargets& targets){
     targets.controlBuffer.reset();
     targets.extinctionBuffer.reset();
     targets.extinctionOverflowBuffer.reset();
+    targets.refractionTileList.reset();
+    targets.refractionTileArguments.reset();
 
     targets = AvboitFrameTargets{};
 }
@@ -294,6 +299,24 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
         return false;
     }
     avboitTargets.transmittanceTexture = Move(*transmittanceTextureResult);
+
+    const u64 tileCount = DivideUp(static_cast<u64>(createdTargets.width), static_cast<u64>(NWB_REFRACTION_GROUP_SIZE)) * DivideUp(static_cast<u64>(createdTargets.height), static_cast<u64>(NWB_REFRACTION_GROUP_SIZE));
+    if(tileCount == 0u || tileCount > static_cast<u64>(Limit<u32>::s_Max) / sizeof(u32))
+        return false;
+    const auto createTileBuffer = [&](const u64 byteSize, const Name name, const bool indirect){
+        Core::BufferDesc desc;
+        desc.setByteSize(byteSize).setStructStride(sizeof(u32)).setCanHaveUAVs(true).setCanHaveRawViews(true).setIsDrawIndirectArgs(indirect)
+            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer).setDebugName(name).enableAutomaticStateTracking(Core::ResourceStates::Common);
+        return m_graphics.createBuffer(desc);
+    };
+    auto tileList = createTileBuffer(tileCount * sizeof(u32), Name("engine/refraction/tile_list"), false);
+    auto tileArguments = createTileBuffer(NWB_REFRACTION_TILE_ARGUMENT_BYTES, Name("engine/refraction/tile_arguments"), true);
+    if(!tileList || !tileArguments){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create refraction tile scheduling buffers"));
+        return false;
+    }
+    avboitTargets.refractionTileList = Move(*tileList);
+    avboitTargets.refractionTileArguments = Move(*tileArguments);
 
     // Pass setup waits for the deferred target builder.
     createdTargets.avboit = Move(avboitTargets);

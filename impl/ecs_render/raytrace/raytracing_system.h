@@ -174,6 +174,7 @@ public:
     [[nodiscard]] bool prepareRefractionResources();
     void setRefractionHardwareTracingEnabled(bool enabled)noexcept;
     [[nodiscard]] RayTracingRefractionGraphResources snapshotRefractionGraphResources()const noexcept;
+    [[nodiscard]] bool recordRefractionTileClassification(Core::CommandList& commandList, const DeferredFrameTargets& targets, const RayTracingRefractionGraphResources& resources)const;
     [[nodiscard]] bool recordRefractionResolve(Core::CommandList& commandList, const DeferredFrameTargets& targets, const RayTracingRefractionGraphResources& resources)const;
 
     // Resource identity is frozen by the shared deferred graph.  Select/grow every trace resource before graph compilation, then let the graph-owned preparation packet issue only GPU work against that frozen set.

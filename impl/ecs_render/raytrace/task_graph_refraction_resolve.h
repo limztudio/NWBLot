@@ -26,6 +26,20 @@ namespace RendererTaskGraphDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct RefractionClassifyTilesGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+    struct Payload{
+        RendererRayTracingSystem& system;
+        const DeferredFrameTargets& targets;
+        RayTracingRefractionGraphResources resources;
+    };
+
+    static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
+        return payload.system.recordRefractionTileClassification(commandList, payload.targets, payload.resources);
+    }
+};
+
+
 struct RefractionResolveGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 

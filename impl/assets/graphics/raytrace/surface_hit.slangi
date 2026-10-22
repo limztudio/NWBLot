@@ -27,7 +27,7 @@ NwbRayTraceGeometryHit nwbRayTraceClosestOrdinaryGeometryHit(const float3 origin
     ray.Direction = direction;
     ray.TMin = minDistance;
     ray.TMax = maxDistance;
-    // Complete the nearest geometric query before fetching attributes. Accept-first traversal or instance filtering can skip a closer boundary; the caller applies its policy to the unchanged identity.
+    // Complete the nearest geometric query before fetching attributes. Accept-first traversal or instance filtering can skip a closer boundary; the caller applies its policy to the identity.
     RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
 #if NWB_RT_CSG_ENABLED
     query.TraceRayInline(nwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE, NWB_RT_SHADOW_BASE_INSTANCE_MASK, ray);

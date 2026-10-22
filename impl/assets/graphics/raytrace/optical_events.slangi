@@ -128,7 +128,7 @@ bool nwbOpticalReplayBootstrap(
         activeWindings[insertion] = uint(winding);
         ++media.count;
     }
-    // Assemble each ordered medium once, after all scalar-index insertion is finished. No medium struct is moved through its own backing array, and only the active homogeneous materials are evaluated.
+    // Assemble each ordered medium once, after all scalar-index insertion is finished. No medium struct is moved through its own backing array, and only the active homogeneous materials are read.
     [unroll] for(uint index = 0u; index < NWB_OPTICAL_MAX_MEDIA; ++index){
         if(index < media.count){
             NwbOpticalInstance optical;

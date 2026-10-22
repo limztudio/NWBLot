@@ -28,7 +28,7 @@
 
 
 // The caller supplies mesh-frame material accessors for its frozen ray material context.
-// The explicit instance material heap slot must select the same context; no camera-effect globals, lighting policy, or optical path decisions belong in this geometric hit reconstruction helper.
+// The explicit instance material heap slot must select the same context; no camera-effect globals, lighting policy, or optical path decisions belong in this geometric hit helper.
 // Closest geometric identity is independent of material reconstruction and caller admission policy.
 struct NwbRayTraceGeometryHit{
     bool hit;

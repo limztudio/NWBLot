@@ -47,7 +47,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID){
         return;
     }
 
-    // Native mip extents floor-halve each axis. An odd source axis contributes three overlapping samples, so no edge texel disappears on reductions such as 45 -> 22. An unchanged axis preserves a 1 -> 1 dimension.
+    // Native mip extents floor-halve each axis. An odd source axis contributes three overlapping samples, so no edge texel disappears on reductions such as 45 -> 22. An unchanged axis keeps 1 -> 1.
     const uint2 begin = uint2(sourceExtent.x == destinationExtent.x ? destination.x : destination.x * 2u, sourceExtent.y == destinationExtent.y ? destination.y : destination.y * 2u);
     const uint2 span = uint2(sourceExtent.x == destinationExtent.x ? 1u : 2u + (sourceExtent.x & 1u), sourceExtent.y == destinationExtent.y ? 1u : 2u + (sourceExtent.y & 1u));
     for(uint y = 0u; y < span.y; ++y){

@@ -249,7 +249,7 @@ public:
 
 // Final tracked state of one primary list for the next to begin from (scheduler orders producer < consumer). Caller-owned lifetimes: refs stay alive until the consumer opens.
 
-// It carries both transient and permanent state. UAV-barrier policy remains local to each command list, while keepInitialState resources are captured after their close-time restore barriers.
+// It carries both transient and permanent state. UAV-barrier policy stays local to each command list; keepInitialState resources are captured after their close-time restore barriers.
 // Before the producer is accepted, this handoff is the only valid cross-list source for that restored native state.
 class CommandListResourceStateHandoff final : NoCopy{
     friend class GraphicsBackend::CommandList;
@@ -264,7 +264,7 @@ private:
         ArraySlice arraySlice = 0;
         ResourceStates::Mask state = ResourceStates::Unknown;
         ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
-        // An invalid ID means concurrently shared (or not yet claimed). Otherwise this is the native queue that last owned the exclusive resource; a valid release destination needs a paired acquire there.
+        // An invalid ID means concurrently shared (or not yet claimed). Otherwise this is the native queue that last owned the resource; a valid release destination needs a paired acquire there.
         GpuPhysicalQueueId ownerQueue;
         GpuPhysicalQueueId releaseDestinationQueue;
     };
@@ -309,7 +309,7 @@ public:
     [[nodiscard]] bool valid()const noexcept{ return m_valid; }
 
     [[nodiscard]] u16 deviceGeneration()const noexcept{ return m_deviceGeneration; }
-    // State snapshots retain raw backend-resource pointers.  Preserve the producer Device identity so a stale snapshot can be rejected before any of those pointers are inspected after device recreation.
+    // State snapshots retain raw backend-resource pointers.  Preserve the producer Device identity so a stale snapshot is rejected before those pointers are used after device recreation.
     [[nodiscard]] bool validForDeviceGeneration(const u16 deviceGeneration)const noexcept{
         return m_valid && deviceGeneration != 0u && m_deviceGeneration == deviceGeneration;
     }
@@ -329,7 +329,7 @@ public:
     // Clips ordinary buffer states. Pending ownership releases must be selected in full because the acquire must use their original byte ranges
     [[nodiscard]] bool buildBufferRangeSubset(const CommandListResourceStateHandoff& source, Buffer* buffer, BufferRange range);
     // Imported exclusive-owner texture handoffs must provide one concrete state for every selected subresource.
-    // Verify that exact coverage before a graph lowers its paired acquire, including the source owner and (when distinct) the release destination captured by the producer's native state tracker.
+    // Verify exact coverage before a graph lowers its paired acquire, including the source owner and (when distinct) the release destination from the producer's state tracker.
     [[nodiscard]] bool coversTextureRangeWithOwnership(Texture* texture, TextureSubresourceSet subresources, GpuPhysicalQueueId expectedOwnerQueue, GpuPhysicalQueueId expectedReleaseDestinationQueue)const noexcept;
     // Buffer ownership must cover every byte in the requested range; unrelated intervals may have different owners.
     [[nodiscard]] bool coversBufferWithOwnership(Buffer* buffer, GpuPhysicalQueueId expectedOwnerQueue, GpuPhysicalQueueId expectedReleaseDestinationQueue, BufferRange range = s_EntireBuffer)const noexcept;
@@ -339,7 +339,7 @@ public:
     // Compares immutable snapshot contents rather than the address of a producer-owned snapshot.
     // This is suitable for declaration deduplication across producer-storage retirement and same-address allocator reuse.
     [[nodiscard]] bool equivalentTo(const CommandListResourceStateHandoff& snapshot)const noexcept;
-    // Exchanges complete snapshot storage without allocating. Both snapshots must be backed by the same arena so each vector remains paired with the allocator that owns its storage after the exchange.
+    // Exchanges complete snapshot storage without allocating. Both snapshots must use the same arena so each vector stays paired with the allocator that owns its storage after the exchange.
     [[nodiscard]] bool exchangeSnapshot(CommandListResourceStateHandoff& snapshot)noexcept;
     [[nodiscard]] bool hasPendingBufferReleases()const noexcept;
     [[nodiscard]] bool empty()const noexcept;

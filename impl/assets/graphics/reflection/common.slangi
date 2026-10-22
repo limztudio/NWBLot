@@ -79,7 +79,7 @@ struct NwbReflectionView{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Candidate allocation and the feedback receiver bound are scheduling inputs. This helper is only for optional diagnostic counters; disabling their writes never changes trace eligibility, queue contents, or feedback decisions.
+// Candidate allocation and the feedback bound are scheduling inputs. This helper is only for optional counters; disabling their writes never changes eligibility, queue contents, or decisions.
 void nwbReflectionRecordDiagnostic(const uint byteOffset, const uint value){
     if(g_NwbReflectionParameters.diagnosticsEnabled != 0u && value != 0u){
         uint previousCount;
@@ -133,7 +133,7 @@ bool nwbReflectionLoadSurface(const uint2 pixel, const bool glass, out NwbReflec
         packedNormal = nwbHeapSampledImage2DNonUniform(normalSlot).Load(texel);
         if(!isfinite(packedNormal.w) || packedNormal.w <= NWB_REFLECTION_GLASS_IOR_MIN)
             return false;
-        // Glass reflection and transmission share the same optical boundary. Its IOR determines F0, so the two entry terms remain complementary even when an authored opaque-reflection parameter is absent.
+        // Glass reflection and transmission share the same optical boundary. Its IOR determines F0, so the two entry terms stay complementary even without an authored opaque-reflection parameter.
         const float ior = clamp(packedNormal.w, 1.0, NWB_REFLECTION_GLASS_IOR_MAX);
         const half ratio = half((ior - 1.0) / (ior + 1.0));
         f0 = half3(ratio * ratio);
@@ -162,7 +162,7 @@ bool nwbReflectionLoadSurface(const uint2 pixel, const bool glass, out NwbReflec
     surface.normal = nwbSafeNormalize(glass ? packedNormal.xyz : packedNormal.xyz * 2.0 - 1.0, -incident);
     if(dot(surface.normal, incident) > 0.0)
         surface.normal = -surface.normal;
-    // Project the component-wise FP16 raster-position bound onto the offset normal. Captured glass instead bounds four representable D32 depth steps, retaining the inverse arithmetic margin in the final bias below.
+    // Project the component-wise FP16 raster-position bound onto the offset normal. Captured glass instead bounds four D32 depth steps, keeping the inverse margin in the final bias below.
     float originUncertainty = dot(abs(surface.position) * NWB_REFLECTION_POSITION_RELATIVE_ERROR, abs(surface.normal));
     if(glass){
         const float nextDepth = min(asfloat(asuint(depth) + NWB_REFLECTION_GLASS_DEPTH_UNCERTAINTY_STEPS), 1.0);
@@ -184,7 +184,7 @@ bool nwbReflectionLoadSurface(const uint2 pixel, const bool glass, out NwbReflec
     surface.bias = max(NWB_REFLECTION_SURFACE_BIAS_MIN, originUncertainty + length(cameraRay) * NWB_REFLECTION_SURFACE_BIAS_DISTANCE_SCALE);
     if(!isfinite(surface.bias) || !all(isfinite(surface.direction)) || !all(isfinite(surface.weight)) || !all(isfinite(surface.position + surface.normal * surface.bias)))
         return false;
-    // The scheduling upper bound precedes stochastic VNDF outcomes, including zero or rejected samples. A prior frame's actual candidates cannot prove that a later rough sample fits the same hardware queue budget.
+    // The scheduling upper bound precedes stochastic VNDF outcomes, including zero or rejected samples. A prior frame's actual candidates cannot prove a later sample fits the same queue budget.
     stableTraceEligible = surface.roughness <= g_NwbReflectionParameters.roughnessCutoff && surface.bias < g_NwbReflectionParameters.maxRayDistance;
     if(!glass && surface.roughness > 0.0){
         const float2 randomSample = nwbReflectionSample2D(pixel, uint2(g_NwbReflectionParameters.sampleBaseX, g_NwbReflectionParameters.sampleBaseY), g_NwbReflectionParameters.samplingSeed);

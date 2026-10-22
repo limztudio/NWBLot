@@ -99,7 +99,7 @@ uint nwbCsgMeshInstanceIndex(){
 #endif
 }
 
-// All CSG consumers select their persistent context from the global heap. Mesh stages inherit it from the receiver record; pixel-only variants use the unused fourth push lane; standalone/AVBOIT variants provide NWB_CSG_CONTEXT_HEAP_SLOT.
+// All CSG consumers select their context from the global heap. Mesh stages inherit it from the receiver record; pixel-only variants use the unused fourth push lane; standalone/AVBOIT variants provide NWB_CSG_CONTEXT_HEAP_SLOT.
 uint nwbCsgContextHeapSlot(){
 #if defined(NWB_CSG_CONTEXT_HEAP_SLOT)
     return NWB_CSG_CONTEXT_HEAP_SLOT;

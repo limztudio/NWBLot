@@ -176,7 +176,7 @@ public:
     [[nodiscard]] RayTracingRefractionGraphResources snapshotRefractionGraphResources()const noexcept;
     [[nodiscard]] bool recordRefractionResolve(Core::CommandList& commandList, const DeferredFrameTargets& targets, const RayTracingRefractionGraphResources& resources)const;
 
-    // Resource identity is frozen by the shared deferred graph.  Select/grow every trace resource before graph compilation, then let the graph-owned preparation packet issue only GPU work against that frozen set.
+    // Resource identity is frozen by the shared deferred graph.  Select/grow every trace resource before compilation, then let the graph-owned preparation packet issue only GPU work against that frozen set.
     [[nodiscard]] bool preflightShadowVisibilityResources(DeferredFrameTargets& targets, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] Expected<bool> recordPreflightShadowVisibilityResources(
         Core::CommandList& commandList,
@@ -219,7 +219,7 @@ public:
     // The material table, instance stream, and typed bytes share indices and offsets. A fresh context retains one all-or-nothing upload batch
     [[nodiscard]] Expected<PreparedShadowMaterialContextUploads> retainPreparedShadowMaterialContextUploads(Core::GpuTaskGraph& graph)const;
     void confirmPreparedShadowMaterialContextUploads()noexcept;
-    // The software scene hierarchy and its leaf instances share topology and leaf indices, retain them as one immutable preflight batch and publish both only when the accepting Shadow Preparation packet submits.
+    // The software scene hierarchy and its leaf instances share topology and leaf indices; keep them as one immutable preflight batch and publish both only when the accepting Shadow Preparation packet submits.
     [[nodiscard]] Expected<PreparedSceneBvhUploads> retainPreparedSceneBvhUploads(Core::GpuTaskGraph& graph)const;
     void confirmPreparedSceneBvhUploads()noexcept;
     // Hardware TLAS work records from this frozen preflight plan in Shadow Preparation. Its static cache becomes valid only after that packet accepts.
@@ -242,7 +242,7 @@ public:
     [[nodiscard]] bool preparedMeshSwBvhBuildsReady()const noexcept{ return m_preparedMeshSwBvhBuildsReady; }
 
     [[nodiscard]] const PreparedMeshSwBvhBuildVector& preparedMeshSwBvhBuilds()const noexcept{ return m_preparedMeshSwBvhBuilds; }
-    // The pure-software Shadow Preparation packet records each frozen build after graph-owned typed sentinel clears. Revalidate this immutable snapshot immediately before its native compute sequence
+    // The pure-software Shadow Preparation packet records each frozen build after graph-owned typed sentinel clears. Revalidate this snapshot immediately before its native compute sequence
     [[nodiscard]] bool recordPreparedMeshSwBvhBuildAfterGraphClears(Core::CommandList& commandList, const PreparedMeshSwBvhBuild& build);
     void confirmPreparedMeshSwBvhBuilds();
     void releaseRayTraceMaterialContextHeapHandles();

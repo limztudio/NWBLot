@@ -51,7 +51,7 @@ namespace Feature{
     };
 };
 
-// One opaque binary semaphore signal from a submission-local hook. Only the owning native Device may decode it; presentation takes one binary signal while timeline dependencies stay token-based.
+// One opaque binary semaphore signal from a submission-local hook. Only the owning native Device may decode it; presentation takes one binary signal while timeline deps stay token-based.
 struct QueueSubmissionNativeSignal{
     Object semaphore = Object(u64{0u});
     u64 value = 0u;
@@ -82,7 +82,7 @@ public:
     [[nodiscard]] constexpr bool valid()const noexcept{ return invoke != nullptr && resolved != nullptr; }
 };
 
-// Submission-local cross-queue dependencies. Same-queue tokens collapse to normal queue order; prior accepted waits may cover distinct-queue tokens. The caller owns the token array until submit returns.
+// Submission-local cross-queue dependencies. Same-queue tokens collapse to queue order; prior accepted waits may cover distinct-queue tokens. The caller owns the token array until submit returns.
 struct QueueSubmissionDesc{
     const QueueSubmissionToken* waitTokens = nullptr;
     usize waitTokenCount = 0;
@@ -368,7 +368,7 @@ struct DeviceCreationParameters : public InstanceParameters{
 
     GraphicsVector<GraphicsString> requiredBackendDeviceExtensions;
     GraphicsVector<GraphicsString> optionalBackendDeviceExtensions;
-    // VK_EXT_debug_utils identifies validation messages with a signed message ID. Keep the suppression list in that native representation instead of the retired debug-report callback location token.
+    // VK_EXT_debug_utils identifies validation messages with a signed ID. Keep the suppression list in that native form instead of the retired debug-report callback location token.
     GraphicsVector<i32> ignoredValidationMessageIds;
 
     GpuDescriptorHeapAbi bindlessHeapAbi;

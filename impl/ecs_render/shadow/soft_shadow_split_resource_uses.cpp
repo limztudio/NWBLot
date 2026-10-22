@@ -107,7 +107,7 @@ bool SoftShadowSplitResourceUseBuilder::build(const SoftShadowSplitResourceInput
     const Core::GpuGraphResourceId shadowTypedMaterials = *shadowTypedMaterialsResult;
     const Core::GpuGraphResourceId shadowInstances = *shadowInstancesResult;
 
-    // The opaque callback has no temporal or coarse scratch access. Keep its direct serial writes separate from the unsplit adaptive declaration so a fresh retained target never becomes a synthetic first read.
+    // The opaque callback has no temporal or coarse scratch access. Keep its serial writes separate from the unsplit adaptive declaration so a fresh target never becomes a synthetic first read.
     constexpr usize s_OpaqueResourceUseCapacity = 18u;
     uses.opaque.reserve(s_OpaqueResourceUseCapacity + (route.traceGeometryStatesGraphOwned ? 0u : inputs.traceGeometryResourceCount));
     uses.opaque.push_back(ReadUse(inputs.worldPosition));
@@ -174,7 +174,7 @@ bool SoftShadowSplitResourceUseBuilder::build(const SoftShadowSplitResourceInput
     if(!route.combinedSoftUpsample){
         constexpr usize s_OpaqueResolveResourceUseCapacity = 8u;
         uses.opaqueResolve.reserve(s_OpaqueResolveResourceUseCapacity);
-        // With the current one-wavelet opaque resolve, the tail only samples the first-wavelet half-B result for upsample. Keep a conservative native ping-pong declaration if that compile-time pass count grows.
+        // With the current one-wavelet opaque resolve, the tail only samples the first-wavelet half-B result for upsample. Keep a conservative ping-pong declaration if that pass count grows.
         if(NWB_SHADOW_RESOLVE_PASS_COUNT == 1u)
             uses.opaqueResolve.push_back(ReadUse(shadowSoftHalfB, Core::ResourceStates::ShaderResource));
         else{

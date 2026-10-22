@@ -89,7 +89,7 @@ struct SoftShadowSplitTasks{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The prepared soft-transparent shadow route: light-space maps when ready, the opaque producer with its wavelet and resolve tail, then the transparent trace, temporal merge, first wavelet, and terminal fold.
+// The prepared soft-transparent shadow route: light-space maps when ready, the opaque producer with its wavelet and resolve tail, then transparent trace, temporal merge, first wavelet, and terminal fold.
 // Tasks declared before a failure stay in `tasks`.
 class SoftShadowSplitTaskChainBuilder final : NoCopy{
 public:

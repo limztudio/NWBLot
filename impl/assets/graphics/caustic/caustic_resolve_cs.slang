@@ -334,7 +334,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             return;
         }
 
-        // The full-resolution world-position G-buffer is RGBA16F. Retain its transport precision and promote only for the distance-based edge stop, matching the half-resolution geometry cache below.
+        // The full-res world-position G-buffer is RGBA16F. Retain transport precision and promote only for the distance-based edge stop, matching the half-res geometry cache below.
         const float3 centerWorld = float3(nwbCausticResolveWorldAtFull(fullTexel));
         const int2 rightFull = int2(min(fullTexel.x + 1, fw - 1), fullTexel.y);
         const int2 downFull = int2(fullTexel.x, min(fullTexel.y + 1, fh - 1));

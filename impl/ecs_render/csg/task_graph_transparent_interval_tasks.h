@@ -61,7 +61,7 @@ public:
 
 
 struct AvboitCsgReceiverSpanGraphTask{
-    // The material/CSG systems, the frame targets, the timing ticket, and the intervals timing slot are required: the transparent interval passes always bracket their dispatches with the frame timing.
+    // The material/CSG systems, frame targets, timing ticket, and intervals timing slot are required: the transparent interval passes always bracket dispatches with the frame timing.
     using Payload = TransparentCsgIntervalRecordInputs;
 
 
@@ -80,7 +80,7 @@ public:
 
 // Interval combine maps visible span/peel inputs to removed-interval outputs.
 struct AvboitCsgIntervalCombineGraphTask{
-    // The material/CSG systems, the frame targets, the timing ticket, and the intervals timing slot are required: the transparent interval passes always bracket their dispatches with the frame timing.
+    // The material/CSG systems, frame targets, timing ticket, and intervals timing slot are required: the transparent interval passes always bracket dispatches with the frame timing.
     using Payload = TransparentCsgIntervalRecordInputs;
 
 

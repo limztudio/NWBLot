@@ -198,7 +198,7 @@ public:
         return p;
     }
 
-    // LIFO reclaim only: p must be the bucket's most-recent allocation (same contract as deallocate); resizes the top in place, or relocates to a fresh block and copies when it cannot grow in place.
+    // LIFO reclaim only: p must be the bucket's most-recent allocation. Grows the top in place, or relocates to a fresh block and copies when it cannot grow.
     inline void* reallocate(void* p, usize align, usize size){
         NWB_ASSERT_MSG(IsValidAlignment(align), NWB_TEXT("ScratchArena alignment must be a non-zero power of two up to s_MaxAlignSize"));
         if(!IsValidAlignment(align))

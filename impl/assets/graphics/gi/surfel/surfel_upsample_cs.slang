@@ -100,7 +100,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             const float bilinearWeight = (i == 0 ? 1.0 - lerpFrac.x : lerpFrac.x) * (j == 0 ? 1.0 - lerpFrac.y : lerpFrac.y);
             const float weight = nwbSurfelUpsampleGeometryWeight(bilinearWeight, dot(d, d), invTwoSigmaWorldSq);
             const float coveredWeight = nwbSurfelUpsampleCoveredWeight(weight, float(tapValue.a));
-            // Uncovered taps still count toward the compatible surface's weight, so coverage fades across a gap. Their zero irradiance does not dilute the normalized estimate or leak light across a crease.
+            // Uncovered taps still count toward the compatible surface's weight, so coverage fades across a gap. Their zero irradiance does not dilute the normalized estimate or leak across a crease.
             compatibleWeightSum += weight;
             coveredWeightSum += coveredWeight;
             irradianceSum += coveredWeight * float3(tapValue.rgb);

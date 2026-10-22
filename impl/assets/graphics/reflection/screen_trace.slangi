@@ -70,7 +70,7 @@ bool nwbReflectionBuildScreenRay(const NwbReflectionSurface surface, out NwbRefl
     if(!all(isfinite(firstClip)) || !all(isfinite(lastClip)))
         return false;
 
-    // Clip in homogeneous coordinates before division. The reflected ray may point toward the camera, through the near plane, or out a side plane; either sign of projected depth direction remains valid.
+    // Clip in homogeneous coordinates before division. The reflected ray may point toward the camera, through the near plane, or out a side plane; either sign of depth direction stays valid.
     const float4 delta = lastClip - firstClip;
     float first = surface.bias / g_NwbReflectionParameters.maxRayDistance;
     float last = 1.0;

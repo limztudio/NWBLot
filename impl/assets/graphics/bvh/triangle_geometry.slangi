@@ -63,7 +63,7 @@ float3 nwbRayTraceTriangleGeometricNormal(const NwbRtInstanceMaterial material, 
     return nwbRayTraceNormalizeGeometryVector(worldNormal);
 }
 
-// Only real triangulation seams merge: indexed adjacency + opposite orientation filter shells/duplicates; object-space coplanarity via triple-product error bound (no crease-angle smoothing).
+// Only real triangulation seams merge: indexed adjacency + opposite orientation filter shells/duplicates; object-space coplanarity via triple-product bound (no crease-angle smoothing).
 bool nwbRayTraceCoplanarSeam(const uint instanceMaterialHeapSlot, const uint instance, const uint firstPrimitive, const uint secondPrimitive){
     if(firstPrimitive == secondPrimitive)
         return true;

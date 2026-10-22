@@ -68,7 +68,7 @@ struct ShadowPreparationOutcome{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A shared packet may optimistically advance several independent temporal domains while recording. Preserve the exact CPU mirrors so each rejected semantic stage can roll back only the state it owned.
+// A shared packet may optimistically advance several independent temporal domains while recording. Keep the exact CPU mirrors so each rejected stage can roll back only the state it owned.
 struct RayTracingFrameCpuStateSnapshot{
     Core::QueueSubmissionToken surfelCountReadbackSubmissionToken;
 
@@ -87,7 +87,7 @@ struct RayTracingFrameCpuStateSnapshot{
 };
 
 
-// Shadow Preparation retains native state for the scene TLAS, shared software-BVH scratch, and adaptive-shadow scratch across packets. The coordinator receives owning handles without reaching into mutable domain state.
+// Shadow Preparation retains native state for the scene TLAS, software-BVH scratch, and adaptive-shadow scratch across packets. The coordinator receives owning handles without touching mutable domain state.
 struct RayTracingShadowPreparationResourceSnapshot{
     Core::RayTracingAccelStructHandle sceneTlas;
     Core::BufferHandle sceneTlasBackingBuffer;

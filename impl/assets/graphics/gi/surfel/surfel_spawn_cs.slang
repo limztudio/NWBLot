@@ -17,7 +17,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// This frame's hash, allocation counters, and free-list are all StorageBuffer heap entries selected by the common dispatch push block. The aliases below keep the allocation logic uncluttered.
+// This frame's hash, counters, and free-list are heap entries selected by the common push block. The aliases below keep the allocation logic uncluttered.
 #define g_NwbSurfelCellHead g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.cellHeadHeapSlot]
 #define g_NwbSurfelCounter g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.counterHeapSlot]
 #define g_NwbSurfelFreeList g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.freeListHeapSlot]

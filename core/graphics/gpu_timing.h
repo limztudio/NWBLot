@@ -531,7 +531,7 @@ private:
 class GpuTimingMeasure final : NoCopy{
 public:
     GpuTimingMeasure(GpuTimingMeasure&&) = delete;
-    // Defined out-of-line: the ctor/dtor own an exact CommandList marker lease, and CommandList is only forward-declared in this header (the marker calls need the complete type, available in the .cpp).
+    // Defined out-of-line: the ctor/dtor own an exact CommandList marker lease, and CommandList is only forward-declared here (the marker calls need the complete type from the .cpp).
     GpuTimingMeasure(GpuTimingRecorder& recorder, const GpuTimingScopeDefinition& scopeDefinition, Device& device, CommandList& commandList, GpuTimingSampleAttribution attribution = s_NoGpuTimingSampleAttribution);
     ~GpuTimingMeasure()noexcept;
 

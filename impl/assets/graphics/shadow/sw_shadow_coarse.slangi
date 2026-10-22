@@ -20,7 +20,7 @@
 // Shared coarse trace: one ray per coarse texel; opaque vs transparent passes differ only in the compile-time occluder class (binary blocker vs colored transmittance).
 
 
-// The coarse transmittance workset is a heap-selected StorageImage. It is writable by the coarse trace and read via the same storage view by classify/resolve, so no pass owns a local UAV binding.
+// The coarse transmittance workset is a heap-selected StorageImage. It is writable by the coarse trace and read via the same storage view by classify/resolve, so no pass owns a local binding.
 #define g_NwbSwShadowCoarse nwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.coarseStorageSlot)
 
 
@@ -28,7 +28,7 @@
 void nwbSwShadowCoarseTrace(const uint2 coarsePixel){
     if(coarsePixel.x >= g_NwbSwShadowPush.coarseWidth || coarsePixel.y >= g_NwbSwShadowPush.coarseHeight)
         return;
-    // Coarse texel k samples (and the resolve reconstructs around) full-res k*FACTOR -- the block's top-left texel. coarseWidth is rounded UP from width/FACTOR, so k*FACTOR stays in [0, width) for every k < coarseWidth.
+    // Coarse texel k samples (and the resolve reconstructs around) full-res k*FACTOR -- the block's top-left texel. coarseWidth is rounded UP from width/FACTOR, so k*FACTOR stays in [0, width) for every k.
     const uint2 base = coarsePixel * NWB_SW_SHADOW_COARSE_FACTOR;
     const int3 texel = int3(int2(base), 0);
 

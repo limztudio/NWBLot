@@ -202,7 +202,7 @@ public:
 [[nodiscard]] static GpuTaskSchedulingHint FrameTimingResetScheduling()noexcept{
     GpuTaskSchedulingHint scheduling;
     scheduling.cost = GpuTaskCostHint::Tiny;
-    // The reset is a complete, CPU-visible preamble boundary. Later renderer submissions may only reserve their timestamp scopes after this packet accepts, so it must not merge with unrelated work.
+    // The reset is a complete, CPU-visible preamble boundary. Later renderer submissions may only reserve their timestamp scopes after this packet accepts, so it must not merge with other work.
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
     scheduling.overlapPreferred = false;

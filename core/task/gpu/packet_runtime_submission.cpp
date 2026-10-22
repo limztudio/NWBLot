@@ -41,7 +41,7 @@ namespace GpuPacketRuntimeDetail{
     ;
 }
 
-// External completions may come from any current-device queue. A completion paired with an imported ownership acquire is narrower: it must prove the exact source queue that released the resource.
+// External completions may come from any current-device queue. A completion paired with an imported acquire is narrower: it must prove the exact source queue that released the resource.
 [[nodiscard]] bool ValidateInitialOwnershipCompletions(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId& packetID)noexcept{
     const GpuCompiledPacketView packetView = planAccess.packet(packetID);
     if(!packetView.valid())

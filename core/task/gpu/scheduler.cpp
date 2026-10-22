@@ -23,7 +23,7 @@ namespace __hidden_gpu_packet_runtime_execution{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A frontier packet is only a recovery/finalization tail. The compiler keeps it out of ordinary work, but does not force declaration order, so normal execution rejects one inside its endpoint or derived prefix.
+// A frontier packet is only a recovery/finalization tail. The compiler keeps it out of ordinary work, but does not force declaration order, so execution rejects one inside its endpoint or prefix.
 [[nodiscard]] Expected<GpuSubmissionPacketRange, GpuSubmissionPacketId> FindNormalGraphPacketRange(const GpuTaskGraph::DeclarationReadView& declarations, const GpuCompiledGraph::ReadView& planAccess, const GpuTaskId& terminalTask)noexcept{
     const usize packetCount = planAccess.packetCount();
     if(packetCount == 0u)
@@ -364,7 +364,7 @@ bool GpuTaskScheduler::recordAndSubmitTaskWithinSubmissionOperation(
     if(!submitPacketRangeWithinSubmissionOperation(graph, compiledGraph, recordedGraph, planAccess.packetRangeForTasks(task, task), nullptr, 0u, transaction, scratchArena, &failedPacket, acceptedCallback, acceptedCallback ? 1u : 0u, nullptr, 0u)){
         if(outFailedPacket)
             *outFailedPacket = failedPacket;
-        // Range submission normally rejected the packet already. Keep this idempotent closeout for validation failures before traversal, so a renderer cannot strand an armed recovery task.
+        // Range submission normally rejected the packet already. Keep this idempotent closeout for validation failures before traversal, so a renderer cannot strand an armed task.
         rejectTask();
         return false;
     }

@@ -180,7 +180,7 @@ bool CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, 
 
         if(!releaseDestinationQueue.valid()){
             // Vulkan ownership belongs to a queue family, not one VkQueue.
-            // A state handoff from another physical queue in this family is valid once its timeline token is waited; reject only a true family crossing that omitted the compiler-planned release/acquire pair.
+            // A handoff from another physical queue in this family is valid once its timeline token is waited; reject only a true family crossing that omitted the planned release/acquire pair.
             if(ownerQueue.valid() && sourceQueueFamily != destinationQueueFamily){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive texture handoff changes queue family without a release/acquire transfer"));
                 return false;

@@ -293,7 +293,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
         outRecordedGraph.addReadyFrontierStatistics(elapsedSeconds, VectorDoubleGetX(workerBusySeconds), availableWorkerSeconds, artifactOperation);
     };
 
-    // Command-IR records form one linear artifact. Keep capture serial to preserve record order and the rollback contract; this records right after prepare so the operation owns one elapsed span.
+    // Command-IR records form one linear artifact. Keep capture serial to preserve record order and the rollback contract; this records right after prepare so the operation owns one span.
     if(!usesParallelRecording){
         if(!recordPreparedPacketRangeInCompileOrder(graph, compiledGraph, planAccess, artifactOperation, range, outRecordedGraph, *serialScratch, serialStateFanInScratchArena, commandIrCapture, outFailedPacket))
             return false;
@@ -364,7 +364,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                     parallelResults[parallelIndex] = 0u;
                     return;
                 }
-                // Keep zero for serial/direct lists. The scheduler caller is worker zero, so shift every lease by one. The stable domain stops a second scheduler with the same index from aliasing this shard.
+                // Keep zero for serial/direct lists. The caller is worker zero, so shift every lease by one. The stable domain stops a second scheduler with the same index from aliasing this shard.
                 parallelResults[parallelIndex] = recordPacket(
                     graph,
                     compiledGraph,

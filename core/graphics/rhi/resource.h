@@ -185,7 +185,7 @@ struct TextureDesc{
 
     bool useClearValue = false;
 
-    // If keepInitialState is true, command lists restore each used subresource to initialState before close. The state is known only after submit; earlier consumers must import the handoff instead.
+    // If keepInitialState is true, command lists restore each used subresource to initialState before close. The state is known only after submit; earlier consumers must import the handoff.
     bool keepInitialState = false;
 
 

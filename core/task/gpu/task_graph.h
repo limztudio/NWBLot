@@ -459,7 +459,7 @@ public:
     // The first isolated primary-Graphics task gates later normal roots without ordering independent branches.
     [[nodiscard]] bool setNormalExecutionPrelude(const GpuTaskId& task);
 
-    // Adds a graph-owned native buffer copy. The helper derives requirements and CopySource/CopyDest uses from its regions and retains the buffers through recording. The caller must not provide separate uses.
+    // Adds a graph-owned buffer copy. The helper derives requirements and CopySource/CopyDest uses from its regions and retains the buffers through recording. The caller provides no uses.
     [[nodiscard]] Expected<GpuTaskId> addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopyBufferTaskDesc& copyDesc);
 
     // Adds a graph-owned native texture copy. The helper derives requirements and CopySource/CopyDest uses from its regions and retains the textures through recording. The caller must not provide separate uses.
@@ -606,9 +606,9 @@ private:
         }
     }
 
-    // Claim packet tasks before recording. One attempt has exactly one native artifact per packet even with concurrent outputs. The lease names the one recorder that may run task thunks, complete, or abort.
+    // Claim packet tasks before recording. One attempt has exactly one artifact per packet even with concurrent outputs. The lease names the one recorder that may run thunks, complete, or abort.
     [[nodiscard]] bool beginPacketRecording(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, u64 recordingAttemptGeneration, GpuPacketRecordingLease& outLease)const noexcept;
-    // A claimed packet becomes submission-eligible only after all its task thunks complete.
+    // A claimed packet becomes submission-eligible only after all its thunks complete.
     [[nodiscard]] bool completePacketRecording(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, GpuPacketRecordingLease& lease)const noexcept;
     // Transfers a failed recorder's exact claim without invoking user code or changing task lifecycle on its worker.
     [[nodiscard]] bool deferPacketRecordingAbort(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, GpuPacketRecordingLease& lease, GpuPacketRecordingAbort& outAbort)const noexcept;
@@ -617,7 +617,7 @@ private:
     // Exception unwind consumes exact recording capabilities without invoking extensible discard observers.
     [[nodiscard]] bool abandonPacketRecordingWithoutCallbacks(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, GpuPacketRecordingLease& lease)const noexcept;
     [[nodiscard]] bool abandonPacketRecordingAbortWithoutCallbacks(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuPacketRecordingAbort& abort)const noexcept;
-    // Ordinary cleanup cannot discard a Recording packet: a retry must not re-arm payload while the original recorder still owns it.
+    // Ordinary cleanup cannot discard a Recording packet: a retry must not re-arm payload while the original recorder owns it.
     void abortPacketRecording(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, GpuPacketRecordingLease& lease)const;
     [[nodiscard]] bool packetReadyForSubmission(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, u64 recordingAttemptGeneration)const noexcept;
 

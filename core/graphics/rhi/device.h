@@ -123,7 +123,7 @@ struct CommandListParameters{
     // Type of the queue that this command list is to be executed on.
     // Dedicated Compute and Transfer queues expose only the command subsets their Vulkan families support.
     CommandQueue::Enum queueType = CommandQueue::Graphics;
-    // Device resolves queueType to its primary physical queue unless an exact queue is supplied. Explicit packets set it directly, so pools, uploads, and handoffs never collapse same-class queues.
+    // Device resolves queueType to its primary physical queue unless an exact queue is supplied. Explicit packets set it directly, so pools, uploads, handoffs never collapse same-class queues.
     GpuPhysicalQueueId physicalQueue;
     // Worker zero is the ordinary serial/direct lease.
     // Ready-frontier graph recording combines a stable nonzero CpuTaskScheduler domain with its local nonzero worker index so different pools cannot alias one native arena shard.

@@ -125,7 +125,7 @@ struct GpuTaskTimingMetadata{
     GpuTaskTimingPolicy::Enum policy = GpuTaskTimingPolicy::None;
 };
 
-// Packet timing identities are derived from the first semantic task rather than compiler packet IDs, preserving one stable telemetry key when an equivalent graph is recompiled into a new plan generation.
+// Packet timing identities derive from the first semantic task rather than compiler packet IDs, keeping one stable telemetry key when an equivalent graph recompiles into a new generation.
 [[nodiscard]] inline Expected<Name> GpuTaskPacketTimingScopeName(const Name& firstTaskIdentity){
     return DeriveName(firstTaskIdentity, AStringView(".packet"));
 }
@@ -329,7 +329,7 @@ public:
     }
 };
 
-// Primitive native copies remain task-level operations: they are scheduled, packetized, and synchronized by the graph, but record directly to the selected CommandList without introducing a general command IR.
+// Primitive native copies remain task-level operations: scheduled, packetized, and synchronized by the graph, but record directly to the selected CommandList without a general command IR.
 // The helpers own the resource-use declarations for every region, so callers must leave GpuTaskDesc::resourceUses empty.
 struct GpuCopyBufferTaskRegion{
     GpuGraphResourceId source;
@@ -386,7 +386,7 @@ struct GpuUploadBufferTaskDesc{
     u64 destinationOffsetBytes = 0u;
     ResourceStates::Mask finalState = ResourceStates::CopyDest;
     // Optional lifecycle output.
-    // Storage must outlive late recording/submission; the helper clears it at declaration and again if the task is discarded, then writes the accepted packet token only after successful submission.
+    // Storage must outlive late recording/submission; the helper clears it at declaration and if the task is discarded, then writes the accepted packet token only after submission.
     QueueSubmissionToken* acceptedToken = nullptr;
 };
 
@@ -400,7 +400,7 @@ struct GpuUploadTextureTaskDesc{
     ResourceStates::Mask finalState = ResourceStates::CopyDest;
     TextureUploadAspect::Enum aspect = TextureUploadAspect::Automatic;
     // Optional lifecycle output.
-    // Storage must outlive late recording/submission; the helper clears it at declaration and again if the task is discarded, then writes the accepted packet token only after successful submission.
+    // Storage must outlive late recording/submission; the helper clears it at declaration and if the task is discarded, then writes the accepted packet token only after submission.
     QueueSubmissionToken* acceptedToken = nullptr;
 };
 
@@ -459,7 +459,7 @@ struct GpuClearTextureTaskDesc{
 static constexpr usize s_GpuClearTextureTaskDescByteSize = 136u;
 static_assert(sizeof(GpuClearTextureTaskDesc) == s_GpuClearTextureTaskDescByteSize, "GpuClearTextureTaskDesc should keep its compact runtime layout");
 
-// A rectangular unsigned-integer clear keeps the same graph-owned CopyDest/lifecycle contract as the general texture clear, while preserving the work-region bounds that a whole-image clear cannot represent.
+// A rectangular unsigned-integer clear keeps the same graph-owned CopyDest/lifecycle contract as the general texture clear, while keeping the work-region bounds a whole-image clear cannot represent.
 // It is kept deliberately narrow until another renderer path needs a different typed rectangle operation.
 struct GpuClearTextureRectUIntTaskDesc{
     GpuGraphResourceId destination;

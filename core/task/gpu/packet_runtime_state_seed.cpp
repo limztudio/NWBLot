@@ -38,7 +38,7 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
     scratch.externalMergedStateSeed.reset();
 
     // State snapshots include inherited state as well as resources a producer changed.
-    // Preserve the base-plus-branches fan-in rule while deriving every filtered branch from declarations: a later source may replace the base, but two independent sources may not leave incompatible final state.
+    // Keep the base-plus-branches fan-in rule while deriving every filtered branch from declarations: a later source may replace the base, but two sources may not leave incompatible state.
     const auto appendSourceSubset = [&]{
         if(scratch.stateSubsetScratch.empty())
             return true;
@@ -180,7 +180,7 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
     };
 
     // Resource-owned external handoffs are resolved from compiler markers rather than a renderer packet override.
-    // They are imported before ordinary task sources so the native command list opens with the released ownership and emits the paired Vulkan acquire before any graph prologue transition records.
+    // They are imported before ordinary task sources so the native command list opens with the released ownership and emits the paired acquire before any graph prologue transition.
     for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
         const GpuCompiledTaskView compiledTaskView = planAccess.findTask(tasks[taskIndex]);
         if(!compiledTaskView.valid())

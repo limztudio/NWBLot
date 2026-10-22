@@ -156,7 +156,7 @@ public:
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
 [[nodiscard]] static bool CreateCausticRefractionBackdrop(NWB::Core::ECS::World& world, NWB::Core::Alloc::GlobalArena& arena){
     constexpr TransparentMaterialRef s_BackdropMaterial{"project/smoke/refraction/materials/opaque"};
-    // Screen refraction requires opaque depth and spatial color variation behind the retained glass entry. Reuse the unlit refraction fixture material, leaving the ground receiver and sphere unchanged.
+    // Screen refraction requires opaque depth and spatial color variation behind the retained glass entry. Reuse the unlit refraction fixture material, leaving ground and sphere unchanged.
     for(u32 stripe = 0u; stripe < 24u; ++stripe){
         const f32 value = (stripe & 1u) != 0u ? 0.92f : 0.04f;
         Float4 position;

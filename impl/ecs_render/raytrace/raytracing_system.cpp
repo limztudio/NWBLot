@@ -95,7 +95,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(DeferredFrameT
     m_rayTracingState.m_surfelUseHwTrace = false;
     if(!targets.shadowVisibility)
         return false;
-    // The trace material-context selector is a global UniformBuffer heap entry. Establish it before gathering: the deferred graph imports the backing handle rather than a recording-time replacement.
+    // The trace material-context selector is a global UniformBuffer heap entry. Establish it before gathering: the graph imports the backing handle rather than a recording-time replacement.
     if(!ensureRayTraceMaterialContextSlotsBuffer())
         return false;
 

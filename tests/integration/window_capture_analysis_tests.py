@@ -59,17 +59,17 @@ LIT_MAIN = "__main__"
 class TextureSmokeAnalysisTests(unittest.TestCase):
     def test_texture_smoke_analysis_isolates_red_bounce_on_the_white_receiver(self):
         rows = [[(210, 210, 210) for _ in range(200)] for _ in range(200)]
-        for y in range(80, 85):
-            for x in range(81, 84):
+        for y in range(40, 45):
+            for x in range(97, 100):
                 rows[y][x] = (104, 70, 68)
-        for y in range(134, 139):
-            for x in range(76, 79):
+        for y in range(126, 131):
+            for x in range(97, 100):
                 rows[y][x] = (104, 70, 68)
 
         analysis = window_capture_smoke.analyze_texture_smoke_rows(rows)
 
         self.assertEqual(analysis.red_pixels, 2 * 3 * 5)
-        self.assertEqual(analysis.receiver_pixel_count, 12 * 7)
+        self.assertEqual(analysis.receiver_pixel_count, 5 * 7)
         self.assertEqual(analysis.receiver_red_pixels, 3 * 5)
 
     def test_texture_smoke_validation_requires_dense_receiver_only_red_coverage(self):

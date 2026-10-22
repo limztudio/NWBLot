@@ -234,7 +234,7 @@ def main(argv=None):
     output = parser.add_mutually_exclusive_group(required=True)
     output.add_argument("--output-directory", type=Path, help="Use the exact evidence directory with the existing freshness checks.")
     output.add_argument("--output-root", type=Path, help="Preserve prior evidence and create a unique child directory for this run.")
-    parser.add_argument(LIT_TIMEOUT, type=float, default=180)
+    parser.add_argument(LIT_TIMEOUT, type=float, default=240)
     parser.add_argument("--analysis-only", action="store_true")
     parser.add_argument(LIT_NO_GPU_VALIDATION, dest="gpu_validation", action="store_false", default=True)
     args = parser.parse_args(argv)

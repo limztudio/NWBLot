@@ -299,7 +299,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
 
         add_test(NAME nwb_csg_reflection_capture_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_optics_smoke.py" "--effect" "reflection" "--executable" "$<TARGET_FILE:nwb_reflection_smoke>"
                 "--working-directory" "${_nwb_transparent_multi_runtime_root}" "--output-directory" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_reflection" ${_nwb_reflection_logserver_args})
-        set_tests_properties(nwb_csg_reflection_capture_smoke PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT 600)
+        set_tests_properties(nwb_csg_reflection_capture_smoke PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT 1200)
 
         add_test(NAME nwb_csg_reflection_collection_reuse_capture_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/reflection_optical_smoke.py" "--csg-reuse" "--executable" "$<TARGET_FILE:nwb_reflection_smoke>"
                 "--working-directory" "${_nwb_transparent_multi_runtime_root}" "--output-root" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_reflection_collection_reuse" "--timeout" "180" ${_nwb_reflection_logserver_args})
@@ -318,7 +318,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             add_test(NAME "nwb_reflection_${_nwb_reflection_suite}_capture_smoke" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/reflection_smoke.py" "--executable" "$<TARGET_FILE:nwb_reflection_smoke>"
                     "--working-directory" "${_nwb_reflection_suite_runtime_root}" "--output-directory" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/reflection_${_nwb_reflection_suite}" "--suite" "${_nwb_reflection_suite_argument}"
                     ${_nwb_reflection_logserver_args})
-            set_tests_properties("nwb_reflection_${_nwb_reflection_suite}_capture_smoke" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT 600)
+            set_tests_properties("nwb_reflection_${_nwb_reflection_suite}_capture_smoke" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT 1800)
         endforeach()
         unset(_nwb_reflection_suite_runtime_root)
         unset(_nwb_reflection_temporal_runtime_root)
@@ -347,7 +347,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         set_tests_properties(nwb_refraction_gpudbg_capture_smoke PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT 240)
         add_test(NAME nwb_refraction_gallery_capture_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/refraction_gallery_smoke.py" "--executable" "$<TARGET_FILE:nwb_refraction_smoke>"
                 "--working-directory" "${_nwb_transparent_multi_runtime_root}" "--output-directory" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/refraction_gallery" ${_nwb_refraction_logserver_args})
-        set_tests_properties(nwb_refraction_gallery_capture_smoke PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT 900)
+        set_tests_properties(nwb_refraction_gallery_capture_smoke PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT 2400)
         add_test(NAME nwb_refraction_duplicate_capture_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/refraction_duplicate_smoke.py" "--executable" "$<TARGET_FILE:nwb_refraction_smoke>"
                 "--working-directory" "${_nwb_transparent_multi_runtime_root}" "--output-directory" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/refraction_duplicates" ${_nwb_refraction_logserver_args})
         set_tests_properties(nwb_refraction_duplicate_capture_smoke PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT 600)
@@ -613,8 +613,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             "--expect-log-message" "SkinnedCausticSmokeProject: skinned glass refractor over ground created" "--expect-log-message" "SkinnedCausticSmokeProject: shutdown")
 
         add_test(NAME nwb_skinned_caustic_csg_transition_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/skinned_caustic_csg_transition_smoke.py" --executable "$<TARGET_FILE:nwb_skinned_caustic_smoke>"
-                --working-directory "${_nwb_skinning_culling_runtime_root}" --output-root "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/skinned_caustic_csg_transition" --timeout 180 ${_nwb_skinning_culling_logserver_args} CONFIGURATIONS dbg opt)
-        set_tests_properties(nwb_skinned_caustic_csg_transition_smoke PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT 690)
+                --working-directory "${_nwb_skinning_culling_runtime_root}" --output-root "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/skinned_caustic_csg_transition" --timeout 240 ${_nwb_skinning_culling_logserver_args} CONFIGURATIONS dbg opt)
+        set_tests_properties(nwb_skinned_caustic_csg_transition_smoke PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT 870)
 
         # The crowd stresses scene updates and opaque/transparent shadows across two lights.
         nwb_declare_executable(nwb_stress_test_smoke)

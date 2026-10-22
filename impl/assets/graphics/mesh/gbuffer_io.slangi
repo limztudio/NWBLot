@@ -12,7 +12,7 @@
 #include "pixel_input.slangi"
 #include "../common/math.slangi"
 
-// Every raster material pixel shader uses the same heap-backed frame buffers as its mesh/compute producer. The trace and cap-fill paths establish their own material-context route before including shared surface code.
+// Every material pixel shader uses the same heap-backed frame buffers as its mesh/compute producer. Trace and cap-fill paths establish their own material-context route first.
 #include "bindless_heap_mesh.slangi"
 
 
@@ -105,7 +105,7 @@ struct NwbMeshGBufferDrawConstants{
 uint nwbMeshShadingModelId(){
     return (g_NwbMeshGBufferDrawConstants.dispatch[NWB_MESH_PUSH_DISPATCH_FLAGS] >> NWB_MESH_DISPATCH_SHADING_MODEL_SHIFT) & NWB_MESH_DISPATCH_SHADING_MODEL_MASK;
 }
-// The pixel stage reads the same per-draw push constant the mesh stage saw, so a surface hook can load typed .bind constants per-pixel via instance index + byte offset, exactly as the mesh runtime does.
+// The pixel stage reads the same per-draw push constant the mesh stage saw, so a surface hook can load typed .bind constants per-pixel via instance index + byte offset, like mesh runtime.
 uint nwbMeshInstanceIndex(){
     return g_NwbMeshGBufferDrawConstants.dispatch[NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX];
 }
@@ -126,7 +126,7 @@ uint nwbMeshFrameViewHeapSlot(){
 }
 #endif
 
-// Raster material hooks receive the camera-to-surface ray through the same mesh-frame view buffer in every generated pass. Keep its orientation explicit: BXDF view vectors are surface-to-camera, while this is incident.
+// Material hooks receive the camera-to-surface ray through the same view buffer in every pass. Keep orientation explicit: BXDF view vectors are surface-to-camera, this is incident.
 float3 nwbMeshCameraToSurfaceDirection(const float3 worldPosition){
     return nwbSafeNormalize(worldPosition - g_NwbMeshCameraPosition.xyz, float3(0.0, 0.0, 1.0));
 }

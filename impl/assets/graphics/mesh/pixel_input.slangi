@@ -54,7 +54,7 @@ static float3 inWorldPosition;
 static float3 inIncidentDirection;
 static float inPixelDepth;
 
-// Rasterizer-independent hook inputs (not SV_-decorated, so the trace can build them from hit attributes as the rasterizer does from interpolated pixels). Exactly the consultable attributes, no more.
+// Rasterizer-independent hook inputs (not SV_-decorated, so the trace can build them from hit attributes as the rasterizer does from pixels). Exactly the consultable attributes, no more.
 struct NwbMeshSurfaceInputs{
     half4 color;
     float3 normal;

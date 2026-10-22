@@ -33,7 +33,7 @@ struct NwbShadowVisibilityAccumulator{
     half interfaceTransmittance;
 };
 
-// Temporary per-instance crossing state. Scoped to the single mesh traversal in nwbSwShadowInstanceOptics so its crossing list is finalized exactly once and never retained across the next instance.
+// Temporary per-instance crossing state. Scoped to the single mesh traversal in nwbSwShadowInstanceOptics so its crossing list is finalized once and never retained across the next instance.
 struct NwbShadowInstanceOptics{
     float3 absorptionCoeff;
     // The interface product folds (0, 1) Fresnel transmission fractions only, so half math is sufficient here.
@@ -47,7 +47,7 @@ struct NwbShadowInstanceOptics{
     float crossingT[NWB_SHADOW_MAX_CROSSINGS_PER_OCCLUDER];
 };
 
-// Traversal outcome for one instance: the caller combines completed optics once, zeroes visibility on an opaque block, keeps the all-blocked fallback on stack overflow, and adds nothing on a clean miss.
+// Traversal outcome for one instance: the caller combines completed optics once, zeroes visibility on an opaque block, keeps the all-blocked fallback on overflow, and adds nothing on a clean miss.
 enum class NwbShadowInstanceStatus : uint{
     Completed,
     NoIntersection,

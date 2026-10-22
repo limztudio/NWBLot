@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shadow trace serves the material-constants accessors from the ray hit's NwbShadowHit via per-invocation globals, so the same authored surface hook evaluates identically here and in the rasterizer (NWB_MESH_MATERIAL_CONTEXT_PROVIDED).
+// Shadow trace serves the material-constants accessors from the ray hit via per-invocation globals, so the same hook evaluates here and in the rasterizer (NWB_MESH_MATERIAL_CONTEXT_PROVIDED).
 #define NWB_MESH_MATERIAL_CONTEXT_PROVIDED
 #include "../mesh/material_typed_bindings.slangi"
 
@@ -33,7 +33,7 @@ struct NwbShadowHit{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per-invocation material context, set from the hit being shaded. A ray hit is shaded by a single dispatch call, so static globals per invocation are sufficient: the dispatch sets the context, then evaluates the hook, which reads it back through the accessors below (the same names the rasterizer defines from its push constant).
+// Per-invocation material context, set from the hit being shaded. One dispatch call shades a hit, so per-invocation statics suffice: the dispatch sets the context, then the hook reads it back below (same names as the rasterizer's push constant).
 static uint g_NwbShadowMaterialConstantByteOffset = 0u;
 static uint g_NwbShadowMeshInstanceIndex = 0u;
 static uint g_NwbShadowSurfaceDispatchId = 0u;

@@ -240,7 +240,7 @@ private:
         Alloc::ScratchArena& scratchArena,
         GpuSubmissionPacketId* outFailedPacket
     )const;
-    // The caller owns the transaction's exclusive SubmissionOperation. This internal path lets the accepted-frontier composite reuse the ordinary task executor without attempting forbidden same-transaction gate reentry.
+    // The caller owns the transaction's exclusive SubmissionOperation. This internal path lets the accepted-frontier composite reuse the ordinary executor without forbidden same-transaction gate reentry.
     [[nodiscard]] bool recordAndSubmitTaskWithinSubmissionOperation(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
@@ -255,7 +255,7 @@ private:
         GpuSubmissionPacketId* outFailedPacket,
         const GpuTaskGraphTaskAcceptedCallback* acceptedCallback
     )const;
-    // Arms one graph recording attempt, publishes that exact attempt into the recorded artifact for failure cleanup, then binds its sole submission transaction while the caller retains the exclusive operation.
+    // Arms one recording attempt, publishes that attempt into the recorded artifact for failure cleanup, then binds its submission transaction while the caller keeps the exclusive operation.
     [[nodiscard]] bool prepareRecordingAttemptAndBindTransactionWithinSubmissionOperation(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,

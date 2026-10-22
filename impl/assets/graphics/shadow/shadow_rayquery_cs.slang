@@ -19,7 +19,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Frame counter for soft-light cone jitter. It seeds the per-pixel low-discrepancy sample so the single jittered opaque ray walks the light's source disk/sphere across frames. A zero-radius light jitters to the axis exactly and keeps the hard-shadow result.
+// Frame counter for cone jitter. Seeds the per-pixel sample so the jittered ray walks the light's disk/sphere across frames. A zero-radius light jitters to the axis and keeps the hard-shadow result.
 struct NwbShadowRqPushConstants{
     uint frameIndex;
     uint worldPositionSlot;
@@ -41,7 +41,7 @@ struct NwbShadowRqPushConstants{
 
 [numthreads(NWB_SHADOW_RT_GROUP_SIZE, NWB_SHADOW_RT_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
-    // FULL-RESOLUTION: one inline-RayQuery occlusion ray per output pixel, written straight into the full-res visibility array the deferred lighting samples. The software transparent stage folds colored transmittance onto this opaque result.
+    // FULL-RESOLUTION: one occlusion ray per output pixel, written into the full-res visibility array the deferred lighting samples. The software stage folds colored transmittance onto this result.
     uint width;
     uint height;
     uint slotElems;

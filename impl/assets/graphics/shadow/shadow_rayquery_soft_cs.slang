@@ -57,7 +57,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
     const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
 
-    // Background: fully LIT (white) for every slot -- the multiplicative identity the resolve carries and the value the upsample writes for a background full-res pixel, so the two agree at the geometry/background edge. Same depth threshold as the SW trace (NWB_SW_SHADOW_BACKGROUND_DEPTH aliases the HW full-res threshold).
+    // Background: fully LIT (white) for every slot — the identity the resolve carries and the value upsample writes for a background pixel, so both agree at the edge. Same threshold as the SW trace.
     if(nwbHeapSampledImage2D(g_NwbShadowRqSoftPushConstants.depthSlot).Load(texel).r >= NWB_SW_SHADOW_BACKGROUND_DEPTH){
         for(uint i = 0u; i < lightCount; ++i){
             const float slot = g_NwbSceneLights[i].params.z;
@@ -77,7 +77,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const float slot = g_NwbSceneLights[i].params.z;
         if(slot < 0.0)
             continue;
-        // Opaque-only jittered samples (per pixel/frame/sample decorrelated); averaging the runtime budget yields the 0..1 coverage the value-aware resolve needs. Temporal accumulation carries sampling across frames.
+        // Opaque-only jittered samples (per pixel/frame/sample decorrelated); averaging the runtime budget yields the 0..1 coverage the resolve needs. Temporal accumulation carries sampling across frames.
         half3 accum = half3(0.0h, 0.0h, 0.0h);
         [loop] for(uint s = 0u; s < sampleCount; ++s){
             const float2 sampleJitter = nwbShadowLowDiscrepancy2D(halfPixel, g_NwbShadowRqSoftPushConstants.frameIndex * NWB_SW_SHADOW_SOFT_SPP + s);

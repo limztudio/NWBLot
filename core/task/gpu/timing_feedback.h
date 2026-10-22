@@ -245,7 +245,7 @@ public:
 
 class GpuTaskTimingHistoryStore;
 
-// A snapshot is writeable only by its owning history store.
+// A snapshot is writable only by its owning history store.
 // Compilation consumes these plain values and therefore cannot observe query completion or mutable frame state while it makes a deterministic queue decision.
 class GpuTaskTimingHistorySnapshot final : NoCopy{
     friend class GpuTaskTimingHistoryStore;

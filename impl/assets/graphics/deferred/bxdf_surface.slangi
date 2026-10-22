@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared BXDF input: deferred unpacks from G-buffer, AVBOIT builds from the surface hook; both feed nwbDeferredDispatchBxdf. param0/1 are material-packed alpha channels; shadingModel selects the BXDF.
+// Shared BXDF input: deferred unpacks from G-buffer, AVBOIT builds from the surface hook; both feed nwbDeferredDispatchBxdf. param0/1 are material-packed alpha; shadingModel selects BXDF.
 struct NwbBxdfSurface{
     half3  baseColor;
     float3 normal;          // world space, normalized

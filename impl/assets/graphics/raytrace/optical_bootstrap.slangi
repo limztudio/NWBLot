@@ -132,7 +132,7 @@ bool nwbOpticalBootstrap(const NwbOpticalTraceConfig config, const float3 origin
 #endif
     }
     if(!complete){
-        // Once all candidate slots are consumed, stopping is conservative even if this happened to be the final candidate. A further Proceed call could expose an unbudgeted event, so unresolved containment is rejected.
+        // Once all candidate slots are consumed, stopping is conservative even if this was the final candidate. A further Proceed call could expose an unbudgeted event, so unresolved containment is rejected.
         query.Abort();
         result.termination = NWB_OPTICAL_TERMINATION_EVENT_LIMIT;
         return false;

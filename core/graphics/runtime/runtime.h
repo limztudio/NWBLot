@@ -55,7 +55,7 @@ public:
     struct TextureSetupDesc{
         TextureDesc textureDesc;
         const void* data = nullptr;
-        // Total upload payload size in bytes, used to validate the subresource upload layout.
+        // Total upload payload size in bytes; validates the subresource upload layout.
         usize uploadDataSize = 0;
         usize rowPitch = 0;
         usize depthPitch = 0;

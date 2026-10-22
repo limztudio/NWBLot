@@ -26,7 +26,7 @@ struct NwbBvhNode{
     uint rightChild;
 };
 
-// Per-dispatch constants shared by the LBVH build kernels (Morton, topology, fit). aabbMin/aabbMax are the mesh object-space bounds used to quantize triangle centroids into Morton codes.
+// Per-dispatch constants shared by the LBVH build kernels (Morton, topology, fit). aabbMin/aabbMax are the object-space bounds used to quantize centroids into Morton codes.
 struct NwbBvhBuildPushConstants{
     uint primitiveCount;
     uint internalCount;

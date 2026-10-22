@@ -78,7 +78,7 @@ struct GpuTaskSchedulingHint{
     // Recovery must also join the accepted queue frontier and is counted only after native submission acceptance.
     bool isRecoverySubmission = false;
     // Recording stays serial unless every task in a packet explicitly opts in.
-    // An opt-in record thunk may run on a worker concurrently with other opt-in packets from the same compiler-derived ready frontier, so it must not mutate shared CPU state or rely on thread-affine APIs.
+    // An opt-in record thunk may run on a worker with other opt-in packets from the same ready frontier, so it must not mutate shared CPU state or rely on thread-affine APIs.
     // Submission remains in compiler order.
     bool allowParallelRecording = false;
     // Opts this task into deterministic load balancing across physical queues that share the selected queue class and Vulkan family.

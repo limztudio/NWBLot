@@ -58,7 +58,7 @@ struct NwbMeshGeneratedVertex{
 
 #if NWB_MESH_SHADER_EMULATION_COMPUTE
 // The compute-emulation target is a per-mesh writable StorageBuffer heap entry.
-// This typed alias shares the canonical StorageBuffer table with the raw and read-only mesh-stream aliases; the push-constant lane below selects the current mesh's entry without recreating a local descriptor set.
+// This typed alias shares the canonical table with the raw/read-only mesh-stream aliases; the push-constant lane below selects the current mesh's entry with no local descriptor set.
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate writable typed view of the StorageBuffer descriptor table.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbMeshGeneratedVertex, Std430DataLayout> g_NwbHeapMeshGeneratedVertexBuffers[];

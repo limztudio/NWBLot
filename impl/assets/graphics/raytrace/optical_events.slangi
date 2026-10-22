@@ -34,7 +34,7 @@ bool nwbOpticalReplayBootstrap(
     inout NwbOpticalTraceResult result
 ){
     media = (NwbOpticalMedia)0;
-    // Candidate records stay immutable. Sort scalar indices instead of retaining an array-backed struct while shifting that same array; every crossing keeps its original distance, primitive and orientation together.
+    // Candidate records stay immutable. Sort scalar indices instead of shifting an array-backed struct in place; every crossing keeps its original distance, primitive and orientation together.
     uint eventOrder[NWB_OPTICAL_MAX_CANDIDATE_EVENTS] = { 0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 13u, 14u, 15u, 16u, 17u, 18u, 19u, 20u, 21u, 22u, 23u, 24u, 25u, 26u, 27u, 28u, 29u, 30u, 31u, };
     [loop] for(uint index = 1u; index < eventCount; ++index){
         uint insertion = index;

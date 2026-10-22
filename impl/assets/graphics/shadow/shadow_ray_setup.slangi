@@ -16,7 +16,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Builds the shared direct-light shadow segment. Both the hardware RayQuery path and the software BVH traversal use this exact direction, finite extent, receiver-side bias, and back-face early-out so their soft-shadow coverage stays in lockstep. Callers include scene/buffer.slangi and shadow_sampling.slangi before this helper.
+// Builds the shared shadow segment. Both traversals use this direction, extent, bias, and back-face early-out so coverage stays in lockstep. Include scene/buffer.slangi and shadow_sampling.slangi first.
 bool nwbShadowBuildLightRay(const float3 worldPosition, const float3 normal, const NwbSceneLight light, const float2 jitter, out float3 outDirection, out float outTMin, out float outTEnd){
     outDirection = float3(0.0, 1.0, 0.0);
     outTMin = NWB_SHADOW_RAY_MIN_DISTANCE;

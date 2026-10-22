@@ -71,7 +71,7 @@ struct NwbReflectionSpatialView{
 #define NWB_REFLECTION_SPATIAL_TILE_WIDTH (NWB_REFLECTION_SPATIAL_GROUP_SIZE + 2u * NWB_REFLECTION_SPATIAL_CACHE_RADIUS)
 #define NWB_REFLECTION_SPATIAL_TILE_TEXELS (NWB_REFLECTION_SPATIAL_TILE_WIDTH * NWB_REFLECTION_SPATIAL_TILE_WIDTH)
 
-// Two color caches (radiance/specular) are half4: every input/output is RGBA16F, so FP16 matches storage and halves the tile to 3,200/4,608/6,272 bytes. Geometry caches stay float4 for plane/edge math; depth shares the unused position lane.
+// Two color caches (radiance/specular) are half4: every input/output is RGBA16F, so FP16 matches storage and halves the tile to 3,200/4,608/6,272 bytes. Geometry caches stay float4 for plane/edge math; depth shares the position lane.
 groupshared half4 g_NwbReflectionSpatialRadiance[NWB_REFLECTION_SPATIAL_TILE_TEXELS];
 groupshared half4 g_NwbReflectionSpatialSpecular[NWB_REFLECTION_SPATIAL_TILE_TEXELS];
 groupshared float4 g_NwbReflectionSpatialPositionDepth[NWB_REFLECTION_SPATIAL_TILE_TEXELS];
@@ -190,7 +190,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
             if(x == 0 && y == 0)
                 continue;
             const float spatialExponent = -float(x * x + y * y) / spatialDenominator;
-            // Every other exponent term is nonpositive, so an exactly zero Gaussian cannot contribute. Retain the original combined exponent below; this shortcut introduces no epsilon or altered weight rounding.
+            // Every other exponent term is nonpositive, so an exactly zero Gaussian cannot contribute. Keep the original combined exponent below; this shortcut introduces no epsilon or altered weight rounding.
             if(exp(spatialExponent) == 0.0)
                 continue;
             const int2 neighborPixel = int2(pixel) + int2(x, y);
@@ -218,7 +218,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
             if(!all(isfinite(neighborPosition)))
                 continue;
             const float3 displacement = neighborPosition - position;
-            // Bound the raster FP16 positions componentwise, then test both receiver tangent planes. This is a receiver-edge filter, not a secondary-hit reprojection or a claim of motion-vector validation.
+            // Bound the raster FP16 positions componentwise, then test both receiver tangent planes. This is a receiver-edge filter, not a secondary-hit reprojection or motion-vector validation.
             const float3 positionUncertainty = (abs(position) + abs(neighborPosition)) * NWB_REFLECTION_SPATIAL_POSITION_RELATIVE_ERROR;
             const float planeTolerance = max(NWB_REFLECTION_SPATIAL_PLANE_TOLERANCE_MIN, max(dot(positionUncertainty, abs(normal)), dot(positionUncertainty, abs(neighborNormal))) + pixelFootprint * NWB_REFLECTION_SPATIAL_PLANE_FOOTPRINT_SCALE);
             const float planeDistance = max(abs(dot(displacement, normal)), abs(dot(displacement, neighborNormal)));

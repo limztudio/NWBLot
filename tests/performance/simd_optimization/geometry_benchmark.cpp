@@ -541,7 +541,7 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
                 coordinate = static_cast<f64>(static_cast<i64>(Next(state) % 2000000001u) - 1000000000);
             pair.first[vertex] = VectorDoubleScale(LoadPosition(coordinates[0], coordinates[1], coordinates[2]), 0.25);
         }
-        const SIMDVectorDouble contained = (pair.first[0] * VectorDoubleReplicate(2.0) + pair.first[1] + pair.first[2]) * VectorDoubleReplicate(0.25);
+        const SIMDVectorDouble contained = VectorDoubleScale(VectorDoubleAdd(VectorDoubleAdd(VectorDoubleScale(pair.first[0], 2.0), pair.first[1]), pair.first[2]), 0.25);
         for(SIMDVectorDouble& vertex : pair.second)
             vertex = contained;
         if(
@@ -557,7 +557,7 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
                 coordinate = static_cast<f64>(static_cast<i64>(Next(state) % 2000001u) - 1000000);
             pair.first[vertex] = LoadPosition(coordinates[0], coordinates[1], coordinates[2]);
         }
-        const SIMDVectorDouble containedSingle = (pair.first[0] * VectorDoubleReplicate(2.0) + pair.first[1] + pair.first[2]) * VectorDoubleReplicate(0.25);
+        const SIMDVectorDouble containedSingle = VectorDoubleScale(VectorDoubleAdd(VectorDoubleAdd(VectorDoubleScale(pair.first[0], 2.0), pair.first[1]), pair.first[2]), 0.25);
         for(u32 vertex = 0u; vertex < 3u; ++vertex){
             pair.first[vertex] = ConvertVectorSingleToDouble(ConvertVectorDoubleToSingle(pair.first[vertex]));
             pair.second[vertex] = ConvertVectorSingleToDouble(ConvertVectorDoubleToSingle(containedSingle));
@@ -617,7 +617,7 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
         if(!CheckExceptionEquivalence(active))
             return false;
     }
-    const f64 maximum = Limit<f64>::s_Max;
+    constexpr f64 maximum = Limit<f64>::s_Max;
     const TrianglePair extreme[] = {
         { { Double4(0.0, 1.0, 1.0), Double4(0.0, 1.0, 1.0), Double4(0.0, 1.0, 1.0) }, { Double4(Limit<f64>::s_Infinity, 1.0, 2.0), Double4(-1.0, -1.0, -1.0), Double4(1.0, 3.0, 4.0) } },
         { { Double4(maximum, 0.0, 0.0), Double4(maximum, 0.0, 0.0), Double4(maximum, 0.0, 0.0) }, { Double4(-maximum, -1.0, -1.0), Double4(0.0, 1.0, 1.0), Double4(maximum, 0.0, 0.0) } }

@@ -17,7 +17,7 @@ NWB_FBX_TO_NWB_BEGIN
 
 
 SIMDVectorSingle FbxMeshBuild::LoadUfbxVector(const ufbx_vec3 value, const f32 w)noexcept{
-    return VectorSet(static_cast<f32>(value.x), static_cast<f32>(value.y), static_cast<f32>(value.z), w);
+    return ConvertVectorDoubleToSingle(VectorDoubleSet(static_cast<f64>(value.x), static_cast<f64>(value.y), static_cast<f64>(value.z), static_cast<f64>(w)));
 }
 
 
@@ -132,7 +132,7 @@ Expected<PositionNormalMap> FbxMeshBuild::BuildSmoothPositionNormals(
         if(!IsFinite(areaLengthSquared) || areaLengthSquared <= options.triangleAreaLengthSquaredEpsilon)
             return true;
 
-        const SIMDVectorSingle areaNormal = VectorSet(static_cast<f32>(areaNormal64.x), static_cast<f32>(areaNormal64.y), static_cast<f32>(areaNormal64.z), 0.0f);
+        const SIMDVectorSingle areaNormal = ConvertVectorDoubleToSingle(areaNormal64);
         for(const SIMDVectorSingle position : positions){
             const PositionKey key = MakePositionKey(position);
             auto result = outNormals.emplace(key, PositionNormalRecord{});
@@ -246,7 +246,7 @@ bool FbxMeshBuild::AppendInstanceMesh(
             SIMDVectorSingle uv0 = VectorZero();
             if(importUvs){
                 const ufbx_vec2 sourceUv0 = ufbx_get_vertex_vec2(&mesh->vertex_uv, cornerIndex);
-                uv0 = VectorSet(static_cast<f32>(sourceUv0.x), static_cast<f32>(sourceUv0.y), 0.0f, 0.0f);
+                uv0 = ConvertVectorDoubleToSingle(VectorDoubleSet(static_cast<f64>(sourceUv0.x), static_cast<f64>(sourceUv0.y), 0.0, 0.0));
                 inOutSawVertexUvs = true;
             }
             else{
@@ -257,7 +257,7 @@ bool FbxMeshBuild::AppendInstanceMesh(
             SIMDVectorSingle color = defaultColorVector;
             if(importColors){
                 const ufbx_vec4 sourceColor = ufbx_get_vertex_vec4(&mesh->vertex_color, cornerIndex);
-                color = VectorSet(static_cast<f32>(sourceColor.x), static_cast<f32>(sourceColor.y), static_cast<f32>(sourceColor.z), static_cast<f32>(sourceColor.w));
+                color = ConvertVectorDoubleToSingle(VectorDoubleSet(static_cast<f64>(sourceColor.x), static_cast<f64>(sourceColor.y), static_cast<f64>(sourceColor.z), static_cast<f64>(sourceColor.w)));
                 inOutSawVertexColors = true;
             }
             StoreFloat(color, corner.color);

@@ -172,11 +172,14 @@ template<typename Scalar, bool Candidate, bool Latency>
     using Vector = Conditional_T<IsSame_V<Scalar, f64>, SIMDVectorDouble, SIMDVectorSingle>;
     Case<Scalar> data[s_DataCount];
     for(usize index = 0u; index < s_DataCount; ++index){
-        const Scalar x = static_cast<Scalar>((index % 7u) + 1u) * static_cast<Scalar>(0.375);
-        const Scalar y = static_cast<Scalar>((index % 5u) + 1u) * static_cast<Scalar>(0.625);
-        const Scalar z = static_cast<Scalar>((index % 3u) + 1u) * static_cast<Scalar>(0.875);
-        data[index] = { Vector{ x, -y, z, static_cast<Scalar>(0) }, Vector{ static_cast<Scalar>(0.5), static_cast<Scalar>(0.75), static_cast<Scalar>(0.125), static_cast<Scalar>(0) },
-            Vector{ static_cast<Scalar>(1), static_cast<Scalar>(0), static_cast<Scalar>(0), static_cast<Scalar>(0) }, static_cast<Scalar>(1e-12) };
+        if constexpr(IsSame_V<Scalar, f64>){
+            const SIMDVectorDouble position = VectorDoubleMultiply(VectorDoubleSet(static_cast<f64>((index % 7u) + 1u), static_cast<f64>((index % 5u) + 1u), static_cast<f64>((index % 3u) + 1u), 0.0), VectorDoubleSet(0.375, -0.625, 0.875, 0.0));
+            data[index] = { position, VectorDoubleSet(0.5, 0.75, 0.125, 0.0), VectorDoubleSet(1.0, 0.0, 0.0, 0.0), 1e-12 };
+        }
+        else{
+            const SIMDVectorSingle position = VectorMultiply(VectorSet(static_cast<f32>((index % 7u) + 1u), static_cast<f32>((index % 5u) + 1u), static_cast<f32>((index % 3u) + 1u), 0.0f), VectorSet(0.375f, -0.625f, 0.875f, 0.0f));
+            data[index] = { position, VectorSet(0.5f, 0.75f, 0.125f, 0.0f), VectorSet(1.0f, 0.0f, 0.0f, 0.0f), 1e-12f };
+        }
     }
     Vector accumulators[8];
     for(auto& accumulator : accumulators)

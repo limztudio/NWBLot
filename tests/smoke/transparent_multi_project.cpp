@@ -497,7 +497,7 @@ public:
                 NWB_LOGGER_ERROR(NWB_TEXT("CausticTimingProbe: camera preset must be populated or sparse"));
                 return false;
             }
-            cameraDistance *= preset == s_SparsePreset ? 2.0f : 1.0f;
+            cameraDistance = VectorGetX(VectorScale(VectorReplicate(cameraDistance), preset == s_SparsePreset ? 2.0f : 1.0f));
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: camera {} distance {} height {}"), preset == "sparse" ? NWB_TEXT("sparse") : NWB_TEXT("populated"), cameraDistance, s_CameraTargetY);
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: fixed delta {} yaw {} sphere scale {}"), RendererBaselineFixedDelta(), EffectiveFrozenAngle(), s_CausticSphereScale);
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: photon phases {}"), NWB_CAUSTIC_TEMPORAL_PHASE_COUNT);

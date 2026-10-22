@@ -33,8 +33,8 @@ static constexpr f32 s_JointMatrixRowEpsilon = 0.0001f;
 
 
 bool FiniteUfbxMatrix(const ufbx_matrix& matrix)noexcept{
-    for(usize i = 0u; i < s_JointMatrixElementCount; ++i){
-        if(!IsFinite(static_cast<f64>(matrix.v[i])))
+    for(usize i = 0u; i < s_JointMatrixElementCount; i += s_Vector4ComponentCount){
+        if(!VectorDoubleIsFinite(VectorDoubleSet(static_cast<f64>(matrix.v[i + 0u]), static_cast<f64>(matrix.v[i + 1u]), static_cast<f64>(matrix.v[i + 2u]), static_cast<f64>(matrix.v[i + 3u])), VectorComponentMask::s_XYZW))
             return false;
     }
     return true;
@@ -42,9 +42,9 @@ bool FiniteUfbxMatrix(const ufbx_matrix& matrix)noexcept{
 
 SIMDMatrix LoadJointMatrix(const ufbx_matrix& matrix)noexcept{
     SIMDMatrix result{};
-    result.v[0u] = VectorSet(static_cast<f32>(matrix.m00), static_cast<f32>(matrix.m01), static_cast<f32>(matrix.m02), static_cast<f32>(matrix.m03));
-    result.v[1u] = VectorSet(static_cast<f32>(matrix.m10), static_cast<f32>(matrix.m11), static_cast<f32>(matrix.m12), static_cast<f32>(matrix.m13));
-    result.v[2u] = VectorSet(static_cast<f32>(matrix.m20), static_cast<f32>(matrix.m21), static_cast<f32>(matrix.m22), static_cast<f32>(matrix.m23));
+    result.v[0u] = ConvertVectorDoubleToSingle(VectorDoubleSet(static_cast<f64>(matrix.m00), static_cast<f64>(matrix.m01), static_cast<f64>(matrix.m02), static_cast<f64>(matrix.m03)));
+    result.v[1u] = ConvertVectorDoubleToSingle(VectorDoubleSet(static_cast<f64>(matrix.m10), static_cast<f64>(matrix.m11), static_cast<f64>(matrix.m12), static_cast<f64>(matrix.m13)));
+    result.v[2u] = ConvertVectorDoubleToSingle(VectorDoubleSet(static_cast<f64>(matrix.m20), static_cast<f64>(matrix.m21), static_cast<f64>(matrix.m22), static_cast<f64>(matrix.m23)));
     result.v[3u] = VectorSet(0.0f, 0.0f, 0.0f, 1.0f);
     return result;
 }

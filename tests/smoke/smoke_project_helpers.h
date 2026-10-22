@@ -131,7 +131,7 @@ struct SmokeYawDisplay{
 
 [[nodiscard]] inline SmokeYawDisplay MakeSmokeYawDisplay(const f32 yaw, const f32 twoPi)noexcept{
     const SIMDVectorSingle turn = VectorReplicate(twoPi);
-    SIMDVectorSingle wrapped = VectorReplicate(FMod(yaw, twoPi));
+    SIMDVectorSingle wrapped = VectorMod(VectorReplicate(yaw), turn);
     if(VectorGetX(wrapped) < 0.0f)
         wrapped = VectorAdd(wrapped, turn);
 

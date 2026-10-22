@@ -159,15 +159,15 @@ TEST(Math, DoubleTransformStreamsPreservePaddedStridesDuringAlignedUnalignedAndI
     EXPECT_EQ(VectorDouble3TransformCoordStream(MakeNotNull(&unaligned[0].value), sizeof(UnalignedRecord), MakeNotNull<const Double3*>(&aligned[0].value), sizeof(AlignedRecord), LengthOf(aligned), matrix).get(), &unaligned[0].value);
     EXPECT_EQ(NWB_MEMCMP(aligned, alignedOriginal.data(), sizeof(aligned)), 0);
     for(usize index = 0u; index < LengthOf(aligned); ++index)
-        EXPECT_EQ(unaligned[index].value.x, 0x1p+40 + 0.5 + 0.25 * static_cast<f64>(index)) << index;
+        EXPECT_EQ(unaligned[index].value.x, VectorDoubleGetX(VectorDoubleMultiplyAddExpression(VectorDoubleReplicate(0.25), VectorDoubleReplicate(static_cast<f64>(index)), VectorDoubleReplicate(0x1p+40 + 0.5)))) << index;
 
     EXPECT_EQ(VectorDouble3TransformCoordStream(MakeNotNull(&unaligned[0].value), sizeof(UnalignedRecord), MakeNotNull<const Double3U*>(&unaligned[0].value), sizeof(UnalignedRecord), LengthOf(unaligned), matrix).get(), &unaligned[0].value);
     EXPECT_EQ(VectorDouble3TransformCoordStream(MakeNotNull(&aligned[0].value), sizeof(AlignedRecord), MakeNotNull<const Double3U*>(&unaligned[0].value), sizeof(UnalignedRecord), LengthOf(aligned), matrix).get(), &aligned[0].value);
     EXPECT_EQ(VectorDouble3TransformCoordStream(MakeNotNull(&aligned[0].value), sizeof(AlignedRecord), MakeNotNull<const Double3*>(&aligned[0].value), sizeof(AlignedRecord), LengthOf(aligned), matrix).get(), &aligned[0].value);
     for(usize index = 0u; index < LengthOf(aligned); ++index){
-        EXPECT_EQ(aligned[index].value.x, 0x1p+40 + 1.25 + 0.25 * static_cast<f64>(index)) << index;
-        EXPECT_EQ(unaligned[index].value.x, 0x1p+40 + 0.75 + 0.25 * static_cast<f64>(index)) << index;
-        EXPECT_EQ(aligned[index].value.y, (static_cast<f64>(index) - 1.0) * 0x1p-40) << index;
+        EXPECT_EQ(aligned[index].value.x, VectorDoubleGetX(VectorDoubleMultiplyAddExpression(VectorDoubleReplicate(0.25), VectorDoubleReplicate(static_cast<f64>(index)), VectorDoubleReplicate(0x1p+40 + 1.25)))) << index;
+        EXPECT_EQ(unaligned[index].value.x, VectorDoubleGetX(VectorDoubleMultiplyAddExpression(VectorDoubleReplicate(0.25), VectorDoubleReplicate(static_cast<f64>(index)), VectorDoubleReplicate(0x1p+40 + 0.75)))) << index;
+        EXPECT_EQ(aligned[index].value.y, VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleSubtract(VectorDoubleReplicate(static_cast<f64>(index)), VectorDoubleSplatOne()), VectorDoubleReplicate(0x1p-40)))) << index;
         EXPECT_EQ(aligned[index].value.z, 1.0 + 0x1p-52) << index;
         const auto alignedBytes = MakeNotNull(reinterpret_cast<const u8*>(&aligned[index]));
         const auto unalignedBytes = MakeNotNull(reinterpret_cast<const u8*>(&unaligned[index]));

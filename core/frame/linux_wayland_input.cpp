@@ -650,7 +650,7 @@ void WaylandFrameInput::dispatchScroll(){
     if(!m_scrollPending)
         return;
 
-    const SIMDVectorDouble scroll = VectorDoubleSet(m_scrollDiscreteX != 0 ? static_cast<f64>(m_scrollDiscreteX) : m_scrollX, m_scrollDiscreteY != 0 ? -static_cast<f64>(m_scrollDiscreteY) : -m_scrollY, 0.0, 0.0);
+    const SIMDVectorDouble scroll = VectorDoubleXorInt(VectorDoubleSet(m_scrollDiscreteX != 0 ? static_cast<f64>(m_scrollDiscreteX) : m_scrollX, m_scrollDiscreteY != 0 ? static_cast<f64>(m_scrollDiscreteY) : m_scrollY, 0.0, 0.0), VectorDoubleSetInt(0u, s_F64SignBitMask, 0u, 0u));
     const SIMDVectorDouble units = VectorDoubleSet(m_scrollDiscreteX != 0 ? 1.0 : s_WaylandScrollAxisUnit, m_scrollDiscreteY != 0 ? 1.0 : s_WaylandScrollAxisUnit, 1.0, 1.0);
     const SIMDVectorDouble offsets = VectorDoubleDivide(scroll, units);
     const f64 xoffset = VectorDoubleGetX(offsets);

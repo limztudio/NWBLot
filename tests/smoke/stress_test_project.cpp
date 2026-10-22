@@ -154,7 +154,7 @@ private:
             if(!configuredFrame || !IsFinite(*configuredFrame) || *configuredFrame < 1.0f){
                 return 0u;
             }
-            return static_cast<u32>(Min(*configuredFrame, 1000000.0f));
+            return static_cast<u32>(VectorGetX(VectorMin(VectorReplicate(*configuredFrame), VectorReplicate(1000000.0f))));
         }();
         return s_captureFrame;
 #else

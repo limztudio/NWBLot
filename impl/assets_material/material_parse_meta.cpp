@@ -215,7 +215,7 @@ static Expected<MaterialCookEntry::StageShaderMap> ParseMaterialStageShaders(con
             NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shader stage entries must not be empty"), PathToString<tchar>(nwbFilePath));
             return MakeUnexpected(Failure{});
         }
-        if(shaderType != Core::ShaderType::PixelStage && shaderType != Core::ShaderType::MeshStage){
+        if(!IsSupportedMaterialShaderStage(shaderType)){
             NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shader stage '{}' is not supported by the ECS renderer material contract; only 'mesh' and 'ps' are allowed"), PathToString<tchar>(nwbFilePath), StringConvert(stageKeyText));
             return MakeUnexpected(Failure{});
         }

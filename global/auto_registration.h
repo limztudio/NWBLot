@@ -18,7 +18,7 @@
 template<typename ValueT, typename ArenaT>
 class AutoRegistrationQueue final : NoCopy{
 public:
-    explicit AutoRegistrationQueue(const Name& arenaName)
+    explicit AutoRegistrationQueue(const Name& arenaName)noexcept(IsNothrowConstructible_V<Futex> && IsNothrowConstructible_V<ArenaT, const Name&> && IsNothrowConstructible_V<Vector<ValueT, ArenaT>, ArenaT&>)
         : m_arena(arenaName)
         , m_values(m_arena)
     {}

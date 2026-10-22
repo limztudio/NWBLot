@@ -102,7 +102,7 @@ private:
 using ReflectionStatisticsControl = RefCounter<ReflectionStatisticsState>;
 using ReflectionStatisticsControlHandle = RefCountPtr< ReflectionStatisticsControl, ArenaRefDeleter<ReflectionStatisticsControl, Core::Alloc::GlobalArena> >;
 
-[[nodiscard]] ReflectionStatisticsControlHandle CreateReflectionStatisticsControl(Core::Alloc::GlobalArena& arena, u16 deviceGeneration)noexcept;
+[[nodiscard]] Expected<ReflectionStatisticsControlHandle> CreateReflectionStatisticsControl(Core::Alloc::GlobalArena& arena, u16 deviceGeneration)noexcept;
 
 // Destruction releases only an unaccepted reservation.
 class ReflectionStatisticsReservation final : NoCopy{
@@ -118,6 +118,7 @@ public:
 
 public:
     [[nodiscard]] bool valid()const noexcept{ return m_key.valid(); }
+
     [[nodiscard]] u32 slotIndex()const noexcept{ return m_key.slot; }
     void accept(const Core::QueueSubmissionToken& token, bool hardwareReady, const ReflectionHistoryOutcome* history = nullptr, const ReflectionFeedbackOutcome* feedback = nullptr)noexcept;
     void discard()noexcept;

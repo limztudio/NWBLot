@@ -198,6 +198,7 @@ RendererTaskTimingFeedback::RendererTaskTimingFeedback(Core::Alloc::GlobalArena&
     m_feedbackCollectionScopes.reserve(feedbackCollectionScopeCount);
     m_feedbackCollectionScopes.assign(feedbackCollectionScopes.get(), feedbackCollectionScopes.get() + feedbackCollectionScopeCount);
 }
+
 RendererTaskTimingFeedback::~RendererTaskTimingFeedback()noexcept{
     deactivate();
 }

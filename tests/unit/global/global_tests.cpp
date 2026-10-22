@@ -133,9 +133,13 @@ public:
 
 public:
     [[nodiscard]] bool empty()const noexcept{ return valueCount == 0u; }
+
     [[nodiscard]] usize size()const noexcept{ return valueCount; }
+
     [[nodiscard]] const u32* data()const noexcept{ return values; }
+
     [[nodiscard]] const u32* begin()const noexcept{ return values; }
+
     [[nodiscard]] const u32* end()const noexcept{ return values + valueCount; }
 
 };

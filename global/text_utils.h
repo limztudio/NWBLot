@@ -7,6 +7,7 @@
 
 #include "basic_string.h"
 #include "expected.h"
+#include "range_traits.h"
 #include "text_trim_parse.h"
 
 
@@ -43,19 +44,32 @@ inline constexpr CharT ToAsciiUpper(CharT c)noexcept(IsArithmetic_V<CharT>){
 }
 
 template<typename StringT>
-inline void ToAsciiLowerInPlace(StringT& inOutText){
+inline void ToAsciiLowerInPlace(StringT& inOutText)noexcept(IsNothrowRangeFor<StringT, decltype([](auto& ch)noexcept(noexcept(ch = ToAsciiLower(ch))){ ch = ToAsciiLower(ch); })>()){
     for(auto& ch : inOutText)
         ch = ToAsciiLower(ch);
 }
 
 template<typename StringT>
-[[nodiscard]] inline StringT ToAsciiLowerCopy(StringT text){
+[[nodiscard]] inline StringT ToAsciiLowerCopy(StringT text)noexcept(noexcept(ToAsciiLowerInPlace(text)) && IsNothrowMoveConstructible_V<StringT> && IsNothrowDestructible_V<StringT>){
     ToAsciiLowerInPlace(text);
     return text;
 }
 
 template<typename StringT>
-[[nodiscard]] inline StringT UnquoteMatchingAsciiQuotes(StringT text){
+[[nodiscard]] inline StringT UnquoteMatchingAsciiQuotes(StringT text)noexcept([]()consteval noexcept{
+    using First = const Decay_T<decltype(DeclVal<StringT&>().front())>;
+    using Last = const Decay_T<decltype(DeclVal<StringT&>().back())>;
+    return
+        noexcept(TrimInPlace(DeclVal<StringT&>())) && noexcept(static_cast<bool>(DeclVal<StringT&>().size() >= 2u))
+        && noexcept(DeclVal<void(*)(First)noexcept>()(DeclVal<StringT&>().front())) && noexcept(DeclVal<void(*)(Last)noexcept>()(DeclVal<StringT&>().back()))
+        && noexcept(static_cast<bool>(
+            (DeclVal<First&>() == static_cast<First>('"') && DeclVal<Last&>() == static_cast<Last>('"'))
+            || (DeclVal<First&>() == static_cast<First>('\'') && DeclVal<Last&>() == static_cast<Last>('\''))
+        ))
+        && noexcept(DeclVal<StringT&>().erase(DeclVal<StringT&>().size() - 1u)) && noexcept(DeclVal<StringT&>().erase(0u, 1u))
+        && IsNothrowDestructible_V<First> && IsNothrowDestructible_V<Last> && IsNothrowMoveConstructible_V<StringT> && IsNothrowDestructible_V<StringT>
+    ;
+}()){
     TrimInPlace(text);
     if(text.size() >= 2u){
         const auto first = text.front();
@@ -106,10 +120,12 @@ template<typename CharT>
 
     return true;
 }
+
 template<typename CharT, typename ArenaT>
 [[nodiscard]] inline constexpr bool EqualsAsciiIgnoreCase(const BasicString<CharT, ArenaT>& text, const BasicStringView<CharT> expected)noexcept(IsArithmetic_V<CharT>){
     return EqualsAsciiIgnoreCase<CharT>(BasicStringView<CharT>{text}, expected);
 }
+
 template<typename CharT, usize N>
 [[nodiscard]] inline constexpr bool EqualsAsciiIgnoreCase(const BasicStringView<CharT> text, const CharT (&expected)[N])noexcept(IsArithmetic_V<CharT>){
     return EqualsAsciiIgnoreCase<CharT>(text, BasicStringView<CharT>(expected, N > 0 ? N - 1 : 0));
@@ -136,6 +152,7 @@ template<typename CharT>
     }
     return false;
 }
+
 template<typename CharT, usize N>
 [[nodiscard]] inline constexpr bool ContainsAsciiIgnoreCase(const BasicStringView<CharT> text, const CharT (&expected)[N])noexcept(IsArithmetic_V<CharT>){
     return ContainsAsciiIgnoreCase<CharT>(text, BasicStringView<CharT>(expected, N > 0 ? N - 1 : 0));
@@ -162,7 +179,7 @@ inline constexpr void CopyCanonical(DstCharT* dst, const usize dstSize, const Sr
 }
 
 template<typename StringT>
-inline void CanonicalizeTextInPlace(StringT& inOutText){
+inline void CanonicalizeTextInPlace(StringT& inOutText)noexcept(IsNothrowRangeFor<StringT, decltype([](auto& ch)noexcept(noexcept(ch = Canonicalize(ch))){ ch = Canonicalize(ch); })>()){
     for(auto& ch : inOutText)
         ch = Canonicalize(ch);
 }
@@ -176,6 +193,7 @@ template<typename CharT, typename ArenaT>
     CanonicalizeTextInPlace(output);
     return output;
 }
+
 template<typename CharT, typename ArenaT>
 [[nodiscard]] inline BasicString<CharT, ArenaT> CanonicalizeText(const BasicString<CharT, ArenaT>& text){
     BasicString<CharT, ArenaT> output(text.data(), text.size(), text.get_allocator());
@@ -196,6 +214,7 @@ template<typename CharT, typename ArenaT>
 [[nodiscard]] inline bool HasEmbeddedNull(const BasicString<CharT, ArenaT>& text)noexcept(IsArithmetic_V<CharT>){
     return HasEmbeddedNull(BasicStringView<CharT>(text));
 }
+
 template<typename StringT>
     requires requires(const StringT& text){
         typename StringT::value_type;
@@ -206,6 +225,7 @@ template<typename StringT>
     using CharT = typename StringT::value_type;
     return HasEmbeddedNull(BasicStringView<CharT>(text.data(), text.size()));
 }
+
 template<typename CharT>
 [[nodiscard]] inline bool HasLineBreak(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     for(const CharT ch : text){
@@ -223,7 +243,10 @@ struct NamedEnumCase{
 };
 
 template<typename EnumT, typename ViewT = AStringView>
-[[nodiscard]] inline Expected<EnumT> ParseNamedEnumText(const ViewT value, const NamedEnumCase<EnumT>* cases, const usize caseCount){
+[[nodiscard]] inline Expected<EnumT> ParseNamedEnumText(const ViewT value, const NamedEnumCase<EnumT>* cases, const usize caseCount)noexcept(
+    noexcept(static_cast<bool>(value == ViewT(cases[DeclVal<usize&>()].text.data(), cases[DeclVal<usize&>()].text.size())))
+    && noexcept(Expected<EnumT>(cases[DeclVal<usize&>()].value))
+){
     for(usize i = 0u; i < caseCount; ++i){
         if(value == ViewT(cases[i].text.data(), cases[i].text.size()))
             return cases[i].value;
@@ -232,7 +255,10 @@ template<typename EnumT, typename ViewT = AStringView>
 }
 
 template<typename EnumT, typename TextFunction, typename ViewT = AStringView>
-[[nodiscard]] inline Expected<EnumT> ParseNormalizedEnumText(const ViewT value, TextFunction textFunction, const EnumT* values, const usize valueCount){
+[[nodiscard]] inline Expected<EnumT> ParseNormalizedEnumText(const ViewT value, TextFunction textFunction, const EnumT* values, const usize valueCount)noexcept(
+    noexcept(static_cast<bool>(value == textFunction(values[DeclVal<usize&>()])))
+    && noexcept(Expected<EnumT>(values[DeclVal<usize&>()]))
+){
     for(usize i = 0u; i < valueCount; ++i){
         if(value == textFunction(values[i]))
             return values[i];

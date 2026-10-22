@@ -133,6 +133,7 @@ public:
 inline constexpr bool operator==(const FrameGraphPhysicalQueueId& lhs, const FrameGraphPhysicalQueueId& rhs)noexcept{
     return lhs.index == rhs.index && lhs.deviceGeneration == rhs.deviceGeneration;
 }
+
 inline constexpr bool operator!=(const FrameGraphPhysicalQueueId& lhs, const FrameGraphPhysicalQueueId& rhs)noexcept{
     return !(lhs == rhs);
 }

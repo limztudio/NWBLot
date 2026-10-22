@@ -46,8 +46,11 @@ public:
 
 public:
     [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_instanceGeneration; }
+
     [[nodiscard]] u64 generation()const noexcept{ return m_generation; }
+
     [[nodiscard]] f32 preferredX()const noexcept{ return m_preferredX; }
+
     [[nodiscard]] bool hasPreferredX()const noexcept{ return m_valid; }
     [[nodiscard]] EditNavigationSnapshot snapshot()const noexcept;
     [[nodiscard]] bool matches(const EditNavigationSnapshot& snapshot)const noexcept;

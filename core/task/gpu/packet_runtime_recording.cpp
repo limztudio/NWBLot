@@ -32,6 +32,7 @@ public:
         , m_artifactAccess(artifactAccess)
         , m_packet(packet)
     {}
+
     ~PacketArtifactPublicationScope()noexcept{
         if(m_active)
             m_recordedGraph.clearPacketPublicationWithoutCallbacks(m_packet, m_artifactAccess);
@@ -83,6 +84,7 @@ public:
         , m_captureCheckpoint(captureCheckpoint)
         , m_uncaughtExceptionCount(UncaughtExceptionCount())
     {}
+
     ~PacketRecordingExceptionScope()noexcept{
         static_assert(noexcept(static_cast<CommandListResourceStateHandoff*>(nullptr)->reset()));
         static_assert(noexcept(static_cast<GpuCommandIrCapture*>(nullptr)->rollback(GpuCommandIrCaptureCheckpoint{})));

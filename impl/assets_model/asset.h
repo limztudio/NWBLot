@@ -93,7 +93,9 @@ public:
 
 public:
     [[nodiscard]] const SkeletonObjectVector& skeletonObjects()const noexcept{ return m_skeletonObjects; }
+
     [[nodiscard]] const StaticMeshObjectVector& staticMeshObjects()const noexcept{ return m_staticMeshObjects; }
+
     [[nodiscard]] const SkinnedMeshObjectVector& skinnedMeshObjects()const noexcept{ return m_skinnedMeshObjects; }
 
 

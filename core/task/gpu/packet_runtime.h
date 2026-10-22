@@ -285,9 +285,11 @@ private:
 
     public:
         [[nodiscard]] static bool Active()noexcept{ return s_ActiveOperation != nullptr; }
+
         [[nodiscard]] static bool ActiveFor(const GpuGraphSubmissionTransaction& transaction)noexcept{
             return s_ActiveOperation && s_ActiveOperation->m_transaction == &transaction;
         }
+
         [[nodiscard]] static bool ActiveExclusiveFor(const GpuGraphSubmissionTransaction& transaction)noexcept{
             return ActiveFor(transaction) && s_ActiveOperation->m_exclusive;
         }

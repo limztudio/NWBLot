@@ -48,6 +48,7 @@ public:
         , m_packet(packet)
         , m_timingTicketCount(timingTicketCount)
     {}
+
     ~AcceptedPacketPublicationGuard()noexcept{
         if(!m_active)
             return;

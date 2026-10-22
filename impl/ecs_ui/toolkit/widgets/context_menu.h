@@ -53,10 +53,15 @@ public:
     [[nodiscard]] bool open(const Rect& anchor)noexcept;
     void close()noexcept;
     [[nodiscard]] bool isOpen()const noexcept{ return m_popup.isOpen(); }
+
     [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_popup.instanceGeneration(); }
+
     [[nodiscard]] u64 revision()const noexcept{ return m_revision; }
+
     [[nodiscard]] u64 cursorKey()const noexcept{ return m_list.cursorKey(); }
+
     [[nodiscard]] const ListState& listState()const noexcept{ return m_list; }
+
     [[nodiscard]] const PopupPlacement& placement()const noexcept{ return m_popup.placement(); }
 
 

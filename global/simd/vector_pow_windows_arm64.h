@@ -102,6 +102,10 @@ inline constexpr i32 s_ArmNotInteger = 0;
 inline constexpr i32 s_ArmOddInteger = 1;
 inline constexpr i32 s_ArmEvenInteger = 2;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<bool Equal>
 NWB_INLINE UInt64x4 ArmCompareMask(const SIMDVectorDouble a, const SIMDVectorDouble b)noexcept{
     const auto aLow = SIMDVectorDoubleDetail::GetLow(a), aHigh = SIMDVectorDoubleDetail::GetHigh(a);
@@ -166,6 +170,11 @@ struct ArmArithmetic{
         }
     }
 
+    [[nodiscard]] NWB_INLINE SIMDVectorSingle Add(SIMDVectorSingle a, SIMDVectorSingle b)const noexcept{
+#pragma STDC FENV_ACCESS ON
+        return Evaluate<SIMDVectorSingle>([&]()noexcept{ return VectorAdd(a, b); });
+    }
+
     [[nodiscard]] NWB_INLINE SIMDVectorDouble DoubleAdd(SIMDVectorDouble a, SIMDVectorDouble b)const noexcept{
 #pragma STDC FENV_ACCESS ON
         return Evaluate<SIMDVectorDouble>([&]()noexcept{ return VectorDoubleAdd(a, b); });
@@ -174,6 +183,11 @@ struct ArmArithmetic{
     [[nodiscard]] NWB_INLINE SIMDVectorDouble DoubleSubtract(SIMDVectorDouble a, SIMDVectorDouble b)const noexcept{
 #pragma STDC FENV_ACCESS ON
         return Evaluate<SIMDVectorDouble>([&]()noexcept{ return VectorDoubleSubtract(a, b); });
+    }
+
+    [[nodiscard]] NWB_INLINE SIMDVectorSingle Multiply(SIMDVectorSingle a, SIMDVectorSingle b)const noexcept{
+#pragma STDC FENV_ACCESS ON
+        return Evaluate<SIMDVectorSingle>([&]()noexcept{ return VectorMultiply(a, b); });
     }
 
     [[nodiscard]] NWB_INLINE SIMDVectorDouble DoubleMultiply(SIMDVectorDouble a, SIMDVectorDouble b)const noexcept{
@@ -202,16 +216,6 @@ struct ArmArithmetic{
             }
         }
         return Evaluate<SIMDVectorSingle>([&]()noexcept{ return ConvertVectorDoubleToSingle(a); });
-    }
-
-    [[nodiscard]] NWB_INLINE SIMDVectorSingle Add(SIMDVectorSingle a, SIMDVectorSingle b)const noexcept{
-#pragma STDC FENV_ACCESS ON
-        return Evaluate<SIMDVectorSingle>([&]()noexcept{ return VectorAdd(a, b); });
-    }
-
-    [[nodiscard]] NWB_INLINE SIMDVectorSingle Multiply(SIMDVectorSingle a, SIMDVectorSingle b)const noexcept{
-#pragma STDC FENV_ACCESS ON
-        return Evaluate<SIMDVectorSingle>([&]()noexcept{ return VectorMultiply(a, b); });
     }
 
     [[nodiscard]] NWB_INLINE SIMDVectorSingle Divide(SIMDVectorSingle a, SIMDVectorSingle b)const noexcept{

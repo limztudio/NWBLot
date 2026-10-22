@@ -37,7 +37,20 @@ inline constexpr u32 s_ReservationPassLimit = 3u;
 
 
 [[nodiscard]] static SIMDMatrixDouble LoadBarValues(const ScrollbarPlacement& bar)noexcept{
-    if(!IsFinite(bar.track.x) || !IsFinite(bar.track.y) || !IsFinite(bar.track.width) || !IsFinite(bar.track.height) || !IsFinite(bar.thumb.x) || !IsFinite(bar.thumb.y) || !IsFinite(bar.thumb.width) || !IsFinite(bar.thumb.height) || !IsFinite(bar.contentExtent) || !IsFinite(bar.viewportExtent) || !IsFinite(bar.maximum) || !IsFinite(bar.offset))
+    if(
+        !IsFinite(bar.track.x)
+        || !IsFinite(bar.track.y)
+        || !IsFinite(bar.track.width)
+        || !IsFinite(bar.track.height)
+        || !IsFinite(bar.thumb.x)
+        || !IsFinite(bar.thumb.y)
+        || !IsFinite(bar.thumb.width)
+        || !IsFinite(bar.thumb.height)
+        || !IsFinite(bar.contentExtent)
+        || !IsFinite(bar.viewportExtent)
+        || !IsFinite(bar.maximum)
+        || !IsFinite(bar.offset)
+    )
         return SIMDMatrixDouble{ .v = { VectorDoubleReplicate(Limit<f64>::s_Infinity), VectorDoubleZero(), VectorDoubleZero(), VectorDoubleZero() } };
     return SIMDMatrixDouble{ .v = {
         VectorDoubleSet(bar.track.x, bar.track.y, bar.track.width, bar.track.height),

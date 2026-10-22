@@ -75,12 +75,19 @@ public:
 
 public:
     constexpr RayTracingOpacityMicromapDesc& setDebugName(const Name& value)noexcept{ debugName = value; return *this; }
+
     constexpr RayTracingOpacityMicromapDesc& setTrackLiveness(bool value)noexcept{ trackLiveness = value; return *this; }
+
     constexpr RayTracingOpacityMicromapDesc& setFlags(RayTracingOpacityMicromapBuildFlags::Mask value)noexcept{ flags = value; return *this; }
+
     RayTracingOpacityMicromapDesc& setCounts(const GraphicsVector<RayTracingOpacityMicromapUsageCount>& value){ counts = value; return *this; }
+
     constexpr RayTracingOpacityMicromapDesc& setInputBuffer(Buffer* value)noexcept{ inputBuffer = value; return *this; }
+
     constexpr RayTracingOpacityMicromapDesc& setInputBufferOffset(u64 value)noexcept{ inputBufferOffset = value; return *this; }
+
     constexpr RayTracingOpacityMicromapDesc& setPerOmmDescs(Buffer* value)noexcept{ perOmmDescs = value; return *this; }
+
     constexpr RayTracingOpacityMicromapDesc& setPerOmmDescsOffset(u64 value)noexcept{ perOmmDescsOffset = value; return *this; }
 };
 
@@ -157,19 +164,33 @@ struct RayTracingGeometryTriangles{
 
 public:
     constexpr RayTracingGeometryTriangles& setIndexBuffer(Buffer* value)noexcept{ indexBuffer = value; return *this; }
+
     constexpr RayTracingGeometryTriangles& setVertexBuffer(Buffer* value)noexcept{ vertexBuffer = value; return *this; }
+
     constexpr RayTracingGeometryTriangles& setIndexFormat(Format::Enum value)noexcept{ indexFormat = value; return *this; }
+
     constexpr RayTracingGeometryTriangles& setVertexFormat(Format::Enum value)noexcept{ vertexFormat = value; return *this; }
+
     constexpr RayTracingGeometryTriangles& setIndexOffset(u64 value)noexcept{ indexOffset = value; return *this; }
+
     constexpr RayTracingGeometryTriangles& setVertexOffset(u64 value)noexcept{ vertexOffset = value; return *this; }
+
     constexpr RayTracingGeometryTriangles& setIndexCount(u32 value)noexcept{ indexCount = value; return *this; }
+
     constexpr RayTracingGeometryTriangles& setVertexCount(u32 value)noexcept{ vertexCount = value; return *this; }
+
     constexpr RayTracingGeometryTriangles& setVertexStride(u32 value)noexcept{ vertexStride = value; return *this; }
+
     constexpr RayTracingGeometryTriangles& setOpacityMicromap(RayTracingOpacityMicromap* value)noexcept{ opacityMicromap = value; return *this; }
+
     constexpr RayTracingGeometryTriangles& setOmmIndexBuffer(Buffer* value)noexcept{ ommIndexBuffer = value; return *this; }
+
     constexpr RayTracingGeometryTriangles& setOmmIndexBufferOffset(u64 value)noexcept{ ommIndexBufferOffset = value; return *this; }
+
     constexpr RayTracingGeometryTriangles& setOmmIndexFormat(Format::Enum value)noexcept{ ommIndexFormat = value; return *this; }
+
     constexpr RayTracingGeometryTriangles& setPOmmUsageCounts(const RayTracingOpacityMicromapUsageCount* value)noexcept{ pOmmUsageCounts = value; return *this; }
+
     constexpr RayTracingGeometryTriangles& setNumOmmUsageCounts(u32 value)noexcept{ numOmmUsageCounts = value; return *this; }
 };
 
@@ -183,8 +204,11 @@ struct RayTracingGeometryAABBs{
 
 public:
     constexpr RayTracingGeometryAABBs& setBuffer(Buffer* value)noexcept{ buffer = value; return *this; }
+
     constexpr RayTracingGeometryAABBs& setOffset(u64 value)noexcept{ offset = value; return *this; }
+
     constexpr RayTracingGeometryAABBs& setCount(u32 value)noexcept{ count = value; return *this; }
+
     constexpr RayTracingGeometryAABBs& setStride(u32 value)noexcept{ stride = value; return *this; }
 };
 
@@ -207,17 +231,29 @@ struct RayTracingGeometrySpheres{
 
 public:
     constexpr RayTracingGeometrySpheres& setIndexBuffer(Buffer* value)noexcept{ indexBuffer = value; return *this; }
+
     constexpr RayTracingGeometrySpheres& setVertexBuffer(Buffer* value)noexcept{ vertexBuffer = value; return *this; }
+
     constexpr RayTracingGeometrySpheres& setIndexFormat(Format::Enum value)noexcept{ indexFormat = value; return *this; }
+
     constexpr RayTracingGeometrySpheres& setVertexPositionFormat(Format::Enum value)noexcept{ vertexPositionFormat = value; return *this; }
+
     constexpr RayTracingGeometrySpheres& setVertexRadiusFormat(Format::Enum value)noexcept{ vertexRadiusFormat = value; return *this; }
+
     constexpr RayTracingGeometrySpheres& setIndexOffset(u64 value)noexcept{ indexOffset = value; return *this; }
+
     constexpr RayTracingGeometrySpheres& setVertexPositionOffset(u64 value)noexcept{ vertexPositionOffset = value; return *this; }
+
     constexpr RayTracingGeometrySpheres& setVertexRadiusOffset(u64 value)noexcept{ vertexRadiusOffset = value; return *this; }
+
     constexpr RayTracingGeometrySpheres& setIndexCount(u32 value)noexcept{ indexCount = value; return *this; }
+
     constexpr RayTracingGeometrySpheres& setVertexCount(u32 value)noexcept{ vertexCount = value; return *this; }
+
     constexpr RayTracingGeometrySpheres& setIndexStride(u32 value)noexcept{ indexStride = value; return *this; }
+
     constexpr RayTracingGeometrySpheres& setVertexPositionStride(u32 value)noexcept{ vertexPositionStride = value; return *this; }
+
     constexpr RayTracingGeometrySpheres& setVertexRadiusStride(u32 value)noexcept{ vertexRadiusStride = value; return *this; }
 };
 
@@ -259,20 +295,35 @@ struct RayTracingGeometryLss{
 
 public:
     constexpr RayTracingGeometryLss& setIndexBuffer(Buffer* value)noexcept{ indexBuffer = value; return *this; }
+
     constexpr RayTracingGeometryLss& setVertexBuffer(Buffer* value)noexcept{ vertexBuffer = value; return *this; }
+
     constexpr RayTracingGeometryLss& setIndexFormat(Format::Enum value)noexcept{ indexFormat = value; return *this; }
+
     constexpr RayTracingGeometryLss& setVertexPositionFormat(Format::Enum value)noexcept{ vertexPositionFormat = value; return *this; }
+
     constexpr RayTracingGeometryLss& setVertexRadiusFormat(Format::Enum value)noexcept{ vertexRadiusFormat = value; return *this; }
+
     constexpr RayTracingGeometryLss& setIndexOffset(u64 value)noexcept{ indexOffset = value; return *this; }
+
     constexpr RayTracingGeometryLss& setVertexPositionOffset(u64 value)noexcept{ vertexPositionOffset = value; return *this; }
+
     constexpr RayTracingGeometryLss& setVertexRadiusOffset(u64 value)noexcept{ vertexRadiusOffset = value; return *this; }
+
     constexpr RayTracingGeometryLss& setIndexCount(u32 value)noexcept{ indexCount = value; return *this; }
+
     constexpr RayTracingGeometryLss& setPrimitiveCount(u32 value)noexcept{ primitiveCount = value; return *this; }
+
     constexpr RayTracingGeometryLss& setVertexCount(u32 value)noexcept{ vertexCount = value; return *this; }
+
     constexpr RayTracingGeometryLss& setIndexStride(u32 value)noexcept{ indexStride = value; return *this; }
+
     constexpr RayTracingGeometryLss& setVertexPositionStride(u32 value)noexcept{ vertexPositionStride = value; return *this; }
+
     constexpr RayTracingGeometryLss& setVertexRadiusStride(u32 value)noexcept{ vertexRadiusStride = value; return *this; }
+
     constexpr RayTracingGeometryLss& setPrimitiveFormat(RayTracingGeometryLssPrimitiveFormat::Enum value)noexcept{ primitiveFormat = value; return *this; }
+
     constexpr RayTracingGeometryLss& setEndcapMode(RayTracingGeometryLssEndcapMode::Enum value)noexcept{ endcapMode = value; return *this; }
 };
 
@@ -299,10 +350,15 @@ public:
 
 public:
     RayTracingGeometryDesc& setTransform(const AffineTransform& value)noexcept{ NWB_MEMCPY(&transform, sizeof(transform), &value, sizeof(AffineTransform)); useTransform = true; return *this; }
+
     constexpr RayTracingGeometryDesc& setFlags(RayTracingGeometryFlags::Mask value)noexcept{ flags = value; return *this; }
+
     constexpr RayTracingGeometryDesc& setTriangles(const RayTracingGeometryTriangles& value)noexcept{ geometryData.triangles = value; geometryType = RayTracingGeometryType::Triangles; return *this; }
+
     constexpr RayTracingGeometryDesc& setAABBs(const RayTracingGeometryAABBs& value)noexcept{ geometryData.aabbs = value; geometryType = RayTracingGeometryType::AABBs; return *this; }
+
     constexpr RayTracingGeometryDesc& setSpheres(const RayTracingGeometrySpheres& value)noexcept{ geometryData.spheres = value; geometryType = RayTracingGeometryType::Spheres; return *this; }
+
     constexpr RayTracingGeometryDesc& setLss(const RayTracingGeometryLss& value)noexcept{ geometryData.lss = value; geometryType = RayTracingGeometryType::Lss; return *this; }
 };
 
@@ -350,10 +406,15 @@ public:
 
 public:
     constexpr RayTracingInstanceDesc& setInstanceID(u32 value)noexcept{ instanceID = value; return *this; }
+
     constexpr RayTracingInstanceDesc& setInstanceContributionToHitGroupIndex(u32 value)noexcept{ instanceContributionToHitGroupIndex = value; return *this; }
+
     constexpr RayTracingInstanceDesc& setInstanceMask(u32 value)noexcept{ instanceMask = value; return *this; }
+
     RayTracingInstanceDesc& setTransform(const AffineTransform& value)noexcept{ NWB_MEMCPY(&transform, sizeof(transform), &value, sizeof(AffineTransform)); return *this; }
+
     constexpr RayTracingInstanceDesc& setFlags(RayTracingInstanceFlags::Mask value)noexcept{ flags = value; return *this; }
+
     constexpr RayTracingInstanceDesc& setBLAS(RayTracingAccelStruct* value)noexcept{ bottomLevelAS = value; return *this; }
 };
 static_assert(sizeof(RayTracingInstanceDesc) == RayTracingInstanceDesc::s_ByteSize, "sizeof(InstanceDesc) is supposed to be 64 bytes");
@@ -397,12 +458,19 @@ public:
 
 public:
     constexpr RayTracingAccelStructDesc& setTopLevelMaxInstances(usize value)noexcept{ topLevelMaxInstances = value; isTopLevel = true; return *this; }
+
     RayTracingAccelStructDesc& addBottomLevelGeometry(const RayTracingGeometryDesc& value){ bottomLevelGeometries.push_back(value); isTopLevel = false; return *this; }
+
     constexpr RayTracingAccelStructDesc& setBuildFlags(RayTracingAccelStructBuildFlags::Mask value)noexcept{ buildFlags = value; return *this; }
+
     constexpr RayTracingAccelStructDesc& setDebugName(const Name& value)noexcept{ debugName = value; return *this; }
+
     constexpr RayTracingAccelStructDesc& setQueueSharing(ResourceQueueSharing::Mask value)noexcept{ queueSharing = value; return *this; }
+
     constexpr RayTracingAccelStructDesc& setTrackLiveness(bool value)noexcept{ trackLiveness = value; return *this; }
+
     constexpr RayTracingAccelStructDesc& setIsTopLevel(bool value)noexcept{ isTopLevel = value; return *this; }
+
     constexpr RayTracingAccelStructDesc& setIsVirtual(bool value)noexcept{ isVirtual = value; return *this; }
 };
 

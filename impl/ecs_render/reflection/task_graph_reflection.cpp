@@ -235,7 +235,7 @@ public:
         const bool sceneReady = payload.resources.parameters.hardwareEnabled != 0u && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
         payload.feedbackReservation.accept(token, sceneReady);
         if(payload.stage == DispatchStage::Hardware && hardware && payload.resources.scene.csgTraceContextBuffer)
-            payload.raytracingSystem.confirmCsgTraceContextReadSubmission(token);
+            payload.raytracingSystem.confirmRayTraceContextReadSubmission(token);
         if(payload.stage == DispatchStage::Hardware && hardware){
             if(payload.hardwareDispatchLogged && !*payload.hardwareDispatchLogged){
                 NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Reflection resolve: hardware"));
@@ -306,7 +306,7 @@ public:
         if(!payload.hardwarePreparationReady || !*payload.hardwarePreparationReady)
             return;
         // An accepted prefix already reads the frozen context even when a later packet fails.
-        payload.raytracingSystem.confirmCsgTraceContextReadSubmission(token);
+        payload.raytracingSystem.confirmRayTraceContextReadSubmission(token);
         if(payload.slice == 0u && !payload.dispatch->timing->confirmBeginSubmission(token)){
             NWB_LOGGER_WARNING(NWB_TEXT("Reflection: failed to confirm accepted hardware timing begin"));
             payload.dispatch->timing->discard();

@@ -85,6 +85,7 @@ public:
 
 public:
     constexpr reference front(){ return at(0); }
+
     constexpr const_reference front()const{ return at(0); }
 
 
@@ -96,6 +97,7 @@ public:
 
         return Base::operator[](m_currentSize - 1);
     }
+
     constexpr const_reference back()const{
         NWB_ASSERT(m_currentSize > 0);
         if(m_currentSize == 0)
@@ -113,11 +115,15 @@ public:
 
 public:
     constexpr iterator end()noexcept{ return iterator(begin()) + m_currentSize; }
+
     constexpr const_iterator end()const noexcept{ return cend(); }
+
     constexpr const_iterator cend()const noexcept{ return const_iterator(cbegin()) + m_currentSize; }
 
     constexpr bool empty()const noexcept{ return m_currentSize == 0; }
+
     constexpr size_type size()const noexcept{ return m_currentSize; }
+
     constexpr size_type max_size()const noexcept{ return s_MaxElements; }
 
     constexpr void clear()noexcept{

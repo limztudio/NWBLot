@@ -36,10 +36,15 @@ public:
 
 public:
     [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return m_rows.instanceGeneration(); }
+
     [[nodiscard]] virtual u64 revision()const noexcept override{ return m_rows.revision(); }
+
     [[nodiscard]] virtual u64 rowCount()const noexcept override{ return m_rows.rowCount(); }
+
     [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{ return m_rows.key(index); }
+
     [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const noexcept override{ return m_rows.indexOf(key); }
+
     [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const noexcept override{
         return m_rows.findEnabled(start, reverse);
     }

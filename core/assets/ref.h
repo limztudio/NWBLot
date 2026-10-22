@@ -69,6 +69,7 @@ template<typename TAsset>
 [[nodiscard]] inline bool operator==(const AssetRef<TAsset>& lhs, const AssetRef<TAsset>& rhs)noexcept{
     return lhs.virtualPath == rhs.virtualPath;
 }
+
 template<typename TAsset>
 [[nodiscard]] inline bool operator!=(const AssetRef<TAsset>& lhs, const AssetRef<TAsset>& rhs)noexcept{
     return !(lhs == rhs);

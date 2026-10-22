@@ -51,11 +51,17 @@ protected:
     [[nodiscard]] TextInputAdmission::Enum emitDeleteSurrounding(TextInputSessionToken token, usize beforeBytes, usize afterBytes, u64 revision, TextInputDeletionBasis::Enum basis);
     [[nodiscard]] bool cancelSession(TextInputSessionToken token, TextInputCancelReason::Enum reason);
     [[nodiscard]] Alloc::GlobalArena& arena()const noexcept{ return m_arena; }
+
     [[nodiscard]] AStringView surroundingText()const noexcept{ return m_surrounding; }
+
     [[nodiscard]] usize surroundingAnchorByte()const noexcept{ return m_anchorByte; }
+
     [[nodiscard]] usize surroundingCaretByte()const noexcept{ return m_caretByte; }
+
     [[nodiscard]] u64 surroundingRevision()const noexcept{ return m_surroundingRevision; }
+
     [[nodiscard]] TextInputRect caretRect()const noexcept{ return m_caret; }
+
     [[nodiscard]] bool focused()const noexcept{ return m_focused; }
 
 

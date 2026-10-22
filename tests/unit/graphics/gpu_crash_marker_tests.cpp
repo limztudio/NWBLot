@@ -178,7 +178,7 @@ TEST(GpuCrashMarkerTracker, RetainedResolvedViewSurvivesConcurrentHistoryGrowthA
     Thread firstWriter([&](){ insertMarkers(s_FirstWriterMarkerNames); });
     Thread secondWriter([&](){ insertMarkers(s_SecondWriterMarkerNames); });
 
-    const auto retainedViewIsValid = [&](){
+    const auto retainedViewIsValid = [&]()noexcept{
         const Core::ResolvedMarker resolved = crashTracker.resolveMarker(retainedHash);
         return retained.second() == AStringView(s_RetainedMarkerLabel) && resolved.first() && resolved.second() == AStringView(s_RetainedMarkerLabel);
     };

@@ -49,6 +49,10 @@ inline constexpr u16 s_DefaultLogServerPort = 7117u;
 inline const Tuple< AStringView, u16 > s_ArgDefault = { "http://localhost", s_DefaultLogServerPort, };
 inline constexpr StringView s_ArgDesc[] = { "Log server address", "Log server port", };
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<ArgCommand::Enum i, typename CLI, typename T>
 inline auto ArgAddOption(CLI& cli, T& arg){
     return cli.add_option(s_ArgCmd[static_cast<usize>(i)].data(), arg, s_ArgDesc[static_cast<usize>(i)].data())->default_val(Get<static_cast<usize>(i)>(s_ArgDefault));
@@ -243,6 +247,7 @@ public:
         m_stream.open(m_filePath, s_FileOpenWrite | s_FileOpenAppend);
         return m_stream.is_open();
     }
+
     bool openByExecutableName(){
         const auto executableName = GetExecutableName(m_arena);
         if(!executableName)
@@ -296,6 +301,7 @@ public:
 
 protected:
     inline bool tryDequeue(MessageType& msg){ return m_messageQueue.try_pop(msg); }
+
     void stopWorker(){
         const bool alreadyStopping = m_exit.exchange(true, MemoryOrder::acq_rel);
 
@@ -336,10 +342,12 @@ public:
         LogString message(Move(str), m_arena);
         return checked_cast<T*>(this)->T::enqueue(MakeTuple(TimerNow(), type, Move(message)));
     }
+
     inline void enqueue(const LogString& str, Core::Common::LogType::Enum type = Core::Common::LogType::Info){
         LogString message(str, m_arena);
         return checked_cast<T*>(this)->T::enqueue(MakeTuple(TimerNow(), type, Move(message)));
     }
+
     inline void enqueue(BasicStringView<tchar> str, Core::Common::LogType::Enum type = Core::Common::LogType::Info){
         LogString message(str, m_arena);
         return checked_cast<T*>(this)->T::enqueue(MakeTuple(TimerNow(), type, Move(message)));
@@ -397,6 +405,7 @@ public:
 
 protected:
     inline void enqueue(MessageType&& data){ return LoggerWorkerBase<T, loggerName>::m_messageQueue.emplace(Move(data)); }
+
     inline void enqueue(const MessageType& data){ return LoggerWorkerBase<T, loggerName>::m_messageQueue.emplace(data); }
 
 
@@ -442,11 +451,13 @@ public:
 
 protected:
     [[nodiscard]] inline bool workerCanExit()const noexcept{ return true; }
+
     void internalDestroy()noexcept{ m_semaphore.release(); }
 
 
 protected:
     inline void enqueue(MessageType&& data){ LoggerWorkerBase<T, loggerName>::m_messageQueue.emplace(Move(data)); m_semaphore.release(); }
+
     inline void enqueue(const MessageType& data){ LoggerWorkerBase<T, loggerName>::m_messageQueue.emplace(data); m_semaphore.release(); }
 
 

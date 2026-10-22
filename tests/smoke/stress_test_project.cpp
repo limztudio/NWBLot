@@ -77,6 +77,7 @@ using StressMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 
 // Spinning opaque/glass crowds exercise TLAS updates and overlapping shadows inside the GI box.
 static constexpr StressModelRef s_Model{"project/characters/body/model"};
+static constexpr StressModelRef s_CausticModel{"project/characters/caustic_closed_body/model"};
 static constexpr StressMaterialRef s_TransparentMaterial{"project/smoke/transparent_multi/materials/shared"};
 static constexpr StressMaterialRef s_OpaqueMaterial{"project/smoke/transparent_multi/materials/ground"};
 static constexpr StressMaterialRef s_GroundMaterial{"project/smoke/transparent_multi/materials/ground"};
@@ -235,7 +236,7 @@ private:
         const NWB::Core::ECS::EntityID entity = CreateTintedModelEntity(
             *m_world,
             m_context.objectArena,
-            s_Model,
+            transparentMaterialClass ? s_CausticModel : s_Model,
             transparent ? s_TransparentMaterial : s_OpaqueMaterial,
             s_SmokeSurfaceMaterialInterface,
             CharacterTint(classIndex, transparent),
@@ -545,6 +546,17 @@ public:
             m_characterOwners.push_back(createCharacter(index));
 
         SyncSmokeModelRuntimes(*m_world);
+        for(usize index = 0u; index < m_characterOwners.size(); ++index){
+            if(HardwareShadowOpaqueBaseline() || index % 2u != 0u)
+                continue;
+            const auto meshEntity = NWB::Tests::Smoke::FindSpawnedModelObject(*m_world, m_characterOwners[index], Name("mesh"), NWB::Impl::ModelObjectKind::SkinnedMesh);
+            auto* const renderer = m_world->tryGetComponent<NWB::Impl::RendererComponent>(meshEntity);
+            if(!renderer){
+                NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: closed refractor renderer is unavailable (index {})"), index);
+                return false;
+            }
+            renderer->opticalBoundaryMode = NWB::Impl::OpticalBoundaryMode::ClosedNested;
+        }
         if(!m_csgScene.initialize(*m_world, m_context.objectArena, scratchArena, m_characterOwners.data(), m_characterOwners.size(), HardwareShadowOpaqueBaseline()))
             return false;
 

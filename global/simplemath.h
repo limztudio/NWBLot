@@ -17,10 +17,13 @@
 
 template<typename T>
 [[nodiscard]] constexpr const T& Min(const T& a, const T& b)noexcept(IsArithmetic_V<T>){ return (a < b) ? a : b; }
+
 template<typename T, typename Compare>
 [[nodiscard]] constexpr const T& Min(const T& a, const T& b, Compare comp)noexcept(noexcept(static_cast<bool>(comp(a, b))) && IsNothrowDestructible_V<Compare>){ return comp(a, b) ? a : b; }
+
 template<typename T>
 [[nodiscard]] constexpr T Min(InitializerList<T> list)noexcept(IsArithmetic_V<T>){ return *std::min_element(list.begin(), list.end()); }
+
 template<typename T, typename Compare>
 [[nodiscard]] constexpr T Min(InitializerList<T> list, Compare comp)noexcept(
     noexcept(Compare(comp))
@@ -34,10 +37,13 @@ template<typename T, typename Compare>
 
 template<typename T>
 [[nodiscard]] constexpr const T& Max(const T& a, const T& b)noexcept(IsArithmetic_V<T>){ return (a > b) ? a : b; }
+
 template<typename T, typename Compare>
 [[nodiscard]] constexpr const T& Max(const T& a, const T& b, Compare comp)noexcept(noexcept(static_cast<bool>(comp(a, b))) && IsNothrowDestructible_V<Compare>){ return comp(a, b) ? b : a; }
+
 template<typename T>
 [[nodiscard]] constexpr T Max(InitializerList<T> list)noexcept(IsArithmetic_V<T>){ return *std::max_element(list.begin(), list.end()); }
+
 template<typename T, typename Compare>
 [[nodiscard]] constexpr T Max(InitializerList<T> list, Compare comp)noexcept(
     noexcept(Compare(comp))

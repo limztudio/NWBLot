@@ -49,7 +49,7 @@ namespace __hidden_assets_mesh_cook{
 
 
 static bool ParseSourceMeshMeta(const DiscoveredNwbFile& discoveredFile, const Core::Metascript::Value& asset, MeshCookEntry& outEntry, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena){
-    auto streamsResult = MeshCookSourceStreams::ParseCommonSourceMeshStreams(discoveredFile, asset, s_MeshMetaKind, false, outEntry.positions.get_allocator().arena(), 0u, scratchArena);
+    auto streamsResult = MeshCookSourceStreams::ParseCommonSourceMeshStreams(discoveredFile, asset, s_MeshMetaKind, outEntry.positions.get_allocator().arena(), scratchArena);
     if(!streamsResult)
         return false;
 
@@ -143,7 +143,7 @@ Expected<MeshCookEntry> ParseMeshCookMetadata(const Name virtualPath, const Path
 Expected<Mesh> BuildMeshAsset(MeshCookEntry& meshEntry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     if(!MeshCookStreamReorder::ReorderMeshStreamsByMeshletTraversal(meshEntry, scratchArena))
         return MakeUnexpected(Failure{});
-    if(!MeshCookRefEncoding::EncodeMeshletRefs(meshEntry, false, s_MeshMetaKind))
+    if(!MeshCookRefEncoding::EncodeMeshletRefs(meshEntry, s_MeshMetaKind))
         return MakeUnexpected(Failure{});
 
     const auto triangleIndices = BuildMeshletTriangleIndices(scratchArena, meshEntry.meshlets, meshEntry.meshletLocalVertexRefs, meshEntry.meshletPositionRefDeltas, meshEntry.meshletPrimitiveIndices, meshEntry.positions.size());

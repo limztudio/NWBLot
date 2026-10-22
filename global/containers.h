@@ -68,12 +68,16 @@ template<typename... Args>
 using Tuple = std::tuple<Args...>;
 template<typename... Args>
 constexpr auto MakeTuple(Args&&... args)noexcept(noexcept(std::make_tuple(Forward<Args>(args)...))){ return std::make_tuple(Forward<Args>(args)...); }
+
 template<typename... Args>
 constexpr auto ForwardAsTuple(Args&&... args)noexcept{ return Tuple<Args&&...>(Forward<Args>(args)...); }
+
 template<size_t I, typename... Args>
 constexpr auto& Get(Tuple<Args...>& t)noexcept{ return std::get<I>(t); }
+
 template<size_t I, typename... Args>
 constexpr const auto& Get(const Tuple<Args...>& t)noexcept{ return std::get<I>(t); }
+
 template<typename... Args>
 constexpr auto Tie(Args&... args)noexcept{ return std::tie(args...); }
 
@@ -148,7 +152,7 @@ namespace ContainerDetail{
 
 
 template<typename DestinationVector, typename SourceValue>
-[[nodiscard]] inline Expected<usize> SourceAliasesDestination(const DestinationVector& destination, const SourceValue* sourceData, const usize sourceSize){
+[[nodiscard]] inline Expected<usize> SourceAliasesDestination(const DestinationVector& destination, const SourceValue* sourceData, const usize sourceSize)noexcept(noexcept(static_cast<bool>(destination.empty() || sourceSize == 0u)) && noexcept(destination.data()) && noexcept(static_cast<bool>(DeclVal<const usize&>() >= destination.size()))){
     if(destination.empty() || sourceSize == 0u)
         return MakeUnexpected(Failure{});
 
@@ -174,12 +178,25 @@ template<typename DestinationVector, typename SourceValue>
 }
 
 template<typename DestinationVector, typename SourceVector>
-[[nodiscard]] inline Expected<usize> SourceAliasesDestination(const DestinationVector& destination, const SourceVector& source){
+[[nodiscard]] inline Expected<usize> SourceAliasesDestination(const DestinationVector& destination, const SourceVector& source)noexcept(noexcept(SourceAliasesDestination(destination, source.data(), source.size()))){
     return SourceAliasesDestination(destination, source.data(), source.size());
 }
 
 template<typename Container>
-inline void ReserveGrowingCapacity(Container& container, const usize requiredCapacity){
+inline void ReserveGrowingCapacity(Container& container, const usize requiredCapacity)noexcept([]()consteval noexcept{
+    if constexpr(requires(const Container& c){ c.capacity(); }){
+        constexpr bool s_ReserveIsNothrow =
+            noexcept(static_cast<bool>(DeclVal<const usize&>() <= DeclVal<Container&>().capacity()))
+            && noexcept(static_cast<usize>(DeclVal<Container&>().capacity()))
+            && noexcept(DeclVal<Container&>().reserve(DeclVal<usize&>()));
+        if constexpr(requires(const Container& c){ c.max_size(); })
+            return s_ReserveIsNothrow && noexcept(static_cast<bool>(DeclVal<usize&>() > DeclVal<Container&>().max_size()));
+        else
+            return s_ReserveIsNothrow;
+    }
+    else
+        return noexcept(DeclVal<Container&>().reserve(DeclVal<const usize&>()));
+}()){
     if constexpr(requires(const Container& c){ c.capacity(); }){
         if(requiredCapacity <= container.capacity())
             return;
@@ -198,7 +215,10 @@ inline void ReserveGrowingCapacity(Container& container, const usize requiredCap
 }
 
 template<typename Container>
-inline void ReserveAdditionalCapacity(Container& container, const usize additionalCount){
+inline void ReserveAdditionalCapacity(Container& container, const usize additionalCount)noexcept(
+    noexcept(DeclVal<void(*)(usize)noexcept>()(container.size()))
+    && noexcept(ReserveGrowingCapacity(container, usize{}))
+){
     if(additionalCount <= 1u)
         return;
 

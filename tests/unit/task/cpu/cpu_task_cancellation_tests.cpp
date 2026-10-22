@@ -114,7 +114,7 @@ TEST(CpuTaskCancellationTests, ParallelRangesPreserveHistoryInRecycledSlots){
     EXPECT_TRUE((scheduler.parallelFor(0u, 1u, 1u, [&](usize)noexcept{ ++rangeCallbacks; })));
     EXPECT_TRUE((scheduler.parallelFor(0u, 128u, 1u, [&](usize)noexcept{ ++rangeCallbacks; })));
     CpuTaskScope interrupted(scheduler);
-    EXPECT_TRUE((interrupted.parallelFor(0u, 64u, 1u, [&](usize index){
+    EXPECT_TRUE((interrupted.parallelFor(0u, 64u, 1u, [&](usize index)noexcept{
         ++interruptedCallbacks;
         if(index == 0u)
             interrupted.cancel();

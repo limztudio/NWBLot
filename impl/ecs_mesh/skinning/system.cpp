@@ -102,18 +102,18 @@ void MeshSkinningSystem::prepare(Core::ECS::World& world){
     pruneRuntimeResources();
     bool ready = true;
     m_world.view<SkinnedMeshBindingComponent>().each([&](Core::ECS::EntityID, SkinnedMeshBindingComponent& binding){
-            if(!ready)
-                return;
-            if(!binding.runtimeMesh.valid())
-                return;
+        if(!ready)
+            return;
+        if(!binding.runtimeMesh.valid())
+            return;
 
-            MeshSkinningRuntimeInstance* instance = m_runtimeMeshCache.findInstance(binding.runtimeMesh);
-            if(!instance)
-                return;
-            NWB_ASSERT(instance->valid());
+        MeshSkinningRuntimeInstance* instance = m_runtimeMeshCache.findInstance(binding.runtimeMesh);
+        if(!instance)
+            return;
+        NWB_ASSERT(instance->valid());
 
-            ready = prepareRuntimeMeshResources(*instance, scratchArena);
-        }
+        ready = prepareRuntimeMeshResources(*instance, scratchArena);
+    }
     );
 
     m_runtimeSetupReady = ready;

@@ -80,6 +80,7 @@ public:
 
 public:
     EditBoxView& operator=(EditBoxView&&)noexcept = default;
+
     EditBoxView& operator=(const EditBoxView&) = delete;
 
 

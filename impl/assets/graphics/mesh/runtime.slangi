@@ -79,7 +79,7 @@ half4 nwbMeshUnpackGeneratedHalf4(const uint2 value){
 }
 #endif
 
-void nwbMeshSetGeneratedVertexNormal(inout NwbMeshGeneratedVertex generatedVertex, const half4 normal){
+void nwbMeshSetGeneratedVertexNormal(__ref NwbMeshGeneratedVertex generatedVertex, const half4 normal){
 #if NWB_MESH_SHADER_EMULATION_COMPUTE
     generatedVertex.normal = nwbMeshPackGeneratedHalf4(normal);
 #else
@@ -87,7 +87,7 @@ void nwbMeshSetGeneratedVertexNormal(inout NwbMeshGeneratedVertex generatedVerte
 #endif
 }
 
-void nwbMeshSetGeneratedVertexTangent(inout NwbMeshGeneratedVertex generatedVertex, const half4 tangent){
+void nwbMeshSetGeneratedVertexTangent(__ref NwbMeshGeneratedVertex generatedVertex, const half4 tangent){
 #if NWB_MESH_SHADER_EMULATION_COMPUTE
     generatedVertex.tangent = nwbMeshPackGeneratedHalf4(tangent);
 #else
@@ -95,7 +95,7 @@ void nwbMeshSetGeneratedVertexTangent(inout NwbMeshGeneratedVertex generatedVert
 #endif
 }
 
-void nwbMeshSetGeneratedVertexColor(inout NwbMeshGeneratedVertex generatedVertex, const half4 color){
+void nwbMeshSetGeneratedVertexColor(__ref NwbMeshGeneratedVertex generatedVertex, const half4 color){
 #if NWB_MESH_SHADER_EMULATION_COMPUTE
     generatedVertex.color = nwbMeshPackGeneratedHalf4(color);
 #else

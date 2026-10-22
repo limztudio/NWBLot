@@ -252,8 +252,8 @@ public:
 
 
 private:
-    [[nodiscard]] Expected<void> recordArenaOwnerSymbols(){
 #if defined(NWB_BUILDMODE)
+    [[nodiscard]] Expected<void> recordArenaOwnerSymbols(){
         const ArenaMemoryOwnerRecord* owner = FirstArenaMemoryOwnerRecord();
         while(owner){
             ArenaMemoryOwnerSnapshot snapshot;
@@ -266,9 +266,11 @@ private:
             if(snapshot.ownerName == Name(*hash))
                 NWB_FATAL_ASSERT(insert(*hash, text));
         }
-#endif
         return {};
     }
+#else
+    [[nodiscard]] Expected<void> recordArenaOwnerSymbols()noexcept{ return {}; }
+#endif
 
     [[nodiscard]] bool writeFile(const ::Path<Alloc::ScratchArena>& path, Alloc::ScratchArena& scratchArena){
         if(!recordArenaOwnerSymbols())

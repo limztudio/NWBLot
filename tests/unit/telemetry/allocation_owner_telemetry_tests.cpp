@@ -60,7 +60,7 @@ struct OwnedAllocation{
 
 
 public:
-    OwnedAllocation(Core::Alloc::GlobalArena& owner, const usize size)
+    OwnedAllocation(Core::Alloc::GlobalArena& owner, const usize size)noexcept
         : arena(owner)
         , pointer(owner.allocate(1u, size))
         , requestedBytes(size)

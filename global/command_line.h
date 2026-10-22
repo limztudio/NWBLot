@@ -19,7 +19,10 @@ template<typename CharT>
 }
 
 template<typename CLI, typename CharT>
-inline void CommandLineParseApp(CLI& cli, const isize argc, CharT** argv){
+inline void CommandLineParseApp(CLI& cli, const isize argc, CharT** argv)noexcept(
+    noexcept(cli.parse(static_cast<int>(argc), argv)) && noexcept(CharT('\0')) && IsNothrowDestructible_V<CharT>
+    && noexcept(cli.parse(1, DeclVal<CharT*(&)[2]>()))
+){
     if(CommandLineHasValidArgv(argc, argv)){
         cli.parse(static_cast<int>(argc), argv);
         return;
@@ -35,7 +38,9 @@ inline void CommandLineParseApp(CLI& cli, const isize argc, CharT** argv){
 
 
 template<typename StringT>
-[[nodiscard]] inline StringT NormalizeOptionText(StringT text){
+[[nodiscard]] inline StringT NormalizeOptionText(StringT text)noexcept(
+    noexcept(TrimInPlace(text)) && noexcept(ToAsciiLowerInPlace(text)) && IsNothrowMoveConstructible_V<StringT> && IsNothrowDestructible_V<StringT>
+){
     TrimInPlace(text);
     ToAsciiLowerInPlace(text);
     return text;
@@ -61,7 +66,10 @@ template<typename CharT>
 }
 
 template<typename StringT, typename EnumT, typename TextFunction>
-[[nodiscard]] inline StringT BuildEnumOptionTexts(TextFunction textFunction, const EnumT* values, const usize valueCount){
+[[nodiscard]] inline StringT BuildEnumOptionTexts(TextFunction textFunction, const EnumT* values, const usize valueCount)noexcept(
+    noexcept(StringT{}) && noexcept(DeclVal<StringT&>() += DeclVal<const char*>()) && noexcept(DeclVal<StringT&>() += textFunction(DeclVal<const EnumT&>()))
+    && IsNothrowMoveConstructible_V<StringT> && IsNothrowDestructible_V<StringT> && IsNothrowDestructible_V<TextFunction>
+){
     StringT text;
     for(usize i = 0u; i < valueCount; ++i){
         if(i > 0u)

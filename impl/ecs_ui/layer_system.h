@@ -82,9 +82,13 @@ public:
     // Main-thread request; last request wins. Empty selects the engine default. Safe from a UI paint callback.
     void requestSkin(const Core::Assets::AssetRef<UiSkin>& skin)noexcept;
     [[nodiscard]] const Core::Assets::AssetRef<UiSkin>& selectedSkin()const noexcept{ return m_skinSelection.selected(); }
+
     [[nodiscard]] const Core::Assets::AssetRef<UiSkin>& requestedSkin()const noexcept{ return m_skinSelection.requestedChange(); }
+
     [[nodiscard]] bool skinRequestPending()const noexcept{ return m_skinSelection.changePending(); }
+
     [[nodiscard]] bool skinRequestFailed()const noexcept{ return m_skinSelection.changeFailed(); }
+
     [[nodiscard]] virtual Core::CpuTaskOptions taskOptions()const noexcept override{
         return { .cost = Core::CpuTaskCost::Light, .target = Core::CpuTaskTarget::MainThread };
     }

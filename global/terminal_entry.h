@@ -13,7 +13,10 @@
 
 // Entry helper only; keep error-reporting state outside invoke; never transports exceptions.
 template<typename Error, typename Invoke, typename ErrorHandler, typename UnexpectedHandler>
-[[nodiscard]] inline int InvokeTerminalEntry(Invoke&& invoke, ErrorHandler&& handleError, UnexpectedHandler&& handleUnexpected){
+[[nodiscard]] inline int InvokeTerminalEntry(Invoke&& invoke, ErrorHandler&& handleError, UnexpectedHandler&& handleUnexpected)noexcept(
+    noexcept(std::declval<int&>() = std::forward<ErrorHandler>(handleError)(std::declval<const Error&>()))
+    && noexcept(std::declval<int&>() = std::forward<UnexpectedHandler>(handleUnexpected)())
+){
     int result;
     try{
         result = std::forward<Invoke>(invoke)();

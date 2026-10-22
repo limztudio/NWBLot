@@ -62,6 +62,7 @@ private:
 
         public:
             PendingMessage& operator=(const PendingMessage&) = delete;
+
             PendingMessage& operator=(PendingMessage&& rhs)noexcept(IsNothrowMoveConstructible_V<T>){
                 if(this != &rhs){
                     m_value.reset();

@@ -213,12 +213,7 @@ namespace GpuTaskGraphCompilerDetail{
     for(usize assignmentIndex = 0u; assignmentIndex < analysis.topologicalOrder().size(); ++assignmentIndex){
         const GpuTaskId taskID = analysis.topologicalOrder()[assignmentIndex];
         const GpuTaskGraphTaskView task = graph.taskAt(taskID.index);
-        const GpuTaskQueuePlacementGroup singleton{
-            .assignmentOffset = assignmentIndex,
-            .assignmentCount = 1u,
-            .requiredCapabilities = task.commands.requiredCapabilities,
-            .initialOwnershipQueue = initialOwnershipQueues[taskID.index],
-        };
+        const GpuTaskQueuePlacementGroup singleton{ .assignmentOffset = assignmentIndex, .assignmentCount = 1u, .requiredCapabilities = task.commands.requiredCapabilities, .initialOwnershipQueue = initialOwnershipQueues[taskID.index], };
         const GpuPhysicalQueueInfo* const singletonQueue = FindBestLegalQueuePlacementGroupCandidate(graph, analysis, topology, singleton);
         if(!singletonQueue)
             return fail(GpuTaskGraphQueueAssignmentStatus::NoCompatibleQueue, taskID);

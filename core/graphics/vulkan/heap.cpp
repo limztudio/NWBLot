@@ -42,6 +42,7 @@ Heap::Heap(const VulkanContext& context, VulkanAllocator& allocator)noexcept
     , m_context(context)
     , m_allocator(allocator)
 {}
+
 Heap::~Heap()noexcept{
     {
         ScopedLock lock(m_bindingMutex);

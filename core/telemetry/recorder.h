@@ -137,6 +137,7 @@ public:
     // Enabled capture retains slots and payload capacity for the next frame. Disabling capture releases them.
     void clear()noexcept;
     [[nodiscard]] TelemetryArena& arena()noexcept{ return m_arena; }
+
     [[nodiscard]] const TelemetryArena& arena()const noexcept{ return m_arena; }
     [[nodiscard]] CaptureOptions captureOptions()const noexcept;
     [[nodiscard]] bool enabled()const noexcept;
@@ -144,6 +145,7 @@ public:
     [[nodiscard]] usize eventCount()const noexcept;
     // Cumulative observer drops include contention, exhausted storage, and oversized payloads. Filtered events are excluded.
     [[nodiscard]] u64 droppedDiagnosticCount()const noexcept{ return m_droppedDiagnosticCount.load(MemoryOrder::relaxed); }
+
     [[nodiscard]] EventView view()const noexcept{ return EventView(*this); }
 
     [[nodiscard]] bool recordBinary(EventKind::Enum kind, u64 frameIndex, const void* payload, usize payloadBytes, u32 streamId = 0u);
@@ -172,11 +174,13 @@ private:
             return BuiltPayloadResult::Failed;
         return publishBuiltSlot(lease, kind, frameIndex, streamId);
     }
+
     [[nodiscard]] bool enabledUnlocked()const noexcept{ return m_capture.enabled(); }
+
     [[nodiscard]] bool enabledUnlocked(EventKind::Enum kind)const noexcept{ return CaptureAllowsEventKind(m_capture, kind); }
     [[nodiscard]] bool appendUnlocked(EventSlotLease& lease, const EventHeader& header, const void* payload, usize payloadBytes);
     [[nodiscard]] bool appendPayloadUnlocked(EventSlotLease& lease, const EventHeader& header, TelemetryBytes&& payload);
-    [[nodiscard]] EventSlotPtr acquireSlotUnlocked();
+    [[nodiscard]] EventSlotPtr acquireSlotUnlocked()noexcept;
     void prepareDiagnosticSlotsUnlocked();
     void recordCapturedDiagnostic(u64 frameIndex, NotNull<const u8*> payload, usize payloadBytes, u32 streamId)noexcept;
     void dropDiagnosticCapture()noexcept;

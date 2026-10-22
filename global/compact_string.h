@@ -288,10 +288,12 @@ template<typename CharT>
 [[nodiscard]] inline bool operator==(const BasicCompactString<CharT>& lhs, const BasicCompactString<CharT>& rhs)noexcept(IsArithmetic_V<CharT>){
     return lhs.view() == rhs.view();
 }
+
 template<typename CharT>
 [[nodiscard]] inline bool operator!=(const BasicCompactString<CharT>& lhs, const BasicCompactString<CharT>& rhs)noexcept(IsArithmetic_V<CharT>){
     return !(lhs == rhs);
 }
+
 template<typename CharT>
 [[nodiscard]] inline bool operator<(const BasicCompactString<CharT>& lhs, const BasicCompactString<CharT>& rhs)noexcept(IsArithmetic_V<CharT>){
     return lhs.view() < rhs.view();
@@ -302,21 +304,25 @@ template<typename CharT>
     lhs += rhs;
     return lhs;
 }
+
 template<typename CharT>
 [[nodiscard]] inline BasicCompactString<CharT> operator+(BasicCompactString<CharT> lhs, const BasicStringView<CharT> rhs)noexcept(IsArithmetic_V<CharT>){
     lhs += rhs;
     return lhs;
 }
+
 template<typename CharT, typename ArenaT>
 [[nodiscard]] inline BasicCompactString<CharT> operator+(BasicCompactString<CharT> lhs, const BasicString<CharT, ArenaT>& rhs)noexcept(IsArithmetic_V<CharT>){
     lhs += rhs;
     return lhs;
 }
+
 template<typename CharT>
 [[nodiscard]] inline BasicCompactString<CharT> operator+(BasicCompactString<CharT> lhs, const BasicCompactString<CharT>& rhs)noexcept(IsArithmetic_V<CharT>){
     lhs += rhs;
     return lhs;
 }
+
 template<typename CharT>
 [[nodiscard]] inline BasicCompactString<CharT> operator+(BasicCompactString<CharT> lhs, const CharT rhs)noexcept(IsArithmetic_V<CharT>){
     lhs += rhs;

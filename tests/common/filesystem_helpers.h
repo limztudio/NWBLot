@@ -56,7 +56,7 @@ template<typename ArenaT>
 }
 
 template<typename ArenaT>
-[[nodiscard]] inline Expected<bool, ErrorCode> WaitForDirectory(const ::Path<ArenaT>& path, const u32 timeoutMilliseconds, const u32 pollMilliseconds = FilesystemTestDetail::s_DefaultDirectoryPollMilliseconds){
+[[nodiscard]] inline Expected<bool, ErrorCode> WaitForDirectory(const ::Path<ArenaT>& path, const u32 timeoutMilliseconds, const u32 pollMilliseconds = FilesystemTestDetail::s_DefaultDirectoryPollMilliseconds)noexcept{
     const u32 stepMilliseconds = pollMilliseconds == 0u ? FilesystemTestDetail::s_MinimumDirectoryPollMilliseconds : pollMilliseconds;
     const Timer deadline = TimerAddMS(TimerNow(), timeoutMilliseconds);
     for(;;){

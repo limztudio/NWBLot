@@ -91,7 +91,8 @@ private:
 
 using SharedFontFace = RefCountPtr<RefCounter<FontFace>, ArenaRefDeleter<RefCounter<FontFace>, Core::Alloc::GlobalArena>>;
 
-[[nodiscard]] SharedFontFace MakeFontFace(Core::Alloc::ScratchArena& scratchArena, Core::Alloc::GlobalArena& arena, const FontSource& source);
+// Fails only when the face cannot be allocated. A face whose native setup failed is still returned and is not valid().
+[[nodiscard]] Expected<SharedFontFace> MakeFontFace(Core::Alloc::ScratchArena& scratchArena, Core::Alloc::GlobalArena& arena, const FontSource& source);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

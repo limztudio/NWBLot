@@ -50,6 +50,7 @@ struct HexCapacityValue{
 };
 
 [[nodiscard]] ThrowingHexCapacityPredicate operator>(HexCapacityValue, HexCapacityValue)noexcept{ return {}; }
+
 [[nodiscard]] usize operator-(const HexCapacityValue lhs, const HexCapacityValue rhs)noexcept{ return lhs.value - rhs.value; }
 
 struct ThrowingHexCapacityString{
@@ -62,7 +63,9 @@ public:
 
 public:
     [[nodiscard]] HexCapacityValue size()const noexcept{ return { text.size() }; }
+
     [[nodiscard]] HexCapacityValue max_size()const noexcept{ return { text.max_size() }; }
+
     void push_back(const char ch)noexcept{ text.push_back(ch); }
 };
 
@@ -83,7 +86,9 @@ public:
 
 public:
     [[nodiscard]] usize size()const noexcept{ return text.size(); }
+
     [[nodiscard]] usize max_size()const noexcept{ return text.max_size(); }
+
     void push_back(const char ch){
         if(text.size() == 2u)
             throw s_HexAppendFailure;
@@ -104,6 +109,7 @@ public:
     ThrowingFixedVectorAssignment& operator=(const ThrowingFixedVectorAssignment&){
         throw s_ElementAssignmentFailure;
     }
+
     ThrowingFixedVectorAssignment& operator=(ThrowingFixedVectorAssignment&&)noexcept = default;
 };
 
@@ -152,6 +158,7 @@ public:
     [[nodiscard]] RefCountTarget& operator*()const{
         throw s_PointerFailure;
     }
+
     explicit operator bool()const noexcept{ return target != nullptr; }
 };
 
@@ -160,6 +167,7 @@ public:
 }
 
 u32 RefCountAddReference(ThrowingFancyPointer)noexcept{ return 1u; }
+
 u32 RefCountRelease(ThrowingFancyPointer)noexcept{ return 1u; }
 
 struct FancyPointerDeleter{
@@ -172,6 +180,7 @@ public:
 
 struct ThrowingComparisonResult{
     operator bool()const{ throw s_ComparisonFailure; }
+
     [[nodiscard]] ThrowingComparisonResult operator!()const noexcept{ return {}; }
 };
 
@@ -186,6 +195,7 @@ struct ComparisonReferenceTarget{
 
 public:
     [[nodiscard]] u32 addReference()noexcept{ return ++references; }
+
     [[nodiscard]] u32 release()noexcept{ return --references; }
 };
 
@@ -193,14 +203,20 @@ using UniqueComparisonOwner = UniquePtr<int, ComparisonProxyDeleter<int>>;
 using ReferenceComparisonOwner = RefCountPtr<ComparisonReferenceTarget, ComparisonProxyDeleter<ComparisonReferenceTarget>>;
 
 [[nodiscard]] ThrowingComparisonResult operator<(const UniqueComparisonOwner&, const UniqueComparisonOwner&)noexcept{ return {}; }
+
 [[nodiscard]] ThrowingComparisonResult operator<(const UniqueComparisonOwner&, decltype(nullptr))noexcept{ return {}; }
+
 [[nodiscard]] ThrowingComparisonResult operator<(decltype(nullptr), const UniqueComparisonOwner&)noexcept{ return {}; }
-[[nodiscard]] ThrowingComparisonResult operator!(const UniqueComparisonOwner&)noexcept{ return {}; }
-[[nodiscard]] ThrowingComparisonResult operator!(const ReferenceComparisonOwner&)noexcept{ return {}; }
 
 [[nodiscard]] ThrowingComparisonResult operator<(const ReferenceComparisonOwner&, const ReferenceComparisonOwner&)noexcept{ return {}; }
+
 [[nodiscard]] ThrowingComparisonResult operator<(const ReferenceComparisonOwner&, decltype(nullptr))noexcept{ return {}; }
+
 [[nodiscard]] ThrowingComparisonResult operator<(decltype(nullptr), const ReferenceComparisonOwner&)noexcept{ return {}; }
+
+[[nodiscard]] ThrowingComparisonResult operator!(const UniqueComparisonOwner&)noexcept{ return {}; }
+
+[[nodiscard]] ThrowingComparisonResult operator!(const ReferenceComparisonOwner&)noexcept{ return {}; }
 
 template<typename OwnerT>
 void VerifyComparisonResultConversions(){
@@ -259,6 +275,7 @@ public:
 
 struct ThrowingDiagnosticTemporary{
     ~ThrowingDiagnosticTemporary()noexcept(false){ throw s_ReadFailure; }
+
     operator AStringView()const noexcept{ return "unsafe"; }
 };
 
@@ -314,12 +331,16 @@ public:
 
 public:
     ObservationPointer& operator=(const ObservationPointer&)noexcept = default;
+
     ObservationPointer& operator=(ObservationPointer&&)noexcept = default;
+
     explicit operator bool()const noexcept{ return target != nullptr; }
 };
 
 [[nodiscard]] bool operator==(const ObservationPointer& first, const ObservationPointer& second)noexcept{ return first.target == second.target; }
+
 u32 RefCountAddReference(ObservationPointer)noexcept{ return 1u; }
+
 u32 RefCountRelease(ObservationPointer)noexcept{ return 1u; }
 
 struct ObservationDeleter{
@@ -344,6 +365,7 @@ struct ThrowingByteSource{
 
 public:
     [[nodiscard]] usize size()const noexcept{ return sizeof(u32); }
+
     [[nodiscard]] const u8* data()const{
         throw s_ReadFailure;
     }

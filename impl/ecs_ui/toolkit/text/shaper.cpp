@@ -71,10 +71,10 @@ bool TextShaper::setFonts(Core::Alloc::ScratchArena& scratchArena, const FontSou
         const FontSource& source = sources[index];
         if(!source.identity.valid() || source.generation == 0u || !source.font.validatePayload())
             return false;
-        SharedFontFace face = MakeFontFace(scratchArena, m_arena, source);
-        if(!face || !face->valid())
+        auto face = MakeFontFace(scratchArena, m_arena, source);
+        if(!face || !(*face)->valid())
             return false;
-        fonts.push_back(Move(face));
+        fonts.push_back(Move(*face));
     }
     m_fonts = Move(fonts);
     return true;

@@ -32,6 +32,7 @@ public:
 
 public:
     [[nodiscard]] i64 value()const noexcept{ return m_value; }
+
     [[nodiscard]] const EditModel& draft()const noexcept{ return m_draft; }
     [[nodiscard]] NumericParseStatus::Enum status(const IntegerBounds& bounds = {})const noexcept;
     [[nodiscard]] bool dirty()const noexcept;

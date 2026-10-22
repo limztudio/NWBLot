@@ -381,6 +381,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
         shadowSurfaceIncludeRoot,
         graphicsMetadata.includeMetadata,
         graphicsMetadata.shaderEntries,
+        graphicsMetadata.materialBindEntries,
         materialEntries,
         context.scratchArena
     );

@@ -328,7 +328,7 @@ void RendererRayTracingSystem::swapSoftShadowTemporalHistory(DeferredFrameTarget
 
     const auto acceptedWorldToClip = m_meshSystem.snapshotAcceptedMeshViewWorldToClip();
     if(acceptedWorldToClip){
-        NWB_MEMCPY(&m_rayTracingState.m_prevWorldToClip, sizeof(m_rayTracingState.m_prevWorldToClip), &*acceptedWorldToClip, sizeof(m_rayTracingState.m_prevWorldToClip));
+        m_rayTracingState.m_prevWorldToClip = *acceptedWorldToClip;
         m_rayTracingState.m_prevWorldToClipValid = true;
     }
     if(m_rayTracingState.m_softTransparentTemporalReady && !hardwareTransparentShadowReady())

@@ -48,7 +48,9 @@ inline constexpr f32 s_DecodeScale = 1.0f / 1.055f;
 struct FlagsSnapshot{
     friend bool operator==(const FlagsSnapshot&, const FlagsSnapshot&)noexcept = default;
     template<typename Stream>
-    friend Stream& operator<<(Stream& stream, const FlagsSnapshot& value){
+    friend Stream& operator<<(Stream& stream, const FlagsSnapshot& value)noexcept(
+        noexcept(DeclVal<void(*)(Stream&)noexcept>()(stream << value.standard << '/' << value.mapped << '/' << value.native))
+    ){
         return stream << value.standard << '/' << value.mapped << '/' << value.native;
     }
 

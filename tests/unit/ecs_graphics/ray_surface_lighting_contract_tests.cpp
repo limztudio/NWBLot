@@ -31,7 +31,7 @@ TEST(EcsGraphics, RaySceneGraphReadsMissingResourcesRetainScratchArena){
     NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/ray_scene_graph_reads/scratch"));
     NWB::Impl::RayTracingSceneGraphResources resources;
     const auto scratchBefore = scratchArena.memoryStats();
-    const auto reads = NWB::Impl::ImportRayTracingSceneGraphReads(graph, resources, NWB::Core::ResourceStates::Common, scratchArena);
+    const auto reads = NWB::Impl::ImportRayTracingSceneGraphReads(graph, resources, NWB::Core::ResourceStates::Common, {}, scratchArena);
     const auto scratchAfter = scratchArena.memoryStats();
 
     EXPECT_FALSE(reads.has_value());

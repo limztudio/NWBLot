@@ -70,7 +70,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<RayTracingOpticalSceneGraphBuffer> ImportOpticalSceneUpload(Core::GpuTaskGraph& graph, const RayTracingOpticalSceneSnapshot& resources){
+Expected<RayTracingOpticalSceneGraphBuffer> ImportOpticalSceneUpload(Core::GpuTaskGraph& graph, const RayTracingOpticalSceneSnapshot& resources, const Core::GpuTaskId priorReadersDrained){
     if(!resources.valid())
         return MakeUnexpected(Failure{});
     const Core::BufferHandle& uploadBuffer = resources.uploadBuffer ? resources.uploadBuffer : resources.buffer;
@@ -125,7 +125,13 @@ Expected<RayTracingOpticalSceneGraphBuffer> ImportOpticalSceneUpload(Core::GpuTa
     scheduling.mergeWithPrevious = true;
     scheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc desc;
-    desc.setIdentity(Name("render.raytrace.optical_scene_upload")).setMarkerLabel("Ray Optical Scene Upload").setScheduling(scheduling).setResourceUses(uses, LengthOf(uses));
+    desc
+        .setIdentity(Name("render.raytrace.optical_scene_upload"))
+        .setMarkerLabel("Ray Optical Scene Upload")
+        .setScheduling(scheduling)
+        .setDependencies(priorReadersDrained.valid() ? &priorReadersDrained : nullptr, priorReadersDrained.valid() ? 1u : 0u)
+        .setResourceUses(uses, LengthOf(uses))
+    ;
     const auto uploadTaskResult = graph.addTask<__hidden_task_graph_optical_scene_upload::OpticalUploadTask>(desc, __hidden_task_graph_optical_scene_upload::OpticalUploadTask::Payload{ uploadBuffer, blob, resources.upload, Move(reservation), plan.queue, });
     if(!uploadTaskResult)
         return MakeUnexpected(uploadTaskResult.error());
@@ -145,11 +151,11 @@ Expected<RayTracingOpticalSceneGraphBuffer> ImportOpticalSceneUpload(Core::GpuTa
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<RayTracingOpticalSceneGraphBuffer> ImportRayTracingOpticalSceneBuffer(Core::GpuTaskGraph& graph, const RayTracingOpticalSceneSnapshot& resources, Core::Alloc::ScratchArena& scratchArena){
-    const auto uploaded = __hidden_task_graph_optical_scene_upload::ImportOpticalSceneUpload(graph, resources);
+Expected<RayTracingOpticalSceneGraphBuffer> ImportRayTracingOpticalSceneBuffer(Core::GpuTaskGraph& graph, const RayTracingOpticalSceneSnapshot& resources, const Core::GpuTaskId priorReadersDrained, Core::Alloc::ScratchArena& scratchArena){
+    const auto uploaded = __hidden_task_graph_optical_scene_upload::ImportOpticalSceneUpload(graph, resources, priorReadersDrained);
     if(!uploaded || !resources.finalize)
         return uploaded;
-    return DeclareRayTracingOpticalBoundsFinalize(graph, resources, uploaded->resource, scratchArena);
+    return DeclareRayTracingOpticalBoundsFinalize(graph, resources, uploaded->resource, priorReadersDrained, scratchArena);
 }
 
 

@@ -105,7 +105,7 @@ Concrete* NewArenaObject(Arena& arena, Args&&... args)noexcept(noexcept(arena.te
 }
 
 template<typename Concrete, typename Arena>
-void DestroyArenaObject(Arena& arena, Concrete* p){
+void DestroyArenaObject(Arena& arena, Concrete* p)noexcept(noexcept(p->~Concrete()) && noexcept(arena.template deallocate<Concrete>(p, 1))){
     if(p){
         p->~Concrete();
         arena.template deallocate<Concrete>(p, 1);
@@ -133,9 +133,9 @@ namespace ArenaObjectDetail{
 
 
 template<typename ArenaT, typename ValueT>
-void DestroyArenaReference(ArenaT* arena, ValueT* value)noexcept{
-    value->~ValueT();
-    arena->deallocate(value, alignof(ValueT), sizeof(ValueT));
+void DestroyArenaReference(ArenaT& arena, ValueT& value)noexcept{
+    value.~ValueT();
+    arena.deallocate(&value, alignof(ValueT), sizeof(ValueT));
 }
 
 
@@ -168,7 +168,7 @@ public:
     void operator()(ValueT* value)const noexcept{
         if(value && arena){
             using ArenaObjectDetail::DestroyArenaReference;
-            DestroyArenaReference(arena, value);
+            DestroyArenaReference(*arena, *value);
         }
     }
 };
@@ -226,6 +226,7 @@ inline typename EnableIf<!IsArray<T>::value, ArenaUniquePtr<T, Arena>>::type Mak
     else
         return ArenaUniquePtr<T, Arena>(NewArenaObject<T>(arena, Forward<Args>(args)...), typename ArenaUniquePtr<T, Arena>::deleter_type(arena));
 }
+
 template<typename T, typename Arena>
 inline typename EnableIf<IsUnboundedArray<T>::value, ArenaUniquePtr<T, Arena>>::type MakeArenaUnique(Arena& arena, usize n)noexcept(
     noexcept(arena.template allocate<RemoveExtent_T<T>>(n))

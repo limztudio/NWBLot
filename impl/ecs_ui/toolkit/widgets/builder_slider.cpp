@@ -131,7 +131,13 @@ bool Builder::prepareSlider(SliderFrame& frame)noexcept{
     if(!metrics)
         return false;
     frame.m_metrics = *metrics;
-    const SIMDVectorDouble paddedSize = VectorDoubleAdd(VectorDoubleAdd(VectorDoubleAdd(VectorDoubleSet(frame.m_metrics.padding.left, frame.m_metrics.padding.top, 0.0, 0.0), VectorDoubleSet(frame.m_metrics.padding.right, frame.m_metrics.padding.bottom, 0.0, 0.0)), VectorDoubleSet(frame.m_metrics.thumbExtent.x, frame.m_metrics.thumbExtent.y, 0.0, 0.0)), VectorDoubleSet(VectorGetX(trackMinimum->value), 0.0, 0.0, 0.0));
+    const SIMDVectorDouble paddedSize = VectorDoubleAdd(
+        VectorDoubleAdd(
+            VectorDoubleAdd(VectorDoubleSet(frame.m_metrics.padding.left, frame.m_metrics.padding.top, 0.0, 0.0), VectorDoubleSet(frame.m_metrics.padding.right, frame.m_metrics.padding.bottom, 0.0, 0.0)),
+            VectorDoubleSet(frame.m_metrics.thumbExtent.x, frame.m_metrics.thumbExtent.y, 0.0, 0.0)
+        ),
+        VectorDoubleSet(VectorGetX(trackMinimum->value), 0.0, 0.0, 0.0)
+    );
     const f64 width = VectorDoubleGetX(paddedSize);
     if(!IsFinite(width) || width > Limit<f32>::s_Max)
         return false;

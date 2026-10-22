@@ -40,6 +40,7 @@ public:
         , m_aborts(aborts)
         , m_recordingAttemptGeneration(recordingAttemptGeneration)
     {}
+
     ~ReadyFrontierRecordingUnwindScope()noexcept{
         if(!m_active)
             return;
@@ -84,7 +85,6 @@ namespace __hidden_gpu_packet_runtime_recording_frontier{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_PacketRecordingFrontierScratchArena("core/task/gpu/packet_recording_frontier");
 inline constexpr usize s_MinParallelRecordingPacketCount = 2u;
 
 
@@ -116,6 +116,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInCompileOrder(
     const GpuCompiledGraph& compiledGraph,
     const GpuSubmissionPacketRange& range,
     GpuRecordedGraph& outRecordedGraph,
+    Alloc::ScratchArena& scratchArena,
     GpuSubmissionPacketId* const outFailedPacket,
     GpuCommandIrCapture* const commandIrCapture
 )const{
@@ -131,7 +132,6 @@ bool GpuNativePacketRecorder::recordPacketRangeInCompileOrder(
         return false;
 
     const Timer recordingOperationBegin = TimerNow();
-    Alloc::ScratchArena scratchArena(__hidden_gpu_packet_runtime_recording_frontier::s_PacketRecordingFrontierScratchArena);
     {
         GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::TryAcquire(graph);
         if(!declarationAccess.valid() || !prepareRecordingAttempt(graph, compiledGraph, range, outRecordedGraph, declarationAccess, planAccess, artifactOperation, scratchArena))
@@ -157,6 +157,7 @@ bool GpuNativePacketRecorder::recordTaskRangeInCompileOrder(
     const GpuTaskId firstTask,
     const GpuTaskId lastTask,
     GpuRecordedGraph& outRecordedGraph,
+    Alloc::ScratchArena& scratchArena,
     GpuSubmissionPacketId* const outFailedPacket,
     GpuCommandIrCapture* const commandIrCapture
 )const{
@@ -169,7 +170,7 @@ bool GpuNativePacketRecorder::recordTaskRangeInCompileOrder(
             return false;
         range = planAccess.packetRangeForTasks(firstTask, lastTask);
     }
-    return recordPacketRangeInCompileOrder(graph, compiledGraph, range, outRecordedGraph, outFailedPacket, commandIrCapture);
+    return recordPacketRangeInCompileOrder(graph, compiledGraph, range, outRecordedGraph, scratchArena, outFailedPacket, commandIrCapture);
 }
 
 
@@ -179,6 +180,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
     const GpuSubmissionPacketRange& range,
     GpuRecordedGraph& outRecordedGraph,
     CpuTaskScheduler& cpuScheduler,
+    Alloc::ScratchArena& scratchArena,
     GpuSubmissionPacketId* const outFailedPacket,
     GpuCommandIrCapture* const commandIrCapture
 )const{
@@ -198,7 +200,6 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
     const usize rangeBegin = range.first.index;
     const usize rangeEnd = rangeBegin + range.packetCount;
     const Timer recordingOperationBegin = TimerNow();
-    Alloc::ScratchArena scratchArena(__hidden_gpu_packet_runtime_recording_frontier::s_PacketRecordingFrontierScratchArena);
     Vector<RecordingEntry, Alloc::ScratchArena> recordingEntries(scratchArena);
     recordingEntries.reserve(range.packetCount);
     Vector<u32, Alloc::ScratchArena> parallelPacketIndices(scratchArena);

@@ -113,7 +113,7 @@ TEST(PersistentArenaTests, SharedArenaConcurrentAllocationCrossThreadFreeAndAcco
     Latch releaseHandoffs(1u);
 
     for(usize threadIndex = 0u; threadIndex < s_ThreadCount; ++threadIndex){
-        workers[threadIndex] = Thread([&arena, &handoffs, &results, &workersReady, &start, &handoffsReady, &releaseHandoffs, threadIndex](){
+        workers[threadIndex] = Thread([&arena, &handoffs, &results, &workersReady, &start, &handoffsReady, &releaseHandoffs, threadIndex]()noexcept{
             bool allocationFailed = false;
             bool contentsPreserved = true;
             bool alignmentPreserved = true;
@@ -214,7 +214,7 @@ TEST(PersistentArenaTests, SharedArenaConcurrentReallocationPreservesPayloadAndA
     Latch start(1u);
 
     for(usize threadIndex = 0u; threadIndex < s_ThreadCount; ++threadIndex){
-        workers[threadIndex] = Thread([&arena, &results, &workersReady, &start, threadIndex](){
+        workers[threadIndex] = Thread([&arena, &results, &workersReady, &start, threadIndex]()noexcept{
             bool allocationFailed = false;
             bool contentsPreserved = true;
             bool alignmentPreserved = true;

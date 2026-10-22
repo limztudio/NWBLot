@@ -29,6 +29,7 @@ public:
     [[nodiscard]] bool valid()const noexcept{
         return widget.valid() && declarationGeneration != 0u && instanceGeneration != 0u && openGeneration != 0u;
     }
+
     [[nodiscard]] bool empty()const noexcept{
         return !widget.valid() && declarationGeneration == 0u && instanceGeneration == 0u && openGeneration == 0u;
     }

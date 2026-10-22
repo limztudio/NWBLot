@@ -151,7 +151,7 @@ void nwbShadowAccumulateInstance(inout NwbShadowVisibilityAccumulator acc, __con
     const float chordLength = max(endpoint - optics.tMin, 0.0);
     const half interfaceWeight = half(smoothstep(0.0, NWB_SHADOW_INTERFACE_FADE_DISTANCE, chordLength));
     acc.interfaceTransmittance *= lerp(half(1.0h), optics.interfaceTransmittance, interfaceWeight);
-    acc.opticalDepth += half3(optics.absorptionCoeff) * half(chordLength);
+    acc.opticalDepth += half3(float3(optics.absorptionCoeff) * chordLength);
 }
 
 half3 nwbShadowFinalizeVisibility(const NwbShadowVisibilityAccumulator acc){

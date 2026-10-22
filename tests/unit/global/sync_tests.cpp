@@ -33,7 +33,7 @@ TEST(GlobalSync, FutexPreservesEveryIncrementUnderContention){
     u32 value = 0u;
     Thread workers[s_ThreadCount];
     for(u32 threadIndex = 0u; threadIndex < s_ThreadCount; ++threadIndex){
-        workers[threadIndex] = Thread([&mutex, &startGate, &value](){
+        workers[threadIndex] = Thread([&mutex, &startGate, &value]()noexcept{
             startGate.arrive_and_wait();
             for(u32 incrementIndex = 0u; incrementIndex < s_IncrementsPerThread; ++incrementIndex){
                 ScopedLock lock(mutex);

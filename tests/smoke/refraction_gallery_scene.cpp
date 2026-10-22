@@ -327,6 +327,7 @@ bool CreateRefractionGalleryScene(ProjectRuntimeContext& context, Core::ECS::Wor
     const auto light = Impl::Scene::CreateDirectionalLightEntity(world, 0.6f, 0.4f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f);
     if(!camera.valid() || !light.valid())
         return false;
+    world.entity(light).getComponent<Impl::Scene::LightComponent>().enableCaustics = false;
     // Tighter framing exposes overlap artifacts while preserving the same camera for every variant.
     auto& cameraComponent = world.entity(camera).getComponent<Impl::Scene::CameraComponent>();
     cameraComponent.setVerticalFovRadians(s_PI * (40.0f / 180.0f));

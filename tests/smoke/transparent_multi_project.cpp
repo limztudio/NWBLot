@@ -511,6 +511,8 @@ public:
         const bool causticsEnabled = !causticSetting || *causticSetting != 0.f;
         m_world->entity(lightEntity).getComponent<NWB::Impl::Scene::LightComponent>().enableCaustics = causticsEnabled;
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticSphereSmokeProject: caustics {}"), causticsEnabled ? NWB_TEXT("enabled") : NWB_TEXT("disabled"));
+#else
+        m_world->entity(lightEntity).getComponent<NWB::Impl::Scene::LightComponent>().enableCaustics = false;
 #endif
 
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)

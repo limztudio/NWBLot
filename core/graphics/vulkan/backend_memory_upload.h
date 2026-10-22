@@ -215,9 +215,11 @@ public:
 
 public:
     [[nodiscard]] const BufferDesc& getDescription()const noexcept{ return m_desc; }
+
     [[nodiscard]] const BufferDesc& getCreationDescription()const noexcept{ return m_creationDesc; }
     [[nodiscard]] bool descriptionMatchesCreation()const noexcept;
     [[nodiscard]] GpuVirtualAddress getGpuVirtualAddress()const noexcept{ return m_deviceAddress; }
+
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
     // Task-graph declarations copy this production admission snapshot while retaining the Buffer itself.
     [[nodiscard]] ResourceQueueAdmissionSnapshot getQueueAdmissionSnapshot()const noexcept{
@@ -276,6 +278,7 @@ inline UploadManager::BufferChunk::BufferChunk(CpuTaskScheduler& pool, BufferHan
     , version(0)
     , physicalQueue(queue)
 {}
+
 inline UploadManager::BufferChunk::~BufferChunk()noexcept = default;
 
 
@@ -323,6 +326,7 @@ public:
 
 public:
     [[nodiscard]] const TextureDesc& getDescription()const noexcept{ return m_desc; }
+
     [[nodiscard]] const TextureDesc& getCreationDescription()const noexcept{ return m_creationDesc; }
     [[nodiscard]] bool descriptionMatchesCreation()const noexcept;
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }

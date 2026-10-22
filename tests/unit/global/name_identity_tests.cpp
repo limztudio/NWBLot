@@ -329,7 +329,7 @@ TEST(Global, RuntimeNameFactoryPreservesRecursiveRecorderGuard){
     };
     NameSymbolCallbackProbe restoreCallbacks;
     RecursiveProbe probe;
-    SetNameSymbolRecordCallback([](const NameHash&, AStringView, void* context){
+    SetNameSymbolRecordCallback([](const NameHash&, AStringView, void* context)noexcept{
         auto& state = *static_cast<RecursiveProbe*>(context);
         ++state.recordCount;
         const auto nested = Name::FromText(AStringView(s_RecursiveInnerName));

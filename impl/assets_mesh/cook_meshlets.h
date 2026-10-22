@@ -33,7 +33,7 @@ public:
         && noexcept(frontier.pop_back())
     );
     template<typename FrontierVectorT>
-    static void AddMeshletTriangleNeighborsToFrontier(const MeshletTrianglePrecompute& trianglePrecompute, const u32 triangleIndex, FrontierVectorT& frontier, Vector<u8, Core::Alloc::ScratchArena>& frontierFlags);
+    static void AddMeshletTriangleNeighborsToFrontier(const MeshletTrianglePrecompute& trianglePrecompute, const u32 triangleIndex, FrontierVectorT& frontier, Vector<u8, Core::Alloc::ScratchArena>& frontierFlags)noexcept(noexcept(frontier.push_back(DeclVal<const u32&>())));
     template<typename VertexRefVectorT, typename PrimitiveIndexVectorT>
     [[nodiscard]] static bool AddMeshletTriangleToBuilder(const Path& nwbFilePath, const TStringView metaKind, const MeshletTriangleData& triangle, VertexRefVectorT& localSourceVertexRefs, MeshletDesc& meshlet, PrimitiveIndexVectorT& primitiveIndices);
     [[nodiscard]] static bool AddVisitedMeshletTriangle(
@@ -98,7 +98,7 @@ void MeshCookMeshlets::RemoveMeshletFrontierCandidate(FrontierVectorT& frontier,
 
 
 template<typename FrontierVectorT>
-void MeshCookMeshlets::AddMeshletTriangleNeighborsToFrontier(const MeshletTrianglePrecompute& trianglePrecompute, const u32 triangleIndex, FrontierVectorT& frontier, Vector<u8, Core::Alloc::ScratchArena>& frontierFlags){
+void MeshCookMeshlets::AddMeshletTriangleNeighborsToFrontier(const MeshletTrianglePrecompute& trianglePrecompute, const u32 triangleIndex, FrontierVectorT& frontier, Vector<u8, Core::Alloc::ScratchArena>& frontierFlags)noexcept(noexcept(frontier.push_back(DeclVal<const u32&>()))){
     const MeshletTriangleData& triangle = trianglePrecompute.triangles[triangleIndex];
     for(const u32 positionIndex : triangle.positions){
         const u32 triangleOffsetBegin = trianglePrecompute.positionTriangleOffsets[positionIndex];

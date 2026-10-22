@@ -74,6 +74,7 @@ public:
         }
         return true;
     }
+
     virtual void finalize()noexcept override{
         ++s_State.finalizeCounts[m_index];
         s_State.record(m_index + s_InitializerCount);

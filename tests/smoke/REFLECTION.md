@@ -83,7 +83,11 @@ The dedicated `nwb_reflection_smoke` target uses `reflection_project.cpp` and
 Run from `Testing/smoke_runtime/<configuration>` so `cwd/res` selects the matching
 packed smoke assets. The shared `nwb_transparent_multi_smoke_assets` cook includes
 both `impl/assets` and `tests/smoke/assets`; rebuilding the target recooks changed
-shader/material assets.
+shader/material assets. The `temporal_light` case also needs a fixture-only lit
+material from `tests/smoke/reflection_temporal_assets`.
+`nwb_reflection_temporal_smoke_assets` prepares that root with the shared catalog
+and cooks it into `Testing/reflection_temporal_smoke_runtime/<configuration>`, so
+the temporal suite runs from that directory.
 
 The cases are:
 
@@ -384,7 +388,8 @@ enabled and its output must never feed temporal accumulation.
 
 Run these additional suites using the same executable/working-directory and
 logserver arguments as the existing capture command, replacing `--suite all`
-with `--suite rough` or `--suite temporal`. CTest entries are
+with `--suite rough` or `--suite temporal`; the temporal suite uses the
+`reflection_temporal_smoke_runtime` working directory described above. CTest entries are
 `nwb_reflection_rough_capture_smoke` and
 `nwb_reflection_temporal_capture_smoke`; both share the display resource lock.
 The analysis tests are available as
@@ -469,7 +474,14 @@ Ambiguous seams, repeated TIR and exhausted paths elsewhere retain the defined
 conservative termination behavior.
 
 Closed homogeneous volumes explicitly use `OpticalBoundaryMode::ClosedNested`
-or `ClosedPriority`. Priority media select the highest `opticalMediumPriority`
+or `ClosedPriority`. Volume caustics require the same explicit watertight, outward,
+homogeneous contract. `Unspecified` keeps its alpha/surface meaning; it does not
+prove an optical interior. With active caustic lights, an unsupported refractive
+volume prevents that photon producer and emits a diagnostic when its scene
+signature changes; unrelated reflection, refraction and shadow effects retain
+their own admission. Refraction-only and ordinary transparent-shadow fixtures
+disable caustics explicitly, while the closed caustic sphere and CSG slab
+fixtures author their volume mode. Priority media select the highest `opticalMediumPriority`
 and then the smallest full entity ID. This is independent of
 `opticalVolumePriority`, which selects a duplicate representative.
 `IdenticalMaterial` and `SharedGroup` coincidence opt-ins retain their existing

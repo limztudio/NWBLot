@@ -151,7 +151,7 @@ NWB_INLINE TransparentDrawPushConstants BuildTransparentDrawPushConstants(
     const bool hdr10OutputActive,
     const u32 csgContextHeapSlot = 0u,
     const bool refractionCapture = false
-){
+)noexcept{
     TransparentDrawPushConstants pushConstants;
     pushConstants.mesh = BuildShaderDrivenPushConstants(meshletCount, instanceIndex, materialConstantByteOffset, viewportState, frameHeapSlots, dispatchFlags);
     pushConstants.avboit = BuildRendererAvboitPushConstants(targets, hdr10OutputActive);

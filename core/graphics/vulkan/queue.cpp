@@ -52,6 +52,7 @@ void Queue::UpdateCommandBufferHighWater(Atomic<u64>& highWaterCount, const u64 
             return;
     }
 }
+
 Queue::Queue(const VulkanContext& context, Device& device, const GpuPhysicalQueueInfo& info, NativeQueueState& nativeQueue)
     : m_context(context)
     , m_device(device)

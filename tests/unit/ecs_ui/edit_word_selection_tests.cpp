@@ -26,18 +26,23 @@ protected:
         const SIMDVectorSingle x = VectorAdd(VectorMultiplyAddExpression(VectorReplicate(static_cast<f32>(byte)), VectorReplicate(10.0f), VectorReplicate(m_placement.textOrigin.x)), VectorSplatOne());
         return { VectorGetX(x), VectorGetX(VectorAdd(VectorReplicate(m_placement.textOrigin.y), VectorReplicate(5.0f))) };
     }
+
     [[nodiscard]] bool down(const usize byte, const u64 timestampMs, const bool shift = false){
         return dispatch({ .type = Ui::InputEventType::PrimaryDown, .position = atByte(byte), .shift = shift, .timestampMs = timestampMs });
     }
+
     [[nodiscard]] bool move(const usize byte){
         return dispatch({ .type = Ui::InputEventType::PointerMove, .position = atByte(byte) });
     }
+
     [[nodiscard]] bool up(const usize byte){
         return dispatch({ .type = Ui::InputEventType::PrimaryUp, .position = atByte(byte) });
     }
+
     [[nodiscard]] bool click(const usize byte, const u64 timestampMs, const bool shift = false){
         return down(byte, timestampMs, shift) && up(byte);
     }
+
     [[nodiscard]] bool clickAt(const Ui::Point point, const u64 timestampMs){
         return dispatch({ .type = Ui::InputEventType::PrimaryDown, .position = point, .timestampMs = timestampMs }) && dispatch({ .type = Ui::InputEventType::PrimaryUp, .position = point });
     }

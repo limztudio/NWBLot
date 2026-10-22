@@ -46,6 +46,7 @@ CommandList::GraphPublicationReadOwnership::GraphPublicationReadOwnership(const 
         }
     }
 }
+
 CommandList::GraphPublicationReadOwnership::~GraphPublicationReadOwnership()noexcept{
     if(!m_acquired)
         return;
@@ -80,6 +81,7 @@ CommandList::GraphRecordingOwnership::GraphRecordingOwnership(CommandList& comma
     if(m_acquired)
         attachCapability();
 }
+
 CommandList::GraphRecordingOwnership::~GraphRecordingOwnership()noexcept{
     release();
 }
@@ -156,6 +158,7 @@ CommandList::GraphSubmissionOwnership::GraphSubmissionOwnership(CommandList& com
         m_acquired = true;
     }
 }
+
 CommandList::GraphSubmissionOwnership::~GraphSubmissionOwnership()noexcept{
     release();
 }

@@ -19,6 +19,13 @@ namespace UniquePtrDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<typename Deleter>
+struct OwnerTransferTag{};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename T, typename Deleter>
 class Storage{
 public:
@@ -33,6 +40,7 @@ protected:
     static void AssertDefaultConstructedDeleterValid()noexcept{
         static_assert(!IsPointer<deleter_type>::value, "UniquePtr deleter default-constructed with null pointer. Use a different constructor or change your deleter to a class.");
     }
+
     static void AssertRValueDeleterValid()noexcept{
         static_assert(!IsLValueReference<deleter_type>::value, "deleter_type reference refers to an rvalue deleter. The reference will probably become invalid before used. Change the deleter_type to not be a reference or construct with permanent deleter.");
     }
@@ -49,6 +57,12 @@ protected:
     Storage(pointer pValue, DeleterArg&& deleter)noexcept
         : m_pair(pValue, Forward<DeleterArg>(deleter))
     {}
+    template<typename OtherDeleter, typename Owner>
+    Storage(Owner& owner, OwnerTransferTag<OtherDeleter>)noexcept
+        : m_pair(pointer(), deleter_type(owner.getDeleter(), owner.get()))
+    {
+        m_pair.first() = owner.release();
+    }
 
 
 public:
@@ -65,20 +79,30 @@ public:
         m_pair.first() = pointer();
         return pTemp;
     }
+
     pointer detach()noexcept{ return release(); }
 
     pointer get()const noexcept(noexcept(DeclVal<void(*)(pointer)noexcept>()(m_pair.first()))){ return m_pair.first(); }
 
     deleter_type& getDeleter()noexcept{ return m_pair.second(); }
+
     const deleter_type& getDeleter()const noexcept{ return m_pair.second(); }
 
 
 protected:
     void swapStorage(Storage& x)noexcept{ m_pair.swap(x.m_pair); }
+
     template<typename OtherDeleter, typename Owner>
     void moveAssignFrom(Owner& owner)noexcept{
-        reset(owner.release());
-        getDeleter() = Move(Forward<OtherDeleter>(owner.getDeleter()));
+        if constexpr(SmartPtrDetail::IsArenaDeleterConversion_V<OtherDeleter, deleter_type>){
+            RemoveReference_T<deleter_type> converted(owner.getDeleter(), owner.get());
+            reset(owner.release());
+            getDeleter() = Move(converted);
+        }
+        else{
+            reset(owner.release());
+            getDeleter() = Move(Forward<OtherDeleter>(owner.getDeleter()));
+        }
     }
 
 
@@ -138,6 +162,16 @@ public:
     {
         base_type::AssertRValueDeleterValid();
     }
+    template<typename U, typename E>
+    requires(SmartPtrDetail::IsArenaDeleterConversion_V<E, deleter_type> && IsConvertible_V<U*, pointer> && IsConstructible_V<deleter_type, E&, U*>)
+    UniquePtr(U* pValue, E&& deleter)noexcept
+        : base_type(static_cast<pointer>(pValue), deleter_type(deleter, pValue))
+    {}
+    template<typename E>
+    requires(SmartPtrDetail::IsArenaDeleterConversion_V<E, deleter_type> && IsConstructible_V<deleter_type, E&, std::nullptr_t>)
+    UniquePtr(std::nullptr_t, E&& deleter)noexcept
+        : base_type(pointer(), deleter_type(deleter, nullptr))
+    {}
     UniquePtr(this_type&& x)noexcept
         : base_type(x.release(), Forward<deleter_type>(x.getDeleter()))
     {}
@@ -148,28 +182,49 @@ public:
     )noexcept
         : base_type(u.release(), Forward<E>(u.getDeleter()))
     {}
+    template<typename U, typename E>
+    requires(!IsArray_V<U> && !IsReference_V<deleter_type> && IsConvertible_V<typename UniquePtr<U, E>::pointer, pointer> && SmartPtrDetail::IsArenaDeleterConversion_V<E, deleter_type> && IsConstructible_V<deleter_type, E&, typename UniquePtr<U, E>::pointer>)
+    UniquePtr(UniquePtr<U, E>&& u)noexcept
+        : base_type(u, UniquePtrDetail::OwnerTransferTag<E>{})
+    {}
     UniquePtr(const this_type&) = delete;
     ~UniquePtr()noexcept{ reset(); }
 
 
 public:
     UniquePtr& operator=(const this_type&) = delete;
+
     UniquePtr& operator=(pointer pValue) = delete;
+
     this_type& operator=(this_type&& x)noexcept{
         base_type::template moveAssignFrom<deleter_type>(x);
         return *this;
     }
+
     template<typename U, typename E>
-    typename EnableIf<!IsArray<U>::value&& IsConvertible<typename UniquePtr<U, E>::pointer, pointer>::value&& IsAssignable<deleter_type&, E&&>::value, this_type&>::type operator=(UniquePtr<U, E>&& u)noexcept{
+    typename EnableIf<
+        !IsArray<U>::value && IsConvertible<typename UniquePtr<U, E>::pointer, pointer>::value
+        && (
+            IsAssignable<deleter_type&, E&&>::value
+            || (
+                SmartPtrDetail::IsArenaDeleterConversion_V<E, deleter_type>
+                && IsConstructible_V<RemoveReference_T<deleter_type>, E&, typename UniquePtr<U, E>::pointer>
+                && IsAssignable_V<deleter_type&, RemoveReference_T<deleter_type>&&>
+            )
+        )
+        , this_type&
+    >::type operator=(UniquePtr<U, E>&& u)noexcept{
         base_type::template moveAssignFrom<E>(u);
         return *this;
     }
+
     this_type& operator=(std::nullptr_t)noexcept{
         reset();
         return *this;
     }
 
     typename AddLValueReference<T>::type operator*()const noexcept(IsPointer_V<pointer>){ return *get(); }
+
     pointer operator->()const noexcept(noexcept(get())){ return get(); }
 
     explicit operator bool()const noexcept(noexcept(DeclVal<void(*)(bool)noexcept>()((get() != pointer())))){ return (get() != pointer()); }
@@ -225,21 +280,26 @@ public:
         : base_type(u.release(), Forward<E>(u.getDeleter()))
     {}
     UniquePtr(const this_type&) = delete;
+
     ~UniquePtr()noexcept{ reset(); }
 
 
 public:
     UniquePtr& operator=(const this_type&) = delete;
+
     UniquePtr& operator=(pointer pArray) = delete;
+
     this_type& operator=(this_type&& x)noexcept{
         base_type::template moveAssignFrom<deleter_type>(x);
         return *this;
     }
+
     template<typename U, typename E>
     typename EnableIf<SmartPtrDetail::IsSafeArrayConversion<T, pointer, U, typename UniquePtr<U, E>::pointer>::value&& IsAssignable<deleter_type&, E&&>::value, this_type&>::type operator=(UniquePtr<U, E>&& u)noexcept{
         base_type::template moveAssignFrom<E>(u);
         return *this;
     }
+
     this_type& operator=(std::nullptr_t)noexcept{
         reset();
         return *this;
@@ -293,7 +353,9 @@ public:
 
 public:
     NotNullUniquePtr& operator=(NotNullUniquePtr&&)noexcept = default;
+
     NotNullUniquePtr& operator=(const NotNullUniquePtr&) = delete;
+
     NotNullUniquePtr& operator=(std::nullptr_t) = delete;
 
     typename AddLValueReference<element_type>::type operator*()const noexcept(noexcept(*m_owner)){
@@ -320,11 +382,12 @@ private:
 
 
 template<typename T, typename... Args>
-inline typename EnableIf<!IsArray<T>::value, UniquePtr<T>>::type MakeUnique(Args&&... args){
+inline typename EnableIf<!IsArray<T>::value, UniquePtr<T>>::type MakeUnique(Args&&... args)noexcept(noexcept(UniquePtr<T>(new T(Forward<Args>(args)...)))){
     return UniquePtr<T>(new T(Forward<Args>(args)...));
 }
+
 template<typename T>
-inline typename EnableIf<IsUnboundedArray<T>::value, UniquePtr<T>>::type MakeUnique(usize n){
+inline typename EnableIf<IsUnboundedArray<T>::value, UniquePtr<T>>::type MakeUnique(usize n)noexcept(noexcept(UniquePtr<T>(new typename RemoveExtent<T>::type[n]))){
     typedef typename RemoveExtent<T>::type TBase;
     return UniquePtr<T>(new TBase[n]);
 }
@@ -339,6 +402,7 @@ template<typename T, typename... Args>
 inline typename EnableIf<!IsArray<T>::value, std::unique_ptr<T>>::type MakeStdUnique(Args&&... args){
     return std::make_unique<T>(Forward<Args>(args)...);
 }
+
 template<typename T>
 inline typename EnableIf<IsUnboundedArray<T>::value, std::unique_ptr<T>>::type MakeStdUnique(usize n){
     return std::make_unique<T>(n);

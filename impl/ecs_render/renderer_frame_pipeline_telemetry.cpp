@@ -194,10 +194,22 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
         const SIMDVectorDouble millisecondsScale = VectorDoubleReplicate(__hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry);
         const SIMDVectorDouble frameTimingMs = VectorDoubleMultiply(VectorDoubleSet(compileStatistics.declarationSeconds, compileStatistics.totalSeconds, recordingStatistics.recordingElapsedSeconds, submissionStatistics.submissionSeconds), millisecondsScale);
         const SIMDVectorDouble compileTimingMs = VectorDoubleMultiply(VectorDoubleSet(compileStatistics.analysisSeconds, compileStatistics.queueAssignmentSeconds, compileStatistics.planningSeconds, compileStatistics.validationSeconds), millisecondsScale);
-        const SIMDVectorDouble analysisPlanningTimingMs = VectorDoubleMultiply(VectorDoubleSet(compileStatistics.dependencyAnalysisSeconds, compileStatistics.hazardAnalysisSeconds, compileStatistics.topologicalOrderSeconds, compileStatistics.packetizationSeconds), millisecondsScale);
-        const SIMDVectorDouble planningRecordingTimingMs = VectorDoubleMultiply(VectorDoubleSet(compileStatistics.resourceStatePlanningSeconds, compileStatistics.packetDependencyPlanningSeconds, recordingStatistics.recordingSeconds, recordingStatistics.commandListAcquisitionSeconds), millisecondsScale);
-        const SIMDVectorDouble recordingFrontierTimingMs = VectorDoubleMultiply(VectorDoubleSet(recordingStatistics.graphBarrierRecordingSeconds, recordingStatistics.taskRecordSeconds, recordingStatistics.readyFrontierElapsedSeconds, recordingStatistics.readyFrontierWorkerBusySeconds), millisecondsScale);
-        const SIMDVectorDouble frontierCapacityMsAndPercent = VectorDoubleMultiply(VectorDoubleSelect(VectorDoubleSet(recordingStatistics.readyFrontierWorkerCapacitySeconds, 0.0, 0.0, 0.0), recordingStatistics.readyFrontierWorkerUtilization(), s_DoubleSIMDMaskY), VectorDoubleSet(__hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry, __hidden_frame_graph_export::s_PercentScaleTelemetry, 1.0, 1.0));
+        const SIMDVectorDouble analysisPlanningTimingMs = VectorDoubleMultiply(
+            VectorDoubleSet(compileStatistics.dependencyAnalysisSeconds, compileStatistics.hazardAnalysisSeconds, compileStatistics.topologicalOrderSeconds, compileStatistics.packetizationSeconds),
+            millisecondsScale
+        );
+        const SIMDVectorDouble planningRecordingTimingMs = VectorDoubleMultiply(
+            VectorDoubleSet(compileStatistics.resourceStatePlanningSeconds, compileStatistics.packetDependencyPlanningSeconds, recordingStatistics.recordingSeconds, recordingStatistics.commandListAcquisitionSeconds),
+            millisecondsScale
+        );
+        const SIMDVectorDouble recordingFrontierTimingMs = VectorDoubleMultiply(
+            VectorDoubleSet(recordingStatistics.graphBarrierRecordingSeconds, recordingStatistics.taskRecordSeconds, recordingStatistics.readyFrontierElapsedSeconds, recordingStatistics.readyFrontierWorkerBusySeconds),
+            millisecondsScale
+        );
+        const SIMDVectorDouble frontierCapacityMsAndPercent = VectorDoubleMultiply(
+            VectorDoubleSelect(VectorDoubleSet(recordingStatistics.readyFrontierWorkerCapacitySeconds, 0.0, 0.0, 0.0), recordingStatistics.readyFrontierWorkerUtilization(), s_DoubleSIMDMaskY),
+            VectorDoubleSet(__hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry, __hidden_frame_graph_export::s_PercentScaleTelemetry, 1.0, 1.0)
+        );
         StringAppendFormat(
             m_frameGraphRendererLabel,
             "Renderer Frame\n"
@@ -309,7 +321,10 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
                 continue;
 
             const SIMDVectorDouble queueSubmissionAndRecordingMs = VectorDoubleMultiply(VectorDoubleSet(queueStatistics.submissionSeconds, queueRecordingStatistics.recordingSeconds, 0.0, 0.0), millisecondsScale);
-            const SIMDVectorDouble queueRecordingBreakdownMs = VectorDoubleMultiply(VectorDoubleSet(queueRecordingStatistics.commandListAcquisitionSeconds, queueRecordingStatistics.graphBarrierRecordingSeconds, queueRecordingStatistics.taskRecordSeconds, 0.0), millisecondsScale);
+            const SIMDVectorDouble queueRecordingBreakdownMs = VectorDoubleMultiply(
+                VectorDoubleSet(queueRecordingStatistics.commandListAcquisitionSeconds, queueRecordingStatistics.graphBarrierRecordingSeconds, queueRecordingStatistics.taskRecordSeconds, 0.0),
+                millisecondsScale
+            );
             StringAppendFormat(
                 m_frameGraphRendererLabel,
                 "\nPhysical queue index={} generation={} class={} family index={} native queue index={} dedicated={}: accepted packets={} accepted tasks={} rejected packets={} rejected tasks={} native submissions={} rejected submit paths={} command lists={} planned waits={} same-queue elisions={} timeline waits={} merged timeline waits={} inherited wait elisions={} accepted frontier={} recovery submissions={} CPU={:.3f} ms"

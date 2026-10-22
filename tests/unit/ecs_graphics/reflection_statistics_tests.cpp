@@ -31,7 +31,7 @@ using namespace NWB::Impl;
 
 struct StatisticsContext{
     Core::Alloc::GlobalArena arena{Name("tests/reflection/statistics")};
-    ReflectionStatisticsControlHandle control = CreateReflectionStatisticsControl(arena, 7u);
+    ReflectionStatisticsControlHandle control = CreateReflectionStatisticsControl(arena, 7u).value_or(ReflectionStatisticsControlHandle{});
 };
 
 [[nodiscard]] ReflectionStatistics Metadata(const u32 frameIndex = 9u)noexcept{
@@ -95,6 +95,7 @@ TEST(ReflectionStatistics, RingSkipsWhenThreeReservationsAreOutstanding){
 
 TEST(ReflectionStatistics, DiscardedReservationCanBeReusedWithoutStaleCallbackMutation){
     StatisticsContext context;
+    ASSERT_TRUE(context.control);
     const auto previous = context.control->reserve(Metadata());
     context.control->discard(previous);
     const auto current = context.control->reserve(Metadata(10u));
@@ -113,6 +114,7 @@ TEST(ReflectionStatistics, PublishesFrozenMetadataAndNonzeroCountersOnlyAtComple
     const bool variants[] = {false, true};
     for(const bool csgHardwareEnabled : variants){
         StatisticsContext context;
+        ASSERT_TRUE(context.control);
         ReflectionStatistics metadata = Metadata();
         metadata.csgHardwareEnabled = csgHardwareEnabled;
         const auto key = context.control->reserve(metadata);
@@ -140,6 +142,7 @@ TEST(ReflectionStatistics, PublishesFrozenMetadataAndNonzeroCountersOnlyAtComple
 
 TEST(ReflectionStatistics, FeedbackEpochSurvivesAcceptedInputMutation){
     StatisticsContext context;
+    ASSERT_TRUE(context.control);
     ReflectionStatistics metadata = Metadata();
     metadata.feedbackRequested = true;
     metadata.feedbackSequence = 12u;
@@ -165,6 +168,7 @@ TEST(ReflectionStatistics, FeedbackEpochSurvivesAcceptedInputMutation){
 
 TEST(ReflectionStatistics, OlderCompletionsCannotReplaceNewerPublishedWork){
     StatisticsContext context;
+    ASSERT_TRUE(context.control);
     const auto older = context.control->reserve(Metadata(10u));
     const auto newer = context.control->reserve(Metadata(11u));
     context.control->accept(older, Token(20u), true);
@@ -183,6 +187,7 @@ TEST(ReflectionStatistics, OlderCompletionsCannotReplaceNewerPublishedWork){
 
 TEST(ReflectionStatistics, CompletionRequiresExactAcceptedPhysicalToken){
     StatisticsContext context;
+    ASSERT_TRUE(context.control);
     const auto key = context.control->reserve(Metadata());
     context.control->accept(key, Token(), true);
     const u32 counters[NWB_REFLECTION_COUNTER_SIZE / sizeof(u32)] = {};
@@ -202,6 +207,7 @@ TEST(ReflectionStatistics, CompletionRequiresExactAcceptedPhysicalToken){
 
 TEST(ReflectionStatistics, ResetRejectsOldCallbacksAndClearsPublication){
     StatisticsContext context;
+    ASSERT_TRUE(context.control);
     const auto previous = context.control->reserve(Metadata());
     context.control->accept(previous, Token(), true);
     const u32 counters[NWB_REFLECTION_COUNTER_SIZE / sizeof(u32)] = {};
@@ -226,6 +232,7 @@ TEST(ReflectionStatistics, ResetRejectsOldCallbacksAndClearsPublication){
 
 TEST(ReflectionStatistics, FailedMappingRetiresSlotWithoutPublishingZeros){
     StatisticsContext context;
+    ASSERT_TRUE(context.control);
     const auto key = context.control->reserve(Metadata());
     context.control->accept(key, Token(), true);
     context.control->complete(key, Token(), nullptr);
@@ -235,6 +242,7 @@ TEST(ReflectionStatistics, FailedMappingRetiresSlotWithoutPublishingZeros){
 
 TEST(ReflectionStatistics, InvalidAcceptedTokenQuarantinesSlotUntilReset){
     StatisticsContext context;
+    ASSERT_TRUE(context.control);
     const auto key = context.control->reserve(Metadata());
     context.control->accept(key, {}, true);
     context.control->discard(key);
@@ -248,6 +256,7 @@ TEST(ReflectionStatistics, InvalidAcceptedTokenQuarantinesSlotUntilReset){
 
 TEST(ReflectionStatistics, LeaseDestructionReclaimsAnUnregisteredReservation){
     StatisticsContext context;
+    ASSERT_TRUE(context.control);
     u32 index = 0u;
     {
         ReflectionStatisticsReservation lease(context.control, Metadata());
@@ -259,6 +268,7 @@ TEST(ReflectionStatistics, LeaseDestructionReclaimsAnUnregisteredReservation){
 
 TEST(ReflectionStatistics, MovingLeaseTransfersOwnershipAndReclaimsAssignmentDestination){
     StatisticsContext context;
+    ASSERT_TRUE(context.control);
     ReflectionStatisticsReservation first(context.control, Metadata());
     const u32 firstSlot = first.slotIndex();
     ReflectionStatisticsReservation second(Move(first));
@@ -274,6 +284,7 @@ TEST(ReflectionStatistics, MovingLeaseTransfersOwnershipAndReclaimsAssignmentDes
 
 TEST(ReflectionStatistics, AcceptedLeaseRemainsInFlightAfterPayloadDestruction){
     StatisticsContext context;
+    ASSERT_TRUE(context.control);
     u32 index = 0u;
     {
         ReflectionStatisticsReservation lease(context.control, Metadata());
@@ -290,6 +301,7 @@ TEST(ReflectionStatistics, AcceptedLeaseRemainsInFlightAfterPayloadDestruction){
 
 TEST(ReflectionStatistics, RejectedGraphRegistrationReleasesLease){
     StatisticsContext context;
+    ASSERT_TRUE(context.control);
     Core::GpuTaskGraph graph(context.arena);
     const auto task = graph.addTask<LeaseTask>(Core::GpuTaskDesc{}, LeaseTask::Payload{ReflectionStatisticsReservation(context.control, Metadata())});
     EXPECT_FALSE(task.has_value());
@@ -298,6 +310,7 @@ TEST(ReflectionStatistics, RejectedGraphRegistrationReleasesLease){
 
 TEST(ReflectionStatistics, GraphResetDiscardsUnrecordedReservations){
     StatisticsContext context;
+    ASSERT_TRUE(context.control);
     Core::GpuTaskGraph graph(context.arena);
     {
         const auto gpuAdmissionAt300 = graph.addTask<LeaseTask>(TaskDesc(), LeaseTask::Payload{ReflectionStatisticsReservation(context.control, Metadata())});
@@ -310,6 +323,7 @@ TEST(ReflectionStatistics, GraphResetDiscardsUnrecordedReservations){
 
 TEST(ReflectionStatistics, PayloadDestructionReclaimsLeaseWithoutDiscardCallback){
     StatisticsContext context;
+    ASSERT_TRUE(context.control);
     Core::GpuTaskGraph graph(context.arena);
     {
         const auto gpuAdmissionAt308 = graph.addTask<DestructorLeaseTask>(TaskDesc(), DestructorLeaseTask::Payload{ReflectionStatisticsReservation(context.control, Metadata())});

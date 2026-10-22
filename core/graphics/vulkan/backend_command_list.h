@@ -196,10 +196,12 @@ public:
         const GraphPublicationReadOwnership ownership(*this);
         return ownership.m_readable ? recordingLeaseSerialUnchecked() : 0u;
     }
+
     [[nodiscard]] bool matchesRecordingLease(u64 serial)const noexcept{
         const GraphPublicationReadOwnership ownership(*this);
         return ownership.m_readable && matchesRecordingLeaseUnchecked(serial);
     }
+
     [[nodiscard]] bool isRenderPassActive()const noexcept{
         const GraphPublicationReadOwnership ownership(*this);
         return ownership.m_readable && m_renderPassActive;
@@ -310,15 +312,21 @@ public:
     [[nodiscard]] bool hasExplicitBufferState(Buffer* buffer, BufferRange range = s_EntireBuffer, bool requireKnown = false)const noexcept;
 
     Device& getDevice()noexcept{ return m_device; }
+
     const CommandListParameters& getDescription()noexcept{ return m_desc; }
+
     [[nodiscard]] CommandListParameters getResolvedDescription()const noexcept{ return m_creationDesc; }
 
 private:
     [[nodiscard]] bool publicCommandStateAccessible()const noexcept;
     [[nodiscard]] bool hasCommandBufferUnchecked()const noexcept{ return matchesNativeLeaseIdentity(); }
+
     [[nodiscard]] bool isRecordingUnchecked()const noexcept{ return m_isRecording && matchesNativeLeaseIdentity(); }
+
     [[nodiscard]] bool commandRecordingFailedUnchecked()const noexcept{ return m_commandRecordingFailed; }
+
     [[nodiscard]] u64 recordingLeaseSerialUnchecked()const noexcept{ return m_recordingLeaseSerial; }
+
     [[nodiscard]] bool matchesRecordingLeaseUnchecked(u64 serial)const noexcept{
         return serial != 0u && serial == m_recordingLeaseSerial && matchesActiveNativeLeaseIdentity();
     }
@@ -422,7 +430,8 @@ private:
         usize numInstances,
         RayTracingAccelStructBuildFlags::Mask buildFlags,
         VkBuildAccelerationStructureFlagsKHR vkBuildFlags,
-        TStringView operationName
+        TStringView operationName,
+        const RayTracingInstanceDesc* instances = nullptr
     );
     [[nodiscard]] CommandMarkerRecordingToken beginMarkerLease(const AStringView name);
     [[nodiscard]] bool endMarkerLease(const CommandMarkerRecordingToken& token);

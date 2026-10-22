@@ -111,7 +111,7 @@ struct RtSceneBvhState{
     // One context-slot descriptor shared by all ray-tracing effects.
     Core::GpuDescriptorHandle m_rayTraceMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::Invalid();
     // Previous-frame transform for soft-shadow reprojection; invalid after target recreation.
-    Float44U m_prevWorldToClip = {};
+    Float44 m_prevWorldToClip = {};
 
     bool m_tlasStaticSceneHashValid = false;
     bool m_sceneSwBvhStaticSceneHashValid = false;
@@ -174,8 +174,8 @@ struct RtShadowState{
     Core::BufferHandle m_swShadowEdgeListBuffer;
     Core::BufferHandle m_swShadowIndirectArgsBuffer;
 
-    // CSG ray readers may occupy several physical transports in one queue class.
-    Vector<Core::QueueSubmissionToken, Core::Alloc::GlobalArena> m_csgTraceContextReadSubmissionTokens;
+    // Shared selector and optical readers may occupy several physical transports in one queue class.
+    Vector<Core::QueueSubmissionToken, Core::Alloc::GlobalArena> m_rayTraceContextReadSubmissionTokens;
     // HW distinct meshes and heap views shared with caustic/GI.
     Vector<NotNull<Core::Buffer*>, Core::Alloc::GlobalArena> m_shadowMeshIndexBuffers;
     Vector<NotNull<Core::Buffer*>, Core::Alloc::GlobalArena> m_shadowMeshAttributeBuffers;
@@ -218,7 +218,7 @@ struct RtShadowState{
 public:
     // Arena-backed tables and caches must be constructed with the renderer arena.
     explicit RtShadowState(Core::Alloc::GlobalArena& arena)
-        : m_csgTraceContextReadSubmissionTokens(arena)
+        : m_rayTraceContextReadSubmissionTokens(arena)
         , m_shadowMeshIndexBuffers(arena)
         , m_shadowMeshAttributeBuffers(arena)
         , m_shadowMeshPositionBuffers(arena)

@@ -91,6 +91,7 @@ public:
     [[nodiscard]] constexpr u32 slot()const noexcept{ return value & s_SlotMask; }
 };
 inline constexpr bool operator==(const GpuDescriptorHandle lhs, const GpuDescriptorHandle rhs)noexcept{ return lhs.value == rhs.value; }
+
 inline constexpr bool operator!=(const GpuDescriptorHandle lhs, const GpuDescriptorHandle rhs)noexcept{ return lhs.value != rhs.value; }
 static constexpr usize s_GpuDescriptorHandleByteSize = 4;
 static_assert(sizeof(GpuDescriptorHandle) == s_GpuDescriptorHandleByteSize, "GpuDescriptorHandle is supposed to be a single 32-bit word");
@@ -149,7 +150,9 @@ struct GpuDescriptorHeapDesc{
 
 public:
     constexpr GpuDescriptorHeapDesc& setResourceCapacity(u32 value)noexcept{ resourceCapacity = value; return *this; }
+
     constexpr GpuDescriptorHeapDesc& setSamplerCapacity(u32 value)noexcept{ samplerCapacity = value; return *this; }
+
     constexpr GpuDescriptorHeapDesc& setBindlessHeapAbi(const GpuDescriptorHeapAbi& value)noexcept{ bindlessHeapAbi = value; return *this; }
 };
 
@@ -213,6 +216,7 @@ public:
 
 public:
     GpuDescriptorRetirementGuard& operator=(const GpuDescriptorRetirementGuard&) = delete;
+
     GpuDescriptorRetirementGuard& operator=(GpuDescriptorRetirementGuard&&) = delete;
 
 

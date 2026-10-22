@@ -191,21 +191,37 @@ struct TextureDesc{
 
 public:
     constexpr TextureDesc& setWidth(u32 v)noexcept{ width = v; return *this; }
+
     constexpr TextureDesc& setHeight(u32 v)noexcept{ height = v; return *this; }
+
     constexpr TextureDesc& setDepth(u32 v)noexcept{ depth = v; return *this; }
+
     constexpr TextureDesc& setArraySize(u32 v)noexcept{ arraySize = v; return *this; }
+
     constexpr TextureDesc& setMipLevels(u32 v)noexcept{ mipLevels = v; return *this; }
+
     constexpr TextureDesc& setSampleCount(u32 v)noexcept{ sampleCount = v; return *this; }
+
     constexpr TextureDesc& setFormat(Format::Enum v)noexcept{ format = v; return *this; }
+
     constexpr TextureDesc& setDimension(TextureDimension::Enum v)noexcept{ dimension = v; return *this; }
+
     constexpr TextureDesc& setName(const Name& v)noexcept{ name = v; return *this; }
+
     constexpr TextureDesc& setInRenderTarget(bool v)noexcept{ isRenderTarget = v; return *this; }
+
     constexpr TextureDesc& setInUAV(bool v)noexcept{ isUAV = v; return *this; }
+
     constexpr TextureDesc& setInTypeless(bool v)noexcept{ isTypeless = v; return *this; }
+
     constexpr TextureDesc& setClearValue(const Color& v)noexcept{ clearValue = v; useClearValue = true; return *this; }
+
     constexpr TextureDesc& setUseClearValue(bool v)noexcept{ useClearValue = v; return *this; }
+
     constexpr TextureDesc& setInitialState(ResourceStates::Mask v)noexcept{ initialState = v; return *this; }
+
     constexpr TextureDesc& setKeepInitialState(bool v)noexcept{ keepInitialState = v; return *this; }
+
     constexpr TextureDesc& setQueueSharing(ResourceQueueSharing::Mask v)noexcept{ queueSharing = v; return *this; }
 };
 
@@ -230,11 +246,17 @@ public:
     [[nodiscard]] TextureSlice resolve(u32 mipWidth, u32 mipHeight, u32 mipDepth)const noexcept;
 
     constexpr TextureSlice& setOrigin(u32 vx = 0, u32 vy = 0, u32 vz = 0)noexcept{ x = vx; y = vy; z = vz; return *this; }
+
     constexpr TextureSlice& setWidth(u32 value)noexcept{ width = value; return *this; }
+
     constexpr TextureSlice& setHeight(u32 value)noexcept{ height = value; return *this; }
+
     constexpr TextureSlice& setDepth(u32 value)noexcept{ depth = value; return *this; }
+
     constexpr TextureSlice& setSize(u32 vx = s_AllDimensions, u32 vy = s_AllDimensions, u32 vz = s_AllDimensions)noexcept{ width = vx; height = vy; depth = vz; return *this; }
+
     constexpr TextureSlice& setMipLevel(MipLevel level)noexcept{ mipLevel = level; return *this; }
+
     constexpr TextureSlice& setArraySlice(ArraySlice slice)noexcept{ arraySlice = slice; return *this; }
 };
 
@@ -314,6 +336,7 @@ public:
 inline bool operator==(const TextureSubresourceSet& lhs, const TextureSubresourceSet& rhs)noexcept{
     return lhs.baseMipLevel == rhs.baseMipLevel && lhs.numMipLevels == rhs.numMipLevels && lhs.baseArraySlice == rhs.baseArraySlice && lhs.numArraySlices == rhs.numArraySlices;
 }
+
 inline bool operator!=(const TextureSubresourceSet& lhs, const TextureSubresourceSet& rhs)noexcept{ return !(lhs == rhs); }
 
 inline constexpr auto s_AllSubresources = TextureSubresourceSet(0, TextureSubresourceSet::s_AllMipLevels, 0, TextureSubresourceSet::s_AllArraySlices);
@@ -338,11 +361,17 @@ struct VertexAttributeDesc{
 
 public:
     constexpr VertexAttributeDesc& setFormat(Format::Enum value)noexcept{ format = value; return *this; }
+
     constexpr VertexAttributeDesc& setArraySize(u32 value)noexcept{ arraySize = value; return *this; }
+
     constexpr VertexAttributeDesc& setBufferIndex(u32 value)noexcept{ bufferIndex = value; return *this; }
+
     constexpr VertexAttributeDesc& setOffset(u32 value)noexcept{ offset = value; return *this; }
+
     constexpr VertexAttributeDesc& setElementStride(u32 value)noexcept{ elementStride = value; return *this; }
+
     constexpr VertexAttributeDesc& setName(const Name& value)noexcept{ name = value; return *this; }
+
     constexpr VertexAttributeDesc& setIsInstanced(bool value)noexcept{ isInstanced = value; return *this; }
 };
 
@@ -384,25 +413,45 @@ struct BufferDesc{
 
 public:
     constexpr BufferDesc& setByteSize(u64 value)noexcept{ byteSize = value; return *this; }
+
     constexpr BufferDesc& setStructStride(u32 value)noexcept{ structStride = value; return *this; }
+
     constexpr BufferDesc& setMaxVersions(u32 value)noexcept{ maxVersions = value; return *this; }
+
     constexpr BufferDesc& setFormat(Format::Enum value)noexcept{ format = value; return *this; }
+
     constexpr BufferDesc& setDebugName(const Name& value)noexcept{ debugName = value; return *this; }
+
     constexpr BufferDesc& setCanHaveUAVs(bool value)noexcept{ canHaveUAVs = value; return *this; }
+
     constexpr BufferDesc& setCanHaveTypedViews(bool value)noexcept{ canHaveTypedViews = value; return *this; }
+
     constexpr BufferDesc& setCanHaveRawViews(bool value)noexcept{ canHaveRawViews = value; return *this; }
+
     constexpr BufferDesc& setIsVertexBuffer(bool value)noexcept{ isVertexBuffer = value; return *this; }
+
     constexpr BufferDesc& setIsIndexBuffer(bool value)noexcept{ isIndexBuffer = value; return *this; }
+
     constexpr BufferDesc& setIsConstantBuffer(bool value)noexcept{ isConstantBuffer = value; return *this; }
+
     constexpr BufferDesc& setIsDrawIndirectArgs(bool value)noexcept{ isDrawIndirectArgs = value; return *this; }
+
     constexpr BufferDesc& setIsAccelStructBuildInput(bool value)noexcept{ isAccelStructBuildInput = value; return *this; }
+
     constexpr BufferDesc& setIsAccelStructStorage(bool value)noexcept{ isAccelStructStorage = value; return *this; }
+
     constexpr BufferDesc& setIsShaderBindingTable(bool value)noexcept{ isShaderBindingTable = value; return *this; }
+
     constexpr BufferDesc& setIsVolatile(bool value)noexcept{ isVolatile = value; return *this; }
+
     constexpr BufferDesc& setIsVirtual(bool value)noexcept{ isVirtual = value; return *this; }
+
     constexpr BufferDesc& setInitialState(ResourceStates::Mask value)noexcept{ initialState = value; return *this; }
+
     constexpr BufferDesc& setKeepInitialState(bool value)noexcept{ keepInitialState = value; return *this; }
+
     constexpr BufferDesc& setQueueSharing(ResourceQueueSharing::Mask value)noexcept{ queueSharing = value; return *this; }
+
     constexpr BufferDesc& setCpuAccess(CpuAccessMode::Enum value)noexcept{ cpuAccess = value; return *this; }
 
     // Equivalent to .setInitialState(initialStateValue).setKeepInitialState(true)
@@ -439,10 +488,13 @@ public:
     [[nodiscard]] constexpr bool hasExtent()const noexcept{
         return byteSize != 0u && byteOffset < s_AllBytes && (byteSize == s_AllBytes || byteSize <= s_AllBytes - byteOffset);
     }
+
     [[nodiscard]] constexpr u64 end()const noexcept{ return byteSize == s_AllBytes ? s_AllBytes : byteOffset + byteSize; }
+
     [[nodiscard]] constexpr bool overlaps(const BufferRange& other)const noexcept{
         return hasExtent() && other.hasExtent() && byteOffset < other.end() && other.byteOffset < end();
     }
+
     [[nodiscard]] constexpr bool contains(const BufferRange& other)const noexcept{
         return hasExtent() && other.hasExtent() && byteOffset <= other.byteOffset && end() >= other.end();
     }
@@ -451,6 +503,7 @@ public:
 
 
     constexpr BufferRange& setByteOffset(u64 value)noexcept{ byteOffset = value; return *this; }
+
     constexpr BufferRange& setByteSize(u64 value)noexcept{ byteSize = value; return *this; }
 };
 

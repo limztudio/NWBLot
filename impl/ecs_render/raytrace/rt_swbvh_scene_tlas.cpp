@@ -186,7 +186,12 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
             instanceDesc.setFlags(Core::RayTracingInstanceFlags::ForceOpaque);
 
         const bool transparent = (instanceMaterial.flags & RtInstanceMaterialFlag::Transparent) != 0u;
-        instanceDesc.setInstanceMask(NWB_RT_OPTICAL_BASE_INSTANCE_MASK | NWB_RT_SHADOW_BASE_INSTANCE_MASK | (transparent ? NWB_RT_OPTICAL_TRANSPARENT_INSTANCE_MASK | NWB_RT_SHADOW_TRANSPARENT_INSTANCE_MASK : 0u));
+        const bool refractive = (instanceMaterial.flags & RtInstanceMaterialFlag::Refractive) != 0u;
+        instanceDesc.setInstanceMask(
+            NWB_RT_OPTICAL_BASE_INSTANCE_MASK | NWB_RT_SHADOW_BASE_INSTANCE_MASK
+            | (transparent ? NWB_RT_OPTICAL_TRANSPARENT_INSTANCE_MASK | NWB_RT_SHADOW_TRANSPARENT_INSTANCE_MASK : 0u)
+            | (refractive ? NWB_RT_REFRACTIVE_INSTANCE_MASK : 0u)
+        );
         const SIMDMatrix objectToWorld = LoadFloat(instanceDesc.transform);
         const SIMDVectorSingle localMin = LoadFloatInt(meshResult->meshResources.csgLocalBounds.minBounds);
         const SIMDVectorSingle localMax = LoadFloatInt(meshResult->meshResources.csgLocalBounds.maxBounds);

@@ -31,7 +31,9 @@ public:
 
 public:
     [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ observeCallback(); return generation; }
+
     [[nodiscard]] virtual u64 revision()const noexcept override{ observeCallback(); return contentRevision; }
+
     [[nodiscard]] virtual u64 rowCount()const noexcept override{ observeCallback(); return count; }
 
     [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{

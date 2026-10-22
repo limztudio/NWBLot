@@ -41,13 +41,17 @@ public:
 
 public:
     [[nodiscard]] const BindingLayoutDesc* getDescription()const noexcept{ return m_isBindless ? nullptr : &m_desc; }
+
     [[nodiscard]] const BindlessLayoutDesc* getBindlessDesc()const noexcept{ return m_isBindless ? &m_bindlessDesc : nullptr; }
 
 public:
     // Descriptor-buffer metadata; layouts must be pure resource or sampler sets.
     [[nodiscard]] bool isDescriptorBufferCompatible()const noexcept{ return m_descriptorBufferCompatible; }
+
     [[nodiscard]] u32 getDescriptorBufferSetSizeBytes()const noexcept{ return m_descriptorBufferSetSizeBytes; }
+
     [[nodiscard]] DescriptorBufferSegmentKind::Enum getDescriptorBufferSegmentKind()const noexcept{ return m_descriptorBufferSegmentKind; }
+
     [[nodiscard]] const HashMap<u32, u32, Alloc::GlobalArena, Hasher<u32>, EqualTo<u32>>& getDescriptorBufferBindingOffsets()const noexcept{ return m_descriptorBufferBindingOffsets; }
 
 
@@ -87,9 +91,13 @@ public:
 
 public:
     [[nodiscard]] const RayTracingAccelStructDesc& getDescription()const noexcept{ return m_desc; }
+
     [[nodiscard]] ResourceQueueSharing::Mask getCreationQueueSharing()const noexcept{ return m_creationQueueSharing; }
+
     [[nodiscard]] bool queueSharingMatchesCreation()const noexcept{ return m_desc.queueSharing == m_creationQueueSharing; }
+
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
+
     [[nodiscard]] u64 getDeviceAddress()const noexcept{ return m_deviceAddress; }
     // Exposed for explicit scheduling handoffs.
     [[nodiscard]] Buffer* getBackingBuffer()const noexcept{ return m_buffer.get(); }
@@ -135,6 +143,7 @@ public:
 
 public:
     [[nodiscard]] const RayTracingOpacityMicromapDesc& getDescription()const noexcept{ return m_desc; }
+
     [[nodiscard]] u64 getDeviceAddress()const noexcept{ return m_deviceAddress; }
 
 

@@ -59,7 +59,7 @@ public:
 
 public:
     virtual void registerRuntimeMeshProvider(IRuntimeMeshProvider& provider)override;
-    virtual void unregisterRuntimeMeshProvider(IRuntimeMeshProvider& provider)override;
+    virtual void unregisterRuntimeMeshProvider(IRuntimeMeshProvider& provider)noexcept override;
 
 
 private:

@@ -60,6 +60,7 @@
 #include <global/compile.h>
 #include <global/algorithm.h>
 #include <global/not_null.h>
+#include <global/span.h>
 #include <global/text_utils.h>
 
 
@@ -521,7 +522,7 @@ struct RenderableRayTracingMeshResources{
 [[nodiscard]] bool EnsureHeapBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, Core::GpuDescriptorClass::Enum descriptorClass, bool writable, Core::GpuDescriptorHandle& inOutHandle);
 [[nodiscard]] bool ReplaceHeapBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, Core::GpuDescriptorClass::Enum descriptorClass, bool writable, Core::GpuDescriptorHandle& inOutHandle);
 void RetireHeapHandle(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle& handle);
-u32 BuildSceneBvhNode(NotNull<u32*> indices, const u32 lo, const u32 hi, NotNull<const SceneBvhPrimitiveCalculation*> primitiveBounds, Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena>& nodes, const NotNull<const u32*> instanceLeafCost);
+u32 BuildSceneBvhNode(const Span<u32> indices, const u32 lo, const u32 hi, const Span<const SceneBvhPrimitiveCalculation> primitiveBounds, Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena>& nodes, const Span<const u32> instanceLeafCost);
 [[nodiscard]] NwbRtInstanceMaterialGpu ResolveInstanceShadowMaterial(const MaterialSurfaceInfo& materialInfo, const u32 materialConstantByteOffset, const u32 meshInstanceIndex)noexcept;
 
 

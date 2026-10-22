@@ -33,7 +33,9 @@ public:
 
 public:
     [[nodiscard]] virtual TextInputCapabilities capabilities()const noexcept override{ return { true, true, true, true }; }
+
     [[nodiscard]] TextInputAdmission::Enum commit(const AStringView text){ return emitCommit(activeSession(), text); }
+
     [[nodiscard]] TextInputAdmission::Enum preedit(const AStringView text, const usize anchor, const usize caret){
         return emitPreedit(activeSession(), text, anchor, caret, false);
     }

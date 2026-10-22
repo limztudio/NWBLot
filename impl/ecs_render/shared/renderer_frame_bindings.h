@@ -41,6 +41,7 @@ namespace ECSRenderDetail{
 
     public:
         [[nodiscard]] bool valid()const noexcept{ return static_cast<bool>(buffer); }
+
         [[nodiscard]] bool bindingValid()const noexcept{
             return buffer && heapHandle.valid() && heapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer;
         }
@@ -69,6 +70,7 @@ namespace ECSRenderDetail{
                 && materialTypedHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
             ;
         }
+
         [[nodiscard]] bool matches(const MaterialPassBufferSnapshot& materialBuffers, const Core::BufferHandle& meshViewBuffer)const noexcept{
             return
                 bindingValid()
@@ -79,6 +81,7 @@ namespace ECSRenderDetail{
                 && materialTypedBufferCapacity == materialBuffers.materialTypedBufferCapacity
             ;
         }
+
         [[nodiscard]] bool frameReady(const usize instanceCount, const usize materialTypedByteCount)const noexcept{
             if(materialTypedByteCount == 0u || (materialTypedByteCount & (sizeof(u32) - 1u)) != 0u)
                 return false;

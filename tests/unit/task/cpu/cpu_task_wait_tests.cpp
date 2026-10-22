@@ -657,7 +657,7 @@ TEST(CpuTaskWaitTests, RecycledPositivePrerequisiteSlotsDoNotAdmitUnrelatedWork)
             const auto cpuAdmission200 = scheduler.submit([&]()noexcept{ ++unrelated; });
             ASSERT_TRUE(cpuAdmission200);
             recycled =*cpuAdmission200;
-         });
+        });
         producer.join();
         EXPECT_TRUE(recycled.valid());
         EXPECT_EQ(recycled.index, positive.index);

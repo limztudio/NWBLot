@@ -70,6 +70,7 @@ struct FrameGraphReflectionResolveInputs{
     Core::GpuGraphResourceId avboitForegroundExtinction;
     Core::GpuGraphResourceSetId hardwareTraceGeometrySet;
     Core::GpuGraphResourceSetId traceMaterialSampledTextureSet;
+    Core::GpuTaskId traceContextUploadTask;
     Core::GpuTaskId lightingTask;
     Core::GpuTaskId avboitFinalTask;
     Core::GpuTaskId surfelGiTask;

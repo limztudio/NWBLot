@@ -98,7 +98,13 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<RayTracingOpticalSceneGraphBuffer> DeclareRayTracingOpticalBoundsFinalize(Core::GpuTaskGraph& graph, const RayTracingOpticalSceneSnapshot& resources, const Core::GpuGraphResourceId source, Core::Alloc::ScratchArena& scratchArena){
+Expected<RayTracingOpticalSceneGraphBuffer> DeclareRayTracingOpticalBoundsFinalize(
+    Core::GpuTaskGraph& graph,
+    const RayTracingOpticalSceneSnapshot& resources,
+    const Core::GpuGraphResourceId source,
+    const Core::GpuTaskId priorReadersDrained,
+    Core::Alloc::ScratchArena& scratchArena
+){
     if(!resources.finalize || !resources.uploadBuffer || !source.valid())
         return MakeUnexpected(Failure{});
     const auto& finalize = *resources.finalize;
@@ -167,7 +173,13 @@ Expected<RayTracingOpticalSceneGraphBuffer> DeclareRayTracingOpticalBoundsFinali
     scheduling.mergeWithPrevious = true;
     scheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc desc;
-    desc.setIdentity(Name("render.raytrace.optical_bounds_finalize")).setMarkerLabel("Ray Optical Bounds Finalize").setScheduling(scheduling).setResourceUses(uses.data(), uses.size());
+    desc
+        .setIdentity(Name("render.raytrace.optical_bounds_finalize"))
+        .setMarkerLabel("Ray Optical Bounds Finalize")
+        .setScheduling(scheduling)
+        .setDependencies(priorReadersDrained.valid() ? &priorReadersDrained : nullptr, priorReadersDrained.valid() ? 1u : 0u)
+        .setResourceUses(uses.data(), uses.size())
+    ;
     const auto uploadTaskResult = graph.addTask<__hidden_task_graph_optical_bounds_finalize::FinalizeTask>(desc, __hidden_task_graph_optical_bounds_finalize::FinalizeTask::Payload{ resources.uploadBuffer, resources.finalize, upload });
     if(!uploadTaskResult)
         return MakeUnexpected(uploadTaskResult.error());

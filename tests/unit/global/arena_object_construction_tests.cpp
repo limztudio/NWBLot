@@ -5,6 +5,7 @@
 #include <core/alloc/module.h>
 
 #include <global/arena_object.h>
+#include <global/optional.h>
 
 #include <gtest/gtest.h>
 
@@ -132,6 +133,7 @@ public:
         ++attempts;
         return nullptr;
     }
+
     template<typename T>
     void deallocate(void* memory, const usize count){
         static_cast<void>(memory);
@@ -151,6 +153,7 @@ public:
         ++s_PlacementCalls;
         return nullptr;
     }
+
     static void* operator new[](usize, void*)noexcept{
         ++s_PlacementCalls;
         return nullptr;
@@ -263,7 +266,8 @@ public:
 
 template<typename Arena>
 struct RawPrivateDestructorProbe{
-    friend void ::DestroyArenaObject<RawPrivateDestructorProbe<Arena>, Arena>(Arena&, RawPrivateDestructorProbe<Arena>*);
+    template<typename Concrete, typename OwnerArena>
+    friend void ::DestroyArenaObject(OwnerArena& arena, Concrete* p)noexcept(noexcept(p->~Concrete()) && noexcept(arena.template deallocate<Concrete>(p, 1)));
 
 
 public:
@@ -277,6 +281,204 @@ public:
 private:
     ~RawPrivateDestructorProbe()noexcept{ destroyed = true; }
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct OwnerReentryCallback{
+    NotNull<void (*)(NotNull<void*>)noexcept> function;
+    NotNull<void*> context;
+};
+
+template<typename Owner>
+struct ReentryOwners{
+    Owner& slot;
+    Owner& replacement;
+    Owner& sink;
+};
+
+template<typename Owner>
+void RebindOwner(NotNull<void*> value)noexcept(noexcept(DeclVal<Owner&>() = Move(DeclVal<Owner&>()))){
+    auto& owners = *static_cast<ReentryOwners<Owner>*>(value.get());
+    owners.slot = Move(owners.replacement);
+    owners.sink = Move(owners.slot);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct PolymorphicAllocationState{
+    usize paddingDestructors = 0u;
+    usize baseDestructors = 0u;
+    usize concreteDestructors = 0u;
+    const OwnerReentryCallback* reentry = nullptr;
+};
+
+struct PolymorphicAllocationPadding{
+    PolymorphicAllocationState& state;
+    usize padding[3u] = {};
+
+
+public:
+    explicit PolymorphicAllocationPadding(PolymorphicAllocationState& value)noexcept
+        : state(value)
+    {}
+    virtual ~PolymorphicAllocationPadding()noexcept{ ++state.paddingDestructors; }
+};
+
+struct PolymorphicAllocationBase{
+    PolymorphicAllocationState& state;
+
+
+public:
+    explicit PolymorphicAllocationBase(PolymorphicAllocationState& value)noexcept
+        : state(value)
+    {}
+    virtual ~PolymorphicAllocationBase()noexcept{ ++state.baseDestructors; }
+};
+
+struct PolymorphicAllocationIntermediate : virtual PolymorphicAllocationBase{
+    explicit PolymorphicAllocationIntermediate(PolymorphicAllocationState& value)noexcept
+        : PolymorphicAllocationBase(value)
+    {}
+    virtual ~PolymorphicAllocationIntermediate()noexcept override = default;
+};
+
+struct alignas(128u) PolymorphicAllocationProbe final : PolymorphicAllocationPadding, PolymorphicAllocationIntermediate{
+    explicit PolymorphicAllocationProbe(PolymorphicAllocationState& value)noexcept
+        : PolymorphicAllocationBase(value)
+        , PolymorphicAllocationPadding(value)
+        , PolymorphicAllocationIntermediate(value)
+    {}
+    virtual ~PolymorphicAllocationProbe()noexcept override{
+        auto& state = PolymorphicAllocationPadding::state;
+        ++state.concreteDestructors;
+        if(state.reentry)
+            state.reentry->function.get()(state.reentry->context);
+    }
+};
+
+
+struct ArrayReentryProbe{
+    usize& destroyed;
+    const OwnerReentryCallback* reentry;
+
+
+public:
+    explicit ArrayReentryProbe(usize& value, const OwnerReentryCallback* callback = nullptr)noexcept
+        : destroyed(value)
+        , reentry(callback)
+    {}
+    ~ArrayReentryProbe()noexcept{
+        ++destroyed;
+        if(reentry)
+            reentry->function.get()(reentry->context);
+    }
+};
+
+
+template<typename Arena>
+void VerifyScalarOwnerReentry(Arena& oldArena, Arena& newArena){
+    const auto oldBefore = oldArena.memoryStats();
+    const auto newBefore = newArena.memoryStats();
+    PolymorphicAllocationState oldState, newState;
+    using Owner = ArenaUniquePtr<PolymorphicAllocationBase, Arena>;
+    Optional<ReentryOwners<Owner>> context;
+    Optional<OwnerReentryCallback> callback;
+    Owner sink;
+    auto replacement = MakeArenaUnique<PolymorphicAllocationBase>(newArena, newState);
+    Owner slot;
+    auto& owners = context.emplace(slot, replacement, sink);
+    oldState.reentry = &callback.emplace(MakeNotNull(&RebindOwner<Owner>), MakeNotNull(static_cast<void*>(&owners)));
+    auto concrete = MakeArenaUnique<PolymorphicAllocationProbe>(oldArena, oldState);
+    ASSERT_TRUE(concrete && replacement);
+    EXPECT_NE(static_cast<void*>(concrete.get()), static_cast<void*>(static_cast<PolymorphicAllocationBase*>(concrete.get())));
+    slot = Move(concrete);
+    slot.reset();
+    EXPECT_FALSE(slot);
+    EXPECT_FALSE(replacement);
+    EXPECT_TRUE(sink);
+    EXPECT_EQ(oldState.concreteDestructors, 1u);
+    EXPECT_EQ(oldArena.memoryStats().usedBytes, oldBefore.usedBytes);
+    sink.reset();
+    EXPECT_EQ(newState.baseDestructors, 1u);
+    EXPECT_EQ(newArena.memoryStats().usedBytes, newBefore.usedBytes);
+}
+
+template<typename Arena, bool Empty>
+void VerifyArrayOwnerReentry(Arena& oldArena, Arena& newArena){
+    const auto oldBefore = oldArena.memoryStats();
+    const auto newBefore = newArena.memoryStats();
+    usize oldDestroyed = 0u, newDestroyed = 0u;
+    using Deleter = Conditional_T<Empty, EmptyDeleter<ArrayReentryProbe[]>, ArenaDeleter<ArrayReentryProbe[], Arena>>;
+    using Owner = UniquePtr<ArrayReentryProbe[], Deleter>;
+    {
+        Optional<ReentryOwners<Owner>> context;
+        Optional<OwnerReentryCallback> callback;
+        auto* oldMemory = oldArena.template allocate<ArrayReentryProbe>(2u);
+        ASSERT_NE(oldMemory, nullptr);
+        ArrayReentryProbe* oldElements = nullptr;
+        ArenaObjectDetail::ConstructionStorage<ArrayReentryProbe, Arena, false> oldStorage(oldArena, MakeNotNull(oldMemory), 2u, oldElements);
+        auto* newMemory = newArena.template allocate<ArrayReentryProbe>(1u);
+        ASSERT_NE(newMemory, nullptr);
+        ArrayReentryProbe* newElements = nullptr;
+        ArenaObjectDetail::ConstructionStorage<ArrayReentryProbe, Arena, false> newStorage(newArena, MakeNotNull(newMemory), 1u, newElements);
+        Owner sink, replacement, slot;
+        newElements = ::new(static_cast<void*>(newMemory)) ArrayReentryProbe[1u]{ ArrayReentryProbe(newDestroyed) };
+        if constexpr(Empty)
+            replacement = Owner(newElements, Deleter(1u));
+        else{
+            replacement = Owner(newElements, Deleter(newArena, 1u));
+            newStorage.release();
+        }
+        auto& owners = context.emplace(slot, replacement, sink);
+        auto& reentry = callback.emplace(MakeNotNull(&RebindOwner<Owner>), MakeNotNull(static_cast<void*>(&owners)));
+        oldElements = ::new(static_cast<void*>(oldMemory)) ArrayReentryProbe[2u]{ ArrayReentryProbe(oldDestroyed, &reentry), ArrayReentryProbe(oldDestroyed) };
+        if constexpr(Empty)
+            slot = Owner(oldElements, Deleter(2u));
+        else{
+            slot = Owner(oldElements, Deleter(oldArena, 2u));
+            oldStorage.release();
+        }
+        slot.reset();
+        EXPECT_FALSE(slot);
+        EXPECT_FALSE(replacement);
+        EXPECT_TRUE(sink);
+        EXPECT_EQ(oldDestroyed, 2u);
+        sink.reset();
+        EXPECT_EQ(newDestroyed, 1u);
+    }
+    EXPECT_EQ(oldArena.memoryStats().usedBytes, oldBefore.usedBytes);
+    EXPECT_EQ(newArena.memoryStats().usedBytes, newBefore.usedBytes);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename Arena>
+void VerifyPolymorphicAllocationIdentity(Arena& arena){
+    const ArenaMemoryStats before = arena.memoryStats();
+    PolymorphicAllocationState state;
+    {
+        auto concrete = MakeArenaUnique<PolymorphicAllocationProbe>(arena, state);
+        ASSERT_TRUE(concrete);
+        EXPECT_NE(static_cast<void*>(concrete.get()), static_cast<void*>(static_cast<PolymorphicAllocationBase*>(concrete.get())));
+        ArenaUniquePtr<PolymorphicAllocationIntermediate, Arena> intermediate(Move(concrete));
+        ArenaUniquePtr<PolymorphicAllocationBase, Arena> base(Move(intermediate));
+        ArenaUniquePtr<const PolymorphicAllocationBase, Arena> cv(Move(base));
+        const auto deleter = cv.getDeleter();
+        ArenaUniquePtr<const PolymorphicAllocationBase, Arena> restored(cv.release(), deleter);
+    }
+    EXPECT_EQ(state.paddingDestructors, 1u);
+    EXPECT_EQ(state.baseDestructors, 1u);
+    EXPECT_EQ(state.concreteDestructors, 1u);
+    const ArenaMemoryStats after = arena.memoryStats();
+    EXPECT_EQ(after.usedBytes, before.usedBytes);
+    EXPECT_EQ(after.allocationCount - before.allocationCount, after.deallocationCount - before.deallocationCount);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -543,6 +745,31 @@ TEST(ArenaObjectConstruction, IndividualDeleterFriendRetainsCompletedRollbackAnd
     EXPECT_EQ(persistentAfter.reservedBytes, persistentBefore.reservedBytes);
     EXPECT_EQ(globalAfter.allocationCount - globalBefore.allocationCount, globalAfter.deallocationCount - globalBefore.deallocationCount);
     EXPECT_EQ(persistentAfter.allocationCount - persistentBefore.allocationCount, persistentAfter.deallocationCount - persistentBefore.deallocationCount);
+}
+
+TEST(ArenaObjectConstruction, PolymorphicTransfersRetainCompleteAllocationAcrossVirtualBases){
+    GlobalArena global(Name("tests/arena_object/polymorphic_global"));
+    PersistentArena persistent(Name("tests/arena_object/polymorphic_persistent"), PersistentArena::StructureAlignedSize(4096u));
+    ScratchArena scratch(Name("tests/arena_object/polymorphic_scratch"));
+    VerifyPolymorphicAllocationIdentity(global);
+    VerifyPolymorphicAllocationIdentity(persistent);
+    VerifyPolymorphicAllocationIdentity(scratch);
+}
+
+TEST(ArenaObjectConstruction, StatefulCleanupSurvivesPreallocatedOwnerReentry){
+    GlobalArena oldGlobal(Name("tests/arena_object/reentry_old_global")), newGlobal(Name("tests/arena_object/reentry_new_global"));
+    PersistentArena oldPersistent(Name("tests/arena_object/reentry_old_persistent"), PersistentArena::StructureAlignedSize(4096u));
+    PersistentArena newPersistent(Name("tests/arena_object/reentry_new_persistent"), PersistentArena::StructureAlignedSize(4096u));
+    ScratchArena oldScratch(Name("tests/arena_object/reentry_old_scratch")), newScratch(Name("tests/arena_object/reentry_new_scratch"));
+    VerifyScalarOwnerReentry(oldGlobal, newGlobal);
+    VerifyScalarOwnerReentry(oldPersistent, newPersistent);
+    VerifyScalarOwnerReentry(oldScratch, newScratch);
+    VerifyArrayOwnerReentry<GlobalArena, false>(oldGlobal, newGlobal);
+    VerifyArrayOwnerReentry<PersistentArena, false>(oldPersistent, newPersistent);
+    VerifyArrayOwnerReentry<ScratchArena, false>(oldScratch, newScratch);
+    VerifyArrayOwnerReentry<GlobalArena, true>(oldGlobal, newGlobal);
+    VerifyArrayOwnerReentry<PersistentArena, true>(oldPersistent, newPersistent);
+    VerifyArrayOwnerReentry<ScratchArena, true>(oldScratch, newScratch);
 }
 
 

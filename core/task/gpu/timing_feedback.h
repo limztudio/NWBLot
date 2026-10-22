@@ -46,6 +46,7 @@ public:
 inline constexpr bool operator==(const GpuTaskTimingAssignmentKey& lhs, const GpuTaskTimingAssignmentKey& rhs)noexcept{
     return lhs.task == rhs.task && lhs.variant == rhs.variant && lhs.resolutionClass == rhs.resolutionClass;
 }
+
 inline constexpr bool operator!=(const GpuTaskTimingAssignmentKey& lhs, const GpuTaskTimingAssignmentKey& rhs)noexcept{
     return !(lhs == rhs);
 }
@@ -66,6 +67,7 @@ public:
 inline constexpr bool operator==(const GpuTaskTimingKey& lhs, const GpuTaskTimingKey& rhs)noexcept{
     return lhs.task == rhs.task && lhs.variant == rhs.variant && lhs.resolutionClass == rhs.resolutionClass && lhs.queue == rhs.queue;
 }
+
 inline constexpr bool operator!=(const GpuTaskTimingKey& lhs, const GpuTaskTimingKey& rhs)noexcept{
     return !(lhs == rhs);
 }
@@ -124,6 +126,7 @@ public:
     [[nodiscard]] bool operator()(const RouteKey& lhs, const RouteKey& rhs)const noexcept{
         return lhs == rhs;
     }
+
     [[nodiscard]] bool operator()(const RouteKey& lhs, const RouteLookup& rhs)const noexcept{
         return lhs.task == rhs.key.task.identityHash() && lhs.variant == rhs.key.variant && lhs.resolutionClass == rhs.key.resolutionClass && lhs.queue == rhs.key.queue && lhs.physicalQueue == rhs.physicalQueue;
     }
@@ -142,6 +145,7 @@ public:
     [[nodiscard]] bool operator()(const AssignmentKey& lhs, const AssignmentKey& rhs)const noexcept{
         return lhs == rhs;
     }
+
     [[nodiscard]] bool operator()(const AssignmentKey& lhs, const GpuTaskTimingAssignmentKey& rhs)const noexcept{
         return lhs.task == rhs.task.identityHash() && lhs.variant == rhs.variant && lhs.resolutionClass == rhs.resolutionClass;
     }
@@ -256,6 +260,7 @@ public:
 
 public:
     [[nodiscard]] bool valid()const noexcept{ return m_valid; }
+
     [[nodiscard]] u16 deviceGeneration()const noexcept{ return m_deviceGeneration; }
     [[nodiscard]] const GpuTaskTimingHistory* find(const GpuTaskTimingKey& key, const GpuPhysicalQueueId& physicalQueue)const noexcept;
     [[nodiscard]] const GpuTaskTimingAssignmentState* findAssignment(const GpuTaskTimingAssignmentKey& key)const noexcept;
@@ -312,6 +317,7 @@ public:
     void snapshot(GpuTaskTimingHistorySnapshot& outSnapshot)const;
 
     [[nodiscard]] u16 deviceGeneration()const noexcept{ return m_deviceGeneration; }
+
     [[nodiscard]] usize historyCount()const noexcept{ return m_histories.size(); }
     [[nodiscard]] const GpuTaskTimingHistory* find(const GpuTaskTimingKey& key, const GpuPhysicalQueueId& physicalQueue)const noexcept;
     [[nodiscard]] const GpuTaskTimingAssignmentState* findAssignment(const GpuTaskTimingAssignmentKey& key)const noexcept;

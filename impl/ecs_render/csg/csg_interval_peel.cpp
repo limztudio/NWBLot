@@ -174,19 +174,12 @@ void RendererCsgSystem::renderCsgIntervalCaps(Core::CommandList& commandList, De
     commandList.draw(drawArgs);
 }
 
-void RendererCsgSystem::renderRefractionIntervalCaps(
-    Core::CommandList& commandList,
-    const DeferredFrameTargets& targets,
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-    const Core::Rect& workRect,
-    const u32* receiverIndices,
-    const usize receiverCount
-){
+void RendererCsgSystem::renderRefractionIntervalCaps(Core::CommandList& commandList, const DeferredFrameTargets& targets, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources, const Core::Rect& workRect, const Span<const u32> receiverIndices){
     NWB_ASSERT(csgResources.refractionCapFillPipeline);
     NWB_ASSERT(csgResources.bindingValid());
     NWB_ASSERT(targets.avboit.refractionFramebuffer);
     NWB_ASSERT(targets.bindless.slotsBufferDescriptor.valid());
-    NWB_ASSERT(receiverIndices && receiverCount != 0u);
+    NWB_ASSERT(!receiverIndices.empty());
 
     Core::ViewportState viewportState;
     viewportState.addViewport(targets.avboit.refractionFramebuffer->getFramebufferInfo().getViewport()).addScissorRect(workRect);
@@ -202,8 +195,8 @@ void RendererCsgSystem::renderRefractionIntervalCaps(
     frameHeapSlots.generatedVertex = csgResources.clipContextSlotsHeapHandle.slot();
     Core::DrawArguments drawArgs;
     drawArgs.setVertexCount(ECSRenderDetail::s_FullscreenTriangleVertexCount);
-    for(usize index = 0u; index < receiverCount; ++index){
-        ECSRenderDetail::SetShaderDrivenPushConstants(commandList, 0u, receiverIndices[index], 0u, viewportState, frameHeapSlots, 0u);
+    for(const u32 receiverIndex : receiverIndices){
+        ECSRenderDetail::SetShaderDrivenPushConstants(commandList, 0u, receiverIndex, 0u, viewportState, frameHeapSlots, 0u);
         commandList.draw(drawArgs);
     }
 }

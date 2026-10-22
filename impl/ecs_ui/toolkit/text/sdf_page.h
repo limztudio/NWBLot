@@ -68,6 +68,7 @@ public:
 
 public:
     [[nodiscard]] const SdfAtlasPageBinding& binding()const noexcept{ return m_binding; }
+
     [[nodiscard]] const Pixels& pixels()const noexcept{ return m_pixels; }
 
 

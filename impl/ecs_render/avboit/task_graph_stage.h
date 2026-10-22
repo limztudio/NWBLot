@@ -66,6 +66,7 @@ struct RendererAvboitTaskGraphValidation{
 
 public:
     [[nodiscard]] bool valid()const noexcept{ return m_valid; }
+
     [[nodiscard]] const RendererTaskGraphTransparencyStage& stage()const noexcept{ return m_stage; }
 };
 

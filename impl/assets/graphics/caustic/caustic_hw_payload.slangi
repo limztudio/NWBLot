@@ -2,21 +2,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#ifndef NWB_GRAPHICS_CAUSTIC_REFRACT_SLANGI
-#define NWB_GRAPHICS_CAUSTIC_REFRACT_SLANGI
+#ifndef NWB_GRAPHICS_CAUSTIC_HW_PAYLOAD_SLANGI
+#define NWB_GRAPHICS_CAUSTIC_HW_PAYLOAD_SLANGI
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// CPU-equivalent Snell refraction for HW/SW caustic parity; zero signals total internal reflection.
-float3 nwbCausticRefract(float3 incident, float3 normal, float eta){
-    const float cosI = dot(incident, normal);
-    const float k = 1.0 - eta * eta * (1.0 - cosI * cosI);
-    if(k < 0.0)
-        return float3(0.0, 0.0, 0.0);
-    return eta * incident - (eta * cosI + sqrt(k)) * normal;
-}
+// Internal TraceRay result: one FP32 distance and the full custom instance index; no material or geometric-normal copy.
+struct NwbCausticHwPayload{
+    float distance;
+    uint instance;
+};
+
+// Custom instance indices have 24 bits, so a hit never matches this value.
+#define NWB_CAUSTIC_HW_MISS_INSTANCE 0xFFFFFFFFu
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

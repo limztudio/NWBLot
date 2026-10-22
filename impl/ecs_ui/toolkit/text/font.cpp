@@ -419,8 +419,11 @@ bool FontFace::rasterize(u32 glyphId, u32 pixelSize, GlyphBitmap& output){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SharedFontFace MakeFontFace(Core::Alloc::ScratchArena& scratchArena, Core::Alloc::GlobalArena& arena, const FontSource& source){
-    return SharedFontFace(NewArenaObject<RefCounter<FontFace>>(arena, scratchArena, arena, source), ArenaRefDeleter<RefCounter<FontFace>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
+Expected<SharedFontFace> MakeFontFace(Core::Alloc::ScratchArena& scratchArena, Core::Alloc::GlobalArena& arena, const FontSource& source){
+    auto face = SharedFontFace(NewArenaObject<RefCounter<FontFace>>(arena, scratchArena, arena, source), ArenaRefDeleter<RefCounter<FontFace>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
+    if(!face)
+        return MakeUnexpected(Failure{});
+    return face;
 }
 
 

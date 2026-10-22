@@ -30,7 +30,17 @@ namespace __hidden_ui_slider_layout{
 
 
 [[nodiscard]] static SIMDMatrixDouble LoadMetrics(const SliderMetrics& metrics)noexcept{
-    if(!IsFinite(metrics.padding.left) || !IsFinite(metrics.padding.top) || !IsFinite(metrics.padding.right) || !IsFinite(metrics.padding.bottom) || !IsFinite(metrics.thumbExtent.x) || !IsFinite(metrics.thumbExtent.y) || !IsFinite(metrics.trackHeight) || !IsFinite(metrics.contentSize.x) || !IsFinite(metrics.contentSize.y))
+    if(
+        !IsFinite(metrics.padding.left)
+        || !IsFinite(metrics.padding.top)
+        || !IsFinite(metrics.padding.right)
+        || !IsFinite(metrics.padding.bottom)
+        || !IsFinite(metrics.thumbExtent.x)
+        || !IsFinite(metrics.thumbExtent.y)
+        || !IsFinite(metrics.trackHeight)
+        || !IsFinite(metrics.contentSize.x)
+        || !IsFinite(metrics.contentSize.y)
+    )
         return SIMDMatrixDouble{ .v = { VectorDoubleReplicate(Limit<f64>::s_Infinity), VectorDoubleZero(), VectorDoubleZero(), VectorDoubleZero() } };
     return SIMDMatrixDouble{ .v = {
         VectorDoubleSet(metrics.padding.left, metrics.padding.top, metrics.padding.right, metrics.padding.bottom),
@@ -41,11 +51,13 @@ namespace __hidden_ui_slider_layout{
 }
 
 [[nodiscard]] static bool ValidMetrics(const SIMDMatrixDouble& values)noexcept{
-    if(VectorDoubleMoveMask(VectorDoubleOrInt(VectorDoubleIsNaN(values.v[0]), VectorDoubleIsInfinite(values.v[0]))) != 0u
+    if(
+        VectorDoubleMoveMask(VectorDoubleOrInt(VectorDoubleIsNaN(values.v[0]), VectorDoubleIsInfinite(values.v[0]))) != 0u
         || VectorDoubleMoveMask(VectorDoubleOrInt(VectorDoubleIsNaN(values.v[1]), VectorDoubleIsInfinite(values.v[1]))) != 0u
         || VectorDoubleMoveMask(VectorDoubleOrInt(VectorDoubleIsNaN(values.v[2]), VectorDoubleIsInfinite(values.v[2]))) != 0u
         || VectorDoubleMoveMask(VectorDoubleGreaterOrEqual(values.v[0], VectorDoubleZero())) != VectorDoubleComponentMask::s_DoubleXYZW
-        || (VectorDoubleMoveMask(VectorDoubleGreater(values.v[1], VectorDoubleZero())) & VectorDoubleComponentMask::s_DoubleXYZ) != VectorDoubleComponentMask::s_DoubleXYZ)
+        || (VectorDoubleMoveMask(VectorDoubleGreater(values.v[1], VectorDoubleZero())) & VectorDoubleComponentMask::s_DoubleXYZ) != VectorDoubleComponentMask::s_DoubleXYZ
+    )
         return false;
     const SIMDVectorDouble padding = VectorDoubleAdd(values.v[0], VectorDoubleSwizzle<2, 3, 2, 3>(values.v[0]));
     const SIMDVectorDouble size = VectorDoubleAdd(padding, VectorDoubleMax(values.v[1], VectorDoubleSwizzle<0, 2, 0, 2>(values.v[1])));

@@ -145,7 +145,8 @@ def parse_optics(log_text):
 
 
 def validate_queue_coverage(statistics, spec):
-    if spec.case not in (LIT_OPTICAL_CSG_CAP, LIT_OPTICAL_CSG_OPEN_TAIL, LIT_OPTICAL_UNSPECIFIED_REFERENCE, LIT_OPTICAL_CSG_UNSPECIFIED_CAP, *DENSE_CASES):
+    # Smooth interior controls exercise mixed opaque/glass queues; optical query limits apply only after hardware admission.
+    if spec.case not in ("optical_inside", "optical_inside_nested", LIT_OPTICAL_TIR, LIT_OPTICAL_CSG_CAP, LIT_OPTICAL_CSG_OPEN_TAIL, LIT_OPTICAL_UNSPECIFIED_REFERENCE, LIT_OPTICAL_CSG_UNSPECIFIED_CAP, *DENSE_CASES):
         return None
     completed = []
     for sample in statistics:

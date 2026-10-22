@@ -33,11 +33,13 @@ protected:
 
 protected:
     IShader& operator=(const IShader&) = default;
+
     IShader& operator=(IShader&&)noexcept = default;
 
 
 public:
     [[nodiscard]] const Core::Assets::AssetString& entryPoint()const noexcept{ return m_entryPoint; }
+
     [[nodiscard]] const Core::Assets::AssetBytes& bytecode()const noexcept{ return m_bytecode; }
 
 
@@ -70,6 +72,7 @@ public:
 
 public:
     TypedShader& operator=(const TypedShader&) = default;
+
     TypedShader& operator=(TypedShader&&)noexcept = default;
 
 

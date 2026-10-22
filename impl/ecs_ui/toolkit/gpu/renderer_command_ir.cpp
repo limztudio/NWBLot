@@ -114,7 +114,9 @@ bool RecordRasterCommandIr(const GpuRasterTask::Payload& payload, Core::CommandL
     if(!capture.beginRecordingAttempt(context.recordingAttemptGeneration))
         return false;
     Core::GpuDescriptorHeap& heap = frame->m_resources->m_graphics.getDevice().getDescriptorHeap();
-    const Core::GpuCommandIrOwnerAnchor descriptorOwner = Core::MakeGpuCommandIrOwnerAnchor(frame->m_arena, GpuFrame(frame));
+    const auto descriptorOwner = Core::MakeGpuCommandIrOwnerAnchor(frame->m_arena, GpuFrame(frame));
+    if(!descriptorOwner)
+        return false;
     const Core::TextureDesc& target = frame->m_target->m_color->getDescription();
     const GpuRasterGeometry geometry(frame->m_snapshot.displayMetrics(), target);
     const auto initialPush = geometry.initializePushConstants(frame->m_resources->m_samplerDescriptor.slot());
@@ -131,7 +133,7 @@ bool RecordRasterCommandIr(const GpuRasterTask::Payload& payload, Core::CommandL
             continue;
         const Core::Rect& scissor = *resolvedScissor;
         if(!hasRasterState || scissor != boundScissor){
-            if(!__hidden_ui_gpu_command_ir::CaptureRasterState(payload, context, capture, heap, descriptorOwner, viewport, scissor))
+            if(!__hidden_ui_gpu_command_ir::CaptureRasterState(payload, context, capture, heap, *descriptorOwner, viewport, scissor))
                 return false;
             boundScissor = scissor;
             hasRasterState = true;
@@ -165,10 +167,12 @@ bool RecordOutputCommandIr(const GpuOutputTask::Payload& payload, Core::CommandL
     if(!capture.beginRecordingAttempt(context.recordingAttemptGeneration))
         return false;
     Core::GpuDescriptorHeap& heap = frame->m_resources->m_graphics.getDevice().getDescriptorHeap();
-    const Core::GpuCommandIrOwnerAnchor descriptorOwner = Core::MakeGpuCommandIrOwnerAnchor(frame->m_arena, GpuFrame(frame));
+    const auto descriptorOwner = Core::MakeGpuCommandIrOwnerAnchor(frame->m_arena, GpuFrame(frame));
+    if(!descriptorOwner)
+        return false;
     const Core::TextureDesc& target = payload.acquired.backBuffer.texture->getDescription();
     const Core::Viewport viewport(0.0f, static_cast<f32>(target.width), 0.0f, static_cast<f32>(target.height), 0.0f, 1.0f);
-    if(!__hidden_ui_gpu_command_ir::CaptureOutputState(payload, context, capture, heap, descriptorOwner, viewport))
+    if(!__hidden_ui_gpu_command_ir::CaptureOutputState(payload, context, capture, heap, *descriptorOwner, viewport))
         return false;
     GpuOutputPushConstants push;
     push.textureSlot = frame->m_target->m_sampledImage.slot();

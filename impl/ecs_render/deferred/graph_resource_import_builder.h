@@ -37,6 +37,7 @@ struct DeferredGraphResourceImportInputs{
     const DeferredLaggedLightingHistoryResources* captureHistory = nullptr;
     bool clearAvboitTargets = false;
     bool capturesLaggedLightingHistory = false;
+    bool hasCsgFrameWork = false;
 };
 
 struct DeferredGraphResourceImportResult{

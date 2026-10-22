@@ -86,6 +86,7 @@ private:
 
     public:
         Item& operator=(Item&&)noexcept = default;
+
         Item& operator=(const Item&) = delete;
     };
 
@@ -242,6 +243,7 @@ private:
 
     public:
         TooltipFrame& operator=(TooltipFrame&&)noexcept = default;
+
         TooltipFrame& operator=(const TooltipFrame&) = delete;
     };
 

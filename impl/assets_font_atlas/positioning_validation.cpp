@@ -233,7 +233,15 @@ public:
             if(!range(0u, s_GposHeaderV11Bytes))
                 return false;
             const u64 variations = u32At(s_GposFeatureVariationsOffset);
-            if(variations != 0u && (!range(variations, s_FeatureVariationsHeaderBytes) || u16At(variations) != 1u || u16At(variations + s_OtMinorVersionOffset) != 0u || !range(variations + s_FeatureVariationsHeaderBytes, static_cast<u64>(u32At(variations + s_FeatureVariationsCountOffset)) * s_FeatureVariationRecordBytes)))
+            if(
+                variations != 0u
+                && (
+                    !range(variations, s_FeatureVariationsHeaderBytes)
+                    || u16At(variations) != 1u
+                    || u16At(variations + s_OtMinorVersionOffset) != 0u
+                    || !range(variations + s_FeatureVariationsHeaderBytes, static_cast<u64>(u32At(variations + s_FeatureVariationsCountOffset)) * s_FeatureVariationRecordBytes)
+                )
+            )
                 return false;
         }
         return true;
@@ -297,18 +305,22 @@ private:
     [[nodiscard]] bool range(u64 offset, u64 count)noexcept{
         return spend(1u) && offset <= m_bytes.size() && count <= m_bytes.size() - offset;
     }
+
     [[nodiscard]] bool spend(u32 count)noexcept{
         if(count > m_budget)
             return false;
         m_budget -= count;
         return true;
     }
+
     [[nodiscard]] u16 u16At(u64 offset)const noexcept{
         return static_cast<u16>((static_cast<u16>(m_bytes[offset]) << s_BitsPerByte) | m_bytes[offset + 1u]);
     }
+
     [[nodiscard]] u32 u32At(u64 offset)const noexcept{
         return (static_cast<u32>(u16At(offset)) << s_OtU16Bits) | u16At(offset + s_OtU16Bytes);
     }
+
     [[nodiscard]] Expected<u32> coverage(u64 offset)noexcept{
         if(!range(offset, s_CoverageHeaderBytes))
             return MakeUnexpected(Failure{});
@@ -331,6 +343,7 @@ private:
         }
         return glyphCount;
     }
+
     [[nodiscard]] bool classDef(u64 offset, u32 classCount)noexcept{
         if(offset == 0u)
             return true;
@@ -366,6 +379,7 @@ private:
         }
         return true;
     }
+
     [[nodiscard]] bool device(u64 parent, u32 offset)noexcept{
         if(offset == 0u)
             return true;
@@ -382,9 +396,11 @@ private:
         const u32 bits = 1u << format;
         return range(table + s_DeviceHeaderBytes, ((end - start + 1u) * bits + s_DeviceDeltaWordRoundUp) / s_DeviceDeltaWordBits * s_OtU16Bytes);
     }
+
     [[nodiscard]] u32 valueSize(u16 format)const noexcept{
         return static_cast<u32>(CountSetBits(static_cast<u32>(format & s_ValueFormatFieldMask))) * s_OtU16Bytes;
     }
+
     [[nodiscard]] bool value(u64 offset, u16 format, u64 parent)noexcept{
         if((format & s_ValueFormatReservedMask) != 0u || !range(offset, valueSize(format)))
             return false;
@@ -398,6 +414,7 @@ private:
         }
         return true;
     }
+
     [[nodiscard]] bool langSys(u64 offset, u32 featureCount)noexcept{
         if(!range(offset, s_LangSysHeaderBytes) || u16At(offset) != 0u)
             return false;
@@ -411,6 +428,7 @@ private:
         }
         return true;
     }
+
     [[nodiscard]] bool scriptList(u64 offset, u32 featureCount)noexcept{
         if(!range(offset, s_OtU16Bytes))
             return false;
@@ -434,6 +452,7 @@ private:
         }
         return true;
     }
+
     [[nodiscard]] bool featureList(u64 offset, u32 lookupCount)noexcept{
         if(!range(offset, s_OtU16Bytes))
             return false;
@@ -456,6 +475,7 @@ private:
         }
         return true;
     }
+
     [[nodiscard]] bool pairPos(u64 offset)noexcept{
         if(!range(offset, s_PairPosSetHeaderBytes))
             return false;
@@ -510,6 +530,7 @@ private:
         }
         return true;
     }
+
     [[nodiscard]] bool subtable(u64 offset, u32 type)noexcept{
         if(!range(offset, s_PosSubtableHeaderBytes))
             return false;
@@ -548,6 +569,7 @@ private:
         }
         return (type == s_GposContextLookupType || type == s_GposChainedContextLookupType) && format >= 1u && format <= s_ContextMaxFormat;
     }
+
     [[nodiscard]] bool lookupList(u64 offset)noexcept{
         if(!range(offset, s_OtU16Bytes))
             return false;

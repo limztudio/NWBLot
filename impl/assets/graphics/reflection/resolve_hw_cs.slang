@@ -124,7 +124,12 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID){
     const uint linearPixel = glass ? packedPixel - pixelCount : packedPixel;
     const uint2 pixel = uint2(linearPixel % g_NwbReflectionParameters.dimensionsAndRoute.x, linearPixel / g_NwbReflectionParameters.dimensionsAndRoute.x);
     NwbReflectionSurface surface;
-    if(!nwbReflectionLoadSurface(pixel, glass, surface) || !any(surface.weight > half3(0.0h)) || surface.bias >= g_NwbReflectionParameters.maxRayDistance)
+    bool surfaceValid;
+    if(glass)
+        surfaceValid = nwbReflectionLoadSurface(pixel, true, surface);
+    else
+        surfaceValid = nwbReflectionLoadSurface(pixel, false, surface);
+    if(!surfaceValid || !any(surface.weight > half3(0.0h)) || surface.bias >= g_NwbReflectionParameters.maxRayDistance)
         return;
     nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_HARDWARE_RAYS, 1u);
 #if NWB_REFLECTION_OPTICAL_TRANSPORT

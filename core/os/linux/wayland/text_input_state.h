@@ -68,12 +68,16 @@ public:
         m_pending = false;
         m_cause = TextInputChangeCause::InputMethod;
     }
+
     void caretChanged()noexcept{ m_pending = true; }
+
     void surroundingChanged(TextInputChangeCause::Enum cause)noexcept{
         m_pending = true;
         m_cause = cause;
     }
+
     [[nodiscard]] bool pending()const noexcept{ return m_pending; }
+
     [[nodiscard]] TextInputChangeCause::Enum cause()const noexcept{ return m_cause; }
 
 

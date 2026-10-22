@@ -120,10 +120,12 @@ template<typename CharT>
 [[nodiscard]] inline u64 ComputeFnv64Text(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     return ComputeFnv64Bytes(text.data(), text.size() * sizeof(CharT));
 }
+
 template<typename CharT, typename ArenaT>
 [[nodiscard]] inline u64 ComputeFnv64Text(const BasicString<CharT, ArenaT>& text)noexcept(IsArithmetic_V<CharT>){
     return ComputeFnv64Text(BasicStringView<CharT>(text));
 }
+
 template<typename StringT>
     requires requires(const StringT& text){
         typename StringT::value_type;

@@ -349,6 +349,7 @@ Expected<u32> RendererRayTracingSystem::renderShadowVisibility(
 
         {
             Core::GpuTimingMeasure opaqueTraceTiming(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowOpaqueTrace, m_graphics.getDevice(), commandList);
+
             Core::ComputeState softState;
             softState.setPipeline(m_rayTracingState.m_shadowSoftPipeline.get());
             commandList.setComputeState(softState);
@@ -393,6 +394,7 @@ Expected<u32> RendererRayTracingSystem::renderShadowVisibility(
 
     {
         Core::GpuTimingMeasure opaqueTraceTiming(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowOpaqueTrace, m_graphics.getDevice(), commandList);
+
         Core::ComputeState shadowState;
         shadowState.setPipeline(m_rayTracingState.m_shadowPipeline.get());
         commandList.setComputeState(shadowState);

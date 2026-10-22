@@ -238,6 +238,11 @@ void WaylandClipboardService::sendSource(Source& source, const int fd){
         return;
     }
     auto writer = MakeGlobalUnique<ClipboardPipeWriter>(m_arena, m_arena);
+    if(!writer){
+        int rejectedFd = fd;
+        CloseClipboardPipe(rejectedFd);
+        return;
+    }
     if(writer->begin(fd, source.text))
         m_writers.push_back(Move(writer));
 }

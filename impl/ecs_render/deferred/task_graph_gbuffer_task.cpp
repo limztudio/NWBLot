@@ -108,6 +108,7 @@ namespace ECSRenderDetail{
             }
             else{
                 Core::GpuTimingMeasure timing(graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueRegular, graphics.getDevice(), commandList);
+
                 materialSystem.renderMaterialPassDrawItems(opaqueDrawContext, *regularDrawItemsForGbuffer);
             }
         }
@@ -128,6 +129,7 @@ namespace ECSRenderDetail{
         };
         if(csgSampleStateReady && csgReceiverSurfaceDrawResourcesReady && !opaqueDrawItems.csgReceiverSurface.empty()){
             Core::GpuTimingMeasure timing(graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueCsgReceiverSurface, graphics.getDevice(), commandList);
+
             materialSystem.renderMaterialPassDrawItems(csgReceiverSurfaceDrawContext, opaqueDrawItems.csgReceiverSurface);
         }
     }

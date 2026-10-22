@@ -186,8 +186,7 @@ Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord ECSRenderDetail::Bui
     return result;
 }
 
-Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics
-ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(
+Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(
     const Core::GpuTaskGraphPhysicalQueueCompileStatistics& compileStatistics,
     const Core::GpuTaskGraphPhysicalQueueRecordingStatistics& recordingStatistics,
     const Core::GpuTaskGraphPhysicalQueueSubmissionStatistics& submissionStatistics

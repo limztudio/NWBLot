@@ -31,7 +31,9 @@ constexpr usize s_CompoundAssignmentTokenLength = 2u;
 
 
 [[nodiscard]] inline bool IsDigit(MChar c)noexcept{ return c >= s_DigitFirst && c <= s_DigitLast; }
+
 [[nodiscard]] inline bool IsAlpha(MChar c)noexcept{ return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'; }
+
 [[nodiscard]] inline bool IsAlphaNumeric(MChar c)noexcept{ return IsAlpha(c) || IsDigit(c); }
 
 

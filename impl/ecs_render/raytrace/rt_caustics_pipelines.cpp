@@ -77,6 +77,7 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
     }
     else{
         Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_CausticPhotons, m_graphics.getDevice(), commandList);
+
         recordPhotons();
     }
 
@@ -102,7 +103,13 @@ bool RendererRayTracingSystem::hasHwCausticWork(const ECSRenderDetail::MeshViewB
     // Hardware photons require a caustic light, refractor, TLAS, and tracked mesh.
     return
         m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
+        && m_shadowVisibilityTraceResourcesPreflighted
+        && m_shadowVisibilityPreparedTargets
+        && (m_lightSpaceShadow.m_csg.snapshot.hasCsg ? m_rayTracingState.m_hwCausticCsgPipeline : m_rayTracingState.m_hwCausticPipeline)
+        && (m_lightSpaceShadow.m_csg.snapshot.hasCsg ? m_rayTracingState.m_hwCausticCsgShaderTable : m_rayTracingState.m_hwCausticShaderTable)
+        && causticResolveResourcesReady(*m_shadowVisibilityPreparedTargets, m_rayTracingState.m_causticTemporalDecay)
         && m_rayTracingState.m_causticLightCount > 0u
+        && m_unsupportedCausticVolumeCount == 0u
         && m_rayTracingState.m_causticRefractiveInstanceCount > 0u
         && m_rayTracingState.m_tlas
         && m_rayTracingState.m_shadowMeshCount > 0u

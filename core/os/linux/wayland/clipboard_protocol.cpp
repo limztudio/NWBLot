@@ -233,6 +233,12 @@ void WaylandClipboardService::attachSeat(wl_seat* const seat, const u32 seatGlob
 
 void WaylandClipboardService::addOffer(void* const handle, const ClipboardChannel::Enum channel){
     auto offer = MakeGlobalUnique<Offer>(m_arena, *this);
+    if(!offer){
+        Offer rejected(*this);
+        rejected.handle = handle;
+        rejected.channel = channel;
+        return;
+    }
     offer->handle = handle;
     offer->channel = channel;
     if(m_offers.size() == s_MaxOffers)
@@ -256,6 +262,8 @@ ClipboardStatus::Enum WaylandClipboardService::writeSelection(const ClipboardCha
     if(!m_focused || !m_serial || !m_seat)
         return ClipboardStatus::Unavailable;
     auto source = MakeGlobalUnique<Source>(m_arena, *this, m_arena);
+    if(!source)
+        return ClipboardStatus::NativeFailure;
     source->channel = channel;
     if(!text.empty())
         source->text.assign(text.data(), text.size());

@@ -363,6 +363,7 @@ public:
     [[nodiscard]] constexpr bool valid()const noexcept{
         return complete && error == GpuCommandIrStreamValidationError::None;
     }
+
     [[nodiscard]] constexpr bool failed()const noexcept{
         return error != GpuCommandIrStreamValidationError::None;
     }
@@ -378,8 +379,11 @@ public:
     [[nodiscard]] Expected<GpuCommandIrBuiltinTaskRecord, GpuCommandIrStreamReadStatus::Enum> nextBuiltinTask()noexcept;
     [[nodiscard]] Expected<GpuCommandIrDecodedRecord, GpuCommandIrStreamReadStatus::Enum> next()noexcept;
     [[nodiscard]] const GpuCommandIrStreamValidationResult& validation()const noexcept{ return m_validation; }
+
     [[nodiscard]] u64 graphGeneration()const noexcept{ return m_graphGeneration; }
+
     [[nodiscard]] u64 planGeneration()const noexcept{ return m_planGeneration; }
+
     [[nodiscard]] u64 recordCount()const noexcept{ return m_recordCount; }
     [[nodiscard]] BinaryByteView blobBytes()const noexcept;
 
@@ -529,8 +533,11 @@ public:
     void reset()noexcept;
 
     [[nodiscard]] usize recordCount()const noexcept{ return m_recordEndOffsets.size(); }
+
     [[nodiscard]] u64 graphGeneration()const noexcept{ return m_graphGeneration; }
+
     [[nodiscard]] u64 planGeneration()const noexcept{ return m_planGeneration; }
+
     [[nodiscard]] u64 recordingAttemptGeneration()const noexcept{ return m_recordingAttemptGeneration; }
     // A non-empty capture belongs to exactly one native recording attempt, even when the graph and compiler plan remain unchanged across a rejected retry.
     [[nodiscard]] bool beginRecordingAttempt(u64 recordingAttemptGeneration)noexcept;

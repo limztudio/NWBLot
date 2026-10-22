@@ -81,10 +81,13 @@ public:
 
 public:
     void setFrameIndex(u64 frameIndex)noexcept{ m_frameIndex.store(frameIndex, MemoryOrder::relaxed); }
+
     void setStreamId(u32 streamId)noexcept{ m_streamId.store(streamId, MemoryOrder::relaxed); }
 
     [[nodiscard]] u64 frameIndex()const noexcept{ return m_frameIndex.load(MemoryOrder::relaxed); }
+
     [[nodiscard]] u32 streamId()const noexcept{ return m_streamId.load(MemoryOrder::relaxed); }
+
     [[nodiscard]] bool installed()const noexcept{ return m_installed; }
 
     void capture(const DiagnosticEventRecord& record)noexcept;

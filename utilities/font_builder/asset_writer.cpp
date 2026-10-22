@@ -53,6 +53,7 @@ private:
         path.replaceExtension(s_PreparedFontExtension);
         return path;
     }
+
     [[nodiscard]] static ScratchPath MakeWorkPath(Core::Alloc::ScratchArena& scratch, const ScratchPath& base, const AStringView suffix){
         ScratchPath path(scratch, base);
         path += suffix;
@@ -153,6 +154,7 @@ public:
             return MakeUnexpected(error);
         return {};
     }
+
     [[nodiscard]] bool verify(const u8* expected, const usize count)const{
         InputFileStream stream(m_path, InputFileStream::binary);
         if(!stream.is_open())
@@ -171,6 +173,7 @@ public:
         stream.read(&extra, 1);
         return stream.gcount() == 0 && stream.eof();
     }
+
     void published()noexcept{ m_owned = false; }
 
 

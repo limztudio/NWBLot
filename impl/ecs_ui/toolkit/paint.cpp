@@ -224,10 +224,7 @@ void PaintBuilder::emitQuad(const Rect& rectangle, const Rect& uv, const Color& 
         if(previous.layer > m_layer)
             m_commandsOrdered = false;
     }
-    m_snapshot.m_commands.push_back({
-        firstIndex, __hidden_ui_paint::s_QuadIndexCount, clip, material, glyphPageIndex, sdfPageIndex, sdfChannel, m_layer, textureImageIndex
-    }
-    );
+    m_snapshot.m_commands.push_back({ firstIndex, __hidden_ui_paint::s_QuadIndexCount, clip, material, glyphPageIndex, sdfPageIndex, sdfChannel, m_layer, textureImageIndex });
 }
 
 void PaintBuilder::emitNineSlice(const UiSkinRegion& region, const Rect& rectangle, const Color& tint){

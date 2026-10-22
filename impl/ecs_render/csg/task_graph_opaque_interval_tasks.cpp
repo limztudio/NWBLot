@@ -196,6 +196,7 @@ bool CsgIntervalSampleGraphTask::Record(const Payload& payload, Core::CommandLis
             }
             else{
                 Core::GpuTimingMeasure timing(graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueCsg, graphics.getDevice(), commandList);
+
                 materialSystem.renderMaterialPassDrawItems(csgDrawContext, opaqueDrawItems.csg);
             }
         }

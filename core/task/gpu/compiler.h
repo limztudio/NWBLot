@@ -214,16 +214,22 @@ public:
     [[nodiscard]] GpuTaskGraphSchedulingTaskIndexView schedulingProducers(const GpuTaskId& consumer)const noexcept;
     // Every resource reason remains available even when it shares one scheduling edge with an explicit dependency.
     [[nodiscard]] const GraphicsVector<GpuTaskDependencyEdge>& inferredEdges()const noexcept{ return m_inferredEdges; }
+
     [[nodiscard]] const GraphicsVector<GpuTaskExternalDependencyEdge>& externalDependencies()const noexcept{
         return m_externalDependencies;
     }
+
     [[nodiscard]] const GraphicsVector<GpuTaskId>& topologicalOrder()const noexcept{ return m_topologicalOrder; }
+
     [[nodiscard]] const GraphicsVector<GpuTaskId>& cyclePath()const noexcept{ return m_cyclePath; }
+
     [[nodiscard]] const GraphicsVector<GpuTaskDependencyEdge>& cycleEdges()const noexcept{ return m_cycleEdges; }
     [[nodiscard]] bool hasExplicitEdge(const GpuTaskId& producer, const GpuTaskId& consumer)const noexcept;
     [[nodiscard]] bool hasInferredEdge(const GpuTaskId& producer, const GpuTaskId& consumer)const noexcept;
     [[nodiscard]] usize explicitEdgeCount()const noexcept{ return m_explicitEdgeCount; }
+
     [[nodiscard]] usize inferredEdgeCount()const noexcept{ return m_inferredEdgeCount; }
+
     [[nodiscard]] usize resourceVersionEdgeCount()const noexcept{ return m_resourceVersionEdgeCount; }
 
 

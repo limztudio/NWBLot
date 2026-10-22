@@ -75,58 +75,37 @@ int nwbMaterialSignExtendShort(const uint value){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_MATERIAL_TYPED_NON_HALF_LOAD_FAMILIES(APPLY) \
-APPLY(Bool, bool, 1u) \
-APPLY(Char, char, 1u) \
-APPLY(UChar, uchar, 1u) \
-APPLY(Short, short, 2u) \
-APPLY(UShort, ushort, 2u) \
-APPLY(Int, int, 4u) \
-APPLY(UInt, uint, 4u) \
-APPLY(Float, float, 4u)
-
-#define NWB_MATERIAL_TYPED_ALL_LOAD_FAMILIES(APPLY) \
-NWB_MATERIAL_TYPED_NON_HALF_LOAD_FAMILIES(APPLY) \
-APPLY(Half, half, 2u)
-
-#define NWB_MATERIAL_TYPED_VECTOR_LOAD_FAMILY(LOAD_SUFFIX, VALUE_TYPE, BYTE_STRIDE) \
-VALUE_TYPE##2 nwbMaterialLoad##LOAD_SUFFIX##2AtBase(const uint storageByteOffset, const uint byteOffset){ \
-    return VALUE_TYPE##2( \
-        nwbMaterialLoad##LOAD_SUFFIX##AtBase(storageByteOffset, byteOffset + 0u), \
-        nwbMaterialLoad##LOAD_SUFFIX##AtBase(storageByteOffset, byteOffset + (BYTE_STRIDE)) \
-    ); \
-} \
-VALUE_TYPE##3 nwbMaterialLoad##LOAD_SUFFIX##3AtBase(const uint storageByteOffset, const uint byteOffset){ \
-    return VALUE_TYPE##3( \
-        nwbMaterialLoad##LOAD_SUFFIX##AtBase(storageByteOffset, byteOffset + 0u), \
-        nwbMaterialLoad##LOAD_SUFFIX##AtBase(storageByteOffset, byteOffset + (BYTE_STRIDE)), \
-        nwbMaterialLoad##LOAD_SUFFIX##AtBase(storageByteOffset, byteOffset + ((BYTE_STRIDE) * 2u)) \
-    ); \
-} \
-VALUE_TYPE##4 nwbMaterialLoad##LOAD_SUFFIX##4AtBase(const uint storageByteOffset, const uint byteOffset){ \
-    return VALUE_TYPE##4( \
-        nwbMaterialLoad##LOAD_SUFFIX##AtBase(storageByteOffset, byteOffset + 0u), \
-        nwbMaterialLoad##LOAD_SUFFIX##AtBase(storageByteOffset, byteOffset + (BYTE_STRIDE)), \
-        nwbMaterialLoad##LOAD_SUFFIX##AtBase(storageByteOffset, byteOffset + ((BYTE_STRIDE) * 2u)), \
-        nwbMaterialLoad##LOAD_SUFFIX##AtBase(storageByteOffset, byteOffset + ((BYTE_STRIDE) * 3u)) \
-    ); \
+bool nwbMaterialLoadBoolAtBase(const uint storageByteOffset, const uint byteOffset){
+    return nwbMaterialLoadRawByteAtBase(storageByteOffset, byteOffset) != 0u;
 }
 
-#define NWB_MATERIAL_TYPED_SCALAR_LOAD(LOAD_SUFFIX, VALUE_TYPE, VALUE_EXPRESSION) \
-VALUE_TYPE nwbMaterialLoad##LOAD_SUFFIX##AtBase(const uint storageByteOffset, const uint byteOffset){ \
-    return VALUE_EXPRESSION; \
+char nwbMaterialLoadCharAtBase(const uint storageByteOffset, const uint byteOffset){
+    return char(nwbMaterialSignExtendByte(nwbMaterialLoadRawByteAtBase(storageByteOffset, byteOffset)));
 }
 
-NWB_MATERIAL_TYPED_SCALAR_LOAD(Bool, bool, nwbMaterialLoadRawByteAtBase(storageByteOffset, byteOffset) != 0u)
-NWB_MATERIAL_TYPED_SCALAR_LOAD(Char, char, char(nwbMaterialSignExtendByte(nwbMaterialLoadRawByteAtBase(storageByteOffset, byteOffset))))
-NWB_MATERIAL_TYPED_SCALAR_LOAD(UChar, uchar, uchar(nwbMaterialLoadRawByteAtBase(storageByteOffset, byteOffset)))
-NWB_MATERIAL_TYPED_SCALAR_LOAD(Short, short, short(nwbMaterialSignExtendShort(nwbMaterialLoadRawUShortAtBase(storageByteOffset, byteOffset))))
-NWB_MATERIAL_TYPED_SCALAR_LOAD(UShort, ushort, ushort(nwbMaterialLoadRawUShortAtBase(storageByteOffset, byteOffset)))
-NWB_MATERIAL_TYPED_SCALAR_LOAD(Int, int, asint(nwbMaterialLoadRawUIntAtBase(storageByteOffset, byteOffset)))
-NWB_MATERIAL_TYPED_SCALAR_LOAD(UInt, uint, nwbMaterialLoadRawUIntAtBase(storageByteOffset, byteOffset))
-NWB_MATERIAL_TYPED_SCALAR_LOAD(Float, float, asfloat(nwbMaterialLoadRawUIntAtBase(storageByteOffset, byteOffset)))
+uchar nwbMaterialLoadUCharAtBase(const uint storageByteOffset, const uint byteOffset){
+    return uchar(nwbMaterialLoadRawByteAtBase(storageByteOffset, byteOffset));
+}
 
-#undef NWB_MATERIAL_TYPED_SCALAR_LOAD
+short nwbMaterialLoadShortAtBase(const uint storageByteOffset, const uint byteOffset){
+    return short(nwbMaterialSignExtendShort(nwbMaterialLoadRawUShortAtBase(storageByteOffset, byteOffset)));
+}
+
+ushort nwbMaterialLoadUShortAtBase(const uint storageByteOffset, const uint byteOffset){
+    return ushort(nwbMaterialLoadRawUShortAtBase(storageByteOffset, byteOffset));
+}
+
+int nwbMaterialLoadIntAtBase(const uint storageByteOffset, const uint byteOffset){
+    return asint(nwbMaterialLoadRawUIntAtBase(storageByteOffset, byteOffset));
+}
+
+uint nwbMaterialLoadUIntAtBase(const uint storageByteOffset, const uint byteOffset){
+    return nwbMaterialLoadRawUIntAtBase(storageByteOffset, byteOffset);
+}
+
+float nwbMaterialLoadFloatAtBase(const uint storageByteOffset, const uint byteOffset){
+    return asfloat(nwbMaterialLoadRawUIntAtBase(storageByteOffset, byteOffset));
+}
 
 half2 nwbMaterialLoadPackedHalf2AtBase(const uint storageByteOffset, const uint byteOffset){
     return half2(nwbUnpackHalf2x16(nwbMaterialLoadRawUIntAtBase(storageByteOffset, byteOffset)));
@@ -159,32 +138,429 @@ half4 nwbMaterialLoadHalf4AtBase(const uint storageByteOffset, const uint byteOf
     return half4(xy.x, xy.y, zw.x, zw.y);
 }
 
-NWB_MATERIAL_TYPED_NON_HALF_LOAD_FAMILIES(NWB_MATERIAL_TYPED_VECTOR_LOAD_FAMILY)
-
-#undef NWB_MATERIAL_TYPED_VECTOR_LOAD_FAMILY
-
-#define NWB_MATERIAL_TYPED_STORAGE_LOAD(STORAGE_NAME, STORAGE_BYTE_OFFSET, VALUE_TYPE, LOAD_SUFFIX) \
-VALUE_TYPE nwbMaterialLoad##STORAGE_NAME##LOAD_SUFFIX(const NwbMeshInstanceData instance, const uint byteOffset){ \
-    return nwbMaterialLoad##LOAD_SUFFIX##AtBase((STORAGE_BYTE_OFFSET), byteOffset); \
+bool2 nwbMaterialLoadBool2AtBase(const uint storageByteOffset, const uint byteOffset){
+    return bool2(nwbMaterialLoadBoolAtBase(storageByteOffset, byteOffset + 0u), nwbMaterialLoadBoolAtBase(storageByteOffset, byteOffset + 1u));
 }
 
-#define NWB_MATERIAL_TYPED_STORAGE_LOAD_FAMILY(STORAGE_NAME, STORAGE_BYTE_OFFSET, LOAD_SUFFIX, VALUE_TYPE) \
-NWB_MATERIAL_TYPED_STORAGE_LOAD(STORAGE_NAME, STORAGE_BYTE_OFFSET, VALUE_TYPE, LOAD_SUFFIX) \
-NWB_MATERIAL_TYPED_STORAGE_LOAD(STORAGE_NAME, STORAGE_BYTE_OFFSET, VALUE_TYPE##2, LOAD_SUFFIX##2) \
-NWB_MATERIAL_TYPED_STORAGE_LOAD(STORAGE_NAME, STORAGE_BYTE_OFFSET, VALUE_TYPE##3, LOAD_SUFFIX##3) \
-NWB_MATERIAL_TYPED_STORAGE_LOAD(STORAGE_NAME, STORAGE_BYTE_OFFSET, VALUE_TYPE##4, LOAD_SUFFIX##4)
+bool3 nwbMaterialLoadBool3AtBase(const uint storageByteOffset, const uint byteOffset){
+    return bool3(nwbMaterialLoadBoolAtBase(storageByteOffset, byteOffset + 0u), nwbMaterialLoadBoolAtBase(storageByteOffset, byteOffset + 1u), nwbMaterialLoadBoolAtBase(storageByteOffset, byteOffset + 2u));
+}
 
-#define NWB_MATERIAL_TYPED_STORAGE_LOAD_FAMILIES(LOAD_SUFFIX, VALUE_TYPE, BYTE_STRIDE) \
-NWB_MATERIAL_TYPED_STORAGE_LOAD_FAMILY(Constant, nwbMeshMaterialConstantByteOffset(), LOAD_SUFFIX, VALUE_TYPE) \
-NWB_MATERIAL_TYPED_STORAGE_LOAD_FAMILY(Mutable, instance.materialMutableByteOffset, LOAD_SUFFIX, VALUE_TYPE)
+bool4 nwbMaterialLoadBool4AtBase(const uint storageByteOffset, const uint byteOffset){
+    return bool4(
+        nwbMaterialLoadBoolAtBase(storageByteOffset, byteOffset + 0u),
+        nwbMaterialLoadBoolAtBase(storageByteOffset, byteOffset + 1u),
+        nwbMaterialLoadBoolAtBase(storageByteOffset, byteOffset + 2u),
+        nwbMaterialLoadBoolAtBase(storageByteOffset, byteOffset + 3u)
+    );
+}
 
-NWB_MATERIAL_TYPED_ALL_LOAD_FAMILIES(NWB_MATERIAL_TYPED_STORAGE_LOAD_FAMILIES)
+char2 nwbMaterialLoadChar2AtBase(const uint storageByteOffset, const uint byteOffset){
+    return char2(nwbMaterialLoadCharAtBase(storageByteOffset, byteOffset + 0u), nwbMaterialLoadCharAtBase(storageByteOffset, byteOffset + 1u));
+}
 
-#undef NWB_MATERIAL_TYPED_STORAGE_LOAD_FAMILIES
-#undef NWB_MATERIAL_TYPED_STORAGE_LOAD_FAMILY
-#undef NWB_MATERIAL_TYPED_STORAGE_LOAD
-#undef NWB_MATERIAL_TYPED_ALL_LOAD_FAMILIES
-#undef NWB_MATERIAL_TYPED_NON_HALF_LOAD_FAMILIES
+char3 nwbMaterialLoadChar3AtBase(const uint storageByteOffset, const uint byteOffset){
+    return char3(nwbMaterialLoadCharAtBase(storageByteOffset, byteOffset + 0u), nwbMaterialLoadCharAtBase(storageByteOffset, byteOffset + 1u), nwbMaterialLoadCharAtBase(storageByteOffset, byteOffset + 2u));
+}
+
+char4 nwbMaterialLoadChar4AtBase(const uint storageByteOffset, const uint byteOffset){
+    return char4(
+        nwbMaterialLoadCharAtBase(storageByteOffset, byteOffset + 0u),
+        nwbMaterialLoadCharAtBase(storageByteOffset, byteOffset + 1u),
+        nwbMaterialLoadCharAtBase(storageByteOffset, byteOffset + 2u),
+        nwbMaterialLoadCharAtBase(storageByteOffset, byteOffset + 3u)
+    );
+}
+
+uchar2 nwbMaterialLoadUChar2AtBase(const uint storageByteOffset, const uint byteOffset){
+    return uchar2(nwbMaterialLoadUCharAtBase(storageByteOffset, byteOffset + 0u), nwbMaterialLoadUCharAtBase(storageByteOffset, byteOffset + 1u));
+}
+
+uchar3 nwbMaterialLoadUChar3AtBase(const uint storageByteOffset, const uint byteOffset){
+    return uchar3(nwbMaterialLoadUCharAtBase(storageByteOffset, byteOffset + 0u), nwbMaterialLoadUCharAtBase(storageByteOffset, byteOffset + 1u), nwbMaterialLoadUCharAtBase(storageByteOffset, byteOffset + 2u));
+}
+
+uchar4 nwbMaterialLoadUChar4AtBase(const uint storageByteOffset, const uint byteOffset){
+    return uchar4(
+        nwbMaterialLoadUCharAtBase(storageByteOffset, byteOffset + 0u),
+        nwbMaterialLoadUCharAtBase(storageByteOffset, byteOffset + 1u),
+        nwbMaterialLoadUCharAtBase(storageByteOffset, byteOffset + 2u),
+        nwbMaterialLoadUCharAtBase(storageByteOffset, byteOffset + 3u)
+    );
+}
+
+short2 nwbMaterialLoadShort2AtBase(const uint storageByteOffset, const uint byteOffset){
+    return short2(nwbMaterialLoadShortAtBase(storageByteOffset, byteOffset + 0u), nwbMaterialLoadShortAtBase(storageByteOffset, byteOffset + 2u));
+}
+
+short3 nwbMaterialLoadShort3AtBase(const uint storageByteOffset, const uint byteOffset){
+    return short3(nwbMaterialLoadShortAtBase(storageByteOffset, byteOffset + 0u), nwbMaterialLoadShortAtBase(storageByteOffset, byteOffset + 2u), nwbMaterialLoadShortAtBase(storageByteOffset, byteOffset + 4u));
+}
+
+short4 nwbMaterialLoadShort4AtBase(const uint storageByteOffset, const uint byteOffset){
+    return short4(
+        nwbMaterialLoadShortAtBase(storageByteOffset, byteOffset + 0u),
+        nwbMaterialLoadShortAtBase(storageByteOffset, byteOffset + 2u),
+        nwbMaterialLoadShortAtBase(storageByteOffset, byteOffset + 4u),
+        nwbMaterialLoadShortAtBase(storageByteOffset, byteOffset + 6u)
+    );
+}
+
+ushort2 nwbMaterialLoadUShort2AtBase(const uint storageByteOffset, const uint byteOffset){
+    return ushort2(nwbMaterialLoadUShortAtBase(storageByteOffset, byteOffset + 0u), nwbMaterialLoadUShortAtBase(storageByteOffset, byteOffset + 2u));
+}
+
+ushort3 nwbMaterialLoadUShort3AtBase(const uint storageByteOffset, const uint byteOffset){
+    return ushort3(nwbMaterialLoadUShortAtBase(storageByteOffset, byteOffset + 0u), nwbMaterialLoadUShortAtBase(storageByteOffset, byteOffset + 2u), nwbMaterialLoadUShortAtBase(storageByteOffset, byteOffset + 4u));
+}
+
+ushort4 nwbMaterialLoadUShort4AtBase(const uint storageByteOffset, const uint byteOffset){
+    return ushort4(
+        nwbMaterialLoadUShortAtBase(storageByteOffset, byteOffset + 0u),
+        nwbMaterialLoadUShortAtBase(storageByteOffset, byteOffset + 2u),
+        nwbMaterialLoadUShortAtBase(storageByteOffset, byteOffset + 4u),
+        nwbMaterialLoadUShortAtBase(storageByteOffset, byteOffset + 6u)
+    );
+}
+
+int2 nwbMaterialLoadInt2AtBase(const uint storageByteOffset, const uint byteOffset){
+    return int2(nwbMaterialLoadIntAtBase(storageByteOffset, byteOffset + 0u), nwbMaterialLoadIntAtBase(storageByteOffset, byteOffset + 4u));
+}
+
+int3 nwbMaterialLoadInt3AtBase(const uint storageByteOffset, const uint byteOffset){
+    return int3(nwbMaterialLoadIntAtBase(storageByteOffset, byteOffset + 0u), nwbMaterialLoadIntAtBase(storageByteOffset, byteOffset + 4u), nwbMaterialLoadIntAtBase(storageByteOffset, byteOffset + 8u));
+}
+
+int4 nwbMaterialLoadInt4AtBase(const uint storageByteOffset, const uint byteOffset){
+    return int4(
+        nwbMaterialLoadIntAtBase(storageByteOffset, byteOffset + 0u),
+        nwbMaterialLoadIntAtBase(storageByteOffset, byteOffset + 4u),
+        nwbMaterialLoadIntAtBase(storageByteOffset, byteOffset + 8u),
+        nwbMaterialLoadIntAtBase(storageByteOffset, byteOffset + 12u)
+    );
+}
+
+uint2 nwbMaterialLoadUInt2AtBase(const uint storageByteOffset, const uint byteOffset){
+    return uint2(nwbMaterialLoadUIntAtBase(storageByteOffset, byteOffset + 0u), nwbMaterialLoadUIntAtBase(storageByteOffset, byteOffset + 4u));
+}
+
+uint3 nwbMaterialLoadUInt3AtBase(const uint storageByteOffset, const uint byteOffset){
+    return uint3(nwbMaterialLoadUIntAtBase(storageByteOffset, byteOffset + 0u), nwbMaterialLoadUIntAtBase(storageByteOffset, byteOffset + 4u), nwbMaterialLoadUIntAtBase(storageByteOffset, byteOffset + 8u));
+}
+
+uint4 nwbMaterialLoadUInt4AtBase(const uint storageByteOffset, const uint byteOffset){
+    return uint4(
+        nwbMaterialLoadUIntAtBase(storageByteOffset, byteOffset + 0u),
+        nwbMaterialLoadUIntAtBase(storageByteOffset, byteOffset + 4u),
+        nwbMaterialLoadUIntAtBase(storageByteOffset, byteOffset + 8u),
+        nwbMaterialLoadUIntAtBase(storageByteOffset, byteOffset + 12u)
+    );
+}
+
+float2 nwbMaterialLoadFloat2AtBase(const uint storageByteOffset, const uint byteOffset){
+    return float2(nwbMaterialLoadFloatAtBase(storageByteOffset, byteOffset + 0u), nwbMaterialLoadFloatAtBase(storageByteOffset, byteOffset + 4u));
+}
+
+float3 nwbMaterialLoadFloat3AtBase(const uint storageByteOffset, const uint byteOffset){
+    return float3(nwbMaterialLoadFloatAtBase(storageByteOffset, byteOffset + 0u), nwbMaterialLoadFloatAtBase(storageByteOffset, byteOffset + 4u), nwbMaterialLoadFloatAtBase(storageByteOffset, byteOffset + 8u));
+}
+
+float4 nwbMaterialLoadFloat4AtBase(const uint storageByteOffset, const uint byteOffset){
+    return float4(
+        nwbMaterialLoadFloatAtBase(storageByteOffset, byteOffset + 0u),
+        nwbMaterialLoadFloatAtBase(storageByteOffset, byteOffset + 4u),
+        nwbMaterialLoadFloatAtBase(storageByteOffset, byteOffset + 8u),
+        nwbMaterialLoadFloatAtBase(storageByteOffset, byteOffset + 12u)
+    );
+}
+
+bool nwbMaterialLoadConstantBool(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadBoolAtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+bool2 nwbMaterialLoadConstantBool2(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadBool2AtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+bool3 nwbMaterialLoadConstantBool3(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadBool3AtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+bool4 nwbMaterialLoadConstantBool4(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadBool4AtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+bool nwbMaterialLoadMutableBool(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadBoolAtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+bool2 nwbMaterialLoadMutableBool2(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadBool2AtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+bool3 nwbMaterialLoadMutableBool3(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadBool3AtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+bool4 nwbMaterialLoadMutableBool4(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadBool4AtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+char nwbMaterialLoadConstantChar(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadCharAtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+char2 nwbMaterialLoadConstantChar2(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadChar2AtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+char3 nwbMaterialLoadConstantChar3(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadChar3AtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+char4 nwbMaterialLoadConstantChar4(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadChar4AtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+char nwbMaterialLoadMutableChar(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadCharAtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+char2 nwbMaterialLoadMutableChar2(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadChar2AtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+char3 nwbMaterialLoadMutableChar3(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadChar3AtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+char4 nwbMaterialLoadMutableChar4(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadChar4AtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+uchar nwbMaterialLoadConstantUChar(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadUCharAtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+uchar2 nwbMaterialLoadConstantUChar2(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadUChar2AtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+uchar3 nwbMaterialLoadConstantUChar3(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadUChar3AtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+uchar4 nwbMaterialLoadConstantUChar4(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadUChar4AtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+uchar nwbMaterialLoadMutableUChar(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadUCharAtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+uchar2 nwbMaterialLoadMutableUChar2(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadUChar2AtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+uchar3 nwbMaterialLoadMutableUChar3(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadUChar3AtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+uchar4 nwbMaterialLoadMutableUChar4(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadUChar4AtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+short nwbMaterialLoadConstantShort(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadShortAtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+short2 nwbMaterialLoadConstantShort2(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadShort2AtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+short3 nwbMaterialLoadConstantShort3(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadShort3AtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+short4 nwbMaterialLoadConstantShort4(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadShort4AtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+short nwbMaterialLoadMutableShort(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadShortAtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+short2 nwbMaterialLoadMutableShort2(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadShort2AtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+short3 nwbMaterialLoadMutableShort3(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadShort3AtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+short4 nwbMaterialLoadMutableShort4(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadShort4AtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+ushort nwbMaterialLoadConstantUShort(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadUShortAtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+ushort2 nwbMaterialLoadConstantUShort2(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadUShort2AtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+ushort3 nwbMaterialLoadConstantUShort3(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadUShort3AtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+ushort4 nwbMaterialLoadConstantUShort4(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadUShort4AtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+ushort nwbMaterialLoadMutableUShort(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadUShortAtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+ushort2 nwbMaterialLoadMutableUShort2(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadUShort2AtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+ushort3 nwbMaterialLoadMutableUShort3(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadUShort3AtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+ushort4 nwbMaterialLoadMutableUShort4(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadUShort4AtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+int nwbMaterialLoadConstantInt(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadIntAtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+int2 nwbMaterialLoadConstantInt2(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadInt2AtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+int3 nwbMaterialLoadConstantInt3(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadInt3AtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+int4 nwbMaterialLoadConstantInt4(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadInt4AtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+int nwbMaterialLoadMutableInt(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadIntAtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+int2 nwbMaterialLoadMutableInt2(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadInt2AtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+int3 nwbMaterialLoadMutableInt3(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadInt3AtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+int4 nwbMaterialLoadMutableInt4(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadInt4AtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+uint nwbMaterialLoadConstantUInt(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadUIntAtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+uint2 nwbMaterialLoadConstantUInt2(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadUInt2AtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+uint3 nwbMaterialLoadConstantUInt3(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadUInt3AtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+uint4 nwbMaterialLoadConstantUInt4(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadUInt4AtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+uint nwbMaterialLoadMutableUInt(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadUIntAtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+uint2 nwbMaterialLoadMutableUInt2(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadUInt2AtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+uint3 nwbMaterialLoadMutableUInt3(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadUInt3AtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+uint4 nwbMaterialLoadMutableUInt4(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadUInt4AtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+float nwbMaterialLoadConstantFloat(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadFloatAtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+float2 nwbMaterialLoadConstantFloat2(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadFloat2AtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+float3 nwbMaterialLoadConstantFloat3(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadFloat3AtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+float4 nwbMaterialLoadConstantFloat4(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadFloat4AtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+float nwbMaterialLoadMutableFloat(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadFloatAtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+float2 nwbMaterialLoadMutableFloat2(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadFloat2AtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+float3 nwbMaterialLoadMutableFloat3(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadFloat3AtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+float4 nwbMaterialLoadMutableFloat4(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadFloat4AtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+half nwbMaterialLoadConstantHalf(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadHalfAtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+half2 nwbMaterialLoadConstantHalf2(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadHalf2AtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+half3 nwbMaterialLoadConstantHalf3(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadHalf3AtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+half4 nwbMaterialLoadConstantHalf4(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadHalf4AtBase(nwbMeshMaterialConstantByteOffset(), byteOffset);
+}
+
+half nwbMaterialLoadMutableHalf(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadHalfAtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+half2 nwbMaterialLoadMutableHalf2(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadHalf2AtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+half3 nwbMaterialLoadMutableHalf3(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadHalf3AtBase(instance.materialMutableByteOffset, byteOffset);
+}
+
+half4 nwbMaterialLoadMutableHalf4(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadHalf4AtBase(instance.materialMutableByteOffset, byteOffset);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

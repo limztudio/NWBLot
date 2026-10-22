@@ -7,6 +7,10 @@
 #include "smoke_project_helpers.h"
 #include "smoke_scene_helpers.h"
 
+#if defined(NWB_CSG_CAUSTIC_SMOKE)
+#include "csg_caustic_timing_probe.h"
+#endif
+
 #include <loader/project_entry.h>
 
 #include <impl/ecs_csg/module.h>
@@ -193,6 +197,10 @@ private:
             center, extent
         );
         NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("CsgShadowSmokeProject: box creation failed"));
+#if defined(NWB_CSG_CAUSTIC_SMOKE)
+        if(transparent)
+            m_world->entity(entity).getComponent<NWB::Impl::RendererComponent>().opticalBoundaryMode = NWB::Impl::OpticalBoundaryMode::ClosedNested;
+#endif
         if(transparent && m_openAtlas){
             const Half packedIor = ConvertFloatToHalf(1.5f);
             const Half4U packedTransmission = MakeHalf4U(0.25f, 0.5f, 0.75f, 0.0f);
@@ -413,7 +421,70 @@ private:
         return true;
     }
 
+#if defined(NWB_CSG_CAUSTIC_SMOKE)
+    bool configureTiming(NWB::Core::Alloc::ScratchArena& scratchArena){
+        const auto mode = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_CAUSTIC_TIMING_MODE");
+        const auto output = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_CAUSTIC_TIMING_FILE");
+        const auto cpuOutput = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_CAUSTIC_CPU_GPU_FILE");
+        const auto start = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_CAUSTIC_TIMING_START_FILE");
+        if(!mode){
+            if(output || cpuOutput || start){
+                NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: mode and explicit output must agree"));
+                return false;
+            }
+            return true;
+        }
+        const AStringView modeView(mode->data(), mode->size());
+        const auto route = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_CAUSTIC_TIMING_ROUTE");
+        const AStringView routeView = route ? AStringView(route->data(), route->size()) : AStringView{};
+        if(
+            (modeView != "performance" && modeView != "diagnostic") || (routeView != "hardware" && routeView != "software") || !output || !start || m_capture || !m_context.requestQuit
+            || (m_arm != Arm::Reference && m_arm != Arm::Cut) || m_pointLight || m_finiteLightSource || m_analyticAtlas || m_openAtlas || ReadSmokeEnvironmentFlag("NWB_CSG_CAUSTIC_DISABLED")
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: requires uncaptured directional hard-light reference/cut boxes and an explicit route"));
+            return false;
+        }
+        const bool rayTracing = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct);
+        const bool rayQuery = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
+        const bool hardware = rayTracing && rayQuery;
+        if(routeView == "hardware" && !hardware){
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticTiming: hardware unavailable rt_accel={} ray_query={}"), rayTracing ? 1u : 0u, rayQuery ? 1u : 0u);
+            m_context.requestQuit();
+            return true;
+        }
+        if((routeView == "hardware") != hardware){
+            NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: actual route differs from requested acquisition"));
+            return false;
+        }
+        const usize receivers = m_world->view<NWB::Impl::StaticCsgMeshComponent>().candidateCount() + m_world->view<NWB::Impl::SkinnedCsgMeshComponent>().candidateCount();
+        const usize cutters = m_world->view<NWB::Impl::CsgCutterComponent>().candidateCount();
+        if(receivers != (m_arm == Arm::Cut ? 1u : 0u) || cutters != receivers){
+            NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: fixture receiver/cutter identity differs from selected arm"));
+            return false;
+        }
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticTiming: scene arm={} receivers={} cutters={} expected_shader_csg={} camera=960x720 light=directional capture=0")
+            , m_arm == Arm::Cut ? NWB_TEXT("cut") : NWB_TEXT("reference"), receivers, cutters, receivers != 0u ? 1u : 0u
+        );
+        m_timing = MakeUnique<NWB::Tests::Smoke::CsgCausticTimingProbe>(m_context);
+        if(!m_timing->initialize(
+            modeView == "diagnostic", receivers != 0u, hardware, AStringView(output->data(), output->size())
+            , cpuOutput ? AStringView(cpuOutput->data(), cpuOutput->size()) : AStringView{}, AStringView(start->data(), start->size())
+        ))
+            return false;
+        m_context.graphics.addRenderPassToBack(*m_timing);
+        m_timingRegistered = true;
+        return true;
+    }
+#endif
+
     void destroyWorld(){
+#if defined(NWB_CSG_CAUSTIC_SMOKE)
+        if(m_timingRegistered){
+            m_context.graphics.removeRenderPass(*m_timing);
+            m_timingRegistered = false;
+        }
+        m_timing.reset();
+#endif
         if(m_capture){
             m_capture->stop();
             m_capture.reset();
@@ -478,10 +549,19 @@ public:
         if(!capture)
             return false;
         m_capture = Move(*capture);
+#if defined(NWB_CSG_CAUSTIC_SMOKE)
+        NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
+        if(!configureTiming(scratchArena))
+            return false;
+#endif
         return true;
     }
 
     virtual void onShutdown()override{
+#if defined(NWB_CSG_CAUSTIC_SMOKE)
+        if(m_timing)
+            m_timing->finish();
+#endif
         destroyWorld();
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: shutdown"));
     }
@@ -504,6 +584,10 @@ public:
             NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
             return false;
         }
+#if defined(NWB_CSG_CAUSTIC_SMOKE)
+        if(m_timing && !m_timing->update())
+            return false;
+#endif
         return true;
     }
 
@@ -512,6 +596,10 @@ private:
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
     UniquePtr<FramebufferCapture> m_capture;
+#if defined(NWB_CSG_CAUSTIC_SMOKE)
+    UniquePtr<NWB::Tests::Smoke::CsgCausticTimingProbe> m_timing;
+    bool m_timingRegistered = false;
+#endif
     EntityID m_movingCutters[2] = {};
     Float4 m_finalCutterCenters[2] = {};
     u32 m_movingCount = 0u;
@@ -535,7 +623,9 @@ private:
 
 
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){ return { 960, 720 }; }
+
 TStringView NWB::QueryProjectWindowTitle()noexcept{ return NWB_TEXT("NWB CSG Shadow Smoke"); }
+
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<__hidden_csg_shadow_smoke::CsgShadowSmokeProject>(context);
 }

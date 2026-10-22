@@ -61,10 +61,12 @@ template<typename CharT>
 
     return text.substr(begin, end - begin);
 }
+
 template<typename CharT, typename ArenaT>
 [[nodiscard]] inline BasicStringView<CharT> TrimView(const BasicString<CharT, ArenaT>& text)noexcept(IsArithmetic_V<CharT>){
     return TrimView<CharT>(BasicStringView<CharT>{text});
 }
+
 template<typename StringT> requires requires(const StringT& text){ typename StringT::value_type; text.data(); text.size(); }
 [[nodiscard]] inline BasicStringView<typename StringT::value_type> TrimView(const StringT& text)noexcept(noexcept(BasicStringView<typename StringT::value_type>{text.data(), text.size()}) && IsArithmetic_V<typename StringT::value_type>){
     using CharT = typename StringT::value_type;
@@ -80,10 +82,12 @@ template<typename CharT>
         text.remove_prefix(1u);
     return text;
 }
+
 template<typename CharT, typename ArenaT>
 [[nodiscard]] inline BasicStringView<CharT> TrimLeftView(const BasicString<CharT, ArenaT>& text)noexcept(IsArithmetic_V<CharT>){
     return TrimLeftView<CharT>(BasicStringView<CharT>{text});
 }
+
 template<typename StringT> requires requires(const StringT& text){ typename StringT::value_type; text.data(); text.size(); }
 [[nodiscard]] inline BasicStringView<typename StringT::value_type> TrimLeftView(const StringT& text)noexcept(noexcept(BasicStringView<typename StringT::value_type>{text.data(), text.size()}) && IsArithmetic_V<typename StringT::value_type>){
     using CharT = typename StringT::value_type;
@@ -97,14 +101,17 @@ template<typename CharT>
 [[nodiscard]] inline constexpr bool StartsWith(const BasicStringView<CharT> text, const BasicStringView<CharT> prefix)noexcept(IsArithmetic_V<CharT>){
     return text.size() >= prefix.size() && BasicStringView<CharT>(text.data(), prefix.size()) == prefix;
 }
+
 template<typename CharT, typename ArenaT>
 [[nodiscard]] inline constexpr bool StartsWith(const BasicString<CharT, ArenaT>& text, const BasicStringView<CharT> prefix)noexcept(IsArithmetic_V<CharT>){
     return StartsWith<CharT>(BasicStringView<CharT>{text}, prefix);
 }
+
 template<typename CharT, usize N>
 [[nodiscard]] inline constexpr bool StartsWith(const BasicStringView<CharT> text, const CharT (&prefix)[N])noexcept(IsArithmetic_V<CharT>){
     return StartsWith<CharT>(text, BasicStringView<CharT>(prefix, N > 0u ? N - 1u : 0u));
 }
+
 template<typename CharT, typename ArenaT, usize N>
 [[nodiscard]] inline constexpr bool StartsWith(const BasicString<CharT, ArenaT>& text, const CharT (&prefix)[N])noexcept(IsArithmetic_V<CharT>){
     return StartsWith<CharT>(BasicStringView<CharT>{text}, BasicStringView<CharT>(prefix, N > 0u ? N - 1u : 0u));
@@ -114,6 +121,7 @@ template<typename CharT, typename ArenaT>
 [[nodiscard]] inline BasicString<CharT, ArenaT> Trim(ArenaT& arena, const BasicStringView<CharT> text){
     return BasicString<CharT, ArenaT>(TrimView(text), arena);
 }
+
 template<typename CharT, typename ArenaT>
 [[nodiscard]] inline BasicString<CharT, ArenaT> Trim(const BasicString<CharT, ArenaT>& text){
     return BasicString<CharT, ArenaT>(TrimView<CharT>(BasicStringView<CharT>{text}), text.get_allocator());
@@ -127,7 +135,11 @@ template<typename StringT>
         text.erase(index);
         text.erase(index, count);
     }
-inline void TrimInPlace(StringT& inOutText){
+inline void TrimInPlace(StringT& inOutText)noexcept(
+    noexcept(TrimView(inOutText)) && noexcept(static_cast<bool>(DeclVal<usize>() == inOutText.size()))
+    && noexcept(static_cast<usize>(DeclVal<BasicStringView<typename StringT::value_type>>().data() - inOutText.data()))
+    && noexcept(inOutText.erase(DeclVal<usize>())) && noexcept(inOutText.erase(0u, DeclVal<const usize&>()))
+){
     const BasicStringView<typename StringT::value_type> trimmed = TrimView(inOutText);
     if(trimmed.size() == inOutText.size())
         return;
@@ -138,7 +150,7 @@ inline void TrimInPlace(StringT& inOutText){
 }
 
 template<typename StringT>
-[[nodiscard]] inline StringT TrimCopy(StringT text){
+[[nodiscard]] inline StringT TrimCopy(StringT text)noexcept(noexcept(TrimInPlace(text)) && IsNothrowMoveConstructible_V<StringT> && IsNothrowDestructible_V<StringT>){
     TrimInPlace(text);
     return text;
 }
@@ -160,7 +172,22 @@ template<typename StringT>
         text.resize(size);
         text[0u];
     }
-inline void NormalizeLineEndingsInPlace(StringT& inOutText, const bool useCrlf){
+inline void NormalizeLineEndingsInPlace(StringT& inOutText, const bool useCrlf)noexcept([]()consteval noexcept{
+    using CharT = typename StringT::value_type;
+    return
+        noexcept(DeclVal<void(*)(usize)noexcept>()(DeclVal<StringT&>().size()))
+        && noexcept(static_cast<bool>(DeclVal<StringT&>()[DeclVal<usize&>()] == CharT('\r')))
+        && noexcept(static_cast<bool>(DeclVal<bool>() && DeclVal<StringT&>()[DeclVal<usize>()] == CharT('\n')))
+        && noexcept(DeclVal<void(*)(CharT)noexcept>()(DeclVal<StringT&>()[DeclVal<usize&>()]))
+        && noexcept(static_cast<bool>(DeclVal<const CharT&>() == CharT('\r')))
+        && noexcept(DeclVal<StringT&>()[DeclVal<usize>()] = CharT('\n'))
+        && noexcept(DeclVal<StringT&>()[DeclVal<usize>()] = DeclVal<const CharT&>())
+        && noexcept(DeclVal<StringT&>()[DeclVal<usize&>()] = CharT('\n'))
+        && noexcept(DeclVal<StringT&>()[DeclVal<usize&>()] = DeclVal<const CharT&>())
+        && noexcept(DeclVal<StringT&>().resize(DeclVal<usize&>())) && noexcept(DeclVal<StringT&>().resize(DeclVal<usize>()))
+        && IsNothrowDestructible_V<CharT>
+    ;
+}()){
     using CharT = typename StringT::value_type;
     const usize sourceSize = inOutText.size();
 
@@ -228,7 +255,10 @@ inline void NormalizeLineEndingsInPlace(StringT& inOutText, const bool useCrlf){
 
 
 template<typename StringT>
-inline void StripUtf8Bom(StringT& inOutText){
+inline void StripUtf8Bom(StringT& inOutText)noexcept(
+    noexcept(static_cast<bool>(inOutText.size() < TextDetail::s_Utf8BomByteCount)) && noexcept(static_cast<u8>(inOutText[0]))
+    && noexcept(inOutText.erase(0, TextDetail::s_Utf8BomByteCount))
+){
     if(inOutText.size() < TextDetail::s_Utf8BomByteCount)
         return;
 

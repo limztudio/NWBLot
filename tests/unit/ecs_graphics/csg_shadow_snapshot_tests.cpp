@@ -52,11 +52,13 @@ struct FrameCacheRuntimeProvider final : IRuntimeMeshProvider{
 
 public:
     [[nodiscard]] virtual Expected<RuntimeMeshDesc> resolveRuntimeMesh(Core::ECS::EntityID)noexcept override{ return MakeUnexpected(Failure{}); }
+
     [[nodiscard]] virtual bool hasRuntimeMeshBinding(const Core::ECS::EntityID entity)const override{
         if(throwOnQuery)
             throw s_FrameCacheBindingFailure;
         return attached && entity == receiver;
     }
+
     virtual void markLiveRuntimeMeshes(RuntimeMeshRequestSet&)noexcept override{}
 };
 

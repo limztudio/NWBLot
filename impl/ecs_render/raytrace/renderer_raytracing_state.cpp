@@ -132,7 +132,7 @@ void RendererRayTracingState::invalidateResources()noexcept{
     m_rayTraceMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::Invalid();
     m_csgTraceContextBuffer.reset();
     m_csgTraceContextHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    for(auto& token : m_csgTraceContextReadSubmissionTokens)
+    for(auto& token : m_rayTraceContextReadSubmissionTokens)
         token = {};
     m_sceneBvhNodeCapacity = 0u;
     m_sceneInstanceCapacity = 0u;

@@ -298,6 +298,11 @@ public:
         activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(*m_world, Float4(0.0f, s_CameraHeight, -s_CameraDistance, 0.0f));
         const auto directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, s_DefaultDirectionalLightPitch, s_DefaultDirectionalLightYaw, 0.0f, s_WarmDirectionalLightColor, s_DefaultDirectionalLightIntensity);
 
+#if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
+        if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(directionalLight))
+            light->enableCaustics = false;
+#endif
+
         createReceiver();
         SyncSmokeModelRuntimes(*m_world);
         const bool receiverReady = installCsgReceiverOnSpawnedModelObject();

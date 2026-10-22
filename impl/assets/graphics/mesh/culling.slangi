@@ -159,7 +159,7 @@ bool nwbMeshAllOutsideScissor(const float4 a, const float4 b, const float4 c){
     return triMax.x < scissorRect.x || triMin.x > scissorRect.z || triMax.y < scissorRect.y || triMin.y > scissorRect.w;
 }
 
-bool nwbMeshTriangleCulled(const NwbMeshGeneratedVertex vertices[NWB_MESHLET_TRIANGLE_INDEX_COUNT]){
+bool nwbMeshTriangleCulled(__constref NwbMeshGeneratedVertex vertices[NWB_MESHLET_TRIANGLE_INDEX_COUNT]){
     const float4 a = vertices[0].position;
     const float4 b = vertices[1].position;
     const float4 c = vertices[2].position;

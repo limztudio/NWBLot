@@ -144,6 +144,7 @@ public:
 
 public:
     [[nodiscard]] bool empty()const noexcept{ return meshDrawItems.empty() && indexedDrawItems.empty() && computeDrawItems.empty(); }
+
     void reserve(const usize capacity){
         meshDrawItems.reserve(capacity);
         indexedDrawItems.reserve(capacity);
@@ -167,6 +168,7 @@ public:
 
 public:
     [[nodiscard]] bool empty()const noexcept{ return regular.empty() && csg.empty() && csgReceiverSurface.empty(); }
+
     void reserve(const usize capacity){
         regular.reserve(capacity);
         csg.reserve(capacity);

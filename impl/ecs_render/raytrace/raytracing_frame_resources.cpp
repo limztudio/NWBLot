@@ -53,6 +53,11 @@ RayTracingLightingClassificationInput RendererRayTracingSystem::snapshotLighting
 
 void RendererRayTracingSystem::publishPreparedLightingClassification(const RayTracingLightingClassification& classification, const ECSRenderDetail::SceneLightGpuData* const lights, const u32 lightCount){
     m_rayTracingState.m_causticLightCount = classification.causticLightCount;
+    if(m_shadowVisibilityTraceResourcesPreflighted && classification.causticLightCount != 0u && m_unsupportedCausticVolumeCount != 0u && (!m_unsupportedCausticVolumeReported || m_reportedUnsupportedCausticVolumeHash != m_unsupportedCausticVolumeHash)){
+        m_reportedUnsupportedCausticVolumeHash = m_unsupportedCausticVolumeHash;
+        m_unsupportedCausticVolumeReported = true;
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: caustic photons unavailable: {} refractive volume(s) need an explicit closed homogeneous optical boundary mode (first entity {})"), m_unsupportedCausticVolumeCount, m_firstUnsupportedCausticVolumeEntity);
+    }
     m_rayTracingState.m_softShadowSlotMask = classification.softShadowSlotMask;
     m_rayTracingState.m_softwareTransparentSampling.m_history.prepareLighting(lights, lightCount);
     prepareLightSpaceShadows(lights, lightCount);
@@ -102,18 +107,18 @@ RayTracingShadowPreparationResourceSnapshot RendererRayTracingSystem::snapshotSh
 RayTracingDeferredGraphResourceSnapshot RendererRayTracingSystem::snapshotDeferredGraphResources()const noexcept{
     const auto& state = m_rayTracingState;
     const bool hasCsgTrace = m_shadowVisibilityTraceResourcesPreflighted && m_lightSpaceShadow.m_csg.snapshot.hasCsg;
-    usize csgReadTokenCount = 0u;
-    for(const auto& token : state.m_csgTraceContextReadSubmissionTokens){
+    usize contextReadTokenCount = 0u;
+    for(const auto& token : state.m_rayTraceContextReadSubmissionTokens){
         if(token.valid()){
-            csgReadTokenCount = state.m_csgTraceContextReadSubmissionTokens.size();
+            contextReadTokenCount = state.m_rayTraceContextReadSubmissionTokens.size();
             break;
         }
     }
     return RayTracingDeferredGraphResourceSnapshot{
         .materialContextSlotsBuffer = state.m_rayTraceMaterialContextSlotsBuffer,
         .csgTraceContextBuffer = hasCsgTrace ? state.m_csgTraceContextBuffer : nullptr,
-        .csgTraceContextReadSubmissionTokens = csgReadTokenCount != 0u ? state.m_csgTraceContextReadSubmissionTokens.data() : nullptr,
-        .csgTraceContextReadSubmissionTokenCount = csgReadTokenCount,
+        .rayTraceContextReadSubmissionTokens = contextReadTokenCount != 0u ? state.m_rayTraceContextReadSubmissionTokens.data() : nullptr,
+        .rayTraceContextReadSubmissionTokenCount = contextReadTokenCount,
         .csgTraceBoundsBuffers = hasCsgTrace ? m_lightSpaceShadow.m_csg.dynamicBounds.data() : nullptr,
         .csgTraceBoundsBufferCount = hasCsgTrace ? m_lightSpaceShadow.m_csg.dynamicBounds.size() : 0u,
         .shadowInstanceMaterialBuffer = state.m_shadowInstanceMaterialBuffer,

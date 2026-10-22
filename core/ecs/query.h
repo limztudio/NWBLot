@@ -138,6 +138,7 @@ public:
     bool resolveDenseIndices(EntityID entityId, usize anchorDenseIndex)noexcept{
         return resolveDenseIndicesImpl(entityId, anchorDenseIndex, IndexSequenceFor<Ts...>{});
     }
+
     template<usize I>
     bool resolveDenseIndex(EntityID entityId, usize anchorDenseIndex)noexcept{
         const auto denseIndex = ViewTupleAccess::FindDenseIndex<I>(pools, anchorPoolIndex, anchorDenseIndex, entityId);
@@ -166,6 +167,7 @@ public:
 };
 template<typename... Ts>
 inline bool operator==(const ViewIterator<Ts...>& a, const ViewIterator<Ts...>& b)noexcept{ return a.index == b.index; }
+
 template<typename... Ts>
 inline bool operator!=(const ViewIterator<Ts...>& a, const ViewIterator<Ts...>& b)noexcept{ return a.index != b.index; }
 
@@ -201,6 +203,7 @@ public:
     IteratorType begin()const noexcept{
         return IteratorType(m_pools, m_anchorEntities, m_anchorPoolIndex, 0, m_count, m_valid);
     }
+
     IteratorType end()const noexcept{
         return IteratorType(m_pools, m_anchorEntities, m_anchorPoolIndex, m_count, m_count, false);
     }

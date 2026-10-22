@@ -52,21 +52,25 @@ public:
 
 class MeshCookSourceStreams final : NoCopy{
 public:
-    static Expected<ScratchVector<MeshVertexRef>> ParseSourceVertexRefs(const Path& nwbFilePath, const Core::Metascript::Value& asset, const TStringView metaKind, const bool includeSkin, Core::Alloc::ScratchArena& scratchArena);
+    static Expected<ScratchVector<MeshVertexRef>> ParseSourceVertexRefs(const Path& nwbFilePath, const Core::Metascript::Value& asset, const TStringView metaKind, Core::Alloc::ScratchArena& scratchArena);
     static bool ValidateSourceStreamIndex(const Path& nwbFilePath, const TStringView metaKind, const AStringView streamName, const u32 index, const usize streamCount);
     static bool ValidateSourceIndexStream(const Path& nwbFilePath, const TStringView metaKind, const Core::Assets::AssetVector<u32>& indices, const usize vertexRefCount);
-    static bool ValidateSourceVertexRefs(const Path& nwbFilePath, const TStringView metaKind, const bool includeSkin, const SourceMeshStreams& streams, const usize skinCount);
+    static bool ValidateSourceVertexRefs(const Path& nwbFilePath, const TStringView metaKind, const SourceMeshStreams& streams);
     template<typename CookEntryT>
-    static void CopySourceStreams(SourceMeshStreams& streams, CookEntryT& outEntry);
-    static Expected<SourceMeshStreams> ParseCommonSourceMeshStreams(
-        const DiscoveredNwbFile& discoveredFile,
-        const Core::Metascript::Value& asset,
-        const TStringView metaKind,
-        const bool includeSkin,
-        Core::Assets::AssetArena& assetArena,
-        const usize skinCount,
-        Core::Alloc::ScratchArena& scratchArena
+    static void CopySourceStreams(SourceMeshStreams& streams, CookEntryT& outEntry)noexcept(
+        noexcept(outEntry.positions.clear()) && noexcept(outEntry.normals.clear()) && noexcept(outEntry.tangents.clear())
+        && noexcept(outEntry.uv0.clear()) && noexcept(outEntry.colors.clear()) && noexcept(outEntry.vertexRefs.clear())
+        && noexcept(outEntry.positions.reserve(streams.positions.size())) && noexcept(outEntry.normals.reserve(streams.normals.size()))
+        && noexcept(outEntry.tangents.reserve(streams.tangents.size())) && noexcept(outEntry.uv0.reserve(streams.uv0.size()))
+        && noexcept(outEntry.colors.reserve(streams.colors.size())) && noexcept(outEntry.vertexRefs.reserve(streams.vertexRefs.size()))
+        && noexcept(outEntry.positions.insert(outEntry.positions.end(), streams.positions.begin(), streams.positions.end()))
+        && noexcept(outEntry.normals.push_back(MakeHalf4U(DeclVal<const Float3U&>().x, DeclVal<const Float3U&>().y, DeclVal<const Float3U&>().z, 0.0f)))
+        && noexcept(outEntry.tangents.push_back(MakeHalf4U(DeclVal<const Float4U&>().x, DeclVal<const Float4U&>().y, DeclVal<const Float4U&>().z, DeclVal<const Float4U&>().w)))
+        && noexcept(outEntry.uv0.insert(outEntry.uv0.end(), streams.uv0.begin(), streams.uv0.end()))
+        && noexcept(outEntry.colors.push_back(MakeHalf4U(DeclVal<const Float4U&>().x, DeclVal<const Float4U&>().y, DeclVal<const Float4U&>().z, DeclVal<const Float4U&>().w)))
+        && noexcept(outEntry.vertexRefs.insert(outEntry.vertexRefs.end(), streams.vertexRefs.begin(), streams.vertexRefs.end()))
     );
+    static Expected<SourceMeshStreams> ParseCommonSourceMeshStreams(const DiscoveredNwbFile& discoveredFile, const Core::Metascript::Value& asset, const TStringView metaKind, Core::Assets::AssetArena& assetArena, Core::Alloc::ScratchArena& scratchArena);
 
 
 public:
@@ -78,7 +82,19 @@ public:
 
 
 template<typename CookEntryT>
-void MeshCookSourceStreams::CopySourceStreams(SourceMeshStreams& streams, CookEntryT& outEntry){
+void MeshCookSourceStreams::CopySourceStreams(SourceMeshStreams& streams, CookEntryT& outEntry)noexcept(
+    noexcept(outEntry.positions.clear()) && noexcept(outEntry.normals.clear()) && noexcept(outEntry.tangents.clear())
+    && noexcept(outEntry.uv0.clear()) && noexcept(outEntry.colors.clear()) && noexcept(outEntry.vertexRefs.clear())
+    && noexcept(outEntry.positions.reserve(streams.positions.size())) && noexcept(outEntry.normals.reserve(streams.normals.size()))
+    && noexcept(outEntry.tangents.reserve(streams.tangents.size())) && noexcept(outEntry.uv0.reserve(streams.uv0.size()))
+    && noexcept(outEntry.colors.reserve(streams.colors.size())) && noexcept(outEntry.vertexRefs.reserve(streams.vertexRefs.size()))
+    && noexcept(outEntry.positions.insert(outEntry.positions.end(), streams.positions.begin(), streams.positions.end()))
+    && noexcept(outEntry.normals.push_back(MakeHalf4U(DeclVal<const Float3U&>().x, DeclVal<const Float3U&>().y, DeclVal<const Float3U&>().z, 0.0f)))
+    && noexcept(outEntry.tangents.push_back(MakeHalf4U(DeclVal<const Float4U&>().x, DeclVal<const Float4U&>().y, DeclVal<const Float4U&>().z, DeclVal<const Float4U&>().w)))
+    && noexcept(outEntry.uv0.insert(outEntry.uv0.end(), streams.uv0.begin(), streams.uv0.end()))
+    && noexcept(outEntry.colors.push_back(MakeHalf4U(DeclVal<const Float4U&>().x, DeclVal<const Float4U&>().y, DeclVal<const Float4U&>().z, DeclVal<const Float4U&>().w)))
+    && noexcept(outEntry.vertexRefs.insert(outEntry.vertexRefs.end(), streams.vertexRefs.begin(), streams.vertexRefs.end()))
+){
     outEntry.positions.clear();
     outEntry.normals.clear();
     outEntry.tangents.clear();

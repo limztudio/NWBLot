@@ -149,6 +149,7 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
         commandList.commitBarriers();
         {
             Core::GpuTimingMeasure opaqueTraceTiming(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowOpaqueTrace, m_graphics.getDevice(), commandList);
+
             SwShadowHeapPushConstants softTracePush = makePush();
             softTracePush.width = targets.width;
             softTracePush.height = targets.height;

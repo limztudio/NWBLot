@@ -49,6 +49,7 @@ public:
 
 public:
     [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_instanceGeneration; }
+
     [[nodiscard]] f64 offset()const noexcept{ return m_offset; }
     [[nodiscard]] bool setOffset(f64 offset)noexcept;
     [[nodiscard]] bool ensureVisible(f64 start, f64 end, f64 viewportHeight)noexcept;

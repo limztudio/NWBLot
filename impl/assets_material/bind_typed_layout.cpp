@@ -12,6 +12,7 @@
 #include "bind_typed_value.h"
 
 #include <global/array.h>
+#include <global/span.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -24,15 +25,6 @@ NWB_IMPL_BEGIN
 
 
 namespace MaterialBindDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct MaterialTypedFieldBytes{
-    NotNull<const u8*> data;
-    u32 size = 0u;
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -112,11 +104,11 @@ static Expected<UInt4U> BuildMaterialTypedLayoutDefaultValue(const Name& materia
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<MaterialTypedFieldBytes> GetMaterialTypedLayoutFieldBytes(const MaterialLayoutFieldType::Enum fieldType, const UInt4U& value)noexcept{
+static Expected<Span<const u8>> GetMaterialTypedLayoutFieldBytes(const MaterialLayoutFieldType::Enum fieldType, const UInt4U& value)noexcept{
     const u32 byteSize = MaterialLayoutFieldByteSize(fieldType);
     if(byteSize == 0u || byteSize > sizeof(value))
         return MakeUnexpected(Failure{});
-    return MaterialTypedFieldBytes{ MakeNotNull(reinterpret_cast<const u8*>(&value)), byteSize };
+    return Span<const u8>(reinterpret_cast<const u8*>(&value), byteSize);
 }
 
 
@@ -127,8 +119,8 @@ static Expected<MaterialTypedFieldBytes> GetMaterialTypedLayoutFieldBytes(const 
 static void AppendMaterialTypedLayoutFieldBytes(Material::TypedBlockByteVector& outBlockBytes, const MaterialLayoutFieldType::Enum fieldType, const UInt4U& value){
     const auto fieldBytes = GetMaterialTypedLayoutFieldBytes(fieldType, value);
     NWB_ASSERT(fieldBytes);
-    outBlockBytes.reserve(outBlockBytes.size() + fieldBytes->size);
-    outBlockBytes.insert(outBlockBytes.end(), fieldBytes->data.get(), fieldBytes->data.get() + fieldBytes->size);
+    outBlockBytes.reserve(outBlockBytes.size() + fieldBytes->size());
+    outBlockBytes.insert(outBlockBytes.end(), fieldBytes->begin(), fieldBytes->end());
 }
 
 
@@ -313,10 +305,10 @@ static bool WriteMaterialTypedLayoutFieldBytes(Material::TypedBlockByteVector& i
     const auto fieldBytes = GetMaterialTypedLayoutFieldBytes(fieldType, value);
     if(!fieldBytes)
         return false;
-    if(byteOffset > inOutBlockBytes.size() || static_cast<usize>(fieldBytes->size) > inOutBlockBytes.size() - byteOffset)
+    if(byteOffset > inOutBlockBytes.size() || fieldBytes->size() > inOutBlockBytes.size() - byteOffset)
         return false;
 
-    NWB_MEMCPY(inOutBlockBytes.data() + byteOffset, fieldBytes->size, fieldBytes->data.get(), fieldBytes->size);
+    NWB_MEMCPY(inOutBlockBytes.data() + byteOffset, fieldBytes->size(), fieldBytes->data(), fieldBytes->size());
     return true;
 }
 

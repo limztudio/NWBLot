@@ -270,7 +270,7 @@ public:
     }
 
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
-        payload.raytracingSystem.confirmCsgTraceContextReadSubmission(token);
+        payload.raytracingSystem.confirmRayTraceContextReadSubmission(token);
     }
 
     static void Discarded(Payload& payload){

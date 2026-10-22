@@ -180,7 +180,8 @@ const Ui::FontSource fonts[]{
     { latinRef, latinFont, latinGeneration, &latinAtlas },
     { koreanRef, koreanFont, koreanGeneration, &koreanAtlas },
 };
-if(!text.setFonts(fonts, 2u))
+Core::Alloc::ScratchArena setupScratch(Name("runtime/ui/setup"));
+if(!text.setFonts(setupScratch, fonts, 2u))
     return false;
 
 Ui::ShapeRequest request{ "Hello, custom UI" };

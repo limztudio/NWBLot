@@ -214,7 +214,9 @@ public:
             locked = m_flag.testAndSet();
         }
     }
+
     bool try_lock()noexcept{ return (!m_flag.testAndSet()); }
+
     void unlock()noexcept{ m_flag.clear(MemoryOrder::release); }
 
 
@@ -237,11 +239,13 @@ template<isize LeastMaxValue>
 class ScopedLock<Semaphore<LeastMaxValue>> : NoCopy{
 public:
     ScopedLock(const ScopedLock&) = delete;
+
     ScopedLock(Semaphore<LeastMaxValue>& obj)noexcept(noexcept(obj.acquire()))
         : m_obj(obj)
     {
         m_obj.acquire();
     }
+
     ~ScopedLock()noexcept{ m_obj.release(); }
 
 

@@ -581,6 +581,7 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     // Attribute sorting to the mesh rebuild at its call site.
     {
         Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_SwBvhSort, m_graphics.getDevice(), commandList);
+
         if(!bvhBitonicSort(commandList, primitiveCount, paddedCount))
             return false;
     }

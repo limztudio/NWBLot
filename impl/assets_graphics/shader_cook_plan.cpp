@@ -22,6 +22,8 @@
 #include <core/common/log.h>
 #include <core/graphics/shader_stage_names.h>
 
+#include <global/hash_utils.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -290,6 +292,7 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
     const Path& shadowSurfaceIncludeRoot,
     const IncludeMetadataMap& includeMetadata,
     ShaderEntryVector& inOutShaderEntries,
+    const ShaderCook::CookVector<MaterialBindEntry>& materialBindEntries,
     const ShaderCook::CookVector<MaterialCookEntry>& materialEntries,
     ScratchArena& scratchArena
 ){
@@ -338,6 +341,7 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
             implicitIncludeRoots.push_back(MakeNotNull(&assetRoot.path));
     }
 
+    const ShaderCook::CookVector<Path> noIncludeDirectories(cookArena);
     for(ShaderCook::ShaderEntry& entry : inOutShaderEntries){
         PreparedShaderEntry preparedEntry(cookArena);
         preparedEntry.entry = Move(entry);
@@ -391,7 +395,7 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
         if(!__hidden_shader_cook_plan::ValidateShaderDoesNotUseImplicitDefine(preparedEntry.entry, AssetsGraphicsCsgShaderVariants::s_IntervalSampleEnabledImplicitDefineName))
             return MakeUnexpected(Failure{});
 
-        auto materialDependency = ResolveMaterialBindDependencyInterface(cookArena, AStringView(preparedEntry.entry.name), materialBindIncludeRoot, preparedEntry.dependencies, scratchArena);
+        auto materialDependency = ResolveMaterialBindDependencyInterface(cookArena, AStringView(preparedEntry.entry.name), materialBindIncludeRoot, materialBindEntries, preparedEntry.dependencies, scratchArena);
         if(!materialDependency)
             return MakeUnexpected(Failure{});
         preparedEntry.materialTypedBindingInterface = materialDependency->interfaceName;
@@ -425,6 +429,13 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
             return MakeUnexpected(Failure{});
         preparedEntry.dependencyChecksum = dependency->checksum;
         preparedEntry.compilerInputsHaveBom = dependency->compilerInputsHaveBom;
+        // Authored `.bind` files are not compiler inputs, so hash them on their own and fold that into the shader checksum.
+        if(!materialDependency->interfaceSources.empty()){
+            const auto interfaceDependency = shaderCook.computeDependencyChecksum(materialDependency->interfaceSources, noIncludeDirectories, { { resolvedPaths.repoRoot, "repo" }, { resolvedPaths.cacheDirectory, "generated_cache" } }, scratchArena);
+            if(!interfaceDependency)
+                return MakeUnexpected(Failure{});
+            Fnv64AppendValue(preparedEntry.dependencyChecksum, interfaceDependency->checksum);
+        }
         const auto supportsCsgClipVariant = AssetsGraphicsCsgShaderVariants::SupportsClipVariant(materialClipShaderKeys, preparedEntry.entry);
         const auto supportsAvboitCsgClipVariant = AssetsGraphicsCsgShaderVariants::SupportsClipVariant(*avboitClipShaderKeys, preparedEntry.entry);
         if(!supportsCsgClipVariant){

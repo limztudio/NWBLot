@@ -65,11 +65,7 @@ static bool WriteIfChanged(const ScratchPath& path, const ScratchBytes& bytes, S
     const ScratchPath temporary = path.parentPath() / temporaryName;
     ScopeExit removeTemporary([&temporary]()noexcept{
         if(!RemoveFile(temporary)){
-            CaptureDiagnosticEvent(DiagnosticEventRecord{
-                .event = s_WarningEventName,
-                .category = "built_asset_temporary_cleanup",
-                .message = "AssetBuilder: failed to remove temporary output",
-            });
+            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_WarningEventName, .category = "built_asset_temporary_cleanup", .message = "AssetBuilder: failed to remove temporary output", });
         }
     });
     if(!WriteBinaryFile(temporary, bytes) || !ReadBinaryFile(temporary, existing) || existing != bytes || !RenamePath(temporary, path)){

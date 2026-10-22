@@ -43,9 +43,10 @@ struct HardwareCausticsStageInputs{
     Core::GpuGraphResourceId sceneShading;
     Core::GpuGraphResourceId lights;
     Core::GpuGraphResourceId materialContextSlots;
-    Core::GpuGraphResourceSetId hardwareTraceAttributeSet;
-    const Core::GpuGraphResourceId* hardwareTraceAttributeResources = nullptr;
-    usize hardwareTraceAttributeResourceCount = 0u;
+    Core::GpuGraphResourceId opticalScene;
+    Core::GpuGraphResourceSetId hardwareTraceGeometrySet;
+    const Core::GpuGraphResourceId* hardwareTraceGeometryResources = nullptr;
+    usize hardwareTraceGeometryResourceCount = 0u;
     Core::GpuGraphResourceSetId traceMaterialSampledTextureSet;
     Core::GpuTaskId graphicsPrefixTask;
     const bool* shadowPreparationReady = nullptr;

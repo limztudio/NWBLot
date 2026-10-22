@@ -43,9 +43,11 @@ public:
 
 public:
     virtual LogArena& arena()noexcept override{ return m_arena; }
+
     virtual void enqueue(LogString&& str, Core::Common::LogType::Enum type = Core::Common::LogType::Info)override{
         record(str, type);
     }
+
     virtual void enqueue(const LogString& str, Core::Common::LogType::Enum type = Core::Common::LogType::Info)override{
         record(str, type);
     }
@@ -54,14 +56,17 @@ public:
         ScopedLock lock(m_mutex);
         return m_messageCount;
     }
+
     [[nodiscard]] u32 errorCount()const noexcept{
         ScopedLock lock(m_mutex);
         return m_errorCount;
     }
+
     [[nodiscard]] Core::Common::LogType::Enum lastType()const noexcept{
         ScopedLock lock(m_mutex);
         return m_lastType;
     }
+
     [[nodiscard]] bool sawMessageContaining(const TStringView text)const noexcept{
         ScopedLock lock(m_mutex);
 
@@ -71,6 +76,7 @@ public:
         }
         return false;
     }
+
     [[nodiscard]] bool sawErrorContaining(const TStringView text)const noexcept{
         ScopedLock lock(m_mutex);
 

@@ -158,6 +158,7 @@ public:
 class NullAllocatedBucket final : public ICookEntryBucket{
 public:
     static void* operator new(usize)noexcept{ return nullptr; }
+
     static void operator delete(void* pointer)noexcept{ ::operator delete(pointer); }
 
 
@@ -167,8 +168,11 @@ public:
 
 public:
     [[nodiscard]] virtual usize size()const noexcept override{ return 0u; }
+
     virtual bool parseDocument(const NWB::Path&, AStringView, const NWB::Path&, const Metascript::Document&, CookEntryParseContext&)noexcept override{ return false; }
+
     virtual bool parseValue(Name, const NWB::Path&, const Metascript::Value&, CookEntryParseContext&)noexcept override{ return false; }
+
     virtual bool writeCookedAssets(CookEntryWriteContext&)noexcept override{ return false; }
 };
 
@@ -180,7 +184,9 @@ public:
         static constexpr Name s_Type("tests/metadata_registry/null_allocation");
         return s_Type;
     }
+
     static void* operator new(usize)noexcept{ return nullptr; }
+
     static void operator delete(void* pointer)noexcept{ ::operator delete(pointer); }
 
 
@@ -210,6 +216,7 @@ public:
 
 struct ThrowingImplicitAssetName{
     explicit operator Name() & noexcept{ return s_NameNone; }
+
     operator const Name&()const&{ throw 197u; }
 };
 

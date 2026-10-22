@@ -161,7 +161,7 @@ public:
     }
 
     template<typename BufferHandler>
-    static void ForEachMeshSourceBuffer(const MeshResources& mesh, BufferHandler&& handler)noexcept(noexcept(handler(s_MeshPositionBindingSlot, MeshSourceBuffer(mesh, s_MeshPositionBindingSlot), false))){
+    static void ForEachMeshSourceBuffer(const MeshResources& mesh, BufferHandler&& handler)noexcept(noexcept(handler(DeclVal<const u32&>(), MeshSourceBuffer(mesh, s_MeshPositionBindingSlot), DeclVal<const bool&>()))){
         ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool rawView)noexcept(noexcept(handler(bindingSlot, MeshSourceBuffer(mesh, bindingSlot), rawView))){
             handler(bindingSlot, MeshSourceBuffer(mesh, bindingSlot), rawView);
         }
@@ -184,7 +184,7 @@ public:
     [[nodiscard]] bool prepareComputeEmulationResources(MeshResources& mesh);
     [[nodiscard]] bool prepareObjectGeometryCache(MeshResources& mesh, const Core::ComputePipelineHandle& decoderPipeline);
     [[nodiscard]] bool confirmObjectGeometryCache(const Name& meshKey, const RuntimeMeshBuffers& sourceBuffers, const ECSRenderDetail::ObjectGeometryCacheSnapshot& expected, bool runtimeMesh)noexcept;
-    void pruneRuntimeMeshResources();
+    void pruneRuntimeMeshResources(Core::Alloc::ScratchArena& scratchArena);
     void collectRayTracingResourceSnapshots(ECSRenderDetail::MeshRayTracingResourceSnapshotVector& outSnapshots)const;
     [[nodiscard]] Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> findRayTracingResourceSnapshot(const Name& meshName)const noexcept;
     [[nodiscard]] Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> findRenderableRayTracingResourceSnapshot(const RenderableMeshDesc& mesh)const noexcept;

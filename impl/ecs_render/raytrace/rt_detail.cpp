@@ -92,7 +92,7 @@ void RetireHeapHandle(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle& 
     handle = Core::GpuDescriptorHandle::Invalid();
 }
 
-// Binned-SAH binary BVH over indices[lo, hi); node 0 is the root. Splits on the minimum SAH boundary, median fallback on coincident centroids. Node layout matches the per-mesh build for traversal.
+// Binned-SAH binary BVH over indices[lo, hi); node 0 is the root. Splits on the minimum SAH boundary, median fallback on coincident centroids. Node layout matches the per-mesh build.
 u32 BuildSceneBvhNode(const Span<u32> indices, const u32 lo, const u32 hi, const Span<const SceneBvhPrimitiveCalculation> primitiveBounds, Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena>& nodes, const Span<const u32> instanceLeafCost){
     const u32 nodeIndex = static_cast<u32>(nodes.size());
     nodes.push_back(SceneBvhNodeCalculation{});

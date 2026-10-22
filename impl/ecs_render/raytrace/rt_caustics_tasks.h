@@ -51,7 +51,7 @@ static void ConfirmCausticAccumulatorClears(Payload& payload)noexcept(
         payload.raytracingSystem.confirmCausticAccumulatorBootstrapClear();
 }
 
-// A warm accumulator decays before either photon route writes atomic splats. Separate task so the compiler lowers the UAV dependency into the producer callback, not a reassertion after decay.
+// A warm accumulator decays before either photon route writes atomic splats. Separate task so the compiler lowers the UAV dependency into the producer callback, not reassertion after decay.
 struct CausticAccumulatorDecayGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
@@ -73,7 +73,7 @@ public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
 
-        // Match the producer's existing no-work and failed-shadow behavior.  A graph declaration can still retain the accumulator dependency, but no dispatch is issued unless the producer would run.
+        // Match the producer's existing no-work and failed-shadow behavior.  A graph declaration can still keep the accumulator dependency, but no dispatch is issued unless the producer would run.
         if(!payload.shadowVisibilityPrepared)
             return true;
         const bool hasWork = payload.hardwareCaustics ? payload.raytracingSystem.hasHwCausticWork(payload.meshView) : payload.raytracingSystem.hasCausticWork(payload.meshView);

@@ -52,7 +52,7 @@ inline void RecoverOpaqueSoftShadowAllLit(const PayloadT& payload, Core::Command
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A prepared soft-transparent frame records production, resolve, trace, and fold as one native packet. Shared state is stack-owned for this transaction; it never survives acceptance or retry.
+// A prepared soft-transparent frame records production, resolve, trace, and fold as one native packet. Shared state is stack-owned for this transaction; it never survives retry.
 struct ShadowVisibilityOpaqueGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
@@ -310,7 +310,7 @@ public:
 };
 
 
-// The transparent trace publishes RGB half-resolution visibility. On temporal frames this task freezes the selected history pair, publishes the next pair for the wavelet, and starts the resolve envelope.
+// The transparent trace publishes RGB half-resolution visibility. On temporal frames this task freezes the selected history pair, publishes the next pair for the wavelet, and starts the resolve.
 struct ShadowTransparentSoftTemporalMergeGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 

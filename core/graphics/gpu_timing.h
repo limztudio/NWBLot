@@ -119,9 +119,9 @@ public:
         u64 performanceCaptureEpoch,
         u64 subscriptionIdentityLimit,
         bool publishPerformanceSamples,
+        Alloc::ScratchArena& scratchArena,
         SampleDispatchVector& completedSamples,
-        GpuTimingSinkSampleVector& performanceSamples,
-        Alloc::ScratchArena& scratchArena
+        GpuTimingSinkSampleVector& performanceSamples
     );
     void recordFrameReset(CommandList& commandList);
     void confirmFrameReset(const QueueSubmissionToken& token);
@@ -311,7 +311,7 @@ private:
     [[nodiscard]] GpuTimingAccumulator* findAccumulator(const GpuTimingScope& scope)noexcept;
     // Metric-output scopes have no independent accumulator; successful absence is distinct from creation failure.
     [[nodiscard]] Expected<Optional<NotNull<GpuTimingAccumulator*>>> findOrCreateAccumulator(const Name& scopeName);
-    [[nodiscard]] bool collectLocked(Device& device, u64 subscriptionIdentityLimit, SampleDispatchVector& completedSamples, GpuTimingSinkSampleVector& performanceSamples, Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] bool collectLocked(Device& device, u64 subscriptionIdentityLimit, Alloc::ScratchArena& scratchArena, SampleDispatchVector& completedSamples, GpuTimingSinkSampleVector& performanceSamples);
     [[nodiscard]] bool submissionCompleted(Device& device, const QueueSubmissionToken& token);
     [[nodiscard]] SampleListenerRecordPtr findSampleListenerLocked(const GpuTimingSampleSubscription& subscription)noexcept;
     [[nodiscard]] u64 sampleSubscriptionIdentityLimitLocked()const noexcept;

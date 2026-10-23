@@ -444,7 +444,7 @@ template<typename AssetT, typename MetadataValue>
 }
 
 template<typename SourceStringT, typename MetadataDocument, typename ParseDocument>
-[[nodiscard]] inline bool ParseMetadataDocumentText(const Path& filePath, const AStringView diagnosticPrefix, SourceStringT& ioText, MetadataDocument& outDoc, ParseDocument&& parseDoc){
+[[nodiscard]] inline bool ParseMetadataDocumentText(const Path& filePath, const AStringView diagnosticPrefix, ParseDocument&& parseDoc, SourceStringT& ioText, MetadataDocument& outDoc){
     if(!ReadTextFile(filePath, ioText)){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': failed to read source text"), StringConvert(diagnosticPrefix), PathToString<tchar>(filePath));
         return false;

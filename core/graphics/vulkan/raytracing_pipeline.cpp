@@ -298,7 +298,7 @@ Expected<RayTracingPipelineHandle> Device::createRayTracingPipeline(const RayTra
         hitGroup.exportName = hitGroup.exportName.empty() ? AStringView{} : AStringView(pso->m_shaderGroups[groupIndex].exportName);
     }
 
-    if(!configurePipelineBindings(desc.globalBindingLayouts, NWB_TEXT("ray tracing pipeline"), *pso, scratchArena))
+    if(!configurePipelineBindings(desc.globalBindingLayouts, NWB_TEXT("ray tracing pipeline"), scratchArena, *pso))
         return MakeUnexpected(Failure{});
 
     const bool enablePipelineFlags2 = desc.allowSpheres || desc.allowLinearSweptSpheres;

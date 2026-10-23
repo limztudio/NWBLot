@@ -41,10 +41,10 @@ private:
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         const GpuSubmissionPacketRange& range,
-        GpuRecordedGraph& outRecordedGraph,
         Alloc::ScratchArena& scratchArena,
+        GpuRecordedGraph& outRecordedGraph,
         GpuSubmissionPacketId* outFailedPacket = nullptr,
-        GpuCommandIrCapture* commandIrCapture = nullptr
+        GpuCommandIrCapture* outCommandIrCapture = nullptr
     )const;
     // Task endpoints resolve after compilation, keeping record spans independent of packet splitting while preserving intentional late tails.
     [[nodiscard]] bool recordTaskRangeInCompileOrder(
@@ -52,21 +52,21 @@ private:
         const GpuCompiledGraph& compiledGraph,
         GpuTaskId firstTask,
         GpuTaskId lastTask,
-        GpuRecordedGraph& outRecordedGraph,
         Alloc::ScratchArena& scratchArena,
+        GpuRecordedGraph& outRecordedGraph,
         GpuSubmissionPacketId* outFailedPacket = nullptr,
-        GpuCommandIrCapture* commandIrCapture = nullptr
+        GpuCommandIrCapture* outCommandIrCapture = nullptr
     )const;
     // Records ready frontiers via cpuScheduler; parallel only when every task opts in, else serial (command-IR keeps serial order). Synchronous: submittable on return.
     [[nodiscard]] bool recordPacketRangeInReadyFrontiers(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         const GpuSubmissionPacketRange& range,
-        GpuRecordedGraph& outRecordedGraph,
         CpuTaskScheduler& cpuScheduler,
         Alloc::ScratchArena& scratchArena,
+        GpuRecordedGraph& outRecordedGraph,
         GpuSubmissionPacketId* outFailedPacket = nullptr,
-        GpuCommandIrCapture* commandIrCapture = nullptr
+        GpuCommandIrCapture* outCommandIrCapture = nullptr
     )const;
 
 
@@ -78,35 +78,35 @@ private:
         const GpuCompiledGraph::ReadView& planAccess,
         const GpuRecordedGraph::ArtifactOperation& artifactAccess,
         const GpuSubmissionPacketRange& range,
-        GpuRecordedGraph& outRecordedGraph,
-        GpuRecordedGraph::PacketRecordingScratch& scratch,
         Alloc::ScratchArena& stateFanInScratchArena,
-        GpuCommandIrCapture* commandIrCapture,
+        GpuRecordedGraph::PacketRecordingScratch& scratch,
+        GpuRecordedGraph& outRecordedGraph,
+        GpuCommandIrCapture* outCommandIrCapture,
         GpuSubmissionPacketId* outFailedPacket
     )const;
     [[nodiscard]] bool recordPacket(
+        GpuRecordedGraph& outRecordedGraph,
+        GpuRecordedGraph::PacketRecordingScratch& scratch,
+        GpuCommandIrCapture* commandIrCapture,
+        GpuPacketRecordingAbort* deferredAbort,
+        Alloc::ScratchArena& stateFanInScratchArena,
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
         const GpuRecordedGraph::ArtifactOperation& artifactAccess,
         GpuSubmissionPacketId packet,
-        GpuRecordedGraph& outRecordedGraph,
-        GpuRecordedGraph::PacketRecordingScratch& scratch,
-        Alloc::ScratchArena& stateFanInScratchArena,
-        GpuCommandIrCapture* commandIrCapture,
         u64 recordingWorkerDomain = 0u,
-        u32 recordingWorkerIndex = 0u,
-        GpuPacketRecordingAbort* deferredAbort = nullptr
+        u32 recordingWorkerIndex = 0u
     )const;
     [[nodiscard]] bool prepareRecordingAttempt(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         const GpuSubmissionPacketRange& range,
-        GpuRecordedGraph& outRecordedGraph,
         const GpuTaskGraph::DeclarationReadView& declarationAccess,
         const GpuCompiledGraph::ReadView& planAccess,
         const GpuRecordedGraph::ArtifactOperation& artifactAccess,
-        Alloc::ScratchArena& scratchArena
+        Alloc::ScratchArena& scratchArena,
+        GpuRecordedGraph& outRecordedGraph
     )const;
     [[nodiscard]] bool preflightPacketResources(
         const GpuTaskGraph& graph,

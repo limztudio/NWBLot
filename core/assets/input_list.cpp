@@ -16,7 +16,7 @@ NWB_ASSETS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ReadAssetInputList(const Path& path, AssetVector<AssetString>& inputs, Alloc::ScratchArena& scratchArena, const bool resolveRelativePaths){
+bool ReadAssetInputList(AssetVector<AssetString>& inputs, const Path& path, Alloc::ScratchArena& scratchArena, const bool resolveRelativePaths){
     AString<Alloc::ScratchArena> text(scratchArena);
     if(!ReadTextFile(path, text) || HasEmbeddedNull(AStringView(text))){
         NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: failed to read input list '{}'"), PathToString<tchar>(path));

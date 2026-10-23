@@ -31,9 +31,9 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuTaskGraphAnalysis& analysis,
     const Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialOwnershipDependencies,
     const Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialAvailabilityDependencies,
+    Alloc::ScratchArena& scratchArena,
     Vector<GpuPacketDependency, Alloc::ScratchArena>& resourceStateDependencies,
-    GpuTaskGraphCompiledPlanStorage& compiledPlan,
-    Alloc::ScratchArena& scratchArena
+    GpuTaskGraphCompiledPlanStorage& compiledPlan
 ){
     const usize packetCount = compiledPlan.packets.size();
     const bool plansResourceStateDependencies = !resourceStateDependencies.empty();

@@ -22,8 +22,8 @@ NWB_ASSETS_BEGIN
 
 
 template<typename ValueContainer>
-[[nodiscard]] bool ReadVectorPayload(const AssetBytes& binary, usize& inOutCursor, const u64 count, ValueContainer& outValues, const TStringView failureContext, const TStringView label){
-    const auto result = ::ReadBinaryVectorPayload(binary, inOutCursor, count, outValues);
+[[nodiscard]] bool ReadVectorPayload(const AssetBytes& binary, const u64 count, const TStringView failureContext, const TStringView label, usize& inOutCursor, ValueContainer& outValues){
+    const auto result = ::ReadBinaryVectorPayload(binary, count, inOutCursor, outValues);
     if(result)
         return true;
 
@@ -38,7 +38,7 @@ template<typename ValueContainer>
 }
 
 template<typename HeaderT>
-[[nodiscard]] Expected<HeaderT> ReadMagicHeaderPayload(const AssetBytes& binary, usize& inOutCursor, const u32 expectedMagic, const TStringView failureContext, const TStringView assetType){
+[[nodiscard]] Expected<HeaderT> ReadMagicHeaderPayload(const AssetBytes& binary, const u32 expectedMagic, const TStringView failureContext, const TStringView assetType, usize& inOutCursor){
     const auto header = ReadPOD<HeaderT>(binary, inOutCursor);
     if(!header){
         NWB_LOGGER_ERROR(NWB_TEXT("{} failed: malformed header"), failureContext);

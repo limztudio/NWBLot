@@ -401,7 +401,7 @@ static void DrainPendingAcks(const int ackReadFd)noexcept{
     }
 }
 
-static void WaitForOwnedChild(pid_t& child, const bool terminateImmediately, CrashDetail::PlatformCleanupObservations& observations)noexcept{
+static void WaitForOwnedChild(const bool terminateImmediately, pid_t& child, Detail::PlatformCleanupObservations& observations)noexcept{
     if(child <= 0)
         return;
     constexpr u32 s_WaitPollCount = 300u;
@@ -538,7 +538,7 @@ Expected<void, PlatformFailure> StartDesktopHandler(const ::Path<ArenaT>& handle
             CleanupOwnedDescriptor(descriptor, observations);
         for(int& descriptor : startup)
             CleanupOwnedDescriptor(descriptor, observations);
-        WaitForOwnedChild(child, true, observations);
+        WaitForOwnedChild(true, child, observations);
         if(child > 0){
             g_State.handlerPid = child;
             g_State.platformRestorePending = true;
@@ -662,7 +662,7 @@ void UninstallPlatformResources(PlatformCleanupObservations& observations)noexce
     CleanupOwnedDescriptor(g_State.emergencyWriteFd, observations);
 #elif defined(NWB_PLATFORM_LINUX)
     CleanupOwnedDescriptor(g_State.requestWriteFd, observations);
-    WaitForOwnedChild(g_State.handlerPid, false, observations);
+    WaitForOwnedChild(false, g_State.handlerPid, observations);
     CleanupOwnedDescriptor(g_State.ackReadFd, observations);
 #endif
     g_State.handlerStarted = false;

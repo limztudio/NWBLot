@@ -181,7 +181,7 @@ public:
 [[nodiscard]] AssetMetadataParseResult::Enum TryAutoCollectedDocumentMetadataParsers(AssetDocumentMetadataParseContext& context);
 [[nodiscard]] AssetMetadataParseResult::Enum TryAutoCollectedValueMetadataParsers(AssetValueMetadataParseContext& context);
 [[nodiscard]] Expected<ExpandedAssetMetadataVector, AssetBunchExpandFailure::Enum> TryAutoCollectedAssetBunchExpanders(const AssetBunchExpandContext& context);
-[[nodiscard]] bool ParseAssetMetadata(CookArena& cookArena, const DiscoveredNwbFileVector& nwbFiles, ParsedAssetMetadata& outMetadata, Core::CpuTaskScheduler& cpuScheduler, ScratchArena& scratchArena);
+[[nodiscard]] bool ParseAssetMetadata(CookArena& cookArena, const DiscoveredNwbFileVector& nwbFiles, Core::CpuTaskScheduler& cpuScheduler, ScratchArena& scratchArena, ParsedAssetMetadata& outMetadata);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

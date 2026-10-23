@@ -231,7 +231,7 @@ bool GpuTaskGraphAnalysis::hasInferredEdge(const GpuTaskId& producer, const GpuT
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& graph, GpuTaskGraphAnalysis& outAnalysis, Alloc::ScratchArena& scratchArena)const{
+bool GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& graph, Alloc::ScratchArena& scratchArena, GpuTaskGraphAnalysis& outAnalysis)const{
     using namespace GpuTaskGraphCompilerDetail;
     using namespace __hidden_gpu_task_graph_compiler_analysis;
 
@@ -304,7 +304,7 @@ bool GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& grap
 
     const Timer dependencyAnalysisBegin = TimerNow();
     Vector<GpuTaskDependencyEdge, Alloc::ScratchArena> resourceVersionDependencyEdges(scratchArena);
-    const auto resourceVersions = BuildResourceVersionDependencyEdges(graph, resourceVersionDependencyEdges, scratchArena);
+    const auto resourceVersions = BuildResourceVersionDependencyEdges(graph, scratchArena, resourceVersionDependencyEdges);
     if(!resourceVersions){
         outAnalysis.m_diagnostic = resourceVersions.error();
         return false;
@@ -407,8 +407,8 @@ bool GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& grap
     const Timer semanticTopologyBegin = TimerNow();
     TaskDependencyAdjacency dependencyAdjacency(scratchArena);
     {
-        BuildTaskDependencyAdjacency(outAnalysis.m_edges, graph.taskCount(), dependencyAdjacency, scratchArena);
-        if(!BuildTopologicalOrder(graph, outAnalysis.m_edges, dependencyAdjacency, outAnalysis.m_topologicalOrder, outAnalysis.m_cyclePath, outAnalysis.m_cycleEdges, scratchArena)){
+        BuildTaskDependencyAdjacency(outAnalysis.m_edges, graph.taskCount(), scratchArena, dependencyAdjacency);
+        if(!BuildTopologicalOrder(graph, outAnalysis.m_edges, dependencyAdjacency, scratchArena, outAnalysis.m_topologicalOrder, outAnalysis.m_cyclePath, outAnalysis.m_cycleEdges)){
             const GpuTaskDependencyEdge* const cycleEdge = FindCycleDiagnosticEdge(outAnalysis.m_cycleEdges);
             return fail(
                 GpuTaskGraphAnalysisStatus::Cycle,
@@ -491,20 +491,20 @@ bool GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& grap
     const Timer finalTopologyBegin = TimerNow();
     {
         if(dependencyAdjacency.edgeIndices.size() != outAnalysis.m_edges.size()){
-            BuildTaskDependencyAdjacency(outAnalysis.m_edges, graph.taskCount(), dependencyAdjacency, scratchArena);
+            BuildTaskDependencyAdjacency(outAnalysis.m_edges, graph.taskCount(), scratchArena, dependencyAdjacency);
         }
         // Physical hazards only connect earlier semantic-order accesses to the current task.
         // Those forward edges preserve the already smallest stable topological order and cannot introduce a cycle.
-        BuildSchedulingEdges(outAnalysis.m_edges, dependencyAdjacency, outAnalysis.m_topologicalOrder, outAnalysis.m_schedulingEdges, scratchArena);
+        BuildSchedulingEdges(outAnalysis.m_edges, dependencyAdjacency, outAnalysis.m_topologicalOrder, scratchArena, outAnalysis.m_schedulingEdges);
         BuildSchedulingTaskAdjacency(
             outAnalysis.m_schedulingEdges,
             graph.taskCount(),
             graph.generation(),
+            scratchArena,
             outAnalysis.m_schedulingOutgoingOffsets,
             outAnalysis.m_schedulingOutgoingConsumers,
             outAnalysis.m_schedulingIncomingOffsets,
-            outAnalysis.m_schedulingIncomingProducers,
-            scratchArena
+            outAnalysis.m_schedulingIncomingProducers
         );
     }
     const f64 topologicalOrderSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(semanticTopologySeconds), VectorDoubleReplicate(DurationInSeconds<f64>(TimerNow(), finalTopologyBegin))));

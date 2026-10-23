@@ -22,27 +22,27 @@ NWB_CORE_BEGIN
 class GpuTaskGraphCompiler final : NoCopy{
 public:
     // Graph validation and hazards stay independent from physical queue policy, so later packet, barrier, recording, and submission stages can consume one validated analysis result.
-    [[nodiscard]] bool analyze(const GpuTaskGraph::DeclarationReadView& graph, GpuTaskGraphAnalysis& outAnalysis, Alloc::ScratchArena& scratchArena)const;
+    [[nodiscard]] bool analyze(const GpuTaskGraph::DeclarationReadView& graph, Alloc::ScratchArena& scratchArena, GpuTaskGraphAnalysis& outAnalysis)const;
 
     // This produces only a physical-queue decision. It never creates a command list or changes submission; the scheduler supplies the topology found from its current device.
     [[nodiscard]] bool assignQueues(
+        GpuTaskGraphQueueAssignments& outAssignments,
+        Alloc::ScratchArena& scratchArena,
         const GpuTaskGraph::DeclarationReadView& graph,
         const GpuTaskGraphAnalysis& analysis,
         const GpuPhysicalQueueTopology& topology,
-        GpuTaskGraphQueueAssignments& outAssignments,
-        Alloc::ScratchArena& scratchArena,
         const GpuTaskGraphQueueAssignmentOptions& options = {}
     )const;
 
     // The packet compiler reuses the analysis and queue-assignment results shared by scheduler admission, telemetry, and packet creation.
     // Tasks retain one packet by default.
     [[nodiscard]] bool compile(
-        const GpuTaskGraph::DeclarationReadView& graph,
         GpuTaskGraphAnalysis& outAnalysis,
-        const GpuPhysicalQueueTopology& topology,
         GpuTaskGraphQueueAssignments& outAssignments,
         GpuCompiledGraph& outCompiledGraph,
         Alloc::ScratchArena& scratchArena,
+        const GpuTaskGraph::DeclarationReadView& graph,
+        const GpuPhysicalQueueTopology& topology,
         const GpuTaskGraphCompileOptions& options = {}
     )const;
 };
@@ -239,8 +239,8 @@ struct GpuTaskQueuePlacementGroup{
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
     const GpuPhysicalQueueTopology& topology,
-    Vector<GpuTaskQueuePlacementGroup, Alloc::ScratchArena>& outGroups,
-    Alloc::ScratchArena& scratchArena
+    Alloc::ScratchArena& scratchArena,
+    Vector<GpuTaskQueuePlacementGroup, Alloc::ScratchArena>& outGroups
 );
 
 [[nodiscard]] const GpuPhysicalQueueInfo* FindBestLegalQueuePlacementGroupCandidate(
@@ -349,7 +349,7 @@ struct GpuTaskQueuePlacementGroup{
 [[nodiscard]] bool RangesOverlap(const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& lhs, const GpuTaskResourceRange& rhs)noexcept;
 [[nodiscard]] bool RangeContains(const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& outer, const GpuTaskResourceRange& inner)noexcept;
 
-[[nodiscard]] Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdges(const GpuTaskGraph::DeclarationReadView& graph, Vector<GpuTaskDependencyEdge, Alloc::ScratchArena>& outEdges, Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdges(const GpuTaskGraph::DeclarationReadView& graph, Alloc::ScratchArena& scratchArena, Vector<GpuTaskDependencyEdge, Alloc::ScratchArena>& outEdges);
 
 [[nodiscard]] bool CollectResourceFirstUseRangesWithinTask(
     const GpuTaskGraph::DeclarationReadView& graph,
@@ -436,9 +436,9 @@ struct GpuTaskQueuePlacementGroup{
     const GpuTaskGraphAnalysis& analysis,
     const Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialOwnershipDependencies,
     const Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialAvailabilityDependencies,
+    Alloc::ScratchArena& scratchArena,
     Vector<GpuPacketDependency, Alloc::ScratchArena>& resourceStateDependencies,
-    GpuTaskGraphCompiledPlanStorage& compiledPlan,
-    Alloc::ScratchArena& scratchArena
+    GpuTaskGraphCompiledPlanStorage& compiledPlan
 );
 
 

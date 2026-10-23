@@ -28,11 +28,11 @@ public:
     AcceptedPacketPublicationGuard(
         GpuGraphSubmissionTransaction& transaction,
         GpuTaskGraph& graph,
+        GpuPacketSubmissionLease& lease,
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
         const GpuSubmissionPacketId packet,
         const QueueSubmissionToken& token,
-        GpuPacketSubmissionLease& lease,
         const NativeSubmissionInfo& nativeSubmissionInfo,
         const NotNull<GpuTimingSubmissionTicket*>* const timingTickets,
         const usize timingTicketCount
@@ -258,10 +258,10 @@ bool GpuGraphSubmissionTransaction::beginPacketSubmission(const GpuTaskGraph& gr
 
 bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
     GpuTaskGraph& graph,
+    GpuPacketSubmissionLease& lease,
     const GpuCompiledGraph& compiledGraph,
     const GpuSubmissionPacketId packetID,
     const QueueSubmissionToken& token,
-    GpuPacketSubmissionLease& lease,
     const NativeSubmissionInfo& nativeSubmissionInfo,
     const NotNull<GpuTimingSubmissionTicket*>* const timingTickets,
     const usize timingTicketCount,
@@ -292,7 +292,7 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
     const GpuTaskId* const tasks = packetView.tasks;
 
     graph.beginPacketSubmissionAcceptance(compiledGraph, planAccess, packetID, token, lease);
-    AcceptedPacketPublicationGuard publicationGuard(*this, graph, compiledGraph, planAccess, packetID, token, lease, nativeSubmissionInfo, timingTickets, timingTicketCount);
+    AcceptedPacketPublicationGuard publicationGuard(*this, graph, lease, compiledGraph, planAccess, packetID, token, nativeSubmissionInfo, timingTickets, timingTicketCount);
 
     bool callbacksAccepted = true;
     bool timingResolved = true;

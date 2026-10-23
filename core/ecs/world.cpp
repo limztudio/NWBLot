@@ -129,7 +129,7 @@ void World::addEntityComponentType(EntityID entityId, ComponentTypeId typeId, IC
             return;
     }
 
-    headNode = acquireEntityComponentNode(typeId, pool, headNode);
+    headNode = acquireEntityComponentNode(typeId, headNode, pool);
 }
 
 
@@ -159,7 +159,7 @@ void World::ensureEntityComponentHead(EntityID entityId){
 }
 
 
-u32 World::acquireEntityComponentNode(ComponentTypeId typeId, IComponentPool& pool, u32 nextNode){
+u32 World::acquireEntityComponentNode(ComponentTypeId typeId, u32 nextNode, IComponentPool& pool){
     if(m_freeEntityComponentNode != s_InvalidEntityComponentNode){
         const u32 nodeIndex = m_freeEntityComponentNode;
         EntityComponentNode& node = m_entityComponentNodes[nodeIndex];

@@ -176,10 +176,10 @@ struct ItemVirtualPath{
     const DeclarationLookup& declarations,
     const AStringView baseVirtualPath,
     const ScratchNameHashSet& assetVariableHashes,
-    ScratchNameHashSet& resolvingVariableHashes,
     const Metascript::Value& source,
     Metascript::MetaArena& valueArena,
-    ScratchArena& scratchArena
+    ScratchArena& scratchArena,
+    ScratchNameHashSet& resolvingVariableHashes
 );
 
 [[nodiscard]] static Expected<Metascript::Value> ResolveAssetReferenceList(
@@ -188,16 +188,16 @@ struct ItemVirtualPath{
     const DeclarationLookup& declarations,
     const AStringView baseVirtualPath,
     const ScratchNameHashSet& assetVariableHashes,
-    ScratchNameHashSet& resolvingVariableHashes,
     const Metascript::Value& source,
     Metascript::MetaArena& valueArena,
-    ScratchArena& scratchArena
+    ScratchArena& scratchArena,
+    ScratchNameHashSet& resolvingVariableHashes
 ){
     Metascript::Value result(valueArena);
     result.makeList();
     result.asList().reserve(source.asList().size());
     for(const Metascript::Value& item : source.asList()){
-        auto resolved = ResolveAssetReferenceValue(nwbFilePath, doc, declarations, baseVirtualPath, assetVariableHashes, resolvingVariableHashes, item, valueArena, scratchArena);
+        auto resolved = ResolveAssetReferenceValue(nwbFilePath, doc, declarations, baseVirtualPath, assetVariableHashes, item, valueArena, scratchArena, resolvingVariableHashes);
         if(!resolved)
             return MakeUnexpected(Failure{});
         result.append(Move(*resolved));
@@ -211,17 +211,17 @@ struct ItemVirtualPath{
     const DeclarationLookup& declarations,
     const AStringView baseVirtualPath,
     const ScratchNameHashSet& assetVariableHashes,
-    ScratchNameHashSet& resolvingVariableHashes,
     const Metascript::Value& source,
     Metascript::MetaArena& valueArena,
-    ScratchArena& scratchArena
+    ScratchArena& scratchArena,
+    ScratchNameHashSet& resolvingVariableHashes
 ){
     Metascript::Value result(valueArena);
     result.makeMap();
     result.asMap().reserve(source.asMap().size());
     for(const auto& [key, value] : source.asMap()){
         Metascript::Value& field = result.field(Metascript::MStringView(key.data(), key.size()));
-        auto resolved = ResolveAssetReferenceValue(nwbFilePath, doc, declarations, baseVirtualPath, assetVariableHashes, resolvingVariableHashes, value, valueArena, scratchArena);
+        auto resolved = ResolveAssetReferenceValue(nwbFilePath, doc, declarations, baseVirtualPath, assetVariableHashes, value, valueArena, scratchArena, resolvingVariableHashes);
         if(!resolved)
             return MakeUnexpected(Failure{});
         field = Move(*resolved);
@@ -235,10 +235,10 @@ struct ItemVirtualPath{
     const DeclarationLookup& declarations,
     const AStringView baseVirtualPath,
     const ScratchNameHashSet& assetVariableHashes,
-    ScratchNameHashSet& resolvingVariableHashes,
     const Metascript::Value& source,
     Metascript::MetaArena& valueArena,
-    ScratchArena& scratchArena
+    ScratchArena& scratchArena,
+    ScratchNameHashSet& resolvingVariableHashes
 ){
     const Metascript::MStringView reference = source.asReference();
     const Metascript::Document::Declaration* declaration = declarations.find(reference);
@@ -265,7 +265,7 @@ struct ItemVirtualPath{
             return MakeUnexpected(Failure{});
         }
 
-        auto resolved = ResolveAssetReferenceValue(nwbFilePath, doc, declarations, baseVirtualPath, assetVariableHashes, resolvingVariableHashes, *localValue, valueArena, scratchArena);
+        auto resolved = ResolveAssetReferenceValue(nwbFilePath, doc, declarations, baseVirtualPath, assetVariableHashes, *localValue, valueArena, scratchArena, resolvingVariableHashes);
         resolvingVariableHashes.erase(variableHash);
         return resolved;
     }
@@ -287,17 +287,17 @@ struct ItemVirtualPath{
     const DeclarationLookup& declarations,
     const AStringView baseVirtualPath,
     const ScratchNameHashSet& assetVariableHashes,
-    ScratchNameHashSet& resolvingVariableHashes,
     const Metascript::Value& source,
     Metascript::MetaArena& valueArena,
-    ScratchArena& scratchArena
+    ScratchArena& scratchArena,
+    ScratchNameHashSet& resolvingVariableHashes
 ){
     if(source.isReference())
-        return ResolveAssetReference(nwbFilePath, doc, declarations, baseVirtualPath, assetVariableHashes, resolvingVariableHashes, source, valueArena, scratchArena);
+        return ResolveAssetReference(nwbFilePath, doc, declarations, baseVirtualPath, assetVariableHashes, source, valueArena, scratchArena, resolvingVariableHashes);
     if(source.isList())
-        return ResolveAssetReferenceList(nwbFilePath, doc, declarations, baseVirtualPath, assetVariableHashes, resolvingVariableHashes, source, valueArena, scratchArena);
+        return ResolveAssetReferenceList(nwbFilePath, doc, declarations, baseVirtualPath, assetVariableHashes, source, valueArena, scratchArena, resolvingVariableHashes);
     if(source.isMap())
-        return ResolveAssetReferenceMap(nwbFilePath, doc, declarations, baseVirtualPath, assetVariableHashes, resolvingVariableHashes, source, valueArena, scratchArena);
+        return ResolveAssetReferenceMap(nwbFilePath, doc, declarations, baseVirtualPath, assetVariableHashes, source, valueArena, scratchArena, resolvingVariableHashes);
 
     Metascript::Value result(valueArena);
     result = source;
@@ -420,7 +420,7 @@ Expected<ExpandedAssetMetadataVector> ExpandAssetBunch(const Path& assetRoot, co
                 return MakeUnexpected(Failure{});
             }
 
-            auto resolvedAssetValue = ResolveAssetReferenceValue(nwbFilePath, doc, *declarations, AStringView(baseVirtualPathText->data(), baseVirtualPathText->size()), usedVariables, resolvingVariableHashes, *assetValue, assetValue->arena(), scratchArena);
+            auto resolvedAssetValue = ResolveAssetReferenceValue(nwbFilePath, doc, *declarations, AStringView(baseVirtualPathText->data(), baseVirtualPathText->size()), usedVariables, *assetValue, assetValue->arena(), scratchArena, resolvingVariableHashes);
             if(!resolvedAssetValue)
                 return MakeUnexpected(Failure{});
 

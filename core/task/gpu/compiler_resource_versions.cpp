@@ -261,8 +261,8 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdges(const GpuTaskGraph::DeclarationReadView& graph, Vector<GpuTaskDependencyEdge, Alloc::ScratchArena>& outEdges, Alloc::ScratchArena& scratchArena){
-    using namespace __hidden_gpu_task_graph_compiler_resource_versions;
+Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdges(const GpuTaskGraph::DeclarationReadView& graph, Alloc::ScratchArena& scratchArena, Vector<GpuTaskDependencyEdge, Alloc::ScratchArena>& outEdges){
+    using namespace __hidden_gpu_task_resource_versions;
 
     outEdges.clear();
     GpuTaskGraphAnalysisDiagnostic diagnostic;

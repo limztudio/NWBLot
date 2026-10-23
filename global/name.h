@@ -24,7 +24,7 @@ namespace NameDetail{
 
 #if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
 template<typename CharT>
-inline constexpr void CopyDebugName(const BasicStringView<CharT> text, char* dst, const usize dstSize)noexcept(IsArithmetic_V<CharT>){
+inline constexpr void CopyDebugName(char* dst, const usize dstSize, const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     if(dstSize == 0)
         return;
 
@@ -86,7 +86,7 @@ private:
 #endif
     {
 #if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
-        NameDetail::CopyDebugName(text, m_debugName, NameDetail::s_DebugNameCapacity);
+        NameDetail::CopyDebugName(m_debugName, NameDetail::s_DebugNameCapacity, text);
 #endif
         if(!IsConstantEvaluated())
             NameDetail::RecordNameSymbolText(m_hash, text);
@@ -140,7 +140,7 @@ public:
 #endif
     {
 #if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
-        NameDetail::HashToDebugString(m_hash, m_debugName, NameDetail::s_DebugNameCapacity);
+        NameDetail::HashToDebugString(m_debugName, NameDetail::s_DebugNameCapacity, m_hash);
 #endif
     }
     explicit constexpr Name(const NameText<char> text)
@@ -178,13 +178,13 @@ public:
         return text.substr(0u, text.find('\0'));
 #else
         auto& buf = NameDetail::NextSymbolTextBuffer();
-        if(NameDetail::ResolveNameSymbolText(m_hash, buf, NameDetail::s_SymbolTextBufferLength)){
+        if(NameDetail::ResolveNameSymbolText(buf, NameDetail::s_SymbolTextBufferLength, m_hash)){
             buf[NameDetail::s_SymbolTextBufferLength - 1u] = '\0';
             const AStringView text(buf, NameDetail::s_SymbolTextBufferLength);
             return text.substr(0u, text.find('\0'));
         }
 
-        NameDetail::HashToDebugString(m_hash, buf, NameDetail::s_SymbolTextBufferLength);
+        NameDetail::HashToDebugString(buf, NameDetail::s_SymbolTextBufferLength, m_hash);
         return AStringView(buf, NameDetail::s_DebugHashTextLength);
 #endif
     }
@@ -197,12 +197,12 @@ public:
         return m_debugName;
 #else
         auto& buf = NameDetail::NextSymbolTextBuffer();
-        if(NameDetail::ResolveNameSymbolText(m_hash, buf, NameDetail::s_SymbolTextBufferLength)){
+        if(NameDetail::ResolveNameSymbolText(buf, NameDetail::s_SymbolTextBufferLength, m_hash)){
             buf[NameDetail::s_SymbolTextBufferLength - 1u] = '\0';
             return buf;
         }
 
-        NameDetail::HashToDebugString(m_hash, buf, NameDetail::s_SymbolTextBufferLength);
+        NameDetail::HashToDebugString(buf, NameDetail::s_SymbolTextBufferLength, m_hash);
         return buf;
 #endif
     }
@@ -213,7 +213,7 @@ public:
         return AStringView(m_debugName);
 #else
         auto& buf = NameDetail::NextSymbolTextBuffer();
-        NameDetail::HashToDebugString(m_hash, buf, NameDetail::s_SymbolTextBufferLength);
+        NameDetail::HashToDebugString(buf, NameDetail::s_SymbolTextBufferLength, m_hash);
         return AStringView(buf, NameDetail::s_DebugHashTextLength);
 #endif
     }

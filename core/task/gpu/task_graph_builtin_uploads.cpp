@@ -202,7 +202,7 @@ Expected<GpuTaskId> GpuTaskGraph::addUploadBufferTask(const GpuTaskDesc& desc, c
     const usize resourceUseCount = uploadDesc.finalState == ResourceStates::CopyDest ? 1u : LengthOf(resourceUses);
     GpuTaskDesc resolvedDesc = desc;
     resolvedDesc.setResourceUses(resourceUses, resourceUseCount);
-    return appendBuiltinTaskWithinMutation<UploadTask>(resolvedDesc, payload, mutation);
+    return appendBuiltinTaskWithinMutation<UploadTask>(payload, resolvedDesc, mutation);
 }
 
 Expected<GpuTaskId> GpuTaskGraph::addUploadTextureTask(const GpuTaskDesc& desc, const GpuUploadTextureTaskDesc& uploadDesc){
@@ -268,7 +268,7 @@ Expected<GpuTaskId> GpuTaskGraph::addUploadTextureTask(const GpuTaskDesc& desc, 
     if(*resolvedAspect != TextureUploadAspect::Color)
         commands.requiredCapabilities |= GpuQueueCapability::Graphics;
     resolvedDesc.setResourceUses(resourceUses, resourceUseCount);
-    return appendBuiltinTaskWithinMutation<UploadTask>(resolvedDesc, payload, mutation, commands);
+    return appendBuiltinTaskWithinMutation<UploadTask>(payload, resolvedDesc, mutation, commands);
 }
 
 

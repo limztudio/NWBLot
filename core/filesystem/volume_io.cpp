@@ -158,9 +158,9 @@ static bool TransferSegmentChunk(
     const GlobalFilesystemDetail::StreamOffset streamOffset,
     const AStringView openOperation,
     const AStringView seekOperation,
-    Stream& stream,
     SeekStream&& seekStream,
-    TransferStream&& transferStream
+    TransferStream&& transferStream,
+    Stream& stream
 ){
     if(!stream.is_open()){
         LogFailureWithPath(volumeName, openOperation, segmentPaths[segmentIndex], LastErrnoMessage());
@@ -177,7 +177,7 @@ static bool TransferSegmentChunk(
 }
 
 template<typename SegmentPaths, typename Bytes, typename TransferChunk>
-static bool TransferVolumeBytes(const AStringView volumeName, const AStringView operation, const SegmentPaths& segmentPaths, const u64 segmentSize, const u64 offset, const u64 byteCount, Bytes& bytes, TransferChunk&& transferChunk){
+static bool TransferVolumeBytes(const AStringView volumeName, const AStringView operation, const SegmentPaths& segmentPaths, const u64 segmentSize, const u64 offset, const u64 byteCount, TransferChunk&& transferChunk, Bytes& bytes){
     return ForEachSegmentChunk(
         volumeName,
         operation,
@@ -218,7 +218,6 @@ static bool ReadSegmentBytes(
         streamOffset,
         "readBytes:open",
         "readBytes:seek",
-        stream,
         [](auto& stream, const GlobalFilesystemDetail::StreamOffset offset)noexcept(noexcept(stream.seekg(offset))){ stream.seekg(offset); },
         [&](auto& stream){
             stream.read(reinterpret_cast<char*>(outputBytes), streamChunkSize);
@@ -235,7 +234,8 @@ static bool ReadSegmentBytes(
 
             outputBytes += chunkBytes;
             return true;
-        }
+        },
+        stream
     );
 }
 
@@ -257,7 +257,6 @@ static bool WriteSegmentBytes(
         streamOffset,
         "writeBytes:open",
         "writeBytes:seek",
-        stream,
         [](auto& stream, const GlobalFilesystemDetail::StreamOffset offset)noexcept(noexcept(stream.seekp(offset))){ stream.seekp(offset); },
         [&](auto& stream){
             stream.write(reinterpret_cast<const char*>(inputBytes), streamChunkSize);
@@ -279,7 +278,8 @@ static bool WriteSegmentBytes(
 
             inputBytes += chunkBytes;
             return true;
-        }
+        },
+        stream
     );
 }
 
@@ -455,7 +455,7 @@ bool VolumeFileSystem::readBytesLocked(const u64 offset, void* data, const u64 b
     }
 
     u8* outputBytes = static_cast<u8*>(data);
-    return FilesystemVolumeDetail::TransferVolumeBytes(m_volumeName, FilesystemVolumeDetail::s_VolumeOpReadBytes, m_segmentPaths, m_segmentSize, offset, byteCount, outputBytes, FilesystemVolumeDetail::ReadSegmentBytesOp{});
+    return FilesystemVolumeDetail::TransferVolumeBytes(m_volumeName, FilesystemVolumeDetail::s_VolumeOpReadBytes, m_segmentPaths, m_segmentSize, offset, byteCount, FilesystemVolumeDetail::ReadSegmentBytesOp{}, outputBytes);
 }
 
 bool VolumeFileSystem::writeBytesLocked(const u64 offset, const void* data, const u64 byteCount){
@@ -479,7 +479,7 @@ bool VolumeFileSystem::writeBytesLocked(const u64 offset, const void* data, cons
     }
 
     const u8* inputBytes = static_cast<const u8*>(data);
-    return FilesystemVolumeDetail::TransferVolumeBytes(m_volumeName, FilesystemVolumeDetail::s_VolumeOpWriteBytes, m_segmentPaths, m_segmentSize, offset, byteCount, inputBytes, FilesystemVolumeDetail::WriteSegmentBytesOp{});
+    return FilesystemVolumeDetail::TransferVolumeBytes(m_volumeName, FilesystemVolumeDetail::s_VolumeOpWriteBytes, m_segmentPaths, m_segmentSize, offset, byteCount, FilesystemVolumeDetail::WriteSegmentBytesOp{}, inputBytes);
 }
 
 

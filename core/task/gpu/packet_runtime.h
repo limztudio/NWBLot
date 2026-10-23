@@ -472,10 +472,10 @@ private:
     [[nodiscard]] bool beginPacketSubmission(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, GpuSubmissionPacketId packet, u64 recordingAttemptGeneration, GpuPacketSubmissionLease& outLease)noexcept;
     [[nodiscard]] bool acceptSubmittingPacket(
         GpuTaskGraph& graph,
+        GpuPacketSubmissionLease& lease,
         const GpuCompiledGraph& compiledGraph,
         GpuSubmissionPacketId packet,
         const QueueSubmissionToken& token,
-        GpuPacketSubmissionLease& lease,
         const NativeSubmissionInfo& nativeSubmissionInfo,
         const NotNull<GpuTimingSubmissionTicket*>* timingTickets,
         usize timingTicketCount,
@@ -484,8 +484,8 @@ private:
     void commitAcceptedPacket(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, GpuSubmissionPacketId packet, const QueueSubmissionToken& token, const NativeSubmissionInfo& nativeSubmissionInfo)noexcept;
     void abandonTimingTicketsWithoutCallbacks(const NotNull<GpuTimingSubmissionTicket*>* timingTickets, usize timingTicketCount)noexcept;
     void rejectPacket(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId& packet, u64 recordingAttemptGeneration);
-    void rejectSubmittingPacket(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, GpuPacketSubmissionLease& lease);
-    void abandonSubmittingPacketAfterExceptionWithinSubmissionOperation(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, GpuPacketSubmissionLease& lease)noexcept;
+    void rejectSubmittingPacket(GpuTaskGraph& graph, GpuPacketSubmissionLease& lease, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet);
+    void abandonSubmittingPacketAfterExceptionWithinSubmissionOperation(GpuTaskGraph& graph, GpuPacketSubmissionLease& lease, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet)noexcept;
     void completeRejectedPacketWithinSubmissionOperation(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, bool nativeSubmissionRejected)noexcept;
     void abandonUnacceptedPacketsAfterExceptionWithinSubmissionOperation(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)noexcept;
 

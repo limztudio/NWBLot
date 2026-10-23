@@ -40,42 +40,42 @@ inline constexpr u64 s_PendingSubmissionCost = 4u;
 
 bool GpuTaskScheduler::scheduleGraph(
     const GpuTaskGraph& graph,
+    Alloc::ScratchArena& scratchArena,
     GpuTaskGraphAnalysis& analysis,
     GpuTaskGraphQueueAssignments& assignments,
     GpuCompiledGraph& compiledGraph,
     GpuRecordedGraph& recordedGraph,
-    GpuGraphSubmissionTransaction& transaction,
-    Alloc::ScratchArena& scratchArena
+    GpuGraphSubmissionTransaction& transaction
 )const{
     const GpuTaskGraphCompileOptions compileOptions;
-    return scheduleGraph(graph, analysis, assignments, compiledGraph, recordedGraph, transaction, scratchArena, compileOptions);
+    return scheduleGraph(graph, compileOptions, scratchArena, analysis, assignments, compiledGraph, recordedGraph, transaction);
 }
 
 bool GpuTaskScheduler::scheduleGraph(
     const GpuTaskGraph& graph,
+    const GpuTaskGraphCompileOptions& compileOptions,
+    Alloc::ScratchArena& scratchArena,
     GpuTaskGraphAnalysis& analysis,
     GpuTaskGraphQueueAssignments& assignments,
     GpuCompiledGraph& compiledGraph,
     GpuRecordedGraph& recordedGraph,
-    GpuGraphSubmissionTransaction& transaction,
-    Alloc::ScratchArena& scratchArena,
-    const GpuTaskGraphCompileOptions& compileOptions
+    GpuGraphSubmissionTransaction& transaction
 )const{
     DeviceOperation deviceOperation(*this);
     if(!deviceOperation.m_admitted)
         return false;
 
-    return compileGraph(graph, analysis, assignments, compiledGraph, recordedGraph, transaction, scratchArena, compileOptions);
+    return compileGraph(graph, compileOptions, scratchArena, analysis, assignments, compiledGraph, recordedGraph, transaction);
 }
 
 bool GpuTaskScheduler::executeGraph(
+    const GpuTaskGraphNormalExecutionDesc& desc,
+    Alloc::ScratchArena& scratchArena,
     GpuTaskGraph& graph,
     GpuCompiledGraph& compiledGraph,
     GpuRecordedGraph& recordedGraph,
-    const GpuTaskGraphNormalExecutionDesc& desc,
     GpuGraphSubmissionTransaction& transaction,
     GpuTimingRecorder* const timingRecorder,
-    Alloc::ScratchArena& scratchArena,
     GpuSubmissionPacketId* const outFailedPacket
 )const{
     if(outFailedPacket)
@@ -84,17 +84,17 @@ bool GpuTaskScheduler::executeGraph(
     if(!deviceOperation.m_admitted)
         return false;
     const GpuNativePacketRecorder recorder(device(), timingRecorder);
-    return submitGraph(graph, compiledGraph, recorder, recordedGraph, desc, transaction, scratchArena, outFailedPacket);
+    return submitGraph(compiledGraph, recorder, desc, scratchArena, graph, recordedGraph, transaction, outFailedPacket);
 }
 
 bool GpuTaskScheduler::executeAcceptedFrontierTask(
-    GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
-    GpuRecordedGraph& recordedGraph,
     const GpuTaskId task,
+    Alloc::ScratchArena& scratchArena,
+    GpuTaskGraph& graph,
+    GpuRecordedGraph& recordedGraph,
     GpuGraphSubmissionTransaction& transaction,
     GpuTimingRecorder* const timingRecorder,
-    Alloc::ScratchArena& scratchArena,
     GpuSubmissionPacketId* const outFailedPacket
 )const{
     if(outFailedPacket)
@@ -103,20 +103,20 @@ bool GpuTaskScheduler::executeAcceptedFrontierTask(
     if(!deviceOperation.m_admitted)
         return false;
     const GpuNativePacketRecorder recorder(device(), timingRecorder);
-    return recordAndSubmitAcceptedFrontierTask(graph, compiledGraph, recorder, recordedGraph, task, transaction, scratchArena, outFailedPacket);
+    return recordAndSubmitAcceptedFrontierTask(compiledGraph, recorder, task, scratchArena, graph, recordedGraph, transaction, outFailedPacket);
 }
 
 bool GpuTaskScheduler::executeTask(
-    GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
-    GpuRecordedGraph& recordedGraph,
     const GpuTaskId task,
     const GpuTaskGraphTaskRecordedCallback* const recordedCallback,
+    const GpuTaskGraphTaskAcceptedCallback* const acceptedCallback,
+    Alloc::ScratchArena& scratchArena,
+    GpuTaskGraph& graph,
+    GpuRecordedGraph& recordedGraph,
     GpuGraphSubmissionTransaction& transaction,
     GpuTimingRecorder* const timingRecorder,
-    Alloc::ScratchArena& scratchArena,
-    GpuSubmissionPacketId* const outFailedPacket,
-    const GpuTaskGraphTaskAcceptedCallback* const acceptedCallback
+    GpuSubmissionPacketId* const outFailedPacket
 )const{
     if(outFailedPacket)
         *outFailedPacket = {};
@@ -124,18 +124,18 @@ bool GpuTaskScheduler::executeTask(
     if(!deviceOperation.m_admitted)
         return false;
     const GpuNativePacketRecorder recorder(device(), timingRecorder);
-    return recordAndSubmitTask(graph, compiledGraph, recorder, recordedGraph, task, recordedCallback, transaction, scratchArena, outFailedPacket, acceptedCallback);
+    return recordAndSubmitTask(compiledGraph, recorder, task, recordedCallback, acceptedCallback, scratchArena, graph, recordedGraph, transaction, outFailedPacket);
 }
 
 bool GpuTaskScheduler::compileGraph(
     const GpuTaskGraph& graph,
+    const GpuTaskGraphCompileOptions& compileOptions,
+    Alloc::ScratchArena& scratchArena,
     GpuTaskGraphAnalysis& analysis,
     GpuTaskGraphQueueAssignments& assignments,
     GpuCompiledGraph& compiledGraph,
     GpuRecordedGraph& recordedGraph,
-    GpuGraphSubmissionTransaction& transaction,
-    Alloc::ScratchArena& scratchArena,
-    const GpuTaskGraphCompileOptions& compileOptions
+    GpuGraphSubmissionTransaction& transaction
 )const{
     const GpuPhysicalQueueTopology topology = device().getPhysicalQueueTopology();
     if(!topology.queues || topology.queueCount == 0u)
@@ -162,7 +162,7 @@ bool GpuTaskScheduler::compileGraph(
 
     const GpuTaskGraph::DeclarationReadView declarations(graph);
     const GpuTaskGraphCompiler compiler;
-    if(!compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena, resolvedOptions))
+    if(!compiler.compile(analysis, assignments, compiledGraph, scratchArena, declarations, topology, resolvedOptions))
         return false;
 
     recordedGraph.reset(compiledGraph);

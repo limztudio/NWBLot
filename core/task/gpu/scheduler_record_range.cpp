@@ -21,15 +21,15 @@ bool GpuTaskScheduler::recordPacketRange(
     const GpuCompiledGraph& compiledGraph,
     const GpuNativePacketRecorder& recorder,
     const GpuSubmissionPacketRange& range,
-    GpuRecordedGraph& recordedGraph,
     CpuTaskScheduler* const readyFrontierScheduler,
-    GpuCommandIrCapture* const commandIrCapture,
     Alloc::ScratchArena& scratchArena,
+    GpuRecordedGraph& recordedGraph,
+    GpuCommandIrCapture* const commandIrCapture,
     GpuSubmissionPacketId* const outFailedPacket
 )const{
     return readyFrontierScheduler
-        ? recorder.recordPacketRangeInReadyFrontiers(graph, compiledGraph, range, recordedGraph, *readyFrontierScheduler, scratchArena, outFailedPacket, commandIrCapture)
-        : recorder.recordPacketRangeInCompileOrder(graph, compiledGraph, range, recordedGraph, scratchArena, outFailedPacket, commandIrCapture)
+        ? recorder.recordPacketRangeInReadyFrontiers(graph, compiledGraph, range, *readyFrontierScheduler, scratchArena, recordedGraph, outFailedPacket, commandIrCapture)
+        : recorder.recordPacketRangeInCompileOrder(graph, compiledGraph, range, scratchArena, recordedGraph, outFailedPacket, commandIrCapture)
     ;
 }
 

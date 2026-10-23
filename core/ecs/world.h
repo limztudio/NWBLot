@@ -263,7 +263,7 @@ private:
     void addEntityComponentType(EntityID entityId, ComponentTypeId typeId, IComponentPool& pool);
     void removeEntityComponentType(EntityID entityId, ComponentTypeId typeId)noexcept;
     void ensureEntityComponentHead(EntityID entityId);
-    u32 acquireEntityComponentNode(ComponentTypeId typeId, IComponentPool& pool, u32 nextNode);
+    u32 acquireEntityComponentNode(ComponentTypeId typeId, u32 nextNode, IComponentPool& pool);
     void releaseEntityComponentNode(u32 nodeIndex)noexcept;
 
 

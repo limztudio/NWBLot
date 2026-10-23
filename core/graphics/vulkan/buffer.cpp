@@ -423,7 +423,7 @@ Expected<BufferSuballocation> CommandList::prepareUploadStaging(const void* data
     if(!staging)
         return MakeUnexpected(staging.error());
 
-    const auto copied = VulkanDetail::CopyHostMemory(taskScheduler(), staging->cpuAddress, data, dataSize);
+    const auto copied = VulkanDetail::CopyHostMemory(staging->cpuAddress, taskScheduler(), data, dataSize);
     if(!copied){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: staging copy for {} rejected CPU work: {}"), operationName, static_cast<u32>(copied.error()));
         return MakeUnexpected(Failure{});

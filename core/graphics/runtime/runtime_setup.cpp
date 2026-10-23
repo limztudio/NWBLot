@@ -345,13 +345,13 @@ Expected<BufferHandle> GraphicsRuntime::setupBuffer(const BufferSetupDesc& desc)
         .directConsumerQueue = device.getPrimaryPhysicalQueue(consumerQueue),
     };
     const bool submitted = GraphicsModuleDetail::SubmitGraphOwnedSetupUpload(
-        *this,
+        uploadToken,
         *m_standaloneGraphWorkspaces,
+        *this,
         uploadDesc.queueSharing,
         consumerQueue,
         &submissionData,
         MakeNotNull(&__hidden_graphics_setup::DeclareBufferSetupUpload),
-        uploadToken,
         sameClassRouting.enabled ? sameClassRouting.primaryQueue : GpuPhysicalQueueId{}
     );
     if(!submitted){
@@ -405,13 +405,13 @@ Expected<TextureHandle> GraphicsRuntime::setupTexture(const TextureSetupDesc& de
         .directConsumerQueue = device.getPrimaryPhysicalQueue(consumerQueue),
     };
     const bool submitted = GraphicsModuleDetail::SubmitGraphOwnedSetupUpload(
-        *this,
+        uploadToken,
         *m_standaloneGraphWorkspaces,
+        *this,
         uploadDesc.queueSharing,
         consumerQueue,
         &submissionData,
         MakeNotNull(&__hidden_graphics_setup::DeclareTextureSetupUpload),
-        uploadToken,
         sameClassRouting.enabled ? sameClassRouting.primaryQueue : GpuPhysicalQueueId{}
     );
     if(!submitted){

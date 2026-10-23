@@ -69,7 +69,7 @@ private:
 
 class GpuTaskScheduler::SubmittingPacketUnwindScope final : NoCopy{
 public:
-    SubmittingPacketUnwindScope(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuGraphSubmissionTransaction& transaction)noexcept
+    SubmittingPacketUnwindScope(GpuTaskGraph& graph, GpuGraphSubmissionTransaction& transaction, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)noexcept
         : m_graph(graph)
         , m_compiledGraph(compiledGraph)
         , m_planAccess(planAccess)
@@ -81,7 +81,7 @@ public:
             return;
 
         NothrowScopedLock resolutionLock(m_transaction.m_resolutionMutex);
-        m_transaction.abandonSubmittingPacketAfterExceptionWithinSubmissionOperation(m_graph, m_compiledGraph, m_planAccess, m_packet, *m_submissionLease);
+        m_transaction.abandonSubmittingPacketAfterExceptionWithinSubmissionOperation(m_graph, *m_submissionLease, m_compiledGraph, m_planAccess, m_packet);
     }
 
 
@@ -110,18 +110,18 @@ private:
 
 
 bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
-    GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuCompiledGraph::ReadView& planAccess,
     const GpuRecordedGraph& recordedGraph,
     const GpuRecordedGraph::ArtifactOperation& artifactAccess,
     const GpuSubmissionPacketId& packetID,
-    GpuGraphSubmissionTransaction& transaction,
-    Alloc::ScratchArena& scratchArena,
-    const NotNull<GpuTimingSubmissionTicket*>* const timingTickets,
     const usize timingTicketCount,
     const QueueSubmissionPreSubmitHook* const preSubmitHook,
-    const GpuTaskSubmissionDetail::TaskCallbackBindings<GpuTaskGraphTaskAcceptedCallback>& taskAcceptedCallbacks
+    const GpuTaskSubmissionDetail::TaskCallbackBindings<GpuTaskGraphTaskAcceptedCallback>& taskAcceptedCallbacks,
+    Alloc::ScratchArena& scratchArena,
+    const NotNull<GpuTimingSubmissionTicket*>* const timingTickets,
+    GpuTaskGraph& graph,
+    GpuGraphSubmissionTransaction& transaction
 )const{
     if(!planAccess.validFor(compiledGraph) || !artifactAccess.validFor(recordedGraph) || !GpuGraphSubmissionTransaction::SubmissionOperation::ActiveFor(transaction))
         return false;
@@ -200,7 +200,7 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
         return false;
 
     // Freeze every ticket before validating the wait frontier so a reservation carrying a cross-queue frame-reset token stays retryable.
-    SubmittingPacketUnwindScope submittingPacketUnwind(graph, compiledGraph, planAccess, transaction);
+    SubmittingPacketUnwindScope submittingPacketUnwind(graph, transaction, compiledGraph, planAccess);
     usize preparedTimingTicketCount = 0u;
     PreparedTimingTicketsUnwindScope preparedTimingTicketsUnwind(submissionTimingTickets.data(), preparedTimingTicketCount);
     for(; preparedTimingTicketCount < submissionTimingTickets.size(); ++preparedTimingTicketCount){
@@ -260,7 +260,7 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     }
     // Device has released its native Queue locks.
     // Serialize only the irreversible CPU publication tail; another ordinary packet may enter Vulkan without exposing timing, payload, or transaction state out of order.
-    SubmittingPacketUnwindScope resolutionSubmittingPacketUnwind(graph, compiledGraph, planAccess, transaction);
+    SubmittingPacketUnwindScope resolutionSubmittingPacketUnwind(graph, transaction, compiledGraph, planAccess);
     PreparedTimingTicketsUnwindScope resolutionPreparedTimingTicketsUnwind(submissionTimingTickets.data(), preparedTimingTicketCount);
     ScopedLock resolutionLock(transaction.m_resolutionMutex);
     resolutionPreparedTimingTicketsUnwind.abandonOnUnwind();
@@ -276,7 +276,7 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
         }
         resolutionPreparedTimingTicketsUnwind.release();
         resolutionSubmittingPacketUnwind.release();
-        transaction.rejectSubmittingPacket(graph, compiledGraph, planAccess, packetID, submissionLease);
+        transaction.rejectSubmittingPacket(graph, submissionLease, compiledGraph, planAccess, packetID);
         if(submissionLease.valid())
             NWB_FATAL_ASSERT_MSG(false, "rejected native submission must consume its exact packet lease");
         if(!timingResolved)
@@ -292,7 +292,7 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     nativeSubmissionInfo.submissionSeconds = DurationInSeconds<f64>(TimerNow(), submissionBegin);
     resolutionPreparedTimingTicketsUnwind.release();
     resolutionSubmittingPacketUnwind.release();
-    return transaction.acceptSubmittingPacket(graph, compiledGraph, packetID, token, submissionLease, nativeSubmissionInfo, submissionTimingTickets.data(), submissionTimingTickets.size(), taskAcceptedCallbacks);
+    return transaction.acceptSubmittingPacket(graph, submissionLease, compiledGraph, packetID, token, nativeSubmissionInfo, submissionTimingTickets.data(), submissionTimingTickets.size(), taskAcceptedCallbacks);
 }
 
 

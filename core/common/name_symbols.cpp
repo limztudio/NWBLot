@@ -56,7 +56,7 @@ inline constexpr AStringView s_NamesymEscapedTab = "\\t";
 template<typename ArenaT>
 void AppendDebugHashText(AString<ArenaT>& outText, const NameHash& hash){
     char hashText[::NameDetail::s_DebugHashTextLength + 1u];
-    NameDetail::HashToDebugString(hash, hashText, sizeof(hashText));
+    NameDetail::HashToDebugString(hashText, sizeof(hashText), hash);
     outText += AStringView(hashText, ::NameDetail::s_DebugHashTextLength);
 }
 
@@ -106,7 +106,7 @@ public:
         return true;
     }
 
-    [[nodiscard]] bool resolve(const NameHash& hash, char* const outText, const usize outTextSize)const{
+    [[nodiscard]] bool resolve(char* const outText, const usize outTextSize, const NameHash& hash)const{
         if(outText == nullptr || outTextSize == 0u || NameDetail::IsZeroHash(hash))
             return false;
 
@@ -190,8 +190,8 @@ public:
         return m_symbols.insert(m_arena, hash, text);
     }
 
-    [[nodiscard]] bool resolve(const NameHash& hash, char* const outText, const usize outTextSize)const{
-        return m_symbols.resolve(hash, outText, outTextSize);
+    [[nodiscard]] bool resolve(char* const outText, const usize outTextSize, const NameHash& hash)const{
+        return m_symbols.resolve(outText, outTextSize, hash);
     }
 
     void clear()noexcept{
@@ -336,9 +336,9 @@ void RecordSymbol(const NameHash& hash, const AStringView text, void* const user
         return;
 }
 
-[[nodiscard]] bool ResolveSymbol(const NameHash& hash, char* const outText, const usize outTextSize, void* const userData){
+[[nodiscard]] bool ResolveSymbol(char* const outText, const usize outTextSize, const NameHash& hash, void* const userData){
     auto* const registry = static_cast<RuntimeRegistry*>(userData);
-    return registry && registry->resolve(hash, outText, outTextSize);
+    return registry && registry->resolve(outText, outTextSize, hash);
 }
 
 
@@ -357,8 +357,8 @@ namespace NameSymbols{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Resolve(const NameHash& hash, char* const outText, const usize outTextSize){
-    return __hidden_common_name_symbols::Registry().resolve(hash, outText, outTextSize);
+bool Resolve(char* const outText, const usize outTextSize, const NameHash& hash){
+    return __hidden_common_name_symbols::Registry().resolve(outText, outTextSize, hash);
 }
 
 usize EntryCount(){

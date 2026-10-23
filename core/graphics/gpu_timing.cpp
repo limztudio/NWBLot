@@ -159,7 +159,7 @@ void GpuTimingRecorder::collect(Device& device){
         {
             ScopedLock recorderLock(m_mutex);
             publishFrameIndex = m_currentFrameIndex;
-            publishPerformanceSamples = collectLocked(device, subscriptionIdentityLimit, completedSamples, performanceSamples, scratchArena);
+            publishPerformanceSamples = collectLocked(device, subscriptionIdentityLimit, scratchArena, completedSamples, performanceSamples);
         }
         for(const GpuTimingSinkSample& sample : performanceSamples)
             m_timing.recordSample(sample.scope, sample.durationSeconds, sample.sourceFrameIndex);
@@ -185,7 +185,7 @@ void GpuTimingRecorder::collect(Device& device, const u64 publishFrameIndex){
         bool publishPerformanceSamples = false;
         {
             ScopedLock recorderLock(m_mutex);
-            publishPerformanceSamples = collectLocked(device, subscriptionIdentityLimit, completedSamples, performanceSamples, scratchArena);
+            publishPerformanceSamples = collectLocked(device, subscriptionIdentityLimit, scratchArena, completedSamples, performanceSamples);
         }
         for(const GpuTimingSinkSample& sample : performanceSamples)
             m_timing.recordSample(sample.scope, sample.durationSeconds, sample.sourceFrameIndex);
@@ -482,7 +482,7 @@ Expected<Optional<NotNull<GpuTimingAccumulator*>>> GpuTimingRecorder::findOrCrea
     return Optional<NotNull<GpuTimingAccumulator*>>(MakeNotNull(it.value().get()));
 }
 
-bool GpuTimingRecorder::collectLocked(Device& device, const u64 subscriptionIdentityLimit, SampleDispatchVector& completedSamples, GpuTimingSinkSampleVector& performanceSamples, Alloc::ScratchArena& scratchArena){
+bool GpuTimingRecorder::collectLocked(Device& device, const u64 subscriptionIdentityLimit, Alloc::ScratchArena& scratchArena, SampleDispatchVector& completedSamples, GpuTimingSinkSampleVector& performanceSamples){
     syncActiveState();
     reservePendingAttributionSamplesLocked(completedSamples);
     const bool publishPerformanceSamples = m_performanceCollectionActive;
@@ -501,7 +501,7 @@ bool GpuTimingRecorder::collectLocked(Device& device, const u64 subscriptionIden
         return publishPerformanceSamples;
 
     for(auto it = m_accumulators.begin(); it != m_accumulators.end(); ++it)
-        it.value()->collect(device, *this, m_epoch, m_performanceCaptureEpoch, subscriptionIdentityLimit, publishPerformanceSamples, completedSamples, performanceSamples, scratchArena);
+        it.value()->collect(device, *this, m_epoch, m_performanceCaptureEpoch, subscriptionIdentityLimit, publishPerformanceSamples, scratchArena, completedSamples, performanceSamples);
     return publishPerformanceSamples;
 }
 

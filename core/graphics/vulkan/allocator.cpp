@@ -188,7 +188,7 @@ inline void UnmapAllocation(const VulkanAllocatorHandle allocator, const VulkanA
     vmaUnmapMemory(ToVmaAllocator(allocator), ToVmaAllocation(allocation));
 }
 
-inline void UnmapTransientAllocation(const VulkanAllocatorHandle allocator, const VulkanAllocationHandle allocation, void*& mappedMemory, const bool persistentlyMapped){
+inline void UnmapTransientAllocation(const VulkanAllocatorHandle allocator, const VulkanAllocationHandle allocation, const bool persistentlyMapped, void*& mappedMemory){
     if(mappedMemory && !persistentlyMapped){
         UnmapAllocation(allocator, allocation);
         mappedMemory = nullptr;
@@ -209,9 +209,9 @@ inline void UnmapTransientAllocation(const VulkanAllocatorHandle allocator, cons
     return result;
 }
 
-inline void DestroyBufferAllocation(const VulkanAllocatorHandle allocator, VkBuffer& buffer, VulkanAllocationHandle& allocation, void*& mappedMemory, const bool persistentlyMapped){
+inline void DestroyBufferAllocation(const VulkanAllocatorHandle allocator, const bool persistentlyMapped, VkBuffer& buffer, VulkanAllocationHandle& allocation, void*& mappedMemory){
     if(allocation){
-        UnmapTransientAllocation(allocator, allocation, mappedMemory, persistentlyMapped);
+        UnmapTransientAllocation(allocator, allocation, persistentlyMapped, mappedMemory);
         vmaDestroyBuffer(ToVmaAllocator(allocator), buffer, ToVmaAllocation(allocation));
         allocation = nullptr;
     }
@@ -295,7 +295,7 @@ VkResult VulkanAllocator::createBuffer(Buffer& buffer, const VkBufferCreateInfo&
 }
 
 void VulkanAllocator::destroyBuffer(Buffer& buffer){
-    __hidden_vulkan_allocator::DestroyBufferAllocation(m_allocator, buffer.m_buffer, buffer.m_allocation, buffer.m_mappedMemory, buffer.m_persistentlyMapped);
+    __hidden_vulkan_allocator::DestroyBufferAllocation(m_allocator, buffer.m_persistentlyMapped, buffer.m_buffer, buffer.m_allocation, buffer.m_mappedMemory);
     buffer.m_persistentlyMapped = false;
     buffer.m_requiresInvalidate = false;
 }
@@ -364,7 +364,7 @@ VkResult VulkanAllocator::createStagingTexture(StagingTexture& texture, const Vk
 }
 
 void VulkanAllocator::destroyStagingTexture(StagingTexture& texture){
-    __hidden_vulkan_allocator::DestroyBufferAllocation(m_allocator, texture.m_buffer, texture.m_allocation, texture.m_mappedMemory, true);
+    __hidden_vulkan_allocator::DestroyBufferAllocation(m_allocator, true, texture.m_buffer, texture.m_allocation, texture.m_mappedMemory);
     texture.m_requiresInvalidate = false;
 }
 
@@ -449,7 +449,7 @@ Expected<BufferAllocation, VkResult> VulkanAllocator::createHostMappedBuffer(con
 }
 
 void VulkanAllocator::destroyHostMappedBuffer(VkBuffer& buffer, VulkanAllocationHandle& allocation, void*& mappedMemory)noexcept{
-    __hidden_vulkan_allocator::DestroyBufferAllocation(m_allocator, buffer, allocation, mappedMemory, true);
+    __hidden_vulkan_allocator::DestroyBufferAllocation(m_allocator, true, buffer, allocation, mappedMemory);
 }
 
 bool VulkanAllocator::tryRegisterBufferNativeIdentity(Buffer& buffer){

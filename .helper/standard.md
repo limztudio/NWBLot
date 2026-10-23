@@ -362,6 +362,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
     - Use raw pointer members only for truly optional relationships.
   - For `NotNull<T*>`, do not add redundant null checks before dereference; treat it as non-null by contract.
   - Avoid nullable-pointer APIs followed by immediate non-null assertions; model required inputs as references instead.
+- When a function has both `in` and `out` (including in/out) parameters, keep the `in` and `out` parameter groups sequential and contiguous rather than interleaved. For example, `in, in, in, out, out` or `out, in, in, in` are acceptable, whereas `in, out, in, in, out` or `out, in, out` are forbidden. Apply the same contiguous parameter-ordering rule to C++ functions and Slang shader functions (except where an external third-party or OS callback signature is fixed by a foreign API).
 - For scoped mutex locking, prefer `ScopedLock lock(m_mutex);` (or `ScopedLock lock(otherMutex);`) instead of lock-type-specific scoped-lock forms when possible.
 
 ## 7. Ownership and memory patterns

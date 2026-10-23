@@ -176,7 +176,7 @@ inline constexpr usize HashValue(const NameHash& hash)noexcept{
 }
 
 template<typename CharT>
-inline void HashToDebugString(const NameHash& hash, CharT* dst, const usize dstSize)noexcept(IsArithmetic_V<CharT>){
+inline void HashToDebugString(CharT* dst, const usize dstSize, const NameHash& hash)noexcept(IsArithmetic_V<CharT>){
     if(dstSize == 0)
         return;
 

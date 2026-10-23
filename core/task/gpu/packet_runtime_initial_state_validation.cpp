@@ -29,7 +29,7 @@ constexpr usize s_LinearStateCountLimit = 8u;
 
 
 template<typename States, typename ResourceGetter, typename RecordLess>
-static void BuildRecordIndex(const States& states, Vector<usize, Alloc::ScratchArena>& index, const ResourceGetter resourceGetter, const RecordLess recordLess){
+static void BuildRecordIndex(Vector<usize, Alloc::ScratchArena>& index, const States& states, const ResourceGetter resourceGetter, const RecordLess recordLess){
     index.clear();
     index.reserve(states.size());
     for(usize stateIndex = 0u; stateIndex < states.size(); ++stateIndex){
@@ -44,7 +44,7 @@ static void BuildRecordIndex(const States& states, Vector<usize, Alloc::ScratchA
 }
 
 template<typename States, typename ResourceGetter>
-[[nodiscard]] static bool DeduplicatePermanentIndex(const States& states, Vector<usize, Alloc::ScratchArena>& index, const ResourceGetter resourceGetter)noexcept{
+[[nodiscard]] static bool DeduplicatePermanentIndex(Vector<usize, Alloc::ScratchArena>& index, const States& states, const ResourceGetter resourceGetter)noexcept{
     usize uniqueCount = 0u;
     for(const usize stateIndex : index){
         const auto& state = states[stateIndex];
@@ -105,9 +105,9 @@ bool GpuInitialStateHandoffValidation::validate(){
     if(m_states.m_permanentTextureStates.size() > s_LinearStateCountLimit){
         if(!m_permanentTextureIndex)
             m_permanentTextureIndex.emplace(m_scratchArena);
-        BuildRecordIndex(m_states.m_permanentTextureStates, *m_permanentTextureIndex, textureResource, [](const auto& lhs, const auto& rhs)noexcept{ return LessThan<Texture*>{}(lhs.texture, rhs.texture); }
+        BuildRecordIndex(*m_permanentTextureIndex, m_states.m_permanentTextureStates, textureResource, [](const auto& lhs, const auto& rhs)noexcept{ return LessThan<Texture*>{}(lhs.texture, rhs.texture); }
         );
-        if(!DeduplicatePermanentIndex(m_states.m_permanentTextureStates, *m_permanentTextureIndex, textureResource))
+        if(!DeduplicatePermanentIndex(*m_permanentTextureIndex, m_states.m_permanentTextureStates, textureResource))
             return false;
         m_permanentTexturesIndexed = true;
     }
@@ -120,9 +120,9 @@ bool GpuInitialStateHandoffValidation::validate(){
     if(m_states.m_permanentBufferStates.size() > s_LinearStateCountLimit){
         if(!m_permanentBufferIndex)
             m_permanentBufferIndex.emplace(m_scratchArena);
-        BuildRecordIndex(m_states.m_permanentBufferStates, *m_permanentBufferIndex, bufferResource, [](const auto& lhs, const auto& rhs)noexcept{ return LessThan<Buffer*>{}(lhs.buffer, rhs.buffer); }
+        BuildRecordIndex(*m_permanentBufferIndex, m_states.m_permanentBufferStates, bufferResource, [](const auto& lhs, const auto& rhs)noexcept{ return LessThan<Buffer*>{}(lhs.buffer, rhs.buffer); }
         );
-        if(!DeduplicatePermanentIndex(m_states.m_permanentBufferStates, *m_permanentBufferIndex, bufferResource))
+        if(!DeduplicatePermanentIndex(*m_permanentBufferIndex, m_states.m_permanentBufferStates, bufferResource))
             return false;
         m_permanentBuffersIndexed = true;
     }
@@ -136,7 +136,7 @@ bool GpuInitialStateHandoffValidation::validate(){
     if(m_states.m_textureStates.size() > s_LinearStateCountLimit){
         if(!m_textureIndex)
             m_textureIndex.emplace(m_scratchArena);
-        BuildRecordIndex(m_states.m_textureStates, *m_textureIndex, textureResource, [](const auto& lhs, const auto& rhs)noexcept{
+        BuildRecordIndex(*m_textureIndex, m_states.m_textureStates, textureResource, [](const auto& lhs, const auto& rhs)noexcept{
             if(lhs.texture != rhs.texture)
                 return LessThan<Texture*>{}(lhs.texture, rhs.texture);
             if(lhs.mipLevel != rhs.mipLevel)
@@ -175,7 +175,7 @@ bool GpuInitialStateHandoffValidation::validate(){
     if(m_states.m_bufferStates.size() > s_LinearStateCountLimit){
         if(!m_bufferIndex)
             m_bufferIndex.emplace(m_scratchArena);
-        BuildRecordIndex(m_states.m_bufferStates, *m_bufferIndex, bufferResource, [](const auto& lhs, const auto& rhs)noexcept{
+        BuildRecordIndex(*m_bufferIndex, m_states.m_bufferStates, bufferResource, [](const auto& lhs, const auto& rhs)noexcept{
             if(lhs.buffer != rhs.buffer)
                 return LessThan<Buffer*>{}(lhs.buffer, rhs.buffer);
             return lhs.range.byteOffset < rhs.range.byteOffset;

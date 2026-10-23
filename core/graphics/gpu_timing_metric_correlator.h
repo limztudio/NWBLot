@@ -131,7 +131,7 @@ public:
         usize queueOutputCount
     );
     // Stages completed derived samples without invoking the timing sink. The caller owns the observer-publication boundary.
-    void recordTimestampRange(const Name& scopeName, u64 frameIndex, const GpuComparableTimestampRange& range, GpuTimingSinkSampleVector& performanceSamples, Alloc::ScratchArena& scratchArena);
+    void recordTimestampRange(const Name& scopeName, u64 frameIndex, const GpuComparableTimestampRange& range, Alloc::ScratchArena& scratchArena, GpuTimingSinkSampleVector& performanceSamples);
     [[nodiscard]] bool hasOutputRole(const Name& scopeName)const noexcept;
     void discardPendingRanges()noexcept;
     void reset()noexcept;

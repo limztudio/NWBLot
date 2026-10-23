@@ -51,7 +51,7 @@ inline constexpr AStringView s_DefaultTaskMarkerLabel = "GPU Task";
     return GpuTaskPacketTimingScopeName(task.identity);
 }
 
-[[nodiscard]] bool PrepareCompiledTimingQueries(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, GpuTimingRecorder* const timingRecorder, Alloc::ScratchArena& scratchArena);
+[[nodiscard]] bool PrepareCompiledTimingQueries(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, Alloc::ScratchArena& scratchArena, GpuTimingRecorder* const timingRecorder);
 
 [[nodiscard]] bool HasExplicitKnownInitialState(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledBarrier& barrier, CommandList& commandList)noexcept;
 

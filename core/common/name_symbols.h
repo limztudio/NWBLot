@@ -38,7 +38,7 @@ inline constexpr AStringView s_FileHeader = "nwb_namesym_v1";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool Resolve(const NameHash& hash, char* outText, usize outTextSize);
+[[nodiscard]] bool Resolve(char* outText, usize outTextSize, const NameHash& hash);
 
 void InstallRuntimeRegistry();
 // Detaches callbacks before registry teardown so static use cannot dereference it.
@@ -83,7 +83,7 @@ template<typename ArenaT>
 }
 
 template<typename CharT, typename ArenaT>
-inline void AppendResolvedText(ArenaT& arena, BasicString<CharT, ArenaT>& outText, const AStringView resolvedText){
+inline void AppendResolvedText(const AStringView resolvedText, ArenaT& arena, BasicString<CharT, ArenaT>& outText){
     if constexpr(IsSame_V<CharT, char>){
         outText.append(resolvedText.data(), resolvedText.size());
     }
@@ -106,13 +106,13 @@ inline void DecodeHashTokens(ArenaT& arena, BasicString<CharT, ArenaT>& inOutTex
         const auto hash = hashText ? ::NameDetail::DecodeDebugHashText(AStringView(hashText->data(), ::NameDetail::s_DebugHashTextLength)) : Expected<NameHash>(MakeUnexpected(Failure{}));
         if(hash){
             char resolvedText[s_MaxResolvedTextLength];
-            if(Resolve(*hash, resolvedText, sizeof(resolvedText))){
+            if(Resolve(resolvedText, sizeof(resolvedText), *hash)){
                 if(!decoded){
                     decoded.emplace(arena);
                     decoded->reserve(inOutText.size());
                 }
                 decoded->append(inOutText.data() + copiedUntil, i - copiedUntil);
-                AppendResolvedText(arena, *decoded, AStringView(resolvedText));
+                AppendResolvedText(AStringView(resolvedText), arena, *decoded);
                 i += ::NameDetail::s_DebugHashTextLength;
                 copiedUntil = i;
                 continue;

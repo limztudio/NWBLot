@@ -232,7 +232,7 @@ Expected<GpuTaskId> GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, co
     if(requiresComputeOrGraphicsCapability)
         commands.alternativeCapabilities = GpuQueueCapability::Compute | GpuQueueCapability::Graphics;
     resolvedDesc.setResourceUses(resourceUses.data(), resourceUses.size());
-    return appendBuiltinTaskWithinMutation<CopyTask>(resolvedDesc, payload, mutation, commands);
+    return appendBuiltinTaskWithinMutation<CopyTask>(payload, resolvedDesc, mutation, commands);
 }
 
 Expected<GpuTaskId> GpuTaskGraph::addResolveTextureTask(const GpuTaskDesc& desc, const GpuResolveTextureTaskDesc& resolveDesc){
@@ -311,7 +311,7 @@ Expected<GpuTaskId> GpuTaskGraph::addResolveTextureTask(const GpuTaskDesc& desc,
 
     GpuTaskDesc resolvedDesc = desc;
     resolvedDesc.setResourceUses(resourceUses.data(), resourceUses.size());
-    return appendBuiltinTaskWithinMutation<ResolveTask>(resolvedDesc, payload, mutation, { GpuQueueCapability::Graphics });
+    return appendBuiltinTaskWithinMutation<ResolveTask>(payload, resolvedDesc, mutation, { GpuQueueCapability::Graphics });
 }
 
 

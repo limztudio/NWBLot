@@ -37,9 +37,9 @@ void GpuTimingAccumulator::collect(
     const u64 performanceCaptureEpoch,
     const u64 subscriptionIdentityLimit,
     const bool publishPerformanceSamples,
+    Alloc::ScratchArena& scratchArena,
     SampleDispatchVector& completedSamples,
-    GpuTimingSinkSampleVector& performanceSamples,
-    Alloc::ScratchArena& scratchArena
+    GpuTimingSinkSampleVector& performanceSamples
 ){
     if(m_pendingAcceptedQueryCount == 0u)
         return;
@@ -119,7 +119,7 @@ void GpuTimingAccumulator::collect(
             performanceSamples.push_back(GpuTimingSinkSample{ .scope = m_timingScope, .durationSeconds = durationSeconds, .sourceFrameIndex = sourceFrameIndex, });
         }
         if(publishPerformanceSample && comparableRange.valid()){
-            recorder.m_metricCorrelator.recordTimestampRange(m_scopeName, sourceFrameIndex, comparableRange, performanceSamples, scratchArena);
+            recorder.m_metricCorrelator.recordTimestampRange(m_scopeName, sourceFrameIndex, comparableRange, scratchArena, performanceSamples);
         }
         releaseQuery(record);
 

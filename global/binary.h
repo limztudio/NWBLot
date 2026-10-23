@@ -91,7 +91,7 @@ template<typename Container>
 }
 
 template<typename Container>
-[[nodiscard]] inline bool ReadBytes(const Container& binary, usize& inOutOffset, void* outBytes, const usize byteCount)noexcept(noexcept(CanReadBytes(binary, inOutOffset, byteCount)) && IsPointer_V<decltype(binary.data())> && noexcept(binary.data())){
+[[nodiscard]] inline bool ReadBytes(const Container& binary, const usize byteCount, usize& inOutOffset, void* outBytes)noexcept(noexcept(CanReadBytes(binary, inOutOffset, byteCount)) && IsPointer_V<decltype(binary.data())> && noexcept(binary.data())){
     RequireByteContainer<Container>();
     if(!CanReadBytes(binary, inOutOffset, byteCount))
         return false;
@@ -160,10 +160,10 @@ inline void AppendPOD(Container& outBinary, const PodType& value){
 }
 
 template<typename PodType, typename Container>
-[[nodiscard]] inline Expected<PodType> ReadPOD(const Container& binary, usize& inOutOffset)noexcept(noexcept(PodType{}) && IsNothrowMoveConstructible_V<PodType> && noexcept(BinaryDetail::ReadBytes(binary, inOutOffset, &DeclVal<PodType&>(), sizeof(PodType)))){
+[[nodiscard]] inline Expected<PodType> ReadPOD(const Container& binary, usize& inOutOffset)noexcept(noexcept(PodType{}) && IsNothrowMoveConstructible_V<PodType> && noexcept(BinaryDetail::ReadBytes(binary, sizeof(PodType), inOutOffset, &DeclVal<PodType&>()))){
     static_assert(IsTriviallyCopyable_V<PodType>, "binary POD reads require trivially-copyable values");
     PodType value = {};
-    if(!BinaryDetail::ReadBytes(binary, inOutOffset, &value, sizeof(PodType)))
+    if(!BinaryDetail::ReadBytes(binary, sizeof(PodType), inOutOffset, &value))
         return MakeUnexpected(Failure{});
     return value;
 }
@@ -185,7 +185,7 @@ namespace BinaryDetail{
 
 
 template<typename Container>
-[[nodiscard]] inline bool SkipBytes(const Container& binary, usize& inOutOffset, const usize byteCount)noexcept(noexcept(CanReadBytes(binary, inOutOffset, byteCount))){
+[[nodiscard]] inline bool SkipBytes(const Container& binary, const usize byteCount, usize& inOutOffset)noexcept(noexcept(CanReadBytes(binary, inOutOffset, byteCount))){
     RequireByteContainer<Container>();
     if(!CanReadBytes(binary, inOutOffset, byteCount))
         return false;
@@ -286,7 +286,7 @@ template<typename ValueType>
 }
 
 template<typename Container, typename ValueContainer>
-[[nodiscard]] inline Expected<void, BinaryVectorPayloadFailure::Enum> ReadBinaryVectorPayload(const Container& binary, usize& inOutOffset, const u64 count, ValueContainer& outValues)noexcept([]()consteval noexcept{
+[[nodiscard]] inline Expected<void, BinaryVectorPayloadFailure::Enum> ReadBinaryVectorPayload(const Container& binary, const u64 count, usize& inOutOffset, ValueContainer& outValues)noexcept([]()consteval noexcept{
     using ValueType = typename ValueContainer::value_type;
     constexpr bool s_CommonIsNothrow =
         noexcept(DeclVal<ValueContainer&>().clear())

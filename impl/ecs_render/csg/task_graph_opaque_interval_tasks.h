@@ -90,11 +90,11 @@ public:
 };
 
 struct CsgReceiverSpanBuildGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+    using Payload = CsgOpaqueIntervalRecordInputs;
 
-    struct Payload : public CsgOpaqueIntervalRecordInputs{
-        using CsgOpaqueIntervalRecordInputs::CsgOpaqueIntervalRecordInputs;
-    };
+
+public:
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
 
 public:
@@ -104,11 +104,11 @@ public:
 
 // Interval combine maps peel/span aliases to removed-interval aliases; graph lowers fences.
 struct CsgIntervalCombineGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+    using Payload = CsgOpaqueIntervalRecordInputs;
 
-    struct Payload : public CsgOpaqueIntervalRecordInputs{
-        using CsgOpaqueIntervalRecordInputs::CsgOpaqueIntervalRecordInputs;
-    };
+
+public:
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
 
 public:

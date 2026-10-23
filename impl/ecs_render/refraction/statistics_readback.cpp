@@ -5,6 +5,7 @@
 #include "statistics_readback.h"
 
 #include <impl/assets/graphics/refraction/diagnostics_layout.h>
+#include <impl/ecs_render/shared/statistics_readback_detail.h>
 
 #include <core/alloc/general.h>
 #include <core/common/log.h>
@@ -21,48 +22,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RefractionStatisticsState::RefractionStatisticsState(const u16 deviceGeneration)noexcept
-    : m_deviceGeneration(deviceGeneration)
-{}
-
-void RefractionStatisticsState::reset(const u16 deviceGeneration)noexcept{
-    NothrowScopedLock lock(m_mutex);
-
-    m_generation = m_generation == Limit<u64>::s_Max ? 0u : m_generation + 1u;
-    m_deviceGeneration = deviceGeneration;
-    m_latest = {};
-    for(Slot& slot : m_slots)
-        slot = {};
-}
-
-RefractionStatisticsReservationKey RefractionStatisticsState::reserve(const RefractionStatistics& metadata)noexcept{
-    NothrowScopedLock lock(m_mutex);
-
-    if(m_deviceGeneration == 0u || m_generation == 0u || m_nextSequence == Limit<u64>::s_Max)
-        return {};
-    for(u32 index = 0u; index < s_SlotCount; ++index){
-        Slot& slot = m_slots[index];
-        if(slot.reserved || slot.inFlight)
-            continue;
-        slot.metadata = metadata;
-        slot.metadata.sequence = m_nextSequence++;
-        slot.metadata.generation = m_generation;
-        slot.metadata.acceptedToken = {};
-        slot.metadata.hardwareReady = false;
-        slot.reserved = true;
-        return RefractionStatisticsReservationKey{slot.metadata.sequence, m_generation, index};
-    }
-    return {};
-}
-
-void RefractionStatisticsState::discard(const RefractionStatisticsReservationKey& key)noexcept{
-    NothrowScopedLock lock(m_mutex);
-
-    Slot* slot = matchingSlot(key);
-    if(slot && slot->reserved && !slot->inFlight)
-        *slot = {};
-}
-
 void RefractionStatisticsState::accept(const RefractionStatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const bool hardwareReady)noexcept{
     NothrowScopedLock lock(m_mutex);
 
@@ -77,26 +36,11 @@ void RefractionStatisticsState::accept(const RefractionStatisticsReservationKey&
     // Never recycle memory whose GPU completion is unproved.
 }
 
-Expected<RefractionStatisticsPendingReadback> RefractionStatisticsState::pending(const u32 index)const noexcept{
-    NothrowScopedLock lock(m_mutex);
-
-    if(index >= s_SlotCount)
-        return MakeUnexpected(Failure{});
-    const Slot& slot = m_slots[index];
-    const Core::QueueSubmissionToken& token = slot.metadata.acceptedToken;
-    if(!slot.inFlight || !token.valid() || !token.hasPhysicalQueueIdentity() || token.deviceGeneration != m_deviceGeneration)
-        return MakeUnexpected(Failure{});
-    return RefractionStatisticsPendingReadback{ .key = {slot.metadata.sequence, slot.metadata.generation, index}, .token = token, };
-}
-
 void RefractionStatisticsState::complete(const RefractionStatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const u32* counters)noexcept{
     NothrowScopedLock lock(m_mutex);
 
-    Slot* slot = matchingSlot(key);
-    if(!slot || !slot->inFlight)
-        return;
-    const Core::QueueSubmissionToken& accepted = slot->metadata.acceptedToken;
-    if(!token.valid() || !token.hasPhysicalQueueIdentity() || token.deviceGeneration != m_deviceGeneration || accepted.queue != token.queue || accepted.value != token.value || !accepted.matchesPhysicalQueue(token.physicalQueueIndex, token.deviceGeneration))
+    Slot* slot = beginCompleteWithinLock(key, token);
+    if(!slot)
         return;
     if(counters && slot->metadata.sequence > m_latest.sequence){
         m_latest = slot->metadata;
@@ -107,74 +51,21 @@ void RefractionStatisticsState::complete(const RefractionStatisticsReservationKe
     *slot = {};
 }
 
-Expected<RefractionStatistics> RefractionStatisticsState::tryGetLatestStatistics()const noexcept{
-    NothrowScopedLock lock(m_mutex);
-
-    if(m_latest.sequence == 0u)
-        return MakeUnexpected(Failure{});
-    return m_latest;
-}
-
-RefractionStatisticsState::Slot* RefractionStatisticsState::matchingSlot(const RefractionStatisticsReservationKey& key)noexcept{
-    if(!key.valid() || key.generation != m_generation || key.slot >= s_SlotCount)
-        return nullptr;
-    Slot& slot = m_slots[key.slot];
-    return slot.metadata.sequence == key.sequence && slot.metadata.generation == key.generation ? &slot : nullptr;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 Expected<RefractionStatisticsControlHandle> CreateRefractionStatisticsControl(Core::Alloc::GlobalArena& arena, const u16 deviceGeneration)noexcept{
-    auto control = RefractionStatisticsControlHandle(NewArenaObject<RefractionStatisticsControl>(arena, deviceGeneration), ArenaRefDeleter<RefractionStatisticsControl, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
-    if(!control)
-        return MakeUnexpected(Failure{});
-    return control;
+    return CreateStatisticsControl<RefractionStatisticsControl>(arena, deviceGeneration);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RefractionStatisticsReservation::RefractionStatisticsReservation(RefractionStatisticsControlHandle control, const RefractionStatistics& metadata)noexcept
-    : m_control(Move(control))
-{
-    if(m_control)
-        m_key = m_control->reserve(metadata);
-}
-
-RefractionStatisticsReservation::RefractionStatisticsReservation(RefractionStatisticsReservation&& other)noexcept
-    : m_control(Move(other.m_control))
-    , m_key(other.m_key)
-{
-    other.m_key = {};
-}
-
-RefractionStatisticsReservation::~RefractionStatisticsReservation()noexcept{
-    discard();
-}
-
-RefractionStatisticsReservation& RefractionStatisticsReservation::operator=(RefractionStatisticsReservation&& other)noexcept{
-    if(this != &other){
-        discard();
-        m_control = Move(other.m_control);
-        m_key = other.m_key;
-        other.m_key = {};
-    }
-    return *this;
-}
-
 void RefractionStatisticsReservation::accept(const Core::QueueSubmissionToken& token, const bool hardwareReady)noexcept{
     if(m_control && m_key.valid())
         m_control->accept(m_key, token, hardwareReady);
-    m_key = {};
-    m_control = nullptr;
-}
-
-void RefractionStatisticsReservation::discard()noexcept{
-    if(m_control && m_key.valid())
-        m_control->discard(m_key);
     m_key = {};
     m_control = nullptr;
 }
@@ -234,15 +125,9 @@ bool RefractionStatisticsReadback::prepareResources(){
         return false;
     }
     Core::BufferHandle buffers[RefractionStatisticsState::s_SlotCount];
-    for(u32 index = 0u; index < RefractionStatisticsState::s_SlotCount; ++index){
-        Core::BufferDesc desc;
-        desc.setByteSize(NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE).setCpuAccess(Core::CpuAccessMode::Read).setDebugName(s_Names[index]).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).enableAutomaticStateTracking(Core::ResourceStates::CopyDest);
-        auto buffersResult = m_graphics.createBuffer(desc);
-        if(!buffersResult){
-            heap.free(*descriptor);
-            return false;
-        }
-        buffers[index] = Move(*buffersResult);
+    if(!ECSRenderDetail::CreateStatisticsReadbackBuffers(m_graphics, NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE, s_Names, buffers)){
+        heap.free(*descriptor);
+        return false;
     }
     m_control->reset(deviceGeneration);
     m_counters = Move(counters);
@@ -253,32 +138,12 @@ bool RefractionStatisticsReadback::prepareResources(){
 }
 
 void RefractionStatisticsReadback::pollCompleted(){
-    if(!m_control)
-        return;
-    auto& device = m_graphics.getDevice();
-    for(u32 index = 0u; index < RefractionStatisticsState::s_SlotCount; ++index){
-        if(!m_buffers[index])
-            continue;
-        const auto pending = m_control->pending(index);
-        if(!pending || pending->token.deviceGeneration != device.getDeviceGeneration())
-            continue;
-        const auto& key = pending->key;
-        const auto& token = pending->token;
-        const Core::GpuPhysicalQueueId physicalQueue{.index = token.physicalQueueIndex, .deviceGeneration = token.deviceGeneration};
-        const Expected<u64> completedValue = device.queueGetCompletedInstance(physicalQueue);
-        if(!completedValue || *completedValue < token.value)
-            continue;
-        const Expected<void*> counters = device.mapBuffer(*m_buffers[index], Core::CpuAccessMode::Read);
-        if(!counters){
-            NWB_LOGGER_ERROR(NWB_TEXT("Refraction statistics: failed to map a completed readback"));
-            m_control->complete(key, token, nullptr);
-            continue;
-        }
-        u32 completedCounters[NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE / sizeof(u32)];
-        NWB_MEMCPY(completedCounters, sizeof(completedCounters), *counters, sizeof(completedCounters));
-        device.unmapBuffer(*m_buffers[index]);
-        m_control->complete(key, token, completedCounters);
-    }
+    ECSRenderDetail::PollCompletedStatisticsReadback<NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE>(
+        m_control,
+        m_graphics,
+        m_buffers,
+        NWB_TEXT("Refraction statistics: failed to map a completed readback")
+    );
 }
 
 Expected<RefractionStatistics> RefractionStatisticsReadback::tryGetLatestStatistics()const noexcept{

@@ -24,8 +24,10 @@ LIT_WINDOW_SETTLE_SECONDS = 0.1
 
 
 REPO = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPO / "tests" / "ab"))
 sys.path.insert(0, str(REPO / "tests" / "smoke"))
 
+from gpu_timing_parse import require_positive  # noqa: E402
 from harness_test_support import make_abnormal_exit_terminator  # noqa: E402
 from window_capture_smoke import (  # noqa: E402
     run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, make_runtime_launch_args, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed, require_normal_process_exit,
@@ -137,11 +139,6 @@ def wait_for_lifecycle_stage(process, log_directory: Path, log_baseline: Mapping
 
     expected_events = tuple(event_name for event_name, _ in LAGGED_LIGHTING_LIFECYCLE)
     raise SmokeFailure(f"timed out {stage}: expected accepted lifecycle prefix {expected_events[:expected_event_count]}\n" f"{latest_log[-4000:]}")
-
-
-def require_positive(parser: argparse.ArgumentParser, option: str, value: float) -> None:
-    if not math.isfinite(value) or value <= 0.0:
-        parser.error(f"{option} must be positive and finite")
 
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:

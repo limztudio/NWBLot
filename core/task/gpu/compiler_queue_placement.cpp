@@ -111,13 +111,8 @@ using namespace GpuTaskGraphCompilerDetail;
 }
 
 
-[[nodiscard]] bool TaskAllowsMerge(const GpuTaskGraphTaskView& task)noexcept{
-    return task.scheduling.allowPacketMerge && !task.scheduling.forceSubmissionBoundary && !task.scheduling.joinsAcceptedQueueFrontier;
-}
-
-
 [[nodiscard]] bool RequestsCompatiblePrecedingMerge(const GpuTaskGraphTaskView& preceding, const GpuTaskGraphTaskView& task)noexcept{
-    if(!task.scheduling.mergeWithPrevious || !TaskAllowsMerge(preceding) || !TaskAllowsMerge(task))
+    if(!task.scheduling.mergeWithPrevious || !GpuTaskGraphCompilerDetail::TaskAllowsPacketMerge(preceding) || !GpuTaskGraphCompilerDetail::TaskAllowsPacketMerge(task))
         return false;
     if(!task.scheduling.allowMergeAcrossConsumerFrontier)
         return true;

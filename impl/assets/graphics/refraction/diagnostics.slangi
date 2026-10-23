@@ -64,11 +64,11 @@ void nwbRefractionCount(const uint offset, const uint amount = 1u){
 #endif
 }
 
-void nwbRefractionCountQueryWork(const NwbRayTraceGeometryHit hit){
+void nwbRefractionCountHitQueryWork(const uint physicalQueries, const uint queryBudgetUnits){
 #if NWB_REFRACTION_DIAGNOSTICS
 #if NWB_RT_CSG_ENABLED
-    nwbRefractionCount(NWB_REFRACTION_COUNTER_physicalQueries, hit.physicalQueries);
-    nwbRefractionCount(NWB_REFRACTION_COUNTER_queryBudgetUnits, hit.queryBudgetUnits);
+    nwbRefractionCount(NWB_REFRACTION_COUNTER_physicalQueries, physicalQueries);
+    nwbRefractionCount(NWB_REFRACTION_COUNTER_queryBudgetUnits, queryBudgetUnits);
 #else
     nwbRefractionCount(NWB_REFRACTION_COUNTER_physicalQueries);
     nwbRefractionCount(NWB_REFRACTION_COUNTER_queryBudgetUnits);
@@ -76,15 +76,19 @@ void nwbRefractionCountQueryWork(const NwbRayTraceGeometryHit hit){
 #endif
 }
 
-void nwbRefractionCountQueryWork(const NwbRayTraceSurfaceHit hit){
-#if NWB_REFRACTION_DIAGNOSTICS
-#if NWB_RT_CSG_ENABLED
-    nwbRefractionCount(NWB_REFRACTION_COUNTER_physicalQueries, hit.physicalQueries);
-    nwbRefractionCount(NWB_REFRACTION_COUNTER_queryBudgetUnits, hit.queryBudgetUnits);
+void nwbRefractionCountQueryWork(const NwbRayTraceGeometryHit hit){
+#if NWB_REFRACTION_DIAGNOSTICS && NWB_RT_CSG_ENABLED
+    nwbRefractionCountHitQueryWork(hit.physicalQueries, hit.queryBudgetUnits);
 #else
-    nwbRefractionCount(NWB_REFRACTION_COUNTER_physicalQueries);
-    nwbRefractionCount(NWB_REFRACTION_COUNTER_queryBudgetUnits);
+    nwbRefractionCountHitQueryWork(1u, 1u);
 #endif
+}
+
+void nwbRefractionCountQueryWork(const NwbRayTraceSurfaceHit hit){
+#if NWB_REFRACTION_DIAGNOSTICS && NWB_RT_CSG_ENABLED
+    nwbRefractionCountHitQueryWork(hit.physicalQueries, hit.queryBudgetUnits);
+#else
+    nwbRefractionCountHitQueryWork(1u, 1u);
 #endif
 }
 

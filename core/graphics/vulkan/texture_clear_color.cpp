@@ -338,14 +338,7 @@ void CommandList::clearColorTextureBox(Alloc::ScratchArena& scratchArena, Textur
         Buffer& stagingBuffer = *staging->buffer;
         const u64 stagingOffset = staging->offset;
         void* const stagingBytes = staging->cpuAddress;
-        if(
-            !stagingBytes
-            || (stagingOffset % mipPlan.uploadLayout.stagingAlignment) != 0u
-            || (stagingOffset % mipPlan.uploadLayout.copyOffsetAlignment) != 0u
-            || stagingOffset > stagingBuffer.m_creationDesc.byteSize
-            || static_cast<u64>(mipPlan.uploadLayout.clearByteCount)
-                > stagingBuffer.m_creationDesc.byteSize - stagingOffset
-        ){
+        if(!VulkanTextureDetail::TextureClearStagingRangeValid(stagingBytes, stagingOffset, stagingBuffer.m_creationDesc.byteSize, mipPlan.uploadLayout)){
             rejectCommandRecording(s_ClearTextureBoxOperation, VulkanTextureDetail::s_ClearStagingRangeInvalidReason);
             return;
         }
@@ -359,35 +352,9 @@ void CommandList::clearColorTextureBox(Alloc::ScratchArena& scratchArena, Textur
             region.imageExtent = { static_cast<u32>(clearWidth), static_cast<u32>(clearHeight), static_cast<u32>(clearDepth) };
             m_context.deviceDispatch.vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer.m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1u, &region);
         }
-        else if(mipPlan.uploadLayout.mergeArrayLayerCopies){
-            Vector<VkBufferImageCopy, Alloc::ScratchArena> regions(resolvedSubresources.numArraySlices, scratchArena);
-            const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
-            u32 regionIndex = 0u;
-            for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
-                VkBufferImageCopy region{};
-                region.bufferOffset = stagingOffset + static_cast<u64>(regionIndex) * mipPlan.uploadLayout.layerPitch;
-                region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(VK_IMAGE_ASPECT_COLOR_BIT, mipLevel, arraySlice, 1u);
-                region.imageOffset = { mipPlan.resolvedBox.minX, mipPlan.resolvedBox.minY, 0 };
-                region.imageExtent = { static_cast<u32>(clearWidth), static_cast<u32>(clearHeight), 1u };
-                regions[regionIndex++] = region;
-            }
-
-            if(!regions.empty())
-                m_context.deviceDispatch.vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer.m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<u32>(regions.size()), regions.data());
-        }
         else{
             Vector<VkBufferImageCopy, Alloc::ScratchArena> regions(resolvedSubresources.numArraySlices, scratchArena);
-            const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
-            u32 regionIndex = 0u;
-            for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
-                VkBufferImageCopy region{};
-                region.bufferOffset = stagingOffset;
-                region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(VK_IMAGE_ASPECT_COLOR_BIT, mipLevel, arraySlice, 1u);
-                region.imageOffset = { mipPlan.resolvedBox.minX, mipPlan.resolvedBox.minY, 0 };
-                region.imageExtent = { static_cast<u32>(clearWidth), static_cast<u32>(clearHeight), 1u };
-                regions[regionIndex++] = region;
-            }
-
+            VulkanTextureDetail::BuildArrayLayerBufferImageCopies(resolvedSubresources, VK_IMAGE_ASPECT_COLOR_BIT, mipLevel, mipPlan.resolvedBox, stagingOffset, mipPlan.uploadLayout, regions);
             if(!regions.empty())
                 m_context.deviceDispatch.vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer.m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<u32>(regions.size()), regions.data());
         }

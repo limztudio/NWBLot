@@ -91,25 +91,13 @@ struct TextureImagePaintSample{
 
 class UiTextureImageBuilderTests : public WidgetFixture{
 protected:
-    [[nodiscard]] static ImageOptions Fixed(f32 width = 96.0f, f32 height = 40.0f)noexcept;
     [[nodiscard]] static PopupOptions ParentOptions()noexcept;
     [[nodiscard]] static PopupOptions ChildOptions()noexcept;
-
-
-protected:
-    [[nodiscard]] bool panel(u64 generation);
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-ImageOptions UiTextureImageBuilderTests::Fixed(const f32 width, const f32 height)noexcept{
-    ImageOptions options;
-    options.width = { LayoutSizePolicy::Fixed, width };
-    options.height = { LayoutSizePolicy::Fixed, height };
-    return options;
-}
 
 PopupOptions UiTextureImageBuilderTests::ParentOptions()noexcept{
     PopupOptions options;
@@ -123,10 +111,6 @@ PopupOptions UiTextureImageBuilderTests::ChildOptions()noexcept{
     options.anchor = { 420.0f, 20.0f, 80.0f, 20.0f };
     options.size = { 280.0f, 240.0f };
     return options;
-}
-
-bool UiTextureImageBuilderTests::panel(const u64 generation){
-    return begin(generation) && m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 360.0f, 400.0f });
 }
 
 

@@ -48,8 +48,7 @@ inline constexpr u32 s_PageStepCount = 10u;
     return
         IsPreciseUiRect(placement.bounds) && IsPreciseUiRect(placement.clip) && IsPreciseUiRect(placement.travelBounds)
         && IsPreciseUiRect(placement.track) && IsPreciseUiRect(placement.centerTravel) && IsPreciseUiRect(placement.thumb)
-        && IsFinite(placement.thumbExtent.x) && placement.thumbExtent.x >= 0.0f
-        && IsFinite(placement.thumbExtent.y) && placement.thumbExtent.y >= 0.0f
+        && IsValidUiExtent(placement.thumbExtent)
         && placement.thumbExtent.x == placement.thumb.width && placement.thumbExtent.y == placement.thumb.height
         && placement.thumbExtent.x <= placement.travelBounds.width && placement.thumbExtent.y <= placement.travelBounds.height
         && placement.centerTravel.width <= placement.travelBounds.width
@@ -65,10 +64,6 @@ inline constexpr u32 s_PageStepCount = 10u;
         && BitCast<u32>(lhs.thumbExtent.x) == BitCast<u32>(rhs.thumbExtent.x)
         && BitCast<u32>(lhs.thumbExtent.y) == BitCast<u32>(rhs.thumbExtent.y)
     ;
-}
-
-[[nodiscard]] static bool SamePress(const InputActionId& lhs, const InputActionId& rhs)noexcept{
-    return lhs.target == rhs.target && lhs.declarationGeneration == rhs.declarationGeneration && lhs.layoutGeneration == rhs.layoutGeneration && lhs.sequence == rhs.sequence;
 }
 
 [[nodiscard]] static bool ValidGesture(const PointerGesture& gesture)noexcept{
@@ -311,7 +306,7 @@ bool SliderBehavior::Drag(SliderState& state, SliderResult& result, const Slider
         return true;
     }
     const f64 delta = VectorDoubleGetY(travelDelta);
-    bool moved = SamePress(state.m_press, gesture.id) && state.m_pressMoved;
+    bool moved = state.m_press == gesture.id && state.m_pressMoved;
     f64 value = state.m_value;
     if(delta == 0.0){
         if(moved)

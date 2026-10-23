@@ -50,9 +50,7 @@ namespace __hidden_gpu_command_ir_replay_lowering{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static GpuCommandIrReplayResult ReplayFailure(const GpuCommandIrReplayError::Enum error, const GpuCommandIrStreamValidationResult& streamValidation = {}, const u64 recordIndex = Limit<u64>::s_Max)noexcept{
-    return GpuCommandIrReplayResult{ .error = error, .streamValidation = streamValidation, .recordIndex = recordIndex, };
-}
+using GpuCommandIrDetail::ReplayFailure;
 
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateBufferBackendOperand(Buffer& buffer, const ResourceStates::Mask requiredState, CommandList& commandList, const GpuPhysicalQueueInfo& commandQueue)noexcept{
     if(!GraphicsBackend::IsBufferReadyForState(commandList.getDevice(), &buffer, requiredState) || !ResourceQueueAdmissionAdmitsQueue(buffer.getQueueAdmissionSnapshot(), commandQueue))

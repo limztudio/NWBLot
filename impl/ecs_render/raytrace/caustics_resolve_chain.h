@@ -48,17 +48,10 @@ struct CausticsResolveStageNaming{
     TStringView warnText;
 };
 
-struct CausticsResolveChainInputs{
+struct CausticsResolveChainInputs : public CausticsResolveChainStageUseInputs{
     DeferredFrameTargets& targets;
     Core::GpuTaskId geometryTask;
     Core::GpuTaskSchedulingHint baseScheduling;
-    CausticsResolveStageUses prepare;
-    CausticsResolveStageUses wavelet;
-    CausticsResolveStageUses secondWavelet;
-    CausticsResolveStageUses thirdWavelet;
-    CausticsResolveStageUses fourthWavelet;
-    CausticsResolveStageUses fifthWavelet;
-    CausticsResolveStageUses upsample;
     const Core::GpuTaskExternalStateSource* stateSources = nullptr;
     usize stateSourceCount = 0u;
     bool applyStateSourcesToPrepareOnly = true;
@@ -75,7 +68,7 @@ public:
     {}
 };
 
-struct CausticsResolveChainResult{
+struct CausticsResolveChainStageTasks{
     Core::GpuTaskId causticResolvePrepareTask;
     Core::GpuTaskId causticResolveWaveletTask;
     Core::GpuTaskId causticResolveSecondWaveletTask;
@@ -83,6 +76,9 @@ struct CausticsResolveChainResult{
     Core::GpuTaskId causticResolveFourthWaveletTask;
     Core::GpuTaskId causticResolveFifthWaveletTask;
     Core::GpuTaskId causticResolveUpsampleTask;
+};
+
+struct CausticsResolveChainResult : public CausticsResolveChainStageTasks{
     Core::GpuTaskId causticsTask;
 };
 

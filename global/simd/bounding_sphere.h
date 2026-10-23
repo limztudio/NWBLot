@@ -205,14 +205,6 @@
     return CollisionDoubleDetail::SphereCenterRadius(centerValue, VectorDouble3Length(extentsValue));
 }
 
-[[nodiscard]] inline SIMDVectorSingle NWB_SIMD_CALL BoundingSphere::SphereFromCornersValue(const Span<const SIMDVectorSingle> corners)noexcept{
-    return CollisionDetail::CreateSphereFromVectorPoints(corners);
-}
-
-[[nodiscard]] inline SIMDVectorDouble NWB_SIMD_CALL BoundingDoubleSphere::SphereFromCornersValue(const Span<const SIMDVectorDouble> corners)noexcept{
-    return CollisionDoubleDetail::CreateSphereFromVectorPoints(corners);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -599,13 +591,13 @@ inline void BoundingDoubleSphere::CreateFromPoints(BoundingDoubleSphere& outSphe
 inline void BoundingSphere::CreateFromFrustum(BoundingSphere& outSphere, const BoundingFrustum& frustum)noexcept{
     SIMDVectorSingle corners[BoundingFrustum::s_CornerCount];
     CollisionDetail::FrustumCorners(LoadFloat(frustum.origin), LoadFloat(frustum.orientation), frustum.rightSlope, frustum.leftSlope, frustum.topSlope, frustum.bottomSlope, frustum.nearPlane, frustum.farPlane, corners);
-    StoreFloat(SphereFromCornersValue(corners), outSphere.centerRadius);
+    StoreFloat(CollisionDetail::CreateSphereFromVectorPoints(corners), outSphere.centerRadius);
 }
 
 inline void BoundingDoubleSphere::CreateFromFrustum(BoundingDoubleSphere& outSphere, const BoundingDoubleFrustum& frustum)noexcept{
     SIMDVectorDouble corners[BoundingDoubleFrustum::s_DoubleCornerCount];
     CollisionDoubleDetail::FrustumCorners(LoadDouble(frustum.origin), LoadDouble(frustum.orientation), frustum.rightSlope, frustum.leftSlope, frustum.topSlope, frustum.bottomSlope, frustum.nearPlane, frustum.farPlane, corners);
-    StoreDouble(SphereFromCornersValue(corners), outSphere.centerRadius);
+    StoreDouble(CollisionDoubleDetail::CreateSphereFromVectorPoints(corners), outSphere.centerRadius);
 }
 
 

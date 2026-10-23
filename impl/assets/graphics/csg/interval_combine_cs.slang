@@ -58,30 +58,6 @@ uint nwbCsgIntervalCombineIntervalLayerCount(){
     return min(layerCount, NWB_CSG_PEEL_LAYER_COUNT);
 }
 
-uint nwbCsgIntervalCombineReceiverSpanLayerCount(){
-    uint width = 1u;
-    uint height = 1u;
-    uint layerCount = 1u;
-    g_NwbCsgReceiverSpanData.GetDimensions(width, height, layerCount);
-    return min(layerCount, NWB_CSG_RECEIVER_SPAN_LAYER_COUNT);
-}
-
-uint nwbCsgIntervalCombineRemovedIntervalLayerCount(){
-    uint width = 1u;
-    uint height = 1u;
-    uint layerCount = 1u;
-    g_NwbCsgRemovedIntervalDepth.GetDimensions(width, height, layerCount);
-    return min(layerCount, NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT);
-}
-
-uint2 nwbCsgIntervalCombineWorkOffset(){
-    return nwbCsgIntervalDispatchWorkOffset();
-}
-
-uint2 nwbCsgIntervalCombineWorkExtent(){
-    return nwbCsgIntervalDispatchWorkExtent();
-}
-
 uint nwbCsgIntervalCombineIdReceiverIndex(const uint id){
     const uint receiverBits = id & NWB_CSG_RECEIVER_INDEX_MASK;
     return receiverBits == 0u ? NWB_CSG_INVALID_RECEIVER_INDEX : receiverBits - 1u;
@@ -266,17 +242,17 @@ void nwbCsgIntervalCombineWriteEntries(const uint2 pixel, __constref NwbCsgRemov
 [numthreads(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_X, NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_Y, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint2 frameExtent = nwbCsgIntervalCombineFrameExtent();
-    const uint2 workExtent = nwbCsgIntervalCombineWorkExtent();
+    const uint2 workExtent = nwbCsgIntervalDispatchWorkExtent();
     if(dispatchThreadID.x >= workExtent.x || dispatchThreadID.y >= workExtent.y)
         return;
 
-    const uint2 pixel = dispatchThreadID.xy + nwbCsgIntervalCombineWorkOffset();
+    const uint2 pixel = dispatchThreadID.xy + nwbCsgIntervalDispatchWorkOffset();
     if(pixel.x >= frameExtent.x || pixel.y >= frameExtent.y)
         return;
 
     const uint intervalLayerCount = nwbCsgIntervalCombineIntervalLayerCount();
-    const uint spanLayerCount = nwbCsgIntervalCombineReceiverSpanLayerCount();
-    const uint removedIntervalLayerCount = nwbCsgIntervalCombineRemovedIntervalLayerCount();
+    const uint spanLayerCount = nwbCsgReceiverSpanLayerCount();
+    const uint removedIntervalLayerCount = nwbCsgRemovedIntervalLayerCount();
 
     NwbCsgRemovedIntervalCandidate entries[NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT];
     [unroll] for(uint layerIndex = 0u; layerIndex < NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT; ++layerIndex){

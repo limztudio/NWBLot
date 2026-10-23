@@ -26,9 +26,7 @@ struct PacketMergeSummary{
     bool hasCrossQueueConsumerFrontier = false;
 };
 
-[[nodiscard]] bool TaskAllowsPacketMerge(const GpuTaskGraphTaskView& task)noexcept{
-    return task.scheduling.allowPacketMerge && !task.scheduling.forceSubmissionBoundary && !task.scheduling.joinsAcceptedQueueFrontier;
-}
+using GpuTaskGraphCompilerDetail::TaskAllowsPacketMerge;
 
 [[nodiscard]] bool SchedulingConsumersContain(const GpuTaskGraphAnalysis& analysis, const GpuTaskId& producer, const GpuTaskId& consumer)noexcept{
     const GpuTaskGraphSchedulingTaskIndexView consumers = analysis.schedulingConsumers(producer);
@@ -210,8 +208,9 @@ namespace GpuTaskGraphCompilerDetail{
         GpuSubmissionPacketId packetID;
         GpuTaskPacketizationDecision::Enum packetizationDecision = compiledPlan.packets.empty() ? GpuTaskPacketizationDecision::FirstTask : GpuTaskPacketizationDecision::MergeNotRequested;
         const bool scoredMergeRequested = policy == GpuTaskGraphPacketizationPolicy::FrontierScored && !task.scheduling.mergeWithPrevious;
-        const bool mergeRequested = (task.scheduling.mergeWithPrevious || scoredMergeRequested) && task.scheduling.allowPacketMerge && !task.scheduling.forceSubmissionBoundary && !task.scheduling.joinsAcceptedQueueFrontier && !compiledPlan.packets.empty();
-        if(!compiledPlan.packets.empty() && (!task.scheduling.allowPacketMerge || task.scheduling.forceSubmissionBoundary || task.scheduling.joinsAcceptedQueueFrontier))
+        const bool taskAllowsMerge = TaskAllowsPacketMerge(task);
+        const bool mergeRequested = (task.scheduling.mergeWithPrevious || scoredMergeRequested) && taskAllowsMerge && !compiledPlan.packets.empty();
+        if(!compiledPlan.packets.empty() && !taskAllowsMerge)
             packetizationDecision = GpuTaskPacketizationDecision::TaskForcesBoundary;
         if(mergeRequested){
             GpuSubmissionPacket& precedingPacket = compiledPlan.packets.back();

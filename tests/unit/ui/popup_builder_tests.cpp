@@ -31,13 +31,6 @@ constexpr AStringView s_LaterKey = "later";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void ExpectBounds(const Rect& actual, const Rect& expected){
-    EXPECT_FLOAT_EQ(actual.x, expected.x);
-    EXPECT_FLOAT_EQ(actual.y, expected.y);
-    EXPECT_FLOAT_EQ(actual.width, expected.width);
-    EXPECT_FLOAT_EQ(actual.height, expected.height);
-}
-
 static PopupOptions Anchored()noexcept{
     PopupOptions options;
     options.anchor = { 40.0f, 60.0f, 80.0f, 24.0f };
@@ -142,7 +135,7 @@ TEST_F(UiPopupBuilderTests, ModalBackdropAndBodyRenderAboveAPanelDeclaredByALate
     EXPECT_EQ(backdrop.firstIndex, 0u);
     EXPECT_EQ(backdrop.indexCount, 6u);
     EXPECT_GT(snapshot.commands()[0u].firstIndex, backdrop.firstIndex);
-    ExpectBounds(backdrop.clip, { 0.0f, 0.0f, 800.0f, 600.0f });
+    ExpectRect(backdrop.clip, { 0.0f, 0.0f, 800.0f, 600.0f });
     const Vertex& first = snapshot.vertices()[snapshot.indices()[backdrop.firstIndex]];
     const Vertex& opposite = snapshot.vertices()[snapshot.indices()[backdrop.firstIndex + 2u]];
     EXPECT_FLOAT_EQ(first.position.x, 0.0f);
@@ -447,7 +440,7 @@ TEST_F(UiPopupBuilderTests, MissingPopupAndPanelSkinRejectsAdmissionWithoutChang
     EXPECT_FALSE(m_builder.beginPopup(s_PopupKey, state, moved));
     EXPECT_TRUE(m_context.failed());
     EXPECT_TRUE(m_builder.balanced());
-    ExpectBounds(state.placement().bounds, previous);
+    ExpectRect(state.placement().bounds, previous);
     EXPECT_FALSE(m_context.finishFrame());
     EXPECT_FALSE(m_context.commitFrame(2u));
     EXPECT_EQ(m_context.input().layoutGeneration(), 1u);

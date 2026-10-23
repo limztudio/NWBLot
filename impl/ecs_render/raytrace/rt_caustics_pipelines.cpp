@@ -99,20 +99,14 @@ bool RendererRayTracingSystem::hasHwCausticWork()const noexcept{
     return hasHwCausticWork(meshView);
 }
 
-bool RendererRayTracingSystem::hasHwCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept{
-    // Hardware photons require a caustic light, refractor, TLAS, and tracked mesh.
+bool RendererRayTracingSystem::hasCommonCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept{
     return
-        m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
-        && m_shadowVisibilityTraceResourcesPreflighted
+        m_shadowVisibilityTraceResourcesPreflighted
         && m_shadowVisibilityPreparedTargets
-        && (m_lightSpaceShadow.m_csg.snapshot.hasCsg ? m_rayTracingState.m_hwCausticCsgPipeline : m_rayTracingState.m_hwCausticPipeline)
-        && (m_lightSpaceShadow.m_csg.snapshot.hasCsg ? m_rayTracingState.m_hwCausticCsgShaderTable : m_rayTracingState.m_hwCausticShaderTable)
         && causticResolveResourcesReady(*m_shadowVisibilityPreparedTargets, m_rayTracingState.m_causticTemporalDecay)
         && m_rayTracingState.m_causticLightCount > 0u
         && m_unsupportedCausticVolumeCount == 0u
         && m_rayTracingState.m_causticRefractiveInstanceCount > 0u
-        && m_rayTracingState.m_tlas
-        && m_rayTracingState.m_shadowMeshCount > 0u
         && m_rayTracingState.m_causticEmissionTargetBuffer
         && m_rayTracingState.m_causticEmissionTargetHeapHandle.valid()
         && m_rayTracingState.m_causticEmissionTargetHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
@@ -120,6 +114,18 @@ bool RendererRayTracingSystem::hasHwCausticWork(const ECSRenderDetail::MeshViewB
         && m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid()
         && m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer
         && meshView.bindingValid()
+    ;
+}
+
+bool RendererRayTracingSystem::hasHwCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept{
+    // Hardware photons require a caustic light, refractor, TLAS, and tracked mesh.
+    return
+        m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
+        && (m_lightSpaceShadow.m_csg.snapshot.hasCsg ? m_rayTracingState.m_hwCausticCsgPipeline : m_rayTracingState.m_hwCausticPipeline)
+        && (m_lightSpaceShadow.m_csg.snapshot.hasCsg ? m_rayTracingState.m_hwCausticCsgShaderTable : m_rayTracingState.m_hwCausticShaderTable)
+        && m_rayTracingState.m_tlas
+        && m_rayTracingState.m_shadowMeshCount > 0u
+        && hasCommonCausticWork(meshView)
     ;
 }
 

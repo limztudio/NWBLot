@@ -32,7 +32,7 @@ namespace __hidden_gpu_packet_runtime_recorded_graph{
 inline constexpr usize s_MinOverlapPacketCount = 2u;
 
 template<typename StatisticsT>
-static void AccumulatePacketRecordingCounts(StatisticsT& statistics, const GpuRecordedPacket& recordedPacket, const bool overlaps)noexcept{
+static void AccumulatePacketRecordingCounts(StatisticsT& statistics, SIMDVectorDouble& inOutRecordingSeconds, const GpuRecordedPacket& recordedPacket, const bool overlaps)noexcept{
     ++statistics.packetCount;
     statistics.taskCount += recordedPacket.taskCount;
     statistics.commandListCount += recordedPacket.commandListCount;
@@ -42,6 +42,15 @@ static void AccumulatePacketRecordingCounts(StatisticsT& statistics, const GpuRe
     // Overlap is graph-wide even when accumulating only one physical queue.
     if(overlaps)
         ++statistics.parallelPacketCount;
+    inOutRecordingSeconds = VectorDoubleAdd(inOutRecordingSeconds, VectorDoubleSet(recordedPacket.commandListAcquisitionSeconds, recordedPacket.graphBarrierRecordingSeconds, recordedPacket.taskRecordSeconds, recordedPacket.recordingSeconds));
+}
+
+template<typename StatisticsT>
+static void StorePacketRecordingSeconds(StatisticsT& statistics, const SIMDVectorDouble recordingSeconds)noexcept{
+    statistics.commandListAcquisitionSeconds = VectorDoubleGetX(recordingSeconds);
+    statistics.graphBarrierRecordingSeconds = VectorDoubleGetY(recordingSeconds);
+    statistics.taskRecordSeconds = VectorDoubleGetZ(recordingSeconds);
+    statistics.recordingSeconds = VectorDoubleGetW(recordingSeconds);
 }
 
 struct PacketRecordingIntervalEntry{
@@ -504,13 +513,9 @@ GpuTaskGraphRecordingStatistics GpuRecordedGraph::recordingStatistics(const GpuC
         if(recordedPacket.commandListCount == 0u || recordedPacket.packet != planAccess.packetIdAt(packetIndex))
             continue;
 
-        __hidden_gpu_packet_runtime_recorded_graph::AccumulatePacketRecordingCounts(statistics, recordedPacket, storage.packetRecordingOverlaps[packetIndex] != 0u);
-        recordingSeconds = VectorDoubleAdd(recordingSeconds, VectorDoubleSet(recordedPacket.commandListAcquisitionSeconds, recordedPacket.graphBarrierRecordingSeconds, recordedPacket.taskRecordSeconds, recordedPacket.recordingSeconds));
+        __hidden_gpu_packet_runtime_recorded_graph::AccumulatePacketRecordingCounts(statistics, recordingSeconds, recordedPacket, storage.packetRecordingOverlaps[packetIndex] != 0u);
     }
-    statistics.commandListAcquisitionSeconds = VectorDoubleGetX(recordingSeconds);
-    statistics.graphBarrierRecordingSeconds = VectorDoubleGetY(recordingSeconds);
-    statistics.taskRecordSeconds = VectorDoubleGetZ(recordingSeconds);
-    statistics.recordingSeconds = VectorDoubleGetW(recordingSeconds);
+    __hidden_gpu_packet_runtime_recorded_graph::StorePacketRecordingSeconds(statistics, recordingSeconds);
     return statistics;
 }
 
@@ -550,13 +555,9 @@ GpuTaskGraphPhysicalQueueRecordingStatistics GpuRecordedGraph::physicalQueueReco
         if(packetPlan.queue != queue)
             continue;
 
-        __hidden_gpu_packet_runtime_recorded_graph::AccumulatePacketRecordingCounts(statistics, recordedPacket, storage.packetRecordingOverlaps[packetIndex] != 0u);
-        recordingSeconds = VectorDoubleAdd(recordingSeconds, VectorDoubleSet(recordedPacket.commandListAcquisitionSeconds, recordedPacket.graphBarrierRecordingSeconds, recordedPacket.taskRecordSeconds, recordedPacket.recordingSeconds));
+        __hidden_gpu_packet_runtime_recorded_graph::AccumulatePacketRecordingCounts(statistics, recordingSeconds, recordedPacket, storage.packetRecordingOverlaps[packetIndex] != 0u);
     }
-    statistics.commandListAcquisitionSeconds = VectorDoubleGetX(recordingSeconds);
-    statistics.graphBarrierRecordingSeconds = VectorDoubleGetY(recordingSeconds);
-    statistics.taskRecordSeconds = VectorDoubleGetZ(recordingSeconds);
-    statistics.recordingSeconds = VectorDoubleGetW(recordingSeconds);
+    __hidden_gpu_packet_runtime_recorded_graph::StorePacketRecordingSeconds(statistics, recordingSeconds);
     return statistics;
 }
 

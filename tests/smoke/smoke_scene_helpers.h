@@ -6,6 +6,7 @@
 
 
 #include "smoke_environment.h"
+#include "smoke_project_helpers.h"
 #include "software_shadow_settings.h"
 #include "caustic_quality_settings.h"
 #include "surfel_gi_quality_settings.h"
@@ -121,6 +122,12 @@ inline Impl::RendererSystem& AddSmokeRenderSystems(Core::ECS::World& world, Proj
     context.graphics.addRenderPassToBack(systems.renderer);
     context.frameGraphRegistry.registerContributor(systems.renderer);
     return systems.renderer;
+}
+
+[[nodiscard]] inline NotNullUniquePtr<Core::ECS::World> CreateSmokeRenderWorldOrDie(ProjectRuntimeContext& context, const TStringView projectName){
+    auto world = CreateSmokeWorldOrDie(context, projectName);
+    AddSmokeRenderSystems(*world, context);
+    return world;
 }
 
 inline void FinishDestroyingSmokeWorld(ProjectRuntimeContext& context, NotNullUniquePtr<Core::ECS::World>& world){

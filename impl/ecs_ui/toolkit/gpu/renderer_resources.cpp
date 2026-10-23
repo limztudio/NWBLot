@@ -109,14 +109,11 @@ template<typename TShader>
 
 
 bool GpuRendererState::MatchesAcquired(const Core::AcquiredPresentationFrame& first, const Core::AcquiredPresentationFrame& second)noexcept{
-    const Core::QueueSubmissionToken& a = first.backBuffer.availabilityCompletion;
-    const Core::QueueSubmissionToken& b = second.backBuffer.availabilityCompletion;
     return
         first.valid() && second.valid()
         && first.backBuffer.texture == second.backBuffer.texture && first.framebuffer == second.framebuffer
         && first.backBuffer.index == second.backBuffer.index && first.backBuffer.nativeInitialState == second.backBuffer.nativeInitialState
-        && a.value == b.value && a.physicalQueueIndex == b.physicalQueueIndex
-        && a.deviceGeneration == b.deviceGeneration && a.queue == b.queue
+        && first.backBuffer.availabilityCompletion == second.backBuffer.availabilityCompletion
     ;
 }
 

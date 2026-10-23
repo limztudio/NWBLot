@@ -43,18 +43,18 @@ bool CommandList::resetTimerQuery(TimerQuery& query){
             invalidateCommandRecording();
             return false;
         }
-        priorSubmission = query.m_completedCycleSubmission.valid() ? query.m_completedCycleSubmission : query.m_resetAuthorizationSubmission;
+        priorSubmission = query.prerequisiteSubmissionWithinLock();
     }
     const bool priorSubmissionObservedComplete = VulkanTimerQueryDetail::IsSubmissionComplete(m_device, priorSubmission);
 
     bool resetRecorded = false;
     {
         ScopedLock queryLock(query.m_mutex);
-        const QueueSubmissionToken currentPriorSubmission = query.m_completedCycleSubmission.valid() ? query.m_completedCycleSubmission : query.m_resetAuthorizationSubmission;
+        const QueueSubmissionToken currentPriorSubmission = query.prerequisiteSubmissionWithinLock();
         if(
             !query.m_recordingActive
             && query.m_cycleGeneration == 0u
-            && VulkanTimerQueryDetail::MatchesSubmissionToken(currentPriorSubmission, priorSubmission)
+            && currentPriorSubmission == priorSubmission
             && (query.m_resetRecordingOwner.commandBuffer || query.m_nextResetAuthorizationGeneration != Limit<u64>::s_Max)
             && (!query.m_resetRecordingOwner.commandBuffer || (query.m_resetRecordingOwner.commandBuffer == m_currentCmdBuf.get() && query.m_resetRecordingOwner.recordingID == m_currentCmdBuf->m_recordingID))
         ){
@@ -129,7 +129,7 @@ Expected<TimerQueryRecordingToken> CommandList::beginTimerQuery(TimerQuery& quer
             priorSubmission = query.m_resetAuthorizationSubmission;
         }
         else{
-            priorSubmission = query.m_completedCycleSubmission.valid() ? query.m_completedCycleSubmission : query.m_resetAuthorizationSubmission;
+            priorSubmission = query.prerequisiteSubmissionWithinLock();
         }
     }
     const bool priorSubmissionObservedComplete = VulkanTimerQueryDetail::IsSubmissionComplete(m_device, priorSubmission);
@@ -140,14 +140,14 @@ Expected<TimerQueryRecordingToken> CommandList::beginTimerQuery(TimerQuery& quer
         const bool resetOwnedByCurrentCommandBuffer = query.m_resetRecordingOwner.commandBuffer == m_currentCmdBuf.get() && query.m_resetRecordingOwner.recordingID == m_currentCmdBuf->m_recordingID && query.m_resetRecordingAuthorizationGeneration != 0u;
         const QueueSubmissionToken currentPriorSubmission = !recordsInlineReset && !resetOwnedByCurrentCommandBuffer
             ? query.m_resetAuthorizationSubmission
-            : (query.m_completedCycleSubmission.valid() ? query.m_completedCycleSubmission : query.m_resetAuthorizationSubmission)
+            : query.prerequisiteSubmissionWithinLock()
         ;
         if(
             !query.m_recordingActive
             && query.m_cycleGeneration == 0u
             && (!query.m_resetRecordingOwner.commandBuffer || resetOwnedByCurrentCommandBuffer)
             && (recordsInlineReset || resetOwnedByCurrentCommandBuffer || query.m_resetAuthorizationAvailable)
-            && VulkanTimerQueryDetail::MatchesSubmissionToken(currentPriorSubmission, priorSubmission)
+            && currentPriorSubmission == priorSubmission
             && query.m_nextRecordingGeneration != Limit<u64>::s_Max
         ){
             TrackedCommandBuffer::TimerQueryRecordingClaim& claim = m_currentCmdBuf->findOrAppendTimerQueryRecordingClaim(query);

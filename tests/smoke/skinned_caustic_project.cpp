@@ -53,11 +53,13 @@ constexpr AStringView s_CsgTransitionEnvironment = "NWB_SKINNED_CAUSTIC_CSG_TRAN
 constexpr AStringView s_CsgLaggedEnvironment = "NWB_SKINNED_CAUSTIC_CSG_LAGGED";
 constexpr AStringView s_CsgNoPhotonsEnvironment = "NWB_SKINNED_CAUSTIC_CSG_NO_PHOTONS";
 
-using NWB::Tests::Smoke::AddSmokeSkinnedRenderSystems;
+using NWB::Tests::Smoke::CreateSmokeSkinnedRenderWorldOrDie;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::CreateTintedModelEntity;
 using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
 using NWB::Tests::Smoke::FindSpawnedModelObject;
+using NWB::Tests::Smoke::LoadSmokeSkeletonBindJoints;
+using NWB::Tests::Smoke::PrepareSmokeCaptureSeries;
 using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
 
 using SkinnedCausticModelRef = NWB::Core::Assets::AssetRef<NWB::Impl::Model>;
@@ -123,9 +125,7 @@ static constexpr f32 s_MaxAnimationDelta = 1.0f / 15.0f;
 class SkinnedCausticSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = NWB::Tests::Smoke::CreateSmokeWorldOrDie(context, s_ProjectName);
-
-        AddSmokeSkinnedRenderSystems(*world, context);
+        auto world = CreateSmokeSkinnedRenderWorldOrDie(context, s_ProjectName);
         if(NWB::Tests::Smoke::ReadSmokeEnvironmentFlag(s_CsgTransitionEnvironment)){
             auto* renderer = world->getSystem<NWB::Impl::RendererSystem>();
             NWB_ASSERT(renderer);
@@ -164,17 +164,6 @@ private:
         NWB::Tests::Smoke::AssignCsgCutterParameters(cutter, parameters);
         m_cutterEntity = entity.id();
         return true;
-    }
-
-    [[nodiscard]] bool prepareTransitionCapture(const AStringView outputPath){
-        m_capturePaths.reserve(s_TransitionSampleCount);
-        for(u32 sample = 0u; sample < s_TransitionSampleCount; ++sample){
-            const auto path = sample + 1u == s_TransitionSampleCount ? NWB::Tests::Smoke::SmokeEnvironmentString(outputPath, m_context.objectArena) : StringFormat(m_context.objectArena, "{}.{}.bmp", outputPath, sample);
-            m_capturePaths.emplace_back(m_context.objectArena, AStringView(path));
-        }
-        const NWB::Tests::Smoke::FramebufferCaptureOptions options{ .shouldCapture = ShouldCapture, .predicateContext = this, .requiredWidth = 1280u, .requiredHeight = 900u, .quitWhenReady = false, };
-        m_capture = MakeUnique<NWB::Tests::Smoke::FramebufferCapture>(m_context, Move(m_capturePaths.front()), 1u, options);
-        return m_capture && m_capture->start();
     }
 
     void foldTransitionTiming(const Name scope, u64& lastPublication, u64 (&phaseSamples)[s_TransitionPhaseCount])noexcept{
@@ -312,46 +301,6 @@ private:
         }
     }
 
-    [[nodiscard]] bool loadSkeletonBindJoints(){
-        const auto modelAsset = m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), s_Model.name());
-        if(!modelAsset){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: failed to load model for skeleton bind joints"));
-            return false;
-        }
-        NWB_ASSERT(*modelAsset);
-        const auto* model = NWB::Core::Assets::CastAsset<NWB::Impl::Model>(modelAsset->get());
-        if(!model){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: loaded model has unexpected type"));
-            return false;
-        }
-        if(model->skeletonObjects().empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: model has no skeleton object"));
-            return false;
-        }
-
-        const auto skeletonAsset = m_context.assetManager.loadSync(NWB::Impl::Skeleton::AssetTypeName(), model->skeletonObjects().front().skeleton.name());
-        if(!skeletonAsset){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: failed to load skeleton for bind joints"));
-            return false;
-        }
-        NWB_ASSERT(*skeletonAsset);
-        const auto* skeleton = NWB::Core::Assets::CastAsset<NWB::Impl::Skeleton>(skeletonAsset->get());
-        if(!skeleton){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: loaded skeleton has unexpected type"));
-            return false;
-        }
-        if(skeleton->joints().empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: skeleton has no joints"));
-            return false;
-        }
-
-        m_bindJoints.clear();
-        m_bindJoints.reserve(skeleton->joints().size());
-        for(const NWB::Impl::SkeletonJoint& joint : skeleton->joints())
-            m_bindJoints.push_back(joint.localBindPose);
-        return !m_bindJoints.empty();
-    }
-
     NWB::Core::ECS::EntityID createGlassCharacter(){
         bool tintApplied = false;
         const NWB::Core::ECS::EntityID entity = CreateTintedModelEntity(
@@ -414,14 +363,15 @@ public:
             const auto output = NWB::Tests::Smoke::ReadSmokeEnvironmentText(scratchArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
             if(!output)
                 return false;
-            if(!prepareTransitionCapture(AStringView(*output)))
+            const NWB::Tests::Smoke::FramebufferCaptureOptions captureOptions{ .shouldCapture = ShouldCapture, .predicateContext = this, .requiredWidth = 1280u, .requiredHeight = 900u, .quitWhenReady = false, };
+            if(!PrepareSmokeCaptureSeries(m_context, AStringView(*output), s_TransitionSampleCount, captureOptions, m_capturePaths, m_capture))
                 return false;
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedCausticTransition: setup lagged={} caustics={} minimum_frame=360 warmup_seconds=30 phase_frames=64 samples=8 model=closed_prism")
                 , NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_SKINNED_CAUSTIC_CSG_LAGGED") ? 1u : 0u
                 , NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_SKINNED_CAUSTIC_CSG_NO_PHOTONS") ? 0u : 1u
             );
         }
-        if(!loadSkeletonBindJoints())
+        if(!LoadSmokeSkeletonBindJoints(m_bindJoints, m_context.assetManager, s_Model, s_ProjectName))
             return false;
 
         auto activeCameraEntity = m_world->createEntity();

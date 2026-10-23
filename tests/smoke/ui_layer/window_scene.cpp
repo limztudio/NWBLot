@@ -70,7 +70,7 @@ static constexpr f32 s_Gap = 4.0f;
 
 bool UiWindowSmokeScene::paint(Impl::UiPaintContext& context){
     using namespace Impl::Ui;
-    observeDisplay(context.display);
+    ObserveSmokeDisplay(NWB_TEXT("UiWindowSmoke"), context.display, m_lastDisplay, m_displayChanged);
     Builder& ui = context.ui;
     ui.style().gap = __hidden_ui_window_smoke::s_Gap;
     ui.style().fontSize = 12.0f;
@@ -109,14 +109,6 @@ bool UiWindowSmokeScene::paint(Impl::UiPaintContext& context){
     observeState(metrics);
     paintMarkers(context, metrics);
     return true;
-}
-
-void UiWindowSmokeScene::observeDisplay(const Impl::Ui::DisplayMetrics& display){
-    if(m_lastDisplay.logicalWidth == display.logicalWidth && m_lastDisplay.logicalHeight == display.logicalHeight && m_lastDisplay.pixelScaleX == display.pixelScaleX && m_lastDisplay.pixelScaleY == display.pixelScaleY)
-        return;
-    m_lastDisplay = display;
-    m_displayChanged = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiWindowSmoke: display logical={}x{} scale={}x{}"), display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY);
 }
 
 void UiWindowSmokeScene::observeState(const Impl::Ui::WindowMetrics& metrics){

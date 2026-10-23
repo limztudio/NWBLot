@@ -165,8 +165,10 @@ private:
     [[nodiscard]] bool textAreaMatches(const TextAreaFrame& frame)const noexcept;
     void snapshotNumericEdit(NumericEditFrame& frame, const EditModel& draft)noexcept;
     [[nodiscard]] bool numericDraftMatches(const NumericEditFrame& frame, const EditModel& draft)const noexcept;
-    [[nodiscard]] bool integerEditMatches(const IntegerEditFrame& frame)const noexcept;
-    [[nodiscard]] bool floatEditMatches(const FloatEditFrame& frame)const noexcept;
+    template<typename EditFrameT>
+    [[nodiscard]] bool numericEditFrameMatches(const EditFrameT& frame)const noexcept{
+        return frame.model && frame.model->revision() == frame.revision && numericDraftMatches(frame, frame.model->draft());
+    }
     [[nodiscard]] bool numericEditMatches(const Item& item)const noexcept;
     [[nodiscard]] bool numericStateAvailable(const EditBoxState& state)const noexcept;
     [[nodiscard]] SIMDVectorSingle loadEditMinimumSize()const noexcept;

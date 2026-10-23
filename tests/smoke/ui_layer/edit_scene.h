@@ -40,10 +40,8 @@ public:
 
 private:
     void resetModels();
-    void observeDisplay(const Impl::Ui::DisplayMetrics& display);
     [[nodiscard]] Array<u32, 12u> values()const noexcept;
     void observeState(Impl::Ui::TextService& text);
-    void paintMarkers(Impl::UiPaintContext& context)const;
 
 
 private:

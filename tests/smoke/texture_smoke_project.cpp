@@ -38,9 +38,8 @@ namespace __hidden_texture_smoke{
 constexpr AStringView s_ReadbackResourcePath = "tests.smoke.texture.srgb_edges.readback";
 constexpr TStringView s_ProjectName = NWB_TEXT("TextureSmokeProject");
 
-using NWB::Tests::Smoke::AddSmokeRenderSystems;
 using NWB::Tests::Smoke::CreateSmokeCamera;
-using NWB::Tests::Smoke::CreateSmokeWorldOrDie;
+using NWB::Tests::Smoke::CreateSmokeRenderWorldOrDie;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::DestroyCapturedSmokeRenderWorld;
 using NWB::Tests::Smoke::FramebufferCapture;
@@ -248,14 +247,6 @@ struct SRGBClearEdgeInputs{
 
 class TextureSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
-    static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = CreateSmokeWorldOrDie(context, s_ProjectName);
-        AddSmokeRenderSystems(*world, context);
-        return world;
-    }
-
-
-private:
     bool configureFramebufferCapture(){
         auto capture = ConfigureSmokeFramebufferCapture(m_context, s_ProjectName, s_FramebufferCaptureDefaultFrameCount);
         if(!capture)
@@ -268,7 +259,7 @@ private:
 public:
     explicit TextureSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
-        , m_world(CreateWorldOrDie(context))
+        , m_world(CreateSmokeRenderWorldOrDie(context, s_ProjectName))
     {
         m_captureConfigurationValid = configureFramebufferCapture();
     }

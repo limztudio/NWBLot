@@ -93,23 +93,29 @@ struct TextureUploadCopyAspect{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CommandList::copyTexture(Texture& dest, const TextureSlice& destSlice, Texture& src, const TextureSlice& srcSlice){
-    constexpr TStringView s_OperationName = NWB_TEXT("copy texture");
+bool CommandList::validateTextureTransferResources(Texture& dest, const ResourceStates::Mask destState, Texture& src, const ResourceStates::Mask srcState, const TStringView operationName){
     if(&src.m_context != &m_context || &dest.m_context != &m_context){
-        rejectCommandRecording(s_OperationName, __hidden_texture_transfer::s_TexturesNotOwnedReason);
-        return;
+        rejectCommandRecording(operationName, __hidden_texture_transfer::s_TexturesNotOwnedReason);
+        return false;
     }
     if(src.m_image == VK_NULL_HANDLE || dest.m_image == VK_NULL_HANDLE){
-        rejectCommandRecording(s_OperationName, __hidden_texture_transfer::s_NativeImageNullReason);
-        return;
+        rejectCommandRecording(operationName, __hidden_texture_transfer::s_NativeImageNullReason);
+        return false;
     }
     if(&src == &dest || src.m_image == dest.m_image){
-        rejectCommandRecording(s_OperationName, __hidden_texture_transfer::s_NativeImageNotDistinctReason);
-        return;
+        rejectCommandRecording(operationName, __hidden_texture_transfer::s_NativeImageNotDistinctReason);
+        return false;
     }
-    if(!validateTextureForGpuState(&src, ResourceStates::CopySource, s_OperationName, VK_IMAGE_USAGE_TRANSFER_SRC_BIT))
-        return;
-    if(!validateTextureForGpuState(&dest, ResourceStates::CopyDest, s_OperationName, VK_IMAGE_USAGE_TRANSFER_DST_BIT))
+    if(!validateTextureForGpuState(&src, srcState, operationName, VK_IMAGE_USAGE_TRANSFER_SRC_BIT))
+        return false;
+    if(!validateTextureForGpuState(&dest, destState, operationName, VK_IMAGE_USAGE_TRANSFER_DST_BIT))
+        return false;
+    return true;
+}
+
+void CommandList::copyTexture(Texture& dest, const TextureSlice& destSlice, Texture& src, const TextureSlice& srcSlice){
+    constexpr TStringView s_OperationName = NWB_TEXT("copy texture");
+    if(!validateTextureTransferResources(dest, ResourceStates::CopyDest, src, ResourceStates::CopySource, s_OperationName))
         return;
 
     const auto contract = VulkanTextureDetail::ResolveTextureCopyContract(src.m_creationDesc, srcSlice, dest.m_creationDesc, destSlice);
@@ -287,21 +293,7 @@ void CommandList::resolveTexture(Texture& dest, const TextureSubresourceSet& dst
     constexpr TStringView s_OperationName = NWB_TEXT("resolve texture");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
         return;
-    if(&src.m_context != &m_context || &dest.m_context != &m_context){
-        rejectCommandRecording(s_OperationName, __hidden_texture_transfer::s_TexturesNotOwnedReason);
-        return;
-    }
-    if(src.m_image == VK_NULL_HANDLE || dest.m_image == VK_NULL_HANDLE){
-        rejectCommandRecording(s_OperationName, __hidden_texture_transfer::s_NativeImageNullReason);
-        return;
-    }
-    if(&src == &dest || src.m_image == dest.m_image){
-        rejectCommandRecording(s_OperationName, __hidden_texture_transfer::s_NativeImageNotDistinctReason);
-        return;
-    }
-    if(!validateTextureForGpuState(&src, ResourceStates::ResolveSource, s_OperationName, VK_IMAGE_USAGE_TRANSFER_SRC_BIT))
-        return;
-    if(!validateTextureForGpuState(&dest, ResourceStates::ResolveDest, s_OperationName, VK_IMAGE_USAGE_TRANSFER_DST_BIT))
+    if(!validateTextureTransferResources(dest, ResourceStates::ResolveDest, src, ResourceStates::ResolveSource, s_OperationName))
         return;
     NWB_ASSERT(
         VulkanTextureDetail::IsTextureDescShapeValid(src.m_creationDesc)

@@ -43,7 +43,7 @@ sys.path.insert(0, str(REPO / LIT_TESTS_DIRECTORY / "ab"))
 sys.path.insert(0, str(REPO / LIT_TESTS_DIRECTORY / "smoke"))
 
 from gpu_timing_parse import (  # noqa: E402
-    INTERVAL_RE, MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS, ScopeSummary, load_name_symbols as load_timing_name_symbols, parse_timing_file, require_scope_samples, summarize_scopes,)
+    INTERVAL_RE, MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS, ScopeSummary, load_name_symbols as load_timing_name_symbols, parse_timing_file, require_non_negative, require_positive, require_scope_samples, summarize_scopes,)
 from harness_test_support import make_abnormal_exit_terminator  # noqa: E402
 from window_capture_smoke import (  # noqa: E402
     run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WindowsCapture, build_launch_environment, make_runtime_launch_args, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
@@ -595,16 +595,6 @@ def evaluate_runs(args: argparse.Namespace, sync: RunResult, async_run: RunResul
 
     return { LIT_SCHEMA: LIT_NWB_ASYNC_SHADOW_M4_V3, LIT_VERDICT: verdict, LIT_GATES: gates, LIT_FRAME_REGRESSION_PERCENT: regression_percent, LIT_SYNC: compact_run(sync, sync_frame), LIT_ASYNC: compact_run(async_run, async_frame, shadow),
         LIT_PIXEL_DIFF: raw_pixel_diff_payload(pixel_diff) if pixel_diff else None, }
-
-
-def require_positive(parser: argparse.ArgumentParser, option: str, value: float) -> None:
-    if not math.isfinite(value) or value <= 0.0:
-        parser.error(f"{option} must be positive and finite")
-
-
-def require_non_negative(parser: argparse.ArgumentParser, option: str, value: float) -> None:
-    if not math.isfinite(value) or value < 0.0:
-        parser.error(f"{option} must be non-negative and finite")
 
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:

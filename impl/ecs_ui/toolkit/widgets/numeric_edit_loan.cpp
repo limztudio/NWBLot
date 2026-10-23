@@ -36,21 +36,13 @@ bool Builder::numericDraftMatches(const NumericEditFrame& frame, const EditModel
     ;
 }
 
-bool Builder::integerEditMatches(const IntegerEditFrame& frame)const noexcept{
-    return frame.model && frame.model->revision() == frame.revision && numericDraftMatches(frame, frame.model->draft());
-}
-
-bool Builder::floatEditMatches(const FloatEditFrame& frame)const noexcept{
-    return frame.model && frame.model->revision() == frame.revision && numericDraftMatches(frame, frame.model->draft());
-}
-
 bool Builder::numericEditMatches(const Item& item)const noexcept{
     if(item.integerEdit != s_LayoutNoParent){
-        if(item.integerEdit >= m_scope->m_integerEdits.size() || !integerEditMatches(m_scope->m_integerEdits[item.integerEdit]))
+        if(item.integerEdit >= m_scope->m_integerEdits.size() || !numericEditFrameMatches(m_scope->m_integerEdits[item.integerEdit]))
             return false;
     }
     if(item.floatEdit != s_LayoutNoParent){
-        if(item.floatEdit >= m_scope->m_floatEdits.size() || !floatEditMatches(m_scope->m_floatEdits[item.floatEdit]))
+        if(item.floatEdit >= m_scope->m_floatEdits.size() || !numericEditFrameMatches(m_scope->m_floatEdits[item.floatEdit]))
             return false;
     }
     return true;

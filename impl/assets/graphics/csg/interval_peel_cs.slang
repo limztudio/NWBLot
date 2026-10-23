@@ -50,14 +50,6 @@ uint nwbCsgIntervalPeelLayerCount(){
     return min(g_NwbCsgIntervalDispatchPushConstants.frame[NWB_CSG_INTERVAL_DISPATCH_PUSH_LAYER_COUNT], NWB_CSG_PEEL_LAYER_COUNT);
 }
 
-uint2 nwbCsgIntervalPeelWorkOffset(){
-    return nwbCsgIntervalDispatchWorkOffset();
-}
-
-uint2 nwbCsgIntervalPeelWorkExtent(){
-    return nwbCsgIntervalDispatchWorkExtent();
-}
-
 float nwbCsgSafeHomogeneousW(const float w){
     if(abs(w) >= NWB_CSG_HOMOGENEOUS_W_EPSILON)
         return w;
@@ -288,11 +280,11 @@ void nwbCsgWriteIntervalPeelEntries(const uint2 pixel, __constref NwbCsgInterval
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint frameWidth = nwbCsgIntervalPeelFrameWidth();
     const uint frameHeight = nwbCsgIntervalPeelFrameHeight();
-    const uint2 workExtent = nwbCsgIntervalPeelWorkExtent();
+    const uint2 workExtent = nwbCsgIntervalDispatchWorkExtent();
     if(dispatchThreadID.x >= workExtent.x || dispatchThreadID.y >= workExtent.y)
         return;
 
-    const uint2 pixel = dispatchThreadID.xy + nwbCsgIntervalPeelWorkOffset();
+    const uint2 pixel = dispatchThreadID.xy + nwbCsgIntervalDispatchWorkOffset();
     if(pixel.x >= frameWidth || pixel.y >= frameHeight)
         return;
 

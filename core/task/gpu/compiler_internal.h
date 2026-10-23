@@ -113,6 +113,10 @@ struct GpuTaskGraphResourceStatePlan{
 
 [[nodiscard]] bool HasCapabilities(GpuQueueCapability::Mask available, GpuQueueCapability::Mask required)noexcept;
 
+[[nodiscard]] inline bool TaskAllowsPacketMerge(const GpuTaskGraphTaskView& task)noexcept{
+    return task.scheduling.allowPacketMerge && !task.scheduling.forceSubmissionBoundary && !task.scheduling.joinsAcceptedQueueFrontier;
+}
+
 [[nodiscard]] inline bool IsBetterQueue(const GpuPhysicalQueueInfo& candidate, const GpuPhysicalQueueInfo* const current)noexcept{
     if(!current)
         return true;

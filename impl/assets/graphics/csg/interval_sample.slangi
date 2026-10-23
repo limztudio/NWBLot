@@ -70,26 +70,6 @@ struct NwbCsgIntervalCapPixel{
 
 
 #if NWB_CSG_RECEIVER_EVENTS_WRITABLE
-uint nwbCsgReceiverEventLayerCount(){
-    uint width = 1u;
-    uint height = 1u;
-    uint layerCount = 1u;
-    g_NwbCsgReceiverEventData.GetDimensions(width, height, layerCount);
-    return min(layerCount, NWB_CSG_RECEIVER_EVENT_LAYER_COUNT);
-}
-#endif
-
-#if NWB_CSG_REMOVED_INTERVAL_SAMPLE_ENABLED
-uint nwbCsgRemovedIntervalLayerCount(){
-    uint width = 1u;
-    uint height = 1u;
-    uint layerCount = 1u;
-    g_NwbCsgRemovedIntervalDepth.GetDimensions(width, height, layerCount);
-    return min(layerCount, NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT);
-}
-#endif
-
-#if NWB_CSG_RECEIVER_EVENTS_WRITABLE
 void nwbCsgMarkReceiverSurfaceEvent(const float4 rasterPosition, const float3 worldPosition, const uint receiverIndex, const bool frontFace){
     const uint layerCount = nwbCsgReceiverEventLayerCount();
     if(layerCount == 0u)

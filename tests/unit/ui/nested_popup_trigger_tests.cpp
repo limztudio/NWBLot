@@ -47,10 +47,6 @@ protected:
         m_child.open();
     }
 
-    [[nodiscard]] WidgetId parentId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), s_ParentPopupKey)); }
-
-    [[nodiscard]] WidgetId childId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), s_ChildPopupKey)); }
-
     [[nodiscard]] WidgetId fieldId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(childId(), s_ComboKey)); }
 
     [[nodiscard]] WidgetId rowsId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(fieldId(), s_ComboRowsKey)); }

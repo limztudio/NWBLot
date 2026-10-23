@@ -23,12 +23,7 @@ namespace __hidden_gpu_command_ir_raster_preflight{
 
 
 [[nodiscard]] static bool HasResourceUse(const GpuTaskGraphTaskView& task, const GpuGraphResourceId resource, const ResourceStates::Mask state, const GpuTaskResourceAccess::Enum access)noexcept{
-    for(usize index = 0u; index < task.resourceUseCount; ++index){
-        const GpuTaskResourceUse& use = task.resourceUses[index];
-        if(use.resource == resource && use.requiredState == state && use.access == access)
-            return true;
-    }
-    return false;
+    return GpuCommandIrDetail::FindTaskResourceUse(task, resource, state, access) != nullptr;
 }
 
 [[nodiscard]] static bool ViewportIsValid(const Viewport& viewport)noexcept{
@@ -48,10 +43,6 @@ namespace __hidden_gpu_command_ir_raster_preflight{
     ;
 }
 
-[[nodiscard]] static bool ScissorIsValid(const Rect& scissor)noexcept{
-    return scissor.minX >= 0 && scissor.minY >= 0 && scissor.maxX >= scissor.minX && scissor.maxY >= scissor.minY;
-}
-
 [[nodiscard]] static bool ImplicitScissorIsValid(const Viewport& viewport)noexcept{
     return viewport.minX >= 0.0f && viewport.minY >= 0.0f && viewport.maxX <= static_cast<f32>(Limit<i32>::s_Max) && viewport.maxY <= static_cast<f32>(Limit<i32>::s_Max);
 }
@@ -69,7 +60,7 @@ namespace __hidden_gpu_command_ir_raster_preflight{
         return GpuCommandIrReplayError::ResourceUseMismatch;
     if(!ViewportIsValid(record.viewport))
         return GpuCommandIrReplayError::InvalidRasterState;
-    if(record.hasScissor ? !ScissorIsValid(record.scissor) : !ImplicitScissorIsValid(record.viewport))
+    if(record.hasScissor ? !record.scissor.validScissor() : !ImplicitScissorIsValid(record.viewport))
         return GpuCommandIrReplayError::InvalidRasterState;
     if(!IsFinite(record.blendConstantColor.r) || !IsFinite(record.blendConstantColor.g) || !IsFinite(record.blendConstantColor.b) || !IsFinite(record.blendConstantColor.a))
         return GpuCommandIrReplayError::InvalidRasterState;

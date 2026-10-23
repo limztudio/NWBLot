@@ -32,7 +32,6 @@ public:
 
 
 private:
-    void observeDisplay(const Impl::Ui::DisplayMetrics& display);
     void observeState(const Impl::Ui::WindowMetrics& metrics);
     void logAction(TStringView action);
     void paintMarkers(Impl::UiPaintContext& context, const Impl::Ui::WindowMetrics& metrics)const;

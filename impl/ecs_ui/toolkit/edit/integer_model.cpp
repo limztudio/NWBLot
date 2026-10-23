@@ -33,20 +33,11 @@ NumericEditResult IntegerEditModel::commit(const IntegerBounds& bounds, const bo
 
 Expected<bool, ErrorCode> IntegerEditModel::canonicalize(const i64 value){
     char buffer[s_NumericEditMaxBytes];
-    const auto formatted = FormatI64(value, buffer);
-    if(!formatted)
-        return MakeUnexpected(formatted.error());
-    const bool changed = *formatted != m_draft.text();
-    if(!m_draft.setText(*formatted))
-        return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
-    m_acceptedDraft.assign(formatted->data(), formatted->size());
-    return changed;
+    return NumericEditDetail::CanonicalizeDraft(FormatI64(value, buffer), m_draft, m_acceptedDraft);
 }
 
 void IntegerEditModel::advanceRevision()noexcept{
-    if(m_revision == Limit<u64>::s_Max)
-        TerminateInvariant();
-    ++m_revision;
+    NumericEditDetail::AdvanceRevision(m_revision);
 }
 
 
@@ -65,14 +56,11 @@ IntegerEditModel::IntegerEditModel(Core::Alloc::GlobalArena& arena)
 NumericParseStatus::Enum IntegerEditModel::status(const IntegerBounds& bounds)const noexcept{
     if(!ValidateIntegerBounds(bounds))
         return NumericParseStatus::Invalid;
-    auto parsed = ParseIntegerDraft(m_draft.text());
-    if(parsed && (*parsed < bounds.minimum || *parsed > bounds.maximum))
-        return NumericParseStatus::OutOfRange;
-    return parsed ? NumericParseStatus::Complete : parsed.error();
+    return NumericEditDetail::DraftStatus(ParseIntegerDraft(m_draft.text()), bounds);
 }
 
 bool IntegerEditModel::dirty()const noexcept{
-    return m_draft.text() != AStringView(m_acceptedDraft.data(), m_acceptedDraft.size());
+    return NumericEditDetail::DraftDirty(m_draft, m_acceptedDraft);
 }
 
 bool IntegerEditModel::setValue(const i64 value){
@@ -84,10 +72,7 @@ bool IntegerEditModel::setValue(const i64 value){
 }
 
 bool IntegerEditModel::setDraft(const AStringView text){
-    if(!m_draft.setText(text))
-        return false;
-    advanceRevision();
-    return true;
+    return NumericEditDetail::SetDraftText(text, m_draft, m_revision);
 }
 
 NumericEditResult IntegerEditModel::submit(const IntegerBounds& bounds){ return commit(bounds, false); }
@@ -95,17 +80,11 @@ NumericEditResult IntegerEditModel::submit(const IntegerBounds& bounds){ return 
 NumericEditResult IntegerEditModel::blur(const IntegerBounds& bounds){ return commit(bounds, true); }
 
 NumericEditResult IntegerEditModel::cancel(){
-    NumericEditResult result = NumericEditDetail::RestoreDraft([this](){ return canonicalize(m_value); }, true);
-    if(result.valid)
-        advanceRevision();
-    return result;
+    return NumericEditDetail::RestoreModelDraft([this](){ return canonicalize(m_value); }, true, m_revision);
 }
 
 NumericEditResult IntegerEditModel::abandon(){
-    NumericEditResult result = NumericEditDetail::RestoreDraft([this](){ return canonicalize(m_value); }, false);
-    if(result.valid)
-        advanceRevision();
-    return result;
+    return NumericEditDetail::RestoreModelDraft([this](){ return canonicalize(m_value); }, false, m_revision);
 }
 
 

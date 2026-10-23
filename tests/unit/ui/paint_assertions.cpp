@@ -22,6 +22,13 @@ namespace UiPaintAssertions{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void ExpectRect(const Impl::Ui::Rect& actual, const Impl::Ui::Rect& expected){
+    EXPECT_FLOAT_EQ(actual.x, expected.x);
+    EXPECT_FLOAT_EQ(actual.y, expected.y);
+    EXPECT_FLOAT_EQ(actual.width, expected.width);
+    EXPECT_FLOAT_EQ(actual.height, expected.height);
+}
+
 void ExpectSameVertices(const Impl::Ui::DrawSnapshot& actual, const Impl::Ui::DrawSnapshot& expected){
     for(usize index = 0u; index < actual.vertices().size(); ++index){
         const Impl::Ui::Vertex& a = actual.vertices()[index];

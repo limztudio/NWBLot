@@ -44,7 +44,7 @@ sys.path.insert(0, str(REPO / LIT_TESTS_DIRECTORY / "ab"))
 sys.path.insert(0, str(REPO / LIT_TESTS_DIRECTORY / "smoke"))
 
 from gpu_timing_parse import (  # noqa: E402
-    MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS, ScopeSummary, load_name_symbols as load_timing_name_symbols, parse_timing_file, require_scope_samples, summarize_scopes,)
+    MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS, ScopeSummary, load_name_symbols as load_timing_name_symbols, parse_timing_file, require_non_negative, require_positive, require_scope_samples, summarize_scopes,)
 from name_symbols import debug_name_hash_token  # noqa: E402
 from harness_test_support import make_abnormal_exit_terminator  # noqa: E402
 from window_capture_smoke import (  # noqa: E402
@@ -396,16 +396,6 @@ def write_markdown_report(path: Path, report: Mapping[str, object]) -> None:
 def make_failure_report(error: SmokeFailure, healthy: Optional[RunResult], baseline: Optional[RunResult]) -> Dict[str, object]:
     return { LIT_SCHEMA: LIT_NWB_HARDWARE_SHADOW_BOUNDARY_V1, LIT_GENERATED_UTC: datetime.now(timezone.utc).isoformat(), LIT_VERDICT: LIT_FAIL, LIT_COLLECTION_ERROR: str(error), LIT_GATES: [gate("target-scene collection", False, str(error))],
         LIT_HEALTHY: raw_run_payload(healthy) if healthy else None, LIT_BASELINE: raw_run_payload(baseline) if baseline else None, }
-
-
-def require_positive(parser: argparse.ArgumentParser, option: str, value: float) -> None:
-    if not math.isfinite(value) or value <= 0.0:
-        parser.error(f"{option} must be positive and finite")
-
-
-def require_non_negative(parser: argparse.ArgumentParser, option: str, value: float) -> None:
-    if not math.isfinite(value) or value < 0.0:
-        parser.error(f"{option} must be non-negative and finite")
 
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:

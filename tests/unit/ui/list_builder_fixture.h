@@ -57,18 +57,11 @@ public:
     }
 
     [[nodiscard]] virtual Expected<u64> indexOf(const u64 value)const noexcept override{
-        u64 index = 0u;
         invalidateText();
         ++lookupCalls;
-        if(malformedLookup){
-            index = count;
-            return index;
-        }
-        if(value == 0u || value == removed || value > count + (removed != 0u ? 1u : 0u))
-            return MakeUnexpected(Failure{});
-        const u64 forward = value - 1u - (removed != 0u && value > removed ? 1u : 0u);
-        index = reverse ? count - 1u - forward : forward;
-        return index < count ? Expected<u64>{ index } : MakeUnexpected(Failure{});
+        if(malformedLookup)
+            return count;
+        return UiWidgetTests::FindArithmeticFixtureRowIndex(count, removed, reverse, value);
     }
 
     [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool backwards)const noexcept override{
@@ -98,9 +91,7 @@ public:
 
 private:
     [[nodiscard]] u64 rawKey(const u64 index)const noexcept{
-        const u64 forward = reverse ? count - 1u - index : index;
-        const u64 value = forward + 1u;
-        return value + (removed != 0u && value >= removed ? 1u : 0u);
+        return UiWidgetTests::ArithmeticFixtureRowKey(count, removed, reverse, index);
     }
 
     void invalidateText()const noexcept{

@@ -57,19 +57,7 @@ public:
     mutable bool mutationApplied = false;
 };
 
-class UiNumericEditLoanTests : public NumericFixture{
-protected:
-    [[nodiscard]] bool beginParent(const u64 generation){
-        return begin(generation) && m_builder.beginPopup("parent", m_parent, UiWidgetTests::LargeLoanParentOptions());
-    }
-
-    [[nodiscard]] bool finishRoot(){ return m_context.endRoot() && m_context.finishFrame(); }
-
-
-protected:
-    PopupState m_parent;
-    PopupState m_child;
-};
+using UiNumericEditLoanTests = NumericFixture;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

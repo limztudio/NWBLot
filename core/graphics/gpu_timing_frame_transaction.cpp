@@ -136,7 +136,7 @@ bool GpuTimingFrameTransaction::confirmBeginSubmission(const QueueSubmissionToke
     }
 
     if(m_beginSubmission.valid()){
-        const bool matches = m_beginSubmission.queue == token.queue && m_beginSubmission.value == token.value && m_beginSubmission.physicalQueueIndex == token.physicalQueueIndex && m_beginSubmission.deviceGeneration == token.deviceGeneration;
+        const bool matches = m_beginSubmission == token;
         if(!matches){
             m_recorder.quarantineScope(m_scope);
             m_scope = {};

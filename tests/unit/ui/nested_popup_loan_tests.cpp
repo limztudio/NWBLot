@@ -191,8 +191,6 @@ protected:
         return begin(generation) && m_builder.beginPopup(s_ParentPopupKey, m_parent, UiWidgetTests::NestedParentOptions());
     }
 
-    [[nodiscard]] bool finishRoot(){ return m_context.endRoot() && m_context.finishFrame(); }
-
     [[nodiscard]] bool acceptBase(const u64 generation){
         if(!begin(generation) || !m_builder.beginPanel("base", { 0.0f, 0.0f, 100.0f, 80.0f }))
             return false;

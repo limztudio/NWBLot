@@ -104,18 +104,6 @@ inline void NWB_SIMD_CALL BoundingDoubleOrientedBox::TransformOrientedBoxValue(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void NWB_SIMD_CALL BoundingOrientedBox::CornersValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle boxOrientation, SIMDVectorSingle (&outCorners)[s_CornerCount])noexcept{
-    CollisionDetail::ObbCorners(boxCenter, boxExtents, boxOrientation, outCorners);
-}
-
-inline void NWB_SIMD_CALL BoundingDoubleOrientedBox::CornersValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble boxOrientation, SIMDVectorDouble (&outCorners)[s_DoubleCornerCount])noexcept{
-    CollisionDoubleDetail::ObbCorners(boxCenter, boxExtents, boxOrientation, outCorners);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingOrientedBox::ContainsPointValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle boxOrientation, SIMDVectorSingle point)noexcept{
     return CollisionDetail::PointInsideObb(point, boxCenter, boxExtents, boxOrientation) ? ContainmentType::Contains : ContainmentType::Disjoint;
 }
@@ -424,7 +412,7 @@ inline void NWB_SIMD_CALL BoundingDoubleOrientedBox::transform(BoundingDoubleOri
 
 inline void BoundingOrientedBox::getCorners(Float3U (&corners)[s_CornerCount])const noexcept{
     SIMDVectorSingle cornerVectors[s_CornerCount];
-    CornersValue(LoadFloat(center), LoadFloat(extents), LoadFloat(orientation), cornerVectors);
+    CollisionDetail::ObbCorners(LoadFloat(center), LoadFloat(extents), LoadFloat(orientation), cornerVectors);
     for(u32 i = 0u; i < s_CornerCount; ++i)
         StoreFloat(VectorSetW(cornerVectors[i], 0.0f), corners[i]);
 }
@@ -432,7 +420,7 @@ inline void BoundingOrientedBox::getCorners(Float3U (&corners)[s_CornerCount])co
 template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
 inline void BoundingDoubleOrientedBox::getCorners(PointT (&corners)[s_DoubleCornerCount])const noexcept{
     SIMDVectorDouble cornerVectors[s_DoubleCornerCount];
-    CornersValue(LoadDouble(center), LoadDouble(extents), LoadDouble(orientation), cornerVectors);
+    CollisionDoubleDetail::ObbCorners(LoadDouble(center), LoadDouble(extents), LoadDouble(orientation), cornerVectors);
     for(u64 i = 0u; i < s_DoubleCornerCount; ++i)
         StoreDouble(VectorDoubleSetW(cornerVectors[i], 0.0), corners[i]);
 }

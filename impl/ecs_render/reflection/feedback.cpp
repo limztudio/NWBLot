@@ -16,37 +16,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_reflection_feedback{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] bool SameScreenSettings(const ReflectionSettings& a, const ReflectionSettings& b)noexcept{
-    // Sampling/filter/diagnostics leave smooth rays unchanged.
-    return
-        a.traceMode == b.traceMode && a.samplingSeed == b.samplingSeed
-        && a.maxHardwareRaysPerFrame == b.maxHardwareRaysPerFrame && a.maxOpticalQueries == b.maxOpticalQueries
-        && a.maxRayDistance == b.maxRayDistance && a.distanceFadeStart == b.distanceFadeStart
-        && a.roughnessCutoff == b.roughnessCutoff && a.screenMaxSteps == b.screenMaxSteps
-        && a.screenThickness == b.screenThickness && a.screenConfidenceThreshold == b.screenConfidenceThreshold
-        && a.screenEdgeFade == b.screenEdgeFade
-        && a.environmentTop.x == b.environmentTop.x && a.environmentTop.y == b.environmentTop.y
-        && a.environmentTop.z == b.environmentTop.z && a.environmentBottom.x == b.environmentBottom.x
-        && a.environmentBottom.y == b.environmentBottom.y && a.environmentBottom.z == b.environmentBottom.z
-    ;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 ReflectionFeedbackOutcome ResolveReflectionFeedbackOutcome(const ReflectionFeedbackPlan& plan, const bool hardwareReady)noexcept{
     const bool hardwareChanged = !plan.reset && plan.acceptedSequence != 0u && plan.previousHardwareReady != hardwareReady;
     ReflectionFeedbackOutcome result;
@@ -103,9 +72,9 @@ ReflectionFeedbackPlan ReflectionFeedbackState::plan(const ReflectionSceneConten
         result.resetReason = ReflectionFeedbackResetReason::InvalidAcceptance;
     else if(m_acceptedSequence == 0u)
         result.resetReason = m_resourcesChanged ? ReflectionFeedbackResetReason::ResourcesChanged : ReflectionFeedbackResetReason::FirstObservation;
-    else if(enabled != m_enabled || !__hidden_reflection_feedback::SameScreenSettings(settings, m_settings))
+    else if(enabled != m_enabled || !SameReflectionTraceSettings(settings, m_settings))
         result.resetReason = ReflectionFeedbackResetReason::SettingsChanged;
-    else if(stamp.geometry != m_stamp.geometry || stamp.material != m_stamp.material || stamp.lighting != m_stamp.lighting || stamp.trusted != m_stamp.trusted)
+    else if(!stamp.matchesScene(m_stamp))
         result.resetReason = ReflectionFeedbackResetReason::SceneChanged;
     else if(stamp.view != m_stamp.view)
         result.resetReason = ReflectionFeedbackResetReason::ViewChanged;

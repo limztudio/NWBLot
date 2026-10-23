@@ -38,10 +38,9 @@ namespace __hidden_flicker_test_smoke{
 
 constexpr TStringView s_ProjectName = NWB_TEXT("FlickerTestSmokeProject");
 
-using NWB::Tests::Smoke::AddSmokeSkinnedRenderSystems;
 using NWB::Tests::Smoke::ArrowYawInputHandler;
 using NWB::Tests::Smoke::CreateSmokeCamera;
-using NWB::Tests::Smoke::CreateSmokeWorldOrDie;
+using NWB::Tests::Smoke::CreateSmokeSkinnedRenderWorldOrDie;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::CreateTintedModelEntity;
 using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
@@ -96,13 +95,6 @@ static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;
 
 class FlickerTestSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
-    static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = CreateSmokeWorldOrDie(context, s_ProjectName);
-
-        AddSmokeSkinnedRenderSystems(*world, context);
-        return world;
-    }
-
     // Pin yaw for A/B captures that isolate flicker from motion.
     static f32 FrozenYaw(){
         static const f32 s_Yaw = ReadSmokeFrozenYawFromEnvironment("NWB_FLICKER_TEST_SPIN_ANGLE");
@@ -113,7 +105,7 @@ private:
 public:
     explicit FlickerTestSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
-        , m_world(CreateWorldOrDie(context))
+        , m_world(CreateSmokeSkinnedRenderWorldOrDie(context, s_ProjectName))
     {}
     virtual ~FlickerTestSmokeProject()noexcept override{
         m_context.input.removeHandler(m_arrowYawInput); // Backstop for skipped onShutdown; the dispatcher outlives this project.

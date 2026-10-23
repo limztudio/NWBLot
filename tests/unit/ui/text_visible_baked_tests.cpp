@@ -166,7 +166,7 @@ TEST_F(TextVisibleBakedTests, PaddedSdfPlaneIntersectingClipSurvivesWhenShapingO
     const FontAtlasGlyph& record = *glyph.face->bakedAtlas()->glyph(glyph.glyphId);
     EXPECT_EQ(snapshot.sdfPages()[0u].get(), glyph.face->bakedAtlas()->page(record.group).get());
     ASSERT_EQ(snapshot.commands().size(), 1u);
-    ExpectRectangle(snapshot.commands()[0u].clip, clip);
+    ExpectRect(snapshot.commands()[0u].clip, clip);
     ASSERT_EQ(snapshot.vertices().size(), 4u);
     EXPECT_EQ(snapshot.indices().size(), 6u);
     EXPECT_FLOAT_EQ(snapshot.vertices()[0u].position.x, clip.x);

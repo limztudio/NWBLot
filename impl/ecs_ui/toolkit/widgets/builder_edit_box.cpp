@@ -55,23 +55,19 @@ EditBoxResult Builder::declareEditBox(const AStringView stableKey, const EditBox
         m_context.fail();
         return result;
     }
-    if(integerFrame){
-        if(!integerFrame->model || integerFrame->model->revision() != integerFrame->revision){
-            m_context.fail();
-            result.valid = false;
-            return result;
-        }
-        snapshotNumericEdit(*integerFrame, model);
-        integerFrame->focused = result.focused;
-    }
-    if(floatFrame){
-        if(!floatFrame->model || floatFrame->model->revision() != floatFrame->revision){
-            m_context.fail();
-            result.valid = false;
-            return result;
-        }
-        snapshotNumericEdit(*floatFrame, model);
-        floatFrame->focused = result.focused;
+    const auto snapshotNumericFrame = [&](auto* const frame)noexcept{
+        if(!frame)
+            return true;
+        if(!frame->model || frame->model->revision() != frame->revision)
+            return false;
+        snapshotNumericEdit(*frame, model);
+        frame->focused = result.focused;
+        return true;
+    };
+    if(!snapshotNumericFrame(integerFrame) || !snapshotNumericFrame(floatFrame)){
+        m_context.fail();
+        result.valid = false;
+        return result;
     }
     Item item(m_arena);
     item.style = m_style;
@@ -82,7 +78,7 @@ EditBoxResult Builder::declareEditBox(const AStringView stableKey, const EditBox
         result.valid = false;
         return result;
     }
-    if((integerFrame && !integerEditMatches(*integerFrame)) || (floatFrame && !floatEditMatches(*floatFrame))){
+    if((integerFrame && !numericEditFrameMatches(*integerFrame)) || (floatFrame && !numericEditFrameMatches(*floatFrame))){
         m_context.fail();
         result.valid = false;
         return result;

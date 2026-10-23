@@ -109,6 +109,12 @@ public:
     [[nodiscard]] bool valid()const noexcept{
         return target.valid() && declarationGeneration != 0u && layoutGeneration != 0u && sequence != 0u;
     }
+    [[nodiscard]] constexpr bool operator==(const InputActionId& other)const noexcept{
+        return target == other.target && declarationGeneration == other.declarationGeneration && layoutGeneration == other.layoutGeneration && sequence == other.sequence;
+    }
+    [[nodiscard]] constexpr bool operator!=(const InputActionId& other)const noexcept{
+        return !(*this == other);
+    }
 };
 
 struct InputAction{

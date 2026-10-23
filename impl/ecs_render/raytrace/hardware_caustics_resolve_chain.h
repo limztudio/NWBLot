@@ -44,15 +44,8 @@ public:
     {}
 };
 
-struct HardwareCausticsResolveChainResult{
+struct HardwareCausticsResolveChainResult : public CausticsResolveChainStageTasks{
     Core::GpuTaskId hardwareCausticsTask;
-    Core::GpuTaskId causticResolvePrepareTask;
-    Core::GpuTaskId causticResolveWaveletTask;
-    Core::GpuTaskId causticResolveSecondWaveletTask;
-    Core::GpuTaskId causticResolveThirdWaveletTask;
-    Core::GpuTaskId causticResolveFourthWaveletTask;
-    Core::GpuTaskId causticResolveFifthWaveletTask;
-    Core::GpuTaskId causticResolveUpsampleTask;
 };
 
 

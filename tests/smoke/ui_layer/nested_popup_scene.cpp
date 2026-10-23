@@ -78,7 +78,7 @@ UiNestedPopupSmokeScene::~UiNestedPopupSmokeScene()noexcept{
 }
 
 bool UiNestedPopupSmokeScene::paint(Impl::UiPaintContext& context){
-    observeDisplay(context.display);
+    ObserveSmokeDisplay(NWB_TEXT("UiNestedPopupSmoke"), context.display, m_lastDisplay, m_displayChanged);
     m_source.beginFrame();
     m_childDeclared = false;
     auto& ui = context.ui;
@@ -202,14 +202,6 @@ bool UiNestedPopupSmokeScene::paintChild(Impl::Ui::Builder& ui){
     return text.valid && ui.endPopup();
 }
 
-void UiNestedPopupSmokeScene::observeDisplay(const Impl::Ui::DisplayMetrics& display){
-    if(m_lastDisplay.logicalWidth == display.logicalWidth && m_lastDisplay.logicalHeight == display.logicalHeight && m_lastDisplay.pixelScaleX == display.pixelScaleX && m_lastDisplay.pixelScaleY == display.pixelScaleY)
-        return;
-    m_lastDisplay = display;
-    m_displayChanged = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiNestedPopupSmoke: display logical={}x{} scale={}x{}"), display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY);
-}
-
 void UiNestedPopupSmokeScene::observeState(Impl::UiPaintContext& context){
     using namespace Impl::Ui;
     m_rectangles.fill({});
@@ -299,16 +291,7 @@ void UiNestedPopupSmokeScene::observeState(Impl::UiPaintContext& context){
 }
 
 void UiNestedPopupSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
-    const auto current = values();
-    const auto positions = BuildSmokeMarkerPositions<(TupleSize_V<decltype(current)> + 1u) * 2u, 12u, 12u>();
-    const f32 y = VectorGetX(VectorSubtract(VectorReplicate(context.display.logicalHeight), VectorReplicate(18.0f)));
-    for(usize index = 0u; index <= current.size(); ++index){
-        const u64 value = index == current.size() ? m_sequence : current[index];
-        for(u32 part = 0u; part < 2u; ++part){
-            const usize marker = index * 2u + part;
-            context.paint.fillRect({ positions[marker], y, 8.0f, 8.0f }, EncodeSmokeColor(value >> (part * 12u)));
-        }
-    }
+    PaintKeyedSmokeValueMarkers<12u, 8u, 8u, 18u>(context, values(), m_sequence);
 }
 
 Array<u64, 29u> UiNestedPopupSmokeScene::values()const noexcept{

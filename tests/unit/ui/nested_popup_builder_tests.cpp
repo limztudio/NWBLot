@@ -60,15 +60,9 @@ protected:
         m_child.open();
     }
 
-    [[nodiscard]] WidgetId parentId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), s_ParentPopupKey)); }
-
-    [[nodiscard]] WidgetId childId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), s_ChildPopupKey)); }
-
     [[nodiscard]] bool beginParent(const u64 generation){
         return begin(generation) && m_builder.beginPopup(s_ParentPopupKey, m_parent, ParentOptions());
     }
-
-    [[nodiscard]] bool finishRoot(){ return m_context.endRoot() && m_context.finishFrame(); }
 
     [[nodiscard]] bool prepareButtons(const u64 generation){
         if(!beginParent(generation))

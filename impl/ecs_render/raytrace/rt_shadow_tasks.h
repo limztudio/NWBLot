@@ -48,6 +48,20 @@ inline void RecoverOpaqueSoftShadowAllLit(const PayloadT& payload, Core::Command
     payload.opaqueResolveTiming.reset();
 }
 
+template<typename PayloadT>
+inline void DiscardOpaqueSoftShadowResolve(PayloadT& payload){
+    payload.opaqueProduced = false;
+    Core::DiscardGpuTimingMeasure(&payload.asyncTiming);
+    Core::DiscardGpuTimingMeasure(&payload.shadowVisibilityTiming);
+    Core::DiscardGpuTimingMeasure(&payload.opaqueResolveTiming);
+}
+
+template<typename PayloadT>
+inline void DiscardTransparentSoftShadowResolve(PayloadT& payload){
+    payload.transparentTraceProduced = false;
+    Core::DiscardGpuTimingMeasure(&payload.transparentResolveTiming);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -210,10 +224,7 @@ public:
     }
 
     static void Discarded(Payload& payload){
-        payload.opaqueProduced = false;
-        Core::DiscardGpuTimingMeasure(&payload.asyncTiming);
-        Core::DiscardGpuTimingMeasure(&payload.shadowVisibilityTiming);
-        Core::DiscardGpuTimingMeasure(&payload.opaqueResolveTiming);
+        DiscardOpaqueSoftShadowResolve(payload);
     }
 };
 
@@ -259,10 +270,7 @@ public:
     }
 
     static void Discarded(Payload& payload){
-        payload.opaqueProduced = false;
-        Core::DiscardGpuTimingMeasure(&payload.asyncTiming);
-        Core::DiscardGpuTimingMeasure(&payload.shadowVisibilityTiming);
-        Core::DiscardGpuTimingMeasure(&payload.opaqueResolveTiming);
+        DiscardOpaqueSoftShadowResolve(payload);
     }
 };
 
@@ -368,8 +376,7 @@ public:
     }
 
     static void Discarded(Payload& payload){
-        payload.transparentTraceProduced = false;
-        Core::DiscardGpuTimingMeasure(&payload.transparentResolveTiming);
+        DiscardTransparentSoftShadowResolve(payload);
     }
 };
 
@@ -446,8 +453,7 @@ public:
     }
 
     static void Discarded(Payload& payload){
-        payload.transparentTraceProduced = false;
-        Core::DiscardGpuTimingMeasure(&payload.transparentResolveTiming);
+        DiscardTransparentSoftShadowResolve(payload);
     }
 };
 

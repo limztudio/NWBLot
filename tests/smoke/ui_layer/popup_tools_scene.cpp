@@ -65,7 +65,7 @@ UiPopupToolsSmokeScene::~UiPopupToolsSmokeScene()noexcept{
 
 bool UiPopupToolsSmokeScene::paint(Impl::UiPaintContext& context){
     using namespace Impl::Ui;
-    observeDisplay(context.display);
+    ObserveSmokeDisplay(__hidden_ui_popup_tools_smoke::s_LogTag, context.display, m_lastDisplay, m_displayChanged);
     m_source.beginFrame();
     m_sentinelFocused = false;
     Builder& ui = context.ui;
@@ -129,14 +129,6 @@ bool UiPopupToolsSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, c
             m_enabled = !m_enabled;
     }
     return true;
-}
-
-void UiPopupToolsSmokeScene::observeDisplay(const Impl::Ui::DisplayMetrics& display){
-    if(m_lastDisplay.logicalWidth == display.logicalWidth && m_lastDisplay.logicalHeight == display.logicalHeight && m_lastDisplay.pixelScaleX == display.pixelScaleX && m_lastDisplay.pixelScaleY == display.pixelScaleY)
-        return;
-    m_lastDisplay = display;
-    m_displayChanged = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiPopupToolsSmoke: display logical={}x{} scale={}x{}"), display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY);
 }
 
 Array<u64, 15u> UiPopupToolsSmokeScene::values()const noexcept{

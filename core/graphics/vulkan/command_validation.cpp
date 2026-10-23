@@ -283,7 +283,7 @@ bool CommandList::validateViewportState(const ViewportState& viewportState, cons
         rejectCommandRecording(operationName, NWB_TEXT("viewport is outside Vulkan device limits"));
         return false;
     }
-    if(!viewportState.scissorRects.empty() && !VulkanDetail::IsScissorRectValid(viewportState.scissorRects[0u])){
+    if(!viewportState.scissorRects.empty() && !viewportState.scissorRects[0u].validScissor()){
         rejectCommandRecording(operationName, NWB_TEXT("scissor rectangle is invalid"));
         return false;
     }

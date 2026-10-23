@@ -5,9 +5,12 @@
 #pragma once
 
 
+#include "model.h"
 #include "numeric_parse.h"
 
 #include <core/alloc/global.h>
+
+#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -89,6 +92,52 @@ template<typename Canonicalize>
     result.restored = *restored;
     result.valid = true;
     result.cancelled = cancelled;
+    return result;
+}
+
+inline void AdvanceRevision(u64& inOutRevision)noexcept{
+    if(inOutRevision == Limit<u64>::s_Max)
+        TerminateInvariant();
+    ++inOutRevision;
+}
+
+[[nodiscard]] inline Expected<bool, ErrorCode> CanonicalizeDraft(
+    const Expected<AStringView, ErrorCode>& formatted,
+    EditModel& inOutDraft,
+    AString<Core::Alloc::GlobalArena>& outAcceptedDraft
+){
+    if(!formatted)
+        return MakeUnexpected(formatted.error());
+    const bool changed = *formatted != inOutDraft.text();
+    if(!inOutDraft.setText(*formatted))
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
+    outAcceptedDraft.assign(formatted->data(), formatted->size());
+    return changed;
+}
+
+template<typename Value, typename Bounds>
+[[nodiscard]] inline NumericParseStatus::Enum DraftStatus(const Expected<Value, NumericParseStatus::Enum>& parsed, const Bounds& bounds)noexcept{
+    if(parsed && (*parsed < bounds.minimum || *parsed > bounds.maximum))
+        return NumericParseStatus::OutOfRange;
+    return parsed ? NumericParseStatus::Complete : parsed.error();
+}
+
+[[nodiscard]] inline bool DraftDirty(const EditModel& draft, const AString<Core::Alloc::GlobalArena>& acceptedDraft)noexcept{
+    return draft.text() != AStringView(acceptedDraft.data(), acceptedDraft.size());
+}
+
+[[nodiscard]] inline bool SetDraftText(const AStringView text, EditModel& inOutDraft, u64& inOutRevision){
+    if(!inOutDraft.setText(text))
+        return false;
+    AdvanceRevision(inOutRevision);
+    return true;
+}
+
+template<typename Canonicalize>
+[[nodiscard]] inline NumericEditResult RestoreModelDraft(Canonicalize canonicalize, const bool cancelled, u64& inOutRevision){
+    NumericEditResult result = RestoreDraft(Move(canonicalize), cancelled);
+    if(result.valid)
+        AdvanceRevision(inOutRevision);
     return result;
 }
 

@@ -679,6 +679,7 @@ private:
     void releaseCausticResolveActivity();
     [[nodiscard]] bool ensureCausticGeometryDownsamplePipeline();
     [[nodiscard]] bool causticResolveResourcesReady(const DeferredFrameTargets& targets, f32 temporalDecay)const noexcept;
+    [[nodiscard]] bool hasCommonCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept;
     [[nodiscard]] bool ensureCausticAccumulatorDecayPipeline();
     [[nodiscard]] bool ensureCausticRtPipeline();
     [[nodiscard]] bool ensureBvhSortPipeline();

@@ -44,12 +44,12 @@ constexpr TStringView s_ProjectName = NWB_TEXT("SkinningCullingBenchmark");
 
 using BenchmarkModelRef = NWB::Core::Assets::AssetRef<NWB::Impl::Model>;
 using BenchmarkMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
-using NWB::Tests::Smoke::AddSmokeSkinnedRenderSystems;
+using NWB::Tests::Smoke::CreateSmokeSkinnedRenderWorldOrDie;
 using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
 using NWB::Tests::Smoke::FindSpawnedModelObject;
+using NWB::Tests::Smoke::LoadSmokeSkeletonBindJoints;
+using NWB::Tests::Smoke::ReadSmokeEnvironmentFlag;
 using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
-
-inline constexpr Name s_EnvironmentFlagArena("tests/smoke/skinning_culling_benchmark/environment_flag");
 
 namespace BenchmarkMode{
     enum Enum : u8{
@@ -152,24 +152,6 @@ static constexpr usize s_BenchmarkCaseCount = sizeof(s_BenchmarkCases) / sizeof(
 [[nodiscard]] static bool ShouldAnimateJoint(const u32 jointIndex, const u32 characterIndex, const bool staticPreview)noexcept{
     const u32 modulo = staticPreview ? s_StaticPreviewAnimatedJointModulo : s_AnimatedJointModulo;
     return jointIndex != 0u && (RandomJointSeed(jointIndex, characterIndex) % modulo) == 0u;
-}
-
-[[nodiscard]] static bool EnvironmentFlagEnabled(const AStringView name){
-    NWB::Core::Alloc::GlobalArena arena(s_EnvironmentFlagArena);
-    const auto value = ReadEnvironmentVariable(arena, name);
-    if(!value){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skinning benchmark: failed to read environment '{}': {}"), StringConvert(name), StringConvert(value.error().message()));
-        return false;
-    }
-    return *value && !(*value)->empty() && (**value)[0] != '\0' && (**value)[0] != '0';
-}
-
-[[nodiscard]] static bool StaticPreviewEnabled(){
-    return EnvironmentFlagEnabled(s_StaticPreviewEnv);
-}
-
-[[nodiscard]] static bool FastSmokeEnabled(){
-    return EnvironmentFlagEnabled(s_FastSmokeEnv);
 }
 
 static void BuildAnimatedJointMatrix(const SIMDMatrix& bindJoint, const u32 jointIndex, const u32 characterIndex, const f32 timeSeconds, const bool staticPreview, SIMDMatrix& outMatrix)noexcept{
@@ -288,15 +270,6 @@ private:
 
 class SkinningCullingBenchmarkProject final : public NWB::IProjectEntryCallbacks{
 private:
-    static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = NWB::Tests::Smoke::CreateSmokeWorldOrDie(context, s_ProjectName);
-
-        AddSmokeSkinnedRenderSystems(*world, context);
-        return world;
-    }
-
-
-private:
     void destroyWorld(){
         if(!m_world.owner())
             return;
@@ -312,60 +285,6 @@ private:
         m_quitRequested = true;
         if(m_context.requestQuit)
             m_context.requestQuit();
-    }
-
-    [[nodiscard]] bool loadSkeletonBindJoints(){
-        const auto loadedModelAsset = m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), s_BenchmarkModel.name());
-        if(!loadedModelAsset){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: failed to load benchmark model"));
-            return false;
-        }
-        NWB_ASSERT(*loadedModelAsset);
-        const auto* model = NWB::Core::Assets::CastAsset<NWB::Impl::Model>(loadedModelAsset->get());
-        if(!model){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark model has unexpected type"));
-            return false;
-        }
-        const NWB::Impl::ModelSkeletonObject* skeletonObject = nullptr;
-        for(const NWB::Impl::ModelSkeletonObject& object : model->skeletonObjects()){
-            if(object.name == s_ModelSkeletonObject){
-                skeletonObject = &object;
-                break;
-            }
-        }
-        if(!skeletonObject && !model->skeletonObjects().empty())
-            skeletonObject = &model->skeletonObjects().front();
-        if(!skeletonObject || !skeletonObject->skeleton.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark model has no skeleton object"));
-            return false;
-        }
-
-        const auto loadedSkeletonAsset = m_context.assetManager.loadSync(NWB::Impl::Skeleton::AssetTypeName(), skeletonObject->skeleton.name());
-        if(!loadedSkeletonAsset){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: failed to load benchmark skeleton"));
-            return false;
-        }
-        NWB_ASSERT(*loadedSkeletonAsset);
-        const auto* skeleton = NWB::Core::Assets::CastAsset<NWB::Impl::Skeleton>(loadedSkeletonAsset->get());
-        if(!skeleton){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark skeleton has unexpected type"));
-            return false;
-        }
-        if(skeleton->joints().empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark skeleton has no joints"));
-            return false;
-        }
-        m_bindJoints.clear();
-        m_bindJoints.reserve(skeleton->joints().size());
-        for(const NWB::Impl::SkeletonJoint& joint : skeleton->joints()){
-            if(!MatrixIsInvertibleAffine(LoadFloat(joint.localBindPose), NWB::Impl::SkeletonRuntime::s_AffineEpsilon, NWB::Impl::SkeletonRuntime::s_JointDeterminantEpsilon)){
-                NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark skeleton contains an invalid bind pose"));
-                return false;
-            }
-
-            m_bindJoints.push_back(joint.localBindPose);
-        }
-        return !m_bindJoints.empty();
     }
 
     void configureCamera(const BenchmarkView::Enum view)noexcept{
@@ -478,11 +397,11 @@ private:
 public:
     explicit SkinningCullingBenchmarkProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
-        , m_world(CreateWorldOrDie(context))
+        , m_world(CreateSmokeSkinnedRenderWorldOrDie(context, s_ProjectName))
         , m_entities(context.objectArena)
         , m_bindJoints(context.objectArena)
-        , m_staticPreview(StaticPreviewEnabled())
-        , m_fastSmoke(!m_staticPreview && FastSmokeEnabled())
+        , m_staticPreview(ReadSmokeEnvironmentFlag(s_StaticPreviewEnv))
+        , m_fastSmoke(!m_staticPreview && ReadSmokeEnvironmentFlag(s_FastSmokeEnv))
     {}
     virtual ~SkinningCullingBenchmarkProject()noexcept override{
         destroyWorld();
@@ -496,7 +415,7 @@ public:
         if(m_gpuTimingEnabled)
             m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
 
-        if(!loadSkeletonBindJoints()){
+        if(!LoadSmokeSkeletonBindJoints(m_bindJoints, m_context.assetManager, s_BenchmarkModel, s_ProjectName, s_ModelSkeletonObject, true)){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark mesh has no skeleton joints"));
             requestQuit();
             return true;
@@ -633,7 +552,7 @@ private:
     u32 m_caseRenderedFrames = 0u;
     u32 m_finishDrainFrames = 0u;
     u32 m_repeatIndex = 0u;
-    const bool m_gpuTimingEnabled = EnvironmentFlagEnabled(s_GpuTimingEnv);
+    const bool m_gpuTimingEnabled = ReadSmokeEnvironmentFlag(s_GpuTimingEnv);
     bool m_finished = false;
     bool m_quitRequested = false;
     bool m_staticPreview = false;

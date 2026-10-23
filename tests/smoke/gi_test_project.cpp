@@ -44,10 +44,9 @@ namespace __hidden_gi_test_smoke{
 constexpr TStringView s_ProjectName = NWB_TEXT("GiTestSmokeProject");
 
 using NWB::Tests::Smoke::CreateSmokeCamera;
-using NWB::Tests::Smoke::CreateSmokeWorldOrDie;
+using NWB::Tests::Smoke::CreateSmokeRenderWorldOrDie;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::DestroySmokeRenderWorld;
-using NWB::Tests::Smoke::AddSmokeRenderSystems;
 using NWB::Tests::Smoke::RendererBaselineCaptureFreezeFrame;
 using NWB::Tests::Smoke::RendererBaselineFixedDelta;
 
@@ -178,14 +177,6 @@ private:
     }
 
 
-    static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = CreateSmokeWorldOrDie(context, s_ProjectName);
-
-        AddSmokeRenderSystems(*world, context);
-        return world;
-    }
-
-
 private:
     void destroyWorld(){
         if(m_complexCapture){
@@ -200,7 +191,7 @@ private:
 public:
     explicit GiTestSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
-        , m_world(CreateWorldOrDie(context))
+        , m_world(CreateSmokeRenderWorldOrDie(context, s_ProjectName))
         , m_csgGiScene(context, *m_world)
     {}
     virtual ~GiTestSmokeProject()noexcept override{

@@ -46,22 +46,9 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
 ){
     using namespace RendererTaskGraphDetail;
 
-    m_deferredShadowPrepareTask = {};
-    m_deferredShadowPrepareSoftwareBvhBuildFirstTask = {};
-    m_deferredShadowPrepareSoftwareBvhBuildLastTask = {};
     m_deferredShadowPrepareSceneRefitTask = {};
     m_sceneBvhRefitInputsUploadTask = {};
-    m_deferredShadowPrepareAccelStructFinalizeTask = {};
-    m_deferredBindlessSlotsUploadTask = {};
-    m_rayTraceMaterialContextSlotsUploadTask = {};
-    m_csgTraceContextUploadTask = {};
-    m_causticEmissionTargetsUploadTask = {};
-    m_surfelFrameConstantsUploadTask = {};
-    m_shadowInstanceMaterialUploadTask = {};
-    m_shadowInstanceUploadTask = {};
-    m_shadowMaterialTypedUploadTask = {};
-    m_sceneBvhNodesUploadTask = {};
-    m_sceneBvhInstancesUploadTask = {};
+    resetShadowPrepareTaskState();
     if(
         !deferredTargets.valid()
         || !deferredTargets.bindless.valid()

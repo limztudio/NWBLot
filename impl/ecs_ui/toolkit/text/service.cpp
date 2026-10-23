@@ -6,6 +6,8 @@
 
 #include "atlas.h"
 
+#include <global/atomic_identity.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -28,16 +30,6 @@ static Atomic<u64> s_NextServiceIdentity{ 1u };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static u64 NewIdentity()noexcept{
-    const u64 identity = s_NextServiceIdentity.fetch_add(1u, MemoryOrder::relaxed);
-    NWB_FATAL_ASSERT_MSG(identity != 0u, NWB_TEXT("UI text service identity overflow"));
-    return identity;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 
@@ -50,7 +42,7 @@ TextService::TextService(Core::Alloc::GlobalArena& arena)
     , m_atlas(Core::MakeGlobalUnique<GlyphAtlas>(arena, arena))
     , m_pages(arena)
     , m_sdfPages(arena)
-    , m_identity(__hidden_ui_text_service::NewIdentity())
+    , m_identity(NextNonWrappingIdentity(__hidden_ui_text_service::s_NextServiceIdentity))
 {
     m_pages.reserve(s_GlyphAtlasMaxPages);
     m_sdfPages.reserve(s_PaintMaxGlyphPages);

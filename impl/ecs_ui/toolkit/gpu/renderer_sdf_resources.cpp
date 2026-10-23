@@ -43,19 +43,7 @@ namespace __hidden_ui_gpu_sdf_resources{
 }
 
 [[nodiscard]] static bool PrepareDescriptor(GpuSdfAtlasVersion& version){
-    if(version.m_sampledImage.valid())
-        return true;
-    Core::GpuDescriptorHeap& heap = version.m_graphics.getDevice().getDescriptorHeap();
-    const Expected<Core::GpuDescriptorHandle> descriptorResult = heap.allocate(Core::GpuDescriptorClass::SampledImage);
-    if(!descriptorResult)
-        return false;
-    const Core::GpuDescriptorHandle descriptor = *descriptorResult;
-    Core::GpuDescriptorRetirementGuard descriptorGuard(heap, descriptor);
-    if(!heap.write(descriptor, Core::DescriptorWriteItem::TextureSrv(0u, version.m_texture.get(), version.m_texture->getDescription().format, Core::s_AllSubresources, Core::TextureDimension::Texture2D)))
-        return false;
-    version.m_sampledImage = descriptor;
-    descriptorGuard.release();
-    return true;
+    return PrepareGpuSampledImageDescriptor(version.m_graphics, version.m_texture, version.m_texture->getDescription().format, version.m_sampledImage);
 }
 
 
@@ -74,8 +62,7 @@ GpuSdfAtlasVersion::GpuSdfAtlasVersion(Core::GraphicsRuntime& graphics, SharedSd
 {}
 
 GpuSdfAtlasVersion::~GpuSdfAtlasVersion()noexcept{
-    if(m_sampledImage.valid())
-        m_graphics.getDevice().getDescriptorHeap().free(m_sampledImage);
+    FreeGpuDescriptor(m_graphics, m_sampledImage);
 }
 
 

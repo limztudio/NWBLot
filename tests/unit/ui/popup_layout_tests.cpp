@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "paint_assertions.h"
+
 #include <impl/ecs_ui/toolkit/widgets/popup.h>
 
 #include <gtest/gtest.h>
@@ -18,20 +20,10 @@ namespace __hidden_ui_popup_layout_tests{
 
 using namespace NWB;
 using namespace NWB::Impl::Ui;
+using NWB::UiPaintAssertions::ExpectRect;
 
 static_assert(!IsConstructible_V<PopupState, const PopupState&>);
 static_assert(!IsConstructible_V<PopupState, PopupState&&>);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static void ExpectBounds(const Rect& actual, const Rect& expected){
-    EXPECT_FLOAT_EQ(actual.x, expected.x);
-    EXPECT_FLOAT_EQ(actual.y, expected.y);
-    EXPECT_FLOAT_EQ(actual.width, expected.width);
-    EXPECT_FLOAT_EQ(actual.height, expected.height);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -45,7 +37,7 @@ TEST(UiPopupLayoutTests, BottomEdgeFlipsAboveAndClampsHorizontalOverflow){
     const auto placementResult = PopupLayout::Place(options, { 800.0f, 600.0f, 1.0f, 1.0f });
     ASSERT_TRUE(placementResult);
     placement = *placementResult;
-    ExpectBounds(placement.bounds, { 580.0f, 396.0f, 220.0f, 160.0f });
+    ExpectRect(placement.bounds, { 580.0f, 396.0f, 220.0f, 160.0f });
     EXPECT_EQ(placement.side, PopupPlacementSide::Above);
 }
 
@@ -58,7 +50,7 @@ TEST(UiPopupLayoutTests, AbovePreferenceFlipsBelowAtTopEdge){
     const auto placementResult = PopupLayout::Place(options, { 400.0f, 300.0f, 1.0f, 1.0f });
     ASSERT_TRUE(placementResult);
     placement = *placementResult;
-    ExpectBounds(placement.bounds, { 40.0f, 46.0f, 140.0f, 90.0f });
+    ExpectRect(placement.bounds, { 40.0f, 46.0f, 140.0f, 90.0f });
     EXPECT_EQ(placement.side, PopupPlacementSide::Below);
 }
 
@@ -71,7 +63,7 @@ TEST(UiPopupLayoutTests, RightPreferenceFlipsLeftAndClampsVerticalOverflow){
     const auto placementResult = PopupLayout::Place(options, { 400.0f, 300.0f, 1.0f, 1.0f });
     ASSERT_TRUE(placementResult);
     placement = *placementResult;
-    ExpectBounds(placement.bounds, { 226.0f, 210.0f, 140.0f, 90.0f });
+    ExpectRect(placement.bounds, { 226.0f, 210.0f, 140.0f, 90.0f });
     EXPECT_EQ(placement.side, PopupPlacementSide::Left);
 }
 
@@ -84,7 +76,7 @@ TEST(UiPopupLayoutTests, LeftPreferenceFlipsRightAtLeftEdge){
     const auto placementResult = PopupLayout::Place(options, { 400.0f, 300.0f, 1.0f, 1.0f });
     ASSERT_TRUE(placementResult);
     placement = *placementResult;
-    ExpectBounds(placement.bounds, { 46.0f, 40.0f, 140.0f, 90.0f });
+    ExpectRect(placement.bounds, { 46.0f, 40.0f, 140.0f, 90.0f });
     EXPECT_EQ(placement.side, PopupPlacementSide::Right);
 }
 
@@ -96,7 +88,7 @@ TEST(UiPopupLayoutTests, NeitherVerticalSideFitsUsesMoreRoomAndKeepsCompletePopu
     const auto placementResult = PopupLayout::Place(options, { 320.0f, 240.0f, 1.0f, 1.0f });
     ASSERT_TRUE(placementResult);
     placement = *placementResult;
-    ExpectBounds(placement.bounds, { 100.0f, 0.0f, 80.0f, 200.0f });
+    ExpectRect(placement.bounds, { 100.0f, 0.0f, 80.0f, 200.0f });
     EXPECT_EQ(placement.side, PopupPlacementSide::Above);
 }
 
@@ -110,7 +102,7 @@ TEST(UiPopupLayoutTests, EqualAvailableRoomPreservesTheRequestedSide){
     const auto placementResult = PopupLayout::Place(options, { 320.0f, 240.0f, 1.0f, 1.0f });
     ASSERT_TRUE(placementResult);
     placement = *placementResult;
-    ExpectBounds(placement.bounds, { 100.0f, 0.0f, 80.0f, 150.0f });
+    ExpectRect(placement.bounds, { 100.0f, 0.0f, 80.0f, 150.0f });
     EXPECT_EQ(placement.side, PopupPlacementSide::Above);
 }
 
@@ -122,8 +114,8 @@ TEST(UiPopupLayoutTests, OversizedPopupShrinksToTheViewportOnBothAxes){
     const auto placementResult = PopupLayout::Place(options, { 100.0f, 80.0f, 2.0f, 1.25f });
     ASSERT_TRUE(placementResult);
     placement = *placementResult;
-    ExpectBounds(placement.bounds, { 0.0f, 0.0f, 100.0f, 80.0f });
-    ExpectBounds(placement.viewport, placement.bounds);
+    ExpectRect(placement.bounds, { 0.0f, 0.0f, 100.0f, 80.0f });
+    ExpectRect(placement.viewport, placement.bounds);
 }
 
 TEST(UiPopupLayoutTests, OffscreenAnchorAndLargeGapStillProduceBoundedGeometry){
@@ -135,13 +127,13 @@ TEST(UiPopupLayoutTests, OffscreenAnchorAndLargeGapStillProduceBoundedGeometry){
     const auto placementResult = PopupLayout::Place(options, { 320.0f, 240.0f, 1.0f, 1.0f });
     ASSERT_TRUE(placementResult);
     placement = *placementResult;
-    ExpectBounds(placement.bounds, { 220.0f, 0.0f, 100.0f, 100.0f });
+    ExpectRect(placement.bounds, { 220.0f, 0.0f, 100.0f, 100.0f });
     EXPECT_EQ(placement.side, PopupPlacementSide::Left);
     options.gap = Limit<f32>::s_Max;
     const auto placementResult2 = PopupLayout::Place(options, { 320.0f, 240.0f, 1.0f, 1.0f });
     ASSERT_TRUE(placementResult2);
     placement = *placementResult2;
-    ExpectBounds(placement.bounds, { 220.0f, 0.0f, 100.0f, 100.0f });
+    ExpectRect(placement.bounds, { 220.0f, 0.0f, 100.0f, 100.0f });
     EXPECT_EQ(placement.side, PopupPlacementSide::Right);
 }
 
@@ -153,7 +145,7 @@ TEST(UiPopupLayoutTests, EmptyAnchorCanRepresentPointPlacement){
     const auto placementResult = PopupLayout::Place(options, { 320.0f, 240.0f, 1.0f, 1.0f });
     ASSERT_TRUE(placementResult);
     placement = *placementResult;
-    ExpectBounds(placement.bounds, { 124.0f, 34.0f, 80.0f, 60.0f });
+    ExpectRect(placement.bounds, { 124.0f, 34.0f, 80.0f, 60.0f });
     EXPECT_EQ(placement.side, PopupPlacementSide::Below);
 }
 
@@ -168,8 +160,8 @@ TEST(UiPopupLayoutTests, AsymmetricDpiChangesDoNotRescaleLogicalPlacement){
     const auto secondResult = PopupLayout::Place(options, { 680.0f, 480.0f, 2.5f, 1.25f });
     ASSERT_TRUE(secondResult);
     second = *secondResult;
-    ExpectBounds(second.bounds, first.bounds);
-    ExpectBounds(second.viewport, first.viewport);
+    ExpectRect(second.bounds, first.bounds);
+    ExpectRect(second.viewport, first.viewport);
     EXPECT_EQ(second.side, first.side);
 }
 

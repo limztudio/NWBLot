@@ -235,51 +235,16 @@ void CommandList::clearDepthStencilTextureBox(Texture& texture, TextureSubresour
             Buffer& stagingBuffer = *staging->buffer;
             const u64 stagingOffset = staging->offset;
             void* const stagingBytes = staging->cpuAddress;
-            if(
-                !stagingBytes
-                || (stagingOffset % uploadLayout.stagingAlignment) != 0u
-                || (stagingOffset % uploadLayout.copyOffsetAlignment) != 0u
-                || stagingOffset > stagingBuffer.m_creationDesc.byteSize
-                || static_cast<u64>(uploadLayout.clearByteCount)
-                    > stagingBuffer.m_creationDesc.byteSize - stagingOffset
-            ){
+            if(!VulkanTextureDetail::TextureClearStagingRangeValid(stagingBytes, stagingOffset, stagingBuffer.m_creationDesc.byteSize, uploadLayout)){
                 rejectCommandRecording(s_OperationName, VulkanTextureDetail::s_ClearStagingRangeInvalidReason);
                 return false;
             }
             VulkanTextureDetail::FillTextureClearBytes(stagingBytes, uploadLayout.clearByteCount, clearPattern.get(), clearPatternSize);
 
-            if(uploadLayout.mergeArrayLayerCopies){
-                Vector<VkBufferImageCopy, Alloc::ScratchArena> regions(resolvedSubresources.numArraySlices, scratchArena);
-                const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
-                u32 regionIndex = 0u;
-                for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
-                    VkBufferImageCopy region{};
-                    region.bufferOffset = stagingOffset + static_cast<u64>(regionIndex) * uploadLayout.layerPitch;
-                    region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(aspect, mipLevel, arraySlice, 1u);
-                    region.imageOffset = { mipPlan.resolvedBox.minX, mipPlan.resolvedBox.minY, 0 };
-                    region.imageExtent = { static_cast<u32>(mipPlan.resolvedBox.width()), static_cast<u32>(mipPlan.resolvedBox.height()), 1u };
-                    regions[regionIndex++] = region;
-                }
-
-                if(!regions.empty())
-                    m_context.deviceDispatch.vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer.m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<u32>(regions.size()), regions.data());
-            }
-            else{
-                Vector<VkBufferImageCopy, Alloc::ScratchArena> regions(resolvedSubresources.numArraySlices, scratchArena);
-                const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
-                u32 regionIndex = 0u;
-                for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
-                    VkBufferImageCopy region{};
-                    region.bufferOffset = stagingOffset;
-                    region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(aspect, mipLevel, arraySlice, 1u);
-                    region.imageOffset = { mipPlan.resolvedBox.minX, mipPlan.resolvedBox.minY, 0 };
-                    region.imageExtent = { static_cast<u32>(mipPlan.resolvedBox.width()), static_cast<u32>(mipPlan.resolvedBox.height()), 1u };
-                    regions[regionIndex++] = region;
-                }
-
-                if(!regions.empty())
-                    m_context.deviceDispatch.vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer.m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<u32>(regions.size()), regions.data());
-            }
+            Vector<VkBufferImageCopy, Alloc::ScratchArena> regions(resolvedSubresources.numArraySlices, scratchArena);
+            VulkanTextureDetail::BuildArrayLayerBufferImageCopies(resolvedSubresources, aspect, mipLevel, mipPlan.resolvedBox, stagingOffset, uploadLayout, regions);
+            if(!regions.empty())
+                m_context.deviceDispatch.vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer.m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<u32>(regions.size()), regions.data());
 
             retainStagingBuffer(stagingBuffer);
         }

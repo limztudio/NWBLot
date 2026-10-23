@@ -27,15 +27,6 @@ constexpr AStringView s_BeforeKey = "before";
 
 class UiImageBuilderTests : public WidgetFixture{
 protected:
-    [[nodiscard]] static ImageOptions Fixed(const f32 width = 96.0f, const f32 height = 40.0f)noexcept{
-        ImageOptions options;
-        options.width = { LayoutSizePolicy::Fixed, width };
-        options.height = { LayoutSizePolicy::Fixed, height };
-        return options;
-    }
-
-
-protected:
     virtual void SetUp()override{
         WidgetFixture::SetUp();
         if(HasFatalFailure())
@@ -57,11 +48,6 @@ protected:
         ASSERT_TRUE(m_skin.validatePayload());
         m_builder.setSkin(m_skin);
     }
-
-    [[nodiscard]] bool panel(const u64 generation){
-        return begin(generation) && m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 360.0f, 400.0f });
-    }
-
 };
 
 

@@ -73,12 +73,8 @@ static constexpr usize s_HeadUnitsPerEmEnd = 20u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Path BundledFontRoot(FontTestArena& testArena){
-    return Path(testArena.arena, NWB_REPO_ROOT) / "impl" / "assets" / "ui" / "fonts" / "default";
-}
-
 [[nodiscard]] static Expected<Font> LoadLatin(FontTestArena& testArena){
-    const Path path = BundledFontRoot(testArena) / "latin.font";
+    const Path path = DefaultBundledFontRoot(testArena) / "latin.font";
     Core::Assets::AssetBytes source(testArena.arena);
     Font candidate(testArena.arena, Name("engine/ui/fonts/default/latin/face"));
     auto sourceResult = ReadBundledFontBytes(path, source.get_allocator().arena());
@@ -224,7 +220,7 @@ TEST(AssetsFont, PreparedAtlasPixelsAreExcludedFromCookedFontsAndRejectedByRunti
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     FontTestArena testArena;
-    const Path bundledRoot = BundledFontRoot(testArena);
+    const Path bundledRoot = DefaultBundledFontRoot(testArena);
     static constexpr AStringView s_BundledNames[] = { "latin.font", "korean.font" };
     static constexpr Name s_Names[] = { Name("engine/ui/fonts/default/latin/face"), Name("engine/ui/fonts/default/korean/face") };
     for(usize index = 0u; index < LengthOf(s_BundledNames); ++index){

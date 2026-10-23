@@ -45,7 +45,6 @@ private:
     [[nodiscard]] bool paintRoot(Impl::Ui::Builder& ui);
     [[nodiscard]] bool paintParent(Impl::Ui::Builder& ui);
     [[nodiscard]] bool paintChild(Impl::Ui::Builder& ui);
-    void observeDisplay(const Impl::Ui::DisplayMetrics& display);
     // Copies accepted observations during this callback; no target or popup-scope pointer survives publication.
     void observeState(Impl::UiPaintContext& context);
     void paintMarkers(Impl::UiPaintContext& context)const;

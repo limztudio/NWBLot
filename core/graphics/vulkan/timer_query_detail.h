@@ -37,10 +37,6 @@ inline Expected<Array<u64, s_TimerQueryTimestampCount>, VkResult> GetTimerQueryR
     return timestamps;
 }
 
-[[nodiscard]] inline bool MatchesSubmissionToken(const QueueSubmissionToken& lhs, const QueueSubmissionToken& rhs)noexcept{
-    return lhs.queue == rhs.queue && lhs.value == rhs.value && lhs.physicalQueueIndex == rhs.physicalQueueIndex && lhs.deviceGeneration == rhs.deviceGeneration;
-}
-
 [[nodiscard]] inline bool IsSubmissionComplete(Device& device, const QueueSubmissionToken& token){
     if(!token.valid())
         return true;

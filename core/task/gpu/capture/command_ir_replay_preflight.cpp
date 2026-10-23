@@ -22,15 +22,39 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace GpuCommandIrDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const GpuTaskResourceUse* FindTaskResourceUse(const GpuTaskGraphTaskView& task, const GpuGraphResourceId resource, const ResourceStates::Mask state, const GpuTaskResourceAccess::Enum access)noexcept{
+    for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
+        const GpuTaskResourceUse& use = task.resourceUses[useIndex];
+        if(use.resource == resource && use.requiredState == state && use.access == access)
+            return &use;
+    }
+    return nullptr;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_gpu_command_ir_replay_preflight{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static GpuCommandIrReplayResult ReplayFailure(const GpuCommandIrReplayError::Enum error, const GpuCommandIrStreamValidationResult& streamValidation = {}, const u64 recordIndex = Limit<u64>::s_Max)noexcept{
-    return GpuCommandIrReplayResult{ .error = error, .streamValidation = streamValidation, .recordIndex = recordIndex, };
-}
+using GpuCommandIrDetail::FindTaskResourceUse;
+using GpuCommandIrDetail::ReplayFailure;
 
 // Finish the syntax walk first, so malformed later bytes still report InvalidStream before this semantic error.
 [[nodiscard]] static GpuCommandIrReplayResult SemanticFailure(GpuCommandIrStreamReader& reader, const GpuCommandIrReplayError::Enum error, const u64 recordIndex = Limit<u64>::s_Max)noexcept{
@@ -47,15 +71,6 @@ namespace __hidden_gpu_command_ir_replay_preflight{
 
 [[nodiscard]] static bool QueueHasGraphicsCapability(const GpuPhysicalQueueInfo& queue)noexcept{
     return (static_cast<u8>(queue.capabilities) & static_cast<u8>(GpuQueueCapability::Graphics)) != 0u;
-}
-
-[[nodiscard]] static const GpuTaskResourceUse* FindTaskResourceUse(const GpuTaskGraphTaskView& task, const GpuGraphResourceId resource, const ResourceStates::Mask state, const GpuTaskResourceAccess::Enum access)noexcept{
-    for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
-        const GpuTaskResourceUse& use = task.resourceUses[useIndex];
-        if(use.resource == resource && use.requiredState == state && use.access == access)
-            return &use;
-    }
-    return nullptr;
 }
 
 [[nodiscard]] static bool BufferRangeContains(const BufferDesc& description, const BufferRange& declaration, const u64 offsetBytes, const u64 sizeBytes)noexcept{

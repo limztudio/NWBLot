@@ -42,8 +42,10 @@ using NWB::Tests::Smoke::AddSmokeRenderSystems;
 using NWB::Tests::Smoke::AddStaticCsgMeshReceiver;
 using NWB::Tests::Smoke::AssignCsgCutterParameters;
 using NWB::Tests::Smoke::AssignCsgCutterTransform;
+using NWB::Tests::Smoke::CreateSmokeWorldOrDie;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::DestroySmokeRenderWorld;
+using NWB::Tests::Smoke::PrepareSmokeCaptureSeries;
 
 using CsgVisibleMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 using CsgVisibleMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
@@ -241,15 +243,7 @@ static void ApplyCutterTransform(NWB::Core::ECS::World& world, const NWB::Core::
 class CsgVisibleSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = MakeUnique<NWB::Core::ECS::World>(context.objectArena, context.cpuTasks);
-        if(!world){
-            NWB_LOGGER_FATAL(NWB_TEXT("CsgVisibleSmokeProject initialization failed: ECS world allocation failed"));
-            throw RuntimeException("CsgVisibleSmokeProject initialization failed");
-        }
-        if(!context.shaderPathResolver){
-            NWB_LOGGER_FATAL(NWB_TEXT("CsgVisibleSmokeProject initialization failed: shader path resolver callback is null"));
-            throw RuntimeException("CsgVisibleSmokeProject initialization failed");
-        }
+        auto world = CreateSmokeWorldOrDie(context, CsgVisibleFpsLabel());
 
         if(context.graphics.queryFeatureSupport(NWB::Core::Feature::Meshlets)){
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: natural native mesh-shader route selected"));
@@ -265,7 +259,7 @@ private:
             renderer.setFrameLaggedAsyncLightingEnabled(NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_CSG_GI_TEMPORAL_LAGGED"));
         }
 
-        return MakeNotNullUnique(Move(world));
+        return world;
     }
 
     [[nodiscard]] static bool ShouldCapture(void* const context, const u64 frame)noexcept{
@@ -280,17 +274,6 @@ private:
             m_capture.reset();
         }
         DestroySmokeRenderWorld(m_context, m_world);
-    }
-
-    [[nodiscard]] bool prepareTemporalCapture(const AStringView outputPath){
-        m_capturePaths.reserve(s_TemporalSampleCount);
-        for(u32 sample = 0u; sample < s_TemporalSampleCount; ++sample){
-            const auto path = sample + 1u == s_TemporalSampleCount ? NWB::Tests::Smoke::SmokeEnvironmentString(outputPath, m_context.objectArena) : StringFormat(m_context.objectArena, "{}.{}.bmp", outputPath, sample);
-            m_capturePaths.emplace_back(m_context.objectArena, AStringView(path));
-        }
-        const NWB::Tests::Smoke::FramebufferCaptureOptions options{ .shouldCapture = ShouldCapture, .predicateContext = this, .requiredWidth = 1280u, .requiredHeight = 900u, .quitWhenReady = false, };
-        m_capture = MakeUnique<NWB::Tests::Smoke::FramebufferCapture>(m_context, Move(m_capturePaths.front()), 1u, options);
-        return m_capture && m_capture->start();
     }
 
     void updateTemporalCapture(){
@@ -395,7 +378,8 @@ public:
             }
             else if(*view != "full")
                 return false;
-            if(!prepareTemporalCapture(AStringView(*output)))
+            const NWB::Tests::Smoke::FramebufferCaptureOptions captureOptions{ .shouldCapture = ShouldCapture, .predicateContext = this, .requiredWidth = 1280u, .requiredHeight = 900u, .quitWhenReady = false, };
+            if(!PrepareSmokeCaptureSeries(m_context, AStringView(*output), s_TemporalSampleCount, captureOptions, m_capturePaths, m_capture))
                 return false;
             m_temporalAnimated = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_CSG_GI_TEMPORAL_ANIMATED");
             if(overlapping && m_temporalAnimated){

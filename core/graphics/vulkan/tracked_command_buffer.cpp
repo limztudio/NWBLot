@@ -120,6 +120,18 @@ bool TrackedCommandBuffer::recordsTimerQueryBegin(const TimerQuery& query, const
     return false;
 }
 
+TrackedCommandBuffer::TimerQueryClaimOwnerMatches TrackedCommandBuffer::resolveTimerQueryClaimOwnerMatches(const TimerQuery& query, const TimerQueryRecordingClaim& claim)const noexcept{
+    return {
+        .resetOwnerMatches =
+            query.m_resetRecordingOwner.commandBuffer == this
+            && query.m_resetRecordingOwner.recordingID == claim.recordingID
+            && query.m_resetRecordingAuthorizationGeneration != 0u
+            && query.m_resetRecordingAuthorizationGeneration == claim.resetRecordingAuthorizationGeneration,
+        .beginOwnerMatches = query.m_beginRecordingOwner.commandBuffer == this && query.m_beginRecordingOwner.recordingID == claim.recordingID && query.m_cycleGeneration == claim.generation,
+        .endOwnerMatches = query.m_endRecordingOwner.commandBuffer == this && query.m_endRecordingOwner.recordingID == claim.recordingID && query.m_cycleGeneration == claim.generation,
+    };
+}
+
 bool TrackedCommandBuffer::validateTimerQueryRecordingClaims(
     const Queue& submissionQueue,
     const QueueSubmissionWait* const localWaits,
@@ -133,29 +145,17 @@ bool TrackedCommandBuffer::validateTimerQueryRecordingClaims(
             return false;
 
         NothrowScopedLock queryLock(query.m_mutex);
-        const QueueSubmissionToken currentPrerequisite = query.m_completedCycleSubmission.valid() ? query.m_completedCycleSubmission : query.m_resetAuthorizationSubmission;
-        const bool prerequisiteMatches =
-            currentPrerequisite.queue == claim.prerequisiteSubmission.queue
-            && currentPrerequisite.value == claim.prerequisiteSubmission.value
-            && currentPrerequisite.physicalQueueIndex == claim.prerequisiteSubmission.physicalQueueIndex
-            && currentPrerequisite.deviceGeneration == claim.prerequisiteSubmission.deviceGeneration
-        ;
+        const QueueSubmissionToken currentPrerequisite = query.prerequisiteSubmissionWithinLock();
+        const bool prerequisiteMatches = currentPrerequisite == claim.prerequisiteSubmission;
         if((claim.recordsReset || claim.recordsBegin) && (!prerequisiteMatches || !submissionQueue.coversTimerQueryPrerequisite(claim.prerequisiteSubmission, claim.prerequisiteObservedComplete, localWaits, localWaitCount)))
             return false;
-        const bool resetOwnerMatches =
-            query.m_resetRecordingOwner.commandBuffer == this
-            && query.m_resetRecordingOwner.recordingID == claim.recordingID
-            && query.m_resetRecordingAuthorizationGeneration != 0u
-            && query.m_resetRecordingAuthorizationGeneration == claim.resetRecordingAuthorizationGeneration
-        ;
-        const bool beginOwnerMatches = query.m_beginRecordingOwner.commandBuffer == this && query.m_beginRecordingOwner.recordingID == claim.recordingID && query.m_cycleGeneration == claim.generation;
-        const bool endOwnerMatches = query.m_endRecordingOwner.commandBuffer == this && query.m_endRecordingOwner.recordingID == claim.recordingID && query.m_cycleGeneration == claim.generation;
-        if(claim.recordsReset && !claim.recordsBegin && !resetOwnerMatches)
+        const TimerQueryClaimOwnerMatches ownerMatches = resolveTimerQueryClaimOwnerMatches(query, claim);
+        if(claim.recordsReset && !claim.recordsBegin && !ownerMatches.resetOwnerMatches)
             return false;
         if(
             claim.recordsBegin
             && (
-                !beginOwnerMatches
+                !ownerMatches.beginOwnerMatches
                 || query.m_cycleInvalidated
                 || query.m_cycleQueue != claim.queue
                 || (
@@ -163,17 +163,14 @@ bool TrackedCommandBuffer::validateTimerQueryRecordingClaims(
                     && (
                         !query.m_resetAuthorizationAvailable
                         || query.m_resetAuthorizationGeneration != claim.consumedResetAuthorizationGeneration
-                        || query.m_resetAuthorizationSubmission.queue != claim.resetAuthorizationSubmission.queue
-                        || query.m_resetAuthorizationSubmission.value != claim.resetAuthorizationSubmission.value
-                        || query.m_resetAuthorizationSubmission.physicalQueueIndex != claim.resetAuthorizationSubmission.physicalQueueIndex
-                        || query.m_resetAuthorizationSubmission.deviceGeneration != claim.resetAuthorizationSubmission.deviceGeneration
+                        || query.m_resetAuthorizationSubmission != claim.resetAuthorizationSubmission
                     )
                 )
             )
         )
             return false;
         if(claim.recordsEnd){
-            if(!endOwnerMatches || query.m_cycleInvalidated || query.m_cycleQueue != claim.queue)
+            if(!ownerMatches.endOwnerMatches || query.m_cycleInvalidated || query.m_cycleQueue != claim.queue)
                 return false;
             if(query.m_beginAccepted || claim.recordsBegin)
                 continue;
@@ -201,17 +198,10 @@ void TrackedCommandBuffer::commitTimerQueryRecordingClaims(const QueueSubmission
             TerminateInvariant();
 
         NothrowScopedLock queryLock(query.m_mutex);
-        const bool resetOwnerMatches =
-            query.m_resetRecordingOwner.commandBuffer == this
-            && query.m_resetRecordingOwner.recordingID == claim.recordingID
-            && query.m_resetRecordingAuthorizationGeneration != 0u
-            && query.m_resetRecordingAuthorizationGeneration == claim.resetRecordingAuthorizationGeneration
-        ;
-        const bool beginOwnerMatches = query.m_beginRecordingOwner.commandBuffer == this && query.m_beginRecordingOwner.recordingID == claim.recordingID && query.m_cycleGeneration == claim.generation;
-        const bool endOwnerMatches = query.m_endRecordingOwner.commandBuffer == this && query.m_endRecordingOwner.recordingID == claim.recordingID && query.m_cycleGeneration == claim.generation;
+        const TimerQueryClaimOwnerMatches ownerMatches = resolveTimerQueryClaimOwnerMatches(query, claim);
 
         if(claim.recordsReset && !claim.recordsBegin){
-            if(!resetOwnerMatches)
+            if(!ownerMatches.resetOwnerMatches)
                 TerminateInvariant();
             query.m_resetRecordingOwner = {};
             query.m_resetAuthorizationGeneration = query.m_resetRecordingAuthorizationGeneration;
@@ -225,7 +215,7 @@ void TrackedCommandBuffer::commitTimerQueryRecordingClaims(const QueueSubmission
             query.m_recordingActive = false;
         }
         if(claim.recordsBegin){
-            if(!beginOwnerMatches)
+            if(!ownerMatches.beginOwnerMatches)
                 TerminateInvariant();
             query.m_beginRecordingOwner = {};
             query.m_beginAccepted = true;
@@ -240,7 +230,7 @@ void TrackedCommandBuffer::commitTimerQueryRecordingClaims(const QueueSubmission
             query.m_recordingActive = true;
         }
         if(claim.recordsEnd){
-            if(!endOwnerMatches || (!query.m_beginAccepted && !claim.recordsBegin))
+            if(!ownerMatches.endOwnerMatches || (!query.m_beginAccepted && !claim.recordsBegin))
                 TerminateInvariant();
             query.m_endRecordingOwner = {};
             query.m_recordingActive = false;
@@ -269,21 +259,15 @@ void TrackedCommandBuffer::discardTimerQueryRecordingClaims()noexcept{
         if(claim.queryIncarnation == 0u || query.m_incarnation != claim.queryIncarnation)
             continue;
         NothrowScopedLock queryLock(query.m_mutex);
-        if(
-            claim.recordsReset
-            && !claim.recordsBegin
-            && query.m_resetRecordingOwner.commandBuffer == this
-            && query.m_resetRecordingOwner.recordingID == claim.recordingID
-            && query.m_resetRecordingAuthorizationGeneration != 0u
-            && query.m_resetRecordingAuthorizationGeneration == claim.resetRecordingAuthorizationGeneration
-        ){
+        const TimerQueryClaimOwnerMatches ownerMatches = resolveTimerQueryClaimOwnerMatches(query, claim);
+        if(claim.recordsReset && !claim.recordsBegin && ownerMatches.resetOwnerMatches){
             query.m_resetRecordingOwner = {};
             query.m_resetRecordingAuthorizationGeneration = 0u;
         }
-        if(claim.recordsEnd && query.m_endRecordingOwner.commandBuffer == this && query.m_endRecordingOwner.recordingID == claim.recordingID && query.m_cycleGeneration == claim.generation){
+        if(claim.recordsEnd && ownerMatches.endOwnerMatches){
             query.m_endRecordingOwner = {};
         }
-        if(claim.recordsBegin && query.m_beginRecordingOwner.commandBuffer == this && query.m_beginRecordingOwner.recordingID == claim.recordingID && query.m_cycleGeneration == claim.generation){
+        if(claim.recordsBegin && ownerMatches.beginOwnerMatches){
             query.m_timestampQueue = query.m_cycleBaselineQueue;
             query.m_timestampValidBits = query.m_cycleBaselineValidBits;
             query.m_completedCycleSubmission = query.m_cycleBaselineCompletion;

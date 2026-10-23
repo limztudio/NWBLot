@@ -41,7 +41,6 @@ public:
 
 
 private:
-    void observeDisplay(const Impl::Ui::DisplayMetrics& display);
     [[nodiscard]] Array<u64, 22u> values()const noexcept;
     [[nodiscard]] Impl::Ui::Rect cursorRow()const noexcept;
     void observeState(Impl::Ui::TextService& text);

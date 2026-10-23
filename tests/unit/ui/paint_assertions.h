@@ -26,6 +26,7 @@ namespace UiPaintAssertions{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void ExpectRect(const Impl::Ui::Rect& actual, const Impl::Ui::Rect& expected);
 // Callers validate snapshot sizes before comparing the common geometry fields.
 void ExpectSameVertices(const Impl::Ui::DrawSnapshot& actual, const Impl::Ui::DrawSnapshot& expected);
 void ExpectSameCommandFields(const Impl::Ui::DrawCommand& actual, const Impl::Ui::DrawCommand& expected);

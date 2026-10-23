@@ -220,6 +220,8 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/task_graph_float_clear_tasks.h"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_frame_pipeline_graph_surfel_gi.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_frame_pipeline_graph_surfel_gi_readback.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/shared/statistics_readback_detail.h"
+    "${CMAKE_CURRENT_LIST_DIR}/shared/statistics_readback_state.h"
     "${CMAKE_CURRENT_LIST_DIR}/shared/task_graph_draw_snapshots.h"
     "${CMAKE_CURRENT_LIST_DIR}/shared/task_graph_stage.h"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/avboit_pass.cpp"

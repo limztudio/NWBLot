@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include "paint_assertions.h"
+
 #include <impl/ecs_ui/toolkit/text/service.h>
 
 #include <gtest/gtest.h>
@@ -33,7 +35,7 @@ inline constexpr AStringView s_KoreanFontPath = "tests/ui/fonts/korean";
 inline constexpr AStringView s_SkinPath = "tests/ui/skin";
 
 
-void ExpectRectangle(const Rect& actual, const Rect& expected);
+using UiPaintAssertions::ExpectRect;
 void ExpectSamePaint(const DrawSnapshot& actual, const DrawSnapshot& expected);
 
 

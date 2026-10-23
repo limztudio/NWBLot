@@ -63,20 +63,6 @@ protected:
         return options;
     }
 
-    [[nodiscard]] static PopupOptions ParentOptions()noexcept{
-        PopupOptions options;
-        options.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
-        options.size = { 340.0f, 420.0f };
-        return options;
-    }
-
-    [[nodiscard]] static PopupOptions ChildOptions()noexcept{
-        PopupOptions options;
-        options.anchor = { 420.0f, 20.0f, 80.0f, 20.0f };
-        options.size = { 340.0f, 420.0f };
-        return options;
-    }
-
 
 public:
     UiTextAreaScrollLifetimeTests()
@@ -106,7 +92,7 @@ protected:
     }
 
     [[nodiscard]] bool popupFrame(const u64 generation){
-        if(!begin(generation) || !m_builder.beginPopup(s_ParentPopupKey, m_parent, ParentOptions()) || !m_builder.beginPopup(s_ChildPopupKey, m_child, ChildOptions()))
+        if(!begin(generation) || !m_builder.beginPopup(s_ParentPopupKey, m_parent, LargeLoanParentOptions()) || !m_builder.beginPopup(s_ChildPopupKey, m_child, LargeLoanChildOptions()))
             return false;
         m_result = m_builder.textArea(s_TextAreaKey, m_model, m_state, SmallOptions());
         return m_result.valid && m_builder.endPopup() && m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame() && m_context.commitFrame(generation);
@@ -313,8 +299,8 @@ TEST_F(UiTextAreaScrollLifetimeTests, ClosingAnAncestorRetiresWheelAndCaptureBef
     ASSERT_TRUE(startThumb(popupArea()));
     const Point release = UiWidgetTests::Center(m_state.scrollbars().vertical.thumb);
     ASSERT_TRUE(begin(2u));
-    ASSERT_TRUE(m_builder.beginPopup(s_ParentPopupKey, m_parent, ParentOptions()));
-    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, ChildOptions()));
+    ASSERT_TRUE(m_builder.beginPopup(s_ParentPopupKey, m_parent, LargeLoanParentOptions()));
+    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, LargeLoanChildOptions()));
     ASSERT_TRUE(m_builder.textArea(s_TextAreaKey, m_model, m_state, SmallOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     m_parent.close();
@@ -328,8 +314,8 @@ TEST_F(UiTextAreaScrollLifetimeTests, ClosingAnAncestorRetiresWheelAndCaptureBef
     expectModel(m_model, model);
     m_parent.open();
     ASSERT_TRUE(begin(3u));
-    ASSERT_TRUE(m_builder.beginPopup(s_ParentPopupKey, m_parent, ParentOptions()));
-    EXPECT_FALSE(m_builder.beginPopup(s_ChildPopupKey, m_child, ChildOptions()));
+    ASSERT_TRUE(m_builder.beginPopup(s_ParentPopupKey, m_parent, LargeLoanParentOptions()));
+    EXPECT_FALSE(m_builder.beginPopup(s_ChildPopupKey, m_child, LargeLoanChildOptions()));
     EXPECT_FALSE(m_child.isOpen());
     ASSERT_TRUE(m_builder.endPopup());
     ASSERT_TRUE(m_context.endRoot());

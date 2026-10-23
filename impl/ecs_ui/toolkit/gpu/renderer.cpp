@@ -77,8 +77,7 @@ GpuTargetVersion::GpuTargetVersion(Core::GraphicsRuntime& graphics)noexcept
 {}
 
 GpuTargetVersion::~GpuTargetVersion()noexcept{
-    if(m_sampledImage.valid())
-        m_graphics.getDevice().getDescriptorHeap().free(m_sampledImage);
+    FreeGpuDescriptor(m_graphics, m_sampledImage);
 }
 
 
@@ -90,8 +89,7 @@ GpuSharedResources::GpuSharedResources(Core::GraphicsRuntime& graphics)noexcept
 {}
 
 GpuSharedResources::~GpuSharedResources()noexcept{
-    if(m_samplerDescriptor.valid())
-        m_graphics.getDevice().getDescriptorHeap().free(m_samplerDescriptor);
+    FreeGpuDescriptor(m_graphics, m_samplerDescriptor);
 }
 
 

@@ -5,9 +5,8 @@
 #include "text_input_service.h"
 #include "text_input_text.h"
 
-#include <global/atomic.h>
+#include <global/atomic_identity.h>
 #include <global/scope_exit.h>
-#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,10 +26,7 @@ namespace __hidden_text_input_service{
 
 static u64 AllocateServiceIdentity()noexcept{
     static Atomic<u64> s_NextIdentity{ 1u };
-    const u64 identity = s_NextIdentity.fetch_add(1u, MemoryOrder::relaxed);
-    if(identity == 0u)
-        TerminateInvariant();
-    return identity;
+    return NextNonWrappingIdentity(s_NextIdentity);
 }
 
 static TextInputAdmission::Enum ValidateSurrounding(const AStringView text, const usize anchorByte, const usize caretByte)noexcept{

@@ -68,7 +68,7 @@ UiEditSmokeScene::~UiEditSmokeScene()noexcept{
 
 bool UiEditSmokeScene::paint(Impl::UiPaintContext& context){
     using namespace Impl::Ui;
-    observeDisplay(context.display);
+    ObserveSmokeDisplay(__hidden_ui_edit_smoke::s_LogTag, context.display, m_lastDisplay, m_displayChanged);
     Builder& ui = context.ui;
     ui.style().fontSize = 16.0f;
     ui.style().gap = 8.0f;
@@ -101,7 +101,7 @@ bool UiEditSmokeScene::paint(Impl::UiPaintContext& context){
     if(!ui.label("read_only_hint", m_readOnly ? "F5: primary read-only" : "F5: primary editable", label) || !ui.label("visibility_hint", "F6: hide primary / F7: reset", label) || !ui.endPanel())
         return false;
     observeState(context.text);
-    paintMarkers(context);
+    PaintSingleSmokeValueMarkers(context, values(), m_sequence);
     return true;
 }
 
@@ -124,14 +124,6 @@ bool UiEditSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i
 void UiEditSmokeScene::resetModels(){
     const bool reset = m_primary.setText(__hidden_ui_edit_smoke::s_Primary) && m_secondary.setText(__hidden_ui_edit_smoke::s_Secondary);
     NWB_FATAL_ASSERT_MSG(reset, NWB_TEXT("UI edit smoke documents must be valid UTF8"));
-}
-
-void UiEditSmokeScene::observeDisplay(const Impl::Ui::DisplayMetrics& display){
-    if(m_lastDisplay.logicalWidth == display.logicalWidth && m_lastDisplay.logicalHeight == display.logicalHeight && m_lastDisplay.pixelScaleX == display.pixelScaleX && m_lastDisplay.pixelScaleY == display.pixelScaleY)
-        return;
-    m_lastDisplay = display;
-    m_displayChanged = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiEditSmoke: display logical={}x{} scale={}x{}"), display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY);
 }
 
 Array<u32, 12u> UiEditSmokeScene::values()const noexcept{
@@ -169,16 +161,6 @@ void UiEditSmokeScene::observeState(Impl::Ui::TextService& text){
     );
     LogSmokeEditGeometry(__hidden_ui_edit_smoke::s_LogTag, m_sequence, __hidden_ui_edit_smoke::s_PrimaryLabel, primary, primarySelection);
     LogSmokeEditGeometry(__hidden_ui_edit_smoke::s_LogTag, m_sequence, __hidden_ui_edit_smoke::s_SecondaryLabel, secondary, secondarySelection);
-}
-
-void UiEditSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
-    const auto current = values();
-    const auto positions = BuildSmokeMarkerPositions<TupleSize_V<decltype(current)> + 1u, 12u, 20u>();
-    const f32 y = VectorGetX(VectorSubtract(VectorReplicate(context.display.logicalHeight), VectorReplicate(20.0f)));
-    for(usize index = 0u; index <= current.size(); ++index){
-        const u32 value = index == current.size() ? m_sequence : current[index];
-        context.paint.fillRect({ positions[index], y, 14.0f, 12.0f }, EncodeSmokeColor(value));
-    }
 }
 
 

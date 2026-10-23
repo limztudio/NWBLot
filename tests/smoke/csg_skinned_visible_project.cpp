@@ -42,7 +42,7 @@ namespace __hidden_csg_skinned_visible_smoke{
 constexpr TStringView s_ProjectName = NWB_TEXT("CsgSkinnedVisibleSmokeProject");
 
 using NWB::Tests::Smoke::AddSkinnedCsgMeshReceiver;
-using NWB::Tests::Smoke::AddSmokeSkinnedRenderSystems;
+using NWB::Tests::Smoke::CreateSmokeSkinnedRenderWorldOrDie;
 using NWB::Tests::Smoke::AssignCsgCutterParameters;
 using NWB::Tests::Smoke::AssignCsgCutterTransform;
 using NWB::Tests::Smoke::CreateTintedModelEntity;
@@ -150,15 +150,6 @@ static constexpr Float4 s_WarmDirectionalLightColor = Float4(1.0f, 0.96f, 0.88f)
 
 
 class CsgSkinnedVisibleSmokeProject final : public NWB::IProjectEntryCallbacks{
-private:
-    static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = NWB::Tests::Smoke::CreateSmokeWorldOrDie(context, s_ProjectName);
-
-        AddSmokeSkinnedRenderSystems(*world, context);
-        return world;
-    }
-
-
 private:
     void destroyWorld(){
         DestroySmokeSkinnedRenderWorld(m_context, m_world);
@@ -282,7 +273,7 @@ private:
 public:
     explicit CsgSkinnedVisibleSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
-        , m_world(CreateWorldOrDie(context))
+        , m_world(CreateSmokeSkinnedRenderWorldOrDie(context, s_ProjectName))
     {}
     virtual ~CsgSkinnedVisibleSmokeProject()noexcept override{
         destroyWorld();

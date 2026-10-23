@@ -68,11 +68,11 @@ bool Builder::validateDeferredStates()const noexcept{
             return false;
     }
     for(const auto& frame : m_scope->m_integerEdits){
-        if(!integerEditMatches(frame))
+        if(!numericEditFrameMatches(frame))
             return false;
     }
     for(const auto& frame : m_scope->m_floatEdits){
-        if(!floatEditMatches(frame))
+        if(!numericEditFrameMatches(frame))
             return false;
     }
     for(const auto& frame : m_scope->m_radioGroups){
@@ -102,24 +102,17 @@ void Builder::releaseDeferredLoans()noexcept{
     // Frozen geometry and input targets retain copied tokens and keys, never source or model loans.
     m_scope->m_radioGroups.clear();
     m_scope->m_sliders.clear();
-    for(auto& frame : m_scope->m_textAreas){
-        frame.model = nullptr;
-        frame.state = nullptr;
-        if(frame.item < m_scope->m_items.size())
-            m_scope->m_items[frame.item].editState = nullptr;
-    }
-    for(auto& frame : m_scope->m_integerEdits){
-        frame.model = nullptr;
-        frame.state = nullptr;
-        if(frame.item < m_scope->m_items.size())
-            m_scope->m_items[frame.item].editState = nullptr;
-    }
-    for(auto& frame : m_scope->m_floatEdits){
-        frame.model = nullptr;
-        frame.state = nullptr;
-        if(frame.item < m_scope->m_items.size())
-            m_scope->m_items[frame.item].editState = nullptr;
-    }
+    const auto clearEditLoanFrames = [this](auto& frames)noexcept{
+        for(auto& frame : frames){
+            frame.model = nullptr;
+            frame.state = nullptr;
+            if(frame.item < m_scope->m_items.size())
+                m_scope->m_items[frame.item].editState = nullptr;
+        }
+    };
+    clearEditLoanFrames(m_scope->m_textAreas);
+    clearEditLoanFrames(m_scope->m_integerEdits);
+    clearEditLoanFrames(m_scope->m_floatEdits);
     for(auto& frame : m_scope->m_lists){
         frame.source = nullptr;
         frame.state = nullptr;

@@ -45,6 +45,18 @@ namespace Tests{
     return font.validatePayload();
 }
 
+#if defined(NWB_REPO_ROOT)
+template<typename TestArenaT>
+[[nodiscard]] inline ::Path<Core::Assets::AssetArena> DefaultBundledFontRoot(TestArenaT& testArena){
+    return ::Path<Core::Assets::AssetArena>(testArena.arena, NWB_REPO_ROOT) / "impl" / "assets" / "ui" / "fonts" / "default";
+}
+#endif
+
+inline void WriteLittleU32(Core::Assets::AssetBytes& bytes, const usize offset, const u32 value)noexcept{
+    for(u32 index = 0u; index < 4u; ++index)
+        bytes[offset + index] = static_cast<u8>(value >> (index * 8u));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

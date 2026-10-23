@@ -118,11 +118,7 @@ struct VersionConsumerUses{
     return graph.addTask(desc);
 }
 
-[[nodiscard]] inline bool Analyze(Core::Alloc::ScratchArena& scratchArena, const Graphics::GpuTaskGraph& graph, Graphics::GpuTaskGraphAnalysis& analysis){
-    const Graphics::GpuTaskGraphCompiler compiler;
-    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-    return compiler.analyze(declarations, scratchArena, analysis);
-}
+using TaskGraphTestUtils::Analyze;
 
 [[nodiscard]] inline bool Assign(
     Graphics::GpuTaskGraphQueueAssignments& assignments,

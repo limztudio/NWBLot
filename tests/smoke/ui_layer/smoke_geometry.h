@@ -108,15 +108,33 @@ inline void LogSmokeRect(const TStringView tag, const u32 sequence, const TStrin
     return hash;
 }
 
-template<u32 Step, u32 Width, typename ValuesT>
+inline void ObserveSmokeDisplay(const TStringView tag, const Impl::Ui::DisplayMetrics& display, Impl::Ui::DisplayMetrics& inOutLastDisplay, bool& inOutDisplayChanged){
+    if(inOutLastDisplay.logicalWidth == display.logicalWidth && inOutLastDisplay.logicalHeight == display.logicalHeight && inOutLastDisplay.pixelScaleX == display.pixelScaleX && inOutLastDisplay.pixelScaleY == display.pixelScaleY)
+        return;
+    inOutLastDisplay = display;
+    inOutDisplayChanged = true;
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}: display logical={}x{} scale={}x{}"), tag, display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY);
+}
+
+template<typename ValuesT>
+inline void PaintSingleSmokeValueMarkers(Impl::UiPaintContext& context, const ValuesT& values, const u32 sequence){
+    const auto positions = BuildSmokeMarkerPositions<TupleSize_V<ValuesT> + 1u, 12u, 20u>();
+    const f32 y = VectorGetX(VectorSubtract(VectorReplicate(context.display.logicalHeight), VectorReplicate(20.0f)));
+    for(usize index = 0u; index <= values.size(); ++index){
+        const u32 value = index == values.size() ? sequence : values[index];
+        context.paint.fillRect({ positions[index], y, 14.0f, 12.0f }, EncodeSmokeColor(value));
+    }
+}
+
+template<u32 Step, u32 Width, u32 Height = 12u, u32 BottomOffset = 20u, typename ValuesT>
 inline void PaintKeyedSmokeValueMarkers(Impl::UiPaintContext& context, const ValuesT& values, const u64 sequence){
     const auto positions = BuildSmokeMarkerPositions<(TupleSize_V<ValuesT> + 1u) * 2u, 12u, Step>();
-    const f32 y = VectorGetX(VectorSubtract(VectorReplicate(context.display.logicalHeight), VectorReplicate(20.0f)));
+    const f32 y = VectorGetX(VectorSubtract(VectorReplicate(context.display.logicalHeight), VectorReplicate(static_cast<f32>(BottomOffset))));
     for(usize index = 0u; index <= values.size(); ++index){
         const u64 value = index == values.size() ? sequence : values[index];
         for(u32 part = 0u; part < 2u; ++part){
             const usize marker = index * 2u + part;
-            context.paint.fillRect({ positions[marker], y, static_cast<f32>(Width), 12.0f }, EncodeSmokeColor(value >> (part * 12u)));
+            context.paint.fillRect({ positions[marker], y, static_cast<f32>(Width), static_cast<f32>(Height) }, EncodeSmokeColor(value >> (part * 12u)));
         }
     }
 }

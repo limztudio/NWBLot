@@ -14,33 +14,24 @@ example, ``python -m launcher async-shadow-m4 -- --measure-seconds 30``.
 from __future__ import annotations
 
 import argparse
-import subprocess
 import sys
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import List, Sequence
 
 
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO))
+sys.path.insert(0, str(REPO / "tests" / "ab"))
 
+import launch as AB_LAUNCH  # noqa: E402
 import launcher as ROOT_LAUNCHER  # noqa: E402
 
-LIT_ON = "ON"
-LIT_COZTER = ".cozter"
-LIT_OUT = "out"
-LIT_AB_RESULTS = "ab-results"
 LIT_ASYNC_SHADOW_M4 = "async-shadow-m4"
 LIT_SYNC_EXECUTABLE = "--sync-executable"
 LIT_ASYNC_EXECUTABLE = "--async-executable"
-LIT_RUNTIME_DIR = "--runtime-dir"
-LIT_OUTPUT_DIR = "--output-dir"
-LIT_GPU_VALIDATION = "--gpu-validation"
-LIT_NO_LOGSERVER = "--no-logserver"
-LIT_LOGSERVER_EXECUTABLE = "--logserver-executable"
-LIT_STORE_TRUE = "store_true"
-LIT_GPU_VALIDATION_2 = "gpu_validation"
+LIT_RUNTIME_DIR = AB_LAUNCH.LIT_RUNTIME_DIR
+LIT_OUTPUT_DIR = AB_LAUNCH.LIT_OUTPUT_DIR
 LIT_MAIN = "__main__"
 
 
@@ -48,7 +39,7 @@ RUNNER_SCRIPT = Path("tests") / "ab" / "async_shadow_m4" / "run.py"
 SYNC_TARGET = "nwb_async_shadow_m4_sync_benchmark"
 ASYNC_TARGET = "nwb_async_shadow_m4_async_benchmark"
 RUNTIME_DIRECTORY = Path("Testing") / "skinning_culling_benchmark_runtime"
-REQUIRED_DEFINES = { "NWB_BUILD_LOADER": LIT_ON, "NWB_BUILD_LOGSERVER": LIT_ON, "NWB_BUILD_PIPELINE": LIT_ON, "NWB_BUILD_TESTS": LIT_ON, }
+REQUIRED_DEFINES = AB_LAUNCH.REQUIRED_AB_DEFINES
 
 
 @dataclass(frozen=True)
@@ -60,8 +51,7 @@ class M4Paths:
 
 
 def default_output_directory(root: Path) -> Path:
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return root / LIT_COZTER / LIT_OUT / LIT_AB_RESULTS / LIT_ASYNC_SHADOW_M4 / stamp
+    return AB_LAUNCH.default_ab_output_directory(root, LIT_ASYNC_SHADOW_M4)
 
 
 def resolve_paths(args: argparse.Namespace, settings) -> M4Paths:
@@ -78,23 +68,16 @@ def build_benchmark_targets(args: argparse.Namespace, settings, environment) -> 
 
 def runner_command(args: argparse.Namespace, paths: M4Paths) -> List[object]:
     command: List[object] = [sys.executable, REPO / RUNNER_SCRIPT, LIT_SYNC_EXECUTABLE, paths.sync_executable, LIT_ASYNC_EXECUTABLE, paths.async_executable, LIT_RUNTIME_DIR, paths.runtime_directory, LIT_OUTPUT_DIR, paths.output_directory,]
-    if args.gpu_validation:
-        command.append(LIT_GPU_VALIDATION)
-    if args.no_logserver:
-        command.append(LIT_NO_LOGSERVER)
-    elif args.logserver_executable is not None:
-        command += [LIT_LOGSERVER_EXECUTABLE, ROOT_LAUNCHER.resolve_path(REPO, args.logserver_executable)]
-    command += list(args.runner_args)
-    return command
+    return AB_LAUNCH.append_ab_runner_args(command, args, REPO)
 
 
 def run_runner(args: argparse.Namespace, paths: M4Paths) -> int:
-    command = runner_command(args, paths)
-    print(f"M4 validation artifacts: {paths.output_directory}", flush=True)
-    print("+ " + ROOT_LAUNCHER.format_command(command), flush=True)
-    if args.dry_run:
-        return 0
-    return subprocess.run([str(part) for part in command], cwd=REPO).returncode
+    return AB_LAUNCH.run_ab_runner(
+        runner_command(args, paths),
+        args.dry_run,
+        REPO,
+        f"M4 validation artifacts: {paths.output_directory}",
+    )
 
 
 def make_parser() -> argparse.ArgumentParser:
@@ -104,20 +87,17 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument(LIT_ASYNC_EXECUTABLE, type=Path, help="Override the asynchronous benchmark executable.")
     parser.add_argument(LIT_RUNTIME_DIR, type=Path, help="Override the cooked M4 runtime directory.")
     parser.add_argument(LIT_OUTPUT_DIR, type=Path, help="Directory for M4 logs, captures, and reports.")
-    parser.add_argument(LIT_LOGSERVER_EXECUTABLE, type=Path, help="Override the logserver executable.")
-    parser.add_argument(LIT_NO_LOGSERVER, action=LIT_STORE_TRUE, help="Use standalone loader logs instead of logserver.")
-    validation_group = parser.add_mutually_exclusive_group()
-    validation_group.add_argument(LIT_GPU_VALIDATION, dest=LIT_GPU_VALIDATION_2, action=LIT_STORE_TRUE, help="Enable selected-backend GPU validation (the default).",)
-    validation_group.add_argument("--no-gpu-validation", dest=LIT_GPU_VALIDATION_2, action="store_false", help="Do not pass --gpudbg to the paired benchmark processes.",)
-    parser.set_defaults(gpu_validation=True)
+    AB_LAUNCH.add_ab_runner_options(
+        parser,
+        default_gpu_validation=True,
+        gpu_validation_help="Enable selected-backend GPU validation (the default).",
+        no_gpu_validation_help="Do not pass --gpudbg to the paired benchmark processes.",
+    )
     return parser
 
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
-    launcher_args, runner_args = ROOT_LAUNCHER.split_application_args(argv)
-    args = make_parser().parse_args(launcher_args)
-    args.runner_args = runner_args
-    return args
+    return AB_LAUNCH.parse_ab_launcher_args(make_parser, argv)
 
 
 def run(args: argparse.Namespace) -> int:

@@ -77,6 +77,20 @@ struct ReflectionSettings{
     bool spatialFilterEnabled = true;
 };
 
+[[nodiscard]] inline bool SameReflectionTraceSettings(const ReflectionSettings& first, const ReflectionSettings& second)noexcept{
+    return
+        first.traceMode == second.traceMode && first.samplingSeed == second.samplingSeed
+        && first.maxHardwareRaysPerFrame == second.maxHardwareRaysPerFrame && first.maxOpticalQueries == second.maxOpticalQueries
+        && first.maxRayDistance == second.maxRayDistance && first.distanceFadeStart == second.distanceFadeStart
+        && first.roughnessCutoff == second.roughnessCutoff && first.screenMaxSteps == second.screenMaxSteps
+        && first.screenThickness == second.screenThickness && first.screenConfidenceThreshold == second.screenConfidenceThreshold
+        && first.screenEdgeFade == second.screenEdgeFade
+        && first.environmentTop.x == second.environmentTop.x && first.environmentTop.y == second.environmentTop.y
+        && first.environmentTop.z == second.environmentTop.z && first.environmentBottom.x == second.environmentBottom.x
+        && first.environmentBottom.y == second.environmentBottom.y && first.environmentBottom.z == second.environmentBottom.z
+    ;
+}
+
 // Settings are an external boundary; reject invalid values early.
 [[nodiscard]] bool ValidateReflectionSettings(const ReflectionSettings& settings)noexcept;
 

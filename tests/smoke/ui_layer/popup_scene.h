@@ -40,10 +40,8 @@ public:
 
 
 private:
-    void observeDisplay(const Impl::Ui::DisplayMetrics& display);
     [[nodiscard]] Array<u32, 12u> values()const noexcept;
     void observeState();
-    void paintMarkers(Impl::UiPaintContext& context)const;
 
 
 private:

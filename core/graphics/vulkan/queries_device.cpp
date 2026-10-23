@@ -29,7 +29,7 @@ bool TimerQuery::completedCycleMatchesWithinLock(const u64 generation, const Que
         && m_cycleGeneration == 0u
         && !m_recordingActive
         && m_completedCycleGeneration == generation
-        && VulkanTimerQueryDetail::MatchesSubmissionToken(m_completedCycleSubmission, submission)
+        && m_completedCycleSubmission == submission
         && queueInfo
         && m_timestampValidBits != 0u
         && queueInfo->timestampValidBits == m_timestampValidBits
@@ -170,20 +170,20 @@ bool Device::resetTimerQuery(TimerQuery& query){
         ScopedLock queryLock(query.m_mutex);
         if(query.m_resetRecordingOwner.commandBuffer || query.m_cycleGeneration != 0u || query.m_recordingActive || query.m_nextResetAuthorizationGeneration == Limit<u64>::s_Max || requiresRecreation())
             return false;
-        priorSubmission = query.m_completedCycleSubmission.valid() ? query.m_completedCycleSubmission : query.m_resetAuthorizationSubmission;
+        priorSubmission = query.prerequisiteSubmissionWithinLock();
     }
     if(!VulkanTimerQueryDetail::IsSubmissionComplete(*this, priorSubmission))
         return false;
 
     ScopedLock queryLock(query.m_mutex);
-    const QueueSubmissionToken currentPriorSubmission = query.m_completedCycleSubmission.valid() ? query.m_completedCycleSubmission : query.m_resetAuthorizationSubmission;
+    const QueueSubmissionToken currentPriorSubmission = query.prerequisiteSubmissionWithinLock();
     if(
         query.m_resetRecordingOwner.commandBuffer
         || query.m_cycleGeneration != 0u
         || query.m_recordingActive
         || query.m_nextResetAuthorizationGeneration == Limit<u64>::s_Max
         || requiresRecreation()
-        || !VulkanTimerQueryDetail::MatchesSubmissionToken(currentPriorSubmission, priorSubmission)
+        || currentPriorSubmission != priorSubmission
     )
         return false;
     m_context.deviceDispatch.vkResetQueryPool(m_context.device, query.m_queryPool, s_TimerQueryBeginIndex, s_TimerQueryTimestampCount);

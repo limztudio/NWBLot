@@ -97,11 +97,7 @@ struct AvboitSharedComputeEmulationRecordInputs{
     AvboitSharedComputeEmulationPhase::Enum phase = AvboitSharedComputeEmulationPhase::Generate;
 };
 
-struct AvboitSharedComputeEmulationRecordTrait{
-    const Core::GpuTimingScopeDefinition& timingScope;
-    MaterialPipelinePass::Enum pipelinePass = MaterialPipelinePass::AvboitOccupancy;
-    Core::FramebufferHandle AvboitFrameTargets::* framebuffer = nullptr;
-};
+using AvboitSharedComputeEmulationRecordTrait = AvboitComputeEmulationRecordTrait;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

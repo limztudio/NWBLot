@@ -203,6 +203,10 @@ protected:
         return begin(generation) && m_builder.beginPanel(s_NumericPanelKey, { 20.0f, 20.0f, 740.0f, 520.0f });
     }
 
+    [[nodiscard]] bool beginParent(const u64 generation){
+        return begin(generation) && m_builder.beginPopup("parent", m_parent, UiWidgetTests::LargeLoanParentOptions());
+    }
+
     [[nodiscard]] bool acceptNumeric(){
         return finishPanel() && m_context.commitFrame(m_context.readyGeneration());
     }
@@ -215,6 +219,8 @@ protected:
     FloatEditModel m_float;
     EditBoxState m_integerState;
     EditBoxState m_floatState;
+    PopupState m_parent;
+    PopupState m_child;
     NumericHost m_host;
 };
 

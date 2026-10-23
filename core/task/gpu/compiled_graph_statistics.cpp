@@ -30,8 +30,7 @@ using OwnershipTransferKey = NotNull<const GpuCompiledOwnershipTransfer*>;
 struct OwnershipTransferSignatureHasher{
     usize operator()(const OwnershipTransferKey& key)const noexcept{
         const GpuCompiledOwnershipTransfer& transfer = *key;
-        usize hash = Hasher<u64>{}(transfer.resource.generation);
-        HashCombine(hash, transfer.resource.index);
+        usize hash = GpuGraphResourceIdHasher{}(transfer.resource);
         HashCombine(hash, transfer.route);
         HashCombine(hash, transfer.sourceTask.generation);
         HashCombine(hash, transfer.sourceTask.index);
@@ -48,14 +47,6 @@ struct OwnershipTransferSignatureHasher{
 struct OwnershipTransferSignatureEqual{
     bool operator()(const OwnershipTransferKey& lhs, const OwnershipTransferKey& rhs)const noexcept{
         return lhs->resource == rhs->resource && lhs->route == rhs->route && lhs->sourceTask == rhs->sourceTask && lhs->destinationTask == rhs->destinationTask && lhs->sourceQueue == rhs->sourceQueue && lhs->destinationQueue == rhs->destinationQueue;
-    }
-};
-
-struct OwnershipResourceHasher{
-    usize operator()(const GpuGraphResourceId& resource)const noexcept{
-        usize hash = Hasher<u64>{}(resource.generation);
-        HashCombine(hash, resource.index);
-        return hash;
     }
 };
 
@@ -198,7 +189,7 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
         return;
 
     HashSet<OwnershipTransferKey, Alloc::ScratchArena, OwnershipTransferSignatureHasher, OwnershipTransferSignatureEqual> signatures(0u, OwnershipTransferSignatureHasher(), OwnershipTransferSignatureEqual(), scratchArena);
-    HashMap<GpuGraphResourceId, OwnershipResourceStatistics, Alloc::ScratchArena, OwnershipResourceHasher, EqualTo<GpuGraphResourceId>> resources(0u, OwnershipResourceHasher(), EqualTo<GpuGraphResourceId>(), scratchArena);
+    HashMap<GpuGraphResourceId, OwnershipResourceStatistics, Alloc::ScratchArena, GpuGraphResourceIdHasher, EqualTo<GpuGraphResourceId>> resources(0u, GpuGraphResourceIdHasher(), EqualTo<GpuGraphResourceId>(), scratchArena);
     signatures.reserve(m_ownershipTransfers.size());
     resources.reserve(Min(graph.resourceCount(), m_ownershipTransfers.size()));
     const auto statisticsForQueue = [&](const GpuPhysicalQueueId& id)noexcept -> GpuTaskGraphPhysicalQueueCompileStatistics&{

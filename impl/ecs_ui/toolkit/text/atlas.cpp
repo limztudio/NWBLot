@@ -4,7 +4,7 @@
 
 #include "atlas.h"
 
-#include <global/termination.h>
+#include <global/atomic_identity.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,12 +27,6 @@ static Atomic<u64> s_NextAtlasIdentity{ 1u };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] static u64 NewIdentity()noexcept{
-    const u64 identity = s_NextAtlasIdentity.fetch_add(1u, MemoryOrder::relaxed);
-    NWB_FATAL_ASSERT_MSG(identity != 0u, NWB_TEXT("UI glyph atlas identity overflow"));
-    return identity;
-}
 
 struct AtlasPlacement{
     u32 x = 0u;
@@ -69,7 +63,7 @@ GlyphAtlas::GlyphAtlas(Core::Alloc::GlobalArena& arena)
     , m_index(arena)
     , m_pages(arena)
     , m_bitmap(arena)
-    , m_identity(__hidden_ui_text_atlas::NewIdentity())
+    , m_identity(NextNonWrappingIdentity(__hidden_ui_text_atlas::s_NextAtlasIdentity))
 {
     m_glyphs.reserve(s_GlyphAtlasMaxGlyphs);
     m_pages.reserve(s_GlyphAtlasMaxPages);
@@ -79,7 +73,7 @@ void GlyphAtlas::reset()noexcept{
     m_index.clear();
     m_glyphs.clear();
     m_pages.clear();
-    m_identity = __hidden_ui_text_atlas::NewIdentity();
+    m_identity = NextNonWrappingIdentity(__hidden_ui_text_atlas::s_NextAtlasIdentity);
 }
 
 bool GlyphAtlas::prepare(const SharedFontFace& face, u32 glyphId, u32 pixelSize){

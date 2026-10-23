@@ -135,12 +135,12 @@ void WaylandClipboardService::OnSourceSend(void* const data, wl_data_source*, co
     auto& source = *static_cast<Source*>(data);
     u8 rank = 0u;
     __hidden_wayland_clipboard_protocol::SelectMime(SafeStringView(mime), rank);
-    if(rank != 0u)
+    if(rank != 0u){
         source.service.sendSource(source, fd);
-    else{
-        int rejectedFd = fd;
-        CloseClipboardPipe(rejectedFd);
+        return;
     }
+    int rejectedFd = fd;
+    CloseClipboardPipe(rejectedFd);
 }
 
 void WaylandClipboardService::OnSourceCancelled(void* const data, wl_data_source* const native){
@@ -179,15 +179,7 @@ void WaylandClipboardService::OnPrimaryMime(void* const data, zwp_primary_select
 }
 
 void WaylandClipboardService::OnPrimarySend(void* const data, zwp_primary_selection_source_v1*, const char* const mime, const int fd){
-    auto& source = *static_cast<Source*>(data);
-    u8 rank = 0u;
-    __hidden_wayland_clipboard_protocol::SelectMime(SafeStringView(mime), rank);
-    if(rank != 0u)
-        source.service.sendSource(source, fd);
-    else{
-        int rejectedFd = fd;
-        CloseClipboardPipe(rejectedFd);
-    }
+    OnSourceSend(data, nullptr, mime, fd);
 }
 
 void WaylandClipboardService::OnPrimaryCancelled(void* const data, zwp_primary_selection_source_v1* const native){

@@ -219,6 +219,9 @@ private:
     void resetFrameTargets();
     void resetDeferredTaskGraphRuntime();
     void resetFrameTaskState();
+    void resetShadowPrepareUploadTaskState()noexcept;
+    void resetShadowPrepareTaskState()noexcept;
+    void resetDeferredFrameTaskIdsAndFlags()noexcept;
     void resetDeferredCausticsTaskState()noexcept;
     void resetSharedDeferredFrameTaskState()noexcept;
     void resetGraphicsPrefixTaskState()noexcept;

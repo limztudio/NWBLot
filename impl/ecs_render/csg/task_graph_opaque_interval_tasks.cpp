@@ -64,6 +64,24 @@ public:
     return readiness;
 }
 
+template<typename Dispatch>
+[[nodiscard]] inline bool RecordOpaqueInterval(const CsgOpaqueIntervalRecordInputs& payload, Core::CommandList& commandList, Dispatch dispatch){
+    if(!payload.opaqueDrawSnapshot.captured)
+        return false;
+
+    RendererMaterialSystem& materialSystem = payload.materialSystem;
+    RendererCsgSystem& csgSystem = payload.csgSystem;
+    DeferredFrameTargets& deferredTargets = payload.targets;
+    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
+    OpaqueIntervalReadiness readiness = ResolveOpaqueIntervalReadiness(payload, materialSystem, scratchArena);
+    if(readiness.csgResourcesReady && readiness.csgFrameData.hasWork() && readiness.csgReceiverSurfaceDrawResourcesReady){
+        dispatch(csgSystem, commandList, deferredTargets, readiness.csgFrameData, payload.csgResources);
+    }
+    commandList.endRenderPass();
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -76,20 +94,13 @@ public:
 
 bool CsgReceiverSpanBuildGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_cast<void>(context);
-    if(!payload.opaqueDrawSnapshot.captured)
-        return false;
-
-    RendererMaterialSystem& materialSystem = payload.materialSystem;
-    RendererCsgSystem& csgSystem = payload.csgSystem;
-    DeferredFrameTargets& deferredTargets = payload.targets;
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
-    __hidden_opaque_interval_tasks::OpaqueIntervalReadiness readiness = __hidden_opaque_interval_tasks::ResolveOpaqueIntervalReadiness(payload, materialSystem, scratchArena);
-    if(readiness.csgResourcesReady && readiness.csgFrameData.hasWork() && readiness.csgReceiverSurfaceDrawResourcesReady){
-        csgSystem.dispatchCsgReceiverSpanBuild(commandList, deferredTargets, readiness.csgFrameData, payload.csgResources);
-    }
-    commandList.endRenderPass();
-    return true;
+    return __hidden_opaque_interval_tasks::RecordOpaqueInterval(
+        payload,
+        commandList,
+        [](RendererCsgSystem& csgSystem, Core::CommandList& cmd, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData, const CsgGraphResourceSnapshot& csgResources){
+            csgSystem.dispatchCsgReceiverSpanBuild(cmd, targets, csgFrameData, csgResources);
+        }
+    );
 }
 
 
@@ -98,20 +109,13 @@ bool CsgReceiverSpanBuildGraphTask::Record(const Payload& payload, Core::Command
 
 bool CsgIntervalCombineGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_cast<void>(context);
-    if(!payload.opaqueDrawSnapshot.captured)
-        return false;
-
-    RendererMaterialSystem& materialSystem = payload.materialSystem;
-    RendererCsgSystem& csgSystem = payload.csgSystem;
-    DeferredFrameTargets& deferredTargets = payload.targets;
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
-    __hidden_opaque_interval_tasks::OpaqueIntervalReadiness readiness = __hidden_opaque_interval_tasks::ResolveOpaqueIntervalReadiness(payload, materialSystem, scratchArena);
-    if(readiness.csgResourcesReady && readiness.csgFrameData.hasWork() && readiness.csgReceiverSurfaceDrawResourcesReady){
-        csgSystem.dispatchCsgIntervalCombine(commandList, deferredTargets, readiness.csgFrameData, payload.csgResources);
-    }
-    commandList.endRenderPass();
-    return true;
+    return __hidden_opaque_interval_tasks::RecordOpaqueInterval(
+        payload,
+        commandList,
+        [](RendererCsgSystem& csgSystem, Core::CommandList& cmd, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData, const CsgGraphResourceSnapshot& csgResources){
+            csgSystem.dispatchCsgIntervalCombine(cmd, targets, csgFrameData, csgResources);
+        }
+    );
 }
 
 

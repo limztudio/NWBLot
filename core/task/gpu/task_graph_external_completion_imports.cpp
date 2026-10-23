@@ -26,11 +26,6 @@ namespace __hidden_gpu_task_graph_external_completion_imports{
     return token.queue != CommandQueue::kCount || token.value != 0u || token.physicalQueueIndex != Limit<u16>::s_Max || token.deviceGeneration != 0u;
 }
 
-[[nodiscard]] static bool SameSubmissionToken(const QueueSubmissionToken& lhs, const QueueSubmissionToken& rhs)noexcept{
-    return lhs.queue == rhs.queue && lhs.value == rhs.value && lhs.physicalQueueIndex == rhs.physicalQueueIndex && lhs.deviceGeneration == rhs.deviceGeneration;
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -55,7 +50,7 @@ Expected<GpuExternalCompletionId> GpuTaskGraph::importExternalCompletion(const G
         GpuExternalCompletionNode& existing = m_externalCompletions[completionIndex];
         if(hasToken){
             if(existing.hasToken){
-                if(!SameSubmissionToken(existing.token, desc.token))
+                if(existing.token != desc.token)
                     return MakeUnexpected(Failure{});
             }
             else{

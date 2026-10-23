@@ -23,6 +23,30 @@
 
 #define g_NwbCsgBindlessResources nwbHeapDeferredBindlessResources(g_NwbCsgClipContextSlots.deferredBindlessResources)
 
+uint nwbCsgReceiverEventLayerCount(){
+    uint width = 1u;
+    uint height = 1u;
+    uint layerCount = 1u;
+    nwbHeapStorageImage2DArrayUint4(g_NwbCsgBindlessResources.csgPeelSlots.w).GetDimensions(width, height, layerCount);
+    return min(layerCount, NWB_CSG_RECEIVER_EVENT_LAYER_COUNT);
+}
+
+uint nwbCsgReceiverSpanLayerCount(){
+    uint width = 1u;
+    uint height = 1u;
+    uint layerCount = 1u;
+    nwbHeapStorageImage2DArrayUint4(g_NwbCsgBindlessResources.csgSpanSlots.y).GetDimensions(width, height, layerCount);
+    return min(layerCount, NWB_CSG_RECEIVER_SPAN_LAYER_COUNT);
+}
+
+uint nwbCsgRemovedIntervalLayerCount(){
+    uint width = 1u;
+    uint height = 1u;
+    uint layerCount = 1u;
+    nwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgSpanSlots.w).GetDimensions(width, height, layerCount);
+    return min(layerCount, NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

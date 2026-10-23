@@ -67,18 +67,12 @@ public:
 
 public:
     constexpr reference at(size_type pos){
-        NWB_ASSERT(pos < m_currentSize);
-        if(pos >= m_currentSize)
-            throw RuntimeException("FixedVector index out of range");
-
+        requireIndex(pos);
         return Base::operator[](pos);
     }
 
     constexpr const_reference at(size_type pos)const{
-        NWB_ASSERT(pos < m_currentSize);
-        if(pos >= m_currentSize)
-            throw RuntimeException("FixedVector index out of range");
-
+        requireIndex(pos);
         return Base::operator[](pos);
     }
 
@@ -91,18 +85,12 @@ public:
 
 public:
     constexpr reference back(){
-        NWB_ASSERT(m_currentSize > 0);
-        if(m_currentSize == 0)
-            throw RuntimeException("FixedVector back on empty vector");
-
+        requireNonEmpty("FixedVector back on empty vector");
         return Base::operator[](m_currentSize - 1);
     }
 
     constexpr const_reference back()const{
-        NWB_ASSERT(m_currentSize > 0);
-        if(m_currentSize == 0)
-            throw RuntimeException("FixedVector back on empty vector");
-
+        requireNonEmpty("FixedVector back on empty vector");
         return Base::operator[](m_currentSize - 1);
     }
 
@@ -141,28 +129,19 @@ public:
     }
 
     constexpr void push_back(const T& value){
-        NWB_ASSERT(m_currentSize < s_MaxElements);
-        if(m_currentSize >= s_MaxElements)
-            throw RuntimeException("FixedVector capacity exceeded");
-
+        requireCapacity();
         *(data() + m_currentSize) = value;
         ++m_currentSize;
     }
 
     constexpr void push_back(T&& value){
-        NWB_ASSERT(m_currentSize < s_MaxElements);
-        if(m_currentSize >= s_MaxElements)
-            throw RuntimeException("FixedVector capacity exceeded");
-
+        requireCapacity();
         *(data() + m_currentSize) = Move(value);
         ++m_currentSize;
     }
 
     constexpr void pop_back(){
-        NWB_ASSERT(m_currentSize > 0);
-        if(m_currentSize == 0)
-            throw RuntimeException("FixedVector pop_back on empty vector");
-
+        requireNonEmpty("FixedVector pop_back on empty vector");
         --m_currentSize;
     }
 
@@ -181,14 +160,31 @@ public:
 
     template<typename... Args>
     constexpr reference emplace_back(Args&&... args){
-        NWB_ASSERT(m_currentSize < s_MaxElements);
-        if(m_currentSize >= s_MaxElements)
-            throw RuntimeException("FixedVector capacity exceeded");
-
+        requireCapacity();
         T& slot = data()[m_currentSize];
         slot = T(Forward<Args>(args)...);
         ++m_currentSize;
         return slot;
+    }
+
+
+private:
+    constexpr void requireIndex(const size_type pos)const{
+        NWB_ASSERT(pos < m_currentSize);
+        if(pos >= m_currentSize)
+            throw RuntimeException("FixedVector index out of range");
+    }
+
+    constexpr void requireNonEmpty(const char* const message)const{
+        NWB_ASSERT(m_currentSize > 0);
+        if(m_currentSize == 0)
+            throw RuntimeException(message);
+    }
+
+    constexpr void requireCapacity()const{
+        NWB_ASSERT(m_currentSize < s_MaxElements);
+        if(m_currentSize >= s_MaxElements)
+            throw RuntimeException("FixedVector capacity exceeded");
     }
 
 

@@ -76,6 +76,20 @@ template<usize Count>
 }
 
 
+template<typename WaitCountsT>
+[[nodiscard]] static constexpr bool TimelineWaitTokenCountsAreValid(const WaitCountsT& counts)noexcept{
+    if(counts.sameQueueWaitElisionCount > counts.plannedWaitTokenCount)
+        return false;
+    u64 remainingWaitTokenCount = counts.plannedWaitTokenCount - counts.sameQueueWaitElisionCount;
+    if(counts.mergedTimelineWaitCount > remainingWaitTokenCount)
+        return false;
+    remainingWaitTokenCount -= counts.mergedTimelineWaitCount;
+    if(counts.inheritedTimelineWaitElisionCount > remainingWaitTokenCount)
+        return false;
+    remainingWaitTokenCount -= counts.inheritedTimelineWaitElisionCount;
+    return counts.timelineWaitCount == remainingWaitTokenCount;
+}
+
 template<typename StatisticsT>
 [[nodiscard]] static bool SubmissionCountsAreValid(const StatisticsT& statistics)noexcept([]()consteval noexcept{
     using Compile = RemoveReference_T<decltype(DeclVal<const StatisticsT&>().compile)>;
@@ -96,12 +110,7 @@ template<typename StatisticsT>
             || DeclVal<const Submission&>().nativeCommandListCount > DeclVal<const Recording&>().commandListCount
             || DeclVal<const Submission&>().sameQueueWaitElisionCount > DeclVal<const Submission&>().plannedWaitTokenCount
             || (DeclVal<const Submission&>().nativeSubmissionCount == 0u && DeclVal<const Submission&>().inheritedTimelineWaitElisionCount != 0u)) ? 0 : 0)
-        && noexcept(DeclVal<void(*)(u64)noexcept>()(DeclVal<const Submission&>().plannedWaitTokenCount - DeclVal<const Submission&>().sameQueueWaitElisionCount))
-        && noexcept((DeclVal<const Submission&>().mergedTimelineWaitCount > DeclVal<u64&>()) ? 0 : 0)
-        && noexcept(DeclVal<u64&>() -= DeclVal<const Submission&>().mergedTimelineWaitCount)
-        && noexcept((DeclVal<const Submission&>().inheritedTimelineWaitElisionCount > DeclVal<u64&>()) ? 0 : 0)
-        && noexcept(DeclVal<u64&>() -= DeclVal<const Submission&>().inheritedTimelineWaitElisionCount)
-        && noexcept((DeclVal<const Submission&>().timelineWaitCount != DeclVal<u64&>()) ? 0 : 0)
+        && noexcept(TimelineWaitTokenCountsAreValid(DeclVal<const Submission&>()))
     ;
 }()){
     const auto& compile = statistics.compile;
@@ -121,37 +130,14 @@ template<typename StatisticsT>
         || submission.nativeSubmissionCount > recording.packetCount
         || submission.nativeSubmissionCount > submission.nativeCommandListCount
         || submission.nativeCommandListCount > recording.commandListCount
-        || submission.sameQueueWaitElisionCount > submission.plannedWaitTokenCount
         || (submission.nativeSubmissionCount == 0u && submission.inheritedTimelineWaitElisionCount != 0u)
     )
         return false;
 
-    u64 remainingWaitTokenCount = submission.plannedWaitTokenCount - submission.sameQueueWaitElisionCount;
-    if(submission.mergedTimelineWaitCount > remainingWaitTokenCount)
-        return false;
-    remainingWaitTokenCount -= submission.mergedTimelineWaitCount;
-    if(submission.inheritedTimelineWaitElisionCount > remainingWaitTokenCount)
-        return false;
-    remainingWaitTokenCount -= submission.inheritedTimelineWaitElisionCount;
-    if(submission.timelineWaitCount != remainingWaitTokenCount)
-        return false;
-
-    return true;
+    return TimelineWaitTokenCountsAreValid(submission);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Default-context copies retain the complete original validation order and compiler FP lowering.
-// Exceptional values and non-native targets use these boundaries before packed comparisons.
-[[nodiscard]] NWB_NOINLINE static bool ScalarIsValidFrameGraphRuntimeStatistics(const FrameGraphRuntimeStatistics& statistics)noexcept{
+[[nodiscard]] static constexpr bool RuntimeStatisticsCountsAreValid(const FrameGraphRuntimeStatistics& statistics)noexcept{
     if(!statistics.present || statistics.graphGeneration == 0u || statistics.planGeneration == 0u || statistics.recordingAttemptGeneration == 0u || statistics.deviceGeneration == 0u)
         return false;
 
@@ -190,7 +176,205 @@ template<typename StatisticsT>
     )
         return false;
 
-    if(!__hidden_frame_graph_statistics_validators::SubmissionCountsAreValid(statistics))
+    return SubmissionCountsAreValid(statistics);
+}
+
+[[nodiscard]] static constexpr bool PhysicalQueueCompileAndRecordingCountsAreValid(const FrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
+    if(
+        statistics.graphGeneration == 0u
+        || statistics.planGeneration == 0u
+        || statistics.recordingAttemptGeneration == 0u
+        || statistics.deviceGeneration == 0u
+        || !statistics.queue.valid()
+        || statistics.queue.deviceGeneration != statistics.deviceGeneration
+        || !IsValidFrameGraphQueueClass(statistics.queueClass)
+    )
+        return false;
+
+    const FrameGraphPhysicalQueueCompileRuntimeStatistics& compile = statistics.compile;
+    if(
+        compile.packetCount > compile.taskCount
+        || compile.mergedTaskCount != compile.taskCount - compile.packetCount
+        || (compile.packetCount == 0u && compile.taskCount != 0u)
+        || compile.incomingLogicalOwnershipTransferSignatureCount
+            > compile.incomingLogicalOwnershipTransferCount
+        || compile.outgoingLogicalOwnershipTransferSignatureCount
+            > compile.outgoingLogicalOwnershipTransferCount
+        || compile.incomingRepeatedOwnershipTransferSignatureCount
+            > compile.incomingLogicalOwnershipTransferSignatureCount
+        || compile.outgoingRepeatedOwnershipTransferSignatureCount
+            > compile.outgoingLogicalOwnershipTransferSignatureCount
+    )
+        return false;
+    if(
+        compile.concurrentSharingAdviceResourceCount
+            > compile.incomingLogicalOwnershipTransferSignatureCount
+        && compile.concurrentSharingAdviceResourceCount
+            - compile.incomingLogicalOwnershipTransferSignatureCount
+            > compile.outgoingLogicalOwnershipTransferSignatureCount
+    )
+        return false;
+
+    if(compile.prologueBarrierCount > Limit<u64>::s_Max - compile.epilogueBarrierCount)
+        return false;
+    const u64 plannedBarrierCount = compile.prologueBarrierCount + compile.epilogueBarrierCount;
+    if(compile.ownershipReleaseBarrierCount > plannedBarrierCount || compile.ownershipAcquireBarrierCount > plannedBarrierCount - compile.ownershipReleaseBarrierCount || (compile.taskCount == 0u && plannedBarrierCount != 0u))
+        return false;
+
+    const FrameGraphPhysicalQueueRecordingRuntimeStatistics& recording = statistics.recording;
+    if(
+        recording.packetCount > compile.packetCount
+        || recording.taskCount > compile.taskCount
+        || recording.packetCount > recording.taskCount
+        || recording.packetCount > recording.commandListCount
+        || recording.barrierCount > plannedBarrierCount
+        || recording.workerRoutedPacketCount > recording.packetCount
+        || recording.parallelPacketCount > recording.packetCount
+    )
+        return false;
+    if(recording.taskCount - recording.packetCount > compile.mergedTaskCount)
+        return false;
+    return
+        recording.packetCount != 0u
+        || (
+            recording.taskCount == 0u
+            && recording.commandListCount == 0u
+            && recording.barrierCount == 0u
+            && recording.workerRoutedPacketCount == 0u
+            && recording.parallelPacketCount == 0u
+        )
+    ;
+}
+
+[[nodiscard]] static bool PhysicalQueueSubmissionCountsAreValid(const FrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
+    if(!SubmissionCountsAreValid(statistics))
+        return false;
+
+    const FrameGraphPhysicalQueueCompileRuntimeStatistics& compile = statistics.compile;
+    const FrameGraphPhysicalQueueSubmissionRuntimeStatistics& submission = statistics.submission;
+    const u64 acceptedMergedTaskCount = submission.acceptedTaskCount - submission.acceptedPacketCount;
+    const u64 rejectedMergedTaskCount = submission.rejectedTaskCount - submission.rejectedPacketCount;
+    if(acceptedMergedTaskCount > compile.mergedTaskCount || rejectedMergedTaskCount > compile.mergedTaskCount - acceptedMergedTaskCount)
+        return false;
+    if(submission.acceptedPacketCount == 0u && submission.acceptedTaskCount != 0u)
+        return false;
+    if(submission.rejectedPacketCount == 0u && submission.rejectedTaskCount != 0u)
+        return false;
+    if(
+        submission.nativeSubmissionCount == 0u
+        && (
+            submission.nativeCommandListCount != 0u
+            || submission.plannedWaitTokenCount != 0u
+            || submission.sameQueueWaitElisionCount != 0u
+            || submission.timelineWaitCount != 0u
+            || submission.mergedTimelineWaitCount != 0u
+            || submission.inheritedTimelineWaitElisionCount != 0u
+            || submission.acceptedFrontierSubmissionCount != 0u
+            || submission.recoverySubmissionCount != 0u
+            || submission.submissionSeconds != 0.0
+        )
+    )
+        return false;
+    return true;
+}
+
+[[nodiscard]] static bool PhysicalQueueOwnerCompileAndRecordingPrefixAreValid(const FrameGraphPhysicalQueueRuntimeStatistics& statistics, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept{
+    if(
+        statistics.graphGeneration != ownerStatistics.graphGeneration
+        || statistics.planGeneration != ownerStatistics.planGeneration
+        || statistics.recordingAttemptGeneration != ownerStatistics.recordingAttemptGeneration
+        || statistics.deviceGeneration != ownerStatistics.deviceGeneration
+    )
+        return false;
+
+    const FrameGraphPhysicalQueueCompileRuntimeStatistics& compile = statistics.compile;
+    const FrameGraphCompileRuntimeStatistics& ownerCompile = ownerStatistics.compile;
+    if(
+        compile.taskCount > ownerCompile.taskCount
+        || compile.packetCount > ownerCompile.packetCount
+        || compile.mergedTaskCount > ownerCompile.mergedTaskCount
+        || compile.ownershipReleaseBarrierCount > ownerCompile.ownershipReleaseBarrierCount
+        || compile.ownershipAcquireBarrierCount > ownerCompile.ownershipAcquireBarrierCount
+        || compile.incomingLogicalOwnershipTransferCount > ownerCompile.logicalOwnershipTransferCount
+        || compile.outgoingLogicalOwnershipTransferCount > ownerCompile.logicalOwnershipTransferCount
+        || compile.incomingLogicalOwnershipTransferSignatureCount
+            > ownerCompile.logicalOwnershipTransferSignatureCount
+        || compile.outgoingLogicalOwnershipTransferSignatureCount
+            > ownerCompile.logicalOwnershipTransferSignatureCount
+        || compile.incomingRepeatedOwnershipTransferSignatureCount
+            > ownerCompile.repeatedOwnershipTransferSignatureCount
+        || compile.outgoingRepeatedOwnershipTransferSignatureCount
+            > ownerCompile.repeatedOwnershipTransferSignatureCount
+        || compile.concurrentSharingAdviceResourceCount > ownerCompile.concurrentSharingAdviceResourceCount
+    )
+        return false;
+
+    const auto barrierCount = FrameGraphStatisticsDetail::FrameGraphCompileBarrierCount(ownerCompile);
+    if(!barrierCount)
+        return false;
+    const u64 ownerBarrierCount = *barrierCount;
+    if(compile.prologueBarrierCount > ownerBarrierCount || compile.epilogueBarrierCount > ownerBarrierCount - compile.prologueBarrierCount)
+        return false;
+
+    const FrameGraphPhysicalQueueRecordingRuntimeStatistics& recording = statistics.recording;
+    const FrameGraphRecordingRuntimeStatistics& ownerRecording = ownerStatistics.recording;
+    return
+        recording.packetCount <= ownerRecording.packetCount
+        && recording.taskCount <= ownerRecording.taskCount
+        && recording.commandListCount <= ownerRecording.commandListCount
+        && recording.barrierCount <= ownerRecording.barrierCount
+        && recording.workerRoutedPacketCount <= ownerRecording.workerRoutedPacketCount
+        && recording.parallelPacketCount <= ownerRecording.parallelPacketCount
+    ;
+}
+
+[[nodiscard]] static constexpr bool PhysicalQueueOwnerTailCountsAreValid(const FrameGraphPhysicalQueueRuntimeStatistics& statistics, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept{
+    const FrameGraphPhysicalQueueRecordingRuntimeStatistics& recording = statistics.recording;
+    const FrameGraphRecordingRuntimeStatistics& ownerRecording = ownerStatistics.recording;
+    if(recording.taskCount - recording.packetCount > ownerRecording.taskCount - ownerRecording.packetCount || recording.commandListCount - recording.packetCount > ownerRecording.commandListCount - ownerRecording.packetCount)
+        return false;
+
+    const FrameGraphPhysicalQueueSubmissionRuntimeStatistics& submission = statistics.submission;
+    const FrameGraphSubmissionRuntimeStatistics& ownerSubmission = ownerStatistics.submission;
+    // Submission acceptance and per-queue snapshots visit packets in different orders, so floating duration sums can differ by 1 ULP while counts remain exact.
+    return
+        submission.acceptedPacketCount <= ownerSubmission.acceptedPacketCount
+        && submission.acceptedTaskCount <= ownerSubmission.acceptedTaskCount
+        && submission.rejectedPacketCount <= ownerSubmission.rejectedPacketCount
+        && submission.rejectedTaskCount <= ownerSubmission.rejectedTaskCount
+        && submission.nativeSubmissionCount <= ownerSubmission.nativeSubmissionCount
+        && submission.rejectedSubmissionCount <= ownerSubmission.rejectedSubmissionCount
+        && submission.nativeCommandListCount <= ownerSubmission.nativeCommandListCount
+        && submission.plannedWaitTokenCount <= ownerSubmission.plannedWaitTokenCount
+        && submission.sameQueueWaitElisionCount <= ownerSubmission.sameQueueWaitElisionCount
+        && submission.timelineWaitCount <= ownerSubmission.timelineWaitCount
+        && submission.mergedTimelineWaitCount <= ownerSubmission.mergedTimelineWaitCount
+        && submission.inheritedTimelineWaitElisionCount <= ownerSubmission.inheritedTimelineWaitElisionCount
+        && submission.acceptedFrontierSubmissionCount <= ownerSubmission.acceptedFrontierSubmissionCount
+        && submission.recoverySubmissionCount <= ownerSubmission.recoverySubmissionCount
+        && submission.acceptedTaskCount - submission.acceptedPacketCount
+            <= ownerSubmission.acceptedTaskCount - ownerSubmission.acceptedPacketCount
+        && submission.rejectedTaskCount - submission.rejectedPacketCount
+            <= ownerSubmission.rejectedTaskCount - ownerSubmission.rejectedPacketCount
+        && submission.nativeCommandListCount - submission.nativeSubmissionCount
+            <= ownerSubmission.nativeCommandListCount - ownerSubmission.nativeSubmissionCount
+    ;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Default-context copies retain the complete original validation order and compiler FP lowering.
+// Exceptional values and non-native targets use these boundaries before packed comparisons.
+[[nodiscard]] NWB_NOINLINE static bool ScalarIsValidFrameGraphRuntimeStatistics(const FrameGraphRuntimeStatistics& statistics)noexcept{
+    if(!__hidden_frame_graph_statistics_validators::RuntimeStatisticsCountsAreValid(statistics))
         return false;
 
     const f64 durations[] = {
@@ -224,69 +408,14 @@ template<typename StatisticsT>
 }
 
 [[nodiscard]] NWB_NOINLINE static bool ScalarIsValidFrameGraphPhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
-    if(
-        statistics.graphGeneration == 0u
-        || statistics.planGeneration == 0u
-        || statistics.recordingAttemptGeneration == 0u
-        || statistics.deviceGeneration == 0u
-        || !statistics.queue.valid()
-        || statistics.queue.deviceGeneration != statistics.deviceGeneration
-        || !IsValidFrameGraphQueueClass(statistics.queueClass)
-    )
-        return false;
-
-    const FrameGraphPhysicalQueueCompileRuntimeStatistics& compile = statistics.compile;
-    if(
-        compile.packetCount > compile.taskCount
-        || compile.mergedTaskCount != compile.taskCount - compile.packetCount
-        || (compile.packetCount == 0u && compile.taskCount != 0u)
-        || compile.incomingLogicalOwnershipTransferSignatureCount
-            > compile.incomingLogicalOwnershipTransferCount
-        || compile.outgoingLogicalOwnershipTransferSignatureCount
-            > compile.outgoingLogicalOwnershipTransferCount
-        || compile.incomingRepeatedOwnershipTransferSignatureCount
-            > compile.incomingLogicalOwnershipTransferSignatureCount
-        || compile.outgoingRepeatedOwnershipTransferSignatureCount
-            > compile.outgoingLogicalOwnershipTransferSignatureCount
-    )
-        return false;
-    if(
-        compile.concurrentSharingAdviceResourceCount
-            > compile.incomingLogicalOwnershipTransferSignatureCount
-        && compile.concurrentSharingAdviceResourceCount
-            - compile.incomingLogicalOwnershipTransferSignatureCount
-            > compile.outgoingLogicalOwnershipTransferSignatureCount
-    )
-        return false;
-
-    if(compile.prologueBarrierCount > Limit<u64>::s_Max - compile.epilogueBarrierCount)
-        return false;
-    const u64 plannedBarrierCount = compile.prologueBarrierCount + compile.epilogueBarrierCount;
-    if(compile.ownershipReleaseBarrierCount > plannedBarrierCount || compile.ownershipAcquireBarrierCount > plannedBarrierCount - compile.ownershipReleaseBarrierCount || (compile.taskCount == 0u && plannedBarrierCount != 0u))
+    if(!__hidden_frame_graph_statistics_validators::PhysicalQueueCompileAndRecordingCountsAreValid(statistics))
         return false;
 
     const FrameGraphPhysicalQueueRecordingRuntimeStatistics& recording = statistics.recording;
     if(
-        recording.packetCount > compile.packetCount
-        || recording.taskCount > compile.taskCount
-        || recording.packetCount > recording.taskCount
-        || recording.packetCount > recording.commandListCount
-        || recording.barrierCount > plannedBarrierCount
-        || recording.workerRoutedPacketCount > recording.packetCount
-        || recording.parallelPacketCount > recording.packetCount
-    )
-        return false;
-    if(recording.taskCount - recording.packetCount > compile.mergedTaskCount)
-        return false;
-    if(
         recording.packetCount == 0u
         && (
-            recording.taskCount != 0u
-            || recording.commandListCount != 0u
-            || recording.barrierCount != 0u
-            || recording.workerRoutedPacketCount != 0u
-            || recording.parallelPacketCount != 0u
-            || recording.commandListAcquisitionSeconds != 0.0
+            recording.commandListAcquisitionSeconds != 0.0
             || recording.graphBarrierRecordingSeconds != 0.0
             || recording.taskRecordSeconds != 0.0
             || recording.recordingSeconds != 0.0
@@ -295,31 +424,7 @@ template<typename StatisticsT>
         return false;
 
     const FrameGraphPhysicalQueueSubmissionRuntimeStatistics& submission = statistics.submission;
-    if(!__hidden_frame_graph_statistics_validators::SubmissionCountsAreValid(statistics))
-        return false;
-
-    const u64 acceptedMergedTaskCount = submission.acceptedTaskCount - submission.acceptedPacketCount;
-    const u64 rejectedMergedTaskCount = submission.rejectedTaskCount - submission.rejectedPacketCount;
-    if(acceptedMergedTaskCount > compile.mergedTaskCount || rejectedMergedTaskCount > compile.mergedTaskCount - acceptedMergedTaskCount)
-        return false;
-    if(submission.acceptedPacketCount == 0u && submission.acceptedTaskCount != 0u)
-        return false;
-    if(submission.rejectedPacketCount == 0u && submission.rejectedTaskCount != 0u)
-        return false;
-    if(
-        submission.nativeSubmissionCount == 0u
-        && (
-            submission.nativeCommandListCount != 0u
-            || submission.plannedWaitTokenCount != 0u
-            || submission.sameQueueWaitElisionCount != 0u
-            || submission.timelineWaitCount != 0u
-            || submission.mergedTimelineWaitCount != 0u
-            || submission.inheritedTimelineWaitElisionCount != 0u
-            || submission.acceptedFrontierSubmissionCount != 0u
-            || submission.recoverySubmissionCount != 0u
-            || submission.submissionSeconds != 0.0
-        )
-    )
+    if(!__hidden_frame_graph_statistics_validators::PhysicalQueueSubmissionCountsAreValid(statistics))
         return false;
 
     const f64 durations[] = { recording.commandListAcquisitionSeconds, recording.graphBarrierRecordingSeconds, recording.taskRecordSeconds, recording.recordingSeconds, submission.submissionSeconds, };
@@ -334,85 +439,21 @@ template<typename StatisticsT>
     if(
         !ScalarIsValidFrameGraphRuntimeStatistics(ownerStatistics)
         || !ScalarIsValidFrameGraphPhysicalQueueRuntimeStatistics(statistics)
-        || statistics.graphGeneration != ownerStatistics.graphGeneration
-        || statistics.planGeneration != ownerStatistics.planGeneration
-        || statistics.recordingAttemptGeneration != ownerStatistics.recordingAttemptGeneration
-        || statistics.deviceGeneration != ownerStatistics.deviceGeneration
+        || !__hidden_frame_graph_statistics_validators::PhysicalQueueOwnerCompileAndRecordingPrefixAreValid(statistics, ownerStatistics)
     )
-        return false;
-
-    const FrameGraphPhysicalQueueCompileRuntimeStatistics& compile = statistics.compile;
-    const FrameGraphCompileRuntimeStatistics& ownerCompile = ownerStatistics.compile;
-    if(
-        compile.taskCount > ownerCompile.taskCount
-        || compile.packetCount > ownerCompile.packetCount
-        || compile.mergedTaskCount > ownerCompile.mergedTaskCount
-        || compile.ownershipReleaseBarrierCount > ownerCompile.ownershipReleaseBarrierCount
-        || compile.ownershipAcquireBarrierCount > ownerCompile.ownershipAcquireBarrierCount
-        || compile.incomingLogicalOwnershipTransferCount > ownerCompile.logicalOwnershipTransferCount
-        || compile.outgoingLogicalOwnershipTransferCount > ownerCompile.logicalOwnershipTransferCount
-        || compile.incomingLogicalOwnershipTransferSignatureCount
-            > ownerCompile.logicalOwnershipTransferSignatureCount
-        || compile.outgoingLogicalOwnershipTransferSignatureCount
-            > ownerCompile.logicalOwnershipTransferSignatureCount
-        || compile.incomingRepeatedOwnershipTransferSignatureCount
-            > ownerCompile.repeatedOwnershipTransferSignatureCount
-        || compile.outgoingRepeatedOwnershipTransferSignatureCount
-            > ownerCompile.repeatedOwnershipTransferSignatureCount
-        || compile.concurrentSharingAdviceResourceCount > ownerCompile.concurrentSharingAdviceResourceCount
-    )
-        return false;
-
-    const auto barrierCount = FrameGraphStatisticsDetail::FrameGraphCompileBarrierCount(ownerCompile);
-    if(!barrierCount)
-        return false;
-    const u64 ownerBarrierCount = *barrierCount;
-    if(compile.prologueBarrierCount > ownerBarrierCount || compile.epilogueBarrierCount > ownerBarrierCount - compile.prologueBarrierCount)
         return false;
 
     const FrameGraphPhysicalQueueRecordingRuntimeStatistics& recording = statistics.recording;
     const FrameGraphRecordingRuntimeStatistics& ownerRecording = ownerStatistics.recording;
     if(
-        recording.packetCount > ownerRecording.packetCount
-        || recording.taskCount > ownerRecording.taskCount
-        || recording.commandListCount > ownerRecording.commandListCount
-        || recording.barrierCount > ownerRecording.barrierCount
-        || recording.workerRoutedPacketCount > ownerRecording.workerRoutedPacketCount
-        || recording.parallelPacketCount > ownerRecording.parallelPacketCount
-        || recording.commandListAcquisitionSeconds > ownerRecording.commandListAcquisitionSeconds
+        recording.commandListAcquisitionSeconds > ownerRecording.commandListAcquisitionSeconds
         || recording.graphBarrierRecordingSeconds > ownerRecording.graphBarrierRecordingSeconds
         || recording.taskRecordSeconds > ownerRecording.taskRecordSeconds
         || recording.recordingSeconds > ownerRecording.recordingSeconds
     )
         return false;
-    if(recording.taskCount - recording.packetCount > ownerRecording.taskCount - ownerRecording.packetCount || recording.commandListCount - recording.packetCount > ownerRecording.commandListCount - ownerRecording.packetCount)
-        return false;
 
-    const FrameGraphPhysicalQueueSubmissionRuntimeStatistics& submission = statistics.submission;
-    const FrameGraphSubmissionRuntimeStatistics& ownerSubmission = ownerStatistics.submission;
-    // Submission acceptance and per-queue snapshots visit packets in different orders, so floating duration sums can differ by 1 ULP while counts remain exact.
-    return
-        submission.acceptedPacketCount <= ownerSubmission.acceptedPacketCount
-        && submission.acceptedTaskCount <= ownerSubmission.acceptedTaskCount
-        && submission.rejectedPacketCount <= ownerSubmission.rejectedPacketCount
-        && submission.rejectedTaskCount <= ownerSubmission.rejectedTaskCount
-        && submission.nativeSubmissionCount <= ownerSubmission.nativeSubmissionCount
-        && submission.rejectedSubmissionCount <= ownerSubmission.rejectedSubmissionCount
-        && submission.nativeCommandListCount <= ownerSubmission.nativeCommandListCount
-        && submission.plannedWaitTokenCount <= ownerSubmission.plannedWaitTokenCount
-        && submission.sameQueueWaitElisionCount <= ownerSubmission.sameQueueWaitElisionCount
-        && submission.timelineWaitCount <= ownerSubmission.timelineWaitCount
-        && submission.mergedTimelineWaitCount <= ownerSubmission.mergedTimelineWaitCount
-        && submission.inheritedTimelineWaitElisionCount <= ownerSubmission.inheritedTimelineWaitElisionCount
-        && submission.acceptedFrontierSubmissionCount <= ownerSubmission.acceptedFrontierSubmissionCount
-        && submission.recoverySubmissionCount <= ownerSubmission.recoverySubmissionCount
-        && submission.acceptedTaskCount - submission.acceptedPacketCount
-            <= ownerSubmission.acceptedTaskCount - ownerSubmission.acceptedPacketCount
-        && submission.rejectedTaskCount - submission.rejectedPacketCount
-            <= ownerSubmission.rejectedTaskCount - ownerSubmission.rejectedPacketCount
-        && submission.nativeCommandListCount - submission.nativeSubmissionCount
-            <= ownerSubmission.nativeCommandListCount - ownerSubmission.nativeSubmissionCount
-    ;
+    return __hidden_frame_graph_statistics_validators::PhysicalQueueOwnerTailCountsAreValid(statistics, ownerStatistics);
 }
 
 bool IsValidFrameGraphRuntimeStatistics(const FrameGraphRuntimeStatistics& statistics)noexcept{
@@ -427,47 +468,8 @@ bool IsValidFrameGraphRuntimeStatistics(const FrameGraphRuntimeStatistics& stati
     if(!__hidden_frame_graph_statistics_validators::DurationsAreOrdinary(durations))
         return ScalarIsValidFrameGraphRuntimeStatistics(statistics);
 
-    if(!statistics.present || statistics.graphGeneration == 0u || statistics.planGeneration == 0u || statistics.recordingAttemptGeneration == 0u || statistics.deviceGeneration == 0u)
+    if(!__hidden_frame_graph_statistics_validators::RuntimeStatisticsCountsAreValid(statistics))
         return false;
-
-    const FrameGraphCompileRuntimeStatistics& compile = statistics.compile;
-    if(
-        compile.packetCount > compile.taskCount
-        || compile.mergedTaskCount != compile.taskCount - compile.packetCount
-        || (compile.resourceVersionCount != 0u && compile.resourceCount == 0u)
-        || (compile.resourceVersionEdgeCount != 0u && compile.resourceVersionCount == 0u)
-        || compile.directResourceUseCount > compile.resourceUseCount
-        || compile.expandedResourceSetMemberUseCount != compile.resourceUseCount - compile.directResourceUseCount
-        || compile.payloadObjectCount > compile.taskCount
-        || compile.logicalOwnershipTransferSignatureCount > compile.logicalOwnershipTransferCount
-        || compile.repeatedOwnershipTransferSignatureCount > compile.logicalOwnershipTransferSignatureCount
-        || compile.concurrentSharingCouldAvoidTransferCount > compile.logicalOwnershipTransferCount
-        || compile.concurrentSharingAdviceResourceCount > compile.resourceCount
-        || compile.logicalOwnershipTransferInternalCount > compile.logicalOwnershipTransferCount
-    )
-        return false;
-
-    u64 remainingOwnershipTransferCount = compile.logicalOwnershipTransferCount - compile.logicalOwnershipTransferInternalCount;
-    if(compile.logicalOwnershipTransferExternalImportCount > remainingOwnershipTransferCount)
-        return false;
-    remainingOwnershipTransferCount -= compile.logicalOwnershipTransferExternalImportCount;
-    if(compile.logicalOwnershipTransferExternalExportCount != remainingOwnershipTransferCount)
-        return false;
-
-    const FrameGraphRecordingRuntimeStatistics& recording = statistics.recording;
-    if(
-        recording.packetCount > compile.packetCount
-        || recording.taskCount > compile.taskCount
-        || recording.packetCount > recording.taskCount
-        || recording.packetCount > recording.commandListCount
-        || recording.workerRoutedPacketCount > recording.packetCount
-        || recording.parallelPacketCount > recording.packetCount
-    )
-        return false;
-
-    if(!__hidden_frame_graph_statistics_validators::SubmissionCountsAreValid(statistics))
-        return false;
-
 
     return __hidden_frame_graph_statistics_validators::DurationsAreValid(durations);
 }
@@ -480,94 +482,12 @@ bool IsValidFrameGraphPhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQue
     if(!__hidden_frame_graph_statistics_validators::DurationsAreOrdinary(durations))
         return ScalarIsValidFrameGraphPhysicalQueueRuntimeStatistics(statistics);
 
-    if(
-        statistics.graphGeneration == 0u
-        || statistics.planGeneration == 0u
-        || statistics.recordingAttemptGeneration == 0u
-        || statistics.deviceGeneration == 0u
-        || !statistics.queue.valid()
-        || statistics.queue.deviceGeneration != statistics.deviceGeneration
-        || !IsValidFrameGraphQueueClass(statistics.queueClass)
-    )
+    if(!__hidden_frame_graph_statistics_validators::PhysicalQueueCompileAndRecordingCountsAreValid(statistics))
         return false;
-
-    const FrameGraphPhysicalQueueCompileRuntimeStatistics& compile = statistics.compile;
-    if(
-        compile.packetCount > compile.taskCount
-        || compile.mergedTaskCount != compile.taskCount - compile.packetCount
-        || (compile.packetCount == 0u && compile.taskCount != 0u)
-        || compile.incomingLogicalOwnershipTransferSignatureCount
-            > compile.incomingLogicalOwnershipTransferCount
-        || compile.outgoingLogicalOwnershipTransferSignatureCount
-            > compile.outgoingLogicalOwnershipTransferCount
-        || compile.incomingRepeatedOwnershipTransferSignatureCount
-            > compile.incomingLogicalOwnershipTransferSignatureCount
-        || compile.outgoingRepeatedOwnershipTransferSignatureCount
-            > compile.outgoingLogicalOwnershipTransferSignatureCount
-    )
+    if(statistics.recording.packetCount == 0u && !__hidden_frame_graph_statistics_validators::DurationsAreZero(durations[0u]))
         return false;
-    if(
-        compile.concurrentSharingAdviceResourceCount
-            > compile.incomingLogicalOwnershipTransferSignatureCount
-        && compile.concurrentSharingAdviceResourceCount
-            - compile.incomingLogicalOwnershipTransferSignatureCount
-            > compile.outgoingLogicalOwnershipTransferSignatureCount
-    )
+    if(!__hidden_frame_graph_statistics_validators::PhysicalQueueSubmissionCountsAreValid(statistics))
         return false;
-
-    if(compile.prologueBarrierCount > Limit<u64>::s_Max - compile.epilogueBarrierCount)
-        return false;
-    const u64 plannedBarrierCount = compile.prologueBarrierCount + compile.epilogueBarrierCount;
-    if(compile.ownershipReleaseBarrierCount > plannedBarrierCount || compile.ownershipAcquireBarrierCount > plannedBarrierCount - compile.ownershipReleaseBarrierCount || (compile.taskCount == 0u && plannedBarrierCount != 0u))
-        return false;
-
-    const FrameGraphPhysicalQueueRecordingRuntimeStatistics& recording = statistics.recording;
-    if(
-        recording.packetCount > compile.packetCount
-        || recording.taskCount > compile.taskCount
-        || recording.packetCount > recording.taskCount
-        || recording.packetCount > recording.commandListCount
-        || recording.barrierCount > plannedBarrierCount
-        || recording.workerRoutedPacketCount > recording.packetCount
-        || recording.parallelPacketCount > recording.packetCount
-    )
-        return false;
-    if(recording.taskCount - recording.packetCount > compile.mergedTaskCount)
-        return false;
-    if(
-        recording.packetCount == 0u
-        && (recording.taskCount != 0u || recording.commandListCount != 0u || recording.barrierCount != 0u || recording.workerRoutedPacketCount != 0u || recording.parallelPacketCount != 0u || !__hidden_frame_graph_statistics_validators::DurationsAreZero(durations[0u]))
-    )
-        return false;
-
-    const FrameGraphPhysicalQueueSubmissionRuntimeStatistics& submission = statistics.submission;
-    if(!__hidden_frame_graph_statistics_validators::SubmissionCountsAreValid(statistics))
-        return false;
-
-    const u64 acceptedMergedTaskCount = submission.acceptedTaskCount - submission.acceptedPacketCount;
-    const u64 rejectedMergedTaskCount = submission.rejectedTaskCount - submission.rejectedPacketCount;
-    if(acceptedMergedTaskCount > compile.mergedTaskCount || rejectedMergedTaskCount > compile.mergedTaskCount - acceptedMergedTaskCount)
-        return false;
-    if(submission.acceptedPacketCount == 0u && submission.acceptedTaskCount != 0u)
-        return false;
-    if(submission.rejectedPacketCount == 0u && submission.rejectedTaskCount != 0u)
-        return false;
-    if(
-        submission.nativeSubmissionCount == 0u
-        && (
-            submission.nativeCommandListCount != 0u
-            || submission.plannedWaitTokenCount != 0u
-            || submission.sameQueueWaitElisionCount != 0u
-            || submission.timelineWaitCount != 0u
-            || submission.mergedTimelineWaitCount != 0u
-            || submission.inheritedTimelineWaitElisionCount != 0u
-            || submission.acceptedFrontierSubmissionCount != 0u
-            || submission.recoverySubmissionCount != 0u
-            || submission.submissionSeconds != 0.0
-        )
-    )
-        return false;
-
 
     return __hidden_frame_graph_statistics_validators::DurationsAreValid(durations);
 }
@@ -588,85 +508,18 @@ bool IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(const FrameGraphPhy
     if(
         !IsValidFrameGraphRuntimeStatistics(ownerStatistics)
         || !IsValidFrameGraphPhysicalQueueRuntimeStatistics(statistics)
-        || statistics.graphGeneration != ownerStatistics.graphGeneration
-        || statistics.planGeneration != ownerStatistics.planGeneration
-        || statistics.recordingAttemptGeneration != ownerStatistics.recordingAttemptGeneration
-        || statistics.deviceGeneration != ownerStatistics.deviceGeneration
+        || !__hidden_frame_graph_statistics_validators::PhysicalQueueOwnerCompileAndRecordingPrefixAreValid(statistics, ownerStatistics)
     )
-        return false;
-
-    const FrameGraphPhysicalQueueCompileRuntimeStatistics& compile = statistics.compile;
-    const FrameGraphCompileRuntimeStatistics& ownerCompile = ownerStatistics.compile;
-    if(
-        compile.taskCount > ownerCompile.taskCount
-        || compile.packetCount > ownerCompile.packetCount
-        || compile.mergedTaskCount > ownerCompile.mergedTaskCount
-        || compile.ownershipReleaseBarrierCount > ownerCompile.ownershipReleaseBarrierCount
-        || compile.ownershipAcquireBarrierCount > ownerCompile.ownershipAcquireBarrierCount
-        || compile.incomingLogicalOwnershipTransferCount > ownerCompile.logicalOwnershipTransferCount
-        || compile.outgoingLogicalOwnershipTransferCount > ownerCompile.logicalOwnershipTransferCount
-        || compile.incomingLogicalOwnershipTransferSignatureCount
-            > ownerCompile.logicalOwnershipTransferSignatureCount
-        || compile.outgoingLogicalOwnershipTransferSignatureCount
-            > ownerCompile.logicalOwnershipTransferSignatureCount
-        || compile.incomingRepeatedOwnershipTransferSignatureCount
-            > ownerCompile.repeatedOwnershipTransferSignatureCount
-        || compile.outgoingRepeatedOwnershipTransferSignatureCount
-            > ownerCompile.repeatedOwnershipTransferSignatureCount
-        || compile.concurrentSharingAdviceResourceCount > ownerCompile.concurrentSharingAdviceResourceCount
-    )
-        return false;
-
-    const auto barrierCount = FrameGraphStatisticsDetail::FrameGraphCompileBarrierCount(ownerCompile);
-    if(!barrierCount)
-        return false;
-    const u64 ownerBarrierCount = *barrierCount;
-    if(compile.prologueBarrierCount > ownerBarrierCount || compile.epilogueBarrierCount > ownerBarrierCount - compile.prologueBarrierCount)
         return false;
 
     const FrameGraphPhysicalQueueRecordingRuntimeStatistics& recording = statistics.recording;
     const FrameGraphRecordingRuntimeStatistics& ownerRecording = ownerStatistics.recording;
-    if(
-        recording.packetCount > ownerRecording.packetCount
-        || recording.taskCount > ownerRecording.taskCount
-        || recording.commandListCount > ownerRecording.commandListCount
-        || recording.barrierCount > ownerRecording.barrierCount
-        || recording.workerRoutedPacketCount > ownerRecording.workerRoutedPacketCount
-        || recording.parallelPacketCount > ownerRecording.parallelPacketCount
-    )
-        return false;
     const SIMDVectorDouble recordingDurations = VectorDoubleSet(recording.commandListAcquisitionSeconds, recording.graphBarrierRecordingSeconds, recording.taskRecordSeconds, recording.recordingSeconds);
     const SIMDVectorDouble ownerRecordingDurations = VectorDoubleSet(ownerRecording.commandListAcquisitionSeconds, ownerRecording.graphBarrierRecordingSeconds, ownerRecording.taskRecordSeconds, ownerRecording.recordingSeconds);
     if(!__hidden_frame_graph_statistics_validators::DurationsDoNotExceed(recordingDurations, ownerRecordingDurations))
         return false;
-    if(recording.taskCount - recording.packetCount > ownerRecording.taskCount - ownerRecording.packetCount || recording.commandListCount - recording.packetCount > ownerRecording.commandListCount - ownerRecording.packetCount)
-        return false;
 
-    const FrameGraphPhysicalQueueSubmissionRuntimeStatistics& submission = statistics.submission;
-    const FrameGraphSubmissionRuntimeStatistics& ownerSubmission = ownerStatistics.submission;
-    // Submission acceptance and per-queue snapshots visit packets in different orders, so floating duration sums can differ by 1 ULP while counts remain exact.
-    return
-        submission.acceptedPacketCount <= ownerSubmission.acceptedPacketCount
-        && submission.acceptedTaskCount <= ownerSubmission.acceptedTaskCount
-        && submission.rejectedPacketCount <= ownerSubmission.rejectedPacketCount
-        && submission.rejectedTaskCount <= ownerSubmission.rejectedTaskCount
-        && submission.nativeSubmissionCount <= ownerSubmission.nativeSubmissionCount
-        && submission.rejectedSubmissionCount <= ownerSubmission.rejectedSubmissionCount
-        && submission.nativeCommandListCount <= ownerSubmission.nativeCommandListCount
-        && submission.plannedWaitTokenCount <= ownerSubmission.plannedWaitTokenCount
-        && submission.sameQueueWaitElisionCount <= ownerSubmission.sameQueueWaitElisionCount
-        && submission.timelineWaitCount <= ownerSubmission.timelineWaitCount
-        && submission.mergedTimelineWaitCount <= ownerSubmission.mergedTimelineWaitCount
-        && submission.inheritedTimelineWaitElisionCount <= ownerSubmission.inheritedTimelineWaitElisionCount
-        && submission.acceptedFrontierSubmissionCount <= ownerSubmission.acceptedFrontierSubmissionCount
-        && submission.recoverySubmissionCount <= ownerSubmission.recoverySubmissionCount
-        && submission.acceptedTaskCount - submission.acceptedPacketCount
-            <= ownerSubmission.acceptedTaskCount - ownerSubmission.acceptedPacketCount
-        && submission.rejectedTaskCount - submission.rejectedPacketCount
-            <= ownerSubmission.rejectedTaskCount - ownerSubmission.rejectedPacketCount
-        && submission.nativeCommandListCount - submission.nativeSubmissionCount
-            <= ownerSubmission.nativeCommandListCount - ownerSubmission.nativeSubmissionCount
-    ;
+    return __hidden_frame_graph_statistics_validators::PhysicalQueueOwnerTailCountsAreValid(statistics, ownerStatistics);
 }
 
 bool IsValidFrameGraphPacketSubmissionStatistics(const FrameGraphPacketSubmissionStatisticsRecord& statistics)noexcept{
@@ -679,20 +532,12 @@ bool IsValidFrameGraphPacketSubmissionStatistics(const FrameGraphPacketSubmissio
         || statistics.taskCount == 0u
         || statistics.commandListCount == 0u
         || (statistics.recoverySubmission && !statistics.joinsAcceptedQueueFrontier)
-        || statistics.sameQueueWaitElisionCount > statistics.plannedWaitTokenCount
+        || !__hidden_frame_graph_statistics_validators::TimelineWaitTokenCountsAreValid(statistics)
         || statistics.submissionSeconds < 0.0
         || !IsFinite(statistics.submissionSeconds)
     )
         return false;
-
-    u64 remainingWaitTokenCount = statistics.plannedWaitTokenCount - statistics.sameQueueWaitElisionCount;
-    if(statistics.mergedTimelineWaitCount > remainingWaitTokenCount)
-        return false;
-    remainingWaitTokenCount -= statistics.mergedTimelineWaitCount;
-    if(statistics.inheritedTimelineWaitElisionCount > remainingWaitTokenCount)
-        return false;
-    remainingWaitTokenCount -= statistics.inheritedTimelineWaitElisionCount;
-    return statistics.timelineWaitCount == remainingWaitTokenCount;
+    return true;
 }
 
 

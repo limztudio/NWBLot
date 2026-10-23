@@ -4,6 +4,8 @@
 
 #include "window.h"
 
+#include <impl/ecs_ui/toolkit/layout/validation.h>
+
 #include <global/simd/result.h>
 #include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
@@ -24,22 +26,11 @@ namespace __hidden_ui_window_behavior{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ValidBounds(const Rect& bounds)noexcept{
-    return
-        IsFinite(bounds.x) && IsFinite(bounds.y) && IsFinite(bounds.width) && IsFinite(bounds.height) && bounds.width >= 0.0f && bounds.height >= 0.0f
-        && VectorIsFinite(VectorAdd(VectorSet(bounds.x, bounds.y, 0.0f, 0.0f), VectorSet(bounds.width, bounds.height, 0.0f, 0.0f)), VectorComponentMask::s_XY)
-    ;
-}
-
-[[nodiscard]] bool SameGesture(const InputActionId& lhs, const InputActionId& rhs)noexcept{
-    return lhs.target == rhs.target && lhs.declarationGeneration == rhs.declarationGeneration && lhs.layoutGeneration == rhs.layoutGeneration && lhs.sequence == rhs.sequence;
-}
-
 [[nodiscard]] Expected<SIMDVectorDoubleResult> LoadPointerDisplacement(const PointerGesture& gesture)noexcept{
     if(
         !gesture.id.valid() || !IsFinite(gesture.origin.x) || !IsFinite(gesture.origin.y)
         || !IsFinite(gesture.position.x) || !IsFinite(gesture.position.y)
-        || !ValidBounds(gesture.referenceRectangle) || gesture.referenceRectangle.width <= 0.0f
+        || !IsValidUiRect(gesture.referenceRectangle) || gesture.referenceRectangle.width <= 0.0f
         || gesture.referenceRectangle.height <= 0.0f || gesture.state > PointerGestureState::Completed
     )
         return MakeUnexpected(Failure{});
@@ -59,10 +50,9 @@ namespace __hidden_ui_window_behavior{
 
 bool WindowBehavior::Initialize(WindowState& state, const WindowOptions& options, const WindowMetrics& metrics)noexcept{
     if(
-        !__hidden_ui_window_behavior::ValidBounds(options.initialBounds)
+        !IsValidUiRect(options.initialBounds)
         || options.direction > LayoutDirection::Column || options.direction == LayoutDirection::Leaf
-        || !IsFinite(options.minimumSize.x) || options.minimumSize.x < 0.0f
-        || !IsFinite(options.minimumSize.y) || options.minimumSize.y < 0.0f
+        || !IsValidUiExtent(options.minimumSize)
         || !IsFinite(metrics.minimumSize.x) || metrics.minimumSize.x <= 0.0f
         || !IsFinite(metrics.minimumSize.y) || metrics.minimumSize.y <= 0.0f
     )
@@ -73,7 +63,7 @@ bool WindowBehavior::Initialize(WindowState& state, const WindowOptions& options
         candidate.moveGesture = {};
         candidate.resizeGesture = {};
     }
-    if(!__hidden_ui_window_behavior::ValidBounds(candidate.bounds))
+    if(!IsValidUiRect(candidate.bounds))
         return false;
     const SIMDVectorSingle size = VectorSet(candidate.bounds.width, candidate.bounds.height, candidate.bounds.width, candidate.bounds.height);
     const SIMDVectorSingle minimum = VectorSet(metrics.minimumSize.x, metrics.minimumSize.y, metrics.minimumSize.x, metrics.minimumSize.y);
@@ -81,7 +71,7 @@ bool WindowBehavior::Initialize(WindowState& state, const WindowOptions& options
     candidate.bounds.width = VectorGetX(constrained);
     candidate.bounds.height = VectorGetY(constrained);
     candidate.initialized = true;
-    if(!__hidden_ui_window_behavior::ValidBounds(candidate.bounds))
+    if(!IsValidUiRect(candidate.bounds))
         return false;
     state = candidate;
     return true;
@@ -92,7 +82,7 @@ bool WindowBehavior::ApplyMove(WindowState& state, const PointerGesture& gesture
     if(!displacement)
         return false;
     WindowGestureState movement = state.moveGesture;
-    if(!__hidden_ui_window_behavior::SameGesture(movement.id, gesture.id)){
+    if(movement.id != gesture.id){
         movement.id = gesture.id;
         movement.initialBounds = gesture.referenceRectangle;
     }
@@ -105,7 +95,7 @@ bool WindowBehavior::ApplyMove(WindowState& state, const PointerGesture& gesture
     Rect candidate = state.bounds;
     candidate.x = static_cast<f32>(left);
     candidate.y = static_cast<f32>(top);
-    if(!__hidden_ui_window_behavior::ValidBounds(candidate))
+    if(!IsValidUiRect(candidate))
         return false;
     state.bounds = candidate;
     state.moveGesture = movement;
@@ -117,7 +107,7 @@ bool WindowBehavior::ApplyResize(WindowState& state, const PointerGesture& gestu
     if(!displacement || !IsFinite(minimumSize.x) || minimumSize.x <= 0.0f || !IsFinite(minimumSize.y) || minimumSize.y <= 0.0f)
         return false;
     WindowGestureState resizing = state.resizeGesture;
-    if(!__hidden_ui_window_behavior::SameGesture(resizing.id, gesture.id)){
+    if(resizing.id != gesture.id){
         resizing.id = gesture.id;
         resizing.initialBounds = gesture.referenceRectangle;
     }
@@ -131,7 +121,7 @@ bool WindowBehavior::ApplyResize(WindowState& state, const PointerGesture& gestu
     Rect candidate = state.bounds;
     candidate.width = static_cast<f32>(width);
     candidate.height = static_cast<f32>(height);
-    if(!__hidden_ui_window_behavior::ValidBounds(candidate))
+    if(!IsValidUiRect(candidate))
         return false;
     state.bounds = candidate;
     state.resizeGesture = resizing;
@@ -139,7 +129,7 @@ bool WindowBehavior::ApplyResize(WindowState& state, const PointerGesture& gestu
 }
 
 bool WindowBehavior::Constrain(WindowState& state, const DisplayMetrics& display, const f32 titleHeight)noexcept{
-    if(!IsFinite(display.logicalWidth) || display.logicalWidth <= 0.0f || !IsFinite(display.logicalHeight) || display.logicalHeight <= 0.0f || !IsFinite(titleHeight) || titleHeight <= 0.0f || !__hidden_ui_window_behavior::ValidBounds(state.bounds))
+    if(!IsFinite(display.logicalWidth) || display.logicalWidth <= 0.0f || !IsFinite(display.logicalHeight) || display.logicalHeight <= 0.0f || !IsFinite(titleHeight) || titleHeight <= 0.0f || !IsValidUiRect(state.bounds))
         return false;
     const f32 height = state.collapsed ? titleHeight : state.bounds.height;
     const SIMDVectorSingle remaining = VectorSubtract(VectorSet(display.logicalWidth, display.logicalHeight, display.logicalWidth, display.logicalHeight), VectorSet(state.bounds.width, height, state.bounds.width, height));

@@ -57,7 +57,7 @@ UiComboSmokeScene::~UiComboSmokeScene()noexcept{
 
 bool UiComboSmokeScene::paint(Impl::UiPaintContext& context){
     using namespace Impl::Ui;
-    observeDisplay(context.display);
+    ObserveSmokeDisplay(__hidden_ui_combo_smoke::s_LogTag, context.display, m_lastDisplay, m_displayChanged);
     m_source.beginFrame();
     m_focused = false;
     Builder& ui = context.ui;
@@ -142,14 +142,6 @@ bool UiComboSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const 
         break;
     }
     return true;
-}
-
-void UiComboSmokeScene::observeDisplay(const Impl::Ui::DisplayMetrics& display){
-    if(m_lastDisplay.logicalWidth == display.logicalWidth && m_lastDisplay.logicalHeight == display.logicalHeight && m_lastDisplay.pixelScaleX == display.pixelScaleX && m_lastDisplay.pixelScaleY == display.pixelScaleY)
-        return;
-    m_lastDisplay = display;
-    m_displayChanged = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiComboSmoke: display logical={}x{} scale={}x{}"), display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY);
 }
 
 Array<u64, 16u> UiComboSmokeScene::values()const noexcept{

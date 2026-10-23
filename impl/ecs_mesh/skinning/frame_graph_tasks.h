@@ -79,24 +79,25 @@ template<SkinningPlanRecorder Recorder>
 }
 
 
+struct TaskGraphSkinningPlansPayload{
+    MeshSkinningSystem& system;
+    Core::GpuTimingSubmissionTicket& timingTicket;
+    Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena> plans;
+
+
+public:
+    explicit TaskGraphSkinningPlansPayload(Core::Alloc::GlobalArena& arena, MeshSkinningSystem& systemIn, Core::GpuTimingSubmissionTicket& timingTicketIn)noexcept
+        : system(systemIn)
+        , timingTicket(timingTicketIn)
+        , plans(arena)
+    {}
+};
+
+
 // Deformation produces UAV streams; compiler owns the UAV-to-SRV handoff.
 struct MeshSkinningSystem::TaskGraphSkinningDeformationTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
-    // The skinning system and the timing ticket are required: deformation always records against this frame's ticket.
-    struct Payload{
-        MeshSkinningSystem& system;
-        Core::GpuTimingSubmissionTicket& timingTicket;
-        Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena> plans;
-
-
-    public:
-        explicit Payload(Core::Alloc::GlobalArena& arena, MeshSkinningSystem& systemIn, Core::GpuTimingSubmissionTicket& timingTicketIn)noexcept
-            : system(systemIn)
-            , timingTicket(timingTicketIn)
-            , plans(arena)
-        {}
-    };
+    using Payload = TaskGraphSkinningPlansPayload;
 
 
 public:
@@ -109,21 +110,7 @@ public:
 // Bounds/repack consume deformation and publish UAV outputs for the local-bounds reduction.
 struct MeshSkinningSystem::TaskGraphSkinningPostDispatchTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
-    // The skinning system and the timing ticket are required: bounds/repack always records against this frame's ticket.
-    struct Payload{
-        MeshSkinningSystem& system;
-        Core::GpuTimingSubmissionTicket& timingTicket;
-        Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena> plans;
-
-
-    public:
-        explicit Payload(Core::Alloc::GlobalArena& arena, MeshSkinningSystem& systemIn, Core::GpuTimingSubmissionTicket& timingTicketIn)noexcept
-            : system(systemIn)
-            , timingTicket(timingTicketIn)
-            , plans(arena)
-        {}
-    };
+    using Payload = TaskGraphSkinningPlansPayload;
 
 
 public:

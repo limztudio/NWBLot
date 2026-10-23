@@ -128,6 +128,12 @@ private:
         bool consumesResetAuthorization = false;
     };
 
+    struct TimerQueryClaimOwnerMatches{
+        bool resetOwnerMatches = false;
+        bool beginOwnerMatches = false;
+        bool endOwnerMatches = false;
+    };
+
 
 public:
     TrackedCommandBuffer(Queue& queue, const VulkanContext& context, VkCommandPool commandPool, bool ownsCommandPool, Futex* sharedCommandPoolMutex)noexcept;
@@ -141,6 +147,7 @@ private:
     [[nodiscard]] TimerQueryRecordingClaim& findOrAppendTimerQueryRecordingClaim(TimerQuery& query);
     [[nodiscard]] TimerQueryRecordingClaim* findTimerQueryRecordingClaim(TimerQuery& query, u64 generation)noexcept;
     [[nodiscard]] bool recordsTimerQueryBegin(const TimerQuery& query, u64 generation)const noexcept;
+    [[nodiscard]] TimerQueryClaimOwnerMatches resolveTimerQueryClaimOwnerMatches(const TimerQuery& query, const TimerQueryRecordingClaim& claim)const noexcept;
     [[nodiscard]] bool validateTimerQueryRecordingClaims(const Queue& submissionQueue, const QueueSubmissionWait* localWaits, usize localWaitCount, const NotNull<TrackedCommandBuffer*>* precedingCommandBuffers, usize precedingCommandBufferCount)const noexcept;
     void commitTimerQueryRecordingClaims(const QueueSubmissionToken& submissionToken)noexcept;
     void discardTimerQueryRecordingClaims()noexcept;

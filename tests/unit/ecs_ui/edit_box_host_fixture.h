@@ -187,6 +187,11 @@ protected:
         return prepare(model, options) && commit();
     }
 
+    [[nodiscard]] Ui::Point atByte(const usize byte)const noexcept{
+        const SIMDVectorSingle x = VectorAdd(VectorMultiplyAddExpression(VectorReplicate(static_cast<f32>(byte)), VectorReplicate(10.0f), VectorReplicate(m_placement.textOrigin.x)), VectorSplatOne());
+        return { VectorGetX(x), VectorGetX(VectorAdd(VectorReplicate(m_placement.textOrigin.y), VectorReplicate(5.0f))) };
+    }
+
     [[nodiscard]] bool dispatch(const Ui::InputEvent& event){
         m_host.collectNative();
         const Ui::WidgetId previousCapture = m_context.input().capture();

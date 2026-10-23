@@ -8,10 +8,13 @@
 #include "smoke_scene_helpers.h"
 
 #include <impl/assets_model/asset.h>
+#include <impl/assets_skeleton/asset.h>
 #include <impl/ecs_mesh/skinning/module.h>
 #include <impl/ecs_model/module.h>
 #include <impl/ecs_model_renderer/model_renderer.h>
+#include <impl/ecs_skeleton/runtime_helpers.h>
 
+#include <core/assets/manager.h>
 #include <core/ecs/entity.h>
 
 
@@ -47,6 +50,76 @@ inline void AddSmokeSkinnedRenderSystems(Core::ECS::World& world, ProjectRuntime
     context.graphics.addRenderPassToBack(meshSkinningSystem);
     context.graphics.addRenderPassToBack(systems.renderer);
     context.frameGraphRegistry.registerContributor(systems.renderer);
+}
+
+[[nodiscard]] inline NotNullUniquePtr<Core::ECS::World> CreateSmokeSkinnedRenderWorldOrDie(ProjectRuntimeContext& context, const TStringView projectName, const SmokeRenderQualitySettings& baseSettings = {}){
+    auto world = CreateSmokeWorldOrDie(context, projectName);
+    AddSmokeSkinnedRenderSystems(*world, context, baseSettings);
+    return world;
+}
+
+[[nodiscard]] inline bool LoadSmokeSkeletonBindJoints(
+    Vector<Impl::SkeletonJointMatrix, Core::Alloc::GlobalArena>& outBindJoints,
+    Core::Assets::AssetManager& assetManager,
+    const SmokeModelRef& modelRef,
+    const TStringView projectName,
+    const Name preferredSkeletonObject = Name(),
+    const bool requireInvertibleBindPose = false
+){
+    const auto loadedModelAsset = assetManager.loadSync(Impl::Model::AssetTypeName(), modelRef.name());
+    if(!loadedModelAsset){
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to load model for skeleton bind joints"), projectName);
+        return false;
+    }
+    NWB_ASSERT(*loadedModelAsset);
+    const auto* model = Core::Assets::CastAsset<Impl::Model>(loadedModelAsset->get());
+    if(!model){
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: loaded model has unexpected type"), projectName);
+        return false;
+    }
+
+    const Impl::ModelSkeletonObject* skeletonObject = nullptr;
+    if(preferredSkeletonObject){
+        for(const Impl::ModelSkeletonObject& object : model->skeletonObjects()){
+            if(object.name == preferredSkeletonObject){
+                skeletonObject = &object;
+                break;
+            }
+        }
+    }
+    if(!skeletonObject && !model->skeletonObjects().empty())
+        skeletonObject = &model->skeletonObjects().front();
+    if(!skeletonObject || !skeletonObject->skeleton.valid()){
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: model has no skeleton object"), projectName);
+        return false;
+    }
+
+    const auto loadedSkeletonAsset = assetManager.loadSync(Impl::Skeleton::AssetTypeName(), skeletonObject->skeleton.name());
+    if(!loadedSkeletonAsset){
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to load skeleton for bind joints"), projectName);
+        return false;
+    }
+    NWB_ASSERT(*loadedSkeletonAsset);
+    const auto* skeleton = Core::Assets::CastAsset<Impl::Skeleton>(loadedSkeletonAsset->get());
+    if(!skeleton){
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: loaded skeleton has unexpected type"), projectName);
+        return false;
+    }
+    if(skeleton->joints().empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: skeleton has no joints"), projectName);
+        return false;
+    }
+
+    outBindJoints.clear();
+    outBindJoints.reserve(skeleton->joints().size());
+    for(const Impl::SkeletonJoint& joint : skeleton->joints()){
+        if(requireInvertibleBindPose && !MatrixIsInvertibleAffine(LoadFloat(joint.localBindPose), Impl::SkeletonRuntime::s_AffineEpsilon, Impl::SkeletonRuntime::s_JointDeterminantEpsilon)){
+            NWB_LOGGER_ERROR(NWB_TEXT("{}: skeleton contains an invalid bind pose"), projectName);
+            return false;
+        }
+        outBindJoints.push_back(joint.localBindPose);
+    }
+    return !outBindJoints.empty();
 }
 
 inline void DestroySmokeSkinnedRenderWorld(ProjectRuntimeContext& context, NotNullUniquePtr<Core::ECS::World>& world){

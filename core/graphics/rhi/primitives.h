@@ -197,6 +197,10 @@ public:
     [[nodiscard]] constexpr i32 width()const noexcept{ return maxX - minX; }
 
     [[nodiscard]] constexpr i32 height()const noexcept{ return maxY - minY; }
+
+    [[nodiscard]] constexpr bool validScissor()const noexcept{
+        return minX >= 0 && minY >= 0 && maxX >= minX && maxY >= minY;
+    }
 };
 inline bool operator==(const Rect& lhs, const Rect& rhs)noexcept{
     return (lhs.minX == rhs.minX) && (lhs.maxX == rhs.maxX) && (lhs.minY == rhs.minY) && (lhs.maxY == rhs.maxY);

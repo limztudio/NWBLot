@@ -4,7 +4,7 @@
 
 #include "image_source.h"
 
-#include <global/sync.h>
+#include <global/atomic_identity.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -28,16 +28,6 @@ static Atomic<u64> s_NextGeneration{ 1u };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static u64 NewGeneration()noexcept{
-    const u64 generation = s_NextGeneration.fetch_add(1u, MemoryOrder::relaxed);
-    NWB_FATAL_ASSERT_MSG(generation != 0u, NWB_TEXT("UI image source generation overflow"));
-    return generation;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 
@@ -53,7 +43,7 @@ ImageSource::ImageSource(Core::Alloc::GlobalArena& arena, const Texture& texture
     Core::Assets::AssetBytes payloadBytes(arena);
     payloadBytes.assign(texture.payloadBytes().begin(), texture.payloadBytes().end());
     m_texture.setPayload(texture.width(), texture.height(), Move(mipLevels), Move(payloadBytes), texture.dimension(), texture.depth(), texture.payloadFormat(), texture.alphaMode(), texture.alphaConstantUnorm8());
-    m_generation = __hidden_ui_image_source::NewGeneration();
+    m_generation = NextNonWrappingIdentity(__hidden_ui_image_source::s_NextGeneration);
 }
 
 

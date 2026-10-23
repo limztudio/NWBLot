@@ -46,28 +46,8 @@ namespace CrashNames = Core::Crash::PackageNames;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CrashTestPath CrashRootDirectory(Core::Alloc::GlobalArena& arena){
-    const auto executableDirectory = GetExecutableDirectory(arena);
-    if(executableDirectory)
-        return *executableDirectory / CrashNames::s_DefaultRootDirectoryName;
-
-    return CrashTestPath(arena, CrashNames::s_DefaultRootDirectoryName);
-}
-
-CrashTestPath TestRootDirectory(Core::Alloc::GlobalArena& arena){
-    return CrashRootDirectory(arena) / "test_storage";
-}
-
-CrashTestPath TestCaseDirectory(Core::Alloc::GlobalArena& arena, const AStringView testGroup){
-    return TestRootDirectory(arena) / testGroup;
-}
-
 CrashTestPath StorageDirectory(Core::Alloc::GlobalArena& arena, const AStringView testGroup){
     return TestCaseDirectory(arena, testGroup) / "storage";
-}
-
-CrashTestPath SpoolDirectory(Core::Alloc::GlobalArena& arena, const AStringView testGroup){
-    return TestCaseDirectory(arena, testGroup) / "spool";
 }
 
 CrashTestPath ArchiveInputDirectory(Core::Alloc::GlobalArena& arena, const AStringView testGroup){
@@ -94,10 +74,6 @@ CrashTestPath RawArchivePath(Core::Alloc::GlobalArena& arena, const AStringView 
 
 CrashTestPath InvalidArchivePath(Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem){
     return StorageDirectory(arena, testGroup) / Log::s_CrashInvalidDirectoryName / ArchiveFileName(arena, stem);
-}
-
-void RemoveTestArtifacts(Core::Alloc::GlobalArena& arena, const AStringView testGroup){
-    EXPECT_TRUE(RemoveAllIfExists(TestCaseDirectory(arena, testGroup)));
 }
 
 void AppendArchiveFile(CrashTestText& archive, const AStringView relativePath, const AStringView content){

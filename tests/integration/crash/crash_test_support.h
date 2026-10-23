@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <tests/common/crash_test_paths.h>
 #include <tests/common/filesystem_helpers.h>
 #include <tests/common/test_context.h>
 
@@ -59,25 +60,11 @@ inline constexpr Name s_SignalChildInstallArena("tests/integration/crash/signal_
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline CrashTestPath CrashRootDirectory(NWB::Core::Alloc::GlobalArena& arena){
-    const auto executableDirectory = GetExecutableDirectory(arena);
-    if(executableDirectory)
-        return *executableDirectory / CrashNames::s_DefaultRootDirectoryName;
-
-    return CrashTestPath(arena, CrashNames::s_DefaultRootDirectoryName);
-}
-
-[[nodiscard]] inline CrashTestPath TestRootDirectory(NWB::Core::Alloc::GlobalArena& arena){
-    return CrashRootDirectory(arena) / "test_storage";
-}
-
-[[nodiscard]] inline CrashTestPath TestCaseDirectory(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup){
-    return TestRootDirectory(arena) / testGroup;
-}
-
-[[nodiscard]] inline CrashTestPath SpoolDirectory(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup){
-    return TestCaseDirectory(arena, testGroup) / s_SpoolDirectory;
-}
+using NWB::Tests::CrashTestPaths::CrashRootDirectory;
+using NWB::Tests::CrashTestPaths::RemoveTestArtifacts;
+using NWB::Tests::CrashTestPaths::SpoolDirectory;
+using NWB::Tests::CrashTestPaths::TestCaseDirectory;
+using NWB::Tests::CrashTestPaths::TestRootDirectory;
 
 [[nodiscard]] inline CrashTestPath BucketDirectory(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView bucketName){
     return SpoolDirectory(arena, testGroup) / bucketName;
@@ -85,10 +72,6 @@ inline constexpr Name s_SignalChildInstallArena("tests/integration/crash/signal_
 
 [[nodiscard]] inline CrashTestPath PackageDirectory(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView bucketName, const AStringView packageName){
     return BucketDirectory(arena, testGroup, bucketName) / packageName;
-}
-
-inline void RemoveTestArtifacts(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup){
-    EXPECT_TRUE(RemoveAllIfExists(TestCaseDirectory(arena, testGroup)));
 }
 
 [[nodiscard]] inline bool CreatePackageDirectory(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView bucketName, const AStringView packageName){

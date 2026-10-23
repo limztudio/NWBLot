@@ -408,6 +408,7 @@ private:
     void clearColorTextureBox(Alloc::ScratchArena& scratchArena, Texture& texture, TextureSubresourceSet subresources, const Box& box, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
     bool clearActiveRenderPassColorTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const VkClearColorValue& clearValue);
     bool clearActiveRenderPassDepthStencilTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, bool clearDepth, f32 depth, bool clearStencil, u8 stencil);
+    [[nodiscard]] bool validateTextureTransferResources(Texture& dest, ResourceStates::Mask destState, Texture& src, ResourceStates::Mask srcState, TStringView operationName);
     [[nodiscard]] bool validateStagingTextureCopyResources(StagingTexture& stagingTexture, Texture& texture, CpuAccessMode::Enum requiredCpuAccess, VkImageUsageFlags requiredImageUsage, TStringView operationName);
     Expected<VkBufferImageCopy> prepareStagingTextureCopy(StagingTexture& stagingResource, const TextureSlice& stagingSlice, Texture& textureResource, const TextureSlice& textureSlice)const noexcept;
     [[nodiscard]] Expected<BufferSuballocation> prepareUploadStaging(usize dataSize, TStringView operationName, u32 alignment = s_DefaultUploadSuballocationAlignment);
@@ -535,7 +536,10 @@ public:
 
 
 private:
-    // Device holds m_mutex while consulting the completed-cycle predicates.
+    // Caller holds m_mutex while consulting prerequisite and completed-cycle predicates.
+    [[nodiscard]] QueueSubmissionToken prerequisiteSubmissionWithinLock()const noexcept{
+        return m_completedCycleSubmission.valid() ? m_completedCycleSubmission : m_resetAuthorizationSubmission;
+    }
     [[nodiscard]] bool hasCompletedCycleWithinLock()const noexcept;
     [[nodiscard]] bool completedCycleMatchesWithinLock(u64 generation, const QueueSubmissionToken& submission, const GpuPhysicalQueueInfo* queueInfo)const noexcept;
 

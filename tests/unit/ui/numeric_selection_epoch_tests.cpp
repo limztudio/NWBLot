@@ -76,17 +76,7 @@ public:
     mutable bool mutationApplied = false;
 };
 
-class UiNumericSelectionEpochTests : public NumericFixture{
-protected:
-    [[nodiscard]] bool beginParent(const u64 generation){
-        return begin(generation) && m_builder.beginPopup("parent", m_parent, UiWidgetTests::LargeLoanParentOptions());
-    }
-
-
-protected:
-    PopupState m_parent;
-    PopupState m_child;
-};
+using UiNumericSelectionEpochTests = NumericFixture;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

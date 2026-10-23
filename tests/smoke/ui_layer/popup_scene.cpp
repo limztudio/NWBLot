@@ -74,7 +74,7 @@ UiPopupSmokeScene::~UiPopupSmokeScene()noexcept{
 
 bool UiPopupSmokeScene::paint(Impl::UiPaintContext& context){
     using namespace Impl::Ui;
-    observeDisplay(context.display);
+    ObserveSmokeDisplay(__hidden_ui_popup_smoke::s_LogTag, context.display, m_lastDisplay, m_displayChanged);
     Builder& ui = context.ui;
     ui.style().fontSize = 12.0f;
     ui.style().gap = 8.0f;
@@ -141,7 +141,7 @@ bool UiPopupSmokeScene::paint(Impl::UiPaintContext& context){
             return false;
     }
     observeState();
-    paintMarkers(context);
+    PaintSingleSmokeValueMarkers(context, values(), m_sequence);
     return true;
 }
 
@@ -178,14 +178,6 @@ bool UiPopupSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const 
     return true;
 }
 
-void UiPopupSmokeScene::observeDisplay(const Impl::Ui::DisplayMetrics& display){
-    if(m_lastDisplay.logicalWidth == display.logicalWidth && m_lastDisplay.logicalHeight == display.logicalHeight && m_lastDisplay.pixelScaleX == display.pixelScaleX && m_lastDisplay.pixelScaleY == display.pixelScaleY)
-        return;
-    m_lastDisplay = display;
-    m_displayChanged = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiPopupSmoke: display logical={}x{} scale={}x{}"), display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY);
-}
-
 Array<u32, 12u> UiPopupSmokeScene::values()const noexcept{
     return { static_cast<u32>(m_visible && m_popup.isOpen()), static_cast<u32>(m_modal), m_underlying, m_selected,
         static_cast<u32>(m_checked), static_cast<u32>(m_popupFocused), static_cast<u32>(m_outsideFocused),
@@ -218,16 +210,6 @@ void UiPopupSmokeScene::observeState(){
     LogSmokeRect(__hidden_ui_popup_smoke::s_LogTag, m_sequence, __hidden_ui_popup_smoke::s_SecondLabel, { first.x, VectorGetX(laterRowsY), first.width, first.height });
     LogSmokeRect(__hidden_ui_popup_smoke::s_LogTag, m_sequence, NWB_TEXT("check"), { first.x, VectorGetY(laterRowsY), first.width, first.height });
     LogSmokeRect(__hidden_ui_popup_smoke::s_LogTag, m_sequence, NWB_TEXT("edit"), m_popupEdit.placement.bounds);
-}
-
-void UiPopupSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
-    const auto current = values();
-    const auto positions = BuildSmokeMarkerPositions<TupleSize_V<decltype(current)> + 1u, 12u, 20u>();
-    const f32 y = VectorGetX(VectorSubtract(VectorReplicate(context.display.logicalHeight), VectorReplicate(20.0f)));
-    for(usize index = 0u; index <= current.size(); ++index){
-        const u32 value = index == current.size() ? m_sequence : current[index];
-        context.paint.fillRect({ positions[index], y, 14.0f, 12.0f }, EncodeSmokeColor(value));
-    }
 }
 
 

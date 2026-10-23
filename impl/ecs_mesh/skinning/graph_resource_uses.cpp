@@ -34,14 +34,6 @@ static constexpr usize s_PromotedIndexCapacityFactor = 4u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct ResourceHash{
-    [[nodiscard]] usize operator()(const Core::GpuGraphResourceId resource)const noexcept{
-        usize hash = Hasher<u64>{}(resource.generation);
-        HashCombine(hash, resource.index);
-        return hash;
-    }
-};
-
 struct ResourceUseInfo{
     usize outputIndex = 0u;
     Core::ResourceStates::Mask requiredState = Core::ResourceStates::Unknown;
@@ -56,7 +48,7 @@ struct ResourceUseEntry{
 // Inline storage covers one plan's roles; larger sets index unique identities only.
 template<usize InlineCapacity>
 struct ResourceUseCollector : NoCopy{
-    using Index = HashMap<Core::GpuGraphResourceId, ResourceUseInfo, Core::Alloc::ScratchArena, ResourceHash, EqualTo<Core::GpuGraphResourceId>>;
+    using Index = HashMap<Core::GpuGraphResourceId, ResourceUseInfo, Core::Alloc::ScratchArena, Core::GpuGraphResourceIdHasher, EqualTo<Core::GpuGraphResourceId>>;
 
 
 public:
@@ -106,7 +98,7 @@ public:
 
     [[nodiscard]] bool promoteIndex(){
         NWB_ASSERT(!m_index && m_count == InlineCapacity);
-        Index index(InlineCapacity * s_PromotedIndexCapacityFactor,ResourceHash{}, EqualTo<Core::GpuGraphResourceId>{}, m_scratchArena);
+        Index index(InlineCapacity * s_PromotedIndexCapacityFactor, Core::GpuGraphResourceIdHasher{}, EqualTo<Core::GpuGraphResourceId>{}, m_scratchArena);
         for(const ResourceUseEntry& entry : m_inline){
             const auto [found, inserted] = index.emplace(entry.resource, entry.info);
             if(!inserted){

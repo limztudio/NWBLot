@@ -38,30 +38,6 @@ uint2 nwbCsgReceiverSpanBuildFrameExtent(){
     return uint2(width, height);
 }
 
-uint nwbCsgReceiverSpanBuildEventLayerCount(){
-    uint width = 1u;
-    uint height = 1u;
-    uint layerCount = 1u;
-    g_NwbCsgReceiverEventData.GetDimensions(width, height, layerCount);
-    return min(layerCount, NWB_CSG_RECEIVER_EVENT_LAYER_COUNT);
-}
-
-uint nwbCsgReceiverSpanBuildSpanLayerCount(){
-    uint width = 1u;
-    uint height = 1u;
-    uint layerCount = 1u;
-    g_NwbCsgReceiverSpanData.GetDimensions(width, height, layerCount);
-    return min(layerCount, NWB_CSG_RECEIVER_SPAN_LAYER_COUNT);
-}
-
-uint2 nwbCsgReceiverSpanBuildWorkOffset(){
-    return nwbCsgIntervalDispatchWorkOffset();
-}
-
-uint2 nwbCsgReceiverSpanBuildWorkExtent(){
-    return nwbCsgIntervalDispatchWorkExtent();
-}
-
 uint nwbCsgReceiverSpanBuildLoadEventCount(const uint2 pixel, const uint eventLayerCount, inout uint inOutFlags){
     const uint eventCount = g_NwbCsgReceiverEventCount.Load(int3(int2(pixel), 0));
     // The event emit pass keeps counting past the storable layer budget, so a raw count above the budget is exactly the overflow condition; no separate event-flags texture is required.
@@ -183,17 +159,17 @@ bool nwbCsgReceiverSpanBuildPairSingleReceiver(const uint2 pixel, const uint spa
 [numthreads(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_X, NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_Y, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint2 frameExtent = nwbCsgReceiverSpanBuildFrameExtent();
-    const uint2 workExtent = nwbCsgReceiverSpanBuildWorkExtent();
+    const uint2 workExtent = nwbCsgIntervalDispatchWorkExtent();
     if(dispatchThreadID.x >= workExtent.x || dispatchThreadID.y >= workExtent.y)
         return;
 
-    const uint2 pixel = dispatchThreadID.xy + nwbCsgReceiverSpanBuildWorkOffset();
+    const uint2 pixel = dispatchThreadID.xy + nwbCsgIntervalDispatchWorkOffset();
     if(pixel.x >= frameExtent.x || pixel.y >= frameExtent.y)
         return;
 
     uint flags = 0u;
-    const uint eventLayerCount = nwbCsgReceiverSpanBuildEventLayerCount();
-    const uint spanLayerCount = nwbCsgReceiverSpanBuildSpanLayerCount();
+    const uint eventLayerCount = nwbCsgReceiverEventLayerCount();
+    const uint spanLayerCount = nwbCsgReceiverSpanLayerCount();
     const uint eventCount = nwbCsgReceiverSpanBuildLoadEventCount(pixel, eventLayerCount, flags);
 
     uint spanCount = 0u;

@@ -126,32 +126,22 @@ namespace RendererTaskGraphDetail{
 
 
 [[nodiscard]] bool AvboitDepthWarpGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
-    bool timingRecorded = false;
-    const auto timingAttribution = ECSRenderDetail::BeginTaskTimingSample(payload.timingFeedback, payload.timingScope, context);
-    if(!timingAttribution){
-        payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
-        return false;
-    }
-    payload.timingAttribution = *timingAttribution;
-    payload.avboitSystem.dispatchAvboitDepthWarp(commandList, payload.targets, payload.timingAttribution, &timingRecorded);
-    if(!timingRecorded && payload.timingFeedback){
-        payload.timingFeedback->discardRecording(payload.timingAttribution);
-        payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
-    }
-    return true;
+    return RecordAvboitComputeEffect(
+        payload,
+        commandList,
+        context,
+        [&](Core::CommandList& dispatchCommandList, AvboitFrameTargets& targets, const Core::GpuTimingSampleAttribution attribution, bool* const timingRecorded){
+            payload.avboitSystem.dispatchAvboitDepthWarp(dispatchCommandList, targets, attribution, timingRecorded);
+        }
+    );
 }
 
 void AvboitDepthWarpGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
-    if(payload.timingFeedback)
-        payload.timingFeedback->acceptSubmission(payload.timingAttribution, token);
-    payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
+    AcceptAvboitComputeEffect(payload, token);
 }
 
 void AvboitDepthWarpGraphTask::Discarded(Payload& payload)noexcept{
-    if(payload.timingFeedback)
-        payload.timingFeedback->discardRecording(payload.timingAttribution);
-    payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
+    DiscardAvboitComputeEffect(payload);
 }
 
 

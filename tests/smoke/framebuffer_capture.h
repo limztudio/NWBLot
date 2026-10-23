@@ -163,6 +163,23 @@ private:
     return ConfigureSmokeFramebufferCapture(context, scratchArena, projectName, defaultFrameCount, options);
 }
 
+[[nodiscard]] inline bool PrepareSmokeCaptureSeries(
+    ProjectRuntimeContext& context,
+    const AStringView outputPath,
+    const u32 sampleCount,
+    const FramebufferCaptureOptions& options,
+    Vector<::Path<Core::Alloc::GlobalArena>, Core::Alloc::GlobalArena>& outCapturePaths,
+    UniquePtr<FramebufferCapture>& outCapture
+){
+    outCapturePaths.reserve(sampleCount);
+    for(u32 sample = 0u; sample < sampleCount; ++sample){
+        const auto path = sample + 1u == sampleCount ? SmokeEnvironmentString(outputPath, context.objectArena) : StringFormat(context.objectArena, "{}.{}.bmp", outputPath, sample);
+        outCapturePaths.emplace_back(context.objectArena, AStringView(path));
+    }
+    outCapture = MakeUnique<FramebufferCapture>(context, Move(outCapturePaths.front()), 1u, options);
+    return outCapture && outCapture->start();
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

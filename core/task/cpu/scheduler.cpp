@@ -5,8 +5,8 @@
 #include "scheduler.h"
 #include "arena_names.h"
 
+#include <global/atomic_identity.h>
 #include <global/exception.h>
-#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -68,10 +68,7 @@ CpuTaskScheduler::Execution::~Execution()noexcept{
 
 u64 CpuTaskScheduler::AllocateDomainIdentity()noexcept{
     static Atomic<u64> s_Next{ 1u };
-    const u64 identity = s_Next.fetch_add(1u, MemoryOrder::relaxed);
-    if(identity == 0u)
-        TerminateInvariant();
-    return identity;
+    return NextNonWrappingIdentity(s_Next);
 }
 
 CpuTaskSchedulerConfig CpuTaskScheduler::WorkerConfig(const u32 workerCount)noexcept{

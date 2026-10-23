@@ -31,15 +31,9 @@ HardwareCausticsResolveChainBuilder::HardwareCausticsResolveChainBuilder(Core::G
 [[nodiscard]] Expected<HardwareCausticsResolveChainResult> HardwareCausticsResolveChainBuilder::declare(const HardwareCausticsResolveChainInputs& inputs, Core::Alloc::ScratchArena& scratchArena){
     HardwareCausticsResolveChainResult result{};
     CausticsResolveChainInputs sharedInputs(inputs.targets, inputs.producerDispatched, inputs.timingTicket, inputs.resolveTiming);
+    static_cast<CausticsResolveChainStageUseInputs&>(sharedInputs) = inputs;
     sharedInputs.geometryTask = inputs.geometryTask;
     sharedInputs.baseScheduling = inputs.baseScheduling;
-    sharedInputs.prepare = inputs.prepare;
-    sharedInputs.wavelet = inputs.wavelet;
-    sharedInputs.secondWavelet = inputs.secondWavelet;
-    sharedInputs.thirdWavelet = inputs.thirdWavelet;
-    sharedInputs.fourthWavelet = inputs.fourthWavelet;
-    sharedInputs.fifthWavelet = inputs.fifthWavelet;
-    sharedInputs.upsample = inputs.upsample;
     const CausticsResolveChainNaming naming{
         {Name("render.hardware_caustics.resolve_prepare"), "Hardware Caustics Resolve Prepare", NWB_TEXT("RendererSystem: could not declare hardware-caustics resolve-prepare graph task")},
         {Name("render.hardware_caustics.resolve_wavelet"), "Hardware Caustics Resolve Wavelet", NWB_TEXT("RendererSystem: could not declare hardware-caustics first-wavelet graph task")},
@@ -54,13 +48,7 @@ HardwareCausticsResolveChainBuilder::HardwareCausticsResolveChainBuilder(Core::G
     auto sharedResult = sharedBuilder.declare(sharedInputs, naming, scratchArena);
     if(!sharedResult)
         return MakeUnexpected(Failure{});
-    result.causticResolvePrepareTask = sharedResult->causticResolvePrepareTask;
-    result.causticResolveWaveletTask = sharedResult->causticResolveWaveletTask;
-    result.causticResolveSecondWaveletTask = sharedResult->causticResolveSecondWaveletTask;
-    result.causticResolveThirdWaveletTask = sharedResult->causticResolveThirdWaveletTask;
-    result.causticResolveFourthWaveletTask = sharedResult->causticResolveFourthWaveletTask;
-    result.causticResolveFifthWaveletTask = sharedResult->causticResolveFifthWaveletTask;
-    result.causticResolveUpsampleTask = sharedResult->causticResolveUpsampleTask;
+    static_cast<CausticsResolveChainStageTasks&>(result) = *sharedResult;
     result.hardwareCausticsTask = sharedResult->causticsTask;
     return result;
 }

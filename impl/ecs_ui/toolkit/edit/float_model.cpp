@@ -34,20 +34,11 @@ NumericEditResult FloatEditModel::commit(const FloatBounds& bounds, const bool c
 
 Expected<bool, ErrorCode> FloatEditModel::canonicalize(const f64 value){
     char buffer[s_NumericEditMaxBytes];
-    const auto formatted = FormatF64(value, buffer);
-    if(!formatted)
-        return MakeUnexpected(formatted.error());
-    const bool changed = *formatted != m_draft.text();
-    if(!m_draft.setText(*formatted))
-        return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
-    m_acceptedDraft.assign(formatted->data(), formatted->size());
-    return changed;
+    return NumericEditDetail::CanonicalizeDraft(FormatF64(value, buffer), m_draft, m_acceptedDraft);
 }
 
 void FloatEditModel::advanceRevision()noexcept{
-    if(m_revision == Limit<u64>::s_Max)
-        TerminateInvariant();
-    ++m_revision;
+    NumericEditDetail::AdvanceRevision(m_revision);
 }
 
 
@@ -66,14 +57,11 @@ FloatEditModel::FloatEditModel(Core::Alloc::GlobalArena& arena)
 NumericParseStatus::Enum FloatEditModel::status(const FloatBounds& bounds)const noexcept{
     if(!ValidateFloatBounds(bounds))
         return NumericParseStatus::Invalid;
-    auto parsed = ParseFloatDraft(m_draft.text());
-    if(parsed && (*parsed < bounds.minimum || *parsed > bounds.maximum))
-        return NumericParseStatus::OutOfRange;
-    return parsed ? NumericParseStatus::Complete : parsed.error();
+    return NumericEditDetail::DraftStatus(ParseFloatDraft(m_draft.text()), bounds);
 }
 
 bool FloatEditModel::dirty()const noexcept{
-    return m_draft.text() != AStringView(m_acceptedDraft.data(), m_acceptedDraft.size());
+    return NumericEditDetail::DraftDirty(m_draft, m_acceptedDraft);
 }
 
 bool FloatEditModel::setValue(const f64 value){
@@ -85,10 +73,7 @@ bool FloatEditModel::setValue(const f64 value){
 }
 
 bool FloatEditModel::setDraft(const AStringView text){
-    if(!m_draft.setText(text))
-        return false;
-    advanceRevision();
-    return true;
+    return NumericEditDetail::SetDraftText(text, m_draft, m_revision);
 }
 
 NumericEditResult FloatEditModel::submit(const FloatBounds& bounds){ return commit(bounds, false); }
@@ -96,17 +81,11 @@ NumericEditResult FloatEditModel::submit(const FloatBounds& bounds){ return comm
 NumericEditResult FloatEditModel::blur(const FloatBounds& bounds){ return commit(bounds, true); }
 
 NumericEditResult FloatEditModel::cancel(){
-    NumericEditResult result = NumericEditDetail::RestoreDraft([this](){ return canonicalize(m_value); }, true);
-    if(result.valid)
-        advanceRevision();
-    return result;
+    return NumericEditDetail::RestoreModelDraft([this](){ return canonicalize(m_value); }, true, m_revision);
 }
 
 NumericEditResult FloatEditModel::abandon(){
-    NumericEditResult result = NumericEditDetail::RestoreDraft([this](){ return canonicalize(m_value); }, false);
-    if(result.valid)
-        advanceRevision();
-    return result;
+    return NumericEditDetail::RestoreModelDraft([this](){ return canonicalize(m_value); }, false, m_revision);
 }
 
 

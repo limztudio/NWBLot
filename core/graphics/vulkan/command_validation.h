@@ -57,10 +57,6 @@ namespace VulkanDetail{
     ;
 }
 
-[[nodiscard]] constexpr bool IsScissorRectValid(const Rect& scissor)noexcept{
-    return scissor.minX >= 0 && scissor.minY >= 0 && scissor.maxX >= scissor.minX && scissor.maxY >= scissor.minY;
-}
-
 [[nodiscard]] inline bool IsImplicitScissorValid(const Viewport& viewport)noexcept{
     if(!IsFinite(viewport.minX) || !IsFinite(viewport.maxX) || !IsFinite(viewport.minY) || !IsFinite(viewport.maxY))
         return false;

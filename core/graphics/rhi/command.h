@@ -76,6 +76,13 @@ public:
     }
 };
 
+[[nodiscard]] inline constexpr bool operator==(const QueueSubmissionToken& lhs, const QueueSubmissionToken& rhs)noexcept{
+    return lhs.queue == rhs.queue && lhs.value == rhs.value && lhs.physicalQueueIndex == rhs.physicalQueueIndex && lhs.deviceGeneration == rhs.deviceGeneration;
+}
+[[nodiscard]] inline constexpr bool operator!=(const QueueSubmissionToken& lhs, const QueueSubmissionToken& rhs)noexcept{
+    return !(lhs == rhs);
+}
+
 // Immutable queue pressure sampled at one scheduling decision. Timeline distance is a coarse availability signal.
 struct GpuQueueTimelineSnapshot{
     GpuPhysicalQueueId queue;

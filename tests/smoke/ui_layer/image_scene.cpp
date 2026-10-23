@@ -60,13 +60,10 @@ bool UiImageSmokeScene::paint(Impl::UiPaintContext& context){
     ui.style().fontSize = 14.0f;
     ui.style().gap = 8.0f;
     m_declared = {};
-    const SIMDVectorSingle logicalWidth = VectorReplicate(context.display.logicalWidth);
-    const SIMDVectorSingle mainWidth = VectorMax(VectorReplicate(300.0f), VectorMultiplyAddExpression(logicalWidth, VectorReplicate(0.5f), VectorNegate(VectorReplicate(40.0f))));
-    const SIMDVectorSingle rightColumn = VectorAdd(VectorAdd(VectorReplicate(24.0f), mainWidth), VectorReplicate(32.0f));
-    const SIMDVectorSingle rightWidth = VectorMax(VectorReplicate(220.0f), VectorSubtract(VectorSubtract(logicalWidth, rightColumn), VectorReplicate(24.0f)));
-    const f32 width = VectorGetX(mainWidth);
-    const f32 right = VectorGetX(rightColumn);
-    const f32 otherWidth = VectorGetX(rightWidth);
+    const PassiveSmokeColumns columns = ResolvePassiveSmokeColumns(context.display);
+    const f32 width = columns.mainWidth;
+    const f32 right = columns.rightColumn;
+    const f32 otherWidth = columns.rightWidth;
     if(!paintMain(ui, { 24.0f, 24.0f, width, 392.0f }) || !paintFrozen(ui, { right, 24.0f, otherWidth, 120.0f }) || !paintExternal(context, { right, 176.0f, otherWidth, 84.0f }) || !paintPopups(ui, right) || ui.failed())
         return false;
     observeState(context);

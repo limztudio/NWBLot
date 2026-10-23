@@ -25,13 +25,6 @@ namespace UiTextVisibleTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ExpectRectangle(const Rect& actual, const Rect& expected){
-    EXPECT_FLOAT_EQ(actual.x, expected.x);
-    EXPECT_FLOAT_EQ(actual.y, expected.y);
-    EXPECT_FLOAT_EQ(actual.width, expected.width);
-    EXPECT_FLOAT_EQ(actual.height, expected.height);
-}
-
 void ExpectSamePaint(const DrawSnapshot& actual, const DrawSnapshot& expected){
     ASSERT_EQ(actual.glyphPages().size(), expected.glyphPages().size());
     ASSERT_EQ(actual.sdfPages().size(), expected.sdfPages().size());
@@ -53,7 +46,7 @@ void ExpectSamePaint(const DrawSnapshot& actual, const DrawSnapshot& expected){
         const DrawCommand& a = actual.commands()[index];
         const DrawCommand& e = expected.commands()[index];
         UiPaintAssertions::ExpectSameCommandFields(a, e);
-        ExpectRectangle(a.clip, e.clip);
+        ExpectRect(a.clip, e.clip);
     }
 }
 

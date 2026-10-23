@@ -16,6 +16,7 @@
 
 #include <core/alloc/scratch.h>
 #include <core/graphics/backend_selection.h>
+#include <core/graphics/rhi/gpu_descriptor_heap.h>
 #include <core/task/gpu/presentation_contributor.h>
 #include <core/task/gpu/task_graph.h>
 
@@ -103,6 +104,32 @@ template<typename T, typename... Args>
     if(!value)
         return MakeUnexpected(Failure{});
     return GpuVersion<T>(value, ArenaRefDeleter<RefCounter<T>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
+}
+
+inline void FreeGpuDescriptor(Core::GraphicsRuntime& graphics, const Core::GpuDescriptorHandle& descriptor)noexcept{
+    if(descriptor.valid())
+        graphics.getDevice().getDescriptorHeap().free(descriptor);
+}
+
+[[nodiscard]] inline bool PrepareGpuSampledImageDescriptor(
+    Core::GraphicsRuntime& graphics,
+    const Core::TextureHandle& texture,
+    const Core::Format::Enum format,
+    Core::GpuDescriptorHandle& inOutDescriptor
+){
+    if(inOutDescriptor.valid())
+        return true;
+    Core::GpuDescriptorHeap& heap = graphics.getDevice().getDescriptorHeap();
+    const Expected<Core::GpuDescriptorHandle> descriptorResult = heap.allocate(Core::GpuDescriptorClass::SampledImage);
+    if(!descriptorResult)
+        return false;
+    const Core::GpuDescriptorHandle descriptor = *descriptorResult;
+    Core::GpuDescriptorRetirementGuard descriptorGuard(heap, descriptor);
+    if(!heap.write(descriptor, Core::DescriptorWriteItem::TextureSrv(0u, texture.get(), format, Core::s_AllSubresources, Core::TextureDimension::Texture2D)))
+        return false;
+    inOutDescriptor = descriptor;
+    descriptorGuard.release();
+    return true;
 }
 
 

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import math
 import re
 import statistics
@@ -123,3 +124,13 @@ def require_scope_samples(summaries: Mapping[str, ScopeSummary], scope: str, min
 
     observed = ", ".join(summaries) or "none"
     raise SmokeFailure(f"required timing scope '{scope}' has fewer than {minimum_samples} samples in {timing_file}; " f"observed scopes: {observed}. Build dbg/namesym or pass the matching --*-namesym sidecar.")
+
+
+def require_positive(parser: argparse.ArgumentParser, option: str, value: float) -> None:
+    if not math.isfinite(value) or value <= 0.0:
+        parser.error(f"{option} must be positive and finite")
+
+
+def require_non_negative(parser: argparse.ArgumentParser, option: str, value: float) -> None:
+    if not math.isfinite(value) or value < 0.0:
+        parser.error(f"{option} must be non-negative and finite")

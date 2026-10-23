@@ -69,6 +69,14 @@ namespace RayTracingSurfelGiTaskDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct SurfelGiAsyncPassPayload{
+    RendererRayTracingSystem& raytracingSystem;
+    DeferredFrameTargets& targets;
+    DeferredLightingGraphResources deferredLightingResources;
+    Core::GpuTimingSubmissionTicket& timingTicket;
+    Optional<Core::GpuTimingMeasure>& asyncTiming;
+};
+
 // Hash-build, spawn, trace-args, trace, and resolve share one async-guard preamble; only the render call differs.
 template<typename PayloadT>
 [[nodiscard]] inline bool SurfelAsyncRecordReady(const PayloadT& payload, const Core::GpuTaskRecordContext& context)noexcept(
@@ -82,6 +90,29 @@ template<typename PayloadT>
     if(!queue || (queue->queueClass == Core::CommandQueue::Compute && !payload.asyncTiming.has_value()))
         return false;
     return true;
+}
+
+using SurfelGiAsyncPassRecorder = bool (RendererRayTracingSystem::*)(Core::CommandList&, DeferredFrameTargets&, const DeferredLightingGraphResources&);
+
+template<SurfelGiAsyncPassRecorder Recorder>
+[[nodiscard]] inline bool RecordSurfelGiAsyncPass(const SurfelGiAsyncPassPayload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    static_assert(Recorder != nullptr);
+    if(!SurfelAsyncRecordReady(payload, context))
+        return false;
+
+    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
+    if(!(payload.raytracingSystem.*Recorder)(commandList, payload.targets, payload.deferredLightingResources)){
+        if(payload.asyncTiming.has_value()){
+            payload.asyncTiming.value().discardTiming();
+            payload.asyncTiming.reset();
+        }
+        return false;
+    }
+    return true;
+}
+
+inline void DiscardSurfelGiAsyncPass(SurfelGiAsyncPassPayload& payload){
+    Core::DiscardGpuTimingMeasure(&payload.asyncTiming);
 }
 
 
@@ -137,136 +168,60 @@ public:
 
 struct SurfelGiHashBuildGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
-    // All bindings are required: hash-build always records against this frame's ticket and brackets the shared async surfel range.
-    struct Payload{
-        RendererRayTracingSystem& raytracingSystem;
-        DeferredFrameTargets& targets;
-        DeferredLightingGraphResources deferredLightingResources;
-        Core::GpuTimingSubmissionTicket& timingTicket;
-        Optional<Core::GpuTimingMeasure>& asyncTiming;
-    };
+    using Payload = SurfelGiAsyncPassPayload;
 
 
 public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-        if(!RayTracingSurfelGiTaskDetail::SurfelAsyncRecordReady(payload, context))
-            return false;
-
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
-        if(!payload.raytracingSystem.renderSurfelGiHashBuild(commandList, payload.targets, payload.deferredLightingResources)){
-            if(payload.asyncTiming.has_value()){
-                payload.asyncTiming.value().discardTiming();
-                payload.asyncTiming.reset();
-            }
-            return false;
-        }
-        return true;
+        return RecordSurfelGiAsyncPass<&RendererRayTracingSystem::renderSurfelGiHashBuild>(payload, commandList, context);
     }
 
     static void Discarded(Payload& payload){
-        Core::DiscardGpuTimingMeasure(&payload.asyncTiming);
+        DiscardSurfelGiAsyncPass(payload);
     }
 };
 
 
 struct SurfelGiSpawnGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
-    // All bindings are required: spawn always records against this frame's ticket and brackets the shared async surfel range.
-    struct Payload{
-        RendererRayTracingSystem& raytracingSystem;
-        DeferredFrameTargets& targets;
-        DeferredLightingGraphResources deferredLightingResources;
-        Core::GpuTimingSubmissionTicket& timingTicket;
-        Optional<Core::GpuTimingMeasure>& asyncTiming;
-    };
+    using Payload = SurfelGiAsyncPassPayload;
 
 
 public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-        if(!RayTracingSurfelGiTaskDetail::SurfelAsyncRecordReady(payload, context))
-            return false;
-
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
-        if(!payload.raytracingSystem.renderSurfelGiSpawn(commandList, payload.targets, payload.deferredLightingResources)){
-            if(payload.asyncTiming.has_value()){
-                payload.asyncTiming.value().discardTiming();
-                payload.asyncTiming.reset();
-            }
-            return false;
-        }
-        return true;
+        return RecordSurfelGiAsyncPass<&RendererRayTracingSystem::renderSurfelGiSpawn>(payload, commandList, context);
     }
 
     static void Discarded(Payload& payload){
-        Core::DiscardGpuTimingMeasure(&payload.asyncTiming);
+        DiscardSurfelGiAsyncPass(payload);
     }
 };
 
 
 struct SurfelGiTraceBuildArgsGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
-    // All bindings are required: trace-args always records against this frame's ticket and brackets the shared async surfel range.
-    struct Payload{
-        RendererRayTracingSystem& raytracingSystem;
-        DeferredFrameTargets& targets;
-        DeferredLightingGraphResources deferredLightingResources;
-        Core::GpuTimingSubmissionTicket& timingTicket;
-        Optional<Core::GpuTimingMeasure>& asyncTiming;
-    };
+    using Payload = SurfelGiAsyncPassPayload;
 
 
 public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-        if(!RayTracingSurfelGiTaskDetail::SurfelAsyncRecordReady(payload, context))
-            return false;
-
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
-        if(!payload.raytracingSystem.renderSurfelGiTraceBuildArgs(commandList, payload.targets, payload.deferredLightingResources)){
-            if(payload.asyncTiming.has_value()){
-                payload.asyncTiming.value().discardTiming();
-                payload.asyncTiming.reset();
-            }
-            return false;
-        }
-        return true;
+        return RecordSurfelGiAsyncPass<&RendererRayTracingSystem::renderSurfelGiTraceBuildArgs>(payload, commandList, context);
     }
 
     static void Discarded(Payload& payload){
-        Core::DiscardGpuTimingMeasure(&payload.asyncTiming);
+        DiscardSurfelGiAsyncPass(payload);
     }
 };
 
 
 struct SurfelGiTraceGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
-    // All bindings are required: trace always records against this frame's ticket and brackets the shared async surfel range.
-    struct Payload{
-        RendererRayTracingSystem& raytracingSystem;
-        DeferredFrameTargets& targets;
-        DeferredLightingGraphResources deferredLightingResources;
-        Core::GpuTimingSubmissionTicket& timingTicket;
-        Optional<Core::GpuTimingMeasure>& asyncTiming;
-    };
+    using Payload = SurfelGiAsyncPassPayload;
 
 
 public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-        if(!RayTracingSurfelGiTaskDetail::SurfelAsyncRecordReady(payload, context))
-            return false;
-
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
-        if(!payload.raytracingSystem.renderSurfelGiTrace(commandList, payload.targets, payload.deferredLightingResources)){
-            if(payload.asyncTiming.has_value()){
-                payload.asyncTiming.value().discardTiming();
-                payload.asyncTiming.reset();
-            }
-            return false;
-        }
-        return true;
+        return RecordSurfelGiAsyncPass<&RendererRayTracingSystem::renderSurfelGiTrace>(payload, commandList, context);
     }
 
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
@@ -274,42 +229,23 @@ public:
     }
 
     static void Discarded(Payload& payload){
-        Core::DiscardGpuTimingMeasure(&payload.asyncTiming);
+        DiscardSurfelGiAsyncPass(payload);
     }
 };
 
 
 struct SurfelGiResolveGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
-    // All bindings are required: resolve always records against this frame's ticket and brackets the shared async surfel range.
-    struct Payload{
-        RendererRayTracingSystem& raytracingSystem;
-        DeferredFrameTargets& targets;
-        DeferredLightingGraphResources deferredLightingResources;
-        Core::GpuTimingSubmissionTicket& timingTicket;
-        Optional<Core::GpuTimingMeasure>& asyncTiming;
-    };
+    using Payload = SurfelGiAsyncPassPayload;
 
 
 public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-        if(!RayTracingSurfelGiTaskDetail::SurfelAsyncRecordReady(payload, context))
-            return false;
-
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
-        if(!payload.raytracingSystem.renderSurfelGiResolve(commandList, payload.targets, payload.deferredLightingResources)){
-            if(payload.asyncTiming.has_value()){
-                payload.asyncTiming.value().discardTiming();
-                payload.asyncTiming.reset();
-            }
-            return false;
-        }
-        return true;
+        return RecordSurfelGiAsyncPass<&RendererRayTracingSystem::renderSurfelGiResolve>(payload, commandList, context);
     }
 
     static void Discarded(Payload& payload){
-        Core::DiscardGpuTimingMeasure(&payload.asyncTiming);
+        DiscardSurfelGiAsyncPass(payload);
     }
 };
 

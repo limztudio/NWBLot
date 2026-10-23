@@ -49,19 +49,7 @@ namespace __hidden_ui_gpu_glyph_resources{
 }
 
 [[nodiscard]] static bool PrepareDescriptor(GpuGlyphVersion& version){
-    if(version.m_sampledImage.valid())
-        return true;
-    Core::GpuDescriptorHeap& heap = version.m_graphics.getDevice().getDescriptorHeap();
-    const Expected<Core::GpuDescriptorHandle> descriptorResult = heap.allocate(Core::GpuDescriptorClass::SampledImage);
-    if(!descriptorResult)
-        return false;
-    const Core::GpuDescriptorHandle descriptor = *descriptorResult;
-    Core::GpuDescriptorRetirementGuard descriptorGuard(heap, descriptor);
-    if(!heap.write(descriptor, Core::DescriptorWriteItem::TextureSrv(0u, version.m_texture.get(), Core::Format::R8_UNORM, Core::s_AllSubresources, Core::TextureDimension::Texture2D)))
-        return false;
-    version.m_sampledImage = descriptor;
-    descriptorGuard.release();
-    return true;
+    return PrepareGpuSampledImageDescriptor(version.m_graphics, version.m_texture, Core::Format::R8_UNORM, version.m_sampledImage);
 }
 
 
@@ -80,8 +68,7 @@ GpuGlyphVersion::GpuGlyphVersion(Core::GraphicsRuntime& graphics, SharedGlyphPag
 {}
 
 GpuGlyphVersion::~GpuGlyphVersion()noexcept{
-    if(m_sampledImage.valid())
-        m_graphics.getDevice().getDescriptorHeap().free(m_sampledImage);
+    FreeGpuDescriptor(m_graphics, m_sampledImage);
 }
 
 

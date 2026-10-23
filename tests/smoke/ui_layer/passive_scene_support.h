@@ -20,6 +20,20 @@ NWB_BEGIN
 namespace Tests::Smoke{
 
 
+struct PassiveSmokeColumns{
+    f32 mainWidth = 0.0f;
+    f32 rightColumn = 0.0f;
+    f32 rightWidth = 0.0f;
+};
+
+[[nodiscard]] inline PassiveSmokeColumns ResolvePassiveSmokeColumns(const Impl::Ui::DisplayMetrics& display)noexcept{
+    const SIMDVectorSingle logicalWidth = VectorReplicate(display.logicalWidth);
+    const SIMDVectorSingle mainWidth = VectorMax(VectorReplicate(300.0f), VectorMultiplyAddExpression(logicalWidth, VectorReplicate(0.5f), VectorNegate(VectorReplicate(40.0f))));
+    const SIMDVectorSingle rightColumn = VectorAdd(VectorAdd(VectorReplicate(24.0f), mainWidth), VectorReplicate(32.0f));
+    const SIMDVectorSingle rightWidth = VectorMax(VectorReplicate(220.0f), VectorSubtract(VectorSubtract(logicalWidth, rightColumn), VectorReplicate(24.0f)));
+    return { VectorGetX(mainWidth), VectorGetX(rightColumn), VectorGetX(rightWidth) };
+}
+
 struct PassiveSmokeTargetObservation{
     u32 focusCode = 0u;
     u32 passiveTargets = 0u;
@@ -117,17 +131,7 @@ template<typename SnapshotT, typename StateChangedT>
 
 template<typename ValuesT>
 inline void PaintPassiveSmokeValueMarkers(Impl::UiPaintContext& context, const ValuesT& values, const u64 sequence){
-    const f32 y = VectorGetX(VectorSubtract(VectorReplicate(context.display.logicalHeight), VectorReplicate(18.0f)));
-    const auto positions = BuildSmokeMarkerPositions<(TupleSize_V<ValuesT> + 1u) * 2u, 12u, 12u>();
-    usize marker = 0u;
-    for(const u64 value : values){
-        for(u32 part = 0u; part < 2u; ++part){
-            context.paint.fillRect({ positions[marker++], y, 8.0f, 8.0f }, EncodeSmokeColor(value >> (part * 12u)));
-        }
-    }
-    for(u32 part = 0u; part < 2u; ++part){
-        context.paint.fillRect({ positions[marker++], y, 8.0f, 8.0f }, EncodeSmokeColor(sequence >> (part * 12u)));
-    }
+    PaintKeyedSmokeValueMarkers<12u, 8u, 8u, 18u>(context, values, sequence);
 }
 
 

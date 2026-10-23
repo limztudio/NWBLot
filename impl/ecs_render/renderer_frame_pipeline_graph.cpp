@@ -140,34 +140,11 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     const RayTracingDeferredGraphResourceSnapshot rayTracingGraphResources = m_raytracingSystem.snapshotDeferredGraphResources();
     const RayTracingSurfelPersistentResourceSnapshot rayTracingSurfelResources = m_raytracingSystem.snapshotSurfelPersistentResources();
 
-    m_deferredBindlessSlotsUploadTask = {};
-    m_rayTraceMaterialContextSlotsUploadTask = {};
-    m_csgTraceContextUploadTask = {};
-    m_causticEmissionTargetsUploadTask = {};
-    m_surfelFrameConstantsUploadTask = {};
-    m_shadowInstanceMaterialUploadTask = {};
-    m_shadowInstanceUploadTask = {};
-    m_shadowMaterialTypedUploadTask = {};
-    m_sceneBvhNodesUploadTask = {};
-    m_sceneBvhInstancesUploadTask = {};
-    m_deferredLaggedLightingHistorySlotsUploadTask = {};
     m_deferredFrameTimingBeginTask = {};
-    m_deferredShadowPrepareTask = {};
-    m_deferredShadowPrepareSoftwareBvhBuildFirstTask = {};
-    m_deferredShadowPrepareSoftwareBvhBuildLastTask = {};
-    m_deferredShadowPrepareAccelStructFinalizeTask = {};
-    m_graphicsPrefixMeshViewSetupTask = {};
-    m_graphicsPrefixSceneShadingSetupTask = {};
-    m_graphicsPrefixDeferredClearTask = {};
+    resetShadowPrepareTaskState();
     m_graphicsPrefixCsgIntervalClearFirstTask = {};
     m_graphicsPrefixCsgIntervalClearTask = {};
-    resetGraphicsPrefixTaskState();
-    resetSharedDeferredFrameTaskState();
-    m_graphicsPrefixMeshViewSetupReady = false;
-    m_graphicsPrefixSceneShadingSetupReady = false;
-    m_deferredFrameRecoveryArmed = false;
-    m_deferredFrameRecoveryRetiresTiming = false;
-    m_deferredPresentationOverlayRequired = false;
+    resetDeferredFrameTaskIdsAndFlags();
     resetDeferredTaskGraphRuntime();
     // Declaration runs between artifact discard and execution-time compilation.
     const Timer declarationBegin = TimerNow();

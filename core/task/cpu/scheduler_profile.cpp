@@ -4,7 +4,7 @@
 
 #include "scheduler.h"
 
-#include <global/termination.h>
+#include <global/atomic_identity.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -44,10 +44,7 @@ CpuTaskScheduler::ProfileMeasure::~ProfileMeasure()noexcept{
 
 u64 CpuTaskScheduler::AllocateProfileLabelIdentity()noexcept{
     static Atomic<u64> s_Next{ 1u };
-    const u64 identity = s_Next.fetch_add(1u, MemoryOrder::relaxed);
-    if(identity == 0u)
-        TerminateInvariant();
-    return identity;
+    return NextNonWrappingIdentity(s_Next);
 }
 
 CpuTaskProfileLabel CpuTaskScheduler::registerProfileLabel(const Name& name){

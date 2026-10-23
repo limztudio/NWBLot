@@ -6,6 +6,7 @@
 
 
 #include <tests/unit/ui/native_input.h>
+#include "paint_assertions.h"
 #include "widget_id_assertion.h"
 
 #include <impl/ecs_ui/toolkit/builder.h>
@@ -46,12 +47,7 @@ inline constexpr Name s_FontScratchArenaName("tests/ui/fonts/operation_scratch")
     return { VectorGetX(center), VectorGetY(center) };
 }
 
-inline void ExpectRect(const Rect& actual, const Rect& expected){
-    EXPECT_FLOAT_EQ(actual.x, expected.x);
-    EXPECT_FLOAT_EQ(actual.y, expected.y);
-    EXPECT_FLOAT_EQ(actual.width, expected.width);
-    EXPECT_FLOAT_EQ(actual.height, expected.height);
-}
+using UiPaintAssertions::ExpectRect;
 
 inline void ExpectRectExact(const Rect& actual, const Rect& expected){
     EXPECT_EQ(BitCast<u32>(actual.x), BitCast<u32>(expected.x));
@@ -152,6 +148,20 @@ inline constexpr AStringView s_ChildPopupKey = "child";
     return options;
 }
 
+[[nodiscard]] inline u64 ArithmeticFixtureRowKey(const u64 count, const u64 removed, const bool reverse, const u64 index)noexcept{
+    const u64 forward = reverse ? count - 1u - index : index;
+    const u64 value = forward + 1u;
+    return value + (removed != 0u && value >= removed ? 1u : 0u);
+}
+
+[[nodiscard]] inline Expected<u64> FindArithmeticFixtureRowIndex(const u64 count, const u64 removed, const bool reverse, const u64 value)noexcept{
+    if(value == 0u || value == removed || value > count + (removed != 0u ? 1u : 0u))
+        return MakeUnexpected(Failure{});
+    const u64 forward = value - 1u - (removed != 0u && value > removed ? 1u : 0u);
+    const u64 index = reverse ? count - 1u - forward : forward;
+    return index < count ? Expected<u64>{ index } : MakeUnexpected(Failure{});
+}
+
 template<typename KeyLookup>
 [[nodiscard]] Expected<u64> FindSingleDisabledFixtureRow(const u64 count, const u64 start, const bool backwards, const u64 disabled, KeyLookup&& rawKey)noexcept(noexcept(static_cast<bool>(rawKey(DeclVal<u64&>()) != disabled))){
     u64 index = 0u;
@@ -246,8 +256,31 @@ protected:
         return m_builder.endWindow() && m_context.endRoot() && m_context.finishFrame();
     }
 
+    [[nodiscard]] static ImageOptions Fixed(const f32 width = 96.0f, const f32 height = 40.0f)noexcept{
+        ImageOptions options;
+        options.width = { LayoutSizePolicy::Fixed, width };
+        options.height = { LayoutSizePolicy::Fixed, height };
+        return options;
+    }
+
+    [[nodiscard]] bool panel(const u64 generation, const AStringView key = "panel", const Rect& bounds = { 10.0f, 10.0f, 360.0f, 400.0f }){
+        return begin(generation) && m_builder.beginPanel(key, bounds);
+    }
+
+    [[nodiscard]] bool finishRoot(){
+        return m_context.endRoot() && m_context.finishFrame();
+    }
+
     [[nodiscard]] bool finishPanel(){
-        return m_builder.endPanel() && m_context.endRoot() && m_context.finishFrame();
+        return m_builder.endPanel() && finishRoot();
+    }
+
+    [[nodiscard]] WidgetId parentId()const{
+        return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), s_ParentPopupKey));
+    }
+
+    [[nodiscard]] WidgetId childId()const{
+        return UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), s_ChildPopupKey));
     }
 
     [[nodiscard]] WidgetId id(const AStringView child, const AStringView parent = "window")const{

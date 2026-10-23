@@ -61,22 +61,10 @@ bool RendererRayTracingSystem::hasCausticWork(const ECSRenderDetail::MeshViewBuf
     const bool hardwareShadowSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct) && m_graphics.queryFeatureSupport(Core::Feature::RayQuery);
     return
         !hardwareShadowSupported
-        && m_shadowVisibilityTraceResourcesPreflighted
-        && m_shadowVisibilityPreparedTargets
         && (m_lightSpaceShadow.m_csg.snapshot.hasCsg ? m_rayTracingState.m_swCausticCsgPipeline : m_rayTracingState.m_swCausticPipeline)
-        && causticResolveResourcesReady(*m_shadowVisibilityPreparedTargets, m_rayTracingState.m_causticTemporalDecay)
-        && m_rayTracingState.m_causticLightCount > 0u
-        && m_unsupportedCausticVolumeCount == 0u
-        && m_rayTracingState.m_causticRefractiveInstanceCount > 0u
         && m_rayTracingState.m_sceneBvhInstanceCount > 0u
         && m_rayTracingState.m_swShadowMeshCount > 0u
-        && m_rayTracingState.m_causticEmissionTargetBuffer
-        && m_rayTracingState.m_causticEmissionTargetHeapHandle.valid()
-        && m_rayTracingState.m_causticEmissionTargetHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
-        && m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer
-        && m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid()
-        && m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer
-        && meshView.bindingValid()
+        && hasCommonCausticWork(meshView)
     ;
 }
 

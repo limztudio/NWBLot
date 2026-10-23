@@ -31,15 +31,9 @@ SoftwareCausticsResolveChainBuilder::SoftwareCausticsResolveChainBuilder(Core::G
 [[nodiscard]] Expected<SoftwareCausticsResolveChainResult> SoftwareCausticsResolveChainBuilder::declare(const SoftwareCausticsResolveChainInputs& inputs, Core::Alloc::ScratchArena& scratchArena){
     SoftwareCausticsResolveChainResult result{};
     CausticsResolveChainInputs sharedInputs(inputs.targets, inputs.producerDispatched, inputs.timingTicket, inputs.resolveTiming);
+    static_cast<CausticsResolveChainStageUseInputs&>(sharedInputs) = inputs;
     sharedInputs.geometryTask = inputs.geometryTask;
     sharedInputs.baseScheduling = inputs.baseScheduling;
-    sharedInputs.prepare = inputs.prepare;
-    sharedInputs.wavelet = inputs.wavelet;
-    sharedInputs.secondWavelet = inputs.secondWavelet;
-    sharedInputs.thirdWavelet = inputs.thirdWavelet;
-    sharedInputs.fourthWavelet = inputs.fourthWavelet;
-    sharedInputs.fifthWavelet = inputs.fifthWavelet;
-    sharedInputs.upsample = inputs.upsample;
     sharedInputs.stateSources = inputs.stateSources;
     sharedInputs.stateSourceCount = inputs.stateSourceCount;
     const CausticsResolveChainNaming naming{
@@ -56,13 +50,7 @@ SoftwareCausticsResolveChainBuilder::SoftwareCausticsResolveChainBuilder(Core::G
     auto sharedResult = sharedBuilder.declare(sharedInputs, naming, scratchArena);
     if(!sharedResult)
         return MakeUnexpected(Failure{});
-    result.causticResolvePrepareTask = sharedResult->causticResolvePrepareTask;
-    result.causticResolveWaveletTask = sharedResult->causticResolveWaveletTask;
-    result.causticResolveSecondWaveletTask = sharedResult->causticResolveSecondWaveletTask;
-    result.causticResolveThirdWaveletTask = sharedResult->causticResolveThirdWaveletTask;
-    result.causticResolveFourthWaveletTask = sharedResult->causticResolveFourthWaveletTask;
-    result.causticResolveFifthWaveletTask = sharedResult->causticResolveFifthWaveletTask;
-    result.causticResolveUpsampleTask = sharedResult->causticResolveUpsampleTask;
+    static_cast<CausticsResolveChainStageTasks&>(result) = *sharedResult;
     result.softwareCausticsTask = sharedResult->causticsTask;
     return result;
 }

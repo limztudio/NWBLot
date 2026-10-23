@@ -76,18 +76,6 @@ inline void NWB_SIMD_CALL BoundingDoubleBox::TransformBoxValue(SIMDVectorDouble 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void NWB_SIMD_CALL BoundingBox::CornersValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle (&outCorners)[s_CornerCount])noexcept{
-    CollisionDetail::AabbCorners(boxCenter, boxExtents, outCorners);
-}
-
-inline void NWB_SIMD_CALL BoundingDoubleBox::CornersValue(SIMDVectorDouble boxCenter, SIMDVectorDouble boxExtents, SIMDVectorDouble (&outCorners)[s_DoubleCornerCount])noexcept{
-    CollisionDoubleDetail::AabbCorners(boxCenter, boxExtents, outCorners);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingBox::ContainsPointValue(SIMDVectorSingle boxCenter, SIMDVectorSingle boxExtents, SIMDVectorSingle point)noexcept{
     SIMDVectorSingle minBounds{};
     SIMDVectorSingle maxBounds{};
@@ -420,7 +408,7 @@ inline void NWB_SIMD_CALL BoundingDoubleBox::transform(BoundingDoubleBox& outBox
 
 inline void BoundingBox::getCorners(Float3U (&corners)[s_CornerCount])const noexcept{
     SIMDVectorSingle cornerVectors[s_CornerCount];
-    CornersValue(LoadFloat(center), LoadFloat(extents), cornerVectors);
+    CollisionDetail::AabbCorners(LoadFloat(center), LoadFloat(extents), cornerVectors);
     for(u32 i = 0u; i < s_CornerCount; ++i)
         StoreFloat(VectorSetW(cornerVectors[i], 0.0f), corners[i]);
 }
@@ -428,7 +416,7 @@ inline void BoundingBox::getCorners(Float3U (&corners)[s_CornerCount])const noex
 template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
 inline void BoundingDoubleBox::getCorners(PointT (&corners)[s_DoubleCornerCount])const noexcept{
     SIMDVectorDouble cornerVectors[s_DoubleCornerCount];
-    CornersValue(LoadDouble(center), LoadDouble(extents), cornerVectors);
+    CollisionDoubleDetail::AabbCorners(LoadDouble(center), LoadDouble(extents), cornerVectors);
     for(u64 i = 0u; i < s_DoubleCornerCount; ++i)
         StoreDouble(VectorDoubleSetW(cornerVectors[i], 0.0), corners[i]);
 }

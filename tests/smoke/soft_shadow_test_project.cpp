@@ -39,10 +39,9 @@ namespace __hidden_soft_shadow_test_smoke{
 
 constexpr TStringView s_ProjectName = NWB_TEXT("SoftShadowTestSmokeProject");
 
-using NWB::Tests::Smoke::AddSmokeSkinnedRenderSystems;
 using NWB::Tests::Smoke::ArrowYawInputHandler;
 using NWB::Tests::Smoke::CreateSmokeCamera;
-using NWB::Tests::Smoke::CreateSmokeWorldOrDie;
+using NWB::Tests::Smoke::CreateSmokeSkinnedRenderWorldOrDie;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::CreateTintedModelEntity;
 using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
@@ -105,14 +104,6 @@ static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;
 
 class SoftShadowTestSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
-    static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = CreateSmokeWorldOrDie(context, s_ProjectName);
-
-        AddSmokeSkinnedRenderSystems(*world, context);
-
-        return world;
-    }
-
     // Angular radius is in radians; larger sources soften the penumbra.
     static f32 ConfiguredAngularRadius(){
         static const f32 s_Angle = [](){
@@ -147,7 +138,7 @@ private:
 public:
     explicit SoftShadowTestSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
-        , m_world(CreateWorldOrDie(context))
+        , m_world(CreateSmokeSkinnedRenderWorldOrDie(context, s_ProjectName))
     {}
     virtual ~SoftShadowTestSmokeProject()noexcept override{
         m_timingRenderPass.stop();

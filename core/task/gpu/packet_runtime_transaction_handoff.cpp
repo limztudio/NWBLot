@@ -73,10 +73,7 @@ namespace __hidden_gpu_packet_runtime_transaction_handoff{
                 planAccess.packetForTask(range.producerTask)
                     == planAccess.packetForTask(producer.producerTask)
                 && range.sourceQueue == producer.sourceQueue
-                && range.token.queue == producer.token.queue
-                && range.token.value == producer.token.value
-                && range.token.physicalQueueIndex == producer.token.physicalQueueIndex
-                && range.token.deviceGeneration == producer.token.deviceGeneration
+                && range.token == producer.token
             );
         }
         if(!matchesProducer)
@@ -90,10 +87,7 @@ namespace __hidden_gpu_packet_runtime_transaction_handoff{
     return
         handoff.producerTask == producer.producerTask
         && handoff.sourceQueue == producer.sourceQueue
-        && handoff.token.queue == producer.token.queue
-        && handoff.token.value == producer.token.value
-        && handoff.token.physicalQueueIndex == producer.token.physicalQueueIndex
-        && handoff.token.deviceGeneration == producer.token.deviceGeneration
+        && handoff.token == producer.token
     ;
 }
 

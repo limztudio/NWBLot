@@ -18,13 +18,7 @@ namespace __hidden_ecs_ui_edit_pointer_source_tests{
 
 using namespace UiEditBoxTestSupport;
 
-class UiEditPointerSourceTests : public UiEditBoxHostTests{
-protected:
-    [[nodiscard]] Ui::Point atByte(const usize byte)const noexcept{
-        const SIMDVectorSingle x = VectorAdd(VectorMultiplyAddExpression(VectorReplicate(static_cast<f32>(byte)), VectorReplicate(10.0f), VectorReplicate(m_placement.textOrigin.x)), VectorSplatOne());
-        return { VectorGetX(x), VectorGetX(VectorAdd(VectorReplicate(m_placement.textOrigin.y), VectorReplicate(5.0f))) };
-    }
-};
+using UiEditPointerSourceTests = UiEditBoxHostTests;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -136,34 +136,10 @@ void RendererFramePipeline::invalidateResources(){
     m_preparedRefractionResources = RayTracingRefractionGraphResources{};
     m_shadowPreparationOutcome.resourcesValid = false;
     m_shadowPreparationOutcome.ready = false;
-    m_deferredBindlessSlotsUploadTask = {};
-    m_rayTraceMaterialContextSlotsUploadTask = {};
-    m_csgTraceContextUploadTask = {};
-    m_causticEmissionTargetsUploadTask = {};
-    m_surfelFrameConstantsUploadTask = {};
-    m_shadowInstanceMaterialUploadTask = {};
-    m_shadowInstanceUploadTask = {};
-    m_shadowMaterialTypedUploadTask = {};
-    m_sceneBvhNodesUploadTask = {};
-    m_sceneBvhInstancesUploadTask = {};
-    m_deferredLaggedLightingHistorySlotsUploadTask = {};
-    m_deferredShadowPrepareTask = {};
-    m_deferredShadowPrepareSoftwareBvhBuildFirstTask = {};
-    m_deferredShadowPrepareSoftwareBvhBuildLastTask = {};
-    m_deferredShadowPrepareAccelStructFinalizeTask = {};
-    m_graphicsPrefixMeshViewSetupTask = {};
-    m_graphicsPrefixSceneShadingSetupTask = {};
-    m_graphicsPrefixDeferredClearTask = {};
-    resetGraphicsPrefixTaskState();
-    m_graphicsPrefixMeshViewSetupReady = false;
-    m_graphicsPrefixSceneShadingSetupReady = false;
-    resetSharedDeferredFrameTaskState();
-    m_deferredFrameRecoveryArmed = false;
-    m_deferredFrameRecoveryRetiresTiming = false;
+    resetShadowPrepareTaskState();
     m_preparedTaskGraphPresentationContributor = nullptr;
     m_preparedTaskGraphOutputLayerContributor = nullptr;
-    m_deferredPresentationOverlayRequired = false;
-    resetDeferredTaskGraphRuntime();
+    resetFrameTaskState();
     NWB_FATAL_ASSERT_MSG(m_deferredLightingRecordedGraph.releaseCommandListCache(), "renderer resource invalidation requires idle command-list caches");
     resetInvalidatedResourceStateHandoffs();
     resetLaggedLightingHistoryTracking();
@@ -459,7 +435,7 @@ void RendererFramePipeline::resetDeferredTaskGraphRuntime(){
     m_deferredLightingTaskGraphScheduled = false;
 }
 
-void RendererFramePipeline::resetFrameTaskState(){
+void RendererFramePipeline::resetShadowPrepareUploadTaskState()noexcept{
     m_deferredBindlessSlotsUploadTask = {};
     m_rayTraceMaterialContextSlotsUploadTask = {};
     m_csgTraceContextUploadTask = {};
@@ -470,6 +446,18 @@ void RendererFramePipeline::resetFrameTaskState(){
     m_shadowMaterialTypedUploadTask = {};
     m_sceneBvhNodesUploadTask = {};
     m_sceneBvhInstancesUploadTask = {};
+}
+
+void RendererFramePipeline::resetShadowPrepareTaskState()noexcept{
+    m_deferredShadowPrepareTask = {};
+    m_deferredShadowPrepareSoftwareBvhBuildFirstTask = {};
+    m_deferredShadowPrepareSoftwareBvhBuildLastTask = {};
+    m_deferredShadowPrepareAccelStructFinalizeTask = {};
+    resetShadowPrepareUploadTaskState();
+}
+
+void RendererFramePipeline::resetDeferredFrameTaskIdsAndFlags()noexcept{
+    resetShadowPrepareUploadTaskState();
     m_deferredLaggedLightingHistorySlotsUploadTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
@@ -481,6 +469,10 @@ void RendererFramePipeline::resetFrameTaskState(){
     m_deferredFrameRecoveryArmed = false;
     m_deferredFrameRecoveryRetiresTiming = false;
     m_deferredPresentationOverlayRequired = false;
+}
+
+void RendererFramePipeline::resetFrameTaskState(){
+    resetDeferredFrameTaskIdsAndFlags();
     resetDeferredTaskGraphRuntime();
 }
 

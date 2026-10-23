@@ -16,35 +16,27 @@ Pass options for ``run.py`` after ``--``, for example:
 from __future__ import annotations
 
 import argparse
-import subprocess
 import sys
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import List, Sequence
 
 
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO))
+sys.path.insert(0, str(REPO / "tests" / "ab"))
 
+import launch as AB_LAUNCH  # noqa: E402
 import launcher as ROOT_LAUNCHER  # noqa: E402
 
-LIT_ON = "ON"
 LIT_DBG = "dbg"
 LIT_OPT = "opt"
-LIT_COZTER = ".cozter"
-LIT_OUT = "out"
-LIT_AB_RESULTS = "ab-results"
 LIT_HARDWARE_SHADOW_BOUNDARY = "hardware-shadow-boundary"
 LIT_HEALTHY_EXECUTABLE = "--healthy-executable"
 LIT_BASELINE_EXECUTABLE = "--baseline-executable"
-LIT_RUNTIME_DIR = "--runtime-dir"
-LIT_OUTPUT_DIR = "--output-dir"
-LIT_GPU_VALIDATION = "--gpu-validation"
-LIT_NO_LOGSERVER = "--no-logserver"
-LIT_LOGSERVER_EXECUTABLE = "--logserver-executable"
-LIT_STORE_TRUE = "store_true"
-LIT_GPU_VALIDATION_2 = "gpu_validation"
+LIT_RUNTIME_DIR = AB_LAUNCH.LIT_RUNTIME_DIR
+LIT_OUTPUT_DIR = AB_LAUNCH.LIT_OUTPUT_DIR
+LIT_STORE_TRUE = AB_LAUNCH.LIT_STORE_TRUE
 LIT_SELF_TEST = "--self-test"
 LIT_MAIN = "__main__"
 
@@ -52,7 +44,7 @@ LIT_MAIN = "__main__"
 RUNNER_SCRIPT = Path("tests") / "ab" / "hardware_shadow_boundary" / "run.py"
 HEALTHY_TARGET = "nwb_hardware_shadow_boundary_healthy_benchmark"
 RUNTIME_DIRECTORY = Path("Testing") / "skinning_culling_benchmark_runtime"
-REQUIRED_DEFINES = { "NWB_BUILD_LOADER": LIT_ON, "NWB_BUILD_LOGSERVER": LIT_ON, "NWB_BUILD_PIPELINE": LIT_ON, "NWB_BUILD_TESTS": LIT_ON, }
+REQUIRED_DEFINES = AB_LAUNCH.REQUIRED_AB_DEFINES
 DIAGNOSTIC_CONFIGURATIONS = (LIT_DBG, LIT_OPT)
 
 
@@ -65,8 +57,7 @@ class BoundaryPaths:
 
 
 def default_output_directory(root: Path) -> Path:
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return root / LIT_COZTER / LIT_OUT / LIT_AB_RESULTS / LIT_HARDWARE_SHADOW_BOUNDARY / stamp
+    return AB_LAUNCH.default_ab_output_directory(root, LIT_HARDWARE_SHADOW_BOUNDARY)
 
 
 def require_diagnostic_configuration(config: str) -> None:
@@ -87,34 +78,21 @@ def resolve_paths(args: argparse.Namespace, settings) -> BoundaryPaths:
 
 
 def build_benchmark_targets(args: argparse.Namespace, settings, environment) -> None:
-    if args.skip_build:
-        return
-
-    command: List[object] = list(settings.cmake) + ["--build", str(settings.build_dir), "--target", HEALTHY_TARGET, "--config", settings.config,]
-    if args.jobs:
-        command += ["--parallel", str(args.jobs)]
-    ROOT_LAUNCHER.run_checked(command, settings.root, environment, args.dry_run)
+    ROOT_LAUNCHER.build_target(args, settings, HEALTHY_TARGET, environment)
 
 
 def runner_command(args: argparse.Namespace, paths: BoundaryPaths) -> List[object]:
     command: List[object] = [sys.executable, REPO / RUNNER_SCRIPT, LIT_HEALTHY_EXECUTABLE, paths.healthy_executable, LIT_BASELINE_EXECUTABLE, paths.baseline_executable, LIT_RUNTIME_DIR, paths.runtime_directory, LIT_OUTPUT_DIR, paths.output_directory,]
-    if args.gpu_validation:
-        command.append(LIT_GPU_VALIDATION)
-    if args.no_logserver:
-        command.append(LIT_NO_LOGSERVER)
-    elif args.logserver_executable is not None:
-        command += [LIT_LOGSERVER_EXECUTABLE, ROOT_LAUNCHER.resolve_path(REPO, args.logserver_executable)]
-    command += list(args.runner_args)
-    return command
+    return AB_LAUNCH.append_ab_runner_args(command, args, REPO)
 
 
 def run_runner(args: argparse.Namespace, paths: BoundaryPaths) -> int:
-    command = runner_command(args, paths)
-    print(f"Hardware-shadow boundary artifacts: {paths.output_directory}", flush=True)
-    print("+ " + ROOT_LAUNCHER.format_command(command), flush=True)
-    if args.dry_run:
-        return 0
-    return subprocess.run([str(part) for part in command], cwd=REPO).returncode
+    return AB_LAUNCH.run_ab_runner(
+        runner_command(args, paths),
+        args.dry_run,
+        REPO,
+        f"Hardware-shadow boundary artifacts: {paths.output_directory}",
+    )
 
 
 def make_parser() -> argparse.ArgumentParser:
@@ -124,21 +102,18 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument(LIT_BASELINE_EXECUTABLE, dest="baseline_executable", type=Path, help="Override the executable reused for the opaque baseline arm.",)
     parser.add_argument(LIT_RUNTIME_DIR, type=Path, help="Override the cooked stress-scene runtime directory.")
     parser.add_argument(LIT_OUTPUT_DIR, type=Path, help="Directory for boundary timing, logs, captures, and reports.")
-    parser.add_argument(LIT_LOGSERVER_EXECUTABLE, type=Path, help="Override the logserver executable.")
-    parser.add_argument(LIT_NO_LOGSERVER, action=LIT_STORE_TRUE, help="Use standalone loader logs instead of logserver.")
-    validation_group = parser.add_mutually_exclusive_group()
-    validation_group.add_argument(LIT_GPU_VALIDATION, dest=LIT_GPU_VALIDATION_2, action=LIT_STORE_TRUE, help="Enable GPU validation for a correctness-oriented run.",)
-    validation_group.add_argument("--no-gpu-validation", dest=LIT_GPU_VALIDATION_2, action="store_false", help="Measure without --gpudbg layer overhead (the default).",)
-    parser.set_defaults(gpu_validation=False)
+    AB_LAUNCH.add_ab_runner_options(
+        parser,
+        default_gpu_validation=False,
+        gpu_validation_help="Enable GPU validation for a correctness-oriented run.",
+        no_gpu_validation_help="Measure without --gpudbg layer overhead (the default).",
+    )
     parser.add_argument(LIT_SELF_TEST, action=LIT_STORE_TRUE, help="Check diagnostic-configuration rejection without starting a graphics application.")
     return parser
 
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
-    launcher_args, runner_args = ROOT_LAUNCHER.split_application_args(argv)
-    args = make_parser().parse_args(launcher_args)
-    args.runner_args = runner_args
-    return args
+    return AB_LAUNCH.parse_ab_launcher_args(make_parser, argv)
 
 
 def run_self_test() -> int:
@@ -148,14 +123,17 @@ def run_self_test() -> int:
         assert "requires --config dbg or --config opt" in str(error)
     else:
         raise AssertionError("fin must not claim the warning-based semantic verdict")
-    print("hardware-shadow boundary launcher self-test passed")
+    require_diagnostic_configuration(LIT_DBG)
+    require_diagnostic_configuration(LIT_OPT)
     return 0
 
 
 def run(args: argparse.Namespace) -> int:
+    if args.self_test:
+        return run_self_test()
+    require_diagnostic_configuration(args.config)
     environment = ROOT_LAUNCHER.build_environment(args)
     settings = ROOT_LAUNCHER.resolve_launch_settings(args, ROOT_LAUNCHER.DEFAULT_DOMAIN)
-    require_diagnostic_configuration(settings.config)
     ROOT_LAUNCHER.maybe_configure(args, settings, REQUIRED_DEFINES, environment)
     settings = ROOT_LAUNCHER.refresh_launch_settings(settings, args.domain)
     build_benchmark_targets(args, settings, environment)
@@ -164,8 +142,6 @@ def run(args: argparse.Namespace) -> int:
 
 def main(argv: Sequence[str]) -> int:
     args = parse_args(argv)
-    if args.self_test:
-        return run_self_test()
     return run(args)
 
 

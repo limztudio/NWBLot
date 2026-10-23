@@ -43,10 +43,6 @@ protected:
             state.open();
     }
 
-    [[nodiscard]] WidgetId parentId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), s_ParentPopupKey)); }
-
-    [[nodiscard]] WidgetId childId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), s_ChildPopupKey)); }
-
     [[nodiscard]] WidgetId fieldId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), s_ComboKey)); }
 
     [[nodiscard]] WidgetId menuRows()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), s_MenuKey)), s_MenuRowsKey)); }

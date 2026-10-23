@@ -70,10 +70,7 @@ bool BackendContext::confirmFramePresentationSignal(const QueueSubmissionPreSubm
         && claim.resolved == &BackendContext::InvokeFramePresentationSignalResolution
         && m_framePresentationSignalState == FramePresentationSignalState::Accepted
         && token.valid()
-        && token.queue == m_framePresentationSubmission.queue
-        && token.value == m_framePresentationSubmission.value
-        && token.physicalQueueIndex == m_framePresentationSubmission.physicalQueueIndex
-        && token.deviceGeneration == m_framePresentationSubmission.deviceGeneration
+        && token == m_framePresentationSubmission
     ;
 }
 
@@ -413,10 +410,7 @@ bool BackendContext::cancelFramePresentationSignalDeferred(const QueueSubmission
         && m_swapChainIndex == swapChainIndex
         && m_framePresentationSignalState == FramePresentationSignalState::Retiring
         && m_framePresentationSemaphore == presentationSemaphore
-        && m_framePresentationSubmission.queue == presentationSubmission.queue
-        && m_framePresentationSubmission.value == presentationSubmission.value
-        && m_framePresentationSubmission.physicalQueueIndex == presentationSubmission.physicalQueueIndex
-        && m_framePresentationSubmission.deviceGeneration == presentationSubmission.deviceGeneration
+        && m_framePresentationSubmission == presentationSubmission
         && m_framePresentationClaimIdentity == presentationClaimIdentity
         && m_framePresentationSwapChainIndex == presentationSwapChainIndex
         && presentationSwapChainIndex < m_presentSemaphores.size()

@@ -96,6 +96,12 @@ struct RasterReplayState{
     u64 recordIndex,
     RasterReplayState& state
 )noexcept;
+[[nodiscard]] inline GpuCommandIrReplayResult ReplayFailure(const GpuCommandIrReplayError::Enum error, const GpuCommandIrStreamValidationResult& streamValidation = {}, const u64 recordIndex = Limit<u64>::s_Max)noexcept{
+    return GpuCommandIrReplayResult{ .error = error, .streamValidation = streamValidation, .recordIndex = recordIndex, };
+}
+
+[[nodiscard]] const GpuTaskResourceUse* FindTaskResourceUse(const GpuTaskGraphTaskView& task, GpuGraphResourceId resource, ResourceStates::Mask state, GpuTaskResourceAccess::Enum access)noexcept;
+
 [[nodiscard]] bool LowerRasterOperation(const GpuCommandIrRasterTaskRecord& record, const GpuCommandIrOwnedStream& stream, BinaryByteView blobBytes, CommandList& commandList);
 
 

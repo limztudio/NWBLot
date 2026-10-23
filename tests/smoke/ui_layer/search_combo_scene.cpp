@@ -61,7 +61,7 @@ UiSearchComboSmokeScene::~UiSearchComboSmokeScene()noexcept{
 
 bool UiSearchComboSmokeScene::paint(Impl::UiPaintContext& context){
     using namespace Impl::Ui;
-    observeDisplay(context.display);
+    ObserveSmokeDisplay(__hidden_ui_search_combo_smoke::s_LogTag, context.display, m_lastDisplay, m_displayChanged);
     m_source.beginFrame();
     m_focused = false;
     Builder& ui = context.ui;
@@ -129,25 +129,14 @@ bool UiSearchComboSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, 
     return true;
 }
 
-void UiSearchComboSmokeScene::observeDisplay(const Impl::Ui::DisplayMetrics& display){
-    if(m_lastDisplay.logicalWidth == display.logicalWidth && m_lastDisplay.logicalHeight == display.logicalHeight && m_lastDisplay.pixelScaleX == display.pixelScaleX && m_lastDisplay.pixelScaleY == display.pixelScaleY)
-        return;
-    m_lastDisplay = display;
-    m_displayChanged = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiSearchComboSmoke: display logical={}x{} scale={}x{}"), display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY);
-}
-
 Array<u64, 22u> UiSearchComboSmokeScene::values()const noexcept{
     const auto& combo = m_state.combo();
     const auto& list = combo.listState();
     const auto& placement = list.placement();
     const auto& query = m_state.query();
-    u32 hash = 2166136261u;
-    for(const char character : query.text())
-        hash = (hash ^ static_cast<u8>(character)) * 16777619u;
     return { combo.selectedKey(), list.cursorKey(), m_source.rowCount(), m_source.filtered().rowCount(),
         placement.firstRow, placement.endRow, m_source.labelReads(), static_cast<u64>(combo.isOpen()),
-        static_cast<u64>(query.text().size()), static_cast<u64>(hash & 0xffffffu), static_cast<u64>(query.anchor()),
+        static_cast<u64>(query.text().size()), HashSmokeText(query.text()) & 0xffffffu, static_cast<u64>(query.anchor()),
         static_cast<u64>(query.caret()), static_cast<u64>(m_state.editorState().focused), static_cast<u64>(m_focused),
         m_commits, m_source.filtered().revision(), static_cast<u64>(m_source.reversed()), m_source.removedKey(),
         static_cast<u64>(m_enabled), m_source.revision(), m_underlying, static_cast<u64>(query.composition().active) };

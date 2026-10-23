@@ -8,6 +8,8 @@
 #include <core/graphics/rhi/command.h>
 #include <core/graphics/rhi/raytracing.h>
 
+#include <global/hash_utils.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -141,6 +143,14 @@ inline constexpr bool operator==(const GpuGraphResourceId& lhs, const GpuGraphRe
 }
 
 inline constexpr bool operator!=(const GpuGraphResourceId& lhs, const GpuGraphResourceId& rhs)noexcept{ return !(lhs == rhs); }
+
+struct GpuGraphResourceIdHasher{
+    [[nodiscard]] usize operator()(const GpuGraphResourceId& resource)const noexcept{
+        usize hash = Hasher<u64>{}(resource.generation);
+        HashCombine(hash, resource.index);
+        return hash;
+    }
+};
 
 struct GpuGraphResourceVersionId{
     u64 generation = 0u;

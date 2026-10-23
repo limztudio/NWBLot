@@ -209,6 +209,44 @@ inline Expected<TextureClearUploadLayout> BuildTextureClearUploadLayout(const u6
     return TextureClearUploadLayout{ uploadSize, *layerPitch, static_cast<usize>(clearByteCount), *copyOffsetAlignment, *stagingAlignment, mergeArrayLayerCopies };
 }
 
+[[nodiscard]] inline bool TextureClearStagingRangeValid(
+    const void* const stagingBytes,
+    const u64 stagingOffset,
+    const u64 stagingBufferByteSize,
+    const TextureClearUploadLayout& uploadLayout
+)noexcept{
+    return
+        stagingBytes != nullptr
+        && (stagingOffset % uploadLayout.stagingAlignment) == 0u
+        && (stagingOffset % uploadLayout.copyOffsetAlignment) == 0u
+        && stagingOffset <= stagingBufferByteSize
+        && static_cast<u64>(uploadLayout.clearByteCount) <= stagingBufferByteSize - stagingOffset
+    ;
+}
+
+inline void BuildArrayLayerBufferImageCopies(
+    const TextureSubresourceSet& resolvedSubresources,
+    const VkImageAspectFlags aspectMask,
+    const MipLevel mipLevel,
+    const Box& resolvedBox,
+    const u64 stagingOffset,
+    const TextureClearUploadLayout& uploadLayout,
+    Vector<VkBufferImageCopy, Alloc::ScratchArena>& regions
+)noexcept{
+    const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
+    const u64 layerPitch = uploadLayout.mergeArrayLayerCopies ? uploadLayout.layerPitch : 0ull;
+    const VkExtent3D imageExtent{ static_cast<u32>(resolvedBox.width()), static_cast<u32>(resolvedBox.height()), 1u };
+    u32 regionIndex = 0u;
+    for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
+        VkBufferImageCopy region{};
+        region.bufferOffset = stagingOffset + static_cast<u64>(regionIndex) * layerPitch;
+        region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(aspectMask, mipLevel, arraySlice, 1u);
+        region.imageOffset = { resolvedBox.minX, resolvedBox.minY, 0 };
+        region.imageExtent = imageExtent;
+        regions[regionIndex++] = region;
+    }
+}
+
 template<typename ValueT>
 inline void WriteClearPatternValue(NotNull<u8*> outBytes, const ValueT& value)noexcept{
     NWB_MEMCPY(outBytes.get(), sizeof(value), &value, sizeof(value));
@@ -297,20 +335,21 @@ inline void WriteBC1ColorClearBlock(NotNull<u8*> outPattern, const SIMDVectorSin
     WriteClearPatternValue(MakeNotNull(outPattern.get() + sizeof(color0) + sizeof(color1)), indices);
 }
 
-inline void WriteBC4UNormClearBlock(NotNull<u8*> outPattern, const SIMDVectorSingle value)noexcept{
-    const u8 endpoint = static_cast<u8>(VectorGetX(QuantizeUNormClearVector(value, VectorReplicate(static_cast<f32>(Limit<u8>::s_Max)))));
+inline void WriteBC4ClearBlockEndpoint(NotNull<u8*> outPattern, const u8 endpoint)noexcept{
     outPattern.get()[0] = endpoint;
     outPattern.get()[1] = endpoint;
     for(u32 byteIndex = s_BC4EndpointByteCount; byteIndex < s_BCSingleClearBlockBytes; ++byteIndex)
         outPattern.get()[byteIndex] = 0u;
 }
 
+inline void WriteBC4UNormClearBlock(NotNull<u8*> outPattern, const SIMDVectorSingle value)noexcept{
+    const u8 endpoint = static_cast<u8>(VectorGetX(QuantizeUNormClearVector(value, VectorReplicate(static_cast<f32>(Limit<u8>::s_Max)))));
+    WriteBC4ClearBlockEndpoint(outPattern, endpoint);
+}
+
 inline void WriteBC4SNormClearBlock(NotNull<u8*> outPattern, const SIMDVectorSingle value)noexcept{
     const i8 endpoint = static_cast<i8>(VectorGetX(QuantizeSNormClearVector(value, VectorReplicate(static_cast<f32>(Limit<i8>::s_Max)))));
-    outPattern.get()[0] = static_cast<u8>(endpoint);
-    outPattern.get()[1] = static_cast<u8>(endpoint);
-    for(u32 byteIndex = s_BC4EndpointByteCount; byteIndex < s_BCSingleClearBlockBytes; ++byteIndex)
-        outPattern.get()[byteIndex] = 0u;
+    WriteBC4ClearBlockEndpoint(outPattern, static_cast<u8>(endpoint));
 }
 
 template<usize ByteCount>

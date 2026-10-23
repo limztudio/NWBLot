@@ -10,6 +10,7 @@
 #include <core/common/module.h>
 
 #include <tests/common/capturing_logger.h>
+#include <tests/common/font_fixture.h>
 #include <tests/common/test_context.h>
 
 #include <global/filesystem.h>
@@ -59,10 +60,6 @@ static constexpr Name s_ScratchArena("tests/integration/assets_font_atlas/metada
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Path FixtureRoot(MetadataTestArena& testArena){
-    return Path(testArena.arena, NWB_REPO_ROOT) / "impl" / "assets" / "ui" / "fonts" / "default";
-}
-
 [[nodiscard]] static Path ScratchRoot(MetadataTestArena& testArena){
     return Path(testArena.arena, NWB_REPO_ROOT) / "__artifacts" / "font_metadata_tests";
 }
@@ -71,14 +68,14 @@ static constexpr Name s_ScratchArena("tests/integration/assets_font_atlas/metada
     if(!EnsureDirectories(directory))
         return false;
     Core::Assets::AssetBytes bytes(testArena.arena);
-    if(!ReadBinaryFile(FixtureRoot(testArena) / s_LatinFontFilename, bytes))
+    if(!ReadBinaryFile(DefaultBundledFontRoot(testArena) / s_LatinFontFilename, bytes))
         return false;
     return WriteBinaryFile(directory / s_LatinFontFilename, bytes);
 }
 
 [[nodiscard]] static bool LoadMetadata(MetadataTestArena& testArena, Core::Metascript::Document& document){
     AString<Core::Assets::AssetArena> text(testArena.arena);
-    return ReadTextFile(FixtureRoot(testArena) / s_LatinMetadataFilename, text) && document.parse(AStringView(text));
+    return ReadTextFile(DefaultBundledFontRoot(testArena) / s_LatinMetadataFilename, text) && document.parse(AStringView(text));
 }
 
 
@@ -367,7 +364,7 @@ TEST(AssetsFontMetadata, MissingTruncatedCorruptAndMismatchedFontSourcesAreRejec
     EXPECT_FALSE(ParseFontCookMetadataValue(Name("project/other"), path, face, testArena.arena));
     EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, metadata, entry.arena, scratchArena));
     Core::Assets::AssetBytes otherFont(testArena.arena);
-    ASSERT_TRUE(ReadBinaryFile(FixtureRoot(testArena) / "korean.font", otherFont));
+    ASSERT_TRUE(ReadBinaryFile(DefaultBundledFontRoot(testArena) / "korean.font", otherFont));
     ASSERT_TRUE(WriteBinaryFile(fontPath, otherFont));
     FontCookEntry replacementFont(testArena.arena);
     auto replacementFontParseResult = ParseFontCookMetadataValue(Name("project/other"), path, face, replacementFont.arena);

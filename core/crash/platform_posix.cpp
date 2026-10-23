@@ -401,7 +401,7 @@ static void DrainPendingAcks(const int ackReadFd)noexcept{
     }
 }
 
-static void WaitForOwnedChild(const bool terminateImmediately, pid_t& child, Detail::PlatformCleanupObservations& observations)noexcept{
+static void WaitForOwnedChild(const bool terminateImmediately, pid_t& child, CrashDetail::PlatformCleanupObservations& observations)noexcept{
     if(child <= 0)
         return;
     constexpr u32 s_WaitPollCount = 300u;

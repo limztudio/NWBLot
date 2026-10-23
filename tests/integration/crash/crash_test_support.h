@@ -125,8 +125,8 @@ inline void BuildCrashIdForProcess(char (&outCrashId)[N], const u32 processId, c
 #endif
 }
 
-inline void FillPackageRequest(const CrashTestPath& spoolDirectory, const AStringView crashId, NWB::Core::Alloc::GlobalArena& arena, NWB::Core::Crash::Detail::CrashRequest& request){
-    request = NWB::Core::Crash::Detail::CrashRequest{};
+inline void FillPackageRequest(const CrashTestPath& spoolDirectory, const AStringView crashId, NWB::Core::Alloc::GlobalArena& arena, NWB::Core::Crash::CrashDetail::CrashRequest& request){
+    request = NWB::Core::Crash::CrashDetail::CrashRequest{};
     request.platform = CurrentCrashPlatformKind();
     request.reasonKind = NWB::Core::Crash::CrashDetail::CrashReasonKind::ManualDump;
     request.processId = CurrentProcessId();

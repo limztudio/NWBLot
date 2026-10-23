@@ -345,7 +345,7 @@ bool WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payl
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: staging or verification failed; previous pair remains in place"));
         return false;
     }
-    const auto published = __hidden_font_builder_writer::Publish(paths, options.overwrite, stagedFont, stagedMetadata);
+    const auto published = __hidden_font_builder_asset_writer::Publish(paths, options.overwrite, stagedFont, stagedMetadata);
     if(!published){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: pair publication failed: {}"), StringConvert(published.error().message()));
         return false;

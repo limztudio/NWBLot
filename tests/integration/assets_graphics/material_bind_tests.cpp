@@ -158,7 +158,7 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
     auto validCacheEntryResult = AssetsGraphicsFixture::ParseMaterialBindFromText(testArena, AssetsGraphicsFixture::s_MinimalMaterialBindSource, validCacheRoot, scratchArena);
     ASSERT_TRUE(validCacheEntryResult);
     NWB::Impl::MaterialBindEntry& validCacheEntry = *validCacheEntryResult;
-    validCacheEntry.virtualPath = s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE;
+    validCacheEntry.virtualPath = s_ProjectMaterialInterfacesTestSurface;
     const auto cachedLayout = NWB::Impl::FindOrBuildMaterialBindTypedLayout(cacheInterface, validCacheEntry, scratchArena, layoutCache);
     ASSERT_TRUE(cachedLayout);
     EXPECT_EQ(layoutCache.entries.size(), 1u);

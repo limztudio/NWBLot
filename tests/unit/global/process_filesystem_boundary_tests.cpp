@@ -360,10 +360,10 @@ TEST(Global, CaptureProcessOutputAdmitsEmptySuccessAndPreservesExitFailure){
     ASSERT_FALSE(invalid);
     EXPECT_EQ(invalid.error().kind, ProcessCaptureFailureKind::InvalidArguments);
     EXPECT_EQ(invalid.error().nativeError, ErrorCondition::invalid_argument);
-    const AStringView emptyArguments[]{ s_BIN_SH, s_C, "exit 0" };
+    const AStringView emptyArguments[]{ s_BinSh, s_C, "exit 0" };
     ASSERT_TRUE(CaptureProcessOutput(output, testArena.arena, emptyArguments));
     EXPECT_TRUE(output.empty());
-    const AStringView failedArguments[]{ s_BIN_SH, s_C, "printf retained; exit 23" };
+    const AStringView failedArguments[]{ s_BinSh, s_C, "printf retained; exit 23" };
     const auto failed = CaptureProcessOutput(output, testArena.arena, failedArguments);
     ASSERT_FALSE(failed);
     EXPECT_EQ(failed.error().kind, ProcessCaptureFailureKind::ChildExitedUnsuccessfully);

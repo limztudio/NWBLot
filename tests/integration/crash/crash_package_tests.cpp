@@ -242,9 +242,9 @@ TEST(Crash, WriteCrashPackageFailsWhenSpoolPathIsFile){
     const CrashTestPath spoolPath = SpoolDirectory(arena, s_Group);
     EXPECT_TRUE(WriteTextFile(spoolPath, AStringView("not a directory")));
 
-    NWB::Core::Crash::Detail::CrashRequest request;
+    NWB::Core::Crash::CrashDetail::CrashRequest request;
     FillPackageRequest(spoolPath, AStringView("crash-package-bad-spool"), arena, request);
-    EXPECT_FALSE(NWB::Core::Crash::Detail::WriteCrashPackage(request));
+    EXPECT_FALSE(NWB::Core::Crash::CrashDetail::WriteCrashPackage(request));
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -406,7 +406,7 @@ TEST(Crash, FlushReportsFailsWhenUploadingRecoveryIsBlocked){
     EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CrashId));
     EXPECT_TRUE(WriteTextFile(BucketDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName), AStringView("blocked")));
 
-    NWB::Core::Crash::Detail::CrashUploadSnapshot snapshot;
+    NWB::Core::Crash::CrashDetail::CrashUploadSnapshot snapshot;
     CopyPathText(SpoolDirectory(arena, s_Group), arena, snapshot.spoolDirectory);
     CopyFixedBuffer(snapshot.logServerUrl, AStringView("http://127.0.0.1:1"));
 

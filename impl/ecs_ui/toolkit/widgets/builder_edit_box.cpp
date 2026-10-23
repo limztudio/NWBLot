@@ -20,10 +20,10 @@ NWB_IMPL_UI_BEGIN
 
 
 EditBoxResult Builder::editBox(const AStringView stableKey, EditModel& model, EditBoxState& state, const EditBoxOptions& options){
-    return declareEditBox(stableKey, model, state, options);
+    return declareEditBox(stableKey, options, model, state);
 }
 
-EditBoxResult Builder::declareEditBox(const AStringView stableKey, EditModel& model, EditBoxState& state, const EditBoxOptions& options, IEditActionSink* actions, IntegerEditFrame* integerFrame, FloatEditFrame* floatFrame){
+EditBoxResult Builder::declareEditBox(const AStringView stableKey, const EditBoxOptions& options, EditModel& model, EditBoxState& state, IEditActionSink* actions, IntegerEditFrame* integerFrame, FloatEditFrame* floatFrame){
     if(declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || model.textMode() != EditTextMode::SingleLine || m_context.failed() || m_scope->m_items.size() >= s_LayoutMaxNodes){
         m_context.fail();
         return {};

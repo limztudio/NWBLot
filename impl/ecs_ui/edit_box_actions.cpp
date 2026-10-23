@@ -17,7 +17,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool UiEditBoxHost::apply(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options, Event& event, Ui::EditBoxResult& result, Ui::IEditActionSink* actions, NavigationBorrow* navigation){
+bool UiEditBoxHost::apply(const Ui::EditBoxOptions& options, Event& event, Entry& entry, Ui::EditModel& model, Ui::EditBoxResult& result, Ui::IEditActionSink* actions, NavigationBorrow* navigation){
     const u64 revision = model.revision();
     const u64 externalRevision = model.externalRevision();
     const u64 selectionGeneration = model.selectionGeneration();
@@ -31,12 +31,12 @@ bool UiEditBoxHost::apply(Entry& entry, Ui::EditModel& model, const Ui::EditBoxO
     const bool composing = model.composition().active;
     if(event.kind == UiEditBoxEventKind::Command){
         if(event.navigation)
-            return navigation ? applyNavigation(model, event, *navigation, event.navigationDirection) : true;
+            return navigation ? applyNavigation(event, event.navigationDirection, model, *navigation) : true;
         const auto command = Ui::ApplyEditCommand(model, event.command, options.readOnly);
         result.submitted |= command.submitted;
         result.cancelled |= command.cancelled;
         if(actions && (command.submitted || command.cancelled)){
-            if(!applyAction(entry, model, options, command.submitted ? Ui::EditAction::Submit : Ui::EditAction::Cancel, result, *actions, navigation))
+            if(!applyAction(options, command.submitted ? Ui::EditAction::Submit : Ui::EditAction::Cancel, entry, model, result, *actions, navigation))
                 return false;
         }
         if(command.cancelled){
@@ -137,7 +137,7 @@ bool UiEditBoxHost::apply(Entry& entry, Ui::EditModel& model, const Ui::EditBoxO
     }
     else if(event.kind == UiEditBoxEventKind::Blur && actions){
         entry.retiredFocusGeneration = event.focusGeneration;
-        return applyAction(entry, model, options, Ui::EditAction::Blur, result, *actions, navigation);
+        return applyAction(options, Ui::EditAction::Blur, entry, model, result, *actions, navigation);
     }
     else if(event.kind == UiEditBoxEventKind::Focus && navigation){
         navigation->state.reset();
@@ -154,7 +154,7 @@ bool UiEditBoxHost::apply(Entry& entry, Ui::EditModel& model, const Ui::EditBoxO
     return true;
 }
 
-bool UiEditBoxHost::applyAction(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options, const Ui::EditAction::Enum action, Ui::EditBoxResult& result, Ui::IEditActionSink& actions, NavigationBorrow* navigation){
+bool UiEditBoxHost::applyAction(const Ui::EditBoxOptions& options, const Ui::EditAction::Enum action, Entry& entry, Ui::EditModel& model, Ui::EditBoxResult& result, Ui::IEditActionSink& actions, NavigationBorrow* navigation){
     const u64 revision = model.revision();
     const u64 selectionGeneration = model.selectionGeneration();
     const u64 compositionGeneration = model.compositionGeneration();

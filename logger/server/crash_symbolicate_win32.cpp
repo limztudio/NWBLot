@@ -155,7 +155,7 @@ template<typename T>
     return {};
 }
 
-[[nodiscard]] static Expected<void> AddLocationMemoryRange(const DumpImage& dumpImage, DumpMemoryReader& reader, const u64 begin, const MINIDUMP_LOCATION_DESCRIPTOR& location){
+[[nodiscard]] static Expected<void> AddLocationMemoryRange(const DumpImage& dumpImage, const u64 begin, const MINIDUMP_LOCATION_DESCRIPTOR& location, DumpMemoryReader& reader){
     return AddMemoryRange(reader, begin, location.DataSize, dumpImage.rva(location.Rva, location.DataSize));
 }
 
@@ -213,7 +213,7 @@ template<typename T>
             return MakeUnexpected(Failure{});
         for(usize index = 0u; index < threads->count; ++index){
             const MINIDUMP_THREAD thread = threads->record(index);
-            if(!AddLocationMemoryRange(dumpImage, reader, thread.Stack.StartOfMemoryRange, thread.Stack.Memory))
+            if(!AddLocationMemoryRange(dumpImage, thread.Stack.StartOfMemoryRange, thread.Stack.Memory, reader))
                 return MakeUnexpected(Failure{});
         }
     }
@@ -231,7 +231,7 @@ template<typename T>
             return MakeUnexpected(Failure{});
         for(usize index = 0u; index < ranges->count; ++index){
             const MINIDUMP_MEMORY_DESCRIPTOR descriptor = ranges->record(index);
-            if(!AddLocationMemoryRange(dumpImage, reader, descriptor.StartOfMemoryRange, descriptor.Memory))
+            if(!AddLocationMemoryRange(dumpImage, descriptor.StartOfMemoryRange, descriptor.Memory, reader))
                 return MakeUnexpected(Failure{});
         }
     }
@@ -419,7 +419,7 @@ static void LoadDumpModules(Core::Alloc::ScratchArena& scratchArena, const HANDL
     outReport += s_ReportLineEnd;
 }
 
-static void AppendResolvedSymbol(Core::Alloc::ScratchArena& scratchArena, const HANDLE symbolProcess, CrashReportText& outReport, const DWORD frameIndex, const DWORD64 address){
+static void AppendResolvedSymbol(const HANDLE symbolProcess, const DWORD frameIndex, const DWORD64 address, Core::Alloc::ScratchArena& scratchArena, CrashReportText& outReport){
     outReport += "#";
     char frameBuffer[s_DecimalTextBufferCapacity];
     outReport += FormatDecimal(static_cast<usize>(frameIndex), frameBuffer);
@@ -494,7 +494,7 @@ static void AppendResolvedSymbol(Core::Alloc::ScratchArena& scratchArena, const 
         if(hexStart != AStringView::npos){
             const Expected<u64> address = ParseHexAddressText(line.substr(hexStart + s_HexAddressPrefix.size()));
             if(address && *address != 0u){
-                AppendResolvedSymbol(scratchArena, symbolProcess, outReport, frameIndex, static_cast<DWORD64>(*address));
+                AppendResolvedSymbol(symbolProcess, frameIndex, static_cast<DWORD64>(*address), scratchArena, outReport);
                 ++frameIndex;
                 decodedAnyFrame = true;
             }
@@ -575,7 +575,7 @@ Expected<bool, CrashSymbolicationFailure> AppendWindowsMinidumpStack(Core::Alloc
         if(frame.AddrPC.Offset == 0u)
             break;
 
-        AppendResolvedSymbol(scratchArena, symbolProcess, outReport, frameIndex, frame.AddrPC.Offset);
+        AppendResolvedSymbol(symbolProcess, frameIndex, frame.AddrPC.Offset, scratchArena, outReport);
         decodedAnyFrame = true;
 
         if(!StackWalk64(machineType, symbolProcess, nullptr, &frame, &walkContext, ReadProcessMemoryFromDump, SymFunctionTableAccess64, SymGetModuleBase64, nullptr))

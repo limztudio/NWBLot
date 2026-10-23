@@ -26,11 +26,11 @@ namespace NumericEditDetail{
 template<typename Value, typename Bounds, typename Canonicalize, typename Changed>
 [[nodiscard]] NumericEditResult CommitDraft(
     Value& value,
+    AString<Core::Alloc::GlobalArena>& acceptedDraft,
     const Expected<Value, NumericParseStatus::Enum>& parsed,
     const Bounds& bounds,
     const bool canonical,
     const AStringView draft,
-    AString<Core::Alloc::GlobalArena>& acceptedDraft,
     Canonicalize canonicalize,
     Changed changed
 ){

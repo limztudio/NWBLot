@@ -212,11 +212,11 @@ private:
     [[nodiscard]] bool currentContextMenuOwner(const TargetOwner& owner)const noexcept;
     void reconcileContextMenus()noexcept;
     void appendContextMenu(const HitTarget& target, const Point& position, InputActionSource::Enum origin, const InputSource& inputSource, InputRoutingResult& result);
-    [[nodiscard]] bool routeContextMenuCommand(const InputEvent& event, const HitTarget* focused, CommandSource& source, bool alreadyPressed)noexcept;
-    void routeSecondary(const InputEvent& event, InputRoutingResult& result, const HitTarget* hit);
-    void appendControlAction(const HitTarget& host, const HitTarget& source, ControlActionKind::Enum kind, f64 delta, InputRoutingResult& result, f64 deltaX = 0.0);
-    [[nodiscard]] bool routeControlNavigation(const InputEvent& event, const HitTarget& host, const HitTarget& source, CommandSource& held, bool alreadyPressed, InputRoutingResult& result);
-    void routeWheel(const InputEvent& event, InputRoutingResult& result, const HitTarget* hit);
+    [[nodiscard]] bool routeContextMenuCommand(const InputEvent& event, const HitTarget* focused, bool alreadyPressed, CommandSource& source)noexcept;
+    void routeSecondary(const InputEvent& event, const HitTarget* hit, InputRoutingResult& result);
+    void appendControlAction(InputRoutingResult& result, const HitTarget& host, const HitTarget& source, ControlActionKind::Enum kind, f64 delta, f64 deltaX = 0.0);
+    [[nodiscard]] bool routeControlNavigation(const InputEvent& event, const HitTarget& host, const HitTarget& source, bool alreadyPressed, CommandSource& held, InputRoutingResult& result);
+    void routeWheel(const InputEvent& event, const HitTarget* hit, InputRoutingResult& result);
     [[nodiscard]] bool allowedByPopup(const HitTarget& target)const noexcept;
     [[nodiscard]] bool popupDescendant(const PopupToken& token, const PopupToken& ancestor)const noexcept;
     [[nodiscard]] bool stagePopups(const PopupScope* scopes, usize count);
@@ -235,7 +235,7 @@ private:
     void appendPointerGesture(const HitTarget& target, InputRoutingResult& result);
     void updatePointerGesture(const Point& position, bool completed)noexcept;
     void reconcilePointerGestures()noexcept;
-    void routePointer(const InputEvent& event, InputRoutingResult& result, const HitTarget* hit);
+    void routePointer(const InputEvent& event, const HitTarget* hit, InputRoutingResult& result);
     void routeCommand(const InputEvent& event, InputRoutingResult& result);
     [[nodiscard]] bool moveFocus(bool reverse)noexcept;
     [[nodiscard]] bool moveFocusForTraversal(bool reverse);

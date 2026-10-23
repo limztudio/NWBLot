@@ -23,7 +23,7 @@ NumericEditResult FloatEditModel::commit(const FloatBounds& bounds, const bool c
     if(!ValidateFloatBounds(bounds))
         return {};
     NumericEditResult result = NumericEditDetail::CommitDraft(
-        m_value, ParseFloatDraft(m_draft.text()), bounds, canonical, m_draft.text(), m_acceptedDraft,
+        m_value, m_acceptedDraft, ParseFloatDraft(m_draft.text()), bounds, canonical, m_draft.text(),
         [this](const f64 candidate){ return canonicalize(candidate); },
         [](const f64 candidate, const f64 value)noexcept{ return BitCast<u64>(candidate) != BitCast<u64>(value); }
     );

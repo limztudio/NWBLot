@@ -124,11 +124,11 @@ void InputRouter::routePointerSource(const InputEvent& event, InputRoutingResult
     result.pointerRouted = true;
     m_interactionPosition = event.position;
     if(event.type == InputEventType::SecondaryDown || event.type == InputEventType::SecondaryUp)
-        routeSecondary(event, result, hit);
+        routeSecondary(event, hit, result);
     else if(event.type == InputEventType::PointerWheel)
-        routeWheel(event, result, hit);
+        routeWheel(event, hit, result);
     else
-        routePointer(event, result, hit);
+        routePointer(event, hit, result);
     if(release){
         const auto index = static_cast<isize>(held - m_pointerSources.data());
         m_pointerSources.erase(m_pointerSources.begin() + index);

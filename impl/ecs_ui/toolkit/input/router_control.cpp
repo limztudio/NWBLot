@@ -144,7 +144,7 @@ void InputRouter::reconcileControlActions()noexcept{
     }
 }
 
-void InputRouter::appendControlAction(const HitTarget& host, const HitTarget& source, const ControlActionKind::Enum kind, const f64 delta, InputRoutingResult& result, const f64 deltaX){
+void InputRouter::appendControlAction(InputRoutingResult& result, const HitTarget& host, const HitTarget& source, const ControlActionKind::Enum kind, const f64 delta, const f64 deltaX){
     if(m_controlActions.size() == s_InputMaxControlActions || m_nextActionSequence == 0u){
         result.activationOverflow = true;
         return;
@@ -169,7 +169,7 @@ void InputRouter::appendControlAction(const HitTarget& host, const HitTarget& so
     ++m_nextActionSequence;
 }
 
-bool InputRouter::routeControlNavigation(const InputEvent& event, const HitTarget& host, const HitTarget& source, CommandSource& held, const bool alreadyPressed, InputRoutingResult& result){
+bool InputRouter::routeControlNavigation(const InputEvent& event, const HitTarget& host, const HitTarget& source, const bool alreadyPressed, CommandSource& held, InputRoutingResult& result){
     ControlActionKind::Enum kind;
     switch(event.command){
     case InputCommand::Left:
@@ -203,17 +203,17 @@ bool InputRouter::routeControlNavigation(const InputEvent& event, const HitTarge
         && held.focusOwner.target == source.id && held.focusOwner.declarationGeneration == source.declarationGeneration
         && held.focusOwner.popup == source.popup && held.focusOwner.control == source.control
     )
-        appendControlAction(host, source, kind, 0.0, result);
+        appendControlAction(result, host, source, kind, 0.0);
     return true;
 }
 
-void InputRouter::routeWheel(const InputEvent& event, InputRoutingResult& result, const HitTarget* hit){
+void InputRouter::routeWheel(const InputEvent& event, const HitTarget* hit, InputRoutingResult& result){
     result.pointerConsumed |= m_primaryDown ? m_pointerSequenceConsumed : m_secondaryDown ? m_secondarySequenceConsumed : hasPopup() || hit != nullptr;
     if((m_primaryDown && !m_pointerSequenceConsumed) || (m_secondaryDown && !m_secondarySequenceConsumed) || hit == nullptr || (event.scrollX == 0.0 && event.scrollY == 0.0))
         return;
     const HitTarget* host = controlHost(*hit);
     if(host != nullptr && host->scrollable && (event.scrollY != 0.0 || host->scrollStepX > 0.0))
-        appendControlAction(*host, *hit, ControlActionKind::Wheel, event.scrollY, result, event.scrollX);
+        appendControlAction(result, *host, *hit, ControlActionKind::Wheel, event.scrollY, event.scrollX);
 }
 
 

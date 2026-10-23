@@ -110,7 +110,7 @@ Expected<AString> PromptString(const AStringView label, const AStringView defaul
     return line;
 }
 
-bool PromptBool(const AStringView label, const bool defaultValue, bool& prompted, Core::Alloc::ScratchArena& scratchArena){
+bool PromptBool(const AStringView label, const bool defaultValue, Core::Alloc::ScratchArena& scratchArena, bool& prompted){
     prompted = true;
     ScratchString line(scratchArena);
     for(;;){
@@ -133,7 +133,7 @@ bool PromptBool(const AStringView label, const bool defaultValue, bool& prompted
     }
 }
 
-f64 PromptDouble(const AStringView label, const f64 defaultValue, bool& prompted, Core::Alloc::ScratchArena& scratchArena){
+f64 PromptDouble(const AStringView label, const f64 defaultValue, Core::Alloc::ScratchArena& scratchArena, bool& prompted){
     prompted = true;
     ScratchString line(scratchArena);
     for(;;){
@@ -157,7 +157,7 @@ f64 PromptDouble(const AStringView label, const f64 defaultValue, bool& prompted
     }
 }
 
-bool ValidateOutputOverwrite(const ScratchPath& outputPath, const ImportOptions& options, bool& prompted, Core::Alloc::ScratchArena& scratchArena){
+bool ValidateOutputOverwrite(const ScratchPath& outputPath, const ImportOptions& options, Core::Alloc::ScratchArena& scratchArena, bool& prompted){
     const auto exists = FileExists(outputPath);
     if(!exists){
         NWB_LOGGER_WARNING(NWB_TEXT("Failed to query output path: {}"), StringConvert(exists.error().message()));
@@ -172,10 +172,10 @@ bool ValidateOutputOverwrite(const ScratchPath& outputPath, const ImportOptions&
         return false;
     }
 
-    return PromptBool("Output already exists. Overwrite it?", false, prompted, scratchArena);
+    return PromptBool("Output already exists. Overwrite it?", false, scratchArena, prompted);
 }
 
-bool ConfigurePromptsBeforeLoad(ImportOptions& options, const OptionPresence& presence, bool& prompted, Core::Alloc::ScratchArena& scratchArena){
+bool ConfigurePromptsBeforeLoad(const OptionPresence& presence, Core::Alloc::ScratchArena& scratchArena, ImportOptions& options, bool& prompted){
     if(options.inputPath.empty()){
         if(options.acceptDefaults){
             NWB_LOGGER_WARNING(NWB_TEXT("Input FBX or NWB path is required."));
@@ -192,14 +192,14 @@ bool ConfigurePromptsBeforeLoad(ImportOptions& options, const OptionPresence& pr
     options.inputPath = UnquoteMatchingAsciiQuotes(Move(options.inputPath));
 
     if(!presence.preserveSpace && !options.acceptDefaults && !options.listMeshes){
-        const bool convertSpace = PromptBool("Convert axes/units to NWB space (+X right, +Y up, +Z forward, 1 unit = 1 meter)?", true, prompted, scratchArena);
+        const bool convertSpace = PromptBool("Convert axes/units to NWB space (+X right, +Y up, +Z forward, 1 unit = 1 meter)?", true, scratchArena, prompted);
         options.preserveSpace = !convertSpace;
     }
 
     return true;
 }
 
-bool ConfigurePromptsAfterLoad(ImportOptions& options, const OptionPresence& presence, const UtilityVector<MeshInstance>& visibleInstances, bool& prompted, Core::Alloc::ScratchArena& scratchArena){
+bool ConfigurePromptsAfterLoad(const OptionPresence& presence, const UtilityVector<MeshInstance>& visibleInstances, Core::Alloc::ScratchArena& scratchArena, ImportOptions& options, bool& prompted){
     if(!presence.assetType && !options.acceptDefaults){
         const ScratchString choices = OutputAssetTypeOptionsText(scratchArena);
         ScratchString prompt("Asset type (", scratchArena);
@@ -244,13 +244,13 @@ bool ConfigurePromptsAfterLoad(ImportOptions& options, const OptionPresence& pre
     }
 
     if(!presence.scale && !options.acceptDefaults)
-        options.scale = PromptDouble("Additional uniform scale", options.scale, prompted, scratchArena);
+        options.scale = PromptDouble("Additional uniform scale", options.scale, scratchArena, prompted);
 
     if(!presence.local && !options.acceptDefaults)
-        options.bakeTransforms = PromptBool("Bake node transforms into the mesh?", options.bakeTransforms, prompted, scratchArena);
+        options.bakeTransforms = PromptBool("Bake node transforms into the mesh?", options.bakeTransforms, scratchArena, prompted);
 
     if(!presence.ignoreColors && !options.acceptDefaults)
-        options.importColors = PromptBool("Import FBX vertex colors when present?", options.importColors, prompted, scratchArena);
+        options.importColors = PromptBool("Import FBX vertex colors when present?", options.importColors, scratchArena, prompted);
 
     if(!presence.defaultColor && !options.acceptDefaults){
         auto colorText = PromptString("Default RGBA color for vertices without FBX color", options.defaultColorText, prompted);
@@ -260,7 +260,7 @@ bool ConfigurePromptsAfterLoad(ImportOptions& options, const OptionPresence& pre
     }
 
     if(!presence.flipWinding && !options.acceptDefaults)
-        options.flipWinding = PromptBool("Flip triangle winding?", options.flipWinding, prompted, scratchArena);
+        options.flipWinding = PromptBool("Flip triangle winding?", options.flipWinding, scratchArena, prompted);
 
     return true;
 }
@@ -319,7 +319,7 @@ void WriteCanonicalizeReport(ScratchStringStream& report, const SourceMeshCanoni
     WriteRefreshCount(report, s_IndicesStreamLabel, canonicalizeReport.before.indices, canonicalizeReport.after.indices);
 }
 
-int RunNwbRefresh(const CLI::App& app, ImportOptions& options, const OptionPresence& presence, Core::CpuTaskScheduler& cpuScheduler, bool& prompted, Core::Alloc::ScratchArena& scratchArena){
+int RunNwbRefresh(const CLI::App& app, const OptionPresence& presence, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, ImportOptions& options, bool& prompted){
     if(options.listMeshes)
         return ExitValidation(app, s_FbxToNwbListMeshesFlag, "Only valid for FBX input.", scratchArena);
 
@@ -336,7 +336,7 @@ int RunNwbRefresh(const CLI::App& app, ImportOptions& options, const OptionPrese
     const ScratchPath outputPath(scratchArena, options.outputPath);
     if(outputPath.empty())
         return ExitValidation(app, s_FbxToNwbOutputOption, s_OutputPathEmptyText, scratchArena);
-    if(!ValidateOutputOverwrite(outputPath, options, prompted, scratchArena))
+    if(!ValidateOutputOverwrite(outputPath, options, scratchArena, prompted))
         return s_FbxToNwbExitFailure;
 
     const ScratchPath inputPath(scratchArena, options.inputPath);
@@ -433,7 +433,7 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
         presence.separateAssets = separateAssetsOption.count() > __hidden_command_line::s_CliOptionPresentCount;
         presence.refreshNwb = refreshNwbOption.count() > __hidden_command_line::s_CliOptionPresentCount;
 
-        if(!__hidden_command_line::ConfigurePromptsBeforeLoad(options, presence, prompted, scratchArena))
+        if(!__hidden_command_line::ConfigurePromptsBeforeLoad(presence, scratchArena, options, prompted))
             return __hidden_command_line::ExitValidation(app, __hidden_command_line::s_FbxToNwbInputOption, "Input FBX or NWB path is required.", scratchArena);
 
         if(!IsFinite(options.scale) || options.scale <= 0.0)
@@ -450,14 +450,14 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
             return __hidden_command_line::ExitValidation(app, __hidden_command_line::s_FbxToNwbInputOption, "Input path must name an existing regular file.", scratchArena);
 
         if(__hidden_command_line::IsNwbRefreshMode(options, scratchArena))
-            return __hidden_command_line::RunNwbRefresh(app, options, presence, cpuScheduler, prompted, scratchArena);
+            return __hidden_command_line::RunNwbRefresh(app, presence, cpuScheduler, scratchArena, options, prompted);
 
         auto scene = LoadScene(options, scratchArena);
         if(!scene)
             return __hidden_command_line::s_FbxToNwbExitFailure;
 
         if(!presence.includeHidden && !options.acceptDefaults && !options.listMeshes)
-            options.includeHidden = __hidden_command_line::PromptBool("Include hidden mesh nodes?", options.includeHidden, prompted, scratchArena);
+            options.includeHidden = __hidden_command_line::PromptBool("Include hidden mesh nodes?", options.includeHidden, scratchArena, prompted);
 
         UtilityVector<MeshInstance> instances = CollectMeshInstances(scene->scene, options.includeHidden);
         if(options.listMeshes){
@@ -472,7 +472,7 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
             return __hidden_command_line::s_FbxToNwbExitFailure;
         }
 
-        if(!__hidden_command_line::ConfigurePromptsAfterLoad(options, presence, instances, prompted, scratchArena))
+        if(!__hidden_command_line::ConfigurePromptsAfterLoad(presence, instances, scratchArena, options, prompted))
             return __hidden_command_line::s_FbxToNwbExitFailure;
 
         if(!ValidateAssetTypeText(options.assetType))
@@ -509,7 +509,7 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
         const ScratchPath outputPath(scratchArena, options.outputPath);
         if(outputPath.empty())
             return __hidden_command_line::ExitValidation(app, __hidden_command_line::s_FbxToNwbOutputOption, __hidden_command_line::s_OutputPathEmptyText, scratchArena);
-        if(!__hidden_command_line::ValidateOutputOverwrite(outputPath, options, prompted, scratchArena))
+        if(!__hidden_command_line::ValidateOutputOverwrite(outputPath, options, scratchArena, prompted))
             return __hidden_command_line::s_FbxToNwbExitFailure;
 
         auto built = BuildMesh(instances, selection, options, wantsSkinning, *defaultColor, cpuScheduler, scratchArena);

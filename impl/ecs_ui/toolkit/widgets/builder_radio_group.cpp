@@ -110,7 +110,7 @@ RadioGroupResult Builder::radioGroup(const AStringView stableKey, const IListDat
             return result;
         }
     }
-    const auto choices = RadioGroupBehavior::Reconcile(state, source, result, &guard);
+    const auto choices = RadioGroupBehavior::Reconcile(state, result, source, &guard);
     const bool reconciled = choices.has_value();
     if(choices)
         frame.m_choices = *choices;
@@ -138,7 +138,7 @@ RadioGroupResult Builder::radioGroup(const AStringView stableKey, const IListDat
     if(!interactive)
         m_context.input().invalidateTarget((*widget)->id);
     while(auto action = m_context.takeControlAction(**widget, interactive, frame.m_token)){
-        if(!RadioGroupBehavior::Apply(state, frame.m_choices, options, *action, result)){
+        if(!RadioGroupBehavior::Apply(state, result, frame.m_choices, options, *action)){
             result.valid = false;
             m_context.fail();
             return result;

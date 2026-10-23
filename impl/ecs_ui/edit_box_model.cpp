@@ -18,15 +18,15 @@ NWB_IMPL_BEGIN
 
 
 Ui::EditBoxResult UiEditBoxHost::edit(const Ui::WidgetState& widget, Ui::EditModel& model, const Ui::EditBoxOptions& options){
-    return editBorrowed(widget, model, options, m_context.popupToken(), nullptr);
+    return editBorrowed(widget, options, m_context.popupToken(), model, nullptr);
 }
 
 Ui::EditBoxResult UiEditBoxHost::editInPopup(const Ui::WidgetState& widget, Ui::EditModel& model, const Ui::EditBoxOptions& options, const Ui::PopupToken& popup){
-    return editBorrowed(widget, model, options, popup, nullptr);
+    return editBorrowed(widget, options, popup, model, nullptr);
 }
 
 Ui::EditBoxResult UiEditBoxHost::editActions(const Ui::WidgetState& widget, Ui::EditModel& model, const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::IEditActionSink& actions){
-    return editBorrowed(widget, model, options, popup, &actions);
+    return editBorrowed(widget, options, popup, model, &actions);
 }
 
 Ui::EditBoxResult UiEditBoxHost::editNavigated(
@@ -35,10 +35,10 @@ Ui::EditBoxResult UiEditBoxHost::editNavigated(
     Ui::IEditNavigationResolver& resolver, Ui::IEditActionSink& actions
 ){
     NavigationBorrow borrowed{ navigation, resolver };
-    return editBorrowed(widget, model, options, popup, &actions, &borrowed);
+    return editBorrowed(widget, options, popup, model, &actions, &borrowed);
 }
 
-Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, Ui::EditModel& model, const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::IEditActionSink* actions, NavigationBorrow* navigation){
+Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::EditModel& model, Ui::IEditActionSink* actions, NavigationBorrow* navigation){
     if(rejectBorrowedMutation())
         return {};
     if(navigation && model.textMode() != Ui::EditTextMode::Multiline)
@@ -113,7 +113,7 @@ Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, Ui:
         navigation->state.reset();
         entry->navigationResetPending = false;
     }
-    if(abandon && !applyAction(*entry, model, options, Ui::EditAction::Abandon, result, *actions, navigation)){
+    if(abandon && !applyAction(options, Ui::EditAction::Abandon, *entry, model, result, *actions, navigation)){
         result.valid = false;
         discard(owner);
         return result;
@@ -135,7 +135,7 @@ Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, Ui:
         if(actions && event.focusGeneration <= entry->retiredFocusGeneration)
             continue;
         if(options.enabled){
-            if(!apply(*entry, model, options, event, result, actions, navigation)){
+            if(!apply(options, event, *entry, model, result, actions, navigation)){
                 result.valid = false;
                 discard(owner);
                 if(m_session.owner() == owner || (m_clipboard.pending() && m_clipboardOwner == owner) || (m_primary.pending() && m_primaryOwner == owner))

@@ -146,7 +146,7 @@ public:
 [[nodiscard]] static Expected<AString<Core::Alloc::ScratchArena>> RunLinuxSymbolizerCommand(Core::Alloc::ScratchArena& arena, const Span<const AStringView> arguments){
     AString<Core::Alloc::ScratchArena> output{arena};
     output.reserve(ProcessExecutionDetail::s_DefaultCaptureOutputMaxBytes);
-    const auto captured = CaptureProcessOutput(arena, output, arguments);
+    const auto captured = CaptureProcessOutput(output, arena, arguments);
     if(!captured){
         const ProcessCaptureFailure& failure = captured.error();
         NWB_LOGGER_INFO(NWB_TEXT("Linux symbolizer capture failed: phase {}, native {}, completion {}, exit {}, signal {}, truncated {}")
@@ -222,7 +222,7 @@ public:
     return MakeUnexpected(Failure{});
 }
 
-[[nodiscard]] static Expected<AStringView> FindLinuxSymbolFileText(Core::Alloc::ScratchArena& arena, LinuxSymbolFileCache& cache, const AStringView modulePathText, const CrashSymbolicationConfig& config){
+[[nodiscard]] static Expected<AStringView> FindLinuxSymbolFileText(const AStringView modulePathText, const CrashSymbolicationConfig& config, Core::Alloc::ScratchArena& arena, LinuxSymbolFileCache& cache){
     for(const LinuxSymbolFileCacheEntry& entry : cache.entries){
         if(AStringView(entry.modulePath.data(), entry.modulePath.size()) != modulePathText)
             continue;
@@ -246,8 +246,8 @@ public:
     return AStringView(entry.symbolPath.data(), entry.symbolPath.size());
 }
 
-[[nodiscard]] static Expected<AString<Core::Alloc::ScratchArena>> ResolveLinuxFrameSymbol(Core::Alloc::ScratchArena& arena, LinuxSymbolFileCache& cache, const AStringView modulePathText, const u64 moduleOffset, const CrashSymbolicationConfig& config){
-    const auto symbolPathText = FindLinuxSymbolFileText(arena, cache, modulePathText, config);
+[[nodiscard]] static Expected<AString<Core::Alloc::ScratchArena>> ResolveLinuxFrameSymbol(const AStringView modulePathText, const u64 moduleOffset, const CrashSymbolicationConfig& config, Core::Alloc::ScratchArena& arena, LinuxSymbolFileCache& cache){
+    const auto symbolPathText = FindLinuxSymbolFileText(modulePathText, config, arena, cache);
     if(!symbolPathText)
         return MakeUnexpected(Failure{});
 
@@ -294,7 +294,7 @@ static void AppendLinuxClientCallstack(Core::Alloc::ScratchArena& arena, const A
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
                 const u64 symbolOffset = moduleOffset + mapEntry->fileOffset;
                 AppendHexAddress(outReport, moduleOffset);
-                const auto symbol = ResolveLinuxFrameSymbol(arena, symbolFileCache, modulePath, symbolOffset, config);
+                const auto symbol = ResolveLinuxFrameSymbol(modulePath, symbolOffset, config, arena, symbolFileCache);
                 if(symbol){
                     outReport += " ";
                     outReport += *symbol;

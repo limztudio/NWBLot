@@ -61,7 +61,7 @@ void InputRouter::appendContextMenu(const HitTarget& target, const Point& positi
     ++m_nextActionSequence;
 }
 
-bool InputRouter::routeContextMenuCommand(const InputEvent& event, const HitTarget* focused, CommandSource& source, const bool alreadyPressed)noexcept{
+bool InputRouter::routeContextMenuCommand(const InputEvent& event, const HitTarget* focused, const bool alreadyPressed, CommandSource& source)noexcept{
     const bool trigger = event.command == InputCommand::ContextMenu;
     if(!trigger || focused == nullptr || !focused->contextMenu || !m_windowFocused || !isInteractive(*focused))
         return false;
@@ -73,7 +73,7 @@ bool InputRouter::routeContextMenuCommand(const InputEvent& event, const HitTarg
 }
 
 
-void InputRouter::routeSecondary(const InputEvent& event, InputRoutingResult& result, const HitTarget* hit){
+void InputRouter::routeSecondary(const InputEvent& event, const HitTarget* hit, InputRoutingResult& result){
     if(event.type == InputEventType::SecondaryUp){
         result.pointerConsumed |= m_secondaryDown ? m_secondarySequenceConsumed : m_primaryDown ? m_pointerSequenceConsumed : hasPopup() || hit != nullptr;
         const HitTarget* anchor = hit != nullptr && !hit->contextMenu && hit->owner.valid() ? controlHost(*hit) : hit;

@@ -109,7 +109,7 @@ Expected<PipelineOptions> PipelineCommandLine::parse(const int argc, char** argv
             NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: paths must not contain nulls or newlines"));
             return MakeUnexpected(Failure{});
         }
-        if(!NWB::Core::Assets::ReadAssetInputList(Path(arena, listText), options.inputs, scratchArena, m_tool == PipelineTool::AssetGatherer))
+        if(!NWB::Core::Assets::ReadAssetInputList(options.inputs, Path(arena, listText), scratchArena, m_tool == PipelineTool::AssetGatherer))
             return MakeUnexpected(Failure{});
     }
     options.includeSkinDependencies = m_includeSkinDependencies;

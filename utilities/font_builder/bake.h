@@ -63,7 +63,7 @@ using RasterGlyphs = Core::Assets::AssetVector<RasterGlyph>;
 [[nodiscard]] bool ValidateOptions(const BakeOptions& options, Core::Alloc::ScratchArena& scratch);
 // Options must already pass ValidateOptions.
 [[nodiscard]] Expected<Impl::FontAtlasPayload> Bake(const BakeOptions& options, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratch);
-[[nodiscard]] bool PackGlyphs(const BakeOptions& options, const RasterGlyphs& glyphs, Impl::FontAtlasPayload& outPayload, Core::Alloc::ScratchArena& scratch);
+[[nodiscard]] bool PackGlyphs(const BakeOptions& options, const RasterGlyphs& glyphs, Core::Alloc::ScratchArena& scratch, Impl::FontAtlasPayload& outPayload);
 [[nodiscard]] bool WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratch);
 int Run(int argc, char** argv);
 

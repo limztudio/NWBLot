@@ -47,7 +47,7 @@ struct alignas(SIMDVectorSingle) SkinInfluenceCalculation{
 };
 static_assert(alignof(Expected<SkinInfluenceCalculation>) >= alignof(SkinInfluenceCalculation));
 
-Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const MeshInstance& instance, const ImportOptions& options, ufbx_skin_deformer* skin, ExportContext& context, Core::Alloc::ScratchArena& scratchArena);
+Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const MeshInstance& instance, const ImportOptions& options, ufbx_skin_deformer* skin, Core::Alloc::ScratchArena& scratchArena, ExportContext& context);
 
 Expected<SkinInfluenceCalculation> LoadInfluence(ufbx_skin_deformer* skin, const Span<const u16> clusterJoints, u32 logicalVertex);
 

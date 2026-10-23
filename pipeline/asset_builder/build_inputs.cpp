@@ -80,7 +80,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SelectBuildInputs(const AssetBuildOptions& options, const Assets::ResolvedCookPaths& paths, Assets::DiscoveredNwbFileVector& files, Assets::ScratchArena& scratchArena){
+bool SelectBuildInputs(const AssetBuildOptions& options, const Assets::ResolvedCookPaths& paths, Assets::ScratchArena& scratchArena, Assets::DiscoveredNwbFileVector& files){
     if(options.inputs.empty()){
         files.clear();
         return true;

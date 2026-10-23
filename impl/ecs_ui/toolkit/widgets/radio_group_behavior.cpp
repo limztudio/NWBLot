@@ -110,7 +110,7 @@ namespace __hidden_ui_radio_group_behavior{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<RadioGroupChoices> RadioGroupBehavior::Reconcile(RadioGroupState& state, const IListDataSource& source, RadioGroupResult& result, const IRadioGroupReconcileGuard* const guard){
+Expected<RadioGroupChoices> RadioGroupBehavior::Reconcile(RadioGroupState& state, RadioGroupResult& result, const IListDataSource& source, const IRadioGroupReconcileGuard* const guard){
     using namespace __hidden_ui_radio_group_behavior;
     if(state.m_reconciling){
         state.m_reentryObserved = true;
@@ -179,7 +179,7 @@ Expected<RadioGroupChoices> RadioGroupBehavior::Reconcile(RadioGroupState& state
     return candidate;
 }
 
-bool RadioGroupBehavior::Apply(RadioGroupState& state, const RadioGroupChoices& choices, const RadioGroupOptions& options, const ControlAction& action, RadioGroupResult& result)noexcept{
+bool RadioGroupBehavior::Apply(RadioGroupState& state, RadioGroupResult& result, const RadioGroupChoices& choices, const RadioGroupOptions& options, const ControlAction& action)noexcept{
     using namespace __hidden_ui_radio_group_behavior;
     if(state.m_reconciling){
         state.m_reentryObserved = true;

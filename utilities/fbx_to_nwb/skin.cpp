@@ -75,7 +75,7 @@ AStringView NodeDisplayName(const ufbx_node* node)noexcept{
     return AStringView(node->name.data, node->name.length);
 }
 
-Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const MeshInstance& instance, const ImportOptions& options, ufbx_skin_deformer* skin, ExportContext& context, Core::Alloc::ScratchArena& scratchArena){
+Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const MeshInstance& instance, const ImportOptions& options, ufbx_skin_deformer* skin, Core::Alloc::ScratchArena& scratchArena, ExportContext& context){
     ::Vector<u16, Core::Alloc::ScratchArena> outClusterJoints(scratchArena);
     if(!skin){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skinned mesh requires a skin deformer"));

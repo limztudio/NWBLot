@@ -23,7 +23,7 @@ SearchComboResult Builder::searchComboBox(AStringView stableKey, ISearchableList
     }
     const usize previousCount = m_scope->m_combos.size();
     SearchComboResult result;
-    result.combo = declareCombo(stableKey, source, state.combo(), options.combo, &state, &source, &options);
+    result.combo = declareCombo(stableKey, source, options.combo, &options, state.combo(), &state, &source);
     if(result.combo.valid && m_scope->m_combos.size() > previousCount)
         result.queryChanged = m_scope->m_combos.back().queryChanged;
     return result;

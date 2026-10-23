@@ -42,10 +42,10 @@ struct CookedObjectPayloadView{
     Core::CpuTaskScheduler& cpuScheduler,
     const ResolvedCookPaths& resolvedPaths,
     AStringView configurationSafeName,
+    ScratchArena& scratchArena,
     ParsedAssetMetadata& parsedMetadata,
     AssetVolumePackManifest& manifest,
-    VirtualPathHashSet& seenVirtualPathHashes,
-    ScratchArena& scratchArena
+    VirtualPathHashSet& seenVirtualPathHashes
 );
 [[nodiscard]] Expected<CookedObjectPayloadView> ReadCookedObjectPayload(const Path& objectPath, const Name& expectedVirtualPath, Vector<u8, ScratchArena>& inOutObjectBytes);
 

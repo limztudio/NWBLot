@@ -61,7 +61,7 @@ namespace __hidden_ui_gpu_command_ir{
     state.indexFormat = Core::Format::R32_UINT;
     if(!capture.captureSetGraphicsState(context.task, context.packet, context.queue, state))
         return false;
-    return capture.captureBindGraphicsHeap(context.task, context.packet, context.queue, payload.pipeline, frame->m_resources->m_pipeline, heap, frame->m_arena, descriptorOwner);
+    return capture.captureBindGraphicsHeap(heap, frame->m_arena, context.task, context.packet, context.queue, payload.pipeline, frame->m_resources->m_pipeline, descriptorOwner);
 }
 
 [[nodiscard]] static bool CaptureOutputState(
@@ -80,7 +80,7 @@ namespace __hidden_ui_gpu_command_ir{
     state.viewport = viewport;
     if(!capture.captureSetGraphicsState(context.task, context.packet, context.queue, state))
         return false;
-    return capture.captureBindGraphicsHeap(context.task, context.packet, context.queue, payload.graphPipeline, payload.pipeline, heap, payload.frame->m_arena, descriptorOwner);
+    return capture.captureBindGraphicsHeap(heap, payload.frame->m_arena, context.task, context.packet, context.queue, payload.graphPipeline, payload.pipeline, descriptorOwner);
 }
 
 

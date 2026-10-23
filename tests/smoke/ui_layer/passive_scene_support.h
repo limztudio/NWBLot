@@ -27,8 +27,8 @@ struct PassiveSmokeTargetObservation{
 
 template<typename RectanglesT, typename IncludeIndexT>
 [[nodiscard]] inline PassiveSmokeTargetObservation ObservePassiveSmokeTargets(
-    const Impl::Ui::InputRouter& input,
     RectanglesT& rectangles,
+    const Impl::Ui::InputRouter& input,
     const u64 parentGeneration,
     const u64 childGeneration,
     const usize beginIndex,

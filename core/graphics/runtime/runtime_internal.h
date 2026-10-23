@@ -59,13 +59,13 @@ using GraphTaskDeclaration = GraphicsRuntime::StandaloneTaskGraphDeclaration;
     GpuTimingFrameTransaction* frameTimingTransaction = nullptr
 );
 [[nodiscard]] bool SubmitGraphOwnedSetupUpload(
-    const GraphicsRuntime& graphics,
+    QueueSubmissionToken& inOutUploadToken,
     StandaloneGraphWorkspacePool& workspaces,
+    const GraphicsRuntime& graphics,
     ResourceQueueSharing::Mask queueSharing,
     CommandQueue::Enum consumerQueue,
     void* userData,
     NotNull<GraphTaskDeclaration> declareTask,
-    QueueSubmissionToken& inOutUploadToken,
     GpuPhysicalQueueId requiredTerminalQueue = {}
 );
 [[nodiscard]] bool SubmitGraphOwnedFrameTimingReset(const GraphicsRuntime& graphics, StandaloneGraphWorkspacePool& workspaces, GpuTimingRecorder& timing);

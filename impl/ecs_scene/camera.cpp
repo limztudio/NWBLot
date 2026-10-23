@@ -38,12 +38,12 @@ namespace __hidden_camera{
 
 [[nodiscard]] Expected<SceneCameraView> TryBuildSceneCameraView(
     const Core::ECS::EntityID entity,
-    TransformComponent& transform,
-    CameraComponent& camera,
     const f32 fallbackAspectRatio,
     const SIMDVectorSingle position,
     const SIMDVectorSingle rotation,
-    const SIMDVectorSingle scale
+    const SIMDVectorSingle scale,
+    TransformComponent& transform,
+    CameraComponent& camera
 )noexcept{
     if(!SceneCameraTransformValid(position, rotation, scale))
         return MakeUnexpected(Failure{});
@@ -94,7 +94,7 @@ SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, const f32 fallba
         auto* transform = world.tryGetComponent<TransformComponent>(activeCamera);
         auto* camera = world.tryGetComponent<CameraComponent>(activeCamera);
         if(transform && camera){
-            const auto requestedCamera = __hidden_camera::TryBuildSceneCameraView(activeCamera, *transform, *camera, fallbackAspectRatio, LoadFloat(transform->position), LoadFloat(transform->rotation), LoadFloat(transform->scale));
+            const auto requestedCamera = __hidden_camera::TryBuildSceneCameraView(activeCamera, fallbackAspectRatio, LoadFloat(transform->position), LoadFloat(transform->rotation), LoadFloat(transform->scale), *transform, *camera);
             if(requestedCamera)
                 return *requestedCamera;
         }
@@ -103,7 +103,7 @@ SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, const f32 fallba
     const auto cameraView = world.view<TransformComponent, CameraComponent>();
     for(auto it = cameraView.begin(); it != cameraView.end(); ++it){
         auto&& [entity, transform, camera] = *it;
-        const auto resolvedCamera = __hidden_camera::TryBuildSceneCameraView(entity, transform, camera, fallbackAspectRatio, LoadFloat(transform.position), LoadFloat(transform.rotation), LoadFloat(transform.scale));
+        const auto resolvedCamera = __hidden_camera::TryBuildSceneCameraView(entity, fallbackAspectRatio, LoadFloat(transform.position), LoadFloat(transform.rotation), LoadFloat(transform.scale), transform, camera);
         if(resolvedCamera)
             return *resolvedCamera;
     }

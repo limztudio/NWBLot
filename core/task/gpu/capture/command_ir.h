@@ -549,13 +549,13 @@ public:
     // ownerArena and the descriptor owner's arena must outlive every exported stream that retains this heap binding.
     // The Device and its heap must outlive the last retained lease/artifact.
     [[nodiscard]] bool captureBindGraphicsHeap(
+        GpuDescriptorHeap& heap,
+        GraphicsArena& ownerArena,
         GpuTaskId task,
         GpuSubmissionPacketId packet,
         GpuPhysicalQueueId queue,
         GpuGraphPipelineId pipeline,
         const GraphicsPipelineHandle& pipelineOwner,
-        GpuDescriptorHeap& heap,
-        GraphicsArena& ownerArena,
         const GpuCommandIrOwnerAnchor& descriptorOwner
     );
     [[nodiscard]] bool capturePushConstants(GpuTaskId task, GpuSubmissionPacketId packet, GpuPhysicalQueueId queue, BinaryByteView bytes);

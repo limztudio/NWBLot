@@ -106,7 +106,7 @@ struct ReentrantCompileDuringDeclarationTask{
             const Graphics::GpuTaskGraph::DeclarationReadView declarations = Graphics::GpuTaskGraph::DeclarationReadView::TryAcquire(*graph);
             bool succeeded = false;
             if(declarations.valid())
-                succeeded = compiler.analyze(declarations, *analysis, *scratchArena);
+                succeeded = compiler.analyze(declarations, *scratchArena, *analysis);
             if(compileSucceeded)
                 *compileSucceeded = succeeded;
         }

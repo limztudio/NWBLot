@@ -60,10 +60,10 @@ public:
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
-        GpuRecordedGraph& recordedGraph,
         const GpuRecordedGraph::ArtifactOperation& artifactAccess,
         const GpuSubmissionPacketId packet,
         const u64 recordingAttemptGeneration,
+        GpuRecordedGraph& recordedGraph,
         GpuPacketRecordingLease& recordingLease,
         GpuPacketRecordingAbort* const deferredAbort,
         GpuCommandIrCapture* const commandIrCapture,
@@ -135,18 +135,18 @@ private:
 
 
 bool GpuNativePacketRecorder::recordPacket(
+    GpuRecordedGraph& outRecordedGraph,
+    GpuRecordedGraph::PacketRecordingScratch& scratch,
+    GpuCommandIrCapture* const commandIrCapture,
+    GpuPacketRecordingAbort* const deferredAbort,
+    Alloc::ScratchArena& stateFanInScratchArena,
     const GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuCompiledGraph::ReadView& planAccess,
     const GpuRecordedGraph::ArtifactOperation& artifactAccess,
     const GpuSubmissionPacketId packetID,
-    GpuRecordedGraph& outRecordedGraph,
-    GpuRecordedGraph::PacketRecordingScratch& scratch,
-    Alloc::ScratchArena& stateFanInScratchArena,
-    GpuCommandIrCapture* const commandIrCapture,
     const u64 recordingWorkerDomain,
-    const u32 recordingWorkerIndex,
-    GpuPacketRecordingAbort* const deferredAbort
+    const u32 recordingWorkerIndex
 )const{
     if(deferredAbort && deferredAbort->valid()){
         NWB_ASSERT_MSG(false, NWB_TEXT("Packet recording abort output must be fresh"));
@@ -213,7 +213,7 @@ bool GpuNativePacketRecorder::recordPacket(
         abortPacketRecording();
         return false;
     }
-    PacketRecordingExceptionScope exceptionScope(graph, compiledGraph, planAccess, outRecordedGraph, artifactAccess, packetID, recordingAttemptGeneration, recordingLease, deferredAbort, commandIrCapture, capturedPrefix, packetStateSeed);
+    PacketRecordingExceptionScope exceptionScope(graph, compiledGraph, planAccess, artifactAccess, packetID, recordingAttemptGeneration, outRecordedGraph, recordingLease, deferredAbort, commandIrCapture, capturedPrefix, packetStateSeed);
     const Timer recordingBegin = TimerNow();
 
     const auto initialStateResult = outRecordedGraph.buildPacketInitialStateSeed(scratch, stateFanInScratchArena, graph, declarationAccess, compiledGraph, planAccess, artifactAccess, packetID);
@@ -514,15 +514,15 @@ bool GpuNativePacketRecorder::prepareRecordingAttempt(
     const GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuSubmissionPacketRange& range,
-    GpuRecordedGraph& outRecordedGraph,
     const GpuTaskGraph::DeclarationReadView& declarationAccess,
     const GpuCompiledGraph::ReadView& planAccess,
     const GpuRecordedGraph::ArtifactOperation& artifactAccess,
-    Alloc::ScratchArena& scratchArena
+    Alloc::ScratchArena& scratchArena,
+    GpuRecordedGraph& outRecordedGraph
 )const{
     if(!range.valid() || !planAccess.validFor(compiledGraph) || !artifactAccess.exclusiveFor(outRecordedGraph) || !planAccess.validFor(declarationAccess) || m_device.getDeviceGeneration() != planAccess.deviceGeneration() || !planAccess.validPacketRange(range))
         return false;
-    if(!GpuPacketRecordingDetail::PrepareCompiledTimingQueries(declarationAccess, planAccess, m_timingRecorder, scratchArena))
+    if(!GpuPacketRecordingDetail::PrepareCompiledTimingQueries(declarationAccess, planAccess, scratchArena, m_timingRecorder))
         return false;
     const bool artifactMatchesPlan = outRecordedGraph.validForWithinArtifactOperation(graph, declarationAccess, compiledGraph, planAccess, artifactAccess);
     if(artifactMatchesPlan && graph.matchesRecordingAttempt(compiledGraph, outRecordedGraph.recordingAttemptGenerationWithinArtifactOperation(artifactAccess))){

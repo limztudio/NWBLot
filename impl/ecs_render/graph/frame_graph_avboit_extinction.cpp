@@ -178,11 +178,11 @@ Expected<FrameGraphAvboitExtinctionUploadResult> FrameGraphAvboitExtinctionUploa
                     .csgStreamsUploaded = extinctionCsgStreamsUploaded,
                     .intervalOutputsGraphOwned = intervalOutputsGraphOwned,
                 },
-                avboitExtinctionComputeEmulationPayload.plan,
-                avboitExtinctionComputeEmulationPayload.csgPlan,
                 scratchArena,
                 extinctionInstanceData.size(),
-                extinctionMaterialTypedBytes.size()
+                extinctionMaterialTypedBytes.size(),
+                avboitExtinctionComputeEmulationPayload.plan,
+                avboitExtinctionComputeEmulationPayload.csgPlan
             );
             if(!extinctionComputeEmulationCaptureResult)
                 return MakeUnexpected(Failure{});

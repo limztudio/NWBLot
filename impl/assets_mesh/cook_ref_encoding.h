@@ -36,10 +36,10 @@ public:
 
 template<typename CookEntryT>
 bool MeshCookRefEncoding::EncodeMeshletRefs(CookEntryT& entry, const TStringView metaKind){
-    return EncodeMeshletRefDeltas(entry.meshlets, entry.meshletPositionStreamRefs, entry.meshletAttributeStreamRefs, entry.meshletPositionRefDeltas, entry.meshletAttributeRefDeltas, false, [&](const usize meshletIndex, const TStringView reason){
+    return EncodeMeshletRefDeltas(entry.meshletPositionStreamRefs, entry.meshletAttributeStreamRefs, false, [&](const usize meshletIndex, const TStringView reason){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet {} {}"), metaKind, StringConvert(entry.virtualPath.resolvedText()), meshletIndex, reason);
         return false;
-    }
+    }, entry.meshlets, entry.meshletPositionRefDeltas, entry.meshletAttributeRefDeltas
     );
 }
 

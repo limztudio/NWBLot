@@ -24,49 +24,49 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareSurfelResourceInitial
     return graph.addTask<SurfelGiInitializationLifecycleGraphTask>(desc, SurfelGiInitializationLifecycleGraphTask::Payload{ .raytracingSystem = *this, });
 }
 
-Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareAgeFreeTask(const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& asyncTiming){
+Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareAgeFreeTask(const Core::GpuTaskDesc& desc, const DeferredLightingGraphResources& deferredLightingResources, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& asyncTiming){
     return m_graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiAgeFreeGraphTask>(
         desc,
         RayTracingSurfelGiTaskDetail::SurfelGiAgeFreeGraphTask::Payload{ .raytracingSystem = m_system, .graphics = m_system.m_graphics, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }
     );
 }
 
-Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareHashBuildTask(const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& asyncTiming){
+Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareHashBuildTask(const Core::GpuTaskDesc& desc, const DeferredLightingGraphResources& deferredLightingResources, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& asyncTiming){
     return m_graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiHashBuildGraphTask>(
         desc,
         RayTracingSurfelGiTaskDetail::SurfelGiHashBuildGraphTask::Payload{ .raytracingSystem = m_system, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }
     );
 }
 
-Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareSpawnTask(const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& asyncTiming){
+Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareSpawnTask(const Core::GpuTaskDesc& desc, const DeferredLightingGraphResources& deferredLightingResources, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& asyncTiming){
     return m_graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiSpawnGraphTask>(
         desc,
         RayTracingSurfelGiTaskDetail::SurfelGiSpawnGraphTask::Payload{ .raytracingSystem = m_system, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }
     );
 }
 
-Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareTraceBuildArgsTask(const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& asyncTiming){
+Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareTraceBuildArgsTask(const Core::GpuTaskDesc& desc, const DeferredLightingGraphResources& deferredLightingResources, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& asyncTiming){
     return m_graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiTraceBuildArgsGraphTask>(
         desc,
         RayTracingSurfelGiTaskDetail::SurfelGiTraceBuildArgsGraphTask::Payload{ .raytracingSystem = m_system, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }
     );
 }
 
-Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareTraceTask(const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& asyncTiming){
+Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareTraceTask(const Core::GpuTaskDesc& desc, const DeferredLightingGraphResources& deferredLightingResources, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& asyncTiming){
     return m_graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiTraceGraphTask>(
         desc,
         RayTracingSurfelGiTaskDetail::SurfelGiTraceGraphTask::Payload{ .raytracingSystem = m_system, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }
     );
 }
 
-Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareResolveTask(const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& asyncTiming){
+Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareResolveTask(const Core::GpuTaskDesc& desc, const DeferredLightingGraphResources& deferredLightingResources, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& asyncTiming){
     return m_graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiResolveGraphTask>(
         desc,
         RayTracingSurfelGiTaskDetail::SurfelGiResolveGraphTask::Payload{ .raytracingSystem = m_system, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }
     );
 }
 
-Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareTerminalTask(const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>* const asyncTiming){
+Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareTerminalTask(const Core::GpuTaskDesc& desc, const DeferredLightingGraphResources& deferredLightingResources, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>* const asyncTiming){
     return m_graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiGraphTask>(
         desc,
         RayTracingSurfelGiTaskDetail::SurfelGiGraphTask::Payload{ .raytracingSystem = m_system, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }

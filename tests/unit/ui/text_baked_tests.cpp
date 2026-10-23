@@ -61,7 +61,7 @@ protected:
         payload.font = source.identity;
         payload.fontSha256 = ComputeSha256({ m_font.fontBytes().data(), m_font.fontBytes().size() });
         const Core::Assets::AssetBytes& bytes = m_font.fontBytes();
-        UiFixtureSupport::PopulateBakedFontTables(bytes, payload, m_arena);
+        UiFixtureSupport::PopulateBakedFontTables(bytes, m_arena, payload);
         payload.bakePpem = 32u;
         payload.ascenderUnits = 1000.f;
         payload.descenderUnits = -250.f;

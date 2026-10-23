@@ -74,7 +74,7 @@ using TaskGraphTestUtils::TestArena;
 }
 
 
-void CheckSingleLaneStateChangeScratch(const usize taskCount, usize& scratchPeak, const bool concurrentSharing = false){
+void CheckSingleLaneStateChangeScratch(usize& scratchPeak, const usize taskCount, const bool concurrentSharing = false){
     SCOPED_TRACE(taskCount);
     SCOPED_TRACE(concurrentSharing);
     TestArena testArena;
@@ -111,7 +111,7 @@ void CheckSingleLaneStateChangeScratch(const usize taskCount, usize& scratchPeak
     Graphics::GpuTaskGraphCompileOptions options;
     options.allowMetadataOnlyTasks = true;
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-    ASSERT_TRUE(compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena, options));
+    ASSERT_TRUE(compiler.compile(analysis, assignments, compiledGraph, scratchArena, declarations, topology, options));
     scratchPeak = scratchArena.memoryStats().peakUsedBytes;
     const Graphics::GpuCompiledGraph::ReadView plan(compiledGraph);
     ASSERT_EQ(plan.packetCount(), taskCount);
@@ -455,8 +455,8 @@ TEST(GpuTaskGraph, KeepsPartialReadOrderingWhenSourcePacketChangesAdjacentRange)
 TEST(GpuTaskGraph, KeepsSingleLaneAlternatingReadStateScratchGrowthLinear){
     usize smallScratchPeak = 0u;
     usize largeScratchPeak = 0u;
-    ASSERT_NO_FATAL_FAILURE(CheckSingleLaneStateChangeScratch(128u, smallScratchPeak));
-    ASSERT_NO_FATAL_FAILURE(CheckSingleLaneStateChangeScratch(512u, largeScratchPeak));
+    ASSERT_NO_FATAL_FAILURE(CheckSingleLaneStateChangeScratch(smallScratchPeak, 128u));
+    ASSERT_NO_FATAL_FAILURE(CheckSingleLaneStateChangeScratch(largeScratchPeak, 512u));
     ASSERT_NE(smallScratchPeak, 0u);
     ASSERT_NE(largeScratchPeak, 0u);
     RecordUnsignedTestProperty("small_read_state_scratch_peak_bytes", smallScratchPeak);
@@ -469,8 +469,8 @@ TEST(GpuTaskGraph, KeepsSingleLaneAlternatingReadStateScratchGrowthLinear){
 TEST(GpuTaskGraph, KeepsConcurrentSingleLaneAlternatingReadStateScratchGrowthLinear){
     usize smallScratchPeak = 0u;
     usize largeScratchPeak = 0u;
-    ASSERT_NO_FATAL_FAILURE(CheckSingleLaneStateChangeScratch(128u, smallScratchPeak, true));
-    ASSERT_NO_FATAL_FAILURE(CheckSingleLaneStateChangeScratch(512u, largeScratchPeak, true));
+    ASSERT_NO_FATAL_FAILURE(CheckSingleLaneStateChangeScratch(smallScratchPeak, 128u, true));
+    ASSERT_NO_FATAL_FAILURE(CheckSingleLaneStateChangeScratch(largeScratchPeak, 512u, true));
     ASSERT_NE(smallScratchPeak, 0u);
     ASSERT_NE(largeScratchPeak, 0u);
     RecordUnsignedTestProperty("small_concurrent_read_state_scratch_peak_bytes", smallScratchPeak);

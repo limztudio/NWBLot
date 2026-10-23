@@ -84,7 +84,7 @@ TEST(GpuTaskGraph, RoutesOptedInWorkAcrossSameClassPhysicalQueues){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
     const Graphics::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
@@ -159,7 +159,7 @@ TEST(GpuTaskGraph, PreservesLatestDirectDependencyRouteAcrossIncomingAdjacencyOr
     EXPECT_EQ(producers[1u], first.index);
 
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, topology, assignments));
+    ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology));
     const Graphics::GpuTaskQueueAssignment* const firstAssignment = assignments.find(first);
     const Graphics::GpuTaskQueueAssignment* const secondAssignment = assignments.find(second);
     const Graphics::GpuTaskQueueAssignment* const consumerAssignment = assignments.find(consumer);
@@ -203,7 +203,7 @@ TEST(GpuTaskGraph, RetainsSameFamilyRoutingWithoutCrossFamilyOptIn){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     ASSERT_TRUE(Analyze(operationScratchArena, graph, analysis));
-    ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, topology, assignments));
+    ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology));
 
     const Graphics::GpuTaskQueueAssignment* const firstAssignment = assignments.find(first);
     const Graphics::GpuTaskQueueAssignment* const secondAssignment = assignments.find(second);
@@ -264,7 +264,7 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassWorkWithExclusiveOwnershipHandoffs)
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
     const Graphics::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
@@ -356,7 +356,7 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassConcurrentGraphicsResourceWithoutOw
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
     const Graphics::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
@@ -426,7 +426,7 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassComputeAndTransferWorkWithOwnership
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        ASSERT_TRUE(Compile(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+        ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
         const Graphics::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);

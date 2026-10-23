@@ -371,7 +371,7 @@ TEST(AssetsGraphics, FailedReorderedSharedPayloadBuildPreservesPublishedVirtualP
     NWB::Core::Assets::AssetBytes originalList(testArena.arena);
     ASSERT_TRUE(ReadBinaryFile(publishedDirectory / NWB::Core::Assets::BuiltAssetDetail::s_ManifestFilename, originalList));
     NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString> originalArtifactPaths(testArena.arena);
-    ASSERT_TRUE(NWB::Core::Assets::ReadAssetInputList(publishedDirectory / NWB::Core::Assets::BuiltAssetDetail::s_ManifestFilename, originalArtifactPaths, scratchArena, true));
+    ASSERT_TRUE(NWB::Core::Assets::ReadAssetInputList(originalArtifactPaths, publishedDirectory / NWB::Core::Assets::BuiltAssetDetail::s_ManifestFilename, scratchArena, true));
     ASSERT_EQ(originalArtifactPaths.size(), s_ExpectedDualCount);
     NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetBytes> originalArtifactBytes(testArena.arena);
     originalArtifactBytes.reserve(originalArtifactPaths.size());

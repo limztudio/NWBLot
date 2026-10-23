@@ -176,11 +176,11 @@ Expected<FrameGraphAvboitOccupancyUploadResult> FrameGraphAvboitOccupancyUploadC
                     .csgStreamsUploaded = occupancyCsgStreamsUploaded,
                     .intervalOutputsGraphOwned = intervalOutputsGraphOwned,
                 },
-                avboitOccupancyComputeEmulationPayload.plan,
-                avboitOccupancyComputeEmulationPayload.csgPlan,
                 scratchArena,
                 occupancyInstanceData.size(),
-                occupancyMaterialTypedBytes.size()
+                occupancyMaterialTypedBytes.size(),
+                avboitOccupancyComputeEmulationPayload.plan,
+                avboitOccupancyComputeEmulationPayload.csgPlan
             );
             if(!occupancyComputeEmulationCaptureResult)
                 return MakeUnexpected(Failure{});

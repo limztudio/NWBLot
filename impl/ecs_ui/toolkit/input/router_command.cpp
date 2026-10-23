@@ -49,7 +49,7 @@ void InputRouter::routeCommand(const InputEvent& event, InputRoutingResult& resu
     if(alreadyPressed && !consumed)
         return;
     const HitTarget* focused = findTarget(m_focus, m_focusDeclaration);
-    if(routeContextMenuCommand(event, focused, *source, alreadyPressed))
+    if(routeContextMenuCommand(event, focused, alreadyPressed, *source))
         consumed = true;
     else if(event.command == InputCommand::FocusNext || event.command == InputCommand::FocusPrevious)
         consumed |= moveFocusForTraversal(event.command == InputCommand::FocusPrevious) || hasPopup();
@@ -85,7 +85,7 @@ void InputRouter::routeCommand(const InputEvent& event, InputRoutingResult& resu
                     source->controlOwner = { control->id, control->declarationGeneration, control->popup, control->control, false };
             }
             else
-                controlHandled = routeControlNavigation(event, *control, *focused, *source, alreadyPressed, result);
+                controlHandled = routeControlNavigation(event, *control, *focused, alreadyPressed, *source, result);
         }
         source->delegated |= controlHandled && commandOwner != nullptr;
         if(submitCommand && focused != nullptr && !event.repeat && !alreadyPressed && (controlHandled || focused->activatable || focused->textEditable))

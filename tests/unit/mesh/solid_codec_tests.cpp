@@ -251,7 +251,7 @@ TEST(MeshSolidCodec, AdjacentBoundsPreserveFloatBitsAndRejectATruncatedLastCone)
     }
     Core::Assets::AssetVector<Impl::MeshletBounds> decoded(arena);
     usize cursor = 0u;
-    ASSERT_TRUE(Core::Assets::ReadVectorPayload(binary, cursor, bounds.size(), decoded, NWB_TEXT("compact bounds"), NWB_TEXT("bounds")));
+    ASSERT_TRUE(Core::Assets::ReadVectorPayload(binary, bounds.size(), NWB_TEXT("compact bounds"), NWB_TEXT("bounds"), cursor, decoded));
     ASSERT_EQ(decoded.size(), bounds.size());
     for(usize index = 0u; index < decoded.size(); ++index){
         for(usize component = 0u; component < 4u; ++component)
@@ -262,7 +262,7 @@ TEST(MeshSolidCodec, AdjacentBoundsPreserveFloatBitsAndRejectATruncatedLastCone)
         Core::Assets::AssetBytes truncated(binary);
         truncated.resize(truncated.size() - removedBytes);
         cursor = 0u;
-        EXPECT_FALSE(Core::Assets::ReadVectorPayload(truncated, cursor, bounds.size(), decoded, NWB_TEXT("compact bounds"), NWB_TEXT("bounds"))) << "missing final cone bytes: " << removedBytes;
+        EXPECT_FALSE(Core::Assets::ReadVectorPayload(truncated, bounds.size(), NWB_TEXT("compact bounds"), NWB_TEXT("bounds"), cursor, decoded)) << "missing final cone bytes: " << removedBytes;
         EXPECT_EQ(cursor, 0u);
         EXPECT_TRUE(decoded.empty());
     }

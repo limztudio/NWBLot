@@ -232,13 +232,13 @@ template<typename ElementT, usize ComponentCount>
     return outInfluences;
 }
 
-[[nodiscard]] bool FillIndicesRecursive(const ScratchPath& nwbFilePath, const Core::Metascript::Value& value, const AStringView label, UtilityVector<u32>& outIndices, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] bool FillIndicesRecursive(const ScratchPath& nwbFilePath, const Core::Metascript::Value& value, const AStringView label, Core::Alloc::ScratchArena& scratchArena, UtilityVector<u32>& outIndices){
     if(value.isList()){
         const auto& list = value.asList();
         for(usize i = 0u; i < list.size(); ++i){
             ScratchStringStream childLabel(s_FileOpenWrite, scratchArena);
             childLabel << label << "[" << i << "]";
-            if(!FillIndicesRecursive(nwbFilePath, list[i], childLabel.str(), outIndices, scratchArena))
+            if(!FillIndicesRecursive(nwbFilePath, list[i], childLabel.str(), scratchArena, outIndices))
                 return false;
         }
         return true;
@@ -257,7 +257,7 @@ template<typename ElementT, usize ComponentCount>
     const auto field = FindRequiredListField(nwbFilePath, asset, s_IndicesField);
     if(!field)
         return MakeUnexpected(field.error());
-    if(!FillIndicesRecursive(nwbFilePath, **field, s_IndicesField, outIndices, scratchArena))
+    if(!FillIndicesRecursive(nwbFilePath, **field, s_IndicesField, scratchArena, outIndices))
         return MakeUnexpected(Failure{});
     if(outIndices.empty() || (outIndices.size() % s_TriangleIndexCount) != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' must contain whole triangles"), StringConvert(s_MeshMetaKind), PathToString<tchar>(nwbFilePath));

@@ -87,7 +87,7 @@ static Expected<NWB::Impl::Material> BuildMaterialFromBindAndMeta(const AStringV
         bindEntries.push_back(Move(bindEntry));
         NWB::Impl::ShaderCook::CookVector<NWB::Impl::MaterialCookEntry> materialEntries(testArena.arena);
         materialEntries.push_back(Move(*materialEntryResult));
-        if(NWB::Impl::ValidateMaterialCookInterfaces(bindEntries, materialEntries, scratchArena))
+        if(NWB::Impl::ValidateMaterialCookInterfaces(bindEntries, scratchArena, materialEntries))
             built = NWB::Impl::BuildMaterialAsset(materialEntries[0u], testArena.arena);
     }
 

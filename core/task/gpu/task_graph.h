@@ -515,7 +515,7 @@ public:
         if constexpr(GpuGraphTaskContract::DiscardedApi<TaskT>)
             discardPayload = &DiscardTaskPayload<TaskT>;
 
-        const auto task = appendTaskWithinMutation(desc, GpuGraphTaskContract::CommandRequirements<TaskT>(*storedPayload.get()), storedPayload.get(), recordPayload, acceptPayload, discardPayload, &DestroyTaskPayload<Payload>, sizeof(Payload), mutation);
+        const auto task = appendTaskWithinMutation(desc, GpuGraphTaskContract::CommandRequirements<TaskT>(*storedPayload.get()), recordPayload, acceptPayload, discardPayload, &DestroyTaskPayload<Payload>, sizeof(Payload), mutation, storedPayload.get());
         if(task)
             storedPayload.publish();
         else
@@ -532,13 +532,13 @@ public:
 
     template<typename TaskT>
     [[nodiscard]] Expected<GpuTaskId> appendBuiltinTaskWithinMutation(
-        const GpuTaskDesc& resolvedDesc,
         ProvisionalPayloadOwner<typename TaskT::Payload>& payload,
+        const GpuTaskDesc& resolvedDesc,
         const DeclarationMutationScope& mutation,
         const GpuTaskCommandRequirements& commands = { .requiredCapabilities = GpuQueueCapability::Transfer }
     ){
         using Payload = typename TaskT::Payload;
-        const auto task = appendTaskWithinMutation(resolvedDesc, commands, payload.get(), &RecordTaskPayload<TaskT>, &AcceptTaskPayload<TaskT>, &DiscardTaskPayload<TaskT>, &DestroyTaskPayload<Payload>, sizeof(Payload), mutation);
+        const auto task = appendTaskWithinMutation(resolvedDesc, commands, &RecordTaskPayload<TaskT>, &AcceptTaskPayload<TaskT>, &DiscardTaskPayload<TaskT>, &DestroyTaskPayload<Payload>, sizeof(Payload), mutation, payload.get());
         if(task)
             payload.publish();
         else
@@ -693,13 +693,13 @@ private:
     [[nodiscard]] Expected<GpuTaskId> appendTaskWithinMutation(
         const GpuTaskDesc& desc,
         const GpuTaskCommandRequirements& commands,
-        void* payload,
         GpuTaskRecordThunk recordPayload,
         GpuTaskAcceptedThunk acceptPayload,
         GpuTaskDiscardedThunk discardPayload,
         GpuTaskPayloadDestroyThunk destroyPayload,
         usize payloadObjectSize,
-        const DeclarationMutationScope& mutationAccess
+        const DeclarationMutationScope& mutationAccess,
+        void* payload
     );
     void discardAndDestroyUnappendedPayload(void* payload, GpuTaskDiscardedThunk discardPayload, GpuTaskPayloadDestroyThunk destroyPayload);
     [[nodiscard]] u32 findResourceIdentity(const Name& identity)const noexcept;

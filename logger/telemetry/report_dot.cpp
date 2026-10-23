@@ -89,7 +89,7 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
 
 
 [[nodiscard]] AStringView FrameGraphNodeIdentityText(const Telemetry::FrameGraphNodePayload& node, char (&identityText)[NameDetail::s_DebugHashTextLength + 1u]){
-    NameDetail::HashToDebugString(node.name.hash(), identityText, sizeof(identityText));
+    NameDetail::HashToDebugString(identityText, sizeof(identityText), node.name.hash());
     return AStringView(identityText, NameDetail::s_DebugHashTextLength);
 }
 

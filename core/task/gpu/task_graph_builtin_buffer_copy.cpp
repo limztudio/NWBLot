@@ -144,7 +144,7 @@ Expected<GpuTaskId> GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, con
 
     GpuTaskDesc resolvedDesc = desc;
     resolvedDesc.setResourceUses(resourceUses.data(), resourceUses.size());
-    return appendBuiltinTaskWithinMutation<CopyTask>(resolvedDesc, payload, mutation);
+    return appendBuiltinTaskWithinMutation<CopyTask>(payload, resolvedDesc, mutation);
 }
 
 

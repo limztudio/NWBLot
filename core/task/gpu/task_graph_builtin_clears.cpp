@@ -215,7 +215,7 @@ Expected<GpuTaskId> GpuTaskGraph::addClearBufferTask(const GpuTaskDesc& desc, co
     const GpuTaskResourceUse resourceUse{ .resource = clearDesc.destination, .range = {}, .requiredState = ResourceStates::CopyDest, .access = GpuTaskResourceAccess::Write, };
     GpuTaskDesc resolvedDesc = desc;
     resolvedDesc.setResourceUses(&resourceUse, 1u);
-    return appendBuiltinTaskWithinMutation<ClearTask>(resolvedDesc, payload, mutation);
+    return appendBuiltinTaskWithinMutation<ClearTask>(payload, resolvedDesc, mutation);
 }
 
 Expected<GpuTaskId> GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuClearTextureTaskDesc& clearDesc){
@@ -265,7 +265,7 @@ Expected<GpuTaskId> GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, c
     if(!__hidden_gpu_task_graph_builtin_clears::IncludeHookCommandRequirements(commands, clearDesc.recordHooks.commands))
         return MakeUnexpected(Failure{});
     resolvedDesc.setResourceUses(&resourceUse, 1u);
-    return appendBuiltinTaskWithinMutation<ClearTask>(resolvedDesc, payload, mutation, commands);
+    return appendBuiltinTaskWithinMutation<ClearTask>(payload, resolvedDesc, mutation, commands);
 }
 
 Expected<GpuTaskId> GpuTaskGraph::addClearTextureRectUIntTask(const GpuTaskDesc& desc, const GpuClearTextureRectUIntTaskDesc& clearDesc){
@@ -312,7 +312,7 @@ Expected<GpuTaskId> GpuTaskGraph::addClearTextureRectUIntTask(const GpuTaskDesc&
     if(!__hidden_gpu_task_graph_builtin_clears::IncludeHookCommandRequirements(commands, clearDesc.recordHooks.commands))
         return MakeUnexpected(Failure{});
     resolvedDesc.setResourceUses(&resourceUse, 1u);
-    return appendBuiltinTaskWithinMutation<ClearTask>(resolvedDesc, payload, mutation, commands);
+    return appendBuiltinTaskWithinMutation<ClearTask>(payload, resolvedDesc, mutation, commands);
 }
 
 

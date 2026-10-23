@@ -112,24 +112,24 @@ protected:
     }
 
     template<typename HeaderT>
-    [[nodiscard]] bool readGeometryAttributeStreams(const Core::Assets::AssetBytes& binary, usize& inOutCursor, const HeaderT& header, const TStringView failureContext){
-        return MeshAssetBinaryPayload::ReadMeshAttributeStreams(binary, inOutCursor, header, m_positionStream, m_normalStream, m_tangentStream, m_uv0Stream, m_colorStream, failureContext);
+    [[nodiscard]] bool readGeometryAttributeStreams(const Core::Assets::AssetBytes& binary, const HeaderT& header, const TStringView failureContext, usize& inOutCursor){
+        return MeshAssetBinaryPayload::ReadMeshAttributeStreams(binary, header, failureContext, inOutCursor, m_positionStream, m_normalStream, m_tangentStream, m_uv0Stream, m_colorStream);
     }
 
     template<typename HeaderT>
-    [[nodiscard]] bool readGeometryMeshletStreams(const Core::Assets::AssetBytes& binary, usize& inOutCursor, const HeaderT& header, const TStringView failureContext){
+    [[nodiscard]] bool readGeometryMeshletStreams(const Core::Assets::AssetBytes& binary, const HeaderT& header, const TStringView failureContext, usize& inOutCursor){
         return MeshAssetBinaryPayload::ReadMeshletStreams(
             binary,
-            inOutCursor,
             header,
+            failureContext,
+            inOutCursor,
             m_meshlets,
             m_meshletBounds,
             m_meshletPositionRefDeltas,
             m_meshletAttributeRefDeltas,
             m_meshletLocalVertexRefs,
             m_meshletPrimitiveIndices,
-            m_solidTriangleWords,
-            failureContext
+            m_solidTriangleWords
         );
     }
 

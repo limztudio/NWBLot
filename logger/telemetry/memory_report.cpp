@@ -109,11 +109,11 @@ void AppendTelemetryMemoryRecordJson(AString<Core::Alloc::ScratchArena>& out, co
     out += TelemetryMemoryReportDetail::s_MemoryRecordPeakBasisKey;
     AppendJsonQuotedText(out, __hidden_memory_report::MemoryPeakBasisText(payload.snapshot.source));
     char identityText[NameDetail::s_DebugHashTextLength + 1u];
-    NameDetail::HashToDebugString(payload.scopeName.hash(), identityText, sizeof(identityText));
+    NameDetail::HashToDebugString(identityText, sizeof(identityText), payload.scopeName.hash());
     const AStringView identity(identityText, NameDetail::s_DebugHashTextLength);
     char resolvedText[Core::Common::NameSymbols::s_MaxResolvedTextLength];
     AStringView scopeText = payload.scopeText;
-    if(scopeText == identity && Core::Common::NameSymbols::Resolve(payload.scopeName.hash(), resolvedText, sizeof(resolvedText)))
+    if(scopeText == identity && Core::Common::NameSymbols::Resolve(resolvedText, sizeof(resolvedText), payload.scopeName.hash()))
         scopeText = AStringView(resolvedText);
     out += TelemetryMemoryReportDetail::s_MemoryRecordScopeKey;
     AppendJsonQuotedText(out, scopeText);

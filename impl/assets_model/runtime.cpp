@@ -177,7 +177,7 @@ bool Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
 bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
     Core::Alloc::ScratchArena scratchArena(AssetsModelArenaScope::s_LoadBinaryArena);
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<ModelBinaryPayload::ModelHeaderBinary>(binary, cursor, ModelBinaryPayload::s_ModelMagic, ModelBinaryPayload::s_ModelLoadBinaryContext, ModelBinaryPayload::s_ModelAssetKindLabel);
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<ModelBinaryPayload::ModelHeaderBinary>(binary, ModelBinaryPayload::s_ModelMagic, ModelBinaryPayload::s_ModelLoadBinaryContext, ModelBinaryPayload::s_ModelAssetKindLabel, cursor);
     if(!headerResult)
         return false;
     const ModelBinaryPayload::ModelHeaderBinary& header = *headerResult;
@@ -191,11 +191,11 @@ bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
     Vector<ModelBinaryPayload::ModelStaticMeshObjectBinary, Core::Alloc::ScratchArena> staticMeshObjectBinaries(scratchArena);
     Vector<ModelBinaryPayload::ModelSkinnedMeshObjectBinary, Core::Alloc::ScratchArena> skinnedMeshObjectBinaries(scratchArena);
 
-    if(!Core::Assets::ReadVectorPayload(binary, cursor, header.skeletonObjectCount, skeletonObjectBinaries, ModelBinaryPayload::s_ModelLoadBinaryContext, ModelBinaryPayload::s_SkeletonObjectsPayloadLabel))
+    if(!Core::Assets::ReadVectorPayload(binary, header.skeletonObjectCount, ModelBinaryPayload::s_ModelLoadBinaryContext, ModelBinaryPayload::s_SkeletonObjectsPayloadLabel, cursor, skeletonObjectBinaries))
         return false;
-    if(!Core::Assets::ReadVectorPayload(binary, cursor, header.staticMeshObjectCount, staticMeshObjectBinaries, ModelBinaryPayload::s_ModelLoadBinaryContext, ModelBinaryPayload::s_StaticMeshObjectsPayloadLabel))
+    if(!Core::Assets::ReadVectorPayload(binary, header.staticMeshObjectCount, ModelBinaryPayload::s_ModelLoadBinaryContext, ModelBinaryPayload::s_StaticMeshObjectsPayloadLabel, cursor, staticMeshObjectBinaries))
         return false;
-    if(!Core::Assets::ReadVectorPayload(binary, cursor, header.skinnedMeshObjectCount, skinnedMeshObjectBinaries, ModelBinaryPayload::s_ModelLoadBinaryContext, ModelBinaryPayload::s_SkinnedMeshObjectsPayloadLabel))
+    if(!Core::Assets::ReadVectorPayload(binary, header.skinnedMeshObjectCount, ModelBinaryPayload::s_ModelLoadBinaryContext, ModelBinaryPayload::s_SkinnedMeshObjectsPayloadLabel, cursor, skinnedMeshObjectBinaries))
         return false;
 
     candidate.m_skeletonObjects.reserve(skeletonObjectBinaries.size());

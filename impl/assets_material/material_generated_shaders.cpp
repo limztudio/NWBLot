@@ -66,12 +66,12 @@ static void AssignGeneratedMaterialShaderSource(CookString& outSource, ScratchAr
 
 
 Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShadersImpl(
-    CookArena& arena,
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
     const AStringView sharedMeshShaderName,
-    CookVector<MaterialCookEntry>& materialEntries,
-    ScratchArena& scratchArena
+    CookArena& arena,
+    ScratchArena& scratchArena,
+    CookVector<MaterialCookEntry>& materialEntries
 ){
     CookVector<GeneratedMaterialPixelShader> generatedShaders(arena);
     usize generatedShaderCount = 0u;
@@ -166,7 +166,6 @@ Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShadersImpl(
 
 // Shared body for the three AVBOIT pass-PS generators; opaque materials are skipped.
 static Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitPassPixelShadersImpl(
-    CookArena& arena,
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
     const AStringView generatedDirectoryLeaf,
@@ -174,8 +173,9 @@ static Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitPass
     const AStringView passLabel,
     const AStringView generatedNamePrefix,
     MaterialCookString MaterialCookEntry::* entryShaderNameField,
-    CookVector<MaterialCookEntry>& materialEntries,
-    ScratchArena& scratchArena
+    CookArena& arena,
+    ScratchArena& scratchArena,
+    CookVector<MaterialCookEntry>& materialEntries
 ){
     CookVector<GeneratedMaterialPixelShader> generatedShaders(arena);
     usize generatedShaderCount = 0u;
@@ -248,14 +248,13 @@ static Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitPass
 
 
 Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitAccumulatePixelShadersImpl(
-    CookArena& arena,
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
-    CookVector<MaterialCookEntry>& materialEntries,
-    ScratchArena& scratchArena
+    CookArena& arena,
+    ScratchArena& scratchArena,
+    CookVector<MaterialCookEntry>& materialEntries
 ){
     return EmitMaterialAvboitPassPixelShadersImpl(
-        arena,
         cacheDirectory,
         configurationSafeName,
         AStringView("material_avboit_accumulate_pixel_shaders"),
@@ -263,8 +262,9 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitAcc
         MaterialBinaryPayload::s_AvboitAccumulatePassLabel,
         s_AvboitAccumulatePixelShaderGeneratedPrefix,
         &MaterialCookEntry::avboitAccumulatePixelShaderName,
-        materialEntries,
-        scratchArena
+        arena,
+        scratchArena,
+        materialEntries
     );
 }
 
@@ -273,14 +273,13 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitAcc
 
 
 Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitOccupancyPixelShadersImpl(
-    CookArena& arena,
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
-    CookVector<MaterialCookEntry>& materialEntries,
-    ScratchArena& scratchArena
+    CookArena& arena,
+    ScratchArena& scratchArena,
+    CookVector<MaterialCookEntry>& materialEntries
 ){
     return EmitMaterialAvboitPassPixelShadersImpl(
-        arena,
         cacheDirectory,
         configurationSafeName,
         AStringView("material_avboit_occupancy_pixel_shaders"),
@@ -288,8 +287,9 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitOcc
         MaterialBinaryPayload::s_AvboitOccupancyPassLabel,
         s_AvboitOccupancyPixelShaderGeneratedPrefix,
         &MaterialCookEntry::avboitOccupancyPixelShaderName,
-        materialEntries,
-        scratchArena
+        arena,
+        scratchArena,
+        materialEntries
     );
 }
 
@@ -298,14 +298,13 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitOcc
 
 
 Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitExtinctionPixelShadersImpl(
-    CookArena& arena,
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
-    CookVector<MaterialCookEntry>& materialEntries,
-    ScratchArena& scratchArena
+    CookArena& arena,
+    ScratchArena& scratchArena,
+    CookVector<MaterialCookEntry>& materialEntries
 ){
     return EmitMaterialAvboitPassPixelShadersImpl(
-        arena,
         cacheDirectory,
         configurationSafeName,
         AStringView("material_avboit_extinction_pixel_shaders"),
@@ -313,8 +312,9 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitExt
         MaterialBinaryPayload::s_AvboitExtinctionPassLabel,
         s_AvboitExtinctionPixelShaderGeneratedPrefix,
         &MaterialCookEntry::avboitExtinctionPixelShaderName,
-        materialEntries,
-        scratchArena
+        arena,
+        scratchArena,
+        materialEntries
     );
 }
 

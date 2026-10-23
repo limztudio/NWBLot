@@ -22,7 +22,7 @@ NumericEditResult IntegerEditModel::commit(const IntegerBounds& bounds, const bo
     if(!ValidateIntegerBounds(bounds))
         return {};
     NumericEditResult result = NumericEditDetail::CommitDraft(
-        m_value, ParseIntegerDraft(m_draft.text()), bounds, canonical, m_draft.text(), m_acceptedDraft,
+        m_value, m_acceptedDraft, ParseIntegerDraft(m_draft.text()), bounds, canonical, m_draft.text(),
         [this](const i64 candidate){ return canonicalize(candidate); },
         [](const i64 candidate, const i64 value)noexcept{ return candidate != value; }
     );

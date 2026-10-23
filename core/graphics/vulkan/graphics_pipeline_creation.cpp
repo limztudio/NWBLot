@@ -167,7 +167,7 @@ Expected<GraphicsPipelineHandle> Device::createGraphicsPipeline(const GraphicsPi
         return MakeUnexpected(Failure{});
     }
 
-    if(!configurePipelineBindings(desc.bindingLayouts, s_OperationName, *pso, scratchArena))
+    if(!configurePipelineBindings(desc.bindingLayouts, s_OperationName, scratchArena, *pso))
         return MakeUnexpected(Failure{});
 
     auto vertexInputInfo = VulkanDetail::MakeVkStruct<VkPipelineVertexInputStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO);
@@ -216,7 +216,7 @@ Expected<GraphicsPipelineHandle> Device::createGraphicsPipeline(const GraphicsPi
     pipelineInfo.renderPass = VK_NULL_HANDLE;
     pipelineInfo.subpass = 0;
 
-    if(!createPipeline(s_OperationName, *pso, pipelineInfo))
+    if(!createPipeline(s_OperationName, pipelineInfo, *pso))
         return MakeUnexpected(Failure{});
 
     return pso;

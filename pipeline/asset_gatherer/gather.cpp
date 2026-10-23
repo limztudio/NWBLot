@@ -60,7 +60,7 @@ namespace __hidden_gather{
             return MakeUnexpected(Failure{});
         }
         if(*manifestExists){
-            if(!Assets::ReadAssetInputList(manifest, files, scratchArena, true))
+            if(!Assets::ReadAssetInputList(files, manifest, scratchArena, true))
                 return MakeUnexpected(Failure{});
             continue;
         }
@@ -125,7 +125,7 @@ bool GatherAssets(const AssetGatherOptions& options){
             const usize payloadSize = bytes.size() - payloadOffset;
             const bool identical = existing.payloadBytes.size() == payloadSize && NWB_MEMCMP(existing.payloadBytes.data(), bytes.data() + payloadOffset, payloadSize) == 0;
             if(!identical){
-                if(!options.mergePayloads || !options.mergePayloads(virtualPath, existing.payloadBytes, bytes.data() + payloadOffset, payloadSize, scratchArena)){
+                if(!options.mergePayloads || !options.mergePayloads(virtualPath, bytes.data() + payloadOffset, payloadSize, scratchArena, existing.payloadBytes)){
                     NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: conflicting built asset identity '{}'"), StringConvert(virtualPath.resolvedText()));
                     return false;
                 }

@@ -420,11 +420,11 @@ void VerifyArrayOwnerReentry(Arena& oldArena, Arena& newArena){
         auto* oldMemory = oldArena.template allocate<ArrayReentryProbe>(2u);
         ASSERT_NE(oldMemory, nullptr);
         ArrayReentryProbe* oldElements = nullptr;
-        ArenaObjectDetail::ConstructionStorage<ArrayReentryProbe, Arena, false> oldStorage(oldArena, MakeNotNull(oldMemory), 2u, oldElements);
+        ArenaObjectDetail::ConstructionStorage<ArrayReentryProbe, Arena, false> oldStorage(oldArena, 2u, MakeNotNull(oldMemory), oldElements);
         auto* newMemory = newArena.template allocate<ArrayReentryProbe>(1u);
         ASSERT_NE(newMemory, nullptr);
         ArrayReentryProbe* newElements = nullptr;
-        ArenaObjectDetail::ConstructionStorage<ArrayReentryProbe, Arena, false> newStorage(newArena, MakeNotNull(newMemory), 1u, newElements);
+        ArenaObjectDetail::ConstructionStorage<ArrayReentryProbe, Arena, false> newStorage(newArena, 1u, MakeNotNull(newMemory), newElements);
         Owner sink, replacement, slot;
         newElements = ::new(static_cast<void*>(newMemory)) ArrayReentryProbe[1u]{ ArrayReentryProbe(newDestroyed) };
         if constexpr(Empty)

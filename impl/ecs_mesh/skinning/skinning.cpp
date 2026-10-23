@@ -200,7 +200,7 @@ void MeshSkinningSystem::confirmGraphOwnedSkinningDispatch(const MeshSkinningGra
     if(!instance->deformationState.accept(plan.deformationCandidate))
         return;
 
-    ApplyMeshSkinningSubmissionCommit(true, instance->editRevision, instance->dirtyFlags, resources.bindlessResourceSlotsUploaded, plan.submissionCommit);
+    ApplyMeshSkinningSubmissionCommit(true, instance->editRevision, plan.submissionCommit, instance->dirtyFlags, resources.bindlessResourceSlotsUploaded);
 }
 
 

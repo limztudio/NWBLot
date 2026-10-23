@@ -578,7 +578,7 @@ the glass continues casting its refractive shadow and photon caustic. Set
 leaving the caustic producer on the device's natural route. Both preferences
 default to enabled when the environment variables are absent.
 
-`nwb_caustic_sphere_capture_smoke` reads back the application framebuffer after
+`nwb_software_raytracing_optical_smoke` reads back the application framebuffer after
 360 graphics presentation frames, once GPU readback has completed, with a fixed
 1/60-second simulation delta. It requires both
 a refraction resolve and a caustic producer dispatch, clean runtime logs, a

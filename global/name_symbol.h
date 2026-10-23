@@ -12,7 +12,7 @@
 
 
 using NameSymbolRecordCallback = void(*)(const NameHash& hash, AStringView text, void* userData);
-using NameSymbolResolveCallback = bool(*)(const NameHash& hash, char* outText, usize outTextSize, void* userData);
+using NameSymbolResolveCallback = bool(*)(char* outText, usize outTextSize, const NameHash& hash, void* userData);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -104,7 +104,7 @@ inline void SetNameSymbolResolveCallback(const NameSymbolResolveCallback callbac
     state.userData = userData;
 }
 
-[[nodiscard]] inline bool ResolveNameSymbolText(const NameHash& hash, char* const outText, const usize outTextSize){
+[[nodiscard]] inline bool ResolveNameSymbolText(char* const outText, const usize outTextSize, const NameHash& hash){
     if(IsZeroHash(hash) || outText == nullptr || outTextSize == 0u)
         return false;
 
@@ -117,7 +117,7 @@ inline void SetNameSymbolResolveCallback(const NameSymbolResolveCallback callbac
         return false;
     ScopedSymbolCallbackFlag resolveFlag(inProgress);
 
-    return state.callback(hash, outText, outTextSize, state.userData);
+    return state.callback(outText, outTextSize, hash, state.userData);
 }
 
 template<typename CharT>

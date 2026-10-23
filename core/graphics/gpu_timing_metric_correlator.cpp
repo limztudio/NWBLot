@@ -246,7 +246,7 @@ bool GpuTimingMetricCorrelator::preparePacketEnvelopeMetrics(
     return true;
 }
 
-void GpuTimingMetricCorrelator::recordTimestampRange(const Name& scopeName, const u64 frameIndex, const GpuComparableTimestampRange& range, GpuTimingSinkSampleVector& performanceSamples, Alloc::ScratchArena& scratchArena){
+void GpuTimingMetricCorrelator::recordTimestampRange(const Name& scopeName, const u64 frameIndex, const GpuComparableTimestampRange& range, Alloc::ScratchArena& scratchArena, GpuTimingSinkSampleVector& performanceSamples){
     for(OverlapRecord& record : m_overlapRecords){
         if(scopeName != record.firstScope && scopeName != record.secondScope)
             continue;
@@ -331,7 +331,7 @@ void GpuTimingMetricCorrelator::recordTimestampRange(const Name& scopeName, cons
             packetRanges.push_back(scope.range);
 
         GpuQueuePacketEnvelopeMetricsVector queueMetrics{scratchArena};
-        const auto envelopeMetrics = TryAggregateGpuPacketEnvelopeMetrics(packetRanges.data(), packetRanges.size(), queueMetrics, scratchArena);
+        const auto envelopeMetrics = TryAggregateGpuPacketEnvelopeMetrics(packetRanges.data(), packetRanges.size(), scratchArena, queueMetrics);
         bool aggregated = envelopeMetrics && queueMetrics.size() == it->queueOutputs.size();
         for(const GpuQueuePacketEnvelopeMetrics& queueMetric : queueMetrics){
             bool hasOutput = false;

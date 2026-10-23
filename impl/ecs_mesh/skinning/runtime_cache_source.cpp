@@ -47,7 +47,7 @@ static constexpr TStringView s_AssetLoadContext = NWB_TEXT("MeshSkinningRuntimeC
 
 template<typename MeshletVectorT, typename PositionRefVectorT, typename LocalVertexRefVectorT>
 [[nodiscard]] bool ResolveAttributeSkins(const MeshletVectorT& meshlets, const PositionRefVectorT& positionRefs, const LocalVertexRefVectorT& localVertexRefs, const usize attributeRefCount, MeshSkinningRuntimeInstance::AttributeSkinVector& outAttributeSkins){
-    return MeshMeshletRefValidation::ResolveMeshletAttributeSkins(meshlets, positionRefs, localVertexRefs, attributeRefCount, outAttributeSkins, [](const usize meshletIndex, const usize attributeIndex, const u32 previousSkin, const u32 skinIndex){
+    return MeshMeshletRefValidation::ResolveMeshletAttributeSkins(meshlets, positionRefs, localVertexRefs, attributeRefCount, [](const usize meshletIndex, const usize attributeIndex, const u32 previousSkin, const u32 skinIndex){
             static_cast<void>(attributeIndex);
             static_cast<void>(previousSkin);
             static_cast<void>(skinIndex);
@@ -57,7 +57,8 @@ template<typename MeshletVectorT, typename PositionRefVectorT, typename LocalVer
         [](const usize attributeIndex){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: source attribute ref {} is unreferenced"), attributeIndex);
             return false;
-        }
+        },
+        outAttributeSkins
     );
 }
 
@@ -87,7 +88,7 @@ template<typename MeshletVectorT, typename PositionRefVectorT, typename LocalVer
 
 
 template<typename MeshT, typename SkinStreamT>
-[[nodiscard]] bool BuildRuntimeZippedPayload(const MeshT& mesh, const SkinStreamT& skinStream, MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] bool BuildRuntimeZippedPayload(const MeshT& mesh, const SkinStreamT& skinStream, Core::Alloc::ScratchArena& scratchArena, MeshSkinningRuntimeInstance& instance){
     Vector<MeshletPositionStreamRef, Core::Alloc::ScratchArena> runtimePositionRefs{scratchArena};
     Vector<MeshletAttributeStreamRef, Core::Alloc::ScratchArena> runtimeAttributeRefs{scratchArena};
     usize positionRefCount = 0u;
@@ -154,10 +155,10 @@ template<typename MeshT, typename SkinStreamT>
     if(!ResolveAttributeSkins(instance.meshlets, runtimePositionRefs, instance.meshletLocalVertexRefs, runtimeAttributeRefs.size(), instance.attributeSkins))
         return false;
 
-    if(!EncodeMeshletRefDeltas(instance.meshlets, runtimePositionRefs, runtimeAttributeRefs, instance.meshletPositionRefDeltas, instance.meshletAttributeRefDeltas, true, [&](const usize meshletIndex, const TStringView reason){
+    if(!EncodeMeshletRefDeltas(runtimePositionRefs, runtimeAttributeRefs, true, [&](const usize meshletIndex, const TStringView reason){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime meshlet {} {}"), meshletIndex, reason);
         return false;
-    }
+    }, instance.meshlets, instance.meshletPositionRefDeltas, instance.meshletAttributeRefDeltas
     ))
         return false;
 
@@ -176,7 +177,7 @@ template<typename MeshT, typename SkinStreamT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, SkinnedMeshBindingComponent& component, Core::Alloc::ScratchArena& scratchArena){
+bool MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Core::Alloc::ScratchArena& scratchArena, SkinnedMeshBindingComponent& component){
     const Name& sourceName = component.skin.name();
     if(!component.skin.valid()){
         releaseRuntimeMesh(entity);
@@ -231,7 +232,7 @@ bool MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Ski
     instance.meshletPrimitiveIndices = mesh.meshletPrimitiveIndices();
     instance.solidTriangleWords = mesh.solidTriangleWords();
     instance.dirtyFlags = RuntimeMeshDirtyFlag::All;
-    if(!__hidden_runtime_cache_source::BuildRuntimeZippedPayload(mesh, skin.influences(), instance, scratchArena)){
+    if(!__hidden_runtime_cache_source::BuildRuntimeZippedPayload(mesh, skin.influences(), scratchArena, instance)){
         eraseUnusedSource(sourceName);
         return false;
     }

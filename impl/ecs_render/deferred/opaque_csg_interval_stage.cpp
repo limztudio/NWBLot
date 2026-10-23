@@ -263,8 +263,8 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(Core::Allo
     Core::GpuTaskId csgIntervalSampleDependency = tasks.intervalCombineTask;
     if(m_intervalSamplePayload.materialDrawBuffersUploaded && !objectGeometry.prepare(
         inputs.opaqueDrawItems.csg.indexedDrawItems.data(), inputs.opaqueDrawItems.csg.indexedDrawItems.size(),
-        inputs.frameBindings, inputs.targets, csgIntervalSampleDependency, csgIntervalSampleResourceUses,
-        scratchArena, nullptr, inputs.intervalSampleTimingTicket
+        inputs.frameBindings, inputs.targets, scratchArena, csgIntervalSampleDependency, csgIntervalSampleResourceUses,
+        nullptr, inputs.intervalSampleTimingTicket
     ))
         return MakeUnexpected(Failure{});
     if(opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned){

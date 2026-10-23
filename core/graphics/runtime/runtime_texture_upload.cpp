@@ -230,13 +230,13 @@ bool GraphicsRuntime::uploadTextureBatch(const TextureUploadBatchDesc& desc)cons
         .directConsumerQueue = device.getPrimaryPhysicalQueue(consumerQueue),
     };
     const bool submitted = GraphicsModuleDetail::SubmitGraphOwnedSetupUpload(
-        *this,
+        uploadToken,
         *m_standaloneGraphWorkspaces,
+        *this,
         textureDesc.queueSharing,
         consumerQueue,
         &submissionData,
         MakeNotNull(&__hidden_graphics_texture_upload::DeclareTextureUploadBatch),
-        uploadToken,
         sameClassRouting.enabled ? sameClassRouting.primaryQueue : GpuPhysicalQueueId{}
     );
     if(!submitted){

@@ -46,9 +46,9 @@ public:
         usize drawCount,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         const DeferredFrameTargets& targets,
+        Core::Alloc::ScratchArena& scratchArena,
         Core::GpuTaskId& dependency,
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& rasterUses,
-        Core::Alloc::ScratchArena& scratchArena,
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr,
         Core::GpuTimingSubmissionTicket** rebindableTimingTicket = nullptr
     );

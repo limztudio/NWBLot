@@ -215,7 +215,7 @@ private:
     return {};
 }
 
-[[nodiscard]] static Expected<void, ErrorCode> Publish(const OutputPaths& paths, TemporaryFile& font, TemporaryFile& metadata, const bool overwrite){
+[[nodiscard]] static Expected<void, ErrorCode> Publish(const OutputPaths& paths, const bool overwrite, TemporaryFile& font, TemporaryFile& metadata){
     const auto present = CheckOutputs(paths, overwrite);
     if(!present)
         return MakeUnexpected(present.error());
@@ -345,7 +345,7 @@ bool WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payl
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: staging or verification failed; previous pair remains in place"));
         return false;
     }
-    const auto published = __hidden_font_builder_asset_writer::Publish(paths, stagedFont, stagedMetadata, options.overwrite);
+    const auto published = __hidden_font_builder_asset_writer::Publish(paths, options.overwrite, stagedFont, stagedMetadata);
     if(!published){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: pair publication failed: {}"), StringConvert(published.error().message()));
         return false;

@@ -213,7 +213,7 @@ struct EncodedMip{
     return transport;
 }
 
-[[nodiscard]] static bool AppendEncodedMip(const basisu::basisu_backend_output& output, const EncodedMip& mip, const basist::basis_tex_format format, Vector<u8>& bytes, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] static bool AppendEncodedMip(const basisu::basisu_backend_output& output, const EncodedMip& mip, const basist::basis_tex_format format, Core::Alloc::ScratchArena& scratchArena, Vector<u8>& bytes){
     if(output.m_tex_format != format || output.m_slice_desc.size() != mip.sliceCount || output.m_slice_desc.size() != output.m_slice_image_data.size())
         return false;
 
@@ -236,7 +236,7 @@ struct EncodedMip{
     return true;
 }
 
-[[nodiscard]] static bool EncodeMip(const FloatPlanes& planes, const TextureDimension::Enum dimension, const TexturePayloadFormat::Enum format, const bool alphaOnly, const EncodedMip& mip, Vector<u8>& bytes, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] static bool EncodeMip(const FloatPlanes& planes, const TextureDimension::Enum dimension, const TexturePayloadFormat::Enum format, const bool alphaOnly, const EncodedMip& mip, Core::Alloc::ScratchArena& scratchArena, Vector<u8>& bytes){
     basisu::job_pool jobs(s_EncoderWorkerCount);
     basisu::basis_compressor_params params;
     const bool hdr = !alphaOnly && IsHdrTexturePayloadFormat(format);
@@ -292,7 +292,7 @@ struct EncodedMip{
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal failed to encode a linear mip, error {}."), static_cast<i32>(encoded));
         return false;
     }
-    if(!AppendEncodedMip(compressor.get_uastc_backend_output(), mip, basisFormat, bytes, scratchArena)){
+    if(!AppendEncodedMip(compressor.get_uastc_backend_output(), mip, basisFormat, scratchArena, bytes)){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal returned an invalid mip layout."));
         return false;
     }
@@ -348,12 +348,12 @@ Expected<PreparedTexture> EncodeLinearTexture(TextureEncodeInput&& input, Core::
     prepared.bytes.reserve(payloadByteCount);
 
     for(usize level = 0u; level < mips.size(); ++level){
-        if(!EncodeMip(mips[level], input.dimension, input.format, false, (*mipLevels)[level], prepared.bytes, scratchArena))
+        if(!EncodeMip(mips[level], input.dimension, input.format, false, (*mipLevels)[level], scratchArena, prepared.bytes))
             return MakeUnexpected(Failure{});
     }
     if(separateAlpha){
         for(usize level = 0u; level < mips.size(); ++level){
-            if(!EncodeMip(mips[level], input.dimension, input.format, true, (*mipLevels)[level], prepared.bytes, scratchArena))
+            if(!EncodeMip(mips[level], input.dimension, input.format, true, (*mipLevels)[level], scratchArena, prepared.bytes))
                 return MakeUnexpected(Failure{});
         }
     }

@@ -71,7 +71,7 @@ Expected<MeshBuildResult> BuildMesh(
     skinContext.jointLookup.reserve(jointCapacity);
     for(const usize instanceIndex : selection){
         NWB_ASSERT(instanceIndex < instances.size());
-        if(!FbxMeshBuild::AppendInstanceMesh(instances[instanceIndex], options, wantsSkinning, *normalMode, defaultColor, triangleIndices, meshContext, skinContext, result.sawVertexColors, result.sawVertexUvs, usedDefaultUvs, scratchArena)){
+        if(!FbxMeshBuild::AppendInstanceMesh(instances[instanceIndex], options, wantsSkinning, *normalMode, defaultColor, scratchArena, triangleIndices, meshContext, skinContext, result.sawVertexColors, result.sawVertexUvs, usedDefaultUvs)){
             return MakeUnexpected(Failure{});
         }
     }

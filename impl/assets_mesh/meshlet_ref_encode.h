@@ -169,13 +169,13 @@ template<
     typename FailureHandlerT
 >
 [[nodiscard]] bool EncodeMeshletRefDeltas(
-    MeshletVectorT& meshlets,
     const PositionRefVectorT& positionRefs,
     const AttributeRefVectorT& attributeRefs,
-    PositionDeltaVectorT& outPositionDeltas,
-    AttributeDeltaVectorT& outAttributeDeltas,
     const bool skinRequired,
-    FailureHandlerT onFailure
+    FailureHandlerT onFailure,
+    MeshletVectorT& meshlets,
+    PositionDeltaVectorT& outPositionDeltas,
+    AttributeDeltaVectorT& outAttributeDeltas
 ){
     outPositionDeltas.clear();
     outAttributeDeltas.clear();

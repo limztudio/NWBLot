@@ -41,7 +41,7 @@ struct Shelf{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool PackGlyphs(const BakeOptions& options, const RasterGlyphs& glyphs, Impl::FontAtlasPayload& outPayload, Core::Alloc::ScratchArena& scratch){
+bool PackGlyphs(const BakeOptions& options, const RasterGlyphs& glyphs, Core::Alloc::ScratchArena& scratch, Impl::FontAtlasPayload& outPayload){
     Vector<u32, Core::Alloc::ScratchArena> order(scratch);
     order.reserve(glyphs.size());
     for(u32 index = 0u; index < glyphs.size(); ++index){

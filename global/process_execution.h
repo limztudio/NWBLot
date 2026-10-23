@@ -572,8 +572,8 @@ template<typename ArenaT>
 
 template<typename ArenaT, typename StringT>
 [[nodiscard]] inline Expected<void, ProcessCaptureFailure> CaptureProcessOutput(
-    ArenaT& arena,
     StringT& outOutput,
+    ArenaT& arena,
     const Span<const AStringView> arguments,
     const usize maxOutputBytes = ProcessExecutionDetail::s_DefaultCaptureOutputMaxBytes,
     const usize readBufferBytes = ProcessExecutionDetail::s_CaptureReadBufferBytes,

@@ -101,7 +101,7 @@ Expected<GpuTaskId> GpuTaskGraph::addTask(const GpuTaskDesc& desc, const GpuTask
     DeclarationMutationScope mutation(*this);
     if(!mutation.valid())
         return MakeUnexpected(Failure{});
-    return appendTaskWithinMutation(desc, commands, nullptr, nullptr, nullptr, nullptr, nullptr, 0u, mutation);
+    return appendTaskWithinMutation(desc, commands, nullptr, nullptr, nullptr, nullptr, 0u, mutation, nullptr);
 }
 
 bool GpuTaskGraph::setNormalExecutionPrelude(const GpuTaskId& task){

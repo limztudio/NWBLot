@@ -62,7 +62,7 @@ TEST(AssetsGraphics, ShaderDependenciesTrackContinuedIncludesAndRejectUnplannedI
     Impl::ShaderCook shaderCook(testArena.arena);
     Impl::ShaderCook::CookVector<Path> includeDirectories(testArena.arena);
     Impl::ShaderCook::CookVector<Path> dependencies(testArena.arena);
-    ASSERT_TRUE(Impl::ShaderSourceDependencies::Gather(sourcePath, includeDirectories, {}, dependencies, scratchArena));
+    ASSERT_TRUE(Impl::ShaderSourceDependencies::Gather(sourcePath, includeDirectories, {}, scratchArena, dependencies));
     ASSERT_EQ(dependencies.size(), 2u);
     ASSERT_NE(FindIf(dependencies.begin(), dependencies.end(), [&trackedInclude](const Path& path)noexcept{
         return path == trackedInclude;
@@ -85,12 +85,12 @@ TEST(AssetsGraphics, ShaderDependenciesTrackContinuedIncludesAndRejectUnplannedI
     for(const AStringView source : s_UnplannedIncludes){
         SCOPED_TRACE(source);
         ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(sourcePath, source));
-        EXPECT_FALSE(Impl::ShaderSourceDependencies::Gather(sourcePath, includeDirectories, {}, dependencies, scratchArena));
+        EXPECT_FALSE(Impl::ShaderSourceDependencies::Gather(sourcePath, includeDirectories, {}, scratchArena, dependencies));
     }
     const usize failureErrors = logger.errorCount();
     EXPECT_GT(failureErrors, 0u);
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(sourcePath, s_Source));
-    EXPECT_TRUE(Impl::ShaderSourceDependencies::Gather(sourcePath, includeDirectories, {}, dependencies, scratchArena));
+    EXPECT_TRUE(Impl::ShaderSourceDependencies::Gather(sourcePath, includeDirectories, {}, scratchArena, dependencies));
     EXPECT_EQ(logger.errorCount(), failureErrors);
     EXPECT_TRUE(RemoveAllIfExists(root));
 }
@@ -174,8 +174,8 @@ TEST(AssetsGraphics, ShaderDependencyChecksumIncludesOrderedSearchRootsWithSameF
     secondDirectories.push_back(firstRoot);
     Impl::ShaderCook::CookVector<Path> firstDependencies(testArena.arena);
     Impl::ShaderCook::CookVector<Path> secondDependencies(testArena.arena);
-    ASSERT_TRUE(Impl::ShaderSourceDependencies::Gather(sourcePath, firstDirectories, {}, firstDependencies, scratchArena));
-    ASSERT_TRUE(Impl::ShaderSourceDependencies::Gather(sourcePath, secondDirectories, {}, secondDependencies, scratchArena));
+    ASSERT_TRUE(Impl::ShaderSourceDependencies::Gather(sourcePath, firstDirectories, {}, scratchArena, firstDependencies));
+    ASSERT_TRUE(Impl::ShaderSourceDependencies::Gather(sourcePath, secondDirectories, {}, scratchArena, secondDependencies));
     ASSERT_EQ(firstDependencies.size(), 3u);
     ASSERT_EQ(secondDependencies.size(), firstDependencies.size());
     for(const Path& dependency : firstDependencies)
@@ -258,7 +258,7 @@ TEST(AssetsGraphics, ShaderDependencyCollectionRetainsCaseDistinctPhysicalInputs
     Impl::ShaderCook shaderCook(testArena.arena);
     Impl::ShaderCook::CookVector<Path> noDirectories(testArena.arena);
     Impl::ShaderCook::CookVector<Path> dependencies(testArena.arena);
-    ASSERT_TRUE(Impl::ShaderSourceDependencies::Gather(sourcePath, noDirectories, {}, dependencies, scratchArena));
+    ASSERT_TRUE(Impl::ShaderSourceDependencies::Gather(sourcePath, noDirectories, {}, scratchArena, dependencies));
     ASSERT_EQ(dependencies.size(), 3u);
     EXPECT_NE(FindIf(dependencies.begin(), dependencies.end(), [&upperPath](const Path& path)noexcept{ return path == upperPath; }), dependencies.end());
     EXPECT_NE(FindIf(dependencies.begin(), dependencies.end(), [&lowerPath](const Path& path)noexcept{ return path == lowerPath; }), dependencies.end());

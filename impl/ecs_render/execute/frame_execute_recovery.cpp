@@ -53,13 +53,13 @@ bool FrameExecuteRecovery::executeFrameRecoveryTask(){
     Core::Alloc::ScratchArena recoveryScratchArena(RendererArenaScope::s_TaskGraphArena);
     const Core::GpuTaskScheduler& scheduler = renderer.m_graphics.gpuTasks();
     const bool recoveryAccepted = scheduler.executeAcceptedFrontierTask(
-        renderer.m_deferredLightingTaskGraph,
         renderer.m_deferredLightingCompiledGraph,
-        renderer.m_deferredLightingRecordedGraph,
         renderer.m_deferredFrameRecoveryTask,
+        recoveryScratchArena,
+        renderer.m_deferredLightingTaskGraph,
+        renderer.m_deferredLightingRecordedGraph,
         renderer.m_deferredLightingSubmissionTransaction,
-        &renderer.m_graphics.gpuTiming(),
-        recoveryScratchArena
+        &renderer.m_graphics.gpuTiming()
     );
     if(!recoveryAccepted){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: deferred frame recovery record/submission was rejected"));

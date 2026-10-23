@@ -135,7 +135,7 @@ static_assert(alignof(Expected<TangentFrameDirections>) >= alignof(TangentFrameD
 
 
 template<typename ScratchArenaT>
-[[nodiscard]] inline Expected<TangentFrameRebuildResult> RebuildTangentFrames(ScratchArenaT& scratchArena, TangentFrameRebuildVertex* vertices, const usize vertexCount, const u32* indices, const usize indexCount){
+[[nodiscard]] inline Expected<TangentFrameRebuildResult> RebuildTangentFrames(ScratchArenaT& scratchArena, const usize vertexCount, const u32* indices, const usize indexCount, TangentFrameRebuildVertex* vertices){
     if(!vertices || !indices || vertexCount == 0u || indexCount == 0u || (indexCount % TangentFrameRebuildDetail::s_IndicesPerTriangle) != 0u || vertexCount > static_cast<usize>(Limit<u32>::s_Max))
         return MakeUnexpected(Failure{});
 
@@ -227,9 +227,9 @@ template<typename ScratchArenaT>
     return result;
 }
 
-template<typename ScratchArenaT, typename VertexVectorT, typename IndexVectorT>
-[[nodiscard]] inline Expected<TangentFrameRebuildResult> RebuildTangentFrames(ScratchArenaT& scratchArena, VertexVectorT& vertices, const IndexVectorT& indices){
-    return RebuildTangentFrames(scratchArena, vertices.data(), vertices.size(), indices.data(), indices.size());
+template<typename ScratchArenaT, typename IndexVectorT, typename VertexVectorT>
+[[nodiscard]] inline Expected<TangentFrameRebuildResult> RebuildTangentFrames(ScratchArenaT& scratchArena, const IndexVectorT& indices, VertexVectorT& vertices){
+    return RebuildTangentFrames(scratchArena, vertices.size(), indices.data(), indices.size(), vertices.data());
 }
 
 

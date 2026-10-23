@@ -153,10 +153,10 @@ private:
     [[nodiscard]] bool append(Event&& event);
     [[nodiscard]] bool compositionActive(const Entry& entry)const noexcept;
     void discard(const UiTextEditOwner& owner)noexcept;
-    [[nodiscard]] Ui::EditBoxResult editBorrowed(const Ui::WidgetState& widget, Ui::EditModel& model, const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::IEditActionSink* actions, NavigationBorrow* navigation = nullptr);
-    [[nodiscard]] bool apply(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options, Event& event, Ui::EditBoxResult& result, Ui::IEditActionSink* actions, NavigationBorrow* navigation);
-    [[nodiscard]] bool applyNavigation(Ui::EditModel& model, const Event& event, NavigationBorrow& navigation, Ui::EditNavigationDirection::Enum direction);
-    [[nodiscard]] bool applyAction(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options, Ui::EditAction::Enum action, Ui::EditBoxResult& result, Ui::IEditActionSink& actions, NavigationBorrow* navigation);
+    [[nodiscard]] Ui::EditBoxResult editBorrowed(const Ui::WidgetState& widget, const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::EditModel& model, Ui::IEditActionSink* actions, NavigationBorrow* navigation = nullptr);
+    [[nodiscard]] bool apply(const Ui::EditBoxOptions& options, Event& event, Entry& entry, Ui::EditModel& model, Ui::EditBoxResult& result, Ui::IEditActionSink* actions, NavigationBorrow* navigation);
+    [[nodiscard]] bool applyNavigation(const Event& event, Ui::EditNavigationDirection::Enum direction, Ui::EditModel& model, NavigationBorrow& navigation);
+    [[nodiscard]] bool applyAction(const Ui::EditBoxOptions& options, Ui::EditAction::Enum action, Entry& entry, Ui::EditModel& model, Ui::EditBoxResult& result, Ui::IEditActionSink& actions, NavigationBorrow* navigation);
     [[nodiscard]] bool rejectBorrowedMutation()noexcept;
     [[nodiscard]] u64 nextFocusGeneration()noexcept;
     void synchronizeSession(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options, bool inputMethod);

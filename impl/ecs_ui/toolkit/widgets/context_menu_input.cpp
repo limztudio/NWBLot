@@ -43,7 +43,7 @@ bool Builder::prepareContextMenu(ContextMenuFrame& frame, ContextMenuResult& res
         options.wheelRows = frame.options.wheelRows;
         options.selectOnNavigate = false;
         ListResult preview;
-        if(!ListBehavior::Apply(state.m_list, *frame.source, options, first, preview) || !contextMenuMatches(frame))
+        if(!ListBehavior::Apply(state.m_list, preview, *frame.source, options, first) || !contextMenuMatches(frame))
             return false;
     }
     return applyContextMenuInput(frame, result);
@@ -73,7 +73,7 @@ bool Builder::applyContextMenuInput(ContextMenuFrame& frame, ContextMenuResult& 
         }
         else{
             ListResult preview;
-            if(!ListBehavior::Apply(frame.state->m_list, *frame.source, options, *action, preview) || !contextMenuMatches(frame))
+            if(!ListBehavior::Apply(frame.state->m_list, preview, *frame.source, options, *action) || !contextMenuMatches(frame))
                 return false;
             if(preview.activated){
                 result.activated = true;

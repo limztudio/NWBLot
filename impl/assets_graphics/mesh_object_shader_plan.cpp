@@ -35,7 +35,7 @@ namespace AssetsGraphicsCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AppendMeshObjectShaderEntries(ShaderCook::CookArena& cookArena, ShaderCook& shaderCook, const ResolvedCookPaths& resolvedPaths, const PreparedShaderEntry& meshEntry, PreparedShaderPlan& plan, ScratchArena& scratchArena){
+bool AppendMeshObjectShaderEntries(const ResolvedCookPaths& resolvedPaths, const PreparedShaderEntry& meshEntry, ShaderCook::CookArena& cookArena, ScratchArena& scratchArena, ShaderCook& shaderCook, PreparedShaderPlan& plan){
     const ShaderCook::ShaderEntry& mesh = meshEntry.entry;
     // The fixed decoder and this raster stage share an engine ABI, independent of authored material defines.
     static constexpr AStringView s_SharedMeshProgramName = "engine/graphics/mesh/shared_ms";
@@ -82,7 +82,7 @@ bool AppendMeshObjectShaderEntries(ShaderCook::CookArena& cookArena, ShaderCook&
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: fixed object geometry shader is missing: '{}'"), PathToString<tchar>(prepared.sourcePath));
         return false;
     }
-    if(!ShaderSourceDependencies::Gather(prepared.sourcePath, prepared.includeDirectories, AssetsGraphicsCsgShaderVariants::s_ExternallyPlannedMacroIncludes, prepared.dependencies, scratchArena))
+    if(!ShaderSourceDependencies::Gather(prepared.sourcePath, prepared.includeDirectories, AssetsGraphicsCsgShaderVariants::s_ExternallyPlannedMacroIncludes, scratchArena, prepared.dependencies))
         return false;
     const auto dependency = shaderCook.computeDependencyChecksum(prepared.dependencies, prepared.includeDirectories, { { resolvedPaths.repoRoot, s_DependencyRepoRootAlias }, { resolvedPaths.cacheDirectory, s_DependencyGeneratedCacheRootAlias } }, scratchArena);
     if(!dependency)

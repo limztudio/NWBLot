@@ -144,9 +144,9 @@ bool ObjectGeometryCacheGraph::prepare(
     const usize drawCount,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const DeferredFrameTargets& targets,
+    Core::Alloc::ScratchArena& scratchArena,
     Core::GpuTaskId& dependency,
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& rasterUses,
-    Core::Alloc::ScratchArena& scratchArena,
     Core::GpuTimingSubmissionTicket* timingTicket,
     Core::GpuTimingSubmissionTicket** rebindableTimingTicket
 ){

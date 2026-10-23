@@ -48,7 +48,7 @@ Atomic<u64> g_TemporarySequence{0u};
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool WriteIfChanged(const ScratchPath& path, const ScratchBytes& bytes, ScratchBytes& existing, const bool replaceDifferent = true){
+static bool WriteIfChanged(ScratchBytes& existing, const ScratchPath& path, const ScratchBytes& bytes, const bool replaceDifferent = true){
     const auto read = ReadBinaryFile(path, existing);
     if(read && existing == bytes)
         return true;
@@ -166,7 +166,7 @@ bool WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail:
                 NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to inspect built asset '{}'"), PathToString<tchar>(path));
                 return false;
             }
-            if(!__hidden_built_asset::WriteIfChanged(path, artifactBytes, existingBytes, false))
+            if(!__hidden_built_asset::WriteIfChanged(existingBytes, path, artifactBytes, false))
                 return false;
             break;
         }
@@ -179,7 +179,7 @@ bool WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail:
     BinaryDetail::AppendBytesNoReserveUnchecked(artifactBytes, manifestText.data(), manifestText.size());
     path = scratchOutputDirectory;
     path /= s_ManifestFilename;
-    return __hidden_built_asset::WriteIfChanged(path, artifactBytes, existingBytes);
+    return __hidden_built_asset::WriteIfChanged(existingBytes, path, artifactBytes);
 }
 
 Expected<BuiltAssetPayload> ReadBuiltAsset(const Path& path, AssetBytes& inOutBytes){

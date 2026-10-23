@@ -153,7 +153,7 @@ Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(S
         return MakeUnexpected(Failure{});
     }
 
-    const auto rebuildResult = Core::Mesh::RebuildTangentFrames(scratchArena, rebuildVertices, rebuildIndices);
+    const auto rebuildResult = Core::Mesh::RebuildTangentFrames(scratchArena, rebuildIndices, rebuildVertices);
     if(!rebuildResult){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to generate source tangent stream"));
         return MakeUnexpected(Failure{});

@@ -97,7 +97,7 @@ static void CheckDenseDependencies(const usize taskCount, const Scenario::Enum s
     const Graphics::GpuTaskGraphCompiler compiler;
     const usize pairCount = taskCount * (taskCount - 1u) / 2u;
     Graphics::Alloc::ScratchArena analysisScratch(s_TaskGraphScratchArena);
-    ASSERT_TRUE(compiler.analyze(view, analysis, analysisScratch));
+    ASSERT_TRUE(compiler.analyze(view, analysisScratch, analysis));
     const usize peakScratch = analysisScratch.memoryStats().peakUsedBytes;
     ASSERT_EQ(analysis.edges().size(), pairCount);
     ASSERT_EQ(analysis.schedulingEdges().size(), taskCount - 1u);

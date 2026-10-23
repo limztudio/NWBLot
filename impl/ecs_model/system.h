@@ -69,7 +69,7 @@ struct ModelSkinnedMeshObject;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using ModelObjectRendererCallback = Function<void(Core::ECS::World& world, Core::Alloc::GlobalArena& arena, Core::ECS::Entity& entity, Core::ECS::EntityID owner, const Core::Assets::AssetRef<Material>& material)>;
+using ModelObjectRendererCallback = Function<void(Core::ECS::World& world, Core::Alloc::GlobalArena& arena, Core::ECS::EntityID owner, const Core::Assets::AssetRef<Material>& material, Core::ECS::Entity& entity)>;
 
 struct ModelObjectRendererHooks{
     ModelObjectRendererCallback apply;

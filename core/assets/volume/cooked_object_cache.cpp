@@ -240,11 +240,11 @@ static bool BuildRegistryObjectBucketManifestEntries(
     Core::Alloc::GlobalArena& arena,
     const AssetsVolumeCookDetail::ResolvedCookPaths& resolvedPaths,
     const AStringView configurationSafeName,
-    Core::Assets::CookEntryRegistry& entryRegistry,
     const usize bucketIndex,
-    AssetsVolumeCookDetail::AssetVolumePackManifest& bucketManifest,
     Futex& objectCacheWriteMutex,
-    Core::Alloc::ScratchArena& scratchArena
+    Core::Alloc::ScratchArena& scratchArena,
+    Core::Assets::CookEntryRegistry& entryRegistry,
+    AssetsVolumeCookDetail::AssetVolumePackManifest& bucketManifest
 ){
     Core::Assets::CookEntryPathHashSet bucketSeenVirtualPathHashes(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
     AssetVolumeObjectCacheWriter cookedAssetWriter(arena, resolvedPaths.cacheDirectory, configurationSafeName, bucketManifest, scratchArena, objectCacheWriteMutex);
@@ -299,10 +299,10 @@ bool BuildRegistryObjectManifestEntries(
     Core::CpuTaskScheduler& cpuScheduler,
     const ResolvedCookPaths& resolvedPaths,
     const AStringView configurationSafeName,
+    ScratchArena& scratchArena,
     ParsedAssetMetadata& parsedMetadata,
     AssetVolumePackManifest& manifest,
-    VirtualPathHashSet& seenVirtualPathHashes,
-    ScratchArena& scratchArena
+    VirtualPathHashSet& seenVirtualPathHashes
 ){
     const usize bucketCount = parsedMetadata.entryRegistry.bucketCount();
     if(bucketCount == 0u)
@@ -321,7 +321,7 @@ bool BuildRegistryObjectManifestEntries(
 
         Core::Alloc::ScratchArena bucketScratchArena(AssetsVolumeArenaScope::s_CookArena);
         __hidden_cooked_object_cache::RegistryObjectBucketManifest& bucketManifest = bucketManifests[bucketIndex];
-        if(__hidden_cooked_object_cache::BuildRegistryObjectBucketManifestEntries(arena, resolvedPaths, configurationSafeName, parsedMetadata.entryRegistry, bucketIndex, bucketManifest.manifest, objectCacheWriteMutex, bucketScratchArena))
+        if(__hidden_cooked_object_cache::BuildRegistryObjectBucketManifestEntries(arena, resolvedPaths, configurationSafeName, bucketIndex, objectCacheWriteMutex, bucketScratchArena, parsedMetadata.entryRegistry, bucketManifest.manifest))
             return;
 
         failed.store(true, MemoryOrder::release);

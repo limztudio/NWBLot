@@ -26,7 +26,7 @@ inline constexpr AStringView s_DiagnosticPrefix = "DependencyComputer";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool SelectInput(const NWB::Path& path, const bool directory, const Assets::DiscoveredNwbFileVector& files, Vector<u8, Assets::ScratchArena>& selected, Vector<usize, Assets::ScratchArena>& order, Assets::ScratchArena& scratchArena){
+[[nodiscard]] static bool SelectInput(const NWB::Path& path, const bool directory, const Assets::DiscoveredNwbFileVector& files, Assets::ScratchArena& scratchArena, Vector<u8, Assets::ScratchArena>& selected, Vector<usize, Assets::ScratchArena>& order){
     Assets::ScratchString input = PathToString(scratchArena, path);
 #if defined(NWB_PLATFORM_WINDOWS)
     CanonicalizeTextInPlace(input);
@@ -153,7 +153,7 @@ Expected<DependencyInputSelection> DependencyProviderCatalog::selectInputs(const
                 }
             }
         }
-        if(!contained || (!SelectInput(path, directory, m_files, selected, order, scratchArena) && !directory)){
+        if(!contained || (!SelectInput(path, directory, m_files, scratchArena, selected, order) && !directory)){
             NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: input selects no .nwb asset within the asset roots '{}'"), PathToString<tchar>(path));
             return MakeUnexpected(Failure{});
         }
@@ -166,7 +166,7 @@ Expected<NWB::Core::Metascript::Document> DependencyProviderCatalog::read(const 
     NWB_ASSERT(index < m_files.size());
     Assets::ScratchString text(scratchArena);
     Core::Metascript::Document document(m_arena);
-    if(!Assets::ParseMetadataDocumentText(m_files[index].filePath, s_DiagnosticPrefix, text, document, [&](const AStringView source){ return document.parse(source); }))
+    if(!Assets::ParseMetadataDocumentText(m_files[index].filePath, s_DiagnosticPrefix, [&](const AStringView source){ return document.parse(source); }, text, document))
         return MakeUnexpected(Failure{});
     return document;
 }

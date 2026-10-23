@@ -35,7 +35,7 @@ namespace RendererTaskGraphDetail{
     const AvboitComputeEmulationRecordTrait trait{ RendererGpuTimingScope::s_AvboitAccumulate, MaterialPipelinePass::AvboitAccumulate, &AvboitFrameTargets::accumulationFramebuffer, };
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
 
-    return RecordAvboitComputeEmulationFromPayload(scratchArena, payload, commandList, context, payload.accumulationTiming, trait);
+    return RecordAvboitComputeEmulationFromPayload(scratchArena, payload, commandList, context, trait, payload.accumulationTiming);
 }
 
 
@@ -48,7 +48,7 @@ namespace RendererTaskGraphDetail{
     const AvboitSharedComputeEmulationRecordTrait trait{ RendererGpuTimingScope::s_AvboitAccumulate, MaterialPipelinePass::AvboitAccumulate, &AvboitFrameTargets::accumulationFramebuffer, };
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
 
-    return RecordAvboitSharedComputeEmulationFromPayload(scratchArena, payload, commandList, context, payload.accumulationTiming, payload.phase == AvboitAccumulationSharedComputeEmulationGraphTask::Phase::Raster, trait);
+    return RecordAvboitSharedComputeEmulationFromPayload(scratchArena, payload, commandList, context, payload.phase == AvboitAccumulationSharedComputeEmulationGraphTask::Phase::Raster, trait, payload.accumulationTiming);
 }
 
 
@@ -68,7 +68,6 @@ namespace RendererTaskGraphDetail{
         &Payload::accumulationSnapshot,
         &Payload::accumulationComputeEmulationOutputStatesGraphOwned,
         &Payload::accumulationCsgComputeEmulationOutputStatesGraphOwned,
-        payload.accumulationComputeEmulationTiming,
         [&](Core::CommandList& dispatchCommandList, const MaterialPassDrawItemPartitions& dispatchDrawItems, const CsgFrameGpuData& dispatchCsgFrameData, const usize dispatchInstanceCount, const usize dispatchMaterialTypedByteCount){
             payload.avboitSystem.renderAvboitAccumulatePass(
                 dispatchCommandList,
@@ -82,11 +81,12 @@ namespace RendererTaskGraphDetail{
                 payload.accumulationMaterialFrameStatesGraphOwned,
                 payload.accumulationMaterialGeometryStatesGraphOwned,
                 payload.accumulationComputeEmulationOutputStatesGraphOwned,
-                payload.accumulationComputeEmulationTiming,
                 payload.accumulationCsgComputeEmulationOutputStatesGraphOwned,
-                payload.generatedGeometryReused
+                payload.generatedGeometryReused,
+                payload.accumulationComputeEmulationTiming
             );
-        }
+        },
+        payload.accumulationComputeEmulationTiming
     );
 }
 

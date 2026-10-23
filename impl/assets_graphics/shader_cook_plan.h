@@ -91,18 +91,18 @@ public:
 
 
 [[nodiscard]] Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
-    ShaderCook::CookArena& cookArena,
-    ShaderCook& shaderCook,
     const ResolvedCookPaths& resolvedPaths,
     const Path& materialBindIncludeRoot,
     const Path& csgShapeIncludeRoot,
     const Path& deferredBxdfIncludeRoot,
     const Path& shadowSurfaceIncludeRoot,
     const IncludeMetadataMap& includeMetadata,
-    ShaderEntryVector& inOutShaderEntries,
     const ShaderCook::CookVector<MaterialBindEntry>& materialBindEntries,
     const ShaderCook::CookVector<MaterialCookEntry>& materialEntries,
-    ScratchArena& scratchArena
+    ShaderCook::CookArena& cookArena,
+    ScratchArena& scratchArena,
+    ShaderCook& shaderCook,
+    ShaderEntryVector& inOutShaderEntries
 );
 
 

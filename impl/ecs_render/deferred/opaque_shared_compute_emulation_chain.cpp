@@ -40,7 +40,7 @@ constexpr usize s_ResourceSetUseCapacity = 2u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<OpaqueSharedComputeEmulationChainResult> OpaqueSharedComputeEmulationChainBuilder::declare(Core::Alloc::ScratchArena& scratchArena, const OpaqueSharedComputeEmulationChainInputs& inputs, Core::GpuTaskId* const tasks, const usize taskCapacity){
+Expected<OpaqueSharedComputeEmulationChainResult> OpaqueSharedComputeEmulationChainBuilder::declare(Core::Alloc::ScratchArena& scratchArena, const OpaqueSharedComputeEmulationChainInputs& inputs, const usize taskCapacity, Core::GpuTaskId* const tasks){
     using namespace RendererTaskGraphDetail;
     using namespace __hidden_opaque_shared_compute_emulation_chain;
     using OpaqueSharedPhase = ECSRenderDetail::OpaqueRegularSharedComputeEmulationGraphTask::Phase::Enum;

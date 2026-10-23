@@ -28,7 +28,7 @@ inline constexpr u32 s_MinParallelCoreCount = 1u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ResolveRoots(const PipelineOptions& parsed, NWB::Pipeline::AssetBuilder::AssetBuildOptions& options, NWB::Core::Assets::ScratchArena& scratchArena){
+static bool ResolveRoots(const PipelineOptions& parsed, NWB::Core::Assets::ScratchArena& scratchArena, NWB::Pipeline::AssetBuilder::AssetBuildOptions& options){
     namespace Assets = NWB::Core::Assets;
     auto& arena = options.assetRoots.get_allocator().arena();
     const auto repoRoot = AbsolutePath(Path(arena, options.repoRoot.empty() ? AStringView(".") : AStringView(options.repoRoot)));
@@ -83,7 +83,7 @@ int RunPipelineTool(const int argc, char** argv){
             buildOptions.assetType = *options.assetType;
         buildOptions.useExplicitInputs = true;
         NWB::Core::Assets::ScratchArena scratchArena(__hidden_asset_builder::s_AssetBuilderArena);
-        if(!__hidden_asset_builder::ResolveRoots(options, buildOptions, scratchArena))
+        if(!__hidden_asset_builder::ResolveRoots(options, scratchArena, buildOptions))
             return s_PipelineExitFailure;
         buildOptions.inputs = Move(options.inputs);
         const bool built = NWB::Pipeline::AssetBuilder::BuildAssets(buildOptions);

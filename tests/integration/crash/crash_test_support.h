@@ -100,7 +100,7 @@ inline void RemoveTestArtifacts(NWB::Core::Alloc::GlobalArena& arena, const AStr
 }
 
 template<usize N>
-inline void CopyPathText(NWB::Core::Alloc::GlobalArena& arena, char (&outText)[N], const CrashTestPath& path){
+inline void CopyPathText(const CrashTestPath& path, NWB::Core::Alloc::GlobalArena& arena, char (&outText)[N]){
     const AString<NWB::Core::Alloc::GlobalArena> text = PathToString<char>(arena, path);
     CopyFixedBuffer(outText, AStringView(text.data(), text.size()));
 }
@@ -125,7 +125,7 @@ inline void BuildCrashIdForProcess(char (&outCrashId)[N], const u32 processId, c
 #endif
 }
 
-inline void FillPackageRequest(NWB::Core::Alloc::GlobalArena& arena, NWB::Core::Crash::CrashDetail::CrashRequest& request, const CrashTestPath& spoolDirectory, const AStringView crashId){
+inline void FillPackageRequest(const CrashTestPath& spoolDirectory, const AStringView crashId, NWB::Core::Alloc::GlobalArena& arena, NWB::Core::Crash::CrashDetail::CrashRequest& request){
     request = NWB::Core::Crash::CrashDetail::CrashRequest{};
     request.platform = CurrentCrashPlatformKind();
     request.reasonKind = NWB::Core::Crash::CrashDetail::CrashReasonKind::ManualDump;
@@ -136,7 +136,7 @@ inline void FillPackageRequest(NWB::Core::Alloc::GlobalArena& arena, NWB::Core::
     CopyFixedBuffer(request.versionText, AStringView(s_ApplicationVersion));
     CopyFixedBuffer(request.buildId, AStringView(s_Test));
     CopyFixedBuffer(request.abi, CurrentAbiName());
-    CopyPathText(arena, request.spoolDirectory, spoolDirectory);
+    CopyPathText(spoolDirectory, arena, request.spoolDirectory);
 }
 
 

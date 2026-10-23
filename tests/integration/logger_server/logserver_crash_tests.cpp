@@ -384,7 +384,7 @@ TEST_F(LoggerServerCrash, LinuxCrashPackageReportsMissingProcMaps){
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText archive(arena);
-    BeginArchiveWithManifest(arena, archive, "linux-missing-maps-test", s_Linux, s_Crash, s_Signal, 11u);
+    BeginArchiveWithManifest(archive, arena, "linux-missing-maps-test", s_Linux, s_Crash, s_Signal, 11u);
     AppendArchiveFile(archive, CrashNames::s_CpuContextFileName, "instruction_pointer=4198964\n");
 
     const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
@@ -409,7 +409,7 @@ TEST_F(LoggerServerCrash, LinuxCrashPackageReportsUnmappedInstructionPointer){
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText archive(arena);
-    BeginArchiveWithManifest(arena, archive, "linux-unmapped-ip-test", s_Linux, s_Crash, s_Signal, 11u);
+    BeginArchiveWithManifest(archive, arena, "linux-unmapped-ip-test", s_Linux, s_Crash, s_Signal, 11u);
     AppendArchiveFile(archive, CrashNames::s_CpuContextFileName, "instruction_pointer=7340032\n");
     AppendArchiveFile(archive, CrashNames::s_ProcMapsFileName, "00400000-00452000 r-xp 00000000 08:01 123 /tmp/nwb_loader\n");
 
@@ -435,7 +435,7 @@ TEST_F(LoggerServerCrash, AndroidCrashPackageReportsTombstoneWithoutFrames){
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText archive(arena);
-    BeginArchiveWithManifest(arena, archive, "android-no-frames-test", "android", s_Crash, s_ManualDump, 0u);
+    BeginArchiveWithManifest(archive, arena, "android-no-frames-test", "android", s_Crash, s_ManualDump, 0u);
     AppendArchiveFile(archive, CrashNames::s_AndroidTombstoneFileName, "pid: 7, tid: 7, name: nwb\nbacktrace:\n");
 
     const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
@@ -461,7 +461,7 @@ TEST_F(LoggerServerCrash, WindowsCrashPackageReportsMissingMinidump){
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText archive(arena);
-    BeginArchiveWithManifest(arena, archive, "windows-missing-dump-test", s_Windows, s_Crash, s_WindowsExceptionCategory, 0xC0000005u);
+    BeginArchiveWithManifest(archive, arena, "windows-missing-dump-test", s_Windows, s_Crash, s_WindowsExceptionCategory, 0xC0000005u);
 
     const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
 
@@ -495,7 +495,7 @@ TEST_F(LoggerServerCrash, WindowsCrashPackageDecodesGpuDetectiveCaptureInProcess
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText archive(arena);
-    BeginArchiveWithManifest(arena, archive, "gpu-detective-test", s_Windows, s_Crash, s_WindowsExceptionCategory, 0xC0000005u);
+    BeginArchiveWithManifest(archive, arena, "gpu-detective-test", s_Windows, s_Crash, s_WindowsExceptionCategory, 0xC0000005u);
     // Malformed RGD input must report decode failure without aborting crash ingest.
     AppendArchiveFile(archive, CrashNames::s_GpuDetectiveCaptureFileName, "not a valid radeon gpu detective capture\n");
 
@@ -546,7 +546,7 @@ TEST_F(LoggerServerCrash, CrashManifestWithoutEventIsRejected){
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText archive(arena);
-    BeginArchiveWithManifest(arena, archive, "missing-event-manifest-test", s_Linux, s_Crash, s_Signal, 11u, ManifestEventField::Omit);
+    BeginArchiveWithManifest(archive, arena, "missing-event-manifest-test", s_Linux, s_Crash, s_Signal, 11u, ManifestEventField::Omit);
     const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
 
     EXPECT_FALSE(result.accepted);
@@ -570,7 +570,7 @@ TEST_F(LoggerServerCrash, InvalidManifestBooleanIsRejectedWhileFalseAndZeroRemai
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText validArchive(arena);
-    BeginArchiveWithManifest(arena, validArchive, s_ValidStem, s_Linux, s_Crash, s_Signal, 0u);
+    BeginArchiveWithManifest(validArchive, arena, s_ValidStem, s_Linux, s_Crash, s_Signal, 0u);
     const auto validResult = ProcessCrashArchive(arena, s_Group, s_ValidStem, validArchive);
     ASSERT_TRUE(validResult.accepted);
 
@@ -616,19 +616,19 @@ TEST_F(LoggerServerCrash, CrashRetentionPrunesOldestAcceptedUploads){
 
     {
         CrashTestText archive(arena);
-        BuildLinuxCrashArchive(arena, archive, s_Stem0);
+        BuildLinuxCrashArchive(archive, arena, s_Stem0);
         const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem0, archive, config);
         EXPECT_TRUE(result.accepted);
     }
     {
         CrashTestText archive(arena);
-        BuildLinuxCrashArchive(arena, archive, s_Stem1);
+        BuildLinuxCrashArchive(archive, arena, s_Stem1);
         const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem1, archive, config);
         EXPECT_TRUE(result.accepted);
     }
     {
         CrashTestText archive(arena);
-        BuildLinuxCrashArchive(arena, archive, s_Stem2);
+        BuildLinuxCrashArchive(archive, arena, s_Stem2);
         const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem2, archive, config);
         EXPECT_TRUE(result.accepted);
     }
@@ -675,7 +675,7 @@ TEST_F(LoggerServerCrash, AcceptedCrashWarnsWhenRawArchiveCannotBeRetained){
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText archive(arena);
-    BuildLinuxCrashArchive(arena, archive, s_Stem);
+    BuildLinuxCrashArchive(archive, arena, s_Stem);
 
     EXPECT_TRUE(EnsureDirectories(StorageDirectory(arena, s_Group)));
     EXPECT_TRUE(WriteTextFile(StorageDirectory(arena, s_Group) / NWB::Log::s_CrashRawDirectoryName, AStringView("blocked")));

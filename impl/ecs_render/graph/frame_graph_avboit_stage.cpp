@@ -171,9 +171,10 @@ Expected<Core::GpuTaskId> FrameGraphAvboitStage::declare(Core::Alloc::ScratchAre
     AvboitGeneratedGeometryReuse generatedGeometry(scratchArena);
     const auto refractionCaptureTaskResult = DeclareAvboitRefractionCapture(
         scratchArena,
-        m_graph, m_arena, m_materialSystem, m_csgSystem, inputs.targets,
-        inputs.csgFrameState, inputs.csgResources, inputs.frameBindings, inputs.meshViewState, objectGeometry, generatedGeometry, avboitIntervalCompletionTask,
-        inputs.refractionCaptureEnabled
+        m_graph, m_arena, m_materialSystem, m_csgSystem,
+        inputs.csgFrameState, inputs.csgResources, inputs.frameBindings, inputs.meshViewState, avboitIntervalCompletionTask,
+        inputs.refractionCaptureEnabled,
+        inputs.targets, objectGeometry, generatedGeometry
     );
     if(!refractionCaptureTaskResult)
         return MakeUnexpected(Failure{});
@@ -318,9 +319,9 @@ Expected<Core::GpuTaskId> FrameGraphAvboitStage::declare(Core::Alloc::ScratchAre
     const Core::GpuTaskId avboitDepthWarpCompletionTask = avboitDepthWarpStageResult->completionTask;
 
     if(inputs.hasTransparentRenderers){
-        if(!declareExtinction(scratchArena, inputs, timing, objectGeometry, generatedGeometry, avboitComputeEffectChainBuilder, avboitDepthWarpCompletionTask, avboitIntervalOutputsGraphOwned))
+        if(!declareExtinction(scratchArena, inputs, timing, avboitDepthWarpCompletionTask, avboitIntervalOutputsGraphOwned, objectGeometry, generatedGeometry, avboitComputeEffectChainBuilder))
             return MakeUnexpected(Failure{});
-        if(!declareAccumulation(scratchArena, inputs, timing, objectGeometry, generatedGeometry, avboitIntervalOutputsGraphOwned))
+        if(!declareAccumulation(scratchArena, inputs, timing, avboitIntervalOutputsGraphOwned, objectGeometry, generatedGeometry))
             return MakeUnexpected(Failure{});
         return m_avboitSystem.taskGraphStage().m_accumulationFinalizeTask;
     }
@@ -332,11 +333,11 @@ bool FrameGraphAvboitStage::declareExtinction(
     Core::Alloc::ScratchArena& scratchArena,
     const FrameGraphAvboitStageInputs& inputs,
     const FrameGraphAvboitStageTiming& timing,
+    const Core::GpuTaskId avboitDepthWarpCompletionTask,
+    const bool avboitIntervalOutputsGraphOwned,
     ObjectGeometryCacheGraph& objectGeometry,
     AvboitGeneratedGeometryReuse& generatedGeometry,
-    AvboitComputeEffectChainBuilder& avboitComputeEffectChainBuilder,
-    const Core::GpuTaskId avboitDepthWarpCompletionTask,
-    const bool avboitIntervalOutputsGraphOwned
+    AvboitComputeEffectChainBuilder& avboitComputeEffectChainBuilder
 ){
     using namespace RendererTaskGraphDetail;
 
@@ -468,9 +469,9 @@ bool FrameGraphAvboitStage::declareAccumulation(
     Core::Alloc::ScratchArena& scratchArena,
     const FrameGraphAvboitStageInputs& inputs,
     const FrameGraphAvboitStageTiming& timing,
+    const bool avboitIntervalOutputsGraphOwned,
     ObjectGeometryCacheGraph& objectGeometry,
-    AvboitGeneratedGeometryReuse& generatedGeometry,
-    const bool avboitIntervalOutputsGraphOwned
+    AvboitGeneratedGeometryReuse& generatedGeometry
 ){
     using namespace RendererTaskGraphDetail;
 

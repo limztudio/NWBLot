@@ -26,17 +26,17 @@ public:
     [[nodiscard]] static SIMDVectorSingle TangentHandednessVec(SIMDVectorSingle normalizedTangent, SIMDVectorSingle tangentVec)noexcept;
     [[nodiscard]] static SIMDVectorSingle UpAxisVec()noexcept;
     static void NormalizeDeformVertex(SIMDVectorSingle& normal, SIMDVectorSingle& tangent)noexcept;
-    [[nodiscard]] static Expected<u32> SplitEdgeVertex(CsgDeformVertexVector<Core::Alloc::ScratchArena>& vertices, CsgDeformEdgeSplitMap& edgeSplits, const u32 first, const u32 second, const f32 firstDistance, const f32 secondDistance);
+    [[nodiscard]] static Expected<u32> SplitEdgeVertex(const u32 first, const u32 second, const f32 firstDistance, const f32 secondDistance, CsgDeformVertexVector<Core::Alloc::ScratchArena>& vertices, CsgDeformEdgeSplitMap& edgeSplits);
     static void EmitTriangle(CsgDeformTriangleVector<Core::Alloc::ScratchArena>& triangles, const u32 first, const u32 second, const u32 third);
     // Keep side is distance >= 0; caller snaps |distance| <= epsilon to zero first.
     [[nodiscard]] static Expected<void, CsgDeformViabilityReason::Enum> ClipShell(
         Core::Alloc::ScratchArena& scratchArena,
         const CsgDeformShape& shape,
         const f32 epsilon,
-        CsgDeformVertexVector<Core::Alloc::ScratchArena>& inOutVertices,
-        CsgDeformTriangleVector<Core::Alloc::ScratchArena>& inOutTriangles,
         CsgDeformTriangleVector<Core::Alloc::ScratchArena>& scratchKept,
-        Vector<f32, Core::Alloc::ScratchArena>& scratchDistances
+        Vector<f32, Core::Alloc::ScratchArena>& scratchDistances,
+        CsgDeformVertexVector<Core::Alloc::ScratchArena>& inOutVertices,
+        CsgDeformTriangleVector<Core::Alloc::ScratchArena>& inOutTriangles
     );
 
 

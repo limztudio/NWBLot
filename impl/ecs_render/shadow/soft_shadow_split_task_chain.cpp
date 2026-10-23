@@ -199,17 +199,17 @@ bool SoftShadowSplitTaskChainBuilder::declareOpaqueTasks(
     const auto opaqueTaskResult = m_raytracingSystem.declareShadowVisibilityOpaqueTask(
         m_graph,
         opaqueDesc,
-        inputs.targets,
         inputs.deferredLightingResources,
         inputs.shadowPrepared,
         route.hardwareShadowSupported,
+        route.graphOwnsOpaqueTemporalMergeEntryStates,
+        &inputs.rayTracingPlan.lightSpace,
+        inputs.targets,
         inputs.timingTicket,
         inputs.asyncTiming,
         inputs.shadowVisibilityTiming,
         inputs.opaqueProduced,
-        inputs.opaqueFrameIndex,
-        route.graphOwnsOpaqueTemporalMergeEntryStates,
-        &inputs.rayTracingPlan.lightSpace
+        inputs.opaqueFrameIndex
     );
     if(!opaqueTaskResult){
         tasks.opaque = {};
@@ -232,18 +232,18 @@ bool SoftShadowSplitTaskChainBuilder::declareOpaqueTasks(
         const auto opaqueFirstWaveletTaskResult = m_raytracingSystem.declareShadowVisibilityOpaqueFirstWaveletTask(
             m_graph,
             opaqueFirstWaveletDesc,
-            inputs.targets,
             inputs.deferredLightingResources,
-            inputs.timingTicket,
-            inputs.asyncTiming,
-            inputs.shadowVisibilityTiming,
-            inputs.opaqueResolveTiming,
-            inputs.opaqueProduced,
             inputs.opaqueFrameIndex,
             route.hardwareShadowSupported,
             route.graphOwnsOpaqueTemporalMergeEntryStates,
             route.combinedSoftUpsample,
-            route.combinedSoftWavelet
+            route.combinedSoftWavelet,
+            inputs.targets,
+            inputs.timingTicket,
+            inputs.asyncTiming,
+            inputs.shadowVisibilityTiming,
+            inputs.opaqueResolveTiming,
+            inputs.opaqueProduced
         );
         if(!opaqueFirstWaveletTaskResult){
             tasks.opaqueFirstWavelet = {};
@@ -266,15 +266,15 @@ bool SoftShadowSplitTaskChainBuilder::declareOpaqueTasks(
         const auto opaqueResolveTaskResult = m_raytracingSystem.declareShadowVisibilityOpaqueResolveTailTask(
             m_graph,
             opaqueResolveDesc,
-            inputs.targets,
             inputs.deferredLightingResources,
+            inputs.opaqueFrameIndex,
+            route.hardwareShadowSupported,
+            inputs.targets,
             inputs.timingTicket,
             inputs.asyncTiming,
             inputs.shadowVisibilityTiming,
             inputs.opaqueResolveTiming,
-            inputs.opaqueProduced,
-            inputs.opaqueFrameIndex,
-            route.hardwareShadowSupported
+            inputs.opaqueProduced
         );
         if(!opaqueResolveTaskResult){
             tasks.opaqueResolve = {};
@@ -311,13 +311,13 @@ bool SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
     const auto transparentTraceTaskResult = m_raytracingSystem.declareShadowTransparentSoftTraceTask(
         m_graph,
         traceDesc,
-        inputs.targets,
         inputs.deferredLightingResources,
-        inputs.timingTicket,
         inputs.opaqueProduced,
         inputs.opaqueFrameIndex,
-        inputs.transparentTraceProduced,
-        &inputs.rayTracingPlan.lightSpace
+        &inputs.rayTracingPlan.lightSpace,
+        inputs.targets,
+        inputs.timingTicket,
+        inputs.transparentTraceProduced
     );
     if(!transparentTraceTaskResult){
         tasks.transparentTrace = {};
@@ -341,16 +341,16 @@ bool SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
         const auto transparentTemporalMergeTaskResult = m_raytracingSystem.declareShadowTransparentSoftTemporalMergeTask(
             m_graph,
             transparentTemporalMergeDesc,
-            inputs.targets,
             inputs.deferredLightingResources,
-            inputs.timingTicket,
-            inputs.transparentResolveTiming,
             inputs.opaqueProduced,
-            inputs.transparentTraceProduced,
             inputs.opaqueFrameIndex,
             true,
             route.combinedSoftTemporal,
-            route.hardwareShadowSupported
+            route.hardwareShadowSupported,
+            inputs.targets,
+            inputs.timingTicket,
+            inputs.transparentResolveTiming,
+            inputs.transparentTraceProduced
         );
         if(!transparentTemporalMergeTaskResult){
             tasks.transparentTemporalMerge = {};
@@ -373,16 +373,16 @@ bool SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
     const auto transparentFirstWaveletTaskResult = m_raytracingSystem.declareShadowTransparentSoftFirstWaveletTask(
         m_graph,
         transparentFirstWaveletDesc,
-        inputs.targets,
         inputs.deferredLightingResources,
-        inputs.timingTicket,
-        inputs.transparentResolveTiming,
         inputs.opaqueProduced,
-        inputs.transparentTraceProduced,
         inputs.opaqueFrameIndex,
         true,
         !uses.graphOwnsTransparentTemporalMergeEntryStates,
-        route.combinedSoftWavelet
+        route.combinedSoftWavelet,
+        inputs.targets,
+        inputs.timingTicket,
+        inputs.transparentResolveTiming,
+        inputs.transparentTraceProduced
     );
     if(!transparentFirstWaveletTaskResult){
         tasks.transparentFirstWavelet = {};
@@ -404,16 +404,16 @@ bool SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
     const auto foldTaskResult = m_raytracingSystem.declareShadowTransparentSoftFoldTask(
         m_graph,
         foldDesc,
-        inputs.targets,
         inputs.deferredLightingResources,
+        inputs.opaqueProduced,
+        inputs.opaqueFrameIndex,
+        route.combinedSoftUpsample,
+        inputs.targets,
         inputs.timingTicket,
         inputs.asyncTiming,
         inputs.shadowVisibilityTiming,
         inputs.transparentResolveTiming,
-        inputs.opaqueProduced,
-        inputs.transparentTraceProduced,
-        inputs.opaqueFrameIndex,
-        route.combinedSoftUpsample
+        inputs.transparentTraceProduced
     );
     if(!foldTaskResult){
         tasks.fold = {};

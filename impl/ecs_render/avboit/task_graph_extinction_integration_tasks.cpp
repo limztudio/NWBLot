@@ -37,7 +37,7 @@ namespace RendererTaskGraphDetail{
     const AvboitComputeEmulationRecordTrait trait{ RendererGpuTimingScope::s_AvboitExtinction, MaterialPipelinePass::AvboitExtinction, &AvboitFrameTargets::lowFramebuffer, };
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
 
-    return RecordAvboitComputeEmulationFromPayload(scratchArena, payload, commandList, context, payload.extinctionTiming, trait);
+    return RecordAvboitComputeEmulationFromPayload(scratchArena, payload, commandList, context, trait, payload.extinctionTiming);
 }
 
 
@@ -50,7 +50,7 @@ namespace RendererTaskGraphDetail{
     const AvboitSharedComputeEmulationRecordTrait trait{ RendererGpuTimingScope::s_AvboitExtinction, MaterialPipelinePass::AvboitExtinction, &AvboitFrameTargets::lowFramebuffer, };
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
 
-    return RecordAvboitSharedComputeEmulationFromPayload(scratchArena, payload, commandList, context, payload.extinctionTiming, payload.phase == AvboitExtinctionSharedComputeEmulationGraphTask::Phase::Raster, trait);
+    return RecordAvboitSharedComputeEmulationFromPayload(scratchArena, payload, commandList, context, payload.phase == AvboitExtinctionSharedComputeEmulationGraphTask::Phase::Raster, trait, payload.extinctionTiming);
 }
 
 
@@ -70,7 +70,6 @@ namespace RendererTaskGraphDetail{
         &Payload::extinctionSnapshot,
         &Payload::extinctionComputeEmulationOutputStatesGraphOwned,
         &Payload::extinctionCsgComputeEmulationOutputStatesGraphOwned,
-        payload.extinctionComputeEmulationTiming,
         [&](Core::CommandList& dispatchCommandList, const MaterialPassDrawItemPartitions& dispatchDrawItems, const CsgFrameGpuData& dispatchCsgFrameData, const usize dispatchInstanceCount, const usize dispatchMaterialTypedByteCount){
             payload.avboitSystem.renderAvboitExtinctionPass(
                 dispatchCommandList,
@@ -84,11 +83,12 @@ namespace RendererTaskGraphDetail{
                 payload.extinctionMaterialFrameStatesGraphOwned,
                 payload.extinctionMaterialGeometryStatesGraphOwned,
                 payload.extinctionComputeEmulationOutputStatesGraphOwned,
-                payload.extinctionComputeEmulationTiming,
                 payload.extinctionCsgComputeEmulationOutputStatesGraphOwned,
-                payload.generatedGeometryReused
+                payload.generatedGeometryReused,
+                payload.extinctionComputeEmulationTiming
             );
-        }
+        },
+        payload.extinctionComputeEmulationTiming
     );
 }
 

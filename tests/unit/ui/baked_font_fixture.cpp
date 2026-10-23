@@ -31,7 +31,7 @@ using namespace Impl;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void PopulateBakedFontTables(const Core::Assets::AssetBytes& bytes, FontAtlasPayload& payload, Core::Alloc::GlobalArena& arena){
+void PopulateBakedFontTables(const Core::Assets::AssetBytes& bytes, Core::Alloc::GlobalArena& arena, FontAtlasPayload& payload){
     hb_blob_t* const blob = hb_blob_create(reinterpret_cast<const char*>(bytes.data()), static_cast<u32>(bytes.size()), HB_MEMORY_MODE_READONLY, nullptr, nullptr);
     ScopeExit releaseBlob([blob]()noexcept{ hb_blob_destroy(blob); });
     hb_face_t* const face = hb_face_create(blob, 0u);

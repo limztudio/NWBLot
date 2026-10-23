@@ -34,7 +34,7 @@ inline constexpr AStringView s_ExceptionKey = "exception=";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void AppendOptionalTextFile(Core::Alloc::ScratchArena& scratchArena, CrashReportText& outReport, const CrashScratchPath& packageDirectory, const AStringView fileName, const AStringView label){
+static void AppendOptionalTextFile(const CrashScratchPath& packageDirectory, const AStringView fileName, const AStringView label, Core::Alloc::ScratchArena& scratchArena, CrashReportText& outReport){
     AString<Core::Alloc::ScratchArena> text{scratchArena};
     const auto read = ReadTextFile(packageDirectory / fileName, text);
     if(!read){
@@ -74,7 +74,7 @@ CrashScratchPath EffectiveSymbolStoreDirectory(Core::Alloc::ScratchArena& arena,
     return CrashDefaultRootDirectory(arena) / s_CrashSymbolStoreDirectoryName;
 }
 
-static void AppendSymbolStoreStatus(Core::Alloc::ScratchArena& arena, CrashReportText& outReport, const CrashSymbolicationConfig& config){
+static void AppendSymbolStoreStatus(const CrashSymbolicationConfig& config, Core::Alloc::ScratchArena& arena, CrashReportText& outReport){
     const CrashScratchPath symbolStoreDirectory = EffectiveSymbolStoreDirectory(arena, config);
     outReport += "symbol_store=";
     outReport += PathToString<char>(arena, symbolStoreDirectory);
@@ -289,7 +289,7 @@ CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const CrashScratc
     detailReport += "\nartifact_strategy=";
     detailReport += summary.artifactStrategy;
     detailReport += Symbolicate::s_ReportLineEnd;
-    Symbolicate::AppendSymbolStoreStatus(scratchArena, detailReport, config);
+    Symbolicate::AppendSymbolStoreStatus(config, scratchArena, detailReport);
     Symbolicate::AppendEventSummary(summary, detailReport);
 
     if(summary.platform == LoggerCrashSymbolicateDetail::s_WindowsPlatformName){
@@ -313,14 +313,14 @@ CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const CrashScratc
         detailReport += "status=not_decoded\nresolver=unknown\ndetail=unknown crash platform\n";
     }
 
-    Symbolicate::AppendOptionalTextFile(scratchArena, detailReport, packageDirectory, Core::Crash::PackageNames::s_GpuCrashReportFileName, "gpu_crash");
+    Symbolicate::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_GpuCrashReportFileName, "gpu_crash", scratchArena, detailReport);
     Symbolicate::AppendRadeonGpuDetectiveSummary(scratchArena, packageDirectory, config, detailReport);
     Symbolicate::AppendAftermathGpuDumpSummary(scratchArena, packageDirectory, config, detailReport);
-    Symbolicate::AppendOptionalTextFile(scratchArena, detailReport, packageDirectory, Core::Crash::PackageNames::s_CpuContextFileName, "cpu_context");
-    Symbolicate::AppendOptionalTextFile(scratchArena, detailReport, packageDirectory, Core::Crash::PackageNames::s_MetadataFileName, "metadata");
-    Symbolicate::AppendOptionalTextFile(scratchArena, detailReport, packageDirectory, Core::Crash::PackageNames::s_BreadcrumbsFileName, "breadcrumbs");
-    Symbolicate::AppendOptionalTextFile(scratchArena, detailReport, packageDirectory, Core::Crash::PackageNames::s_SymbolicationFileName, "client_symbolication_note");
-    Symbolicate::AppendOptionalTextFile(scratchArena, detailReport, packageDirectory, Core::Crash::PackageNames::s_AndroidCollectionFileName, "android_collection");
+    Symbolicate::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_CpuContextFileName, "cpu_context", scratchArena, detailReport);
+    Symbolicate::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_MetadataFileName, "metadata", scratchArena, detailReport);
+    Symbolicate::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_BreadcrumbsFileName, "breadcrumbs", scratchArena, detailReport);
+    Symbolicate::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_SymbolicationFileName, "client_symbolication_note", scratchArena, detailReport);
+    Symbolicate::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_AndroidCollectionFileName, "android_collection", scratchArena, detailReport);
     return Symbolicate::BuildOrderedCrashReport(scratchArena, summary, Move(detailReport));
 }
 

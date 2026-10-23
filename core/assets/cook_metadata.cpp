@@ -71,10 +71,10 @@ struct AutoMetadataParser{
     const Name assetType,
     const Name virtualPath,
     const Core::Metascript::Value& asset,
-    ParsedAssetMetadata& outMetadata,
-    CookEntryPathHashSet& seenPropertyAssetPathHashes,
     Core::CpuTaskScheduler& cpuScheduler,
-    ScratchArena& scratchArena
+    ScratchArena& scratchArena,
+    CookEntryPathHashSet& seenPropertyAssetPathHashes,
+    ParsedAssetMetadata& outMetadata
 ){
     AssetValueMetadataParseContext metadataParseContext{ cookArena, discoveredNwbFile, assetType, virtualPath, asset, outMetadata, scratchArena };
     const AssetMetadataParseResult::Enum metadataParseResult = TryAutoCollectedValueMetadataParsers(metadataParseContext);
@@ -91,10 +91,10 @@ struct AutoMetadataParser{
     CookArena& cookArena,
     const DiscoveredNwbFile& discoveredNwbFile,
     const Core::Metascript::Document& doc,
-    ParsedAssetMetadata& outMetadata,
-    CookEntryPathHashSet& seenPropertyAssetPathHashes,
     Core::CpuTaskScheduler& cpuScheduler,
-    ScratchArena& scratchArena
+    ScratchArena& scratchArena,
+    CookEntryPathHashSet& seenPropertyAssetPathHashes,
+    ParsedAssetMetadata& outMetadata
 ){
     const auto* assetDeclaration = FindMetadataAssetDeclaration(doc);
     if(!assetDeclaration){
@@ -277,7 +277,7 @@ Expected<ExpandedAssetMetadataVector, AssetBunchExpandFailure::Enum> TryAutoColl
     return MakeUnexpected(AssetBunchExpandFailure::Unsupported);
 }
 
-bool ParseAssetMetadata(CookArena& cookArena, const DiscoveredNwbFileVector& nwbFiles, ParsedAssetMetadata& outMetadata, Core::CpuTaskScheduler& cpuScheduler, ScratchArena& scratchArena){
+bool ParseAssetMetadata(CookArena& cookArena, const DiscoveredNwbFileVector& nwbFiles, Core::CpuTaskScheduler& cpuScheduler, ScratchArena& scratchArena, ParsedAssetMetadata& outMetadata){
     CookEntryPathHashSet seenPropertyAssetPathHashes(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
 
     seenPropertyAssetPathHashes.reserve(nwbFiles.size());
@@ -295,7 +295,7 @@ bool ParseAssetMetadata(CookArena& cookArena, const DiscoveredNwbFileVector& nwb
             return false;
         if(expandedAssets){
             for(const ExpandedAssetMetadata& expandedAsset : *expandedAssets){
-                if(!__hidden_cook_metadata::ParseDeclaredAssetItem(cookArena, discoveredNwbFile, expandedAsset.assetType, expandedAsset.virtualPath, expandedAsset.value, outMetadata, seenPropertyAssetPathHashes, cpuScheduler, scratchArena))
+                if(!__hidden_cook_metadata::ParseDeclaredAssetItem(cookArena, discoveredNwbFile, expandedAsset.assetType, expandedAsset.virtualPath, expandedAsset.value, cpuScheduler, scratchArena, seenPropertyAssetPathHashes, outMetadata))
                     return false;
                 parsedAnyMetadata = true;
             }
@@ -307,7 +307,7 @@ bool ParseAssetMetadata(CookArena& cookArena, const DiscoveredNwbFileVector& nwb
             return false;
         }
 
-        if(!__hidden_cook_metadata::ParseSingleAssetDocument(cookArena, discoveredNwbFile, doc, outMetadata, seenPropertyAssetPathHashes, cpuScheduler, scratchArena))
+        if(!__hidden_cook_metadata::ParseSingleAssetDocument(cookArena, discoveredNwbFile, doc, cpuScheduler, scratchArena, seenPropertyAssetPathHashes, outMetadata))
             return false;
         parsedAnyMetadata = true;
     }

@@ -225,15 +225,15 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
     Core::Alloc::GlobalArena& arena,
     RendererMaterialSystem& materialSystem,
     RendererCsgSystem& csgSystem,
-    DeferredFrameTargets& targets,
     const CsgFrameState& csgFrameState,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const ECSRenderDetail::MeshViewGpuData& meshViewState,
-    ObjectGeometryCacheGraph& objectGeometry,
-    AvboitGeneratedGeometryReuse& generatedGeometry,
     Core::GpuTaskId dependency,
-    const bool enabled
+    const bool enabled,
+    DeferredFrameTargets& targets,
+    ObjectGeometryCacheGraph& objectGeometry,
+    AvboitGeneratedGeometryReuse& generatedGeometry
 ){
     using namespace __hidden_refraction_capture;
     generatedGeometry.reset();
@@ -293,11 +293,12 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
 #endif
     materialSystem.gatherMaterialPassDrawItems(
         targets.avboit.refractionFramebuffer.get(), MaterialPipelinePass::AvboitRefractionCapture, true,
-        csgFrameState, drawItems, instances, csgFrameData,
+        csgFrameState, RendererResourceLookupMode::PreparedOnly, &meshViewState,
+        drawItems, instances, csgFrameData,
 #if defined(NWB_DEBUG)
         typedRanges,
 #endif
-        typedBytes, RendererResourceLookupMode::PreparedOnly, &meshViewState
+        typedBytes
     );
     if(drawItems.empty())
         return finalize();
@@ -401,9 +402,9 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
         }
     }
 
-    if(!objectGeometry.prepare(drawItems.regular.indexedDrawItems.data(), drawItems.regular.indexedDrawItems.size(), frameBindings, targets, dependency, commonUses, scratchArena))
+    if(!objectGeometry.prepare(drawItems.regular.indexedDrawItems.data(), drawItems.regular.indexedDrawItems.size(), frameBindings, targets, scratchArena, dependency, commonUses))
         return MakeUnexpected(Failure{});
-    if(!objectGeometry.prepare(drawItems.csg.indexedDrawItems.data(), drawItems.csg.indexedDrawItems.size(), frameBindings, targets, dependency, commonUses, scratchArena))
+    if(!objectGeometry.prepare(drawItems.csg.indexedDrawItems.data(), drawItems.csg.indexedDrawItems.size(), frameBindings, targets, scratchArena, dependency, commonUses))
         return MakeUnexpected(Failure{});
 
     usize drawTaskIndex = 0u;

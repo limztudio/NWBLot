@@ -138,9 +138,9 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
     const bool materialFrameStatesGraphOwned,
     const bool materialGeometryStatesGraphOwned,
     const bool emulationOutputEntryStateGraphOwned,
-    Optional<Core::GpuTimingMeasure>* const emulationOutputTiming,
     const bool csgEmulationOutputEntryStateGraphOwned,
-    const bool emulationOutputReused
+    const bool emulationOutputReused,
+    Optional<Core::GpuTimingMeasure>* const emulationOutputTiming
 ){
     const auto discardEmulationOutputTiming = [emulationOutputTiming](){
         if(!emulationOutputTiming || !emulationOutputTiming->has_value())
@@ -237,13 +237,15 @@ bool RendererMaterialSystem::prepareMaterialPassResources(
         pass,
         transparent,
         csgFrameState,
+        RendererResourceLookupMode::CreateMissing,
+        nullptr,
         drawItems,
         instanceData,
         csgFrameData,
 #if defined(NWB_DEBUG)
         materialTypedRanges,
 #endif
-        materialTypedBytes, RendererResourceLookupMode::CreateMissing, nullptr
+        materialTypedBytes
     );
     if(drawItems.empty())
         return true;
@@ -261,13 +263,15 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
     const MaterialPipelinePass::Enum pass,
     const bool transparent,
     const CsgFrameState& csgFrameState,
+    const RendererResourceLookupMode::Enum lookupMode,
+    const ECSRenderDetail::MeshViewGpuData* const csgWorkRegionMeshViewState,
     MaterialPassDrawItemPartitions& drawItems,
     InstanceGpuDataVector& instanceData,
     CsgFrameGpuData& csgFrameData,
 #if defined(NWB_DEBUG)
     ECSRenderDetail::MaterialTypedInstanceRangeVector& materialTypedRanges,
 #endif
-    MaterialTypedByteDataVector& materialTypedBytes, const RendererResourceLookupMode::Enum lookupMode, const ECSRenderDetail::MeshViewGpuData* const csgWorkRegionMeshViewState
+    MaterialTypedByteDataVector& materialTypedBytes
 ){
     if(!framebuffer)
         return;
@@ -508,7 +512,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         const auto& typedRanges = appendedInstance->typedRanges;
 
         if(csgClipActive){
-            auto csgRange = m_csgSystem.appendCsgReceiverClipData(*csgReceiverLookupPtr, csgReceiverState, mesh.csgLocalBounds, transform, framebufferInfo.width, framebufferInfo.height, csgFrameData, csgWorkRegionMeshViewState);
+            auto csgRange = m_csgSystem.appendCsgReceiverClipData(*csgReceiverLookupPtr, csgReceiverState, mesh.csgLocalBounds, transform, framebufferInfo.width, framebufferInfo.height, csgWorkRegionMeshViewState, csgFrameData);
             if(!csgRange)
                 return false;
             // Cap shader shares the receiver surface hook; rangeInfo.w carries the BXDF id.

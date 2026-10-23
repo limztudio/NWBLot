@@ -53,7 +53,7 @@ void UiProgressSmokeScene::observeState(Impl::UiPaintContext& context){
     UiProgressSnapshot current = m_declared;
     current.display = context.display;
     const InputRouter& input = context.ui.input();
-    const auto observation = ObservePassiveSmokeTargets(input, current.rectangles, m_parent.instanceGeneration(), m_child.instanceGeneration(), 2u, 13u, [](const usize index)noexcept{ return index != 10u; });
+    const auto observation = ObservePassiveSmokeTargets(current.rectangles, input, m_parent.instanceGeneration(), m_child.instanceGeneration(), 2u, 13u, [](const usize index)noexcept{ return index != 10u; });
     const u32 focusCode = observation.focusCode;
     const u32 progressTargets = observation.passiveTargets;
     current.values = { static_cast<u64>(m_phase), focusCode, m_beforeClicks, m_afterClicks, static_cast<u64>(m_parent.isOpen()), static_cast<u64>(m_child.isOpen()), input.popupCount(), progressTargets };

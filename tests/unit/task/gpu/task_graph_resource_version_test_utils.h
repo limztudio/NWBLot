@@ -121,30 +121,30 @@ struct VersionConsumerUses{
 [[nodiscard]] inline bool Analyze(Core::Alloc::ScratchArena& scratchArena, const Graphics::GpuTaskGraph& graph, Graphics::GpuTaskGraphAnalysis& analysis){
     const Graphics::GpuTaskGraphCompiler compiler;
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-    return compiler.analyze(declarations, analysis, scratchArena);
+    return compiler.analyze(declarations, scratchArena, analysis);
 }
 
 [[nodiscard]] inline bool Assign(
+    Graphics::GpuTaskGraphQueueAssignments& assignments,
     Core::Alloc::ScratchArena& scratchArena,
     const Graphics::GpuTaskGraph& graph,
     const Graphics::GpuTaskGraphAnalysis& analysis,
     const Graphics::GpuPhysicalQueueTopology& topology,
-    Graphics::GpuTaskGraphQueueAssignments& assignments,
     const Graphics::GpuTaskGraphQueueAssignmentOptions& options = {}
 ){
     const Graphics::GpuTaskGraphCompiler compiler;
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-    return compiler.assignQueues(declarations, analysis, topology, assignments, scratchArena, options);
+    return compiler.assignQueues(assignments, scratchArena, declarations, analysis, topology, options);
 }
 
-[[nodiscard]] inline bool Compile(Core::Alloc::ScratchArena& scratchArena, const Graphics::GpuTaskGraph& graph, Graphics::GpuTaskGraphAnalysis& analysis, Graphics::GpuTaskGraphQueueAssignments& assignments, Graphics::GpuCompiledGraph& compiledGraph){
+[[nodiscard]] inline bool Compile(Graphics::GpuTaskGraphAnalysis& analysis, Graphics::GpuTaskGraphQueueAssignments& assignments, Graphics::GpuCompiledGraph& compiledGraph, Core::Alloc::ScratchArena& scratchArena, const Graphics::GpuTaskGraph& graph){
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
     const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u, };
     Graphics::GpuTaskGraphCompileOptions options;
     options.allowMetadataOnlyTasks = true;
     const Graphics::GpuTaskGraphCompiler compiler;
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-    return compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena, options);
+    return compiler.compile(analysis, assignments, compiledGraph, scratchArena, declarations, topology, options);
 }
 
 inline void ExpectClosedCycle(const Graphics::GpuTaskGraphAnalysis& analysis){

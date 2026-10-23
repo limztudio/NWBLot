@@ -23,12 +23,12 @@ NWB_IMPL_BEGIN
 Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
-    DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
     const bool& prepared,
     const bool hardwareShadowSupported,
-    Core::GpuTimingSubmissionTicket& timingTicket,
-    const GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan
+    const GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan,
+    DeferredFrameTargets& targets,
+    Core::GpuTimingSubmissionTicket& timingTicket
 ){
     return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowVisibilityGraphTask>(
         desc,
@@ -48,16 +48,16 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityTask(
 Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoftTemporalMergeTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
-    DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
-    Core::GpuTimingSubmissionTicket& timingTicket,
-    Optional<Core::GpuTimingMeasure>& transparentResolveTiming,
     const bool& opaqueProduced,
-    bool& transparentTraceProduced,
     const u32& opaqueFrameIndex,
     const bool graphOwnsTransparentTemporalMergeEntryStates,
     const bool combinedTemporal,
-    const bool hardwareShadowSupported
+    const bool hardwareShadowSupported,
+    DeferredFrameTargets& targets,
+    Core::GpuTimingSubmissionTicket& timingTicket,
+    Optional<Core::GpuTimingMeasure>& transparentResolveTiming,
+    bool& transparentTraceProduced
 ){
     return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftTemporalMergeGraphTask>(
         desc,
@@ -81,16 +81,16 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoft
 Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoftFirstWaveletTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
-    DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
-    Core::GpuTimingSubmissionTicket& timingTicket,
-    Optional<Core::GpuTimingMeasure>& transparentResolveTiming,
     const bool& opaqueProduced,
-    bool& transparentTraceProduced,
     const u32& opaqueFrameIndex,
     const bool graphOwnsTransparentWaveletInputBoundary,
     const bool startsTransparentResolveTiming,
-    const bool combinedWavelet
+    const bool combinedWavelet,
+    DeferredFrameTargets& targets,
+    Core::GpuTimingSubmissionTicket& timingTicket,
+    Optional<Core::GpuTimingMeasure>& transparentResolveTiming,
+    bool& transparentTraceProduced
 ){
     return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftFirstWaveletGraphTask>(
         desc,
@@ -114,16 +114,16 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoft
 Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoftFoldTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
-    DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
+    const bool& opaqueProduced,
+    const u32& opaqueFrameIndex,
+    const bool combinedUpsample,
+    DeferredFrameTargets& targets,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>& asyncTiming,
     Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming,
     Optional<Core::GpuTimingMeasure>& transparentResolveTiming,
-    const bool& opaqueProduced,
-    bool& transparentTraceProduced,
-    const u32& opaqueFrameIndex,
-    const bool combinedUpsample
+    bool& transparentTraceProduced
 ){
     return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftFoldGraphTask>(
         desc,
@@ -146,13 +146,13 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoft
 Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoftTraceTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
-    DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
-    Core::GpuTimingSubmissionTicket& timingTicket,
     const bool& opaqueProduced,
     const u32& opaqueFrameIndex,
-    bool& transparentTraceProduced,
-    const LightSpaceShadowSnapshot* const lightSpace
+    const LightSpaceShadowSnapshot* const lightSpace,
+    DeferredFrameTargets& targets,
+    Core::GpuTimingSubmissionTicket& timingTicket,
+    bool& transparentTraceProduced
 ){
     return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftTraceGraphTask>(
         desc,

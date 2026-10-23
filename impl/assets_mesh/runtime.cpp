@@ -38,7 +38,7 @@ bool Mesh::loadBinary(const Core::Assets::AssetBytes& binary){
 
     const TStringView loadFailureContext = MeshBinaryPayload::s_MeshLoadBinaryContext;
     usize cursor = 0;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<MeshBinaryPayload::MeshHeaderBinary>(binary, cursor, MeshBinaryPayload::s_MeshMagic, loadFailureContext, MeshBinaryPayload::s_MeshAssetKindLabel);
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<MeshBinaryPayload::MeshHeaderBinary>(binary, MeshBinaryPayload::s_MeshMagic, loadFailureContext, MeshBinaryPayload::s_MeshAssetKindLabel, cursor);
     if(!headerResult)
         return false;
     const MeshBinaryPayload::MeshHeaderBinary& header = *headerResult;
@@ -57,9 +57,9 @@ bool Mesh::loadBinary(const Core::Assets::AssetBytes& binary){
     }
 
     Mesh candidate(m_positionStream.get_allocator().arena(), virtualPath());
-    if(!candidate.readGeometryAttributeStreams(binary, cursor, header, loadFailureContext))
+    if(!candidate.readGeometryAttributeStreams(binary, header, loadFailureContext, cursor))
         return false;
-    if(!candidate.readGeometryMeshletStreams(binary, cursor, header, loadFailureContext))
+    if(!candidate.readGeometryMeshletStreams(binary, header, loadFailureContext, cursor))
         return false;
     if(!Core::Assets::ReadCompletePayload(binary, cursor, loadFailureContext))
         return false;

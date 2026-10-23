@@ -99,7 +99,7 @@ bool ApplyMaterialBindTypedLayoutParameterValue(
 
 Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayoutImpl(const MaterialBindEntry& bindEntry, const Name& contextName, MaterialCookArena& arena, ScratchArena& scratchArena);
 
-Expected<NotNull<const MaterialBindTypedLayout*>> FindOrBuildMaterialBindTypedLayoutImpl(const Name& materialInterface, const MaterialBindEntry& bindEntry, MaterialBindTypedLayoutCache& inOutCache, ScratchArena& scratchArena);
+Expected<NotNull<const MaterialBindTypedLayout*>> FindOrBuildMaterialBindTypedLayoutImpl(const Name& materialInterface, const MaterialBindEntry& bindEntry, ScratchArena& scratchArena, MaterialBindTypedLayoutCache& inOutCache);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

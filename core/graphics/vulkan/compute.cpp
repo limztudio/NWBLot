@@ -90,14 +90,14 @@ Expected<ComputePipelineHandle> Device::createComputePipeline(const ComputePipel
     PipelineShaderStageVector shaderStages{ scratchArena };
     shaderStages.push_back(shaderStage);
 
-    if(!configurePipelineBindings(desc.bindingLayouts, s_OperationName, *pso, scratchArena))
+    if(!configurePipelineBindings(desc.bindingLayouts, s_OperationName, scratchArena, *pso))
         return MakeUnexpected(Failure{});
 
     auto pipelineInfo = VulkanDetail::MakeVkStruct<VkComputePipelineCreateInfo>(VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO);
     pipelineInfo.stage = shaderStages[0];
     VulkanDetail::AttachPipelineBindingState(pipelineInfo, *pso);
 
-    if(!createPipeline(s_OperationName, *pso, pipelineInfo))
+    if(!createPipeline(s_OperationName, pipelineInfo, *pso))
         return MakeUnexpected(Failure{});
 
     return pso;

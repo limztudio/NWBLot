@@ -348,7 +348,7 @@ inline void AppendFeatureStruct(void*& pNext, FeatureT& feature)noexcept{
     pNext = &feature;
 }
 
-inline void AppendOptionalDeviceFeature(void*& pNext, OptionalDeviceFeatureSet& features, DeviceExtensionFeature::Enum feature, bool (&appended)[static_cast<usize>(DeviceExtensionFeature::Count)])noexcept{
+inline void AppendOptionalDeviceFeature(DeviceExtensionFeature::Enum feature, void*& pNext, OptionalDeviceFeatureSet& features, bool (&appended)[static_cast<usize>(DeviceExtensionFeature::Count)])noexcept{
     if(feature == DeviceExtensionFeature::None || feature == DeviceExtensionFeature::Count)
         return;
 

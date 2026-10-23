@@ -62,7 +62,7 @@ bool Skeleton::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
 bool Skeleton::loadBinary(const Core::Assets::AssetBytes& binary){
     Core::Alloc::ScratchArena scratchArena(AssetsSkeletonArenaScope::s_LoadBinaryArena);
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SkeletonBinaryPayload::HeaderBinary>(binary, cursor, SkeletonBinaryPayload::s_SkeletonMagic, SkeletonBinaryPayload::s_SkeletonLoadBinaryContext, SkeletonBinaryPayload::s_SkeletonAssetKindLabel);
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SkeletonBinaryPayload::HeaderBinary>(binary, SkeletonBinaryPayload::s_SkeletonMagic, SkeletonBinaryPayload::s_SkeletonLoadBinaryContext, SkeletonBinaryPayload::s_SkeletonAssetKindLabel, cursor);
     if(!headerResult)
         return false;
     const SkeletonBinaryPayload::HeaderBinary& header = *headerResult;

@@ -475,7 +475,7 @@ Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
         compileOptions.packetTimingEnvelope.firstTask = frameTimingBeginTask;
         compileOptions.packetTimingEnvelope.lastTask = terminalTask;
     }
-    if(!scheduler.scheduleGraph(graph, analysis, assignments, compiledGraph, recordedGraph, transaction, scratchArena, compileOptions)){
+    if(!scheduler.scheduleGraph(graph, compileOptions, scratchArena, analysis, assignments, compiledGraph, recordedGraph, transaction)){
         const auto& analysisDiagnostic = analysis.diagnostic();
         const auto& queueDiagnostic = assignments.diagnostic();
         NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: standalone graph scheduling failed: analysis={} task={} resource={} version={} queue={} queueTask={}")
@@ -539,7 +539,7 @@ Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
     // Setup and timing callers preserve their established serial behavior. The public standalone graph boundary supplies the Graphics worker pool.
     GpuTaskGraphNormalExecutionDesc normalExecution;
     normalExecution.readyFrontierScheduler = readyFrontierScheduler;
-    const bool graphAccepted = scheduler.executeGraph(graph, compiledGraph, recordedGraph, normalExecution, transaction, timingRecorder, scratchArena);
+    const bool graphAccepted = scheduler.executeGraph(normalExecution, scratchArena, graph, compiledGraph, recordedGraph, transaction, timingRecorder);
     const QueueSubmissionToken terminalToken = transaction.taskToken(compiledPlan, terminalTask);
     if(!graphAccepted){
         bool timingRecovered = true;
@@ -551,7 +551,7 @@ Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
             if(!timingRecovered)
                 frameTimingTransaction->discard();
         }
-        const bool recovered = !transaction.hasAcceptedPackets() || scheduler.executeAcceptedFrontierTask(graph, compiledGraph, recordedGraph, recoveryTask, transaction, timingRecorder, scratchArena);
+        const bool recovered = !transaction.hasAcceptedPackets() || scheduler.executeAcceptedFrontierTask(compiledGraph, recoveryTask, scratchArena, graph, recordedGraph, transaction, timingRecorder);
         if(recovered && frameTimingTransaction && frameTimingTransaction->needsRetirement()){
             const QueueSubmissionToken recoveryToken = transaction.taskToken(compiledPlan, recoveryTask);
             timingRecovered = frameTimingTransaction->confirmEndSubmission(recoveryToken, false) && timingRecovered;
@@ -580,13 +580,13 @@ Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
 }
 
 bool SubmitGraphOwnedSetupUpload(
-    const GraphicsRuntime& graphics,
+    QueueSubmissionToken& inOutUploadToken,
     StandaloneGraphWorkspacePool& workspaces,
+    const GraphicsRuntime& graphics,
     const ResourceQueueSharing::Mask queueSharing,
     const CommandQueue::Enum consumerQueue,
     void* const userData,
     const NotNull<GraphTaskDeclaration> declareTask,
-    QueueSubmissionToken& inOutUploadToken,
     const GpuPhysicalQueueId requiredTerminalQueue
 ){
     inOutUploadToken = {};

@@ -33,7 +33,7 @@ namespace __hidden_csg_resources{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ReserveCsgStructuredBuffer(Core::GraphicsRuntime& graphics, Core::BufferHandle& buffer, usize& inOutCapacity, const usize requiredCount, const usize elementByteSize, const Name& debugName){
+[[nodiscard]] static bool ReserveCsgStructuredBuffer(Core::GraphicsRuntime& graphics, const usize requiredCount, const usize elementByteSize, const Name& debugName, Core::BufferHandle& buffer, usize& inOutCapacity){
     if(requiredCount == 0u)
         return true;
     if(buffer && inOutCapacity >= requiredCount)
@@ -101,7 +101,7 @@ namespace __hidden_csg_resources{
     return true;
 }
 
-[[nodiscard]] static bool EnsureCsgBufferHeapHandle(Core::Device& device, Core::Buffer& buffer, const Core::GpuDescriptorClass::Enum descriptorClass, Core::GpuDescriptorHandle& inOutHandle){
+[[nodiscard]] static bool EnsureCsgBufferHeapHandle(Core::Device& device, const Core::GpuDescriptorClass::Enum descriptorClass, Core::Buffer& buffer, Core::GpuDescriptorHandle& inOutHandle){
     if(inOutHandle.valid())
         return inOutHandle.descriptorClass() == descriptorClass;
     const auto acquired = AcquireCsgBufferHeapHandle(device, buffer, descriptorClass);
@@ -156,8 +156,8 @@ bool RendererCsgSystem::createCsgClipResources(){
         }
     }
     if(
-        !__hidden_csg_resources::EnsureCsgBufferHeapHandle(device, *m_csgState.m_clipContextSlotsBuffer.get(), Core::GpuDescriptorClass::UniformBuffer, m_csgState.m_clipContextSlotsHeapHandle)
-        || !__hidden_csg_resources::EnsureCsgBufferHeapHandle(device, *m_csgState.m_intervalSampleStateBuffer.get(), Core::GpuDescriptorClass::UniformBuffer, m_csgState.m_intervalSampleStateHeapHandle)
+        !__hidden_csg_resources::EnsureCsgBufferHeapHandle(device, Core::GpuDescriptorClass::UniformBuffer, *m_csgState.m_clipContextSlotsBuffer.get(), m_csgState.m_clipContextSlotsHeapHandle)
+        || !__hidden_csg_resources::EnsureCsgBufferHeapHandle(device, Core::GpuDescriptorClass::UniformBuffer, *m_csgState.m_intervalSampleStateBuffer.get(), m_csgState.m_intervalSampleStateHeapHandle)
     )
         return false;
 
@@ -166,7 +166,7 @@ bool RendererCsgSystem::createCsgClipResources(){
 
 bool RendererCsgSystem::reserveCsgReceiverRangeBufferCapacity(const usize rangeCount){
     const usize oldCapacity = m_csgState.m_receiverRangeBufferCapacity;
-    if(!__hidden_csg_resources::ReserveCsgStructuredBuffer(m_graphics, m_csgState.m_receiverRangeBuffer, m_csgState.m_receiverRangeBufferCapacity, rangeCount, sizeof(CsgReceiverRangeGpuData), ECSRenderDetail::s_CsgReceiverRangeBufferName)){
+    if(!__hidden_csg_resources::ReserveCsgStructuredBuffer(m_graphics, rangeCount, sizeof(CsgReceiverRangeGpuData), ECSRenderDetail::s_CsgReceiverRangeBufferName, m_csgState.m_receiverRangeBuffer, m_csgState.m_receiverRangeBufferCapacity)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG receiver range buffer"));
         return false;
     }
@@ -180,7 +180,7 @@ bool RendererCsgSystem::reserveCsgReceiverRangeBufferCapacity(const usize rangeC
 
 bool RendererCsgSystem::reserveCsgCutterBufferCapacity(const usize cutterCount){
     const usize oldCapacity = m_csgState.m_cutterBufferCapacity;
-    if(!__hidden_csg_resources::ReserveCsgStructuredBuffer(m_graphics, m_csgState.m_cutterBuffer, m_csgState.m_cutterBufferCapacity, cutterCount, sizeof(CsgCutterGpuData), ECSRenderDetail::s_CsgCutterBufferName)){
+    if(!__hidden_csg_resources::ReserveCsgStructuredBuffer(m_graphics, cutterCount, sizeof(CsgCutterGpuData), ECSRenderDetail::s_CsgCutterBufferName, m_csgState.m_cutterBuffer, m_csgState.m_cutterBufferCapacity)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG cutter buffer"));
         return false;
     }
@@ -200,8 +200,8 @@ bool RendererCsgSystem::prepareCsgFrameResources(const usize receiverRangeCount,
     if(!reserveCsgReceiverRangeBufferCapacity(receiverRangeCount) || !reserveCsgCutterBufferCapacity(cutterCount))
         return false;
     if(
-        !__hidden_csg_resources::EnsureCsgBufferHeapHandle(m_graphics.getDevice(), *m_csgState.m_receiverRangeBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, m_csgState.m_receiverRangeBufferHeapHandle)
-        || !__hidden_csg_resources::EnsureCsgBufferHeapHandle(m_graphics.getDevice(), *m_csgState.m_cutterBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, m_csgState.m_cutterBufferHeapHandle)
+        !__hidden_csg_resources::EnsureCsgBufferHeapHandle(m_graphics.getDevice(), Core::GpuDescriptorClass::StorageBuffer, *m_csgState.m_receiverRangeBuffer.get(), m_csgState.m_receiverRangeBufferHeapHandle)
+        || !__hidden_csg_resources::EnsureCsgBufferHeapHandle(m_graphics.getDevice(), Core::GpuDescriptorClass::StorageBuffer, *m_csgState.m_cutterBuffer.get(), m_csgState.m_cutterBufferHeapHandle)
         || !m_csgState.m_clipContextSlotsBuffer || !m_csgState.m_clipContextSlotsHeapHandle.valid()
         || !m_csgState.m_intervalSampleStateBuffer || !m_csgState.m_intervalSampleStateHeapHandle.valid()
     ){

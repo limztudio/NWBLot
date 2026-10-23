@@ -442,7 +442,7 @@ inline VkPipelineColorBlendStateCreateInfo BuildPipelineColorBlendState(const Fr
 Expected<VkPipelineMultisampleStateCreateInfo> ConfigurePipelineMultisampleState(u32 sampleCount, bool alphaToCoverageEnable, TStringView operationName);
 void ConfigurePipelineDepthStencilState(const DepthStencilState& state, PipelineStencilFaceMode::Enum stencilFaceMode, VkPipelineDepthStencilStateCreateInfo& outState)noexcept;
 
-[[nodiscard]] inline Expected<void, CpuTaskAdmissionError::Enum> CopyHostMemory(CpuTaskScheduler& cpuScheduler, void* dst, const void* src, usize size, usize parallelThreshold = s_CopyHostMemoryParallelThreshold, usize chunkSize = s_CopyHostMemoryChunkSize){
+[[nodiscard]] inline Expected<void, CpuTaskAdmissionError::Enum> CopyHostMemory(void* dst, CpuTaskScheduler& cpuScheduler, const void* src, usize size, usize parallelThreshold = s_CopyHostMemoryParallelThreshold, usize chunkSize = s_CopyHostMemoryChunkSize){
     if(!dst || !src || size == 0)
         return {};
 

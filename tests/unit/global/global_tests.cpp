@@ -454,11 +454,11 @@ TEST(Global, EmptyBinaryVectorReadClearsReusedOutputWithoutAdvancing){
     usize cursor = 0u;
     ::Vector<u16, NWB::Core::Alloc::ScratchArena> parsed(scratchArena);
     parsed.reserve(4u);
-    ASSERT_TRUE(ReadBinaryVectorPayload(binary, cursor, static_cast<u64>(source.size()), parsed));
+    ASSERT_TRUE(ReadBinaryVectorPayload(binary, static_cast<u64>(source.size()), cursor, parsed));
 
     cursor = 0u;
     parsed.push_back(7u);
-    ASSERT_TRUE(ReadBinaryVectorPayload(binary, cursor, 0u, parsed));
+    ASSERT_TRUE(ReadBinaryVectorPayload(binary, 0u, cursor, parsed));
     EXPECT_EQ(cursor, 0u);
     EXPECT_TRUE(parsed.empty());
 }
@@ -473,7 +473,7 @@ TEST(Global, FixedVectorOverflowDoesNotAdvanceBinaryCursor){
 
     usize vectorCursor = 0u;
     FixedVector<u16, s_ExpectedDualCount> tooSmall;
-    EXPECT_EQ(ReadBinaryVectorPayload(vectorBinary, vectorCursor, 3u, tooSmall), MakeUnexpected(BinaryVectorPayloadFailure::OutputOverflow));
+    EXPECT_EQ(ReadBinaryVectorPayload(vectorBinary, 3u, vectorCursor, tooSmall), MakeUnexpected(BinaryVectorPayloadFailure::OutputOverflow));
     EXPECT_EQ(vectorCursor, 0u);
     EXPECT_TRUE(tooSmall.empty());
 }
@@ -489,7 +489,7 @@ TEST(Global, RejectedBinaryVectorPayloadReadsDoNotAdvanceCursor){
     ::Vector<u32, NWB::Core::Alloc::ScratchArena> parsed(scratchArena);
     parsed.reserve(4u);
     parsed.push_back(0xAABBCCDDu);
-    EXPECT_EQ(ReadBinaryVectorPayload(truncated, cursor, s_ExpectedDualCount, parsed), MakeUnexpected(BinaryVectorPayloadFailure::SourceTruncated));
+    EXPECT_EQ(ReadBinaryVectorPayload(truncated, s_ExpectedDualCount, cursor, parsed), MakeUnexpected(BinaryVectorPayloadFailure::SourceTruncated));
     EXPECT_EQ(cursor, 0u);
     EXPECT_TRUE(parsed.empty());
 }

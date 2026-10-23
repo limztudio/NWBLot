@@ -276,7 +276,7 @@ NwbCausticSplat nwbCausticTracePhoton(NwbCausticPhoton photon){
             break;
         const bool entering = dot(direction, boundary.geometricNormal) < 0.0;
         NwbOpticalMedia transmittedMedia = media;
-        if(!nwbOpticalApplyBoundary(transmittedMedia, medium, entering, result))
+        if(!nwbOpticalApplyBoundary(medium, entering, transmittedMedia, result))
             break;
         const NwbOpticalMedium transmitted = nwbOpticalDominantMedium(transmittedMedia);
         const float3 normal = entering ? boundary.geometricNormal : -boundary.geometricNormal;

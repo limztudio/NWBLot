@@ -14,7 +14,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void InputRouter::routePointer(const InputEvent& event, InputRoutingResult& result, const HitTarget* hit){
+void InputRouter::routePointer(const InputEvent& event, const HitTarget* hit, InputRoutingResult& result){
     if(event.type == InputEventType::PointerMove){
         if(m_primaryDown)
             updatePointerGesture(event.position, false);
@@ -65,7 +65,7 @@ void InputRouter::routePointer(const InputEvent& event, InputRoutingResult& resu
     if(m_primaryDown && m_pointerSequenceConsumed && m_pointerSubmitArmed && hit != nullptr && hit->id == m_capture && hit->declarationGeneration == m_captureDeclaration && hit->activatable && hit->popup == m_capturePopup && hit->control == m_captureControl){
         const HitTarget* host = hit->owner.valid() ? controlHost(*hit) : nullptr;
         if(host != nullptr)
-            appendControlAction(*host, *hit, ControlActionKind::Activate, 0.0, result);
+            appendControlAction(result, *host, *hit, ControlActionKind::Activate, 0.0);
         else
             appendActivation(*hit, InputActionSource::Pointer, event.source, result);
     }

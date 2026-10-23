@@ -23,8 +23,8 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareRegular(
     Core::Alloc::ScratchArena& scratchArena,
     const OpaqueComputeEmulationProducerInputs& inputs,
     const Core::GpuTaskResourceSetUse& outputUavSetUse,
-    ECSRenderDetail::OpaqueRegularComputeEmulationGraphTask::Payload& payload,
-    const Core::GpuTaskId& dependency
+    const Core::GpuTaskId& dependency,
+    ECSRenderDetail::OpaqueRegularComputeEmulationGraphTask::Payload& payload
 ){
     using namespace RendererTaskGraphDetail;
 
@@ -77,8 +77,8 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareCsgRecei
     const OpaqueComputeEmulationProducerInputs& inputs,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
     const Core::GpuTaskResourceSetUse& outputUavSetUse,
-    ECSRenderDetail::OpaqueCsgReceiverComputeEmulationGraphTask::Payload& payload,
-    const Core::GpuTaskId& dependency
+    const Core::GpuTaskId& dependency,
+    ECSRenderDetail::OpaqueCsgReceiverComputeEmulationGraphTask::Payload& payload
 ){
     using namespace RendererTaskGraphDetail;
 

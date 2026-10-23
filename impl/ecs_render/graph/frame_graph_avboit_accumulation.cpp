@@ -177,11 +177,11 @@ Expected<FrameGraphAvboitAccumulationUploadResult> FrameGraphAvboitAccumulationU
                     .csgStreamsUploaded = accumulationCsgStreamsUploaded,
                     .intervalOutputsGraphOwned = intervalOutputsGraphOwned,
                 },
-                avboitAccumulationComputeEmulationPayload.plan,
-                avboitAccumulationComputeEmulationPayload.csgPlan,
                 scratchArena,
                 accumulationInstanceData.size(),
-                accumulationMaterialTypedBytes.size()
+                accumulationMaterialTypedBytes.size(),
+                avboitAccumulationComputeEmulationPayload.plan,
+                avboitAccumulationComputeEmulationPayload.csgPlan
             );
             if(!accumulationComputeEmulationCaptureResult)
                 return MakeUnexpected(Failure{});

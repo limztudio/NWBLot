@@ -156,7 +156,7 @@ private:
     [[nodiscard]] bool paintWindowResize();
     [[nodiscard]] bool paintItems();
     [[nodiscard]] bool paintItem(const Item& item, const LayoutBox& box);
-    [[nodiscard]] EditBoxResult declareEditBox(AStringView stableKey, EditModel& model, EditBoxState& state, const EditBoxOptions& options, IEditActionSink* actions = nullptr, IntegerEditFrame* integerFrame = nullptr, FloatEditFrame* floatFrame = nullptr);
+    [[nodiscard]] EditBoxResult declareEditBox(AStringView stableKey, const EditBoxOptions& options, EditModel& model, EditBoxState& state, IEditActionSink* actions = nullptr, IntegerEditFrame* integerFrame = nullptr, FloatEditFrame* floatFrame = nullptr);
     [[nodiscard]] bool paintTextArea(const Item& item, const LayoutBox& box);
     [[nodiscard]] bool applyTextAreaScrollInput(const Item& item, const TextAreaFrame& frame, const ControlToken& token);
     [[nodiscard]] bool paintTextAreaScrollbars(const Item& item, const ScrollViewportPlacement& placement, const Rect& clip, const ControlToken& token);
@@ -194,8 +194,8 @@ private:
     [[nodiscard]] bool applyListGesture(ListState& state, const PointerGesture& gesture)noexcept;
     [[nodiscard]] ComboResult declareCombo(
         AStringView stableKey, const IListDataSource& source,
-        ComboState& state, const ComboOptions& options, SearchComboState* search = nullptr,
-        ISearchableListDataSource* searchSource = nullptr, const SearchComboOptions* searchOptions = nullptr
+        const ComboOptions& options, const SearchComboOptions* searchOptions, ComboState& state,
+        SearchComboState* search = nullptr, ISearchableListDataSource* searchSource = nullptr
     );
     [[nodiscard]] bool paintCombo(const Item& item, const LayoutBox& box);
     [[nodiscard]] bool paintCombos();

@@ -375,7 +375,7 @@ private:
     )const;
     [[nodiscard]] Expected<PipelineBindingState> buildPipelineBindings(const BindingLayoutVector& bindingLayouts, TStringView operationName, Alloc::ScratchArena& scratchArena)const;
     template<typename PipelineT>
-    [[nodiscard]] bool configurePipelineBindings(const BindingLayoutVector& bindingLayouts, TStringView operationName, PipelineT& pipeline, Alloc::ScratchArena& scratchArena)const{
+    [[nodiscard]] bool configurePipelineBindings(const BindingLayoutVector& bindingLayouts, TStringView operationName, Alloc::ScratchArena& scratchArena, PipelineT& pipeline)const{
         auto bindings = buildPipelineBindings(bindingLayouts, operationName, scratchArena);
         if(bindings){
             static_cast<PipelineBindingState&>(pipeline) = Move(*bindings);
@@ -385,7 +385,7 @@ private:
     }
 
     template<typename PipelineT>
-    [[nodiscard]] bool createPipeline(TStringView operationName, PipelineT& pipeline, const VkComputePipelineCreateInfo& pipelineInfo)const{
+    [[nodiscard]] bool createPipeline(TStringView operationName, const VkComputePipelineCreateInfo& pipelineInfo, PipelineT& pipeline)const{
         const VkResult res = m_context.deviceDispatch.vkCreateComputePipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pipeline.m_pipeline);
         if(res == VK_SUCCESS)
             return true;
@@ -395,7 +395,7 @@ private:
     }
 
     template<typename PipelineT>
-    [[nodiscard]] bool createPipeline(TStringView operationName, PipelineT& pipeline, const VkGraphicsPipelineCreateInfo& pipelineInfo)const{
+    [[nodiscard]] bool createPipeline(TStringView operationName, const VkGraphicsPipelineCreateInfo& pipelineInfo, PipelineT& pipeline)const{
         const VkResult res = m_context.deviceDispatch.vkCreateGraphicsPipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pipeline.m_pipeline);
         if(res == VK_SUCCESS)
             return true;

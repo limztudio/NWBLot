@@ -78,7 +78,7 @@ SceneShadingBufferUploads RendererDeferredSystem::prepareSceneShadingBufferUploa
     SceneShadingBufferUploads uploads{};
 
     f32 causticLightImportance[NWB_SCENE_MAX_LIGHTS];
-    const u32 lightCount = ECSRenderDetail::ResolveSceneLights(m_world, uploads.lightData, causticLightImportance, NWB_SCENE_MAX_LIGHTS);
+    const u32 lightCount = ECSRenderDetail::ResolveSceneLights(m_world, NWB_SCENE_MAX_LIGHTS, uploads.lightData, causticLightImportance);
 
     // Rank caustic lights into params.w; needs a refractive instance.
     const u32 causticLightCount = ECSRenderDetail::ResolveCausticLights(uploads.lightData, causticLightImportance, lightCount, rayTracingInput.refractiveInstanceCount);
@@ -195,7 +195,7 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
         }
     }
 
-    if(!ECSRenderDetail::CreateClampSampler(device, m_deferredState.m_sampler, false)){
+    if(!ECSRenderDetail::CreateClampSampler(device, false, m_deferredState.m_sampler)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting sampler"));
         return false;
     }
@@ -232,7 +232,7 @@ bool RendererDeferredSystem::createDeferredLightingPipeline(){
     return true;
 }
 
-Expected<Core::GpuTaskId> RendererDeferredSystem::declareDeferredLightingTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const bool useLaggedLightingHistory, Core::GpuTimingSubmissionTicket& timingTicket){
+Expected<Core::GpuTaskId> RendererDeferredSystem::declareDeferredLightingTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const bool useLaggedLightingHistory, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket){
     return graph.addTask<__hidden_deferred_lighting::DeferredLightingGraphTask>(
         desc,
         __hidden_deferred_lighting::DeferredLightingGraphTask::Payload{ .deferredSystem = *this, .targets = targets, .timingTicket = timingTicket, .useLaggedLightingHistory = useLaggedLightingHistory, }

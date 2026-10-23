@@ -85,7 +85,7 @@ static Expected<Core::Filesystem::VolumeBuildConfig> ConfigureVolumeSizing(const
     return config;
 }
 
-static bool PushManifestObjectFilePayloadToVolume(const AssetsVolumeCookDetail::AssetVolumePackEntry& entry, ScratchBytes& objectBytes, Core::Filesystem::IFilesystem& filesystem){
+static bool PushManifestObjectFilePayloadToVolume(const AssetsVolumeCookDetail::AssetVolumePackEntry& entry, Core::Filesystem::IFilesystem& filesystem, ScratchBytes& objectBytes){
     const auto payload = AssetsVolumeCookDetail::ReadCookedObjectPayload(entry.objectPath, entry.virtualPath, objectBytes);
     if(!payload)
         return false;
@@ -101,7 +101,7 @@ static bool PushManifestObjectFilePayloadToVolume(const AssetsVolumeCookDetail::
     return false;
 }
 
-static bool PushManifestEntryToVolume(const AssetsVolumeCookDetail::AssetVolumePackEntry& entry, ScratchBytes& objectBytes, Core::Filesystem::IFilesystem& filesystem){
+static bool PushManifestEntryToVolume(const AssetsVolumeCookDetail::AssetVolumePackEntry& entry, Core::Filesystem::IFilesystem& filesystem, ScratchBytes& objectBytes){
     switch(entry.source){
     case AssetsVolumeCookDetail::AssetVolumePackEntrySource::PayloadBytes:
         if(entry.identity.payloadSize != static_cast<u64>(entry.payloadBytes.size()) || entry.identity.payloadHash != ComputeFnv64Bytes(entry.payloadBytes.data(), entry.payloadBytes.size())){
@@ -114,7 +114,7 @@ static bool PushManifestEntryToVolume(const AssetsVolumeCookDetail::AssetVolumeP
         NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to push manifest payload '{}'"), StringConvert(entry.virtualPath.resolvedText()));
         return false;
     case AssetsVolumeCookDetail::AssetVolumePackEntrySource::ObjectFilePayload:
-        return PushManifestObjectFilePayloadToVolume(entry, objectBytes, filesystem);
+        return PushManifestObjectFilePayloadToVolume(entry, filesystem, objectBytes);
     default:
         break;
     }
@@ -126,7 +126,7 @@ static bool PushManifestEntryToVolume(const AssetsVolumeCookDetail::AssetVolumeP
 static bool PushManifestToVolume(ScratchArena& scratchArena, const AssetsVolumeCookDetail::AssetVolumePackManifest& manifest, Core::Filesystem::IFilesystem& filesystem){
     ScratchBytes objectBytes(scratchArena);
     for(const AssetsVolumeCookDetail::AssetVolumePackEntry& entry : manifest.entries){
-        if(!PushManifestEntryToVolume(entry, objectBytes, filesystem))
+        if(!PushManifestEntryToVolume(entry, filesystem, objectBytes))
             return false;
     }
 

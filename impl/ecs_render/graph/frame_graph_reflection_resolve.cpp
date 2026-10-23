@@ -29,7 +29,7 @@ FrameGraphReflectionResolve::FrameGraphReflectionResolve(Core::GpuTaskGraph& gra
 }
 
 
-Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare(const FrameGraphReflectionResolveInputs& inputs, RayTracingSceneGraphReads& sceneReads, Core::Alloc::ScratchArena& scratchArena){
+Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare(const FrameGraphReflectionResolveInputs& inputs, Core::Alloc::ScratchArena& scratchArena, RayTracingSceneGraphReads& sceneReads){
     FrameGraphReflectionResolveResult result{};
     using namespace RendererTaskGraphDetail;
     DeferredFrameTargets& deferredTargets = inputs.targets;

@@ -75,7 +75,7 @@ public:
 
 public:
     // Writes each declared phase task into `tasks` in order.
-    [[nodiscard]] Expected<OpaqueSharedComputeEmulationChainResult> declare(Core::Alloc::ScratchArena& scratchArena, const OpaqueSharedComputeEmulationChainInputs& inputs, Core::GpuTaskId* tasks, usize taskCapacity);
+    [[nodiscard]] Expected<OpaqueSharedComputeEmulationChainResult> declare(Core::Alloc::ScratchArena& scratchArena, const OpaqueSharedComputeEmulationChainInputs& inputs, usize taskCapacity, Core::GpuTaskId* tasks);
 
 
 private:

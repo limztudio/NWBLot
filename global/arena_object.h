@@ -24,7 +24,7 @@ namespace ArenaObjectDetail{
 template<typename T, typename Arena, bool DestroyCompleted = true, bool OwnsConstructed = false>
 class ConstructionStorage final : NoCopy{
 public:
-    ConstructionStorage(Arena& arena, NotNull<T*> memory, const usize count, T*& constructed)noexcept
+    ConstructionStorage(Arena& arena, const usize count, NotNull<T*> memory, T*& constructed)noexcept
         : m_arena(arena)
         , m_memory(memory.get())
         , m_count(count)
@@ -98,7 +98,7 @@ Concrete* NewArenaObject(Arena& arena, Args&&... args)noexcept(noexcept(arena.te
         return nullptr;
 
     Concrete* object = nullptr;
-    ArenaObjectDetail::ConstructionStorage<Concrete, Arena> storage(arena, MakeNotNull(mem), 1u, object);
+    ArenaObjectDetail::ConstructionStorage<Concrete, Arena> storage(arena, 1u, MakeNotNull(mem), object);
     object = ::new(static_cast<void*>(mem)) Concrete(Forward<Args>(args)...);
     storage.release();
     return object;
@@ -218,7 +218,7 @@ inline typename EnableIf<!IsArray<T>::value, ArenaUniquePtr<T, Arena>>::type Mak
             return ArenaUniquePtr<T, Arena>(static_cast<T*>(nullptr), typename ArenaUniquePtr<T, Arena>::deleter_type(arena));
 
         T* object = nullptr;
-        ArenaObjectDetail::ConstructionStorage<T, Arena, true, true> storage(arena, MakeNotNull(mem), 1u, object);
+        ArenaObjectDetail::ConstructionStorage<T, Arena, true, true> storage(arena, 1u, MakeNotNull(mem), object);
         object = ::new(static_cast<void*>(mem)) T(Forward<Args>(args)...);
         storage.release();
         return ArenaUniquePtr<T, Arena>(object, typename ArenaUniquePtr<T, Arena>::deleter_type(arena));
@@ -240,7 +240,7 @@ inline typename EnableIf<IsUnboundedArray<T>::value, ArenaUniquePtr<T, Arena>>::
         return ArenaUniquePtr<T, Arena>(static_cast<TBase*>(nullptr), typename ArenaUniquePtr<T, Arena>::deleter_type(arena, n));
 
     TBase* objects = nullptr;
-    ArenaObjectDetail::ConstructionStorage<TBase, Arena, false> storage(arena, MakeNotNull(mem), n, objects);
+    ArenaObjectDetail::ConstructionStorage<TBase, Arena, false> storage(arena, n, MakeNotNull(mem), objects);
     objects = ::new(static_cast<void*>(mem)) TBase[n];
     storage.release();
     return ArenaUniquePtr<T, Arena>(objects, typename ArenaUniquePtr<T, Arena>::deleter_type(arena, n));

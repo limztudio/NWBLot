@@ -71,7 +71,7 @@ bool Builder::applyComboInput(const WidgetState& field, ComboFrame& frame, Combo
             options.wheelRows = frame.options.wheelRows;
             options.selectOnNavigate = false;
             ListResult preview;
-            if(!ListBehavior::Apply(state.m_list, *frame.results, options, *action, preview))
+            if(!ListBehavior::Apply(state.m_list, preview, *frame.results, options, *action))
                 return false;
         }
     }
@@ -120,7 +120,7 @@ bool Builder::applyComboListInput(ComboFrame& frame, ComboResult& result){
                 continue;
             }
             ListResult preview;
-            if(!ListBehavior::Apply(state.m_list, *frame.results, options, *action, preview) || !comboMatches(frame))
+            if(!ListBehavior::Apply(state.m_list, preview, *frame.results, options, *action) || !comboMatches(frame))
                 return false;
             if(preview.activated){
                 if(!ComboBehavior::Commit(state, *frame.source, state.m_list.selectedKey()))

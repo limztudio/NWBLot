@@ -103,7 +103,7 @@ public:
         const Core::GpuTaskGraphCompiler compiler;
         Core::GpuTaskGraphCompileOptions options;
         options.allowMetadataOnlyTasks = true;
-        if(!compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena, options)){
+        if(!compiler.compile(analysis, assignments, compiledGraph, scratchArena, declarations, topology, options)){
             ADD_FAILURE() << "analysis status=" << static_cast<u32>(analysis.diagnostic().status) << ", queue status=" << static_cast<u32>(assignments.diagnostic().status);
             return false;
         }

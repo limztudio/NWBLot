@@ -52,9 +52,9 @@ public:
         RendererDeferredSystem& deferredSystem,
         RendererRayTracingState& rayTracingState,
         RendererAvboitSystem& avboitSystem,
-        DeferredFrameTargets& targets,
         const Snapshot& snapshot,
-        bool restoreBindlessSlots
+        bool restoreBindlessSlots,
+        DeferredFrameTargets& targets
     )noexcept;
 
 

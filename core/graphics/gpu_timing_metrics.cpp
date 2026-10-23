@@ -63,7 +63,7 @@ using TimestampEventVector = Vector<TimestampEvent, Alloc::ScratchArena>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<GpuPacketEnvelopeMetrics> TryAggregateGpuPacketEnvelopeMetrics(const GpuComparableTimestampRange* const packetEnvelopes, const usize packetEnvelopeCount, GpuQueuePacketEnvelopeMetricsVector& outQueueMetrics, Alloc::ScratchArena& scratchArena){
+Expected<GpuPacketEnvelopeMetrics> TryAggregateGpuPacketEnvelopeMetrics(const GpuComparableTimestampRange* const packetEnvelopes, const usize packetEnvelopeCount, Alloc::ScratchArena& scratchArena, GpuQueuePacketEnvelopeMetricsVector& outQueueMetrics){
     using namespace __hidden_gpu_timing_metrics;
 
     const auto reject = [&]()noexcept{

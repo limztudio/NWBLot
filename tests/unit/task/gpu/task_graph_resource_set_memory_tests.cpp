@@ -50,7 +50,7 @@ static constexpr Name s_ScratchOwner("core/task/gpu/declaration_scratch");
     return {};
 }
 
-[[nodiscard]] static bool FillResources(Core::GpuTaskGraph& graph, ResourceIds& members, const usize count){
+[[nodiscard]] static bool FillResources(Core::GpuTaskGraph& graph, const usize count, ResourceIds& members){
     members.clear();
     members.reserve(count);
     for(usize index = 0u; index < count; ++index){
@@ -91,7 +91,7 @@ TEST(ResourceSetMemory, SmallSetsAndBlockedMutationLeaveTheScratchOwnerUnallocat
         Core::Alloc::GlobalArena arena(Name("tests/resource_set_memory/small"));
         Core::GpuTaskGraph graph(arena);
         ResourceIds members(arena);
-        ASSERT_TRUE(FillResources(graph, members, 64u));
+        ASSERT_TRUE(FillResources(graph, 64u, members));
         Core::GpuGraphResourceSetId lastSet;
         for(const usize count : { 0u, 1u, 8u, 32u }){
             char text[32u] = {};
@@ -133,7 +133,7 @@ TEST(ResourceSetMemory, LargeSmallLargeScopesReclaimUsageAndReuseBackingAcrossGr
         for(usize cycle = 0u; cycle < 8u; ++cycle){
             if(cycle != 0u)
                 graph.reset();
-            ASSERT_TRUE(FillResources(graph, members, 4096u));
+            ASSERT_TRUE(FillResources(graph, 4096u, members));
             const ArenaMemoryStats heapBefore = HeapBackingMemoryStats();
             usize phase = 0u;
             for(const usize count : { 4096u, 33u, 4096u }){
@@ -187,7 +187,7 @@ TEST(ResourceSetMemory, LateRejectedMembersRetireTemporaryStorageBeforeTheNextDe
         Core::Alloc::GlobalArena arena(Name("tests/resource_set_memory/rejection"));
         Core::GpuTaskGraph graph(arena);
         ResourceIds members(arena);
-        ASSERT_TRUE(FillResources(graph, members, 1024u));
+        ASSERT_TRUE(FillResources(graph, 1024u, members));
         const Core::GpuGraphResourceId saved = members.back();
         const Core::GpuGraphResourceSetDesc rejected = SetDescription(Name("tests/resource_set_memory/rejected"), members, members.size());
         u64 warmReserved = 0u;

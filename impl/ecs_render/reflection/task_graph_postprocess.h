@@ -29,8 +29,8 @@ namespace RendererTaskGraphDetail{
     Core::Alloc::ScratchArena& scratchArena,
     const ReflectionFrameSnapshot& resources,
     const ReflectionGraphInputs& inputs,
-    ReflectionGraphResult& result,
-    Core::GpuTaskId dependency
+    Core::GpuTaskId dependency,
+    ReflectionGraphResult& result
 );
 
 

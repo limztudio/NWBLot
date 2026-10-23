@@ -162,7 +162,7 @@ bool BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
     for(const auto& [_, feature] : m_enabledExtensions.device){
         if(feature == DeviceExtensionFeature::DescriptorBuffer || (apiSupportsVulkan13 && feature == DeviceExtensionFeature::TextureCompressionAstcHdr))
             continue;
-        VulkanDetail::AppendOptionalDeviceFeature(pNext, supportedOptionalFeatures, feature, queriedOptionalFeatures);
+        VulkanDetail::AppendOptionalDeviceFeature(feature, pNext, supportedOptionalFeatures, queriedOptionalFeatures);
     }
 
     optionalPhysicalDeviceFeatures.pNext = pNext;
@@ -401,7 +401,7 @@ bool BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
         // ASTC HDR is owned by VkPhysicalDeviceVulkan13Features after promotion into Vulkan 1.3.
         if(apiSupportsVulkan13 && feature == DeviceExtensionFeature::TextureCompressionAstcHdr)
             continue;
-        VulkanDetail::AppendOptionalDeviceFeature(pNext, requestedOptionalFeatures, feature, enabledOptionalFeatures);
+        VulkanDetail::AppendOptionalDeviceFeature(feature, pNext, requestedOptionalFeatures, enabledOptionalFeatures);
     }
 
     if(!apiSupportsVulkan13 && dynamicRenderingEnabled)

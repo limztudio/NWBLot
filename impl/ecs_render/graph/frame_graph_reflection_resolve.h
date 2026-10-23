@@ -98,7 +98,7 @@ public:
 
 
 public:
-    [[nodiscard]] Expected<FrameGraphReflectionResolveResult> declare(const FrameGraphReflectionResolveInputs& inputs, RayTracingSceneGraphReads& sceneReads, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] Expected<FrameGraphReflectionResolveResult> declare(const FrameGraphReflectionResolveInputs& inputs, Core::Alloc::ScratchArena& scratchArena, RayTracingSceneGraphReads& sceneReads);
 
 
 private:

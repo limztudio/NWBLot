@@ -31,7 +31,6 @@ NWB_IMPL_BEGIN
 
 bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     Core::Alloc::ScratchArena& scratchArena,
-    DeferredFrameTargets& deferredTargets,
     const DeferredLightingGraphResources& deferredLightingResources,
     const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources,
     const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
@@ -52,6 +51,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     const Core::GpuGraphResourceSetId traceMaterialSampledTextureSet,
     const Core::GpuTaskId prefixTask,
     const Core::GpuExternalCompletionId laggedLightingHistoryWriterDrainCompletion,
+    DeferredFrameTargets& deferredTargets,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>& asyncTiming,
     Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming,
@@ -518,12 +518,12 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     const auto mDeferredShadowVisibilityTaskResult2 = m_raytracingSystem.declareShadowVisibilityTask(
         m_deferredLightingTaskGraph,
         desc,
-        deferredTargets,
         deferredLightingResources,
         m_shadowPreparationOutcome.ready,
         hardwareShadowSupported,
-        timingTicket,
-        graphOwnedAdaptivePlan
+        graphOwnedAdaptivePlan,
+        deferredTargets,
+        timingTicket
     );
     if(!mDeferredShadowVisibilityTaskResult2){
         m_deferredShadowVisibilityTask = {};

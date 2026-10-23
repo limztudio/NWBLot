@@ -42,7 +42,7 @@ GpuTaskScheduler::SubmissionAttemptExceptionFinalizer* GpuTaskScheduler::Submiss
 }
 
 
-GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::SubmissionAttemptExceptionFinalizer(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const GpuRecordedGraph& recordedGraph, GpuGraphSubmissionTransaction& transaction)noexcept
+GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::SubmissionAttemptExceptionFinalizer(GpuTaskGraph& graph, GpuGraphSubmissionTransaction& transaction, const GpuCompiledGraph& compiledGraph, const GpuRecordedGraph& recordedGraph)noexcept
     : m_graph(graph)
     , m_compiledGraph(compiledGraph)
     , m_recordedGraph(recordedGraph)
@@ -141,9 +141,9 @@ void GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::beginClosingWithinSu
 
 
 GpuTaskScheduler::SubmissionAttemptExceptionScope::SubmissionAttemptExceptionScope(
-    GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuRecordedGraph& recordedGraph,
+    GpuTaskGraph& graph,
     GpuGraphSubmissionTransaction& transaction,
     GpuSubmissionPacketId* const outFailedPacket
 )noexcept

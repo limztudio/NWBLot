@@ -42,7 +42,7 @@ struct ResolveStageDesc{
     bool applyStateSources;
     const CausticsResolveStageUses& stageUses;
     Core::GpuTaskId& outTask;
-    Expected<Core::GpuTaskId> (RendererRayTracingSystem::*declareTask)(Core::GpuTaskGraph&, const Core::GpuTaskDesc&, DeferredFrameTargets&, const bool&);
+    Expected<Core::GpuTaskId> (RendererRayTracingSystem::*declareTask)(Core::GpuTaskGraph&, const Core::GpuTaskDesc&, const bool&, DeferredFrameTargets&);
 };
 
 // One activity read of the previous stage and one activity write of this stage.
@@ -115,7 +115,7 @@ inline constexpr usize s_ActivityUsesPerStage = 2u;
         }
         if(!inputs.applyStateSourcesToPrepareOnly || stage.applyStateSources)
             stageDesc.setExternalStateSources(inputs.stateSources, inputs.stateSourceCount);
-        const auto stageTask = (m_raytracingSystem.*(stage.declareTask))(m_graph, stageDesc, (inputs.targets), (inputs.producerDispatched));
+        const auto stageTask = (m_raytracingSystem.*(stage.declareTask))(m_graph, stageDesc, (inputs.producerDispatched), (inputs.targets));
         if(!stageTask){
             stage.outTask = {};
             NWB_LOGGER_WARNING(stage.naming.warnText);
@@ -127,7 +127,7 @@ inline constexpr usize s_ActivityUsesPerStage = 2u;
 
     Core::GpuTaskDesc timingCloseDesc;
     timingCloseDesc.setIdentity(naming.timingClose.identity).setMarkerLabel(naming.timingClose.label).setScheduling(stageScheduling).setDependencies(&result.causticResolveUpsampleTask, 1u);
-    const auto resultCausticsTaskResult = m_raytracingSystem.declareCausticResolveTask(m_graph, timingCloseDesc, (inputs.timingTicket), (inputs.producerDispatched), (inputs.resolveTiming));
+    const auto resultCausticsTaskResult = m_raytracingSystem.declareCausticResolveTask(m_graph, timingCloseDesc, (inputs.producerDispatched), (inputs.timingTicket), (inputs.resolveTiming));
     if(!resultCausticsTaskResult){
         result.causticsTask = {};
         NWB_LOGGER_WARNING(naming.timingClose.warnText);

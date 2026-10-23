@@ -231,7 +231,6 @@ private:
     void resetLaggedLightingHistoryTracking()noexcept;
     [[nodiscard]] bool declareDeferredShadowPrepareTask(
         Core::Alloc::ScratchArena& scratchArena,
-        DeferredFrameTargets& deferredTargets,
         const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources,
         const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
         Core::GpuGraphResourceId currentBindlessSlots,
@@ -241,12 +240,11 @@ private:
         const Core::GpuGraphResourceId* softwareBvhBuildStateResources,
         usize softwareBvhBuildStateResourceCount,
         bool softwareTraceResourcesPrepared,
+        DeferredFrameTargets& deferredTargets,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
     [[nodiscard]] Expected<u64> declareDeferredGraphicsPrefixTasks(
         Core::Alloc::ScratchArena& scratchArena,
-        DeferredFrameTargets& deferredTargets,
-        ObjectGeometryCacheGraph& objectGeometry,
         Core::GpuTaskId shadowPrepareTask,
         const CsgFrameState& csgFrameState,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
@@ -259,18 +257,19 @@ private:
         const Core::GpuGraphResourceId* shadowTraceGeometryResources,
         usize shadowTraceGeometryResourceCount,
         Core::GpuGraphResourceSetId shadowTraceGeometrySet,
+        const bool& asyncPrefixTimingSpansOnePacket,
+        DeferredFrameTargets& deferredTargets,
+        ObjectGeometryCacheGraph& objectGeometry,
         Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
         Optional<Core::GpuTimingMeasure>& deferredClearTiming,
         GraphClearTimingRecordState& deferredClearTimingState,
         GraphClearTimingRecordState& csgIntervalClearTimingState,
         Optional<Core::GpuTimingMeasure>& opaqueRegularSharedComputeEmulationTiming,
         Optional<Core::GpuTimingMeasure>& opaqueCsgIntervalSampleComputeEmulationTiming,
-        Core::GpuTimingSubmissionTicket** timingTickets,
-        const bool& asyncPrefixTimingSpansOnePacket
+        Core::GpuTimingSubmissionTicket** timingTickets
     );
     [[nodiscard]] bool declareDeferredShadowVisibilityTask(
         Core::Alloc::ScratchArena& scratchArena,
-        DeferredFrameTargets& deferredTargets,
         const DeferredLightingGraphResources& deferredLightingResources,
         const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources,
         const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
@@ -291,6 +290,7 @@ private:
         Core::GpuGraphResourceSetId traceMaterialSampledTextureSet,
         Core::GpuTaskId prefixTask,
         Core::GpuExternalCompletionId laggedLightingHistoryWriterDrainCompletion,
+        DeferredFrameTargets& deferredTargets,
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>& asyncTiming,
         Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming,
@@ -303,7 +303,6 @@ private:
     [[nodiscard]] bool declareDeferredSoftwareCausticsTask(
         Core::Alloc::ScratchArena& scratchArena,
         bool hardwareCaustics,
-        DeferredFrameTargets& deferredTargets,
         const DeferredLightingGraphResources& deferredLightingResources,
         const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
         Core::GpuGraphResourceId worldPosition,
@@ -318,13 +317,13 @@ private:
         usize softwareTraceGeometryResourceCount,
         Core::GpuGraphResourceSetId softwareTraceGeometrySet,
         Core::GpuGraphResourceSetId traceMaterialSampledTextureSet,
+        DeferredFrameTargets& deferredTargets,
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>& causticPhotonTiming,
         Optional<Core::GpuTimingMeasure>& causticResolveTiming
     );
     [[nodiscard]] bool declareDeferredSurfelGiTask(
         Core::Alloc::ScratchArena& scratchArena,
-        DeferredFrameTargets& deferredTargets,
         const DeferredLightingGraphResources& deferredLightingResources,
         const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
         const RayTracingSurfelPersistentResourceSnapshot& rayTracingSurfelResources,
@@ -342,6 +341,7 @@ private:
         Core::GpuTaskId effectsTask,
         bool useLaggedLightingHistory,
         Core::GpuExternalCompletionId surfelCounterReadbackCompletion,
+        DeferredFrameTargets& deferredTargets,
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>& asyncTiming
     );
@@ -349,13 +349,18 @@ private:
     void buildDeferredLightingTaskGraph(
         Core::Alloc::ScratchArena& scratchArena,
         const ECSRenderDetail::RendererFrameGraphFeatures& features,
-        DeferredFrameTargets& deferredTargets,
         const CsgFrameState& csgFrameState,
         bool clearAvboitTargets,
         bool hasTransparentRenderers,
         bool hasOpaqueCsgFrameWork,
         f32 meshViewAspectRatio,
         const Core::AcquiredPresentationFrame& presentationFrame,
+        const bool& asyncPrefixTimingSpansOnePacket,
+        const Core::QueueSubmissionToken& surfelCounterReadbackCompletionToken,
+        const Core::QueueSubmissionToken& laggedLightingHistoryReadReadyToken,
+        const Core::QueueSubmissionToken& laggedLightingHistoryWriterDrainToken,
+        bool includeLaggedLightingHistoryCapture,
+        DeferredFrameTargets& deferredTargets,
         Core::GpuTimingFrameTransaction& frameTimingTransaction,
         Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
         Optional<Core::GpuTimingMeasure>& deferredClearTiming,
@@ -365,7 +370,6 @@ private:
         Optional<Core::GpuTimingMeasure>& opaqueCsgIntervalSampleComputeEmulationTiming,
         Core::GpuTimingSubmissionTicket& shadowPrepareTimingTicket,
         Core::GpuTimingSubmissionTicket** graphicsPrefixTimingTickets,
-        const bool& asyncPrefixTimingSpansOnePacket,
         Optional<Core::GpuTimingMeasure>& asyncFinalTiming,
         Core::GpuTimingSubmissionTicket& avboitPreTimingTicket,
         GraphClearTimingRecordState& avboitClearTimingState,
@@ -394,11 +398,7 @@ private:
         Optional<Core::GpuTimingMeasure>& causticResolveTiming,
         Core::GpuTimingSubmissionTicket& lightingTimingTicket,
         Core::GpuTimingSubmissionTicket& compositeTimingTicket,
-        Core::GpuTimingSubmissionTicket& presentTimingTicket,
-        const Core::QueueSubmissionToken& surfelCounterReadbackCompletionToken,
-        const Core::QueueSubmissionToken& laggedLightingHistoryReadReadyToken,
-        const Core::QueueSubmissionToken& laggedLightingHistoryWriterDrainToken,
-        bool includeLaggedLightingHistoryCapture
+        Core::GpuTimingSubmissionTicket& presentTimingTicket
     );
     void reportLaggedLightingTransition(LaggedLightingReport::Enum report, u64 targetGeneration);
 

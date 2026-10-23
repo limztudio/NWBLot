@@ -631,7 +631,7 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
             return MakeUnexpected(Failure{});
     }
 
-    const auto dependencyResult5 = DeclareReflectionPostprocessTasks(graph, graphics, scratchArena, resources, inputs, result, dependency);
+    const auto dependencyResult5 = DeclareReflectionPostprocessTasks(graph, graphics, scratchArena, resources, inputs, dependency, result);
     if(!dependencyResult5){
         dependency = {};
         return MakeUnexpected(Failure{});

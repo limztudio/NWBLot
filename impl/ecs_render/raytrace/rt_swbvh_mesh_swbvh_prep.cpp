@@ -32,8 +32,8 @@ bool RendererRayTracingSystem::recordPreparedMeshSwBvhBuildAfterGraphClears(Core
     Core::BufferHandle nodeBuffer = build.nodeBuffer;
     Core::BufferHandle parentBuffer = build.parentBuffer;
     const bool recorded = build.performRefit
-        ? refitMeshSwBvhPrepared(commandList, build.positionHeapHandle.slot(), build.triangleIndexHeapHandle.slot(), build.primitiveCount, nodeBuffer, parentBuffer, build.nodeHeapHandle, build.parentHeapHandle)
-        : buildMeshSwBvhPrepared(commandList, build.positionHeapHandle.slot(), build.triangleIndexHeapHandle.slot(), build.primitiveCount, build.aabbMin, build.aabbMax, nodeBuffer, parentBuffer, build.nodeHeapHandle, build.parentHeapHandle)
+        ? refitMeshSwBvhPrepared(commandList, build.positionHeapHandle.slot(), build.triangleIndexHeapHandle.slot(), build.primitiveCount, build.nodeHeapHandle, build.parentHeapHandle, nodeBuffer, parentBuffer)
+        : buildMeshSwBvhPrepared(commandList, build.positionHeapHandle.slot(), build.triangleIndexHeapHandle.slot(), build.primitiveCount, build.aabbMin, build.aabbMax, build.nodeHeapHandle, build.parentHeapHandle, nodeBuffer, parentBuffer)
     ;
     if(!recorded){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record frozen software BVH build for mesh '{}'"), StringConvert(build.meshName.resolvedText()));

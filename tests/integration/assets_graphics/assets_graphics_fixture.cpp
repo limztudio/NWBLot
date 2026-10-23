@@ -490,14 +490,14 @@ Expected<NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>> AssetsGrap
 
 
 bool AssetsGraphicsFixture::EncodeTestMeshletRefs(
-    NWB::Core::Assets::AssetVector<NWB::Impl::MeshletDesc>& meshlets,
     const NWB::Core::Assets::AssetVector<NWB::Impl::MeshletPositionStreamRef>& positionRefs,
     const NWB::Core::Assets::AssetVector<NWB::Impl::MeshletAttributeStreamRef>& attributeRefs,
+    const bool skinRequired,
+    NWB::Core::Assets::AssetVector<NWB::Impl::MeshletDesc>& meshlets,
     NWB::Core::Assets::AssetVector<u8>& outPositionRefDeltas,
-    NWB::Core::Assets::AssetVector<u8>& outAttributeRefDeltas,
-    const bool skinRequired
+    NWB::Core::Assets::AssetVector<u8>& outAttributeRefDeltas
 ){
-    return NWB::Impl::EncodeMeshletRefDeltas(meshlets, positionRefs, attributeRefs, outPositionRefDeltas, outAttributeRefDeltas, skinRequired, [](const usize, const TStringView)noexcept{ return false; }
+    return NWB::Impl::EncodeMeshletRefDeltas(positionRefs, attributeRefs, skinRequired, [](const usize, const TStringView)noexcept{ return false; }, meshlets, outPositionRefDeltas, outAttributeRefDeltas
     );
 }
 
@@ -533,7 +533,7 @@ Expected<AssetsGraphicsFixture::MaterialBinaryTypedLayoutOffsets> AssetsGraphics
     if(*fieldCount > (binary.size() - cursor) / NWB::Impl::MaterialBinaryPayload::s_TypedLayoutFieldBytes)
         return MakeUnexpected(Failure{});
     const usize fieldBytes = static_cast<usize>(*fieldCount) * NWB::Impl::MaterialBinaryPayload::s_TypedLayoutFieldBytes;
-    if(!BinaryDetail::SkipBytes(binary, cursor, fieldBytes))
+    if(!BinaryDetail::SkipBytes(binary, fieldBytes, cursor))
         return MakeUnexpected(Failure{});
 
     return MaterialBinaryTypedLayoutOffsets{ typedLayoutBegin, cursor };

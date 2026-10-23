@@ -32,14 +32,14 @@ namespace AssetsGraphicsCookDetail{
 
 
 [[nodiscard]] bool AppendPreparedShadersToManifest(
-    ShaderCook::CookArena& cookArena,
-    ShaderCook& shaderCook,
     const Path& cacheDirectory,
     AStringView configurationSafeName,
+    ShaderCook::CookArena& cookArena,
+    ScratchArena& scratchArena,
+    ShaderCook& shaderCook,
     PreparedShaderVector& preparedEntries,
     Core::Assets::AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
-    VirtualPathHashSet& inOutSeenVirtualPathHashes,
-    ScratchArena& scratchArena
+    VirtualPathHashSet& inOutSeenVirtualPathHashes
 );
 
 

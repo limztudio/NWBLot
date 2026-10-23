@@ -332,7 +332,7 @@ private:
         return true;
     }
 
-    bool readU32(NWB::Core::Alloc::ScratchArena& scratchArena, const AStringView name, u32& value, const u32 minimum, const u32 maximum){
+    bool readU32(NWB::Core::Alloc::ScratchArena& scratchArena, const AStringView name, const u32 minimum, const u32 maximum, u32& value){
         const auto text = ReadSmokeEnvironmentText(scratchArena, name);
         if(!text)
             return true;
@@ -412,11 +412,11 @@ private:
             || !readFlag(scratchArena, "NWB_REFLECTION_SMOKE_TEMPORAL", settings.temporalEnabled)
             || !readFlag(scratchArena, "NWB_REFLECTION_SMOKE_SPATIAL", settings.spatialFilterEnabled)
             || !readFlag(scratchArena, "NWB_REFLECTION_SMOKE_FINAL_STATE", m_freshFinalState)
-            || !readU32(scratchArena, "NWB_REFLECTION_SMOKE_HISTORY_SAMPLES", m_targetSamples, 1u, 256u)
-            || !readU32(scratchArena, "NWB_REFLECTION_SMOKE_POST_RESET_SAMPLES", m_postResetSamples, 1u, 256u)
-            || !readU32(scratchArena, "NWB_REFLECTION_SMOKE_SEED", m_requestedSeed, 0u, Limit<u32>::s_Max)
-            || !readU32(scratchArena, "NWB_REFLECTION_SMOKE_OPTICAL_QUERIES", settings.maxOpticalQueries, 1u, 16u)
-            || !readU32(scratchArena, "NWB_REFLECTION_SMOKE_SCREEN_STEPS", settings.screenMaxSteps, 1u, 256u)
+            || !readU32(scratchArena, "NWB_REFLECTION_SMOKE_HISTORY_SAMPLES", 1u, 256u, m_targetSamples)
+            || !readU32(scratchArena, "NWB_REFLECTION_SMOKE_POST_RESET_SAMPLES", 1u, 256u, m_postResetSamples)
+            || !readU32(scratchArena, "NWB_REFLECTION_SMOKE_SEED", 0u, Limit<u32>::s_Max, m_requestedSeed)
+            || !readU32(scratchArena, "NWB_REFLECTION_SMOKE_OPTICAL_QUERIES", 1u, 16u, settings.maxOpticalQueries)
+            || !readU32(scratchArena, "NWB_REFLECTION_SMOKE_SCREEN_STEPS", 1u, 256u, settings.screenMaxSteps)
         )
             return false;
         settings.temporalMaxSamples = m_targetSamples;

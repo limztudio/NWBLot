@@ -147,7 +147,7 @@ bool ListBehavior::Reconcile(ListState& state, const IListDataSource& source){
     return true;
 }
 
-bool ListBehavior::Apply(ListState& state, const IListDataSource& source, const ListOptions& options, const ControlAction& action, ListResult& result){
+bool ListBehavior::Apply(ListState& state, ListResult& result, const IListDataSource& source, const ListOptions& options, const ControlAction& action){
     using namespace __hidden_ui_list_behavior;
     const u64 inputGeneration = state.m_inputGeneration;
     const ControlToken token{ state.m_inputGeneration, state.m_sourceGeneration, state.m_sourceRevision };

@@ -147,7 +147,7 @@ TEST(GpuTaskGraph, RejectsNonRecordableTasksDuringNativeCompilation){
 
     {
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-        EXPECT_FALSE(compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena));
+        EXPECT_FALSE(compiler.compile(analysis, assignments, compiledGraph, scratchArena, declarations, topology));
         EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::MissingTaskRecordPayload);
         EXPECT_EQ(analysis.diagnostic().task, task);
         EXPECT_FALSE(analysis.valid());
@@ -160,7 +160,7 @@ TEST(GpuTaskGraph, RejectsNonRecordableTasksDuringNativeCompilation){
     metadataOptions.allowMetadataOnlyTasks = true;
     {
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-        EXPECT_TRUE(compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena, metadataOptions));
+        EXPECT_TRUE(compiler.compile(analysis, assignments, compiledGraph, scratchArena, declarations, topology, metadataOptions));
         EXPECT_TRUE(analysis.valid());
         EXPECT_TRUE(assignments.valid());
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
@@ -196,7 +196,7 @@ TEST(GpuTaskGraph, RegistersOnlyExactTypedPayloadLifecycleSignatures){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
     graph.reset();
 
     EXPECT_EQ(recordCount, 0u);
@@ -234,7 +234,7 @@ TEST(GpuTaskGraph, RejectsMetadataResourceUsesBeforeNativeRecording){
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
         EXPECT_TRUE(declarations.taskAt(task.index).hasPayload);
         EXPECT_TRUE(declarations.taskAt(task.index).hasRecordPayload);
-        EXPECT_FALSE(compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena));
+        EXPECT_FALSE(compiler.compile(analysis, assignments, compiledGraph, scratchArena, declarations, topology));
         EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::InvalidResourceUse);
         EXPECT_EQ(analysis.diagnostic().task, task);
         EXPECT_EQ(analysis.diagnostic().resource, resource);
@@ -248,7 +248,7 @@ TEST(GpuTaskGraph, RejectsMetadataResourceUsesBeforeNativeRecording){
 
         Graphics::GpuTaskGraphCompileOptions metadataOptions;
         metadataOptions.allowMetadataOnlyTasks = true;
-        EXPECT_TRUE(compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena, metadataOptions));
+        EXPECT_TRUE(compiler.compile(analysis, assignments, compiledGraph, scratchArena, declarations, topology, metadataOptions));
         EXPECT_TRUE(analysis.valid());
         EXPECT_TRUE(assignments.valid());
         {
@@ -288,7 +288,7 @@ TEST(GpuTaskGraph, RejectsMetadataResourceUsesBeforeNativeRecording){
         Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
         {
             const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-            EXPECT_TRUE(compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena));
+            EXPECT_TRUE(compiler.compile(analysis, assignments, compiledGraph, scratchArena, declarations, topology));
             EXPECT_TRUE(analysis.valid());
             EXPECT_TRUE(assignments.valid());
             const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
@@ -308,7 +308,7 @@ TEST(GpuTaskGraph, RejectsMetadataResourceUsesBeforeNativeRecording){
         metadataOptions.allowMetadataOnlyTasks = true;
         {
             const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-            EXPECT_FALSE(compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena, metadataOptions));
+            EXPECT_FALSE(compiler.compile(analysis, assignments, compiledGraph, scratchArena, declarations, topology, metadataOptions));
             EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::InvalidResourceUse);
             EXPECT_EQ(analysis.diagnostic().task, invalidTypedTask);
             EXPECT_EQ(analysis.diagnostic().resource, unusedTexture);

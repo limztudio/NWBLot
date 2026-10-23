@@ -71,7 +71,7 @@ TEST(GpuTaskGraph, RoutesOptInTimingFeedbackAcrossGraphicsAndComputeClasses){
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         ASSERT_TRUE(Analyze(operationScratchArena, graph, analysis));
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-        ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, topology, assignments));
+        ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology));
         const Graphics::GpuTaskQueueAssignment* assignment = assignments.find(task);
         ASSERT_NE(assignment, nullptr);
         const Graphics::GpuPhysicalQueueInfo& incumbentQueue = staticCompute ? queues[1u] : queues[0u];
@@ -101,7 +101,7 @@ TEST(GpuTaskGraph, RoutesOptInTimingFeedbackAcrossGraphicsAndComputeClasses){
         assignmentOptions.timingHistory = &timingSnapshot;
         assignmentOptions.timingFeedbackPolicy = timingPolicy;
         assignmentOptions.timingFrameIndex = 10u;
-        ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, topology, assignments, assignmentOptions));
+        ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, assignmentOptions));
         assignment = assignments.find(task);
         ASSERT_NE(assignment, nullptr);
         EXPECT_EQ(assignment->initialQueue, incumbentQueue.id);
@@ -121,7 +121,7 @@ TEST(GpuTaskGraph, RoutesOptInTimingFeedbackAcrossGraphicsAndComputeClasses){
         timingPolicy.minimumFramesBetweenSwitches = 10u;
         assignmentOptions.timingFeedbackPolicy = timingPolicy;
         assignmentOptions.timingFrameIndex = 12u;
-        ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, topology, assignments, assignmentOptions));
+        ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, assignmentOptions));
         assignment = assignments.find(task);
         ASSERT_NE(assignment, nullptr);
         EXPECT_EQ(assignment->initialQueue, incumbentQueue.id);
@@ -130,7 +130,7 @@ TEST(GpuTaskGraph, RoutesOptInTimingFeedbackAcrossGraphicsAndComputeClasses){
         EXPECT_TRUE(assignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::TimingFeedback);
 
         assignmentOptions.timingFrameIndex = 20u;
-        ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, topology, assignments, assignmentOptions));
+        ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, assignmentOptions));
         assignment = assignments.find(task);
         ASSERT_NE(assignment, nullptr);
         EXPECT_EQ(assignment->initialQueue, incumbentQueue.id);
@@ -192,7 +192,7 @@ TEST(GpuTaskGraph, CrossClassTimingCalibrationPreservesStaticBaselineAndHonorsHy
     assignmentOptions.timingHistory = &timingSnapshot;
     assignmentOptions.timingFeedbackPolicy = timingPolicy;
     assignmentOptions.timingFrameIndex = 0u;
-    ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, topology, assignments, assignmentOptions));
+    ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, assignmentOptions));
     const Graphics::GpuTaskQueueAssignment* assignment = assignments.find(task);
     ASSERT_NE(assignment, nullptr);
     EXPECT_EQ(assignment->initialQueue, queues[1u].id);
@@ -204,7 +204,7 @@ TEST(GpuTaskGraph, CrossClassTimingCalibrationPreservesStaticBaselineAndHonorsHy
     ASSERT_TRUE(timingHistory.recordSample(computeKey, queues[1u].id, 0.010, 1u));
     timingHistory.snapshot(timingSnapshot);
     assignmentOptions.timingFrameIndex = 1u;
-    ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, topology, assignments, assignmentOptions));
+    ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, assignmentOptions));
     assignment = assignments.find(task);
     ASSERT_NE(assignment, nullptr);
     EXPECT_EQ(assignment->initialQueue, queues[1u].id);
@@ -225,7 +225,7 @@ TEST(GpuTaskGraph, CrossClassTimingCalibrationPreservesStaticBaselineAndHonorsHy
     timingPolicy.minimumAbsoluteBenefitSeconds = 0.007;
     assignmentOptions.timingFeedbackPolicy = timingPolicy;
     assignmentOptions.timingFrameIndex = 20u;
-    ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, topology, assignments, assignmentOptions));
+    ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, assignmentOptions));
     assignment = assignments.find(task);
     ASSERT_NE(assignment, nullptr);
     EXPECT_EQ(assignment->queue, queues[1u].id);
@@ -235,14 +235,14 @@ TEST(GpuTaskGraph, CrossClassTimingCalibrationPreservesStaticBaselineAndHonorsHy
     timingPolicy.minimumFramesBetweenSwitches = 10u;
     assignmentOptions.timingFeedbackPolicy = timingPolicy;
     assignmentOptions.timingFrameIndex = 5u;
-    ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, topology, assignments, assignmentOptions));
+    ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, assignmentOptions));
     assignment = assignments.find(task);
     ASSERT_NE(assignment, nullptr);
     EXPECT_EQ(assignment->queue, queues[1u].id);
     EXPECT_FALSE(assignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::TimingFeedback);
 
     assignmentOptions.timingFrameIndex = 13u;
-    ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, topology, assignments, assignmentOptions));
+    ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, assignmentOptions));
     assignment = assignments.find(task);
     ASSERT_NE(assignment, nullptr);
     EXPECT_EQ(assignment->initialQueue, queues[1u].id);
@@ -309,7 +309,7 @@ TEST(GpuTaskGraph, RejectsCrossClassTimingRoutesWithoutEveryRequiredOptIn){
         assignmentOptions.timingFeedbackPolicy = timingPolicy;
         assignmentOptions.timingFrameIndex = 20u;
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-        ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, topology, assignments, assignmentOptions));
+        ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, assignmentOptions));
         const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(task);
         ASSERT_NE(assignment, nullptr);
         EXPECT_EQ(assignment->initialQueue, queues[incumbentQueueIndex].id);
@@ -319,7 +319,7 @@ TEST(GpuTaskGraph, RejectsCrossClassTimingRoutesWithoutEveryRequiredOptIn){
         // A rejected policy must also drop the earlier valid result.
         timingPolicy.minimumRelativeBenefit = 2.0;
         assignmentOptions.timingFeedbackPolicy = timingPolicy;
-        EXPECT_FALSE(Assign(operationScratchArena, graph, analysis, topology, assignments, assignmentOptions));
+        EXPECT_FALSE(Assign(assignments, operationScratchArena, graph, analysis, topology, assignmentOptions));
         EXPECT_EQ(assignments.diagnostic().status, Graphics::GpuTaskGraphQueueAssignmentStatus::InvalidTimingFeedback);
         EXPECT_FALSE(assignments.valid());
         {
@@ -396,7 +396,7 @@ TEST(GpuTaskGraph, RanksEqualTimingRoutesDeterministicallyAndKeepsDwellAndFamily
     assignmentOptions.timingFrameIndex = 12u;
 
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, topology, assignments, assignmentOptions));
+    ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, assignmentOptions));
     const Graphics::GpuTaskQueueAssignment* const preloadAssignment = assignments.find(preload);
     const Graphics::GpuTaskQueueAssignment* const targetAssignment = assignments.find(target);
     ASSERT_NE(preloadAssignment, nullptr);
@@ -417,7 +417,7 @@ TEST(GpuTaskGraph, RanksEqualTimingRoutesDeterministicallyAndKeepsDwellAndFamily
     timingPolicy.minimumFramesBetweenSwitches = 30u;
     assignmentOptions.timingFeedbackPolicy = timingPolicy;
     assignmentOptions.timingFrameIndex = 14u;
-    ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, topology, assignments, assignmentOptions));
+    ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, assignmentOptions));
     const Graphics::GpuTaskQueueAssignment* const dwellAssignment = assignments.find(target);
     ASSERT_NE(dwellAssignment, nullptr);
     EXPECT_EQ(dwellAssignment->queue, queues[0u].id);
@@ -430,7 +430,7 @@ TEST(GpuTaskGraph, RanksEqualTimingRoutesDeterministicallyAndKeepsDwellAndFamily
     const Graphics::GpuPhysicalQueueTopology crossFamilyTopology{ .queues = crossFamilyQueues, .queueCount = LengthOf(crossFamilyQueues), };
     timingPolicy.minimumFramesBetweenSwitches = 0u;
     assignmentOptions.timingFeedbackPolicy = timingPolicy;
-    ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, crossFamilyTopology, assignments, assignmentOptions));
+    ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, crossFamilyTopology, assignmentOptions));
     const Graphics::GpuTaskQueueAssignment* const crossFamilyAssignment = assignments.find(target);
     ASSERT_NE(crossFamilyAssignment, nullptr);
     EXPECT_EQ(crossFamilyAssignment->queue, queues[0u].id);
@@ -506,7 +506,7 @@ TEST(GpuTaskGraph, RoutesOptedInCrossFamilyTimingFeedbackWithExclusiveOwnershipH
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(operationScratchArena, graph, analysis, topology, assignments, compiledGraph, compileOptions));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology, compileOptions));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
 

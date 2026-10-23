@@ -702,13 +702,13 @@ private:
     [[nodiscard]] Expected<u32> appendShaderRecord(
         AStringView exportName,
         ShaderTableRecordKind::Enum expectedKind,
+        TStringView operationName,
+        TStringView recordName,
+        TStringView exportKind,
         GraphicsVector<u32>& groupIndices,
         BufferHandle& buffer,
         u64& offset,
-        u32& count,
-        TStringView operationName,
-        TStringView recordName,
-        TStringView exportKind
+        u32& count
     );
 
 

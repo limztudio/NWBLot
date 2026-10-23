@@ -85,7 +85,7 @@ TEST(FontAtlasPacking, TightRectanglesAndAllChannelCountsPreserveGuardedPixels){
             glyphs.push_back(Move(glyph));
         }
         FontAtlasPayload payload(arena);
-        ASSERT_TRUE(PackGlyphs(options, glyphs, payload, scratch));
+        ASSERT_TRUE(PackGlyphs(options, glyphs, scratch, payload));
         ASSERT_EQ(payload.groups.size(), 2u);
         EXPECT_EQ(payload.groups[0u].channelCount, 4u);
         EXPECT_EQ(payload.groups[1u].channelCount, tailChannels);
@@ -132,7 +132,7 @@ TEST(FontAtlasPacking, RejectsCapacityWithoutDroppingGlyphs){
         glyphs.push_back(Move(glyph));
     }
     FontAtlasPayload payload(arena);
-    EXPECT_FALSE(PackGlyphs(options, glyphs, payload, scratch));
+    EXPECT_FALSE(PackGlyphs(options, glyphs, scratch, payload));
 }
 
 TEST(FontAtlasPositioning, LegacyPairsStayBoundedAndSorted){

@@ -60,13 +60,13 @@ bool BuildAssets(const AssetBuildOptions& options){
 
     auto& nwbFiles = *discoveredFiles;
 
-    if((options.useExplicitInputs || !options.inputs.empty()) && !SelectBuildInputs(options, resolvedPaths, nwbFiles, scratchArena))
+    if((options.useExplicitInputs || !options.inputs.empty()) && !SelectBuildInputs(options, resolvedPaths, scratchArena, nwbFiles))
         return false;
 
     Assets::ParsedAssetMetadata parsedMetadata(arena);
     if(!Assets::RegisterAutoCollectedCookEntryTypes(parsedMetadata.entryRegistry, scratchArena))
         return false;
-    if(!Assets::ParseAssetMetadata(arena, nwbFiles, parsedMetadata, options.services.cpuScheduler, scratchArena))
+    if(!Assets::ParseAssetMetadata(arena, nwbFiles, options.services.cpuScheduler, scratchArena, parsedMetadata))
         return false;
 
     Assets::CookString configurationSafeName = BuildCanonicalSafeCacheName(arena, options.configuration.view());
@@ -93,7 +93,7 @@ bool BuildAssets(const AssetBuildOptions& options){
         if(!manifestCooker(manifest, seenVirtualPathHashes, scratchArena))
             return false;
     }
-    if(!Assets::AssetsVolumeCookDetail::BuildRegistryObjectManifestEntries(arena, options.services.cpuScheduler, resolvedPaths, configurationSafeName, parsedMetadata, manifest, seenVirtualPathHashes, scratchArena))
+    if(!Assets::AssetsVolumeCookDetail::BuildRegistryObjectManifestEntries(arena, options.services.cpuScheduler, resolvedPaths, configurationSafeName, scratchArena, parsedMetadata, manifest, seenVirtualPathHashes))
         return false;
 
     if(!Assets::BuiltAssetDetail::WriteBuiltAssets(resolvedPaths.outputDirectory, manifest, scratchArena))

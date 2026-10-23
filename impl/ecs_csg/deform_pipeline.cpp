@@ -77,7 +77,7 @@ Expected<CsgDeformStats, CsgDeformFailure> CsgDeformPipeline::RebuildSequentialC
         const CsgDeformCutDesc& cut = cuts[cutIndex];
         if(!cut.active)
             continue;
-        const auto clipped = CsgDeformWallBuilder::ClipShell(scratchArena, cut.shape, epsilon, outVertices, outTriangles, scratchKept, scratchDistances);
+        const auto clipped = CsgDeformWallBuilder::ClipShell(scratchArena, cut.shape, epsilon, scratchKept, scratchDistances, outVertices, outTriangles);
         if(!clipped){
             return MakeUnexpected(CsgDeformFailure{ clipped.error(), stats });
         }
@@ -87,7 +87,7 @@ Expected<CsgDeformStats, CsgDeformFailure> CsgDeformPipeline::RebuildSequentialC
             return MakeUnexpected(CsgDeformFailure{ reason, stats });
         }
         if(options.fillCaps){
-            const auto cutCaps = CsgDeformCapBuilder::FillCutCaps(scratchArena, outVertices, outTriangles, scratchEdges);
+            const auto cutCaps = CsgDeformCapBuilder::FillCutCaps(scratchArena, scratchEdges, outVertices, outTriangles);
             if(!cutCaps){
                 return MakeUnexpected(CsgDeformFailure{ CsgDeformViabilityReason::CapLoopFailed, stats });
             }

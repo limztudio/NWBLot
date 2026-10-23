@@ -36,7 +36,7 @@ namespace __hidden_model_system{
 
 using AttachmentJointQuery = ModelAttachmentJointQuery;
 
-static void ResolveAttachmentJointQueries(Core::ECS::World& world, Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena>& jointPalette, const NotNull<AttachmentJointQuery*> queries, const usize queryCount, const usize* const parentOrder){
+static void ResolveAttachmentJointQueries(Core::ECS::World& world, const usize queryCount, const usize* const parentOrder, Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena>& jointPalette, const NotNull<AttachmentJointQuery*> queries){
     const auto queryAt = [&](const usize index)noexcept -> AttachmentJointQuery&{
         return queries.get()[parentOrder ? parentOrder[index] : index];
     };
@@ -315,7 +315,7 @@ bool ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const M
     if(const auto decomposition = MatrixDecompose(MatrixMultiply(__hidden_model_system::LoadOwnerWorldMatrix(m_world, owner), LoadFloat(object.transform))))
         __hidden_model_system::StoreDecomposedTransform(*decomposition, transform);
     if(m_applyRenderer)
-        m_applyRenderer(m_world, m_arena, entity, owner, object.material);
+        m_applyRenderer(m_world, m_arena, owner, object.material, entity);
 
     auto& mesh = entity.addComponent<MeshComponent>();
     mesh.mesh = object.mesh;
@@ -376,7 +376,7 @@ bool ModelSystem::spawnSkinnedMeshObject(const Core::ECS::EntityID owner, const 
     if(const auto decomposition = MatrixDecompose(MatrixMultiply(__hidden_model_system::LoadOwnerWorldMatrix(m_world, owner), LoadFloat(object.transform))))
         __hidden_model_system::StoreDecomposedTransform(*decomposition, transform);
     if(m_applyRenderer)
-        m_applyRenderer(m_world, m_arena, entity, owner, object.material);
+        m_applyRenderer(m_world, m_arena, owner, object.material, entity);
 
     auto& binding = entity.addComponent<SkinnedMeshBindingComponent>();
     binding.skin = object.skin;
@@ -433,7 +433,7 @@ void ModelSystem::updateStaticMeshAttachments(){
         );
         const NotNull<ModelAttachmentJointQuery*> queries(jointQueries.data());
         if(sharedParent){
-            __hidden_model_system::ResolveAttachmentJointQueries(m_world, m_scratchJoints, queries, queryCount, nullptr);
+            __hidden_model_system::ResolveAttachmentJointQueries(m_world, queryCount, nullptr, m_scratchJoints, queries);
         }
         else{
             Vector<usize, Core::Alloc::GlobalArena>& parentOrder = m_attachmentParentOrder;
@@ -444,7 +444,7 @@ void ModelSystem::updateStaticMeshAttachments(){
             Sort(parentOrder.begin(), parentOrder.end(), [&](const usize lhs, const usize rhs)noexcept{
                 return jointQueries[lhs].parentEntity < jointQueries[rhs].parentEntity;
             });
-            __hidden_model_system::ResolveAttachmentJointQueries(m_world, m_scratchJoints, queries, queryCount, parentOrder.data());
+            __hidden_model_system::ResolveAttachmentJointQueries(m_world, queryCount, parentOrder.data(), m_scratchJoints, queries);
         }
     }
 

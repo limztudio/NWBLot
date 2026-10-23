@@ -103,7 +103,7 @@ public:
     [[nodiscard]] static Expected<u32, MetadataU32ValueFailure::Enum> ValidateMetadataU32Value(const Core::Metascript::Value& value)noexcept;
     static void LogMetadataU32ValueFailure(const Path& nwbFilePath, const TStringView metaKind, const AStringView label, const MetadataU32ValueFailure::Enum failure);
     template<typename IndexVectorT>
-    static bool FillMetadataIndexRecursive(const Path& nwbFilePath, const Core::Metascript::Value& value, const TStringView metaKind, const AStringView label, IndexVectorT& outIndices, Core::Alloc::ScratchArena& scratchArena);
+    static bool FillMetadataIndexRecursive(const Path& nwbFilePath, const Core::Metascript::Value& value, const TStringView metaKind, const AStringView label, Core::Alloc::ScratchArena& scratchArena, IndexVectorT& outIndices);
     static Expected<Core::Assets::AssetVector<u32>> ParseMetadataIndexField(const Path& nwbFilePath, const Core::Metascript::Value& asset, const TStringView metaKind, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
 
 
@@ -182,7 +182,7 @@ Expected<ScratchVector<ElementT>> MeshCookMetadata::ParseMetadataFloatListField(
 
 
 template<typename IndexVectorT>
-bool MeshCookMetadata::FillMetadataIndexRecursive(const Path& nwbFilePath, const Core::Metascript::Value& value, const TStringView metaKind, const AStringView label, IndexVectorT& outIndices, Core::Alloc::ScratchArena& scratchArena){
+bool MeshCookMetadata::FillMetadataIndexRecursive(const Path& nwbFilePath, const Core::Metascript::Value& value, const TStringView metaKind, const AStringView label, Core::Alloc::ScratchArena& scratchArena, IndexVectorT& outIndices){
     struct IndexBreadcrumb{
         const IndexBreadcrumb* parent = nullptr;
         usize index = 0u;
@@ -251,7 +251,7 @@ inline Expected<Core::Assets::AssetVector<u32>> MeshCookMetadata::ParseMetadataI
     }
 
     indices.reserve(*indexCount);
-    if(!FillMetadataIndexRecursive(nwbFilePath, **field, metaKind, MeshCookMetadata::s_IndicesFieldNameView, indices, scratchArena)){
+    if(!FillMetadataIndexRecursive(nwbFilePath, **field, metaKind, MeshCookMetadata::s_IndicesFieldNameView, scratchArena, indices)){
         return MakeUnexpected(Failure{});
     }
     NWB_ASSERT(indices.size() == *indexCount);

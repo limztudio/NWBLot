@@ -301,7 +301,7 @@ TEST(GpuTaskUseIndex, CompiledResourceSetExpansionPreservesEveryInitialByteRange
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
     const Graphics::GpuCompiledGraph::ReadView plan(compiledGraph);
     const auto view = plan.findTask(task);
     ASSERT_NE(view.plan, nullptr);
@@ -354,7 +354,7 @@ TEST(GpuTaskUseIndex, RepeatedAccelerationStructureUsesKeepOneInitialTransitionA
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
     const Graphics::GpuCompiledGraph::ReadView plan(compiledGraph);
     const auto view = plan.findTask(task);
     ASSERT_NE(view.plan, nullptr);

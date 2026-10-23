@@ -126,17 +126,17 @@ bool ShaderTable::setRayGenerationShader(const AStringView exportName){
 
 Expected<u32> ShaderTable::addMissShader(const AStringView exportName){
     ScopedLock lock(m_mutex);
-    return appendShaderRecord(exportName, ShaderTableRecordKind::Miss, m_missGroupIndices, m_missBuffer, m_missOffset, m_missCount, NWB_TEXT("add miss shader"), NWB_TEXT("miss"), NWB_TEXT("miss shader"));
+    return appendShaderRecord(exportName, ShaderTableRecordKind::Miss, NWB_TEXT("add miss shader"), NWB_TEXT("miss"), NWB_TEXT("miss shader"), m_missGroupIndices, m_missBuffer, m_missOffset, m_missCount);
 }
 
 Expected<u32> ShaderTable::addHitGroup(const AStringView exportName){
     ScopedLock lock(m_mutex);
-    return appendShaderRecord(exportName, ShaderTableRecordKind::HitGroup, m_hitGroupIndices, m_hitBuffer, m_hitOffset, m_hitCount, NWB_TEXT("add hit group"), NWB_TEXT("hit"), NWB_TEXT("hit group"));
+    return appendShaderRecord(exportName, ShaderTableRecordKind::HitGroup, NWB_TEXT("add hit group"), NWB_TEXT("hit"), NWB_TEXT("hit group"), m_hitGroupIndices, m_hitBuffer, m_hitOffset, m_hitCount);
 }
 
 Expected<u32> ShaderTable::addCallableShader(const AStringView exportName){
     ScopedLock lock(m_mutex);
-    return appendShaderRecord(exportName, ShaderTableRecordKind::Callable, m_callableGroupIndices, m_callableBuffer, m_callableOffset, m_callableCount, NWB_TEXT("add callable shader"), NWB_TEXT("callable"), NWB_TEXT("callable shader"));
+    return appendShaderRecord(exportName, ShaderTableRecordKind::Callable, NWB_TEXT("add callable shader"), NWB_TEXT("callable"), NWB_TEXT("callable shader"), m_callableGroupIndices, m_callableBuffer, m_callableOffset, m_callableCount);
 }
 
 void ShaderTable::clearMissShaders()noexcept{
@@ -309,13 +309,13 @@ Expected<ShaderTable::ShaderTableAllocation> ShaderTable::allocateSBTBuffer(cons
 Expected<u32> ShaderTable::appendShaderRecord(
     const AStringView exportName,
     const ShaderTableRecordKind::Enum expectedKind,
+    TStringView operationName,
+    TStringView recordName,
+    TStringView exportKind,
     GraphicsVector<u32>& groupIndices,
     BufferHandle& buffer,
     u64& offset,
-    u32& count,
-    TStringView operationName,
-    TStringView recordName,
-    TStringView exportKind
+    u32& count
 ){
     if(count == Limit<u32>::s_Max){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader table record count exceeds u32 range"), operationName);

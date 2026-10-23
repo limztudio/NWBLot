@@ -128,7 +128,7 @@ TEST(GpuTaskGraph, NormalExecutionPreludeGatesIndependentBranchesWithoutOrdering
     Graphics::GpuTaskGraphCompileOptions options;
     options.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
     options.packetTimingEnvelope = { .firstTask = prelude, .lastTask = terminal };
-    ASSERT_TRUE(Compile(operationScratchArena, graph, analysis, topology, assignments, compiledGraph, options));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology, options));
     const Graphics::GpuCompiledGraph::ReadView plan(compiledGraph);
     ASSERT_TRUE(plan.valid());
     const Graphics::GpuSubmissionPacketId preludePacket = plan.packetForTask(prelude);

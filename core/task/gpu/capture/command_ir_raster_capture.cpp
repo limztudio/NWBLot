@@ -214,13 +214,13 @@ bool GpuCommandIrCapture::captureSetGraphicsState(const GpuTaskId task, const Gp
 }
 
 bool GpuCommandIrCapture::captureBindGraphicsHeap(
+    GpuDescriptorHeap& heap,
+    GraphicsArena& ownerArena,
     const GpuTaskId task,
     const GpuSubmissionPacketId packet,
     const GpuPhysicalQueueId queue,
     const GpuGraphPipelineId pipeline,
     const GraphicsPipelineHandle& pipelineOwner,
-    GpuDescriptorHeap& heap,
-    GraphicsArena& ownerArena,
     const GpuCommandIrOwnerAnchor& descriptorOwner
 ){
     if(!pipeline.valid() || pipeline.generation != task.generation || !pipelineOwner || !descriptorOwner.valid() || !heap.isInitialized())

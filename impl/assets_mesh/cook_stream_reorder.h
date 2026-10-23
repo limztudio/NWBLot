@@ -63,9 +63,9 @@ public:
     template<typename CookEntryT>
     static void PrepareCommonMeshStreamReorder(const CookEntryT& entry, MeshCookCommonStreamReorder& reorder);
     template<typename CookEntryT>
-    [[nodiscard]] static bool RemapMeshletAttributeRefs(CookEntryT& entry, const TStringView metaKind, MeshCookCommonStreamReorder& reorder);
+    [[nodiscard]] static bool RemapMeshletAttributeRefs(const TStringView metaKind, CookEntryT& entry, MeshCookCommonStreamReorder& reorder);
     template<typename CookEntryT, typename SkinRemapperT>
-    [[nodiscard]] static bool RemapMeshletPositionRefs(CookEntryT& entry, const TStringView metaKind, MeshCookCommonStreamReorder& reorder, SkinRemapperT remapSkin);
+    [[nodiscard]] static bool RemapMeshletPositionRefs(const TStringView metaKind, SkinRemapperT remapSkin, CookEntryT& entry, MeshCookCommonStreamReorder& reorder);
     template<typename CookEntryT>
     static void CommitCommonMeshStreamReorder(CookEntryT& entry, MeshCookCommonStreamReorder& reorder)noexcept(
         noexcept(entry.positions = Move(reorder.positions))
@@ -134,7 +134,7 @@ void MeshCookStreamReorder::PrepareCommonMeshStreamReorder(const CookEntryT& ent
 
 
 template<typename CookEntryT>
-bool MeshCookStreamReorder::RemapMeshletAttributeRefs(CookEntryT& entry, const TStringView metaKind, MeshCookCommonStreamReorder& reorder){
+bool MeshCookStreamReorder::RemapMeshletAttributeRefs(const TStringView metaKind, CookEntryT& entry, MeshCookCommonStreamReorder& reorder){
     for(const MeshletDesc& meshlet : entry.meshlets){
         for(u32 localAttributeIndex = 0u; localAttributeIndex < MeshletAttributeCount(meshlet); ++localAttributeIndex){
             MeshletAttributeStreamRef& ref = entry.meshletAttributeStreamRefs[meshlet.attributeRefOffset + localAttributeIndex];
@@ -154,7 +154,7 @@ bool MeshCookStreamReorder::RemapMeshletAttributeRefs(CookEntryT& entry, const T
 
 
 template<typename CookEntryT, typename SkinRemapperT>
-bool MeshCookStreamReorder::RemapMeshletPositionRefs(CookEntryT& entry, const TStringView metaKind, MeshCookCommonStreamReorder& reorder, SkinRemapperT remapSkin){
+bool MeshCookStreamReorder::RemapMeshletPositionRefs(const TStringView metaKind, SkinRemapperT remapSkin, CookEntryT& entry, MeshCookCommonStreamReorder& reorder){
     for(const MeshletDesc& meshlet : entry.meshlets){
         for(u32 localPositionIndex = 0u; localPositionIndex < MeshletPositionCount(meshlet); ++localPositionIndex){
             MeshletPositionStreamRef& ref = entry.meshletPositionStreamRefs[meshlet.positionRefOffset + localPositionIndex];

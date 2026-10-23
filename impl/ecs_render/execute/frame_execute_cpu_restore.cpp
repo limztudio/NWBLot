@@ -59,9 +59,9 @@ void FrameExecuteCpuRestore::RestorePostGbufferPacketCpuState(
     RendererDeferredSystem& deferredSystem,
     RendererRayTracingState& rayTracingState,
     RendererAvboitSystem& avboitSystem,
-    DeferredFrameTargets& targets,
     const Snapshot& snapshot,
-    const bool restoreBindlessSlots
+    const bool restoreBindlessSlots,
+    DeferredFrameTargets& targets
 )noexcept{
     if(restoreBindlessSlots)
         targets.bindless.slotsUploaded = snapshot.deferredBindlessSlotsUploaded;

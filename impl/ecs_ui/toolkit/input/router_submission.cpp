@@ -64,7 +64,7 @@ void InputRouter::releaseCommand(const InputEvent& event, const CommandSource& s
     if(source.controlOwner.host.valid()){
         if(currentControlCommandOwner(source)){
             const HitTarget* host = findTarget(source.controlOwner.host, source.controlOwner.declarationGeneration);
-            appendControlAction(*host, *focused, ControlActionKind::Submit, 0.0, result);
+            appendControlAction(result, *host, *focused, ControlActionKind::Submit, 0.0);
         }
     }
     else if(focused->activatable)

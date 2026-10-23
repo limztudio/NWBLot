@@ -18,23 +18,23 @@ NWB_CORE_BEGIN
 
 
 bool GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
-    GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuRecordedGraph& recordedGraph,
     const GpuSubmissionPacketRange& range,
     const GpuTaskGraphTaskTimingTicket* const taskTimingTickets,
     const usize taskTimingTicketCount,
-    GpuGraphSubmissionTransaction& transaction,
-    Alloc::ScratchArena& scratchArena,
-    GpuSubmissionPacketId* const outFailedPacket,
     const GpuTaskGraphTaskAcceptedCallback* const taskAcceptedCallbacks,
     const usize taskAcceptedCallbackCount,
     const GpuTaskGraphTaskSubmissionHook* const taskSubmissionHooks,
-    const usize taskSubmissionHookCount
+    const usize taskSubmissionHookCount,
+    Alloc::ScratchArena& scratchArena,
+    GpuTaskGraph& graph,
+    GpuGraphSubmissionTransaction& transaction,
+    GpuSubmissionPacketId* const outFailedPacket
 )const{
     if(outFailedPacket)
         *outFailedPacket = {};
-    SubmissionAttemptExceptionFinalizer exceptionFinalizer(graph, compiledGraph, recordedGraph, transaction);
+    SubmissionAttemptExceptionFinalizer exceptionFinalizer(graph, transaction, compiledGraph, recordedGraph);
     GpuRecordedGraph::ArtifactOperation artifactOperation(recordedGraph, GpuRecordedGraph::ArtifactOperationMode::Read);
     if(!artifactOperation.valid()){
         return false;
@@ -48,7 +48,7 @@ bool GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
     if(!declarationAccess.valid())
         return false;
 
-    SubmissionAttemptExceptionScope preflightExceptionScope(graph, compiledGraph, recordedGraph, transaction, outFailedPacket);
+    SubmissionAttemptExceptionScope preflightExceptionScope(compiledGraph, recordedGraph, graph, transaction, outFailedPacket);
     if(planAccess.validPacketRange(range))
         preflightExceptionScope.setFailedPacket(range.first);
 
@@ -98,9 +98,9 @@ bool GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
         if(!packetView.valid())
             return false;
         const QueueSubmissionPreSubmitHook* const preSubmitHook = bindings.collectPacket(packet, resolvedTimingTickets);
-        SubmissionAttemptExceptionScope packetExceptionScope(graph, compiledGraph, recordedGraph, transaction, outFailedPacket);
+        SubmissionAttemptExceptionScope packetExceptionScope(compiledGraph, recordedGraph, graph, transaction, outFailedPacket);
         packetExceptionScope.setFailedPacket(packet);
-        if(!submitPacketWithinSubmissionOperation(graph, compiledGraph, planAccess, recordedGraph, artifactOperation, packet, transaction, scratchArena, resolvedTimingTickets.data(), resolvedTimingTickets.size(), preSubmitHook, acceptedCallbacks)){
+        if(!submitPacketWithinSubmissionOperation(compiledGraph, planAccess, recordedGraph, artifactOperation, packet, resolvedTimingTickets.size(), preSubmitHook, acceptedCallbacks, scratchArena, resolvedTimingTickets.data(), graph, transaction)){
             if(outFailedPacket)
                 *outFailedPacket = packet;
             return false;

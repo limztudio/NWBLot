@@ -106,13 +106,13 @@ void GpuTaskGraph::TaskPayloadDestroyScope::activateWithinLock()noexcept{
 Expected<GpuTaskId> GpuTaskGraph::appendTaskWithinMutation(
     const GpuTaskDesc& desc,
     const GpuTaskCommandRequirements& commands,
-    void* const payload,
     const GpuTaskRecordThunk recordPayload,
     const GpuTaskAcceptedThunk acceptPayload,
     const GpuTaskDiscardedThunk discardPayload,
     const GpuTaskPayloadDestroyThunk destroyPayload,
     const usize payloadObjectSize,
-    const DeclarationMutationScope& mutationAccess
+    const DeclarationMutationScope& mutationAccess,
+    void* const payload
 ){
     if(!mutationAccess.validFor(*this))
         return MakeUnexpected(Failure{});

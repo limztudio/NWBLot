@@ -40,7 +40,7 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SkinAssetCodecAutoRegistrar, SkinAssetCodec);
 
 bool Skin::loadBinary(const Core::Assets::AssetBytes& binary){
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SkinBinaryPayload::HeaderBinary>(binary, cursor, SkinBinaryPayload::s_SkinMagic, SkinBinaryPayload::s_SkinLoadBinaryContext, SkinBinaryPayload::s_SkinAssetKindLabel);
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SkinBinaryPayload::HeaderBinary>(binary, SkinBinaryPayload::s_SkinMagic, SkinBinaryPayload::s_SkinLoadBinaryContext, SkinBinaryPayload::s_SkinAssetKindLabel, cursor);
     if(!headerResult)
         return false;
     const SkinBinaryPayload::HeaderBinary& header = *headerResult;
@@ -53,9 +53,9 @@ bool Skin::loadBinary(const Core::Assets::AssetBytes& binary){
     candidate.m_mesh.virtualPath = Name(header.meshNameHash);
     candidate.m_skeleton.virtualPath = Name(header.skeletonNameHash);
 
-    if(!Core::Assets::ReadVectorPayload(binary, cursor, header.influenceCount, candidate.m_influences, SkinBinaryPayload::s_SkinLoadBinaryContext, SkinBinaryPayload::s_InfluencesPayloadLabel))
+    if(!Core::Assets::ReadVectorPayload(binary, header.influenceCount, SkinBinaryPayload::s_SkinLoadBinaryContext, SkinBinaryPayload::s_InfluencesPayloadLabel, cursor, candidate.m_influences))
         return false;
-    if(!Core::Assets::ReadVectorPayload(binary, cursor, header.inverseBindMatrixCount, candidate.m_inverseBindMatrices, SkinBinaryPayload::s_SkinLoadBinaryContext, SkinBinaryPayload::s_InverseBindMatricesPayloadLabel))
+    if(!Core::Assets::ReadVectorPayload(binary, header.inverseBindMatrixCount, SkinBinaryPayload::s_SkinLoadBinaryContext, SkinBinaryPayload::s_InverseBindMatricesPayloadLabel, cursor, candidate.m_inverseBindMatrices))
         return false;
 
     if(!Core::Assets::ReadCompletePayload(binary, cursor, SkinBinaryPayload::s_SkinLoadBinaryContext)|| !candidate.validatePayload())

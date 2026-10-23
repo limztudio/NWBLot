@@ -118,7 +118,7 @@ Expected<MeshletPipelineHandle> Device::createMeshletPipeline(const MeshletPipel
     if(desc.pixelShader)
         appendPipelineShaderStage(*desc.pixelShader, VK_SHADER_STAGE_FRAGMENT_BIT, specInfos, shaderStages);
 
-    if(!configurePipelineBindings(desc.bindingLayouts, s_OperationName, *pso, scratchArena))
+    if(!configurePipelineBindings(desc.bindingLayouts, s_OperationName, scratchArena, *pso))
         return MakeUnexpected(Failure{});
 
     auto rasterizer = VulkanDetail::BuildPipelineRasterizationState(desc.renderState.rasterState, VulkanDetail::ConvertFillMode(desc.renderState.rasterState.fillMode), desc.renderState.rasterState.depthClipEnable ? VK_FALSE : VK_TRUE);
@@ -137,7 +137,7 @@ Expected<MeshletPipelineHandle> Device::createMeshletPipeline(const MeshletPipel
     VulkanDetail::AttachGraphicsPipelineFixedState(pipelineInfo, rasterizer, *fixedState);
     pipelineInfo.renderPass = VK_NULL_HANDLE;
 
-    if(!createPipeline(s_OperationName, *pso, pipelineInfo))
+    if(!createPipeline(s_OperationName, pipelineInfo, *pso))
         return MakeUnexpected(Failure{});
 
     return pso;

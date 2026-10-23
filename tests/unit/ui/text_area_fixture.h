@@ -145,7 +145,7 @@ public:
             const u64 beforeComposition = model.compositionGeneration();
             bool vertical = false;
             if(event.kind == AreaEventKind::Action){
-                result.valid = applyAction(model, navigation, sink, event.action, options.readOnly, result);
+                result.valid = applyAction(event.action, options.readOnly, model, navigation, sink, result);
             }
             else if(options.enabled && event.kind == AreaEventKind::Text && !options.readOnly)
                 result.valid = model.replaceSelection(event.text);
@@ -173,7 +173,7 @@ public:
                     const auto command = ApplyEditCommand(model, request, options.readOnly);
                     if(command.submitted || command.cancelled){
                         const auto action = command.submitted ? EditAction::Submit : EditAction::Cancel;
-                        result.valid = applyAction(model, navigation, sink, action, options.readOnly, result);
+                        result.valid = applyAction(action, options.readOnly, model, navigation, sink, result);
                     }
                 }
             }
@@ -209,7 +209,7 @@ public:
 
 
 private:
-    [[nodiscard]] bool applyAction(EditModel& model, EditNavigationState& navigation, IEditActionSink& sink, const EditAction::Enum action, const bool readOnly, EditBoxResult& result){
+    [[nodiscard]] bool applyAction(const EditAction::Enum action, const bool readOnly, EditModel& model, EditNavigationState& navigation, IEditActionSink& sink, EditBoxResult& result){
         actionTexts.emplace_back(m_arena);
         actionTexts.back().assign(model.text().data(), model.text().size());
         if(!sink.apply(model, action, readOnly))

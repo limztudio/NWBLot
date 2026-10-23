@@ -113,7 +113,7 @@ static constexpr u32 s_QwordHighWordShift = 32u;
         lane = static_cast<u64>(*low) | (static_cast<u64>(*high) << s_QwordHighWordShift);
     }
     payload.font.virtualPath = Name(identity);
-    if(!BinaryDetail::ReadBytes(bytes, cursor, payload.fontSha256.bytes, sizeof(payload.fontSha256.bytes)))
+    if(!BinaryDetail::ReadBytes(bytes, sizeof(payload.fontSha256.bytes), cursor, payload.fontSha256.bytes))
         return MakeUnexpected(Failure{});
     const auto faceIndex = ReadU32LittleEndian(bytes, cursor);
     if(!faceIndex)
@@ -195,7 +195,7 @@ static constexpr u32 s_QwordHighWordShift = 32u;
         const auto byteCount = ReadU32LittleEndian(bytes, cursor);
         if(!byteCount)
             return MakeUnexpected(byteCount.error());
-        if(!BinaryDetail::ReadBytes(bytes, cursor, group.sha256.bytes, sizeof(group.sha256.bytes)))
+        if(!BinaryDetail::ReadBytes(bytes, sizeof(group.sha256.bytes), cursor, group.sha256.bytes))
             return MakeUnexpected(Failure{});
         if(group.width == 0u || group.height == 0u || group.width > s_FontAtlasMaxExtent || group.height > s_FontAtlasMaxExtent || group.channelCount == 0u || group.channelCount > s_FontAtlasMaxChannelCount)
             return MakeUnexpected(Failure{});
@@ -203,7 +203,7 @@ static constexpr u32 s_QwordHighWordShift = 32u;
         if(expectedBytes != *byteCount || pixelBytes + *byteCount > s_FontAtlasMaxPixelBytes || cursor > bytes.size() || *byteCount > bytes.size() - cursor)
             return MakeUnexpected(Failure{});
         group.pixels.resize(*byteCount);
-        if(!BinaryDetail::ReadBytes(bytes, cursor, group.pixels.data(), *byteCount))
+        if(!BinaryDetail::ReadBytes(bytes, *byteCount, cursor, group.pixels.data()))
             return MakeUnexpected(Failure{});
         pixelBytes += *byteCount;
         payload.groups.push_back(Move(group));
@@ -219,12 +219,12 @@ static constexpr u32 s_QwordHighWordShift = 32u;
         const auto byteCount = ReadU32LittleEndian(bytes, cursor);
         if(!byteCount)
             return MakeUnexpected(byteCount.error());
-        if(!BinaryDetail::ReadBytes(bytes, cursor, table.sha256.bytes, sizeof(table.sha256.bytes)))
+        if(!BinaryDetail::ReadBytes(bytes, sizeof(table.sha256.bytes), cursor, table.sha256.bytes))
             return MakeUnexpected(Failure{});
         if(*byteCount == 0u || tableBytes + *byteCount > s_FontAtlasMaxPositioningBytes || cursor > bytes.size() || *byteCount > bytes.size() - cursor)
             return MakeUnexpected(Failure{});
         table.bytes.resize(*byteCount);
-        if(!BinaryDetail::ReadBytes(bytes, cursor, table.bytes.data(), *byteCount))
+        if(!BinaryDetail::ReadBytes(bytes, *byteCount, cursor, table.bytes.data()))
             return MakeUnexpected(Failure{});
         tableBytes += *byteCount;
         payload.positioningTables.push_back(Move(table));

@@ -194,7 +194,7 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
 
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<TextureBinaryPayload::HeaderBinary>(binary, cursor, TextureBinaryPayload::s_TextureMagic, __hidden_texture_runtime::s_LoadBinaryContext, s_TextureAssetKindLabel);
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<TextureBinaryPayload::HeaderBinary>(binary, TextureBinaryPayload::s_TextureMagic, __hidden_texture_runtime::s_LoadBinaryContext, s_TextureAssetKindLabel, cursor);
     if(!headerResult)
         return false;
     const TextureBinaryPayload::HeaderBinary& header = *headerResult;
@@ -274,7 +274,7 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
 
     Core::Assets::AssetBytes payloadBytes(m_payloadBytes.get_allocator().arena());
     payloadBytes.resize(payloadByteCount);
-    if(!BinaryDetail::ReadBytes(binary, cursor, payloadBytes.data(), payloadByteCount)){
+    if(!BinaryDetail::ReadBytes(binary, payloadByteCount, cursor, payloadBytes.data())){
         NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: texture payload is malformed"));
         return false;
     }

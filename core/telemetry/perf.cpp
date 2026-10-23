@@ -105,7 +105,7 @@ template<typename HeaderT>
     return ParsedPerfPayload<HeaderT>{ .header = *header, .scopeText = AStringView(reinterpret_cast<const char*>(encoded.data() + cursor), header->scopeNameBytes), };
 }
 
-static void RecordTimingView(Recorder& recorder, const PerfTimingSource::Enum source, const Perf::TimingView& timing, const u32 streamId, u32& outRecordedEvents, bool& inOutSucceeded){
+static void RecordTimingView(const PerfTimingSource::Enum source, const Perf::TimingView& timing, const u32 streamId, Recorder& recorder, u32& outRecordedEvents, bool& inOutSucceeded){
     if(!recorder.enabled(EventKind::PerfFrame)){
         inOutSucceeded = false;
         return;
@@ -124,7 +124,7 @@ static void RecordTimingView(Recorder& recorder, const PerfTimingSource::Enum so
     }
 }
 
-static void RecordMemoryView(Recorder& recorder, const Perf::MemoryView& memory, const u32 streamId, u32& outRecordedEvents, bool& inOutSucceeded){
+static void RecordMemoryView(const Perf::MemoryView& memory, const u32 streamId, Recorder& recorder, u32& outRecordedEvents, bool& inOutSucceeded){
     if(!recorder.enabled(EventKind::MemoryFrame)){
         inOutSucceeded = false;
         return;
@@ -307,11 +307,11 @@ bool RecordPerfMemory(Recorder& recorder, const Name& scopeName, const Perf::Mem
 PerfSessionRecordResult RecordPerfSessionReport(Recorder& recorder, const Perf::SessionReport& report, const u32 streamId){
     PerfSessionRecordResult result;
     if(report.capture.cpuTimingActive())
-        __hidden_telemetry_perf::RecordTimingView(recorder, PerfTimingSource::Cpu, report.cpuTiming, streamId, result.cpuTimingEvents, result.succeeded);
+        __hidden_telemetry_perf::RecordTimingView(PerfTimingSource::Cpu, report.cpuTiming, streamId, recorder, result.cpuTimingEvents, result.succeeded);
     if(report.capture.gpuTimingActive())
-        __hidden_telemetry_perf::RecordTimingView(recorder, PerfTimingSource::Gpu, report.gpuTiming, streamId, result.gpuTimingEvents, result.succeeded);
+        __hidden_telemetry_perf::RecordTimingView(PerfTimingSource::Gpu, report.gpuTiming, streamId, recorder, result.gpuTimingEvents, result.succeeded);
     if(report.capture.memoryActive())
-        __hidden_telemetry_perf::RecordMemoryView(recorder, report.memory, streamId, result.memoryEvents, result.succeeded);
+        __hidden_telemetry_perf::RecordMemoryView(report.memory, streamId, recorder, result.memoryEvents, result.succeeded);
     return result;
 }
 

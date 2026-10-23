@@ -99,9 +99,9 @@ uint nwbCsgIntervalCombineReceiverSpanFlagsToRemovedFlags(const uint spanFlags){
 }
 
 void nwbCsgIntervalCombineInsertEntry(
-    inout NwbCsgRemovedIntervalCandidate entries[NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT],
     const NwbCsgRemovedIntervalCandidate candidate,
     const uint removedIntervalLayerCount,
+    inout NwbCsgRemovedIntervalCandidate entries[NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT],
     inout uint inOutRemovedIntervalCount,
     inout uint inOutFlags
 ){
@@ -132,13 +132,13 @@ bool nwbCsgIntervalCombineBackCapVisible(const float2 spanDepth, const float4 cu
 }
 
 void nwbCsgIntervalCombineAppendUnion(
-    inout NwbCsgRemovedIntervalCandidate entries[NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT],
     const uint2 pixel,
     const float2 spanDepth,
     const uint spanIndex,
     const uint firstInterval,
     const uint lastInterval,
     const uint removedIntervalLayerCount,
+    inout NwbCsgRemovedIntervalCandidate entries[NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT],
     inout uint inOutRemovedIntervalCount,
     inout uint inOutFlags
 ){
@@ -153,16 +153,16 @@ void nwbCsgIntervalCombineAppendUnion(
     const uint firstSource = 1u + spanIndex * NWB_CSG_PEEL_LAYER_COUNT + firstInterval;
     const uint lastSource = 1u + spanIndex * NWB_CSG_PEEL_LAYER_COUNT + lastInterval;
     entry.sourcePair = firstSource | (lastSource << NWB_CSG_INTERVAL_SOURCE_BIT_COUNT);
-    nwbCsgIntervalCombineInsertEntry(entries, entry, removedIntervalLayerCount, inOutRemovedIntervalCount, inOutFlags);
+    nwbCsgIntervalCombineInsertEntry(entry, removedIntervalLayerCount, entries, inOutRemovedIntervalCount, inOutFlags);
 }
 
 void nwbCsgIntervalCombineSpan(
-    inout NwbCsgRemovedIntervalCandidate entries[NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT],
     const uint2 pixel,
     const uint4 spanData,
     const uint spanIndex,
     const uint intervalLayerCount,
     const uint removedIntervalLayerCount,
+    inout NwbCsgRemovedIntervalCandidate entries[NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT],
     inout uint inOutRemovedIntervalCount,
     inout uint inOutFlags
 ){
@@ -208,7 +208,7 @@ void nwbCsgIntervalCombineSpan(
             break;
         const NwbCsgClippedInterval candidate = intervals[intervalIndex];
         if(candidate.linearDepth.x > unionExit + NWB_CSG_INTERVAL_OVERLAP_EPSILON){
-            nwbCsgIntervalCombineAppendUnion(entries, pixel, spanDepth, spanIndex, firstInterval, lastInterval, removedIntervalLayerCount, inOutRemovedIntervalCount, inOutFlags);
+            nwbCsgIntervalCombineAppendUnion(pixel, spanDepth, spanIndex, firstInterval, lastInterval, removedIntervalLayerCount, entries, inOutRemovedIntervalCount, inOutFlags);
             firstInterval = candidate.intervalIndex;
             lastInterval = firstInterval;
             unionExit = candidate.linearDepth.y;
@@ -221,7 +221,7 @@ void nwbCsgIntervalCombineSpan(
             unionCutterExit = candidate.cutterExit;
         }
     }
-    nwbCsgIntervalCombineAppendUnion(entries, pixel, spanDepth, spanIndex, firstInterval, lastInterval, removedIntervalLayerCount, inOutRemovedIntervalCount, inOutFlags);
+    nwbCsgIntervalCombineAppendUnion(pixel, spanDepth, spanIndex, firstInterval, lastInterval, removedIntervalLayerCount, entries, inOutRemovedIntervalCount, inOutFlags);
 }
 
 void nwbCsgIntervalCombineWriteEntries(const uint2 pixel, __constref NwbCsgRemovedIntervalCandidate entries[NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT], const uint removedIntervalLayerCount, const uint removedIntervalCount, const uint flags){
@@ -296,7 +296,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     uint removedIntervalCount = 0u;
     [loop] for(uint spanIndex = 0u; spanIndex < spanCount; ++spanIndex){
         const uint4 spanData = g_NwbCsgReceiverSpanData.Load(int3(int2(pixel), int(spanIndex)));
-        nwbCsgIntervalCombineSpan(entries, pixel, spanData, spanIndex, intervalLayerCount, removedIntervalLayerCount, removedIntervalCount, flags);
+        nwbCsgIntervalCombineSpan(pixel, spanData, spanIndex, intervalLayerCount, removedIntervalLayerCount, entries, removedIntervalCount, flags);
     }
 
     nwbCsgIntervalCombineWriteEntries(pixel, entries, removedIntervalLayerCount, removedIntervalCount, flags);

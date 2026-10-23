@@ -145,7 +145,7 @@ DeferredLightingStageBuilder::DeferredLightingStageBuilder(Core::GpuTaskGraph& g
         .setExternalDependencies(lightingExternalDependencies, lightingExternalDependencyCount)
         .setResourceUses(resourceUses, LengthOf(resourceUses))
     ;
-    const auto resultLightingTaskResult = m_deferredSystem.declareDeferredLightingTask(m_graph, desc, deferredTargets, useLaggedLightingHistory, timingTicket);
+    const auto resultLightingTaskResult = m_deferredSystem.declareDeferredLightingTask(m_graph, desc, useLaggedLightingHistory, deferredTargets, timingTicket);
     if(!resultLightingTaskResult){
         result.lightingTask = {};
         return MakeUnexpected(Failure{});

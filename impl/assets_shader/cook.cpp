@@ -422,7 +422,7 @@ void ShaderCook::mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector
     }
 }
 
-bool ShaderCook::expandDefineCombinations(const CookMap<CookString, DefineEntry>& defineValues, CookVector<DefineCombo>& outCombinations, Alloc::ScratchArena& scratchArena){
+bool ShaderCook::expandDefineCombinations(const CookMap<CookString, DefineEntry>& defineValues, Alloc::ScratchArena& scratchArena, CookVector<DefineCombo>& outCombinations){
     outCombinations.clear();
     DefineCombo initialCombo{m_memoryArena};
     initialCombo.reserve(defineValues.size());

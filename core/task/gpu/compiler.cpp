@@ -67,12 +67,12 @@ struct InitialOwnershipCompletionRequirement{
 
 
 bool GpuTaskGraphCompiler::compile(
-    const GpuTaskGraph::DeclarationReadView& graph,
     GpuTaskGraphAnalysis& outAnalysis,
-    const GpuPhysicalQueueTopology& topology,
     GpuTaskGraphQueueAssignments& outAssignments,
     GpuCompiledGraph& outCompiledGraph,
     Alloc::ScratchArena& scratchArena,
+    const GpuTaskGraph::DeclarationReadView& graph,
+    const GpuPhysicalQueueTopology& topology,
     const GpuTaskGraphCompileOptions& options
 )const{
     using namespace GpuTaskGraphCompilerDetail;
@@ -100,7 +100,7 @@ bool GpuTaskGraphCompiler::compile(
 
     const Timer compileBegin = TimerNow();
     const Timer analysisBegin = compileBegin;
-    if(!analyze(graph, outAnalysis, scratchArena))
+    if(!analyze(graph, scratchArena, outAnalysis))
         return false;
     const f64 analysisSeconds = DurationInSeconds<f64>(TimerNow(), analysisBegin);
 
@@ -149,7 +149,7 @@ bool GpuTaskGraphCompiler::compile(
     }
 
     const Timer queueAssignmentBegin = TimerNow();
-    if(!assignQueues(graph, outAnalysis, topology, outAssignments, scratchArena, options.queueAssignmentOptions))
+    if(!assignQueues(outAssignments, scratchArena, graph, outAnalysis, topology, options.queueAssignmentOptions))
         return false;
     const f64 queueAssignmentSeconds = DurationInSeconds<f64>(TimerNow(), queueAssignmentBegin);
     const Timer planningBegin = TimerNow();
@@ -342,7 +342,7 @@ bool GpuTaskGraphCompiler::compile(
     const f64 resourceStatePlanningSeconds = DurationInSeconds<f64>(TimerNow(), resourceStatePlanningBegin);
 
     const Timer packetDependencyPlanningBegin = TimerNow();
-    if(!PlanPacketDependencies(graph, outAnalysis, initialOwnershipDependencies, initialAvailabilityDependencies, resourceStateDependencies, compiledPlan, scratchArena)){
+    if(!PlanPacketDependencies(graph, outAnalysis, initialOwnershipDependencies, initialAvailabilityDependencies, scratchArena, resourceStateDependencies, compiledPlan)){
         return false;
     }
     const f64 packetDependencyPlanningSeconds = DurationInSeconds<f64>(TimerNow(), packetDependencyPlanningBegin);

@@ -48,11 +48,11 @@ const GpuTaskQueueAssignment* GpuTaskGraphQueueAssignments::find(const GpuTaskId
 
 
 bool GpuTaskGraphCompiler::assignQueues(
+    GpuTaskGraphQueueAssignments& outAssignments,
+    Alloc::ScratchArena& scratchArena,
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
     const GpuPhysicalQueueTopology& topology,
-    GpuTaskGraphQueueAssignments& outAssignments,
-    Alloc::ScratchArena& scratchArena,
     const GpuTaskGraphQueueAssignmentOptions& options
 )const{
     using namespace GpuTaskGraphCompilerDetail;
@@ -90,7 +90,7 @@ bool GpuTaskGraphCompiler::assignQueues(
     outAssignments.m_assignments.reserve(graph.taskCount());
 
     Vector<GpuTaskQueuePlacementGroup, Alloc::ScratchArena> groups(scratchArena);
-    const auto placementGroups = BuildQueuePlacementGroups(graph, analysis, topology, groups, scratchArena);
+    const auto placementGroups = BuildQueuePlacementGroups(graph, analysis, topology, scratchArena, groups);
     if(!placementGroups){
         outAssignments.m_diagnostic = placementGroups.error();
         return false;

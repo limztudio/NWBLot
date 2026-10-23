@@ -197,7 +197,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         FrameExecuteCpuRestore::RestoreAvboitCpuState(m_avboitSystem, avboitTargetsNeedClear);
     };
     const auto restorePostGbufferPacketCpuState = [&](const bool restoreBindlessSlots)noexcept{
-        FrameExecuteCpuRestore::RestorePostGbufferPacketCpuState(m_meshSystem, m_deferredSystem, m_rayTracingState, m_avboitSystem, deferredTargets, executeCpuRestoreSnapshot, restoreBindlessSlots);
+        FrameExecuteCpuRestore::RestorePostGbufferPacketCpuState(m_meshSystem, m_deferredSystem, m_rayTracingState, m_avboitSystem, executeCpuRestoreSnapshot, restoreBindlessSlots, deferredTargets);
     };
     // Retain this token even if Surfel GI consumes the diagnostic.
     const Core::QueueSubmissionToken surfelCounterReadbackCompletionToken = rayTracingCpuState.surfelCountReadbackSubmissionToken;
@@ -215,13 +215,18 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         buildDeferredLightingTaskGraph(
             deferredGraphScratchArena,
             frameGraphFeatures,
-            deferredTargets,
             csgFrameState,
             clearAvboitTargets,
             hasTransparentRenderers,
             hasOpaqueCsgFrameWork,
             meshViewAspectRatio,
             presentationFrame,
+            timing.asyncPrefixTimingSpansOnePacket,
+            surfelCounterReadbackCompletionToken,
+            priorLaggedLightingHistoryReadReadyToken,
+            priorLaggedLightingHistoryWriterDrainToken,
+            captureLightingHistory,
+            deferredTargets,
             timing.frameTimingTransaction,
             timing.asyncPrefixTiming,
             timing.deferredClearTiming,
@@ -231,7 +236,6 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             timing.opaqueCsgIntervalSampleComputeEmulationTiming,
             timing.shadowPrepareTimingTicket,
             timing.graphicsPrefixTimingTickets,
-            timing.asyncPrefixTimingSpansOnePacket,
             timing.asyncFinalTiming,
             timing.avboitPreTimingTicket,
             timing.avboitClearTimingState,
@@ -260,11 +264,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             timing.causticResolveTiming,
             timing.deferredLightingTimingTicket,
             timing.deferredCompositeTimingTicket,
-            timing.deferredPresentTimingTicket,
-            surfelCounterReadbackCompletionToken,
-            priorLaggedLightingHistoryReadReadyToken,
-            priorLaggedLightingHistoryWriterDrainToken,
-            captureLightingHistory
+            timing.deferredPresentTimingTicket
         );
     };
     buildDeferredGraph(requestsLaggedLightingHistoryCapture);
@@ -295,7 +295,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     Core::GpuTaskId graphicsPrefixTimingTasks[GraphicsPrefixTimingResolver::s_TimingTaskCount];
     GraphicsPrefixTimingResolver graphicsPrefixTimingResolver(MakeNotNull(this));
     GraphicsPrefixTimingResolutionResult graphicsPrefixTimingResolution;
-    graphicsPrefixTimingResolver.resolve(deferredCompiledPlan, timing.graphicsPrefixTimingTickets, timing.graphicsPrefixOwnedTimingTickets, FrameExecuteTimingState::s_GraphicsPrefixTimingTicketCount, graphicsPrefixTimingTasks, timing.asyncPrefixTimingSpansOnePacket, graphicsPrefixTimingResolution);
+    graphicsPrefixTimingResolver.resolve(deferredCompiledPlan, timing.graphicsPrefixOwnedTimingTickets, FrameExecuteTimingState::s_GraphicsPrefixTimingTicketCount, timing.graphicsPrefixTimingTickets, graphicsPrefixTimingTasks, timing.asyncPrefixTimingSpansOnePacket, graphicsPrefixTimingResolution);
     const bool graphicsPrefixTimingBindingsValid = graphicsPrefixTimingResolution.bindingsValid;
     const usize graphicsPrefixUniquePacketCount = graphicsPrefixTimingResolution.uniquePacketCount;
     ShadowVisibilityMergeValidator shadowVisibilityMergeValidator(MakeNotNull(this));
@@ -563,7 +563,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     m_avboitSystem.markFrameTargetUsage(hasTransparentRenderers);
 
     Core::GpuTaskGraphTaskTimingTicket normalTimingTickets[RendererFramePipelineExecuteDetail::s_DeferredTimingTicketCapacity] = {};
-    const auto normalTimingTicketCount = timing.bindNormalTimingTickets(*this, deferredCompiledPlan, graphicsPrefixTimingTasks, graphicsPrefixUniquePacketCount, avboitValidation, hardwareShadowSupported, normalTimingTickets, LengthOf(normalTimingTickets));
+    const auto normalTimingTicketCount = timing.bindNormalTimingTickets(*this, deferredCompiledPlan, graphicsPrefixTimingTasks, graphicsPrefixUniquePacketCount, avboitValidation, hardwareShadowSupported, LengthOf(normalTimingTickets), normalTimingTickets);
     if(!normalTimingTicketCount){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to bind normal deferred graph timing"));
         discardRenderPackets();
@@ -587,13 +587,13 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
 
     const Core::GpuTaskScheduler& normalScheduler = m_graphics.gpuTasks();
     const bool normalGraphAccepted = normalScheduler.executeGraph(
+        normalExecution,
+        lifecycles.normalExecutionScratchArena,
         m_deferredLightingTaskGraph,
         m_deferredLightingCompiledGraph,
         m_deferredLightingRecordedGraph,
-        normalExecution,
         m_deferredLightingSubmissionTransaction,
-        &m_graphics.gpuTiming(),
-        lifecycles.normalExecutionScratchArena
+        &m_graphics.gpuTiming()
     );
 
     const Core::QueueSubmissionToken frameTimingBeginSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(deferredCompiledPlan, m_deferredFrameTimingBeginTask);

@@ -124,7 +124,7 @@ asset_bunch bunch = [
 }
 
 #if defined(NWB_FINAL)
-static Expected<NWB::Core::Assets::ExpandedAssetMetadataVector> ExpandModelBunchFixture(TestArena& testArena, const AStringView meta, const AStringView caseName, NWB::Core::Metascript::Document& doc, NWB::Core::Alloc::ScratchArena& scratchArena){
+static Expected<NWB::Core::Assets::ExpandedAssetMetadataVector> ExpandModelBunchFixture(TestArena& testArena, const AStringView meta, const AStringView caseName, NWB::Core::Alloc::ScratchArena& scratchArena, NWB::Core::Metascript::Document& doc){
     if(!doc.parse(meta))
         return MakeUnexpected(Failure{});
 
@@ -161,7 +161,7 @@ asset_bunch bunch = [
     TestArena testArena;
     NWB::Core::Metascript::Document doc(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ModelFixtureScratchArena);
-    const auto expanded = ExpandModelBunchFixture(testArena, AStringView(meta.data(), meta.size()), "model_bunch_duplicate_local_reference", doc, scratchArena);
+    const auto expanded = ExpandModelBunchFixture(testArena, AStringView(meta.data(), meta.size()), "model_bunch_duplicate_local_reference", scratchArena, doc);
     EXPECT_FALSE(expanded);
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("variable 'mesh' is listed more than once")));
 #else
@@ -194,7 +194,7 @@ asset_bunch bunch = [
     TestArena testArena;
     NWB::Core::Metascript::Document doc(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ModelFixtureScratchArena);
-    const auto expanded = ExpandModelBunchFixture(testArena, AStringView(meta.data(), meta.size()), "model_bunch_missing_local_reference", doc, scratchArena);
+    const auto expanded = ExpandModelBunchFixture(testArena, AStringView(meta.data(), meta.size()), "model_bunch_missing_local_reference", scratchArena, doc);
     EXPECT_FALSE(expanded);
 #endif
 }

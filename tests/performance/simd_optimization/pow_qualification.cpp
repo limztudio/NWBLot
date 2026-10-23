@@ -196,7 +196,7 @@ NWB_NOINLINE SIMDVectorSingle PackedDouble(const SIMDVectorSingle x, const SIMDV
     return seed;
 }
 
-[[nodiscard]] bool Compare(const StringView category, const NotNull<Evaluate> evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y, Counts& counts, const bool quantize = false){
+[[nodiscard]] bool Compare(Counts& counts, const StringView category, const NotNull<Evaluate> evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y, const bool quantize = false){
     const auto expected = Observe(MakeNotNull<Evaluate>(Reference), x, y), actual = Observe(evaluate, x, y);
     if(!expected || !actual)
         return false;
@@ -248,7 +248,7 @@ void PrintCounts(const StringView category, const Counts& counts){
             for(const u32 y : s_Exceptional){
                 for(usize lane = 0u; lane < 4u; ++lane){
                     const SIMDVectorSingle left = VectorSetIntByIndex(s_SIMDOne, x, lane), right = VectorSetIntByIndex(s_SIMDOne, y, lane);
-                    if(!Compare(s_ExceptionalLabel, evaluate, left, right, exceptional))
+                    if(!Compare(exceptional, s_ExceptionalLabel, evaluate, left, right))
                         return failures + 1u;
                 }
             }
@@ -260,7 +260,7 @@ void PrintCounts(const StringView category, const Counts& counts){
                 x[lane] = static_cast<u32>(NextSeed(seed));
                 y[lane] = static_cast<u32>(NextSeed(seed));
             }
-            if(!Compare(s_RandomLabel, evaluate, BitCast<SIMDVectorSingle>(x), BitCast<SIMDVectorSingle>(y), random))
+            if(!Compare(random, s_RandomLabel, evaluate, BitCast<SIMDVectorSingle>(x), BitCast<SIMDVectorSingle>(y)))
                 return failures + 1u;
         }
         for(usize index = 0u; index < 65536u; ++index){
@@ -269,18 +269,18 @@ void PrintCounts(const StringView category, const Counts& counts){
                 x[lane] = 0x00800000u + static_cast<u32>(NextSeed(seed) % 0x7f000000u);
                 y[lane] = (0x3c000000u + static_cast<u32>(NextSeed(seed) % 0x06000000u)) | (static_cast<u32>(NextSeed(seed)) & 0x80000000u);
             }
-            if(!Compare(s_PositiveFiniteLabel, evaluate, BitCast<SIMDVectorSingle>(x), BitCast<SIMDVectorSingle>(y), positive))
+            if(!Compare(positive, s_PositiveFiniteLabel, evaluate, BitCast<SIMDVectorSingle>(x), BitCast<SIMDVectorSingle>(y)))
                 return failures + 1u;
         }
         for(u32 first = 0u; first < 65536u; first += 4u){
             const SIMDVectorSingle linear = VectorScale(VectorSet(static_cast<f32>(first), static_cast<f32>(first + 1u), static_cast<f32>(first + 2u), static_cast<f32>(first + 3u)), 1.0f / 65535.0f);
-            if(!Compare("srgb_uniform16", evaluate, linear, VectorReplicate(s_EncodeExponent), srgb, true))
+            if(!Compare(srgb, "srgb_uniform16", evaluate, linear, VectorReplicate(s_EncodeExponent), true))
                 return failures + 1u;
         }
         for(u32 first = 0u; first < 256u; first += 4u){
             const SIMDVectorSingle encoded = VectorScale(VectorSet(static_cast<f32>(first), static_cast<f32>(first + 1u), static_cast<f32>(first + 2u), static_cast<f32>(first + 3u)), 1.0f / 255.0f);
             const SIMDVectorSingle base = VectorScale(VectorAdd(encoded, VectorReplicate(0.055f)), s_DecodeScale);
-            if(!Compare("srgb_decode8", evaluate, base, VectorReplicate(2.4f), srgb))
+            if(!Compare(srgb, "srgb_decode8", evaluate, base, VectorReplicate(2.4f)))
                 return failures + 1u;
         }
         // Search every 8-bit transition in the actual rounded reference expression.
@@ -295,7 +295,7 @@ void PrintCounts(const StringView category, const Counts& counts){
             }
             for(i32 offset = -16; offset <= 16; ++offset){
                 const SIMDVectorSingle linear = VectorReplicate(BitCast<f32>(lower + offset));
-                if(!Compare("srgb_transition", evaluate, linear, VectorReplicate(s_EncodeExponent), srgb, true))
+                if(!Compare(srgb, "srgb_transition", evaluate, linear, VectorReplicate(s_EncodeExponent), true))
                     return failures + 1u;
             }
         }

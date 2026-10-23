@@ -120,13 +120,13 @@ bool RendererFramePipeline::scheduleDeferredLightingTaskGraphForExecution(Core::
     const Core::GpuTaskScheduler& scheduler = m_graphics.gpuTasks();
     if(!scheduler.scheduleGraph(
         m_deferredLightingTaskGraph,
+        compileOptions,
+        scratchArena,
         m_deferredLightingTaskGraphAnalysis,
         m_deferredLightingTaskGraphQueueAssignments,
         m_deferredLightingCompiledGraph,
         m_deferredLightingRecordedGraph,
-        m_deferredLightingSubmissionTransaction,
-        scratchArena,
-        compileOptions
+        m_deferredLightingSubmissionTransaction
     )){
         const auto& analysisDiagnostic = m_deferredLightingTaskGraphAnalysis.diagnostic();
         const auto& queueDiagnostic = m_deferredLightingTaskGraphQueueAssignments.diagnostic();

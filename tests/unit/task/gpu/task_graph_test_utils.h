@@ -116,33 +116,33 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
 [[nodiscard]] bool Analyze(Core::Alloc::ScratchArena& scratchArena, const Graphics::GpuTaskGraph& graph, Graphics::GpuTaskGraphAnalysis& analysis);
 
 [[nodiscard]] bool Assign(
+    Graphics::GpuTaskGraphQueueAssignments& assignments,
     Core::Alloc::ScratchArena& scratchArena,
     const Graphics::GpuTaskGraph& graph,
     const Graphics::GpuTaskGraphAnalysis& analysis,
     const Graphics::GpuPhysicalQueueTopology& topology,
-    Graphics::GpuTaskGraphQueueAssignments& assignments,
     const Graphics::GpuTaskGraphQueueAssignmentOptions& options = {}
 );
 
 [[nodiscard]] bool Compile(
-    Core::Alloc::ScratchArena& scratchArena,
-    const Graphics::GpuTaskGraph& graph,
     Graphics::GpuTaskGraphAnalysis& analysis,
-    const Graphics::GpuPhysicalQueueTopology& topology,
     Graphics::GpuTaskGraphQueueAssignments& assignments,
     Graphics::GpuCompiledGraph& compiledGraph,
+    Core::Alloc::ScratchArena& scratchArena,
+    const Graphics::GpuTaskGraph& graph,
+    const Graphics::GpuPhysicalQueueTopology& topology,
     const Graphics::GpuTaskGraphCompileOptions& options = {}
 );
 
 // Compiles on a topology copy where Compute and Transfer capabilities stay only on their own queue class when that class exists.
 // Single-capability Graphics, Compute, and Transfer work then gets one legal queue class from its command requirements alone.
 [[nodiscard]] bool CompileWithSeparatedCommandQueues(
-    Core::Alloc::ScratchArena& scratchArena,
-    const Graphics::GpuTaskGraph& graph,
     Graphics::GpuTaskGraphAnalysis& analysis,
-    const Graphics::GpuPhysicalQueueTopology& topology,
     Graphics::GpuTaskGraphQueueAssignments& assignments,
     Graphics::GpuCompiledGraph& compiledGraph,
+    Core::Alloc::ScratchArena& scratchArena,
+    const Graphics::GpuTaskGraph& graph,
+    const Graphics::GpuPhysicalQueueTopology& topology,
     const Graphics::GpuTaskGraphCompileOptions& options = {}
 );
 

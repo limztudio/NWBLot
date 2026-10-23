@@ -70,7 +70,7 @@ static void ApplyRetention(Core::Alloc::ScratchArena& arena, const CrashIngestCo
     return Core::Common::LogType::EssentialInfo;
 }
 
-static void AppendAcceptedIngestDetails(Core::Alloc::ScratchArena& arena, CrashText& outReport, const CrashScratchPath& rawPath, const bool rawArchived){
+static void AppendAcceptedIngestDetails(const CrashScratchPath& rawPath, const bool rawArchived, Core::Alloc::ScratchArena& arena, CrashText& outReport){
     if(!outReport.empty() && outReport.back() != '\n')
         outReport += s_ReportLineEnd;
 
@@ -441,7 +441,7 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, c
 
     result.accepted = true;
     result.type = rawArchived ? Ingest::AcceptedCrashLogType(summary) : Core::Common::LogType::Warning;
-    Ingest::AppendAcceptedIngestDetails(scratchArena, symbolicationReport, rawArchived ? *rawPath : operationArchivePath, rawArchived);
+    Ingest::AppendAcceptedIngestDetails(rawArchived ? *rawPath : operationArchivePath, rawArchived, scratchArena, symbolicationReport);
     result.message = StringConvert(arena, AStringView(symbolicationReport.data(), symbolicationReport.size()));
     return result;
 }

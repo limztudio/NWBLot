@@ -54,7 +54,7 @@ Futex& RgdDecodeMutex()noexcept{
 
 
 // The upstream serializer APIs require native strings; decode failures retain any report sections already produced while project streams use scratch storage.
-AInteropString AssembleTextSummary(const Config& config, RgdCrashDumpContents& contents, Core::Alloc::ScratchArena& scratchArena){
+AInteropString AssembleTextSummary(const Config& config, Core::Alloc::ScratchArena& scratchArena, RgdCrashDumpContents& contents){
     AStringStream<Core::Alloc::ScratchArena> txt(s_FileOpenWrite, scratchArena);
 
     {
@@ -181,7 +181,7 @@ Expected<AInteropString, StringView> DecodeCrashDumpToText(const AInteropString&
     if(!RgdParsingUtils::ParseCrashDump(config, contents))
         return MakeUnexpected(__hidden_rgd_decode::s_ParseFailedError);
 
-    return __hidden_rgd_decode::AssembleTextSummary(config, contents, scratchArena);
+    return __hidden_rgd_decode::AssembleTextSummary(config, scratchArena, contents);
 }
 
 

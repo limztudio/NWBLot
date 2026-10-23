@@ -121,8 +121,8 @@ Expected<usize> FrameExecuteTimingState::bindNormalTimingTickets(
     const usize graphicsPrefixUniquePacketCount,
     const RendererAvboitTaskGraphValidation& avboitValidation,
     const bool hardwareShadowSupported,
-    Core::GpuTaskGraphTaskTimingTicket* const tickets,
-    const usize ticketCapacity
+    const usize ticketCapacity,
+    Core::GpuTaskGraphTaskTimingTicket* const tickets
 ){
     usize ticketCount = 0u;
     const auto appendTicket = [&](const Core::GpuTaskId task, Core::GpuTimingSubmissionTicket& timingTicket)noexcept -> bool {
@@ -163,7 +163,7 @@ Expected<usize> FrameExecuteTimingState::bindNormalTimingTickets(
         .m_accumulation = avboitAccumulationTimingTicket,
     };
     ready = ready
-        && renderer.m_avboitSystem.appendTaskGraphTimingTickets(avboitValidation, avboitTimingTickets, tickets, ticketCapacity, ticketCount)
+        && renderer.m_avboitSystem.appendTaskGraphTimingTickets(avboitValidation, ticketCapacity, avboitTimingTickets, tickets, ticketCount)
         && appendTicket(renderer.m_deferredLightingTask, deferredLightingTimingTicket)
         && appendTicket(renderer.m_deferredCompositeTask, deferredCompositeTimingTicket)
         && appendTicket(renderer.m_deferredPresentTask, deferredPresentTimingTicket)

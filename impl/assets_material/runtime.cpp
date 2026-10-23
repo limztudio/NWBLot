@@ -150,7 +150,7 @@ public:
     {}
 };
 
-static Expected<MaterialTypedLayoutPayload> ReadMaterialTypedLayout(const Core::Assets::AssetBytes& binary, usize& inOutCursor, Core::Assets::AssetArena& arena){
+static Expected<MaterialTypedLayoutPayload> ReadMaterialTypedLayout(const Core::Assets::AssetBytes& binary, Core::Assets::AssetArena& arena, usize& inOutCursor){
     MaterialTypedLayoutPayload payload(arena);
 
     const auto layoutHashResult = ReadPOD<u64>(binary, inOutCursor);
@@ -231,7 +231,7 @@ static Expected<MaterialTypedLayoutPayload> ReadMaterialTypedLayout(const Core::
     }
 
     payload.blockBytes.resize(blockByteCount);
-    if(!BinaryDetail::ReadBytes(binary, inOutCursor, payload.blockBytes.data(), blockByteCount)){
+    if(!BinaryDetail::ReadBytes(binary, blockByteCount, inOutCursor, payload.blockBytes.data())){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: malformed typed block bytes"));
         return MakeUnexpected(Failure{});
     }
@@ -336,7 +336,7 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
-    auto typedLayout = __hidden_runtime::ReadMaterialTypedLayout(binary, cursor, m_shaderVariant.get_allocator().arena());
+    auto typedLayout = __hidden_runtime::ReadMaterialTypedLayout(binary, m_shaderVariant.get_allocator().arena(), cursor);
     if(!typedLayout)
         return false;
     candidate.m_typedLayoutHash = typedLayout->layoutHash;

@@ -558,7 +558,7 @@ Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayoutImpl(const Materia
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<NotNull<const MaterialBindTypedLayout*>> FindOrBuildMaterialBindTypedLayoutImpl(const Name& materialInterface, const MaterialBindEntry& bindEntry, MaterialBindTypedLayoutCache& inOutCache, ScratchArena& scratchArena){
+Expected<NotNull<const MaterialBindTypedLayout*>> FindOrBuildMaterialBindTypedLayoutImpl(const Name& materialInterface, const MaterialBindEntry& bindEntry, ScratchArena& scratchArena, MaterialBindTypedLayoutCache& inOutCache){
     const auto cacheIt = inOutCache.lookup.find(materialInterface);
     if(cacheIt != inOutCache.lookup.end()){
         const usize cacheIndex = cacheIt.value();

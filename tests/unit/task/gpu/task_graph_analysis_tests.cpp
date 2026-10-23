@@ -67,11 +67,11 @@ static void ExpectEdgeEqual(const Graphics::GpuTaskDependencyEdge& expected, con
     EXPECT_EQ(actual.hazard, expected.hazard);
 }
 
-static void ExpectDagAnalysis(const Graphics::GpuTaskGraph& graph, Graphics::GpuTaskGraphAnalysis& analysis, const Vector<Graphics::GpuTaskDependencyEdge, Core::Alloc::ScratchArena>& expectedEdges, Core::Alloc::ScratchArena& scratchArena){
+static void ExpectDagAnalysis(const Graphics::GpuTaskGraph& graph, const Vector<Graphics::GpuTaskDependencyEdge, Core::Alloc::ScratchArena>& expectedEdges, Core::Alloc::ScratchArena& scratchArena, Graphics::GpuTaskGraphAnalysis& analysis){
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
     ASSERT_TRUE(declarations.valid());
     const Graphics::GpuTaskGraphCompiler compiler;
-    ASSERT_TRUE(compiler.analyze(declarations, analysis, scratchArena));
+    ASSERT_TRUE(compiler.analyze(declarations, scratchArena, analysis));
     ASSERT_TRUE(analysis.validFor(declarations));
     ASSERT_EQ(analysis.edges().size(), expectedEdges.size());
     for(usize edgeIndex = 0u; edgeIndex < expectedEdges.size(); ++edgeIndex)
@@ -255,7 +255,7 @@ TEST(GpuTaskGraphAnalysis, PreservesLowestReadyIdAcrossRepeatedBackwardReleasesA
             Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
             const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
             Core::Alloc::ScratchArena scratch(s_AnalysisScratchArena);
-            ASSERT_TRUE(Graphics::GpuTaskGraphCompiler().analyze(view, analysis, scratch));
+            ASSERT_TRUE(Graphics::GpuTaskGraphCompiler().analyze(view, scratch, analysis));
             ASSERT_NO_FATAL_FAILURE(ExpectReadyOrder(analysis, count, shape));
         }
     }
@@ -286,7 +286,7 @@ TEST(GpuTaskGraphAnalysis, RetainsCycleDiagnosticsAfterBackwardReleasePrefixExha
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
     Core::Alloc::ScratchArena scratch(s_AnalysisScratchArena);
-    EXPECT_FALSE(Graphics::GpuTaskGraphCompiler().analyze(view, analysis, scratch));
+    EXPECT_FALSE(Graphics::GpuTaskGraphCompiler().analyze(view, scratch, analysis));
     EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::Cycle);
     EXPECT_TRUE(analysis.topologicalOrder().empty());
     ASSERT_EQ(analysis.cyclePath().size(), 3u);
@@ -307,7 +307,7 @@ TEST(GpuTaskGraphAnalysis, ReducesShortcutEdgesAtTheLastDirectConsumerBeforeLong
         Core::Alloc::ScratchArena scratch(s_AnalysisScratchArena);
         const Graphics::GpuTaskGraphCompiler compiler;
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-        ASSERT_TRUE(compiler.analyze(view, analysis, scratch));
+        ASSERT_TRUE(compiler.analyze(view, scratch, analysis));
         ASSERT_NO_FATAL_FAILURE(ExpectReducedShortcutChain(analysis, s_TaskCount, reversed));
     }
 }
@@ -371,7 +371,7 @@ TEST(GpuTaskGraphAnalysis, MatchesIndependentReferenceForPermutedDagsAndDuplicat
             }
 
             Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-            ASSERT_NO_FATAL_FAILURE(ExpectDagAnalysis(graph, analysis, expectedEdges, scratchArena));
+            ASSERT_NO_FATAL_FAILURE(ExpectDagAnalysis(graph, expectedEdges, scratchArena, analysis));
             EXPECT_EQ(analysis.explicitEdgeCount(), expectedEdges.size());
             EXPECT_EQ(analysis.inferredEdgeCount(), 0u);
             EXPECT_TRUE(analysis.inferredEdges().empty());
@@ -420,7 +420,7 @@ TEST(GpuTaskGraphAnalysis, DeduplicatesHazardReasonsAndPreservesExplicitRawEdgeP
     expectedEdges.push_back(Graphics::GpuTaskDependencyEdge{ .producer = tasks[1u], .consumer = tasks[2u], .resource = resources[0u], .resourceVersion = {}, .hazard = Graphics::GpuTaskHazardType::ReadAfterWrite, });
     expectedEdges.push_back(Graphics::GpuTaskDependencyEdge{ .producer = tasks[0u], .consumer = tasks[2u], .resource = resources[2u], .resourceVersion = {}, .hazard = Graphics::GpuTaskHazardType::ReadAfterWrite, });
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    ASSERT_NO_FATAL_FAILURE(ExpectDagAnalysis(graph, analysis, expectedEdges, scratchArena));
+    ASSERT_NO_FATAL_FAILURE(ExpectDagAnalysis(graph, expectedEdges, scratchArena, analysis));
     EXPECT_EQ(analysis.explicitEdgeCount(), 1u);
     EXPECT_EQ(analysis.inferredEdgeCount(), 3u);
     EXPECT_EQ(analysis.resourceVersionEdgeCount(), 0u);
@@ -457,7 +457,7 @@ TEST(GpuTaskGraphAnalysis, EmptySchedulingReachabilityAvoidsStorageAndResetsAcro
     {
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
 
-        ASSERT_TRUE(compiler.analyze(declarations, analysis, analysisScratchArena));
+        ASSERT_TRUE(compiler.analyze(declarations, analysisScratchArena, analysis));
         ASSERT_TRUE(analysis.schedulingEdges().empty());
     }
 
@@ -513,7 +513,7 @@ TEST(GpuTaskGraphAnalysis, EmptySchedulingReachabilityAvoidsStorageAndResetsAcro
     {
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(dependentGraph);
 
-        ASSERT_TRUE(compiler.analyze(declarations, dependentAnalysis, analysisScratchArena));
+        ASSERT_TRUE(compiler.analyze(declarations, analysisScratchArena, dependentAnalysis));
         ASSERT_FALSE(dependentAnalysis.schedulingEdges().empty());
         ASSERT_TRUE(Graphics::GpuTaskGraphCompilerDetail::BuildGpuTaskSchedulingReachability(declarations, dependentAnalysis, reachability));
     }

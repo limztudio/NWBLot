@@ -215,13 +215,13 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
     if(inputs.streamsUploaded && !objectGeometry.prepare(
         extinctionPayload.extinctionSnapshot.regularIndexedDrawItems.data(),
         extinctionPayload.extinctionSnapshot.regularIndexedDrawItems.size(),
-        frameBindings, inputs.targets, extinctionDependency, extinctionResourceUses, scratchArena, &inputs.extinctionTimingTicket
+        frameBindings, inputs.targets, scratchArena, extinctionDependency, extinctionResourceUses, &inputs.extinctionTimingTicket
     ))
         return MakeUnexpected(Failure{});
     if(inputs.streamsUploaded && !objectGeometry.prepare(
         extinctionPayload.extinctionSnapshot.csgIndexedDrawItems.data(),
         extinctionPayload.extinctionSnapshot.csgIndexedDrawItems.size(),
-        frameBindings, inputs.targets, extinctionDependency, extinctionResourceUses, scratchArena, &inputs.extinctionTimingTicket
+        frameBindings, inputs.targets, scratchArena, extinctionDependency, extinctionResourceUses, &inputs.extinctionTimingTicket
     ))
         return MakeUnexpected(Failure{});
 

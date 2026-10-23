@@ -38,12 +38,12 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
 
 [[nodiscard]] Expected<DeferredGraphSuffixResult> DeferredGraphSuffixBuilder::declare(
     const DeferredGraphSuffixInputs& inputs,
-    DeferredFrameTargets& targets,
     const ReflectionCompositeInputs& compositeInputs,
+    const Core::GpuTaskId& shadowVisibilityTask,
+    DeferredFrameTargets& targets,
     Core::GpuTimingSubmissionTicket& compositeTimingTicket,
     Core::GpuTimingSubmissionTicket& presentTimingTicket,
     Optional<Core::GpuTimingMeasure>& asyncFinalTiming,
-    const Core::GpuTaskId& shadowVisibilityTask,
     Core::GpuTimingFrameTransaction& frameTimingTransaction
 ){
     using namespace RendererTaskGraphDetail;
@@ -143,7 +143,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
         .setResourceUses(compositeResourceUses, LengthOf(compositeResourceUses))
     ;
     // Composite may share its compatible serial predecessor while retaining all graph-owned joins.
-    const auto resultCompositeTaskResult = m_deferredSystem.declareDeferredCompositeTask(m_graph, compositeDesc, targets, compositeTimingTicket, compositeInputs);
+    const auto resultCompositeTaskResult = m_deferredSystem.declareDeferredCompositeTask(m_graph, compositeDesc, compositeInputs, targets, compositeTimingTicket);
     if(!resultCompositeTaskResult){
         result.compositeTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred-composite graph task"));

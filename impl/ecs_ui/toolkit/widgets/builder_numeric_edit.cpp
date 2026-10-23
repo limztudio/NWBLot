@@ -23,7 +23,7 @@ namespace __hidden_builder_numeric_edit{
 template <typename Model, typename Bounds>
 class NumericActions final : public IEditActionSink{
 public:
-    NumericActions(Model& model, const Bounds& bounds, NumericEditResult& result, u64& revision, const Context& context)noexcept
+    NumericActions(const Bounds& bounds, const Context& context, Model& model, NumericEditResult& result, u64& revision)noexcept
         : m_model(model)
         , m_bounds(bounds)
         , m_result(result)
@@ -102,9 +102,9 @@ NumericEditBoxResult Builder::integerEdit(const AStringView stableKey, IntegerEd
     frame.model = &model;
     frame.state = &state;
     frame.revision = model.revision();
-    __hidden_builder_numeric_edit::NumericActions actions(model, options.bounds, result.numeric, frame.revision, m_context);
+    __hidden_builder_numeric_edit::NumericActions actions(options.bounds, m_context, model, result.numeric, frame.revision);
     const usize previousCount = m_scope->m_items.size();
-    result.edit = declareEditBox(stableKey, model.lendDraft(), state, options.edit, &actions, &frame);
+    result.edit = declareEditBox(stableKey, options.edit, model.lendDraft(), state, &actions, &frame);
     result.numeric.valid &= result.edit.valid;
     if(result.edit.valid && m_scope->m_items.size() > previousCount){
         frame.item = static_cast<u32>(previousCount);
@@ -125,9 +125,9 @@ NumericEditBoxResult Builder::floatEdit(const AStringView stableKey, FloatEditMo
     frame.model = &model;
     frame.state = &state;
     frame.revision = model.revision();
-    __hidden_builder_numeric_edit::NumericActions actions(model, options.bounds, result.numeric, frame.revision, m_context);
+    __hidden_builder_numeric_edit::NumericActions actions(options.bounds, m_context, model, result.numeric, frame.revision);
     const usize previousCount = m_scope->m_items.size();
-    result.edit = declareEditBox(stableKey, model.lendDraft(), state, options.edit, &actions, nullptr, &frame);
+    result.edit = declareEditBox(stableKey, options.edit, model.lendDraft(), state, &actions, nullptr, &frame);
     result.numeric.valid &= result.edit.valid;
     if(result.edit.valid && m_scope->m_items.size() > previousCount){
         frame.item = static_cast<u32>(previousCount);

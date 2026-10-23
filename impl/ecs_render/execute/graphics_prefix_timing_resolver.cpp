@@ -26,9 +26,9 @@ GraphicsPrefixTimingResolver::GraphicsPrefixTimingResolver(NotNull<RendererFrame
 
 void GraphicsPrefixTimingResolver::resolve(
     const Core::GpuCompiledGraph::ReadView& compiledPlan,
-    Core::GpuTimingSubmissionTicket** timingTickets,
     Core::GpuTimingSubmissionTicket* const* ownedTickets,
     usize ticketCount,
+    Core::GpuTimingSubmissionTicket** timingTickets,
     Core::GpuTaskId* timingTasks,
     bool& asyncSpansOnePacket,
     GraphicsPrefixTimingResolutionResult& outResult

@@ -139,7 +139,7 @@ void RendererRayTracingSystem::preflightLightSpaceShadowResources(){
     // Use the same scene ordering and shadow-slot allocator as the later prefix. That prefix may only select a fitting generation.
     ECSRenderDetail::SceneLightGpuData lights[NWB_SCENE_MAX_LIGHTS];
     f32 causticImportance[NWB_SCENE_MAX_LIGHTS] = {};
-    const u32 lightCount = ECSRenderDetail::ResolveSceneLights(m_world, lights, causticImportance, NWB_SCENE_MAX_LIGHTS);
+    const u32 lightCount = ECSRenderDetail::ResolveSceneLights(m_world, NWB_SCENE_MAX_LIGHTS, lights, causticImportance);
     for(u32 index = 0u; index < lightCount; ++index)
         state.m_csgRequired = state.m_csgRequired || (state.m_csg.snapshot.hasCsg && lights[index].params.z >= 0.f);
     const auto planResult = buildLightSpaceShadowPlan(lights, lightCount);

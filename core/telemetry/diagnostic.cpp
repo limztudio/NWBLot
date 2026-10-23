@@ -43,7 +43,7 @@ inline constexpr StringView s_LifecycleCategory = "telemetry_diagnostic_lifecycl
     return header.magic == s_DiagnosticPayloadMagic && header.version == s_DiagnosticPayloadVersion && (header.flags & ~s_KnownFlags) == 0u;
 }
 
-[[nodiscard]] static Expected<AStringView> ReadText(const BinaryByteView& payload, usize& inOutCursor, const u32 byteCount)noexcept{
+[[nodiscard]] static Expected<AStringView> ReadText(const BinaryByteView& payload, const u32 byteCount, usize& inOutCursor)noexcept{
     if(!BinaryDetail::CanReadBytes(payload, inOutCursor, byteCount))
         return MakeUnexpected(Failure{});
 
@@ -167,7 +167,7 @@ Expected<DiagnosticPayload> ParseDiagnosticPayload(const void* const payload, co
         { header.fileBytes, NotNull(&parsedPayload.file) },
     }};
     for(const TextField& field : textFields){
-        const auto text = __hidden_telemetry_diagnostic::ReadText(encoded, cursor, field.byteCount);
+        const auto text = __hidden_telemetry_diagnostic::ReadText(encoded, field.byteCount, cursor);
         if(!text)
             return MakeUnexpected(Failure{});
         *field.destination = *text;

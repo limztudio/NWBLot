@@ -16,9 +16,9 @@ NWB_IMPL_BEGIN
 
 bool RendererAvboitSystem::appendTaskGraphTimingTickets(
     const RendererAvboitTaskGraphValidation& validation,
+    const usize bindingCapacity,
     RendererAvboitTaskGraphTimingTickets& timingTickets,
     Core::GpuTaskGraphTaskTimingTicket* const bindings,
-    const usize bindingCapacity,
     usize& bindingCount
 )const{
     if(!validation.valid() || !bindings || bindingCount > bindingCapacity)

@@ -19,10 +19,10 @@ NWB_IMPL_UI_BEGIN
 
 
 ComboResult Builder::comboBox(const AStringView stableKey, const IListDataSource& source, ComboState& state, const ComboOptions& options){
-    return declareCombo(stableKey, source, state, options);
+    return declareCombo(stableKey, source, options, nullptr, state);
 }
 
-ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& source, ComboState& state, const ComboOptions& options, SearchComboState* search, ISearchableListDataSource* searchSource, const SearchComboOptions* searchOptions){
+ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& source, const ComboOptions& options, const SearchComboOptions* searchOptions, ComboState& state, SearchComboState* search, ISearchableListDataSource* searchSource){
     ComboResult result;
     if(
         declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed()

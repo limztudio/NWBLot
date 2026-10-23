@@ -111,8 +111,8 @@ public:
         usize graphicsPrefixUniquePacketCount,
         const RendererAvboitTaskGraphValidation& avboitValidation,
         bool hardwareShadowSupported,
-        Core::GpuTaskGraphTaskTimingTicket* tickets,
-        usize ticketCapacity
+        usize ticketCapacity,
+        Core::GpuTaskGraphTaskTimingTicket* tickets
     );
 };
 

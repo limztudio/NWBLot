@@ -205,11 +205,10 @@ bool MeshSkinningSystem::hasRuntimeMeshBinding(const Core::ECS::EntityID entity)
 }
 
 void MeshSkinningSystem::markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests){
-    MarkLiveSkinnedRuntimeMeshes(m_world, requests, [this](const Core::ECS::EntityID entity, const SkinnedMeshBindingComponent& binding){
+    MarkLiveSkinnedRuntimeMeshes(m_world, [this](const Core::ECS::EntityID entity, const SkinnedMeshBindingComponent& binding){
         const MeshSkinningRuntimeInstance* const instance = binding.runtimeMesh.valid() ? m_runtimeMeshCache.findInstance(binding.runtimeMesh) : nullptr;
         return ResolveSkinnedRuntimeMeshIdentity(entity, binding.runtimeMesh, instance);
-    }
-    );
+    }, requests);
 }
 
 bool MeshSkinningSystem::submitFrameSkinningGraph(){
@@ -363,7 +362,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     Core::GpuTaskGraphCompileOptions compileOptions;
     compileOptions.packetizationPolicy = Core::GpuTaskGraphPacketizationPolicy::FrontierScored;
     const Core::GpuTaskScheduler& scheduler = m_graphics.gpuTasks();
-    if(!scheduler.scheduleGraph(graph, analysis, assignments, compiledGraph, recordedGraph, transaction, scratchArena, compileOptions)){
+    if(!scheduler.scheduleGraph(graph, compileOptions, scratchArena, analysis, assignments, compiledGraph, recordedGraph, transaction)){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to prepare graph-owned skinning work"));
         return false;
     }
@@ -431,7 +430,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     normalExecution.taskTimingTicketCount = LengthOf(timingTickets);
     normalExecution.taskAcceptedCallbacks = &acceptedCallback;
     normalExecution.taskAcceptedCallbackCount = 1u;
-    const bool skinningGraphAccepted = scheduler.executeGraph(graph, compiledGraph, recordedGraph, normalExecution, transaction, nullptr, scratchArena);
+    const bool skinningGraphAccepted = scheduler.executeGraph(normalExecution, scratchArena, graph, compiledGraph, recordedGraph, transaction, nullptr);
     const Core::QueueSubmissionToken skinningToken = transaction.taskToken(compiledPlan, terminalTask);
     if(!skinningToken.valid()){
         if(!transaction.discardUnaccepted(graph, compiledGraph, recordedGraph.recordingAttemptGeneration()))

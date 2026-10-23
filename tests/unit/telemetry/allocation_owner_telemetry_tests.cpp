@@ -125,7 +125,7 @@ static void ExpectDelta(const Perf::MemoryDelta& actual, const Perf::MemoryDelta
 
 [[nodiscard]] static AStringView FindOwnerJsonRecord(const AStringView json, const Name& owner, const AStringView sourceField){
     char identityText[NameDetail::s_DebugHashTextLength + 1u] = {};
-    NameDetail::HashToDebugString(owner.hash(), identityText, sizeof(identityText));
+    NameDetail::HashToDebugString(identityText, sizeof(identityText), owner.hash());
     usize cursor = json.find("\"memoryRecords\": [");
     while(cursor != AStringView::npos && cursor < json.size()){
         const usize nextLine = json.find('\n', cursor);
@@ -531,9 +531,9 @@ TEST(AllocationOwnerTelemetry, ResolvesLoadedOwnerSymbolsByFullIdentityAndPreser
     char firstHashText[NameDetail::s_DebugHashTextLength + 1u] = {};
     char secondHashText[NameDetail::s_DebugHashTextLength + 1u] = {};
     char unknownHashText[NameDetail::s_DebugHashTextLength + 1u] = {};
-    NameDetail::HashToDebugString(firstHash, firstHashText, sizeof(firstHashText));
-    NameDetail::HashToDebugString(secondHash, secondHashText, sizeof(secondHashText));
-    NameDetail::HashToDebugString(unknownHash, unknownHashText, sizeof(unknownHashText));
+    NameDetail::HashToDebugString(firstHashText, sizeof(firstHashText), firstHash);
+    NameDetail::HashToDebugString(secondHashText, sizeof(secondHashText), secondHash);
+    NameDetail::HashToDebugString(unknownHashText, sizeof(unknownHashText), unknownHash);
 
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());

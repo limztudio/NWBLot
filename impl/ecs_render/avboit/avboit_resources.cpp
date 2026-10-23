@@ -20,7 +20,7 @@ namespace __hidden_avboit_resources{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool CreateHeapComputePipeline(Core::Device& device, Core::ComputePipelineHandle& pipeline, const Core::ShaderHandle& shader, const Core::BindingLayoutHandle& bindingLayout){
+static bool CreateHeapComputePipeline(Core::Device& device, const Core::ShaderHandle& shader, const Core::BindingLayoutHandle& bindingLayout, Core::ComputePipelineHandle& pipeline){
     if(pipeline)
         return true;
 
@@ -51,7 +51,7 @@ static bool CreateHeapComputePipeline(Core::Device& device, Core::ComputePipelin
 bool RendererAvboitSystem::createAvboitResources(){
     auto& device = m_graphics.getDevice();
 
-    if(!ECSRenderDetail::CreateClampSampler(device, m_avboitState.m_linearSampler, true)){
+    if(!ECSRenderDetail::CreateClampSampler(device, true, m_avboitState.m_linearSampler)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create linear sampler for AVBOIT"));
         return false;
     }
@@ -80,12 +80,12 @@ bool RendererAvboitSystem::createAvboitPipelines(){
         return false;
     }
 
-    if(!__hidden_avboit_resources::CreateHeapComputePipeline(device, m_avboitState.m_depthWarpPipeline, m_avboitState.m_depthWarpComputeShader, *materialPassBindingLayout)){
+    if(!__hidden_avboit_resources::CreateHeapComputePipeline(device, m_avboitState.m_depthWarpComputeShader, *materialPassBindingLayout, m_avboitState.m_depthWarpPipeline)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT depth-warp pipeline"));
         return false;
     }
 
-    if(!__hidden_avboit_resources::CreateHeapComputePipeline(device, m_avboitState.m_integratePipeline, m_avboitState.m_integrateComputeShader, *materialPassBindingLayout)){
+    if(!__hidden_avboit_resources::CreateHeapComputePipeline(device, m_avboitState.m_integrateComputeShader, *materialPassBindingLayout, m_avboitState.m_integratePipeline)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT integration pipeline"));
         return false;
     }

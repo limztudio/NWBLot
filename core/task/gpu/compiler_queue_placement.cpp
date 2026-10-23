@@ -53,7 +53,7 @@ using namespace GpuTaskGraphCompilerDetail;
 }
 
 
-[[nodiscard]] Expected<void, GpuTaskId> BuildInitialOwnershipQueueConstraints(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphAnalysis& analysis, Vector<GpuPhysicalQueueId, Alloc::ScratchArena>& outQueues, Alloc::ScratchArena& scratchArena){
+[[nodiscard]] Expected<void, GpuTaskId> BuildInitialOwnershipQueueConstraints(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphAnalysis& analysis, Alloc::ScratchArena& scratchArena, Vector<GpuPhysicalQueueId, Alloc::ScratchArena>& outQueues){
     usize taskUseCapacity = 0u;
     usize ownedResourceUseCount = 0u;
     for(const GpuTaskId taskID : analysis.topologicalOrder()){
@@ -190,8 +190,8 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
     const GpuPhysicalQueueTopology& topology,
-    Vector<GpuTaskQueuePlacementGroup, Alloc::ScratchArena>& outGroups,
-    Alloc::ScratchArena& scratchArena
+    Alloc::ScratchArena& scratchArena,
+    Vector<GpuTaskQueuePlacementGroup, Alloc::ScratchArena>& outGroups
 ){
     using namespace __hidden_gpu_task_graph_compiler_queue_placement;
 
@@ -203,7 +203,7 @@ namespace GpuTaskGraphCompilerDetail{
         return MakeUnexpected(diagnostic);
     };
     Vector<GpuPhysicalQueueId, Alloc::ScratchArena> initialOwnershipQueues(graph.taskCount(), scratchArena);
-    const auto ownershipConstraints = BuildInitialOwnershipQueueConstraints(graph, analysis, initialOwnershipQueues, scratchArena);
+    const auto ownershipConstraints = BuildInitialOwnershipQueueConstraints(graph, analysis, scratchArena, initialOwnershipQueues);
     if(!ownershipConstraints)
         return fail(GpuTaskGraphQueueAssignmentStatus::NoCompatibleQueue, ownershipConstraints.error());
 

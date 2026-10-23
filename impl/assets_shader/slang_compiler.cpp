@@ -285,7 +285,7 @@ Expected<u64> SlangShaderCompiler::ComputeCompilerFingerprint(const Path& tempor
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest& request, ShaderCook::CookVector<u8>& outBytecode, Core::Alloc::ScratchArena& scratchArena){
+bool SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest& request, Core::Alloc::ScratchArena& scratchArena, ShaderCook::CookVector<u8>& outBytecode){
     outBytecode.clear();
 
     if(request.sourcePath.empty()){

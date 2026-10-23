@@ -70,7 +70,7 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
             haveGesture = gesture && gesture->control == token;
         }
         else{
-            if(!ListBehavior::Apply(state, source, options, *action, result)){
+            if(!ListBehavior::Apply(state, result, source, options, *action)){
                 m_context.fail();
                 result.valid = false;
                 return result;

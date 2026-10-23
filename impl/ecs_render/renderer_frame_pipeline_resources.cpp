@@ -243,7 +243,7 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     if(!m_materialSystem.prepareMaterialPassResources(scratchArena, deferredTargets.framebuffer.get(), MaterialPipelinePass::Opaque, false, m_preparedCsgFrameState, nullptr))
         return false;
 
-    if(m_preparedHasTransparentRenderers && !m_avboitSystem.prepareAvboitPassResources(scratchArena, deferredTargets, m_preparedCsgFrameState))
+    if(m_preparedHasTransparentRenderers && !m_avboitSystem.prepareAvboitPassResources(scratchArena, m_preparedCsgFrameState, deferredTargets))
         return false;
 
     // Material owns capacity growth. Once every material domain pass is prepared, publish exactly one matching Mesh-owned generation for the frame and retain the prior generation on refresh.

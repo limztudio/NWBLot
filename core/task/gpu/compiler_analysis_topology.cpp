@@ -124,7 +124,7 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void BuildTaskDependencyAdjacency(const GraphicsVector<GpuTaskDependencyEdge>& edges, const usize taskCount, TaskDependencyAdjacency& outAdjacency, Alloc::ScratchArena& scratchArena){
+void BuildTaskDependencyAdjacency(const GraphicsVector<GpuTaskDependencyEdge>& edges, const usize taskCount, Alloc::ScratchArena& scratchArena, TaskDependencyAdjacency& outAdjacency){
     outAdjacency.offsets.clear();
     outAdjacency.offsets.resize(taskCount + 1u, 0u);
     for(const GpuTaskDependencyEdge& edge : edges)
@@ -148,10 +148,10 @@ bool BuildTopologicalOrder(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GraphicsVector<GpuTaskDependencyEdge>& edges,
     const TaskDependencyAdjacency& adjacency,
+    Alloc::ScratchArena& scratchArena,
     GraphicsVector<GpuTaskId>& outOrder,
     GraphicsVector<GpuTaskId>& outCyclePath,
-    GraphicsVector<GpuTaskDependencyEdge>& outCycleEdges,
-    Alloc::ScratchArena& scratchArena
+    GraphicsVector<GpuTaskDependencyEdge>& outCycleEdges
 ){
     using namespace __hidden_gpu_task_graph_compiler_analysis_topology;
 
@@ -276,8 +276,8 @@ void BuildSchedulingEdges(
     const GraphicsVector<GpuTaskDependencyEdge>& rawEdges,
     const TaskDependencyAdjacency& adjacency,
     const GraphicsVector<GpuTaskId>& topologicalOrder,
-    GraphicsVector<GpuTaskDependencyEdge>& outSchedulingEdges,
-    Alloc::ScratchArena& scratchArena
+    Alloc::ScratchArena& scratchArena,
+    GraphicsVector<GpuTaskDependencyEdge>& outSchedulingEdges
 ){
     const usize taskCount = topologicalOrder.size();
     Vector<u32, Alloc::ScratchArena> reached(taskCount, Limit<u32>::s_Max, scratchArena);
@@ -367,11 +367,11 @@ void BuildSchedulingTaskAdjacency(
     const GraphicsVector<GpuTaskDependencyEdge>& schedulingEdges,
     const usize taskCount,
     const u64 graphGeneration,
+    Alloc::ScratchArena& scratchArena,
     GraphicsVector<usize>& outOutgoingOffsets,
     GraphicsVector<u32>& outOutgoingConsumers,
     GraphicsVector<usize>& outIncomingOffsets,
-    GraphicsVector<u32>& outIncomingProducers,
-    Alloc::ScratchArena& scratchArena
+    GraphicsVector<u32>& outIncomingProducers
 ){
     static_cast<void>(graphGeneration);
 

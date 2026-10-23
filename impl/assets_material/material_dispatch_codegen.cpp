@@ -341,6 +341,24 @@ static void AppendShadowSurfaceBindAliasUndefines(const ShadowSurfaceBindAliasVe
     }
 }
 
+static void AppendShadowSurfaceInputDefines(ScratchString& inOutSource){
+    inOutSource += "#define inColor (nwbShadowSurfaceInputs.color)\n";
+    inOutSource += "#define inNormal (nwbShadowSurfaceInputs.normal)\n";
+    inOutSource += "#define inTangent (nwbShadowSurfaceInputs.tangent)\n";
+    inOutSource += "#define inUv0 (nwbShadowSurfaceInputs.uv0)\n";
+    inOutSource += "#define inWorldPosition (nwbShadowSurfaceInputs.worldPosition)\n";
+    inOutSource += "#define inIncidentDirection (nwbShadowSurfaceInputs.incidentDirection)\n";
+}
+
+static void AppendShadowSurfaceInputUndefines(ScratchString& inOutSource){
+    inOutSource += "#undef inIncidentDirection\n";
+    inOutSource += "#undef inWorldPosition\n";
+    inOutSource += "#undef inUv0\n";
+    inOutSource += "#undef inTangent\n";
+    inOutSource += "#undef inNormal\n";
+    inOutSource += "#undef inColor\n";
+}
+
 static Expected<ShadowSurfaceBindEntryLookup> BuildShadowSurfaceBindEntryLookup(const CookVector<MaterialBindEntry>& materialBindEntries, ScratchArena& arena){
     ShadowSurfaceBindEntryLookup lookup(0, Hasher<Name>(), EqualTo<Name>(), arena);
     lookup.reserve(materialBindEntries.size());
@@ -481,30 +499,31 @@ Expected<Path> EmitShadowSurfaceDispatchModuleImpl(const Path& cacheDirectory, c
         }
         if(!AppendShadowSurfaceBindAliases(*bindEntryById[id], AStringView(bindNamespace), bindAliasSeenSymbols, bindAliasSymbols, source, scratchArena))
             return MakeUnexpected(Failure{});
+        AppendShadowSurfaceInputDefines(source);
         source += s_GeneratedDefineDirective;
         source += s_ShadowSurfaceFunctionMacro;
-        source += ' ';
+        source += "() ";
         source += s_ShadowSurfaceModelPrefix;
         source += idView;
-        source += '\n';
+        source += "(const NwbMeshSurfaceInputs nwbShadowSurfaceInputs)\n";
         source += s_GeneratedIncludeDirective;
         source += surfaceById[id];
         source += s_GeneratedIncludeDirectiveEnd;
         source += s_GeneratedUndefDirective;
         source += s_ShadowSurfaceFunctionMacro;
         source += "\n";
+        AppendShadowSurfaceInputUndefines(source);
         AppendShadowSurfaceBindAliasUndefines(bindAliasSymbols, source);
         source += "NwbMeshSurface ";
         source += s_ShadowSurfaceWrapperPrefix;
         source += idView;
         source += "(NwbShadowHit hit){\n";
         source += "    nwbShadowSetMaterialContext(hit);\n";
-        source += "    NwbMeshSurfaceInputs in = nwbShadowBuildSurfaceInputs(hit);\n";
-        source += "    nwbLoadMeshSurfaceInputs(in);\n";
+        source += "    const NwbMeshSurfaceInputs in = nwbShadowBuildSurfaceInputs(hit);\n";
         source += s_GeneratedReturnPrefix;
         source += s_ShadowSurfaceModelPrefix;
         source += idView;
-        source += "();\n";
+        source += "(in);\n";
         source += s_GeneratedFunctionEnd;
     }
 

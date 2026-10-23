@@ -30,24 +30,24 @@ NwbRayTraceSurfaceHit nwbRefractionClosestEntryInterface(const uint instanceMate
 #endif
         return rejected;
     }
-    return nwbRayTraceReconstructSurfaceHit(instanceMaterialHeapSlot, origin, direction, geometry);
+    return nwbRayTraceReconstructValidatedSurfaceHit(instanceMaterialHeapSlot, origin, direction, geometry);
 }
 
-NwbRayTraceSurfaceHit nwbRefractionClosestExitInterface(const uint instanceMaterialHeapSlot, const float3 origin, const float3 direction, const float minDistance, const float maxDistance, const uint primaryInstance){
-    const NwbRayTraceGeometryHit geometry = nwbRayTraceClosestGeometryHit(origin, direction, minDistance, maxDistance);
+NwbRayTraceSurfaceHit nwbRefractionClosestExitInterface(const uint instanceMaterialHeapSlot, const float3 origin, const float3 direction, const float minDistance, const float maxDistance, const uint primaryInstance, out NwbRayTraceGeometryHit outGeometry){
+    outGeometry = nwbRayTraceClosestGeometryHit(origin, direction, minDistance, maxDistance);
 #if NWB_RT_CSG_ENABLED
-    if(geometry.failure != 0u)
-        return nwbRayTraceReconstructSurfaceHit(instanceMaterialHeapSlot, origin, direction, geometry);
+    if(outGeometry.failure != 0u)
+        return nwbRayTraceReconstructSurfaceHit(instanceMaterialHeapSlot, origin, direction, outGeometry);
 #endif
-    if(!geometry.hit || geometry.instance != primaryInstance || geometry.frontFace){
+    if(!outGeometry.hit || outGeometry.instance != primaryInstance || outGeometry.frontFace){
         NwbRayTraceSurfaceHit rejected = (NwbRayTraceSurfaceHit)0;
 #if NWB_RT_CSG_ENABLED && NWB_REFRACTION_DIAGNOSTICS
-        rejected.queryBudgetUnits = geometry.queryBudgetUnits;
-        rejected.physicalQueries = geometry.physicalQueries;
+        rejected.queryBudgetUnits = outGeometry.queryBudgetUnits;
+        rejected.physicalQueries = outGeometry.physicalQueries;
 #endif
         return rejected;
     }
-    return nwbRayTraceReconstructSurfaceHit(instanceMaterialHeapSlot, origin, direction, geometry);
+    return nwbRayTraceReconstructValidatedSurfaceHit(instanceMaterialHeapSlot, origin, direction, outGeometry);
 }
 
 

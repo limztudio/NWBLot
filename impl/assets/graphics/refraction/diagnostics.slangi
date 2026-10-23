@@ -64,6 +64,18 @@ void nwbRefractionCount(const uint offset, const uint amount = 1u){
 #endif
 }
 
+void nwbRefractionCountQueryWork(const NwbRayTraceGeometryHit hit){
+#if NWB_REFRACTION_DIAGNOSTICS
+#if NWB_RT_CSG_ENABLED
+    nwbRefractionCount(NWB_REFRACTION_COUNTER_physicalQueries, hit.physicalQueries);
+    nwbRefractionCount(NWB_REFRACTION_COUNTER_queryBudgetUnits, hit.queryBudgetUnits);
+#else
+    nwbRefractionCount(NWB_REFRACTION_COUNTER_physicalQueries);
+    nwbRefractionCount(NWB_REFRACTION_COUNTER_queryBudgetUnits);
+#endif
+#endif
+}
+
 void nwbRefractionCountQueryWork(const NwbRayTraceSurfaceHit hit){
 #if NWB_REFRACTION_DIAGNOSTICS
 #if NWB_RT_CSG_ENABLED

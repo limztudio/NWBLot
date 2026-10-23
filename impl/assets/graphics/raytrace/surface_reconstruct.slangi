@@ -54,6 +54,7 @@ struct NwbRayTraceSurfaceHit{
     bool hit;
     uint instance;
     uint primitive;
+    uint meshInstanceIndex;
     uint flags;
     uint shadingModelId;
     float distance;
@@ -85,6 +86,7 @@ NwbRayTraceSurfaceHit nwbRayTraceReconstructSurfaceHit(const uint instanceMateri
     hit.distance = distance;
     hit.position = origin + direction * hit.distance;
     const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(instanceMaterialHeapSlot)[hit.instance];
+    hit.meshInstanceIndex = material.meshInstanceIndex;
     hit.flags = material.flags;
     hit.shadingModelId = material.shadingModelId;
     const uint triangleBase = primitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
@@ -107,6 +109,43 @@ NwbRayTraceSurfaceHit nwbRayTraceReconstructSurfaceHit(const uint instanceMateri
     hit.shadingNormal = surfaceHit.worldNormal;
 #endif
     hit.surface = nwbShadowDispatchSurface(material.surfaceDispatchId, surfaceHit);
+    return hit;
+}
+
+NwbRayTraceSurfaceHit nwbRayTraceReconstructValidatedSurfaceHit(const uint instanceMaterialHeapSlot, const float3 origin, const float3 direction, const NwbRayTraceGeometryHit geometry){
+#if NWB_RT_CSG_ENABLED
+    if(geometry.cutter != NWB_CSG_RAY_INVALID_INDEX){
+        NwbRayTraceSurfaceHit hit = (NwbRayTraceSurfaceHit)0;
+        hit.hit = true;
+        hit.queryBudgetUnits = geometry.queryBudgetUnits;
+        hit.physicalQueries = geometry.physicalQueries;
+        hit.instance = geometry.instance;
+        hit.primitive = NWB_CSG_RAY_INVALID_INDEX;
+        hit.cutter = geometry.cutter;
+        hit.distance = geometry.distance;
+        hit.position = origin + direction * geometry.distance;
+        hit.geometricNormal = geometry.geometricNormal;
+        hit.shadingNormal = geometry.geometricNormal;
+        const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(instanceMaterialHeapSlot)[geometry.instance];
+        hit.meshInstanceIndex = material.meshInstanceIndex;
+        hit.flags = material.flags;
+        hit.shadingModelId = material.shadingModelId;
+        NwbShadowHit surfaceHit = (NwbShadowHit)0;
+        surfaceHit.meshInstanceIndex = material.meshInstanceIndex;
+        surfaceHit.surfaceDispatchId = material.surfaceDispatchId;
+        surfaceHit.materialConstantByteOffset = material.materialConstantByteOffset;
+        surfaceHit.worldPosition = hit.position;
+        surfaceHit.worldNormal = hit.geometricNormal;
+        surfaceHit.rayDirection = direction;
+        hit.surface = nwbShadowDispatchSurface(material.surfaceDispatchId, surfaceHit);
+        return hit;
+    }
+#endif
+    NwbRayTraceSurfaceHit hit = nwbRayTraceReconstructSurfaceHit(instanceMaterialHeapSlot, origin, direction, geometry.distance, geometry.instance, geometry.primitive, geometry.barycentrics, geometry.worldToObject);
+#if NWB_RT_CSG_ENABLED
+    hit.queryBudgetUnits = geometry.queryBudgetUnits;
+    hit.physicalQueries = geometry.physicalQueries;
+#endif
     return hit;
 }
 
@@ -133,38 +172,8 @@ NwbRayTraceSurfaceHit nwbRayTraceReconstructSurfaceHit(const uint instanceMateri
         }
         return hit;
     }
-    if(geometry.cutter != NWB_CSG_RAY_INVALID_INDEX){
-        NwbRayTraceSurfaceHit hit = (NwbRayTraceSurfaceHit)0;
-        hit.hit = true;
-        hit.queryBudgetUnits = geometry.queryBudgetUnits;
-        hit.physicalQueries = geometry.physicalQueries;
-        hit.instance = geometry.instance;
-        hit.primitive = NWB_CSG_RAY_INVALID_INDEX;
-        hit.cutter = geometry.cutter;
-        hit.distance = geometry.distance;
-        hit.position = origin + direction * geometry.distance;
-        hit.geometricNormal = geometry.geometricNormal;
-        hit.shadingNormal = geometry.geometricNormal;
-        const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(instanceMaterialHeapSlot)[geometry.instance];
-        hit.flags = material.flags;
-        hit.shadingModelId = material.shadingModelId;
-        NwbShadowHit surfaceHit = (NwbShadowHit)0;
-        surfaceHit.meshInstanceIndex = material.meshInstanceIndex;
-        surfaceHit.surfaceDispatchId = material.surfaceDispatchId;
-        surfaceHit.materialConstantByteOffset = material.materialConstantByteOffset;
-        surfaceHit.worldPosition = hit.position;
-        surfaceHit.worldNormal = hit.geometricNormal;
-        surfaceHit.rayDirection = direction;
-        hit.surface = nwbShadowDispatchSurface(material.surfaceDispatchId, surfaceHit);
-        return hit;
-    }
 #endif
-    NwbRayTraceSurfaceHit hit = nwbRayTraceReconstructSurfaceHit(instanceMaterialHeapSlot, origin, direction, geometry.distance, geometry.instance, geometry.primitive, geometry.barycentrics, geometry.worldToObject);
-#if NWB_RT_CSG_ENABLED
-    hit.queryBudgetUnits = geometry.queryBudgetUnits;
-    hit.physicalQueries = geometry.physicalQueries;
-#endif
-    return hit;
+    return nwbRayTraceReconstructValidatedSurfaceHit(instanceMaterialHeapSlot, origin, direction, geometry);
 }
 
 

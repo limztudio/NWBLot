@@ -61,9 +61,22 @@ static const half NWB_REFRACTION_OPAQUE_COVERAGE_MIN = 0.999h;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-half3 nwbRefractionShadeHit(const NwbRayTraceSurfaceHit hit, const float3 direction){
+float3 nwbRefractionResolveSurfaceNormal(const uint instanceMaterialHeapSlot, const NwbRayTraceGeometryHit geometry, const float3 surfaceNormal){
+    const float lengthSquared = dot(surfaceNormal, surfaceNormal);
+    if(nwbFiniteFloat3(surfaceNormal) && nwbFiniteFloat(lengthSquared) && lengthSquared > NWB_SAFE_NORMALIZE_MIN_LENGTH_SQUARED)
+        return surfaceNormal * rsqrt(lengthSquared);
+#if NWB_RT_CSG_ENABLED
+    if(geometry.cutter != NWB_CSG_RAY_INVALID_INDEX)
+        return geometry.geometricNormal;
+#endif
+    const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(instanceMaterialHeapSlot)[geometry.instance];
+    return nwbRayTraceTriangleGeometricNormal(material, geometry.primitive, geometry.worldToObject);
+}
+
+half3 nwbRefractionShadeGeometryHit(const uint instanceMaterialHeapSlot, const float3 origin, const float3 direction, const NwbRayTraceGeometryHit geometry){
+    const NwbRayTraceSurfaceHit hit = nwbRayTraceReconstructValidatedSurfaceHit(instanceMaterialHeapSlot, origin, direction, geometry);
     nwbRefractionCount(NWB_REFRACTION_COUNTER_materialShadeCalls);
-    float3 normal = nwbSafeNormalize(hit.surface.normal, hit.geometricNormal);
+    float3 normal = nwbRefractionResolveSurfaceNormal(instanceMaterialHeapSlot, geometry, hit.surface.normal);
     if(dot(normal, direction) > 0.0)
         normal = -normal;
     half3 radiance = half3(0.0h);
@@ -76,10 +89,6 @@ half3 nwbRefractionShadeHit(const NwbRayTraceSurfaceHit hit, const float3 direct
     }
     // Offscreen hits have no camera lighting cache. This deliberately bounded diffuse approximation shares the authored surface contract with GI; full camera BRDF, shadows, and GI are not implicitly available at a ray hit.
     return radiance * hit.surface.baseColor;
-}
-
-half3 nwbRefractionShadeGeometryHit(const float3 origin, const float3 direction, const NwbRayTraceGeometryHit geometry){
-    return nwbRefractionShadeHit(nwbRayTraceReconstructSurfaceHit(g_NwbRefractionMaterialContext.sceneSlots.z, origin, direction, geometry), direction);
 }
 
 bool nwbRefractionCachedHit(const NwbRayTraceSurfaceHit hit, const NwbRefractionEntry entry, const bool includeTransparency, out half3 radiance){
@@ -103,10 +112,11 @@ bool nwbRefractionCachedHit(const NwbRayTraceSurfaceHit hit, const NwbRefraction
 half4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry entry){
     nwbRefractionCount(NWB_REFRACTION_COUNTER_hardwarePixels);
     nwbRefractionCount(NWB_REFRACTION_COUNTER_entryQueries);
+    const uint instanceMaterialHeapSlot = g_NwbRefractionMaterialContext.sceneSlots.z;
     const float3 camera = g_NwbRefractionView.cameraPosition.xyz;
     const float entryDistance = length(entry.position - camera);
     const float associationTolerance = max(entry.bias * NWB_REFRACTION_BIAS_TOLERANCE_SCALE, entryDistance * NWB_REFRACTION_ASSOCIATION_DISTANCE_SCALE);
-    const NwbRayTraceSurfaceHit entryHit = nwbRefractionClosestEntryInterface(g_NwbRefractionMaterialContext.sceneSlots.z, camera, entry.incident, max(entryDistance - associationTolerance, entry.bias), entryDistance + associationTolerance);
+    const NwbRayTraceSurfaceHit entryHit = nwbRefractionClosestEntryInterface(instanceMaterialHeapSlot, camera, entry.incident, max(entryDistance - associationTolerance, entry.bias), entryDistance + associationTolerance);
     nwbRefractionCountQueryWork(entryHit);
 #if NWB_RT_CSG_ENABLED
     if(entryHit.failure != 0u){
@@ -118,8 +128,7 @@ half4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry e
         nwbRefractionCount(NWB_REFRACTION_COUNTER_entryAssociationMisses);
         return nwbRefractionResolveScreen(pixel, entry);
     }
-    const uint meshInstanceIndex = nwbHeapRtInstanceMaterials(g_NwbRefractionMaterialContext.sceneSlots.z)[entryHit.instance].meshInstanceIndex;
-    if(g_NwbMeshInstances[meshInstanceIndex].entityId != entry.primaryEntityId){
+    if(g_NwbMeshInstances[entryHit.meshInstanceIndex].entityId != entry.primaryEntityId){
         nwbRefractionCount(NWB_REFRACTION_COUNTER_entryWrongEntities);
         return nwbRefractionResolveScreen(pixel, entry);
     }
@@ -139,7 +148,8 @@ half4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry e
     // At most two total-internal-reflection continuations, staying inside the same primary instance. Their Fresnel reflectance is one, so only the accumulated Beer-Lambert distance changes until the ray finally transmits.
     for(uint internalBounce = 0u; internalBounce <= NWB_REFRACTION_MAX_INTERNAL_BOUNCES; ++internalBounce){
         nwbRefractionCount(NWB_REFRACTION_COUNTER_exitQueries);
-        exitHit = nwbRefractionClosestExitInterface(g_NwbRefractionMaterialContext.sceneSlots.z, internalOrigin + internalDirection * entry.bias, internalDirection, entry.bias, NWB_REFRACTION_MAX_DISTANCE, entryHit.instance);
+        NwbRayTraceGeometryHit exitGeometry;
+        exitHit = nwbRefractionClosestExitInterface(instanceMaterialHeapSlot, internalOrigin + internalDirection * entry.bias, internalDirection, entry.bias, NWB_REFRACTION_MAX_DISTANCE, entryHit.instance, exitGeometry);
         nwbRefractionCountQueryWork(exitHit);
 #if NWB_RT_CSG_ENABLED
         if(exitHit.failure != 0u){
@@ -153,7 +163,7 @@ half4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry e
             return nwbRefractionResolveScreen(pixel, entry);
         }
         pathLength += length(exitHit.position - internalOrigin);
-        float3 exitNormal = nwbSafeNormalize(exitHit.surface.normal, exitHit.geometricNormal);
+        float3 exitNormal = nwbRefractionResolveSurfaceNormal(instanceMaterialHeapSlot, exitGeometry, exitHit.surface.normal);
         if(dot(exitNormal, internalDirection) < 0.0)
             exitNormal = -exitNormal;
         exitCosine = half(saturate(dot(internalDirection, exitNormal)));
@@ -182,18 +192,18 @@ half4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry e
     for(uint layer = 0u; layer < NWB_REFRACTION_MAX_BACKGROUND_LAYERS; ++layer){
         nwbRefractionCount(NWB_REFRACTION_COUNTER_backgroundQueries);
         const NwbRayTraceGeometryHit backgroundGeometry = nwbRayTraceClosestGeometryHit(origin, outgoingDirection, entry.bias, NWB_REFRACTION_MAX_DISTANCE);
-        const NwbRayTraceSurfaceHit background = nwbRayTraceReconstructSurfaceHit(g_NwbRefractionMaterialContext.sceneSlots.z, origin, outgoingDirection, backgroundGeometry);
-        nwbRefractionCountQueryWork(background);
-        if(!background.hit){
+        nwbRefractionCountQueryWork(backgroundGeometry);
+        if(!backgroundGeometry.hit){
             nwbRefractionCount(NWB_REFRACTION_COUNTER_backgroundMisses);
             break;
         }
 #if NWB_RT_CSG_ENABLED
-        if(background.failure != 0u){
+        if(backgroundGeometry.failure != 0u){
             nwbRefractionCount(NWB_REFRACTION_COUNTER_backgroundFailures);
             return half4(0.0h, 0.0h, 0.0h, 1.0h);
         }
 #endif
+        const NwbRayTraceSurfaceHit background = nwbRayTraceReconstructValidatedSurfaceHit(instanceMaterialHeapSlot, origin, outgoingDirection, backgroundGeometry);
         if(nwbRefractionIorEligible(float(background.surface.refractionIor))){
             nwbRefractionCount(NWB_REFRACTION_COUNTER_secondaryGlassPixels);
             break;
@@ -215,7 +225,7 @@ half4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry e
             if(layer + 1u == NWB_REFRACTION_MAX_BACKGROUND_LAYERS)
                 nwbRefractionCount(NWB_REFRACTION_COUNTER_backgroundLayerCapPixels);
         }
-        const half3 shadedRadiance = nwbRefractionShadeGeometryHit(origin, outgoingDirection, backgroundGeometry);
+        const half3 shadedRadiance = nwbRefractionShadeGeometryHit(instanceMaterialHeapSlot, origin, outgoingDirection, backgroundGeometry);
         if(opaqueHit)
             return half4((accumulated + transmittance * half3(shadedRadiance)) * half3(attenuation), 1.0h);
         accumulated += transmittance * coverage * shadedRadiance;

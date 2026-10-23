@@ -10,7 +10,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per-frame skinned-normal repack: GPU mirror of BuildMeshletTriangleAttributes reading the deformed stream, so RT shadow + caustic traces bend on the live pose. uv0 is pose-invariant: only the 8-byte normal half is rewritten.
+// Repacks deformed vertex normals into per-triangle-corner attributes for ray-traced shadows and caustics while preserving uv0.
 struct NwbSkinnedMeshRepackPushConstants{
     uint2 payload0;
 };
@@ -37,7 +37,7 @@ uint nwbSkinnedMeshRepackLoadPrimitiveIndex(const uint primitiveIndex){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// One thread group per meshlet; threads stride over the meshlet's primitive-corner refs, exactly like the CPU triangle-attribute builder. The write SLOT is the primitive byte offset (primitive*3+corner); the normal VALUE comes from the global attribute (normal) index for that local vertex.
+// One thread group per meshlet writes packed corner normals at (primitive * 3 + corner) from the deformed normal stream.
 [numthreads(NWB_SKINNED_MESH_REPACK_GROUP_SIZE_X, 1, 1)]
 void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     const uint meshletIndex = groupID.x;

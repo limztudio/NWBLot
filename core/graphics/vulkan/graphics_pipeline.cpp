@@ -258,7 +258,6 @@ bool CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPa
 
     const FramebufferDesc& fbDesc = framebuffer.m_desc;
 
-    // Dynamic rendering (VK_KHR_dynamic_rendering)
     constexpr u32 s_MaxColorAttachments = s_MaxRenderTargets;
     VkRenderingAttachmentInfo colorAttachments[s_MaxColorAttachments] = {};
     const u32 numColorAttachments = static_cast<u32>(fbDesc.colorAttachments.size());

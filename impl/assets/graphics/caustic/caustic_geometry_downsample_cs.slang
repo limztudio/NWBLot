@@ -13,10 +13,10 @@
 // Half-res geometry pack for the caustic resolve: one 2x point sample per half texel bakes xyz = world position, w = receiver validity.
 
 struct NwbCausticGeometryDownsamplePushConstants{
-    uint width;       // full-res G-buffer width
-    uint height;      // full-res G-buffer height
-    uint halfWidth;   // half-res output width
-    uint halfHeight;  // half-res output height
+    uint width;
+    uint height;
+    uint halfWidth;
+    uint halfHeight;
     uint worldPositionSlot;
     uint depthSlot;
     uint outputStorageSlot;

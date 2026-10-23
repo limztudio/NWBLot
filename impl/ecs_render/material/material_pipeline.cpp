@@ -34,7 +34,6 @@ namespace __hidden_material_pipeline{
 
 inline constexpr Name s_SharedMeshProgramName("engine/graphics/mesh/shared_ms");
 
-// The equals sign plus the two quotes around the module include.
 inline constexpr usize s_ModuleAssignmentPunctuationSize = 3u;
 
 

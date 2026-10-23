@@ -21,7 +21,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Owns one texture asset's device-local image and its persistent global sampled-image heap entry. Release it before its Graphics owner tears down so the heap can retire the descriptor and retain the image through in-flight work.
+// Owns a texture asset's device-local image and global sampled-image heap entry; release before Graphics teardown.
 struct TextureGpuResource final : NoCopy{
     Core::TextureHandle texture;
     Core::GpuDescriptorHandle sampledImageHeapHandle = Core::GpuDescriptorHandle::Invalid();

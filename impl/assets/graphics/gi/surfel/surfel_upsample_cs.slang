@@ -90,7 +90,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             const half3 tapRawNormalSample = half3(nwbSurfelUpsampleGbufferNormal().Load(int3(tapFull, 0)).xyz);
             const float3 tapRawNormal = float3(tapRawNormalSample);
             if(dot(tapRawNormal, tapRawNormal) < NWB_SURFEL_GBUFFER_NORMAL_LENGTH_SQUARED_MIN)
-                continue; // tap's geometry is background
+                continue;
             const float3 tapNormal = float3(nwbSurfelDecodeGbufferNormal(tapRawNormalSample));
             if(!nwbSurfelUpsampleNormalCompatible(dot(tapNormal, centerNormal)))
                 continue; // different surface (crease) -> would leak GI across the edge

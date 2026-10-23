@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Stage-2 coarse transparent trace: one colored ray per shadowed light per coarse texel (same trace as opaque-coarse, transparent class). Base layer for the adaptive resolve; not yet folded onto the opaque mask.
+// Stage-2 coarse transparent trace: traces one colored ray per shadowed light per coarse texel for adaptive resolve.
 
 
 #include "sw_binding_slots.h"

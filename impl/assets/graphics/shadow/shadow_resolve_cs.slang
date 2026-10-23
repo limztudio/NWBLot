@@ -453,7 +453,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const NwbShadowResolveVisFVec centerVis = (NwbShadowResolveVisFVec)nwbShadowResolveLoadInput(texel, slot);
         const float sigmaLum = nwbShadowResolveCenterSigmaLum(texel, slot, hw, hh, momentsValid);
         NwbShadowResolveVisFVec sum = (NwbShadowResolveVisFVec)0.0;
-        // The bilateral weight sum is a bounded filter factor, so half arithmetic is sufficient here.
         half weightSum = half(0.0h);
         [unroll] for(int ky = -NWB_SHADOW_RESOLVE_KERNEL_RADIUS; ky <= NWB_SHADOW_RESOLVE_KERNEL_RADIUS; ++ky){
             [unroll] for(int kx = -NWB_SHADOW_RESOLVE_KERNEL_RADIUS; kx <= NWB_SHADOW_RESOLVE_KERNEL_RADIUS; ++kx){
@@ -465,7 +464,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                     continue;
                 const NwbShadowResolveVisFVec tapVis = (NwbShadowResolveVisFVec)nwbShadowResolveLoadInput(tap, slot);
                 const float dDist = float(tapGeom.z) - centerGeomDistance;
-                // Every filter weight is a (0, 1) bounded factor, so half arithmetic is sufficient here.
                 const half distWeight = half(exp(-dDist * dDist * invTwoSigmaDistSq));
                 const half normalWeight = nwbShadowResolveNormalWeightVec(centerNormalWavelet, tapGeom.xy);
                 const half valueWeight = nwbShadowResolveValueWeightVec(centerVis, tapVis, sigmaLum);

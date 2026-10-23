@@ -55,8 +55,8 @@ namespace GpuDescriptorClass{
 
 
 // One opaque 32-bit integer: the only thing that crosses the C++/shader boundary.
-//   bits 31..28 (4)  : class tag  - GpuDescriptorClass::Enum (<= kCount classes, fits with headroom)
-//   bits 27..0 (28)  : slot index - global within its namespace (resource heap or sampler heap), max 2^28
+//   bits 31..28 (4): class tag - GpuDescriptorClass::Enum (<= kCount classes, fits with headroom)
+//   bits 27..0 (28): slot index - global within its namespace (resource heap or sampler heap), max 2^28
 
 // Generation/versioning is intentionally not packed here (index bits are more valuable); a debug-only side table validates handles instead.
 struct GpuDescriptorHandle{

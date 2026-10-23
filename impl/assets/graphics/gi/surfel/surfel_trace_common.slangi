@@ -17,7 +17,7 @@
 #include "surfel_runtime.slangi"
 #include "surfel_sh.slangi"
 #include "surfel_guide.slangi"
-#include "surfel_hash.slangi" // nwbSurfelCellCoord / nwbSurfelHashCell
+#include "surfel_hash.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

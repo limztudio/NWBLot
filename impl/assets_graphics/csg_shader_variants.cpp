@@ -83,7 +83,7 @@ Expected<ShaderStageKeySet, NameTextError::Enum> CollectAvboitClipShaderKeys(con
     CollectMaterialMeshShaderKeys(materialEntries, shaderKeys);
 
     const Name& pixelStageName = Core::ShaderStageNames::ArchiveStageNameFromShaderType(Core::ShaderType::PixelStage);
-    // Every transparent material owns cook-generated AVBOIT accumulate/occupancy/extinction pixel shaders, and each needs the matching CSG clip variant for its typed material binding and project surface/BXDF contract.
+    // Transparent materials require CSG clip variants for each cook-generated AVBOIT pixel shader (accumulate, occupancy, extinction).
     for(const MaterialCookEntry& materialEntry : materialEntries){
         if(!materialEntry.avboitAccumulatePixelShaderName.empty()){
             const auto shaderName = Name::FromText(AStringView(materialEntry.avboitAccumulatePixelShaderName));

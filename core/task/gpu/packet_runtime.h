@@ -435,7 +435,7 @@ public:
 
 private:
     // Appends one latest accepted token for every physical queue other than `destinationQueue`.
-    // A recovery packet submitted on that destination does not need to wait on its own queue because queue order already supplies the dependency
+    // A recovery packet submitted on that destination does not need to wait on its own queue because queue order already supplies the dependency.
     [[nodiscard]] bool appendAcceptedQueueFrontierWaitTokens(const GpuPhysicalQueueId& destinationQueue, Vector<QueueSubmissionToken, Alloc::ScratchArena>& outTokens)const;
 
     [[nodiscard]] bool validForLocked(const GpuCompiledGraph::ReadView& planAccess)const noexcept;

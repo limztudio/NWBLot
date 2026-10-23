@@ -94,8 +94,8 @@ static constexpr f32 s_SpotLightYaw = 0.0f;
 static constexpr f32 s_SpotInnerConeCos = 0.85f;
 static constexpr f32 s_SpotOuterConeCos = 0.55f;
 
-static constexpr f32 s_SpinSpeed = 0.5f; // radians/second
-static constexpr f32 s_ManualYawSpeed = 0.6f; // radians/second
+static constexpr f32 s_SpinSpeed = 0.5f;
+static constexpr f32 s_ManualYawSpeed = 0.6f;
 static constexpr f32 s_TwoPi = 6.2831853f;
 static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;
 

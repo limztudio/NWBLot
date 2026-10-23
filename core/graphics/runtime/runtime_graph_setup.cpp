@@ -536,7 +536,7 @@ Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
     if(recoveryPacketPlan.queue != graphicsQueue || recoveryPacketPlan.dependencyCount != 0u || recoveryPacketPlan.externalDependencyCount != 0u || !recoveryPacketPlan.joinsAcceptedQueueFrontier)
         return MakeUnexpected(Failure{});
 
-    // Setup and timing callers preserve their established serial behavior. The public standalone graph boundary supplies the Graphics worker pool
+    // Setup and timing callers preserve their established serial behavior. The public standalone graph boundary supplies the Graphics worker pool.
     GpuTaskGraphNormalExecutionDesc normalExecution;
     normalExecution.readyFrontierScheduler = readyFrontierScheduler;
     const bool graphAccepted = scheduler.executeGraph(graph, compiledGraph, recordedGraph, normalExecution, transaction, timingRecorder, scratchArena);

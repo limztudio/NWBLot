@@ -81,7 +81,6 @@ static constexpr f32 s_DefaultDirectionalLightPitch = 0.9f;
 static constexpr f32 s_DefaultDirectionalLightYaw = 0.65f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 2.0f;
 static constexpr f32 s_MaxAnimationDelta = 1.0f / 30.0f;
-// Manual yaw speed is in radians/second.
 static constexpr f32 s_ManualYawSpeed = 0.6f;
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
 static constexpr TransparentMeshRef s_TransparentShapeMesh{"project/meshes/caustic_sphere"};
@@ -92,7 +91,6 @@ static constexpr TransparentMeshRef s_TransparentLeftMesh{"project/meshes/cylind
 static constexpr TransparentMeshRef s_TransparentCenterMesh{"project/meshes/octahedron"};
 static constexpr TransparentMeshRef s_TransparentRightMesh{"project/meshes/cone"};
 #endif
-// Scene rotation.
 // The plain transparent-shadow scene spins for overlap inspection; the caustic sphere stays static so its focused photon result is easy to inspect.
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
 static constexpr f32 s_TransparentSceneRotationSpeed = 0.0f;

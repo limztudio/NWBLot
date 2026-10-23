@@ -68,7 +68,7 @@ half3 nwbRefractionShadeHit(const NwbRayTraceSurfaceHit hit, const float3 direct
         nwbSceneResolveLight(g_NwbSceneLights[lightIndex], hit.position, lightVector, lightRadiance);
         radiance += lightRadiance * half(max(dot(normal, lightVector), 0.0));
     }
-    // Offscreen hits have no camera lighting cache. This bounded diffuse approximation shares the authored surface contract with GI; full camera BRDF, shadows, and GI are not implicitly available at a ray hit.
+    // Offscreen hits have no camera lighting cache and use the bounded diffuse surface approximation shared with GI.
     return radiance * hit.surface.baseColor;
 }
 
@@ -114,14 +114,14 @@ half4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry e
     // Exit cosine is a saturate-bounded (0, 1) factor feeding the bounded Fresnel attenuation below.
     half exitCosine = half(0.0h);
     float pathLength = 0.0;
-    // At most two total-internal-reflection continuations, staying inside the same primary instance. Their Fresnel reflectance is one, so only the accumulated Beer-Lambert distance changes until transmission.
+    // Trace at most two internal reflections within the same primary instance, accumulating Beer-Lambert distance until transmission.
     for(uint internalBounce = 0u; internalBounce <= NWB_REFRACTION_MAX_INTERNAL_BOUNCES; ++internalBounce){
         exitHit = nwbRefractionClosestExitInterface(g_NwbRefractionMaterialContext.sceneSlots.z, internalOrigin + internalDirection * entry.bias, internalDirection, entry.bias, NWB_REFRACTION_MAX_DISTANCE, entryHit.instance);
 #if NWB_RT_CSG_ENABLED
         if(exitHit.failure != 0u)
             return half4(0.0h, 0.0h, 0.0h, 1.0h);
 #endif
-        // A different closest instance may be a nested volume or geometry inside the primary. Do not ignore it and pretend the next same-instance hit was the nearest interface. Open meshes take the sheet fallback.
+        // Stop when a different instance is hit inside the primary; open meshes use the sheet fallback.
         if(!exitHit.hit)
             return nwbRefractionResolveScreen(pixel, entry);
         pathLength += length(exitHit.position - internalOrigin);
@@ -135,7 +135,7 @@ half4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry e
         internalDirection = reflect(internalDirection, exitNormal);
         internalOrigin = exitHit.position;
     }
-    // Residual internally reflected energy at the fixed cap is discarded. Returning a straight-through leak here would violate the optical boundary; a future reflected-radiance pass can supply the missing contribution.
+    // Discard residual internally reflected energy at the bounce cap rather than leaking straight-through background.
     if(dot(outgoingDirection, outgoingDirection) < NWB_REFRACTION_DIRECTION_LENGTH_SQUARED_MIN)
         return half4(0.0h, 0.0h, 0.0h, 1.0h);
     const half3 attenuation = nwbRefractionAttenuation(entry.tint, pathLength, entry.ior, entry.cosine, exitCosine);

@@ -277,7 +277,6 @@ half4 nwbCausticResolveWavelet(const uint2 pixel, const uint3 groupThreadID, con
 
     const NwbCausticWaveletSpatialParameters parameters = nwbCausticWaveletSpatialParameters(texel, hw, step);
 
-    // Kernel and edge-stop weights are (0, 1) bounded factors with an HDR color accumulator, matching the half tile cache.
     half3 sum = half3(0.0h, 0.0h, 0.0h);
     half weightSum = half(0.0h);
     [unroll] for(int ky = -NWB_CAUSTIC_RESOLVE_KERNEL_RADIUS; ky <= NWB_CAUSTIC_RESOLVE_KERNEL_RADIUS; ++ky){

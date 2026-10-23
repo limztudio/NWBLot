@@ -82,7 +82,7 @@ static constexpr u32 s_BenchmarkRepeatCount = 4u;
 static constexpr u32 s_WarmupFrameCount = 8u;
 static constexpr u32 s_SampleFrameCount = 16u;
 static constexpr u32 s_FinishDrainFrameCount = 30u;
-// Keeps the full benchmark as the default while letting functional smoke runs exercise a live animated skinning upload without a long soak.ithout spending several minutes on every performance case on a software or low-throughput adapter.
+// Keeps the full benchmark as the default while letting smoke runs exercise animated skinning uploads without a long soak.
 static constexpr u32 s_FastSmokeCharacterCount = 1u;
 static constexpr u32 s_FastSmokeWarmupFrameCount = 1u;
 static constexpr u32 s_FastSmokeSampleFrameCount = 3u;

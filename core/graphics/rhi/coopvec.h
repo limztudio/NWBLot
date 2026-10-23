@@ -73,10 +73,8 @@ public:
 struct CooperativeVectorMatrixLayoutDesc{
     Buffer* buffer = nullptr;
 
-    // Byte offset within the buffer.
     u64 offset = 0;
 
-    // Matrix size in bytes.
     usize size = 0;
 
     // Byte stride; zero derives row/column stride. Optimal layouts ignore it and should use zero.
@@ -95,7 +93,6 @@ struct CooperativeVectorConvertMatrixLayoutDesc{
     u32 numColumns = 0;
 };
 
-// Size in bytes.
 usize GetCooperativeVectorDataTypeSize(CooperativeVectorDataType::Enum type)noexcept;
 
 // Row/column byte stride; successful zero for InferencingOptimal and TrainingOptimal, failure for invalid dimensions/type/layout or overflow.

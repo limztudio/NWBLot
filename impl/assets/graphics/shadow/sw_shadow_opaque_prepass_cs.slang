@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Software-shadow OPAQUE pre-pass (full resolution). One thread per full-res pixel: trace one OPAQUE-only occlusion ray per shadowed light and OVERWRITE visibility with the binary mask -- the software analog of the HW RayQuery pass, run before the transparent multiply. No coarse buffer; the whole grid is traced full-res.
+// Full-resolution software-shadow opaque prepass: traces one opaque occlusion ray per shadowed light and writes the binary visibility mask.
 
 
 #include "sw_binding_slots.h"

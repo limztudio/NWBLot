@@ -28,7 +28,7 @@
 void nwbSwShadowCoarseTrace(const uint2 coarsePixel){
     if(coarsePixel.x >= g_NwbSwShadowPush.coarseWidth || coarsePixel.y >= g_NwbSwShadowPush.coarseHeight)
         return;
-    // Coarse texel k samples (and the resolve reconstructs around) full-res k*FACTOR -- the block's top-left texel. coarseWidth is rounded UP from width/FACTOR, so k*FACTOR stays in [0, width) for every k.
+    // Coarse texel k samples the top-left full-resolution texel at k * FACTOR.
     const uint2 base = coarsePixel * NWB_SW_SHADOW_COARSE_FACTOR;
     const int3 texel = int3(int2(base), 0);
 

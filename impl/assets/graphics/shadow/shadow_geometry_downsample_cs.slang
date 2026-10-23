@@ -15,10 +15,10 @@
 // Receiver geometry packs the octahedral normal in .xy, camera distance in .z, and validity in .w.
 
 struct NwbShadowGeometryDownsamplePushConstants{
-    uint width;       // full-res G-buffer width
-    uint height;      // full-res G-buffer height
-    uint halfWidth;   // receiver-grid output width
-    uint halfHeight;  // receiver-grid output height
+    uint width;
+    uint height;
+    uint halfWidth;
+    uint halfHeight;
     // Global heap SampledImage slots select the full-resolution G-buffer inputs.
     uint worldPositionSlot;
     uint normalSlot;

@@ -356,7 +356,6 @@ struct GpuCopyTextureTaskRegion{
 struct GpuCopyTextureTaskDesc{
     const GpuCopyTextureTaskRegion* regions = nullptr;
     usize regionCount = 0u;
-    // Optional lifecycle output, written only after the containing packet submission is accepted.
     QueueSubmissionToken* acceptedToken = nullptr;
 };
 
@@ -372,7 +371,6 @@ struct GpuResolveTextureTaskRegion{
 struct GpuResolveTextureTaskDesc{
     const GpuResolveTextureTaskRegion* regions = nullptr;
     usize regionCount = 0u;
-    // Optional lifecycle output, written only after the containing packet submission is accepted.
     QueueSubmissionToken* acceptedToken = nullptr;
 };
 
@@ -399,8 +397,6 @@ struct GpuUploadTextureTaskDesc{
     usize depthPitch = 0u;
     ResourceStates::Mask finalState = ResourceStates::CopyDest;
     TextureUploadAspect::Enum aspect = TextureUploadAspect::Automatic;
-    // Optional lifecycle output.
-    // Storage must outlive late recording/submission; the helper clears it at declaration and if the task is discarded, then writes the accepted packet token only after submission.
     QueueSubmissionToken* acceptedToken = nullptr;
 };
 
@@ -410,7 +406,6 @@ struct GpuUploadTextureTaskDesc{
 struct GpuClearBufferTaskDesc{
     GpuGraphResourceId destination;
     u32 clearValue = 0u;
-    // Optional lifecycle output, written only after the containing packet submission is accepted.
     QueueSubmissionToken* acceptedToken = nullptr;
 };
 
@@ -440,7 +435,6 @@ struct GpuClearTextureTaskRecordHooks{
 };
 
 struct GpuClearTextureTaskDesc{
-    // Optional lifecycle output, written only after the containing packet submission is accepted.
     QueueSubmissionToken* acceptedToken = nullptr;
     GpuGraphResourceId destination;
     // Optional recording-local hooks.
@@ -466,9 +460,7 @@ struct GpuClearTextureRectUIntTaskDesc{
     TextureSubresourceSet subresources = s_AllSubresources;
     Rect rect;
     UIntColor uintValue;
-    // Optional recording-local hooks use the same bracket contract as whole-texture clears.
     GpuClearTextureTaskRecordHooks recordHooks;
-    // Optional lifecycle output, written only after the containing packet submission is accepted.
     QueueSubmissionToken* acceptedToken = nullptr;
 };
 

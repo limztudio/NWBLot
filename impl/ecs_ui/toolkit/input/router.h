@@ -91,7 +91,6 @@ public:
 
 
 public:
-    // Return the resolved intent admitted with this queued event.
     [[nodiscard]] Expected<InputEvent> queue(const InputEvent& event);
     [[nodiscard]] Expected<InputEvent> queuePointer(const PointerInput& input);
     [[nodiscard]] bool setBindings(const InputKeyBinding* bindings, usize count);

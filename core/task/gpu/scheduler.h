@@ -104,7 +104,7 @@ public:
 
 
 public:
-    // The device owner attaches after creation and detaches before native destruction. It must stop and join producers and finish required GPU waits first
+    // The device owner attaches after creation and detaches before native destruction. It must stop and join producers and finish required GPU waits first.
     [[nodiscard]] bool attachDevice(Device& device)noexcept;
     [[nodiscard]] bool detachDevice(Device& device)noexcept;
     [[nodiscard]] bool isAttachedTo(const Device& device)const noexcept;
@@ -136,7 +136,7 @@ public:
         Alloc::ScratchArena& scratchArena,
         const GpuTaskGraphCompileOptions& compileOptions
     )const;
-    // Records and executes the compiler-frozen ordinary graph prefix. Native recorder construction and queue submission remain scheduler-owned
+    // Records and executes the compiler-frozen ordinary graph prefix. Native recorder construction and queue submission remain scheduler-owned.
     [[nodiscard]] bool executeGraph(
         GpuTaskGraph& graph,
         GpuCompiledGraph& compiledGraph,
@@ -285,7 +285,7 @@ private:
         usize taskSubmissionHookCount
     )const;
     // The caller owns one valid SubmissionOperation for the full native-accept, task-callback, and transaction-publication sequence.
-    // Range submission supplies its synchronous semantic obligations here
+    // Range submission supplies its synchronous semantic obligations here.
     [[nodiscard]] bool submitPacketWithinSubmissionOperation(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,

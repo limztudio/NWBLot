@@ -417,9 +417,9 @@ private:
     Core::GpuTaskId m_csgTraceContextUploadTask;
     // Optional refractive-AABB stream. It must merge into that same first Graphics packet; caustic consumers inherit Shadow Preparation's handoff rather than an upload frontier.
     Core::GpuTaskId m_causticEmissionTargetsUploadTask;
-    // Optional per-frame surfel constant payload. It must merge into that same first Graphics packet the later GI pass inherits Shadow Preparation's handoff from rather than an upload frontier.
+    // Optional per-frame surfel constant payload; merges into the first Graphics packet alongside Shadow Preparation.
     Core::GpuTaskId m_surfelFrameConstantsUploadTask;
-    // Optional ABI-coupled shadow material context batch. Every upload must merge into Shadow Preparation its SRV handoff, rather than any individual upload, owns the later trace consumers.
+    // Optional ABI-coupled shadow material context batch; merges into Shadow Preparation so its SRV handoff owns later trace consumers.
     Core::GpuTaskId m_shadowInstanceMaterialUploadTask;
     Core::GpuTaskId m_shadowInstanceUploadTask;
     Core::GpuTaskId m_shadowMaterialTypedUploadTask;
@@ -461,7 +461,7 @@ private:
     Core::GpuTaskId m_graphicsPrefixCsgIntervalCombineTask;
     Core::GpuTaskId m_graphicsPrefixCsgIntervalSampleTask;
     Core::GpuTaskId m_graphicsPrefixTask;
-    // Prepared soft-transparent shadow frames split opaque production, wavelets, resolve tails, transparent trace, temporal merge, and terminal tail. Every task compiles into one packet
+    // Prepared soft-transparent shadow frames compile opaque production, wavelets, resolve tails, transparent trace, temporal merge, and terminal tail into one packet.
     Core::GpuTaskId m_deferredShadowVisibilityOpaqueTask;
     Core::GpuTaskId m_deferredShadowVisibilityOpaqueFirstWaveletTask;
     Core::GpuTaskId m_deferredShadowVisibilityOpaqueResolveTask;
@@ -484,7 +484,7 @@ private:
     Core::GpuTaskId m_deferredCausticAccumulatorNonTemporalClearTask;
     // A warm temporal accumulator decays in a mergeable graph task before its selected photon producer.
     Core::GpuTaskId m_deferredCausticAccumulatorDecayTask;
-    // Photon, downsample, resolve prepare, five wavelets, upsample, and timing close are distinct tasks, but stay in the selected packet so the compiler owns handoffs without changing that one.
+    // Photon, downsample, resolve prepare, wavelets, upsample, and timing close stay in one packet while the compiler owns their handoffs.
     Core::GpuTaskId m_deferredCausticPhotonTask;
     Core::GpuTaskId m_deferredCausticGeometryTask;
     Core::GpuTaskId m_deferredCausticResolvePrepareTask;
@@ -560,12 +560,12 @@ private:
     // Native TLAS/BLAS, software-BVH build storage, and normalized trace geometry change inside Shadow Preparation. Keep only live generations so the next frame's first packet seeds states.
     Core::GpuPersistentResourceStateCache m_shadowPreparePersistentState;
     // Software caustics retain their temporal scratch on either compiler-selected route.
-    // Hardware dispatch-rays caustics retain their temporal accumulator only after the Graphics hardware-caustics packet accepts
+    // Hardware dispatch-rays caustics retain their temporal accumulator only after the Graphics hardware-caustics packet accepts.
     Core::GpuPersistentResourceStateCache m_causticsComputePersistentState;
     Core::GpuPersistentResourceStateCache m_hardwareCausticAccumulatorPersistentState;
     // Retain only the accepted cross-queue return state needed when irradiance moves from Graphics lighting back to a Compute-routed caustics packet. Producer/lighting flow is compiler-seeded.
     Core::GpuPersistentResourceStateCache m_causticIrradianceReturnState;
-    // Surfel GI retains its field/history on either route, including its RayQuery trace variant. The resolved full-resolution irradiance is consumed on that route or snapshotted for lagged lighting. Keep note.
+    // Surfel GI retains its field and history on either route; resolved irradiance is consumed directly or snapshotted for lagged lighting.
     Core::GpuPersistentResourceStateCache m_surfelGiComputePersistentState;
     // The counter can continue into a late Transfer readback, so retain the accepted tail state and its typed backing separately.
     // The next Surfel-GI packet imports this cache through its first-use declaration.
@@ -588,7 +588,7 @@ private:
     ReflectionSettings m_reflectionSettings;
     RayTracingRefractionGraphResources m_preparedRefractionResources;
     Core::QueueSubmissionToken m_laggedLightingHistorySubmissionToken;
-    // The newest incomplete accepted same-generation Transfer tail protects live producer writes while declaration resets the normal history-read token. A later tail is its proven successor; old tails do cures. Target recreation clears it with normal state.
+    // The newest incomplete accepted same-generation Transfer tail protects live producer writes while declaration resets the normal history-read token. Target recreation clears it with normal state.
     Core::QueueSubmissionToken m_laggedLightingHistoryWriterDrainToken;
     // Deferred target creation increments this identity for every target generation. It prevents a recycled slot or allocator address from making a freshly recreated history look accepted.
     u64 m_laggedLightingHistoryGeneration = 0u;
@@ -608,7 +608,7 @@ private:
     RendererRayTracingSystem m_raytracingSystem;
 
 private:
-    // Declare every callback owner before graph storage. Reverse member destruction keeps graph storage lifetime inside those owners during normal destruction and unwinding. Lifecycle is quiesced before pass end.
+    // Declare every callback owner before graph storage so reverse destruction keeps graph storage alive during teardown and unwinding.
     RendererTaskTimingFeedback m_deferredTaskTimingFeedback;
     // All renderer stages, presentation, optional history copies, and recovery share one packet graph.
     Core::GpuTaskGraph m_deferredLightingTaskGraph;

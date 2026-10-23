@@ -401,7 +401,7 @@ struct BufferDesc{
     bool isAccelStructStorage = false;
     bool isShaderBindingTable = false;
 
-    // A dynamic/upload buffer whose contents only live in the current command list
+    // Dynamic/upload buffer whose contents live only in the current command list.
     bool isVolatile = false;
 
     // Indicates that the buffer is created with no backing memory, and memory is bound to the buffer later using bindBufferMemory.

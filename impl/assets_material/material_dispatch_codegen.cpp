@@ -456,7 +456,7 @@ Expected<Path> EmitShadowSurfaceDispatchModuleImpl(const Path& cacheDirectory, c
 
     // Context (NwbShadowHit + accessors + surface contract) comes from the includer's shadow_surface.slangi; emitting it here would force an unresolvable virtual engine/ include path.
 
-    // Per-id hook: each unique `.bind` emitted once in a private namespace with scoped aliases (no global `using`: later interfaces may collide; namespacing the surface would relocate its guarded includes).
+    // Emit each unique `.bind` once in a private namespace with scoped aliases so multiple interfaces do not collide.
     ScratchHashSet<ScratchString> bindAliasSeenSymbols{ 0, Hasher<ScratchString>(), EqualTo<ScratchString>(), scratchArena };
     ShadowSurfaceBindAliasVector bindAliasSymbols(scratchArena);
     ScratchString bindNamespace(scratchArena);

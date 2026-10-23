@@ -14,7 +14,6 @@
 
 
 bool nwbAvboitLoadAcceptedMaterialAlpha(const float4 position, const half4 color, const float3 normal, const float4 tangent, const float2 uv0, const float4 worldPosition, out half outAlpha){
-    // Initialize alpha so the CSG early return satisfies the out-parameter contract.
     outAlpha = half(0.0);
 
     // The selected optical object's entry and exit surfaces are resolved together by bounded refraction.

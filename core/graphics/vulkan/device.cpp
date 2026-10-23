@@ -28,7 +28,7 @@ namespace __hidden_vulkan_device{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Timeline values live within one logical-device lifetime. Indices come from the Device registry(not CommandQueue ordinals); the generation makes a recreated Device reject old tokens.
+// Timeline values live within one logical-device lifetime. Indices come from the Device registry (not CommandQueue ordinals); the generation makes a recreated Device reject old tokens.
 static VulkanDetail::DeviceGenerationAllocator s_DeviceGenerationAllocator;
 
 

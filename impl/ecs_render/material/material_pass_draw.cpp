@@ -103,7 +103,7 @@ u32 RendererMaterialSystem::materialPassDrawDispatchFlags(const MaterialPassDraw
     u32 flags = meshDispatchFlags(mesh, context.pass, drawItem.pipelineKey.twoSided, drawItem.meshletConeCullScaleSafe);
     if(drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None)
         flags &= ~ECSRenderDetail::s_MeshDispatchFlagCsgMeshletFullyRemovedCull;
-    // Carry the owning material's shading-model id in the high bits of the per-draw dispatch word
+    // Carry the owning material's shading-model id in the high bits of the per-draw dispatch word.
     flags = (flags & NWB_MESH_DISPATCH_FLAG_MASK) | ((drawItem.shadingModelId & NWB_MESH_DISPATCH_SHADING_MODEL_MASK) << NWB_MESH_DISPATCH_SHADING_MODEL_SHIFT);
     return flags;
 }

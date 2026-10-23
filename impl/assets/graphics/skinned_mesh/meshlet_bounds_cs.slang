@@ -140,7 +140,6 @@ void nwbSkinnedMeshBoundsReduceValidPositionCount(const uint groupThreadIndex){
     const uint laneIndex = WaveGetLaneIndex();
     const uint waveIndex = groupThreadIndex / waveLaneCount;
     const uint waveSum = WaveReadLaneFirst(WaveActiveSum(g_NwbSkinnedMeshBoundsValidPositionCount[groupThreadIndex]));
-    // Waves must finish reading lane slots before leaders overwrite them.
     GroupMemoryBarrierWithGroupSync();
     if(laneIndex == 0u)
         g_NwbSkinnedMeshBoundsValidPositionCount[waveIndex] = waveSum;
@@ -166,7 +165,6 @@ void nwbSkinnedMeshBoundsReduceRadius(const uint groupThreadIndex){
     const uint laneIndex = WaveGetLaneIndex();
     const uint waveIndex = groupThreadIndex / waveLaneCount;
     const float waveMax = WaveReadLaneFirst(WaveActiveMax(g_NwbSkinnedMeshBoundsRadiusSq[groupThreadIndex]));
-    // Waves must finish reading lane slots before leaders overwrite them.
     GroupMemoryBarrierWithGroupSync();
     if(laneIndex == 0u)
         g_NwbSkinnedMeshBoundsRadiusSq[waveIndex] = waveMax;
@@ -192,7 +190,6 @@ void nwbSkinnedMeshBoundsReduceAreaNormal(const uint groupThreadIndex){
     const uint laneIndex = WaveGetLaneIndex();
     const uint waveIndex = groupThreadIndex / waveLaneCount;
     const float3 waveSum = WaveReadLaneFirst(WaveActiveSum(g_NwbSkinnedMeshBoundsAreaNormal[groupThreadIndex]));
-    // Waves must finish reading lane slots before leaders overwrite them.
     GroupMemoryBarrierWithGroupSync();
     if(laneIndex == 0u)
         g_NwbSkinnedMeshBoundsAreaNormal[waveIndex] = waveSum;
@@ -218,7 +215,6 @@ void nwbSkinnedMeshBoundsReduceValidFaceNormalCount(const uint groupThreadIndex)
     const uint laneIndex = WaveGetLaneIndex();
     const uint waveIndex = groupThreadIndex / waveLaneCount;
     const uint waveSum = WaveReadLaneFirst(WaveActiveSum(g_NwbSkinnedMeshBoundsValidFaceNormalCount[groupThreadIndex]));
-    // Waves must finish reading lane slots before leaders overwrite them.
     GroupMemoryBarrierWithGroupSync();
     if(laneIndex == 0u)
         g_NwbSkinnedMeshBoundsValidFaceNormalCount[waveIndex] = waveSum;
@@ -244,7 +240,6 @@ void nwbSkinnedMeshBoundsReduceConeCutoff(const uint groupThreadIndex){
     const uint laneIndex = WaveGetLaneIndex();
     const uint waveIndex = groupThreadIndex / waveLaneCount;
     const float waveMin = WaveReadLaneFirst(WaveActiveMin(g_NwbSkinnedMeshBoundsConeCutoff[groupThreadIndex]));
-    // Waves must finish reading lane slots before leaders overwrite them.
     GroupMemoryBarrierWithGroupSync();
     if(laneIndex == 0u)
         g_NwbSkinnedMeshBoundsConeCutoff[waveIndex] = waveMin;

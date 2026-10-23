@@ -137,7 +137,7 @@ bool nwbReflectionValidateScreenHit(
     if(abs(incidence) < NWB_REFLECTION_SCREEN_INCIDENCE_MIN)
         return false;
 
-    // The depth hierarchy is only a rejection bound, never a hit. Intersect the captured surface's local plane in world units, then require that crossing to project into this interval. Starting behind a cell does not make a hit or forbid a ray toward the camera.
+    // The depth hierarchy is only a rejection bound; intersect the local surface plane and require the crossing to project into this cell.
     const float distance = dot(position - ray.worldOrigin, normal) / incidence;
     if(!isfinite(distance) || distance <= surface.bias || distance > g_NwbReflectionParameters.maxRayDistance)
         return false;

@@ -74,7 +74,7 @@ Expected<void, CsgDeformViabilityReason::Enum> CsgDeformCutterField::ShapeDistan
     outDistances.clear();
     outDistances.resize(vertexCount, s_KeepDistanceZero);
 
-    // Cutter dispatch happens once per cut. World-to-shape and SDF eval stay on SIMD lanes
+    // Cutter dispatch happens once per cut. World-to-shape and SDF eval stay on SIMD lanes.
     const SIMDMatrix worldToShape = LoadFloat(shape.worldToShape);
     const SIMDVectorSingle parameter0 = LoadFloat(shape.parameter0);
     CsgDeformDistanceFunc distanceFunc = nullptr;

@@ -134,7 +134,7 @@ template<typename Payload, typename CaptureCopyFn, typename EmitCopyFn>
         return true;
     if(resourceDesc.initialState == ResourceStates::Unknown || (externalFinalState != ResourceStates::Unknown && externalFinalState != resourceDesc.initialState))
         return false;
-    // An Unknown write-only destination never invents an input state. Fresh managed subresources lower from Undefined
+    // An Unknown write-only destination never invents an input state. Fresh managed subresources lower from Undefined.
     return graphInitialState == ResourceStates::Unknown || graphInitialState == resourceDesc.initialState;
 }
 

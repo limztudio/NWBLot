@@ -450,7 +450,7 @@ bool GpuRecordedGraph::validForWithinArtifactOperation(
         && storage->graphIdentity == &graph
         && storage->recordingAttemptGeneration != 0u
         // A terminal accepted/discarded artifact remains a valid immutable result after the graph releases its active attempt lease.
-        // Declaration admission plus the exact compiled-plan identity proves that the source graph has not mutated
+        // Declaration admission plus the exact compiled-plan identity proves that the source graph has not mutated.
     ;
 }
 

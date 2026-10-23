@@ -36,7 +36,7 @@ private:
 
 private:
     // Records one compiler-derived non-empty contiguous range.
-    // Earlier producer packets needed by the range must already be recorded, keeps deliberate late tails separate from the ordinary graph prefix.
+    // Earlier producer packets needed by the range must already be recorded, keeping deliberate late tails separate from the ordinary graph prefix.
     [[nodiscard]] bool recordPacketRangeInCompileOrder(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,

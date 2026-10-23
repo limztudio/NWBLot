@@ -167,7 +167,7 @@ bool GpuNativePacketRecorder::recordPacket(
         || !outRecordedGraph.validForWithinArtifactOperation(graph, declarationAccess, compiledGraph, planAccess, artifactAccess)
     )
         return false;
-    // A capture is one immutable compiled-plan artifact. Reject a stale non-empty capture before opening a packet that happens not to contain a primitive command
+    // A capture is one immutable compiled-plan artifact. Reject a stale non-empty capture before opening a packet that happens not to contain a primitive command.
     if(commandIrCapture && commandIrCapture->recordCount() != 0u && (commandIrCapture->graphGeneration() != planAccess.generation() || commandIrCapture->planGeneration() != planAccess.planGeneration()))
         return false;
     if(commandIrCapture && commandIrCapture->recordCount() != 0u && commandIrCapture->recordingAttemptGeneration() != recordingAttemptGeneration)

@@ -89,7 +89,7 @@ bool GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
     }
     Vector<NotNull<GpuTimingSubmissionTicket*>, Alloc::ScratchArena> resolvedTimingTickets{ scratchArena };
     resolvedTimingTickets.reserve(bindings.timingTickets.size());
-    // The owning composite admission remains active. Release the nested reader only after every mutable artifact query and scratch allocation completes
+    // The owning composite admission remains active. Release the nested reader only after every mutable artifact query and scratch allocation completes.
     preflightExceptionScope.complete();
 
     for(usize packetIndex = range.first.index; packetIndex < rangeEnd; ++packetIndex){

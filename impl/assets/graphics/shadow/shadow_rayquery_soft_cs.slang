@@ -57,7 +57,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
     const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
 
-    // Background: fully LIT (white) for every slot — the identity the resolve carries and the value upsample writes for a background pixel, so both agree at the edge. Same threshold as the SW trace.
+    // Background writes full visibility for every slot to match resolve and upsample.
     if(nwbHeapSampledImage2D(g_NwbShadowRqSoftPushConstants.depthSlot).Load(texel).r >= NWB_SW_SHADOW_BACKGROUND_DEPTH){
         for(uint i = 0u; i < lightCount; ++i){
             const float slot = g_NwbSceneLights[i].params.z;

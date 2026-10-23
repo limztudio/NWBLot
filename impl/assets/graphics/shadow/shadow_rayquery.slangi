@@ -21,7 +21,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The deferred selector itself is a global heap entry supplied by the push block.  The opaque trace therefore has no local cbuffer even though scene/buffer.slangi exposes its light helpers.
+// The deferred selector is a global heap entry supplied by the push block; the opaque trace has no local cbuffer.
 #ifndef NWB_SHADOW_RQ_DEFERRED_RESOURCES_HEAP_SLOT
 #error "shadow RayQuery sources must provide the deferred-resource heap slot expression"
 #endif

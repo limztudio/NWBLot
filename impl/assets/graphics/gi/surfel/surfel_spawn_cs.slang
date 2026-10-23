@@ -69,7 +69,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const half3 rawNormalSample = half3(nwbHeapSampledImage2D(g_NwbSurfelHeapPushConstants.normalSlot).Load(loadCoord).xyz);
     const float3 rawNormal = float3(rawNormalSample);
     if(dot(rawNormal, rawNormal) < NWB_SURFEL_GBUFFER_NORMAL_LENGTH_SQUARED_MIN)
-        return; // no geometry at this tile (background)
+        return;
 
     const half3 worldPositionSample = half3(nwbHeapSampledImage2D(g_NwbSurfelHeapPushConstants.worldPositionSlot).Load(loadCoord).xyz);
     const float3 worldPosition = float3(worldPositionSample);

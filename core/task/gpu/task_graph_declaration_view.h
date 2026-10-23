@@ -138,7 +138,7 @@ struct GpuTaskGraphTelemetryOptions{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Lexical proof that immutable declaration storage cannot be reset or mutated. Compiler/tooling callers acquire a waiting view before any other operation gate
+// Lexical proof that immutable declaration storage cannot be reset or mutated. Compiler/tooling callers acquire a waiting view before any other operation gate.
 class GpuTaskGraphDeclarationReadView final : NoCopy{
     friend class GpuCompiledGraph::ReadView;
     friend class GpuTaskGraph;

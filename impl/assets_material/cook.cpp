@@ -296,7 +296,7 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: material resource references do not match typed layout"));
         return false;
     }
-    usize reserveBytes = sizeof(u32); // magic
+    usize reserveBytes = sizeof(u32);
     bool canReserve = AddBinaryStringReserveBytes(reserveBytes, AStringView(material.shaderVariant()))
         && AddBinaryReserveBytes(reserveBytes, sizeof(NameHash))
         && AddBinaryReserveBytes(reserveBytes, sizeof(u64))
@@ -310,15 +310,15 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         && AddBinaryRepeatedReserveBytes(reserveBytes, material.resourceReferences().size(), MaterialBinaryPayload::s_ResourceReferenceBytes)
         && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
         && AddBinaryRepeatedReserveBytes(reserveBytes, material.stageShaderCount(), MaterialBinaryPayload::s_ShaderEntryBytes)
-        && AddBinaryReserveBytes(reserveBytes, sizeof(u32)) // material flags
-        && AddBinaryReserveBytes(reserveBytes, sizeof(u32)) // shading model id
-        && AddBinaryReserveBytes(reserveBytes, sizeof(u32)) // surface dispatch id
-        && AddBinaryReserveBytes(reserveBytes, sizeof(u32)) // AVBOIT accumulate pixel shader presence flag
-        && AddBinaryReserveBytes(reserveBytes, sizeof(NameHash)) // optional AVBOIT accumulate pixel shader name
-        && AddBinaryReserveBytes(reserveBytes, sizeof(u32)) // AVBOIT occupancy pixel shader presence flag
-        && AddBinaryReserveBytes(reserveBytes, sizeof(NameHash)) // optional AVBOIT occupancy pixel shader name
-        && AddBinaryReserveBytes(reserveBytes, sizeof(u32)) // AVBOIT extinction pixel shader presence flag
-        && AddBinaryReserveBytes(reserveBytes, sizeof(NameHash)) // optional AVBOIT extinction pixel shader name
+        && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
+        && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
+        && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
+        && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
+        && AddBinaryReserveBytes(reserveBytes, sizeof(NameHash))
+        && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
+        && AddBinaryReserveBytes(reserveBytes, sizeof(NameHash))
+        && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
+        && AddBinaryReserveBytes(reserveBytes, sizeof(NameHash))
     ;
 
     outBinary.clear();
@@ -390,7 +390,7 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
     AppendPOD(outBinary, material.shadingModelId());
     AppendPOD(outBinary, material.surfaceDispatchId());
 
-    // Optional per-material AVBOIT pixel shaders (accumulate, occupancy, extinction): each a presence flag plus shader name hash, present only for surface-authored transparent materials and read back in this order.
+    // Optional AVBOIT pixel shaders (accumulate, occupancy, extinction) serialize as a presence flag plus shader name hash.
     const auto appendOptionalAvboitPixelShader = [&outBinary](const Core::Assets::AssetRef<PixelShader>& shaderRef){
         if(shaderRef.valid()){
             AppendPOD(outBinary, static_cast<u32>(1u));

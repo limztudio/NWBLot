@@ -64,7 +64,7 @@ struct GpuRecordedPacket{
     // Exact publication identities let reset/destruction revoke an unsubmitted list without touching a later recording that reuses the same retained CommandList object.
     u64 commandListRecordingLeaseSerials[s_MaxCommandLists] = {};
     // These fields are written before commandListCount publishes the slot.
-    // They intentionally describe the packet after graph lowering, compile tooling can distinguish declared work from the native work that was recorded.
+    // They describe the packet after graph lowering so compile tooling can distinguish declared work from recorded native work.
     u32 taskCount = 0u;
     u32 barrierCount = 0u;
     f64 commandListAcquisitionSeconds = 0.0;
@@ -205,7 +205,7 @@ private:
         bool m_ownsAdmission = false;
     };
     // Every ready-frontier worker receives isolated state-handoff scratch.
-    // This is separate from the per-packet final-state slots, are written only by the packet's own recording worker and read by later frontiers.
+    // Separate from per-packet final-state slots, which are written only by the packet's own recording worker and read by later frontiers.
     struct PacketRecordingScratch final : NoCopy{
         struct CachedCommandList{
             CommandListParameters parameters;
@@ -256,7 +256,7 @@ public:
 
 public:
     // A live record/submit operation leases every packet, timing ticket, state seed, and command-list handle in this artifact.
-    // Failed reset leaves all storage and exact publication identities unchanged so the operation can finish or unwind safely
+    // Failed reset leaves all storage and exact publication identities unchanged so the operation can finish or unwind safely.
     [[nodiscard]] bool tryReset(const GpuCompiledGraph& compiledGraph);
     void reset(const GpuCompiledGraph& compiledGraph);
     // Join graph/native work before releasing device-bound cached recording objects.

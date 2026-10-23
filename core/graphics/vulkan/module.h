@@ -88,7 +88,7 @@ struct DeviceDesc{
     const AStringView* deviceExtensions = nullptr;
     usize numDeviceExtensions = 0;
 
-    // Indicates if VkPhysicalDeviceVulkan12Features::bufferDeviceAddress was set to 'true' at device creation time
+    // True when VkPhysicalDeviceVulkan12Features::bufferDeviceAddress was enabled at device creation.
     bool bufferDeviceAddressSupported = false;
     // Retains the exact VkPhysicalDeviceVulkan12Features::hostQueryReset bit enabled at device creation time.
     bool hostQueryResetFeatureEnabled = false;
@@ -117,11 +117,11 @@ struct DeviceDesc{
     // Indicates if VK_NV_cooperative_vector feature bits were enabled at device creation time.
     bool cooperativeVectorFeatureEnabled = false;
     bool cooperativeVectorTrainingFeatureEnabled = false;
-    // Indicates if VK_EXT_mesh_shader taskShader was enabled at device creation time
+    // True when VK_EXT_mesh_shader taskShader was enabled at device creation.
     bool meshTaskShaderSupported = false;
-    // Indicates if VK_NV_ray_tracing_linear_swept_spheres spheres was enabled at device creation time
+    // True when VK_NV_ray_tracing_linear_swept_spheres spheres was enabled at device creation.
     bool rayTracingSpheresSupported = false;
-    // Indicates if VK_NV_ray_tracing_linear_swept_spheres linearSweptSpheres was enabled at device creation time
+    // True when VK_NV_ray_tracing_linear_swept_spheres linearSweptSpheres was enabled at device creation.
     bool rayTracingLinearSweptSpheresSupported = false;
     bool gpuCrashDiagnosticsEnabled = false;
     bool logBufferLifetime = false;

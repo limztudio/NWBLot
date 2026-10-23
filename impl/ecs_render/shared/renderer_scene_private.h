@@ -159,7 +159,7 @@ inline bool CausticLightEnabled(const SceneLightGpuData& light)noexcept{
     return light.params.w >= s_CausticSlotEnabledThreshold;
 }
 
-// Assigns caustic slots to top caustic-enabled lights (after ResolveSceneLights; negative = none). Gate: needs a refractive instance AND opt-in, so transparent-shadow scenes stay tests.
+// Assigns caustic slots to top caustic-enabled lights after ResolveSceneLights when a refractive instance and caustic opt-in are present.
 inline u32 ResolveCausticLights(SceneLightGpuData* outLights, const f32* causticImportance, const u32 lightCount, const u32 refractiveInstanceCount)noexcept{
     if(refractiveInstanceCount == 0u || lightCount == 0u)
         return 0u;

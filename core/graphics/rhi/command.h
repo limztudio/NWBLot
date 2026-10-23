@@ -76,7 +76,7 @@ public:
     }
 };
 
-// Immutable queue pressure sampled at one scheduling decision. Timeline distance is a coarse availability signal
+// Immutable queue pressure sampled at one scheduling decision. Timeline distance is a coarse availability signal.
 struct GpuQueueTimelineSnapshot{
     GpuPhysicalQueueId queue;
     u64 submittedValue = 0u;
@@ -202,7 +202,7 @@ public:
     }
 };
 
-// Raw device timestamps for one timer query. Only the low timestampValidBits are exposed, so durations use modular tick arithmetic
+// Raw device timestamps for one timer query. Only the low timestampValidBits are exposed, so durations use modular tick arithmetic.
 struct TimerQueryResult{
     static constexpr u32 s_FullWidthBits = 64u;
 
@@ -309,7 +309,7 @@ public:
     [[nodiscard]] bool valid()const noexcept{ return m_valid; }
 
     [[nodiscard]] u16 deviceGeneration()const noexcept{ return m_deviceGeneration; }
-    // State snapshots retain raw backend-resource pointers.  Preserve the producer Device identity so a stale snapshot is rejected before those pointers are used after recreation.
+    // State snapshots retain raw backend-resource pointers. Preserve the producer Device identity so a stale snapshot is rejected before those pointers are used after recreation.
     [[nodiscard]] bool validForDeviceGeneration(const u16 deviceGeneration)const noexcept{
         return m_valid && deviceGeneration != 0u && m_deviceGeneration == deviceGeneration;
     }
@@ -326,7 +326,7 @@ public:
     [[nodiscard]] bool buildResourceSubset(const CommandListResourceStateHandoff& source, const CommandListResourceSelection& selection);
     [[nodiscard]] bool buildTextureSubset(const CommandListResourceStateHandoff& source, Texture* texture, Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool buildTextureRangeSubset(const CommandListResourceStateHandoff& source, Texture* texture, TextureSubresourceSet subresources);
-    // Clips ordinary buffer states. Pending ownership releases must be selected in full because the acquire must use their original byte ranges
+    // Clips ordinary buffer states. Pending ownership releases must be selected in full because the acquire must use their original byte ranges.
     [[nodiscard]] bool buildBufferRangeSubset(const CommandListResourceStateHandoff& source, Buffer* buffer, BufferRange range);
     // Imported exclusive-owner texture handoffs must provide one concrete state for every selected subresource.
     // Verify exact coverage before a graph lowers its paired acquire, including the source owner and (when distinct) the release destination from the producer's state tracker.

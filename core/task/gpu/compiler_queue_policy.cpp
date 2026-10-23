@@ -32,7 +32,7 @@ inline constexpr u64 s_LargeQueueCostWeight = 8u;
 
 inline constexpr u8 s_ValidQueueCapabilityMask = static_cast<u8>(GpuQueueCapability::Transfer) | static_cast<u8>(GpuQueueCapability::Compute) | static_cast<u8>(GpuQueueCapability::Graphics);
 
-// Compilers are short-lived value objects, so packet identity must be allocated process-wide. The graph generation remains the identity of declared task/resource handles
+// Compilers are short-lived value objects, so packet identity must be allocated process-wide. The graph generation remains the identity of declared task/resource handles.
 static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
 
 

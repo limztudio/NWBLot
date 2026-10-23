@@ -71,7 +71,7 @@ struct NwbReflectionSpatialView{
 #define NWB_REFLECTION_SPATIAL_TILE_WIDTH (NWB_REFLECTION_SPATIAL_GROUP_SIZE + 2u * NWB_REFLECTION_SPATIAL_CACHE_RADIUS)
 #define NWB_REFLECTION_SPATIAL_TILE_TEXELS (NWB_REFLECTION_SPATIAL_TILE_WIDTH * NWB_REFLECTION_SPATIAL_TILE_WIDTH)
 
-// Two color caches (radiance/specular) are half4: every input/output is RGBA16F, so FP16 matches storage and halves the tile to 3,200/4,608/6,272 bytes. Geometry caches stay float4 for plane/edge math; depth shares a lane.
+// Color tile caches use half4 to match RGBA16F storage; geometry caches stay float4 for plane and edge math.
 groupshared half4 g_NwbReflectionSpatialRadiance[NWB_REFLECTION_SPATIAL_TILE_TEXELS];
 groupshared half4 g_NwbReflectionSpatialSpecular[NWB_REFLECTION_SPATIAL_TILE_TEXELS];
 groupshared float4 g_NwbReflectionSpatialPositionDepth[NWB_REFLECTION_SPATIAL_TILE_TEXELS];

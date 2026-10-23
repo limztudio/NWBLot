@@ -31,7 +31,7 @@ bool nwbBxdfRequiresLinearOutput(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// observerDirection points from the hit back along the incident ray. Materials consume this view vector and return linear radiance. Uses direct-light loop and fallback; no secondary shadow, GI, or recursive rays.
+// observerDirection points from the hit toward the ray origin; evaluates direct lights and ambient fallback without secondary rays.
 half3 nwbRayTraceSurfaceRadiance(const NwbRayTraceSurfaceHit hit, const float3 observerDirection){
     if(!hit.hit)
         return half3(0.0h);

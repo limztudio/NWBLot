@@ -552,9 +552,9 @@ public:
     // Declares a distinct semantic value for one exact physical resource range. Repeating an identical descriptor intentionally produces a different version ID.
     [[nodiscard]] Expected<GpuGraphResourceVersionId> declareResourceVersion(const GpuGraphResourceVersionDesc& desc);
     // Stores an immutable dynamic resource collection.
-    // Task resource-set declarations expand to the set's concrete members at task creation, compilation and recording keep their existing resource-level contracts.
+    // Task resource-set declarations expand to concrete members at task creation; compilation and recording keep their resource-level contracts.
     [[nodiscard]] Expected<GpuGraphResourceSetId> importResourceSet(const GpuGraphResourceSetDesc& desc);
-    // Pipeline IDs are graph-local side-table entries.  Metadata-only entries support analysis/capture setup
+    // Pipeline IDs are graph-local side-table entries. Metadata-only entries support analysis and capture setup.
     [[nodiscard]] Expected<GpuGraphPipelineId> importPipeline(const GpuGraphPipelineDesc& desc);
     [[nodiscard]] Expected<GpuGraphPipelineId> importGraphicsPipeline(const GraphicsPipelineHandle& pipeline, const GpuGraphPipelineDesc& desc);
     [[nodiscard]] Expected<GpuGraphPipelineId> importComputePipeline(const ComputePipelineHandle& pipeline, const GpuGraphPipelineDesc& desc);
@@ -636,9 +636,9 @@ private:
     void abortPacketSubmission(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, GpuPacketSubmissionLease& lease)const;
     [[nodiscard]] bool abandonPacketSubmissionWithoutCallbacks(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, GpuPacketSubmissionLease& lease)const noexcept;
     // Atomically discards one non-recording packet.
-    // A packet with an in-flight Recording claim is left intact transaction cancellation cannot race native command recording or reopen the graph for a retry.
+    // A packet with an in-flight Recording claim is left intact so transaction cancellation cannot race native recording or reopen the graph.
     [[nodiscard]] bool discardUnacceptedPacket(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const;
-    // Unexpected observer failure must resolve the graph-owned attempt without invoking another extensible callback the original exception is active.
+    // Unexpected observer failure must resolve the graph-owned attempt without invoking another callback while the original exception is active.
     // Payload destruction remains owned by normal graph teardown.
     [[nodiscard]] bool abandonUnacceptedPacketWithoutCallbacks(
         const GpuCompiledGraph& compiledGraph,
@@ -649,7 +649,7 @@ private:
     )const noexcept;
 
 private:
-    // Lowers a compiler-owned packet-boundary barrier through the existing state tracker.  Task thunks retain responsibility only for barriers internal to their own sequence.
+    // Lowers a compiler-owned packet-boundary barrier through the existing state tracker. Task thunks own only barriers internal to their sequence.
     [[nodiscard]] bool applyCompiledBarrier(
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
@@ -743,7 +743,7 @@ private:
     GraphicsVector<GpuTaskResourceUse> m_resourceUses;
     GraphicsVector<GpuTaskResourceVersionUse> m_resourceVersionUses;
     GraphicsVector<GpuGraphResourceNode> m_resources;
-    // Ordinals refer to immutable declarations in the current generation. Small graphs use their bounded existing node prefix
+    // Ordinals refer to immutable declarations in the current generation. Small graphs use their bounded existing node prefix.
     Optional<ImportIdentityIndex> m_resourceIdentityIndex;
     Optional<ResourcePointerIndex> m_resourcePointerIndex;
     GraphicsVector<GpuGraphResourceVersionNode> m_resourceVersions;

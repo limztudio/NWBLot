@@ -112,7 +112,7 @@ void GpuTaskGraph::beginPacketSubmissionAcceptance(const GpuCompiledGraph& compi
 }
 
 void GpuTaskGraph::notifyPacketSubmissionAccepted(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet, const QueueSubmissionToken& token, const GpuPacketSubmissionLease& lease)const{
-    const bool inputValid = !planAccess.validFor(compiledGraph) || !planAccess.validPacket(packet) || !token.valid() || !lease.valid() ? false : true;
+    const bool inputValid = planAccess.validFor(compiledGraph) && planAccess.validPacket(packet) && token.valid() && lease.valid();
     NWB_FATAL_ASSERT_MSG(inputValid, "native-accepted callback publication must retain its exact graph submission lease");
 
     const GpuCompiledPacketView packetView = planAccess.packet(packet);

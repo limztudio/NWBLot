@@ -501,7 +501,7 @@ RmtErrorCode RmtResourceUserdataTrackImplicitResourceToken(const RmtResourceIden
                                                            const uint64_t                delay_time,
                                                            const RmtImplicitResourceType implicit_resource_type)
 {
-    if (timestamp - delay_time <= timestamp)
+    if (timestamp >= delay_time)
     {
         TokenData token_data              = {};
         token_data.token_type             = kResourceImplicit;

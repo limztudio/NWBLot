@@ -26,7 +26,7 @@ IDENTITY_CAPTURES = tuple((case, route) for case in ("identity_reference", "iden
 FAILURE_CAPTURES = (("crossing_overflow", "automatic"), ("crossing_overflow", "screen"))
 NEAR_AIR_CAPTURES = tuple((case, route) for case in ("near_air_ordinary", "near_air_csg") for route in ("automatic", "screen"))
 # This bright stripe interior avoids the foreground/behind panels, horizontal markers and stripe boundaries.
-NEAR_AIR_RECTANGLE = (462, 345, 468, 350)
+NEAR_AIR_RECTANGLE = (449, 345, 461, 350)
 MINIMUM_NEAR_AIR_TRANSMITTED_RED = 2
 MINIMUM_NEAR_AIR_SCREEN_RED = 12
 MINIMUM_NEAR_AIR_RED_ATTENUATION = 8

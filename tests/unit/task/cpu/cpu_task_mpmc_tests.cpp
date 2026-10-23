@@ -93,12 +93,10 @@ void Produce(CpuTaskScheduler& scheduler, CpuTaskScope& scope, ProducerState& st
                 state.visits[slot + 1u].fetch_add(1u, MemoryOrder::relaxed);
                 const auto secondCpuTaskAdmission = scheduler.submit([&state, slot]()noexcept{
                     state.visits[slot + 2u].fetch_add(1u, MemoryOrder::relaxed);
-                }
-                );
+                });
                 if(!secondCpuTaskAdmission || !secondCpuTaskAdmission->valid())
                     state.rejected.store(true, MemoryOrder::release);
-            }
-            );
+            });
             if(!cpuTaskAdmission || !cpuTaskAdmission->valid())
                 state.rejected.store(true, MemoryOrder::release);
         };
@@ -175,8 +173,7 @@ TEST(CpuTaskMpmcTests, OwnerExternalAndWorkerProducersShareQueuesWithoutLosingOr
                 producer.join();
         }
         scheduler.drain();
-    }
-    );
+    });
 
     for(u32 producer = 0u; producer < s_WorkerCount; ++producer){
         const auto cpuTaskAdmission = scope.submit([&, producer](){
@@ -195,8 +192,7 @@ TEST(CpuTaskMpmcTests, OwnerExternalAndWorkerProducersShareQueuesWithoutLosingOr
         producers[producer] = JoiningThread([&, producer](){
             state.ready.fetch_add(1u, MemoryOrder::release);
             Produce(scheduler, scope, state, 1u + producer);
-        }
-        );
+        });
     }
     EXPECT_TRUE(WaitUntil([&]()noexcept{ return state.ready.load(MemoryOrder::acquire) == s_ProducerCount - 1u; }));
     EXPECT_EQ(state.workerMask.load(MemoryOrder::acquire), (1u << s_WorkerCount) - 1u);
@@ -246,8 +242,7 @@ TEST(CpuTaskMpmcTests, ExternalProducersCanWaitForMainThreadTasksWhileTheOwnerPu
             if(producer.joinable())
                 producer.join();
         }
-    }
-    );
+    });
 
     for(u32 producer = 0u; producer < s_ExternalProducerCount; ++producer){
         producers[producer] = JoiningThread([&, producer](){
@@ -286,8 +281,7 @@ TEST(CpuTaskMpmcTests, ExternalProducersCanWaitForMainThreadTasksWhileTheOwnerPu
                 else
                     scheduler.wait();
             }
-        }
-        );
+        });
     }
     EXPECT_TRUE(WaitUntil([&]()noexcept{ return ready.load(MemoryOrder::acquire) == s_ExternalProducerCount; }));
     start.store(true, MemoryOrder::release);
@@ -346,8 +340,7 @@ TEST(CpuTaskMpmcTests, CanceledCompletionCannotLoseConcurrentHandleScopeOrSchedu
                 if(waiter.joinable())
                     waiter.join();
             }
-        }
-        );
+        });
         for(u32 kind = 0u; kind < s_JoinKinds; ++kind){
             waiters[kind] = JoiningThread([&, kind](){
                 if(!WaitUntil([&]()noexcept{ return start.load(MemoryOrder::acquire); })){
@@ -362,8 +355,7 @@ TEST(CpuTaskMpmcTests, CanceledCompletionCannotLoseConcurrentHandleScopeOrSchedu
                 else
                     scheduler.wait();
                 finished.fetch_add(1u, MemoryOrder::release);
-            }
-            );
+            });
         }
         if(round % 2u == 0u){
             start.store(true, MemoryOrder::release);

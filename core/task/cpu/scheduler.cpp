@@ -142,8 +142,7 @@ CpuTaskScheduler::CpuTaskScheduler(const CpuTaskSchedulerConfig& config)
     for(u32 worker = 0u; worker < m_workerCount; ++worker){
         m_workers.emplace_back([this, index = static_cast<usize>(worker) + 1u](const StopToken& stop){
             workerLoop(stop, index);
-        }
-        );
+        });
     }
 }
 
@@ -509,8 +508,7 @@ void CpuTaskScheduler::execute(const TaskHandle handle, const usize workerIndex,
         }
         if(readyToRetire)
             retire(handle, *node);
-    }
-    );
+    });
     {
         Execution execution(*this, handle, workerIndex, affinity);
         if(profile)
@@ -618,8 +616,7 @@ void CpuTaskScheduler::workerLoop(const StopToken& stop, const usize workerIndex
                 }
                 const bool ready = m_workerChanged[affinity].wait(lock, stop, [this, affinity]()noexcept{
                     return hasReadyLocked(affinity, false, false);
-                }
-                );
+                });
                 if(idle)
                     finishProfileLocked(*idle, TimerNow());
                 if(!ready)

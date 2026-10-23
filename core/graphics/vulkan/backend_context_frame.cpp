@@ -152,8 +152,7 @@ bool BackendContext::recreateAcquireSyncSlots(const usize count){
                 m_deviceDispatch.vkDestroyFence(m_vulkanDevice, slot.fence, nullptr);
             if(slot.semaphore)
                 m_deviceDispatch.vkDestroySemaphore(m_vulkanDevice, slot.semaphore, nullptr);
-        }
-        );
+        });
 
         VkResult result = m_deviceDispatch.vkCreateSemaphore(m_vulkanDevice, &semaphoreInfo, nullptr, &slot.semaphore);
         if(result == VK_SUCCESS)
@@ -361,8 +360,7 @@ bool BackendContext::cancelFramePresentationSignalDeferred(const QueueSubmission
         return false;
     m_framePresentationCondition.wait(presentationLock, [this]()noexcept{
         return m_framePresentationSignalState != FramePresentationSignalState::Queued;
-    }
-    );
+    });
     if(claim && (claim->identity != m_framePresentationClaimIdentity || claim->invoke != &BackendContext::InvokeFramePresentationSignalPreparation || claim->resolved != &BackendContext::InvokeFramePresentationSignalResolution))
         return false;
     if(m_framePresentationSignalState == FramePresentationSignalState::Idle)

@@ -105,9 +105,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void AppendAftermathGpuDumpSummary(Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& packageDirectory, const CrashSymbolicationConfig& config, CrashReportText& outReport){
-    static_cast<void>(config);
-
+void AppendAftermathGpuDumpSummary(Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& packageDirectory, CrashReportText& outReport){
     const CrashScratchPath dumpPath = packageDirectory / CrashNames::s_AftermathGpuDumpFileName;
     const auto regularDump = IsRegularFile(dumpPath);
     if(!regularDump){
@@ -170,8 +168,7 @@ void AppendAftermathGpuDumpSummary(Core::Alloc::ScratchArena& scratchArena, cons
                 CaptureDiagnosticEvent("logger_server_aftermath", detail.view(), __FILE__, __LINE__);
             }
             decoder = nullptr;
-        }
-        );
+        });
 
         const GFSDK_Aftermath_Result generateResult = decoderLib.generateJson(
             decoder,

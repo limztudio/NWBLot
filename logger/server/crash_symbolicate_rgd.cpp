@@ -35,9 +35,7 @@ inline constexpr AStringView s_ReportDetailPrefix = "detail=";
 
 
 // Expected decode failures retain the ingest report; unexpected exceptions remain terminal.
-void AppendRadeonGpuDetectiveSummary(Core::Alloc::ScratchArena& arena, const CrashScratchPath& packageDirectory, const CrashSymbolicationConfig& config, CrashReportText& outReport){
-    static_cast<void>(config);
-
+void AppendRadeonGpuDetectiveSummary(Core::Alloc::ScratchArena& arena, const CrashScratchPath& packageDirectory, CrashReportText& outReport){
     const CrashScratchPath rgdCapture = packageDirectory / CrashNames::s_GpuDetectiveCaptureFileName;
     const auto regularCapture = IsRegularFile(rgdCapture);
     if(!regularCapture){

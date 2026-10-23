@@ -169,8 +169,7 @@ Expected<GpuVersion<GpuGlyphVersion>> GpuRendererState::prepareGlyphPage(const S
         .finalState = Core::ResourceStates::ShaderResource,
         .physicalInitialState = Core::ResourceStates::Unknown,
         .hasPhysicalInitialState = true,
-    }
-    ))
+    }))
         return MakeUnexpected(Failure{});
     if(!version->m_readinessToken.valid() || !version->m_readinessToken.hasPhysicalQueueIdentity())
         return MakeUnexpected(Failure{});

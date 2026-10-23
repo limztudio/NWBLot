@@ -113,8 +113,7 @@ void MeshSkinningSystem::prepare(Core::ECS::World& world){
         NWB_ASSERT(instance->valid());
 
         ready = prepareRuntimeMeshResources(*instance, scratchArena);
-    }
-    );
+    });
 
     m_runtimeSetupReady = ready;
 }
@@ -234,8 +233,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     skinningBindings.each([&](Core::ECS::EntityID entity, SkinnedMeshBindingComponent& binding){
         if(!declarationFailed && !planBuilder.declare(entity, binding))
             declarationFailed = true;
-    }
-    );
+    });
     Core::GpuTaskId terminalTask = planBuilder.terminalTask();
 
     if(declarationFailed)
@@ -268,8 +266,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
                 .localBoundsPipeline = plan.localBoundsPipeline,
                 .meshletCount = plan.meshletCount,
                 .bindlessResourceSlots = plan.bindlessResourceSlots,
-            }
-            );
+            });
         }
     }
     Core::GpuTaskId postDispatchDependency = terminalTask;

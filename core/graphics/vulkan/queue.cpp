@@ -421,8 +421,7 @@ Expected<NotNull<Queue::WorkerCommandArena*>, VkResult> Queue::getOrCreateWorker
         if(arena->commandPool)
             m_context.deviceDispatch.vkDestroyCommandPool(m_context.device, arena->commandPool, m_context.allocationCallbacks);
         DestroyArenaObjectNoexcept(m_context.objectArena, arena);
-    }
-    );
+    });
 
     auto poolInfo = VulkanDetail::MakeVkStruct<VkCommandPoolCreateInfo>(VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO);
     poolInfo.queueFamilyIndex = m_queueFamilyIndex;

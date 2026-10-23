@@ -99,8 +99,7 @@ bool UiLayerSystem::collectRoots(){
         }
         m_liveRoots.push_back({ entity, component.order });
         m_rootIdentities.push_back({ entity.id, 1u });
-    }
-    );
+    });
     m_context.retainRoots(m_rootIdentities.data(), m_rootIdentities.size());
     return !overflow;
 }

@@ -197,8 +197,7 @@ static void CopyMessagesToClipboard(const HWND hwnd)noexcept{
     ScopeExit closeClipboard([]()noexcept{
         if(!CloseClipboard())
             CaptureDiagnosticEvent(s_ClipboardDiagnosticCategory, "Failed to close clipboard", __FILE__, __LINE__);
-    }
-    );
+    });
     if(!EmptyClipboard()){
         CaptureDiagnosticEvent(s_ClipboardDiagnosticCategory, "Failed to empty clipboard", __FILE__, __LINE__);
         return;
@@ -305,8 +304,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 SendMessage(listHwnd, WM_SETREDRAW, TRUE, 0);
                 if(!InvalidateRect(listHwnd, nullptr, TRUE))
                     CaptureDiagnosticEvent(s_LayoutDiagnosticCategory, "Log server: failed to invalidate its message list", __FILE__, __LINE__);
-            }
-            );
+            });
 
             SendMessage(listHwnd, LB_RESETCONTENT, 0, 0);
             const auto synchronized = SynchronizeMessageRows(listHwnd);
@@ -339,8 +337,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 ScopeExit releaseDc([&]()noexcept{
                     if(!ReleaseDC(s_ListHwnd, hdc))
                         CaptureDiagnosticEvent(s_PaintDiagnosticCategory, "Log server: failed to release its text measurement device context", __FILE__, __LINE__);
-                }
-                );
+                });
 
                 const HFONT font = reinterpret_cast<HFONT>(SendMessage(s_ListHwnd, WM_GETFONT, 0, 0));
                 HGDIOBJ oldFont = nullptr;
@@ -357,8 +354,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                         if(!restored || restored == HGDI_ERROR)
                             CaptureDiagnosticEvent(s_PaintDiagnosticCategory, "Log server: failed to restore its text measurement font", __FILE__, __LINE__);
                     }
-                }
-                );
+                });
 
                 if(!curStr.first().empty()){
                     if(DrawText(hdc, curStr.first().c_str(), -1, &rect, DT_WORDBREAK | DT_LEFT | DT_CALCRECT) == 0)
@@ -394,8 +390,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 ScopeExit releaseBrush([&]()noexcept{
                     if(!DeleteObject(brush))
                         CaptureDiagnosticEvent(s_PaintDiagnosticCategory, "Log server: failed to delete its row background brush", __FILE__, __LINE__);
-                }
-                );
+                });
 
                 if(!FillRect(hdc, &rect, brush))
                     CaptureDiagnosticEvent(s_PaintDiagnosticCategory, "Log server: failed to fill its row background", __FILE__, __LINE__);
@@ -407,8 +402,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 ScopeExit restoreTextColor([&]()noexcept{
                     if(SetTextColor(hdc, oldTextColor) == CLR_INVALID)
                         CaptureDiagnosticEvent(s_PaintDiagnosticCategory, "Log server: failed to restore its log text color", __FILE__, __LINE__);
-                }
-                );
+                });
 
                 const int oldBackgroundMode = SetBkMode(hdc, TRANSPARENT);
                 if(oldBackgroundMode == 0){
@@ -418,8 +412,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 ScopeExit restoreBackgroundMode([&]()noexcept{
                     if(!SetBkMode(hdc, oldBackgroundMode))
                         CaptureDiagnosticEvent(s_PaintDiagnosticCategory, "Log server: failed to restore its log text background mode", __FILE__, __LINE__);
-                }
-                );
+                });
 
                 if(!curData.first().empty() && DrawText(hdc, curData.first().c_str(), -1, &rect, DT_WORDBREAK | DT_LEFT) == 0)
                     CaptureDiagnosticEvent(s_PaintDiagnosticCategory, "Log server: failed to draw its log text", __FILE__, __LINE__);

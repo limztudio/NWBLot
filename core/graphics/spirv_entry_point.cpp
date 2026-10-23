@@ -187,8 +187,7 @@ template<typename Source>
 
         entryPointName = entryPoint.name;
         found = true;
-    }
-    );
+    });
     if(!validModule)
         return MakeUnexpected(SpirvEntryPointLookupResult::InvalidSpirv);
     if(!found)

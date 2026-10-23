@@ -73,8 +73,7 @@ TEST(GlobalArenaTests, SharedOwnerAllocationChurnPreservesPayloadAndAccounting){
             }
 
             results[threadIndex] = WorkerResult{ .stats = arena.memoryStats(), .allocationFailed = allocationFailed, .contentsPreserved = contentsPreserved, };
-        }
-        );
+        });
     }
 
     workersReady.wait();
@@ -163,8 +162,7 @@ TEST(PersistentArenaTests, SharedArenaConcurrentAllocationCrossThreadFreeAndAcco
             }
 
             results[threadIndex] = PersistentArenaWorkerResult{ .allocationFailed = allocationFailed, .contentsPreserved = contentsPreserved, .alignmentPreserved = alignmentPreserved, };
-        }
-        );
+        });
     }
 
     workersReady.wait();
@@ -249,8 +247,7 @@ TEST(PersistentArenaTests, SharedArenaConcurrentReallocationPreservesPayloadAndA
             }
 
             results[threadIndex] = PersistentArenaWorkerResult{ .allocationFailed = allocationFailed, .contentsPreserved = contentsPreserved, .alignmentPreserved = alignmentPreserved, };
-        }
-        );
+        });
     }
 
     workersReady.wait();

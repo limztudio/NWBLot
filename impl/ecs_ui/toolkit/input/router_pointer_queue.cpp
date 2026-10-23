@@ -66,12 +66,10 @@ Expected<InputEvent> InputRouter::resolvePointerEvent(const InputEvent& event){
     const PointerIntent::Enum intent = event.type == InputEventType::SecondaryDown || event.type == InputEventType::SecondaryUp ? PointerIntent::ContextMenu : PointerIntent::Activate;
     const auto held = FindIf(m_pointerBindings.begin(), m_pointerBindings.end(), [&event, intent](const PointerBinding& binding)noexcept{
         return binding.source == event.source && binding.intent == intent;
-    }
-    );
+    });
     const auto contact = FindIf(m_pointerBindings.begin(), m_pointerBindings.end(), [&event](const PointerBinding& binding)noexcept{
         return binding.source == event.source;
-    }
-    );
+    });
     if(contact != m_pointerBindings.end())
         resolved.hoverCapable = contact->hoverCapable;
     if(press){

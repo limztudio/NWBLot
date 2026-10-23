@@ -174,8 +174,7 @@ TEST(CpuTaskSubmissionTests, WorkerCallbackFailureTerminatesWithoutDeferredCalle
                 if(scheduler.currentWorkerIndex() == 0u)
                     ExitTestProcess(0u);
                 throw s_WorkerException;
-            }
-            );
+            });
             if(!cpuTaskAdmission)
                 ExitTestProcess(0u);
             const auto task = *cpuTaskAdmission;

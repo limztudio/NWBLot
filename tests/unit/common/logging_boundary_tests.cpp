@@ -87,8 +87,7 @@ TEST(CommonLoggingBoundaries, CapturingLoggerSerializesConcurrentWritersAndReade
         if(errorCount > lastErrorCount)
             observedErrors.fetch_add(errorCount - lastErrorCount, MemoryOrder::relaxed);
         // Reader may drain the full tail; overlap already proved by partial reads.
-    }
-    );
+    });
     Thread writers[s_ThreadCount];
     for(u32 threadIndex = 0u; threadIndex < s_ThreadCount; ++threadIndex){
         writers[threadIndex] = Thread([&logger, &startGate, &activeWriters](){
@@ -98,8 +97,7 @@ TEST(CommonLoggingBoundaries, CapturingLoggerSerializesConcurrentWritersAndReade
                 NWB::Core::Common::LoggerDetail::EnqueueMessage(logger, type, s_ParallelLoggerMessage);
             }
             activeWriters.fetch_sub(1u, MemoryOrder::release);
-        }
-        );
+        });
     }
 
     startGate.arrive_and_wait();

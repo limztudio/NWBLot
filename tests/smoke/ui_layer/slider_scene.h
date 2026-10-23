@@ -30,7 +30,7 @@ namespace Tests::Smoke{
 // RefCounter derives from this scene; each value owner outlives the final enclosing Builder scope.
 class UiSliderSmokeScene : public Core::IInputEventHandler, NoCopy{
 public:
-    UiSliderSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
+    explicit UiSliderSmokeScene(Core::InputDispatcher& input);
     virtual ~UiSliderSmokeScene()noexcept override;
 
 

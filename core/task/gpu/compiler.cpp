@@ -88,8 +88,7 @@ bool GpuTaskGraphCompiler::compile(
         const GpuTaskQueueAssignmentDiagnostic diagnostic = outAssignments.m_diagnostic;
         outAssignments.reset();
         outAssignments.m_diagnostic = diagnostic;
-    }
-    );
+    });
 
     GpuCompiledGraph::CompilationScope compilation(outCompiledGraph);
     if(!compilation.valid()){

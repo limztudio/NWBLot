@@ -55,8 +55,7 @@ int RunPipelineTool(const int argc, char** argv){
         }
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("DependencyComputer: returned {} inputs (skin dependencies: {})"), inputs.size(), parsed.includeSkinDependencies);
         return s_PipelineExitSuccess;
-    }
-    );
+    });
 }
 
 

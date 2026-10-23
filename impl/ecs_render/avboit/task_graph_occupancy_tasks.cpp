@@ -64,12 +64,11 @@ namespace RendererTaskGraphDetail{
 
 
 [[nodiscard]] bool AvboitOccupancyComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-
     static_cast<void>(context);
     const AvboitComputeEmulationRecordTrait trait{ RendererGpuTimingScope::s_AvboitOccupancy, MaterialPipelinePass::AvboitOccupancy, &AvboitFrameTargets::lowFramebuffer, };
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
 
-    return RecordAvboitComputeEmulationFromPayload(scratchArena, payload, commandList, context, trait, payload.occupancyTiming);
+    return RecordAvboitComputeEmulationFromPayload(scratchArena, payload, commandList, trait, payload.occupancyTiming);
 }
 
 
@@ -77,12 +76,11 @@ namespace RendererTaskGraphDetail{
 
 
 [[nodiscard]] bool AvboitOccupancySharedComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-
     static_cast<void>(context);
     const AvboitSharedComputeEmulationRecordTrait trait{ RendererGpuTimingScope::s_AvboitOccupancy, MaterialPipelinePass::AvboitOccupancy, &AvboitFrameTargets::lowFramebuffer, };
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
 
-    return RecordAvboitSharedComputeEmulationFromPayload(scratchArena, payload, commandList, context, payload.phase == AvboitOccupancySharedComputeEmulationGraphTask::Phase::Raster, trait, payload.occupancyTiming);
+    return RecordAvboitSharedComputeEmulationFromPayload(scratchArena, payload, commandList, payload.phase == AvboitOccupancySharedComputeEmulationGraphTask::Phase::Raster, trait, payload.occupancyTiming);
 }
 
 
@@ -90,14 +88,13 @@ namespace RendererTaskGraphDetail{
 
 
 [[nodiscard]] bool AvboitOccupancyGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-
+    static_cast<void>(context);
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
 
     return RecordAvboitRasterPassFromPayload(
         scratchArena,
         payload,
         commandList,
-        context,
         &Payload::occupancyPhasePrepared,
         &Payload::occupancySnapshot,
         &Payload::occupancyComputeEmulationOutputStatesGraphOwned,

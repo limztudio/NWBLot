@@ -61,8 +61,7 @@ void GpuTimingAccumulator::collect(
                 completedSamples.push_back(SampleDispatch{
                     .sample = GpuTimingSample{ .sourceFrameIndex = record.frameIndex, .scopeName = m_scopeName, .attribution = record.attribution, .comparableRange = {}, .physicalQueue = record.physicalQueue, },
                     .subscriptionIdentityLimit = record.retirementSubscriptionIdentityLimit,
-                }
-                );
+                });
                 record.attribution = s_NoGpuTimingSampleAttribution;
                 record.retirementSubscriptionIdentityLimit = 0u;
                 record.retirementNotificationPending = false;
@@ -78,8 +77,7 @@ void GpuTimingAccumulator::collect(
                 completedSamples.push_back(SampleDispatch{
                     .sample = GpuTimingSample{ .sourceFrameIndex = record.frameIndex, .scopeName = m_scopeName, .attribution = record.attribution, .comparableRange = {}, .physicalQueue = record.physicalQueue, .published = false, },
                     .subscriptionIdentityLimit = subscriptionIdentityLimit,
-                }
-                );
+                });
             }
             releaseQuery(record);
             ++m_unpublishedSampleCount;
@@ -112,8 +110,7 @@ void GpuTimingAccumulator::collect(
                     .published = publishSample,
                 },
                 .subscriptionIdentityLimit = subscriptionIdentityLimit,
-            }
-            );
+            });
         }
         if(publishPerformanceSample){
             performanceSamples.push_back(GpuTimingSinkSample{ .scope = m_timingScope, .durationSeconds = durationSeconds, .sourceFrameIndex = sourceFrameIndex, });
@@ -534,8 +531,7 @@ void GpuTimingAccumulator::retireMarkedAttributions(SampleDispatchVector& outSam
         outSamples.push_back(SampleDispatch{
             .sample = GpuTimingSample{ .sourceFrameIndex = record.frameIndex, .scopeName = m_scopeName, .attribution = record.attribution, .comparableRange = {}, .physicalQueue = record.physicalQueue, },
             .subscriptionIdentityLimit = record.retirementSubscriptionIdentityLimit,
-        }
-        );
+        });
         record.attribution = s_NoGpuTimingSampleAttribution;
         record.retirementSubscriptionIdentityLimit = 0u;
         record.retirementNotificationPending = false;
@@ -570,8 +566,7 @@ void GpuTimingAccumulator::retireAttributions(SampleDispatchVector& outSamples, 
             .sample = GpuTimingSample{ .sourceFrameIndex = record.frameIndex, .scopeName = m_scopeName, .attribution = record.attribution, .comparableRange = {}, .physicalQueue = record.physicalQueue, },
             .subscriptionIdentityLimit = record.retirementNotificationPending ? record.retirementSubscriptionIdentityLimit : subscriptionIdentityLimit
             ,
-        }
-        );
+        });
         record.attribution = s_NoGpuTimingSampleAttribution;
         record.retirementSubscriptionIdentityLimit = 0u;
         record.retirementNotificationPending = false;

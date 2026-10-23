@@ -89,8 +89,7 @@ void UiLayerSystem::prepare(Core::ECS::World& world){
             return false;
         m_skinAsset = Move(*candidateAsset);
         return true;
-    }
-    );
+    });
     if(skinChange == UiSkinChangeResult::Failed)
         NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: UI skin request failed; retaining the selected skin"));
 }
@@ -122,8 +121,7 @@ bool UiLayerSystem::validateResources(const u32 width, const u32 height, const u
             return false;
         m_skinAsset = Move(*candidateAsset);
         return true;
-    }
-    );
+    });
     if(selection == UiSkinSelectionResult::Failed)
         return false;
     if(selection == UiSkinSelectionResult::DefaultFallback){

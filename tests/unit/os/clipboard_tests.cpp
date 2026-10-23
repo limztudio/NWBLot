@@ -275,8 +275,7 @@ TEST(Clipboard, WrongThreadCallsNeverTouchRequestStorage){
         EXPECT_EQ(service.poll(token, completion), ClipboardPollResult::WrongThread);
         EXPECT_FALSE(service.cancel(token));
         EXPECT_FALSE(service.pump());
-    }
-    );
+    });
     worker.join();
     ASSERT_FALSE(::testing::Test::HasFatalFailure());
     EXPECT_EQ(service.poll(token, completion), ClipboardPollResult::Pending);

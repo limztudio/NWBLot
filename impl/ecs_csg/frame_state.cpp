@@ -63,8 +63,7 @@ void GatherReceiverState(Core::ECS::World& world, const CsgReceiverKind::Enum re
 
         const CsgReceiverDrawState& receiverState = opaqueWork ? *opaqueState : *transparentState;
         AddCsgFrameReceiverWork(inOutState, receiverKind, opaqueWork, transparentWork, receiverState.cutterCount);
-    }
-    );
+    });
 }
 
 
@@ -93,8 +92,7 @@ CsgFrameReceiverLookup::CsgFrameReceiverLookup(Core::ECS::World& world, Core::Al
         auto result = m_cutterRanges.try_emplace(cutter.receiverGroup, CutterRangeEntry{});
         CsgFrameCutterRange& range = result.first.value().range;
         range.cutterCount = AddSaturating<u32>(range.cutterCount, 1u);
-    }
-    );
+    });
 
     u32 firstCutter = 0u;
     for(auto it = m_cutterRanges.begin(); it != m_cutterRanges.end(); ++it){
@@ -125,8 +123,7 @@ CsgFrameReceiverLookup::CsgFrameReceiverLookup(Core::ECS::World& world, Core::Al
         NWB_ASSERT(cutterIndex < m_cutterRefs.size());
         m_cutterRefs[cutterIndex] = CsgFrameCutterRef{ entity, &cutter };
         ++writtenCount;
-    }
-    );
+    });
 }
 
 

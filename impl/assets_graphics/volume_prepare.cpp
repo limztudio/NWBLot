@@ -405,8 +405,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
             manifest,
             seenVirtualPathHashes
         );
-    }
-    );
+    });
     return true;
 }
 

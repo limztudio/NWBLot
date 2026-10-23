@@ -245,7 +245,7 @@ Expected<Core::GpuTaskId> FrameGraphAvboitStage::declare(Core::Alloc::ScratchAre
     Core::GpuTaskId avboitClearTask = avboitClearChainResult->clearTask;
 
 
-    AvboitOccupancyRecordInputs avboitOccupancyRecordInputs{ m_arena, inputs.targets, timing.preTimingTicket, timing.occupancyComputeEmulationTiming };
+    AvboitOccupancyRecordInputs avboitOccupancyRecordInputs{ inputs.targets, timing.preTimingTicket, timing.occupancyComputeEmulationTiming };
     avboitOccupancyRecordInputs.albedo = inputs.resources.albedo;
     avboitOccupancyRecordInputs.normal = inputs.resources.normal;
     avboitOccupancyRecordInputs.worldPosition = inputs.resources.worldPosition;
@@ -284,7 +284,7 @@ Expected<Core::GpuTaskId> FrameGraphAvboitStage::declare(Core::Alloc::ScratchAre
     avboitOccupancyRecordInputs.sharedComputeEmulationInstanceCount = occupancySharedComputeEmulationInstanceCount;
     avboitOccupancyRecordInputs.sharedComputeEmulationMaterialTypedByteCount = occupancySharedComputeEmulationMaterialTypedByteCount;
     AvboitOccupancyRecordBuilder avboitOccupancyRecordBuilder(m_graph, m_graphics, m_materialSystem, m_avboitSystem);
-    auto avboitOccupancyRecordResult = avboitOccupancyRecordBuilder.declare(scratchArena, inputs.frameBindings, inputs.csgResources, objectGeometry, avboitOccupancyRecordInputs, avboitOccupancyPayload, avboitOccupancyComputeEmulationPayload);
+    auto avboitOccupancyRecordResult = avboitOccupancyRecordBuilder.declare(scratchArena, inputs.frameBindings, objectGeometry, avboitOccupancyRecordInputs, avboitOccupancyPayload, avboitOccupancyComputeEmulationPayload);
     if(!avboitOccupancyRecordResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT occupancy graph task"));
         return MakeUnexpected(Failure{});
@@ -389,7 +389,7 @@ bool FrameGraphAvboitStage::declareExtinction(
     const ECSRenderDetail::RegularSharedComputeEmulationGraphPlan extinctionSharedComputeEmulationPlan = extinctionUploadChainResult->sharedComputeEmulationPlan;
     const usize extinctionSharedComputeEmulationInstanceCount = extinctionUploadChainResult->sharedComputeEmulationInstanceCount;
     const usize extinctionSharedComputeEmulationMaterialTypedByteCount = extinctionUploadChainResult->sharedComputeEmulationMaterialTypedByteCount;
-    AvboitExtinctionRecordInputs avboitExtinctionRecordInputs{ m_arena, inputs.targets, timing.extinctionTimingTicket, timing.extinctionComputeEmulationTiming };
+    AvboitExtinctionRecordInputs avboitExtinctionRecordInputs{ inputs.targets, timing.extinctionTimingTicket, timing.extinctionComputeEmulationTiming };
     avboitExtinctionRecordInputs.albedo = inputs.resources.albedo;
     avboitExtinctionRecordInputs.normal = inputs.resources.normal;
     avboitExtinctionRecordInputs.worldPosition = inputs.resources.worldPosition;
@@ -432,7 +432,7 @@ bool FrameGraphAvboitStage::declareExtinction(
     avboitExtinctionRecordInputs.sharedComputeEmulationInstanceCount = extinctionSharedComputeEmulationInstanceCount;
     avboitExtinctionRecordInputs.sharedComputeEmulationMaterialTypedByteCount = extinctionSharedComputeEmulationMaterialTypedByteCount;
     AvboitExtinctionRecordBuilder avboitExtinctionRecordBuilder(m_graph, m_graphics, m_materialSystem, m_avboitSystem);
-    auto avboitExtinctionRecordResult = avboitExtinctionRecordBuilder.declare(scratchArena, inputs.frameBindings, inputs.csgResources, objectGeometry, avboitExtinctionRecordInputs, avboitExtinctionPayload, avboitExtinctionComputeEmulationPayload);
+    auto avboitExtinctionRecordResult = avboitExtinctionRecordBuilder.declare(scratchArena, inputs.frameBindings, objectGeometry, avboitExtinctionRecordInputs, avboitExtinctionPayload, avboitExtinctionComputeEmulationPayload);
     if(!avboitExtinctionRecordResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT extinction graph task"));
         return false;
@@ -523,7 +523,7 @@ bool FrameGraphAvboitStage::declareAccumulation(
     const usize accumulationSharedComputeEmulationInstanceCount = accumulationUploadChainResult->sharedComputeEmulationInstanceCount;
     const usize accumulationSharedComputeEmulationMaterialTypedByteCount = accumulationUploadChainResult->sharedComputeEmulationMaterialTypedByteCount;
 
-    AvboitAccumulationRecordInputs avboitAccumulationRecordInputs{ m_arena, inputs.targets, timing.accumulationTimingTicket, timing.accumulationComputeEmulationTiming };
+    AvboitAccumulationRecordInputs avboitAccumulationRecordInputs{ inputs.targets, timing.accumulationTimingTicket, timing.accumulationComputeEmulationTiming };
     avboitAccumulationRecordInputs.albedo = inputs.resources.albedo;
     avboitAccumulationRecordInputs.normal = inputs.resources.normal;
     avboitAccumulationRecordInputs.worldPosition = inputs.resources.worldPosition;
@@ -569,7 +569,7 @@ bool FrameGraphAvboitStage::declareAccumulation(
     avboitAccumulationRecordInputs.sharedComputeEmulationInstanceCount = accumulationSharedComputeEmulationInstanceCount;
     avboitAccumulationRecordInputs.sharedComputeEmulationMaterialTypedByteCount = accumulationSharedComputeEmulationMaterialTypedByteCount;
     AvboitAccumulationRecordBuilder avboitAccumulationRecordBuilder(m_graph, m_graphics, m_materialSystem, m_avboitSystem);
-    auto avboitAccumulationRecordResult = avboitAccumulationRecordBuilder.declare(scratchArena, inputs.frameBindings, inputs.csgResources, objectGeometry, avboitAccumulationRecordInputs, avboitAccumulationPayload, avboitAccumulationComputeEmulationPayload);
+    auto avboitAccumulationRecordResult = avboitAccumulationRecordBuilder.declare(scratchArena, inputs.frameBindings, objectGeometry, avboitAccumulationRecordInputs, avboitAccumulationPayload, avboitAccumulationComputeEmulationPayload);
     if(!avboitAccumulationRecordResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT accumulation graph task"));
         return false;

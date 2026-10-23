@@ -161,8 +161,7 @@ TEST(CpuTaskProfilingTests, CaptureRestartRejectsOldReadyAndExecutingTimers){
         ASSERT_TRUE(childTaskAdmission);
         child = *childTaskAdmission;
         EXPECT_TRUE(child.valid());
-    }
-    );
+    });
     ASSERT_TRUE(cpuTaskAdmission);
     const auto parent = *cpuTaskAdmission;
     ASSERT_TRUE(parent.valid());
@@ -246,16 +245,14 @@ TEST(CpuTaskProfilingTests, ConcurrentCaptureChangesDoNotAffectTaskCompletionOrM
             SleepMS(__hidden_cpu_task_profiling_tests::s_PollIntervalMS);
             scheduler.setProfiling(false);
         }
-    }
-    );
+    });
     while(!started.load(MemoryOrder::acquire))
         SleepMS(__hidden_cpu_task_profiling_tests::s_PollIntervalMS);
     for(u32 index = 0u; index < 256u; ++index){
         const auto cpuTaskAdmission = scope.submit([&]()noexcept{
             SleepMS(__hidden_cpu_task_profiling_tests::s_PollIntervalMS);
             callbacks.fetch_add(1u, MemoryOrder::release);
-        }
-        );
+        });
         EXPECT_TRUE(cpuTaskAdmission);
         if(cpuTaskAdmission)
             EXPECT_TRUE(cpuTaskAdmission->valid());

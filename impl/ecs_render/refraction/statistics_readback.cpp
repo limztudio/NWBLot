@@ -238,14 +238,11 @@ bool RefractionStatisticsReadback::prepareResources(){
         Core::BufferDesc desc;
         desc.setByteSize(NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE).setCpuAccess(Core::CpuAccessMode::Read).setDebugName(s_Names[index]).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).enableAutomaticStateTracking(Core::ResourceStates::CopyDest);
         auto buffersResult = m_graphics.createBuffer(desc);
-        if(buffersResult)
-            buffers[index] = Move(*buffersResult);
-        else
-            buffers[index].reset();
         if(!buffersResult){
             heap.free(*descriptor);
             return false;
         }
+        buffers[index] = Move(*buffersResult);
     }
     m_control->reset(deviceGeneration);
     m_counters = Move(counters);

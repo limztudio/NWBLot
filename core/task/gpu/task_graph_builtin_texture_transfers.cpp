@@ -216,8 +216,7 @@ Expected<GpuTaskId> GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, co
                 .destinationResource = region.destination,
                 .destination = destinationResource.texture,
                 .destinationSlice = contract->destinationSlice,
-            }
-            );
+            });
         }
     }
     if(!valid)
@@ -302,8 +301,7 @@ Expected<GpuTaskId> GpuTaskGraph::addResolveTextureTask(const GpuTaskDesc& desc,
                 .destinationResource = region.destination,
                 .destination = destinationResource.texture,
                 .destinationSubresources = resolvedSubresources->destinationSubresources,
-            }
-            );
+            });
         }
     }
     if(!valid)

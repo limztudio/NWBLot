@@ -267,11 +267,13 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
         dependency = *producedTask;
         return true;
     };
-    if(!appendClear(Name("render.refraction.clear.depth"), depth, true)
+    if(
+        !appendClear(Name("render.refraction.clear.depth"), depth, true)
         || !appendClear(Name("render.refraction.clear.normal_ior"), normalIor, false)
         || !appendClear(Name("render.refraction.clear.tint_coverage"), tintCoverage, false)
         || !appendClear(Name("render.refraction.clear.instance"), instance, false)
-        || !appendClear(Name("render.refraction.clear.specular_roughness"), specularRoughness, false, Core::Color(0.f, 0.f, 0.f, 1.f)))
+        || !appendClear(Name("render.refraction.clear.specular_roughness"), specularRoughness, false, Core::Color(0.f, 0.f, 0.f, 1.f))
+    )
         return MakeUnexpected(Failure{});
 
     const auto finalize = [&](){
@@ -303,9 +305,11 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
     if(drawItems.empty())
         return finalize();
     const bool hasCsg = !drawItems.csg.empty();
-    if(!frameBindings.frameReady(instances.size(), typedBytes.size())
+    if(
+        !frameBindings.frameReady(instances.size(), typedBytes.size())
         || !materialSystem.materialPassDrawResourcesReady(drawItems.regular, frameBindings)
-        || (hasCsg && (!csgFrameData.hasWork() || !csgResources.frameReady(csgFrameData) || !materialSystem.materialPassDrawResourcesReady(drawItems.csg, frameBindings))))
+        || (hasCsg && (!csgFrameData.hasWork() || !csgResources.frameReady(csgFrameData) || !materialSystem.materialPassDrawResourcesReady(drawItems.csg, frameBindings)))
+    )
         return MakeUnexpected(Failure{});
 
     const MaterialPassDrawItems* const drawSets[] = {&drawItems.regular, &drawItems.csg};
@@ -353,8 +357,10 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
         dependency = *producedTask;
         return true;
     };
-    if(!appendUpload(Name("render.refraction.capture.instances_upload"), materialInstances, instances.data(), instances.size() * sizeof(InstanceGpuData), alignof(InstanceGpuData))
-        || !appendUpload(Name("render.refraction.capture.material_upload"), materialTyped, typedBytes.data(), typedBytes.size(), alignof(u32)))
+    if(
+        !appendUpload(Name("render.refraction.capture.instances_upload"), materialInstances, instances.data(), instances.size() * sizeof(InstanceGpuData), alignof(InstanceGpuData))
+        || !appendUpload(Name("render.refraction.capture.material_upload"), materialTyped, typedBytes.data(), typedBytes.size(), alignof(u32))
+    )
         return MakeUnexpected(Failure{});
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> commonUses{scratchArena};
@@ -376,13 +382,15 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
         const auto cuttersResult = ImportBuffer(graph, csgResources.cutters);
         const auto clipResult = ImportBuffer(graph, csgResources.clipContextSlots);
         const auto intervalResult = ImportBuffer(graph, csgResources.intervalSampleState);
-        if(!intervalResult
+        if(
+            !intervalResult
             || !rangesResult
             || !appendUpload(Name("render.refraction.capture.csg_ranges_upload"), *rangesResult, csgFrameData.receiverRanges.data(), csgFrameData.receiverRanges.size() * sizeof(CsgReceiverRangeGpuData), alignof(CsgReceiverRangeGpuData))
             || !cuttersResult
             || !appendUpload(Name("render.refraction.capture.csg_cutters_upload"), *cuttersResult, csgFrameData.cutters.data(), csgFrameData.cutters.size() * sizeof(CsgCutterGpuData), alignof(CsgCutterGpuData))
             || !clipResult
-            || !appendUpload(Name("render.refraction.capture.csg_context_upload"), *clipResult, &*clipContext, sizeof(*clipContext), alignof(CsgClipContextSlots)))
+            || !appendUpload(Name("render.refraction.capture.csg_context_upload"), *clipResult, &*clipContext, sizeof(*clipContext), alignof(CsgClipContextSlots))
+        )
             return MakeUnexpected(Failure{});
         const Core::GpuGraphResourceId interval = *intervalResult;
         const Core::GpuGraphResourceId ranges = *rangesResult;

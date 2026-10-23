@@ -274,8 +274,7 @@ static void EnqueueServerMessage(Server& server, const TStringView message, cons
     ScopeExit releaseInfo([&]()noexcept{
         info.~ConnectionInfo();
         Core::Alloc::CoreFree(&info);
-    }
-    );
+    });
     info.uploadKind = uploadKind;
     if(uploadKind == ConnectionUploadKind::Crash){
         Core::Alloc::ScratchArena scratchArena(Name("logger/server/crash_upload/scratch"));

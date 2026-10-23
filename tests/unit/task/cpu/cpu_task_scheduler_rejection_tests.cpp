@@ -62,8 +62,7 @@ TEST(CpuTaskSchedulerTests, DescendantWaitForAnAncestorIsRejectedInsteadOfDeadlo
                 ExitTestProcess(0u);
             const auto child = *childTaskAdmission;
             EXPECT_TRUE(child.valid());
-        }
-        );
+        });
         if(!cpuTaskAdmission)
             ExitTestProcess(0u);
         parent = *cpuTaskAdmission;
@@ -99,8 +98,7 @@ TEST(CpuTaskSchedulerTests, ChildCannotDependDirectlyOnItsStructuredParent){
         const auto cpuTaskAdmission = scheduler.submit([&](){
             const auto child = scheduler.submit([]()noexcept{}, parent);
             rejected = !child;
-        }
-        );
+        });
         if(!cpuTaskAdmission)
             ExitTestProcess(2u);
         parent = *cpuTaskAdmission;
@@ -125,8 +123,7 @@ TEST(CpuTaskSchedulerTests, ChildCannotDependOnATransitiveDependentOfItsStructur
         const auto cpuTaskAdmission = scheduler.submit([&](){
             const auto child = scheduler.submit([]()noexcept{}, dependent);
             rejected = !child;
-        }
-        );
+        });
         if(!cpuTaskAdmission)
             ExitTestProcess(2u);
         const auto parent = *cpuTaskAdmission;
@@ -161,14 +158,12 @@ TEST(CpuTaskSchedulerTests, DescendantOnAnotherWorkerCannotJoinItsAncestorsScope
                 if(!CpuTaskTestSupport::WaitUntil(parentGate.entered, s_GateTimeoutMS) || scheduler.currentWorkerIndex() == parentWorker.load(MemoryOrder::acquire))
                     ExitTestProcess(0u);
                 scope.wait();
-            }
-            );
+            });
             EXPECT_TRUE(secondCpuTaskAdmission);
             if(secondCpuTaskAdmission)
                 EXPECT_TRUE(secondCpuTaskAdmission->valid());
             parentGate.block();
-        }
-        );
+        });
         EXPECT_TRUE(cpuTaskAdmission);
         if(cpuTaskAdmission)
             EXPECT_TRUE(cpuTaskAdmission->valid());
@@ -213,8 +208,7 @@ TEST(CpuTaskSchedulerTests, DescendantCannotWaitForTransitiveDependentsOfItsAnce
             EXPECT_TRUE(secondCpuTaskAdmission);
             if(secondCpuTaskAdmission)
                 EXPECT_TRUE(secondCpuTaskAdmission->valid());
-        }
-        );
+        });
         if(!cpuTaskAdmission)
             ExitTestProcess(0u);
         const auto parent = *cpuTaskAdmission;

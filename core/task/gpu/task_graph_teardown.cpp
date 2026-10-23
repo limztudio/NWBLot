@@ -55,8 +55,7 @@ bool GpuTaskGraph::retireTaskPayloads(){
     ScopeExit reopenDeclarations([this]()noexcept{
         NothrowScopedLock lock(m_lifecycleMutex);
         m_teardownInProgress = false;
-    }
-    );
+    });
     return UncaughtExceptionCount() != 0 ? destroyTaskPayloadsWithoutCallbacks() : destroyTaskPayloads();
 }
 

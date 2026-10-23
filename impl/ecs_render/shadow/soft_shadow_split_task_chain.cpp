@@ -85,9 +85,8 @@ bool SoftShadowSplitTaskChainBuilder::declareLightSpaceShadowMaps(
     constexpr usize s_LightSpaceReadCapacity = 9u;
     lightSpaceReads.reserve(s_LightSpaceReadCapacity + inputs.rayTracingPlan.lightSpace.csgDynamicBoundsCount + (route.traceGeometryStatesGraphOwned ? 0u : inputs.traceGeometryResourceCount));
     if(!RendererFramePipelineDetail::AppendRayTracingSceneShadowBuffers(inputs.rayTracingResources, importBuffer, [&](const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state)noexcept{
-            lightSpaceReads.push_back(ReadUse(resource, state));
-        }
-    ))
+        lightSpaceReads.push_back(ReadUse(resource, state));
+    }))
         return false;
     lightSpaceReads.push_back(ReadUse(inputs.materialContextSlots, Core::ResourceStates::ConstantBuffer));
     lightSpaceReads.push_back(ReadUse(inputs.currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
@@ -138,8 +137,7 @@ bool SoftShadowSplitTaskChainBuilder::declareLightSpaceShadowMaps(
         .sceneReadSetCount = inputs.traceResourceSetUseCount,
         .stateSources = inputs.stateSources,
         .stateSourceCount = inputs.stateSourceCount,
-    }
-    );
+    });
     if(!mapsResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare light-space shadow maps"));
         return false;

@@ -325,8 +325,7 @@ bool BuildRegistryObjectManifestEntries(
             return;
 
         failed.store(true, MemoryOrder::release);
-    }
-    );
+    });
     if(!parallelWork){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: registry object preparation rejected CPU work: {}"), static_cast<u32>(parallelWork.error()));
         return false;

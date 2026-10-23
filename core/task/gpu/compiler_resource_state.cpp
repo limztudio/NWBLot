@@ -163,8 +163,7 @@ namespace GpuTaskGraphCompilerDetail{
                 pendingEpilogueBarriers.push_back(PendingCompiledEpilogueBarrier{
                     .task = previousState->task,
                     .barrier = GpuCompiledBarrier{ .resource = use.resource, .range = barrierRange, .before = before, .after = before, .sourceQueue = previousState->queue, .destinationQueue = compiledTask.queue, .type = releaseType, },
-                }
-                );
+                });
                 compiledPlan.prologueBarriers.push_back(GpuCompiledBarrier{
                     .resource = use.resource,
                     .range = barrierRange,
@@ -173,8 +172,7 @@ namespace GpuTaskGraphCompilerDetail{
                     .sourceQueue = previousState->queue,
                     .destinationQueue = compiledTask.queue,
                     .type = acquireType,
-                }
-                );
+                });
             }
             const bool readOnlySameState = previousState->access == GpuTaskResourceAccess::Read && use.access == GpuTaskResourceAccess::Read && before == use.requiredState && !needsSameStateDependency;
             const bool mayOmitInternalStateSeed = use.hasIndependentStateSource && readOnlySameState && concurrentQueuePair;
@@ -320,8 +318,7 @@ namespace GpuTaskGraphCompilerDetail{
                             .destinationQueue = compiledTask.queue,
                             .type = initialOwnerAcquireType,
                             .isInitialOwnerHandoff = true,
-                        }
-                        );
+                        });
                     }
 
                     const bool needsSameStateDependency = previousState && before == use.requiredState && (IsWriteAccess(previousState->access) || IsWriteAccess(use.access));
@@ -349,8 +346,7 @@ namespace GpuTaskGraphCompilerDetail{
                             .type = needsUavDependency ? UavBarrierType(resource.type) : TransitionBarrierType(resource.type),
                             .isGraphInitialState = materializesGraphInitialState || requiresExplicitInitialStateSource,
                             .forceMemoryDependency = needsSameStateDependency,
-                        }
-                        );
+                        });
                     }
                 }
 
@@ -362,8 +358,7 @@ namespace GpuTaskGraphCompilerDetail{
                     .access = use.access,
                     .queue = compiledTask.queue,
                     .readStateSourceIndex = readStateSourceIndex,
-                }
-                ))
+                }))
                     return false;
                 continue;
             }
@@ -411,8 +406,7 @@ namespace GpuTaskGraphCompilerDetail{
                     .destinationQueue = compiledTask.queue,
                     .type = GpuCompiledBarrierType::AccelStructOwnershipAcquire,
                     .isInitialOwnerHandoff = true,
-                }
-                );
+                });
                 initialOwnershipDependencies.push_back(GpuTaskExternalDependencyEdge{ .completion = initialOwnerHandoffSource->completion, .consumer = taskID, });
             }
             const bool needsSameStateDependency = previousState && before == use.requiredState && (IsWriteAccess(previousState->access) || IsWriteAccess(use.access));
@@ -435,8 +429,7 @@ namespace GpuTaskGraphCompilerDetail{
                     .type = needsUavDependency ? UavBarrierType(resource.type) : TransitionBarrierType(resource.type),
                     .isGraphInitialState = materializesGraphInitialState || requiresExplicitInitialStateSource,
                     .forceMemoryDependency = needsSameStateDependency,
-                }
-                );
+                });
             }
 
             if(!resourceHistory.append(TrackedCompiledResourceState{ .resource = use.resource, .range = use.range, .task = taskID, .state = use.requiredState, .access = use.access, .queue = compiledTask.queue, .readStateSourceIndex = readStateSourceIndex, }))

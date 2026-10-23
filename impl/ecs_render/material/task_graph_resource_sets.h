@@ -64,8 +64,7 @@ namespace RendererTaskGraphDetail{
             usize hash = 0u;
             ForEachMaterialPassMeshSourceBuffer(*mesh, [&](const Core::BufferHandle& buffer)noexcept{
                 HashCombine(hash, buffer.get());
-            }
-            );
+            });
             return hash;
         };
         const auto equalSources = [](const MeshSourceRef& lhs, const MeshSourceRef& rhs)noexcept{
@@ -76,14 +75,12 @@ namespace RendererTaskGraphDetail{
             usize sourceIndex = 0u;
             ForEachMaterialPassMeshSourceBuffer(*rhs, [&](const Core::BufferHandle& buffer)noexcept{
                 rhsBuffers[sourceIndex++] = buffer.get();
-            }
-            );
+            });
             sourceIndex = 0u;
             bool equal = true;
             ForEachMaterialPassMeshSourceBuffer(*lhs, [&](const Core::BufferHandle& buffer)noexcept{
                 equal = (buffer.get() == rhsBuffers[sourceIndex++]) && equal;
-            }
-            );
+            });
             return equal;
         };
         using MeshSourceSet = HashSet<MeshSourceRef, Core::Alloc::ScratchArena, RemoveConst_T<decltype(hashSources)>, RemoveConst_T<decltype(equalSources)>>;
@@ -123,8 +120,7 @@ namespace RendererTaskGraphDetail{
             ForEachMaterialPassMeshSourceBuffer(*mesh, [&](const Core::BufferHandle& buffer){
                 if(sourceBufferIdentities.insert(MakeNotNull(buffer.get())).second)
                     sourceBuffers.push_back(BufferRef(&buffer));
-            }
-            );
+            });
         }
     }
 

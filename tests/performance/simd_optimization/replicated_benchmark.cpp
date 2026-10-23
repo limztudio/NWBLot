@@ -386,8 +386,7 @@ u32 Verify(){
         failures += VerifyReduction<Operation::Clamp3>(seed);
         failures += VerifyReduction<Operation::Clamp4>(seed);
         return failures;
-    }
-    );
+    });
     if(!verification.environmentAvailable)
         return verification.failures;
     const u32 failures = verification.failures;

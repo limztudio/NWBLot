@@ -86,6 +86,7 @@ public:
     void complete(const RefractionStatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const u32* counters)noexcept;
     [[nodiscard]] Expected<RefractionStatistics> tryGetLatestStatistics()const noexcept;
 
+
 private:
     [[nodiscard]] Slot* matchingSlot(const RefractionStatisticsReservationKey& key)noexcept;
 

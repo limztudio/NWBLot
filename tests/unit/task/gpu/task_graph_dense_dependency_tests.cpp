@@ -71,8 +71,7 @@ static void DeclareDenseDependencies(Graphics::GpuTaskGraph& graph, const usize 
                     .range = {},
                     .requiredState = Graphics::ResourceStates::UnorderedAccess,
                     .access = resourceIndex == index ? Graphics::GpuTaskResourceAccess::Write : Graphics::GpuTaskResourceAccess::Read,
-                }
-                );
+                });
             }
         }
         char text[32u] = {};

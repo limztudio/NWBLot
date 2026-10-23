@@ -379,8 +379,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                     cpuScheduler.domainIdentity(),
                     static_cast<u32>(cpuScheduler.currentWorkerIndex() + 1u)
                 ) ? 1u : 0u;
-            }
-            );
+            });
             for(usize parallelIndex = 0u; parallelIndex < parallelAborts.size(); ++parallelIndex){
                 GpuPacketRecordingAbort& abort = parallelAborts[parallelIndex];
                 if(!abort.valid())

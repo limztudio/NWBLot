@@ -392,8 +392,7 @@ TEST(TextInput, WrongThreadCannotMutateOrPollOwnerSession){
         EXPECT_EQ(service.updateSurrounding(token, {}, 0u, 0u), TextInputAdmission::WrongThread);
         EXPECT_FALSE(service.setFocused(false));
         EXPECT_FALSE(service.end(token));
-    }
-    );
+    });
     worker.join();
     ASSERT_FALSE(::testing::Test::HasFatalFailure());
     EXPECT_EQ(service.activeSession(), token);

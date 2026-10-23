@@ -435,8 +435,7 @@ TEST(GpuTaskGraphResourceFragments, LatestCoveredRangeNormalizesInactiveDimensio
                 type == Graphics::GpuGraphResourceType::Texture ? Graphics::TextureSubresourceSet::s_AllArraySlices : 1u
             ),
             .bufferRange = Graphics::BufferRange(32u, type == Graphics::GpuGraphResourceType::Buffer ? Graphics::BufferRange::s_AllBytes : 8u),
-        }
-        );
+        });
         StateFragments fragments(scratchArena);
         fragments.reserve(s_ExpectedDualCount);
         fragments.push_back(TrackedResourceStateFragment{ .range = {}, .state = &states[0u], .stateIndex = 0u });

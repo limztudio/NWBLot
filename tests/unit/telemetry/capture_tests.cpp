@@ -331,8 +331,7 @@ TEST(Telemetry, DiagnosticObserverPreservesOrderingAndPayloadLifetimeDuringBuild
         captureDidNotAllocate = before.allocationCount == after.allocationCount && before.reallocationCount == after.reallocationCount;
         payload.push_back(17u);
         return recorder.recordBinary(Telemetry::EventKind::MemoryFrame, 8u, nullptr, 0u);
-    }
-    ));
+    }));
     ASSERT_TRUE(captureDidNotAllocate);
     ASSERT_EQ(recorder.eventCount(), 3u);
     const auto events = recorder.view();
@@ -396,8 +395,7 @@ TEST(Telemetry, DiagnosticCaptureGuardConcurrentLifetimeStress){
             CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error, .category = s_TelemetryGuardCategory, .message = "capture during destruction", });
             YieldThread();
         }
-    }
-    );
+    });
 
     while(!captureThreadStarted.test(MemoryOrder::acquire))
         captureThreadStarted.wait(false, MemoryOrder::acquire);

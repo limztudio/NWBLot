@@ -142,8 +142,7 @@ bool GpuInitialStateHandoffValidation::validate(){
             if(lhs.mipLevel != rhs.mipLevel)
                 return lhs.mipLevel < rhs.mipLevel;
             return lhs.arraySlice < rhs.arraySlice;
-        }
-        );
+        });
         for(usize index = 1u; index < m_textureIndex->size(); ++index){
             const auto& previous = m_states.m_textureStates[(*m_textureIndex)[index - 1u]];
             const auto& state = m_states.m_textureStates[(*m_textureIndex)[index]];
@@ -179,8 +178,7 @@ bool GpuInitialStateHandoffValidation::validate(){
             if(lhs.buffer != rhs.buffer)
                 return LessThan<Buffer*>{}(lhs.buffer, rhs.buffer);
             return lhs.range.byteOffset < rhs.range.byteOffset;
-        }
-        );
+        });
         for(usize index = 1u; index < m_bufferIndex->size(); ++index){
             const auto& previous = m_states.m_bufferStates[(*m_bufferIndex)[index - 1u]];
             const auto& state = m_states.m_bufferStates[(*m_bufferIndex)[index]];

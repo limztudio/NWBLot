@@ -135,8 +135,7 @@ Expected<GpuTaskId> GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, con
                 .destination = destinationResource.buffer,
                 .destinationOffsetBytes = region.destinationOffsetBytes,
                 .dataSizeBytes = region.dataSizeBytes,
-            }
-            );
+            });
         }
     }
     if(!valid)

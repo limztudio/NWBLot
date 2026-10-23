@@ -17,7 +17,6 @@
 
 #include <core/graphics/gpu_timing.h>
 #include <core/graphics/runtime/runtime.h>
-#include <core/task/gpu/task_graph.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -115,11 +114,9 @@ template<typename PayloadT>
     Core::Alloc::ScratchArena& scratchArena,
     const PayloadT& payload,
     Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context,
     const AvboitComputeEmulationRecordTrait& trait,
     Optional<Core::GpuTimingMeasure>& timing
 ){
-    static_cast<void>(context);
     const AvboitComputeEmulationRecordInputs inputs{
         payload.graphics,
         payload.materialSystem,
@@ -146,7 +143,6 @@ template<typename PayloadT, typename DispatchFn>
     Core::Alloc::ScratchArena& scratchArena,
     const PayloadT& payload,
     Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context,
     const bool PayloadT::* phasePreparedMember,
     const ECSRenderDetail::TransparentMaterialPassGraphSnapshot PayloadT::* snapshotMember,
     const bool PayloadT::* emuOutputStatesMember,
@@ -154,7 +150,6 @@ template<typename PayloadT, typename DispatchFn>
     DispatchFn&& dispatch,
     Optional<Core::GpuTimingMeasure>* timing
 ){
-    static_cast<void>(context);
     if(((payload.*emuOutputStatesMember || payload.*csgEmuOutputStatesMember) && !payload.generatedGeometryReused && !timing))
         return false;
 
@@ -181,12 +176,10 @@ template<typename PayloadT>
     Core::Alloc::ScratchArena& scratchArena,
     const PayloadT& payload,
     Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context,
     const bool isRasterPhase,
     const AvboitSharedComputeEmulationRecordTrait& trait,
     Optional<Core::GpuTimingMeasure>& timing
 ){
-    static_cast<void>(context);
     const AvboitSharedComputeEmulationRecordInputs inputs{
         payload.graphics,
         payload.materialSystem,

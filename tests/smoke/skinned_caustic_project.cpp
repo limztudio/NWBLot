@@ -215,15 +215,19 @@ private:
         }
         const auto primaryGraphics = m_context.graphics.getDevice().getPrimaryPhysicalQueue(NWB::Core::CommandQueue::Graphics);
         for(const auto& node : nodes){
-            if(node.name != Name("render.hardware_caustics.photons") || !node.queueAssignment.present
+            if(
+                node.name != Name("render.hardware_caustics.photons") || !node.queueAssignment.present
                 || !node.compiledTask.present || !node.queueAssignment.acceptedQueue.valid()
-                || node.queueAssignment.acceptance == NWB::Core::Telemetry::FrameGraphQueueAssignmentAcceptance::NotAccepted)
+                || node.queueAssignment.acceptance == NWB::Core::Telemetry::FrameGraphQueueAssignmentAcceptance::NotAccepted
+            )
                 continue;
             for(const auto& packet : packetStatistics){
-                if(packet.packetIndex != node.compiledTask.packetIndex
+                if(
+                    packet.packetIndex != node.compiledTask.packetIndex
                     || packet.packetGeneration != node.compiledTask.planGeneration
                     || packet.queue != node.queueAssignment.acceptedQueue || packet.taskCount == 0u
-                    || packet.commandListCount == 0u || packet.recoverySubmission)
+                    || packet.commandListCount == 0u || packet.recoverySubmission
+                )
                     continue;
                 const bool offGraphics = packet.queue.index != primaryGraphics.index || packet.queue.deviceGeneration != primaryGraphics.deviceGeneration;
                 NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedCausticTransition: accepted photon route phase {} source_frame={} queue={} graphics_queue={} generation={} off_graphics={}")

@@ -9,7 +9,6 @@
 #include <impl/ecs_render/shared/renderer_frame_bindings.h>
 #include <impl/ecs_render/shared/task_graph_draw_snapshots.h>
 #include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
-#include <impl/ecs_render/csg/csg_graph_resource_snapshot.h>
 #include <impl/ecs_render/csg/task_graph_opaque_compute_emulation_plan.h>
 #include <impl/ecs_render/avboit/task_graph_compute_emulation_plan.h>
 #include <impl/ecs_render/avboit/record_inputs_base.h>
@@ -51,8 +50,8 @@ struct AvboitExtinctionRecordInputs : public AvboitRecordInputsBase{
 
 
 public:
-    AvboitExtinctionRecordInputs(Core::Alloc::GlobalArena& arena, DeferredFrameTargets& targetsIn, Core::GpuTimingSubmissionTicket& timingTicketIn, Optional<Core::GpuTimingMeasure>& computeEmulationTimingIn)noexcept
-        : AvboitRecordInputsBase(arena, targetsIn)
+    AvboitExtinctionRecordInputs(DeferredFrameTargets& targetsIn, Core::GpuTimingSubmissionTicket& timingTicketIn, Optional<Core::GpuTimingMeasure>& computeEmulationTimingIn)noexcept
+        : AvboitRecordInputsBase(targetsIn)
         , extinctionTimingTicket(timingTicketIn)
         , extinctionComputeEmulationTiming(computeEmulationTimingIn)
     {
@@ -78,7 +77,6 @@ public:
     [[nodiscard]] Expected<AvboitExtinctionRecordResult> declare(
         Core::Alloc::ScratchArena& scratchArena,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
-        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
         ObjectGeometryCacheGraph& objectGeometry,
         AvboitExtinctionRecordInputs& inputs,
         RendererTaskGraphDetail::AvboitExtinctionGraphTask::Payload& extinctionPayload,

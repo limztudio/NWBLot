@@ -78,8 +78,7 @@ TEST(Crash, ManualContextTimeoutRetainsOwnedDumpAndReusableHandlerAfterSourceSto
     ScopeExit resume([handlerThread]()noexcept{
         if(ResumeThread(handlerThread) == static_cast<DWORD>(-1))
             TerminateInvariant();
-    }
-    );
+    });
     ASSERT_EQ(previousSuspendCount, 0u);
     const auto transport = NWB::Core::Crash::CrashDetail::RequestCrashHandler(request, 1u);
     EXPECT_EQ(transport, NWB::Core::Crash::CrashDetail::CrashDumpTransportStatus::TimedOut);

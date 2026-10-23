@@ -38,26 +38,26 @@ inline constexpr usize s_DecodeExtraResourceUseCount = 3u;
 [[nodiscard]] bool SameDecode(const MaterialPassDrawItem& left, const MaterialPassDrawItem& right)noexcept{
     const auto& leftCache = left.meshResources.objectGeometryCache;
     const auto& rightCache = right.meshResources.objectGeometryCache;
-    if(left.meshKey != right.meshKey || left.meshResources.runtimeMesh != right.meshResources.runtimeMesh
+    if(
+        left.meshKey != right.meshKey || left.meshResources.runtimeMesh != right.meshResources.runtimeMesh
         || left.meshResources.meshletCount != right.meshResources.meshletCount
         || leftCache.buffer != rightCache.buffer || leftCache.heapHandle != rightCache.heapHandle
         || leftCache.decoderPipeline != rightCache.decoderPipeline || leftCache.sourceRevision != rightCache.sourceRevision
         || leftCache.requiresDecode != rightCache.requiresDecode || leftCache.initialized != rightCache.initialized
-        || leftCache.indexByteOffset != rightCache.indexByteOffset || leftCache.indexCount != rightCache.indexCount)
+        || leftCache.indexByteOffset != rightCache.indexByteOffset || leftCache.indexCount != rightCache.indexCount
+    )
         return false;
     Core::Buffer* rightSources[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT] = {};
     usize sourceIndex = 0u;
     ForEachMaterialPassMeshSourceBuffer(right.meshResources, [&](const Core::BufferHandle& source)noexcept{
         rightSources[sourceIndex++] = source.get();
-    }
-    );
+    });
     sourceIndex = 0u;
     bool same = true;
     ForEachMaterialPassMeshSourceBuffer(left.meshResources, [&](const Core::BufferHandle& source)noexcept{
         same = same && source.get() == rightSources[sourceIndex];
         ++sourceIndex;
-    }
-    );
+    });
     for(usize index = 0u; index < NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT; ++index)
         same = same && left.meshResources.geometryHeapHandles[index] == right.meshResources.geometryHeapHandles[index];
     return same;

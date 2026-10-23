@@ -64,14 +64,12 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
 [[nodiscard]] Expected<AvboitExtinctionRecordResult> AvboitExtinctionRecordBuilder::declare(
     Core::Alloc::ScratchArena& scratchArena,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
     ObjectGeometryCacheGraph& objectGeometry,
     AvboitExtinctionRecordInputs& inputs,
     RendererTaskGraphDetail::AvboitExtinctionGraphTask::Payload& extinctionPayload,
     RendererTaskGraphDetail::AvboitExtinctionComputeEmulationGraphTask::Payload& computeEmulationPayload
 ){
     using namespace RendererTaskGraphDetail;
-    static_cast<void>(csgResources);
     AvboitExtinctionRecordResult result{};
     if(!inputs.depthWarpCompletionTask.valid() || !inputs.uploadTask.valid())
         return MakeUnexpected(Failure{});

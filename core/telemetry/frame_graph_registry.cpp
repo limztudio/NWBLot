@@ -105,8 +105,7 @@ bool FrameGraphRegistry::record(CaptureSession& session){
         m_edges.clear();
         m_nodes.clear();
         m_recording = false;
-    }
-    );
+    });
 
     FrameGraphBuilder builder(scratchArena, m_nodes, m_edges, m_pendingNameEdges, m_physicalQueueRuntimeStatistics, m_packetSubmissionStatistics, session.frameIndex());
     bool hasGraph = false;

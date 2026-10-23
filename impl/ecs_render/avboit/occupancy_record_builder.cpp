@@ -64,14 +64,12 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
 [[nodiscard]] Expected<AvboitOccupancyRecordResult> AvboitOccupancyRecordBuilder::declare(
     Core::Alloc::ScratchArena& scratchArena,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
     ObjectGeometryCacheGraph& objectGeometry,
     AvboitOccupancyRecordInputs& inputs,
     RendererTaskGraphDetail::AvboitOccupancyGraphTask::Payload& occupancyPayload,
     RendererTaskGraphDetail::AvboitOccupancyComputeEmulationGraphTask::Payload& computeEmulationPayload
 ){
     using namespace RendererTaskGraphDetail;
-    static_cast<void>(csgResources);
     AvboitOccupancyRecordResult result{};
     if(!inputs.clearTask.valid() || !inputs.uploadTask.valid())
         return MakeUnexpected(Failure{});
@@ -287,7 +285,6 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
     DeferredFrameTargets& deferredTargets = inputs.targets;
     Core::GpuTimingSubmissionTicket& avboitPreTimingTicket = inputs.preTimingTicket;
     Optional<Core::GpuTimingMeasure>& avboitOccupancyComputeEmulationTiming = inputs.occupancyComputeEmulationTiming;
-    static_cast<void>(frameBindings);
     const ECSRenderDetail::RegularSharedComputeEmulationGraphPlan& occupancySharedComputeEmulationPlan = inputs.sharedComputeEmulationPlan;
     const usize occupancySharedComputeEmulationInstanceCount = inputs.sharedComputeEmulationInstanceCount;
     const usize occupancySharedComputeEmulationMaterialTypedByteCount = inputs.sharedComputeEmulationMaterialTypedByteCount;

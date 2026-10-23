@@ -69,8 +69,7 @@ TEST(TerminalEntry, UnknownFailureUsesItsTerminalHandlerAfterReverseOrderCleanup
         order[count] = 3u;
         ++count;
         return -1;
-    }
-    );
+    });
     EXPECT_EQ(result, -1);
     EXPECT_FALSE(typedHandled);
     EXPECT_EQ(count, 3u);

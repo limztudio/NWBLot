@@ -207,8 +207,7 @@ TEST(Global, NameResolvedTextIsBoundedByStoredAndResolverBuffers){
         for(usize i = 0u; i < outTextSize; ++i)
             outText[i] = 'x';
         return true;
-    }
-    );
+    });
     const AStringView resolved = name.resolvedText();
     EXPECT_EQ(resolved.size(), NameDetail::s_SymbolTextBufferLength - 1u);
     EXPECT_EQ(resolved.back(), 'x');

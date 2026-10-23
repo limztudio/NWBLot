@@ -220,8 +220,7 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
                 .meshletBoundsSlot = meshResult->meshResources.meshletCount != 0u ? meshResult->meshResources.meshletLocalBoundsHeapHandle.slot() : 0u,
                 .transparent = transparent,
                 .csg = false,
-            }
-            );
+            });
             m_lightSpaceShadow.m_sceneBuffers.push_back(meshResult->meshResources.positionBuffer);
             m_lightSpaceShadow.m_sceneBuffers.push_back(meshResult->meshResources.triangleIndexBuffer);
             m_lightSpaceShadow.m_sceneBuffers.push_back(meshResult->meshResources.attributeBuffer);

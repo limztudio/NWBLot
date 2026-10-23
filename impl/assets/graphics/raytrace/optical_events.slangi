@@ -52,11 +52,13 @@ bool nwbOpticalReplayBootstrap(
         const NwbOpticalBootstrapEvent previous = events[eventOrder[index - 1u]];
         if(event.distance - previous.distance <= tolerance){
             // Only a coplanar indexed seam may collapse duplicate edge candidates. A same-facing sharp edge still has multiple refraction normals, and an unshared triangle belongs to another shell.
-            if(event.instance != previous.instance || event.entering != previous.entering
+            if(
+                event.instance != previous.instance || event.entering != previous.entering
 #if NWB_RT_CSG_ENABLED
                 || event.primitive == NWB_CSG_RAY_INVALID_INDEX || previous.primitive == NWB_CSG_RAY_INVALID_INDEX
 #endif
-                || !nwbRayTraceCoplanarSeam(config.instanceMaterialHeapSlot, event.instance, event.primitive, previous.primitive)){
+                || !nwbRayTraceCoplanarSeam(config.instanceMaterialHeapSlot, event.instance, event.primitive, previous.primitive)
+            ){
                 result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
                 return false;
             }

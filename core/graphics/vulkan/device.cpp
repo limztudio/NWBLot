@@ -145,8 +145,7 @@ Device::Device(const DeviceDesc& desc)
     ScopeExit releaseUnpublishedResources([this, initialExceptionCount]()noexcept{
         if(UncaughtExceptionCount() > initialExceptionCount)
             releaseOwnedResources();
-    }
-    );
+    });
 
     VkResult res = VK_SUCCESS;
 

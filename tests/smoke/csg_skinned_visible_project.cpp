@@ -164,9 +164,7 @@ private:
         DestroySmokeSkinnedRenderWorld(m_context, m_world);
     }
 
-    NWB::Core::ECS::EntityID createSkinnedReceiverInstance(const Float4 position, const Float4 colorTint, const bool enableCsg){
-        static_cast<void>(enableCsg);
-
+    NWB::Core::ECS::EntityID createSkinnedReceiverInstance(const Float4 position, const Float4 colorTint){
         bool tintApplied = false;
         const NWB::Core::ECS::EntityID entity = CreateTintedModelEntity(*m_world, m_context.objectArena, s_Model, s_ReceiverMaterial, s_SmokeSurfaceMaterialInterface, colorTint, position, Float4(1.0f, 1.0f, 1.0f, 0.0f), tintApplied);
         if(!tintApplied)
@@ -191,8 +189,8 @@ private:
     }
 
     void createReceiver(){
-        m_plainReceiver = createSkinnedReceiverInstance(Float4(-s_ReceiverOffsetX, 0.0f, 0.0f, 0.0f), Float4(s_PlainReceiverTint.x, s_PlainReceiverTint.y, s_PlainReceiverTint.z, ReceiverAlpha()), false);
-        m_receiver = createSkinnedReceiverInstance(Float4(s_ReceiverOffsetX, 0.0f, 0.0f, 0.0f), Float4(s_CsgReceiverTint.x, s_CsgReceiverTint.y, s_CsgReceiverTint.z, ReceiverAlpha()), true);
+        m_plainReceiver = createSkinnedReceiverInstance(Float4(-s_ReceiverOffsetX, 0.0f, 0.0f, 0.0f), Float4(s_PlainReceiverTint.x, s_PlainReceiverTint.y, s_PlainReceiverTint.z, ReceiverAlpha()));
+        m_receiver = createSkinnedReceiverInstance(Float4(s_ReceiverOffsetX, 0.0f, 0.0f, 0.0f), Float4(s_CsgReceiverTint.x, s_CsgReceiverTint.y, s_CsgReceiverTint.z, ReceiverAlpha()));
     }
 
     [[nodiscard]] SIMDVectorSingle loadCutterAnchorLocalCenter()const{

@@ -411,8 +411,7 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelFor(usize 
     };
     return parallelRange(begin, end, grainSize, options, MakeNotNull(static_cast<const void*>(&range)), NotNull<RangeFunction>([](NotNull<const void*> context, const usize first, const usize last)noexcept(noexcept((*static_cast<const decltype(range)*>(context.get()))(first, last))){
         (*static_cast<const decltype(range)*>(context.get()))(first, last);
-    }
-    ));
+    }));
 }
 
 

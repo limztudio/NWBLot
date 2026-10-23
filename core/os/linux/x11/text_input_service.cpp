@@ -101,8 +101,7 @@ bool X11TextInputService::filterEvent(XEvent& event){
     ScopeExit finishDispatch([this]()noexcept{
         if(m_dispatch.leave())
             releaseContext();
-    }
-    );
+    });
 
     // XIM transport replies target its hidden connection window, not the application window.
     return XFilterEvent(&event, None) != False;
@@ -119,8 +118,7 @@ bool X11TextInputService::dispatchKey(XKeyEvent& event){
     ScopeExit finishDispatch([this]()noexcept{
         if(m_dispatch.leave())
             releaseContext();
-    }
-    );
+    });
 
     m_lookup.resize(__hidden_x11_text_input_service::s_InitialLookupBytes);
     KeySym symbol = NoSymbol;
@@ -172,8 +170,7 @@ TextInputAdmission::Enum X11TextInputService::startNativeSession(const TextInput
     ScopeExit finishDispatch([this]()noexcept{
         if(m_dispatch.leave())
             releaseContext();
-    }
-    );
+    });
 
     m_nativeToken = token;
     m_preedit.clear();
@@ -212,8 +209,7 @@ TextInputAdmission::Enum X11TextInputService::updateNativeCaret(const TextInputR
     ScopeExit finishDispatch([this]()noexcept{
         if(m_dispatch.leave())
             releaseContext();
-    }
-    );
+    });
 
     m_caretSpot = XPoint{ static_cast<short>(Clamp<i32>(caret.x, s_MinI16, s_MaxI16)), static_cast<short>(Clamp<i64>(static_cast<i64>(caret.y) + caret.height, s_MinI16, s_MaxI16)), };
     // Send the spot even when it did not move: this IM round trip also drains forwarded-key sync work, which keeps committed text and key events in order.

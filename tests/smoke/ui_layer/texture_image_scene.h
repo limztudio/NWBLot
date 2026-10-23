@@ -10,7 +10,6 @@
 #include <impl/ecs_ui/components.h>
 #include <impl/ecs_ui/toolkit/images/image_loader.h>
 
-#include <core/graphics/runtime/runtime.h>
 #include <core/input/module.h>
 
 
@@ -75,7 +74,7 @@ using SharedUiTextureImageSmokeScene = RefCountPtr< RefCounter<UiTextureImageSmo
 
 [[nodiscard]] bool IsUiLayerTextureImageSmokeEnabled();
 [[nodiscard]] bool IsUiLayerTextureImageSkinSmokeEnabled();
-[[nodiscard]] SharedUiTextureImageSmokeScene CreateUiTextureImageSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input, const Core::Assets::AssetManager& assets, Core::GraphicsRuntime& graphics);
+[[nodiscard]] SharedUiTextureImageSmokeScene CreateUiTextureImageSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input, const Core::Assets::AssetManager& assets);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

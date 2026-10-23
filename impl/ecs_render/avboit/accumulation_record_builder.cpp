@@ -64,14 +64,12 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
 [[nodiscard]] Expected<AvboitAccumulationRecordResult> AvboitAccumulationRecordBuilder::declare(
     Core::Alloc::ScratchArena& scratchArena,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
     ObjectGeometryCacheGraph& objectGeometry,
     AvboitAccumulationRecordInputs& inputs,
     RendererTaskGraphDetail::AvboitAccumulationGraphTask::Payload& accumulationPayload,
     RendererTaskGraphDetail::AvboitAccumulationComputeEmulationGraphTask::Payload& computeEmulationPayload
 ){
     using namespace RendererTaskGraphDetail;
-    static_cast<void>(csgResources);
     AvboitAccumulationRecordResult result{};
     if(!inputs.integrationTask.valid() || !inputs.uploadTask.valid())
         return MakeUnexpected(Failure{});

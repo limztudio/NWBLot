@@ -223,8 +223,7 @@ template<typename CutterTransformLoader, typename CutterHandler>
 
         if(!handler(*resolvedCutter))
             resolved = false;
-    }
-    );
+    });
     return resolved;
 }
 

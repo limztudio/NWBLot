@@ -487,8 +487,7 @@ TEST(CsgShadowSnapshot, CaptureReuseRefreshesForContentTopologyMembershipAndBind
     expectRefresh([&]()noexcept{ mesh.meshName = Name("tests/csg_shadow/replacement_mesh"); });
     expectRefresh([&]()noexcept{
         mesh.runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, 17u);
-    }
-    );
+    });
     expectRefresh([&]()noexcept{ materials[0].surfaceDispatchId = 5u; });
     expectRefresh([&]()noexcept{ materials[0].positionSlot = 9u; });
     expectRefresh([&]()noexcept{ materials[0].flags = RtInstanceMaterialFlag::Transparent; });

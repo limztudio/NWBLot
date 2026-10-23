@@ -293,8 +293,7 @@ Expected<ShaderCook::ShaderEntry> ShaderCook::parseShaderMeta(const Path& nwbFil
     entry.archiveStage = entry.stage;
     if(!Assets::ValidateMetadataAssetFields(nwbFilePath, asset, __hidden_shader_cook::s_ShaderMetaDiagnosticPrefix, [isMesh = shaderType == Core::ShaderType::MeshStage](const AStringView field)noexcept{
         return field == __hidden_shader_cook::s_RayQueryField || field == __hidden_shader_cook::s_OptimizationLevelField || field == __hidden_shader_cook::s_EntryPointField || field == __hidden_shader_cook::s_IncludeRootsField || field == __hidden_shader_cook::s_DefinesField || (isMesh && field == __hidden_shader_cook::s_EmitMeshComputeShadowField);
-    }
-    ))
+    }))
         return MakeUnexpected(Failure{});
     const auto rayQuery = __hidden_shader_cook::ParseOptionalIntegerFlagField(nwbFilePath, asset, __hidden_shader_cook::s_RayQueryField, entry.rayQuery);
     if(!rayQuery)

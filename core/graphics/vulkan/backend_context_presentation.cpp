@@ -141,8 +141,7 @@ bool BackendContext::abandonAcquiredFrame(){
     UniqueLock<Futex> presentationLock(m_framePresentationMutex);
     m_framePresentationCondition.wait(presentationLock, [this]()noexcept{
         return m_framePresentationSignalState != FramePresentationSignalState::Queued;
-    }
-    );
+    });
     if(!m_frameAcquired)
         return true;
     if(m_frameAbandonmentComplete){

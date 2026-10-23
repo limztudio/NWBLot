@@ -393,8 +393,7 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& 
         const auto csgUploadResult = graph.addUploadBufferTask(uploadDesc, Core::GpuUploadBufferTaskDesc{
             .source = csgBytes, .destination = result.csgContext, .finalState = Core::ResourceStates::Common,
             .acceptedToken = initialize ? &snapshot.diagnostics->contextInitialized : nullptr,
-        }
-        );
+        });
         if(!csgUploadResult){
             csgUpload = {};
             return MakeUnexpected(Failure{});

@@ -150,8 +150,7 @@ TEST(UiClipboardPublications, AnotherThreadCannotRequestDrainOrCancelOwnedPublic
         requested = publications.request("other");
         drained = publications.drain().status;
         cancelled = publications.cancel();
-    }
-    );
+    });
     other.join();
     EXPECT_EQ(requested, UiClipboardPublicationStatus::WrongThread);
     EXPECT_EQ(drained, UiClipboardPublicationStatus::WrongThread);

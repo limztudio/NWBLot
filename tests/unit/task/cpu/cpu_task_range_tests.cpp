@@ -63,8 +63,7 @@ TEST(CpuTaskRangeTests, SingleChunkJoinsAllSubmittedDescendants){
             ASSERT_TRUE(secondCpuTaskAdmission);
             if(secondCpuTaskAdmission)
                 ASSERT_TRUE(secondCpuTaskAdmission->valid());
-        }
-        );
+        });
         ASSERT_TRUE(cpuTaskAdmission);
         if(cpuTaskAdmission)
             ASSERT_TRUE(cpuTaskAdmission->valid());
@@ -86,8 +85,7 @@ TEST(CpuTaskRangeTests, SingleChunkKeepsItsCallingWorkersIdentity){
             EXPECT_EQ(scheduler.currentWorkerAffinity(), affinity);
         }
         )));
-    }
-    );
+    });
     ASSERT_TRUE(cpuTaskAdmission);
     const auto task = *cpuTaskAdmission;
     ASSERT_TRUE(task.valid());
@@ -102,8 +100,7 @@ TEST(CpuTaskRangeTests, ExternalSingleChunkUsesAWorkerInsteadOfTheProducer){
     Thread producer([&](){
         EXPECT_TRUE((scheduler.parallelFor(0u, 1u, 1u, [&](usize)noexcept{ worker = scheduler.currentWorkerIndex(); })));
         done.store(true, MemoryOrder::release);
-    }
-    );
+    });
     PumpUntil(scheduler, done);
     producer.join();
     EXPECT_EQ(worker, 1u);
@@ -123,8 +120,7 @@ TEST(CpuTaskRangeTests, ExternalMainThreadRangeWaitsForTheOwner){
         }, { .target = CpuTaskTarget::MainThread }
         )));
         done.store(true, MemoryOrder::release);
-    }
-    );
+    });
     PumpUntil(scheduler, done);
     producer.join();
     EXPECT_EQ(callbacks, 1u);
@@ -168,8 +164,7 @@ TEST(CpuTaskRangeTests, InlineFailureRetiresSubmittedDescendantsBeforeTerminalHa
             const auto cpuTaskAdmission = scheduler.submit([&, capture = Retirement(retirements)](){
                 EXPECT_TRUE(capture.count != nullptr);
                 ++callbacks;
-            }
-            );
+            });
             EXPECT_TRUE(cpuTaskAdmission);
             if(cpuTaskAdmission)
                 EXPECT_TRUE(cpuTaskAdmission->valid());

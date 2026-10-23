@@ -227,16 +227,14 @@ public:
     [[nodiscard]] Expected<void, CpuTaskAdmissionError::Enum> parallelEach(CpuTaskScope& tasks, Func&& func)const{
         return parallelEachImpl(func, [this, &tasks](const auto& apply){
             return tasks.parallelFor(static_cast<usize>(0), m_count, apply);
-        }
-        );
+        });
     }
 
     template<typename Func>
     [[nodiscard]] Expected<void, CpuTaskAdmissionError::Enum> parallelEach(CpuTaskScope& tasks, usize grainSize, Func&& func, CpuTaskOptions options = {})const{
         return parallelEachImpl(func, [this, &tasks, grainSize, options](const auto& apply){
             return tasks.parallelFor(static_cast<usize>(0), m_count, grainSize, apply, options);
-        }
-        );
+        });
     }
 
 
@@ -260,8 +258,7 @@ private:
 
         return dispatch([this, &func](const usize denseIndex)noexcept(noexcept(applyFunc(func, denseIndex))){
             applyFunc(func, denseIndex);
-        }
-        );
+        });
     }
 
 

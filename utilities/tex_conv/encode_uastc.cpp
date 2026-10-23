@@ -221,9 +221,11 @@ struct EncodedMip{
     const u64 planeByteCount = mip.sizeBytes / mip.sliceCount;
     for(usize index = 0u; index < output.m_slice_desc.size(); ++index){
         const basisu::basisu_backend_slice_desc& desc = output.m_slice_desc[index];
-        if(desc.m_source_file_index >= mip.sliceCount || desc.m_mip_index != 0u || desc.m_orig_width != mip.width || desc.m_orig_height != mip.height
+        if(
+            desc.m_source_file_index >= mip.sliceCount || desc.m_mip_index != 0u || desc.m_orig_width != mip.width || desc.m_orig_height != mip.height
             || desc.m_num_blocks_x != mip.blockCountX || desc.m_num_blocks_y != mip.blockCountY || slices[desc.m_source_file_index] != s_InvalidSlice
-            || output.m_slice_image_data[index].size_in_bytes() != planeByteCount)
+            || output.m_slice_image_data[index].size_in_bytes() != planeByteCount
+        )
             return false;
         slices[desc.m_source_file_index] = index;
     }

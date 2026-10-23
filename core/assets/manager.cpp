@@ -182,8 +182,7 @@ Expected<u64> AssetManager::allocateRequestId()noexcept{
 void AssetManager::dispatchAsync(const u64 requestId, IAssetAsyncExecutor& asyncExecutor){
     asyncExecutor.enqueue([this, requestId](){
         processRequest(requestId);
-    }
-    );
+    });
 }
 
 

@@ -190,8 +190,7 @@ TEST(UiTextEditOwned, OwnedCollectionAdoptionAndCancellationRejectAnotherThread)
         poll = session.pollOwned(event);
         adopt = session.adoptLocal(s_Owner, model, s_Caret);
         cancelled = session.cancel();
-    }
-    );
+    });
     other.join();
     EXPECT_EQ(poll, TextInputPollResult::WrongThread);
     EXPECT_EQ(adopt, TextInputAdmission::WrongThread);

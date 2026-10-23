@@ -276,8 +276,7 @@ bool RendererTaskTimingFeedback::setPolicy(const Core::GpuTaskTimingFeedbackPoli
     ScopeExit resolvePolicy([&]()noexcept{
         ScopedLock lock(m_mutex);
         ResolveRendererTaskTimingFeedbackPolicyTransition(m_policy, transition, collectionUpdated);
-    }
-    );
+    });
 
     if(transition.action == RendererTaskTimingFeedbackCollectionAction::Enable){
         collectionUpdated = m_graphics.gpuTiming().setFeedbackCollectionScopes(subscription, NotNull<const Name*>(m_feedbackCollectionScopes.data()), m_feedbackCollectionScopes.size());

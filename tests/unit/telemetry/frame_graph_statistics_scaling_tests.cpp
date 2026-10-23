@@ -105,8 +105,7 @@ void PrepareFixture(StatisticsFixture& fixture, const u32 packetCount, const u32
             .queueAssignment = {},
             .compiledTask = {},
             .runtimeStatistics = OwnerStatistics(packetsPerOwner),
-        }
-        );
+        });
     }
 }
 

@@ -199,8 +199,7 @@ template<typename EntryPoint>
             return entryPoint(args.argc(), args.argv(), hInstance);
 
         return s_ApplicationEntryFailure;
-    }
-    );
+    });
 }
 
 template<typename EntryPoint>
@@ -211,8 +210,7 @@ template<typename EntryPoint>
             return entryPoint(args.argc(), args.argv(), GetModuleHandleW(nullptr));
 
         return s_ApplicationEntryFailure;
-    }
-    );
+    });
 }
 
 

@@ -158,6 +158,7 @@ bool IsValidFrameGraphCompiledTask(const FrameGraphCompiledTask& compiledTask)no
     return compiledTask.present && compiledTask.planGeneration != 0u && compiledTask.packetIndex != Limit<u32>::s_Max && IsValidFrameGraphTaskPacketizationDecision(compiledTask.packetizationDecision);
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

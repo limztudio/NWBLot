@@ -46,8 +46,7 @@ public:
 
         ScopeExit drainOnFailure([&]()noexcept{
             m_tasks.drain();
-        }
-        );
+        });
 
         m_tasks.wait();
         m_callbacks.onShutdown();

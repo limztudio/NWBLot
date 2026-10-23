@@ -88,8 +88,7 @@ TEST(CpuTaskWaitTests, ScopeRejectsTransitiveDependentsOfTheCallersAncestor){
         ASSERT_TRUE(secondCpuTaskAdmission);
         if(secondCpuTaskAdmission)
             ASSERT_TRUE(secondCpuTaskAdmission->valid());
-    }
-    );
+    });
     ASSERT_TRUE(cpuTaskAdmission);
     const auto ancestor = *cpuTaskAdmission;
     ASSERT_TRUE(ancestor.valid());
@@ -122,8 +121,7 @@ TEST(CpuTaskWaitTests, ScopeRechecksDependenciesPublishedByCooperativeWork){
         ASSERT_TRUE(secondCpuTaskAdmission);
         if(secondCpuTaskAdmission)
             ASSERT_TRUE(secondCpuTaskAdmission->valid());
-    }
-    );
+    });
     ASSERT_TRUE(cpuTaskAdmission);
     if(cpuTaskAdmission)
         ASSERT_TRUE(cpuTaskAdmission->valid());
@@ -186,8 +184,7 @@ TEST(CpuTaskWaitTests, NewDependencyInvalidatesAnEarlierUnrelatedSearch){
         ASSERT_TRUE(thirdCpuTaskAdmission);
         if(thirdCpuTaskAdmission)
             ASSERT_TRUE(thirdCpuTaskAdmission->valid());
-    }
-    );
+    });
     ASSERT_TRUE(secondCpuTaskAdmission);
     if(secondCpuTaskAdmission)
         ASSERT_TRUE(secondCpuTaskAdmission->valid());
@@ -217,8 +214,7 @@ TEST(CpuTaskWaitTests, ReusedUnrelatedSlotCanBecomeAScopedDescendant){
         ASSERT_TRUE(child.valid());
         EXPECT_EQ(child.index, unrelated.index);
         EXPECT_NE(child.generation, unrelated.generation);
-    }
-    );
+    });
     ASSERT_TRUE(cpuTaskAdmission);
     if(cpuTaskAdmission)
         ASSERT_TRUE(cpuTaskAdmission->valid());
@@ -251,8 +247,7 @@ TEST(CpuTaskWaitTests, NestedScopesUseIndependentSearchIdentities){
         EXPECT_EQ(innerCallbacks, 0u);
         inner.wait();
         EXPECT_EQ(innerCallbacks, s_ExpectedDualCount);
-    }
-    );
+    });
     ASSERT_TRUE(thirdCpuTaskAdmission);
     if(thirdCpuTaskAdmission)
         ASSERT_TRUE(thirdCpuTaskAdmission->valid());
@@ -280,8 +275,7 @@ TEST(CpuTaskWaitTests, ConcurrentScopeWaitersCanSwitchTheSharedSearchCache){
         while(!start.load(MemoryOrder::acquire))
             SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
         scopeA.wait();
-    }
-    );
+    });
     ASSERT_TRUE(cpuTaskAdmission);
     const auto waiterA = *cpuTaskAdmission;
     const auto secondCpuTaskAdmission = scheduler.submit([&](){
@@ -289,8 +283,7 @@ TEST(CpuTaskWaitTests, ConcurrentScopeWaitersCanSwitchTheSharedSearchCache){
         while(!start.load(MemoryOrder::acquire))
             SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
         scopeB.wait();
-    }
-    );
+    });
     ASSERT_TRUE(secondCpuTaskAdmission);
     const auto waiterB = *secondCpuTaskAdmission;
     ASSERT_TRUE(waiterA.valid());
@@ -372,8 +365,7 @@ TEST(CpuTaskWaitTests, NestedJoinCanRetireAnUnrelatedAnchorWithoutNewPublication
         scheduler.wait(anchor);
         EXPECT_EQ(unrelated, 1u);
         ++joined;
-    }
-    );
+    });
     ASSERT_TRUE(cpuTaskAdmission);
     if(cpuTaskAdmission)
         ASSERT_TRUE(cpuTaskAdmission->valid());
@@ -413,15 +405,13 @@ TEST(CpuTaskWaitTests, AnotherWorkerCanClaimAnUnrelatedAnchorDuringScopeExecutio
         startWaiter.store(true, MemoryOrder::release);
         releaseBlocker.store(true, MemoryOrder::release);
         releaseAnchor.store(true, MemoryOrder::release);
-    }
-    );
+    });
     const auto cpuTaskAdmission = scheduler.submit([&](){
         waiterEntered.store(true, MemoryOrder::release);
         while(!startWaiter.load(MemoryOrder::acquire))
             SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
         scope.wait();
-    }
-    );
+    });
     ASSERT_TRUE(cpuTaskAdmission);
     const auto waiter = *cpuTaskAdmission;
     ASSERT_TRUE(waiter.valid());
@@ -431,8 +421,7 @@ TEST(CpuTaskWaitTests, AnotherWorkerCanClaimAnUnrelatedAnchorDuringScopeExecutio
         blockerEntered.store(true, MemoryOrder::release);
         while(!releaseBlocker.load(MemoryOrder::acquire))
             SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
-    }
-    );
+    });
     ASSERT_TRUE(secondCpuTaskAdmission);
     if(secondCpuTaskAdmission)
         ASSERT_TRUE(secondCpuTaskAdmission->valid());
@@ -442,8 +431,7 @@ TEST(CpuTaskWaitTests, AnotherWorkerCanClaimAnUnrelatedAnchorDuringScopeExecutio
         anchorEntered.store(true, MemoryOrder::release);
         while(!releaseAnchor.load(MemoryOrder::acquire))
             SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
-    }
-    );
+    });
     ASSERT_TRUE(thirdCpuTaskAdmission);
     if(thirdCpuTaskAdmission)
         ASSERT_TRUE(thirdCpuTaskAdmission->valid());
@@ -452,8 +440,7 @@ TEST(CpuTaskWaitTests, AnotherWorkerCanClaimAnUnrelatedAnchorDuringScopeExecutio
         while(!anchorEntered.load(MemoryOrder::acquire))
             SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
         joined.fetch_add(1u, MemoryOrder::relaxed);
-    }
-    );
+    });
     ASSERT_TRUE(fourthCpuTaskAdmission);
     if(fourthCpuTaskAdmission)
         ASSERT_TRUE(fourthCpuTaskAdmission->valid());
@@ -465,8 +452,7 @@ TEST(CpuTaskWaitTests, AnotherWorkerCanClaimAnUnrelatedAnchorDuringScopeExecutio
         EXPECT_EQ(unrelated.load(MemoryOrder::acquire), 0u);
         joined.fetch_add(1u, MemoryOrder::relaxed);
         releaseAnchor.store(true, MemoryOrder::release);
-    }
-    );
+    });
     ASSERT_TRUE(sixthCpuTaskAdmission);
     if(sixthCpuTaskAdmission)
         ASSERT_TRUE(sixthCpuTaskAdmission->valid());
@@ -490,8 +476,7 @@ TEST(CpuTaskWaitTests, DependencyCompletionAppendsScopedWorkAfterAnUnrelatedAnch
         entered.store(true, MemoryOrder::release);
         while(!release.load(MemoryOrder::acquire))
             SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
-    }
-    );
+    });
     ASSERT_TRUE(cpuTaskAdmission);
     const auto prerequisite = *cpuTaskAdmission;
     ASSERT_TRUE(prerequisite.valid());
@@ -698,8 +683,7 @@ TEST(CpuTaskWaitTests, StructuredParentCompletionStaysScopedUntilEveryChildRetir
             if(thirdCpuTaskAdmission)
                 EXPECT_TRUE(thirdCpuTaskAdmission->valid());
         }
-    }
-    );
+    });
     ASSERT_TRUE(secondCpuTaskAdmission);
     if(secondCpuTaskAdmission)
         ASSERT_TRUE(secondCpuTaskAdmission->valid());

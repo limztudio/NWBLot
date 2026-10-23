@@ -166,8 +166,7 @@ bool RendererMeshSystem::meshGeometryHeapHandlesReady(const MeshResources& mesh)
     ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool)noexcept{
         const Core::GpuDescriptorHandle handle = mesh.geometryHeapHandles[bindingSlot];
         ready = ready && handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
-    }
-    );
+    });
     return ready;
 }
 
@@ -177,8 +176,7 @@ void RendererMeshSystem::populateMeshGeometryHeapSlots(InstanceGpuData& outInsta
         outInstance.geometryHeapSlots[slotIndex] = 0u;
     ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool)noexcept{
         outInstance.geometryHeapSlots[bindingSlot] = mesh.geometryHeapHandles[bindingSlot].slot();
-    }
-    );
+    });
 }
 
 void RendererMeshSystem::releaseMeshGeometryHeapHandles(MeshResources& mesh){
@@ -347,16 +345,14 @@ bool RendererMeshSystem::createMeshGeometryHeapHandles(MeshResources& mesh){
         }
         acquired[bindingSlot] = *handle;
         retireHandle.release();
-    }
-    );
+    });
 
     if(!registered)
         return false;
 
     ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool)noexcept{
         mesh.geometryHeapHandles[bindingSlot] = acquired[bindingSlot];
-    }
-    );
+    });
     retireAcquired.release();
     NWB_ASSERT(meshGeometryHeapHandlesReady(mesh));
     return true;

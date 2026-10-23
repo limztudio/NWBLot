@@ -60,8 +60,7 @@ void MeshSkinningRuntimeCache::prepareResources(Core::ECS::World& world, Core::A
     skinningBindingView.each([&](Core::ECS::EntityID entity, SkinnedMeshBindingComponent& component){
         if(!ensureRuntimeMesh(entity, scratchArena, component))
             component.runtimeMesh.reset();
-    }
-    );
+    });
 
     if(!pruneStaleInstances)
         return;

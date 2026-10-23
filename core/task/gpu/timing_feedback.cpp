@@ -368,8 +368,7 @@ void GpuTaskTimingHistoryStore::snapshot(GpuTaskTimingHistorySnapshot& outSnapsh
         outSnapshot.m_historyIndex.reset();
         outSnapshot.m_assignmentIndex.reset();
         outSnapshot.reset();
-    }
-    );
+    });
 
     outSnapshot.m_histories.reserve(m_histories.size());
     for(const HistoryRecord& record : m_histories)

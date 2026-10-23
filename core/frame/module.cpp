@@ -81,8 +81,7 @@ Frame::~Frame()noexcept(false){
         m_cpuTasks.drain();
         m_textInput.reset();
         m_clipboard.reset();
-    }
-    );
+    });
 
     m_cpuTasks.wait();
     cleanup();

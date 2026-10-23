@@ -97,8 +97,7 @@ bool QueuedClipboardService::cancel(const ClipboardRequestToken token){
         request->executing = wasExecuting;
         if(!wasExecuting)
             request->text.clear();
-    }
-    );
+    });
     if(cancelNative)
         cancelNativeRequest(token);
     return true;

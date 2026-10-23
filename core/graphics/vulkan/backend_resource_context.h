@@ -457,8 +457,7 @@ void ConfigurePipelineDepthStencilState(const DepthStencilState& state, Pipeline
             const usize chunkOffset = chunkIndex * effectiveChunkSize;
             const usize chunkBytes = Min(effectiveChunkSize, size - chunkOffset);
             NWB_MEMCPY(dstBytes.get() + chunkOffset, chunkBytes, srcBytes.get() + chunkOffset, chunkBytes);
-        }
-        );
+        });
     }
 
     NWB_MEMCPY(dst, size, src, size);

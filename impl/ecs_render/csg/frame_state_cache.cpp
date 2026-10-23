@@ -44,8 +44,7 @@ namespace CsgFrameCacheDetail{
         Fnv64AppendValue(contentHash, cutter.worldToShape);
         Fnv64AppendValue(contentHash, cutter.shapeToWorld);
         Fnv64AppendBuffer(contentHash, cutter.parameterBytes.data(), cutter.parameterBytes.size());
-    }
-    );
+    });
 
     auto receiverView = world.view<StaticCsgMeshComponent>();
     bool cacheable = true;
@@ -83,8 +82,7 @@ namespace CsgFrameCacheDetail{
             Fnv64AppendValue(contentHash, transform->rotation);
             Fnv64AppendValue(contentHash, transform->scale);
         }
-    }
-    );
+    });
     if(!cacheable)
         return MakeUnexpected(Failure{});
 

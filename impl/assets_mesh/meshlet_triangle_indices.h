@@ -52,8 +52,7 @@ template<
 
         outIndices[primitiveByte] = positionRef->position;
         return true;
-    }
-    ))
+    }))
         return MakeUnexpected(Failure{});
     return outIndices;
 }

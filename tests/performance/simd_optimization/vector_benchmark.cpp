@@ -251,8 +251,7 @@ u32 Verify(){
         failures += VerifyFactory<Operation::QuaternionNormal>();
         failures += VerifyQuaternionAxes();
         return failures;
-    }
-    );
+    });
     if(!verification.environmentAvailable)
         return verification.failures;
     const u32 failures = verification.failures;

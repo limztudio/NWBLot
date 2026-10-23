@@ -127,8 +127,7 @@ void Device::prepareSubmissionCommandListWorkspaceLocked(Queue& queue, CommandLi
                 .graphRecordingOwnershipSerial = graphSubmissionAuthorized ? commandList.m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire) : 0u,
                 .recordingWorkerIndex = commandList.m_creationDesc.recordingWorkerIndex,
                 .graphSubmissionAuthorized = graphSubmissionAuthorized,
-            }
-            );
+            });
         }
     }
 

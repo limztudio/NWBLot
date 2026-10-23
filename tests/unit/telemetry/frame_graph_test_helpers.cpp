@@ -390,8 +390,7 @@ void BuildTestPacketSubmissionFrameGraph(
         .plannedWaitTokenCount = 1u,
         .sameQueueWaitElisionCount = 1u,
         .submissionSeconds = 0.375,
-    }
-    );
+    });
     packetSubmissionStatistics.push_back(Telemetry::FrameGraphPacketSubmissionStatisticsRecord{
         .packetGeneration = 72u,
         .taskCount = 2u,
@@ -404,8 +403,7 @@ void BuildTestPacketSubmissionFrameGraph(
         .sameQueueWaitElisionCount = 1u,
         .timelineWaitCount = 1u,
         .submissionSeconds = 0.125,
-    }
-    );
+    });
     packetSubmissionStatistics.push_back(Telemetry::FrameGraphPacketSubmissionStatisticsRecord{
         .packetGeneration = 72u,
         .taskCount = 1u,
@@ -419,8 +417,7 @@ void BuildTestPacketSubmissionFrameGraph(
         .timelineWaitCount = 1u,
         .mergedTimelineWaitCount = 2u,
         .submissionSeconds = 0.25,
-    }
-    );
+    });
 }
 
 

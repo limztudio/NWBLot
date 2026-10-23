@@ -150,11 +150,13 @@ bool nwbCausticCheckBoundary(
     if(count == 0u || boundary.instance != hit.instance)
         return false;
     [loop] for(uint index = 1u; index < count; ++index){
-        if(events[index].instance != events[0].instance || events[index].entering != events[0].entering
+        if(
+            events[index].instance != events[0].instance || events[index].entering != events[0].entering
 #if NWB_RT_CSG_ENABLED
             || events[index].primitive == NWB_CSG_RAY_INVALID_INDEX || events[0].primitive == NWB_CSG_RAY_INVALID_INDEX
 #endif
-            || !nwbRayTraceCoplanarSeam(config.instanceMaterialHeapSlot, events[0].instance, events[0].primitive, events[index].primitive))
+            || !nwbRayTraceCoplanarSeam(config.instanceMaterialHeapSlot, events[0].instance, events[0].primitive, events[index].primitive)
+        )
             return false;
     }
     return true;

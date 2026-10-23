@@ -126,8 +126,7 @@ public:
 
         world.view<PositionComponent>().each([](NWB::Core::ECS::EntityID, PositionComponent& position)noexcept{
             ++position.x;
-        }
-        );
+        });
         return {};
     }
 
@@ -261,12 +260,10 @@ TEST(Ecs, EmptyViewDoesNotAllocateComponentPools){
 
     testWorld.world.view<PositionComponent>().each([&singleViewCount](NWB::Core::ECS::EntityID, PositionComponent&)noexcept{
         ++singleViewCount;
-    }
-    );
+    });
     testWorld.world.view<PositionComponent, VelocityComponent>().each([&multiViewCount](NWB::Core::ECS::EntityID, PositionComponent&, VelocityComponent&)noexcept{
         ++multiViewCount;
-    }
-    );
+    });
     EXPECT_TRUE((testWorld.world.view<PositionComponent>().parallelEach(testWorld.world.taskScope(), [&singleViewCount](NWB::Core::ECS::EntityID, PositionComponent&)noexcept{
         ++singleViewCount;
     }
@@ -404,8 +401,7 @@ TEST(Ecs, ComponentPoolsPreserveSparseTypeLookupAndWorldIsolation){
         EXPECT_EQ(&component, &firstComponent);
         EXPECT_EQ(component.value, 17u);
         ++visits;
-    }
-    );
+    });
     EXPECT_EQ(visits, 1u);
 
     firstEntity.addComponent<PoolSlotComponent<31u>>().value = 53u;
@@ -458,8 +454,7 @@ TEST(Ecs, DuplicateComponentAddIsStable){
     usize viewCount = 0u;
     testWorld.world.view<PositionComponent>().each([&viewCount](NWB::Core::ECS::EntityID, PositionComponent&)noexcept{
         ++viewCount;
-    }
-    );
+    });
     EXPECT_EQ(viewCount, 1u);
 }
 
@@ -582,13 +577,11 @@ TEST(Ecs, SystemDependentsProceedWithoutWaitingForUnrelatedWork){
         while(!dependentCompleted.load(MemoryOrder::acquire) && DurationInMS<u64>(TimerNow(), begin) < __hidden_ecs_tests::s_SystemCompletionTimeoutMS)
             SleepMS(__hidden_ecs_tests::s_PollIntervalMS);
         independentObservedCompletion.store(dependentCompleted.load(MemoryOrder::acquire), MemoryOrder::release);
-    }
-    );
+    });
     ScheduledSystem dependent(arena, { { positionType, NWB::Core::ECS::AccessMode::Read } }, [&](){
         EXPECT_EQ(value, 5);
         dependentCompleted.store(true, MemoryOrder::release);
-    }
-    );
+    });
 
     NWB::Core::ECS::SystemScheduler scheduler(arena);
     scheduler.addSystem(writer);
@@ -640,16 +633,13 @@ TEST(Ecs, DependentSystemObservesAllNestedQueryTasks){
             position.y = position.x + 1;
         }
         )));
-    }
-    );
+    });
     ScheduledSystem reader(arena, { { positionType, NWB::Core::ECS::AccessMode::Read } }, [&](){
         world.view<PositionComponent>().each([&](NWB::Core::ECS::EntityID, PositionComponent& position){
             EXPECT_EQ(position.y, position.x + 1);
             ++observed;
-        }
-        );
-    }
-    );
+        });
+    });
 
     NWB::Core::ECS::SystemScheduler scheduler(arena);
     scheduler.addSystem(writer);
@@ -672,16 +662,13 @@ TEST(Ecs, SystemCompletionIncludesAsynchronousDescendants){
             const auto secondCpuTaskAdmission = world.taskScope().submit([&]()noexcept{ value.store(41, MemoryOrder::release); });
             ASSERT_TRUE(secondCpuTaskAdmission);
             EXPECT_TRUE(secondCpuTaskAdmission->valid());
-        }
-        );
+        });
         ASSERT_TRUE(cpuTaskAdmission);
         EXPECT_TRUE(cpuTaskAdmission->valid());
-    }
-    );
+    });
     ScheduledSystem reader(arena, { { positionType, NWB::Core::ECS::AccessMode::Read } }, [&]()noexcept{
         observed = value.load(MemoryOrder::acquire);
-    }
-    );
+    });
 
     NWB::Core::ECS::SystemScheduler scheduler(arena);
     scheduler.addSystem(writer);
@@ -706,8 +693,7 @@ TEST(Ecs, WorldClearDoesNotWaitForUnrelatedSchedulerTasks){
         while(!release.load(MemoryOrder::acquire) && DurationInMS<u64>(TimerNow(), begin) < __hidden_ecs_tests::s_SystemCompletionTimeoutMS)
             SleepMS(__hidden_ecs_tests::s_PollIntervalMS);
         completed.store(true, MemoryOrder::release);
-    }
-    );
+    });
     ASSERT_TRUE(cpuTaskAdmission);
     EXPECT_TRUE(cpuTaskAdmission->valid());
     started.wait(false, MemoryOrder::acquire);

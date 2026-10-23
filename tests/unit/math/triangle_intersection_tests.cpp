@@ -150,8 +150,7 @@ TEST(MathTriangleIntersection, InactiveSignalingNaNsDoNotRaiseInvalidDuringInter
     ScopeExit restoreEnvironment([&]()noexcept{
         if(!SetFloatingPointEnvironment(*originalEnvironment))
             NWB_ASSERT(false);
-    }
-    );
+    });
     volatile u32 singleInactiveBits = 0x7f800001u;
     volatile u64 doubleInactiveBits = 0x7ff0000000000001u;
     const SIMDVectorSingle firstSingle[] = {

@@ -85,14 +85,12 @@ TEST(CpuTaskProgressTests, ScopeJoinWakesForANewlyReadyUnscopedMainThreadPrerequ
             scheduler.drain();
             if(releaser.joinable())
                 releaser.join();
-        }
-        );
+        });
         const auto cpuTaskAdmission = scheduler.submit([&]()noexcept{
             workerEntered.store(true, MemoryOrder::release);
             workerEntered.notify_one();
             release.wait(false, MemoryOrder::acquire);
-        }
-        );
+        });
         ASSERT_TRUE(cpuTaskAdmission);
         const auto gate = *cpuTaskAdmission;
         ASSERT_TRUE(gate.valid());
@@ -111,8 +109,7 @@ TEST(CpuTaskProgressTests, ScopeJoinWakesForANewlyReadyUnscopedMainThreadPrerequ
                 SleepMS(__hidden_cpu_task_progress_tests::s_PollIntervalMS);
             release.store(true, MemoryOrder::release);
             release.notify_one();
-        }
-        );
+        });
         // No handle waiter or completed scope can provide the prerequisite's readiness notification.
         joining.store(true, MemoryOrder::release);
         joining.notify_one();
@@ -143,8 +140,7 @@ TEST(CpuTaskProgressTests, ConcurrentSameScopeJoinsRetainLatePublishedDescendant
             start.store(true, MemoryOrder::release);
             start.notify_all();
             scheduler.drain();
-        }
-        );
+        });
         for(u32 waiter = 0u; waiter < s_Workers; ++waiter){
             const auto cpuTaskAdmission = scheduler.submit([&](){
                 entered.fetch_add(1u, MemoryOrder::release);
@@ -152,8 +148,7 @@ TEST(CpuTaskProgressTests, ConcurrentSameScopeJoinsRetainLatePublishedDescendant
                 start.wait(false, MemoryOrder::acquire);
                 scope.wait();
                 joined.fetch_add(1u, MemoryOrder::release);
-            }
-            );
+            });
             ASSERT_TRUE(cpuTaskAdmission);
             if(cpuTaskAdmission)
                 ASSERT_TRUE(cpuTaskAdmission->valid());
@@ -172,8 +167,7 @@ TEST(CpuTaskProgressTests, ConcurrentSameScopeJoinsRetainLatePublishedDescendant
                 EXPECT_TRUE(fourthCpuTaskAdmission);
                 if(fourthCpuTaskAdmission)
                     EXPECT_TRUE(fourthCpuTaskAdmission->valid());
-            }
-            );
+            });
             EXPECT_TRUE(thirdCpuTaskAdmission);
             if(thirdCpuTaskAdmission)
                 EXPECT_TRUE(thirdCpuTaskAdmission->valid());

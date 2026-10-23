@@ -329,8 +329,7 @@ TEST(AllocationOwners, ConcurrentSharedOwnerChurnPreservesTotals){
                 }
                 arena.deallocate(allocation, 1u, 128u);
             }
-        }
-        );
+        });
     }
     const Timer begin = TimerNow();
     startGate.arrive_and_wait();

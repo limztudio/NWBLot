@@ -189,8 +189,7 @@ TEST(AssetsGraphics, MeshAcceptanceHardEdgeCubeZippedRefs){
         EXPECT_TRUE(TestMeshletHasPositionNormalValue(loadedMesh, meshlet, positions, normals, localRefs, Float3U(-0.5f, -0.5f, -0.5f), Float4U(0.0f, 0.0f, -1.0f, 0.0f)));
         EXPECT_TRUE(TestMeshletHasPositionNormalValue(loadedMesh, meshlet, positions, normals, localRefs, Float3U(-0.5f, -0.5f, -0.5f), Float4U(0.0f, -1.0f, 0.0f, 0.0f)));
         EXPECT_TRUE(TestMeshletHasPositionNormalValue(loadedMesh, meshlet, positions, normals, localRefs, Float3U(-0.5f, -0.5f, -0.5f), Float4U(-1.0f, 0.0f, 0.0f, 0.0f)));
-    }
-    );
+    });
 }
 
 
@@ -198,8 +197,7 @@ TEST(AssetsGraphics, OpposedSphereNormalsDisableMeshletCone){
     RunSmokeMeshAcceptance("sphere_smooth.nwb", "sphere_smooth", Name("project/meshes/sphere_smooth"), [](const NWB::Impl::Mesh& loadedMesh){
         ASSERT_EQ(loadedMesh.meshletBounds().size(), 1u);
         EXPECT_FALSE(NWB::Impl::MeshletConeEnabled(loadedMesh.meshletBounds()[0u]));
-    }
-    );
+    });
 }
 
 TEST(AssetsGraphics, MeshAcceptanceUvSeamQuad){
@@ -229,8 +227,7 @@ TEST(AssetsGraphics, MeshAcceptanceUvSeamQuad){
         EXPECT_EQ(attributeRef2->tangent, 0u);
         EXPECT_EQ(attributeRef3->tangent, 1u);
         EXPECT_EQ(attributeRef4->tangent, 1u);
-    }
-    );
+    });
 }
 
 TEST(AssetsGraphics, MeshAcceptanceMirroredUvQuad){
@@ -247,8 +244,7 @@ TEST(AssetsGraphics, MeshAcceptanceMirroredUvQuad){
         ASSERT_TRUE(attributeRef3);
         EXPECT_EQ(attributeRef0->tangent, 0u);
         EXPECT_EQ(attributeRef3->tangent, 1u);
-    }
-    );
+    });
 }
 
 TEST(AssetsGraphics, MeshAcceptanceTwoSidedPlane){
@@ -256,8 +252,7 @@ TEST(AssetsGraphics, MeshAcceptanceTwoSidedPlane){
         EXPECT_EQ(TestMeshletLogicalPositionRefCount(loadedMesh), 3u);
         EXPECT_EQ(TestMeshletLogicalAttributeRefCount(loadedMesh), 6u);
         EXPECT_FALSE(NWB::Impl::MeshletConeEnabled(loadedMesh.meshletBounds()[0u]));
-    }
-    );
+    });
 }
 
 TEST(AssetsGraphics, MeshAcceptanceLargeManyMeshlets){
@@ -271,8 +266,7 @@ TEST(AssetsGraphics, MeshAcceptanceLargeManyMeshlets){
 
         EXPECT_EQ(NWB::Impl::MeshletPrimitiveCount(loadedMesh.meshlets()[0u]), NWB::Impl::s_MeshMaxMeshletTriangles);
         EXPECT_EQ(NWB::Impl::MeshletPrimitiveCount(loadedMesh.meshlets()[1u]), 1u);
-    }
-    );
+    });
 }
 
 

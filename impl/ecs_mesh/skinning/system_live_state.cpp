@@ -76,8 +76,7 @@ void MeshSkinningSystem::collectLiveSkinningStateBuffers(Vector<Core::BufferHand
             };
         }
         collector.collect(instance, resources);
-    }
-    );
+    });
 }
 
 bool MeshSkinningSystem::replaceAcceptedSkinningState(const Core::CommandListResourceStateHandoff& state, Core::Alloc::ScratchArena& scratchArena){

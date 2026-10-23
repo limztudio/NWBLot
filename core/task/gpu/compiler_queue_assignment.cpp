@@ -147,8 +147,7 @@ bool GpuTaskGraphCompiler::assignQueues(
                 .queueClass = selectedQueue.queueClass,
                 .reason = HasCapabilities(group.requiredCapabilities, GpuQueueCapability::Graphics) ? GpuTaskQueueAssignmentReason::RequiredGraphics : GpuTaskQueueAssignmentReason::Scored,
                 .dedicated = selectedQueue.dedicated,
-            }
-            );
+            });
             outAssignments.m_assignmentIndicesByTask[taskID.index] = assignmentIndex;
         }
     }

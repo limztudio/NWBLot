@@ -41,8 +41,7 @@ World::~World()noexcept(false){
         while(!m_systems.empty())
             m_systems.pop_back();
         m_pools.clear();
-    }
-    );
+    });
     if(UncaughtExceptionCount() == 0){
         m_tasks.wait();
         joined = true;

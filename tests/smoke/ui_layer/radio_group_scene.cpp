@@ -41,10 +41,9 @@ constexpr AStringView s_ChoicesKey = "choices";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiRadioGroupSmokeScene::UiRadioGroupSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input)
+UiRadioGroupSmokeScene::UiRadioGroupSmokeScene(Core::InputDispatcher& input)
     : m_input(input)
 {
-    static_cast<void>(arena);
     m_state.select(10u);
     m_disabled.select(30u);
     m_popupRadio.select(10u);
@@ -171,7 +170,7 @@ bool IsUiLayerRadioGroupSkinSmokeEnabled(){
 }
 
 SharedUiRadioGroupSmokeScene CreateUiRadioGroupSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input){
-    return SharedUiRadioGroupSmokeScene(NewArenaObject<RefCounter<UiRadioGroupSmokeScene>>(arena, arena, input), ArenaRefDeleter<RefCounter<UiRadioGroupSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
+    return SharedUiRadioGroupSmokeScene(NewArenaObject<RefCounter<UiRadioGroupSmokeScene>>(arena, input), ArenaRefDeleter<RefCounter<UiRadioGroupSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
 

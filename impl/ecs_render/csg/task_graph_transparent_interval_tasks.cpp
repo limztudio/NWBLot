@@ -114,8 +114,7 @@ bool AvboitCsgReceiverSpanGraphTask::Record(const Payload& payload, Core::Comman
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
     return __hidden_transparent_interval_tasks::RecordTransparentInterval(payload, commandList, scratchArena, [&](const auto& readiness){
         payload.csgSystem.dispatchCsgReceiverSpanBuild(commandList, payload.targets, readiness.csgFrameData, payload.csgResources);
-    }
-    );
+    });
 }
 
 
@@ -137,8 +136,7 @@ bool AvboitCsgIntervalCombineGraphTask::Record(const Payload& payload, Core::Com
         payload.csgSystem.dispatchCsgIntervalCombine(commandList, payload.targets, readiness.csgFrameData, payload.csgResources);
         payload.transparentCsgIntervalsTiming.value().finishTiming(commandList);
         payload.transparentCsgIntervalsTiming.reset();
-    }
-    );
+    });
 }
 
 

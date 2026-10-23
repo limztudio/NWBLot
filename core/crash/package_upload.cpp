@@ -202,8 +202,7 @@ static Expected<void, UploadFailure> UploadPackage(Alloc::ScratchArena& scratchA
     ScopeExit releaseHeaders([&]()noexcept{
         if(headers)
             curl_slist_free_all(headers);
-    }
-    );
+    });
     if(!crashUploadToken.empty()){
         headers = curl_slist_append(nullptr, authorizationHeader.c_str());
         if(!headers)
@@ -423,8 +422,7 @@ static void CollectAndroidEmergencyRecord(Alloc::ScratchArena& scratchArena, con
                 .message = "Android collection note could not be written or closed",
                 .file = __FILE__,
                 .line = __LINE__,
-            }
-            );
+            });
     }
     CrashBytesT<Alloc::ScratchArena> empty(scratchArena);
     if(!WriteBinaryFile(recordPath, empty))
@@ -435,8 +433,7 @@ static void CollectAndroidEmergencyRecord(Alloc::ScratchArena& scratchArena, con
             .message = "Collected Android emergency record could not be cleared or closed",
             .file = __FILE__,
             .line = __LINE__,
-        }
-        );
+        });
 }
 #else
 static void CollectAndroidEmergencyRecord(Alloc::ScratchArena& scratchArena, const CrashUploadSnapshot& snapshot)noexcept{

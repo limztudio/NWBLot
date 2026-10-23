@@ -276,8 +276,7 @@ Expected<GpuGraphPipelineId> GpuTaskGraph::appendPipeline(const GpuGraphPipeline
             m_pipelines.pop_back();
         while(m_markerText.size() > markerCount)
             m_markerText.pop_back();
-    }
-    );
+    });
     const MarkerLabelRange markerLabelRange = appendMarkerLabel(desc.markerLabel);
     pipeline.markerLabelOffset = markerLabelRange.offset;
     pipeline.markerLabelSize = markerLabelRange.size;

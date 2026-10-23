@@ -81,8 +81,7 @@ TEST(MathNativeMask, RawSignBitsIgnoreLowWordSignAndNoncanonicalNaNPayloads){
     ScopeExit restoreEnvironment([&]()noexcept{
         if(!SetFloatingPointEnvironment(*originalEnvironment))
             NWB_ASSERT(false);
-    }
-    );
+    });
 
     // Packing binary64 high words must ignore low-word sign bits and must not classify signaling NaNs as floating-point values.
     constexpr u64 s_Magnitudes[]{ 0x0000000080000000ull, 0x0000000000000001ull, 0x7FF0000080000001ull, 0x7FF8123476543210ull };
@@ -107,8 +106,7 @@ TEST(MathNativeMask, PartialAndFullComparisonsPreserveSignalingLaneExceptions){
     ScopeExit restoreEnvironment([&]()noexcept{
         if(!SetFloatingPointEnvironment(*originalEnvironment))
             NWB_ASSERT(false);
-    }
-    );
+    });
 
     constexpr i32 s_RoundingModes[]{ FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
     for(const i32 roundingMode : s_RoundingModes){

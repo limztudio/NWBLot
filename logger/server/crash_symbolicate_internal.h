@@ -57,9 +57,9 @@ void AppendHexAddress(CrashReportText& outReport, u64 address);
 void AppendLinuxArtifactSummary(Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& packageDirectory, const CrashSymbolicationConfig& config, CrashReportText& outReport);
 void AppendAndroidTombstoneSummary(Core::Alloc::ScratchArena& arena, const CrashScratchPath& packageDirectory, CrashReportText& outReport);
 // Cross-platform: rgd ships for Windows + Linux, and a .rgd may be decoded by whichever server ingests the package.
-void AppendRadeonGpuDetectiveSummary(Core::Alloc::ScratchArena& arena, const CrashScratchPath& packageDirectory, const CrashSymbolicationConfig& config, CrashReportText& outReport);
+void AppendRadeonGpuDetectiveSummary(Core::Alloc::ScratchArena& arena, const CrashScratchPath& packageDirectory, CrashReportText& outReport);
 // Cross-platform: the Aftermath runtime ships for Windows + Linux, and a .nv-gpudmp may be decoded by whichever server ingests the package.
-void AppendAftermathGpuDumpSummary(Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& packageDirectory, const CrashSymbolicationConfig& config, CrashReportText& outReport);
+void AppendAftermathGpuDumpSummary(Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& packageDirectory, CrashReportText& outReport);
 
 #if defined(NWB_PLATFORM_WINDOWS)
 [[nodiscard]] Expected<bool, CrashSymbolicationFailure> AppendWindowsMinidumpStack(

@@ -89,8 +89,7 @@ int RunPipelineTool(const int argc, char** argv){
         const bool built = NWB::Pipeline::AssetBuilder::BuildAssets(buildOptions);
         cpuScheduler.wait();
         return built ? s_PipelineExitSuccess : s_PipelineExitFailure;
-    }
-    );
+    });
 }
 
 

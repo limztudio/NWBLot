@@ -112,8 +112,7 @@ void RendererMaterialSystem::setMaterialPassCommonBufferStates(const MaterialPas
     if(!context.materialGeometryStatesGraphOwned){
         ForEachMaterialPassMeshSourceBuffer(mesh, [&](const Core::BufferHandle& buffer){
             context.commandList.setBufferState(buffer.get(), Core::ResourceStates::ShaderResource);
-        }
-        );
+        });
     }
     if(!context.materialFrameStatesGraphOwned){
         NWB_ASSERT(context.frameBindings.bindingValid());

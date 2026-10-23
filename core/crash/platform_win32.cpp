@@ -314,8 +314,7 @@ Expected<void, PlatformFailure> StartDesktopHandler(const ::Path<ArenaT>& handle
         __hidden_crash_win32::WaitForOwnedProcess(processInfo.hProcess, true, observations);
         __hidden_crash_win32::CleanupOwnedHandle(processInfo.hThread, observations);
         __hidden_crash_win32::CleanupOwnedHandle(processInfo.hProcess, observations);
-    }
-    );
+    });
     SECURITY_ATTRIBUTES securityAttributes = {};
     securityAttributes.nLength = sizeof(securityAttributes);
     securityAttributes.bInheritHandle = TRUE;

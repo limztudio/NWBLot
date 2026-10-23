@@ -425,8 +425,7 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
             NWB::Core::RegisterGpuCrashSink(nullptr, nullptr);
             NWB::Core::Crash::UninstallCrashHandler();
         }
-    }
-    );
+    });
 
     NWB::Core::Alloc::ScratchArena commandLineArena(__hidden_loader::s_CommandLineArena);
     __hidden_loader::LoaderOptions options(commandLineArena);

@@ -253,8 +253,7 @@ Expected<GpuTaskId> GpuTaskGraph::appendTaskWithinMutation(
                 .requiredState = resourceSetUse.requiredState,
                 .access = resourceSetUse.access,
                 .hasIndependentStateSource = resourceSetUse.hasIndependentStateSource,
-            }
-            );
+            });
         }
     }
 
@@ -409,8 +408,7 @@ Expected<GpuGraphResourceId> GpuTaskGraph::appendResourceWithinMutation(const Gp
             .completion = source.completion,
             .minimumCompletionToken = source.minimumCompletionToken,
             .stateSource = (*initialOwnerHandoffStateSnapshots)[sourceIndex].get(),
-        }
-        );
+        });
         m_initialOwnerHandoffStateSnapshots.push_back(MakeNotNull((*initialOwnerHandoffStateSnapshots)[sourceIndex].get()));
     }
 
@@ -452,8 +450,7 @@ Expected<GpuGraphResourceId> GpuTaskGraph::appendResourceWithinMutation(const Gp
             m_resourcePointerIndex->erase(pointerKey);
         if(identityInserted)
             m_resourceIdentityIndex->erase(identityKey);
-    }
-    );
+    });
     const u32 index = static_cast<u32>(m_resources.size());
     m_resources.push_back(Move(resource));
     if(m_resourceIdentityIndex){
@@ -569,8 +566,7 @@ Expected<GpuGraphResourceSetId> GpuTaskGraph::appendResourceSet(const GpuGraphRe
     ScopeExit indexRollback([&]()noexcept{
         if(identityInserted)
             m_resourceSetIdentityIndex->erase(identityKey);
-    }
-    );
+    });
     const u32 index = static_cast<u32>(m_resourceSets.size());
     m_resourceSets.push_back(Move(resourceSet));
     if(m_resourceSetIdentityIndex){
@@ -616,8 +612,7 @@ Expected<GpuExternalCompletionId> GpuTaskGraph::appendExternalCompletion(const G
     ScopeExit indexRollback([&]()noexcept{
         if(identityInserted)
             m_externalCompletionIdentityIndex->erase(identityKey);
-    }
-    );
+    });
     const u32 index = static_cast<u32>(m_externalCompletions.size());
     m_externalCompletions.push_back(Move(completion));
     if(m_externalCompletionIdentityIndex){

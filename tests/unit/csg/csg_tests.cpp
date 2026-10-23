@@ -278,8 +278,7 @@ TEST(Csg, ReceiverLookupExcludesIncompleteInactiveUntypedAndWrongPassInputs){
             receiverLookup.forEachReceiverCutter(resolvedDrawState, [&](const NWB::Core::ECS::EntityID, const NWB::Impl::CsgCutterComponent& resolvedCutter){
                 EXPECT_EQ(resolvedCutter.receiverGroup, receiver.receiverGroup);
                 ++resolvedCutterCount;
-            }
-            );
+            });
         }
         EXPECT_EQ(resolvedCutterCount, s_ExpectedDualCount);
 

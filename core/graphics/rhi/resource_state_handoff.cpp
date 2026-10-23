@@ -71,12 +71,10 @@ bool CommandListResourceStateHandoff::buildResourceSubset(const CommandListResou
         if(hasTextures){
             RetainIf(m_textureStates, [&](const TextureState& state)noexcept{
                 return selection.containsTexture(state.texture);
-            }
-            );
+            });
             RetainIf(m_permanentTextureStates, [&](const PermanentTextureState& state)noexcept{
                 return selection.containsTexture(state.texture);
-            }
-            );
+            });
         }
         else{
             m_textureStates.clear();
@@ -85,12 +83,10 @@ bool CommandListResourceStateHandoff::buildResourceSubset(const CommandListResou
         if(hasBuffers){
             RetainIf(m_bufferStates, [&](const BufferState& state)noexcept{
                 return selection.containsBuffer(state.buffer);
-            }
-            );
+            });
             RetainIf(m_permanentBufferStates, [&](const BufferState& state)noexcept{
                 return selection.containsBuffer(state.buffer);
-            }
-            );
+            });
         }
         else{
             m_bufferStates.clear();
@@ -195,12 +191,10 @@ bool CommandListResourceStateHandoff::buildTextureRangeSubset(const CommandListR
         using namespace __hidden_resource_state_handoff;
         RetainIf(m_textureStates, [&](const TextureState& state)noexcept{
             return state.texture == texture && contains(state.mipLevel, state.arraySlice);
-        }
-        );
+        });
         RetainIf(m_permanentTextureStates, [&](const PermanentTextureState& state)noexcept{
             return state.texture == texture;
-        }
-        );
+        });
         m_bufferStates.clear();
         m_permanentBufferStates.clear();
     }
@@ -251,8 +245,7 @@ bool CommandListResourceStateHandoff::buildBufferRangeSubset(const CommandListRe
         using namespace __hidden_resource_state_handoff;
         RetainIf(m_bufferStates, [&](const BufferState& state)noexcept{
             return state.buffer == buffer && state.range.overlaps(resolvedRange);
-        }
-        );
+        });
         for(BufferState& state : m_bufferStates)
             state.range = state.range.intersect(resolvedRange);
         RetainIf(m_permanentBufferStates, [&](const BufferState& state)noexcept{ return state.buffer == buffer; });

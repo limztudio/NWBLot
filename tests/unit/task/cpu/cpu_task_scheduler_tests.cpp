@@ -126,14 +126,12 @@ TEST(CpuTaskSchedulerTests, ParentCompletionRetainsAncestorCapturesUntilGrandchi
             const auto thirdCpuTaskAdmission = scheduler.submit([&grandchildGate, &total, &parentCapture, &childCapture, grandchildCapture = LifetimeProbe(retirements, 17u)]()noexcept{
                 grandchildGate.block();
                 total.store(parentCapture.value + childCapture.value + grandchildCapture.value, MemoryOrder::release);
-            }
-            );
+            });
             ASSERT_TRUE(thirdCpuTaskAdmission);
             const auto grandchild = *thirdCpuTaskAdmission;
             if(!grandchild.valid())
                 rejected.store(true, MemoryOrder::release);
-        }
-        );
+        });
         ASSERT_TRUE(secondCpuTaskAdmission);
         const auto child = *secondCpuTaskAdmission;
         if(!child.valid())
@@ -199,12 +197,10 @@ TEST(CpuTaskSchedulerTests, ScopeDestructionIncludesChildrenSubmittedDirectlyToT
         const auto cpuTaskAdmission = scope.submit([&](){
             const auto secondCpuTaskAdmission = scheduler.submit([&invoked, capture = LifetimeProbe(retired, 23u)]()noexcept{
                 invoked.store(capture.value, MemoryOrder::release);
-            }
-            );
+            });
             if(!secondCpuTaskAdmission || !secondCpuTaskAdmission->valid())
                 rejected.store(true, MemoryOrder::release);
-        }
-        );
+        });
         EXPECT_TRUE(cpuTaskAdmission);
         if(cpuTaskAdmission)
             EXPECT_TRUE(cpuTaskAdmission->valid());
@@ -229,8 +225,7 @@ TEST(CpuTaskSchedulerTests, OneWorkerCompletesNestedParallelRangesThroughCoopera
             )));
         }
         )));
-    }
-    );
+    });
     ASSERT_TRUE(cpuTaskAdmission);
     const auto root = *cpuTaskAdmission;
     scheduler.wait(root);
@@ -263,8 +258,7 @@ TEST(CpuTaskSchedulerTests, MainThreadTasksSubmittedByWorkersExecuteOnlyOnTheSch
         if(!secondCpuTaskAdmission || !secondCpuTaskAdmission->valid())
             rejected.store(true, MemoryOrder::release);
         published.store(true, MemoryOrder::release);
-    }
-    );
+    });
     ASSERT_TRUE(cpuTaskAdmission);
     const auto parent = *cpuTaskAdmission;
     EXPECT_TRUE(CpuTaskTestSupport::WaitUntil(published, s_GateTimeoutMS));
@@ -293,8 +287,7 @@ TEST(CpuTaskSchedulerTests, ZeroWorkersMakeProgressAcrossChildrenDependenciesAnd
         mainOptions.target = CpuTaskTarget::MainThread;
         const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept{ value *= 3u; actual = QueryCurrentThreadId(); }, mainOptions, &child, 1u);
         rejected = !secondCpuTaskAdmission || !secondCpuTaskAdmission->valid();
-    }
-    );
+    });
     ASSERT_TRUE(cpuTaskAdmission);
     const auto parent = *cpuTaskAdmission;
     scheduler.wait(parent);

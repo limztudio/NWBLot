@@ -404,9 +404,9 @@ private:
     void discardInvalidCommandBuffer();
     [[nodiscard]] bool validateIndirectBuffer(Buffer* buffer, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, TStringView commandName);
     [[nodiscard]] Expected<NotNull<Buffer*>> prepareDrawIndirect(u32 offsetBytes, u32 drawCount, u64 commandSizeBytes, TStringView operationLabel, TStringView commandName, VulkanDetail::IndirectDrawIndexMode::Enum indexMode);
-    void clearColorTexture(Alloc::ScratchArena& scratchArena, Texture& texture, TextureSubresourceSet subresources, TStringView valueName, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
-    void clearColorTextureBox(Alloc::ScratchArena& scratchArena, Texture& texture, TextureSubresourceSet subresources, const Box& box, TStringView valueName, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
-    bool clearActiveRenderPassColorTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const VkClearColorValue& clearValue, TStringView valueName);
+    void clearColorTexture(Alloc::ScratchArena& scratchArena, Texture& texture, TextureSubresourceSet subresources, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
+    void clearColorTextureBox(Alloc::ScratchArena& scratchArena, Texture& texture, TextureSubresourceSet subresources, const Box& box, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
+    bool clearActiveRenderPassColorTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const VkClearColorValue& clearValue);
     bool clearActiveRenderPassDepthStencilTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, bool clearDepth, f32 depth, bool clearStencil, u8 stencil);
     [[nodiscard]] bool validateStagingTextureCopyResources(StagingTexture& stagingTexture, Texture& texture, CpuAccessMode::Enum requiredCpuAccess, VkImageUsageFlags requiredImageUsage, TStringView operationName);
     Expected<VkBufferImageCopy> prepareStagingTextureCopy(StagingTexture& stagingResource, const TextureSlice& stagingSlice, Texture& textureResource, const TextureSlice& textureSlice)const noexcept;

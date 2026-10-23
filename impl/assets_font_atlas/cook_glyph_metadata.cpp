@@ -63,8 +63,7 @@ static constexpr AStringView s_PlaneTopField = "plane_top";
     const bool hasBitmap = map.findField(s_WidthField) != nullptr;
     if(!Core::Assets::ValidateMetadataAssetFields(path, map, s_DiagnosticPrefix, [hasBitmap](const AStringView field)noexcept{
         return field == s_AdvanceUnitsField || (hasBitmap && (field == s_GroupField || field == s_ChannelField || field == s_XField || field == s_YField || field == s_WidthField || field == s_HeightField || field == s_PlaneLeftField || field == s_PlaneTopField));
-    }
-    ))
+    }))
         return MakeUnexpected(Failure{});
     auto advanceUnitsResult = Core::Assets::ReadMetadataFiniteF32Field(path, map, s_DiagnosticPrefix, s_AdvanceUnitsField, true);
     if(!advanceUnitsResult)

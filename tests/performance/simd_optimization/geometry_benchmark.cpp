@@ -438,8 +438,7 @@ static void Fill(const u32 kind, TrianglePair (&pairs)[s_FixtureCount])noexcept{
     ScopeExit restoreEnvironment([&]()noexcept{
         if(!SetFloatingPointEnvironment(*originalEnvironment))
             __builtin_trap();
-    }
-    );
+    });
     const bool original = Baseline(pair.first[0], pair.first[1], pair.first[2], pair.second[0], pair.second[1], pair.second[2]);
     const i32 originalFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))

@@ -44,10 +44,9 @@ constexpr AStringView s_TitleKey = "title";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiProgressSmokeScene::UiProgressSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input)
+UiProgressSmokeScene::UiProgressSmokeScene(Core::InputDispatcher& input)
     : m_input(input)
 {
-    static_cast<void>(arena);
     m_input.addHandlerToBack(*this);
 }
 
@@ -194,7 +193,7 @@ bool IsUiLayerProgressSkinSmokeEnabled(){
 }
 
 SharedUiProgressSmokeScene CreateUiProgressSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input){
-    return SharedUiProgressSmokeScene(NewArenaObject<RefCounter<UiProgressSmokeScene>>(arena, arena, input), ArenaRefDeleter<RefCounter<UiProgressSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
+    return SharedUiProgressSmokeScene(NewArenaObject<RefCounter<UiProgressSmokeScene>>(arena, input), ArenaRefDeleter<RefCounter<UiProgressSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
 

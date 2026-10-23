@@ -294,8 +294,7 @@ static void SignalHandler(const int signalNumber, siginfo_t* signalInfo, void* s
 [[nodiscard]] static bool SendAllSocketNoSigpipe(const int descriptor, const void* const data, const usize byteCount)noexcept{
     return TransferAllPosix(static_cast<const u8*>(data), byteCount, [descriptor](const u8* const cursor, const usize remaining)noexcept{
         return send(descriptor, cursor, remaining, MSG_NOSIGNAL);
-    }
-    );
+    });
 }
 
 [[noreturn]] static void FailChild(const int startupDescriptor, const int error)noexcept{
@@ -543,8 +542,7 @@ Expected<void, PlatformFailure> StartDesktopHandler(const ::Path<ArenaT>& handle
             g_State.handlerPid = child;
             g_State.platformRestorePending = true;
         }
-    }
-    );
+    });
     if(socketpair(AF_UNIX, SOCK_STREAM, 0, request) != 0)
         return MakeUnexpected(NativeFailure(PlatformOperation::CreateRequestChannel, errno));
     if(pipe(ack) != 0)

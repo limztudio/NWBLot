@@ -103,8 +103,7 @@ TEST(CpuTaskSchedulerTests, CancelingAnActiveParentPreventsFutureDescendantsAndC
         const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept{ childInvocations.fetch_add(1u); });
         if(!secondCpuTaskAdmission || !secondCpuTaskAdmission->valid())
             childRejected.store(true, MemoryOrder::release);
-    }
-    );
+    });
     ASSERT_TRUE(cpuTaskAdmission);
     const auto parent = *cpuTaskAdmission;
     EXPECT_TRUE(CpuTaskTestSupport::WaitUntil(parentGate.entered, s_GateTimeoutMS));
@@ -138,8 +137,7 @@ TEST(CpuTaskSchedulerTests, HeavyWorkUsesTheOtherClassWhileItsPreferredWorkerIsO
     const auto cpuTaskAdmission = scheduler.submit([&]()noexcept{
         preferredAffinity = scheduler.currentWorkerAffinity();
         preferredGate.block();
-    }
-    );
+    });
     EXPECT_TRUE(cpuTaskAdmission);
     if(cpuTaskAdmission)
         EXPECT_TRUE(cpuTaskAdmission->valid());
@@ -147,8 +145,7 @@ TEST(CpuTaskSchedulerTests, HeavyWorkUsesTheOtherClassWhileItsPreferredWorkerIsO
     const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept{
         spillAffinity = scheduler.currentWorkerAffinity();
         spillGate.block();
-    }
-    );
+    });
     EXPECT_TRUE(secondCpuTaskAdmission);
     if(secondCpuTaskAdmission)
         EXPECT_TRUE(secondCpuTaskAdmission->valid());

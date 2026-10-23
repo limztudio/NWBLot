@@ -465,8 +465,7 @@ TEST_F(Win32TextInputFixture, SceneFallbackBridgeRejectsForeignServiceAndWrongTh
         EXPECT_FALSE((workerCodePoint = DecodeWin32FallbackCharInput(*m_service, 'A')));
 
         EXPECT_FALSE(ResetWin32FallbackCharInput(*m_service));
-    }
-    );
+    });
     worker.join();
     ASSERT_TRUE((codePoint = DecodeWin32FallbackCharInput(*m_service, 'C')));
     EXPECT_EQ(*codePoint, static_cast<u32>('C'));

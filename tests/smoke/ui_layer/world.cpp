@@ -166,7 +166,7 @@ Expected<NotNullUniquePtr<Core::ECS::World>> CreateUiLayerSmokeWorld(ProjectRunt
     auto entity = world->createEntity();
     auto& paint = entity.addComponent<Impl::UiPaintComponent>();
     if(textureImageSmoke){
-        const auto scene = CreateUiTextureImageSmokeScene(context.objectArena, context.input, context.assetManager, context.graphics);
+        const auto scene = CreateUiTextureImageSmokeScene(context.objectArena, context.input, context.assetManager);
         paint.paint = [scene](Impl::UiPaintContext& paintContext){
             if(!scene->paint(paintContext))
                 NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: texture-image UI paint failed"));

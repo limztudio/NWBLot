@@ -74,8 +74,7 @@ TEST(LoggerClipboardText, NativeOwnershipFreesUntransferredMemoryAndReleasesTran
     ScopeExit cleanup([&]()noexcept{
         if(transferred && GlobalFree(transferred))
             TerminateInvariant();
-    }
-    );
+    });
     EXPECT_NE(GlobalFlags(transferred), GMEM_INVALID_HANDLE);
     EXPECT_NE(GlobalSize(transferred), 0u);
 }

@@ -35,8 +35,7 @@ TEST(CpuTopologyTests, DiscoveryHonorsAProcessAffinityRestriction){
             ExitProcess(1u);
         const auto selected = FindIf(placements->begin(), placements->end(), [&original](const CpuWorkerPlacement& placement)noexcept{
             return placement.processorGroup == original.Group;
-        }
-        );
+        });
         if(selected == placements->end())
             ExitProcess(2u);
         const u32 processorIndex = selected->logicalProcessorIndex;
@@ -104,8 +103,7 @@ TEST(CpuTopologyTests, DiscoveryHonorsInheritedLinuxAffinityIncludingHighProcess
             return;
         restrictedPlacements = QueryCpuWorkerPlacements();
         usableCount = QueryCpuCoreCount(CpuAffinity::Any);
-    }
-    );
+    });
     worker.join();
     ASSERT_TRUE(applied);
     ASSERT_TRUE(restrictedPlacements);

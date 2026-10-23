@@ -306,8 +306,7 @@ bool IsUiLayerTextureImageSkinSmokeEnabled(){
     return ReadSmokeEnvironmentFlag("NWB_UI_LAYER_TEXTURE_IMAGE_SKIN");
 }
 
-SharedUiTextureImageSmokeScene CreateUiTextureImageSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input, const Core::Assets::AssetManager& assets, Core::GraphicsRuntime& graphics){
-    static_cast<void>(graphics);
+SharedUiTextureImageSmokeScene CreateUiTextureImageSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input, const Core::Assets::AssetManager& assets){
     return SharedUiTextureImageSmokeScene(NewArenaObject<RefCounter<UiTextureImageSmokeScene>>(arena, arena, input, assets), ArenaRefDeleter<RefCounter<UiTextureImageSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 

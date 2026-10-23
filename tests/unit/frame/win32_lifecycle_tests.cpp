@@ -172,8 +172,7 @@ static void CheckInactiveLoop(const bool renderUnfocused){
     ScopeExit removePass([&]()noexcept{
         if(renderUnfocused)
             frame.graphics().removeRenderPass(pass);
-    }
-    );
+    });
     ASSERT_EQ(frame.graphics().shouldRenderUnfocused(), renderUnfocused);
     LoopCallbackState callback{ frame };
     frame.setProjectUpdateCallback(&RequestQuitOnUpdate, &callback);
@@ -193,8 +192,7 @@ static void CheckInactiveLoop(const bool renderUnfocused){
             if(!PostMessage(native.hwnd(), WM_CLOSE, 0u, 0))
                 TerminateInvariant();
         }
-    }
-    );
+    });
     const bool loopSucceeded = frame.mainLoop();
     watchdog.request_stop();
     watchdog.join();

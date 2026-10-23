@@ -30,7 +30,7 @@ namespace Tests::Smoke{
 // RefCounter derives from the scene; the passive progress declarations copy all value and style inputs.
 class UiProgressSmokeScene : public Core::IInputEventHandler, NoCopy{
 public:
-    UiProgressSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
+    explicit UiProgressSmokeScene(Core::InputDispatcher& input);
     virtual ~UiProgressSmokeScene()noexcept override;
 
 

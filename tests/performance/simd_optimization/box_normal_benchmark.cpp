@@ -260,8 +260,7 @@ int main(const int argc, const char* const* argv){
         ScopeExit restore([&]()noexcept{
             if(!SetFloatingPointEnvironment(*original))
                 __builtin_trap();
-        }
-        );
+        });
         const u32 singleFailures = Verify<f32>();
         const u32 doubleFailures = Verify<f64>();
         NWB_COUT << "verification single=" << singleFailures << " double=" << doubleFailures << " cases=262144\n";

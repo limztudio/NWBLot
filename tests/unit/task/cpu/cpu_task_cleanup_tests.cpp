@@ -213,8 +213,7 @@ TEST(CpuTaskCleanupTests, SchedulerDestructorPropagatesCallerFailureToTheTermina
             EXPECT_TRUE(probe.retirements != nullptr);
             ++callbacks;
             throw TerminalTaskError{ 29 };
-        }
-        );
+        });
         EXPECT_TRUE(secondCpuTaskAdmission);
         if(secondCpuTaskAdmission)
             EXPECT_TRUE(secondCpuTaskAdmission->valid());
@@ -251,8 +250,7 @@ TEST(CpuTaskCleanupTests, ScopeDestructorPropagatesCallerFailureAfterDrainingIts
             EXPECT_TRUE(probe.retirements != nullptr);
             ++callbacks;
             throw TerminalTaskError{ 41 };
-        }
-        );
+        });
         EXPECT_TRUE(secondCpuTaskAdmission);
         if(secondCpuTaskAdmission)
             EXPECT_TRUE(secondCpuTaskAdmission->valid());
@@ -288,8 +286,7 @@ TEST(CpuTaskCleanupTests, UnrelatedUnwindCancelsQueuedTasksWithoutReplacingTheOr
             EXPECT_TRUE(probe.retirements != nullptr);
             ++callbacks;
             throw TerminalTaskError{ 59 };
-        }
-        );
+        });
         EXPECT_TRUE(secondCpuTaskAdmission);
         if(secondCpuTaskAdmission)
             EXPECT_TRUE(secondCpuTaskAdmission->valid());
@@ -324,8 +321,7 @@ TEST(CpuTaskCleanupTests, TerminalDrainJoinsAnActiveWorkerAndRetiresCanceledCapt
         if(!WaitUntil(released))
             expired.store(true, MemoryOrder::release);
         finished.store(true, MemoryOrder::release);
-    }
-    );
+    });
     EXPECT_TRUE(cpuTaskAdmission);
     if(cpuTaskAdmission)
         EXPECT_TRUE(cpuTaskAdmission->valid());
@@ -344,8 +340,7 @@ TEST(CpuTaskCleanupTests, TerminalDrainJoinsAnActiveWorkerAndRetiresCanceledCapt
             expired.store(true, MemoryOrder::release);
         SleepMS(s_CleanupWaitIntervalMS);
         released.store(true, MemoryOrder::release);
-    }
-    );
+    });
     drainStarted.store(true, MemoryOrder::release);
     scheduler.drain();
     releaseWorker.join();
@@ -405,8 +400,7 @@ TEST(CpuTaskCleanupTests, ConcurrentProducersCompleteNestedTaskRanges){
                 )));
             }
             )));
-        }
-        );
+        });
         ASSERT_TRUE(cpuTaskAdmission);
         if(cpuTaskAdmission)
             ASSERT_TRUE(cpuTaskAdmission->valid());
@@ -431,8 +425,7 @@ TEST(CpuTaskCleanupTests, NestedRangeFailureJoinsItsSubtreeBeforeUnwindingTheRec
                 throw TerminalTaskError{ 67 };
             }
             )));
-        }
-        );
+        });
         EXPECT_TRUE(cpuTaskAdmission);
         if(cpuTaskAdmission)
             EXPECT_TRUE(cpuTaskAdmission->valid());
@@ -458,8 +451,7 @@ TEST(CpuTaskCleanupTests, DescendantRetirementCanReenterSchedulerBeforeParentCom
                 TerminateInvariant();
             SleepMS(__hidden_cpu_task_cleanup_tests::s_PollIntervalMS);
         }
-    }
-    );
+    });
     CpuTaskHandle parent;
     bool incompleteDuringRetirement = false;
     usize outstandingDuringRetirement = 0u;
@@ -471,8 +463,7 @@ TEST(CpuTaskCleanupTests, DescendantRetirementCanReenterSchedulerBeforeParentCom
         EXPECT_TRUE(secondCpuTaskAdmission);
         if(secondCpuTaskAdmission)
             EXPECT_TRUE(secondCpuTaskAdmission->valid());
-    }
-    );
+    });
     ASSERT_TRUE(cpuTaskAdmission);
     parent = *cpuTaskAdmission;
     ASSERT_TRUE(parent.valid());

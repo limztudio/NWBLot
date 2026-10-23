@@ -514,56 +514,49 @@ TEST(ArenaObjectConstruction, RawObjectFailureReleasesAlignedStorageAndConstruct
     using Probe = ConstructionProbe<GlobalArena>;
     VerifyConstructionFailure(arena, 1u, [&](ConstructionState& state){
         return ArenaUniquePtr<Probe, GlobalArena>(NewArenaObject<Probe>(arena, arena, state), ArenaDeleter<Probe, GlobalArena>(arena));
-    }
-    );
+    });
 }
 
 TEST(ArenaObjectConstruction, GenericUniqueObjectFailureReleasesAlignedStorageAndConstructedMembers){
     GlobalArena arena(Name("tests/arena_object/generic_constructor_failure"));
     VerifyConstructionFailure(arena, 1u, [&](ConstructionState& state){
         return MakeArenaUnique<ConstructionProbe<GlobalArena>>(arena, arena, state);
-    }
-    );
+    });
 }
 
 TEST(ArenaObjectConstruction, GlobalUniqueObjectFailureReleasesAlignedStorageAndConstructedMembers){
     GlobalArena arena(Name("tests/arena_object/global_constructor_failure"));
     VerifyConstructionFailure(arena, 1u, [&](ConstructionState& state){
         return MakeGlobalUnique<ConstructionProbe<GlobalArena>>(arena, arena, state);
-    }
-    );
+    });
 }
 
 TEST(ArenaObjectConstruction, PersistentUniqueObjectFailureReleasesAlignedStorageAndConstructedMembers){
     PersistentArena arena(Name("tests/arena_object/persistent_constructor_failure"), PersistentArena::StructureAlignedSize(16384u));
     VerifyConstructionFailure(arena, 1u, [&](ConstructionState& state){
         return MakePersistentUnique<ConstructionProbe<PersistentArena>>(arena, arena, state);
-    }
-    );
+    });
 }
 
 TEST(ArenaObjectConstruction, GenericArrayFailureDestroysOnlyCompletedElementsAndReleasesStorage){
     GlobalArena arena(Name("tests/arena_object/generic_array_failure"));
     VerifyConstructionFailure(arena, 3u, [&](ConstructionState&){
         return MakeArenaUnique<ConstructionProbe<GlobalArena>[]>(arena, 4u);
-    }
-    );
+    });
 }
 
 TEST(ArenaObjectConstruction, GlobalArrayFailureDestroysOnlyCompletedElementsAndReleasesStorage){
     GlobalArena arena(Name("tests/arena_object/global_array_failure"));
     VerifyConstructionFailure(arena, 3u, [&](ConstructionState&){
         return MakeGlobalUnique<ConstructionProbe<GlobalArena>[]>(arena, 4u);
-    }
-    );
+    });
 }
 
 TEST(ArenaObjectConstruction, PersistentArrayFailureDestroysOnlyCompletedElementsAndReleasesStorage){
     PersistentArena arena(Name("tests/arena_object/persistent_array_failure"), PersistentArena::StructureAlignedSize(16384u));
     VerifyConstructionFailure(arena, 3u, [&](ConstructionState&){
         return MakePersistentUnique<ConstructionProbe<PersistentArena>[]>(arena, 4u);
-    }
-    );
+    });
 }
 
 TEST(ArenaObjectConstruction, NestedFactorySuccessIsDestroyedWhenOuterConstructionThrows){

@@ -155,8 +155,7 @@ namespace GpuTaskGraphCompilerDetail{
             pendingEpilogueBarriers.push_back(PendingCompiledEpilogueBarrier{
                 .task = state.task,
                 .barrier = GpuCompiledBarrier{ .resource = state.resource, .range = terminalRange, .before = state.state, .after = resource.externalFinalState, .sourceQueue = state.queue, .destinationQueue = state.queue, .type = exportType, },
-            }
-            );
+            });
             if(hasExternalFinalRelease && state.queue != resource.externalFinalReleaseDestinationQueue){
                 const GpuCompiledBarrierType::Enum releaseType = OwnershipReleaseBarrierType(resource.type);
                 NWB_ASSERT(releaseType < GpuCompiledBarrierType::kCount);
@@ -175,8 +174,7 @@ namespace GpuTaskGraphCompilerDetail{
                         .destinationQueue = resource.externalFinalReleaseDestinationQueue,
                         .type = releaseType,
                     },
-                }
-                );
+                });
             }
             hasTerminalDeclaredRange = true;
             return true;
@@ -225,8 +223,7 @@ namespace GpuTaskGraphCompilerDetail{
                 .sourceCount = externalExportSourceCount,
                 .destinationQueue = resource.externalFinalReleaseDestinationQueue,
                 .finalState = resource.externalFinalState,
-            }
-            );
+            });
         }
     }
     return true;

@@ -165,8 +165,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
                 .attributeByteSize = attributeDesc.byteSize,
                 .primitiveCount = meshResult->meshResources.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount,
                 .runtimeMesh = meshResult->meshResources.runtimeMesh,
-            }
-            );
+            });
 
             meshSlot = m_rayTracingState.m_swShadowMeshCount;
             m_rayTracingState.m_swShadowMeshNodeBuffers.push_back(meshNodeBuffer);
@@ -304,8 +303,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
             .meshletCount = meshResult->meshResources.meshletCount,
             .meshletDescSlot = meshResult->meshResources.meshletCount != 0u ? meshResult->meshResources.meshletDescHeapHandle.slot() : 0u,
             .meshletBoundsSlot = meshResult->meshResources.meshletCount != 0u ? meshResult->meshResources.meshletLocalBoundsHeapHandle.slot() : 0u,
-        }
-        );
+        });
         instances.push_back(instance);
         instanceBvhPrimitives.push_back(bvhPrimitive);
         instanceMaterials.push_back(instanceMaterial);

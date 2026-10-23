@@ -71,10 +71,9 @@ struct AvboitRecordInputsBase{
 
 
 public:
-    AvboitRecordInputsBase(Core::Alloc::GlobalArena& arena, DeferredFrameTargets& targetsIn)noexcept
+    explicit AvboitRecordInputsBase(DeferredFrameTargets& targetsIn)noexcept
         : targets(targetsIn)
     {
-        static_cast<void>(arena);
     }
 
 

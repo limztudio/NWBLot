@@ -314,8 +314,8 @@ CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const CrashScratc
     }
 
     Symbolicate::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_GpuCrashReportFileName, "gpu_crash", scratchArena, detailReport);
-    Symbolicate::AppendRadeonGpuDetectiveSummary(scratchArena, packageDirectory, config, detailReport);
-    Symbolicate::AppendAftermathGpuDumpSummary(scratchArena, packageDirectory, config, detailReport);
+    Symbolicate::AppendRadeonGpuDetectiveSummary(scratchArena, packageDirectory, detailReport);
+    Symbolicate::AppendAftermathGpuDumpSummary(scratchArena, packageDirectory, detailReport);
     Symbolicate::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_CpuContextFileName, "cpu_context", scratchArena, detailReport);
     Symbolicate::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_MetadataFileName, "metadata", scratchArena, detailReport);
     Symbolicate::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_BreadcrumbsFileName, "breadcrumbs", scratchArena, detailReport);

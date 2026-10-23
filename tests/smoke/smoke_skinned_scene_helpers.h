@@ -114,8 +114,7 @@ inline void SyncSmokeModelRuntimes(Core::ECS::World& world){
             return;
         if(object.owner == owner && object.object == objectName && object.kind == objectKind)
             result = entity;
-    }
-    );
+    });
     return result;
 }
 

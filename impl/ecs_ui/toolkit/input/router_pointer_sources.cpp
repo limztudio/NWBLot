@@ -35,16 +35,14 @@ bool InputRouter::wantsPointer()const noexcept{
 InputRouter::PointerSource* InputRouter::findPointerSource(const InputSource& source, const PointerIntent::Enum intent)noexcept{
     const auto found = FindIf(m_pointerSources.begin(), m_pointerSources.end(), [&source, intent](const PointerSource& current)noexcept{
         return current.source == source && current.intent == intent;
-    }
-    );
+    });
     return found == m_pointerSources.end() ? nullptr : &*found;
 }
 
 const InputRouter::PointerSource* InputRouter::findPointerSource(const InputSource& source, const PointerIntent::Enum intent)const noexcept{
     const auto found = FindIf(m_pointerSources.begin(), m_pointerSources.end(), [&source, intent](const PointerSource& current)noexcept{
         return current.source == source && current.intent == intent;
-    }
-    );
+    });
     return found == m_pointerSources.end() ? nullptr : &*found;
 }
 

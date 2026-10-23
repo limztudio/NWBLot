@@ -160,8 +160,7 @@ TEST(Crash, UninstallRestoresDisabledAlternateStackAndPriorSignalAndTerminateOwn
         if(sigaction(SIGILL, &originalAction, nullptr) != 0 || sigaltstack(&originalStack, nullptr) != 0)
             TerminateInvariant();
         ExchangeTerminateHandler(originalTerminate);
-    }
-    );
+    });
     stack_t disabled = {};
     disabled.ss_flags = SS_DISABLE;
     ASSERT_EQ(sigaltstack(&disabled, nullptr), 0);
@@ -203,8 +202,7 @@ TEST(Crash, UninstallPreservesNewerForeignNativeHookOwners){
         if(sigaction(SIGILL, &originalAction, nullptr) != 0 || sigaltstack(&originalStack, nullptr) != 0)
             TerminateInvariant();
         ExchangeTerminateHandler(originalTerminate);
-    }
-    );
+    });
     NWB::Core::Alloc::PersistentArena installArena(s_InstallArena, NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u));
     NWB::Core::Crash::CrashConfig config(installArena);
     config.applicationName = "preserve-foreign-hooks";

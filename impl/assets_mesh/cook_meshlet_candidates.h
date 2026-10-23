@@ -479,8 +479,7 @@ Expected<MeshletFrontierCandidate> MeshletCandidateSearch::FindBestDisconnectedM
         if(foundCandidate)
             result.candidate = *foundCandidate;
         parallelCandidates[chunkIndex] = result;
-    }
-    );
+    });
     if(!parallelWork){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshCook: disconnected candidate preparation rejected CPU work: {}"), static_cast<u32>(parallelWork.error()));
         return MakeUnexpected(Failure{});

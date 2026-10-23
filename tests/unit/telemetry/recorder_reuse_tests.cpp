@@ -33,8 +33,7 @@ struct PayloadBuildFailure{};
         EXPECT_TRUE(payload.empty());
         payload.resize(byteCount, value);
         return true;
-    }
-    );
+    });
 }
 
 void RunConcurrentReset(const bool disableCapture){
@@ -64,14 +63,12 @@ void RunConcurrentReset(const bool disableCapture){
                         }
                     }
                     return true;
-                }
-                );
+                });
                 if(!enteredBuilder)
                     payloadsReady.count_down();
                 if(recorded)
                     accepted.fetch_add(1u, MemoryOrder::relaxed);
-            }
-            );
+            });
         }
         payloadsReady.wait();
         recorder.clear();
@@ -152,8 +149,7 @@ TEST(Telemetry, RecorderBuilderCanClearAndReenterWhileItsPayloadIsLeased){
         for(const u8 value : payload)
             EXPECT_EQ(value, 42u);
         return nested;
-    }
-    ));
+    }));
     ASSERT_EQ(recorder.eventCount(), s_ExpectedDualCount);
     const auto* nested = recorder.view().eventAt(0u);
     const auto* outer = recorder.view().eventAt(1u);
@@ -179,8 +175,7 @@ TEST(Telemetry, RecorderDisableDuringBuildRejectsPublicationAndReleasesLease){
         payload.back() = 37u;
         EXPECT_EQ(payload.back(), 37u);
         return true;
-    }
-    ));
+    }));
     EXPECT_EQ(recorder.eventCount(), 0u);
     const ArenaMemoryStats disabled = testArena.arena.memoryStats();
     EXPECT_EQ(disabled.usedBytes, before.usedBytes);
@@ -202,16 +197,14 @@ TEST(Telemetry, RecorderPublicationUsesCaptureOptionsAtBuilderCompletion){
         recorder.setCaptureOptions(Telemetry::CaptureOptions::Disabled());
         recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
         return true;
-    }
-    ));
+    }));
     ASSERT_EQ(recorder.eventCount(), 1u);
     EXPECT_EQ(recorder.view().eventAt(0u)->payload.back(), 71u);
     EXPECT_FALSE(recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, s_ExpectedDualCount, 0u, [&](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes& payload){
         payload.resize(64u, 29u);
         recorder.setCaptureOptions(Telemetry::CaptureOptions::FrameGraphOnly());
         return true;
-    }
-    ));
+    }));
     EXPECT_EQ(recorder.eventCount(), 1u);
 }
 
@@ -359,8 +352,7 @@ TEST(Telemetry, RecorderBuilderForeignMovesKeepOwnershipWithinEachArena){
                 ASSERT_TRUE(recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, 3u, 0u, [&](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes& payload)noexcept{
                     payload = Move(foreignPayload);
                     return true;
-                }
-                ));
+                }));
             }
             EXPECT_EQ(foreignArena.arena.memoryStats().usedBytes, foreignInitial.usedBytes);
         }

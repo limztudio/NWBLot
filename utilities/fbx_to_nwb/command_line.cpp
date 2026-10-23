@@ -552,8 +552,7 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
     }, [&](const CLI::ParseError& error){ return __hidden_command_line::ExitParseError(app, error, scratchArena); }, [](){
         NWB_LOGGER_ERROR(NWB_TEXT("FBX conversion terminated with an unexpected exception"));
         return -1;
-    }
-    );
+    });
 }
 
 

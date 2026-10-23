@@ -164,8 +164,7 @@ public:
     static void ForEachMeshSourceBuffer(const MeshResources& mesh, BufferHandler&& handler)noexcept(noexcept(handler(DeclVal<const u32&>(), MeshSourceBuffer(mesh, s_MeshPositionBindingSlot), DeclVal<const bool&>()))){
         ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool rawView)noexcept(noexcept(handler(bindingSlot, MeshSourceBuffer(mesh, bindingSlot), rawView))){
             handler(bindingSlot, MeshSourceBuffer(mesh, bindingSlot), rawView);
-        }
-        );
+        });
     }
 
 

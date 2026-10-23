@@ -91,8 +91,7 @@ TEST(Math, OrderedDoubleClampPreservesZeroNanAndSubnormalPayloads){
 #if defined(NWB_HAS_SSE2) || defined(NWB_HAS_AVX)
         _mm_setcsr(originalControl);
 #endif
-    }
-    );
+    });
 #if defined(NWB_HAS_SSE2) || defined(NWB_HAS_AVX)
     constexpr u32 s_Modes[]{ 0u, 0x40u, 0x8000u, 0x8040u };
     const u32 heldControl = _mm_getcsr();
@@ -170,8 +169,7 @@ TEST(Math, SingleSquareRootsPreserveSignedZeroSubnormalsAndInfinityWithoutInvali
     ScopeExit restoreEnvironment([&]()noexcept{
         if(!SetFloatingPointEnvironment(*originalEnvironment))
             NWB_ASSERT(false);
-    }
-    );
+    });
 
     volatile u32 runtimeBits[]{ 0u, 0x80000000u, 0x7f800000u, 2u };
     const SIMDVectorSingle input = VectorSetInt(runtimeBits[0], runtimeBits[1], runtimeBits[2], runtimeBits[3]);
@@ -238,8 +236,7 @@ TEST(Math, MultiplySubtractRetainsCancellationDirectionAndSignedZero){
     ScopeExit restoreEnvironment([&]()noexcept{
         if(!SetFloatingPointEnvironment(*originalEnvironment))
             NWB_ASSERT(false);
-    }
-    );
+    });
     ASSERT_TRUE(SetFloatingPointRoundingMode(FE_TONEAREST));
 
     // FMA retains the 2^-54 residual; negating c-a*b would reverse an exact cancellation's zero sign.
@@ -343,8 +340,7 @@ TEST(Math, SingleFixedRoundingPreservesTiesSignedZeroAndSpecialValuesAcrossAmbie
     ScopeExit restoreEnvironment([&]()noexcept{
         if(!SetFloatingPointEnvironment(*originalEnvironment))
             NWB_ASSERT(false);
-    }
-    );
+    });
 
     const i32 modes[]{ FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
     volatile f32 runtimeInputs[][4]{
@@ -409,8 +405,7 @@ TEST(Math, DoubleFixedRoundingIgnoresAmbientDirectedModesAndKeepsNearestTiesAndS
     ScopeExit restoreEnvironment([&]()noexcept{
         if(!SetFloatingPointEnvironment(*originalEnvironment))
             NWB_ASSERT(false);
-    }
-    );
+    });
 
     const i32 roundingModes[]{ FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
     volatile f64 runtimeInputs[][4]{

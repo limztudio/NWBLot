@@ -135,8 +135,7 @@ bool PaintBuilder::drawRegion(const Name& regionName, const Rect& rectangle, con
     NWB_ASSERT(m_recording);
     const auto region = FindIf(m_regions.begin(), m_regions.end(), [&regionName](const UiSkinRegion& value)noexcept{
         return value.name == regionName;
-    }
-    );
+    });
     if(region == m_regions.end())
         return false;
     if(region->drawMode == UiSkinDrawMode::NineSlice)

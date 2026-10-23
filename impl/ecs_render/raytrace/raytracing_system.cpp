@@ -405,8 +405,7 @@ bool RendererRayTracingSystem::preparedTraversalStorageMatchesCurrent()const noe
 bool RendererRayTracingSystem::appendPreparedShadowTraceMaterialSampledTextures(const MaterialSurfaceInfo& materialInfo, ShadowMaterialSampledTextureCollector& collector){
     return collector.collect(materialInfo, [this](const MaterialSurfaceInfo& material, MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& pending){
         return m_materialSystem.appendPreparedMaterialSurfaceSampledTextures(material, pending);
-    }
-    );
+    });
 }
 
 void RendererRayTracingSystem::clearPreparedShadowTraceMaterialSampledTextures()noexcept{
@@ -608,6 +607,7 @@ void RendererRayTracingSystem::clearPreparedSceneSwBvhTraversal()noexcept{
     m_preparedSceneSwBvhMaterialMutationVersion = 0u;
     m_preparedSceneSwBvhReady = false;
 }
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

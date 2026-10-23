@@ -44,10 +44,9 @@ constexpr AStringView s_ValueKey = "value";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiSliderSmokeScene::UiSliderSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input)
+UiSliderSmokeScene::UiSliderSmokeScene(Core::InputDispatcher& input)
     : m_input(input)
 {
-    static_cast<void>(arena);
     NWB_FATAL_ASSERT(m_state.setValue(0.25));
     NWB_FATAL_ASSERT(m_disabled.setValue(0.75));
     NWB_FATAL_ASSERT(m_constant.setValue(0.5));
@@ -196,7 +195,7 @@ bool IsUiLayerSliderSkinSmokeEnabled(){
 }
 
 SharedUiSliderSmokeScene CreateUiSliderSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input){
-    return SharedUiSliderSmokeScene(NewArenaObject<RefCounter<UiSliderSmokeScene>>(arena, arena, input), ArenaRefDeleter<RefCounter<UiSliderSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
+    return SharedUiSliderSmokeScene(NewArenaObject<RefCounter<UiSliderSmokeScene>>(arena, input), ArenaRefDeleter<RefCounter<UiSliderSmokeScene>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
 

@@ -30,9 +30,11 @@ namespace Tests::Smoke{
     const bool allAccepted = submission.rejectedPacketCount == 0u && submission.rejectedTaskCount == 0u;
     const bool unusedRecovery = submission.rejectedPacketCount == 1u && submission.rejectedTaskCount == 1u;
     const u64 discarded = unusedRecovery ? 1u : 0u;
-    if(compile.packetCount == 0u || compile.taskCount == 0u || (!allAccepted && !unusedRecovery)
+    if(
+        compile.packetCount == 0u || compile.taskCount == 0u || (!allAccepted && !unusedRecovery)
         || submission.rejectedSubmissionCount != 0u || submission.recoverySubmissionCount != 0u || submission.acceptedPacketCount != compile.packetCount - discarded
-        || submission.acceptedTaskCount != compile.taskCount - discarded || payload.packetSubmissionStatistics.size() != submission.acceptedPacketCount)
+        || submission.acceptedTaskCount != compile.taskCount - discarded || payload.packetSubmissionStatistics.size() != submission.acceptedPacketCount
+    )
         return false;
 
     u64 acceptedTasksRemaining = submission.acceptedTaskCount;

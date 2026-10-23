@@ -111,8 +111,7 @@ const ShaderArchive::Record* FindRecord(const RecordVector& records, const Name&
             return recordVariant < variantName;
 
         return LessNameHash(record.stage.hash(), targetStage);
-    }
-    );
+    });
     if(it == records.end())
         return nullptr;
     if(it->shaderName.hash() != targetShader || AStringView(it->variantName) != variantName || it->stage.hash() != targetStage)

@@ -92,8 +92,7 @@ TEST(MathNativeReduction, MultipleNaNsInactiveSignalingLanesAndOrderedCancellati
     ScopeExit restoreEnvironment([&]()noexcept{
         if(!SetFloatingPointEnvironment(*originalEnvironment))
             NWB_ASSERT(false);
-    }
-    );
+    });
 
     // Scalar-lane reductions can commute multiple NaN payloads or accidentally evaluate an unused signaling lane.
     constexpr u64 s_InputBits[][8]{
@@ -181,8 +180,7 @@ TEST(MathNativeReduction, ReciprocalLengthsPreserveZeroDivisionSubnormalSquaresA
     ScopeExit restoreEnvironment([&]()noexcept{
         if(!SetFloatingPointEnvironment(*originalEnvironment))
             NWB_ASSERT(false);
-    }
-    );
+    });
     constexpr u64 s_Cases[][4]{
         { 0u, 0x8000000000000000ull, 0u, 0x8000000000000000ull },
         { 0x1e60000000000000ull, 0u, 0u, 0u },

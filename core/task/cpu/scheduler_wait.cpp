@@ -38,13 +38,11 @@ void CpuTaskScheduler::wait(const TaskHandle handle){
         ScopeExit unregisterWaiter([this]()noexcept{
             --m_handleJoinWaiters;
             --m_joinWaiters;
-        }
-        );
+        });
 
         m_changed.wait(lock, [this, handle]()noexcept{
             return !resolveLocked(handle) || hasReadyLocked(currentWorkerAffinity(), isMainThread(), isExecuting());
-        }
-        );
+        });
     }
 }
 
@@ -68,8 +66,7 @@ void CpuTaskScheduler::wait(){
 
         m_changed.wait(lock, [this]()noexcept{
             return m_outstanding == 0u || hasReadyLocked(CpuAffinity::Any, isMainThread(), false);
-        }
-        );
+        });
     }
 }
 
@@ -142,8 +139,7 @@ void CpuTaskScheduler::waitScope(CpuTaskScope& scope){
         m_changed.wait(lock, [this, &scope, &wait](){
             validateWaitLocked({}, &scope);
             return scope.m_pending.load(MemoryOrder::acquire) == 0u || hasReadyLocked(currentWorkerAffinity(), isMainThread(), isExecuting() || scope.m_allowCallerWork, &wait);
-        }
-        );
+        });
     }
 }
 

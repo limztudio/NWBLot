@@ -359,8 +359,7 @@ TEST(GpuTaskGraphAnalysis, MatchesIndependentReferenceForPermutedDagsAndDuplicat
                         .resource = {},
                         .resourceVersion = {},
                         .hazard = Graphics::GpuTaskHazardType::Explicit,
-                    }
-                    );
+                    });
                 }
                 const auto taskResult = AddTask(graph, consumerIndex, dependencies.data(), dependencies.size());
                 ASSERT_TRUE(taskResult);

@@ -592,8 +592,7 @@ template<typename ArenaT, typename StringT>
     ScopeExit closePipe([&]()noexcept{
         ProcessExecutionDetail::CloseFileDescriptor(pipeFds[0]);
         ProcessExecutionDetail::CloseFileDescriptor(pipeFds[1]);
-    }
-    );
+    });
 
     const pid_t childPid = ::fork();
     if(childPid < 0)

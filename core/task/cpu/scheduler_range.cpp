@@ -35,8 +35,7 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(cons
             }
             releaseReservation(handle);
         }
-    }
-    );
+    });
 
     TaskHandle inlineTask;
     u32 wakeMask;

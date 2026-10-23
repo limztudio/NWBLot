@@ -31,7 +31,7 @@ namespace Tests::Smoke{
 // RefCounter derives from this scene; its sources and states outlive every outer Builder loan.
 class UiRadioGroupSmokeScene : public Core::IInputEventHandler, NoCopy{
 public:
-    UiRadioGroupSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input);
+    explicit UiRadioGroupSmokeScene(Core::InputDispatcher& input);
     virtual ~UiRadioGroupSmokeScene()noexcept override;
 
 

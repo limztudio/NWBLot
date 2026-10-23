@@ -183,8 +183,7 @@ NWB_NOINLINE static void CaptureRecoverableErrorForCrashObservation(const AStrin
         .message = message,
         .file = s_TestSourceFilename,
         .line = __LINE__,
-    }
-    );
+    });
 }
 #endif
 

@@ -99,8 +99,7 @@ Expected<InputEvent> InputRouter::resolveSourceEvent(const InputEvent& event){
         return MakeUnexpected(Failure{});
     auto held = FindIf(m_boundSources.begin(), m_boundSources.end(), [&resolved](const BoundSource& source)noexcept{
         return source.source == resolved.source;
-    }
-    );
+    });
     if(held != m_boundSources.end()){
         resolved.command = held->intent.command;
         resolved.extend = held->intent.extend;
@@ -138,16 +137,14 @@ Expected<InputEvent> InputRouter::resolveSourceEvent(const InputEvent& event){
 InputRouter::CommandSource* InputRouter::findCommandSource(const InputSource& source)noexcept{
     const auto found = FindIf(m_commandSources.begin(), m_commandSources.end(), [&source](const CommandSource& current)noexcept{
         return current.source == source;
-    }
-    );
+    });
     return found == m_commandSources.end() ? nullptr : &*found;
 }
 
 const InputRouter::CommandSource* InputRouter::findCommandSource(const InputSource& source)const noexcept{
     const auto found = FindIf(m_commandSources.begin(), m_commandSources.end(), [&source](const CommandSource& current)noexcept{
         return current.source == source;
-    }
-    );
+    });
     return found == m_commandSources.end() ? nullptr : &*found;
 }
 

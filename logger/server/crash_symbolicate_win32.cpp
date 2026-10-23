@@ -544,8 +544,7 @@ Expected<bool, CrashSymbolicationFailure> AppendWindowsMinidumpStack(Core::Alloc
             const DiagnosticEventText detail = MakeDiagnosticEventText("Windows symbol session cleanup failed: native_category=system native_code={}", GetLastError());
             CaptureDiagnosticEvent("logger_windows_symbols", detail.view(), __FILE__, __LINE__);
         }
-    }
-    );
+    });
     s_CurrentDumpMemoryReader = &*memoryReader;
     ScopeExit clearMemoryReader([]()noexcept{ s_CurrentDumpMemoryReader = nullptr; });
 

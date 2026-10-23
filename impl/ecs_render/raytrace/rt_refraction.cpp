@@ -151,14 +151,12 @@ bool RendererRayTracingSystem::prepareRefractionResources(){
         if(hardware)
             desc.addBindingLayout(heap.getAccelStructLayout());
         auto pipelineResult = device.createComputePipeline(desc);
-        if(pipelineResult)
-            pipeline = Move(*pipelineResult);
-        else
-            pipeline.reset();
         if(!pipelineResult){
+            pipeline.reset();
             failed = true;
             return false;
         }
+        pipeline = Move(*pipelineResult);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: created refraction resolve pipeline ({}, {})"), hardware ? NWB_TEXT("hardware ray query") : NWB_TEXT("screen space"), dense ? NWB_TEXT("dense grid") : NWB_TEXT("sparse queue"));
         return true;
     };

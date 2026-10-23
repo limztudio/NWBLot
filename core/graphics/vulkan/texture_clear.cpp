@@ -295,8 +295,7 @@ void CommandList::clearDepthStencilTextureBox(Texture& texture, TextureSubresour
     retainResource(&texture);
 }
 
-bool CommandList::clearActiveRenderPassColorTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const VkClearColorValue& clearValue, TStringView valueName){
-    static_cast<void>(valueName);
+bool CommandList::clearActiveRenderPassColorTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const VkClearColorValue& clearValue){
     constexpr TStringView s_OperationName = NWB_TEXT("clear color attachment");
     if(!m_renderPassActive || !m_renderPassFramebuffer){
         rejectCommandRecording(s_OperationName, NWB_TEXT("active rendering with a color attachment is required"));

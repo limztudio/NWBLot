@@ -98,8 +98,7 @@ NWB_NOINLINE u32 Qualify()noexcept{
     ScopeExit restoreEnvironment([&]()noexcept{
         if(!SetFloatingPointEnvironment(*originalEnvironment))
             NWB_ASSERT(false);
-    }
-    );
+    });
     u64 state = 0x7462825482129431ull;
     const auto next = [&]()noexcept{
         state ^= state << 13u;

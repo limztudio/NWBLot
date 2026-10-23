@@ -88,9 +88,11 @@ NwbRayTraceGeometryHit nwbRayTraceCsgBoundaryGeometry(const uint contextSlot, co
             if(interval.y <= interval.x || interval.y <= 0.0 || (!nwbCsgRaySameDistance(interval.x, boundary.distance) && !nwbCsgRaySameDistance(interval.y, boundary.distance)))
                 continue;
             float3 normal;
-            if(!nwbRayTraceCsgCutterNormalUnique(other, worldPosition)
+            if(
+                !nwbRayTraceCsgCutterNormalUnique(other, worldPosition)
                 || !nwbCsgAnalyticCutterNormal(other.shapeType, other.worldToShapeRow0, other.worldToShapeRow1, other.worldToShapeRow2, other.parameter0, worldPosition, normal)
-                || dot(normal, geometry.geometricNormal) < 1.0 - NWB_CSG_RAY_ROUNDOFF_EPSILON_SCALE * NWB_FLOAT_EPSILON){
+                || dot(normal, geometry.geometricNormal) < 1.0 - NWB_CSG_RAY_ROUNDOFF_EPSILON_SCALE * NWB_FLOAT_EPSILON
+            ){
                 // Coincident cutter endpoints may share a normal; distinct normals form an unresolved union crease.
                 geometry.failure = NWB_CSG_RAY_FAILURE_AMBIGUOUS_NORMAL;
                 geometry.distance = minimum;

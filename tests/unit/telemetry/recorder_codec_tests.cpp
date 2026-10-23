@@ -302,8 +302,7 @@ TEST(Telemetry, RecorderAcceptsConcurrentRecords){
                 if(!Telemetry::RecordTextLog(recorder, NWB::Core::Common::LogType::Info, NWB_TEXT("concurrent telemetry record"), eventIndex, threadIndex))
                     return;
             }
-        }
-        );
+        });
     }
 
     for(Thread& thread : threads)

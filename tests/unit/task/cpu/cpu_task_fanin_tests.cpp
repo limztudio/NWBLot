@@ -79,8 +79,7 @@ void VerifyFanIn(Alloc::ScratchArena& scratchArena, const usize uniqueDependency
         rootEntered.store(true, MemoryOrder::release);
         if(!CpuTaskTestSupport::WaitUntil(releaseRoot, s_GateTimeoutMS))
             rootExpired.store(true, MemoryOrder::release);
-    }
-    );
+    });
     ASSERT_TRUE(cpuTaskAdmission);
     const CpuTaskHandle root = *cpuTaskAdmission;
     ASSERT_TRUE(root.valid());
@@ -179,8 +178,7 @@ TEST(CpuTaskSchedulerTests, NestedLargeFanInAcceptsIndependentPredecessorsAndDup
         ASSERT_TRUE(secondCpuTaskAdmission);
         if(secondCpuTaskAdmission)
             ASSERT_TRUE(secondCpuTaskAdmission->valid());
-    }
-    );
+    });
     ASSERT_TRUE(cpuTaskAdmission);
     const auto root = *cpuTaskAdmission;
     ASSERT_TRUE(root.valid());
@@ -222,8 +220,7 @@ TEST(CpuTaskSchedulerTests, NestedLargeFanInRejectsACycleAtTheEndOfTheDependency
         const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept{ ++invocations; }, {}, prerequisites.data(), prerequisites.size());
         rejected = !secondCpuTaskAdmission || !secondCpuTaskAdmission->valid();
         ++invocations;
-    }
-    );
+    });
     ASSERT_TRUE(cpuTaskAdmission);
     auto tail = *cpuTaskAdmission;
     ASSERT_TRUE(tail.valid());
@@ -260,8 +257,7 @@ TEST(CpuTaskSchedulerTests, NestedDependencyAcceptsARetiredGenerationInTheAncest
     const auto cpuTaskAdmission = scheduler.submit([&](){
         const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept{ invoked = true; }, completed);
         accepted = secondCpuTaskAdmission.has_value() && secondCpuTaskAdmission->valid();
-    }
-    );
+    });
     ASSERT_TRUE(cpuTaskAdmission);
     const auto parent = *cpuTaskAdmission;
     ASSERT_TRUE(parent.valid());

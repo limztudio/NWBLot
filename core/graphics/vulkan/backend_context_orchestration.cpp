@@ -178,8 +178,7 @@ bool BackendContext::createDevice(){
         .capabilities = graphicsQueueCapabilities,
         .dedicated = false,
         .primaryForClass = true,
-    }
-    );
+    });
     appendSameClassQueues(CommandQueue::Graphics);
     if(m_computeQueueEnabled){
         physicalQueues.push_back(VulkanPhysicalQueueDesc{
@@ -189,8 +188,7 @@ bool BackendContext::createDevice(){
             .capabilities = computeQueueCapabilities,
             .dedicated = true,
             .primaryForClass = true,
-        }
-        );
+        });
         appendSameClassQueues(CommandQueue::Compute);
     }
     if(m_transferQueueEnabled){
@@ -201,8 +199,7 @@ bool BackendContext::createDevice(){
             .capabilities = transferQueueCapabilities,
             .dedicated = true,
             .primaryForClass = true,
-        }
-        );
+        });
         appendSameClassQueues(CommandQueue::Transfer);
     }
     deviceDesc.nativeQueues = m_nativeQueues.data();

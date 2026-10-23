@@ -118,8 +118,7 @@ public:
                 .packetIndex = packetIndex,
                 .queue = { .index = static_cast<u16>(firstQueueIndex + packetIndex % s_ExpectedDualCount), .deviceGeneration = 17u },
                 .queueClass = Telemetry::FrameGraphQueueClass::Graphics,
-            }
-            );
+            });
         }
     }
 };

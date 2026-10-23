@@ -147,8 +147,7 @@ void ModelSystem::syncModelRuntimes(){
 
     m_world.view<ModelComponent>().each([&](const Core::ECS::EntityID entity, ModelComponent& component){
         ensureModelRuntime(entity, component, scratchArena);
-    }
-    );
+    });
 }
 
 void ModelSystem::clearInactiveModelRuntimes(Core::Alloc::ScratchArena& scratchArena){
@@ -162,15 +161,13 @@ void ModelSystem::clearInactiveModelRuntimes(Core::Alloc::ScratchArena& scratchA
         static_cast<void>(entity);
         if(objectIsInactive(object))
             ++inactiveObjectCount;
-    }
-    );
+    });
     usize inactiveRuntimeCount = 0u;
     runtimes.each([&](const Core::ECS::EntityID entity, const ModelRuntimeComponent& runtime)noexcept{
         static_cast<void>(runtime);
         if(!m_world.tryGetComponent<ModelComponent>(entity))
             ++inactiveRuntimeCount;
-    }
-    );
+    });
     if(inactiveObjectCount == 0u && inactiveRuntimeCount == 0u)
         return;
 
@@ -180,8 +177,7 @@ void ModelSystem::clearInactiveModelRuntimes(Core::Alloc::ScratchArena& scratchA
         objects.each([&](const Core::ECS::EntityID entity, const ModelObjectComponent& object)noexcept{
             if(objectIsInactive(object))
                 inactiveEntities.push_back(entity);
-        }
-        );
+        });
         for(const Core::ECS::EntityID entity : inactiveEntities)
             m_world.destroyEntity(entity);
     }
@@ -193,8 +189,7 @@ void ModelSystem::clearInactiveModelRuntimes(Core::Alloc::ScratchArena& scratchA
             static_cast<void>(runtime);
             if(!m_world.tryGetComponent<ModelComponent>(entity))
                 inactiveEntities.push_back(entity);
-        }
-        );
+        });
         for(const Core::ECS::EntityID entity : inactiveEntities)
             m_world.entity(entity).removeComponent<ModelRuntimeComponent>();
     }
@@ -233,16 +228,14 @@ void ModelSystem::clearModelRuntime(const Core::ECS::EntityID entity, Core::Allo
         static_cast<void>(objectEntity);
         if(object.owner == entity)
             ++ownedCount;
-    }
-    );
+    });
     if(ownedCount != 0u){
         Vector<Core::ECS::EntityID, Core::Alloc::ScratchArena> ownedEntities(scratchArena);
         ownedEntities.reserve(ownedCount);
         objects.each([&](const Core::ECS::EntityID objectEntity, const ModelObjectComponent& object)noexcept{
             if(object.owner == entity)
                 ownedEntities.push_back(objectEntity);
-        }
-        );
+        });
         for(const Core::ECS::EntityID objectEntity : ownedEntities)
             m_world.destroyEntity(objectEntity);
     }
@@ -409,8 +402,7 @@ void ModelSystem::updateStaticMeshAttachments(){
             static_cast<void>(transform);
             if(attachment.parentEntity.valid() && attachment.parentJointIndex != s_SkeletonInvalidJointIndex)
                 ++queryCount;
-        }
-        );
+        });
     }
 
     // Attachment grouping storage is reused member state; zero or one joint query needs neither an index nor scratch.
@@ -429,8 +421,7 @@ void ModelSystem::updateStaticMeshAttachments(){
             if(!jointQueries.empty() && jointQueries.front().parentEntity != attachment.parentEntity)
                 sharedParent = false;
             jointQueries.push_back(ModelAttachmentJointQuery{ .parentEntity = attachment.parentEntity, .parentJointIndex = attachment.parentJointIndex, });
-        }
-        );
+        });
         const NotNull<ModelAttachmentJointQuery*> queries(jointQueries.data());
         if(sharedParent){
             __hidden_model_system::ResolveAttachmentJointQueries(m_world, queryCount, nullptr, m_scratchJoints, queries);
@@ -481,8 +472,7 @@ void ModelSystem::updateStaticMeshAttachments(){
 
         if(const auto decomposition = MatrixDecompose(worldTransform))
             __hidden_model_system::StoreDecomposedTransform(*decomposition, transform);
-    }
-    );
+    });
 }
 
 Core::ECS::EntityID ModelSystem::findSpawnedObject(const Core::ECS::EntityID owner, const Name objectName)const noexcept{

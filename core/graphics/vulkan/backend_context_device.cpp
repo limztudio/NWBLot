@@ -223,8 +223,7 @@ bool BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
         .vulkan13FeatureSupported = supportedVulkan13Features.textureCompressionASTC_HDR == VK_TRUE,
         .extensionEnabled = isDeviceExtensionEnabled(VK_EXT_TEXTURE_COMPRESSION_ASTC_HDR_EXTENSION_NAME),
         .extensionFeatureSupported = supportedOptionalFeatures.textureCompressionAstcHdr.textureCompressionASTC_HDR == VK_TRUE,
-    }
-    );
+    });
 
     {
         auto ss = VulkanDetail::ScratchStringStream(s_FileOpenWrite, scratchArena);
@@ -571,8 +570,7 @@ bool BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
                 .capabilities = capabilitiesForSameClassQueue(request.family),
                 .dedicated = queueClass != CommandQueue::Graphics,
                 .primaryForClass = false,
-            }
-            );
+            });
             if(!sameClassQueueEnabled){
                 secondaryQueueFamily = request.family;
                 sameClassQueueEnabled = true;

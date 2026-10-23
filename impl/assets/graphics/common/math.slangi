@@ -67,7 +67,7 @@ bool nwbFiniteFloat4(const float4 value){
 float3 nwbSafeNormalizeMinLengthSquared(const float3 value, const float3 fallback, const float minLengthSquared){
     const float lengthSquared = dot(value, value);
     const uint minBits = (asuint(max(minLengthSquared, 0.0)) & NWB_FLOAT_MAGNITUDE_BITS_MASK) + 1u;
-    return (asuint(lengthSquared) - minBits) <= (NWB_FLOAT_MAX_BITS - minBits) ? value * rsqrt(lengthSquared) : fallback;
+    return select(bool3((asuint(lengthSquared) - minBits) <= (NWB_FLOAT_MAX_BITS - minBits)), value * rsqrt(lengthSquared), fallback);
 }
 
 float3 nwbSafeNormalize(const float3 value, const float3 fallback){

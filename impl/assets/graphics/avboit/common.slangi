@@ -143,24 +143,6 @@ float2 nwbAvboitFullUvFromLowFragCoord(float2 fragCoord){
     return clamp(fragCoord / lowSize, float2(0.0), float2(1.0));
 }
 
-bool nwbAvboitPrimaryRefractionEntity(float2 fullUv, uint entityId){
-    if(!nwbAvboitRefractionEnabled())
-        return false;
-    const uint2 fullSize = uint2(nwbAvboitFullWidth(), nwbAvboitFullHeight());
-    const uint2 fullPixel = min(uint2(fullUv * float2(fullSize)), fullSize - 1u);
-    const int3 texel = int3(fullPixel, 0);
-    if(nwbHeapSampledImage2D(NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.refractionSlots0.x).Load(texel).r >= NWB_SCENE_BACKGROUND_DEPTH)
-        return false;
-    const uint primaryEntityId = nwbAvboitUnpackRefractionEntityId(nwbHeapSampledImage2D(NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.refractionSlots1.w).Load(texel).rg);
-    return primaryEntityId == entityId;
-}
-
-float nwbAvboitPrimaryRefractionDepth(float2 fragCoord){
-    if(!nwbAvboitRefractionEnabled())
-        return NWB_SCENE_BACKGROUND_DEPTH;
-    return nwbHeapSampledImage2D(NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.refractionSlots0.x).Load(int3(int2(fragCoord), 0)).r;
-}
-
 float4 nwbAvboitFullRasterPositionFromLowFragCoord(float4 fragCoord){
     const float2 fullSize = float2(float(nwbAvboitFullWidth()), float(nwbAvboitFullHeight()));
     return float4(nwbAvboitFullUvFromLowFragCoord(fragCoord.xy) * fullSize, fragCoord.zw);

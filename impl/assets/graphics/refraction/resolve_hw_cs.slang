@@ -66,9 +66,7 @@ static const half NWB_REFRACTION_OPAQUE_COVERAGE_MIN = 0.999h;
 
 half3 nwbRefractionShadeSurfaceHit(const NwbMeshSurface surface, const float3 position, const float3 direction){
     nwbRefractionCount(NWB_REFRACTION_COUNTER_materialShadeCalls);
-    float3 normal = surface.normal;
-    if(dot(normal, direction) > 0.0)
-        normal = -normal;
+    const float3 normal = select(bool3(dot(surface.normal, direction) > 0.0), -surface.normal, surface.normal);
     half3 radiance = half3(0.0h);
     const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
     for(uint lightIndex = 0u; lightIndex < lightCount; ++lightIndex){
@@ -108,14 +106,14 @@ bool nwbRefractionTryAssociateCapturedEntry(const uint instanceMaterialHeapSlot,
     const uint candidate = g_NwbRefractionPush.certifiedInstanceIndex;
     if(!entry.frontBoundary || candidate >= g_NwbRefractionMaterialContext.materialSlots.z || associationTolerance > NWB_REFRACTION_CERTIFIED_ASSOCIATION_MAX_TOLERANCE)
         return false;
-    const float minDistance = max(entryDistance - associationTolerance, entry.bias);
-    const float4 windowStartClip = mul(g_NwbRefractionView.worldToClip, float4(camera + entry.incident * minDistance, 1.0));
-    if(windowStartClip.w <= NWB_REFRACTION_MIN_CLIP_W || windowStartClip.z < 0.0)
-        return false;
     const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(instanceMaterialHeapSlot)[candidate];
     if((material.flags & NWB_REFRACTION_CERTIFIED_INSTANCE_MATERIAL_FLAGS) != NWB_REFRACTION_CERTIFIED_INSTANCE_MATERIAL_FLAGS)
         return false;
     if(g_NwbMeshInstances[material.meshInstanceIndex].entityId != entry.primaryEntityId)
+        return false;
+    const float minDistance = max(entryDistance - associationTolerance, entry.bias);
+    const float4 windowStartClip = mul(g_NwbRefractionView.worldToClip, float4(camera + entry.incident * minDistance, 1.0));
+    if(select(windowStartClip.w <= NWB_REFRACTION_MIN_CLIP_W, true, windowStartClip.z < 0.0))
         return false;
     primaryInstance = candidate;
     primaryAttributeSlot = material.attributeSlot;
@@ -189,8 +187,7 @@ bool nwbRefractionTryResolveHardware(const NwbRefractionEntry entry, out half4 o
             return false;
         }
         pathLength += length(exitPosition - internalOrigin);
-        if(dot(exitNormal, internalDirection) < 0.0)
-            exitNormal = -exitNormal;
+        exitNormal = select(bool3(dot(exitNormal, internalDirection) < 0.0), -exitNormal, exitNormal);
         exitCosine = half(saturate(dot(internalDirection, exitNormal)));
         outgoingDirection = refract(internalDirection, -exitNormal, float(entry.ior));
         if(dot(outgoingDirection, outgoingDirection) >= NWB_REFRACTION_DIRECTION_LENGTH_SQUARED_MIN)
@@ -334,7 +331,7 @@ half4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry e
     const bool displaced = dot(continuationDirection, continuationDirection) > NWB_REFRACTION_DIRECTION_LENGTH_SQUARED_MIN && nwbRefractionScreenBackgroundPixel(continuationEntry, continuationDirection, samplePixel);
     if(volumeExited)
         nwbRefractionCount(displaced ? NWB_REFRACTION_COUNTER_exitScreenBackgroundReturns : NWB_REFRACTION_COUNTER_exitStraightFallbackPixels);
-    const half3 backgroundRadiance = nwbRefractionBackgroundForEntry(displaced ? samplePixel : pixel, entry, true, displaced);
+    const half3 backgroundRadiance = nwbRefractionBackgroundForEntry(select(bool2(displaced), samplePixel, pixel), entry, true, displaced);
     return half4(half3(backgroundRadiance) * half3(continuationAttenuation), 1.0h);
 }
 

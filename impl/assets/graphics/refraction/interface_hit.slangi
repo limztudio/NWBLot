@@ -18,17 +18,17 @@
 // Refraction admits the nearest retained boundary. Rejected faces/instances do not need a material.
 NwbMeshSurface nwbRefractionEvaluateTriangleSurface(const NwbRtInstanceMaterial material, const float3 position, const float3 direction, const uint primitive, const float2 barycentrics, const float3x4 worldToObject){
     const uint triangleBase = primitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
-    const NwbRayTraceVertexAttrib a0 = nwbRayTraceDecodeVertexAttrib(nwbHeapRawBuffer(material.attributeSlot).Load4(triangleBase * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
-    const NwbRayTraceVertexAttrib a1 = nwbRayTraceDecodeVertexAttrib(nwbHeapRawBuffer(material.attributeSlot).Load4((triangleBase + 1u) * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
-    const NwbRayTraceVertexAttrib a2 = nwbRayTraceDecodeVertexAttrib(nwbHeapRawBuffer(material.attributeSlot).Load4((triangleBase + 2u) * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
+    const uint4 a0 = nwbHeapRawBuffer(material.attributeSlot).Load4(triangleBase * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES);
+    const uint4 a1 = nwbHeapRawBuffer(material.attributeSlot).Load4((triangleBase + 1u) * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES);
+    const uint4 a2 = nwbHeapRawBuffer(material.attributeSlot).Load4((triangleBase + 2u) * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES);
     const float3 weights = float3(1.0 - barycentrics.x - barycentrics.y, barycentrics.x, barycentrics.y);
     NwbShadowHit surfaceHit;
     surfaceHit.meshInstanceIndex = material.meshInstanceIndex;
     surfaceHit.surfaceDispatchId = material.surfaceDispatchId;
     surfaceHit.materialConstantByteOffset = material.materialConstantByteOffset;
     surfaceHit.worldPosition = position;
-    surfaceHit.worldNormal = nwbRayTraceTransformSurfaceNormal(worldToObject, float3(a0.normal) * weights.x + float3(a1.normal) * weights.y + float3(a2.normal) * weights.z);
-    surfaceHit.uv0 = a0.uv0 * weights.x + a1.uv0 * weights.y + a2.uv0 * weights.z;
+    surfaceHit.worldNormal = nwbRayTraceTransformSurfaceNormal(worldToObject, nwbRayTraceDecodeVertexNormal(a0.xy) * weights.x + nwbRayTraceDecodeVertexNormal(a1.xy) * weights.y + nwbRayTraceDecodeVertexNormal(a2.xy) * weights.z);
+    surfaceHit.uv0 = asfloat(a0.zw) * weights.x + asfloat(a1.zw) * weights.y + asfloat(a2.zw) * weights.z;
     surfaceHit.rayDirection = direction;
     return nwbShadowDispatchSurface(material.surfaceDispatchId, surfaceHit);
 }

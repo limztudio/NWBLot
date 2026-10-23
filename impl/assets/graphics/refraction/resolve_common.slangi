@@ -188,9 +188,8 @@ bool nwbRefractionLoadEntry(const uint2 pixel, out NwbRefractionEntry entry){
     const float3 cameraRay = entry.position - g_NwbRefractionView.cameraPosition.xyz;
     entry.cameraDistance = length(cameraRay);
     entry.incident = nwbSafeNormalize(cameraRay, float3(0.0, 0.0, 1.0));
-    entry.normal = nwbSafeNormalize(normalIor.xyz, -entry.incident);
-    if(dot(entry.incident, entry.normal) > 0.0)
-        entry.normal = -entry.normal;
+    const float3 rawNormal = nwbSafeNormalize(normalIor.xyz, -entry.incident);
+    entry.normal = select(bool3(dot(entry.incident, rawNormal) > 0.0), -rawNormal, rawNormal);
     entry.ior = half(clamp(normalIor.w, 1.0, NWB_REFRACTION_IOR_MAX));
     entry.tint = half3(saturate(tintCoverage.xyz));
     entry.cosine = half(saturate(-dot(entry.incident, entry.normal)));
@@ -263,7 +262,7 @@ half4 nwbRefractionResolveScreen(const uint2 pixel, const NwbRefractionEntry ent
     uint2 samplePixel = pixel;
     const float3 direction = refract(entry.incident, entry.normal, 1.0 / float(entry.ior));
     const bool displaced = dot(direction, direction) > NWB_REFRACTION_DIRECTION_LENGTH_SQUARED_MIN && nwbRefractionScreenBackgroundPixel(entry, direction, samplePixel);
-    const half3 background = nwbRefractionBackgroundForEntry(displaced ? samplePixel : pixel, entry, true, displaced);
+    const half3 background = nwbRefractionBackgroundForEntry(select(bool2(displaced), samplePixel, pixel), entry, true, displaced);
     return half4(background * nwbRefractionAttenuation(entry.tint, NWB_REFRACTION_FALLBACK_THICKNESS, entry.ior, entry.cosine, entry.cosine), 1.0h);
 }
 

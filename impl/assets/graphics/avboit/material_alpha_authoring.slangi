@@ -19,8 +19,13 @@ bool nwbAvboitLoadAcceptedMaterialAlpha(const float4 position, const half4 color
     // The selected optical object's entry and exit surfaces are resolved together by bounded refraction.
     // Removing that complete instance here keeps full-coverage glass from extinguishing its own background.
     if(nwbAvboitRefractionEnabled()){
-        if(nwbAvboitPrimaryRefractionEntity(nwbAvboitFullUvFromLowFragCoord(position.xy), nwbMeshLoadInstance().entityId))
-            return false;
+        const uint2 fullSize = uint2(nwbAvboitFullWidth(), nwbAvboitFullHeight());
+        const int3 fullTexel = int3(min(uint2(nwbAvboitFullUvFromLowFragCoord(position.xy) * float2(fullSize)), fullSize - 1u), 0);
+        if(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.refractionSlots0.x).Load(fullTexel).r < NWB_SCENE_BACKGROUND_DEPTH){
+            const uint primaryEntityId = nwbAvboitUnpackRefractionEntityId(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.refractionSlots1.w).Load(fullTexel).rg);
+            if(primaryEntityId == g_NwbMeshInstances[nwbMeshInstanceIndex()].entityId)
+                return false;
+        }
     }
 
     NwbMeshSurfaceInputs surfaceInputs;

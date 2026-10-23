@@ -88,15 +88,21 @@ struct NwbAvboitAccumulatePixelOutput{
 
 NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
     const bool refractionCapture = nwbAvboitRefractionCapture();
+    const int3 fullTexel = int3(int2(input.position.xy), 0);
+    float refractionDepth = NWB_SCENE_BACKGROUND_DEPTH;
     if(refractionCapture){
         // Capture owns a separate depth attachment, so opaque rejection precedes material and CSG evaluation.
-        const float opaqueDepth = nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.w).Load(int3(int2(input.position.xy), 0)).r;
+        const float opaqueDepth = nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.w).Load(fullTexel).r;
         if(input.position.z > opaqueDepth)
             discard;
     }
     else if(nwbAvboitRefractionEnabled()){
-        if(nwbAvboitPrimaryRefractionEntity(nwbAvboitFullUvFromFragCoord(input.position.xy), nwbMeshLoadInstance().entityId))
-            discard;
+        refractionDepth = nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.refractionSlots0.x).Load(fullTexel).r;
+        if(refractionDepth < NWB_SCENE_BACKGROUND_DEPTH){
+            const uint primaryEntityId = nwbAvboitUnpackRefractionEntityId(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.refractionSlots1.w).Load(fullTexel).rg);
+            if(primaryEntityId == g_NwbMeshInstances[nwbMeshInstanceIndex()].entityId)
+                discard;
+        }
     }
 
     NwbMeshSurfaceInputs surfaceInputs;
@@ -164,7 +170,6 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
     output.foregroundColor = float4(0.0);
     output.foregroundExtinction = float4(0.0);
     // Preserve foreground transparency at its camera pixel. Background resolves separately through the bent path; a cleared capture depth leaves ordinary AVBOIT outputs unchanged.
-    const float refractionDepth = nwbAvboitPrimaryRefractionDepth(input.position.xy);
     if(refractionDepth < NWB_SCENE_BACKGROUND_DEPTH && input.position.z < refractionDepth){
         output.foregroundColor = output.accumColor;
         output.foregroundExtinction = output.accumExtinction;

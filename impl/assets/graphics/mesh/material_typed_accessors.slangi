@@ -38,10 +38,10 @@ typedef vector<ushort, 4> ushort4;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Storage block bases (storageByteOffset) are 4-byte word-aligned; field byteOffsets carry any subword lane.
 uint nwbMaterialLoadRawUIntAtBase(const uint storageByteOffset, const uint byteOffset){
-    const uint absoluteByteOffset = storageByteOffset + byteOffset;
-    const uint wordIndex = absoluteByteOffset >> NWB_MATERIAL_TYPED_WORD_BYTE_SHIFT;
-    const uint byteShift = (absoluteByteOffset & NWB_MATERIAL_TYPED_BYTE_LANE_MASK) * NWB_MATERIAL_TYPED_BYTE_BITS;
+    const uint wordIndex = (storageByteOffset >> NWB_MATERIAL_TYPED_WORD_BYTE_SHIFT) + (byteOffset >> NWB_MATERIAL_TYPED_WORD_BYTE_SHIFT);
+    const uint byteShift = (byteOffset & NWB_MATERIAL_TYPED_BYTE_LANE_MASK) * NWB_MATERIAL_TYPED_BYTE_BITS;
     const uint word = g_NwbMaterialTypedWords[wordIndex] >> byteShift;
     if(byteShift == 0u)
         return word;
@@ -50,9 +50,9 @@ uint nwbMaterialLoadRawUIntAtBase(const uint storageByteOffset, const uint byteO
 }
 
 uint nwbMaterialLoadRawSubwordAtBase(const uint storageByteOffset, const uint byteOffset, const uint byteLaneMask, const uint valueMask){
-    const uint absoluteByteOffset = storageByteOffset + byteOffset;
-    const uint word = g_NwbMaterialTypedWords[absoluteByteOffset >> NWB_MATERIAL_TYPED_WORD_BYTE_SHIFT];
-    return (word >> ((absoluteByteOffset & byteLaneMask) * NWB_MATERIAL_TYPED_BYTE_BITS)) & valueMask;
+    const uint wordIndex = (storageByteOffset >> NWB_MATERIAL_TYPED_WORD_BYTE_SHIFT) + (byteOffset >> NWB_MATERIAL_TYPED_WORD_BYTE_SHIFT);
+    const uint word = g_NwbMaterialTypedWords[wordIndex];
+    return (word >> ((byteOffset & byteLaneMask) * NWB_MATERIAL_TYPED_BYTE_BITS)) & valueMask;
 }
 
 uint nwbMaterialLoadRawByteAtBase(const uint storageByteOffset, const uint byteOffset){
@@ -112,14 +112,7 @@ half2 nwbMaterialLoadPackedHalf2AtBase(const uint storageByteOffset, const uint 
 }
 
 half nwbMaterialLoadHalfAtBase(const uint storageByteOffset, const uint byteOffset){
-    const uint absoluteByteOffset = storageByteOffset + byteOffset;
-    const uint byteLane = absoluteByteOffset & NWB_MATERIAL_TYPED_BYTE_LANE_MASK;
-    if(byteLane != NWB_MATERIAL_TYPED_BYTE_LANE_MASK){
-        const uint word = g_NwbMaterialTypedWords[absoluteByteOffset >> NWB_MATERIAL_TYPED_WORD_BYTE_SHIFT];
-        return half(f16tof32((word >> (byteLane * NWB_MATERIAL_TYPED_BYTE_BITS)) & NWB_HALF_BITS_MASK));
-    }
-
-    return half(f16tof32(nwbMaterialLoadRawUIntAtBase(storageByteOffset, byteOffset) & NWB_HALF_BITS_MASK));
+    return half(f16tof32(nwbMaterialLoadRawUShortAtBase(storageByteOffset, byteOffset)));
 }
 
 half2 nwbMaterialLoadHalf2AtBase(const uint storageByteOffset, const uint byteOffset){

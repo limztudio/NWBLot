@@ -39,20 +39,24 @@ class GpuTimingAccumulator final : NoCopy{
 
 
 private:
-    enum class QueryState : u8{
-        Available,
-        Recording,
-        EndedUnaccepted,
-        EndFailedUnaccepted,
-        PendingAccepted,
-        PendingRetirementAccepted,
-        Quarantined,
+    struct QueryState{
+        enum Enum : u8{
+            Available,
+            Recording,
+            EndedUnaccepted,
+            EndFailedUnaccepted,
+            PendingAccepted,
+            PendingRetirementAccepted,
+            Quarantined,
+        };
     };
 
-    enum class QueryEndResult : u8{
-        Invalid,
-        Ended,
-        RetirementRequired,
+    struct QueryEndResult{
+        enum Enum : u8{
+            Invalid,
+            Ended,
+            RetirementRequired,
+        };
     };
 
     struct SampleDispatch{
@@ -79,7 +83,7 @@ private:
         GpuPhysicalQueueId frameResetRecordingQueue;
         u32 epoch = 0u;
         CommandQueue::Enum queueClass = CommandQueue::kCount;
-        QueryState state = QueryState::Available;
+        QueryState::Enum state = QueryState::Available;
         // A recovery endpoint completes an accepted begin after a later frame packet was rejected.
         // The query must still retire on the device timeline, but it must not publish a partial frame sample as a valid frame time.
         bool publishSample = true;
@@ -125,8 +129,8 @@ public:
     void requestQueries(u32 queryCount)noexcept;
     [[nodiscard]] bool materializeRequestedQueries(Device& device);
     [[nodiscard]] Expected<QueryBegin> beginQuery(CommandList& commandList, u64 frameIndex, u32 epoch, u64 performanceCaptureEpoch, GpuTimingSampleAttribution attribution);
-    [[nodiscard]] QueryEndResult endQuery(CommandList& commandList, const GpuTimingScope& scope);
-    [[nodiscard]] QueryEndResult endQueryFromExistingClaim(CommandList& commandList, const GpuTimingScope& scope)noexcept;
+    [[nodiscard]] QueryEndResult::Enum endQuery(CommandList& commandList, const GpuTimingScope& scope);
+    [[nodiscard]] QueryEndResult::Enum endQueryFromExistingClaim(CommandList& commandList, const GpuTimingScope& scope)noexcept;
     [[nodiscard]] bool recordQueryEnd(CommandList& commandList, const GpuTimingScope& scope);
     [[nodiscard]] bool validateQuerySubmission(const GpuTimingScope& scope, const QueueSubmissionToken& token)const noexcept;
     [[nodiscard]] bool confirmQuery(const GpuTimingScope& scope, const QueueSubmissionToken& token, bool publishSample)noexcept;
@@ -375,16 +379,20 @@ class GpuTimingSubmissionTicket final : NoCopy{
 private:
     class PreparedSubmissionUnwindScope;
 
-    enum class ScopePublicationState : u8{
-        Reserved,
-        Published,
-        Cancelled,
+    struct ScopePublicationState{
+        enum Enum : u8{
+            Reserved,
+            Published,
+            Cancelled,
+        };
     };
 
-    enum class ScopeEndpointValidationResult : u8{
-        Valid,
-        RetryableBatchMismatch,
-        InvalidEndpoint,
+    struct ScopeEndpointValidationResult{
+        enum Enum : u8{
+            Valid,
+            RetryableBatchMismatch,
+            InvalidEndpoint,
+        };
     };
 
     struct ActivationFailure{
@@ -404,7 +412,7 @@ private:
         GpuTimingScope scope;
         CommandListRecordingEndpoint beginEndpoint;
         CommandListRecordingEndpoint endEndpoint;
-        ScopePublicationState state = ScopePublicationState::Reserved;
+        ScopePublicationState::Enum state = ScopePublicationState::Reserved;
     };
 
 public:
@@ -448,7 +456,7 @@ private:
     [[nodiscard]] bool prepareSubmission(CommandList* const* commandLists, usize commandListCount, Vector<QueueSubmissionToken, Alloc::ScratchArena>& waitTokens);
     [[nodiscard]] bool prepareSubmissionAfterCommandListValidation(CommandList* const* commandLists, usize commandListCount, Vector<QueueSubmissionToken, Alloc::ScratchArena>& waitTokens);
     [[nodiscard]] bool prepareSubmissionState(Vector<QueueSubmissionToken, Alloc::ScratchArena>& waitTokens);
-    [[nodiscard]] ScopeEndpointValidationResult validateScopePublicationEndpoints(CommandList* const* commandLists, usize commandListCount)noexcept;
+    [[nodiscard]] ScopeEndpointValidationResult::Enum validateScopePublicationEndpoints(CommandList* const* commandLists, usize commandListCount)noexcept;
     [[nodiscard]] bool resetForRecordingReuse(GpuTimingRecorder& recorder)noexcept;
     void rollbackPreparedSubmission()noexcept;
     void discardPreparedSubmission()noexcept;
@@ -483,13 +491,15 @@ private:
 // Rejected tail: recovery end with publishSample=false so no partial duration reports.
 class GpuTimingFrameTransaction final : NoCopy{
 private:
-    enum class State : u8{
-        Idle,
-        Inactive,
-        BeginRecorded,
-        BeginAccepted,
-        EndRecorded,
-        Resolved,
+    struct State{
+        enum Enum : u8{
+            Idle,
+            Inactive,
+            BeginRecorded,
+            BeginAccepted,
+            EndRecorded,
+            Resolved,
+        };
     };
 
 
@@ -521,7 +531,7 @@ private:
     GpuTimingRecorder& m_recorder;
     GpuTimingScope m_scope;
     QueueSubmissionToken m_beginSubmission;
-    State m_state = State::Idle;
+    State::Enum m_state = State::Idle;
 };
 
 

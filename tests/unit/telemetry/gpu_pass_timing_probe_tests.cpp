@@ -20,7 +20,7 @@ namespace __hidden_gpu_pass_timing_probe_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr TStringView s_PUBLISHED_WINDOWS_2 = NWB_TEXT("published_windows=2");
+static constexpr TStringView s_PublishedWindows2 = NWB_TEXT("published_windows=2");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -58,7 +58,7 @@ TEST(GpuPassTimingProbe, ReportsEveryRegisteredScopeBeyondSixtyFour){
     EXPECT_EQ(logger.messageCount(), s_ScopeCount + 1u);
     const TString<Core::Alloc::GlobalArena> lastScopeText = StringFormat(testArena.arena, NWB_TEXT("  {}: gpu_window_ms"), StringConvert(lastScope.resolvedText()));
     EXPECT_TRUE(logger.sawMessageContaining(lastScopeText));
-    EXPECT_FALSE(logger.sawMessageContaining(s_PUBLISHED_WINDOWS_2));
+    EXPECT_FALSE(logger.sawMessageContaining(s_PublishedWindows2));
 }
 
 TEST(GpuPassTimingProbe, GrowthPreservesAccumulationAndWatermarksAcrossIntervals){
@@ -90,7 +90,7 @@ TEST(GpuPassTimingProbe, GrowthPreservesAccumulationAndWatermarksAcrossIntervals
     }
     probe.recordFrame(0.25f, view);
     EXPECT_EQ(logger.messageCount(), 2u);
-    EXPECT_FALSE(logger.sawMessageContaining(s_PUBLISHED_WINDOWS_2));
+    EXPECT_FALSE(logger.sawMessageContaining(s_PublishedWindows2));
 
     // The old publication remains visible, but the next interval must not count it again.
     probe.recordFrame(0.25f, view);
@@ -105,7 +105,7 @@ TEST(GpuPassTimingProbe, GrowthPreservesAccumulationAndWatermarksAcrossIntervals
     EXPECT_EQ(logger.messageCount(), 6u);
     const TString<Core::Alloc::GlobalArena> lastScopeText = StringFormat(testArena.arena, NWB_TEXT("  {}: gpu_window_ms"), StringConvert(recorder.scopeNameAt(s_AddedScopes).resolvedText()));
     EXPECT_TRUE(logger.sawMessageContaining(lastScopeText));
-    EXPECT_FALSE(logger.sawMessageContaining(s_PUBLISHED_WINDOWS_2));
+    EXPECT_FALSE(logger.sawMessageContaining(s_PublishedWindows2));
 }
 
 

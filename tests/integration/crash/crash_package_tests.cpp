@@ -19,7 +19,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_crash_tests{
+namespace __hidden_crash_package_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -62,9 +62,9 @@ TEST(Crash, SpoolAdmissionPreservesFilesystemCategoryAndCodeAfterUnlock){
     config.applicationName = "bad-spool-admission";
     config.spoolDirectory = spoolDirectory;
     EXPECT_FALSE(NWB::Core::Crash::InstallCrashHandler(config));
-    EXPECT_FALSE(NWB::Core::Crash::Detail::g_State.installed);
-    EXPECT_FALSE(NWB::Core::Crash::Detail::g_State.handlerStarted);
-    EXPECT_FALSE(NWB::Core::Crash::Detail::g_State.platformRestorePending);
+    EXPECT_FALSE(NWB::Core::Crash::CrashDetail::g_State.installed);
+    EXPECT_FALSE(NWB::Core::Crash::CrashDetail::g_State.handlerStarted);
+    EXPECT_FALSE(NWB::Core::Crash::CrashDetail::g_State.platformRestorePending);
     EXPECT_EQ(s_NativeLifecycleDiagnostics, 1u);
     EXPECT_EQ(s_UnlockedLifecycleDiagnostics, 1u);
     EXPECT_EQ(AStringView(s_LastLifecycleOperation), AStringView("prepare_spool"));
@@ -108,9 +108,9 @@ TEST(Crash, FailedExecutableAdmissionReleasesResourcesAndObservesFailureAfterUnl
 #endif
     for(u32 attempt = 0u; attempt < 4u; ++attempt){
         EXPECT_FALSE(NWB::Core::Crash::InstallCrashHandler(config));
-        EXPECT_FALSE(NWB::Core::Crash::Detail::g_State.installed);
-        EXPECT_FALSE(NWB::Core::Crash::Detail::g_State.handlerStarted);
-        EXPECT_FALSE(NWB::Core::Crash::Detail::g_State.platformRestorePending);
+        EXPECT_FALSE(NWB::Core::Crash::CrashDetail::g_State.installed);
+        EXPECT_FALSE(NWB::Core::Crash::CrashDetail::g_State.handlerStarted);
+        EXPECT_FALSE(NWB::Core::Crash::CrashDetail::g_State.platformRestorePending);
     }
 #if defined(NWB_PLATFORM_WINDOWS)
     DWORD after = 0u;
@@ -183,7 +183,7 @@ TEST(Crash, UninstallRestoresDisabledAlternateStackAndPriorSignalAndTerminateOwn
     EXPECT_NE(restoredStack.ss_flags & SS_DISABLE, 0);
     EXPECT_EQ(restoredAction.sa_handler, OriginalSignalOwner);
     EXPECT_EQ(QueryTerminateHandler(), OriginalTerminateOwner);
-    EXPECT_FALSE(NWB::Core::Crash::Detail::g_State.platformRestorePending);
+    EXPECT_FALSE(NWB::Core::Crash::CrashDetail::g_State.platformRestorePending);
     RemoveTestArtifacts(arena, s_Group);
 }
 
@@ -227,7 +227,7 @@ TEST(Crash, UninstallPreservesNewerForeignNativeHookOwners){
     EXPECT_EQ(retainedStack.ss_sp, g_ForeignSignalStack);
     EXPECT_EQ(retainedAction.sa_handler, ForeignSignalOwner);
     EXPECT_EQ(QueryTerminateHandler(), ForeignTerminateOwner);
-    EXPECT_FALSE(NWB::Core::Crash::Detail::g_State.platformRestorePending);
+    EXPECT_FALSE(NWB::Core::Crash::CrashDetail::g_State.platformRestorePending);
     RemoveTestArtifacts(arena, s_Group);
 }
 #endif
@@ -242,9 +242,9 @@ TEST(Crash, WriteCrashPackageFailsWhenSpoolPathIsFile){
     const CrashTestPath spoolPath = SpoolDirectory(arena, s_Group);
     EXPECT_TRUE(WriteTextFile(spoolPath, AStringView("not a directory")));
 
-    NWB::Core::Crash::Detail::CrashRequest request;
+    NWB::Core::Crash::CrashDetail::CrashRequest request;
     FillPackageRequest(arena, request, spoolPath, AStringView("crash-package-bad-spool"));
-    EXPECT_FALSE(NWB::Core::Crash::Detail::WriteCrashPackage(request));
+    EXPECT_FALSE(NWB::Core::Crash::CrashDetail::WriteCrashPackage(request));
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -255,16 +255,16 @@ TEST(Crash, CrashSpoolRetentionPrunesOldestPackages){
     constexpr AStringView s_Group("crash_spool_retention_test");
     RemoveTestArtifacts(arena, s_Group);
 
-    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_001));
-    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_002));
-    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_003));
+    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_Crash001));
+    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_Crash002));
+    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_Crash003));
     EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "bad package name"));
-    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, s_CRASH_001));
-    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, s_CRASH_002));
-    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, s_CRASH_001));
-    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, s_CRASH_002));
-    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CRASH_001));
-    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CRASH_002));
+    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, s_Crash001));
+    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, s_Crash002));
+    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, s_Crash001));
+    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, s_Crash002));
+    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_Crash001));
+    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_Crash002));
 
     NWB::Core::Crash::CrashSpoolRetentionConfig retention;
     retention.maxPendingPackages = 2u;
@@ -272,20 +272,20 @@ TEST(Crash, CrashSpoolRetentionPrunesOldestPackages){
     retention.maxFailedPackages = 1u;
     retention.maxUploadingPackages = 1u;
     NWB::Core::Alloc::ScratchArena scratchArena(s_OperationScratch);
-    EXPECT_TRUE(NWB::Core::Crash::Detail::ApplyCrashSpoolRetention(scratchArena, SpoolDirectory(arena, s_Group), retention));
+    EXPECT_TRUE(NWB::Core::Crash::CrashDetail::ApplyCrashSpoolRetention(scratchArena, SpoolDirectory(arena, s_Group), retention));
 
     {
-        const auto pathQuery = FileExists(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_001));
+        const auto pathQuery = FileExists(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_Crash001));
         ASSERT_TRUE(pathQuery);
         EXPECT_FALSE(*pathQuery);
     }
     {
-        const auto pathQuery = IsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_002));
+        const auto pathQuery = IsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_Crash002));
         ASSERT_TRUE(pathQuery);
         EXPECT_TRUE(*pathQuery);
     }
     {
-        const auto pathQuery = IsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_003));
+        const auto pathQuery = IsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_Crash003));
         ASSERT_TRUE(pathQuery);
         EXPECT_TRUE(*pathQuery);
     }
@@ -295,32 +295,32 @@ TEST(Crash, CrashSpoolRetentionPrunesOldestPackages){
         EXPECT_TRUE(*pathQuery);
     }
     {
-        const auto pathQuery = FileExists(PackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, s_CRASH_001));
+        const auto pathQuery = FileExists(PackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, s_Crash001));
         ASSERT_TRUE(pathQuery);
         EXPECT_FALSE(*pathQuery);
     }
     {
-        const auto pathQuery = IsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, s_CRASH_002));
+        const auto pathQuery = IsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, s_Crash002));
         ASSERT_TRUE(pathQuery);
         EXPECT_TRUE(*pathQuery);
     }
     {
-        const auto pathQuery = FileExists(PackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, s_CRASH_001));
+        const auto pathQuery = FileExists(PackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, s_Crash001));
         ASSERT_TRUE(pathQuery);
         EXPECT_FALSE(*pathQuery);
     }
     {
-        const auto pathQuery = IsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, s_CRASH_002));
+        const auto pathQuery = IsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, s_Crash002));
         ASSERT_TRUE(pathQuery);
         EXPECT_TRUE(*pathQuery);
     }
     {
-        const auto pathQuery = FileExists(PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CRASH_001));
+        const auto pathQuery = FileExists(PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_Crash001));
         ASSERT_TRUE(pathQuery);
         EXPECT_FALSE(*pathQuery);
     }
     {
-        const auto pathQuery = IsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CRASH_002));
+        const auto pathQuery = IsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_Crash002));
         ASSERT_TRUE(pathQuery);
         EXPECT_TRUE(*pathQuery);
     }
@@ -334,8 +334,8 @@ TEST(Crash, CrashSpoolRetentionZeroDisablesPruning){
     constexpr AStringView s_Group("crash_spool_retention_zero_test");
     RemoveTestArtifacts(arena, s_Group);
 
-    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_001));
-    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_002));
+    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_Crash001));
+    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_Crash002));
 
     NWB::Core::Crash::CrashSpoolRetentionConfig retention;
     retention.maxPendingPackages = 0u;
@@ -343,15 +343,15 @@ TEST(Crash, CrashSpoolRetentionZeroDisablesPruning){
     retention.maxFailedPackages = 0u;
     retention.maxUploadingPackages = 0u;
     NWB::Core::Alloc::ScratchArena scratchArena(s_OperationScratch);
-    EXPECT_TRUE(NWB::Core::Crash::Detail::ApplyCrashSpoolRetention(scratchArena, SpoolDirectory(arena, s_Group), retention));
+    EXPECT_TRUE(NWB::Core::Crash::CrashDetail::ApplyCrashSpoolRetention(scratchArena, SpoolDirectory(arena, s_Group), retention));
 
     {
-        const auto pathQuery = IsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_001));
+        const auto pathQuery = IsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_Crash001));
         ASSERT_TRUE(pathQuery);
         EXPECT_TRUE(*pathQuery);
     }
     {
-        const auto pathQuery = IsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_002));
+        const auto pathQuery = IsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_Crash002));
         ASSERT_TRUE(pathQuery);
         EXPECT_TRUE(*pathQuery);
     }
@@ -365,9 +365,9 @@ TEST(Crash, CrashSpoolRetentionProtectsActivePendingPackage){
     constexpr AStringView s_Group("crash_spool_retention_protect_test");
     RemoveTestArtifacts(arena, s_Group);
 
-    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_001));
-    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_002));
-    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_003));
+    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_Crash001));
+    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_Crash002));
+    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_Crash003));
 
     NWB::Core::Crash::CrashSpoolRetentionConfig retention;
     retention.maxPendingPackages = 1u;
@@ -375,20 +375,20 @@ TEST(Crash, CrashSpoolRetentionProtectsActivePendingPackage){
     retention.maxFailedPackages = 0u;
     retention.maxUploadingPackages = 0u;
     NWB::Core::Alloc::ScratchArena scratchArena(s_OperationScratch);
-    EXPECT_TRUE(NWB::Core::Crash::Detail::ApplyCrashSpoolRetention(scratchArena, SpoolDirectory(arena, s_Group), retention, AStringView("crash-001")));
+    EXPECT_TRUE(NWB::Core::Crash::CrashDetail::ApplyCrashSpoolRetention(scratchArena, SpoolDirectory(arena, s_Group), retention, AStringView("crash-001")));
 
     {
-        const auto pathQuery = IsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_001));
+        const auto pathQuery = IsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_Crash001));
         ASSERT_TRUE(pathQuery);
         EXPECT_TRUE(*pathQuery);
     }
     {
-        const auto pathQuery = FileExists(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_002));
+        const auto pathQuery = FileExists(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_Crash002));
         ASSERT_TRUE(pathQuery);
         EXPECT_FALSE(*pathQuery);
     }
     {
-        const auto pathQuery = IsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CRASH_003));
+        const auto pathQuery = IsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_Crash003));
         ASSERT_TRUE(pathQuery);
         EXPECT_TRUE(*pathQuery);
     }
@@ -406,11 +406,11 @@ TEST(Crash, FlushReportsFailsWhenUploadingRecoveryIsBlocked){
     EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CrashId));
     EXPECT_TRUE(WriteTextFile(BucketDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName), AStringView("blocked")));
 
-    NWB::Core::Crash::Detail::CrashUploadSnapshot snapshot;
+    NWB::Core::Crash::CrashDetail::CrashUploadSnapshot snapshot;
     CopyPathText(arena, snapshot.spoolDirectory, SpoolDirectory(arena, s_Group));
     CopyFixedBuffer(snapshot.logServerUrl, AStringView("http://127.0.0.1:1"));
 
-    EXPECT_FALSE(NWB::Core::Crash::Detail::FlushPendingCrashReportsImpl(arena, snapshot));
+    EXPECT_FALSE(NWB::Core::Crash::CrashDetail::FlushPendingCrashReportsImpl(arena, snapshot));
     {
         const auto pathQuery = IsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CrashId));
         ASSERT_TRUE(pathQuery);

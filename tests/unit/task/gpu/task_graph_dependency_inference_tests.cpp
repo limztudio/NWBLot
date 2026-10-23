@@ -61,10 +61,10 @@ TEST(GpuTaskGraph, ExpandsImmutableResourceSetsIntoConcreteHazards){
     const Graphics::GpuGraphResourceSetId resourceSet = *resourceSetResult;
     ASSERT_TRUE(resourceSet.valid());
     {
-        const auto gpuAdmissionAt54 = graph.importResourceSet(resourceSetDesc);
-        EXPECT_TRUE(gpuAdmissionAt54);
-        if(gpuAdmissionAt54)
-            EXPECT_EQ(*gpuAdmissionAt54, resourceSet);
+        const auto gpuTaskAdmission = graph.importResourceSet(resourceSetDesc);
+        EXPECT_TRUE(gpuTaskAdmission);
+        if(gpuTaskAdmission)
+            EXPECT_EQ(*gpuTaskAdmission, resourceSet);
     }
 
     const Graphics::GpuGraphResourceId duplicateMembers[] = { textureA, textureA };
@@ -118,9 +118,9 @@ TEST(GpuTaskGraph, RejectsMalformedBufferRangesAndDetectsTextureOverlap){
     zeroBufferRange.bufferRange = Graphics::BufferRange(0u, 0u);
     const Graphics::GpuTaskResourceUse zeroBufferUse{ .resource = buffer, .range = zeroBufferRange, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read, };
     {
-        const auto gpuAdmissionAt98 = AddTask(graph, Name("tests/task_graph/zero_buffer_range"), "Zero Buffer Range", nullptr, 0u, &zeroBufferUse, 1u);
-        ASSERT_TRUE(gpuAdmissionAt98);
-        ASSERT_TRUE(gpuAdmissionAt98->valid());
+        const auto gpuTaskAdmission = AddTask(graph, Name("tests/task_graph/zero_buffer_range"), "Zero Buffer Range", nullptr, 0u, &zeroBufferUse, 1u);
+        ASSERT_TRUE(gpuTaskAdmission);
+        ASSERT_TRUE(gpuTaskAdmission->valid());
     }
     Graphics::GpuTaskGraphAnalysis zeroRangeAnalysis(testArena.arena);
     EXPECT_FALSE(Analyze(operationScratchArena, graph, zeroRangeAnalysis));
@@ -135,9 +135,9 @@ TEST(GpuTaskGraph, RejectsMalformedBufferRangesAndDetectsTextureOverlap){
     overflowBufferRange.bufferRange = Graphics::BufferRange(Limit<u64>::s_Max - 3u, 4u);
     const Graphics::GpuTaskResourceUse overflowBufferUse{ .resource = overflowBuffer, .range = overflowBufferRange, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read, };
     {
-        const auto gpuAdmissionAt109 = AddTask(graph, Name("tests/task_graph/overflow_buffer_range"), "Overflow Buffer Range", nullptr, 0u, &overflowBufferUse, 1u);
-        ASSERT_TRUE(gpuAdmissionAt109);
-        ASSERT_TRUE(gpuAdmissionAt109->valid());
+        const auto secondGpuTaskAdmission = AddTask(graph, Name("tests/task_graph/overflow_buffer_range"), "Overflow Buffer Range", nullptr, 0u, &overflowBufferUse, 1u);
+        ASSERT_TRUE(secondGpuTaskAdmission);
+        ASSERT_TRUE(secondGpuTaskAdmission->valid());
     }
     Graphics::GpuTaskGraphAnalysis overflowRangeAnalysis(testArena.arena);
     EXPECT_FALSE(Analyze(operationScratchArena, graph, overflowRangeAnalysis));
@@ -247,14 +247,14 @@ TEST(GpuTaskGraph, KeepsTextureSubresourcesAndBufferRangesIndependent){
     const Graphics::GpuTaskResourceUse firstTextureUse{ .resource = texture, .range = firstTextureRange, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write, };
     const Graphics::GpuTaskResourceUse secondTextureUse{ .resource = texture, .range = secondTextureRange, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read, };
     {
-        const auto gpuAdmissionAt193 = AddTask(graph, Name("tests/task_graph/mip_zero"), "Mip Zero", nullptr, 0u, &firstTextureUse, 1u);
-        ASSERT_TRUE(gpuAdmissionAt193);
-        ASSERT_TRUE(gpuAdmissionAt193->valid());
+        const auto gpuTaskAdmission = AddTask(graph, Name("tests/task_graph/mip_zero"), "Mip Zero", nullptr, 0u, &firstTextureUse, 1u);
+        ASSERT_TRUE(gpuTaskAdmission);
+        ASSERT_TRUE(gpuTaskAdmission->valid());
     }
     {
-        const auto gpuAdmissionAt194 = AddTask(graph, Name("tests/task_graph/mip_one"), "Mip One", nullptr, 0u, &secondTextureUse, 1u);
-        ASSERT_TRUE(gpuAdmissionAt194);
-        ASSERT_TRUE(gpuAdmissionAt194->valid());
+        const auto secondGpuTaskAdmission = AddTask(graph, Name("tests/task_graph/mip_one"), "Mip One", nullptr, 0u, &secondTextureUse, 1u);
+        ASSERT_TRUE(secondGpuTaskAdmission);
+        ASSERT_TRUE(secondGpuTaskAdmission->valid());
     }
 
     Graphics::GpuTaskGraphAnalysis textureAnalysis(testArena.arena);

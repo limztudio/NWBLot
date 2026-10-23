@@ -20,7 +20,7 @@ namespace __hidden_telemetry_frame_graph_registry_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_TARGET = "target";
+static constexpr AStringView s_Target = "target";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,12 +38,12 @@ class PendingNameFrameGraphContributor final : public Telemetry::IFrameGraphCont
 public:
     virtual bool appendFrameGraph(Telemetry::FrameGraphBuilder& builder)override{
         const Telemetry::FrameGraphNodeHandle source = builder.addPass(Name("source"), "Source");
-        const Telemetry::FrameGraphNodeHandle target = builder.addResource(Name(s_TARGET), "Target");
-        const Telemetry::FrameGraphNodeHandle duplicateTarget = builder.addResource(Name(s_TARGET), "Duplicate Target");
+        const Telemetry::FrameGraphNodeHandle target = builder.addResource(Name(s_Target), "Target");
+        const Telemetry::FrameGraphNodeHandle duplicateTarget = builder.addResource(Name(s_Target), "Duplicate Target");
         if(!target.valid() || !duplicateTarget.valid())
             return false;
 
-        builder.dependsOnByName(source, Name(s_TARGET), 7u);
+        builder.dependsOnByName(source, Name(s_Target), 7u);
         builder.dependsOnByName(source, Name("missing"), 9u);
         return true;
     }

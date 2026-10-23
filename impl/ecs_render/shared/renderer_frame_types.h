@@ -214,7 +214,7 @@ struct DeferredBindlessResourceSlots{
     u32 csgRemovedIntervalCapNormal = 0u;
     u32 csgRemovedIntervalData = 0u;
     u32 csgRemovedIntervalCount = 0u;
-    u32 _csgPad = 0u;
+    u32 csgPadding = 0u;
 
     u32 refractionDepth = 0u;
     u32 refractionNormalIor = 0u;

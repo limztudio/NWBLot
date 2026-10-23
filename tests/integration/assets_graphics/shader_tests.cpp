@@ -25,15 +25,15 @@ namespace Tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_assets_graphics_shader{
+namespace __hidden_assets_graphics_shader_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_PS = "ps";
-static constexpr AStringView s_PROJECT_SHADERS_TEST_SHADER = "project/shaders/test_shader";
-static constexpr AStringView s_MAIN = "main";
+static constexpr AStringView s_Ps = "ps";
+static constexpr AStringView s_ProjectShadersTestShader = "project/shaders/test_shader";
+static constexpr AStringView s_Main = "main";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -51,22 +51,22 @@ TEST(AssetsGraphics, ShaderArchiveVariantLookupIsExact){
     TestArena testArena;
     NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record> records(testArena.arena);
     NWB::Core::ShaderArchive::Record defaultRecord(testArena.arena);
-    defaultRecord.shaderName = Name(s_PROJECT_SHADERS_TEST_SHADER);
+    defaultRecord.shaderName = Name(s_ProjectShadersTestShader);
     defaultRecord.variantName.assign(NWB::Core::ShaderArchive::s_DefaultVariant);
-    defaultRecord.stage = Name(s_PS);
+    defaultRecord.stage = Name(s_Ps);
     defaultRecord.virtualPathHash = Name("shader/test_shader/default/ps").hash();
     records.push_back(Move(defaultRecord));
 
     Name virtualPath = s_NameNone;
-    const auto virtualPathResult1 = NWB::Core::ShaderArchive::FindVirtualPath(records, Name(s_PROJECT_SHADERS_TEST_SHADER), NWB::Core::ShaderArchive::s_DefaultVariant, Name(s_PS));
+    const auto virtualPathResult1 = NWB::Core::ShaderArchive::FindVirtualPath(records, Name(s_ProjectShadersTestShader), NWB::Core::ShaderArchive::s_DefaultVariant, Name(s_Ps));
     ASSERT_TRUE(virtualPathResult1);
     virtualPath = *virtualPathResult1;
     EXPECT_EQ(virtualPath, Name(records[0].virtualPathHash));
-    EXPECT_FALSE(NWB::Core::ShaderArchive::BuildVirtualPathName(Name(s_PROJECT_SHADERS_TEST_SHADER), "", Name(s_PS)));
+    EXPECT_FALSE(NWB::Core::ShaderArchive::BuildVirtualPathName(Name(s_ProjectShadersTestShader), "", Name(s_Ps)));
 
-    EXPECT_FALSE(NWB::Core::ShaderArchive::FindVirtualPath(records, Name(s_PROJECT_SHADERS_TEST_SHADER), "NWB_FEATURE=1", Name(s_PS)));
+    EXPECT_FALSE(NWB::Core::ShaderArchive::FindVirtualPath(records, Name(s_ProjectShadersTestShader), "NWB_FEATURE=1", Name(s_Ps)));
 
-    EXPECT_FALSE(NWB::Core::ShaderArchive::FindVirtualPath(records, Name(s_PROJECT_SHADERS_TEST_SHADER), "", Name(s_PS)));
+    EXPECT_FALSE(NWB::Core::ShaderArchive::FindVirtualPath(records, Name(s_ProjectShadersTestShader), "", Name(s_Ps)));
 }
 
 TEST(AssetsGraphics, ShaderArchiveRejectsNullAndTruncatedByteViewsWhileAdmittingUnalignedRecords){
@@ -75,9 +75,9 @@ TEST(AssetsGraphics, ShaderArchiveRejectsNullAndTruncatedByteViewsWhileAdmitting
     const Core::Common::LoggerRegistrationGuard loggerRegistration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     Core::GraphicsVector<Core::ShaderArchive::Record> records(testArena.arena);
     Core::ShaderArchive::Record record(testArena.arena);
-    record.shaderName = Name(s_PROJECT_SHADERS_TEST_SHADER);
+    record.shaderName = Name(s_ProjectShadersTestShader);
     record.variantName.assign(Core::ShaderArchive::s_DefaultVariant);
-    record.stage = Name(s_PS);
+    record.stage = Name(s_Ps);
     record.virtualPathHash = Name("shader/unaligned/default/ps").hash();
     record.sourceChecksum = 0x12345678u;
     records.push_back(Move(record));
@@ -109,16 +109,16 @@ TEST(AssetsGraphics, WrongStageAndMalformedEntryInstructionsAreRejected){
     const u32 words[] = { 0x07230203u, 0x00010500u, 0u, 16u, 0u, (5u << 16u) | 15u, 4u, 1u, PackSpirvStringWord('m', 'a', 'i', 'n'), 0u, };
 
     EXPECT_TRUE(NWB::Core::IsValidSpirvModuleWords(words, LengthOf(words)));
-    const auto entryPointResult1 = NWB::Core::ResolveSpirvEntryPointName(words, LengthOf(words), s_MAIN, NWB::Core::ShaderType::Pixel);
+    const auto entryPointResult1 = NWB::Core::ResolveSpirvEntryPointName(words, LengthOf(words), s_Main, NWB::Core::ShaderType::Pixel);
     ASSERT_TRUE(entryPointResult1);
 
-    const auto entryPointResult2 = NWB::Core::ResolveSpirvEntryPointName(words, LengthOf(words), s_MAIN, NWB::Core::ShaderType::Compute);
+    const auto entryPointResult2 = NWB::Core::ResolveSpirvEntryPointName(words, LengthOf(words), s_Main, NWB::Core::ShaderType::Compute);
     ASSERT_FALSE(entryPointResult2);
     EXPECT_EQ(entryPointResult2.error(), NWB::Core::SpirvEntryPointLookupResult::NotFound);
 
     const u32 invalidWords[] = { 0x07230203u, 0x00010500u, 0u, 16u, 0u, (5u << 16u) | 15u, 4u, 1u, PackSpirvStringWord('m', 'a', 'i', 'n'), };
 
-    const auto entryPointResult3 = NWB::Core::ResolveSpirvEntryPointName(invalidWords, LengthOf(invalidWords), s_MAIN, NWB::Core::ShaderType::Pixel);
+    const auto entryPointResult3 = NWB::Core::ResolveSpirvEntryPointName(invalidWords, LengthOf(invalidWords), s_Main, NWB::Core::ShaderType::Pixel);
     ASSERT_FALSE(entryPointResult3);
     EXPECT_EQ(entryPointResult3.error(), NWB::Core::SpirvEntryPointLookupResult::InvalidSpirv);
     EXPECT_FALSE(NWB::Core::IsValidSpirvModuleWords(invalidWords, LengthOf(invalidWords)));
@@ -126,7 +126,7 @@ TEST(AssetsGraphics, WrongStageAndMalformedEntryInstructionsAreRejected){
     const u32 malformedOtherStageEntryWords[] = { 0x07230203u, 0x00010500u, 0u, 16u, 0u, (4u << 16u) | 15u, 0u, 1u, PackSpirvStringWord('m', 'a', 'i', 'n'), };
 
     EXPECT_FALSE(NWB::Core::IsValidSpirvModuleWords(malformedOtherStageEntryWords, LengthOf(malformedOtherStageEntryWords)));
-    const auto entryPointResult4 = NWB::Core::ResolveSpirvEntryPointName(malformedOtherStageEntryWords, LengthOf(malformedOtherStageEntryWords), s_MAIN, NWB::Core::ShaderType::Pixel);
+    const auto entryPointResult4 = NWB::Core::ResolveSpirvEntryPointName(malformedOtherStageEntryWords, LengthOf(malformedOtherStageEntryWords), s_Main, NWB::Core::ShaderType::Pixel);
     ASSERT_FALSE(entryPointResult4);
     EXPECT_EQ(entryPointResult4.error(), NWB::Core::SpirvEntryPointLookupResult::InvalidSpirv);
 }
@@ -153,7 +153,7 @@ TEST(AssetsGraphics, SpirvEntryPointViewsRebindCopiedWordsAndRejectMalformedMatc
         EXPECT_NE(copiedEntryPoint.data(), sourceEntryPoint.data());
     }
     // Specializations retain their own bytecode, so their entry-name view must survive the original module.
-    EXPECT_EQ(copiedEntryPoint, s_MAIN);
+    EXPECT_EQ(copiedEntryPoint, s_Main);
     EXPECT_EQ(copiedEntryPoint.data()[copiedEntryPoint.size()], '\0');
 
     Core::Assets::AssetBytes unalignedBytes(testArena.arena);
@@ -165,7 +165,7 @@ TEST(AssetsGraphics, SpirvEntryPointViewsRebindCopiedWordsAndRejectMalformedMatc
     ASSERT_TRUE(entryPointResult7);
     byteEntryPoint = *entryPointResult7;
     EXPECT_EQ(byteEntryPoint.data(), reinterpret_cast<const char*>(unalignedBytes.data() + 1u + 8u * sizeof(u32)));
-    EXPECT_EQ(byteEntryPoint, s_MAIN);
+    EXPECT_EQ(byteEntryPoint, s_Main);
     const auto entryPointResult8 = Core::ResolveSpirvEntryPointName(BinaryByteView{ unalignedModule.data(), unalignedModule.size() - 1u }, requestedName, Core::ShaderType::Pixel);
     ASSERT_FALSE(entryPointResult8);
     EXPECT_EQ(entryPointResult8.error(), Core::SpirvEntryPointLookupResult::InvalidSpirv);

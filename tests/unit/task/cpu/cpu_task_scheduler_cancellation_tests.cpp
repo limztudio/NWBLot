@@ -37,10 +37,10 @@ TEST(CpuTaskSchedulerTests, QueuedPrioritiesRunCriticalThenNormalThenBackgroundA
     TaskGate occupied;
     CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
     ScopeExit releaseWorker([&]()noexcept{ occupied.open(); });
-    const auto cpuAdmission103 = scheduler.submit([&]()noexcept{ occupied.block(); });
-    EXPECT_TRUE(cpuAdmission103);
-    if(cpuAdmission103)
-        EXPECT_TRUE(cpuAdmission103->valid());
+    const auto cpuTaskAdmission = scheduler.submit([&]()noexcept{ occupied.block(); });
+    EXPECT_TRUE(cpuTaskAdmission);
+    if(cpuTaskAdmission)
+        EXPECT_TRUE(cpuTaskAdmission->valid());
     EXPECT_TRUE(CpuTaskTestSupport::WaitUntil(occupied.entered, s_GateTimeoutMS));
     Atomic<u32> cursor{ 0u };
     u32 order[3u]{};
@@ -48,10 +48,10 @@ TEST(CpuTaskSchedulerTests, QueuedPrioritiesRunCriticalThenNormalThenBackgroundA
     for(u32 index = 0u; index < 3u; ++index){
         CpuTaskOptions options;
         options.priority = priorities[index];
-        const auto cpuAdmission104 = scheduler.submit([&, index]()noexcept{ order[cursor.fetch_add(1u)] = index; }, options);
-        EXPECT_TRUE(cpuAdmission104);
-        if(cpuAdmission104)
-            EXPECT_TRUE(cpuAdmission104->valid());
+        const auto secondCpuTaskAdmission = scheduler.submit([&, index]()noexcept{ order[cursor.fetch_add(1u)] = index; }, options);
+        EXPECT_TRUE(secondCpuTaskAdmission);
+        if(secondCpuTaskAdmission)
+            EXPECT_TRUE(secondCpuTaskAdmission->valid());
     }
     occupied.open();
     scheduler.wait();
@@ -70,15 +70,15 @@ TEST(CpuTaskSchedulerTests, CanceledScopeSkipsQueuedBodiesAndTheirDependentsAndR
     CpuTaskScheduler scheduler(0u);
     CpuTaskScope scope(scheduler);
     u32 invoked = 0u;
-    const auto cpuAdmission105 = scope.submit([&invoked, capture = LifetimeProbe(retired, 1u)]()noexcept{ invoked += capture.value; });
-    ASSERT_TRUE(cpuAdmission105);
-    const auto predecessor = *cpuAdmission105;
-    const auto cpuAdmission106 = scheduler.submit([&invoked, capture = LifetimeProbe(retired, s_ExpectedDualCount)]()noexcept{ invoked += capture.value; }, predecessor);
-    ASSERT_TRUE(cpuAdmission106);
-    const auto dependent = *cpuAdmission106;
+    const auto predecessorTaskAdmission = scope.submit([&invoked, capture = LifetimeProbe(retired, 1u)]()noexcept{ invoked += capture.value; });
+    ASSERT_TRUE(predecessorTaskAdmission);
+    const auto predecessor = *predecessorTaskAdmission;
+    const auto dependentTaskAdmission = scheduler.submit([&invoked, capture = LifetimeProbe(retired, s_ExpectedDualCount)]()noexcept{ invoked += capture.value; }, predecessor);
+    ASSERT_TRUE(dependentTaskAdmission);
+    const auto dependent = *dependentTaskAdmission;
     scope.cancel();
-    const auto cpuAdmission107 = scope.submit([&]()noexcept{ ++invoked; });
-    EXPECT_FALSE(cpuAdmission107);
+    const auto cpuTaskAdmission = scope.submit([&]()noexcept{ ++invoked; });
+    EXPECT_FALSE(cpuTaskAdmission);
     scheduler.wait(dependent);
     scope.wait();
     EXPECT_EQ(invoked, 0u);
@@ -98,19 +98,19 @@ TEST(CpuTaskSchedulerTests, CancelingAnActiveParentPreventsFutureDescendantsAndC
     Atomic<u32> childInvocations{ 0u };
     Atomic<u32> continuationInvocations{ 0u };
     Atomic<bool> childRejected{ false };
-    const auto cpuAdmission108 = scope.submit([&](){
+    const auto cpuTaskAdmission = scope.submit([&](){
         parentGate.block();
-        const auto cpuAdmission109 = scheduler.submit([&]()noexcept{ childInvocations.fetch_add(1u); });
-        if(!cpuAdmission109 || !cpuAdmission109->valid())
+        const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept{ childInvocations.fetch_add(1u); });
+        if(!secondCpuTaskAdmission || !secondCpuTaskAdmission->valid())
             childRejected.store(true, MemoryOrder::release);
     }
     );
-    ASSERT_TRUE(cpuAdmission108);
-    const auto parent = *cpuAdmission108;
+    ASSERT_TRUE(cpuTaskAdmission);
+    const auto parent = *cpuTaskAdmission;
     EXPECT_TRUE(CpuTaskTestSupport::WaitUntil(parentGate.entered, s_GateTimeoutMS));
-    const auto cpuAdmission110 = scheduler.submit([&]()noexcept{ continuationInvocations.fetch_add(1u); }, parent);
-    ASSERT_TRUE(cpuAdmission110);
-    const auto continuation = *cpuAdmission110;
+    const auto continuationTaskAdmission = scheduler.submit([&]()noexcept{ continuationInvocations.fetch_add(1u); }, parent);
+    ASSERT_TRUE(continuationTaskAdmission);
+    const auto continuation = *continuationTaskAdmission;
     scope.cancel();
     parentGate.open();
     scheduler.wait(continuation);
@@ -135,23 +135,23 @@ TEST(CpuTaskSchedulerTests, HeavyWorkUsesTheOtherClassWhileItsPreferredWorkerIsO
         GTEST_SKIP() << "The permitted CPUs do not provide both capacity classes.";
     CpuAffinity::Enum preferredAffinity = CpuAffinity::Any;
     CpuAffinity::Enum spillAffinity = CpuAffinity::Any;
-    const auto cpuAdmission111 = scheduler.submit([&]()noexcept{
+    const auto cpuTaskAdmission = scheduler.submit([&]()noexcept{
         preferredAffinity = scheduler.currentWorkerAffinity();
         preferredGate.block();
     }
     );
-    EXPECT_TRUE(cpuAdmission111);
-    if(cpuAdmission111)
-        EXPECT_TRUE(cpuAdmission111->valid());
+    EXPECT_TRUE(cpuTaskAdmission);
+    if(cpuTaskAdmission)
+        EXPECT_TRUE(cpuTaskAdmission->valid());
     EXPECT_TRUE(CpuTaskTestSupport::WaitUntil(preferredGate.entered, s_GateTimeoutMS));
-    const auto cpuAdmission112 = scheduler.submit([&]()noexcept{
+    const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept{
         spillAffinity = scheduler.currentWorkerAffinity();
         spillGate.block();
     }
     );
-    EXPECT_TRUE(cpuAdmission112);
-    if(cpuAdmission112)
-        EXPECT_TRUE(cpuAdmission112->valid());
+    EXPECT_TRUE(secondCpuTaskAdmission);
+    if(secondCpuTaskAdmission)
+        EXPECT_TRUE(secondCpuTaskAdmission->valid());
     EXPECT_TRUE(CpuTaskTestSupport::WaitUntil(spillGate.entered, s_GateTimeoutMS));
     preferredGate.open();
     spillGate.open();
@@ -206,25 +206,25 @@ TEST(CpuTaskSchedulerTests, LateDependenciesRetainCanceledResultsAfterRepeatedNo
     CpuTaskScope canceledScope(scheduler);
     u32 canceledInvocations = 0u;
     u32 unrelatedInvocations = 0u;
-    const auto cpuAdmission117 = canceledScope.submit([&]()noexcept{ ++canceledInvocations; });
-    ASSERT_TRUE(cpuAdmission117);
-    const auto canceled = *cpuAdmission117;
+    const auto canceledTaskAdmission = canceledScope.submit([&]()noexcept{ ++canceledInvocations; });
+    ASSERT_TRUE(canceledTaskAdmission);
+    const auto canceled = *canceledTaskAdmission;
     canceledScope.cancel();
     canceledScope.wait();
     for(u32 iteration = 0u; iteration < 16u; ++iteration){
-        const auto cpuAdmission118 = scheduler.submit([&]()noexcept{ ++unrelatedInvocations; });
-        ASSERT_TRUE(cpuAdmission118);
-        const auto unrelated = *cpuAdmission118;
+        const auto unrelatedTaskAdmission = scheduler.submit([&]()noexcept{ ++unrelatedInvocations; });
+        ASSERT_TRUE(unrelatedTaskAdmission);
+        const auto unrelated = *unrelatedTaskAdmission;
         scheduler.wait(unrelated);
     }
-    const auto cpuAdmission119 = scheduler.submit([&]()noexcept{ ++canceledInvocations; }, canceled);
-    ASSERT_TRUE(cpuAdmission119);
-    const auto lateDependent = *cpuAdmission119;
+    const auto lateDependentTaskAdmission = scheduler.submit([&]()noexcept{ ++canceledInvocations; }, canceled);
+    ASSERT_TRUE(lateDependentTaskAdmission);
+    const auto lateDependent = *lateDependentTaskAdmission;
     ASSERT_TRUE(lateDependent.valid());
     scheduler.wait(lateDependent);
-    const auto cpuAdmission120 = scheduler.submit([&]()noexcept{ ++canceledInvocations; }, lateDependent);
-    ASSERT_TRUE(cpuAdmission120);
-    const auto laterDependent = *cpuAdmission120;
+    const auto laterDependentTaskAdmission = scheduler.submit([&]()noexcept{ ++canceledInvocations; }, lateDependent);
+    ASSERT_TRUE(laterDependentTaskAdmission);
+    const auto laterDependent = *laterDependentTaskAdmission;
     ASSERT_TRUE(laterDependent.valid());
     scheduler.wait(laterDependent);
     EXPECT_EQ(canceledInvocations, 0u);

@@ -14,7 +14,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_baked_font_atlas{
+namespace __hidden_ui_text_baked_atlas{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -51,7 +51,7 @@ BakedFontAtlas::BakedFontAtlas(Core::Alloc::GlobalArena& arena, const FontAtlas&
     m_bakePpem = payload.bakePpem;
     m_glyphs.assign(payload.glyphs.begin(), payload.glyphs.end());
     m_pages.reserve(payload.groups.size());
-    const u64 identity = __hidden_ui_baked_font_atlas::NewIdentity();
+    const u64 identity = __hidden_ui_text_baked_atlas::NewIdentity();
     for(u32 group = 0u; group < payload.groups.size(); ++group){
         auto page = CreateSdfAtlasPage(arena, atlas, fontGeneration, identity, group);
         if(!page)

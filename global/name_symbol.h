@@ -36,23 +36,23 @@ struct NameSymbolResolverState{
 
 
 [[nodiscard]] inline NameSymbolRecorderState& SymbolRecorderState()noexcept{
-    static NameSymbolRecorderState s_state;
-    return s_state;
+    static NameSymbolRecorderState s_State;
+    return s_State;
 }
 
 [[nodiscard]] inline NameSymbolResolverState& SymbolResolverState()noexcept{
-    static NameSymbolResolverState s_state;
-    return s_state;
+    static NameSymbolResolverState s_State;
+    return s_State;
 }
 
 [[nodiscard]] inline bool& SymbolRecordInProgress()noexcept{
-    thread_local static bool s_inProgress = false;
-    return s_inProgress;
+    thread_local static bool s_InProgress = false;
+    return s_InProgress;
 }
 
 [[nodiscard]] inline bool& SymbolResolveInProgress()noexcept{
-    thread_local static bool s_inProgress = false;
-    return s_inProgress;
+    thread_local static bool s_InProgress = false;
+    return s_InProgress;
 }
 
 class ScopedSymbolCallbackFlag final{
@@ -85,10 +85,10 @@ inline constexpr usize s_SymbolTextBufferCount = 8u;
 
 
 [[nodiscard]] inline auto NextSymbolTextBuffer()noexcept -> char(&)[s_SymbolTextBufferLength]{
-    thread_local static char s_buffers[s_SymbolTextBufferCount][s_SymbolTextBufferLength];
-    thread_local static usize s_next = 0u;
-    auto& buffer = s_buffers[s_next];
-    s_next = (s_next + 1u) % s_SymbolTextBufferCount;
+    thread_local static char s_Buffers[s_SymbolTextBufferCount][s_SymbolTextBufferLength];
+    thread_local static usize s_Next = 0u;
+    auto& buffer = s_Buffers[s_Next];
+    s_Next = (s_Next + 1u) % s_SymbolTextBufferCount;
     return buffer;
 }
 

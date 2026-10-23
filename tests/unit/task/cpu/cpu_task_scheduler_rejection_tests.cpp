@@ -37,10 +37,10 @@ TEST(CpuTaskSchedulerTests, WorkerSelfWaitIsRejectedInsteadOfDeadlocking){
         TaskGate start;
         CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
         CpuTaskHandle self;
-        const auto cpuAdmission113 = scheduler.submit([&](){ start.block(); scheduler.wait(self); });
-        if(!cpuAdmission113)
+        const auto selfTaskAdmission = scheduler.submit([&](){ start.block(); scheduler.wait(self); });
+        if(!selfTaskAdmission)
             ExitTestProcess(0u);
-        self = *cpuAdmission113;
+        self = *selfTaskAdmission;
         start.open();
         scheduler.wait();
     }, ""
@@ -55,18 +55,18 @@ TEST(CpuTaskSchedulerTests, DescendantWaitForAnAncestorIsRejectedInsteadOfDeadlo
         TaskGate start;
         CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
         CpuTaskHandle parent;
-        const auto cpuAdmission114 = scheduler.submit([&](){
+        const auto cpuTaskAdmission = scheduler.submit([&](){
             start.block();
-            const auto cpuAdmission115 = scheduler.submit([&](){ scheduler.wait(parent); });
-            if(!cpuAdmission115)
+            const auto childTaskAdmission = scheduler.submit([&](){ scheduler.wait(parent); });
+            if(!childTaskAdmission)
                 ExitTestProcess(0u);
-            const auto child = *cpuAdmission115;
+            const auto child = *childTaskAdmission;
             EXPECT_TRUE(child.valid());
         }
         );
-        if(!cpuAdmission114)
+        if(!cpuTaskAdmission)
             ExitTestProcess(0u);
-        parent = *cpuAdmission114;
+        parent = *cpuTaskAdmission;
         start.open();
         scheduler.wait();
     }, ""
@@ -80,10 +80,10 @@ TEST(CpuTaskSchedulerTests, JoiningTheScopeThatContainsTheCurrentTaskIsRejected)
         DeadlineGuard deadline(true);
         CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
         CpuTaskScope scope(scheduler);
-        const auto cpuAdmission116 = scope.submit([&](){ scope.wait(); });
-        EXPECT_TRUE(cpuAdmission116);
-        if(cpuAdmission116)
-            EXPECT_TRUE(cpuAdmission116->valid());
+        const auto cpuTaskAdmission = scope.submit([&](){ scope.wait(); });
+        EXPECT_TRUE(cpuTaskAdmission);
+        if(cpuTaskAdmission)
+            EXPECT_TRUE(cpuTaskAdmission->valid());
         scheduler.wait();
     }, ""
     );
@@ -96,14 +96,14 @@ TEST(CpuTaskSchedulerTests, ChildCannotDependDirectlyOnItsStructuredParent){
         CpuTaskScheduler scheduler(0u);
         CpuTaskHandle parent;
         bool rejected = false;
-        const auto cpuAdmission121 = scheduler.submit([&](){
+        const auto cpuTaskAdmission = scheduler.submit([&](){
             const auto child = scheduler.submit([]()noexcept{}, parent);
             rejected = !child;
         }
         );
-        if(!cpuAdmission121)
+        if(!cpuTaskAdmission)
             ExitTestProcess(2u);
-        parent = *cpuAdmission121;
+        parent = *cpuTaskAdmission;
         scheduler.pumpMainThread();
         if(!rejected)
             ExitTestProcess(1u);
@@ -122,20 +122,20 @@ TEST(CpuTaskSchedulerTests, ChildCannotDependOnATransitiveDependentOfItsStructur
         CpuTaskHandle dependent;
         bool rejected = false;
         u32 continuations = 0u;
-        const auto cpuAdmission123 = scheduler.submit([&](){
+        const auto cpuTaskAdmission = scheduler.submit([&](){
             const auto child = scheduler.submit([]()noexcept{}, dependent);
             rejected = !child;
         }
         );
-        if(!cpuAdmission123)
+        if(!cpuTaskAdmission)
             ExitTestProcess(2u);
-        const auto parent = *cpuAdmission123;
+        const auto parent = *cpuTaskAdmission;
         dependent = parent;
         for(u32 depth = 0u; depth < 3u; ++depth){
-            const auto cpuAdmission125 = scheduler.submit([&]()noexcept{ ++continuations; }, dependent);
-            if(!cpuAdmission125)
+            const auto dependentTaskAdmission = scheduler.submit([&]()noexcept{ ++continuations; }, dependent);
+            if(!dependentTaskAdmission)
                 ExitTestProcess(2u);
-            dependent = *cpuAdmission125;
+            dependent = *dependentTaskAdmission;
         }
         scheduler.pumpMainThread();
         if(!rejected)
@@ -155,23 +155,23 @@ TEST(CpuTaskSchedulerTests, DescendantOnAnotherWorkerCannotJoinItsAncestorsScope
         CpuTaskScheduler scheduler(HomogeneousWorkers(s_ExpectedDualCount));
         CpuTaskScope scope(scheduler);
         Atomic<usize> parentWorker{ 0u };
-        const auto cpuAdmission126 = scope.submit([&](){
+        const auto cpuTaskAdmission = scope.submit([&](){
             parentWorker.store(scheduler.currentWorkerIndex(), MemoryOrder::release);
-            const auto cpuAdmission127 = scheduler.submit([&](){
+            const auto secondCpuTaskAdmission = scheduler.submit([&](){
                 if(!CpuTaskTestSupport::WaitUntil(parentGate.entered, s_GateTimeoutMS) || scheduler.currentWorkerIndex() == parentWorker.load(MemoryOrder::acquire))
                     ExitTestProcess(0u);
                 scope.wait();
             }
             );
-            EXPECT_TRUE(cpuAdmission127);
-            if(cpuAdmission127)
-                EXPECT_TRUE(cpuAdmission127->valid());
+            EXPECT_TRUE(secondCpuTaskAdmission);
+            if(secondCpuTaskAdmission)
+                EXPECT_TRUE(secondCpuTaskAdmission->valid());
             parentGate.block();
         }
         );
-        EXPECT_TRUE(cpuAdmission126);
-        if(cpuAdmission126)
-            EXPECT_TRUE(cpuAdmission126->valid());
+        EXPECT_TRUE(cpuTaskAdmission);
+        if(cpuTaskAdmission)
+            EXPECT_TRUE(cpuTaskAdmission->valid());
         scheduler.wait();
     }, ""
     );
@@ -185,14 +185,14 @@ TEST(CpuTaskSchedulerTests, WorkerCannotWaitForAnIndependentlySubmittedDependent
         TaskGate start;
         CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
         CpuTaskHandle dependent;
-        const auto cpuAdmission128 = scheduler.submit([&](){ start.block(); scheduler.wait(dependent); });
-        if(!cpuAdmission128)
+        const auto runningTaskAdmission = scheduler.submit([&](){ start.block(); scheduler.wait(dependent); });
+        if(!runningTaskAdmission)
             ExitTestProcess(0u);
-        const auto running = *cpuAdmission128;
-        const auto cpuAdmission129 = scheduler.submit([]()noexcept{}, running);
-        if(!cpuAdmission129)
+        const auto running = *runningTaskAdmission;
+        const auto dependentTaskAdmission = scheduler.submit([]()noexcept{}, running);
+        if(!dependentTaskAdmission)
             ExitTestProcess(0u);
-        dependent = *cpuAdmission129;
+        dependent = *dependentTaskAdmission;
         start.open();
         scheduler.wait();
     }, ""
@@ -207,23 +207,23 @@ TEST(CpuTaskSchedulerTests, DescendantCannotWaitForTransitiveDependentsOfItsAnce
         TaskGate start;
         CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
         CpuTaskHandle dependent;
-        const auto cpuAdmission130 = scheduler.submit([&](){
+        const auto cpuTaskAdmission = scheduler.submit([&](){
             start.block();
-            const auto cpuAdmission131 = scheduler.submit([&](){ scheduler.wait(dependent); });
-            EXPECT_TRUE(cpuAdmission131);
-            if(cpuAdmission131)
-                EXPECT_TRUE(cpuAdmission131->valid());
+            const auto secondCpuTaskAdmission = scheduler.submit([&](){ scheduler.wait(dependent); });
+            EXPECT_TRUE(secondCpuTaskAdmission);
+            if(secondCpuTaskAdmission)
+                EXPECT_TRUE(secondCpuTaskAdmission->valid());
         }
         );
-        if(!cpuAdmission130)
+        if(!cpuTaskAdmission)
             ExitTestProcess(0u);
-        const auto parent = *cpuAdmission130;
+        const auto parent = *cpuTaskAdmission;
         dependent = parent;
         for(u32 depth = 0u; depth < 3u; ++depth){
-            const auto cpuAdmission132 = scheduler.submit([]()noexcept{}, dependent);
-            if(!cpuAdmission132)
+            const auto dependentTaskAdmission = scheduler.submit([]()noexcept{}, dependent);
+            if(!dependentTaskAdmission)
                 ExitTestProcess(0u);
-            dependent = *cpuAdmission132;
+            dependent = *dependentTaskAdmission;
         }
         start.open();
         scheduler.wait();

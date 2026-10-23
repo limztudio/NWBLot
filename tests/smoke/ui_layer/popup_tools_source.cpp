@@ -21,7 +21,7 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_popup_tools_smoke_source{
+namespace __hidden_ui_popup_tools_source{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -58,7 +58,7 @@ Expected<u64> UiPopupToolsSmokeSource::findEnabled(const u64 start, const bool r
 StringView UiPopupToolsSmokeSource::text(const u64 index)const noexcept{
     ++m_labelReads;
     const u64 rowKey = key(index);
-    return rowKey == 0u ? StringView{} : __hidden_ui_popup_tools_smoke_source::s_Labels[rowKey - 1u];
+    return rowKey == 0u ? StringView{} : __hidden_ui_popup_tools_source::s_Labels[rowKey - 1u];
 }
 
 

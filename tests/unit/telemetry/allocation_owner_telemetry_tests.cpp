@@ -258,12 +258,12 @@ TEST(AllocationOwnerTelemetry, CapturesAutomaticAllocationOwnersAcrossEnableReal
     TestArena testArena;
     char sequenceText[32u] = {};
     const AStringView sequence = FormatDecimal(s_OwnerSequence.fetch_add(1u, MemoryOrder::relaxed), sequenceText);
-    const auto derivedNameAt249Col27 = DeriveName(Name("tests/telemetry/automatic_owner/"), sequence);
-    ASSERT_TRUE(derivedNameAt249Col27);
-    const Name ownerName = *derivedNameAt249Col27;
-    const auto derivedNameAt250Col29 = DeriveName(Name("tests/telemetry/retired_scratch/"), sequence);
-    ASSERT_TRUE(derivedNameAt250Col29);
-    const Name scratchName = *derivedNameAt250Col29;
+    const auto ownerNameResult = DeriveName(Name("tests/telemetry/automatic_owner/"), sequence);
+    ASSERT_TRUE(ownerNameResult);
+    const Name ownerName = *ownerNameResult;
+    const auto scratchNameResult = DeriveName(Name("tests/telemetry/retired_scratch/"), sequence);
+    ASSERT_TRUE(scratchNameResult);
+    const Name scratchName = *scratchNameResult;
     Core::Alloc::GlobalArena owner(ownerName);
     OwnedAllocation allocation(owner, 53u);
     ASSERT_NE(allocation.pointer, nullptr);
@@ -412,9 +412,9 @@ TEST(AllocationOwnerTelemetry, CapturesAutomaticAllocationOwnersAcrossEnableReal
 TEST(AllocationOwnerTelemetry, SharedNameSumsLiveUsageAndPreservesLargestIndividualArenaPeak){
     TestArena testArena;
     char sequenceText[32u] = {};
-    const auto derivedNameAt399Col27 = DeriveName(Name("tests/telemetry/shared_arena_peak/"), FormatDecimal(s_OwnerSequence.fetch_add(1u, MemoryOrder::relaxed), sequenceText));
-    ASSERT_TRUE(derivedNameAt399Col27);
-    const Name ownerName = *derivedNameAt399Col27;
+    const auto ownerNameResult = DeriveName(Name("tests/telemetry/shared_arena_peak/"), FormatDecimal(s_OwnerSequence.fetch_add(1u, MemoryOrder::relaxed), sequenceText));
+    ASSERT_TRUE(ownerNameResult);
+    const Name ownerName = *ownerNameResult;
     Perf::Session perfSession(testArena.arena);
     perfSession.setCaptureOptions(Perf::CaptureOptions{ .enabled = true, .memory = true });
     Core::Alloc::GlobalArena firstArena(ownerName);

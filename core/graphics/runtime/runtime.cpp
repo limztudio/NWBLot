@@ -26,7 +26,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_graphics_lifecycle{
+namespace __hidden_graphics_runtime{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -192,7 +192,7 @@ GraphicsRuntime::~GraphicsRuntime()noexcept(false){
 
 bool GraphicsRuntime::init(const Common::FrameData& data){
     if(m_cpuTiming && !m_frameTimingScope.valid()){
-        const auto scope = m_cpuTiming->registerScope(__hidden_graphics_lifecycle::s_GraphicsFrameCpuTimingScope);
+        const auto scope = m_cpuTiming->registerScope(__hidden_graphics_runtime::s_GraphicsFrameCpuTimingScope);
         if(!scope){
             NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: CPU frame timing scope registration failed"));
             return false;
@@ -245,7 +245,7 @@ bool GraphicsRuntime::init(const Common::FrameData& data){
 
 bool GraphicsRuntime::createHeadlessDevice(){
     if(m_cpuTiming && !m_frameTimingScope.valid()){
-        const auto scope = m_cpuTiming->registerScope(__hidden_graphics_lifecycle::s_GraphicsFrameCpuTimingScope);
+        const auto scope = m_cpuTiming->registerScope(__hidden_graphics_runtime::s_GraphicsFrameCpuTimingScope);
         if(!scope){
             NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: CPU frame timing scope registration failed"));
             return false;
@@ -281,7 +281,7 @@ bool GraphicsRuntime::createHeadlessDevice(){
 }
 
 bool GraphicsRuntime::createInstance(const InstanceParameters& params){
-    if(!__hidden_graphics_lifecycle::CopyInstanceParameters(m_deviceCreationParams, params)){
+    if(!__hidden_graphics_runtime::CopyInstanceParameters(m_deviceCreationParams, params)){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: debug runtime is only available in non-final builds"));
         return false;
     }
@@ -544,7 +544,7 @@ Expected<void, CpuTaskAdmissionError::Enum> GraphicsRuntime::renderWithPhaseTimi
                 prepareBegin = TimerNow();
             const bool resourcesPrepared = renderPass->prepareResources(framebuffer);
             if(phaseTiming)
-                phaseTiming->stage(resourcesPrepared ? __hidden_graphics_lifecycle::s_GraphicsPrepareResourcesCpuTimingScope : __hidden_graphics_lifecycle::s_GraphicsPrepareResourcesFailedCpuTimingScope, prepareBegin, m_cpuTiming);
+                phaseTiming->stage(resourcesPrepared ? __hidden_graphics_runtime::s_GraphicsPrepareResourcesCpuTimingScope : __hidden_graphics_runtime::s_GraphicsPrepareResourcesFailedCpuTimingScope, prepareBegin, m_cpuTiming);
             if(!resourcesPrepared){
                 NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: render pass skipped after resource preparation failed"));
                 return;
@@ -555,7 +555,7 @@ Expected<void, CpuTaskAdmissionError::Enum> GraphicsRuntime::renderWithPhaseTimi
                 renderBegin = TimerNow();
             renderPass->render(framebuffer);
             if(phaseTiming)
-                phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsRenderPassesCpuTimingScope, renderBegin, m_cpuTiming);
+                phaseTiming->stage(__hidden_graphics_runtime::s_GraphicsRenderPassesCpuTimingScope, renderBegin, m_cpuTiming);
 
             // Later task callbacks observe this request before touching the invalidated device generation.
             if(device.requiresRecreation())
@@ -621,13 +621,13 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
             animateBegin = TimerNow();
         animate(elapsedTime);
         if(phaseTiming)
-            phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsAnimateCpuTimingScope, animateBegin, m_cpuTiming);
+            phaseTiming->stage(__hidden_graphics_runtime::s_GraphicsAnimateCpuTimingScope, animateBegin, m_cpuTiming);
 
         Timer beginFrameBegin;
         if(phaseTiming)
             beginFrameBegin = TimerNow();
         BeginFrameResult beginFrameResult;
-        for(usize attempt = 0u; attempt < __hidden_graphics_lifecycle::s_MaxBeginFrameResizeAttempts; ++attempt){
+        for(usize attempt = 0u; attempt < __hidden_graphics_runtime::s_MaxBeginFrameResizeAttempts; ++attempt){
             beginFrameResult = m_backend->beginFrame();
             if(beginFrameResult.status != BeginFrameStatus::ResizeRequired)
                 break;
@@ -635,7 +635,7 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
                 break;
         }
         if(phaseTiming)
-            phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsBeginFrameCpuTimingScope, beginFrameBegin, m_cpuTiming);
+            phaseTiming->stage(__hidden_graphics_runtime::s_GraphicsBeginFrameCpuTimingScope, beginFrameBegin, m_cpuTiming);
         if(!beginFrameResult.acquired()){
             if(beginFrameResult.status == BeginFrameStatus::ResizeRequired)
                 NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: swap-chain resize retries were exhausted; requesting device recreation."));
@@ -666,14 +666,14 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
             }
 
             m_acquiredPresentationFrame = { .backBuffer = Move(acquiredBackBuffer), .framebuffer = m_swapChainFramebuffers[acquiredBackBufferIndex], };
-            const __hidden_graphics_lifecycle::ScopedAcquiredPresentationFrameReset acquiredFrameReset(m_acquiredPresentationFrame);
+            const __hidden_graphics_runtime::ScopedAcquiredPresentationFrameReset acquiredFrameReset(m_acquiredPresentationFrame);
 
             Timer framePreambleBegin;
             if(phaseTiming)
                 framePreambleBegin = TimerNow();
             const bool preamblePrepared = prepareFramePreamble();
             if(phaseTiming)
-                phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsFramePreambleCpuTimingScope, framePreambleBegin, m_cpuTiming);
+                phaseTiming->stage(__hidden_graphics_runtime::s_GraphicsFramePreambleCpuTimingScope, framePreambleBegin, m_cpuTiming);
             if(!preamblePrepared){
                 // prepareFramePreamble() returns false only after the device requires recreation.
                 // Do not issue recovery GPU work; required device teardown owns the unresolved acquired image and synchronization.
@@ -694,7 +694,7 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
                 return false;
             }
             if(phaseTiming)
-                phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsRenderCpuTimingScope, renderBegin, m_cpuTiming);
+                phaseTiming->stage(__hidden_graphics_runtime::s_GraphicsRenderCpuTimingScope, renderBegin, m_cpuTiming);
 
             if(m_deviceRecreationRequested || device.requiresRecreation()){
                 if(device.requiresRecreation())
@@ -713,7 +713,7 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
             if(presentationAccepted)
                 ++m_successfulPresentationCount;
             if(phaseTiming)
-                phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsPresentCpuTimingScope, presentBegin, m_cpuTiming);
+                phaseTiming->stage(__hidden_graphics_runtime::s_GraphicsPresentCpuTimingScope, presentBegin, m_cpuTiming);
             if(!presented){
                 // A consumed presentation already cleared acquisition and makes abandonment a no-op.
                 // Every healthy unconsumed failure is drained and quarantined before recreation.
@@ -739,7 +739,7 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
         garbageCollectionBegin = TimerNow();
     device.runGarbageCollection();
     if(phaseTiming)
-        phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsGarbageCollectCpuTimingScope, garbageCollectionBegin, m_cpuTiming);
+        phaseTiming->stage(__hidden_graphics_runtime::s_GraphicsGarbageCollectCpuTimingScope, garbageCollectionBegin, m_cpuTiming);
     if(device.requiresRecreation()){
         requestDeviceRecreation();
         return false;

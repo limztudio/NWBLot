@@ -18,7 +18,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_cpu_scheduler_fairness{
+namespace __hidden_cpu_task_scheduler{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -374,9 +374,9 @@ void CpuTaskScheduler::enqueueLocked(const u32 index)noexcept{
 CpuTaskScheduler::TaskHandle CpuTaskScheduler::claimLocked(const CpuAffinity::Enum affinity, const bool mainThread, const bool cooperative, ScopeWait* const preferredScope)noexcept{
     // Periodically admit background and normal work even while critical producers keep publishing.
     const u64 dispatch = m_dispatchCount;
-    const usize firstPriority = dispatch % __hidden_cpu_scheduler_fairness::s_BackgroundAdmissionPeriod == __hidden_cpu_scheduler_fairness::s_BackgroundAdmissionTick
+    const usize firstPriority = dispatch % __hidden_cpu_task_scheduler::s_BackgroundAdmissionPeriod == __hidden_cpu_task_scheduler::s_BackgroundAdmissionTick
         ? static_cast<usize>(CpuTaskPriority::Background)
-        : (dispatch % __hidden_cpu_scheduler_fairness::s_NormalAdmissionPeriod == __hidden_cpu_scheduler_fairness::s_NormalAdmissionTick ? static_cast<usize>(CpuTaskPriority::Normal) : static_cast<usize>(CpuTaskPriority::Critical))
+        : (dispatch % __hidden_cpu_task_scheduler::s_NormalAdmissionPeriod == __hidden_cpu_task_scheduler::s_NormalAdmissionTick ? static_cast<usize>(CpuTaskPriority::Normal) : static_cast<usize>(CpuTaskPriority::Critical))
     ;
     const usize preferredCost = affinity == CpuAffinity::Efficiency ? CpuTaskCost::Light : CpuTaskCost::Heavy;
     const usize costs[s_CostSlotCount] = { s_MainThreadTargetSlot, preferredCost, 0u, preferredCost == CpuTaskCost::Heavy ? static_cast<usize>(CpuTaskCost::Light) : static_cast<usize>(CpuTaskCost::Heavy) };

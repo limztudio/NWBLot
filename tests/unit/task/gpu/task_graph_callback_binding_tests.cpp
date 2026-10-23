@@ -88,10 +88,10 @@ bool CallbackGraph::prepare(const usize taskCount){
         char suffix[s_NumberBufferBytes] = {};
         Graphics::GpuTaskSchedulingHint scheduling;
         scheduling.mergeWithPrevious = index % s_MergeGroupSize != 0u;
-        const auto derivedNameAt92Col12 = DeriveName(Name("tests/callback_bindings/task/"), FormatDecimal(index, suffix));
-        if(!derivedNameAt92Col12)
+        const auto derivedNameResult = DeriveName(Name("tests/callback_bindings/task/"), FormatDecimal(index, suffix));
+        if(!derivedNameResult)
             return false;
-        const auto taskResult = AddTaskWithCommands(m_graph, *derivedNameAt92Col12, "Callback Binding Task", GraphicsCommands(), scheduling, {}, scheduling.mergeWithPrevious ? &m_tasks.back() : nullptr, scheduling.mergeWithPrevious ? 1u : 0u);
+        const auto taskResult = AddTaskWithCommands(m_graph, *derivedNameResult, "Callback Binding Task", GraphicsCommands(), scheduling, {}, scheduling.mergeWithPrevious ? &m_tasks.back() : nullptr, scheduling.mergeWithPrevious ? 1u : 0u);
         if(!taskResult)
             return false;
         const Graphics::GpuTaskId task = *taskResult;

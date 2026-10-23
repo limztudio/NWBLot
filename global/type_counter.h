@@ -20,8 +20,8 @@ private:
 public:
     template<typename T>
     static usize Id()noexcept{
-        static const usize s_value = s_NextId.fetch_add(1, MemoryOrder::relaxed);
-        return s_value;
+        static const usize s_Value = s_NextId.fetch_add(1, MemoryOrder::relaxed);
+        return s_Value;
     }
 };
 

@@ -229,20 +229,24 @@ class GpuGraphSubmissionTransaction final : NoCopy{
 
 
 private:
-    enum class PacketRuntimeState : u8{
-        Declared,
-        Submitting,
-        Rejecting,
-        Accepted,
-        Rejected,
+    struct PacketRuntimeState{
+        enum Enum : u8{
+            Declared,
+            Submitting,
+            Rejecting,
+            Accepted,
+            Rejected,
+        };
     };
 
-    enum class SubmissionOperationMode : u8{
-        OrdinaryPacket,
-        WaitExclusiveBarrier,
-        TryExclusiveBarrier,
-        CompositeBarrier,
-        ExceptionFinalizer,
+    struct SubmissionOperationMode{
+        enum Enum : u8{
+            OrdinaryPacket,
+            WaitExclusiveBarrier,
+            TryExclusiveBarrier,
+            CompositeBarrier,
+            ExceptionFinalizer,
+        };
     };
 
     struct PacketRuntime{
@@ -255,7 +259,7 @@ private:
         usize mergedTimelineWaitCount = 0u;
         usize inheritedTimelineWaitElisionCount = 0u;
         f64 submissionSeconds = 0.0;
-        PacketRuntimeState state = PacketRuntimeState::Declared;
+        PacketRuntimeState::Enum state = PacketRuntimeState::Declared;
         // A post-reservation submit-path failure is terminally rejected, but ordinary discard/rejection never sets this flag.
         // It can occur before the backend execute call, such as while validating a timing ticket.
         bool nativeSubmissionRejected = false;
@@ -296,7 +300,7 @@ private:
 
 
     public:
-        SubmissionOperation(const GpuGraphSubmissionTransaction& transaction, SubmissionOperationMode mode, const GpuRecordedGraph::ArtifactOperation* borrowedArtifact = nullptr)noexcept;
+        SubmissionOperation(const GpuGraphSubmissionTransaction& transaction, SubmissionOperationMode::Enum mode, const GpuRecordedGraph::ArtifactOperation* borrowedArtifact = nullptr)noexcept;
         ~SubmissionOperation()noexcept;
 
 

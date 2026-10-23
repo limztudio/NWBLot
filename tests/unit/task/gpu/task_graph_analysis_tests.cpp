@@ -52,10 +52,10 @@ inline constexpr Name s_AnalysisScratchArena("tests/task/gpu/analysis_scratch");
 ){
     char taskIndexBuffer[32u] = {};
     Graphics::GpuTaskDesc desc;
-    const auto derivedNameAt55Col21 = DeriveName(Name("tests/task_graph_analysis/task_"), FormatDecimal(taskIndex, taskIndexBuffer));
-    if(!derivedNameAt55Col21)
+    const auto resourceNameResult = DeriveName(Name("tests/task_graph_analysis/task_"), FormatDecimal(taskIndex, taskIndexBuffer));
+    if(!resourceNameResult)
         return MakeUnexpected(Failure{});
-    desc.setIdentity(*derivedNameAt55Col21).setMarkerLabel("Analysis Test Task").setDependencies(dependencies, dependencyCount).setResourceUses(resourceUses, resourceUseCount);
+    desc.setIdentity(*resourceNameResult).setMarkerLabel("Analysis Test Task").setDependencies(dependencies, dependencyCount).setResourceUses(resourceUses, resourceUseCount);
     return graph.addTask(desc);
 }
 
@@ -188,9 +188,9 @@ static void DeclareShortcutChain(Graphics::GpuTaskGraph& graph, const usize task
             dependencies[offset] = { .generation = generation, .index = static_cast<u32>(reversed ? taskCount - sourceIndex - 1u : sourceIndex), };
         }
         {
-            const auto gpuAdmissionAt187 = AddTask(graph, declarationIndex, dependencies, dependencyCount);
-            ASSERT_TRUE(gpuAdmissionAt187);
-            ASSERT_TRUE(gpuAdmissionAt187->valid());
+            const auto gpuTaskAdmission = AddTask(graph, declarationIndex, dependencies, dependencyCount);
+            ASSERT_TRUE(gpuTaskAdmission);
+            ASSERT_TRUE(gpuTaskAdmission->valid());
         }
     }
 }
@@ -226,9 +226,9 @@ static void DeclareReadyOrderGraph(Graphics::GpuTaskGraph& graph, const usize ta
         const usize producerIndex = !hasDependency ? 0u : shape == ReadyOrderShape::ReverseChain ? taskIndex + 1u : shape == ReadyOrderShape::ConsumerFirstPairs ? taskIndex + half : taskIndex - half;
         const Graphics::GpuTaskId dependency{ .generation = generation, .index = static_cast<u32>(producerIndex) };
         {
-            const auto gpuAdmissionAt221 = AddTask(graph, taskIndex, hasDependency ? &dependency : nullptr, hasDependency ? 1u : 0u);
-            ASSERT_TRUE(gpuAdmissionAt221);
-            ASSERT_TRUE(gpuAdmissionAt221->valid());
+            const auto secondGpuTaskAdmission = AddTask(graph, taskIndex, hasDependency ? &dependency : nullptr, hasDependency ? 1u : 0u);
+            ASSERT_TRUE(secondGpuTaskAdmission);
+            ASSERT_TRUE(secondGpuTaskAdmission->valid());
         }
     }
 }
@@ -274,14 +274,14 @@ TEST(GpuTaskGraphAnalysis, RetainsCycleDiagnosticsAfterBackwardReleasePrefixExha
     const Graphics::GpuTaskId first{ .generation = generation, .index = s_PrefixCount };
     const Graphics::GpuTaskId second{ .generation = generation, .index = s_PrefixCount + 1u };
     {
-        const auto gpuAdmissionAt265 = AddTask(graph, s_PrefixCount, &second, 1u);
-        ASSERT_TRUE(gpuAdmissionAt265);
-        ASSERT_EQ(*gpuAdmissionAt265, first);
+        const auto gpuTaskAdmission = AddTask(graph, s_PrefixCount, &second, 1u);
+        ASSERT_TRUE(gpuTaskAdmission);
+        ASSERT_EQ(*gpuTaskAdmission, first);
     }
     {
-        const auto gpuAdmissionAt266 = AddTask(graph, s_PrefixCount + 1u, &first, 1u);
-        ASSERT_TRUE(gpuAdmissionAt266);
-        ASSERT_EQ(*gpuAdmissionAt266, second);
+        const auto secondGpuTaskAdmission = AddTask(graph, s_PrefixCount + 1u, &first, 1u);
+        ASSERT_TRUE(secondGpuTaskAdmission);
+        ASSERT_EQ(*secondGpuTaskAdmission, second);
     }
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
@@ -386,11 +386,11 @@ TEST(GpuTaskGraphAnalysis, DeduplicatesHazardReasonsAndPreservesExplicitRawEdgeP
     Graphics::GpuGraphResourceId resources[3u] = {};
     for(usize resourceIndex = 0u; resourceIndex < LengthOf(resources); ++resourceIndex){
         char resourceIndexBuffer[32u] = {};
-        const auto derivedNameAt388Col29 = DeriveName(Name("tests/task_graph_analysis/resource_"), FormatDecimal(resourceIndex, resourceIndexBuffer));
-        ASSERT_TRUE(derivedNameAt388Col29);
-        const auto gpuAdmissionAt368 = graph.importHazardDomain(Graphics::GpuGraphResourceDesc{}.setIdentity(*derivedNameAt388Col29).setMarkerLabel("Analysis Hazard Domain").setType(Graphics::GpuGraphResourceType::HazardDomain));
-        ASSERT_TRUE(gpuAdmissionAt368);
-        resources[resourceIndex] = *gpuAdmissionAt368;
+        const auto resourceNameResult = DeriveName(Name("tests/task_graph_analysis/resource_"), FormatDecimal(resourceIndex, resourceIndexBuffer));
+        ASSERT_TRUE(resourceNameResult);
+        const auto resourceTaskAdmission = graph.importHazardDomain(Graphics::GpuGraphResourceDesc{}.setIdentity(*resourceNameResult).setMarkerLabel("Analysis Hazard Domain").setType(Graphics::GpuGraphResourceType::HazardDomain));
+        ASSERT_TRUE(resourceTaskAdmission);
+        resources[resourceIndex] = *resourceTaskAdmission;
         ASSERT_TRUE(resources[resourceIndex].valid());
     }
 
@@ -408,9 +408,9 @@ TEST(GpuTaskGraphAnalysis, DeduplicatesHazardReasonsAndPreservesExplicitRawEdgeP
             uses[resourceIndex * 2u + 1u] = uses[resourceIndex * 2u];
         }
         const Graphics::GpuTaskId dependencies[] = { tasks[0u], tasks[0u] };
-        const auto gpuAdmissionAt391 = AddTask(graph, taskIndex, dependencies, taskIndex == 1u ? 2u : 0u, uses, resourceCount * 2u);
-        ASSERT_TRUE(gpuAdmissionAt391);
-        tasks[taskIndex] = *gpuAdmissionAt391;
+        const auto taskAdmission = AddTask(graph, taskIndex, dependencies, taskIndex == 1u ? 2u : 0u, uses, resourceCount * 2u);
+        ASSERT_TRUE(taskAdmission);
+        tasks[taskIndex] = *taskAdmission;
         ASSERT_TRUE(tasks[taskIndex].valid());
     }
 
@@ -447,9 +447,9 @@ TEST(GpuTaskGraphAnalysis, EmptySchedulingReachabilityAvoidsStorageAndResetsAcro
     Graphics::GpuTaskGraph graph(testArena.arena);
     Graphics::GpuTaskId tasks[s_TaskCount] = {};
     for(usize taskIndex = 0u; taskIndex < s_TaskCount; ++taskIndex){
-        const auto gpuAdmissionAt428 = AddTask(graph, taskIndex);
-        ASSERT_TRUE(gpuAdmissionAt428);
-        tasks[taskIndex] = *gpuAdmissionAt428;
+        const auto taskAdmission = AddTask(graph, taskIndex);
+        ASSERT_TRUE(taskAdmission);
+        tasks[taskIndex] = *taskAdmission;
         ASSERT_TRUE(tasks[taskIndex].valid());
     }
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);

@@ -21,7 +21,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_command_list_state_handoff{
+namespace __hidden_resource_state_handoff{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -67,7 +67,7 @@ bool CommandListResourceStateHandoff::buildResourceSubset(const CommandListResou
     const bool hasBuffers = selection.bufferCount() != 0u;
     const u16 sourceDeviceGeneration = source.m_deviceGeneration;
     if(this == &source){
-        using namespace __hidden_command_list_state_handoff;
+        using namespace __hidden_resource_state_handoff;
         if(hasTextures){
             RetainIf(m_textureStates, [&](const TextureState& state)noexcept{
                 return selection.containsTexture(state.texture);
@@ -192,7 +192,7 @@ bool CommandListResourceStateHandoff::buildTextureRangeSubset(const CommandListR
     m_permanentTextureStates.reserve(permanentTextureStateCount);
     const u16 sourceDeviceGeneration = source.m_deviceGeneration;
     if(this == &source){
-        using namespace __hidden_command_list_state_handoff;
+        using namespace __hidden_resource_state_handoff;
         RetainIf(m_textureStates, [&](const TextureState& state)noexcept{
             return state.texture == texture && contains(state.mipLevel, state.arraySlice);
         }
@@ -248,7 +248,7 @@ bool CommandListResourceStateHandoff::buildBufferRangeSubset(const CommandListRe
     m_permanentBufferStates.reserve(permanentBufferStateCount);
     const u16 sourceDeviceGeneration = source.m_deviceGeneration;
     if(this == &source){
-        using namespace __hidden_command_list_state_handoff;
+        using namespace __hidden_resource_state_handoff;
         RetainIf(m_bufferStates, [&](const BufferState& state)noexcept{
             return state.buffer == buffer && state.range.overlaps(resolvedRange);
         }
@@ -293,7 +293,7 @@ bool CommandListResourceStateHandoff::coversTextureRangeWithOwnership(Texture* c
     for(const PermanentTextureState& state : m_permanentTextureStates){
         if(state.texture != texture)
             continue;
-        if(permanentState || !__hidden_command_list_state_handoff::OwnershipMatches(state.ownerQueue, state.releaseDestinationQueue, expectedOwnerQueue, expectedReleaseDestinationQueue))
+        if(permanentState || !__hidden_resource_state_handoff::OwnershipMatches(state.ownerQueue, state.releaseDestinationQueue, expectedOwnerQueue, expectedReleaseDestinationQueue))
             return false;
         permanentState = &state;
     }
@@ -308,7 +308,7 @@ bool CommandListResourceStateHandoff::coversTextureRangeWithOwnership(Texture* c
             for(const TextureState& state : m_textureStates){
                 if(state.texture != texture || state.mipLevel != mipLevel || state.arraySlice != arraySlice)
                     continue;
-                if(matchingState || !__hidden_command_list_state_handoff::OwnershipMatches(state.ownerQueue, state.releaseDestinationQueue, expectedOwnerQueue, expectedReleaseDestinationQueue))
+                if(matchingState || !__hidden_resource_state_handoff::OwnershipMatches(state.ownerQueue, state.releaseDestinationQueue, expectedOwnerQueue, expectedReleaseDestinationQueue))
                     return false;
                 matchingState = &state;
             }
@@ -331,7 +331,7 @@ bool CommandListResourceStateHandoff::coversBufferWithOwnership(Buffer* const bu
     for(const BufferState& state : m_permanentBufferStates){
         if(state.buffer != buffer)
             continue;
-        if(permanentState || !__hidden_command_list_state_handoff::OwnershipMatches(state.ownerQueue, state.releaseDestinationQueue, expectedOwnerQueue, expectedReleaseDestinationQueue))
+        if(permanentState || !__hidden_resource_state_handoff::OwnershipMatches(state.ownerQueue, state.releaseDestinationQueue, expectedOwnerQueue, expectedReleaseDestinationQueue))
             return false;
         permanentState = &state;
     }
@@ -346,7 +346,7 @@ bool CommandListResourceStateHandoff::coversBufferWithOwnership(Buffer* const bu
                 continue;
             if(state.releaseDestinationQueue.valid() && !resolvedRange.contains(state.range.resolve(buffer->getCreationDescription())))
                 return false;
-            if(!__hidden_command_list_state_handoff::OwnershipMatches(state.ownerQueue, state.releaseDestinationQueue, expectedOwnerQueue, expectedReleaseDestinationQueue))
+            if(!__hidden_resource_state_handoff::OwnershipMatches(state.ownerQueue, state.releaseDestinationQueue, expectedOwnerQueue, expectedReleaseDestinationQueue))
                 return false;
             if(state.range.byteOffset > coveredEnd || state.range.end() <= coveredEnd)
                 continue;

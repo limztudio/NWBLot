@@ -39,7 +39,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_win32_message_loop{
+namespace __hidden_frame_win32{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -199,7 +199,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         }
         LRESULT lifecycleResult;
         if(
-            __hidden_win32_message_loop::HandleWin32FrameLifecycleMessage(
+            __hidden_frame_win32::HandleWin32FrameLifecycleMessage(
                 hwnd, uMsg, wParam, []()noexcept{},
                 [&](const bool isActive){
                     frame->data<Common::WinFrame>().setActive(isActive);
@@ -348,7 +348,7 @@ bool Frame::mainLoop(){
         return true;
 
     bool gracefulQuit = false;
-    const bool loopResult = __hidden_win32_message_loop::RunWin32TimedFrameLoop(
+    const bool loopResult = __hidden_frame_win32::RunWin32TimedFrameLoop(
         [&]()noexcept{ return data<Common::WinFrame>().isActive(); },
         [&](){
             RECT rect = {};

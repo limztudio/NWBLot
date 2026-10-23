@@ -16,7 +16,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_mesh_validation{
+namespace __hidden_mesh_runtime_validation{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -51,7 +51,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
 
 
 [[nodiscard]] bool MeshRuntimeValidation::ValidDirectionVector(const SIMDVectorSingle direction)noexcept{
-    return VectorIsFinite(direction, VectorComponentMask::s_XYZ) && Vector3NearEqual(Vector3LengthSq(direction), s_SIMDOne, VectorReplicate(__hidden_mesh_validation::s_DirectionLengthTolerance));
+    return VectorIsFinite(direction, VectorComponentMask::s_XYZ) && Vector3NearEqual(Vector3LengthSq(direction), s_SIMDOne, VectorReplicate(__hidden_mesh_runtime_validation::s_DirectionLengthTolerance));
 }
 
 
@@ -59,8 +59,8 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
     const SIMDVectorSingle direction = VectorSetW(tangent, 0.0f);
     return
         VectorIsFinite(tangent, VectorComponentMask::s_XYZW)
-        && Vector3NearEqual(Vector3LengthSq(direction), s_SIMDOne, VectorReplicate(__hidden_mesh_validation::s_DirectionLengthTolerance))
-        && Vector4NearEqual(VectorAbs(VectorSplatW(tangent)), s_SIMDOne, VectorReplicate(__hidden_mesh_validation::s_TangentHandednessTolerance))
+        && Vector3NearEqual(Vector3LengthSq(direction), s_SIMDOne, VectorReplicate(__hidden_mesh_runtime_validation::s_DirectionLengthTolerance))
+        && Vector4NearEqual(VectorAbs(VectorSplatW(tangent)), s_SIMDOne, VectorReplicate(__hidden_mesh_runtime_validation::s_TangentHandednessTolerance))
     ;
 }
 

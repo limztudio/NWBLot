@@ -169,7 +169,7 @@ bool GpuTimingSubmissionTicket::prepareSubmission(CommandList* const* commandLis
         }
     }
 
-    const ScopeEndpointValidationResult endpointValidation = validateScopePublicationEndpoints(commandLists, commandListCount);
+    const ScopeEndpointValidationResult::Enum endpointValidation = validateScopePublicationEndpoints(commandLists, commandListCount);
     if(endpointValidation == ScopeEndpointValidationResult::Valid)
         return true;
 
@@ -186,7 +186,7 @@ bool GpuTimingSubmissionTicket::prepareSubmissionAfterCommandListValidation(Comm
     if(!prepareSubmissionState(waitTokens))
         return false;
 
-    const ScopeEndpointValidationResult endpointValidation = validateScopePublicationEndpoints(commandLists, commandListCount);
+    const ScopeEndpointValidationResult::Enum endpointValidation = validateScopePublicationEndpoints(commandLists, commandListCount);
     if(endpointValidation == ScopeEndpointValidationResult::Valid)
         return true;
 
@@ -211,7 +211,7 @@ bool GpuTimingSubmissionTicket::prepareSubmissionState(Vector<QueueSubmissionTok
     return true;
 }
 
-GpuTimingSubmissionTicket::ScopeEndpointValidationResult GpuTimingSubmissionTicket::validateScopePublicationEndpoints(CommandList* const* commandLists, const usize commandListCount)noexcept{
+GpuTimingSubmissionTicket::ScopeEndpointValidationResult::Enum GpuTimingSubmissionTicket::validateScopePublicationEndpoints(CommandList* const* commandLists, const usize commandListCount)noexcept{
     NothrowScopedLock lock(m_mutex);
     NWB_ASSERT_MSG(m_submissionPrepared && !m_resolved, NWB_TEXT("GPU timing endpoint validation requires a prepared submission"));
     if(!m_submissionPrepared || m_resolved)

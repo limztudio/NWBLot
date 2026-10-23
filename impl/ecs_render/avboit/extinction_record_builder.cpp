@@ -25,7 +25,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_avboit_extinction_record{
+namespace __hidden_avboit_extinction_record_builder{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -139,9 +139,9 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> extinctionResourceUses{ scratchArena };
     extinctionResourceUses.reserve(
-        __hidden_avboit_extinction_record::s_ResourceBaseCount
-        + (inputs.streamsUploaded ? __hidden_avboit_extinction_record::s_StreamUseCount : 0u)
-        + (hasCsgIntervalReads ? __hidden_avboit_extinction_record::s_CsgIntervalUseCount : 0u)
+        __hidden_avboit_extinction_record_builder::s_ResourceBaseCount
+        + (inputs.streamsUploaded ? __hidden_avboit_extinction_record_builder::s_StreamUseCount : 0u)
+        + (hasCsgIntervalReads ? __hidden_avboit_extinction_record_builder::s_CsgIntervalUseCount : 0u)
     );
     // Keep the full raster contract on every route so crossings retain hazards and lowering.
     extinctionResourceUses.push_back(ReadUse(inputs.albedo));
@@ -186,7 +186,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
         .requiredState = ECSRenderDetail::s_GeneratedGeometryRasterState,
         .access = Core::GpuTaskResourceAccess::Read,
     };
-    Core::GpuTaskResourceSetUse extinctionMaterialResourceSetUses[__hidden_avboit_extinction_record::s_MaterialResourceSetUseCapacity] = {};
+    Core::GpuTaskResourceSetUse extinctionMaterialResourceSetUses[__hidden_avboit_extinction_record_builder::s_MaterialResourceSetUseCapacity] = {};
     usize extinctionMaterialResourceSetUseCount = 0u;
     if(extinctionPayload.extinctionMaterialGeometryStatesGraphOwned)
         extinctionMaterialResourceSetUses[extinctionMaterialResourceSetUseCount++] = extinctionMaterialGeometrySetUse;
@@ -235,7 +235,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
         computeEmulationPayload.materialGeometryStatesGraphOwned = extinctionPayload.extinctionMaterialGeometryStatesGraphOwned;
 
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> extinctionComputeEmulationResourceUses{ scratchArena };
-        extinctionComputeEmulationResourceUses.reserve(__hidden_avboit_extinction_record::s_EmulationBaseCount + (inputs.csgComputeEmulationPlanCaptured ? __hidden_avboit_extinction_record::s_EmulationPlanUseCount : 0u));
+        extinctionComputeEmulationResourceUses.reserve(__hidden_avboit_extinction_record_builder::s_EmulationBaseCount + (inputs.csgComputeEmulationPlanCaptured ? __hidden_avboit_extinction_record_builder::s_EmulationPlanUseCount : 0u));
         extinctionComputeEmulationResourceUses.push_back(ReadUse(inputs.meshView, Core::ResourceStates::ConstantBuffer));
         extinctionComputeEmulationResourceUses.push_back(ReadBufferUse(inputs.materialInstances, extinctionInstanceRange));
         extinctionComputeEmulationResourceUses.push_back(ReadBufferUse(inputs.materialTyped, extinctionMaterialTypedRange));
@@ -255,7 +255,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
                 inputs.csgRemovedIntervalCountSubresources
             );
         }
-        Core::GpuTaskResourceSetUse extinctionComputeEmulationResourceSetUses[__hidden_avboit_extinction_record::s_ComputeEmulationResourceSetUseCapacity] = {};
+        Core::GpuTaskResourceSetUse extinctionComputeEmulationResourceSetUses[__hidden_avboit_extinction_record_builder::s_ComputeEmulationResourceSetUseCapacity] = {};
         usize extinctionComputeEmulationResourceSetUseCount = 0u;
         extinctionComputeEmulationResourceSetUses[extinctionComputeEmulationResourceSetUseCount++] = extinctionMaterialGeometrySetUse;
         if(inputs.materialSampledTextureSet.valid()){
@@ -292,7 +292,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
     if(extinctionSharedComputeEmulationOutputStatesGraphOwned){
         // Keep the retained output concrete so the compiler preserves alternating uses.
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> extinctionSharedGenerateResourceUses{ scratchArena };
-        extinctionSharedGenerateResourceUses.reserve(__hidden_avboit_extinction_record::s_SharedGenerateUseCount);
+        extinctionSharedGenerateResourceUses.reserve(__hidden_avboit_extinction_record_builder::s_SharedGenerateUseCount);
         extinctionSharedGenerateResourceUses.push_back(ReadUse(inputs.meshView, Core::ResourceStates::ConstantBuffer));
         extinctionSharedGenerateResourceUses.push_back(ReadBufferUse(inputs.materialInstances, extinctionInstanceRange));
         extinctionSharedGenerateResourceUses.push_back(ReadBufferUse(inputs.materialTyped, extinctionMaterialTypedRange));

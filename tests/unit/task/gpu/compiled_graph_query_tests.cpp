@@ -49,11 +49,11 @@ static void CheckPacketQueries(const usize taskCount){
         scheduling.mergeWithPrevious = orderIndex != 0u;
         const Graphics::GpuTaskId dependency{ .generation = graphGeneration, .index = static_cast<u32>(declarationIndex + 1u), };
         char identityText[32u] = {};
-        const auto derivedNameAt52Col12 = DeriveName(Name("tests/compiled_query/task/"), FormatDecimal(declarationIndex, identityText));
-        ASSERT_TRUE(derivedNameAt52Col12);
-        const auto gpuAdmissionAt50 = AddTaskWithCommands(graph, *derivedNameAt52Col12, "Compiled Query Task", GraphicsCommands(), scheduling, {}, orderIndex != 0u ? &dependency : nullptr, orderIndex != 0u ? 1u : 0u);
-        ASSERT_TRUE(gpuAdmissionAt50);
-        tasks[orderIndex] = *gpuAdmissionAt50;
+        const auto derivedNameResult = DeriveName(Name("tests/compiled_query/task/"), FormatDecimal(declarationIndex, identityText));
+        ASSERT_TRUE(derivedNameResult);
+        const auto taskAdmission = AddTaskWithCommands(graph, *derivedNameResult, "Compiled Query Task", GraphicsCommands(), scheduling, {}, orderIndex != 0u ? &dependency : nullptr, orderIndex != 0u ? 1u : 0u);
+        ASSERT_TRUE(taskAdmission);
+        tasks[orderIndex] = *taskAdmission;
         ASSERT_TRUE(tasks[orderIndex].valid());
     }
     const auto nextPacketTaskResult = AddTaskWithCommands(graph, Name("tests/compiled_query/next_packet"), "Next Packet", GraphicsCommands(), {}, {}, &tasks.back(), 1u);

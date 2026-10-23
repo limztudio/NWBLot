@@ -115,32 +115,32 @@ private:
 
     // Angular radius is in radians; larger sources soften the penumbra.
     static f32 ConfiguredAngularRadius(){
-        static const f32 s_angle = [](){
+        static const f32 s_Angle = [](){
             const auto parsed = ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_ANGLE");
             if(!parsed)
                 return s_DefaultAngularRadius;
             const SIMDVectorSingle angle = VectorReplicate(*parsed);
             return VectorGetX(VectorSelect(VectorZero(), VectorMin(VectorReplicate(0.2f), angle), VectorGreater(angle, VectorZero())));
         }();
-        return s_angle;
+        return s_Angle;
     }
 
     // Point/spot softness depends on source radius in world units and light distance: asin(radius / distance).
     static f32 ConfiguredSourceRadius(){
-        static const f32 s_radius = [](){
+        static const f32 s_Radius = [](){
             const auto parsed = ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS");
             if(!parsed)
                 return s_DefaultSourceRadius;
             const SIMDVectorSingle radius = VectorReplicate(*parsed);
             return VectorGetX(VectorSelect(VectorZero(), VectorMin(VectorSplatOne(), radius), VectorGreater(radius, VectorZero())));
         }();
-        return s_radius;
+        return s_Radius;
     }
 
     // Pin yaw for captures that isolate shimmer from motion.
     static f32 FrozenYaw(){
-        static const f32 s_yaw = ReadSmokeFrozenYawFromEnvironment("NWB_SOFT_SHADOW_TEST_SPIN_ANGLE");
-        return s_yaw;
+        static const f32 s_Yaw = ReadSmokeFrozenYawFromEnvironment("NWB_SOFT_SHADOW_TEST_SPIN_ANGLE");
+        return s_Yaw;
     }
 
 

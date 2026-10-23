@@ -69,20 +69,20 @@ void VerifyFanIn(Alloc::ScratchArena& scratchArena, const usize uniqueDependency
     CpuTaskScheduler scheduler(config);
     ScopeExit releaseGuard([&]()noexcept{ releaseRoot.store(true, MemoryOrder::release); });
 
-    const auto cpuAdmission30 = scheduler.submit([]()noexcept{});
-    ASSERT_TRUE(cpuAdmission30);
-    const CpuTaskHandle completed = *cpuAdmission30;
+    const auto completedTaskAdmission = scheduler.submit([]()noexcept{});
+    ASSERT_TRUE(completedTaskAdmission);
+    const CpuTaskHandle completed = *completedTaskAdmission;
     ASSERT_TRUE(completed.valid());
     scheduler.wait(completed);
 
-    const auto cpuAdmission31 = scheduler.submit([&]()noexcept{
+    const auto cpuTaskAdmission = scheduler.submit([&]()noexcept{
         rootEntered.store(true, MemoryOrder::release);
         if(!CpuTaskTestSupport::WaitUntil(releaseRoot, s_GateTimeoutMS))
             rootExpired.store(true, MemoryOrder::release);
     }
     );
-    ASSERT_TRUE(cpuAdmission31);
-    const CpuTaskHandle root = *cpuAdmission31;
+    ASSERT_TRUE(cpuTaskAdmission);
+    const CpuTaskHandle root = *cpuTaskAdmission;
     ASSERT_TRUE(root.valid());
     ASSERT_TRUE(CpuTaskTestSupport::WaitUntil(rootEntered, s_GateTimeoutMS));
     EXPECT_TRUE(scheduler.isComplete(completed));
@@ -93,13 +93,13 @@ void VerifyFanIn(Alloc::ScratchArena& scratchArena, const usize uniqueDependency
     tasks.reserve(uniqueDependencyCount);
     dependencies.reserve(uniqueDependencyCount * repetitionCount + 2u);
     for(usize index = 0u; index < uniqueDependencyCount; ++index){
-        const auto cpuAdmission32 = scheduler.submit([&, index]()noexcept{
+        const auto secondCpuTaskAdmission = scheduler.submit([&, index]()noexcept{
             ++dependencyInvocations[index];
             dependencyCompletionCount.fetch_add(1u, MemoryOrder::release);
         }, root
         );
-        ASSERT_TRUE(cpuAdmission32);
-        const CpuTaskHandle dependency = *cpuAdmission32;
+        ASSERT_TRUE(secondCpuTaskAdmission);
+        const CpuTaskHandle dependency = *secondCpuTaskAdmission;
         ASSERT_TRUE(dependency.valid());
         tasks.push_back(dependency);
     }
@@ -113,13 +113,13 @@ void VerifyFanIn(Alloc::ScratchArena& scratchArena, const usize uniqueDependency
     dependencies.push_back(completed);
     dependencies.push_back(CpuTaskHandle{});
 
-    const auto cpuAdmission33 = scheduler.submit([&]()noexcept{
+    const auto thirdCpuTaskAdmission = scheduler.submit([&]()noexcept{
         completionCountObservedByJoin.store(dependencyCompletionCount.load(MemoryOrder::acquire), MemoryOrder::release);
         joinInvocationCount.fetch_add(1u, MemoryOrder::release);
     }, {}, dependencies.data(), dependencies.size()
     );
-    ASSERT_TRUE(cpuAdmission33);
-    const CpuTaskHandle joined = *cpuAdmission33;
+    ASSERT_TRUE(thirdCpuTaskAdmission);
+    const CpuTaskHandle joined = *thirdCpuTaskAdmission;
     ASSERT_TRUE(joined.valid());
     EXPECT_FALSE(scheduler.isComplete(joined));
     EXPECT_EQ(dependencyCompletionCount.load(MemoryOrder::acquire), 0u);
@@ -170,35 +170,35 @@ TEST(CpuTaskSchedulerTests, NestedLargeFanInAcceptsIndependentPredecessorsAndDup
     u32 predecessors = 0u;
     u32 continuations = 0u;
     u32 childInvocations = 0u;
-    const auto cpuAdmission34 = scheduler.submit([&](){
-        const auto cpuAdmission35 = scheduler.submit([&](){
+    const auto cpuTaskAdmission = scheduler.submit([&](){
+        const auto secondCpuTaskAdmission = scheduler.submit([&](){
             EXPECT_EQ(predecessors, s_FanIn);
             ++childInvocations;
         }, {}, prerequisites.data(), prerequisites.size()
         );
-        ASSERT_TRUE(cpuAdmission35);
-        if(cpuAdmission35)
-            ASSERT_TRUE(cpuAdmission35->valid());
+        ASSERT_TRUE(secondCpuTaskAdmission);
+        if(secondCpuTaskAdmission)
+            ASSERT_TRUE(secondCpuTaskAdmission->valid());
     }
     );
-    ASSERT_TRUE(cpuAdmission34);
-    const auto root = *cpuAdmission34;
+    ASSERT_TRUE(cpuTaskAdmission);
+    const auto root = *cpuTaskAdmission;
     ASSERT_TRUE(root.valid());
     auto tail = root;
     for(usize index = 0u; index < s_ChainLength; ++index){
-        const auto cpuAdmission36 = scheduler.submit([&](){
+        const auto thirdCpuTaskAdmission = scheduler.submit([&](){
             EXPECT_EQ(childInvocations, 1u);
             ++continuations;
         }, tail
         );
-        ASSERT_TRUE(cpuAdmission36);
-        tail = *cpuAdmission36;
+        ASSERT_TRUE(thirdCpuTaskAdmission);
+        tail = *thirdCpuTaskAdmission;
         ASSERT_TRUE(tail.valid());
     }
     for(usize index = 0u; index < s_FanIn; ++index){
-        const auto cpuAdmission37 = scheduler.submit([&]()noexcept{ ++predecessors; });
-        ASSERT_TRUE(cpuAdmission37);
-        prerequisites[index] = *cpuAdmission37;
+        const auto prerequisiteTaskAdmission = scheduler.submit([&]()noexcept{ ++predecessors; });
+        ASSERT_TRUE(prerequisiteTaskAdmission);
+        prerequisites[index] = *prerequisiteTaskAdmission;
         ASSERT_TRUE(prerequisites[index].valid());
     }
     prerequisites[s_FanIn] = prerequisites.front();
@@ -218,26 +218,26 @@ TEST(CpuTaskSchedulerTests, NestedLargeFanInRejectsACycleAtTheEndOfTheDependency
     CpuTaskScheduler scheduler(0u);
     u32 invocations = 0u;
     bool rejected = false;
-    const auto cpuAdmission38 = scheduler.submit([&](){
-        const auto cpuAdmission39 = scheduler.submit([&]()noexcept{ ++invocations; }, {}, prerequisites.data(), prerequisites.size());
-        rejected = !cpuAdmission39 || !cpuAdmission39->valid();
+    const auto cpuTaskAdmission = scheduler.submit([&](){
+        const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept{ ++invocations; }, {}, prerequisites.data(), prerequisites.size());
+        rejected = !secondCpuTaskAdmission || !secondCpuTaskAdmission->valid();
         ++invocations;
     }
     );
-    ASSERT_TRUE(cpuAdmission38);
-    auto tail = *cpuAdmission38;
+    ASSERT_TRUE(cpuTaskAdmission);
+    auto tail = *cpuTaskAdmission;
     ASSERT_TRUE(tail.valid());
     for(usize index = 0u; index < s_FanIn; ++index){
-        const auto cpuAdmission40 = scheduler.submit([&]()noexcept{ ++invocations; }, tail);
-        ASSERT_TRUE(cpuAdmission40);
-        tail = *cpuAdmission40;
+        const auto tailTaskAdmission = scheduler.submit([&]()noexcept{ ++invocations; }, tail);
+        ASSERT_TRUE(tailTaskAdmission);
+        tail = *tailTaskAdmission;
         ASSERT_TRUE(tail.valid());
     }
     prerequisites.back() = tail;
     for(usize index = 0u; index < s_FanIn; ++index){
-        const auto cpuAdmission41 = scheduler.submit([&]()noexcept{ ++invocations; });
-        ASSERT_TRUE(cpuAdmission41);
-        prerequisites[index] = *cpuAdmission41;
+        const auto prerequisiteTaskAdmission = scheduler.submit([&]()noexcept{ ++invocations; });
+        ASSERT_TRUE(prerequisiteTaskAdmission);
+        prerequisites[index] = *prerequisiteTaskAdmission;
         ASSERT_TRUE(prerequisites[index].valid());
     }
     scheduler.wait();
@@ -250,20 +250,20 @@ TEST(CpuTaskSchedulerTests, NestedDependencyAcceptsARetiredGenerationInTheAncest
     using namespace __hidden_cpu_task_fanin_tests;
     DeadlineGuard deadline;
     CpuTaskScheduler scheduler(0u);
-    const auto cpuAdmission42 = scheduler.submit([]()noexcept{});
-    ASSERT_TRUE(cpuAdmission42);
-    const auto completed = *cpuAdmission42;
+    const auto completedTaskAdmission = scheduler.submit([]()noexcept{});
+    ASSERT_TRUE(completedTaskAdmission);
+    const auto completed = *completedTaskAdmission;
     ASSERT_TRUE(completed.valid());
     scheduler.wait(completed);
     bool accepted = false;
     bool invoked = false;
-    const auto cpuAdmission43 = scheduler.submit([&](){
-        const auto cpuAdmission44 = scheduler.submit([&]()noexcept{ invoked = true; }, completed);
-        accepted = cpuAdmission44.has_value() && cpuAdmission44->valid();
+    const auto cpuTaskAdmission = scheduler.submit([&](){
+        const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept{ invoked = true; }, completed);
+        accepted = secondCpuTaskAdmission.has_value() && secondCpuTaskAdmission->valid();
     }
     );
-    ASSERT_TRUE(cpuAdmission43);
-    const auto parent = *cpuAdmission43;
+    ASSERT_TRUE(cpuTaskAdmission);
+    const auto parent = *cpuTaskAdmission;
     ASSERT_TRUE(parent.valid());
     EXPECT_EQ(parent.index, completed.index);
     EXPECT_NE(parent.generation, completed.generation);

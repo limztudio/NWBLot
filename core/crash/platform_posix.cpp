@@ -62,29 +62,29 @@ struct FramePointerRecord{
 };
 
 
-[[nodiscard]] static Detail::PlatformFailure NativeFailure(const Detail::PlatformOperation::Enum operation, const int code)noexcept{
-    return { operation, Detail::PlatformErrorDomain::Posix, static_cast<u64>(code) };
+[[nodiscard]] static CrashDetail::PlatformFailure NativeFailure(const CrashDetail::PlatformOperation::Enum operation, const int code)noexcept{
+    return { operation, CrashDetail::PlatformErrorDomain::Posix, static_cast<u64>(code) };
 }
 
-[[nodiscard]] static Expected<void, Detail::PlatformFailure> ReleaseOwnedDescriptor(int& descriptor)noexcept{
+[[nodiscard]] static Expected<void, CrashDetail::PlatformFailure> ReleaseOwnedDescriptor(int& descriptor)noexcept{
     const int owned = descriptor;
     descriptor = -1;
     if(owned < 0)
         return {};
     // Linux/Android release the descriptor even on EINTR: retrying could close a reused descriptor.
     if(close(owned) != 0)
-        return MakeUnexpected(NativeFailure(Detail::PlatformOperation::CloseDescriptor, errno));
+        return MakeUnexpected(NativeFailure(CrashDetail::PlatformOperation::CloseDescriptor, errno));
     return {};
 }
 
-static void CleanupOwnedDescriptor(int& descriptor, Detail::PlatformCleanupObservations& observations)noexcept{
+static void CleanupOwnedDescriptor(int& descriptor, CrashDetail::PlatformCleanupObservations& observations)noexcept{
     const auto released = ReleaseOwnedDescriptor(descriptor);
     if(!released)
         observations.record(released.error());
 }
 
-static void AppendCallstackFrame(Detail::CrashDumpRequestOptions& options, const u64 address)noexcept{
-    if(address == 0u || options.callstackFrameCount >= Detail::s_MaxCallstackFrames)
+static void AppendCallstackFrame(CrashDetail::CrashDumpRequestOptions& options, const u64 address)noexcept{
+    if(address == 0u || options.callstackFrameCount >= CrashDetail::s_MaxCallstackFrames)
         return;
     if(options.callstackFrameCount != 0u && options.callstackFrames[options.callstackFrameCount - 1u] == address)
         return;
@@ -92,7 +92,7 @@ static void AppendCallstackFrame(Detail::CrashDumpRequestOptions& options, const
     options.callstackFrames[options.callstackFrameCount++] = address;
 }
 
-static void CaptureFramePointerCallstack(Detail::CrashDumpRequestOptions& options, const u64 instructionPointer, const u64 stackPointer, const u64 framePointer)noexcept{
+static void CaptureFramePointerCallstack(CrashDetail::CrashDumpRequestOptions& options, const u64 instructionPointer, const u64 stackPointer, const u64 framePointer)noexcept{
     AppendCallstackFrame(options, instructionPointer);
 
     if(stackPointer == 0u || framePointer == 0u || !IsAligned(framePointer, static_cast<u64>(sizeof(void*))))
@@ -101,7 +101,7 @@ static void CaptureFramePointerCallstack(Detail::CrashDumpRequestOptions& option
         return;
 
     u64 currentFrame = framePointer;
-    while(options.callstackFrameCount < Detail::s_MaxCallstackFrames){
+    while(options.callstackFrameCount < CrashDetail::s_MaxCallstackFrames){
         const auto* const frame = reinterpret_cast<const FramePointerRecord*>(static_cast<usize>(currentFrame));
         const u64 nextFrame = static_cast<u64>(reinterpret_cast<usize>(frame->previous));
         const u64 returnAddress = static_cast<u64>(reinterpret_cast<usize>(frame->returnAddress));
@@ -121,9 +121,9 @@ static void CaptureFramePointerCallstack(Detail::CrashDumpRequestOptions& option
 // Pre-2.35 glibc may take the loader lock (dl_iterate_phdr); newer glibc uses lock-free __dl_find_object.
 // When the trigger IP is known, capture starts there (robust to inlining); otherwise only that IP is emitted.
 // Returns false when nothing unwound so the caller falls back to the frame-pointer walk.
-[[nodiscard]] static bool CaptureEhFrameCallstack(Detail::CrashDumpRequestOptions& options, const u64 alignmentInstructionPointer)noexcept{
-    void* unwoundAddresses[Detail::s_MaxCallstackFrames];
-    const int unwoundFrameCount = backtrace(unwoundAddresses, static_cast<int>(Detail::s_MaxCallstackFrames));
+[[nodiscard]] static bool CaptureEhFrameCallstack(CrashDetail::CrashDumpRequestOptions& options, const u64 alignmentInstructionPointer)noexcept{
+    void* unwoundAddresses[CrashDetail::s_MaxCallstackFrames];
+    const int unwoundFrameCount = backtrace(unwoundAddresses, static_cast<int>(CrashDetail::s_MaxCallstackFrames));
     if(unwoundFrameCount <= 0)
         return false;
 
@@ -147,14 +147,14 @@ static void CaptureFramePointerCallstack(Detail::CrashDumpRequestOptions& option
 }
 
 static void WarmUpUnwinder()noexcept{
-    void* warmUpAddresses[Detail::s_MaxCallstackFrames];
-    const int warmedFrameCount = backtrace(warmUpAddresses, static_cast<int>(Detail::s_MaxCallstackFrames));
+    void* warmUpAddresses[CrashDetail::s_MaxCallstackFrames];
+    const int warmedFrameCount = backtrace(warmUpAddresses, static_cast<int>(CrashDetail::s_MaxCallstackFrames));
     if(warmedFrameCount <= 0)
         return;
 }
 #endif
 
-static void CaptureCurrentCallstack(Detail::CrashDumpRequestOptions& outOptions, const void* const stackPointer, const void* const framePointer, const void* const instructionPointer)noexcept{
+static void CaptureCurrentCallstack(CrashDetail::CrashDumpRequestOptions& outOptions, const void* const stackPointer, const void* const framePointer, const void* const instructionPointer)noexcept{
     outOptions.stackPointer = static_cast<u64>(reinterpret_cast<usize>(stackPointer));
     outOptions.framePointer = static_cast<u64>(reinterpret_cast<usize>(framePointer));
     outOptions.instructionPointer = static_cast<u64>(reinterpret_cast<usize>(instructionPointer));
@@ -169,7 +169,7 @@ static void CaptureCurrentCallstack(Detail::CrashDumpRequestOptions& outOptions,
     CaptureFramePointerCallstack(outOptions, outOptions.instructionPointer, outOptions.stackPointer, outOptions.framePointer);
 }
 
-static void CaptureSignalContext(Detail::CrashDumpRequestOptions& options, const siginfo_t* signalInfo, const void* signalContext)noexcept{
+static void CaptureSignalContext(CrashDetail::CrashDumpRequestOptions& options, const siginfo_t* signalInfo, const void* signalContext)noexcept{
     if(signalInfo)
         options.faultAddress = static_cast<u64>(reinterpret_cast<usize>(signalInfo->si_addr));
 
@@ -196,10 +196,10 @@ static void CaptureSignalContext(Detail::CrashDumpRequestOptions& options, const
 }
 
 static void SignalHandler(const int signalNumber, siginfo_t* signalInfo, void* signalContext)noexcept{
-    if(!Detail::TryConsumeSuppressedPlatformCrashCapture()){
-        Detail::CrashDumpRequestOptions options;
+    if(!CrashDetail::TryConsumeSuppressedPlatformCrashCapture()){
+        CrashDetail::CrashDumpRequestOptions options;
         CaptureSignalContext(options, signalInfo, signalContext);
-        Detail::NotifyCrashHandler(Detail::CrashReasonKind::PosixSignal, static_cast<u32>(signalNumber), options);
+        CrashDetail::NotifyCrashHandler(CrashDetail::CrashReasonKind::PosixSignal, static_cast<u32>(signalNumber), options);
     }
 
     struct sigaction action = {};
@@ -210,29 +210,29 @@ static void SignalHandler(const int signalNumber, siginfo_t* signalInfo, void* s
 }
 
 [[noreturn]] static void TerminateHandler()noexcept{
-    Detail::CrashDumpRequestOptions options;
+    CrashDetail::CrashDumpRequestOptions options;
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
     // std::terminate runs in a normal thread context, so unwind a callstack directly instead of relying on the follow-up SIGABRT to carry it.
     if(!CaptureEhFrameCallstack(options, 0u))
         options.callstackFrameCount = 0u;
 #endif
-    Detail::NotifyCrashHandler(Detail::CrashReasonKind::Terminate, 0u, options);
+    CrashDetail::NotifyCrashHandler(CrashDetail::CrashReasonKind::Terminate, 0u, options);
     abort();
 }
 
-[[nodiscard]] static Expected<void, Detail::PlatformFailure> InstallSignalHandlers()noexcept{
+[[nodiscard]] static Expected<void, CrashDetail::PlatformFailure> InstallSignalHandlers()noexcept{
     stack_t stack = {};
     stack.ss_sp = g_SignalStack;
     stack.ss_size = sizeof(g_SignalStack);
-    if(sigaltstack(&stack, &Detail::g_State.previousSignalStack) != 0)
-        return MakeUnexpected(NativeFailure(Detail::PlatformOperation::InstallSignalStack, errno));
-    Detail::g_State.signalStackInstalled = true;
-    Detail::g_State.signalStackOwner = QueryCurrentThreadId();
+    if(sigaltstack(&stack, &CrashDetail::g_State.previousSignalStack) != 0)
+        return MakeUnexpected(NativeFailure(CrashDetail::PlatformOperation::InstallSignalStack, errno));
+    CrashDetail::g_State.signalStackInstalled = true;
+    CrashDetail::g_State.signalStackOwner = QueryCurrentThreadId();
 
     struct sigaction action = {};
     action.sa_sigaction = SignalHandler;
     if(sigemptyset(&action.sa_mask) != 0)
-        return MakeUnexpected(NativeFailure(Detail::PlatformOperation::InstallSignalAction, errno));
+        return MakeUnexpected(NativeFailure(CrashDetail::PlatformOperation::InstallSignalAction, errno));
     action.sa_flags = SA_SIGINFO | SA_ONSTACK | SA_RESETHAND;
     constexpr int s_Signals[] = {
         SIGSEGV, SIGABRT, SIGFPE, SIGILL,
@@ -244,28 +244,28 @@ static void SignalHandler(const int signalNumber, siginfo_t* signalInfo, void* s
 #endif
     };
     for(usize index = 0u; index < sizeof(s_Signals) / sizeof(s_Signals[0u]); ++index){
-        if(sigaction(s_Signals[index], &action, &Detail::g_State.previousSignalActions[index]) != 0)
-            return MakeUnexpected(NativeFailure(Detail::PlatformOperation::InstallSignalAction, errno));
-        Detail::g_State.installedSignals[index] = s_Signals[index];
-        Detail::g_State.signalActionInstalled[index] = true;
+        if(sigaction(s_Signals[index], &action, &CrashDetail::g_State.previousSignalActions[index]) != 0)
+            return MakeUnexpected(NativeFailure(CrashDetail::PlatformOperation::InstallSignalAction, errno));
+        CrashDetail::g_State.installedSignals[index] = s_Signals[index];
+        CrashDetail::g_State.signalActionInstalled[index] = true;
     }
     return {};
 }
 
 #if defined(NWB_PLATFORM_ANDROID)
-[[nodiscard]] static Expected<void, Detail::PlatformFailure> OpenAndroidEmergencyFile()noexcept{
-    const AStringView directory(Detail::g_State.spoolDirectoryText);
+[[nodiscard]] static Expected<void, CrashDetail::PlatformFailure> OpenAndroidEmergencyFile()noexcept{
+    const AStringView directory(CrashDetail::g_State.spoolDirectoryText);
     const AStringView filename(PackageNames::s_AndroidEmergencyRequestFileName);
-    char emergencyPath[Detail::s_MaxPathText] = {};
+    char emergencyPath[CrashDetail::s_MaxPathText] = {};
     if(directory.empty() || directory.size() + 1u + filename.size() >= sizeof(emergencyPath))
-        return MakeUnexpected(NativeFailure(Detail::PlatformOperation::OpenEmergencyFile, ENAMETOOLONG));
+        return MakeUnexpected(NativeFailure(CrashDetail::PlatformOperation::OpenEmergencyFile, ENAMETOOLONG));
     CopyFixedBuffer(emergencyPath, directory);
     AppendFixedBuffer(emergencyPath, "/");
     AppendFixedBuffer(emergencyPath, filename);
     const int descriptor = open(emergencyPath, O_CREAT | O_APPEND | O_WRONLY | O_CLOEXEC, s_AndroidEmergencyFileMode);
     if(descriptor < 0)
-        return MakeUnexpected(NativeFailure(Detail::PlatformOperation::OpenEmergencyFile, errno));
-    Detail::g_State.emergencyWriteFd = descriptor;
+        return MakeUnexpected(NativeFailure(CrashDetail::PlatformOperation::OpenEmergencyFile, errno));
+    CrashDetail::g_State.emergencyWriteFd = descriptor;
     return {};
 }
 #endif
@@ -350,19 +350,19 @@ static void DrainPendingAcks(const int ackReadFd)noexcept{
         if((pollFd.revents & POLLIN) == 0)
             return;
 
-        Detail::CrashAck ignoredAck;
+        CrashDetail::CrashAck ignoredAck;
         if(!ReadAllFileDescriptor(ackReadFd, &ignoredAck, sizeof(ignoredAck)))
             return;
     }
 }
 
-[[nodiscard]] static Detail::CrashDumpTransportStatus::Enum WaitForAck(const int ackReadFd, const Detail::CrashRequest& request, const u32 waitMilliseconds)noexcept{
+[[nodiscard]] static CrashDetail::CrashDumpTransportStatus::Enum WaitForAck(const int ackReadFd, const CrashDetail::CrashRequest& request, const u32 waitMilliseconds)noexcept{
     if(ackReadFd < 0 || waitMilliseconds == 0u)
-        return Detail::CrashDumpTransportStatus::Sent;
+        return CrashDetail::CrashDumpTransportStatus::Sent;
 
     const auto now = ProcessExecutionDetail::MonotonicMilliseconds();
     if(!now || static_cast<u64>(waitMilliseconds) > Limit<u64>::s_Max - *now)
-        return Detail::CrashDumpTransportStatus::Failed;
+        return CrashDetail::CrashDumpTransportStatus::Failed;
     const u64 deadline = *now + waitMilliseconds;
 
     for(;;){
@@ -372,36 +372,36 @@ static void DrainPendingAcks(const int ackReadFd)noexcept{
 
         const auto remainingTimeout = ProcessExecutionDetail::RemainingTimeoutMilliseconds(deadline);
         if(!remainingTimeout)
-            return Detail::CrashDumpTransportStatus::Failed;
+            return CrashDetail::CrashDumpTransportStatus::Failed;
         const int pollResult = poll(&pollFd, 1u, *remainingTimeout);
         if(pollResult == 0)
-            return Detail::CrashDumpTransportStatus::TimedOut;
+            return CrashDetail::CrashDumpTransportStatus::TimedOut;
         if(pollResult < 0){
             if(errno == EINTR)
                 continue;
-            return Detail::CrashDumpTransportStatus::Failed;
+            return CrashDetail::CrashDumpTransportStatus::Failed;
         }
 
         if((pollFd.revents & POLLIN) == 0){
             if((pollFd.revents & (POLLERR | POLLHUP | POLLNVAL)) != 0)
-                return Detail::CrashDumpTransportStatus::Failed;
+                return CrashDetail::CrashDumpTransportStatus::Failed;
             continue;
         }
 
-        Detail::CrashAck ack;
+        CrashDetail::CrashAck ack;
         if(!ReadAllFileDescriptor(ackReadFd, &ack, sizeof(ack)))
-            return Detail::CrashDumpTransportStatus::Failed;
-        if(Detail::CrashAckMatchesRequest(ack, request))
-            return ack.packageWritten ? Detail::CrashDumpTransportStatus::PackageWritten : Detail::CrashDumpTransportStatus::PackageWriteFailed;
+            return CrashDetail::CrashDumpTransportStatus::Failed;
+        if(CrashDetail::CrashAckMatchesRequest(ack, request))
+            return ack.packageWritten ? CrashDetail::CrashDumpTransportStatus::PackageWritten : CrashDetail::CrashDumpTransportStatus::PackageWriteFailed;
         const auto expired = ProcessExecutionDetail::TimeoutExpired(deadline);
         if(!expired)
-            return Detail::CrashDumpTransportStatus::Failed;
+            return CrashDetail::CrashDumpTransportStatus::Failed;
         if(*expired)
-            return Detail::CrashDumpTransportStatus::TimedOut;
+            return CrashDetail::CrashDumpTransportStatus::TimedOut;
     }
 }
 
-static void WaitForOwnedChild(pid_t& child, const bool terminateImmediately, Detail::PlatformCleanupObservations& observations)noexcept{
+static void WaitForOwnedChild(pid_t& child, const bool terminateImmediately, CrashDetail::PlatformCleanupObservations& observations)noexcept{
     if(child <= 0)
         return;
     constexpr u32 s_WaitPollCount = 300u;
@@ -411,7 +411,7 @@ static void WaitForOwnedChild(pid_t& child, const bool terminateImmediately, Det
     for(u32 phase = 0u; phase < s_WaitPhaseCount; ++phase){
         if(phase != 0u || terminateImmediately){
             if(kill(child, SIGKILL) != 0 && errno != ESRCH){
-                observations.record(NativeFailure(Detail::PlatformOperation::KillChild, errno));
+                observations.record(NativeFailure(CrashDetail::PlatformOperation::KillChild, errno));
                 return;
             }
             terminated = true;
@@ -422,24 +422,24 @@ static void WaitForOwnedChild(pid_t& child, const bool terminateImmediately, Det
             if(waited == child){
                 child = -1;
                 if(!terminated && WIFEXITED(status) && WEXITSTATUS(status) != 0)
-                    observations.record({ Detail::PlatformOperation::WaitChild, Detail::PlatformErrorDomain::ExitCode, static_cast<u64>(WEXITSTATUS(status)) });
+                    observations.record({ CrashDetail::PlatformOperation::WaitChild, CrashDetail::PlatformErrorDomain::ExitCode, static_cast<u64>(WEXITSTATUS(status)) });
                 else if(!terminated && WIFSIGNALED(status))
-                    observations.record({ Detail::PlatformOperation::WaitChild, Detail::PlatformErrorDomain::Signal, static_cast<u64>(WTERMSIG(status)) });
+                    observations.record({ CrashDetail::PlatformOperation::WaitChild, CrashDetail::PlatformErrorDomain::Signal, static_cast<u64>(WTERMSIG(status)) });
                 return;
             }
             if(waited < 0 && errno != EINTR){
                 const int error = errno;
                 if(error == ECHILD)
                     child = -1;
-                observations.record(NativeFailure(Detail::PlatformOperation::WaitChild, error));
+                observations.record(NativeFailure(CrashDetail::PlatformOperation::WaitChild, error));
                 return;
             }
             if(poll(nullptr, 0u, s_WaitPollMilliseconds) < 0 && errno != EINTR){
-                observations.record(NativeFailure(Detail::PlatformOperation::WaitChild, errno));
+                observations.record(NativeFailure(CrashDetail::PlatformOperation::WaitChild, errno));
                 break;
             }
         }
-        observations.record(NativeFailure(Detail::PlatformOperation::WaitChild, ETIMEDOUT));
+        observations.record(NativeFailure(CrashDetail::PlatformOperation::WaitChild, ETIMEDOUT));
         if(terminated)
             return;
     }
@@ -457,7 +457,7 @@ static void WaitForOwnedChild(pid_t& child, const bool terminateImmediately, Det
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace Detail{
+namespace CrashDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -482,14 +482,14 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
 
     // Re-entrancy guard + writer serialization, matching Win32: a fault inside the transport bails, and one faulting thread owns the channel.
     // Async-safe (atomic CAS, no Futex).
-    static thread_local bool s_inTransport = false;
-    if(s_inTransport)
+    static thread_local bool s_InTransport = false;
+    if(s_InTransport)
         return CrashDumpTransportStatus::Failed;
-    s_inTransport = true;
+    s_InTransport = true;
 
     u32 expected = 0u;
     if(!g_State.transportInFlight.compare_exchange_strong(expected, 1u, MemoryOrder::acq_rel, MemoryOrder::acquire)){
-        s_inTransport = false;
+        s_InTransport = false;
         return CrashDumpTransportStatus::Sent;
     }
 
@@ -508,7 +508,7 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
 #endif
 
     g_State.transportInFlight.store(0u, MemoryOrder::release);
-    s_inTransport = false;
+    s_InTransport = false;
     return status;
 }
 

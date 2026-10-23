@@ -44,9 +44,11 @@ class Device final : public RefCounter<GraphicsResource>, NoCopy{
 
 
 private:
-    enum class DeviceLossDiagnosticPolicy : u8{
-        Capture,
-        Defer,
+    struct DeviceLossDiagnosticPolicy{
+        enum Enum : u8{
+            Capture,
+            Defer,
+        };
     };
 
 
@@ -248,7 +250,7 @@ private:
         const GpuPhysicalQueueId& executionQueue,
         const QueueSubmissionDesc& submitDesc,
         bool graphSubmissionAuthorized,
-        DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy = DeviceLossDiagnosticPolicy::Capture
+        DeviceLossDiagnosticPolicy::Enum deviceLossDiagnosticPolicy = DeviceLossDiagnosticPolicy::Capture
     );
 
 
@@ -332,10 +334,10 @@ public:
 private:
     void markDeviceLost()noexcept{ m_deviceLost.store(true, MemoryOrder::release); }
     [[nodiscard]] VkResult waitForNativeIdle()noexcept;
-    [[nodiscard]] bool waitForSubmissionTokenInternal(const QueueSubmissionToken& token, DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy);
-    [[nodiscard]] bool setEventQueryInternal(EventQuery& query, CommandQueue::Enum queue, DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy);
-    [[nodiscard]] Expected<bool> pollEventQueryInternal(EventQuery& query, DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy);
-    [[nodiscard]] bool waitEventQueryInternal(EventQuery& query, DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy);
+    [[nodiscard]] bool waitForSubmissionTokenInternal(const QueueSubmissionToken& token, DeviceLossDiagnosticPolicy::Enum deviceLossDiagnosticPolicy);
+    [[nodiscard]] bool setEventQueryInternal(EventQuery& query, CommandQueue::Enum queue, DeviceLossDiagnosticPolicy::Enum deviceLossDiagnosticPolicy);
+    [[nodiscard]] Expected<bool> pollEventQueryInternal(EventQuery& query, DeviceLossDiagnosticPolicy::Enum deviceLossDiagnosticPolicy);
+    [[nodiscard]] bool waitEventQueryInternal(EventQuery& query, DeviceLossDiagnosticPolicy::Enum deviceLossDiagnosticPolicy);
     void prepareForDestructionAfterIdleOrLoss();
     [[nodiscard]] bool beginSubmissionOperation()noexcept;
     void endSubmissionOperation()noexcept;

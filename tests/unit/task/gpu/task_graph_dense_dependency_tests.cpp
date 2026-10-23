@@ -54,11 +54,11 @@ static void DeclareDenseDependencies(Graphics::GpuTaskGraph& graph, const usize 
     if(scenario != Scenario::Explicit){
         for(usize index = 0u; index < taskCount; ++index){
             char text[32u] = {};
-            const auto derivedNameAt57Col65 = DeriveName(Name("tests/dense_dependencies/resource/"), FormatDecimal(index, text));
-            ASSERT_TRUE(derivedNameAt57Col65);
-            const auto gpuAdmissionAt57 = AddHazardDomain(graph, *derivedNameAt57Col65, "Dense Hazard");
-            ASSERT_TRUE(gpuAdmissionAt57);
-            resources.push_back(*gpuAdmissionAt57);
+            const auto resourceNameResult = DeriveName(Name("tests/dense_dependencies/resource/"), FormatDecimal(index, text));
+            ASSERT_TRUE(resourceNameResult);
+            const auto gpuTaskAdmission = AddHazardDomain(graph, *resourceNameResult, "Dense Hazard");
+            ASSERT_TRUE(gpuTaskAdmission);
+            resources.push_back(*gpuTaskAdmission);
             ASSERT_TRUE(resources.back().valid());
         }
     }
@@ -76,9 +76,9 @@ static void DeclareDenseDependencies(Graphics::GpuTaskGraph& graph, const usize 
             }
         }
         char text[32u] = {};
-        const auto derivedNameAt79Col12 = DeriveName(Name("tests/dense_dependencies/task/"), FormatDecimal(index, text));
-        ASSERT_TRUE(derivedNameAt79Col12);
-        const auto taskResult = AddTask(graph, *derivedNameAt79Col12, "Dense Dependency Task", scenario == Scenario::Inferred ? nullptr : tasks.data(), scenario == Scenario::Inferred ? 0u : tasks.size(), uses.data(), uses.size());
+        const auto derivedNameResult = DeriveName(Name("tests/dense_dependencies/task/"), FormatDecimal(index, text));
+        ASSERT_TRUE(derivedNameResult);
+        const auto taskResult = AddTask(graph, *derivedNameResult, "Dense Dependency Task", scenario == Scenario::Inferred ? nullptr : tasks.data(), scenario == Scenario::Inferred ? 0u : tasks.size(), uses.data(), uses.size());
         ASSERT_TRUE(taskResult);
         const auto task = *taskResult;
         ASSERT_TRUE(task.valid());

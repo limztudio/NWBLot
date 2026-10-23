@@ -18,7 +18,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_x11_clipboard{
+namespace __hidden_x11_clipboard_service{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -58,7 +58,7 @@ X11ClipboardService::~X11ClipboardService()noexcept{
         X11CheckedOperation operation(m_display);
         XDestroyWindow(&m_display, m_ownerWindow);
         if(!operation.succeeded())
-            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = __hidden_x11_clipboard::s_WarningEventName, .category = __hidden_x11_clipboard::s_LifecycleCategory, .message = "X11 clipboard: owner window destruction failed", .file = __FILE__, .line = __LINE__, });
+            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = __hidden_x11_clipboard_service::s_WarningEventName, .category = __hidden_x11_clipboard_service::s_LifecycleCategory, .message = "X11 clipboard: owner window destruction failed", .file = __FILE__, .line = __LINE__, });
     }
 }
 
@@ -219,7 +219,7 @@ void X11ClipboardService::releaseOperation(){
         X11CheckedOperation checked(m_display);
         XDestroyWindow(&m_display, m_operationWindow);
         if(!checked.succeeded())
-            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = __hidden_x11_clipboard::s_WarningEventName, .category = __hidden_x11_clipboard::s_LifecycleCategory, .message = "X11 clipboard: request window destruction failed", .file = __FILE__, .line = __LINE__, });
+            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = __hidden_x11_clipboard_service::s_WarningEventName, .category = __hidden_x11_clipboard_service::s_LifecycleCategory, .message = "X11 clipboard: request window destruction failed", .file = __FILE__, .line = __LINE__, });
     }
     m_operationWindow = 0u;
     m_operationToken = {};

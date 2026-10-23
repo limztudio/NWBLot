@@ -200,10 +200,10 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
         m_context.fail();
         return {};
     }
-    const SIMDVectorSingle listpaddingCurrent = VectorSet(list.padding.left, list.padding.top, list.padding.right, list.padding.bottom);
-    const SIMDVectorSingle listpaddingCandidate = VectorSet(background->padding.left, background->padding.top, background->padding.right, background->padding.bottom);
-    const SIMDVectorSingle listpaddingMaximum = VectorSelect(listpaddingCandidate, listpaddingCurrent, VectorGreater(listpaddingCurrent, listpaddingCandidate));
-    list.padding = { VectorGetX(listpaddingMaximum), VectorGetY(listpaddingMaximum), VectorGetZ(listpaddingMaximum), VectorGetW(listpaddingMaximum) };
+    const SIMDVectorSingle listPaddingCurrent = VectorSet(list.padding.left, list.padding.top, list.padding.right, list.padding.bottom);
+    const SIMDVectorSingle listPaddingCandidate = VectorSet(background->padding.left, background->padding.top, background->padding.right, background->padding.bottom);
+    const SIMDVectorSingle listPaddingMaximum = VectorSelect(listPaddingCandidate, listPaddingCurrent, VectorGreater(listPaddingCurrent, listPaddingCandidate));
+    list.padding = { VectorGetX(listPaddingMaximum), VectorGetY(listPaddingMaximum), VectorGetZ(listPaddingMaximum), VectorGetW(listPaddingMaximum) };
     if(!prepareListMetrics(list) || !comboMatches(frame)){
         m_context.fail();
         return {};

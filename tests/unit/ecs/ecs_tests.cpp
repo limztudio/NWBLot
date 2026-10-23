@@ -667,15 +667,15 @@ TEST(Ecs, SystemCompletionIncludesAsynchronousDescendants){
     i32 observed = 0;
 
     ScheduledSystem writer(arena, { { positionType, NWB::Core::ECS::AccessMode::Write } }, [&](){
-        const auto cpuAdmission2 = world.taskScope().submit([&](){
+        const auto cpuTaskAdmission = world.taskScope().submit([&](){
             SleepMS(s_EntityWaitIntervalMS);
-            const auto cpuAdmission3 = world.taskScope().submit([&]()noexcept{ value.store(41, MemoryOrder::release); });
-            ASSERT_TRUE(cpuAdmission3);
-            EXPECT_TRUE(cpuAdmission3->valid());
+            const auto secondCpuTaskAdmission = world.taskScope().submit([&]()noexcept{ value.store(41, MemoryOrder::release); });
+            ASSERT_TRUE(secondCpuTaskAdmission);
+            EXPECT_TRUE(secondCpuTaskAdmission->valid());
         }
         );
-        ASSERT_TRUE(cpuAdmission2);
-        EXPECT_TRUE(cpuAdmission2->valid());
+        ASSERT_TRUE(cpuTaskAdmission);
+        EXPECT_TRUE(cpuTaskAdmission->valid());
     }
     );
     ScheduledSystem reader(arena, { { positionType, NWB::Core::ECS::AccessMode::Read } }, [&]()noexcept{
@@ -699,7 +699,7 @@ TEST(Ecs, WorldClearDoesNotWaitForUnrelatedSchedulerTasks){
     Atomic<bool> started{ false };
     Atomic<bool> release{ false };
     Atomic<bool> completed{ false };
-    const auto cpuAdmission4 = unrelatedTasks.submit([&]()noexcept{
+    const auto cpuTaskAdmission = unrelatedTasks.submit([&]()noexcept{
         started.store(true, MemoryOrder::release);
         started.notify_all();
         const Timer begin = TimerNow();
@@ -708,8 +708,8 @@ TEST(Ecs, WorldClearDoesNotWaitForUnrelatedSchedulerTasks){
         completed.store(true, MemoryOrder::release);
     }
     );
-    ASSERT_TRUE(cpuAdmission4);
-    EXPECT_TRUE(cpuAdmission4->valid());
+    ASSERT_TRUE(cpuTaskAdmission);
+    EXPECT_TRUE(cpuTaskAdmission->valid());
     started.wait(false, MemoryOrder::acquire);
     world.createEntity().addComponent<PositionComponent>();
     world.clear();

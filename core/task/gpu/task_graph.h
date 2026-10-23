@@ -116,21 +116,25 @@ private:
         PayloadT* m_payload = nullptr;
     };
 
-    enum class TaskLifecycleState : u8{
-        Declared,
-        Recording,
-        Recorded,
-        Submitting,
-        Accepting,
-        Accepted,
-        Discarded,
+    struct TaskLifecycleState{
+        enum Enum : u8{
+            Declared,
+            Recording,
+            Recorded,
+            Submitting,
+            Accepting,
+            Accepted,
+            Discarded,
+        };
     };
 
-    enum class SubmissionBindingState : u8{
-        None,
-        Active,
-        ExceptionClosing,
-        Resolved,
+    struct SubmissionBindingState{
+        enum Enum : u8{
+            None,
+            Active,
+            ExceptionClosing,
+            Resolved,
+        };
     };
 
     class DeclarationMutationScope final : NoCopy{
@@ -234,7 +238,7 @@ private:
         mutable u64 submissionClaimGeneration = 0u;
         mutable u64 discardNotificationGeneration = 0u;
         GpuTaskTimingMetadata timing;
-        mutable TaskLifecycleState lifecycleState = TaskLifecycleState::Declared;
+        mutable TaskLifecycleState::Enum lifecycleState = TaskLifecycleState::Declared;
         mutable bool recordThunkInProgress = false;
         mutable bool recordThunkCompleted = false;
     };
@@ -772,7 +776,7 @@ private:
     mutable u32 m_activeDeclarationReadCount = 0u;
     mutable u32 m_activeDiscardNotificationCount = 0u;
     mutable Atomic<u32> m_activePacketRecordingClaimCount{ 0u };
-    mutable SubmissionBindingState m_submissionBindingState = SubmissionBindingState::None;
+    mutable SubmissionBindingState::Enum m_submissionBindingState = SubmissionBindingState::None;
     u16 m_externalCompletionDeviceGeneration = 0u;
     bool m_hasPresentEndpoint = false;
     mutable bool m_teardownInProgress = false;

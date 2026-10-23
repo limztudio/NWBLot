@@ -313,9 +313,9 @@ TEST(ReflectionStatistics, GraphResetDiscardsUnrecordedReservations){
     ASSERT_TRUE(context.control);
     Core::GpuTaskGraph graph(context.arena);
     {
-        const auto gpuAdmissionAt300 = graph.addTask<LeaseTask>(TaskDesc(), LeaseTask::Payload{ReflectionStatisticsReservation(context.control, Metadata())});
-        ASSERT_TRUE(gpuAdmissionAt300);
-        ASSERT_TRUE(gpuAdmissionAt300->valid());
+        const auto gpuTaskAdmission = graph.addTask<LeaseTask>(TaskDesc(), LeaseTask::Payload{ReflectionStatisticsReservation(context.control, Metadata())});
+        ASSERT_TRUE(gpuTaskAdmission);
+        ASSERT_TRUE(gpuTaskAdmission->valid());
     }
     graph.reset();
     EXPECT_EQ(context.control->reserve(Metadata()).slot, 0u);
@@ -326,9 +326,9 @@ TEST(ReflectionStatistics, PayloadDestructionReclaimsLeaseWithoutDiscardCallback
     ASSERT_TRUE(context.control);
     Core::GpuTaskGraph graph(context.arena);
     {
-        const auto gpuAdmissionAt308 = graph.addTask<DestructorLeaseTask>(TaskDesc(), DestructorLeaseTask::Payload{ReflectionStatisticsReservation(context.control, Metadata())});
-        ASSERT_TRUE(gpuAdmissionAt308);
-        ASSERT_TRUE(gpuAdmissionAt308->valid());
+        const auto gpuTaskAdmission = graph.addTask<DestructorLeaseTask>(TaskDesc(), DestructorLeaseTask::Payload{ReflectionStatisticsReservation(context.control, Metadata())});
+        ASSERT_TRUE(gpuTaskAdmission);
+        ASSERT_TRUE(gpuTaskAdmission->valid());
     }
     graph.reset();
     EXPECT_EQ(context.control->reserve(Metadata()).slot, 0u);

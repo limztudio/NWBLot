@@ -25,7 +25,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_avboit_accumulation_record{
+namespace __hidden_avboit_accumulation_record_builder{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -145,9 +145,9 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accumulationResourceUses{ scratchArena };
     accumulationResourceUses.reserve(
-        __hidden_avboit_accumulation_record::s_ResourceBaseCount
-        + (inputs.streamsUploaded ? __hidden_avboit_accumulation_record::s_StreamUseCount : 0u)
-        + (hasCsgIntervalReads ? __hidden_avboit_accumulation_record::s_CsgIntervalUseCount : 0u)
+        __hidden_avboit_accumulation_record_builder::s_ResourceBaseCount
+        + (inputs.streamsUploaded ? __hidden_avboit_accumulation_record_builder::s_StreamUseCount : 0u)
+        + (hasCsgIntervalReads ? __hidden_avboit_accumulation_record_builder::s_CsgIntervalUseCount : 0u)
     );
     accumulationResourceUses.push_back(ReadUse(inputs.albedo));
     accumulationResourceUses.push_back(ReadUse(inputs.normal, Core::ResourceStates::ShaderResource));
@@ -197,7 +197,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
         .requiredState = ECSRenderDetail::s_GeneratedGeometryRasterState,
         .access = Core::GpuTaskResourceAccess::Read,
     };
-    Core::GpuTaskResourceSetUse accumulationMaterialResourceSetUses[__hidden_avboit_accumulation_record::s_MaterialResourceSetUseCapacity] = {};
+    Core::GpuTaskResourceSetUse accumulationMaterialResourceSetUses[__hidden_avboit_accumulation_record_builder::s_MaterialResourceSetUseCapacity] = {};
     usize accumulationMaterialResourceSetUseCount = 0u;
     if(accumulationPayload.accumulationMaterialGeometryStatesGraphOwned){
         accumulationMaterialResourceSetUses[accumulationMaterialResourceSetUseCount++] = accumulationMaterialGeometrySetUse;
@@ -245,7 +245,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
         computeEmulationPayload.materialGeometryStatesGraphOwned = accumulationPayload.accumulationMaterialGeometryStatesGraphOwned;
 
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accumulationComputeEmulationResourceUses{ scratchArena };
-        accumulationComputeEmulationResourceUses.reserve(__hidden_avboit_accumulation_record::s_EmulationBaseCount + (inputs.csgComputeEmulationPlanCaptured ? __hidden_avboit_accumulation_record::s_EmulationPlanUseCount : 0u));
+        accumulationComputeEmulationResourceUses.reserve(__hidden_avboit_accumulation_record_builder::s_EmulationBaseCount + (inputs.csgComputeEmulationPlanCaptured ? __hidden_avboit_accumulation_record_builder::s_EmulationPlanUseCount : 0u));
         accumulationComputeEmulationResourceUses.push_back(ReadUse(inputs.meshView, Core::ResourceStates::ConstantBuffer));
         accumulationComputeEmulationResourceUses.push_back(ReadBufferUse(inputs.materialInstances, inputs.instanceRange));
         accumulationComputeEmulationResourceUses.push_back(ReadBufferUse(inputs.materialTyped, inputs.materialTypedRange));
@@ -265,7 +265,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
                 inputs.csgRemovedIntervalCountSubresources
             );
         }
-        Core::GpuTaskResourceSetUse accumulationComputeEmulationResourceSetUses[__hidden_avboit_accumulation_record::s_ComputeEmulationResourceSetUseCapacity] = {};
+        Core::GpuTaskResourceSetUse accumulationComputeEmulationResourceSetUses[__hidden_avboit_accumulation_record_builder::s_ComputeEmulationResourceSetUseCapacity] = {};
         usize accumulationComputeEmulationResourceSetUseCount = 0u;
         accumulationComputeEmulationResourceSetUses[accumulationComputeEmulationResourceSetUseCount++] = accumulationMaterialGeometrySetUse;
         if(inputs.materialSampledTextureSet.valid()){
@@ -302,7 +302,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
     if(accumulationSharedComputeEmulationOutputStatesGraphOwned){
         // Retained output appears in every phase; keep it exact to preserve alternating uses.
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accumulationSharedGenerateResourceUses{ scratchArena };
-        accumulationSharedGenerateResourceUses.reserve(__hidden_avboit_accumulation_record::s_SharedGenerateUseCount);
+        accumulationSharedGenerateResourceUses.reserve(__hidden_avboit_accumulation_record_builder::s_SharedGenerateUseCount);
         accumulationSharedGenerateResourceUses.push_back(ReadUse(inputs.meshView, Core::ResourceStates::ConstantBuffer));
         accumulationSharedGenerateResourceUses.push_back(ReadBufferUse(inputs.materialInstances, inputs.instanceRange));
         accumulationSharedGenerateResourceUses.push_back(ReadBufferUse(inputs.materialTyped, inputs.materialTypedRange));

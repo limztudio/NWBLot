@@ -46,12 +46,12 @@ namespace __hidden_global_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_ALPHA = "alpha";
-static constexpr AStringView s_BETA = "beta";
-static constexpr AStringView s_UNIT = "unit";
-static constexpr AStringView s_VALUE_42 = "value 42";
-static constexpr AStringView s_VALUE_FORMAT_TRAILING = "value {}.trailing";
-static constexpr WStringView s_VALUE_FORMAT_TRAILING_WIDE = L"value {}.trailing";
+static constexpr AStringView s_Alpha = "alpha";
+static constexpr AStringView s_Beta = "beta";
+static constexpr AStringView s_Unit = "unit";
+static constexpr AStringView s_Value42 = "value 42";
+static constexpr AStringView s_ValueFormatTrailing = "value {}.trailing";
+static constexpr WStringView s_ValueFormatTrailingWide = L"value {}.trailing";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -324,12 +324,12 @@ TEST(Global, Utf8DecoderRespectsBoundedNonterminatedInput){
 }
 
 TEST(Global, DiagnosticFormatSupportsBoundedFormatViewsAndNullableAdapters){
-    constexpr AStringView s_Format = s_VALUE_FORMAT_TRAILING;
+    constexpr AStringView s_Format = s_ValueFormatTrailing;
     const DiagnosticEventText narrow = MakeDiagnosticEventText(s_Format.substr(0u, 8u), 42u);
-    EXPECT_EQ(narrow.view(), s_VALUE_42);
-    constexpr WStringView s_WideFormat = s_VALUE_FORMAT_TRAILING_WIDE;
+    EXPECT_EQ(narrow.view(), s_Value42);
+    constexpr WStringView s_WideFormat = s_ValueFormatTrailingWide;
     const DiagnosticEventText wide = MakeDiagnosticEventText(s_WideFormat.substr(0u, 8u), 42u);
-    EXPECT_EQ(wide.view(), s_VALUE_42);
+    EXPECT_EQ(wide.view(), s_Value42);
     EXPECT_EQ(MakeDiagnosticEventText(static_cast<const char*>(nullptr), 42u).view(), AStringView{});
 }
 
@@ -386,7 +386,7 @@ TEST(Global, TextUtilitiesRejectNullShortAndOverflowingInput){
     EXPECT_FALSE(CanRepresentU64<u32>(static_cast<u64>(Limit<u32>::s_Max) + 1u));
     EXPECT_TRUE(CanRepresentU64<i64>(static_cast<u64>(Limit<i64>::s_Max)));
     EXPECT_FALSE(CanRepresentU64<i64>(static_cast<u64>(Limit<i64>::s_Max) + 1u));
-    EXPECT_FALSE(StartsWith(AStringView("al"), s_ALPHA));
+    EXPECT_FALSE(StartsWith(AStringView("al"), s_Alpha));
 
     const auto value = ParseVariableHexU64(AStringView("FFFFFFFFFFFFFFFF"));
     ASSERT_TRUE(value);
@@ -407,8 +407,8 @@ TEST(Global, StringTableUsesPrefixedBoundsAndRejectsEmptyAppend){
     NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
     ::Vector<u8, NWB::Core::Alloc::ScratchArena> stringTable(scratchArena);
     stringTable.reserve(16u);
-    const auto alphaOffset = AppendStringTableText(stringTable, s_ALPHA);
-    const auto betaOffset = AppendStringTableText(stringTable, s_BETA);
+    const auto alphaOffset = AppendStringTableText(stringTable, s_Alpha);
+    const auto betaOffset = AppendStringTableText(stringTable, s_Beta);
     ASSERT_TRUE(alphaOffset);
     ASSERT_TRUE(betaOffset);
 
@@ -418,7 +418,7 @@ TEST(Global, StringTableUsesPrefixedBoundsAndRejectsEmptyAppend){
     prefixedBinary.insert(prefixedBinary.end(), stringTable.begin(), stringTable.end());
     const auto parsed = ReadStringTableText(prefixedBinary, 1u, stringTable.size(), *betaOffset);
     ASSERT_TRUE(parsed);
-    EXPECT_EQ(parsed->view(), s_BETA);
+    EXPECT_EQ(parsed->view(), s_Beta);
 
     const usize previousSize = stringTable.size();
     EXPECT_FALSE(AppendStringTableText(stringTable, AStringView()));
@@ -566,7 +566,7 @@ TEST(Global, DiagnosticEventHookRejectsReentryAndHonorsBoundedText){
     SetDiagnosticEventCallback(callback.get());
     CaptureDiagnosticEvent(AStringView("unit.trailing").substr(0u, 4u), AStringView("message.trailing").substr(0u, 7u), "diagnostics_test.cpp", 42u);
     ClearDiagnosticEventCallback(callback.get());
-    CaptureDiagnosticEvent(s_UNIT, "ignored");
+    CaptureDiagnosticEvent(s_Unit, "ignored");
 
     EXPECT_EQ(s_DiagnosticEventCaptureCount, 1u);
     ASSERT_NE(s_DiagnosticEventName.data(), nullptr);

@@ -79,9 +79,9 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
         const Graphics::GpuGraphResourceId resource = *resourceResult;
         ASSERT_TRUE(resource.valid());
         {
-            const auto gpuAdmissionAt73 = addFirstUse(graph, resource, Name("tests/task_graph/initial_owner_compute_use"), "Initial Owner Compute Use", computeCommands);
-            ASSERT_TRUE(gpuAdmissionAt73);
-            ASSERT_TRUE(gpuAdmissionAt73->valid());
+            const auto gpuTaskAdmission = addFirstUse(graph, resource, Name("tests/task_graph/initial_owner_compute_use"), "Initial Owner Compute Use", computeCommands);
+            ASSERT_TRUE(gpuTaskAdmission);
+            ASSERT_TRUE(gpuTaskAdmission->valid());
         }
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
@@ -100,9 +100,9 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
         const Graphics::GpuGraphResourceId resource = *resourceResult;
         ASSERT_TRUE(resource.valid());
         {
-            const auto gpuAdmissionAt93 = addFirstUse(graph, resource, Name("tests/task_graph/initial_owner_stale_use"), "Initial Owner Stale Use", graphicsCommands);
-            ASSERT_TRUE(gpuAdmissionAt93);
-            ASSERT_TRUE(gpuAdmissionAt93->valid());
+            const auto secondGpuTaskAdmission = addFirstUse(graph, resource, Name("tests/task_graph/initial_owner_stale_use"), "Initial Owner Stale Use", graphicsCommands);
+            ASSERT_TRUE(secondGpuTaskAdmission);
+            ASSERT_TRUE(secondGpuTaskAdmission->valid());
         }
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
@@ -121,9 +121,9 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
         const Graphics::GpuGraphResourceId resource = *resourceResult;
         ASSERT_TRUE(resource.valid());
         {
-            const auto gpuAdmissionAt108 = addFirstUse(graph, resource, Name("tests/task_graph/initial_owner_concurrent_use"), "Initial Owner Concurrent Use", graphicsCommands);
-            ASSERT_TRUE(gpuAdmissionAt108);
-            ASSERT_TRUE(gpuAdmissionAt108->valid());
+            const auto thirdGpuTaskAdmission = addFirstUse(graph, resource, Name("tests/task_graph/initial_owner_concurrent_use"), "Initial Owner Concurrent Use", graphicsCommands);
+            ASSERT_TRUE(thirdGpuTaskAdmission);
+            ASSERT_TRUE(thirdGpuTaskAdmission->valid());
         }
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);

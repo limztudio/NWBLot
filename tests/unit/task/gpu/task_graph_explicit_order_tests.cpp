@@ -182,10 +182,10 @@ TEST(GpuTaskGraph, RejectsExplicitCyclesAndExportsExternalMetadata){
     }
 
     {
-        const auto gpuAdmissionAt610 = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/late_external")).setMarkerLabel("Late External"));
-        EXPECT_TRUE(gpuAdmissionAt610);
-        if(gpuAdmissionAt610)
-            EXPECT_TRUE(gpuAdmissionAt610->valid());
+        const auto gpuTaskAdmission = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/late_external")).setMarkerLabel("Late External"));
+        EXPECT_TRUE(gpuTaskAdmission);
+        if(gpuTaskAdmission)
+            EXPECT_TRUE(gpuTaskAdmission->valid());
     }
     {
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
@@ -210,18 +210,18 @@ TEST(GpuTaskGraph, RejectsDeepExplicitCyclesWithoutCallStackGrowth){
     const Name taskBaseName("tests/task_graph/deep_cycle_task_");
     char taskIndexBuffer[32u] = {};
     const Graphics::GpuTaskId futureLast{ .generation = graphGeneration, .index = static_cast<u32>(s_TaskCount - 1u), };
-    const auto derivedNameAt750Col44 = DeriveName(taskBaseName, FormatDecimal(0u, taskIndexBuffer));
-    ASSERT_TRUE(derivedNameAt750Col44);
-    const auto firstResult = AddTask(graph, *derivedNameAt750Col44, s_DeepCycleTaskLabel, &futureLast, 1u);
+    const auto derivedNameResult = DeriveName(taskBaseName, FormatDecimal(0u, taskIndexBuffer));
+    ASSERT_TRUE(derivedNameResult);
+    const auto firstResult = AddTask(graph, *derivedNameResult, s_DeepCycleTaskLabel, &futureLast, 1u);
     ASSERT_TRUE(firstResult);
     const Graphics::GpuTaskId first = *firstResult;
     ASSERT_TRUE(first.valid());
 
     Graphics::GpuTaskId previous = first;
     for(usize taskIndex = 1u; taskIndex < s_TaskCount; ++taskIndex){
-        const auto derivedNameAt757Col50 = DeriveName(taskBaseName, FormatDecimal(taskIndex, taskIndexBuffer));
-        ASSERT_TRUE(derivedNameAt757Col50);
-        const auto currentResult = AddTask(graph, *derivedNameAt757Col50, s_DeepCycleTaskLabel, &previous, 1u);
+        const auto secondDerivedNameResult = DeriveName(taskBaseName, FormatDecimal(taskIndex, taskIndexBuffer));
+        ASSERT_TRUE(secondDerivedNameResult);
+        const auto currentResult = AddTask(graph, *secondDerivedNameResult, s_DeepCycleTaskLabel, &previous, 1u);
         ASSERT_TRUE(currentResult);
         const Graphics::GpuTaskId current = *currentResult;
         ASSERT_TRUE(current.valid());

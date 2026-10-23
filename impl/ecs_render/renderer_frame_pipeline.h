@@ -129,12 +129,14 @@ class RendererFramePipeline final : NoCopy{
 
 private:
     // Transition reports observe accepted-history lifecycle decisions without owning them.
-    enum class LaggedLightingReport : u8{
-        Unreported,
-        NoDedicatedAsyncCompute,
-        BootstrapAccepted,
-        ActiveHistoryAccepted,
-        CurrentFrameAccepted,
+    struct LaggedLightingReport{
+        enum Enum : u8{
+            Unreported,
+            NoDedicatedAsyncCompute,
+            BootstrapAccepted,
+            ActiveHistoryAccepted,
+            CurrentFrameAccepted,
+        };
     };
 
 
@@ -395,7 +397,7 @@ private:
         const Core::QueueSubmissionToken& laggedLightingHistoryWriterDrainToken,
         bool includeLaggedLightingHistoryCapture
     );
-    void reportLaggedLightingTransition(LaggedLightingReport report, u64 targetGeneration);
+    void reportLaggedLightingTransition(LaggedLightingReport::Enum report, u64 targetGeneration);
 
 
 private:
@@ -579,7 +581,7 @@ private:
     bool m_reflectionHardwareLogged = false;
     bool m_reflectionFallbackLogged = false;
     bool m_refractionEnabled = true;
-    LaggedLightingReport m_laggedLightingReport = LaggedLightingReport::Unreported;
+    LaggedLightingReport::Enum m_laggedLightingReport = LaggedLightingReport::Unreported;
     bool m_preparedCsgFrameStateValid = false;
     bool m_preparedHasTransparentRenderers = false;
     ShadowPreparationOutcome m_shadowPreparationOutcome;

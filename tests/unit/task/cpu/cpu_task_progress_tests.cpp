@@ -87,24 +87,24 @@ TEST(CpuTaskProgressTests, ScopeJoinWakesForANewlyReadyUnscopedMainThreadPrerequ
                 releaser.join();
         }
         );
-        const auto cpuAdmission67 = scheduler.submit([&]()noexcept{
+        const auto cpuTaskAdmission = scheduler.submit([&]()noexcept{
             workerEntered.store(true, MemoryOrder::release);
             workerEntered.notify_one();
             release.wait(false, MemoryOrder::acquire);
         }
         );
-        ASSERT_TRUE(cpuAdmission67);
-        const auto gate = *cpuAdmission67;
+        ASSERT_TRUE(cpuTaskAdmission);
+        const auto gate = *cpuTaskAdmission;
         ASSERT_TRUE(gate.valid());
         workerEntered.wait(false, MemoryOrder::acquire);
-        const auto cpuAdmission68 = scheduler.submit([&]()noexcept{ ++callbacks; }, s_MainThread, &gate, 1u);
-        ASSERT_TRUE(cpuAdmission68);
-        const auto prerequisite = *cpuAdmission68;
+        const auto prerequisiteTaskAdmission = scheduler.submit([&]()noexcept{ ++callbacks; }, s_MainThread, &gate, 1u);
+        ASSERT_TRUE(prerequisiteTaskAdmission);
+        const auto prerequisite = *prerequisiteTaskAdmission;
         ASSERT_TRUE(prerequisite.valid());
-        const auto cpuAdmission69 = scope.submit([&]()noexcept{ ++callbacks; }, s_MainThread, &prerequisite, 1u);
-        ASSERT_TRUE(cpuAdmission69);
-        if(cpuAdmission69)
-            ASSERT_TRUE(cpuAdmission69->valid());
+        const auto secondCpuTaskAdmission = scope.submit([&]()noexcept{ ++callbacks; }, s_MainThread, &prerequisite, 1u);
+        ASSERT_TRUE(secondCpuTaskAdmission);
+        if(secondCpuTaskAdmission)
+            ASSERT_TRUE(secondCpuTaskAdmission->valid());
         releaser = JoiningThread([&]()noexcept{
             joining.wait(false, MemoryOrder::acquire);
             if(round % s_ReleaseSchedules == 0u)
@@ -146,7 +146,7 @@ TEST(CpuTaskProgressTests, ConcurrentSameScopeJoinsRetainLatePublishedDescendant
         }
         );
         for(u32 waiter = 0u; waiter < s_Workers; ++waiter){
-            const auto cpuAdmission70 = scheduler.submit([&](){
+            const auto cpuTaskAdmission = scheduler.submit([&](){
                 entered.fetch_add(1u, MemoryOrder::release);
                 entered.notify_one();
                 start.wait(false, MemoryOrder::acquire);
@@ -154,48 +154,48 @@ TEST(CpuTaskProgressTests, ConcurrentSameScopeJoinsRetainLatePublishedDescendant
                 joined.fetch_add(1u, MemoryOrder::release);
             }
             );
-            ASSERT_TRUE(cpuAdmission70);
-            if(cpuAdmission70)
-                ASSERT_TRUE(cpuAdmission70->valid());
+            ASSERT_TRUE(cpuTaskAdmission);
+            if(cpuTaskAdmission)
+                ASSERT_TRUE(cpuTaskAdmission->valid());
         }
         for(u32 count = entered.load(MemoryOrder::acquire); count != s_Workers; count = entered.load(MemoryOrder::acquire))
             entered.wait(count, MemoryOrder::acquire);
         for(auto& root : roots){
-            const auto cpuAdmission71 = scheduler.submit([&]()noexcept{ visits.fetch_add(1u, MemoryOrder::relaxed); });
-            ASSERT_TRUE(cpuAdmission71);
-            root = *cpuAdmission71;
+            const auto rootTaskAdmission = scheduler.submit([&]()noexcept{ visits.fetch_add(1u, MemoryOrder::relaxed); });
+            ASSERT_TRUE(rootTaskAdmission);
+            root = *rootTaskAdmission;
             ASSERT_TRUE(root.valid());
         }
-        const auto cpuAdmission72 = scope.submit([&](){
-            const auto cpuAdmission73 = scheduler.submit([&](){
-                const auto cpuAdmission74 = scheduler.submit([&]()noexcept{ visits.fetch_add(1u, MemoryOrder::relaxed); });
-                EXPECT_TRUE(cpuAdmission74);
-                if(cpuAdmission74)
-                    EXPECT_TRUE(cpuAdmission74->valid());
+        const auto secondCpuTaskAdmission = scope.submit([&](){
+            const auto thirdCpuTaskAdmission = scheduler.submit([&](){
+                const auto fourthCpuTaskAdmission = scheduler.submit([&]()noexcept{ visits.fetch_add(1u, MemoryOrder::relaxed); });
+                EXPECT_TRUE(fourthCpuTaskAdmission);
+                if(fourthCpuTaskAdmission)
+                    EXPECT_TRUE(fourthCpuTaskAdmission->valid());
             }
             );
-            EXPECT_TRUE(cpuAdmission73);
-            if(cpuAdmission73)
-                EXPECT_TRUE(cpuAdmission73->valid());
+            EXPECT_TRUE(thirdCpuTaskAdmission);
+            if(thirdCpuTaskAdmission)
+                EXPECT_TRUE(thirdCpuTaskAdmission->valid());
         }, {}, roots, s_RootCount
         );
-        ASSERT_TRUE(cpuAdmission72);
-        if(cpuAdmission72)
-            ASSERT_TRUE(cpuAdmission72->valid());
+        ASSERT_TRUE(secondCpuTaskAdmission);
+        if(secondCpuTaskAdmission)
+            ASSERT_TRUE(secondCpuTaskAdmission->valid());
         start.store(true, MemoryOrder::release);
         start.notify_all();
         scheduler.wait();
         EXPECT_EQ(joined.load(MemoryOrder::acquire), s_Workers);
         EXPECT_EQ(visits.load(MemoryOrder::acquire), s_RootCount + 1u);
         // This scope keeps its identity after completion, while publication invalidates its old contribution proofs.
-        const auto cpuAdmission75 = scheduler.submit([&]()noexcept{ visits.fetch_add(1u, MemoryOrder::relaxed); });
-        ASSERT_TRUE(cpuAdmission75);
-        const auto later = *cpuAdmission75;
+        const auto laterTaskAdmission = scheduler.submit([&]()noexcept{ visits.fetch_add(1u, MemoryOrder::relaxed); });
+        ASSERT_TRUE(laterTaskAdmission);
+        const auto later = *laterTaskAdmission;
         ASSERT_TRUE(later.valid());
-        const auto cpuAdmission76 = scope.submit([&]()noexcept{ visits.fetch_add(1u, MemoryOrder::relaxed); }, later);
-        ASSERT_TRUE(cpuAdmission76);
-        if(cpuAdmission76)
-            ASSERT_TRUE(cpuAdmission76->valid());
+        const auto fifthCpuTaskAdmission = scope.submit([&]()noexcept{ visits.fetch_add(1u, MemoryOrder::relaxed); }, later);
+        ASSERT_TRUE(fifthCpuTaskAdmission);
+        if(fifthCpuTaskAdmission)
+            ASSERT_TRUE(fifthCpuTaskAdmission->valid());
         scope.wait();
         scheduler.wait();
         finish.release();

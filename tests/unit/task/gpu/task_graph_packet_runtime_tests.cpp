@@ -341,9 +341,9 @@ TEST(GpuTaskGraph, RejectsAcceptedQueueFrontierTasksWithPrerequisites){
 
         Graphics::GpuTaskGraph validGraph(testArena.arena);
         {
-            const auto gpuAdmissionAt313 = AddTask(validGraph, Name("tests/task_graph/frontier_stale_assignment_source"), "Frontier Stale Assignment Source");
-            ASSERT_TRUE(gpuAdmissionAt313);
-            ASSERT_TRUE(gpuAdmissionAt313->valid());
+            const auto gpuTaskAdmission = AddTask(validGraph, Name("tests/task_graph/frontier_stale_assignment_source"), "Frontier Stale Assignment Source");
+            ASSERT_TRUE(gpuTaskAdmission);
+            ASSERT_TRUE(gpuTaskAdmission->valid());
         }
         const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
         const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u, };

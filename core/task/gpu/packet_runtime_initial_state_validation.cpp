@@ -16,7 +16,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_gpu_initial_state_handoff_validation{
+namespace __hidden_gpu_packet_runtime_initial_state_validation{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -96,7 +96,7 @@ bool GpuInitialStateHandoffValidation::ValidBufferRange(const BufferRange& range
 }
 
 bool GpuInitialStateHandoffValidation::validate(){
-    using namespace __hidden_gpu_initial_state_handoff_validation;
+    using namespace __hidden_gpu_packet_runtime_initial_state_validation;
 
     m_permanentTexturesIndexed = false;
     m_permanentBuffersIndexed = false;
@@ -211,7 +211,7 @@ bool GpuInitialStateHandoffValidation::validate(){
 Expected<ResourceStates::Mask> GpuInitialStateHandoffValidation::permanentTextureState(Texture* const texture)const noexcept{
     ResourceStates::Mask result = ResourceStates::Unknown;
     if(m_permanentTexturesIndexed && texture){
-        return __hidden_gpu_initial_state_handoff_validation::FindPermanentState(m_states.m_permanentTextureStates, *m_permanentTextureIndex, texture, [](const auto& state)noexcept{ return state.texture; }
+        return __hidden_gpu_packet_runtime_initial_state_validation::FindPermanentState(m_states.m_permanentTextureStates, *m_permanentTextureIndex, texture, [](const auto& state)noexcept{ return state.texture; }
         );
     }
     for(const auto& state : m_states.m_permanentTextureStates){
@@ -229,7 +229,7 @@ Expected<ResourceStates::Mask> GpuInitialStateHandoffValidation::permanentTextur
 Expected<ResourceStates::Mask> GpuInitialStateHandoffValidation::permanentBufferState(Buffer* const buffer)const noexcept{
     ResourceStates::Mask result = ResourceStates::Unknown;
     if(m_permanentBuffersIndexed && buffer){
-        return __hidden_gpu_initial_state_handoff_validation::FindPermanentState(m_states.m_permanentBufferStates, *m_permanentBufferIndex, buffer, [](const auto& state)noexcept{ return state.buffer; }
+        return __hidden_gpu_packet_runtime_initial_state_validation::FindPermanentState(m_states.m_permanentBufferStates, *m_permanentBufferIndex, buffer, [](const auto& state)noexcept{ return state.buffer; }
         );
     }
     for(const auto& state : m_states.m_permanentBufferStates){

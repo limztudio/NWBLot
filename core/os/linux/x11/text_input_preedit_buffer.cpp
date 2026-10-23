@@ -17,7 +17,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_x11_preedit{
+namespace __hidden_x11_text_input_preedit_buffer{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -49,7 +49,7 @@ void X11PreeditBuffer::clear()noexcept{
 }
 
 bool X11PreeditBuffer::replace(const usize firstCharacter, const usize characterCount, const AStringView insertion, const usize caretCharacter){
-    using namespace __hidden_x11_preedit;
+    using namespace __hidden_x11_text_input_preedit_buffer;
     if(characterCount > s_MaxBytes || firstCharacter > s_MaxBytes - characterCount)
         return false;
     if(!ValidUtf8(insertion))

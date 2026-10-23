@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_simd_optimization_benchmark{
+namespace __hidden_vector_benchmark{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -325,7 +325,7 @@ void SelectVariant(const Dataset& data, const bool candidate, const usize iterat
 
 
 int main(const int argc, const char* const* argv){
-    using namespace __hidden_simd_optimization_benchmark;
+    using namespace __hidden_vector_benchmark;
     NWB_COUT.precision(17);
     if(argc == 2 && StringView(argv[1]) == "--verify")
         return Verify() == 0u ? 0 : 1;

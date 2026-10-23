@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_mesh_source_streams{
+namespace __hidden_mesh_cook_source_streams{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -46,7 +46,7 @@ Expected<ScratchVector<MeshVertexRef>> MeshCookSourceStreams::ParseSourceVertexR
         return MakeUnexpected(field.error());
 
     const auto& list = (*field)->asList();
-    const usize expectedComponentCount = __hidden_mesh_source_streams::s_VertexRefComponentCount;
+    const usize expectedComponentCount = __hidden_mesh_cook_source_streams::s_VertexRefComponentCount;
     vertexRefs.reserve(list.size());
     for(usize vertexRefIndex = 0u; vertexRefIndex < list.size(); ++vertexRefIndex){
         const Core::Metascript::Value& value = list[vertexRefIndex];
@@ -58,11 +58,11 @@ Expected<ScratchVector<MeshVertexRef>> MeshCookSourceStreams::ParseSourceVertexR
         MeshVertexRef ref;
         const auto& components = value.asList();
         const AStringView componentNames[] = {
-            __hidden_mesh_source_streams::s_VertexRefPositionName,
-            __hidden_mesh_source_streams::s_VertexRefNormalName,
-            __hidden_mesh_source_streams::s_VertexRefTangentName,
-            __hidden_mesh_source_streams::s_VertexRefUvName,
-            __hidden_mesh_source_streams::s_VertexRefColorName,
+            __hidden_mesh_cook_source_streams::s_VertexRefPositionName,
+            __hidden_mesh_cook_source_streams::s_VertexRefNormalName,
+            __hidden_mesh_cook_source_streams::s_VertexRefTangentName,
+            __hidden_mesh_cook_source_streams::s_VertexRefUvName,
+            __hidden_mesh_cook_source_streams::s_VertexRefColorName,
         };
         const NotNull<u32*> componentValues[] = { MakeNotNull(&ref.position), MakeNotNull(&ref.normal), MakeNotNull(&ref.tangent), MakeNotNull(&ref.uv0), MakeNotNull(&ref.color), MakeNotNull(&ref.skin), };
         for(usize componentIndex = 0u; componentIndex < expectedComponentCount; ++componentIndex){
@@ -70,7 +70,7 @@ Expected<ScratchVector<MeshVertexRef>> MeshCookSourceStreams::ParseSourceVertexR
             if(!component){
                 const ScratchString label = MeshCookMetadata::MakeIndexedLabel(scratchArena, MeshCookMetadata::s_VertexRefsFieldNameView, vertexRefIndex);
                 ScratchString componentLabel{scratchArena};
-                componentLabel.reserve(label.size() + componentNames[componentIndex].size() + __hidden_mesh_source_streams::s_ComponentLabelExtraCharCount);
+                componentLabel.reserve(label.size() + componentNames[componentIndex].size() + __hidden_mesh_cook_source_streams::s_ComponentLabelExtraCharCount);
                 componentLabel.append(label.data(), label.size());
                 componentLabel += '.';
                 componentLabel.append(componentNames[componentIndex].data(), componentNames[componentIndex].size());
@@ -117,15 +117,15 @@ bool MeshCookSourceStreams::ValidateSourceIndexStream(const Path& nwbFilePath, c
 
 bool MeshCookSourceStreams::ValidateSourceVertexRefs(const Path& nwbFilePath, const TStringView metaKind, const SourceMeshStreams& streams){
     for(const MeshVertexRef& ref : streams.vertexRefs){
-        if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_source_streams::s_VertexRefPositionName, ref.position, streams.positions.size()))
+        if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_cook_source_streams::s_VertexRefPositionName, ref.position, streams.positions.size()))
             return false;
-        if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_source_streams::s_VertexRefNormalName, ref.normal, streams.normals.size()))
+        if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_cook_source_streams::s_VertexRefNormalName, ref.normal, streams.normals.size()))
             return false;
-        if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_source_streams::s_VertexRefTangentName, ref.tangent, streams.tangents.size()))
+        if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_cook_source_streams::s_VertexRefTangentName, ref.tangent, streams.tangents.size()))
             return false;
-        if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_source_streams::s_VertexRefUvName, ref.uv0, streams.uv0.size()))
+        if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_cook_source_streams::s_VertexRefUvName, ref.uv0, streams.uv0.size()))
             return false;
-        if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_source_streams::s_VertexRefColorName, ref.color, streams.colors.size()))
+        if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_cook_source_streams::s_VertexRefColorName, ref.color, streams.colors.size()))
             return false;
         if(ref.skin != s_MeshMissingStreamIndex){
             NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': static vertex_ref cannot contain a skin index"), metaKind, PathToString<tchar>(nwbFilePath));

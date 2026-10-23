@@ -95,10 +95,10 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
         result.valid = false;
         return result;
     }
-    const SIMDVectorSingle framepaddingCurrent = VectorSet(frame.padding.left, frame.padding.top, frame.padding.right, frame.padding.bottom);
-    const SIMDVectorSingle framepaddingCandidate = VectorSet(background->padding.left, background->padding.top, background->padding.right, background->padding.bottom);
-    const SIMDVectorSingle framepaddingMaximum = VectorSelect(framepaddingCandidate, framepaddingCurrent, VectorGreater(framepaddingCurrent, framepaddingCandidate));
-    frame.padding = { VectorGetX(framepaddingMaximum), VectorGetY(framepaddingMaximum), VectorGetZ(framepaddingMaximum), VectorGetW(framepaddingMaximum) };
+    const SIMDVectorSingle framePaddingCurrent = VectorSet(frame.padding.left, frame.padding.top, frame.padding.right, frame.padding.bottom);
+    const SIMDVectorSingle framePaddingCandidate = VectorSet(background->padding.left, background->padding.top, background->padding.right, background->padding.bottom);
+    const SIMDVectorSingle framePaddingMaximum = VectorSelect(framePaddingCandidate, framePaddingCurrent, VectorGreater(framePaddingCurrent, framePaddingCandidate));
+    frame.padding = { VectorGetX(framePaddingMaximum), VectorGetY(framePaddingMaximum), VectorGetZ(framePaddingMaximum), VectorGetW(framePaddingMaximum) };
     if(!prepareListMetrics(frame)){
         m_context.fail();
         result.valid = false;

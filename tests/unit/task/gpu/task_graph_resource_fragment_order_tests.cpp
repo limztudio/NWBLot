@@ -489,10 +489,10 @@ TEST(GpuTaskGraphResourceFragments, SixtyFourBuffersPreserveExactTerminalExportS
     Graphics::GpuTaskResourceUse readUses[s_BufferCount];
     for(usize index = 0u; index < s_BufferCount; ++index){
         char text[32u] = {};
-        const auto derivedNameAt490Col30 = DeriveName(Name("tests/fragment_order/buffer/"), FormatDecimal(index, text));
-        ASSERT_TRUE(derivedNameAt490Col30);
-        const Name identity = *derivedNameAt490Col30;
-        const auto gpuAdmissionAt491 = graph.importResource(Graphics::GpuGraphResourceDesc{}
+        const auto identityNameResult = DeriveName(Name("tests/fragment_order/buffer/"), FormatDecimal(index, text));
+        ASSERT_TRUE(identityNameResult);
+        const Name identity = *identityNameResult;
+        const auto gpuTaskAdmission = graph.importResource(Graphics::GpuGraphResourceDesc{}
             .setIdentity(identity)
             .setMarkerLabel("Fragment Order Buffer")
             .setType(Graphics::GpuGraphResourceType::Buffer)
@@ -500,8 +500,8 @@ TEST(GpuTaskGraphResourceFragments, SixtyFourBuffersPreserveExactTerminalExportS
             .setExternalFinalState(Graphics::ResourceStates::ShaderResource)
             .setExternalFinalReleaseDestinationQueue(queues[1u].id)
         );
-        ASSERT_TRUE(gpuAdmissionAt491);
-        buffers[index] = *gpuAdmissionAt491;
+        ASSERT_TRUE(gpuTaskAdmission);
+        buffers[index] = *gpuTaskAdmission;
         ASSERT_TRUE(buffers[index].valid());
         wholeUses[index] = Graphics::GpuTaskResourceUse{ .resource = buffers[index], .range = BufferRange(0u, 128u), .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write, };
         cutUses[index * s_ExpectedDualCount] = Graphics::GpuTaskResourceUse{ .resource = buffers[index], .range = BufferRange(32u, 16u), .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write, };

@@ -29,7 +29,7 @@ AvboitGeometryPreparationBuilder::AvboitGeometryPreparationBuilder(Core::GpuTask
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_geometry_preparation{
+namespace __hidden_avboit_geometry_preparation_builder{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -84,7 +84,7 @@ struct PhaseIdentities{
     AvboitGeometryPreparationResult result{};
     if(!inputs.drawItemSets || inputs.drawItemSetCount == 0u)
         return MakeUnexpected(Failure{});
-    const __hidden_geometry_preparation::PhaseIdentities identities = __hidden_geometry_preparation::IdentitiesForPhase(inputs.phase);
+    const __hidden_avboit_geometry_preparation_builder::PhaseIdentities identities = __hidden_avboit_geometry_preparation_builder::IdentitiesForPhase(inputs.phase);
     const auto materialGeometrySetResult = RendererTaskGraphDetail::GatherPreparedMaterialGeometryResourceSet(m_graph, inputs.drawItemSets, inputs.drawItemSetCount, m_scratchArena, Name(identities.geometryIdentity), identities.geometryLabel);
     result.geometryOwned = materialGeometrySetResult.has_value();
     if(materialGeometrySetResult)

@@ -195,7 +195,7 @@ Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
     const GpuPhysicalQueueId& executionQueue,
     const QueueSubmissionDesc& submitDesc,
     const bool graphSubmissionAuthorized,
-    const DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy
+    const DeviceLossDiagnosticPolicy::Enum deviceLossDiagnosticPolicy
 ){
     SubmissionOperationLease submissionOperation(*this);
     if(!submissionOperation.valid())
@@ -370,7 +370,7 @@ u32 Device::getQueueFamilyIndex(const GpuPhysicalQueueId& queue)const noexcept{
     return info ? info->familyIndex : VK_QUEUE_FAMILY_IGNORED;
 }
 
-bool Device::waitForSubmissionTokenInternal(const QueueSubmissionToken& token, const DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy){
+bool Device::waitForSubmissionTokenInternal(const QueueSubmissionToken& token, const DeviceLossDiagnosticPolicy::Enum deviceLossDiagnosticPolicy){
     if(!token.valid() || !token.hasPhysicalQueueIdentity() || !matchesPhysicalQueueIdentity(token.queue, token.physicalQueueIndex, token.deviceGeneration) || token.physicalQueueIndex >= m_physicalQueues.size())
         return false;
 

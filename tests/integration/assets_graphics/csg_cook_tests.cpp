@@ -25,7 +25,7 @@ namespace Tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_assets_graphics_csg_cook{
+namespace __hidden_assets_graphics_csg_cook_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -285,9 +285,9 @@ TEST(AssetsGraphics, CsgRegistryOwnsExactModuleTextAfterSourceRetirementAndRepla
     EXPECT_EQ(*selected, originalInclude);
     for(u32 index = 0u; index < 32u; ++index){
         char indexText[32u] = {};
-        const auto derivedNameAt278Col31 = DeriveName(Name("project/csg/exact_text_extra/"), FormatDecimal(index, indexText));
-        ASSERT_TRUE(derivedNameAt278Col31);
-        const Name extraName = *derivedNameAt278Col31;
+        const auto extraNameResult = DeriveName(Name("project/csg/exact_text_extra/"), FormatDecimal(index, indexText));
+        ASSERT_TRUE(extraNameResult);
+        const Name extraName = *extraNameResult;
         auto extra = CsgCookTestShapeDesc(registryArena.arena, extraName, s_NameNone, AStringView{});
         ASSERT_TRUE(registry.registerShapeType(extra));
     }

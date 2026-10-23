@@ -41,11 +41,11 @@ using AString = NWB::Tests::TestAString;
 constexpr u32 s_ExpectedDualCount = 2u;
 #endif
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-static constexpr AStringView s_BIN_SH = "/bin/sh";
+static constexpr AStringView s_BinSh = "/bin/sh";
 static constexpr AStringView s_C = "-c";
 #endif
 #if defined(NWB_PLATFORM_WINDOWS)
-static constexpr AStringView s_TRAILING_SUFFIX = ".trailing";
+static constexpr AStringView s_TrailingSuffix = ".trailing";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -191,8 +191,8 @@ TEST(Global, WindowsProcessInputsSupportBoundedViews){
     ::AString<NWB::Core::Alloc::GlobalArena> executableNameText = PathToString<char>(testArena.arena, executablePath.filename());
     const usize searchPathLength = searchPathText.size();
     const usize executableNameLength = executableNameText.size();
-    searchPathText += s_TRAILING_SUFFIX;
-    executableNameText += s_TRAILING_SUFFIX;
+    searchPathText += s_TrailingSuffix;
+    executableNameText += s_TrailingSuffix;
     const auto executableAvailable = ExecutableAvailableInPath(testArena.arena, AStringView(searchPathText).substr(0u, searchPathLength), AStringView(executableNameText).substr(0u, executableNameLength));
     ASSERT_TRUE(executableAvailable);
     EXPECT_TRUE(*executableAvailable);
@@ -203,8 +203,8 @@ TEST(Global, WindowsProcessInputsSupportBoundedViews){
     ::AString<NWB::Core::Alloc::GlobalArena> outputPathText = PathToString<char>(testArena.arena, outputPath);
     const usize outputPathLength = outputPathText.size();
     const usize executableLength = executableText.size();
-    outputPathText += s_TRAILING_SUFFIX;
-    executableText += s_TRAILING_SUFFIX;
+    outputPathText += s_TrailingSuffix;
+    executableText += s_TrailingSuffix;
     const AStringView arguments[]{ AStringView(executableText).substr(0u, executableLength), "/c", "echo stdout&echo stderr 1>&2&exit /b 23" };
     const auto exitCode = RunProcessRedirectedToFile(testArena.arena, arguments, AStringView(outputPathText).substr(0u, outputPathLength));
     ASSERT_TRUE(exitCode);
@@ -360,10 +360,10 @@ TEST(Global, CaptureProcessOutputAdmitsEmptySuccessAndPreservesExitFailure){
     ASSERT_FALSE(invalid);
     EXPECT_EQ(invalid.error().kind, ProcessCaptureFailureKind::InvalidArguments);
     EXPECT_EQ(invalid.error().nativeError, ErrorCondition::invalid_argument);
-    const AStringView emptyArguments[]{ s_BIN_SH, s_C, "exit 0" };
+    const AStringView emptyArguments[]{ s_BinSh, s_C, "exit 0" };
     ASSERT_TRUE(CaptureProcessOutput(testArena.arena, output, emptyArguments));
     EXPECT_TRUE(output.empty());
-    const AStringView failedArguments[]{ s_BIN_SH, s_C, "printf retained; exit 23" };
+    const AStringView failedArguments[]{ s_BinSh, s_C, "printf retained; exit 23" };
     const auto failed = CaptureProcessOutput(testArena.arena, output, failedArguments);
     ASSERT_FALSE(failed);
     EXPECT_EQ(failed.error().kind, ProcessCaptureFailureKind::ChildExitedUnsuccessfully);
@@ -372,7 +372,7 @@ TEST(Global, CaptureProcessOutputAdmitsEmptySuccessAndPreservesExitFailure){
 }
 
 TEST(Global, CaptureProcessOutputAppendFailureClosesPipeAndReapsChildBeforeUnwinding){
-    const AStringView argv[] = { s_BIN_SH, s_C, "printf '%s\\n' \"$$\"; exec 1>&-; while :; do :; done" };
+    const AStringView argv[] = { s_BinSh, s_C, "printf '%s\\n' \"$$\"; exec 1>&-; while :; do :; done" };
     NWB::Tests::TestArena<> testArena;
     ThrowingCaptureOutput output;
     constexpr u32 s_CaptureTimeoutMS = 250u;
@@ -389,7 +389,7 @@ TEST(Global, CaptureProcessOutputAppendFailureClosesPipeAndReapsChildBeforeUnwin
 }
 
 TEST(Global, CaptureProcessOutputReapsTruncatedChild){
-    const AStringView argv[] = { s_BIN_SH, s_C, "printf '%s\\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' \"$$\"; exec 1>&-; while :; do :; done" };
+    const AStringView argv[] = { s_BinSh, s_C, "printf '%s\\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' \"$$\"; exec 1>&-; while :; do :; done" };
     NWB::Tests::TestArena<> testArena;
     AString output(testArena.arena);
     constexpr u32 s_CaptureTimeoutMS = 250u;
@@ -418,7 +418,7 @@ TEST(Global, CaptureProcessOutputReapsTruncatedChild){
 }
 
 TEST(Global, CaptureProcessOutputTimesOutWithContinuousOutput){
-    const AStringView argv[] = { s_BIN_SH, s_C, "while :; do printf x; done" };
+    const AStringView argv[] = { s_BinSh, s_C, "while :; do printf x; done" };
     NWB::Tests::TestArena<> testArena;
     AString output(testArena.arena);
     const auto startMilliseconds = ProcessExecutionDetail::MonotonicMilliseconds();
@@ -443,7 +443,7 @@ TEST(Global, RedirectedNonzeroExitAndInvalidArgumentsPreserveCapturedStreams){
     ASSERT_TRUE(EnsureEmptyDirectory(root));
     ASSERT_TRUE(WriteTextFile(outputPath, AStringView("stale")));
 
-    const AStringView argv[] = { s_BIN_SH, s_C, AStringView("printf stdout; printf stderr >&2; exit 23; printf ignored").substr(0u, 41u) };
+    const AStringView argv[] = { s_BinSh, s_C, AStringView("printf stdout; printf stderr >&2; exit 23; printf ignored").substr(0u, 41u) };
     const auto outputPathText = PathToString<char>(testArena.arena, outputPath);
     const auto exitCode = RunProcessRedirectedToFile(testArena.arena, argv, AStringView(outputPathText));
     ASSERT_TRUE(exitCode);

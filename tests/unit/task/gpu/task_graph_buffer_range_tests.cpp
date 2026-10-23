@@ -316,7 +316,7 @@ TEST(GpuTaskGraphBufferRange, GroupsLateOwnershipAndTerminalExportsInTaskAndDisc
     Array<Graphics::GpuTaskId, s_ExpectedDualCount> writers{};
     Array<Graphics::GpuTaskId, s_ExpectedDualCount> consumers{};
     for(usize index = 0u; index < resources.size(); ++index){
-        const auto gpuAdmissionAt273 = graph.importResource(
+        const auto gpuTaskAdmission = graph.importResource(
             Graphics::GpuGraphResourceDesc{}
                 .setIdentity(identities[index])
                 .setMarkerLabel("Grouped Epilogue Buffer")
@@ -325,27 +325,27 @@ TEST(GpuTaskGraphBufferRange, GroupsLateOwnershipAndTerminalExportsInTaskAndDisc
                 .setExternalFinalState(Graphics::ResourceStates::ShaderResource)
                 .setExternalFinalReleaseDestinationQueue(queues[s_ThirdElementIndex].id)
         );
-        ASSERT_TRUE(gpuAdmissionAt273);
-        resources[index] = *gpuAdmissionAt273;
+        ASSERT_TRUE(gpuTaskAdmission);
+        resources[index] = *gpuTaskAdmission;
         ASSERT_TRUE(resources[index].valid());
     }
     for(usize offset = 0u; offset < resources.size(); ++offset){
         const usize index = resources.size() - offset - 1u;
         const Graphics::GpuTaskResourceUse use = BufferUse(resources[index], ranges[index].byteOffset, ranges[index].byteSize, Graphics::ResourceStates::CopyDest);
-        const auto derivedNameAt323Col59 = DeriveName(identities[index], AStringView("writer"));
-        ASSERT_TRUE(derivedNameAt323Col59);
-        const auto gpuAdmissionAt287 = AddRangeTask(graph, *derivedNameAt323Col59, &use, 1u);
-        ASSERT_TRUE(gpuAdmissionAt287);
-        writers[index] = *gpuAdmissionAt287;
+        const auto derivedNameResult = DeriveName(identities[index], AStringView("writer"));
+        ASSERT_TRUE(derivedNameResult);
+        const auto writerTaskAdmission = AddRangeTask(graph, *derivedNameResult, &use, 1u);
+        ASSERT_TRUE(writerTaskAdmission);
+        writers[index] = *writerTaskAdmission;
         ASSERT_TRUE(writers[index].valid());
     }
     for(usize index = 0u; index < resources.size(); ++index){
         const Graphics::GpuTaskResourceUse use = BufferUse(resources[index], ranges[index].byteOffset, ranges[index].byteSize, Graphics::ResourceStates::ShaderResource, Graphics::GpuTaskResourceAccess::Read);
-        const auto derivedNameAt330Col59 = DeriveName(identities[index], AStringView("consumer"));
-        ASSERT_TRUE(derivedNameAt330Col59);
-        const auto gpuAdmissionAt292 = AddRangeTask(graph, *derivedNameAt330Col59, &use, 1u, true);
-        ASSERT_TRUE(gpuAdmissionAt292);
-        consumers[index] = *gpuAdmissionAt292;
+        const auto secondDerivedNameResult = DeriveName(identities[index], AStringView("consumer"));
+        ASSERT_TRUE(secondDerivedNameResult);
+        const auto consumerTaskAdmission = AddRangeTask(graph, *secondDerivedNameResult, &use, 1u, true);
+        ASSERT_TRUE(consumerTaskAdmission);
+        consumers[index] = *consumerTaskAdmission;
         ASSERT_TRUE(consumers[index].valid());
     }
     const auto emptyResult = graph.addTask(Graphics::GpuTaskDesc{}.setIdentity(Name("tests/buffer_range/grouped_empty")).setMarkerLabel("No Epilogue Task"));

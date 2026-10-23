@@ -19,7 +19,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_task_graph_telemetry{
+namespace __hidden_gpu_task_graph_telemetry{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -230,7 +230,7 @@ bool GpuTaskGraphDeclarationReadView::appendFrameGraphTelemetry(Telemetry::Frame
         u8 flags = GpuTaskGraphTelemetryNodeFlag::None;
         Telemetry::FrameGraphPassMetadata metadata;
         if(options.compiledPlan){
-            const auto compiledTask = __hidden_task_graph_telemetry::BuildCompiledTask(*options.compiledPlan, task.id);
+            const auto compiledTask = __hidden_gpu_task_graph_telemetry::BuildCompiledTask(*options.compiledPlan, task.id);
             if(!compiledTask)
                 return false;
             metadata.compiledTask = *compiledTask;
@@ -238,7 +238,7 @@ bool GpuTaskGraphDeclarationReadView::appendFrameGraphTelemetry(Telemetry::Frame
         if(options.queueAssignments){
             auto& assignment = *MakeNotNull(options.queueAssignments->find(task.id));
             const GpuTaskQueueAssignmentTelemetry* const accepted = options.queueAssignmentTelemetry ? options.queueAssignmentTelemetry->find(task.id) : nullptr;
-            const auto queueAssignment = __hidden_task_graph_telemetry::BuildQueueAssignment(assignment, accepted);
+            const auto queueAssignment = __hidden_gpu_task_graph_telemetry::BuildQueueAssignment(assignment, accepted);
             if(!queueAssignment)
                 return false;
             metadata.queueAssignment = *queueAssignment;
@@ -293,14 +293,14 @@ bool GpuTaskGraphDeclarationReadView::appendFrameGraphTelemetry(Telemetry::Frame
             flags |= GpuTaskGraphTelemetryEdgeFlag::VersionDependency;
         else if(edge.hazard == GpuTaskHazardType::VersionLifetime)
             flags |= GpuTaskGraphTelemetryEdgeFlag::VersionLifetime;
-        auto [annotation, inserted] = inferredFlags.try_emplace(__hidden_task_graph_telemetry::DependencyPairKey(edge), flags);
+        auto [annotation, inserted] = inferredFlags.try_emplace(__hidden_gpu_task_graph_telemetry::DependencyPairKey(edge), flags);
         if(!inserted)
             annotation.value() |= flags;
     }
     for(const GpuTaskDependencyEdge& edge : analysis.edges()){
         // Analysis keeps one raw edge per pair and gives explicit dependencies precedence over inferred hazards.
         u8 flags = edge.hazard == GpuTaskHazardType::Explicit ? GpuTaskGraphTelemetryEdgeFlag::ExplicitDependency : GpuTaskGraphTelemetryEdgeFlag::None;
-        const auto annotation = inferredFlags.find(__hidden_task_graph_telemetry::DependencyPairKey(edge));
+        const auto annotation = inferredFlags.find(__hidden_gpu_task_graph_telemetry::DependencyPairKey(edge));
         if(annotation != inferredFlags.end())
             flags |= annotation->second;
         builder.addEdge(taskNodes[edge.producer.index], taskNodes[edge.consumer.index], Telemetry::FrameGraphEdgeKind::DependsOn, flags);

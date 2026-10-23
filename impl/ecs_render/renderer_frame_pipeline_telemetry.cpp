@@ -12,10 +12,6 @@
 
 #include <global/simd/vector_arithmetic.h>
 
-namespace __hidden_frame_telemetry{
-static constexpr AStringView s_UnknownStageLabel = "Unknown";
-};
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -26,12 +22,13 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_frame_graph_export{
+namespace __hidden_renderer_frame_pipeline_telemetry{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr AStringView s_UnknownStageLabel = "Unknown";
 static constexpr f64 s_MillisecondsPerSecondTelemetry = 1000.0;
 static constexpr f64 s_PercentScaleTelemetry = 100.0;
 
@@ -48,7 +45,7 @@ static constexpr f64 s_PercentScaleTelemetry = 100.0;
     case Core::CommandQueue::Transfer:
         return "Transfer";
     default:
-        return ::__hidden_frame_telemetry::s_UnknownStageLabel;
+        return s_UnknownStageLabel;
     }
 }
 
@@ -61,7 +58,7 @@ static constexpr f64 s_PercentScaleTelemetry = 100.0;
     case Core::GpuOwnershipTransferRoute::ExternalExport:
         return "ExternalExport";
     default:
-        return ::__hidden_frame_telemetry::s_UnknownStageLabel;
+        return s_UnknownStageLabel;
     }
 }
 
@@ -84,7 +81,7 @@ static constexpr f64 s_PercentScaleTelemetry = 100.0;
     case Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer:
         return "GraphicsAsyncComputeAndTransfer";
     default:
-        return ::__hidden_frame_telemetry::s_UnknownStageLabel;
+        return s_UnknownStageLabel;
     }
 }
 
@@ -191,7 +188,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
         const Core::GpuTaskGraphCompileStatistics& compileStatistics = deferredRuntimeStatistics.compile;
         const Core::GpuTaskGraphRecordingStatistics& recordingStatistics = deferredRuntimeStatistics.recording;
         const Core::GpuTaskGraphSubmissionStatistics& submissionStatistics = deferredRuntimeStatistics.submission;
-        const SIMDVectorDouble millisecondsScale = VectorDoubleReplicate(__hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry);
+        const SIMDVectorDouble millisecondsScale = VectorDoubleReplicate(__hidden_renderer_frame_pipeline_telemetry::s_MillisecondsPerSecondTelemetry);
         const SIMDVectorDouble frameTimingMs = VectorDoubleMultiply(VectorDoubleSet(compileStatistics.declarationSeconds, compileStatistics.totalSeconds, recordingStatistics.recordingElapsedSeconds, submissionStatistics.submissionSeconds), millisecondsScale);
         const SIMDVectorDouble compileTimingMs = VectorDoubleMultiply(VectorDoubleSet(compileStatistics.analysisSeconds, compileStatistics.queueAssignmentSeconds, compileStatistics.planningSeconds, compileStatistics.validationSeconds), millisecondsScale);
         const SIMDVectorDouble analysisPlanningTimingMs = VectorDoubleMultiply(
@@ -208,7 +205,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
         );
         const SIMDVectorDouble frontierCapacityMsAndPercent = VectorDoubleMultiply(
             VectorDoubleSelect(VectorDoubleSet(recordingStatistics.readyFrontierWorkerCapacitySeconds, 0.0, 0.0, 0.0), recordingStatistics.readyFrontierWorkerUtilization(), s_DoubleSIMDMaskY),
-            VectorDoubleSet(__hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry, __hidden_frame_graph_export::s_PercentScaleTelemetry, 1.0, 1.0)
+            VectorDoubleSet(__hidden_renderer_frame_pipeline_telemetry::s_MillisecondsPerSecondTelemetry, __hidden_renderer_frame_pipeline_telemetry::s_PercentScaleTelemetry, 1.0, 1.0)
         );
         StringAppendFormat(
             m_frameGraphRendererLabel,
@@ -334,7 +331,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
                 "\n  Command arena: workers={} epochs={} pending epochs={} command buffers current/high-water={}/{} reusable={} leased={} pending={} growth={} resets={} native handle storage lower bound={} bytes",
                 queueRuntimeStatistics.queue.index,
                 queueRuntimeStatistics.queue.deviceGeneration,
-                __hidden_frame_graph_export::PhysicalQueueClassLabel(queueInfo.queueClass),
+                __hidden_renderer_frame_pipeline_telemetry::PhysicalQueueClassLabel(queueInfo.queueClass),
                 queueInfo.familyIndex,
                 queueInfo.queueIndex,
                 queueInfo.dedicated,
@@ -392,7 +389,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
 
             const Core::GpuCommandArenaWorkerStatistics directCommandArenaStatistics = m_graphics.getDevice().getCommandArenaWorkerStatistics(queueInfo.id, 0u, 0u);
             if(directCommandArenaStatistics.valid())
-                __hidden_frame_graph_export::AppendCommandArenaWorkerStatistics(m_frameGraphRendererLabel, directCommandArenaStatistics);
+                __hidden_renderer_frame_pipeline_telemetry::AppendCommandArenaWorkerStatistics(m_frameGraphRendererLabel, directCommandArenaStatistics);
 
             // Recorded packets retain the exact worker domain/index used for native allocation.
             // Walk the immutable compiled order and reject any identity already seen on this queue; packet counts are small, so this allocation-free pass is preferable to persistent storage.
@@ -426,7 +423,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
 
                 const Core::GpuCommandArenaWorkerStatistics workerCommandArenaStatistics = m_graphics.getDevice().getCommandArenaWorkerStatistics(queueInfo.id, recordedPacket->recordingWorkerDomain, recordedPacket->recordingWorkerIndex);
                 if(workerCommandArenaStatistics.valid())
-                    __hidden_frame_graph_export::AppendCommandArenaWorkerStatistics(m_frameGraphRendererLabel, workerCommandArenaStatistics);
+                    __hidden_renderer_frame_pipeline_telemetry::AppendCommandArenaWorkerStatistics(m_frameGraphRendererLabel, workerCommandArenaStatistics);
             }
         }
 
@@ -442,14 +439,14 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
                     "\nLogical ownership transfer {}: resource identity={} route={} source physical queue index={} generation={} family={} destination physical queue index={} generation={} family={} declared sharing={} mask={} concurrent sharing could avoid={}",
                     transferIndex,
                     transfer.resourceIdentity.resolvedText(),
-                    __hidden_frame_graph_export::OwnershipTransferRouteLabel(transfer.route),
+                    __hidden_renderer_frame_pipeline_telemetry::OwnershipTransferRouteLabel(transfer.route),
                     transfer.sourceQueue.index,
                     transfer.sourceQueue.deviceGeneration,
                     transfer.sourceQueueFamilyIndex,
                     transfer.destinationQueue.index,
                     transfer.destinationQueue.deviceGeneration,
                     transfer.destinationQueueFamilyIndex,
-                    __hidden_frame_graph_export::ResourceQueueSharingLabel(transfer.declaredQueueSharing),
+                    __hidden_renderer_frame_pipeline_telemetry::ResourceQueueSharingLabel(transfer.declaredQueueSharing),
                     static_cast<u32>(transfer.declaredQueueSharing),
                     transfer.concurrentSharingCouldAvoid
                 );
@@ -498,7 +495,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
             "\nGPU timing physical queue index={} generation={} class={} family index={} native queue index={} capability mask={} timestamp valid bits={} duration timestamps={} comparable timestamps={}",
             queueInfo.id.index,
             queueInfo.id.deviceGeneration,
-            __hidden_frame_graph_export::PhysicalQueueClassLabel(queueInfo.queueClass),
+            __hidden_renderer_frame_pipeline_telemetry::PhysicalQueueClassLabel(queueInfo.queueClass),
             queueInfo.familyIndex,
             queueInfo.queueIndex,
             static_cast<u32>(queueInfo.capabilities),

@@ -16,24 +16,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_telemetry_report{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static constexpr StringView s_UnknownReportField = "unknown";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_LOG_BEGIN
 
 
@@ -46,6 +28,7 @@ namespace TelemetryReportDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr StringView s_UnknownReportField = "unknown";
 static constexpr usize s_TimedGraphDotFixedReserveBytes = 96u;
 static constexpr usize s_TimedGraphDotBytesPerGraph = 128u;
 static constexpr usize s_TimedGraphDotBytesPerNode = 768u;
@@ -133,7 +116,7 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
         return "external";
     case Telemetry::FrameGraphNodeKind::Unknown:
     default:
-        return ::__hidden_telemetry_report::s_UnknownReportField;
+        return s_UnknownReportField;
     }
 }
 
@@ -161,7 +144,7 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
         return "transfer";
     case Telemetry::FrameGraphQueueClass::Unknown:
     default:
-        return ::__hidden_telemetry_report::s_UnknownReportField;
+        return s_UnknownReportField;
     }
 }
 
@@ -175,7 +158,7 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
         return "scored";
     case Telemetry::FrameGraphQueueAssignmentReason::Unknown:
     default:
-        return ::__hidden_telemetry_report::s_UnknownReportField;
+        return s_UnknownReportField;
     }
 }
 
@@ -190,7 +173,7 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
     case Telemetry::FrameGraphQueueAssignmentAcceptance::NotAccepted:
         return "notAccepted";
     default:
-        return ::__hidden_telemetry_report::s_UnknownReportField;
+        return s_UnknownReportField;
     }
 }
 
@@ -224,7 +207,7 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
         return "scoredMergeDomainMismatch";
     case Telemetry::FrameGraphTaskPacketizationDecision::Unknown:
     default:
-        return ::__hidden_telemetry_report::s_UnknownReportField;
+        return s_UnknownReportField;
     }
 }
 

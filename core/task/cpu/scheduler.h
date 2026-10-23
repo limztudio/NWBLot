@@ -46,14 +46,16 @@ private:
 
 
 private:
-    enum class TaskState : u8{
-        Free,
-        Preparing,
-        Waiting,
-        Ready,
-        Running,
-        Children,
-        Retiring,
+    struct TaskState{
+        enum Enum : u8{
+            Free,
+            Preparing,
+            Waiting,
+            Ready,
+            Running,
+            Children,
+            Retiring,
+        };
     };
 
     struct TaskNode{
@@ -69,7 +71,7 @@ private:
         u32 latestCanceledGeneration = 0u;
         u32 next = TaskHandle::s_InvalidIndex;
         bool canceled = false;
-        TaskState state = TaskState::Free;
+        TaskState::Enum state = TaskState::Free;
 
 
     public:

@@ -170,15 +170,15 @@ TEST(CpuTaskSubmissionTests, WorkerCallbackFailureTerminatesWithoutDeferredCalle
         DeadlineGuard deadline;
         const int result = InvokeTerminalEntry<u32>([]()->int{
             CpuTaskScheduler scheduler(1u);
-            const auto cpuAdmission135 = scheduler.submit([&](){
+            const auto cpuTaskAdmission = scheduler.submit([&](){
                 if(scheduler.currentWorkerIndex() == 0u)
                     ExitTestProcess(0u);
                 throw s_WorkerException;
             }
             );
-            if(!cpuAdmission135)
+            if(!cpuTaskAdmission)
                 ExitTestProcess(0u);
-            const auto task = *cpuAdmission135;
+            const auto task = *cpuTaskAdmission;
             if(!task.valid())
                 return 0;
             scheduler.wait(task);

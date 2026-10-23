@@ -17,7 +17,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_glyph_paint{
+namespace __hidden_ui_paint_glyph{
 static bool SamePage(const GlyphPageBinding& first, const GlyphPageBinding& second)noexcept{
     return first.font == second.font && first.fontGeneration == second.fontGeneration && first.atlasIdentity == second.atlasIdentity && first.index == second.index;
 }
@@ -47,7 +47,7 @@ bool PaintBuilder::drawGlyph(const SharedGlyphPage& page, const Rect& rectangle,
         if(!prepareGlyphPages(&page, 1u))
             return false;
         for(index = 0u; index < m_snapshot.m_glyphPages.size(); ++index){
-            if(__hidden_ui_glyph_paint::SamePage(m_snapshot.m_glyphPages[index]->binding(), page->binding()))
+            if(__hidden_ui_paint_glyph::SamePage(m_snapshot.m_glyphPages[index]->binding(), page->binding()))
                 break;
         }
     }

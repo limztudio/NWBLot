@@ -41,9 +41,9 @@ static void CheckOwnershipStatistics(const usize resourceCount){
     uses.reserve(resourceCount * 2u);
     for(usize resourceIndex = 0u; resourceIndex < resourceCount; ++resourceIndex){
         char identityText[32u] = {};
-        const auto derivedNameAt44Col30 = DeriveName(Name("tests/ownership_statistics/resource/"), FormatDecimal(resourceIndex, identityText));
-        ASSERT_TRUE(derivedNameAt44Col30);
-        const Name identity = *derivedNameAt44Col30;
+        const auto identityNameResult = DeriveName(Name("tests/ownership_statistics/resource/"), FormatDecimal(resourceIndex, identityText));
+        ASSERT_TRUE(identityNameResult);
+        const Name identity = *identityNameResult;
         const auto resourceResult = AddTextureMetadata(graph, identity, "Ownership Statistics Texture", Graphics::ResourceStates::Common, Graphics::ResourceQueueSharing::Exclusive);
         ASSERT_TRUE(resourceResult);
         const Graphics::GpuGraphResourceId resource = *resourceResult;
@@ -55,14 +55,14 @@ static void CheckOwnershipStatistics(const usize resourceCount){
     for(usize taskIndex = 0u; taskIndex < 3u; ++taskIndex){
         char identityText[32u] = {};
         Graphics::GpuTaskDesc desc;
-        const auto derivedNameAt62Col25 = DeriveName(Name("tests/ownership_statistics/task/"), FormatDecimal(taskIndex, identityText));
-        ASSERT_TRUE(derivedNameAt62Col25);
-        desc.setIdentity(*derivedNameAt62Col25).setMarkerLabel("Ownership Statistics Task").setResourceUses(uses.data(), uses.size());
+        const auto resourceNameResult = DeriveName(Name("tests/ownership_statistics/task/"), FormatDecimal(taskIndex, identityText));
+        ASSERT_TRUE(resourceNameResult);
+        desc.setIdentity(*resourceNameResult).setMarkerLabel("Ownership Statistics Task").setResourceUses(uses.data(), uses.size());
         const auto commands = taskIndex == 1u ? ComputeCommands() : GraphicsCommands();
         {
-            const auto gpuAdmissionAt62 = graph.addTask(desc, commands);
-            ASSERT_TRUE(gpuAdmissionAt62);
-            ASSERT_TRUE(gpuAdmissionAt62->valid());
+            const auto gpuTaskAdmission = graph.addTask(desc, commands);
+            ASSERT_TRUE(gpuTaskAdmission);
+            ASSERT_TRUE(gpuTaskAdmission->valid());
         }
     }
     ThreeQueueCompile compilation(testArena);

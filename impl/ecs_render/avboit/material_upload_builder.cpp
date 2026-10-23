@@ -28,7 +28,7 @@ AvboitMaterialUploadBuilder::AvboitMaterialUploadBuilder(Core::GpuTaskGraph& gra
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_material_upload{
+namespace __hidden_avboit_material_upload_builder{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -118,7 +118,7 @@ struct UploadIdentities{
         return MakeUnexpected(Failure{});
     }
 
-    const __hidden_material_upload::UploadIdentities identities = __hidden_material_upload::IdentitiesForPhase(inputs.phase);
+    const __hidden_avboit_material_upload_builder::UploadIdentities identities = __hidden_avboit_material_upload_builder::IdentitiesForPhase(inputs.phase);
     const auto instanceBlobResult = m_graph.copyUploadData(instanceData.data(), instanceData.size() * sizeof(InstanceGpuData), alignof(InstanceGpuData));
     const auto materialTypedBlobResult = m_graph.copyUploadData(materialTypedBytes.data(), materialTypedBytes.size(), alignof(u32));
     if(!instanceBlobResult || !materialTypedBlobResult){

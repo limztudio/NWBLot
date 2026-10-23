@@ -16,16 +16,16 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSwizzle(SIMDVectorSingle value, 
 #if defined(NWB_HAS_NEON64)
     return vreinterpretq_f32_u8(vqtbl1q_u8(vreinterpretq_u8_f32(value), SIMDVectorDetail::PermuteByteIndices(e0, e1, e2, e3)));
 #elif defined(NWB_HAS_NEON)
-    static const u32 s_controlElement[4] = { 0x03020100u, 0x07060504u, 0x0B0A0908u, 0x0F0E0D0Cu, };
+    static const u32 s_ControlElement[4] = { 0x03020100u, 0x07060504u, 0x0B0A0908u, 0x0F0E0D0Cu, };
 
     uint8x8x2_t table{};
     table.val[0] = vreinterpret_u8_f32(vget_low_f32(value));
     table.val[1] = vreinterpret_u8_f32(vget_high_f32(value));
 
-    uint32x2_t idx = vcreate_u32(static_cast<u64>(s_controlElement[e0]) | (static_cast<u64>(s_controlElement[e1]) << s_F32BitCount));
+    uint32x2_t idx = vcreate_u32(static_cast<u64>(s_ControlElement[e0]) | (static_cast<u64>(s_ControlElement[e1]) << s_F32BitCount));
     const uint8x8_t lo = vtbl2_u8(table, vreinterpret_u8_u32(idx));
 
-    idx = vcreate_u32(static_cast<u64>(s_controlElement[e2]) | (static_cast<u64>(s_controlElement[e3]) << s_F32BitCount));
+    idx = vcreate_u32(static_cast<u64>(s_ControlElement[e2]) | (static_cast<u64>(s_ControlElement[e3]) << s_F32BitCount));
     const uint8x8_t hi = vtbl2_u8(table, vreinterpret_u8_u32(idx));
     return vcombine_f32(vreinterpret_f32_u8(lo), vreinterpret_f32_u8(hi));
 #elif defined(NWB_HAS_AVX)
@@ -196,7 +196,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute(SIMDVectorSingle v0, SIM
     const uint8x16x2_t table = { vreinterpretq_u8_f32(v0), vreinterpretq_u8_f32(v1) };
     return vreinterpretq_f32_u8(vqtbl2q_u8(table, SIMDVectorDetail::PermuteByteIndices(x, y, z, w)));
 #elif defined(NWB_HAS_NEON)
-    static const u32 s_controlElement[8] = { 0x03020100u, 0x07060504u, 0x0B0A0908u, 0x0F0E0D0Cu, 0x13121110u, 0x17161514u, 0x1B1A1918u, 0x1F1E1D1Cu, };
+    static const u32 s_ControlElement[8] = { 0x03020100u, 0x07060504u, 0x0B0A0908u, 0x0F0E0D0Cu, 0x13121110u, 0x17161514u, 0x1B1A1918u, 0x1F1E1D1Cu, };
 
     uint8x8x4_t table{};
     table.val[0] = vreinterpret_u8_f32(vget_low_f32(v0));
@@ -204,10 +204,10 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorPermute(SIMDVectorSingle v0, SIM
     table.val[2] = vreinterpret_u8_f32(vget_low_f32(v1));
     table.val[3] = vreinterpret_u8_f32(vget_high_f32(v1));
 
-    uint32x2_t idx = vcreate_u32(static_cast<u64>(s_controlElement[x]) | (static_cast<u64>(s_controlElement[y]) << s_F32BitCount));
+    uint32x2_t idx = vcreate_u32(static_cast<u64>(s_ControlElement[x]) | (static_cast<u64>(s_ControlElement[y]) << s_F32BitCount));
     const uint8x8_t lo = vtbl4_u8(table, vreinterpret_u8_u32(idx));
 
-    idx = vcreate_u32(static_cast<u64>(s_controlElement[z]) | (static_cast<u64>(s_controlElement[w]) << s_F32BitCount));
+    idx = vcreate_u32(static_cast<u64>(s_ControlElement[z]) | (static_cast<u64>(s_ControlElement[w]) << s_F32BitCount));
     const uint8x8_t hi = vtbl4_u8(table, vreinterpret_u8_u32(idx));
     return vcombine_f32(vreinterpret_f32_u8(lo), vreinterpret_f32_u8(hi));
 #elif defined(NWB_HAS_AVX)

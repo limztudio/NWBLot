@@ -108,9 +108,9 @@ TEST(GpuTaskGraphResourceVersion, RejectsMissingAndDuplicateTaskProducedVersionP
         const Graphics::GpuTaskResourceUse resourceUse = ResourceUse(resource, BufferRange(0u, 64u), Graphics::ResourceStates::ShaderResource, Graphics::GpuTaskResourceAccess::Read);
         const Graphics::GpuTaskResourceVersionUse versionUse = VersionUse(version, Graphics::GpuTaskResourceVersionRole::Consume);
         {
-            const auto gpuAdmissionAt96 = AddTask(graph, Name("tests/task_graph_resource_version/missing_producer_consumer"), &resourceUse, 1u, &versionUse, 1u);
-            ASSERT_TRUE(gpuAdmissionAt96);
-            ASSERT_TRUE(gpuAdmissionAt96->valid());
+            const auto gpuTaskAdmission = AddTask(graph, Name("tests/task_graph_resource_version/missing_producer_consumer"), &resourceUse, 1u, &versionUse, 1u);
+            ASSERT_TRUE(gpuTaskAdmission);
+            ASSERT_TRUE(gpuTaskAdmission->valid());
         }
 
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);

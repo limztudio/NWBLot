@@ -26,7 +26,7 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_font_builder_writer{
+namespace __hidden_font_builder_asset_writer{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -308,13 +308,13 @@ bool WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payl
     }
     BuildFontMetadata(payload, metadata);
 
-    const __hidden_font_builder_writer::OutputPaths paths(scratch, options.output);
-    const auto outputs = __hidden_font_builder_writer::CheckOutputs(paths, options.overwrite);
+    const __hidden_font_builder_asset_writer::OutputPaths paths(scratch, options.output);
+    const auto outputs = __hidden_font_builder_asset_writer::CheckOutputs(paths, options.overwrite);
     if(!outputs){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: output pair unavailable; use --overwrite for complete regular .nwb and .font files: {}"), StringConvert(outputs.error().message()));
         return false;
     }
-    const auto workPaths = __hidden_font_builder_writer::CheckWorkPaths(paths);
+    const auto workPaths = __hidden_font_builder_asset_writer::CheckWorkPaths(paths);
     if(!workPaths){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: publication work paths unavailable: {}"), StringConvert(workPaths.error().message()));
         return false;
@@ -328,8 +328,8 @@ bool WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payl
         }
     }
 
-    __hidden_font_builder_writer::TemporaryFile stagedFont(paths.fontTemporary);
-    __hidden_font_builder_writer::TemporaryFile stagedMetadata(paths.metadataTemporary);
+    __hidden_font_builder_asset_writer::TemporaryFile stagedFont(paths.fontTemporary);
+    __hidden_font_builder_asset_writer::TemporaryFile stagedMetadata(paths.metadataTemporary);
     const auto metadataBytes = MakeNotNull(reinterpret_cast<const u8*>(metadata.data()));
     const auto fontStaged = stagedFont.stage(fontBinary->data(), fontBinary->size());
     if(!fontStaged){
@@ -345,7 +345,7 @@ bool WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payl
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: staging or verification failed; previous pair remains in place"));
         return false;
     }
-    const auto published = __hidden_font_builder_writer::Publish(paths, stagedFont, stagedMetadata, options.overwrite);
+    const auto published = __hidden_font_builder_asset_writer::Publish(paths, stagedFont, stagedMetadata, options.overwrite);
     if(!published){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: pair publication failed: {}"), StringConvert(published.error().message()));
         return false;

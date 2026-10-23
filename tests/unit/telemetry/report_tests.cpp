@@ -25,10 +25,10 @@ namespace __hidden_telemetry_report_tests{
 
 constexpr AStringView s_ReportArenaName = "tests/telemetry/report_work";
 
-static constexpr AStringView s_GBUFFER = "gbuffer";
-static constexpr AStringView s_RUNTIME_STATISTICS_NONE = "runtime_statistics=\"none\"";
-static constexpr AStringView s_RUNTIME_STATISTICS_NULL_JSON = "\"runtimeStatistics\": null";
-static constexpr AStringView s_RESOURCE_WITH_NULL_STATISTICS_JSON = "\"kind\": \"resource\", \"flags\": 0, \"queueAssignment\": null, \"compiledTask\": null, \"runtimeStatistics\": null";
+static constexpr AStringView s_GBuffer = "gbuffer";
+static constexpr AStringView s_RuntimeStatisticsNone = "runtime_statistics=\"none\"";
+static constexpr AStringView s_RuntimeStatisticsNullJson = "\"runtimeStatistics\": null";
+static constexpr AStringView s_ResourceWithNullStatisticsJson = "\"kind\": \"resource\", \"flags\": 0, \"queueAssignment\": null, \"compiledTask\": null, \"runtimeStatistics\": null";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -48,7 +48,7 @@ TEST(Telemetry, TelemetryReportKeepsCaptureOrderAndCorrelatesTimingByFrame){
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
 
-    const Name gbufferScopeName{s_GBUFFER};
+    const Name gbufferScopeName{s_GBuffer};
     NWB::Core::Perf::TimingStats firstTiming = MakeTestTimingStats();
     firstTiming.seconds = 0.041;
     firstTiming.sampleCount = 1u;
@@ -123,7 +123,7 @@ TEST(Telemetry, TelemetryReportDoesNotAttachAggregatedTimingToOneGraph){
     aggregatedTiming.publishFrameIndex = 44u;
     aggregatedTiming.firstSampleFrameIndex = 43u;
     aggregatedTiming.lastSampleFrameIndex = 43u;
-    ASSERT_TRUE(Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Gpu, Name(s_GBUFFER), "gbuffer", aggregatedTiming, 70u));
+    ASSERT_TRUE(Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Gpu, Name(s_GBuffer), "gbuffer", aggregatedTiming, 70u));
 
     Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
@@ -246,9 +246,9 @@ TEST(Telemetry, TelemetryReportMarksAbsentRuntimeStatistics){
     const AStringView firstPassJson = json.substr(firstPassJsonOffset, resourceJsonOffset - firstPassJsonOffset);
     const AStringView resourceJson = json.substr(resourceJsonOffset, secondPassJsonOffset - resourceJsonOffset);
     const AStringView secondPassJson = json.substr(secondPassJsonOffset, jsonEdgesOffset - secondPassJsonOffset);
-    EXPECT_TRUE(ContainsText(firstPassJson, s_RUNTIME_STATISTICS_NULL_JSON));
-    EXPECT_TRUE(ContainsText(resourceJson, s_RESOURCE_WITH_NULL_STATISTICS_JSON));
-    EXPECT_TRUE(ContainsText(secondPassJson, s_RUNTIME_STATISTICS_NULL_JSON));
+    EXPECT_TRUE(ContainsText(firstPassJson, s_RuntimeStatisticsNullJson));
+    EXPECT_TRUE(ContainsText(resourceJson, s_ResourceWithNullStatisticsJson));
+    EXPECT_TRUE(ContainsText(secondPassJson, s_RuntimeStatisticsNullJson));
 
     const AStringView dot(report.graph.data(), report.graph.size());
     const usize firstPassDotOffset = dot.find("  n0 [");
@@ -266,9 +266,9 @@ TEST(Telemetry, TelemetryReportMarksAbsentRuntimeStatistics){
     const AStringView firstPassDot = dot.substr(firstPassDotOffset, resourceDotOffset - firstPassDotOffset);
     const AStringView resourceDot = dot.substr(resourceDotOffset, secondPassDotOffset - resourceDotOffset);
     const AStringView secondPassDot = dot.substr(secondPassDotOffset, dotEdgesOffset - secondPassDotOffset);
-    EXPECT_TRUE(ContainsText(firstPassDot, s_RUNTIME_STATISTICS_NONE));
-    EXPECT_TRUE(ContainsText(resourceDot, s_RUNTIME_STATISTICS_NONE));
-    EXPECT_TRUE(ContainsText(secondPassDot, s_RUNTIME_STATISTICS_NONE));
+    EXPECT_TRUE(ContainsText(firstPassDot, s_RuntimeStatisticsNone));
+    EXPECT_TRUE(ContainsText(resourceDot, s_RuntimeStatisticsNone));
+    EXPECT_TRUE(ContainsText(secondPassDot, s_RuntimeStatisticsNone));
 }
 
 TEST(Telemetry, TelemetryReportRetainsFiniteRecordsWhenTimingTotalsOverflow){

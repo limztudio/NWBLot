@@ -41,11 +41,11 @@ constexpr AStringView s_OpenAtlas = "open";
 constexpr AStringView s_PlaneShapePath = "engine/csg/plane";
 constexpr AStringView s_CapsuleShapePath = "engine/csg/capsule";
 
-static constexpr AStringView s_ENGINE_CSG_SPHERE = "engine/csg/sphere";
-static constexpr AStringView s_DIRECTIONAL = "directional";
-static constexpr AStringView s_POINT = "point";
-static constexpr AStringView s_HARD = "hard";
-static constexpr AStringView s_FINITE = "finite";
+static constexpr AStringView s_EngineCsgSphere = "engine/csg/sphere";
+static constexpr AStringView s_Directional = "directional";
+static constexpr AStringView s_Point = "point";
+static constexpr AStringView s_Hard = "hard";
+static constexpr AStringView s_Finite = "finite";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -145,15 +145,15 @@ private:
         }
         if(const auto value = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_SHADOW_LIGHT")){
             const AStringView light(value->data(), value->size());
-            if(light != s_DIRECTIONAL && light != s_POINT)
+            if(light != s_Directional && light != s_Point)
                 return false;
-            m_pointLight = light == s_POINT;
+            m_pointLight = light == s_Point;
         }
         if(const auto value = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_SHADOW_LIGHT_SOURCE")){
             const AStringView source(value->data(), value->size());
-            if(source != s_HARD && source != s_FINITE)
+            if(source != s_Hard && source != s_Finite)
                 return false;
-            m_finiteLightSource = source == s_FINITE;
+            m_finiteLightSource = source == s_Finite;
         }
         if(const auto value = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_SHADOW_ATLAS")){
             const AStringView atlas(value->data(), value->size());
@@ -344,7 +344,7 @@ private:
         NWB::Impl::CsgSphereShapeParameters sphere;
         sphere.radius = Float4(1.0f, 0.0f, 0.0f, 0.0f);
         const SIMDMatrix ellipsoid = MatrixAffineTransformation(VectorSet(0.5f, 0.45f, 0.75f, 0.0f), VectorZero(), QuaternionIdentity(), VectorSet(0.0f, 1.0f, -6.0f, 0.0f));
-        addAnalyticCutter(1u, Name(s_ENGINE_CSG_SPHERE), sphere, ellipsoid);
+        addAnalyticCutter(1u, Name(s_EngineCsgSphere), sphere, ellipsoid);
 
         NWB::Impl::CsgCapsuleShapeParameters capsule;
         capsule.radiusHalfHeight = Float4(0.35f, 0.25f, 0.0f, 0.0f);
@@ -355,8 +355,8 @@ private:
         addAnalyticCutter(3u, Name(s_CapsuleShapePath), capsule, alongLight);
 
         sphere.radius = Float4(0.55f, 0.0f, 0.0f, 0.0f);
-        addAnalyticCutter(4u, Name(s_ENGINE_CSG_SPHERE), sphere, MatrixTranslation(0.0f, -1.0f, -6.25f));
-        addAnalyticCutter(4u, Name(s_ENGINE_CSG_SPHERE), sphere, MatrixTranslation(0.0f, -1.0f, -5.75f));
+        addAnalyticCutter(4u, Name(s_EngineCsgSphere), sphere, MatrixTranslation(0.0f, -1.0f, -6.25f));
+        addAnalyticCutter(4u, Name(s_EngineCsgSphere), sphere, MatrixTranslation(0.0f, -1.0f, -5.75f));
         // The infinite plane keeps the control in the CSG route while removing only z <= -8, outside its box.
         plane.normalDistance = Float4(0.0f, 0.0f, 1.0f, 8.0f);
         addAnalyticCutter(5u, Name(s_PlaneShapePath), plane, MatrixIdentity());
@@ -522,7 +522,7 @@ public:
         lightComponent->enableCaustics = false;
 #endif
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: light_source={} angular_radius={:.3f} source_radius={:.3f}")
-            , StringConvert(m_finiteLightSource ? s_FINITE : s_HARD)
+            , StringConvert(m_finiteLightSource ? s_Finite : s_Hard)
             , static_cast<f64>(lightComponent->angularRadius), static_cast<f64>(lightComponent->sourceRadius)
         );
         if(m_openAtlas){
@@ -535,7 +535,7 @@ public:
             createAtlas();
         const bool hardware = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery) && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: atlas arm={} light={} hardware={} camera_x={} caster_z_max=-5 receiver_z=0")
-            , static_cast<u32>(m_arm), StringConvert(m_pointLight ? s_POINT : s_DIRECTIONAL), hardware ? 1u : 0u
+            , static_cast<u32>(m_arm), StringConvert(m_pointLight ? s_Point : s_Directional), hardware ? 1u : 0u
             , static_cast<f64>(cameraX)
         );
         constexpr u32 s_DefaultCaptureFrameCount = 120u;

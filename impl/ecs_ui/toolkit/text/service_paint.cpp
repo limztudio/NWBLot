@@ -24,7 +24,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_text_paint{
+namespace __hidden_ui_text_service_paint{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -176,7 +176,7 @@ struct PreparedGlyph{
 
 
 Expected<Rect> TextService::measure(const TextLayout& layout, const DisplayMetrics& display){
-    using namespace __hidden_ui_text_paint;
+    using namespace __hidden_ui_text_service_paint;
     if(layout.lines().empty() || !IsFinite(layout.fontSize()) || layout.fontSize() < 1.0f / s_TextFixedPointScale || layout.fontSize() > s_TextMaxFontSize || !IsFinite(display.pixelScaleX) || !IsFinite(display.pixelScaleY) || display.pixelScaleX <= 0.0f || display.pixelScaleY <= 0.0f)
         return MakeUnexpected(Failure{});
     const SIMDVectorSingle physicalSizes = VectorMultiply(VectorReplicate(layout.fontSize()), VectorMax(VectorSet(display.pixelScaleX, display.pixelScaleY, 1.0f, 1.0f), VectorSet(display.pixelScaleY, display.pixelScaleX, 1.0f, 1.0f)));
@@ -280,11 +280,11 @@ bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point top
             return false;
     }
     // Exact rectangles remove conservative overinclusion before image admission; painter order remains unchanged.
-    Vector<__hidden_ui_text_paint::PreparedGlyph, Core::Alloc::ScratchArena> prepared(scratchArena);
+    Vector<__hidden_ui_text_service_paint::PreparedGlyph, Core::Alloc::ScratchArena> prepared(scratchArena);
     prepared.reserve(candidates.size());
     for(const usize index : candidates){
         const PlacedGlyph& glyph = layout.glyphs()[index];
-        __hidden_ui_text_paint::PreparedGlyph item;
+        __hidden_ui_text_service_paint::PreparedGlyph item;
         if(const BakedFontAtlas* atlas = TextGlyphVisibility::SelectAtlas(glyph, physicalSize)){
             const auto rectangle = TextGlyphVisibility::AtlasRectangle(glyph, *atlas, layout.fontSize(), topLeft);
             if(!rectangle)

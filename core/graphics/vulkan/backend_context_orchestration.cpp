@@ -592,7 +592,7 @@ bool BackendContext::createSwapChainResources(Alloc::ScratchArena& scratchArena)
 }
 
 bool BackendContext::validPreparedTicket(const SwapChainTransitionTicket& ticket, const SwapChainTransitionKind::Enum kind)const noexcept{
-    const SwapChainLifecycleState requiredState = kind == SwapChainTransitionKind::Resize ? SwapChainLifecycleState::PreparedResize : SwapChainLifecycleState::PreparedDestroy;
+    const SwapChainLifecycleState::Enum requiredState = kind == SwapChainTransitionKind::Resize ? SwapChainLifecycleState::PreparedResize : SwapChainLifecycleState::PreparedDestroy;
     return ticket.valid() && ticket.owner == this && ticket.kind == kind && ticket.epoch == m_swapChainLifecycleEpoch && m_swapChainLifecycleState == requiredState;
 }
 

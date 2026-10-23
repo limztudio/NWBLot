@@ -17,7 +17,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_descriptor_buffer{
+namespace __hidden_vulkan_resource_bindings_descriptor_buffer{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -184,10 +184,10 @@ bool DescriptorBufferManager::initialize(){
         return failInitialization();
     }
 
-    if(!initializeSegment(m_resourceSegment, __hidden_descriptor_buffer::s_ResourceSegmentDebugName, *resourceCapacityBytes))
+    if(!initializeSegment(m_resourceSegment, __hidden_vulkan_resource_bindings_descriptor_buffer::s_ResourceSegmentDebugName, *resourceCapacityBytes))
         return failInitialization();
 
-    if(!initializeSegment(m_samplerSegment, __hidden_descriptor_buffer::s_SamplerSegmentDebugName, *samplerCapacityBytes))
+    if(!initializeSegment(m_samplerSegment, __hidden_vulkan_resource_bindings_descriptor_buffer::s_SamplerSegmentDebugName, *samplerCapacityBytes))
         return failInitialization();
 
     m_bindingGeneration = m_nextBindingGeneration;
@@ -282,9 +282,9 @@ bool DescriptorBufferManager::reserveInitialCapacityForBindingGeneration(const u
         m_enabled = false;
         return false;
     };
-    if(*resourceCapacityBytes != m_resourceSegment.capacityBytes && !initializeSegment(m_resourceSegment, __hidden_descriptor_buffer::s_ResourceSegmentDebugName, *resourceCapacityBytes))
+    if(*resourceCapacityBytes != m_resourceSegment.capacityBytes && !initializeSegment(m_resourceSegment, __hidden_vulkan_resource_bindings_descriptor_buffer::s_ResourceSegmentDebugName, *resourceCapacityBytes))
         return failReservation();
-    if(*samplerCapacityBytes != m_samplerSegment.capacityBytes && !initializeSegment(m_samplerSegment, __hidden_descriptor_buffer::s_SamplerSegmentDebugName, *samplerCapacityBytes))
+    if(*samplerCapacityBytes != m_samplerSegment.capacityBytes && !initializeSegment(m_samplerSegment, __hidden_vulkan_resource_bindings_descriptor_buffer::s_SamplerSegmentDebugName, *samplerCapacityBytes))
         return failReservation();
 
     NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Sized initial descriptor buffers to driver layouts (resource={} bytes, sampler={} bytes)."), *resourceCapacityBytes, *samplerCapacityBytes);

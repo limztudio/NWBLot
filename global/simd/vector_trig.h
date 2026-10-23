@@ -192,17 +192,17 @@ NWB_INLINE void NWB_SIMD_CALL VectorDoubleSinCosEst(SIMDVectorDouble& outSin, SI
 
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorTan(SIMDVectorSingle value)noexcept{
-    static const SIMDVectorConstF s_tanCoefficients0 = { { { 1.0f, -4.667168334e-1f, 2.566383229e-2f, -3.118153191e-4f } } };
-    static const SIMDVectorConstF s_tanCoefficients1 = { { { 4.981943399e-7f, -1.333835001e-1f, 3.424887824e-3f, -1.786170734e-5f } } };
-    static const SIMDVectorConstF s_tanConstants = { { { 1.570796371f, 6.077100628e-11f, 0.000244140625f, 0.63661977228f } } };
-    static const SIMDVectorConstU s_mask = { { { 0x1u, 0x1u, 0x1u, 0x1u } } };
+    static const SIMDVectorConstF s_TanCoefficients0 = { { { 1.0f, -4.667168334e-1f, 2.566383229e-2f, -3.118153191e-4f } } };
+    static const SIMDVectorConstF s_TanCoefficients1 = { { { 4.981943399e-7f, -1.333835001e-1f, 3.424887824e-3f, -1.786170734e-5f } } };
+    static const SIMDVectorConstF s_TanConstants = { { { 1.570796371f, 6.077100628e-11f, 0.000244140625f, 0.63661977228f } } };
+    static const SIMDVectorConstU s_Mask = { { { 0x1u, 0x1u, 0x1u, 0x1u } } };
 
-    SIMDVectorSingle twoDivPi = VectorSplatW(s_tanConstants);
+    SIMDVectorSingle twoDivPi = VectorSplatW(s_TanConstants);
     SIMDVectorSingle zero = VectorZero();
 
-    SIMDVectorSingle c0 = VectorSplatX(s_tanConstants);
-    SIMDVectorSingle c1 = VectorSplatY(s_tanConstants);
-    SIMDVectorSingle epsilon = VectorSplatZ(s_tanConstants);
+    SIMDVectorSingle c0 = VectorSplatX(s_TanConstants);
+    SIMDVectorSingle c1 = VectorSplatY(s_TanConstants);
+    SIMDVectorSingle epsilon = VectorSplatZ(s_TanConstants);
 
     SIMDVectorSingle va = VectorMultiply(value, twoDivPi);
     va = VectorRound(va);
@@ -221,16 +221,16 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorTan(SIMDVectorSingle value)noexc
 
     SIMDVectorSingle vc2 = VectorMultiply(vc, vc);
 
-    SIMDVectorSingle t7 = VectorSplatW(s_tanCoefficients1);
-    SIMDVectorSingle t6 = VectorSplatZ(s_tanCoefficients1);
-    SIMDVectorSingle t4 = VectorSplatX(s_tanCoefficients1);
-    SIMDVectorSingle t3 = VectorSplatW(s_tanCoefficients0);
-    SIMDVectorSingle t5 = VectorSplatY(s_tanCoefficients1);
-    SIMDVectorSingle t2 = VectorSplatZ(s_tanCoefficients0);
-    SIMDVectorSingle t1 = VectorSplatY(s_tanCoefficients0);
-    SIMDVectorSingle t0 = VectorSplatX(s_tanCoefficients0);
+    SIMDVectorSingle t7 = VectorSplatW(s_TanCoefficients1);
+    SIMDVectorSingle t6 = VectorSplatZ(s_TanCoefficients1);
+    SIMDVectorSingle t4 = VectorSplatX(s_TanCoefficients1);
+    SIMDVectorSingle t3 = VectorSplatW(s_TanCoefficients0);
+    SIMDVectorSingle t5 = VectorSplatY(s_TanCoefficients1);
+    SIMDVectorSingle t2 = VectorSplatZ(s_TanCoefficients0);
+    SIMDVectorSingle t1 = VectorSplatY(s_TanCoefficients0);
+    SIMDVectorSingle t0 = VectorSplatX(s_TanCoefficients0);
 
-    SIMDVectorSingle vbIsEven = VectorAndInt(vb, s_mask);
+    SIMDVectorSingle vbIsEven = VectorAndInt(vb, s_Mask);
     vbIsEven = VectorEqualInt(vbIsEven, zero);
 
     SIMDVectorSingle n = VectorMultiplyAdd(vc2, t7, t6);

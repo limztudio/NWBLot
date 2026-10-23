@@ -17,7 +17,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_gpu_packet_runtime_execution{
+namespace __hidden_gpu_task_scheduler{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -124,7 +124,7 @@ bool GpuTaskScheduler::submitGraph(
         GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::TryAcquire(graph);
         if(!declarationAccess.valid() || !planAccess.validFor(declarationAccess) || !transaction.validFor(planAccess))
             return false;
-        const auto range = __hidden_gpu_packet_runtime_execution::FindNormalGraphPacketRange(declarationAccess, planAccess, desc.terminalTask);
+        const auto range = __hidden_gpu_task_scheduler::FindNormalGraphPacketRange(declarationAccess, planAccess, desc.terminalTask);
         if(!range){
             if(outFailedPacket)
                 *outFailedPacket = range.error();

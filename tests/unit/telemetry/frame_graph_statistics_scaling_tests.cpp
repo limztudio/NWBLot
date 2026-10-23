@@ -20,8 +20,8 @@ namespace __hidden_frame_graph_statistics_scaling_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_QUEUE_ALIAS_OWNER = "queue_alias_owner";
-static constexpr AStringView s_QUEUE_ALIAS_OWNER_2 = "Queue alias owner";
+static constexpr AStringView s_QueueAliasOwner = "queue_alias_owner";
+static constexpr AStringView s_QueueAliasOwner2 = "Queue alias owner";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -224,14 +224,14 @@ TEST(Telemetry, PacketStatisticsQueueSourceSurvivesDestinationGrowth){
     StatisticsFixture fixture(testArena.arena);
     Telemetry::FrameGraphBuilder builder(testArena.scratchArena, fixture.nodes, fixture.edges, fixture.pendingEdges, fixture.queues, fixture.packets);
     const Telemetry::FrameGraphPassMetadata metadata{ .queueAssignment = {}, .compiledTask = {}, .runtimeStatistics = OwnerStatistics(1u), };
-    const auto firstOwner = builder.addPass(Name(s_QUEUE_ALIAS_OWNER), s_QUEUE_ALIAS_OWNER_2, metadata);
+    const auto firstOwner = builder.addPass(Name(s_QueueAliasOwner), s_QueueAliasOwner2, metadata);
     ASSERT_TRUE(builder.addPhysicalQueueRuntimeStatistics(firstOwner, QueueStatistics(1u, 1u)));
     while(fixture.queues.size() < fixture.queues.capacity()){
-        const auto owner = builder.addPass(Name(s_QUEUE_ALIAS_OWNER), s_QUEUE_ALIAS_OWNER_2, metadata);
+        const auto owner = builder.addPass(Name(s_QueueAliasOwner), s_QueueAliasOwner2, metadata);
         ASSERT_TRUE(builder.addPhysicalQueueRuntimeStatistics(owner, fixture.queues[0u].statistics));
     }
     const usize capacityBeforeGrowth = fixture.queues.capacity();
-    const auto owner = builder.addPass(Name(s_QUEUE_ALIAS_OWNER), s_QUEUE_ALIAS_OWNER_2, metadata);
+    const auto owner = builder.addPass(Name(s_QueueAliasOwner), s_QueueAliasOwner2, metadata);
     ASSERT_TRUE(builder.addPhysicalQueueRuntimeStatistics(owner, fixture.queues[0u].statistics));
     ASSERT_GT(fixture.queues.capacity(), capacityBeforeGrowth);
     EXPECT_EQ(fixture.queues.back().ownerNodeIndex, owner.index);

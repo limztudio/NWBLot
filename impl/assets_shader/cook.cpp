@@ -22,15 +22,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_shader_cook{
-static constexpr StringView s_NoneOptText = "none";
-static constexpr StringView s_DefaultVariantText = "default";
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_IMPL_BEGIN
 
 
@@ -57,6 +48,8 @@ template<typename T>
 using ScratchVector = Vector<T, Alloc::ScratchArena>;
 template<typename T>
 using ScratchHashSet = HashSet<T, Alloc::ScratchArena, Hasher<T>, EqualTo<T>>;
+static constexpr StringView s_NoneOptText = "none";
+static constexpr StringView s_DefaultVariantText = "default";
 static constexpr AStringView s_AssetTypeInclude = "include";
 static constexpr AStringView s_SlangSourceExtension = ".slang";
 static constexpr AStringView s_SlangIncludeExtension = ".slangi";
@@ -76,9 +69,9 @@ static constexpr AStringView s_EmitMeshComputeShadowField = "emit_mesh_compute_s
 
 
 static Expected<ShaderOptimizationLevel::Enum> TryParseShaderOptimizationLevel(const AStringView text)noexcept{
-    if(text == ::__hidden_shader_cook::s_NoneOptText)
+    if(text == __hidden_shader_cook::s_NoneOptText)
         return ShaderOptimizationLevel::None;
-    if(text == ::__hidden_shader_cook::s_DefaultVariantText)
+    if(text == __hidden_shader_cook::s_DefaultVariantText)
         return ShaderOptimizationLevel::Default;
     if(text == "high")
         return ShaderOptimizationLevel::High;
@@ -96,7 +89,7 @@ static bool ValidateVariantSignature(const AStringView contextLabel, const AStri
     if(variantSignature.empty())
         return true;
 
-    if(variantSignature == ::__hidden_shader_cook::s_DefaultVariantText){
+    if(variantSignature == __hidden_shader_cook::s_DefaultVariantText){
         if(defineValues.empty())
             return true;
 
@@ -508,7 +501,7 @@ bool ShaderCook::expandDefineCombinations(const CookMap<CookString, DefineEntry>
 
 ShaderCook::CookString ShaderCook::buildVariantName(const DefineCombo& combo, Alloc::ScratchArena& scratchArena){
     if(combo.empty())
-        return CookString(::__hidden_shader_cook::s_DefaultVariantText, m_memoryArena);
+        return CookString(__hidden_shader_cook::s_DefaultVariantText, m_memoryArena);
 
     if(combo.size() == 1u){
         const auto& [defineName, defineValue] = *combo.begin();

@@ -24,10 +24,12 @@ NWB_CORE_BEGIN
 
 class GpuTaskScheduler::PreparedTimingTicketsUnwindScope final : NoCopy{
 private:
-    enum class Mode : u8{
-        Rollback,
-        Abandon,
-        Released,
+    struct Mode{
+        enum Enum : u8{
+            Rollback,
+            Abandon,
+            Released,
+        };
     };
 
 
@@ -61,7 +63,7 @@ public:
 private:
     const NotNull<GpuTimingSubmissionTicket*>* m_tickets = nullptr;
     usize& m_preparedTicketCount;
-    Mode m_mode = Mode::Rollback;
+    Mode::Enum m_mode = Mode::Rollback;
 };
 
 

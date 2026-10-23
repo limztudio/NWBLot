@@ -16,7 +16,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_wayland_clipboard{
+namespace __hidden_wayland_clipboard_protocol{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -50,8 +50,8 @@ static void SelectMime(const AStringView mime, u8& rank)noexcept{
 
 
 NotNull<const char*> WaylandClipboardService::NativeMimeForRank(const u8 rank)noexcept{
-    NWB_ASSERT(rank > 0u && rank <= __hidden_wayland_clipboard::s_Utf8Mimes.size());
-    return MakeNotNull(__hidden_wayland_clipboard::s_Utf8Mimes[__hidden_wayland_clipboard::s_Utf8Mimes.size() - rank].data());
+    NWB_ASSERT(rank > 0u && rank <= __hidden_wayland_clipboard_protocol::s_Utf8Mimes.size());
+    return MakeNotNull(__hidden_wayland_clipboard_protocol::s_Utf8Mimes[__hidden_wayland_clipboard_protocol::s_Utf8Mimes.size() - rank].data());
 }
 
 void WaylandClipboardService::OnRegistryGlobal(void* const data, wl_registry* const registry, const u32 name, const char* const interfaceName, const u32 version){
@@ -122,7 +122,7 @@ void WaylandClipboardService::OnSelection(void* const data, wl_data_device*, wl_
 
 void WaylandClipboardService::OnOfferMime(void* const data, wl_data_offer*, const char* const mime)noexcept{
     auto& offer = *static_cast<Offer*>(data);
-    __hidden_wayland_clipboard::SelectMime(SafeStringView(mime), offer.rank);
+    __hidden_wayland_clipboard_protocol::SelectMime(SafeStringView(mime), offer.rank);
 }
 
 void WaylandClipboardService::OnOfferActions(void*, wl_data_offer*, u32)noexcept{}
@@ -134,7 +134,7 @@ void WaylandClipboardService::OnSourceTarget(void*, wl_data_source*, const char*
 void WaylandClipboardService::OnSourceSend(void* const data, wl_data_source*, const char* const mime, const int fd){
     auto& source = *static_cast<Source*>(data);
     u8 rank = 0u;
-    __hidden_wayland_clipboard::SelectMime(SafeStringView(mime), rank);
+    __hidden_wayland_clipboard_protocol::SelectMime(SafeStringView(mime), rank);
     if(rank != 0u)
         source.service.sendSource(source, fd);
     else{
@@ -175,13 +175,13 @@ void WaylandClipboardService::OnPrimarySelection(void* const data, zwp_primary_s
 
 void WaylandClipboardService::OnPrimaryMime(void* const data, zwp_primary_selection_offer_v1*, const char* const mime)noexcept{
     auto& offer = *static_cast<Offer*>(data);
-    __hidden_wayland_clipboard::SelectMime(SafeStringView(mime), offer.rank);
+    __hidden_wayland_clipboard_protocol::SelectMime(SafeStringView(mime), offer.rank);
 }
 
 void WaylandClipboardService::OnPrimarySend(void* const data, zwp_primary_selection_source_v1*, const char* const mime, const int fd){
     auto& source = *static_cast<Source*>(data);
     u8 rank = 0u;
-    __hidden_wayland_clipboard::SelectMime(SafeStringView(mime), rank);
+    __hidden_wayland_clipboard_protocol::SelectMime(SafeStringView(mime), rank);
     if(rank != 0u)
         source.service.sendSource(source, fd);
     else{
@@ -275,7 +275,7 @@ ClipboardStatus::Enum WaylandClipboardService::writeSelection(const ClipboardCha
         static const wl_data_source_listener s_Listener{ OnSourceTarget, OnSourceSend, OnSourceCancelled, OnSourceDrop, OnSourceFinished, OnSourceAction };
         if(wl_data_source_add_listener(native, &s_Listener, source.get()) != 0)
             NWB_FATAL_ASSERT(false);
-        for(const AStringView mime : __hidden_wayland_clipboard::s_Utf8Mimes)
+        for(const AStringView mime : __hidden_wayland_clipboard_protocol::s_Utf8Mimes)
             wl_data_source_offer(native, mime.data());
         wl_data_device_set_selection(m_device, native, m_serial);
     }
@@ -288,7 +288,7 @@ ClipboardStatus::Enum WaylandClipboardService::writeSelection(const ClipboardCha
         static const zwp_primary_selection_source_v1_listener s_Listener{ OnPrimarySend, OnPrimaryCancelled };
         if(zwp_primary_selection_source_v1_add_listener(native, &s_Listener, source.get()) != 0)
             NWB_FATAL_ASSERT(false);
-        for(const AStringView mime : __hidden_wayland_clipboard::s_Utf8Mimes)
+        for(const AStringView mime : __hidden_wayland_clipboard_protocol::s_Utf8Mimes)
             zwp_primary_selection_source_v1_offer(native, mime.data());
         zwp_primary_selection_device_v1_set_selection(m_primaryDevice, native, m_serial);
     }

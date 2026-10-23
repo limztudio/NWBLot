@@ -32,7 +32,7 @@ constexpr u32 s_ExpectedDualCount = 2u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_assets_graphics_codec{
+namespace __hidden_assets_graphics_codec_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -43,7 +43,7 @@ constexpr AStringView s_TestsConfiguration = "tests";
 constexpr AStringView s_FirstSamplerPath = "project/samplers/first";
 constexpr AStringView s_SecondSamplerPath = "project/samplers/second";
 
-static constexpr AStringView s_CACHE = "cache";
+static constexpr AStringView s_Cache = "cache";
 static constexpr AStringView s_SamplerMetadata =
     "sampler asset;\n"
     "asset.min_filter = \"linear\";\n"
@@ -222,7 +222,7 @@ TEST(AssetsGraphics, AssetBuildWritesRegistryObjectCache){
     EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(metaPath, AssetsGraphicsFixture::s_MinimalMeshMeta));
     EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, s_ExpectedDualCount));
 
-    const auto objectPath = FindSingleAssetObjectCachePath(testArena, root / s_CACHE);
+    const auto objectPath = FindSingleAssetObjectCachePath(testArena, root / s_Cache);
     ASSERT_TRUE(objectPath);
 
     const auto firstObjectBytes = ReadAssetObjectCacheBytes(testArena, *objectPath);
@@ -234,7 +234,7 @@ TEST(AssetsGraphics, AssetBuildWritesRegistryObjectCache){
     loadedAsset = Move(*loadedAssetLoadResult);
 
     EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, s_ExpectedDualCount));
-    const auto unchangedObjectPath = FindSingleAssetObjectCachePath(testArena, root / s_CACHE);
+    const auto unchangedObjectPath = FindSingleAssetObjectCachePath(testArena, root / s_Cache);
     ASSERT_TRUE(unchangedObjectPath);
     EXPECT_EQ(*unchangedObjectPath, *objectPath);
 
@@ -259,7 +259,7 @@ TEST(AssetsGraphics, AssetBuildWritesRegistryObjectCache){
 
     EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(metaPath, AssetsGraphicsFixture::s_DefaultColorMeshMeta));
     EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, s_ExpectedDualCount));
-    const auto changedObjectPath = FindNewAssetObjectCachePath(testArena, root / s_CACHE, *objectPath);
+    const auto changedObjectPath = FindNewAssetObjectCachePath(testArena, root / s_Cache, *objectPath);
     ASSERT_TRUE(changedObjectPath);
     EXPECT_NE(*changedObjectPath, *objectPath);
 
@@ -296,7 +296,7 @@ TEST(AssetsGraphics, SharedCodecPayloadsKeepDistinctVirtualPathsUnderLongBuildDi
     const Path builtDirectory = root / directoryName;
     ASSERT_EQ(PathToString(testArena.arena, builtDirectory).size(), 200u);
     ASSERT_TRUE(AssetsGraphicsFixture::BuildPreparedGraphicsAssetRoots(testArena, root, builtDirectory, { assetRoot }, s_ExpectedDualCount));
-    ASSERT_TRUE(FindSingleAssetObjectCachePath(testArena, root / s_CACHE));
+    ASSERT_TRUE(FindSingleAssetObjectCachePath(testArena, root / s_Cache));
 
     NWB::Pipeline::AssetGatherer::AssetGatherOptions options(testArena.arena);
     options.inputs.emplace_back(PathToString(testArena.arena, builtDirectory));
@@ -324,7 +324,7 @@ TEST(AssetsGraphics, BuiltArtifactsRejectMismatchedObjectCookKeys){
     const Name virtualPath(s_FirstSamplerPath);
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "samplers" / "first.nwb", s_SamplerMetadata));
     ASSERT_TRUE(AssetsGraphicsFixture::BuildPreparedGraphicsAssetRoots(testArena, root, root / "built", { assetRoot }, s_ExpectedDualCount));
-    const auto objectPath = FindSingleAssetObjectCachePath(testArena, root / s_CACHE);
+    const auto objectPath = FindSingleAssetObjectCachePath(testArena, root / s_Cache);
     ASSERT_TRUE(objectPath);
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
     Vector<u8, NWB::Core::Alloc::ScratchArena> objectBytes(scratchArena);
@@ -356,7 +356,7 @@ TEST(AssetsGraphics, FailedReorderedSharedPayloadBuildPreservesPublishedVirtualP
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "samplers" / "first.nwb", s_SamplerMetadata));
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "samplers" / "second.nwb", s_SamplerMetadata));
     ASSERT_TRUE(AssetsGraphicsFixture::BuildPreparedGraphicsAssetRoots(testArena, root, root / "seed_built", { assetRoot }, s_ExpectedDualCount));
-    const auto objectPath = FindSingleAssetObjectCachePath(testArena, root / s_CACHE);
+    const auto objectPath = FindSingleAssetObjectCachePath(testArena, root / s_Cache);
     ASSERT_TRUE(objectPath);
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
     Vector<u8, NWB::Core::Alloc::ScratchArena> objectBytes(scratchArena);

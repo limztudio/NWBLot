@@ -32,7 +32,7 @@
 // Generic uniform-buffer heap alias: the leading uint is at byte 0, uint3 padding starts at byte 16, and the configured std140 layout has a 32-byte extent.
 struct NwbBindlessHeapUint{
     uint value;
-    uint3 _pad;
+    uint3 padding;
 };
 
 

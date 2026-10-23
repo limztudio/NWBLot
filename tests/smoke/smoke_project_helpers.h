@@ -70,25 +70,25 @@ inline constexpr f32 s_DegreesPerTurn = 360.0f;
 }
 
 [[nodiscard]] inline u32 RendererBaselineCaptureFreezeFrame(){
-    static const u32 s_captureFrame = [](){
+    static const u32 s_CaptureFrame = [](){
         const auto configuredFrame = ReadSmokeEnvironmentF32("NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME");
         if(!configuredFrame || !IsFinite(*configuredFrame) || *configuredFrame < 1.0f){
             return 0u;
         }
         return static_cast<u32>(VectorGetX(VectorMin(VectorReplicate(*configuredFrame), VectorReplicate(1000000.0f))));
     }();
-    return s_captureFrame;
+    return s_CaptureFrame;
 }
 
 [[nodiscard]] inline f32 RendererBaselineFixedDelta(){
-    static const f32 s_fixedDelta = [](){
+    static const f32 s_FixedDelta = [](){
         const auto configuredDelta = ReadSmokeEnvironmentF32("NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS");
         if(!configuredDelta || !IsFinite(*configuredDelta) || *configuredDelta <= 0.0f || *configuredDelta > 1.0f){
             return 0.0f;
         }
         return *configuredDelta;
     }();
-    return s_fixedDelta;
+    return s_FixedDelta;
 }
 
 class YawSpinController final{

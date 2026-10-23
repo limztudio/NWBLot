@@ -20,7 +20,7 @@ TESTBED_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_testbed_ui_gallery{
+namespace __hidden_ui_widget_gallery{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -54,7 +54,7 @@ static constexpr Array<StringView, Section::kCount> s_SectionNames{
 
 
 SIMDVectorSingle UiWidgetGallery::LayoutBounds(const SIMDVectorSingle displaySize, const SIMDVectorSingle preferredTop)noexcept{
-    using namespace __hidden_testbed_ui_gallery;
+    using namespace __hidden_ui_widget_gallery;
     const f32 height = ((s_SelectorHeight + s_ContentGap) + s_ContentHeight);
     const SIMDVectorSingle size = VectorSet(s_SelectorWidth, height, 0.0f, 0.0f);
     const SIMDVectorSingle available = VectorSubtract(VectorSubtract(displaySize, size), VectorReplicate(s_Margin));
@@ -81,7 +81,7 @@ UiWidgetGallery::UiWidgetGallery(NWB::Core::Alloc::GlobalArena& arena, const NWB
 
 void UiWidgetGallery::paint(NWB::Impl::UiPaintContext& context, const NWB::Impl::Ui::Rect& bounds){
     using namespace NWB::Impl::Ui;
-    using namespace __hidden_testbed_ui_gallery;
+    using namespace __hidden_ui_widget_gallery;
     Builder& ui = context.ui;
     const u32 previous = m_selectedGallery;
     if(!ui.beginPanel("gallery_selector", { bounds.x, bounds.y, bounds.width, s_SelectorHeight }))

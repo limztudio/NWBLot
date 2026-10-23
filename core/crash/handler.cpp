@@ -45,8 +45,8 @@ inline constexpr int s_ProcessFailureExitCode = -1;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Detail::CrashAck MakeAck(const Detail::CrashRequest& request, const bool packageWritten)noexcept{
-    Detail::CrashAck ack;
+static CrashDetail::CrashAck MakeAck(const CrashDetail::CrashRequest& request, const bool packageWritten)noexcept{
+    CrashDetail::CrashAck ack;
     ack.packageWritten = packageWritten ? 1u : 0u;
     CopyFixedBuffer(ack.crashId, request.crashId);
     return ack;
@@ -83,7 +83,7 @@ static Detail::CrashAck MakeAck(const Detail::CrashRequest& request, const bool 
 int RunCrashHandlerProcess(const isize argc, tchar** argv){
     if(!__hidden_crash_handler::SilenceProcess())
         return __hidden_crash_handler::s_ProcessFailureExitCode;
-    Detail::InitializeDumpArena();
+    CrashDetail::InitializeDumpArena();
 
 #if defined(NWB_PLATFORM_WINDOWS)
     HANDLE requestReadHandle = INVALID_HANDLE_VALUE;
@@ -91,11 +91,11 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
     HANDLE ackEvent = nullptr;
 
     for(isize i = 1; i + 1 < argc; ++i){
-        if(SafeStringView(argv[i]) == Detail::s_RequestHandleArgument)
+        if(SafeStringView(argv[i]) == CrashDetail::s_RequestHandleArgument)
             requestReadHandle = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(ParseDecimalPrefixU64(SafeStringView(argv[++i]))));
-        else if(SafeStringView(argv[i]) == Detail::s_AckHandleArgument)
+        else if(SafeStringView(argv[i]) == CrashDetail::s_AckHandleArgument)
             ackWriteHandle = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(ParseDecimalPrefixU64(SafeStringView(argv[++i]))));
-        else if(SafeStringView(argv[i]) == Detail::s_AckEventArgument)
+        else if(SafeStringView(argv[i]) == CrashDetail::s_AckEventArgument)
             ackEvent = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(ParseDecimalPrefixU64(SafeStringView(argv[++i]))));
     }
 
@@ -103,23 +103,23 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
         return __hidden_crash_handler::s_ProcessFailureExitCode;
 
     for(;;){
-        Detail::CrashRequest request;
+        CrashDetail::CrashRequest request;
         if(!ReadAllWin32Handle(requestReadHandle, &request, sizeof(request)))
             break;
         // Defensive: reject a corrupt/interleaved request (writer serialization should prevent this).
-        if(!Detail::IsCurrentCrashRequest(request))
+        if(!CrashDetail::IsCurrentCrashRequest(request))
             break;
 
-        const bool packageWritten = Detail::WriteCrashPackage(request);
+        const bool packageWritten = CrashDetail::WriteCrashPackage(request);
         if(ackWriteHandle != INVALID_HANDLE_VALUE){
-            const Detail::CrashAck ack = __hidden_crash_handler::MakeAck(request, packageWritten);
+            const CrashDetail::CrashAck ack = __hidden_crash_handler::MakeAck(request, packageWritten);
             if(!WriteAllWin32Handle(ackWriteHandle, &ack, sizeof(ack)))
                 break;
         }
         if(ackEvent && !SetEvent(ackEvent))
             return __hidden_crash_handler::s_ProcessFailureExitCode;
         if(packageWritten){
-            if(!Detail::FlushCrashReportsForRequest(request))
+            if(!CrashDetail::FlushCrashReportsForRequest(request))
                 continue;
         }
     }
@@ -129,9 +129,9 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
     int requestReadFd = -1;
     int ackWriteFd = -1;
     for(isize i = 1; i + 1 < argc; ++i){
-        if(SafeStringView(argv[i]) == Detail::s_RequestFdArgument)
+        if(SafeStringView(argv[i]) == CrashDetail::s_RequestFdArgument)
             requestReadFd = static_cast<int>(ParseDecimalPrefixU64(SafeStringView(argv[++i])));
-        else if(SafeStringView(argv[i]) == Detail::s_AckFdArgument)
+        else if(SafeStringView(argv[i]) == CrashDetail::s_AckFdArgument)
             ackWriteFd = static_cast<int>(ParseDecimalPrefixU64(SafeStringView(argv[++i])));
     }
 
@@ -139,21 +139,21 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
         return __hidden_crash_handler::s_ProcessFailureExitCode;
 
     for(;;){
-        Detail::CrashRequest request;
+        CrashDetail::CrashRequest request;
         if(!ReadAllFileDescriptor(requestReadFd, &request, sizeof(request)))
             break;
         // Defensive: reject a corrupt/interleaved request (writer serialization should prevent this).
-        if(!Detail::IsCurrentCrashRequest(request))
+        if(!CrashDetail::IsCurrentCrashRequest(request))
             break;
 
-        const bool packageWritten = Detail::WriteCrashPackage(request);
+        const bool packageWritten = CrashDetail::WriteCrashPackage(request);
         if(ackWriteFd >= 0){
-            const Detail::CrashAck ack = __hidden_crash_handler::MakeAck(request, packageWritten);
+            const CrashDetail::CrashAck ack = __hidden_crash_handler::MakeAck(request, packageWritten);
             if(!WriteAllFileDescriptor(ackWriteFd, &ack, sizeof(ack)))
                 break;
         }
         if(packageWritten){
-            if(!Detail::FlushCrashReportsForRequest(request))
+            if(!CrashDetail::FlushCrashReportsForRequest(request))
                 continue;
         }
     }

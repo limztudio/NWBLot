@@ -55,11 +55,11 @@ TEST(GpuTaskGraphImportScaling, PreservesCompletionUpgradeConflictsAndResetAcros
         Graphics::GpuTaskGraph graph(testArena.arena);
         for(usize index = 0u; index < prefixCount; ++index){
             {
-                const auto derivedNameAt58Col127 = IndexedIdentity(Name("tests/import_scaling/completion_prefix/"), index);
-                ASSERT_TRUE(derivedNameAt58Col127);
-                const auto gpuAdmissionAt57 = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(*derivedNameAt58Col127).setMarkerLabel("Completion Prefix"));
-                ASSERT_TRUE(gpuAdmissionAt57);
-                ASSERT_TRUE(gpuAdmissionAt57->valid());
+                const auto prefixNameResult = IndexedIdentity(Name("tests/import_scaling/completion_prefix/"), index);
+                ASSERT_TRUE(prefixNameResult);
+                const auto gpuTaskAdmission = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(*prefixNameResult).setMarkerLabel("Completion Prefix"));
+                ASSERT_TRUE(gpuTaskAdmission);
+                ASSERT_TRUE(gpuTaskAdmission->valid());
             }
         }
         const Graphics::GpuExternalCompletionDesc metadata = Graphics::GpuExternalCompletionDesc{}.setIdentity(Name("tests/import_scaling/upgraded_completion")).setMarkerLabel("Original Completion");
@@ -76,10 +76,10 @@ TEST(GpuTaskGraphImportScaling, PreservesCompletionUpgradeConflictsAndResetAcros
         upgraded.markerLabel = "Token Upgrade Label";
         upgraded.token = { .value = 31u, .physicalQueueIndex = 0u, .deviceGeneration = 17u, .queue = Graphics::CommandQueue::Graphics, };
         {
-            const auto gpuAdmissionAt70 = graph.importExternalCompletion(upgraded);
-            EXPECT_TRUE(gpuAdmissionAt70);
-            if(gpuAdmissionAt70)
-                EXPECT_EQ(*gpuAdmissionAt70, id);
+            const auto secondGpuTaskAdmission = graph.importExternalCompletion(upgraded);
+            EXPECT_TRUE(secondGpuTaskAdmission);
+            if(secondGpuTaskAdmission)
+                EXPECT_EQ(*secondGpuTaskAdmission, id);
         }
         u64 upgradedRevision = 0u;
         {
@@ -92,16 +92,16 @@ TEST(GpuTaskGraphImportScaling, PreservesCompletionUpgradeConflictsAndResetAcros
             EXPECT_EQ(token->value, upgraded.token.value);
         }
         {
-            const auto gpuAdmissionAt81 = graph.importExternalCompletion(metadata);
-            EXPECT_TRUE(gpuAdmissionAt81);
-            if(gpuAdmissionAt81)
-                EXPECT_EQ(*gpuAdmissionAt81, id);
+            const auto thirdGpuTaskAdmission = graph.importExternalCompletion(metadata);
+            EXPECT_TRUE(thirdGpuTaskAdmission);
+            if(thirdGpuTaskAdmission)
+                EXPECT_EQ(*thirdGpuTaskAdmission, id);
         }
         {
-            const auto gpuAdmissionAt82 = graph.importExternalCompletion(upgraded);
-            EXPECT_TRUE(gpuAdmissionAt82);
-            if(gpuAdmissionAt82)
-                EXPECT_EQ(*gpuAdmissionAt82, id);
+            const auto fourthGpuTaskAdmission = graph.importExternalCompletion(upgraded);
+            EXPECT_TRUE(fourthGpuTaskAdmission);
+            if(fourthGpuTaskAdmission)
+                EXPECT_EQ(*fourthGpuTaskAdmission, id);
         }
         Graphics::GpuExternalCompletionDesc conflict = upgraded;
         ++conflict.token.value;

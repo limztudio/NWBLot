@@ -200,24 +200,24 @@ TEST(CpuTaskCleanupTests, SchedulerDestructorPropagatesCallerFailureToTheTermina
     u32 handled = 0u;
     const int result = InvokeTerminalEntry<TerminalTaskError>([&]()->int{
         CpuTaskScheduler scheduler(0u);
-        const auto cpuAdmission13 = scheduler.submit([&, probe = RetirementProbe(retirements)](){
+        const auto cpuTaskAdmission = scheduler.submit([&, probe = RetirementProbe(retirements)](){
             EXPECT_TRUE(probe.retirements != nullptr);
             ++callbacks;
             throw TerminalTaskError{ 17 };
         }, { .target = CpuTaskTarget::MainThread }
         );
-        EXPECT_TRUE(cpuAdmission13);
-        if(cpuAdmission13)
-            EXPECT_TRUE(cpuAdmission13->valid());
-        const auto cpuAdmission14 = scheduler.submit([&, probe = RetirementProbe(retirements)](){
+        EXPECT_TRUE(cpuTaskAdmission);
+        if(cpuTaskAdmission)
+            EXPECT_TRUE(cpuTaskAdmission->valid());
+        const auto secondCpuTaskAdmission = scheduler.submit([&, probe = RetirementProbe(retirements)](){
             EXPECT_TRUE(probe.retirements != nullptr);
             ++callbacks;
             throw TerminalTaskError{ 29 };
         }
         );
-        EXPECT_TRUE(cpuAdmission14);
-        if(cpuAdmission14)
-            EXPECT_TRUE(cpuAdmission14->valid());
+        EXPECT_TRUE(secondCpuTaskAdmission);
+        if(secondCpuTaskAdmission)
+            EXPECT_TRUE(secondCpuTaskAdmission->valid());
         return 0;
     }, [&](const TerminalTaskError& error){
         ++handled;
@@ -238,24 +238,24 @@ TEST(CpuTaskCleanupTests, ScopeDestructorPropagatesCallerFailureAfterDrainingIts
     u32 callbacks = 0u;
     const int result = InvokeTerminalEntry<TerminalTaskError>([&]()->int{
         CpuTaskScope scope(scheduler);
-        const auto cpuAdmission15 = scope.submit([&, probe = RetirementProbe(retirements)](){
+        const auto cpuTaskAdmission = scope.submit([&, probe = RetirementProbe(retirements)](){
             EXPECT_TRUE(probe.retirements != nullptr);
             ++callbacks;
             throw TerminalTaskError{ 37 };
         }, { .target = CpuTaskTarget::MainThread }
         );
-        EXPECT_TRUE(cpuAdmission15);
-        if(cpuAdmission15)
-            EXPECT_TRUE(cpuAdmission15->valid());
-        const auto cpuAdmission16 = scope.submit([&, probe = RetirementProbe(retirements)](){
+        EXPECT_TRUE(cpuTaskAdmission);
+        if(cpuTaskAdmission)
+            EXPECT_TRUE(cpuTaskAdmission->valid());
+        const auto secondCpuTaskAdmission = scope.submit([&, probe = RetirementProbe(retirements)](){
             EXPECT_TRUE(probe.retirements != nullptr);
             ++callbacks;
             throw TerminalTaskError{ 41 };
         }
         );
-        EXPECT_TRUE(cpuAdmission16);
-        if(cpuAdmission16)
-            EXPECT_TRUE(cpuAdmission16->valid());
+        EXPECT_TRUE(secondCpuTaskAdmission);
+        if(secondCpuTaskAdmission)
+            EXPECT_TRUE(secondCpuTaskAdmission->valid());
         return 0;
     }, [&](const TerminalTaskError& error){
         EXPECT_EQ(retirements.load(MemoryOrder::acquire), s_ExpectedDualCount);
@@ -275,24 +275,24 @@ TEST(CpuTaskCleanupTests, UnrelatedUnwindCancelsQueuedTasksWithoutReplacingTheOr
     const int result = InvokeTerminalEntry<TerminalTaskError>([&]()->int{
         CpuTaskScheduler scheduler(0u);
         CpuTaskScope scope(scheduler);
-        const auto cpuAdmission17 = scheduler.submit([&, probe = RetirementProbe(retirements)](){
+        const auto cpuTaskAdmission = scheduler.submit([&, probe = RetirementProbe(retirements)](){
             EXPECT_TRUE(probe.retirements != nullptr);
             ++callbacks;
             throw TerminalTaskError{ 53 };
         }, { .target = CpuTaskTarget::MainThread }
         );
-        EXPECT_TRUE(cpuAdmission17);
-        if(cpuAdmission17)
-            EXPECT_TRUE(cpuAdmission17->valid());
-        const auto cpuAdmission18 = scope.submit([&, probe = RetirementProbe(retirements)](){
+        EXPECT_TRUE(cpuTaskAdmission);
+        if(cpuTaskAdmission)
+            EXPECT_TRUE(cpuTaskAdmission->valid());
+        const auto secondCpuTaskAdmission = scope.submit([&, probe = RetirementProbe(retirements)](){
             EXPECT_TRUE(probe.retirements != nullptr);
             ++callbacks;
             throw TerminalTaskError{ 59 };
         }
         );
-        EXPECT_TRUE(cpuAdmission18);
-        if(cpuAdmission18)
-            EXPECT_TRUE(cpuAdmission18->valid());
+        EXPECT_TRUE(secondCpuTaskAdmission);
+        if(secondCpuTaskAdmission)
+            EXPECT_TRUE(secondCpuTaskAdmission->valid());
         throw TerminalTaskError{ 47 };
     }, [&](const TerminalTaskError& error){
         EXPECT_EQ(retirements.load(MemoryOrder::acquire), s_ExpectedDualCount);
@@ -318,7 +318,7 @@ TEST(CpuTaskCleanupTests, TerminalDrainJoinsAnActiveWorkerAndRetiresCanceledCapt
     Atomic<bool> finished{ false };
     Atomic<bool> expired{ false };
     u32 canceledCallbacks = 0u;
-    const auto cpuAdmission19 = scope.submit([&, probe = RetirementProbe(retirements)](){
+    const auto cpuTaskAdmission = scope.submit([&, probe = RetirementProbe(retirements)](){
         EXPECT_TRUE(probe.retirements != nullptr);
         started.store(true, MemoryOrder::release);
         if(!WaitUntil(released))
@@ -326,19 +326,19 @@ TEST(CpuTaskCleanupTests, TerminalDrainJoinsAnActiveWorkerAndRetiresCanceledCapt
         finished.store(true, MemoryOrder::release);
     }
     );
-    EXPECT_TRUE(cpuAdmission19);
-    if(cpuAdmission19)
-        EXPECT_TRUE(cpuAdmission19->valid());
+    EXPECT_TRUE(cpuTaskAdmission);
+    if(cpuTaskAdmission)
+        EXPECT_TRUE(cpuTaskAdmission->valid());
     EXPECT_TRUE(WaitUntil(started));
-    const auto cpuAdmission20 = scope.submit([&, probe = RetirementProbe(retirements)](){
+    const auto secondCpuTaskAdmission = scope.submit([&, probe = RetirementProbe(retirements)](){
         EXPECT_TRUE(probe.retirements != nullptr);
         ++canceledCallbacks;
         throw TerminalTaskError{ 61 };
     }, { .target = CpuTaskTarget::MainThread }
     );
-    EXPECT_TRUE(cpuAdmission20);
-    if(cpuAdmission20)
-        EXPECT_TRUE(cpuAdmission20->valid());
+    EXPECT_TRUE(secondCpuTaskAdmission);
+    if(secondCpuTaskAdmission)
+        EXPECT_TRUE(secondCpuTaskAdmission->valid());
     JoiningThread releaseWorker([&]()noexcept{
         if(!WaitUntil(drainStarted))
             expired.store(true, MemoryOrder::release);
@@ -354,8 +354,8 @@ TEST(CpuTaskCleanupTests, TerminalDrainJoinsAnActiveWorkerAndRetiresCanceledCapt
     EXPECT_EQ(retirements.load(MemoryOrder::acquire), s_ExpectedDualCount);
     EXPECT_EQ(canceledCallbacks, 0u);
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
-    const auto cpuAdmission21 = scheduler.submit([]()noexcept{});
-    EXPECT_FALSE(cpuAdmission21);
+    const auto thirdCpuTaskAdmission = scheduler.submit([]()noexcept{});
+    EXPECT_FALSE(thirdCpuTaskAdmission);
 }
 
 
@@ -366,20 +366,20 @@ TEST(CpuTaskCleanupTests, CancelingOneScopeKeepsTheSchedulerAvailableForOtherWor
     CpuTaskScope other(scheduler);
     u32 canceledCallbacks = 0u;
     u32 completedCallbacks = 0u;
-    const auto cpuAdmission22 = canceled.submit([&]()noexcept{ ++canceledCallbacks; });
-    EXPECT_TRUE(cpuAdmission22);
-    if(cpuAdmission22)
-        EXPECT_TRUE(cpuAdmission22->valid());
-    const auto cpuAdmission23 = other.submit([&]()noexcept{ ++completedCallbacks; });
-    EXPECT_TRUE(cpuAdmission23);
-    if(cpuAdmission23)
-        EXPECT_TRUE(cpuAdmission23->valid());
+    const auto cpuTaskAdmission = canceled.submit([&]()noexcept{ ++canceledCallbacks; });
+    EXPECT_TRUE(cpuTaskAdmission);
+    if(cpuTaskAdmission)
+        EXPECT_TRUE(cpuTaskAdmission->valid());
+    const auto secondCpuTaskAdmission = other.submit([&]()noexcept{ ++completedCallbacks; });
+    EXPECT_TRUE(secondCpuTaskAdmission);
+    if(secondCpuTaskAdmission)
+        EXPECT_TRUE(secondCpuTaskAdmission->valid());
     canceled.cancel();
     canceled.wait();
     other.wait();
-    const auto cpuAdmission24 = scheduler.submit([&]()noexcept{ ++completedCallbacks; });
-    ASSERT_TRUE(cpuAdmission24);
-    const auto later = *cpuAdmission24;
+    const auto laterTaskAdmission = scheduler.submit([&]()noexcept{ ++completedCallbacks; });
+    ASSERT_TRUE(laterTaskAdmission);
+    const auto later = *laterTaskAdmission;
     ASSERT_TRUE(later.valid());
     scheduler.wait(later);
     EXPECT_EQ(canceledCallbacks, 0u);
@@ -397,7 +397,7 @@ TEST(CpuTaskCleanupTests, ConcurrentProducersCompleteNestedTaskRanges){
     CpuTaskScheduler scheduler(config);
     CpuTaskScope scope(scheduler);
     for(u32 producer = 0u; producer < s_ExpectedDualCount; ++producer){
-        const auto cpuAdmission25 = scope.submit([&](){
+        const auto cpuTaskAdmission = scope.submit([&](){
             EXPECT_TRUE((scheduler.parallelFor(0u, 128u, 4u, [&](usize){
                 EXPECT_TRUE((scheduler.parallelFor(0u, 32u, 4u, [&](usize)noexcept{
                     visits.fetch_add(1u, MemoryOrder::relaxed);
@@ -407,9 +407,9 @@ TEST(CpuTaskCleanupTests, ConcurrentProducersCompleteNestedTaskRanges){
             )));
         }
         );
-        ASSERT_TRUE(cpuAdmission25);
-        if(cpuAdmission25)
-            ASSERT_TRUE(cpuAdmission25->valid());
+        ASSERT_TRUE(cpuTaskAdmission);
+        if(cpuTaskAdmission)
+            ASSERT_TRUE(cpuTaskAdmission->valid());
     }
     scope.wait();
     EXPECT_EQ(visits.load(MemoryOrder::acquire), s_ExpectedDualCount * 128u * 32u);
@@ -424,7 +424,7 @@ TEST(CpuTaskCleanupTests, NestedRangeFailureJoinsItsSubtreeBeforeUnwindingTheRec
     CpuTaskScheduler scheduler(0u);
     const int result = InvokeTerminalEntry<TerminalTaskError>([&]()->int{
         CpuTaskScope scope(scheduler);
-        const auto cpuAdmission26 = scope.submit([&, probe = RetirementProbe(retirements)](){
+        const auto cpuTaskAdmission = scope.submit([&, probe = RetirementProbe(retirements)](){
             EXPECT_TRUE(probe.retirements != nullptr);
             EXPECT_TRUE((scope.parallelFor(0u, 16u, 1u, [&](usize){
                 ++callbacks;
@@ -433,9 +433,9 @@ TEST(CpuTaskCleanupTests, NestedRangeFailureJoinsItsSubtreeBeforeUnwindingTheRec
             )));
         }
         );
-        EXPECT_TRUE(cpuAdmission26);
-        if(cpuAdmission26)
-            EXPECT_TRUE(cpuAdmission26->valid());
+        EXPECT_TRUE(cpuTaskAdmission);
+        if(cpuTaskAdmission)
+            EXPECT_TRUE(cpuTaskAdmission->valid());
         scope.wait();
         return 0;
     }, [&](const TerminalTaskError& error){
@@ -465,25 +465,25 @@ TEST(CpuTaskCleanupTests, DescendantRetirementCanReenterSchedulerBeforeParentCom
     usize outstandingDuringRetirement = 0u;
     u32 callbacks = 0u;
     CpuTaskScheduler scheduler(0u);
-    const auto cpuAdmission27 = scheduler.submit([&scheduler, &callbacks, probe = ReentrantRetirementProbe(scheduler, parent, incompleteDuringRetirement, outstandingDuringRetirement)](){
+    const auto cpuTaskAdmission = scheduler.submit([&scheduler, &callbacks, probe = ReentrantRetirementProbe(scheduler, parent, incompleteDuringRetirement, outstandingDuringRetirement)](){
         EXPECT_TRUE(probe.m_active);
-        const auto cpuAdmission28 = scheduler.submit([&]()noexcept{ ++callbacks; });
-        EXPECT_TRUE(cpuAdmission28);
-        if(cpuAdmission28)
-            EXPECT_TRUE(cpuAdmission28->valid());
+        const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept{ ++callbacks; });
+        EXPECT_TRUE(secondCpuTaskAdmission);
+        if(secondCpuTaskAdmission)
+            EXPECT_TRUE(secondCpuTaskAdmission->valid());
     }
     );
-    ASSERT_TRUE(cpuAdmission27);
-    parent = *cpuAdmission27;
+    ASSERT_TRUE(cpuTaskAdmission);
+    parent = *cpuTaskAdmission;
     ASSERT_TRUE(parent.valid());
-    const auto cpuAdmission29 = scheduler.submit([&](){
+    const auto thirdCpuTaskAdmission = scheduler.submit([&](){
         EXPECT_TRUE(incompleteDuringRetirement);
         EXPECT_EQ(outstandingDuringRetirement, s_ExpectedDualCount);
         ++callbacks;
     }, parent
     );
-    ASSERT_TRUE(cpuAdmission29);
-    const auto dependent = *cpuAdmission29;
+    ASSERT_TRUE(thirdCpuTaskAdmission);
+    const auto dependent = *thirdCpuTaskAdmission;
     ASSERT_TRUE(dependent.valid());
     scheduler.wait(dependent);
     EXPECT_EQ(callbacks, s_ExpectedDualCount);

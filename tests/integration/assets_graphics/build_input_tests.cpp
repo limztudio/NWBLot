@@ -22,10 +22,10 @@ namespace __hidden_build_input_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_A_NWB = "a.nwb";
-static constexpr AStringView s_ASSETS = "assets";
-static constexpr AStringView s_PROJECT = "project";
-static constexpr AStringView s_ASSETS_A_NWB = "assets/a.nwb";
+static constexpr AStringView s_ANwb = "a.nwb";
+static constexpr AStringView s_Assets = "assets";
+static constexpr AStringView s_Project = "project";
+static constexpr AStringView s_AssetsANwb = "assets/a.nwb";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -50,9 +50,9 @@ public:
 protected:
     virtual void SetUp()override{
         m_root = NWB::Tests::RepoRootOf(m_testArena.arena, __FILE__) / "__build_obj" / "build_input_tests";
-        ASSERT_TRUE(EnsureDirectories(m_root / s_ASSETS / "empty"));
+        ASSERT_TRUE(EnsureDirectories(m_root / s_Assets / "empty"));
         m_paths.repoRoot = m_root;
-        m_paths.assetRoots.emplace_back(m_root / s_ASSETS, ACompactString(s_PROJECT));
+        m_paths.assetRoots.emplace_back(m_root / s_Assets, ACompactString(s_Project));
     }
 
     virtual void TearDown()override{
@@ -68,7 +68,7 @@ protected:
         ASSERT_TRUE(stream);
         Assets::AssetString normalized = PathToString(m_testArena.arena, path.lexicallyNormal());
         CanonicalizeTextInPlace(normalized);
-        m_files.emplace_back(m_testArena.arena, m_root / s_ASSETS, path, normalized, ACompactString(s_PROJECT));
+        m_files.emplace_back(m_testArena.arena, m_root / s_Assets, path, normalized, ACompactString(s_Project));
     }
 
     void addInput(AStringView relativePath){
@@ -106,17 +106,17 @@ TEST_F(BuildInputSelection, EmptyBuildDomainIsRejectedBeforeInputDiscovery){
 
 TEST_F(BuildInputSelection, ExactInputsPreserveDiscoveredOrderAndDuplicateRecords){
     addFile("assets/z.nwb");
-    addFile(s_ASSETS_A_NWB);
+    addFile(s_AssetsANwb);
     addFile("assets/excluded.nwb");
-    addFile(s_ASSETS_A_NWB);
+    addFile(s_AssetsANwb);
     addInput("assets/./a.nwb");
     addInput("assets/z.nwb");
-    addInput(s_ASSETS_A_NWB);
+    addInput(s_AssetsANwb);
     ASSERT_TRUE(select());
     ASSERT_EQ(m_files.size(), 3u);
     EXPECT_EQ(PathToString(m_testArena.arena, m_files[0].filePath.filename()), "z.nwb");
-    EXPECT_EQ(PathToString(m_testArena.arena, m_files[1].filePath.filename()), s_A_NWB);
-    EXPECT_EQ(PathToString(m_testArena.arena, m_files[2].filePath.filename()), s_A_NWB);
+    EXPECT_EQ(PathToString(m_testArena.arena, m_files[1].filePath.filename()), s_ANwb);
+    EXPECT_EQ(PathToString(m_testArena.arena, m_files[2].filePath.filename()), s_ANwb);
 }
 
 TEST_F(BuildInputSelection, DirectoryInputsRespectBoundariesAndAllowEmptyRoots){
@@ -128,14 +128,14 @@ TEST_F(BuildInputSelection, DirectoryInputsRespectBoundariesAndAllowEmptyRoots){
     addInput("assets/empty");
     ASSERT_TRUE(select());
     ASSERT_EQ(m_files.size(), s_ExpectedDualCount);
-    EXPECT_EQ(PathToString(m_testArena.arena, m_files[0].filePath.filename()), s_A_NWB);
+    EXPECT_EQ(PathToString(m_testArena.arena, m_files[0].filePath.filename()), s_ANwb);
     EXPECT_EQ(PathToString(m_testArena.arena, m_files[1].filePath.filename()), "c.nwb");
 }
 
 TEST_F(BuildInputSelection, RejectedInputsLeaveDiscoveredFilesIntact){
-    addFile(s_ASSETS_A_NWB);
+    addFile(s_AssetsANwb);
     addFile("outside/b.nwb");
-    addInput(s_ASSETS_A_NWB);
+    addInput(s_AssetsANwb);
     addInput("outside");
     EXPECT_FALSE(select());
     EXPECT_EQ(m_files.size(), s_ExpectedDualCount);
@@ -158,7 +158,7 @@ TEST_F(BuildInputSelection, DirectoryCaseFollowsHostFilesystemContract){
     EXPECT_EQ(m_files.size(), s_ExpectedDualCount);
 #else
     ASSERT_EQ(m_files.size(), 1u);
-    EXPECT_EQ(PathToString(m_testArena.arena, m_files[0].filePath.filename()), s_A_NWB);
+    EXPECT_EQ(PathToString(m_testArena.arena, m_files[0].filePath.filename()), s_ANwb);
 #endif
 }
 
@@ -173,9 +173,9 @@ TEST_F(BuildInputSelection, InferredRootsDeduplicateAssetsAncestorsWithoutDroppi
     const auto roots = Assets::ResolveAssetRoots(m_root, sources, true, Assets::AssetRootDuplicatePolicy::ExactText, scratchArena);
     ASSERT_TRUE(roots);
     ASSERT_EQ(roots->size(), 3u);
-    EXPECT_EQ((*roots)[0].path, (m_root / s_ASSETS).lexicallyNormal());
+    EXPECT_EQ((*roots)[0].path, (m_root / s_Assets).lexicallyNormal());
     EXPECT_EQ((*roots)[0].virtualRoot.view(), "project");
-    EXPECT_EQ((*roots)[1].path, (m_root / "impl" / s_ASSETS).lexicallyNormal());
+    EXPECT_EQ((*roots)[1].path, (m_root / "impl" / s_Assets).lexicallyNormal());
     EXPECT_EQ((*roots)[1].virtualRoot.view(), "engine");
     EXPECT_EQ((*roots)[2].path, (m_root / "loose").lexicallyNormal());
     EXPECT_EQ((*roots)[2].virtualRoot.view(), "project");
@@ -222,7 +222,7 @@ TEST_F(BuildInputSelection, RootResolutionFailureRetainsSourceIndexWithoutPublis
     const auto recovered = Assets::ResolveAssetRoots(m_root, sources, true, Assets::AssetRootDuplicatePolicy::ExactText, scratchArena);
     ASSERT_TRUE(recovered);
     ASSERT_EQ(recovered->size(), 1u);
-    EXPECT_EQ((*recovered)[0].path, (m_root / s_ASSETS).lexicallyNormal());
+    EXPECT_EQ((*recovered)[0].path, (m_root / s_Assets).lexicallyNormal());
 }
 
 

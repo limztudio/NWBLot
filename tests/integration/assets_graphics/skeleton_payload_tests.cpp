@@ -22,9 +22,9 @@ namespace __hidden_skeleton_payload_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_LEFT = "left";
-static constexpr AStringView s_ROOT = "root";
-static constexpr AStringView s_RIGHT = "right";
+static constexpr AStringView s_Left = "left";
+static constexpr AStringView s_Root = "root";
+static constexpr AStringView s_Right = "right";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -51,10 +51,10 @@ public:
     SkeletonInputs(){
         entry.virtualPath = skeleton.virtualPath();
         entry.joints.reserve(4u);
-        entry.joints.push_back(SkeletonCookJoint{ .name = Name(s_ROOT) });
-        entry.joints.push_back(SkeletonCookJoint{ .name = Name(s_LEFT), .parent = Name(s_ROOT) });
-        entry.joints.push_back(SkeletonCookJoint{ .name = Name(s_RIGHT), .parent = Name(s_ROOT) });
-        entry.joints.push_back(SkeletonCookJoint{ .name = Name("hand"), .parent = Name(s_LEFT) });
+        entry.joints.push_back(SkeletonCookJoint{ .name = Name(s_Root) });
+        entry.joints.push_back(SkeletonCookJoint{ .name = Name(s_Left), .parent = Name(s_Root) });
+        entry.joints.push_back(SkeletonCookJoint{ .name = Name(s_Right), .parent = Name(s_Root) });
+        entry.joints.push_back(SkeletonCookJoint{ .name = Name("hand"), .parent = Name(s_Left) });
         entry.joints[1u].localBindPose._14 = 2.0f;
         entry.joints[3u].localBindPose._24 = 3.0f;
     }
@@ -75,15 +75,15 @@ TEST(SkeletonPayload, RejectsLaterSelfAndMissingParentsAndRecoversWithValidParen
     for(u32 invalidCase = 0u; invalidCase < 4u; ++invalidCase){
         SkeletonInputs inputs;
         switch(invalidCase){
-        case 0u: inputs.entry.joints[0u].parent = Name(s_LEFT); break;
-        case 1u: inputs.entry.joints[1u].parent = Name(s_LEFT); break;
+        case 0u: inputs.entry.joints[0u].parent = Name(s_Left); break;
+        case 1u: inputs.entry.joints[1u].parent = Name(s_Left); break;
         case s_ExpectedDualCount: inputs.entry.joints[3u].parent = Name("missing"); break;
-        case 3u: inputs.entry.joints[1u].parent = Name(s_RIGHT); break;
+        case 3u: inputs.entry.joints[1u].parent = Name(s_Right); break;
         }
         EXPECT_FALSE(BuildSkeletonAsset(inputs.entry, inputs.arena, inputs.scratchArena)) << invalidCase;
         inputs.entry.joints[0u].parent = s_NameNone;
-        inputs.entry.joints[1u].parent = Name(s_ROOT);
-        inputs.entry.joints[3u].parent = Name(s_LEFT);
+        inputs.entry.joints[1u].parent = Name(s_Root);
+        inputs.entry.joints[3u].parent = Name(s_Left);
         EXPECT_TRUE(BuildSkeletonAsset(inputs.entry, inputs.arena, inputs.scratchArena));
     }
     EXPECT_EQ(logger.errorCount(), 4u);
@@ -93,7 +93,7 @@ TEST(SkeletonPayload, RejectsLaterSelfAndMissingParentsAndRecoversWithValidParen
 TEST(SkeletonPayload, RejectsDuplicateCanonicalIdsAfterResolvingEarlierParent){
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerRegistration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    for(const Name& duplicate : { Name(s_LEFT), Name("ROOT") }){
+    for(const Name& duplicate : { Name(s_Left), Name("ROOT") }){
         SkeletonInputs inputs;
         inputs.entry.joints[3u].name = duplicate;
         inputs.entry.joints[3u].parent = duplicate;
@@ -138,7 +138,7 @@ TEST(SkeletonPayload, RepeatedValidationReclaimsCallerScratchAfterSuccessAndInva
     for(usize iteration = 0u; iteration < 16u; ++iteration){
         Skeleton::JointIndexMap jointIndices(inputs.skeleton.jointIndices());
         const bool valid = iteration % s_ExpectedDualCount == 0u;
-        jointIndices.at(Name(s_LEFT)) = valid ? 1u : 0u;
+        jointIndices.at(Name(s_Left)) = valid ? 1u : 0u;
         inputs.skeleton.setJoints(Skeleton::JointVector(inputs.skeleton.joints()), Move(jointIndices));
         EXPECT_EQ(inputs.skeleton.validatePayload(inputs.scratchArena), valid);
         const ArenaMemoryStats current = inputs.scratchArena.memoryStats();

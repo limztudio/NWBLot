@@ -14,10 +14,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T, u32 maxElements>
-class FixedVector : private std::array<T, maxElements>{
+template<typename T, u32 MaxElements>
+class FixedVector : private std::array<T, MaxElements>{
 public:
-    using Base = std::array<T, maxElements>;
+    using Base = std::array<T, MaxElements>;
 
 
 public:
@@ -33,7 +33,7 @@ public:
 
 
 public:
-    static constexpr u32 s_MaxElements = maxElements;
+    static constexpr u32 s_MaxElements = MaxElements;
 
 
 public:

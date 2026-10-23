@@ -14,7 +14,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_image_paint{
+namespace __hidden_ui_paint_images{
 [[nodiscard]] static bool SameTextureKey(const ImageSource& first, const ImageSource& second)noexcept{
     return first.identity() == second.identity() && first.generation() == second.generation();
 }
@@ -85,13 +85,13 @@ bool PaintBuilder::prepareImages(const SharedGlyphPage* const glyphPages, const 
             return false;
         bool found = false;
         for(const SharedImageSource& existing : m_snapshot.m_textureImages){
-            if(__hidden_ui_image_paint::SameTextureKey(*textureImages[candidate], *existing)){
+            if(__hidden_ui_paint_images::SameTextureKey(*textureImages[candidate], *existing)){
                 found = true;
                 break;
             }
         }
         for(usize previous = 0u; previous < candidate; ++previous){
-            if(__hidden_ui_image_paint::SameTextureKey(*textureImages[candidate], *textureImages[previous])){
+            if(__hidden_ui_paint_images::SameTextureKey(*textureImages[candidate], *textureImages[previous])){
                 found = true;
                 break;
             }
@@ -133,7 +133,7 @@ bool PaintBuilder::prepareImages(const SharedGlyphPage* const glyphPages, const 
     for(usize candidate = 0u; candidate < textureCount; ++candidate){
         bool found = false;
         for(const SharedImageSource& bound : m_snapshot.m_textureImages){
-            if(__hidden_ui_image_paint::SameTextureKey(*bound, *textureImages[candidate])){
+            if(__hidden_ui_paint_images::SameTextureKey(*bound, *textureImages[candidate])){
                 found = true;
                 break;
             }

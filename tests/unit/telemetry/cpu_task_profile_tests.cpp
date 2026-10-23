@@ -15,7 +15,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_cpu_task_profile_integration_tests{
+namespace __hidden_cpu_task_profile_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -49,9 +49,9 @@ public:
         m_recorder.recordSample(scope, seconds, frameIndex);
         if(m_injectTasks && m_injectionBudget != 0u){
             --m_injectionBudget;
-            const auto cpuAdmission205 = m_scheduler.submit([]()noexcept{});
-            ASSERT_TRUE(cpuAdmission205);
-            const CpuTaskHandle task = *cpuAdmission205;
+            const auto taskAdmission = m_scheduler.submit([]()noexcept{});
+            ASSERT_TRUE(taskAdmission);
+            const CpuTaskHandle task = *taskAdmission;
             ASSERT_TRUE(task.valid());
             m_scheduler.wait(task);
         }
@@ -85,7 +85,7 @@ private:
 
 
 TEST(CpuTaskProfileIntegration, DelayedTaskTimingPreservesExecutionFrameAtLaterPublication){
-    using namespace __hidden_cpu_task_profile_integration_tests;
+    using namespace __hidden_cpu_task_profile_tests;
     TestArena arena;
     Perf::Session perf(arena.arena);
     perf.setCaptureOptions({ .enabled = true, .cpuTiming = true });
@@ -100,9 +100,9 @@ TEST(CpuTaskProfileIntegration, DelayedTaskTimingPreservesExecutionFrameAtLaterP
     CpuTaskScope scope(scheduler, scopeLabel);
     scheduler.setProfiling(true, 41u);
 
-    const auto cpuAdmission206 = scope.submit([]()noexcept{}, { .profileLabel = taskLabel });
-    ASSERT_TRUE(cpuAdmission206);
-    const CpuTaskHandle task = *cpuAdmission206;
+    const auto taskAdmission = scope.submit([]()noexcept{}, { .profileLabel = taskLabel });
+    ASSERT_TRUE(taskAdmission);
+    const CpuTaskHandle task = *taskAdmission;
     ASSERT_TRUE(task.valid());
     scheduler.wait(task);
     scope.wait();
@@ -137,15 +137,15 @@ TEST(CpuTaskProfileIntegration, DelayedTaskTimingPreservesExecutionFrameAtLaterP
 }
 
 TEST(CpuTaskProfileIntegration, DisabledTimingSinkDiscardsBufferedSamples){
-    using namespace __hidden_cpu_task_profile_integration_tests;
+    using namespace __hidden_cpu_task_profile_tests;
     TestArena arena;
     Perf::TimingRecorder timing(arena.arena);
     CpuTaskScheduler scheduler(0u);
     scheduler.setProfiling(true, 7u);
-    const auto cpuAdmission207 = scheduler.submit([]()noexcept{});
-    ASSERT_TRUE(cpuAdmission207);
-    if(cpuAdmission207)
-        ASSERT_TRUE(cpuAdmission207->valid());
+    const auto cpuTaskAdmission = scheduler.submit([]()noexcept{});
+    ASSERT_TRUE(cpuTaskAdmission);
+    if(cpuTaskAdmission)
+        ASSERT_TRUE(cpuTaskAdmission->valid());
     scheduler.wait();
     ASSERT_GT(scheduler.statistics().profilePendingEvents, 0u);
     Perf::CollectCpuTaskProfile(scheduler, timing);
@@ -158,16 +158,16 @@ TEST(CpuTaskProfileIntegration, DisabledTimingSinkDiscardsBufferedSamples){
 }
 
 TEST(CpuTaskProfileIntegration, CollectorConsumesOnlyItsInitialPendingSnapshot){
-    using namespace __hidden_cpu_task_profile_integration_tests;
+    using namespace __hidden_cpu_task_profile_tests;
     TestArena arena;
     Perf::TimingRecorder timing(arena.arena);
     timing.setEnabled(true);
     CpuTaskScheduler scheduler(0u);
     scheduler.setProfiling(true, 11u);
-    const auto cpuAdmission208 = scheduler.submit([]()noexcept{});
-    ASSERT_TRUE(cpuAdmission208);
-    if(cpuAdmission208)
-        ASSERT_TRUE(cpuAdmission208->valid());
+    const auto cpuTaskAdmission = scheduler.submit([]()noexcept{});
+    ASSERT_TRUE(cpuTaskAdmission);
+    if(cpuTaskAdmission)
+        ASSERT_TRUE(cpuTaskAdmission->valid());
     scheduler.wait();
     const usize pendingBefore = scheduler.statistics().profilePendingEvents;
     ASSERT_GT(pendingBefore, 0u);
@@ -179,7 +179,7 @@ TEST(CpuTaskProfileIntegration, CollectorConsumesOnlyItsInitialPendingSnapshot){
 }
 
 TEST(CpuTaskProfileIntegration, NativeWorkerSamplesAreRecordedOnTheCollectorThread){
-    using namespace __hidden_cpu_task_profile_integration_tests;
+    using namespace __hidden_cpu_task_profile_tests;
     TestArena arena;
     Perf::TimingRecorder timing(arena.arena);
     timing.setEnabled(true);
@@ -193,9 +193,9 @@ TEST(CpuTaskProfileIntegration, NativeWorkerSamplesAreRecordedOnTheCollectorThre
     const CpuTaskProfileLabel label = scheduler.registerProfileLabel(taskName);
     ASSERT_TRUE(label.valid());
     scheduler.setProfiling(true, 19u);
-    const auto cpuAdmission209 = scheduler.submit([&]()noexcept{ executionThread = QueryCurrentThreadId(); }, { .profileLabel = label });
-    ASSERT_TRUE(cpuAdmission209);
-    const CpuTaskHandle task = *cpuAdmission209;
+    const auto taskAdmission = scheduler.submit([&]()noexcept{ executionThread = QueryCurrentThreadId(); }, { .profileLabel = label });
+    ASSERT_TRUE(taskAdmission);
+    const CpuTaskHandle task = *taskAdmission;
     ASSERT_TRUE(task.valid());
     scheduler.wait(task);
     EXPECT_NE(executionThread, owner);

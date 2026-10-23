@@ -22,7 +22,7 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_text_smoke{
+namespace __hidden_ui_text_samples{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,7 +38,7 @@ static constexpr u64 s_CoverageAtlasIdentity = 0x5549534D4F4B45u;
 
 [[nodiscard]] static Expected<Impl::Ui::SharedGlyphPage> MakeCoveragePage(Core::Alloc::GlobalArena& arena){
     const Impl::Ui::GlyphPageBinding binding{
-        .font = Core::Assets::AssetRef<Impl::Font>(__hidden_ui_text_smoke::s_LatinFontPath),
+        .font = Core::Assets::AssetRef<Impl::Font>(__hidden_ui_text_samples::s_LatinFontPath),
         .fontGeneration = 1u,
         .atlasIdentity = s_CoverageAtlasIdentity,
         .generation = 1u,
@@ -57,7 +57,7 @@ static constexpr u64 s_CoverageAtlasIdentity = 0x5549534D4F4B45u;
 
 [[nodiscard]] static Expected<Impl::Ui::SharedSdfAtlasPage> MakeSdfPage(Core::Alloc::GlobalArena& arena, const u32 channelCount){
     const Impl::Ui::SdfAtlasPageBinding binding{
-        .font = Core::Assets::AssetRef<Impl::Font>(__hidden_ui_text_smoke::s_LatinFontPath),
+        .font = Core::Assets::AssetRef<Impl::Font>(__hidden_ui_text_samples::s_LatinFontPath),
         .fontSha256 = {},
         .pixelsSha256 = {},
         .fontGeneration = 1u,
@@ -96,16 +96,16 @@ UiTextSmokeSamples::UiTextSmokeSamples(Core::Alloc::GlobalArena& arena)
     , m_korean(arena)
     , m_clipped(arena)
 {
-    auto coverageResult = __hidden_ui_text_smoke::MakeCoveragePage(arena);
+    auto coverageResult = __hidden_ui_text_samples::MakeCoveragePage(arena);
     if(coverageResult)
         m_coverage = Move(*coverageResult);
     for(u32 channels = 1u; channels <= 4u; ++channels){
-        auto pageResult = __hidden_ui_text_smoke::MakeSdfPage(arena, channels);
+        auto pageResult = __hidden_ui_text_samples::MakeSdfPage(arena, channels);
         if(pageResult)
             m_sdf[channels - 1u] = Move(*pageResult);
     }
     const bool configured = m_latin.setText({ .text = "office ffi e\xCC\x81 gqyp", .fontSize = 22.0f }) == Impl::Ui::TextLayoutStatus::Success && m_clipped.setText({ .text = "Clipped coverage label", .fontSize = 22.0f }) == Impl::Ui::TextLayoutStatus::Success
-        && m_korean.setText({ .text = __hidden_ui_text_smoke::s_Korean, .fontSize = 22.0f, .scriptTag = Impl::Ui::TextScriptTag('H', 'a', 'n', 'g'), .language = "ko" }) == Impl::Ui::TextLayoutStatus::Success;
+        && m_korean.setText({ .text = __hidden_ui_text_samples::s_Korean, .fontSize = 22.0f, .scriptTag = Impl::Ui::TextScriptTag('H', 'a', 'n', 'g'), .language = "ko" }) == Impl::Ui::TextLayoutStatus::Success;
     NWB_FATAL_ASSERT_MSG(configured && m_coverage, NWB_TEXT("UI smoke text and coverage fixture must be valid"));
     for(const Impl::Ui::SharedSdfAtlasPage& page : m_sdf)
         NWB_FATAL_ASSERT_MSG(page, NWB_TEXT("UI smoke compact SDF fixtures must be valid"));

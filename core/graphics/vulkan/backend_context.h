@@ -72,17 +72,19 @@ private:
 
 
 private:
-    enum class AcquireSyncSlotState : u8{
-        Idle,
-        AcquirePending,
-        ConsumerAccepted,
-        Unconsumed,
+    struct AcquireSyncSlotState{
+        enum Enum : u8{
+            Idle,
+            AcquirePending,
+            ConsumerAccepted,
+            Unconsumed,
+        };
     };
     struct AcquireSyncSlot{
         VkSemaphore semaphore = VK_NULL_HANDLE;
         VkFence fence = VK_NULL_HANDLE;
         QueueSubmissionToken consumerToken;
-        AcquireSyncSlotState state = AcquireSyncSlotState::Idle;
+        AcquireSyncSlotState::Enum state = AcquireSyncSlotState::Idle;
     };
 
 
@@ -91,23 +93,27 @@ private:
 
 
 private:
-    enum class FramePresentationSignalState : u8{
-        Idle,
-        Claimed,
-        Queued,
-        Rejected,
-        Accepted,
-        Failed,
-        Retiring,
+    struct FramePresentationSignalState{
+        enum Enum : u8{
+            Idle,
+            Claimed,
+            Queued,
+            Rejected,
+            Accepted,
+            Failed,
+            Retiring,
+        };
     };
-    enum class SwapChainLifecycleState : u8{
-        Ready,
-        RetiringPresentation,
-        Preparing,
-        PreparedResize,
-        PreparedDestroy,
-        NeedsDestroy,
-        Destroyed,
+    struct SwapChainLifecycleState{
+        enum Enum : u8{
+            Ready,
+            RetiringPresentation,
+            Preparing,
+            PreparedResize,
+            PreparedDestroy,
+            NeedsDestroy,
+            Destroyed,
+        };
     };
 
 
@@ -313,8 +319,8 @@ private:
     bool m_framePresentationClaimIdentityExhausted = false;
     bool m_frameAcquired = false;
     bool m_frameAbandonmentComplete = false;
-    FramePresentationSignalState m_framePresentationSignalState = FramePresentationSignalState::Idle;
-    SwapChainLifecycleState m_swapChainLifecycleState = SwapChainLifecycleState::Ready;
+    FramePresentationSignalState::Enum m_framePresentationSignalState = FramePresentationSignalState::Idle;
+    SwapChainLifecycleState::Enum m_swapChainLifecycleState = SwapChainLifecycleState::Ready;
     bool m_lifecycleDrainActive = false;
     bool m_swapChainMutableFormatSupported = false;
     bool m_hdr10ColorSpaceExtensionEnabled = false;

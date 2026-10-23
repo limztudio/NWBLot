@@ -249,7 +249,7 @@ Expected<GpuTimingAccumulator::QueryBegin> GpuTimingAccumulator::beginQuery(Comm
     return result;
 }
 
-GpuTimingAccumulator::QueryEndResult GpuTimingAccumulator::endQuery(CommandList& commandList, const GpuTimingScope& scope){
+GpuTimingAccumulator::QueryEndResult::Enum GpuTimingAccumulator::endQuery(CommandList& commandList, const GpuTimingScope& scope){
     if(!scope.valid() || scope.scopeName != m_scopeName || scope.index >= m_queries.size())
         return QueryEndResult::Invalid;
 
@@ -266,7 +266,7 @@ GpuTimingAccumulator::QueryEndResult GpuTimingAccumulator::endQuery(CommandList&
     return QueryEndResult::Ended;
 }
 
-GpuTimingAccumulator::QueryEndResult GpuTimingAccumulator::endQueryFromExistingClaim(CommandList& commandList, const GpuTimingScope& scope)noexcept{
+GpuTimingAccumulator::QueryEndResult::Enum GpuTimingAccumulator::endQueryFromExistingClaim(CommandList& commandList, const GpuTimingScope& scope)noexcept{
     if(!scope.valid() || scope.scopeName != m_scopeName || scope.index >= m_queries.size())
         return QueryEndResult::Invalid;
 

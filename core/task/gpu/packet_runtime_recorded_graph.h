@@ -155,10 +155,12 @@ class GpuRecordedGraph final : NoCopy{
 
 private:
     struct ArtifactStorage;
-    enum class ArtifactOperationMode : u8{
-        Read,
-        WaitRead,
-        Exclusive,
+    struct ArtifactOperationMode{
+        enum Enum : u8{
+            Read,
+            WaitRead,
+            Exclusive,
+        };
     };
     class ArtifactOperation final : NoCopy{
     private:
@@ -184,7 +186,7 @@ private:
 
 
     public:
-        ArtifactOperation(const GpuRecordedGraph& recordedGraph, ArtifactOperationMode mode)noexcept;
+        ArtifactOperation(const GpuRecordedGraph& recordedGraph, ArtifactOperationMode::Enum mode)noexcept;
         ~ArtifactOperation()noexcept;
 
 

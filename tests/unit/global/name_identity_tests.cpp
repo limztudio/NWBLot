@@ -28,7 +28,7 @@ constexpr AStringView s_RecursiveInnerName = "identity/recursive_inner";
 constexpr u32 s_ExpectedDualCount = 2u;
 #endif
 #if !defined(NWB_DEBUG)
-static constexpr AStringView s_RUNTIME_GENERATED = "runtime/generated";
+static constexpr AStringView s_RuntimeGenerated = "runtime/generated";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -158,7 +158,7 @@ TEST(Global, NameResolvedTextPreservesSymbolLookupAndHashFallback){
     EXPECT_EQ(binaryName.resolvedText(), hashView);
     EXPECT_EQ(formattedName.view(), hashView);
 #else
-    EXPECT_EQ(binaryName.resolvedText(), s_RUNTIME_GENERATED);
+    EXPECT_EQ(binaryName.resolvedText(), s_RuntimeGenerated);
     EXPECT_EQ(formattedName.view(), hashView);
     EXPECT_NE(binaryName.resolvedText(), hashView);
     EXPECT_NE(binaryName.resolvedText(), binaryName.logText());

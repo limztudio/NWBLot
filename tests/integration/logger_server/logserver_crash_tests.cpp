@@ -38,7 +38,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_logger_server_tests{
+namespace __hidden_logserver_crash_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -49,19 +49,19 @@ constexpr AStringView s_ApplicationName = "logserver_crash_tests";
 constexpr AStringView s_ApplicationVersion = "1";
 constexpr AStringView s_WindowsExceptionCategory = "windows_exception";
 
-static constexpr AStringView s_PLATFORM_LINUX = "platform=linux";
-static constexpr AStringView s_SECRET_TOKEN = "secret-token";
-static constexpr AStringView s_EVENT = "[event]";
+static constexpr AStringView s_PlatformLinux = "platform=linux";
+static constexpr AStringView s_SecretToken = "secret-token";
+static constexpr AStringView s_Event = "[event]";
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-static constexpr AStringView s_CALLSTACK = "callstack:";
-static constexpr AStringView s_STATUS_CALLSTACK_CAPTURED = "status=callstack_captured";
+static constexpr AStringView s_Callstack = "callstack:";
+static constexpr AStringView s_StatusCallstackCaptured = "status=callstack_captured";
 #endif
-static constexpr AStringView s_TESTS_INTEGRATION_LOGGER_SERVER_LOGSERVE = "tests/integration/logger_server/logserver_crash_tests.cpp";
-static constexpr AStringView s_LINUX = "linux";
-static constexpr AStringView s_CRASH = "crash";
-static constexpr AStringView s_SIGNAL = "signal";
-static constexpr AStringView s_MANUAL_DUMP = "manual_dump";
-static constexpr AStringView s_WINDOWS = "windows";
+static constexpr AStringView s_TestsIntegrationLoggerServerLogserve = "tests/integration/logger_server/logserver_crash_tests.cpp";
+static constexpr AStringView s_Linux = "linux";
+static constexpr AStringView s_Crash = "crash";
+static constexpr AStringView s_Signal = "signal";
+static constexpr AStringView s_ManualDump = "manual_dump";
+static constexpr AStringView s_Windows = "windows";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -278,7 +278,7 @@ TEST_F(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
 
     ASSERT_TRUE(assertPackageDirectory);
     NWB::Core::Alloc::ScratchArena archiveScratch(s_ArchiveScratch);
-    const auto archive = NWB::Core::Crash::Detail::BuildPackageArchive(arena, archiveScratch, *assertPackageDirectory);
+    const auto archive = NWB::Core::Crash::CrashDetail::BuildPackageArchive(arena, archiveScratch, *assertPackageDirectory);
     ASSERT_TRUE(archive);
     const NWB::Log::CrashIngestResult result = ProcessCrashArchiveBytes(arena, s_Group, s_Stem, *archive);
     EXPECT_TRUE(result.accepted);
@@ -287,14 +287,14 @@ TEST_F(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
     auto reportResult = ReadServerSymbolication(arena, s_Group, s_Stem);
     ASSERT_TRUE(reportResult);
     CrashTestText report = Move(*reportResult);
-    EXPECT_TRUE(Contains(report, s_PLATFORM_LINUX));
+    EXPECT_TRUE(Contains(report, s_PlatformLinux));
     EXPECT_TRUE(Contains(report, "reason=manual_dump"));
-    EXPECT_TRUE(Contains(report, s_EVENT));
+    EXPECT_TRUE(Contains(report, s_Event));
     EXPECT_TRUE(Contains(report, "event=assert"));
-    EXPECT_TRUE(Contains(report, s_STATUS_CALLSTACK_CAPTURED));
-    EXPECT_TRUE(Contains(report, s_CALLSTACK));
+    EXPECT_TRUE(Contains(report, s_StatusCallstackCaptured));
+    EXPECT_TRUE(Contains(report, s_Callstack));
     EXPECT_EQ(FindText(report, "false\nat "), 0u);
-    EXPECT_TRUE(Contains(report, s_TESTS_INTEGRATION_LOGGER_SERVER_LOGSERVE));
+    EXPECT_TRUE(Contains(report, s_TestsIntegrationLoggerServerLogserve));
     const auto externalSymbolizer = LinuxExternalSymbolizerAvailable(arena);
     ASSERT_TRUE(externalSymbolizer);
     if(*externalSymbolizer){
@@ -342,7 +342,7 @@ TEST_F(LoggerServerCrash, RecoverableErrorDiagnosticProducesObservableLoggerRepo
 
     ASSERT_TRUE(errorPackageDirectory);
     NWB::Core::Alloc::ScratchArena archiveScratch(s_ArchiveScratch);
-    const auto archive = NWB::Core::Crash::Detail::BuildPackageArchive(arena, archiveScratch, *errorPackageDirectory);
+    const auto archive = NWB::Core::Crash::CrashDetail::BuildPackageArchive(arena, archiveScratch, *errorPackageDirectory);
     ASSERT_TRUE(archive);
     const NWB::Log::CrashIngestResult result = ProcessCrashArchiveBytes(arena, s_Group, s_Stem, *archive);
     EXPECT_TRUE(result.accepted);
@@ -351,14 +351,14 @@ TEST_F(LoggerServerCrash, RecoverableErrorDiagnosticProducesObservableLoggerRepo
     auto reportResult = ReadServerSymbolication(arena, s_Group, s_Stem);
     ASSERT_TRUE(reportResult);
     CrashTestText report = Move(*reportResult);
-    EXPECT_TRUE(Contains(report, s_EVENT));
+    EXPECT_TRUE(Contains(report, s_Event));
     EXPECT_TRUE(Contains(report, "event=error"));
     EXPECT_TRUE(Contains(report, s_ErrorMessage));
-    EXPECT_TRUE(Contains(report, s_TESTS_INTEGRATION_LOGGER_SERVER_LOGSERVE));
+    EXPECT_TRUE(Contains(report, s_TestsIntegrationLoggerServerLogserve));
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-    EXPECT_TRUE(Contains(report, s_PLATFORM_LINUX));
-    EXPECT_TRUE(Contains(report, s_STATUS_CALLSTACK_CAPTURED));
-    EXPECT_TRUE(Contains(report, s_CALLSTACK));
+    EXPECT_TRUE(Contains(report, s_PlatformLinux));
+    EXPECT_TRUE(Contains(report, s_StatusCallstackCaptured));
+    EXPECT_TRUE(Contains(report, s_Callstack));
     const auto externalSymbolizer = LinuxExternalSymbolizerAvailable(arena);
     ASSERT_TRUE(externalSymbolizer);
     if(*externalSymbolizer)
@@ -384,7 +384,7 @@ TEST_F(LoggerServerCrash, LinuxCrashPackageReportsMissingProcMaps){
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText archive(arena);
-    BeginArchiveWithManifest(arena, archive, "linux-missing-maps-test", s_LINUX, s_CRASH, s_SIGNAL, 11u);
+    BeginArchiveWithManifest(arena, archive, "linux-missing-maps-test", s_Linux, s_Crash, s_Signal, 11u);
     AppendArchiveFile(archive, CrashNames::s_CpuContextFileName, "instruction_pointer=4198964\n");
 
     const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
@@ -394,7 +394,7 @@ TEST_F(LoggerServerCrash, LinuxCrashPackageReportsMissingProcMaps){
     auto reportResult = ReadServerSymbolication(arena, s_Group, s_Stem);
     ASSERT_TRUE(reportResult);
     CrashTestText report = Move(*reportResult);
-    EXPECT_TRUE(Contains(report, s_PLATFORM_LINUX));
+    EXPECT_TRUE(Contains(report, s_PlatformLinux));
     EXPECT_TRUE(Contains(report, "proc_maps=missing"));
     EXPECT_TRUE(Contains(report, "proc maps missing for module lookup"));
 
@@ -409,7 +409,7 @@ TEST_F(LoggerServerCrash, LinuxCrashPackageReportsUnmappedInstructionPointer){
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText archive(arena);
-    BeginArchiveWithManifest(arena, archive, "linux-unmapped-ip-test", s_LINUX, s_CRASH, s_SIGNAL, 11u);
+    BeginArchiveWithManifest(arena, archive, "linux-unmapped-ip-test", s_Linux, s_Crash, s_Signal, 11u);
     AppendArchiveFile(archive, CrashNames::s_CpuContextFileName, "instruction_pointer=7340032\n");
     AppendArchiveFile(archive, CrashNames::s_ProcMapsFileName, "00400000-00452000 r-xp 00000000 08:01 123 /tmp/nwb_loader\n");
 
@@ -420,7 +420,7 @@ TEST_F(LoggerServerCrash, LinuxCrashPackageReportsUnmappedInstructionPointer){
     auto reportResult = ReadServerSymbolication(arena, s_Group, s_Stem);
     ASSERT_TRUE(reportResult);
     CrashTestText report = Move(*reportResult);
-    EXPECT_TRUE(Contains(report, s_PLATFORM_LINUX));
+    EXPECT_TRUE(Contains(report, s_PlatformLinux));
     EXPECT_TRUE(Contains(report, "proc_maps=present"));
     EXPECT_TRUE(Contains(report, "instruction pointer was not found in proc maps"));
 
@@ -435,7 +435,7 @@ TEST_F(LoggerServerCrash, AndroidCrashPackageReportsTombstoneWithoutFrames){
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText archive(arena);
-    BeginArchiveWithManifest(arena, archive, "android-no-frames-test", "android", s_CRASH, s_MANUAL_DUMP, 0u);
+    BeginArchiveWithManifest(arena, archive, "android-no-frames-test", "android", s_Crash, s_ManualDump, 0u);
     AppendArchiveFile(archive, CrashNames::s_AndroidTombstoneFileName, "pid: 7, tid: 7, name: nwb\nbacktrace:\n");
 
     const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
@@ -461,7 +461,7 @@ TEST_F(LoggerServerCrash, WindowsCrashPackageReportsMissingMinidump){
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText archive(arena);
-    BeginArchiveWithManifest(arena, archive, "windows-missing-dump-test", s_WINDOWS, s_CRASH, s_WindowsExceptionCategory, 0xC0000005u);
+    BeginArchiveWithManifest(arena, archive, "windows-missing-dump-test", s_Windows, s_Crash, s_WindowsExceptionCategory, 0xC0000005u);
 
     const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
 
@@ -471,7 +471,7 @@ TEST_F(LoggerServerCrash, WindowsCrashPackageReportsMissingMinidump){
     ASSERT_TRUE(reportResult);
     CrashTestText report = Move(*reportResult);
     EXPECT_TRUE(Contains(report, "platform=windows"));
-    EXPECT_TRUE(Contains(report, s_EVENT));
+    EXPECT_TRUE(Contains(report, s_Event));
     EXPECT_TRUE(Contains(report, "event=crash"));
     EXPECT_TRUE(Contains(report, "exception=access_violation 0x00000000c0000005"));
     EXPECT_TRUE(Contains(report, "resolver=windows_pdb_minidump"));
@@ -495,7 +495,7 @@ TEST_F(LoggerServerCrash, WindowsCrashPackageDecodesGpuDetectiveCaptureInProcess
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText archive(arena);
-    BeginArchiveWithManifest(arena, archive, "gpu-detective-test", s_WINDOWS, s_CRASH, s_WindowsExceptionCategory, 0xC0000005u);
+    BeginArchiveWithManifest(arena, archive, "gpu-detective-test", s_Windows, s_Crash, s_WindowsExceptionCategory, 0xC0000005u);
     // Malformed RGD input must report decode failure without aborting crash ingest.
     AppendArchiveFile(archive, CrashNames::s_GpuDetectiveCaptureFileName, "not a valid radeon gpu detective capture\n");
 
@@ -546,7 +546,7 @@ TEST_F(LoggerServerCrash, CrashManifestWithoutEventIsRejected){
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText archive(arena);
-    BeginArchiveWithManifest(arena, archive, "missing-event-manifest-test", s_LINUX, s_CRASH, s_SIGNAL, 11u, ManifestEventField::Omit);
+    BeginArchiveWithManifest(arena, archive, "missing-event-manifest-test", s_Linux, s_Crash, s_Signal, 11u, ManifestEventField::Omit);
     const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
 
     EXPECT_FALSE(result.accepted);
@@ -570,11 +570,11 @@ TEST_F(LoggerServerCrash, InvalidManifestBooleanIsRejectedWhileFalseAndZeroRemai
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText validArchive(arena);
-    BeginArchiveWithManifest(arena, validArchive, s_ValidStem, s_LINUX, s_CRASH, s_SIGNAL, 0u);
+    BeginArchiveWithManifest(arena, validArchive, s_ValidStem, s_Linux, s_Crash, s_Signal, 0u);
     const auto validResult = ProcessCrashArchive(arena, s_Group, s_ValidStem, validArchive);
     ASSERT_TRUE(validResult.accepted);
 
-    CrashTestText manifest = BuildManifest(arena, s_InvalidStem, s_LINUX, s_CRASH, s_SIGNAL, 0u);
+    CrashTestText manifest = BuildManifest(arena, s_InvalidStem, s_Linux, s_Crash, s_Signal, 0u);
     constexpr AStringView s_BooleanPrefix("\"has_exception_context\": ");
     const usize fieldOffset = AStringView(manifest.data(), manifest.size()).find(s_BooleanPrefix);
     ASSERT_NE(fieldOffset, AStringView::npos);
@@ -766,16 +766,16 @@ TEST_F(LoggerServerCrash, MessagePayloadReadsUnalignedBytesAndPreservesEmbeddedN
 TEST_F(LoggerServerCrash, CrashUploadAuthorizationMatchesBearerToken){
     EXPECT_TRUE(NWB::Log::CrashUploadAuthorizationMatches(AStringView(), AStringView()));
     EXPECT_TRUE(NWB::Log::CrashUploadAuthorizationMatches(AStringView(), "bad"));
-    EXPECT_TRUE(NWB::Log::CrashUploadAuthorizationMatches(s_SECRET_TOKEN, "Bearer secret-token"));
-    EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SECRET_TOKEN, AStringView()));
-    EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SECRET_TOKEN, s_SECRET_TOKEN));
-    EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SECRET_TOKEN, "Bearer wrong"));
-    EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SECRET_TOKEN, "Bearer secret-token "));
+    EXPECT_TRUE(NWB::Log::CrashUploadAuthorizationMatches(s_SecretToken, "Bearer secret-token"));
+    EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SecretToken, AStringView()));
+    EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SecretToken, s_SecretToken));
+    EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SecretToken, "Bearer wrong"));
+    EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SecretToken, "Bearer secret-token "));
 
     const char headerBytes[] = "Bearer secret-token trailing";
     const AStringView header(headerBytes, LengthOf("Bearer secret-token") - 1u);
-    EXPECT_TRUE(NWB::Log::CrashUploadAuthorizationMatches(s_SECRET_TOKEN, header));
-    EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SECRET_TOKEN, header.substr(0u, header.size() - 1u)));
+    EXPECT_TRUE(NWB::Log::CrashUploadAuthorizationMatches(s_SecretToken, header));
+    EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SecretToken, header.substr(0u, header.size() - 1u)));
 }
 
 

@@ -380,24 +380,24 @@ private:
 public:
     // Vary spin speed from one build to compare caustic motion-vector reprojection.
     static f32 EffectiveRotationSpeed(){
-        static const f32 s_speed = [](){
+        static const f32 s_Speed = [](){
             const auto parsed = ReadSmokeEnvironmentF32("NWB_TRANSPARENT_MULTI_SPIN_SPEED");
             if(!parsed)
                 return s_TransparentSceneRotationSpeed;
             return IsFinite(*parsed) && (*parsed >= 0.0f) ? *parsed : s_TransparentSceneRotationSpeed;
         }();
-        return s_speed;
+        return s_Speed;
     }
 
     // Pin yaw for deterministic captures; an unset override leaves normal spin active.
     static f32 EffectiveFrozenAngle(){
-        static const f32 s_angle = [](){
+        static const f32 s_Angle = [](){
             const auto parsed = ReadSmokeEnvironmentF32("NWB_TRANSPARENT_MULTI_SPIN_ANGLE");
             if(!parsed)
                 return Limit<f32>::s_QuietNaN;
             return IsFinite(*parsed) ? *parsed : Limit<f32>::s_QuietNaN;
         }();
-        return s_angle;
+        return s_Angle;
     }
 
 

@@ -76,11 +76,11 @@ TEST(GpuTaskGraph, HazardTrackingPreservesResourceAndSurvivingWriterOrder){
     };
     Graphics::GpuTaskId tasks[LengthOf(uses)];
     for(usize index = 0u; index < LengthOf(uses); ++index){
-        const auto derivedNameAt77Col53 = IndexedName(Name("tests/hazard_tracking/task"), index);
-        ASSERT_TRUE(derivedNameAt77Col53);
-        const auto gpuAdmissionAt73 = AddTask(graph, *derivedNameAt77Col53, "Task", nullptr, 0u, &uses[index], 1u);
-        ASSERT_TRUE(gpuAdmissionAt73);
-        tasks[index] = *gpuAdmissionAt73;
+        const auto derivedNameResult = IndexedName(Name("tests/hazard_tracking/task"), index);
+        ASSERT_TRUE(derivedNameResult);
+        const auto taskAdmission = AddTask(graph, *derivedNameResult, "Task", nullptr, 0u, &uses[index], 1u);
+        ASSERT_TRUE(taskAdmission);
+        tasks[index] = *taskAdmission;
         ASSERT_TRUE(tasks[index].valid());
     }
     struct ExpectedHazard{
@@ -137,11 +137,11 @@ TEST(GpuTaskGraph, HazardTrackingRetiresOnlyCoveredReadersAndPreservesAppendOrde
     };
     Graphics::GpuTaskId tasks[LengthOf(uses)];
     for(usize index = 0u; index < LengthOf(uses); ++index){
-        const auto derivedNameAt134Col54 = IndexedName(Name("tests/hazard_tracking/read_task"), index);
-        ASSERT_TRUE(derivedNameAt134Col54);
-        const auto gpuAdmissionAt126 = AddTask(graph, *derivedNameAt134Col54, "Read Task", nullptr, 0u, &uses[index], 1u);
-        ASSERT_TRUE(gpuAdmissionAt126);
-        tasks[index] = *gpuAdmissionAt126;
+        const auto derivedNameResult = IndexedName(Name("tests/hazard_tracking/read_task"), index);
+        ASSERT_TRUE(derivedNameResult);
+        const auto taskAdmission = AddTask(graph, *derivedNameResult, "Read Task", nullptr, 0u, &uses[index], 1u);
+        ASSERT_TRUE(taskAdmission);
+        tasks[index] = *taskAdmission;
         ASSERT_TRUE(tasks[index].valid());
     }
     const usize expectedPairs[][2u] = { { 1u, 3u }, { 3u, 5u }, { 0u, 5u }, { 2u, 5u }, { 4u, 5u }, { 5u, 6u }, { 5u, 7u }, { 6u, 7u }, };

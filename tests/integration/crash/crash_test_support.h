@@ -35,11 +35,11 @@ inline constexpr u32 s_PackageReadyTimeoutMS = 3000u;
 inline constexpr AStringView s_SpoolDirectory = "spool";
 inline constexpr AStringView s_ApplicationVersion = "1";
 
-inline constexpr AStringView s_CRASH_001 = "crash-001";
-inline constexpr AStringView s_CRASH_002 = "crash-002";
-inline constexpr AStringView s_CRASH_003 = "crash-003";
-inline constexpr AStringView s_CRASH_TESTS = "crash_tests";
-inline constexpr AStringView s_TEST = "test";
+inline constexpr AStringView s_Crash001 = "crash-001";
+inline constexpr AStringView s_Crash002 = "crash-002";
+inline constexpr AStringView s_Crash003 = "crash-003";
+inline constexpr AStringView s_CrashTests = "crash_tests";
+inline constexpr AStringView s_Test = "test";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -113,28 +113,28 @@ inline void BuildCrashIdForProcess(char (&outCrashId)[N], const u32 processId, c
     AppendUnsignedToFixedBuffer(outCrashId, sequence);
 }
 
-[[nodiscard]] inline NWB::Core::Crash::Detail::PlatformKind::Enum CurrentCrashPlatformKind()noexcept{
+[[nodiscard]] inline NWB::Core::Crash::CrashDetail::PlatformKind::Enum CurrentCrashPlatformKind()noexcept{
 #if defined(NWB_PLATFORM_WINDOWS)
-    return NWB::Core::Crash::Detail::PlatformKind::Windows;
+    return NWB::Core::Crash::CrashDetail::PlatformKind::Windows;
 #elif defined(NWB_PLATFORM_ANDROID)
-    return NWB::Core::Crash::Detail::PlatformKind::Android;
+    return NWB::Core::Crash::CrashDetail::PlatformKind::Android;
 #elif defined(NWB_PLATFORM_LINUX)
-    return NWB::Core::Crash::Detail::PlatformKind::Linux;
+    return NWB::Core::Crash::CrashDetail::PlatformKind::Linux;
 #else
-    return NWB::Core::Crash::Detail::PlatformKind::Unknown;
+    return NWB::Core::Crash::CrashDetail::PlatformKind::Unknown;
 #endif
 }
 
-inline void FillPackageRequest(NWB::Core::Alloc::GlobalArena& arena, NWB::Core::Crash::Detail::CrashRequest& request, const CrashTestPath& spoolDirectory, const AStringView crashId){
-    request = NWB::Core::Crash::Detail::CrashRequest{};
+inline void FillPackageRequest(NWB::Core::Alloc::GlobalArena& arena, NWB::Core::Crash::CrashDetail::CrashRequest& request, const CrashTestPath& spoolDirectory, const AStringView crashId){
+    request = NWB::Core::Crash::CrashDetail::CrashRequest{};
     request.platform = CurrentCrashPlatformKind();
-    request.reasonKind = NWB::Core::Crash::Detail::CrashReasonKind::ManualDump;
+    request.reasonKind = NWB::Core::Crash::CrashDetail::CrashReasonKind::ManualDump;
     request.processId = CurrentProcessId();
     request.threadId = CurrentThreadId();
     CopyFixedBuffer(request.crashId, crashId);
-    CopyFixedBuffer(request.applicationName, AStringView(s_CRASH_TESTS));
+    CopyFixedBuffer(request.applicationName, AStringView(s_CrashTests));
     CopyFixedBuffer(request.versionText, AStringView(s_ApplicationVersion));
-    CopyFixedBuffer(request.buildId, AStringView(s_TEST));
+    CopyFixedBuffer(request.buildId, AStringView(s_Test));
     CopyFixedBuffer(request.abi, CurrentAbiName());
     CopyPathText(arena, request.spoolDirectory, spoolDirectory);
 }
@@ -155,9 +155,9 @@ inline void ObserveNativeLifecycle(const DiagnosticEventRecord& record)noexcept{
     ++s_NativeLifecycleDiagnostics;
     CopyFixedBuffer(s_LastLifecycleDiagnostic, record.message);
     CopyFixedBuffer(s_LastLifecycleOperation, record.expression);
-    if(NWB::Core::Crash::Detail::g_State.mutex.try_lock()){
+    if(NWB::Core::Crash::CrashDetail::g_State.mutex.try_lock()){
         ++s_UnlockedLifecycleDiagnostics;
-        NWB::Core::Crash::Detail::g_State.mutex.unlock();
+        NWB::Core::Crash::CrashDetail::g_State.mutex.unlock();
     }
 }
 #endif

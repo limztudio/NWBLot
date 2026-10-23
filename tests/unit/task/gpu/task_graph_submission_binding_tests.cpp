@@ -75,10 +75,10 @@ SubmissionBindingFixture::SubmissionBindingFixture()
         const AStringView suffix = FormatDecimal(index, text);
         Graphics::GpuTaskSchedulingHint scheduling;
         scheduling.mergeWithPrevious = index % mergeGroupSize != 0u;
-        const auto derivedNameAt79Col12 = DeriveName(Name("tests/submission_bindings/task/"), suffix);
-        if(!derivedNameAt79Col12)
+        const auto derivedNameResult = DeriveName(Name("tests/submission_bindings/task/"), suffix);
+        if(!derivedNameResult)
             return false;
-        const auto taskResult = AddTaskWithCommands(graph, *derivedNameAt79Col12, "Submission Binding", commands, scheduling, {}, scheduling.mergeWithPrevious ? &tasks.back() : nullptr, scheduling.mergeWithPrevious ? 1u : 0u);
+        const auto taskResult = AddTaskWithCommands(graph, *derivedNameResult, "Submission Binding", commands, scheduling, {}, scheduling.mergeWithPrevious ? &tasks.back() : nullptr, scheduling.mergeWithPrevious ? 1u : 0u);
         if(!taskResult)
             return false;
         const Graphics::GpuTaskId task = *taskResult;

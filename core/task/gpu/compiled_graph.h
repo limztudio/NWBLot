@@ -396,11 +396,13 @@ private:
 
 
 private:
-    enum class AttemptBindingState : u8{
-        None,
-        Recording,
-        Submitting,
-        Resolved,
+    struct AttemptBindingState{
+        enum Enum : u8{
+            None,
+            Recording,
+            Submitting,
+            Resolved,
+        };
     };
 
     class CompilationScope final : NoCopy{
@@ -614,7 +616,7 @@ private:
     mutable Atomic<u32> m_planAccessState = 0u;
     mutable Futex m_attemptBindingMutex;
     u16 m_deviceGeneration = 0u;
-    mutable AttemptBindingState m_attemptBindingState = AttemptBindingState::None;
+    mutable AttemptBindingState::Enum m_attemptBindingState = AttemptBindingState::None;
     bool m_hasPresentEndpoint = false;
     bool m_valid = false;
 };

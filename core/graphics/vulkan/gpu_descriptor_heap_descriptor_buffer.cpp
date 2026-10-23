@@ -17,7 +17,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_vulkan_descriptor_heap{
+namespace __hidden_vulkan_descriptor_heap_descriptor_buffer{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -100,7 +100,7 @@ TextureDimension::Enum GetSampledImageDimension(const GpuDescriptorClass::Enum d
 
 
 bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const DescriptorWriteItem& item){
-    using namespace __hidden_vulkan_descriptor_heap;
+    using namespace __hidden_vulkan_descriptor_heap_descriptor_buffer;
     ScopedLock lock(m_mutex);
 
     if(!m_initialized){
@@ -391,7 +391,7 @@ bool GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignme
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap: descriptor-buffer layout has no offset for class {}."), static_cast<u32>(cls));
                 return MakeUnexpected(Failure{});
             }
-            const VkDescriptorType descriptorType = VulkanDetail::ConvertDescriptorType(__hidden_vulkan_descriptor_heap::ClassToResourceType(cls));
+            const VkDescriptorType descriptorType = VulkanDetail::ConvertDescriptorType(__hidden_vulkan_descriptor_heap_descriptor_buffer::ClassToResourceType(cls));
             const u32 descriptorSize = m_context.descriptorBufferManager->getDescriptorSize(descriptorType);
             const u64 requiredBytes = static_cast<u64>(descriptorCount) * descriptorSize;
             if(descriptorSize == 0u || it->second > setSizeBytes || requiredBytes > static_cast<u64>(setSizeBytes - it->second)){

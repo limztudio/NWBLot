@@ -58,7 +58,7 @@ namespace MeshSkinningGraphDetail{
 // Deformation and post-dispatch share the same plan loop; only the per-plan recorder differs.
 using SkinningPlanRecorder = bool (MeshSkinningSystem::*)(const MeshSkinningGraphDispatchPlan&, Core::CommandList&, const Core::GpuTaskRecordContext&);
 
-template<SkinningPlanRecorder recorder>
+template<SkinningPlanRecorder Recorder>
 [[nodiscard]] inline bool RecordSkinningPlans(
     MeshSkinningSystem& system,
     Core::GpuTimingSubmissionTicket& timingTicket,
@@ -66,13 +66,13 @@ template<SkinningPlanRecorder recorder>
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
 ){
-    static_assert(recorder != nullptr);
+    static_assert(Recorder != nullptr);
     if(plans.empty())
         return false;
 
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(timingTicket);
     for(const MeshSkinningGraphDispatchPlan& plan : plans){
-        if(!(system.*recorder)(plan, commandList, context))
+        if(!(system.*Recorder)(plan, commandList, context))
             return false;
     }
     return true;

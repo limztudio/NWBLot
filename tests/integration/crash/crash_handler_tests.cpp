@@ -40,38 +40,38 @@ TEST(Crash, ManualContextTimeoutRetainsOwnedDumpAndReusableHandlerAfterSourceSto
     constexpr AStringView s_Group("crash_manual_owned_context_test");
     RemoveTestArtifacts(arena, s_Group);
     NWB::Core::Crash::CrashConfig config(installArena);
-    config.applicationName = AStringView(s_CRASH_TESTS);
+    config.applicationName = AStringView(s_CrashTests);
     config.spoolDirectory = SpoolDirectory(arena, s_Group);
     ASSERT_TRUE(NWB::Core::Crash::InstallCrashHandler(config));
     ScopeExit uninstall([]()noexcept{ NWB::Core::Crash::UninstallCrashHandler(); });
 
-    NWB::Core::Crash::Detail::CrashRequest request;
+    NWB::Core::Crash::CrashDetail::CrashRequest request;
     u32 capturedContextFlags = 0u;
     u64 capturedInstructionPointer = 0u;
     {
-        NWB::Core::Crash::Detail::ManualDumpContextStorage storage;
-        NWB::Core::Crash::Detail::CrashDumpRequestOptions options;
-        NWB::Core::Crash::Detail::CaptureManualDumpContext(options, storage);
-        capturedContextFlags = storage.context.ContextFlags & ~NWB::Core::Crash::Detail::s_WindowsExtendedContextFlag;
+        NWB::Core::Crash::CrashDetail::ManualDumpContextStorage storage;
+        NWB::Core::Crash::CrashDetail::CrashDumpRequestOptions options;
+        NWB::Core::Crash::CrashDetail::CaptureManualDumpContext(options, storage);
+        capturedContextFlags = storage.context.ContextFlags & ~NWB::Core::Crash::CrashDetail::s_WindowsExtendedContextFlag;
         capturedInstructionPointer = options.instructionPointer;
-        auto sourceRequest = NWB::Core::Crash::Detail::BuildCrashDumpRequest(NWB::Core::Crash::Detail::CrashReasonKind::ManualDump, 0u, options);
+        auto sourceRequest = NWB::Core::Crash::CrashDetail::BuildCrashDumpRequest(NWB::Core::Crash::CrashDetail::CrashReasonKind::ManualDump, 0u, options);
         NWB_MEMCPY(&request, sizeof(request), &sourceRequest, sizeof(sourceRequest));
-        sourceRequest = NWB::Core::Crash::Detail::CrashRequest{};
+        sourceRequest = NWB::Core::Crash::CrashDetail::CrashRequest{};
         storage.context = CONTEXT{};
         storage.exceptionRecord = EXCEPTION_RECORD{};
         storage.exceptionPointers = EXCEPTION_POINTERS{};
     }
-    ASSERT_TRUE(NWB::Core::Crash::Detail::IsCurrentCrashRequest(request));
+    ASSERT_TRUE(NWB::Core::Crash::CrashDetail::IsCurrentCrashRequest(request));
     EXPECT_EQ(request.exceptionPointers, 0u);
     EXPECT_EQ(request.manualContext.ContextFlags, capturedContextFlags);
     EXPECT_NE(capturedContextFlags, 0u);
-    NWB::Core::Crash::Detail::ManualDumpContextStorage handlerStorage(request);
+    NWB::Core::Crash::CrashDetail::ManualDumpContextStorage handlerStorage(request);
     EXPECT_EQ(handlerStorage.exceptionPointers.ContextRecord, &handlerStorage.context);
     EXPECT_EQ(handlerStorage.exceptionPointers.ExceptionRecord, &handlerStorage.exceptionRecord);
     EXPECT_EQ(handlerStorage.exceptionRecord.ExceptionRecord, nullptr);
     EXPECT_EQ(handlerStorage.exceptionRecord.ExceptionAddress, reinterpret_cast<void*>(static_cast<usize>(capturedInstructionPointer)));
 
-    const HANDLE handlerThread = NWB::Core::Crash::Detail::g_State.handlerProcessInfo.hThread;
+    const HANDLE handlerThread = NWB::Core::Crash::CrashDetail::g_State.handlerProcessInfo.hThread;
     ASSERT_NE(handlerThread, nullptr);
     const DWORD previousSuspendCount = SuspendThread(handlerThread);
     ASSERT_NE(previousSuspendCount, static_cast<DWORD>(-1));
@@ -81,11 +81,11 @@ TEST(Crash, ManualContextTimeoutRetainsOwnedDumpAndReusableHandlerAfterSourceSto
     }
     );
     ASSERT_EQ(previousSuspendCount, 0u);
-    const auto transport = NWB::Core::Crash::Detail::RequestCrashHandler(request, 1u);
-    EXPECT_EQ(transport, NWB::Core::Crash::Detail::CrashDumpTransportStatus::TimedOut);
+    const auto transport = NWB::Core::Crash::CrashDetail::RequestCrashHandler(request, 1u);
+    EXPECT_EQ(transport, NWB::Core::Crash::CrashDetail::CrashDumpTransportStatus::TimedOut);
     ASSERT_NE(ResumeThread(handlerThread), static_cast<DWORD>(-1));
     resume.release();
-    ASSERT_EQ(WaitForSingleObject(NWB::Core::Crash::Detail::g_State.crashHandledEvent, NWB::Core::Crash::Detail::s_ManualCrashDumpWaitMilliseconds), WAIT_OBJECT_0);
+    ASSERT_EQ(WaitForSingleObject(NWB::Core::Crash::CrashDetail::g_State.crashHandledEvent, NWB::Core::Crash::CrashDetail::s_ManualCrashDumpWaitMilliseconds), WAIT_OBJECT_0);
 
     const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, AStringView(request.crashId));
     EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_SymbolicationFileName, AStringView("minidump captured;")));
@@ -108,7 +108,7 @@ TEST(Crash, ManualContextTimeoutRetainsOwnedDumpAndReusableHandlerAfterSourceSto
     MINIDUMP_EXCEPTION_STREAM exceptionStream = {};
     NWB_MEMCPY(&exceptionStream, sizeof(exceptionStream), dumpBytes.data() + streamOffset, sizeof(exceptionStream));
     EXPECT_EQ(exceptionStream.ThreadId, request.threadId);
-    EXPECT_EQ(exceptionStream.ExceptionRecord.ExceptionCode, NWB::Core::Crash::Detail::s_ManualDumpExceptionCode);
+    EXPECT_EQ(exceptionStream.ExceptionRecord.ExceptionCode, NWB::Core::Crash::CrashDetail::s_ManualDumpExceptionCode);
     EXPECT_EQ(exceptionStream.ExceptionRecord.ExceptionAddress, capturedInstructionPointer);
     ASSERT_GE(exceptionStream.ThreadContext.DataSize, sizeof(CONTEXT));
     ASSERT_LE(static_cast<u64>(exceptionStream.ThreadContext.Rva) + sizeof(CONTEXT), dumpBytes.size());
@@ -128,27 +128,27 @@ TEST(Crash, ManualContextTimeoutRetainsOwnedDumpAndReusableHandlerAfterSourceSto
 }
 
 TEST(Crash, ManualNativeContextAdmissionRejectsWrongVersionSizeArchitectureAndLinkedRecords){
-    NWB::Core::Crash::Detail::ManualDumpContextStorage storage;
-    NWB::Core::Crash::Detail::CrashDumpRequestOptions options;
-    NWB::Core::Crash::Detail::CaptureManualDumpContext(options, storage);
-    auto request = NWB::Core::Crash::Detail::BuildCrashDumpRequest(NWB::Core::Crash::Detail::CrashReasonKind::ManualDump, 0u, options);
-    ASSERT_TRUE(NWB::Core::Crash::Detail::IsCurrentCrashRequest(request));
+    NWB::Core::Crash::CrashDetail::ManualDumpContextStorage storage;
+    NWB::Core::Crash::CrashDetail::CrashDumpRequestOptions options;
+    NWB::Core::Crash::CrashDetail::CaptureManualDumpContext(options, storage);
+    auto request = NWB::Core::Crash::CrashDetail::BuildCrashDumpRequest(NWB::Core::Crash::CrashDetail::CrashReasonKind::ManualDump, 0u, options);
+    ASSERT_TRUE(NWB::Core::Crash::CrashDetail::IsCurrentCrashRequest(request));
     request.version = 1u;
-    EXPECT_FALSE(NWB::Core::Crash::Detail::IsCurrentCrashRequest(request));
-    request.version = NWB::Core::Crash::Detail::s_RequestVersion + 1u;
-    EXPECT_FALSE(NWB::Core::Crash::Detail::IsCurrentCrashRequest(request));
-    request.version = NWB::Core::Crash::Detail::s_RequestVersion;
+    EXPECT_FALSE(NWB::Core::Crash::CrashDetail::IsCurrentCrashRequest(request));
+    request.version = NWB::Core::Crash::CrashDetail::s_RequestVersion + 1u;
+    EXPECT_FALSE(NWB::Core::Crash::CrashDetail::IsCurrentCrashRequest(request));
+    request.version = NWB::Core::Crash::CrashDetail::s_RequestVersion;
     --request.manualContextSize;
-    EXPECT_FALSE(NWB::Core::Crash::Detail::IsCurrentCrashRequest(request));
+    EXPECT_FALSE(NWB::Core::Crash::CrashDetail::IsCurrentCrashRequest(request));
     request.manualContextSize = sizeof(CONTEXT);
     request.manualContextArchitecture ^= 0x00010000u;
-    EXPECT_FALSE(NWB::Core::Crash::Detail::IsCurrentCrashRequest(request));
-    request.manualContextArchitecture = NWB::Core::Crash::Detail::s_WindowsContextArchitecture;
+    EXPECT_FALSE(NWB::Core::Crash::CrashDetail::IsCurrentCrashRequest(request));
+    request.manualContextArchitecture = NWB::Core::Crash::CrashDetail::s_WindowsContextArchitecture;
     request.manualExceptionRecord.ExceptionRecord = &storage.exceptionRecord;
-    EXPECT_FALSE(NWB::Core::Crash::Detail::IsCurrentCrashRequest(request));
+    EXPECT_FALSE(NWB::Core::Crash::CrashDetail::IsCurrentCrashRequest(request));
     request.manualExceptionRecord.ExceptionRecord = nullptr;
-    request.manualContext.ContextFlags |= NWB::Core::Crash::Detail::s_WindowsExtendedContextFlag;
-    EXPECT_FALSE(NWB::Core::Crash::Detail::IsCurrentCrashRequest(request));
+    request.manualContext.ContextFlags |= NWB::Core::Crash::CrashDetail::s_WindowsExtendedContextFlag;
+    EXPECT_FALSE(NWB::Core::Crash::CrashDetail::IsCurrentCrashRequest(request));
 }
 
 TEST(Crash, DesktopHandlerDoesNotRetainUnrelatedInheritableHandles){
@@ -169,7 +169,7 @@ TEST(Crash, DesktopHandlerDoesNotRetainUnrelatedInheritableHandles){
     ASSERT_NE(sentinelHandle, INVALID_HANDLE_VALUE);
 
     NWB::Core::Crash::CrashConfigT<NWB::Core::Alloc::PersistentArena> config(installArena);
-    config.applicationName = AStringView(s_CRASH_TESTS);
+    config.applicationName = AStringView(s_CrashTests);
     config.version = AStringView(s_ApplicationVersion);
     config.buildId = AStringView("handle-inheritance-test");
     config.spoolDirectory = SpoolDirectory(arena, s_Group);
@@ -195,30 +195,30 @@ TEST(Crash, LinuxManualDumpUnwindsBeyondTheLeafWithoutFramePointers){
     RemoveTestArtifacts(arena, s_Group);
 
     NWB::Core::Crash::CrashConfigT<NWB::Core::Alloc::PersistentArena> config(installArena);
-    config.applicationName = AStringView(s_CRASH_TESTS);
+    config.applicationName = AStringView(s_CrashTests);
     config.version = AStringView(s_ApplicationVersion);
     config.buildId = AStringView("desktop-handler-runtime-test");
     config.spoolDirectory = SpoolDirectory(arena, s_Group);
 
     {
-        ScopedLock lock(NWB::Core::Crash::Detail::g_State.mutex);
-        NWB::Core::Crash::Detail::g_State.crashSequence.store(1u, MemoryOrder::relaxed);
+        ScopedLock lock(NWB::Core::Crash::CrashDetail::g_State.mutex);
+        NWB::Core::Crash::CrashDetail::g_State.crashSequence.store(1u, MemoryOrder::relaxed);
     }
 
     const bool installed = NWB::Core::Crash::InstallCrashHandler(config);
     ASSERT_TRUE(installed);
 
-    NWB::Core::Crash::Detail::CrashDumpRequestOptions options;
-    options.waitMilliseconds = NWB::Core::Crash::Detail::s_PlatformCrashHandlerWaitMilliseconds;
-    options.triggerCategory = AStringView(s_TEST);
+    NWB::Core::Crash::CrashDetail::CrashDumpRequestOptions options;
+    options.waitMilliseconds = NWB::Core::Crash::CrashDetail::s_PlatformCrashHandlerWaitMilliseconds;
+    options.triggerCategory = AStringView(s_Test);
     options.triggerMessage = AStringView("desktop handler runtime");
     options.triggerFile = AStringView("tests/integration/crash/crash_package_tests.cpp");
-    NWB::Core::Crash::Detail::ManualDumpContextStorage contextStorage;
-    NWB::Core::Crash::Detail::CaptureManualDumpContext(options, contextStorage);
-    const NWB::Core::Crash::CrashDumpResult result = NWB::Core::Crash::Detail::RequestCrashDump(NWB::Core::Crash::Detail::CrashReasonKind::ManualDump, 0u, options);
+    NWB::Core::Crash::CrashDetail::ManualDumpContextStorage contextStorage;
+    NWB::Core::Crash::CrashDetail::CaptureManualDumpContext(options, contextStorage);
+    const NWB::Core::Crash::CrashDumpResult result = NWB::Core::Crash::CrashDetail::RequestCrashDump(NWB::Core::Crash::CrashDetail::CrashReasonKind::ManualDump, 0u, options);
     EXPECT_EQ(result.status, NWB::Core::Crash::CrashDumpStatus::PackageWritten);
 
-    char crashId[NWB::Core::Crash::Detail::s_MaxShortText] = {};
+    char crashId[NWB::Core::Crash::CrashDetail::s_MaxShortText] = {};
     BuildCrashIdForProcess(crashId, CurrentProcessId(), 1u);
 
     const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, AStringView(crashId));
@@ -248,30 +248,30 @@ TEST(Crash, DesktopInstalledHandlerWritesGpuCrashTextOnlyPackage){
     RemoveTestArtifacts(arena, s_Group);
 
     NWB::Core::Crash::CrashConfigT<NWB::Core::Alloc::PersistentArena> config(installArena);
-    config.applicationName = AStringView(s_CRASH_TESTS);
+    config.applicationName = AStringView(s_CrashTests);
     config.version = AStringView(s_ApplicationVersion);
     config.buildId = AStringView("gpu-text-only-runtime-test");
     config.spoolDirectory = SpoolDirectory(arena, s_Group);
 
     {
-        ScopedLock lock(NWB::Core::Crash::Detail::g_State.mutex);
-        NWB::Core::Crash::Detail::g_State.crashSequence.store(1u, MemoryOrder::relaxed);
+        ScopedLock lock(NWB::Core::Crash::CrashDetail::g_State.mutex);
+        NWB::Core::Crash::CrashDetail::g_State.crashSequence.store(1u, MemoryOrder::relaxed);
     }
 
     const bool installed = NWB::Core::Crash::InstallCrashHandler(config);
     ASSERT_TRUE(installed);
 
-    NWB::Core::Crash::Detail::CrashDumpRequestOptions options;
-    options.waitMilliseconds = NWB::Core::Crash::Detail::s_PlatformCrashHandlerWaitMilliseconds;
-    options.triggerCategory = AStringView(NWB::Core::Crash::Detail::s_GpuCrashCategory);
+    NWB::Core::Crash::CrashDetail::CrashDumpRequestOptions options;
+    options.waitMilliseconds = NWB::Core::Crash::CrashDetail::s_PlatformCrashHandlerWaitMilliseconds;
+    options.triggerCategory = AStringView(NWB::Core::Crash::CrashDetail::s_GpuCrashCategory);
     options.gpuReport = AStringView("minimal GPU crash report: no vendor GPU dump or device-fault details were available\n");
     options.gpuDumpKind = NWB::Core::Crash::GpuCrashDumpKind::None;
-    NWB::Core::Crash::Detail::ManualDumpContextStorage contextStorage;
-    NWB::Core::Crash::Detail::CaptureManualDumpContext(options, contextStorage);
-    const NWB::Core::Crash::CrashDumpResult result = NWB::Core::Crash::Detail::RequestCrashDump(NWB::Core::Crash::Detail::CrashReasonKind::GpuCrash, 0u, options);
+    NWB::Core::Crash::CrashDetail::ManualDumpContextStorage contextStorage;
+    NWB::Core::Crash::CrashDetail::CaptureManualDumpContext(options, contextStorage);
+    const NWB::Core::Crash::CrashDumpResult result = NWB::Core::Crash::CrashDetail::RequestCrashDump(NWB::Core::Crash::CrashDetail::CrashReasonKind::GpuCrash, 0u, options);
     EXPECT_EQ(result.status, NWB::Core::Crash::CrashDumpStatus::PackageWritten);
 
-    char crashId[NWB::Core::Crash::Detail::s_MaxShortText] = {};
+    char crashId[NWB::Core::Crash::CrashDetail::s_MaxShortText] = {};
     BuildCrashIdForProcess(crashId, CurrentProcessId(), 1u);
 
     const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, AStringView(crashId));
@@ -315,14 +315,14 @@ TEST(Crash, LinuxSignalHandlerWritesCrashPackage){
     if(childPid == 0){
         NWB::Core::Alloc::PersistentArena installArena(s_SignalChildInstallArena, NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u));
         NWB::Core::Crash::CrashConfigT<NWB::Core::Alloc::PersistentArena> config(installArena);
-        config.applicationName = AStringView(s_CRASH_TESTS);
+        config.applicationName = AStringView(s_CrashTests);
         config.version = AStringView(s_ApplicationVersion);
         config.buildId = AStringView("linux-signal-runtime-test");
         config.spoolDirectory = spoolDirectory;
 
         {
-            ScopedLock lock(NWB::Core::Crash::Detail::g_State.mutex);
-            NWB::Core::Crash::Detail::g_State.crashSequence.store(1u, MemoryOrder::relaxed);
+            ScopedLock lock(NWB::Core::Crash::CrashDetail::g_State.mutex);
+            NWB::Core::Crash::CrashDetail::g_State.crashSequence.store(1u, MemoryOrder::relaxed);
         }
 
         if(!NWB::Core::Crash::InstallCrashHandler(config))
@@ -343,7 +343,7 @@ TEST(Crash, LinuxSignalHandlerWritesCrashPackage){
         EXPECT_TRUE(WIFSIGNALED(status));
         EXPECT_EQ(WTERMSIG(status), SIGSEGV);
 
-        char crashId[NWB::Core::Crash::Detail::s_MaxShortText] = {};
+        char crashId[NWB::Core::Crash::CrashDetail::s_MaxShortText] = {};
         BuildCrashIdForProcess(crashId, static_cast<u32>(childPid), 1u);
 
         const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, AStringView(crashId));

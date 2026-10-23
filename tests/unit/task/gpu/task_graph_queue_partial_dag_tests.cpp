@@ -98,9 +98,9 @@ void DeclareGraph(Graphics::GpuTaskGraph& graph, const usize taskCount, const Sh
         scheduling.mergeWithPrevious = shape == Shape::MergedPairs && taskIndex % 2u != 0u;
         const bool graphicsTask = shape == Shape::MergedPairs ? (taskIndex / 2u) % 2u == 0u : taskIndex % 2u == 0u;
         char identityText[32u] = {};
-        const auto derivedNameAt103Col12 = DeriveName(Name("tests/queue_partial_dag/"), FormatDecimal(taskIndex, identityText));
-        ASSERT_TRUE(derivedNameAt103Col12);
-        const auto taskResult = AddTaskWithCommands(graph, *derivedNameAt103Col12, "Partial DAG Task", graphicsTask ? GraphicsCommands() : ComputeCommands(), scheduling, {}, dependencies.data(), dependencies.size());
+        const auto derivedNameResult = DeriveName(Name("tests/queue_partial_dag/"), FormatDecimal(taskIndex, identityText));
+        ASSERT_TRUE(derivedNameResult);
+        const auto taskResult = AddTaskWithCommands(graph, *derivedNameResult, "Partial DAG Task", graphicsTask ? GraphicsCommands() : ComputeCommands(), scheduling, {}, dependencies.data(), dependencies.size());
         ASSERT_TRUE(taskResult);
         const Graphics::GpuTaskId task = *taskResult;
         ASSERT_TRUE(task.valid());
@@ -108,9 +108,9 @@ void DeclareGraph(Graphics::GpuTaskGraph& graph, const usize taskCount, const Sh
 }
 
 
-template<usize taskCount = 130u>
+template<usize TaskCount = 130u>
 void CheckIndexedScores(const Shape::Enum shape){
-    constexpr usize s_TaskCount = taskCount;
+    constexpr usize s_TaskCount = TaskCount;
     SCOPED_TRACE(shape);
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -372,11 +372,11 @@ TEST(GpuTaskQueueScoring, OrderedAndUnusedReachabilityAvoidMaskAllocationsAcross
             char identityText[32u] = {};
             Graphics::GpuTaskSchedulingHint scheduling;
             scheduling.cost = Graphics::GpuTaskCostHint::Large;
-            const auto derivedNameAt386Col16 = DeriveName(Name("tests/queue_no_masks/"), FormatDecimal(index, identityText));
-            ASSERT_TRUE(derivedNameAt386Col16);
-            const auto gpuAdmissionAt382 = AddTaskWithCommands(graph, *derivedNameAt386Col16, "Ordered Queue Task", ComputeCommands(), scheduling, {}, preceding.valid() ? &preceding : nullptr, preceding.valid() ? 1u : 0u);
-            ASSERT_TRUE(gpuAdmissionAt382);
-            preceding = *gpuAdmissionAt382;
+            const auto derivedNameResult = DeriveName(Name("tests/queue_no_masks/"), FormatDecimal(index, identityText));
+            ASSERT_TRUE(derivedNameResult);
+            const auto precedingTaskAdmission = AddTaskWithCommands(graph, *derivedNameResult, "Ordered Queue Task", ComputeCommands(), scheduling, {}, preceding.valid() ? &preceding : nullptr, preceding.valid() ? 1u : 0u);
+            ASSERT_TRUE(precedingTaskAdmission);
+            preceding = *precedingTaskAdmission;
             ASSERT_TRUE(preceding.valid());
         }
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);

@@ -23,9 +23,13 @@ struct NwbRayTraceVertexAttrib{
     float2 uv0;
 };
 
+float3 nwbRayTraceDecodeVertexNormal(const uint2 packed){
+    return float3(nwbUnpackHalf2x16(packed.x), f16tof32(packed.y & NWB_HALF_BITS_MASK));
+}
+
 NwbRayTraceVertexAttrib nwbRayTraceDecodeVertexAttrib(const uint4 packed){
     NwbRayTraceVertexAttrib attrib;
-    attrib.normal = half3(float3(nwbUnpackHalf2x16(packed.x), nwbUnpackHalf2x16(packed.y).x));
+    attrib.normal = half3(nwbRayTraceDecodeVertexNormal(packed.xy));
     attrib.uv0 = asfloat(packed.zw);
     return attrib;
 }

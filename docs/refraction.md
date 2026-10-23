@@ -31,10 +31,13 @@ scene contains a single unclipped non-CSG refractive instance
 front boundary, the resolve reconstructs the exact camera entry position from
 captured depth and starts exit traversal directly without an entry ray query.
 Uncertified, back-facing, or CSG-clipped entries issue a nearest-hit entry query
-that validates the optical entry surface (`refractionIor`, entity identity, and
-world position), while exit candidates evaluate only the world-space exit
-position and interpolated surface normal (or CSG cutter geometric normal) without
-material surface dispatch. The usual path issues two nearest-hit queries for a
+that rejects opaque instances from material flags before fetching intersection
+attributes, validates the optical entry surface (`refractionIor`, entity identity,
+and world position), and retains the primary vertex-attribute slot; exit
+candidates then load only the 8-byte packed vertex normals (`Load2` via
+`nwbRayTraceDecodeVertexNormal`) or CSG cutter geometric normal to evaluate the
+world-space exit position and surface normal without reloading instance material
+records, UV attributes, or material surface dispatch. The usual path issues two nearest-hit queries for a
 certified single refractor or three when entry tracing is required; the bounded
 loop permits at most six or seven respectively, including two internal
 reflections and two additional ordinary transparent background layers. Residual

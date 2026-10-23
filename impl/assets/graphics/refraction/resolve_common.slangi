@@ -136,22 +136,26 @@ half3 nwbRefractionBackground(const uint2 pixel){
     return behind / max(frontTransmittance, half(NWB_REFRACTION_FRONT_TRANSMITTANCE_MIN)) + opaque * backTransmittance;
 }
 
+half nwbRefractionFresnelTransmissionFromR0(const half r0, const half cosine){
+    return half(1.0) - (r0 + (half(1.0) - r0) * half(pow(half(1.0h) - saturate(cosine), half(NWB_REFRACTION_SCHLICK_EXPONENT))));
+}
+
 half nwbRefractionFresnelTransmission(const half ior, const half cosine){
     // Schlick reflectance is a (0, 1) bounded factor, so half arithmetic is sufficient here.
     const half ratio = (ior - half(1.0h)) / (ior + half(1.0h));
-    const half r0 = ratio * ratio;
-    return half(1.0) - (r0 + (half(1.0) - r0) * half(pow(half(1.0h) - saturate(cosine), half(NWB_REFRACTION_SCHLICK_EXPONENT))));
+    return nwbRefractionFresnelTransmissionFromR0(ratio * ratio, cosine);
 }
 
 half3 nwbRefractionAttenuation(const half3 tint, const float thickness, const half ior, const half entryCosine, const half exitCosine){
     // Tint/Beer attenuation plus two bounded Fresnel transmissions stay in (0, 1]; half color math is sufficient.
-    return half3(exp(log(clamp(float3(tint), float3(NWB_REFRACTION_TINT_MIN), float3(1.0))) * max(thickness, 0.0)) * float3(nwbRefractionFresnelTransmission(ior, entryCosine)) * float3(nwbRefractionFresnelTransmission(ior, exitCosine)));
+    const half ratio = (ior - half(1.0h)) / (ior + half(1.0h));
+    const half r0 = ratio * ratio;
+    return half3(exp(log(clamp(float3(tint), float3(NWB_REFRACTION_TINT_MIN), float3(1.0))) * max(thickness, 0.0)) * float3(nwbRefractionFresnelTransmissionFromR0(r0, entryCosine)) * float3(nwbRefractionFresnelTransmissionFromR0(r0, exitCosine)));
 }
 
 struct NwbRefractionEntry{
     uint primaryEntityId;
     bool frontBoundary;
-    float depth;
     float cameraDistance;
     float3 position;
     float3 incident;
@@ -166,8 +170,8 @@ struct NwbRefractionEntry{
 bool nwbRefractionLoadEntry(const uint2 pixel, out NwbRefractionEntry entry){
     entry = (NwbRefractionEntry)0;
     const int3 texel = int3(pixel, 0);
-    entry.depth = nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.x).Load(texel).r;
-    if(entry.depth >= 1.0)
+    const float depth = nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.x).Load(texel).r;
+    if(depth >= 1.0)
         return false;
     const float4 normalIor = nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.y).Load(texel);
     if(!nwbRefractionIorEligible(normalIor.w))
@@ -176,7 +180,7 @@ bool nwbRefractionLoadEntry(const uint2 pixel, out NwbRefractionEntry entry){
     entry.primaryEntityId = nwbAvboitUnpackRefractionEntityId(packedIdentity);
     entry.frontBoundary = nwbAvboitUnpackRefractionFrontBoundary(packedIdentity);
     const half4 tintCoverage = half4(nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.z).Load(texel));
-    entry.position = nwbRefractionReconstruct(pixel, entry.depth);
+    entry.position = nwbRefractionReconstruct(pixel, depth);
     const float3 cameraRay = entry.position - g_NwbRefractionView.cameraPosition.xyz;
     entry.cameraDistance = length(cameraRay);
     entry.incident = nwbSafeNormalize(cameraRay, float3(0.0, 0.0, 1.0));

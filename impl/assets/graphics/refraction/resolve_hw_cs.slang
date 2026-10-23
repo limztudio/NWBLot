@@ -88,19 +88,20 @@ bool nwbRefractionCachedHit(const float3 position, const NwbRefractionEntry entr
     if(!nwbRefractionProject(position, pixel, projectedDepth))
         return false;
     const float opaqueDepth = nwbHeapSampledImage2D(g_NwbRefractionResources.gbufferSlots.w).Load(int3(pixel, 0)).r;
-    if(opaqueDepth >= 1.0)
+    if(opaqueDepth >= 1.0 || abs(projectedDepth - opaqueDepth) > NWB_REFRACTION_CACHED_HIT_DEPTH_TOLERANCE)
         return false;
     const float3 opaqueWorld = nwbHeapSampledImage2D(g_NwbRefractionResources.gbufferSlots.z).Load(int3(pixel, 0)).xyz;
     const float cameraDistance = length(position - g_NwbRefractionView.cameraPosition.xyz);
     // Require both projected depth and world distance. A depth-only comparison becomes permissive in the far field and returns an opaque foreground object's lighting for a hidden RT hit.
-    if(abs(projectedDepth - opaqueDepth) > NWB_REFRACTION_CACHED_HIT_DEPTH_TOLERANCE || length(opaqueWorld - position) > max(NWB_REFRACTION_CACHED_HIT_DISTANCE_MIN, cameraDistance * NWB_REFRACTION_CACHED_HIT_DISTANCE_SCALE))
+    if(length(opaqueWorld - position) > max(NWB_REFRACTION_CACHED_HIT_DISTANCE_MIN, cameraDistance * NWB_REFRACTION_CACHED_HIT_DISTANCE_SCALE))
         return false;
     radiance = includeTransparency ? half3(nwbRefractionBackgroundForEntry(pixel, entry)) : half3(nwbRefractionOpaqueBackground(pixel));
     return true;
 }
 
-bool nwbRefractionTryAssociateCapturedEntry(const uint instanceMaterialHeapSlot, const NwbRefractionEntry entry, const float3 camera, const float entryDistance, const float associationTolerance, out uint primaryInstance){
+bool nwbRefractionTryAssociateCapturedEntry(const uint instanceMaterialHeapSlot, const NwbRefractionEntry entry, const float3 camera, const float entryDistance, const float associationTolerance, out uint primaryInstance, out uint primaryAttributeSlot){
     primaryInstance = 0u;
+    primaryAttributeSlot = 0u;
 #if NWB_RT_CSG_ENABLED
     return false;
 #else
@@ -117,22 +118,28 @@ bool nwbRefractionTryAssociateCapturedEntry(const uint instanceMaterialHeapSlot,
     if(g_NwbMeshInstances[material.meshInstanceIndex].entityId != entry.primaryEntityId)
         return false;
     primaryInstance = candidate;
+    primaryAttributeSlot = material.attributeSlot;
     return true;
 #endif
 }
 
-bool nwbRefractionTryResolveHardware(const uint2 pixel, const NwbRefractionEntry entry, out half4 outRadiance){
+bool nwbRefractionTryResolveHardware(const NwbRefractionEntry entry, out half4 outRadiance, out float3 outContinuationOrigin, out float3 outContinuationDirection, out half3 outContinuationAttenuation, out bool outVolumeExited){
     outRadiance = half4(0.0h, 0.0h, 0.0h, 1.0h);
+    outContinuationOrigin = entry.position;
+    outContinuationDirection = float3(0.0);
+    outContinuationAttenuation = half3(0.0h);
+    outVolumeExited = false;
     nwbRefractionCount(NWB_REFRACTION_COUNTER_hardwarePixels);
     const uint instanceMaterialHeapSlot = g_NwbRefractionMaterialContext.sceneSlots.z;
     const float3 camera = g_NwbRefractionView.cameraPosition.xyz;
     const float entryDistance = entry.cameraDistance;
     const float associationTolerance = max(entry.bias * NWB_REFRACTION_BIAS_TOLERANCE_SCALE, entryDistance * NWB_REFRACTION_ASSOCIATION_DISTANCE_SCALE);
     uint primaryInstance = 0u;
+    uint primaryAttributeSlot = 0u;
     float3 internalOrigin = entry.position;
-    if(!nwbRefractionTryAssociateCapturedEntry(instanceMaterialHeapSlot, entry, camera, entryDistance, associationTolerance, primaryInstance)){
+    if(!nwbRefractionTryAssociateCapturedEntry(instanceMaterialHeapSlot, entry, camera, entryDistance, associationTolerance, primaryInstance, primaryAttributeSlot)){
         nwbRefractionCount(NWB_REFRACTION_COUNTER_entryQueries);
-        const NwbRayTraceSurfaceHit entryHit = nwbRefractionClosestEntryInterface(instanceMaterialHeapSlot, camera, entry.incident, max(entryDistance - associationTolerance, entry.bias), entryDistance + associationTolerance);
+        const NwbRayTraceSurfaceHit entryHit = nwbRefractionClosestEntryInterface(instanceMaterialHeapSlot, camera, entry.incident, max(entryDistance - associationTolerance, entry.bias), entryDistance + associationTolerance, primaryAttributeSlot);
         nwbRefractionCountQueryWork(entryHit);
 #if NWB_RT_CSG_ENABLED
         if(entryHit.failure != 0u){
@@ -168,7 +175,7 @@ bool nwbRefractionTryResolveHardware(const uint2 pixel, const NwbRefractionEntry
         nwbRefractionCount(NWB_REFRACTION_COUNTER_exitQueries);
         NwbRayTraceGeometryHit exitGeometry;
         float3 exitNormal;
-        const bool exitValid = nwbRefractionClosestExitInterface(instanceMaterialHeapSlot, internalOrigin + internalDirection * entry.bias, internalDirection, entry.bias, NWB_REFRACTION_MAX_DISTANCE, primaryInstance, exitGeometry, exitPosition, exitNormal);
+        const bool exitValid = nwbRefractionClosestExitInterface(internalOrigin + internalDirection * entry.bias, internalDirection, entry.bias, NWB_REFRACTION_MAX_DISTANCE, primaryInstance, primaryAttributeSlot, exitGeometry, exitPosition, exitNormal);
         nwbRefractionCountQueryWork(exitGeometry);
 #if NWB_RT_CSG_ENABLED
         if(exitGeometry.failure != 0u){
@@ -282,13 +289,7 @@ bool nwbRefractionTryResolveHardware(const uint2 pixel, const NwbRefractionEntry
             coverage = half(saturate(float(background.surface.renderCoverage)));
             opaqueHit = coverage >= half(NWB_REFRACTION_OPAQUE_COVERAGE_MIN);
             if(opaqueHit){
-                half3 radiance;
                 nwbRefractionCount(NWB_REFRACTION_COUNTER_cachedHitAttempts);
-                if(nwbRefractionCachedHit(backgroundPosition, entry, layer == 0u, radiance)){
-                    nwbRefractionCount(NWB_REFRACTION_COUNTER_cachedOpaqueReturns);
-                    outRadiance = half4((accumulated + transmittance * half3(radiance)) * half3(attenuation), 1.0h);
-                    return true;
-                }
                 nwbRefractionCount(NWB_REFRACTION_COUNTER_cachedHitMisses);
                 nwbRefractionCount(NWB_REFRACTION_COUNTER_shadedOpaqueReturns);
             }
@@ -309,24 +310,38 @@ bool nwbRefractionTryResolveHardware(const uint2 pixel, const NwbRefractionEntry
     }
     // Keep the primary volume's exit (direction/thickness/Fresnel); secondary glass adds cached AVBOIT appearance only.
     // Full background replace: no double-count of partially traced layers.
-    NwbRefractionEntry exitEntry = entry;
-    exitEntry.position = exitPosition;
-    half3 backgroundRadiance;
-    if(!nwbRefractionScreenBackground(exitEntry, outgoingDirection, backgroundRadiance)){
-        nwbRefractionCount(NWB_REFRACTION_COUNTER_exitStraightFallbackPixels);
-        backgroundRadiance = half3(nwbRefractionBackground(pixel));
-    }
-    else
-        nwbRefractionCount(NWB_REFRACTION_COUNTER_exitScreenBackgroundReturns);
-    outRadiance = half4(half3(backgroundRadiance) * half3(attenuation), 1.0h);
-    return true;
+    outContinuationOrigin = exitPosition;
+    outContinuationDirection = outgoingDirection;
+    outContinuationAttenuation = attenuation;
+    outVolumeExited = true;
+    return false;
 }
 
 half4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry entry){
     half4 radiance;
-    if(nwbRefractionTryResolveHardware(pixel, entry, radiance))
-        return radiance;
-    return nwbRefractionResolveScreen(pixel, entry);
+    float3 continuationOrigin = entry.position;
+    float3 continuationDirection = float3(0.0);
+    half3 continuationAttenuation = half3(0.0h);
+    bool volumeExited = false;
+    if(g_NwbRefractionPush.refractionEnabled != 0u){
+        if(nwbRefractionTryResolveHardware(entry, radiance, continuationOrigin, continuationDirection, continuationAttenuation, volumeExited))
+            return radiance;
+        if(!volumeExited)
+            continuationDirection = refract(entry.incident, entry.normal, 1.0 / float(entry.ior));
+    }
+    if(!volumeExited)
+        continuationAttenuation = nwbRefractionAttenuation(entry.tint, NWB_REFRACTION_FALLBACK_THICKNESS, entry.ior, entry.cosine, entry.cosine);
+    NwbRefractionEntry continuationEntry = entry;
+    continuationEntry.position = continuationOrigin;
+    half3 backgroundRadiance;
+    if(dot(continuationDirection, continuationDirection) <= NWB_REFRACTION_DIRECTION_LENGTH_SQUARED_MIN || !nwbRefractionScreenBackground(continuationEntry, continuationDirection, backgroundRadiance)){
+        if(volumeExited)
+            nwbRefractionCount(NWB_REFRACTION_COUNTER_exitStraightFallbackPixels);
+        backgroundRadiance = half3(nwbRefractionBackground(pixel));
+    }
+    else if(volumeExited)
+        nwbRefractionCount(NWB_REFRACTION_COUNTER_exitScreenBackgroundReturns);
+    return half4(half3(backgroundRadiance) * half3(continuationAttenuation), 1.0h);
 }
 
 
@@ -341,7 +356,7 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID, ui
     if(nwbRefractionResolvePixel(groupId, groupThreadId, pixel)){
         NwbRefractionEntry entry;
         if(nwbRefractionLoadEntry(pixel, entry))
-            g_NwbRefractionOutput[pixel] = g_NwbRefractionPush.refractionEnabled != 0u ? nwbRefractionResolveHardware(pixel, entry) : float4(nwbRefractionStraightFallback(pixel, entry), 1.0);
+            g_NwbRefractionOutput[pixel] = nwbRefractionResolveHardware(pixel, entry);
         else
             g_NwbRefractionOutput[pixel] = float4(0.0);
     }
@@ -355,7 +370,7 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID, ui
         g_NwbRefractionOutput[pixel] = float4(0.0);
         return;
     }
-    g_NwbRefractionOutput[pixel] = g_NwbRefractionPush.refractionEnabled != 0u ? nwbRefractionResolveHardware(pixel, entry) : float4(nwbRefractionStraightFallback(pixel, entry), 1.0);
+    g_NwbRefractionOutput[pixel] = nwbRefractionResolveHardware(pixel, entry);
 #endif
 }
 

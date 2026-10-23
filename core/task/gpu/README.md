@@ -87,4 +87,4 @@ The launcher builds and runs the target; the test executable writes the XML repo
 
 The partial-DAG placement cases in `tests/unit/task/gpu/task_graph_queue_partial_dag_tests.cpp` cover multiword score preservation across queue moves and rebuilds, sparse-row scratch bounds, relation-state reset on rebuild, assignment exclusion without local assignment, and mask-allocation avoidance for ordered/unused reachability. These complement the independent-task and serial-chain placement controls.
 
-Historical measurement evidence is preserved in the [GPU task performance report](../../../docs/gpu_task_performance_history.md) and [renderer M4 qualification report](../../../tests/ab/async_shadow_m4/qualification_history.md).
+Historical renderer M4 measurement evidence is preserved in the [renderer M4 qualification report](../../../tests/ab/async_shadow_m4/qualification_history.md).

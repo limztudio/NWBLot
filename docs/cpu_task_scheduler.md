@@ -118,5 +118,3 @@ Time submission, execution, and completion joins together when comparing schedul
 Use coarse ranges, simultaneous independent ranges, nested systems, individual tiny tasks, and batched equivalents. Scope-join experiments vary unrelated ready-prefix length, dependent fan-in, shared-chain length, worker count, and external waiter count. Include whole-scheduler joins over the same graph, no-prefix work, empty/completed joins, and coarse ranges as controls. Compare ordinary cancellation lookups with retained canceled generations after repeated node reuse.
 
 These CPU microbenchmarks describe the named host operation. They do not establish application frame rate or GPU overlap, and small noisy differences need independent confirmation. Application claims require representative application measurements. Preserve resource limits and output/lifetime validation while measuring.
-
-Recorded measurements and run-specific qualification evidence are in the [CPU task scheduler measurement report](reports/cpu_task_scheduler_measurement_report.md).

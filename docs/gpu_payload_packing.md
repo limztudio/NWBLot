@@ -30,7 +30,6 @@ Compiled payload and upload byte counts are exact. Physical GPU allocation depen
 
 Freeze baseline executables and matching cooked assets before rebuilding the candidate, then match host, driver, resolution, shader routes and views. Warm each ordinary GI cache separately, discard at least 30 seconds and retain at least 30 seconds of positive timing intervals. The skinning comparison runs 64 animated characters through 12 culling/view cases, repeated four times per run, with two complete runs per build in before/after/after/before order. Record asset/binary hashes, diagnostics and relevant control scopes. Keep the 0.015 ms skinning timing floor explicit when interpreting small dispatch differences; aggregate GPU time is distinct from presentation FPS. A single matched pair does not establish a repeatable speedup or cross-platform performance.
 
-Recorded layout comparisons, rendering qualification and matched timing evidence are retained in the [GPU payload packing measurement report](reports/gpu_payload_packing_measurement_report.md).
 
 ## Candidates retained at their current sizes
 

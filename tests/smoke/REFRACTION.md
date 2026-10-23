@@ -438,8 +438,7 @@ establish GPU-time shares. Background hits evaluate only `refractionIor` and
 `renderCoverage` before consulting the screen-space lighting cache; full shading
 surface reconstruction (`nwbRefractionShadeGeometryHit`) runs only when an
 uncached opaque hit or transparent layer calls the refraction lighting helper
-(`materialShadeCalls`). See the qualification reports under `docs/reports/` for
-dated profile and candidate measurements.
+(`materialShadeCalls`).
 
 `refraction_query_diagnostics_smoke.py` acquires diagnostic counts and optical
 checks separately from timing:

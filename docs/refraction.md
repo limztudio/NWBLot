@@ -103,11 +103,4 @@ dependency. Resizing replaces the complete target generation; disabling refracti
 clears captured identity/depth and resolved validity to prevent stale glass.
 
 See [the dedicated smoke test](../tests/smoke/REFRACTION.md) for the automated
-off/hardware/screen comparison, Vulkan validation run, and saved image metrics,
-and the measurement reports under `docs/reports/`
-([dense mapping](reports/refraction_dense_mapping_qualification_20261022.md),
-[query profile](reports/refraction_query_profile_20261022.md),
-[Candidate C](reports/refraction_candidate_c_qualification_20261023.md),
-[Candidate B](reports/refraction_candidate_b_qualification_20261023.md), and
-[Candidate A](reports/refraction_candidate_a_qualification_20261023.md)) for
-qualification evidence.
+off/hardware/screen comparison, Vulkan validation run, and saved image metrics.

@@ -434,11 +434,11 @@ each issue one physical inline query; certified single-refractor front boundarie
 associate directly from the capture without an entry query (`entryQueries = 0`,
 `entryHits = activePixels`), while CSG may perform additional physical work, so
 `physicalQueries` and `queryBudgetUnits` remain separate. Counter shares do not
-establish GPU-time shares. Background hits evaluate only `refractionIor` and
-`renderCoverage` before consulting the screen-space lighting cache; full shading
-surface reconstruction (`nwbRefractionShadeGeometryHit`) runs only when an
-uncached opaque hit or transparent layer calls the refraction lighting helper
-(`materialShadeCalls`).
+establish GPU-time shares. Background hits on opaque instances consult the
+screen-space lighting cache directly from hit distance and instance flags before
+reading primitive, barycentric, or `worldToObject` intersection attributes;
+surface reconstruction and `nwbRefractionShadeSurfaceHit` (`materialShadeCalls`)
+run only when a hit is non-opaque or misses the screen cache.
 
 `refraction_query_diagnostics_smoke.py` acquires diagnostic counts and optical
 checks separately from timing:

@@ -17,37 +17,76 @@
 
 // Refraction admits the nearest retained boundary. Rejected faces/instances do not need a material.
 NwbRayTraceSurfaceHit nwbRefractionClosestEntryInterface(const uint instanceMaterialHeapSlot, const float3 origin, const float3 direction, const float minDistance, const float maxDistance){
-    const NwbRayTraceGeometryHit geometry = nwbRayTraceClosestGeometryHit(origin, direction, minDistance, maxDistance);
 #if NWB_RT_CSG_ENABLED
+    const NwbRayTraceGeometryHit geometry = nwbRayTraceClosestGeometryHit(origin, direction, minDistance, maxDistance);
     if(geometry.failure != 0u)
         return nwbRayTraceReconstructSurfaceHit(instanceMaterialHeapSlot, origin, direction, geometry);
-#endif
     if(!geometry.hit || !geometry.frontFace){
         NwbRayTraceSurfaceHit rejected = (NwbRayTraceSurfaceHit)0;
-#if NWB_RT_CSG_ENABLED && NWB_REFRACTION_DIAGNOSTICS
+#if NWB_REFRACTION_DIAGNOSTICS
         rejected.queryBudgetUnits = geometry.queryBudgetUnits;
         rejected.physicalQueries = geometry.physicalQueries;
 #endif
         return rejected;
     }
     return nwbRayTraceReconstructValidatedSurfaceHit(instanceMaterialHeapSlot, origin, direction, geometry);
+#else
+    RayDesc ray;
+    ray.Origin = origin;
+    ray.Direction = direction;
+    ray.TMin = minDistance;
+    ray.TMax = maxDistance;
+    RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
+    query.TraceRayInline(nwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE, NWB_RAY_TRACING_ALL_INSTANCE_MASK, ray);
+    while(query.Proceed()){}
+    if(query.CommittedStatus() != COMMITTED_TRIANGLE_HIT || !query.CommittedTriangleFrontFace())
+        return (NwbRayTraceSurfaceHit)0;
+    return nwbRayTraceReconstructSurfaceHit(instanceMaterialHeapSlot, origin, direction, query.CommittedRayT(), query.CommittedInstanceID(), query.CommittedPrimitiveIndex(), query.CommittedTriangleBarycentrics(), query.CommittedWorldToObject3x4());
+#endif
 }
 
-NwbRayTraceSurfaceHit nwbRefractionClosestExitInterface(const uint instanceMaterialHeapSlot, const float3 origin, const float3 direction, const float minDistance, const float maxDistance, const uint primaryInstance, out NwbRayTraceGeometryHit outGeometry){
-    outGeometry = nwbRayTraceClosestGeometryHit(origin, direction, minDistance, maxDistance);
+bool nwbRefractionClosestExitInterface(const uint instanceMaterialHeapSlot, const float3 origin, const float3 direction, const float minDistance, const float maxDistance, const uint primaryInstance, out NwbRayTraceGeometryHit outGeometry, out float3 outPosition, out float3 outNormal){
+    outPosition = float3(0.0);
+    outNormal = float3(0.0, 0.0, 1.0);
 #if NWB_RT_CSG_ENABLED
+    outGeometry = nwbRayTraceClosestGeometryHit(origin, direction, minDistance, maxDistance);
     if(outGeometry.failure != 0u)
-        return nwbRayTraceReconstructSurfaceHit(instanceMaterialHeapSlot, origin, direction, outGeometry);
-#endif
-    if(!outGeometry.hit || outGeometry.instance != primaryInstance || outGeometry.frontFace){
-        NwbRayTraceSurfaceHit rejected = (NwbRayTraceSurfaceHit)0;
-#if NWB_RT_CSG_ENABLED && NWB_REFRACTION_DIAGNOSTICS
-        rejected.queryBudgetUnits = outGeometry.queryBudgetUnits;
-        rejected.physicalQueries = outGeometry.physicalQueries;
-#endif
-        return rejected;
+        return false;
+    if(!outGeometry.hit || outGeometry.instance != primaryInstance || outGeometry.frontFace)
+        return false;
+    outPosition = origin + direction * outGeometry.distance;
+    if(outGeometry.cutter != NWB_CSG_RAY_INVALID_INDEX){
+        outNormal = outGeometry.geometricNormal;
+        return true;
     }
-    return nwbRayTraceReconstructValidatedSurfaceHit(instanceMaterialHeapSlot, origin, direction, outGeometry);
+    const uint primitive = outGeometry.primitive;
+    const float2 barycentrics = outGeometry.barycentrics;
+    const float3x4 worldToObject = outGeometry.worldToObject;
+#else
+    outGeometry = (NwbRayTraceGeometryHit)0;
+    RayDesc ray;
+    ray.Origin = origin;
+    ray.Direction = direction;
+    ray.TMin = minDistance;
+    ray.TMax = maxDistance;
+    RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
+    query.TraceRayInline(nwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE, NWB_RAY_TRACING_ALL_INSTANCE_MASK, ray);
+    while(query.Proceed()){}
+    if(query.CommittedStatus() != COMMITTED_TRIANGLE_HIT || query.CommittedTriangleFrontFace() || query.CommittedInstanceID() != primaryInstance)
+        return false;
+    outPosition = origin + direction * query.CommittedRayT();
+    const uint primitive = query.CommittedPrimitiveIndex();
+    const float2 barycentrics = query.CommittedTriangleBarycentrics();
+    const float3x4 worldToObject = query.CommittedWorldToObject3x4();
+#endif
+    const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(instanceMaterialHeapSlot)[primaryInstance];
+    const uint triangleBase = primitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
+    const NwbRayTraceVertexAttrib a0 = nwbRayTraceDecodeVertexAttrib(nwbHeapRawBuffer(material.attributeSlot).Load4(triangleBase * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
+    const NwbRayTraceVertexAttrib a1 = nwbRayTraceDecodeVertexAttrib(nwbHeapRawBuffer(material.attributeSlot).Load4((triangleBase + 1u) * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
+    const NwbRayTraceVertexAttrib a2 = nwbRayTraceDecodeVertexAttrib(nwbHeapRawBuffer(material.attributeSlot).Load4((triangleBase + 2u) * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
+    const float3 weights = float3(1.0 - barycentrics.x - barycentrics.y, barycentrics.x, barycentrics.y);
+    outNormal = nwbRayTraceTransformSurfaceNormal(worldToObject, float3(a0.normal) * weights.x + float3(a1.normal) * weights.y + float3(a2.normal) * weights.z);
+    return true;
 }
 
 

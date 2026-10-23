@@ -31,21 +31,23 @@ scene contains a single unclipped non-CSG refractive instance
 front boundary, the resolve reconstructs the exact camera entry position from
 captured depth and starts exit traversal directly without an entry ray query.
 Uncertified, back-facing, or CSG-clipped entries issue a nearest-hit entry query
-that validates only the optical entry fields (`refractionIor`, entity identity,
-and world position), while exit candidates evaluate only the surface and
-geometric normals. The usual path issues two nearest-hit queries for a certified
-single refractor or three when entry tracing is required; the bounded loop
-permits at most six or seven respectively, including two internal reflections and
-two additional ordinary transparent background layers. Residual total internal
-reflection at this cap terminates with opaque black. Hard-edged glass can
-therefore show dark facets: the refraction resolve has no internal
+that validates the optical entry surface (`refractionIor`, entity identity, and
+world position), while exit candidates evaluate only the world-space exit
+position and interpolated surface normal (or CSG cutter geometric normal) without
+material surface dispatch. The usual path issues two nearest-hit queries for a
+certified single refractor or three when entry tracing is required; the bounded
+loop permits at most six or seven respectively, including two internal
+reflections and two additional ordinary transparent background layers. Residual
+total internal reflection at this cap terminates with opaque black. Hard-edged
+glass can therefore show dark facets: the refraction resolve has no internal
 reflected-radiance contribution to recover that energy. Absorption uses the
 traveled distance inside the primary volume, with Fresnel transmission at entry
-and exit. Background hits evaluate only `refractionIor` and `renderCoverage`
-before validating opaque or AVBOIT screen-color reuse against the G-buffer,
-deferring full shading surface reconstruction and geometric-normal fallback until
-an uncached opaque hit or transparent layer requires simplified direct diffuse
-lighting. This is not the full camera material shader.
+and exit. Background hits on opaque instances validate opaque or AVBOIT
+screen-color reuse directly from hit distance and instance flags before reading
+primitive, barycentric, or `worldToObject` intersection attributes; non-opaque
+instances and uncached opaque hits reconstruct the surface once and call
+`nwbRefractionShadeSurfaceHit` only when simplified direct diffuse lighting is
+needed. This is not the full camera material shader.
 
 The independent screen shader has no ray-query capability. It performs at most
 24 depth-march steps, with a straight-through fallback when it cannot establish a

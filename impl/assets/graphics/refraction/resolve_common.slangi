@@ -238,10 +238,9 @@ bool nwbRefractionScreenBackground(const NwbRefractionEntry entry, const float3 
 half4 nwbRefractionResolveScreen(const uint2 pixel, const NwbRefractionEntry entry){
     half3 background;
     const float3 direction = refract(entry.incident, entry.normal, 1.0 / float(entry.ior));
-    if(dot(direction, direction) > NWB_REFRACTION_DIRECTION_LENGTH_SQUARED_MIN && nwbRefractionScreenBackground(entry, direction, background)){
-        return half4(half3(background) * nwbRefractionAttenuation(entry.tint, NWB_REFRACTION_FALLBACK_THICKNESS, entry.ior, entry.cosine, entry.cosine), 1.0h);
-    }
-    return half4(half3(nwbRefractionStraightFallback(pixel, entry)), 1.0h);
+    if(dot(direction, direction) <= NWB_REFRACTION_DIRECTION_LENGTH_SQUARED_MIN || !nwbRefractionScreenBackground(entry, direction, background))
+        background = nwbRefractionBackground(pixel);
+    return half4(background * nwbRefractionAttenuation(entry.tint, NWB_REFRACTION_FALLBACK_THICKNESS, entry.ior, entry.cosine, entry.cosine), 1.0h);
 }
 
 

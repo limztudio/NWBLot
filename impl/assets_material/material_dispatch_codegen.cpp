@@ -212,7 +212,6 @@ Expected<Path> EmitDeferredBxdfDispatchModuleImpl(const Path& cacheDirectory, co
 
 static constexpr AStringView s_ShadowSurfaceFunctionMacro = "nwbMaterialSurface";
 static constexpr AStringView s_ShadowSurfaceModelPrefix = "nwbShadowSurfaceModel";
-static constexpr AStringView s_ShadowSurfaceWrapperPrefix = "nwbShadowSurfaceWrapper";
 
 // Per-interface Slang namespace that isolates each material `.bind` file-scope symbol in the dispatch module (the one TU that concatenates multiple `.bind` files).
 // The project-owned `.surface` fragment stays global so its guarded helper includes retain their normal global ownership; generated aliases expose exactly that surface's bind API.
@@ -514,20 +513,11 @@ Expected<Path> EmitShadowSurfaceDispatchModuleImpl(const Path& cacheDirectory, c
         source += "\n";
         AppendShadowSurfaceInputUndefines(source);
         AppendShadowSurfaceBindAliasUndefines(bindAliasSymbols, source);
-        source += "NwbMeshSurface ";
-        source += s_ShadowSurfaceWrapperPrefix;
-        source += idView;
-        source += "(NwbShadowHit hit){\n";
-        source += "    nwbShadowSetMaterialContext(hit);\n";
-        source += "    const NwbMeshSurfaceInputs in = nwbShadowBuildSurfaceInputs(hit);\n";
-        source += s_GeneratedReturnPrefix;
-        source += s_ShadowSurfaceModelPrefix;
-        source += idView;
-        source += "(in);\n";
-        source += s_GeneratedFunctionEnd;
     }
 
     source += "NwbMeshSurface nwbShadowDispatchSurface(uint surfaceDispatchId, NwbShadowHit hit){\n";
+    source += "    nwbShadowSetMaterialContext(hit);\n";
+    source += "    const NwbMeshSurfaceInputs in = nwbShadowBuildSurfaceInputs(hit);\n";
     source += "    switch(surfaceDispatchId){\n";
     for(usize id = 0u; id < surfaceById.size(); ++id){
         if(surfaceById[id].empty())
@@ -538,9 +528,9 @@ Expected<Path> EmitShadowSurfaceDispatchModuleImpl(const Path& cacheDirectory, c
         source += s_GeneratedSwitchCaseLabel;
         source += idView;
         source += s_GeneratedSwitchCaseReturn;
-        source += s_ShadowSurfaceWrapperPrefix;
+        source += s_ShadowSurfaceModelPrefix;
         source += idView;
-        source += "(hit);\n";
+        source += "(in);\n";
     }
     // Unknown id: no material surface is available (for example, an explicit opaque-stage material).
     // Shadow consumes only the neutral optical fields; GI may consume baseColor, where the fixed mid-grey is an explicit no-surface fallback rather than an inferred project-material albedo.

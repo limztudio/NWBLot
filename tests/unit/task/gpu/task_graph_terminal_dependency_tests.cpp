@@ -137,7 +137,7 @@ static void CheckTerminalDependencies(const usize readerCount, const TerminalDep
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     Core::Alloc::ScratchArena scratchArena(Name("tests/terminal_dependency/compilation"));
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(scratchArena, graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, scratchArena, graph, topology));
 
     const Graphics::GpuCompiledGraph::ReadView plan(compiledGraph);
     ASSERT_EQ(plan.taskCount(), readers.size() + finalizers.size());

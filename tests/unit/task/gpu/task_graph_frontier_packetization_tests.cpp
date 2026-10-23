@@ -79,7 +79,7 @@ TEST(GpuTaskGraph, FrontierSafePacketizationSplitsBeforeCrossQueueConsumer){
     Graphics::GpuTaskGraphAnalysis explicitMergeAnalysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments explicitMergeAssignments(testArena.arena);
     Graphics::GpuCompiledGraph explicitMergeGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, explicitMergeAnalysis, topology, explicitMergeAssignments, explicitMergeGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(explicitMergeAnalysis, explicitMergeAssignments, explicitMergeGraph, operationScratchArena, graph, topology));
     {
         const Graphics::GpuCompiledGraph::ReadView explicitMergePlan(explicitMergeGraph);
 
@@ -101,7 +101,7 @@ TEST(GpuTaskGraph, FrontierSafePacketizationSplitsBeforeCrossQueueConsumer){
     Graphics::GpuTaskGraphAnalysis frontierAnalysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments frontierAssignments(testArena.arena);
     Graphics::GpuCompiledGraph frontierGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, frontierAnalysis, topology, frontierAssignments, frontierGraph, frontierOptions));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(frontierAnalysis, frontierAssignments, frontierGraph, operationScratchArena, graph, topology, frontierOptions));
     const Graphics::GpuCompiledGraph::ReadView frontierPlan(frontierGraph);
 
     ASSERT_EQ(frontierPlan.packetCount(), 3u);
@@ -306,7 +306,7 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationPreservesCrossQueueConsumerFrontie
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph, options));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology, options));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
     ASSERT_EQ(compiledPlan.packetCount(), 3u);
@@ -379,7 +379,7 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationCarriesTailPhysicalQueueFrontierFo
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(operationScratchArena, graph, analysis, topology, assignments, compiledGraph, options));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology, options));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
     ASSERT_EQ(compiledPlan.packetCount(), 3u);
@@ -463,7 +463,7 @@ TEST(GpuTaskGraph, FrontierSafePacketizationKeepsFrontierAfterExplicitOverride){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph, options));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology, options));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
     ASSERT_EQ(compiledPlan.packetCount(), 3u);
@@ -555,7 +555,7 @@ TEST(GpuTaskGraph, FrontierSafeConsumerFrontierOverrideRequiresExplicitImmediate
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology, frontierOptions));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
     ASSERT_EQ(compiledPlan.packetCount(), 3u);
@@ -618,7 +618,7 @@ TEST(GpuTaskGraph, FrontierSafePacketizationKeepsMergeWhenLaterTaskOwnsCrossQueu
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology, frontierOptions));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
     ASSERT_EQ(compiledPlan.packetCount(), s_ExpectedDualCount);

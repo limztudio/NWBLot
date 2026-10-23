@@ -56,7 +56,7 @@ TEST(GpuTaskGraph, PlansExclusiveOwnershipHandoffToDedicatedTransfer){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
     {
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
         const Graphics::GpuCompiledTaskView compiledProducerView = compiledPlan.findTask(pair.producer);
@@ -158,14 +158,14 @@ TEST(GpuTaskGraph, PlansExclusiveOwnershipHandoffToDedicatedTransfer){
         EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(0u), nullptr);
     }
 
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
     {
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
         ASSERT_EQ(compiledPlan.logicalOwnershipTransferCount(), 1u);
     }
     const Graphics::GpuPhysicalQueueTopology invalidTopology{};
-    EXPECT_FALSE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, invalidTopology, assignments, compiledGraph));
+    EXPECT_FALSE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, invalidTopology));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
     EXPECT_FALSE(compiledPlan.valid());
@@ -215,7 +215,7 @@ TEST(GpuTaskGraph, ReportsOwnershipRangesWithoutReleaseAcquireDuplicates){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
 
@@ -327,7 +327,7 @@ TEST(GpuTaskGraph, AdvisesConcurrentSharingForRepeatedExclusiveOwnershipMoves){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
 
@@ -471,7 +471,7 @@ TEST(GpuTaskGraph, OmitsOwnershipTelemetryForSameFamilyAndSamePhysicalRoutes){
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+        ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
         const Graphics::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(pair.producer).plan;
         const Graphics::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(pair.consumer).plan;
@@ -495,7 +495,7 @@ TEST(GpuTaskGraph, OmitsOwnershipTelemetryForSameFamilyAndSamePhysicalRoutes){
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+        ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
         const Graphics::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(pair.producer).plan;
         const Graphics::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(pair.consumer).plan;
@@ -571,7 +571,7 @@ TEST(GpuTaskGraph, AcceptsDedicatedTransferClassOnAConcurrentlySharedComputeFami
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
     const Graphics::GpuTaskQueueAssignment* const consumerAssignment = assignments.find(pair.consumer);
@@ -609,7 +609,7 @@ TEST(GpuTaskGraph, RejectsDedicatedTransferUseOutsideConcurrentSharingContract){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    EXPECT_FALSE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+    EXPECT_FALSE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
     EXPECT_EQ(assignments.diagnostic().status, Graphics::GpuTaskGraphQueueAssignmentStatus::NoCompatibleQueue);

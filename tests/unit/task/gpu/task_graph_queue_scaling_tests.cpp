@@ -141,7 +141,7 @@ TEST(GpuTaskGraph, SameClassBalancingCountsMergedAndUnroutedPrefixCosts){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     ASSERT_TRUE(Analyze(operationScratchArena, graph, analysis));
-    ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, topology, assignments));
+    ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology));
 
     // The first merged group and later fixed task remain on queue zero; dependency affinity keeps task six on seven.
     const u16 expectedQueueIndices[] = { 0u, 0u, 7u, 0u, 11u, 11u, 7u, 7u };

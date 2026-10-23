@@ -95,7 +95,7 @@ TEST(GpuTaskGraph, UsesTheFullExplicitOrderToOrientInferredHazards){
     const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u, };
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
     ASSERT_EQ(compiledPlan.packetCount(), 3u);

@@ -58,7 +58,7 @@ TEST(GpuTaskGraph, RecreatesPacketRecordingStateAfterRecompile){
     ASSERT_TRUE(firstTaskResult);
     const Graphics::GpuTaskId firstTask = *firstTaskResult;
     ASSERT_TRUE(firstTask.valid());
-    ASSERT_TRUE(Compile(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
     Graphics::GpuSubmissionPacketId firstPacket;
     Graphics::GpuPhysicalQueueId firstQueue;
     u64 firstCompiledGeneration = 0u;
@@ -96,7 +96,7 @@ TEST(GpuTaskGraph, RecreatesPacketRecordingStateAfterRecompile){
     ASSERT_TRUE(secondTaskResult);
     const Graphics::GpuTaskId secondTask = *secondTaskResult;
     ASSERT_TRUE(secondTask.valid());
-    ASSERT_TRUE(Compile(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
     Graphics::GpuSubmissionPacketId secondPacket;
     Graphics::GpuPhysicalQueueId secondQueue;
     {
@@ -141,7 +141,7 @@ TEST(GpuTaskGraph, InvalidatesPacketRuntimeAndCaptureForSameGraphRecompile){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(operationScratchArena, graph, analysis, firstTopology, assignments, compiledGraph));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, firstTopology));
     u64 graphGeneration = 0u;
     u64 firstPlanGeneration = 0u;
     Graphics::GpuSubmissionPacketId firstPacket;
@@ -175,7 +175,7 @@ TEST(GpuTaskGraph, InvalidatesPacketRuntimeAndCaptureForSameGraphRecompile){
     ASSERT_TRUE(capture.captureClearBuffer(task, firstPacket, firstQueue, Graphics::GpuGraphResourceId{ .generation = graphGeneration, .index = 0u }, 0xdecafbadU));
     ASSERT_EQ(capture.planGeneration(), firstPlanGeneration);
 
-    ASSERT_TRUE(Compile(operationScratchArena, graph, analysis, secondTopology, assignments, compiledGraph));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, secondTopology));
     const Tests::GpuTaskGraphReadViews reads(graph, compiledGraph);
 
     ASSERT_TRUE(reads.valid());
@@ -209,7 +209,7 @@ TEST(GpuTaskGraph, CompiledTaskLookupRejectsOutOfRangeStaleAndUncompiledHandles)
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
     usize graphTaskCount = 0u;
     u64 graphGeneration = 0u;
     {
@@ -262,7 +262,7 @@ TEST(GpuTaskGraph, CompiledTaskLookupRejectsOutOfRangeStaleAndUncompiledHandles)
         expectMissingTask(compiledPlan, appended);
     }
 
-    ASSERT_TRUE(Compile(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
     {
         const Tests::GpuTaskGraphReadViews reads(graph, compiledGraph);
 
@@ -279,7 +279,7 @@ TEST(GpuTaskGraph, CompiledTaskLookupRejectsOutOfRangeStaleAndUncompiledHandles)
     const Graphics::GpuTaskId replacement = *replacementResult;
     ASSERT_TRUE(replacement.valid());
     ASSERT_NE(replacement.generation, first.generation);
-    ASSERT_TRUE(Compile(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
     {
         const Tests::GpuTaskGraphReadViews reads(graph, compiledGraph);
 
@@ -350,7 +350,7 @@ TEST(GpuTaskGraph, RejectsAcceptedQueueFrontierTasksWithPrerequisites){
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        ASSERT_TRUE(Compile(operationScratchArena, validGraph, analysis, topology, assignments, compiledGraph));
+        ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, validGraph, topology));
         ASSERT_TRUE(assignments.valid());
         {
             const Tests::GpuTaskGraphReadViews reads(validGraph, compiledGraph);
@@ -358,7 +358,7 @@ TEST(GpuTaskGraph, RejectsAcceptedQueueFrontierTasksWithPrerequisites){
             ASSERT_TRUE(reads.valid());
         }
 
-        EXPECT_FALSE(Compile(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+        EXPECT_FALSE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
         EXPECT_FALSE(analysis.valid());
         EXPECT_FALSE(assignments.valid());
         {

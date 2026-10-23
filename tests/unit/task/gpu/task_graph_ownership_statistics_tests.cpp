@@ -118,7 +118,7 @@ static void CheckOwnershipStatistics(const usize resourceCount){
     }
     ASSERT_TRUE(compilation.compile(graph));
     const Graphics::GpuPhysicalQueueTopology invalidTopology{};
-    EXPECT_FALSE(Compile(declarationScratch, graph, compilation.analysis, invalidTopology, compilation.assignments, compilation.compiledGraph));
+    EXPECT_FALSE(Compile(compilation.analysis, compilation.assignments, compilation.compiledGraph, declarationScratch, graph, invalidTopology));
     const Graphics::GpuCompiledGraph::ReadView plan(compilation.compiledGraph);
     EXPECT_FALSE(plan.physicalQueueCompileStatistics(compilation.graphicsQueue.id).valid());
 }

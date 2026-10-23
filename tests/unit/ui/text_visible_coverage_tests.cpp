@@ -463,7 +463,7 @@ TEST_F(TextVisibleCoverageTests, NaturalSdfMeasurementExcludesTransparentSpreadA
     payload.font = Core::Assets::AssetRef<Font>(s_LatinFontPath);
     const Core::Assets::AssetBytes& bytes = m_latin.fontBytes();
     payload.fontSha256 = ComputeSha256({ bytes.data(), bytes.size() });
-    UiFixtureSupport::PopulateBakedFontTables(bytes, payload, m_arena);
+    UiFixtureSupport::PopulateBakedFontTables(bytes, m_arena, payload);
     payload.bakePpem = 32u;
     payload.ascenderUnits = 1069.0f;
     payload.descenderUnits = -293.0f;

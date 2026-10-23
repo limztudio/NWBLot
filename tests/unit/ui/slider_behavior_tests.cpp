@@ -213,7 +213,7 @@ TEST_F(UiSliderBehaviorTests, AdmissionKeepsAnExternalOutOfRangeValueUntilAccept
     ASSERT_TRUE(set(20.0));
     EXPECT_EQ(m_state.value(), 20.0);
     EXPECT_FLOAT_EQ(m_placement.thumb.x, 222.0f);
-    ASSERT_TRUE(SliderBehavior::Apply(m_state, m_options, key(ControlActionKind::Left), m_result));
+    ASSERT_TRUE(SliderBehavior::Apply(m_state, m_result, m_options, key(ControlActionKind::Left)));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.99);
     EXPECT_TRUE(m_result.valueChanged);
 }
@@ -228,7 +228,7 @@ TEST_F(UiSliderBehaviorTests, PolicyAndStableGeometryChangesRetirePreviouslyCopi
     EXPECT_EQ(m_state.inputGeneration(), input);
     const SliderSnapshot before = m_state.snapshot();
     const SliderResult result = m_result;
-    EXPECT_FALSE(SliderBehavior::Apply(m_state, m_options, stale, m_result));
+    EXPECT_FALSE(SliderBehavior::Apply(m_state, m_result, m_options, stale));
     EXPECT_TRUE(m_state.matches(before));
     ExpectResult(m_result, result);
     const u64 policy = m_state.admissionGeneration();
@@ -259,13 +259,13 @@ TEST_F(UiSliderBehaviorTests, PublicIdenticalAndAwayBackIntentsRejectOldCopiedAc
     const ControlAction stale = key(ControlActionKind::Right);
     ASSERT_TRUE(m_state.setValue(0.25));
     SliderSnapshot before = m_state.snapshot();
-    EXPECT_FALSE(SliderBehavior::Apply(m_state, m_options, stale, m_result));
+    EXPECT_FALSE(SliderBehavior::Apply(m_state, m_result, m_options, stale));
     EXPECT_TRUE(m_state.matches(before));
     EXPECT_FALSE(m_result.valid);
     ASSERT_TRUE(m_state.setValue(0.5));
     ASSERT_TRUE(m_state.setValue(0.25));
     before = m_state.snapshot();
-    EXPECT_FALSE(SliderBehavior::Apply(m_state, m_options, stale, m_result));
+    EXPECT_FALSE(SliderBehavior::Apply(m_state, m_result, m_options, stale));
     EXPECT_TRUE(m_state.matches(before));
     EXPECT_FALSE(m_result.valid);
 }
@@ -274,11 +274,11 @@ TEST_F(UiSliderBehaviorTests, AutomaticStepsRemainFiniteAcrossOppositeExtremeBou
     m_options.minimum = -Limit<f64>::s_Max;
     m_options.maximum = Limit<f64>::s_Max;
     ASSERT_TRUE(set(0.0));
-    ASSERT_TRUE(SliderBehavior::Apply(m_state, m_options, key(ControlActionKind::Right), m_result));
+    ASSERT_TRUE(SliderBehavior::Apply(m_state, m_result, m_options, key(ControlActionKind::Right)));
     EXPECT_TRUE(IsFinite(m_state.value()));
     EXPECT_GT(m_state.value(), 0.0);
     EXPECT_NEAR(VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(m_state.value()), VectorDoubleReplicate(Limit<f64>::s_Max))), 0.02, 1.0e-15);
-    ASSERT_TRUE(SliderBehavior::Apply(m_state, m_options, key(ControlActionKind::PageUp), m_result));
+    ASSERT_TRUE(SliderBehavior::Apply(m_state, m_result, m_options, key(ControlActionKind::PageUp)));
     EXPECT_TRUE(IsFinite(m_state.value()));
     EXPECT_NEAR(VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(m_state.value()), VectorDoubleReplicate(Limit<f64>::s_Max))), 0.22, 1.0e-15);
 }
@@ -286,9 +286,9 @@ TEST_F(UiSliderBehaviorTests, AutomaticStepsRemainFiniteAcrossOppositeExtremeBou
 TEST_F(UiSliderBehaviorTests, AutomaticSubnormalStepUsesTheRepresentableSpanWhenDivisionUnderflows){
     m_options.maximum = BitCast<f64>(1ull);
     ASSERT_TRUE(refresh());
-    ASSERT_TRUE(SliderBehavior::Apply(m_state, m_options, key(ControlActionKind::Right), m_result));
+    ASSERT_TRUE(SliderBehavior::Apply(m_state, m_result, m_options, key(ControlActionKind::Right)));
     EXPECT_EQ(BitCast<u64>(m_state.value()), 1u);
-    ASSERT_TRUE(SliderBehavior::Apply(m_state, m_options, key(ControlActionKind::Left), m_result));
+    ASSERT_TRUE(SliderBehavior::Apply(m_state, m_result, m_options, key(ControlActionKind::Left)));
     EXPECT_EQ(BitCast<u64>(m_state.value()), 0u);
 }
 
@@ -297,11 +297,11 @@ TEST_F(UiSliderBehaviorTests, ExplicitExtremeStepsAndPageIterationSaturateWithou
     m_options.maximum = Limit<f64>::s_Max;
     m_options.keyStep = Limit<f64>::s_Max;
     ASSERT_TRUE(refresh());
-    ASSERT_TRUE(SliderBehavior::Apply(m_state, m_options, key(ControlActionKind::PageUp), m_result));
+    ASSERT_TRUE(SliderBehavior::Apply(m_state, m_result, m_options, key(ControlActionKind::PageUp)));
     EXPECT_EQ(BitCast<u64>(m_state.value()), BitCast<u64>(m_options.maximum));
-    ASSERT_TRUE(SliderBehavior::Apply(m_state, m_options, key(ControlActionKind::PageDown), m_result));
+    ASSERT_TRUE(SliderBehavior::Apply(m_state, m_result, m_options, key(ControlActionKind::PageDown)));
     EXPECT_EQ(BitCast<u64>(m_state.value()), BitCast<u64>(m_options.minimum));
-    ASSERT_TRUE(SliderBehavior::Apply(m_state, m_options, key(ControlActionKind::Right), m_result));
+    ASSERT_TRUE(SliderBehavior::Apply(m_state, m_result, m_options, key(ControlActionKind::Right)));
     EXPECT_EQ(m_state.value(), 0.0);
 }
 
@@ -309,7 +309,7 @@ TEST_F(UiSliderBehaviorTests, DisabledAndConstantRangesAreValidWithoutApplyingIn
     m_options.enabled = false;
     ASSERT_TRUE(set(0.25));
     SliderSnapshot before = m_state.snapshot();
-    ASSERT_TRUE(SliderBehavior::Apply(m_state, m_options, key(ControlActionKind::Right), m_result));
+    ASSERT_TRUE(SliderBehavior::Apply(m_state, m_result, m_options, key(ControlActionKind::Right)));
     EXPECT_TRUE(m_state.matches(before));
     EXPECT_TRUE(m_result.valid);
     EXPECT_FALSE(m_result.valueChanged);
@@ -318,7 +318,7 @@ TEST_F(UiSliderBehaviorTests, DisabledAndConstantRangesAreValidWithoutApplyingIn
     m_options.maximum = 5.0;
     ASSERT_TRUE(refresh());
     before = m_state.snapshot();
-    ASSERT_TRUE(SliderBehavior::Seek(m_state, m_options, gesture(false), m_result));
+    ASSERT_TRUE(SliderBehavior::Seek(m_state, m_result, m_options, gesture(false)));
     EXPECT_TRUE(m_state.matches(before));
     EXPECT_EQ(m_state.value(), 0.25);
     EXPECT_FALSE(m_result.dragging);
@@ -328,7 +328,7 @@ TEST_F(UiSliderBehaviorTests, SubmitActivationAndWheelLeaveTheValueAndSemanticSn
     ASSERT_TRUE(set(-0.0));
     const SliderSnapshot before = m_state.snapshot();
     for(const auto kind : { ControlActionKind::Submit, ControlActionKind::Activate, ControlActionKind::Wheel }){
-        ASSERT_TRUE(SliderBehavior::Apply(m_state, m_options, key(kind), m_result));
+        ASSERT_TRUE(SliderBehavior::Apply(m_state, m_result, m_options, key(kind)));
         EXPECT_TRUE(m_state.matches(before));
         EXPECT_TRUE(m_result.valid);
         EXPECT_FALSE(m_result.valueChanged);
@@ -341,18 +341,18 @@ TEST_F(UiSliderBehaviorTests, InvalidPolicyTokenAndUnadmittedInputPreserveStateA
     m_result = result;
     ControlAction action = key(ControlActionKind::Right);
     ++action.control.contentGeneration;
-    EXPECT_FALSE(SliderBehavior::Apply(m_state, m_options, action, m_result));
+    EXPECT_FALSE(SliderBehavior::Apply(m_state, m_result, m_options, action));
     EXPECT_TRUE(m_state.matches(before));
     ExpectResult(m_result, result);
     SliderOptions invalid = m_options;
     invalid.keyStep = -1.0;
-    EXPECT_FALSE(SliderBehavior::Apply(m_state, invalid, key(ControlActionKind::Right), m_result));
+    EXPECT_FALSE(SliderBehavior::Apply(m_state, m_result, invalid, key(ControlActionKind::Right)));
     EXPECT_TRUE(m_state.matches(before));
     ExpectResult(m_result, result);
     SliderState unadmitted;
     action.control = unadmitted.controlToken();
     const SliderSnapshot unknown = unadmitted.snapshot();
-    EXPECT_FALSE(SliderBehavior::Apply(unadmitted, m_options, action, m_result));
+    EXPECT_FALSE(SliderBehavior::Apply(unadmitted, m_result, m_options, action));
     EXPECT_TRUE(unadmitted.matches(unknown));
     ExpectResult(m_result, result);
 }
@@ -376,11 +376,11 @@ TEST_F(UiSliderBehaviorTests, InvalidAdmissionGeometryOrOptionsPreserveThePrevio
 TEST_F(UiSliderBehaviorTests, TrackSeekUsesAbsoluteAcceptedCenterTravelAndExactEndpoints){
     PointerGesture seek = gesture(false);
     seek.position.x = -Limit<f32>::s_Max;
-    ASSERT_TRUE(SliderBehavior::Seek(m_state, m_options, seek, m_result));
+    ASSERT_TRUE(SliderBehavior::Seek(m_state, m_result, m_options, seek));
     EXPECT_EQ(BitCast<u64>(m_state.value()), BitCast<u64>(m_options.minimum));
     seek.position.x = Limit<f32>::s_Max;
     seek.state = PointerGestureState::Completed;
-    ASSERT_TRUE(SliderBehavior::Seek(m_state, m_options, seek, m_result));
+    ASSERT_TRUE(SliderBehavior::Seek(m_state, m_result, m_options, seek));
     EXPECT_EQ(BitCast<u64>(m_state.value()), BitCast<u64>(m_options.maximum));
     EXPECT_FALSE(m_result.dragging);
 }
@@ -390,7 +390,7 @@ TEST_F(UiSliderBehaviorTests, TrackSeekRejectsAChangedCopiedReferenceWithoutPubl
     seek.referenceRectangle.x = VectorGetX(VectorAdd(VectorReplicate(seek.referenceRectangle.x), VectorReplicate(1.0f)));
     const SliderSnapshot before = m_state.snapshot();
     const SliderResult result = m_result;
-    EXPECT_FALSE(SliderBehavior::Seek(m_state, m_options, seek, m_result));
+    EXPECT_FALSE(SliderBehavior::Seek(m_state, m_result, m_options, seek));
     EXPECT_TRUE(m_state.matches(before));
     ExpectResult(m_result, result);
 }
@@ -400,11 +400,11 @@ TEST_F(UiSliderBehaviorTests, RepeatedThumbUpdatesUseOriginalCopiedBaselineWitho
     PointerGesture drag = gesture();
     const SIMDVectorSingle widthGap = VectorSubtract(VectorReplicate(drag.referenceRectangle.width), VectorReplicate(drag.targetRectangle.width));
     drag.position.x = VectorGetX(VectorMultiplyAddExpression(widthGap, VectorReplicate(0.25f), VectorReplicate(drag.position.x)));
-    ASSERT_TRUE(SliderBehavior::Drag(m_state, m_options, drag, m_result));
+    ASSERT_TRUE(SliderBehavior::Drag(m_state, m_result, m_options, drag));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.5);
     drag.position.x = VectorGetX(VectorMultiplyAddExpression(widthGap, VectorReplicate(0.25f), VectorReplicate(drag.position.x)));
     ++drag.updateSequence;
-    ASSERT_TRUE(SliderBehavior::Drag(m_state, m_options, drag, m_result));
+    ASSERT_TRUE(SliderBehavior::Drag(m_state, m_result, m_options, drag));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.75);
 }
 
@@ -412,13 +412,13 @@ TEST_F(UiSliderBehaviorTests, AStationaryThumbCompletionPreservesAnOrderedKeyCha
     m_options.keyStep = 0.125;
     ASSERT_TRUE(set(0.25));
     PointerGesture drag = gesture();
-    ASSERT_TRUE(SliderBehavior::Drag(m_state, m_options, drag, m_result));
+    ASSERT_TRUE(SliderBehavior::Drag(m_state, m_result, m_options, drag));
     EXPECT_FALSE(m_result.valueChanged);
-    ASSERT_TRUE(SliderBehavior::Apply(m_state, m_options, key(ControlActionKind::Right, 13u), m_result));
+    ASSERT_TRUE(SliderBehavior::Apply(m_state, m_result, m_options, key(ControlActionKind::Right, 13u)));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.375);
     drag.state = PointerGestureState::Completed;
     ++drag.updateSequence;
-    ASSERT_TRUE(SliderBehavior::Drag(m_state, m_options, drag, m_result));
+    ASSERT_TRUE(SliderBehavior::Drag(m_state, m_result, m_options, drag));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.375);
     EXPECT_FALSE(m_result.dragging);
     EXPECT_FALSE(m_state.snapshot().press.valid());
@@ -430,13 +430,13 @@ TEST_F(UiSliderBehaviorTests, ReturningAfterAnAppliedMoveRestoresTheExactSignedZ
     PointerGesture drag = gesture();
     const SIMDVectorSingle widthGap = VectorSubtract(VectorReplicate(drag.referenceRectangle.width), VectorReplicate(drag.targetRectangle.width));
     drag.position.x = VectorGetX(VectorMultiplyAddExpression(widthGap, VectorReplicate(0.25f), VectorReplicate(drag.position.x)));
-    ASSERT_TRUE(SliderBehavior::Drag(m_state, m_options, drag, m_result));
+    ASSERT_TRUE(SliderBehavior::Drag(m_state, m_result, m_options, drag));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.5);
     EXPECT_TRUE(m_state.snapshot().pressMoved);
     drag.position = drag.origin;
     drag.state = PointerGestureState::Completed;
     ++drag.updateSequence;
-    ASSERT_TRUE(SliderBehavior::Drag(m_state, m_options, drag, m_result));
+    ASSERT_TRUE(SliderBehavior::Drag(m_state, m_result, m_options, drag));
     EXPECT_EQ(BitCast<u64>(m_state.value()), 0x8000000000000000ull);
     EXPECT_FALSE(m_state.snapshot().pressMoved);
 }
@@ -445,14 +445,14 @@ TEST_F(UiSliderBehaviorTests, ANewStationaryPressDoesNotBorrowTheOldPressMovedFl
     ASSERT_TRUE(set(0.25));
     PointerGesture first = gesture();
     first.position.x = VectorGetX(VectorAdd(VectorReplicate(first.position.x), VectorReplicate(52.0f)));
-    ASSERT_TRUE(SliderBehavior::Drag(m_state, m_options, first, m_result));
+    ASSERT_TRUE(SliderBehavior::Drag(m_state, m_result, m_options, first));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.5);
     PointerGesture second = first;
     ++second.id.sequence;
     ++second.updateSequence;
     second.position = second.origin;
     second.state = PointerGestureState::Completed;
-    ASSERT_TRUE(SliderBehavior::Drag(m_state, m_options, second, m_result));
+    ASSERT_TRUE(SliderBehavior::Drag(m_state, m_result, m_options, second));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.5);
 }
 
@@ -460,7 +460,7 @@ TEST_F(UiSliderBehaviorTests, AdmissionRetirementEndsThePressAndKeepsItsLastAppl
     ASSERT_TRUE(set(0.25));
     PointerGesture drag = gesture();
     drag.position.x = VectorGetX(VectorAdd(VectorReplicate(drag.position.x), VectorReplicate(52.0f)));
-    ASSERT_TRUE(SliderBehavior::Drag(m_state, m_options, drag, m_result));
+    ASSERT_TRUE(SliderBehavior::Drag(m_state, m_result, m_options, drag));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.5);
     m_options.enabled = false;
     ASSERT_TRUE(refresh());
@@ -468,7 +468,7 @@ TEST_F(UiSliderBehaviorTests, AdmissionRetirementEndsThePressAndKeepsItsLastAppl
     EXPECT_FALSE(m_state.snapshot().press.valid());
     EXPECT_FALSE(m_state.snapshot().pressMoved);
     const SliderSnapshot before = m_state.snapshot();
-    EXPECT_FALSE(SliderBehavior::Drag(m_state, m_options, drag, m_result));
+    EXPECT_FALSE(SliderBehavior::Drag(m_state, m_result, m_options, drag));
     EXPECT_TRUE(m_state.matches(before));
 }
 
@@ -476,12 +476,12 @@ TEST_F(UiSliderBehaviorTests, ThumbDisplacementCastsBeforeSubtractingExtremeFloa
     PointerGesture drag = gesture();
     drag.origin.x = -Limit<f32>::s_Max;
     drag.position.x = Limit<f32>::s_Max;
-    ASSERT_TRUE(SliderBehavior::Drag(m_state, m_options, drag, m_result));
+    ASSERT_TRUE(SliderBehavior::Drag(m_state, m_result, m_options, drag));
     EXPECT_EQ(BitCast<u64>(m_state.value()), BitCast<u64>(m_options.maximum));
     drag.origin.x = Limit<f32>::s_Max;
     drag.position.x = -Limit<f32>::s_Max;
     ++drag.updateSequence;
-    ASSERT_TRUE(SliderBehavior::Drag(m_state, m_options, drag, m_result));
+    ASSERT_TRUE(SliderBehavior::Drag(m_state, m_result, m_options, drag));
     EXPECT_EQ(BitCast<u64>(m_state.value()), BitCast<u64>(m_options.minimum));
 }
 
@@ -501,7 +501,7 @@ TEST_F(UiSliderBehaviorTests, InvalidThumbPayloadGeometryOrTokenIsRejectedAtomic
         case 5u: drag.id.sequence = 0u; break;
         default: drag.updateSequence = 0u; break;
         }
-        EXPECT_FALSE(SliderBehavior::Drag(m_state, m_options, drag, m_result));
+        EXPECT_FALSE(SliderBehavior::Drag(m_state, m_result, m_options, drag));
         EXPECT_TRUE(m_state.matches(before));
         ExpectResult(m_result, result);
     }
@@ -512,14 +512,14 @@ TEST_F(UiSliderBehaviorTests, AClampedNonzeroMoveStillRestoresItsBaselineWhenRet
     ASSERT_TRUE(set(1.0));
     PointerGesture drag = gesture();
     drag.position.x = VectorGetX(VectorAdd(VectorReplicate(drag.position.x), VectorReplicate(20.0f)));
-    ASSERT_TRUE(SliderBehavior::Drag(m_state, m_options, drag, m_result));
+    ASSERT_TRUE(SliderBehavior::Drag(m_state, m_result, m_options, drag));
     EXPECT_FALSE(m_result.valueChanged);
     EXPECT_TRUE(m_state.snapshot().pressMoved);
-    ASSERT_TRUE(SliderBehavior::Apply(m_state, m_options, key(ControlActionKind::Left), m_result));
+    ASSERT_TRUE(SliderBehavior::Apply(m_state, m_result, m_options, key(ControlActionKind::Left)));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.875);
     drag.position = drag.origin;
     drag.state = PointerGestureState::Completed;
-    ASSERT_TRUE(SliderBehavior::Drag(m_state, m_options, drag, m_result));
+    ASSERT_TRUE(SliderBehavior::Drag(m_state, m_result, m_options, drag));
     EXPECT_DOUBLE_EQ(m_state.value(), 1.0);
 }
 

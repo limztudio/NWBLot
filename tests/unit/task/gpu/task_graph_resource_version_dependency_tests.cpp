@@ -72,7 +72,7 @@ TEST(GpuTaskGraphResourceVersion, OrdersConsumerBeforeProducerAndPublishesCompil
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(operationScratchArena, graph, analysis, assignments, compiledGraph));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph));
     {
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
         ASSERT_TRUE(declarations.valid());
@@ -214,7 +214,7 @@ TEST(GpuTaskGraphResourceVersion, DeduplicatesVersionAndPhysicalHazardsInQueueSc
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(0u, TaskGraphTestUtils::QueueCapabilities(Graphics::GpuQueueCapability::Graphics, Graphics::GpuQueueCapability::Transfer)), DedicatedComputeQueue(), };
     const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues), };
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, topology, assignments));
+    ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology));
     const Graphics::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
     const Graphics::GpuTaskQueueAssignment* const consumerAssignment = assignments.find(consumer);
     ASSERT_NE(producerAssignment, nullptr);

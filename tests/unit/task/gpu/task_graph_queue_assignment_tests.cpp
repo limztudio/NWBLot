@@ -52,12 +52,12 @@ TEST(GpuTaskGraph, AutomaticallyUsesTheOnlyQueueSupportingAllCommandKinds){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     ASSERT_TRUE(Analyze(operationScratchArena, graph, analysis));
-    ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, topology, assignments));
+    ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology));
     ASSERT_NE(assignments.find(task), nullptr);
     EXPECT_EQ(assignments.find(task)->queue, queues[s_ThirdElementIndex].id);
     const Graphics::GpuPhysicalQueueInfo incompatibleQueues[] = { DedicatedComputeQueue(), DedicatedTransferQueue() };
     const Graphics::GpuPhysicalQueueTopology incompatibleTopology{ .queues = incompatibleQueues, .queueCount = LengthOf(incompatibleQueues) };
-    EXPECT_FALSE(Assign(operationScratchArena, graph, analysis, incompatibleTopology, assignments));
+    EXPECT_FALSE(Assign(assignments, operationScratchArena, graph, analysis, incompatibleTopology));
     EXPECT_EQ(assignments.diagnostic().status, Graphics::GpuTaskGraphQueueAssignmentStatus::NoCompatibleQueue);
     EXPECT_EQ(assignments.diagnostic().task, task);
 }
@@ -83,7 +83,7 @@ TEST(GpuTaskGraph, KeepsTaskOwnedPrimaryGraphicsRestrictionDuringAutomaticPlacem
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     ASSERT_TRUE(Analyze(operationScratchArena, graph, analysis));
-    ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, topology, assignments));
+    ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology));
     ASSERT_NE(assignments.find(task), nullptr);
     EXPECT_EQ(assignments.find(task)->queue, GraphicsQueue().id);
 }
@@ -115,7 +115,7 @@ TEST(GpuTaskGraph, ConditionalRecoveryDoesNotCreateOverlapForSerialNormalWork){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments normalAssignments(testArena.arena);
     ASSERT_TRUE(Analyze(operationScratchArena, graph, analysis));
-    ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, topology, normalAssignments));
+    ASSERT_TRUE(Assign(normalAssignments, operationScratchArena, graph, analysis, topology));
     const Graphics::GpuTaskQueueAssignment* const normalMiddle = normalAssignments.find(middle);
     ASSERT_NE(normalMiddle, nullptr);
     ASSERT_EQ(normalMiddle->queue, queues[0u].id);
@@ -132,7 +132,7 @@ TEST(GpuTaskGraph, ConditionalRecoveryDoesNotCreateOverlapForSerialNormalWork){
     ASSERT_TRUE(recovery.valid());
     Graphics::GpuTaskGraphQueueAssignments recoveryAssignments(testArena.arena);
     ASSERT_TRUE(Analyze(operationScratchArena, graph, analysis));
-    ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, topology, recoveryAssignments));
+    ASSERT_TRUE(Assign(recoveryAssignments, operationScratchArena, graph, analysis, topology));
     const Graphics::GpuTaskId normalTasks[] = { prefix, middle, suffix };
     for(const Graphics::GpuTaskId task : normalTasks){
         const Graphics::GpuTaskQueueAssignment* const before = normalAssignments.find(task);
@@ -180,8 +180,8 @@ TEST(GpuTaskGraph, ChoosesAutomaticPlacementDeterministicallyAcrossTopologyOrder
     ASSERT_TRUE(Analyze(operationScratchArena, graph, analysis));
     Graphics::GpuTaskGraphQueueAssignments firstAssignments(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments secondAssignments(testArena.arena);
-    ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, firstTopology, firstAssignments));
-    ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, secondTopology, secondAssignments));
+    ASSERT_TRUE(Assign(firstAssignments, operationScratchArena, graph, analysis, firstTopology));
+    ASSERT_TRUE(Assign(secondAssignments, operationScratchArena, graph, analysis, secondTopology));
 
     const Graphics::GpuTaskQueueAssignment* const firstAssignment = firstAssignments.find(transferTask);
     const Graphics::GpuTaskQueueAssignment* const secondAssignment = secondAssignments.find(transferTask);
@@ -224,7 +224,7 @@ TEST(GpuTaskGraph, QueueScoreUsesOnlyReducedOutgoingDependencies){
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(0u, QueueCapabilities(Graphics::GpuQueueCapability::Graphics, Graphics::GpuQueueCapability::Transfer)), DedicatedComputeQueue() };
     const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues), };
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, topology, assignments));
+    ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology));
     const Graphics::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
     ASSERT_NE(producerAssignment, nullptr);
     EXPECT_EQ(producerAssignment->queueClass, Graphics::CommandQueue::Compute);
@@ -285,7 +285,7 @@ TEST(GpuTaskGraph, DeduplicatesRawOwnershipScoreAndIgnoresSameFamilyQueueCrossin
     const Graphics::GpuPhysicalQueueInfo separateFamilyQueues[] = { graphicsQueue, DedicatedComputeQueue(), };
     const Graphics::GpuPhysicalQueueTopology separateFamilyTopology{ .queues = separateFamilyQueues, .queueCount = LengthOf(separateFamilyQueues), };
     Graphics::GpuTaskGraphQueueAssignments separateFamilyAssignments(testArena.arena);
-    ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, separateFamilyTopology, separateFamilyAssignments));
+    ASSERT_TRUE(Assign(separateFamilyAssignments, operationScratchArena, graph, analysis, separateFamilyTopology));
     const Graphics::GpuTaskQueueAssignment* const separateFamilyAssignment = separateFamilyAssignments.find(consumer);
     ASSERT_NE(separateFamilyAssignment, nullptr);
     EXPECT_EQ(separateFamilyAssignment->score.incomingCrossings, 1);
@@ -304,7 +304,7 @@ TEST(GpuTaskGraph, DeduplicatesRawOwnershipScoreAndIgnoresSameFamilyQueueCrossin
     const Graphics::GpuPhysicalQueueInfo sameFamilyQueues[] = { graphicsQueue, sameFamilyCompute, };
     const Graphics::GpuPhysicalQueueTopology sameFamilyTopology{ .queues = sameFamilyQueues, .queueCount = LengthOf(sameFamilyQueues), };
     Graphics::GpuTaskGraphQueueAssignments sameFamilyAssignments(testArena.arena);
-    ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, sameFamilyTopology, sameFamilyAssignments));
+    ASSERT_TRUE(Assign(sameFamilyAssignments, operationScratchArena, graph, analysis, sameFamilyTopology));
     const Graphics::GpuTaskQueueAssignment* const sameFamilyAssignment = sameFamilyAssignments.find(consumer);
     ASSERT_NE(sameFamilyAssignment, nullptr);
     EXPECT_EQ(sameFamilyAssignment->score.incomingCrossings, 1);
@@ -332,12 +332,12 @@ TEST(GpuTaskGraph, RejectsInvalidAndIncompatibleQueueTopologiesDeterministically
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     ASSERT_TRUE(Analyze(operationScratchArena, graph, analysis));
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    EXPECT_FALSE(Assign(operationScratchArena, graph, analysis, Graphics::GpuPhysicalQueueTopology{}, assignments));
+    EXPECT_FALSE(Assign(assignments, operationScratchArena, graph, analysis, Graphics::GpuPhysicalQueueTopology{}));
     EXPECT_EQ(assignments.diagnostic().status, Graphics::GpuTaskGraphQueueAssignmentStatus::InvalidQueueTopology);
 
     const Graphics::GpuPhysicalQueueInfo graphicsOnly[] = { GraphicsQueue(0u, Graphics::GpuQueueCapability::Graphics), };
     const Graphics::GpuPhysicalQueueTopology graphicsOnlyTopology{ .queues = graphicsOnly, .queueCount = LengthOf(graphicsOnly), };
-    EXPECT_FALSE(Assign(operationScratchArena, graph, analysis, graphicsOnlyTopology, assignments));
+    EXPECT_FALSE(Assign(assignments, operationScratchArena, graph, analysis, graphicsOnlyTopology));
     EXPECT_EQ(assignments.diagnostic().status, Graphics::GpuTaskGraphQueueAssignmentStatus::NoCompatibleQueue);
     EXPECT_EQ(assignments.diagnostic().task, task);
     EXPECT_EQ(assignments.diagnostic().requiredCapabilities, Graphics::GpuQueueCapability::Compute);
@@ -345,7 +345,7 @@ TEST(GpuTaskGraph, RejectsInvalidAndIncompatibleQueueTopologiesDeterministically
     Graphics::GpuPhysicalQueueInfo invalidTransferQueue = DedicatedTransferQueue();
     invalidTransferQueue.capabilities = Graphics::GpuQueueCapability::Compute;
     const Graphics::GpuPhysicalQueueTopology invalidTransferTopology{ .queues = &invalidTransferQueue, .queueCount = 1u, };
-    EXPECT_FALSE(Assign(operationScratchArena, graph, analysis, invalidTransferTopology, assignments));
+    EXPECT_FALSE(Assign(assignments, operationScratchArena, graph, analysis, invalidTransferTopology));
     EXPECT_EQ(assignments.diagnostic().status, Graphics::GpuTaskGraphQueueAssignmentStatus::InvalidQueueTopology);
 
     Graphics::GpuPhysicalQueueInfo duplicateNativeQueue = GraphicsQueue(3u);
@@ -353,7 +353,7 @@ TEST(GpuTaskGraph, RejectsInvalidAndIncompatibleQueueTopologiesDeterministically
     duplicateNativeQueue.queueIndex = GraphicsQueue().queueIndex;
     const Graphics::GpuPhysicalQueueInfo duplicateNativeQueues[] = { GraphicsQueue(), duplicateNativeQueue, };
     const Graphics::GpuPhysicalQueueTopology duplicateNativeTopology{ .queues = duplicateNativeQueues, .queueCount = LengthOf(duplicateNativeQueues), };
-    EXPECT_FALSE(Assign(operationScratchArena, graph, analysis, duplicateNativeTopology, assignments));
+    EXPECT_FALSE(Assign(assignments, operationScratchArena, graph, analysis, duplicateNativeTopology));
     EXPECT_EQ(assignments.diagnostic().status, Graphics::GpuTaskGraphQueueAssignmentStatus::InvalidQueueTopology);
 
     const Graphics::GpuPhysicalQueueInfo topologyA[] = { DedicatedComputeQueue(), GraphicsQueue() };
@@ -362,8 +362,8 @@ TEST(GpuTaskGraph, RejectsInvalidAndIncompatibleQueueTopologiesDeterministically
     const Graphics::GpuPhysicalQueueTopology secondTopology{ .queues = topologyB, .queueCount = LengthOf(topologyB), };
     Graphics::GpuTaskGraphQueueAssignments firstAssignments(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments secondAssignments(testArena.arena);
-    ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, firstTopology, firstAssignments));
-    ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, secondTopology, secondAssignments));
+    ASSERT_TRUE(Assign(firstAssignments, operationScratchArena, graph, analysis, firstTopology));
+    ASSERT_TRUE(Assign(secondAssignments, operationScratchArena, graph, analysis, secondTopology));
     const Graphics::GpuTaskQueueAssignment* const firstAssignment = firstAssignments.find(task);
     const Graphics::GpuTaskQueueAssignment* const secondAssignment = secondAssignments.find(task);
     ASSERT_NE(firstAssignment, nullptr);

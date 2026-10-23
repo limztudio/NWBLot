@@ -107,29 +107,29 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
 [[nodiscard]] bool Analyze(Core::Alloc::ScratchArena& scratchArena, const Graphics::GpuTaskGraph& graph, Graphics::GpuTaskGraphAnalysis& analysis){
     const Graphics::GpuTaskGraphCompiler compiler;
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-    return compiler.analyze(declarations, analysis, scratchArena);
+    return compiler.analyze(declarations, scratchArena, analysis);
 }
 
 [[nodiscard]] bool Assign(
+    Graphics::GpuTaskGraphQueueAssignments& assignments,
     Core::Alloc::ScratchArena& scratchArena,
     const Graphics::GpuTaskGraph& graph,
     const Graphics::GpuTaskGraphAnalysis& analysis,
     const Graphics::GpuPhysicalQueueTopology& topology,
-    Graphics::GpuTaskGraphQueueAssignments& assignments,
     const Graphics::GpuTaskGraphQueueAssignmentOptions& options
 ){
     const Graphics::GpuTaskGraphCompiler compiler;
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-    return compiler.assignQueues(declarations, analysis, topology, assignments, scratchArena, options);
+    return compiler.assignQueues(assignments, scratchArena, declarations, analysis, topology, options);
 }
 
 [[nodiscard]] bool Compile(
-    Core::Alloc::ScratchArena& scratchArena,
-    const Graphics::GpuTaskGraph& graph,
     Graphics::GpuTaskGraphAnalysis& analysis,
-    const Graphics::GpuPhysicalQueueTopology& topology,
     Graphics::GpuTaskGraphQueueAssignments& assignments,
     Graphics::GpuCompiledGraph& compiledGraph,
+    Core::Alloc::ScratchArena& scratchArena,
+    const Graphics::GpuTaskGraph& graph,
+    const Graphics::GpuPhysicalQueueTopology& topology,
     const Graphics::GpuTaskGraphCompileOptions& options
 ){
     const Graphics::GpuTaskGraphCompiler compiler;
@@ -138,20 +138,20 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     // Native compilation keeps the stricter default, covered by the payload lifecycle tests.
     metadataOptions.allowMetadataOnlyTasks = true;
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-    return compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena, metadataOptions);
+    return compiler.compile(analysis, assignments, compiledGraph, scratchArena, declarations, topology, metadataOptions);
 }
 
 [[nodiscard]] bool CompileWithSeparatedCommandQueues(
-    Core::Alloc::ScratchArena& scratchArena,
-    const Graphics::GpuTaskGraph& graph,
     Graphics::GpuTaskGraphAnalysis& analysis,
-    const Graphics::GpuPhysicalQueueTopology& topology,
     Graphics::GpuTaskGraphQueueAssignments& assignments,
     Graphics::GpuCompiledGraph& compiledGraph,
+    Core::Alloc::ScratchArena& scratchArena,
+    const Graphics::GpuTaskGraph& graph,
+    const Graphics::GpuPhysicalQueueTopology& topology,
     const Graphics::GpuTaskGraphCompileOptions& options
 ){
     if(!topology.queues)
-        return Compile(scratchArena, graph, analysis, topology, assignments, compiledGraph, options);
+        return Compile(analysis, assignments, compiledGraph, scratchArena, graph, topology, options);
 
     bool hasComputeQueue = false;
     bool hasTransferQueue = false;
@@ -169,7 +169,7 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
         queue.capabilities = static_cast<Graphics::GpuQueueCapability::Mask>(capabilities);
     }
     const Graphics::GpuPhysicalQueueTopology separatedTopology{ .queues = queues.data(), .queueCount = queues.size(), };
-    return Compile(scratchArena, graph, analysis, separatedTopology, assignments, compiledGraph, options);
+    return Compile(analysis, assignments, compiledGraph, scratchArena, graph, separatedTopology, options);
 }
 
 
@@ -186,7 +186,7 @@ SingleQueueCompile::SingleQueueCompile(TestArena& testArena)
 }
 
 [[nodiscard]] bool SingleQueueCompile::compile(const Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskGraphCompileOptions& options){
-    return Compile(scratchArena, graph, analysis, topology, assignments, compiledGraph, options);
+    return Compile(analysis, assignments, compiledGraph, scratchArena, graph, topology, options);
 }
 
 
@@ -206,7 +206,7 @@ TwoQueueCompile::TwoQueueCompile(TestArena& testArena)
 }
 
 [[nodiscard]] bool TwoQueueCompile::compile(const Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskGraphCompileOptions& options){
-    return CompileWithSeparatedCommandQueues(scratchArena, graph, analysis, topology, assignments, compiledGraph, options);
+    return CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, scratchArena, graph, topology, options);
 }
 
 
@@ -228,7 +228,7 @@ ThreeQueueCompile::ThreeQueueCompile(TestArena& testArena)
 }
 
 [[nodiscard]] bool ThreeQueueCompile::compile(const Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskGraphCompileOptions& options){
-    return CompileWithSeparatedCommandQueues(scratchArena, graph, analysis, topology, assignments, compiledGraph, options);
+    return CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, scratchArena, graph, topology, options);
 }
 
 

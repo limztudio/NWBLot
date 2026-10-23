@@ -137,7 +137,7 @@ void CheckIndexedScores(const Shape::Enum shape){
     }
     scoringData.rebuildAssignmentLoads(assignments, topology);
     Vector<GpuTaskQueuePlacementGroup, Graphics::Alloc::ScratchArena> groups(scratch);
-    ASSERT_TRUE(BuildQueuePlacementGroups(view, analysis, topology, groups, scratch));
+    ASSERT_TRUE(BuildQueuePlacementGroups(view, analysis, topology, scratch, groups));
 
     // Scalar Floyd-Warshall is independent of packed rows, word bounds, and queue-cost membership.
     Vector<Array<bool, s_TaskCount>, Graphics::Alloc::ScratchArena> reachable(s_TaskCount, scratch);

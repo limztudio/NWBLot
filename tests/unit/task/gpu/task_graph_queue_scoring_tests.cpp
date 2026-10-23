@@ -102,7 +102,7 @@ TEST(GpuTaskQueueScoring, CachedLoadsAndScoresMatchIndependentReferenceAfterMove
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
         const Graphics::GpuTaskGraphCompiler compiler;
-        ASSERT_TRUE(compiler.analyze(declarations, analysis, scratchArena));
+        ASSERT_TRUE(compiler.analyze(declarations, scratchArena, analysis));
         GpuTaskSchedulingReachability reachability(scratchArena);
         ASSERT_TRUE(BuildGpuTaskSchedulingReachability(declarations, analysis, reachability));
         GpuTaskQueueScoringData scoringData(declarations, analysis, reachability, options, scratchArena);

@@ -63,7 +63,7 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+        ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
         const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
 
@@ -86,7 +86,7 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        EXPECT_FALSE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+        EXPECT_FALSE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
         EXPECT_FALSE(compiledPlan.valid());
@@ -107,7 +107,7 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        EXPECT_FALSE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+        EXPECT_FALSE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
         EXPECT_FALSE(compiledPlan.valid());
@@ -128,7 +128,7 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        EXPECT_FALSE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+        EXPECT_FALSE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
         EXPECT_FALSE(compiledPlan.valid());

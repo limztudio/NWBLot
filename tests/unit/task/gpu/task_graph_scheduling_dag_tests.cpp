@@ -102,7 +102,7 @@ TEST(GpuTaskGraph, ReducesSchedulingDagWithoutLosingRawDependencyDiagnostics){
     Graphics::GpuTaskGraphAnalysis separateAnalysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments separateAssignments(testArena.arena);
     Graphics::GpuCompiledGraph separateGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, separateAnalysis, topology, separateAssignments, separateGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(separateAnalysis, separateAssignments, separateGraph, operationScratchArena, graph, topology));
     {
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(separateGraph);
         ASSERT_EQ(compiledPlan.packetCount(), 3u);
@@ -124,7 +124,7 @@ TEST(GpuTaskGraph, ReducesSchedulingDagWithoutLosingRawDependencyDiagnostics){
     Graphics::GpuTaskGraphAnalysis scoredAnalysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments scoredAssignments(testArena.arena);
     Graphics::GpuCompiledGraph scoredGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, scoredAnalysis, topology, scoredAssignments, scoredGraph, scoredOptions));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(scoredAnalysis, scoredAssignments, scoredGraph, operationScratchArena, graph, topology, scoredOptions));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(scoredGraph);
     ASSERT_EQ(compiledPlan.packetCount(), s_ExpectedDualCount);
     const Graphics::GpuSubmissionPacketId scoredFirstPacket = compiledPlan.packetForTask(first);

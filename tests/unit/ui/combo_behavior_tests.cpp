@@ -171,7 +171,7 @@ public:
     action.kind = kind;
     action.control = { preview.inputGeneration(), source.instanceGeneration(), source.revision() };
     ListResult result;
-    return ListBehavior::Apply(preview, source, options, action, result);
+    return ListBehavior::Apply(preview, result, source, options, action);
 }
 
 

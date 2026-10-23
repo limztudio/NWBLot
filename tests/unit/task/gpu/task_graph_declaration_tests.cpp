@@ -144,7 +144,7 @@ TEST(GpuTaskGraph, RejectsReentrantTelemetryReadsDuringDeclarationMutationWithou
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(scratchArena, graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, scratchArena, graph, topology));
     Graphics::GpuGraphSubmissionTransaction transaction(testArena.arena);
     transaction.reset(compiledGraph);
 
@@ -200,7 +200,7 @@ TEST(GpuTaskGraph, RejectsReentrantTelemetryReadsDuringDeclarationMutationWithou
     EXPECT_EQ(retainedTelemetry->previousAcceptedQueue, savedTelemetry.previousAcceptedQueue);
     EXPECT_EQ(retainedTelemetry->acceptance, savedTelemetry.acceptance);
 
-    ASSERT_TRUE(Compile(scratchArena, graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, scratchArena, graph, topology));
     transaction.reset(compiledGraph);
     Telemetry::FrameGraphNodeDescs recoveredNodes(testArena.arena);
     Telemetry::FrameGraphEdgeDescs recoveredEdges(testArena.arena);
@@ -334,7 +334,7 @@ TEST(GpuTaskGraph, DeclarationStorageMutationsInvalidateCompilerSnapshots){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
     {
         const Tests::GpuTaskGraphReadViews reads(graph, compiledGraph);
         ASSERT_TRUE(reads.valid());
@@ -349,7 +349,7 @@ TEST(GpuTaskGraph, DeclarationStorageMutationsInvalidateCompilerSnapshots){
             EXPECT_FALSE(assignments.validFor(reads.declarations));
             EXPECT_FALSE(reads.compiled.validFor(reads.declarations));
         }
-        ASSERT_TRUE(Compile(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+        ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
         const Tests::GpuTaskGraphReadViews reads(graph, compiledGraph);
         EXPECT_TRUE(reads.valid());
         EXPECT_TRUE(analysis.validFor(reads.declarations));
@@ -503,7 +503,7 @@ TEST(GpuTaskGraph, FailedAndIdempotentDeclarationsPreserveCompilerSnapshots){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
     u64 compiledRevision = 0u;
     {
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
@@ -571,7 +571,7 @@ TEST(GpuTaskGraph, ExternalFinalResourceDeclarationInvalidatesPriorCompiledPlan)
     Graphics::GpuTaskGraphAnalysis priorAnalysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments priorAssignments(testArena.arena);
     Graphics::GpuCompiledGraph priorCompiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(operationScratchArena, graph, priorAnalysis, topology, priorAssignments, priorCompiledGraph));
+    ASSERT_TRUE(Compile(priorAnalysis, priorAssignments, priorCompiledGraph, operationScratchArena, graph, topology));
     u64 compiledRevision = 0u;
     {
         const Tests::GpuTaskGraphReadViews reads(graph, priorCompiledGraph);
@@ -600,7 +600,7 @@ TEST(GpuTaskGraph, ExternalFinalResourceDeclarationInvalidatesPriorCompiledPlan)
     Graphics::GpuTaskGraphAnalysis freshAnalysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments freshAssignments(testArena.arena);
     Graphics::GpuCompiledGraph freshCompiledGraph(testArena.arena);
-    EXPECT_FALSE(Compile(operationScratchArena, graph, freshAnalysis, topology, freshAssignments, freshCompiledGraph));
+    EXPECT_FALSE(Compile(freshAnalysis, freshAssignments, freshCompiledGraph, operationScratchArena, graph, topology));
     const Graphics::GpuCompiledGraph::ReadView freshCompiledPlan(freshCompiledGraph);
     EXPECT_FALSE(freshCompiledPlan.valid());
 }

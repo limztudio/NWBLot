@@ -1070,7 +1070,7 @@ void RmtPrint(LogLevel log_level, const char* format, ...)
 
     if (printing_func == nullptr)
     {
-        char buffer[2048];
+        char buffer[2049];
         vsnprintf(buffer, 2048, format, args);
 #ifdef _WIN32
         const size_t len = strlen(buffer);

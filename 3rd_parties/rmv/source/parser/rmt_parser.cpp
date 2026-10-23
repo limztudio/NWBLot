@@ -558,8 +558,8 @@ static RmtErrorCode ParseUserdata(RmtParser* rmt_parser, const uint16_t token_he
     out_userdata_token->size_in_bytes = (payload_length >> 12) & 0xfffff;
 
     // If the payload extends beyond the end of the buffer, return an end of buffer error.  Processing of this token will restart when the next buffer is reloaded.
-    const int32_t payload_end_offset = rmt_parser->file_buffer_offset + (sizeof(uint8_t) * out_userdata_token->size_in_bytes + sizeof(uint32_t));
-    RMT_RETURN_ON_ERROR((payload_end_offset <= rmt_parser->file_buffer_actual_size), kRmtErrorInvalidSize);
+    const size_t payload_end_offset = (size_t)rmt_parser->file_buffer_offset + (sizeof(uint8_t) * out_userdata_token->size_in_bytes + sizeof(uint32_t));
+    RMT_RETURN_ON_ERROR((payload_end_offset <= (size_t)rmt_parser->file_buffer_actual_size), kRmtErrorInvalidSize);
 
     void* payload                     = (void*)((uintptr_t)rmt_parser->file_buffer + rmt_parser->file_buffer_offset + sizeof(uint32_t));
     out_userdata_token->payload_cache = nullptr;
@@ -616,7 +616,8 @@ static RmtErrorCode ParseUserdata(RmtParser* rmt_parser, const uint16_t token_he
         out_userdata_token->resource_identifier               = resource_identifier;
         out_userdata_token->correlation_identifier            = correlation_identifier;
     }
-    else if (out_userdata_token->userdata_type == kRmtUserdataTypeMarkImplicitResource)
+    else if (out_userdata_token->userdata_type == kRmtUserdataTypeMarkImplicitResource &&
+             out_userdata_token->size_in_bytes >= static_cast<int32_t>(sizeof(int32_t)))
     {
         const uintptr_t             resource_id_address = (reinterpret_cast<uintptr_t>(payload) + (out_userdata_token->size_in_bytes - sizeof(int32_t)));
         const uint32_t              resource_id_value   = *(reinterpret_cast<uint32_t*>(resource_id_address));
@@ -1708,12 +1709,20 @@ bool RmtParserIsCompleted(RmtParser* rmt_parser)
 {
     RMT_RETURN_ON_ERROR(rmt_parser, false);
 
-    RmtParserPosition  parser_pos;
-    RmtToken           token;
-    const RmtErrorCode error_code = RmtParserAdvance(rmt_parser, &token, &parser_pos);
-    RmtParserSetPosition(rmt_parser, &parser_pos);
+    RmtParserPosition parser_pos;
+    RmtToken          token;
 
-    return error_code != kRmtOk;
+    // Peek at the next token to determine whether the parser can still advance.  RmtParserAdvance() records the
+    // current parser position in parser_pos before mutating any parser state, so the position must always be
+    // restored afterwards to keep this a non-consuming peek (RmtParserAdvance() can modify buffer refill and
+    // offset state even when it returns an error).
+    const RmtErrorCode advance_error_code      = RmtParserAdvance(rmt_parser, &token, &parser_pos);
+    const RmtErrorCode set_position_error_code = RmtParserSetPosition(rmt_parser, &parser_pos);
+    RMT_ASSERT(set_position_error_code == kRmtOk);
+    RMT_UNUSED(set_position_error_code);
+
+    // If the parser could not advance, it has reached the end of the stream and is considered completed.
+    return advance_error_code != kRmtOk;
 }
 
 RmtErrorCode RmtParserReset(RmtParser* rmt_parser, FILE* file_handle)

@@ -185,6 +185,41 @@ static bool EnableProcessDpiAwareness(){
     return true;
 }
 
+static void ResizeWindowForClientExtentOnPrimaryWorkArea(HWND hwnd, const u16 clientWidth, const u16 clientHeight, const UINT dpi){
+    if(!hwnd || dpi == 0u || clientWidth == 0u || clientHeight == 0u)
+        return;
+
+    RECT rc = { 0, 0, static_cast<i32>(clientWidth), static_cast<i32>(clientHeight) };
+    const DWORD style = static_cast<DWORD>(GetWindowLongPtr(hwnd, GWL_STYLE));
+    const DWORD exStyle = static_cast<DWORD>(GetWindowLongPtr(hwnd, GWL_EXSTYLE));
+    if(!AdjustWindowRectExForDpi(&rc, style, FALSE, exStyle, dpi)){
+        const DWORD nativeError = GetLastError();
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 DPI window adjustment failed; native_domain=Win32 native_code={}"), nativeError);
+        return;
+    }
+
+    RECT workArea = { 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN) };
+    {
+        const POINT origin = { 0, 0 };
+        MONITORINFO monitorInfo = {};
+        monitorInfo.cbSize = sizeof(MONITORINFO);
+        const HMONITOR monitor = MonitorFromPoint(origin, MONITOR_DEFAULTTOPRIMARY);
+        if(monitor && GetMonitorInfo(monitor, &monitorInfo))
+            workArea = monitorInfo.rcWork;
+    }
+
+    const i32 workAreaWidth = workArea.right - workArea.left;
+    const i32 workAreaHeight = workArea.bottom - workArea.top;
+    const i32 actualWidth = rc.right - rc.left;
+    const i32 actualHeight = rc.bottom - rc.top;
+    const i32 x = workArea.left + (workAreaWidth > actualWidth ? ((workAreaWidth - actualWidth) >> 1) : 0);
+    const i32 y = workArea.top + (workAreaHeight > actualHeight ? ((workAreaHeight - actualHeight) >> 1) : 0);
+    if(!SetWindowPos(hwnd, nullptr, x, y, actualWidth, actualHeight, SWP_NOZORDER | SWP_NOACTIVATE)){
+        const DWORD nativeError = GetLastError();
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 DPI window resize failed; native_domain=Win32 native_code={}"), nativeError);
+    }
+}
+
 static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
     if(auto* frame = s_Frame){
         if(uMsg == WM_NCDESTROY && frame->data<Common::WinFrame>().hwnd() == hwnd)
@@ -213,6 +248,18 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
         if(const Optional<LRESULT> inputResult = input.handleMessage(uMsg, wParam, lParam))
             return *inputResult;
+
+        if(uMsg == WM_SYSCOMMAND && (wParam & 0xFFF0u) == SC_MINIMIZE && frame->graphics().shouldRenderUnfocused())
+            return 0;
+
+        if(uMsg == WM_DPICHANGED || uMsg == WM_DISPLAYCHANGE){
+            if(frame->graphics().shouldRenderUnfocused() && IsIconic(hwnd))
+                ShowWindow(hwnd, SW_RESTORE);
+            const UINT targetDpi = uMsg == WM_DPICHANGED ? HIWORD(wParam) : GetDpiForWindow(hwnd);
+            const auto& frameData = frame->data<Common::WinFrame>();
+            ResizeWindowForClientExtentOnPrimaryWorkArea(hwnd, frameData.width(), frameData.height(), targetDpi);
+            return 0;
+        }
 
         if(uMsg == WM_PAINT){
             PAINTSTRUCT ps;
@@ -331,6 +378,21 @@ bool Frame::init(){
         return false;
     }
 
+    const UINT windowDpi = GetDpiForWindow(hwnd);
+    if(windowDpi != 0u && windowDpi != initialDpi){
+        RECT windowRect = { 0, 0, static_cast<i32>(windowWidth), static_cast<i32>(windowHeight) };
+        if(!AdjustWindowRectExForDpi(&windowRect, s_WindowStyle, FALSE, s_WindowExtendedStyle, windowDpi)){
+            const DWORD nativeError = GetLastError();
+            NWB_LOGGER_FATAL(NWB_TEXT("Frame window adjustment failed; native_domain=Win32 native_code={}"), nativeError);
+            return false;
+        }
+        if(!SetWindowPos(hwnd, nullptr, x, y, windowRect.right - windowRect.left, windowRect.bottom - windowRect.top, SWP_NOZORDER | SWP_NOACTIVATE)){
+            const DWORD nativeError = GetLastError();
+            NWB_LOGGER_FATAL(NWB_TEXT("Frame window DPI resize failed; native_domain=Win32 native_code={}"), nativeError);
+            return false;
+        }
+    }
+
     if(!startup())
         return false;
 
@@ -351,8 +413,14 @@ bool Frame::mainLoop(){
     const bool loopResult = __hidden_win32_message_loop::RunWin32TimedFrameLoop(
         [&](){ return data<Common::WinFrame>().isActive() || m_graphics.shouldRenderUnfocused(); },
         [&](){
+            const HWND hwnd = data<Common::WinFrame>().hwnd();
+            if(m_graphics.shouldRenderUnfocused() && IsIconic(hwnd)){
+                ShowWindow(hwnd, SW_RESTORE);
+                const auto& frameData = data<Common::WinFrame>();
+                FrameDetail::ResizeWindowForClientExtentOnPrimaryWorkArea(hwnd, frameData.width(), frameData.height(), GetDpiForWindow(hwnd));
+            }
             RECT rect = {};
-            if(!GetClientRect(data<Common::WinFrame>().hwnd(), &rect)){
+            if(!GetClientRect(hwnd, &rect)){
                 const DWORD nativeError = GetLastError();
                 NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 client rectangle query failed; native_domain=Win32 native_code={}"), nativeError);
                 return false;
@@ -360,6 +428,10 @@ bool Frame::mainLoop(){
             const bool windowVisible = (rect.right > rect.left) && (rect.bottom > rect.top);
             const u32 width = windowVisible ? static_cast<u32>(rect.right - rect.left) : 0;
             const u32 height = windowVisible ? static_cast<u32>(rect.bottom - rect.top) : 0;
+            if(windowVisible){
+                data<Common::WinFrame>().width() = static_cast<u16>(Min<u32>(width, s_MaxU16));
+                data<Common::WinFrame>().height() = static_cast<u16>(Min<u32>(height, s_MaxU16));
+            }
             const bool windowIsInFocus = GetForegroundWindow() == data<Common::WinFrame>().hwnd();
             if(const Optional<TStringView> title = syncGraphicsWindowState(width, height, windowVisible, windowIsInFocus)){
 #ifdef NWB_UNICODE

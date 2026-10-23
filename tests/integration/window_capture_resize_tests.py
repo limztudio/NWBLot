@@ -225,6 +225,19 @@ class ResizeCaptureBackendTests(unittest.TestCase):
                 backend.resize_client(42, width, height, allow_outside_work_area=True)
         backend.user32.SetWindowPos.assert_not_called()
 
+    def test_windows_capture_enables_per_monitor_v2_dpi_awareness(self):
+        backend = object.__new__(window_capture_smoke.WindowsCapture)
+        backend.user32 = mock.Mock()
+        backend.user32.GetThreadDpiAwarenessContext.return_value = 1
+        backend.user32.AreDpiAwarenessContextsEqual.side_effect = [0, 1]
+        backend.user32.SetProcessDpiAwarenessContext.return_value = 0
+        backend._enable_dpi_awareness()
+        backend.user32.SetProcessDpiAwarenessContext.assert_called_once()
+        backend.user32.SetThreadDpiAwarenessContext.assert_called_once()
+        backend.user32.AreDpiAwarenessContextsEqual.side_effect = [0, 0]
+        with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "SetProcessDpiAwarenessContext"):
+            backend._enable_dpi_awareness()
+
 
 if __name__ == LIT_MAIN:
     unittest.main()

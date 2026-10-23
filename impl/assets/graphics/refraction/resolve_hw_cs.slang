@@ -78,6 +78,10 @@ half3 nwbRefractionShadeHit(const NwbRayTraceSurfaceHit hit, const float3 direct
     return radiance * hit.surface.baseColor;
 }
 
+half3 nwbRefractionShadeGeometryHit(const float3 origin, const float3 direction, const NwbRayTraceGeometryHit geometry){
+    return nwbRefractionShadeHit(nwbRayTraceReconstructSurfaceHit(g_NwbRefractionMaterialContext.sceneSlots.z, origin, direction, geometry), direction);
+}
+
 bool nwbRefractionCachedHit(const NwbRayTraceSurfaceHit hit, const NwbRefractionEntry entry, const bool includeTransparency, out half3 radiance){
     radiance = half3(0.0h);
     uint2 pixel;
@@ -177,7 +181,8 @@ half4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry e
     // Further glass or an incomplete continuation uses the exit-based approximation below without tracing a new volume.
     for(uint layer = 0u; layer < NWB_REFRACTION_MAX_BACKGROUND_LAYERS; ++layer){
         nwbRefractionCount(NWB_REFRACTION_COUNTER_backgroundQueries);
-        const NwbRayTraceSurfaceHit background = nwbRayTraceClosestSurfaceHit(g_NwbRefractionMaterialContext.sceneSlots.z, origin, outgoingDirection, entry.bias, NWB_REFRACTION_MAX_DISTANCE);
+        const NwbRayTraceGeometryHit backgroundGeometry = nwbRayTraceClosestGeometryHit(origin, outgoingDirection, entry.bias, NWB_REFRACTION_MAX_DISTANCE);
+        const NwbRayTraceSurfaceHit background = nwbRayTraceReconstructSurfaceHit(g_NwbRefractionMaterialContext.sceneSlots.z, origin, outgoingDirection, backgroundGeometry);
         nwbRefractionCountQueryWork(background);
         if(!background.hit){
             nwbRefractionCount(NWB_REFRACTION_COUNTER_backgroundMisses);
@@ -194,22 +199,26 @@ half4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry e
             break;
         }
         const half coverage = half(saturate(float(background.surface.renderCoverage)));
-        if(coverage >= half(NWB_REFRACTION_OPAQUE_COVERAGE_MIN)){
+        const bool opaqueHit = coverage >= half(NWB_REFRACTION_OPAQUE_COVERAGE_MIN);
+        if(opaqueHit){
             half3 radiance;
             nwbRefractionCount(NWB_REFRACTION_COUNTER_cachedHitAttempts);
-            if(!nwbRefractionCachedHit(background, entry, layer == 0u, radiance)){
-                nwbRefractionCount(NWB_REFRACTION_COUNTER_cachedHitMisses);
-                nwbRefractionCount(NWB_REFRACTION_COUNTER_shadedOpaqueReturns);
-                radiance = nwbRefractionShadeHit(background, outgoingDirection);
-            }
-            else
+            if(nwbRefractionCachedHit(background, entry, layer == 0u, radiance)){
                 nwbRefractionCount(NWB_REFRACTION_COUNTER_cachedOpaqueReturns);
-            return half4((accumulated + transmittance * half3(radiance)) * half3(attenuation), 1.0h);
+                return half4((accumulated + transmittance * half3(radiance)) * half3(attenuation), 1.0h);
+            }
+            nwbRefractionCount(NWB_REFRACTION_COUNTER_cachedHitMisses);
+            nwbRefractionCount(NWB_REFRACTION_COUNTER_shadedOpaqueReturns);
         }
-        nwbRefractionCount(NWB_REFRACTION_COUNTER_transparentHits);
-        if(layer + 1u == NWB_REFRACTION_MAX_BACKGROUND_LAYERS)
-            nwbRefractionCount(NWB_REFRACTION_COUNTER_backgroundLayerCapPixels);
-        accumulated += transmittance * coverage * nwbRefractionShadeHit(background, outgoingDirection);
+        else{
+            nwbRefractionCount(NWB_REFRACTION_COUNTER_transparentHits);
+            if(layer + 1u == NWB_REFRACTION_MAX_BACKGROUND_LAYERS)
+                nwbRefractionCount(NWB_REFRACTION_COUNTER_backgroundLayerCapPixels);
+        }
+        const half3 shadedRadiance = nwbRefractionShadeGeometryHit(origin, outgoingDirection, backgroundGeometry);
+        if(opaqueHit)
+            return half4((accumulated + transmittance * half3(shadedRadiance)) * half3(attenuation), 1.0h);
+        accumulated += transmittance * coverage * shadedRadiance;
         transmittance *= half(1.0h) - coverage;
         origin = background.position + outgoingDirection * entry.bias;
     }

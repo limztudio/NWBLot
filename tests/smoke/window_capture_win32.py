@@ -96,12 +96,34 @@ class WindowsCapture:
     BITMAPINFOHEADER = WinBitmapInfoHeader
     BITMAPINFO = WinBitmapInfo
 
+    DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = ctypes.c_void_p(-4)
+
     def __init__(self):
         self.user32 = create_windows_user32()
         require_windows_interactive_desktop(self.user32)
+        self._enable_dpi_awareness()
         self.gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
         self.dwmapi = None
         self._bind_functions()
+
+    def _enable_dpi_awareness(self):
+        self.user32.GetThreadDpiAwarenessContext.argtypes = []
+        self.user32.GetThreadDpiAwarenessContext.restype = ctypes.c_void_p
+        self.user32.AreDpiAwarenessContextsEqual.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        self.user32.AreDpiAwarenessContextsEqual.restype = ctypes.c_int
+        self.user32.SetProcessDpiAwarenessContext.argtypes = [ctypes.c_void_p]
+        self.user32.SetProcessDpiAwarenessContext.restype = ctypes.c_int
+        context = ctypes.c_void_p(self.user32.GetThreadDpiAwarenessContext())
+        if self.user32.AreDpiAwarenessContextsEqual(context, self.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2):
+            return
+        if self.user32.SetProcessDpiAwarenessContext(self.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2):
+            return
+        self.user32.SetThreadDpiAwarenessContext.argtypes = [ctypes.c_void_p]
+        self.user32.SetThreadDpiAwarenessContext.restype = ctypes.c_void_p
+        self.user32.SetThreadDpiAwarenessContext(self.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
+        context = ctypes.c_void_p(self.user32.GetThreadDpiAwarenessContext())
+        if not self.user32.AreDpiAwarenessContextsEqual(context, self.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2):
+            raise SmokeFailure(f"SetProcessDpiAwarenessContext(PER_MONITOR_AWARE_V2) failed: {ctypes.get_last_error()}")
 
     def close(self):
         pass

@@ -40,7 +40,7 @@ struct RefractionPushConstants{
     NWB_REFRACTION_PUSH_CONSTANTS_FIELDS(NWB_REFRACTION_CPU_FIELD)
 #undef NWB_REFRACTION_CPU_FIELD
 };
-static_assert(sizeof(RefractionPushConstants) == 10u * sizeof(u32));
+static_assert(sizeof(RefractionPushConstants) == 11u * sizeof(u32));
 static_assert(NWB_REFRACTION_DENSE_ARGUMENT_OFFSET == 4u * sizeof(u32));
 static_assert(NWB_REFRACTION_TILE_ARGUMENT_BYTES == 8u * sizeof(u32));
 
@@ -56,6 +56,7 @@ static RefractionPushConstants MakePushConstants(const DeferredFrameTargets& tar
     push.tileListSlot = targets.avboit.refractionTileListDescriptor.slot();
     push.tileArgumentsSlot = targets.avboit.refractionTileArgumentsDescriptor.slot();
     push.diagnosticsSlot = resources.statistics.counterDescriptor.slot();
+    push.certifiedInstanceIndex = resources.certifiedInstanceIndex;
     return push;
 }
 
@@ -229,6 +230,7 @@ RayTracingRefractionGraphResources RendererRayTracingSystem::snapshotRefractionG
         resources.tlasHeapHandle = m_rayTracingState.m_tlasHeapHandle;
         resources.materialContextSlotsBuffer = m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer;
         resources.materialContextSlotsHeapSlot = m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.slot();
+        resources.certifiedInstanceIndex = csg ? Limit<u32>::s_Max : m_rayTracingState.m_refractionCertifiedInstanceIndex;
     }
     return resources;
 }

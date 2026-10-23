@@ -148,6 +148,7 @@ half3 nwbRefractionAttenuation(const half3 tint, const float thickness, const ha
 
 struct NwbRefractionEntry{
     uint primaryEntityId;
+    bool frontBoundary;
     float depth;
     float3 position;
     float3 incident;
@@ -164,7 +165,9 @@ bool nwbRefractionLoadEntry(const uint2 pixel, out NwbRefractionEntry entry){
     entry.depth = nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.x).Load(int3(pixel, 0)).r;
     if(entry.depth >= 1.0)
         return false;
-    entry.primaryEntityId = nwbAvboitUnpackRefractionEntityId(nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots1.w).Load(int3(pixel, 0)).rg);
+    const float2 packedIdentity = nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots1.w).Load(int3(pixel, 0)).rg;
+    entry.primaryEntityId = nwbAvboitUnpackRefractionEntityId(packedIdentity);
+    entry.frontBoundary = nwbAvboitUnpackRefractionFrontBoundary(packedIdentity);
     const float4 normalIor = nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.y).Load(int3(pixel, 0));
     if(!nwbRefractionIorEligible(normalIor.w))
         return false;

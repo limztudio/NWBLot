@@ -20,9 +20,9 @@ class RefractionQueryDiagnosticsTests(unittest.TestCase):
         left, top, right, bottom = projected_bounds(cell.width, cell.height, cell.density)
         pixels = (right - left) * (bottom - top)
         counters = dict.fromkeys(COUNTER_FIELDS, 0)
-        for name in ("hardwarePixels", "entryQueries", "associatedEntries", "exitQueries", "volumeExits", "backgroundQueries", "cachedOpaqueReturns", "cachedHitAttempts"):
+        for name in ("hardwarePixels", "associatedEntries", "exitQueries", "volumeExits", "backgroundQueries", "cachedOpaqueReturns", "cachedHitAttempts"):
             counters[name] = pixels
-        counters["physicalQueries"] = counters["queryBudgetUnits"] = 3 * pixels
+        counters["physicalQueries"] = counters["queryBudgetUnits"] = 2 * pixels
         return {"metadata": {"sequence": 5, "generation": 2, "graphics_frame": 30, "observed_frame": 32, "target_start_frame": 10,
             "completed_target_frames": 20, "frame_index": 0, "width": cell.width, "height": cell.height, "hardware_requested": 1,
             "hardware_available": 1, "hardware_ready": 1, "csg_enabled": 0, "token_valid": 1, "physical_valid": 1, "token_queue": 0,
@@ -101,10 +101,10 @@ class RefractionQueryDiagnosticsTests(unittest.TestCase):
 
     def test_internally_consistent_missing_pixels_still_fail_independent_coverage(self):
         profile = self.profile()
-        for name in ("hardwarePixels", "entryQueries", "associatedEntries", "exitQueries", "volumeExits", "backgroundQueries", "cachedOpaqueReturns", "cachedHitAttempts"):
+        for name in ("hardwarePixels", "associatedEntries", "exitQueries", "volumeExits", "backgroundQueries", "cachedOpaqueReturns", "cachedHitAttempts"):
             profile["counters"][name] -= 64
-        profile["counters"]["physicalQueries"] -= 192
-        profile["counters"]["queryBudgetUnits"] -= 192
+        profile["counters"]["physicalQueries"] -= 128
+        profile["counters"]["queryBudgetUnits"] -= 128
         self.assert_rejected(profile, "independent projected rectangle")
 
     def test_missing_entry_exit_or_background_work_fails_conservation(self):
@@ -141,7 +141,7 @@ class RefractionQueryDiagnosticsTests(unittest.TestCase):
             with self.subTest(field=field):
                 profile = self.profile()
                 profile["counters"][field] += 1
-                self.assert_rejected(profile, "conservation")
+                self.assert_rejected(profile, "conservation|rejections")
         profile = self.profile()
         profile["metadata"]["csg_enabled"] = 1
         self.assert_rejected(profile, "CSG physical work")

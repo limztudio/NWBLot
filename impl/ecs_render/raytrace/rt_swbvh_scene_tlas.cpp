@@ -29,6 +29,7 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
     using namespace RayTracingSoftwareBvhDetail;
 
     m_preparedSceneContentStamp = {};
+    m_rayTracingState.m_refractionCertifiedInstanceIndex = Limit<u32>::s_Max;
 
     if(!m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
         return false;
@@ -50,10 +51,16 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
     MaterialTypedByteDataVector shadowMaterialTypedBytes{ scratchArena };
     ECSRenderDetail::MaterialTypedConstantRangeMap shadowConstantTypedRanges(0, ECSRenderDetail::MaterialTypedConstantRangeMap::hasher(), ECSRenderDetail::MaterialTypedConstantRangeMap::key_equal(), scratchArena);
     ECSRenderDetail::MaterialTypedByteContentRangeMap shadowMutableTypedRanges(0, ECSRenderDetail::MaterialTypedByteContentRangeMap::hasher(), ECSRenderDetail::MaterialTypedByteContentRangeMap::key_equal(), scratchArena);
+    struct InstanceWorldBounds{
+        Float3U minimum = {};
+        Float3U maximum = {};
+    };
+    Vector<InstanceWorldBounds, Core::Alloc::ScratchArena> instanceWorldBounds{ scratchArena };
     instances.reserve(candidateCount);
     instanceBlases.reserve(candidateCount);
     instanceMaterials.reserve(candidateCount);
     shadowInstanceData.reserve(candidateCount);
+    instanceWorldBounds.reserve(candidateCount);
     shadowConstantTypedRanges.reserve(candidateCount);
     shadowMutableTypedRanges.reserve(candidateCount);
     MeshBufferSlotLookup meshSlotLookup(0, Hasher<NotNull<Core::Buffer*>>(), EqualTo<NotNull<Core::Buffer*>>(), scratchArena);
@@ -77,6 +84,9 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
     m_rayTracingState.m_sceneHasTransparentOccluder = false;
     bool staticScene = true;
     bool contentComplete = true;
+    bool allInstanceBoundsValid = true;
+    u32 refractiveInstanceCount = 0u;
+    u32 singleRefractiveInstanceIndex = Limit<u32>::s_Max;
     RayTracingOpticalSceneGather opticalScene(scratchArena, candidateCount);
 
     ShadowMaterialSampledTextureCollector sampledTextureCollector(m_preparedShadowTraceMaterialSampledTextures, scratchArena);
@@ -227,13 +237,26 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
         SIMDVectorSingle opticalMin = VectorZero();
         SIMDVectorSingle opticalMax = VectorZero();
         bool opticalBoundsValid = false;
-        if(transparent && !meshResult->resolvedMesh.runtime && !meshResult->meshResources.runtimeMesh && meshResult->meshResources.csgLocalBounds.valid()){
+        InstanceWorldBounds worldBounds;
+        if(!meshResult->resolvedMesh.runtime && !meshResult->meshResources.runtimeMesh && meshResult->meshResources.csgLocalBounds.valid()){
             const auto bounds = ComputeOpticalWorldBounds(objectToWorld, localMin, localMax);
             if(bounds){
-                opticalMin = bounds->minimum;
-                opticalMax = bounds->maximum;
-                opticalBoundsValid = true;
+                StoreFloat(bounds->minimum, worldBounds.minimum);
+                StoreFloat(bounds->maximum, worldBounds.maximum);
+                if(transparent){
+                    opticalMin = bounds->minimum;
+                    opticalMax = bounds->maximum;
+                    opticalBoundsValid = true;
+                }
             }
+            else
+                allInstanceBoundsValid = false;
+        }
+        else
+            allInstanceBoundsValid = false;
+        if(refractive){
+            ++refractiveInstanceCount;
+            singleRefractiveInstanceIndex = meshInstanceIndex;
         }
         const bool runtimeOpticalBounds = transparent && (meshResult->resolvedMesh.runtime || meshResult->meshResources.runtimeMesh) && meshResult->meshResources.runtimeLocalBoundsBuffer && meshResult->meshResources.runtimeLocalBoundsHeapHandle.valid();
         if(runtimeOpticalBounds){
@@ -248,6 +271,7 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
         instanceBlases.push_back(meshResult->meshResources.blas);
         instanceMaterials.push_back(instanceMaterial);
         shadowInstanceData.push_back(shadowInstance);
+        instanceWorldBounds.push_back(worldBounds);
     }
 
     if(!FinishLightSpaceCsgGather(m_lightSpaceShadow.m_csg, m_world, m_csgShapeRegistry, scratchArena))
@@ -287,6 +311,36 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
         m_rayTracingState.m_tlasStaticSceneHashValid = false;
         m_rayTracingState.m_hwShadowMaterialContextHashValid = false;
         return false;
+    }
+
+    if(staticScene && opticalScene.boundsCompleteExceptRuntime && !csg.hasCsg && allInstanceBoundsValid && refractiveInstanceCount == 1u && singleRefractiveInstanceIndex < instances.size()){
+        constexpr f32 s_RefractionCertifiedBoundsMargin = 0.016f;
+        const InstanceWorldBounds& targetBounds = instanceWorldBounds[singleRefractiveInstanceIndex];
+        const f32 expandedMinX = targetBounds.minimum.x - s_RefractionCertifiedBoundsMargin;
+        const f32 expandedMinY = targetBounds.minimum.y - s_RefractionCertifiedBoundsMargin;
+        const f32 expandedMinZ = targetBounds.minimum.z - s_RefractionCertifiedBoundsMargin;
+        const f32 expandedMaxX = targetBounds.maximum.x + s_RefractionCertifiedBoundsMargin;
+        const f32 expandedMaxY = targetBounds.maximum.y + s_RefractionCertifiedBoundsMargin;
+        const f32 expandedMaxZ = targetBounds.maximum.z + s_RefractionCertifiedBoundsMargin;
+        bool isolated = true;
+        for(usize index = 0u; index < instanceWorldBounds.size(); ++index){
+            if(index == singleRefractiveInstanceIndex)
+                continue;
+            const InstanceWorldBounds& otherBounds = instanceWorldBounds[index];
+            const bool separated =
+                expandedMaxX < otherBounds.minimum.x || otherBounds.maximum.x < expandedMinX
+                || expandedMaxY < otherBounds.minimum.y || otherBounds.maximum.y < expandedMinY
+                || expandedMaxZ < otherBounds.minimum.z || otherBounds.maximum.z < expandedMinZ
+            ;
+            if(!separated){
+                isolated = false;
+                break;
+            }
+        }
+        if(isolated){
+            instanceMaterials[singleRefractiveInstanceIndex].flags |= RtInstanceMaterialFlag::RefractionEntryCertified;
+            m_rayTracingState.m_refractionCertifiedInstanceIndex = singleRefractiveInstanceIndex;
+        }
     }
 
     // TLAS and material context use separate static keys.

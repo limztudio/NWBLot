@@ -42,6 +42,7 @@ namespace RtInstanceMaterialFlag{
         None = s_RtInstanceMaterialFlagNoneBase,
         Transparent = NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT,
         Refractive = NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE,
+        RefractionEntryCertified = NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTION_ENTRY_CERTIFIED,
     };
 };
 

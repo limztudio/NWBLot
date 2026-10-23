@@ -89,6 +89,7 @@ void RendererRayTracingState::invalidateResources()noexcept{
     m_refractionDenseScreenPipelineFailed = false;
     m_refractionDenseHwPipelineFailed = false;
     m_refractionDenseCsgHwPipelineFailed = false;
+    m_refractionCertifiedInstanceIndex = Limit<u32>::s_Max;
     m_refractionUseHardwareTrace = false;
     // Scene TLAS is GPU state released on teardown; per-mesh BLAS lives on the mesh cache.
     m_tlas.reset();

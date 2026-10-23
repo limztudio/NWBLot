@@ -436,6 +436,7 @@ struct RtRefractionState{
     bool m_refractionDenseScreenPipelineFailed = false;
     bool m_refractionDenseHwPipelineFailed = false;
     bool m_refractionDenseCsgHwPipelineFailed = false;
+    u32 m_refractionCertifiedInstanceIndex = Limit<u32>::s_Max;
     bool m_refractionUseHardwareTrace = false;
     bool m_refractionHardwareTracingEnabled = true;
 };

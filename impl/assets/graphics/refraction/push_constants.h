@@ -26,7 +26,8 @@
     FIELD(refractionEnabled, 1u) \
     FIELD(tileListSlot, 0u) \
     FIELD(tileArgumentsSlot, 0u) \
-    FIELD(diagnosticsSlot, 0xffffffffu)
+    FIELD(diagnosticsSlot, 0xffffffffu) \
+    FIELD(certifiedInstanceIndex, 0xffffffffu)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

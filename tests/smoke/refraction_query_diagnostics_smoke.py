@@ -103,7 +103,9 @@ def validate_statistics(statistics, cell):
 
     c = counters
     pixels = c["hardwarePixels"]
-    equal("entry queries", c["entryQueries"], pixels)
+    equal("entry queries", c["entryQueries"], 0)
+    if c["entryAssociationMisses"] + c["entryWrongEntities"] + c["entryFailures"] > c["entryQueries"]:
+        raise SmokeFailure("entry query rejections exceed entry queries")
     equal("entry association", pixels, c["entryAssociationMisses"] + c["entryWrongEntities"] + c["entryFailures"] + c["associatedEntries"])
     exit_starts = c["associatedEntries"] - c["invalidEntryDirections"]
     if exit_starts < 0 or not exit_starts <= c["exitQueries"] <= 3 * exit_starts or c["tirCappedPixels"] > exit_starts:

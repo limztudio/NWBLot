@@ -53,6 +53,8 @@ static const float NWB_REFRACTION_CACHED_HIT_DEPTH_TOLERANCE = 0.0002;
 static const float NWB_REFRACTION_CACHED_HIT_DISTANCE_MIN = 0.01;
 static const float NWB_REFRACTION_CACHED_HIT_DISTANCE_SCALE = 0.002;
 static const float NWB_REFRACTION_ASSOCIATION_DISTANCE_SCALE = 0.0002;
+static const float NWB_REFRACTION_CERTIFIED_ASSOCIATION_MAX_TOLERANCE = 0.012;
+static const uint NWB_REFRACTION_CERTIFIED_INSTANCE_MATERIAL_FLAGS = NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT | NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE | NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTION_ENTRY_CERTIFIED;
 static const uint NWB_REFRACTION_MAX_INTERNAL_BOUNCES = 2u;
 static const uint NWB_REFRACTION_MAX_BACKGROUND_LAYERS = 3u;
 static const half NWB_REFRACTION_OPAQUE_COVERAGE_MIN = 0.999h;
@@ -109,28 +111,56 @@ bool nwbRefractionCachedHit(const NwbRayTraceSurfaceHit hit, const NwbRefraction
     return true;
 }
 
+bool nwbRefractionTryAssociateCapturedEntry(const uint instanceMaterialHeapSlot, const NwbRefractionEntry entry, const float3 camera, const float entryDistance, const float associationTolerance, out uint primaryInstance){
+    primaryInstance = 0u;
+#if NWB_RT_CSG_ENABLED
+    return false;
+#else
+    const uint candidate = g_NwbRefractionPush.certifiedInstanceIndex;
+    if(!entry.frontBoundary || candidate >= g_NwbRefractionMaterialContext.materialSlots.z || associationTolerance > NWB_REFRACTION_CERTIFIED_ASSOCIATION_MAX_TOLERANCE)
+        return false;
+    const float minDistance = max(entryDistance - associationTolerance, entry.bias);
+    const float4 windowStartClip = mul(g_NwbRefractionView.worldToClip, float4(camera + entry.incident * minDistance, 1.0));
+    if(windowStartClip.w <= NWB_REFRACTION_MIN_CLIP_W || windowStartClip.z < 0.0)
+        return false;
+    const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(instanceMaterialHeapSlot)[candidate];
+    if((material.flags & NWB_REFRACTION_CERTIFIED_INSTANCE_MATERIAL_FLAGS) != NWB_REFRACTION_CERTIFIED_INSTANCE_MATERIAL_FLAGS)
+        return false;
+    if(g_NwbMeshInstances[material.meshInstanceIndex].entityId != entry.primaryEntityId)
+        return false;
+    primaryInstance = candidate;
+    return true;
+#endif
+}
+
 half4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry entry){
     nwbRefractionCount(NWB_REFRACTION_COUNTER_hardwarePixels);
-    nwbRefractionCount(NWB_REFRACTION_COUNTER_entryQueries);
     const uint instanceMaterialHeapSlot = g_NwbRefractionMaterialContext.sceneSlots.z;
     const float3 camera = g_NwbRefractionView.cameraPosition.xyz;
     const float entryDistance = length(entry.position - camera);
     const float associationTolerance = max(entry.bias * NWB_REFRACTION_BIAS_TOLERANCE_SCALE, entryDistance * NWB_REFRACTION_ASSOCIATION_DISTANCE_SCALE);
-    const NwbRayTraceSurfaceHit entryHit = nwbRefractionClosestEntryInterface(instanceMaterialHeapSlot, camera, entry.incident, max(entryDistance - associationTolerance, entry.bias), entryDistance + associationTolerance);
-    nwbRefractionCountQueryWork(entryHit);
+    uint primaryInstance = 0u;
+    float3 internalOrigin = entry.position;
+    if(!nwbRefractionTryAssociateCapturedEntry(instanceMaterialHeapSlot, entry, camera, entryDistance, associationTolerance, primaryInstance)){
+        nwbRefractionCount(NWB_REFRACTION_COUNTER_entryQueries);
+        const NwbRayTraceSurfaceHit entryHit = nwbRefractionClosestEntryInterface(instanceMaterialHeapSlot, camera, entry.incident, max(entryDistance - associationTolerance, entry.bias), entryDistance + associationTolerance);
+        nwbRefractionCountQueryWork(entryHit);
 #if NWB_RT_CSG_ENABLED
-    if(entryHit.failure != 0u){
-        nwbRefractionCount(NWB_REFRACTION_COUNTER_entryFailures);
-        return half4(0.0h, 0.0h, 0.0h, 1.0h);
-    }
+        if(entryHit.failure != 0u){
+            nwbRefractionCount(NWB_REFRACTION_COUNTER_entryFailures);
+            return half4(0.0h, 0.0h, 0.0h, 1.0h);
+        }
 #endif
-    if(!entryHit.hit || !nwbRefractionIorEligible(float(entryHit.surface.refractionIor))){
-        nwbRefractionCount(NWB_REFRACTION_COUNTER_entryAssociationMisses);
-        return nwbRefractionResolveScreen(pixel, entry);
-    }
-    if(g_NwbMeshInstances[entryHit.meshInstanceIndex].entityId != entry.primaryEntityId){
-        nwbRefractionCount(NWB_REFRACTION_COUNTER_entryWrongEntities);
-        return nwbRefractionResolveScreen(pixel, entry);
+        if(!entryHit.hit || !nwbRefractionIorEligible(float(entryHit.surface.refractionIor))){
+            nwbRefractionCount(NWB_REFRACTION_COUNTER_entryAssociationMisses);
+            return nwbRefractionResolveScreen(pixel, entry);
+        }
+        if(g_NwbMeshInstances[entryHit.meshInstanceIndex].entityId != entry.primaryEntityId){
+            nwbRefractionCount(NWB_REFRACTION_COUNTER_entryWrongEntities);
+            return nwbRefractionResolveScreen(pixel, entry);
+        }
+        primaryInstance = entryHit.instance;
+        internalOrigin = entryHit.position;
     }
     nwbRefractionCount(NWB_REFRACTION_COUNTER_associatedEntries);
 
@@ -140,7 +170,6 @@ half4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry e
         return half4(0.0h, 0.0h, 0.0h, 1.0h);
     }
     NwbRayTraceSurfaceHit exitHit = (NwbRayTraceSurfaceHit)0;
-    float3 internalOrigin = entryHit.position;
     float3 outgoingDirection = float3(0.0);
     // Exit cosine is a saturate-bounded (0, 1) factor feeding the bounded Fresnel attenuation below.
     half exitCosine = half(0.0h);
@@ -149,7 +178,7 @@ half4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry e
     for(uint internalBounce = 0u; internalBounce <= NWB_REFRACTION_MAX_INTERNAL_BOUNCES; ++internalBounce){
         nwbRefractionCount(NWB_REFRACTION_COUNTER_exitQueries);
         NwbRayTraceGeometryHit exitGeometry;
-        exitHit = nwbRefractionClosestExitInterface(instanceMaterialHeapSlot, internalOrigin + internalDirection * entry.bias, internalDirection, entry.bias, NWB_REFRACTION_MAX_DISTANCE, entryHit.instance, exitGeometry);
+        exitHit = nwbRefractionClosestExitInterface(instanceMaterialHeapSlot, internalOrigin + internalDirection * entry.bias, internalDirection, entry.bias, NWB_REFRACTION_MAX_DISTANCE, primaryInstance, exitGeometry);
         nwbRefractionCountQueryWork(exitHit);
 #if NWB_RT_CSG_ENABLED
         if(exitHit.failure != 0u){

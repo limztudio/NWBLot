@@ -12,6 +12,7 @@
 
 #include "csg_shader_variants.h"
 
+#include <impl/assets_graphics/mesh/names.h>
 #include <impl/assets_material/shader_stage_names.h>
 #include <impl/assets_shader/source_dependencies.h>
 
@@ -38,22 +39,21 @@ namespace AssetsGraphicsCookDetail{
 bool AppendMeshObjectShaderEntries(const ResolvedCookPaths& resolvedPaths, const PreparedShaderEntry& meshEntry, ShaderCook::CookArena& cookArena, ScratchArena& scratchArena, ShaderCook& shaderCook, PreparedShaderPlan& plan){
     const ShaderCook::ShaderEntry& mesh = meshEntry.entry;
     // The fixed decoder and this raster stage share an engine ABI, independent of authored material defines.
-    static constexpr AStringView s_SharedMeshProgramName = "engine/graphics/mesh/shared_ms";
     static constexpr AStringView s_ObjectVertexSourceName = "object_vs.slang";
     static constexpr AStringView s_ImplPathToken = "impl";
     static constexpr AStringView s_AssetsPathToken = "assets";
     static constexpr AStringView s_GraphicsPathToken = "graphics";
     static constexpr AStringView s_MeshPathToken = "mesh";
     static constexpr AStringView s_SharedMeshSourceFile = "shared_ms.slang";
-    if(mesh.name != s_SharedMeshProgramName && !TStringView(meshEntry.sourcePath.native()).ends_with(NWB_TEXT("shared_ms.slang")))
+    if(mesh.name != AssetsGraphicsMesh::s_SharedMeshShaderText && !TStringView(meshEntry.sourcePath.native()).ends_with(NWB_TEXT("shared_ms.slang")))
         return true;
 
     const ::Path<ScratchArena> expectedSource = ::Path<ScratchArena>(scratchArena, resolvedPaths.repoRoot) / s_ImplPathToken / s_AssetsPathToken / s_GraphicsPathToken / s_MeshPathToken / s_SharedMeshSourceFile;
     const bool hasFixedSource = ::Path<ScratchArena>(scratchArena, meshEntry.sourcePath).lexicallyNormal() == expectedSource.lexicallyNormal();
-    if(mesh.name != s_SharedMeshProgramName && !hasFixedSource)
+    if(mesh.name != AssetsGraphicsMesh::s_SharedMeshShaderText && !hasFixedSource)
         return true;
     if(
-        mesh.name != s_SharedMeshProgramName
+        mesh.name != AssetsGraphicsMesh::s_SharedMeshShaderText
         || mesh.archiveStage != Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::MeshStage)
         || mesh.stage != Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::MeshStage)
         || !hasFixedSource
@@ -84,7 +84,11 @@ bool AppendMeshObjectShaderEntries(const ResolvedCookPaths& resolvedPaths, const
     }
     if(!ShaderSourceDependencies::Gather(prepared.sourcePath, prepared.includeDirectories, AssetsGraphicsCsgShaderVariants::s_ExternallyPlannedMacroIncludes, scratchArena, prepared.dependencies))
         return false;
-    const auto dependency = shaderCook.computeDependencyChecksum(prepared.dependencies, prepared.includeDirectories, { { resolvedPaths.repoRoot, s_DependencyRepoRootAlias }, { resolvedPaths.cacheDirectory, s_DependencyGeneratedCacheRootAlias } }, scratchArena);
+    const auto dependency = shaderCook.computeDependencyChecksum(
+        prepared.dependencies, prepared.includeDirectories,
+        { { resolvedPaths.repoRoot, s_DependencyRepoRootAlias }, { resolvedPaths.cacheDirectory, s_DependencyGeneratedCacheRootAlias } },
+        scratchArena
+    );
     if(!dependency)
         return false;
     prepared.dependencyChecksum = dependency->checksum;

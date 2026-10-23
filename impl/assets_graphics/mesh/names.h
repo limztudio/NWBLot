@@ -7,6 +7,7 @@
 
 #include <impl/global.h>
 
+#include <global/basic_string.h>
 #include <global/name.h>
 
 
@@ -25,8 +26,11 @@ namespace AssetsGraphicsMesh{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr AStringView s_SharedMeshShaderText = "engine/graphics/mesh/shared_ms";
+
 inline constexpr Name s_ObjectGeometryDecodeShaderName("engine/graphics/mesh/object_decode_cs");
 inline constexpr Name s_EmulationVertexShaderName("engine/graphics/mesh/emulation_vs");
+inline constexpr Name s_SharedMeshShaderName(s_SharedMeshShaderText);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

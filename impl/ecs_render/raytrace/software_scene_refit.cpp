@@ -4,6 +4,7 @@
 
 #include "software_scene_refit.h"
 
+#include <impl/assets_graphics/bvh/names.h>
 #include <impl/ecs_render/renderer_frame_pipeline_graph_shared.h>
 #include <impl/ecs_render/shader/shader_system.h>
 
@@ -89,7 +90,8 @@ Expected<SoftwareSceneRefitHandle> SoftwareSceneRefitResources::prepare(
         return MakeUnexpected(Failure{});
     if(!m_inputBuffer || m_inputBuffer->getCreationDescription().byteSize < byteSize){
         Core::BufferDesc desc;
-        desc.setByteSize(byteSize).setCanHaveRawViews(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(Name(RendererFramePipelineDetail::s_SoftwareSceneRefitInputsName)).enableAutomaticStateTracking(Core::ResourceStates::Common);
+        desc.setByteSize(byteSize).setCanHaveRawViews(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
+            .setDebugName(Name(RendererFramePipelineDetail::s_SoftwareSceneRefitInputsName)).enableAutomaticStateTracking(Core::ResourceStates::Common);
         auto replacementResult = m_graphics.createBuffer(desc);
         if(!replacementResult)
             return MakeUnexpected(Failure{});
@@ -133,7 +135,10 @@ Expected<SoftwareSceneRefitHandle> SoftwareSceneRefitResources::prepare(
     snapshot->inputs.reserve(instanceCount);
     snapshot->meshNodes.reserve(instanceCount);
     for(usize index = 0u; index < instanceCount; ++index){
-        if(!meshNodes[index] || inputs[index].meshNodeSlot == Limit<u32>::s_Max || meshNodes[index]->getDeviceGeneration() != device.getDeviceGeneration() || meshNodes[index]->getCreationDescription().byteSize < __hidden_software_scene_refit::s_SoftwareNodeByteSize)
+        if(
+            !meshNodes[index] || inputs[index].meshNodeSlot == Limit<u32>::s_Max
+            || meshNodes[index]->getDeviceGeneration() != device.getDeviceGeneration() || meshNodes[index]->getCreationDescription().byteSize < __hidden_software_scene_refit::s_SoftwareNodeByteSize
+        )
             return MakeUnexpected(Failure{});
         snapshot->inputs.push_back(inputs[index]);
         snapshot->meshNodes.push_back(meshNodes[index]);
@@ -160,7 +165,7 @@ bool SoftwareSceneRefitResources::ensurePipeline(RendererShaderSystem& shaderSys
         if(!bindingLayoutResult)
             return false;
     }
-    if(!shaderSystem.loadShader<ComputeShader>(m_shader, Name("engine/graphics/bvh/scene_refit_cs"), __hidden_software_scene_refit::s_DefaultShaderVariant, Name("SoftwareSceneRefit")))
+    if(!shaderSystem.loadShader<ComputeShader>(m_shader, AssetsGraphicsBvh::s_SceneRefitShaderName, __hidden_software_scene_refit::s_DefaultShaderVariant, Name("SoftwareSceneRefit")))
         return false;
     Core::ComputePipelineDesc desc;
     desc.setComputeShader(m_shader).addBindingLayout(m_bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());

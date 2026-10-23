@@ -7,6 +7,8 @@ target_sources(nwb_assets_graphics INTERFACE
     "${CMAKE_CURRENT_LIST_DIR}/deferred/names.h"
     "${CMAKE_CURRENT_LIST_DIR}/gi/names.h"
     "${CMAKE_CURRENT_LIST_DIR}/mesh/names.h"
+    "${CMAKE_CURRENT_LIST_DIR}/raytrace/names.h"
+    "${CMAKE_CURRENT_LIST_DIR}/reflection/names.h"
     "${CMAKE_CURRENT_LIST_DIR}/refraction/names.h"
     "${CMAKE_CURRENT_LIST_DIR}/shadow/names.h"
     "${CMAKE_CURRENT_LIST_DIR}/skinned_mesh/names.h"

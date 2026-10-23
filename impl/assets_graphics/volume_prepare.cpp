@@ -13,6 +13,7 @@
 #include "shader_volume_writer.h"
 
 #include <impl/assets_csg/cook.h>
+#include <impl/assets_graphics/mesh/names.h>
 #include <impl/assets_material/cook.h>
 #include <impl/assets_material/shader_stage_names.h>
 #include <impl/assets_shader/shader_types.h>
@@ -288,8 +289,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
 
     // Generate per-`surface` G-buffer PS (pixel = generated, mesh = shared), synthesize shader entries like authored ones. Before shader prep + ValidateMaterials.
     auto& materialCookArena = materialEntries.get_allocator().arena();
-    static constexpr AStringView s_SharedMeshProgramName = "engine/graphics/mesh/shared_ms";
-    auto generatedPixelShadersResult = EmitMaterialPixelShaders(context.resolvedPaths.cacheDirectory, context.configurationSafeName, s_SharedMeshProgramName, materialCookArena, context.scratchArena, materialEntries);
+    auto generatedPixelShadersResult = EmitMaterialPixelShaders(context.resolvedPaths.cacheDirectory, context.configurationSafeName, AssetsGraphicsMesh::s_SharedMeshShaderText, materialCookArena, context.scratchArena, materialEntries);
     if(!generatedPixelShadersResult)
         return false;
 

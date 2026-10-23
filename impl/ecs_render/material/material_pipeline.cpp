@@ -9,6 +9,7 @@
 #include <impl/ecs_render/material/renderer_material_state.h>
 #include <impl/ecs_render/shader/shader_system.h>
 #include <impl/assets_graphics/csg/names.h>
+#include <impl/assets_graphics/mesh/names.h>
 #include <impl/assets_material/shader_stage_names.h>
 #include <impl/ecs_csg/shape_registry.h>
 
@@ -31,8 +32,6 @@ namespace __hidden_material_pipeline{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-inline constexpr Name s_SharedMeshProgramName("engine/graphics/mesh/shared_ms");
 
 inline constexpr usize s_ModuleAssignmentPunctuationSize = 3u;
 
@@ -215,7 +214,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
     const AStringView pixelShaderVariant = csgClipPipeline && !avboitCsgClipPipeline ? AStringView(csgShaderVariant) : shaderVariant;
     const AStringView meshShaderVariant = csgClipPipeline ? AStringView(csgShaderVariant) : shaderVariant;
 
-    const bool sharedObjectGeometry = materialInfo.meshShader.name() == __hidden_material_pipeline::s_SharedMeshProgramName &&shaderVariant == Core::ShaderArchive::s_DefaultVariant;
+    const bool sharedObjectGeometry = materialInfo.meshShader.name() == AssetsGraphicsMesh::s_SharedMeshShaderName && shaderVariant == Core::ShaderArchive::s_DefaultVariant;
     const AStringView objectGeometryShaderVariant = sharedObjectGeometry ? shaderVariant : meshShaderVariant;
 
     Core::ShaderHandle passPixelShader;
@@ -376,7 +375,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
 
         resources.renderPath = RenderPath::ComputeEmulation;
         // The shared mesh_compute program is independent of authored materials.
-        resources.sharedGeometryComputeProgram = pipelineKey.csgMode == MaterialPipelineCsgMode::None && materialInfo.meshShader.name() == __hidden_material_pipeline::s_SharedMeshProgramName && meshShaderVariant == Core::ShaderArchive::s_DefaultVariant;
+        resources.sharedGeometryComputeProgram = pipelineKey.csgMode == MaterialPipelineCsgMode::None && materialInfo.meshShader.name() == AssetsGraphicsMesh::s_SharedMeshShaderName && meshShaderVariant == Core::ShaderArchive::s_DefaultVariant;
         resources.indexedGeometryOutput = resources.sharedGeometryComputeProgram;
         return true;
     };

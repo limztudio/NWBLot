@@ -6,6 +6,7 @@
 #include "timing_names.h"
 
 #include <impl/assets/graphics/reflection/temporal_constants.h>
+#include <impl/assets_graphics/reflection/names.h>
 #include <impl/ecs_render/shader/shader_system.h>
 
 #include <core/common/log.h>
@@ -83,7 +84,7 @@ bool RendererReflectionPostprocess::prepareResources(const u32 width, const u32 
     const bool active = settings.traceMode != ReflectionTraceMode::Disabled;
     if(settings.temporalEnabled && active){
         if(
-            !preparePipeline(m_temporalPipeline, m_temporalShader, Name("engine/graphics/reflection/temporal_cs"), Core::ShaderArchive::s_DefaultVariant)
+            !preparePipeline(m_temporalPipeline, m_temporalShader, AssetsGraphicsReflection::s_TemporalShaderName, Core::ShaderArchive::s_DefaultVariant)
             || !prepareImage(m_history, __hidden_reflection_postprocess_resources::s_HistoryDescriptorIndex, Name("engine/reflection/opaque_history"))
             || !m_graphics.gpuTiming().prepareScopeQueries(ReflectionGpuTimingScope::s_Temporal.identity, device, s_ReflectionGpuTimingQueriesPerRange)
         )
@@ -92,7 +93,7 @@ bool RendererReflectionPostprocess::prepareResources(const u32 width, const u32 
     if(settings.spatialFilterEnabled && settings.spatialRadius > 0u && active){
         const u32 radiusIndex = settings.spatialRadius - 1u;
         if(
-            !preparePipeline(m_spatialPipelines[radiusIndex], m_spatialShaders[radiusIndex], Name("engine/graphics/reflection/spatial_cs"), __hidden_reflection_postprocess_resources::s_SpatialVariants[radiusIndex])
+            !preparePipeline(m_spatialPipelines[radiusIndex], m_spatialShaders[radiusIndex], AssetsGraphicsReflection::s_SpatialShaderName, __hidden_reflection_postprocess_resources::s_SpatialVariants[radiusIndex])
             || !prepareImage(m_spatial, __hidden_reflection_postprocess_resources::s_SpatialDescriptorIndex, Name("engine/reflection/opaque_spatial"))
             || !m_graphics.gpuTiming().prepareScopeQueries(ReflectionGpuTimingScope::s_Spatial.identity, device, s_ReflectionGpuTimingQueriesPerRange)
         )

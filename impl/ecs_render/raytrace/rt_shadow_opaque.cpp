@@ -23,17 +23,17 @@ NWB_IMPL_BEGIN
 Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityOpaqueTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
-    DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
     const bool& prepared,
     const bool hardwareShadowSupported,
+    const bool graphOwnsOpaqueTemporalMergeEntryStates,
+    const LightSpaceShadowSnapshot* const lightSpace,
+    DeferredFrameTargets& targets,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>& asyncTiming,
     Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming,
     bool& opaqueProduced,
-    u32& opaqueFrameIndex,
-    const bool graphOwnsOpaqueTemporalMergeEntryStates,
-    const LightSpaceShadowSnapshot* const lightSpace
+    u32& opaqueFrameIndex
 ){
     return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueGraphTask>(
         desc,
@@ -58,18 +58,18 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityOpaqu
 Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityOpaqueFirstWaveletTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
-    DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
-    Core::GpuTimingSubmissionTicket& timingTicket,
-    Optional<Core::GpuTimingMeasure>& asyncTiming,
-    Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming,
-    Optional<Core::GpuTimingMeasure>& opaqueResolveTiming,
-    bool& opaqueProduced,
     const u32& opaqueFrameIndex,
     const bool hardwareShadowSupported,
     const bool graphOwnsOpaqueTemporalMergeEntryStates,
     const bool deferUpsample,
-    const bool deferWavelet
+    const bool deferWavelet,
+    DeferredFrameTargets& targets,
+    Core::GpuTimingSubmissionTicket& timingTicket,
+    Optional<Core::GpuTimingMeasure>& asyncTiming,
+    Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming,
+    Optional<Core::GpuTimingMeasure>& opaqueResolveTiming,
+    bool& opaqueProduced
 ){
     return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueFirstWaveletGraphTask>(
         desc,
@@ -95,15 +95,15 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityOpaqu
 Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityOpaqueResolveTailTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
-    DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
+    const u32& opaqueFrameIndex,
+    const bool hardwareShadowSupported,
+    DeferredFrameTargets& targets,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>& asyncTiming,
     Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming,
     Optional<Core::GpuTimingMeasure>& opaqueResolveTiming,
-    bool& opaqueProduced,
-    const u32& opaqueFrameIndex,
-    const bool hardwareShadowSupported
+    bool& opaqueProduced
 ){
     return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueResolveTailGraphTask>(
         desc,

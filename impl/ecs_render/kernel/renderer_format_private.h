@@ -36,7 +36,7 @@ inline Core::Format::Enum SelectSupportedFormat(Core::Device& device, const Core
     return Core::Format::UNKNOWN;
 }
 
-inline bool CreateClampSampler(Core::Device& device, Core::SamplerHandle& sampler, const bool linearFiltering){
+inline bool CreateClampSampler(Core::Device& device, const bool linearFiltering, Core::SamplerHandle& sampler){
     if(sampler)
         return true;
 

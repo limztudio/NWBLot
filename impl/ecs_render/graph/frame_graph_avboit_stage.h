@@ -95,19 +95,19 @@ private:
         Core::Alloc::ScratchArena& scratchArena,
         const FrameGraphAvboitStageInputs& inputs,
         const FrameGraphAvboitStageTiming& timing,
+        Core::GpuTaskId avboitDepthWarpCompletionTask,
+        bool avboitIntervalOutputsGraphOwned,
         ObjectGeometryCacheGraph& objectGeometry,
         AvboitGeneratedGeometryReuse& generatedGeometry,
-        AvboitComputeEffectChainBuilder& avboitComputeEffectChainBuilder,
-        Core::GpuTaskId avboitDepthWarpCompletionTask,
-        bool avboitIntervalOutputsGraphOwned
+        AvboitComputeEffectChainBuilder& avboitComputeEffectChainBuilder
     );
     [[nodiscard]] bool declareAccumulation(
         Core::Alloc::ScratchArena& scratchArena,
         const FrameGraphAvboitStageInputs& inputs,
         const FrameGraphAvboitStageTiming& timing,
+        bool avboitIntervalOutputsGraphOwned,
         ObjectGeometryCacheGraph& objectGeometry,
-        AvboitGeneratedGeometryReuse& generatedGeometry,
-        bool avboitIntervalOutputsGraphOwned
+        AvboitGeneratedGeometryReuse& generatedGeometry
     );
 
 

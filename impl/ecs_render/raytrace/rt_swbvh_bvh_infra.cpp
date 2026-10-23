@@ -519,10 +519,10 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     u32 primitiveCount,
     const Float3Int& aabbMin,
     const Float3Int& aabbMax,
-    Core::BufferHandle& nodeBuffer,
-    Core::BufferHandle& parentBuffer,
     const Core::GpuDescriptorHandle nodeHeapHandle,
-    const Core::GpuDescriptorHandle parentHeapHandle
+    const Core::GpuDescriptorHandle parentHeapHandle,
+    Core::BufferHandle& nodeBuffer,
+    Core::BufferHandle& parentBuffer
 ){
     if(primitiveCount == 0u || positionHeapSlot == Limit<u32>::s_Max || triangleIndexHeapSlot == Limit<u32>::s_Max || !meshSwBvhResourcesReady(nodeBuffer, parentBuffer, nodeHeapHandle, parentHeapHandle))
         return false;
@@ -601,10 +601,10 @@ bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
     const u32 positionHeapSlot,
     const u32 triangleIndexHeapSlot,
     u32 primitiveCount,
-    Core::BufferHandle& nodeBuffer,
-    Core::BufferHandle& parentBuffer,
     const Core::GpuDescriptorHandle nodeHeapHandle,
-    const Core::GpuDescriptorHandle parentHeapHandle
+    const Core::GpuDescriptorHandle parentHeapHandle,
+    Core::BufferHandle& nodeBuffer,
+    Core::BufferHandle& parentBuffer
 ){
     if(primitiveCount == 0u || positionHeapSlot == Limit<u32>::s_Max || triangleIndexHeapSlot == Limit<u32>::s_Max || !meshSwBvhResourcesReady(nodeBuffer, parentBuffer, nodeHeapHandle, parentHeapHandle))
         return false;

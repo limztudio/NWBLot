@@ -522,7 +522,7 @@ struct RenderableRayTracingMeshResources{
 [[nodiscard]] bool EnsureHeapBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, Core::GpuDescriptorClass::Enum descriptorClass, bool writable, Core::GpuDescriptorHandle& inOutHandle);
 [[nodiscard]] bool ReplaceHeapBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, Core::GpuDescriptorClass::Enum descriptorClass, bool writable, Core::GpuDescriptorHandle& inOutHandle);
 void RetireHeapHandle(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle& handle);
-u32 BuildSceneBvhNode(const Span<u32> indices, const u32 lo, const u32 hi, const Span<const SceneBvhPrimitiveCalculation> primitiveBounds, Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena>& nodes, const Span<const u32> instanceLeafCost);
+u32 BuildSceneBvhNode(const u32 lo, const u32 hi, const Span<const SceneBvhPrimitiveCalculation> primitiveBounds, const Span<const u32> instanceLeafCost, const Span<u32> indices, Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena>& nodes);
 [[nodiscard]] NwbRtInstanceMaterialGpu ResolveInstanceShadowMaterial(const MaterialSurfaceInfo& materialInfo, const u32 materialConstantByteOffset, const u32 meshInstanceIndex)noexcept;
 
 

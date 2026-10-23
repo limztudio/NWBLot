@@ -129,7 +129,7 @@ bool RendererDeferredSystem::createDeferredCompositeResources(){
         }
     }
 
-    if(!ECSRenderDetail::CreateClampSampler(device, m_deferredState.m_sampler, false)){
+    if(!ECSRenderDetail::CreateClampSampler(device, false, m_deferredState.m_sampler)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite sampler"));
         return false;
     }
@@ -207,9 +207,9 @@ bool RendererDeferredSystem::createDeferredPresentPipeline(Core::Framebuffer& pr
 Expected<Core::GpuTaskId> RendererDeferredSystem::declareDeferredCompositeTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
+    const ReflectionCompositeInputs& reflectionInputs,
     DeferredFrameTargets& targets,
-    Core::GpuTimingSubmissionTicket& timingTicket,
-    const ReflectionCompositeInputs& reflectionInputs
+    Core::GpuTimingSubmissionTicket& timingTicket
 ){
     return graph.addTask<__hidden_deferred_composite::DeferredCompositeGraphTask>(
         desc,

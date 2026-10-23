@@ -127,8 +127,8 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
     if(avboitPrePayload.transparentCsgStreamsUploaded && !objectGeometry.prepare(
         avboitPrePayload.transparentCsgSnapshot.receiverSurfaceIndexedDrawItems.data(),
         avboitPrePayload.transparentCsgSnapshot.receiverSurfaceIndexedDrawItems.size(),
-        avboitPrePayload.frameBindings, deferredTargets, intervalDependency, avboitIntervalResourceUses,
-        scratchArena, inputs.timingTicket
+        avboitPrePayload.frameBindings, deferredTargets, scratchArena, intervalDependency, avboitIntervalResourceUses,
+        inputs.timingTicket
     ))
         return MakeUnexpected(Failure{});
 

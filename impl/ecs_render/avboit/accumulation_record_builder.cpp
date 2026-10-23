@@ -227,13 +227,13 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
     if(inputs.streamsUploaded && !objectGeometry.prepare(
         accumulationPayload.accumulationSnapshot.regularIndexedDrawItems.data(),
         accumulationPayload.accumulationSnapshot.regularIndexedDrawItems.size(),
-        frameBindings, inputs.targets, accumulationDependency, accumulationResourceUses, scratchArena, &inputs.accumulationTimingTicket
+        frameBindings, inputs.targets, scratchArena, accumulationDependency, accumulationResourceUses, &inputs.accumulationTimingTicket
     ))
         return MakeUnexpected(Failure{});
     if(inputs.streamsUploaded && !objectGeometry.prepare(
         accumulationPayload.accumulationSnapshot.csgIndexedDrawItems.data(),
         accumulationPayload.accumulationSnapshot.csgIndexedDrawItems.size(),
-        frameBindings, inputs.targets, accumulationDependency, accumulationResourceUses, scratchArena, &inputs.accumulationTimingTicket
+        frameBindings, inputs.targets, scratchArena, accumulationDependency, accumulationResourceUses, &inputs.accumulationTimingTicket
     ))
         return MakeUnexpected(Failure{});
 

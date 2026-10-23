@@ -156,11 +156,13 @@ public:
         bool emulationOutputEntryStateGraphOwned = false,
         // The producer opens this established pass measure before its dispatches; the prepared raster closes it.
         // A missing measure means the producer intentionally no-op'd, so this consumer must not raster stale data.
-        Optional<Core::GpuTimingMeasure>* emulationOutputTiming = nullptr,
         // AVBOIT may instead freeze a CSG-only alias-free producer. Keep this separate from the regular handoff so a mixed CSG stream cannot suppress its local dispatch/raster interleaving.
         bool csgEmulationOutputEntryStateGraphOwned = false,
         // A matching earlier producer permits raster timing independent of this pass.
-        bool emulationOutputReused = false
+        bool emulationOutputReused = false,
+        // The producer opens this established pass measure before its dispatches; the prepared raster closes it.
+        // A missing measure means the producer intentionally no-op'd, so this consumer must not raster stale data.
+        Optional<Core::GpuTimingMeasure>* emulationOutputTiming = nullptr
     );
     [[nodiscard]] bool prepareMaterialPassResources(Core::Alloc::ScratchArena& scratchArena, Core::Framebuffer* framebuffer, MaterialPipelinePass::Enum pass, bool transparent, const CsgFrameState& csgFrameState, const AvboitFrameTargets* avboitTargets);
     void gatherMaterialPassDrawItems(
@@ -168,16 +170,16 @@ public:
         MaterialPipelinePass::Enum pass,
         bool transparent,
         const CsgFrameState& csgFrameState,
+        RendererResourceLookupMode::Enum lookupMode,
+        // CSG graph preparation uses the immutable view payload; other gathers use the accepted CPU view.
+        const ECSRenderDetail::MeshViewGpuData* csgWorkRegionMeshViewState,
         MaterialPassDrawItemPartitions& drawItems,
         InstanceGpuDataVector& instanceData,
         CsgFrameGpuData& csgFrameData,
 #if defined(NWB_DEBUG)
         ECSRenderDetail::MaterialTypedInstanceRangeVector& materialTypedRanges,
 #endif
-        MaterialTypedByteDataVector& materialTypedBytes,
-        RendererResourceLookupMode::Enum lookupMode,
-        // CSG graph preparation uses the immutable view payload; other gathers use the accepted CPU view.
-        const ECSRenderDetail::MeshViewGpuData* csgWorkRegionMeshViewState
+        MaterialTypedByteDataVector& materialTypedBytes
     );
     // Creation and override application belong to preparation; render paths only use the prepared lookup below.
     [[nodiscard]] Expected<NotNull<const MaterialTypedByteVector*>> prepareMaterialInstanceMutableTypedBytes(

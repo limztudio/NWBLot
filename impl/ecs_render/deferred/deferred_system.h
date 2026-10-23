@@ -107,7 +107,7 @@ public:
     void confirmSceneShadingBufferUploads(const ECSRenderDetail::SceneLightGpuData* lightData, u32 lightCount, bool lightUploadRequired, const ECSRenderDetail::SceneShadingGpuData& sceneShadingState, bool sceneShadingUploadRequired)noexcept;
     [[nodiscard]] bool createDeferredLightingResources();
     [[nodiscard]] bool createDeferredLightingPipeline();
-    [[nodiscard]] Expected<Core::GpuTaskId> declareDeferredLightingTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, bool useLaggedLightingHistory, Core::GpuTimingSubmissionTicket& timingTicket);
+    [[nodiscard]] Expected<Core::GpuTaskId> declareDeferredLightingTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, bool useLaggedLightingHistory, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket);
     [[nodiscard]] bool renderDeferredLighting(Core::CommandList& commandList, DeferredFrameTargets& targets, bool useLaggedLightingHistory = false);
     [[nodiscard]] Expected<DeferredFrameTargets> createDeferredFrameTargets(u32 width, u32 height);
     [[nodiscard]] bool createDeferredFrameTargetResources(DeferredFrameTargets& targets, Core::Sampler& avboitLinearSampler);
@@ -115,7 +115,7 @@ public:
     [[nodiscard]] bool createDeferredCompositePipeline();
     [[nodiscard]] bool createDeferredPresentPipeline(Core::Framebuffer& presentationFramebuffer);
     void resetDeferredFrameTargets(DeferredFrameTargets& targets);
-    [[nodiscard]] Expected<Core::GpuTaskId> declareDeferredCompositeTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, const ReflectionCompositeInputs& reflectionInputs);
+    [[nodiscard]] Expected<Core::GpuTaskId> declareDeferredCompositeTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const ReflectionCompositeInputs& reflectionInputs, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket);
     [[nodiscard]] bool renderDeferredComposite(Core::CommandList& commandList, DeferredFrameTargets& targets, const ReflectionCompositeInputs& reflectionInputs);
     [[nodiscard]] bool renderDeferredPresent(Core::CommandList& commandList, DeferredFrameTargets& targets, const Core::AcquiredPresentationFrame& presentationFrame, Core::GpuDescriptorHandle outputLayerImage);
 

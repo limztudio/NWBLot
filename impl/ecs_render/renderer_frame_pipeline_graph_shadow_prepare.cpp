@@ -32,7 +32,6 @@ NWB_IMPL_BEGIN
 
 bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     Core::Alloc::ScratchArena& scratchArena,
-    DeferredFrameTargets& deferredTargets,
     const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources,
     const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
     const Core::GpuGraphResourceId currentBindlessSlots,
@@ -42,6 +41,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     const Core::GpuGraphResourceId* const softwareBvhBuildStateResources,
     const usize softwareBvhBuildStateResourceCount,
     const bool softwareTraceResourcesPrepared,
+    DeferredFrameTargets& deferredTargets,
     Core::GpuTimingSubmissionTicket& timingTicket
 ){
     using namespace RendererTaskGraphDetail;

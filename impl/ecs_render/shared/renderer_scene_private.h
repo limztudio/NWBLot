@@ -88,7 +88,7 @@ inline SIMDVectorSingle CausticSlotImportance(const SIMDVectorSingle colorIntens
     return VectorMultiply(luminance, intensity);
 }
 
-inline u32 ResolveSceneLights(Core::ECS::World& world, SceneLightGpuData* outLights, f32* outCausticImportance, const u32 maxLights)noexcept{
+inline u32 ResolveSceneLights(Core::ECS::World& world, const u32 maxLights, SceneLightGpuData* outLights, f32* outCausticImportance)noexcept{
     if(maxLights == 0u)
         return 0u;
 
@@ -99,7 +99,7 @@ inline u32 ResolveSceneLights(Core::ECS::World& world, SceneLightGpuData* outLig
     const SIMDMatrix defaultBasis = NWB::Impl::Scene::BuildDefaultSceneViewBasis();
     NWB::Impl::Scene::SceneLight sceneLights[NWB_SCENE_MAX_LIGHTS];
     f32 shadowImportance[NWB_SCENE_MAX_LIGHTS] = {};
-    const usize gatheredCount = NWB::Impl::Scene::GatherSceneLights(world, defaultBasis.v[2], sceneLights, capacity);
+    const usize gatheredCount = NWB::Impl::Scene::GatherSceneLights(world, defaultBasis.v[2], capacity, sceneLights);
 
     for(usize i = 0u; i < gatheredCount; ++i){
         const NWB::Impl::Scene::SceneLight& src = sceneLights[i];

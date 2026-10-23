@@ -29,7 +29,6 @@ NWB_IMPL_BEGIN
 bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     Core::Alloc::ScratchArena& scratchArena,
     const bool hardwareCaustics,
-    DeferredFrameTargets& deferredTargets,
     const DeferredLightingGraphResources& deferredLightingResources,
     const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
     const Core::GpuGraphResourceId worldPosition,
@@ -44,6 +43,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     const usize softwareTraceGeometryResourceCount,
     const Core::GpuGraphResourceSetId softwareTraceGeometrySet,
     const Core::GpuGraphResourceSetId traceMaterialSampledTextureSet,
+    DeferredFrameTargets& deferredTargets,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>& causticPhotonTiming,
     Optional<Core::GpuTimingMeasure>& causticResolveTiming
@@ -347,11 +347,11 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         const auto accumulatorDecayTaskResult = m_raytracingSystem.declareCausticAccumulatorDecayTask(
             m_deferredLightingTaskGraph,
             accumulatorDecayDesc,
-            deferredTargets,
             meshViewBufferSnapshot,
             m_shadowPreparationOutcome.ready,
             rayTracingResources.causticTemporalDecay,
             false,
+            deferredTargets,
             timingTicket,
             causticPhotonTiming
         );
@@ -382,15 +382,15 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     const auto mDeferredCausticPhotonTaskResult = m_raytracingSystem.declareSoftwareCausticsTask(
         m_deferredLightingTaskGraph,
         photonDesc,
-        deferredTargets,
         deferredLightingResources,
         meshViewBufferSnapshot,
         m_shadowPreparationOutcome.ready,
+        graphOwnsAccumulatorBootstrapClear,
+        graphOwnsNonTemporalAccumulatorClear,
+        deferredTargets,
         timingTicket,
         causticPhotonTiming,
-        m_deferredCausticProducerDispatched,
-        graphOwnsAccumulatorBootstrapClear,
-        graphOwnsNonTemporalAccumulatorClear
+        m_deferredCausticProducerDispatched
     );
     if(!mDeferredCausticPhotonTaskResult){
         m_deferredCausticPhotonTask = {};
@@ -410,7 +410,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         .setExternalStateSources(scratchStateSources, scratchStateSourceCount)
         .setResourceUses(geometryResourceUses.data(), geometryResourceUses.size())
     ;
-    const auto mDeferredCausticGeometryTaskResult = m_raytracingSystem.declareCausticGeometryDownsampleTask(m_deferredLightingTaskGraph, geometryDesc, deferredTargets, timingTicket, m_deferredCausticProducerDispatched, causticResolveTiming);
+    const auto mDeferredCausticGeometryTaskResult = m_raytracingSystem.declareCausticGeometryDownsampleTask(m_deferredLightingTaskGraph, geometryDesc, m_deferredCausticProducerDispatched, deferredTargets, timingTicket, causticResolveTiming);
     if(!mDeferredCausticGeometryTaskResult){
         m_deferredCausticGeometryTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred software-caustics geometry graph task"));

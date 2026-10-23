@@ -117,8 +117,8 @@ public:
         const NWB::Impl::Scene::TransformComponent* transform,
         u32 frameWidth,
         u32 frameHeight,
-        CsgFrameGpuData& csgFrameData,
-        const ECSRenderDetail::MeshViewGpuData* csgWorkRegionMeshViewState
+        const ECSRenderDetail::MeshViewGpuData* csgWorkRegionMeshViewState,
+        CsgFrameGpuData& csgFrameData
     )const;
 
 

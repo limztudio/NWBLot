@@ -72,13 +72,15 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
             MaterialPipelinePass::CsgReceiverSurface,
             true,
             (inputs.csgFrameState),
+            RendererResourceLookupMode::PreparedOnly,
+            &inputs.meshViewState,
             transparentCsgDrawItems,
             transparentCsgInstanceData,
             transparentCsgFrameData,
 #if defined(NWB_DEBUG)
             transparentCsgMaterialTypedRanges,
 #endif
-            transparentCsgMaterialTypedBytes, RendererResourceLookupMode::PreparedOnly, &inputs.meshViewState
+            transparentCsgMaterialTypedBytes
         );
 
         if(!transparentCsgDrawItems.csgReceiverSurface.empty() && transparentCsgFrameData.hasWork()){

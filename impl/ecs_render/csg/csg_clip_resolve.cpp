@@ -392,8 +392,8 @@ Expected<CsgReceiverRangeGpuData> RendererCsgSystem::appendCsgReceiverClipData(
     const Scene::TransformComponent* transform,
     const u32 frameWidth,
     const u32 frameHeight,
-    CsgFrameGpuData& csgFrameData,
-    const ECSRenderDetail::MeshViewGpuData* const csgWorkRegionMeshViewState
+    const ECSRenderDetail::MeshViewGpuData* const csgWorkRegionMeshViewState,
+    CsgFrameGpuData& csgFrameData
 )const{
     CsgReceiverRangeGpuData range;
     if(csgFrameData.cutters.size() > static_cast<usize>(Limit<u32>::s_Max))

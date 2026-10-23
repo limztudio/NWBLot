@@ -18,11 +18,11 @@ NWB_IMPL_BEGIN
 
 [[nodiscard]] Expected<AvboitComputeEmulationCaptureResult> AvboitComputeEmulationCapture::capture(
     const AvboitComputeEmulationCaptureInputs& inputs,
-    ECSRenderDetail::AvboitAliasFreeComputeEmulationGraphPlan& plan,
-    ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphPlan& csgPlan,
     Core::Alloc::ScratchArena& scratchArena,
     usize instanceCount,
-    usize materialTypedByteCount
+    usize materialTypedByteCount,
+    ECSRenderDetail::AvboitAliasFreeComputeEmulationGraphPlan& plan,
+    ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphPlan& csgPlan
 ){
     AvboitComputeEmulationCaptureResult result{};
     const MaterialPassDrawItemPartitions& drawItems = inputs.drawItems;

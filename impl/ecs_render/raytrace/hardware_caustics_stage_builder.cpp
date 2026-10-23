@@ -360,11 +360,11 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
         const auto accumulatorDecayTaskResult = m_raytracingSystem.declareCausticAccumulatorDecayTask(
             m_graph,
             accumulatorDecayDesc,
-            (*inputs.targets),
             (*inputs.meshViewSnapshot),
             *inputs.shadowPreparationReady,
             inputs.rayTracingResources->causticTemporalDecay,
             true,
+            (*inputs.targets),
             (*inputs.timingTicket),
             *inputs.photonTiming
         );
@@ -395,15 +395,15 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
     const auto resultCausticPhotonTaskResult = m_raytracingSystem.declareHardwareCausticsTask(
         m_graph,
         hardwarePhotonDesc,
-        (*inputs.targets),
         (*inputs.lightingResources),
         (*inputs.meshViewSnapshot),
         *inputs.shadowPreparationReady,
+        graphOwnsAccumulatorBootstrapClear,
+        graphOwnsNonTemporalAccumulatorClear,
+        (*inputs.targets),
         (*inputs.timingTicket),
         *inputs.photonTiming,
-        *inputs.producerDispatched,
-        graphOwnsAccumulatorBootstrapClear,
-        graphOwnsNonTemporalAccumulatorClear
+        *inputs.producerDispatched
     );
     if(!resultCausticPhotonTaskResult){
         result.causticPhotonTask = {};
@@ -422,7 +422,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
         .setDependencies(&result.causticPhotonTask, 1u)
         .setResourceUses(hardwareGeometryResourceUses.data(), hardwareGeometryResourceUses.size())
     ;
-    const auto resultCausticGeometryTaskResult = m_raytracingSystem.declareCausticGeometryDownsampleTask(m_graph, hardwareGeometryDesc, (*inputs.targets), (*inputs.timingTicket), *inputs.producerDispatched, *inputs.resolveTiming);
+    const auto resultCausticGeometryTaskResult = m_raytracingSystem.declareCausticGeometryDownsampleTask(m_graph, hardwareGeometryDesc, *inputs.producerDispatched, (*inputs.targets), (*inputs.timingTicket), *inputs.resolveTiming);
     if(!resultCausticGeometryTaskResult){
         result.causticGeometryTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare hardware-caustics geometry graph task"));

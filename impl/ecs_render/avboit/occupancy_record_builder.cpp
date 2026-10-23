@@ -202,13 +202,13 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
     if(occupancyPayload.occupancyStreamsUploaded && !objectGeometry.prepare(
         occupancyPayload.occupancySnapshot.regularIndexedDrawItems.data(),
         occupancyPayload.occupancySnapshot.regularIndexedDrawItems.size(),
-        frameBindings, inputs.targets, occupancyDependency, avboitPreResourceUses, scratchArena, &inputs.preTimingTicket
+        frameBindings, inputs.targets, scratchArena, occupancyDependency, avboitPreResourceUses, &inputs.preTimingTicket
     ))
         return MakeUnexpected(Failure{});
     if(occupancyPayload.occupancyStreamsUploaded && !objectGeometry.prepare(
         occupancyPayload.occupancySnapshot.csgIndexedDrawItems.data(),
         occupancyPayload.occupancySnapshot.csgIndexedDrawItems.size(),
-        frameBindings, inputs.targets, occupancyDependency, avboitPreResourceUses, scratchArena, &inputs.preTimingTicket
+        frameBindings, inputs.targets, scratchArena, occupancyDependency, avboitPreResourceUses, &inputs.preTimingTicket
     ))
         return MakeUnexpected(Failure{});
 

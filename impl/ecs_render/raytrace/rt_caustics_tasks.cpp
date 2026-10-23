@@ -25,11 +25,11 @@ NWB_IMPL_BEGIN
 Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticAccumulatorDecayTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
-    DeferredFrameTargets& targets,
     const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
     const bool& shadowVisibilityPrepared,
     const f32 decayFactor,
     const bool hardwareCaustics,
+    DeferredFrameTargets& targets,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>& causticPhotonTiming
 ){
@@ -52,15 +52,15 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticAccumulatorDec
 Expected<Core::GpuTaskId> RendererRayTracingSystem::declareSoftwareCausticsTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
-    DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
     const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
     const bool& shadowVisibilityPrepared,
+    const bool graphOwnsAccumulatorBootstrapClear,
+    const bool graphOwnsNonTemporalAccumulatorClear,
+    DeferredFrameTargets& targets,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>& causticPhotonTiming,
-    bool& causticProducerDispatched,
-    const bool graphOwnsAccumulatorBootstrapClear,
-    const bool graphOwnsNonTemporalAccumulatorClear
+    bool& causticProducerDispatched
 ){
     return graph.addTask<RayTracingCausticsTaskDetail::SoftwareCausticsGraphTask>(
         desc,
@@ -82,15 +82,15 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareSoftwareCausticsTask(
 Expected<Core::GpuTaskId> RendererRayTracingSystem::declareHardwareCausticsTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
-    DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
     const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
     const bool& shadowVisibilityPrepared,
+    const bool graphOwnsAccumulatorBootstrapClear,
+    const bool graphOwnsNonTemporalAccumulatorClear,
+    DeferredFrameTargets& targets,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>& causticPhotonTiming,
-    bool& causticProducerDispatched,
-    const bool graphOwnsAccumulatorBootstrapClear,
-    const bool graphOwnsNonTemporalAccumulatorClear
+    bool& causticProducerDispatched
 ){
     return graph.addTask<RayTracingCausticsTaskDetail::HardwareCausticsGraphTask>(
         desc,
@@ -112,9 +112,9 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareHardwareCausticsTask(
 Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticGeometryDownsampleTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
+    const bool& causticProducerDispatched,
     DeferredFrameTargets& targets,
     Core::GpuTimingSubmissionTicket& timingTicket,
-    const bool& causticProducerDispatched,
     Optional<Core::GpuTimingMeasure>& causticResolveTiming
 ){
     return graph.addTask<RayTracingCausticsTaskDetail::CausticGeometryDownsampleGraphTask>(
@@ -134,8 +134,8 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticGeometryDownsa
 Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticResolveTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
-    Core::GpuTimingSubmissionTicket& timingTicket,
     const bool& causticProducerDispatched,
+    Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>& causticResolveTiming
 ){
     return graph.addTask<RayTracingCausticsTaskDetail::CausticResolveGraphTask>(
@@ -145,7 +145,7 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticResolveTask(
 }
 
 
-Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticResolvePrepareTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const bool& causticProducerDispatched){
+Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticResolvePrepareTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const bool& causticProducerDispatched, DeferredFrameTargets& targets){
     return graph.addTask<RayTracingCausticsTaskDetail::CausticResolvePrepareGraphTask>(
         desc,
         RayTracingCausticsTaskDetail::CausticResolvePrepareGraphTask::Payload{ .raytracingSystem = *this, .targets = targets, .causticProducerDispatched = causticProducerDispatched, .activity = causticResolveActivitySnapshot(targets), }
@@ -153,7 +153,7 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticResolvePrepare
 }
 
 
-Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticResolveWaveletTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const bool& causticProducerDispatched){
+Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticResolveWaveletTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const bool& causticProducerDispatched, DeferredFrameTargets& targets){
     return graph.addTask<RayTracingCausticsTaskDetail::CausticResolveWaveletGraphTask>(
         desc,
         RayTracingCausticsTaskDetail::CausticResolveWaveletGraphTask::Payload{ .raytracingSystem = *this, .targets = targets, .causticProducerDispatched = causticProducerDispatched, .activity = causticResolveActivitySnapshot(targets), }
@@ -161,7 +161,7 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticResolveWavelet
 }
 
 
-Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticResolveSecondWaveletTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const bool& causticProducerDispatched){
+Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticResolveSecondWaveletTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const bool& causticProducerDispatched, DeferredFrameTargets& targets){
     return graph.addTask<RayTracingCausticsTaskDetail::CausticResolveSecondWaveletGraphTask>(
         desc,
         RayTracingCausticsTaskDetail::CausticResolveSecondWaveletGraphTask::Payload{ .raytracingSystem = *this, .targets = targets, .causticProducerDispatched = causticProducerDispatched, .activity = causticResolveActivitySnapshot(targets), }
@@ -169,7 +169,7 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticResolveSecondW
 }
 
 
-Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticResolveThirdWaveletTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const bool& causticProducerDispatched){
+Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticResolveThirdWaveletTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const bool& causticProducerDispatched, DeferredFrameTargets& targets){
     return graph.addTask<RayTracingCausticsTaskDetail::CausticResolveThirdWaveletGraphTask>(
         desc,
         RayTracingCausticsTaskDetail::CausticResolveThirdWaveletGraphTask::Payload{ .raytracingSystem = *this, .targets = targets, .causticProducerDispatched = causticProducerDispatched, .activity = causticResolveActivitySnapshot(targets), }
@@ -177,7 +177,7 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticResolveThirdWa
 }
 
 
-Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticResolveFourthWaveletTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const bool& causticProducerDispatched){
+Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticResolveFourthWaveletTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const bool& causticProducerDispatched, DeferredFrameTargets& targets){
     return graph.addTask<RayTracingCausticsTaskDetail::CausticResolveFourthWaveletGraphTask>(
         desc,
         RayTracingCausticsTaskDetail::CausticResolveFourthWaveletGraphTask::Payload{ .raytracingSystem = *this, .targets = targets, .causticProducerDispatched = causticProducerDispatched, .activity = causticResolveActivitySnapshot(targets), }
@@ -185,7 +185,7 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticResolveFourthW
 }
 
 
-Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticResolveFifthWaveletTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const bool& causticProducerDispatched){
+Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticResolveFifthWaveletTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const bool& causticProducerDispatched, DeferredFrameTargets& targets){
     return graph.addTask<RayTracingCausticsTaskDetail::CausticResolveFifthWaveletGraphTask>(
         desc,
         RayTracingCausticsTaskDetail::CausticResolveFifthWaveletGraphTask::Payload{ .raytracingSystem = *this, .targets = targets, .causticProducerDispatched = causticProducerDispatched, .activity = causticResolveActivitySnapshot(targets), }
@@ -193,7 +193,7 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticResolveFifthWa
 }
 
 
-Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticResolveUpsampleTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const bool& causticProducerDispatched){
+Expected<Core::GpuTaskId> RendererRayTracingSystem::declareCausticResolveUpsampleTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, const bool& causticProducerDispatched, DeferredFrameTargets& targets){
     return graph.addTask<RayTracingCausticsTaskDetail::CausticResolveUpsampleGraphTask>(
         desc,
         RayTracingCausticsTaskDetail::CausticResolveUpsampleGraphTask::Payload{ .raytracingSystem = *this, .targets = targets, .causticProducerDispatched = causticProducerDispatched, .activity = causticResolveActivitySnapshot(targets), }

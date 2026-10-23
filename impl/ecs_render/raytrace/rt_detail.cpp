@@ -93,7 +93,7 @@ void RetireHeapHandle(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle& 
 }
 
 // Binned-SAH binary BVH over indices[lo, hi); node 0 is the root. Splits on the minimum SAH boundary, median fallback on coincident centroids. Node layout matches the per-mesh build.
-u32 BuildSceneBvhNode(const Span<u32> indices, const u32 lo, const u32 hi, const Span<const SceneBvhPrimitiveCalculation> primitiveBounds, Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena>& nodes, const Span<const u32> instanceLeafCost){
+u32 BuildSceneBvhNode(const u32 lo, const u32 hi, const Span<const SceneBvhPrimitiveCalculation> primitiveBounds, const Span<const u32> instanceLeafCost, const Span<u32> indices, Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena>& nodes){
     const u32 nodeIndex = static_cast<u32>(nodes.size());
     nodes.push_back(SceneBvhNodeCalculation{});
 
@@ -238,8 +238,8 @@ u32 BuildSceneBvhNode(const Span<u32> indices, const u32 lo, const u32 hi, const
     if(!anyAxisValid || mid == lo || mid == hi)
         mid = lo + (hi - lo) / 2u; // degenerate split (coincident centroids everywhere) -> count median; still correct
 
-    const u32 leftChild = BuildSceneBvhNode(indices, lo, mid, primitiveBounds, nodes, instanceLeafCost);
-    const u32 rightChild = BuildSceneBvhNode(indices, mid, hi, primitiveBounds, nodes, instanceLeafCost);
+    const u32 leftChild = BuildSceneBvhNode(lo, mid, primitiveBounds, instanceLeafCost, indices, nodes);
+    const u32 rightChild = BuildSceneBvhNode(mid, hi, primitiveBounds, instanceLeafCost, indices, nodes);
 
     SceneBvhNodeCalculation& node = nodes[nodeIndex];
     StoreFloat(VectorMin(LoadFloat(nodes[leftChild].aabbMin), LoadFloat(nodes[rightChild].aabbMin)), node.aabbMin);

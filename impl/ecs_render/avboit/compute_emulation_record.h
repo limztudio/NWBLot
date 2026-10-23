@@ -116,8 +116,8 @@ template<typename PayloadT>
     const PayloadT& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context,
-    Optional<Core::GpuTimingMeasure>& timing,
-    const AvboitComputeEmulationRecordTrait& trait
+    const AvboitComputeEmulationRecordTrait& trait,
+    Optional<Core::GpuTimingMeasure>& timing
 ){
     static_cast<void>(context);
     const AvboitComputeEmulationRecordInputs inputs{
@@ -151,8 +151,8 @@ template<typename PayloadT, typename DispatchFn>
     const ECSRenderDetail::TransparentMaterialPassGraphSnapshot PayloadT::* snapshotMember,
     const bool PayloadT::* emuOutputStatesMember,
     const bool PayloadT::* csgEmuOutputStatesMember,
-    Optional<Core::GpuTimingMeasure>* timing,
-    DispatchFn&& dispatch
+    DispatchFn&& dispatch,
+    Optional<Core::GpuTimingMeasure>* timing
 ){
     static_cast<void>(context);
     if(((payload.*emuOutputStatesMember || payload.*csgEmuOutputStatesMember) && !payload.generatedGeometryReused && !timing))
@@ -182,9 +182,9 @@ template<typename PayloadT>
     const PayloadT& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context,
-    Optional<Core::GpuTimingMeasure>& timing,
     const bool isRasterPhase,
-    const AvboitSharedComputeEmulationRecordTrait& trait
+    const AvboitSharedComputeEmulationRecordTrait& trait,
+    Optional<Core::GpuTimingMeasure>& timing
 ){
     static_cast<void>(context);
     const AvboitSharedComputeEmulationRecordInputs inputs{

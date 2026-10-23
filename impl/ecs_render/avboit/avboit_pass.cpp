@@ -144,7 +144,7 @@ RendererAvboitPushConstants BuildRendererAvboitPushConstants(const AvboitFrameTa
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererAvboitSystem::prepareAvboitPassResources(Core::Alloc::ScratchArena& scratchArena, DeferredFrameTargets& targets, const CsgFrameState& csgFrameState){
+bool RendererAvboitSystem::prepareAvboitPassResources(Core::Alloc::ScratchArena& scratchArena, const CsgFrameState& csgFrameState, DeferredFrameTargets& targets){
     AvboitFrameTargets& avboitTargets = targets.avboit;
     if(!avboitTargets.valid())
         return false;
@@ -222,9 +222,9 @@ void RendererAvboitSystem::renderAvboitOccupancyPass(
     const bool occupancyMaterialFrameStatesGraphOwned,
     const bool occupancyMaterialGeometryStatesGraphOwned,
     const bool occupancyComputeEmulationOutputStatesGraphOwned,
-    Optional<Core::GpuTimingMeasure>* const occupancyComputeEmulationTiming,
     const bool occupancyCsgComputeEmulationOutputStatesGraphOwned,
-    const bool generatedGeometryReused
+    const bool generatedGeometryReused,
+    Optional<Core::GpuTimingMeasure>* const occupancyComputeEmulationTiming
 ){
     AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
@@ -245,9 +245,9 @@ void RendererAvboitSystem::renderAvboitOccupancyPass(
         occupancyMaterialFrameStatesGraphOwned,
         occupancyMaterialGeometryStatesGraphOwned,
         occupancyComputeEmulationOutputStatesGraphOwned,
-        occupancyComputeEmulationTiming,
         occupancyCsgComputeEmulationOutputStatesGraphOwned,
-        generatedGeometryReused
+        generatedGeometryReused,
+        occupancyComputeEmulationTiming
     );
     commandList.endRenderPass();
 }
@@ -264,9 +264,9 @@ void RendererAvboitSystem::renderAvboitExtinctionPass(
     const bool extinctionMaterialFrameStatesGraphOwned,
     const bool extinctionMaterialGeometryStatesGraphOwned,
     const bool extinctionComputeEmulationOutputStatesGraphOwned,
-    Optional<Core::GpuTimingMeasure>* const extinctionComputeEmulationTiming,
     const bool extinctionCsgComputeEmulationOutputStatesGraphOwned,
-    const bool generatedGeometryReused
+    const bool generatedGeometryReused,
+    Optional<Core::GpuTimingMeasure>* const extinctionComputeEmulationTiming
 ){
     AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
@@ -285,9 +285,9 @@ void RendererAvboitSystem::renderAvboitExtinctionPass(
         extinctionMaterialFrameStatesGraphOwned,
         extinctionMaterialGeometryStatesGraphOwned,
         extinctionComputeEmulationOutputStatesGraphOwned,
-        extinctionComputeEmulationTiming,
         extinctionCsgComputeEmulationOutputStatesGraphOwned,
-        generatedGeometryReused
+        generatedGeometryReused,
+        extinctionComputeEmulationTiming
     );
     commandList.endRenderPass();
 }
@@ -304,9 +304,9 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
     const bool accumulationMaterialFrameStatesGraphOwned,
     const bool accumulationMaterialGeometryStatesGraphOwned,
     const bool accumulationComputeEmulationOutputStatesGraphOwned,
-    Optional<Core::GpuTimingMeasure>* const accumulationComputeEmulationTiming,
     const bool accumulationCsgComputeEmulationOutputStatesGraphOwned,
-    const bool generatedGeometryReused
+    const bool generatedGeometryReused,
+    Optional<Core::GpuTimingMeasure>* const accumulationComputeEmulationTiming
 ){
     AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
@@ -325,9 +325,9 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
         accumulationMaterialFrameStatesGraphOwned,
         accumulationMaterialGeometryStatesGraphOwned,
         accumulationComputeEmulationOutputStatesGraphOwned,
-        accumulationComputeEmulationTiming,
         accumulationCsgComputeEmulationOutputStatesGraphOwned,
-        generatedGeometryReused
+        generatedGeometryReused,
+        accumulationComputeEmulationTiming
     );
     commandList.endRenderPass();
 }

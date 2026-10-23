@@ -48,8 +48,6 @@ NWB_IMPL_BEGIN
 
 Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     Core::Alloc::ScratchArena& scratchArena,
-    DeferredFrameTargets& deferredTargets,
-    ObjectGeometryCacheGraph& objectGeometry,
     const Core::GpuTaskId shadowPrepareTask,
     const CsgFrameState& csgFrameState,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
@@ -62,14 +60,16 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     const Core::GpuGraphResourceId* const shadowTraceGeometryResources,
     const usize shadowTraceGeometryResourceCount,
     const Core::GpuGraphResourceSetId shadowTraceGeometrySet,
+    const bool& asyncPrefixTimingSpansOnePacket,
+    DeferredFrameTargets& deferredTargets,
+    ObjectGeometryCacheGraph& objectGeometry,
     Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
     Optional<Core::GpuTimingMeasure>& deferredClearTiming,
     GraphClearTimingRecordState& deferredClearTimingState,
     GraphClearTimingRecordState& csgIntervalClearTimingState,
     Optional<Core::GpuTimingMeasure>& opaqueRegularSharedComputeEmulationTiming,
     Optional<Core::GpuTimingMeasure>& opaqueCsgIntervalSampleComputeEmulationTiming,
-    Core::GpuTimingSubmissionTicket** const timingTickets,
-    const bool& asyncPrefixTimingSpansOnePacket
+    Core::GpuTimingSubmissionTicket** const timingTickets
 ){
     using namespace RendererTaskGraphDetail;
     namespace PrefixTimingSlotNs = ECSRenderDetail::DeferredGraphicsPrefixTimingSlot;
@@ -211,13 +211,15 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         MaterialPipelinePass::Opaque,
         false,
         csgFrameState,
+        RendererResourceLookupMode::PreparedOnly,
+        &meshViewState,
         opaqueDrawItems,
         instanceData,
         csgFrameData,
 #if defined(NWB_DEBUG)
         materialTypedRanges,
 #endif
-        materialTypedBytes, RendererResourceLookupMode::PreparedOnly, &meshViewState
+        materialTypedBytes
     );
 
     ECSRenderDetail::GbufferGraphTask::Payload gbufferPayload{ m_arena, m_graphics, m_materialSystem, m_csgSystem, deferredTargets, *timingTicketSlot(PrefixTimingSlotNs::Gbuffer), m_graphicsPrefixMeshViewSetupReady, m_graphicsPrefixSceneShadingSetupReady, };
@@ -545,13 +547,13 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> objectGeometryReads{scratchArena};
     if(gbufferPayload.materialDrawBuffersUploaded && !objectGeometry.prepare(
         opaqueDrawItems.regular.indexedDrawItems.data(), opaqueDrawItems.regular.indexedDrawItems.size(),
-        frameBindings, deferredTargets, gbufferDependency, objectGeometryReads, scratchArena,
+        frameBindings, deferredTargets, scratchArena, gbufferDependency, objectGeometryReads,
         nullptr, timingTicketSlot(PrefixTimingSlotNs::Gbuffer)
     ))
         return MakeUnexpected(Failure{});
     if(gbufferPayload.materialDrawBuffersUploaded && !objectGeometry.prepare(
         opaqueDrawItems.csgReceiverSurface.indexedDrawItems.data(), opaqueDrawItems.csgReceiverSurface.indexedDrawItems.size(),
-        frameBindings, deferredTargets, gbufferDependency, objectGeometryReads, scratchArena,
+        frameBindings, deferredTargets, scratchArena, gbufferDependency, objectGeometryReads,
         nullptr, timingTicketSlot(PrefixTimingSlotNs::Gbuffer)
     ))
         return MakeUnexpected(Failure{});
@@ -574,14 +576,14 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     };
     OpaqueComputeEmulationProducerBuilder computeEmulationProducerBuilder(m_deferredLightingTaskGraph);
     if(opaqueComputeEmulationOutputStatesGraphOwned){
-        const auto producerTask = computeEmulationProducerBuilder.declareRegular(scratchArena, computeEmulationProducerInputs, opaqueComputeEmulationOutputUavSetUse, opaqueComputeEmulationPayload, gbufferDependency);
+        const auto producerTask = computeEmulationProducerBuilder.declareRegular(scratchArena, computeEmulationProducerInputs, opaqueComputeEmulationOutputUavSetUse, gbufferDependency, opaqueComputeEmulationPayload);
         if(!producerTask)
             return MakeUnexpected(Failure{});
         m_graphicsPrefixOpaqueComputeEmulationTask = *producerTask;
         gbufferDependency = m_graphicsPrefixOpaqueComputeEmulationTask;
     }
     if(opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned){
-        const auto producerTask = computeEmulationProducerBuilder.declareCsgReceiver(scratchArena, computeEmulationProducerInputs, csgResources, opaqueCsgReceiverComputeEmulationOutputUavSetUse, opaqueCsgReceiverComputeEmulationPayload, gbufferDependency);
+        const auto producerTask = computeEmulationProducerBuilder.declareCsgReceiver(scratchArena, computeEmulationProducerInputs, csgResources, opaqueCsgReceiverComputeEmulationOutputUavSetUse, gbufferDependency, opaqueCsgReceiverComputeEmulationPayload);
         if(!producerTask)
             return MakeUnexpected(Failure{});
         m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask = *producerTask;
@@ -645,8 +647,8 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
                 .materialFrameStatesGraphOwned = opaqueSharedMaterialFrameStatesGraphOwned,
                 .materialGeometryStatesGraphOwned = opaqueSharedMaterialGeometryStatesGraphOwned,
             },
-            m_graphicsPrefixOpaqueSharedComputeEmulationTasks,
-            LengthOf(m_graphicsPrefixOpaqueSharedComputeEmulationTasks)
+            LengthOf(m_graphicsPrefixOpaqueSharedComputeEmulationTasks),
+            m_graphicsPrefixOpaqueSharedComputeEmulationTasks
         );
         if(!sharedComputeEmulationChain)
             return MakeUnexpected(Failure{});

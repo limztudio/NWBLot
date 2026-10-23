@@ -63,15 +63,15 @@ namespace RendererTaskGraphDetail{
     Core::Alloc::GlobalArena& arena,
     RendererMaterialSystem& materialSystem,
     RendererCsgSystem& csgSystem,
-    DeferredFrameTargets& targets,
     const CsgFrameState& csgFrameState,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const ECSRenderDetail::MeshViewGpuData& meshViewState,
-    ObjectGeometryCacheGraph& objectGeometry,
-    AvboitGeneratedGeometryReuse& generatedGeometry,
     Core::GpuTaskId dependency,
-    bool enabled
+    bool enabled,
+    DeferredFrameTargets& targets,
+    ObjectGeometryCacheGraph& objectGeometry,
+    AvboitGeneratedGeometryReuse& generatedGeometry
 );
 
 

@@ -69,7 +69,7 @@ namespace RendererTaskGraphDetail{
     const AvboitComputeEmulationRecordTrait trait{ RendererGpuTimingScope::s_AvboitOccupancy, MaterialPipelinePass::AvboitOccupancy, &AvboitFrameTargets::lowFramebuffer, };
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
 
-    return RecordAvboitComputeEmulationFromPayload(scratchArena, payload, commandList, context, payload.occupancyTiming, trait);
+    return RecordAvboitComputeEmulationFromPayload(scratchArena, payload, commandList, context, trait, payload.occupancyTiming);
 }
 
 
@@ -82,7 +82,7 @@ namespace RendererTaskGraphDetail{
     const AvboitSharedComputeEmulationRecordTrait trait{ RendererGpuTimingScope::s_AvboitOccupancy, MaterialPipelinePass::AvboitOccupancy, &AvboitFrameTargets::lowFramebuffer, };
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
 
-    return RecordAvboitSharedComputeEmulationFromPayload(scratchArena, payload, commandList, context, payload.occupancyTiming, payload.phase == AvboitOccupancySharedComputeEmulationGraphTask::Phase::Raster, trait);
+    return RecordAvboitSharedComputeEmulationFromPayload(scratchArena, payload, commandList, context, payload.phase == AvboitOccupancySharedComputeEmulationGraphTask::Phase::Raster, trait, payload.occupancyTiming);
 }
 
 
@@ -102,7 +102,6 @@ namespace RendererTaskGraphDetail{
         &Payload::occupancySnapshot,
         &Payload::occupancyComputeEmulationOutputStatesGraphOwned,
         &Payload::occupancyCsgComputeEmulationOutputStatesGraphOwned,
-        payload.occupancyComputeEmulationTiming,
         [&](Core::CommandList& dispatchCommandList, const MaterialPassDrawItemPartitions& dispatchDrawItems, const CsgFrameGpuData& dispatchCsgFrameData, const usize dispatchInstanceCount, const usize dispatchMaterialTypedByteCount){
             payload.avboitSystem.renderAvboitOccupancyPass(
                 dispatchCommandList,
@@ -116,11 +115,12 @@ namespace RendererTaskGraphDetail{
                 payload.occupancyMaterialFrameStatesGraphOwned,
                 payload.occupancyMaterialGeometryStatesGraphOwned,
                 payload.occupancyComputeEmulationOutputStatesGraphOwned,
-                payload.occupancyComputeEmulationTiming,
                 payload.occupancyCsgComputeEmulationOutputStatesGraphOwned,
-                payload.generatedGeometryReused
+                payload.generatedGeometryReused,
+                payload.occupancyComputeEmulationTiming
             );
-        }
+        },
+        payload.occupancyComputeEmulationTiming
     );
 }
 

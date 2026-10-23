@@ -43,13 +43,15 @@ AvboitPassUploadHelper::AvboitPassUploadHelper(RendererMaterialSystem& materialS
         inputs.pass,
         true,
         inputs.csgFrameState,
+        RendererResourceLookupMode::PreparedOnly,
+        &inputs.meshViewState,
         drawItems,
         instanceData,
         csgFrameData,
 #if defined(NWB_DEBUG)
         materialTypedRanges,
 #endif
-        materialTypedBytes, RendererResourceLookupMode::PreparedOnly, &inputs.meshViewState
+        materialTypedBytes
     );
 
     result.hasDrawItems = !drawItems.empty();

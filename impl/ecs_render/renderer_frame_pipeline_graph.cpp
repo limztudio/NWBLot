@@ -83,13 +83,18 @@ NWB_IMPL_BEGIN
 void RendererFramePipeline::buildDeferredLightingTaskGraph(
     Core::Alloc::ScratchArena& scratchArena,
     const ECSRenderDetail::RendererFrameGraphFeatures& features,
-    DeferredFrameTargets& deferredTargets,
     const CsgFrameState& csgFrameState,
     const bool clearAvboitTargets,
     const bool hasTransparentRenderers,
     const bool hasOpaqueCsgFrameWork,
     const f32 meshViewAspectRatio,
     const Core::AcquiredPresentationFrame& presentationFrame,
+    const bool& asyncPrefixTimingSpansOnePacket,
+    const Core::QueueSubmissionToken& surfelCounterReadbackCompletionToken,
+    const Core::QueueSubmissionToken& laggedLightingHistoryReadReadyToken,
+    const Core::QueueSubmissionToken& laggedLightingHistoryWriterDrainToken,
+    const bool includeLaggedLightingHistoryCapture,
+    DeferredFrameTargets& deferredTargets,
     Core::GpuTimingFrameTransaction& frameTimingTransaction,
     Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
     Optional<Core::GpuTimingMeasure>& deferredClearTiming,
@@ -99,7 +104,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     Optional<Core::GpuTimingMeasure>& opaqueCsgIntervalSampleComputeEmulationTiming,
     Core::GpuTimingSubmissionTicket& shadowPrepareTimingTicket,
     Core::GpuTimingSubmissionTicket** const graphicsPrefixTimingTickets,
-    const bool& asyncPrefixTimingSpansOnePacket,
     Optional<Core::GpuTimingMeasure>& asyncFinalTiming,
     Core::GpuTimingSubmissionTicket& avboitPreTimingTicket,
     GraphClearTimingRecordState& avboitClearTimingState,
@@ -128,11 +132,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     Optional<Core::GpuTimingMeasure>& causticResolveTiming,
     Core::GpuTimingSubmissionTicket& lightingTimingTicket,
     Core::GpuTimingSubmissionTicket& compositeTimingTicket,
-    Core::GpuTimingSubmissionTicket& presentTimingTicket,
-    const Core::QueueSubmissionToken& surfelCounterReadbackCompletionToken,
-    const Core::QueueSubmissionToken& laggedLightingHistoryReadReadyToken,
-    const Core::QueueSubmissionToken& laggedLightingHistoryWriterDrainToken,
-    const bool includeLaggedLightingHistoryCapture
+    Core::GpuTimingSubmissionTicket& presentTimingTicket
 ){
     using namespace RendererTaskGraphDetail;
 
@@ -269,7 +269,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
 
     if(!declareDeferredShadowPrepareTask(
         scratchArena,
-        deferredTargets,
         rayTracingShadowResources,
         rayTracingGraphResources,
         currentBindlessSlots,
@@ -279,6 +278,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         traceGeometry.softwareBvhBuildState.data(),
         traceGeometry.softwareBvhBuildState.size(),
         traceGeometry.softwareTraceResourcesPrepared,
+        deferredTargets,
         shadowPrepareTimingTicket
     )){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shared shadow-preparation packet"));
@@ -295,8 +295,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     ObjectGeometryCacheGraph objectGeometry(m_deferredLightingTaskGraph, m_materialSystem, m_meshSystem, scratchArena);
     auto graphicsPrefixResult = declareDeferredGraphicsPrefixTasks(
         scratchArena,
-        deferredTargets,
-        objectGeometry,
         shadowPrepareHandoffTask,
         csgFrameState,
         frameBindings,
@@ -309,14 +307,16 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         traceGeometry.traceGeometry.data(),
         traceGeometry.traceGeometry.size(),
         traceGeometry.shadowTraceGeometrySet,
+        asyncPrefixTimingSpansOnePacket,
+        deferredTargets,
+        objectGeometry,
         asyncPrefixTiming,
         deferredClearTiming,
         deferredClearTimingState,
         opaqueCsgIntervalClearTimingState,
         opaqueRegularSharedComputeEmulationTiming,
         opaqueCsgIntervalSampleComputeEmulationTiming,
-        graphicsPrefixTimingTickets,
-        asyncPrefixTimingSpansOnePacket
+        graphicsPrefixTimingTickets
     );
     if(!graphicsPrefixResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred graphics-prefix packet"));
@@ -412,7 +412,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     // Effects start from the prefix packet; declare Shadow/Software first for stable queue assignment.
     if(!declareDeferredShadowVisibilityTask(
         scratchArena,
-        deferredTargets,
         deferredLightingResources,
         rayTracingShadowResources,
         rayTracingGraphResources,
@@ -433,6 +432,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         traceGeometry.traceMaterialSampledTextureSet,
         m_graphicsPrefixTask,
         features.laggedLightingHistoryWriterWaitPending ? m_deferredLightingHistoryWriterDrainCompletion : Core::GpuExternalCompletionId{},
+        deferredTargets,
         shadowVisibilityTimingTicket,
         shadowVisibilityAsyncTiming,
         shadowVisibilityTiming,
@@ -446,7 +446,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     if(!declaresHardwareCaustics && !declareDeferredSoftwareCausticsTask(
         scratchArena,
         declaresHardwareCaustics,
-        deferredTargets,
         deferredLightingResources,
         rayTracingGraphResources,
         worldPosition,
@@ -461,6 +460,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         traceGeometry.softwareTraceGeometry.size(),
         traceGeometry.softwareTraceGeometrySet,
         traceGeometry.traceMaterialSampledTextureSet,
+        deferredTargets,
         softwareCausticsTimingTicket,
         causticPhotonTiming,
         causticResolveTiming
@@ -470,7 +470,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     // Declare Surfel GI before hardware/AVBOIT to keep effects -> surfel -> suffix order.
     if(!declareDeferredSurfelGiTask(
         scratchArena,
-        deferredTargets,
         deferredLightingResources,
         rayTracingGraphResources,
         rayTracingSurfelResources,
@@ -488,6 +487,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         effectsTask,
         useLaggedLightingHistory,
         m_deferredSurfelGiCounterReadbackCompletion,
+        deferredTargets,
         surfelGiTimingTicket,
         surfelGiAsyncTiming
     ))
@@ -667,8 +667,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             .refractionHardwareLogged = &m_refractionHardwareLogged,
             .refractionScreenLogged = &m_refractionScreenLogged,
         },
-        sceneReads,
-        scratchArena
+        scratchArena,
+        sceneReads
     );
     if(!reflectionResolveResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare reflection graph tasks"));
@@ -701,12 +701,12 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             .presentationFrame = presentationFrame,
             .presentationFramebufferDesc = presentationFramebufferDesc,
         },
-        deferredTargets,
         reflectionCompositeInputs,
+        m_deferredShadowVisibilityTask,
+        deferredTargets,
         compositeTimingTicket,
         presentTimingTicket,
         asyncFinalTiming,
-        m_deferredShadowVisibilityTask,
         frameTimingTransaction
     );
     if(!suffixResult)

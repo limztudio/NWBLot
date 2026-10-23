@@ -37,14 +37,14 @@ public:
 
 
 public:
-    [[nodiscard]] Expected<Core::GpuTaskId> declareAgeFreeTask(const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& asyncTiming);
-    [[nodiscard]] Expected<Core::GpuTaskId> declareHashBuildTask(const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& asyncTiming);
-    [[nodiscard]] Expected<Core::GpuTaskId> declareSpawnTask(const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& asyncTiming);
-    [[nodiscard]] Expected<Core::GpuTaskId> declareTraceBuildArgsTask(const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& asyncTiming);
-    [[nodiscard]] Expected<Core::GpuTaskId> declareTraceTask(const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& asyncTiming);
-    [[nodiscard]] Expected<Core::GpuTaskId> declareResolveTask(const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& asyncTiming);
+    [[nodiscard]] Expected<Core::GpuTaskId> declareAgeFreeTask(const Core::GpuTaskDesc& desc, const DeferredLightingGraphResources& deferredLightingResources, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& asyncTiming);
+    [[nodiscard]] Expected<Core::GpuTaskId> declareHashBuildTask(const Core::GpuTaskDesc& desc, const DeferredLightingGraphResources& deferredLightingResources, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& asyncTiming);
+    [[nodiscard]] Expected<Core::GpuTaskId> declareSpawnTask(const Core::GpuTaskDesc& desc, const DeferredLightingGraphResources& deferredLightingResources, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& asyncTiming);
+    [[nodiscard]] Expected<Core::GpuTaskId> declareTraceBuildArgsTask(const Core::GpuTaskDesc& desc, const DeferredLightingGraphResources& deferredLightingResources, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& asyncTiming);
+    [[nodiscard]] Expected<Core::GpuTaskId> declareTraceTask(const Core::GpuTaskDesc& desc, const DeferredLightingGraphResources& deferredLightingResources, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& asyncTiming);
+    [[nodiscard]] Expected<Core::GpuTaskId> declareResolveTask(const Core::GpuTaskDesc& desc, const DeferredLightingGraphResources& deferredLightingResources, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>& asyncTiming);
     // Records the phases the split route left over; only the resolve-owning route brackets the shared async range.
-    [[nodiscard]] Expected<Core::GpuTaskId> declareTerminalTask(const Core::GpuTaskDesc& desc, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>* asyncTiming);
+    [[nodiscard]] Expected<Core::GpuTaskId> declareTerminalTask(const Core::GpuTaskDesc& desc, const DeferredLightingGraphResources& deferredLightingResources, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, Optional<Core::GpuTimingMeasure>* asyncTiming);
 
 
 private:

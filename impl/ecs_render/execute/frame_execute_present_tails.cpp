@@ -48,16 +48,16 @@ bool FrameExecutePresentTails::executeSurfelCounterReadback(const Core::GpuPhysi
         const Core::GpuTaskGraphTaskAcceptedCallback readbackAcceptedCallback{ .task = renderer.m_deferredSurfelGiCounterReadbackTask, .context = &readbackContext, .invoke = FrameExecuteSurfelReadback::AcceptReadbackFinalState, };
         const Core::GpuTaskScheduler& scheduler = renderer.m_graphics.gpuTasks();
         const bool readbackAccepted = scheduler.executeTask(
-            renderer.m_deferredLightingTaskGraph,
             renderer.m_deferredLightingCompiledGraph,
-            renderer.m_deferredLightingRecordedGraph,
             renderer.m_deferredSurfelGiCounterReadbackTask,
             &readbackRecordedCallback,
+            &readbackAcceptedCallback,
+            scratchArena,
+            renderer.m_deferredLightingTaskGraph,
+            renderer.m_deferredLightingRecordedGraph,
             renderer.m_deferredLightingSubmissionTransaction,
             &renderer.m_graphics.gpuTiming(),
-            scratchArena,
-            nullptr,
-            &readbackAcceptedCallback
+            nullptr
         );
         const Core::QueueSubmissionToken readbackSubmissionToken = renderer.m_deferredLightingSubmissionTransaction.taskToken(m_compiledPlan, renderer.m_deferredSurfelGiCounterReadbackTask);
         if(!readbackSubmissionToken.valid()){
@@ -117,16 +117,16 @@ void FrameExecutePresentTails::executeLaggedLightingHistoryCapture(DeferredFrame
             const Core::GpuTaskGraphTaskAcceptedCallback historyCopyAcceptedCallback{ .task = renderer.m_deferredLaggedLightingHistoryTask, .context = &historyCopyAcceptance, .invoke = FrameExecuteHistoryCopy::AcceptHistoryCopyFinalState, };
             const Core::GpuTaskScheduler& scheduler = renderer.m_graphics.gpuTasks();
             const bool historyCopyAccepted = scheduler.executeTask(
-                renderer.m_deferredLightingTaskGraph,
                 renderer.m_deferredLightingCompiledGraph,
-                renderer.m_deferredLightingRecordedGraph,
                 renderer.m_deferredLaggedLightingHistoryTask,
                 &historyCopyRecordedCallback,
+                &historyCopyAcceptedCallback,
+                scratchArena,
+                renderer.m_deferredLightingTaskGraph,
+                renderer.m_deferredLightingRecordedGraph,
                 renderer.m_deferredLightingSubmissionTransaction,
                 &renderer.m_graphics.gpuTiming(),
-                scratchArena,
-                nullptr,
-                &historyCopyAcceptedCallback
+                nullptr
             );
             const Core::QueueSubmissionToken historyCopySubmissionToken = renderer.m_deferredLightingSubmissionTransaction.taskToken(m_compiledPlan, renderer.m_deferredLaggedLightingHistoryTask);
             if(historyCopySubmissionToken.valid() && (!historyCopyAccepted || !historyCopyAcceptance.acceptedStateReady)){

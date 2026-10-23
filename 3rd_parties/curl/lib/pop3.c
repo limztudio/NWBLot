@@ -699,9 +699,8 @@ static CURLcode pop3_perform_authentication(struct Curl_easy *data,
     /* Calculate the SASL login details */
     result = Curl_sasl_start(&pop3c->sasl, data, FALSE, &progress);
 
-    if(!result)
-      if(progress == SASL_INPROGRESS)
-        pop3_state(data, POP3_AUTH);
+    if(!result && progress == SASL_INPROGRESS)
+      pop3_state(data, POP3_AUTH);
   }
 
   if(!result && progress == SASL_IDLE) {
@@ -1655,7 +1654,7 @@ static CURLcode pop3_doing(struct Curl_easy *data, bool *dophase_done)
   return result;
 }
 
-static void pop3_easy_dtor(void *key, size_t klen, void *entry)
+static void pop3_easy_dtor(const void *key, size_t klen, void *entry)
 {
   struct POP3 *pop3 = entry;
   (void)key;
@@ -1667,7 +1666,7 @@ static void pop3_easy_dtor(void *key, size_t klen, void *entry)
   curlx_free(pop3);
 }
 
-static void pop3_conn_dtor(void *key, size_t klen, void *entry)
+static void pop3_conn_dtor(const void *key, size_t klen, void *entry)
 {
   struct pop3_conn *pop3c = entry;
   (void)key;

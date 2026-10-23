@@ -366,6 +366,9 @@ static CURLcode tftp_tx(struct tftp_conn *state, tftp_event_t event)
   char *bufptr;
   bool eos;
 
+  if(!data->state.upload)
+    return CURLE_TFTP_ILLEGAL;
+
   switch(event) {
 
   case TFTP_EVENT_ACK:
@@ -770,10 +773,14 @@ static CURLcode tftp_send_first(struct tftp_conn *state,
     break;
 
   case TFTP_EVENT_ACK: /* Connected for transmit */
+    if(!data->state.upload)
+      return CURLE_TFTP_ILLEGAL;
     result = tftp_connect_for_tx(state, event);
     break;
 
   case TFTP_EVENT_DATA: /* Connected for receive */
+    if(data->state.upload)
+      return CURLE_TFTP_ILLEGAL;
     result = tftp_connect_for_rx(state, event);
     break;
 
@@ -880,7 +887,7 @@ static CURLcode tftp_state_machine(struct tftp_conn *state,
   return result;
 }
 
-static void tftp_conn_dtor(void *key, size_t klen, void *entry)
+static void tftp_conn_dtor(const void *key, size_t klen, void *entry)
 {
   struct tftp_conn *state = entry;
   (void)key;
@@ -1007,7 +1014,7 @@ static CURLcode tftp_done(struct Curl_easy *data, CURLcode status,
   (void)status;
   (void)premature;
 
-  if(Curl_pgrsDone(data))
+  if(Curl_pgrsDone(data, Curl_pgrs_now(data)))
     return CURLE_ABORTED_BY_CALLBACK;
 
   /* If we have encountered an error */
@@ -1074,6 +1081,8 @@ static CURLcode tftp_receive_packet(struct Curl_easy *data,
 
     switch(state->event) {
     case TFTP_EVENT_DATA:
+      if(data->state.upload)
+        return CURLE_TFTP_ILLEGAL;
       /* Do not pass to the client empty or retransmitted packets */
       if(state->rbytes > 4 &&
          (NEXT_BLOCKNUM(state->block) == getrpacketblock(&state->rpacket))) {

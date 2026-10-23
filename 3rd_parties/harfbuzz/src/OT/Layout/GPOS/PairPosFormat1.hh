@@ -16,7 +16,7 @@ struct PairPosFormat1_3
 
   protected:
   HBUINT16      format;                 /* Format identifier--format = 1 */
-  typename Types::template OffsetTo<Coverage>
+  typename Types::template LOffsetTo<Coverage>
                 coverage;               /* Offset to Coverage table--from
                                          * beginning of subtable */
   ValueFormat   valueFormat[2];         /* [0] Defines the types of data in
@@ -25,11 +25,11 @@ struct PairPosFormat1_3
                                         /* [1] Defines the types of data in
                                          * ValueRecord2--for the second glyph
                                          * in the pair--may be zero (0) */
-  Array16Of<typename Types::template OffsetTo<PairSet>>
-                pairSet;                /* Array of PairSet tables
-                                         * ordered by Coverage Index */
+  typename Types::template ArrayOf<typename Types::template OffsetTo<PairSet>>
+                pairSet;                /* Array of PairSet tables ordered by
+                                         * Coverage Index */
   public:
-  DEFINE_SIZE_ARRAY (8 + Types::size, pairSet);
+  DEFINE_SIZE_ARRAY (2 + Types::LOffset::static_size + 2 * ValueFormat::static_size + Types::HBUINT::static_size, pairSet);
 
   bool sanitize (hb_sanitize_context_t *c) const
   {
@@ -56,7 +56,7 @@ struct PairPosFormat1_3
 
     if (pairSet.len > glyphs->get_population () * hb_bit_storage ((unsigned) pairSet.len))
     {
-      for (hb_codepoint_t g : glyphs->iter())
+      for (hb_codepoint_t g : glyphs->iter ())
       {
 	unsigned i = cov.get_coverage (g);
 	if ((this+pairSet[i]).intersects (glyphs, valueFormat))
@@ -241,8 +241,6 @@ struct PairPosFormat1_3
                                                                  bool strip_hints, bool strip_empty,
                                                                  const hb_hashmap_t<unsigned, hb_pair_t<unsigned, int>> *varidx_delta_map = nullptr) const
   {
-    unsigned record_size = PairSet::get_size (valueFormat);
-
     unsigned format1 = 0;
     unsigned format2 = 0;
     for (const auto & _ :
@@ -252,20 +250,13 @@ struct PairPosFormat1_3
 	)
     {
       const PairSet& set = (this + _);
-      const PairValueRecord *record = &set.firstPairValueRecord;
+      auto formats = set.get_values_view (valueFormat).compute_effective_value_formats (
+          glyphset, valueFormat, strip_hints, strip_empty, varidx_delta_map);
+      format1 |= formats.first;
+      format2 |= formats.second;
 
-      unsigned count = set.len;
-      for (unsigned i = 0; i < count; i++)
-      {
-        if (record->intersects (glyphset))
-        {
-          format1 = format1 | valueFormat[0].get_effective_format (record->get_values_1 (), strip_hints, strip_empty, &set, varidx_delta_map);
-          format2 = format2 | valueFormat[1].get_effective_format (record->get_values_2 (valueFormat[0]), strip_hints, strip_empty, &set, varidx_delta_map);
-        }
-        record = &StructAtOffset<const PairValueRecord> (record, record_size);
-      }
-
-      if (format1 == valueFormat[0] && format2 == valueFormat[1])
+      if (!varidx_delta_map &&
+          format1 == valueFormat[0] && format2 == valueFormat[1])
         break;
     }
 

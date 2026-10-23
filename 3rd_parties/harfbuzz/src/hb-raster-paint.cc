@@ -128,19 +128,17 @@ ensure_initialized (hb_raster_paint_t *c)
 
   if (hb_color_get_alpha (c->background))
   {
-    uint32_t bg = HB_COLOR (hb_color_get_blue (c->background),
-			    hb_color_get_green (c->background),
-			    hb_color_get_red (c->background),
-			    hb_color_get_alpha (c->background));
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wcast-align"
-    uint32_t *pixels = (uint32_t *) hb_raster_image_get_buffer (root);
-#pragma GCC diagnostic pop
+    uint32_t bg = color_to_premul_pixel (c->background);
     hb_raster_extents_t ext;
     hb_raster_image_get_extents (root, &ext);
-    unsigned count = ext.width * ext.height;
-    for (unsigned i = 0; i < count; i++)
-      pixels[i] = bg;
+    const uint8_t *buf = hb_raster_image_get_buffer (root);
+    for (unsigned y = 0; y < ext.height; y++)
+    {
+      hb_packed_t<uint32_t> *row =
+	(hb_packed_t<uint32_t> *) (buf + (size_t) y * ext.stride);
+      for (unsigned x = 0; x < ext.width; x++)
+	row[x] = hb_packed_t<uint32_t> (bg);
+    }
   }
 
   if (unlikely (!c->surface_stack.push_or_fail (root)))
@@ -2589,9 +2587,9 @@ hb_raster_paint_render (hb_raster_paint_t *paint)
  *
  * Discards accumulated paint output so @paint can be reused for
  * another render.  User configuration (base transform, scale
- * factors, foreground, custom palette colors) is preserved.  Call
- * hb_raster_paint_reset() to also reset user configuration to
- * defaults.
+ * factors, foreground, background, palette, custom palette colors)
+ * is preserved.  Call hb_raster_paint_reset() to also reset user
+ * configuration to defaults.
  *
  * Since: 14.2.0
  **/
@@ -2625,6 +2623,8 @@ hb_raster_paint_reset (hb_raster_paint_t *paint)
   paint->x_scale_factor = 1.f;
   paint->y_scale_factor = 1.f;
   paint->foreground = HB_COLOR (0, 0, 0, 255);
+  paint->background = HB_COLOR (0, 0, 0, 0);
+  paint->palette = 0;
   paint->budget = HB_BUDGET_DEFAULT;
   hb_raster_paint_clear_custom_palette_colors (paint);
   hb_raster_paint_clear (paint);

@@ -206,6 +206,9 @@ struct hb_bit_set_invertible_t
       return s.is_equal (other.s);
     else
     {
+      if (get_population () != other.get_population ())
+	return false;
+
       /* TODO Add iter_ranges() and use here. */
       auto it1 = iter ();
       auto it2 = other.iter ();
@@ -337,7 +340,7 @@ struct hb_bit_set_invertible_t
       base = 0;
     else
     {
-      base = *codepoint & -hb_bit_page_t::ELT_BITS;
+      base = *codepoint & ~hb_bit_page_t::ELT_MASK;
       if (unlikely (base >= INVALID - hb_bit_page_t::ELT_BITS + 1))
 	goto done;
       base += hb_bit_page_t::ELT_BITS;
@@ -514,7 +517,7 @@ struct hb_bit_set_invertible_t
 
     void sync ()
     {
-      base = v & -hb_bit_page_t::ELT_BITS;
+      base = v & ~hb_bit_page_t::ELT_MASK;
       hb_codepoint_t cursor = base ? base - hb_bit_page_t::ELT_BITS : INVALID;
       s->next_bits (&cursor, &bits);
       unsigned int bit = v & (hb_bit_page_t::ELT_BITS - 1);

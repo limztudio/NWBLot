@@ -16,6 +16,39 @@
 
 
 // Refraction admits the nearest retained boundary. Rejected faces/instances do not need a material.
+NwbMeshSurface nwbRefractionEvaluateTriangleSurface(const NwbRtInstanceMaterial material, const float3 position, const float3 direction, const uint primitive, const float2 barycentrics, const float3x4 worldToObject){
+    const uint triangleBase = primitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
+    const NwbRayTraceVertexAttrib a0 = nwbRayTraceDecodeVertexAttrib(nwbHeapRawBuffer(material.attributeSlot).Load4(triangleBase * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
+    const NwbRayTraceVertexAttrib a1 = nwbRayTraceDecodeVertexAttrib(nwbHeapRawBuffer(material.attributeSlot).Load4((triangleBase + 1u) * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
+    const NwbRayTraceVertexAttrib a2 = nwbRayTraceDecodeVertexAttrib(nwbHeapRawBuffer(material.attributeSlot).Load4((triangleBase + 2u) * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
+    const float3 weights = float3(1.0 - barycentrics.x - barycentrics.y, barycentrics.x, barycentrics.y);
+    NwbShadowHit surfaceHit;
+    surfaceHit.meshInstanceIndex = material.meshInstanceIndex;
+    surfaceHit.surfaceDispatchId = material.surfaceDispatchId;
+    surfaceHit.materialConstantByteOffset = material.materialConstantByteOffset;
+    surfaceHit.worldPosition = position;
+    surfaceHit.worldNormal = nwbRayTraceTransformSurfaceNormal(worldToObject, float3(a0.normal) * weights.x + float3(a1.normal) * weights.y + float3(a2.normal) * weights.z);
+    surfaceHit.uv0 = a0.uv0 * weights.x + a1.uv0 * weights.y + a2.uv0 * weights.z;
+    surfaceHit.rayDirection = direction;
+    return nwbShadowDispatchSurface(material.surfaceDispatchId, surfaceHit);
+}
+
+NwbMeshSurface nwbRefractionEvaluateGeometrySurface(const NwbRtInstanceMaterial material, const float3 position, const float3 direction, const NwbRayTraceGeometryHit geometry){
+#if NWB_RT_CSG_ENABLED
+    if(geometry.cutter != NWB_CSG_RAY_INVALID_INDEX){
+        NwbShadowHit surfaceHit = (NwbShadowHit)0;
+        surfaceHit.meshInstanceIndex = material.meshInstanceIndex;
+        surfaceHit.surfaceDispatchId = material.surfaceDispatchId;
+        surfaceHit.materialConstantByteOffset = material.materialConstantByteOffset;
+        surfaceHit.worldPosition = position;
+        surfaceHit.worldNormal = geometry.geometricNormal;
+        surfaceHit.rayDirection = direction;
+        return nwbShadowDispatchSurface(material.surfaceDispatchId, surfaceHit);
+    }
+#endif
+    return nwbRefractionEvaluateTriangleSurface(material, position, direction, geometry.primitive, geometry.barycentrics, geometry.worldToObject);
+}
+
 NwbRayTraceSurfaceHit nwbRefractionClosestEntryInterface(const uint instanceMaterialHeapSlot, const float3 origin, const float3 direction, const float minDistance, const float maxDistance, out uint outAttributeSlot){
     outAttributeSlot = 0u;
 #if NWB_RT_CSG_ENABLED
@@ -30,8 +63,27 @@ NwbRayTraceSurfaceHit nwbRefractionClosestEntryInterface(const uint instanceMate
 #endif
         return rejected;
     }
-    outAttributeSlot = nwbHeapRtInstanceMaterials(instanceMaterialHeapSlot)[geometry.instance].attributeSlot;
-    return nwbRayTraceReconstructValidatedSurfaceHit(instanceMaterialHeapSlot, origin, direction, geometry);
+    const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(instanceMaterialHeapSlot)[geometry.instance];
+    if((material.flags & (NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT | NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE)) == 0u){
+        NwbRayTraceSurfaceHit rejected = (NwbRayTraceSurfaceHit)0;
+#if NWB_REFRACTION_DIAGNOSTICS
+        rejected.queryBudgetUnits = geometry.queryBudgetUnits;
+        rejected.physicalQueries = geometry.physicalQueries;
+#endif
+        return rejected;
+    }
+    outAttributeSlot = material.attributeSlot;
+    NwbRayTraceSurfaceHit hit = (NwbRayTraceSurfaceHit)0;
+    hit.hit = true;
+    hit.instance = geometry.instance;
+    hit.meshInstanceIndex = material.meshInstanceIndex;
+    hit.position = origin + direction * geometry.distance;
+#if NWB_REFRACTION_DIAGNOSTICS
+    hit.queryBudgetUnits = geometry.queryBudgetUnits;
+    hit.physicalQueries = geometry.physicalQueries;
+#endif
+    hit.surface = nwbRefractionEvaluateGeometrySurface(material, hit.position, direction, geometry);
+    return hit;
 #else
     RayDesc ray;
     ray.Origin = origin;
@@ -53,21 +105,7 @@ NwbRayTraceSurfaceHit nwbRefractionClosestEntryInterface(const uint instanceMate
     hit.instance = instance;
     hit.meshInstanceIndex = material.meshInstanceIndex;
     hit.position = origin + direction * query.CommittedRayT();
-    const uint triangleBase = query.CommittedPrimitiveIndex() * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
-    const NwbRayTraceVertexAttrib a0 = nwbRayTraceDecodeVertexAttrib(nwbHeapRawBuffer(material.attributeSlot).Load4(triangleBase * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
-    const NwbRayTraceVertexAttrib a1 = nwbRayTraceDecodeVertexAttrib(nwbHeapRawBuffer(material.attributeSlot).Load4((triangleBase + 1u) * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
-    const NwbRayTraceVertexAttrib a2 = nwbRayTraceDecodeVertexAttrib(nwbHeapRawBuffer(material.attributeSlot).Load4((triangleBase + 2u) * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
-    const float2 barycentrics = query.CommittedTriangleBarycentrics();
-    const float3 weights = float3(1.0 - barycentrics.x - barycentrics.y, barycentrics.x, barycentrics.y);
-    NwbShadowHit surfaceHit;
-    surfaceHit.meshInstanceIndex = material.meshInstanceIndex;
-    surfaceHit.surfaceDispatchId = material.surfaceDispatchId;
-    surfaceHit.materialConstantByteOffset = material.materialConstantByteOffset;
-    surfaceHit.worldPosition = hit.position;
-    surfaceHit.worldNormal = nwbRayTraceTransformSurfaceNormal(query.CommittedWorldToObject3x4(), float3(a0.normal) * weights.x + float3(a1.normal) * weights.y + float3(a2.normal) * weights.z);
-    surfaceHit.uv0 = a0.uv0 * weights.x + a1.uv0 * weights.y + a2.uv0 * weights.z;
-    surfaceHit.rayDirection = direction;
-    hit.surface = nwbShadowDispatchSurface(material.surfaceDispatchId, surfaceHit);
+    hit.surface = nwbRefractionEvaluateTriangleSurface(material, hit.position, direction, query.CommittedPrimitiveIndex(), query.CommittedTriangleBarycentrics(), query.CommittedWorldToObject3x4());
     return hit;
 #endif
 }

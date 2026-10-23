@@ -23,6 +23,7 @@
 #define NWB_FLOAT_MIN_NORMAL_BITS 0x00800000u
 #define NWB_FLOAT_MANTISSA_BIT_COUNT 23u
 #define NWB_FLOAT_EXPONENT_MASK 0xffu
+#define NWB_FLOAT_ONE_BITS 0x3f800000u
 #define NWB_FLOAT_MAX_BITS 0x7f7fffffu
 #define NWB_FLOAT_MAX 3.402823466e+38
 #define NWB_FLOAT_QUIET_NAN_BITS 0x7fc00000u
@@ -52,20 +53,21 @@ float2 nwbUnpackHalf2x16(uint value){
 }
 
 bool nwbFiniteFloat(const float value){
-    return !isnan(value) && !isinf(value);
+    return (asuint(value) & NWB_FLOAT_MAGNITUDE_BITS_MASK) <= NWB_FLOAT_MAX_BITS;
 }
 
 bool nwbFiniteFloat3(const float3 value){
-    return !any(isnan(value)) && !any(isinf(value));
+    return all((asuint(value) & NWB_FLOAT_MAGNITUDE_BITS_MASK) <= NWB_FLOAT_MAX_BITS);
 }
 
 bool nwbFiniteFloat4(const float4 value){
-    return !any(isnan(value)) && !any(isinf(value));
+    return all((asuint(value) & NWB_FLOAT_MAGNITUDE_BITS_MASK) <= NWB_FLOAT_MAX_BITS);
 }
 
 float3 nwbSafeNormalizeMinLengthSquared(const float3 value, const float3 fallback, const float minLengthSquared){
     const float lengthSquared = dot(value, value);
-    return nwbFiniteFloat3(value) && nwbFiniteFloat(lengthSquared) && lengthSquared > minLengthSquared ? value * rsqrt(lengthSquared) : fallback;
+    const uint minBits = (asuint(max(minLengthSquared, 0.0)) & NWB_FLOAT_MAGNITUDE_BITS_MASK) + 1u;
+    return (asuint(lengthSquared) - minBits) <= (NWB_FLOAT_MAX_BITS - minBits) ? value * rsqrt(lengthSquared) : fallback;
 }
 
 float3 nwbSafeNormalize(const float3 value, const float3 fallback){

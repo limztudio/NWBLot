@@ -113,14 +113,13 @@ half2 nwbMaterialLoadPackedHalf2AtBase(const uint storageByteOffset, const uint 
 
 half nwbMaterialLoadHalfAtBase(const uint storageByteOffset, const uint byteOffset){
     const uint absoluteByteOffset = storageByteOffset + byteOffset;
-    const uint word = g_NwbMaterialTypedWords[absoluteByteOffset >> NWB_MATERIAL_TYPED_WORD_BYTE_SHIFT];
     const uint byteLane = absoluteByteOffset & NWB_MATERIAL_TYPED_BYTE_LANE_MASK;
-    if(byteLane == 0u || byteLane == NWB_MATERIAL_TYPED_U16_BYTE_LANE_MASK){
-        const half2 value = half2(nwbUnpackHalf2x16(word));
-        return half(byteLane == 0u ? value.x : value.y);
+    if(byteLane != NWB_MATERIAL_TYPED_BYTE_LANE_MASK){
+        const uint word = g_NwbMaterialTypedWords[absoluteByteOffset >> NWB_MATERIAL_TYPED_WORD_BYTE_SHIFT];
+        return half(f16tof32((word >> (byteLane * NWB_MATERIAL_TYPED_BYTE_BITS)) & NWB_HALF_BITS_MASK));
     }
 
-    return nwbMaterialLoadPackedHalf2AtBase(storageByteOffset, byteOffset).x;
+    return half(f16tof32(nwbMaterialLoadRawUIntAtBase(storageByteOffset, byteOffset) & NWB_HALF_BITS_MASK));
 }
 
 half2 nwbMaterialLoadHalf2AtBase(const uint storageByteOffset, const uint byteOffset){

@@ -51,7 +51,7 @@ public:
             ++static_cast<NameSymbolCallbackProbe*>(context)->recordCount;
         }, this
         );
-        SetNameSymbolResolveCallback([](const NameHash&, char*, usize, void* context)noexcept{
+        SetNameSymbolResolveCallback([](char*, usize, const NameHash&, void* context)noexcept{
             ++static_cast<NameSymbolCallbackProbe*>(context)->resolveCount;
             return false;
         }, this
@@ -135,7 +135,7 @@ TEST(Global, NameBinaryIdentityNeverInvokesInstalledSymbolCallbacks){
     const Name recorded{AStringView("identity/recorded_probe")};
     EXPECT_EQ(probe.recordCount, 1u);
     char resolved[32u] = {};
-    EXPECT_FALSE(NameDetail::ResolveNameSymbolText(recorded.identityHash(), resolved, LengthOf(resolved)));
+    EXPECT_FALSE(NameDetail::ResolveNameSymbolText(resolved, LengthOf(resolved), recorded.identityHash()));
     EXPECT_EQ(probe.recordCount, 1u);
     EXPECT_EQ(probe.resolveCount, 1u);
 #if defined(NWB_BUILD_SYMBOLS)
@@ -150,7 +150,7 @@ TEST(Global, NameResolvedTextPreservesSymbolLookupAndHashFallback){
 
     const Name runtimeName{AStringView("Runtime\\Generated")};
     char hashText[NameDetail::s_DebugHashTextLength + 1u] = {};
-    NameDetail::HashToDebugString(runtimeName.identityHash(), hashText, sizeof(hashText));
+    NameDetail::HashToDebugString(hashText, sizeof(hashText), runtimeName.identityHash());
     const AStringView hashView(hashText, NameDetail::s_DebugHashTextLength);
     const Name binaryName{runtimeName.identityHash()};
     const DiagnosticEventText formattedName = MakeDiagnosticEventText("{}", binaryName);
@@ -178,7 +178,7 @@ TEST(Global, DiagnosticNameTextNeverInvokesForeignSymbolCallbacks){
         throw 17u;
     }, &probe
     );
-    SetNameSymbolResolveCallback([](const NameHash&, char*, usize, void* context)->bool{
+    SetNameSymbolResolveCallback([](char*, usize, const NameHash&, void* context)->bool{
         ++static_cast<NameSymbolCallbackProbe*>(context)->resolveCount;
         throw 29u;
     }, &probe
@@ -186,7 +186,7 @@ TEST(Global, DiagnosticNameTextNeverInvokesForeignSymbolCallbacks){
 
     EXPECT_EQ(MakeDiagnosticEventText(AStringView("{}"), s_Authored).view(), s_Authored.logText());
     char hashText[NameDetail::s_DebugHashTextLength + 1u] = {};
-    NameDetail::HashToDebugString(binary.identityHash(), hashText, sizeof(hashText));
+    NameDetail::HashToDebugString(hashText, sizeof(hashText), binary.identityHash());
     EXPECT_EQ(MakeDiagnosticEventText(AStringView("{}"), binary).view(), AStringView(hashText));
     EXPECT_EQ(probe.recordCount, 0u);
     EXPECT_EQ(probe.resolveCount, 0u);
@@ -203,7 +203,7 @@ TEST(Global, NameResolvedTextIsBoundedByStoredAndResolverBuffers){
 #if defined(NWB_DEBUG)
     EXPECT_EQ(name.resolvedText().size(), NameDetail::s_DebugNameCapacity - 1u);
 #else
-    SetNameSymbolResolveCallback([](const NameHash&, char* outText, const usize outTextSize, void*)noexcept{
+    SetNameSymbolResolveCallback([](char* outText, const usize outTextSize, const NameHash&, void*)noexcept{
         for(usize i = 0u; i < outTextSize; ++i)
             outText[i] = 'x';
         return true;
@@ -351,7 +351,7 @@ TEST(Global, RuntimeNameFactoryPreservesRecursiveRecorderGuard){
 TEST(Global, NameHashDebugTextRejectsInvalidHex){
     const NameHash source = ComputeNameHash(MakeNotNull("global_name_hash_debug_text"));
     char hashText[NameDetail::s_DebugHashTextLength + 1u] = {};
-    NameDetail::HashToDebugString(source, hashText, sizeof(hashText));
+    NameDetail::HashToDebugString(hashText, sizeof(hashText), source);
     hashText[0u] = 'g';
     EXPECT_FALSE(NameDetail::DecodeDebugHashText(AStringView(hashText)));
 }

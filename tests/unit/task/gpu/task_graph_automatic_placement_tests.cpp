@@ -68,7 +68,7 @@ TEST(GpuTaskGraph, PreservesDiagnosticsForSingleLegalClassAndIndependentMergeGro
     for(const auto& queues : queueOrders){
         const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-        ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, topology, assignments, options));
+        ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, options));
         for(const Graphics::GpuTaskId task : tasks){
             const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(task);
             ASSERT_NE(assignment, nullptr);
@@ -113,7 +113,7 @@ TEST(GpuTaskGraph, ExtendsMergedGroupAfterLegalityWitnessFallsBackToGraphics){
     for(const auto& queues : queueOrders){
         const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-        ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, topology, assignments));
+        ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology));
         for(const Graphics::GpuTaskId task : tasks){
             const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(task);
             ASSERT_NE(assignment, nullptr);
@@ -146,7 +146,7 @@ TEST(GpuTaskGraph, SplitsMergedGroupForDisjointExternalQueueContracts){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     ASSERT_TRUE(Analyze(operationScratchArena, graph, analysis));
-    ASSERT_TRUE(Assign(operationScratchArena, graph, analysis, topology, assignments));
+    ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology));
     const Graphics::GpuTaskQueueAssignment* const firstAssignment = assignments.find(first);
     const Graphics::GpuTaskQueueAssignment* const secondAssignment = assignments.find(second);
     ASSERT_NE(firstAssignment, nullptr);

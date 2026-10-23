@@ -54,7 +54,7 @@ void UiTextureImageSmokeScene::observeState(Impl::UiPaintContext& context){
     current.display = context.display;
     const InputRouter& input = context.ui.input();
     const auto observation = ObservePassiveSmokeTargets(
-        input, current.rectangles, m_parent.instanceGeneration(), m_child.instanceGeneration(), 2u, current.rectangles.size(),
+        current.rectangles, input, m_parent.instanceGeneration(), m_child.instanceGeneration(), 2u, current.rectangles.size(),
         [](const usize index)noexcept{ return index != 8u && index != 14u && index != 15u; }
     );
     const u32 focusCode = observation.focusCode;

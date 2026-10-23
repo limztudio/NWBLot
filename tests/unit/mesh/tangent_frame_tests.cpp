@@ -88,7 +88,7 @@ TEST(Mesh, DegenerateUvsUseStableTangentFallback){
     for(TangentFrameRebuildVertex& vertex : vertices)
         vertex.uv0 = Float2U(0.0f, 0.0f);
 
-    const auto result = RebuildTangentFrames(scratchArena, vertices, indices);
+    const auto result = RebuildTangentFrames(scratchArena, indices, vertices);
     ASSERT_TRUE(result);
     EXPECT_EQ(result->rebuiltVertexCount, vertices.size());
     EXPECT_EQ(result->degenerateUvTriangleCount, s_ExpectedDualCount);
@@ -110,7 +110,7 @@ TEST(Mesh, RejectsDegenerateTangentFrameTriangle){
     vertices.push_back(TangentFrameFixture::MakeVertex(0.0f, 0.0f, 0.0f, 0.0f, 1.0f));
     const Vector<u32> indices = NWB::Tests::MakeTriangleIndices();
 
-    EXPECT_FALSE(RebuildTangentFrames(scratchArena, vertices, indices));
+    EXPECT_FALSE(RebuildTangentFrames(scratchArena, indices, vertices));
 }
 
 

@@ -138,7 +138,7 @@ TEST(AssetsGraphics, ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInheritedD
             addDefine(entry.defineValues, Impl::AssetsGraphicsCsgShaderVariants::s_ProjectEvaluatorModuleDefineName, { "\"first.slangi\"", "\"second.slangi\"" });
         entries.push_back(Move(entry));
         const Path emptyPath(testArena.arena);
-        return Plan::PrepareShaderEntriesForCook(testArena.arena, shaderCook, paths, bindRoot, csgRoot, emptyPath, emptyPath, includeMetadata, entries, materialBinds, materials, scratchArena);
+        return Plan::PrepareShaderEntriesForCook(paths, bindRoot, csgRoot, emptyPath, emptyPath, includeMetadata, materialBinds, materials, testArena.arena, scratchArena, shaderCook, entries);
     };
 
     for(u32 mode = 0u; mode < 3u; ++mode){

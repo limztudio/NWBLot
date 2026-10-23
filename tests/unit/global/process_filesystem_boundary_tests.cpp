@@ -356,15 +356,15 @@ public:
 TEST(Global, CaptureProcessOutputAdmitsEmptySuccessAndPreservesExitFailure){
     NWB::Tests::TestArena<> testArena;
     AString output(testArena.arena);
-    const auto invalid = CaptureProcessOutput(testArena.arena, output, {});
+    const auto invalid = CaptureProcessOutput(output, testArena.arena, {});
     ASSERT_FALSE(invalid);
     EXPECT_EQ(invalid.error().kind, ProcessCaptureFailureKind::InvalidArguments);
     EXPECT_EQ(invalid.error().nativeError, ErrorCondition::invalid_argument);
-    const AStringView emptyArguments[]{ s_BinSh, s_C, "exit 0" };
-    ASSERT_TRUE(CaptureProcessOutput(testArena.arena, output, emptyArguments));
+    const AStringView emptyArguments[]{ s_BIN_SH, s_C, "exit 0" };
+    ASSERT_TRUE(CaptureProcessOutput(output, testArena.arena, emptyArguments));
     EXPECT_TRUE(output.empty());
-    const AStringView failedArguments[]{ s_BinSh, s_C, "printf retained; exit 23" };
-    const auto failed = CaptureProcessOutput(testArena.arena, output, failedArguments);
+    const AStringView failedArguments[]{ s_BIN_SH, s_C, "printf retained; exit 23" };
+    const auto failed = CaptureProcessOutput(output, testArena.arena, failedArguments);
     ASSERT_FALSE(failed);
     EXPECT_EQ(failed.error().kind, ProcessCaptureFailureKind::ChildExitedUnsuccessfully);
     EXPECT_EQ(failed.error().exitCode, 23);
@@ -376,7 +376,7 @@ TEST(Global, CaptureProcessOutputAppendFailureClosesPipeAndReapsChildBeforeUnwin
     NWB::Tests::TestArena<> testArena;
     ThrowingCaptureOutput output;
     constexpr u32 s_CaptureTimeoutMS = 250u;
-    EXPECT_THROW(EXPECT_FALSE(CaptureProcessOutput(testArena.arena, output, argv, 64u, 64u, s_CaptureTimeoutMS)), RuntimeException);
+    EXPECT_THROW(EXPECT_FALSE(CaptureProcessOutput(output, testArena.arena, argv, 64u, 64u, s_CaptureTimeoutMS)), RuntimeException);
     ASSERT_GT(output.childPid, 0);
     int status = 0;
     errno = 0;
@@ -393,7 +393,7 @@ TEST(Global, CaptureProcessOutputReapsTruncatedChild){
     NWB::Tests::TestArena<> testArena;
     AString output(testArena.arena);
     constexpr u32 s_CaptureTimeoutMS = 250u;
-    const auto captured = CaptureProcessOutput(testArena.arena, output, argv, 16u, 64u, s_CaptureTimeoutMS);
+    const auto captured = CaptureProcessOutput(output, testArena.arena, argv, 16u, 64u, s_CaptureTimeoutMS);
     ASSERT_FALSE(captured);
     EXPECT_TRUE(captured.error().outputTruncated);
 
@@ -424,7 +424,7 @@ TEST(Global, CaptureProcessOutputTimesOutWithContinuousOutput){
     const auto startMilliseconds = ProcessExecutionDetail::MonotonicMilliseconds();
     ASSERT_TRUE(startMilliseconds);
     constexpr u32 s_ContinuousOutputTimeoutMS = 100u;
-    const auto captured = CaptureProcessOutput(testArena.arena, output, argv, 64u, 64u, s_ContinuousOutputTimeoutMS);
+    const auto captured = CaptureProcessOutput(output, testArena.arena, argv, 64u, 64u, s_ContinuousOutputTimeoutMS);
     ASSERT_FALSE(captured);
     EXPECT_EQ(captured.error().kind, ProcessCaptureFailureKind::TimedOut);
     EXPECT_EQ(captured.error().nativeError, ErrorCondition::timed_out);

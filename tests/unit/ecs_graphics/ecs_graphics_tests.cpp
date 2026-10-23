@@ -83,12 +83,12 @@ TEST(EcsGraphics, MeshSkinningSubmissionCommitRejectKeepsPoseAndSelectorPending)
     commit.handledDirtyFlags = static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty);
     commit.bindlessResourceSlotsUploadRecorded = true;
 
-    NWB::Impl::ApplyMeshSkinningSubmissionCommit(false, 17u, dirtyFlags, bindlessResourceSlotsUploaded, commit);
+    NWB::Impl::ApplyMeshSkinningSubmissionCommit(false, 17u, commit, dirtyFlags, bindlessResourceSlotsUploaded);
 
     EXPECT_EQ(dirtyFlags, static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(NWB::Impl::RuntimeMeshDirtyFlag::AttributesDirty | NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty));
     EXPECT_FALSE(bindlessResourceSlotsUploaded);
 
-    NWB::Impl::ApplyMeshSkinningSubmissionCommit(true, 17u, dirtyFlags, bindlessResourceSlotsUploaded, commit);
+    NWB::Impl::ApplyMeshSkinningSubmissionCommit(true, 17u, commit, dirtyFlags, bindlessResourceSlotsUploaded);
 
     EXPECT_EQ(dirtyFlags, NWB::Impl::RuntimeMeshDirtyFlag::AttributesDirty);
     EXPECT_TRUE(bindlessResourceSlotsUploaded);
@@ -104,12 +104,12 @@ TEST(EcsGraphics, MeshSkinningGraphOwnedDispatchCommitsSelectorWithAcceptedCompu
     commit.handledDirtyFlags = dirtyFlags;
     commit.bindlessResourceSlotsUploadRecorded = true;
 
-    NWB::Impl::ApplyMeshSkinningSubmissionCommit(false, 23u, dirtyFlags, bindlessResourceSlotsUploaded, commit);
+    NWB::Impl::ApplyMeshSkinningSubmissionCommit(false, 23u, commit, dirtyFlags, bindlessResourceSlotsUploaded);
 
     EXPECT_EQ(dirtyFlags, static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty));
     EXPECT_FALSE(bindlessResourceSlotsUploaded);
 
-    NWB::Impl::ApplyMeshSkinningSubmissionCommit(true, 23u, dirtyFlags, bindlessResourceSlotsUploaded, commit);
+    NWB::Impl::ApplyMeshSkinningSubmissionCommit(true, 23u, commit, dirtyFlags, bindlessResourceSlotsUploaded);
 
     EXPECT_EQ(dirtyFlags, NWB::Impl::RuntimeMeshDirtyFlag::None);
     EXPECT_TRUE(bindlessResourceSlotsUploaded);
@@ -123,7 +123,7 @@ TEST(EcsGraphics, MeshSkinningSubmissionCommitPreservesNewerEditRevision){
     commit.handledDirtyFlags = dirtyFlags;
     commit.bindlessResourceSlotsUploadRecorded = true;
 
-    NWB::Impl::ApplyMeshSkinningSubmissionCommit(true, 18u, dirtyFlags, bindlessResourceSlotsUploaded, commit);
+    NWB::Impl::ApplyMeshSkinningSubmissionCommit(true, 18u, commit, dirtyFlags, bindlessResourceSlotsUploaded);
 
     EXPECT_EQ(dirtyFlags, static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty));
     EXPECT_FALSE(bindlessResourceSlotsUploaded);
@@ -573,13 +573,13 @@ static NWB::Impl::MeshSkinningRuntimeInstance MakeTriangleInstance(NWB::Core::Al
     for(const u32 index : MakeTriangleIndices())
         instance.meshletPrimitiveIndices.push_back(static_cast<u8>(index));
     const bool meshletRefsEncoded = NWB::Impl::EncodeMeshletRefDeltas(
-        instance.meshlets,
         meshletPositionStreamRefs,
         meshletAttributeStreamRefs,
-        instance.meshletPositionRefDeltas,
-        instance.meshletAttributeRefDeltas,
         true,
-        [](const usize, const TStringView)noexcept{ return false; }
+        [](const usize, const TStringView)noexcept{ return false; },
+        instance.meshlets,
+        instance.meshletPositionRefDeltas,
+        instance.meshletAttributeRefDeltas
     );
     NWB_FATAL_ASSERT(meshletRefsEncoded);
     instance.meshletPositionRefCount = static_cast<u32>(meshletPositionStreamRefs.size());

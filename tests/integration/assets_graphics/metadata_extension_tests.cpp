@@ -571,7 +571,7 @@ TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnu
             ASSERT_TRUE(RegisterAutoCollectedCookEntryTypes(metadata.entryRegistry, scratchArena));
             auto& samplers = metadata.entryRegistry.entries<Impl::SamplerCookEntry>(Impl::Sampler::AssetTypeName());
             auto& models = metadata.entryRegistry.entries<Impl::ModelCookEntry>(Impl::Model::AssetTypeName());
-            EXPECT_EQ(ParseAssetMetadata(parseArena, files, metadata, cpuScheduler, scratchArena), !rejectDuplicate);
+            EXPECT_EQ(ParseAssetMetadata(parseArena, files, cpuScheduler, scratchArena, metadata), !rejectDuplicate);
             ASSERT_EQ(samplers.size(), s_SamplerCount);
             EXPECT_GE(samplers.capacity(), s_SamplerCount);
             EXPECT_TRUE(models.empty());

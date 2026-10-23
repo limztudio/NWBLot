@@ -241,7 +241,7 @@ TEST(GpuTaskGraphAnalysis, ResourceVersionPreBirthReachabilityHandlesFrozenSeman
     Vector<Graphics::GpuTaskDependencyEdge, Core::Alloc::ScratchArena> edges(scratchArena);
     {
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-        ASSERT_TRUE(Graphics::GpuTaskGraphCompilerDetail::BuildResourceVersionDependencyEdges(declarations, edges, scratchArena));
+        ASSERT_TRUE(Graphics::GpuTaskGraphCompilerDetail::BuildResourceVersionDependencyEdges(declarations, scratchArena, edges));
     }
     ASSERT_EQ(edges.size(), 2u);
     EXPECT_EQ(edges[0u].producer, tasks[2u]);
@@ -312,7 +312,7 @@ TEST(GpuTaskGraphAnalysis, VersionLifetimeEdgesPreserveDistinctTaskAndVersionOrd
         Vector<Graphics::GpuTaskDependencyEdge, Core::Alloc::ScratchArena> edges(scratchArena);
         {
             const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-            ASSERT_TRUE(Graphics::GpuTaskGraphCompilerDetail::BuildResourceVersionDependencyEdges(declarations, edges, scratchArena));
+            ASSERT_TRUE(Graphics::GpuTaskGraphCompilerDetail::BuildResourceVersionDependencyEdges(declarations, scratchArena, edges));
         }
         ASSERT_EQ(edges.size(), 4u);
         for(usize index = 0u; index < LengthOf(versions); ++index){

@@ -295,7 +295,7 @@ TEST(GpuTaskGraph, TracksFinalOverlappingIntraTaskTextureStateForConsumersAndExp
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+        ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
         const Graphics::GpuCompiledTaskView compiledProducerView = compiledPlan.findTask(producer);
@@ -348,7 +348,7 @@ TEST(GpuTaskGraph, TracksFinalOverlappingIntraTaskTextureStateForConsumersAndExp
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+        ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
         const Graphics::GpuCompiledTaskView compiledProducerView = compiledPlan.findTask(producer);
@@ -396,7 +396,7 @@ TEST(GpuTaskGraph, PlansGraphInitialStateForUncoveredLaterTextureSubresourcesWit
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
 
@@ -500,7 +500,7 @@ TEST(GpuTaskGraph, AllowsIndependentConcurrentReadStateSources){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
     EXPECT_EQ(FindEdge(analysis, concurrentGraphics, concurrentCompute), nullptr);
     EXPECT_EQ(FindEdge(analysis, defaultConcurrentGraphics, defaultConcurrentCompute), nullptr);
     EXPECT_EQ(FindEdge(analysis, exclusiveGraphics, exclusiveCompute), nullptr);
@@ -585,7 +585,7 @@ TEST(GpuTaskGraph, AllowsIndependentConcurrentReadStateSources){
     Graphics::GpuTaskGraphAnalysis sameFamilyAnalysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments sameFamilyAssignments(testArena.arena);
     Graphics::GpuCompiledGraph sameFamilyCompiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(operationScratchArena, graph, sameFamilyAnalysis, sameFamilyTopology, sameFamilyAssignments, sameFamilyCompiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(sameFamilyAnalysis, sameFamilyAssignments, sameFamilyCompiledGraph, operationScratchArena, graph, sameFamilyTopology));
     const Graphics::GpuCompiledGraph::ReadView sameFamilyPlan(sameFamilyCompiledGraph);
     const Graphics::GpuSubmissionPacketId sameFamilyGraphicsPacket = sameFamilyPlan.packetForTask(concurrentGraphics);
     const Graphics::GpuSubmissionPacketId sameFamilyComputePacket = sameFamilyPlan.packetForTask(concurrentCompute);

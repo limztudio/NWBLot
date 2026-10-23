@@ -70,8 +70,8 @@ struct ManifestTriggerFields{
 void RemoveTestArtifacts(Core::Alloc::GlobalArena& arena, AStringView testGroup);
 void AppendArchiveFile(CrashTestText& archive, AStringView relativePath, AStringView content);
 void BeginArchiveWithManifest(
-    Core::Alloc::GlobalArena& arena,
     CrashTestText& archive,
+    Core::Alloc::GlobalArena& arena,
     AStringView crashId,
     AStringView platform,
     AStringView event,
@@ -95,7 +95,7 @@ void BeginArchiveWithManifest(
 [[nodiscard]] Expected<CrashTestText, ErrorCode> ReadServerSymbolication(Core::Alloc::GlobalArena& arena, AStringView testGroup, AStringView stem);
 [[nodiscard]] Log::CrashIngestConfig MakeIngestConfig(Core::Alloc::GlobalArena& arena, AStringView testGroup);
 [[nodiscard]] Expected<CrashTestPath, ErrorCode> WaitForTriggerPackage(Core::Alloc::GlobalArena& arena, const CrashTestPath& pendingDirectory, AStringView category, AStringView expression, AStringView message, AStringView file);
-void BuildLinuxCrashArchive(Core::Alloc::GlobalArena& arena, CrashTestText& archive, AStringView crashId);
+void BuildLinuxCrashArchive(CrashTestText& archive, Core::Alloc::GlobalArena& arena, AStringView crashId);
 [[nodiscard]] bool Contains(const CrashTestText& text, AStringView needle)noexcept;
 [[nodiscard]] bool ContainsMessage(const Log::LogString& text, TStringView needle)noexcept;
 void PreserveObservedReport(Core::Alloc::GlobalArena& arena, const CrashTestText& report, AStringView suffix);

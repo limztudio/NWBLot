@@ -65,7 +65,7 @@ static void CheckPacketQueries(const usize taskCount){
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
     const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u };
-    ASSERT_TRUE(Compile(operationScratchArena, graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
     const GpuTaskGraphReadViews views(graph, compiledGraph);
     ASSERT_TRUE(views.valid());
     ASSERT_EQ(views.compiled.packetCount(), 2u);

@@ -82,7 +82,7 @@ TEST(AssetsGraphics, ObjectGeometryMetadataRejectsRetiredVertexSourceSelectors){
         metadata.append(testCase.fields.data(), testCase.fields.size());
         ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, AStringView(metadata.data(), metadata.size())));
         const u32 priorErrors = logger.errorCount();
-        EXPECT_EQ(AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(testArena, shaderCook, metadataPath, scratchArena).has_value(), testCase.accepted);
+        EXPECT_EQ(AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(metadataPath, testArena, scratchArena, shaderCook).has_value(), testCase.accepted);
         if(testCase.accepted){
             EXPECT_EQ(logger.errorCount(), priorErrors);
         }
@@ -129,7 +129,7 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
     mesh.supportsCsgClipVariant = true;
     Plan::PreparedShaderPlan plan(testArena.arena);
     plan.plannedFileCount = mesh.variantCount;
-    ASSERT_TRUE(Plan::AppendMeshObjectShaderEntries(testArena.arena, shaderCook, paths, mesh, plan, scratchArena));
+    ASSERT_TRUE(Plan::AppendMeshObjectShaderEntries(paths, mesh, testArena.arena, scratchArena, shaderCook, plan));
     ASSERT_EQ(plan.preparedEntries.size(), 1u);
     EXPECT_EQ(plan.plannedFileCount, 3u);
     {
@@ -155,7 +155,7 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
         }
         Plan::PreparedShaderPlan rejectedPlan(testArena.arena);
         rejectedPlan.plannedFileCount = 7u;
-        EXPECT_FALSE(Plan::AppendMeshObjectShaderEntries(testArena.arena, shaderCook, paths, rejected, rejectedPlan, scratchArena));
+        EXPECT_FALSE(Plan::AppendMeshObjectShaderEntries(paths, rejected, testArena.arena, scratchArena, shaderCook, rejectedPlan));
         EXPECT_TRUE(rejectedPlan.preparedEntries.empty());
         EXPECT_EQ(rejectedPlan.plannedFileCount, 7u);
     }
@@ -163,7 +163,7 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
     const u64 oldChecksum = plan.preparedEntries[0].dependencyChecksum;
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(meshRoot / "object_shared.slangi", s_SharedSlangiValueSnippet));
     Plan::PreparedShaderPlan changedPlan(testArena.arena);
-    ASSERT_TRUE(Plan::AppendMeshObjectShaderEntries(testArena.arena, shaderCook, paths, mesh, changedPlan, scratchArena));
+    ASSERT_TRUE(Plan::AppendMeshObjectShaderEntries(paths, mesh, testArena.arena, scratchArena, shaderCook, changedPlan));
     ASSERT_EQ(changedPlan.preparedEntries.size(), 1u);
     EXPECT_NE(changedPlan.preparedEntries[0].dependencyChecksum, oldChecksum);
     const auto removedShader = RemoveFile(meshRoot / "object_vs.slang");
@@ -171,7 +171,7 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
     ASSERT_TRUE(*removedShader);
     Plan::PreparedShaderPlan missingSourcePlan(testArena.arena);
     missingSourcePlan.plannedFileCount = 7u;
-    EXPECT_FALSE(Plan::AppendMeshObjectShaderEntries(testArena.arena, shaderCook, paths, mesh, missingSourcePlan, scratchArena));
+    EXPECT_FALSE(Plan::AppendMeshObjectShaderEntries(paths, mesh, testArena.arena, scratchArena, shaderCook, missingSourcePlan));
     EXPECT_TRUE(missingSourcePlan.preparedEntries.empty());
     EXPECT_EQ(missingSourcePlan.plannedFileCount, 7u);
     EXPECT_TRUE(RemoveAllIfExists(root));

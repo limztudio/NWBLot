@@ -78,7 +78,7 @@ TEST(AssetsGraphics, MeshletRefEncodingCrossesIndexWidthBoundaries){
 
     auto positionRefDeltas = AssetsGraphicsFixture::MakeAssetVector<u8>(testArena);
     auto attributeRefDeltas = AssetsGraphicsFixture::MakeAssetVector<u8>(testArena);
-    const bool encoded = AssetsGraphicsFixture::EncodeTestMeshletRefs(meshlets, positionRefs, attributeRefs, positionRefDeltas, attributeRefDeltas, true);
+    const bool encoded = AssetsGraphicsFixture::EncodeTestMeshletRefs(positionRefs, attributeRefs, true, meshlets, positionRefDeltas, attributeRefDeltas);
     EXPECT_TRUE(encoded);
     if(!encoded)
         return;

@@ -336,7 +336,7 @@ template<Operation::Enum Kind>
 u32 VerifyReduction(u64& seed){
 #pragma STDC FENV_ACCESS ON
     return SimdOptimizationBenchmark::VerifyReductionCases(
-        s_OperationNames[Kind], seed,
+        seed, s_OperationNames[Kind],
         [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{ return Evaluate<Kind, false>(lhs, rhs); },
         [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{ return Evaluate<Kind, true>(lhs, rhs); },
         [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs, const SimdOptimizationBenchmark::Observation& expected, const SimdOptimizationBenchmark::Observation& actual, const usize index, u32& failures){

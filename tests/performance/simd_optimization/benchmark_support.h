@@ -106,7 +106,7 @@ struct NoAdditionalReductionCheck{
 };
 
 template<typename Baseline, typename Candidate, typename Additional = NoAdditionalReductionCheck>
-u32 VerifyReductionCases(const StringView operation, u64& seed, Baseline&& baseline, Candidate&& candidate, Additional&& additional = {}){
+u32 VerifyReductionCases(u64& seed, const StringView operation, Baseline&& baseline, Candidate&& candidate, Additional&& additional = {}){
 #pragma STDC FENV_ACCESS ON
     constexpr u64 s_Exceptional[]{ 0u, 0x8000000000000000ull, 1u, 0x8000000000000001ull, 0x0010000000000000ull, 0x3ff0000000000000ull, 0xbff0000000000000ull, 0x7fefffffffffffffull,
         0x7ff0000000000000ull, 0xfff0000000000000ull, 0x7ff8000000000123ull, 0xfff8000000000124ull, 0x7ff0000000000125ull, 0xfff0000000000126ull };

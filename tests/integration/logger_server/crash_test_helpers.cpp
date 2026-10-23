@@ -112,8 +112,8 @@ void AppendArchiveFile(CrashTestText& archive, const AStringView relativePath, c
 }
 
 void BeginArchiveWithManifest(
-    Core::Alloc::GlobalArena& arena,
     CrashTestText& archive,
+    Core::Alloc::GlobalArena& arena,
     const AStringView crashId,
     const AStringView platform,
     const AStringView event,
@@ -286,8 +286,8 @@ Expected<CrashTestPath, ErrorCode> WaitForTriggerPackage(Core::Alloc::GlobalAren
     }
 }
 
-void BuildLinuxCrashArchive(Core::Alloc::GlobalArena& arena, CrashTestText& archive, const AStringView crashId){
-    BeginArchiveWithManifest(arena, archive, crashId, "linux", "crash", "signal", 11u);
+void BuildLinuxCrashArchive(CrashTestText& archive, Core::Alloc::GlobalArena& arena, const AStringView crashId){
+    BeginArchiveWithManifest(archive, arena, crashId, "linux", "crash", "signal", 11u);
     AppendArchiveFile(archive, CrashNames::s_CpuContextFileName, "fault_address=0\ninstruction_pointer=4198964\nstack_pointer=0\nframe_pointer=0\n");
     AppendArchiveFile(archive, CrashNames::s_CallstackFileName, "#0 0x0000000000401234\n#1 0x0000000000401240\n");
     AppendArchiveFile(archive, CrashNames::s_ProcMapsFileName, "00400000-00452000 r-xp 00000000 08:01 123 /tmp/nwb_loader\n");

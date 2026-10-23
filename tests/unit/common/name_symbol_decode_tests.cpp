@@ -46,8 +46,8 @@ static void VerifyUnknownAndBoundaryTokens(){
     const Name known(AStringView("decode/known"));
     char knownToken[::NameDetail::s_DebugHashTextLength + 1u] = {};
     char unknownToken[::NameDetail::s_DebugHashTextLength + 1u] = {};
-    NameDetail::HashToDebugString(known.identityHash(), knownToken, sizeof(knownToken));
-    NameDetail::HashToDebugString(ComputeNameHash(MakeNotNull("decode/unknown")), unknownToken, sizeof(unknownToken));
+    NameDetail::HashToDebugString(knownToken, sizeof(knownToken), known.identityHash());
+    NameDetail::HashToDebugString(unknownToken, sizeof(unknownToken), ComputeNameHash(MakeNotNull("decode/unknown")));
     AString<Arena> source(arena);
     source.append(unknownToken).append(" !").append(knownToken).append("_ !a").append(knownToken).append(" !");
     knownToken[0u] = 'g';
@@ -80,9 +80,9 @@ static void VerifyResolvedSpans(){
     char shortToken[::NameDetail::s_DebugHashTextLength + 1u] = {};
     char longToken[::NameDetail::s_DebugHashTextLength + 1u] = {};
     char unknownToken[::NameDetail::s_DebugHashTextLength + 1u] = {};
-    NameDetail::HashToDebugString(shortName.identityHash(), shortToken, sizeof(shortToken));
-    NameDetail::HashToDebugString(longName.identityHash(), longToken, sizeof(longToken));
-    NameDetail::HashToDebugString(ComputeNameHash(MakeNotNull("decode/unresolved")), unknownToken, sizeof(unknownToken));
+    NameDetail::HashToDebugString(shortToken, sizeof(shortToken), shortName.identityHash());
+    NameDetail::HashToDebugString(longToken, sizeof(longToken), longName.identityHash());
+    NameDetail::HashToDebugString(unknownToken, sizeof(unknownToken), ComputeNameHash(MakeNotNull("decode/unresolved")));
     AString<Arena> source(arena);
     source.append(shortToken).append(" !").append(unknownToken).append(" !").append(longToken).append(" !").append(shortToken);
     AString<Arena> expectedSource(arena);
@@ -133,7 +133,7 @@ TEST(NameSymbolDecodeTests, RejectsNoncurrentDocumentHeaderBeforePublishingSymbo
     const Name retained(AStringView("admission/retained"));
     const NameHash incomingHash = ComputeNameHash(MakeNotNull("admission/incoming"));
     char incomingToken[::NameDetail::s_DebugHashTextLength + 1u] = {};
-    NameDetail::HashToDebugString(incomingHash, incomingToken, sizeof(incomingToken));
+    NameDetail::HashToDebugString(incomingToken, sizeof(incomingToken), incomingHash);
     AString<NWB::Core::Alloc::GlobalArena> record(arena);
     StringAppendFormat(record, "{}\truntime\tAdmission/Incoming\n", incomingToken);
     const usize retainedCount = NameSymbols::EntryCount();
@@ -144,16 +144,16 @@ TEST(NameSymbolDecodeTests, RejectsNoncurrentDocumentHeaderBeforePublishingSymbo
         document.append(header).append(record);
         EXPECT_FALSE(NameSymbols::LoadFromMemory(AStringView(document.data(), document.size())));
         EXPECT_EQ(NameSymbols::EntryCount(), retainedCount);
-        EXPECT_TRUE(NameSymbols::Resolve(retained.hash(), resolvedText, sizeof(resolvedText)));
+        EXPECT_TRUE(NameSymbols::Resolve(resolvedText, sizeof(resolvedText), retained.hash()));
         EXPECT_EQ(AStringView(resolvedText), "admission/retained");
-        EXPECT_FALSE(NameSymbols::Resolve(incomingHash, resolvedText, sizeof(resolvedText)));
+        EXPECT_FALSE(NameSymbols::Resolve(resolvedText, sizeof(resolvedText), incomingHash));
     }
 
     AString<NWB::Core::Alloc::GlobalArena> currentDocument(arena);
     currentDocument.append(NameSymbols::s_FileHeader).append("\tproducer=runtime\r\n").append(record);
     ASSERT_TRUE(NameSymbols::LoadFromMemory(AStringView(currentDocument.data(), currentDocument.size())));
-    EXPECT_TRUE(NameSymbols::Resolve(retained.hash(), resolvedText, sizeof(resolvedText)));
-    ASSERT_TRUE(NameSymbols::Resolve(incomingHash, resolvedText, sizeof(resolvedText)));
+    EXPECT_TRUE(NameSymbols::Resolve(resolvedText, sizeof(resolvedText), retained.hash()));
+    ASSERT_TRUE(NameSymbols::Resolve(resolvedText, sizeof(resolvedText), incomingHash));
     EXPECT_EQ(AStringView(resolvedText), "admission/incoming");
     NameSymbols::ClearRuntimeSymbols();
 }
@@ -227,26 +227,26 @@ TEST(NameSymbolDecodeTests, NameSymbolsCollectArenaOwnersWithoutPerformanceCaptu
     NameSymbols::ClearRuntimeSymbols();
 
     char resolvedText[128] = {};
-    EXPECT_FALSE(NameSymbols::Resolve(s_LiveHash, resolvedText, sizeof(resolvedText)));
-    EXPECT_FALSE(NameSymbols::Resolve(s_RetiredHash, resolvedText, sizeof(resolvedText)));
-    EXPECT_FALSE(NameSymbols::Resolve(s_HeapHash, resolvedText, sizeof(resolvedText)));
+    EXPECT_FALSE(NameSymbols::Resolve(resolvedText, sizeof(resolvedText), s_LiveHash));
+    EXPECT_FALSE(NameSymbols::Resolve(resolvedText, sizeof(resolvedText), s_RetiredHash));
+    EXPECT_FALSE(NameSymbols::Resolve(resolvedText, sizeof(resolvedText), s_HeapHash));
 
     ::AString<NWB::Core::Alloc::GlobalArena> namesymText(liveOwner);
     ASSERT_TRUE(NameSymbols::Serialize(namesymText));
 #if defined(NWB_BUILD_SYMBOLS)
-    EXPECT_TRUE(NameSymbols::Resolve(s_LiveHash, resolvedText, sizeof(resolvedText)));
-    EXPECT_STREQ(resolvedText, s_TestsNamesymbolsBeforeRegistryLive.data());
-    EXPECT_TRUE(NameSymbols::Resolve(s_RetiredHash, resolvedText, sizeof(resolvedText)));
-    EXPECT_STREQ(resolvedText, s_TestsNamesymbolsBeforeRegistryRetire.data());
-    EXPECT_TRUE(NameSymbols::Resolve(s_HeapHash, resolvedText, sizeof(resolvedText)));
-    EXPECT_STREQ(resolvedText, s_GlobalArenaMemoryHeapBacking.data());
-    EXPECT_NE(namesymText.find(s_TestsNamesymbolsBeforeRegistryLive), decltype(namesymText)::npos);
-    EXPECT_NE(namesymText.find(s_TestsNamesymbolsBeforeRegistryRetire), decltype(namesymText)::npos);
-    EXPECT_NE(namesymText.find(s_GlobalArenaMemoryHeapBacking), decltype(namesymText)::npos);
+    EXPECT_TRUE(NameSymbols::Resolve(resolvedText, sizeof(resolvedText), s_LiveHash));
+    EXPECT_STREQ(resolvedText, s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_LIVE.data());
+    EXPECT_TRUE(NameSymbols::Resolve(resolvedText, sizeof(resolvedText), s_RetiredHash));
+    EXPECT_STREQ(resolvedText, s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_RETIRE.data());
+    EXPECT_TRUE(NameSymbols::Resolve(resolvedText, sizeof(resolvedText), s_HeapHash));
+    EXPECT_STREQ(resolvedText, s_GLOBAL_ARENA_MEMORY_HEAP_BACKING.data());
+    EXPECT_NE(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_LIVE), decltype(namesymText)::npos);
+    EXPECT_NE(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_RETIRE), decltype(namesymText)::npos);
+    EXPECT_NE(namesymText.find(s_GLOBAL_ARENA_MEMORY_HEAP_BACKING), decltype(namesymText)::npos);
 #else
-    EXPECT_FALSE(NameSymbols::Resolve(s_LiveHash, resolvedText, sizeof(resolvedText)));
-    EXPECT_FALSE(NameSymbols::Resolve(s_RetiredHash, resolvedText, sizeof(resolvedText)));
-    EXPECT_FALSE(NameSymbols::Resolve(s_HeapHash, resolvedText, sizeof(resolvedText)));
+    EXPECT_FALSE(NameSymbols::Resolve(resolvedText, sizeof(resolvedText), s_LiveHash));
+    EXPECT_FALSE(NameSymbols::Resolve(resolvedText, sizeof(resolvedText), s_RetiredHash));
+    EXPECT_FALSE(NameSymbols::Resolve(resolvedText, sizeof(resolvedText), s_HeapHash));
 #endif
 
     NameSymbols::ClearRuntimeSymbols();

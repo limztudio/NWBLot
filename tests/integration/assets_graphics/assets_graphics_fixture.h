@@ -146,10 +146,10 @@ public:
     [[nodiscard]] static Expected<Path> EmitDuplicateGeneratedMaterialBindIncludePath(TestArena& testArena, const CookCase& cookCase);
     #endif
     template<typename EntryT>
-    static Expected<EntryT> ParseShaderMetadataFile(TestArena& testArena, NWB::Impl::ShaderCook& shaderCook, const Path& metadataPath, NWB::Core::Alloc::ScratchArena& scratchArena){
+    static Expected<EntryT> ParseShaderMetadataFile(const Path& metadataPath, TestArena& testArena, NWB::Core::Alloc::ScratchArena& scratchArena, NWB::Impl::ShaderCook& shaderCook){
         NWB::Core::Metascript::Document document(testArena.arena);
         NWB::Impl::ShaderCook::CookString source(testArena.arena);
-        if(!NWB::Core::Assets::ParseMetadataDocumentText(metadataPath, "Meta", source, document, [&document](const AStringView text){ return document.parse(text); }))
+        if(!NWB::Core::Assets::ParseMetadataDocumentText(metadataPath, "Meta", [&document](const AStringView text){ return document.parse(text); }, source, document))
             return MakeUnexpected(Failure{});
 
         if constexpr(IsSame_V<EntryT, NWB::Impl::ShaderCook::ShaderEntry>)
@@ -213,12 +213,12 @@ public:
     }
 
     static bool EncodeTestMeshletRefs(
-        NWB::Core::Assets::AssetVector<NWB::Impl::MeshletDesc>& meshlets,
         const NWB::Core::Assets::AssetVector<NWB::Impl::MeshletPositionStreamRef>& positionRefs,
         const NWB::Core::Assets::AssetVector<NWB::Impl::MeshletAttributeStreamRef>& attributeRefs,
+        const bool skinRequired,
+        NWB::Core::Assets::AssetVector<NWB::Impl::MeshletDesc>& meshlets,
         NWB::Core::Assets::AssetVector<u8>& outPositionRefDeltas,
-        NWB::Core::Assets::AssetVector<u8>& outAttributeRefDeltas,
-        const bool skinRequired
+        NWB::Core::Assets::AssetVector<u8>& outAttributeRefDeltas
     );
     [[nodiscard]] static Expected<MaterialBinaryTypedLayoutOffsets> FindMaterialBinaryTypedLayoutOffsets(const NWB::Core::Assets::AssetBytes& binary)noexcept;
     static Expected<u64> FindShaderArchiveSourceChecksum(const NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>& records, const Name shaderName, const Name stageName)noexcept;

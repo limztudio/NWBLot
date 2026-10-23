@@ -76,7 +76,7 @@ protected:
     }
 
     bool select(){
-        return Builder::SelectBuildInputs(m_options, m_paths, m_files, m_scratchArena);
+        return Builder::SelectBuildInputs(m_options, m_paths, m_scratchArena, m_files);
     }
 
 

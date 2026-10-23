@@ -72,7 +72,7 @@ TEST(AssetsGraphics, DuplicateMaterialBindIdentityIsRejectedBeforeMaterialMutati
     material.typedLayoutHash = 0xF091u;
     material.typedBlockBytes.push_back(0x2Au);
 
-    EXPECT_FALSE(NWB::Impl::ValidateMaterialCookInterfaces(bindEntries, materialEntries, scratchArena));
+    EXPECT_FALSE(NWB::Impl::ValidateMaterialCookInterfaces(bindEntries, scratchArena, materialEntries));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("Material bind interface 'project/material_interfaces/test_surface' is duplicated")));
     EXPECT_EQ(material.typedLayoutHash, 0xF091u);
     ASSERT_EQ(material.typedBlockBytes.size(), 1u);
@@ -146,7 +146,7 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
         CapturingLogger failureLogger;
         NWB::Core::Common::LoggerRegistrationGuard failureLoggerRegistrationGuard(failureLogger, NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
 
-        EXPECT_FALSE(NWB::Impl::FindOrBuildMaterialBindTypedLayout(cacheInterface, float1DefaultEntry, layoutCache, scratchArena));
+        EXPECT_FALSE(NWB::Impl::FindOrBuildMaterialBindTypedLayout(cacheInterface, float1DefaultEntry, scratchArena, layoutCache));
         EXPECT_TRUE(failureLogger.sawErrorContaining(NWB_TEXT("default 'float1(1.0)'")));
     }
     EXPECT_TRUE(layoutCache.entries.empty());
@@ -158,8 +158,8 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
     auto validCacheEntryResult = AssetsGraphicsFixture::ParseMaterialBindFromText(testArena, AssetsGraphicsFixture::s_MinimalMaterialBindSource, validCacheRoot, scratchArena);
     ASSERT_TRUE(validCacheEntryResult);
     NWB::Impl::MaterialBindEntry& validCacheEntry = *validCacheEntryResult;
-    validCacheEntry.virtualPath = s_ProjectMaterialInterfacesTestSurface;
-    const auto cachedLayout = NWB::Impl::FindOrBuildMaterialBindTypedLayout(cacheInterface, validCacheEntry, layoutCache, scratchArena);
+    validCacheEntry.virtualPath = s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE;
+    const auto cachedLayout = NWB::Impl::FindOrBuildMaterialBindTypedLayout(cacheInterface, validCacheEntry, scratchArena, layoutCache);
     ASSERT_TRUE(cachedLayout);
     EXPECT_EQ(layoutCache.entries.size(), 1u);
     EXPECT_EQ(layoutCache.lookup.size(), 1u);

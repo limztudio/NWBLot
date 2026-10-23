@@ -126,7 +126,7 @@ bool nwbRefractionTryResolveHardware(const uint2 pixel, const NwbRefractionEntry
     nwbRefractionCount(NWB_REFRACTION_COUNTER_hardwarePixels);
     const uint instanceMaterialHeapSlot = g_NwbRefractionMaterialContext.sceneSlots.z;
     const float3 camera = g_NwbRefractionView.cameraPosition.xyz;
-    const float entryDistance = length(entry.position - camera);
+    const float entryDistance = entry.cameraDistance;
     const float associationTolerance = max(entry.bias * NWB_REFRACTION_BIAS_TOLERANCE_SCALE, entryDistance * NWB_REFRACTION_ASSOCIATION_DISTANCE_SCALE);
     uint primaryInstance = 0u;
     float3 internalOrigin = entry.position;

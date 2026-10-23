@@ -124,8 +124,10 @@ half3 nwbRefractionOpaqueBackground(const uint2 pixel){
 half3 nwbRefractionBackground(const uint2 pixel){
     const int3 texel = int3(pixel, 0);
     const half3 opaque = nwbRefractionOpaqueBackground(pixel);
-    const half3 behind = half3(nwbHeapSampledImage2D(g_NwbRefractionResources.compositeSlots.y).Load(texel).rgb);
     const half behindExtinction = half(nwbHeapSampledImage2D(g_NwbRefractionResources.compositeSlots.z).Load(texel).r);
+    if(behindExtinction <= half(0.0h))
+        return opaque;
+    const half3 behind = half3(nwbHeapSampledImage2D(g_NwbRefractionResources.compositeSlots.y).Load(texel).rgb);
     const half frontExtinction = half(nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots1.z).Load(texel).r);
     // Transmittances are (0, 1) bounded factors, so half arithmetic is sufficient here.
     const half frontTransmittance = exp(-min(frontExtinction, half(NWB_AVBOIT_EXTINCTION_SATURATION)));
@@ -150,6 +152,7 @@ struct NwbRefractionEntry{
     uint primaryEntityId;
     bool frontBoundary;
     float depth;
+    float cameraDistance;
     float3 position;
     float3 incident;
     float3 normal;
@@ -162,18 +165,20 @@ struct NwbRefractionEntry{
 
 bool nwbRefractionLoadEntry(const uint2 pixel, out NwbRefractionEntry entry){
     entry = (NwbRefractionEntry)0;
-    entry.depth = nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.x).Load(int3(pixel, 0)).r;
+    const int3 texel = int3(pixel, 0);
+    entry.depth = nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.x).Load(texel).r;
     if(entry.depth >= 1.0)
         return false;
-    const float2 packedIdentity = nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots1.w).Load(int3(pixel, 0)).rg;
-    entry.primaryEntityId = nwbAvboitUnpackRefractionEntityId(packedIdentity);
-    entry.frontBoundary = nwbAvboitUnpackRefractionFrontBoundary(packedIdentity);
-    const float4 normalIor = nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.y).Load(int3(pixel, 0));
+    const float4 normalIor = nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.y).Load(texel);
     if(!nwbRefractionIorEligible(normalIor.w))
         return false;
-    const half4 tintCoverage = half4(nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.z).Load(int3(pixel, 0)));
+    const float2 packedIdentity = nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots1.w).Load(texel).rg;
+    entry.primaryEntityId = nwbAvboitUnpackRefractionEntityId(packedIdentity);
+    entry.frontBoundary = nwbAvboitUnpackRefractionFrontBoundary(packedIdentity);
+    const half4 tintCoverage = half4(nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.z).Load(texel));
     entry.position = nwbRefractionReconstruct(pixel, entry.depth);
     const float3 cameraRay = entry.position - g_NwbRefractionView.cameraPosition.xyz;
+    entry.cameraDistance = length(cameraRay);
     entry.incident = nwbSafeNormalize(cameraRay, float3(0.0, 0.0, 1.0));
     entry.normal = nwbSafeNormalize(normalIor.xyz, -entry.incident);
     if(dot(entry.incident, entry.normal) > 0.0)
@@ -181,17 +186,27 @@ bool nwbRefractionLoadEntry(const uint2 pixel, out NwbRefractionEntry entry){
     entry.ior = half(clamp(normalIor.w, 1.0, NWB_REFRACTION_IOR_MAX));
     entry.tint = half3(saturate(tintCoverage.xyz));
     entry.cosine = half(saturate(-dot(entry.incident, entry.normal)));
-    entry.bias = max(NWB_REFRACTION_MIN_DISTANCE, length(cameraRay) * NWB_REFRACTION_BIAS_DISTANCE_SCALE);
+    entry.bias = max(NWB_REFRACTION_MIN_DISTANCE, entry.cameraDistance * NWB_REFRACTION_BIAS_DISTANCE_SCALE);
     // Coverage is intentionally not an optical mask: perfectly clear glass may author zero AVBOIT opacity.
     return true;
 }
 
 half3 nwbRefractionBackgroundForEntry(const uint2 pixel, const NwbRefractionEntry entry){
     const int3 texel = int3(pixel, 0);
-    const float primaryDepth = nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.x).Load(texel).r;
-    const uint samplePrimary = nwbAvboitUnpackRefractionEntityId(nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots1.w).Load(texel).rg);
+    const half3 opaque = nwbRefractionOpaqueBackground(pixel);
+    const half behindExtinction = half(nwbHeapSampledImage2D(g_NwbRefractionResources.compositeSlots.z).Load(texel).r);
+    if(behindExtinction <= half(0.0h))
+        return opaque;
     // Displaced pixels outside this primary silhouette reuse only the opaque cache so foreground transparent layers are not pulled behind glass.
-    return primaryDepth < 1.0 && samplePrimary == entry.primaryEntityId ? nwbRefractionBackground(pixel) : nwbRefractionOpaqueBackground(pixel);
+    if(nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.x).Load(texel).r >= 1.0)
+        return opaque;
+    if(nwbAvboitUnpackRefractionEntityId(nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots1.w).Load(texel).rg) != entry.primaryEntityId)
+        return opaque;
+    const half3 behind = half3(nwbHeapSampledImage2D(g_NwbRefractionResources.compositeSlots.y).Load(texel).rgb);
+    const half frontExtinction = half(nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots1.z).Load(texel).r);
+    const half frontTransmittance = exp(-min(frontExtinction, half(NWB_AVBOIT_EXTINCTION_SATURATION)));
+    const half backTransmittance = exp(-min(behindExtinction, half(NWB_AVBOIT_EXTINCTION_SATURATION)));
+    return behind / max(frontTransmittance, half(NWB_REFRACTION_FRONT_TRANSMITTANCE_MIN)) + opaque * backTransmittance;
 }
 
 half3 nwbRefractionStraightFallback(const uint2 pixel, const NwbRefractionEntry entry){
@@ -210,6 +225,7 @@ bool nwbRefractionScreenBackground(const NwbRefractionEntry entry, const float3 
         return false;
     const float3 sourceOpaque = nwbRefractionReconstruct(sourcePixel, sourceOpaqueDepth);
     const float maxDistance = min(max(length(sourceOpaque - entry.position) * 2.0, entry.bias * NWB_REFRACTION_SCREEN_MAX_DISTANCE_BIAS_SCALE), NWB_REFRACTION_MAX_DISTANCE);
+    const float entryCameraDistance = length(entry.position - g_NwbRefractionView.cameraPosition.xyz);
     float previousT = entry.bias;
     for(uint step = 1u; step <= NWB_REFRACTION_SCREEN_STEP_COUNT; ++step){
         const float t = maxDistance * float(step * step) / (float(NWB_REFRACTION_SCREEN_STEP_COUNT) * float(NWB_REFRACTION_SCREEN_STEP_COUNT));
@@ -224,7 +240,7 @@ bool nwbRefractionScreenBackground(const NwbRefractionEntry entry, const float3 
             const float3 delta = sceneWorld - entry.position;
             const float alongRay = dot(delta, direction);
             const float tolerance = max(entry.bias * NWB_REFRACTION_BIAS_TOLERANCE_SCALE, (t - previousT) * NWB_REFRACTION_SCREEN_STEP_TOLERANCE_SCALE);
-            if(alongRay > entry.bias && length(delta - direction * alongRay) < tolerance && length(sceneWorld - g_NwbRefractionView.cameraPosition.xyz) > length(entry.position - g_NwbRefractionView.cameraPosition.xyz)){
+            if(alongRay > entry.bias && length(delta - direction * alongRay) < tolerance && length(sceneWorld - g_NwbRefractionView.cameraPosition.xyz) > entryCameraDistance){
                 radiance = half3(nwbRefractionBackgroundForEntry(samplePixel, entry));
                 return true;
             }

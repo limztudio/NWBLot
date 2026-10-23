@@ -27,7 +27,7 @@ The complete Windows ARM64 optimized build passed. The full 104-entry CTest run 
 The two skips are expected capability selections on this host:
 
 - `nwb_transparent_multi_sw_capture_smoke`: the natural hardware shadow route is selected on RayQuery-capable hardware. The forced hardware-RT-disabled tests below run independently.
-- `nwb_csg_visible_capture_smoke`: Meshlets are unavailable, so the natural compute-emulation route is selected. Its compute-emulation counterpart passed.
+- `nwb_csg_gi_*_smoke`: the CSG visible fixture selects its natural mesh-shader or indexed route from Meshlet support. The temporal suites passed.
 
 All eight forced hardware-RT-disabled GPU-validation smoke cases passed: overlap, early/late CSG, caustics, optics, skinning, stress resize and GI. These runs use `--disable-hardware-ray-tracing --gpudbg` and verify that RayQuery, ray-tracing pipeline, acceleration-structure and acceleration-structure descriptor/layout capabilities are disabled. The full suite also exercised reflection/refraction, duplicate transparent objects, optical feedback, gallery captures, crash handling and RGD decoding.
 

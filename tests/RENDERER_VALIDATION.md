@@ -51,7 +51,7 @@ Images, runtime logs, and analysis are retained in `__artifacts/renderer_error_c
 ## Capability limits and retained history
 
 - `nwb_transparent_multi_sw_capture_smoke` skips on this RayQuery device because the natural renderer route is hybrid. The software-only route requires its intended device configuration.
-- `nwb_csg_visible_capture_smoke` skips because native Meshlets are unavailable. The compute-emulation counterpart passes.
+- The CSG visible fixture selects its natural route from Meshlet support and logs it (`natural native mesh-shader route selected` or `natural indexed route selected because Meshlets are unavailable`); the `nwb_csg_gi_*_smoke` temporal suites exercise that fixture.
 - Internal GPU tests retain their existing capability and queue-dependent skips. Existing disabled tests, including 61 ECS cases and 27 GPU-task cases, were not forced on.
 
 Initial and intermediate failures remain in the artifact directory, including `baseline_other_tests.log`, `affected_opt_tests.log`, `csg_opt_tests.log`, and the original CSG captures in `transparent_csg_initial/` and `transparent_csg_optics_off/`. The earlier experiment artifacts under `__artifacts/reflection_stage9_after_pull/` remain historical evidence. Generated artifacts are ignored local diagnostics, not runtime dependencies.

@@ -129,7 +129,7 @@ public:
 
 
 [[nodiscard]] Expected<MaterialCookEntry> ParseMaterialCookMetadata(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] bool ValidateMaterialCookInterfaces(const MaterialCookVector<MaterialBindEntry>& materialBindEntries, MaterialCookVector<MaterialCookEntry>& materialEntries, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] bool ValidateMaterialCookInterfaces(const MaterialCookVector<MaterialBindEntry>& materialBindEntries, Core::Alloc::ScratchArena& scratchArena, MaterialCookVector<MaterialCookEntry>& materialEntries);
 [[nodiscard]] Expected<MaterialCookString> BuildMaterialBindIncludeSource(MaterialCookArena& arena, const MaterialBindEntry& entry, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<Path> EmitMaterialBindIncludes(MaterialCookArena& arena, const Path& cacheDirectory, AStringView configurationSafeName, const MaterialCookVector<MaterialBindEntry>& materialBindEntries, Core::Alloc::ScratchArena& scratchArena);
 struct MaterialBindDependency{
@@ -179,39 +179,39 @@ public:
 // Explicit `shaders` only for opaque non-refractive; transparent/refractive must use `surface`.
 // Sources must be absolute paths.
 [[nodiscard]] Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShaders(
-    MaterialCookArena& arena,
     const Path& cacheDirectory,
     AStringView configurationSafeName,
     AStringView sharedMeshShaderName,
-    MaterialCookVector<MaterialCookEntry>& materialEntries,
-    Core::Alloc::ScratchArena& scratchArena
+    MaterialCookArena& arena,
+    Core::Alloc::ScratchArena& scratchArena,
+    MaterialCookVector<MaterialCookEntry>& materialEntries
 );
 
 // Transparent-pass twin of EmitMaterialPixelShaders: generates each TRANSPARENT `surface` material's AVBOIT accumulate PS (not a material stage shader; name stored on the cooked material).
 // Opaque skipped; explicit-stage transparent rejected (no separate AVBOIT hook in the schema).
 // `surfaceSource` must be an absolute path.
 [[nodiscard]] Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitAccumulatePixelShaders(
-    MaterialCookArena& arena,
     const Path& cacheDirectory,
     AStringView configurationSafeName,
-    MaterialCookVector<MaterialCookEntry>& materialEntries,
-    Core::Alloc::ScratchArena& scratchArena
+    MaterialCookArena& arena,
+    Core::Alloc::ScratchArena& scratchArena,
+    MaterialCookVector<MaterialCookEntry>& materialEntries
 );
 
 // Occupancy/extinction twins of the accumulate PS: same surface.renderCoverage contract, names stored on the cooked material (not stage shaders). `surfaceSource` must already be resolved.
 [[nodiscard]] Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitOccupancyPixelShaders(
-    MaterialCookArena& arena,
     const Path& cacheDirectory,
     AStringView configurationSafeName,
-    MaterialCookVector<MaterialCookEntry>& materialEntries,
-    Core::Alloc::ScratchArena& scratchArena
+    MaterialCookArena& arena,
+    Core::Alloc::ScratchArena& scratchArena,
+    MaterialCookVector<MaterialCookEntry>& materialEntries
 );
 [[nodiscard]] Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitExtinctionPixelShaders(
-    MaterialCookArena& arena,
     const Path& cacheDirectory,
     AStringView configurationSafeName,
-    MaterialCookVector<MaterialCookEntry>& materialEntries,
-    Core::Alloc::ScratchArena& scratchArena
+    MaterialCookArena& arena,
+    Core::Alloc::ScratchArena& scratchArena,
+    MaterialCookVector<MaterialCookEntry>& materialEntries
 );
 
 

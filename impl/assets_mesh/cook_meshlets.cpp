@@ -17,8 +17,8 @@ NWB_IMPL_BEGIN
 bool MeshCookMeshlets::AddVisitedMeshletTriangle(
     const Path& nwbFilePath,
     const TStringView metaKind,
-    MeshletTrianglePrecompute& trianglePrecompute,
     const u32 triangleIndex,
+    MeshletTrianglePrecompute& trianglePrecompute,
     Vector<u32, Core::Alloc::ScratchArena>& localSourceVertexRefs,
     Vector<u32, Core::Alloc::ScratchArena>& localTriangleIndices,
     MeshletDesc& meshlet,
@@ -47,14 +47,14 @@ bool MeshCookMeshlets::AddVisitedMeshletTriangle(
 bool MeshCookMeshlets::GrowMeshletFromFrontier(
     const Path& nwbFilePath,
     const TStringView metaKind,
-    MeshletTrianglePrecompute& trianglePrecompute,
     const usize seedSearchOffset,
+    Core::CpuTaskScheduler& cpuScheduler,
+    MeshletTrianglePrecompute& trianglePrecompute,
     Vector<u32, Core::Alloc::ScratchArena>& localSourceVertexRefs,
     Vector<u32, Core::Alloc::ScratchArena>& localTriangleIndices,
     MeshletDesc& meshlet,
     Core::Assets::AssetVector<u8>& primitiveIndices,
     MeshletScoreState& scoreState,
-    Core::CpuTaskScheduler& cpuScheduler,
     Vector<MeshletCandidateSearchResult, Core::Alloc::ScratchArena>& parallelCandidates,
     Vector<u32, Core::Alloc::ScratchArena>& frontier,
     Vector<u8, Core::Alloc::ScratchArena>& frontierFlags
@@ -65,7 +65,7 @@ bool MeshCookMeshlets::GrowMeshletFromFrontier(
             if(!disconnectedCandidate)
                 break;
 
-            if(!AddVisitedMeshletTriangle(nwbFilePath, metaKind, trianglePrecompute, disconnectedCandidate->triangleIndex, localSourceVertexRefs, localTriangleIndices, meshlet, primitiveIndices, scoreState, frontier, frontierFlags))
+            if(!AddVisitedMeshletTriangle(nwbFilePath, metaKind, disconnectedCandidate->triangleIndex, trianglePrecompute, localSourceVertexRefs, localTriangleIndices, meshlet, primitiveIndices, scoreState, frontier, frontierFlags))
                 return false;
             continue;
         }
@@ -75,7 +75,7 @@ bool MeshCookMeshlets::GrowMeshletFromFrontier(
             break;
 
         RemoveMeshletFrontierCandidate(frontier, frontierFlags, bestCandidate->frontierOffset);
-        if(!AddVisitedMeshletTriangle(nwbFilePath, metaKind, trianglePrecompute, bestCandidate->triangleIndex, localSourceVertexRefs, localTriangleIndices, meshlet, primitiveIndices, scoreState, frontier, frontierFlags))
+        if(!AddVisitedMeshletTriangle(nwbFilePath, metaKind, bestCandidate->triangleIndex, trianglePrecompute, localSourceVertexRefs, localTriangleIndices, meshlet, primitiveIndices, scoreState, frontier, frontierFlags))
             return false;
     }
 

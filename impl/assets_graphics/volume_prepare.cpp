@@ -78,7 +78,7 @@ static GraphicsVolumeMetadata& GraphicsMetadata(Core::Assets::ParsedAssetMetadat
     return Core::Assets::RequireParsedMetadataExtension<GraphicsVolumeMetadata>(metadata, s_GraphicsVolumeMetadataExtensionName, metadata.arena);
 }
 
-static bool AppendUniqueShaderEntry(ShaderCook::ShaderEntry& shaderEntry, const Path& nwbFilePath, GraphicsVolumeMetadata& graphicsMetadata, AssetsGraphicsCookDetail::ShaderEntryVector& outShaderEntries){
+static bool AppendUniqueShaderEntry(const Path& nwbFilePath, ShaderCook::ShaderEntry& shaderEntry, GraphicsVolumeMetadata& graphicsMetadata, AssetsGraphicsCookDetail::ShaderEntryVector& outShaderEntries){
     if(shaderEntry.name.empty())
         return true;
 
@@ -117,7 +117,7 @@ static Core::Assets::AssetMetadataParseResult::Enum ParseGraphicsDocumentMetadat
             return AssetMetadataParseResult::Error;
         shaderEntry.name = Move(*shaderName);
 
-        if(!AppendUniqueShaderEntry(shaderEntry, context.discoveredNwbFile.filePath, graphicsMetadata, graphicsMetadata.shaderEntries))
+        if(!AppendUniqueShaderEntry(context.discoveredNwbFile.filePath, shaderEntry, graphicsMetadata, graphicsMetadata.shaderEntries))
             return AssetMetadataParseResult::Error;
         return AssetMetadataParseResult::Parsed;
     }
@@ -210,7 +210,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
         return false;
     }
 
-    if(!ValidateMaterialCookInterfaces(graphicsMetadata.materialBindEntries, materialEntries, context.scratchArena))
+    if(!ValidateMaterialCookInterfaces(graphicsMetadata.materialBindEntries, context.scratchArena, materialEntries))
         return false;
 
     auto materialBindIncludeRootResult = EmitMaterialBindIncludes(context.arena, context.resolvedPaths.cacheDirectory, context.configurationSafeName, graphicsMetadata.materialBindEntries, context.scratchArena);
@@ -289,21 +289,21 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
     // Generate per-`surface` G-buffer PS (pixel = generated, mesh = shared), synthesize shader entries like authored ones. Before shader prep + ValidateMaterials.
     auto& materialCookArena = materialEntries.get_allocator().arena();
     static constexpr AStringView s_SharedMeshProgramName = "engine/graphics/mesh/shared_ms";
-    auto generatedPixelShadersResult = EmitMaterialPixelShaders(materialCookArena, context.resolvedPaths.cacheDirectory, context.configurationSafeName, s_SharedMeshProgramName, materialEntries, context.scratchArena);
+    auto generatedPixelShadersResult = EmitMaterialPixelShaders(context.resolvedPaths.cacheDirectory, context.configurationSafeName, s_SharedMeshProgramName, materialCookArena, context.scratchArena, materialEntries);
     if(!generatedPixelShadersResult)
         return false;
 
     // Generate AVBOIT accumulation from the same surface hook before shader preparation and material validation.
-    auto generatedAvboitAccumulatePixelShadersResult = EmitMaterialAvboitAccumulatePixelShaders(materialCookArena, context.resolvedPaths.cacheDirectory, context.configurationSafeName, materialEntries, context.scratchArena);
+    auto generatedAvboitAccumulatePixelShadersResult = EmitMaterialAvboitAccumulatePixelShaders(context.resolvedPaths.cacheDirectory, context.configurationSafeName, materialCookArena, context.scratchArena, materialEntries);
     if(!generatedAvboitAccumulatePixelShadersResult)
         return false;
 
     // Occupancy, extinction, and accumulation must share the surface hook so renderCoverage agrees across passes.
-    auto generatedAvboitOccupancyPixelShadersResult = EmitMaterialAvboitOccupancyPixelShaders(materialCookArena, context.resolvedPaths.cacheDirectory, context.configurationSafeName, materialEntries, context.scratchArena);
+    auto generatedAvboitOccupancyPixelShadersResult = EmitMaterialAvboitOccupancyPixelShaders(context.resolvedPaths.cacheDirectory, context.configurationSafeName, materialCookArena, context.scratchArena, materialEntries);
     if(!generatedAvboitOccupancyPixelShadersResult)
         return false;
 
-    auto generatedAvboitExtinctionPixelShadersResult = EmitMaterialAvboitExtinctionPixelShaders(materialCookArena, context.resolvedPaths.cacheDirectory, context.configurationSafeName, materialEntries, context.scratchArena);
+    auto generatedAvboitExtinctionPixelShadersResult = EmitMaterialAvboitExtinctionPixelShaders(context.resolvedPaths.cacheDirectory, context.configurationSafeName, materialCookArena, context.scratchArena, materialEntries);
     if(!generatedAvboitExtinctionPixelShadersResult)
         return false;
 
@@ -372,18 +372,18 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
     }
 
     auto preparedPlan = AssetsGraphicsCookDetail::PrepareShaderEntriesForCook(
-        context.arena,
-        graphicsMetadata.shaderCook,
         context.resolvedPaths,
         materialBindIncludeRoot,
         csgShapeIncludeRoot,
         deferredBxdfIncludeRoot,
         shadowSurfaceIncludeRoot,
         graphicsMetadata.includeMetadata,
-        graphicsMetadata.shaderEntries,
         graphicsMetadata.materialBindEntries,
         materialEntries,
-        context.scratchArena
+        context.arena,
+        context.scratchArena,
+        graphicsMetadata.shaderCook,
+        graphicsMetadata.shaderEntries
     );
     if(!preparedPlan)
         return false;
@@ -396,14 +396,14 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
 
     context.manifestCookers.emplace_back([&context](Core::Assets::AssetsVolumeCookDetail::AssetVolumePackManifest& manifest, Core::Assets::CookEntryPathHashSet& seenVirtualPathHashes, Core::Assets::ScratchArena& writeScratchArena){
         return AssetsGraphicsCookDetail::AppendPreparedShadersToManifest(
-            context.arena,
-            GraphicsMetadata(context.parsedMetadata).shaderCook,
             context.resolvedPaths.cacheDirectory,
             context.configurationSafeName,
+            context.arena,
+            writeScratchArena,
+            GraphicsMetadata(context.parsedMetadata).shaderCook,
             GraphicsMetadata(context.parsedMetadata).preparedPlan.preparedEntries,
             manifest,
-            seenVirtualPathHashes,
-            writeScratchArena
+            seenVirtualPathHashes
         );
     }
     );

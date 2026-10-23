@@ -61,10 +61,10 @@ using SkinningPlanRecorder = bool (MeshSkinningSystem::*)(const MeshSkinningGrap
 template<SkinningPlanRecorder Recorder>
 [[nodiscard]] inline bool RecordSkinningPlans(
     MeshSkinningSystem& system,
-    Core::GpuTimingSubmissionTicket& timingTicket,
     const Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena>& plans,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context
+    const Core::GpuTaskRecordContext& context,
+    Core::GpuTimingSubmissionTicket& timingTicket,
+    Core::CommandList& commandList
 ){
     static_assert(Recorder != nullptr);
     if(plans.empty())
@@ -101,7 +101,7 @@ struct MeshSkinningSystem::TaskGraphSkinningDeformationTask{
 
 public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-        return RecordSkinningPlans<&MeshSkinningSystem::recordGraphOwnedSkinningDeformation>(payload.system, payload.timingTicket, payload.plans, commandList, context);
+        return RecordSkinningPlans<&MeshSkinningSystem::recordGraphOwnedSkinningDeformation>(payload.system, payload.plans, context, payload.timingTicket, commandList);
     }
 };
 
@@ -128,7 +128,7 @@ struct MeshSkinningSystem::TaskGraphSkinningPostDispatchTask{
 
 public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-        return RecordSkinningPlans<&MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch>(payload.system, payload.timingTicket, payload.plans, commandList, context);
+        return RecordSkinningPlans<&MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch>(payload.system, payload.plans, context, payload.timingTicket, commandList);
     }
 };
 

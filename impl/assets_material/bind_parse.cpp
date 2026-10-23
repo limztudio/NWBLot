@@ -29,7 +29,7 @@ namespace MaterialBindDetail{
 Expected<Metascript::Document> ParseMaterialBindDocument(const Path& bindFilePath, MaterialCookArena& arena, ScratchArena& scratchArena){
     Metascript::Document doc(arena);
     ScratchString bindText{scratchArena};
-    if(!Core::Assets::ParseMetadataDocumentText(bindFilePath, s_MaterialBindDiagnosticPrefix, bindText, doc, [&](const AStringView text){ return doc.parse(text); }))
+    if(!Core::Assets::ParseMetadataDocumentText(bindFilePath, s_MaterialBindDiagnosticPrefix, [&](const AStringView text){ return doc.parse(text); }, bindText, doc))
         return MakeUnexpected(Failure{});
     return doc;
 }

@@ -31,7 +31,7 @@ public:
 };
 
 
-inline void ApplyMeshSkinningSubmissionCommit(const bool submissionAccepted, const u32 currentEditRevision, RuntimeMeshDirtyFlags& inOutDirtyFlags, bool& inOutBindlessResourceSlotsUploaded, const MeshSkinningSubmissionCommit& commit)noexcept{
+inline void ApplyMeshSkinningSubmissionCommit(const bool submissionAccepted, const u32 currentEditRevision, const MeshSkinningSubmissionCommit& commit, RuntimeMeshDirtyFlags& inOutDirtyFlags, bool& inOutBindlessResourceSlotsUploaded)noexcept{
     if(!submissionAccepted || currentEditRevision != commit.editRevision)
         return;
 

@@ -29,7 +29,7 @@ namespace AssetsGraphicsCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool AppendMeshObjectShaderEntries(ShaderCook::CookArena& cookArena, ShaderCook& shaderCook, const ResolvedCookPaths& resolvedPaths, const PreparedShaderEntry& meshEntry, PreparedShaderPlan& plan, ScratchArena& scratchArena);
+[[nodiscard]] bool AppendMeshObjectShaderEntries(const ResolvedCookPaths& resolvedPaths, const PreparedShaderEntry& meshEntry, ShaderCook::CookArena& cookArena, ScratchArena& scratchArena, ShaderCook& shaderCook, PreparedShaderPlan& plan);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

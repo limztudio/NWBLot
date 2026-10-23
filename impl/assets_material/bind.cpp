@@ -146,8 +146,8 @@ Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayout(const MaterialBin
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<NotNull<const MaterialBindTypedLayout*>> FindOrBuildMaterialBindTypedLayout(const Name& materialInterface, const MaterialBindEntry& bindEntry, MaterialBindTypedLayoutCache& inOutCache, Core::Alloc::ScratchArena& scratchArena){
-    return MaterialBindDetail::FindOrBuildMaterialBindTypedLayoutImpl(materialInterface, bindEntry, inOutCache, scratchArena);
+Expected<NotNull<const MaterialBindTypedLayout*>> FindOrBuildMaterialBindTypedLayout(const Name& materialInterface, const MaterialBindEntry& bindEntry, Core::Alloc::ScratchArena& scratchArena, MaterialBindTypedLayoutCache& inOutCache){
+    return MaterialBindDetail::FindOrBuildMaterialBindTypedLayoutImpl(materialInterface, bindEntry, scratchArena, inOutCache);
 }
 
 

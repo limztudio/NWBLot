@@ -147,7 +147,7 @@ uint nwbLightSpaceBoundaryMode(const uint instance){
 
 #if NWB_LIGHT_SPACE_OCCLUDER != NWB_SW_SHADOW_OCCLUDER_OPAQUE
 // Mixed receivers integrate retained open surfaces independently of their closed solid and cap boundaries.
-void nwbLightSpaceIntegrateInstance(const uint pixelIndex, const uint end, const uint instance, inout uint index, const float receiverDepth, const uint4 csgRange, const bool closed, inout half3 opticalDepth, inout half interfaceProduct){
+void nwbLightSpaceIntegrateInstance(const uint pixelIndex, const uint end, const uint instance, const float receiverDepth, const uint4 csgRange, const bool closed, inout uint index, inout half3 opticalDepth, inout half interfaceProduct){
     const bool csg = (csgRange.z & NWB_CSG_RAY_RECEIVER_ACTIVE) != 0u;
     half3 absorption = half3(0.0h);
     half transmission = half(1.0h);
@@ -238,14 +238,14 @@ bool nwbLightSpaceSample(const NwbLightSpaceView view, const uint2 pixel, const 
         const uint4 csgRange = nwbCsgShadowRange(instance);
         if((csgRange.z & NWB_CSG_RAY_RECEIVER_ACTIVE) != 0u){
             const uint begin = index;
-            nwbLightSpaceIntegrateInstance(pixelIndex, count, instance, index, receiverDepth, csgRange, true, opticalDepth, interfaceProduct);
+            nwbLightSpaceIntegrateInstance(pixelIndex, count, instance, receiverDepth, csgRange, true, index, opticalDepth, interfaceProduct);
             uint openIndex = begin;
-            nwbLightSpaceIntegrateInstance(pixelIndex, index, instance, openIndex, receiverDepth, csgRange, false, opticalDepth, interfaceProduct);
+            nwbLightSpaceIntegrateInstance(pixelIndex, index, instance, receiverDepth, csgRange, false, openIndex, opticalDepth, interfaceProduct);
         }
         else{
             const uint mode = nwbLightSpaceBoundaryMode(instance);
             const bool closed = mode == NWB_RT_OPTICAL_BOUNDARY_CLOSED_NESTED || mode == NWB_RT_OPTICAL_BOUNDARY_CLOSED_PRIORITY;
-            nwbLightSpaceIntegrateInstance(pixelIndex, count, instance, index, receiverDepth, csgRange, closed, opticalDepth, interfaceProduct);
+            nwbLightSpaceIntegrateInstance(pixelIndex, count, instance, receiverDepth, csgRange, closed, index, opticalDepth, interfaceProduct);
         }
     }
     visibility = saturate(interfaceProduct * exp(-opticalDepth));

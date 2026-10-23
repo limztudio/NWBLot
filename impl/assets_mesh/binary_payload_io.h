@@ -107,21 +107,21 @@ template<
 >
 [[nodiscard]] bool ReadMeshAttributeStreams(
     const Core::Assets::AssetBytes& binary,
-    usize& inOutCursor,
     const HeaderT& header,
+    const TStringView failureContext,
+    usize& inOutCursor,
     PositionContainer& outPositions,
     NormalContainer& outNormals,
     TangentContainer& outTangents,
     Uv0Container& outUv0,
-    ColorContainer& outColors,
-    const TStringView failureContext
+    ColorContainer& outColors
 ){
     return
-        Core::Assets::ReadVectorPayload(binary, inOutCursor, header.positionCount, outPositions, failureContext, s_PositionsStreamLabel)
-        && Core::Assets::ReadVectorPayload(binary, inOutCursor, header.normalCount, outNormals, failureContext, s_NormalsStreamLabel)
-        && Core::Assets::ReadVectorPayload(binary, inOutCursor, header.tangentCount, outTangents, failureContext, s_TangentsStreamLabel)
-        && Core::Assets::ReadVectorPayload(binary, inOutCursor, header.uv0Count, outUv0, failureContext, s_Uv0StreamLabel)
-        && Core::Assets::ReadVectorPayload(binary, inOutCursor, header.colorCount, outColors, failureContext, s_ColorsStreamLabel)
+        Core::Assets::ReadVectorPayload(binary, header.positionCount, failureContext, s_PositionsStreamLabel, inOutCursor, outPositions)
+        && Core::Assets::ReadVectorPayload(binary, header.normalCount, failureContext, s_NormalsStreamLabel, inOutCursor, outNormals)
+        && Core::Assets::ReadVectorPayload(binary, header.tangentCount, failureContext, s_TangentsStreamLabel, inOutCursor, outTangents)
+        && Core::Assets::ReadVectorPayload(binary, header.uv0Count, failureContext, s_Uv0StreamLabel, inOutCursor, outUv0)
+        && Core::Assets::ReadVectorPayload(binary, header.colorCount, failureContext, s_ColorsStreamLabel, inOutCursor, outColors)
     ;
 }
 
@@ -137,30 +137,30 @@ template<
 >
 [[nodiscard]] bool ReadMeshletStreams(
     const Core::Assets::AssetBytes& binary,
-    usize& inOutCursor,
     const HeaderT& header,
+    const TStringView failureContext,
+    usize& inOutCursor,
     MeshletContainer& outMeshlets,
     MeshletBoundsContainer& outMeshletBounds,
     MeshletPositionRefDeltaContainer& outMeshletPositionRefDeltas,
     MeshletAttributeRefDeltaContainer& outMeshletAttributeRefDeltas,
     MeshletLocalVertexRefContainer& outMeshletLocalVertexRefs,
     MeshletPrimitiveIndexContainer& outMeshletPrimitiveIndices,
-    SolidTriangleWordContainer& outSolidTriangleWords,
-    const TStringView failureContext
+    SolidTriangleWordContainer& outSolidTriangleWords
 ){
-    if(!Core::Assets::ReadVectorPayload(binary, inOutCursor, header.meshletCount, outMeshlets, failureContext, s_MeshletsStreamLabel))
+    if(!Core::Assets::ReadVectorPayload(binary, header.meshletCount, failureContext, s_MeshletsStreamLabel, inOutCursor, outMeshlets))
         return false;
-    if(!Core::Assets::ReadVectorPayload(binary, inOutCursor, header.meshletBoundCount, outMeshletBounds, failureContext, s_MeshletBoundsStreamLabel))
+    if(!Core::Assets::ReadVectorPayload(binary, header.meshletBoundCount, failureContext, s_MeshletBoundsStreamLabel, inOutCursor, outMeshletBounds))
         return false;
-    if(!Core::Assets::ReadVectorPayload(binary, inOutCursor, header.meshletPositionRefDeltaByteCount, outMeshletPositionRefDeltas, failureContext, s_MeshletPositionRefDeltasStreamLabel))
+    if(!Core::Assets::ReadVectorPayload(binary, header.meshletPositionRefDeltaByteCount, failureContext, s_MeshletPositionRefDeltasStreamLabel, inOutCursor, outMeshletPositionRefDeltas))
         return false;
-    if(!Core::Assets::ReadVectorPayload(binary, inOutCursor, header.meshletAttributeRefDeltaByteCount, outMeshletAttributeRefDeltas, failureContext, s_MeshletAttributeRefDeltasStreamLabel))
+    if(!Core::Assets::ReadVectorPayload(binary, header.meshletAttributeRefDeltaByteCount, failureContext, s_MeshletAttributeRefDeltasStreamLabel, inOutCursor, outMeshletAttributeRefDeltas))
         return false;
-    if(!Core::Assets::ReadVectorPayload(binary, inOutCursor, header.meshletLocalVertexRefCount, outMeshletLocalVertexRefs, failureContext, s_MeshletLocalVertexRefsStreamLabel))
+    if(!Core::Assets::ReadVectorPayload(binary, header.meshletLocalVertexRefCount, failureContext, s_MeshletLocalVertexRefsStreamLabel, inOutCursor, outMeshletLocalVertexRefs))
         return false;
-    if(!Core::Assets::ReadVectorPayload(binary, inOutCursor, header.meshletPrimitiveIndexCount, outMeshletPrimitiveIndices, failureContext, s_MeshletPrimitiveIndicesStreamLabel))
+    if(!Core::Assets::ReadVectorPayload(binary, header.meshletPrimitiveIndexCount, failureContext, s_MeshletPrimitiveIndicesStreamLabel, inOutCursor, outMeshletPrimitiveIndices))
         return false;
-    return Core::Assets::ReadVectorPayload(binary, inOutCursor, (header.meshletPrimitiveIndexCount / s_MeshletTriangleIndexCount + s_MeshletSolidTriangleWordRoundUp) / s_MeshletSolidTriangleWordBits, outSolidTriangleWords, failureContext, s_SolidTriangleWordsStreamLabel);
+    return Core::Assets::ReadVectorPayload(binary, (header.meshletPrimitiveIndexCount / s_MeshletTriangleIndexCount + s_MeshletSolidTriangleWordRoundUp) / s_MeshletSolidTriangleWordBits, failureContext, s_SolidTriangleWordsStreamLabel, inOutCursor, outSolidTriangleWords);
 }
 
 

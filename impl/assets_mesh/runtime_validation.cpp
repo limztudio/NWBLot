@@ -136,7 +136,6 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
         meshlets,
         localVertexRefs,
         attributeRefCount,
-        attributeSkins,
         [&](const usize meshletIndex, const MeshletDesc& meshlet, const usize, const u32 localPositionIndex)->Expected<u32>{
             const auto positionRef = DecodeMeshletPositionRef(positionRefDeltas.data(), positionRefDeltas.size(), meshlet, localPositionIndex, true);
             if(!positionRef){
@@ -155,7 +154,8 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
         [&](const usize attributeIndex){
             MeshPayloadValidationDiagnostics::LogMeshPayloadIndexedValidation(contextText, meshPathText, NWB_TEXT("meshlet attribute ref"), attributeIndex, NWB_TEXT("is unreferenced"));
             return false;
-        }
+        },
+        attributeSkins
     );
 }
 

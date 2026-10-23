@@ -219,7 +219,7 @@ public:
 
     void mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector<Path>& dependencies, const CookMap<CookString, IncludeEntry>& includeMetadata, Core::Alloc::ScratchArena& scratchArena);
 
-    [[nodiscard]] bool expandDefineCombinations(const CookMap<CookString, DefineEntry>& defineValues, CookVector<DefineCombo>& outCombinations, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] bool expandDefineCombinations(const CookMap<CookString, DefineEntry>& defineValues, Core::Alloc::ScratchArena& scratchArena, CookVector<DefineCombo>& outCombinations);
 
     [[nodiscard]] CookString buildVariantName(const DefineCombo& combo, Core::Alloc::ScratchArena& scratchArena);
 

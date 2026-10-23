@@ -29,7 +29,7 @@ namespace __hidden_pipeline{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool LoadComputeShader(Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, MeshSkinningSystem::ShaderPathResolveCallback& shaderPathResolver, Core::ShaderHandle& shader, const Name& shaderName, const Name& debugName){
+static bool LoadComputeShader(Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, MeshSkinningSystem::ShaderPathResolveCallback& shaderPathResolver, const Name& shaderName, const Name& debugName, Core::ShaderHandle& shader){
     return ShaderAssetLoader::Load<ComputeShader>(shader, shaderName, Core::ShaderArchive::s_DefaultVariant, debugName, graphics, assetManager, shaderPathResolver, NWB_TEXT("MeshSkinningSystem"));
 }
 
@@ -68,7 +68,7 @@ bool MeshSkinningSystem::ensureSkinningPipeline(){
         }
     }
 
-    if(!__hidden_pipeline::LoadComputeShader(m_graphics, m_assetManager, m_shaderPathResolver, m_skinningComputeShader, AssetsGraphicsSkinnedMesh::s_SkinningComputeShaderName, Name("ECSMeshSkinning_SkinningCS")))
+    if(!__hidden_pipeline::LoadComputeShader(m_graphics, m_assetManager, m_shaderPathResolver, AssetsGraphicsSkinnedMesh::s_SkinningComputeShaderName, Name("ECSMeshSkinning_SkinningCS"), m_skinningComputeShader))
         return false;
 
     if(m_skinningComputePipeline)
@@ -113,7 +113,7 @@ bool MeshSkinningSystem::ensureBoundsPipeline(){
         }
     }
 
-    if(!__hidden_pipeline::LoadComputeShader(m_graphics, m_assetManager, m_shaderPathResolver, m_boundsComputeShader, AssetsGraphicsSkinnedMesh::s_MeshletBoundsComputeShaderName, Name("ECSMeshSkinning_MeshletBoundsCS")))
+    if(!__hidden_pipeline::LoadComputeShader(m_graphics, m_assetManager, m_shaderPathResolver, AssetsGraphicsSkinnedMesh::s_MeshletBoundsComputeShaderName, Name("ECSMeshSkinning_MeshletBoundsCS"), m_boundsComputeShader))
         return false;
 
     if(m_boundsComputePipeline)
@@ -138,7 +138,7 @@ bool MeshSkinningSystem::ensureLocalBoundsPipeline(){
         return true;
     if(!ensureBoundsPipeline())
         return false;
-    if(!__hidden_pipeline::LoadComputeShader(m_graphics, m_assetManager, m_shaderPathResolver, m_localBoundsComputeShader, AssetsGraphicsSkinnedMesh::s_LocalBoundsComputeShaderName, Name("ECSMeshSkinning_LocalBoundsCS")))
+    if(!__hidden_pipeline::LoadComputeShader(m_graphics, m_assetManager, m_shaderPathResolver, AssetsGraphicsSkinnedMesh::s_LocalBoundsComputeShaderName, Name("ECSMeshSkinning_LocalBoundsCS"), m_localBoundsComputeShader))
         return false;
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
@@ -180,7 +180,7 @@ bool MeshSkinningSystem::ensureRepackPipeline(){
         }
     }
 
-    if(!__hidden_pipeline::LoadComputeShader(m_graphics, m_assetManager, m_shaderPathResolver, m_repackComputeShader, AssetsGraphicsSkinnedMesh::s_RepackNormalsComputeShaderName, Name("ECSMeshSkinning_RepackNormalsCS")))
+    if(!__hidden_pipeline::LoadComputeShader(m_graphics, m_assetManager, m_shaderPathResolver, AssetsGraphicsSkinnedMesh::s_RepackNormalsComputeShaderName, Name("ECSMeshSkinning_RepackNormalsCS"), m_repackComputeShader))
         return false;
 
     if(m_repackComputePipeline)

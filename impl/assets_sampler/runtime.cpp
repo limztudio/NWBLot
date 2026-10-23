@@ -51,7 +51,7 @@ bool Sampler::validatePayload()const{
 
 bool Sampler::loadBinary(const Core::Assets::AssetBytes& binary){
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SamplerBinaryPayload::HeaderBinary>(binary, cursor, SamplerBinaryPayload::s_SamplerMagic, SamplerBinaryPayload::s_SamplerLoadBinaryContext, SamplerBinaryPayload::s_SamplerAssetKindLabel);
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SamplerBinaryPayload::HeaderBinary>(binary, SamplerBinaryPayload::s_SamplerMagic, SamplerBinaryPayload::s_SamplerLoadBinaryContext, SamplerBinaryPayload::s_SamplerAssetKindLabel, cursor);
     if(!headerResult)
         return false;
     const SamplerBinaryPayload::HeaderBinary& header = *headerResult;

@@ -66,8 +66,8 @@ template<typename SourceArenaT, typename DependencyVectorT>
     const ::Path<SourceArenaT>& sourcePath,
     const ShaderCook::CookVector<Path>& includeDirectories,
     const Span<const AStringView> externallyPlannedMacroIncludes,
-    DependencyVectorT& outDependencies,
-    Core::Alloc::ScratchArena& scratchArena
+    Core::Alloc::ScratchArena& scratchArena,
+    DependencyVectorT& outDependencies
 ){
     using ScratchArena = Core::Alloc::ScratchArena;
     using ScratchPath = ::Path<ScratchArena>;

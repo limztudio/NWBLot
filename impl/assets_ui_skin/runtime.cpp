@@ -80,7 +80,7 @@ static_assert(UiSkinColorRole::Count == UiSkinBinaryPayload::s_UiSkinPaletteColo
 
 bool UiSkin::loadBinary(const Core::Assets::AssetBytes& binary){
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<UiSkinBinaryPayload::HeaderBinary>(binary, cursor, UiSkinBinaryPayload::s_UiSkinMagic, UiSkinBinaryPayload::s_UiSkinLoadBinaryContext, UiSkinBinaryPayload::s_UiSkinAssetKindLabel);
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<UiSkinBinaryPayload::HeaderBinary>(binary, UiSkinBinaryPayload::s_UiSkinMagic, UiSkinBinaryPayload::s_UiSkinLoadBinaryContext, UiSkinBinaryPayload::s_UiSkinAssetKindLabel, cursor);
     if(!headerResult)
         return false;
     const UiSkinBinaryPayload::HeaderBinary& header = *headerResult;

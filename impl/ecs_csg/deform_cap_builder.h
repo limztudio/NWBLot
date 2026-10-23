@@ -39,15 +39,15 @@ public:
     [[nodiscard]] static Expected<SIMDVectorSingleResult> CapNormal(SIMDVectorSingle area)noexcept;
     [[nodiscard]] static Expected<u32> FillCapLoop(
         const SIMDVectorSingle loopNormalVec,
+        const Vector<u32, Core::Alloc::ScratchArena>& loop,
         CsgDeformVertexVector<Core::Alloc::ScratchArena>& inOutVertices,
-        CsgDeformTriangleVector<Core::Alloc::ScratchArena>& inOutTriangles,
-        const Vector<u32, Core::Alloc::ScratchArena>& loop
+        CsgDeformTriangleVector<Core::Alloc::ScratchArena>& inOutTriangles
     );
     [[nodiscard]] static Expected<u32> FillCutCaps(
         Core::Alloc::ScratchArena& scratchArena,
+        Vector<CsgDeformCutLoopEdge, Core::Alloc::ScratchArena>& scratchEdges,
         CsgDeformVertexVector<Core::Alloc::ScratchArena>& inOutVertices,
-        CsgDeformTriangleVector<Core::Alloc::ScratchArena>& inOutTriangles,
-        Vector<CsgDeformCutLoopEdge, Core::Alloc::ScratchArena>& scratchEdges
+        CsgDeformTriangleVector<Core::Alloc::ScratchArena>& inOutTriangles
     );
 
 

@@ -51,7 +51,7 @@ static Expected<MaterialBindInterfaceLookup> BuildMaterialBindInterfaceLookup(co
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateMaterialCookInterfaces(const CookVector<MaterialBindEntry>& materialBindEntries, CookVector<MaterialCookEntry>& materialEntries, ScratchArena& scratchArena){
+bool ValidateMaterialCookInterfaces(const CookVector<MaterialBindEntry>& materialBindEntries, ScratchArena& scratchArena, CookVector<MaterialCookEntry>& materialEntries){
     auto materialBindLookupResult = BuildMaterialBindInterfaceLookup(materialBindEntries, scratchArena);
     if(!materialBindLookupResult)
         return false;
@@ -86,7 +86,7 @@ bool ValidateMaterialCookInterfaces(const CookVector<MaterialBindEntry>& materia
         }
         const MaterialBindEntry& bindEntry = *bindEntryIt.value();
 
-        const auto layoutResult = FindOrBuildMaterialBindTypedLayout(materialInterfaceName, bindEntry, layoutCache, scratchArena);
+        const auto layoutResult = FindOrBuildMaterialBindTypedLayout(materialInterfaceName, bindEntry, scratchArena, layoutCache);
         if(!layoutResult){
             NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' failed to resolve typed layout cache for interface '{}'"), StringConvert(AStringView(materialEntry.virtualPath)), StringConvert(AStringView(materialEntry.materialInterface)));
             return false;

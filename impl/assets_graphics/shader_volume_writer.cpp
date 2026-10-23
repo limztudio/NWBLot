@@ -96,8 +96,8 @@ static bool GetVariantBytecode(
     const Path& sourcePath,
     const ScratchPath& bytecodeCachePath,
     const bool compilerInputsHaveBom,
-    Core::GraphicsBytes& outBytecode,
-    ScratchArena& scratchArena
+    ScratchArena& scratchArena,
+    Core::GraphicsBytes& outBytecode
 ){
 
     outBytecode.clear();
@@ -151,7 +151,7 @@ static bool GetVariantBytecode(
         .rayQuery = entry.rayQuery,
         .compilerInputsHaveBom = compilerInputsHaveBom,
     };
-    return SlangShaderCompiler::CompileVariant(compileRequest, outBytecode, scratchArena);
+    return SlangShaderCompiler::CompileVariant(compileRequest, scratchArena, outBytecode);
 }
 
 
@@ -176,11 +176,11 @@ static Expected<usize> ReserveShaderIndexRecords(const PreparedShaderVector& pre
 }
 
 static bool AppendShaderIndexToManifest(
-    ShaderCook::CookArena& cookArena,
     const Span<const Core::ShaderArchive::Record> shaderIndexRecords,
+    ShaderCook::CookArena& cookArena,
+    ScratchArena& scratchArena,
     Core::Assets::AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
-    VirtualPathHashSet& inOutSeenVirtualPathHashes,
-    ScratchArena& scratchArena
+    VirtualPathHashSet& inOutSeenVirtualPathHashes
 ){
     const Name& shaderIndexVirtualPath = Core::ShaderArchive::IndexVirtualPathName();
     if(!inOutSeenVirtualPathHashes.insert(shaderIndexVirtualPath.hash()).second){
@@ -227,14 +227,14 @@ namespace AssetsGraphicsCookDetail{
 
 
 bool AppendPreparedShadersToManifest(
-    ShaderCook::CookArena& cookArena,
-    ShaderCook& shaderCook,
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
+    ShaderCook::CookArena& cookArena,
+    ScratchArena& scratchArena,
+    ShaderCook& shaderCook,
     PreparedShaderVector& preparedEntries,
     Core::Assets::AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
-    VirtualPathHashSet& inOutSeenVirtualPathHashes,
-    ScratchArena& scratchArena
+    VirtualPathHashSet& inOutSeenVirtualPathHashes
 ){
     Vector<Core::ShaderArchive::Record, ScratchArena> shaderIndexRecords{scratchArena};
     const auto shaderRecordCount = __hidden_shader_volume_writer::ReserveShaderIndexRecords(preparedEntries, shaderIndexRecords);
@@ -281,8 +281,8 @@ bool AppendPreparedShadersToManifest(
                 preparedEntry.sourcePath,
                 bytecodeCachePath,
                 preparedEntry.compilerInputsHaveBom,
-                cookedBytecode,
-                scratchArena
+                scratchArena,
+                cookedBytecode
             ))
                 return false;
 
@@ -323,7 +323,7 @@ bool AppendPreparedShadersToManifest(
             return true;
         };
 
-        if(!shaderCook.expandDefineCombinations(entry.defineValues, defineCombinations, scratchArena)){
+        if(!shaderCook.expandDefineCombinations(entry.defineValues, scratchArena, defineCombinations)){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: variant combination count exceeds runtime limits for entry '{}'"), StringConvert(entry.name));
             return false;
         }
@@ -346,7 +346,7 @@ bool AppendPreparedShadersToManifest(
     }
 
     NWB_ASSERT(shaderIndexRecords.size() == *shaderRecordCount);
-    return __hidden_shader_volume_writer::AppendShaderIndexToManifest(cookArena, shaderIndexRecords, manifest, inOutSeenVirtualPathHashes, scratchArena);
+    return __hidden_shader_volume_writer::AppendShaderIndexToManifest(shaderIndexRecords, cookArena, scratchArena, manifest, inOutSeenVirtualPathHashes);
 }
 
 

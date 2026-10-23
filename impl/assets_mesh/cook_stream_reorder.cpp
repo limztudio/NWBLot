@@ -18,17 +18,17 @@ bool MeshCookStreamReorder::ReorderMeshStreamsByMeshletTraversal(MeshCookEntry& 
     MeshCookCommonStreamReorder reorder(entry.positions.get_allocator().arena(), scratchArena);
     PrepareCommonMeshStreamReorder(entry, reorder);
 
-    if(!RemapMeshletPositionRefs(entry, s_MeshMetaKind, reorder, [&](const MeshletPositionStreamRef& ref){
+    if(!RemapMeshletPositionRefs(s_MeshMetaKind, [&](const MeshletPositionStreamRef& ref){
         if(ref.skin == s_MeshMissingStreamIndex)
             return true;
 
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': static meshlet position reference cannot contain skin"), s_MeshMetaKind, StringConvert(entry.virtualPath.resolvedText()));
         return false;
-    }
+    }, entry, reorder
     ))
         return false;
 
-    if(!RemapMeshletAttributeRefs(entry, s_MeshMetaKind, reorder))
+    if(!RemapMeshletAttributeRefs(s_MeshMetaKind, entry, reorder))
         return false;
 
     CommitCommonMeshStreamReorder(entry, reorder);

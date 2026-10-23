@@ -61,7 +61,7 @@ consteval bool ResolveIdentityIsNothrow()noexcept{
 
 
 template<typename ResolveIdentity>
-void MarkLiveSkinnedRuntimeMeshes(Core::ECS::World& world, RuntimeMeshRequestSet& requests, ResolveIdentity&& resolveIdentity)noexcept(RuntimeMeshLivenessExceptionDetail::ResolveIdentityIsNothrow<ResolveIdentity>()){
+void MarkLiveSkinnedRuntimeMeshes(Core::ECS::World& world, ResolveIdentity&& resolveIdentity, RuntimeMeshRequestSet& requests)noexcept(RuntimeMeshLivenessExceptionDetail::ResolveIdentityIsNothrow<ResolveIdentity>()){
     if(requests.complete())
         return;
     for(auto&& [entity, binding] : world.view<SkinnedMeshBindingComponent>()){

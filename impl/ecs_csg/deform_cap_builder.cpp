@@ -120,7 +120,7 @@ Expected<SIMDVectorSingleResult> CsgDeformCapBuilder::CapNormal(const SIMDVector
     return SIMDVectorSingleResult{ VectorSelect(normalized, CsgDeformWallBuilder::UpAxisVec(), s_SIMDMaskW) };
 }
 
-Expected<u32> CsgDeformCapBuilder::FillCapLoop(const SIMDVectorSingle loopNormalVec, CsgDeformVertexVector<ScratchArena>& inOutVertices, CsgDeformTriangleVector<ScratchArena>& inOutTriangles, const Vector<u32, ScratchArena>& loop){
+Expected<u32> CsgDeformCapBuilder::FillCapLoop(const SIMDVectorSingle loopNormalVec, const Vector<u32, ScratchArena>& loop, CsgDeformVertexVector<ScratchArena>& inOutVertices, CsgDeformTriangleVector<ScratchArena>& inOutTriangles){
     u32 capTriangles = 0u;
     if(loop.size() < s_MinLoopVertices)
         return MakeUnexpected(Failure{});
@@ -166,7 +166,7 @@ Expected<u32> CsgDeformCapBuilder::FillCapLoop(const SIMDVectorSingle loopNormal
     return capTriangles;
 }
 
-Expected<u32> CsgDeformCapBuilder::FillCutCaps(ScratchArena& scratchArena, CsgDeformVertexVector<ScratchArena>& inOutVertices, CsgDeformTriangleVector<ScratchArena>& inOutTriangles, Vector<CsgDeformCutLoopEdge, ScratchArena>& scratchEdges){
+Expected<u32> CsgDeformCapBuilder::FillCutCaps(ScratchArena& scratchArena, Vector<CsgDeformCutLoopEdge, ScratchArena>& scratchEdges, CsgDeformVertexVector<ScratchArena>& inOutVertices, CsgDeformTriangleVector<ScratchArena>& inOutTriangles){
     u32 capTriangles = 0u;
     CsgDeformCapBuilder::CollectBoundaryEdges(scratchArena, inOutTriangles, scratchEdges);
     if(scratchEdges.empty())
@@ -218,7 +218,7 @@ Expected<u32> CsgDeformCapBuilder::FillCutCaps(ScratchArena& scratchArena, CsgDe
         const auto loopNormal = CapNormal(area);
         if(!loopNormal)
             return MakeUnexpected(Failure{});
-        const auto loopCaps = CsgDeformCapBuilder::FillCapLoop(loopNormal->value, inOutVertices, inOutTriangles, loop);
+        const auto loopCaps = CsgDeformCapBuilder::FillCapLoop(loopNormal->value, loop, inOutVertices, inOutTriangles);
         if(!loopCaps)
             return MakeUnexpected(Failure{});
         capTriangles += *loopCaps;

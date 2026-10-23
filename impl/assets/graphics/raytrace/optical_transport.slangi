@@ -331,7 +331,7 @@ NwbOpticalTraceResult nwbOpticalTrace(const NwbOpticalTraceConfig config, const 
             }
             const bool entering = facing < 0.0;
             NwbOpticalMedia transmittedMedia = media;
-            if(!nwbOpticalApplyBoundary(transmittedMedia, boundaryMedium, entering, result))
+            if(!nwbOpticalApplyBoundary(boundaryMedium, entering, transmittedMedia, result))
                 return result;
             const NwbOpticalMedium transmittedMedium = nwbOpticalDominantMedium(transmittedMedia);
             const NwbDielectricInterface boundary = nwbDielectricTransmit(direction, entering ? hit.geometricNormal : -hit.geometricNormal, incidentMedium.ior, transmittedMedium.ior);

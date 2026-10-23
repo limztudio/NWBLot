@@ -94,7 +94,7 @@ NwbOpticalMedium nwbOpticalDominantMedium(__constref NwbOpticalMedia media){
 
 #if NWB_OPTICAL_CLOSED_MEDIA
 // Nested boundaries are an authored stack: highest priority wins; same-instance shells union via positive winding. Mixed policies/unmatched exits stay ambiguous: never guess.
-bool nwbOpticalApplyBoundary(inout NwbOpticalMedia media, const NwbOpticalMedium medium, const bool entering, inout NwbOpticalTraceResult result){
+bool nwbOpticalApplyBoundary(const NwbOpticalMedium medium, const bool entering, inout NwbOpticalMedia media, inout NwbOpticalTraceResult result){
     uint existing = NWB_OPTICAL_MAX_MEDIA;
     [unroll] for(uint index = 0u; index < NWB_OPTICAL_MAX_MEDIA; ++index){
         if(index < media.count && media.entries[index].instance == medium.instance)

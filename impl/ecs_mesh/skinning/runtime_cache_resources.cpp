@@ -198,9 +198,9 @@ template<typename PayloadT, typename PayloadVector>
 
 template<typename PayloadT, typename PayloadVector>
 [[nodiscard]] bool AssignRuntimeBuffer(
-    Core::GraphicsRuntime& graphics,
-    MeshSkinningRuntimeInstance& instance,
     Core::BufferHandle& outBuffer,
+    Core::GraphicsRuntime& graphics,
+    const MeshSkinningRuntimeInstance& instance,
     const AStringView suffix,
     const PayloadVector& payload,
     const bool canHaveUavs,
@@ -221,10 +221,10 @@ template<typename PayloadT, typename PayloadVector>
 
 template<typename PayloadVector>
 [[nodiscard]] bool AssignPaddedRawRuntimeBuffer(
+    Core::BufferHandle& outBuffer,
     Core::GraphicsRuntime& graphics,
     Core::Alloc::ScratchArena& scratchArena,
-    MeshSkinningRuntimeInstance& instance,
-    Core::BufferHandle& outBuffer,
+    const MeshSkinningRuntimeInstance& instance,
     const AStringView suffix,
     const PayloadVector& payload,
     const bool canHaveUavs,
@@ -279,36 +279,36 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
 
     bool uploaded = CreateMeshSkinningLocalBoundsBuffers(m_graphics, instance);
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Float3U>(
+        instance.restPositionBuffer,
         m_graphics,
         instance,
-        instance.restPositionBuffer,
         __hidden_runtime_cache_resources::s_RestPositionsSuffix,
         instance.restPositions,
         false,
         __hidden_runtime_cache_resources::s_RestPositionLabel
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Half4U>(
+        instance.restNormalBuffer,
         m_graphics,
         instance,
-        instance.restNormalBuffer,
         __hidden_runtime_cache_resources::s_RestNormalsSuffix,
         instance.restNormals,
         false,
         __hidden_runtime_cache_resources::s_RestNormalLabel
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Half4U>(
+        instance.restTangentBuffer,
         m_graphics,
         instance,
-        instance.restTangentBuffer,
         __hidden_runtime_cache_resources::s_RestTangentsSuffix,
         instance.restTangents,
         false,
         __hidden_runtime_cache_resources::s_RestTangentLabel
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Float3U>(
+        instance.skinnedPositionBuffer,
         m_graphics,
         instance,
-        instance.skinnedPositionBuffer,
         __hidden_runtime_cache_resources::s_SkinnedPositionsSuffix,
         instance.restPositions,
         true,
@@ -318,38 +318,38 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         Core::ResourceQueueSharing::GraphicsAndAsyncCompute
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Half4U>(
+        instance.skinnedNormalBuffer,
         m_graphics,
         instance,
-        instance.skinnedNormalBuffer,
         __hidden_runtime_cache_resources::s_SkinnedNormalsSuffix,
         instance.restNormals,
         true,
         __hidden_runtime_cache_resources::s_SkinnedNormalLabel
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Half4U>(
+        instance.skinnedTangentBuffer,
         m_graphics,
         instance,
-        instance.skinnedTangentBuffer,
         __hidden_runtime_cache_resources::s_SkinnedTangentsSuffix,
         instance.restTangents,
         true,
         __hidden_runtime_cache_resources::s_SkinnedTangentLabel
     ) && uploaded;
-    uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Float2U>(m_graphics, instance, instance.uv0Buffer, __hidden_runtime_cache_resources::s_Uv0Suffix, instance.uv0, false, __hidden_runtime_cache_resources::s_Uv0Label) && uploaded;
-    uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Half4U>(m_graphics, instance, instance.colorBuffer, __hidden_runtime_cache_resources::s_ColorsSuffix, instance.colors, false, __hidden_runtime_cache_resources::s_ColorLabel) && uploaded;
+    uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Float2U>(instance.uv0Buffer, m_graphics, instance, __hidden_runtime_cache_resources::s_Uv0Suffix, instance.uv0, false, __hidden_runtime_cache_resources::s_Uv0Label) && uploaded;
+    uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Half4U>(instance.colorBuffer, m_graphics, instance, __hidden_runtime_cache_resources::s_ColorsSuffix, instance.colors, false, __hidden_runtime_cache_resources::s_ColorLabel) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<MeshletDesc>(
+        instance.meshletDescBuffer,
         m_graphics,
         instance,
-        instance.meshletDescBuffer,
         __hidden_runtime_cache_resources::s_MeshletsSuffix,
         instance.meshlets,
         false,
         __hidden_runtime_cache_resources::s_MeshletDescriptorLabel
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<MeshletBounds>(
+        instance.meshletBoundsBuffer,
         m_graphics,
         instance,
-        instance.meshletBoundsBuffer,
         __hidden_runtime_cache_resources::s_MeshletBoundsSuffix,
         instance.meshletBounds,
         true,
@@ -357,48 +357,48 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         true
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignPaddedRawRuntimeBuffer(
+        instance.meshletPositionRefDeltaBuffer,
         m_graphics,
         scratchArena,
         instance,
-        instance.meshletPositionRefDeltaBuffer,
         __hidden_runtime_cache_resources::s_MeshletPositionRefDeltasSuffix,
         instance.meshletPositionRefDeltas,
         false,
         __hidden_runtime_cache_resources::s_MeshletPositionRefDeltaLabel
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignPaddedRawRuntimeBuffer(
+        instance.meshletAttributeRefDeltaBuffer,
         m_graphics,
         scratchArena,
         instance,
-        instance.meshletAttributeRefDeltaBuffer,
         __hidden_runtime_cache_resources::s_MeshletAttributeRefDeltasSuffix,
         instance.meshletAttributeRefDeltas,
         false,
         __hidden_runtime_cache_resources::s_MeshletAttributeRefDeltaLabel
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<MeshletLocalVertexRef>(
+        instance.meshletLocalVertexRefBuffer,
         m_graphics,
         instance,
-        instance.meshletLocalVertexRefBuffer,
         __hidden_runtime_cache_resources::s_MeshletLocalVertexRefsSuffix,
         instance.meshletLocalVertexRefs,
         false,
         __hidden_runtime_cache_resources::s_MeshletLocalVertexRefLabel
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignPaddedRawRuntimeBuffer(
+        instance.meshletPrimitiveIndexBuffer,
         m_graphics,
         scratchArena,
         instance,
-        instance.meshletPrimitiveIndexBuffer,
         __hidden_runtime_cache_resources::s_MeshletPrimitiveIndicesSuffix,
         instance.meshletPrimitiveIndices,
         false,
         __hidden_runtime_cache_resources::s_MeshletPrimitiveIndexLabel
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<u32>(
+        instance.attributeSkinBuffer,
         m_graphics,
         instance,
-        instance.attributeSkinBuffer,
         __hidden_runtime_cache_resources::s_AttributeSkinsSuffix,
         instance.attributeSkins,
         false,
@@ -419,9 +419,9 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         }
 
         uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<u32>(
+            instance.triangleIndexBuffer,
             m_graphics,
             instance,
-            instance.triangleIndexBuffer,
             MeshResourceNames::s_RtTriangleIndicesBufferName,
             *triangleIndices,
             false,
@@ -442,9 +442,9 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         }
 
         uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<AttribGpu>(
+            instance.attributeBuffer,
             m_graphics,
             instance,
-            instance.attributeBuffer,
             MeshResourceNames::s_RtTriangleAttributesBufferName,
             *triangleAttributes,
             true, // canHaveUavs: the per-frame skinned-normal repack pass writes this buffer as a raw UAV in place

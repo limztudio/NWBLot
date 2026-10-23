@@ -242,7 +242,7 @@ using ShadowSurfaceBindAliasVector = Vector<ScratchString, ScratchArena>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void AppendShadowSurfaceBindAlias(const AStringView symbol, const AStringView bindNamespace, ScratchHashSet<ScratchString>& inOutSeenSymbols, ShadowSurfaceBindAliasVector& outAliasSymbols, ScratchString& inOutSource, ScratchArena& scratchArena){
+static void AppendShadowSurfaceBindAlias(const AStringView symbol, const AStringView bindNamespace, ScratchArena& scratchArena, ScratchHashSet<ScratchString>& inOutSeenSymbols, ShadowSurfaceBindAliasVector& outAliasSymbols, ScratchString& inOutSource){
     ScratchString seenSymbol(symbol, scratchArena);
     if(!inOutSeenSymbols.insert(Move(seenSymbol)).second)
         return;
@@ -262,10 +262,10 @@ static void AppendShadowSurfaceBindAlias(const AStringView symbol, const AString
 static bool AppendShadowSurfaceBindAliases(
     const MaterialBindEntry& bindEntry,
     const AStringView bindNamespace,
+    ScratchArena& scratchArena,
     ScratchHashSet<ScratchString>& inOutSeenSymbols,
     ShadowSurfaceBindAliasVector& outAliasSymbols,
-    ScratchString& inOutSource,
-    ScratchArena& scratchArena
+    ScratchString& inOutSource
 ){
     inOutSeenSymbols.clear();
     outAliasSymbols.clear();
@@ -276,7 +276,7 @@ static bool AppendShadowSurfaceBindAliases(
         ScratchString suffix(s_MaterialBindInterfaceHashSymbolPrefix, scratchArena);
         suffix += FormatDecimal(static_cast<usize>(lane), laneDigits);
         const ScratchString symbol = BuildMaterialBindGeneratedSymbol(scratchArena, {}, AStringView(suffix));
-        AppendShadowSurfaceBindAlias(AStringView(symbol), bindNamespace, inOutSeenSymbols, outAliasSymbols, inOutSource, scratchArena);
+        AppendShadowSurfaceBindAlias(AStringView(symbol), bindNamespace, scratchArena, inOutSeenSymbols, outAliasSymbols, inOutSource);
     }
 
     const AStringView layoutSymbols[] = {
@@ -291,11 +291,11 @@ static bool AppendShadowSurfaceBindAliases(
     static_assert(LengthOf(layoutSymbols) == s_ShadowSurfaceBindLayoutAliasCount);
     for(const AStringView suffix : layoutSymbols){
         const ScratchString symbol = BuildMaterialBindGeneratedSymbol(scratchArena, {}, suffix);
-        AppendShadowSurfaceBindAlias(AStringView(symbol), bindNamespace, inOutSeenSymbols, outAliasSymbols, inOutSource, scratchArena);
+        AppendShadowSurfaceBindAlias(AStringView(symbol), bindNamespace, scratchArena, inOutSeenSymbols, outAliasSymbols, inOutSource);
     }
 
     for(const MaterialBindStruct& bindStruct : bindEntry.structs){
-        AppendShadowSurfaceBindAlias(AStringView(bindStruct.name), bindNamespace, inOutSeenSymbols, outAliasSymbols, inOutSource, scratchArena);
+        AppendShadowSurfaceBindAlias(AStringView(bindStruct.name), bindNamespace, scratchArena, inOutSeenSymbols, outAliasSymbols, inOutSource);
     }
 
     for(const MaterialBindInstance& instance : bindEntry.instances){
@@ -309,22 +309,22 @@ static bool AppendShadowSurfaceBindAliases(
         const AStringView blockSuffixes[] = { s_MaterialBindStorageSymbolSuffix, s_MaterialBindByteOffsetSymbolSuffix, s_MaterialBindByteSizeSymbolSuffix };
         for(const AStringView suffix : blockSuffixes){
             const ScratchString symbol = BuildMaterialBindGeneratedSymbol(scratchArena, { instanceName }, suffix);
-            AppendShadowSurfaceBindAlias(AStringView(symbol), bindNamespace, inOutSeenSymbols, outAliasSymbols, inOutSource, scratchArena);
+            AppendShadowSurfaceBindAlias(AStringView(symbol), bindNamespace, scratchArena, inOutSeenSymbols, outAliasSymbols, inOutSource);
         }
 
         const ScratchString blockAccessor = BuildMaterialBindAccessorName(scratchArena, { instanceName });
-        AppendShadowSurfaceBindAlias(AStringView(blockAccessor), bindNamespace, inOutSeenSymbols, outAliasSymbols, inOutSource, scratchArena);
+        AppendShadowSurfaceBindAlias(AStringView(blockAccessor), bindNamespace, scratchArena, inOutSeenSymbols, outAliasSymbols, inOutSource);
 
         for(const MaterialBindField& field : bindStruct->fields){
             const AStringView fieldName(field.name);
             const AStringView fieldSuffixes[] = { s_MaterialBindByteOffsetSymbolSuffix, s_MaterialBindKeySymbolSuffix, s_MaterialBindDefaultSymbolSuffix };
             for(const AStringView suffix : fieldSuffixes){
                 const ScratchString symbol = BuildMaterialBindGeneratedSymbol(scratchArena, { instanceName, fieldName }, suffix);
-                AppendShadowSurfaceBindAlias(AStringView(symbol), bindNamespace, inOutSeenSymbols, outAliasSymbols, inOutSource, scratchArena);
+                AppendShadowSurfaceBindAlias(AStringView(symbol), bindNamespace, scratchArena, inOutSeenSymbols, outAliasSymbols, inOutSource);
             }
 
             const ScratchString fieldAccessor = BuildMaterialBindAccessorName(scratchArena, { instanceName, fieldName });
-            AppendShadowSurfaceBindAlias(AStringView(fieldAccessor), bindNamespace, inOutSeenSymbols, outAliasSymbols, inOutSource, scratchArena);
+            AppendShadowSurfaceBindAlias(AStringView(fieldAccessor), bindNamespace, scratchArena, inOutSeenSymbols, outAliasSymbols, inOutSource);
         }
     }
 
@@ -479,7 +479,7 @@ Expected<Path> EmitShadowSurfaceDispatchModuleImpl(const Path& cacheDirectory, c
             source += interfaceById[id];
             source += ".bind\"\n}\n";
         }
-        if(!AppendShadowSurfaceBindAliases(*bindEntryById[id], AStringView(bindNamespace), bindAliasSeenSymbols, bindAliasSymbols, source, scratchArena))
+        if(!AppendShadowSurfaceBindAliases(*bindEntryById[id], AStringView(bindNamespace), scratchArena, bindAliasSeenSymbols, bindAliasSymbols, source))
             return MakeUnexpected(Failure{});
         source += s_GeneratedDefineDirective;
         source += s_ShadowSurfaceFunctionMacro;

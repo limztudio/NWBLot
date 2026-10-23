@@ -48,14 +48,14 @@ namespace __hidden_assets_mesh_cook{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ParseSourceMeshMeta(const DiscoveredNwbFile& discoveredFile, const Core::Metascript::Value& asset, MeshCookEntry& outEntry, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena){
+static bool ParseSourceMeshMeta(const DiscoveredNwbFile& discoveredFile, const Core::Metascript::Value& asset, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, MeshCookEntry& outEntry){
     auto streamsResult = MeshCookSourceStreams::ParseCommonSourceMeshStreams(discoveredFile, asset, s_MeshMetaKind, outEntry.positions.get_allocator().arena(), scratchArena);
     if(!streamsResult)
         return false;
 
     SourceMeshStreams& streams = *streamsResult;
     MeshCookSourceStreams::CopySourceStreams(streams, outEntry);
-    return MeshCookMeshlets::BuildMeshlets(discoveredFile.filePath, s_MeshMetaKind, streams.indices, outEntry, cpuScheduler, scratchArena);
+    return MeshCookMeshlets::BuildMeshlets(discoveredFile.filePath, s_MeshMetaKind, streams.indices, cpuScheduler, scratchArena, outEntry);
 }
 
 static bool ValidateMeshAssetFields(const DiscoveredNwbFile& discoveredFile, const Core::Metascript::Value& asset){
@@ -92,7 +92,7 @@ static Expected<MeshCookEntry> ParseMeshMeta(
         return MakeUnexpected(Failure{});
     if(!ValidateMeshAssetFields(discoveredFile, asset))
         return MakeUnexpected(Failure{});
-    if(!ParseSourceMeshMeta(discoveredFile, asset, entry, cpuScheduler, scratchArena))
+    if(!ParseSourceMeshMeta(discoveredFile, asset, cpuScheduler, scratchArena, entry))
         return MakeUnexpected(Failure{});
     return entry;
 }

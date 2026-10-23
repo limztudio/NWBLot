@@ -46,7 +46,7 @@ static bool ValidateRecordIdentity(const Core::ShaderArchive::Record& record){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool MergeGatheredGraphicsAsset(const Name& virtualPath, Core::Assets::AssetBytes& existingPayload, const void* incomingPayload, const usize incomingSize, Core::Alloc::ScratchArena& scratchArena){
+bool MergeGatheredGraphicsAsset(const Name& virtualPath, const void* incomingPayload, const usize incomingSize, Core::Alloc::ScratchArena& scratchArena, Core::Assets::AssetBytes& existingPayload){
     if(virtualPath != Core::ShaderArchive::IndexVirtualPathName())
         return false;
     if(incomingSize > 0u && incomingPayload == nullptr)

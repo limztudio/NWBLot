@@ -81,10 +81,10 @@ public:
         const MeshletContainer& meshlets,
         const LocalVertexRefContainer& localVertexRefs,
         const usize attributeCount,
-        AttributeSkinContainer& outAttributeSkins,
         SkinResolver resolveSkin,
         ConflictHandler onConflict,
-        UnreferencedHandler onUnreferenced
+        UnreferencedHandler onUnreferenced,
+        AttributeSkinContainer& outAttributeSkins
     )noexcept(MeshletRefValidationExceptionDetail::AttributeSkinsIsNothrow<MeshletContainer, LocalVertexRefContainer, AttributeSkinContainer, SkinResolver, ConflictHandler, UnreferencedHandler>());
     template<
         typename MeshletContainer,
@@ -99,9 +99,9 @@ public:
         const PositionRefContainer& positionRefs,
         const LocalVertexRefContainer& localVertexRefs,
         const usize attributeCount,
-        AttributeSkinContainer& outAttributeSkins,
         ConflictHandler onConflict,
-        UnreferencedHandler onUnreferenced
+        UnreferencedHandler onUnreferenced,
+        AttributeSkinContainer& outAttributeSkins
     )noexcept(
         IsNothrowConstructible_V<ConflictHandler, ConflictHandler&> && IsNothrowConstructible_V<UnreferencedHandler, UnreferencedHandler&>
         && MeshletRefValidationExceptionDetail::AttributeSkinsIsNothrow<MeshletContainer, LocalVertexRefContainer, AttributeSkinContainer, MeshletRefValidationExceptionDetail::PositionSkinResolver<PositionRefContainer>, ConflictHandler, UnreferencedHandler>()
@@ -128,10 +128,10 @@ template<
     const MeshletContainer& meshlets,
     const LocalVertexRefContainer& localVertexRefs,
     const usize attributeCount,
-    AttributeSkinContainer& outAttributeSkins,
     SkinResolver resolveSkin,
     ConflictHandler onConflict,
-    UnreferencedHandler onUnreferenced
+    UnreferencedHandler onUnreferenced,
+    AttributeSkinContainer& outAttributeSkins
 )noexcept(MeshletRefValidationExceptionDetail::AttributeSkinsIsNothrow<MeshletContainer, LocalVertexRefContainer, AttributeSkinContainer, SkinResolver, ConflictHandler, UnreferencedHandler>()){
     outAttributeSkins.clear();
     outAttributeSkins.resize(attributeCount, s_MeshMissingStreamIndex);
@@ -185,9 +185,9 @@ template<
     const PositionRefContainer& positionRefs,
     const LocalVertexRefContainer& localVertexRefs,
     const usize attributeCount,
-    AttributeSkinContainer& outAttributeSkins,
     ConflictHandler onConflict,
-    UnreferencedHandler onUnreferenced
+    UnreferencedHandler onUnreferenced,
+    AttributeSkinContainer& outAttributeSkins
 )noexcept(
     IsNothrowConstructible_V<ConflictHandler, ConflictHandler&> && IsNothrowConstructible_V<UnreferencedHandler, UnreferencedHandler&>
     && MeshletRefValidationExceptionDetail::AttributeSkinsIsNothrow<MeshletContainer, LocalVertexRefContainer, AttributeSkinContainer, MeshletRefValidationExceptionDetail::PositionSkinResolver<PositionRefContainer>, ConflictHandler, UnreferencedHandler>()
@@ -196,12 +196,12 @@ template<
         meshlets,
         localVertexRefs,
         attributeCount,
-        outAttributeSkins,
         [&](const usize, const MeshletDesc&, const usize meshletPositionBase, const u32 localPositionIndex)noexcept(noexcept(Expected<u32>{ positionRefs[meshletPositionBase + localPositionIndex].skin }))->Expected<u32>{
             return positionRefs[meshletPositionBase + localPositionIndex].skin;
         },
         onConflict,
-        onUnreferenced
+        onUnreferenced,
+        outAttributeSkins
     );
 }
 

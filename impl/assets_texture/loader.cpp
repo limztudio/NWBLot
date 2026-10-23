@@ -193,7 +193,7 @@ bool TextureAssetLoader::Create(TextureGpuResource& outResource, const Texture& 
         .setDimension(textureDimension)
         .setInitialState(Core::ResourceStates::ShaderResource)
         .setKeepInitialState(true)
-        // Static decoded assets are immediately sampled by Graphics/Compute, while sizeable batches may use a dedicated Transfer producer.  Declare all three consumer/producer transports before creation so the graph-owned upload can choose the automatic Transfer -> Compute -> Graphics route safely.
+        // Declare Transfer, Compute, and Graphics transports so graph-owned uploads can route static textures across all three queues.
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer).setName(imageName)
     ;
     if(textureAsset.dimension() == TextureDimension::TextureCube)

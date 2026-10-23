@@ -187,8 +187,7 @@ static Expected<ScratchVector<NotNull<const MaterialBindInstance*>>> BuildSorted
         instances.push_back(MakeNotNull(&instance));
     Sort(instances.begin(), instances.end(), [](const NotNull<const MaterialBindInstance*> lhs, const NotNull<const MaterialBindInstance*> rhs)noexcept{
         return lhs->name < rhs->name;
-    }
-    );
+    });
     if(instances.size() > Limit<u32>::s_Max){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' exceeds supported block count for '{}'"), StringConvert(bindEntry.virtualPath), StringConvert(contextName.resolvedText()));
         return MakeUnexpected(Failure{});

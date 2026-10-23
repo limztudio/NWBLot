@@ -34,7 +34,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Slot accessor for the structured node view. Like nwbHeapRawBuffer(), the varying per-mesh slot is wrapped in NonUniformResourceIndex() here so every SW node fetch decorates identically. Returns the buffer by value (an opaque handle) so the caller subscripts by node index.
+// Slot accessor for the structured node view. The varying per-mesh slot is wrapped in NonUniformResourceIndex(); returns the buffer by value for caller subscripting.
 StructuredBuffer<NwbBvhNode> nwbHeapBvhNodes(const uint slot){
     return g_NwbHeapBvhNodeBuffers[NonUniformResourceIndex(slot)];
 }

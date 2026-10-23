@@ -53,9 +53,9 @@ inline constexpr StringView s_ArgDesc[] = { "Log server address", "Log server po
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<ArgCommand::Enum i, typename CLI, typename T>
+template<ArgCommand::Enum Command, typename CLI, typename T>
 inline auto ArgAddOption(CLI& cli, T& arg){
-    return cli.add_option(s_ArgCmd[static_cast<usize>(i)].data(), arg, s_ArgDesc[static_cast<usize>(i)].data())->default_val(Get<static_cast<usize>(i)>(s_ArgDefault));
+    return cli.add_option(s_ArgCmd[static_cast<usize>(Command)].data(), arg, s_ArgDesc[static_cast<usize>(Command)].data())->default_val(Get<static_cast<usize>(Command)>(s_ArgDefault));
 }
 
 
@@ -286,7 +286,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T, const TStringView& loggerName>
+template<typename T, const TStringView& LoggerName>
 class LoggerWorkerBase{
 public:
     explicit LoggerWorkerBase(const NameText<char> allocationLog)
@@ -364,9 +364,9 @@ protected:
     Atomic<bool> m_exit;
 };
 
-template<typename T, f32 updateIntervalSeconds, const TStringView& loggerName>
-class IntervalLoggerWorkerBase : public LoggerWorkerBase<T, loggerName>{
-    friend LoggerWorkerBase<T, loggerName>;
+template<typename T, f32 UpdateIntervalSeconds, const TStringView& LoggerName>
+class IntervalLoggerWorkerBase : public LoggerWorkerBase<T, LoggerName>{
+    friend LoggerWorkerBase<T, LoggerName>;
 
 
 private:
@@ -378,9 +378,9 @@ private:
         for(;;){
             const Timer currentTime = TimerNow();
             const f32 elapsedSeconds = DurationInSeconds<f32>(currentTime, self.m_lastUpdateTime);
-            if(elapsedSeconds < updateIntervalSeconds){
+            if(elapsedSeconds < UpdateIntervalSeconds){
                 // Sleep until the next update deadline; the cadence bounds message and shutdown latency.
-                const SIMDVectorSingle remainingSeconds = VectorSubtract(VectorReplicate(updateIntervalSeconds), VectorReplicate(elapsedSeconds));
+                const SIMDVectorSingle remainingSeconds = VectorSubtract(VectorReplicate(UpdateIntervalSeconds), VectorReplicate(elapsedSeconds));
                 static constexpr f32 s_MillisecondsPerSecondF = 1000.0f;
                 static constexpr u32 s_MinSleepMilliseconds = 1u;
                 const u32 sleepMilliseconds = Max<u32>(s_MinSleepMilliseconds, static_cast<u32>(VectorGetX(VectorCeiling(VectorScale(remainingSeconds, s_MillisecondsPerSecondF)))));
@@ -398,26 +398,26 @@ private:
 
 public:
     explicit IntervalLoggerWorkerBase(const NameText<char> allocationLog)
-        : LoggerWorkerBase<T, loggerName>(allocationLog)
+        : LoggerWorkerBase<T, LoggerName>(allocationLog)
         , m_lastUpdateTime(TimerNow())
     {}
 
 
 protected:
-    inline void enqueue(MessageType&& data){ return LoggerWorkerBase<T, loggerName>::m_messageQueue.emplace(Move(data)); }
+    inline void enqueue(MessageType&& data){ return LoggerWorkerBase<T, LoggerName>::m_messageQueue.emplace(Move(data)); }
 
-    inline void enqueue(const MessageType& data){ return LoggerWorkerBase<T, loggerName>::m_messageQueue.emplace(data); }
+    inline void enqueue(const MessageType& data){ return LoggerWorkerBase<T, LoggerName>::m_messageQueue.emplace(data); }
 
 
 private:
     Timer m_lastUpdateTime;
 };
-template<typename T, f32 updateIntervalSeconds, const TStringView& loggerName>
-bool IntervalLoggerWorkerBase<T, updateIntervalSeconds, loggerName>::s_GlobalInit = false;
+template<typename T, f32 UpdateIntervalSeconds, const TStringView& LoggerName>
+bool IntervalLoggerWorkerBase<T, UpdateIntervalSeconds, LoggerName>::s_GlobalInit = false;
 
-template<typename T, const TStringView& loggerName>
-class QueuedLoggerWorkerBase : public LoggerWorkerBase<T, loggerName>{
-    friend LoggerWorkerBase<T, loggerName>;
+template<typename T, const TStringView& LoggerName>
+class QueuedLoggerWorkerBase : public LoggerWorkerBase<T, LoggerName>{
+    friend LoggerWorkerBase<T, LoggerName>;
 
 
 private:
@@ -444,7 +444,7 @@ private:
 
 public:
     explicit QueuedLoggerWorkerBase(const NameText<char> allocationLog)
-        : LoggerWorkerBase<T, loggerName>(allocationLog)
+        : LoggerWorkerBase<T, LoggerName>(allocationLog)
         , m_semaphore(0)
     {}
 
@@ -456,16 +456,16 @@ protected:
 
 
 protected:
-    inline void enqueue(MessageType&& data){ LoggerWorkerBase<T, loggerName>::m_messageQueue.emplace(Move(data)); m_semaphore.release(); }
+    inline void enqueue(MessageType&& data){ LoggerWorkerBase<T, LoggerName>::m_messageQueue.emplace(Move(data)); m_semaphore.release(); }
 
-    inline void enqueue(const MessageType& data){ LoggerWorkerBase<T, loggerName>::m_messageQueue.emplace(data); m_semaphore.release(); }
+    inline void enqueue(const MessageType& data){ LoggerWorkerBase<T, LoggerName>::m_messageQueue.emplace(data); m_semaphore.release(); }
 
 
 protected:
     Semaphore<> m_semaphore;
 };
-template<typename T, const TStringView& loggerName>
-bool QueuedLoggerWorkerBase<T, loggerName>::s_GlobalInit = false;
+template<typename T, const TStringView& LoggerName>
+bool QueuedLoggerWorkerBase<T, LoggerName>::s_GlobalInit = false;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

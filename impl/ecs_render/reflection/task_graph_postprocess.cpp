@@ -28,7 +28,7 @@ namespace RendererTaskGraphDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_reflection_postprocess_tasks{
+namespace __hidden_task_graph_postprocess{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -168,7 +168,7 @@ Expected<Core::GpuTaskId> DeclareReflectionPostprocessTasks(
     ReflectionGraphResult& result,
     Core::GpuTaskId dependency
 ){
-    using namespace __hidden_reflection_postprocess_tasks;
+    using namespace __hidden_task_graph_postprocess;
     const ReflectionPostprocessSnapshot& snapshot = resources.postprocess;
     ReflectionHistoryReservation reservation(snapshot.control, snapshot.history);
     if(!reservation.valid() || (snapshot.history.eligible && !snapshot.temporalPipeline))

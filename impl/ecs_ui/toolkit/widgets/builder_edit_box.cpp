@@ -143,8 +143,8 @@ bool Builder::prepareEditBox(Item& item, EditModel& model, EditBoxState& state, 
         return false;
     }
     item.editState = &state;
-    item.padding = item.editStyle.padding;
 
+    SIMDVectorSingle padding = VectorSet(item.editStyle.padding.left, item.editStyle.padding.top, item.editStyle.padding.right, item.editStyle.padding.bottom);
     const Name names[]{ m_editStyle.normal, m_editStyle.hover, m_editStyle.focused, m_editStyle.disabled };
     for(const auto& name : names){
         const UiSkinRegion* skinRegion = region(name, m_editStyle.normal);
@@ -152,11 +152,10 @@ bool Builder::prepareEditBox(Item& item, EditModel& model, EditBoxState& state, 
             skinRegion = region(m_editStyle.fallback, m_editStyle.fallback);
         if(!skinRegion)
             continue;
-        const SIMDVectorSingle itempaddingCurrent = VectorSet(item.padding.left, item.padding.top, item.padding.right, item.padding.bottom);
-        const SIMDVectorSingle itempaddingCandidate = VectorSet(skinRegion->padding.left, skinRegion->padding.top, skinRegion->padding.right, skinRegion->padding.bottom);
-        const SIMDVectorSingle itempaddingMaximum = VectorSelect(itempaddingCandidate, itempaddingCurrent, VectorGreater(itempaddingCurrent, itempaddingCandidate));
-        item.padding = { VectorGetX(itempaddingMaximum), VectorGetY(itempaddingMaximum), VectorGetZ(itempaddingMaximum), VectorGetW(itempaddingMaximum) };
+        const SIMDVectorSingle candidate = VectorSet(skinRegion->padding.left, skinRegion->padding.top, skinRegion->padding.right, skinRegion->padding.bottom);
+        padding = VectorSelect(candidate, padding, VectorGreater(padding, candidate));
     }
+    item.padding = { VectorGetX(padding), VectorGetY(padding), VectorGetZ(padding), VectorGetW(padding) };
     return true;
 }
 

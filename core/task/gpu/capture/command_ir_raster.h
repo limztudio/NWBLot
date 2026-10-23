@@ -235,7 +235,7 @@ struct GpuCommandIrRasterStateOwner{
 };
 
 // Sidecar owners never enter the wire.
-// A heap lease and descriptor owner must remain live until native replay records the exact heap binding; exported streams share these strong references with the capture rather than reacquiring them.
+// A heap lease and descriptor owner must stay live until native replay records the exact binding; exported streams share these refs with the capture rather than reacquiring them.
 struct GpuCommandIrRasterHeapOwner{
     GraphicsPipelineHandle pipeline;
     GpuCommandIrOwnerAnchor lease;

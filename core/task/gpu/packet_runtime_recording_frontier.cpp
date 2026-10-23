@@ -293,7 +293,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
         outRecordedGraph.addReadyFrontierStatistics(elapsedSeconds, VectorDoubleGetX(workerBusySeconds), availableWorkerSeconds, artifactOperation);
     };
 
-    // Command-IR records form one linear graph-generation artifact. Keeping capture serial preserves its existing record order and rollback contract. This path records directly after the shared prepare step so the enclosing ready-frontier operation owns exactly one elapsed span rather than nesting compile-order telemetry.
+    // Command-IR records form one linear artifact. Keep capture serial to preserve record order and the rollback contract; this records right after prepare so the operation owns one span.
     if(!usesParallelRecording){
         if(!recordPreparedPacketRangeInCompileOrder(graph, compiledGraph, planAccess, artifactOperation, range, outRecordedGraph, *serialScratch, serialStateFanInScratchArena, commandIrCapture, outFailedPacket))
             return false;
@@ -323,7 +323,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
         }
         return true;
     };
-    // Compiler order is already free for monotonic frontiers, including a deep state-seed chain. A later independent packet may lower the frontier again
+    // Compiler order is already free for monotonic frontiers, including a deep state-seed chain. A later independent packet may lower the frontier again.
     if(!recordingFrontiersAreMonotonic){
         Sort(recordingEntries.begin(), recordingEntries.end(), __hidden_gpu_packet_runtime_recording_frontier::LessPacketRecordingFrontierEntry);
     }
@@ -364,7 +364,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                     parallelResults[parallelIndex] = 0u;
                     return;
                 }
-                // Reserve zero for serial/direct command lists. The scheduler's caller is worker zero, so shift every ready-frontier lease by one. The stable scheduler domain prevents a second scheduler with the same local worker index from aliasing this native command-pool shard.
+                // Keep zero for serial/direct lists. The caller is worker zero, so shift every lease by one. The stable domain stops a second scheduler with the same index from aliasing this shard.
                 parallelResults[parallelIndex] = recordPacket(
                     graph,
                     compiledGraph,

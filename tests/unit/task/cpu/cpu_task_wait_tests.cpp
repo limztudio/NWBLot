@@ -64,14 +64,14 @@ TEST(CpuTaskWaitTests, ScopeRejectsAnIndependentTaskDependingOnTheCaller){
     CpuTaskScheduler scheduler(0u);
     CpuTaskScope scope(scheduler);
     u32 callbacks = 0u;
-    const auto cpuAdmission136 = scheduler.submit([&](){ scope.wait(); });
-    ASSERT_TRUE(cpuAdmission136);
-    const auto caller = *cpuAdmission136;
+    const auto callerTaskAdmission = scheduler.submit([&](){ scope.wait(); });
+    ASSERT_TRUE(callerTaskAdmission);
+    const auto caller = *callerTaskAdmission;
     ASSERT_TRUE(caller.valid());
-    const auto cpuAdmission137 = scope.submit([&]()noexcept{ ++callbacks; }, caller);
-    ASSERT_TRUE(cpuAdmission137);
-    if(cpuAdmission137)
-        ASSERT_TRUE(cpuAdmission137->valid());
+    const auto cpuTaskAdmission = scope.submit([&]()noexcept{ ++callbacks; }, caller);
+    ASSERT_TRUE(cpuTaskAdmission);
+    if(cpuTaskAdmission)
+        ASSERT_TRUE(cpuTaskAdmission->valid());
     EXPECT_THROW(scheduler.wait(caller), RuntimeException);
     scope.wait();
     EXPECT_EQ(callbacks, 0u);
@@ -83,24 +83,24 @@ TEST(CpuTaskWaitTests, ScopeRejectsTransitiveDependentsOfTheCallersAncestor){
     WaitDeadline deadline;
     CpuTaskScheduler scheduler(0u);
     CpuTaskScope scope(scheduler);
-    const auto cpuAdmission138 = scheduler.submit([&](){
-        const auto cpuAdmission139 = scheduler.submit([&](){ scope.wait(); });
-        ASSERT_TRUE(cpuAdmission139);
-        if(cpuAdmission139)
-            ASSERT_TRUE(cpuAdmission139->valid());
+    const auto cpuTaskAdmission = scheduler.submit([&](){
+        const auto secondCpuTaskAdmission = scheduler.submit([&](){ scope.wait(); });
+        ASSERT_TRUE(secondCpuTaskAdmission);
+        if(secondCpuTaskAdmission)
+            ASSERT_TRUE(secondCpuTaskAdmission->valid());
     }
     );
-    ASSERT_TRUE(cpuAdmission138);
-    const auto ancestor = *cpuAdmission138;
+    ASSERT_TRUE(cpuTaskAdmission);
+    const auto ancestor = *cpuTaskAdmission;
     ASSERT_TRUE(ancestor.valid());
-    const auto cpuAdmission140 = scheduler.submit([]()noexcept{}, ancestor);
-    ASSERT_TRUE(cpuAdmission140);
-    const auto middle = *cpuAdmission140;
+    const auto middleTaskAdmission = scheduler.submit([]()noexcept{}, ancestor);
+    ASSERT_TRUE(middleTaskAdmission);
+    const auto middle = *middleTaskAdmission;
     ASSERT_TRUE(middle.valid());
-    const auto cpuAdmission141 = scope.submit([]()noexcept{}, middle);
-    ASSERT_TRUE(cpuAdmission141);
-    if(cpuAdmission141)
-        ASSERT_TRUE(cpuAdmission141->valid());
+    const auto thirdCpuTaskAdmission = scope.submit([]()noexcept{}, middle);
+    ASSERT_TRUE(thirdCpuTaskAdmission);
+    if(thirdCpuTaskAdmission)
+        ASSERT_TRUE(thirdCpuTaskAdmission->valid());
     EXPECT_THROW(scheduler.wait(ancestor), RuntimeException);
     scope.wait();
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
@@ -112,21 +112,21 @@ TEST(CpuTaskWaitTests, ScopeRechecksDependenciesPublishedByCooperativeWork){
     CpuTaskScheduler scheduler(0u);
     CpuTaskScope scope(scheduler);
     u32 callbacks = 0u;
-    const auto cpuAdmission142 = scheduler.submit([&](){ scope.wait(); });
-    ASSERT_TRUE(cpuAdmission142);
-    const auto caller = *cpuAdmission142;
+    const auto callerTaskAdmission = scheduler.submit([&](){ scope.wait(); });
+    ASSERT_TRUE(callerTaskAdmission);
+    const auto caller = *callerTaskAdmission;
     ASSERT_TRUE(caller.valid());
-    const auto cpuAdmission143 = scope.submit([&](){
+    const auto cpuTaskAdmission = scope.submit([&](){
         ++callbacks;
-        const auto cpuAdmission144 = scope.submit([&]()noexcept{ ++callbacks; }, caller);
-        ASSERT_TRUE(cpuAdmission144);
-        if(cpuAdmission144)
-            ASSERT_TRUE(cpuAdmission144->valid());
+        const auto secondCpuTaskAdmission = scope.submit([&]()noexcept{ ++callbacks; }, caller);
+        ASSERT_TRUE(secondCpuTaskAdmission);
+        if(secondCpuTaskAdmission)
+            ASSERT_TRUE(secondCpuTaskAdmission->valid());
     }
     );
-    ASSERT_TRUE(cpuAdmission143);
-    if(cpuAdmission143)
-        ASSERT_TRUE(cpuAdmission143->valid());
+    ASSERT_TRUE(cpuTaskAdmission);
+    if(cpuTaskAdmission)
+        ASSERT_TRUE(cpuTaskAdmission->valid());
     EXPECT_THROW(scheduler.wait(caller), RuntimeException);
     scope.wait();
     EXPECT_EQ(callbacks, 1u);
@@ -139,25 +139,25 @@ TEST(CpuTaskWaitTests, ScopeCanJoinIndependentPrerequisitesAndDescendants){
     CpuTaskScheduler scheduler(0u);
     CpuTaskScope scope(scheduler);
     u32 callbacks = 0u;
-    const auto cpuAdmission145 = scheduler.submit([&](){ scope.wait(); });
-    ASSERT_TRUE(cpuAdmission145);
-    const auto caller = *cpuAdmission145;
+    const auto callerTaskAdmission = scheduler.submit([&](){ scope.wait(); });
+    ASSERT_TRUE(callerTaskAdmission);
+    const auto caller = *callerTaskAdmission;
     ASSERT_TRUE(caller.valid());
-    const auto cpuAdmission146 = scheduler.submit([&]()noexcept{ ++callbacks; });
-    ASSERT_TRUE(cpuAdmission146);
-    const auto prerequisite = *cpuAdmission146;
+    const auto prerequisiteTaskAdmission = scheduler.submit([&]()noexcept{ ++callbacks; });
+    ASSERT_TRUE(prerequisiteTaskAdmission);
+    const auto prerequisite = *prerequisiteTaskAdmission;
     ASSERT_TRUE(prerequisite.valid());
-    const auto cpuAdmission147 = scope.submit([&](){
+    const auto cpuTaskAdmission = scope.submit([&](){
         ++callbacks;
-        const auto cpuAdmission148 = scheduler.submit([&]()noexcept{ ++callbacks; });
-        ASSERT_TRUE(cpuAdmission148);
-        if(cpuAdmission148)
-            ASSERT_TRUE(cpuAdmission148->valid());
+        const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept{ ++callbacks; });
+        ASSERT_TRUE(secondCpuTaskAdmission);
+        if(secondCpuTaskAdmission)
+            ASSERT_TRUE(secondCpuTaskAdmission->valid());
     }, prerequisite
     );
-    ASSERT_TRUE(cpuAdmission147);
-    if(cpuAdmission147)
-        ASSERT_TRUE(cpuAdmission147->valid());
+    ASSERT_TRUE(cpuTaskAdmission);
+    if(cpuTaskAdmission)
+        ASSERT_TRUE(cpuTaskAdmission->valid());
     scheduler.wait(caller);
     scope.wait();
     EXPECT_EQ(callbacks, 3u);
@@ -172,25 +172,25 @@ TEST(CpuTaskWaitTests, NewDependencyInvalidatesAnEarlierUnrelatedSearch){
     u32 unrelated = 0u;
     CpuTaskScheduler scheduler(0u);
     CpuTaskScope scope(scheduler);
-    const auto cpuAdmission149 = scheduler.submit([&](){ EXPECT_EQ(++sequence, s_ExpectedDualCount); });
-    ASSERT_TRUE(cpuAdmission149);
-    const auto prerequisite = *cpuAdmission149;
+    const auto prerequisiteTaskAdmission = scheduler.submit([&](){ EXPECT_EQ(++sequence, s_ExpectedDualCount); });
+    ASSERT_TRUE(prerequisiteTaskAdmission);
+    const auto prerequisite = *prerequisiteTaskAdmission;
     ASSERT_TRUE(prerequisite.valid());
-    const auto cpuAdmission150 = scheduler.submit([&]()noexcept{ ++unrelated; });
-    ASSERT_TRUE(cpuAdmission150);
-    if(cpuAdmission150)
-        ASSERT_TRUE(cpuAdmission150->valid());
-    const auto cpuAdmission151 = scope.submit([&](){
+    const auto cpuTaskAdmission = scheduler.submit([&]()noexcept{ ++unrelated; });
+    ASSERT_TRUE(cpuTaskAdmission);
+    if(cpuTaskAdmission)
+        ASSERT_TRUE(cpuTaskAdmission->valid());
+    const auto secondCpuTaskAdmission = scope.submit([&](){
         EXPECT_EQ(++sequence, 1u);
-        const auto cpuAdmission152 = scope.submit([&](){ EXPECT_EQ(++sequence, 3u); }, prerequisite);
-        ASSERT_TRUE(cpuAdmission152);
-        if(cpuAdmission152)
-            ASSERT_TRUE(cpuAdmission152->valid());
+        const auto thirdCpuTaskAdmission = scope.submit([&](){ EXPECT_EQ(++sequence, 3u); }, prerequisite);
+        ASSERT_TRUE(thirdCpuTaskAdmission);
+        if(thirdCpuTaskAdmission)
+            ASSERT_TRUE(thirdCpuTaskAdmission->valid());
     }
     );
-    ASSERT_TRUE(cpuAdmission151);
-    if(cpuAdmission151)
-        ASSERT_TRUE(cpuAdmission151->valid());
+    ASSERT_TRUE(secondCpuTaskAdmission);
+    if(secondCpuTaskAdmission)
+        ASSERT_TRUE(secondCpuTaskAdmission->valid());
     scope.wait();
     EXPECT_EQ(sequence, 3u);
     EXPECT_EQ(unrelated, 0u);
@@ -204,24 +204,24 @@ TEST(CpuTaskWaitTests, ReusedUnrelatedSlotCanBecomeAScopedDescendant){
     u32 callbacks = 0u;
     CpuTaskScheduler scheduler(0u);
     CpuTaskScope scope(scheduler);
-    const auto cpuAdmission153 = scheduler.submit([&]()noexcept{ ++callbacks; });
-    ASSERT_TRUE(cpuAdmission153);
-    const auto unrelated = *cpuAdmission153;
+    const auto unrelatedTaskAdmission = scheduler.submit([&]()noexcept{ ++callbacks; });
+    ASSERT_TRUE(unrelatedTaskAdmission);
+    const auto unrelated = *unrelatedTaskAdmission;
     ASSERT_TRUE(unrelated.valid());
-    const auto cpuAdmission154 = scope.submit([&](){
+    const auto cpuTaskAdmission = scope.submit([&](){
         EXPECT_EQ(callbacks, 0u);
         scheduler.wait(unrelated);
-        const auto cpuAdmission155 = scheduler.submit([&]()noexcept{ ++callbacks; });
-        ASSERT_TRUE(cpuAdmission155);
-        const auto child = *cpuAdmission155;
+        const auto childTaskAdmission = scheduler.submit([&]()noexcept{ ++callbacks; });
+        ASSERT_TRUE(childTaskAdmission);
+        const auto child = *childTaskAdmission;
         ASSERT_TRUE(child.valid());
         EXPECT_EQ(child.index, unrelated.index);
         EXPECT_NE(child.generation, unrelated.generation);
     }
     );
-    ASSERT_TRUE(cpuAdmission154);
-    if(cpuAdmission154)
-        ASSERT_TRUE(cpuAdmission154->valid());
+    ASSERT_TRUE(cpuTaskAdmission);
+    if(cpuTaskAdmission)
+        ASSERT_TRUE(cpuTaskAdmission->valid());
     scope.wait();
     EXPECT_EQ(callbacks, s_ExpectedDualCount);
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
@@ -235,27 +235,27 @@ TEST(CpuTaskWaitTests, NestedScopesUseIndependentSearchIdentities){
     CpuTaskScheduler scheduler(0u);
     CpuTaskScope inner(scheduler);
     CpuTaskScope outer(scheduler);
-    const auto cpuAdmission156 = scheduler.submit([&]()noexcept{ ++innerCallbacks; });
-    ASSERT_TRUE(cpuAdmission156);
-    const auto prerequisite = *cpuAdmission156;
+    const auto prerequisiteTaskAdmission = scheduler.submit([&]()noexcept{ ++innerCallbacks; });
+    ASSERT_TRUE(prerequisiteTaskAdmission);
+    const auto prerequisite = *prerequisiteTaskAdmission;
     ASSERT_TRUE(prerequisite.valid());
-    const auto cpuAdmission157 = inner.submit([&]()noexcept{ ++innerCallbacks; }, prerequisite);
-    ASSERT_TRUE(cpuAdmission157);
-    if(cpuAdmission157)
-        ASSERT_TRUE(cpuAdmission157->valid());
-    const auto cpuAdmission158 = scheduler.submit([&]()noexcept{ ++unrelatedCallbacks; });
-    ASSERT_TRUE(cpuAdmission158);
-    if(cpuAdmission158)
-        ASSERT_TRUE(cpuAdmission158->valid());
-    const auto cpuAdmission159 = outer.submit([&](){
+    const auto cpuTaskAdmission = inner.submit([&]()noexcept{ ++innerCallbacks; }, prerequisite);
+    ASSERT_TRUE(cpuTaskAdmission);
+    if(cpuTaskAdmission)
+        ASSERT_TRUE(cpuTaskAdmission->valid());
+    const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept{ ++unrelatedCallbacks; });
+    ASSERT_TRUE(secondCpuTaskAdmission);
+    if(secondCpuTaskAdmission)
+        ASSERT_TRUE(secondCpuTaskAdmission->valid());
+    const auto thirdCpuTaskAdmission = outer.submit([&](){
         EXPECT_EQ(innerCallbacks, 0u);
         inner.wait();
         EXPECT_EQ(innerCallbacks, s_ExpectedDualCount);
     }
     );
-    ASSERT_TRUE(cpuAdmission159);
-    if(cpuAdmission159)
-        ASSERT_TRUE(cpuAdmission159->valid());
+    ASSERT_TRUE(thirdCpuTaskAdmission);
+    if(thirdCpuTaskAdmission)
+        ASSERT_TRUE(thirdCpuTaskAdmission->valid());
     outer.wait();
     EXPECT_EQ(unrelatedCallbacks, 0u);
     scheduler.wait();
@@ -275,45 +275,45 @@ TEST(CpuTaskWaitTests, ConcurrentScopeWaitersCanSwitchTheSharedSearchCache){
     CpuTaskScheduler scheduler(config);
     CpuTaskScope scopeA(scheduler);
     CpuTaskScope scopeB(scheduler);
-    const auto cpuAdmission160 = scheduler.submit([&](){
+    const auto cpuTaskAdmission = scheduler.submit([&](){
         entered.fetch_add(1u, MemoryOrder::release);
         while(!start.load(MemoryOrder::acquire))
             SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
         scopeA.wait();
     }
     );
-    ASSERT_TRUE(cpuAdmission160);
-    const auto waiterA = *cpuAdmission160;
-    const auto cpuAdmission161 = scheduler.submit([&](){
+    ASSERT_TRUE(cpuTaskAdmission);
+    const auto waiterA = *cpuTaskAdmission;
+    const auto secondCpuTaskAdmission = scheduler.submit([&](){
         entered.fetch_add(1u, MemoryOrder::release);
         while(!start.load(MemoryOrder::acquire))
             SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
         scopeB.wait();
     }
     );
-    ASSERT_TRUE(cpuAdmission161);
-    const auto waiterB = *cpuAdmission161;
+    ASSERT_TRUE(secondCpuTaskAdmission);
+    const auto waiterB = *secondCpuTaskAdmission;
     ASSERT_TRUE(waiterA.valid());
     ASSERT_TRUE(waiterB.valid());
     while(entered.load(MemoryOrder::acquire) != s_ExpectedDualCount)
         SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
     for(u32 index = 0u; index < 32u; ++index){
-        const auto cpuAdmission162 = scheduler.submit([]()noexcept{});
-        ASSERT_TRUE(cpuAdmission162);
-        const auto prerequisiteB = *cpuAdmission162;
-        const auto cpuAdmission163 = scheduler.submit([]()noexcept{});
-        ASSERT_TRUE(cpuAdmission163);
-        const auto prerequisiteA = *cpuAdmission163;
+        const auto prerequisiteBTaskAdmission = scheduler.submit([]()noexcept{});
+        ASSERT_TRUE(prerequisiteBTaskAdmission);
+        const auto prerequisiteB = *prerequisiteBTaskAdmission;
+        const auto prerequisiteATaskAdmission = scheduler.submit([]()noexcept{});
+        ASSERT_TRUE(prerequisiteATaskAdmission);
+        const auto prerequisiteA = *prerequisiteATaskAdmission;
         EXPECT_TRUE(prerequisiteB.valid());
         EXPECT_TRUE(prerequisiteA.valid());
-        const auto cpuAdmission164 = scopeB.submit([&]()noexcept{ visitsB.fetch_add(1u, MemoryOrder::relaxed); }, prerequisiteB);
-        EXPECT_TRUE(cpuAdmission164);
-        if(cpuAdmission164)
-            EXPECT_TRUE(cpuAdmission164->valid());
-        const auto cpuAdmission165 = scopeA.submit([&]()noexcept{ visitsA.fetch_add(1u, MemoryOrder::relaxed); }, prerequisiteA);
-        EXPECT_TRUE(cpuAdmission165);
-        if(cpuAdmission165)
-            EXPECT_TRUE(cpuAdmission165->valid());
+        const auto thirdCpuTaskAdmission = scopeB.submit([&]()noexcept{ visitsB.fetch_add(1u, MemoryOrder::relaxed); }, prerequisiteB);
+        EXPECT_TRUE(thirdCpuTaskAdmission);
+        if(thirdCpuTaskAdmission)
+            EXPECT_TRUE(thirdCpuTaskAdmission->valid());
+        const auto fourthCpuTaskAdmission = scopeA.submit([&]()noexcept{ visitsA.fetch_add(1u, MemoryOrder::relaxed); }, prerequisiteA);
+        EXPECT_TRUE(fourthCpuTaskAdmission);
+        if(fourthCpuTaskAdmission)
+            EXPECT_TRUE(fourthCpuTaskAdmission->valid());
     }
     start.store(true, MemoryOrder::release);
     scheduler.wait(waiterA);
@@ -336,18 +336,18 @@ TEST(CpuTaskWaitTests, ScopeJoinSkipsUnrelatedPrefixesAcrossPriorityQueues){
     for(u32 index = 0u; index < s_UnrelatedTasks; ++index){
         CpuTaskOptions options;
         options.priority = static_cast<CpuTaskPriority::Enum>(index % s_Priorities);
-        const auto cpuAdmission166 = scheduler.submit([&]()noexcept{ ++unrelated; }, options);
-        ASSERT_TRUE(cpuAdmission166);
-        if(cpuAdmission166)
-            ASSERT_TRUE(cpuAdmission166->valid());
+        const auto cpuTaskAdmission = scheduler.submit([&]()noexcept{ ++unrelated; }, options);
+        ASSERT_TRUE(cpuTaskAdmission);
+        if(cpuTaskAdmission)
+            ASSERT_TRUE(cpuTaskAdmission->valid());
     }
     for(u32 index = 0u; index < s_ScopedTasks; ++index){
         CpuTaskOptions options;
         options.priority = static_cast<CpuTaskPriority::Enum>(index % s_Priorities);
-        const auto cpuAdmission167 = scope.submit([&]()noexcept{ ++joined; }, options);
-        ASSERT_TRUE(cpuAdmission167);
-        if(cpuAdmission167)
-            ASSERT_TRUE(cpuAdmission167->valid());
+        const auto secondCpuTaskAdmission = scope.submit([&]()noexcept{ ++joined; }, options);
+        ASSERT_TRUE(secondCpuTaskAdmission);
+        if(secondCpuTaskAdmission)
+            ASSERT_TRUE(secondCpuTaskAdmission->valid());
     }
     scope.wait();
     EXPECT_EQ(joined, s_ScopedTasks);
@@ -363,28 +363,28 @@ TEST(CpuTaskWaitTests, NestedJoinCanRetireAnUnrelatedAnchorWithoutNewPublication
     CpuTaskScope scope(scheduler);
     u32 unrelated = 0u;
     u32 joined = 0u;
-    const auto cpuAdmission168 = scheduler.submit([&]()noexcept{ ++unrelated; });
-    ASSERT_TRUE(cpuAdmission168);
-    const auto anchor = *cpuAdmission168;
+    const auto anchorTaskAdmission = scheduler.submit([&]()noexcept{ ++unrelated; });
+    ASSERT_TRUE(anchorTaskAdmission);
+    const auto anchor = *anchorTaskAdmission;
     ASSERT_TRUE(anchor.valid());
-    const auto cpuAdmission169 = scope.submit([&](){
+    const auto cpuTaskAdmission = scope.submit([&](){
         EXPECT_EQ(unrelated, 0u);
         scheduler.wait(anchor);
         EXPECT_EQ(unrelated, 1u);
         ++joined;
     }
     );
-    ASSERT_TRUE(cpuAdmission169);
-    if(cpuAdmission169)
-        ASSERT_TRUE(cpuAdmission169->valid());
-    const auto cpuAdmission170 = scheduler.submit([&]()noexcept{ ++unrelated; });
-    ASSERT_TRUE(cpuAdmission170);
-    if(cpuAdmission170)
-        ASSERT_TRUE(cpuAdmission170->valid());
-    const auto cpuAdmission171 = scope.submit([&]()noexcept{ ++joined; });
-    ASSERT_TRUE(cpuAdmission171);
-    if(cpuAdmission171)
-        ASSERT_TRUE(cpuAdmission171->valid());
+    ASSERT_TRUE(cpuTaskAdmission);
+    if(cpuTaskAdmission)
+        ASSERT_TRUE(cpuTaskAdmission->valid());
+    const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept{ ++unrelated; });
+    ASSERT_TRUE(secondCpuTaskAdmission);
+    if(secondCpuTaskAdmission)
+        ASSERT_TRUE(secondCpuTaskAdmission->valid());
+    const auto thirdCpuTaskAdmission = scope.submit([&]()noexcept{ ++joined; });
+    ASSERT_TRUE(thirdCpuTaskAdmission);
+    if(thirdCpuTaskAdmission)
+        ASSERT_TRUE(thirdCpuTaskAdmission->valid());
     scope.wait();
     EXPECT_EQ(joined, s_ExpectedDualCount);
     EXPECT_EQ(unrelated, 1u);
@@ -415,61 +415,61 @@ TEST(CpuTaskWaitTests, AnotherWorkerCanClaimAnUnrelatedAnchorDuringScopeExecutio
         releaseAnchor.store(true, MemoryOrder::release);
     }
     );
-    const auto cpuAdmission172 = scheduler.submit([&](){
+    const auto cpuTaskAdmission = scheduler.submit([&](){
         waiterEntered.store(true, MemoryOrder::release);
         while(!startWaiter.load(MemoryOrder::acquire))
             SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
         scope.wait();
     }
     );
-    ASSERT_TRUE(cpuAdmission172);
-    const auto waiter = *cpuAdmission172;
+    ASSERT_TRUE(cpuTaskAdmission);
+    const auto waiter = *cpuTaskAdmission;
     ASSERT_TRUE(waiter.valid());
     while(!waiterEntered.load(MemoryOrder::acquire))
         SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
-    const auto cpuAdmission173 = scheduler.submit([&]()noexcept{
+    const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept{
         blockerEntered.store(true, MemoryOrder::release);
         while(!releaseBlocker.load(MemoryOrder::acquire))
             SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
     }
     );
-    ASSERT_TRUE(cpuAdmission173);
-    if(cpuAdmission173)
-        ASSERT_TRUE(cpuAdmission173->valid());
+    ASSERT_TRUE(secondCpuTaskAdmission);
+    if(secondCpuTaskAdmission)
+        ASSERT_TRUE(secondCpuTaskAdmission->valid());
     while(!blockerEntered.load(MemoryOrder::acquire))
         SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
-    const auto cpuAdmission174 = scheduler.submit([&]()noexcept{
+    const auto thirdCpuTaskAdmission = scheduler.submit([&]()noexcept{
         anchorEntered.store(true, MemoryOrder::release);
         while(!releaseAnchor.load(MemoryOrder::acquire))
             SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
     }
     );
-    ASSERT_TRUE(cpuAdmission174);
-    if(cpuAdmission174)
-        ASSERT_TRUE(cpuAdmission174->valid());
-    const auto cpuAdmission175 = scope.submit([&]()noexcept{
+    ASSERT_TRUE(thirdCpuTaskAdmission);
+    if(thirdCpuTaskAdmission)
+        ASSERT_TRUE(thirdCpuTaskAdmission->valid());
+    const auto fourthCpuTaskAdmission = scope.submit([&]()noexcept{
         releaseBlocker.store(true, MemoryOrder::release);
         while(!anchorEntered.load(MemoryOrder::acquire))
             SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
         joined.fetch_add(1u, MemoryOrder::relaxed);
     }
     );
-    ASSERT_TRUE(cpuAdmission175);
-    if(cpuAdmission175)
-        ASSERT_TRUE(cpuAdmission175->valid());
-    const auto cpuAdmission176 = scheduler.submit([&]()noexcept{ unrelated.fetch_add(1u, MemoryOrder::relaxed); });
-    ASSERT_TRUE(cpuAdmission176);
-    if(cpuAdmission176)
-        ASSERT_TRUE(cpuAdmission176->valid());
-    const auto cpuAdmission177 = scope.submit([&](){
+    ASSERT_TRUE(fourthCpuTaskAdmission);
+    if(fourthCpuTaskAdmission)
+        ASSERT_TRUE(fourthCpuTaskAdmission->valid());
+    const auto fifthCpuTaskAdmission = scheduler.submit([&]()noexcept{ unrelated.fetch_add(1u, MemoryOrder::relaxed); });
+    ASSERT_TRUE(fifthCpuTaskAdmission);
+    if(fifthCpuTaskAdmission)
+        ASSERT_TRUE(fifthCpuTaskAdmission->valid());
+    const auto sixthCpuTaskAdmission = scope.submit([&](){
         EXPECT_EQ(unrelated.load(MemoryOrder::acquire), 0u);
         joined.fetch_add(1u, MemoryOrder::relaxed);
         releaseAnchor.store(true, MemoryOrder::release);
     }
     );
-    ASSERT_TRUE(cpuAdmission177);
-    if(cpuAdmission177)
-        ASSERT_TRUE(cpuAdmission177->valid());
+    ASSERT_TRUE(sixthCpuTaskAdmission);
+    if(sixthCpuTaskAdmission)
+        ASSERT_TRUE(sixthCpuTaskAdmission->valid());
     startWaiter.store(true, MemoryOrder::release);
     scheduler.wait(waiter);
     scheduler.wait();
@@ -486,14 +486,14 @@ TEST(CpuTaskWaitTests, DependencyCompletionAppendsScopedWorkAfterAnUnrelatedAnch
     CpuTaskScheduler scheduler(1u);
     CpuTaskScope scope(scheduler);
     ScopeExit releaseOnFailure([&]()noexcept{ release.store(true, MemoryOrder::release); });
-    const auto cpuAdmission178 = scheduler.submit([&]()noexcept{
+    const auto cpuTaskAdmission = scheduler.submit([&]()noexcept{
         entered.store(true, MemoryOrder::release);
         while(!release.load(MemoryOrder::acquire))
             SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
     }
     );
-    ASSERT_TRUE(cpuAdmission178);
-    const auto prerequisite = *cpuAdmission178;
+    ASSERT_TRUE(cpuTaskAdmission);
+    const auto prerequisite = *cpuTaskAdmission;
     ASSERT_TRUE(prerequisite.valid());
     while(!entered.load(MemoryOrder::acquire))
         SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
@@ -501,22 +501,22 @@ TEST(CpuTaskWaitTests, DependencyCompletionAppendsScopedWorkAfterAnUnrelatedAnch
     mainThread.target = CpuTaskTarget::MainThread;
     u32 unrelated = 0u;
     u32 joined = 0u;
-    const auto cpuAdmission179 = scheduler.submit([&]()noexcept{ ++unrelated; }, mainThread);
-    ASSERT_TRUE(cpuAdmission179);
-    if(cpuAdmission179)
-        ASSERT_TRUE(cpuAdmission179->valid());
-    const auto cpuAdmission180 = scope.submit([&]()noexcept{
+    const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept{ ++unrelated; }, mainThread);
+    ASSERT_TRUE(secondCpuTaskAdmission);
+    if(secondCpuTaskAdmission)
+        ASSERT_TRUE(secondCpuTaskAdmission->valid());
+    const auto thirdCpuTaskAdmission = scope.submit([&]()noexcept{
         ++joined;
         release.store(true, MemoryOrder::release);
     }, mainThread
     );
-    ASSERT_TRUE(cpuAdmission180);
-    if(cpuAdmission180)
-        ASSERT_TRUE(cpuAdmission180->valid());
-    const auto cpuAdmission181 = scope.submit([&]()noexcept{ ++joined; }, mainThread, &prerequisite, 1u);
-    ASSERT_TRUE(cpuAdmission181);
-    if(cpuAdmission181)
-        ASSERT_TRUE(cpuAdmission181->valid());
+    ASSERT_TRUE(thirdCpuTaskAdmission);
+    if(thirdCpuTaskAdmission)
+        ASSERT_TRUE(thirdCpuTaskAdmission->valid());
+    const auto fourthCpuTaskAdmission = scope.submit([&]()noexcept{ ++joined; }, mainThread, &prerequisite, 1u);
+    ASSERT_TRUE(fourthCpuTaskAdmission);
+    if(fourthCpuTaskAdmission)
+        ASSERT_TRUE(fourthCpuTaskAdmission->valid());
     scope.wait();
     EXPECT_EQ(joined, s_ExpectedDualCount);
     EXPECT_EQ(unrelated, 0u);
@@ -533,26 +533,26 @@ TEST(CpuTaskWaitTests, APositiveSearchCannotAdmitVisitedUnrelatedSiblingBranches
     u32 prerequisites = 0u;
     u32 unrelated = 0u;
     u32 joined = 0u;
-    const auto cpuAdmission182 = scheduler.submit([&]()noexcept{ ++prerequisites; });
-    ASSERT_TRUE(cpuAdmission182);
-    const auto root = *cpuAdmission182;
+    const auto rootTaskAdmission = scheduler.submit([&]()noexcept{ ++prerequisites; });
+    ASSERT_TRUE(rootTaskAdmission);
+    const auto root = *rootTaskAdmission;
     ASSERT_TRUE(root.valid());
-    const auto cpuAdmission183 = scheduler.submit([&]()noexcept{ ++unrelated; }, root);
-    ASSERT_TRUE(cpuAdmission183);
-    const auto sibling = *cpuAdmission183;
+    const auto siblingTaskAdmission = scheduler.submit([&]()noexcept{ ++unrelated; }, root);
+    ASSERT_TRUE(siblingTaskAdmission);
+    const auto sibling = *siblingTaskAdmission;
     ASSERT_TRUE(sibling.valid());
-    const auto cpuAdmission184 = scheduler.submit([&]()noexcept{ ++unrelated; }, sibling);
-    ASSERT_TRUE(cpuAdmission184);
-    if(cpuAdmission184)
-        ASSERT_TRUE(cpuAdmission184->valid());
-    const auto cpuAdmission185 = scheduler.submit([&]()noexcept{ ++prerequisites; }, root);
-    ASSERT_TRUE(cpuAdmission185);
-    const auto positive = *cpuAdmission185;
+    const auto cpuTaskAdmission = scheduler.submit([&]()noexcept{ ++unrelated; }, sibling);
+    ASSERT_TRUE(cpuTaskAdmission);
+    if(cpuTaskAdmission)
+        ASSERT_TRUE(cpuTaskAdmission->valid());
+    const auto positiveTaskAdmission = scheduler.submit([&]()noexcept{ ++prerequisites; }, root);
+    ASSERT_TRUE(positiveTaskAdmission);
+    const auto positive = *positiveTaskAdmission;
     ASSERT_TRUE(positive.valid());
-    const auto cpuAdmission186 = scope.submit([&]()noexcept{ ++joined; }, positive);
-    ASSERT_TRUE(cpuAdmission186);
-    if(cpuAdmission186)
-        ASSERT_TRUE(cpuAdmission186->valid());
+    const auto secondCpuTaskAdmission = scope.submit([&]()noexcept{ ++joined; }, positive);
+    ASSERT_TRUE(secondCpuTaskAdmission);
+    if(secondCpuTaskAdmission)
+        ASSERT_TRUE(secondCpuTaskAdmission->valid());
     scope.wait();
     EXPECT_EQ(prerequisites, s_ExpectedDualCount);
     EXPECT_EQ(joined, 1u);
@@ -569,34 +569,34 @@ TEST(CpuTaskWaitTests, PublicationCanMakeAnEarlierNegativeSiblingContribute){
     u32 unrelatedTail = 0u;
     u32 prerequisite = 0u;
     u32 joined = 0u;
-    const auto cpuAdmission187 = scheduler.submit([]()noexcept{});
-    ASSERT_TRUE(cpuAdmission187);
-    const auto root = *cpuAdmission187;
+    const auto rootTaskAdmission = scheduler.submit([]()noexcept{});
+    ASSERT_TRUE(rootTaskAdmission);
+    const auto root = *rootTaskAdmission;
     ASSERT_TRUE(root.valid());
-    const auto cpuAdmission188 = scheduler.submit([&]()noexcept{ ++prerequisite; }, root);
-    ASSERT_TRUE(cpuAdmission188);
-    const auto sibling = *cpuAdmission188;
+    const auto siblingTaskAdmission = scheduler.submit([&]()noexcept{ ++prerequisite; }, root);
+    ASSERT_TRUE(siblingTaskAdmission);
+    const auto sibling = *siblingTaskAdmission;
     ASSERT_TRUE(sibling.valid());
-    const auto cpuAdmission189 = scheduler.submit([&]()noexcept{ ++unrelatedTail; }, sibling);
-    ASSERT_TRUE(cpuAdmission189);
-    if(cpuAdmission189)
-        ASSERT_TRUE(cpuAdmission189->valid());
-    const auto cpuAdmission190 = scheduler.submit([]()noexcept{}, root);
-    ASSERT_TRUE(cpuAdmission190);
-    const auto positive = *cpuAdmission190;
+    const auto cpuTaskAdmission = scheduler.submit([&]()noexcept{ ++unrelatedTail; }, sibling);
+    ASSERT_TRUE(cpuTaskAdmission);
+    if(cpuTaskAdmission)
+        ASSERT_TRUE(cpuTaskAdmission->valid());
+    const auto positiveTaskAdmission = scheduler.submit([]()noexcept{}, root);
+    ASSERT_TRUE(positiveTaskAdmission);
+    const auto positive = *positiveTaskAdmission;
     ASSERT_TRUE(positive.valid());
-    const auto cpuAdmission191 = scope.submit([&](){
+    const auto secondCpuTaskAdmission = scope.submit([&](){
         EXPECT_EQ(prerequisite, 0u);
         ++joined;
-        const auto cpuAdmission192 = scope.submit([&]()noexcept{ ++joined; }, sibling);
-        EXPECT_TRUE(cpuAdmission192);
-        if(cpuAdmission192)
-            EXPECT_TRUE(cpuAdmission192->valid());
+        const auto thirdCpuTaskAdmission = scope.submit([&]()noexcept{ ++joined; }, sibling);
+        EXPECT_TRUE(thirdCpuTaskAdmission);
+        if(thirdCpuTaskAdmission)
+            EXPECT_TRUE(thirdCpuTaskAdmission->valid());
     }, positive
     );
-    ASSERT_TRUE(cpuAdmission191);
-    if(cpuAdmission191)
-        ASSERT_TRUE(cpuAdmission191->valid());
+    ASSERT_TRUE(secondCpuTaskAdmission);
+    if(secondCpuTaskAdmission)
+        ASSERT_TRUE(secondCpuTaskAdmission->valid());
     scope.wait();
     EXPECT_EQ(prerequisite, 1u);
     EXPECT_EQ(joined, s_ExpectedDualCount);
@@ -613,22 +613,22 @@ TEST(CpuTaskWaitTests, AShortestScopeProofDoesNotAdmitUnprocessedSiblingFrontier
     CpuTaskScope scope(scheduler);
     u32 unrelated = 0u;
     u32 joined = 0u;
-    const auto cpuAdmission193 = scheduler.submit([]()noexcept{});
-    ASSERT_TRUE(cpuAdmission193);
-    const auto root = *cpuAdmission193;
+    const auto rootTaskAdmission = scheduler.submit([]()noexcept{});
+    ASSERT_TRUE(rootTaskAdmission);
+    const auto root = *rootTaskAdmission;
     ASSERT_TRUE(root.valid());
-    const auto cpuAdmission194 = scheduler.submit([&]()noexcept{ ++unrelated; }, root);
-    ASSERT_TRUE(cpuAdmission194);
-    const auto sibling = *cpuAdmission194;
+    const auto siblingTaskAdmission = scheduler.submit([&]()noexcept{ ++unrelated; }, root);
+    ASSERT_TRUE(siblingTaskAdmission);
+    const auto sibling = *siblingTaskAdmission;
     ASSERT_TRUE(sibling.valid());
-    const auto cpuAdmission195 = scheduler.submit([&]()noexcept{ ++unrelated; }, sibling);
-    ASSERT_TRUE(cpuAdmission195);
-    if(cpuAdmission195)
-        ASSERT_TRUE(cpuAdmission195->valid());
-    const auto cpuAdmission196 = scope.submit([&]()noexcept{ ++joined; }, root);
-    ASSERT_TRUE(cpuAdmission196);
-    if(cpuAdmission196)
-        ASSERT_TRUE(cpuAdmission196->valid());
+    const auto cpuTaskAdmission = scheduler.submit([&]()noexcept{ ++unrelated; }, sibling);
+    ASSERT_TRUE(cpuTaskAdmission);
+    if(cpuTaskAdmission)
+        ASSERT_TRUE(cpuTaskAdmission->valid());
+    const auto secondCpuTaskAdmission = scope.submit([&]()noexcept{ ++joined; }, root);
+    ASSERT_TRUE(secondCpuTaskAdmission);
+    if(secondCpuTaskAdmission)
+        ASSERT_TRUE(secondCpuTaskAdmission->valid());
     scope.wait();
     EXPECT_EQ(joined, 1u);
     EXPECT_EQ(unrelated, 0u);
@@ -643,35 +643,35 @@ TEST(CpuTaskWaitTests, RecycledPositivePrerequisiteSlotsDoNotAdmitUnrelatedWork)
     CpuTaskScope scope(scheduler);
     u32 unrelated = 0u;
     u32 joined = 0u;
-    const auto cpuAdmission197 = scheduler.submit([]()noexcept{});
-    ASSERT_TRUE(cpuAdmission197);
-    const auto root = *cpuAdmission197;
+    const auto rootTaskAdmission = scheduler.submit([]()noexcept{});
+    ASSERT_TRUE(rootTaskAdmission);
+    const auto root = *rootTaskAdmission;
     ASSERT_TRUE(root.valid());
-    const auto cpuAdmission198 = scheduler.submit([]()noexcept{}, root);
-    ASSERT_TRUE(cpuAdmission198);
-    const auto positive = *cpuAdmission198;
+    const auto positiveTaskAdmission = scheduler.submit([]()noexcept{}, root);
+    ASSERT_TRUE(positiveTaskAdmission);
+    const auto positive = *positiveTaskAdmission;
     ASSERT_TRUE(positive.valid());
-    const auto cpuAdmission199 = scope.submit([&](){
+    const auto cpuTaskAdmission = scope.submit([&](){
         CpuTaskHandle recycled;
         JoiningThread producer([&](){
-            const auto cpuAdmission200 = scheduler.submit([&]()noexcept{ ++unrelated; });
-            ASSERT_TRUE(cpuAdmission200);
-            recycled =*cpuAdmission200;
+            const auto recycledTaskAdmission = scheduler.submit([&]()noexcept{ ++unrelated; });
+            ASSERT_TRUE(recycledTaskAdmission);
+            recycled =*recycledTaskAdmission;
         });
         producer.join();
         EXPECT_TRUE(recycled.valid());
         EXPECT_EQ(recycled.index, positive.index);
         EXPECT_NE(recycled.generation, positive.generation);
         ++joined;
-        const auto cpuAdmission201 = scope.submit([&]()noexcept{ ++joined; });
-        EXPECT_TRUE(cpuAdmission201);
-        if(cpuAdmission201)
-            EXPECT_TRUE(cpuAdmission201->valid());
+        const auto secondCpuTaskAdmission = scope.submit([&]()noexcept{ ++joined; });
+        EXPECT_TRUE(secondCpuTaskAdmission);
+        if(secondCpuTaskAdmission)
+            EXPECT_TRUE(secondCpuTaskAdmission->valid());
     }, positive
     );
-    ASSERT_TRUE(cpuAdmission199);
-    if(cpuAdmission199)
-        ASSERT_TRUE(cpuAdmission199->valid());
+    ASSERT_TRUE(cpuTaskAdmission);
+    if(cpuTaskAdmission)
+        ASSERT_TRUE(cpuTaskAdmission->valid());
     scope.wait();
     EXPECT_EQ(joined, s_ExpectedDualCount);
     EXPECT_EQ(unrelated, 0u);
@@ -687,22 +687,22 @@ TEST(CpuTaskWaitTests, StructuredParentCompletionStaysScopedUntilEveryChildRetir
     CpuTaskScope scope(scheduler);
     u32 unrelated = 0u;
     u32 children = 0u;
-    const auto cpuAdmission202 = scheduler.submit([&]()noexcept{ ++unrelated; });
-    ASSERT_TRUE(cpuAdmission202);
-    if(cpuAdmission202)
-        ASSERT_TRUE(cpuAdmission202->valid());
-    const auto cpuAdmission203 = scope.submit([&](){
+    const auto cpuTaskAdmission = scheduler.submit([&]()noexcept{ ++unrelated; });
+    ASSERT_TRUE(cpuTaskAdmission);
+    if(cpuTaskAdmission)
+        ASSERT_TRUE(cpuTaskAdmission->valid());
+    const auto secondCpuTaskAdmission = scope.submit([&](){
         for(u32 child = 0u; child < s_Children; ++child){
-            const auto cpuAdmission204 = scheduler.submit([&]()noexcept{ ++children; });
-            EXPECT_TRUE(cpuAdmission204);
-            if(cpuAdmission204)
-                EXPECT_TRUE(cpuAdmission204->valid());
+            const auto thirdCpuTaskAdmission = scheduler.submit([&]()noexcept{ ++children; });
+            EXPECT_TRUE(thirdCpuTaskAdmission);
+            if(thirdCpuTaskAdmission)
+                EXPECT_TRUE(thirdCpuTaskAdmission->valid());
         }
     }
     );
-    ASSERT_TRUE(cpuAdmission203);
-    if(cpuAdmission203)
-        ASSERT_TRUE(cpuAdmission203->valid());
+    ASSERT_TRUE(secondCpuTaskAdmission);
+    if(secondCpuTaskAdmission)
+        ASSERT_TRUE(secondCpuTaskAdmission->valid());
     scope.wait();
     EXPECT_EQ(children, s_Children);
     EXPECT_EQ(unrelated, 0u);

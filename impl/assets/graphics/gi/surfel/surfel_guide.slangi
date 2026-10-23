@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Piecewise-constant directional guide in the surfel's local frame. Equal z and azimuth intervals give every cell the same solid angle. The mixed PDF is evaluated for BOTH uniform and guided rays when projecting radiance to SH.
+// Piecewise-constant directional guide in the surfel's local frame. Equal z and azimuth intervals give every cell the same solid angle. The mixed PDF covers both uniform and guided rays.
 
 
 #include "../constants.h"

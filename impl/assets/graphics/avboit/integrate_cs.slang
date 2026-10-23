@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The integrated transmittance volume and all source work buffers are global-heap entries selected by the shared target-generation payload. Keep the established local names below so the integration algorithm stays readable.
+// The volume and source buffers are global-heap entries selected by the shared payload. Keep the local names below.
 #define g_Transmittance nwbAvboitTransmittanceUav()
 #define g_Extinction nwbAvboitExtinction()
 #define g_Control nwbAvboitControl()

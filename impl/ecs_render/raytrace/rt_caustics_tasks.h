@@ -51,7 +51,7 @@ static void ConfirmCausticAccumulatorClears(Payload& payload)noexcept(
         payload.raytracingSystem.confirmCausticAccumulatorBootstrapClear();
 }
 
-// A warm temporal accumulator decays before either photon route writes its atomic splats.  This remains a separate graph task so the compiler lowers the accumulator's UAV dependency into the producer callback rather than depending on a packet-local state reassertion after the decay dispatch.
+// A warm accumulator decays before either photon route writes atomic splats. Separate task so the compiler lowers the UAV dependency into the producer callback, not reassertion after decay.
 struct CausticAccumulatorDecayGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
@@ -73,14 +73,14 @@ public:
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         static_cast<void>(context);
 
-        // Match the selected producer's existing no-work and failed-shadow behavior.  A graph declaration can still retain the accumulator dependency, but no dispatch is issued unless the producer would run.
+        // Match the producer's existing no-work and failed-shadow behavior. A graph declaration can still keep the accumulator dependency, but no dispatch is issued unless the producer would run.
         if(!payload.shadowVisibilityPrepared)
             return true;
         const bool hasWork = payload.hardwareCaustics ? payload.raytracingSystem.hasHwCausticWork(payload.meshView) : payload.raytracingSystem.hasCausticWork(payload.meshView);
         if(!hasWork)
             return true;
 
-        // A prior rejected record can retry this task before its graph transaction gets discarded.  Release the incomplete query reservation before starting the retry's one caustic-photons interval.
+        // A prior rejected record can retry this task before its graph transaction gets discarded. Release the incomplete query reservation before starting the retry's one photons interval.
         Core::DiscardGpuTimingMeasure(&payload.causticPhotonTiming);
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
         payload.causticPhotonTiming.emplace(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_CausticPhotons, payload.graphics.getDevice(), commandList);

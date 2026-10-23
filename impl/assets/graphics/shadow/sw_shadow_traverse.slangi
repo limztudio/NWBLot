@@ -91,7 +91,7 @@ NwbShadowInstanceStatus nwbSwShadowInstanceOptics(const uint instanceIndex, cons
     stack[0u] = 0u;
     uint stackPointer = 1u;
     --stackPointer;
-    uint nodeIndex = stack[stackPointer]; // per-mesh root
+    uint nodeIndex = stack[stackPointer];
 
     // Child nodes are prevalidated by parent ranking; test only the root at loop entry.
     {
@@ -209,7 +209,7 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
     stack[0u] = 0u;
     uint stackPointer = 1u;
     --stackPointer;
-    uint nodeIndex = stack[stackPointer]; // root
+    uint nodeIndex = stack[stackPointer];
 
     {
         const NwbBvhNode root = nwbHeapBvhNodes(g_NwbSwShadowMaterialContextSlots.sceneSlots.x)[nodeIndex];
@@ -218,7 +218,7 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
             return; // every scene leaf is opaque, so this compile-time transparent pass has no work
 #endif
         if(!nwbSwShadowRayAabb(origin, invDir, tMin, tMax, root.aabbMin, root.aabbMax))
-            return; // whole scene missed
+            return;
     }
 
     while(true){
@@ -280,7 +280,6 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
                 continue;
             }
 
-            // Conservatively block light rather than skip an over-deep subtree.
             if((stackPointer + 1u) >= NWB_SW_SHADOW_SCENE_STACK_SIZE){
                 acc.transmittance = half3(0.0h, 0.0h, 0.0h);
                 return;

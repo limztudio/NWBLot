@@ -25,13 +25,19 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_reflection_resources{
-    inline constexpr Name s_RayQueueBufferName("engine/reflection/ray_queue");
-    inline constexpr Name s_IndirectArgsBufferName("engine/reflection/indirect_args");
-    inline constexpr Name s_BuildArgsShaderName("engine/graphics/reflection/build_args_cs");
-    inline constexpr Name s_HardwareResolveShaderName("engine/graphics/reflection/resolve_hw_cs");
+namespace __hidden_reflection_system{
 
-    enum DescriptorIndex : u32{
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr Name s_RayQueueBufferName("engine/reflection/ray_queue");
+inline constexpr Name s_IndirectArgsBufferName("engine/reflection/indirect_args");
+inline constexpr Name s_BuildArgsShaderName("engine/graphics/reflection/build_args_cs");
+inline constexpr Name s_HardwareResolveShaderName("engine/graphics/reflection/resolve_hw_cs");
+
+namespace DescriptorIndex{
+    enum Enum : u32{
         OpaqueSampled,
         OpaqueStorage,
         GlassSampled,
@@ -41,6 +47,12 @@ namespace __hidden_reflection_resources{
         Args,
         Parameters,
     };
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 
@@ -88,7 +100,7 @@ void RendererReflectionSystem::invalidateResources(){
 }
 
 bool RendererReflectionSystem::prepareResources(const u32 width, const u32 height, const bool prepareHardware, const bool prepareCsgHardware, const ReflectionSettings& settings){
-    using namespace __hidden_reflection_resources;
+    using namespace __hidden_reflection_system;
     const u64 pixelCount = static_cast<u64>(width) * height;
     // Packed pixels cover both families; queue addresses need byte offsets.
     if(width == 0u || height == 0u || pixelCount > static_cast<u64>(s_MaxU32) / 2u)
@@ -236,14 +248,14 @@ bool RendererReflectionSystem::prepareResources(const u32 width, const u32 heigh
         return allocated && heap.write(descriptor, item);
     };
     if(
-        !registerDescriptor(m_descriptors[OpaqueSampled], Core::GpuDescriptorClass::SampledImage, Core::DescriptorWriteItem::TextureSrv(0u, m_resources.opaqueRadiance.get()))
-        || !registerDescriptor(m_descriptors[OpaqueStorage], Core::GpuDescriptorClass::StorageImage, Core::DescriptorWriteItem::TextureUav(0u, m_resources.opaqueRadiance.get()))
-        || !registerDescriptor(m_descriptors[GlassSampled], Core::GpuDescriptorClass::SampledImage, Core::DescriptorWriteItem::TextureSrv(0u, m_resources.glassRadiance.get()))
-        || !registerDescriptor(m_descriptors[GlassStorage], Core::GpuDescriptorClass::StorageImage, Core::DescriptorWriteItem::TextureUav(0u, m_resources.glassRadiance.get()))
-        || !registerDescriptor(m_descriptors[Queue], Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::RawBufferUav(0u, m_resources.queue.get()))
-        || !registerDescriptor(m_descriptors[Counters], Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::RawBufferUav(0u, m_resources.counters.get()))
-        || !registerDescriptor(m_descriptors[Args], Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::RawBufferUav(0u, m_resources.indirectArgs.get()))
-        || !registerDescriptor(m_descriptors[Parameters], Core::GpuDescriptorClass::UniformBuffer, Core::DescriptorWriteItem::ConstantBuffer(0u, m_resources.frameParameters.get()))
+        !registerDescriptor(m_descriptors[DescriptorIndex::OpaqueSampled], Core::GpuDescriptorClass::SampledImage, Core::DescriptorWriteItem::TextureSrv(0u, m_resources.opaqueRadiance.get()))
+        || !registerDescriptor(m_descriptors[DescriptorIndex::OpaqueStorage], Core::GpuDescriptorClass::StorageImage, Core::DescriptorWriteItem::TextureUav(0u, m_resources.opaqueRadiance.get()))
+        || !registerDescriptor(m_descriptors[DescriptorIndex::GlassSampled], Core::GpuDescriptorClass::SampledImage, Core::DescriptorWriteItem::TextureSrv(0u, m_resources.glassRadiance.get()))
+        || !registerDescriptor(m_descriptors[DescriptorIndex::GlassStorage], Core::GpuDescriptorClass::StorageImage, Core::DescriptorWriteItem::TextureUav(0u, m_resources.glassRadiance.get()))
+        || !registerDescriptor(m_descriptors[DescriptorIndex::Queue], Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::RawBufferUav(0u, m_resources.queue.get()))
+        || !registerDescriptor(m_descriptors[DescriptorIndex::Counters], Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::RawBufferUav(0u, m_resources.counters.get()))
+        || !registerDescriptor(m_descriptors[DescriptorIndex::Args], Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::RawBufferUav(0u, m_resources.indirectArgs.get()))
+        || !registerDescriptor(m_descriptors[DescriptorIndex::Parameters], Core::GpuDescriptorClass::UniformBuffer, Core::DescriptorWriteItem::ConstantBuffer(0u, m_resources.frameParameters.get()))
     ){
         releaseTargets();
         return false;
@@ -268,16 +280,16 @@ bool RendererReflectionSystem::prepareResources(const u32 width, const u32 heigh
     m_resources.parameters.width = width;
     m_resources.parameters.height = height;
     m_resources.parameters.queueCapacity = capacity;
-    m_resources.parameters.opaqueOutputSlot = m_descriptors[OpaqueStorage].slot();
-    m_resources.parameters.glassOutputSlot = m_descriptors[GlassStorage].slot();
-    m_resources.parameters.opaqueRadianceSlot = m_descriptors[OpaqueSampled].slot();
-    m_resources.parameters.glassRadianceSlot = m_descriptors[GlassSampled].slot();
-    m_resources.parameters.queueSlot = m_descriptors[Queue].slot();
-    m_resources.parameters.counterSlot = m_descriptors[Counters].slot();
-    m_resources.parameters.argsSlot = m_descriptors[Args].slot();
+    m_resources.parameters.opaqueOutputSlot = m_descriptors[DescriptorIndex::OpaqueStorage].slot();
+    m_resources.parameters.glassOutputSlot = m_descriptors[DescriptorIndex::GlassStorage].slot();
+    m_resources.parameters.opaqueRadianceSlot = m_descriptors[DescriptorIndex::OpaqueSampled].slot();
+    m_resources.parameters.glassRadianceSlot = m_descriptors[DescriptorIndex::GlassSampled].slot();
+    m_resources.parameters.queueSlot = m_descriptors[DescriptorIndex::Queue].slot();
+    m_resources.parameters.counterSlot = m_descriptors[DescriptorIndex::Counters].slot();
+    m_resources.parameters.argsSlot = m_descriptors[DescriptorIndex::Args].slot();
     m_resources.parameters.depthPyramidSlot = depthPyramid.sampledSlot;
     m_resources.parameters.depthMipCount = depthPyramid.mipCount;
-    m_resources.frameParametersSlot = m_descriptors[Parameters].slot();
+    m_resources.frameParametersSlot = m_descriptors[DescriptorIndex::Parameters].slot();
     return m_statistics.prepareResources() && m_postprocess.prepareResources(width, height, settings) && m_feedback.prepareResources(width, height, settings, settings.screenFeedbackEnabled);
 }
 
@@ -466,7 +478,7 @@ bool RendererReflectionSystem::prepareCsgDispatchResources(){
 }
 
 bool RendererReflectionSystem::prepareQueue(const u32 capacity){
-    using namespace __hidden_reflection_resources;
+    using namespace __hidden_reflection_system;
     if(m_resources.queue && m_resources.parameters.queueCapacity >= capacity)
         return true;
     Core::BufferDesc desc;
@@ -492,9 +504,9 @@ bool RendererReflectionSystem::prepareQueue(const u32 capacity){
         return false;
     }
     // Publish only after success; retirement protects the old selector.
-    if(m_descriptors[Queue].valid())
-        heap.free(m_descriptors[Queue]);
-    m_descriptors[Queue] = descriptor;
+    if(m_descriptors[DescriptorIndex::Queue].valid())
+        heap.free(m_descriptors[DescriptorIndex::Queue]);
+    m_descriptors[DescriptorIndex::Queue] = descriptor;
     m_resources.queue = Move(queue);
     m_resources.parameters.queueCapacity = capacity;
     m_resources.parameters.queueSlot = descriptor.slot();
@@ -502,7 +514,7 @@ bool RendererReflectionSystem::prepareQueue(const u32 capacity){
 }
 
 bool RendererReflectionSystem::prepareArguments(const u32 capacity, const bool sliced){
-    using namespace __hidden_reflection_resources;
+    using namespace __hidden_reflection_system;
     const u32 argumentCount = sliced ? (capacity + NWB_REFLECTION_TRACE_SLICE_RAYS - 1u) / NWB_REFLECTION_TRACE_SLICE_RAYS : 1u;
     const u64 byteSize = static_cast<u64>(argumentCount) * NWB_REFLECTION_INDIRECT_ARGUMENT_BYTES;
     if(m_resources.indirectArgs && m_resources.indirectArgs->getCreationDescription().byteSize >= byteSize)
@@ -530,9 +542,9 @@ bool RendererReflectionSystem::prepareArguments(const u32 capacity, const bool s
         heap.free(descriptor);
         return false;
     }
-    if(m_descriptors[Args].valid())
-        heap.free(m_descriptors[Args]);
-    m_descriptors[Args] = descriptor;
+    if(m_descriptors[DescriptorIndex::Args].valid())
+        heap.free(m_descriptors[DescriptorIndex::Args]);
+    m_descriptors[DescriptorIndex::Args] = descriptor;
     m_resources.indirectArgs = Move(arguments);
     m_resources.parameters.argsSlot = descriptor.slot();
     return true;
@@ -591,17 +603,17 @@ bool RendererReflectionSystem::preparePipelines(const bool prepareHardware, cons
     };
     if(
         !preparePipeline(m_resources.classifyPipeline, m_classifyShader, Name("engine/graphics/reflection/classify_cs"), Name("ECSRender_ReflectionClassify"), false, m_bindingLayout)
-        || !preparePipeline(m_resources.buildArgsPipeline, m_buildArgsShader, __hidden_reflection_resources::s_BuildArgsShaderName, Name("ECSRender_ReflectionBuildArgs"), false, m_bindingLayout, s_ReflectionBuildArgsVariant)
+        || !preparePipeline(m_resources.buildArgsPipeline, m_buildArgsShader, __hidden_reflection_system::s_BuildArgsShaderName, Name("ECSRender_ReflectionBuildArgs"), false, m_bindingLayout, s_ReflectionBuildArgsVariant)
         || !preparePipeline(m_resources.depthPyramid.pipeline, m_depthShader, Name("engine/graphics/reflection/depth_reduce_cs"), Name("ECSRender_ReflectionDepthReduce"), false, m_depthBindingLayout)
     )
         return false;
     if(
         prepareHardware && m_graphics.queryFeatureSupport(Core::Feature::RayQuery) && heap.hasAccelStructLayout()
-        && (!preparePipeline(m_resources.hardwarePipeline, m_hardwareShader, __hidden_reflection_resources::s_HardwareResolveShaderName, Name("ECSRender_ReflectionOpticalHardware"), true, m_bindingLayout, s_ReflectionHwOpticalVariant) || !preparePipeline(
+        && (!preparePipeline(m_resources.hardwarePipeline, m_hardwareShader, __hidden_reflection_system::s_HardwareResolveShaderName, Name("ECSRender_ReflectionOpticalHardware"), true, m_bindingLayout, s_ReflectionHwOpticalVariant) || !preparePipeline(
             m_plainHardwarePipeline, m_plainHardwareShader,
-            __hidden_reflection_resources::s_HardwareResolveShaderName, Name("ECSRender_ReflectionHardware"), true, m_bindingLayout,
+            __hidden_reflection_system::s_HardwareResolveShaderName, Name("ECSRender_ReflectionHardware"), true, m_bindingLayout,
             s_ReflectionHwPlainVariant
-        ) || !preparePipeline(m_unspecifiedHardwarePipeline, m_unspecifiedHardwareShader, __hidden_reflection_resources::s_HardwareResolveShaderName, Name("ECSRender_ReflectionUnspecifiedOpticalHardware"), true, m_bindingLayout, s_ReflectionHwUnspecifiedVariant))
+        ) || !preparePipeline(m_unspecifiedHardwarePipeline, m_unspecifiedHardwareShader, __hidden_reflection_system::s_HardwareResolveShaderName, Name("ECSRender_ReflectionUnspecifiedOpticalHardware"), true, m_bindingLayout, s_ReflectionHwUnspecifiedVariant))
     )
         return false;
     const bool csgHardware = prepareCsgHardware && m_graphics.queryFeatureSupport(Core::Feature::RayQuery) && heap.hasAccelStructLayout();
@@ -619,13 +631,13 @@ bool RendererReflectionSystem::preparePipelines(const bool prepareHardware, cons
     }
     if(
         csgHardware
-        && (!preparePipeline(m_csgBuildArgsPipeline, m_csgBuildArgsShader, __hidden_reflection_resources::s_BuildArgsShaderName, Name("ECSRender_ReflectionCsgBuildArgs"), false, m_csgBindingLayout, s_ReflectionCsgBuildArgsVariant) || !preparePipeline(
+        && (!preparePipeline(m_csgBuildArgsPipeline, m_csgBuildArgsShader, __hidden_reflection_system::s_BuildArgsShaderName, Name("ECSRender_ReflectionCsgBuildArgs"), false, m_csgBindingLayout, s_ReflectionCsgBuildArgsVariant) || !preparePipeline(
             m_csgHardwarePipeline, m_csgHardwareShader,
-            __hidden_reflection_resources::s_HardwareResolveShaderName, Name("ECSRender_ReflectionCsgOpticalHardware"), true, m_csgBindingLayout,
+            __hidden_reflection_system::s_HardwareResolveShaderName, Name("ECSRender_ReflectionCsgOpticalHardware"), true, m_csgBindingLayout,
             s_ReflectionHwCsgOpticalVariant
-        ) || !preparePipeline(m_csgPlainHardwarePipeline, m_csgPlainHardwareShader, __hidden_reflection_resources::s_HardwareResolveShaderName, Name("ECSRender_ReflectionCsgHardware"), true, m_csgBindingLayout, s_ReflectionHwCsgPlainVariant) || !preparePipeline(
+        ) || !preparePipeline(m_csgPlainHardwarePipeline, m_csgPlainHardwareShader, __hidden_reflection_system::s_HardwareResolveShaderName, Name("ECSRender_ReflectionCsgHardware"), true, m_csgBindingLayout, s_ReflectionHwCsgPlainVariant) || !preparePipeline(
             m_csgUnspecifiedHardwarePipeline, m_csgUnspecifiedHardwareShader,
-            __hidden_reflection_resources::s_HardwareResolveShaderName, Name("ECSRender_ReflectionCsgUnspecifiedOpticalHardware"), true, m_csgBindingLayout,
+            __hidden_reflection_system::s_HardwareResolveShaderName, Name("ECSRender_ReflectionCsgUnspecifiedOpticalHardware"), true, m_csgBindingLayout,
             s_ReflectionHwCsgUnspecifiedVariant
         ))
     )

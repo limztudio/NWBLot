@@ -114,11 +114,11 @@ Expected<ProgressMetrics> ProgressLayout::Measure(const ProgressOptions& options
     candidate.fillMinimum = { VectorGetX(fillMinimum->value), VectorGetY(fillMinimum->value) };
     const SIMDVectorDouble innerWidthInnerHeightValue = VectorDoubleAdd(
         VectorDoubleAdd(VectorDoubleSet(static_cast<f64>(candidate.padding.left), static_cast<f64>(candidate.padding.top), 0.0, 0.0), VectorDoubleSet(candidate.padding.right, candidate.padding.bottom, 0.0, 0.0)),
-        VectorDoubleSet(VectorGetX(fillMinimum->value), VectorGetY(fillMinimum->value), 0.0, 0.0)
+        VectorDoubleAndInt(ConvertVectorSingleToDouble(fillMinimum->value), s_DoubleSIMDMaskXY)
     );
-    const f64 innerWidth = VectorDoubleGetX(innerWidthInnerHeightValue);
-    const SIMDVectorDouble geometryPair5Operand0 = VectorDoubleSet(static_cast<f64>(VectorGetX(trackMinimum->value)), static_cast<f64>(options.height), 0.0, 0.0);
-    const SIMDVectorDouble geometryPair5Operand1 = VectorDoubleMax(VectorDoubleSet(innerWidth, VectorGetY(trackMinimum->value), 0.0, 0.0), innerWidthInnerHeightValue);
+    const SIMDVectorDouble trackMinimumDouble = ConvertVectorSingleToDouble(trackMinimum->value);
+    const SIMDVectorDouble geometryPair5Operand0 = VectorDoubleSelect(VectorDoubleSet(0.0, static_cast<f64>(options.height), 0.0, 0.0), trackMinimumDouble, s_DoubleSIMDMaskX);
+    const SIMDVectorDouble geometryPair5Operand1 = VectorDoubleMax(VectorDoubleSelect(innerWidthInnerHeightValue, trackMinimumDouble, s_DoubleSIMDMaskY), innerWidthInnerHeightValue);
     const SIMDVectorDouble widthHeightValue = VectorDoubleSelect(geometryPair5Operand1, geometryPair5Operand0, VectorDoubleGreater(geometryPair5Operand0, geometryPair5Operand1));
     const f64 width = VectorDoubleGetX(widthHeightValue);
     const f64 height = VectorDoubleGetY(widthHeightValue);
@@ -152,7 +152,8 @@ Expected<ProgressPlacement> ProgressLayout::Place(const Rect& bounds, const Rect
     if(!content)
         return MakeUnexpected(Failure{});
     candidate.content = *content;
-    const f64 normalized = VectorDoubleGetX(VectorDoubleClamp(VectorDoubleReplicate(fraction), VectorDoubleZero(), VectorDoubleSplatOne()));
+    const SIMDVectorDouble normalizedVector = VectorDoubleClamp(VectorDoubleReplicate(fraction), VectorDoubleZero(), VectorDoubleSplatOne());
+    const f64 normalized = VectorDoubleGetX(normalizedVector);
     candidate.fillReveal = candidate.content;
     candidate.fillCanvas = candidate.content;
     if(normalized == 0.0){
@@ -160,12 +161,14 @@ Expected<ProgressPlacement> ProgressLayout::Place(const Rect& bounds, const Rect
         candidate.fillCanvas.width = 0.0f;
     }
     else if(normalized != 1.0){
-        const auto fillReveal = MakeUiRect<UiRectPrecision::EmptyPaint>(VectorDoubleSet(candidate.content.x, candidate.content.y, VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(candidate.content.width), VectorDoubleReplicate(normalized))), candidate.content.height));
+        const SIMDVectorDouble contentVector = VectorDoubleSet(candidate.content.x, candidate.content.y, candidate.content.width, candidate.content.height);
+        const SIMDVectorDouble revealWidth = VectorDoubleMultiply(VectorDoubleSplatZ(contentVector), normalizedVector);
+        const auto fillReveal = MakeUiRect<UiRectPrecision::EmptyPaint>(VectorDoubleSelect(contentVector, revealWidth, s_DoubleSIMDMaskZ));
         if(!fillReveal)
             return MakeUnexpected(Failure{});
         candidate.fillReveal = *fillReveal;
-        const f64 canvasWidth = candidate.fillReveal.width == 0.0f ? 0.0 : VectorDoubleGetX(VectorDoubleMin(VectorDoubleReplicate(candidate.content.width), VectorDoubleMax(VectorDoubleReplicate(candidate.fillReveal.width), VectorDoubleReplicate(metrics.fillMinimum.x))));
-        const auto fillCanvas = MakeUiRect<UiRectPrecision::EmptyPaint>(VectorDoubleSet(candidate.content.x, candidate.content.y, canvasWidth, candidate.content.height));
+        const SIMDVectorDouble canvasWidth = candidate.fillReveal.width == 0.0f ? VectorDoubleZero() : VectorDoubleMin(VectorDoubleSplatZ(contentVector), VectorDoubleMax(VectorDoubleReplicate(candidate.fillReveal.width), VectorDoubleReplicate(metrics.fillMinimum.x)));
+        const auto fillCanvas = MakeUiRect<UiRectPrecision::EmptyPaint>(VectorDoubleSelect(contentVector, canvasWidth, s_DoubleSIMDMaskZ));
         if(!fillCanvas)
             return MakeUnexpected(Failure{});
         candidate.fillCanvas = *fillCanvas;

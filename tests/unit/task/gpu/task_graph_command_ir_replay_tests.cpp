@@ -103,7 +103,7 @@ TEST(GpuCommandIrReplay, PreflightsTheWholeStreamAgainstTheCompiledPacketBeforeL
     ASSERT_TRUE(capture.captureCopyBuffer(secondTask, secondPacket, queue, source, 0u, destination, 0u, 4u));
     ASSERT_EQ(capture.recordCount(), s_ExpectedDualCount);
     const Graphics::GpuCommandIrReplayResult validContext = Graphics::PreflightGpuCommandIrPacket(capture.commandBytes(), declarations, compiledPlan, packet);
-    // Metadata-only imports cannot be lowered, but preflight has already established the stream, graph, packet, queue, task order, resource kinds, and declared CopySource/CopyDest uses before that boundary.
+    // Metadata-only imports cannot be lowered, but preflight has already established the stream, graph, packet, queue, task order, resource kinds, and declared uses before that boundary.
     EXPECT_EQ(validContext.error, Graphics::GpuCommandIrReplayError::MissingBackendResource);
     EXPECT_TRUE(validContext.streamValidation.valid());
     EXPECT_EQ(validContext.recordIndex, 0u);

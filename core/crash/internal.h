@@ -33,7 +33,7 @@ NWB_CRASH_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace Detail{
+namespace CrashDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -400,8 +400,8 @@ struct CrashState{
     u32 diagnosticCaptureCount = 0u;
     Atomic<u32> publishedSnapshotImage{ 0u };
     Atomic<u32> suppressedPlatformCrashCaptures{ 0u };
-    // Crash-transport channel guard: a single CAS claims the request pipe/event so concurrent faulting threads never interleave their fixed-POD writes.
-    // Deliberately distinct from `mutex` (which the assert/diagnostic path may already hold when a hard fault occurs), and an atomic (not a Futex) so it is signal/SEH-safe.
+    // Crash-transport channel guard: one CAS claims the pipe/event so concurrent faulting threads never interleave fixed-POD writes.
+    // Distinct from `mutex` (the assert path may hold it), and atomic (not Futex) so it stays signal/SEH-safe.
     Atomic<u32> transportInFlight{ 0u };
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)

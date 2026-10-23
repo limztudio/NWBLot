@@ -105,7 +105,7 @@ struct GpuTaskQueueAssignment{
 };
 
 // Explicit compatible merges are available under each packetization policy.
-// Frontier-safe packetization preserves those requests unless a task already in the preceding packet enables a consumer on another physical queue
+// Frontier-safe packetization preserves those requests unless a task already in the preceding packet enables a consumer on another physical queue.
 namespace GpuTaskGraphPacketizationPolicy{
     enum Enum : u8{
         ExplicitMerge,
@@ -127,11 +127,11 @@ struct GpuTaskQueueLoad{
 
 struct GpuTaskGraphQueueAssignmentOptions{
     const GpuTaskTimingHistorySnapshot* timingHistory = nullptr;
-    // Scheduler-owned pressure sampled immediately before compilation. Costs use the same relative units as task cost hints and affect only movable routes
+    // Scheduler-owned pressure sampled immediately before compilation. Costs use the same relative units as task cost hints and affect only movable routes.
     const GpuTaskQueueLoad* queueLoads = nullptr;
     usize queueLoadCount = 0u;
     // Scalar policy is copied into one compile request so concurrent runtime policy changes cannot mutate an in-progress queue assignment.
-    // The history remains an explicitly immutable snapshot owned by its producer.
+    // The history stays an immutable snapshot owned by its producer.
     GpuTaskTimingFeedbackPolicy timingFeedbackPolicy;
     u64 timingFrameIndex = 0u;
 };
@@ -262,7 +262,7 @@ private:
     bool m_valid = false;
 };
 
-// Queue assignment is a separate immutable compile result. Renderer integrations may use it for native-recording selection; graph core never creates a command list or submits work.
+// Queue assignment is a separate immutable compile result. Renderer integrations may use it for recording selection; graph core never creates a command list or submits work.
 class GpuTaskGraphQueueAssignments final : NoCopy{
     friend class GpuTaskGraphCompiler;
 

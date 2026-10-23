@@ -351,8 +351,7 @@ void CommandList::releaseBufferOwnership(Buffer* bufferResource, const GpuPhysic
     releases.push_back(BufferOwnershipRelease{mergedRange, destinationQueue});
     Sort(releases.begin(), releases.end(), [](const BufferOwnershipRelease& lhs, const BufferOwnershipRelease& rhs)noexcept{
         return lhs.range.byteOffset < rhs.range.byteOffset;
-    }
-    );
+    });
     m_bufferOwnershipReleaseDestinations.insert_or_assign(MakeNotNull(&buffer), Move(releases));
     retainResource(&buffer);
 }

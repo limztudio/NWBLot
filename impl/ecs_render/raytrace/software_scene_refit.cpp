@@ -10,16 +10,30 @@
 #include <core/graphics/runtime/runtime.h>
 #include <core/graphics/backend_selection/backend.h>
 
-namespace __hidden_refit_shader{
-static constexpr StringView s_DefaultShaderVariant = "default";
-static constexpr u64 s_SoftwareNodeByteSize = 32u;
-};
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_software_scene_refit{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr StringView s_DefaultShaderVariant = "default";
+static constexpr u64 s_SoftwareNodeByteSize = 32u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -68,7 +82,7 @@ Expected<SoftwareSceneRefitHandle> SoftwareSceneRefitResources::prepare(
     auto& device = m_graphics.getDevice();
     auto& heap = device.getDescriptorHeap();
     const auto& sceneDesc = sceneNodes->getCreationDescription();
-    if(sceneNodes->getDeviceGeneration() != device.getDeviceGeneration() || !sceneDesc.canHaveUAVs || sceneDesc.byteSize < static_cast<u64>(nodeCount) * __hidden_refit_shader::s_SoftwareNodeByteSize)
+    if(sceneNodes->getDeviceGeneration() != device.getDeviceGeneration() || !sceneDesc.canHaveUAVs || sceneDesc.byteSize < static_cast<u64>(nodeCount) * __hidden_software_scene_refit::s_SoftwareNodeByteSize)
         return MakeUnexpected(Failure{});
     const usize byteSize = instanceCount * sizeof(SoftwareSceneRefitInstanceGpu);
     if(m_inputBuffer && m_inputBuffer->getDeviceGeneration() != device.getDeviceGeneration())
@@ -119,7 +133,7 @@ Expected<SoftwareSceneRefitHandle> SoftwareSceneRefitResources::prepare(
     snapshot->inputs.reserve(instanceCount);
     snapshot->meshNodes.reserve(instanceCount);
     for(usize index = 0u; index < instanceCount; ++index){
-        if(!meshNodes[index] || inputs[index].meshNodeSlot == Limit<u32>::s_Max || meshNodes[index]->getDeviceGeneration() != device.getDeviceGeneration() || meshNodes[index]->getCreationDescription().byteSize < __hidden_refit_shader::s_SoftwareNodeByteSize)
+        if(!meshNodes[index] || inputs[index].meshNodeSlot == Limit<u32>::s_Max || meshNodes[index]->getDeviceGeneration() != device.getDeviceGeneration() || meshNodes[index]->getCreationDescription().byteSize < __hidden_software_scene_refit::s_SoftwareNodeByteSize)
             return MakeUnexpected(Failure{});
         snapshot->inputs.push_back(inputs[index]);
         snapshot->meshNodes.push_back(meshNodes[index]);
@@ -146,7 +160,7 @@ bool SoftwareSceneRefitResources::ensurePipeline(RendererShaderSystem& shaderSys
         if(!bindingLayoutResult)
             return false;
     }
-    if(!shaderSystem.loadShader<ComputeShader>(m_shader, Name("engine/graphics/bvh/scene_refit_cs"), ::__hidden_refit_shader::s_DefaultShaderVariant, Name("SoftwareSceneRefit")))
+    if(!shaderSystem.loadShader<ComputeShader>(m_shader, Name("engine/graphics/bvh/scene_refit_cs"), __hidden_software_scene_refit::s_DefaultShaderVariant, Name("SoftwareSceneRefit")))
         return false;
     Core::ComputePipelineDesc desc;
     desc.setComputeShader(m_shader).addBindingLayout(m_bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());

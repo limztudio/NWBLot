@@ -19,7 +19,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_gpu_glyphs{
+namespace __hidden_ui_gpu_glyph_resources{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -93,7 +93,7 @@ bool GpuRendererState::ValidateGlyphPages(const DrawSnapshot& snapshot)noexcept{
     if(pages.size() + snapshot.sdfPages().size() + snapshot.textureImages().size() > s_PaintMaxImages)
         return false;
     for(usize index = 0u; index < pages.size(); ++index){
-        if(!__hidden_ui_gpu_glyphs::ValidPage(pages[index]))
+        if(!__hidden_ui_gpu_glyph_resources::ValidPage(pages[index]))
             return false;
         for(usize previous = 0u; previous < index; ++previous){
             if(SameGlyphPageKey(pages[index]->binding(), pages[previous]->binding()))
@@ -128,12 +128,12 @@ Expected<GpuVersion<GpuGlyphVersion>> GpuRendererState::prepareGlyphPage(const S
         replaceIndex = index;
         if(existing->m_page->binding().generation != page->binding().generation)
             break;
-        if(!__hidden_ui_gpu_glyphs::SamePageVersion(*existing->m_page, *page))
+        if(!__hidden_ui_gpu_glyph_resources::SamePageVersion(*existing->m_page, *page))
             return MakeUnexpected(Failure{});
         GpuVersion<GpuGlyphVersion> reused = existing;
         m_glyphCache.erase(m_glyphCache.begin() + static_cast<isize>(index));
         m_glyphCache.push_back(reused);
-        if(!__hidden_ui_gpu_glyphs::PrepareDescriptor(*reused))
+        if(!__hidden_ui_gpu_glyph_resources::PrepareDescriptor(*reused))
             return MakeUnexpected(Failure{});
         return Move(reused);
     }
@@ -181,7 +181,7 @@ Expected<GpuVersion<GpuGlyphVersion>> GpuRendererState::prepareGlyphPage(const S
         evictImageCacheEntry();
     m_glyphCache.push_back(version);
     // Cache accepted uploads before descriptor publication so descriptor exhaustion retries cannot discard their readiness.
-    if(!__hidden_ui_gpu_glyphs::PrepareDescriptor(*version))
+    if(!__hidden_ui_gpu_glyph_resources::PrepareDescriptor(*version))
         return MakeUnexpected(Failure{});
     return Move(version);
 }

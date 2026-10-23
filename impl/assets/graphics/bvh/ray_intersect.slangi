@@ -21,7 +21,7 @@ static const float NWB_BVH_RAY_DIRECTION_EPSILON = 1e-8;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared ray/AABB helpers for the software BVH consumers. Keep the reciprocal direction finite for axis-aligned rays: an infinite reciprocal multiplied by a zero slab offset would otherwise create a NaN and incorrectly reject a box.
+// Shared ray/AABB helpers for software BVH consumers. Keep the reciprocal direction finite for axis-aligned rays: an infinite reciprocal times a zero slab offset would NaN and reject a box.
 float3 nwbBvhSafeInvDir(const float3 direction){
     const float epsilon = NWB_BVH_RAY_DIRECTION_EPSILON;
     const float3 safe = float3(

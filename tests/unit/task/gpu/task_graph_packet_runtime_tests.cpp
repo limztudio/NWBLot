@@ -112,7 +112,7 @@ TEST(GpuTaskGraph, RecreatesPacketRecordingStateAfterRecompile){
         EXPECT_FALSE(recordedGraph.physicalQueueRecordingStatistics(compiledGraph, compiledPlan, secondQueue).valid());
     }
 
-    // reset() releases old packet-owned command-list handles and reconstructs the serial/per-packet recording scratch for the new immutable graph generation before a future command arena can be leased again.
+    // reset() releases old packet-owned command-list handles and reconstructs the serial/per-packet scratch for the new immutable graph generation before a future arena can be leased again.
     recordedGraph.reset(compiledGraph);
     transaction.reset(compiledGraph);
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
@@ -341,9 +341,9 @@ TEST(GpuTaskGraph, RejectsAcceptedQueueFrontierTasksWithPrerequisites){
 
         Graphics::GpuTaskGraph validGraph(testArena.arena);
         {
-            const auto gpuAdmissionAt313 = AddTask(validGraph, Name("tests/task_graph/frontier_stale_assignment_source"), "Frontier Stale Assignment Source");
-            ASSERT_TRUE(gpuAdmissionAt313);
-            ASSERT_TRUE(gpuAdmissionAt313->valid());
+            const auto gpuTaskAdmission = AddTask(validGraph, Name("tests/task_graph/frontier_stale_assignment_source"), "Frontier Stale Assignment Source");
+            ASSERT_TRUE(gpuTaskAdmission);
+            ASSERT_TRUE(gpuTaskAdmission->valid());
         }
         const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
         const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u, };

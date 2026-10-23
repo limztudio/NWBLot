@@ -26,17 +26,17 @@ TEST(Crash, SnapshotKeepsPublishedMetadataDuringInterruptedWriter){
     constexpr AStringView s_Published("published_complete_value");
     ASSERT_TRUE(NWB::Core::Crash::SetCrashMetadata(s_Key, s_Published));
 
-    NWB::Core::Crash::Detail::CrashRequest request;
+    NWB::Core::Crash::CrashDetail::CrashRequest request;
     bool exercisedWriter = false;
     {
-        NothrowScopedLock lock(NWB::Core::Crash::Detail::g_State.mutex);
-        for(auto& metadata : NWB::Core::Crash::Detail::g_State.metadata){
+        NothrowScopedLock lock(NWB::Core::Crash::CrashDetail::g_State.mutex);
+        for(auto& metadata : NWB::Core::Crash::CrashDetail::g_State.metadata){
             if(!metadata.used || AStringView(metadata.key) != s_Key)
                 continue;
             const auto original = metadata;
             ScopeExit restore([&metadata, &original]()noexcept{ metadata = original; });
             CopyFixedBuffer(metadata.value, AStringView("unpublished_partial_value"));
-            request = NWB::Core::Crash::Detail::BuildCrashDumpRequest(NWB::Core::Crash::Detail::CrashReasonKind::ManualDump, 0u, {});
+            request = NWB::Core::Crash::CrashDetail::BuildCrashDumpRequest(NWB::Core::Crash::CrashDetail::CrashReasonKind::ManualDump, 0u, {});
             exercisedWriter = true;
             break;
         }
@@ -56,8 +56,8 @@ TEST(Crash, ConcurrentPublicWritersPublishCompleteMetadataAndBreadcrumbRecords){
     constexpr AStringView s_Key("snapshot_concurrent_writer");
     constexpr AStringView s_Category("snapshot_concurrent_breadcrumb");
     constexpr usize s_Iterations = 2000u;
-    char first[NWB::Core::Crash::Detail::s_MaxMediumText] = {};
-    char second[NWB::Core::Crash::Detail::s_MaxMediumText] = {};
+    char first[NWB::Core::Crash::CrashDetail::s_MaxMediumText] = {};
+    char second[NWB::Core::Crash::CrashDetail::s_MaxMediumText] = {};
     for(usize i = 0u; i + 1u < sizeof(first); ++i){
         first[i] = 'a';
         second[i] = 'b';
@@ -78,7 +78,7 @@ TEST(Crash, ConcurrentPublicWritersPublishCompleteMetadataAndBreadcrumbRecords){
     });
     start.arrive_and_wait();
     for(usize iteration = 0u; iteration < s_Iterations; ++iteration){
-        const auto request = NWB::Core::Crash::Detail::BuildCrashDumpRequest(NWB::Core::Crash::Detail::CrashReasonKind::ManualDump, 0u, {});
+        const auto request = NWB::Core::Crash::CrashDetail::BuildCrashDumpRequest(NWB::Core::Crash::CrashDetail::CrashReasonKind::ManualDump, 0u, {});
         bool found = false;
         for(u32 i = 0u; i < request.metadataCount; ++i){
             const auto& metadata = request.metadata[i];

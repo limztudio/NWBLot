@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Stage-3 classify + fill: edge texels append to the compacted list and keep the pristine opaque mask for the indirect pass to fold once (no double-multiply). Overflow degrades to the interpolated fallback. No tracing here.
+// Stage-3 transparent shadow classify pass: appends edge texels for indirect full-resolution trace and interpolates smooth tiles.
 
 
 #include "sw_binding_slots.h"
@@ -49,7 +49,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const uint slot = coarseLight.slot;
 
         if(coarseLight.isEdge){
-            // EDGE: append (pixel, lightIndex) to the compacted list; DO NOT trace and DO NOT write the texel -- leave the pristine opaque mask for the indirect trace's single overwrite. Always increment the counter (so the true edge total is measured) but guard the indexed write to the allocated capacity.
+            // Edge texel: append (pixel, lightIndex) for indirect trace while leaving the opaque mask intact; fall back to interpolation on overflow.
             uint appendIndex;
             InterlockedAdd(g_NwbSwShadowEdgeCounter[NWB_SW_SHADOW_EDGE_COUNTER_APPEND], 1u, appendIndex);
             if(appendIndex < edgeCapacity){

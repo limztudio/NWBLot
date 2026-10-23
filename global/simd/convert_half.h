@@ -176,18 +176,18 @@ inline constexpr u32 s_NormalRoundingBiasBits = 0xc8000000u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<u32 MANTISSA_BIT_COUNT>
+template<u32 MantissaBitCount>
 [[nodiscard]] NWB_INLINE u32 ConvertFloatToUnsignedFloat(const f32 value)noexcept{
-    static_assert(MANTISSA_BIT_COUNT > 0u, "Unsigned floating-point values need a mantissa");
-    static_assert(MANTISSA_BIT_COUNT <= UnsignedFloatConvertDetail::s_MaxMantissaBitCount, "Unsupported unsigned floating-point mantissa width");
+    static_assert(MantissaBitCount > 0u, "Unsigned floating-point values need a mantissa");
+    static_assert(MantissaBitCount <= UnsignedFloatConvertDetail::s_MaxMantissaBitCount, "Unsupported unsigned floating-point mantissa width");
 
     u32 bits = BitCast<u32>(value);
     const u32 absBits = bits & s_F32AbsoluteBitMask;
-    const u32 targetInf = UnsignedFloatConvertDetail::s_ExponentFieldMask << MANTISSA_BIT_COUNT;
-    const u32 targetMantissaMask = (1u << MANTISSA_BIT_COUNT) - 1u;
+    const u32 targetInf = UnsignedFloatConvertDetail::s_ExponentFieldMask << MantissaBitCount;
+    const u32 targetMantissaMask = (1u << MantissaBitCount) - 1u;
 
     if(absBits > s_F32InfinityBits){
-        const u32 payload = (absBits >> (s_F32MantissaBitCount - MANTISSA_BIT_COUNT)) & targetMantissaMask;
+        const u32 payload = (absBits >> (s_F32MantissaBitCount - MantissaBitCount)) & targetMantissaMask;
         return targetInf | (payload != 0u ? payload : 1u);
     }
     if((bits & s_F32SignBitMask) != 0u || absBits == 0u)
@@ -197,13 +197,13 @@ template<u32 MANTISSA_BIT_COUNT>
     if(bits >= UnsignedFloatConvertDetail::s_OverflowBits)
         return targetInf;
 
-    const u32 zeroThreshold = (s_F32ExponentBias - UnsignedFloatConvertDetail::s_ExponentBias - MANTISSA_BIT_COUNT) << s_F32MantissaBitCount;
+    const u32 zeroThreshold = (s_F32ExponentBias - UnsignedFloatConvertDetail::s_ExponentBias - MantissaBitCount) << s_F32MantissaBitCount;
     if(bits <= zeroThreshold)
         return 0u;
 
     if(bits < UnsignedFloatConvertDetail::s_MinNormalBits){
         const u32 sourceExponent = bits >> s_F32MantissaBitCount;
-        const u32 roundShift = (s_F32ExponentBias - 1u) - sourceExponent + (UnsignedFloatConvertDetail::s_MaxMantissaBitCount - MANTISSA_BIT_COUNT);
+        const u32 roundShift = (s_F32ExponentBias - 1u) - sourceExponent + (UnsignedFloatConvertDetail::s_MaxMantissaBitCount - MantissaBitCount);
         bits = s_F32ImplicitMantissaBit | (bits & s_F32MantissaBitMask);
         u32 result = bits >> roundShift;
         const u32 sticky = (bits & ((1u << (roundShift - 1u)) - 1u)) != 0u ? 1u : 0u;
@@ -211,9 +211,9 @@ template<u32 MANTISSA_BIT_COUNT>
         return result;
     }
 
-    const u32 shift = s_F32MantissaBitCount - MANTISSA_BIT_COUNT;
+    const u32 shift = s_F32MantissaBitCount - MantissaBitCount;
     bits += UnsignedFloatConvertDetail::s_NormalRoundingBiasBits;
-    return ((bits + ((1u << (shift - 1u)) - 1u) + ((bits >> shift) & 1u)) >> shift) & ((1u << (UnsignedFloatConvertDetail::s_ExponentBitCount + MANTISSA_BIT_COUNT)) - 1u);
+    return ((bits + ((1u << (shift - 1u)) - 1u) + ((bits >> shift) & 1u)) >> shift) & ((1u << (UnsignedFloatConvertDetail::s_ExponentBitCount + MantissaBitCount)) - 1u);
 }
 
 [[nodiscard]] NWB_INLINE Half ConvertFloatToHalf(const f32 value)noexcept{

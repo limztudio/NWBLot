@@ -57,17 +57,17 @@ TEST(CpuTaskRangeTests, SingleChunkJoinsAllSubmittedDescendants){
     u32 callbacks = 0u;
     EXPECT_TRUE((scheduler.parallelFor(0u, 1u, 1u, [&](usize){
         ++callbacks;
-        const auto cpuAdmission77 = scheduler.submit([&](){
+        const auto cpuTaskAdmission = scheduler.submit([&](){
             ++callbacks;
-            const auto cpuAdmission78 = scheduler.submit([&]()noexcept{ ++callbacks; });
-            ASSERT_TRUE(cpuAdmission78);
-            if(cpuAdmission78)
-                ASSERT_TRUE(cpuAdmission78->valid());
+            const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept{ ++callbacks; });
+            ASSERT_TRUE(secondCpuTaskAdmission);
+            if(secondCpuTaskAdmission)
+                ASSERT_TRUE(secondCpuTaskAdmission->valid());
         }
         );
-        ASSERT_TRUE(cpuAdmission77);
-        if(cpuAdmission77)
-            ASSERT_TRUE(cpuAdmission77->valid());
+        ASSERT_TRUE(cpuTaskAdmission);
+        if(cpuTaskAdmission)
+            ASSERT_TRUE(cpuTaskAdmission->valid());
     }
     )));
     EXPECT_EQ(callbacks, 3u);
@@ -77,7 +77,7 @@ TEST(CpuTaskRangeTests, SingleChunkJoinsAllSubmittedDescendants){
 TEST(CpuTaskRangeTests, SingleChunkKeepsItsCallingWorkersIdentity){
     using namespace __hidden_cpu_task_range_tests;
     CpuTaskScheduler scheduler(OneWorker());
-    const auto cpuAdmission79 = scheduler.submit([&](){
+    const auto cpuTaskAdmission = scheduler.submit([&](){
         const usize worker = scheduler.currentWorkerIndex();
         const auto affinity = scheduler.currentWorkerAffinity();
         EXPECT_NE(worker, 0u);
@@ -88,8 +88,8 @@ TEST(CpuTaskRangeTests, SingleChunkKeepsItsCallingWorkersIdentity){
         )));
     }
     );
-    ASSERT_TRUE(cpuAdmission79);
-    const auto task = *cpuAdmission79;
+    ASSERT_TRUE(cpuTaskAdmission);
+    const auto task = *cpuTaskAdmission;
     ASSERT_TRUE(task.valid());
     scheduler.wait(task);
 }
@@ -165,14 +165,14 @@ TEST(CpuTaskRangeTests, InlineFailureRetiresSubmittedDescendantsBeforeTerminalHa
     CpuTaskScheduler scheduler(0u);
     const int result = ::InvokeTerminalEntry<Failure>([&]()->int{
         EXPECT_TRUE((scheduler.parallelFor(0u, 1u, 1u, [&](usize){
-            const auto cpuAdmission80 = scheduler.submit([&, capture = Retirement(retirements)](){
+            const auto cpuTaskAdmission = scheduler.submit([&, capture = Retirement(retirements)](){
                 EXPECT_TRUE(capture.count != nullptr);
                 ++callbacks;
             }
             );
-            EXPECT_TRUE(cpuAdmission80);
-            if(cpuAdmission80)
-                EXPECT_TRUE(cpuAdmission80->valid());
+            EXPECT_TRUE(cpuTaskAdmission);
+            if(cpuTaskAdmission)
+                EXPECT_TRUE(cpuTaskAdmission->valid());
             throw Failure{ 73 };
         }
         )));

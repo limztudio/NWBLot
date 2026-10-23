@@ -22,14 +22,14 @@ namespace Tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_assets_graphics_model_fixture{
+namespace __hidden_assets_graphics_model_fixture_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #if defined(NWB_FINAL)
-static constexpr AStringView s_MODEL_FIXTURE_NWB = "model_fixture.nwb";
+static constexpr AStringView s_ModelFixtureNwb = "model_fixture.nwb";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -118,7 +118,7 @@ asset_bunch bunch = [
     TestArena testArena;
     auto cookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "model_bunch_four_row_transform");
     ASSERT_TRUE(cookCase);
-    EXPECT_FALSE(AssetsGraphicsFixture::CookSingleGraphicsMeta(AStringView(meta.data(), meta.size()), "characters", s_MODEL_FIXTURE_NWB, testArena, *cookCase));
+    EXPECT_FALSE(AssetsGraphicsFixture::CookSingleGraphicsMeta(AStringView(meta.data(), meta.size()), "characters", s_ModelFixtureNwb, testArena, *cookCase));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("must be a 3x4 affine matrix")));
 #endif
 }
@@ -129,7 +129,7 @@ static Expected<NWB::Core::Assets::ExpandedAssetMetadataVector> ExpandModelBunch
         return MakeUnexpected(Failure{});
 
     const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, caseName) / "assets";
-    const Path nwbFilePath = assetRoot / "characters" / s_MODEL_FIXTURE_NWB;
+    const Path nwbFilePath = assetRoot / "characters" / s_ModelFixtureNwb;
     return NWB::Core::Assets::AssetsBunchCook::ExpandAssetBunch(assetRoot, "project", nwbFilePath, doc, scratchArena);
 }
 #endif

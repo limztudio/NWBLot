@@ -16,7 +16,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_gpu_persistent_resource_state_cache{
+namespace __hidden_gpu_persistent_state{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -94,7 +94,7 @@ bool GpuPersistentResourceStateCache::replaceResourceSubset(
         }
 
         CommandListResourceSelection selection(scratchArena);
-        using namespace __hidden_gpu_persistent_resource_state_cache;
+        using namespace __hidden_gpu_persistent_state;
         if(!BuildSelection(selection, textures, textureCount, buffers, bufferCount)){
             reset();
             return false;
@@ -162,7 +162,7 @@ bool GpuPersistentResourceStateCache::buildMergedResourceSubset(
         if(!source.valid() || (textureCount != 0u && !textures) || (bufferCount != 0u && !buffers))
             return false;
         CommandListResourceSelection selection(scratchArena);
-        using namespace __hidden_gpu_persistent_resource_state_cache;
+        using namespace __hidden_gpu_persistent_state;
         if(!BuildSelection(selection, textures, textureCount, buffers, bufferCount))
             return false;
         RetainSelectedHandles(selection, textures, buffers, sourceCandidate.m_textures, sourceCandidate.m_buffers);
@@ -208,7 +208,7 @@ bool GpuPersistentResourceStateCache::buildFilteredResourceSubset(
         return false;
 
     CommandListResourceSelection selection(scratchArena);
-    using namespace __hidden_gpu_persistent_resource_state_cache;
+    using namespace __hidden_gpu_persistent_state;
     if(!BuildSelection(selection, textures, textureCount, buffers, bufferCount))
         return false;
     RetainSelectedHandles(selection, textures, buffers, outCandidate.m_textures, outCandidate.m_buffers);

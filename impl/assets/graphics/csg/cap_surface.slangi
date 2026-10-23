@@ -16,7 +16,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The cap-fill fullscreen draw reuses the ordinary 64-byte mesh push ABI.  Its fourth frame-slot word is unused by this path, so it selects the global CSG context UniformBuffer without growing any push range.
+// The cap-fill draw reuses the ordinary 64-byte mesh push ABI. Its fourth frame-slot word is unused here, so it selects the global CSG context UniformBuffer with no push growth.
 struct NwbCsgCapFillPushConstants{
     uint4 dispatch;
     float4 viewportRect;
@@ -48,7 +48,7 @@ uint nwbMeshFrameMaterialTypedHeapSlot(){
 uint nwbMeshFrameInstanceHeapSlot(){
     return g_NwbCsgClipContextSlots.meshInstances;
 }
-// interval_sample.slangi already included bindless_heap_mesh.slangi with its b18-selected mesh-view alias. Its include guard keeps this include focused on the cap-fill material/instance accessors above.
+// interval_sample.slangi already included the mesh-view alias. Its include guard keeps this include focused on the cap-fill accessors above.
 #include "../mesh/bindless_heap_mesh.slangi"
 #include "../shadow/shadow_surface.slangi"
 #include "shadow/generated/surface_dispatch.slangi"
@@ -67,7 +67,7 @@ NwbMeshSurface nwbCsgCapSurface(const NwbCsgIntervalCapPixel cap, const NwbCsgRe
     hit.meshInstanceIndex = receiver.materialContext.z;
     hit.surfaceDispatchId = receiver.materialContext.x;
     hit.materialConstantByteOffset = receiver.materialContext.y;
-    // A cap has no receiver-triangle UV/color/tangent. Match the documented non-rasterized surface inputs used by the generated dispatcher, while preserving every declared typed material field and both BXDF parameters.
+    // A cap has no receiver-triangle UV/color/tangent. Match the non-rasterized surface inputs of the generated dispatcher, while preserving every typed material field and both BXDF params.
     hit.uv0 = float2(0.0);
     hit.worldNormal = cap.normal;
     hit.worldPosition = cap.worldPosition;

@@ -45,14 +45,14 @@ TEST(CpuTaskProfilingTests, ReadyAndExecutionEventsRetainTheirOwnFramesAndLabels
     const auto taskLabel = scheduler.registerProfileLabel(taskName);
     CpuTaskScope scope(scheduler, scopeLabel);
     scheduler.setProfiling(true, 7u);
-    const auto cpuAdmission54 = scope.submit([]()noexcept{ SleepMS(__hidden_cpu_task_profiling_tests::s_PollIntervalMS); }, { .profileLabel = taskLabel });
-    ASSERT_TRUE(cpuAdmission54);
-    const auto task = *cpuAdmission54;
+    const auto taskAdmission = scope.submit([]()noexcept{ SleepMS(__hidden_cpu_task_profiling_tests::s_PollIntervalMS); }, { .profileLabel = taskLabel });
+    ASSERT_TRUE(taskAdmission);
+    const auto task = *taskAdmission;
     ASSERT_TRUE(task.valid());
-    const auto cpuAdmission55 = scope.submit([]()noexcept{ SleepMS(__hidden_cpu_task_profiling_tests::s_PollIntervalMS); });
-    ASSERT_TRUE(cpuAdmission55);
-    if(cpuAdmission55)
-        ASSERT_TRUE(cpuAdmission55->valid());
+    const auto cpuTaskAdmission = scope.submit([]()noexcept{ SleepMS(__hidden_cpu_task_profiling_tests::s_PollIntervalMS); });
+    ASSERT_TRUE(cpuTaskAdmission);
+    if(cpuTaskAdmission)
+        ASSERT_TRUE(cpuTaskAdmission->valid());
     SleepMS(__hidden_cpu_task_profiling_tests::s_PollIntervalMS);
     scheduler.setProfiling(true, 8u);
     scheduler.wait(task);
@@ -113,18 +113,18 @@ TEST(CpuTaskProfilingTests, RingBufferPreservesOrderAcrossPartialDrainsAndReport
     config.profileEventCapacity = 4u;
     CpuTaskScheduler scheduler(config);
     scheduler.setProfiling(true);
-    const auto cpuAdmission56 = scheduler.submit([]()noexcept{});
-    ASSERT_TRUE(cpuAdmission56);
-    const auto first = *cpuAdmission56;
+    const auto firstTaskAdmission = scheduler.submit([]()noexcept{});
+    ASSERT_TRUE(firstTaskAdmission);
+    const auto first = *firstTaskAdmission;
     ASSERT_TRUE(first.valid());
     scheduler.wait(first);
     CpuTaskProfileEvent events[8u];
     ASSERT_EQ(scheduler.readProfileEvents(events, s_ExpectedDualCount), s_ExpectedDualCount);
     EXPECT_EQ(events[0u].kind, CpuTaskProfileKind::QueueDelay);
     EXPECT_EQ(events[1u].kind, CpuTaskProfileKind::Execution);
-    const auto cpuAdmission57 = scheduler.submit([]()noexcept{});
-    ASSERT_TRUE(cpuAdmission57);
-    const auto second = *cpuAdmission57;
+    const auto secondTaskAdmission = scheduler.submit([]()noexcept{});
+    ASSERT_TRUE(secondTaskAdmission);
+    const auto second = *secondTaskAdmission;
     ASSERT_TRUE(second.valid());
     scheduler.wait(second);
     ASSERT_EQ(scheduler.readProfileEvents(events, 8u), 4u);
@@ -134,9 +134,9 @@ TEST(CpuTaskProfilingTests, RingBufferPreservesOrderAcrossPartialDrainsAndReport
     EXPECT_EQ(events[s_ThirdElementIndex].kind, CpuTaskProfileKind::Execution);
     EXPECT_EQ(events[3u].kind, CpuTaskProfileKind::HandleJoin);
     EXPECT_EQ(events[3u].task.generation, second.generation);
-    const auto cpuAdmission58 = scheduler.submit([]()noexcept{});
-    ASSERT_TRUE(cpuAdmission58);
-    const auto third = *cpuAdmission58;
+    const auto thirdTaskAdmission = scheduler.submit([]()noexcept{});
+    ASSERT_TRUE(thirdTaskAdmission);
+    const auto third = *thirdTaskAdmission;
     ASSERT_TRUE(third.valid());
     scheduler.wait(third);
     scheduler.wait();
@@ -154,21 +154,21 @@ TEST(CpuTaskProfilingTests, CaptureRestartRejectsOldReadyAndExecutingTimers){
     CpuTaskHandle child;
     CpuTaskScheduler scheduler(0u);
     scheduler.setProfiling(true, 1u);
-    const auto cpuAdmission59 = scheduler.submit([&](){
+    const auto cpuTaskAdmission = scheduler.submit([&](){
         scheduler.setProfiling(false);
         scheduler.setProfiling(true, s_ExpectedDualCount);
-        const auto cpuAdmission60 = scheduler.submit([]()noexcept{});
-        ASSERT_TRUE(cpuAdmission60);
-        child = *cpuAdmission60;
+        const auto childTaskAdmission = scheduler.submit([]()noexcept{});
+        ASSERT_TRUE(childTaskAdmission);
+        child = *childTaskAdmission;
         EXPECT_TRUE(child.valid());
     }
     );
-    ASSERT_TRUE(cpuAdmission59);
-    const auto parent = *cpuAdmission59;
+    ASSERT_TRUE(cpuTaskAdmission);
+    const auto parent = *cpuTaskAdmission;
     ASSERT_TRUE(parent.valid());
-    const auto cpuAdmission61 = scheduler.submit([]()noexcept{});
-    ASSERT_TRUE(cpuAdmission61);
-    const auto oldReady = *cpuAdmission61;
+    const auto oldReadyTaskAdmission = scheduler.submit([]()noexcept{});
+    ASSERT_TRUE(oldReadyTaskAdmission);
+    const auto oldReady = *oldReadyTaskAdmission;
     ASSERT_TRUE(oldReady.valid());
     scheduler.wait(parent);
     CpuTaskProfileEvent events[16u];
@@ -203,9 +203,9 @@ TEST(CpuTaskProfilingTests, ForeignLabelsDoNotAliasLocalNames){
     const auto local = second.registerProfileLabel(name);
     EXPECT_NE(foreign.value, local.value);
     second.setProfiling(true);
-    const auto cpuAdmission62 = second.submit([]()noexcept{}, { .profileLabel = foreign });
-    ASSERT_TRUE(cpuAdmission62);
-    const auto task = *cpuAdmission62;
+    const auto taskAdmission = second.submit([]()noexcept{}, { .profileLabel = foreign });
+    ASSERT_TRUE(taskAdmission);
+    const auto task = *taskAdmission;
     ASSERT_TRUE(task.valid());
     second.wait(task);
     CpuTaskProfileEvent events[8u];
@@ -251,14 +251,14 @@ TEST(CpuTaskProfilingTests, ConcurrentCaptureChangesDoNotAffectTaskCompletionOrM
     while(!started.load(MemoryOrder::acquire))
         SleepMS(__hidden_cpu_task_profiling_tests::s_PollIntervalMS);
     for(u32 index = 0u; index < 256u; ++index){
-        const auto cpuAdmission63 = scope.submit([&]()noexcept{
+        const auto cpuTaskAdmission = scope.submit([&]()noexcept{
             SleepMS(__hidden_cpu_task_profiling_tests::s_PollIntervalMS);
             callbacks.fetch_add(1u, MemoryOrder::release);
         }
         );
-        EXPECT_TRUE(cpuAdmission63);
-        if(cpuAdmission63)
-            EXPECT_TRUE(cpuAdmission63->valid());
+        EXPECT_TRUE(cpuTaskAdmission);
+        if(cpuTaskAdmission)
+            EXPECT_TRUE(cpuTaskAdmission->valid());
     }
     while(callbacks.load(MemoryOrder::acquire) != 256u){
         CpuTaskProfileEvent events[8u];
@@ -276,9 +276,9 @@ TEST(CpuTaskProfilingTests, ConcurrentCaptureChangesDoNotAffectTaskCompletionOrM
     EXPECT_EQ(scheduler.statistics().completedTasks, 256u);
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
     scheduler.setProfiling(true, 1000u);
-    const auto cpuAdmission64 = scheduler.submit([]()noexcept{});
-    ASSERT_TRUE(cpuAdmission64);
-    const auto probe = *cpuAdmission64;
+    const auto probeTaskAdmission = scheduler.submit([]()noexcept{});
+    ASSERT_TRUE(probeTaskAdmission);
+    const auto probe = *probeTaskAdmission;
     ASSERT_TRUE(probe.valid());
     scheduler.wait(probe);
     CpuTaskProfileEvent events[16u];
@@ -298,16 +298,16 @@ TEST(CpuTaskProfilingTests, EmptyCompletedAndCanceledScopeJoinsRetainTheirProfil
     CpuTaskScope empty(scheduler, scheduler.registerProfileLabel(names[0u]));
     CpuTaskScope completed(scheduler, scheduler.registerProfileLabel(names[1u]));
     CpuTaskScope canceled(scheduler, scheduler.registerProfileLabel(names[s_ThirdElementIndex]));
-    const auto cpuAdmission65 = completed.submit([]()noexcept{});
-    ASSERT_TRUE(cpuAdmission65);
-    const auto task = *cpuAdmission65;
+    const auto taskAdmission = completed.submit([]()noexcept{});
+    ASSERT_TRUE(taskAdmission);
+    const auto task = *taskAdmission;
     ASSERT_TRUE(task.valid());
     scheduler.wait(task);
     u32 canceledCallbacks = 0u;
-    const auto cpuAdmission66 = canceled.submit([&]()noexcept{ ++canceledCallbacks; });
-    ASSERT_TRUE(cpuAdmission66);
-    if(cpuAdmission66)
-        ASSERT_TRUE(cpuAdmission66->valid());
+    const auto cpuTaskAdmission = canceled.submit([&]()noexcept{ ++canceledCallbacks; });
+    ASSERT_TRUE(cpuTaskAdmission);
+    if(cpuTaskAdmission)
+        ASSERT_TRUE(cpuTaskAdmission->valid());
     canceled.cancel();
     canceled.wait();
     EXPECT_EQ(canceledCallbacks, 0u);

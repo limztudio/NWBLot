@@ -28,7 +28,7 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_numeric_snapshot{
+namespace __hidden_ui_numeric_edit_snapshot{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -58,7 +58,7 @@ static constexpr TStringView s_RectNames[]{ NWB_TEXT("integer_bounds"), NWB_TEXT
 
 
 Array<u64, 30u> UiNumericEditSmokeScene::values()const noexcept{
-    using namespace __hidden_ui_numeric_snapshot;
+    using namespace __hidden_ui_numeric_edit_snapshot;
     const auto& integer = m_integer.draft();
     const auto& floating = m_float.draft();
     return { BitCast<u64>(m_integer.value()), BitCast<u64>(m_float.value()), static_cast<u64>(integer.text().size()),
@@ -74,7 +74,7 @@ Array<u64, 30u> UiNumericEditSmokeScene::values()const noexcept{
 
 void UiNumericEditSmokeScene::observeState(const Impl::Ui::DisplayMetrics& display, Impl::Ui::TextService& text){
     using namespace Impl::Ui;
-    using namespace __hidden_ui_numeric_snapshot;
+    using namespace __hidden_ui_numeric_edit_snapshot;
     UiNumericEditSnapshot current;
     current.values = values();
     current.display = display;

@@ -25,13 +25,13 @@ namespace Tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_assets_graphics_shader_dependency{
+namespace __hidden_assets_graphics_shader_dependency_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_MATERIAL_BIND_INCLUDES = "material_bind_includes";
+static constexpr AStringView s_MaterialBindIncludes = "material_bind_includes";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -103,8 +103,8 @@ TEST(AssetsGraphics, ShaderDependencyChecksumAliasesGeneratedRoot){
 
 
     const Path relativeIncludePath = Path(testArena.arena, "project") / "material_interfaces" / "test_surface.bind";
-    const Path firstGeneratedRoot = root / "first" / s_MATERIAL_BIND_INCLUDES;
-    const Path secondGeneratedRoot = root / "second" / s_MATERIAL_BIND_INCLUDES;
+    const Path firstGeneratedRoot = root / "first" / s_MaterialBindIncludes;
+    const Path secondGeneratedRoot = root / "second" / s_MaterialBindIncludes;
     const Path firstGeneratedInclude = firstGeneratedRoot / relativeIncludePath;
     const Path secondGeneratedInclude = secondGeneratedRoot / relativeIncludePath;
     EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(firstGeneratedInclude, "generated include\n"));
@@ -121,17 +121,17 @@ TEST(AssetsGraphics, ShaderDependencyChecksumAliasesGeneratedRoot){
 
     u64 firstChecksum = 0u;
     u64 secondChecksum = 0u;
-    const auto dependencyResult2 = shaderCook.computeDependencyChecksum(firstDependencies, includeDirectories, { { firstGeneratedRoot, s_MATERIAL_BIND_INCLUDES } }, scratchArena);
+    const auto dependencyResult2 = shaderCook.computeDependencyChecksum(firstDependencies, includeDirectories, { { firstGeneratedRoot, s_MaterialBindIncludes } }, scratchArena);
     ASSERT_TRUE(dependencyResult2);
     firstChecksum = dependencyResult2->checksum;
-    const auto dependencyResult1 = shaderCook.computeDependencyChecksum(secondDependencies, includeDirectories, { { secondGeneratedRoot, s_MATERIAL_BIND_INCLUDES } }, scratchArena);
+    const auto dependencyResult1 = shaderCook.computeDependencyChecksum(secondDependencies, includeDirectories, { { secondGeneratedRoot, s_MaterialBindIncludes } }, scratchArena);
     ASSERT_TRUE(dependencyResult1);
     secondChecksum = dependencyResult1->checksum;
     EXPECT_EQ(firstChecksum, secondChecksum);
 
     EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(secondGeneratedInclude, "changed generated include\n"));
     u64 changedChecksum = 0u;
-    const auto dependencyResult0 = shaderCook.computeDependencyChecksum(secondDependencies, includeDirectories, { { secondGeneratedRoot, s_MATERIAL_BIND_INCLUDES } }, scratchArena);
+    const auto dependencyResult0 = shaderCook.computeDependencyChecksum(secondDependencies, includeDirectories, { { secondGeneratedRoot, s_MaterialBindIncludes } }, scratchArena);
     ASSERT_TRUE(dependencyResult0);
     changedChecksum = dependencyResult0->checksum;
     EXPECT_NE(firstChecksum, changedChecksum);
@@ -144,7 +144,7 @@ TEST(AssetsGraphics, ShaderDependencyChecksumAliasesGeneratedRoot){
 
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
-    EXPECT_FALSE(shaderCook.computeDependencyChecksum(unaliasedDependencies, includeDirectories, { { firstGeneratedRoot, s_MATERIAL_BIND_INCLUDES } }, scratchArena));
+    EXPECT_FALSE(shaderCook.computeDependencyChecksum(unaliasedDependencies, includeDirectories, { { firstGeneratedRoot, s_MaterialBindIncludes } }, scratchArena));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("outside the declared dependency root aliases")));
 #endif
 

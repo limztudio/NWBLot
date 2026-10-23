@@ -129,23 +129,22 @@ Expected<f64> SliderBehavior::Normalize(const f64 minimum, const f64 maximum, co
     using namespace __hidden_ui_slider_behavior;
     if(!ValidRange(minimum, maximum) || !IsFinite(value))
         return MakeUnexpected(Failure{});
-    f64 normalized = 0.0;
+    SIMDVectorDouble normalizedValue = VectorDoubleZero();
     if(minimum != maximum && value > minimum){
         if(value >= maximum)
-            normalized = 1.0;
+            normalizedValue = VectorDoubleSplatOne();
         else{
             const SIMDVectorDouble span = VectorDoubleSubtract(VectorDoubleReplicate(maximum), VectorDoubleReplicate(minimum));
             if(IsFinite(VectorDoubleGetX(span)))
-                normalized = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleSubtract(VectorDoubleReplicate(value), VectorDoubleReplicate(minimum)), span));
+                normalizedValue = VectorDoubleDivide(VectorDoubleSubtract(VectorDoubleReplicate(value), VectorDoubleReplicate(minimum)), span);
             else{
                 const SIMDVectorDouble scaled = VectorDoubleMultiply(VectorDoubleSet(value, minimum, maximum, minimum), VectorDoubleReplicate(s_OverflowGuardScale));
-                normalized = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleSubtract(VectorDoubleSplatX(scaled), VectorDoubleSplatY(scaled)), VectorDoubleSubtract(VectorDoubleSplatZ(scaled), VectorDoubleSplatW(scaled))));
+                normalizedValue = VectorDoubleDivide(VectorDoubleSubtract(VectorDoubleSplatX(scaled), VectorDoubleSplatY(scaled)), VectorDoubleSubtract(VectorDoubleSplatZ(scaled), VectorDoubleSplatW(scaled)));
             }
         }
     }
-    if(!IsFinite(normalized))
+    if(!IsFinite(VectorDoubleGetX(normalizedValue)))
         return MakeUnexpected(Failure{});
-    const SIMDVectorDouble normalizedValue = VectorDoubleReplicate(normalized);
     return VectorDoubleGetX(VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(VectorDoubleSplatOne(), normalizedValue), VectorDoubleGreater(normalizedValue, VectorDoubleZero())));
 }
 
@@ -322,7 +321,7 @@ bool SliderBehavior::Drag(SliderState& state, const SliderOptions& options, cons
         const auto normalized = Normalize(options.minimum, options.maximum, baseline);
         if(!normalized)
             return false;
-        const SIMDVectorDouble normalizedValue = VectorDoubleAdd(VectorDoubleReplicate(*normalized), VectorDoubleDivide(VectorDoubleReplicate(delta), VectorDoubleReplicate(travel)));
+        const SIMDVectorDouble normalizedValue = VectorDoubleAdd(VectorDoubleReplicate(*normalized), VectorDoubleDivide(VectorDoubleSplatY(travelDelta), VectorDoubleSplatX(travelDelta)));
         const f64 dragged = VectorDoubleGetX(VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(VectorDoubleSplatOne(), normalizedValue), VectorDoubleGreater(normalizedValue, VectorDoubleZero())));
         const auto interpolated = Interpolate(options.minimum, options.maximum, dragged);
         if(!interpolated)

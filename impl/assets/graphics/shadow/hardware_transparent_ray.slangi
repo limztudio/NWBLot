@@ -53,7 +53,7 @@ bool nwbHwShadowBuildRay(const uint2 halfPixel, out RayDesc ray){
 
 void nwbHwShadowStoreVisibility(const uint2 halfPixel, const half3 visibility){
     const uint3 texel = uint3(halfPixel, g_NwbHardwareTransparentPush.lightSlot);
-    // Visibility visibility is a (0, 1) bounded factor; half math matches the finalized transmittance.
+    // Visibility is a (0, 1) bounded factor; half math matches the finalized transmittance.
     half3 accumulated = visibility / half(g_NwbHardwareTransparentPush.sampleCount);
     if(g_NwbHardwareTransparentPush.sampleIndex != 0u)
         accumulated += half3(nwbHeapStorageImage2DArrayFloat4(g_NwbHardwareTransparentPush.outputStorageSlot)[texel].rgb);

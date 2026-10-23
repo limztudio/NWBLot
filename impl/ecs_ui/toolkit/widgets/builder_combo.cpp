@@ -140,8 +140,8 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     item.style = m_style;
     item.enabled = options.enabled;
     item.combo = static_cast<u32>(m_scope->m_combos.size());
-    item.padding = frame.style.padding;
-    Point minimum;
+    SIMDVectorSingle minimumSize = VectorZero();
+    SIMDVectorSingle itemPadding = VectorSet(frame.style.padding.left, frame.style.padding.top, frame.style.padding.right, frame.style.padding.bottom);
     const Name names[]{ frame.style.normal, frame.style.hover, frame.style.open, frame.style.focused, frame.style.disabled };
     for(const auto& name : names){
         const UiSkinRegion* skinRegion = region(name, frame.style.fallback);
@@ -149,15 +149,12 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
             m_context.fail();
             return {};
         }
-        const SIMDVectorSingle minimumCurrent = VectorSet(minimum.x, minimum.y, minimum.x, minimum.y);
-        const SIMDVectorSingle minimumCandidate = VectorSet(skinRegion->minimumWidth, skinRegion->minimumHeight, skinRegion->minimumWidth, skinRegion->minimumHeight);
-        const SIMDVectorSingle minimumMaximum = VectorSelect(minimumCandidate, minimumCurrent, VectorGreater(minimumCurrent, minimumCandidate));
-        minimum = { VectorGetX(minimumMaximum), VectorGetY(minimumMaximum) };
-        const SIMDVectorSingle itempaddingCurrent = VectorSet(item.padding.left, item.padding.top, item.padding.right, item.padding.bottom);
-        const SIMDVectorSingle itempaddingCandidate = VectorSet(skinRegion->padding.left, skinRegion->padding.top, skinRegion->padding.right, skinRegion->padding.bottom);
-        const SIMDVectorSingle itempaddingMaximum = VectorSelect(itempaddingCandidate, itempaddingCurrent, VectorGreater(itempaddingCurrent, itempaddingCandidate));
-        item.padding = { VectorGetX(itempaddingMaximum), VectorGetY(itempaddingMaximum), VectorGetZ(itempaddingMaximum), VectorGetW(itempaddingMaximum) };
+        const SIMDVectorSingle minimumCandidate = VectorSet(skinRegion->minimumWidth, skinRegion->minimumHeight, 0.0f, 0.0f);
+        minimumSize = VectorSelect(minimumCandidate, minimumSize, VectorGreater(minimumSize, minimumCandidate));
+        const SIMDVectorSingle paddingCandidate = VectorSet(skinRegion->padding.left, skinRegion->padding.top, skinRegion->padding.right, skinRegion->padding.bottom);
+        itemPadding = VectorSelect(paddingCandidate, itemPadding, VectorGreater(itemPadding, paddingCandidate));
     }
+    item.padding = { VectorGetX(itemPadding), VectorGetY(itemPadding), VectorGetZ(itemPadding), VectorGetW(itemPadding) };
     const UiSkinRegion* arrow = region(frame.style.arrow, frame.style.arrowFallback);
     if(!arrow){
         m_context.fail();
@@ -203,10 +200,10 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
         m_context.fail();
         return {};
     }
-    const SIMDVectorSingle listpaddingCurrent = VectorSet(list.padding.left, list.padding.top, list.padding.right, list.padding.bottom);
-    const SIMDVectorSingle listpaddingCandidate = VectorSet(background->padding.left, background->padding.top, background->padding.right, background->padding.bottom);
-    const SIMDVectorSingle listpaddingMaximum = VectorSelect(listpaddingCandidate, listpaddingCurrent, VectorGreater(listpaddingCurrent, listpaddingCandidate));
-    list.padding = { VectorGetX(listpaddingMaximum), VectorGetY(listpaddingMaximum), VectorGetZ(listpaddingMaximum), VectorGetW(listpaddingMaximum) };
+    const SIMDVectorSingle listPaddingCurrent = VectorSet(list.padding.left, list.padding.top, list.padding.right, list.padding.bottom);
+    const SIMDVectorSingle listPaddingCandidate = VectorSet(background->padding.left, background->padding.top, background->padding.right, background->padding.bottom);
+    const SIMDVectorSingle listPaddingMaximum = VectorSelect(listPaddingCandidate, listPaddingCurrent, VectorGreater(listPaddingCurrent, listPaddingCandidate));
+    list.padding = { VectorGetX(listPaddingMaximum), VectorGetY(listPaddingMaximum), VectorGetZ(listPaddingMaximum), VectorGetW(listPaddingMaximum) };
     if(!prepareListMetrics(list) || !comboMatches(frame)){
         m_context.fail();
         return {};
@@ -223,8 +220,7 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     description.height = options.height;
     const SIMDVectorSingle content = VectorMax(VectorSet(measured.x, measured.y, 0.0f, 0.0f), VectorSet(measured.x, frame.arrowExtent, 0.0f, 0.0f));
     const SIMDVectorSingle contentSize = VectorAdd(VectorAdd(content, VectorSet(frame.arrowExtent, 0.0f, 0.0f, 0.0f)), VectorSet(frame.style.arrowGap, 0.0f, 0.0f, 0.0f));
-    const SIMDVectorSingle paddedSize = VectorAdd(VectorAdd(contentSize, VectorSet(item.padding.left, item.padding.top, 0.0f, 0.0f)), VectorSet(item.padding.right, item.padding.bottom, 0.0f, 0.0f));
-    const SIMDVectorSingle minimumSize = VectorSet(minimum.x, minimum.y, 0.0f, 0.0f);
+    const SIMDVectorSingle paddedSize = VectorAdd(VectorAdd(contentSize, VectorSelect(VectorZero(), itemPadding, s_SIMDMaskXY)), VectorSwizzle<2, 3, 2, 3>(itemPadding));
     const SIMDVectorSingle intrinsicSize = VectorSelect(paddedSize, minimumSize, VectorGreater(minimumSize, paddedSize));
     description.intrinsicSize = { VectorGetX(intrinsicSize), VectorGetY(intrinsicSize) };
     const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);

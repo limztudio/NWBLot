@@ -45,7 +45,7 @@ static const uint NWB_REFLECTION_SCREEN_WORK_LIMIT_SHIFT = 16u;
 static const uint NWB_REFLECTION_SCREEN_WORK_LIMIT_MASK = 255u;
 static const uint NWB_REFLECTION_SCREEN_WORK_BYPASS_SHIFT = 24u;
 
-// Shared integer operations do not require optional subgroup ballot or 64-bit atomic support. Screen work packs iterations in 16 bits (at most 128*256), then limit misses and bypassed pixels in 8 bits each (at most 128 each).
+// Shared integer operations need no subgroup ballot or 64-bit atomics. Screen work packs iterations in 16 bits (at most 128*256), misses and bypassed pixels in 8 bits each (at most 128).
 groupshared uint g_NwbReflectionCandidateMasks[NWB_REFLECTION_CANDIDATE_MASK_COUNT];
 groupshared uint g_NwbReflectionCandidateBase;
 groupshared uint g_NwbReflectionObservations[NWB_REFLECTION_OBSERVATION_SURFACE_COUNT];
@@ -68,7 +68,7 @@ NwbReflectionFeedbackTile nwbReflectionLoadFeedbackTile(const uint2 pixel, const
         return tile;
     const uint tilesX = (g_NwbReflectionParameters.dimensionsAndRoute.x + NWB_REFLECTION_FEEDBACK_GROUP_SIZE - 1u) / NWB_REFLECTION_FEEDBACK_GROUP_SIZE;
     const uint tilesY = (g_NwbReflectionParameters.dimensionsAndRoute.y + NWB_REFLECTION_FEEDBACK_GROUP_SIZE - 1u) / NWB_REFLECTION_FEEDBACK_GROUP_SIZE;
-    // The CPU declares this previous-bank read only for a compatible accepted observation. Check the published header before accessing tile entries; invalid selectors are never touched when the frame flag is absent.
+    // The CPU declares this previous-bank read only for a compatible accepted observation. Check the published header before touching entries; invalid selectors are never touched when absent.
     const uint4 header = nwbHeapRawBuffer(g_NwbReflectionParameters.feedbackReadSlot).Load4(0u);
     if((header.w & NWB_REFLECTION_FEEDBACK_HEADER_VALID) == 0u || header.z != tilesX * tilesY || header.y != g_NwbReflectionParameters.feedbackProbeIndex - 1u)
         return tile;
@@ -80,7 +80,7 @@ NwbReflectionFeedbackTile nwbReflectionLoadFeedbackTile(const uint2 pixel, const
     tile.state = entry;
     tile.previousValid = true;
     const uint budget = min(g_NwbReflectionParameters.maxHardwareRays, g_NwbReflectionParameters.queueCapacity);
-    // Reserving groups can arrive in a different order when SSR is skipped. Every potential receiver must fit, including other rough pixels whose current VNDF sample may differ from the last accepted frame.
+    // Reserving groups can arrive in a different order when SSR is skipped. Every potential receiver must fit, including other rough pixels whose current sample may differ from the last frame.
     if(entry == NWB_REFLECTION_FEEDBACK_DORMANT && header.x <= budget){
         const uint phase = nwbReflectionSamplingHash(entryIndex) & (NWB_REFLECTION_FEEDBACK_PROBE_PERIOD - 1u);
         tile.probe = (g_NwbReflectionParameters.feedbackProbeIndex & (NWB_REFLECTION_FEEDBACK_PROBE_PERIOD - 1u)) == phase;
@@ -200,7 +200,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint groupIndex : SV_Gro
     }
 
     if(sharedWork){
-        // Main owns the entire synchronization network. Tail lanes participate even on diagnostic-only Screen or Disabled routes. A zero hardware budget still counts candidates; diagnostics never determine routing.
+        // Main owns the entire synchronization network. Tail lanes participate even on diagnostic-only Screen or Disabled routes. A zero budget still counts candidates; diagnostics never route.
         GroupMemoryBarrierWithGroupSync();
         const uint maskIndex = groupIndex >> NWB_REFLECTION_CANDIDATE_WORD_SHIFT;
         const uint bit = 1u << (groupIndex & NWB_REFLECTION_CANDIDATE_WORD_LANE_MASK);

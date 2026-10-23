@@ -89,9 +89,9 @@ bool RendererGatherBenchmarkProbe::poll(const Core::Perf::SessionReport& report,
     }
     u32 scope = 0u;
     for(; scope + 1u < s_CpuScopeCount; scope += 2u){
-        const SIMDVectorDouble milliseconds = SIMDVectorDouble{ sample.milliseconds[scope], sample.milliseconds[scope + 1u] } * __hidden_renderer_gather_benchmark_probe::s_MillisecondsPerSecond;
-        sample.milliseconds[scope] = milliseconds.x;
-        sample.milliseconds[scope + 1u] = milliseconds.y;
+        const SIMDVectorDouble milliseconds = VectorDoubleScale(VectorDoubleSet(sample.milliseconds[scope], sample.milliseconds[scope + 1u], 0.0, 0.0), __hidden_renderer_gather_benchmark_probe::s_MillisecondsPerSecond);
+        sample.milliseconds[scope] = VectorDoubleGetX(milliseconds);
+        sample.milliseconds[scope + 1u] = VectorDoubleGetY(milliseconds);
     }
     if(scope < s_CpuScopeCount)
         sample.milliseconds[scope] = VectorDoubleGetX(VectorDoubleScale(VectorDoubleReplicate(sample.milliseconds[scope]), __hidden_renderer_gather_benchmark_probe::s_MillisecondsPerSecond));
@@ -168,14 +168,14 @@ bool RendererGatherBenchmarkProbe::write(const AStringView path, const AStringVi
     }
     for(usize index = 0u; index < m_gpu.size(); index += 2u){
         const usize count = Min(usize{ 2u }, m_gpu.size() - index);
-        const SIMDVectorDouble milliseconds = SIMDVectorDouble{ m_gpu[index].timing.seconds, count > 1u ? m_gpu[index + 1u].timing.seconds : 0.0 } * __hidden_renderer_gather_benchmark_probe::s_MillisecondsPerSecond;
+        const SIMDVectorDouble milliseconds = VectorDoubleScale(VectorDoubleSet(m_gpu[index].timing.seconds, count > 1u ? m_gpu[index + 1u].timing.seconds : 0.0, 0.0, 0.0), __hidden_renderer_gather_benchmark_probe::s_MillisecondsPerSecond);
         for(usize lane = 0u; lane < count; ++lane){
             const GpuSample& sample = m_gpu[index + lane];
             output << "{\"type\":\"gpu\",\"scope\":\"" << s_GpuNames[sample.scope]
                 << "\",\"publish_frame\":" << sample.timing.publishFrameIndex
                 << ",\"first_source_frame\":" << sample.timing.firstSampleFrameIndex
                 << ",\"last_source_frame\":" << sample.timing.lastSampleFrameIndex
-                << ",\"total_ms\":" << milliseconds[lane]
+                << ",\"total_ms\":" << VectorDoubleGetByIndex(milliseconds, lane)
                 << ",\"samples\":" << sample.timing.sampleCount << "}\n";
         }
     }

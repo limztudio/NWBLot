@@ -59,16 +59,16 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
     const half4 gc = nwbShadowMergeGeometry(g_NwbShadowMergePush.geometryCurrSlot, texel);
     const bool valid = gc.w > half(NWB_SHADOW_GEOMETRY_VALID_THRESHOLD);
-    const float3 Nc = nwbOctDecodeNormal(float2(gc.xy));
+    const float3 currentNormal = nwbOctDecodeNormal(float2(gc.xy));
     const float currentCameraDistance = float(gc.z);
 
     // Ceil-sized receiver grids keep every top-left source coordinate inside the full-resolution target.
     const int2 full = int2(h * g_NwbShadowMergePush.receiverFactor);
     const half3 worldPositionSample = half3(nwbHeapSampledImage2D(g_NwbShadowMergePush.worldPositionSlot).Load(int3(full, 0)).xyz);
-    const float3 Wc = float3(worldPositionSample);
+    const float3 currentWorldPosition = float3(worldPositionSample);
 
-    const NwbShadowMergeReprojection reprojection = nwbShadowReprojectHistory(Wc, g_NwbShadowMergePush.prevWorldToClip, g_NwbShadowMergePush.historyValid, halfWidth, halfHeight);
-    const bool historyAccepted = nwbShadowMergeHistoryAccepted(reprojection, valid, g_NwbShadowMergePush.geometryPrevSlot, Nc, currentCameraDistance);
+    const NwbShadowMergeReprojection reprojection = nwbShadowReprojectHistory(currentWorldPosition, g_NwbShadowMergePush.prevWorldToClip, g_NwbShadowMergePush.historyValid, halfWidth, halfHeight);
+    const bool historyAccepted = nwbShadowMergeHistoryAccepted(reprojection, valid, g_NwbShadowMergePush.geometryPrevSlot, currentNormal, currentCameraDistance);
 
     uint validTapMask = 0u;
     if(valid){

@@ -163,7 +163,7 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
             materialInfo = materialInfoResult->get();
             if(materialInfo->transparent)
                 m_rayTracingState.m_sceneHasTransparentOccluder = true;
-            // The trace surface dispatcher reads this material's Texture2D fields through non-uniform bindless slots. Retain the exact resolved handles during preflight
+            // The trace surface dispatcher reads this material's Texture2D fields through non-uniform bindless slots. Retain the exact resolved handles during preflight.
             if(materialInfo->surfaceDispatchId != Limit<u32>::s_Max && !appendPreparedShadowTraceMaterialSampledTextures(*materialInfo, sampledTextureCollector))
                 return false;
             const auto materialContext = m_materialSystem.appendShadowOccluderMaterialContext(entity, *materialInfo, transformPtr, shadowMaterialTypedBytes, shadowConstantTypedRanges, shadowMutableTypedRanges);

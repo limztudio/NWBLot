@@ -18,7 +18,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_win32_clipboard{
+namespace __hidden_win32_clipboard_service{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -119,7 +119,7 @@ void Win32ClipboardService::cancelNativeRequest(const ClipboardRequestToken toke
 }
 
 ClipboardStatus::Enum Win32ClipboardService::readNativeText(AString<Alloc::GlobalArena>& text){
-    using namespace __hidden_win32_clipboard;
+    using namespace __hidden_win32_clipboard_service;
     if(!OpenClipboard(static_cast<HWND>(m_nativeWindowHandle.get()))){
         NWB_LOGGER_WARNING(NWB_TEXT("Clipboard: OpenClipboard unavailable ({})"), GetLastError());
         return ClipboardStatus::Unavailable;
@@ -185,7 +185,7 @@ ClipboardStatus::Enum Win32ClipboardService::readNativeText(AString<Alloc::Globa
 }
 
 ClipboardStatus::Enum Win32ClipboardService::writeNativeText(const AStringView text){
-    using namespace __hidden_win32_clipboard;
+    using namespace __hidden_win32_clipboard_service;
     m_wideText.clear();
     if(!text.empty()){
         const i32 length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<i32>(text.size()), nullptr, 0);

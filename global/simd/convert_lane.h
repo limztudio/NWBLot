@@ -93,8 +93,8 @@ NWB_INLINE void NWB_SIMD_CALL StoreUInt3Bits(SIMDVectorSingle value, u32 (&out)[
 }
 #endif
 
-template<typename secondRow>
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadFloat3Components(const secondRow& src)noexcept{
+template<typename T>
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadFloat3Components(const T& src)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return MakeF32(src.x, src.y, src.z, 0.0f);
 #elif defined(NWB_HAS_NEON)
@@ -109,8 +109,8 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadFloat3Components(const secondRow& 
 #endif
 }
 
-template<typename secondRow>
-NWB_INLINE void NWB_SIMD_CALL StoreFloat3Components(SIMDVectorSingle src, secondRow& dst)noexcept{
+template<typename T>
+NWB_INLINE void NWB_SIMD_CALL StoreFloat3Components(SIMDVectorSingle src, T& dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
     dst.x = src.f[0];
     dst.y = src.f[1];
@@ -126,8 +126,8 @@ NWB_INLINE void NWB_SIMD_CALL StoreFloat3Components(SIMDVectorSingle src, second
 }
 
 #if defined(NWB_HAS_SCALAR)
-template<typename secondRow>
-NWB_INLINE void StoreFloat34Scalar(SIMDMatrix src, secondRow& dst)noexcept{
+template<typename T>
+NWB_INLINE void StoreFloat34Scalar(SIMDMatrix src, T& dst)noexcept{
     dst._11 = src._11;
     dst._12 = src._12;
     dst._13 = src._13;
@@ -144,8 +144,8 @@ NWB_INLINE void StoreFloat34Scalar(SIMDMatrix src, secondRow& dst)noexcept{
     dst._34 = src._34;
 }
 
-template<typename secondRow>
-NWB_INLINE void StoreFloat44Scalar(SIMDMatrix src, secondRow& dst)noexcept{
+template<typename T>
+NWB_INLINE void StoreFloat44Scalar(SIMDMatrix src, T& dst)noexcept{
     StoreFloat34Scalar(src, dst);
 
     dst._41 = src._41;
@@ -155,8 +155,8 @@ NWB_INLINE void StoreFloat44Scalar(SIMDMatrix src, secondRow& dst)noexcept{
 }
 #endif
 
-template<typename secondRow>
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat34Scalar(const secondRow& src)noexcept{
+template<typename T>
+NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat34Scalar(const T& src)noexcept{
     SIMDMatrix result{};
     result.v[0] = MakeF32(src._11, src._12, src._13, src._14);
     result.v[1] = MakeF32(src._21, src._22, src._23, src._24);
@@ -165,16 +165,16 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat34Scalar(const secondRow& src)noexc
     return result;
 }
 
-template<typename secondRow>
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat44Scalar(const secondRow& src)noexcept{
+template<typename T>
+NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat44Scalar(const T& src)noexcept{
     SIMDMatrix result = LoadFloat34Scalar(src);
     result.v[3] = MakeF32(src._41, src._42, src._43, src._44);
     return result;
 }
 
 #if defined(NWB_HAS_NEON)
-template<typename secondRow>
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat34Neon(const secondRow& src)noexcept{
+template<typename T>
+NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat34Neon(const T& src)noexcept{
     SIMDMatrix result;
     result.v[0] = vld1q_f32(&src._11);
     result.v[1] = vld1q_f32(&src._21);
@@ -183,8 +183,8 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat34Neon(const secondRow& src)noexcep
     return result;
 }
 
-template<typename secondRow>
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat44Neon(const secondRow& src)noexcept{
+template<typename T>
+NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat44Neon(const T& src)noexcept{
     SIMDMatrix result = LoadFloat34Neon(src);
     result.v[3] = vld1q_f32(&src._41);
     return result;
@@ -201,8 +201,8 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL LoadMatrixRow4(const f32& row)noexcept
         return _mm_loadu_ps((&row));
 }
 
-template<bool Aligned, typename secondRow>
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat34Sse(const secondRow& src)noexcept{
+template<bool Aligned, typename T>
+NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat34Sse(const T& src)noexcept{
     SIMDMatrix result;
     result.v[0] = LoadMatrixRow4<Aligned>(src._11);
     result.v[1] = LoadMatrixRow4<Aligned>(src._21);
@@ -211,8 +211,8 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat34Sse(const secondRow& src)noexcept
     return result;
 }
 
-template<bool Aligned, typename secondRow>
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat44Sse(const secondRow& src)noexcept{
+template<bool Aligned, typename T>
+NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat44Sse(const T& src)noexcept{
     SIMDMatrix result = LoadFloat34Sse<Aligned>(src);
     result.v[3] = LoadMatrixRow4<Aligned>(src._41);
     return result;
@@ -220,8 +220,8 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat44Sse(const secondRow& src)noexcept
 #endif
 
 #if defined(NWB_HAS_SCALAR)
-template<typename secondRow>
-NWB_INLINE void NWB_SIMD_CALL StoreInt4Scalar(SIMDVectorSingle src, secondRow& dst)noexcept{
+template<typename T>
+NWB_INLINE void NWB_SIMD_CALL StoreInt4Scalar(SIMDVectorSingle src, T& dst)noexcept{
     dst.x = static_cast<i32>(src.u[0]);
     dst.y = static_cast<i32>(src.u[1]);
     dst.z = static_cast<i32>(src.u[2]);

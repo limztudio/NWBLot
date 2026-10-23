@@ -23,15 +23,15 @@ class GpuGraphSubmissionTransaction;
 
 
 // One accepted terminal packet that contributes to a graph-to-external resource handoff.
-// Several disjoint texture subresource ranges may be published by different packets; a consumer waits on the returned compact token frontier before opening the handoff's merged native state source.
+// Several disjoint texture ranges may be published by different packets; a consumer waits on the returned token frontier before opening the handoff's merged state source.
 struct GpuTaskGraphExternalResourceHandoffProducer{
     GpuTaskId producerTask;
     GpuPhysicalQueueId sourceQueue;
     QueueSubmissionToken token;
 };
 
-// One exact terminal range that contributes to a graph-to-external handoff.
-// A later graph can turn each range into an immutable initial-owner source with the corresponding graph-local completion token; direct native consumers normally use the compact `waitTokens` frontier instead.
+// One exact terminal range contributing to a graph-to-external handoff.
+// A later graph can turn each range into an immutable initial-owner source; direct native consumers normally use the compact `waitTokens` frontier instead.
 struct GpuTaskGraphExternalResourceHandoffRange{
     GpuTaskResourceRange range;
     GpuTaskId producerTask;

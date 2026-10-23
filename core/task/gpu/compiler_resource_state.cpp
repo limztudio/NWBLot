@@ -249,11 +249,11 @@ namespace GpuTaskGraphCompilerDetail{
                 return false;
 
             // A task owns its internal resource ordering.
-            // Previously declared portions remain local CommandList work, while newly introduced texture subresources or buffer bytes still receive graph seeds and transitions.
+            // Newly introduced subresources or bytes get graph seeds and transitions; previously declared portions stay local CommandList work.
             // Acceleration structures retain their whole-resource path.
             const bool alreadyPlannedByTask = resource.type == GpuGraphResourceType::AccelStruct && taskUseHistory.first(use.resource) < useIndex;
             if(alreadyPlannedByTask){
-                // The task thunk owns this local transition, but the declared final state/access must still become the source for later tasks, packet seeds, ownership handoffs, and terminal exports.
+                // The task thunk owns this local transition, but the declared final state/access must still source later tasks, packet seeds, ownership handoffs, and terminal exports.
                 // Do not emit another packet-boundary barrier for it here.
                 if(!resourceHistory.append(TrackedCompiledResourceState{ .resource = use.resource, .range = (*plannedRange), .task = taskID, .state = use.requiredState, .access = use.access, .queue = compiledTask.queue, }))
                     return false;
@@ -303,7 +303,7 @@ namespace GpuTaskGraphCompilerDetail{
                     const ResourceStates::Mask before = previousState ? previousState->state : resource.initialState;
                     const bool hasInitialOwnerStateSeed = !previousState && initialOwnerHandoffSource != nullptr;
                     // An initial-owner handoff opens the packet with its immutable producer snapshot, which materializes the authoritative native starting state.
-                    // A known graph initial state still needs an explicit marker after the acquire: it can differ from that snapshot and can be a no-op transition whose declared state must survive into the packet snapshot.
+                    // A known graph initial state still needs an explicit marker after the acquire: it can differ from that snapshot and can be a no-op transition whose declared state must survive.
                     const bool materializesGraphInitialState = !previousState && resource.initialState != ResourceStates::Unknown;
                     const bool requiresExplicitInitialStateSource = !previousState && !hasInitialOwnerStateSeed && resource.hasBackendResource && resource.initialState == ResourceStates::Unknown && IsReadAccess(use.access);
                     if(!previousState && initialOwnerHandoffSource){

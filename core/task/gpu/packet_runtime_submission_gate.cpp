@@ -96,7 +96,7 @@ void GpuGraphSubmissionTransaction::SubmissionWriterReservation::reset()noexcept
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_submission_gate{
+namespace __hidden_gpu_packet_runtime_submission_gate{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -121,9 +121,9 @@ thread_local GpuGraphSubmissionTransaction::SubmissionOperation* GpuGraphSubmiss
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(const GpuGraphSubmissionTransaction& transaction, const SubmissionOperationMode mode, const GpuRecordedGraph::ArtifactOperation* const borrowedArtifact)noexcept{
-    constexpr u32 s_SubmissionGateWriterBit = __hidden_submission_gate::s_WriterBit;
-    constexpr u32 s_SubmissionGateReaderMask = __hidden_submission_gate::s_ReaderMask;
+GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(const GpuGraphSubmissionTransaction& transaction, const SubmissionOperationMode::Enum mode, const GpuRecordedGraph::ArtifactOperation* const borrowedArtifact)noexcept{
+    constexpr u32 s_SubmissionGateWriterBit = __hidden_gpu_packet_runtime_submission_gate::s_WriterBit;
+    constexpr u32 s_SubmissionGateReaderMask = __hidden_gpu_packet_runtime_submission_gate::s_ReaderMask;
     // Any reentry, for the same or another transaction, is a prompt rejection regardless of target availability.
     // An exception finalizer can therefore run after its local gates unwind without retaining an unrelated transaction gate on this thread.
     if(s_ActiveOperation)
@@ -221,7 +221,7 @@ GpuGraphSubmissionTransaction::SubmissionOperation::~SubmissionOperation()noexce
     if(m_composite)
         m_transaction->m_compositeOperationActive.clear(MemoryOrder::release);
     if(m_exclusive){
-        if(m_transaction->m_submissionGateState.load(MemoryOrder::acquire) != __hidden_submission_gate::s_WriterBit)
+        if(m_transaction->m_submissionGateState.load(MemoryOrder::acquire) != __hidden_gpu_packet_runtime_submission_gate::s_WriterBit)
             NWB_FATAL_ASSERT_MSG(false, "GPU graph submission writer operation lost its exact gate claim");
         m_transaction->m_submissionGateState.store(0u, MemoryOrder::release);
         m_transaction->m_submissionGateState.notify_all();
@@ -229,9 +229,9 @@ GpuGraphSubmissionTransaction::SubmissionOperation::~SubmissionOperation()noexce
     }
     else{
         const u32 previousState = m_transaction->m_submissionGateState.fetch_sub(1u, MemoryOrder::release);
-        if((previousState & __hidden_submission_gate::s_ReaderMask) == 0u)
+        if((previousState & __hidden_gpu_packet_runtime_submission_gate::s_ReaderMask) == 0u)
             NWB_FATAL_ASSERT_MSG(false, "GPU graph submission reader ownership underflowed");
-        if((previousState & __hidden_submission_gate::s_ReaderMask) == 1u)
+        if((previousState & __hidden_gpu_packet_runtime_submission_gate::s_ReaderMask) == 1u)
             m_transaction->m_submissionGateState.notify_all();
     }
 }

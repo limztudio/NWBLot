@@ -297,7 +297,7 @@ bool GpuTaskGraphCompiler::compile(
 
     const Timer resourceStatePlanningBegin = TimerNow();
     // Start with graph-planned packet state seeds, transitions, UAV dependencies, and exclusive-family ownership releases.
-    // A state seed selects the actual final-state snapshot of a graph-internal producer, so it also carries the release destination into CommandList::open where the paired Vulkan acquire is emitted before the consumer.
+    // A state seed selects the final-state snapshot of a producer, so it also carries the release destination into CommandList::open where the paired acquire is emitted before use.
     Vector<TrackedCompiledResourceState, Alloc::ScratchArena> trackedResourceStates(scratchArena);
     Vector<PendingCompiledEpilogueBarrier, Alloc::ScratchArena> pendingEpilogueBarriers(scratchArena);
     Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena> initialOwnershipDependencies(scratchArena);

@@ -36,13 +36,11 @@ constexpr AStringView s_GuardMode = "guard";
 
 using Intersection = bool (NWB_SIMD_CALL *)(SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble)noexcept;
 
-// Fixture storage for one triangle pair.
 struct TrianglePair{
     Double4 first[3];
     Double4 second[3];
 };
 
-// Loaded triangle pair used by the checks.
 struct TrianglePairVectors{
     SIMDVectorDouble first[3];
     SIMDVectorDouble second[3];
@@ -148,7 +146,6 @@ NWB_NOINLINE bool NWB_SIMD_CALL CurrentDot3Baseline(const SIMDVectorDouble a0, c
     const SIMDVectorDouble relativeA1 = VectorDoubleSubtract(first1, first0), relativeA2 = VectorDoubleSubtract(first2, first0);
     const SIMDVectorDouble relativeB0 = VectorDoubleSubtract(second0, first0), relativeB1 = VectorDoubleSubtract(second1, first0), relativeB2 = VectorDoubleSubtract(second2, first0);
     const auto differenceRoundoff = [](const SIMDVectorDouble point, const SIMDVectorDouble origin, const SIMDVectorDouble difference)noexcept{
-        // TwoDiff recovers the subtraction residual without expanding the allowance with a large common translation.
         const SIMDVectorDouble virtualOrigin = VectorDoubleSubtract(point, difference), virtualPoint = VectorDoubleAdd(difference, virtualOrigin);
         return VectorDoubleAdd(VectorDoubleSubtract(point, virtualPoint), VectorDoubleSubtract(virtualOrigin, origin));
     };
@@ -157,7 +154,6 @@ NWB_NOINLINE bool NWB_SIMD_CALL CurrentDot3Baseline(const SIMDVectorDouble a0, c
     const SIMDVectorDouble edgeA0 = relativeA1, edgeA1 = VectorDoubleSubtract(first2, first1), edgeA2 = VectorDoubleNegate(relativeA2);
     const SIMDVectorDouble edgeB0 = VectorDoubleSubtract(second1, second0), edgeB1 = VectorDoubleSubtract(second2, second1), edgeB2 = VectorDoubleSubtract(second0, second2);
     const auto crossAxis = [](const SIMDVectorDouble first, const SIMDVectorDouble second)noexcept{
-        // Separate products make parallel directions produce a zero axis instead of an explicit-FMA residual.
         const SIMDVectorDouble positive = VectorDoubleMultiply(VectorDoubleSwizzle<1, 2, 0, 3>(first), VectorDoubleSwizzle<2, 0, 1, 3>(second));
         const SIMDVectorDouble negative = VectorDoubleMultiply(VectorDoubleSwizzle<2, 0, 1, 3>(first), VectorDoubleSwizzle<1, 2, 0, 3>(second));
         return VectorDoubleSubtract(positive, negative);
@@ -167,7 +163,6 @@ NWB_NOINLINE bool NWB_SIMD_CALL CurrentDot3Baseline(const SIMDVectorDouble a0, c
         const auto projectionInterval = [&](const SIMDVectorDouble relative, const SIMDVectorDouble roundoff)noexcept{
             const SIMDVectorDouble projection = VectorDouble3Dot(relative, axis);
             const SIMDVectorDouble magnitude = VectorDouble3Dot(VectorDoubleAbs(relative), absoluteAxis), coordinateError = VectorDouble3Dot(VectorDoubleAbs(roundoff), absoluteAxis);
-            // Three products and two additions need an absolute cancellation bound; eight epsilons also cover rounding the bound and endpoints.
             const SIMDVectorDouble allowance = VectorDoubleMultiplyAddExpression(VectorDoubleAdd(magnitude, coordinateError), VectorDoubleReplicate(0x1p-49), coordinateError);
             return VectorDoubleSelect(VectorDoubleSubtract(projection, allowance), VectorDoubleAdd(projection, allowance), s_DoubleSIMDMaskY);
         };
@@ -184,7 +179,6 @@ NWB_NOINLINE bool NWB_SIMD_CALL CurrentDot3Baseline(const SIMDVectorDouble a0, c
         return false;
 
     if(VectorDouble3Equal(normalA, zero) && VectorDouble3Equal(normalB, zero)){
-        // Closed degenerate triangles retain their point/segment hulls, including collinear endpoint contact.
         const SIMDVectorDouble directionA = VectorDouble3Equal(edgeA0, zero) ? edgeA1 : edgeA0, directionB = VectorDouble3Equal(edgeB0, zero) ? edgeB1 : edgeB0;
         const SIMDVectorDouble normal = crossAxis(directionA, directionB);
         if(separated(directionA) || separated(directionB) || separated(normal) || separated(crossAxis(directionA, normal)) || separated(crossAxis(directionB, normal)))
@@ -196,7 +190,6 @@ NWB_NOINLINE bool NWB_SIMD_CALL CurrentDot3Baseline(const SIMDVectorDouble a0, c
     }
 
     const auto edgeSeparated = [&](const SIMDVectorDouble edge)noexcept{
-        // In-plane edge normals are necessary when the triangles are coplanar or one hull is degenerate.
         return separated(crossAxis(edge, normalA)) || separated(crossAxis(edge, normalB)) || separated(crossAxis(edge, edgeB0)) || separated(crossAxis(edge, edgeB1)) || separated(crossAxis(edge, edgeB2));
     };
     if(edgeSeparated(edgeA0) || edgeSeparated(edgeA1) || edgeSeparated(edgeA2))
@@ -219,7 +212,6 @@ NWB_NOINLINE bool NWB_SIMD_CALL ZeroAxis(const SIMDVectorDouble a0, const SIMDVe
     const SIMDVectorDouble relativeA1 = VectorDoubleSubtract(first1, first0), relativeA2 = VectorDoubleSubtract(first2, first0);
     const SIMDVectorDouble relativeB0 = VectorDoubleSubtract(second0, first0), relativeB1 = VectorDoubleSubtract(second1, first0), relativeB2 = VectorDoubleSubtract(second2, first0);
     const auto differenceRoundoff = [](const SIMDVectorDouble point, const SIMDVectorDouble origin, const SIMDVectorDouble difference)noexcept{
-        // TwoDiff recovers the subtraction residual without expanding the allowance with a large common translation.
         const SIMDVectorDouble virtualOrigin = VectorDoubleSubtract(point, difference), virtualPoint = VectorDoubleAdd(difference, virtualOrigin);
         return VectorDoubleAdd(VectorDoubleSubtract(point, virtualPoint), VectorDoubleSubtract(virtualOrigin, origin));
     };
@@ -228,7 +220,6 @@ NWB_NOINLINE bool NWB_SIMD_CALL ZeroAxis(const SIMDVectorDouble a0, const SIMDVe
     const SIMDVectorDouble edgeA0 = relativeA1, edgeA1 = VectorDoubleSubtract(first2, first1), edgeA2 = VectorDoubleNegate(relativeA2);
     const SIMDVectorDouble edgeB0 = VectorDoubleSubtract(second1, second0), edgeB1 = VectorDoubleSubtract(second2, second1), edgeB2 = VectorDoubleSubtract(second0, second2);
     const auto crossAxis = [](const SIMDVectorDouble first, const SIMDVectorDouble second)noexcept{
-        // Separate products make parallel directions produce a zero axis instead of an explicit-FMA residual.
         const SIMDVectorDouble positive = VectorDoubleMultiply(VectorDoubleSwizzle<1, 2, 0, 3>(first), VectorDoubleSwizzle<2, 0, 1, 3>(second));
         const SIMDVectorDouble negative = VectorDoubleMultiply(VectorDoubleSwizzle<2, 0, 1, 3>(first), VectorDoubleSwizzle<1, 2, 0, 3>(second));
         return VectorDoubleSubtract(positive, negative);
@@ -240,7 +231,6 @@ NWB_NOINLINE bool NWB_SIMD_CALL ZeroAxis(const SIMDVectorDouble a0, const SIMDVe
         const auto projectionInterval = [&](const SIMDVectorDouble relative, const SIMDVectorDouble roundoff)noexcept{
             const SIMDVectorDouble projection = VectorDouble3Dot(relative, axis);
             const SIMDVectorDouble magnitude = VectorDouble3Dot(VectorDoubleAbs(relative), absoluteAxis), coordinateError = VectorDouble3Dot(VectorDoubleAbs(roundoff), absoluteAxis);
-            // Three products and two additions need an absolute cancellation bound; eight epsilons also cover rounding the bound and endpoints.
             const SIMDVectorDouble allowance = VectorDoubleMultiplyAddExpression(VectorDoubleAdd(magnitude, coordinateError), VectorDoubleReplicate(0x1p-49), coordinateError);
             return VectorDoubleSelect(VectorDoubleSubtract(projection, allowance), VectorDoubleAdd(projection, allowance), s_DoubleSIMDMaskY);
         };
@@ -257,7 +247,6 @@ NWB_NOINLINE bool NWB_SIMD_CALL ZeroAxis(const SIMDVectorDouble a0, const SIMDVe
         return false;
 
     if(VectorDouble3Equal(normalA, zero) && VectorDouble3Equal(normalB, zero)){
-        // Closed degenerate triangles retain their point/segment hulls, including collinear endpoint contact.
         const SIMDVectorDouble directionA = VectorDouble3Equal(edgeA0, zero) ? edgeA1 : edgeA0, directionB = VectorDouble3Equal(edgeB0, zero) ? edgeB1 : edgeB0;
         const SIMDVectorDouble normal = crossAxis(directionA, directionB);
         if(separated(directionA) || separated(directionB) || separated(normal) || separated(crossAxis(directionA, normal)) || separated(crossAxis(directionB, normal)))
@@ -269,7 +258,6 @@ NWB_NOINLINE bool NWB_SIMD_CALL ZeroAxis(const SIMDVectorDouble a0, const SIMDVe
     }
 
     const auto edgeSeparated = [&](const SIMDVectorDouble edge)noexcept{
-        // In-plane edge normals are necessary when the triangles are coplanar or one hull is degenerate.
         return separated(crossAxis(edge, normalA)) || separated(crossAxis(edge, normalB)) || separated(crossAxis(edge, edgeB0)) || separated(crossAxis(edge, edgeB1)) || separated(crossAxis(edge, edgeB2));
     };
     if(edgeSeparated(edgeA0) || edgeSeparated(edgeA1) || edgeSeparated(edgeA2))
@@ -294,7 +282,6 @@ NWB_NOINLINE bool NWB_SIMD_CALL AbsHoisted(const SIMDVectorDouble a0, const SIMD
     const SIMDVectorDouble absoluteA1 = VectorDoubleAbs(relativeA1), absoluteA2 = VectorDoubleAbs(relativeA2);
     const SIMDVectorDouble absoluteB0 = VectorDoubleAbs(relativeB0), absoluteB1 = VectorDoubleAbs(relativeB1), absoluteB2 = VectorDoubleAbs(relativeB2);
     const auto differenceRoundoff = [](const SIMDVectorDouble point, const SIMDVectorDouble origin, const SIMDVectorDouble difference)noexcept{
-        // TwoDiff recovers the subtraction residual without expanding the allowance with a large common translation.
         const SIMDVectorDouble virtualOrigin = VectorDoubleSubtract(point, difference), virtualPoint = VectorDoubleAdd(difference, virtualOrigin);
         return VectorDoubleAdd(VectorDoubleSubtract(point, virtualPoint), VectorDoubleSubtract(virtualOrigin, origin));
     };
@@ -304,7 +291,6 @@ NWB_NOINLINE bool NWB_SIMD_CALL AbsHoisted(const SIMDVectorDouble a0, const SIMD
     const SIMDVectorDouble edgeA0 = relativeA1, edgeA1 = VectorDoubleSubtract(first2, first1), edgeA2 = VectorDoubleNegate(relativeA2);
     const SIMDVectorDouble edgeB0 = VectorDoubleSubtract(second1, second0), edgeB1 = VectorDoubleSubtract(second2, second1), edgeB2 = VectorDoubleSubtract(second0, second2);
     const auto crossAxis = [](const SIMDVectorDouble first, const SIMDVectorDouble second)noexcept{
-        // Separate products make parallel directions produce a zero axis instead of an explicit-FMA residual.
         const SIMDVectorDouble positive = VectorDoubleMultiply(VectorDoubleSwizzle<1, 2, 0, 3>(first), VectorDoubleSwizzle<2, 0, 1, 3>(second));
         const SIMDVectorDouble negative = VectorDoubleMultiply(VectorDoubleSwizzle<2, 0, 1, 3>(first), VectorDoubleSwizzle<1, 2, 0, 3>(second));
         return VectorDoubleSubtract(positive, negative);
@@ -316,7 +302,6 @@ NWB_NOINLINE bool NWB_SIMD_CALL AbsHoisted(const SIMDVectorDouble a0, const SIMD
         const auto projectionInterval = [&](const SIMDVectorDouble relative, const SIMDVectorDouble absoluteRelative, const SIMDVectorDouble absoluteRoundoff)noexcept{
             const SIMDVectorDouble projection = VectorDouble3Dot(relative, axis);
             const SIMDVectorDouble magnitude = VectorDouble3Dot(absoluteRelative, absoluteAxis), coordinateError = VectorDouble3Dot(absoluteRoundoff, absoluteAxis);
-            // Three products and two additions need an absolute cancellation bound; eight epsilons also cover rounding the bound and endpoints.
             const SIMDVectorDouble allowance = VectorDoubleMultiplyAddExpression(VectorDoubleAdd(magnitude, coordinateError), VectorDoubleReplicate(0x1p-49), coordinateError);
             return VectorDoubleSelect(VectorDoubleSubtract(projection, allowance), VectorDoubleAdd(projection, allowance), s_DoubleSIMDMaskY);
         };
@@ -333,7 +318,6 @@ NWB_NOINLINE bool NWB_SIMD_CALL AbsHoisted(const SIMDVectorDouble a0, const SIMD
         return false;
 
     if(VectorDouble3Equal(normalA, zero) && VectorDouble3Equal(normalB, zero)){
-        // Closed degenerate triangles retain their point/segment hulls, including collinear endpoint contact.
         const SIMDVectorDouble directionA = VectorDouble3Equal(edgeA0, zero) ? edgeA1 : edgeA0, directionB = VectorDouble3Equal(edgeB0, zero) ? edgeB1 : edgeB0;
         const SIMDVectorDouble normal = crossAxis(directionA, directionB);
         if(separated(directionA) || separated(directionB) || separated(normal) || separated(crossAxis(directionA, normal)) || separated(crossAxis(directionB, normal)))
@@ -345,7 +329,6 @@ NWB_NOINLINE bool NWB_SIMD_CALL AbsHoisted(const SIMDVectorDouble a0, const SIMD
     }
 
     const auto edgeSeparated = [&](const SIMDVectorDouble edge)noexcept{
-        // In-plane edge normals are necessary when the triangles are coplanar or one hull is degenerate.
         return separated(crossAxis(edge, normalA)) || separated(crossAxis(edge, normalB)) || separated(crossAxis(edge, edgeB0)) || separated(crossAxis(edge, edgeB1)) || separated(crossAxis(edge, edgeB2));
     };
     if(edgeSeparated(edgeA0) || edgeSeparated(edgeA1) || edgeSeparated(edgeA2))
@@ -541,7 +524,7 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
                 coordinate = static_cast<f64>(static_cast<i64>(Next(state) % 2000000001u) - 1000000000);
             pair.first[vertex] = VectorDoubleScale(LoadPosition(coordinates[0], coordinates[1], coordinates[2]), 0.25);
         }
-        const SIMDVectorDouble contained = (pair.first[0] * VectorDoubleReplicate(2.0) + pair.first[1] + pair.first[2]) * VectorDoubleReplicate(0.25);
+        const SIMDVectorDouble contained = VectorDoubleScale(VectorDoubleAdd(VectorDoubleAdd(VectorDoubleScale(pair.first[0], 2.0), pair.first[1]), pair.first[2]), 0.25);
         for(SIMDVectorDouble& vertex : pair.second)
             vertex = contained;
         if(
@@ -557,7 +540,7 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
                 coordinate = static_cast<f64>(static_cast<i64>(Next(state) % 2000001u) - 1000000);
             pair.first[vertex] = LoadPosition(coordinates[0], coordinates[1], coordinates[2]);
         }
-        const SIMDVectorDouble containedSingle = (pair.first[0] * VectorDoubleReplicate(2.0) + pair.first[1] + pair.first[2]) * VectorDoubleReplicate(0.25);
+        const SIMDVectorDouble containedSingle = VectorDoubleScale(VectorDoubleAdd(VectorDoubleAdd(VectorDoubleScale(pair.first[0], 2.0), pair.first[1]), pair.first[2]), 0.25);
         for(u32 vertex = 0u; vertex < 3u; ++vertex){
             pair.first[vertex] = ConvertVectorSingleToDouble(ConvertVectorDoubleToSingle(pair.first[vertex]));
             pair.second[vertex] = ConvertVectorSingleToDouble(ConvertVectorDoubleToSingle(containedSingle));
@@ -617,7 +600,7 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
         if(!CheckExceptionEquivalence(active))
             return false;
     }
-    const f64 maximum = Limit<f64>::s_Max;
+    constexpr f64 maximum = Limit<f64>::s_Max;
     const TrianglePair extreme[] = {
         { { Double4(0.0, 1.0, 1.0), Double4(0.0, 1.0, 1.0), Double4(0.0, 1.0, 1.0) }, { Double4(Limit<f64>::s_Infinity, 1.0, 2.0), Double4(-1.0, -1.0, -1.0), Double4(1.0, 3.0, 4.0) } },
         { { Double4(maximum, 0.0, 0.0), Double4(maximum, 0.0, 0.0), Double4(maximum, 0.0, 0.0) }, { Double4(-maximum, -1.0, -1.0), Double4(0.0, 1.0, 1.0), Double4(maximum, 0.0, 0.0) } }

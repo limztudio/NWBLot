@@ -135,7 +135,7 @@ public:
     static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
         RayTracingRefractionGraphResources resources = payload.resources;
         if(resources.usesHardwareTrace && (!payload.hardwarePreparationReady || !*payload.hardwarePreparationReady)){
-            // Shared preparation can accept a nonfatal TLAS miss. Use the already prepared screen pipeline, whose inputs are a subset of this task's declared resources, instead of tracing a stale/unbuilt TLAS.
+            // Shared preparation can accept a nonfatal TLAS miss. Use the prepared screen pipeline, whose inputs are a subset of this task's declared resources, instead of tracing a stale/unbuilt TLAS.
             resources.pipeline = resources.screenFallbackPipeline;
             resources.densePipeline = resources.denseScreenFallbackPipeline;
             resources.usesHardwareTrace = false;
@@ -146,7 +146,7 @@ public:
     }
 
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
-        // Only an accepted packet may publish a dispatch diagnostic. Rejected recording retries leave the latch untouched, and the resource-selection/recording path remains free of mutable renderer state.
+        // Only an accepted packet may publish a dispatch diagnostic. Rejected recording retries leave the latch untouched, and the resource-selection/recording path stays free of renderer state.
         const bool usedHardware = payload.resources.usesHardwareTrace && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
         if(usedHardware)
             payload.system.confirmRayTraceContextReadSubmission(token);

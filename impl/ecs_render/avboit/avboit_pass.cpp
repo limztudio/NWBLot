@@ -16,7 +16,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_avboit{
+namespace __hidden_avboit_pass{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -102,10 +102,10 @@ Core::RenderState BuildRendererAvboitAccumulateRenderState()noexcept{
     renderState.depthStencilState.enableDepthTest().disableDepthWrite().setDepthFunc(Core::ComparisonFunc::LessOrEqual);
     renderState.rasterState.enableDepthClip().setCullBack();
     renderState.blendState
-        .setRenderTarget(NWB_AVBOIT_ACCUM_COLOR_LOCATION, __hidden_avboit::BuildAdditiveBlendTarget())
-        .setRenderTarget(NWB_AVBOIT_ACCUM_EXTINCTION_LOCATION, __hidden_avboit::BuildAdditiveBlendTarget(Core::ColorMask::Red))
-        .setRenderTarget(NWB_AVBOIT_ACCUM_FOREGROUND_COLOR_LOCATION, __hidden_avboit::BuildAdditiveBlendTarget())
-        .setRenderTarget(NWB_AVBOIT_ACCUM_FOREGROUND_EXTINCTION_LOCATION, __hidden_avboit::BuildAdditiveBlendTarget(Core::ColorMask::Red))
+        .setRenderTarget(NWB_AVBOIT_ACCUM_COLOR_LOCATION, __hidden_avboit_pass::BuildAdditiveBlendTarget())
+        .setRenderTarget(NWB_AVBOIT_ACCUM_EXTINCTION_LOCATION, __hidden_avboit_pass::BuildAdditiveBlendTarget(Core::ColorMask::Red))
+        .setRenderTarget(NWB_AVBOIT_ACCUM_FOREGROUND_COLOR_LOCATION, __hidden_avboit_pass::BuildAdditiveBlendTarget())
+        .setRenderTarget(NWB_AVBOIT_ACCUM_FOREGROUND_EXTINCTION_LOCATION, __hidden_avboit_pass::BuildAdditiveBlendTarget(Core::ColorMask::Red))
     ;
     return renderState;
 }
@@ -340,7 +340,7 @@ void RendererAvboitSystem::dispatchAvboitDepthWarp(Core::CommandList& commandLis
 
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
 
-    __hidden_avboit::DispatchAvboitCompute(commandList, *m_avboitState.m_depthWarpPipeline.get(), heap, targets, NWB_AVBOIT_DEPTH_WARP_DISPATCH_GROUP_COUNT_X, m_graphics.isHDR10OutputActive());
+    __hidden_avboit_pass::DispatchAvboitCompute(commandList, *m_avboitState.m_depthWarpPipeline.get(), heap, targets, NWB_AVBOIT_DEPTH_WARP_DISPATCH_GROUP_COUNT_X, m_graphics.isHDR10OutputActive());
 }
 
 void RendererAvboitSystem::dispatchAvboitIntegration(Core::CommandList& commandList, AvboitFrameTargets& targets, const Core::GpuTimingSampleAttribution timingAttribution, bool* const timingRecorded){
@@ -352,7 +352,7 @@ void RendererAvboitSystem::dispatchAvboitIntegration(Core::CommandList& commandL
 
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
 
-    __hidden_avboit::DispatchAvboitCompute(commandList, *m_avboitState.m_integratePipeline.get(), heap, targets, DivideUp(pixelCount, static_cast<u32>(NWB_AVBOIT_INTEGRATE_GROUP_SIZE_X)), m_graphics.isHDR10OutputActive());
+    __hidden_avboit_pass::DispatchAvboitCompute(commandList, *m_avboitState.m_integratePipeline.get(), heap, targets, DivideUp(pixelCount, static_cast<u32>(NWB_AVBOIT_INTEGRATE_GROUP_SIZE_X)), m_graphics.isHDR10OutputActive());
 }
 
 

@@ -362,7 +362,7 @@ bool GpuGraphSubmissionTransaction::externalResourceHandoff(
                 return false;
         }
         // Start from a valid, resource-empty base.
-        // This lets buildFanIn verify that independent terminal ranges are actually disjoint (including ownership metadata) rather than treating an earlier branch as the base and accidentally allowing a later branch to overwrite it.
+        // This lets buildFanIn verify that independent terminal ranges are actually disjoint (including ownership) rather than treating an earlier branch as the base.
         if(
             !firstSourceStates
             || !candidate.stateMerge.buildResourceSubset(*firstSourceStates, nullptr, 0u, nullptr, 0u, m_externalResourceHandoffBuildScratch)

@@ -65,7 +65,7 @@ inline void NWB_SIMD_CALL BoundingFrustum::TransformFrustumValue(
         return bounds;
     }();
     if(!fitted){
-        // A reflected or collapsed cone may cross the chosen forward plane; enclose its transformed corners with a forward axis-aligned cone.
+        // A reflected or collapsed cone may cross the forward plane; enclose its corners with a forward axis-aligned cone.
         const SIMDVectorSingle center = VectorScale(VectorAdd(minBounds, maxBounds), CollisionDetail::s_Half);
         const SIMDVectorSingle extents = VectorScale(VectorSubtract(maxBounds, minBounds), CollisionDetail::s_Half);
         const SIMDVectorSingle depth = VectorSubtract(VectorSplatZ(maxBounds), VectorSplatZ(minBounds));
@@ -153,7 +153,7 @@ inline void NWB_SIMD_CALL BoundingDoubleFrustum::TransformFrustumValue(
         return bounds;
     }();
     if(!fitted){
-        // A reflected or collapsed cone may cross the chosen forward plane; enclose its transformed corners with a forward axis-aligned cone.
+        // A reflected or collapsed cone may cross the forward plane; enclose its corners with a forward axis-aligned cone.
         const SIMDVectorDouble center = VectorDoubleScale(VectorDoubleAdd(minBounds, maxBounds), CollisionDoubleDetail::s_DoubleHalf);
         const SIMDVectorDouble extents = VectorDoubleScale(VectorDoubleSubtract(maxBounds, minBounds), CollisionDoubleDetail::s_DoubleHalf);
         const SIMDVectorDouble depth = VectorDoubleSubtract(VectorDoubleSplatZ(maxBounds), VectorDoubleSplatZ(minBounds));

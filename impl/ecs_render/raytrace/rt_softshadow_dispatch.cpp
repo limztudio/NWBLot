@@ -15,7 +15,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_rt_softshadow{
+namespace __hidden_rt_softshadow_dispatch{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -137,7 +137,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     const u32 historyValid = temporalHistoryReadable ? 1u : 0u;
 
     const auto dispatchMerge = [&](
-        const __hidden_rt_softshadow::ShadowReprojectMergeHeapResources& resources, const bool graphOwnsSoftTraceInputState, const bool graphOwnsMergeCurrentGeometryEntryState, const bool graphOwnsMergeStaticReadEntryStates,
+        const __hidden_rt_softshadow_dispatch::ShadowReprojectMergeHeapResources& resources, const bool graphOwnsSoftTraceInputState, const bool graphOwnsMergeCurrentGeometryEntryState, const bool graphOwnsMergeStaticReadEntryStates,
         const bool graphOwnsMergeTemporalEntryStates
     ){
         NWB_ASSERT(resources.softTrace && resources.historyIn && resources.momentsIn && resources.historyOut && resources.momentsOut);
@@ -188,13 +188,13 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     };
 
     if(dispatchOpaqueResolve || dispatchOpaqueResolveTail){
-        const __hidden_rt_softshadow::ShadowReprojectMergeHeapResources opaqueMerge = frontIsA
-            ? __hidden_rt_softshadow::ShadowReprojectMergeHeapResources{
+        const __hidden_rt_softshadow_dispatch::ShadowReprojectMergeHeapResources opaqueMerge = frontIsA
+            ? __hidden_rt_softshadow_dispatch::ShadowReprojectMergeHeapResources{
                 targets.shadowSoftHalfA.get(), targets.shadowHistA.get(), targets.shadowMomentsA.get(), targets.shadowHistB.get(), targets.shadowMomentsB.get(),
                 targets.bindless.shadowSoftHalfA.slot(), targets.bindless.shadowHistA.slot(), targets.bindless.shadowMomentsA.slot(),
                 targets.bindless.shadowHistBStorage.slot(), targets.bindless.shadowMomentsBStorage.slot()
             }
-            : __hidden_rt_softshadow::ShadowReprojectMergeHeapResources{
+            : __hidden_rt_softshadow_dispatch::ShadowReprojectMergeHeapResources{
                 targets.shadowSoftHalfA.get(), targets.shadowHistB.get(), targets.shadowMomentsB.get(), targets.shadowHistA.get(), targets.shadowMomentsA.get(),
                 targets.bindless.shadowSoftHalfA.slot(), targets.bindless.shadowHistB.slot(), targets.bindless.shadowMomentsB.slot(),
                 targets.bindless.shadowHistAStorage.slot(), targets.bindless.shadowMomentsAStorage.slot()
@@ -316,13 +316,13 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     const bool dispatchTransparentMerge = dispatchTransparentTemporalMerge || (dispatchTransparentResolve && !splitTransparentResolve);
     if((dispatchTransparentMerge || dispatchTransparentWavelet) && m_rayTracingState.m_softTransparentReady){
         const bool transparentTemporalActive = m_rayTracingState.m_softTransparentTemporalReady;
-        const __hidden_rt_softshadow::ShadowReprojectMergeHeapResources transparentMerge = frontIsA
-            ? __hidden_rt_softshadow::ShadowReprojectMergeHeapResources{
+        const __hidden_rt_softshadow_dispatch::ShadowReprojectMergeHeapResources transparentMerge = frontIsA
+            ? __hidden_rt_softshadow_dispatch::ShadowReprojectMergeHeapResources{
                 targets.transparentSoftHalf.get(), targets.transparentHistA.get(), targets.transparentMomentsA.get(), targets.transparentHistB.get(), targets.transparentMomentsB.get(),
                 targets.bindless.transparentSoftHalf.slot(), targets.bindless.transparentHistA.slot(), targets.bindless.transparentMomentsA.slot(),
                 targets.bindless.transparentHistBStorage.slot(), targets.bindless.transparentMomentsBStorage.slot()
             }
-            : __hidden_rt_softshadow::ShadowReprojectMergeHeapResources{
+            : __hidden_rt_softshadow_dispatch::ShadowReprojectMergeHeapResources{
                 targets.transparentSoftHalf.get(), targets.transparentHistB.get(), targets.transparentMomentsB.get(), targets.transparentHistA.get(), targets.transparentMomentsA.get(),
                 targets.bindless.transparentSoftHalf.slot(), targets.bindless.transparentHistB.slot(), targets.bindless.transparentMomentsB.slot(),
                 targets.bindless.transparentHistAStorage.slot(), targets.bindless.transparentMomentsAStorage.slot()

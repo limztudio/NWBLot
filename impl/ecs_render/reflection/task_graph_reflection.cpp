@@ -33,7 +33,7 @@ namespace RendererTaskGraphDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_reflection_tasks{
+namespace __hidden_task_graph_reflection{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -414,7 +414,7 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
     const ReflectionGraphInputs& inputs,
     Core::GpuTaskId dependency
 ){
-    using namespace __hidden_reflection_tasks;
+    using namespace __hidden_task_graph_reflection;
     if(!resources.valid() || !inputs.surfaceReads || inputs.surfaceReadCount == 0u || (inputs.hardwareReadCount > 0u && !inputs.hardwareReads) || (inputs.hardwareSetReadCount > 0u && !inputs.hardwareSetReads))
         return MakeUnexpected(Failure{});
     const bool screen = resources.parameters.traceMode == NWB_REFLECTION_MODE_SCREEN || resources.parameters.traceMode == NWB_REFLECTION_MODE_HYBRID;

@@ -9,11 +9,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Software-shadow ray/primitive intersection math: the shared slab ray/AABB helpers plus the watertight Woop ray/triangle test. PURE float math -- declares NO bindings and pulls NO other concern, so any BVH traversal (scene or per-mesh) can compose it.
+// Binding-free slab ray/AABB helpers and watertight Woop ray/triangle intersection math.
 
 
 #define NWB_SW_SHADOW_AABB_PADDING 1e-4
-// Sentinel returned by nwbSwShadowRayAabbEntryT for a box the ray misses: a finite value that sorts AFTER any real entry distance (so a missed box is never picked as the near child in front-to-back traversal) but is safe to compare with plain <= (no inf/NaN hazards).
+// Finite miss sentinel for nwbSwShadowRayAabbEntryT that sorts after any valid entry distance without inf/NaN hazards.
 #define NWB_SW_SHADOW_AABB_MISS 1.0e30
 
 #include "../bvh/ray_intersect.slangi"
@@ -26,18 +26,18 @@ bool nwbSwShadowRayAabb(const float3 origin, const float3 invDir, const float tM
     return nwbBvhRayAabb(origin, invDir, tMin, tMax, boxMin, boxMax, NWB_SW_SHADOW_AABB_PADDING);
 }
 
-// Box entry distance (slab tNear in [tMin,tMax]); NWB_SW_SHADOW_AABB_MISS on miss. Ordering-only twin of the bool test: identical slab math keeps the miss set identical; ranking nearer-first can never cull a hit.
+// Returns the slab entry distance in [tMin, tMax], or NWB_SW_SHADOW_AABB_MISS on miss.
 float nwbSwShadowRayAabbEntryT(const float3 origin, const float3 invDir, const float tMin, const float tMax, const float3 boxMin, const float3 boxMax){
     float tEntry;
     return nwbBvhRayAabbT(origin, invDir, tMin, tMax, boxMin, boxMax, NWB_SW_SHADOW_AABB_PADDING, tEntry) ? tEntry : NWB_SW_SHADOW_AABB_MISS;
 }
 
-// Reciprocal of the ray direction with each component nudged off exactly zero, so an axis-aligned ray gets a large-but-finite slope instead of +/-inf. That keeps the slab test from forming inf*0 = NaN when the ray origin lies exactly on a box face (a NaN there compares false and would silently drop the shadow).
+// Reciprocal ray direction with zero components nudged to avoid inf * 0 = NaN when the origin lies on a box face.
 float3 nwbSwShadowSafeInvDir(const float3 direction){
     return nwbBvhSafeInvDir(direction);
 }
 
-// Result of a ray/triangle test: whether the ray crossed the triangle inside (tMin, tMax) + the hit's barycentrics. (u, v) are the Moeller-Trumbore parameters (weights of v1, v2); w = 1 - u - v is v0's weight, so an attribute interpolates as a*w + b*u + c*v. t is the world/object ray parameter at the hit.
+// Ray/triangle hit result: ray parameter t and barycentric weights (u, v) for v1 and v2 (with w = 1 - u - v for v0).
 struct NwbSwShadowTriangleHit{
     bool hit;
     float t;
@@ -46,7 +46,7 @@ struct NwbSwShadowTriangleHit{
     float w;
 };
 
-// Watertight two-sided ray/triangle (Woop/Benthin/Wald 2013): exactly one hit per shared edge. Still differs from the HW intersector by +/-1 crossing at grazing silhouettes (inherent hybrid residual, sub-pixel here).
+// Watertight two-sided ray/triangle intersection (Woop/Benthin/Wald 2013) with a single hit per shared edge.
 NwbSwShadowTriangleHit nwbSwShadowRayTriangle(const float3 origin, const float3 direction, const float tMin, const float tMax, const float3 v0, const float3 v1, const float3 v2){
     NwbSwShadowTriangleHit result;
     result.hit = false;
@@ -88,7 +88,7 @@ NwbSwShadowTriangleHit nwbSwShadowRayTriangle(const float3 origin, const float3 
     float v = ax * cy - ay * cx;
     float w = bx * ay - by * ax;
 
-    // Two-sided: reject only when the edge functions carry MIXED signs (the point is outside the triangle). All-non-negative OR all-non-positive is inside, so a shared edge (some component exactly 0) still resolves to a single owning triangle rather than a gap.
+    // Two-sided test: reject only when edge functions have mixed signs so shared edges resolve without gaps.
     if((u < 0.0 || v < 0.0 || w < 0.0) && (u > 0.0 || v > 0.0 || w > 0.0))
         return result;
 

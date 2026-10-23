@@ -56,7 +56,7 @@ void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds(){
             ++m_blasLedgerRebuilds;
         m_blasLedgerUploadedBytes += static_cast<u64>(build.positionByteSize);
     }
-    // An unexpected replacement after recording is not rolled into the accepted mesh cache. Force a future TLAS rebuild rather than retaining a static-scene hash that may describe the retired generation.
+    // An unexpected replacement after recording is not rolled into the accepted mesh cache. Force a future TLAS rebuild rather than retaining a hash that may describe the retired generation.
     if(!allPlansCurrent)
         m_rayTracingState.m_tlasStaticSceneHashValid = false;
     NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: BLAS ownership staticSkipped={} firstBuilds={} refits={} rebuilds={} uploadedBytes={}"), m_blasLedgerStaticSkipped, m_blasLedgerFirstBuilds, m_blasLedgerRefits, m_blasLedgerRebuilds, m_blasLedgerUploadedBytes);

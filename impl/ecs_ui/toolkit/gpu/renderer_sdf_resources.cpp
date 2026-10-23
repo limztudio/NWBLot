@@ -21,7 +21,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_gpu_sdf{
+namespace __hidden_ui_gpu_sdf_resources{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -87,7 +87,7 @@ bool GpuRendererState::ValidateSdfPages(const DrawSnapshot& snapshot)noexcept{
     if(pages.size() + snapshot.glyphPages().size() + snapshot.textureImages().size() > s_PaintMaxImages)
         return false;
     for(usize index = 0u; index < pages.size(); ++index){
-        if(!__hidden_ui_gpu_sdf::ValidPage(pages[index]))
+        if(!__hidden_ui_gpu_sdf_resources::ValidPage(pages[index]))
             return false;
         for(usize previous = 0u; previous < index; ++previous){
             if(SameSdfAtlasPageKey(pages[index]->binding(), pages[previous]->binding()))
@@ -111,7 +111,7 @@ Expected<GpuVersion<GpuSdfAtlasVersion>> GpuRendererState::prepareSdfPage(Core::
         GpuVersion<GpuSdfAtlasVersion> reused = existing;
         m_sdfCache.erase(m_sdfCache.begin() + static_cast<isize>(index));
         m_sdfCache.push_back(reused);
-        if(!__hidden_ui_gpu_sdf::PrepareDescriptor(*reused))
+        if(!__hidden_ui_gpu_sdf_resources::PrepareDescriptor(*reused))
             return MakeUnexpected(Failure{});
         return Move(reused);
     }
@@ -177,7 +177,7 @@ Expected<GpuVersion<GpuSdfAtlasVersion>> GpuRendererState::prepareSdfPage(Core::
         evictImageCacheEntry();
     m_sdfCache.push_back(version);
     // Preserve every accepted upload before descriptor publication; retrying a failed descriptor never uploads again.
-    if(!__hidden_ui_gpu_sdf::PrepareDescriptor(*version))
+    if(!__hidden_ui_gpu_sdf_resources::PrepareDescriptor(*version))
         return MakeUnexpected(Failure{});
     return Move(version);
 }

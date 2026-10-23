@@ -14,7 +14,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_font_atlas_tests{
+namespace __hidden_packing_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -65,7 +65,7 @@ FontAtlasPositioningTable ClassPairFixture(Core::Assets::AssetArena& arena){
 
 
 TEST(FontAtlasPacking, TightRectanglesAndAllChannelCountsPreserveGuardedPixels){
-    using namespace __hidden_font_atlas_tests;
+    using namespace __hidden_packing_tests;
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     Core::Alloc::GlobalArena arena(Name("tests/font_atlas/packing"));
@@ -113,7 +113,7 @@ TEST(FontAtlasPacking, TightRectanglesAndAllChannelCountsPreserveGuardedPixels){
 }
 
 TEST(FontAtlasPacking, RejectsCapacityWithoutDroppingGlyphs){
-    using namespace __hidden_font_atlas_tests;
+    using namespace __hidden_packing_tests;
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     Core::Alloc::GlobalArena arena(Name("tests/font_atlas/capacity"));
@@ -136,7 +136,7 @@ TEST(FontAtlasPacking, RejectsCapacityWithoutDroppingGlyphs){
 }
 
 TEST(FontAtlasPositioning, LegacyPairsStayBoundedAndSorted){
-    using namespace __hidden_font_atlas_tests;
+    using namespace __hidden_packing_tests;
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     Core::Alloc::GlobalArena arena(Name("tests/font_atlas/kern"));
@@ -154,7 +154,7 @@ TEST(FontAtlasPositioning, LegacyPairsStayBoundedAndSorted){
 }
 
 TEST(FontAtlasPositioning, GposClassZeroAndExplicitClassMatrixPreserved){
-    using namespace __hidden_font_atlas_tests;
+    using namespace __hidden_packing_tests;
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     Core::Alloc::GlobalArena arena(Name("tests/font_atlas/gpos"));
@@ -169,7 +169,7 @@ TEST(FontAtlasPositioning, GposClassZeroAndExplicitClassMatrixPreserved){
 }
 
 TEST(FontAtlasPositioning, MalformedTopOffsetsAndExtensionTypeRejected){
-    using namespace __hidden_font_atlas_tests;
+    using namespace __hidden_packing_tests;
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     Core::Alloc::GlobalArena arena(Name("tests/font_atlas/gpos_malformed"));
@@ -183,7 +183,7 @@ TEST(FontAtlasPositioning, MalformedTopOffsetsAndExtensionTypeRejected){
 
 
 TEST(FontAtlasPositioning, PairSetDeviceOffsetsUseImmediateParent){
-    using namespace __hidden_font_atlas_tests;
+    using namespace __hidden_packing_tests;
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     Core::Alloc::GlobalArena arena(Name("tests/font_atlas/gpos_device"));

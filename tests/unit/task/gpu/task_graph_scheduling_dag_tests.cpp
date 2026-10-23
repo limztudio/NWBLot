@@ -212,11 +212,11 @@ TEST(GpuTaskGraph, PackedSchedulingReachabilityPreservesStrictClosureAcrossWordB
         char taskIndexBuffer[32u] = {};
         for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
             const Graphics::GpuTaskId* const dependency = taskIndex >= s_ExpectedDualCount ? &tasks[taskIndex - s_ExpectedDualCount] : nullptr;
-            const auto derivedNameAt488Col58 = DeriveName(taskBaseName, FormatDecimal(taskIndex, taskIndexBuffer));
-            ASSERT_TRUE(derivedNameAt488Col58);
-            const auto gpuAdmissionAt403 = AddTask(graph, *derivedNameAt488Col58, "Packed Reachability Task", dependency, dependency ? 1u : 0u);
-            ASSERT_TRUE(gpuAdmissionAt403);
-            tasks[taskIndex] = *gpuAdmissionAt403;
+            const auto derivedNameResult = DeriveName(taskBaseName, FormatDecimal(taskIndex, taskIndexBuffer));
+            ASSERT_TRUE(derivedNameResult);
+            const auto taskAdmission = AddTask(graph, *derivedNameResult, "Packed Reachability Task", dependency, dependency ? 1u : 0u);
+            ASSERT_TRUE(taskAdmission);
+            tasks[taskIndex] = *taskAdmission;
             ASSERT_TRUE(tasks[taskIndex].valid());
             EXPECT_EQ(tasks[taskIndex].index, taskIndex);
         }

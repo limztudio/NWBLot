@@ -24,16 +24,15 @@ namespace __hidden_camera{
 
 [[nodiscard]] bool SceneCameraTransformValid(const SIMDVectorSingle position, const SIMDVectorSingle rotation, const SIMDVectorSingle scale)noexcept{
     constexpr f32 s_CameraRotationUnitLengthSquaredTolerance = 0.001f;
-    const f32 rotationLengthSquared = VectorGetX(QuaternionLengthSq(rotation));
+    const SIMDVectorSingle rotationLengthSquared = QuaternionLengthSq(rotation);
 
     return
         Vector3IsFinite(position)
         && !QuaternionIsNaN(rotation)
         && !QuaternionIsInfinite(rotation)
         && Vector3IsFinite(scale)
-        && IsFinite(rotationLengthSquared)
-        && rotationLengthSquared >= 1.0f - s_CameraRotationUnitLengthSquaredTolerance
-        && rotationLengthSquared <= 1.0f + s_CameraRotationUnitLengthSquaredTolerance
+        && VectorIsFinite(rotationLengthSquared, VectorComponentMask::s_XYZW)
+        && Vector4NearEqual(rotationLengthSquared, s_SIMDOne, VectorReplicate(s_CameraRotationUnitLengthSquaredTolerance))
     ;
 }
 

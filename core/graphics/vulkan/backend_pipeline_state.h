@@ -298,11 +298,13 @@ private:
         usize m_count = 0u;
     };
 
-    enum class SlotState : u8{
-        Free,
-        Live,
-        PendingRecording,
-        Retired,
+    struct SlotState{
+        enum Enum : u8{
+            Free,
+            Live,
+            PendingRecording,
+            Retired,
+        };
     };
 
     // Fresh indices plus a recycled free list per namespace.
@@ -313,7 +315,7 @@ private:
         FixedTable<u32> freeList;
         usize freeCount = 0u;
         // PendingRecording is the only freed state that native recording may still consume.
-        FixedTable<SlotState> slotStates;
+        FixedTable<SlotState::Enum> slotStates;
         // Keeps the allocated class authoritative while a slot is live or quarantined.
         FixedTable<u8> allocatedClasses;
 

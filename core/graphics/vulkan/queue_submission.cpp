@@ -480,7 +480,7 @@ VkResult Queue::updateLastFinishedID(){
     u64 completedValue = 0;
     const VkResult res = m_context.deviceDispatch.vkGetSemaphoreCounterValue(m_context.device, m_trackingSemaphore, &completedValue);
     if(res == VK_SUCCESS)
-        // vkQueueWaitIdle() establishes a stronger completion fact than a later timeline query. Never let a stale driver value make already-retired command buffers or descriptor uses appear in flight again.
+        // vkQueueWaitIdle() is a stronger completion fact than a later timeline query. Never let a stale driver value make retired command buffers or descriptor uses appear in flight again.
         m_lastFinishedID = Max(m_lastFinishedID, completedValue);
     else if(res == VK_ERROR_DEVICE_LOST)
         m_device.markDeviceLost();

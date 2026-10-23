@@ -122,7 +122,7 @@ struct GpuTaskGraphExternalCompletionView{
     QueueSubmissionToken token;
 };
 
-// Graph-declared presentation completion: retained backbuffer in Unknown/Present, exported to Present only. Users reach the Graphics producer on its exact queue; producer may skip direct use for terminal publish.
+// Graph-declared presentation completion: retained backbuffer in Unknown/Present, exported to Present only. Users reach the producer on its exact queue; producers may skip use for publish.
 struct GpuPresentEndpoint{
     GpuTaskId producer;
     GpuGraphResourceId backBuffer;
@@ -138,7 +138,7 @@ struct GpuTaskGraphTelemetryOptions{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Lexical proof that immutable declaration storage cannot be reset or mutated. Compiler/tooling callers acquire a waiting view before any other operation gate
+// Lexical proof that immutable declaration storage cannot be reset or mutated. Compiler/tooling callers acquire a waiting view before any other operation gate.
 class GpuTaskGraphDeclarationReadView final : NoCopy{
     friend class GpuCompiledGraph::ReadView;
     friend class GpuTaskGraph;

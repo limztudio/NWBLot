@@ -54,14 +54,14 @@ static float3 inWorldPosition;
 static float3 inIncidentDirection;
 static float inPixelDepth;
 
-// Rasterizer-independent hook inputs (not SV_-decorated, so the trace can build them from hit attributes as the rasterizer does from interpolated pixels). Exactly the consultable attributes, no more.
+// Rasterizer-independent hook inputs (not SV_-decorated, so the trace can build them from hit attributes as the rasterizer does from pixels). Exactly the consultable attributes, no more.
 struct NwbMeshSurfaceInputs{
     half4 color;
     float3 normal;
     float4 tangent;
     float2 uv0;
     float3 worldPosition;
-    // World-space direction of the ray arriving at this surface. Raster paths supply the normalized camera-to-surface direction from their mesh-frame view; the shadow trace supplies the occlusion ray (NwbShadowHit.rayDirection).
+    // World-space direction of the ray arriving at this surface. Raster supplies normalized camera-to-surface direction from the mesh-frame view; the shadow trace supplies the occlusion ray.
     float3 incidentDirection;
 };
 

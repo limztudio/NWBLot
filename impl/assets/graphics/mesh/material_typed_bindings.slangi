@@ -16,14 +16,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The per-instance data + typed material-constant buffer are shared by the mesh stage (runtime.slangi) and pixel stage (via gbuffer_io.slangi).  They are descriptor-heap-only renderer resources.
+// Per-instance data + typed material-constant buffer are shared by the mesh stage and pixel stage. They are descriptor-heap-only renderer resources.
 struct NwbMeshInstanceData{
     float4 rotation;
     float3 translation;
     uint materialMutableByteOffset;
     float3 scale;
     uint entityId;
-    // Indexed by NWB_MESH_BINDING_* ABI position. Binding 6 stores CSG's UniformBuffer context selector while typed material words use the frame heap lane; preserve these positions to avoid renumbering source streams.
+    // Binding 6 stores the CSG UniformBuffer context selector while typed material words use the frame heap lane; preserve positions to avoid renumbering source streams.
     uint geometryHeapSlots[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT];
 };
 

@@ -148,8 +148,7 @@ static Expected<CookString> ParseVariantField(const Path& nwbFilePath, const Cor
             sortedAssignments.push_back(AssignmentPtr{ &defineName, &defineValue });
         Sort(sortedAssignments.begin(), sortedAssignments.end(), [](const AssignmentPtr& lhs, const AssignmentPtr& rhs)noexcept{
             return *lhs.key < *rhs.key;
-        }
-        );
+        });
 
         usize canonicalVariantSize = sortedAssignments.size() - 1u;
         for(const AssignmentPtr& assignment : sortedAssignments)

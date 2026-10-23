@@ -80,7 +80,7 @@ protected:
         const SIMDVectorSingle scale = VectorDivide(physicalSize, VectorReplicate(fontSize));
         // Lanes are x and y. X adds the bearing and y subtracts it.
         const SIMDVectorDouble base = VectorDoubleAdd(VectorDoubleSet(origin.x, origin.y, 0.0, 0.0), VectorDoubleSet(glyph.position.x, glyph.position.y, 0.0, 0.0));
-        const SIMDVectorDouble bearing = VectorDoubleDivide(VectorDoubleSet(static_cast<f64>(m_bitmap.bearingX), static_cast<f64>(m_bitmap.bearingY), 0.0, 0.0), VectorDoubleReplicate(static_cast<f64>(VectorGetX(scale))));
+        const SIMDVectorDouble bearing = VectorDoubleDivide(VectorDoubleSet(static_cast<f64>(m_bitmap.bearingX), static_cast<f64>(m_bitmap.bearingY), 0.0, 0.0), ConvertVectorSingleToDouble(scale));
         const SIMDVectorDouble unsnapped = VectorDoublePermute<0, 5, 2, 3>(VectorDoubleAdd(base, bearing), VectorDoubleSubtract(base, bearing));
         const SIMDVectorDouble pixelScale = VectorDoubleSet(display.pixelScaleX, display.pixelScaleY, 1.0, 1.0);
         const SIMDVectorDouble snapped = VectorDoubleDivide(VectorDoubleFloor(VectorDoubleMultiplyAddExpression(unsnapped, pixelScale, VectorDoubleReplicate(0.5))), pixelScale);
@@ -439,7 +439,7 @@ TEST_F(TextVisibleCoverageTests, NaturalMeasurementContainsNativeMarksFallbackAn
     const SIMDVectorSingle firstTexel = VectorFloor(position);
     const i32 firstX = static_cast<i32>(VectorGetX(firstTexel));
     const i32 firstY = static_cast<i32>(VectorGetY(firstTexel));
-    const SIMDVectorSingle fraction = VectorSubtract(position, VectorSet(static_cast<f32>(firstX), static_cast<f32>(firstY), 0.0f, 0.0f));
+    const SIMDVectorSingle fraction = VectorSubtract(position, firstTexel);
     const SIMDVectorSingle remainder = VectorSubtract(VectorSplatOne(), fraction);
     const auto sample = [&](const i32 column, const i32 row)noexcept -> f32{
         const u32 clampedX = static_cast<u32>(Clamp(column, 0, static_cast<i32>(binding.width) - 1));

@@ -36,7 +36,7 @@ private:
 
 private:
     // Records one compiler-derived non-empty contiguous range.
-    // Earlier producer packets needed by the range must already be recorded, keeps deliberate late tails separate from the ordinary graph prefix.
+    // Earlier producer packets needed by the range must already be recorded, keeping deliberate late tails separate from the ordinary graph prefix.
     [[nodiscard]] bool recordPacketRangeInCompileOrder(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
@@ -46,7 +46,7 @@ private:
         GpuSubmissionPacketId* outFailedPacket = nullptr,
         GpuCommandIrCapture* commandIrCapture = nullptr
     )const;
-    // Semantic companion to the packet-range recorder. Task endpoints resolve only after compilation, keeping renderer record spans independent from packet splitting and merging while preserving intentional late tails.
+    // Task endpoints resolve after compilation, keeping record spans independent of packet splitting while preserving intentional late tails.
     [[nodiscard]] bool recordTaskRangeInCompileOrder(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,

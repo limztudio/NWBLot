@@ -27,7 +27,7 @@ namespace Tests::Smoke{
 
 
 // Fixed marker grids have exact integer coordinates.
-// Admit only grids whose casts, products and sums fit FP32's exact nonnegative integer range, so preparing independent positions cannot change rounding or floating flags before the existing ordered paint calls.
+// Admit only grids whose casts, products and sums fit FP32's exact nonnegative integer range, so preparing new positions cannot change rounding or flags before the existing paint calls.
 template<usize Count, u32 Origin, u32 Step>
 [[nodiscard]] inline Array<f32, Count> BuildSmokeMarkerPositions()noexcept{
     constexpr u32 s_ExactIntegerLimit = 1u << 24u;

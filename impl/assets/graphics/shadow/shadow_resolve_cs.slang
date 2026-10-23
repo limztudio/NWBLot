@@ -92,7 +92,7 @@ struct NwbShadowResolvePushConstants{
 // Groupshared tile for small-dilation wavelet passes.
 groupshared NwbShadowResolveVisVec g_NwbShadowResolveTileVis[NWB_SHADOW_RESOLVE_TILE_TEXELS];
 groupshared half2  g_NwbShadowResolveTileNormal[NWB_SHADOW_RESOLVE_TILE_TEXELS];
-// The half-resolution geometry cache is RGBA16F. Retain its scalar camera distance as half in LDS, then widen only for the Gaussian distance term so this tile does not spend twice the shared memory on already-quantized data.
+// The half-res geometry cache is RGBA16F. Keep its scalar camera distance as half in LDS, then widen only for the Gaussian term so this tile does not double shared memory on quantized data.
 groupshared half   g_NwbShadowResolveTileDist[NWB_SHADOW_RESOLVE_TILE_TEXELS];
 groupshared uint   g_NwbShadowResolveTileValid[NWB_SHADOW_RESOLVE_TILE_TEXELS];
 #endif
@@ -269,7 +269,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const float guidedEps = NWB_SHADOW_RESOLVE_GUIDED_EPS_FRAC * centerDist;
         const float guidedEpsSq = guidedEps * guidedEps;
 
-        // Geometry and regression guidance are identical for every light layer at this pixel. Build the compact 3x3 classification once, then retain the original tap order while each layer loads only its own visibility values.
+        // Guidance is identical for every light layer at this pixel. Build the compact 3x3 classification once, then keep the original tap order while each layer loads only its own visibility values.
         uint validTapMask = 0u;
         uint guidedTapMask = 0u;
         float tapCoefficients[NWB_SHADOW_RESOLVE_GUIDED_TAP_COUNT];
@@ -453,7 +453,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const NwbShadowResolveVisFVec centerVis = (NwbShadowResolveVisFVec)nwbShadowResolveLoadInput(texel, slot);
         const float sigmaLum = nwbShadowResolveCenterSigmaLum(texel, slot, hw, hh, momentsValid);
         NwbShadowResolveVisFVec sum = (NwbShadowResolveVisFVec)0.0;
-        // The bilateral weight sum is a bounded filter factor, so half arithmetic is sufficient here.
         half weightSum = half(0.0h);
         [unroll] for(int ky = -NWB_SHADOW_RESOLVE_KERNEL_RADIUS; ky <= NWB_SHADOW_RESOLVE_KERNEL_RADIUS; ++ky){
             [unroll] for(int kx = -NWB_SHADOW_RESOLVE_KERNEL_RADIUS; kx <= NWB_SHADOW_RESOLVE_KERNEL_RADIUS; ++kx){
@@ -465,7 +464,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                     continue;
                 const NwbShadowResolveVisFVec tapVis = (NwbShadowResolveVisFVec)nwbShadowResolveLoadInput(tap, slot);
                 const float dDist = float(tapGeom.z) - centerGeomDistance;
-                // Every filter weight is a (0, 1) bounded factor, so half arithmetic is sufficient here.
                 const half distWeight = half(exp(-dDist * dDist * invTwoSigmaDistSq));
                 const half normalWeight = nwbShadowResolveNormalWeightVec(centerNormalWavelet, tapGeom.xy);
                 const half valueWeight = nwbShadowResolveValueWeightVec(centerVis, tapVis, sigmaLum);

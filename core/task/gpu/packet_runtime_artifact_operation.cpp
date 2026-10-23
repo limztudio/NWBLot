@@ -42,7 +42,7 @@ bool GpuRecordedGraph::ArtifactOperation::ActiveExclusiveFor(const GpuRecordedGr
 }
 
 
-GpuRecordedGraph::ArtifactOperation::ArtifactOperation(const GpuRecordedGraph& recordedGraph, const ArtifactOperationMode mode)noexcept{
+GpuRecordedGraph::ArtifactOperation::ArtifactOperation(const GpuRecordedGraph& recordedGraph, const ArtifactOperationMode::Enum mode)noexcept{
     const bool exclusive = mode == ArtifactOperationMode::Exclusive;
     const bool waitRead = mode == ArtifactOperationMode::WaitRead;
     for(const ArtifactOperation* operation = s_ActiveOperation; operation; operation = operation->m_previousOperation){

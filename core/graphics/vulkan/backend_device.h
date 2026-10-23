@@ -44,9 +44,11 @@ class Device final : public RefCounter<GraphicsResource>, NoCopy{
 
 
 private:
-    enum class DeviceLossDiagnosticPolicy : u8{
-        Capture,
-        Defer,
+    struct DeviceLossDiagnosticPolicy{
+        enum Enum : u8{
+            Capture,
+            Defer,
+        };
     };
 
 
@@ -248,7 +250,7 @@ private:
         const GpuPhysicalQueueId& executionQueue,
         const QueueSubmissionDesc& submitDesc,
         bool graphSubmissionAuthorized,
-        DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy = DeviceLossDiagnosticPolicy::Capture
+        DeviceLossDiagnosticPolicy::Enum deviceLossDiagnosticPolicy = DeviceLossDiagnosticPolicy::Capture
     );
 
 
@@ -275,10 +277,10 @@ public:
     [[nodiscard]] bool matchesPhysicalQueueIdentity(CommandQueue::Enum queue, u16 physicalQueueIndex, u16 deviceGeneration)const noexcept;
     [[nodiscard]] bool matchesPhysicalQueueIdentity(const GpuPhysicalQueueId& queue)const noexcept;
     // Validates an accepted token as a current submission wait without changing queue state.
-    // The producer timeline is sampled under its queue mutex so a failed submit cannot expose its tentative value as available work.
+    // The producer timeline is sampled under its queue mutex so a failed submit cannot expose a tentative value as available work.
     [[nodiscard]] bool validateSubmissionWaitToken(const QueueSubmissionToken& token)const noexcept;
     // Blocks until one exact accepted queue timeline value completes.
-    // This is used to prove that a bridged WSI binary semaphore wait has consumed its signal before the acquire slot is reset and reused.
+    // This proves that a bridged WSI binary semaphore wait consumed its signal before the acquire slot is reset and reused.
     [[nodiscard]] bool waitForSubmissionToken(const QueueSubmissionToken& token);
     // Native device loss permits loss-aware teardown. Logical quarantine still requires an idle join before freeing.
     [[nodiscard]] bool isDeviceLost()const noexcept{ return m_deviceLost.load(MemoryOrder::acquire); }
@@ -332,10 +334,10 @@ public:
 private:
     void markDeviceLost()noexcept{ m_deviceLost.store(true, MemoryOrder::release); }
     [[nodiscard]] VkResult waitForNativeIdle()noexcept;
-    [[nodiscard]] bool waitForSubmissionTokenInternal(const QueueSubmissionToken& token, DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy);
-    [[nodiscard]] bool setEventQueryInternal(EventQuery& query, CommandQueue::Enum queue, DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy);
-    [[nodiscard]] Expected<bool> pollEventQueryInternal(EventQuery& query, DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy);
-    [[nodiscard]] bool waitEventQueryInternal(EventQuery& query, DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy);
+    [[nodiscard]] bool waitForSubmissionTokenInternal(const QueueSubmissionToken& token, DeviceLossDiagnosticPolicy::Enum deviceLossDiagnosticPolicy);
+    [[nodiscard]] bool setEventQueryInternal(EventQuery& query, CommandQueue::Enum queue, DeviceLossDiagnosticPolicy::Enum deviceLossDiagnosticPolicy);
+    [[nodiscard]] Expected<bool> pollEventQueryInternal(EventQuery& query, DeviceLossDiagnosticPolicy::Enum deviceLossDiagnosticPolicy);
+    [[nodiscard]] bool waitEventQueryInternal(EventQuery& query, DeviceLossDiagnosticPolicy::Enum deviceLossDiagnosticPolicy);
     void prepareForDestructionAfterIdleOrLoss();
     [[nodiscard]] bool beginSubmissionOperation()noexcept;
     void endSubmissionOperation()noexcept;

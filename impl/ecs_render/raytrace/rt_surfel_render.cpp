@@ -278,7 +278,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
         commandList.dispatch(DivideUp(targets.width, groupSize), DivideUp(targets.height, groupSize), 1u);
     }
 
-    // The graph-owned late copy publishes its token only after Transfer/Compute/Graphics accepts. This pass only consumes completed diagnostics
+    // The graph-owned late copy publishes its token only after Transfer/Compute/Graphics accepts. This pass only consumes completed diagnostics.
     {
         const u32 frameIndex = m_rayTracingState.m_surfelFrameIndex;
         Core::Buffer* readback = m_rayTracingState.m_surfelCounterReadback.get();

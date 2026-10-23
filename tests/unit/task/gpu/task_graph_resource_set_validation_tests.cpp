@@ -59,10 +59,10 @@ public:
         members.reserve(count);
         for(usize index = 0u; index < count; ++index){
             char text[32u] = {};
-            const auto derivedNameAt60Col34 = DeriveName(Name("tests/resource_set_validation/resource/"), FormatDecimal(index, text));
-            if(!derivedNameAt60Col34)
+            const auto identityNameResult = DeriveName(Name("tests/resource_set_validation/resource/"), FormatDecimal(index, text));
+            if(!identityNameResult)
                 return false;
-            const Name identity = *derivedNameAt60Col34;
+            const Name identity = *identityNameResult;
             const auto resourceResult = graph.importResource(Core::GpuGraphResourceDesc{}.setIdentity(identity).setMarkerLabel("Resource Set Validation Input").setType(Core::GpuGraphResourceType::Buffer));
             if(!resourceResult)
                 return false;
@@ -113,10 +113,10 @@ TEST(ResourceSetValidation, CopiesOrderedMembersAndReusesOnlyTheSameOrderedIdent
     }
     desc.markerLabel = "Replacement Label Does Not Replace Stored Metadata";
     {
-        const auto gpuAdmissionAt105 = context.graph.importResourceSet(desc);
-        EXPECT_TRUE(gpuAdmissionAt105);
-        if(gpuAdmissionAt105)
-            EXPECT_EQ(*gpuAdmissionAt105, set);
+        const auto gpuTaskAdmission = context.graph.importResourceSet(desc);
+        EXPECT_TRUE(gpuTaskAdmission);
+        if(gpuTaskAdmission)
+            EXPECT_EQ(*gpuTaskAdmission, set);
     }
     ExpectUnchangedDeclaration(context, revision, 1u);
     Swap(context.members.front(), context.members.back());
@@ -135,10 +135,10 @@ TEST(ResourceSetValidation, CopiesOrderedMembersAndReusesOnlyTheSameOrderedIdent
     ExpectUnchangedDeclaration(context, revision, 1u);
     desc = context.description(Name("tests/resource_set_validation/second_ordered"));
     {
-        const auto gpuAdmissionAt122 = context.graph.importResourceSet(desc);
-        EXPECT_TRUE(gpuAdmissionAt122);
-        if(gpuAdmissionAt122)
-            EXPECT_TRUE(gpuAdmissionAt122->valid());
+        const auto secondGpuTaskAdmission = context.graph.importResourceSet(desc);
+        EXPECT_TRUE(secondGpuTaskAdmission);
+        if(secondGpuTaskAdmission)
+            EXPECT_TRUE(secondGpuTaskAdmission->valid());
     }
     const Core::GpuTaskGraph::DeclarationReadView declarations(context.graph);
     EXPECT_EQ(declarations.resourceSetCount(), s_ExpectedDualCount);
@@ -177,10 +177,10 @@ TEST(ResourceSetValidation, EarlyAndLateDuplicatesOrInvalidIdsDoNotPublishPartia
             context.members[index] = saved;
         }
         {
-            const auto gpuAdmissionAt159 = context.graph.importResourceSet(desc);
-            EXPECT_TRUE(gpuAdmissionAt159);
-            if(gpuAdmissionAt159)
-                EXPECT_TRUE(gpuAdmissionAt159->valid());
+            const auto gpuTaskAdmission = context.graph.importResourceSet(desc);
+            EXPECT_TRUE(gpuTaskAdmission);
+            if(gpuTaskAdmission)
+                EXPECT_TRUE(gpuTaskAdmission->valid());
         }
         const Core::GpuTaskGraph::DeclarationReadView declarations(context.graph);
         EXPECT_EQ(declarations.resourceSetCount(), 1u);
@@ -197,10 +197,10 @@ TEST(ResourceSetValidation, EmptySetsRemainValidAndMalformedDescriptorsRemainUnp
     const Core::GpuGraphResourceSetId empty = *emptyResult;
     ASSERT_TRUE(empty.valid());
     {
-        const auto gpuAdmissionAt172 = context.graph.importResourceSet(desc);
-        EXPECT_TRUE(gpuAdmissionAt172);
-        if(gpuAdmissionAt172)
-            EXPECT_EQ(*gpuAdmissionAt172, empty);
+        const auto gpuTaskAdmission = context.graph.importResourceSet(desc);
+        EXPECT_TRUE(gpuTaskAdmission);
+        if(gpuTaskAdmission)
+            EXPECT_EQ(*gpuTaskAdmission, empty);
     }
     u64 revision = 0u;
     {
@@ -272,10 +272,10 @@ TEST(ResourceSetValidation, LiveReadViewsRejectBothNewAndIdempotentResourceSetMu
         EXPECT_EQ(stored.members[0u], context.members[0u]);
     }
     {
-        const auto gpuAdmissionAt236 = context.graph.importResourceSet(second);
-        EXPECT_TRUE(gpuAdmissionAt236);
-        if(gpuAdmissionAt236)
-            EXPECT_TRUE(gpuAdmissionAt236->valid());
+        const auto gpuTaskAdmission = context.graph.importResourceSet(second);
+        EXPECT_TRUE(gpuTaskAdmission);
+        if(gpuTaskAdmission)
+            EXPECT_TRUE(gpuTaskAdmission->valid());
     }
 }
 

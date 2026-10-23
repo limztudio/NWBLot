@@ -73,7 +73,7 @@ struct OpaqueRegularSharedComputeEmulationGraphTask{
         };
     };
 
-    // The material system, the frame targets, the timing-ticket slot, the setup readiness flags, and the opaque timing slot are required: shared emulation always brackets its phase with the frame timing.
+    // The material system, frame targets, timing-ticket slot, setup flags, and opaque timing slot are required: shared emulation always brackets its phase with the frame timing.
     struct Payload{
         RendererMaterialSystem& materialSystem;
         DeferredFrameTargets& targets;

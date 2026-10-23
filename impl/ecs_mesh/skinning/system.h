@@ -100,7 +100,6 @@ private:
 
     struct MeshletBoundsPushConstants{
         u32 meshletCount = 0;
-        // UniformBuffer heap slot for MeshSkinningBindlessResourceSlots.
         u32 bindlessResourceSlots = 0;
     };
     static_assert(sizeof(MeshletBoundsPushConstants) == NWB_SKINNED_MESH_BOUNDS_PUSH_CONSTANT_BYTE_SIZE, "MeshSkinning bounds push constants layout must match the shader ABI");
@@ -109,7 +108,6 @@ private:
 
     struct MeshletRepackPushConstants{
         u32 meshletCount = 0;
-        // UniformBuffer heap slot for MeshSkinningBindlessResourceSlots.
         u32 bindlessResourceSlots = 0;
     };
     static_assert(sizeof(MeshletRepackPushConstants) == NWB_SKINNED_MESH_REPACK_PUSH_CONSTANT_BYTE_SIZE, "MeshSkinning repack push constants layout must match the shader ABI");

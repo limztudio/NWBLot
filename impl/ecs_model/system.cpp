@@ -443,8 +443,7 @@ void ModelSystem::updateStaticMeshAttachments(){
                 parentOrder.push_back(queryIndex);
             Sort(parentOrder.begin(), parentOrder.end(), [&](const usize lhs, const usize rhs)noexcept{
                 return jointQueries[lhs].parentEntity < jointQueries[rhs].parentEntity;
-            }
-            );
+            });
             __hidden_model_system::ResolveAttachmentJointQueries(m_world, m_scratchJoints, queries, queryCount, parentOrder.data());
         }
     }

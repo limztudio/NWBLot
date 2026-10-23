@@ -407,7 +407,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     scheduling.forceSubmissionBoundary = false;
     scheduling.allowPacketMerge = true;
     scheduling.mergeWithPrevious = true;
-    // A pure-software per-mesh chain is an explicit immediate predecessor of this semantic endpoint. Retain the complete accepting packet even when later trace consumers form a FrontierSafe consumer frontier.
+    // A pure-software per-mesh chain is an explicit immediate predecessor of this endpoint. Keep the complete packet even when later trace consumers form a FrontierSafe frontier.
     scheduling.allowMergeAcrossConsumerFrontier = pureSoftwareMeshSwBvhBuildsGraphOwned || m_deferredShadowPrepareSceneRefitTask.valid();
     constexpr usize s_DependencyCount = 1u;
     const Core::GpuTaskExternalStateSource shadowPrepareStateSource{ .states = m_shadowPreparePersistentState.source(), };
@@ -474,7 +474,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         accelStructFinalizeScheduling.forceSubmissionBoundary = false;
         accelStructFinalizeScheduling.allowPacketMerge = true;
         accelStructFinalizeScheduling.mergeWithPrevious = true;
-        // Shadow Preparation has direct later Compute consumers. Keep these Read finalizers in the same accepting packet so those consumers wait on every completed build and its typed backing state together.
+        // Shadow Preparation has direct later Compute consumers. Keep these Read finalizers in the same packet so those consumers wait on every completed build and its typed backing state together.
         accelStructFinalizeScheduling.allowMergeAcrossConsumerFrontier = true;
         Core::GpuTaskDesc accelStructFinalizeDesc;
         accelStructFinalizeDesc

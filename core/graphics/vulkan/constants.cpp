@@ -41,7 +41,6 @@ public:
 };
 
 static constexpr FormatMapping s_FormatMappings[] = {
-    // RGBA formats
     { Format::RGBA32_FLOAT           , VK_FORMAT_R32G32B32A32_SFLOAT           , 16, false, false, false },
     { Format::RGBA32_UINT            , VK_FORMAT_R32G32B32A32_UINT             , 16, false, false, false },
     { Format::RGBA32_SINT            , VK_FORMAT_R32G32B32A32_SINT             , 16, false, false, false },
@@ -98,13 +97,11 @@ static constexpr FormatMapping s_FormatMappings[] = {
     { Format::R8_UINT                , VK_FORMAT_R8_UINT                       ,  1, false, false, false },
     { Format::R8_SINT                , VK_FORMAT_R8_SINT                       ,  1, false, false, false },
 
-    // Depth/Stencil formats
     { Format::D32                    , VK_FORMAT_D32_SFLOAT                    ,  4, true , false, false },
     { Format::D24S8                  , VK_FORMAT_D24_UNORM_S8_UINT             ,  4, true , true , false },
     { Format::D32S8                  , VK_FORMAT_D32_SFLOAT_S8_UINT            ,  5, true , true , false },
     { Format::D16                    , VK_FORMAT_D16_UNORM                     ,  2, true , false, false },
 
-    // Compressed formats - BC (DXT)
     { Format::BC1_UNORM              , VK_FORMAT_BC1_RGBA_UNORM_BLOCK          ,  0, false, false, true  },
     { Format::BC1_UNORM_SRGB         , VK_FORMAT_BC1_RGBA_SRGB_BLOCK           ,  0, false, false, true  },
     { Format::BC2_UNORM              , VK_FORMAT_BC2_UNORM_BLOCK               ,  0, false, false, true  },
@@ -120,7 +117,6 @@ static constexpr FormatMapping s_FormatMappings[] = {
     { Format::BC7_UNORM              , VK_FORMAT_BC7_UNORM_BLOCK               ,  0, false, false, true  },
     { Format::BC7_UNORM_SRGB         , VK_FORMAT_BC7_SRGB_BLOCK                ,  0, false, false, true  },
 
-    // Compressed formats - ASTC
     { Format::ASTC_4x4_UNORM         , VK_FORMAT_ASTC_4x4_UNORM_BLOCK          ,  0, false, false, true  },
     { Format::ASTC_4x4_UNORM_SRGB    , VK_FORMAT_ASTC_4x4_SRGB_BLOCK           ,  0, false, false, true  },
     { Format::ASTC_4x4_FLOAT         , VK_FORMAT_ASTC_4x4_SFLOAT_BLOCK_EXT     ,  0, false, false, true  },
@@ -221,7 +217,7 @@ VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask states)noexcept{
     if(states & ResourceStates::ResolveSource)
         flags |= VK_ACCESS_2_TRANSFER_READ_BIT;
     if(states & ResourceStates::Present)
-        flags |= 0; // No access, just layout
+        flags |= 0;
     if(states & ResourceStates::AccelStructRead)
         flags |= VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
     if(states & (ResourceStates::AccelStructWrite | ResourceStates::AccelStructBuildBlas))
@@ -251,7 +247,7 @@ VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask states, bool 
         flags |= VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT;
     if(states & (ResourceStates::ConstantBuffer | ResourceStates::ShaderResource | ResourceStates::UnorderedAccess)){
         // ALL_GRAPHICS omits ray tracing, so add that stage explicitly when its pipeline is enabled.
-        // Without this, a UAV/SRV/CB touched by a ray-tracing shader stays unsynchronized against later access.
+        // Without this, a UAV/SRV/CB touched by ray tracing stays unsynchronized against later access.
         flags |= VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
         if(rayTracingStageAvailable)
             flags |= VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR;

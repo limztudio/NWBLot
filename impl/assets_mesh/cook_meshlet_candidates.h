@@ -288,7 +288,7 @@ MeshletConeScore MeshletCandidateSearch::ComputeMeshletScoreConeCutoff(const Tri
         UpdateMeshletScoreConeCutoff(axis, triangleAreaNormal, hasNormal, coneCutoff);
     }
 
-    if(!hasNormal || VectorGetX(coneCutoff) <= 0.0f)
+    if(!hasNormal || !Vector4Greater(coneCutoff, VectorZero()))
         return {};
 
     return MeshletConeScore{ coneCutoff, true };

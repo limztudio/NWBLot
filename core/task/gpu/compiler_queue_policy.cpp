@@ -32,7 +32,7 @@ inline constexpr u64 s_LargeQueueCostWeight = 8u;
 
 inline constexpr u8 s_ValidQueueCapabilityMask = static_cast<u8>(GpuQueueCapability::Transfer) | static_cast<u8>(GpuQueueCapability::Compute) | static_cast<u8>(GpuQueueCapability::Graphics);
 
-// Compilers are short-lived value objects, so packet identity must be allocated process-wide. The graph generation remains the identity of declared task/resource handles
+// Compilers are short-lived value objects, so packet identity must be allocated process-wide. The graph generation remains the identity of declared task/resource handles.
 static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
 
 
@@ -140,7 +140,7 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
             const GpuPhysicalQueueInfo& previous = topology.queues[previousIndex];
             if(
                 previous.id == queue.id
-                // Queue IDs are graph-facing handles, but one ownership-domain/index pair must still name exactly one native transport. Otherwise same-class routing could manufacture distinct packet identities for the same native queue and incorrectly turn ordinary queue order into a timeline edge.
+                // One domain/index pair names exactly one native transport; otherwise same-class routing could split one native queue into distinct packet identities.
                 || (previous.familyIndex == queue.familyIndex && previous.queueIndex == queue.queueIndex)
             )
                 return false;

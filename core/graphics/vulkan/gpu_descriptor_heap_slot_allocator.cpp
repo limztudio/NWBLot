@@ -21,7 +21,7 @@ NWB_VULKAN_BEGIN
 
 
 usize GpuDescriptorHeap::SlotAllocator::RequiredBytes(const u32 capacity){
-    return AddSize(AddSize(FixedTable<u32>::RequiredBytes(capacity), FixedTable<SlotState>::RequiredBytes(capacity)), FixedTable<u8>::RequiredBytes(capacity));
+    return AddSize(AddSize(FixedTable<u32>::RequiredBytes(capacity), FixedTable<SlotState::Enum>::RequiredBytes(capacity)), FixedTable<u8>::RequiredBytes(capacity));
 }
 
 bool GpuDescriptorHeap::SlotAllocator::initialize(Alloc::PersistentArena& arena, const u32 newCapacity){

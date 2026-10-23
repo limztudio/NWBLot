@@ -199,7 +199,7 @@ GpuRecordedGraph::GpuRecordedGraph(GraphicsArena& arena)noexcept
 GpuRecordedGraph::~GpuRecordedGraph()noexcept{
     NWB_FATAL_ASSERT_MSG(!ArtifactOperation::ActiveFor(*this), "GpuRecordedGraph destruction requires active artifact operations to finish first");
 
-    // Destruction normally joins existing readers. A callback that already owns another artifact or transaction cannot wait here without permitting a symmetric cross-object destruction deadlock.
+    // Destruction normally joins existing readers. A callback that already owns another artifact or transaction cannot wait here without permitting a symmetric cross-object deadlock.
     if(ArtifactOperation::Active() || GpuGraphSubmissionTransaction::SubmissionOperation::Active()){
         ArtifactOperation artifactOperation(*this, ArtifactOperationMode::Exclusive);
         NWB_FATAL_ASSERT_MSG(artifactOperation.valid(), "nested GpuRecordedGraph destruction cannot wait for active artifact operations");
@@ -450,7 +450,7 @@ bool GpuRecordedGraph::validForWithinArtifactOperation(
         && storage->graphIdentity == &graph
         && storage->recordingAttemptGeneration != 0u
         // A terminal accepted/discarded artifact remains a valid immutable result after the graph releases its active attempt lease.
-        // Declaration admission plus the exact compiled-plan identity proves that the source graph has not mutated
+        // Declaration admission plus the exact compiled-plan identity proves that the source graph has not mutated.
     ;
 }
 

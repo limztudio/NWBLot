@@ -70,7 +70,7 @@ bool nwbReflectionBuildScreenRay(const NwbReflectionSurface surface, out NwbRefl
     if(!all(isfinite(firstClip)) || !all(isfinite(lastClip)))
         return false;
 
-    // Clip in homogeneous coordinates before division. The reflected ray may point toward the camera, through the near plane, or out a side plane; either sign of projected depth direction remains valid.
+    // Clip in homogeneous coordinates before division. The reflected ray may point toward the camera, through the near plane, or out a side plane; either sign of depth direction stays valid.
     const float4 delta = lastClip - firstClip;
     float first = surface.bias / g_NwbReflectionParameters.maxRayDistance;
     float last = 1.0;
@@ -137,7 +137,7 @@ bool nwbReflectionValidateScreenHit(
     if(abs(incidence) < NWB_REFLECTION_SCREEN_INCIDENCE_MIN)
         return false;
 
-    // The depth hierarchy is only a rejection bound, never a hit. Intersect the captured surface's local plane in world units, then require that crossing to project into this exact finest-level interval. In particular, starting behind a coarse cell does not manufacture a hit or forbid a ray traveling toward the camera.
+    // The depth hierarchy is only a rejection bound; intersect the local surface plane and require the crossing to project into this cell.
     const float distance = dot(position - ray.worldOrigin, normal) / incidence;
     if(!isfinite(distance) || distance <= surface.bias || distance > g_NwbReflectionParameters.maxRayDistance)
         return false;
@@ -157,7 +157,7 @@ bool nwbReflectionValidateScreenHit(
         return false;
     crossedSurface = true;
 
-    // World positions are stored in FP16. Bound their projection error instead of unprojecting the tiny-near D32 value and comparing that unstable position against a world-space thickness setting.
+    // World positions are stored in FP16. Bound their projection error instead of unprojecting the tiny-near D32 value and comparing that unstable position against world-space thickness.
     const float3 positionError = max(abs(position) * NWB_REFLECTION_POSITION_RELATIVE_ERROR, float3(NWB_REFLECTION_SCREEN_POSITION_ERROR_MIN));
     const float4 positionClip = mul(g_NwbReflectionView.worldToClip, float4(position, 1.0));
     const float4 clipError = float4(
@@ -190,7 +190,7 @@ bool nwbReflectionValidateScreenHit(
     confidence = geometryConfidence * geometryConfidence * edgeWeight.x * edgeWeight.y;
     confidence *= half(smoothstep(NWB_REFLECTION_SCREEN_INCIDENCE_MIN, NWB_REFLECTION_SCREEN_INCIDENCE_FULL, abs(incidence)));
 
-    // Screen color was shaded for the camera observer. Reflective hit materials reduce confidence when the reflected observer differs; roughness relaxes the directional match but does not prove a custom BXDF invariant.
+    // Screen color was shaded for the camera observer. Reflective hit materials reduce confidence when the reflected observer differs; roughness relaxes the match but proves no custom invariant.
     const float4 specular = nwbHeapSampledImage2D(g_NwbReflectionParameters.opaqueSpecularSlot).Load(texel);
     if(!all(isfinite(specular)))
         return false;
@@ -214,7 +214,7 @@ bool nwbReflectionValidateScreenHit(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The caller applies the receiver's Fresnel once and blends the raw cached radiance with its environment by confidence. A failed or uncertain screen query may enter the caller's existing bounded hardware queue.
+// The caller applies the receiver's Fresnel once and blends the raw cached radiance with its environment by confidence. A failed or uncertain screen query may enter the existing hardware queue.
 bool nwbReflectionTraceScreen(const uint2 pixel, const NwbReflectionSurface surface, out half3 radiance, out half confidence, out uint iterations, out bool limited){
     radiance = half3(0.0h);
     confidence = half(0.0h);
@@ -238,7 +238,7 @@ bool nwbReflectionTraceScreen(const uint2 pixel, const NwbReflectionSurface surf
         const float3 position = ray.screenOrigin + ray.screenDirection * parameter;
         if(any(position.xy < 0.0) || any(position.xy >= 1.0))
             return false;
-        // Native NPOT mip dimensions floor-halve. The reduction includes their overlapping edge footprint, so each fetched interval conservatively bounds the complete normalized cell used for this traversal.
+        // Native NPOT mip dimensions floor-halve. The reduction includes their overlapping edge footprint, so each fetched interval bounds the complete normalized cell used for this traversal.
         const uint2 dimensions = max(uint2(1u), fullDimensions >> mip);
         const uint2 cell = min(uint2(position.xy * float2(dimensions)), dimensions - 1u);
         const float cellExit = nwbReflectionScreenCellExit(ray, cell, dimensions);
@@ -250,7 +250,7 @@ bool nwbReflectionTraceScreen(const uint2 pixel, const NwbReflectionSurface surf
         if(!all(isfinite(depthInterval)))
             return false;
         const float exitDepth = ray.screenOrigin.z + ray.screenDirection.z * cellExit;
-        // Both ray directions can skip cells disjoint from the represented visible-depth interval. The maximum permits camera-facing rays to cross a panel's interior efficiently without inferring hidden geometry.
+        // Both ray directions can skip cells disjoint from the represented visible-depth interval. The maximum lets camera-facing rays cross a panel's interior efficiently without hidden geometry.
         const bool empty = depthInterval.x >= 1.0 || max(position.z, exitDepth) < depthInterval.x - NWB_REFLECTION_SCREEN_DEPTH_ROUNDOFF || min(position.z, exitDepth) > depthInterval.y + NWB_REFLECTION_SCREEN_DEPTH_ROUNDOFF;
         if(empty){
             parameter = cellExit + ray.parameterEpsilon;
@@ -262,7 +262,7 @@ bool nwbReflectionTraceScreen(const uint2 pixel, const NwbReflectionSurface surf
             bool crossedSurface;
             if(nwbReflectionValidateScreenHit(pixel, cell, surface, ray, parameter, cellExit, radiance, confidence, crossedSurface))
                 return true;
-            // Do not march through a crossing whose captured position/radiance failed validation and then report a farther layer as visible. Hardware or the environment resolves that missing screen information.
+            // Do not march through a crossing whose captured position/radiance failed validation and then report a farther layer as visible. The environment resolves that missing screen information.
             if(crossedSurface)
                 return false;
             parameter = cellExit + ray.parameterEpsilon;

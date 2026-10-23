@@ -186,11 +186,11 @@ bool RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameT
         return false;
     }
 
-    static u64 s_nextLaggedLightingHistoryGeneration = 0u;
-    ++s_nextLaggedLightingHistoryGeneration;
-    if(s_nextLaggedLightingHistoryGeneration == 0u)
-        ++s_nextLaggedLightingHistoryGeneration;
-    history.generation = s_nextLaggedLightingHistoryGeneration;
+    static u64 s_NextLaggedLightingHistoryGeneration = 0u;
+    ++s_NextLaggedLightingHistoryGeneration;
+    if(s_NextLaggedLightingHistoryGeneration == 0u)
+        ++s_NextLaggedLightingHistoryGeneration;
+    history.generation = s_NextLaggedLightingHistoryGeneration;
     return true;
 }
 

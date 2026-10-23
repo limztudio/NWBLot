@@ -59,7 +59,7 @@ OpaqueCsgIntervalClearBuilder::OpaqueCsgIntervalClearBuilder(Core::GpuTaskGraph&
     Core::GpuTaskId clearTask = *clearTaskResult;
     result.clearFirstTask = clearTask;
     Core::GpuTaskSchedulingHint csgIntervalClearTailScheduling = csgIntervalClearScheduling;
-    // The timing endpoint must remain in the first clear's Graphics packet even when another queue observes the interval id. The explicit immediate dependency satisfies FrontierSafe's consumer-frontier override.
+    // The timing endpoint must stay in the first clear's Graphics packet even when another queue observes the interval id. The explicit immediate dependency satisfies the consumer override.
     csgIntervalClearTailScheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc csgIntervalClearTailDesc;
     csgIntervalClearTailDesc.setIdentity(Name("render.graphics_prefix.csg_receiver_event_count_clear")).setMarkerLabel("CSG Receiver Event Count Clear").setScheduling(csgIntervalClearTailScheduling).setDependencies(&clearTask, 1u);

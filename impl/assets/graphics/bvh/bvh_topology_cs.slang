@@ -15,7 +15,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Common-prefix length of the augmented keys: 32-bit Morton, then the leaf index as a tie-break so equal Morton codes still yield a strict total order (Karras requires this to avoid degenerate nodes). Returns -1 for an out-of-range neighbour, which terminates the range searches below.
+// Common-prefix length of the augmented keys (Morton + leaf index tie-break for a strict total order). Returns -1 for an out-of-range neighbour, which ends the range search below.
 int nwbBvhDelta(const int lhs, const int rhs, const uint primitiveCount){
     if(rhs < 0 || rhs >= (int)primitiveCount)
         return -1;

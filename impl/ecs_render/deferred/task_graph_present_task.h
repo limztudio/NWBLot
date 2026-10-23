@@ -39,7 +39,7 @@ struct DeferredPresentGraphTask{
     // Acquired backbuffer recording belongs to the primary presentation timeline.
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics, true };
 
-    // The deferred system, the graphics runtime, the frame targets, the async-final timing slot, the timing ticket, and the shadow-visibility task are required: present always closes the async-final range when shadow visibility runs on compute.
+    // The deferred system, runtime, targets, async-final timing slot, ticket, and shadow-visibility task are required: present closes the async-final range when shadow runs on compute.
     // Only the output-layer contributor stays optional.
     struct Payload{
         RendererDeferredSystem& deferredSystem;

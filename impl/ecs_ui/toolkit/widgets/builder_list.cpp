@@ -95,10 +95,10 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
         result.valid = false;
         return result;
     }
-    const SIMDVectorSingle framepaddingCurrent = VectorSet(frame.padding.left, frame.padding.top, frame.padding.right, frame.padding.bottom);
-    const SIMDVectorSingle framepaddingCandidate = VectorSet(background->padding.left, background->padding.top, background->padding.right, background->padding.bottom);
-    const SIMDVectorSingle framepaddingMaximum = VectorSelect(framepaddingCandidate, framepaddingCurrent, VectorGreater(framepaddingCurrent, framepaddingCandidate));
-    frame.padding = { VectorGetX(framepaddingMaximum), VectorGetY(framepaddingMaximum), VectorGetZ(framepaddingMaximum), VectorGetW(framepaddingMaximum) };
+    const SIMDVectorSingle framePaddingCurrent = VectorSet(frame.padding.left, frame.padding.top, frame.padding.right, frame.padding.bottom);
+    const SIMDVectorSingle framePaddingCandidate = VectorSet(background->padding.left, background->padding.top, background->padding.right, background->padding.bottom);
+    const SIMDVectorSingle framePaddingMaximum = VectorSelect(framePaddingCandidate, framePaddingCurrent, VectorGreater(framePaddingCurrent, framePaddingCandidate));
+    frame.padding = { VectorGetX(framePaddingMaximum), VectorGetY(framePaddingMaximum), VectorGetZ(framePaddingMaximum), VectorGetW(framePaddingMaximum) };
     if(!prepareListMetrics(frame)){
         m_context.fail();
         result.valid = false;
@@ -213,12 +213,10 @@ bool Builder::applyListGesture(ListState& state, const PointerGesture& gesture)n
         VectorDoubleSet(static_cast<f64>(gesture.targetRectangle.y), static_cast<f64>(gesture.position.y), 0.0, 0.0),
         VectorDoubleSet(static_cast<f64>(gesture.referenceRectangle.y), static_cast<f64>(gesture.origin.y), 0.0, 0.0)
     );
-    const f64 start = VectorDoubleGetX(startDeltaValue);
-    const f64 delta = VectorDoubleGetY(startDeltaValue);
-    const SIMDVectorDouble fractionValue = VectorDoubleDivide(VectorDoubleAdd(VectorDoubleReplicate(start), VectorDoubleReplicate(delta)), travelValue);
-    const f64 fraction = VectorDoubleGetX(VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(VectorDoubleSplatOne(), fractionValue), VectorDoubleGreater(fractionValue, VectorDoubleZero())));
+    const SIMDVectorDouble fractionValue = VectorDoubleDivide(VectorDoubleAdd(VectorDoubleSplatX(startDeltaValue), VectorDoubleSplatY(startDeltaValue)), travelValue);
+    const SIMDVectorDouble fraction = VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(VectorDoubleSplatOne(), fractionValue), VectorDoubleGreater(fractionValue, VectorDoubleZero()));
     state.m_ensureCursor = false;
-    return state.m_scroll.setOffset(VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(fraction), VectorDoubleReplicate(gesture.maximum))));
+    return state.m_scroll.setOffset(VectorDoubleGetX(VectorDoubleMultiply(fraction, VectorDoubleReplicate(gesture.maximum))));
 }
 
 

@@ -17,13 +17,13 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_gpu_packet_runtime_execution{
+namespace __hidden_gpu_task_scheduler{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A frontier packet is meaningful only as an explicit recovery/finalization tail. The compiler prevents it from merging with ordinary work, but does not force declaration order, so normal graph execution rejects one inside either its semantic endpoint prefix or its automatically derived ordinary prefix before recording begins.
+// A frontier packet is only a recovery/finalization tail. The compiler keeps it out of ordinary work, but does not force declaration order, so execution rejects one inside its endpoint.
 [[nodiscard]] Expected<GpuSubmissionPacketRange, GpuSubmissionPacketId> FindNormalGraphPacketRange(const GpuTaskGraph::DeclarationReadView& declarations, const GpuCompiledGraph::ReadView& planAccess, const GpuTaskId& terminalTask)noexcept{
     const usize packetCount = planAccess.packetCount();
     if(packetCount == 0u)
@@ -124,7 +124,7 @@ bool GpuTaskScheduler::submitGraph(
         GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::TryAcquire(graph);
         if(!declarationAccess.valid() || !planAccess.validFor(declarationAccess) || !transaction.validFor(planAccess))
             return false;
-        const auto range = __hidden_gpu_packet_runtime_execution::FindNormalGraphPacketRange(declarationAccess, planAccess, desc.terminalTask);
+        const auto range = __hidden_gpu_task_scheduler::FindNormalGraphPacketRange(declarationAccess, planAccess, desc.terminalTask);
         if(!range){
             if(outFailedPacket)
                 *outFailedPacket = range.error();
@@ -364,7 +364,7 @@ bool GpuTaskScheduler::recordAndSubmitTaskWithinSubmissionOperation(
     if(!submitPacketRangeWithinSubmissionOperation(graph, compiledGraph, recordedGraph, planAccess.packetRangeForTasks(task, task), nullptr, 0u, transaction, scratchArena, &failedPacket, acceptedCallback, acceptedCallback ? 1u : 0u, nullptr, 0u)){
         if(outFailedPacket)
             *outFailedPacket = failedPacket;
-        // Range submission normally rejected the packet already. Keep this idempotent closeout for validation failures that happen before packet traversal, so a renderer cannot strand an armed recovery task.
+        // Range submission normally rejected the packet already. Keep this idempotent closeout for validation failures before traversal, so a renderer cannot strand an armed task.
         rejectTask();
         return false;
     }

@@ -92,7 +92,7 @@ Expected<SliderMetrics> SliderLayout::Measure(const SliderOptions& options, cons
     candidate.trackHeight = style.trackHeight;
     const SIMDVectorDouble padding = VectorDoubleAdd(VectorDoubleSet(style.padding.left, style.padding.top, 0.0, 0.0), VectorDoubleSet(style.padding.right, style.padding.bottom, 0.0, 0.0));
     const SIMDVectorDouble intrinsic = VectorDoubleAdd(padding, VectorDoubleMax(VectorDoubleSet(style.thumbExtent.x, style.thumbExtent.y, 0.0, 0.0), VectorDoubleSet(style.thumbExtent.x, style.trackHeight, 0.0, 0.0)));
-    const SIMDVectorDouble minimum = VectorDoubleSet(VectorDoubleGetX(intrinsic), options.height, 0.0, 0.0);
+    const SIMDVectorDouble minimum = VectorDoubleSelect(intrinsic, VectorDoubleSet(0.0, options.height, 0.0, 0.0), s_DoubleSIMDMaskY);
     const SIMDVectorDouble size = VectorDoubleSelect(intrinsic, minimum, VectorDoubleGreater(minimum, intrinsic));
     const f64 width = VectorDoubleGetX(size);
     const f64 height = VectorDoubleGetY(size);
@@ -121,34 +121,32 @@ Expected<SliderPlacement> SliderLayout::Place(const Rect& bounds, const Rect& cl
     const SIMDVectorDouble paddingEnd = VectorDoubleSet(metrics.padding.right, metrics.padding.bottom, 0.0, 0.0);
     const SIMDVectorDouble lastInset = VectorDoubleSelect(remaining, paddingEnd, VectorDoubleLess(paddingEnd, remaining));
     const SIMDVectorDouble xYValue = VectorDoubleAdd(VectorDoubleSet(bounds.x, bounds.y, 0.0, 0.0), firstInset);
-    const f64 x = VectorDoubleGetX(xYValue);
-    const f64 y = VectorDoubleGetY(xYValue);
+    const SIMDVectorDouble xVector = VectorDoubleSplatX(xYValue);
+    const SIMDVectorDouble yVector = VectorDoubleSplatY(xYValue);
     const SIMDVectorDouble widthHeightValue = VectorDoubleSubtract(remaining, lastInset);
-    const f64 width = VectorDoubleGetX(widthHeightValue);
-    const f64 height = VectorDoubleGetY(widthHeightValue);
+    const SIMDVectorDouble heightVector = VectorDoubleSplatY(widthHeightValue);
     const SIMDVectorDouble geometryPair4Operand0 = VectorDoubleSet(static_cast<f64>(metrics.thumbExtent.x), static_cast<f64>(metrics.thumbExtent.y), 0.0, 0.0);
     const SIMDVectorDouble geometryPair4Operand1 = VectorDoubleSelect(VectorDoubleZero(), widthHeightValue, s_DoubleSIMDMaskXY);
     const SIMDVectorDouble thumbWidthThumbHeightValue = VectorDoubleSelect(geometryPair4Operand1, geometryPair4Operand0, VectorDoubleLess(geometryPair4Operand0, geometryPair4Operand1));
     const f64 thumbWidth = VectorDoubleGetX(thumbWidthThumbHeightValue);
     const f64 thumbHeight = VectorDoubleGetY(thumbWidthThumbHeightValue);
-    const f64 trackHeight = VectorDoubleGetY(VectorDoubleMin(VectorDoubleSet(width, metrics.trackHeight, 0.0, 0.0), widthHeightValue));
-    const f64 travel = VectorDoubleGetX(VectorDoubleSubtract(widthHeightValue, thumbWidthThumbHeightValue));
-    const SIMDVectorDouble offsets = VectorDoubleMultiply(VectorDoubleSet(thumbWidth, travel, 0.0, 0.0), VectorDoubleSet(s_RectCenterFractionF64, normalized, 0.0, 0.0));
-    const SIMDVectorDouble centers = VectorDoubleAdd(VectorDoubleReplicate(x), offsets);
-    const f64 centerStart = VectorDoubleGetX(centers);
-    const f64 thumbX = normalized == 0.0 ? x : normalized == 1.0 ? VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(x), VectorDoubleReplicate(travel))) : VectorDoubleGetY(centers);
-    const auto travelBounds = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoubleSet(x, y, width, height));
+    const SIMDVectorDouble trackHeightVector = VectorDoubleMin(VectorDoubleSelect(widthHeightValue, VectorDoubleReplicate(metrics.trackHeight), s_DoubleSIMDMaskY), widthHeightValue);
+    const SIMDVectorDouble travelVector = VectorDoubleSubtract(widthHeightValue, thumbWidthThumbHeightValue);
+    const SIMDVectorDouble offsets = VectorDoubleMultiply(VectorDoublePermute<0, 4, 2, 3>(thumbWidthThumbHeightValue, travelVector), VectorDoubleSet(s_RectCenterFractionF64, normalized, 0.0, 0.0));
+    const SIMDVectorDouble centers = VectorDoubleAdd(xVector, offsets);
+    const SIMDVectorDouble thumbXVector = normalized == 0.0 ? xVector : normalized == 1.0 ? VectorDoubleAdd(xVector, travelVector) : VectorDoubleSplatY(centers);
+    const auto travelBounds = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoublePermute<0, 1, 4, 5>(xYValue, widthHeightValue));
     if(!travelBounds)
         return MakeUnexpected(Failure{});
-    const auto centerTravel = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoubleSet(centerStart, y, travel, height));
+    const auto centerTravel = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoublePermute<0, 1, 4, 5>(VectorDoubleSelect(xYValue, centers, s_DoubleSIMDMaskX), VectorDoubleSelect(widthHeightValue, travelVector, s_DoubleSIMDMaskX)));
     if(!centerTravel)
         return MakeUnexpected(Failure{});
-    const SIMDVectorDouble verticalSpace = VectorDoubleSubtract(VectorDoubleReplicate(height), VectorDoubleSet(trackHeight, thumbHeight, height, height));
-    const SIMDVectorDouble centeredY = VectorDoubleAdd(VectorDoubleReplicate(y), VectorDoubleMultiply(verticalSpace, VectorDoubleReplicate(s_RectCenterFractionF64)));
-    const auto track = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoubleSet(centerStart, VectorDoubleGetX(centeredY), travel, trackHeight));
+    const SIMDVectorDouble verticalSpace = VectorDoubleSubtract(heightVector, VectorDoublePermute<1, 5, 2, 3>(trackHeightVector, thumbWidthThumbHeightValue));
+    const SIMDVectorDouble centeredY = VectorDoubleAdd(yVector, VectorDoubleMultiply(verticalSpace, VectorDoubleReplicate(s_RectCenterFractionF64)));
+    const auto track = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoublePermute<0, 1, 4, 5>(VectorDoublePermute<0, 4, 2, 3>(centers, centeredY), VectorDoubleSelect(trackHeightVector, travelVector, s_DoubleSIMDMaskX)));
     if(!track)
         return MakeUnexpected(Failure{});
-    const auto thumb = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoubleSet(thumbX, VectorDoubleGetY(centeredY), thumbWidth, thumbHeight));
+    const auto thumb = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoublePermute<0, 1, 4, 5>(VectorDoubleSelect(thumbXVector, centeredY, s_DoubleSIMDMaskY), thumbWidthThumbHeightValue));
     if(!thumb)
         return MakeUnexpected(Failure{});
     candidate.travelBounds = *travelBounds;

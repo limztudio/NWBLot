@@ -20,7 +20,7 @@ TESTBED_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_testbed_ui_gallery{
+namespace __hidden_ui_widget_gallery{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -53,16 +53,17 @@ static constexpr Array<StringView, Section::kCount> s_SectionNames{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB::Impl::Ui::Rect UiWidgetGallery::LayoutBounds(const NWB::Impl::Ui::DisplayMetrics& display, const f32 preferredTop)noexcept{
-    using namespace __hidden_testbed_ui_gallery;
+SIMDVectorSingle UiWidgetGallery::LayoutBounds(const SIMDVectorSingle displaySize, const SIMDVectorSingle preferredTop)noexcept{
+    using namespace __hidden_ui_widget_gallery;
     const f32 height = ((s_SelectorHeight + s_ContentGap) + s_ContentHeight);
-    const SIMDVectorSingle available = VectorSubtract(VectorSubtract(VectorSet(display.logicalWidth, display.logicalHeight, 0.0f, 0.0f), VectorSet(s_SelectorWidth, height, 0.0f, 0.0f)), VectorReplicate(s_Margin));
-    const SIMDVectorSingle preferred = VectorSet(0.0f, preferredTop, 0.0f, 0.0f);
+    const SIMDVectorSingle size = VectorSet(s_SelectorWidth, height, 0.0f, 0.0f);
+    const SIMDVectorSingle available = VectorSubtract(VectorSubtract(displaySize, size), VectorReplicate(s_Margin));
+    const SIMDVectorSingle preferred = VectorAndInt(preferredTop, s_SIMDMaskY);
     const SIMDVectorSingle topLimit = VectorAndInt(VectorLess(preferred, available), VectorSelectControl(0u, 1u, 0u, 0u));
     const SIMDVectorSingle capped = VectorSelect(available, preferred, topLimit);
     const SIMDVectorSingle margin = VectorReplicate(s_Margin);
     const SIMDVectorSingle origin = VectorSelect(capped, margin, VectorGreater(margin, capped));
-    return { VectorGetX(origin), VectorGetY(origin), s_SelectorWidth, height };
+    return VectorPermute<0, 1, 4, 5>(origin, size);
 }
 
 
@@ -80,7 +81,7 @@ UiWidgetGallery::UiWidgetGallery(NWB::Core::Alloc::GlobalArena& arena, const NWB
 
 void UiWidgetGallery::paint(NWB::Impl::UiPaintContext& context, const NWB::Impl::Ui::Rect& bounds){
     using namespace NWB::Impl::Ui;
-    using namespace __hidden_testbed_ui_gallery;
+    using namespace __hidden_ui_widget_gallery;
     Builder& ui = context.ui;
     const u32 previous = m_selectedGallery;
     if(!ui.beginPanel("gallery_selector", { bounds.x, bounds.y, bounds.width, s_SelectorHeight }))

@@ -71,9 +71,9 @@ static void BuildVersionChain(Graphics::GpuTaskGraph& graph, const Graphics::Gpu
             physicalUse.access = Graphics::GpuTaskResourceAccess::Write;
         }
         Graphics::GpuTaskDesc desc;
-        const auto derivedNameAt74Col25 = IndexedName(Name("tests/analysis_optimization/version_task"), index);
-        ASSERT_TRUE(derivedNameAt74Col25);
-        desc.setIdentity(*derivedNameAt74Col25).setMarkerLabel("Analysis Version Task");
+        const auto derivedNameResult = IndexedName(Name("tests/analysis_optimization/version_task"), index);
+        ASSERT_TRUE(derivedNameResult);
+        desc.setIdentity(*derivedNameResult).setMarkerLabel("Analysis Version Task");
         if(previous.valid())
             desc.setDependencies(&previous, 1u);
         if(physicalUse.resource.valid())
@@ -81,9 +81,9 @@ static void BuildVersionChain(Graphics::GpuTaskGraph& graph, const Graphics::Gpu
         if(usesVersion)
             desc.setResourceVersionUses(&versionUse, 1u);
         const Graphics::GpuTaskCommandRequirements commands{ Graphics::GpuQueueCapability::Compute };
-        const auto gpuAdmissionAt78 = graph.addTask(desc, commands);
-        ASSERT_TRUE(gpuAdmissionAt78);
-        previous = *gpuAdmissionAt78;
+        const auto previouTaskAdmission = graph.addTask(desc, commands);
+        ASSERT_TRUE(previouTaskAdmission);
+        previous = *previouTaskAdmission;
         ASSERT_TRUE(previous.valid());
     }
 }
@@ -127,9 +127,9 @@ TEST(GpuTaskGraphAnalysis, VersionLifetimeConstraintsDoNotInventProducedVersionO
         const Graphics::GpuTaskResourceRange range{ .bufferRange = Graphics::BufferRange(0u, 64u) };
         Graphics::GpuGraphResourceVersionId versions[2u];
         for(usize index = 0u; index < LengthOf(versions); ++index){
-            const auto gpuAdmissionAt116 = graph.declareResourceVersion(Graphics::GpuGraphResourceVersionDesc{}.setResource(buffer).setRange(range).setOrigin(Graphics::GpuGraphResourceVersionOrigin::TaskProduced));
-            ASSERT_TRUE(gpuAdmissionAt116);
-            versions[reversed ? 1u - index : index] = *gpuAdmissionAt116;
+            const auto versionTaskAdmission = graph.declareResourceVersion(Graphics::GpuGraphResourceVersionDesc{}.setResource(buffer).setRange(range).setOrigin(Graphics::GpuGraphResourceVersionOrigin::TaskProduced));
+            ASSERT_TRUE(versionTaskAdmission);
+            versions[reversed ? 1u - index : index] = *versionTaskAdmission;
             ASSERT_TRUE(versions[reversed ? 1u - index : index].valid());
         }
         Graphics::GpuTaskId tasks[4u];
@@ -143,13 +143,13 @@ TEST(GpuTaskGraphAnalysis, VersionLifetimeConstraintsDoNotInventProducedVersionO
             };
             const Graphics::GpuTaskResourceVersionUse versionUse{ .version = versions[index % LengthOf(versions)], .role = producer ? Graphics::GpuTaskResourceVersionRole::Produce : Graphics::GpuTaskResourceVersionRole::Consume, };
             Graphics::GpuTaskDesc desc;
-            const auto derivedNameAt140Col29 = IndexedName(Name("tests/analysis_optimization/ambiguous_version_task"), index);
-            ASSERT_TRUE(derivedNameAt140Col29);
-            desc.setIdentity(*derivedNameAt140Col29).setMarkerLabel("Ambiguous Version Task").setResourceUses(&physicalUse, 1u).setResourceVersionUses(&versionUse, 1u);
+            const auto resourceNameResult = IndexedName(Name("tests/analysis_optimization/ambiguous_version_task"), index);
+            ASSERT_TRUE(resourceNameResult);
+            desc.setIdentity(*resourceNameResult).setMarkerLabel("Ambiguous Version Task").setResourceUses(&physicalUse, 1u).setResourceVersionUses(&versionUse, 1u);
             const Graphics::GpuTaskCommandRequirements commands{ Graphics::GpuQueueCapability::Compute };
-            const auto gpuAdmissionAt132 = graph.addTask(desc, commands);
-            ASSERT_TRUE(gpuAdmissionAt132);
-            tasks[index] = *gpuAdmissionAt132;
+            const auto taskAdmission = graph.addTask(desc, commands);
+            ASSERT_TRUE(taskAdmission);
+            tasks[index] = *taskAdmission;
             ASSERT_TRUE(tasks[index].valid());
         }
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
@@ -194,9 +194,9 @@ TEST(GpuTaskGraphAnalysis, ResourceVersionPreBirthReachabilityHandlesFrozenSeman
     Graphics::GpuGraphResourceVersionId versions[2u];
     for(usize index = 0u; index < LengthOf(versions); ++index){
         ASSERT_TRUE(buffers[index].valid());
-        const auto gpuAdmissionAt173 = graph.declareResourceVersion(Graphics::GpuGraphResourceVersionDesc{}.setResource(buffers[index]).setRange(range).setOrigin(Graphics::GpuGraphResourceVersionOrigin::TaskProduced));
-        ASSERT_TRUE(gpuAdmissionAt173);
-        versions[index] = *gpuAdmissionAt173;
+        const auto versionTaskAdmission = graph.declareResourceVersion(Graphics::GpuGraphResourceVersionDesc{}.setResource(buffers[index]).setRange(range).setOrigin(Graphics::GpuGraphResourceVersionOrigin::TaskProduced));
+        ASSERT_TRUE(versionTaskAdmission);
+        versions[index] = *versionTaskAdmission;
         ASSERT_TRUE(versions[index].valid());
     }
     Graphics::GpuTaskId tasks[5u];
@@ -222,9 +222,9 @@ TEST(GpuTaskGraphAnalysis, ResourceVersionPreBirthReachabilityHandlesFrozenSeman
             }
         }
         Graphics::GpuTaskDesc desc;
-        const auto derivedNameAt217Col25 = IndexedName(Name("tests/analysis_optimization/semantic_cycle_task"), index);
-        ASSERT_TRUE(derivedNameAt217Col25);
-        desc.setIdentity(*derivedNameAt217Col25).setMarkerLabel("Semantic Cycle Task");
+        const auto derivedNameResult = IndexedName(Name("tests/analysis_optimization/semantic_cycle_task"), index);
+        ASSERT_TRUE(derivedNameResult);
+        desc.setIdentity(*derivedNameResult).setMarkerLabel("Semantic Cycle Task");
         if(index != 0u)
             desc.setDependencies(&tasks[index - 1u], 1u);
         if(physicalUseCount != 0u){
@@ -232,9 +232,9 @@ TEST(GpuTaskGraphAnalysis, ResourceVersionPreBirthReachabilityHandlesFrozenSeman
             desc.setResourceVersionUses(&versionUse, 1u);
         }
         const Graphics::GpuTaskCommandRequirements commands{ Graphics::GpuQueueCapability::Compute };
-        const auto gpuAdmissionAt207 = graph.addTask(desc, commands);
-        ASSERT_TRUE(gpuAdmissionAt207);
-        tasks[index] = *gpuAdmissionAt207;
+        const auto taskAdmission = graph.addTask(desc, commands);
+        ASSERT_TRUE(taskAdmission);
+        tasks[index] = *taskAdmission;
         ASSERT_TRUE(tasks[index].valid());
     }
     Core::Alloc::ScratchArena scratchArena(Name("tests/analysis_optimization/semantic_cycle_scratch"));
@@ -276,9 +276,9 @@ TEST(GpuTaskGraphAnalysis, VersionLifetimeEdgesPreserveDistinctTaskAndVersionOrd
         for(usize index = 0u; index < LengthOf(versions); ++index){
             const usize versionIndex = reversed ? 1u - index : index;
             ASSERT_TRUE(buffers[versionIndex].valid());
-            const auto gpuAdmissionAt243 = graph.declareResourceVersion(Graphics::GpuGraphResourceVersionDesc{}.setResource(buffers[versionIndex]).setRange(range).setOrigin(Graphics::GpuGraphResourceVersionOrigin::TaskProduced));
-            ASSERT_TRUE(gpuAdmissionAt243);
-            versions[versionIndex] = *gpuAdmissionAt243;
+            const auto versionTaskAdmission = graph.declareResourceVersion(Graphics::GpuGraphResourceVersionDesc{}.setResource(buffers[versionIndex]).setRange(range).setOrigin(Graphics::GpuGraphResourceVersionOrigin::TaskProduced));
+            ASSERT_TRUE(versionTaskAdmission);
+            versions[versionIndex] = *versionTaskAdmission;
             ASSERT_TRUE(versions[versionIndex].valid());
         }
         Graphics::GpuTaskId tasks[3u];
@@ -297,15 +297,15 @@ TEST(GpuTaskGraphAnalysis, VersionLifetimeEdgesPreserveDistinctTaskAndVersionOrd
                 Graphics::GpuTaskResourceVersionUse{ .version = versions[1u], .role = role },
             };
             Graphics::GpuTaskDesc desc;
-            const auto derivedNameAt288Col29 = IndexedName(Name("tests/analysis_optimization/lifetime_task"), index);
-            ASSERT_TRUE(derivedNameAt288Col29);
-            desc.setIdentity(*derivedNameAt288Col29).setMarkerLabel("Lifetime Version Task").setResourceUses(physicalUses, LengthOf(physicalUses));
+            const auto resourceNameResult = IndexedName(Name("tests/analysis_optimization/lifetime_task"), index);
+            ASSERT_TRUE(resourceNameResult);
+            desc.setIdentity(*resourceNameResult).setMarkerLabel("Lifetime Version Task").setResourceUses(physicalUses, LengthOf(physicalUses));
             if(index != 2u)
                 desc.setResourceVersionUses(versionUses, LengthOf(versionUses));
             const Graphics::GpuTaskCommandRequirements commands{ Graphics::GpuQueueCapability::Compute };
-            const auto gpuAdmissionAt266 = graph.addTask(desc, commands);
-            ASSERT_TRUE(gpuAdmissionAt266);
-            tasks[index] = *gpuAdmissionAt266;
+            const auto taskAdmission = graph.addTask(desc, commands);
+            ASSERT_TRUE(taskAdmission);
+            tasks[index] = *taskAdmission;
             ASSERT_TRUE(tasks[index].valid());
         }
         Core::Alloc::ScratchArena scratchArena(Name("tests/analysis_optimization/lifetime_edge_scratch"));

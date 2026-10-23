@@ -308,7 +308,7 @@ void GpuTimingRecorder::endScope(CommandList& commandList, GpuTimingScope& scope
     if(!scope.valid())
         return;
 
-    GpuTimingAccumulator::QueryEndResult endResult = GpuTimingAccumulator::QueryEndResult::Invalid;
+    GpuTimingAccumulator::QueryEndResult::Enum endResult = GpuTimingAccumulator::QueryEndResult::Invalid;
     {
         // Do not retain this lock while publishing into the ticket: terminal ticket paths take the ticket first and then release or quarantine query ownership through the recorder.
         ScopedLock lock(m_mutex);
@@ -332,7 +332,7 @@ void GpuTimingRecorder::endScopeFromOpeningCommandList(CommandList& commandList,
     if(!scope.valid())
         return;
 
-    GpuTimingAccumulator::QueryEndResult endResult = GpuTimingAccumulator::QueryEndResult::Invalid;
+    GpuTimingAccumulator::QueryEndResult::Enum endResult = GpuTimingAccumulator::QueryEndResult::Invalid;
     {
         // Preserve recorder -> accumulator lock ordering while the already-reserved scope is closed.
         NothrowScopedLock lock(m_mutex);

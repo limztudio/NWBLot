@@ -13,7 +13,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_light_space{
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_light_space_resources{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -46,12 +52,6 @@ static constexpr u32 s_DrawArgumentsBufferIndex = 3u;
 
 
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -101,20 +101,20 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
         Core::ShaderType::Compute, Core::ShaderType::Compute, Core::ShaderType::Compute, Core::ShaderType::Compute,
         Core::ShaderType::Compute, Core::ShaderType::Compute, Core::ShaderType::Compute, Core::ShaderType::Compute,
         Core::ShaderType::Compute, Core::ShaderType::Compute, Core::ShaderType::Compute };
-    const AStringView variants[] = { ::__hidden_light_space::s_DefaultLightVariant, ::__hidden_light_space::s_DefaultLightVariant, ::__hidden_light_space::s_DefaultLightVariant,
-        ::__hidden_light_space::s_LightSpaceNoCsgOccluder0,
-        ::__hidden_light_space::s_LightSpaceNoCsgOccluder1,
-        ::__hidden_light_space::s_LightSpaceNoCsgOccluder0,
-        ::__hidden_light_space::s_LightSpaceNoCsgOccluder1,
-        ::__hidden_light_space::s_LightSpaceCsgShade0, ::__hidden_light_space::s_LightSpaceCsgShade1,
-        ::__hidden_light_space::s_LightSpaceCsgOccluder0,
-        ::__hidden_light_space::s_LightSpaceCsgOccluder1,
-        ::__hidden_light_space::s_LightSpaceCsgOccluder0,
-        ::__hidden_light_space::s_LightSpaceCsgOccluder1, ::__hidden_light_space::s_DefaultLightVariant };
+    const AStringView variants[] = { __hidden_light_space_resources::s_DefaultLightVariant, __hidden_light_space_resources::s_DefaultLightVariant, __hidden_light_space_resources::s_DefaultLightVariant,
+        __hidden_light_space_resources::s_LightSpaceNoCsgOccluder0,
+        __hidden_light_space_resources::s_LightSpaceNoCsgOccluder1,
+        __hidden_light_space_resources::s_LightSpaceNoCsgOccluder0,
+        __hidden_light_space_resources::s_LightSpaceNoCsgOccluder1,
+        __hidden_light_space_resources::s_LightSpaceCsgShade0, __hidden_light_space_resources::s_LightSpaceCsgShade1,
+        __hidden_light_space_resources::s_LightSpaceCsgOccluder0,
+        __hidden_light_space_resources::s_LightSpaceCsgOccluder1,
+        __hidden_light_space_resources::s_LightSpaceCsgOccluder0,
+        __hidden_light_space_resources::s_LightSpaceCsgOccluder1, __hidden_light_space_resources::s_DefaultLightVariant };
     for(u32 index = 0u; index < LengthOf(state.m_shaders); ++index){
-        if(!csg && index >= ::__hidden_light_space::s_FirstCsgOnlyShaderIndex && index <= ::__hidden_light_space::s_LastCsgOnlyShaderIndex)
+        if(!csg && index >= __hidden_light_space_resources::s_FirstCsgOnlyShaderIndex && index <= __hidden_light_space_resources::s_LastCsgOnlyShaderIndex)
             continue;
-        if(hardwareCsg && index >= ::__hidden_light_space::s_FirstCsgFallbackShaderIndex && index <= ::__hidden_light_space::s_LastCsgFallbackShaderIndex)
+        if(hardwareCsg && index >= __hidden_light_space_resources::s_FirstCsgFallbackShaderIndex && index <= __hidden_light_space_resources::s_LastCsgFallbackShaderIndex)
             continue;
         if(!state.m_shaders[index] && !m_shaderSystem.loadShaderForStage(state.m_shaders[index], names[index], variants[index], stages[index], Name("ECSRender_LightSpaceShadow"))){
             state.m_pipelineFailed = true;
@@ -126,15 +126,15 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
         MakeNotNull(&snapshot.csgOpaqueResolve), MakeNotNull(&snapshot.csgTransparentResolve), MakeNotNull(&snapshot.csgOpaqueFallback), MakeNotNull(&snapshot.csgTransparentFallback), MakeNotNull(&snapshot.cullPipeline) };
     const u32 shaderIndices[] = { 0u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 13u };
     for(u32 index = 0u; index < LengthOf(outputs); ++index){
-        if(!csg && index >= ::__hidden_light_space::s_FirstCsgOnlyPipelineIndex && index <= ::__hidden_light_space::s_LastCsgOnlyPipelineIndex)
+        if(!csg && index >= __hidden_light_space_resources::s_FirstCsgOnlyPipelineIndex && index <= __hidden_light_space_resources::s_LastCsgOnlyPipelineIndex)
             continue;
-        if(hardwareCsg && index >= ::__hidden_light_space::s_FirstCsgFallbackPipelineIndex && index <= ::__hidden_light_space::s_LastCsgFallbackPipelineIndex)
+        if(hardwareCsg && index >= __hidden_light_space_resources::s_FirstCsgFallbackPipelineIndex && index <= __hidden_light_space_resources::s_LastCsgFallbackPipelineIndex)
             continue;
         if(*outputs[index])
             continue;
         Core::ComputePipelineDesc desc;
         desc.setComputeShader(state.m_shaders[shaderIndices[index]]).addBindingLayout(snapshot.layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-        if(hardwareCsg && index >= ::__hidden_light_space::s_FirstCsgResolvePipelineIndex && index <= ::__hidden_light_space::s_LastCsgResolvePipelineIndex)
+        if(hardwareCsg && index >= __hidden_light_space_resources::s_FirstCsgResolvePipelineIndex && index <= __hidden_light_space_resources::s_LastCsgResolvePipelineIndex)
             desc.addBindingLayout(heap.getAccelStructLayout());
         auto outputsResult = device.createComputePipeline(desc);
         if(outputsResult)
@@ -144,7 +144,7 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
         if(!outputsResult)
             return false;
     }
-    for(u32 transparent = 0u; transparent < ::__hidden_light_space::s_CapturePipelineKindCount; ++transparent){
+    for(u32 transparent = 0u; transparent < __hidden_light_space_resources::s_CapturePipelineKindCount; ++transparent){
         auto& output = transparent != 0u ? snapshot.transparentCapture : snapshot.opaqueCapture;
         if(output)
             continue;
@@ -255,7 +255,7 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePla
         Core::BufferDesc desc;
         desc
             .setByteSize(sizes[index]).setStructStride(sizeof(u32)).setCanHaveRawViews(true).setCanHaveUAVs(true)
-            .setIsDrawIndirectArgs(index == ::__hidden_light_space::s_DrawArgumentsBufferIndex)
+            .setIsDrawIndirectArgs(index == __hidden_light_space_resources::s_DrawArgumentsBufferIndex)
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(names[index])
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;

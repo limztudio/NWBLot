@@ -14,9 +14,9 @@ LIT_LITTLE = "little"
 LIT_BIG = "big"
 LIT_N_2SIHHI = "<2sIHHI"
 # The textured-GI smoke has a fixed camera and a white receiver plane.
-# This client-relative rectangle sits below the sphere silhouette, inside the nearby root of its foreground opaque direct shadow.
+# This client-relative rectangle has a clear gap below the sphere silhouette and covers the nearby root of its foreground opaque direct shadow.
 # Because the light is white and the receiver has no texture or tint, a red value here can only come from the textured sphere's indirect bounce.
-TEXTURE_SMOKE_RECEIVER_REGION = (0.375, 0.667, 0.438, 0.700)
+TEXTURE_SMOKE_RECEIVER_REGION = (0.480, 0.625, 0.505, 0.660)
 TEXTURE_SMOKE_RECEIVER_MIN_RED = 36
 TEXTURE_SMOKE_RECEIVER_RED_CHROMA = 6
 # CSG pose names match the fixture's frozen yaw values 0, 1, and 2 radians.

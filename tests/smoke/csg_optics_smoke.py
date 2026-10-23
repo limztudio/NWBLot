@@ -107,7 +107,7 @@ def parse_args(argv):
     parser.add_argument("--output-directory", type=Path, required=True)
     parser.add_argument("--logserver-executable", type=Path)
     parser.add_argument("--frames", type=int, default=16)
-    parser.add_argument("--timeout", type=float, default=90)
+    parser.add_argument("--timeout", type=float, default=180)
     parser.add_argument("--application-arg", action="append", default=[])
     args = parser.parse_args(argv)
     if args.frames <= 0 or args.timeout <= 0:

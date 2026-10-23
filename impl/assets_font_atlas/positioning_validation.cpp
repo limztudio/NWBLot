@@ -18,7 +18,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_font_atlas_positioning{
+namespace __hidden_font_atlas_positioning_validation{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -611,7 +611,7 @@ private:
 bool ValidateFontAtlasPositioningTable(const FontAtlasPositioningTable& table, const u32 glyphCount){
     if(table.bytes.empty() || table.bytes.size() > s_FontAtlasMaxPositioningBytes || glyphCount == 0u || glyphCount > s_FontAtlasMaxGlyphCount)
         return false;
-    __hidden_font_atlas_positioning::TableValidator validator(table.bytes, glyphCount);
+    __hidden_font_atlas_positioning_validation::TableValidator validator(table.bytes, glyphCount);
     const bool valid = table.tag == s_FontAtlasKernTag ? validator.kern() : table.tag == s_FontAtlasGposTag ? validator.gpos() : table.tag == s_FontAtlasGdefTag ? validator.gdef() : false;
     if(!valid)
         NWB_LOGGER_ERROR(NWB_TEXT("font_atlas: invalid or over-budget raw positioning table {}"), table.tag);

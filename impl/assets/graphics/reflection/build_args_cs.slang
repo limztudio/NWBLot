@@ -31,7 +31,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID){
     if(nwbReflectionFeedbackWriting()){
         const uint tilesX = (g_NwbReflectionParameters.dimensionsAndRoute.x + NWB_REFLECTION_FEEDBACK_GROUP_SIZE - 1u) / NWB_REFLECTION_FEEDBACK_GROUP_SIZE;
         const uint tilesY = (g_NwbReflectionParameters.dimensionsAndRoute.y + NWB_REFLECTION_FEEDBACK_GROUP_SIZE - 1u) / NWB_REFLECTION_FEEDBACK_GROUP_SIZE;
-        // Classification wrote the disjoint entry range. This header store is the complete writer's publication boundary; the owning CPU publishes only accepted work and does not recycle the previous accepted bank.
+        // Classification wrote the disjoint entry range. This header store is the writer's publication boundary; the owning CPU publishes only accepted work and does not recycle the previous bank.
         g_NwbHeapStorageBuffers[g_NwbReflectionParameters.feedbackWriteSlot].Store4(0u, uint4(
             g_NwbReflectionCounters.Load(NWB_REFLECTION_COUNTER_POTENTIAL_RECEIVERS),
             g_NwbReflectionParameters.feedbackProbeIndex, tilesX * tilesY, NWB_REFLECTION_FEEDBACK_HEADER_VALID

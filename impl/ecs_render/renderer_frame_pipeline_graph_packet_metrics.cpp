@@ -72,7 +72,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_task_graph_deferred_lighting{
+namespace __hidden_renderer_frame_pipeline_graph_packet_metrics{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -137,7 +137,7 @@ namespace __hidden_task_graph_deferred_lighting{
 
 
 [[nodiscard]] bool RendererFramePipeline::prepareDeferredGraphPacketEnvelopeMetrics(const Core::GpuTaskGraph::DeclarationReadView& graph, const Core::GpuCompiledGraph::ReadView& compiledGraph, Core::Alloc::ScratchArena& scratchArena){
-    return __hidden_task_graph_deferred_lighting::PreparePacketEnvelopeMetrics(graph, compiledGraph, m_graphics.gpuTiming(), m_graphics.getFrameIndex(), scratchArena);
+    return __hidden_renderer_frame_pipeline_graph_packet_metrics::PreparePacketEnvelopeMetrics(graph, compiledGraph, m_graphics.gpuTiming(), m_graphics.getFrameIndex(), scratchArena);
 }
 
 

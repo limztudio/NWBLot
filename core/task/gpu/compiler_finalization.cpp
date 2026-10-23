@@ -16,7 +16,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_gpu_task_graph_finalization{
+namespace __hidden_gpu_task_graph_compiler_finalization{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -63,7 +63,7 @@ namespace GpuTaskGraphCompilerDetail{
     Vector<PendingCompiledEpilogueBarrier, Alloc::ScratchArena>& pendingEpilogueBarriers = plan.pendingEpilogueBarriers;
     Vector<GpuPacketDependency, Alloc::ScratchArena>& resourceStateDependencies = plan.resourceStateDependencies;
     Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& stateFragments = plan.stateFragments;
-    using namespace __hidden_gpu_task_graph_finalization;
+    using namespace __hidden_gpu_task_graph_compiler_finalization;
     using TerminalDependencyIndex = HashSet<GpuPacketDependency, Alloc::ScratchArena, TerminalPacketDependencyHasher, TerminalPacketDependencyEqual>;
     Optional<TerminalDependencyIndex> indexedTerminalDependencies;
     const auto appendTerminalFinalizationDependency = [&](const GpuPacketDependency& dependency){

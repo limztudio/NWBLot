@@ -32,7 +32,7 @@ inline constexpr usize s_LifecycleFailureTextCapacity = 192u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static AStringView PlatformOperationText(const Detail::PlatformOperation::Enum operation)noexcept{
+[[nodiscard]] static AStringView PlatformOperationText(const CrashDetail::PlatformOperation::Enum operation)noexcept{
     static constexpr AStringView s_Names[] = {
         "none", "prepare_spool", "prepare_command", "prepare_attributes", "create_request_channel", "create_ack_channel", "create_startup_channel",
         "set_inheritance", "create_ack_event", "create_process", "close_handle", "wait_process", "terminate_process",
@@ -61,13 +61,13 @@ template<typename ArenaT>
 }
 
 static void StoreBreadcrumb(const AStringView category, const AStringView message)noexcept{
-    Detail::FixedBreadcrumb& breadcrumb = Detail::g_State.breadcrumbs[Detail::g_State.nextBreadcrumb % Detail::s_MaxBreadcrumbs];
+    CrashDetail::FixedBreadcrumb& breadcrumb = CrashDetail::g_State.breadcrumbs[CrashDetail::g_State.nextBreadcrumb % CrashDetail::s_MaxBreadcrumbs];
     breadcrumb.used = 1u;
-    breadcrumb.order = Detail::g_State.breadcrumbOrder.fetch_add(1u, MemoryOrder::relaxed);
-    CopyFixedBuffer(breadcrumb.category, category.empty() ? AStringView(Detail::s_DefaultBreadcrumbCategory) : category);
+    breadcrumb.order = CrashDetail::g_State.breadcrumbOrder.fetch_add(1u, MemoryOrder::relaxed);
+    CopyFixedBuffer(breadcrumb.category, category.empty() ? AStringView(CrashDetail::s_DefaultBreadcrumbCategory) : category);
     CopyFixedBuffer(breadcrumb.message, message);
-    ++Detail::g_State.nextBreadcrumb;
-    Detail::PublishCrashStateSnapshot();
+    ++CrashDetail::g_State.nextBreadcrumb;
+    CrashDetail::PublishCrashStateSnapshot();
 }
 
 static bool CapturePolicyAllows(const CrashCapturePolicy& policy, const AStringView event, const AStringView category)noexcept{
@@ -104,21 +104,21 @@ static bool DiagnosticResultCanSuppressDuplicatePlatformCrash(const CrashDumpRes
 }
 
 static bool ReserveDiagnosticCapture(const DiagnosticEventRecord& record, const AStringView event, const AStringView category)noexcept{
-    NothrowScopedLock lock(Detail::g_State.mutex);
-    if(!Detail::g_State.installed)
+    NothrowScopedLock lock(CrashDetail::g_State.mutex);
+    if(!CrashDetail::g_State.installed)
         return false;
-    if(!CapturePolicyAllows(Detail::g_State.capturePolicy, event, category))
-        return false;
-
-    const CrashCapturePolicy& policy = Detail::g_State.capturePolicy;
-    if(policy.maxDiagnosticDumpsPerProcess != 0u && Detail::g_State.diagnosticCaptureCount >= policy.maxDiagnosticDumpsPerProcess)
+    if(!CapturePolicyAllows(CrashDetail::g_State.capturePolicy, event, category))
         return false;
 
-    Detail::FixedDiagnosticSite* freeSite = nullptr;
-    Detail::FixedDiagnosticSite* matchingSite = nullptr;
+    const CrashCapturePolicy& policy = CrashDetail::g_State.capturePolicy;
+    if(policy.maxDiagnosticDumpsPerProcess != 0u && CrashDetail::g_State.diagnosticCaptureCount >= policy.maxDiagnosticDumpsPerProcess)
+        return false;
+
+    CrashDetail::FixedDiagnosticSite* freeSite = nullptr;
+    CrashDetail::FixedDiagnosticSite* matchingSite = nullptr;
     const u64 siteHash = DiagnosticSiteHash(record);
-    for(usize i = 0u; i < Detail::s_MaxDiagnosticSites; ++i){
-        Detail::FixedDiagnosticSite& site = Detail::g_State.diagnosticSites[i];
+    for(usize i = 0u; i < CrashDetail::s_MaxDiagnosticSites; ++i){
+        CrashDetail::FixedDiagnosticSite& site = CrashDetail::g_State.diagnosticSites[i];
         if(site.used && site.hash == siteHash){
             matchingSite = &site;
             break;
@@ -141,18 +141,18 @@ static bool ReserveDiagnosticCapture(const DiagnosticEventRecord& record, const 
         matchingSite = freeSite;
     }
 
-    ++Detail::g_State.diagnosticCaptureCount;
+    ++CrashDetail::g_State.diagnosticCaptureCount;
     if(matchingSite)
         ++matchingSite->captureCount;
     return true;
 }
 
-NWB_NOINLINE static CrashDumpResult CaptureCrashDumpForReason(const Detail::CrashReasonKind::Enum reasonKind, const AStringView category, const AStringView message, Detail::CrashDumpRequestOptions& options){
-    const AStringView breadcrumbCategory = category.empty() ? AStringView(Detail::s_ManualDumpCategory) : category;
+NWB_NOINLINE static CrashDumpResult CaptureCrashDumpForReason(const CrashDetail::CrashReasonKind::Enum reasonKind, const AStringView category, const AStringView message, CrashDetail::CrashDumpRequestOptions& options){
+    const AStringView breadcrumbCategory = category.empty() ? AStringView(CrashDetail::s_ManualDumpCategory) : category;
 
     {
-        ScopedLock lock(Detail::g_State.mutex);
-        if(!Detail::g_State.installed)
+        ScopedLock lock(CrashDetail::g_State.mutex);
+        if(!CrashDetail::g_State.installed)
             return CrashDumpResult{ CrashDumpStatus::NotInstalled };
         if(!category.empty() || !message.empty())
             StoreBreadcrumb(breadcrumbCategory, message);
@@ -163,17 +163,17 @@ NWB_NOINLINE static CrashDumpResult CaptureCrashDumpForReason(const Detail::Cras
     if(options.triggerMessage.empty())
         options.triggerMessage = message;
 
-    options.waitMilliseconds = Detail::s_ManualCrashDumpWaitMilliseconds;
+    options.waitMilliseconds = CrashDetail::s_ManualCrashDumpWaitMilliseconds;
     if(options.callstackFramesToSkip == 0u)
         options.callstackFramesToSkip = 1u;
-    Detail::ManualDumpContextStorage contextStorage;
-    Detail::CaptureManualDumpContext(options, contextStorage);
+    CrashDetail::ManualDumpContextStorage contextStorage;
+    CrashDetail::CaptureManualDumpContext(options, contextStorage);
 
-    return Detail::RequestCrashDump(reasonKind, 0u, options);
+    return CrashDetail::RequestCrashDump(reasonKind, 0u, options);
 }
 
 NWB_NOINLINE static void CaptureDiagnosticCrash(const DiagnosticEventRecord& record)noexcept{
-    Detail::CrashDumpRequestOptions options;
+    CrashDetail::CrashDumpRequestOptions options;
     options.event = DiagnosticEventNameFromRecord(record);
     options.triggerCategory = record.category;
     options.triggerExpression = record.expression;
@@ -184,9 +184,9 @@ NWB_NOINLINE static void CaptureDiagnosticCrash(const DiagnosticEventRecord& rec
     options.callstackFramesToSkip = s_DiagnosticCaptureCallstackFramesToSkip;
     if(!ReserveDiagnosticCapture(record, options.event, options.triggerCategory))
         return;
-    const CrashDumpResult result = CaptureCrashDumpForReason(Detail::CrashReasonKind::ManualDump, options.triggerCategory, options.triggerMessage, options);
+    const CrashDumpResult result = CaptureCrashDumpForReason(CrashDetail::CrashReasonKind::ManualDump, options.triggerCategory, options.triggerMessage, options);
     if(record.terminatesProcess && DiagnosticResultCanSuppressDuplicatePlatformCrash(result))
-        Detail::SuppressNextPlatformCrashCapture();
+        CrashDetail::SuppressNextPlatformCrashCapture();
 }
 
 
@@ -199,7 +199,7 @@ NWB_NOINLINE static void CaptureDiagnosticCrash(const DiagnosticEventRecord& rec
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Detail::PlatformCleanupObservations::~PlatformCleanupObservations()noexcept{
+CrashDetail::PlatformCleanupObservations::~PlatformCleanupObservations()noexcept{
     if(m_failureCount == 0u)
         return;
     char text[__hidden_crash_module::s_LifecycleFailureTextCapacity] = {};
@@ -207,12 +207,12 @@ Detail::PlatformCleanupObservations::~PlatformCleanupObservations()noexcept{
     AppendUnsignedToFixedBuffer(text, static_cast<u64>(m_first.domain));
     AppendFixedBuffer(text, ", operation=");
     AppendUnsignedToFixedBuffer(text, static_cast<u64>(m_first.operation));
-    if(m_first.domain == Detail::PlatformErrorDomain::Filesystem){
+    if(m_first.domain == CrashDetail::PlatformErrorDomain::Filesystem){
         AppendFixedBuffer(text, ", category=");
         AppendFixedBuffer(text, AStringView(m_first.filesystemError.category().name()));
     }
     AppendFixedBuffer(text, ", code=");
-    if(m_first.domain == Detail::PlatformErrorDomain::Filesystem){
+    if(m_first.domain == CrashDetail::PlatformErrorDomain::Filesystem){
         const i64 code = m_first.filesystemError.value();
         if(code < 0)
             AppendFixedBuffer(text, "-");
@@ -222,10 +222,10 @@ Detail::PlatformCleanupObservations::~PlatformCleanupObservations()noexcept{
         AppendUnsignedToFixedBuffer(text, m_first.code);
     AppendFixedBuffer(text, ", total failures=");
     AppendUnsignedToFixedBuffer(text, m_failureCount);
-    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = Detail::s_WarningEventName, .category = "crash_native_lifecycle", .expression = __hidden_crash_module::PlatformOperationText(m_first.operation), .message = AStringView(text), .file = __FILE__, .line = __LINE__, });
+    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = CrashDetail::s_WarningEventName, .category = "crash_native_lifecycle", .expression = __hidden_crash_module::PlatformOperationText(m_first.operation), .message = AStringView(text), .file = __FILE__, .line = __LINE__, });
 }
 
-void Detail::PlatformCleanupObservations::record(const PlatformFailure& failure)noexcept{
+void CrashDetail::PlatformCleanupObservations::record(const PlatformFailure& failure)noexcept{
     if(m_failureCount == 0u)
         m_first = failure;
     if(m_failureCount != Limit<u64>::s_Max)
@@ -233,7 +233,7 @@ void Detail::PlatformCleanupObservations::record(const PlatformFailure& failure)
 }
 
 
-void Detail::PlatformCleanupObservations::recordPrimary(const PlatformFailure& failure)noexcept{
+void CrashDetail::PlatformCleanupObservations::recordPrimary(const PlatformFailure& failure)noexcept{
     record(failure);
     m_first = failure;
 }
@@ -253,87 +253,87 @@ template<typename ArenaT>
     if(!executableDirectory)
         return ::Path<ArenaT>(arena);
 
-    return *executableDirectory / Detail::s_HandlerExecutableFileName;
+    return *executableDirectory / CrashDetail::s_HandlerExecutableFileName;
 }
 
 template<typename ArenaT>
 bool InstallCrashHandler(const CrashConfigT<ArenaT>& config){
-    Detail::PlatformCleanupObservations observations;
-    ScopedLock lock(Detail::g_State.mutex);
-    if(Detail::g_State.installed)
+    CrashDetail::PlatformCleanupObservations observations;
+    ScopedLock lock(CrashDetail::g_State.mutex);
+    if(CrashDetail::g_State.installed)
         return true;
-    Detail::UninstallPlatformResources(observations);
-    if(Detail::g_State.platformRestorePending)
+    CrashDetail::UninstallPlatformResources(observations);
+    if(CrashDetail::g_State.platformRestorePending)
         return false;
 
-    CopyFixedBuffer(Detail::g_State.applicationName, config.applicationName);
-    CopyFixedBuffer(Detail::g_State.versionText, config.version);
-    CopyFixedBuffer(Detail::g_State.buildId, config.buildId);
-    CopyFixedBuffer(Detail::g_State.logServerUrl, config.logServerUrl);
-    CopyFixedBuffer(Detail::g_State.crashUploadToken, config.crashUploadToken);
+    CopyFixedBuffer(CrashDetail::g_State.applicationName, config.applicationName);
+    CopyFixedBuffer(CrashDetail::g_State.versionText, config.version);
+    CopyFixedBuffer(CrashDetail::g_State.buildId, config.buildId);
+    CopyFixedBuffer(CrashDetail::g_State.logServerUrl, config.logServerUrl);
+    CopyFixedBuffer(CrashDetail::g_State.crashUploadToken, config.crashUploadToken);
 
     Alloc::ScratchArena scratchArena(CrashArenaScope::s_PlatformInstallationScratch);
     const ::Path<Alloc::ScratchArena> spoolDirectory = config.spoolDirectory.empty() ? DefaultCrashSpoolDirectory(scratchArena) : ::Path<Alloc::ScratchArena>(scratchArena, config.spoolDirectory);
     const ::Path<Alloc::ScratchArena> handlerExecutablePath = config.handlerExecutablePath.empty() ? DefaultCrashHandlerExecutablePath(scratchArena) : ::Path<Alloc::ScratchArena>(scratchArena, config.handlerExecutablePath);
-    Detail::g_State.dumpDetailMode = config.dumpDetailMode;
-    Detail::g_State.capturePolicy = config.capturePolicy;
-    Detail::g_State.spoolRetention = config.spoolRetention;
-    Detail::g_State.diagnosticCaptureCount = 0u;
-    for(Detail::FixedDiagnosticSite& site : Detail::g_State.diagnosticSites)
-        site = Detail::FixedDiagnosticSite{};
-    Detail::InitializeDumpArena();
+    CrashDetail::g_State.dumpDetailMode = config.dumpDetailMode;
+    CrashDetail::g_State.capturePolicy = config.capturePolicy;
+    CrashDetail::g_State.spoolRetention = config.spoolRetention;
+    CrashDetail::g_State.diagnosticCaptureCount = 0u;
+    for(CrashDetail::FixedDiagnosticSite& site : CrashDetail::g_State.diagnosticSites)
+        site = CrashDetail::FixedDiagnosticSite{};
+    CrashDetail::InitializeDumpArena();
     const AString<Alloc::ScratchArena> spoolDirectoryText = PathToString<char>(scratchArena, spoolDirectory);
-    CopyFixedBuffer(Detail::g_State.spoolDirectoryText, AStringView(spoolDirectoryText.data(), spoolDirectoryText.size()));
+    CopyFixedBuffer(CrashDetail::g_State.spoolDirectoryText, AStringView(spoolDirectoryText.data(), spoolDirectoryText.size()));
     const AString<Alloc::ScratchArena> handlerExecutablePathText = PathToString<char>(scratchArena, handlerExecutablePath);
-    CopyFixedBuffer(Detail::g_State.handlerExecutablePathText, AStringView(handlerExecutablePathText.data(), handlerExecutablePathText.size()));
+    CopyFixedBuffer(CrashDetail::g_State.handlerExecutablePathText, AStringView(handlerExecutablePathText.data(), handlerExecutablePathText.size()));
 
-    const auto spool = Detail::EnsureCrashSpoolDirectories(spoolDirectory);
+    const auto spool = CrashDetail::EnsureCrashSpoolDirectories(spoolDirectory);
     if(!spool){
-        observations.recordPrimary(Detail::PlatformFailure{ .operation = Detail::PlatformOperation::PrepareSpool, .domain = Detail::PlatformErrorDomain::Filesystem, .filesystemError = spool.error() });
+        observations.recordPrimary(CrashDetail::PlatformFailure{ .operation = CrashDetail::PlatformOperation::PrepareSpool, .domain = CrashDetail::PlatformErrorDomain::Filesystem, .filesystemError = spool.error() });
         return false;
     }
 
-    ScopeExit rollbackPlatform([&]()noexcept{ Detail::UninstallPlatformResources(observations); });
+    ScopeExit rollbackPlatform([&]()noexcept{ CrashDetail::UninstallPlatformResources(observations); });
 #if !defined(NWB_PLATFORM_ANDROID)
-    const auto handler = Detail::StartDesktopHandler(handlerExecutablePath, scratchArena, observations);
+    const auto handler = CrashDetail::StartDesktopHandler(handlerExecutablePath, scratchArena, observations);
     if(!handler){
         observations.recordPrimary(handler.error());
         return false;
     }
 #endif
 
-    Detail::PublishCrashStateSnapshot();
-    const auto platform = Detail::InstallPlatformHandlers();
+    CrashDetail::PublishCrashStateSnapshot();
+    const auto platform = CrashDetail::InstallPlatformHandlers();
     if(!platform){
         observations.recordPrimary(platform.error());
         return false;
     }
-    Detail::g_State.installed = true;
+    CrashDetail::g_State.installed = true;
     SetDiagnosticEventCallback(__hidden_crash_module::CaptureDiagnosticCrash);
     rollbackPlatform.release();
     return true;
 }
 
 void UninstallCrashHandler()noexcept{
-    Detail::PlatformCleanupObservations observations;
-    NothrowScopedLock lock(Detail::g_State.mutex);
+    CrashDetail::PlatformCleanupObservations observations;
+    NothrowScopedLock lock(CrashDetail::g_State.mutex);
     ClearDiagnosticEventCallback(__hidden_crash_module::CaptureDiagnosticCrash);
-    Detail::g_State.installed = false;
-    Detail::UninstallPlatformResources(observations);
+    CrashDetail::g_State.installed = false;
+    CrashDetail::UninstallPlatformResources(observations);
 }
 
 bool SetCrashMetadata(const AStringView key, const AStringView value)noexcept{
     if(key.empty())
         return false;
 
-    NothrowScopedLock lock(Detail::g_State.mutex);
+    NothrowScopedLock lock(CrashDetail::g_State.mutex);
 
-    Detail::FixedMetadata* freeSlot = nullptr;
-    for(usize i = 0u; i < Detail::s_MaxMetadata; ++i){
-        Detail::FixedMetadata& metadata = Detail::g_State.metadata[i];
+    CrashDetail::FixedMetadata* freeSlot = nullptr;
+    for(usize i = 0u; i < CrashDetail::s_MaxMetadata; ++i){
+        CrashDetail::FixedMetadata& metadata = CrashDetail::g_State.metadata[i];
         if(metadata.used && AStringView(metadata.key) == key){
             CopyFixedBuffer(metadata.value, value);
-            Detail::PublishCrashStateSnapshot();
+            CrashDetail::PublishCrashStateSnapshot();
             return true;
         }
 
@@ -347,23 +347,23 @@ bool SetCrashMetadata(const AStringView key, const AStringView value)noexcept{
     CopyFixedBuffer(freeSlot->key, key);
     CopyFixedBuffer(freeSlot->value, value);
     freeSlot->used = 1u;
-    Detail::PublishCrashStateSnapshot();
+    CrashDetail::PublishCrashStateSnapshot();
     return true;
 }
 
 bool SetCrashUploadDestination(const AStringView logServerUrl, const AStringView crashUploadToken)noexcept{
-    NothrowScopedLock lock(Detail::g_State.mutex);
-    if(!Detail::g_State.installed)
+    NothrowScopedLock lock(CrashDetail::g_State.mutex);
+    if(!CrashDetail::g_State.installed)
         return false;
 
-    CopyFixedBuffer(Detail::g_State.logServerUrl, logServerUrl);
-    CopyFixedBuffer(Detail::g_State.crashUploadToken, crashUploadToken);
-    Detail::PublishCrashStateSnapshot();
+    CopyFixedBuffer(CrashDetail::g_State.logServerUrl, logServerUrl);
+    CopyFixedBuffer(CrashDetail::g_State.crashUploadToken, crashUploadToken);
+    CrashDetail::PublishCrashStateSnapshot();
     return true;
 }
 
 void AddCrashBreadcrumb(const AStringView category, const AStringView message)noexcept{
-    NothrowScopedLock lock(Detail::g_State.mutex);
+    NothrowScopedLock lock(CrashDetail::g_State.mutex);
     __hidden_crash_module::StoreBreadcrumb(category, message);
 }
 
@@ -372,16 +372,16 @@ template ::Path<Alloc::PersistentArena> DefaultCrashHandlerExecutablePath(Alloc:
 template bool InstallCrashHandler(const CrashConfigT<Alloc::PersistentArena>& config);
 
 CrashDumpResult CaptureCrashDump(const AStringView category, const AStringView message){
-    Detail::CrashDumpRequestOptions options;
-    return __hidden_crash_module::CaptureCrashDumpForReason(Detail::CrashReasonKind::ManualDump, category, message, options);
+    CrashDetail::CrashDumpRequestOptions options;
+    return __hidden_crash_module::CaptureCrashDumpForReason(CrashDetail::CrashReasonKind::ManualDump, category, message, options);
 }
 
 CrashDumpResult CaptureGpuCrashDump(const AStringView message, const AStringView binaryDump, const GpuCrashDumpKind::Enum dumpKind){
-    Detail::CrashDumpRequestOptions options;
+    CrashDetail::CrashDumpRequestOptions options;
     options.gpuReport = message;
     options.gpuDump = binaryDump;
     options.gpuDumpKind = binaryDump.empty() ? GpuCrashDumpKind::None : dumpKind;
-    return __hidden_crash_module::CaptureCrashDumpForReason(Detail::CrashReasonKind::GpuCrash, AStringView(Detail::s_GpuCrashCategory), message, options);
+    return __hidden_crash_module::CaptureCrashDumpForReason(CrashDetail::CrashReasonKind::GpuCrash, AStringView(CrashDetail::s_GpuCrashCategory), message, options);
 }
 
 

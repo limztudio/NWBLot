@@ -88,7 +88,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(DeferredFrameT
     m_preparedSceneTlas.clear();
     clearPreparedMeshBlasBuilds();
     clearPreparedMeshSwBvhBuilds();
-    // Surfel GI is a per-frame consumer of the scene selected below. Never let an empty or rejected preflight reuse the preceding frame's backend selection and dispatch against stale trace inputs.
+    // Surfel GI is a per-frame consumer of the scene selected below. Never let an empty or rejected preflight reuse the preceding frame's backend selection and dispatch against stale inputs.
     m_rayTracingState.m_hardwareTransparentShadow.m_ready = false;
     m_rayTracingState.m_softTransparentReady = false;
     m_rayTracingState.m_softTransparentTemporalReady = false;
@@ -96,7 +96,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(DeferredFrameT
     m_rayTracingState.m_surfelUseHwTrace = false;
     if(!targets.shadowVisibility)
         return false;
-    // The trace material-context selector is itself a global UniformBuffer heap entry. Establish it before gathering the deferred graph imports the final backing handle rather than a recording-time replacement.
+    // The trace material-context selector is a global UniformBuffer heap entry. Establish it before gathering: the graph imports the backing handle rather than a recording-time replacement.
     if(!ensureRayTraceMaterialContextSlotsBuffer())
         return false;
 
@@ -158,14 +158,13 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(DeferredFrameT
 
         prepareSoftCombinedResolvePipelines();
 
-        // Build the hardware caustic producer resources alongside the shadow ones. Non-fatal to shadows: a failure leaves the caustic buffer black (the additive no-op), mirroring the SW-branch prepareGpuBvhCausticResources call below.
+        // Build the hardware caustic producer resources alongside the shadow ones. Non-fatal to shadows: a failure leaves the caustic buffer black (the additive no-op), mirroring the SW call below.
         if(!prepareHwCausticResources(targets))
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hardware caustic producer resource preparation failed"));
 
-        // Enable surfel GI on the HW path: the HW RayQuery trace twin reuses the TLAS + the HW-resident per-mesh geometry + InstanceID-material record the shadow/caustic path already built -- this is the ONLY place surfels run on real RT hardware.
+        // Hardware surfel GI reuses the TLAS, per-mesh geometry, and instance records built for shadows and caustics.
         // Gated on the HW shadow backend being ready + a non-empty TLAS.
-        // m_tlasInstanceCount is the HW instance count.
-        // Non-fatal: a failure leaves GI off this frame (the lighting uses hemiAmbient).
+        // Non-fatal: a failure leaves GI off this frame (lighting uses hemiAmbient).
         if(backendReady && m_rayTracingState.m_tlasInstanceCount > 0u && m_rayTracingState.m_shadowMeshCount > 0u){
             m_rayTracingState.m_surfelEnabled = true;
             m_rayTracingState.m_surfelUseHwTrace = true;
@@ -185,7 +184,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(DeferredFrameT
         return true;
     }
 
-    // No hardware ray tracing: build/refit the per-mesh software BVHs from the already skinned geometry, then build the per-frame software scene/instance BVH over them before the render pass consumes it.
+    // No hardware ray tracing: build/refit the per-mesh software BVHs from the skinned geometry, then build the per-frame software scene/instance BVH over them before the pass consumes it.
     const bool meshResourcesReady = preparePendingMeshSwBvhResources(scratchArena);
     if(!meshResourcesReady)
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software shadow BVH resource preparation failed"));
@@ -273,7 +272,7 @@ Expected<bool> RendererRayTracingSystem::recordPreflightShadowVisibilityResource
     if(!m_shadowVisibilityResourcesPreflighted || m_shadowVisibilityPreparedTargets != &targets)
         return MakeUnexpected(Failure{});
 
-    // A non-fatal preflight miss intentionally leaves tracing unavailable for this frame. Do not retry capacity growth recording: the shared graph has already frozen its imported resource identities.
+    // A non-fatal preflight miss leaves tracing unavailable for this frame. Do not retry capacity growth recording: the shared graph has already frozen its imported resource identities.
     if(!m_shadowVisibilityTraceResourcesPreflighted)
         return false;
 
@@ -290,8 +289,8 @@ Expected<bool> RendererRayTracingSystem::recordPreflightShadowVisibilityResource
         return MakeUnexpected(Failure{});
     }
     // Pure software frames have no opaque-HW fallback.
-    // Fresh uploads and accepted cache reuse both retain their matching traversal snapshot, recording validates that exact plan without regathering scene/material data.
-    // A missing or stale plan rejects the packet
+    // Fresh uploads and accepted cache reuse both retain their matching traversal snapshot; recording validates that exact plan without regathering scene or material data.
+    // A missing or stale plan rejects the packet.
     if(!m_preparedSceneSwBvhReady){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software shadow scene has no frozen preflight traversal"));
         return MakeUnexpected(Failure{});
@@ -337,7 +336,7 @@ void RendererRayTracingSystem::discardPreflightShadowVisibilityResources()noexce
     m_rayTracingState.m_surfelEnabled = false;
     m_rayTracingState.m_surfelUseHwTrace = false;
 
-    // Recording updates these flags optimistically.  If the shared packet never submits, make every retained acceleration structure rebuildable instead of allowing a later frame to consume its unrecorded contents.
+    // Recording updates these flags optimistically. If the shared packet never submits, keep every retained structure rebuildable instead of letting a later frame consume its contents.
     m_meshSystem.discardRayTracingBuildState();
 }
 

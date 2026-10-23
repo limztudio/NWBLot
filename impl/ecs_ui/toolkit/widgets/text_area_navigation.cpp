@@ -79,7 +79,8 @@ private:
         return MakeUnexpected(Failure{});
     const SIMDVectorDouble center = VectorDoubleAdd(VectorDoubleReplicate(caret.y), VectorDoubleMultiply(VectorDoubleReplicate(caret.height), VectorDoubleReplicate(s_RectCenterFractionF64)));
     const SIMDVectorDouble pageStep = VectorDoubleReplicate(static_cast<f64>(viewportHeight));
-    const f64 target = VectorDoubleGetX(VectorDoubleAdd(center, down ? pageStep : VectorDoubleNegate(pageStep)));
+    const SIMDVectorDouble targetValue = VectorDoubleAdd(center, down ? pageStep : VectorDoubleNegate(pageStep));
+    const f64 target = VectorDoubleGetX(targetValue);
     const EditCaretLine& first = lines.front();
     const EditCaretLine& last = lines.back();
     const SIMDVectorDouble minimumMaximumValue = VectorDoubleMultiplyAddExpression(
@@ -91,9 +92,8 @@ private:
     const f64 maximum = VectorDoubleGetY(minimumMaximumValue);
     if(!IsFinite(target) || !IsFinite(minimum) || !IsFinite(maximum) || minimum > maximum)
         return MakeUnexpected(Failure{});
-    const SIMDVectorDouble targetValue = VectorDoubleReplicate(target);
-    const SIMDVectorDouble minimumValue = VectorDoubleReplicate(minimum);
-    const Point point{ preferredX, static_cast<f32>(VectorDoubleGetX(VectorDoubleSelect(minimumValue, VectorDoubleMin(VectorDoubleReplicate(maximum), targetValue), VectorDoubleGreater(targetValue, minimumValue)))) };
+    const SIMDVectorDouble minimumValue = VectorDoubleSplatX(minimumMaximumValue);
+    const Point point{ preferredX, static_cast<f32>(VectorDoubleGetX(VectorDoubleSelect(minimumValue, VectorDoubleMin(VectorDoubleSplatY(minimumMaximumValue), targetValue), VectorDoubleGreater(targetValue, minimumValue)))) };
     if(!IsFinite(point.y))
         return MakeUnexpected(Failure{});
     const auto result = geometry.hitTest(point);

@@ -73,18 +73,18 @@ TEST(GpuTaskGraph, OrdersIndependentTerminalFinalizationDependenciesNearestFirst
     char readerIndexBuffer[32u] = {};
     for(usize readerIndex = 0u; readerIndex < LengthOf(readers); ++readerIndex){
         Graphics::GpuTaskDesc readerDesc;
-        const auto derivedNameAt653Col25 = DeriveName(readerBaseName, FormatDecimal(readerIndex, readerIndexBuffer));
-        ASSERT_TRUE(derivedNameAt653Col25);
+        const auto readerNameResult = DeriveName(readerBaseName, FormatDecimal(readerIndex, readerIndexBuffer));
+        ASSERT_TRUE(readerNameResult);
         readerDesc
-            .setIdentity(*derivedNameAt653Col25)
+            .setIdentity(*readerNameResult)
             .setMarkerLabel("Ordered Terminal Finalization Reader")
             .setScheduling(readerScheduling)
             .setDependencies(readerIndex == 1u ? &readers[0u] : nullptr, readerIndex == 1u ? 1u : 0u)
             .setResourceUses(&readerUse, 1u)
         ;
-        const auto gpuAdmissionAt631 = graph.addTask(readerDesc, readerCommands[readerIndex]);
-        ASSERT_TRUE(gpuAdmissionAt631);
-        readers[readerIndex] = *gpuAdmissionAt631;
+        const auto readerTaskAdmission = graph.addTask(readerDesc, readerCommands[readerIndex]);
+        ASSERT_TRUE(readerTaskAdmission);
+        readers[readerIndex] = *readerTaskAdmission;
         ASSERT_TRUE(readers[readerIndex].valid());
     }
 
@@ -154,9 +154,9 @@ TEST(GpuTaskGraph, TerminalFinalizationReachabilityCrossesPackedWordBoundaries){
         const Name prefixBaseName("tests/task_graph/terminal_packed_reachability_prefix_");
         char taskIndexBuffer[32u] = {};
         for(usize taskIndex = 0u; taskIndex < prefixPacketCount; ++taskIndex){
-            const auto derivedNameAt731Col69 = DeriveName(prefixBaseName, FormatDecimal(taskIndex, taskIndexBuffer));
-            ASSERT_TRUE(derivedNameAt731Col69);
-            const auto prefixTaskResult = AddTaskWithCommands(graph, *derivedNameAt731Col69, "Terminal Packed Reachability Prefix", prefixCommands, prefixScheduling);
+            const auto prefixNameResult = DeriveName(prefixBaseName, FormatDecimal(taskIndex, taskIndexBuffer));
+            ASSERT_TRUE(prefixNameResult);
+            const auto prefixTaskResult = AddTaskWithCommands(graph, *prefixNameResult, "Terminal Packed Reachability Prefix", prefixCommands, prefixScheduling);
             ASSERT_TRUE(prefixTaskResult);
             const Graphics::GpuTaskId prefixTask = *prefixTaskResult;
             ASSERT_TRUE(prefixTask.valid());

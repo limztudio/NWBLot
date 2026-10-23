@@ -53,16 +53,16 @@ TEST(GpuTaskGraphTimingFeedback, RanksEqualDurationsAfterShorterCandidateAppears
     Graphics::GpuTaskId target;
     for(usize taskIndex = 0u; taskIndex < LengthOf(costs); ++taskIndex){
         char identityText[32u] = {};
-        const auto derivedNameAt54Col30 = DeriveName(Name("tests/timing_scaling/tied/"), FormatDecimal(taskIndex, identityText));
-        ASSERT_TRUE(derivedNameAt54Col30);
-        const Name identity = *derivedNameAt54Col30;
+        const auto identityNameResult = DeriveName(Name("tests/timing_scaling/tied/"), FormatDecimal(taskIndex, identityText));
+        ASSERT_TRUE(identityNameResult);
+        const Name identity = *identityNameResult;
         Graphics::GpuTaskSchedulingHint scheduling;
         scheduling.cost = costs[taskIndex];
         scheduling.allowSameClassQueueRouting = true;
         scheduling.allowTimingFeedbackRouting = true;
-        const auto gpuAdmissionAt59 = AddTaskWithCommands(graph, identity, "Tied Duration Timing Task", GraphicsCommands(), scheduling);
-        ASSERT_TRUE(gpuAdmissionAt59);
-        target = *gpuAdmissionAt59;
+        const auto targetTaskAdmission = AddTaskWithCommands(graph, identity, "Tied Duration Timing Task", GraphicsCommands(), scheduling);
+        ASSERT_TRUE(targetTaskAdmission);
+        target = *targetTaskAdmission;
         ASSERT_TRUE(target.valid());
         const Graphics::GpuPhysicalQueueId queue = queues[assignedQueues[taskIndex]].id;
         assignments.push_back({ .task = target, .initialQueue = queue, .queue = queue, .score = {} });

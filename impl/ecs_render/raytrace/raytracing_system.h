@@ -181,7 +181,7 @@ public:
     [[nodiscard]] bool recordRefractionTileClassification(Core::CommandList& commandList, const DeferredFrameTargets& targets, const RayTracingRefractionGraphResources& resources)const;
     [[nodiscard]] bool recordRefractionResolve(Core::CommandList& commandList, const DeferredFrameTargets& targets, const RayTracingRefractionGraphResources& resources)const;
 
-    // Resource identity is frozen by the shared deferred graph.  Select/grow every trace resource before graph compilation, then let the graph-owned preparation packet issue only GPU work against that frozen set.
+    // Resource identity is frozen by the shared deferred graph. Select/grow every trace resource before compilation, then let the preparation packet issue only work against that frozen set.
     [[nodiscard]] bool preflightShadowVisibilityResources(DeferredFrameTargets& targets, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] Expected<bool> recordPreflightShadowVisibilityResources(
         Core::CommandList& commandList,
@@ -219,12 +219,12 @@ public:
     void confirmRayTraceContextReadSubmission(const Core::QueueSubmissionToken& token)noexcept;
     // Retain the exact preflight-gathered caustic AABB stream as an immutable graph blob. A valid empty result authoritatively represents a frame without refractive emission targets.
     [[nodiscard]] Expected<Optional<Core::GpuUploadBlobId>> retainPreparedCausticEmissionTargetUpload(Core::GpuTaskGraph& graph)const;
-    // Retain the exact per-frame surfel constant payload before graph recording. A valid empty result represents an inactive surfel frame
+    // Retain the exact per-frame surfel constant payload before graph recording. A valid empty result represents an inactive surfel frame.
     [[nodiscard]] Expected<Optional<Core::GpuUploadBlobId>> retainPreparedSurfelFrameConstantsUpload(Core::GpuTaskGraph& graph, const DeferredFrameTargets& targets)const;
-    // The material table, instance stream, and typed bytes share indices and offsets. A fresh context retains one all-or-nothing upload batch
+    // The material table, instance stream, and typed bytes share indices and offsets. A fresh context retains one all-or-nothing upload batch.
     [[nodiscard]] Expected<PreparedShadowMaterialContextUploads> retainPreparedShadowMaterialContextUploads(Core::GpuTaskGraph& graph)const;
     void confirmPreparedShadowMaterialContextUploads()noexcept;
-    // The software scene hierarchy and its leaf instances share topology and leaf indices, retain them as one immutable preflight batch and publish both only when the accepting Shadow Preparation packet submits.
+    // The software scene hierarchy and its leaf instances share topology and leaf indices; keep them as one preflight batch and publish both only when the Shadow Preparation packet submits.
     [[nodiscard]] Expected<PreparedSceneBvhUploads> retainPreparedSceneBvhUploads(Core::GpuTaskGraph& graph)const;
     void confirmPreparedSceneBvhUploads()noexcept;
     // Hardware TLAS work records from this frozen preflight plan in Shadow Preparation. Its static cache becomes valid only after that packet accepts.
@@ -247,7 +247,7 @@ public:
     [[nodiscard]] bool preparedMeshSwBvhBuildsReady()const noexcept{ return m_preparedMeshSwBvhBuildsReady; }
 
     [[nodiscard]] const PreparedMeshSwBvhBuildVector& preparedMeshSwBvhBuilds()const noexcept{ return m_preparedMeshSwBvhBuilds; }
-    // The pure-software Shadow Preparation packet records each frozen build after graph-owned typed sentinel clears. Revalidate this immutable snapshot immediately before its native compute sequence
+    // The pure-software Shadow Preparation packet records each frozen build after graph-owned typed sentinel clears. Revalidate this snapshot immediately before its native compute sequence.
     [[nodiscard]] bool recordPreparedMeshSwBvhBuildAfterGraphClears(Core::CommandList& commandList, const PreparedMeshSwBvhBuild& build);
     void confirmPreparedMeshSwBvhBuilds();
     void releaseRayTraceMaterialContextHeapHandles();
@@ -273,7 +273,7 @@ public:
         Core::GpuTimingSubmissionTicket& timingTicket,
         GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan = {}
     );
-    // A prepared soft-transparent frame splits opaque visibility and transparent fold in one semantic packet. The opaque task opens the shared timing scopes
+    // A prepared soft-transparent frame splits opaque visibility and transparent fold in one semantic packet. The opaque task opens the shared timing scopes.
     [[nodiscard]] Expected<Core::GpuTaskId> declareShadowVisibilityOpaqueTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
@@ -290,7 +290,7 @@ public:
         const LightSpaceShadowSnapshot* lightSpace = nullptr
     );
     // The prepared opaque producer records the trace and geometry downsample first.
-    // This adjacent callback owns the compiler-lowered trace/geometry sampled handoff before temporal merge and the first wavelet
+    // This adjacent callback owns the compiler-lowered trace/geometry sampled handoff before temporal merge and the first wavelet.
     [[nodiscard]] Expected<Core::GpuTaskId> declareShadowVisibilityOpaqueFirstWaveletTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
@@ -381,7 +381,7 @@ public:
     void confirmCausticAccumulatorNonTemporalClear()noexcept;
     // The temporal bootstrap clear is recorded by a graph task, but this mirror changes only when the containing caustic producer packet accepts.
     void confirmCausticAccumulatorBootstrapClear()noexcept;
-    // A warm temporal accumulator decays in its own graph task before the selected photon producer.  The task shares the producer packet, so the compiler owns the UAV handoff between the two dispatches.
+    // A warm temporal accumulator decays in its own graph task before the selected photon producer. The task shares the producer packet, so the compiler owns the UAV handoff between dispatches.
     [[nodiscard]] Expected<Core::GpuTaskId> declareCausticAccumulatorDecayTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
@@ -393,7 +393,7 @@ public:
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>& causticPhotonTiming
     );
-    // Record the decay dispatch itself.  Graph callers leave entry state lowering and the following producer's UAV dependency to the compiler
+    // Record the decay dispatch itself. Graph callers leave entry state lowering and the following producer's UAV dependency to the compiler.
     [[nodiscard]] bool dispatchCausticAccumulatorDecay(Core::CommandList& commandList, DeferredFrameTargets& targets, f32 decayFactor);
     // Software visibility consumes graph-declared traversal inputs for opaque shadows and transparent transmittance.
     [[nodiscard]] Expected<u32> renderGpuBvhShadowVisibility(
@@ -437,7 +437,7 @@ public:
         bool graphOwnsNonTemporalAccumulatorClear = false
     );
     [[nodiscard]] bool renderHwCaustics(Core::CommandList& commandList, const ECSRenderDetail::MeshViewBufferSnapshot& meshView, DeferredFrameTargets& targets, Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr);
-    // The normal deferred graph records geometry downsample, resolve prepare, all five wavelet passes, and upsample after the selected photon producer. Their exact resource uses own the immutable and ping-pong UAV-to-SRV handoffs
+    // The normal deferred graph records downsample, resolve prepare, wavelet passes, and upsample after the photon producer. Their uses own the immutable and ping-pong UAV-to-SRV handoffs.
     [[nodiscard]] Expected<Core::GpuTaskId> declareCausticGeometryDownsampleTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
@@ -605,7 +605,7 @@ private:
         bool graphOwnsOpaqueTemporalMergeEntryStates
     );
     // Denoise either backend's soft trace and optionally run the transparent trace and resolve phases.
-    // The shared deferred graph supplies the first geometry-downsample entry states, the opaque geometry-to-resolve handoff, and prepared transparent trace-to-merge/first-wavelet plus temporal-merge-to-wavelet handoffs; later lifecycle transitions remain task-local.
+    // The shared deferred graph supplies the first downsample entry states, the opaque-to-resolve handoff, and prepared trace-to-merge/first-wavelet plus handoffs; later transitions stay local.
     void dispatchSoftShadowDenoiseAndTransparentFold(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
@@ -748,8 +748,6 @@ private:
     u64 m_preparedSceneSwBvhMaterialMutationVersion = 0u;
     PreparedMeshBlasBuildVector m_preparedMeshBlasBuilds;
     // Per-frame BLAS actions keyed by dirty reason.
-    // Answers whether the stress scene rebuilds per-mesh geometry when only instance transforms change.
-    // Logged on confirm
     u64 m_blasLedgerStaticSkipped = 0u;
     u64 m_blasLedgerFirstBuilds = 0u;
     u64 m_blasLedgerRefits = 0u;

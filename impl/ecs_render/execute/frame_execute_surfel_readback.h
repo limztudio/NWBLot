@@ -24,7 +24,7 @@ class RendererFramePipeline;
 
 
 // Surfel-counter readback tail acceptance (Transfer queue).
-// Separated from RendererFramePipeline::render(): the readback context plus its recorded/accepted callbacks are one functionality — retain the counter candidate privately until Transfer accepts, then publish the submission token.
+// Context and recorded/accepted callbacks hold the counter candidate until Transfer accepts, then publish the token.
 class FrameExecuteSurfelReadback final{
 public:
     struct Context{

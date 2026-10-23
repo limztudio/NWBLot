@@ -353,15 +353,15 @@ GpuDescriptorHeapLifecycleStatistics GpuDescriptorHeap::lifecycleStatistics()con
     statistics.accelStructCapacity = m_accelStructSlots.capacity;
     statistics.pendingRetiredSlotCount = m_pendingRecordingCount + m_retiredCount;
 
-    for(const SlotState slotState : m_resourceSlots.slotStates){
+    for(const SlotState::Enum slotState : m_resourceSlots.slotStates){
         if(slotState == SlotState::Live)
             ++statistics.resourceLiveSlotCount;
     }
-    for(const SlotState slotState : m_samplerSlots.slotStates){
+    for(const SlotState::Enum slotState : m_samplerSlots.slotStates){
         if(slotState == SlotState::Live)
             ++statistics.samplerLiveSlotCount;
     }
-    for(const SlotState slotState : m_accelStructSlots.slotStates){
+    for(const SlotState::Enum slotState : m_accelStructSlots.slotStates){
         if(slotState == SlotState::Live)
             ++statistics.accelStructLiveSlotCount;
     }

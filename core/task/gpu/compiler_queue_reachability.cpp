@@ -20,7 +20,7 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_gpu_task_queue_reachability{
+namespace __hidden_gpu_task_graph_compiler_queue_reachability{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -391,10 +391,10 @@ bool BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView&
                 }
             }
             if(compactRows){
-                __hidden_gpu_task_queue_reachability::SymmetrizeCompactTaskRelations(outReachability.m_words, outReachability.m_rowOffsets, outReachability.m_relatedWordRanges, taskCount, wordsPerRow);
+                __hidden_gpu_task_graph_compiler_queue_reachability::SymmetrizeCompactTaskRelations(outReachability.m_words, outReachability.m_rowOffsets, outReachability.m_relatedWordRanges, taskCount, wordsPerRow);
             }
             else
-                __hidden_gpu_task_queue_reachability::SymmetrizeTaskRelations(outReachability.m_words, taskCount, wordsPerRow);
+                __hidden_gpu_task_graph_compiler_queue_reachability::SymmetrizeTaskRelations(outReachability.m_words, taskCount, wordsPerRow);
             outReachability.m_valid = true;
             return true;
         }
@@ -427,7 +427,7 @@ bool BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView&
         }
     }
     // Symmetrize the completed directed closure with bounded tile storage; ranks preserve strict direction.
-    __hidden_gpu_task_queue_reachability::SymmetrizeTaskRelations(outReachability.m_words, taskCount, wordsPerRow);
+    __hidden_gpu_task_graph_compiler_queue_reachability::SymmetrizeTaskRelations(outReachability.m_words, taskCount, wordsPerRow);
     outReachability.m_topologicalRanks.resize(taskCount);
     for(usize orderIndex = 0u; orderIndex < analysis.topologicalOrder().size(); ++orderIndex)
         outReachability.m_topologicalRanks[analysis.topologicalOrder()[orderIndex].index] = static_cast<u32>(orderIndex);

@@ -17,19 +17,19 @@ inline constexpr usize s_FrameParamU16ValuesPerSlot = s_FrameParamStorageSlotByt
 inline constexpr usize s_FrameParamU8ValuesPerSlot = s_FrameParamStorageSlotBytes / sizeof(u8);
 
 
-template<usize pointerSlots>
+template<usize PointerSlots>
 union FrameParamStorage{
-    void* ptr[pointerSlots];
-    u64 u64[pointerSlots];
-    u32 u32[pointerSlots * s_FrameParamU32ValuesPerSlot];
-    u16 u16[pointerSlots * s_FrameParamU16ValuesPerSlot];
-    u8 u8[pointerSlots * s_FrameParamU8ValuesPerSlot];
+    void* ptr[PointerSlots];
+    u64 u64[PointerSlots];
+    u32 u32[PointerSlots * s_FrameParamU32ValuesPerSlot];
+    u16 u16[PointerSlots * s_FrameParamU16ValuesPerSlot];
+    u8 u8[PointerSlots * s_FrameParamU8ValuesPerSlot];
 };
 
-template<usize pointerSlots>
+template<usize PointerSlots>
 class BasicFrameData{
 public:
-    using Param = FrameParamStorage<pointerSlots>;
+    using Param = FrameParamStorage<PointerSlots>;
 
 
 public:

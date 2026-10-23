@@ -153,7 +153,7 @@ Expected<Optional<Core::GpuUploadBlobId>> RendererRayTracingSystem::retainPrepar
 }
 
 bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc::ScratchArena& scratchArena){
-    // Photon emission targets are world bounds of refractive instances. Freeze the gathered bytes here, preflight still owns capacity/descriptor selection; graph declaration retains only this immutable snapshot.
+    // Photon emission targets are world bounds of refractive instances. Freeze the gathered bytes here; preflight still owns capacity/selection; graph declaration retains only this snapshot.
     m_preparedCausticEmissionTargetBytes.clear();
     m_rayTracingState.m_causticRefractiveInstanceCount = 0u;
     m_unsupportedCausticVolumeCount = 0u;

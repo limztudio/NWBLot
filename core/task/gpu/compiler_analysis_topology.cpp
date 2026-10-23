@@ -310,8 +310,7 @@ void BuildSchedulingEdges(
             candidates.push_back(adjacency.edgeIndices[adjacencyIndex]);
         Sort(candidates.data(), candidates.data() + candidates.size(), [&](const usize lhs, const usize rhs)noexcept{
             return topologicalIndices[rawEdges[lhs].consumer.index] < topologicalIndices[rawEdges[rhs].consumer.index];
-        }
-        );
+        });
         const usize lastConsumerRank = topologicalIndices[rawEdges[candidates.back()].consumer.index];
         usize firstUnreachedCandidate = 0u;
         for(usize candidateIndex = 0u; candidateIndex < candidates.size(); ++candidateIndex){

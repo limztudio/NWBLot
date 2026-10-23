@@ -104,7 +104,7 @@ public:
 
 
 public:
-    // The device owner attaches after creation and detaches before native destruction. It must stop and join producers and finish required GPU waits first
+    // The device owner attaches after creation and detaches before native destruction. It must stop and join producers and finish required GPU waits first.
     [[nodiscard]] bool attachDevice(Device& device)noexcept;
     [[nodiscard]] bool detachDevice(Device& device)noexcept;
     [[nodiscard]] bool isAttachedTo(const Device& device)const noexcept;
@@ -136,7 +136,7 @@ public:
         Alloc::ScratchArena& scratchArena,
         const GpuTaskGraphCompileOptions& compileOptions
     )const;
-    // Records and executes the compiler-frozen ordinary graph prefix. Native recorder construction and queue submission remain scheduler-owned
+    // Records and executes the compiler-frozen ordinary graph prefix. Native recorder construction and queue submission remain scheduler-owned.
     [[nodiscard]] bool executeGraph(
         GpuTaskGraph& graph,
         GpuCompiledGraph& compiledGraph,
@@ -240,7 +240,7 @@ private:
         Alloc::ScratchArena& scratchArena,
         GpuSubmissionPacketId* outFailedPacket
     )const;
-    // The caller owns the transaction's exclusive SubmissionOperation. This internal path lets the accepted-frontier composite reuse the ordinary task executor without attempting forbidden same-transaction gate reentry.
+    // The caller owns the transaction's exclusive SubmissionOperation. This internal path lets the accepted-frontier composite reuse the executor without same-transaction gate reentry.
     [[nodiscard]] bool recordAndSubmitTaskWithinSubmissionOperation(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
@@ -255,7 +255,7 @@ private:
         GpuSubmissionPacketId* outFailedPacket,
         const GpuTaskGraphTaskAcceptedCallback* acceptedCallback
     )const;
-    // Arms one graph recording attempt, publishes that exact attempt into the recorded artifact for failure cleanup, then binds its sole submission transaction while the caller retains the exclusive operation.
+    // Arms one recording attempt, publishes that attempt into the recorded artifact for failure cleanup, then binds its submission transaction while the caller keeps the exclusive operation.
     [[nodiscard]] bool prepareRecordingAttemptAndBindTransactionWithinSubmissionOperation(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
@@ -285,7 +285,7 @@ private:
         usize taskSubmissionHookCount
     )const;
     // The caller owns one valid SubmissionOperation for the full native-accept, task-callback, and transaction-publication sequence.
-    // Range submission supplies its synchronous semantic obligations here
+    // Range submission supplies its synchronous semantic obligations here.
     [[nodiscard]] bool submitPacketWithinSubmissionOperation(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,

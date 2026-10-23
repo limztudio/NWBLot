@@ -20,10 +20,10 @@ namespace __hidden_telemetry_perf_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_MEMORY_PROJECT_ARENA = "memory/project_arena";
-static constexpr AStringView s_RENDERER_FRAME = "renderer/frame";
-static constexpr AStringView s_RENDERER_FRAME_TEXT = "Renderer Frame";
-static constexpr AStringView s_PROJECT_ARENA_TEXT = "Project Arena";
+static constexpr AStringView s_MemoryProjectArena = "memory/project_arena";
+static constexpr AStringView s_RendererFrame = "renderer/frame";
+static constexpr AStringView s_RendererFrameText = "Renderer Frame";
+static constexpr AStringView s_ProjectArenaText = "Project Arena";
 static constexpr u32 s_ScopeNameConversionFailure = 0x5C0FEu;
 
 
@@ -62,11 +62,11 @@ struct ThrowingScopeRecord{
 
 TEST(Telemetry, PerfTimingPayloadRejectsNonCurrentVersionsAndCorruptMagicAfterValidParse){
     TestArena testArena;
-    const Name scopeName{s_RENDERER_FRAME};
+    const Name scopeName{s_RendererFrame};
     const NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
 
     Telemetry::TelemetryBytes payload(testArena.arena);
-    ASSERT_TRUE(Telemetry::BuildPerfTimingPayload(testArena.arena, Telemetry::PerfTimingSource::Gpu, scopeName, s_RENDERER_FRAME_TEXT, stats, payload));
+    ASSERT_TRUE(Telemetry::BuildPerfTimingPayload(testArena.arena, Telemetry::PerfTimingSource::Gpu, scopeName, s_RendererFrameText, stats, payload));
 
     Expected<Telemetry::PerfTimingPayload> parsed = MakeUnexpected(Failure{});
     ASSERT_TRUE((parsed = Telemetry::ParsePerfTimingPayload(payload.data(), payload.size())));
@@ -95,10 +95,10 @@ TEST(Telemetry, PerfTimingPayloadRejectsInvalidInput){
     Telemetry::TelemetryBytes payload(testArena.arena);
     NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
 
-    EXPECT_FALSE(Telemetry::BuildPerfTimingPayload(testArena.arena, Telemetry::PerfTimingSource::Unknown, Name(s_RENDERER_FRAME), s_RENDERER_FRAME_TEXT, stats, payload));
+    EXPECT_FALSE(Telemetry::BuildPerfTimingPayload(testArena.arena, Telemetry::PerfTimingSource::Unknown, Name(s_RendererFrame), s_RendererFrameText, stats, payload));
 
     stats.sampleCount = 0u;
-    EXPECT_FALSE(Telemetry::BuildPerfTimingPayload(testArena.arena, Telemetry::PerfTimingSource::Cpu, Name(s_RENDERER_FRAME), s_RENDERER_FRAME_TEXT, stats, payload));
+    EXPECT_FALSE(Telemetry::BuildPerfTimingPayload(testArena.arena, Telemetry::PerfTimingSource::Cpu, Name(s_RendererFrame), s_RendererFrameText, stats, payload));
 }
 
 TEST(Telemetry, PerfTimingRejectsNonfiniteDurationsAtBuildAndWireAdmission){
@@ -114,16 +114,16 @@ TEST(Telemetry, PerfTimingRejectsNonfiniteDurationsAtBuildAndWireAdmission){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
     Telemetry::TelemetryBytes current(testArena.arena);
-    const Name scopeName(s_RENDERER_FRAME);
+    const Name scopeName(s_RendererFrame);
     const TimingStats validStats = MakeTestTimingStats();
-    ASSERT_TRUE(Telemetry::BuildPerfTimingPayload(testArena.arena, Telemetry::PerfTimingSource::Cpu, scopeName, s_RENDERER_FRAME_TEXT, validStats, current));
+    ASSERT_TRUE(Telemetry::BuildPerfTimingPayload(testArena.arena, Telemetry::PerfTimingSource::Cpu, scopeName, s_RendererFrameText, validStats, current));
     for(usize field = 0u; field < s_Fields.size(); ++field){
         for(const u64 bits : s_NonfiniteBits){
             SCOPED_TRACE(field);
             SCOPED_TRACE(bits);
             TimingStats invalid = validStats;
             invalid.*s_Fields[field] = BitCast<f64>(bits);
-            EXPECT_FALSE(Telemetry::BuildPerfTimingPayload(testArena.arena, Telemetry::PerfTimingSource::Cpu, scopeName, s_RENDERER_FRAME_TEXT, invalid, payload));
+            EXPECT_FALSE(Telemetry::BuildPerfTimingPayload(testArena.arena, Telemetry::PerfTimingSource::Cpu, scopeName, s_RendererFrameText, invalid, payload));
             payload = current;
             usize cursor = 0u;
             const auto readHeader = ReadPOD<Telemetry::EncodedPerfTimingPayloadHeader>(current, cursor);
@@ -141,12 +141,12 @@ TEST(Telemetry, PerfTimingRejectsNonfiniteDurationsAtBuildAndWireAdmission){
 
 TEST(Telemetry, PerfMemoryPayloadRejectsCorruptedHeaderAfterValidParse){
     TestArena testArena;
-    const Name scopeName{s_MEMORY_PROJECT_ARENA};
+    const Name scopeName{s_MemoryProjectArena};
     const NWB::Core::Perf::MemorySnapshot snapshot = MakeTestMemorySnapshot(scopeName);
     const NWB::Core::Perf::MemoryDelta delta = MakeTestMemoryDelta();
 
     Telemetry::TelemetryBytes payload(testArena.arena);
-    ASSERT_TRUE(Telemetry::BuildPerfMemoryPayload(testArena.arena, scopeName, s_PROJECT_ARENA_TEXT, snapshot, delta, payload));
+    ASSERT_TRUE(Telemetry::BuildPerfMemoryPayload(testArena.arena, scopeName, s_ProjectArenaText, snapshot, delta, payload));
 
     Expected<Telemetry::PerfMemoryPayload> parsed = MakeUnexpected(Failure{});
     ASSERT_TRUE((parsed = Telemetry::ParsePerfMemoryPayload(payload.data(), payload.size())));
@@ -158,20 +158,20 @@ TEST(Telemetry, PerfMemoryPayloadRejectsCorruptedHeaderAfterValidParse){
 TEST(Telemetry, PerfMemoryPayloadRejectsInvalidInput){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
-    const Name scopeName{s_MEMORY_PROJECT_ARENA};
+    const Name scopeName{s_MemoryProjectArena};
     NWB::Core::Perf::MemorySnapshot snapshot = MakeTestMemorySnapshot(scopeName);
     NWB::Core::Perf::MemoryDelta delta = MakeTestMemoryDelta();
 
-    EXPECT_FALSE(Telemetry::BuildPerfMemoryPayload(testArena.arena, s_NameNone, s_PROJECT_ARENA_TEXT, snapshot, delta, payload));
+    EXPECT_FALSE(Telemetry::BuildPerfMemoryPayload(testArena.arena, s_NameNone, s_ProjectArenaText, snapshot, delta, payload));
 
     EXPECT_FALSE(Telemetry::BuildPerfMemoryPayload(testArena.arena, scopeName, AStringView(), snapshot, delta, payload));
 
     snapshot.scopeName = Name("memory/other_arena");
-    EXPECT_FALSE(Telemetry::BuildPerfMemoryPayload(testArena.arena, scopeName, s_PROJECT_ARENA_TEXT, snapshot, delta, payload));
+    EXPECT_FALSE(Telemetry::BuildPerfMemoryPayload(testArena.arena, scopeName, s_ProjectArenaText, snapshot, delta, payload));
 
     snapshot = MakeTestMemorySnapshot(scopeName);
     delta.currentFrameIndex = 99u;
-    EXPECT_FALSE(Telemetry::BuildPerfMemoryPayload(testArena.arena, scopeName, s_PROJECT_ARENA_TEXT, snapshot, delta, payload));
+    EXPECT_FALSE(Telemetry::BuildPerfMemoryPayload(testArena.arena, scopeName, s_ProjectArenaText, snapshot, delta, payload));
 }
 
 TEST(Telemetry, MemoryDifferencePreservesSignedLimitsAndLargeUnsignedCounters){
@@ -195,7 +195,7 @@ TEST(Telemetry, MemoryDifferencePreservesSignedLimitsAndLargeUnsignedCounters){
         { Limit<u64>::s_Max - 17u, Limit<u64>::s_Max, -17 },
         { 0u, 128u, -128 },
     };
-    const Name scopeName(s_MEMORY_PROJECT_ARENA);
+    const Name scopeName(s_MemoryProjectArena);
     const auto makeSnapshot = [scopeName](const u64 counter, const u64 frame)noexcept{
         MemorySnapshot snapshot;
         snapshot.scopeName = scopeName;
@@ -243,7 +243,7 @@ TEST(Telemetry, MemoryDifferenceOmitsUnrepresentableCountersFromTelemetry){
         { 0u, Limit<u64>::s_Max },
     };
     TestArena testArena;
-    const Name scopeName(s_MEMORY_PROJECT_ARENA);
+    const Name scopeName(s_MemoryProjectArena);
     Telemetry::TelemetryBytes payload(testArena.arena);
     for(const CounterField field : s_Fields){
         for(const CounterCase& test : s_Cases){
@@ -259,7 +259,7 @@ TEST(Telemetry, MemoryDifferenceOmitsUnrepresentableCountersFromTelemetry){
             current.*field = test.current;
             const auto delta = NWB::Core::Perf::Difference(current, previous);
             EXPECT_FALSE(delta.valid());
-            ASSERT_TRUE(Telemetry::BuildPerfMemoryPayload(testArena.arena, scopeName, s_PROJECT_ARENA_TEXT, current, delta, payload));
+            ASSERT_TRUE(Telemetry::BuildPerfMemoryPayload(testArena.arena, scopeName, s_ProjectArenaText, current, delta, payload));
             const auto parsed = Telemetry::ParsePerfMemoryPayload(payload.data(), payload.size());
             ASSERT_TRUE(parsed);
             EXPECT_FALSE(parsed->delta.valid());
@@ -285,7 +285,7 @@ TEST(Telemetry, MemoryReportMarksUnrepresentableTotalsWithoutChangingIndividualR
         { Limit<i64>::s_Min, Limit<i64>::s_Max, -1, true },
     };
     TestArena testArena;
-    const Name scopeName(s_MEMORY_PROJECT_ARENA);
+    const Name scopeName(s_MemoryProjectArena);
     for(const DeltaCase& test : s_Cases){
         SCOPED_TRACE(test.first);
         SCOPED_TRACE(test.second);
@@ -294,12 +294,12 @@ TEST(Telemetry, MemoryReportMarksUnrepresentableTotalsWithoutChangingIndividualR
         auto snapshot = MakeTestMemorySnapshot(scopeName);
         auto delta = MakeTestMemoryDelta();
         delta.usedBytes = test.first;
-        ASSERT_TRUE(Telemetry::RecordPerfMemory(recorder, scopeName, s_PROJECT_ARENA_TEXT, snapshot, delta));
+        ASSERT_TRUE(Telemetry::RecordPerfMemory(recorder, scopeName, s_ProjectArenaText, snapshot, delta));
         ++snapshot.frameIndex;
         ++delta.previousFrameIndex;
         ++delta.currentFrameIndex;
         delta.usedBytes = test.second;
-        ASSERT_TRUE(Telemetry::RecordPerfMemory(recorder, scopeName, s_PROJECT_ARENA_TEXT, snapshot, delta));
+        ASSERT_TRUE(Telemetry::RecordPerfMemory(recorder, scopeName, s_ProjectArenaText, snapshot, delta));
         const auto report = Log::BuildTelemetryReport(testArena.arena, recorder.view(), testArena.scratchArena);
         ASSERT_TRUE(report);
         EXPECT_EQ(report->summary.parseFailureCount, 0u);
@@ -321,7 +321,7 @@ TEST(Telemetry, MemoryReportMarksUnrepresentableTotalsWithoutChangingIndividualR
             ++delta.previousFrameIndex;
             ++delta.currentFrameIndex;
             delta.usedBytes = -test.second;
-            ASSERT_TRUE(Telemetry::RecordPerfMemory(recorder, scopeName, s_PROJECT_ARENA_TEXT, snapshot, delta));
+            ASSERT_TRUE(Telemetry::RecordPerfMemory(recorder, scopeName, s_ProjectArenaText, snapshot, delta));
             const auto continued = Log::BuildTelemetryReport(testArena.arena, recorder.view(), testArena.scratchArena);
             ASSERT_TRUE(continued);
             EXPECT_FALSE(continued->summary.memorySources[NWB::Core::Perf::MemorySource::ExplicitScope].totalUsedDeltaValid);
@@ -335,7 +335,7 @@ TEST(Telemetry, MemoryReportMarksUnrepresentableTotalsWithoutChangingIndividualR
 
         recorder.clear();
         delta.usedBytes = 0;
-        ASSERT_TRUE(Telemetry::RecordPerfMemory(recorder, scopeName, s_PROJECT_ARENA_TEXT, snapshot, delta));
+        ASSERT_TRUE(Telemetry::RecordPerfMemory(recorder, scopeName, s_ProjectArenaText, snapshot, delta));
         const auto reset = Log::BuildTelemetryReport(testArena.arena, recorder.view(), testArena.scratchArena);
         ASSERT_TRUE(reset);
         EXPECT_TRUE(reset->summary.memorySources[NWB::Core::Perf::MemorySource::ExplicitScope].totalUsedDeltaValid);

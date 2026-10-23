@@ -307,9 +307,9 @@ TEST(ReflectionFeedback, RejectedGraphAndResetReleaseTheMoveOnlyReservation){
     desc.setIdentity(Name("tests.feedback.lease")).setMarkerLabel("Feedback Lease");
     const auto pending = control->plan(Stamp(), ReflectionSettings{}, true, s_ExpectedDualCount);
     {
-        const auto gpuAdmissionAt301 = graph.addTask<LeaseTask>(desc, LeaseTask::Payload{ReflectionFeedbackReservation(control, pending)});
-        ASSERT_TRUE(gpuAdmissionAt301);
-        ASSERT_TRUE(gpuAdmissionAt301->valid());
+        const auto gpuTaskAdmission = graph.addTask<LeaseTask>(desc, LeaseTask::Payload{ReflectionFeedbackReservation(control, pending)});
+        ASSERT_TRUE(gpuTaskAdmission);
+        ASSERT_TRUE(gpuTaskAdmission->valid());
     }
     graph.reset();
     const auto retry = control->plan(Stamp(), ReflectionSettings{}, true, 3u);

@@ -43,7 +43,6 @@ struct RayTracingOpacityMicromapUsageCount{
     u32 count = 0;
     // Micro triangle count is 4^N, where N is the subdivision level.
     u32 subdivisionLevel = 0;
-    // OMM input sub format.
     OpacityMicromapFormat::Enum format = OpacityMicromapFormat::OC1_2_State;
 };
 
@@ -589,7 +588,7 @@ struct RayTracingClusterOperationBlasBuildParams{
 };
 
 struct RayTracingClusterOperationParams{
-    // Maximum number of acceleration structures (or templates) to build/instantiate/move
+    // Maximum number of acceleration structures or templates to build, instantiate, or move.
     u32 maxArgCount = 0;
 
     RayTracingClusterOperationType::Enum type = RayTracingClusterOperationType::Move;
@@ -606,7 +605,6 @@ struct RayTracingClusterOperationDesc{
 
     u64 scratchSizeInBytes = 0;                            // Size of scratch resource returned by getClusterOperationSizeInfo() scratchSizeInBytes
 
-    // Input Resources
     Buffer* inIndirectArgCountBuffer = nullptr;            // Buffer containing the number of AS to build, instantiate, or move
     u64 inIndirectArgCountOffsetInBytes = 0;               // Offset (in bytes) to where the count is in the inIndirectArgCountBuffer
     Buffer* inIndirectArgsBuffer = nullptr;                // Source-record array for the selected operation; cluster BLAS builds use IndirectArgs.

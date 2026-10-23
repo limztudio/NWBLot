@@ -14,7 +14,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UploadManager::UploadManager(Device& pParent, u64 defaultChunkSize, u64 memoryLimit, const ChunkKind chunkKind)
+UploadManager::UploadManager(Device& pParent, u64 defaultChunkSize, u64 memoryLimit, const ChunkKind::Enum chunkKind)
     : m_device(pParent)
     , m_defaultChunkSize(defaultChunkSize)
     , m_memoryLimit(memoryLimit)

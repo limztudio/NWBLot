@@ -34,59 +34,59 @@ inline constexpr DWORD s_CrashWaitHandleCount = 2u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Detail::PlatformFailure NativeFailure(const Detail::PlatformOperation::Enum operation, const DWORD code)noexcept{
-    return { operation, Detail::PlatformErrorDomain::Windows, static_cast<u64>(code) };
+[[nodiscard]] static CrashDetail::PlatformFailure NativeFailure(const CrashDetail::PlatformOperation::Enum operation, const DWORD code)noexcept{
+    return { operation, CrashDetail::PlatformErrorDomain::Windows, static_cast<u64>(code) };
 }
 
-[[nodiscard]] static Expected<void, Detail::PlatformFailure> ReleaseOwnedHandle(HANDLE& handle, const HANDLE emptyValue = nullptr)noexcept{
+[[nodiscard]] static Expected<void, CrashDetail::PlatformFailure> ReleaseOwnedHandle(HANDLE& handle, const HANDLE emptyValue = nullptr)noexcept{
     const HANDLE owned = handle;
     handle = emptyValue;
     if(!owned || owned == INVALID_HANDLE_VALUE)
         return {};
     if(!CloseHandle(owned))
-        return MakeUnexpected(NativeFailure(Detail::PlatformOperation::CloseHandle, GetLastError()));
+        return MakeUnexpected(NativeFailure(CrashDetail::PlatformOperation::CloseHandle, GetLastError()));
     return {};
 }
 
-static void CleanupOwnedHandle(HANDLE& handle, Detail::PlatformCleanupObservations& observations, const HANDLE emptyValue = nullptr)noexcept{
+static void CleanupOwnedHandle(HANDLE& handle, CrashDetail::PlatformCleanupObservations& observations, const HANDLE emptyValue = nullptr)noexcept{
     const auto released = ReleaseOwnedHandle(handle, emptyValue);
     if(!released)
         observations.record(released.error());
 }
 
-static void WaitForOwnedProcess(const HANDLE process, const bool terminateImmediately, Detail::PlatformCleanupObservations& observations)noexcept{
+static void WaitForOwnedProcess(const HANDLE process, const bool terminateImmediately, CrashDetail::PlatformCleanupObservations& observations)noexcept{
     if(!process || process == INVALID_HANDLE_VALUE)
         return;
     DWORD waited = WaitForSingleObject(process, terminateImmediately ? 0u : s_HandlerExitWaitMilliseconds);
     bool terminated = false;
     if(!terminateImmediately && waited != WAIT_OBJECT_0){
         // Preserve detached upload completion after the existing bounded normal shutdown wait.
-        observations.record(NativeFailure(Detail::PlatformOperation::WaitProcess, waited == WAIT_FAILED ? GetLastError() : ERROR_TIMEOUT));
+        observations.record(NativeFailure(CrashDetail::PlatformOperation::WaitProcess, waited == WAIT_FAILED ? GetLastError() : ERROR_TIMEOUT));
         return;
     }
     if(waited != WAIT_OBJECT_0){
         if(waited != WAIT_TIMEOUT)
-            observations.record(NativeFailure(Detail::PlatformOperation::WaitProcess, waited == WAIT_FAILED ? GetLastError() : ERROR_INVALID_DATA));
+            observations.record(NativeFailure(CrashDetail::PlatformOperation::WaitProcess, waited == WAIT_FAILED ? GetLastError() : ERROR_INVALID_DATA));
         if(!TerminateProcess(process, ERROR_CANCELLED)){
             const DWORD error = GetLastError();
             waited = WaitForSingleObject(process, 0u);
             if(waited != WAIT_OBJECT_0)
-                observations.record(NativeFailure(Detail::PlatformOperation::TerminateProcess, error));
+                observations.record(NativeFailure(CrashDetail::PlatformOperation::TerminateProcess, error));
         }
         else{
             terminated = true;
             waited = WaitForSingleObject(process, s_HandlerExitWaitMilliseconds);
         }
         if(waited != WAIT_OBJECT_0){
-            observations.record(NativeFailure(Detail::PlatformOperation::WaitProcess, waited == WAIT_FAILED ? GetLastError() : ERROR_TIMEOUT));
+            observations.record(NativeFailure(CrashDetail::PlatformOperation::WaitProcess, waited == WAIT_FAILED ? GetLastError() : ERROR_TIMEOUT));
             return;
         }
     }
     DWORD exitCode = 0u;
     if(!GetExitCodeProcess(process, &exitCode))
-        observations.record(NativeFailure(Detail::PlatformOperation::WaitProcess, GetLastError()));
+        observations.record(NativeFailure(CrashDetail::PlatformOperation::WaitProcess, GetLastError()));
     else if(exitCode != 0u && !terminated)
-        observations.record({ Detail::PlatformOperation::WaitProcess, Detail::PlatformErrorDomain::ExitCode, static_cast<u64>(exitCode) });
+        observations.record({ CrashDetail::PlatformOperation::WaitProcess, CrashDetail::PlatformErrorDomain::ExitCode, static_cast<u64>(exitCode) });
 }
 
 static void DrainPendingAcks(const HANDLE ackReadHandle)noexcept{
@@ -97,10 +97,10 @@ static void DrainPendingAcks(const HANDLE ackReadHandle)noexcept{
         DWORD availableBytes = 0u;
         if(!PeekNamedPipe(ackReadHandle, nullptr, 0u, nullptr, &availableBytes, nullptr))
             return;
-        if(availableBytes < sizeof(Detail::CrashAck))
+        if(availableBytes < sizeof(CrashDetail::CrashAck))
             return;
 
-        Detail::CrashAck ignoredAck;
+        CrashDetail::CrashAck ignoredAck;
         if(!ReadAllWin32Handle(ackReadHandle, &ignoredAck, sizeof(ignoredAck)))
             return;
     }
@@ -109,22 +109,22 @@ static void DrainPendingAcks(const HANDLE ackReadHandle)noexcept{
 static LONG WINAPI UnhandledExceptionFilter(EXCEPTION_POINTERS* exceptionInfo){
     const u32 exceptionCode = exceptionInfo && exceptionInfo->ExceptionRecord ? static_cast<u32>(exceptionInfo->ExceptionRecord->ExceptionCode) : 0u;
 
-    Detail::CrashDumpRequestOptions options;
+    CrashDetail::CrashDumpRequestOptions options;
     options.exceptionPointers = static_cast<u64>(reinterpret_cast<usize>(exceptionInfo));
     if(exceptionInfo && exceptionInfo->ExceptionRecord)
         options.instructionPointer = static_cast<u64>(reinterpret_cast<usize>(exceptionInfo->ExceptionRecord->ExceptionAddress));
 
-    if(!Detail::TryConsumeSuppressedPlatformCrashCapture())
-        Detail::NotifyCrashHandler(Detail::CrashReasonKind::WindowsException, exceptionCode, options);
+    if(!CrashDetail::TryConsumeSuppressedPlatformCrashCapture())
+        CrashDetail::NotifyCrashHandler(CrashDetail::CrashReasonKind::WindowsException, exceptionCode, options);
 
-    if(Detail::g_State.previousExceptionFilter)
-        return Detail::g_State.previousExceptionFilter(exceptionInfo);
+    if(CrashDetail::g_State.previousExceptionFilter)
+        return CrashDetail::g_State.previousExceptionFilter(exceptionInfo);
 
     return EXCEPTION_EXECUTE_HANDLER;
 }
 
 [[noreturn]] static void TerminateHandler()noexcept{
-    Detail::NotifyCrashHandler(Detail::CrashReasonKind::Terminate, 0u);
+    CrashDetail::NotifyCrashHandler(CrashDetail::CrashReasonKind::Terminate, 0u);
     TerminateInvariant();
 }
 
@@ -174,7 +174,7 @@ static u64 ContextFramePointer(const CONTEXT& context)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace Detail{
+namespace CrashDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -211,17 +211,17 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
     if(g_State.requestWriteHandle == INVALID_HANDLE_VALUE)
         return CrashDumpTransportStatus::Failed;
 
-    // Re-entrancy guard: a fault while already inside the transport (e.g. the SEH filter itself faulting) must not re-enter and corrupt the in-flight request or self-deadlock on the channel.
-    static thread_local bool s_inTransport = false;
-    if(s_inTransport)
+    // Re-entrancy guard: a fault while already inside the transport (e.g. the SEH filter itself faulting) must not re-enter and corrupt the request or self-deadlock on the channel.
+    static thread_local bool s_InTransport = false;
+    if(s_InTransport)
         return CrashDumpTransportStatus::Failed;
-    s_inTransport = true;
+    s_InTransport = true;
 
     // Serialize concurrent writers: if two threads fault at once, only one owns the single request pipe + ack event; the other bails (its sibling's report is still written).
     // One async-safe CAS, never blocks.
     u32 expected = 0u;
     if(!g_State.transportInFlight.compare_exchange_strong(expected, 1u, MemoryOrder::acq_rel, MemoryOrder::acquire)){
-        s_inTransport = false;
+        s_InTransport = false;
         return CrashDumpTransportStatus::Sent;
     }
 
@@ -269,7 +269,7 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
     }while(false);
 
     g_State.transportInFlight.store(0u, MemoryOrder::release);
-    s_inTransport = false;
+    s_InTransport = false;
     return status;
 }
 

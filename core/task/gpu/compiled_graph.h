@@ -44,7 +44,7 @@ struct GpuSubmissionPacket{
     u32 externalDependencyOffset = 0u;
     u32 externalDependencyCount = 0u;
     // Compiler-derived ready-frontier depth for native recording.
-    // Packets in one depth have no recorded-state-seed producer relationship, so the runtime may record opted-in packets concurrently while retaining deterministic compile-order submission.
+    // Packets in one depth have no seed producer relationship, so the runtime may record opted-in packets concurrently while keeping deterministic compile-order submission.
     u32 recordingFrontier = 0u;
     GpuPhysicalQueueId queue;
     // A late recovery/finalization packet receives waits for the latest accepted packet on every other physical queue directly from GpuGraphSubmissionTransaction.
@@ -114,7 +114,7 @@ struct GpuCompiledTask{
     GpuPhysicalQueueId queue;
     GpuTaskPacketizationDecision::Enum packetizationDecision = GpuTaskPacketizationDecision::Unknown;
     GpuTaskTimingPolicy::Enum timingPolicy = GpuTaskTimingPolicy::None;
-    // Calibration observations contribute route duration history without becoming the committed timing-feedback incumbent.
+    // Calibration observations add route duration history without becoming the committed timing-feedback incumbent.
     // Retain that decision so late query collection preserves policy dwell.
     bool recordsNonCommittingTimingSample = false;
 };
@@ -171,7 +171,7 @@ public:
 };
 
 // Immutable presentation completion resolved from a strict typed-texture declaration.
-// It retains the semantic producer/backbuffer pair along with the compiler-owned packet and exact physical queue shared by every backbuffer user before the one native present signal.
+// It retains the semantic producer/backbuffer pair plus the compiler-owned packet and exact physical queue shared by every backbuffer user before the one native present signal.
 struct GpuCompiledPresentEndpoint{
     GpuTaskId producer;
     GpuGraphResourceId backBuffer;
@@ -187,7 +187,7 @@ public:
 
 
 // One semantic exclusive-ownership movement.
-// Internal moves remain one record even though native lowering emits a release and an acquire barrier; external routes deliberately leave the task and packet on the external side invalid.
+// Internal moves stay one record even though native lowering emits a release and an acquire barrier; external routes leave the task and packet on the external side invalid.
 // Queue-family indices and sharing intent are captured by value so telemetry never has to reinterpret a later topology or resource declaration.
 namespace GpuOwnershipTransferRoute{
     enum Enum : u8{
@@ -260,7 +260,7 @@ public:
 
 
 // Immutable accepted-plan telemetry for one concrete task-graph plan.
-// Core compiler counters and the sanitized caller-provided declaration duration publish only after success; failed or superseded plans retain an empty snapshot, so tooling never has to reconcile partial barrier/packet data with a later generation.
+// Core counters and the caller-provided declaration duration publish only after success; failed or superseded plans keep an empty snapshot.
 struct GpuTaskGraphCompileStatistics{
     static constexpr usize s_QueueClassCount = static_cast<usize>(CommandQueue::kCount);
     static constexpr usize s_PacketizationDecisionCount = static_cast<usize>(GpuTaskPacketizationDecision::kCount);
@@ -274,7 +274,7 @@ struct GpuTaskGraphCompileStatistics{
     usize resourceVersionCount = 0u;
     // Counts both producer-to-consumer dependencies and consumer-to-overwriter lifetime edges.
     usize resourceVersionEdgeCount = 0u;
-    // These are analysis categories, not a disjoint scheduling-edge partition: one task pair can have both an explicit declaration and inferred resource reason, so callers must not sum them as a final edge count.
+    // Analysis categories, not a disjoint edge partition: one pair can carry both reasons, so callers must not sum them as a final edge count.
     usize explicitDependencyCount = 0u;
     usize inferredDependencyCount = 0u;
     usize declaredExternalDependencyCount = 0u;
@@ -349,7 +349,7 @@ public:
 
 
 // Immutable-by-value accepted-plan telemetry for one exact physical queue.
-// Barrier counts belong to the compiled task that lowers them: a cross-queue ownership release therefore belongs to its producer queue, while the matching acquire belongs to its consumer queue.
+// Barrier counts belong to the compiled task that lowers them: a cross-queue release belongs to its producer queue, while the matching acquire belongs to its consumer queue.
 struct GpuTaskGraphPhysicalQueueCompileStatistics{
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
@@ -396,11 +396,13 @@ private:
 
 
 private:
-    enum class AttemptBindingState : u8{
-        None,
-        Recording,
-        Submitting,
-        Resolved,
+    struct AttemptBindingState{
+        enum Enum : u8{
+            None,
+            Recording,
+            Submitting,
+            Resolved,
+        };
     };
 
     class CompilationScope final : NoCopy{
@@ -421,7 +423,7 @@ private:
 
 
 public:
-    // Runtime entry points use a short nonblocking read claim while they derive packet identities or initialize plan-indexed storage before an exact graph attempt can provide the persistent immutable-plan lease.
+    // Runtime entry points take a short nonblocking read claim while deriving packet identities or plan storage before an exact graph attempt provides the immutable-plan lease.
     // The view is deliberately nonmovable because its address participates in the thread-local lexical proof chain.
     class ReadView final : NoCopy{
         friend class GpuCompiledGraph;
@@ -614,7 +616,7 @@ private:
     mutable Atomic<u32> m_planAccessState = 0u;
     mutable Futex m_attemptBindingMutex;
     u16 m_deviceGeneration = 0u;
-    mutable AttemptBindingState m_attemptBindingState = AttemptBindingState::None;
+    mutable AttemptBindingState::Enum m_attemptBindingState = AttemptBindingState::None;
     bool m_hasPresentEndpoint = false;
     bool m_valid = false;
 };

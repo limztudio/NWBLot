@@ -14,7 +14,6 @@
 
 
 bool nwbAvboitLoadAcceptedMaterialAlpha(const float4 position, const half4 color, const float3 normal, const float4 tangent, const float2 uv0, const float4 worldPosition, out half outAlpha){
-    // Initialize alpha so the CSG early return satisfies the out-parameter contract.
     outAlpha = half(0.0);
 
     // The selected optical object's entry and exit surfaces are resolved together by bounded refraction.
@@ -45,7 +44,7 @@ bool nwbAvboitLoadAcceptedMaterialAlpha(const float4 position, const half4 color
     return nwbAvboitAcceptLowDepthFragment(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.w), nwbHeapSampler(g_NwbDeferredBindlessResources.lightingSlots.w), position, outAlpha, virtualSlice);
 }
 
-// Occupancy and extinction consume the same raster payload. Keep their conversion at this authoring boundary so a new field in NwbAvboitMaterialAlphaPixelInput cannot quietly reach only one of the two target-generation passes.
+// Occupancy and extinction share one raster payload. Keep conversion here so a new input field cannot reach only one pass.
 bool nwbAvboitLoadAcceptedMaterialAlpha(const NwbAvboitMaterialAlphaPixelInput input, out half outAlpha){
     return nwbAvboitLoadAcceptedMaterialAlpha(input.position, half4(input.color), input.normal, input.tangent, input.uv0, input.worldPosition, outAlpha);
 }

@@ -25,7 +25,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_command_list_state_handoff_merge{
+namespace __hidden_resource_state_handoff_merge{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -97,7 +97,7 @@ bool CommandListResourceStateHandoff::buildFanIn(const CommandListResourceStateH
     reset();
     m_deviceGeneration = base.m_deviceGeneration;
 
-    using namespace __hidden_command_list_state_handoff_merge;
+    using namespace __hidden_resource_state_handoff_merge;
     const auto sameTextureState = [](const TextureState& lhs, const TextureState& rhs)noexcept{
         return lhs.state == rhs.state && lhs.queueSharing == rhs.queueSharing && lhs.ownerQueue == rhs.ownerQueue && lhs.releaseDestinationQueue == rhs.releaseDestinationQueue;
     };
@@ -225,8 +225,7 @@ bool CommandListResourceStateHandoff::buildFanIn(const CommandListResourceStateH
             if(lhs.offset != rhs.offset)
                 return lhs.offset < rhs.offset;
             return lhs.beginning < rhs.beginning;
-        }
-        );
+        });
 
         // Sweep the union of interval boundaries.
         // A branch retaining the base state contributes no change; independent changes must agree only where their byte ranges overlap.

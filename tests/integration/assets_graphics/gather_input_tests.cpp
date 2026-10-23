@@ -68,9 +68,9 @@ protected:
         for(usize i = 0u; i < count; ++i){
             if(!bytes.empty())
                 bytes.front() = static_cast<u8>(seed + i);
-            const auto derivedNameAt66Col69 = AssetName(i);
-            ASSERT_TRUE(derivedNameAt66Col69);
-            ASSERT_TRUE(Pack::AppendPayloadBytesToManifest(manifest, *derivedNameAt66Col69, bytes));
+            const auto derivedNameResult = AssetName(i);
+            ASSERT_TRUE(derivedNameResult);
+            ASSERT_TRUE(Pack::AppendPayloadBytesToManifest(manifest, *derivedNameResult, bytes));
         }
         ASSERT_TRUE(Assets::BuiltAssetDetail::WriteBuiltAssets(m_root / directory, manifest, scratchArena));
         m_options.inputs.emplace_back(PathToString(m_testArena.arena, m_root / directory));
@@ -87,9 +87,9 @@ protected:
         EXPECT_EQ(filesystem->fileCount(), count);
         Assets::AssetBytes bytes(m_testArena.arena);
         for(usize i = 0u; i < count; ++i){
-            const auto derivedNameAt83Col45 = AssetName(i);
-            ASSERT_TRUE(derivedNameAt83Col45);
-            ASSERT_TRUE(filesystem->readFile(*derivedNameAt83Col45, bytes));
+            const auto secondDerivedNameResult = AssetName(i);
+            ASSERT_TRUE(secondDerivedNameResult);
+            ASSERT_TRUE(filesystem->readFile(*secondDerivedNameResult, bytes));
             ASSERT_EQ(bytes.size(), payloadSize);
             if(!bytes.empty())
                 EXPECT_EQ(bytes.front(), static_cast<u8>(seed + i));

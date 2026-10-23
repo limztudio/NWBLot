@@ -25,7 +25,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_avboit_compute_effect_chain{
+namespace __hidden_avboit_compute_effect_chain_builder{
 
 
 [[nodiscard]] static Core::GpuTaskSchedulingHint ComputeEffectScheduling()noexcept{
@@ -68,7 +68,7 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(Core::GpuTaskGr
     if(!inputs.occupancyTask.valid())
         return MakeUnexpected(Failure{});
 
-    const Core::GpuTaskSchedulingHint avboitComputeScheduling = __hidden_avboit_compute_effect_chain::ComputeEffectScheduling();
+    const Core::GpuTaskSchedulingHint avboitComputeScheduling = __hidden_avboit_compute_effect_chain_builder::ComputeEffectScheduling();
     const Core::GpuTaskTimingMetadata avboitComputeStageTiming = AvboitComputeStageTimingMetadata(inputs.targets);
     Core::GpuTaskId completionTask = inputs.occupancyTask;
     if(inputs.hasTransparentRenderers){
@@ -125,7 +125,7 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(Core::GpuTaskGr
     if(!inputs.transmittance.valid() || !inputs.currentBindlessSlots.valid())
         return MakeUnexpected(Failure{});
 
-    const Core::GpuTaskSchedulingHint avboitComputeScheduling = __hidden_avboit_compute_effect_chain::ComputeEffectScheduling();
+    const Core::GpuTaskSchedulingHint avboitComputeScheduling = __hidden_avboit_compute_effect_chain_builder::ComputeEffectScheduling();
     const Core::GpuTaskTimingMetadata avboitComputeStageTiming = AvboitComputeStageTimingMetadata(inputs.targets);
     // Integration retains packet affinity; the compiler lowers its queue and resource states.
     const Core::GpuTaskResourceUse integrationResourceUses[] = {

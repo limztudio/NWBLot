@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Gracefully close a known X11 top-level window by sending a WM_DELETE_WINDOW ClientMessage.
 #
-# The NWB render apps exit gracefully ONLY via the WM_DELETE_WINDOW protocol (their X11 event loop returns "stop" on that message, which unwinds to main()'s return and -- in a NWB_BUILDMODE build -- writes the .namesym sidecar).
+# The NWB render apps exit gracefully ONLY via WM_DELETE_WINDOW (their X11 loop returns "stop" on that message, and a NWB_BUILDMODE build writes the .namesym sidecar).
 # SIGINT/SIGTERM/TerminateProcess skip that path, so a plain kill produces no sidecar.
 # This is the Linux analog of the window-capture smoke's Windows WM_CLOSE teardown.
 #

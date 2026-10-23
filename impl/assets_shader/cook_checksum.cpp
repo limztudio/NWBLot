@@ -16,13 +16,6 @@
 
 #include <global/hash_utils.h>
 
-namespace __hidden_shader_cook_checksum{
-static constexpr StringView s_NoneOptName = "none";
-static constexpr StringView s_DefaultOptName = "default";
-static constexpr StringView s_HighOptName = "high";
-static constexpr StringView s_MaximalOptName = "maximal";
-};
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -33,11 +26,16 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_cook_checksum{
+namespace __hidden_shader_cook_checksum{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+static constexpr StringView s_NoneOptName = "none";
+static constexpr StringView s_DefaultOptName = "default";
+static constexpr StringView s_HighOptName = "high";
+static constexpr StringView s_MaximalOptName = "maximal";
 
 using ScratchPath = ::Path<Core::Alloc::ScratchArena>;
 using ScratchString = AString<Core::Alloc::ScratchArena>;
@@ -129,10 +127,10 @@ static Expected<ScratchString> BuildCanonicalDependencyPath(const Path& dependen
 
 [[nodiscard]] static AStringView ShaderOptimizationLevelText(const ShaderOptimizationLevel::Enum optimizationLevel)noexcept{
     switch(optimizationLevel){
-    case ShaderOptimizationLevel::None: return __hidden_shader_cook_checksum::s_NoneOptName;
-    case ShaderOptimizationLevel::Default: return __hidden_shader_cook_checksum::s_DefaultOptName;
-    case ShaderOptimizationLevel::High: return __hidden_shader_cook_checksum::s_HighOptName;
-    case ShaderOptimizationLevel::Maximal: return __hidden_shader_cook_checksum::s_MaximalOptName;
+    case ShaderOptimizationLevel::None: return s_NoneOptName;
+    case ShaderOptimizationLevel::Default: return s_DefaultOptName;
+    case ShaderOptimizationLevel::High: return s_HighOptName;
+    case ShaderOptimizationLevel::Maximal: return s_MaximalOptName;
     default: return {};
     }
 }
@@ -153,7 +151,7 @@ Expected<ShaderCook::DependencyChecksum> ShaderCook::computeDependencyChecksum(
     const InitializerList<DependencyRootAlias> dependencyRootAliases,
     Core::Alloc::ScratchArena& scratchArena
 ){
-    using __hidden_cook_checksum::SortedDependencyItem;
+    using __hidden_shader_cook_checksum::SortedDependencyItem;
 
     static constexpr u32 s_DependencyChecksumVersion = 3u;
     static constexpr u8 s_NewlineByte = '\n';
@@ -167,7 +165,7 @@ Expected<ShaderCook::DependencyChecksum> ShaderCook::computeDependencyChecksum(
         return MakeUnexpected(Failure{});
     }
 
-    Vector<__hidden_cook_checksum::NormalizedDependencyRootAlias, Core::Alloc::ScratchArena> normalizedRootAliases{scratchArena};
+    Vector<__hidden_shader_cook_checksum::NormalizedDependencyRootAlias, Core::Alloc::ScratchArena> normalizedRootAliases{scratchArena};
     normalizedRootAliases.reserve(dependencyRootAliases.size());
     for(const DependencyRootAlias& rootAlias : dependencyRootAliases){
         if(rootAlias.root.empty() || rootAlias.key.empty()){
@@ -175,28 +173,28 @@ Expected<ShaderCook::DependencyChecksum> ShaderCook::computeDependencyChecksum(
             return MakeUnexpected(Failure{});
         }
 
-        __hidden_cook_checksum::NormalizedDependencyRootAlias normalizedAlias{scratchArena};
-        const auto rootPath = AbsolutePath(__hidden_cook_checksum::ScratchPath(scratchArena, rootAlias.root));
+        __hidden_shader_cook_checksum::NormalizedDependencyRootAlias normalizedAlias{scratchArena};
+        const auto rootPath = AbsolutePath(__hidden_shader_cook_checksum::ScratchPath(scratchArena, rootAlias.root));
         if(!rootPath){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve dependency root alias '{}' : {}"), PathToString<tchar>(rootAlias.root), StringConvert(rootPath.error().message()));
             return MakeUnexpected(Failure{});
         }
 
-        normalizedAlias.root = __hidden_cook_checksum::NormalizeDependencyRootAliasPath(*rootPath);
+        normalizedAlias.root = __hidden_shader_cook_checksum::NormalizeDependencyRootAliasPath(*rootPath);
         normalizedAlias.key = rootAlias.key;
         CanonicalizeTextInPlace(normalizedAlias.key);
         if(normalizedAlias.key.empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("Dependency checksum requires non-empty dependency root alias keys"));
             return MakeUnexpected(Failure{});
         }
-        normalizedAlias.depth = __hidden_cook_checksum::PathDepth(normalizedAlias.root);
+        normalizedAlias.depth = __hidden_shader_cook_checksum::PathDepth(normalizedAlias.root);
         normalizedRootAliases.push_back(Move(normalizedAlias));
     }
 
     Fnv64AppendValue(result.checksum, s_DependencyChecksumVersion);
     Fnv64AppendValue(result.checksum, includeDirectories.size());
     for(const Path& includeDirectory : includeDirectories){
-        const auto canonicalPath = __hidden_cook_checksum::BuildCanonicalDependencyPath(includeDirectory, normalizedRootAliases, scratchArena, true);
+        const auto canonicalPath = __hidden_shader_cook_checksum::BuildCanonicalDependencyPath(includeDirectory, normalizedRootAliases, scratchArena, true);
         if(!canonicalPath)
             return MakeUnexpected(Failure{});
         Fnv64AppendBuffer(result.checksum, reinterpret_cast<const u8*>(canonicalPath->data()), canonicalPath->size());
@@ -207,7 +205,7 @@ Expected<ShaderCook::DependencyChecksum> ShaderCook::computeDependencyChecksum(
     sortedDependencies.reserve(dependencies.size());
     for(const Path& dependency : dependencies){
         SortedDependencyItem item(scratchArena, dependency);
-        auto canonicalPath = __hidden_cook_checksum::BuildCanonicalDependencyPath(dependency, normalizedRootAliases, scratchArena, false);
+        auto canonicalPath = __hidden_shader_cook_checksum::BuildCanonicalDependencyPath(dependency, normalizedRootAliases, scratchArena, false);
         if(!canonicalPath)
             return MakeUnexpected(Failure{});
         item.canonicalPath = Move(*canonicalPath);
@@ -260,7 +258,7 @@ u64 ShaderCook::computeSourceChecksum(const ShaderEntry& entry, const AStringVie
     appendChecksumLine(entry.stage);
     appendChecksumLine(entry.archiveStage);
     appendChecksumLine(entry.rayQuery ? SlangShaderCompiler::s_Spirv15RayQueryTargetProfileText : SlangShaderCompiler::s_Spirv15TargetProfileText);
-    appendChecksumLine(__hidden_cook_checksum::ShaderOptimizationLevelText(entry.optimizationLevel));
+    appendChecksumLine(__hidden_shader_cook_checksum::ShaderOptimizationLevelText(entry.optimizationLevel));
     appendChecksumLine(AStringView(entry.entryPoint));
     appendChecksumLine(variantSignature);
     if(entry.implicitDefines.size() <= 1u){

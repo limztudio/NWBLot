@@ -284,10 +284,10 @@ TEST(GpuTaskGraph, OwnsPipelineMetadataAndInvalidatesPipelineIdsOnReset){
         EXPECT_EQ(declarations.pipelineCount(), 1u);
     }
     {
-        const auto gpuAdmissionAt265 = graph.importPipeline(desc);
-        EXPECT_TRUE(gpuAdmissionAt265);
-        if(gpuAdmissionAt265)
-            EXPECT_EQ(*gpuAdmissionAt265, pipeline);
+        const auto gpuTaskAdmission = graph.importPipeline(desc);
+        EXPECT_TRUE(gpuTaskAdmission);
+        if(gpuTaskAdmission)
+            EXPECT_EQ(*gpuTaskAdmission, pipeline);
     }
 
     markerLabel[0] = 'X';
@@ -324,9 +324,9 @@ TEST(GpuTaskGraph, DeclarationStorageMutationsInvalidateCompilerSnapshots){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     {
-        const auto gpuAdmissionAt296 = AddTask(graph, Name("tests/task_graph/declaration_revision_base"), "Declaration Revision Base");
-        ASSERT_TRUE(gpuAdmissionAt296);
-        ASSERT_TRUE(gpuAdmissionAt296->valid());
+        const auto gpuTaskAdmission = AddTask(graph, Name("tests/task_graph/declaration_revision_base"), "Declaration Revision Base");
+        ASSERT_TRUE(gpuTaskAdmission);
+        ASSERT_TRUE(gpuTaskAdmission->valid());
     }
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
@@ -362,9 +362,9 @@ TEST(GpuTaskGraph, DeclarationStorageMutationsInvalidateCompilerSnapshots){
         previousRevision = declarations.declarationRevision();
     }
     {
-        const auto gpuAdmissionAt330 = AddTask(graph, Name("tests/task_graph/declaration_revision_task"), "Declaration Revision Task");
-        ASSERT_TRUE(gpuAdmissionAt330);
-        ASSERT_TRUE(gpuAdmissionAt330->valid());
+        const auto secondGpuTaskAdmission = AddTask(graph, Name("tests/task_graph/declaration_revision_task"), "Declaration Revision Task");
+        ASSERT_TRUE(secondGpuTaskAdmission);
+        ASSERT_TRUE(secondGpuTaskAdmission->valid());
     }
     {
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
@@ -488,14 +488,14 @@ TEST(GpuTaskGraph, FailedAndIdempotentDeclarationsPreserveCompilerSnapshots){
     ASSERT_TRUE(completion.valid());
     const u8 uploadBytes[] = { 0x17u };
     {
-        const auto gpuAdmissionAt432 = graph.copyUploadData(uploadBytes, sizeof(uploadBytes), alignof(u8));
-        ASSERT_TRUE(gpuAdmissionAt432);
-        ASSERT_TRUE(gpuAdmissionAt432->valid());
+        const auto gpuTaskAdmission = graph.copyUploadData(uploadBytes, sizeof(uploadBytes), alignof(u8));
+        ASSERT_TRUE(gpuTaskAdmission);
+        ASSERT_TRUE(gpuTaskAdmission->valid());
     }
     {
-        const auto gpuAdmissionAt433 = AddTask(graph, Name("tests/task_graph/stable_declaration_task"), "Stable Declaration Task");
-        ASSERT_TRUE(gpuAdmissionAt433);
-        ASSERT_TRUE(gpuAdmissionAt433->valid());
+        const auto secondGpuTaskAdmission = AddTask(graph, Name("tests/task_graph/stable_declaration_task"), "Stable Declaration Task");
+        ASSERT_TRUE(secondGpuTaskAdmission);
+        ASSERT_TRUE(secondGpuTaskAdmission->valid());
     }
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
@@ -511,28 +511,28 @@ TEST(GpuTaskGraph, FailedAndIdempotentDeclarationsPreserveCompilerSnapshots){
     }
 
     {
-        const auto gpuAdmissionAt447 = graph.importResource(resourceDesc);
-        EXPECT_TRUE(gpuAdmissionAt447);
-        if(gpuAdmissionAt447)
-            EXPECT_EQ(*gpuAdmissionAt447, resource);
+        const auto thirdGpuTaskAdmission = graph.importResource(resourceDesc);
+        EXPECT_TRUE(thirdGpuTaskAdmission);
+        if(thirdGpuTaskAdmission)
+            EXPECT_EQ(*thirdGpuTaskAdmission, resource);
     }
     {
-        const auto gpuAdmissionAt448 = graph.importResourceSet(resourceSetDesc);
-        EXPECT_TRUE(gpuAdmissionAt448);
-        if(gpuAdmissionAt448)
-            EXPECT_EQ(*gpuAdmissionAt448, resourceSet);
+        const auto fourthGpuTaskAdmission = graph.importResourceSet(resourceSetDesc);
+        EXPECT_TRUE(fourthGpuTaskAdmission);
+        if(fourthGpuTaskAdmission)
+            EXPECT_EQ(*fourthGpuTaskAdmission, resourceSet);
     }
     {
-        const auto gpuAdmissionAt449 = graph.importPipeline(pipelineDesc);
-        EXPECT_TRUE(gpuAdmissionAt449);
-        if(gpuAdmissionAt449)
-            EXPECT_EQ(*gpuAdmissionAt449, pipeline);
+        const auto fifthGpuTaskAdmission = graph.importPipeline(pipelineDesc);
+        EXPECT_TRUE(fifthGpuTaskAdmission);
+        if(fifthGpuTaskAdmission)
+            EXPECT_EQ(*fifthGpuTaskAdmission, pipeline);
     }
     {
-        const auto gpuAdmissionAt450 = graph.importExternalCompletion(completionDesc);
-        EXPECT_TRUE(gpuAdmissionAt450);
-        if(gpuAdmissionAt450)
-            EXPECT_EQ(*gpuAdmissionAt450, completion);
+        const auto sixthGpuTaskAdmission = graph.importExternalCompletion(completionDesc);
+        EXPECT_TRUE(sixthGpuTaskAdmission);
+        if(sixthGpuTaskAdmission)
+            EXPECT_EQ(*sixthGpuTaskAdmission, completion);
     }
     {
         const Tests::GpuTaskGraphReadViews reads(graph, compiledGraph);
@@ -561,9 +561,9 @@ TEST(GpuTaskGraph, ExternalFinalResourceDeclarationInvalidatesPriorCompiledPlan)
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     {
-        const auto gpuAdmissionAt475 = AddTask(graph, Name("tests/task_graph/external_final_revision_base"), "External Final Revision Base");
-        ASSERT_TRUE(gpuAdmissionAt475);
-        ASSERT_TRUE(gpuAdmissionAt475->valid());
+        const auto gpuTaskAdmission = AddTask(graph, Name("tests/task_graph/external_final_revision_base"), "External Final Revision Base");
+        ASSERT_TRUE(gpuTaskAdmission);
+        ASSERT_TRUE(gpuTaskAdmission->valid());
     }
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();

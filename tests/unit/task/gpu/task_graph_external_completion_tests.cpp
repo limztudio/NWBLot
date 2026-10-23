@@ -28,8 +28,8 @@ namespace __hidden_task_graph_external_completion_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_TESTS_TASK_GRAPH_OWNED_EXTERNAL_COMPLETI = "tests/task_graph/owned_external_completion";
-static constexpr AStringView s_TESTS_TASK_GRAPH_METADATA_EXTERNAL_COMPL = "tests/task_graph/metadata_external_completion";
+static constexpr AStringView s_TestsTaskGraphOwnedExternalCompleti = "tests/task_graph/owned_external_completion";
+static constexpr AStringView s_TestsTaskGraphMetadataExternalCompl = "tests/task_graph/metadata_external_completion";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -87,10 +87,10 @@ TEST(GpuTaskGraph, RejectsSubmissionRangeWithMissingLatePacketCompletionToken){
 
     const Graphics::QueueSubmissionToken token{ .value = 17u, .physicalQueueIndex = queues[0u].id.index, .deviceGeneration = queues[0u].id.deviceGeneration, .queue = queues[0u].queueClass, };
     {
-        const auto gpuAdmissionAt81 = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(completionIdentity).setMarkerLabel("Bound Late Packet Completion").setToken(token));
-        EXPECT_TRUE(gpuAdmissionAt81);
-        if(gpuAdmissionAt81)
-            EXPECT_EQ(*gpuAdmissionAt81, completion);
+        const auto gpuTaskAdmission = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(completionIdentity).setMarkerLabel("Bound Late Packet Completion").setToken(token));
+        EXPECT_TRUE(gpuTaskAdmission);
+        if(gpuTaskAdmission)
+            EXPECT_EQ(*gpuTaskAdmission, completion);
     }
     {
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
@@ -112,7 +112,7 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::QueueSubmissionToken token{ .value = 31u, .physicalQueueIndex = 2u, .deviceGeneration = 1u, .queue = Graphics::CommandQueue::Transfer, };
-    const auto completionResult = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name(s_TESTS_TASK_GRAPH_OWNED_EXTERNAL_COMPLETI)).setMarkerLabel("Owned External Completion").setToken(token));
+    const auto completionResult = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name(s_TestsTaskGraphOwnedExternalCompleti)).setMarkerLabel("Owned External Completion").setToken(token));
     ASSERT_TRUE(completionResult);
     const Graphics::GpuExternalCompletionId completion = *completionResult;
     ASSERT_TRUE(completion.valid());
@@ -127,7 +127,7 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
         EXPECT_TRUE(declarations.validForDeviceGeneration(token.deviceGeneration));
         tokenFirstRevision = declarations.declarationRevision();
     }
-    const auto repeatedMetadataImportResult = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name(s_TESTS_TASK_GRAPH_OWNED_EXTERNAL_COMPLETI)).setMarkerLabel("Compatible Metadata Reference"));
+    const auto repeatedMetadataImportResult = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name(s_TestsTaskGraphOwnedExternalCompleti)).setMarkerLabel("Compatible Metadata Reference"));
     ASSERT_TRUE(repeatedMetadataImportResult);
     const Graphics::GpuExternalCompletionId repeatedMetadataImport = *repeatedMetadataImportResult;
     EXPECT_EQ(repeatedMetadataImport, completion);
@@ -136,7 +136,7 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
         ASSERT_TRUE(declarations.valid());
         EXPECT_EQ(declarations.declarationRevision(), tokenFirstRevision);
     }
-    const auto repeatedTokenImportResult = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name(s_TESTS_TASK_GRAPH_OWNED_EXTERNAL_COMPLETI)).setMarkerLabel("Compatible Token Reference").setToken(token));
+    const auto repeatedTokenImportResult = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name(s_TestsTaskGraphOwnedExternalCompleti)).setMarkerLabel("Compatible Token Reference").setToken(token));
     ASSERT_TRUE(repeatedTokenImportResult);
     const Graphics::GpuExternalCompletionId repeatedTokenImport = *repeatedTokenImportResult;
     EXPECT_EQ(repeatedTokenImport, completion);
@@ -148,7 +148,7 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
 
     Graphics::QueueSubmissionToken conflictingToken = token;
     ++conflictingToken.value;
-    EXPECT_FALSE(graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name(s_TESTS_TASK_GRAPH_OWNED_EXTERNAL_COMPLETI)).setMarkerLabel("Conflicting Token Reference").setToken(conflictingToken)).has_value());
+    EXPECT_FALSE(graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name(s_TestsTaskGraphOwnedExternalCompleti)).setMarkerLabel("Conflicting Token Reference").setToken(conflictingToken)).has_value());
 
     Graphics::QueueSubmissionToken staleToken = token;
     ++staleToken.deviceGeneration;
@@ -170,7 +170,7 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
     ).has_value()
     );
 
-    const auto metadataCompletionResult = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name(s_TESTS_TASK_GRAPH_METADATA_EXTERNAL_COMPL)).setMarkerLabel("Metadata External Completion"));
+    const auto metadataCompletionResult = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name(s_TestsTaskGraphMetadataExternalCompl)).setMarkerLabel("Metadata External Completion"));
     ASSERT_TRUE(metadataCompletionResult);
     const Graphics::GpuExternalCompletionId metadataCompletion = *metadataCompletionResult;
     ASSERT_TRUE(metadataCompletion.valid());
@@ -220,7 +220,7 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
         ASSERT_TRUE(declarations.valid());
         metadataFirstRevision = declarations.declarationRevision();
     }
-    const auto upgradedCompletionResult = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name(s_TESTS_TASK_GRAPH_METADATA_EXTERNAL_COMPL)).setMarkerLabel("Late Token Upgrade").setToken(token));
+    const auto upgradedCompletionResult = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name(s_TestsTaskGraphMetadataExternalCompl)).setMarkerLabel("Late Token Upgrade").setToken(token));
     ASSERT_TRUE(upgradedCompletionResult);
     const Graphics::GpuExternalCompletionId upgradedCompletion = *upgradedCompletionResult;
     EXPECT_EQ(upgradedCompletion, metadataCompletion);
@@ -249,16 +249,16 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
         upgradedRevision = declarations.declarationRevision();
     }
     {
-        const auto gpuAdmissionAt224 = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name(s_TESTS_TASK_GRAPH_METADATA_EXTERNAL_COMPL)).setMarkerLabel("Upgraded Metadata Reference"));
-        EXPECT_TRUE(gpuAdmissionAt224);
-        if(gpuAdmissionAt224)
-            EXPECT_EQ(*gpuAdmissionAt224, metadataCompletion);
+        const auto gpuTaskAdmission = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name(s_TestsTaskGraphMetadataExternalCompl)).setMarkerLabel("Upgraded Metadata Reference"));
+        EXPECT_TRUE(gpuTaskAdmission);
+        if(gpuTaskAdmission)
+            EXPECT_EQ(*gpuTaskAdmission, metadataCompletion);
     }
     {
-        const auto gpuAdmissionAt225 = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name(s_TESTS_TASK_GRAPH_METADATA_EXTERNAL_COMPL)).setMarkerLabel("Upgraded Token Reference").setToken(token));
-        EXPECT_TRUE(gpuAdmissionAt225);
-        if(gpuAdmissionAt225)
-            EXPECT_EQ(*gpuAdmissionAt225, metadataCompletion);
+        const auto secondGpuTaskAdmission = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name(s_TestsTaskGraphMetadataExternalCompl)).setMarkerLabel("Upgraded Token Reference").setToken(token));
+        EXPECT_TRUE(secondGpuTaskAdmission);
+        if(secondGpuTaskAdmission)
+            EXPECT_EQ(*secondGpuTaskAdmission, metadataCompletion);
     }
     {
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);

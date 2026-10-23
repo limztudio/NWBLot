@@ -71,7 +71,7 @@ struct NwbCausticResolvePushConstants{
 #if NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_DIRECT
 // Groupshared tile for small-dilation wavelet passes.
 groupshared half3  g_NwbCausticResolveTileColor[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
-// The geometry cache is RGBA16F. Keep its sampled world positions compact in LDS and widen only for the edge-stop arithmetic below; storing them as float3 here would double the shared-memory footprint without adding precision.
+// The geometry cache is RGBA16F. Keep sampled world positions compact in LDS and widen only for the edge-stop math; float3 storage would double shared memory with no added precision.
 groupshared half3  g_NwbCausticResolveTileWorld[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
 groupshared uint   g_NwbCausticResolveTileValid[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
 groupshared uint   g_NwbCausticResolveTileActive;
@@ -277,7 +277,6 @@ half4 nwbCausticResolveWavelet(const uint2 pixel, const uint3 groupThreadID, con
 
     const NwbCausticWaveletSpatialParameters parameters = nwbCausticWaveletSpatialParameters(texel, hw, step);
 
-    // Kernel and edge-stop weights are (0, 1) bounded factors with an HDR color accumulator, matching the half tile cache.
     half3 sum = half3(0.0h, 0.0h, 0.0h);
     half weightSum = half(0.0h);
     [unroll] for(int ky = -NWB_CAUSTIC_RESOLVE_KERNEL_RADIUS; ky <= NWB_CAUSTIC_RESOLVE_KERNEL_RADIUS; ++ky){
@@ -334,7 +333,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             return;
         }
 
-        // The full-resolution world-position G-buffer is RGBA16F. Retain its transport precision and promote only for the distance-based edge stop, matching the half-resolution geometry cache below.
+        // The full-res world-position G-buffer is RGBA16F. Retain transport precision and promote only for the distance-based edge stop, matching the half-res geometry cache below.
         const float3 centerWorld = float3(nwbCausticResolveWorldAtFull(fullTexel));
         const int2 rightFull = int2(min(fullTexel.x + 1, fw - 1), fullTexel.y);
         const int2 downFull = int2(fullTexel.x, min(fullTexel.y + 1, fh - 1));

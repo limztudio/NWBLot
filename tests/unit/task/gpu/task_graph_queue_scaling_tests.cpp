@@ -39,11 +39,11 @@ TEST(GpuTaskGraph, SerialSchedulingReachabilityPreservesStrictQueriesAcrossReuse
     Graphics::GpuTaskId tasks[s_TaskCount] = {};
     for(usize taskIndex = 0u; taskIndex < s_TaskCount; ++taskIndex){
         char identityText[32u] = {};
-        const auto derivedNameAt42Col12 = DeriveName(Name("tests/queue_scaling/serial/"), FormatDecimal(taskIndex, identityText));
-        ASSERT_TRUE(derivedNameAt42Col12);
-        const auto gpuAdmissionAt40 = AddTaskWithCommands(graph, *derivedNameAt42Col12, "Serial Reachability Task", ComputeCommands(), {}, {}, taskIndex != 0u ? &tasks[taskIndex - 1u] : nullptr, taskIndex != 0u ? 1u : 0u);
-        ASSERT_TRUE(gpuAdmissionAt40);
-        tasks[taskIndex] = *gpuAdmissionAt40;
+        const auto derivedNameResult = DeriveName(Name("tests/queue_scaling/serial/"), FormatDecimal(taskIndex, identityText));
+        ASSERT_TRUE(derivedNameResult);
+        const auto taskAdmission = AddTaskWithCommands(graph, *derivedNameResult, "Serial Reachability Task", ComputeCommands(), {}, {}, taskIndex != 0u ? &tasks[taskIndex - 1u] : nullptr, taskIndex != 0u ? 1u : 0u);
+        ASSERT_TRUE(taskAdmission);
+        tasks[taskIndex] = *taskAdmission;
         ASSERT_TRUE(tasks[taskIndex].valid());
     }
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
@@ -117,9 +117,9 @@ TEST(GpuTaskGraph, SameClassBalancingCountsMergedAndUnroutedPrefixCosts){
     Graphics::GpuTaskId tasks[LengthOf(costs)] = {};
     for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex){
         char identityText[32u] = {};
-        const auto derivedNameAt124Col30 = DeriveName(Name("tests/queue_scaling/prefix/"), FormatDecimal(taskIndex, identityText));
-        ASSERT_TRUE(derivedNameAt124Col30);
-        const Name identity = *derivedNameAt124Col30;
+        const auto identityNameResult = DeriveName(Name("tests/queue_scaling/prefix/"), FormatDecimal(taskIndex, identityText));
+        ASSERT_TRUE(identityNameResult);
+        const Name identity = *identityNameResult;
         Graphics::GpuTaskSchedulingHint scheduling;
         scheduling.cost = costs[taskIndex];
         scheduling.overlapPreferred = taskIndex != 3u;
@@ -127,9 +127,9 @@ TEST(GpuTaskGraph, SameClassBalancingCountsMergedAndUnroutedPrefixCosts){
         scheduling.mergeWithPrevious = taskIndex == 1u;
         scheduling.preserveSameClassQueueWithDirectDependency = taskIndex == 6u;
         const Graphics::GpuTaskId dependency = taskIndex == 1u ? tasks[0u] : taskIndex == 6u ? tasks[2u] : Graphics::GpuTaskId{};
-        const auto gpuAdmissionAt124 = AddTaskWithCommands(graph, identity, "Weighted Prefix Task", GraphicsCommands(), scheduling, {}, dependency.valid() ? &dependency : nullptr, dependency.valid() ? 1u : 0u);
-        ASSERT_TRUE(gpuAdmissionAt124);
-        tasks[taskIndex] = *gpuAdmissionAt124;
+        const auto taskAdmission = AddTaskWithCommands(graph, identity, "Weighted Prefix Task", GraphicsCommands(), scheduling, {}, dependency.valid() ? &dependency : nullptr, dependency.valid() ? 1u : 0u);
+        ASSERT_TRUE(taskAdmission);
+        tasks[taskIndex] = *taskAdmission;
         ASSERT_TRUE(tasks[taskIndex].valid());
     }
     Graphics::GpuPhysicalQueueInfo firstAuxiliary = GraphicsQueue(7u);

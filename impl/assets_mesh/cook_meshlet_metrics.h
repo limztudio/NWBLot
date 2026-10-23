@@ -180,7 +180,7 @@ MeshletCookMetrics MeshletCookMetricsReport::BuildMeshletCookMetrics(const CookE
 
         const SIMDVectorSingle coneCutoff = VectorScale(VectorReplicate(static_cast<f32>(MeshletConePackedCutoff(bounds))), 1.0f / s_MeshletUnorm8Max);
         ++metrics.coneEnabledCount;
-        radiusAndCutoffSums = VectorDoubleAdd(radiusAndCutoffSums, VectorDoubleSet(bounds.sphere.w, VectorGetX(coneCutoff), 0.0, 0.0));
+        radiusAndCutoffSums = VectorDoubleAdd(radiusAndCutoffSums, VectorDoublePermute<0, 4, 2, 3>(VectorDoubleSet(bounds.sphere.w, 0.0, 0.0, 0.0), ConvertVectorSingleToDouble(coneCutoff)));
         worstConeCutoff = VectorMin(worstConeCutoff, coneCutoff);
     }
     metrics.worstConeCutoff = VectorGetX(worstConeCutoff);

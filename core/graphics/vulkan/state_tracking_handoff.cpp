@@ -122,8 +122,7 @@ bool CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, 
     }
     Sort(orderedBufferStates.begin(), orderedBufferStates.end(), [](const auto lhs, const auto rhs)noexcept{
         return lhs->buffer != rhs->buffer ? LessThan<Buffer*>()(lhs->buffer, rhs->buffer) : lhs->range.byteOffset < rhs->range.byteOffset;
-    }
-    );
+    });
     for(usize index = 1u; index < orderedBufferStates.size(); ++index){
         const auto& previous = *orderedBufferStates[index - 1u];
         const auto& current = *orderedBufferStates[index];
@@ -181,7 +180,7 @@ bool CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, 
 
         if(!releaseDestinationQueue.valid()){
             // Vulkan ownership belongs to a queue family, not one VkQueue.
-            // A state handoff from another physical queue in this family is valid once its timeline token is waited; reject only a true family crossing that omitted the compiler-planned release/acquire pair.
+            // A handoff from another physical queue in this family is valid once its timeline token is waited; reject only a true family crossing that omitted the planned release/acquire pair.
             if(ownerQueue.valid() && sourceQueueFamily != destinationQueueFamily){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive texture handoff changes queue family without a release/acquire transfer"));
                 return false;

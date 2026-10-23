@@ -85,8 +85,8 @@ static constexpr f32 s_PointLightHeight = 2.6f;
 static constexpr f32 s_PointLightIntensity = 9.0f;
 static constexpr f32 s_PointLightRange = 16.0f;
 
-static constexpr f32 s_SpinSpeed = 0.5f; // radians/second
-static constexpr f32 s_ManualYawSpeed = 0.6f; // radians/second
+static constexpr f32 s_SpinSpeed = 0.5f;
+static constexpr f32 s_ManualYawSpeed = 0.6f;
 static constexpr f32 s_TwoPi = 6.2831853f;
 static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;
 
@@ -105,8 +105,8 @@ private:
 
     // Pin yaw for A/B captures that isolate flicker from motion.
     static f32 FrozenYaw(){
-        static const f32 s_yaw = ReadSmokeFrozenYawFromEnvironment("NWB_FLICKER_TEST_SPIN_ANGLE");
-        return s_yaw;
+        static const f32 s_Yaw = ReadSmokeFrozenYawFromEnvironment("NWB_FLICKER_TEST_SPIN_ANGLE");
+        return s_Yaw;
     }
 
 
@@ -146,12 +146,12 @@ public:
         const NWB::Core::ECS::EntityID directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, s_DirectionalLightPitch, s_DirectionalLightYaw, 0.0f, Float4(1.0f, 0.96f, 0.88f), s_DirectionalLightIntensity);
         const NWB::Core::ECS::EntityID pointLight = NWB::Impl::Scene::CreatePointLightEntity(*m_world, Float4(0.8f, s_PointLightHeight, -0.6f, 0.0f), Float4(0.60f, 0.76f, 1.00f), s_PointLightIntensity, s_PointLightRange);
         // Keep caustics enabled for the repro; NWB_FLICKER_TEST_NO_CAUSTICS selects the control.
-        static const bool s_disableCaustics = [](){
+        static const bool s_DisableCaustics = [](){
             NWB::Core::Alloc::ScratchArena arena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
             const auto value = ReadSmokeEnvironmentText(arena, "NWB_FLICKER_TEST_NO_CAUSTICS");
             return value && (*value)[0] == '1';
         }();
-        if(s_disableCaustics){
+        if(s_DisableCaustics){
             for(const NWB::Core::ECS::EntityID lightEntity : { directionalLight, pointLight }){
                 if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(lightEntity))
                     light->enableCaustics = false;

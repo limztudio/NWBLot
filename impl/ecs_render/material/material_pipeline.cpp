@@ -34,7 +34,6 @@ namespace __hidden_material_pipeline{
 
 inline constexpr Name s_SharedMeshProgramName("engine/graphics/mesh/shared_ms");
 
-// The equals sign plus the two quotes around the module include.
 inline constexpr usize s_ModuleAssignmentPunctuationSize = 3u;
 
 
@@ -267,7 +266,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
             return m_shaderSystem.loadShader<PixelShader>(resources.pixelShader, passPixelShaderName, AStringView(avboitCsgShaderVariant), Name(passPixelShaderDebugName));
         }
         if(!passPixelShader){
-            // AVBOIT pixel shaders are generated for the selected material and use its typed binding and project surface/BXDF contract, so load the resolved per-material pass shader at its default variant.
+            // AVBOIT pixel shaders are generated for the selected material and use its typed binding and surface/BXDF contract, so load the resolved per-material pass shader at its default variant.
             return m_shaderSystem.loadShader<PixelShader>(resources.pixelShader, passPixelShaderName, Core::ShaderArchive::s_DefaultVariant, Name(passPixelShaderDebugName));
         }
         resources.pixelShader = passPixelShader;

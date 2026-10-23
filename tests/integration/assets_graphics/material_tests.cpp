@@ -30,21 +30,21 @@ constexpr u32 s_ExpectedDualCount = 2u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_assets_graphics_material{
+namespace __hidden_assets_graphics_material_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE = "project/material_interfaces/test_surface";
+static constexpr AStringView s_ProjectMaterialInterfacesTestSurface = "project/material_interfaces/test_surface";
 #if defined(NWB_FINAL)
-static constexpr AStringView s_GENERATED_AVBOIT_ACCUMULATE_PS_PROJECT_M = "generated/avboit_accumulate_ps/project/materials/test_material";
-static constexpr AStringView s_GENERATED_AVBOIT_OCCUPANCY_PS_PROJECT_MA = "generated/avboit_occupancy_ps/project/materials/test_material";
-static constexpr AStringView s_GENERATED_AVBOIT_EXTINCTION_PS_PROJECT_M = "generated/avboit_extinction_ps/project/materials/test_material";
+static constexpr AStringView s_GeneratedAvboitAccumulatePsProjectM = "generated/avboit_accumulate_ps/project/materials/test_material";
+static constexpr AStringView s_GeneratedAvboitOccupancyPsProjectMa = "generated/avboit_occupancy_ps/project/materials/test_material";
+static constexpr AStringView s_GeneratedAvboitExtinctionPsProjectM = "generated/avboit_extinction_ps/project/materials/test_material";
 #endif
-static constexpr AStringView s_PROJECT = "project";
-static constexpr AStringView s_ASSETS_DIR = "assets";
-static constexpr AStringView s_MATERIALS = "materials";
+static constexpr AStringView s_Project = "project";
+static constexpr AStringView s_AssetsDir = "assets";
+static constexpr AStringView s_Materials = "materials";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -63,9 +63,9 @@ static Expected<NWB::Impl::MaterialCookEntry> ParseMaterialEntryFromMetaText(con
     if(!doc.parse(metaText))
         return MakeUnexpected(Failure{});
 
-    const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "material_meta") / s_ASSETS_DIR;
-    const Path nwbFilePath = assetRoot / s_MATERIALS / "test_material.nwb";
-    return NWB::Impl::ParseMaterialCookMetadata(assetRoot, s_PROJECT, nwbFilePath, doc, testArena.arena, scratchArena);
+    const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "material_meta") / s_AssetsDir;
+    const Path nwbFilePath = assetRoot / s_Materials / "test_material.nwb";
+    return NWB::Impl::ParseMaterialCookMetadata(assetRoot, s_Project, nwbFilePath, doc, testArena.arena, scratchArena);
 }
 
 static Expected<NWB::Impl::Material> BuildMaterialFromBindAndMeta(const AStringView bindText, const AStringView materialText, const AStringView caseName, TestArena& testArena, NWB::Core::Alloc::ScratchArena& scratchArena){
@@ -81,7 +81,7 @@ static Expected<NWB::Impl::Material> BuildMaterialFromBindAndMeta(const AStringV
     auto bindEntryResult = AssetsGraphicsFixture::ParseMaterialBindFromText(testArena, bindText, bindRoot, scratchArena);
     if(bindEntryResult){
         NWB::Impl::MaterialBindEntry& bindEntry = *bindEntryResult;
-        bindEntry.virtualPath = s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE;
+        bindEntry.virtualPath = s_ProjectMaterialInterfacesTestSurface;
 
         NWB::Impl::ShaderCook::CookVector<NWB::Impl::MaterialBindEntry> bindEntries(testArena.arena);
         bindEntries.push_back(Move(bindEntry));
@@ -114,15 +114,15 @@ static Expected<UniquePtr<NWB::Core::Assets::IAsset>> RoundTripMaterialAssetCode
 
 static void SetGeneratedMaterialAvboitPixelShaders(NWB::Impl::Material& material){
     NWB::Core::Assets::AssetRef<NWB::Impl::PixelShader> accumulatePixelShader;
-    accumulatePixelShader.virtualPath = Name(s_GENERATED_AVBOIT_ACCUMULATE_PS_PROJECT_M);
+    accumulatePixelShader.virtualPath = Name(s_GeneratedAvboitAccumulatePsProjectM);
     material.setAvboitAccumulatePixelShader(accumulatePixelShader);
 
     NWB::Core::Assets::AssetRef<NWB::Impl::PixelShader> occupancyPixelShader;
-    occupancyPixelShader.virtualPath = Name(s_GENERATED_AVBOIT_OCCUPANCY_PS_PROJECT_MA);
+    occupancyPixelShader.virtualPath = Name(s_GeneratedAvboitOccupancyPsProjectMa);
     material.setAvboitOccupancyPixelShader(occupancyPixelShader);
 
     NWB::Core::Assets::AssetRef<NWB::Impl::PixelShader> extinctionPixelShader;
-    extinctionPixelShader.virtualPath = Name(s_GENERATED_AVBOIT_EXTINCTION_PS_PROJECT_M);
+    extinctionPixelShader.virtualPath = Name(s_GeneratedAvboitExtinctionPsProjectM);
     material.setAvboitExtinctionPixelShader(extinctionPixelShader);
 }
 #endif

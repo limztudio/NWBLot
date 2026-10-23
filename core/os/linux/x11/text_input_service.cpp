@@ -21,7 +21,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_x11_text_input{
+namespace __hidden_x11_text_input_service{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -122,7 +122,7 @@ bool X11TextInputService::dispatchKey(XKeyEvent& event){
     }
     );
 
-    m_lookup.resize(__hidden_x11_text_input::s_InitialLookupBytes);
+    m_lookup.resize(__hidden_x11_text_input_service::s_InitialLookupBytes);
     KeySym symbol = NoSymbol;
     Status status = XLookupNone;
     i32 bytes = Xutf8LookupString(m_context, &event, m_lookup.data(), static_cast<i32>(m_lookup.size()), &symbol, &status);
@@ -237,8 +237,8 @@ void X11TextInputService::openMethod(){
     XIMStyles* styles = nullptr;
     const char* const error = XGetIMValues(m_method, XNQueryInputStyle, &styles, nullptr);
     if(!error && styles){
-        for(const XIMStyle style : __hidden_x11_text_input::s_PreferredStyles){
-            if(__hidden_x11_text_input::ContainsStyle(*styles, style)){
+        for(const XIMStyle style : __hidden_x11_text_input_service::s_PreferredStyles){
+            if(__hidden_x11_text_input_service::ContainsStyle(*styles, style)){
                 m_style = style;
                 break;
             }

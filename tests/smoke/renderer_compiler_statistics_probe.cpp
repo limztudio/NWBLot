@@ -27,7 +27,7 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_renderer_compiler_statistics{
+namespace __hidden_renderer_compiler_statistics_probe{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -133,9 +133,9 @@ bool RendererCompilerStatisticsProbe::write()const{
     usize invalid = 0u;
     for(usize index = 0u; index < m_samples.size(); ++index){
         const Sample& sample = m_samples[index];
-        AStringView status = sample.valid ? __hidden_renderer_compiler_statistics::s_ValidStatus : "invalid_snapshot";
+        AStringView status = sample.valid ? __hidden_renderer_compiler_statistics_probe::s_ValidStatus : "invalid_snapshot";
         if(sample.valid){
-            for(const auto& field : __hidden_renderer_compiler_statistics::s_Durations){
+            for(const auto& field : __hidden_renderer_compiler_statistics_probe::s_Durations){
                 const f64 seconds = sample.compile.*field.member;
                 if(!IsFinite(seconds) || seconds < 0.0){
                     status = "invalid_duration";
@@ -153,13 +153,13 @@ bool RendererCompilerStatisticsProbe::write()const{
         if(index != 0u && sample.sourceFrame <= m_samples[index - 1u].sourceFrame)
             status = "non_monotonic_frame";
         output << "{\"type\":\"compiler_statistics\",\"sequence\":" << index << ",\"source_frame\":" << sample.sourceFrame << ",\"status\":\"" << status << '\"';
-        if(status == __hidden_renderer_compiler_statistics::s_ValidStatus){
+        if(status == __hidden_renderer_compiler_statistics_probe::s_ValidStatus){
             output << ",\"identity\":{\"graph_generation\":" << sample.compile.graphGeneration
                 << ",\"plan_generation\":" << sample.compile.planGeneration
                 << ",\"device_generation\":" << sample.compile.deviceGeneration
                 << ",\"recording_attempt_generation\":" << sample.recordingAttempt << "},\"seconds\":{";
             bool first = true;
-            for(const auto& field : __hidden_renderer_compiler_statistics::s_Durations){
+            for(const auto& field : __hidden_renderer_compiler_statistics_probe::s_Durations){
                 if(!first)
                     output << ',';
                 first = false;
@@ -167,7 +167,7 @@ bool RendererCompilerStatisticsProbe::write()const{
             }
             output << "},\"counts\":{";
             first = true;
-            for(const auto& field : __hidden_renderer_compiler_statistics::s_Counts){
+            for(const auto& field : __hidden_renderer_compiler_statistics_probe::s_Counts){
                 if(!first)
                     output << ',';
                 first = false;

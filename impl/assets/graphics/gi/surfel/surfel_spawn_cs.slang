@@ -17,7 +17,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// This frame's hash, allocation counters, and free-list are all StorageBuffer heap entries selected by the common dispatch push block. The aliases below keep the allocation logic uncluttered.
+// This frame's hash, counters, and free-list are heap entries selected by the common push block. The aliases below keep the allocation logic uncluttered.
 #define g_NwbSurfelCellHead g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.cellHeadHeapSlot]
 #define g_NwbSurfelCounter g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.counterHeapSlot]
 #define g_NwbSurfelFreeList g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.freeListHeapSlot]
@@ -69,7 +69,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const half3 rawNormalSample = half3(nwbHeapSampledImage2D(g_NwbSurfelHeapPushConstants.normalSlot).Load(loadCoord).xyz);
     const float3 rawNormal = float3(rawNormalSample);
     if(dot(rawNormal, rawNormal) < NWB_SURFEL_GBUFFER_NORMAL_LENGTH_SQUARED_MIN)
-        return; // no geometry at this tile (background)
+        return;
 
     const half3 worldPositionSample = half3(nwbHeapSampledImage2D(g_NwbSurfelHeapPushConstants.worldPositionSlot).Load(loadCoord).xyz);
     const float3 worldPosition = float3(worldPositionSample);
@@ -116,7 +116,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
     }
 
-    // Pop a recycled id first (pushes quiescent this pass, so no underflow); else capped bump-alloc (BUMP_TOP never overshoots: undoing an over-bump could alias a live slot). On exhaustion release the claim for a later retry.
+    // Pop a recycled id first (pushes stay quiescent this pass, so no underflow); else capped bump-alloc. On exhaustion release the claim for a later retry.
     uint slot = 0u;
     bool allocated = false;
     {
@@ -150,7 +150,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
     }
 
-    // Seed only from the immutable frame-start snapshot. Live neighbours may be locked or newly published by other spawn groups; the snapshot also prevents seed-from-seed feedback. Exclude records expiring in this frame.
+    // Seed only from the immutable frame-start snapshot. It stops seed-from-seed feedback. Exclude records expiring this frame.
     half4 seedShR = half4(0.0h, 0.0h, 0.0h, 0.0h);
     half4 seedShG = half4(0.0h, 0.0h, 0.0h, 0.0h);
     half4 seedShB = half4(0.0h, 0.0h, 0.0h, 0.0h);

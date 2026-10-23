@@ -49,9 +49,9 @@ TEST(GpuTaskGraphStorage, LargeTaskChainPreservesDeclarationsAndReusesStorage){
     identities.reserve(s_TaskCount);
     for(usize index = 0u; index < s_TaskCount; ++index){
         char indexText[32u] = {};
-        const auto derivedNameAt50Col29 = DeriveName(Name("tests/graph_storage/task/"), FormatDecimal(index, indexText));
-        ASSERT_TRUE(derivedNameAt50Col29);
-        identities.push_back(*derivedNameAt50Col29);
+        const auto derivedNameResult = DeriveName(Name("tests/graph_storage/task/"), FormatDecimal(index, indexText));
+        ASSERT_TRUE(derivedNameResult);
+        identities.push_back(*derivedNameResult);
     }
 
     Core::GpuTaskGraph graph(testArena.arena);
@@ -77,9 +77,9 @@ TEST(GpuTaskGraphStorage, LargeTaskChainPreservesDeclarationsAndReusesStorage){
         for(usize index = 0u; index < s_TaskCount; ++index){
             Core::GpuTaskDesc desc;
             desc.setIdentity(identities[index]).setMarkerLabel("Storage Chain Task").setDependencies(&previousTask, index == 0u ? 0u : 1u).setExternalDependencies(&completion, 1u).setResourceUses(&use, 1u);
-            const auto gpuAdmissionAt72 = graph.addTask(desc);
-            ASSERT_TRUE(gpuAdmissionAt72);
-            previousTask = *gpuAdmissionAt72;
+            const auto previousTaskAdmission = graph.addTask(desc);
+            ASSERT_TRUE(previousTaskAdmission);
+            previousTask = *previousTaskAdmission;
             accepted = accepted && previousTask.valid();
         }
         const ArenaMemoryStats memoryAfter = testArena.arena.memoryStats();
@@ -122,9 +122,9 @@ TEST(GpuTaskGraphStorage, MixedDeclarationsAndUploadBytesSurviveStorageGrowth){
     identities.reserve(s_RecordCount);
     for(usize index = 0u; index < s_RecordCount; ++index){
         char indexText[32u] = {};
-        const auto derivedNameAt121Col29 = DeriveName(Name("tests/graph_storage/record/"), FormatDecimal(index, indexText));
-        ASSERT_TRUE(derivedNameAt121Col29);
-        identities.push_back(*derivedNameAt121Col29);
+        const auto derivedNameResult = DeriveName(Name("tests/graph_storage/record/"), FormatDecimal(index, indexText));
+        ASSERT_TRUE(derivedNameResult);
+        identities.push_back(*derivedNameResult);
     }
     Core::GpuTaskGraph graph(testArena.arena);
     Vector<Core::GpuUploadBlobId, Core::Alloc::ScratchArena> uploads(scratchArena);

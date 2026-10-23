@@ -23,9 +23,10 @@ namespace __hidden_box_normal_benchmark{
 
 template<typename Scalar>
 struct Case{
-    Conditional_T<IsSame_V<Scalar, f64>, SIMDVectorDouble, SIMDVectorSingle> position;
-    Conditional_T<IsSame_V<Scalar, f64>, SIMDVectorDouble, SIMDVectorSingle> extents;
-    Conditional_T<IsSame_V<Scalar, f64>, SIMDVectorDouble, SIMDVectorSingle> fallback;
+    using Storage = Conditional_T<IsSame_V<Scalar, f64>, Double4, Float4>;
+    Storage position;
+    Storage extents;
+    Storage fallback;
     Scalar threshold;
 };
 
@@ -94,7 +95,7 @@ static volatile u64 s_Checksum = 0u;
 
 template<typename Scalar>
 [[nodiscard]] Case<Scalar> Fill(const usize index, u64& seed)noexcept{
-    using Vector = Conditional_T<IsSame_V<Scalar, f64>, SIMDVectorDouble, SIMDVectorSingle>;
+    using Storage = typename Case<Scalar>::Storage;
     using Bits = Conditional_T<IsSame_V<Scalar, f64>, u64, u32>;
     constexpr u64 s_Exceptional64[]{ 0u, 0x8000000000000000ull, 1u, 0x8000000000000001ull, 0x0010000000000000ull, 0x3ff0000000000000ull, 0xbff0000000000000ull,
         0x7fefffffffffffffull, 0xffefffffffffffffull, 0x7ff0000000000000ull, 0xfff0000000000000ull, 0x7ff8000000000142ull, 0xfff8000000000284ull, 0x7ff0000000000011ull, 0xfff0000000000022ull };
@@ -107,13 +108,13 @@ template<typename Scalar>
         else
             words[word] = index < 8192u ? s_Exceptional32[random % LengthOf(s_Exceptional32)] : static_cast<u32>(random);
     }
-    Vector position;
-    Vector extents;
-    Vector fallback;
+    Storage position;
+    Storage extents;
+    Storage fallback;
     for(usize lane = 0u; lane < 4u; ++lane){
-        position[lane] = BitCast<Scalar>(words[lane]);
-        extents[lane] = BitCast<Scalar>(words[lane + 4u]);
-        fallback[lane] = BitCast<Scalar>(words[lane + 8u]);
+        position.raw[lane] = BitCast<Scalar>(words[lane]);
+        extents.raw[lane] = BitCast<Scalar>(words[lane + 4u]);
+        fallback.raw[lane] = BitCast<Scalar>(words[lane + 8u]);
     }
     return { position, extents, fallback, BitCast<Scalar>(words[12]) };
 }
@@ -121,16 +122,22 @@ template<typename Scalar>
 template<typename Scalar, bool Candidate>
 [[nodiscard]] NWB_NOINLINE auto Run(const Case<Scalar>& input)noexcept{
     if constexpr(IsSame_V<Scalar, f64>){
+        const SIMDVectorDouble position = LoadDouble(input.position);
+        const SIMDVectorDouble extents = LoadDouble(input.extents);
+        const SIMDVectorDouble fallback = LoadDouble(input.fallback);
         if constexpr(Candidate)
-            return CandidateDouble(input.position, input.extents, input.fallback, input.threshold);
+            return CandidateDouble(position, extents, fallback, input.threshold);
         else
-            return OriginalDouble(input.position, input.extents, input.fallback, input.threshold);
+            return OriginalDouble(position, extents, fallback, input.threshold);
     }
     else{
+        const SIMDVectorSingle position = LoadFloat(input.position);
+        const SIMDVectorSingle extents = LoadFloat(input.extents);
+        const SIMDVectorSingle fallback = LoadFloat(input.fallback);
         if constexpr(Candidate)
-            return CandidateSingle(input.position, input.extents, input.fallback, input.threshold);
+            return CandidateSingle(position, extents, fallback, input.threshold);
         else
-            return OriginalSingle(input.position, input.extents, input.fallback, input.threshold);
+            return OriginalSingle(position, extents, fallback, input.threshold);
     }
 }
 
@@ -172,19 +179,35 @@ template<typename Scalar, bool Candidate, bool Latency>
     using Vector = Conditional_T<IsSame_V<Scalar, f64>, SIMDVectorDouble, SIMDVectorSingle>;
     Case<Scalar> data[s_DataCount];
     for(usize index = 0u; index < s_DataCount; ++index){
-        const Scalar x = static_cast<Scalar>((index % 7u) + 1u) * static_cast<Scalar>(0.375);
-        const Scalar y = static_cast<Scalar>((index % 5u) + 1u) * static_cast<Scalar>(0.625);
-        const Scalar z = static_cast<Scalar>((index % 3u) + 1u) * static_cast<Scalar>(0.875);
-        data[index] = { Vector{ x, -y, z, static_cast<Scalar>(0) }, Vector{ static_cast<Scalar>(0.5), static_cast<Scalar>(0.75), static_cast<Scalar>(0.125), static_cast<Scalar>(0) },
-            Vector{ static_cast<Scalar>(1), static_cast<Scalar>(0), static_cast<Scalar>(0), static_cast<Scalar>(0) }, static_cast<Scalar>(1e-12) };
+        if constexpr(IsSame_V<Scalar, f64>){
+            const SIMDVectorDouble position = VectorDoubleMultiply(VectorDoubleSet(static_cast<f64>((index % 7u) + 1u), static_cast<f64>((index % 5u) + 1u), static_cast<f64>((index % 3u) + 1u), 0.0), VectorDoubleSet(0.375, -0.625, 0.875, 0.0));
+            StoreDouble(position, data[index].position);
+            StoreDouble(VectorDoubleSet(0.5, 0.75, 0.125, 0.0), data[index].extents);
+            StoreDouble(VectorDoubleSet(1.0, 0.0, 0.0, 0.0), data[index].fallback);
+            data[index].threshold = 1e-12;
+        }
+        else{
+            const SIMDVectorSingle position = VectorMultiply(VectorSet(static_cast<f32>((index % 7u) + 1u), static_cast<f32>((index % 5u) + 1u), static_cast<f32>((index % 3u) + 1u), 0.0f), VectorSet(0.375f, -0.625f, 0.875f, 0.0f));
+            StoreFloat(position, data[index].position);
+            StoreFloat(VectorSet(0.5f, 0.75f, 0.125f, 0.0f), data[index].extents);
+            StoreFloat(VectorSet(1.0f, 0.0f, 0.0f, 0.0f), data[index].fallback);
+            data[index].threshold = 1e-12f;
+        }
     }
     Vector accumulators[8];
-    for(auto& accumulator : accumulators)
-        accumulator = data[0].position;
+    for(auto& accumulator : accumulators){
+        if constexpr(IsSame_V<Scalar, f64>)
+            accumulator = LoadDouble(data[0].position);
+        else
+            accumulator = LoadFloat(data[0].position);
+    }
     for(usize iteration = 0u; iteration < iterations; ++iteration){
         if constexpr(Latency){
             Case<Scalar> input = data[iteration % s_DataCount];
-            input.position = accumulators[0];
+            if constexpr(IsSame_V<Scalar, f64>)
+                StoreDouble(accumulators[0], input.position);
+            else
+                StoreFloat(accumulators[0], input.position);
             accumulators[0] = Run<Scalar, Candidate>(input);
         }
         else{

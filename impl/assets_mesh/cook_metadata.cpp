@@ -118,7 +118,7 @@ Expected<u32, MetadataU32ValueFailure::Enum> MeshCookMetadata::ValidateMetadataU
         return Unexpected<MetadataU32ValueFailure::Enum>(MetadataU32ValueFailure::NotNumeric);
 
     const f64 numericValue = value.toDouble();
-    if(!IsFinite(numericValue) || numericValue < 0.0 || numericValue != VectorDoubleFloor(SIMDVectorDouble{ numericValue, numericValue }).x)
+    if(!IsFinite(numericValue) || numericValue < 0.0 || numericValue != VectorDoubleGetX(VectorDoubleFloor(VectorDoubleReplicate(numericValue))))
         return Unexpected<MetadataU32ValueFailure::Enum>(MetadataU32ValueFailure::NonIntegerOrNegative);
     if(numericValue > static_cast<f64>(Limit<u32>::s_Max))
         return Unexpected<MetadataU32ValueFailure::Enum>(MetadataU32ValueFailure::OutOfRange);

@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// SW backend of the GI trace seam: walks the shared SW BVH; HW twin is gi_hw_trace.slangi (same hit + Lambert via gi_trace_common, so both bounce identically). Heap-selected context picks scene/material buffers; producer owns outputs.
+// SW backend of the GI trace seam: walks the shared SW BVH; HW twin is gi_hw_trace.slangi (same hit + Lambert, so both bounce identically).
 
 
 #include "constants.h"
@@ -24,7 +24,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The shared scene-shading CB + light list are target-generation heap entries. The surfel trace push block selects the deferred target-generation payload itself from the global UniformBuffer table, so this shader has no local CBV.
+// The shared scene-shading CB + light list are target-generation heap entries. The surfel push block selects the payload itself from the global table, so no local CBV here.
 #define g_NwbGiSwBindlessResources g_NwbHeapDeferredBindlessResources[g_NwbSurfelHeapPushConstants.deferredResourcesHeapSlot]
 #define NWB_SCENE_SHADING_HEAP_SLOT g_NwbGiSwBindlessResources.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbGiSwBindlessResources.avboitSlots.w
@@ -32,14 +32,14 @@
 // Per-trace scene/material context. Its uniform heap slot is also pushed, selecting the five StorageBuffer aliases without a local selector CBV.
 #define g_NwbGiSwMaterialContextSlots g_NwbHeapSurfelMaterialContextSlotBuffers[g_NwbSurfelHeapPushConstants.materialContextSlotsHeapSlot]
 
-// The generated material-surface evaluator reaches its typed words and mutable mesh-instance records through the mesh bindless-frame route before material_typed_bindings.slangi is included by shadow_surface.slangi.
+// The generated evaluator reaches typed words and mesh-instance records through the mesh bindless-frame route before material_typed_bindings.slangi is included below.
 uint nwbMeshFrameMaterialTypedHeapSlot(){
     return g_NwbGiSwMaterialContextSlots.sceneSlots.w;
 }
 uint nwbMeshFrameInstanceHeapSlot(){
     return g_NwbGiSwMaterialContextSlots.materialSlots.x;
 }
-// The trace material surface never reads mesh view data; bindless view mode keeps bindless_heap_mesh.slangi from declaring a phantom local view cbuffer while retaining a valid helper for any incidental include-time reference.
+// The trace surface never reads mesh view data; bindless view mode keeps the include from declaring a phantom local view cbuffer.
 uint nwbMeshFrameViewHeapSlot(){
     return 0u;
 }
@@ -50,7 +50,7 @@ uint nwbMeshFrameViewHeapSlot(){
 // Omitting those declarations prevents their default set-0 bindings from aliasing GI's typed material buffers.
 #define NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED 1
 
-// The generated shadow dispatch is also the material-surface evaluator for GI. It reads the typed material constants and mutable instance storage through the heap-selected context above, so GI evaluates the authored NwbMeshSurface instead of guessing one project-interface field.
+// The generated shadow dispatch is also the material-surface evaluator for GI. It reads typed constants and instance storage through the heap-selected context above.
 #include "../shadow/shadow_surface.slangi"
 #include "shadow/generated/surface_dispatch.slangi"
 
@@ -66,7 +66,7 @@ uint nwbMeshFrameViewHeapSlot(){
 #include "../bvh/sw_instance.slangi"
 #include "../bvh/ray_vertex_attrib.slangi"
 
-// Global descriptor-heap accessors for per-mesh and scene BVH geometry. The material record carries per-mesh slots; the heap-selected trace context carries the scene-node slot. This include provides nwbHeapBvhNodes() and nwbHeapRawBuffer().
+// Global heap accessors for per-mesh and scene BVH geometry. The material record carries per-mesh slots; the trace context carries the scene-node slot.
 #include "../bvh/bindless_heap_bvh.slangi"
 
 
@@ -74,7 +74,7 @@ uint nwbMeshFrameViewHeapSlot(){
 
 
 // The scene-instance table shares the StorageBuffer descriptor class with the per-mesh BVH, material, and typed buffers.
-// This pass-local typed alias supplies its 64-byte record stride without introducing a second heap class.
+// This pass-local alias supplies the 64-byte record stride without a second heap class.
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed view of the StorageBuffer descriptor table.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> g_NwbHeapGiSwInstanceBuffers[];

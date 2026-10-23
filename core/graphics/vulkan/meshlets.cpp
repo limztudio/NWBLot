@@ -132,8 +132,8 @@ Expected<MeshletPipelineHandle> Device::createMeshletPipeline(const MeshletPipel
     VulkanDetail::AttachPipelineBindingState(pipelineInfo, *pso, &fixedState->renderingInfo);
     pipelineInfo.stageCount = static_cast<u32>(shaderStages.size());
     pipelineInfo.pStages = shaderStages.data();
-    pipelineInfo.pVertexInputState = nullptr; // Mesh shaders don't use vertex input
-    pipelineInfo.pInputAssemblyState = nullptr; // Mesh shaders don't use input assembly
+    pipelineInfo.pVertexInputState = nullptr;
+    pipelineInfo.pInputAssemblyState = nullptr;
     VulkanDetail::AttachGraphicsPipelineFixedState(pipelineInfo, rasterizer, *fixedState);
     pipelineInfo.renderPass = VK_NULL_HANDLE;
 

@@ -26,11 +26,11 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T, const TStringView& loggerName>
-class ClientBase : public IClient, public QueuedLoggerWorkerBase<T, loggerName>{
+template<typename T, const TStringView& LoggerName>
+class ClientBase : public IClient, public QueuedLoggerWorkerBase<T, LoggerName>{
 protected:
-    using BaseType = LoggerWorkerBase<T, loggerName>;
-    using UpdateBaseType = QueuedLoggerWorkerBase<T, loggerName>;
+    using BaseType = LoggerWorkerBase<T, LoggerName>;
+    using UpdateBaseType = QueuedLoggerWorkerBase<T, LoggerName>;
 
 
 protected:

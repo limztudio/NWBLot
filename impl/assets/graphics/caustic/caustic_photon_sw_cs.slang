@@ -283,7 +283,6 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
         return;
 #endif
     const bool refractive = (material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE) != 0u;
-    // Per-mesh geometry slots must remain non-uniform at every access.
     const float3 origin = nwbSwBvhTransformPoint(instance, worldOrigin);
     const float3 direction = nwbSwBvhTransformVector(instance, worldDirection);
     const float3 invDir = nwbBvhSafeInvDir(direction);
@@ -395,7 +394,6 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
     }
 
     if(sceneOverflow){
-        // Instance order is independent of SAH depth; keep every candidate when the fast traversal exceeds its local stack.
         [loop] for(uint instance = 0u; instance < g_NwbCausticSwPushConstants.instanceCount; ++instance)
             nwbCausticSwInstanceClosest(instance, origin, direction, tMin, closest);
     }

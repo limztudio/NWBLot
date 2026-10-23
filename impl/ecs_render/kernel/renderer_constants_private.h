@@ -58,7 +58,7 @@ inline constexpr Core::Color s_ShadowVisibilityAllLitClearColor = Core::Color(1.
 
 // Capture the clear before native recording; callers own destination lookup and render-pass gating.
 [[nodiscard]] bool RecordFloatTextureClear(Core::CommandList& commandList, const Core::GpuTaskRecordContext& context, const Core::GpuGraphResourceId destination, Core::Texture& nativeDestination, const Core::GpuClearTextureTaskDesc& clearDesc);
-// The caustic splat accumulators are fixed-point R32_UINT (no float image atomics on the backend), one layer per RGB channel that the producer InterlockedAdds into; the resolve pass converts them to the RGBA16F irradiance.
+// Caustic splat accumulators are fixed-point R32_UINT (no float image atomics), one layer per RGB channel; the resolve pass converts them to RGBA16F irradiance.
 inline constexpr u32 s_CausticAccumulatorChannelCount = NWB_CAUSTIC_ACCUMULATOR_CHANNEL_COUNT;
 inline constexpr Core::TextureSubresourceSet s_CausticAccumulatorSubresources = Core::TextureSubresourceSet(0, 1, 0, s_CausticAccumulatorChannelCount);
 

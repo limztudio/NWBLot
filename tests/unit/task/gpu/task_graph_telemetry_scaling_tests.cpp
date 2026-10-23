@@ -50,22 +50,22 @@ static void CheckTelemetryEdges(const usize taskCount, const Scenario::Enum scen
     Graphics::GpuTaskGraph graph(testArena.arena);
     Graphics::GpuGraphResourceId resource;
     if(scenario != Scenario::Explicit){
-        const auto gpuAdmissionAt51 = AddBufferMetadata(graph, Name("tests/telemetry_scaling/resource"), "Telemetry Buffer");
-        ASSERT_TRUE(gpuAdmissionAt51);
-        resource = *gpuAdmissionAt51;
+        const auto resourceTaskAdmission = AddBufferMetadata(graph, Name("tests/telemetry_scaling/resource"), "Telemetry Buffer");
+        ASSERT_TRUE(resourceTaskAdmission);
+        resource = *resourceTaskAdmission;
         ASSERT_TRUE(resource.valid());
     }
     const Graphics::GpuTaskResourceUse resourceUse{ .resource = resource, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write, };
     Graphics::GpuTaskId preceding;
     for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
         char identityText[32u] = {};
-        const auto derivedNameAt60Col30 = DeriveName(Name("tests/telemetry_scaling/task/"), FormatDecimal(taskIndex, identityText));
-        ASSERT_TRUE(derivedNameAt60Col30);
-        const Name identity = *derivedNameAt60Col30;
+        const auto identityNameResult = DeriveName(Name("tests/telemetry_scaling/task/"), FormatDecimal(taskIndex, identityText));
+        ASSERT_TRUE(identityNameResult);
+        const Name identity = *identityNameResult;
         const bool explicitDependency = preceding.valid() && (scenario == Scenario::Explicit || (scenario == Scenario::Mixed && taskIndex % 2u != 0u));
-        const auto gpuAdmissionAt60 = AddTask(graph, identity, "Telemetry Task", explicitDependency ? &preceding : nullptr, explicitDependency ? 1u : 0u, resource.valid() ? &resourceUse : nullptr, resource.valid() ? 1u : 0u);
-        ASSERT_TRUE(gpuAdmissionAt60);
-        preceding = *gpuAdmissionAt60;
+        const auto precedingTaskAdmission = AddTask(graph, identity, "Telemetry Task", explicitDependency ? &preceding : nullptr, explicitDependency ? 1u : 0u, resource.valid() ? &resourceUse : nullptr, resource.valid() ? 1u : 0u);
+        ASSERT_TRUE(precedingTaskAdmission);
+        preceding = *precedingTaskAdmission;
         ASSERT_TRUE(preceding.valid());
     }
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);

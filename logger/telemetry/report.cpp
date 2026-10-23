@@ -20,24 +20,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_telemetry_report{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static constexpr StringView s_UnknownReportField = "unknown";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_LOG_BEGIN
 
 
@@ -56,6 +38,7 @@ namespace TelemetryReportDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr StringView s_UnknownReportField = "unknown";
 static constexpr u64 s_TimingSecondsExponentMask = 0x7FF0000000000000ull;
 static constexpr usize s_PerfCsvFixedReserveBytes = 128u;
 static constexpr usize s_PerfCsvBytesPerEvent = 128u;
@@ -175,7 +158,7 @@ AStringView EventKindText(const Telemetry::EventKind::Enum kind)noexcept{
         return "memoryFrame";
     case Telemetry::EventKind::Unknown:
     default:
-        return ::__hidden_telemetry_report::s_UnknownReportField;
+        return TelemetryReportDetail::s_UnknownReportField;
     }
 }
 
@@ -187,7 +170,7 @@ AStringView PerfTimingSourceText(const Telemetry::PerfTimingSource::Enum source)
         return "gpu";
     case Telemetry::PerfTimingSource::Unknown:
     default:
-        return ::__hidden_telemetry_report::s_UnknownReportField;
+        return TelemetryReportDetail::s_UnknownReportField;
     }
 }
 

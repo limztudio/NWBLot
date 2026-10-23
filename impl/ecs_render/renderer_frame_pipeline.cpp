@@ -160,7 +160,7 @@ void RendererFramePipeline::resetLaggedLightingHistoryTracking()noexcept{
     invalidateLaggedLightingHistoryWriterDrain();
 }
 
-void RendererFramePipeline::reportLaggedLightingTransition(const LaggedLightingReport report, const u64 targetGeneration){
+void RendererFramePipeline::reportLaggedLightingTransition(const LaggedLightingReport::Enum report, const u64 targetGeneration){
     if(m_laggedLightingReport == report && m_laggedLightingReportGeneration == targetGeneration)
         return;
 

@@ -43,7 +43,7 @@ u32 GraphicsRuntime::queryWaveLaneCount()const noexcept{
     const auto info = getDevice().getWaveLaneCounts();
     if(info.maxWaveLaneCount > 0u)
         return info.maxWaveLaneCount;
-    // Conservative fallback for backends/paths that cannot report a wave size: 64 lanes is the safe upper bound across all desktop GPUs and keeps groupshared reductions correct without wave intrinsics.
+    // Fallback for backends/paths that cannot report a wave size: 64 lanes is the safe upper bound across desktop GPUs and keeps groupshared reductions correct without wave intrinsics.
     return __hidden_graphics_feature_queries::s_DefaultWaveLaneCount;
 }
 

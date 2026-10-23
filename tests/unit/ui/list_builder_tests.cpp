@@ -287,7 +287,7 @@ TEST_F(UiListBuilderTests, ContentViewportPreflightsTallSecondRowAtFractionalScr
     const f32 initialHeight = VectorGetX(rowHeight);
     const f32 finalHeight = VectorGetY(rowHeight);
     ASSERT_GT(finalHeight, initialHeight);
-    ASSERT_TRUE(m_state.scrollTo(VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(static_cast<f64>(initialHeight)), VectorDoubleReplicate(0.25)))));
+    ASSERT_TRUE(m_state.scrollTo(VectorDoubleGetX(VectorDoubleMultiply(ConvertVectorSingleToDouble(rowHeight), VectorDoubleReplicate(0.25)))));
     ASSERT_TRUE(begin(1u, display));
     ASSERT_TRUE(m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 260.0f }));
     ASSERT_TRUE(m_builder.virtualList(s_ListKey, m_source, m_state, options).valid);

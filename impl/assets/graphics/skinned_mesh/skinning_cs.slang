@@ -129,7 +129,6 @@ bool nwbSkinnedMeshApplyLinearSkinFrame(const uint skinIndex, inout float3 norma
     const float4 skinWeights = nwbSkinnedMeshSkinWeights(skin);
     float3 skinnedNormal = float3(0.0);
     float3 skinnedTangent = float3(0.0);
-    // Skin influence weights are (0, 1) bounded factors; half accumulation is sufficient here.
     half totalWeight = half(0.0h);
 
     for(uint influenceIndex = 0u; influenceIndex < NWB_MESH_SKIN_MAX_INFLUENCE_COUNT; ++influenceIndex){
@@ -172,7 +171,6 @@ bool nwbSkinnedMeshBuildDualQuaternionSkin(const uint skinIndex, out bool hasSki
     const float4 skinWeights = nwbSkinnedMeshSkinWeights(skin);
     float4 referenceReal = float4(0.0);
     bool hasReference = false;
-    // Skin influence weights are (0, 1) bounded factors; half accumulation is sufficient here.
     half totalWeight = half(0.0h);
 
     for(uint influenceIndex = 0u; influenceIndex < NWB_MESH_SKIN_MAX_INFLUENCE_COUNT; ++influenceIndex){

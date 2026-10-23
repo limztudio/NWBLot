@@ -10,6 +10,7 @@
 
 #include <global/floating_point_environment.h>
 #include <global/simd/collision_triangle.h>
+#include <global/simd/convert.h>
 #include <global/scope_exit.h>
 
 
@@ -43,10 +44,10 @@ static void CheckBothPrecisions(const f64 (&first)[3][3], const f64 (&second)[3]
     SIMDVectorSingle firstSingle[3], secondSingle[3];
     SIMDVectorDouble firstDouble[3], secondDouble[3];
     for(u32 index = 0u; index < 3u; ++index){
-        firstSingle[index] = VectorSet(static_cast<f32>(first[index][0]), static_cast<f32>(first[index][1]), static_cast<f32>(first[index][2]), 0.0f);
-        secondSingle[index] = VectorSet(static_cast<f32>(second[index][0]), static_cast<f32>(second[index][1]), static_cast<f32>(second[index][2]), 0.0f);
         firstDouble[index] = VectorDoubleSet(first[index][0], first[index][1], first[index][2], 0.0);
         secondDouble[index] = VectorDoubleSet(second[index][0], second[index][1], second[index][2], 0.0);
+        firstSingle[index] = ConvertVectorDoubleToSingle(firstDouble[index]);
+        secondSingle[index] = ConvertVectorDoubleToSingle(secondDouble[index]);
     }
     CheckWindingAndOperandOrder(firstSingle, secondSingle, expected);
     CheckWindingAndOperandOrder(firstDouble, secondDouble, expected);

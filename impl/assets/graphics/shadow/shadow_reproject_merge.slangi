@@ -59,10 +59,10 @@ bool nwbShadowMergeHistoryAccepted(const NwbShadowMergeReprojection reprojection
     if(reprojection.onScreen && valid){
         const half4 gp = nwbShadowMergeGeometry(geometryPrevSlot, reprojection.texel);
         if(gp.w > half(NWB_SHADOW_GEOMETRY_VALID_THRESHOLD)){
-            const float3 Np = nwbOctDecodeNormal(float2(gp.xy));
+            const float3 previousNormal = nwbOctDecodeNormal(float2(gp.xy));
             const float worldSpacing = max(currentCameraDistance * NWB_SHADOW_TEMPORAL_WORLD_SPACING_SCALE, NWB_SHADOW_TEMPORAL_WORLD_SPACING_MIN);
             const bool planeOk = abs(currentCameraDistance - float(gp.z)) < (NWB_SHADOW_TEMPORAL_PLANE_K * worldSpacing);
-            const bool normalOk = dot(currentNormal, Np) > NWB_SHADOW_TEMPORAL_NORMAL_MIN;
+            const bool normalOk = dot(currentNormal, previousNormal) > NWB_SHADOW_TEMPORAL_NORMAL_MIN;
             historyAccepted = planeOk && normalOk;
         }
     }

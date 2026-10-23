@@ -91,14 +91,14 @@ void CheckSingleLaneStateChangeScratch(const usize taskCount, usize& scratchPeak
     ASSERT_TRUE(resource.valid());
     for(usize index = 0u; index < taskCount; ++index){
         char identityText[32u] = {};
-        const auto derivedNameAt94Col30 = DeriveName(Name("tests/task_graph/single_lane_read_state/"), FormatDecimal(index, identityText));
-        ASSERT_TRUE(derivedNameAt94Col30);
-        const Name identity = *derivedNameAt94Col30;
+        const auto identityNameResult = DeriveName(Name("tests/task_graph/single_lane_read_state/"), FormatDecimal(index, identityText));
+        ASSERT_TRUE(identityNameResult);
+        const Name identity = *identityNameResult;
         const Graphics::GpuTaskResourceUse use{ .resource = resource, .range = {}, .requiredState = index % 2u == 0u ? Graphics::ResourceStates::ShaderResource : Graphics::ResourceStates::CopySource, .access = Graphics::GpuTaskResourceAccess::Read, };
         {
-            const auto gpuAdmissionAt94 = AddStateTask(graph, identity, use, GraphicsCommands());
-            ASSERT_TRUE(gpuAdmissionAt94);
-            ASSERT_TRUE(gpuAdmissionAt94->valid());
+            const auto gpuTaskAdmission = AddStateTask(graph, identity, use, GraphicsCommands());
+            ASSERT_TRUE(gpuTaskAdmission);
+            ASSERT_TRUE(gpuTaskAdmission->valid());
         }
     }
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue() };

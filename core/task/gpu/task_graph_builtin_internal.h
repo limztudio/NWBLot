@@ -26,8 +26,8 @@ namespace GpuTaskGraphBuiltinDetail{
 template<typename ResourceDesc>
 [[nodiscard]] inline bool BuiltInTaskCanMaterializeRetainedState(const ResourceDesc& resourceDesc, const ResourceStates::Mask graphInitialState, const ResourceStates::Mask externalFinalState)noexcept{
     // Retained resources restore to their descriptor state when a native packet closes.
-    // The graph may still use a different built-in state when it explicitly starts from that descriptor state: compiler-owned barriers then establish the primitive state and the recorded packet exports the restored state for the next packet.
-    // A mismatched graph declaration has no native source that this helper can prove, and a terminal external state must agree with the close-time restoration before the graph publishes its handoff.
+    // The graph may use a different built-in state when it starts from that descriptor state: compiler-owned barriers establish the primitive state and the packet exports the restored one.
+    // A mismatched declaration has no native source that this helper can prove, and a terminal external state must agree with the close-time restoration before the graph publishes its handoff.
     if(!resourceDesc.keepInitialState)
         return true;
     return resourceDesc.initialState != ResourceStates::Unknown && graphInitialState == resourceDesc.initialState && (externalFinalState == ResourceStates::Unknown || externalFinalState == resourceDesc.initialState);
@@ -134,7 +134,7 @@ template<typename Payload, typename CaptureCopyFn, typename EmitCopyFn>
         return true;
     if(resourceDesc.initialState == ResourceStates::Unknown || (externalFinalState != ResourceStates::Unknown && externalFinalState != resourceDesc.initialState))
         return false;
-    // An Unknown write-only destination never invents an input state. Fresh managed subresources lower from Undefined
+    // An Unknown write-only destination never invents an input state. Fresh managed subresources lower from Undefined.
     return graphInitialState == ResourceStates::Unknown || graphInitialState == resourceDesc.initialState;
 }
 

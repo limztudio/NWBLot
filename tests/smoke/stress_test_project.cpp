@@ -112,8 +112,8 @@ static constexpr f32 s_PointLightHeight = 2.6f;
 static constexpr f32 s_PointLightIntensity = 9.0f;
 static constexpr f32 s_PointLightRange = 16.0f;
 
-static constexpr f32 s_SpinSpeed = 0.8f; // radians/second
-static constexpr f32 s_ManualYawSpeed = 0.6f; // radians/second
+static constexpr f32 s_SpinSpeed = 0.8f;
+static constexpr f32 s_ManualYawSpeed = 0.6f;
 static constexpr f32 s_TwoPi = 6.2831853f;
 static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;
 
@@ -123,14 +123,14 @@ static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;
 
 // Repeat the authored five-color palette across each material row; transparency and density remain unchanged.
 [[nodiscard]] static Float4 CharacterTint(const u32 classIndex, const bool transparent)noexcept{
-    static const Float4 s_transparentTints[s_CharacterTintCount] = {
+    static const Float4 s_TransparentTints[s_CharacterTintCount] = {
         Float4(0.72f, 0.86f, 1.00f, 0.42f),
         Float4(0.60f, 1.00f, 0.85f, 0.42f),
         Float4(1.00f, 0.82f, 0.88f, 0.44f),
         Float4(0.86f, 0.80f, 1.00f, 0.45f),
         Float4(0.70f, 0.96f, 1.00f, 0.40f),
     };
-    static const Float4 s_opaqueTints[s_CharacterTintCount] = {
+    static const Float4 s_OpaqueTints[s_CharacterTintCount] = {
         Float4(0.90f, 0.52f, 0.42f, 1.0f),
         Float4(0.52f, 0.70f, 0.90f, 1.0f),
         Float4(0.62f, 0.82f, 0.52f, 1.0f),
@@ -138,7 +138,7 @@ static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;
         Float4(0.74f, 0.62f, 0.84f, 1.0f),
     };
     const u32 slot = classIndex % s_CharacterTintCount;
-    return transparent ? s_transparentTints[slot] : s_opaqueTints[slot];
+    return transparent ? s_TransparentTints[slot] : s_OpaqueTints[slot];
 }
 
 
@@ -149,14 +149,14 @@ class StressTestSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     [[nodiscard]] static u32 M4PixelCaptureFreezeFrame(){
 #if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
-        static const u32 s_captureFrame = [](){
+        static const u32 s_CaptureFrame = [](){
             const auto configuredFrame = ReadSmokeEnvironmentF32("NWB_M4_PIXEL_CAPTURE_FREEZE_FRAME");
             if(!configuredFrame || !IsFinite(*configuredFrame) || *configuredFrame < 1.0f){
                 return 0u;
             }
-            return static_cast<u32>(Min(*configuredFrame, 1000000.0f));
+            return static_cast<u32>(VectorGetX(VectorMin(VectorReplicate(*configuredFrame), VectorReplicate(1000000.0f))));
         }();
-        return s_captureFrame;
+        return s_CaptureFrame;
 #else
         return 0u;
 #endif
@@ -165,8 +165,8 @@ private:
     // The benchmark compares hardware transparent shadows against an opaque-only scene.
     [[nodiscard]] static bool HardwareShadowOpaqueBaseline(){
 #if defined(NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK)
-        static const bool s_enabled = ReadSmokeEnvironmentFlag("NWB_HARDWARE_SHADOW_BOUNDARY_OPAQUE_BASELINE");
-        return s_enabled;
+        static const bool s_Enabled = ReadSmokeEnvironmentFlag("NWB_HARDWARE_SHADOW_BOUNDARY_OPAQUE_BASELINE");
+        return s_Enabled;
 #else
         return false;
 #endif
@@ -209,8 +209,8 @@ private:
     // Spin bind-pose bodies about Y with staggered phases (BVH + shadows re-resolve per frame).
     // NWB_STRESS_TEST_SPIN_ANGLE freezes yaw for deterministic A/B.
     static f32 FrozenYaw(){
-        static const f32 s_yaw = ReadSmokeFrozenYawFromEnvironment("NWB_STRESS_TEST_SPIN_ANGLE");
-        return s_yaw;
+        static const f32 s_Yaw = ReadSmokeFrozenYawFromEnvironment("NWB_STRESS_TEST_SPIN_ANGLE");
+        return s_Yaw;
     }
 
 

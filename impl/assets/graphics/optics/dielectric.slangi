@@ -55,7 +55,7 @@ NwbDielectricInterface nwbDielectricTransmit(const float3 direction, const float
     return result;
 }
 
-// The authored RGB tint specifies survival over one world unit, matching the existing transparent-material contract. Homogeneous closed volumes retain this coefficient from their entry boundary.
+// The authored RGB tint specifies survival over one world unit, matching the existing transparent-material contract. Closed volumes keep this coefficient from their entry boundary.
 half3 nwbDielectricAbsorptionCoefficient(const half3 unitSurvival){
     return -log(clamp(unitSurvival, half3(half(NWB_ABSORPTION_SURVIVAL_MIN)), half3(1.0h)));
 }

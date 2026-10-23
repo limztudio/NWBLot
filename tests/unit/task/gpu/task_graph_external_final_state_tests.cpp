@@ -358,15 +358,15 @@ TEST(GpuTaskGraph, RejectsUnpublishableExternalFinalStateContracts){
         .setExternalFinalState(Graphics::ResourceStates::ShaderResource)
     ;
     {
-        const auto gpuAdmissionAt904 = graph.importResource(untouchedDesc);
-        EXPECT_TRUE(gpuAdmissionAt904);
-        if(gpuAdmissionAt904)
-            EXPECT_TRUE(gpuAdmissionAt904->valid());
+        const auto gpuTaskAdmission = graph.importResource(untouchedDesc);
+        EXPECT_TRUE(gpuTaskAdmission);
+        if(gpuTaskAdmission)
+            EXPECT_TRUE(gpuTaskAdmission->valid());
     }
     {
-        const auto gpuAdmissionAt905 = AddTask(graph, Name("tests/task_graph/external_final_unrelated"), "External Final Unrelated");
-        ASSERT_TRUE(gpuAdmissionAt905);
-        ASSERT_TRUE(gpuAdmissionAt905->valid());
+        const auto secondGpuTaskAdmission = AddTask(graph, Name("tests/task_graph/external_final_unrelated"), "External Final Unrelated");
+        ASSERT_TRUE(secondGpuTaskAdmission);
+        ASSERT_TRUE(secondGpuTaskAdmission->valid());
     }
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();

@@ -41,11 +41,11 @@ constexpr AStringView s_OpenAtlas = "open";
 constexpr AStringView s_PlaneShapePath = "engine/csg/plane";
 constexpr AStringView s_CapsuleShapePath = "engine/csg/capsule";
 
-static constexpr AStringView s_ENGINE_CSG_SPHERE = "engine/csg/sphere";
-static constexpr AStringView s_DIRECTIONAL = "directional";
-static constexpr AStringView s_POINT = "point";
-static constexpr AStringView s_HARD = "hard";
-static constexpr AStringView s_FINITE = "finite";
+static constexpr AStringView s_EngineCsgSphere = "engine/csg/sphere";
+static constexpr AStringView s_Directional = "directional";
+static constexpr AStringView s_Point = "point";
+static constexpr AStringView s_Hard = "hard";
+static constexpr AStringView s_Finite = "finite";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -145,15 +145,15 @@ private:
         }
         if(const auto value = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_SHADOW_LIGHT")){
             const AStringView light(value->data(), value->size());
-            if(light != s_DIRECTIONAL && light != s_POINT)
+            if(light != s_Directional && light != s_Point)
                 return false;
-            m_pointLight = light == s_POINT;
+            m_pointLight = light == s_Point;
         }
         if(const auto value = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_SHADOW_LIGHT_SOURCE")){
             const AStringView source(value->data(), value->size());
-            if(source != s_HARD && source != s_FINITE)
+            if(source != s_Hard && source != s_Finite)
                 return false;
-            m_finiteLightSource = source == s_FINITE;
+            m_finiteLightSource = source == s_Finite;
         }
         if(const auto value = ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_SHADOW_ATLAS")){
             const AStringView atlas(value->data(), value->size());
@@ -259,16 +259,15 @@ private:
         const SIMDVectorSingle maximum = LoadFloat(cutterBox.maximum);
         StoreFloat(VectorScale(VectorSubtract(maximum, minimum), 0.5f), parameters.halfExtents);
         AssignCsgCutterParameters(cutter, parameters);
-        Float4 finalCenter;
-        StoreFloat(VectorScale(VectorAdd(minimum, maximum), 0.5f), finalCenter);
-        Float4 initialCenter = finalCenter;
+        const SIMDVectorSingle finalCenter = VectorScale(VectorAdd(minimum, maximum), 0.5f);
+        SIMDVectorSingle initialCenter = finalCenter;
         if(moving && m_arm == Arm::Moved)
-            StoreFloat(VectorSubtract(LoadFloat(initialCenter), VectorScale(VectorSet(0.6f, 0.0f, 0.0f, 0.0f), m_pointLight ? 0.5f : 1.0f)), initialCenter);
-        AssignCsgCutterTransform(cutter, LoadFloat(initialCenter), QuaternionIdentity());
+            initialCenter = VectorSubtract(initialCenter, VectorScale(VectorSet(0.6f, 0.0f, 0.0f, 0.0f), m_pointLight ? 0.5f : 1.0f));
+        AssignCsgCutterTransform(cutter, initialCenter, QuaternionIdentity());
         if(moving){
             NWB_ASSERT(m_movingCount < LengthOf(m_movingCutters));
             m_movingCutters[m_movingCount] = cutterEntity.id();
-            m_finalCutterCenters[m_movingCount] = finalCenter;
+            StoreFloat(finalCenter, m_finalCutterCenters[m_movingCount]);
             ++m_movingCount;
         }
     }
@@ -290,31 +289,26 @@ private:
             const SIMDVectorSingle grid = VectorSubtract(VectorSet(static_cast<f32>(slot % 3u), slot < 3u ? 1.0f : -1.0f, 0.0f, 0.0f), VectorSet(1.0f, 0.0f, 0.0f, 0.0f));
             const SIMDVectorSingle center = VectorScale(VectorMultiply(grid, VectorSet(2.0f, 1.0f, 0.0f, 0.0f)), xyScale);
             const SIMDVectorSingle halfExtent = VectorScale(VectorSet(0.7f, 0.7f, 0.0f, 0.0f), xyScale);
-            const Box box = StoreBoxBounds(VectorSetZ(VectorSubtract(center, halfExtent), -7.0f), VectorSetZ(VectorAdd(center, halfExtent), -5.0f));
+            const SIMDVectorSingle boxMin = VectorSetZ(VectorSubtract(center, halfExtent), -7.0f);
+            const SIMDVectorSingle boxMax = VectorSetZ(VectorAdd(center, halfExtent), -5.0f);
             const bool hole = slot == 0u || slot == 3u;
             const f32 holeHalfWidth = m_pointLight ? 0.36f : 0.24f;
             const SIMDVectorSingle holeOffsets = VectorScale(VectorSet(0.3f, 0.4f, 0.0f, 0.0f), xyScale);
             const SIMDVectorSingle holeCenter = VectorAdd(center, VectorAndInt(holeOffsets, s_SIMDMaskX));
             const SIMDVectorSingle holeExtent = VectorSetX(holeOffsets, holeHalfWidth);
             const SIMDVectorSingle solidExtent = VectorSet(1.0f, 1.0f, 0.0f, 0.0f);
-            Box cutter = hole
-                ? StoreBoxBounds(VectorSetZ(VectorSubtract(holeCenter, holeExtent), -7.2f), VectorSetZ(VectorAdd(holeCenter, holeExtent), -4.8f))
-                : StoreBoxBounds(VectorSetZ(VectorSubtract(center, solidExtent), -6.0f), VectorSetZ(VectorAdd(center, solidExtent), -4.8f));
+            SIMDVectorSingle cutterMin = hole ? VectorSetZ(VectorSubtract(holeCenter, holeExtent), -7.2f) : VectorSetZ(VectorSubtract(center, solidExtent), -6.0f);
+            SIMDVectorSingle cutterMax = hole ? VectorSetZ(VectorAdd(holeCenter, holeExtent), -4.8f) : VectorSetZ(VectorAdd(center, solidExtent), -4.8f);
             if(slot == 5u){
                 const SIMDVectorSingle shift = VectorSet(20.0f, 0.0f, 0.0f, 0.0f);
-                StoreFloat(VectorAdd(LoadFloat(cutter.minimum), shift), cutter.minimum);
-                StoreFloat(VectorAdd(LoadFloat(cutter.maximum), shift), cutter.maximum);
+                cutterMin = VectorAdd(cutterMin, shift);
+                cutterMax = VectorAdd(cutterMax, shift);
             }
             const u32 groupIndex = slot == 5u ? 6u : slot;
-            addCaster(box, cutter, groupIndex, slot >= 2u, hole);
+            addCaster(StoreBoxBounds(boxMin, boxMax), StoreBoxBounds(cutterMin, cutterMax), groupIndex, slot >= 2u, hole);
             if(slot == 4u){
-                Box second = box;
                 const SIMDVectorSingle shift = VectorSet(0.0f, 0.0f, 0.5f, 0.0f);
-                StoreFloat(VectorSubtract(LoadFloat(second.minimum), shift), second.minimum);
-                StoreFloat(VectorSubtract(LoadFloat(second.maximum), shift), second.maximum);
-                StoreFloat(VectorSubtract(LoadFloat(cutter.minimum), shift), cutter.minimum);
-                StoreFloat(VectorSubtract(LoadFloat(cutter.maximum), shift), cutter.maximum);
-                addCaster(second, cutter, 5u, true, false);
+                addCaster(StoreBoxBounds(VectorSubtract(boxMin, shift), VectorSubtract(boxMax, shift)), StoreBoxBounds(VectorSubtract(cutterMin, shift), VectorSubtract(cutterMax, shift)), 5u, true, false);
             }
         }
 #endif
@@ -350,7 +344,7 @@ private:
         NWB::Impl::CsgSphereShapeParameters sphere;
         sphere.radius = Float4(1.0f, 0.0f, 0.0f, 0.0f);
         const SIMDMatrix ellipsoid = MatrixAffineTransformation(VectorSet(0.5f, 0.45f, 0.75f, 0.0f), VectorZero(), QuaternionIdentity(), VectorSet(0.0f, 1.0f, -6.0f, 0.0f));
-        addAnalyticCutter(1u, Name(s_ENGINE_CSG_SPHERE), sphere, ellipsoid);
+        addAnalyticCutter(1u, Name(s_EngineCsgSphere), sphere, ellipsoid);
 
         NWB::Impl::CsgCapsuleShapeParameters capsule;
         capsule.radiusHalfHeight = Float4(0.35f, 0.25f, 0.0f, 0.0f);
@@ -361,8 +355,8 @@ private:
         addAnalyticCutter(3u, Name(s_CapsuleShapePath), capsule, alongLight);
 
         sphere.radius = Float4(0.55f, 0.0f, 0.0f, 0.0f);
-        addAnalyticCutter(4u, Name(s_ENGINE_CSG_SPHERE), sphere, MatrixTranslation(0.0f, -1.0f, -6.25f));
-        addAnalyticCutter(4u, Name(s_ENGINE_CSG_SPHERE), sphere, MatrixTranslation(0.0f, -1.0f, -5.75f));
+        addAnalyticCutter(4u, Name(s_EngineCsgSphere), sphere, MatrixTranslation(0.0f, -1.0f, -6.25f));
+        addAnalyticCutter(4u, Name(s_EngineCsgSphere), sphere, MatrixTranslation(0.0f, -1.0f, -5.75f));
         // The infinite plane keeps the control in the CSG route while removing only z <= -8, outside its box.
         plane.normalDistance = Float4(0.0f, 0.0f, 1.0f, 8.0f);
         addAnalyticCutter(5u, Name(s_PlaneShapePath), plane, MatrixIdentity());
@@ -378,7 +372,7 @@ private:
             for(u32 pair = 0u; pair < 3u; ++pair){
                 const SIMDVectorSingle lower = VectorAdd(VectorReplicate(-7.0f), VectorScale(VectorReplicate(static_cast<f32>(pair)), 0.8f));
                 const SIMDVectorSingle depths = VectorAdd(lower, VectorSet(0.0f, 0.4f, 0.0f, 0.0f));
-                if(!createBox(StoreBoxBounds(VectorSet(0.5f, -0.7f, VectorGetX(depths), 0.0f), VectorSet(1.9f, 0.7f, VectorGetY(depths), 0.0f)), true, s_OpenPairMesh).valid())
+                if(!createBox(StoreBoxBounds(VectorPermute<0, 1, 4, 3>(VectorSet(0.5f, -0.7f, 0.0f, 0.0f), depths), VectorPermute<0, 1, 5, 3>(VectorSet(1.9f, 0.7f, 0.0f, 0.0f), depths)), true, s_OpenPairMesh).valid())
                     return false;
             }
         }
@@ -386,7 +380,7 @@ private:
             for(u32 pair = 0u; pair < 2u; ++pair){
                 const SIMDVectorSingle lower = VectorAdd(VectorReplicate(-6.5f), VectorReplicate(static_cast<f32>(pair)));
                 const SIMDVectorSingle depths = VectorAdd(lower, VectorSet(0.0f, 0.5f, 0.0f, 0.0f));
-                if(!createBox(StoreBoxBounds(VectorSet(-1.9f, -0.7f, VectorGetX(depths), 0.0f), VectorSet(-0.5f, 0.7f, VectorGetY(depths), 0.0f)), true, s_OpenPairMesh).valid())
+                if(!createBox(StoreBoxBounds(VectorPermute<0, 1, 4, 3>(VectorSet(-1.9f, -0.7f, 0.0f, 0.0f), depths), VectorPermute<0, 1, 5, 3>(VectorSet(-0.5f, 0.7f, 0.0f, 0.0f), depths)), true, s_OpenPairMesh).valid())
                     return false;
             }
             if(!createBox({ Float3U(0.5f, -0.7f, -6.6f), Float3U(1.9f, 0.7f, -5.0f) }, true, s_OpenFiveMesh).valid())
@@ -528,7 +522,7 @@ public:
         lightComponent->enableCaustics = false;
 #endif
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: light_source={} angular_radius={:.3f} source_radius={:.3f}")
-            , StringConvert(m_finiteLightSource ? s_FINITE : s_HARD)
+            , StringConvert(m_finiteLightSource ? s_Finite : s_Hard)
             , static_cast<f64>(lightComponent->angularRadius), static_cast<f64>(lightComponent->sourceRadius)
         );
         if(m_openAtlas){
@@ -541,7 +535,7 @@ public:
             createAtlas();
         const bool hardware = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery) && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: atlas arm={} light={} hardware={} camera_x={} caster_z_max=-5 receiver_z=0")
-            , static_cast<u32>(m_arm), StringConvert(m_pointLight ? s_POINT : s_DIRECTIONAL), hardware ? 1u : 0u
+            , static_cast<u32>(m_arm), StringConvert(m_pointLight ? s_Point : s_Directional), hardware ? 1u : 0u
             , static_cast<f64>(cameraX)
         );
         constexpr u32 s_DefaultCaptureFrameCount = 120u;

@@ -125,7 +125,7 @@ bool GpuTaskGraphCompiler::assignQueues(
     GpuTaskQueueScoringData scoringData(graph, analysis, schedulingReachability, options, scratchArena);
 
     // Establish every legal route before scoring.
-    // Explicit compatible merge chains share one provisional queue; their command union and external ownership facts constrain the whole chain, while packetization retains its frontier checks.
+    // Explicit compatible merge chains share one provisional queue; their command union and external facts constrain the whole chain, while packetization retains its frontier checks.
     for(const GpuTaskQueuePlacementGroup& group : groups){
         auto& selectedQueue = *MakeNotNull(FindBestLegalQueuePlacementGroupCandidate(graph, analysis, topology, group));
         for(usize taskOffset = 0u; taskOffset < group.assignmentCount; ++taskOffset){
@@ -200,7 +200,7 @@ bool GpuTaskGraphCompiler::assignQueues(
                 }
             }
             // Finite crossing costs permit useful async overlap.
-            // Without independent work, graph-load estimates must not scatter a serial chain merely because its ancestors and descendants occupy the same queue.
+            // Without independent work, keep serial chains on one queue instead of scattering them by graph load.
             const bool compareTotalScore = !conservative && hasIndependentOverlap;
             for(const Candidate& candidate : candidates){
                 if(!candidate.queue)

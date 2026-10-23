@@ -93,17 +93,17 @@ TEST_F(CrashArchiveUpload, PreservesNativeMissingDirectoryError){
     const auto nativeDirectory = DirectoryIterator<Arena>::Create(missing);
     ASSERT_FALSE(nativeDirectory);
     ScratchArena scratchArena(s_OperationScratch);
-    const auto archive = NWB::Core::Crash::Detail::BuildPackageArchive(m_arena, scratchArena, missing);
+    const auto archive = NWB::Core::Crash::CrashDetail::BuildPackageArchive(m_arena, scratchArena, missing);
     ASSERT_FALSE(archive);
     EXPECT_EQ(archive.error(), nativeDirectory.error());
 }
 
 TEST_F(CrashArchiveUpload, ResultOwnsBytesAfterWorkingScratchExpires){
     ASSERT_TRUE(WriteTextFile(m_root / "payload.txt", AStringView("payload survives scratch")));
-    Optional<NWB::Core::Crash::Detail::CrashBytesT<Arena>> archive;
+    Optional<NWB::Core::Crash::CrashDetail::CrashBytesT<Arena>> archive;
     {
         ScratchArena scratchArena(s_OperationScratch);
-        auto produced = NWB::Core::Crash::Detail::BuildPackageArchive(m_arena, scratchArena, m_root);
+        auto produced = NWB::Core::Crash::CrashDetail::BuildPackageArchive(m_arena, scratchArena, m_root);
         ASSERT_TRUE(produced);
         archive.emplace(Move(*produced));
     }
@@ -120,7 +120,7 @@ TEST_F(CrashArchiveUpload, UnsupportedProtocolPreservesFailureAndPendingRetry){
     const TestPath pending = spoolDirectory / CrashNames::s_PendingDirectoryName / s_CrashId;
     ASSERT_TRUE(EnsureDirectories(pending));
     ASSERT_TRUE(WriteTextFile(pending / "marker.txt", AStringView("package")));
-    NWB::Core::Crash::Detail::CrashUploadSnapshot snapshot;
+    NWB::Core::Crash::CrashDetail::CrashUploadSnapshot snapshot;
     ScratchArena scratchArena(s_OperationScratch);
     const AString<ScratchArena> spoolText = PathToString<char>(scratchArena, spoolDirectory);
     CopyFixedBuffer(snapshot.spoolDirectory, AStringView(spoolText));
@@ -129,7 +129,7 @@ TEST_F(CrashArchiveUpload, UnsupportedProtocolPreservesFailureAndPendingRetry){
     const auto previousCallback = DiagnosticDetail::g_EventCallback.exchange(ObserveUploadDiagnostic, MemoryOrder::acq_rel);
     ScopeExit restoreCallback([previousCallback]()noexcept{ SetDiagnosticEventCallback(previousCallback); });
     s_UploadDiagnostics = 0u;
-    EXPECT_FALSE(NWB::Core::Crash::Detail::FlushPendingCrashReportsImpl(m_arena, snapshot));
+    EXPECT_FALSE(NWB::Core::Crash::CrashDetail::FlushPendingCrashReportsImpl(m_arena, snapshot));
     EXPECT_EQ(s_UploadDiagnostics, 1u);
     EXPECT_EQ(AStringView(s_LastUploadOperation), AStringView("perform_upload"));
     EXPECT_NE(AStringView(s_LastUploadDiagnostic).find("curl code="), AStringView::npos);

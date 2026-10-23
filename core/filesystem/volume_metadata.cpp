@@ -256,8 +256,7 @@ bool VolumeFileSystem::flushMetadataLocked(Alloc::ScratchArena& scratchArena, co
     }
     Sort(sortedRecords.begin(), sortedRecords.end(), [](const VolumeIndexEntryDisk& lhs, const VolumeIndexEntryDisk& rhs)noexcept{
         return ::LessNameHash(lhs.hash, rhs.hash);
-    }
-    );
+    });
 
     Vector<u8, Core::Alloc::ScratchArena> metadataBuffer{scratchArena};
     metadataBuffer.reserve(static_cast<usize>(m_metadataBytes));

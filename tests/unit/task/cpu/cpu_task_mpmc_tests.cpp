@@ -89,29 +89,29 @@ void Produce(CpuTaskScheduler& scheduler, CpuTaskScope& scope, ProducerState& st
         const u32 slot = (producer * s_TasksPerProducer + task) * 4u;
         auto callback = [&scheduler, &state, slot](){
             state.visits[slot].fetch_add(1u, MemoryOrder::relaxed);
-            const auto cpuAdmission45 = scheduler.submit([&scheduler, &state, slot](){
+            const auto cpuTaskAdmission = scheduler.submit([&scheduler, &state, slot](){
                 state.visits[slot + 1u].fetch_add(1u, MemoryOrder::relaxed);
-                const auto cpuAdmission46 = scheduler.submit([&state, slot]()noexcept{
+                const auto secondCpuTaskAdmission = scheduler.submit([&state, slot]()noexcept{
                     state.visits[slot + 2u].fetch_add(1u, MemoryOrder::relaxed);
                 }
                 );
-                if(!cpuAdmission46 || !cpuAdmission46->valid())
+                if(!secondCpuTaskAdmission || !secondCpuTaskAdmission->valid())
                     state.rejected.store(true, MemoryOrder::release);
             }
             );
-            if(!cpuAdmission45 || !cpuAdmission45->valid())
+            if(!cpuTaskAdmission || !cpuTaskAdmission->valid())
                 state.rejected.store(true, MemoryOrder::release);
         };
         CpuTaskOptions options;
         options.cost = static_cast<CpuTaskCost::Enum>(task % 3u);
         options.priority = static_cast<CpuTaskPriority::Enum>((task / 3u) % 3u);
-        const auto cpuAdmission47 = task % 2u == 0u ? scope.submit(Move(callback), options) : scheduler.submit(Move(callback), options);
-        if(!cpuAdmission47){
+        const auto thirdCpuTaskAdmission = task % 2u == 0u ? scope.submit(Move(callback), options) : scheduler.submit(Move(callback), options);
+        if(!thirdCpuTaskAdmission){
             state.rejected.store(true, MemoryOrder::release);
             state.published[producer].store(true, MemoryOrder::release);
             return;
         }
-        const CpuTaskHandle handle = *cpuAdmission47;
+        const CpuTaskHandle handle = *thirdCpuTaskAdmission;
         state.handles[producer][task] = handle;
         if(!handle.valid())
             state.rejected.store(true, MemoryOrder::release);
@@ -135,7 +135,7 @@ void Produce(CpuTaskScheduler& scheduler, CpuTaskScope& scope, ProducerState& st
     for(u32 task = 0u; task < s_TasksPerProducer; ++task){
         const u32 slot = (producer * s_TasksPerProducer + task) * 4u;
         const u32 precedingSlot = (predecessor * s_TasksPerProducer + task) * 4u;
-        const auto cpuAdmission49 = scope.submit([&state, slot, precedingSlot]()noexcept{
+        const auto fourthCpuTaskAdmission = scope.submit([&state, slot, precedingSlot]()noexcept{
             for(u32 descendant = 0u; descendant < 3u; ++descendant){
                 if(state.visits[precedingSlot + descendant].load(MemoryOrder::acquire) != 1u)
                     state.invalidOrder.store(true, MemoryOrder::release);
@@ -143,7 +143,7 @@ void Produce(CpuTaskScheduler& scheduler, CpuTaskScope& scope, ProducerState& st
             state.visits[slot + 3u].fetch_add(1u, MemoryOrder::relaxed);
         }, state.handles[predecessor][task]
         );
-        if(!cpuAdmission49 || !cpuAdmission49->valid())
+        if(!fourthCpuTaskAdmission || !fourthCpuTaskAdmission->valid())
             state.rejected.store(true, MemoryOrder::release);
     }
 }
@@ -179,7 +179,7 @@ TEST(CpuTaskMpmcTests, OwnerExternalAndWorkerProducersShareQueuesWithoutLosingOr
     );
 
     for(u32 producer = 0u; producer < s_WorkerCount; ++producer){
-        const auto cpuAdmission50 = scope.submit([&, producer](){
+        const auto cpuTaskAdmission = scope.submit([&, producer](){
             const usize worker = scheduler.currentWorkerIndex();
             if(worker >= 1u && worker <= s_WorkerCount)
                 state.workerMask.fetch_or(1u << (worker - 1u), MemoryOrder::release);
@@ -187,9 +187,9 @@ TEST(CpuTaskMpmcTests, OwnerExternalAndWorkerProducersShareQueuesWithoutLosingOr
             Produce(scheduler, scope, state, 1u + s_ExternalProducerCount + producer);
         }, { .cost = CpuTaskCost::Any }
         );
-        EXPECT_TRUE(cpuAdmission50);
-        if(cpuAdmission50)
-            EXPECT_TRUE(cpuAdmission50->valid());
+        EXPECT_TRUE(cpuTaskAdmission);
+        if(cpuTaskAdmission)
+            EXPECT_TRUE(cpuTaskAdmission->valid());
     }
     for(u32 producer = 0u; producer < s_ExternalProducerCount; ++producer){
         producers[producer] = JoiningThread([&, producer](){
@@ -267,12 +267,12 @@ TEST(CpuTaskMpmcTests, ExternalProducersCanWaitForMainThreadTasksWhileTheOwnerPu
                 };
                 const CpuTaskOptions options{ .cost = CpuTaskCost::Light, .target = CpuTaskTarget::MainThread };
                 const u32 joinKind = task % s_JoinKinds;
-                const auto cpuAdmission51 = task % 2u == 0u || joinKind == 1u ? scope.submit(Move(callback), options) : scheduler.submit(Move(callback), options);
-                if(!cpuAdmission51){
+                const auto cpuTaskAdmission = task % 2u == 0u || joinKind == 1u ? scope.submit(Move(callback), options) : scheduler.submit(Move(callback), options);
+                if(!cpuTaskAdmission){
                     rejected.store(true, MemoryOrder::release);
                     return;
                 }
-                const CpuTaskHandle handle = *cpuAdmission51;
+                const CpuTaskHandle handle = *cpuTaskAdmission;
                 if(!handle.valid()){
                     rejected.store(true, MemoryOrder::release);
                     return;
@@ -329,9 +329,9 @@ TEST(CpuTaskMpmcTests, CanceledCompletionCannotLoseConcurrentHandleScopeOrSchedu
     u32 callbacks = 0u;
     for(u32 round = 0u; round < s_Rounds; ++round){
         CpuTaskScope scope(scheduler);
-        const auto cpuAdmission53 = scope.submit([&]()noexcept{ ++callbacks; }, { .target = CpuTaskTarget::MainThread });
-        ASSERT_TRUE(cpuAdmission53);
-        const auto handle = *cpuAdmission53;
+        const auto handleTaskAdmission = scope.submit([&]()noexcept{ ++callbacks; }, { .target = CpuTaskTarget::MainThread });
+        ASSERT_TRUE(handleTaskAdmission);
+        const auto handle = *handleTaskAdmission;
         ASSERT_TRUE(handle.valid());
         Atomic<bool> start{ false };
         Atomic<bool> expired{ false };

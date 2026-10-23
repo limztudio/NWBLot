@@ -446,7 +446,7 @@ bool InitX11Frame(Frame& frame){
     XSelectInput(GetX11Display(frameData), GetX11Window(frameData), s_WindowEventMask);
     XStoreName(GetX11Display(frameData), GetX11Window(frameData), windowTitle.data());
 
-    // Tag the top-level window with the process id so smoke teardown can locate the exact window for graceful WM_DELETE_WINDOW close on headless XWayland, where the window is never mapped and PID lookup is the only match key.
+    // Tag the top-level window with the process id so smoke teardown can find it for WM_DELETE_WINDOW close on headless XWayland, where the window is never mapped and PID lookup is key.
     {
         const Atom pidAtom = XInternAtom(GetX11Display(frameData), "_NET_WM_PID", False);
         if(pidAtom != None){

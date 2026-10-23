@@ -15,11 +15,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The consuming effect supplies terminal illumination. This walker owns neither project BXDF selection nor environment assets, reflection outputs, screen-space caches, or feature statistics buffers.
+// The consuming effect supplies terminal illumination. This walker owns neither project selection nor environment assets, reflection outputs, screen caches, or statistics buffers.
 half3 nwbOpticalSurfaceRadiance(const NwbRayTraceSurfaceHit hit, const float3 observerDirection);
 half3 nwbOpticalEnvironmentRadiance(const float3 direction);
 
-// Reserve one query budget unit before each retained-receiver collection; topology validation or complete cutter coverage may reject before issuing a hardware query. Ordinary scenes compile out both the list and CSG geometry arrays.
+// Reserve one query budget unit before each receiver collection; topology validation or full cutter coverage may reject before issuing a query. Ordinary scenes compile out both lists.
 bool nwbOpticalClosestSurfaceHit(
     const NwbOpticalTraceConfig config,
     const float3 origin,
@@ -73,7 +73,7 @@ bool nwbOpticalClosestSurfaceHit(
     return true;
 }
 
-// Resolve numerical ties around the true nearest transparent boundary before changing membership. A second bounded candidate query is necessary because a committed nearest hit alone cannot reveal coincident independent volumes. The authored coincidence selector has already removed explicitly shared boundaries from the scene.
+// Resolve ties around the nearest boundary before changing membership. One committed hit cannot reveal coincident volumes, so a second bounded query is needed. Shared boundaries removed.
 bool nwbOpticalCheckBoundary(
     const NwbOpticalTraceConfig config,
     const float3 origin,
@@ -199,7 +199,7 @@ bool nwbOpticalCheckBoundary(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// One dominant transmitted path; radiance preserved on every termination. Secondary Fresnel is an omitted branch (not an env approximation); TIR keeps membership. No path tree escapes the query budget; in-medium miss adds no env.
+// One dominant transmitted path; radiance preserved on every termination. Secondary Fresnel is an omitted branch; TIR keeps membership. No tree escapes the budget; miss adds no env.
 NwbOpticalTraceResult nwbOpticalTrace(const NwbOpticalTraceConfig config, const float3 initialOrigin, const float3 initialDirection){
     NwbOpticalTraceResult result = (NwbOpticalTraceResult)0;
     result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;

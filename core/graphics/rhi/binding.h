@@ -46,7 +46,7 @@ struct BindingLayoutItem{
 
     ResourceType::Enum type : 8;
     u8 reserved : 8;
-    // Push constant byte size when (type == PushConstants) Descriptor array size (1 or more) for all other resource types Must be 1 for VolatileConstantBuffer
+    // Push constant byte size for PushConstants, 1 for VolatileConstantBuffer, or descriptor array size (>= 1) for other types.
     u16 size : 16;
 
 
@@ -124,7 +124,7 @@ namespace BindlessLayoutType{
         Immutable = s_BindlessLayoutTypeImmutableBase, // Must use registerSpaces to define a fixed descriptor type
 
         MutableSrvUavCbv,   // Global non-sampler resource table
-                            // Valid descriptor types: Texture_SRV, Texture_UAV, TypedBuffer_SRV, TypedBuffer_UAV, StructuredBuffer_SRV, StructuredBuffer_UAV, RawBuffer_SRV, RawBuffer_UAV, ConstantBuffer
+                            // Valid descriptor types: Texture_SRV, Texture_UAV, TypedBuffer_SRV, TypedBuffer_UAV, StructuredBuffer_SRV, StructuredBuffer_UAV, RawBuffer_SRV, RawBuffer_UAV, ConstantBuffer.
 
         MutableSampler,     // Global sampler table
                             // Valid descriptor types: Sampler
@@ -187,7 +187,7 @@ public:
     TextureDimension::Enum dimension : 8;
     // valid for Texture_SRV, Texture_UAV
     Format::Enum format              : 8;
-    // valid for Texture_SRV, Texture_UAV, Buffer_SRV, Buffer_UAV
+    // Valid for Texture_SRV, Texture_UAV, Buffer_SRV, and Buffer_UAV.
     u8 reserved                      : 8;
     u32 reserved2;
 

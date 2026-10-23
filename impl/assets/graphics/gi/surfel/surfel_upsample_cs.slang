@@ -57,7 +57,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const half3 centerWorldSample = half3(nwbSurfelUpsampleGbufferWorldPosition().Load(fullCoord).xyz);
     const float3 centerWorld = float3(centerWorldSample);
 
-    // World-distance edge-stop sigma from this pixel's own world spacing (max of +x/+y to survive a grazing/foreshortened surface). A few pixels of tolerance keeps same-surface taps but rejects a silhouette jump to a far surface.
+    // Edge-stop sigma from this pixel's own world spacing (max of +x/+y for grazing surfaces). A few pixels of tolerance keeps same-surface taps but rejects silhouette jumps.
     const int2 rightFull = int2(min(int(pixel.x) + 1, int(fullWidth) - 1), int(pixel.y));
     const int2 downFull = int2(int(pixel.x), min(int(pixel.y) + 1, int(fullHeight) - 1));
     const half3 rightWorldSample = half3(nwbSurfelUpsampleGbufferWorldPosition().Load(int3(rightFull, 0)).xyz);
@@ -90,7 +90,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             const half3 tapRawNormalSample = half3(nwbSurfelUpsampleGbufferNormal().Load(int3(tapFull, 0)).xyz);
             const float3 tapRawNormal = float3(tapRawNormalSample);
             if(dot(tapRawNormal, tapRawNormal) < NWB_SURFEL_GBUFFER_NORMAL_LENGTH_SQUARED_MIN)
-                continue; // tap's geometry is background
+                continue;
             const float3 tapNormal = float3(nwbSurfelDecodeGbufferNormal(tapRawNormalSample));
             if(!nwbSurfelUpsampleNormalCompatible(dot(tapNormal, centerNormal)))
                 continue; // different surface (crease) -> would leak GI across the edge
@@ -100,7 +100,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             const float bilinearWeight = (i == 0 ? 1.0 - lerpFrac.x : lerpFrac.x) * (j == 0 ? 1.0 - lerpFrac.y : lerpFrac.y);
             const float weight = nwbSurfelUpsampleGeometryWeight(bilinearWeight, dot(d, d), invTwoSigmaWorldSq);
             const float coveredWeight = nwbSurfelUpsampleCoveredWeight(weight, float(tapValue.a));
-            // Uncovered taps still count toward the compatible surface's weight, so coverage fades across a gap. Their zero irradiance does not dilute the normalized estimate or leak light across a crease.
+            // Uncovered taps still count toward the compatible surface's weight, so coverage fades across a gap. Their zero irradiance does not dilute the normalized estimate or leak across a crease.
             compatibleWeightSum += weight;
             coveredWeightSum += coveredWeight;
             irradianceSum += coveredWeight * float3(tapValue.rgb);

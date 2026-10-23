@@ -22,7 +22,7 @@ namespace Tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_assets_graphics_material_bind{
+namespace __hidden_assets_graphics_material_bind_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -30,19 +30,19 @@ namespace __hidden_assets_graphics_material_bind{
 
 constexpr AStringView s_MaterialPixelShaderPath = "project/shaders/material_ps";
 
-static constexpr AStringView s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE = "project/material_interfaces/test_surface";
-static constexpr AStringView s_PROJECT_MATERIALS_TEST_MATERIAL = "project/materials/test_material";
-static constexpr AStringView s_PS = "ps";
-static constexpr AStringView s_PROJECT = "project";
-static constexpr AStringView s_TESTS = "tests";
-static constexpr AStringView s_MATERIAL_BIND_INCLUDES = "material_bind_includes";
-static constexpr AStringView s_MATERIAL_INTERFACES = "material_interfaces";
-static constexpr AStringView s_TEST_SURFACE_BIND = "test_surface.bind";
-static constexpr AStringView s_SHADERS = "shaders";
-static constexpr AStringView s_ENGINE_SAMPLERS_LINEAR_CLAMP = "engine/samplers/linear_clamp";
-static constexpr AStringView s_CACHE = "cache";
-static constexpr AStringView s_ASSETS_DIR = "assets";
-static constexpr AStringView s_MATERIALS = "materials";
+static constexpr AStringView s_ProjectMaterialInterfacesTestSurface = "project/material_interfaces/test_surface";
+static constexpr AStringView s_ProjectMaterialsTestMaterial = "project/materials/test_material";
+static constexpr AStringView s_Ps = "ps";
+static constexpr AStringView s_Project = "project";
+static constexpr AStringView s_Tests = "tests";
+static constexpr AStringView s_MaterialBindIncludes = "material_bind_includes";
+static constexpr AStringView s_MaterialInterfaces = "material_interfaces";
+static constexpr AStringView s_TestSurfaceBind = "test_surface.bind";
+static constexpr AStringView s_Shaders = "shaders";
+static constexpr AStringView s_EngineSamplersLinearClamp = "engine/samplers/linear_clamp";
+static constexpr AStringView s_Cache = "cache";
+static constexpr AStringView s_AssetsDir = "assets";
+static constexpr AStringView s_Materials = "materials";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -64,11 +64,11 @@ TEST(AssetsGraphics, DuplicateMaterialBindIdentityIsRejectedBeforeMaterialMutati
     NWB::Impl::ShaderCook::CookVector<NWB::Impl::MaterialBindEntry> bindEntries(testArena.arena);
     for(usize index = 0u; index < 2u; ++index){
         auto& bind = bindEntries.emplace_back(testArena.arena);
-        bind.virtualPath = s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE;
+        bind.virtualPath = s_ProjectMaterialInterfacesTestSurface;
     }
     NWB::Impl::ShaderCook::CookVector<NWB::Impl::MaterialCookEntry> materialEntries(testArena.arena);
     auto& material = materialEntries.emplace_back(testArena.arena);
-    material.materialInterface = s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE;
+    material.materialInterface = s_ProjectMaterialInterfacesTestSurface;
     material.typedLayoutHash = 0xF091u;
     material.typedBlockBytes.push_back(0x2Au);
 
@@ -127,7 +127,7 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
     auto float1DefaultEntryResult = AssetsGraphicsFixture::ParseMaterialBindFromText(testArena, AssetsGraphicsFixture::s_Float1DefaultMaterialBindSource, float1DefaultRoot, scratchArena);
     ASSERT_TRUE(float1DefaultEntryResult);
     NWB::Impl::MaterialBindEntry& float1DefaultEntry = *float1DefaultEntryResult;
-    float1DefaultEntry.virtualPath = s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE;
+    float1DefaultEntry.virtualPath = s_ProjectMaterialInterfacesTestSurface;
     {
         SCOPED_TRACE("material_bind_float1_default_include");
 
@@ -158,7 +158,7 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
     auto validCacheEntryResult = AssetsGraphicsFixture::ParseMaterialBindFromText(testArena, AssetsGraphicsFixture::s_MinimalMaterialBindSource, validCacheRoot, scratchArena);
     ASSERT_TRUE(validCacheEntryResult);
     NWB::Impl::MaterialBindEntry& validCacheEntry = *validCacheEntryResult;
-    validCacheEntry.virtualPath = s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE;
+    validCacheEntry.virtualPath = s_ProjectMaterialInterfacesTestSurface;
     const auto cachedLayout = NWB::Impl::FindOrBuildMaterialBindTypedLayout(cacheInterface, validCacheEntry, layoutCache, scratchArena);
     ASSERT_TRUE(cachedLayout);
     EXPECT_EQ(layoutCache.entries.size(), 1u);
@@ -178,7 +178,7 @@ TEST(AssetsGraphics, MaterialBindEngineAndProjectResourceValidation){
     EXPECT_FALSE(NWB::Impl::IsSupportedMaterialResourceReference(NWB::Impl::MaterialResourceKind::Sampler, "project/samplers/../linear_clamp"));
     EXPECT_FALSE(NWB::Impl::IsSupportedMaterialResourceReference(NWB::Impl::MaterialResourceKind::Sampler, "engine/samplers/../linear_clamp"));
     EXPECT_TRUE(NWB::Impl::IsSupportedMaterialResourceReference(NWB::Impl::MaterialResourceKind::Sampler, "project/samplers/linear_clamp"));
-    EXPECT_TRUE(NWB::Impl::IsSupportedMaterialResourceReference(NWB::Impl::MaterialResourceKind::Sampler, s_ENGINE_SAMPLERS_LINEAR_CLAMP));
+    EXPECT_TRUE(NWB::Impl::IsSupportedMaterialResourceReference(NWB::Impl::MaterialResourceKind::Sampler, s_EngineSamplersLinearClamp));
 
     EXPECT_EQ(logger.errorCount(), 0u);
 }
@@ -247,7 +247,7 @@ TEST(AssetsGraphics, MaterialBindCookRejectsMalformedParametersAndInterfaceMisma
     Path& interfaceShaderMismatchRoot = interfaceShaderMismatchCookCase->root;
     Path& interfaceShaderMismatchOutputDirectory = interfaceShaderMismatchCookCase->outputDirectory;
 
-    const Path interfaceShaderMismatchAssetRoot = interfaceShaderMismatchRoot / s_ASSETS_DIR;
+    const Path interfaceShaderMismatchAssetRoot = interfaceShaderMismatchRoot / s_AssetsDir;
     EXPECT_TRUE(AssetsGraphicsFixture::WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(
         testArena,
         interfaceShaderMismatchAssetRoot,
@@ -265,7 +265,7 @@ TEST(AssetsGraphics, MaterialBindCookRejectsMalformedParametersAndInterfaceMisma
     Path& interfaceIdentityMismatchRoot = interfaceIdentityMismatchCookCase->root;
     Path& interfaceIdentityMismatchOutputDirectory = interfaceIdentityMismatchCookCase->outputDirectory;
 
-    const Path interfaceIdentityMismatchAssetRoot = interfaceIdentityMismatchRoot / s_ASSETS_DIR;
+    const Path interfaceIdentityMismatchAssetRoot = interfaceIdentityMismatchRoot / s_AssetsDir;
     EXPECT_TRUE(AssetsGraphicsFixture::WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(
         testArena,
         interfaceIdentityMismatchAssetRoot,
@@ -273,7 +273,7 @@ TEST(AssetsGraphics, MaterialBindCookRejectsMalformedParametersAndInterfaceMisma
         AssetsGraphicsFixture::s_BlockScopedMaterialMeta,
         AssetsGraphicsFixture::s_OtherMaterialBindShaderProbeSource
     ));
-    EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(interfaceIdentityMismatchAssetRoot / s_MATERIAL_INTERFACES / "other_surface.bind", AssetsGraphicsFixture::s_MinimalMaterialBindSource));
+    EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(interfaceIdentityMismatchAssetRoot / s_MaterialInterfaces / "other_surface.bind", AssetsGraphicsFixture::s_MinimalMaterialBindSource));
     EXPECT_FALSE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, interfaceIdentityMismatchRoot, interfaceIdentityMismatchOutputDirectory, { interfaceIdentityMismatchAssetRoot }));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("includes generated material bind interface 'project/material_interfaces/other_surface'")));
 
@@ -294,20 +294,20 @@ TEST(AssetsGraphics, ShadowSurfaceDispatchIsolatesOverlappingBindApis){
     Path& outputDirectory = cookCase->outputDirectory;
 
 
-    const Path assetRoot = root / s_ASSETS_DIR;
+    const Path assetRoot = root / s_AssetsDir;
     const bool assetsWritten =
-        AssetsGraphicsFixture::WriteTextFile(assetRoot / s_MATERIAL_INTERFACES / "shadow_dispatch_first.bind", AssetsGraphicsFixture::s_ShadowDispatchFirstMaterialBindSource)
-        && AssetsGraphicsFixture::WriteTextFile(assetRoot / s_MATERIAL_INTERFACES / "shadow_dispatch_second.bind", AssetsGraphicsFixture::s_ShadowDispatchSecondMaterialBindSource)
-        && AssetsGraphicsFixture::WriteTextFile(assetRoot / s_SHADERS / "shadow_dispatch_shared_surface_helper.slangi", AssetsGraphicsFixture::s_ShadowDispatchSharedSurfaceHelperSource)
-        && AssetsGraphicsFixture::WriteTextFile(assetRoot / s_SHADERS / "shadow_dispatch_first.surface", AssetsGraphicsFixture::s_ShadowDispatchFirstMaterialSurfaceSource)
-        && AssetsGraphicsFixture::WriteTextFile(assetRoot / s_SHADERS / "shadow_dispatch_second.surface", AssetsGraphicsFixture::s_ShadowDispatchSecondMaterialSurfaceSource)
-        && AssetsGraphicsFixture::WriteTextFile(assetRoot / s_SHADERS / "shadow_dispatch.bxdf", AssetsGraphicsFixture::s_MaterialBindBxdfSource)
-        && AssetsGraphicsFixture::WriteTextFile(assetRoot / s_MATERIALS / "shadow_dispatch_first.nwb", AssetsGraphicsFixture::s_ShadowDispatchFirstMaterialMeta)
-        && AssetsGraphicsFixture::WriteTextFile(assetRoot / s_MATERIALS / "shadow_dispatch_second.nwb", AssetsGraphicsFixture::s_ShadowDispatchSecondMaterialMeta)
+        AssetsGraphicsFixture::WriteTextFile(assetRoot / s_MaterialInterfaces / "shadow_dispatch_first.bind", AssetsGraphicsFixture::s_ShadowDispatchFirstMaterialBindSource)
+        && AssetsGraphicsFixture::WriteTextFile(assetRoot / s_MaterialInterfaces / "shadow_dispatch_second.bind", AssetsGraphicsFixture::s_ShadowDispatchSecondMaterialBindSource)
+        && AssetsGraphicsFixture::WriteTextFile(assetRoot / s_Shaders / "shadow_dispatch_shared_surface_helper.slangi", AssetsGraphicsFixture::s_ShadowDispatchSharedSurfaceHelperSource)
+        && AssetsGraphicsFixture::WriteTextFile(assetRoot / s_Shaders / "shadow_dispatch_first.surface", AssetsGraphicsFixture::s_ShadowDispatchFirstMaterialSurfaceSource)
+        && AssetsGraphicsFixture::WriteTextFile(assetRoot / s_Shaders / "shadow_dispatch_second.surface", AssetsGraphicsFixture::s_ShadowDispatchSecondMaterialSurfaceSource)
+        && AssetsGraphicsFixture::WriteTextFile(assetRoot / s_Shaders / "shadow_dispatch.bxdf", AssetsGraphicsFixture::s_MaterialBindBxdfSource)
+        && AssetsGraphicsFixture::WriteTextFile(assetRoot / s_Materials / "shadow_dispatch_first.nwb", AssetsGraphicsFixture::s_ShadowDispatchFirstMaterialMeta)
+        && AssetsGraphicsFixture::WriteTextFile(assetRoot / s_Materials / "shadow_dispatch_second.nwb", AssetsGraphicsFixture::s_ShadowDispatchSecondMaterialMeta)
     ;
     ASSERT_TRUE(assetsWritten);
 
-    const Path engineAssetRoot = AssetsGraphicsFixture::AssetsGraphicsTestRepoRoot(testArena) / "impl" / s_ASSETS_DIR;
+    const Path engineAssetRoot = AssetsGraphicsFixture::AssetsGraphicsTestRepoRoot(testArena) / "impl" / s_AssetsDir;
     const bool cooked = AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { engineAssetRoot, assetRoot });
     EXPECT_TRUE(cooked);
     EXPECT_EQ(logger.errorCount(), 0u);
@@ -326,7 +326,7 @@ TEST(AssetsGraphics, MaterialRejectsMissingInterfaceCookIntegration){
     Path& root = cookCase->root;
     Path& outputDirectory = cookCase->outputDirectory;
 
-    const Path assetRoot = root / s_ASSETS_DIR;
+    const Path assetRoot = root / s_AssetsDir;
     EXPECT_TRUE(AssetsGraphicsFixture::WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(
         testArena,
         assetRoot,
@@ -351,14 +351,14 @@ TEST(AssetsGraphics, MaterialBindDependencyInvalidation){
     Path& root = cookCase->root;
     Path& outputDirectory = cookCase->outputDirectory;
 
-    const Path assetRoot = root / s_ASSETS_DIR;
+    const Path assetRoot = root / s_AssetsDir;
     ASSERT_TRUE(AssetsGraphicsFixture::WriteMaterialBindMaterialIntegrationAssets(testArena, assetRoot, AssetsGraphicsFixture::s_MinimalMaterialBindSource, AssetsGraphicsFixture::s_BlockScopedMaterialMeta));
 
     EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
 
 
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    auto loadedAssetLoadResult = AssetsGraphicsFixture::LoadCookedMaterial(testArena, outputDirectory, Name(s_PROJECT_MATERIALS_TEST_MATERIAL));
+    auto loadedAssetLoadResult = AssetsGraphicsFixture::LoadCookedMaterial(testArena, outputDirectory, Name(s_ProjectMaterialsTestMaterial));
     ASSERT_TRUE(loadedAssetLoadResult);
     loadedAsset = Move(*loadedAssetLoadResult);
     if(!loadedAsset)
@@ -372,15 +372,15 @@ TEST(AssetsGraphics, MaterialBindDependencyInvalidation){
     ASSERT_TRUE(recordsLoadResult);
     records = Move(*recordsLoadResult);
     u64 initialPixelSourceChecksum = 0u;
-    auto initialPixelSourceChecksumLoadResult = AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(records, Name(s_MaterialPixelShaderPath), Name(s_PS));
+    auto initialPixelSourceChecksumLoadResult = AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(records, Name(s_MaterialPixelShaderPath), Name(s_Ps));
     ASSERT_TRUE(initialPixelSourceChecksumLoadResult);
     initialPixelSourceChecksum = *initialPixelSourceChecksumLoadResult;
 
-    EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / s_MATERIAL_INTERFACES / s_TEST_SURFACE_BIND, AssetsGraphicsFixture::s_UpdatedDefaultMaterialBindSource));
+    EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / s_MaterialInterfaces / s_TestSurfaceBind, AssetsGraphicsFixture::s_UpdatedDefaultMaterialBindSource));
     EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
 
     loadedAsset.reset();
-    auto loadedAssetLoadResult2 = AssetsGraphicsFixture::LoadCookedMaterial(testArena, outputDirectory, Name(s_PROJECT_MATERIALS_TEST_MATERIAL));
+    auto loadedAssetLoadResult2 = AssetsGraphicsFixture::LoadCookedMaterial(testArena, outputDirectory, Name(s_ProjectMaterialsTestMaterial));
     ASSERT_TRUE(loadedAssetLoadResult2);
     loadedAsset = Move(*loadedAssetLoadResult2);
     if(loadedAsset){
@@ -393,7 +393,7 @@ TEST(AssetsGraphics, MaterialBindDependencyInvalidation){
     ASSERT_TRUE(recordsLoadResult2);
     records = Move(*recordsLoadResult2);
     u64 updatedPixelSourceChecksum = 0u;
-    auto updatedPixelSourceChecksumLoadResult = AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(records, Name(s_MaterialPixelShaderPath), Name(s_PS));
+    auto updatedPixelSourceChecksumLoadResult = AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(records, Name(s_MaterialPixelShaderPath), Name(s_Ps));
     ASSERT_TRUE(updatedPixelSourceChecksumLoadResult);
     updatedPixelSourceChecksum = *updatedPixelSourceChecksumLoadResult;
     EXPECT_NE(updatedPixelSourceChecksum, initialPixelSourceChecksum);
@@ -413,10 +413,10 @@ TEST(AssetsGraphics, MaterialBindDiscoveryValidation){
     Path& outputDirectory = cookCase->outputDirectory;
     EXPECT_TRUE(AssetsGraphicsFixture::CookMinimalMeshWithMaterialBind(AssetsGraphicsFixture::s_MinimalMaterialBindSource, testArena, *cookCase));
 
-    const Path generatedIncludePath = root / s_CACHE / s_TESTS / s_MATERIAL_BIND_INCLUDES / s_PROJECT / s_MATERIAL_INTERFACES / s_TEST_SURFACE_BIND;
+    const Path generatedIncludePath = root / s_Cache / s_Tests / s_MaterialBindIncludes / s_Project / s_MaterialInterfaces / s_TestSurfaceBind;
     // Removing the last bind source must clear its generated include on a recook with the same cache.
     const Path assetRoot = root / "assets";
-    const auto removedBind = RemoveFile(assetRoot / s_MATERIAL_INTERFACES / s_TEST_SURFACE_BIND);
+    const auto removedBind = RemoveFile(assetRoot / s_MaterialInterfaces / s_TestSurfaceBind);
     ASSERT_TRUE(removedBind);
     ASSERT_TRUE(*removedBind);
     ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));

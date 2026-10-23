@@ -80,8 +80,8 @@ struct IsArrayCvConvertible<P1, P2, true> : public FalseType{};
 template<typename Base, typename Derived>
 struct IsDerived : public IntegralConstant<bool, IsBaseOf<Base, Derived>::value && !IsSame<typename RemoveCV<Base>::type, typename RemoveCV<Derived>::type>::value>{};
 
-template<typename T, typename T_pointer, typename U, typename U_pointer>
-struct IsSafeArrayConversion : public IntegralConstant<bool, IsConvertible<U_pointer, T_pointer>::value && IsArray<U>::value && (!IsPointer<U_pointer>::value || !IsPointer<T_pointer>::value || !IsDerived<T, typename RemoveExtent<U>::type>::value)>{};
+template<typename T, typename TPointer, typename U, typename UPointer>
+struct IsSafeArrayConversion : public IntegralConstant<bool, IsConvertible<UPointer, TPointer>::value && IsArray<U>::value && (!IsPointer<UPointer>::value || !IsPointer<TPointer>::value || !IsDerived<T, typename RemoveExtent<U>::type>::value)>{};
 
 template<typename OwnerA, typename OwnerB>
 using OwnerPointerCompareResult_T = CompareThreeWayResult_T<typename OwnerA::pointer, typename OwnerB::pointer>;

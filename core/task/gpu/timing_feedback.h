@@ -33,7 +33,7 @@ public:
 
 
 // Accepted assignment and dwell state follow semantic work across queue-class changes.
-// Duration histories remain route-specific below, but a Graphics -> Compute -> Graphics sequence must update one shared switch timeline.
+// Duration histories stay route-specific below, but a Graphics -> Compute -> Graphics sequence must update one shared switch timeline.
 struct GpuTaskTimingAssignmentKey{
     Name task = s_NameNone;
     u32 variant = 0u;
@@ -211,17 +211,16 @@ inline constexpr u32 s_MinSwitchSamples = 8u;
 
 
 // Disabled by default.
-// A caller supplies this policy and one immutable history snapshot to the compiler; neither missing timing nor an invalid/empty snapshot may change the ordinary deterministic queue assignment.
+// A caller supplies this policy and one immutable history snapshot; neither missing timing nor an invalid snapshot may change ordinary deterministic assignment.
 struct GpuTaskTimingFeedbackPolicy{
     f64 minimumAbsoluteBenefitSeconds = 0.0;
     f64 minimumRelativeBenefit = 0.0;
     u64 minimumFramesBetweenSwitches = GpuTaskTimingFeedbackPolicyDetail::s_MinFramesBetweenSwitches;
     u32 minimumSampleCount = GpuTaskTimingFeedbackPolicyDetail::s_MinSwitchSamples;
     u32 calibrationIntervalFrames = 1u;
-    // While a legal candidate lacks enough samples, one opted-in route is selected every N frames.
-    // Every cross-family probe requires the family-routing opt-in, and cross-class probes also require the cross-class timing opt-in.
+    // While a candidate lacks enough samples, one opted-in route is selected every N frames. Cross-family probes need the family-routing opt-in, and cross-class probes also need their timing.
     // Zero disables calibration.
-    // Probes stop after every legal route reaches minimumSampleCount.
+    // Probes stop once every legal route reaches minimumSampleCount.
     bool enabled = false;
 
 
@@ -245,7 +244,7 @@ public:
 
 class GpuTaskTimingHistoryStore;
 
-// A snapshot is writeable only by its owning history store.
+// A snapshot is writable only by its owning history store.
 // Compilation consumes these plain values and therefore cannot observe query completion or mutable frame state while it makes a deterministic queue decision.
 class GpuTaskTimingHistorySnapshot final : NoCopy{
     friend class GpuTaskTimingHistoryStore;

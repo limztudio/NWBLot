@@ -16,7 +16,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The software-shadow G-buffer inputs and material context are selected directly from global heap tables by the shared push block.  No local selector cbuffer remains in a software-shadow pipeline.
+// Software-shadow G-buffer inputs and material context are selected from global heap tables by the shared push block.
 #define NWB_SW_SHADOW_DEFERRED_RESOURCES nwbHeapDeferredBindlessResources(g_NwbSwShadowPush.deferredResourcesHeapSlot)
 #define g_NwbSwShadowMaterialContextSlots nwbHeapShadowMaterialContextSlots(g_NwbSwShadowPush.materialContextSlotsHeapSlot)
 #define NWB_SCENE_SHADING_HEAP_SLOT NWB_SW_SHADOW_DEFERRED_RESOURCES.avboitSlots.z
@@ -27,7 +27,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// True where this texel is the cleared background (no geometry): fully lit, casts no candidate ray. The passes treat a background texel specially (store white / leave the pristine mask), so this test is centralised here rather than the bare depth literal repeated at every trace/resolve site.
+// Returns true when the texel is cleared background (fully lit, no candidate ray).
 bool nwbSwShadowIsBackground(const int3 texel){
     return nwbHeapSampledImage2D(NWB_SW_SHADOW_DEFERRED_RESOURCES.gbufferSlots.w).Load(texel).r >= NWB_SW_SHADOW_BACKGROUND_DEPTH;
 }

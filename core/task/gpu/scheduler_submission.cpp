@@ -24,10 +24,12 @@ NWB_CORE_BEGIN
 
 class GpuTaskScheduler::PreparedTimingTicketsUnwindScope final : NoCopy{
 private:
-    enum class Mode : u8{
-        Rollback,
-        Abandon,
-        Released,
+    struct Mode{
+        enum Enum : u8{
+            Rollback,
+            Abandon,
+            Released,
+        };
     };
 
 
@@ -61,7 +63,7 @@ public:
 private:
     const NotNull<GpuTimingSubmissionTicket*>* m_tickets = nullptr;
     usize& m_preparedTicketCount;
-    Mode m_mode = Mode::Rollback;
+    Mode::Enum m_mode = Mode::Rollback;
 };
 
 
@@ -159,7 +161,7 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
 
     const GpuRecordedPacket* const recordedPacket = recordedGraph.findWithinArtifactOperation(packetID, artifactAccess);
     const GpuPhysicalQueueInfo* const queue = planAccess.queueInfo(packet.queue);
-    // All validation before the transaction reservation is retryable.  A caller that abandons this artifact uses discardUnaccepted() explicitly
+    // All validation before the transaction reservation is retryable. A caller that abandons this artifact uses discardUnaccepted() explicitly.
     if(!recordedPacket || recordedPacket->commandListCount == 0u || recordedPacket->commandListCount > GpuRecordedPacket::s_MaxCommandLists || !queue || !device().matchesPhysicalQueueIdentity(packet.queue)){
         return false;
     }
@@ -197,7 +199,7 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     if(packet.joinsAcceptedQueueFrontier && !transaction.appendAcceptedQueueFrontierWaitTokens(packet.queue, waitTokens))
         return false;
 
-    // Freeze every timing ticket before validating the complete wait frontier: a query reservation may contribute the accepted frame-reset token that ordered this pool on another physical queue. Preparation remains retryable until the graph packet lease is acquired.
+    // Freeze every ticket before validating the wait frontier so a reservation carrying a cross-queue frame-reset token stays retryable.
     SubmittingPacketUnwindScope submittingPacketUnwind(graph, compiledGraph, planAccess, transaction);
     usize preparedTimingTicketCount = 0u;
     PreparedTimingTicketsUnwindScope preparedTimingTicketsUnwind(submissionTimingTickets.data(), preparedTimingTicketCount);
@@ -230,7 +232,7 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     nativeSubmissionInfo.sameQueueWaitElisionCount = waitStatistics.sameQueueWaitElisionCount;
     nativeSubmissionInfo.mergedTimelineWaitCount = waitStatistics.mergedTimelineWaitCount;
 
-    // A bad dependency or external completion is a pre-submit input error. Preserve the completed native packet so the caller can retry it with corrected tokens
+    // A bad dependency or external completion is a pre-submit input error. Preserve the completed native packet so the caller can retry it with corrected tokens.
     GpuPacketSubmissionLease submissionLease;
     if(!transaction.beginPacketSubmission(graph, compiledGraph, packetID, recordedGraph.recordingAttemptGeneration(), submissionLease))
         return false;
@@ -257,7 +259,7 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
             graphSubmissionOwnerships[commandListIndex].reset();
     }
     // Device has released its native Queue locks.
-    // Serialize only the irreversible CPU publication tail another ordinary packet may already enter Vulkan without exposing timing, payload, or transaction state out of order.
+    // Serialize only the irreversible CPU publication tail; another ordinary packet may enter Vulkan without exposing timing, payload, or transaction state out of order.
     SubmittingPacketUnwindScope resolutionSubmittingPacketUnwind(graph, compiledGraph, planAccess, transaction);
     PreparedTimingTicketsUnwindScope resolutionPreparedTimingTicketsUnwind(submissionTimingTickets.data(), preparedTimingTicketCount);
     ScopedLock resolutionLock(transaction.m_resolutionMutex);

@@ -326,9 +326,9 @@ TEST(ReflectionHistory, GraphRejectionAndResetReleaseUnacceptedLease){
     desc.setIdentity(Name("tests.history.lease")).setMarkerLabel("History Lease");
     const auto pending = control->plan(Stamp(), ReflectionSettings{}, s_ExpectedDualCount);
     {
-        const auto gpuAdmissionAt322 = graph.addTask<LeaseTask>(desc, LeaseTask::Payload{ReflectionHistoryReservation(control, pending)});
-        ASSERT_TRUE(gpuAdmissionAt322);
-        ASSERT_TRUE(gpuAdmissionAt322->valid());
+        const auto gpuTaskAdmission = graph.addTask<LeaseTask>(desc, LeaseTask::Payload{ReflectionHistoryReservation(control, pending)});
+        ASSERT_TRUE(gpuTaskAdmission);
+        ASSERT_TRUE(gpuTaskAdmission->valid());
     }
     graph.reset();
     const auto retry = control->plan(Stamp(), ReflectionSettings{}, 3u);

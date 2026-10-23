@@ -71,7 +71,7 @@ struct StagingTextureMapping{
 };
 
 
-// Sharing intent for multi-transport resources. Never exposes queue-family indices; a requested set becomes concurrent Vulkan sharing only for the distinct families the device created.
+// Sharing intent for multi-transport resources. Never exposes queue-family indices; a requested set becomes concurrent sharing only for the distinct families the device created.
 namespace ResourceQueueSharing{
     static constexpr u8 s_ResourceQueueSharingExclusiveBase = 0;
 
@@ -185,7 +185,7 @@ struct TextureDesc{
 
     bool useClearValue = false;
 
-    // If keepInitialState is true, command lists restore each used subresource to initialState before close. That retained native state becomes globally known only after the restoring command buffer is successfully submitted; a pre-submit cross-list consumer must import CommandListResourceStateHandoff instead.
+    // If keepInitialState is true, command lists restore each used subresource to initialState before close. The state is known only after submit; earlier consumers must import the handoff.
     bool keepInitialState = false;
 
 
@@ -401,7 +401,7 @@ struct BufferDesc{
     bool isAccelStructStorage = false;
     bool isShaderBindingTable = false;
 
-    // A dynamic/upload buffer whose contents only live in the current command list
+    // Dynamic/upload buffer whose contents live only in the current command list.
     bool isVolatile = false;
 
     // Indicates that the buffer is created with no backing memory, and memory is bound to the buffer later using bindBufferMemory.

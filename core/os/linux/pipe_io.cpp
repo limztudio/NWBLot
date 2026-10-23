@@ -22,7 +22,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_clipboard_pipe{
+namespace __hidden_pipe_io{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -101,10 +101,10 @@ void CloseClipboardPipe(int& fd)noexcept{
 }
 
 Expected<bool, ClipboardPipeReadFailure> ReadClipboardPipe(const int fd, ClipboardTextAccumulator& text){
-    Array<char, __hidden_clipboard_pipe::s_ReadChunkBytes> bytes;
+    Array<char, __hidden_pipe_io::s_ReadChunkBytes> bytes;
     usize consumed = 0u;
     usize calls = 0u;
-    while(consumed < __hidden_clipboard_pipe::s_PumpByteBudget && calls < __hidden_clipboard_pipe::s_PumpCallBudget){
+    while(consumed < __hidden_pipe_io::s_PumpByteBudget && calls < __hidden_pipe_io::s_PumpCallBudget){
         ++calls;
         const ssize_t count = read(fd, bytes.data(), bytes.size());
         if(count > 0){
@@ -150,7 +150,7 @@ bool ClipboardPipeWriter::begin(const int fd, const AStringView text){
     }
     if(!text.empty())
         m_text.assign(text.data(), text.size());
-    m_deadline = TimerAddMS(TimerNow(), __hidden_clipboard_pipe::s_TimeoutMs);
+    m_deadline = TimerAddMS(TimerNow(), __hidden_pipe_io::s_TimeoutMs);
     return true;
 }
 
@@ -163,10 +163,10 @@ ClipboardStatus::Enum ClipboardPipeWriter::advance()noexcept{
     }
     usize consumed = 0u;
     usize calls = 0u;
-    while(m_offset < m_text.size() && consumed < __hidden_clipboard_pipe::s_PumpByteBudget && calls < __hidden_clipboard_pipe::s_PumpCallBudget){
+    while(m_offset < m_text.size() && consumed < __hidden_pipe_io::s_PumpByteBudget && calls < __hidden_pipe_io::s_PumpCallBudget){
         ++calls;
-        const usize size = Min(m_text.size() - m_offset, __hidden_clipboard_pipe::s_PumpByteBudget - consumed);
-        const ssize_t count = __hidden_clipboard_pipe::WriteWithoutSigpipe(m_fd, AStringView(m_text).substr(m_offset, size));
+        const usize size = Min(m_text.size() - m_offset, __hidden_pipe_io::s_PumpByteBudget - consumed);
+        const ssize_t count = __hidden_pipe_io::WriteWithoutSigpipe(m_fd, AStringView(m_text).substr(m_offset, size));
         if(count > 0){
             m_offset += static_cast<usize>(count);
             consumed += static_cast<usize>(count);

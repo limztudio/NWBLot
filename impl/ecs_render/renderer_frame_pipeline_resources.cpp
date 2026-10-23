@@ -237,7 +237,7 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     if(hasCsgFrameWork && !deferredTargets.csgIntervalTargetsValid())
         return false;
 
-    // CSG receiver ranges are addressed by material-pass instance index.  A CSG-active material pass reserves one range for every compatible renderer, not only the renderers that receive CSG clipping, so the complete renderer view is the safe prepass capacity bound for either material pass.
+    // CSG receiver ranges are indexed by material-pass instance; an active pass reserves one range per renderer.
     const usize csgReceiverRangeCount = hasCsgFrameWork ? m_world.view<RendererComponent>().candidateCount() : 0u;
 
     if(!m_materialSystem.prepareMaterialPassResources(scratchArena, deferredTargets.framebuffer.get(), MaterialPipelinePass::Opaque, false, m_preparedCsgFrameState, nullptr))
@@ -246,7 +246,7 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     if(m_preparedHasTransparentRenderers && !m_avboitSystem.prepareAvboitPassResources(scratchArena, deferredTargets, m_preparedCsgFrameState))
         return false;
 
-    // Material owns capacity growth. Once every material domain pass is prepared, publish exactly one matching Mesh-owned descriptor generation for the frame and retain the prior generation on any failed refresh.
+    // Material owns capacity growth. Once every material domain pass is prepared, publish exactly one matching Mesh-owned generation for the frame and retain the prior generation on refresh.
     const ECSRenderDetail::MaterialPassBufferSnapshot materialBuffers = m_materialSystem.materialPassBufferSnapshot();
     if(materialBuffers.valid() && !m_meshSystem.prepareMeshFrameBindings(materialBuffers))
         return false;
@@ -267,12 +267,12 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
         return false;
     }
     m_shadowPreparationOutcome.resourcesValid = true;
-    // The shared ray scene already prepares geometry independently of shadow-light count. Reflection borrows its neutral material context only after that preflight has selected the current generation.
+    // The shared ray scene already prepares geometry independently of shadow-light count. Reflection borrows its neutral context only after that preflight has selected the current generation.
     const bool reflectionHardwareRequested = m_reflectionSettings.traceMode == ReflectionTraceMode::Hardware || m_reflectionSettings.traceMode == ReflectionTraceMode::Hybrid;
     m_preparedReflectionSceneAvailable = reflectionHardwareRequested && m_raytracingSystem.prepareSceneQueryResources();
     ++m_reflectionFrameIndex;
 
-    // Refraction pipelines load shaders and create GPU pipelines. Hoist that creation into preparation so the render-time graph build only consumes the prepared snapshot and never creates resources.
+    // Refraction pipelines load shaders and create GPU pipelines. Hoist that creation into preparation so the render-time graph build only consumes the snapshot and never creates resources.
     const bool opticalCaptureRequested = m_preparedHasTransparentRenderers && (m_refractionEnabled || m_reflectionSettings.traceMode != ReflectionTraceMode::Disabled);
     m_preparedRefractionActive = opticalCaptureRequested && m_raytracingSystem.prepareRefractionResources();
     const bool hasTransparentCsgFrameWork = m_preparedCsgFrameState.hasTransparentStaticWork || m_preparedCsgFrameState.hasTransparentSkinnedWork;

@@ -24,7 +24,7 @@ namespace __hidden_logging_boundary_tests{
 using CapturingLogger = NWB::Tests::CapturingLogger;
 
 inline constexpr u32 s_ExpectedDualCount = 2u;
-inline constexpr TStringView s_PARALLEL_LOGGER_MESSAGE = NWB_TEXT("parallel logger message");
+inline constexpr TStringView s_ParallelLoggerMessage = NWB_TEXT("parallel logger message");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -95,7 +95,7 @@ TEST(CommonLoggingBoundaries, CapturingLoggerSerializesConcurrentWritersAndReade
             startGate.arrive_and_wait();
             for(u32 messageIndex = 0u; messageIndex < s_MessagesPerThread; ++messageIndex){
                 const NWB::Core::Common::LogType::Enum type = (messageIndex & 1u) == 0u ? NWB::Core::Common::LogType::Info : NWB::Core::Common::LogType::Error;
-                NWB::Core::Common::LoggerDetail::EnqueueMessage(logger, type, s_PARALLEL_LOGGER_MESSAGE);
+                NWB::Core::Common::LoggerDetail::EnqueueMessage(logger, type, s_ParallelLoggerMessage);
             }
             activeWriters.fetch_sub(1u, MemoryOrder::release);
         }
@@ -113,8 +113,8 @@ TEST(CommonLoggingBoundaries, CapturingLoggerSerializesConcurrentWritersAndReade
     EXPECT_GT(observedErrors.load(MemoryOrder::relaxed), 0u);
     EXPECT_EQ(logger.messageCount(), s_ExpectedMessageCount);
     EXPECT_EQ(logger.errorCount(), s_ExpectedErrorCount);
-    EXPECT_TRUE(logger.sawMessageContaining(s_PARALLEL_LOGGER_MESSAGE));
-    EXPECT_TRUE(logger.sawErrorContaining(s_PARALLEL_LOGGER_MESSAGE));
+    EXPECT_TRUE(logger.sawMessageContaining(s_ParallelLoggerMessage));
+    EXPECT_TRUE(logger.sawErrorContaining(s_ParallelLoggerMessage));
 }
 
 

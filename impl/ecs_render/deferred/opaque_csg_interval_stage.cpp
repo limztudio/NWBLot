@@ -71,7 +71,7 @@ void OpaqueCsgIntervalStage::capturePayloads(
     if(!hasOpaqueCsgFrameWork)
         return;
 
-    // The graph owns the receiver-surface producer fence and each preceding producer fence. Normal prefix compilation merges these callbacks with G-buffer, while a FrontierSafe boundary retains each submission-local timing ticket.
+    // The graph owns the producer fence and each preceding producer fence. Normal prefix compilation merges these callbacks with G-buffer; a FrontierSafe boundary retains each timing ticket.
     m_receiverSpanPayload.materialDrawBuffersUploaded = materialDrawBuffersUploaded;
     m_receiverSpanPayload.csgFrameBuffersUploaded = csgFrameBuffersUploaded;
     m_receiverSpanPayload.csgResources = csgResources;
@@ -177,7 +177,7 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(Core::Allo
         return MakeUnexpected(Failure{});
     }
 
-    // The CSG interval-sample material stream has a different placement from both regular opaque and receiver CSG work: Combine has already completed, and the following Sample callback rasterizes immediately.
+    // The CSG interval-sample material stream has a different placement from opaque and receiver CSG work: Combine already completed, and the following Sample callback rasterizes immediately.
     // That makes pairwise-distinct outputs graph-ownable without excluding earlier regular/receiver aliases.
     const bool opaqueCsgIntervalSampleComputeEmulationPlanCaptured = inputs.hasCsgFrameGpuWork
         && m_intervalSamplePayload.materialFrameStatesGraphOwned
@@ -304,7 +304,7 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(Core::Allo
         opaqueCsgIntervalSampleComputeEmulationScheduling.allowPacketMerge = true;
         opaqueCsgIntervalSampleComputeEmulationScheduling.mergeWithPrevious = true;
         // Combine is the explicit immediate predecessor.
-        // The graph preserves its interval-image UAV handoff across any FrontierSafe split; Sample merges with this producer so its generated-vertex handoff and timing scope remain in one accepted Graphics packet.
+        // The graph keeps its interval-image UAV handoff across any FrontierSafe split; Sample merges with this producer so its generated-vertex handoff and timing scope stay in one packet.
         opaqueCsgIntervalSampleComputeEmulationScheduling.allowMergeAcrossConsumerFrontier = true;
         Core::GpuTaskDesc opaqueCsgIntervalSampleComputeEmulationDesc;
         opaqueCsgIntervalSampleComputeEmulationDesc

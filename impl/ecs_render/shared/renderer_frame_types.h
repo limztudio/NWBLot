@@ -138,7 +138,7 @@ struct MaterialPassDrawContext{
 };
 
 
-// Ray tracing gathers refractive emission targets before Deferred ranks the current scene lights. The root module brokers this compact per-frame contract so neither feature reaches into the other's private state.
+// Ray tracing gathers refractive emission targets before Deferred ranks the current scene lights. The root module brokers this compact contract so neither feature reaches the other's state.
 struct RayTracingLightingClassificationInput{
     u32 refractiveInstanceCount = 0u;
 };
@@ -150,7 +150,7 @@ struct RayTracingLightingClassification{
 };
 static_assert(sizeof(RayTracingLightingClassification) == sizeof(u32) * 2u);
 
-// Deferred owns these buffers, while the root module freezes their current generation for all later graph imports and ray-tracing task payloads. Owning handles keep deferred replacement from invalidating an accepted packet.
+// Deferred owns these buffers, while the root module freezes their generation for graph imports and ray-tracing payloads.
 struct DeferredLightingGraphResources{
     Core::BufferHandle sceneShadingBuffer;
     Core::BufferHandle lightBuffer;
@@ -222,7 +222,7 @@ struct DeferredBindlessResourceSlots{
     u32 csgRemovedIntervalCapNormal = 0u;
     u32 csgRemovedIntervalData = 0u;
     u32 csgRemovedIntervalCount = 0u;
-    u32 _csgPad = 0u;
+    u32 csgPadding = 0u;
 
     u32 refractionDepth = 0u;
     u32 refractionNormalIor = 0u;

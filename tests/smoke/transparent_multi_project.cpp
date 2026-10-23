@@ -81,7 +81,6 @@ static constexpr f32 s_DefaultDirectionalLightPitch = 0.9f;
 static constexpr f32 s_DefaultDirectionalLightYaw = 0.65f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 2.0f;
 static constexpr f32 s_MaxAnimationDelta = 1.0f / 30.0f;
-// Manual yaw speed is in radians/second.
 static constexpr f32 s_ManualYawSpeed = 0.6f;
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
 static constexpr TransparentMeshRef s_TransparentShapeMesh{"project/meshes/caustic_sphere"};
@@ -92,7 +91,6 @@ static constexpr TransparentMeshRef s_TransparentLeftMesh{"project/meshes/cylind
 static constexpr TransparentMeshRef s_TransparentCenterMesh{"project/meshes/octahedron"};
 static constexpr TransparentMeshRef s_TransparentRightMesh{"project/meshes/cone"};
 #endif
-// Scene rotation.
 // The plain transparent-shadow scene spins for overlap inspection; the caustic sphere stays static so its focused photon result is easy to inspect.
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
 static constexpr f32 s_TransparentSceneRotationSpeed = 0.0f;
@@ -140,7 +138,7 @@ private:
 };
 
 // Windows may deny a harness process foreground ownership even after SetForegroundWindow succeeds locally.
-// The target-hardware lifecycle needs actual post-bootstrap submissions, so use Graphics' existing render-pass opt-in only in this dedicated smoke executable; production projects retain their normal focus throttling policy.
+// Target-hardware lifecycle needs real post-bootstrap submissions, so this smoke uses Graphics' render-pass opt-in; production projects keep normal focus throttling.
 class FrameLaggedAsyncLightingUnfocusedPass final : public NWB::Core::IRenderPass{
 public:
     explicit FrameLaggedAsyncLightingUnfocusedPass(NWB::Core::GraphicsRuntime& graphics)noexcept
@@ -156,7 +154,7 @@ public:
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
 [[nodiscard]] static bool CreateCausticRefractionBackdrop(NWB::Core::ECS::World& world, NWB::Core::Alloc::GlobalArena& arena){
     constexpr TransparentMaterialRef s_BackdropMaterial{"project/smoke/refraction/materials/opaque"};
-    // Screen refraction requires opaque depth and spatial color variation behind the retained glass entry. Reuse the unlit refraction fixture material, leaving the ground receiver and sphere unchanged.
+    // Screen refraction requires opaque depth and spatial color variation behind the retained glass entry. Reuse the unlit refraction fixture material, leaving ground and sphere unchanged.
     for(u32 stripe = 0u; stripe < 24u; ++stripe){
         const f32 value = (stripe & 1u) != 0u ? 0.92f : 0.04f;
         Float4 position;
@@ -197,29 +195,29 @@ public:
 }
 
 
-[[nodiscard]] static Float4 TransparentLeftShapeBasePosition()noexcept{
-    return Float4(-0.68f, s_CameraTargetY, 0.02f, 0.0f);
+[[nodiscard]] static SIMDVectorSingle TransparentLeftShapeBasePosition()noexcept{
+    return VectorSet(-0.68f, s_CameraTargetY, 0.02f, 0.0f);
 }
 
-[[nodiscard]] static Float4 TransparentCenterShapeBasePosition()noexcept{
-    return Float4(0.0f, s_CameraTargetY, 0.0f, 0.0f);
+[[nodiscard]] static SIMDVectorSingle TransparentCenterShapeBasePosition()noexcept{
+    return VectorSet(0.0f, s_CameraTargetY, 0.0f, 0.0f);
 }
 
-[[nodiscard]] static Float4 TransparentRightShapeBasePosition()noexcept{
-    return Float4(0.68f, s_CameraTargetY, 0.04f, 0.0f);
+[[nodiscard]] static SIMDVectorSingle TransparentRightShapeBasePosition()noexcept{
+    return VectorSet(0.68f, s_CameraTargetY, 0.04f, 0.0f);
 }
 
 // Opaque occluders orbit through colored shadows to exercise their multiplicative combination.
-[[nodiscard]] static Float4 OpaqueLeftShapeBasePosition()noexcept{
-    return Float4(-0.34f, s_CameraTargetY, 0.30f, 0.0f);
+[[nodiscard]] static SIMDVectorSingle OpaqueLeftShapeBasePosition()noexcept{
+    return VectorSet(-0.34f, s_CameraTargetY, 0.30f, 0.0f);
 }
 
-[[nodiscard]] static Float4 OpaqueRightShapeBasePosition()noexcept{
-    return Float4(0.34f, s_CameraTargetY, 0.30f, 0.0f);
+[[nodiscard]] static SIMDVectorSingle OpaqueRightShapeBasePosition()noexcept{
+    return VectorSet(0.34f, s_CameraTargetY, 0.30f, 0.0f);
 }
 
-[[nodiscard]] static SIMDVectorSingle BuildTransparentSceneRotation(const f32 time)noexcept{
-    return QuaternionRotationRollPitchYaw(0.0f, time, 0.0f);
+[[nodiscard]] static SIMDVectorSingle BuildTransparentSceneRotation(const SIMDVectorSingle time)noexcept{
+    return QuaternionRotationRollPitchYawFromVector(VectorAndInt(time, s_SIMDMaskY));
 }
 
 [[nodiscard]] static SIMDVectorSingle RotateTransparentBasePosition(const SIMDVectorSingle basePosition, const SIMDVectorSingle sceneRotation)noexcept{
@@ -237,8 +235,8 @@ static void ApplyTransparentSceneTransform(NWB::Core::ECS::World& world, const N
 
 
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
-[[nodiscard]] static SIMDVectorSingle BuildTransparentCsgRotation(const f32 time)noexcept{
-    const SIMDVectorSingle angles = VectorMultiply(VectorSet(time, time, time, 0.0f), VectorSet(0.32f, 1.0f, 0.16f, 0.0f));
+[[nodiscard]] static SIMDVectorSingle BuildTransparentCsgRotation(const SIMDVectorSingle time)noexcept{
+    const SIMDVectorSingle angles = VectorMultiply(time, VectorSet(0.32f, 1.0f, 0.16f, 0.0f));
     return QuaternionRotationRollPitchYawFromVector(angles);
 }
 
@@ -382,24 +380,24 @@ private:
 public:
     // Vary spin speed from one build to compare caustic motion-vector reprojection.
     static f32 EffectiveRotationSpeed(){
-        static const f32 s_speed = [](){
+        static const f32 s_Speed = [](){
             const auto parsed = ReadSmokeEnvironmentF32("NWB_TRANSPARENT_MULTI_SPIN_SPEED");
             if(!parsed)
                 return s_TransparentSceneRotationSpeed;
             return IsFinite(*parsed) && (*parsed >= 0.0f) ? *parsed : s_TransparentSceneRotationSpeed;
         }();
-        return s_speed;
+        return s_Speed;
     }
 
     // Pin yaw for deterministic captures; an unset override leaves normal spin active.
     static f32 EffectiveFrozenAngle(){
-        static const f32 s_angle = [](){
+        static const f32 s_Angle = [](){
             const auto parsed = ReadSmokeEnvironmentF32("NWB_TRANSPARENT_MULTI_SPIN_ANGLE");
             if(!parsed)
                 return Limit<f32>::s_QuietNaN;
             return IsFinite(*parsed) ? *parsed : Limit<f32>::s_QuietNaN;
         }();
-        return s_angle;
+        return s_Angle;
     }
 
 
@@ -497,7 +495,7 @@ public:
                 NWB_LOGGER_ERROR(NWB_TEXT("CausticTimingProbe: camera preset must be populated or sparse"));
                 return false;
             }
-            cameraDistance *= preset == s_SparsePreset ? 2.0f : 1.0f;
+            cameraDistance = VectorGetX(VectorScale(VectorReplicate(cameraDistance), preset == s_SparsePreset ? 2.0f : 1.0f));
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: camera {} distance {} height {}"), preset == "sparse" ? NWB_TEXT("sparse") : NWB_TEXT("populated"), cameraDistance, s_CameraTargetY);
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: fixed delta {} yaw {} sphere scale {}"), RendererBaselineFixedDelta(), EffectiveFrozenAngle(), s_CausticSphereScale);
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: photon phases {}"), NWB_CAUSTIC_TEMPORAL_PHASE_COUNT);
@@ -517,13 +515,15 @@ public:
 
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
         // A static sphere lens lets temporal photon accumulation converge without motion artifacts.
+        Float4 centerBasePosition;
+        StoreFloat(TransparentCenterShapeBasePosition(), centerBasePosition);
         const auto centerShapeEntity = CreateTransparentStaticMeshEntity(
             *m_world,
             m_context.objectArena,
             s_TransparentShapeMesh,
             s_TransparentSharedMaterial,
             Float4(0.55f, 0.78f, 1.0f, 0.30f),
-            TransparentCenterShapeBasePosition(),
+            centerBasePosition,
             Float4(s_CausticSphereScale, s_CausticSphereScale, s_CausticSphereScale)
         );
         m_centerShape = centerShapeEntity;
@@ -531,7 +531,17 @@ public:
         if(shapesValid)
             m_world->entity(centerShapeEntity).getComponent<NWB::Impl::RendererComponent>().opticalBoundaryMode = NWB::Impl::OpticalBoundaryMode::ClosedNested;
 #else
-        const auto shapeEntity = CreateTransparentStaticMeshEntity(*m_world, m_context.objectArena, s_TransparentLeftMesh, s_TransparentSharedMaterial, Float4(1.0f, 0.42f, 0.20f, 0.42f), TransparentLeftShapeBasePosition(), Float4(0.62f, 0.62f, 0.62f));
+        Float4 leftBasePosition;
+        Float4 centerBasePosition;
+        Float4 rightBasePosition;
+        Float4 opaqueLeftBasePosition;
+        Float4 opaqueRightBasePosition;
+        StoreFloat(TransparentLeftShapeBasePosition(), leftBasePosition);
+        StoreFloat(TransparentCenterShapeBasePosition(), centerBasePosition);
+        StoreFloat(TransparentRightShapeBasePosition(), rightBasePosition);
+        StoreFloat(OpaqueLeftShapeBasePosition(), opaqueLeftBasePosition);
+        StoreFloat(OpaqueRightShapeBasePosition(), opaqueRightBasePosition);
+        const auto shapeEntity = CreateTransparentStaticMeshEntity(*m_world, m_context.objectArena, s_TransparentLeftMesh, s_TransparentSharedMaterial, Float4(1.0f, 0.42f, 0.20f, 0.42f), leftBasePosition, Float4(0.62f, 0.62f, 0.62f));
         const auto centerShapeEntity = CreateTransparentStaticMeshEntity(
             *m_world,
             m_context.objectArena,
@@ -544,9 +554,9 @@ public:
             s_TransparentSharedMaterial,
             Float4(0.10f, 1.0f, 0.45f, 0.42f),
 #endif
-            TransparentCenterShapeBasePosition(), Float4(0.78f, 0.78f, 0.78f), TransparentCenterCsgReceiverGroup()
+            centerBasePosition, Float4(0.78f, 0.78f, 0.78f), TransparentCenterCsgReceiverGroup()
         );
-        const auto rightShapeEntity = CreateTransparentStaticMeshEntity(*m_world, m_context.objectArena, s_TransparentRightMesh, s_TransparentSharedMaterial, Float4(0.12f, 0.44f, 1.0f, 0.42f), TransparentRightShapeBasePosition(), Float4(0.68f, 0.68f, 0.68f));
+        const auto rightShapeEntity = CreateTransparentStaticMeshEntity(*m_world, m_context.objectArena, s_TransparentRightMesh, s_TransparentSharedMaterial, Float4(0.12f, 0.44f, 1.0f, 0.42f), rightBasePosition, Float4(0.68f, 0.68f, 0.68f));
         m_leftShape = shapeEntity;
         m_centerShape = centerShapeEntity;
         m_rightShape = rightShapeEntity;
@@ -559,7 +569,7 @@ public:
             s_GroundMaterial,
             s_SmokeSurfaceMaterialInterface,
             Float4(0.66f, 0.66f, 0.70f, 1.0f),
-            OpaqueLeftShapeBasePosition(),
+            opaqueLeftBasePosition,
             Float4(0.26f, 0.26f, 0.26f)
         );
         const auto opaqueRightEntity = CreateTintedStaticMeshEntity(
@@ -569,7 +579,7 @@ public:
             s_GroundMaterial,
             s_SmokeSurfaceMaterialInterface,
             Float4(0.72f, 0.68f, 0.62f, 1.0f),
-            OpaqueRightShapeBasePosition(),
+            opaqueRightBasePosition,
             Float4(0.26f, 0.26f, 0.26f)
         );
         m_opaqueLeftShape = opaqueLeftEntity;
@@ -684,17 +694,17 @@ public:
 
 private:
     void updateTransparentSceneTransforms()noexcept{
-        const f32 sceneYaw = m_sceneYaw.yaw();
+        const SIMDVectorSingle sceneYaw = VectorReplicate(m_sceneYaw.yaw());
         const SIMDVectorSingle sceneRotation = BuildTransparentSceneRotation(sceneYaw);
-        ApplyTransparentSceneTransform(*m_world, m_leftShape, LoadFloat(TransparentLeftShapeBasePosition()), sceneRotation, QuaternionIdentity());
+        ApplyTransparentSceneTransform(*m_world, m_leftShape, TransparentLeftShapeBasePosition(), sceneRotation, QuaternionIdentity());
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
-        ApplyTransparentCsgSceneTransform(*m_world, m_csgReceiver, m_csgCutter, LoadFloat(TransparentCenterShapeBasePosition()), sceneRotation, BuildTransparentCsgRotation(sceneYaw));
+        ApplyTransparentCsgSceneTransform(*m_world, m_csgReceiver, m_csgCutter, TransparentCenterShapeBasePosition(), sceneRotation, BuildTransparentCsgRotation(sceneYaw));
 #else
-        ApplyTransparentSceneTransform(*m_world, m_centerShape, LoadFloat(TransparentCenterShapeBasePosition()), sceneRotation, QuaternionIdentity());
+        ApplyTransparentSceneTransform(*m_world, m_centerShape, TransparentCenterShapeBasePosition(), sceneRotation, QuaternionIdentity());
 #endif
-        ApplyTransparentSceneTransform(*m_world, m_rightShape, LoadFloat(TransparentRightShapeBasePosition()), sceneRotation, QuaternionIdentity());
-        ApplyTransparentSceneTransform(*m_world, m_opaqueLeftShape, LoadFloat(OpaqueLeftShapeBasePosition()), sceneRotation, QuaternionIdentity());
-        ApplyTransparentSceneTransform(*m_world, m_opaqueRightShape, LoadFloat(OpaqueRightShapeBasePosition()), sceneRotation, QuaternionIdentity());
+        ApplyTransparentSceneTransform(*m_world, m_rightShape, TransparentRightShapeBasePosition(), sceneRotation, QuaternionIdentity());
+        ApplyTransparentSceneTransform(*m_world, m_opaqueLeftShape, OpaqueLeftShapeBasePosition(), sceneRotation, QuaternionIdentity());
+        ApplyTransparentSceneTransform(*m_world, m_opaqueRightShape, OpaqueRightShapeBasePosition(), sceneRotation, QuaternionIdentity());
     }
 
 

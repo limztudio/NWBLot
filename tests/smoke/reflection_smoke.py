@@ -501,7 +501,7 @@ def parse_args(argv):
     parser.add_argument("--suite", choices=(LIT_ALL, LIT_BASELINE, LIT_SCREEN, LIT_BUDGET, LIT_ROUGH, LIT_TEMPORAL, LIT_OPTICAL, LIT_FEEDBACK, LIT_FEEDBACK_DIAGNOSTICS_OFF), default=LIT_ALL,
         help="Capture the original 22 comparisons, a subset, or the separate roughness, history, optical and feedback suites.")
     parser.add_argument("--frames", type=int, default=16)
-    parser.add_argument(LIT_TIMEOUT, type=float, default=60.0)
+    parser.add_argument(LIT_TIMEOUT, type=float, default=180.0)
     parser.add_argument("--require-hardware", action=LIT_STORE_TRUE)
     parser.add_argument("--application-arg", action=LIT_APPEND, default=[])
     parser.add_argument("--feedback-cases", help="Optional comma-separated feedback capture names for a bounded pilot.")

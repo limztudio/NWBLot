@@ -55,10 +55,10 @@ static constexpr Name s_ScratchOwner("core/task/gpu/declaration_scratch");
     members.reserve(count);
     for(usize index = 0u; index < count; ++index){
         char text[32u] = {};
-        const auto derivedNameAt58Col30 = DeriveName(Name("tests/resource_set_memory/resource/"), FormatDecimal(index, text));
-        if(!derivedNameAt58Col30)
+        const auto identityNameResult = DeriveName(Name("tests/resource_set_memory/resource/"), FormatDecimal(index, text));
+        if(!identityNameResult)
             return false;
-        const Name identity = *derivedNameAt58Col30;
+        const Name identity = *identityNameResult;
         const auto resourceResult = graph.importResource(Core::GpuGraphResourceDesc{}.setIdentity(identity).setMarkerLabel("Resource Set Memory Input").setType(Core::GpuGraphResourceType::Buffer));
         if(!resourceResult)
             return false;
@@ -95,12 +95,12 @@ TEST(ResourceSetMemory, SmallSetsAndBlockedMutationLeaveTheScratchOwnerUnallocat
         Core::GpuGraphResourceSetId lastSet;
         for(const usize count : { 0u, 1u, 8u, 32u }){
             char text[32u] = {};
-            const auto derivedNameAt95Col34 = DeriveName(Name("tests/resource_set_memory/small_set/"), FormatDecimal(count, text));
-            ASSERT_TRUE(derivedNameAt95Col34);
-            const Name identity = *derivedNameAt95Col34;
-            const auto gpuAdmissionAt93 = graph.importResourceSet(SetDescription(identity, members, count));
-            ASSERT_TRUE(gpuAdmissionAt93);
-            lastSet = *gpuAdmissionAt93;
+            const auto identityNameResult = DeriveName(Name("tests/resource_set_memory/small_set/"), FormatDecimal(count, text));
+            ASSERT_TRUE(identityNameResult);
+            const Name identity = *identityNameResult;
+            const auto lastSetTaskAdmission = graph.importResourceSet(SetDescription(identity, members, count));
+            ASSERT_TRUE(lastSetTaskAdmission);
+            lastSet = *lastSetTaskAdmission;
             ASSERT_TRUE(lastSet.valid());
         }
         {
@@ -138,9 +138,9 @@ TEST(ResourceSetMemory, LargeSmallLargeScopesReclaimUsageAndReuseBackingAcrossGr
             usize phase = 0u;
             for(const usize count : { 4096u, 33u, 4096u }){
                 char text[32u] = {};
-                const auto derivedNameAt136Col38 = DeriveName(Name("tests/resource_set_memory/phase/"), FormatDecimal(phase, text));
-                ASSERT_TRUE(derivedNameAt136Col38);
-                const Name identity = *derivedNameAt136Col38;
+                const auto identityNameResult = DeriveName(Name("tests/resource_set_memory/phase/"), FormatDecimal(phase, text));
+                ASSERT_TRUE(identityNameResult);
+                const Name identity = *identityNameResult;
                 const auto setResult = graph.importResourceSet(SetDescription(identity, members, count));
                 ASSERT_TRUE(setResult);
                 const Core::GpuGraphResourceSetId set = *setResult;
@@ -214,14 +214,14 @@ TEST(ResourceSetMemory, LateRejectedMembersRetireTemporaryStorageBeforeTheNextDe
             EXPECT_EQ(ScratchOwnerStats().usedBytes, before.usedBytes);
             members.back() = saved;
             char text[32u] = {};
-            const auto derivedNameAt210Col42 = DeriveName(Name("tests/resource_set_memory/accepted/"), FormatDecimal(cycle, text));
-            ASSERT_TRUE(derivedNameAt210Col42);
-            const Name acceptedIdentity = *derivedNameAt210Col42;
+            const auto acceptedIdentityNameResult = DeriveName(Name("tests/resource_set_memory/accepted/"), FormatDecimal(cycle, text));
+            ASSERT_TRUE(acceptedIdentityNameResult);
+            const Name acceptedIdentity = *acceptedIdentityNameResult;
             {
-                const auto gpuAdmissionAt204 = graph.importResourceSet(SetDescription(acceptedIdentity, members, members.size()));
-                EXPECT_TRUE(gpuAdmissionAt204);
-                if(gpuAdmissionAt204)
-                    EXPECT_TRUE(gpuAdmissionAt204->valid());
+                const auto gpuTaskAdmission = graph.importResourceSet(SetDescription(acceptedIdentity, members, members.size()));
+                EXPECT_TRUE(gpuTaskAdmission);
+                if(gpuTaskAdmission)
+                    EXPECT_TRUE(gpuTaskAdmission->valid());
             }
             const ArenaMemoryStats after = ScratchOwnerStats();
             EXPECT_EQ(after.usedBytes, before.usedBytes);

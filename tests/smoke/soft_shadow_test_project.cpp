@@ -46,7 +46,7 @@ using NWB::Tests::Smoke::CreateSmokeWorldOrDie;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::CreateTintedModelEntity;
 using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
-using NWB::Tests::Smoke::MakeSmokeYawDisplay;
+using NWB::Tests::Smoke::CalculateSmokeYawDisplay;
 using NWB::Tests::Smoke::ReadSmokeEnvironmentF32;
 using NWB::Tests::Smoke::RendererBaselineCaptureFreezeFrame;
 using NWB::Tests::Smoke::RendererBaselineFixedDelta;
@@ -94,8 +94,8 @@ static constexpr f32 s_SpotLightYaw = 0.0f;
 static constexpr f32 s_SpotInnerConeCos = 0.85f;
 static constexpr f32 s_SpotOuterConeCos = 0.55f;
 
-static constexpr f32 s_SpinSpeed = 0.5f; // radians/second
-static constexpr f32 s_ManualYawSpeed = 0.6f; // radians/second
+static constexpr f32 s_SpinSpeed = 0.5f;
+static constexpr f32 s_ManualYawSpeed = 0.6f;
 static constexpr f32 s_TwoPi = 6.2831853f;
 static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;
 
@@ -115,32 +115,32 @@ private:
 
     // Angular radius is in radians; larger sources soften the penumbra.
     static f32 ConfiguredAngularRadius(){
-        static const f32 s_angle = [](){
+        static const f32 s_Angle = [](){
             const auto parsed = ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_ANGLE");
             if(!parsed)
                 return s_DefaultAngularRadius;
             const SIMDVectorSingle angle = VectorReplicate(*parsed);
             return VectorGetX(VectorSelect(VectorZero(), VectorMin(VectorReplicate(0.2f), angle), VectorGreater(angle, VectorZero())));
         }();
-        return s_angle;
+        return s_Angle;
     }
 
     // Point/spot softness depends on source radius in world units and light distance: asin(radius / distance).
     static f32 ConfiguredSourceRadius(){
-        static const f32 s_radius = [](){
+        static const f32 s_Radius = [](){
             const auto parsed = ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS");
             if(!parsed)
                 return s_DefaultSourceRadius;
             const SIMDVectorSingle radius = VectorReplicate(*parsed);
             return VectorGetX(VectorSelect(VectorZero(), VectorMin(VectorSplatOne(), radius), VectorGreater(radius, VectorZero())));
         }();
-        return s_radius;
+        return s_Radius;
     }
 
     // Pin yaw for captures that isolate shimmer from motion.
     static f32 FrozenYaw(){
-        static const f32 s_yaw = ReadSmokeFrozenYawFromEnvironment("NWB_SOFT_SHADOW_TEST_SPIN_ANGLE");
-        return s_yaw;
+        static const f32 s_Yaw = ReadSmokeFrozenYawFromEnvironment("NWB_SOFT_SHADOW_TEST_SPIN_ANGLE");
+        return s_Yaw;
     }
 
 
@@ -311,7 +311,7 @@ public:
     }
 
     void updateWindowTitle(){
-        const auto yawDisplay = MakeSmokeYawDisplay(m_yaw.yaw(), s_TwoPi);
+        const SIMDVectorSingle yawDisplay = CalculateSmokeYawDisplay(VectorReplicate(m_yaw.yaw()), VectorReplicate(s_TwoPi));
         const f32 angleDegrees = VectorGetX(VectorScale(VectorReplicate(ConfiguredAngularRadius()), 360.0f / s_TwoPi));
 
         static constexpr usize s_TitleCapacity = 256u;
@@ -319,7 +319,7 @@ public:
         NWB_TSPRINTF(
             title, s_TitleCapacity,
             NWB_TEXT("%.*s  |  yaw %.2f deg  |  sun %.2f deg  |  src r %.3f%s"),
-            static_cast<i32>(NWB::QueryProjectWindowTitle().size()), NWB::QueryProjectWindowTitle().data(), yawDisplay.degrees, angleDegrees, ConfiguredSourceRadius(),
+            static_cast<i32>(NWB::QueryProjectWindowTitle().size()), NWB::QueryProjectWindowTitle().data(), VectorGetY(yawDisplay), angleDegrees, ConfiguredSourceRadius(),
             m_yaw.manualControl() ? NWB_TEXT("  [manual: <- ->]") : NWB_TEXT("")
         );
         m_context.graphics.setWindowTitle(TStringView(title));

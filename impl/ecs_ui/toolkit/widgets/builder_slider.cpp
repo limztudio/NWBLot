@@ -114,7 +114,7 @@ bool Builder::prepareSlider(SliderFrame& frame)noexcept{
     const auto trackMinimum = __hidden_builder_slider::LoadMinimumSize(*track, VectorDoubleReplicate(m_skin->referenceDensity()));
     if(!trackMinimum)
         return false;
-    frame.m_style.trackHeight = VectorGetY(VectorMax(VectorSet(VectorGetX(trackMinimum->value), frame.m_style.trackHeight, 0.0f, 0.0f), VectorSet(VectorGetX(trackMinimum->value), VectorGetY(trackMinimum->value), 0.0f, 0.0f)));
+    frame.m_style.trackHeight = VectorGetY(VectorMax(VectorSelect(trackMinimum->value, VectorReplicate(frame.m_style.trackHeight), s_SIMDMaskY), trackMinimum->value));
     const UiSkinRegion* thumbs[]{ normal, m_skin->findRegion(frame.m_style.hover), m_skin->findRegion(frame.m_style.pressed), m_skin->findRegion(frame.m_style.disabled) };
     for(const UiSkinRegion* thumb : thumbs){
         if(!thumb)
@@ -123,7 +123,7 @@ bool Builder::prepareSlider(SliderFrame& frame)noexcept{
         if(!minimum)
             return false;
         const SIMDVectorSingle currentSize = VectorSet(frame.m_style.thumbExtent.x, frame.m_style.thumbExtent.y, frame.m_style.thumbExtent.x, frame.m_style.thumbExtent.y);
-        const SIMDVectorSingle minimumSize = VectorSet(VectorGetX(minimum->value), VectorGetY(minimum->value), VectorGetX(minimum->value), VectorGetY(minimum->value));
+        const SIMDVectorSingle minimumSize = VectorSwizzle<0, 1, 0, 1>(minimum->value);
         const SIMDVectorSingle maximumSize = VectorSelect(minimumSize, currentSize, VectorGreater(currentSize, minimumSize));
         frame.m_style.thumbExtent = { VectorGetX(maximumSize), VectorGetY(maximumSize) };
     }
@@ -136,7 +136,7 @@ bool Builder::prepareSlider(SliderFrame& frame)noexcept{
             VectorDoubleAdd(VectorDoubleSet(frame.m_metrics.padding.left, frame.m_metrics.padding.top, 0.0, 0.0), VectorDoubleSet(frame.m_metrics.padding.right, frame.m_metrics.padding.bottom, 0.0, 0.0)),
             VectorDoubleSet(frame.m_metrics.thumbExtent.x, frame.m_metrics.thumbExtent.y, 0.0, 0.0)
         ),
-        VectorDoubleSet(VectorGetX(trackMinimum->value), 0.0, 0.0, 0.0)
+        VectorDoubleAndInt(ConvertVectorSingleToDouble(trackMinimum->value), s_DoubleSIMDMaskX)
     );
     const f64 width = VectorDoubleGetX(paddedSize);
     if(!IsFinite(width) || width > Limit<f32>::s_Max)

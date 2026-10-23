@@ -17,7 +17,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_vulkan_descriptor_buffer_commands{
+namespace __hidden_vulkan_resource_bindings_commands{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -286,7 +286,7 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
         || (bindAccelStruct && !accelStructDesc)
         || (accelStructDesc && accelStructDesc->descriptorSetIndex != abi.accelStructSetIndex)
         || (accelStructDesc && accelStructDesc->maxCapacity != 1u)
-        || !__hidden_vulkan_descriptor_buffer_commands::PipelineMatchesHeapLayouts(pipelineBindings, resourceLayout, samplerLayout, accelStructLayout, abi, bindAccelStruct)
+        || !__hidden_vulkan_resource_bindings_commands::PipelineMatchesHeapLayouts(pipelineBindings, resourceLayout, samplerLayout, accelStructLayout, abi, bindAccelStruct)
     ){
         rejectCommandRecording(operationName, NWB_TEXT("pipeline creation layouts do not exactly match the heap ABI"));
         return;
@@ -328,7 +328,7 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
     DescriptorBufferSegment accelStructBlock{};
     if(bindAccelStruct){
         const u32 slot = accelStructHandle.slot();
-        const GpuDescriptorHeap::SlotState slotState = slot < heap.m_accelStructSlots.slotStates.size() ? heap.m_accelStructSlots.slotStates[slot] : GpuDescriptorHeap::SlotState::Free;
+        const GpuDescriptorHeap::SlotState::Enum slotState = slot < heap.m_accelStructSlots.slotStates.size() ? heap.m_accelStructSlots.slotStates[slot] : GpuDescriptorHeap::SlotState::Free;
         if(
             accelStructHandle.descriptorClass() != GpuDescriptorClass::AccelStruct
             || slot >= heap.m_accelStructSlots.slotStates.size()

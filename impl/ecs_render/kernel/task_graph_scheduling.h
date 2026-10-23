@@ -30,7 +30,7 @@ namespace RendererTaskGraphDetail{
 // Cross-family routing stays separately disabled here until an effect-specific ownership/performance decision promotes it.
 void EnableSameFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& scheduling, const bool preserveDirectDependency = true)noexcept;
 
-// A cross-family route remains a second explicit opt-in. The compiler validates every declared resource against its concurrent-sharing contract and lowers paired ownership barriers for any exclusive crossing.
+// A cross-family route remains a second explicit opt-in. The compiler validates every declared resource against its concurrent-sharing contract and lowers paired barriers for any crossing.
 inline void EnableCrossFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& scheduling)noexcept{
     scheduling.allowCrossFamilySameClassQueueRouting = true;
 }

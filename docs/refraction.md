@@ -6,12 +6,14 @@ refraction (`nwbRefractionIorEligible` in `impl/assets/graphics/refraction/ior.s
 changing device capability reporting. Both settings default to enabled.
 
 The renderer retains one primary refractive instance per pixel. A depth-tested
-raster pass captures its normal, IOR, absorption tint, and transparent-pass instance
-identity after opaque visibility and transparent CSG intervals are ready. Capture
-uses the same authored material hook and draw ordering as the other AVBOIT passes.
-Its depth attachment is separate from opaque depth, which the capture shader checks
-explicitly. Clear glass may have zero `renderCoverage`: coverage is the
-AVBOIT opacity parameter, not an optical transmission mask.
+raster pass captures its normal, IOR, absorption tint, transparent-pass instance
+identity, and front-boundary bit (`NWB_REFRACTION_CAPTURE_FRONT_BOUNDARY_FLAG` in
+bit 16 of `foregroundColor.x`) after opaque visibility and transparent CSG
+intervals are ready. Capture uses the same authored material hook and draw
+ordering as the other AVBOIT passes. Its depth attachment is separate from opaque
+depth, which the capture shader checks explicitly. Clear glass may have zero
+`renderCoverage`: coverage is the AVBOIT opacity parameter, not an optical
+transmission mask.
 
 The primary instance is omitted from AVBOIT occupancy, extinction, and color
 accumulation. The resolve owns its optical transmission. Other transparent
@@ -23,16 +25,27 @@ particles and panels at their camera pixels.
 
 On ray-query hardware, the resolve shares the existing scene TLAS, material
 context, and retained geometry. It associates the raster entry with a TLAS
-instance, finds the volume exit, and traces the transmitted background. The usual
-path issues three nearest-hit queries; the bounded loop permits at most seven,
-including two internal reflections and two additional ordinary transparent
-background layers. Residual total internal reflection at this cap terminates with
-opaque black. Hard-edged glass can therefore show dark facets: the refraction
-resolve has no internal reflected-radiance contribution to recover that energy.
-Absorption uses the traveled distance inside the primary
-volume, with Fresnel transmission at entry and exit. Opaque screen color is reused
-only after validating visibility against the G-buffer. Other hits receive
-simplified direct diffuse lighting. This is not the full camera material shader.
+instance, finds the volume exit, and traces the transmitted background. When the
+scene contains a single unclipped non-CSG refractive instance
+(`RtInstanceMaterialFlag::RefractionEntryCertified`) and the captured pixel is a
+front boundary, the resolve reconstructs the exact camera entry position from
+captured depth and starts exit traversal directly without an entry ray query.
+Uncertified, back-facing, or CSG-clipped entries issue a nearest-hit entry query
+that validates only the optical entry fields (`refractionIor`, entity identity,
+and world position), while exit candidates evaluate only the surface and
+geometric normals. The usual path issues two nearest-hit queries for a certified
+single refractor or three when entry tracing is required; the bounded loop
+permits at most six or seven respectively, including two internal reflections and
+two additional ordinary transparent background layers. Residual total internal
+reflection at this cap terminates with opaque black. Hard-edged glass can
+therefore show dark facets: the refraction resolve has no internal
+reflected-radiance contribution to recover that energy. Absorption uses the
+traveled distance inside the primary volume, with Fresnel transmission at entry
+and exit. Background hits evaluate only `refractionIor` and `renderCoverage`
+before validating opaque or AVBOIT screen-color reuse against the G-buffer,
+deferring full shading surface reconstruction and geometric-normal fallback until
+an uncached opaque hit or transparent layer requires simplified direct diffuse
+lighting. This is not the full camera material shader.
 
 The independent screen shader has no ray-query capability. It performs at most
 24 depth-march steps, with a straight-through fallback when it cannot establish a
@@ -64,13 +77,17 @@ Each active tile still evaluates full-resolution pixels and retains the optical
 entry check. Clear zero-coverage glass and partial edge tiles remain
 eligible without a new material pass or reduced-resolution material sampling.
 
-The target generation owns a four-byte entry per possible tile and a 16-byte
-indirect argument/counter buffer. Counts beyond 65,535 tiles use a second dispatch
-dimension with explicit tail rejection. The graph declares counter clear,
-classifier UAV writes, shader/indirect reads, and the output dependency. Resizing
-replaces these resources with the capture targets. Material pass routing and the
-existing reflection candidate compaction remain independent of tile scheduling.
-Measure classifier, argument clear, resolve, composition, and shared
+The target generation owns a four-byte entry per possible tile and a 32-byte
+indirect argument/counter buffer (`sparse XYZ`, `activeCount`, `dense XYZ`, and a
+reserved zero word). A one-group finalizer selects the direct-mapped dense
+kernel when every tile is active and the tile width fits the dispatch X limit,
+or the compacted sparse kernel (with rows capped at 65,535 workgroups and
+explicit tail rejection) otherwise, zeroing the inactive dispatch record. The
+graph declares counter clear, classifier and finalizer UAV writes,
+shader/indirect reads, and the output dependency. Resizing replaces these
+resources with the capture targets. Material pass routing and the existing
+reflection candidate compaction remain independent of tile scheduling. Measure
+classifier, argument clear, resolve, composition, and shared
 acceleration-structure work together when selecting a shipping quality tier.
 
 AVBOIT integration reuses its packed extinction words to find the first active
@@ -86,4 +103,11 @@ dependency. Resizing replaces the complete target generation; disabling refracti
 clears captured identity/depth and resolved validity to prevent stale glass.
 
 See [the dedicated smoke test](../tests/smoke/REFRACTION.md) for the automated
-off/hardware/screen comparison, Vulkan validation run, and saved image metrics.
+off/hardware/screen comparison, Vulkan validation run, and saved image metrics,
+and the measurement reports under `docs/reports/`
+([dense mapping](reports/refraction_dense_mapping_qualification_20261022.md),
+[query profile](reports/refraction_query_profile_20261022.md),
+[Candidate C](reports/refraction_candidate_c_qualification_20261023.md),
+[Candidate B](reports/refraction_candidate_b_qualification_20261023.md), and
+[Candidate A](reports/refraction_candidate_a_qualification_20261023.md)) for
+qualification evidence.

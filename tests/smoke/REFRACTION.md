@@ -430,11 +430,16 @@ The three-slot readback ring skips a new sample when full while rendering
 continues. Statistics expose entry association, volume exit, internal reflection,
 background continuation, cache and fallback work. Counters are 32-bit, and any
 nonzero `overflowFlags` invalidates that sample. Ordinary logical stage queries
-each issue one physical inline query; CSG may perform additional physical work,
-so `physicalQueries` and `queryBudgetUnits` remain separate. Counter shares do
-not establish GPU-time shares. In particular, `materialShadeCalls` counts calls
-to the refraction lighting helper; accepted hits can already reconstruct their
-material surface before the lighting cache is consulted.
+each issue one physical inline query; certified single-refractor front boundaries
+associate directly from the capture without an entry query (`entryQueries = 0`,
+`entryHits = activePixels`), while CSG may perform additional physical work, so
+`physicalQueries` and `queryBudgetUnits` remain separate. Counter shares do not
+establish GPU-time shares. Background hits evaluate only `refractionIor` and
+`renderCoverage` before consulting the screen-space lighting cache; full shading
+surface reconstruction (`nwbRefractionShadeGeometryHit`) runs only when an
+uncached opaque hit or transparent layer calls the refraction lighting helper
+(`materialShadeCalls`). See the qualification reports under `docs/reports/` for
+dated profile and candidate measurements.
 
 `refraction_query_diagnostics_smoke.py` acquires diagnostic counts and optical
 checks separately from timing:

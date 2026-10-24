@@ -48,13 +48,20 @@ static bool CreateHeapComputePipeline(Core::Device& device, const Core::ShaderHa
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererAvboitSystem::createAvboitResources(){
+bool RendererAvboitSystem::createAvboitSampler(){
     auto& device = m_graphics.getDevice();
 
     if(!ECSRenderDetail::CreateClampSampler(device, true, m_avboitState.m_linearSampler)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create linear sampler for AVBOIT"));
         return false;
     }
+
+    return true;
+}
+
+bool RendererAvboitSystem::createAvboitResources(){
+    if(!createAvboitSampler())
+        return false;
 
     auto loadAvboitComputeShader = [&](Core::ShaderHandle& outShader, const Name& shaderName, const Name& debugName) -> bool{
         return m_shaderSystem.loadShader<ComputeShader>(outShader, shaderName, Core::ShaderArchive::s_DefaultVariant, debugName);

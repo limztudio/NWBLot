@@ -1,0 +1,14 @@
+subsystem asset;
+
+asset.assets = [
+    "engine/graphics/ui/output_ps",
+    "engine/graphics/ui/output_vs",
+    "engine/graphics/ui/ps",
+    "engine/graphics/ui/vs",
+    "engine/ui/fonts/default/korean/atlas",
+    "engine/ui/fonts/default/korean/face",
+    "engine/ui/fonts/default/latin/atlas",
+    "engine/ui/fonts/default/latin/face",
+    "engine/ui/skins/default/atlas"
+];
+

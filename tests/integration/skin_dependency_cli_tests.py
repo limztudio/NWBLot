@@ -1,4 +1,4 @@
-"""Qualify opt-in UI skin texture closure through the actual asset pipeline tools."""
+"""Qualify UI skin, scene, subsystem, and feature dependency closure through the asset pipeline tools."""
 from __future__ import annotations
 
 import argparse
@@ -22,13 +22,13 @@ LIT_TESTS = "tests"
 LIT_PROJECT = "project"
 LIT_ATLAS_NWB = "atlas.nwb"
 LIT_LINEAR = "linear"
+LIT_NEAREST = "nearest"
 LIT_PROJECT_ASSETS_UI_UI_ATLAS_NWB = "project/assets/ui/../ui/atlas.nwb"
 LIT_PROJECT_ASSETS_UI_UI = "project/assets/ui/../ui"
 LIT_ORDER = "order"
 
 
 UTF_8 = "utf-8"
-INCLUDE_SKIN_DEPENDENCIES = "--include-skin-dependencies"
 REPO_ROOT = "--repo-root"
 ASSET_ROOT = "--asset-root"
 INPUT = "--input"
@@ -45,6 +45,10 @@ TEXTURE_MIP = struct.Struct("<6I2Q")
 UASTC_BLOCK_BYTES = 16
 SKIN_MAGIC = 0x55495331
 SKIN_VERSION = 3
+PROJECT_MAGIC = 0x50524A31
+SCENE_MAGIC = 0x53434E31
+SUBSYSTEM_MAGIC = 0x53554231
+SAMPLER_MAGIC = 0x53414D31
 NAME_HASH_BYTES = 64
 ATLAS_EXTENT = (256, 256)
 ARTIFACT_MAGIC = 0x4142574E
@@ -73,23 +77,23 @@ def _copy_texture(repo: pathlib.Path, path: pathlib.Path) -> pathlib.Path:
     return sidecar
 
 
-def _dependency_command(args: argparse.Namespace, fixture: pathlib.Path, roots: list[pathlib.Path], inputs: list[str], manifest: pathlib.Path, enabled: bool = True,) -> list[str]:
-    command = [str(args.dependency_computer), INPUT, *inputs, OUTPUT, str(manifest)]
-    if enabled:
-        command.extend([INCLUDE_SKIN_DEPENDENCIES, REPO_ROOT, str(fixture)])
-        for root in roots:
-            command.extend([ASSET_ROOT, str(root)])
+def _dependency_command(args: argparse.Namespace, fixture: pathlib.Path, roots: list[pathlib.Path], inputs: list[str], manifest: pathlib.Path,) -> list[str]:
+    command = [str(args.dependency_computer), OUTPUT, str(manifest), REPO_ROOT, str(fixture)]
+    if inputs:
+        command.extend([INPUT, *inputs])
+    for root in roots:
+        command.extend([ASSET_ROOT, str(root)])
     return command
 
 
 def _expect_manifest(manifest: pathlib.Path, inputs: list[str], appended: list[pathlib.Path]) -> None:
     actual = manifest.read_text(encoding=UTF_8).splitlines()
     if actual[:len(inputs)] != inputs or len(actual) != len(inputs) + len(appended):
-        raise AssertionError(f"skin closure changed input spelling/order/duplicates or appended count: {actual}")
+        raise AssertionError(f"dependency closure changed input spelling/order/duplicates or appended count: {actual}")
     for spelling, expected in zip(actual[len(inputs):], appended):
         actual_path = pathlib.Path(spelling)
         if not actual_path.is_absolute() or actual_path.resolve() != expected.resolve():
-            raise AssertionError(f"skin closure appended a different provider: {spelling}; expected {expected}")
+            raise AssertionError(f"dependency closure appended a different provider: {spelling}; expected {expected}")
 
 
 def _read_current_artifacts(directory: pathlib.Path, helpers: types.ModuleType) -> dict[bytes, bytes]:
@@ -217,17 +221,100 @@ def _run_package_tests(args: argparse.Namespace, root: pathlib.Path, fixture: pa
     if helpers.read_volume(packed) != refreshed:
         raise AssertionError("texture sidecar change was not reflected in the republished volume")
 
-    launcher_command = [sys.executable, str(args.pipeline_launcher), "--skip-build", INCLUDE_SKIN_DEPENDENCIES, REPO_ROOT, str(args.repo_root), INPUT, str(fixture / LIT_PROJECT / LIT_ASSETS / LIT_UI / LIT_ATLAS_NWB), OUTPUT_DIRECTORY, str(packed),
+    launcher_command = [sys.executable, str(args.pipeline_launcher), "--skip-build", REPO_ROOT, str(args.repo_root), INPUT, str(fixture / LIT_PROJECT / LIT_ASSETS / LIT_UI / LIT_ATLAS_NWB), OUTPUT_DIRECTORY, str(packed),
         CACHE_DIRECTORY, str(root / LIT_C), CONFIGURATION, LIT_TESTS, "--dependency-computer", str(args.dependency_computer), "--asset-builder", str(args.asset_builder), "--asset-gatherer", str(args.asset_gatherer),]
     for asset_root in roots:
         launcher_command.extend([ASSET_ROOT, str(asset_root)])
     helpers.run_command(launcher_command, fixture)
     if helpers.read_volume(packed) != refreshed:
-        raise AssertionError("launcher did not forward skin dependency closure into the exact published volume")
+        raise AssertionError("launcher did not forward dependency closure into the exact published volume")
     launcher_command[launcher_command.index(INPUT) + 1] = str(invalid_skin)
     helpers.run_command(launcher_command, fixture, failure=True)
     if helpers.read_volume(packed) != refreshed:
-        raise AssertionError("failed skin closure changed the already published volume")
+        raise AssertionError("failed dependency closure changed the already published volume")
+
+
+def _run_scene_subsystem_feature_tests(args: argparse.Namespace, root: pathlib.Path, helpers: types.ModuleType) -> None:
+    fixture = root / "scene_root"
+    project_root = fixture / LIT_PROJECT / LIT_ASSETS
+    engine_root = fixture / LIT_IMPL / LIT_ASSETS
+    roots = [engine_root, project_root]
+
+    project_manifest = project_root / "project.nwb"
+    scene_manifest = project_root / "scenes" / "main.nwb"
+    subsystem_manifest = engine_root / "subsystems" / "ui_custom.nwb"
+    skin = project_root / LIT_UI / LIT_ATLAS_NWB
+    texture = engine_root / LIT_UI / LIT_TEXTURE_NWB
+    base_sampler = engine_root / "samplers" / "base.nwb"
+    active_feature_sampler = engine_root / "samplers" / "active_fx.nwb"
+    inactive_feature_sampler = engine_root / "samplers" / "inactive_fx.nwb"
+    unreferenced_sampler = project_root / "samplers" / "unreferenced.nwb"
+
+    _copy_texture(args.repo_root, texture)
+    _write_skin(skin, TEXTURE_IDENTITY)
+    helpers.write_sampler(base_sampler, LIT_LINEAR)
+    helpers.write_sampler(active_feature_sampler, LIT_NEAREST)
+    helpers.write_sampler(inactive_feature_sampler, LIT_LINEAR)
+    helpers.write_sampler(unreferenced_sampler, LIT_NEAREST)
+
+    _write_metadata(
+        subsystem_manifest,
+        'subsystem asset;\nasset.assets = ["engine/samplers/base"];\nasset.features = {\n    "active_fx": ["engine/samplers/active_fx"],\n    "inactive_fx": ["engine/samplers/inactive_fx"]\n};\n',
+    )
+    _write_metadata(
+        scene_manifest,
+        'scene asset;\nasset.subsystems = ["engine/subsystems/ui_custom"];\nasset.enabled_features = ["active_fx"];\nasset.assets = ["project/ui/atlas"];\n',
+    )
+    _write_metadata(
+        project_manifest,
+        'project asset;\nasset.start_scene = "project/scenes/main";\n',
+    )
+
+    manifest = fixture / "scene_dependencies.txt"
+    helpers.run_command(_dependency_command(args, fixture, roots, [], manifest), fixture)
+    expected_files = [project_manifest, scene_manifest, subsystem_manifest, skin, base_sampler, active_feature_sampler, texture]
+    _expect_manifest(manifest, [], expected_files)
+
+    packed = fixture / "scene_volume"
+    launcher_command = [
+        sys.executable,
+        str(args.pipeline_launcher),
+        "--skip-build",
+        REPO_ROOT,
+        str(args.repo_root),
+        OUTPUT_DIRECTORY,
+        str(packed),
+        CACHE_DIRECTORY,
+        str(root / LIT_C),
+        CONFIGURATION,
+        LIT_TESTS,
+        "--dependency-computer",
+        str(args.dependency_computer),
+        "--asset-builder",
+        str(args.asset_builder),
+        "--asset-gatherer",
+        str(args.asset_gatherer),
+    ]
+    for asset_root in roots:
+        launcher_command.extend([ASSET_ROOT, str(asset_root)])
+    helpers.run_command(launcher_command, fixture)
+    volume_payloads = helpers.read_volume(packed)
+    if len(volume_payloads) != len(expected_files):
+        raise AssertionError(f"scene-driven cook expected {len(expected_files)} volume entries, got {len(volume_payloads)}")
+    magic_counts: dict[int, int] = {}
+    for payload in volume_payloads.values():
+        magic = struct.unpack_from(LIT_UINT32_LITTLE_ENDIAN, payload)[0]
+        magic_counts[magic] = magic_counts.get(magic, 0) + 1
+    expected_magic_counts = {
+        PROJECT_MAGIC: 1,
+        SCENE_MAGIC: 1,
+        SUBSYSTEM_MAGIC: 1,
+        SKIN_MAGIC: 1,
+        TEXTURE_MAGIC: 1,
+        SAMPLER_MAGIC: 2,
+    }
+    if magic_counts != expected_magic_counts:
+        raise AssertionError(f"scene-driven volume payload types mismatch: {magic_counts} != {expected_magic_counts}")
 
 
 def run_skin_dependency_tests(args: argparse.Namespace, root: pathlib.Path, helpers: types.ModuleType) -> None:
@@ -245,13 +332,11 @@ def run_skin_dependency_tests(args: argparse.Namespace, root: pathlib.Path, help
     _write_skin(skin, TEXTURE_IDENTITY)
     _write_skin(shared_skin, TEXTURE_IDENTITY)
     helpers.write_sampler(unrelated, LIT_LINEAR)
-    _write_metadata(bunch, "sampler child; asset_bunch bundle = [child];\n")
+    _write_metadata(bunch, 'sampler child;\nchild.min_filter = "linear";\nchild.mag_filter = "linear";\nchild.mip_filter = "linear";\nchild.address_u = "clamp";\nchild.address_v = "clamp";\nchild.address_w = "clamp";\nchild.reduction = "standard";\nchild.max_anisotropy = 1.0;\nchild.mip_bias = 0.0;\nasset_bunch bundle = [child];\n')
     _write_metadata(project_root / "unrelated_bad.nwb", "unrelated malformed metadata {{{\n")
     _write_metadata(project_root / "shaders" / "unrelated_bad.bind", "unrelated malformed bind metadata {{{\n")
 
     original = [LIT_PROJECT_ASSETS_UI_UI_ATLAS_NWB, str(skin), LIT_PROJECT_ASSETS_UI_UI_ATLAS_NWB]
-    helpers.run_command(_dependency_command(args, fixture, roots, original, manifest, enabled=False), fixture)
-    _expect_manifest(manifest, original, [])
     helpers.run_command(_dependency_command(args, fixture, roots, original, manifest), fixture)
     _expect_manifest(manifest, original, [texture])
     good_manifest = manifest.read_bytes()
@@ -297,4 +382,4 @@ def run_skin_dependency_tests(args: argparse.Namespace, root: pathlib.Path, help
             raise AssertionError("failed skin dependency closure replaced the previously accepted dependency list")
 
     _run_package_tests(args, root, fixture, roots, manifest, sidecar, invalid_skin, helpers)
-
+    _run_scene_subsystem_feature_tests(args, root, helpers)

@@ -212,6 +212,7 @@ NotNullUniquePtr<NWB::Core::ECS::World> Project::CreateInitialWorldOrDie(NWB::Pr
 Project::Project(NWB::ProjectRuntimeContext& context)
     : m_context(context)
     , m_world(CreateInitialWorldOrDie(context))
+    , m_sceneSubsystems(context.objectArena)
     , m_uiPreview(context.objectArena, context.assetManager)
 {}
 
@@ -221,6 +222,15 @@ Project::~Project()noexcept{
 }
 
 bool Project::onStartup(){
+    if(!m_sceneSubsystems.loadProjectStartScene(m_context.assetManager))
+        return false;
+    if(auto* const rendererSystem = m_world->getSystem<NWB::Impl::RendererSystem>())
+        rendererSystem->setActiveSceneSubsystems(&m_sceneSubsystems);
+    if(auto* const meshSkinningSystem = m_world->getSystem<NWB::Impl::MeshSkinningSystem>())
+        meshSkinningSystem->setActiveSceneSubsystems(&m_sceneSubsystems);
+    if(auto* const uiLayerSystem = m_world->getSystem<NWB::Impl::UiLayerSystem>())
+        uiLayerSystem->setActiveSceneSubsystems(&m_sceneSubsystems);
+
     auto activeCameraEntity = m_world->createEntity();
     auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
     const Float4 cameraPosition(0.0f, __hidden_runtime::s_CharacterCameraTargetY, __hidden_runtime::s_CameraStartDepth);

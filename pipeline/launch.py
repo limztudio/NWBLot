@@ -5,9 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import os
 from pathlib import Path
-import stat
 import subprocess
 import sys
 import tempfile
@@ -38,7 +36,6 @@ OPTION_ASSET_ROOT = "--asset-root"
 OPTION_CACHE_DIRECTORY = "--cache-directory"
 OPTION_CONFIGURATION = "--configuration"
 OPTION_ASSET_TYPE = "--asset-type"
-OPTION_INCLUDE_SKIN_DEPENDENCIES = "--include-skin-dependencies"
 OPTION_INPUT_LIST = "--input-list"
 OPTION_REPO_ROOT = "--repo-root"
 
@@ -47,13 +44,12 @@ def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     ROOT_LAUNCHER.add_build_options(parser)
     parser.add_argument(OPTION_ASSET_ROOT, type=Path, action=ACTION_EXTEND, nargs="+", required=True)
-    parser.add_argument("--input", type=Path, action=ACTION_EXTEND, nargs="+", help="Explicit .nwb files or directories; defaults to all asset roots")
+    parser.add_argument("--input", type=Path, action=ACTION_EXTEND, nargs="+", help="Explicit .nwb files or directories; defaults to the project.nwb root manifest")
     parser.add_argument(OPTION_OUTPUT_SHORT, OPTION_OUTPUT, OPTION_OUTPUT_DIRECTORY, type=Path, required=True)
     parser.add_argument(OPTION_CACHE_DIRECTORY, type=Path)
     parser.add_argument("--build-directory", type=Path, help="Persistent directory for standalone .nwba artifacts")
     parser.add_argument(OPTION_CONFIGURATION, help="Asset configuration label; defaults to the selected --config")
     parser.add_argument(OPTION_ASSET_TYPE, default="graphics")
-    parser.add_argument(OPTION_INCLUDE_SKIN_DEPENDENCIES, action="store_true", help="Include textures referenced by selected UI skins")
     parser.add_argument("--tool-directory", type=Path, help="Directory containing the three built pipeline executables")
     parser.add_argument("--dependency-computer", type=Path)
     parser.add_argument("--asset-builder", type=Path)
@@ -83,39 +79,20 @@ def resolve_tools(options: argparse.Namespace, settings: ROOT_LAUNCHER.LaunchSet
     return tuple(tools)
 
 
-def discover_directory(directory: Path) -> list[Path]:
-    files = []
-    directories = [directory]
-    while directories:
-        with os.scandir(directories.pop()) as entries:
-            for entry in entries:
-                mode = entry.stat(follow_symlinks=False).st_mode
-                if stat.S_ISDIR(mode):
-                    directories.append(Path(entry.path))
-                elif Path(entry.name).suffix.lower() == ASSET_EXTENSION:
-                    if stat.S_ISLNK(mode):
-                        mode = entry.stat().st_mode
-                    if stat.S_ISREG(mode):
-                        files.append(Path(entry.path).resolve())
-    return sorted(files)
-
-
-def discover_inputs(roots: list[Path], inputs: list[Path] | None, repo_root: Path) -> list[Path]:
+def resolve_inputs(roots: list[Path], inputs: list[Path] | None, repo_root: Path) -> list[Path]:
     for root in roots:
         if not root.is_dir():
             raise ValueError(f"Asset root is not a directory: {root}")
+    if inputs is None:
+        return []
 
-    selected = [resolve_path(repo_root, value) for value in inputs] if inputs is not None else roots
-    files: dict[Path, None] = {}
-    for value in selected:
-        if value.is_dir():
-            for path in discover_directory(value):
-                files[path] = None
-        elif value.is_file() and value.suffix.lower() == ASSET_EXTENSION:
-            files[value] = None
-        else:
-            raise ValueError(f"Input is not a .nwb file or directory: {value}")
-    return list(files)
+    resolved: list[Path] = []
+    for value in inputs:
+        candidate = resolve_path(repo_root, value)
+        if not candidate.is_dir() and not (candidate.is_file() and candidate.suffix.lower() == ASSET_EXTENSION):
+            raise ValueError(f"Input is not a .nwb file or directory: {candidate}")
+        resolved.append(candidate)
+    return resolved
 
 
 def write_inputs(path: Path, values: list[Path]) -> None:
@@ -135,13 +112,13 @@ def run_stage(executable: Path, arguments: list[str], repo_root: Path) -> None:
 
 def pipeline_commands(options: argparse.Namespace, repo_root: Path, roots: list[Path], output: Path, cache: Path, built: Path, configuration: str, tools: tuple[Path, Path, Path], workspace: Path,) -> list[tuple[Path, list[str]]]:
     dependency, builder, gatherer = tools
-    initial_list = workspace / INPUT_LIST_NAME
     dependency_list = workspace / "dependencies.list"
-    dependency_arguments = [OPTION_INPUT_LIST, str(initial_list), OPTION_OUTPUT, str(dependency_list)]
-    if options.include_skin_dependencies:
-        dependency_arguments.extend([OPTION_INCLUDE_SKIN_DEPENDENCIES, OPTION_REPO_ROOT, str(repo_root)])
-        for root in roots:
-            dependency_arguments.extend([OPTION_ASSET_ROOT, str(root)])
+    dependency_arguments = [OPTION_REPO_ROOT, str(repo_root), OPTION_OUTPUT, str(dependency_list)]
+    if options.input is not None:
+        initial_list = workspace / INPUT_LIST_NAME
+        dependency_arguments.extend([OPTION_INPUT_LIST, str(initial_list)])
+    for root in roots:
+        dependency_arguments.extend([OPTION_ASSET_ROOT, str(root)])
     builder_arguments = [OPTION_INPUT_LIST, str(dependency_list), OPTION_REPO_ROOT, str(repo_root), OPTION_OUTPUT_DIRECTORY, str(built), OPTION_CACHE_DIRECTORY, str(cache), OPTION_ASSET_TYPE, options.asset_type,]
     for root in roots:
         builder_arguments.extend([OPTION_ASSET_ROOT, str(root)])
@@ -156,7 +133,7 @@ def cook(options: argparse.Namespace) -> None:
     settings = ROOT_LAUNCHER.resolve_launch_settings(options, ROOT_LAUNCHER.DEFAULT_DOMAIN)
     repo_root = settings.root
     roots = [resolve_path(repo_root, root) for root in options.asset_root]
-    inputs = discover_inputs(roots, options.input, repo_root)
+    inputs = resolve_inputs(roots, options.input, repo_root)
     configuration = settings.config if options.configuration is None else options.configuration
     output = resolve_path(repo_root, options.output)
     cache = resolve_path(repo_root, options.cache_directory or Path(DEFAULT_CACHE_DIRECTORY))
@@ -179,7 +156,8 @@ def cook(options: argparse.Namespace) -> None:
     cache.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="pipeline-", dir=cache) as temporary:
         workspace = Path(temporary)
-        write_inputs(workspace / INPUT_LIST_NAME, inputs)
+        if options.input is not None:
+            write_inputs(workspace / INPUT_LIST_NAME, inputs)
         for executable, arguments in pipeline_commands(options, repo_root, roots, output, cache, built, configuration, tools, workspace):
             run_stage(executable, arguments, repo_root)
 
@@ -199,4 +177,3 @@ def main(argv: Sequence[str]) -> int:
 
 if __name__ == MAIN_ENTRY:
     raise SystemExit(main(sys.argv[1:]))
-

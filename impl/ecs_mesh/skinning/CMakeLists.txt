@@ -32,6 +32,5 @@ target_sources(nwb_ecs_mesh_skinning PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
     "${CMAKE_CURRENT_LIST_DIR}/timing_names.h"
 )
-target_link_libraries(nwb_ecs_mesh_skinning PUBLIC nwb_ecs_mesh nwb_ecs_skeleton nwb_graphics nwb_assets_mesh)
+target_link_libraries(nwb_ecs_mesh_skinning PUBLIC nwb_ecs_mesh nwb_ecs_skeleton nwb_graphics nwb_assets_mesh nwb_assets_scene)
 target_link_libraries(nwb_ecs_mesh_skinning PRIVATE nwb_assets_shader_loader)
-

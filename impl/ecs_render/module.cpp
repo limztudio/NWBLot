@@ -64,6 +64,10 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
     return m_pipeline->appendFrameGraph(builder);
 }
 
+void RendererSystem::setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept{
+    m_pipeline->setActiveSceneSubsystems(subsystems);
+}
+
 void RendererSystem::setRefractionEnabled(const bool enabled)noexcept{
     m_pipeline->setRefractionEnabled(enabled);
 }

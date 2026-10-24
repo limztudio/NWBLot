@@ -26,7 +26,7 @@ target_include_directories(RmvBackend
 # The RMT backend's RDF code paths and the system-info / driver-overrides readers it parses are gated on these.
 target_compile_definitions(RmvBackend PRIVATE SYSTEM_INFO_ENABLE_RDF DRIVER_OVERRIDES_ENABLE_RDF NOMINMAX)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    target_compile_definitions(RmvBackend PRIVATE _LINUX)
+    target_compile_definitions(RmvBackend PRIVATE _LINUX _TRUNCATE=127)
 endif()
 
 target_link_libraries(RmvBackend PUBLIC RmvParser system_info amdrdf)

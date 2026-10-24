@@ -10,6 +10,7 @@
 #include "submission_state.h"
 
 #include <impl/assets/graphics/skinned_mesh/constants.h>
+#include <impl/assets_scene/asset.h>
 #include <impl/ecs_mesh/runtime/mesh.h>
 #include <impl/ecs_mesh/components.h>
 #include <impl/ecs_skeleton/components.h>
@@ -221,6 +222,11 @@ public:
     [[nodiscard]] virtual bool hasRuntimeMeshBinding(Core::ECS::EntityID entity)const noexcept override;
     virtual void markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests)override;
 
+    void setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept{ m_activeSceneSubsystems = subsystems; }
+    [[nodiscard]] bool isSkinningFeatureEnabled()const noexcept{
+        return !m_activeSceneSubsystems || m_activeSceneSubsystems->isFeatureEnabled(BuiltInSubsystemFeatures::s_Skinning);
+    }
+
 
 private:
     [[nodiscard]] bool ensureSkinningPipeline();
@@ -256,6 +262,9 @@ private:
     IRuntimeMeshRegistry& m_runtimeMeshRegistry;
     ShaderPathResolveCallback m_shaderPathResolver;
     MeshSkinningRuntimeCache m_runtimeMeshCache;
+    ActiveSceneSubsystems m_defaultSceneSubsystems;
+    const ActiveSceneSubsystems* m_activeSceneSubsystems = nullptr;
+    bool m_defaultSceneSubsystemsAttempted = false;
     bool m_runtimeSetupReady = false;
 
     HashMap<u64, RuntimeResources, Core::Alloc::GlobalArena, Hasher<u64>, EqualTo<u64>> m_runtimeResources;

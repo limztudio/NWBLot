@@ -27,6 +27,7 @@
 #include <impl/ecs_render/shared/task_graph_stage.h>
 #include <impl/assets/graphics/mesh/binding_slots.h>
 #include <impl/assets_material/asset.h>
+#include <impl/assets_scene/asset.h>
 #include <impl/ecs_csg/frame_state.h>
 #include <impl/ecs_csg/shape_registry.h>
 
@@ -158,6 +159,16 @@ public:
     [[nodiscard]] bool prepareResources(Core::Framebuffer* framebuffer);
     void render(Core::Framebuffer* framebuffer);
     [[nodiscard]] bool appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder);
+    void setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept{ m_activeSceneSubsystems = subsystems; }
+    [[nodiscard]] bool isTransparentFeatureEnabled()const noexcept{
+        return !m_activeSceneSubsystems || m_activeSceneSubsystems->isFeatureEnabled(BuiltInSubsystemFeatures::s_Transparent);
+    }
+    [[nodiscard]] bool isRefractiveFeatureEnabled()const noexcept{
+        return !m_activeSceneSubsystems || m_activeSceneSubsystems->isFeatureEnabled(BuiltInSubsystemFeatures::s_Refractive);
+    }
+    [[nodiscard]] bool isCsgFeatureEnabled()const noexcept{
+        return !m_activeSceneSubsystems || m_activeSceneSubsystems->isFeatureEnabled(BuiltInSubsystemFeatures::s_Csg);
+    }
     // Trades one frame of effect latency for overlap; off by default, self-bootstraps on toggle.
     void setRefractionEnabled(const bool enabled)noexcept{ m_refractionEnabled = enabled; }
 
@@ -545,6 +556,9 @@ private:
     f64 m_deferredLightingTaskGraphDeclarationSeconds = 0.0;
     Core::IGpuTaskGraphPresentationContributor* m_preparedTaskGraphPresentationContributor = nullptr;
     Core::IGpuTaskGraphOutputLayerContributor* m_preparedTaskGraphOutputLayerContributor = nullptr;
+    ActiveSceneSubsystems m_defaultSceneSubsystems;
+    const ActiveSceneSubsystems* m_activeSceneSubsystems = nullptr;
+    bool m_defaultSceneSubsystemsAttempted = false;
 
 private:
     RendererMeshState m_meshState;

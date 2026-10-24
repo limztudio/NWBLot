@@ -43,6 +43,7 @@ UiLayerSystem::UiLayerSystem(
     , m_clipboard(clipboard)
     , m_textInput(textInput)
     , m_assetManager(assetManager)
+    , m_defaultSceneSubsystems(arena)
     , m_skinSelection(skin)
     , m_fontRefs(fonts, arena)
     , m_paint(arena)
@@ -101,6 +102,16 @@ bool UiLayerSystem::validateResources(const u32 width, const u32 height, const u
     m_height = height;
     if(width == 0u || height == 0u)
         return true;
+
+    if(!m_activeSceneSubsystems){
+        if(!m_defaultSceneSubsystems.loadProjectStartScene(m_assetManager))
+            return false;
+        m_activeSceneSubsystems = &m_defaultSceneSubsystems;
+    }
+    if(!m_activeSceneSubsystems->hasSubsystem(BuiltInSubsystems::s_Ui)){
+        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: active scene does not include required subsystem '{}'"), StringConvert(BuiltInSubsystems::s_UiText));
+        return false;
+    }
 
     if(!m_fontsReady){
         Core::Alloc::ScratchArena scratchArena(Name("impl/ecs_ui/load_fonts"));

@@ -1,0 +1,4 @@
+project asset;
+
+asset.start_scene = "project/scenes/main";
+

@@ -10,6 +10,7 @@
 #include "frame_delta.h"
 #include "skin_selection.h"
 
+#include <impl/assets_scene/asset.h>
 #include <impl/ecs_ui/toolkit/input/pointer.h>
 #include <impl/ecs_ui/toolkit/gpu/renderer.h>
 
@@ -78,6 +79,7 @@ public:
 
 
 public:
+    void setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept{ m_activeSceneSubsystems = subsystems; }
     void setGpuCommandRecordingMode(Ui::GpuCommandRecordingMode::Enum mode)noexcept;
     // Main-thread request; last request wins. Empty selects the engine default. Safe from a UI paint callback.
     void requestSkin(const Core::Assets::AssetRef<UiSkin>& skin)noexcept;
@@ -140,6 +142,8 @@ private:
     Core::IClipboardService& m_clipboard;
     Core::ITextInputService& m_textInput;
     Core::Assets::AssetManager& m_assetManager;
+    ActiveSceneSubsystems m_defaultSceneSubsystems;
+    const ActiveSceneSubsystems* m_activeSceneSubsystems = nullptr;
     UiSkinSelection m_skinSelection;
     UniquePtr<Core::Assets::IAsset> m_skinAsset;
     FontReferences m_fontRefs;

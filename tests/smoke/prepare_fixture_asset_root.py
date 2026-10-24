@@ -22,7 +22,8 @@ def prepare_asset_root(output_root, source_roots):
 
     contents = {}
     identities = {}
-    for source in sources:
+    overlay_assets = []
+    for source_index, source in enumerate(sources):
         for path in sorted(source.rglob("*")):
             if path.is_symlink():
                 raise ValueError(f"fixture source must not contain symbolic links: {path}")
@@ -34,6 +35,17 @@ def prepare_asset_root(output_root, source_roots):
                 raise ValueError(f"fixture asset identity collision: {relative} and {identities[identity]}")
             identities[identity] = relative
             contents[relative] = path.read_bytes()
+            if source_index > 0 and relative.lower().endswith(".nwb"):
+                overlay_assets.append("project/" + relative[:-4])
+
+    if overlay_assets and "scenes/main.nwb" in contents:
+        scene_text = contents["scenes/main.nwb"].decode("utf-8")
+        newline = "\r\n" if "\r\n" in scene_text else "\n"
+        closing = newline + "];"
+        assets_start = scene_text.index("asset.assets = [")
+        closing_index = scene_text.index(closing, assets_start)
+        extra_lines = "," + newline + ("," + newline).join(f'    "{asset}"' for asset in overlay_assets)
+        contents["scenes/main.nwb"] = (scene_text[:closing_index] + extra_lines + scene_text[closing_index:]).encode("utf-8")
 
     existing = set()
     for path in output.rglob("*"):

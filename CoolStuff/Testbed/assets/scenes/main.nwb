@@ -1,0 +1,13 @@
+scene asset;
+
+asset.subsystems = [
+    "engine/subsystems/default",
+];
+
+asset.assets = [
+    "project/characters/female/model",
+    "project/materials/mat_skinned_uv",
+    "project/materials/mat_white_opaque",
+    "project/meshes/ground_plane/model",
+];
+

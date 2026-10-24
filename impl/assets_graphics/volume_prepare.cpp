@@ -163,6 +163,7 @@ static Core::Assets::AssetMetadataParseResult::Enum ParseGraphicsDocumentMetadat
             return AssetMetadataParseResult::Error;
 
         graphicsMetadata.csgShapeEntries.push_back(Move(*csgShapeEntryResult));
+        ++Core::Assets::RequireParsedMetadataExtension<AssetsCsgCook::CsgVolumePresence>(context.parsedMetadata, AssetsCsgCook::s_CsgVolumePresenceExtensionName).shapeCount;
         return AssetMetadataParseResult::Parsed;
     }
 

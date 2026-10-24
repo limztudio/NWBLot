@@ -64,6 +64,7 @@ MeshSkinningSystem::MeshSkinningSystem(Core::Alloc::GlobalArena& arena, Core::EC
     , m_runtimeMeshRegistry(runtimeMeshRegistry)
     , m_shaderPathResolver(Move(shaderPathResolver))
     , m_runtimeMeshCache(arena, graphics, assetManager)
+    , m_defaultSceneSubsystems(arena)
     , m_runtimeResources(0, Hasher<u64>(), EqualTo<u64>(), arena)
     , m_frameDispatchPlans(arena)
     , m_frameLiveBuffers(arena)
@@ -95,6 +96,10 @@ MeshSkinningSystem::~MeshSkinningSystem()noexcept{
 void MeshSkinningSystem::prepare(Core::ECS::World& world){
     static_cast<void>(world);
     m_runtimeSetupReady = false;
+    if(!isSkinningFeatureEnabled()){
+        m_runtimeSetupReady = true;
+        return;
+    }
     if(!m_skinningComputePipeline || !m_boundsComputePipeline || !m_localBoundsComputePipeline || !m_repackComputePipeline)
         return;
     Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_PrepareRuntimeArena);
@@ -127,6 +132,13 @@ Expected<void, Core::CpuTaskAdmissionError::Enum> MeshSkinningSystem::update(Cor
 bool MeshSkinningSystem::validateResources(const u32 width, const u32 height, const u32 sampleCount){
     static_cast<void>(sampleCount);
     if(width == 0 || height == 0)
+        return true;
+    if(!m_activeSceneSubsystems && !m_defaultSceneSubsystemsAttempted){
+        m_defaultSceneSubsystemsAttempted = true;
+        if(m_defaultSceneSubsystems.loadProjectStartScene(m_assetManager))
+            m_activeSceneSubsystems = &m_defaultSceneSubsystems;
+    }
+    if(!isSkinningFeatureEnabled())
         return true;
 
     auto& device = m_graphics.getDevice();
@@ -163,6 +175,8 @@ bool MeshSkinningSystem::prepareResources(Core::Framebuffer* framebuffer){
 
 void MeshSkinningSystem::render(Core::Framebuffer* framebuffer){
     static_cast<void>(framebuffer);
+    if(!isSkinningFeatureEnabled())
+        return;
 
     if(!submitFrameSkinningGraph())
         NWB_LOGGER_WARNING(NWB_TEXT("MeshSkinningSystem: skipped skinning because graph-owned work was not accepted"));

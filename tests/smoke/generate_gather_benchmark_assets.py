@@ -67,6 +67,14 @@ def main(argv=None):
     if contents.keys() & generated.keys():
         parser.error("generated benchmark identities collide with source assets")
     contents.update(generated)
+    if "scenes/main.nwb" in contents:
+        scene_text = contents["scenes/main.nwb"].decode(LIT_UTF_8)
+        closing = LIT_R_N + "];"
+        assets_start = scene_text.index("asset.assets = [")
+        closing_index = scene_text.index(closing, assets_start)
+        extra_assets = ["project/" + relative[:-4] for relative in sorted(generated.keys()) if relative.lower().endswith(".nwb")]
+        extra_lines = "," + LIT_R_N + ("," + LIT_R_N).join(f'    "{asset}"' for asset in extra_assets)
+        contents["scenes/main.nwb"] = (scene_text[:closing_index] + extra_lines + scene_text[closing_index:]).encode(LIT_UTF_8)
     if LIT_GENERATION_IDENTITY_JSON in contents:
         parser.error("source assets collide with the reserved generation identity")
     expected = dict(contents)

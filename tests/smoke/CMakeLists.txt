@@ -80,7 +80,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             "${CMAKE_CURRENT_LIST_DIR}/reflection_quality_settings.h"
         )
         set_target_properties("${TARGET_NAME}" PROPERTIES DEBUGGER_WORKING_DIRECTORY "${RUNTIME_ROOT}" WIN32_EXECUTABLE ON VS_DEBUGGER_WORKING_DIRECTORY "${RUNTIME_ROOT}")
-        nwb_target_link_libraries_whole_archive("${TARGET_NAME}" nwb_assets_mesh nwb_assets_skeleton nwb_assets_model nwb_assets_material nwb_assets_shader nwb_assets_texture nwb_assets_sampler)
+        nwb_target_link_libraries_whole_archive("${TARGET_NAME}" nwb_assets_mesh nwb_assets_skeleton nwb_assets_model nwb_assets_material nwb_assets_shader nwb_assets_texture nwb_assets_sampler nwb_assets_subsystem nwb_assets_scene)
         target_link_libraries("${TARGET_NAME}" PRIVATE nwb_common nwb_alloc nwb_loader nwb_ecs_scene nwb_ecs_mesh nwb_ecs_render nwb_ecs_model_renderer nwb_assets_graphics ${ARGN})
         if(TARGET nwb_logserver)
             add_dependencies("${TARGET_NAME}" nwb_logserver)
@@ -462,6 +462,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             set(_nwb_texture_smoke_asset_stamp "${_nwb_texture_smoke_runtime_root}/res/.nwb_texture_smoke_assets_$<CONFIG>.stamp")
             add_custom_command(OUTPUT "${_nwb_texture_smoke_asset_stamp}" COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_texture_smoke_runtime_root}/res" COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/launch.py" --skip-build
                     --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>" --repo-root "${PROJECT_SOURCE_DIR}" --asset-root "impl/assets" --asset-root "tests/smoke/assets" --asset-root "${_nwb_texture_smoke_generated_asset_root}"
+                    --input "tests/smoke/assets/project.nwb" "tests/smoke/assets/smoke/texture/materials/pattern.nwb"
                     --output-directory "${_nwb_texture_smoke_runtime_root}/res" --cache-directory "${_nwb_smoke_asset_cache_directory}/smoke_catalogs/texture" --configuration "$<CONFIG>" COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_texture_smoke_asset_stamp}" DEPENDS
                     nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer "${PROJECT_SOURCE_DIR}/pipeline/launch.py" "${_nwb_texture_smoke_source_nwb}" "${_nwb_texture_smoke_source_tex}" ${_nwb_texture_smoke_asset_inputs}
                 WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}" COMMENT "Cooking NWB texture smoke assets for $<CONFIG>..." VERBATIM USES_TERMINAL)

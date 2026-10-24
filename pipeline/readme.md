@@ -26,15 +26,16 @@ needed with `NWB_BUILD_PIPELINE=ON`, builds `nwb_pipeline`, and resolves all thr
 tools from the selected CMake configuration. Configure, build, and pipeline
 failures retain their nonzero exit status at the root launcher.
 
-`dependency_computer` preserves its inputs, including their order and duplicates.
-With `--include-skin-dependencies`, it also resolves textures referenced by selected
-UI skins and appends missing metadata providers. General dependency expansion is
-not implemented.
-It accepts multiple `--input` values, repeated `--input` options, or an
-`--input-list` file. Its `--output` is a UTF-8 file containing one input per line.
+`dependency_computer` computes transitive `.nwb` asset dependencies. When no explicit
+`--input` or `--input-list` is provided, it automatically discovers `project.nwb` in
+non-engine `--asset-root` directories and expands the dependency graph from the project's
+`start_scene` through scene subsystems, conditional subsystem features, and reachable
+assets. When explicit `--input` or `--input-list` values are provided, it preserves those
+seed inputs and expands their transitive dependencies across `--asset-root` providers.
+Its `--output` is a UTF-8 file containing one resolved provider path per line.
 
 ```console
-python -m launcher run nwb_dependency_computer --config dbg --working-directory . -- --input project/assets/samplers/a.nwb project/assets/samplers/b.nwb --output dependencies.list
+python -m launcher run nwb_dependency_computer --config dbg --working-directory . -- --repo-root . --asset-root impl/assets CoolStuff/Testbed/assets --output dependencies.list
 ```
 
 `asset_builder` compiles selected `.nwb` assets into standalone runtime binary
@@ -119,8 +120,8 @@ python -m launcher pipeline --skip-build --tool-directory __exec/windows/arm64/f
 ```
 
 `--dry-run` prints planned build and pipeline commands without writing manifests,
-artifacts, or volumes, or running tools. `--input` limits selected sources.
-Use `--include-skin-dependencies` to include textures referenced by selected skins.
+artifacts, or volumes, or running tools. `--input` overrides automatic `project.nwb`
+root discovery with an explicit seed list while still expanding transitive dependencies.
 `--build-directory` chooses where to retain intermediate artifacts; otherwise
 they live in an output-specific directory under the asset cache.
 

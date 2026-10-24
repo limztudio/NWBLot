@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<PreparedMeshSwBvhGraphResourceVector> ResolvePreparedSoftwareBvhGraphResources(Core::Alloc::ScratchArena& scratchArena, const Core::GpuTaskGraph& graph, const PreparedMeshSwBvhBuildVector& builds){
+Expected<PreparedMeshSwBvhGraphResourceVector> ResolvePreparedSoftwareBvhGraphResources(const Core::GpuTaskGraph& graph, const Span<const PreparedMeshSwBvhBuild> builds, Core::Alloc::ScratchArena& scratchArena){
     PreparedMeshSwBvhGraphResourceVector result(scratchArena);
     if(builds.empty())
         return result;

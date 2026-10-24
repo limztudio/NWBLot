@@ -300,25 +300,24 @@ TEST(EcsGraphics, ShadowMaterialConstantsReuseOnlyTheSameMaterialAndLayout){
     using RangeMap = NWB::Impl::ECSRenderDetail::MaterialTypedConstantRangeMap;
     NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
     ::Vector<u8, NWB::Core::Alloc::ScratchArena> uploadBytes(scratchArena);
-    ::Vector<u8, NWB::Core::Alloc::ScratchArena> constants(scratchArena);
-    constants.assign({0xA1u, 0xB2u, 0xC3u, 0xD4u});
+    constexpr u8 constants[] = {0xA1u, 0xB2u, 0xC3u, 0xD4u};
     RangeMap ranges(0, RangeMap::hasher(), RangeMap::key_equal(), scratchArena);
     ranges.reserve(3u);
     const Name material("project/materials/shared");
     const Name otherMaterial("project/materials/other");
 
-    const auto first = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialConstantTypedByteRange(uploadBytes, ranges, material, 17u, constants);
+    const auto first = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialConstantTypedByteRange(material, 17u, constants, uploadBytes, ranges);
     ASSERT_TRUE(first);
     const usize firstUploadSize = uploadBytes.size();
     for(u32 instance = 0u; instance < 8u; ++instance){
-        const auto repeated = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialConstantTypedByteRange(uploadBytes, ranges, material, 17u, constants);
+        const auto repeated = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialConstantTypedByteRange(material, 17u, constants, uploadBytes, ranges);
         ASSERT_TRUE(repeated);
         EXPECT_EQ(repeated->byteOffset, first->byteOffset);
         EXPECT_EQ(repeated->byteCount, first->byteCount);
         EXPECT_EQ(uploadBytes.size(), firstUploadSize);
     }
-    const auto differentLayout = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialConstantTypedByteRange(uploadBytes, ranges, material, 18u, constants);
-    const auto differentMaterial = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialConstantTypedByteRange(uploadBytes, ranges, otherMaterial, 17u, constants);
+    const auto differentLayout = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialConstantTypedByteRange(material, 18u, constants, uploadBytes, ranges);
+    const auto differentMaterial = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialConstantTypedByteRange(otherMaterial, 17u, constants, uploadBytes, ranges);
     ASSERT_TRUE(differentLayout);
     ASSERT_TRUE(differentMaterial);
     EXPECT_NE(differentLayout->byteOffset, first->byteOffset);
@@ -327,9 +326,9 @@ TEST(EcsGraphics, ShadowMaterialConstantsReuseOnlyTheSameMaterialAndLayout){
     ASSERT_EQ(ranges.size(), 3u);
     for(const auto& [key, range] : ranges){
         EXPECT_TRUE(key.materialName == material || key.materialName == otherMaterial);
-        ASSERT_EQ(range.byteCount, constants.size());
+        ASSERT_EQ(range.byteCount, sizeof(constants));
         ASSERT_LE(range.byteOffset + range.byteCount, uploadBytes.size());
-        EXPECT_EQ(NWB_MEMCMP(uploadBytes.data() + range.byteOffset, constants.data(), constants.size()), 0);
+        EXPECT_EQ(NWB_MEMCMP(uploadBytes.data() + range.byteOffset, constants, sizeof(constants)), 0);
     }
 }
 
@@ -380,9 +379,7 @@ TEST(EcsGraphics, MaterialTypedByteRangeRepeatedHitsAvoidScratchAllocations){
     using RangeMap = NWB::Impl::ECSRenderDetail::MaterialTypedByteContentRangeMap;
     using ByteRange = NWB::Impl::ECSRenderDetail::MaterialTypedByteRange;
 
-    NWB::Core::Alloc::ScratchArena sourceScratch(Name("tests/material_typed_dedup/hit_sources"));
-    ByteVector sourceBytes(sourceScratch);
-    sourceBytes.resize(4096u);
+    Array<u8, 4096> sourceBytes{};
     for(usize index = 0u; index < sourceBytes.size(); ++index)
         sourceBytes[index] = static_cast<u8>((index * 31u) & 255u);
 
@@ -395,13 +392,13 @@ TEST(EcsGraphics, MaterialTypedByteRangeRepeatedHitsAvoidScratchAllocations){
         ranges.reserve(1u);
         const Span<const u8> bytes(sourceBytes.data(), byteCount);
         ByteRange firstRange;
-        const auto rangeResult1 = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(uploadBytes, ranges, bytes);
+        const auto rangeResult1 = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(bytes, uploadBytes, ranges);
         ASSERT_TRUE(rangeResult1);
         firstRange = *rangeResult1;
         constexpr u32 s_WarmupIterations = 64u;
         for(usize warmup = 0u; warmup < s_WarmupIterations; ++warmup){
             ByteRange range;
-            const auto rangeResult2 = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(uploadBytes, ranges, bytes);
+            const auto rangeResult2 = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(bytes, uploadBytes, ranges);
             ASSERT_TRUE(rangeResult2);
             range = *rangeResult2;
         }
@@ -409,7 +406,7 @@ TEST(EcsGraphics, MaterialTypedByteRangeRepeatedHitsAvoidScratchAllocations){
         const ArenaMemoryStats before = scratchArena.memoryStats();
         for(usize lookup = 0u; lookup < 256u; ++lookup){
             ByteRange range;
-            const auto rangeResult3 = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(uploadBytes, ranges, bytes);
+            const auto rangeResult3 = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(bytes, uploadBytes, ranges);
             ASSERT_TRUE(rangeResult3);
             range = *rangeResult3;
             EXPECT_EQ(range.byteOffset, firstRange.byteOffset);
@@ -417,7 +414,7 @@ TEST(EcsGraphics, MaterialTypedByteRangeRepeatedHitsAvoidScratchAllocations){
         }
         const Span<const u8> emptyBytes;
         ByteRange emptyRange{4u, 4u};
-        const auto rangeResult4 = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(uploadBytes, ranges, emptyBytes);
+        const auto rangeResult4 = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(emptyBytes, uploadBytes, ranges);
         ASSERT_TRUE(rangeResult4);
         emptyRange = *rangeResult4;
         const ArenaMemoryStats after = scratchArena.memoryStats();
@@ -472,21 +469,21 @@ TEST(EcsGraphics, MaterialTypedByteRangeUploadAliasSurvivesGrowthAndMutation){
     using ByteRange = NWB::Impl::ECSRenderDetail::MaterialTypedByteRange;
     using RangeMap = NWB::Impl::ECSRenderDetail::MaterialTypedByteContentRangeMap;
 
-    NWB::Core::Alloc::ScratchArena sourceScratch(Name("tests/material_typed_dedup/alias_source"));
-    ByteVector expectedBytes(sourceScratch);
+    Array<u8, 32> expectedBytes{};
     NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
     ByteVector uploadBytes(scratchArena);
-    uploadBytes.reserve(32u);
+    uploadBytes.reserve(expectedBytes.size());
     uploadBytes.resize(uploadBytes.capacity());
-    for(usize index = 0u; index < uploadBytes.size(); ++index)
+    for(usize index = 0u; index < uploadBytes.size(); ++index){
         uploadBytes[index] = static_cast<u8>((index * 31u) & 255u);
-    expectedBytes.assign(uploadBytes.begin(), uploadBytes.end());
+        expectedBytes[index] = uploadBytes[index];
+    }
     const usize initialCapacity = uploadBytes.capacity();
     const Span<const u8> aliasedBytes(uploadBytes.data(), uploadBytes.size());
     RangeMap ranges(0u, RangeMap::hasher(), RangeMap::key_equal(), scratchArena);
     ranges.reserve(1u);
     ByteRange appendedRange;
-    const auto rangeResult5 = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(uploadBytes, ranges, aliasedBytes);
+    const auto rangeResult5 = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(aliasedBytes, uploadBytes, ranges);
     ASSERT_TRUE(rangeResult5);
     appendedRange = *rangeResult5;
     ASSERT_GT(uploadBytes.capacity(), initialCapacity);
@@ -499,7 +496,7 @@ TEST(EcsGraphics, MaterialTypedByteRangeUploadAliasSurvivesGrowthAndMutation){
         uploadBytes[index] ^= 255u;
     const usize uploadByteCount = uploadBytes.size();
     ByteRange foundRange;
-    const auto rangeResult6 = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(uploadBytes, ranges, expectedBytes);
+    const auto rangeResult6 = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(expectedBytes, uploadBytes, ranges);
     ASSERT_TRUE(rangeResult6);
     foundRange = *rangeResult6;
     EXPECT_EQ(foundRange.byteOffset, appendedRange.byteOffset);

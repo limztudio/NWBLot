@@ -160,12 +160,12 @@ static constexpr TStringView s_RtTriangleAttributeLabel = NWB_TEXT("rt triangle 
     return true;
 }
 
-template<typename PayloadT, typename PayloadVector>
+template<typename PayloadT>
 [[nodiscard]] Expected<Core::BufferHandle, RuntimeMeshBufferUpload::BufferSetupFailure::Enum> SetupRuntimeBuffer(
     Core::GraphicsRuntime& graphics,
     const MeshSkinningRuntimeInstance& instance,
     const AStringView suffix,
-    const PayloadVector& payload,
+    const Span<const PayloadT> payload,
     const bool canHaveUavs,
     const TStringView label,
     const bool canHaveRawViews = false,
@@ -196,13 +196,13 @@ template<typename PayloadT, typename PayloadVector>
     return MakeUnexpected(buffer.error());
 }
 
-template<typename PayloadT, typename PayloadVector>
+template<typename PayloadT>
 [[nodiscard]] bool AssignRuntimeBuffer(
     Core::BufferHandle& outBuffer,
     Core::GraphicsRuntime& graphics,
     const MeshSkinningRuntimeInstance& instance,
     const AStringView suffix,
-    const PayloadVector& payload,
+    const Span<const PayloadT> payload,
     const bool canHaveUavs,
     const TStringView label,
     const bool canHaveRawViews = false,
@@ -219,14 +219,13 @@ template<typename PayloadT, typename PayloadVector>
     return true;
 }
 
-template<typename PayloadVector>
 [[nodiscard]] bool AssignPaddedRawRuntimeBuffer(
     Core::BufferHandle& outBuffer,
     Core::GraphicsRuntime& graphics,
     Core::Alloc::ScratchArena& scratchArena,
     const MeshSkinningRuntimeInstance& instance,
     const AStringView suffix,
-    const PayloadVector& payload,
+    const Span<const u8> payload,
     const bool canHaveUavs,
     const TStringView label,
     const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute
@@ -408,7 +407,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
     // Both shadow backends trace triangles; always build the reconstructed index buffer.
     if(uploaded){
         const usize indexCount = instance.meshletPrimitiveIndices.size();
-        const auto triangleIndices = BuildMeshletTriangleIndices(scratchArena, instance.meshlets, instance.meshletLocalVertexRefs, instance.meshletPositionRefDeltas, instance.meshletPrimitiveIndices, instance.restPositions.size());
+        const auto triangleIndices = BuildMeshletTriangleIndices(instance.meshlets, instance.meshletLocalVertexRefs, instance.meshletPositionRefDeltas, instance.meshletPrimitiveIndices, instance.restPositions.size(), scratchArena);
         if(!triangleIndices){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to reconstruct ray tracing triangle indices for runtime mesh '{}'"), instance.handle.value);
             return false;
@@ -435,7 +434,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
 
     // Per-corner trace attributes seeded from bind-pose; repack overwrites normals per frame.
     if(uploaded){
-        const auto triangleAttributes = BuildMeshletTriangleAttributes(scratchArena, instance.meshlets, instance.meshletLocalVertexRefs, instance.meshletAttributeRefDeltas, instance.meshletPrimitiveIndices, instance.restNormals, instance.uv0);
+        const auto triangleAttributes = BuildMeshletTriangleAttributes(instance.meshlets, instance.meshletLocalVertexRefs, instance.meshletAttributeRefDeltas, instance.meshletPrimitiveIndices, instance.restNormals, instance.uv0, scratchArena);
         if(!triangleAttributes){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to reconstruct shadow trace triangle attributes for runtime mesh '{}'"), instance.handle.value);
             return false;

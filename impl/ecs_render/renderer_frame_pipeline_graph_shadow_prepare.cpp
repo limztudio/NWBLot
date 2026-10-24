@@ -84,7 +84,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         return false;
     }
     const bool meshBlasBuildsGraphOwned = m_raytracingSystem.preparedMeshBlasBuildsReady();
-    const PreparedMeshBlasBuildVector& preparedMeshBlasBuilds = m_raytracingSystem.preparedMeshBlasBuilds();
+    const Span<const PreparedMeshBlasBuild> preparedMeshBlasBuilds = m_raytracingSystem.preparedMeshBlasBuilds();
     if(meshBlasBuildsGraphOwned && preparedMeshBlasBuilds.empty()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen BLAS build plan has no operations"));
         return false;
@@ -94,7 +94,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         return false;
     }
     const bool meshSwBvhBuildsGraphOwned = m_raytracingSystem.preparedMeshSwBvhBuildsReady();
-    const PreparedMeshSwBvhBuildVector& preparedMeshSwBvhBuilds = m_raytracingSystem.preparedMeshSwBvhBuilds();
+    const Span<const PreparedMeshSwBvhBuild> preparedMeshSwBvhBuilds = m_raytracingSystem.preparedMeshSwBvhBuilds();
     if(meshSwBvhBuildsGraphOwned && preparedMeshSwBvhBuilds.empty()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software BVH build plan has no operations"));
         return false;
@@ -106,7 +106,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceSetUse, Core::Alloc::ScratchArena> resourceSetUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accelStructFinalizeResourceUses{ scratchArena };
-    const ShadowPrepareGeometryInputs geometryInputs{ .blasBuilds = preparedMeshBlasBuilds, .traceResources = shadowTraceGeometryResources, .traceResourceCount = shadowTraceGeometryResourceCount, .blasBuildsGraphOwned = meshBlasBuildsGraphOwned, };
+    const ShadowPrepareGeometryInputs geometryInputs{ .blasBuilds = preparedMeshBlasBuilds, .traceResources = Span<const Core::GpuGraphResourceId>(shadowTraceGeometryResources, shadowTraceGeometryResourceCount), .blasBuildsGraphOwned = meshBlasBuildsGraphOwned, };
     ShadowPrepareGeometryResources geometryResources(geometryInputs, scratchArena);
     const auto& meshBlasGeometryBuildInputResources = geometryResources.m_blasBuildInputs;
     const auto& shadowPrepareTraceGeometryResources = geometryResources.m_remainingTraceGeometry;
@@ -286,7 +286,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
 
     const bool pureSoftwareMeshSwBvhBuildsGraphOwned = pureSoftwareMeshSwBvhBuildsGraphOwnedCandidate;
     if(pureSoftwareMeshSwBvhBuildsGraphOwned){
-        auto resources = ResolvePreparedSoftwareBvhGraphResources(scratchArena, m_deferredLightingTaskGraph, preparedMeshSwBvhBuilds);
+        auto resources = ResolvePreparedSoftwareBvhGraphResources(m_deferredLightingTaskGraph, preparedMeshSwBvhBuilds, scratchArena);
         if(!resources){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software BVH build is missing graph resources"));
             return false;

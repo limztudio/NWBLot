@@ -21,19 +21,13 @@ NWB_IMPL_BEGIN
 
 // Flat positionStream-space triangle index buffer from meshlet streams (mirrors nwbMeshBuildMeshletVertex decode).
 // Raw streams cover cooked + skinned instances.
-template<
-    typename MeshletContainer,
-    typename LocalVertexRefContainer,
-    typename DeltaContainer,
-    typename PrimitiveContainer
->
-[[nodiscard]] Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildMeshletTriangleIndices(
-    Core::Alloc::ScratchArena& scratchArena,
-    const MeshletContainer& meshlets,
-    const LocalVertexRefContainer& localVertexRefs,
-    const DeltaContainer& positionRefDeltas,
-    const PrimitiveContainer& primitiveIndices,
-    const usize positionCount
+[[nodiscard]] inline Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildMeshletTriangleIndices(
+    const Span<const MeshletDesc> meshlets,
+    const Span<const MeshletLocalVertexRef> localVertexRefs,
+    const Span<const u8> positionRefDeltas,
+    const Span<const u8> primitiveIndices,
+    const usize positionCount,
+    Core::Alloc::ScratchArena& scratchArena
 ){
     const u8* const deltaBytes = positionRefDeltas.data();
     const usize deltaByteCount = positionRefDeltas.size();
@@ -57,8 +51,8 @@ template<
     return outIndices;
 }
 
-[[nodiscard]] inline Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildMeshletTriangleIndices(Core::Alloc::ScratchArena& scratchArena, const MeshGeometryPayload& payload){
-    return BuildMeshletTriangleIndices(scratchArena, payload.meshlets(), payload.meshletLocalVertexRefs(), payload.meshletPositionRefDeltas(), payload.meshletPrimitiveIndices(), payload.positionStream().size());
+[[nodiscard]] inline Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildMeshletTriangleIndices(const MeshGeometryPayload& payload, Core::Alloc::ScratchArena& scratchArena){
+    return BuildMeshletTriangleIndices(payload.meshlets(), payload.meshletLocalVertexRefs(), payload.meshletPositionRefDeltas(), payload.meshletPrimitiveIndices(), payload.positionStream().size(), scratchArena);
 }
 
 

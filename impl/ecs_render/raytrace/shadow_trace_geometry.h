@@ -46,20 +46,20 @@ struct PreparedShadowTraceGeometryBuffer{
 using PreparedShadowTraceGeometryBufferVector = Vector<PreparedShadowTraceGeometryBuffer, Core::Alloc::GlobalArena>;
 
 struct ShadowTraceGeometrySelection{
-    const Vector<NotNull<Core::Buffer*>, Core::Alloc::GlobalArena>& hardwarePositions;
-    const Vector<NotNull<Core::Buffer*>, Core::Alloc::GlobalArena>& hardwareIndices;
-    const Vector<NotNull<Core::Buffer*>, Core::Alloc::GlobalArena>& hardwareAttributes;
-    const Vector<NotNull<Core::Buffer*>, Core::Alloc::GlobalArena>& softwareNodes;
-    const Vector<NotNull<Core::Buffer*>, Core::Alloc::GlobalArena>& softwarePositions;
-    const Vector<NotNull<Core::Buffer*>, Core::Alloc::GlobalArena>& softwareIndices;
-    const Vector<NotNull<Core::Buffer*>, Core::Alloc::GlobalArena>& softwareAttributes;
+    Span<const NotNull<Core::Buffer*>> hardwarePositions{};
+    Span<const NotNull<Core::Buffer*>> hardwareIndices{};
+    Span<const NotNull<Core::Buffer*>> hardwareAttributes{};
+    Span<const NotNull<Core::Buffer*>> softwareNodes{};
+    Span<const NotNull<Core::Buffer*>> softwarePositions{};
+    Span<const NotNull<Core::Buffer*>> softwareIndices{};
+    Span<const NotNull<Core::Buffer*>> softwareAttributes{};
     bool includeHardware = false;
     bool includeSoftware = false;
 };
 
 
 [[nodiscard]] bool FreezePreparedShadowTraceGeometryBuffers(
-    const Vector<ECSRenderDetail::MeshRayTracingResourceSnapshot, Core::Alloc::ScratchArena>& meshes,
+    Span<const ECSRenderDetail::MeshRayTracingResourceSnapshot> meshes,
     const ShadowTraceGeometrySelection& selection,
     Core::Alloc::ScratchArena& scratchArena,
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& acceptedBuffers,

@@ -123,12 +123,12 @@ static void ReportMeshBufferSetupFailure(const RuntimeMeshBufferUpload::BufferSe
     return bufferName;
 }
 
-template<typename PayloadT, typename PayloadVector>
+template<typename PayloadT>
 [[nodiscard]] static Expected<Core::BufferHandle, RuntimeMeshBufferUpload::BufferSetupFailure::Enum> SetupMeshBuffer(
     Core::GraphicsRuntime& graphics,
     const Name& meshName,
     const AStringView suffix,
-    const PayloadVector& payload,
+    const Span<const PayloadT> payload,
     const TStringView label,
     const bool canHaveRawViews = false,
     const bool accelStructBuildInput = false
@@ -145,13 +145,12 @@ template<typename PayloadT, typename PayloadVector>
     return Move(*buffer);
 }
 
-template<typename PayloadVector>
 [[nodiscard]] static Expected<Core::BufferHandle, RuntimeMeshBufferUpload::BufferSetupFailure::Enum> SetupPaddedRawMeshBuffer(
     Core::GraphicsRuntime& graphics,
     Core::Alloc::ScratchArena& scratchArena,
     const Name& meshName,
     const AStringView suffix,
-    const PayloadVector& payload,
+    const Span<const u8> payload,
     const TStringView label
 ){
     const auto bufferName = DeriveMeshBufferName(meshName, suffix, label);
@@ -180,27 +179,7 @@ template<typename PayloadVector>
     return true;
 }
 
-template<typename PositionVector>
-[[nodiscard]] static Expected<CsgReceiverCpuBounds> BuildPositionStreamBounds(const PositionVector& positions)noexcept([]()constexpr noexcept{
-    using Range = PositionVector;
-    if constexpr(IsArray_V<Range>)
-        return noexcept(DeclVal<void(*)(const Float3U&)noexcept>()(DeclVal<const RemoveExtent_T<Range>&>()));
-    else if constexpr(requires(const Range& values){ values.begin(); values.end(); }){
-        using Iterator = RemoveCVRef_T<decltype(DeclVal<const Range&>().begin())>;
-        using Sentinel = RemoveCVRef_T<decltype(DeclVal<const Range&>().end())>;
-        return
-            noexcept(DeclVal<void(*)(Iterator)noexcept>()(DeclVal<const Range&>().begin()))
-            && noexcept(DeclVal<void(*)(Sentinel)noexcept>()(DeclVal<const Range&>().end()))
-            && IsNothrowDestructible_V<Iterator>
-            && IsNothrowDestructible_V<Sentinel>
-            && noexcept(static_cast<bool>(DeclVal<Iterator&>() != DeclVal<Sentinel&>()))
-            && noexcept(++DeclVal<Iterator&>())
-            && noexcept(DeclVal<void(*)(const Float3U&)noexcept>()(*DeclVal<Iterator&>()))
-        ;
-    }
-    else
-        return false;
-}() && noexcept(static_cast<bool>(positions.empty()))){
+[[nodiscard]] static Expected<CsgReceiverCpuBounds> BuildPositionStreamBounds(const Span<const Float3U> positions)noexcept{
     CsgReceiverCpuBounds bounds;
     if(positions.empty())
         return MakeUnexpected(Failure{});
@@ -346,7 +325,7 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const 
 
     // Both shadow backends trace triangles; always create the reconstructed index buffer.
     {
-        const auto triangleIndices = BuildMeshletTriangleIndices(scratchArena, mesh);
+        const auto triangleIndices = BuildMeshletTriangleIndices(mesh, scratchArena);
         if(!triangleIndices){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to reconstruct shadow trace triangle indices for mesh '{}'"), StringConvert(meshPath.resolvedText()));
             return MakeUnexpected(Failure{});
@@ -385,7 +364,7 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const 
 
     // Flat per-corner trace attributes in lockstep with the index buffer; always carries a raw view.
     {
-        const auto triangleAttributes = BuildMeshletTriangleAttributes(scratchArena, mesh);
+        const auto triangleAttributes = BuildMeshletTriangleAttributes(mesh, scratchArena);
         if(!triangleAttributes){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to reconstruct shadow trace triangle attributes for mesh '{}'"), StringConvert(meshPath.resolvedText()));
             return MakeUnexpected(Failure{});

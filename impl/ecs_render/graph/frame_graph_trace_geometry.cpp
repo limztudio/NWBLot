@@ -29,8 +29,8 @@ Expected<FrameGraphTraceGeometryResult> FrameGraphTraceGeometryImporter::declare
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain preflighted shadow-trace geometry buffers"));
         return MakeUnexpected(Failure{});
     }
-    const PreparedShadowTraceGeometryBufferVector& preparedTraceGeometry = m_raytracingSystem.preparedShadowTraceGeometryBuffers();
-    const PreparedShadowTraceMaterialSampledTextureVector& preparedTraceMaterialSampledTextures = m_raytracingSystem.preparedShadowTraceMaterialSampledTextures();
+    const Span<const PreparedShadowTraceGeometryBuffer> preparedTraceGeometry = m_raytracingSystem.preparedShadowTraceGeometryBuffers();
+    const Span<const Core::TextureHandle> preparedTraceMaterialSampledTextures = m_raytracingSystem.preparedShadowTraceMaterialSampledTextures();
 
     FrameGraphTraceGeometryResult result(scratchArena);
     result.traceGeometry.reserve(preparedTraceGeometry.size());

@@ -89,7 +89,7 @@ TEST(AssetsGraphics, MeshCookerPreservesFlatAndNestedIndexCornerOrder){
         ASSERT_TRUE(loadedAsset);
         const auto& mesh = static_cast<const Impl::Mesh&>(**loadedAsset);
         Core::Alloc::ScratchArena scratchArena(Name("tests/integration/assets_graphics/mesh_index_corner_order"));
-        const auto triangleIndices = Impl::BuildMeshletTriangleIndices(scratchArena, mesh);
+        const auto triangleIndices = Impl::BuildMeshletTriangleIndices(mesh, scratchArena);
         ASSERT_TRUE(triangleIndices);
         ASSERT_EQ(triangleIndices->size(), 3u);
         for(usize corner = 0u; corner < 3u; ++corner){

@@ -325,7 +325,7 @@ bool RendererMaterialSystem::prepareVisibleMaterialSurfaceInfos(){
     return hasTransparentRenderers;
 }
 
-void RendererMaterialSystem::prepareVisibleMaterialInstanceMutableCache(Core::Alloc::ScratchArena& scratchArena){
+void RendererMaterialSystem::prepareVisibleMaterialInstanceMutableCache(){
     pruneMaterialInstanceMutableCache();
 
     auto rendererView = m_world.view<RendererComponent>();
@@ -342,7 +342,7 @@ void RendererMaterialSystem::prepareVisibleMaterialInstanceMutableCache(Core::Al
             continue;
         const NotNull<MaterialSurfaceInfo*> materialInfo = *materialInfoResult;
 
-        if(!prepareMaterialInstanceMutableTypedBytes(scratchArena, entity, *materialInfo, materialInstance))
+        if(!prepareMaterialInstanceMutableTypedBytes(entity, *materialInfo, materialInstance))
             continue;
     }
 }

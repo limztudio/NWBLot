@@ -52,8 +52,8 @@ inline constexpr usize s_RawByteLoadAlignmentBytes = sizeof(u32);
 
 
 template<typename PayloadT>
-[[nodiscard]] inline Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupBuffer(Core::GraphicsRuntime& graphics, const Name& debugName, const PayloadT* payload, const usize count, const BufferFlags flags = {}){
-    const auto payloadBytes = TryMultiply<usize>(count, sizeof(PayloadT));
+[[nodiscard]] inline Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupBuffer(Core::GraphicsRuntime& graphics, const Name& debugName, const Span<const PayloadT> payload, const BufferFlags flags = {}){
+    const auto payloadBytes = TryMultiply<usize>(payload.size(), sizeof(PayloadT));
     if(!payloadBytes)
         return MakeUnexpected(BufferSetupFailure::ByteSizeOverflow);
 
@@ -68,7 +68,7 @@ template<typename PayloadT>
         .setQueueSharing(flags.queueSharing)
         .setDebugName(debugName)
     ;
-    setup.data = payload;
+    setup.data = payload.data();
     setup.dataSize = *payloadBytes;
     auto buffer = graphics.setupBuffer(setup);
     if(!buffer)
@@ -76,13 +76,8 @@ template<typename PayloadT>
     return Move(*buffer);
 }
 
-template<typename PayloadT, typename PayloadVector>
-[[nodiscard]] inline Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupBuffer(Core::GraphicsRuntime& graphics, const Name& debugName, const PayloadVector& payload, const BufferFlags flags = {}){
-    return SetupBuffer<PayloadT>(graphics, debugName, payload.data(), payload.size(), flags);
-}
-
-template<typename PayloadT, typename PayloadVector>
-[[nodiscard]] inline Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupRequiredBuffer(Core::GraphicsRuntime& graphics, const Name& debugName, const PayloadVector& payload, const BufferFlags flags){
+template<typename PayloadT>
+[[nodiscard]] inline Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupRequiredBuffer(Core::GraphicsRuntime& graphics, const Name& debugName, const Span<const PayloadT> payload, const BufferFlags flags){
     if(payload.empty())
         return MakeUnexpected(BufferSetupFailure::EmptyPayload);
     if(MultiplyOverflows<usize>(payload.size(), sizeof(PayloadT)))
@@ -91,8 +86,7 @@ template<typename PayloadT, typename PayloadVector>
     return SetupBuffer<PayloadT>(graphics, debugName, payload, flags);
 }
 
-template<typename PayloadVector>
-[[nodiscard]] inline Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupRequiredPaddedRawByteBuffer(Core::GraphicsRuntime& graphics, Core::Alloc::ScratchArena& scratchArena, const Name& debugName, const PayloadVector& payload, const BufferFlags flags){
+[[nodiscard]] inline Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupRequiredPaddedRawByteBuffer(Core::GraphicsRuntime& graphics, Core::Alloc::ScratchArena& scratchArena, const Name& debugName, const Span<const u8> payload, const BufferFlags flags){
     if(payload.empty())
         return MakeUnexpected(BufferSetupFailure::EmptyPayload);
 

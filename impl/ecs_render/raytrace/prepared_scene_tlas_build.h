@@ -41,8 +41,8 @@ public:
         const RendererRayTracingState& state,
         bool staticScene,
         u64 staticSceneHash,
-        const Vector<Core::RayTracingInstanceDesc, Core::Alloc::ScratchArena>& instances,
-        const Vector<Core::RayTracingAccelStructHandle, Core::Alloc::ScratchArena>& instanceBlases
+        Span<const Core::RayTracingInstanceDesc> instances,
+        Span<const Core::RayTracingAccelStructHandle> instanceBlases
     );
     [[nodiscard]] bool record(RendererRayTracingState& state, Core::CommandList& commandList);
     // Publishes the accepted static-scene hash and backing handoff, then clears the plan.

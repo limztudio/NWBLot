@@ -25,7 +25,6 @@ using TestArena = Tests::TestArena<struct PreparedSoftwareBvhGraphResourcesTests
 struct BuildContext{
     TestArena testArena;
     Core::GpuTaskGraph graph{ testArena.arena };
-    PreparedMeshSwBvhBuildVector builds{ testArena.arena };
 };
 
 
@@ -35,11 +34,11 @@ struct BuildContext{
 TEST(PreparedSoftwareBvhGraphResources, MissingImportedBuildBuffersCannotPublishResources){
     BuildContext context;
     Core::Alloc::ScratchArena scratch(Name("tests/prepared_sw_bvh/missing"));
-    const auto emptyResources = ResolvePreparedSoftwareBvhGraphResources(scratch, context.graph, context.builds);
+    const auto emptyResources = ResolvePreparedSoftwareBvhGraphResources(context.graph, {}, scratch);
     ASSERT_TRUE(emptyResources);
     EXPECT_TRUE(emptyResources->empty());
-    context.builds.emplace_back();
-    EXPECT_FALSE(ResolvePreparedSoftwareBvhGraphResources(scratch, context.graph, context.builds));
+    const PreparedMeshSwBvhBuild missingBuild{};
+    EXPECT_FALSE(ResolvePreparedSoftwareBvhGraphResources(context.graph, Span<const PreparedMeshSwBvhBuild>(&missingBuild, 1u), scratch));
     const Core::GpuTaskGraph::DeclarationReadView view(context.graph);
     ASSERT_TRUE(view.valid());
     EXPECT_EQ(view.resourceCount(), 0u);

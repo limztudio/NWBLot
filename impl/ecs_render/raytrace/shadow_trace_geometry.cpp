@@ -127,7 +127,7 @@ private:
 
 
 bool FreezePreparedShadowTraceGeometryBuffers(
-    const Vector<ECSRenderDetail::MeshRayTracingResourceSnapshot, Core::Alloc::ScratchArena>& meshes,
+    const Span<const ECSRenderDetail::MeshRayTracingResourceSnapshot> meshes,
     const ShadowTraceGeometrySelection& selection,
     Core::Alloc::ScratchArena& scratchArena,
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& acceptedBuffers,
@@ -185,7 +185,7 @@ bool FreezePreparedShadowTraceGeometryBuffers(
         record->preparedIndex = outPrepared.size() - 1u;
         return true;
     };
-    const auto appendSelected = [&]<typename SelectedBuffersT>(const SelectedBuffersT& selectedBuffers, const u32 memberIndex, const AStringView identitySuffix, const u8 role){
+    const auto appendSelected = [&](const Span<const NotNull<Core::Buffer*>> selectedBuffers, const u32 memberIndex, const AStringView identitySuffix, const u8 role){
         for(const NotNull<Core::Buffer*> selectedBuffer : selectedBuffers){
             const BufferRecord* const record = bufferIndex.find(selectedBuffer.get());
             if(!record || record->firstMesh[memberIndex] == s_MissingIndex)

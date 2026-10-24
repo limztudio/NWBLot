@@ -199,11 +199,11 @@ public:
     void discardPreflightShadowVisibilityResources()noexcept;
     // These are retained handles for the current frozen trace plan. The graph imports each physical buffer once and uses the shared IDs for every packet that manually stages it.
     [[nodiscard]] bool freezePreparedShadowTraceGeometryBuffers(Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] const PreparedShadowTraceGeometryBufferVector& preparedShadowTraceGeometryBuffers()const noexcept{ return m_preparedShadowTraceGeometryBuffers; }
+    [[nodiscard]] Span<const PreparedShadowTraceGeometryBuffer> preparedShadowTraceGeometryBuffers()const noexcept{ return m_preparedShadowTraceGeometryBuffers; }
 
-    [[nodiscard]] const PreparedShadowTraceMaterialSampledTextureVector& preparedShadowTraceMaterialSampledTextures()const noexcept{ return m_preparedShadowTraceMaterialSampledTextures; }
+    [[nodiscard]] Span<const Core::TextureHandle> preparedShadowTraceMaterialSampledTextures()const noexcept{ return m_preparedShadowTraceMaterialSampledTextures; }
     // Includes accepted but currently invisible mesh streams, which must retain their state source until their owning mesh is removed or a later preparation packet supersedes it.
-    [[nodiscard]] const Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& acceptedShadowTraceGeometryBuffers()const noexcept{ return m_acceptedShadowTraceGeometryBuffers; }
+    [[nodiscard]] Span<const Core::BufferHandle> acceptedShadowTraceGeometryBuffers()const noexcept{ return m_acceptedShadowTraceGeometryBuffers; }
     void confirmPreparedShadowTraceGeometryNormalization()noexcept;
     void invalidatePreparedShadowTraceGeometryBuffers()noexcept;
 
@@ -237,7 +237,7 @@ public:
     // Only Shadow Preparation acceptance publishes a frozen plan's mesh-cache progress.
     [[nodiscard]] bool preparedMeshBlasBuildsReady()const noexcept{ return m_preparedMeshBlasBuildsReady; }
 
-    [[nodiscard]] const PreparedMeshBlasBuildVector& preparedMeshBlasBuilds()const noexcept{ return m_preparedMeshBlasBuilds; }
+    [[nodiscard]] Span<const PreparedMeshBlasBuild> preparedMeshBlasBuilds()const noexcept{ return m_preparedMeshBlasBuilds; }
     void confirmPreparedMeshBlasBuilds();
     // Software frames freeze selected build/refit work against its shared scratch generation; scene and material snapshots remain independently graph-owned.
     [[nodiscard]] const SoftwareSceneRefitHandle& preparedSceneSwBvhRefit()const noexcept{ return m_preparedSceneSwBvhRefit; }
@@ -246,7 +246,7 @@ public:
 
     [[nodiscard]] bool preparedMeshSwBvhBuildsReady()const noexcept{ return m_preparedMeshSwBvhBuildsReady; }
 
-    [[nodiscard]] const PreparedMeshSwBvhBuildVector& preparedMeshSwBvhBuilds()const noexcept{ return m_preparedMeshSwBvhBuilds; }
+    [[nodiscard]] Span<const PreparedMeshSwBvhBuild> preparedMeshSwBvhBuilds()const noexcept{ return m_preparedMeshSwBvhBuilds; }
     // The pure-software Shadow Preparation packet records each frozen build after graph-owned typed sentinel clears. Revalidate this snapshot immediately before its native compute sequence.
     [[nodiscard]] bool recordPreparedMeshSwBvhBuildAfterGraphClears(Core::CommandList& commandList, const PreparedMeshSwBvhBuild& build);
     void confirmPreparedMeshSwBvhBuilds();

@@ -53,10 +53,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
     // Every composite input is a full-resolution point-sampled target. Use direct mip-0 loads so this Compute shader needs no implicit derivatives or compute-derivative extension.
     const int3 texel = int3(pixel, 0);
-    const half4 glassReflection = g_NwbDeferredCompositePushConstants.glassReflectionSlot != NWB_DEFERRED_INVALID_HEAP_SLOT ? half4(nwbHeapSampledImage2D(g_NwbDeferredCompositePushConstants.glassReflectionSlot).Load(texel)) : half4(0.0h);
     half3 compositeColor = half3(0.0h);
     half frontTransmittance = half(1.0h);
     half3 frontColor = half3(0.0h);
+    half reflectionSource = half(0.0h);
     bool hasRefraction = false;
     bool hasTransmitted = false;
     if(g_NwbDeferredCompositePushConstants.refractionResources != 0u){
@@ -73,13 +73,16 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             }
             const half4 transmitted = half4(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.refractionSlots1.x).Load(texel));
             if(transmitted.a > half(0.0h)){
+                const half4 glassReflection = g_NwbDeferredCompositePushConstants.glassReflectionSlot != NWB_DEFERRED_INVALID_HEAP_SLOT ? half4(nwbHeapSampledImage2D(g_NwbDeferredCompositePushConstants.glassReflectionSlot).Load(texel)) : half4(0.0h);
                 compositeColor = frontColor + frontTransmittance * (transmitted.rgb + glassReflection.rgb);
+                reflectionSource = glassReflection.a;
                 hasTransmitted = true;
             }
         }
     }
-    half reflectionSource = glassReflection.a;
     if(!hasTransmitted){
+        if(g_NwbDeferredCompositePushConstants.reflectionDebugView != 0u && g_NwbDeferredCompositePushConstants.glassReflectionSlot != NWB_DEFERRED_INVALID_HEAP_SLOT)
+            reflectionSource = half(nwbHeapSampledImage2D(g_NwbDeferredCompositePushConstants.glassReflectionSlot).Load(texel).a);
         const half4 opaqueReflection = g_NwbDeferredCompositePushConstants.opaqueReflectionSlot != NWB_DEFERRED_INVALID_HEAP_SLOT ? half4(nwbHeapSampledImage2D(g_NwbDeferredCompositePushConstants.opaqueReflectionSlot).Load(texel)) : half4(0.0h);
         if(reflectionSource <= half(0.0h))
             reflectionSource = opaqueReflection.a;

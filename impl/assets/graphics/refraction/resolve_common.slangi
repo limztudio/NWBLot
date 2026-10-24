@@ -58,7 +58,7 @@ bool nwbRefractionResolvePixel(const uint3 groupId, const uint3 groupThreadId, o
     pixel = groupId.xy * NWB_REFRACTION_GROUP_SIZE + groupThreadId.xy;
 #else
     const uint queueIndex = groupId.y * NWB_REFRACTION_MAX_GROUP_COUNT_X + groupId.x;
-    if(queueIndex >= g_NwbRefractionTileArguments.Load(NWB_REFRACTION_TILE_COUNTER_OFFSET))
+    if(groupId.y != 0u && queueIndex >= g_NwbRefractionTileArguments.Load(NWB_REFRACTION_TILE_COUNTER_OFFSET))
         return false;
     const uint tilesX = (g_NwbRefractionPush.width + NWB_REFRACTION_GROUP_SIZE - 1u) / NWB_REFRACTION_GROUP_SIZE;
     const uint tile = g_NwbRefractionTileList.Load(queueIndex * 4u);
@@ -78,7 +78,6 @@ static const float NWB_REFRACTION_FALLBACK_THICKNESS = 1.0;
 static const float NWB_REFRACTION_MIN_CLIP_W = 1e-6;
 static const half NWB_REFRACTION_FRONT_TRANSMITTANCE_MIN = 1e-4h;
 static const float NWB_REFRACTION_TINT_MIN = 1e-4;
-static const half NWB_REFRACTION_SCHLICK_EXPONENT = 5.0h;
 static const float NWB_REFRACTION_IOR_MAX = 4.0;
 static const float NWB_REFRACTION_BIAS_DISTANCE_SCALE = 1e-5;
 // Association tolerances grow with the entry bias.
@@ -141,7 +140,10 @@ half3 nwbRefractionBackground(const uint2 pixel){
 }
 
 half nwbRefractionFresnelTransmissionFromR0(const half r0, const half cosine){
-    return half(1.0) - (r0 + (half(1.0) - r0) * half(pow(half(1.0h) - saturate(cosine), half(NWB_REFRACTION_SCHLICK_EXPONENT))));
+    const half oneMinusCosine = half(1.0h) - saturate(cosine);
+    const half oneMinusCosine2 = oneMinusCosine * oneMinusCosine;
+    const half oneMinusCosine5 = oneMinusCosine2 * oneMinusCosine2 * oneMinusCosine;
+    return half(1.0h) - (r0 + (half(1.0h) - r0) * oneMinusCosine5);
 }
 
 half nwbRefractionFresnelTransmission(const half ior, const half cosine){
@@ -154,7 +156,8 @@ half3 nwbRefractionAttenuation(const half3 tint, const float thickness, const ha
     // Tint/Beer attenuation plus two bounded Fresnel transmissions stay in (0, 1]; half color math is sufficient.
     const half ratio = (ior - half(1.0h)) / (ior + half(1.0h));
     const half r0 = ratio * ratio;
-    return half3(exp(log(clamp(float3(tint), float3(NWB_REFRACTION_TINT_MIN), float3(1.0))) * max(thickness, 0.0)) * float3(nwbRefractionFresnelTransmissionFromR0(r0, entryCosine)) * float3(nwbRefractionFresnelTransmissionFromR0(r0, exitCosine)));
+    const float fresnel = float(nwbRefractionFresnelTransmissionFromR0(r0, entryCosine)) * float(nwbRefractionFresnelTransmissionFromR0(r0, exitCosine));
+    return half3(exp(log(clamp(float3(tint), float3(NWB_REFRACTION_TINT_MIN), float3(1.0))) * max(thickness, 0.0)) * fresnel);
 }
 
 struct NwbRefractionEntry{
@@ -183,16 +186,17 @@ bool nwbRefractionLoadEntry(const uint2 pixel, out NwbRefractionEntry entry){
     const float2 packedIdentity = nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots1.w).Load(texel).rg;
     entry.primaryEntityId = nwbAvboitUnpackRefractionEntityId(packedIdentity);
     entry.frontBoundary = nwbAvboitUnpackRefractionFrontBoundary(packedIdentity);
-    const half4 tintCoverage = half4(nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.z).Load(texel));
+    const half3 tint = half3(nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.z).Load(texel).rgb);
     entry.position = nwbRefractionReconstruct(pixel, depth);
     const float3 cameraRay = entry.position - g_NwbRefractionView.cameraPosition.xyz;
     entry.cameraDistance = length(cameraRay);
     entry.incident = nwbSafeNormalize(cameraRay, float3(0.0, 0.0, 1.0));
     const float3 rawNormal = nwbSafeNormalize(normalIor.xyz, -entry.incident);
-    entry.normal = select(bool3(dot(entry.incident, rawNormal) > 0.0), -rawNormal, rawNormal);
+    const float incidentDotNormal = dot(entry.incident, rawNormal);
+    entry.normal = select(bool3(incidentDotNormal > 0.0), -rawNormal, rawNormal);
     entry.ior = half(clamp(normalIor.w, 1.0, NWB_REFRACTION_IOR_MAX));
-    entry.tint = half3(saturate(tintCoverage.xyz));
-    entry.cosine = half(saturate(-dot(entry.incident, entry.normal)));
+    entry.tint = saturate(tint);
+    entry.cosine = half(saturate(abs(incidentDotNormal)));
     entry.bias = max(NWB_REFRACTION_MIN_DISTANCE, entry.cameraDistance * NWB_REFRACTION_BIAS_DISTANCE_SCALE);
     // Coverage is intentionally not an optical mask: perfectly clear glass may author zero AVBOIT opacity.
     return true;
@@ -247,7 +251,9 @@ bool nwbRefractionScreenBackgroundPixel(const NwbRefractionEntry entry, const fl
             const float3 delta = sceneWorld - entry.position;
             const float alongRay = dot(delta, direction);
             const float tolerance = max(entry.bias * NWB_REFRACTION_BIAS_TOLERANCE_SCALE, (t - previousT) * NWB_REFRACTION_SCREEN_STEP_TOLERANCE_SCALE);
-            if(alongRay > entry.bias && length(delta - direction * alongRay) < tolerance && length(sceneWorld - g_NwbRefractionView.cameraPosition.xyz) > entryCameraDistance){
+            const float3 perpendicular = delta - direction * alongRay;
+            const float3 sceneCameraDelta = sceneWorld - g_NwbRefractionView.cameraPosition.xyz;
+            if(alongRay > entry.bias && dot(perpendicular, perpendicular) < tolerance * tolerance && dot(sceneCameraDelta, sceneCameraDelta) > entryCameraDistance * entryCameraDistance){
                 outSamplePixel = samplePixel;
                 return true;
             }

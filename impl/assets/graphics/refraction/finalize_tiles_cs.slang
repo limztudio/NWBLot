@@ -17,13 +17,8 @@ void main(){
     const uint count = g_NwbRefractionTileArguments.Load(NWB_REFRACTION_TILE_COUNTER_OFFSET);
     const bool dense = count == tilesX * tilesY && tilesX <= NWB_REFRACTION_MAX_GROUP_COUNT_X;
     const uint compactY = max(1u, (count + NWB_REFRACTION_MAX_GROUP_COUNT_X - 1u) / NWB_REFRACTION_MAX_GROUP_COUNT_X);
-    g_NwbRefractionTileArguments.Store(0u, dense ? 0u : min(count, NWB_REFRACTION_MAX_GROUP_COUNT_X));
-    g_NwbRefractionTileArguments.Store(4u, dense ? 1u : compactY);
-    g_NwbRefractionTileArguments.Store(8u, 1u);
-    g_NwbRefractionTileArguments.Store(NWB_REFRACTION_DENSE_ARGUMENT_OFFSET, dense ? tilesX : 0u);
-    g_NwbRefractionTileArguments.Store(NWB_REFRACTION_DENSE_ARGUMENT_OFFSET + 4u, dense ? tilesY : 1u);
-    g_NwbRefractionTileArguments.Store(NWB_REFRACTION_DENSE_ARGUMENT_OFFSET + 8u, 1u);
-    g_NwbRefractionTileArguments.Store(NWB_REFRACTION_DENSE_ARGUMENT_OFFSET + 12u, 0u);
+    g_NwbRefractionTileArguments.Store4(0u, uint4(dense ? 0u : min(count, NWB_REFRACTION_MAX_GROUP_COUNT_X), dense ? 1u : compactY, 1u, count));
+    g_NwbRefractionTileArguments.Store4(NWB_REFRACTION_DENSE_ARGUMENT_OFFSET, uint4(dense ? tilesX : 0u, dense ? tilesY : 1u, 1u, 0u));
 }
 
 

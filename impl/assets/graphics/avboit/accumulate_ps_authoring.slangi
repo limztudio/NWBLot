@@ -121,7 +121,7 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
     // Surface coverage must match occupancy and extinction.
     const NwbMeshSurface surface = nwbMaterialSurface();
 
-    const half alpha = half(clamp(surface.renderCoverage, 0.0, 1.0));
+    const half alpha = clamp(surface.renderCoverage, half(0.0h), half(1.0h));
 
     if(refractionCapture){
         const float ior = float(surface.refractionIor);
@@ -131,7 +131,7 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
         NwbAvboitAccumulatePixelOutput capture;
         capture.accumColor = float4(nwbSafeNormalize(surface.normal, float3(0.0, 0.0, 1.0)), ior);
         // Shadow absorption tint is a (0, 1) color factor, so half math is sufficient; widen only for the float4 store.
-        capture.accumExtinction = float4(float3(half3(clamp(half3(surface.shadowAbsorptionTint), half3(0.0h), half3(1.0h)))), float(alpha));
+        capture.accumExtinction = float4(float3(clamp(surface.shadowAbsorptionTint, half3(0.0h), half3(1.0h))), float(alpha));
 #if NWB_CSG_ENABLED
         const bool frontBoundary = false;
 #else
@@ -143,7 +143,7 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
         return capture;
     }
 
-    if(alpha <= half(0.0))
+    if(alpha <= half(0.0h))
         discard;
     const half volumeTransmittance = nwbAvboitLinearBiasedTransmittance(input.position.xy, input.position.z);
     const half weightedAlpha = alpha * volumeTransmittance;

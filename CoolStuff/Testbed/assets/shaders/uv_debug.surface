@@ -21,7 +21,7 @@ half3 nwbProjectUvDebug(const float2 uv0){
     const half2 wrappedUv = half2(frac(uv0));
     const half2 checkerCell = floor(wrappedUv * NWB_TESTBED_UV_DEBUG_CHECKER_CELLS_PER_AXIS);
     const half checker = fmod(checkerCell.x + checkerCell.y, NWB_TESTBED_UV_DEBUG_CHECKER_PERIOD);
-    const half3 uvColor = half3(wrappedUv, half(1.0) - wrappedUv.x);
+    const half3 uvColor = half3(wrappedUv, 1.0h - wrappedUv.x);
     return lerp(uvColor * NWB_TESTBED_UV_DEBUG_CHECKER_DARK_SCALE, uvColor, checker);
 }
 

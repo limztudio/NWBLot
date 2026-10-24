@@ -288,7 +288,7 @@ NwbOpticalTraceResult nwbOpticalTrace(const NwbOpticalTraceConfig config, const 
         boundaryMedium.priority = optical.priority;
         if(!nwbOpticalSetMediumProperties(hit.surface, boundaryMedium, result))
             return result;
-        if(optical.mode == NWB_RT_OPTICAL_BOUNDARY_UNSPECIFIED && boundaryMedium.ior != 1.0){
+        if(optical.mode == NWB_RT_OPTICAL_BOUNDARY_UNSPECIFIED && boundaryMedium.ior != half(1.0h)){
             result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
             return result;
         }
@@ -339,7 +339,7 @@ NwbOpticalTraceResult nwbOpticalTrace(const NwbOpticalTraceConfig config, const 
             if(boundary.totalInternalReflection)
                 ++result.tirCount;
             else{
-                throughput *= half(boundary.radianceTransmission);
+                throughput *= boundary.radianceTransmission;
                 media = transmittedMedia;
             }
 #else

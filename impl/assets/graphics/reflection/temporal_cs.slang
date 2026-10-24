@@ -29,14 +29,14 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID){
     // Invalid history has no graph read dependency, so this branch must precede every previous-history load.
     if(g_NwbReflectionTemporal.historyValid == 0u || g_NwbReflectionTemporal.previousSampleCount == 0u)
         return;
-    const float4 specular = nwbHeapSampledImage2D(g_NwbReflectionTemporal.opaqueSpecularSlot).Load(int3(pixel, 0));
-    if(!isfinite(specular.a) || specular.a <= 0.0 || !any(specular.rgb > 0.0))
+    const half4 specular = half4(nwbHeapSampledImage2D(g_NwbReflectionTemporal.opaqueSpecularSlot).Load(int3(pixel, 0)));
+    if(!isfinite(float(specular.a)) || specular.a <= half(0.0h) || !any(specular.rgb > half3(0.0h)))
         return;
     const half4 current = half4(nwbHeapStorageImage2DFloat4(g_NwbReflectionTemporal.currentRadianceUavSlot)[pixel]);
-    if(current.a <= 0.0 || !all(isfinite(current.rgb)))
+    if(current.a <= half(0.0h) || !all(isfinite(current.rgb)))
         return;
     const half4 previous = half4(nwbHeapSampledImage2D(g_NwbReflectionTemporal.previousRadianceSrvSlot).Load(int3(pixel, 0)));
-    if(previous.a <= 0.0 || !all(isfinite(previous.rgb)))
+    if(previous.a <= half(0.0h) || !all(isfinite(previous.rgb)))
         return;
     const uint limit = max(g_NwbReflectionTemporal.maxSampleCount, 1u);
     const uint count = min(g_NwbReflectionTemporal.previousSampleCount, limit - 1u) + 1u;

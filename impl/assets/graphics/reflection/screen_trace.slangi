@@ -34,9 +34,9 @@ static const float NWB_REFLECTION_SCREEN_POSITION_ERROR_MIN = 0.00001;
 static const float NWB_REFLECTION_SCREEN_PROJECTION_SCALE_MIN = 0.00001;
 static const float NWB_REFLECTION_SCREEN_CLIP_ROUNDOFF_SCALE = 0.0000002;
 static const float NWB_REFLECTION_SCREEN_OBSERVER_COSINE_MIN = 0.1;
-static const float NWB_REFLECTION_SCREEN_SPECULAR_STRENGTH_SCALE = 8.0;
-static const float NWB_REFLECTION_SCREEN_ALIGNMENT_SMOOTH = 0.995;
-static const float NWB_REFLECTION_SCREEN_ALIGNMENT_ROUGH = 0.5;
+static const half NWB_REFLECTION_SCREEN_SPECULAR_STRENGTH_SCALE = 8.0h;
+static const half NWB_REFLECTION_SCREEN_ALIGNMENT_SMOOTH = 0.995h;
+static const half NWB_REFLECTION_SCREEN_ALIGNMENT_ROUGH = 0.5h;
 static const float NWB_REFLECTION_SCREEN_ALIGNMENT_FADE_WIDTH = 0.1;
 static const half NWB_REFLECTION_SCREEN_BACKFACE_CONFIDENCE_CAP = 0.5h;
 
@@ -184,19 +184,19 @@ bool nwbReflectionValidateScreenHit(
         return false;
     // Confidence gates are (0, 1) bounded factors, so half arithmetic is sufficient here.
     // Widen only at the float smoothstep/alignment geometry inputs and the half confidence store.
-    const half geometryConfidence = half(half(1.0h) - half(smoothstep(0.0, g_NwbReflectionParameters.screenThickness, residual)));
+    const half geometryConfidence = half(1.0h) - half(smoothstep(0.0, g_NwbReflectionParameters.screenThickness, residual));
     const float2 edgeDistance = min(uv, 1.0 - uv);
-    const half2 edgeWeight = g_NwbReflectionParameters.screenEdgeFade > 0.0 ? half2(smoothstep(float2(0.0), float2(g_NwbReflectionParameters.screenEdgeFade), edgeDistance)) : half2(half(1.0h));
+    const half2 edgeWeight = g_NwbReflectionParameters.screenEdgeFade > 0.0 ? half2(smoothstep(float2(0.0), float2(g_NwbReflectionParameters.screenEdgeFade), edgeDistance)) : half2(1.0h);
     confidence = geometryConfidence * geometryConfidence * edgeWeight.x * edgeWeight.y;
     confidence *= half(smoothstep(NWB_REFLECTION_SCREEN_INCIDENCE_MIN, NWB_REFLECTION_SCREEN_INCIDENCE_FULL, abs(incidence)));
 
     // Screen color was shaded for the camera observer. Reflective hit materials reduce confidence when the reflected observer differs; roughness relaxes the match but proves no custom invariant.
-    const float4 specular = nwbHeapSampledImage2D(g_NwbReflectionParameters.opaqueSpecularSlot).Load(texel);
-    if(!all(isfinite(specular)))
+    const half4 specular = half4(nwbHeapSampledImage2D(g_NwbReflectionParameters.opaqueSpecularSlot).Load(texel));
+    if(!all(isfinite(float4(specular))))
         return false;
-    const half strength = half(saturate(max(specular.x, max(specular.y, specular.z)) * NWB_REFLECTION_SCREEN_SPECULAR_STRENGTH_SCALE));
+    const half strength = saturate(max(specular.x, max(specular.y, specular.z)) * NWB_REFLECTION_SCREEN_SPECULAR_STRENGTH_SCALE);
     const float alignment = dot(cameraObserver, -surface.direction);
-    const half requiredAlignment = half(lerp(NWB_REFLECTION_SCREEN_ALIGNMENT_SMOOTH, NWB_REFLECTION_SCREEN_ALIGNMENT_ROUGH, saturate(specular.w) * saturate(specular.w)));
+    const half requiredAlignment = lerp(NWB_REFLECTION_SCREEN_ALIGNMENT_SMOOTH, NWB_REFLECTION_SCREEN_ALIGNMENT_ROUGH, saturate(specular.w) * saturate(specular.w));
     confidence *= lerp(half(1.0h), half(smoothstep(float(requiredAlignment) - NWB_REFLECTION_SCREEN_ALIGNMENT_FADE_WIDTH, float(requiredAlignment), alignment)), strength);
     // The G-buffer does not identify a thin, two-sided surface versus a solid volume's visible front boundary.
     // Keep a back-facing crossing provisional; Hybrid's default threshold sends this ambiguity to the real scene.

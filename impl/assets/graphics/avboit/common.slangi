@@ -158,7 +158,7 @@ float nwbAvboitOpaqueDepthFromLowFragCoord(Texture2D<float4> opaqueDepth, Sample
 }
 
 float nwbAvboitExtinctionFromAlpha(half alpha){
-    return -log(max(1.0 - float(clamp(alpha, half(0.0), half(1.0))), NWB_AVBOIT_ALPHA_EPSILON));
+    return -log(max(1.0 - float(clamp(alpha, half(0.0h), half(1.0h))), NWB_AVBOIT_ALPHA_EPSILON));
 }
 
 uint nwbAvboitPackExtinctionByte(float extinction){
@@ -167,7 +167,7 @@ uint nwbAvboitPackExtinctionByte(float extinction){
 
 bool nwbAvboitAcceptLowDepthFragment(Texture2D<float4> opaqueDepth, SamplerState pointSampler, float4 fragCoord, const half alpha, out uint outVirtualSlice){
     outVirtualSlice = 0u;
-    if(alpha <= half(0.0))
+    if(alpha <= half(0.0h))
         return false;
 
     const float opaqueDepthValue = nwbAvboitOpaqueDepthFromLowFragCoord(opaqueDepth, pointSampler, fragCoord.xy);

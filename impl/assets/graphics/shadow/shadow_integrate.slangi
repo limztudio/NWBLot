@@ -76,7 +76,7 @@ void nwbShadowInstanceOpticsBegin(__ref NwbShadowInstanceOptics optics){
 }
 
 // Fold ONE accepted transparent crossing into temporary instance state. Order-independent: pairing happens once at finalize, so traversal must never narrow tMax for transparent occluders.
-void nwbShadowInstanceIntegrateCrossing(__ref NwbShadowInstanceOptics optics, inout bool hasAbsorption, const float ior, const half3 transmission, const half cosI, const float t){
+void nwbShadowInstanceIntegrateCrossing(__ref NwbShadowInstanceOptics optics, inout bool hasAbsorption, const half ior, const half3 transmission, const half cosI, const float t){
     for(uint i = 0u; i < optics.crossingCount; ++i){
         if(nwbShadowCrossingMatchesEndpoint(t, optics.crossingT[i]))
             return;

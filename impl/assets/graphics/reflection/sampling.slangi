@@ -67,11 +67,11 @@ half3 nwbReflectionSchlick(const half3 f0, const half viewHalfCosine){
 // Sampling H from the VNDF cancels D and the reflection Jacobian: throughput = F(V,H) * G2(V,L) / G1(V).
 // This factor is bounded by one; bright incident radiance can still have variance, so no arbitrary radiance clamp is applied.
 // Reference: https://jcgt.org/published/0007/04/01/paper.pdf (Appendices A and B).
-void nwbReflectionSampleGgx(const float3 normal, const float3 viewDirection, const half3 f0, const float roughness, const float2 random, out float3 direction, out half3 throughput){
+void nwbReflectionSampleGgx(const float3 normal, const float3 viewDirection, const half3 f0, const half roughness, const float2 random, out float3 direction, out half3 throughput){
     direction = reflect(-viewDirection, normal);
     const half viewCosine = half(saturate(dot(normal, viewDirection)));
     throughput = nwbReflectionSchlick(f0, viewCosine);
-    const float alpha = roughness * roughness;
+    const float alpha = float(roughness) * float(roughness);
     // Preserve the delta interface at zero roughness. The additional limit only prevents FP32 alpha^2 underflow.
     if(alpha < NWB_REFLECTION_GGX_ALPHA_MIN)
         return;

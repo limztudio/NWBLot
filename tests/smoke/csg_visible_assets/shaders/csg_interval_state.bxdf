@@ -32,8 +32,8 @@ half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
             continue;
         hasPeel = true;
         const uint backCapSlot = g_NwbDeferredBindlessResources.csgPeelSlots.x;
-        const float capCoverage = nwbHeapStorageImage2DArrayFloat4(backCapSlot).Load(texel).w;
-        hasPeelCap = hasPeelCap || capCoverage > 0.0;
+        const half capCoverage = half(nwbHeapStorageImage2DArrayFloat4(backCapSlot).Load(texel).w);
+        hasPeelCap = hasPeelCap || capCoverage > 0.0h;
     }
     // RGB separates receiver-span production, cutter peeling, and peeled back-cap coverage.
     return half3(spanCount > 0u ? 1.0h : 0.0h, hasPeel ? 1.0h : 0.0h, hasPeelCap ? 1.0h : 0.0h);

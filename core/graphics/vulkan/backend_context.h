@@ -141,7 +141,7 @@ private:
         { VK_NV_COOPERATIVE_VECTOR_EXTENSION_NAME, DeviceExtensionFeature::None },
         { VK_EXT_DEVICE_FAULT_EXTENSION_NAME, DeviceExtensionFeature::DeviceFault },
         // UASTC HDR 4x4 blocks are directly valid ASTC HDR blocks.
-        // Keep this optional so the texture loader can select BC6H or RGBA16_FLOAT on hardware without it.
+        // Keep this optional so consumers can select BC6H or RGBA16_FLOAT on hardware without it.
         { VK_EXT_TEXTURE_COMPRESSION_ASTC_HDR_EXTENSION_NAME, DeviceExtensionFeature::TextureCompressionAstcHdr },
         { VK_AMD_BUFFER_MARKER_EXTENSION_NAME, DeviceExtensionFeature::None },
     };

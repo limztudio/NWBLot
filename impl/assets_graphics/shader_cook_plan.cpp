@@ -55,12 +55,12 @@ using DependencyPathScratchSet = HashSet<ScratchString, ScratchArena, Hasher<Scr
 static bool AppendIncludeDirectory(const Path& includeDirectory, const ShaderCook::ShaderEntry& entry, ScratchArena& scratchArena, IncludeDirectoryScratchSet& seenIncludeDirectories, CookVector<Path>& outIncludeDirectories){
     const auto isDirectoryResult = IsDirectory(includeDirectory);
     if(!isDirectoryResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to query include root '{}' for entry '{}': {}"), PathToString<tchar>(includeDirectory), StringConvert(entry.name), StringConvert(isDirectoryResult.error().message()));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to query include root '{}' for entry '{}': {}"), PathToString<tchar>(includeDirectory), StringConvert(entry.name), StringConvert(isDirectoryResult.error().message()));
         return false;
     }
     const bool isDirectory = *isDirectoryResult;
     if(!isDirectory){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: include root is not a directory for entry '{}': '{}'"), StringConvert(entry.name), PathToString<tchar>(includeDirectory));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: include root is not a directory for entry '{}': '{}'"), StringConvert(entry.name), PathToString<tchar>(includeDirectory));
         return false;
     }
 
@@ -88,7 +88,7 @@ static Expected<CookVector<Path>> BuildIncludeDirectories(
 
     CookVector<Path> includeDirectories(arena);
     if(entry.includeRoots.size() > Limit<usize>::s_Max - implicitIncludeRoots.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: include root count overflow for entry '{}'"), StringConvert(entry.name));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: include root count overflow for entry '{}'"), StringConvert(entry.name));
         return MakeUnexpected(Failure{});
     }
 
@@ -104,12 +104,12 @@ static Expected<CookVector<Path>> BuildIncludeDirectories(
         auto includeDirectory = Core::Assets::ResolveVirtualAssetPath(includeDirectories.get_allocator().arena(), assetRoots, includeRoot, scratchArena);
         if(!includeDirectory){
             if(Core::Assets::HasReservedAssetVirtualRoot(includeRoot, scratchArena)){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve virtual include root '{}' for entry '{}'"), StringConvert(includeRoot), StringConvert(entry.name));
+                NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to resolve virtual include root '{}' for entry '{}'"), StringConvert(includeRoot), StringConvert(entry.name));
                 return MakeUnexpected(Failure{});
             }
             const auto resolved = ResolveAbsolutePath(includeDirectories.get_allocator().arena(), repoRoot, AStringView(includeRoot));
             if(!resolved){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve include root '{}' for entry '{}': {}"), StringConvert(includeRoot), StringConvert(entry.name), StringConvert(resolved.error().message()));
+                NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to resolve include root '{}' for entry '{}': {}"), StringConvert(includeRoot), StringConvert(entry.name), StringConvert(resolved.error().message()));
                 return MakeUnexpected(Failure{});
             }
             includeDirectory = *resolved;
@@ -130,7 +130,7 @@ static bool ValidateShaderDoesNotUseImplicitDefine(ShaderCook::ShaderEntry& entr
     if(entry.defineValues.find(defineName) == entry.defineValues.end())
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: shader '{}' uses reserved implicit define '{}' as a variant define"), StringConvert(entry.name), StringConvert(defineName));
+    NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: shader '{}' uses reserved implicit define '{}' as a variant define"), StringConvert(entry.name), StringConvert(defineName));
     return false;
 }
 
@@ -160,11 +160,11 @@ static Expected<u64> CountShaderVariants(const ShaderCook::ShaderEntry& entry){
     for(const auto& [defineName, defineEntry] : entry.defineValues){
         const u64 valueCount = static_cast<u64>(defineEntry.values.size());
         if(valueCount == 0){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: entry '{}' has define '{}' with no values"), StringConvert(entry.name), StringConvert(defineName));
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: entry '{}' has define '{}' with no values"), StringConvert(entry.name), StringConvert(defineName));
             return MakeUnexpected(Failure{});
         }
         if(variantCount > Limit<u64>::s_Max / valueCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: variant count overflow for entry '{}'"), StringConvert(entry.name));
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: variant count overflow for entry '{}'"), StringConvert(entry.name));
             return MakeUnexpected(Failure{});
         }
         variantCount *= valueCount;
@@ -184,7 +184,7 @@ static Expected<::Path<ScratchArena>> ResolveProjectEvaluatorModuleIncludePath(c
             return includePath.lexicallyNormal();
         }
         if(!includePathQueryResult && !IsMissingPathError(includePathQueryResult.error())){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to query CSG evaluator module include '{}': {}"), PathToString<tchar>(includePath), StringConvert(includePathQueryResult.error().message()));
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to query CSG evaluator module include '{}': {}"), PathToString<tchar>(includePath), StringConvert(includePathQueryResult.error().message()));
             return MakeUnexpected(Failure{});
         }
     }
@@ -196,19 +196,19 @@ static Expected<::Path<ScratchArena>> ResolveProjectEvaluatorModuleIncludePath(c
             return candidate;
         }
         if(!candidateQueryResult && !IsMissingPathError(candidateQueryResult.error())){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to query CSG evaluator module include '{}': {}"), PathToString<tchar>(candidate), StringConvert(candidateQueryResult.error().message()));
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to query CSG evaluator module include '{}': {}"), PathToString<tchar>(candidate), StringConvert(candidateQueryResult.error().message()));
             return MakeUnexpected(Failure{});
         }
     }
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve CSG evaluator module include '{}'"), StringConvert(includeName));
+    NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to resolve CSG evaluator module include '{}'"), StringConvert(includeName));
     return MakeUnexpected(Failure{});
 }
 
 static bool AppendUniqueDependency(const ::Path<ScratchArena>& dependency, ScratchArena& scratchArena, DependencyPathScratchSet& seenDependencies, ShaderCook::CookVector<Path>& inOutDependencies){
     auto absoluteDependencyResult = AbsolutePath(dependency);
     if(!absoluteDependencyResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve CSG evaluator module dependency '{}': {}"), PathToString<tchar>(dependency), StringConvert(absoluteDependencyResult.error().message()));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to resolve CSG evaluator module dependency '{}': {}"), PathToString<tchar>(dependency), StringConvert(absoluteDependencyResult.error().message()));
         return false;
     }
     const ::Path<ScratchArena> absoluteDependency = absoluteDependencyResult->lexicallyNormal();
@@ -246,7 +246,7 @@ static bool AppendCsgProjectEvaluatorModuleDependencies(const ShaderCook::Shader
     for(const ShaderCook::CookString& defineValue : foundDefine.value().values){
         const AStringView includeName = UnquoteDoubleQuotedView(AStringView(defineValue));
         if(includeName.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: CSG evaluator module define value '{}' must be a quoted include path"), StringConvert(defineValue));
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: CSG evaluator module define value '{}' must be a quoted include path"), StringConvert(defineValue));
             return false;
         }
 
@@ -299,7 +299,7 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
 
     PreparedShaderPlan plan(cookArena);
     if(inOutShaderEntries.size() > Limit<usize>::s_Max / __hidden_shader_cook_plan::s_MaxPreparedEntriesPerShaderEntry){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: prepared shader entry reserve count overflows"));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: prepared shader entry reserve count overflows"));
         return MakeUnexpected(Failure{});
     }
     plan.preparedEntries.reserve(inOutShaderEntries.size() * __hidden_shader_cook_plan::s_MaxPreparedEntriesPerShaderEntry);
@@ -308,7 +308,7 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
     const AssetsGraphicsCsgShaderVariants::ShaderStageKeySet materialClipShaderKeys = AssetsGraphicsCsgShaderVariants::CollectMaterialClipShaderKeys(materialEntries, scratchArena);
     const auto avboitClipShaderKeys = AssetsGraphicsCsgShaderVariants::CollectAvboitClipShaderKeys(materialEntries, scratchArena);
     if(!avboitClipShaderKeys){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: invalid generated AVBOIT shader identity (failure {})"), static_cast<u32>(avboitClipShaderKeys.error()));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: invalid generated AVBOIT shader identity (failure {})"), static_cast<u32>(avboitClipShaderKeys.error()));
         return MakeUnexpected(Failure{});
     }
 
@@ -323,7 +323,7 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
     if(!csgShapeIncludeRoot.empty()){
         ++implicitIncludeRootCount;
         if(implicitIncludeRootCount > Limit<usize>::s_Max - resolvedPaths.assetRoots.size()){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: implicit shader include root count overflows"));
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: implicit shader include root count overflows"));
             return MakeUnexpected(Failure{});
         }
         implicitIncludeRootCount += resolvedPaths.assetRoots.size();
@@ -439,11 +439,11 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
         const auto supportsCsgClipVariant = AssetsGraphicsCsgShaderVariants::SupportsClipVariant(materialClipShaderKeys, preparedEntry.entry);
         const auto supportsAvboitCsgClipVariant = AssetsGraphicsCsgShaderVariants::SupportsClipVariant(*avboitClipShaderKeys, preparedEntry.entry);
         if(!supportsCsgClipVariant){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: invalid CSG clip shader identity for entry '{}' (failure {})"), StringConvert(preparedEntry.entry.name), static_cast<u32>(supportsCsgClipVariant.error()));
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: invalid CSG clip shader identity for entry '{}' (failure {})"), StringConvert(preparedEntry.entry.name), static_cast<u32>(supportsCsgClipVariant.error()));
             return MakeUnexpected(Failure{});
         }
         if(!supportsAvboitCsgClipVariant){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: invalid AVBOIT clip shader identity for entry '{}' (failure {})"), StringConvert(preparedEntry.entry.name), static_cast<u32>(supportsAvboitCsgClipVariant.error()));
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: invalid AVBOIT clip shader identity for entry '{}' (failure {})"), StringConvert(preparedEntry.entry.name), static_cast<u32>(supportsAvboitCsgClipVariant.error()));
             return MakeUnexpected(Failure{});
         }
         preparedEntry.supportsCsgClipVariant = *supportsCsgClipVariant;
@@ -471,7 +471,7 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
         PreparedShaderEntry meshComputeShadowEntry(cookArena);
         auto shadowEntry = __hidden_shader_cook_plan::BuildMeshComputeShadowEntry(meshShaderEntry.entry);
         if(!shadowEntry){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to build mesh-compute shadow entry for '{}'"), StringConvert(meshShaderEntry.entry.name));
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to build mesh-compute shadow entry for '{}'"), StringConvert(meshShaderEntry.entry.name));
             return MakeUnexpected(Failure{});
         }
 

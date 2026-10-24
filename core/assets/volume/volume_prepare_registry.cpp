@@ -65,8 +65,8 @@ AssetVolumePrepareAutoRegistrar::AssetVolumePrepareAutoRegistrar(const AssetVolu
 bool RegisterAutoCollectedAssetVolumePreparers(AssetVolumePrepareContext& context){
     Vector<NotNull<AssetVolumePrepareFunction>, Core::Alloc::ScratchArena> functions{context.scratchArena};
     return RunAutoCollectedFunctions(
-        __hidden_asset_volume_prepare_registry::QueryAutoPrepareQueue(), context, functions, [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: collected null volume prepare function")); },
-        [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to run auto-collected volume prepare step")); }
+        __hidden_asset_volume_prepare_registry::QueryAutoPrepareQueue(), context, functions, [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: collected null volume prepare function")); },
+        [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to run auto-collected volume prepare step")); }
     );
 }
 

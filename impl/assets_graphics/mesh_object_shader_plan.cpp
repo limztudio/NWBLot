@@ -59,7 +59,7 @@ bool AppendMeshObjectShaderEntries(const ResolvedCookPaths& resolvedPaths, const
         || !hasFixedSource
         || !mesh.emitMeshComputeShadow
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: object geometry stages require the fixed engine shared mesh program"));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: object geometry stages require the fixed engine shared mesh program"));
         return false;
     }
 
@@ -75,11 +75,11 @@ bool AppendMeshObjectShaderEntries(const ResolvedCookPaths& resolvedPaths, const
 
     const auto sourceExists = IsRegularFile(prepared.sourcePath);
     if(!sourceExists){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to inspect fixed object geometry shader '{}': {}:{}"), PathToString<tchar>(prepared.sourcePath), StringConvert(sourceExists.error().category().name()), sourceExists.error().value());
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to inspect fixed object geometry shader '{}': {}:{}"), PathToString<tchar>(prepared.sourcePath), StringConvert(sourceExists.error().category().name()), sourceExists.error().value());
         return false;
     }
     if(!*sourceExists){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: fixed object geometry shader is missing: '{}'"), PathToString<tchar>(prepared.sourcePath));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: fixed object geometry shader is missing: '{}'"), PathToString<tchar>(prepared.sourcePath));
         return false;
     }
     if(!ShaderSourceDependencies::Gather(prepared.sourcePath, prepared.includeDirectories, AssetsGraphicsCsgShaderVariants::s_ExternallyPlannedMacroIncludes, scratchArena, prepared.dependencies))

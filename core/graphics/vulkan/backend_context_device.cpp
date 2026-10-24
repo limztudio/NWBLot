@@ -207,7 +207,7 @@ bool BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
         constexpr AStringView s_MeshShaderExtensionName = VK_EXT_MESH_SHADER_EXTENSION_NAME;
         const auto meshShaderIt = m_enabledExtensions.device.find(s_MeshShaderExtensionName);
         if(meshShaderIt != m_enabledExtensions.device.end() && physicalDeviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU){
-            NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Disabling device extension '{}' on CPU Vulkan device '{}' so renderer uses compute emulation instead of native mesh shaders.")
+            NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Disabling device extension '{}' on CPU Vulkan device '{}' so native mesh-shader support is not reported.")
                 , StringConvert(s_MeshShaderExtensionName)
                 , StringConvert(physicalDeviceProperties.deviceName)
             );

@@ -19,7 +19,7 @@ NWB_ASSETS_BEGIN
 bool ReadAssetInputList(AssetVector<AssetString>& inputs, const Path& path, Alloc::ScratchArena& scratchArena, const bool resolveRelativePaths){
     AString<Alloc::ScratchArena> text(scratchArena);
     if(!ReadTextFile(path, text) || HasEmbeddedNull(AStringView(text))){
-        NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: failed to read input list '{}'"), PathToString<tchar>(path));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetInputList: failed to read input list '{}'"), PathToString<tchar>(path));
         return false;
     }
     StripUtf8Bom(text);
@@ -34,7 +34,7 @@ bool ReadAssetInputList(AssetVector<AssetString>& inputs, const Path& path, Allo
         if(length > 0u && text[cursor + length - 1u] == '\r')
             --length;
         if(length == 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: input list contains an empty path '{}'"), PathToString<tchar>(path));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetInputList: input list contains an empty path '{}'"), PathToString<tchar>(path));
             return false;
         }
         const AStringView value(text.data() + cursor, length);

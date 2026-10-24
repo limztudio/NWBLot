@@ -201,7 +201,7 @@ Ui::DrawSnapshot snapshot = paint.freeze();
 ```
 
 The [offline font-atlas contract](../../../../docs/font_atlas_plan.md) and
-[utility README](../../../../utilities/font_builder/README.md) describe generation,
+[font atlas asset guide](../../../assets_font_atlas/README.md) describe generation,
 lossless payloads, positioning-table export, qualified scale, and GPU ownership.
 `UiFontBinding` in the ECS adapter selects typed font/atlas references explicitly;
 the text service itself consumes already loaded CPU assets and owns no loader,

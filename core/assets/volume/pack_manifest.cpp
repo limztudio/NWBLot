@@ -34,7 +34,7 @@ static bool ValidateManifestVirtualPath(const Name& virtualPath){
     if(virtualPath)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: tried to append an unnamed manifest entry"));
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: tried to append an unnamed manifest entry"));
     return false;
 }
 
@@ -60,14 +60,14 @@ static bool ValidatePayloadIdentity(const Name& virtualPath, const AssetVolumePa
     if(identity.cookKeyHash != 0u)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: manifest entry '{}' has an empty cook key"), StringConvert(virtualPath.resolvedText()));
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: manifest entry '{}' has an empty cook key"), StringConvert(virtualPath.resolvedText()));
     return false;
 }
 
 bool ReserveAssetVolumePackManifest(AssetVolumePackManifest& manifest, const u64 plannedFileCount){
     manifest.plannedFileCount = plannedFileCount;
     if(plannedFileCount > static_cast<u64>(Limit<usize>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: planned manifest entry count exceeds container capacity"));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: planned manifest entry count exceeds container capacity"));
         return false;
     }
 
@@ -81,7 +81,7 @@ bool AppendObjectFilePayloadToManifest(AssetVolumePackManifest& manifest, const 
     if(!ValidatePayloadIdentity(virtualPath, identity))
         return false;
     if(objectPath.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: object manifest entry '{}' has an empty cache path"), StringConvert(virtualPath.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: object manifest entry '{}' has an empty cache path"), StringConvert(virtualPath.resolvedText()));
         return false;
     }
 
@@ -99,7 +99,7 @@ bool AppendPayloadBytesToManifest(AssetVolumePackManifest& manifest, const Name&
     if(!ValidateManifestVirtualPath(virtualPath))
         return false;
     if(payloadByteCount > 0u && payloadBytes == nullptr){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: payload manifest entry '{}' has null bytes"), StringConvert(virtualPath.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: payload manifest entry '{}' has null bytes"), StringConvert(virtualPath.resolvedText()));
         return false;
     }
 

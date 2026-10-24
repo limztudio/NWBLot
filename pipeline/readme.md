@@ -8,7 +8,7 @@ targets and the asset build libraries.
 Run the complete pipeline through the repository launcher:
 
 ```console
-python -m launcher pipeline --config dbg --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
+python -m launcher pipeline --config dbg --asset-root impl/assets project/assets --output-directory runtime/res
 ```
 
 To prepare the tools without running asset stages, use:
@@ -28,8 +28,14 @@ failures retain their nonzero exit status at the root launcher.
 
 `dependency_computer` preserves its inputs, including their order and duplicates.
 With `--include-skin-dependencies`, it also resolves textures referenced by selected
-UI skins and appends missing metadata providers. General dependency expansion is
-not implemented.
+UI skins and appends each missing texture metadata provider once. That resolution
+accepts `--repo-root` (default: the working directory) and repeated `--asset-root`
+values. Its provider catalog resolves metadata identities without reading unrelated
+asset documents, and provider ownership follows asset-root order. Unresolved,
+wrong-type, or ambiguous texture references fail before the output list is written.
+Paired encoded texture payloads stay with the texture cooker and are not added as
+separate inputs. Without the flag, dependency computation is pass-through. General
+dependency expansion is not implemented.
 It accepts multiple `--input` values, repeated `--input` options, or an
 `--input-list` file. Its `--output` is a UTF-8 file containing one input per line.
 
@@ -89,7 +95,7 @@ builds `nwb_pipeline`, calls `dependency_computer`, passes that result to
 errors and failed stages stop the pipeline and preserve the published volume.
 
 ```console
-python -m launcher pipeline --config dbg --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
+python -m launcher pipeline --config dbg --asset-root impl/assets project/assets --output-directory runtime/res
 ```
 
 Build and asset options share one argument list. Use the root entry point for
@@ -115,7 +121,7 @@ configuration and compilation; CMake asset commands use it to avoid starting a
 nested build. For example:
 
 ```console
-python -m launcher pipeline --skip-build --tool-directory __exec/windows/arm64/full/dbg --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
+python -m launcher pipeline --skip-build --tool-directory __exec/windows/arm64/full/dbg --asset-root impl/assets project/assets --output-directory runtime/res
 ```
 
 `--dry-run` prints planned build and pipeline commands without writing manifests,

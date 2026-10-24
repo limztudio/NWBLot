@@ -4,4 +4,4 @@ Models declare named local objects in `skeletons`, `static_meshes`, and `skinned
 
 Every authored `transform` is a compact three-row, four-column affine matrix. Translation occupies the last column. An omitted transform supplies identity. Four-row homogeneous matrices must be rewritten to the current 3x4 source shape; the cooker rejects them instead of discarding the fourth row. Model, skeleton, and skin source matrices share the same finite-value and dimensional validation.
 
-The FBX converter emits this current metadata shape directly. Runtime model objects retain their local identities and typed asset references through cooking and serialization. The internal MDL2 payload omits the duplicate mesh identity from skinned objects; recook older model payloads.
+Offline model preparation emits this current metadata shape directly. Runtime model objects retain their local identities and typed asset references through cooking and serialization. The internal MDL2 payload omits the duplicate mesh identity from skinned objects; recook older model payloads.

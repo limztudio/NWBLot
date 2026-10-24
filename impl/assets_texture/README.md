@@ -1,6 +1,6 @@
 # Texture assets
 
-Textures use a basename pair: `image.nwb` describes the texture and `image.tex` contains its raw linear UASTC blocks. [tex_conv](../../utilities/tex_conv/README.md) converts input RGB to linear light, generates the complete mip chain, and writes both files. The cooker derives checked mip records from the metadata, validates the raw byte layout, and packages it into the current runtime texture binary. It performs no image conversion or texture encoding.
+Textures use a basename pair: `image.nwb` describes the texture and `image.tex` contains its raw linear UASTC blocks. Offline preparation converts input RGB to linear light, generates the complete mip chain, and writes both files. The cooker derives checked mip records from the metadata, validates the raw byte layout, and packages it into the current runtime texture binary. It performs no image conversion or texture encoding.
 
 A 7 by 5 LDR texture with embedded alpha uses:
 

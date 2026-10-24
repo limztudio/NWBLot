@@ -86,16 +86,16 @@ static bool AppendUniqueShaderEntry(const Path& nwbFilePath, ShaderCook::ShaderE
     const auto shaderName = ToName(shaderEntry.name);
     const auto stageName = ToName(shaderEntry.archiveStage);
     if(!shaderName){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: invalid shader identity in meta '{}' (failure {})"), PathToString<tchar>(nwbFilePath), static_cast<u32>(shaderName.error()));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: invalid shader identity in meta '{}' (failure {})"), PathToString<tchar>(nwbFilePath), static_cast<u32>(shaderName.error()));
         return false;
     }
     if(!stageName){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: invalid shader stage in meta '{}' (failure {})"), PathToString<tchar>(nwbFilePath), static_cast<u32>(stageName.error()));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: invalid shader stage in meta '{}' (failure {})"), PathToString<tchar>(nwbFilePath), static_cast<u32>(stageName.error()));
         return false;
     }
     const AssetsGraphicsCookDetail::ShaderStageKey shaderIdentityKey{ *shaderName ? **shaderName : s_NameNone, *stageName ? **stageName : s_NameNone };
     if(!graphicsMetadata.seenShaderIdentityKeys.insert(shaderIdentityKey).second){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: duplicate shader identity '{}' for stage '{}' from meta '{}'"), StringConvert(shaderEntry.name), StringConvert(shaderEntry.archiveStage), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: duplicate shader identity '{}' for stage '{}' from meta '{}'"), StringConvert(shaderEntry.name), StringConvert(shaderEntry.archiveStage), PathToString<tchar>(nwbFilePath));
         return false;
     }
 
@@ -134,7 +134,7 @@ static Core::Assets::AssetMetadataParseResult::Enum ParseGraphicsDocumentMetadat
             const ::Path<ScratchArena> sourcePath(context.scratchArena, includeEntry.source);
             auto absSourceResult = AbsolutePath(sourcePath);
             if(!absSourceResult){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve include metadata source '{}' from '{}': {}")
+                NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to resolve include metadata source '{}' from '{}': {}")
                     , StringConvert(includeEntry.source)
                     , PathToString<tchar>(context.discoveredNwbFile.filePath)
                     , StringConvert(absSourceResult.error().message())
@@ -148,7 +148,7 @@ static Core::Assets::AssetMetadataParseResult::Enum ParseGraphicsDocumentMetadat
             CanonicalizeTextInPlace(key);
 #endif
             if(!graphicsMetadata.includeMetadata.emplace(Move(key), Move(includeEntry)).second){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: duplicate include metadata for source '{}'"), PathToString<tchar>(absSource));
+                NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: duplicate include metadata for source '{}'"), PathToString<tchar>(absSource));
                 return AssetMetadataParseResult::Error;
             }
         }
@@ -207,7 +207,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
 
     auto& materialEntries = context.parsedMetadata.entryRegistry.entries<MaterialCookEntry>(Material::AssetTypeName());
     if(graphicsMetadata.shaderEntries.empty() && !materialEntries.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: material assets require at least one shader entry"));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: material assets require at least one shader entry"));
         return false;
     }
 
@@ -226,7 +226,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
 
         auto resolvedEvalSourceResult = Core::Assets::ResolveVirtualAssetPath(context.arena, context.resolvedPaths.assetRoots, AStringView(csgShapeEntry.evalInclude), context.scratchArena);
         if(!resolvedEvalSourceResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: CSG shape '{}' eval '{}' does not resolve against any asset root"), StringConvert(csgShapeEntry.shapeName.resolvedText()), StringConvert(AStringView(csgShapeEntry.evalInclude)));
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: CSG shape '{}' eval '{}' does not resolve against any asset root"), StringConvert(csgShapeEntry.shapeName.resolvedText()), StringConvert(AStringView(csgShapeEntry.evalInclude)));
             return false;
         }
 
@@ -252,7 +252,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
 
         const auto resolvedSource = Core::Assets::ResolveVirtualAssetPath(context.arena, context.resolvedPaths.assetRoots, AStringView(virtualSource), context.scratchArena);
         if(!resolvedSource){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: material '{}' {} '{}' does not resolve against any asset root"), StringConvert(materialName), StringConvert(label), StringConvert(AStringView(virtualSource)));
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: material '{}' {} '{}' does not resolve against any asset root"), StringConvert(materialName), StringConvert(label), StringConvert(AStringView(virtualSource)));
             return false;
         }
 
@@ -317,7 +317,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
     for(const usize generatedShaderCount : generatedShaderCounts){
         const auto capacity = AddNoOverflow(shaderEntryCapacity, generatedShaderCount);
         if(!capacity){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: generated shader entry count exceeds container capacity"));
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: generated shader entry count exceeds container capacity"));
             return false;
         }
         shaderEntryCapacity = *capacity;
@@ -339,16 +339,16 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
         const auto shaderName = ToName(pixelShaderEntry.name);
         const auto stageName = ToName(pixelShaderEntry.archiveStage);
         if(!shaderName){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: generated shader name has invalid text (failure {})"), static_cast<u32>(shaderName.error()));
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: generated shader name has invalid text (failure {})"), static_cast<u32>(shaderName.error()));
             return false;
         }
         if(!stageName){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: generated shader stage has invalid text (failure {})"), static_cast<u32>(stageName.error()));
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: generated shader stage has invalid text (failure {})"), static_cast<u32>(stageName.error()));
             return false;
         }
         const AssetsGraphicsCookDetail::ShaderStageKey shaderIdentityKey{ *shaderName ? **shaderName : s_NameNone, *stageName ? **stageName : s_NameNone };
         if(!graphicsMetadata.seenShaderIdentityKeys.insert(shaderIdentityKey).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: duplicate generated pixel shader identity '{}'"), StringConvert(pixelShaderEntry.name));
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: duplicate generated pixel shader identity '{}'"), StringConvert(pixelShaderEntry.name));
             return false;
         }
         graphicsMetadata.shaderEntries.push_back(Move(pixelShaderEntry));

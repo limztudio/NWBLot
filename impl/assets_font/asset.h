@@ -22,7 +22,7 @@ NWB_IMPL_BEGIN
 inline constexpr u32 s_FontMaxSourceBytes = 32u * 1024u * 1024u;
 inline constexpr u32 s_FontMaxTableCount = 256u;
 
-// Stores one static, scalable SFNT face prepared by font_builder; shaping and glyph atlases belong to the UI text domain.
+// Stores one static, scalable SFNT face from a prepared font source; shaping and glyph atlases stay outside this asset.
 class Font final : public Core::Assets::TypedAsset<Font>{
 public:
     NWB_DEFINE_ASSET_TYPE("font")

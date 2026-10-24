@@ -53,7 +53,7 @@ static bool WriteIfChanged(ScratchBytes& existing, const ScratchPath& path, cons
     if(read && existing == bytes)
         return true;
     if(!replaceDifferent && (read || !IsMissingPathError(read.error()))){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: cannot publish built asset without replacing existing data '{}'"), PathToString<tchar>(path));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: cannot publish built asset without replacing existing data '{}'"), PathToString<tchar>(path));
         return false;
     }
 
@@ -65,11 +65,11 @@ static bool WriteIfChanged(ScratchBytes& existing, const ScratchPath& path, cons
     const ScratchPath temporary = path.parentPath() / temporaryName;
     ScopeExit removeTemporary([&temporary]()noexcept{
         if(!RemoveFile(temporary)){
-            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_WarningEventName, .category = "built_asset_temporary_cleanup", .message = "AssetBuilder: failed to remove temporary output", });
+            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_WarningEventName, .category = "built_asset_temporary_cleanup", .message = "AssetVolume: failed to remove temporary output", });
         }
     });
     if(!WriteBinaryFile(temporary, bytes) || !ReadBinaryFile(temporary, existing) || existing != bytes || !RenamePath(temporary, path)){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to publish built asset '{}'"), PathToString<tchar>(path));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to publish built asset '{}'"), PathToString<tchar>(path));
         return false;
     }
     removeTemporary.release();
@@ -94,7 +94,7 @@ namespace BuiltAssetDetail{
 
 bool WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail::AssetVolumePackManifest& manifest, Alloc::ScratchArena& scratchArena){
     if(manifest.entries.size() != manifest.plannedFileCount || !EnsureDirectories(outputDirectory)){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: invalid build manifest or output directory '{}'"), PathToString<tchar>(outputDirectory));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: invalid build manifest or output directory '{}'"), PathToString<tchar>(outputDirectory));
         return false;
     }
 
@@ -119,18 +119,18 @@ bool WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail:
             if(!payload)
                 return false;
             if(payload->identity.payloadSize != entry.identity.payloadSize || payload->identity.payloadHash != entry.identity.payloadHash || payload->identity.cookKeyHash != entry.identity.cookKeyHash){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: object cache identity mismatch '{}' for '{}'"), PathToString<tchar>(entry.objectPath), StringConvert(entry.virtualPath.resolvedText()));
+                NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: object cache identity mismatch '{}' for '{}'"), PathToString<tchar>(entry.objectPath), StringConvert(entry.virtualPath.resolvedText()));
                 return false;
             }
             payloadData = payload->data.get();
             payloadSize = payload->size;
         }
         if(entry.identity.payloadSize != payloadSize || (entry.source != AssetsVolumeCookDetail::AssetVolumePackEntrySource::ObjectFilePayload && entry.identity.payloadHash != ComputeFnv64Bytes(payloadData, payloadSize))){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: invalid payload identity '{}'"), StringConvert(entry.virtualPath.resolvedText()));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: invalid payload identity '{}'"), StringConvert(entry.virtualPath.resolvedText()));
             return false;
         }
         if(payloadSize > Limit<usize>::s_Max - __hidden_built_asset::s_HeaderSize){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: built asset payload is too large"));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: built asset payload is too large"));
             return false;
         }
 
@@ -146,7 +146,7 @@ bool WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail:
         // Preserve files referenced by the previous manifest if a later entry fails during this publication.
         for(;;){
             if(artifactIndex == Limit<u64>::s_Max){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: built asset filename slots are exhausted"));
+                NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: built asset filename slots are exhausted"));
                 return false;
             }
             filename.clear();
@@ -163,7 +163,7 @@ bool WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail:
                 continue;
             }
             if(!IsMissingPathError(read.error())){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to inspect built asset '{}'"), PathToString<tchar>(path));
+                NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to inspect built asset '{}'"), PathToString<tchar>(path));
                 return false;
             }
             if(!__hidden_built_asset::WriteIfChanged(existingBytes, path, artifactBytes, false))
@@ -184,7 +184,7 @@ bool WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail:
 
 Expected<BuiltAssetPayload> ReadBuiltAsset(const Path& path, AssetBytes& inOutBytes){
     if(!ReadBinaryFile(path, inOutBytes) || inOutBytes.size() < __hidden_built_asset::s_HeaderSize){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: invalid built asset '{}'"), PathToString<tchar>(path));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: invalid built asset '{}'"), PathToString<tchar>(path));
         return MakeUnexpected(Failure{});
     }
 
@@ -195,7 +195,7 @@ Expected<BuiltAssetPayload> ReadBuiltAsset(const Path& path, AssetBytes& inOutBy
     const u64 payloadSize = *ReadPOD<u64>(inOutBytes, cursor);
     const u64 payloadHash = *ReadPOD<u64>(inOutBytes, cursor);
     if(magic != __hidden_built_asset::s_Magic || version != __hidden_built_asset::s_Version || payloadSize != inOutBytes.size() - cursor || payloadHash != ComputeFnv64Bytes(inOutBytes.data() + cursor, inOutBytes.size() - cursor) || !Name(virtualPathHash)){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: invalid built asset '{}'"), PathToString<tchar>(path));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: invalid built asset '{}'"), PathToString<tchar>(path));
         return MakeUnexpected(Failure{});
     }
     return BuiltAssetPayload{ .virtualPath = Name(virtualPathHash), .payloadOffset = cursor };

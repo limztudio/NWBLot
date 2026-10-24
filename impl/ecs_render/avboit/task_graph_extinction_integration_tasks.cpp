@@ -46,9 +46,8 @@ namespace RendererTaskGraphDetail{
 [[nodiscard]] bool AvboitExtinctionSharedComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_cast<void>(context);
     const AvboitSharedComputeEmulationRecordTrait trait{ RendererGpuTimingScope::s_AvboitExtinction, MaterialPipelinePass::AvboitExtinction, &AvboitFrameTargets::lowFramebuffer, };
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
 
-    return RecordAvboitSharedComputeEmulationFromPayload(scratchArena, payload, commandList, payload.phase == AvboitExtinctionSharedComputeEmulationGraphTask::Phase::Raster, trait, payload.extinctionTiming);
+    return RecordAvboitSharedComputeEmulationFromPayload(payload, commandList, payload.phase == AvboitExtinctionSharedComputeEmulationGraphTask::Phase::Raster, trait, payload.extinctionTiming);
 }
 
 

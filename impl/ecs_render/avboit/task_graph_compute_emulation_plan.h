@@ -75,11 +75,6 @@ public:
     [[nodiscard]] bool matches()const noexcept{
         return MatchesRetainedGeneratedGeometryOutputs(captured, drawItems, outputBuffers, outputLayouts, outputHeapSlots);
     }
-
-    void materialize(MaterialPassDrawItems& outDrawItems)const{
-        outDrawItems.computeDrawItems.reserve(drawItems.size());
-        outDrawItems.computeDrawItems.assign(drawItems.begin(), drawItems.end());
-    }
 };
 
 

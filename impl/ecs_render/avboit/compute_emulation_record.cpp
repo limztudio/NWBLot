@@ -38,15 +38,28 @@ NWB_IMPL_BEGIN
     if(!(csgComputeEmulation ? inputs.csgPlan.matches() : inputs.plan.matches()) || !inputs.materialDrawBuffersUploaded || !inputs.frameBindings.frameReady(inputs.instanceCount, inputs.materialTypedByteCount))
         return false;
 
-    MaterialPassDrawItems drawItems{ scratchArena };
-    CsgFrameGpuData csgFrameData{ scratchArena };
-    if(csgComputeEmulation)
-        inputs.csgPlan.materialize(drawItems, csgFrameData);
-    else
-        inputs.plan.materialize(drawItems);
+    const Span<const MaterialPassDrawItem> computeDrawItems = csgComputeEmulation ? Span<const MaterialPassDrawItem>(inputs.csgPlan.drawItems) : Span<const MaterialPassDrawItem>(inputs.plan.drawItems);
     // Reject late losses so the packet is discarded and the next frame re-preflights.
-    if(!materialSystem.materialPassDrawResourcesReady(drawItems, inputs.frameBindings) || (csgComputeEmulation && (!inputs.csgFrameBuffersUploaded || !csgFrameData.hasWork() || !inputs.csgResources.frameReady(csgFrameData))))
+    const bool drawResourcesReady = csgComputeEmulation
+        ? (
+            materialSystem.meshMaterialPassDrawResourcesReady(inputs.csgPlan.meshDrawItems, inputs.frameBindings)
+            && materialSystem.indexedMaterialPassDrawResourcesReady(inputs.csgPlan.indexedDrawItems, inputs.frameBindings)
+            && materialSystem.computeMaterialPassDrawResourcesReady(computeDrawItems, inputs.frameBindings)
+        )
+        : materialSystem.computeMaterialPassDrawResourcesReady(computeDrawItems, inputs.frameBindings)
+    ;
+    if(!drawResourcesReady)
         return false;
+    if(csgComputeEmulation){
+        CsgFrameGpuData csgFrameData{ scratchArena };
+        csgFrameData.receiverRanges.reserve(inputs.csgPlan.receiverRanges.size());
+        csgFrameData.receiverRanges.assign(inputs.csgPlan.receiverRanges.begin(), inputs.csgPlan.receiverRanges.end());
+        csgFrameData.cutters.reserve(inputs.csgPlan.cutters.size());
+        csgFrameData.cutters.assign(inputs.csgPlan.cutters.begin(), inputs.csgPlan.cutters.end());
+        csgFrameData.workRegion = inputs.csgPlan.workRegion;
+        if(!inputs.csgFrameBuffersUploaded || !csgFrameData.hasWork() || !inputs.csgResources.frameReady(csgFrameData))
+            return false;
+    }
     if(inputs.timing.has_value())
         return false;
 
@@ -70,7 +83,7 @@ NWB_IMPL_BEGIN
         true,
         inputs.conservativeGeometryScissor
     };
-    materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
+    materialSystem.generateComputeMaterialPassDrawItems(drawContext, computeDrawItems);
     return true;
 }
 
@@ -78,7 +91,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool RecordAvboitSharedComputeEmulation(Core::Alloc::ScratchArena& scratchArena, const AvboitSharedComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitSharedComputeEmulationRecordTrait& trait){
+[[nodiscard]] bool RecordAvboitSharedComputeEmulation(const AvboitSharedComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitSharedComputeEmulationRecordTrait& trait){
     const bool generatePhase = inputs.phase == AvboitSharedComputeEmulationPhase::Generate;
     if(
         !trait.framebuffer
@@ -94,9 +107,8 @@ NWB_IMPL_BEGIN
     if(!inputs.plan.matches(inputs.drawIndex) || !inputs.materialDrawBuffersUploaded || !inputs.frameBindings.frameReady(inputs.instanceCount, inputs.materialTypedByteCount))
         return false;
 
-    MaterialPassDrawItems drawItems{ scratchArena };
-    inputs.plan.materialize(inputs.drawIndex, drawItems);
-    if(!materialSystem.materialPassDrawResourcesReady(drawItems, inputs.frameBindings))
+    const Span<const MaterialPassDrawItem> drawItems(&inputs.plan.drawItems[inputs.drawIndex], 1u);
+    if(!materialSystem.computeMaterialPassDrawResourcesReady(drawItems, inputs.frameBindings))
         return false;
 
     if(generatePhase){
@@ -121,10 +133,10 @@ NWB_IMPL_BEGIN
     Core::Framebuffer* const rasterFramebuffer = generatePhase ? nullptr : (inputs.targets.avboit.*(trait.framebuffer)).get();
     const MaterialPassDrawContext drawContext{ commandList, rasterFramebuffer, &inputs.targets.avboit, viewportState, nullptr, inputs.frameBindings, trait.pipelinePass, inputs.materialFrameStatesGraphOwned, inputs.materialGeometryStatesGraphOwned, true };
     if(generatePhase){
-        materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
+        materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems);
     }
     else{
-        materialSystem.renderComputeMaterialPassDrawItemsRasterOnly(drawContext, drawItems.computeDrawItems);
+        materialSystem.renderComputeMaterialPassDrawItemsRasterOnly(drawContext, drawItems);
         if(inputs.finishTiming){
             inputs.timing.value().finishTiming(commandList);
             inputs.timing.reset();

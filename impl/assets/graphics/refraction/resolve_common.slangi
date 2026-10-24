@@ -160,6 +160,12 @@ half3 nwbRefractionAttenuation(const half3 tint, const float thickness, const ha
     return half3(exp(log(clamp(float3(tint), float3(NWB_REFRACTION_TINT_MIN), float3(1.0))) * max(thickness, 0.0)) * fresnel);
 }
 
+half3 nwbRefractionFallbackAttenuation(const half3 tint, const half ior, const half cosine){
+    // Unit-thickness fallback attenuation simplifies exp(log(tint) * 1.0) to clamped tint and squares one Fresnel evaluation.
+    const float fresnel = float(nwbRefractionFresnelTransmission(ior, cosine));
+    return half3(clamp(float3(tint), float3(NWB_REFRACTION_TINT_MIN), float3(1.0)) * (fresnel * fresnel));
+}
+
 struct NwbRefractionEntry{
     uint primaryEntityId;
     bool frontBoundary;
@@ -221,7 +227,7 @@ half3 nwbRefractionBackgroundForEntry(const uint2 pixel, const NwbRefractionEntr
 }
 
 half3 nwbRefractionStraightFallback(const uint2 pixel, const NwbRefractionEntry entry){
-    return half3(nwbRefractionBackground(pixel)) * nwbRefractionAttenuation(entry.tint, NWB_REFRACTION_FALLBACK_THICKNESS, entry.ior, entry.cosine, entry.cosine);
+    return half3(nwbRefractionBackground(pixel)) * nwbRefractionFallbackAttenuation(entry.tint, entry.ior, entry.cosine);
 }
 
 // Single-boundary screen-space continuation; falls back to straight-through when the depth crossing is far from the ray or offscreen.
@@ -269,7 +275,7 @@ half4 nwbRefractionResolveScreen(const uint2 pixel, const NwbRefractionEntry ent
     const float3 direction = refract(entry.incident, entry.normal, 1.0 / float(entry.ior));
     const bool displaced = dot(direction, direction) > NWB_REFRACTION_DIRECTION_LENGTH_SQUARED_MIN && nwbRefractionScreenBackgroundPixel(entry, direction, samplePixel);
     const half3 background = nwbRefractionBackgroundForEntry(select(bool2(displaced), samplePixel, pixel), entry, true, displaced);
-    return half4(background * nwbRefractionAttenuation(entry.tint, NWB_REFRACTION_FALLBACK_THICKNESS, entry.ior, entry.cosine, entry.cosine), 1.0h);
+    return half4(background * nwbRefractionFallbackAttenuation(entry.tint, entry.ior, entry.cosine), 1.0h);
 }
 
 

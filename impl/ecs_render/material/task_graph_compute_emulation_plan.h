@@ -130,11 +130,6 @@ public:
         const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
         return mesh.emulationVertexBuffer && mesh.emulationVertexHeapHandle.valid() && mesh.emulationVertexBuffer.get() == outputBuffer.get() && mesh.emulationVertexHeapHandle.slot() == outputHeapSlot && equivalenceKeys[drawIndex].matches(drawItem);
     }
-
-    void materialize(const usize drawIndex, MaterialPassDrawItems& outDrawItems)const{
-        NWB_ASSERT(captured && drawIndex < drawCount);
-        outDrawItems.computeDrawItems.push_back(drawItems[drawIndex]);
-    }
 };
 
 

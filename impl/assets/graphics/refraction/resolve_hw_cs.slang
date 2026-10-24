@@ -331,7 +331,7 @@ half4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry e
         continuationEntry.cameraDistance = length(continuationOrigin - g_NwbRefractionView.cameraPosition.xyz);
     }
     else
-        continuationAttenuation = nwbRefractionAttenuation(entry.tint, NWB_REFRACTION_FALLBACK_THICKNESS, entry.ior, entry.cosine, entry.cosine);
+        continuationAttenuation = nwbRefractionFallbackAttenuation(entry.tint, entry.ior, entry.cosine);
     uint2 samplePixel = pixel;
     const bool displaced = dot(continuationDirection, continuationDirection) > NWB_REFRACTION_DIRECTION_LENGTH_SQUARED_MIN && nwbRefractionScreenBackgroundPixel(continuationEntry, continuationDirection, samplePixel);
     if(volumeExited)

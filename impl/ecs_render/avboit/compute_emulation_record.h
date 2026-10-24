@@ -103,7 +103,7 @@ using AvboitSharedComputeEmulationRecordTrait = AvboitComputeEmulationRecordTrai
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool RecordAvboitSharedComputeEmulation(Core::Alloc::ScratchArena& scratchArena, const AvboitSharedComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitSharedComputeEmulationRecordTrait& trait);
+[[nodiscard]] bool RecordAvboitSharedComputeEmulation(const AvboitSharedComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitSharedComputeEmulationRecordTrait& trait);
 
 template<typename PayloadT>
 [[nodiscard]] inline bool RecordAvboitComputeEmulationFromPayload(
@@ -169,7 +169,6 @@ template<typename PayloadT, typename DispatchFn>
 
 template<typename PayloadT>
 [[nodiscard]] inline bool RecordAvboitSharedComputeEmulationFromPayload(
-    Core::Alloc::ScratchArena& scratchArena,
     const PayloadT& payload,
     Core::CommandList& commandList,
     const bool isRasterPhase,
@@ -194,7 +193,7 @@ template<typename PayloadT>
         payload.finishTiming,
         isRasterPhase ? AvboitSharedComputeEmulationPhase::Raster : AvboitSharedComputeEmulationPhase::Generate,
     };
-    return RecordAvboitSharedComputeEmulation(scratchArena, inputs, commandList, trait);
+    return RecordAvboitSharedComputeEmulation(inputs, commandList, trait);
 }
 
 

@@ -115,10 +115,7 @@ struct CaptureDrawTask{
         if(!payload.avboitTargets.refractionFramebuffer || !payload.frameBindings.frameReady(payload.instanceCount, payload.materialTypedByteCount) || (payload.csg && !payload.csgResources.bindingValid()))
             return false;
 
-        Core::Alloc::ScratchArena scratch(RendererArenaScope::s_RenderArena);
-        MaterialPassDrawItemVector drawItems{scratch};
-        drawItems.reserve(payload.drawItems.size());
-        drawItems.assign(payload.drawItems.begin(), payload.drawItems.end());
+        const Span<const MaterialPassDrawItem> drawItems(payload.drawItems);
         bool resourcesReady = false;
         switch(payload.renderPath){
         case RenderPath::MeshShader:

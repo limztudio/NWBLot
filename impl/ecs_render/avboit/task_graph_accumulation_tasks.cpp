@@ -44,9 +44,8 @@ namespace RendererTaskGraphDetail{
 [[nodiscard]] bool AvboitAccumulationSharedComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_cast<void>(context);
     const AvboitSharedComputeEmulationRecordTrait trait{ RendererGpuTimingScope::s_AvboitAccumulate, MaterialPipelinePass::AvboitAccumulate, &AvboitFrameTargets::accumulationFramebuffer, };
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
 
-    return RecordAvboitSharedComputeEmulationFromPayload(scratchArena, payload, commandList, payload.phase == AvboitAccumulationSharedComputeEmulationGraphTask::Phase::Raster, trait, payload.accumulationTiming);
+    return RecordAvboitSharedComputeEmulationFromPayload(payload, commandList, payload.phase == AvboitAccumulationSharedComputeEmulationGraphTask::Phase::Raster, trait, payload.accumulationTiming);
 }
 
 

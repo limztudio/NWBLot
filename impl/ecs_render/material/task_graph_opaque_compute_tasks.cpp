@@ -4,8 +4,6 @@
 
 #include "task_graph_opaque_compute_tasks.h"
 
-#include <impl/ecs_render/kernel/arena_names.h>
-#include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
 
@@ -59,19 +57,21 @@ bool OpaqueRegularComputeEmulationGraphTask::Record(const Payload& payload, Core
     if(!frameSetupReady)
         return true;
 
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
-    MaterialPassDrawItems drawItems{ scratchArena };
-    payload.plan.materialize(drawItems);
     // Reject corrupted streams instead of dispatching outside the imported handle set.
-    if(!payload.plan.matches(drawItems.computeDrawItems))
+    if(!payload.plan.matches(payload.plan.drawItems))
         return false;
-    if(!payload.materialDrawBuffersUploaded || !payload.frameBindings.frameReady(payload.instanceCount, payload.materialTypedByteCount) || !materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings))
+    const bool drawResourcesReady =
+        materialSystem.meshMaterialPassDrawResourcesReady(payload.plan.meshDrawItems, payload.frameBindings)
+        && materialSystem.indexedMaterialPassDrawResourcesReady(payload.plan.indexedDrawItems, payload.frameBindings)
+        && materialSystem.computeMaterialPassDrawResourcesReady(payload.plan.drawItems, payload.frameBindings)
+    ;
+    if(!payload.materialDrawBuffersUploaded || !payload.frameBindings.frameReady(payload.instanceCount, payload.materialTypedByteCount) || !drawResourcesReady)
         return true;
 
     Core::ViewportState deferredViewportState;
     deferredViewportState.addViewportAndScissorRect(payload.targets.framebuffer->getFramebufferInfo().getViewport());
     const MaterialPassDrawContext drawContext{ commandList, nullptr, nullptr, deferredViewportState, nullptr, payload.frameBindings, MaterialPipelinePass::Opaque, payload.materialFrameStatesGraphOwned, payload.materialGeometryStatesGraphOwned, true };
-    materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
+    materialSystem.generateComputeMaterialPassDrawItems(drawContext, payload.plan.drawItems);
     return true;
 }
 
@@ -97,10 +97,8 @@ bool OpaqueRegularSharedComputeEmulationGraphTask::Record(const Payload& payload
     if(!frameSetupReady || !payload.plan.matches(payload.drawIndex))
         return false;
 
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
-    MaterialPassDrawItems drawItems{ scratchArena };
-    payload.plan.materialize(payload.drawIndex, drawItems);
-    if(!payload.materialDrawBuffersUploaded || !payload.frameBindings.frameReady(payload.instanceCount, payload.materialTypedByteCount) || !materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings)){
+    const Span<const MaterialPassDrawItem> drawItems(&payload.plan.drawItems[payload.drawIndex], 1u);
+    if(!payload.materialDrawBuffersUploaded || !payload.frameBindings.frameReady(payload.instanceCount, payload.materialTypedByteCount) || !materialSystem.computeMaterialPassDrawResourcesReady(drawItems, payload.frameBindings)){
         Core::DiscardGpuTimingMeasure(&payload.opaqueRegularTiming);
         if(payload.phase == Phase::Raster)
             commandList.endRenderPass();
@@ -122,9 +120,9 @@ bool OpaqueRegularSharedComputeEmulationGraphTask::Record(const Payload& payload
         true
     };
     if(payload.phase == Phase::Generate)
-        materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
+        materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems);
     else{
-        materialSystem.renderComputeMaterialPassDrawItemsRasterOnly(drawContext, drawItems.computeDrawItems);
+        materialSystem.renderComputeMaterialPassDrawItemsRasterOnly(drawContext, drawItems);
         if(payload.finishTiming){
             payload.opaqueRegularTiming.value().finishTiming(commandList);
             payload.opaqueRegularTiming.reset();

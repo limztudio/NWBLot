@@ -67,12 +67,12 @@ bool RendererMaterialSystem::createObjectGeometryPipelineResources(const Name& m
     return true;
 }
 
-bool RendererMaterialSystem::indexedMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept{
+bool RendererMaterialSystem::indexedMaterialPassDrawResourcesReady(const Span<const MaterialPassDrawItem> drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept{
     return (drawItems.empty() || frameBindings.bindingValid()) && prepareIndexedMaterialPassResourceBindings(drawItems);
 }
 
 
-bool RendererMaterialSystem::prepareIndexedMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems)noexcept{
+bool RendererMaterialSystem::prepareIndexedMaterialPassResourceBindings(const Span<const MaterialPassDrawItem> drawItems)noexcept{
     for(const MaterialPassDrawItem& draw : drawItems){
         const auto& cache = draw.meshResources.objectGeometryCache;
         if(!draw.meshResources.valid() || !draw.pipelineResources.indexedPipeline || !cache.valid() || cache.decoderPipeline != draw.pipelineResources.objectGeometryDecodePipeline)
@@ -81,7 +81,7 @@ bool RendererMaterialSystem::prepareIndexedMaterialPassResourceBindings(const Ma
     return true;
 }
 
-void RendererMaterialSystem::renderIndexedMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems){
+void RendererMaterialSystem::renderIndexedMaterialPassDrawItems(const MaterialPassDrawContext& context, const Span<const MaterialPassDrawItem> drawItems){
     if(drawItems.empty())
         return;
     NWB_ASSERT(context.materialGeometryStatesGraphOwned);

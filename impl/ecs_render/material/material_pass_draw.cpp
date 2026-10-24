@@ -57,7 +57,7 @@ bool RendererMaterialSystem::materialPassDrawResourcesReady(const MaterialPassDr
     return meshMaterialPassDrawResourcesReady(drawItems.meshDrawItems, frameBindings) && indexedMaterialPassDrawResourcesReady(drawItems.indexedDrawItems, frameBindings) && computeMaterialPassDrawResourcesReady(drawItems.computeDrawItems, frameBindings);
 }
 
-bool RendererMaterialSystem::meshMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept{
+bool RendererMaterialSystem::meshMaterialPassDrawResourcesReady(const Span<const MaterialPassDrawItem> drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept{
     for(const MaterialPassDrawItem& drawItem : drawItems){
         if(!materialPassDrawResourcesReady(drawItem.meshResources, frameBindings) || !drawItem.pipelineResources.meshletPipeline)
             return false;
@@ -65,7 +65,7 @@ bool RendererMaterialSystem::meshMaterialPassDrawResourcesReady(const MaterialPa
     return true;
 }
 
-bool RendererMaterialSystem::computeMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept{
+bool RendererMaterialSystem::computeMaterialPassDrawResourcesReady(const Span<const MaterialPassDrawItem> drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept{
     if(drawItems.empty())
         return true;
 
@@ -240,7 +240,7 @@ void RendererMaterialSystem::renderMaterialPassDrawItems(const MaterialPassDrawC
         renderComputeMaterialPassDrawItems(context, drawItems.computeDrawItems);
 }
 
-void RendererMaterialSystem::renderMeshMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems){
+void RendererMaterialSystem::renderMeshMaterialPassDrawItems(const MaterialPassDrawContext& context, const Span<const MaterialPassDrawItem> drawItems){
     for(const MaterialPassDrawItem& drawItem : drawItems){
         const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
         const MaterialPassPipelineResourceSnapshot& pipelineResources = drawItem.pipelineResources;
@@ -267,7 +267,7 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(const MaterialPassD
     }
 }
 
-void RendererMaterialSystem::generateComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems){
+void RendererMaterialSystem::generateComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, const Span<const MaterialPassDrawItem> drawItems){
     if(drawItems.empty())
         return;
     // This half deliberately has no local output transition. A graph producer must have declared every selected generated-vertex buffer as a UAV before recording it.
@@ -286,7 +286,7 @@ void RendererMaterialSystem::generateComputeMaterialPassDrawItems(const Material
     }
 }
 
-void RendererMaterialSystem::renderComputeMaterialPassDrawItemsRasterOnly(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems){
+void RendererMaterialSystem::renderComputeMaterialPassDrawItemsRasterOnly(const MaterialPassDrawContext& context, const Span<const MaterialPassDrawItem> drawItems){
     if(drawItems.empty())
         return;
     // This half has no local output transition. The graph declares each unified generated buffer for vertex and index reads.
@@ -304,7 +304,7 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItemsRasterOnly(const 
     }
 }
 
-void RendererMaterialSystem::renderComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems){
+void RendererMaterialSystem::renderComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, const Span<const MaterialPassDrawItem> drawItems){
     if(drawItems.empty())
         return;
     NWB_ASSERT(!context.emulationOutputEntryStateGraphOwned);

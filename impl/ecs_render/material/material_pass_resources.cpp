@@ -108,11 +108,11 @@ bool RendererMaterialSystem::prepareMaterialPassResourceBindings(const MaterialP
     return prepareMeshMaterialPassResourceBindings(drawItems.meshDrawItems) && prepareIndexedMaterialPassResourceBindings(drawItems.indexedDrawItems) && prepareComputeMaterialPassResourceBindings(drawItems.computeDrawItems);
 }
 
-bool RendererMaterialSystem::prepareMeshMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems)noexcept{
+bool RendererMaterialSystem::prepareMeshMaterialPassResourceBindings(const Span<const MaterialPassDrawItem> drawItems)noexcept{
     return prepareMaterialPassResourceBindingsImpl(drawItems, false);
 }
 
-bool RendererMaterialSystem::prepareComputeMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems)noexcept{
+bool RendererMaterialSystem::prepareComputeMaterialPassResourceBindings(const Span<const MaterialPassDrawItem> drawItems)noexcept{
     return prepareMaterialPassResourceBindingsImpl(drawItems, true);
 }
 
@@ -229,7 +229,7 @@ void RendererMaterialSystem::prepareMaterialPassInstanceUploadData(InstanceGpuDa
         instance.geometryHeapSlots[NWB_MESH_INSTANCE_CSG_CONTEXT_HEAP_SLOT] = csgContextHeapSlot.value_or(0u);
 }
 
-bool RendererMaterialSystem::prepareMaterialPassResourceBindingsImpl(const MaterialPassDrawItemVector& drawItems, const bool computeEmulation)noexcept{
+bool RendererMaterialSystem::prepareMaterialPassResourceBindingsImpl(const Span<const MaterialPassDrawItem> drawItems, const bool computeEmulation)noexcept{
     if(drawItems.empty())
         return true;
 

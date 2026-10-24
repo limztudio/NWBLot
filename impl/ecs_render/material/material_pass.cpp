@@ -363,19 +363,13 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         return ECSRenderDetail::FindOrAppendMaterialTypedByteRange(materialTypedBytes, mutableMaterialTypedRanges, **mutableTypedBytes);
     };
 
-    auto appendDrawForMesh = [&](const Core::ECS::EntityID entity, const Core::Assets::AssetRef<Material>& material, MeshResources& mesh, const CsgReceiverDrawState& csgReceiverState) -> bool{
+    auto appendDrawForMesh = [&](const Core::ECS::EntityID entity, const NotNull<MaterialSurfaceInfo*> materialInfo, MeshResources& mesh, const CsgReceiverDrawState& csgReceiverState) -> bool{
         NWB_ASSERT(mesh.valid());
         // Mesh creation establishes source-stream descriptors before draw gathering.
         NWB_ASSERT(m_meshSystem.meshGeometryHeapHandlesReady(mesh));
+        NWB_ASSERT(materialInfo->transparent == transparent);
 
         const NWB::Impl::Scene::TransformComponent* transform = m_world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
-
-        const auto materialInfoResult = lookupMode == RendererResourceLookupMode::CreateMissing ? createMaterialSurfaceInfo(material) : findMaterialSurfaceInfo(material);
-        if(!materialInfoResult)
-            return false;
-        const NotNull<MaterialSurfaceInfo*> materialInfo = *materialInfoResult;
-        if(materialInfo->transparent != transparent)
-            return false;
 
         MaterialPipelineKey pipelineKey;
         pipelineKey.material = materialInfo->materialName;
@@ -556,6 +550,14 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         if(!renderer.visible || m_opticalVolumes.isSuppressed(entity))
             continue;
 
+        MaterialSurfaceInfo* preparedMaterialInfo = nullptr;
+        if(lookupMode == RendererResourceLookupMode::PreparedOnly){
+            const auto materialInfoResult = findMaterialSurfaceInfo(renderer.material);
+            if(!materialInfoResult || (*materialInfoResult)->transparent != transparent)
+                continue;
+            preparedMaterialInfo = materialInfoResult->get();
+        }
+
         const auto resolvedMeshResult = ecsMeshSystem.resolveRenderableMeshStatus(entity);
         if(!resolvedMeshResult)
             continue;
@@ -569,13 +571,21 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
             continue;
         const NotNull<MeshResources*> mesh = *meshResult;
 
+        MaterialSurfaceInfo* materialInfo = preparedMaterialInfo;
+        if(!materialInfo){
+            const auto materialInfoResult = createMaterialSurfaceInfo(renderer.material);
+            if(!materialInfoResult || (*materialInfoResult)->transparent != transparent)
+                continue;
+            materialInfo = materialInfoResult->get();
+        }
+
         CsgReceiverDrawState csgReceiverState;
         if(csgReceiverLookupPtr){
             if(const auto resolvedState = csgReceiverLookupPtr->resolveReceiverDrawState(entity, csgReceiverPass))
                 csgReceiverState = *resolvedState;
         }
 
-        appendDrawForMesh(entity, renderer.material, *mesh, csgReceiverState);
+        appendDrawForMesh(entity, MakeNotNull(materialInfo), *mesh, csgReceiverState);
     }
 }
 

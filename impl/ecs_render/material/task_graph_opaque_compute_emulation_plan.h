@@ -90,7 +90,7 @@ public:
         return captured;
     }
 
-    [[nodiscard]] bool matches(const MaterialPassDrawItemVector& currentDrawItems)const noexcept{
+    [[nodiscard]] bool matches(const Span<const MaterialPassDrawItem> currentDrawItems)const noexcept{
         if(!captured || currentDrawItems.size() != drawItems.size() || outputBuffers.size() != drawItems.size())
             return false;
 
@@ -113,15 +113,6 @@ public:
                 return false;
         }
         return true;
-    }
-
-    void materialize(MaterialPassDrawItems& outDrawItems)const{
-        outDrawItems.meshDrawItems.reserve(meshDrawItems.size());
-        outDrawItems.meshDrawItems.assign(meshDrawItems.begin(), meshDrawItems.end());
-        outDrawItems.indexedDrawItems.reserve(indexedDrawItems.size());
-        outDrawItems.indexedDrawItems.assign(indexedDrawItems.begin(), indexedDrawItems.end());
-        outDrawItems.computeDrawItems.reserve(drawItems.size());
-        outDrawItems.computeDrawItems.assign(drawItems.begin(), drawItems.end());
     }
 };
 

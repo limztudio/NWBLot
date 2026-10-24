@@ -32,7 +32,7 @@ namespace __hidden_material_instance{
     const MaterialInstanceParameter& parameter,
     const MaterialTypedLayoutField& field,
     const u32 byteOffset,
-    Vector<u8, Core::Alloc::ScratchArena>& inOutMutableTypedBytes
+    const Span<u8> inOutMutableTypedBytes
 ){
     const u32 fieldByteSize = MaterialLayoutFieldByteSize(field.fieldType);
     NWB_ASSERT(fieldByteSize != 0u);
@@ -104,7 +104,7 @@ Expected<MaterialInstanceOverrideField> RendererMaterialSystem::FindMaterialInst
     return MakeUnexpected(Failure{});
 }
 
-bool RendererMaterialSystem::ApplyMaterialInstanceOverrides(const Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent& materialInstance, MaterialTypedByteDataVector& inOutMutableTypedBytes){
+bool RendererMaterialSystem::ApplyMaterialInstanceOverrides(const Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent& materialInstance, const Span<u8> inOutMutableTypedBytes){
     if(!materialInstance.materialInterface){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance overrides for entity {} require a material interface"), entity.id);
         return false;
@@ -152,8 +152,7 @@ bool RendererMaterialSystem::ApplyMaterialInstanceOverrides(const Core::ECS::Ent
     return true;
 }
 
-Expected<NotNull<const MaterialTypedByteVector*>> RendererMaterialSystem::prepareMaterialInstanceMutableTypedBytes(
-    Core::Alloc::ScratchArena& scratchArena,
+Expected<Span<const u8>> RendererMaterialSystem::prepareMaterialInstanceMutableTypedBytes(
     const Core::ECS::EntityID entity,
     const MaterialSurfaceInfo& materialInfo,
     const MaterialInstanceComponent* materialInstance
@@ -161,35 +160,32 @@ Expected<NotNull<const MaterialTypedByteVector*>> RendererMaterialSystem::prepar
     pruneMaterialInstanceMutableCache();
 
     if(!materialInstance || materialInstance->overrides.empty()){
-        return MakeNotNull(&materialInfo.mutableDefaultTypedBytes);
+        return Span<const u8>(materialInfo.mutableDefaultTypedBytes);
     }
 
     auto it = m_materialState.m_instanceMutableCache.try_emplace(entity, m_arena).first;
     MaterialInstanceMutableCacheEntry& cacheEntry = it.value();
     if(__hidden_material_instance::MaterialInstanceMutableCacheEntryMatches(cacheEntry, materialInfo, *materialInstance)){
-        return NotNull<const MaterialTypedByteVector*>(&cacheEntry.mutableTypedBytes);
+        return Span<const u8>(cacheEntry.mutableTypedBytes);
     }
 
-    MaterialTypedByteDataVector mutableTypedBytes{scratchArena};
-    mutableTypedBytes.reserve(materialInfo.mutableDefaultTypedBytes.size());
-    mutableTypedBytes.assign(materialInfo.mutableDefaultTypedBytes.begin(), materialInfo.mutableDefaultTypedBytes.end());
-    if(!ApplyMaterialInstanceOverrides(entity, materialInfo, *materialInstance, mutableTypedBytes)){
+    AssignTriviallyCopyableVector(cacheEntry.mutableTypedBytes, materialInfo.mutableDefaultTypedBytes);
+    if(!ApplyMaterialInstanceOverrides(entity, materialInfo, *materialInstance, cacheEntry.mutableTypedBytes)){
         m_materialState.m_instanceMutableCache.erase(it);
         return MakeUnexpected(Failure{});
     }
 
-    AssignTriviallyCopyableVector(cacheEntry.mutableTypedBytes, mutableTypedBytes);
     cacheEntry.materialName = materialInfo.materialName;
     cacheEntry.materialInterface = materialInfo.materialInterface;
     cacheEntry.typedLayoutHash = materialInfo.typedLayoutHash;
     cacheEntry.revision = materialInstance->revision;
 
-    return NotNull<const MaterialTypedByteVector*>(&cacheEntry.mutableTypedBytes);
+    return Span<const u8>(cacheEntry.mutableTypedBytes);
 }
 
-Expected<NotNull<const MaterialTypedByteVector*>> RendererMaterialSystem::findPreparedMaterialInstanceMutableTypedBytes(const Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent* materialInstance)const noexcept{
+Expected<Span<const u8>> RendererMaterialSystem::findPreparedMaterialInstanceMutableTypedBytes(const Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent* materialInstance)const noexcept{
     if(!materialInstance || materialInstance->overrides.empty()){
-        return MakeNotNull(&materialInfo.mutableDefaultTypedBytes);
+        return Span<const u8>(materialInfo.mutableDefaultTypedBytes);
     }
 
     const auto found = m_materialState.m_instanceMutableCache.find(entity);
@@ -200,7 +196,7 @@ Expected<NotNull<const MaterialTypedByteVector*>> RendererMaterialSystem::findPr
     if(!__hidden_material_instance::MaterialInstanceMutableCacheEntryMatches(cacheEntry, materialInfo, *materialInstance))
         return MakeUnexpected(Failure{});
 
-    return NotNull<const MaterialTypedByteVector*>(&cacheEntry.mutableTypedBytes);
+    return Span<const u8>(cacheEntry.mutableTypedBytes);
 }
 
 Expected<ShadowOccluderMaterialContext> RendererMaterialSystem::appendShadowOccluderMaterialContext(
@@ -211,15 +207,15 @@ Expected<ShadowOccluderMaterialContext> RendererMaterialSystem::appendShadowOccl
     ECSRenderDetail::MaterialTypedConstantRangeMap& inOutConstantRanges,
     ECSRenderDetail::MaterialTypedByteContentRangeMap& inOutMutableRanges
 ){
-    const auto constantRange = ECSRenderDetail::FindOrAppendMaterialConstantTypedByteRange(inOutMaterialTypedBytes, inOutConstantRanges, materialInfo.materialName, materialInfo.typedLayoutHash, materialInfo.constantTypedBytes);
+    const auto constantRange = ECSRenderDetail::FindOrAppendMaterialConstantTypedByteRange(materialInfo.materialName, materialInfo.typedLayoutHash, materialInfo.constantTypedBytes, inOutMaterialTypedBytes, inOutConstantRanges);
     if(!constantRange)
         return MakeUnexpected(Failure{});
 
     const MaterialInstanceComponent* materialInstance = m_world.tryGetComponent<MaterialInstanceComponent>(entity);
-    const auto mutableTypedBytes = prepareMaterialInstanceMutableTypedBytes(inOutMaterialTypedBytes.get_allocator().arena(), entity, materialInfo, materialInstance);
+    const auto mutableTypedBytes = prepareMaterialInstanceMutableTypedBytes(entity, materialInfo, materialInstance);
     if(!mutableTypedBytes)
         return MakeUnexpected(Failure{});
-    const auto mutableRange = ECSRenderDetail::FindOrAppendMaterialTypedByteRange(inOutMaterialTypedBytes, inOutMutableRanges, **mutableTypedBytes);
+    const auto mutableRange = ECSRenderDetail::FindOrAppendMaterialTypedByteRange(*mutableTypedBytes, inOutMaterialTypedBytes, inOutMutableRanges);
     if(!mutableRange)
         return MakeUnexpected(Failure{});
 

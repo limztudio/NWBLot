@@ -23,8 +23,8 @@ bool PreparedSceneTlasBuild::capture(
     const RendererRayTracingState& state,
     const bool staticScene,
     const u64 staticSceneHash,
-    const Vector<Core::RayTracingInstanceDesc, Core::Alloc::ScratchArena>& instances,
-    const Vector<Core::RayTracingAccelStructHandle, Core::Alloc::ScratchArena>& instanceBlases
+    const Span<const Core::RayTracingInstanceDesc> instances,
+    const Span<const Core::RayTracingAccelStructHandle> instanceBlases
 ){
     clear();
     if(

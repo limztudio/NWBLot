@@ -307,7 +307,10 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     }
     const bool causticOpticalReader = declaresHardwareCaustics ? m_raytracingSystem.hasHwCausticWork(meshViewBufferSnapshot) : m_raytracingSystem.hasCausticWork(meshViewBufferSnapshot);
 
-    const Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena>& causticTraceGeometryResources = declaresHardwareCaustics ? traceGeometry.hardwareTraceGeometry : traceGeometry.softwareTraceGeometry;
+    const Span<const Core::GpuGraphResourceId> causticTraceGeometryResources = declaresHardwareCaustics
+        ? Span<const Core::GpuGraphResourceId>(traceGeometry.hardwareTraceGeometry)
+        : Span<const Core::GpuGraphResourceId>(traceGeometry.softwareTraceGeometry)
+    ;
     const Core::GpuGraphResourceSetId causticTraceGeometrySet = declaresHardwareCaustics ? traceGeometry.hardwareTraceGeometrySet : traceGeometry.softwareTraceGeometrySet;
 
     // Freeze shadow routing after prefix handoff so transparent folding never sees the prior mask.

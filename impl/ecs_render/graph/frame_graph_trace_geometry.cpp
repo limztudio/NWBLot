@@ -29,8 +29,8 @@ Expected<FrameGraphTraceGeometryResult> FrameGraphTraceGeometryImporter::declare
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain preflighted shadow-trace geometry buffers"));
         return MakeUnexpected(Failure{});
     }
-    const PreparedShadowTraceGeometryBufferVector& preparedTraceGeometry = m_raytracingSystem.preparedShadowTraceGeometryBuffers();
-    const PreparedShadowTraceMaterialSampledTextureVector& preparedTraceMaterialSampledTextures = m_raytracingSystem.preparedShadowTraceMaterialSampledTextures();
+    const Span<const PreparedShadowTraceGeometryBuffer> preparedTraceGeometry = m_raytracingSystem.preparedShadowTraceGeometryBuffers();
+    const Span<const Core::TextureHandle> preparedTraceMaterialSampledTextures = m_raytracingSystem.preparedShadowTraceMaterialSampledTextures();
 
     FrameGraphTraceGeometryResult result(scratchArena);
     result.traceGeometry.reserve(preparedTraceGeometry.size());
@@ -55,7 +55,12 @@ Expected<FrameGraphTraceGeometryResult> FrameGraphTraceGeometryImporter::declare
             result.softwareTraceGeometry.push_back(resource);
     }
     // Trace dispatchers select textures via frozen material context; reuse typed preflight import when owned.
-    const auto traceMaterialSampledTextureResources = ImportMaterialSampledTextureResources(m_graph, preparedTraceMaterialSampledTextures.data(), preparedTraceMaterialSampledTextures.size(), "Prepared Trace Material Sampled Texture", scratchArena);
+    const auto traceMaterialSampledTextureResources = ImportMaterialSampledTextureResources(
+        preparedTraceMaterialSampledTextures,
+        "Prepared Trace Material Sampled Texture",
+        m_graph,
+        scratchArena
+    );
     if(!traceMaterialSampledTextureResources){
         switch(traceMaterialSampledTextureResources.error()){
         case SampledTextureImportFailure::GraphUnavailable:
@@ -103,7 +108,7 @@ Expected<FrameGraphTraceGeometryResult> FrameGraphTraceGeometryImporter::declare
 
 
 // Empty member lists and failed imports leave the set invalid.
-Core::GpuGraphResourceSetId FrameGraphTraceGeometryImporter::importSet(const Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena>& members, const Name& identity, const AStringView markerLabel){
+Core::GpuGraphResourceSetId FrameGraphTraceGeometryImporter::importSet(const Span<const Core::GpuGraphResourceId> members, const Name& identity, const AStringView markerLabel){
     if(members.empty())
         return {};
 

@@ -34,7 +34,7 @@ using PreparedMeshSwBvhGraphResourceVector = Vector<PreparedMeshSwBvhGraphResour
 
 
 // A missing graph identity rejects the complete returned resource list.
-[[nodiscard]] Expected<PreparedMeshSwBvhGraphResourceVector> ResolvePreparedSoftwareBvhGraphResources(Core::Alloc::ScratchArena& scratchArena, const Core::GpuTaskGraph& graph, const PreparedMeshSwBvhBuildVector& builds);
+[[nodiscard]] Expected<PreparedMeshSwBvhGraphResourceVector> ResolvePreparedSoftwareBvhGraphResources(const Core::GpuTaskGraph& graph, Span<const PreparedMeshSwBvhBuild> builds, Core::Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

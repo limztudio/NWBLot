@@ -36,22 +36,14 @@ static_assert(sizeof(AttribGpu) == s_AttribGpuByteSize, "AttribGpu must stay 16 
 
 // Flat per-corner attribute buffer from meshlet streams (mirrors BuildMeshletTriangleIndices decode chain).
 // PrimitiveIndex * 3 + corner fetch; raw streams cover cooked + skinned instances.
-template<
-    typename MeshletContainer,
-    typename LocalVertexRefContainer,
-    typename AttributeDeltaContainer,
-    typename PrimitiveContainer,
-    typename NormalContainer,
-    typename Uv0Container
->
-[[nodiscard]] Expected<Vector<AttribGpu, Core::Alloc::ScratchArena>> BuildMeshletTriangleAttributes(
-    Core::Alloc::ScratchArena& scratchArena,
-    const MeshletContainer& meshlets,
-    const LocalVertexRefContainer& localVertexRefs,
-    const AttributeDeltaContainer& attributeRefDeltas,
-    const PrimitiveContainer& primitiveIndices,
-    const NormalContainer& normalStream,
-    const Uv0Container& uv0Stream
+[[nodiscard]] inline Expected<Vector<AttribGpu, Core::Alloc::ScratchArena>> BuildMeshletTriangleAttributes(
+    const Span<const MeshletDesc> meshlets,
+    const Span<const MeshletLocalVertexRef> localVertexRefs,
+    const Span<const u8> attributeRefDeltas,
+    const Span<const u8> primitiveIndices,
+    const Span<const Half4U> normalStream,
+    const Span<const Float2U> uv0Stream,
+    Core::Alloc::ScratchArena& scratchArena
 ){
     const u8* const attributeDeltaBytes = attributeRefDeltas.data();
     const usize attributeDeltaByteCount = attributeRefDeltas.size();
@@ -61,9 +53,7 @@ template<
 
     Vector<AttribGpu, Core::Alloc::ScratchArena> outAttributes(primitiveIndexCount, scratchArena);
 
-    if(!ForEachMeshletTriangleCorner(meshlets, localVertexRefs, primitiveIndices, [&](const MeshletDesc& meshlet, const usize primitiveByte, const MeshletLocalVertexRef& localVertexRef)noexcept(
-        noexcept(DeclVal<Half4U&>() = normalStream[u32{}]) && noexcept(DeclVal<Float2U&>() = uv0Stream[u32{}])
-    ) -> bool {
+    if(!ForEachMeshletTriangleCorner(meshlets, localVertexRefs, primitiveIndices, [&](const MeshletDesc& meshlet, const usize primitiveByte, const MeshletLocalVertexRef& localVertexRef)noexcept -> bool {
             const u32 localAttributeIndex = static_cast<u32>(localVertexRef.localAttribute);
             const auto attributeRef = DecodeMeshletAttributeRef(attributeDeltaBytes, attributeDeltaByteCount, meshlet, localAttributeIndex);
             if(!attributeRef)
@@ -81,8 +71,8 @@ template<
     return outAttributes;
 }
 
-[[nodiscard]] inline Expected<Vector<AttribGpu, Core::Alloc::ScratchArena>> BuildMeshletTriangleAttributes(Core::Alloc::ScratchArena& scratchArena, const MeshGeometryPayload& payload){
-    return BuildMeshletTriangleAttributes(scratchArena, payload.meshlets(), payload.meshletLocalVertexRefs(), payload.meshletAttributeRefDeltas(), payload.meshletPrimitiveIndices(), payload.normalStream(), payload.uv0Stream());
+[[nodiscard]] inline Expected<Vector<AttribGpu, Core::Alloc::ScratchArena>> BuildMeshletTriangleAttributes(const MeshGeometryPayload& payload, Core::Alloc::ScratchArena& scratchArena){
+    return BuildMeshletTriangleAttributes(payload.meshlets(), payload.meshletLocalVertexRefs(), payload.meshletAttributeRefDeltas(), payload.meshletPrimitiveIndices(), payload.normalStream(), payload.uv0Stream(), scratchArena);
 }
 
 

@@ -6,8 +6,10 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/csg/renderer_csg_types.h>
 #include <impl/ecs_render/csg/task_graph_opaque_compute_tasks.h>
 #include <impl/ecs_render/csg/task_graph_opaque_interval_tasks.h>
+#include <impl/ecs_render/material/renderer_draw_types.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
 
 #include <core/graphics/gpu_timing.h>
@@ -26,9 +28,7 @@ NWB_IMPL_BEGIN
 class ObjectGeometryCacheGraph;
 class RendererCsgSystem;
 class RendererMaterialSystem;
-struct CsgFrameGpuData;
 struct DeferredGraphResourceImportResult;
-struct MaterialPassDrawItemPartitions;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -42,10 +42,10 @@ struct OpaqueCsgIntervalStageInputs{
     const DeferredGraphResourceImportResult& resources;
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings;
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources;
-    const MaterialPassDrawItemPartitions& opaqueDrawItems;
-    const CsgFrameGpuData& csgFrameData;
-    const Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& receiverSpanResourceUses;
-    const Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& intervalCombineResourceUses;
+    MaterialPassDrawItemPartitionsView opaqueDrawItems{};
+    CsgFrameGpuDataView csgFrameData{};
+    Span<const Core::GpuTaskResourceUse> receiverSpanResourceUses;
+    Span<const Core::GpuTaskResourceUse> intervalCombineResourceUses;
     Core::GpuTimingSubmissionTicket** intervalSampleTimingTicket = nullptr;
     Core::TextureSubresourceSet removedIntervalSubresources{};
     Core::TextureSubresourceSet removedIntervalCountSubresources{};
@@ -96,8 +96,8 @@ public:
     void capturePayloads(
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-        const MaterialPassDrawItemPartitions& opaqueDrawItems,
-        const CsgFrameGpuData& csgFrameData,
+        const MaterialPassDrawItemPartitionsView& opaqueDrawItems,
+        const CsgFrameGpuDataView& csgFrameData,
         usize instanceCount,
         usize materialTypedByteCount,
         bool materialDrawBuffersUploaded,

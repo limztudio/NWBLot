@@ -30,23 +30,17 @@ namespace RendererTaskGraphDetail{
 
 
 [[nodiscard]] inline Expected<Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>> GatherPreparedMaterialGeometryUses(
+    const Span<const MaterialPassDrawItemsView> drawItemSets,
     Core::GpuTaskGraph& graph,
-    const MaterialPassDrawItems* const* const drawItemSets,
-    const usize drawItemSetCount,
     Core::Alloc::ScratchArena& scratchArena
 ){
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses(scratchArena);
-    if(drawItemSetCount != 0u && !drawItemSets)
-        return MakeUnexpected(Failure{});
 
     // Indexed raster reads its decoded cache; only mesh/compute stages and cache producers consume source streams.
     constexpr usize s_MaxDrawItemCount = Limit<usize>::s_Max / NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT;
     usize drawItemCount = 0u;
-    for(usize drawItemSetIndex = 0u; drawItemSetIndex < drawItemSetCount; ++drawItemSetIndex){
-        const MaterialPassDrawItems* const drawItems = drawItemSets[drawItemSetIndex];
-        if(!drawItems)
-            return MakeUnexpected(Failure{});
-        for(const usize count : { drawItems->meshDrawItems.size(), drawItems->computeDrawItems.size() }){
+    for(const MaterialPassDrawItemsView& drawItems : drawItemSets){
+        for(const usize count : { drawItems.meshDrawItems.size(), drawItems.computeDrawItems.size() }){
             if(count > s_MaxDrawItemCount - drawItemCount)
                 return MakeUnexpected(Failure{});
             drawItemCount += count;
@@ -96,13 +90,12 @@ namespace RendererTaskGraphDetail{
                 uniqueMeshes.push_back(MeshSourceRef(&mesh));
             return true;
         };
-        for(usize drawItemSetIndex = 0u; drawItemSetIndex < drawItemSetCount; ++drawItemSetIndex){
-            const MaterialPassDrawItems* const drawItems = drawItemSets[drawItemSetIndex];
-            for(const MaterialPassDrawItem& drawItem : drawItems->meshDrawItems){
+        for(const MaterialPassDrawItemsView& drawItems : drawItemSets){
+            for(const MaterialPassDrawItem& drawItem : drawItems.meshDrawItems){
                 if(!appendDrawItem(drawItem))
                     return MakeUnexpected(Failure{});
             }
-            for(const MaterialPassDrawItem& drawItem : drawItems->computeDrawItems){
+            for(const MaterialPassDrawItem& drawItem : drawItems.computeDrawItems){
                 if(!appendDrawItem(drawItem))
                     return MakeUnexpected(Failure{});
             }
@@ -156,15 +149,14 @@ namespace RendererTaskGraphDetail{
 
 // Material geometry enumerates from the frozen snapshot; give the graph one immutable collection.
 [[nodiscard]] inline Expected<Core::GpuGraphResourceSetId> GatherPreparedMaterialGeometryResourceSet(
-    Core::GpuTaskGraph& graph,
-    const MaterialPassDrawItems* const* const drawItemSets,
-    const usize drawItemSetCount,
-    Core::Alloc::ScratchArena& scratchArena,
+    const Span<const MaterialPassDrawItemsView> drawItemSets,
     const Name& identity,
-    const AStringView label
+    const AStringView label,
+    Core::GpuTaskGraph& graph,
+    Core::Alloc::ScratchArena& scratchArena
 ){
     Core::GpuGraphResourceSetId resource{};
-    const auto resourceUses = GatherPreparedMaterialGeometryUses(graph, drawItemSets, drawItemSetCount, scratchArena);
+    const auto resourceUses = GatherPreparedMaterialGeometryUses(drawItemSets, graph, scratchArena);
     if(!resourceUses)
         return MakeUnexpected(Failure{});
 
@@ -210,20 +202,19 @@ namespace RendererTaskGraphDetail{
 
 
 [[nodiscard]] inline Expected<Core::GpuGraphResourceSetId> GatherPreparedMaterialSampledTextureResourceSet(
-    RendererMaterialSystem& materialSystem,
-    Core::GpuTaskGraph& graph,
-    const MaterialPassDrawItems* const* const drawItemSets,
-    const usize drawItemSetCount,
-    Core::Alloc::ScratchArena& scratchArena,
+    const RendererMaterialSystem& materialSystem,
+    const Span<const MaterialPassDrawItemsView> drawItemSets,
     const Name& identity,
-    const AStringView label
+    const AStringView label,
+    Core::GpuTaskGraph& graph,
+    Core::Alloc::ScratchArena& scratchArena
 ){
     Core::GpuGraphResourceSetId resource{};
-    const auto sampledTextures = materialSystem.gatherPreparedMaterialPassSampledTextures(drawItemSets, drawItemSetCount, scratchArena);
+    const auto sampledTextures = materialSystem.gatherPreparedMaterialPassSampledTextures(drawItemSets, scratchArena);
     if(!sampledTextures)
         return MakeUnexpected(Failure{});
 
-    const auto members = ImportMaterialSampledTextureResources(graph, sampledTextures->data(), sampledTextures->size(), "Prepared Material Sampled Texture", scratchArena);
+    const auto members = ImportMaterialSampledTextureResources(*sampledTextures, "Prepared Material Sampled Texture", graph, scratchArena);
     if(!members)
         return MakeUnexpected(Failure{});
     if(members->empty())

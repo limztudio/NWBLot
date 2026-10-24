@@ -99,14 +99,13 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
                 return MakeUnexpected(Failure{});
             }
 
-            const MaterialPassDrawItems* const transparentCsgMaterialGeometryDrawSets[] = { &transparentCsgDrawItems.csgReceiverSurface, };
+            const MaterialPassDrawItemsView transparentCsgMaterialGeometryDrawSets[] = { transparentCsgDrawItems.csgReceiverSurface, };
             const auto geometrySetResult = GatherPreparedMaterialGeometryResourceSet(
-                m_graph,
                 transparentCsgMaterialGeometryDrawSets,
-                LengthOf(transparentCsgMaterialGeometryDrawSets),
-                scratchArena,
                 Name("render.avboit.intervals.transparent_csg_material_geometry"),
-                "Transparent CSG Material Geometry"
+                "Transparent CSG Material Geometry",
+                m_graph,
+                scratchArena
             );
             avboitPrePayload.transparentCsgMaterialGeometryStatesGraphOwned = geometrySetResult.has_value();
             if(!geometrySetResult){
@@ -116,12 +115,11 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
             transparentCsgMaterialGeometrySet = *geometrySetResult;
             const auto sampledTextureSetResult = GatherPreparedMaterialSampledTextureResourceSet(
                 m_materialSystem,
-                m_graph,
                 transparentCsgMaterialGeometryDrawSets,
-                LengthOf(transparentCsgMaterialGeometryDrawSets),
-                scratchArena,
                 Name("render.avboit.intervals.transparent_csg_material_sampled_textures"),
-                "Transparent CSG Material Sampled Textures"
+                "Transparent CSG Material Sampled Textures",
+                m_graph,
+                scratchArena
             );
             if(!sampledTextureSetResult){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared transparent CSG material sampled textures"));
@@ -129,7 +127,7 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
             }
             transparentCsgMaterialSampledTextureSet = *sampledTextureSetResult;
 
-            m_materialSystem.prepareMaterialPassInstanceUploadData(transparentCsgInstanceData, (inputs.csgResources));
+            m_materialSystem.prepareMaterialPassInstanceUploadData(inputs.csgResources, transparentCsgInstanceData);
 #if defined(NWB_DEBUG)
             if(
                 transparentCsgInstanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData)

@@ -182,8 +182,8 @@ void RendererOpticalVolumeSelection::prepare(Core::ECS::World& world, RendererMa
         candidate.priority = renderer.opticalVolumePriority;
         candidate.boundaryMode = static_cast<u32>(renderer.opticalBoundaryMode);
         candidate.mediumPriority = renderer.opticalMediumPriority;
-        candidate.mutableTypedBytes = (*mutableBytes)->data();
-        candidate.mutableTypedByteCount = (*mutableBytes)->size();
+        candidate.mutableTypedBytes = mutableBytes->data();
+        candidate.mutableTypedByteCount = mutableBytes->size();
         if(const auto* transformPtr = world.tryGetComponent<Scene::TransformComponent>(entity)){
             StoreFloat(LoadFloat(transformPtr->position), candidate.position);
             StoreFloat(LoadFloat(transformPtr->rotation), candidate.rotation);

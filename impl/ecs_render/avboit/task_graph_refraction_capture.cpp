@@ -309,11 +309,11 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
     )
         return MakeUnexpected(Failure{});
 
-    const MaterialPassDrawItems* const drawSets[] = {&drawItems.regular, &drawItems.csg};
-    const auto geometrySet = GatherPreparedMaterialGeometryResourceSet(graph, drawSets, LengthOf(drawSets), scratchArena, Name("render.refraction.capture.geometry"), "Refraction Capture Geometry");
+    const MaterialPassDrawItemsView drawSets[] = {drawItems.regular, drawItems.csg};
+    const auto geometrySet = GatherPreparedMaterialGeometryResourceSet(drawSets, Name("render.refraction.capture.geometry"), "Refraction Capture Geometry", graph, scratchArena);
     if(!geometrySet)
         return MakeUnexpected(Failure{});
-    const auto sampledTextureSet = GatherPreparedMaterialSampledTextureResourceSet(materialSystem, graph, drawSets, LengthOf(drawSets), scratchArena, Name("render.refraction.capture.material_textures"), "Refraction Capture Material Textures");
+    const auto sampledTextureSet = GatherPreparedMaterialSampledTextureResourceSet(materialSystem, drawSets, Name("render.refraction.capture.material_textures"), "Refraction Capture Material Textures", graph, scratchArena);
     if(!sampledTextureSet)
         return MakeUnexpected(Failure{});
     const Core::GpuTaskResourceSetUse setUses[] = {
@@ -323,7 +323,7 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
     constexpr usize s_GeometryAndTextureSetUseCount = 2u;
     const usize setUseCount = sampledTextureSet->valid() ? s_GeometryAndTextureSetUseCount : 1u;
 
-    materialSystem.prepareMaterialPassInstanceUploadData(instances, csgResources);
+    materialSystem.prepareMaterialPassInstanceUploadData(csgResources, instances);
     const bool producesReusableGeometry = generatedGeometry.capture(drawItems, instances, frameBindings, meshViewState, MaterialPipelinePass::AvboitRefractionCapture);
     const auto materialInstancesResult = ImportBuffer(graph, frameBindings.instanceBuffer);
     const auto materialTypedResult = ImportBuffer(graph, frameBindings.materialTypedBuffer);
@@ -407,14 +407,14 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
         }
     }
 
-    if(!objectGeometry.prepare(drawItems.regular.indexedDrawItems.data(), drawItems.regular.indexedDrawItems.size(), frameBindings, targets, scratchArena, dependency, commonUses))
+    if(!objectGeometry.prepare(drawItems.regular.indexedDrawItems, frameBindings, targets, scratchArena, dependency, commonUses))
         return MakeUnexpected(Failure{});
-    if(!objectGeometry.prepare(drawItems.csg.indexedDrawItems.data(), drawItems.csg.indexedDrawItems.size(), frameBindings, targets, scratchArena, dependency, commonUses))
+    if(!objectGeometry.prepare(drawItems.csg.indexedDrawItems, frameBindings, targets, scratchArena, dependency, commonUses))
         return MakeUnexpected(Failure{});
 
     usize drawTaskIndex = 0u;
-    const auto appendDraw = [&](const MaterialPassDrawItem* items, const usize count, const bool csg, const RenderPath::Enum renderPath, const bool generate, const Core::GpuGraphResourceId output){
-        if(count == 0u)
+    const auto appendDraw = [&](const Span<const MaterialPassDrawItem> items, const bool csg, const RenderPath::Enum renderPath, const bool generate, const Core::GpuGraphResourceId output){
+        if(items.empty())
             return true;
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses{scratchArena};
         constexpr usize s_DrawExtraUseCapacity = 7u;
@@ -444,8 +444,8 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
         payload.avboitTargets = targets.avboit;
         payload.frameBindings = frameBindings;
         payload.csgResources = csgResources;
-        payload.drawItems.reserve(count);
-        payload.drawItems.assign(items, items + count);
+        payload.drawItems.reserve(items.size());
+        payload.drawItems.assign(items.begin(), items.end());
         payload.instanceCount = instances.size();
         payload.materialTypedByteCount = typedBytes.size();
         payload.csg = csg;
@@ -462,17 +462,18 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
     };
 
     // Emulated draws keep a generator/raster pair so outputs outlive their draw.
-    const MaterialPassDrawItems* const orderedSets[] = {&drawItems.regular, &drawItems.csg};
+    const MaterialPassDrawItemsView orderedSets[] = {drawItems.regular, drawItems.csg};
     for(usize setIndex = 0u; setIndex < LengthOf(orderedSets); ++setIndex){
-        const MaterialPassDrawItems& items = *orderedSets[setIndex];
+        const MaterialPassDrawItemsView& items = orderedSets[setIndex];
         const bool csg = setIndex != 0u;
-        if(!appendDraw(items.meshDrawItems.data(), items.meshDrawItems.size(), csg, RenderPath::MeshShader, false, {}))
+        if(!appendDraw(items.meshDrawItems, csg, RenderPath::MeshShader, false, {}))
             return MakeUnexpected(Failure{});
-        if(!appendDraw(items.indexedDrawItems.data(), items.indexedDrawItems.size(), csg, RenderPath::VertexIndexed, false, {}))
+        if(!appendDraw(items.indexedDrawItems, csg, RenderPath::VertexIndexed, false, {}))
             return MakeUnexpected(Failure{});
         for(const MaterialPassDrawItem& item : items.computeDrawItems){
             const auto outputResult = ImportBuffer(graph, item.meshResources.emulationVertexBuffer);
-            if(!outputResult || !appendDraw(&item, 1u, csg, RenderPath::ComputeEmulation, true, *outputResult) || !appendDraw(&item, 1u, csg, RenderPath::ComputeEmulation, false, *outputResult))
+            const Span<const MaterialPassDrawItem> singleItem(&item, 1u);
+            if(!outputResult || !appendDraw(singleItem, csg, RenderPath::ComputeEmulation, true, *outputResult) || !appendDraw(singleItem, csg, RenderPath::ComputeEmulation, false, *outputResult))
                 return MakeUnexpected(Failure{});
         }
     }

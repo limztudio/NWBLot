@@ -160,12 +160,12 @@ static constexpr TStringView s_RtTriangleAttributeLabel = NWB_TEXT("rt triangle 
     return true;
 }
 
-template<typename PayloadT, typename PayloadVector>
+template<typename PayloadT>
 [[nodiscard]] Expected<Core::BufferHandle, RuntimeMeshBufferUpload::BufferSetupFailure::Enum> SetupRuntimeBuffer(
     Core::GraphicsRuntime& graphics,
     const MeshSkinningRuntimeInstance& instance,
     const AStringView suffix,
-    const PayloadVector& payload,
+    const Span<const PayloadT> payload,
     const bool canHaveUavs,
     const TStringView label,
     const bool canHaveRawViews = false,
@@ -196,40 +196,67 @@ template<typename PayloadT, typename PayloadVector>
     return MakeUnexpected(buffer.error());
 }
 
-template<typename PayloadVector>
-[[nodiscard]] Expected<Core::BufferHandle, RuntimeMeshBufferUpload::BufferSetupFailure::Enum> SetupPaddedRawRuntimeBuffer(
+template<typename PayloadT>
+[[nodiscard]] bool AssignRuntimeBuffer(
+    Core::BufferHandle& outBuffer,
+    Core::GraphicsRuntime& graphics,
+    const MeshSkinningRuntimeInstance& instance,
+    const AStringView suffix,
+    const Span<const PayloadT> payload,
+    const bool canHaveUavs,
+    const TStringView label,
+    const bool canHaveRawViews = false,
+    const bool accelStructBuildInput = false,
+    const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
+    const bool isIndexBuffer = false
+){
+    auto buffer = SetupRuntimeBuffer<PayloadT>(graphics, instance, suffix, payload, canHaveUavs, label, canHaveRawViews, accelStructBuildInput, queueSharing, isIndexBuffer);
+    if(!buffer){
+        outBuffer.reset();
+        return false;
+    }
+    outBuffer = Move(*buffer);
+    return true;
+}
+
+[[nodiscard]] bool AssignPaddedRawRuntimeBuffer(
+    Core::BufferHandle& outBuffer,
     Core::GraphicsRuntime& graphics,
     Core::Alloc::ScratchArena& scratchArena,
     const MeshSkinningRuntimeInstance& instance,
     const AStringView suffix,
-    const PayloadVector& payload,
+    const Span<const u8> payload,
     const bool canHaveUavs,
     const TStringView label,
     const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute
 ){
+    outBuffer = nullptr;
+
     const auto bufferName = DeriveRuntimeResourceName(instance.sourceName, instance.entity.id, instance.editRevision, suffix);
     if(!bufferName){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to derive {} buffer name for runtime mesh '{}'"), label, instance.handle.value);
-        return MakeUnexpected(RuntimeMeshBufferUpload::BufferSetupFailure::CreateFailed);
+        return false;
     }
 
     auto buffer = RuntimeMeshBufferUpload::SetupRequiredPaddedRawByteBuffer(graphics, scratchArena, *bufferName, payload, { canHaveUavs, true, false, queueSharing });
-    if(buffer)
-        return Move(*buffer);
+    if(buffer){
+        outBuffer = Move(*buffer);
+        return true;
+    }
     switch(buffer.error()){
     case RuntimeMeshBufferUpload::BufferSetupFailure::EmptyPayload:
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: {} payload is empty"), label);
-        return MakeUnexpected(buffer.error());
+        return false;
     case RuntimeMeshBufferUpload::BufferSetupFailure::ByteSizeOverflow:
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: {} payload byte size overflows"), label);
-        return MakeUnexpected(buffer.error());
+        return false;
     case RuntimeMeshBufferUpload::BufferSetupFailure::CreateFailed:
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to create {} buffer for runtime mesh '{}'"), label, instance.handle.value);
-        return MakeUnexpected(buffer.error());
+        return false;
     }
 
     NWB_ASSERT(false);
-    return MakeUnexpected(buffer.error());
+    return false;
 }
 
 
@@ -250,35 +277,35 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
     // Software and hybrid tails read raw position/index buffers; keep views even with HWRT.
 
     bool uploaded = CreateMeshSkinningLocalBoundsBuffers(m_graphics, instance);
-    auto restPositionBufferResult = __hidden_runtime_cache_resources::SetupRuntimeBuffer<Float3U>(
+    uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Float3U>(
+        instance.restPositionBuffer,
         m_graphics,
         instance,
         __hidden_runtime_cache_resources::s_RestPositionsSuffix,
         instance.restPositions,
         false,
         __hidden_runtime_cache_resources::s_RestPositionLabel
-    );
-    if(!restPositionBufferResult){
-        instance.restPositionBuffer.reset();
-        uploaded = false;
-    }
-    else
-        instance.restPositionBuffer = Move(*restPositionBufferResult);
-    auto restNormalBufferResult = __hidden_runtime_cache_resources::SetupRuntimeBuffer<Half4U>(m_graphics, instance, __hidden_runtime_cache_resources::s_RestNormalsSuffix, instance.restNormals, false, __hidden_runtime_cache_resources::s_RestNormalLabel);
-    if(!restNormalBufferResult){
-        instance.restNormalBuffer.reset();
-        uploaded = false;
-    }
-    else
-        instance.restNormalBuffer = Move(*restNormalBufferResult);
-    auto restTangentBufferResult = __hidden_runtime_cache_resources::SetupRuntimeBuffer<Half4U>(m_graphics, instance, __hidden_runtime_cache_resources::s_RestTangentsSuffix, instance.restTangents, false, __hidden_runtime_cache_resources::s_RestTangentLabel);
-    if(!restTangentBufferResult){
-        instance.restTangentBuffer.reset();
-        uploaded = false;
-    }
-    else
-        instance.restTangentBuffer = Move(*restTangentBufferResult);
-    auto skinnedPositionBufferResult = __hidden_runtime_cache_resources::SetupRuntimeBuffer<Float3U>(
+    ) && uploaded;
+    uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Half4U>(
+        instance.restNormalBuffer,
+        m_graphics,
+        instance,
+        __hidden_runtime_cache_resources::s_RestNormalsSuffix,
+        instance.restNormals,
+        false,
+        __hidden_runtime_cache_resources::s_RestNormalLabel
+    ) && uploaded;
+    uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Half4U>(
+        instance.restTangentBuffer,
+        m_graphics,
+        instance,
+        __hidden_runtime_cache_resources::s_RestTangentsSuffix,
+        instance.restTangents,
+        false,
+        __hidden_runtime_cache_resources::s_RestTangentLabel
+    ) && uploaded;
+    uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Float3U>(
+        instance.skinnedPositionBuffer,
         m_graphics,
         instance,
         __hidden_runtime_cache_resources::s_SkinnedPositionsSuffix,
@@ -288,70 +315,38 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         true,
         rtSupported,
         Core::ResourceQueueSharing::GraphicsAndAsyncCompute
-    );
-    if(!skinnedPositionBufferResult){
-        instance.skinnedPositionBuffer.reset();
-        uploaded = false;
-    }
-    else
-        instance.skinnedPositionBuffer = Move(*skinnedPositionBufferResult);
-    auto skinnedNormalBufferResult = __hidden_runtime_cache_resources::SetupRuntimeBuffer<Half4U>(
+    ) && uploaded;
+    uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Half4U>(
+        instance.skinnedNormalBuffer,
         m_graphics,
         instance,
         __hidden_runtime_cache_resources::s_SkinnedNormalsSuffix,
         instance.restNormals,
         true,
         __hidden_runtime_cache_resources::s_SkinnedNormalLabel
-    );
-    if(!skinnedNormalBufferResult){
-        instance.skinnedNormalBuffer.reset();
-        uploaded = false;
-    }
-    else
-        instance.skinnedNormalBuffer = Move(*skinnedNormalBufferResult);
-    auto skinnedTangentBufferResult = __hidden_runtime_cache_resources::SetupRuntimeBuffer<Half4U>(
+    ) && uploaded;
+    uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Half4U>(
+        instance.skinnedTangentBuffer,
         m_graphics,
         instance,
         __hidden_runtime_cache_resources::s_SkinnedTangentsSuffix,
         instance.restTangents,
         true,
         __hidden_runtime_cache_resources::s_SkinnedTangentLabel
-    );
-    if(!skinnedTangentBufferResult){
-        instance.skinnedTangentBuffer.reset();
-        uploaded = false;
-    }
-    else
-        instance.skinnedTangentBuffer = Move(*skinnedTangentBufferResult);
-    auto uv0BufferResult = __hidden_runtime_cache_resources::SetupRuntimeBuffer<Float2U>(m_graphics, instance, __hidden_runtime_cache_resources::s_Uv0Suffix, instance.uv0, false, __hidden_runtime_cache_resources::s_Uv0Label);
-    if(!uv0BufferResult){
-        instance.uv0Buffer.reset();
-        uploaded = false;
-    }
-    else
-        instance.uv0Buffer = Move(*uv0BufferResult);
-    auto colorBufferResult = __hidden_runtime_cache_resources::SetupRuntimeBuffer<Half4U>(m_graphics, instance, __hidden_runtime_cache_resources::s_ColorsSuffix, instance.colors, false, __hidden_runtime_cache_resources::s_ColorLabel);
-    if(!colorBufferResult){
-        instance.colorBuffer.reset();
-        uploaded = false;
-    }
-    else
-        instance.colorBuffer = Move(*colorBufferResult);
-    auto meshletDescBufferResult = __hidden_runtime_cache_resources::SetupRuntimeBuffer<MeshletDesc>(
+    ) && uploaded;
+    uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Float2U>(instance.uv0Buffer, m_graphics, instance, __hidden_runtime_cache_resources::s_Uv0Suffix, instance.uv0, false, __hidden_runtime_cache_resources::s_Uv0Label) && uploaded;
+    uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Half4U>(instance.colorBuffer, m_graphics, instance, __hidden_runtime_cache_resources::s_ColorsSuffix, instance.colors, false, __hidden_runtime_cache_resources::s_ColorLabel) && uploaded;
+    uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<MeshletDesc>(
+        instance.meshletDescBuffer,
         m_graphics,
         instance,
         __hidden_runtime_cache_resources::s_MeshletsSuffix,
         instance.meshlets,
         false,
         __hidden_runtime_cache_resources::s_MeshletDescriptorLabel
-    );
-    if(!meshletDescBufferResult){
-        instance.meshletDescBuffer.reset();
-        uploaded = false;
-    }
-    else
-        instance.meshletDescBuffer = Move(*meshletDescBufferResult);
-    auto meshletBoundsBufferResult = __hidden_runtime_cache_resources::SetupRuntimeBuffer<MeshletBounds>(
+    ) && uploaded;
+    uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<MeshletBounds>(
+        instance.meshletBoundsBuffer,
         m_graphics,
         instance,
         __hidden_runtime_cache_resources::s_MeshletBoundsSuffix,
@@ -359,15 +354,9 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         true,
         __hidden_runtime_cache_resources::s_MeshletBoundsLabel,
         true
-    );
-    if(!meshletBoundsBufferResult){
-        instance.meshletBoundsBuffer.reset();
-        uploaded = false;
-    }
-    else
-        instance.meshletBoundsBuffer = Move(*meshletBoundsBufferResult);
-    instance.meshletPositionRefDeltaBuffer.reset();
-    auto meshletPositionRefDeltaBufferResult = __hidden_runtime_cache_resources::SetupPaddedRawRuntimeBuffer(
+    ) && uploaded;
+    uploaded = __hidden_runtime_cache_resources::AssignPaddedRawRuntimeBuffer(
+        instance.meshletPositionRefDeltaBuffer,
         m_graphics,
         scratchArena,
         instance,
@@ -375,13 +364,9 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         instance.meshletPositionRefDeltas,
         false,
         __hidden_runtime_cache_resources::s_MeshletPositionRefDeltaLabel
-    );
-    if(!meshletPositionRefDeltaBufferResult)
-        uploaded = false;
-    else
-        instance.meshletPositionRefDeltaBuffer = Move(*meshletPositionRefDeltaBufferResult);
-    instance.meshletAttributeRefDeltaBuffer.reset();
-    auto meshletAttributeRefDeltaBufferResult = __hidden_runtime_cache_resources::SetupPaddedRawRuntimeBuffer(
+    ) && uploaded;
+    uploaded = __hidden_runtime_cache_resources::AssignPaddedRawRuntimeBuffer(
+        instance.meshletAttributeRefDeltaBuffer,
         m_graphics,
         scratchArena,
         instance,
@@ -389,27 +374,18 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         instance.meshletAttributeRefDeltas,
         false,
         __hidden_runtime_cache_resources::s_MeshletAttributeRefDeltaLabel
-    );
-    if(!meshletAttributeRefDeltaBufferResult)
-        uploaded = false;
-    else
-        instance.meshletAttributeRefDeltaBuffer = Move(*meshletAttributeRefDeltaBufferResult);
-    auto meshletLocalVertexRefBufferResult = __hidden_runtime_cache_resources::SetupRuntimeBuffer<MeshletLocalVertexRef>(
+    ) && uploaded;
+    uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<MeshletLocalVertexRef>(
+        instance.meshletLocalVertexRefBuffer,
         m_graphics,
         instance,
         __hidden_runtime_cache_resources::s_MeshletLocalVertexRefsSuffix,
         instance.meshletLocalVertexRefs,
         false,
         __hidden_runtime_cache_resources::s_MeshletLocalVertexRefLabel
-    );
-    if(!meshletLocalVertexRefBufferResult){
-        instance.meshletLocalVertexRefBuffer.reset();
-        uploaded = false;
-    }
-    else
-        instance.meshletLocalVertexRefBuffer = Move(*meshletLocalVertexRefBufferResult);
-    instance.meshletPrimitiveIndexBuffer.reset();
-    auto meshletPrimitiveIndexBufferResult = __hidden_runtime_cache_resources::SetupPaddedRawRuntimeBuffer(
+    ) && uploaded;
+    uploaded = __hidden_runtime_cache_resources::AssignPaddedRawRuntimeBuffer(
+        instance.meshletPrimitiveIndexBuffer,
         m_graphics,
         scratchArena,
         instance,
@@ -417,30 +393,21 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         instance.meshletPrimitiveIndices,
         false,
         __hidden_runtime_cache_resources::s_MeshletPrimitiveIndexLabel
-    );
-    if(!meshletPrimitiveIndexBufferResult)
-        uploaded = false;
-    else
-        instance.meshletPrimitiveIndexBuffer = Move(*meshletPrimitiveIndexBufferResult);
-    auto attributeSkinBufferResult = __hidden_runtime_cache_resources::SetupRuntimeBuffer<u32>(
+    ) && uploaded;
+    uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<u32>(
+        instance.attributeSkinBuffer,
         m_graphics,
         instance,
         __hidden_runtime_cache_resources::s_AttributeSkinsSuffix,
         instance.attributeSkins,
         false,
         __hidden_runtime_cache_resources::s_AttributeSkinLabel
-    );
-    if(!attributeSkinBufferResult){
-        instance.attributeSkinBuffer.reset();
-        uploaded = false;
-    }
-    else
-        instance.attributeSkinBuffer = Move(*attributeSkinBufferResult);
+    ) && uploaded;
 
     // Both shadow backends trace triangles; always build the reconstructed index buffer.
     if(uploaded){
         const usize indexCount = instance.meshletPrimitiveIndices.size();
-        const auto triangleIndices = BuildMeshletTriangleIndices(scratchArena, instance.meshlets, instance.meshletLocalVertexRefs, instance.meshletPositionRefDeltas, instance.meshletPrimitiveIndices, instance.restPositions.size());
+        const auto triangleIndices = BuildMeshletTriangleIndices(instance.meshlets, instance.meshletLocalVertexRefs, instance.meshletPositionRefDeltas, instance.meshletPrimitiveIndices, instance.restPositions.size(), scratchArena);
         if(!triangleIndices){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to reconstruct ray tracing triangle indices for runtime mesh '{}'"), instance.handle.value);
             return false;
@@ -450,7 +417,8 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
             return false;
         }
 
-        auto triangleIndexBufferResult = __hidden_runtime_cache_resources::SetupRuntimeBuffer<u32>(
+        uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<u32>(
+            instance.triangleIndexBuffer,
             m_graphics,
             instance,
             MeshResourceNames::s_RtTriangleIndicesBufferName,
@@ -461,37 +429,26 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
             rtSupported,
             Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
             true
-        );
-        if(!triangleIndexBufferResult){
-            instance.triangleIndexBuffer.reset();
-            uploaded = false;
-        }
-        else
-            instance.triangleIndexBuffer = Move(*triangleIndexBufferResult);
+        ) && uploaded;
     }
 
     // Per-corner trace attributes seeded from bind-pose; repack overwrites normals per frame.
     if(uploaded){
-        const auto triangleAttributes = BuildMeshletTriangleAttributes(scratchArena, instance.meshlets, instance.meshletLocalVertexRefs, instance.meshletAttributeRefDeltas, instance.meshletPrimitiveIndices, instance.restNormals, instance.uv0);
+        const auto triangleAttributes = BuildMeshletTriangleAttributes(instance.meshlets, instance.meshletLocalVertexRefs, instance.meshletAttributeRefDeltas, instance.meshletPrimitiveIndices, instance.restNormals, instance.uv0, scratchArena);
         if(!triangleAttributes){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to reconstruct shadow trace triangle attributes for runtime mesh '{}'"), instance.handle.value);
             return false;
         }
 
-        auto attributeBufferResult = __hidden_runtime_cache_resources::SetupRuntimeBuffer<AttribGpu>(
+        uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<AttribGpu>(
+            instance.attributeBuffer,
             m_graphics,
             instance,
             MeshResourceNames::s_RtTriangleAttributesBufferName,
             *triangleAttributes,
             true, // canHaveUavs: the per-frame skinned-normal repack pass writes this buffer as a raw UAV in place
             __hidden_runtime_cache_resources::s_RtTriangleAttributeLabel, true, false, Core::ResourceQueueSharing::GraphicsAndAsyncCompute
-        );
-        if(!attributeBufferResult){
-            instance.attributeBuffer.reset();
-            uploaded = false;
-        }
-        else
-            instance.attributeBuffer = Move(*attributeBufferResult);
+        ) && uploaded;
     }
 
     return uploaded;

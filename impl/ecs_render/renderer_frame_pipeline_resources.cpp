@@ -190,7 +190,7 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_PrepareArena);
     m_meshSystem.pruneRuntimeMeshResources(scratchArena);
     m_preparedHasTransparentRenderers = m_materialSystem.prepareVisibleMaterialSurfaceInfos();
-    m_materialSystem.prepareVisibleMaterialInstanceMutableCache(scratchArena);
+    m_materialSystem.prepareVisibleMaterialInstanceMutableCache();
     m_preparedCsgFrameState = CsgFrameState{};
     m_preparedCsgFrameStateValid = false;
 

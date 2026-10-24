@@ -20,9 +20,8 @@ NWB_IMPL_BEGIN
 
 
 struct ShadowPrepareGeometryInputs{
-    const PreparedMeshBlasBuildVector& blasBuilds;
-    const Core::GpuGraphResourceId* traceResources = nullptr;
-    usize traceResourceCount = 0u;
+    Span<const PreparedMeshBlasBuild> blasBuilds{};
+    Span<const Core::GpuGraphResourceId> traceResources{};
     bool blasBuildsGraphOwned = false;
 };
 

@@ -61,7 +61,7 @@ using SkinningPlanRecorder = bool (MeshSkinningSystem::*)(const MeshSkinningGrap
 template<SkinningPlanRecorder Recorder>
 [[nodiscard]] inline bool RecordSkinningPlans(
     MeshSkinningSystem& system,
-    const Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena>& plans,
+    const Span<const MeshSkinningGraphDispatchPlan> plans,
     const Core::GpuTaskRecordContext& context,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Core::CommandList& commandList

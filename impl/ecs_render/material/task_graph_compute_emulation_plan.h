@@ -93,7 +93,7 @@ public:
         captured = false;
     }
 
-    [[nodiscard]] bool capture(const MaterialPassDrawItems& sourceDrawItems, const usize allowedMaxDrawCount)noexcept{
+    [[nodiscard]] bool capture(const MaterialPassDrawItemsView& sourceDrawItems, const usize allowedMaxDrawCount)noexcept{
         reset();
         if(!IsSupportedSharedComputeEmulationDrawCount(allowedMaxDrawCount) || sourceDrawItems.computeDrawItems.size() < s_SharedComputeEmulationMinimumDrawCount || sourceDrawItems.computeDrawItems.size() > allowedMaxDrawCount)
             return false;

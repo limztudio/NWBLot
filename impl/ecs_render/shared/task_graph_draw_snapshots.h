@@ -27,7 +27,7 @@ namespace ECSRenderDetail{
 
 
 template<typename Snapshot>
-inline void CaptureMaterialPassSnapshot(Snapshot& snapshot, const MaterialPassDrawItemPartitions& drawItems, const CsgFrameGpuData& csgFrameData, const usize inInstanceCount, const usize inMaterialTypedByteCount)noexcept(
+inline void CaptureMaterialPassSnapshot(const MaterialPassDrawItemPartitionsView& drawItems, const CsgFrameGpuDataView& csgFrameData, const usize inInstanceCount, const usize inMaterialTypedByteCount, Snapshot& snapshot)noexcept(
     noexcept(AssignVector(snapshot.regularMeshDrawItems, drawItems.regular.meshDrawItems))
     && noexcept(AssignVector(snapshot.regularIndexedDrawItems, drawItems.regular.indexedDrawItems))
     && noexcept(AssignVector(snapshot.regularComputeDrawItems, drawItems.regular.computeDrawItems))
@@ -95,8 +95,8 @@ public:
 
 
 public:
-    void capture(const MaterialPassDrawItemPartitions& drawItems, const CsgFrameGpuData& csgFrameData, const usize inInstanceCount, const usize inMaterialTypedByteCount){
-        CaptureMaterialPassSnapshot(*this, drawItems, csgFrameData, inInstanceCount, inMaterialTypedByteCount);
+    void capture(const MaterialPassDrawItemPartitionsView& drawItems, const CsgFrameGpuDataView& csgFrameData, const usize inInstanceCount, const usize inMaterialTypedByteCount){
+        CaptureMaterialPassSnapshot(drawItems, csgFrameData, inInstanceCount, inMaterialTypedByteCount, *this);
         AssignVector(csgReceiverSurfaceMeshDrawItems, drawItems.csgReceiverSurface.meshDrawItems);
         AssignVector(csgReceiverSurfaceIndexedDrawItems, drawItems.csgReceiverSurface.indexedDrawItems);
         AssignVector(csgReceiverSurfaceComputeDrawItems, drawItems.csgReceiverSurface.computeDrawItems);
@@ -154,7 +154,7 @@ public:
 
 
 public:
-    void capture(const MaterialPassDrawItems& receiverSurfaceDrawItems, const CsgFrameGpuData& csgFrameData, const usize inInstanceCount, const usize inMaterialTypedByteCount){
+    void capture(const MaterialPassDrawItemsView& receiverSurfaceDrawItems, const CsgFrameGpuDataView& csgFrameData, const usize inInstanceCount, const usize inMaterialTypedByteCount){
         AssignVector(receiverSurfaceMeshDrawItems, receiverSurfaceDrawItems.meshDrawItems);
         AssignVector(receiverSurfaceIndexedDrawItems, receiverSurfaceDrawItems.indexedDrawItems);
         AssignVector(receiverSurfaceComputeDrawItems, receiverSurfaceDrawItems.computeDrawItems);
@@ -211,8 +211,8 @@ public:
 
 
 public:
-    void capture(const MaterialPassDrawItemPartitions& drawItems, const CsgFrameGpuData& csgFrameData, const usize inInstanceCount, const usize inMaterialTypedByteCount){
-        CaptureMaterialPassSnapshot(*this, drawItems, csgFrameData, inInstanceCount, inMaterialTypedByteCount);
+    void capture(const MaterialPassDrawItemPartitionsView& drawItems, const CsgFrameGpuDataView& csgFrameData, const usize inInstanceCount, const usize inMaterialTypedByteCount){
+        CaptureMaterialPassSnapshot(drawItems, csgFrameData, inInstanceCount, inMaterialTypedByteCount, *this);
         captured = true;
     }
 

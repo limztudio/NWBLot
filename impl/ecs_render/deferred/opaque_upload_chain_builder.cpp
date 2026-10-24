@@ -42,10 +42,10 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(Core::GpuTaskGraph& graph, Re
     DeferredFrameTargets& deferredTargets = inputs.targets;
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings = inputs.frameBindings;
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources = inputs.csgResources;
-    const MaterialPassDrawItemPartitions& opaqueDrawItems = inputs.drawItems;
-    InstanceGpuDataVector& instanceData = inputs.instanceData;
-    const CsgFrameGpuData& csgFrameData = inputs.csgFrameData;
-    const MaterialTypedByteDataVector& materialTypedBytes = inputs.materialTypedBytes;
+    const MaterialPassDrawItemPartitionsView& opaqueDrawItems = inputs.drawItems;
+    const Span<InstanceGpuData> instanceData = inputs.instanceData;
+    const CsgFrameGpuDataView& csgFrameData = inputs.csgFrameData;
+    const Span<const u8> materialTypedBytes = inputs.materialTypedBytes;
 
     Core::GpuTaskSchedulingHint immutableUploadScheduling;
     immutableUploadScheduling.cost = Core::GpuTaskCostHint::Tiny;
@@ -59,7 +59,7 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(Core::GpuTaskGraph& graph, Re
     if(hasOpaqueDrawItems){
         if(!inputs.materialInstances.valid() || !inputs.materialTyped.valid() || !frameBindings.frameReady(instanceData.size(), materialTypedBytes.size()))
             return MakeUnexpected(Failure{});
-        m_materialSystem.prepareMaterialPassInstanceUploadData(instanceData, csgResources);
+        m_materialSystem.prepareMaterialPassInstanceUploadData(csgResources, instanceData);
 #if defined(NWB_DEBUG)
         if(instanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData))
             return MakeUnexpected(Failure{});

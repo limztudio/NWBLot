@@ -112,10 +112,10 @@ Expected<FrameGraphAvboitExtinctionUploadResult> FrameGraphAvboitExtinctionUploa
         }
         if(extinctionUploadResult->hasDrawItems){
 
-            const MaterialPassDrawItems* const extinctionMaterialGeometryDrawSets[] = { &extinctionDrawItems.regular, &extinctionDrawItems.csg, };
+            const MaterialPassDrawItemsView extinctionMaterialGeometryDrawSets[] = { extinctionDrawItems.regular, extinctionDrawItems.csg, };
             AvboitGeometryPreparationBuilder extinctionGeometryPreparationBuilder(m_graph, m_materialSystem, scratchArena);
             auto extinctionGeometryPreparationResult = extinctionGeometryPreparationBuilder.declare(
-                AvboitGeometryPreparationInputs{ .drawItemSets = extinctionMaterialGeometryDrawSets, .drawItemSetCount = LengthOf(extinctionMaterialGeometryDrawSets), .phase = AvboitGeometryPhase::Extinction, }
+                AvboitGeometryPreparationInputs{ .drawItemSets = extinctionMaterialGeometryDrawSets, .phase = AvboitGeometryPhase::Extinction, }
             );
             if(!extinctionGeometryPreparationResult)
                 return MakeUnexpected(Failure{});
@@ -124,7 +124,7 @@ Expected<FrameGraphAvboitExtinctionUploadResult> FrameGraphAvboitExtinctionUploa
             extinctionMaterialSampledTextureSet = extinctionGeometryPreparationResult->materialSampledTextureSet;
             extinctionMaterialSampledTexturesCollected = extinctionGeometryPreparationResult->sampledTexturesCollected;
 
-            m_materialSystem.prepareMaterialPassInstanceUploadData(extinctionInstanceData, csgResources);
+            m_materialSystem.prepareMaterialPassInstanceUploadData(csgResources, extinctionInstanceData);
 #if defined(NWB_DEBUG)
             if(
                 extinctionInstanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData)
@@ -178,9 +178,9 @@ Expected<FrameGraphAvboitExtinctionUploadResult> FrameGraphAvboitExtinctionUploa
                     .csgStreamsUploaded = extinctionCsgStreamsUploaded,
                     .intervalOutputsGraphOwned = intervalOutputsGraphOwned,
                 },
-                scratchArena,
                 extinctionInstanceData.size(),
                 extinctionMaterialTypedBytes.size(),
+                scratchArena,
                 avboitExtinctionComputeEmulationPayload.plan,
                 avboitExtinctionComputeEmulationPayload.csgPlan
             );

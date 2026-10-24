@@ -321,7 +321,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
             return cache.constantRange;
         }
 
-        const auto range = ECSRenderDetail::AppendMaterialTypedByteRange(materialTypedBytes, materialInfo.constantTypedBytes);
+        const auto range = ECSRenderDetail::AppendMaterialTypedByteRange(materialInfo.constantTypedBytes, materialTypedBytes);
         if(!range)
             return MakeUnexpected(Failure{});
 
@@ -338,7 +338,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
             return cache.defaultMutableRange;
         }
 
-        const auto range = ECSRenderDetail::FindOrAppendMaterialTypedByteRange(materialTypedBytes, mutableMaterialTypedRanges, materialInfo.mutableDefaultTypedBytes);
+        const auto range = ECSRenderDetail::FindOrAppendMaterialTypedByteRange(materialInfo.mutableDefaultTypedBytes, materialTypedBytes, mutableMaterialTypedRanges);
         if(!range)
             return MakeUnexpected(Failure{});
 
@@ -354,13 +354,13 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
 
         // Prepared-only gathers must never populate the persistent override cache.
         const auto mutableTypedBytes = lookupMode == RendererResourceLookupMode::CreateMissing
-            ? prepareMaterialInstanceMutableTypedBytes(materialTypedBytes.get_allocator().arena(), entity, materialInfo, materialInstance)
+            ? prepareMaterialInstanceMutableTypedBytes(entity, materialInfo, materialInstance)
             : findPreparedMaterialInstanceMutableTypedBytes(entity, materialInfo, materialInstance)
         ;
         if(!mutableTypedBytes)
             return MakeUnexpected(Failure{});
 
-        return ECSRenderDetail::FindOrAppendMaterialTypedByteRange(materialTypedBytes, mutableMaterialTypedRanges, **mutableTypedBytes);
+        return ECSRenderDetail::FindOrAppendMaterialTypedByteRange(*mutableTypedBytes, materialTypedBytes, mutableMaterialTypedRanges);
     };
 
     auto appendDrawForMesh = [&](const Core::ECS::EntityID entity, const NotNull<MaterialSurfaceInfo*> materialInfo, MeshResources& mesh, const CsgReceiverDrawState& csgReceiverState) -> bool{

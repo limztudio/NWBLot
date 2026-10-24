@@ -110,10 +110,10 @@ Expected<FrameGraphAvboitOccupancyUploadResult> FrameGraphAvboitOccupancyUploadC
         }
         if(occupancyUploadResult->hasDrawItems){
 
-            const MaterialPassDrawItems* const occupancyMaterialGeometryDrawSets[] = { &occupancyDrawItems.regular, &occupancyDrawItems.csg, };
+            const MaterialPassDrawItemsView occupancyMaterialGeometryDrawSets[] = { occupancyDrawItems.regular, occupancyDrawItems.csg, };
             AvboitGeometryPreparationBuilder occupancyGeometryPreparationBuilder(m_graph, m_materialSystem, scratchArena);
             auto occupancyGeometryPreparationResult = occupancyGeometryPreparationBuilder.declare(
-                AvboitGeometryPreparationInputs{ .drawItemSets = occupancyMaterialGeometryDrawSets, .drawItemSetCount = LengthOf(occupancyMaterialGeometryDrawSets), .phase = AvboitGeometryPhase::Occupancy, }
+                AvboitGeometryPreparationInputs{ .drawItemSets = occupancyMaterialGeometryDrawSets, .phase = AvboitGeometryPhase::Occupancy, }
             );
             if(!occupancyGeometryPreparationResult)
                 return MakeUnexpected(Failure{});
@@ -122,7 +122,7 @@ Expected<FrameGraphAvboitOccupancyUploadResult> FrameGraphAvboitOccupancyUploadC
             occupancyMaterialSampledTextureSet = occupancyGeometryPreparationResult->materialSampledTextureSet;
             occupancyMaterialSampledTexturesCollected = occupancyGeometryPreparationResult->sampledTexturesCollected;
 
-            m_materialSystem.prepareMaterialPassInstanceUploadData(occupancyInstanceData, csgResources);
+            m_materialSystem.prepareMaterialPassInstanceUploadData(csgResources, occupancyInstanceData);
 #if defined(NWB_DEBUG)
             if(
                 occupancyInstanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData)
@@ -176,9 +176,9 @@ Expected<FrameGraphAvboitOccupancyUploadResult> FrameGraphAvboitOccupancyUploadC
                     .csgStreamsUploaded = occupancyCsgStreamsUploaded,
                     .intervalOutputsGraphOwned = intervalOutputsGraphOwned,
                 },
-                scratchArena,
                 occupancyInstanceData.size(),
                 occupancyMaterialTypedBytes.size(),
+                scratchArena,
                 avboitOccupancyComputeEmulationPayload.plan,
                 avboitOccupancyComputeEmulationPayload.csgPlan
             );

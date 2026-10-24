@@ -31,13 +31,13 @@ namespace __hidden_resources{
 
 
 template<typename PayloadT>
-static Expected<Core::BufferHandle, RuntimeMeshBufferUpload::BufferSetupFailure::Enum> SetupStructuredBuffer(Core::GraphicsRuntime& graphics, const Name& debugName, const PayloadT* payload, const usize count, const TStringView label){
-    if(MultiplyOverflows<usize>(count, sizeof(PayloadT))){
+static Expected<Core::BufferHandle, RuntimeMeshBufferUpload::BufferSetupFailure::Enum> SetupStructuredBuffer(Core::GraphicsRuntime& graphics, const Name& debugName, const Span<const PayloadT> payload, const TStringView label){
+    if(MultiplyOverflows<usize>(payload.size(), sizeof(PayloadT))){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: {} payload byte size overflows"), label);
         return MakeUnexpected(RuntimeMeshBufferUpload::BufferSetupFailure::ByteSizeOverflow);
     }
 
-    return RuntimeMeshBufferUpload::SetupBuffer<PayloadT>(graphics, debugName, payload, count, { false, false, false, Core::ResourceQueueSharing::GraphicsAndAsyncCompute });
+    return RuntimeMeshBufferUpload::SetupBuffer<PayloadT>(graphics, debugName, payload, { false, false, false, Core::ResourceQueueSharing::GraphicsAndAsyncCompute });
 }
 
 static Expected<Core::GpuDescriptorHandle> RegisterStorageBuffer(Core::GpuDescriptorHeap& heap, const Core::DescriptorWriteItem& item){
@@ -147,7 +147,7 @@ Expected<bool> MeshSkinningSystem::ensureRuntimeResources(MeshSkinningRuntimeIns
             return MakeUnexpected(Failure{});
         }
 
-        auto skinBufferResult = __hidden_resources::SetupStructuredBuffer(m_graphics, *skinBufferName, skinInfluences->data(), skinInfluences->size(), NWB_TEXT("skin influence"));
+        auto skinBufferResult = __hidden_resources::SetupStructuredBuffer<MeshSkinningInfluenceGpu>(m_graphics, *skinBufferName, *skinInfluences, NWB_TEXT("skin influence"));
         if(!skinBufferResult){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create skin buffer for runtime mesh '{}'"), instance.handle.value);
             return MakeUnexpected(Failure{});

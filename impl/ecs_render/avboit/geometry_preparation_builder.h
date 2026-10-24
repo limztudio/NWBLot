@@ -35,8 +35,7 @@ namespace AvboitGeometryPhase{ enum Enum : u8{
 
 // Shared AVBOIT geometry preparation owns material geometry plus sampled-texture sets.
 struct AvboitGeometryPreparationInputs{
-    const MaterialPassDrawItems* const* drawItemSets = nullptr;
-    usize drawItemSetCount = 0u;
+    Span<const MaterialPassDrawItemsView> drawItemSets;
     AvboitGeometryPhase::Enum phase = AvboitGeometryPhase::Occupancy;
 };
 

@@ -97,7 +97,7 @@ class RendererOpticalVolumeSelection;
 class RendererMaterialSystem final : public IMaterialSurfaceLookup, NoCopy{
 public:
     [[nodiscard]] static Expected<MaterialInstanceOverrideField> FindMaterialInstanceOverrideField(Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceParameter& parameter);
-    [[nodiscard]] static bool ApplyMaterialInstanceOverrides(Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent& materialInstance, MaterialTypedByteDataVector& inOutMutableTypedBytes);
+    [[nodiscard]] static bool ApplyMaterialInstanceOverrides(Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent& materialInstance, Span<u8> inOutMutableTypedBytes);
 
 
 private:
@@ -126,7 +126,7 @@ public:
     [[nodiscard]] virtual Expected<NotNull<MaterialSurfaceInfo*>> findMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset)noexcept override;
     [[nodiscard]] bool resolveMaterialResourceReferences(MaterialSurfaceInfo& materialInfo);
     [[nodiscard]] bool prepareVisibleMaterialSurfaceInfos();
-    void prepareVisibleMaterialInstanceMutableCache(Core::Alloc::ScratchArena& scratchArena);
+    void prepareVisibleMaterialInstanceMutableCache();
     [[nodiscard]] Expected<Core::BindingLayoutHandle> prepareMaterialPassBindingLayout();
     [[nodiscard]] Expected<NotNull<MaterialPipelineResources*>> createRendererPipeline(const MaterialSurfaceInfo& materialInfo, const MaterialPipelineKey& pipelineKey, Core::Framebuffer& framebuffer);
     [[nodiscard]] Expected<NotNull<MaterialPipelineResources*>> findRendererPipeline(const MaterialPipelineKey& pipelineKey)noexcept;
@@ -182,13 +182,12 @@ public:
         MaterialTypedByteDataVector& materialTypedBytes
     );
     // Creation and override application belong to preparation; render paths only use the prepared lookup below.
-    [[nodiscard]] Expected<NotNull<const MaterialTypedByteVector*>> prepareMaterialInstanceMutableTypedBytes(
-        Core::Alloc::ScratchArena& scratchArena,
+    [[nodiscard]] Expected<Span<const u8>> prepareMaterialInstanceMutableTypedBytes(
         Core::ECS::EntityID entity,
         const MaterialSurfaceInfo& materialInfo,
         const MaterialInstanceComponent* materialInstance
     );
-    [[nodiscard]] Expected<NotNull<const MaterialTypedByteVector*>> findPreparedMaterialInstanceMutableTypedBytes(Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent* materialInstance)const noexcept;
+    [[nodiscard]] Expected<Span<const u8>> findPreparedMaterialInstanceMutableTypedBytes(Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent* materialInstance)const noexcept;
     // Shadow-owned copy of one occluder's constants context (draw-pass buffers hold one transparency class at trace time).
     // Mirrors gatherMaterialPassDrawItems packing so the trace hook reads rasterizer-identical bytes.
     [[nodiscard]] Expected<ShadowOccluderMaterialContext> appendShadowOccluderMaterialContext(
@@ -207,9 +206,9 @@ public:
     [[nodiscard]] bool computeMaterialPassDrawResourcesReady(Span<const MaterialPassDrawItem> drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept;
     // Resolves persistent sampled textures selected by frozen draws.
     // Missing cached resources reject collection; asset and descriptor creation belong to preparation.
-    [[nodiscard]] bool appendPreparedMaterialSurfaceSampledTextures(const MaterialSurfaceInfo& materialInfo, MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector);
-    [[nodiscard]] Expected<Vector<Core::TextureHandle, Core::Alloc::ScratchArena>> gatherPreparedMaterialPassSampledTextures(const MaterialPassDrawItems* const* drawItemSets, usize drawItemSetCount, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] bool prepareMaterialPassResourceBindings(const MaterialPassDrawItems& drawItems)noexcept;
+    [[nodiscard]] bool appendPreparedMaterialSurfaceSampledTextures(const MaterialSurfaceInfo& materialInfo, MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector)const;
+    [[nodiscard]] Expected<Vector<Core::TextureHandle, Core::Alloc::ScratchArena>> gatherPreparedMaterialPassSampledTextures(Span<const MaterialPassDrawItemsView> drawItemSets, Core::Alloc::ScratchArena& scratchArena)const;
+    [[nodiscard]] bool prepareMaterialPassResourceBindings(const MaterialPassDrawItemsView& drawItems)noexcept;
     [[nodiscard]] bool prepareMeshMaterialPassResourceBindings(Span<const MaterialPassDrawItem> drawItems)noexcept;
     [[nodiscard]] bool prepareIndexedMaterialPassResourceBindings(Span<const MaterialPassDrawItem> drawItems)noexcept;
     [[nodiscard]] bool prepareComputeMaterialPassResourceBindings(Span<const MaterialPassDrawItem> drawItems)noexcept;
@@ -232,12 +231,12 @@ public:
     void renderComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, Span<const MaterialPassDrawItem> drawItems);
     [[nodiscard]] bool reserveInstanceBufferCapacity(usize instanceCount);
     [[nodiscard]] bool reserveMaterialTypedBufferCapacity(usize byteCount);
-    [[nodiscard]] bool prepareMaterialPassDrawBuffers(const InstanceGpuDataVector& instanceData, const MaterialTypedByteDataVector& materialTypedBytes);
-    [[nodiscard]] bool materialPassDrawBuffersReady(const InstanceGpuDataVector& instanceData, const MaterialTypedByteDataVector& materialTypedBytes)const noexcept;
+    [[nodiscard]] bool prepareMaterialPassDrawBuffers(Span<const InstanceGpuData> instanceData, Span<const u8> materialTypedBytes);
+    [[nodiscard]] bool materialPassDrawBuffersReady(Span<const InstanceGpuData> instanceData, Span<const u8> materialTypedBytes)const noexcept;
     [[nodiscard]] bool materialPassDrawBuffersReady(usize instanceCount, usize materialTypedByteCount)const noexcept;
     [[nodiscard]] ECSRenderDetail::MaterialPassBufferSnapshot materialPassBufferSnapshot()const noexcept;
     // The CSG context descriptor is selected through every instance's heap-slot lane. Graph declaration patches the upload copy before the packet is recorded so every phase keeps the same ABI.
-    void prepareMaterialPassInstanceUploadData(InstanceGpuDataVector& instanceData, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources)noexcept;
+    void prepareMaterialPassInstanceUploadData(const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources, Span<InstanceGpuData> instanceData)noexcept;
     [[nodiscard]] bool prepareMaterialPassResourceBindingsImpl(Span<const MaterialPassDrawItem> drawItems, bool computeEmulation)noexcept;
 
 

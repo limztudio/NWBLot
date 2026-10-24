@@ -342,7 +342,7 @@ bool RendererMaterialSystem::prepareVisibleMaterialSurfaceInfos(){
     return hasTransparentRenderers;
 }
 
-void RendererMaterialSystem::prepareVisibleMaterialInstanceMutableCache(Core::Alloc::ScratchArena& scratchArena){
+void RendererMaterialSystem::prepareVisibleMaterialInstanceMutableCache(){
     pruneMaterialInstanceMutableCache();
 
     auto rendererView = m_world.view<RendererComponent>();
@@ -359,7 +359,7 @@ void RendererMaterialSystem::prepareVisibleMaterialInstanceMutableCache(Core::Al
             continue;
         const NotNull<MaterialSurfaceInfo*> materialInfo = *materialInfoResult;
 
-        if(!prepareMaterialInstanceMutableTypedBytes(scratchArena, entity, *materialInfo, materialInstance))
+        if(!prepareMaterialInstanceMutableTypedBytes(entity, *materialInfo, materialInstance))
             continue;
     }
 }
@@ -385,12 +385,12 @@ bool RendererMaterialSystem::hasTransparentRenderers(const RendererResourceLooku
     return false;
 }
 
-bool RendererMaterialSystem::appendPreparedMaterialSurfaceSampledTextures(const MaterialSurfaceInfo& materialInfo, MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector){
+bool RendererMaterialSystem::appendPreparedMaterialSurfaceSampledTextures(const MaterialSurfaceInfo& materialInfo, MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector)const{
     return AppendPreparedMaterialSurfaceSampledTextures(materialInfo, m_materialState.m_resourceState, collector);
 }
 
-Expected<Vector<Core::TextureHandle, Core::Alloc::ScratchArena>> RendererMaterialSystem::gatherPreparedMaterialPassSampledTextures(const MaterialPassDrawItems* const* const drawItemSets, const usize drawItemSetCount, Core::Alloc::ScratchArena& scratchArena){
-    return GatherPreparedMaterialPassSampledTextures(m_materialState.m_surfaceInfos, m_materialState.m_resourceState, drawItemSets, drawItemSetCount, scratchArena);
+Expected<Vector<Core::TextureHandle, Core::Alloc::ScratchArena>> RendererMaterialSystem::gatherPreparedMaterialPassSampledTextures(const Span<const MaterialPassDrawItemsView> drawItemSets, Core::Alloc::ScratchArena& scratchArena)const{
+    return GatherPreparedMaterialPassSampledTextures(m_materialState.m_surfaceInfos, m_materialState.m_resourceState, drawItemSets, scratchArena);
 }
 
 

@@ -181,8 +181,8 @@ using MaterialTypedByteContentRangeMap = HashMap<MaterialTypedByteContentKey, Ma
     return appendRange;
 }
 
-template<typename DestinationByteVector, typename SourceByteVector>
-[[nodiscard]] inline Expected<MaterialTypedByteRange> AppendMaterialTypedByteRange(DestinationByteVector& materialTypedBytes, const SourceByteVector& typedBytes){
+template<typename DestinationByteVector>
+[[nodiscard]] inline Expected<MaterialTypedByteRange> AppendMaterialTypedByteRange(const Span<const u8> typedBytes, DestinationByteVector& materialTypedBytes){
     const auto appendRange = TryBuildMaterialTypedByteAppendRange(materialTypedBytes.size(), typedBytes.size());
     if(!appendRange)
         return MakeUnexpected(Failure{});
@@ -198,14 +198,14 @@ template<typename DestinationByteVector, typename SourceByteVector>
     return appendRange->byteRange;
 }
 
-template<typename DestinationByteVector, typename SourceByteVector>
-[[nodiscard]] inline Expected<MaterialTypedByteRange> FindOrAppendMaterialConstantTypedByteRange(DestinationByteVector& materialTypedBytes, MaterialTypedConstantRangeMap& rangeMap, const Name& materialName, const u64 typedLayoutHash, const SourceByteVector& typedBytes){
+template<typename DestinationByteVector>
+[[nodiscard]] inline Expected<MaterialTypedByteRange> FindOrAppendMaterialConstantTypedByteRange(const Name& materialName, const u64 typedLayoutHash, const Span<const u8> typedBytes, DestinationByteVector& materialTypedBytes, MaterialTypedConstantRangeMap& rangeMap){
     const MaterialTypedByteRangeKey key{ materialName, typedLayoutHash };
     const auto foundRange = rangeMap.find(key);
     if(foundRange != rangeMap.end())
         return foundRange.value();
 
-    const auto range = AppendMaterialTypedByteRange(materialTypedBytes, typedBytes);
+    const auto range = AppendMaterialTypedByteRange(typedBytes, materialTypedBytes);
     if(!range)
         return MakeUnexpected(Failure{});
     if(!rangeMap.emplace(key, *range).second){
@@ -215,12 +215,12 @@ template<typename DestinationByteVector, typename SourceByteVector>
     return range;
 }
 
-template<typename DestinationByteVector, typename SourceByteVector, typename MaterialTypedByteRangeMap>
-[[nodiscard]] inline Expected<MaterialTypedByteRange> FindOrAppendMaterialTypedByteRange(DestinationByteVector& materialTypedBytes, MaterialTypedByteRangeMap& rangeMap, const SourceByteVector& typedBytes){
+template<typename DestinationByteVector, typename MaterialTypedByteRangeMap>
+[[nodiscard]] inline Expected<MaterialTypedByteRange> FindOrAppendMaterialTypedByteRange(const Span<const u8> typedBytes, DestinationByteVector& materialTypedBytes, MaterialTypedByteRangeMap& rangeMap){
     if(typedBytes.empty())
         return MaterialTypedByteRange{};
 
-    const MaterialTypedByteContentLookup lookup{ ComputeFnv64Bytes(typedBytes.data(), typedBytes.size()), Span<const u8>(typedBytes.data(), typedBytes.size()) };
+    const MaterialTypedByteContentLookup lookup{ ComputeFnv64Bytes(typedBytes.data(), typedBytes.size()), typedBytes };
     const auto foundRange = rangeMap.find(lookup);
     if(foundRange != rangeMap.end())
         return foundRange.value();
@@ -228,7 +228,7 @@ template<typename DestinationByteVector, typename SourceByteVector, typename Mat
     // Copy before growing the upload vector: typedBytes may alias its existing storage.
     MaterialTypedByteContentKey rangeKey(materialTypedBytes.get_allocator().arena(), lookup);
     const Span<const u8> ownedBytes(rangeKey.bytes.data(), rangeKey.bytes.size());
-    const auto range = AppendMaterialTypedByteRange(materialTypedBytes, ownedBytes);
+    const auto range = AppendMaterialTypedByteRange(ownedBytes, materialTypedBytes);
     if(!range)
         return MakeUnexpected(Failure{});
 
@@ -261,8 +261,7 @@ inline InstanceGpuData BuildInstanceGpuData(const Core::ECS::EntityID entity, co
     return data;
 }
 
-template<typename MaterialTypedByteVector>
-[[nodiscard]] inline usize ResolveMaterialTypedUploadByteCount(const MaterialTypedByteVector& materialTypedBytes)noexcept(noexcept(DeclVal<void(*)(usize)noexcept>()(materialTypedBytes.size()))){
+[[nodiscard]] inline usize ResolveMaterialTypedUploadByteCount(const Span<const u8> materialTypedBytes)noexcept{
     const usize uploadByteCount = materialTypedBytes.size();
     NWB_ASSERT_MSG(uploadByteCount != 0u, NWB_TEXT("RendererSystem: material typed data upload is empty"));
     NWB_ASSERT_MSG((uploadByteCount & (s_MaterialTypedWordBytes - 1u)) == 0u, NWB_TEXT("RendererSystem: material typed data upload is not word-aligned"));
@@ -300,8 +299,7 @@ inline void AssertMaterialTypedInstanceRange(const MaterialTypedInstanceRanges& 
 
 using MaterialTypedInstanceRangeVector = Vector<MaterialTypedInstanceRanges, Core::Alloc::ScratchArena>;
 
-template<typename MaterialTypedByteVector>
-inline void AssertMaterialTypedUploadRanges(const MaterialTypedInstanceRangeVector& instanceRanges, const MaterialTypedByteVector& materialTypedBytes)noexcept(noexcept(DeclVal<void(*)(usize)noexcept>()(materialTypedBytes.size()))){
+inline void AssertMaterialTypedUploadRanges(const Span<const MaterialTypedInstanceRanges> instanceRanges, const Span<const u8> materialTypedBytes)noexcept{
     if(instanceRanges.empty())
         return;
 

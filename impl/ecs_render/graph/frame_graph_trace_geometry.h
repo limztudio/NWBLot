@@ -70,7 +70,7 @@ public:
 
 
 private:
-    [[nodiscard]] Core::GpuGraphResourceSetId importSet(const Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena>& members, const Name& identity, AStringView markerLabel);
+    [[nodiscard]] Core::GpuGraphResourceSetId importSet(Span<const Core::GpuGraphResourceId> members, const Name& identity, AStringView markerLabel);
 
 
 private:

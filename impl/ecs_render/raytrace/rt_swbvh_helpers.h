@@ -43,7 +43,7 @@ inline constexpr u32 s_SceneStaticCacheHashVersion = 2u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void AppendTlasInstanceStaticCacheInput(u64& inOutHash, const Core::RayTracingInstanceDesc& instance)noexcept{
+inline void AppendTlasInstanceStaticCacheInput(const Core::RayTracingInstanceDesc& instance, u64& inOutHash)noexcept{
     Fnv64AppendValue(inOutHash, instance.transform);
     Fnv64AppendValue(inOutHash, static_cast<u32>(instance.instanceID));
     Fnv64AppendValue(inOutHash, static_cast<u32>(instance.instanceMask));
@@ -53,16 +53,16 @@ inline void AppendTlasInstanceStaticCacheInput(u64& inOutHash, const Core::RayTr
     Fnv64AppendValue(inOutHash, bottomLevelAsIdentity);
 }
 
-[[nodiscard]] inline u64 ComputeTlasStaticSceneHash(const Vector<Core::RayTracingInstanceDesc, Core::Alloc::ScratchArena>& instances)noexcept{
+[[nodiscard]] inline u64 ComputeTlasStaticSceneHash(const Span<const Core::RayTracingInstanceDesc> instances)noexcept{
     u64 hash = s_Fnv64OffsetBasis;
     Fnv64AppendValue(hash, s_SceneStaticCacheHashVersion);
     Fnv64AppendValue(hash, instances.size());
     for(const Core::RayTracingInstanceDesc& instance : instances)
-        AppendTlasInstanceStaticCacheInput(hash, instance);
+        AppendTlasInstanceStaticCacheInput(instance, hash);
     return hash;
 }
 
-[[nodiscard]] inline u64 ComputeSceneSwBvhStaticSceneHash(const Vector<SceneSwBvhInstanceGpu, Core::Alloc::ScratchArena>& instances, const Vector<SceneBvhPrimitiveCalculation, Core::Alloc::ScratchArena>& primitives)noexcept{
+[[nodiscard]] inline u64 ComputeSceneSwBvhStaticSceneHash(const Span<const SceneSwBvhInstanceGpu> instances, const Span<const SceneBvhPrimitiveCalculation> primitives)noexcept{
     NWB_ASSERT(instances.size() == primitives.size());
 
     u64 hash = s_Fnv64OffsetBasis;
@@ -86,7 +86,7 @@ inline void AppendTlasInstanceStaticCacheInput(u64& inOutHash, const Core::RayTr
     return hash;
 }
 
-[[nodiscard]] inline u64 ComputeShadowMaterialContextHash(const Vector<NwbRtInstanceMaterialGpu, Core::Alloc::ScratchArena>& instanceMaterials, const InstanceGpuDataVector& instanceData, const MaterialTypedByteDataVector& materialTypedBytes)noexcept{
+[[nodiscard]] inline u64 ComputeShadowMaterialContextHash(const Span<const NwbRtInstanceMaterialGpu> instanceMaterials, const Span<const InstanceGpuData> instanceData, const Span<const u8> materialTypedBytes)noexcept{
     NWB_ASSERT(instanceMaterials.size() == instanceData.size());
 
     u64 hash = s_Fnv64OffsetBasis;

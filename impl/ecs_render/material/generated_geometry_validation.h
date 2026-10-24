@@ -26,7 +26,7 @@ namespace ECSRenderDetail{
 
 
 template<typename Plan, typename AcceptMode>
-[[nodiscard]] bool CaptureAliasFreeGeneratedGeometryDraws(Plan& plan, const MaterialPassDrawItems& source, Core::Alloc::ScratchArena& scratchArena, AcceptMode acceptMode){
+[[nodiscard]] bool CaptureAliasFreeGeneratedGeometryDraws(Plan& plan, const MaterialPassDrawItemsView& source, Core::Alloc::ScratchArena& scratchArena, AcceptMode acceptMode){
     plan.drawItems.reserve(source.computeDrawItems.size());
     plan.outputBuffers.reserve(source.computeDrawItems.size());
     plan.outputLayouts.reserve(source.computeDrawItems.size());
@@ -52,10 +52,10 @@ template<typename Plan, typename AcceptMode>
 
 [[nodiscard]] NWB_INLINE bool MatchesRetainedGeneratedGeometryOutputs(
     const bool captured,
-    const Vector<MaterialPassDrawItem, Core::Alloc::GlobalArena>& drawItems,
-    const Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outputBuffers,
-    const Vector<GeneratedGeometryOutputLayout, Core::Alloc::GlobalArena>& outputLayouts,
-    const Vector<u32, Core::Alloc::GlobalArena>& outputHeapSlots
+    const Span<const MaterialPassDrawItem> drawItems,
+    const Span<const Core::BufferHandle> outputBuffers,
+    const Span<const GeneratedGeometryOutputLayout> outputLayouts,
+    const Span<const u32> outputHeapSlots
 )noexcept{
     if(!captured || outputBuffers.size() != drawItems.size() || outputLayouts.size() != drawItems.size() || outputHeapSlots.size() != drawItems.size())
         return false;

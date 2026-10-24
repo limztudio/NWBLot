@@ -30,7 +30,7 @@ void ShadowPrepareGeometryResources::prepareStorage(const bool blasInputStatesGr
         }
     }
     m_blasBuildInputs.reserve(m_requests ? m_requests->size() : m_inlineRequestCount);
-    m_remainingTraceGeometry.reserve(m_inputs.traceResourceCount);
+    m_remainingTraceGeometry.reserve(m_inputs.traceResources.size());
     m_preparedBlasPolicy = blasInputStatesGraphOwned;
     m_storagePrepared = true;
 }
@@ -58,8 +58,7 @@ bool ShadowPrepareGeometryResources::gatherBuildInputs(const Core::GpuTaskGraph&
 bool ShadowPrepareGeometryResources::gatherRemainingTraceResources()noexcept{
     NWB_ASSERT(m_inputsGathered);
     const bool hasBlasInputs = !m_blasBuildInputs.empty();
-    for(usize resourceIndex = 0u; resourceIndex < m_inputs.traceResourceCount; ++resourceIndex){
-        const Core::GpuGraphResourceId resource = m_inputs.traceResources[resourceIndex];
+    for(const Core::GpuGraphResourceId resource : m_inputs.traceResources){
         if(!resource.valid())
             return false;
         const BufferRequest* const request = hasBlasInputs ? findResolvedRequest(resource) : nullptr;
@@ -168,8 +167,8 @@ bool ShadowPrepareGeometryResources::resolveRequests(const Core::GpuTaskGraph& g
         m_resources.emplace(Move(resources));
     }
     // Only resolved requests gain trace membership; stale generations stay distinct.
-    for(usize index = 0u; index < m_inputs.traceResourceCount; ++index){
-        if(BufferRequest* const request = findResolvedRequest(m_inputs.traceResources[index]))
+    for(const Core::GpuGraphResourceId traceResource : m_inputs.traceResources){
+        if(BufferRequest* const request = findResolvedRequest(traceResource))
             request->listedForTrace = true;
     }
     return true;

@@ -82,10 +82,10 @@ struct PhaseIdentities{
 
 [[nodiscard]] Expected<AvboitGeometryPreparationResult> AvboitGeometryPreparationBuilder::declare(const AvboitGeometryPreparationInputs& inputs){
     AvboitGeometryPreparationResult result{};
-    if(!inputs.drawItemSets || inputs.drawItemSetCount == 0u)
+    if(inputs.drawItemSets.empty())
         return MakeUnexpected(Failure{});
     const __hidden_avboit_geometry_preparation_builder::PhaseIdentities identities = __hidden_avboit_geometry_preparation_builder::IdentitiesForPhase(inputs.phase);
-    const auto materialGeometrySetResult = RendererTaskGraphDetail::GatherPreparedMaterialGeometryResourceSet(m_graph, inputs.drawItemSets, inputs.drawItemSetCount, m_scratchArena, Name(identities.geometryIdentity), identities.geometryLabel);
+    const auto materialGeometrySetResult = RendererTaskGraphDetail::GatherPreparedMaterialGeometryResourceSet(inputs.drawItemSets, Name(identities.geometryIdentity), identities.geometryLabel, m_graph, m_scratchArena);
     result.geometryOwned = materialGeometrySetResult.has_value();
     if(materialGeometrySetResult)
         result.materialGeometrySet = *materialGeometrySetResult;
@@ -97,12 +97,11 @@ struct PhaseIdentities{
     if(result.geometryOwned){
         const auto materialSampledTextureSetResult = RendererTaskGraphDetail::GatherPreparedMaterialSampledTextureResourceSet(
             m_materialSystem,
-            m_graph,
             inputs.drawItemSets,
-            inputs.drawItemSetCount,
-            m_scratchArena,
             Name(identities.sampledIdentity),
-            identities.sampledLabel
+            identities.sampledLabel,
+            m_graph,
+            m_scratchArena
         );
         result.sampledTexturesCollected = materialSampledTextureSetResult.has_value();
         if(materialSampledTextureSetResult)

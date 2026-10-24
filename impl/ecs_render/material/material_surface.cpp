@@ -368,12 +368,12 @@ bool RendererMaterialSystem::hasTransparentRenderers(const RendererResourceLooku
     return false;
 }
 
-bool RendererMaterialSystem::appendPreparedMaterialSurfaceSampledTextures(const MaterialSurfaceInfo& materialInfo, MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector){
+bool RendererMaterialSystem::appendPreparedMaterialSurfaceSampledTextures(const MaterialSurfaceInfo& materialInfo, MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector)const{
     return AppendPreparedMaterialSurfaceSampledTextures(materialInfo, m_materialState.m_resourceState, collector);
 }
 
-Expected<Vector<Core::TextureHandle, Core::Alloc::ScratchArena>> RendererMaterialSystem::gatherPreparedMaterialPassSampledTextures(const MaterialPassDrawItems* const* const drawItemSets, const usize drawItemSetCount, Core::Alloc::ScratchArena& scratchArena){
-    return GatherPreparedMaterialPassSampledTextures(m_materialState.m_surfaceInfos, m_materialState.m_resourceState, drawItemSets, drawItemSetCount, scratchArena);
+Expected<Vector<Core::TextureHandle, Core::Alloc::ScratchArena>> RendererMaterialSystem::gatherPreparedMaterialPassSampledTextures(const Span<const MaterialPassDrawItemsView> drawItemSets, Core::Alloc::ScratchArena& scratchArena)const{
+    return GatherPreparedMaterialPassSampledTextures(m_materialState.m_surfaceInfos, m_materialState.m_resourceState, drawItemSets, scratchArena);
 }
 
 

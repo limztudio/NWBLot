@@ -46,13 +46,10 @@ bool AppendPreparedMaterialSurfaceSampledTextures(const MaterialSurfaceInfo& mat
 Expected<Vector<Core::TextureHandle, Core::Alloc::ScratchArena>> GatherPreparedMaterialPassSampledTextures(
     const MaterialSurfaceInfoMap& materials,
     const RendererMaterialResourceState& resources,
-    const MaterialPassDrawItems* const* const drawItemSets,
-    const usize drawItemSetCount,
+    const Span<const MaterialPassDrawItemsView> drawItemSets,
     Core::Alloc::ScratchArena& scratchArena
 ){
     Vector<Core::TextureHandle, Core::Alloc::ScratchArena> textures(scratchArena);
-    if(drawItemSetCount != 0u && !drawItemSets)
-        return MakeUnexpected(Failure{});
 
     MaterialSampledTextureCollector<Core::Alloc::ScratchArena> collector(textures, scratchArena);
     const auto appendDrawItem = [&](const MaterialPassDrawItem& drawItem){
@@ -60,19 +57,16 @@ Expected<Vector<Core::TextureHandle, Core::Alloc::ScratchArena>> GatherPreparedM
         return foundMaterial != materials.end() && AppendPreparedMaterialSurfaceSampledTextures(foundMaterial.value(), resources, collector);
     };
 
-    for(usize drawItemSetIndex = 0u; drawItemSetIndex < drawItemSetCount; ++drawItemSetIndex){
-        const MaterialPassDrawItems* const drawItems = drawItemSets[drawItemSetIndex];
-        if(!drawItems)
-            return MakeUnexpected(Failure{});
-        for(const MaterialPassDrawItem& drawItem : drawItems->meshDrawItems){
+    for(const MaterialPassDrawItemsView& drawItems : drawItemSets){
+        for(const MaterialPassDrawItem& drawItem : drawItems.meshDrawItems){
             if(!appendDrawItem(drawItem))
                 return MakeUnexpected(Failure{});
         }
-        for(const MaterialPassDrawItem& drawItem : drawItems->indexedDrawItems){
+        for(const MaterialPassDrawItem& drawItem : drawItems.indexedDrawItems){
             if(!appendDrawItem(drawItem))
                 return MakeUnexpected(Failure{});
         }
-        for(const MaterialPassDrawItem& drawItem : drawItems->computeDrawItems){
+        for(const MaterialPassDrawItem& drawItem : drawItems.computeDrawItems){
             if(!appendDrawItem(drawItem))
                 return MakeUnexpected(Failure{});
         }
@@ -80,7 +74,7 @@ Expected<Vector<Core::TextureHandle, Core::Alloc::ScratchArena>> GatherPreparedM
     return textures;
 }
 
-bool MergePreparedShadowMaterialSampledTextures(const Vector<Core::TextureHandle, Core::Alloc::ScratchArena>& sampledTextures, MaterialSampledTextureCollector<Core::Alloc::GlobalArena>& collector){
+bool MergePreparedShadowMaterialSampledTextures(const Span<const Core::TextureHandle> sampledTextures, MaterialSampledTextureCollector<Core::Alloc::GlobalArena>& collector){
     for(const Core::TextureHandle& texture : sampledTextures){
         if(!texture || !texture->getCreationDescription().name)
             return false;

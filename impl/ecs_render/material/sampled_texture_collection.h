@@ -131,12 +131,11 @@ using MaterialSurfaceInfoMap = HashMap<Name, MaterialSurfaceInfo, Core::Alloc::G
 [[nodiscard]] Expected<Vector<Core::TextureHandle, Core::Alloc::ScratchArena>> GatherPreparedMaterialPassSampledTextures(
     const MaterialSurfaceInfoMap& materials,
     const RendererMaterialResourceState& resources,
-    const MaterialPassDrawItems* const* drawItemSets,
-    usize drawItemSetCount,
+    Span<const MaterialPassDrawItemsView> drawItemSets,
     Core::Alloc::ScratchArena& scratchArena
 );
 // Names check sequentially; a missing name preserves the published prefix.
-[[nodiscard]] bool MergePreparedShadowMaterialSampledTextures(const Vector<Core::TextureHandle, Core::Alloc::ScratchArena>& sampledTextures, MaterialSampledTextureCollector<Core::Alloc::GlobalArena>& collector);
+[[nodiscard]] bool MergePreparedShadowMaterialSampledTextures(Span<const Core::TextureHandle> sampledTextures, MaterialSampledTextureCollector<Core::Alloc::GlobalArena>& collector);
 
 
 // Materials validate into reused storage before textures enter the output.

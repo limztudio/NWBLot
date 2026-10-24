@@ -81,7 +81,7 @@ public:
         captured = false;
     }
 
-    [[nodiscard]] bool capture(const MaterialPassDrawItems& receiverSurfaceDrawItems, const MaterialPassDrawItems& sourceRegularDrawItems, const CsgFrameGpuData& csgFrameData, Core::Alloc::ScratchArena& scratchArena){
+    [[nodiscard]] bool capture(const MaterialPassDrawItemsView& receiverSurfaceDrawItems, const MaterialPassDrawItemsView& sourceRegularDrawItems, const CsgFrameGpuDataView& csgFrameData, Core::Alloc::ScratchArena& scratchArena){
         reset();
         if(receiverSurfaceDrawItems.computeDrawItems.empty() || !csgFrameData.hasWork())
             return false;
@@ -225,7 +225,7 @@ public:
         captured = false;
     }
 
-    [[nodiscard]] bool capture(const MaterialPassDrawItems& sourceDrawItems, const CsgFrameGpuData& csgFrameData, Core::Alloc::ScratchArena& scratchArena){
+    [[nodiscard]] bool capture(const MaterialPassDrawItemsView& sourceDrawItems, const CsgFrameGpuDataView& csgFrameData, Core::Alloc::ScratchArena& scratchArena){
         reset();
         if(sourceDrawItems.computeDrawItems.empty() || !csgFrameData.hasWork())
             return false;

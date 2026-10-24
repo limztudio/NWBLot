@@ -25,8 +25,8 @@ NWB_IMPL_BEGIN
 
 // Shared AVBOIT compute-emulation capture owns regular plus CSG plus shared plan capture.
 struct AvboitComputeEmulationCaptureInputs{
-    const MaterialPassDrawItemPartitions& drawItems;
-    const CsgFrameGpuData& csgFrameData;
+    MaterialPassDrawItemPartitionsView drawItems{};
+    CsgFrameGpuDataView csgFrameData{};
     bool geometryOwned = false;
     bool sampledTexturesCollected = false;
     bool csgStreamsUploaded = false;
@@ -54,9 +54,9 @@ public:
 public:
     [[nodiscard]] Expected<AvboitComputeEmulationCaptureResult> capture(
         const AvboitComputeEmulationCaptureInputs& inputs,
-        Core::Alloc::ScratchArena& scratchArena,
         usize instanceCount,
         usize materialTypedByteCount,
+        Core::Alloc::ScratchArena& scratchArena,
         ECSRenderDetail::AvboitAliasFreeComputeEmulationGraphPlan& plan,
         ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphPlan& csgPlan
     );

@@ -54,8 +54,8 @@ OpaqueCsgIntervalStage::OpaqueCsgIntervalStage(
 void OpaqueCsgIntervalStage::capturePayloads(
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-    const MaterialPassDrawItemPartitions& opaqueDrawItems,
-    const CsgFrameGpuData& csgFrameData,
+    const MaterialPassDrawItemPartitionsView& opaqueDrawItems,
+    const CsgFrameGpuDataView& csgFrameData,
     const usize instanceCount,
     const usize materialTypedByteCount,
     const bool materialDrawBuffersUploaded,
@@ -137,17 +137,16 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(Core::Allo
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> opaqueCsgIntervalSampleComputeEmulationResourceUses{ scratchArena };
     Core::GpuGraphResourceSetId csgIntervalSampleMaterialGeometrySet;
     Core::GpuGraphResourceSetId csgIntervalSampleMaterialSampledTextureSet;
-    const MaterialPassDrawItems* const csgIntervalSampleMaterialGeometryDrawSets[] = { &inputs.opaqueDrawItems.csg };
+    const MaterialPassDrawItemsView csgIntervalSampleMaterialGeometryDrawSets[] = { inputs.opaqueDrawItems.csg };
     const bool csgIntervalSampleUsesMaterialGeometry = !inputs.opaqueDrawItems.csg.empty();
     m_intervalSamplePayload.materialGeometryStatesGraphOwned = false;
     if(csgIntervalSampleUsesMaterialGeometry){
         const auto csgIntervalSampleMaterialGeometrySetResult = GatherPreparedMaterialGeometryResourceSet(
-            m_graph,
             csgIntervalSampleMaterialGeometryDrawSets,
-            LengthOf(csgIntervalSampleMaterialGeometryDrawSets),
-            scratchArena,
             Name("render.graphics_prefix.csg_interval_sample.material_geometry"),
-            "Opaque CSG Material Geometry"
+            "Opaque CSG Material Geometry",
+            m_graph,
+            scratchArena
         );
         m_intervalSamplePayload.materialGeometryStatesGraphOwned = csgIntervalSampleMaterialGeometrySetResult.has_value();
         if(csgIntervalSampleMaterialGeometrySetResult)
@@ -161,12 +160,11 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(Core::Allo
     if(csgIntervalSampleUsesMaterialGeometry){
         const auto csgIntervalSampleMaterialSampledTextureSetResult = GatherPreparedMaterialSampledTextureResourceSet(
             m_materialSystem,
-            m_graph,
             csgIntervalSampleMaterialGeometryDrawSets,
-            LengthOf(csgIntervalSampleMaterialGeometryDrawSets),
-            scratchArena,
             Name("render.graphics_prefix.csg_interval_sample.material_sampled_textures"),
-            "Opaque CSG Material Sampled Textures"
+            "Opaque CSG Material Sampled Textures",
+            m_graph,
+            scratchArena
         );
         csgIntervalSampleMaterialSampledTexturesCollected = csgIntervalSampleMaterialSampledTextureSetResult.has_value();
         if(csgIntervalSampleMaterialSampledTextureSetResult)
@@ -262,7 +260,7 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(Core::Allo
 
     Core::GpuTaskId csgIntervalSampleDependency = tasks.intervalCombineTask;
     if(m_intervalSamplePayload.materialDrawBuffersUploaded && !objectGeometry.prepare(
-        inputs.opaqueDrawItems.csg.indexedDrawItems.data(), inputs.opaqueDrawItems.csg.indexedDrawItems.size(),
+        inputs.opaqueDrawItems.csg.indexedDrawItems,
         inputs.frameBindings, inputs.targets, scratchArena, csgIntervalSampleDependency, csgIntervalSampleResourceUses,
         nullptr, inputs.intervalSampleTimingTicket
     ))

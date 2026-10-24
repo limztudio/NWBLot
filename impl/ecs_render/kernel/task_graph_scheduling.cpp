@@ -37,13 +37,12 @@ void EnableSameFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& schedulin
 }
 
 void MakeSharedComputeEmulationPhaseTaskDesc(
-    Core::GpuTaskDesc& desc,
     const Name identity,
     const AStringView markerLabel,
     const Core::GpuTaskId& dependency,
-    const Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& resourceUses,
-    const Core::GpuTaskResourceSetUse* const resourceSetUses,
-    const usize resourceSetUseCount
+    const Span<const Core::GpuTaskResourceUse> resourceUses,
+    const Span<const Core::GpuTaskResourceSetUse> resourceSetUses,
+    Core::GpuTaskDesc& desc
 )noexcept{
     desc
         .setIdentity(identity)
@@ -51,7 +50,7 @@ void MakeSharedComputeEmulationPhaseTaskDesc(
         .setScheduling(SharedComputeEmulationChainScheduling())
         .setDependencies(&dependency, 1u)
         .setResourceUses(resourceUses.data(), resourceUses.size())
-        .setResourceSetUses(resourceSetUses, resourceSetUseCount)
+        .setResourceSetUses(resourceSetUses.empty() ? nullptr : resourceSetUses.data(), resourceSetUses.size())
     ;
 }
 

@@ -25,7 +25,7 @@ namespace __hidden_generated_geometry_reuse{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool EligibleGroup(const MaterialPassDrawItemPartitions& draws, const InstanceGpuDataVector& instances, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings, const MaterialPipelinePass::Enum pass, Core::Alloc::ScratchArena& arena){
+[[nodiscard]] bool EligibleGroup(const MaterialPassDrawItemPartitionsView& draws, const Span<const InstanceGpuData> instances, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings, const MaterialPipelinePass::Enum pass, Core::Alloc::ScratchArena& arena){
     if(
         !MaterialPipelinePassUsesRendererAvboit(pass)
         || draws.regular.computeDrawItems.empty() || !draws.regular.meshDrawItems.empty()
@@ -128,8 +128,8 @@ void AvboitGeneratedGeometryReuse::reset()noexcept{
 }
 
 bool AvboitGeneratedGeometryReuse::capture(
-    const MaterialPassDrawItemPartitions& draws,
-    const InstanceGpuDataVector& instances,
+    const MaterialPassDrawItemPartitionsView& draws,
+    const Span<const InstanceGpuData> instances,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const ECSRenderDetail::MeshViewGpuData& view,
     const MaterialPipelinePass::Enum pass
@@ -150,8 +150,8 @@ bool AvboitGeneratedGeometryReuse::capture(
 }
 
 bool AvboitGeneratedGeometryReuse::matches(
-    const MaterialPassDrawItemPartitions& draws,
-    const InstanceGpuDataVector& instances,
+    const MaterialPassDrawItemPartitionsView& draws,
+    const Span<const InstanceGpuData> instances,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const ECSRenderDetail::MeshViewGpuData& view,
     const MaterialPipelinePass::Enum pass

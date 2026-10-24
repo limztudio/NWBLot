@@ -67,9 +67,9 @@ public:
 public:
     [[nodiscard]] Expected<bool> declare(
         const AvboitMaterialUploadInputs& inputs,
-        const InstanceGpuDataVector& instanceData,
-        const MaterialTypedByteDataVector& materialTypedBytes,
-        const CsgFrameGpuData& csgFrameData,
+        Span<const InstanceGpuData> instanceData,
+        Span<const u8> materialTypedBytes,
+        const CsgFrameGpuDataView& csgFrameData,
         bool hasCsgDrawItems,
         Core::GpuTaskId& inOutUploadTask
     );

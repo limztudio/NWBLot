@@ -34,8 +34,8 @@ public:
 
 public:
     void reset()noexcept;
-    [[nodiscard]] bool capture(const MaterialPassDrawItemPartitions& draws, const InstanceGpuDataVector& instances, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings, const ECSRenderDetail::MeshViewGpuData& view, MaterialPipelinePass::Enum pass);
-    [[nodiscard]] bool matches(const MaterialPassDrawItemPartitions& draws, const InstanceGpuDataVector& instances, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings, const ECSRenderDetail::MeshViewGpuData& view, MaterialPipelinePass::Enum pass);
+    [[nodiscard]] bool capture(const MaterialPassDrawItemPartitionsView& draws, Span<const InstanceGpuData> instances, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings, const ECSRenderDetail::MeshViewGpuData& view, MaterialPipelinePass::Enum pass);
+    [[nodiscard]] bool matches(const MaterialPassDrawItemPartitionsView& draws, Span<const InstanceGpuData> instances, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings, const ECSRenderDetail::MeshViewGpuData& view, MaterialPipelinePass::Enum pass);
     // Publish the generation task or a dependent completion task proving all output writes; generation must disable pass-scissor culling.
     [[nodiscard]] bool publishProducer(Core::GpuTaskId task)noexcept;
     [[nodiscard]] Core::GpuTaskId producerTask()const noexcept{ return m_producer; }

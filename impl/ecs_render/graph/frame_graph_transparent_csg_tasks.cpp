@@ -125,8 +125,7 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
     avboitIntervalResourceUses.push_back(ReadWriteUse(avboitCsgDomain, Core::ResourceStates::ShaderResource));
 
     if(avboitPrePayload.transparentCsgStreamsUploaded && !objectGeometry.prepare(
-        avboitPrePayload.transparentCsgSnapshot.receiverSurfaceIndexedDrawItems.data(),
-        avboitPrePayload.transparentCsgSnapshot.receiverSurfaceIndexedDrawItems.size(),
+        avboitPrePayload.transparentCsgSnapshot.receiverSurfaceIndexedDrawItems,
         avboitPrePayload.frameBindings, deferredTargets, scratchArena, intervalDependency, avboitIntervalResourceUses,
         inputs.timingTicket
     ))

@@ -319,17 +319,16 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     Core::GpuGraphResourceSetId opaqueComputeEmulationOutputSet;
     Core::GpuGraphResourceId opaqueSharedComputeEmulationOutput;
     Core::GpuGraphResourceSetId opaqueCsgReceiverComputeEmulationOutputSet;
-    const MaterialPassDrawItems* const gbufferMaterialGeometryDrawSets[] = { &opaqueDrawItems.regular, &opaqueDrawItems.csgReceiverSurface, };
+    const MaterialPassDrawItemsView gbufferMaterialGeometryDrawSets[] = { opaqueDrawItems.regular, opaqueDrawItems.csgReceiverSurface, };
     const bool gbufferUsesMaterialGeometry = !opaqueDrawItems.regular.empty() || !opaqueDrawItems.csgReceiverSurface.empty();
     gbufferPayload.materialGeometryStatesGraphOwned = false;
     if(gbufferUsesMaterialGeometry){
         const auto gbufferMaterialGeometrySetResult = GatherPreparedMaterialGeometryResourceSet(
-            m_deferredLightingTaskGraph,
             gbufferMaterialGeometryDrawSets,
-            LengthOf(gbufferMaterialGeometryDrawSets),
-            scratchArena,
             Name("render.graphics_prefix.gbuffer.material_geometry"),
-            "Opaque Material Geometry"
+            "Opaque Material Geometry",
+            m_deferredLightingTaskGraph,
+            scratchArena
         );
         gbufferPayload.materialGeometryStatesGraphOwned = gbufferMaterialGeometrySetResult.has_value();
         if(gbufferMaterialGeometrySetResult)
@@ -344,12 +343,11 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     if(gbufferUsesMaterialGeometry){
         const auto gbufferMaterialSampledTextureSetResult = GatherPreparedMaterialSampledTextureResourceSet(
             m_materialSystem,
-            m_deferredLightingTaskGraph,
             gbufferMaterialGeometryDrawSets,
-            LengthOf(gbufferMaterialGeometryDrawSets),
-            scratchArena,
             Name("render.graphics_prefix.gbuffer.material_sampled_textures"),
-            "Opaque Material Sampled Textures"
+            "Opaque Material Sampled Textures",
+            m_deferredLightingTaskGraph,
+            scratchArena
         );
         gbufferMaterialSampledTexturesCollected = gbufferMaterialSampledTextureSetResult.has_value();
         if(gbufferMaterialSampledTextureSetResult)
@@ -546,13 +544,13 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     Core::GpuTaskId gbufferDependency = csgIntervalClearTask;
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> objectGeometryReads{scratchArena};
     if(gbufferPayload.materialDrawBuffersUploaded && !objectGeometry.prepare(
-        opaqueDrawItems.regular.indexedDrawItems.data(), opaqueDrawItems.regular.indexedDrawItems.size(),
+        opaqueDrawItems.regular.indexedDrawItems,
         frameBindings, deferredTargets, scratchArena, gbufferDependency, objectGeometryReads,
         nullptr, timingTicketSlot(PrefixTimingSlotNs::Gbuffer)
     ))
         return MakeUnexpected(Failure{});
     if(gbufferPayload.materialDrawBuffersUploaded && !objectGeometry.prepare(
-        opaqueDrawItems.csgReceiverSurface.indexedDrawItems.data(), opaqueDrawItems.csgReceiverSurface.indexedDrawItems.size(),
+        opaqueDrawItems.csgReceiverSurface.indexedDrawItems,
         frameBindings, deferredTargets, scratchArena, gbufferDependency, objectGeometryReads,
         nullptr, timingTicketSlot(PrefixTimingSlotNs::Gbuffer)
     ))

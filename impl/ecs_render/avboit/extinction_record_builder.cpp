@@ -211,14 +211,12 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
         m_avboitSystem.taskGraphStage().m_extinctionStreamTask = extinctionStreamTask;
     Core::GpuTaskId extinctionDependency = inputs.uploadTask;
     if(inputs.streamsUploaded && !objectGeometry.prepare(
-        extinctionPayload.extinctionSnapshot.regularIndexedDrawItems.data(),
-        extinctionPayload.extinctionSnapshot.regularIndexedDrawItems.size(),
+        extinctionPayload.extinctionSnapshot.regularIndexedDrawItems,
         frameBindings, inputs.targets, scratchArena, extinctionDependency, extinctionResourceUses, &inputs.extinctionTimingTicket
     ))
         return MakeUnexpected(Failure{});
     if(inputs.streamsUploaded && !objectGeometry.prepare(
-        extinctionPayload.extinctionSnapshot.csgIndexedDrawItems.data(),
-        extinctionPayload.extinctionSnapshot.csgIndexedDrawItems.size(),
+        extinctionPayload.extinctionSnapshot.csgIndexedDrawItems,
         frameBindings, inputs.targets, scratchArena, extinctionDependency, extinctionResourceUses, &inputs.extinctionTimingTicket
     ))
         return MakeUnexpected(Failure{});
@@ -333,12 +331,11 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
             const usize drawIndex,
             const bool beginTiming,
             const bool finishTiming,
-            const Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& resourceUses,
-            const Core::GpuTaskResourceSetUse* const resourceSetUses,
-            const usize resourceSetUseCount
+            const Span<const Core::GpuTaskResourceUse> resourceUses,
+            const Span<const Core::GpuTaskResourceSetUse> resourceSetUses
         ){
             Core::GpuTaskDesc desc;
-            RendererTaskGraphDetail::MakeSharedComputeEmulationPhaseTaskDesc(desc, identity, markerLabel, dependency, resourceUses, resourceSetUses, resourceSetUseCount);
+            RendererTaskGraphDetail::MakeSharedComputeEmulationPhaseTaskDesc(identity, markerLabel, dependency, resourceUses, resourceSetUses, desc);
             AvboitExtinctionSharedComputeEmulationGraphTask::Payload payload{
                 .graphics = *graphicsAlias,
                 .materialSystem = *materialSystemAlias,
@@ -388,6 +385,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
         NWB_ASSERT(ECSRenderDetail::IsSupportedSharedComputeEmulationDrawCount(inputs.sharedComputeEmulationPlan.drawCount));
         NWB_ASSERT(extinctionSharedComputeEmulationPhaseCount <= LengthOf(extinctionSharedComputeEmulationPhaseIdentities));
         Core::GpuTaskId extinctionSharedComputeEmulationDependency = extinctionDependency;
+        const Span<const Core::GpuTaskResourceSetUse> extinctionMaterialResourceSetUseSpan(extinctionMaterialResourceSetUses, extinctionMaterialResourceSetUseCount);
         for(usize phaseIndex = 0u; phaseIndex < extinctionSharedComputeEmulationPhaseCount; ++phaseIndex){
             const bool isRasterPhase = phaseIndex % ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw != 0u;
             const auto mAvboitSystemTaskGraphStageMExtinctionSharedComputeEmulationTasksPhaseIndexResult = addExtinctionSharedComputeEmulationPhase(
@@ -398,9 +396,8 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
                 phaseIndex / ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw,
                 phaseIndex == 0u,
                 phaseIndex + 1u == extinctionSharedComputeEmulationPhaseCount,
-                isRasterPhase ? extinctionSharedRasterResourceUses : extinctionSharedGenerateResourceUses,
-                extinctionMaterialResourceSetUses,
-                extinctionMaterialResourceSetUseCount
+                isRasterPhase ? Span<const Core::GpuTaskResourceUse>(extinctionSharedRasterResourceUses) : Span<const Core::GpuTaskResourceUse>(extinctionSharedGenerateResourceUses),
+                extinctionMaterialResourceSetUseSpan
             );
             if(!mAvboitSystemTaskGraphStageMExtinctionSharedComputeEmulationTasksPhaseIndexResult){
                 m_avboitSystem.taskGraphStage().m_extinctionSharedComputeEmulationTasks[phaseIndex] = {};

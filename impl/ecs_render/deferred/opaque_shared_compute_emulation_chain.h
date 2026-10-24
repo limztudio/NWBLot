@@ -36,7 +36,7 @@ struct OpaqueSharedComputeEmulationChainInputs{
     const DeferredGraphResourceImportResult& resources;
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings;
     const ECSRenderDetail::RegularSharedComputeEmulationGraphPlan& plan;
-    const Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& objectGeometryReads;
+    Span<const Core::GpuTaskResourceUse> objectGeometryReads;
     Core::GpuTimingSubmissionTicket*& timingTicket;
     const bool& meshViewSetupReady;
     const bool& sceneShadingSetupReady;
@@ -88,9 +88,8 @@ private:
         ECSRenderDetail::OpaqueRegularSharedComputeEmulationGraphTask::Phase::Enum phase,
         usize drawIndex,
         bool finishTiming,
-        const Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& resourceUses,
-        const Core::GpuTaskResourceSetUse* resourceSetUses,
-        usize resourceSetUseCount
+        Span<const Core::GpuTaskResourceUse> resourceUses,
+        Span<const Core::GpuTaskResourceSetUse> resourceSetUses
     );
 
 

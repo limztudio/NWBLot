@@ -104,7 +104,7 @@ bool RendererMaterialSystem::createComputeEmulationResources(){
     return true;
 }
 
-bool RendererMaterialSystem::prepareMaterialPassResourceBindings(const MaterialPassDrawItems& drawItems)noexcept{
+bool RendererMaterialSystem::prepareMaterialPassResourceBindings(const MaterialPassDrawItemsView& drawItems)noexcept{
     return prepareMeshMaterialPassResourceBindings(drawItems.meshDrawItems) && prepareIndexedMaterialPassResourceBindings(drawItems.indexedDrawItems) && prepareComputeMaterialPassResourceBindings(drawItems.computeDrawItems);
 }
 
@@ -191,13 +191,13 @@ bool RendererMaterialSystem::reserveMaterialTypedBufferCapacity(const usize byte
     return true;
 }
 
-bool RendererMaterialSystem::prepareMaterialPassDrawBuffers(const InstanceGpuDataVector& instanceData, const MaterialTypedByteDataVector& materialTypedBytes){
+bool RendererMaterialSystem::prepareMaterialPassDrawBuffers(const Span<const InstanceGpuData> instanceData, const Span<const u8> materialTypedBytes){
     const usize uploadBytes = ECSRenderDetail::ResolveMaterialTypedUploadByteCount(materialTypedBytes);
 
     return reserveInstanceBufferCapacity(instanceData.size()) && reserveMaterialTypedBufferCapacity(uploadBytes);
 }
 
-bool RendererMaterialSystem::materialPassDrawBuffersReady(const InstanceGpuDataVector& instanceData, const MaterialTypedByteDataVector& materialTypedBytes)const noexcept{
+bool RendererMaterialSystem::materialPassDrawBuffersReady(const Span<const InstanceGpuData> instanceData, const Span<const u8> materialTypedBytes)const noexcept{
     const usize uploadBytes = ECSRenderDetail::ResolveMaterialTypedUploadByteCount(materialTypedBytes);
 
     return materialPassDrawBuffersReady(instanceData.size(), uploadBytes);
@@ -222,7 +222,7 @@ ECSRenderDetail::MaterialPassBufferSnapshot RendererMaterialSystem::materialPass
     };
 }
 
-void RendererMaterialSystem::prepareMaterialPassInstanceUploadData(InstanceGpuDataVector& instanceData, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources)noexcept{
+void RendererMaterialSystem::prepareMaterialPassInstanceUploadData(const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources, const Span<InstanceGpuData> instanceData)noexcept{
     // Slot 6 carries CSG context for every raster instance; avoids a second local descriptor.
     const auto csgContextHeapSlot = csgResources.findClipContextHeapSlot();
     for(InstanceGpuData& instance : instanceData)

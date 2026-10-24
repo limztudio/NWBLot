@@ -42,13 +42,12 @@ inline void EnableCrossFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& s
 
 // Shared phase descriptors retain one ordered recording group while the compiler selects its compatible physical queue.
 void MakeSharedComputeEmulationPhaseTaskDesc(
-    Core::GpuTaskDesc& desc,
     const Name identity,
     const AStringView markerLabel,
     const Core::GpuTaskId& dependency,
-    const Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& resourceUses,
-    const Core::GpuTaskResourceSetUse* const resourceSetUses,
-    const usize resourceSetUseCount
+    Span<const Core::GpuTaskResourceUse> resourceUses,
+    Span<const Core::GpuTaskResourceSetUse> resourceSetUses,
+    Core::GpuTaskDesc& desc
 )noexcept;
 
 

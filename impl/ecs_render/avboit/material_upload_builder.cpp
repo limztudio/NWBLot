@@ -105,10 +105,10 @@ struct UploadIdentities{
 
 [[nodiscard]] Expected<bool> AvboitMaterialUploadBuilder::declare(
     const AvboitMaterialUploadInputs& inputs,
-    const InstanceGpuDataVector& instanceData,
-    const MaterialTypedByteDataVector& materialTypedBytes,
-    const CsgFrameGpuData& csgFrameData,
-    bool hasCsgDrawItems,
+    const Span<const InstanceGpuData> instanceData,
+    const Span<const u8> materialTypedBytes,
+    const CsgFrameGpuDataView& csgFrameData,
+    const bool hasCsgDrawItems,
     Core::GpuTaskId& inOutUploadTask
 ){
     if(!inOutUploadTask.valid())

@@ -29,10 +29,9 @@ namespace SampledTextureImportFailure{
 
 // The result preserves texture order; imports already published to the graph remain on failure.
 [[nodiscard]] Expected<Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena>, SampledTextureImportFailure::Enum> ImportMaterialSampledTextureResources(
-    Core::GpuTaskGraph& graph,
-    const Core::TextureHandle* textures,
-    usize textureCount,
+    Span<const Core::TextureHandle> textures,
     AStringView markerLabel,
+    Core::GpuTaskGraph& graph,
     Core::Alloc::ScratchArena& scratchArena
 );
 

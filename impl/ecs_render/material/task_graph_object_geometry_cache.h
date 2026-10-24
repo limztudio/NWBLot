@@ -42,8 +42,7 @@ public:
 
 public:
     [[nodiscard]] bool prepare(
-        const MaterialPassDrawItem* draws,
-        usize drawCount,
+        Span<const MaterialPassDrawItem> draws,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         const DeferredFrameTargets& targets,
         Core::Alloc::ScratchArena& scratchArena,

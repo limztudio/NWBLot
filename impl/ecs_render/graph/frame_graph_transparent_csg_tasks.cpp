@@ -112,7 +112,8 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
     }
     const Core::GpuTaskResourceSetUse intervalMaterialGeometrySetUse{ .resourceSet = intervalMaterialGeometrySet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
     const Core::GpuTaskResourceSetUse intervalMaterialSampledTextureSetUse{ .resourceSet = intervalMaterialSampledTextureSet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
-    Core::GpuTaskResourceSetUse transparentCsgMaterialResourceSetUses[2u] = {};
+    constexpr usize s_TransparentCsgMaterialResourceSetUseCapacity = 2u;
+    Core::GpuTaskResourceSetUse transparentCsgMaterialResourceSetUses[s_TransparentCsgMaterialResourceSetUseCapacity] = {};
     usize transparentCsgMaterialResourceSetUseCount = 0u;
     if(avboitPrePayload.transparentCsgMaterialGeometryStatesGraphOwned){
         transparentCsgMaterialResourceSetUses[transparentCsgMaterialResourceSetUseCount++] = intervalMaterialGeometrySetUse;

@@ -12,6 +12,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr f64 s_DoubleExp10Base = 10.0;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorExp2(SIMDVectorSingle value)noexcept{
 #if defined(NWB_HAS_SSE2)
     __m128i iTrunc = _mm_cvttps_epi32(value);
@@ -27,11 +33,11 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorExp2(SIMDVectorSingle value)noex
     poly = VectorMultiplyAdd(poly, y, s_SIMDOne);
 
     __m128i biased = _mm_add_epi32(iTrunc, s_SIMDExponentBias);
-    biased = _mm_slli_epi32(biased, 23);
+    biased = _mm_slli_epi32(biased, static_cast<i32>(s_F32MantissaBitCount));
     SIMDVectorSingle result0 = VectorDivide(_mm_castsi128_ps(biased), poly);
 
     biased = _mm_add_epi32(iTrunc, s_SIMD253);
-    biased = _mm_slli_epi32(biased, 23);
+    biased = _mm_slli_epi32(biased, static_cast<i32>(s_F32MantissaBitCount));
     SIMDVectorSingle result1 = VectorDivide(_mm_castsi128_ps(biased), poly);
     result1 = VectorMultiply(s_SIMDMinNormal, result1);
 
@@ -79,11 +85,11 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorExp2(SIMDVectorSingle value)noex
     poly = vmlaq_f32(s_SIMDOne, poly, y);
 
     int32x4_t biased = vaddq_s32(iTrunc, s_SIMDExponentBias);
-    biased = vshlq_n_s32(biased, 23);
+    biased = vshlq_n_s32(biased, static_cast<i32>(s_F32MantissaBitCount));
     float32x4_t result0 = VectorDivide(vreinterpretq_f32_s32(biased), poly);
 
     biased = vaddq_s32(iTrunc, s_SIMD253);
-    biased = vshlq_n_s32(biased, 23);
+    biased = vshlq_n_s32(biased, static_cast<i32>(s_F32MantissaBitCount));
     float32x4_t result1 = VectorDivide(vreinterpretq_f32_s32(biased), poly);
     result1 = vmulq_f32(s_SIMDMinNormal, result1);
 
@@ -121,7 +127,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorExp10(SIMDVectorSingle value)noe
 }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleExp10(SIMDVectorDouble value)noexcept{
-    return VectorDoubleSet(Pow(10.0, value[0]), Pow(10.0, value[1]), Pow(10.0, value[2]), Pow(10.0, value[3]));
+    return VectorDoubleSet(Pow(s_DoubleExp10Base, value[0]), Pow(s_DoubleExp10Base, value[1]), Pow(s_DoubleExp10Base, value[2]), Pow(s_DoubleExp10Base, value[3]));
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorExpE(SIMDVectorSingle value)noexcept{
@@ -146,7 +152,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorLog2(SIMDVectorSingle value)noex
     __m128i trailing = _mm_and_si128(_mm_castps_si128(value), s_SIMDQNaNTest);
     const __m128i isExponentZero = _mm_cmpeq_epi32(s_SIMDZero, rawBiased);
 
-    const __m128i biased = _mm_srli_epi32(rawBiased, 23);
+    const __m128i biased = _mm_srli_epi32(rawBiased, static_cast<i32>(s_F32MantissaBitCount));
     const __m128i exponentNormal = _mm_sub_epi32(biased, s_SIMDExponentBias);
     const __m128i trailingNormal = trailing;
 
@@ -212,7 +218,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorLog2(SIMDVectorSingle value)noex
     const int32x4_t trailing = vandq_s32(vreinterpretq_s32_f32(value), s_SIMDQNaNTest);
     const uint32x4_t isExponentZero = vceqq_s32(vreinterpretq_s32_f32(s_SIMDZero), rawBiased);
 
-    const int32x4_t biased = vshrq_n_s32(rawBiased, 23);
+    const int32x4_t biased = vshrq_n_s32(rawBiased, static_cast<i32>(s_F32MantissaBitCount));
     const int32x4_t exponentNormal = vsubq_s32(biased, s_SIMDExponentBias);
     const int32x4_t trailingNormal = trailing;
 

@@ -51,9 +51,9 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL RoundFixed(SIMDVectorSingle value)noex
     }
     else{
         // Integer masks preserve fixed nearest/truncate rounding and signed zero without raising precision exceptions.
-        const __m128i isSmall = _mm_cmplt_epi32(magnitude, _mm_set1_epi32(0x3F800000));
-        const __m128i exponent = _mm_srli_epi32(magnitude, 23);
-        const __m128i shift = _mm_sub_epi32(_mm_set1_epi32(150), exponent);
+        const __m128i isSmall = _mm_cmplt_epi32(magnitude, _mm_set1_epi32(static_cast<i32>(s_F32OneBits)));
+        const __m128i exponent = _mm_srli_epi32(magnitude, static_cast<i32>(s_F32MantissaBitCount));
+        const __m128i shift = _mm_sub_epi32(_mm_set1_epi32(static_cast<i32>(s_F32IntegerExponent)), exponent);
         const __m128i mask = SIMDVectorDetail::MultiSllEpi32(_mm_set1_epi32(-1), shift);
         result = _mm_andnot_si128(isSmall, _mm_and_si128(magnitude, mask));
 
@@ -63,7 +63,7 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL RoundFixed(SIMDVectorSingle value)noex
             const __m128i half = _mm_srli_epi32(unit, 1);
             const __m128i odd = _mm_cmpgt_epi32(_mm_and_si128(result, unit), _mm_setzero_si128());
             const __m128i increment = _mm_or_si128(_mm_cmpgt_epi32(fraction, half), _mm_and_si128(_mm_cmpeq_epi32(fraction, half), odd));
-            const __m128i smallResult = _mm_and_si128(_mm_cmpgt_epi32(magnitude, _mm_set1_epi32(0x3F000000)), _mm_set1_epi32(0x3F800000));
+            const __m128i smallResult = _mm_and_si128(_mm_cmpgt_epi32(magnitude, _mm_set1_epi32(static_cast<i32>(s_F32HalfBits))), _mm_set1_epi32(static_cast<i32>(s_F32OneBits)));
             result = _mm_add_epi32(result, _mm_and_si128(increment, unit));
             result = _mm_or_si128(_mm_and_si128(isSmall, smallResult), _mm_andnot_si128(isSmall, result));
         }

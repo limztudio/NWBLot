@@ -40,7 +40,9 @@ namespace __hidden_task_graph_reflection{
 
 
 inline constexpr TStringView s_DisabledReflectionRoute = NWB_TEXT("disabled");
+inline constexpr TStringView s_HardwareReflectionResolveLogMessage = NWB_TEXT("Reflection resolve: hardware");
 inline constexpr AStringView s_HardwareResolveTaskLabel = "Reflection Hardware Resolve";
+inline constexpr usize s_SliceIndexTextBufferSize = 11u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -238,7 +240,7 @@ public:
             payload.raytracingSystem.confirmRayTraceContextReadSubmission(token);
         if(payload.stage == DispatchStage::Hardware && hardware){
             if(payload.hardwareDispatchLogged && !*payload.hardwareDispatchLogged){
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Reflection resolve: hardware"));
+                NWB_LOGGER_ESSENTIAL_INFO(s_HardwareReflectionResolveLogMessage);
                 *payload.hardwareDispatchLogged = true;
             }
         }
@@ -316,7 +318,7 @@ public:
             payload.dispatch->timing->discard();
         }
         if(payload.hardwareDispatchLogged && !*payload.hardwareDispatchLogged){
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Reflection resolve: hardware"));
+            NWB_LOGGER_ESSENTIAL_INFO(s_HardwareReflectionResolveLogMessage);
             *payload.hardwareDispatchLogged = true;
         }
     }
@@ -395,7 +397,7 @@ public:
 
 
 Expected<Name, ErrorCode> ReflectionCsgHardwareSliceIdentity(const u32 slice){
-    char suffix[11];
+    char suffix[__hidden_task_graph_reflection::s_SliceIndexTextBufferSize];
     const auto index = FormatI64(static_cast<i64>(slice), suffix);
     if(!index)
         return MakeUnexpected(index.error());

@@ -3,9 +3,20 @@
 
 
 // A removed green stripe exposes false GI hits; retained red open triangles must still reflect and block rays.
+static const float NWB_SMOKE_GI_CSG_MIXED_OPEN_PLANE_Z_OFFSET = 1.0;
+static const float NWB_SMOKE_GI_CSG_MIXED_OPEN_PLANE_Z_TOLERANCE = 0.015;
+static const float NWB_SMOKE_GI_CSG_MIXED_NORMAL_Z_MIN = 0.9;
+static const float NWB_SMOKE_GI_CSG_MIXED_STRIPE_HALF_WIDTH = 0.24;
+static const half3 NWB_SMOKE_GI_CSG_MIXED_REMOVED_STRIPE_COLOR = half3(0.02h, 1.0h, 0.02h);
+static const half3 NWB_SMOKE_GI_CSG_MIXED_RETAINED_COLOR = half3(1.0h, 0.02h, 0.02h);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NwbMeshSurface nwbMaterialSurface(){
-    const bool openSurface = abs(inWorldPosition.z + 1.0) < 0.015 && abs(inNormal.z) > 0.9;
-    const half3 color = abs(inWorldPosition.x) < 0.24 ? half3(0.02h, 1.0h, 0.02h) : half3(1.0h, 0.02h, 0.02h);
+    const bool openSurface = abs(inWorldPosition.z + NWB_SMOKE_GI_CSG_MIXED_OPEN_PLANE_Z_OFFSET) < NWB_SMOKE_GI_CSG_MIXED_OPEN_PLANE_Z_TOLERANCE && abs(inNormal.z) > NWB_SMOKE_GI_CSG_MIXED_NORMAL_Z_MIN;
+    const half3 color = abs(inWorldPosition.x) < NWB_SMOKE_GI_CSG_MIXED_STRIPE_HALF_WIDTH ? NWB_SMOKE_GI_CSG_MIXED_REMOVED_STRIPE_COLOR : NWB_SMOKE_GI_CSG_MIXED_RETAINED_COLOR;
     return nwbMakeMeshSurface(openSurface ? color : half3(0.0h), inNormal);
 }
 

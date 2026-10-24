@@ -40,17 +40,21 @@ FIELDS = ("integer_bits", "float_bits", "i_bytes", "i_hash", "i_anchor", "i_care
 RECTANGLES = tuple(f"{field}_{part}" for field in ("integer", "float", "clipboard") for part in ("bounds", "content", "caret", "selection"))
 MARKER_PARTS = tuple(6 if index < 2 else 3 if index in (3, 10, 17) else 2 for index in range(len(FIELDS))) + (2,)
 MARKER_TOLERANCE = 5
+FNV32_OFFSET_BASIS = 2166136261
+FNV32_PRIME = 16777619
+UINT32_MASK = 0xFFFFFFFF
+UINT64_MASK = 0xFFFFFFFFFFFFFFFF
 
 
 def text_hash(text):
-    value = 2166136261
+    value = FNV32_OFFSET_BASIS
     for byte in text.encode(LIT_UTF_8):
-        value = ((value ^ byte) * 16777619) & 0xFFFFFFFF
+        value = ((value ^ byte) * FNV32_PRIME) & UINT32_MASK
     return value
 
 
 def integer_bits(value):
-    return value & 0xFFFFFFFFFFFFFFFF
+    return value & UINT64_MASK
 
 
 def float_bits(value):

@@ -55,7 +55,7 @@ NwbBvhNode nwbLightSpaceSceneRoot(){
             return scene;
         }
         const NwbMeshInstanceData transform = nwbHeapMeshInstances(nwbMeshFrameInstanceHeapSlot())[nwbLightSpaceMaterial(index).meshInstanceIndex];
-        for(uint corner = 0u; corner < 8u; ++corner){
+        for(uint corner = 0u; corner < NWB_LIGHT_SPACE_AABB_CORNER_COUNT; ++corner){
             const float3 local = float3((corner & 1u) != 0u ? root.aabbMax.x : root.aabbMin.x, (corner & 2u) != 0u ? root.aabbMax.y : root.aabbMin.y, (corner & 4u) != 0u ? root.aabbMax.z : root.aabbMin.z);
             const float3 world = nwbRotateVectorByQuaternion(local * transform.scale.xyz, transform.rotation) + transform.translation;
             if(!all(isfinite(world))){

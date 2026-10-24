@@ -28,7 +28,9 @@ namespace MaterialCookDetail{
 
 static constexpr AStringView s_DeferredBxdfFunctionMacro = "NWB_DEFERRED_BXDF_FUNCTION";
 static constexpr AStringView s_DeferredBxdfModelPrefix = "nwbDeferredBxdfModel";
+static constexpr AStringView s_DeferredBxdfIncludeSubDir = "deferred_modules";
 static constexpr AStringView s_DeferredBxdfModuleSubPath = "deferred/generated/bxdf_dispatch.slangi";
+static constexpr AStringView s_DeferredBxdfUnknownFallbackSource = "    default: return half3(1.0h, 0.0h, 1.0h); // no engine default BXDF: an unknown id shows magenta\n";
 static constexpr AStringView s_GeneratedUndefBlockEnd = "\n\n";
 static constexpr AStringView s_GeneratedSwitchCaseLabel = "    case ";
 static constexpr AStringView s_GeneratedSwitchCaseReturn = "u: return ";
@@ -110,7 +112,7 @@ bool AssignMaterialShadingModelIdsImpl(CookVector<MaterialCookEntry>& materialEn
 
 
 static Path BuildDeferredBxdfIncludeRoot(const Path& cacheDirectory, const AStringView configurationSafeName){
-    return cacheDirectory / configurationSafeName / "deferred_modules";
+    return cacheDirectory / configurationSafeName / s_DeferredBxdfIncludeSubDir;
 }
 
 
@@ -189,7 +191,7 @@ Expected<Path> EmitDeferredBxdfDispatchModuleImpl(const Path& cacheDirectory, co
         source += idView;
         source += "(surface, pixel);\n";
     }
-    source += "    default: return half3(1.0h, 0.0h, 1.0h); // no engine default BXDF: an unknown id shows magenta\n";
+    source += s_DeferredBxdfUnknownFallbackSource;
     source += s_GeneratedSwitchEnd;
     source += s_GeneratedDispatchEnd;
 
@@ -216,15 +218,16 @@ static constexpr AStringView s_ShadowSurfaceModelPrefix = "nwbShadowSurfaceModel
 // Per-interface Slang namespace that isolates each material `.bind` file-scope symbol in the dispatch module (the one TU that concatenates multiple `.bind` files).
 // The project-owned `.surface` fragment stays global so its guarded helper includes retain their normal global ownership; generated aliases expose exactly that surface's bind API.
 static constexpr AStringView s_ShadowSurfaceBindNamespacePrefix = "nwbShadowBindModel";
-
+static constexpr AStringView s_ShadowSurfaceIncludeSubDir = "shadow_modules";
 static constexpr AStringView s_ShadowSurfaceModuleSubPath = "shadow/generated/surface_dispatch.slangi";
+static constexpr AStringView s_ShadowSurfaceUnknownFallbackSource = "    default: return nwbMakeMeshSurface(half3(0.5h, 0.5h, 0.5h), hit.worldNormal, half(0.0), half(0.0));\n";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 static Path BuildShadowSurfaceIncludeRoot(const Path& cacheDirectory, const AStringView configurationSafeName){
-    return cacheDirectory / configurationSafeName / "shadow_modules";
+    return cacheDirectory / configurationSafeName / s_ShadowSurfaceIncludeSubDir;
 }
 
 
@@ -534,7 +537,7 @@ Expected<Path> EmitShadowSurfaceDispatchModuleImpl(const Path& cacheDirectory, c
     }
     // Unknown id: no material surface is available (for example, an explicit opaque-stage material).
     // Shadow consumes only the neutral optical fields; GI may consume baseColor, where the fixed mid-grey is an explicit no-surface fallback rather than an inferred project-material albedo.
-    source += "    default: return nwbMakeMeshSurface(half3(0.5h, 0.5h, 0.5h), hit.worldNormal, half(0.0), half(0.0));\n";
+    source += s_ShadowSurfaceUnknownFallbackSource;
     source += s_GeneratedSwitchEnd;
     source += s_GeneratedDispatchEnd;
 

@@ -15,7 +15,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_UI_INVALID_HEAP_SLOT 0xffffffffu
 #define NWB_UI_PUSH_CONSTANTS_BYTE_SIZE 40u
 #define NWB_UI_PUSH_CONSTANTS_SCALE_BYTE_OFFSET 0u
 #define NWB_UI_PUSH_CONSTANTS_TRANSLATE_BYTE_OFFSET 8u

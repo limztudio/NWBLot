@@ -44,6 +44,12 @@ COUNTS = {"reference": (5, 6), "retained": (5, 6), "clipped_reference": (4, 5), 
 LENGTHS = {"reference": (2., 1.2), "retained": (2., 1.2), "clipped_reference": (1., 1.6), "clipped": (1., 1.6), "boundary64": (64. / 63., 1.2), "terminal65": (None, 1.2)}
 IOR = 1.5
 REGIONS = (("first_receiver", -1.2, 0.), ("six_sheet_control", 1.2, 0.), ("clear_receiver", 0., 1.2))
+SRGB_CHANNEL_MAX = 255.0
+SRGB_LINEAR_SLOPE = 12.92
+SRGB_LINEAR_CUTOFF = 0.0031308
+SRGB_GAMMA_SCALE = 1.055
+SRGB_GAMMA_OFFSET = 0.055
+SRGB_GAMMA_EXPONENT = 2.4
 
 
 def expected_open_rgb(length, events):
@@ -51,7 +57,7 @@ def expected_open_rgb(length, events):
         return (0., 0., 0.)
     interface_transmission = (1. - ((IOR - 1.) / (IOR + 1.)) ** 2) ** events
     linear = [channel ** length * interface_transmission for channel in TRANSMISSION]
-    return tuple(255. * (12.92 * value if value <= 0.0031308 else 1.055 * value ** (1. / 2.4) - 0.055) for value in linear)
+    return tuple(SRGB_CHANNEL_MAX * (SRGB_LINEAR_SLOPE * value if value <= SRGB_LINEAR_CUTOFF else SRGB_GAMMA_SCALE * value ** (1. / SRGB_GAMMA_EXPONENT) - SRGB_GAMMA_OFFSET) for value in linear)
 
 
 def validate_runtime(log_text, case, route, frames, warning_policy=LIT_ENABLED):

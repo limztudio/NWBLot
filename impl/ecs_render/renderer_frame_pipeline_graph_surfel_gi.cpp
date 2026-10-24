@@ -84,7 +84,8 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     const bool hasSurfelWork = m_raytracingSystem.hasSurfelWork();
     const bool traceGeometryStatesGraphOwned = traceGeometrySet.valid();
     const RendererFramePipelineDetail::TraceResourceSetUses traceResourceSets = RendererFramePipelineDetail::MakeTraceResourceSetUses(traceGeometrySet, traceMaterialSampledTextureSet);
-    Core::GpuTaskResourceSetUse traceResourceSetUses[2u] = {};
+    constexpr usize s_TraceResourceSetUseCapacity = 2u;
+    Core::GpuTaskResourceSetUse traceResourceSetUses[s_TraceResourceSetUseCapacity] = {};
     usize traceResourceSetUseCount = 0u;
     for(usize traceSetIndex = 0u; traceSetIndex < traceResourceSets.useCount; ++traceSetIndex)
         traceResourceSetUses[traceResourceSetUseCount++] = traceResourceSets.uses[traceSetIndex];
@@ -92,8 +93,9 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     const Core::GpuTaskExternalStateSource surfelGiComputeStateSource{ .states = m_surfelGiComputePersistentState.source(), };
     const Core::GpuTaskExternalStateSource surfelGiCounterStateSource{ .states = m_surfelGiCounterPersistentState.source(), };
     const Core::GpuTaskExternalStateSource surfelIrradianceReturnStateSource{ .states = m_surfelIrradianceReturnState.source(), .applicableConsumerQueueClass = Core::CommandQueue::Compute, };
+    constexpr usize s_StateSourceCapacity = 3u;
     struct SurfelGiTaskStateSourceSet{
-        Core::GpuTaskExternalStateSource values[3u] = {};
+        Core::GpuTaskExternalStateSource values[s_StateSourceCapacity] = {};
         usize count = 0u;
     };
     const auto makeSurfelGiTaskStateSources = [&](const bool includeCompute, const bool includeCounter, const bool includeIrradianceReturn)noexcept{

@@ -60,22 +60,34 @@ class PopupToolsNativeInput(ComboNativeInput):
         cursor_known = bool(self.backend.user32.GetCursorPos(ctypes.byref(position)))
         return {"cursor_screen": [position.x, position.y] if cursor_known else None, "foreground_is_fixture": self.backend.user32.GetForegroundWindow() == self.handle}
 
+    WM_KEYDOWN_MSG = 0x0100
+    WM_KEYUP_MSG = 0x0101
+    VK_APPS_KEY = 0x5D
+    KEY_PREVIOUS_STATE_BIT = 30
+    KEY_TRANSITION_STATE_BIT = 31
+    WM_RBUTTONDOWN_MSG = 0x0204
+    WM_RBUTTONUP_MSG = 0x0205
+    MK_RBUTTON_FLAG = 2
+    WIN32_HIWORD_SHIFT = 16
+    X11_BUTTON3_MASK = 1024
+    X11_RIGHT_BUTTON = 3
+
     def key(self, name, down, *, repeat=False, shift=False, control=False):
         if self.windows and name == "Menu":
-            flags = 1 | ((1 << 30) if repeat or not down else 0) | ((1 << 31) if not down else 0)
-            self._post(0x0100 if down else 0x0101, 0x5D, flags)
+            flags = 1 | ((1 << self.KEY_PREVIOUS_STATE_BIT) if repeat or not down else 0) | ((1 << self.KEY_TRANSITION_STATE_BIT) if not down else 0)
+            self._post(self.WM_KEYDOWN_MSG if down else self.WM_KEYUP_MSG, self.VK_APPS_KEY, flags)
             return
         super().key(name, down, repeat=repeat, shift=shift, control=control)
 
     def right_button(self, down, x, y):
         self.pointer(x, y)
         if self.windows:
-            self._post(0x0204 if down else 0x0205, 2 if down else 0, ((int(y) & WIN32_WORD_MASK) << 16) | (int(x) & WIN32_WORD_MASK))
+            self._post(self.WM_RBUTTONDOWN_MSG if down else self.WM_RBUTTONUP_MSG, self.MK_RBUTTON_FLAG if down else 0, ((int(y) & WIN32_WORD_MASK) << self.WIN32_HIWORD_SHIFT) | (int(x) & WIN32_WORD_MASK))
         else:
             event = LinuxXEvent()
             event.xbutton.type = self.backend.BUTTON_PRESS if down else self.backend.BUTTON_RELEASE
-            self.backend._fill_input_event_prefix(event.xbutton, self.handle, int(x), int(y), state=0 if down else 1024)
-            event.xbutton.button = 3
+            self.backend._fill_input_event_prefix(event.xbutton, self.handle, int(x), int(y), state=0 if down else self.X11_BUTTON3_MASK)
+            event.xbutton.button = self.X11_RIGHT_BUTTON
             mask = self.backend.BUTTON_PRESS_MASK if down else self.backend.BUTTON_RELEASE_MASK
             if not self.backend.x11.XSendEvent(self.backend.display, self.handle, False, mask, ctypes.byref(event)):
                 raise SmokeFailure("failed to send the X11 secondary pointer event")

@@ -72,6 +72,9 @@ def standalone_log_pattern(executable):
     return f"{executable.resolve().stem}_*.log"
 
 
+LOG_TAIL_CHAR_LIMIT = 4000
+
+
 def wait_for_log_message(directory, baseline, pattern, needle, timeout_seconds):
     deadline = time.monotonic() + timeout_seconds
     last_text = ""
@@ -80,7 +83,7 @@ def wait_for_log_message(directory, baseline, pattern, needle, timeout_seconds):
         if needle in text:
             return
         if text:
-            last_text = text[-4000:]
+            last_text = text[-LOG_TAIL_CHAR_LIMIT:]
         time.sleep(LIT_LOG_POLL_SECONDS)
 
     raise SmokeFailure(f"timed out waiting for log message '{needle}'\n{last_text}")

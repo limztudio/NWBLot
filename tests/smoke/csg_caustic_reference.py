@@ -16,11 +16,17 @@ LIT_LINEAR_IRRADIANCE = "linear_irradiance"
 TRANSMISSION = (0.25, 0.5, 0.75)
 IOR = 2.0
 REGIONS = (("split", -1.3, 0.0), ("control", 1.3, 0.0))
+SRGB_CHANNEL_MAX = 255.0
+SRGB_LINEAR_SLOPE = 12.92
+SRGB_ENCODED_LINEAR_CUTOFF = 0.04045
+SRGB_GAMMA_SCALE = 1.055
+SRGB_GAMMA_OFFSET = 0.055
+SRGB_GAMMA_EXPONENT = 2.4
 
 
 def decode_srgb(value):
-    encoded = value / 255.0
-    return encoded / 12.92 if encoded <= 0.04045 else ((encoded + 0.055) / 1.055) ** 2.4
+    encoded = value / SRGB_CHANNEL_MAX
+    return encoded / SRGB_LINEAR_SLOPE if encoded <= SRGB_ENCODED_LINEAR_CUTOFF else ((encoded + SRGB_GAMMA_OFFSET) / SRGB_GAMMA_SCALE) ** SRGB_GAMMA_EXPONENT
 
 
 def expected_split_ratio():

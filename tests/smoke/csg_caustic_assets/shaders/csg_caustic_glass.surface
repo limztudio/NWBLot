@@ -2,9 +2,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static const half NWB_SMOKE_CSG_CAUSTIC_GLASS_IOR = 2.0h;
+static const half3 NWB_SMOKE_CSG_CAUSTIC_GLASS_ABSORPTION_TINT = half3(0.25h, 0.5h, 0.75h);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NwbMeshSurface nwbMaterialSurface(){
     // Parallel slab boundaries preserve photon direction while testing interface loss and retained thickness.
-    return nwbMakeGlassSurface(half3(1.0h), inNormal, half(2.0h), half3(0.25h, 0.5h, 0.75h), half(1.0h));
+    return nwbMakeGlassSurface(half3(1.0h), inNormal, NWB_SMOKE_CSG_CAUSTIC_GLASS_IOR, NWB_SMOKE_CSG_CAUSTIC_GLASS_ABSORPTION_TINT, half(1.0h));
 }
 
 

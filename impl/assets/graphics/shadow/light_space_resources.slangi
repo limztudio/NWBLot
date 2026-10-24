@@ -51,7 +51,7 @@ struct NwbLightSpacePushConstants{
 [[vk::push_constant]] ConstantBuffer<NwbLightSpacePushConstants> g_NwbLightSpacePush;
 
 struct NwbLightSpaceView{
-    float4 worldToClipRows[4];
+    float4 worldToClipRows[NWB_LIGHT_SPACE_VIEW_ROW_COUNT];
     float4 originOrDirection;
     float4 depthRange;
     uint4 map;
@@ -73,7 +73,7 @@ struct NwbLightSpaceEvent{
 NwbLightSpaceView nwbLightSpaceLoadView(const uint index){
     const uint base = index * NWB_LIGHT_SPACE_VIEW_BYTES;
     NwbLightSpaceView view;
-    for(uint row = 0u; row < 4u; ++row)
+    for(uint row = 0u; row < NWB_LIGHT_SPACE_VIEW_ROW_COUNT; ++row)
         view.worldToClipRows[row] = asfloat(nwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + row * NWB_LIGHT_SPACE_VIEW_ROW_BYTES));
     view.originOrDirection = asfloat(nwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + NWB_LIGHT_SPACE_VIEW_ORIGIN_OFFSET));
     view.depthRange = asfloat(nwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + NWB_LIGHT_SPACE_VIEW_DEPTH_RANGE_OFFSET));

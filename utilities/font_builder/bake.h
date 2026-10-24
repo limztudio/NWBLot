@@ -29,13 +29,15 @@ inline constexpr AStringView s_RasterModeOutlineText = "outline";
 inline constexpr u32 s_GlyphGuardExtent = 2u;
 
 
+inline constexpr u32 s_DefaultBakeExtent = 1024u;
+
 struct BakeOptions{
     Path source;
     Path output;
-    u32 ppem = 64u;
-    u32 spread = 8u;
-    u32 extent = 1024u;
-    u32 maxGroups = 8u;
+    u32 ppem = Impl::s_FontAtlasDefaultBakePpem;
+    u32 spread = Impl::s_FontAtlasDefaultSpreadPixels;
+    u32 extent = s_DefaultBakeExtent;
+    u32 maxGroups = Impl::s_FontAtlasMaxGroupCount;
     bool outline = false;
     bool overwrite = false;
 

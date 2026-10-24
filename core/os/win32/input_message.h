@@ -17,9 +17,11 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr usize s_Win32MessageRepeatCountMask = 0xffffu;
+
 // Synthetic messages used by clients may omit the repeat word; they still represent one input.
 [[nodiscard]] constexpr u32 Win32MessageRepeatCount(const isize flags)noexcept{
-    const u32 count = static_cast<u32>(static_cast<usize>(flags) & 0xffffu);
+    const u32 count = static_cast<u32>(static_cast<usize>(flags) & s_Win32MessageRepeatCountMask);
     return count == 0u ? 1u : count;
 }
 

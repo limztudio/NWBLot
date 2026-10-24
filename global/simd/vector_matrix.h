@@ -83,12 +83,12 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixTransposeForTransform(const SIMDMatrix
 NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixTransposePackedRows(__m256 t0, __m256 t1)noexcept{
     __m256 temp0 = _mm256_unpacklo_ps(t0, t1);
     __m256 temp1 = _mm256_unpackhi_ps(t0, t1);
-    __m256 temp2 = _mm256_permute2f128_ps(temp0, temp1, 0x20);
-    __m256 temp3 = _mm256_permute2f128_ps(temp0, temp1, 0x31);
+    __m256 temp2 = _mm256_permute2f128_ps(temp0, temp1, s_SIMDAvxPermute2F128Low0Low1);
+    __m256 temp3 = _mm256_permute2f128_ps(temp0, temp1, s_SIMDAvxPermute2F128High0High1);
     temp0 = _mm256_unpacklo_ps(temp2, temp3);
     temp1 = _mm256_unpackhi_ps(temp2, temp3);
-    t0 = _mm256_permute2f128_ps(temp0, temp1, 0x20);
-    t1 = _mm256_permute2f128_ps(temp0, temp1, 0x31);
+    t0 = _mm256_permute2f128_ps(temp0, temp1, s_SIMDAvxPermute2F128Low0Low1);
+    t1 = _mm256_permute2f128_ps(temp0, temp1, s_SIMDAvxPermute2F128High0High1);
 
     SIMDMatrix result{};
     result.v[0] = _mm256_castps256_ps128(t0);
@@ -238,10 +238,10 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleTranspose4(SIMDVectorDoubl
     const __m256d odd01 = _mm256_unpackhi_pd(row0, row1);
     const __m256d even23 = _mm256_unpacklo_pd(row2, row3);
     const __m256d odd23 = _mm256_unpackhi_pd(row2, row3);
-    result.v[0] = BitCast<SIMDVectorDouble>(_mm256_permute2f128_pd(even01, even23, 0x20));
-    result.v[1] = BitCast<SIMDVectorDouble>(_mm256_permute2f128_pd(odd01, odd23, 0x20));
-    result.v[2] = BitCast<SIMDVectorDouble>(_mm256_permute2f128_pd(even01, even23, 0x31));
-    result.v[3] = BitCast<SIMDVectorDouble>(_mm256_permute2f128_pd(odd01, odd23, 0x31));
+    result.v[0] = BitCast<SIMDVectorDouble>(_mm256_permute2f128_pd(even01, even23, s_SIMDAvxPermute2F128Low0Low1));
+    result.v[1] = BitCast<SIMDVectorDouble>(_mm256_permute2f128_pd(odd01, odd23, s_SIMDAvxPermute2F128Low0Low1));
+    result.v[2] = BitCast<SIMDVectorDouble>(_mm256_permute2f128_pd(even01, even23, s_SIMDAvxPermute2F128High0High1));
+    result.v[3] = BitCast<SIMDVectorDouble>(_mm256_permute2f128_pd(odd01, odd23, s_SIMDAvxPermute2F128High0High1));
 #elif defined(NWB_HAS_SSE2)
     const __m128d low0 = GetLow(r0);
     const __m128d low1 = GetLow(r1);
@@ -291,12 +291,12 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble4TransformTransposed(SIMDV
     return FromPairs(resultLow, resultHigh);
 #elif defined(NWB_HAS_AVX)
     const __m256d lanes = BitCast<__m256d>(value);
-    const __m256d low = _mm256_permute2f128_pd(lanes, lanes, 0x00);
-    const __m256d high = _mm256_permute2f128_pd(lanes, lanes, 0x11);
-    const __m256d x = _mm256_permute_pd(low, 0x0);
-    const __m256d y = _mm256_permute_pd(low, 0xf);
-    const __m256d z = _mm256_permute_pd(high, 0x0);
-    const __m256d w = _mm256_permute_pd(high, 0xf);
+    const __m256d low = _mm256_permute2f128_pd(lanes, lanes, s_SIMDAvxPermute2F128LowLow);
+    const __m256d high = _mm256_permute2f128_pd(lanes, lanes, s_SIMDAvxPermute2F128HighHigh);
+    const __m256d x = _mm256_permute_pd(low, s_SIMDAvxPermutePdAllLow);
+    const __m256d y = _mm256_permute_pd(low, s_SIMDAvxPermutePdAllHigh);
+    const __m256d z = _mm256_permute_pd(high, s_SIMDAvxPermutePdAllLow);
+    const __m256d w = _mm256_permute_pd(high, s_SIMDAvxPermutePdAllHigh);
     __m256d result = _mm256_mul_pd(BitCast<__m256d>(transposedMatrix.v[0]), x);
     result = _mm256_add_pd(result, _mm256_mul_pd(BitCast<__m256d>(transposedMatrix.v[1]), y));
     result = _mm256_add_pd(result, _mm256_mul_pd(BitCast<__m256d>(transposedMatrix.v[2]), z));

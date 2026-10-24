@@ -66,7 +66,7 @@ inline constexpr usize s_MaxStageResourceUses = 8u;
         return MakeUnexpected(Failure{});
 
     const CausticResolveActivitySnapshot activity = m_raytracingSystem.causticResolveActivitySnapshot(inputs.targets);
-    Core::GpuGraphResourceId activityResources[2];
+    Core::GpuGraphResourceId activityResources[s_CausticResolveActivityBufferCount];
     if(activity.valid()){
         for(u32 index = 0u; index < LengthOf(activityResources); ++index){
             Core::GpuGraphResourceDesc desc = BufferResourceDesc(s_CausticResolveActivityBufferNames[index], "caustic resolve activity");
@@ -105,9 +105,9 @@ inline constexpr usize s_MaxStageResourceUses = 8u;
                 activityUses[activityUseCount++] = use;
             // Prepare publishes A; every wavelet alternates masks with its quantized color output.
             if(stageIndex > 0u)
-                activityUses[activityUseCount++] = ReadUse(activityResources[(stageIndex - 1u) % 2u], Core::ResourceStates::ShaderResource);
+                activityUses[activityUseCount++] = ReadUse(activityResources[(stageIndex - 1u) % s_CausticResolveActivityBufferCount], Core::ResourceStates::ShaderResource);
             if(stageIndex <= NWB_CAUSTIC_RESOLVE_PASS_COUNT)
-                activityUses[activityUseCount++] = WriteUse(activityResources[stageIndex % 2u], Core::ResourceStates::UnorderedAccess);
+                activityUses[activityUseCount++] = WriteUse(activityResources[stageIndex % s_CausticResolveActivityBufferCount], Core::ResourceStates::UnorderedAccess);
             stageDesc.setResourceUses(activityUses, activityUseCount);
         }
         if(!inputs.applyStateSourcesToPrepareOnly || stage.applyStateSources)

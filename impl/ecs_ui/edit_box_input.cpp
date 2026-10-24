@@ -208,7 +208,7 @@ bool UiEditBoxHost::character(const u32 unicode){
     event.kind = UiEditBoxEventKind::Character;
     event.owner = entry->owner;
     event.focusGeneration = entry->focusGeneration;
-    char bytes[4u];
+    char bytes[s_Utf8FourByteLength];
     usize count = 0u;
     if(unicode < s_Utf8OneByteLimit){
         bytes[0u] = static_cast<char>(unicode);

@@ -28,7 +28,10 @@ namespace __hidden_hardware_transparent_shadow{
 inline constexpr u32 s_GatherStage = 0u;
 inline constexpr u32 s_EvaluateStage = 1u;
 inline constexpr u32 s_OverflowStage = 2u;
+inline constexpr u32 s_CrossingsBufferIndex = 0u;
+inline constexpr u32 s_OverflowListBufferIndex = 1u;
 inline constexpr u32 s_OverflowArgsBufferIndex = 2u;
+inline constexpr usize s_ReceiverFactorByteOffset = 48u;
 
 struct PushConstants{
     u32 width;
@@ -47,7 +50,7 @@ struct PushConstants{
 };
 
 static_assert(sizeof(PushConstants) == NWB_HW_TRANSPARENT_PUSH_CONSTANT_BYTES);
-static_assert(offsetof(PushConstants, receiverFactor) == 48u);
+static_assert(offsetof(PushConstants, receiverFactor) == s_ReceiverFactorByteOffset);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -115,8 +118,8 @@ bool RendererRayTracingSystem::prepareHardwareTransparentShadowResources(Deferre
     if(pixels > state.m_pixelsCapacity){
         const u64 sizes[] = { pixels * NWB_HW_TRANSPARENT_WORDS_PER_RAY * sizeof(u32), pixels * sizeof(u32), NWB_HW_TRANSPARENT_OVERFLOW_ARGS_WORDS * sizeof(u32), };
         const Name names[] = { Name("hardware_shadow_crossings"), Name("hardware_shadow_overflow_list"), Name("hardware_shadow_overflow_args"), };
-        Core::BufferHandle buffers[3];
-        Core::GpuDescriptorHandle descriptors[3]{};
+        Core::BufferHandle buffers[HardwareTransparentShadowState::s_ScratchBufferCount];
+        Core::GpuDescriptorHandle descriptors[HardwareTransparentShadowState::s_ScratchBufferCount]{};
         Core::GpuDescriptorRetirementGuard retireUnpublished(heap, Span<const Core::GpuDescriptorHandle>(descriptors));
         for(u32 i = 0u; i < LengthOf(buffers); ++i){
             Core::BufferDesc desc;
@@ -148,12 +151,12 @@ bool RendererRayTracingSystem::prepareHardwareTransparentShadowResources(Deferre
         RayTracingDetail::RetireHeapHandle(heap, state.m_crossingsHeapHandle);
         RayTracingDetail::RetireHeapHandle(heap, state.m_overflowListHeapHandle);
         RayTracingDetail::RetireHeapHandle(heap, state.m_overflowArgsHeapHandle);
-        state.m_crossingsBuffer = Move(buffers[0]);
-        state.m_overflowListBuffer = Move(buffers[1]);
-        state.m_overflowArgsBuffer = Move(buffers[2]);
-        state.m_crossingsHeapHandle = descriptors[0];
-        state.m_overflowListHeapHandle = descriptors[1];
-        state.m_overflowArgsHeapHandle = descriptors[2];
+        state.m_crossingsBuffer = Move(buffers[__hidden_hardware_transparent_shadow::s_CrossingsBufferIndex]);
+        state.m_overflowListBuffer = Move(buffers[__hidden_hardware_transparent_shadow::s_OverflowListBufferIndex]);
+        state.m_overflowArgsBuffer = Move(buffers[__hidden_hardware_transparent_shadow::s_OverflowArgsBufferIndex]);
+        state.m_crossingsHeapHandle = descriptors[__hidden_hardware_transparent_shadow::s_CrossingsBufferIndex];
+        state.m_overflowListHeapHandle = descriptors[__hidden_hardware_transparent_shadow::s_OverflowListBufferIndex];
+        state.m_overflowArgsHeapHandle = descriptors[__hidden_hardware_transparent_shadow::s_OverflowArgsBufferIndex];
         for(auto& handle : descriptors)
             handle = Core::GpuDescriptorHandle::Invalid();
         state.m_pixelsCapacity = static_cast<u32>(pixels);

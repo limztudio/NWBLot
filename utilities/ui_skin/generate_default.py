@@ -22,7 +22,10 @@ GUTTER = 4
 ATLAS_COLUMNS = ATLAS_SIZE // TILE_SIZE
 RGB_CHANNEL_COUNT = 3
 RGBA_CHANNEL_COUNT = 4
+ALPHA_CHANNEL_INDEX = 3
 CHANNEL_MAX = 255
+HALF_DIVISOR = 2
+SUBPIXEL_CENTER_OFFSET = 0.5
 SAMPLES_PER_AXIS = 4
 SAMPLE_COUNT = SAMPLES_PER_AXIS * SAMPLES_PER_AXIS
 CORNER_RADIUS = 5.0
@@ -110,7 +113,7 @@ COLOR_ROLES = [{FIELD_NAME: "text.normal", FIELD_RGBA: [0.92, 0.94, 0.98, 1.0]},
 
 
 def rounded_distance(x: float, y: float, radius: float = CORNER_RADIUS) -> float:
-    half = REGION_SIZE / 2
+    half = REGION_SIZE / HALF_DIVISOR
     dx = abs(x - half) - (half - radius)
     dy = abs(y - half) - (half - radius)
     return math.hypot(max(dx, 0), max(dy, 0)) + min(max(dx, dy), 0) - radius
@@ -158,7 +161,7 @@ def generate(directory: Path) -> None:
                 accum = [0, 0, 0, 0]
                 for sy in range(SAMPLES_PER_AXIS):
                     for sx in range(SAMPLES_PER_AXIS):
-                        px, py = x + (sx + 0.5) / SAMPLES_PER_AXIS, y + (sy + 0.5) / SAMPLES_PER_AXIS
+                        px, py = x + (sx + SUBPIXEL_CENTER_OFFSET) / SAMPLES_PER_AXIS, y + (sy + SUBPIXEL_CENTER_OFFSET) / SAMPLES_PER_AXIS
                         if kind:
                             color = ICON_TINT if kind != KIND_WHITE else ICON_WHITE_TINT
                             visible = icon_coverage(kind, px, py)
@@ -169,12 +172,12 @@ def generate(directory: Path) -> None:
                         if visible:
                             for channel in range(RGB_CHANNEL_COUNT):
                                 accum[channel] += color[channel]
-                            accum[3] += CHANNEL_MAX
+                            accum[ALPHA_CHANNEL_INDEX] += CHANNEL_MAX
                 offset = ((origin_y + y) * ATLAS_SIZE + origin_x + x) * RGBA_CHANNEL_COUNT
-                if accum[3]:
+                if accum[ALPHA_CHANNEL_INDEX]:
                     # Keep straight RGB at antialiased edges; alpha alone records coverage.
-                    samples = accum[3] / CHANNEL_MAX
-                    pixels[offset:offset + RGBA_CHANNEL_COUNT] = bytes([round(accum[c] / samples) for c in range(RGB_CHANNEL_COUNT)] + [round(accum[3] / SAMPLE_COUNT)])
+                    samples = accum[ALPHA_CHANNEL_INDEX] / CHANNEL_MAX
+                    pixels[offset:offset + RGBA_CHANNEL_COUNT] = bytes([round(accum[c] / samples) for c in range(RGB_CHANNEL_COUNT)] + [round(accum[ALPHA_CHANNEL_INDEX] / SAMPLE_COUNT)])
         region = {FIELD_NAME: name, FIELD_RECT: [origin_x, origin_y, REGION_SIZE, REGION_SIZE]}
         if kind is None:
             region.update({FIELD_DRAW_MODE: DRAW_MODE_NINE_SLICE, FIELD_SLICE: [NINE_SLICE_BORDER, NINE_SLICE_BORDER, NINE_SLICE_BORDER, NINE_SLICE_BORDER], FIELD_PADDING: [CONTROL_PADDING, CONTROL_PADDING, CONTROL_PADDING, CONTROL_PADDING], FIELD_MINIMUM_SIZE: [MINIMUM_REGION_SIZE, MINIMUM_REGION_SIZE]})

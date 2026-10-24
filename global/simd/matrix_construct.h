@@ -27,7 +27,7 @@ static const SIMDVectorConstU s_SIMDMatrixSelect0001 = { { { s_SELECT_0, s_SELEC
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL PlaneNormalize(SIMDVectorSingle plane)noexcept{
 #if defined(NWB_HAS_SSE4)
-    SIMDVectorSingle lengthSq = _mm_dp_ps(plane, plane, 0x7F);
+    SIMDVectorSingle lengthSq = _mm_dp_ps(plane, plane, s_SIMDSse4Dot3BroadcastMask);
     const SIMDVectorSingle length = _mm_sqrt_ps(lengthSq);
     lengthSq = _mm_cmpneq_ps(lengthSq, s_SIMDInfinity);
     const SIMDVectorSingle result = _mm_div_ps(plane, length);
@@ -131,9 +131,9 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleTranslation(f64 offsetX, f
 NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixTranslationFromVector(SIMDVectorSingle offset)noexcept{
     SIMDMatrix matrix{};
 #if defined(NWB_HAS_SSE4)
-    matrix.v[0] = _mm_blend_ps(s_SIMDIdentityR0, VectorSplatX(offset), 0x8);
-    matrix.v[1] = _mm_blend_ps(s_SIMDIdentityR1, VectorSplatY(offset), 0x8);
-    matrix.v[2] = _mm_blend_ps(s_SIMDIdentityR2, VectorSplatZ(offset), 0x8);
+    matrix.v[0] = _mm_blend_ps(s_SIMDIdentityR0, VectorSplatX(offset), s_SIMDSse4BlendMaskW);
+    matrix.v[1] = _mm_blend_ps(s_SIMDIdentityR1, VectorSplatY(offset), s_SIMDSse4BlendMaskW);
+    matrix.v[2] = _mm_blend_ps(s_SIMDIdentityR2, VectorSplatZ(offset), s_SIMDSse4BlendMaskW);
 #else
     matrix.v[0] = VectorSelect(s_SIMDIdentityR0, VectorSplatX(offset), s_SIMDMaskW);
     matrix.v[1] = VectorSelect(s_SIMDIdentityR1, VectorSplatY(offset), s_SIMDMaskW);

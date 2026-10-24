@@ -121,9 +121,43 @@ inline constexpr u32 s_F32ExponentFieldMask = 0xffu;
 inline constexpr u32 s_F32ExponentBias = 127u;
 inline constexpr u32 s_F32IntegerExponent = s_F32ExponentBias + s_F32MantissaBitCount;
 inline constexpr f32 s_F32Epsilon = 1.192092896e-7f;
+inline constexpr u32 s_F32HalfBits = 0x3f000000u;
+inline constexpr u32 s_F32OneBits = 0x3f800000u;
+inline constexpr u32 s_F32NegativeOneBits = 0xbf800000u;
+inline constexpr f32 s_F32NoFractionThreshold = 8388608.0f;
 inline constexpr u64 s_F64SignBitMask = 0x8000000000000000ull;
+inline constexpr u64 s_F64AbsoluteBitMask = 0x7fffffffffffffffull;
 inline constexpr u32 s_F64SignBitShift = 63u;
+inline constexpr u64 s_F64InfinityBits = 0x7ff0000000000000ull;
+inline constexpr u64 s_F64QuietNaNBits = 0x7ff8000000000000ull;
+inline constexpr u64 s_F64MinNormalBits = 0x0010000000000000ull;
+inline constexpr u32 s_F64MantissaBitCount = 52u;
+inline constexpr u64 s_F64MantissaBitMask = 0x000fffffffffffffull;
+inline constexpr u64 s_F64ExponentFieldMask = 0x7ffull;
+inline constexpr u64 s_F64HalfBits = 0x3fe0000000000000ull;
+inline constexpr u64 s_F64OneBits = 0x3ff0000000000000ull;
+inline constexpr i64 s_F64ExponentBias = 1023ll;
+inline constexpr u64 s_F64IntegerExponent = static_cast<u64>(s_F64ExponentBias) + s_F64MantissaBitCount;
+inline constexpr f64 s_F64NoFractionThreshold = 4503599627370496.0;
 inline constexpr f64 s_F64Epsilon = 0x1p-52;
+
+inline constexpr i32 s_SIMDMovemask2Low = 0x3;
+inline constexpr i32 s_SIMDSse4BlendMaskW = 0x8;
+inline constexpr i32 s_SIMDSse4InsertLaneYMask = 0x10;
+inline constexpr i32 s_SIMDSse4InsertLaneZMask = 0x20;
+inline constexpr i32 s_SIMDSse4InsertLaneWMask = 0x30;
+inline constexpr i32 s_SIMDSse4Dot2BroadcastMask = 0x3F;
+inline constexpr i32 s_SIMDSse4Dot2TransformMask = 0xBF;
+inline constexpr i32 s_SIMDSse4Dot3ScalarMask = 0x71;
+inline constexpr i32 s_SIMDSse4Dot3BroadcastMask = 0x7F;
+inline constexpr i32 s_SIMDSse4Dot4ScalarMask = 0xF1;
+inline constexpr i32 s_SIMDSse4Dot4BroadcastMask = 0xFF;
+inline constexpr i32 s_SIMDAvxPermute2F128LowLow = 0x00;
+inline constexpr i32 s_SIMDAvxPermute2F128HighHigh = 0x11;
+inline constexpr i32 s_SIMDAvxPermute2F128Low0Low1 = 0x20;
+inline constexpr i32 s_SIMDAvxPermute2F128High0High1 = 0x31;
+inline constexpr i32 s_SIMDAvxPermutePdAllLow = 0x0;
+inline constexpr i32 s_SIMDAvxPermutePdAllHigh = 0xF;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -302,7 +336,7 @@ NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDNormalizeX16Y16Z16W16 = { { { 1.0f / 327
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDNoFraction = { { { 8388608.0f, 8388608.0f, 8388608.0f, 8388608.0f } } };
+NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDNoFraction = { { { s_F32NoFractionThreshold, s_F32NoFractionThreshold, s_F32NoFractionThreshold, s_F32NoFractionThreshold } } };
 NWB_GLOBAL_CONST SIMDVectorConstI s_SIMDMaskByte = { { { 0x000000FF, 0x000000FF, 0x000000FF, 0x000000FF } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDNegateX = { { { -1.0f, 1.0f, 1.0f, 1.0f } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDNegateY = { { { 1.0f, -1.0f, 1.0f, 1.0f } } };

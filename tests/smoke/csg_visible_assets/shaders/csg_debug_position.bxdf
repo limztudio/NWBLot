@@ -2,8 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static const float NWB_SMOKE_CSG_DEBUG_POSITION_XY_EXTENT = 6.0;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
-    return half3(clamp(surface.worldPosition * float3(1.0 / 6.0, 1.0 / 6.0, 0.5) + 0.5, 0.0, 1.0));
+    return half3(clamp(surface.worldPosition * float3(1.0 / NWB_SMOKE_CSG_DEBUG_POSITION_XY_EXTENT, 1.0 / NWB_SMOKE_CSG_DEBUG_POSITION_XY_EXTENT, 0.5) + 0.5, 0.0, 1.0));
 }
 
 

@@ -182,7 +182,8 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     }
     const Core::GpuTaskResourceSetUse softwareTraceGeometrySetUse{ .resourceSet = softwareTraceGeometrySet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
     const Core::GpuTaskResourceSetUse traceMaterialSampledTextureSetUse{ .resourceSet = traceMaterialSampledTextureSet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
-    Core::GpuTaskResourceSetUse photonResourceSetUses[2u] = {};
+    constexpr usize s_PhotonResourceSetUseCapacity = 2u;
+    Core::GpuTaskResourceSetUse photonResourceSetUses[s_PhotonResourceSetUseCapacity] = {};
     usize photonResourceSetUseCount = 0u;
     if(softwareTraceGeometryStatesGraphOwned)
         photonResourceSetUses[photonResourceSetUseCount++] = softwareTraceGeometrySetUse;

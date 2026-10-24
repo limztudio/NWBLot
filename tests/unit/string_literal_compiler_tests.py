@@ -33,12 +33,18 @@ UTF16_LITERAL = "NWB_LITERAL_UTF16_EMBEDDED\0\u00e9\U0001f642"
 UTF32_LITERAL = "NWB_LITERAL_UTF32_EMBEDDED\0\U0001f642\U0010ffff"
 SEPARATOR = "/" * 128
 PREVIOUS_OBJECT = b"previous successful object must survive rejected compilation"
+FNV1A_OFFSET_BASIS_32 = 2166136261
+FNV1A_PRIME_32 = 16777619
+UINT32_MASK = 0xFFFFFFFF
+CROSS_TRANSLATION_UNIT_COUNT = 3
+EMBEDDED_NUL_WIDTH_UTF16 = 16
+EMBEDDED_NUL_WIDTH_UTF32 = 32
 
 
 def unit_hash(values: Sequence[int]) -> int:
-    result = 2166136261
+    result = FNV1A_OFFSET_BASIS_32
     for value in values:
-        result = ((result ^ value) * 16777619) & 0xFFFFFFFF
+        result = ((result ^ value) * FNV1A_PRIME_32) & UINT32_MASK
     return result
 
 
@@ -213,7 +219,7 @@ char* MutableB(){{ return g_MutableB; }}
         if any(marker in image for marker in forbidden):
             raise RuntimeError("An eligible fixture literal remains plaintext in the linked image")
         require_success(run([str(executable)], self.directory), "Startup decode / escaped view / distinct object identity")
-        return {"cross_translation_units": 3, "embedded_nul_widths": [16, 32], "image_bytes": len(image)}
+        return {"cross_translation_units": CROSS_TRANSLATION_UNIT_COUNT, "embedded_nul_widths": [EMBEDDED_NUL_WIDTH_UTF16, EMBEDDED_NUL_WIDTH_UTF32], "image_bytes": len(image)}
 
     def failed_compilation_preserves_existing_object(self) -> dict:
         invalid = self.directory / "invalid.cpp"

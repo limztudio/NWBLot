@@ -29,6 +29,10 @@ inline constexpr bool s_NativeEqualityPackets = true;
 inline constexpr bool s_NativeEqualityPackets = false;
 #endif
 inline constexpr i32 s_ByteMovemaskAllEqual = 0xFFFF;
+inline constexpr i32 s_FloatMovemaskAllEqual = 0xF;
+inline constexpr u32 s_PacketF32AbsoluteBitMask = 0x7FFFFFFFu;
+inline constexpr u32 s_PacketF32InfinityBits = 0x7F800000u;
+inline constexpr u32 s_PacketF32MinNormalBits = 0x00800000u;
 
 template<typename Element>
 using EqualityPacket = Element __attribute__((ext_vector_type(s_SIMDVectorBytes / sizeof(Element))));
@@ -40,7 +44,7 @@ using EqualityPacket = Element __attribute__((ext_vector_type(s_SIMDVectorBytes 
 [[nodiscard]] NWB_INLINE bool EqualFloatPacket(const EqualityPacket<f32> lhs, const EqualityPacket<f32> rhs)noexcept{
 #pragma STDC FENV_ACCESS ON
 #if defined(NWB_HAS_SSE2)
-    return _mm_movemask_ps(_mm_cmpeq_ps(BitCast<__m128>(lhs), BitCast<__m128>(rhs))) == 0xFu;
+    return _mm_movemask_ps(_mm_cmpeq_ps(BitCast<__m128>(lhs), BitCast<__m128>(rhs))) == s_FloatMovemaskAllEqual;
 #elif defined(NWB_HAS_NEON)
     const uint64x2_t equal = vreinterpretq_u64_u32(vceqq_f32(BitCast<float32x4_t>(lhs), BitCast<float32x4_t>(rhs)));
     return vgetq_lane_u64(equal, 0) == ~u64{ 0u } && vgetq_lane_u64(equal, 1) == ~u64{ 0u };
@@ -75,10 +79,10 @@ template<typename Element, usize Count>
             __builtin_memcpy(&rhsPacket, rhs.get() + first, count * sizeof(Element));
             if constexpr(IsSame_V<Element, f32>){
                 using UInt4 = EqualityPacket<u32>;
-                const UInt4 lhsMagnitude = BitCast<UInt4>(lhsPacket) & UInt4{ 0x7FFFFFFFu, 0x7FFFFFFFu, 0x7FFFFFFFu, 0x7FFFFFFFu };
-                const UInt4 rhsMagnitude = BitCast<UInt4>(rhsPacket) & UInt4{ 0x7FFFFFFFu, 0x7FFFFFFFu, 0x7FFFFFFFu, 0x7FFFFFFFu };
-                const UInt4 infinity{ 0x7F800000u, 0x7F800000u, 0x7F800000u, 0x7F800000u };
-                const UInt4 minimumNormal{ 0x00800000u, 0x00800000u, 0x00800000u, 0x00800000u };
+                const UInt4 lhsMagnitude = BitCast<UInt4>(lhsPacket) & UInt4{ s_PacketF32AbsoluteBitMask, s_PacketF32AbsoluteBitMask, s_PacketF32AbsoluteBitMask, s_PacketF32AbsoluteBitMask };
+                const UInt4 rhsMagnitude = BitCast<UInt4>(rhsPacket) & UInt4{ s_PacketF32AbsoluteBitMask, s_PacketF32AbsoluteBitMask, s_PacketF32AbsoluteBitMask, s_PacketF32AbsoluteBitMask };
+                const UInt4 infinity{ s_PacketF32InfinityBits, s_PacketF32InfinityBits, s_PacketF32InfinityBits, s_PacketF32InfinityBits };
+                const UInt4 minimumNormal{ s_PacketF32MinNormalBits, s_PacketF32MinNormalBits, s_PacketF32MinNormalBits, s_PacketF32MinNormalBits };
                 const auto exceptional = (lhsMagnitude > infinity) | (rhsMagnitude > infinity) | ((lhsMagnitude != UInt4{}) & (lhsMagnitude < minimumNormal)) | ((rhsMagnitude != UInt4{}) & (rhsMagnitude < minimumNormal));
                 if(__builtin_reduce_or(exceptional) != 0){
                     // Preserve skipped NaN/denormal flags and traps after an earlier mismatch.

@@ -45,7 +45,13 @@ static constexpr u32 s_LastCsgResolvePipelineIndex = 8u;
 static constexpr u32 s_FirstCsgFallbackPipelineIndex = 9u;
 static constexpr u32 s_LastCsgFallbackPipelineIndex = 10u;
 static constexpr u32 s_CapturePipelineKindCount = 2u;
+static constexpr u32 s_CountsBufferIndex = 0u;
+static constexpr u32 s_EventsBufferIndex = 1u;
+static constexpr u32 s_ViewsBufferIndex = 2u;
 static constexpr u32 s_DrawArgumentsBufferIndex = 3u;
+static constexpr u32 s_DepthDescriptorIndex = 4u;
+static constexpr usize s_LightSpaceBufferCount = 4u;
+static constexpr usize s_LightSpaceDescriptorCount = 5u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -249,8 +255,8 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePla
         && snapshot.depth->getCreationDescription().arraySize == plan.viewCount
     )
         return true;
-    Core::BufferHandle buffers[4];
-    Core::GpuDescriptorHandle descriptors[5];
+    Core::BufferHandle buffers[__hidden_light_space_resources::s_LightSpaceBufferCount];
+    Core::GpuDescriptorHandle descriptors[__hidden_light_space_resources::s_LightSpaceDescriptorCount];
     Core::GpuDescriptorRetirementGuard retireUnpublished(heap, Span<const Core::GpuDescriptorHandle>(descriptors));
     const Name names[] = { Name("light_space_counts"), Name("light_space_events"), Name("light_space_views"), Name("light_space_draw_arguments") };
     for(u32 index = 0u; index < LengthOf(buffers); ++index){
@@ -287,8 +293,8 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePla
     const Expected<Core::GpuDescriptorHandle> depthDescriptor = heap.allocate(Core::GpuDescriptorClass::SampledImage2DArray);
     if(!depthDescriptor)
         return false;
-    descriptors[4] = *depthDescriptor;
-    if(!heap.write(descriptors[4], Core::DescriptorWriteItem::TextureSrv(0u, depth.get(), Core::Format::D32, Core::TextureSubresourceSet(0u, 1u, 0u, plan.viewCount), Core::TextureDimension::Texture2DArray)))
+    descriptors[__hidden_light_space_resources::s_DepthDescriptorIndex] = *depthDescriptor;
+    if(!heap.write(descriptors[__hidden_light_space_resources::s_DepthDescriptorIndex], Core::DescriptorWriteItem::TextureSrv(0u, depth.get(), Core::Format::D32, Core::TextureSubresourceSet(0u, 1u, 0u, plan.viewCount), Core::TextureDimension::Texture2DArray)))
         return false;
     Array<Core::FramebufferHandle, NWB_SCENE_SHADOW_SLOT_COUNT * s_PointLightViewCount> opaque;
     Array<Core::FramebufferHandle, NWB_SCENE_SHADOW_SLOT_COUNT * s_PointLightViewCount> transparent;
@@ -315,16 +321,16 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePla
     RayTracingDetail::RetireHeapHandle(heap, snapshot.drawArgumentsDescriptor);
     RayTracingDetail::RetireHeapHandle(heap, snapshot.depthDescriptor);
     m_lightSpaceShadow.m_captureHistory.invalidate();
-    snapshot.counts = Move(buffers[0]);
-    snapshot.events = Move(buffers[1]);
-    snapshot.views = Move(buffers[2]);
-    snapshot.drawArguments = Move(buffers[3]);
+    snapshot.counts = Move(buffers[__hidden_light_space_resources::s_CountsBufferIndex]);
+    snapshot.events = Move(buffers[__hidden_light_space_resources::s_EventsBufferIndex]);
+    snapshot.views = Move(buffers[__hidden_light_space_resources::s_ViewsBufferIndex]);
+    snapshot.drawArguments = Move(buffers[__hidden_light_space_resources::s_DrawArgumentsBufferIndex]);
     snapshot.depth = Move(depth);
-    snapshot.countsDescriptor = descriptors[0];
-    snapshot.eventsDescriptor = descriptors[1];
-    snapshot.viewsDescriptor = descriptors[2];
-    snapshot.drawArgumentsDescriptor = descriptors[3];
-    snapshot.depthDescriptor = descriptors[4];
+    snapshot.countsDescriptor = descriptors[__hidden_light_space_resources::s_CountsBufferIndex];
+    snapshot.eventsDescriptor = descriptors[__hidden_light_space_resources::s_EventsBufferIndex];
+    snapshot.viewsDescriptor = descriptors[__hidden_light_space_resources::s_ViewsBufferIndex];
+    snapshot.drawArgumentsDescriptor = descriptors[__hidden_light_space_resources::s_DrawArgumentsBufferIndex];
+    snapshot.depthDescriptor = descriptors[__hidden_light_space_resources::s_DepthDescriptorIndex];
     snapshot.opaqueFramebuffers = Move(opaque);
     snapshot.transparentFramebuffers = Move(transparent);
     for(auto& descriptor : descriptors)

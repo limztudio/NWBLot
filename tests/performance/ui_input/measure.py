@@ -24,10 +24,13 @@ LIT_VARIANT = "variant"
 LIT_CASES = "cases"
 
 
+HASH_READ_CHUNK_BYTES = 1024 * 1024
+
+
 def file_hash(path):
     digest = hashlib.sha256()
     with path.open("rb") as stream:
-        for block in iter(lambda: stream.read(1024 * 1024), b""):
+        for block in iter(lambda: stream.read(HASH_READ_CHUNK_BYTES), b""):
             digest.update(block)
     return digest.hexdigest()
 

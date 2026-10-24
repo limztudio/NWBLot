@@ -22,6 +22,13 @@ namespace __hidden_metascript_statement_parser{
 
 constexpr usize s_InitialReferencePathSegmentCount = 4u;
 constexpr usize s_InitialStructFieldCount = 8u;
+constexpr MStringView s_StructKeyword = LiteralView("struct");
+constexpr MStringView s_NameFieldKey = LiteralView("name");
+constexpr MStringView s_ArgumentsFieldKey = LiteralView("arguments");
+constexpr MStringView s_AttributesFieldKey = LiteralView("attributes");
+constexpr MStringView s_FieldsFieldKey = LiteralView("fields");
+constexpr MStringView s_TypeFieldKey = LiteralView("type");
+constexpr const char* s_DuplicateVariableDeclarationMessage = "duplicate variable declaration";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -96,13 +103,13 @@ bool StatementParser::declareVariable(const MStringView typeName, const MStringV
         return false;
     }
     if(m_variables.find(variableName) != m_variables.end()){
-        m_cursor.error(variableLine, variableColumn, "duplicate variable declaration");
+        m_cursor.error(variableLine, variableColumn, __hidden_metascript_statement_parser::s_DuplicateVariableDeclarationMessage);
         return false;
     }
 
     MString key(variableName.data(), variableName.size(), m_arena);
     if(!m_variables.emplace(Move(key), Move(initialValue)).second){
-        m_cursor.error(variableLine, variableColumn, "duplicate variable declaration");
+        m_cursor.error(variableLine, variableColumn, __hidden_metascript_statement_parser::s_DuplicateVariableDeclarationMessage);
         return false;
     }
     m_declarations.emplace_back(typeName, variableName, m_arena);
@@ -124,7 +131,7 @@ bool StatementParser::parseStatement(){
     const u32 firstColumn = m_cursor.m_current.column;
     m_cursor.advance();
 
-    if(firstName == LiteralView("struct") && m_cursor.m_current.type == TokenType::Identifier)
+    if(firstName == __hidden_metascript_statement_parser::s_StructKeyword && m_cursor.m_current.type == TokenType::Identifier)
         return parseStructDeclaration(Move(attributes), firstLine, firstColumn);
 
     if(!attributes.asList().empty()){
@@ -221,9 +228,9 @@ Value StatementParser::parseAttribute(){
 
     Value attribute(m_arena);
     attribute.makeMap();
-    attribute.field(LiteralView("name")).setString(attributeName);
+    attribute.field(__hidden_metascript_statement_parser::s_NameFieldKey).setString(attributeName);
 
-    Value& arguments = attribute.field(LiteralView("arguments"));
+    Value& arguments = attribute.field(__hidden_metascript_statement_parser::s_ArgumentsFieldKey);
     arguments.makeList();
 
     if(m_cursor.m_current.type == TokenType::LeftParen){
@@ -313,8 +320,8 @@ bool StatementParser::parseStructDeclaration(Value&& attributes, const u32 struc
 
     Value description(m_arena);
     description.makeMap();
-    description.field(LiteralView("attributes")) = Move(attributes);
-    description.field(LiteralView("fields")) = Move(fields);
+    description.field(__hidden_metascript_statement_parser::s_AttributesFieldKey) = Move(attributes);
+    description.field(__hidden_metascript_statement_parser::s_FieldsFieldKey) = Move(fields);
     MString key(structName.data(), structName.size(), m_arena);
     m_structs.emplace(Move(key), Move(description));
     return true;
@@ -349,9 +356,9 @@ Value StatementParser::parseStructField(Value&& attributes, ScratchNameList& fie
 
     Value field(m_arena);
     field.makeMap();
-    field.field(LiteralView("type")).setString(typeName);
-    field.field(LiteralView("name")).setString(fieldName);
-    field.field(LiteralView("attributes")) = Move(attributes);
+    field.field(__hidden_metascript_statement_parser::s_TypeFieldKey).setString(typeName);
+    field.field(__hidden_metascript_statement_parser::s_NameFieldKey).setString(fieldName);
+    field.field(__hidden_metascript_statement_parser::s_AttributesFieldKey) = Move(attributes);
     return field;
 }
 

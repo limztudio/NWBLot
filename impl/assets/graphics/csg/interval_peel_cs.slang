@@ -65,8 +65,8 @@ void nwbCsgBuildPixelRay(const uint2 pixel, out float3 outRayBegin, out float3 o
     const uint2 extent = uint2(nwbCsgIntervalPeelFrameWidth(), nwbCsgIntervalPeelFrameHeight());
     const float3 direction = nwbMeshViewRayDirection(nwbMeshViewPixelNdc(pixel, extent));
     const float4 camera = float4(g_NwbMeshCameraPosition.xyz, 1.0);
-    const float4 nearPlane = g_NwbMeshFrustumPlanes[4];
-    const float4 farPlane = g_NwbMeshFrustumPlanes[5];
+    const float4 nearPlane = g_NwbMeshFrustumPlanes[NWB_MESH_VIEW_FRUSTUM_NEAR_PLANE_INDEX];
+    const float4 farPlane = g_NwbMeshFrustumPlanes[NWB_MESH_VIEW_FRUSTUM_FAR_PLANE_INDEX];
     const float nearDistance = -dot(nearPlane, camera) / dot(nearPlane.xyz, direction);
     const float farDistance = -dot(farPlane, camera) / dot(farPlane.xyz, direction);
     outRayBegin = camera.xyz + direction * nearDistance;

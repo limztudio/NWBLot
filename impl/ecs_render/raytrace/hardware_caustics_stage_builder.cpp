@@ -88,7 +88,8 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
     const bool hardwareTraceGeometryStatesGraphOwned = inputs.hardwareTraceGeometrySet.valid();
     const Core::GpuTaskResourceSetUse hardwareTraceGeometrySetUse{ .resourceSet = inputs.hardwareTraceGeometrySet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
     const Core::GpuTaskResourceSetUse traceMaterialSampledTextureSetUse{ .resourceSet = inputs.traceMaterialSampledTextureSet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
-    Core::GpuTaskResourceSetUse hardwarePhotonResourceSetUses[2u] = {};
+    constexpr usize s_HardwarePhotonResourceSetUseCapacity = 2u;
+    Core::GpuTaskResourceSetUse hardwarePhotonResourceSetUses[s_HardwarePhotonResourceSetUseCapacity] = {};
     usize hardwarePhotonResourceSetUseCount = 0u;
     if(hardwareTraceGeometryStatesGraphOwned){
         hardwarePhotonResourceSetUses[hardwarePhotonResourceSetUseCount++] = hardwareTraceGeometrySetUse;

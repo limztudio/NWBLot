@@ -254,8 +254,10 @@ class WindowsCapture:
             raise SmokeFailure(LIT_HWND_CLIENT_RECT_UNAVAILABLE.format(hwnd=hwnd))
         return rect.right - rect.left, rect.bottom - rect.top
 
+    MAX_EXACT_FRAMEBUFFER_EXTENT = 16384
+
     def resize_client(self, hwnd, width, height, *, allow_outside_work_area=False):
-        if allow_outside_work_area and any(value < 1 or value > 16384 for value in (width, height)):
+        if allow_outside_work_area and any(value < 1 or value > self.MAX_EXACT_FRAMEBUFFER_EXTENT for value in (width, height)):
             raise SmokeFailure("exact framebuffer extent must remain within 1..16384 pixels")
         client_width, client_height = self.client_size(hwnd)
         window_width, window_height = self._window_size(hwnd)

@@ -5,17 +5,24 @@ import math
 
 
 DOT_COLOR = (235, 245, 255)
+SRGB_LINEAR_SLOPE = 12.92
+SRGB_LINEAR_CUTOFF = 0.0031308
+SRGB_GAMMA_SCALE = 1.055
+SRGB_GAMMA_OFFSET = 0.055
+SRGB_GAMMA_EXPONENT = 2.4
+SRGB_CHANNEL_MAX = 255.0
+SRGB_BYTE_LINEAR_THRESHOLD = 10
 
 
 def linear_rgb_bytes(color):
     def convert(channel):
-        srgb = channel * 12.92 if channel <= 0.0031308 else 1.055 * channel ** (1.0 / 2.4) - 0.055
-        return int(round(srgb * 255.0))
+        srgb = channel * SRGB_LINEAR_SLOPE if channel <= SRGB_LINEAR_CUTOFF else SRGB_GAMMA_SCALE * channel ** (1.0 / SRGB_GAMMA_EXPONENT) - SRGB_GAMMA_OFFSET
+        return int(round(srgb * SRGB_CHANNEL_MAX))
     return tuple(convert(channel) for channel in color)
 
 
 def linear_channels(color):
-    return tuple(channel / 255.0 / 12.92 if channel <= 10 else ((channel / 255.0 + 0.055) / 1.055) ** 2.4 for channel in color)
+    return tuple(channel / SRGB_CHANNEL_MAX / SRGB_LINEAR_SLOPE if channel <= SRGB_BYTE_LINEAR_THRESHOLD else ((channel / SRGB_CHANNEL_MAX + SRGB_GAMMA_OFFSET) / SRGB_GAMMA_SCALE) ** SRGB_GAMMA_EXPONENT for channel in color)
 
 
 def encoded_marker(value, intensity=1.0):

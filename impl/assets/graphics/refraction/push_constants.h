@@ -11,9 +11,11 @@
 
 #define NWB_REFRACTION_GROUP_SIZE 8
 #define NWB_REFRACTION_MAX_GROUP_COUNT_X 65535u
+#define NWB_REFRACTION_TILE_WORD_BYTES 4u
 #define NWB_REFRACTION_TILE_COUNTER_OFFSET 12u
 #define NWB_REFRACTION_DENSE_ARGUMENT_OFFSET 16u
 #define NWB_REFRACTION_TILE_ARGUMENT_BYTES 32u
+#define NWB_REFRACTION_INVALID_SLOT 0xffffffffu
 
 // Shared CPU/Slang ABI; the graph freezes each heap selector before recording.
 #define NWB_REFRACTION_PUSH_CONSTANTS_FIELDS(FIELD) \
@@ -22,12 +24,12 @@
     FIELD(deferredResourcesHeapSlot, 0u) \
     FIELD(materialContextSlotsHeapSlot, 0u) \
     FIELD(viewHeapSlot, 0u) \
-    FIELD(opaqueReflectionSlot, 0xffffffffu) \
+    FIELD(opaqueReflectionSlot, NWB_REFRACTION_INVALID_SLOT) \
     FIELD(refractionEnabled, 1u) \
     FIELD(tileListSlot, 0u) \
     FIELD(tileArgumentsSlot, 0u) \
-    FIELD(diagnosticsSlot, 0xffffffffu) \
-    FIELD(certifiedInstanceIndex, 0xffffffffu)
+    FIELD(diagnosticsSlot, NWB_REFRACTION_INVALID_SLOT) \
+    FIELD(certifiedInstanceIndex, NWB_REFRACTION_INVALID_SLOT)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

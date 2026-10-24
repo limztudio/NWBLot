@@ -94,7 +94,8 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     )
         return false;
 
-    Core::GpuTaskExternalStateSource shadowVisibilityStateSources[2u] = {};
+    constexpr usize s_ShadowVisibilityStateSourceCapacity = 2u;
+    Core::GpuTaskExternalStateSource shadowVisibilityStateSources[s_ShadowVisibilityStateSourceCapacity] = {};
     usize shadowVisibilityStateSourceCount = 0u;
     const auto* const shadowScratchStates = m_shadowComputePersistentState.source();
     if(shadowScratchStates){
@@ -346,7 +347,8 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         }
     }
     const RendererFramePipelineDetail::TraceResourceSetUses traceResourceSets = RendererFramePipelineDetail::MakeTraceResourceSetUses(traceGeometrySet, traceMaterialSampledTextureSet);
-    Core::GpuTaskResourceSetUse traceResourceSetUses[2u] = {};
+    constexpr usize s_TraceResourceSetUseCapacity = 2u;
+    Core::GpuTaskResourceSetUse traceResourceSetUses[s_TraceResourceSetUseCapacity] = {};
     usize traceResourceSetUseCount = 0u;
     for(usize traceSetIndex = 0u; traceSetIndex < traceResourceSets.useCount; ++traceSetIndex)
         traceResourceSetUses[traceResourceSetUseCount++] = traceResourceSets.uses[traceSetIndex];

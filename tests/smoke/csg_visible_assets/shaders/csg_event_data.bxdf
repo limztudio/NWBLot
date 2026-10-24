@@ -42,7 +42,7 @@ half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
             backDepth = asfloat(data.z);
         }
     }
-    const bool matchingPair = eventCount == 2u && hasFront && hasBack;
+    const bool matchingPair = eventCount == NWB_CSG_DIAGNOSTIC_EXPECTED_PAIR_EVENT_COUNT && hasFront && hasBack;
     const bool orderedDepths = hasFront && hasBack && isfinite(frontDepth) && isfinite(backDepth) && backDepth > frontDepth;
     // A failed span exposes its existing flag bits while green/blue independently validate the recorded pair.
     return half3(half(spanState), matchingPair ? 1.0h : 0.0h, orderedDepths ? 1.0h : 0.0h);

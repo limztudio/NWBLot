@@ -61,7 +61,7 @@ bool nwbRefractionResolvePixel(const uint3 groupId, const uint3 groupThreadId, o
     if(groupId.y != 0u && queueIndex >= g_NwbRefractionTileArguments.Load(NWB_REFRACTION_TILE_COUNTER_OFFSET))
         return false;
     const uint tilesX = (g_NwbRefractionPush.width + NWB_REFRACTION_GROUP_SIZE - 1u) / NWB_REFRACTION_GROUP_SIZE;
-    const uint tile = g_NwbRefractionTileList.Load(queueIndex * 4u);
+    const uint tile = g_NwbRefractionTileList.Load(queueIndex * NWB_REFRACTION_TILE_WORD_BYTES);
     pixel = uint2(tile % tilesX, tile / tilesX) * NWB_REFRACTION_GROUP_SIZE + groupThreadId.xy;
 #endif
     return pixel.x < g_NwbRefractionPush.width && pixel.y < g_NwbRefractionPush.height;

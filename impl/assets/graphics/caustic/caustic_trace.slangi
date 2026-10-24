@@ -33,6 +33,9 @@
 
 #define NWB_CAUSTIC_FLUX_EPSILON 1e-6
 #define NWB_CAUSTIC_MIN_EMISSION_AREA 1e-6
+#define NWB_CAUSTIC_EXTERIOR_MARGIN_MINIMUM 1e-3
+#define NWB_CAUSTIC_TRACE_T_MAX 1e7
+#define NWB_CAUSTIC_DOMAIN_AREA_EXTENT_SCALE 4.0
 #define NWB_CAUSTIC_LIGHT_COLOR_MAX 1.5
 #define NWB_CAUSTIC_LIGHT_INTENSITY_MAX 2.0
 
@@ -172,8 +175,6 @@ NwbCausticSplat nwbCausticTracePhoton(NwbCausticPhoton photon){
     float3 direction = photon.direction;
     half3 flux = photon.flux;
     uint refractiveCrossings = 0u;
-    const float exteriorMarginMinimum = 1e-3;
-    const float tMax = 1e7;
     if(!all(isfinite(origin)))
         return splat;
 
@@ -224,7 +225,7 @@ NwbCausticSplat nwbCausticTracePhoton(NwbCausticPhoton photon){
             if(step == NWB_CAUSTIC_MAX_BOUNCES || !isfinite(previous.t) || previous.t < minimum)
                 break;
             minimum = asfloat(asuint(previous.t) + 1u);
-            const float margin = exteriorMarginMinimum + NWB_OPTICS_POSITION_TOLERANCE_SCALE * nwbOpticsPositionUncertainty(previous.worldPos);
+            const float margin = NWB_CAUSTIC_EXTERIOR_MARGIN_MINIMUM + NWB_OPTICS_POSITION_TOLERANCE_SCALE * nwbOpticsPositionUncertainty(previous.worldPos);
             origin = previous.worldPos - direction * margin;
             if(!isfinite(minimum) || !all(isfinite(origin)))
                 break;
@@ -238,7 +239,7 @@ NwbCausticSplat nwbCausticTracePhoton(NwbCausticPhoton photon){
     [loop] for(uint bounce = 0u; bounce < NWB_CAUSTIC_MAX_BOUNCES; ++bounce){
         if(max(max(flux.x, flux.y), flux.z) < NWB_CAUSTIC_FLUX_EPSILON || !nwbOpticalConsumeQuery(config, result))
             break;
-        const NwbCausticHit hit = nwbCausticTraceClosest(origin, direction, 0.0, tMax);
+        const NwbCausticHit hit = nwbCausticTraceClosest(origin, direction, 0.0, NWB_CAUSTIC_TRACE_T_MAX);
 #if NWB_RT_CSG_ENABLED
         if(hit.failure != 0u)
             break;
@@ -374,7 +375,7 @@ NwbCausticEmission nwbCausticEmitPhotonAtTarget(float3 lightDir, float3 aabbMin,
 
     const float3 center = (aabbMin + aabbMax) * 0.5;
     const float2 extent = nwbCausticProjectAabbExtent(aabbMin, aabbMax, right, up);
-    emission.domainArea = max(4.0 * extent.x * extent.y, NWB_CAUSTIC_MIN_EMISSION_AREA);
+    emission.domainArea = max(NWB_CAUSTIC_DOMAIN_AREA_EXTENT_SCALE * extent.x * extent.y, NWB_CAUSTIC_MIN_EMISSION_AREA);
 
     const float2 offset = (cell * 2.0 - 1.0) * extent;
     const float3 target = center + right * offset.x + up * offset.y;

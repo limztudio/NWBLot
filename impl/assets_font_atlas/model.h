@@ -29,13 +29,19 @@ inline constexpr u32 s_FontAtlasMaxPositioningTableCount = 3u; // kern, GPOS and
 inline constexpr u32 s_FontAtlasMinUnitsPerEm = 16u;
 inline constexpr u32 s_FontAtlasMaxUnitsPerEm = 16384u;
 inline constexpr u32 s_FontAtlasMaxExtent = 2048u;
-inline constexpr u32 s_FontAtlasMaxPixelBytes = 128u * 1024u * 1024u;
+inline constexpr u32 s_FontAtlasBytesPerKilobyte = 1024u;
+inline constexpr u32 s_FontAtlasMaxPixelMegabytes = 128u;
+inline constexpr u32 s_FontAtlasMaxPixelBytes = s_FontAtlasMaxPixelMegabytes * s_FontAtlasBytesPerKilobyte * s_FontAtlasBytesPerKilobyte;
 inline constexpr u32 s_FontAtlasMinBakePpem = 16u;
 inline constexpr u32 s_FontAtlasMaxBakePpem = 256u;
 inline constexpr u32 s_FontAtlasMinSpreadPixels = 2u;
 inline constexpr u32 s_FontAtlasMaxSpreadPixels = 32u;
 inline constexpr u32 s_FontAtlasDistanceEncoding = 1u;
-inline constexpr u32 s_FontAtlasMaxPositioningBytes = 32u * 1024u * 1024u;
+inline constexpr u32 s_FontAtlasMaxPositioningMegabytes = 32u;
+inline constexpr u32 s_FontAtlasMaxPositioningBytes = s_FontAtlasMaxPositioningMegabytes * s_FontAtlasBytesPerKilobyte * s_FontAtlasBytesPerKilobyte;
+inline constexpr u32 s_FontAtlasDefaultBakePpem = 64u;
+inline constexpr u32 s_FontAtlasDefaultSpreadPixels = 8u;
+inline constexpr u32 s_FontAtlasDefaultGuardTexels = 1u;
 inline constexpr u32 s_FontAtlasKernTag = 0x6b65726eu;
 inline constexpr u32 s_FontAtlasGposTag = 0x47504f53u;
 inline constexpr u32 s_FontAtlasGdefTag = 0x47444546u;
@@ -67,7 +73,7 @@ struct FontAtlasGlyph{
 struct FontAtlasGroup{
     u32 width = 0u;
     u32 height = 0u;
-    u32 channelCount = 4u;
+    u32 channelCount = s_FontAtlasMaxChannelCount;
     Sha256Digest sha256;
     Core::Assets::AssetBytes pixels;
 
@@ -97,9 +103,9 @@ struct FontAtlasPayload{
     u32 faceIndex = 0u;
     u32 unitsPerEm = 0u;
     u32 sourceGlyphCount = 0u;
-    u32 bakePpem = 64u;
-    u32 spreadPixels = 8u;
-    u32 guardTexels = 1u;
+    u32 bakePpem = s_FontAtlasDefaultBakePpem;
+    u32 spreadPixels = s_FontAtlasDefaultSpreadPixels;
+    u32 guardTexels = s_FontAtlasDefaultGuardTexels;
     FontAtlasRasterMode::Enum rasterMode = FontAtlasRasterMode::Bitmap;
     f32 ascenderUnits = 0.f;
     f32 descenderUnits = 0.f;

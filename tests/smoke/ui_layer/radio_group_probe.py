@@ -47,6 +47,9 @@ CHECKED = ((40, 102, 164), (110, 186, 245))
 MARK = (235, 245, 255)
 
 
+MAX_MARKER_24BIT_VALUE = 0xFFFFFF
+
+
 def snapshot_from_logs(text):
     snapshot = snapshot_from_patterns(text, STATE, DISPLAY, SKIN, GEOMETRY, FIELDS, RECTANGLES, fixture="radio")
     if snapshot is None:
@@ -54,7 +57,7 @@ def snapshot_from_logs(text):
     values, sequence, rectangles = snapshot[LIT_VALUES], snapshot[LIT_SEQUENCE], snapshot[LIT_RECTANGLES]
     if any(rectangle[2] < 0.0 or rectangle[3] < 0.0 for rectangle in rectangles.values()):
         raise SmokeFailure("radio fixture reported a negative placement extent")
-    if any(value > 0xFFFFFF for value in (*values, sequence)):
+    if any(value > MAX_MARKER_24BIT_VALUE for value in (*values, sequence)):
         raise SmokeFailure("radio fixture exceeds its two-part 24-bit displayed marker schema")
     return snapshot
 

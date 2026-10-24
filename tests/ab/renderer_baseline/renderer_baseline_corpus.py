@@ -76,12 +76,15 @@ class CorpusReference:
     limits: Mapping[str, float]
 
 
+HASH_READ_CHUNK_BYTES = 1024 * 1024
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     try:
         with path.open("rb") as source:
             while True:
-                chunk = source.read(1024 * 1024)
+                chunk = source.read(HASH_READ_CHUNK_BYTES)
                 if not chunk:
                     break
                 digest.update(chunk)

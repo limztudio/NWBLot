@@ -40,6 +40,7 @@ INT32_BITS = 32
 INT64_BITS = 64
 RECORD_FIELD_COUNT = 8
 RECORD_PAYLOAD_FIELD_INDEX = 6
+GEP_INDEX_COUNT = 2
 IMAGE_FORMAT_COFF = "coff"
 IMAGE_FORMAT_MACHO = "macho"
 IMAGE_FORMAT_ELF = "elf"
@@ -204,7 +205,7 @@ def _record(api: LlvmApi, context: int, module: int, target_data: int, candidate
         comdat = api.LLVMGetOrInsertComdat(module, name.encode(LLVM_TEXT_ENCODING))
         api.LLVMSetComdatSelectionKind(comdat, 0)
         api.LLVMSetComdat(record, comdat)
-    indices = (REF * 2)(api.LLVMConstInt(i32, 0, 0), api.LLVMConstInt(i32, RECORD_PAYLOAD_FIELD_INDEX, 0))
+    indices = (REF * GEP_INDEX_COUNT)(api.LLVMConstInt(i32, 0, 0), api.LLVMConstInt(i32, RECORD_PAYLOAD_FIELD_INDEX, 0))
     payload = api.LLVMConstInBoundsGEP2(record_type, record, indices, len(indices))
     return payload, info
 

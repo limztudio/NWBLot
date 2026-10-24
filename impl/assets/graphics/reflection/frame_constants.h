@@ -77,6 +77,18 @@
 // Adding this wrapped value subtracts one from a counter.
 #define NWB_REFLECTION_COUNTER_SUBTRACT_ONE 0xffffffffu
 
+#define NWB_REFLECTION_DEFAULT_SCREEN_MAX_STEPS 96u
+#define NWB_REFLECTION_DEFAULT_MAX_RAY_DISTANCE 100.f
+#define NWB_REFLECTION_DEFAULT_DISTANCE_FADE_START 80.f
+#define NWB_REFLECTION_DEFAULT_ROUGHNESS_CUTOFF 0.8f
+#define NWB_REFLECTION_DEFAULT_ENV_TOP_R 0.15f
+#define NWB_REFLECTION_DEFAULT_ENV_TOP_G 0.2f
+#define NWB_REFLECTION_DEFAULT_ENV_TOP_B 0.3f
+#define NWB_REFLECTION_DEFAULT_ENV_BOTTOM_RGB 0.04f
+#define NWB_REFLECTION_DEFAULT_SCREEN_THICKNESS 0.03f
+#define NWB_REFLECTION_DEFAULT_SCREEN_CONFIDENCE_THRESHOLD 0.8f
+#define NWB_REFLECTION_DEFAULT_SCREEN_EDGE_FADE 0.05f
+
 // Eleven std140 lanes: targets own descriptors; this frame payload only borrows selectors.
 #define NWB_REFLECTION_FRAME_ROUTE_UINT_FIELDS(FIELD) \
     FIELD(width, 0u) \
@@ -103,7 +115,7 @@
     FIELD(debugView, 0u) \
     FIELD(depthPyramidSlot, 0u) \
     FIELD(depthMipCount, 0u) \
-    FIELD(screenMaxSteps, 96u) \
+    FIELD(screenMaxSteps, NWB_REFLECTION_DEFAULT_SCREEN_MAX_STEPS) \
     FIELD(diagnosticsEnabled, 0u) \
     FIELD(samplingSeed, 0u) \
     FIELD(sampleBaseX, 0u) \
@@ -119,18 +131,18 @@
     NWB_REFLECTION_FRAME_RESOURCE_UINT_FIELDS(FIELD)
 
 #define NWB_REFLECTION_FRAME_FLOAT_FIELDS(FIELD) \
-    FIELD(maxRayDistance, 100.f) \
-    FIELD(distanceFadeStart, 80.f) \
-    FIELD(roughnessCutoff, 0.8f) \
-    FIELD(environmentTopR, 0.15f) \
-    FIELD(environmentTopG, 0.2f) \
-    FIELD(environmentTopB, 0.3f) \
-    FIELD(environmentBottomR, 0.04f) \
-    FIELD(environmentBottomG, 0.04f) \
-    FIELD(environmentBottomB, 0.04f) \
-    FIELD(screenThickness, 0.03f) \
-    FIELD(screenConfidenceThreshold, 0.8f) \
-    FIELD(screenEdgeFade, 0.05f)
+    FIELD(maxRayDistance, NWB_REFLECTION_DEFAULT_MAX_RAY_DISTANCE) \
+    FIELD(distanceFadeStart, NWB_REFLECTION_DEFAULT_DISTANCE_FADE_START) \
+    FIELD(roughnessCutoff, NWB_REFLECTION_DEFAULT_ROUGHNESS_CUTOFF) \
+    FIELD(environmentTopR, NWB_REFLECTION_DEFAULT_ENV_TOP_R) \
+    FIELD(environmentTopG, NWB_REFLECTION_DEFAULT_ENV_TOP_G) \
+    FIELD(environmentTopB, NWB_REFLECTION_DEFAULT_ENV_TOP_B) \
+    FIELD(environmentBottomR, NWB_REFLECTION_DEFAULT_ENV_BOTTOM_RGB) \
+    FIELD(environmentBottomG, NWB_REFLECTION_DEFAULT_ENV_BOTTOM_RGB) \
+    FIELD(environmentBottomB, NWB_REFLECTION_DEFAULT_ENV_BOTTOM_RGB) \
+    FIELD(screenThickness, NWB_REFLECTION_DEFAULT_SCREEN_THICKNESS) \
+    FIELD(screenConfidenceThreshold, NWB_REFLECTION_DEFAULT_SCREEN_CONFIDENCE_THRESHOLD) \
+    FIELD(screenEdgeFade, NWB_REFLECTION_DEFAULT_SCREEN_EDGE_FADE)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -20,8 +20,10 @@ NWB_IMPL_BEGIN
 
 
 struct RayTracingSceneGraphReads{
+    static constexpr usize s_FixedSceneResourceUseCount = 6u;
+
     // Ordinary scene reads remain inline; only admitted CSG work allocates the variable posed-bounds list.
-    Core::GpuTaskResourceUse uses[6] = {};
+    Core::GpuTaskResourceUse uses[s_FixedSceneResourceUseCount] = {};
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> csgUses;
 
 

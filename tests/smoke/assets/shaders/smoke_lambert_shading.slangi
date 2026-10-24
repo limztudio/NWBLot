@@ -11,8 +11,37 @@
 
 // Smoke-test-owned deferred lighting BXDF.
 // The engine provides scene-light and visibility/caustic transport, while this project asset owns its BRDF, light loop, and tone-map policy for both deferred and AVBOIT dispatches.
+static const half NWB_SMOKE_LAMBERT_TONEMAP_KNEE = 0.65h;
+static const half NWB_SMOKE_LAMBERT_RIM_EXPONENT = 3.0h;
+static const half NWB_SMOKE_LAMBERT_PRIMARY_SPECULAR_EXPONENT = 72.0h;
+static const half NWB_SMOKE_LAMBERT_PRIMARY_SPECULAR_WEIGHT = 0.85h;
+static const half NWB_SMOKE_LAMBERT_SECONDARY_SPECULAR_EXPONENT = 18.0h;
+static const half NWB_SMOKE_LAMBERT_SECONDARY_SPECULAR_WEIGHT = 0.18h;
+static const half NWB_SMOKE_LAMBERT_VIEW_SPECULAR_EXPONENT = 22.0h;
+static const half NWB_SMOKE_LAMBERT_VIEW_SPECULAR_WEIGHT = 0.28h;
+static const half NWB_SMOKE_LAMBERT_ANISOTROPIC_LOBE_EXPONENT = 18.0h;
+static const half3 NWB_SMOKE_LAMBERT_SPECULAR_TINT_NEUTRAL = half3(0.78h);
+static const half3 NWB_SMOKE_LAMBERT_SPECULAR_TINT_WARM = half3(1.0h, 0.9h, 0.68h);
+static const half NWB_SMOKE_LAMBERT_SPECULAR_TINT_MIX = 0.65h;
+static const half NWB_SMOKE_LAMBERT_DIFFUSE_FLOOR = 0.02h;
+static const half NWB_SMOKE_LAMBERT_DIFFUSE_SCALE = 0.98h;
+static const half NWB_SMOKE_LAMBERT_SPECULAR_NDOTL_FLOOR = 0.08h;
+static const half NWB_SMOKE_LAMBERT_SPECULAR_NDOTL_SCALE = 0.92h;
+static const half3 NWB_SMOKE_LAMBERT_RIM_TINT = half3(0.12h, 0.26h, 0.52h);
+static const half NWB_SMOKE_LAMBERT_RIM_RADIANCE_MIX = 0.25h;
+static const half NWB_SMOKE_LAMBERT_RIM_NDOTL_FLOOR = 0.04h;
+static const half NWB_SMOKE_LAMBERT_RIM_NDOTL_SCALE = 0.96h;
+static const half NWB_SMOKE_LAMBERT_FRAME_CUE_WEIGHT = 0.16h;
+static const half3 NWB_SMOKE_LAMBERT_TANGENT_CUE_COLOR = half3(1.0h, 0.35h, 0.2h);
+static const half3 NWB_SMOKE_LAMBERT_BITANGENT_CUE_COLOR = half3(0.2h, 0.7h, 1.0h);
+static const half3 NWB_SMOKE_LAMBERT_BACKLIGHT_CUE_COLOR = half3(0.012h, 0.02h, 0.04h);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 half3 nwbSmokeLambertTonemap(half3 color){
-    return color / (color + half3(0.65h));
+    return color / (color + half3(NWB_SMOKE_LAMBERT_TONEMAP_KNEE));
 }
 
 half3 nwbSmokeLambertShadeLight(NwbSceneLight light, half3 baseColor, float3 normalVector, float3 tangentVector, float3 bitangentVector, float3 viewVector, half ndotv, float3 worldPosition){
@@ -25,20 +54,20 @@ half3 nwbSmokeLambertShadeLight(NwbSceneLight light, half3 baseColor, float3 nor
     const float3 halfVector = nwbSafeNormalize(lightVector + viewVector, lightVector);
     const half ndotl = half(max(dot(normalVector, lightVector), 0.0));
     const half keyDiffuse = ndotl * ndotl;
-    const half rim = pow(max(1.0h - ndotv, 0.0h), 3.0h);
+    const half rim = pow(max(1.0h - ndotv, 0.0h), NWB_SMOKE_LAMBERT_RIM_EXPONENT);
     const half halfDotNormal = half(max(dot(normalVector, halfVector), 0.0));
-    const half specular = pow(halfDotNormal, 72.0h) * 0.85h + pow(halfDotNormal, 18.0h) * 0.18h;
-    const half viewSpecular = pow(ndotv, 22.0h) * 0.28h;
-    const half tangentLobe = pow(half(abs(dot(tangentVector, halfVector))), 18.0h);
-    const half bitangentLobe = pow(half(abs(dot(bitangentVector, halfVector))), 18.0h);
+    const half specular = pow(halfDotNormal, NWB_SMOKE_LAMBERT_PRIMARY_SPECULAR_EXPONENT) * NWB_SMOKE_LAMBERT_PRIMARY_SPECULAR_WEIGHT + pow(halfDotNormal, NWB_SMOKE_LAMBERT_SECONDARY_SPECULAR_EXPONENT) * NWB_SMOKE_LAMBERT_SECONDARY_SPECULAR_WEIGHT;
+    const half viewSpecular = pow(ndotv, NWB_SMOKE_LAMBERT_VIEW_SPECULAR_EXPONENT) * NWB_SMOKE_LAMBERT_VIEW_SPECULAR_WEIGHT;
+    const half tangentLobe = pow(half(abs(dot(tangentVector, halfVector))), NWB_SMOKE_LAMBERT_ANISOTROPIC_LOBE_EXPONENT);
+    const half bitangentLobe = pow(half(abs(dot(bitangentVector, halfVector))), NWB_SMOKE_LAMBERT_ANISOTROPIC_LOBE_EXPONENT);
     const half backLight = half(max(dot(-normalVector, lightVector), 0.0));
 
-    const half3 specularTint = lerp(half3(0.78h), half3(1.0h, 0.9h, 0.68h), half(0.65));
-    const half3 diffuse = baseColor * lightRadiance * (half(0.02) + half(0.98) * keyDiffuse);
-    const half3 specularColor = lightRadiance * specularTint * (specular * (half(0.08) + half(0.92) * ndotl) + viewSpecular);
-    const half3 rimColor = lerp(half3(0.12h, 0.26h, 0.52h), lightRadiance, half(0.25)) * (rim * (half(0.04) + half(0.96) * ndotl));
-    const half3 frameCue = half(0.16) * (half3(1.0h, 0.35h, 0.2h) * half(tangentLobe) + half3(0.2h, 0.7h, 1.0h) * half(bitangentLobe));
-    const half3 backLightCue = half3(0.012h, 0.02h, 0.04h) * half(backLight);
+    const half3 specularTint = lerp(NWB_SMOKE_LAMBERT_SPECULAR_TINT_NEUTRAL, NWB_SMOKE_LAMBERT_SPECULAR_TINT_WARM, NWB_SMOKE_LAMBERT_SPECULAR_TINT_MIX);
+    const half3 diffuse = baseColor * lightRadiance * (NWB_SMOKE_LAMBERT_DIFFUSE_FLOOR + NWB_SMOKE_LAMBERT_DIFFUSE_SCALE * keyDiffuse);
+    const half3 specularColor = lightRadiance * specularTint * (specular * (NWB_SMOKE_LAMBERT_SPECULAR_NDOTL_FLOOR + NWB_SMOKE_LAMBERT_SPECULAR_NDOTL_SCALE * ndotl) + viewSpecular);
+    const half3 rimColor = lerp(NWB_SMOKE_LAMBERT_RIM_TINT, lightRadiance, NWB_SMOKE_LAMBERT_RIM_RADIANCE_MIX) * (rim * (NWB_SMOKE_LAMBERT_RIM_NDOTL_FLOOR + NWB_SMOKE_LAMBERT_RIM_NDOTL_SCALE * ndotl));
+    const half3 frameCue = NWB_SMOKE_LAMBERT_FRAME_CUE_WEIGHT * (NWB_SMOKE_LAMBERT_TANGENT_CUE_COLOR * half(tangentLobe) + NWB_SMOKE_LAMBERT_BITANGENT_CUE_COLOR * half(bitangentLobe));
+    const half3 backLightCue = NWB_SMOKE_LAMBERT_BACKLIGHT_CUE_COLOR * half(backLight);
 
     return diffuse + specularColor + rimColor + frameCue + backLightCue;
 }

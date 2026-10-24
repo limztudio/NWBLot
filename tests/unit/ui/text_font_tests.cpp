@@ -362,8 +362,9 @@ TEST_F(TextFontTests, AtlasGrowthStaysWithinBoundsAndStopsAtSixteenPages){
 
 TEST_F(TextFontTests, NativeCffCoverageAndFaceSurviveFontReplacement){
     Core::Alloc::ScratchArena fontScratchArena(s_FontScratchArenaName);
+    constexpr u32 s_HangulScriptTag = TextScriptTag('H', 'a', 'n', 'g');
     ShapeRequest request{ "\xed\x95\x9c" };
-    request.scriptTag = 0x48616e67u;
+    request.scriptTag = s_HangulScriptTag;
     request.language = s_KoreanLanguage;
     {
         auto layoutResult = m_service.layout(request);
@@ -388,8 +389,9 @@ TEST_F(TextFontTests, NativeCffCoverageAndFaceSurviveFontReplacement){
 TEST_F(TextFontTests, NativeCffBoundsCoverFractionalDpiRasterFringes){
     const f32 sizes[]{ 32.0078125f, 64.21875f, 320.0078125f };
     for(const f32 fontSize : sizes){
+        constexpr u32 s_HangulScriptTag = TextScriptTag('H', 'a', 'n', 'g');
         ShapeRequest request{ "\xed\x95\x9c" };
-        request.scriptTag = 0x48616e67u;
+        request.scriptTag = s_HangulScriptTag;
         request.language = s_KoreanLanguage;
         request.fontSize = fontSize;
         {

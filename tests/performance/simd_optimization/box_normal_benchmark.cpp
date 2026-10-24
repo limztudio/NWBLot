@@ -147,7 +147,8 @@ template<typename Scalar>
 [[nodiscard]] u32 Verify(){
 #pragma STDC FENV_ACCESS ON
     using Bits = Conditional_T<IsSame_V<Scalar, f64>, u64, u32>;
-    u64 seed = 0x12ace40f893d5847ull;
+    constexpr u64 s_VerifyInitialSeed = 0x12ace40f893d5847ull;
+    u64 seed = s_VerifyInitialSeed;
     u32 failures = 0u;
     for(const i32 mode : { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO }){
         if(!SetFloatingPointRoundingMode(mode))

@@ -167,16 +167,22 @@ static void BuildCases(Vector<ProbeCase, Core::Alloc::GlobalArena>& cases){
             }
         }
     }
-    u32 random = 0x6b47c2d1u;
+    constexpr u32 s_RandomCaseInitialSeed = 0x6b47c2d1u;
+    constexpr u32 s_RandomVirtualCountStride = 73u;
+    constexpr u32 s_RandomScenarioId = 11u;
+    constexpr u32 s_XorShift1 = 13u;
+    constexpr u32 s_XorShift2 = 17u;
+    constexpr u32 s_XorShift3 = 5u;
+    u32 random = s_RandomCaseInitialSeed;
     for(u32 index = 0u; index < s_RandomCaseCount; ++index){
         ProbeCase probe;
-        probe.virtualCount = 1u + index * 73u % s_MaxVirtualCount;
+        probe.virtualCount = 1u + index * s_RandomVirtualCountStride % s_MaxVirtualCount;
         probe.physicalCount = s_PhysicalCounts[index % s_PhysicalCounts.size()];
-        probe.scenario = 11u;
+        probe.scenario = s_RandomScenarioId;
         for(u32 slice = 0u; slice < probe.virtualCount; ++slice){
-            random ^= random << 13u;
-            random ^= random >> 17u;
-            random ^= random << 5u;
+            random ^= random << s_XorShift1;
+            random ^= random >> s_XorShift2;
+            random ^= random << s_XorShift3;
             if(random % 8u < 1u + index % 7u)
                 SetOccupied(probe, slice);
         }

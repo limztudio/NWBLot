@@ -101,11 +101,16 @@ struct OctEncodingBoundary{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr u32 s_Oct16ChannelMask = 255u;
+static constexpr u32 s_Oct16YShift = 8u;
+static constexpr f32 s_Oct16UnormScale = 1.0f / 255.0f;
+static constexpr f32 s_Oct16SignedScale = 2.0f;
+
 [[nodiscard]] static SIMDVectorSingle ScalarOct16Reference(const u32 packed)noexcept{
-    const f32 unormX = static_cast<f32>(packed & 255u) * (1.0f / 255.0f);
-    const f32 unormY = static_cast<f32>((packed >> 8u) & 255u) * (1.0f / 255.0f);
-    f32 x = unormX * 2.0f - 1.0f;
-    f32 y = unormY * 2.0f - 1.0f;
+    const f32 unormX = static_cast<f32>(packed & s_Oct16ChannelMask) * s_Oct16UnormScale;
+    const f32 unormY = static_cast<f32>((packed >> s_Oct16YShift) & s_Oct16ChannelMask) * s_Oct16UnormScale;
+    f32 x = unormX * s_Oct16SignedScale - 1.0f;
+    f32 y = unormY * s_Oct16SignedScale - 1.0f;
     const f32 z = 1.0f - (Abs(x) + Abs(y));
     if(z < 0.0f){
         const f32 foldedX = (1.0f - Abs(y)) * (x >= 0.0f ? 1.0f : -1.0f);

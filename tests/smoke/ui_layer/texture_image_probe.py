@@ -62,6 +62,9 @@ SENTINEL = linear_rgb_bytes((0.07, 0.13, 0.2))
 POPUP = (26, 34, 45)
 
 
+MAX_MARKER_24BIT_VALUE = 0xFFFFFF
+
+
 def snapshot_from_logs(text):
     states, displays, skins = list(STATE.finditer(text)), list(DISPLAY.finditer(text)), list(SKIN.finditer(text))
     if not states or not displays or not skins:
@@ -78,7 +81,7 @@ def snapshot_from_logs(text):
         raise SmokeFailure("texture image fixture reported nonfinite display or geometry")
     if any(value <= 0.0 for value in display) or any(r[2] < 0.0 or r[3] < 0.0 for r in rectangles.values()):
         raise SmokeFailure("texture image fixture reported invalid display or placement extents")
-    if any(value > 0xFFFFFF for value in (*values, sequence)):
+    if any(value > MAX_MARKER_24BIT_VALUE for value in (*values, sequence)):
         raise SmokeFailure("texture image fixture exceeds its two-part displayed marker schema")
     if not all(generations) or generations[0] == generations[1]:
         raise SmokeFailure("independent concrete sources must have distinct nonzero generations")

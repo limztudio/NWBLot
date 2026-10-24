@@ -39,6 +39,9 @@ namespace __hidden_stress_frame_graph_snapshot{
 
 void WriteJsonText(OutputFileStream& output, const AStringView text){
     constexpr AStringView s_HexDigits = "0123456789abcdef";
+    constexpr u8 s_JsonControlCharLimit = 0x20u;
+    constexpr u8 s_NibbleBits = 4u;
+    constexpr u8 s_NibbleMask = 0x0fu;
     output << '"';
     for(const char ch : text){
         switch(ch){
@@ -48,8 +51,8 @@ void WriteJsonText(OutputFileStream& output, const AStringView text){
         case '\r': output << "\\r"; break;
         case '\t': output << "\\t"; break;
         default:
-            if(static_cast<u8>(ch) < 0x20u)
-                output << "\\u00" << s_HexDigits[static_cast<u8>(ch) >> 4u] << s_HexDigits[static_cast<u8>(ch) & 0x0fu];
+            if(static_cast<u8>(ch) < s_JsonControlCharLimit)
+                output << "\\u00" << s_HexDigits[static_cast<u8>(ch) >> s_NibbleBits] << s_HexDigits[static_cast<u8>(ch) & s_NibbleMask];
             else
                 output << ch;
             break;

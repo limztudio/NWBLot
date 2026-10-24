@@ -101,15 +101,15 @@ inline void BuildMeshViewFrustumVectors(
     const SIMDVectorSingle cameraPosition = VectorSetW(VectorMultiplyAdd(VectorNegate(forward), VectorSplatW(positionDepthBias), positionDepthBias), 1.0f);
     outCameraPosition = cameraPosition;
 
-    outFrustumPlanes[0] = BuildViewFrustumSidePlaneVector(forward, right, tanHalfHorizontal, cameraPosition);
-    outFrustumPlanes[1] = BuildViewFrustumSidePlaneVector(forward, VectorNegate(right), tanHalfHorizontal, cameraPosition);
-    outFrustumPlanes[2] = BuildViewFrustumSidePlaneVector(forward, up, tanHalfVertical, cameraPosition);
-    outFrustumPlanes[3] = BuildViewFrustumSidePlaneVector(forward, VectorNegate(up), tanHalfVertical, cameraPosition);
+    outFrustumPlanes[NWB_MESH_VIEW_FRUSTUM_LEFT_PLANE_INDEX] = BuildViewFrustumSidePlaneVector(forward, right, tanHalfHorizontal, cameraPosition);
+    outFrustumPlanes[NWB_MESH_VIEW_FRUSTUM_RIGHT_PLANE_INDEX] = BuildViewFrustumSidePlaneVector(forward, VectorNegate(right), tanHalfHorizontal, cameraPosition);
+    outFrustumPlanes[NWB_MESH_VIEW_FRUSTUM_BOTTOM_PLANE_INDEX] = BuildViewFrustumSidePlaneVector(forward, up, tanHalfVertical, cameraPosition);
+    outFrustumPlanes[NWB_MESH_VIEW_FRUSTUM_TOP_PLANE_INDEX] = BuildViewFrustumSidePlaneVector(forward, VectorNegate(up), tanHalfVertical, cameraPosition);
 
     const SIMDVectorSingle nearPoint = VectorSetW(VectorMultiplyAdd(forward, nearPlane, cameraPosition), 0.0f);
     const SIMDVectorSingle farPoint = VectorSetW(VectorMultiplyAdd(forward, farPlane, cameraPosition), 0.0f);
-    outFrustumPlanes[4] = PlaneTests::FromPointNormal(forward, nearPoint, VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
-    outFrustumPlanes[5] = PlaneTests::FromPointNormal(VectorNegate(forward), farPoint, VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
+    outFrustumPlanes[NWB_MESH_VIEW_FRUSTUM_NEAR_PLANE_INDEX] = PlaneTests::FromPointNormal(forward, nearPoint, VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
+    outFrustumPlanes[NWB_MESH_VIEW_FRUSTUM_FAR_PLANE_INDEX] = PlaneTests::FromPointNormal(VectorNegate(forward), farPoint, VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
 }
 
 inline MeshViewGpuData ResolveMeshViewState(Core::ECS::World& world, const f32 fallbackAspectRatio)noexcept{

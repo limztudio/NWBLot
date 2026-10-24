@@ -109,10 +109,13 @@ def parse_int(value):
         raise argparse.ArgumentTypeError(f"invalid integer value '{value}'") from exc
 
 
+WM_CLOSE_MESSAGE = 0x0010
+
+
 def request_windows_graceful_exit(pid):
     # WM_CLOSE runs normal shutdown and writes name-symbol sidecars; forced termination skips it.
     user32 = create_windows_user32()
-    wm_close = 0x0010
+    wm_close = WM_CLOSE_MESSAGE
     targets = []
 
     @WINDOWS_ENUM_CALLBACK

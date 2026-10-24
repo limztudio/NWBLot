@@ -113,17 +113,17 @@ template<typename T> requires(IsSame_V<T, f32> || IsSame_V<T, f64>)
     else{
         // Integer-bit rounding preserves binary64 range, signed zero, and ties independently of the floating-point rounding mode.
         const u64 bits = BitCast<u64>(value);
-        const u64 magnitude = bits & 0x7FFFFFFFFFFFFFFFu;
-        const u64 sign = bits & 0x8000000000000000u;
-        const u64 exponent = magnitude >> 52u;
-        if(exponent == 0x7FFu && (magnitude & 0x000FFFFFFFFFFFFFu) != 0u)
+        const u64 magnitude = bits & s_F64AbsoluteBitMask;
+        const u64 sign = bits & s_F64SignBitMask;
+        const u64 exponent = magnitude >> s_F64MantissaBitCount;
+        if(exponent == s_F64ExponentFieldMask && (magnitude & s_F64MantissaBitMask) != 0u)
             return value + value;
-        if(exponent >= 1075u)
+        if(exponent >= s_F64IntegerExponent)
             return value;
-        if(exponent < 1023u)
-            return BitCast<f64>(sign | (magnitude > 0x3FE0000000000000u ? 0x3FF0000000000000u : 0u));
+        if(exponent < static_cast<u64>(s_F64ExponentBias))
+            return BitCast<f64>(sign | (magnitude > s_F64HalfBits ? s_F64OneBits : 0u));
 
-        const u64 unit = u64{ 1u } << (1075u - exponent);
+        const u64 unit = u64{ 1u } << (s_F64IntegerExponent - exponent);
         const u64 fraction = magnitude & (unit - 1u);
         u64 integer = magnitude & ~(unit - 1u);
         const u64 halfway = unit >> 1u;
@@ -142,9 +142,9 @@ template<typename T> requires(IsSame_V<T, f32> || IsSame_V<T, f64>)
         } result{};
 
         if(IsNaN(value)){
-            result.u = 0x7FC00000u;
+            result.u = s_F32QuietNaNBits;
         }
-        else if(Abs(value) < 8388608.0f){
+        else if(Abs(value) < s_F32NoFractionThreshold){
             result.f = static_cast<f32>(static_cast<i32>(value));
         }
         else{
@@ -155,15 +155,15 @@ template<typename T> requires(IsSame_V<T, f32> || IsSame_V<T, f64>)
     }
     else{
         const u64 bits = BitCast<u64>(value);
-        const u64 magnitude = bits & 0x7FFFFFFFFFFFFFFFu;
-        const u64 exponent = magnitude >> 52u;
-        if(exponent == 0x7FFu && (magnitude & 0x000FFFFFFFFFFFFFu) != 0u)
+        const u64 magnitude = bits & s_F64AbsoluteBitMask;
+        const u64 exponent = magnitude >> s_F64MantissaBitCount;
+        if(exponent == s_F64ExponentFieldMask && (magnitude & s_F64MantissaBitMask) != 0u)
             return BitCast<u64>(value + value);
-        if(exponent >= 1075u)
+        if(exponent >= s_F64IntegerExponent)
             return bits;
-        if(exponent < 1023u)
-            return bits & 0x8000000000000000u;
-        return bits & ~((u64{ 1u } << (1075u - exponent)) - 1u);
+        if(exponent < static_cast<u64>(s_F64ExponentBias))
+            return bits & s_F64SignBitMask;
+        return bits & ~((u64{ 1u } << (s_F64IntegerExponent - exponent)) - 1u);
     }
 }
 
@@ -185,6 +185,10 @@ namespace SIMDVectorDetail{
 
 inline constexpr u32 s_ByteIndexLaneScale = 0x04040404u;
 inline constexpr u32 s_ByteIndexLaneOffsets = 0x03020100u;
+inline constexpr i32 s_LeadingBitMask16 = 0x0000FFFF;
+inline constexpr i32 s_LeadingBitMask8 = 0x000000FF;
+inline constexpr i32 s_LeadingBitMask4 = 0x0000000F;
+inline constexpr i32 s_LeadingBitMask2 = 0x00000003;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -223,13 +227,13 @@ NWB_INLINE __m128i MultiSllEpi32(__m128i value, __m128i count)noexcept{
 }
 
 NWB_INLINE __m128i GetLeadingBit(__m128i value)noexcept{
-    const __m128i mask0000FFFF = _mm_set1_epi32(0x0000FFFF);
-    const __m128i mask000000FF = _mm_set1_epi32(0x000000FF);
-    const __m128i mask0000000F = _mm_set1_epi32(0x0000000F);
-    const __m128i mask00000003 = _mm_set1_epi32(0x00000003);
+    const __m128i mask0000FFFF = _mm_set1_epi32(s_LeadingBitMask16);
+    const __m128i mask000000FF = _mm_set1_epi32(s_LeadingBitMask8);
+    const __m128i mask0000000F = _mm_set1_epi32(s_LeadingBitMask4);
+    const __m128i mask00000003 = _mm_set1_epi32(s_LeadingBitMask2);
 
     __m128i c = _mm_cmpgt_epi32(value, mask0000FFFF);
-    __m128i b = _mm_srli_epi32(c, 31);
+    __m128i b = _mm_srli_epi32(c, static_cast<i32>(s_F32SignBitShift));
     __m128i r = _mm_slli_epi32(b, 4);
 #if defined(NWB_HAS_AVX2)
     value = MultiSrlEpi32(value, r);
@@ -238,7 +242,7 @@ NWB_INLINE __m128i GetLeadingBit(__m128i value)noexcept{
 #endif
 
     c = _mm_cmpgt_epi32(value, mask000000FF);
-    b = _mm_srli_epi32(c, 31);
+    b = _mm_srli_epi32(c, static_cast<i32>(s_F32SignBitShift));
     __m128i s = _mm_slli_epi32(b, 3);
 #if defined(NWB_HAS_AVX2)
     value = MultiSrlEpi32(value, s);
@@ -248,7 +252,7 @@ NWB_INLINE __m128i GetLeadingBit(__m128i value)noexcept{
     r = _mm_or_si128(r, s);
 
     c = _mm_cmpgt_epi32(value, mask0000000F);
-    b = _mm_srli_epi32(c, 31);
+    b = _mm_srli_epi32(c, static_cast<i32>(s_F32SignBitShift));
     s = _mm_slli_epi32(b, 2);
 #if defined(NWB_HAS_AVX2)
     value = MultiSrlEpi32(value, s);
@@ -258,7 +262,7 @@ NWB_INLINE __m128i GetLeadingBit(__m128i value)noexcept{
     r = _mm_or_si128(r, s);
 
     c = _mm_cmpgt_epi32(value, mask00000003);
-    b = _mm_srli_epi32(c, 31);
+    b = _mm_srli_epi32(c, static_cast<i32>(s_F32SignBitShift));
     s = _mm_slli_epi32(b, 1);
 #if defined(NWB_HAS_AVX2)
     value = MultiSrlEpi32(value, s);
@@ -276,7 +280,7 @@ NWB_INLINE __m128i GetLeadingBit(__m128i value)noexcept{
 NWB_INLINE int32x4_t GetLeadingBit(int32x4_t value)noexcept{
     const uint32x4_t raw = vreinterpretq_u32_s32(value);
     const uint32x4_t isZero = vceqq_u32(raw, vdupq_n_u32(0));
-    uint32x4_t leading = vsubq_u32(vdupq_n_u32(31), vclzq_u32(raw));
+    uint32x4_t leading = vsubq_u32(vdupq_n_u32(s_F32SignBitShift), vclzq_u32(raw));
     leading = vbslq_u32(isZero, vdupq_n_u32(0), leading);
     return vreinterpretq_s32_u32(leading);
 }
@@ -556,11 +560,11 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL SplatLane(SIMDVectorDouble value)noexc
 #elif defined(NWB_HAS_AVX2)
     return BitCast<SIMDVectorDouble>(_mm256_permute4x64_pd(BitCast<__m256d>(value), _MM_SHUFFLE(Lane, Lane, Lane, Lane)));
 #elif defined(NWB_HAS_AVX)
-    const __m256d pairs = _mm256_permute2f128_pd(BitCast<__m256d>(value), BitCast<__m256d>(value), Lane < 2u ? 0x00 : 0x11);
-    return BitCast<SIMDVectorDouble>(_mm256_permute_pd(pairs, (Lane & 1u) == 0u ? 0x0 : 0xF));
+    const __m256d pairs = _mm256_permute2f128_pd(BitCast<__m256d>(value), BitCast<__m256d>(value), Lane < 2u ? s_SIMDAvxPermute2F128LowLow : s_SIMDAvxPermute2F128HighHigh);
+    return BitCast<SIMDVectorDouble>(_mm256_permute_pd(pairs, (Lane & 1u) == 0u ? s_SIMDAvxPermutePdAllLow : s_SIMDAvxPermutePdAllHigh));
 #elif defined(NWB_HAS_SSE2)
     const NativeDoublePair pair = Lane < 2u ? GetLow(value) : GetHigh(value);
-    const NativeDoublePair result = _mm_shuffle_pd(pair, pair, (Lane & 1u) == 0u ? 0x0 : 0x3);
+    const NativeDoublePair result = _mm_shuffle_pd(pair, pair, (Lane & 1u) == 0u ? s_SIMDAvxPermutePdAllLow : s_SIMDMovemask2Low);
     return FromPairs(result, result);
 #else
     return __builtin_shufflevector(value, value, Lane, Lane, Lane, Lane);

@@ -18,7 +18,7 @@ struct NwbDeferredCompositeVertexOutput{
 
 
 NwbDeferredCompositeVertexOutput main(uint vertexIndex : SV_VertexID){
-    const half2 positions[3] = half2[3](half2(-1.0h, -1.0h), half2(3.0h, -1.0h), half2(-1.0h, 3.0h));
+    const half2 positions[NWB_DEFERRED_FULLSCREEN_TRIANGLE_VERTEX_COUNT] = half2[NWB_DEFERRED_FULLSCREEN_TRIANGLE_VERTEX_COUNT](half2(NWB_DEFERRED_FULLSCREEN_CLIP_MIN, NWB_DEFERRED_FULLSCREEN_CLIP_MIN), half2(NWB_DEFERRED_FULLSCREEN_CLIP_MAX, NWB_DEFERRED_FULLSCREEN_CLIP_MIN), half2(NWB_DEFERRED_FULLSCREEN_CLIP_MIN, NWB_DEFERRED_FULLSCREEN_CLIP_MAX));
 
     const half2 position = positions[vertexIndex];
     NwbDeferredCompositeVertexOutput output;

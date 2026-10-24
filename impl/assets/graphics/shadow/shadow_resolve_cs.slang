@@ -120,7 +120,7 @@ half4 nwbShadowResolveGeomAtHalf(const int2 halfTexel){
 // The offset is src-round(src) in [-0.5, 0.5], so every weight lands in [0, 0.75]; half math is sufficient here.
 half3 nwbShadowResolveSpatialWeights(const half offset){
     const half2 side = half2(half(0.5h) - offset, half(0.5h) + offset);
-    return half3(half(0.5h) * side.x * side.x, half(0.75h) - offset * offset, half(0.5h) * side.y * side.y);
+    return half3(half(0.5h) * side.x * side.x, half(NWB_SHADOW_RESOLVE_BSPLINE_CENTER_BASE) - offset * offset, half(0.5h) * side.y * side.y);
 }
 
 half nwbShadowResolveNormalWeightVec(const float3 centerNormal, const half2 tapOct){

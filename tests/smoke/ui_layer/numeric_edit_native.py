@@ -64,11 +64,19 @@ class NumericEditNativeInput(PopupToolsNativeInput):
             x11.XCheckTypedWindowEvent.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.POINTER(NumericClipboardEvent)]
             x11.XCheckTypedWindowEvent.restype = ctypes.c_int
 
+    VK_OEM_PLUS = 0xBB
+    VK_OEM_MINUS = 0xBD
+    VK_OEM_PERIOD = 0xBE
+    WM_KEYDOWN_MSG = 0x0100
+    WM_KEYUP_MSG = 0x0101
+    KEY_PREVIOUS_STATE_BIT = 30
+    KEY_TRANSITION_STATE_BIT = 31
+
     def key(self, name, down, *, repeat=False, shift=False, control=False):
-        numeric_keys = {LIT_MINUS: 0xBD, LIT_PERIOD: 0xBE, LIT_PLUS: 0xBB, **{digit: ord(digit) for digit in "0123456789"}}
+        numeric_keys = {LIT_MINUS: self.VK_OEM_MINUS, LIT_PERIOD: self.VK_OEM_PERIOD, LIT_PLUS: self.VK_OEM_PLUS, **{digit: ord(digit) for digit in "0123456789"}}
         if self.windows and name in numeric_keys:
-            flags = 1 | ((1 << 30) if repeat or not down else 0) | ((1 << 31) if not down else 0)
-            self._post(0x0100 if down else 0x0101, numeric_keys[name], flags)
+            flags = 1 | ((1 << self.KEY_PREVIOUS_STATE_BIT) if repeat or not down else 0) | ((1 << self.KEY_TRANSITION_STATE_BIT) if not down else 0)
+            self._post(self.WM_KEYDOWN_MSG if down else self.WM_KEYUP_MSG, numeric_keys[name], flags)
             return
         super().key(name, down, repeat=repeat, shift=shift, control=control)
 

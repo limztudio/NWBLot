@@ -4,16 +4,21 @@
 
 // Hard bands, hard shadows and flat ambient make per-material BXDF dispatch visible.
 // The cook supplies a unique NWB_DEFERRED_BXDF_FUNCTION; deferred lighting types and accessors are in scope.
+static const half3 NWB_TESTBED_TOON_AMBIENT_FLOOR = half3(0.22h, 0.24h, 0.30h);
+static const half NWB_TESTBED_TOON_BRIGHT_BAND_THRESHOLD = 0.6h;
+static const half NWB_TESTBED_TOON_MIDDLE_BAND_THRESHOLD = 0.25h;
+static const half NWB_TESTBED_TOON_BRIGHT_BAND = 1.0h;
+static const half NWB_TESTBED_TOON_MIDDLE_BAND = 0.55h;
+static const half NWB_TESTBED_TOON_DARK_BAND = 0.18h;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
     const float3 normal = nwbSafeNormalize(surface.normal, float3(0.0, 0.0, 1.0));
-    const half3 ambientFloor = half3(0.22h, 0.24h, 0.30h);
-    const half brightBandThreshold = half(0.6);
-    const half middleBandThreshold = half(0.25);
-    const half brightBand = half(1.0);
-    const half middleBand = half(0.55);
-    const half darkBand = half(0.18);
 
-    half3 color = surface.baseColor * ambientFloor;
+    half3 color = surface.baseColor * NWB_TESTBED_TOON_AMBIENT_FLOOR;
     const uint lightCount = nwbSceneLightCount();
     for(uint i = 0u; i < lightCount; ++i){
         float3 lightVector;
@@ -23,7 +28,7 @@ half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
             continue;
 
         const half ndotl = half(max(dot(normal, lightVector), 0.0));
-        const half band = ndotl > brightBandThreshold ? brightBand : (ndotl > middleBandThreshold ? middleBand : darkBand);
+        const half band = ndotl > NWB_TESTBED_TOON_BRIGHT_BAND_THRESHOLD ? NWB_TESTBED_TOON_BRIGHT_BAND : (ndotl > NWB_TESTBED_TOON_MIDDLE_BAND_THRESHOLD ? NWB_TESTBED_TOON_MIDDLE_BAND : NWB_TESTBED_TOON_DARK_BAND);
         const half3 visibility = nwbBxdfLightTransmittance(pixel, i);
         color += surface.baseColor * radiance * (band * visibility);
     }

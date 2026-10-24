@@ -3,12 +3,18 @@
 
 
 // Test-only view of the full-resolution surfel resolve alpha. Red means covered, green means missing; blue marks the -X face so the checker can assess faces separately.
+static const float NWB_SMOKE_GI_COVERAGE_PROBE_FACE_NORMAL_THRESHOLD = -0.7;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
 #ifdef NWB_GRAPHICS_DEFERRED_LIGHTING_FRAMEWORK_SLANGI
     const half coverage = saturate(half(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.lightingSlots.z).Load(int3(pixel, 0)).a));
-    if(surface.normal.z < -0.7)
+    if(surface.normal.z < NWB_SMOKE_GI_COVERAGE_PROBE_FACE_NORMAL_THRESHOLD)
         return half3(coverage, 1.0h - coverage, 0.0h);
-    if(surface.normal.x < -0.7)
+    if(surface.normal.x < NWB_SMOKE_GI_COVERAGE_PROBE_FACE_NORMAL_THRESHOLD)
         return half3(coverage, 1.0h - coverage, 1.0h);
 #endif
     return half3(0.0h);

@@ -54,6 +54,10 @@ def f32(value):
     return struct.unpack(STRUCT_FLOAT, struct.pack(STRUCT_FLOAT, value))[0]
 
 
+MAX_MARKER_24BIT_VALUE = 0xFFFFFF
+MAX_UINT64_VALUE = 0xFFFFFFFFFFFFFFFF
+
+
 def snapshot_from_logs(text):
     snapshot = snapshot_from_patterns(text, STATE, DISPLAY, SKIN, GEOMETRY, FIELDS, RECTANGLES, fixture="slider", bit_fields=BIT_FIELDS)
     if snapshot is None:
@@ -62,7 +66,7 @@ def snapshot_from_logs(text):
     bits = snapshot[LIT_BITS]
     if any(rectangle[2] < 0.0 or rectangle[3] < 0.0 for rectangle in rectangles.values()):
         raise SmokeFailure("slider fixture reported a negative placement extent")
-    if any(value > 0xFFFFFF for value in (*values, sequence)) or any(value > 0xFFFFFFFFFFFFFFFF for value in bits):
+    if any(value > MAX_MARKER_24BIT_VALUE for value in (*values, sequence)) or any(value > MAX_UINT64_VALUE for value in bits):
         raise SmokeFailure("slider fixture exceeds its displayed marker schema")
     if not all(math.isfinite(bits_value(value)) for value in bits):
         raise SmokeFailure("slider fixture reported a nonfinite typed value")

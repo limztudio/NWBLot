@@ -17,7 +17,8 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_TextMaxBytes = 1024u * 1024u;
+inline constexpr usize s_TextBytesPerKilobyte = 1024u;
+inline constexpr usize s_TextMaxBytes = s_TextBytesPerKilobyte * s_TextBytesPerKilobyte;
 inline constexpr usize s_TextMaxFontSources = 8u;
 inline constexpr usize s_TextMaxLanguageBytes = 63u;
 inline constexpr f32 s_TextDefaultFontSize = 16.0f;
@@ -46,8 +47,12 @@ namespace TextCaretEdge{
     enum Enum : u8{ Leading, Trailing };
 };
 
+inline constexpr u32 s_ScriptTagByte0Shift = 24u;
+inline constexpr u32 s_ScriptTagByte1Shift = 16u;
+inline constexpr u32 s_ScriptTagByte2Shift = 8u;
+
 [[nodiscard]] constexpr u32 TextScriptTag(char a, char b, char c, char d)noexcept{
-    return (static_cast<u32>(a) << 24u) | (static_cast<u32>(b) << 16u) | (static_cast<u32>(c) << 8u) | static_cast<u32>(d);
+    return (static_cast<u32>(a) << s_ScriptTagByte0Shift) | (static_cast<u32>(b) << s_ScriptTagByte1Shift) | (static_cast<u32>(c) << s_ScriptTagByte2Shift) | static_cast<u32>(d);
 }
 
 inline constexpr u32 s_TextDefaultScriptTag = TextScriptTag('L', 'a', 't', 'n');

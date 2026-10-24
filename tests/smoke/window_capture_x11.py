@@ -136,6 +136,8 @@ class LinuxX11Capture:
         self.x11.XTranslateCoordinates.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_int, ctypes.c_int, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_ulong),]
         self.x11.XTranslateCoordinates.restype = ctypes.c_int
 
+    X11_CARDINAL32_FORMAT_BITS = 32
+
     def get_window_pid(self, window):
         actual_type = ctypes.c_ulong()
         actual_format = ctypes.c_int()
@@ -148,7 +150,7 @@ class LinuxX11Capture:
             return None
 
         try:
-            if actual_format.value != 32 or item_count.value < 1:
+            if actual_format.value != X11_CARDINAL32_FORMAT_BITS or item_count.value < 1:
                 return None
             return int(ctypes.cast(value, ctypes.POINTER(ctypes.c_ulong))[0])
         finally:

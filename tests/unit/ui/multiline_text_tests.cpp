@@ -48,22 +48,29 @@ TEST(UiMultilineText, AcceptsEmptyAndCanonicalLfLinesWithoutChangingBytes){
 }
 
 TEST(UiMultilineText, ControlsAndPrintableAsciiBoundariesRespectCanonicalLfAndNormalization){
+    constexpr u32 s_AsciiLimit = 0x80u;
+    constexpr u32 s_AsciiTab = 0x9u;
+    constexpr u32 s_AsciiLineFeed = 0xAu;
+    constexpr u32 s_AsciiCarriageReturn = 0xDu;
+    constexpr u32 s_AsciiSpace = 0x20u;
+    constexpr u32 s_AsciiTilde = 0x7Eu;
+    constexpr u32 s_AsciiDelete = 0x7Fu;
     Tests::TestArena arena;
-    for(u32 scalar = 0u; scalar < 0x80u; ++scalar){
-        if(scalar > 0x20u && scalar < 0x7Eu)
+    for(u32 scalar = 0u; scalar < s_AsciiLimit; ++scalar){
+        if(scalar > s_AsciiSpace && scalar < s_AsciiTilde)
             continue;
         SCOPED_TRACE(scalar);
         const char bytes[]{ 'a', static_cast<char>(scalar), 'b' };
         const AStringView text(bytes, 3u);
-        const bool canonical = scalar == 0xAu || (scalar >= 0x20u && scalar < 0x7Fu);
+        const bool canonical = scalar == s_AsciiLineFeed || (scalar >= s_AsciiSpace && scalar < s_AsciiDelete);
         EXPECT_EQ(ValidateMultilineText(text), canonical);
-        const bool normalizable = canonical || scalar == 0x9u || scalar == 0xDu;
+        const bool normalizable = canonical || scalar == s_AsciiTab || scalar == s_AsciiCarriageReturn;
         auto normalized = NormalizeMultilineText(arena.arena, text, 3u);
         EXPECT_EQ(normalized.has_value(), normalizable);
         if(normalizable){
             ASSERT_TRUE(normalized);
             AString<Core::Alloc::GlobalArena> output(Move(*normalized));
-            const char replacement = scalar == 0x9u ? ' ' : scalar == 0xDu ? '\n' : static_cast<char>(scalar);
+            const char replacement = scalar == s_AsciiTab ? ' ' : scalar == s_AsciiCarriageReturn ? '\n' : static_cast<char>(scalar);
             const char expected[]{ 'a', replacement, 'b' };
             EXPECT_EQ(AStringView(output.data(), output.size()), AStringView(expected, 3u));
             EXPECT_TRUE(ValidateMultilineText({ output.data(), output.size() }));
@@ -76,14 +83,18 @@ TEST(UiMultilineText, ControlsAndPrintableAsciiBoundariesRespectCanonicalLfAndNo
 }
 
 TEST(UiMultilineText, RejectsEveryC1ControlExceptNelDuringNormalization){
+    constexpr u32 s_C1ControlFirst = 0x80u;
+    constexpr u32 s_C1ControlLast = 0x9Fu;
+    constexpr u32 s_C1NextLineScalar = 0x85u;
+    constexpr u32 s_Utf8C1LeadByte = 0xC2u;
     Tests::TestArena arena;
-    for(u32 scalar = 0x80u; scalar <= 0x9Fu; ++scalar){
+    for(u32 scalar = s_C1ControlFirst; scalar <= s_C1ControlLast; ++scalar){
         SCOPED_TRACE(scalar);
-        const char bytes[]{ 'a', static_cast<char>(0xC2u), static_cast<char>(scalar), 'b' };
+        const char bytes[]{ 'a', static_cast<char>(s_Utf8C1LeadByte), static_cast<char>(scalar), 'b' };
         const AStringView text(bytes, 4u);
         EXPECT_FALSE(ValidateMultilineText(text));
         auto normalized = NormalizeMultilineText(arena.arena, text, 4u);
-        if(scalar == 0x85u){
+        if(scalar == s_C1NextLineScalar){
             ASSERT_TRUE(normalized);
             EXPECT_EQ(*normalized, "a\nb");
         }

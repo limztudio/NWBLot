@@ -104,11 +104,16 @@ TEST_F(TextVisibleCoverageTests, MoreThan4096DistinctHiddenHangulDoNotExhaustThe
     AString<Core::Alloc::GlobalArena> text("A\n", m_arena);
     const usize hiddenCount = s_GlyphAtlasMaxGlyphs + 1u;
     text.reserve(2u + hiddenCount * 3u);
+    constexpr u32 s_HangulSyllableBase = 0xac00u;
+    constexpr u32 s_Utf8ThreeByteLeadPrefix = 0xe0u;
+    constexpr u32 s_Utf8ThreeByteLeadShift = 12u;
+    constexpr u32 s_Utf8ContinuationMiddleShift = 6u;
+    constexpr u32 s_Utf8ContinuationPayloadMask = 0x3fu;
     for(u32 index = 0u; index < hiddenCount; ++index){
-        const u32 scalar = 0xac00u + index;
-        text.push_back(static_cast<char>(0xe0u | (scalar >> 12u)));
-        text.push_back(static_cast<char>(0x80u | ((scalar >> 6u) & 0x3fu)));
-        text.push_back(static_cast<char>(0x80u | (scalar & 0x3fu)));
+        const u32 scalar = s_HangulSyllableBase + index;
+        text.push_back(static_cast<char>(s_Utf8ThreeByteLeadPrefix | (scalar >> s_Utf8ThreeByteLeadShift)));
+        text.push_back(static_cast<char>(s_Utf8ContinuationMarker | ((scalar >> s_Utf8ContinuationMiddleShift) & s_Utf8ContinuationPayloadMask)));
+        text.push_back(static_cast<char>(s_Utf8ContinuationMarker | (scalar & s_Utf8ContinuationPayloadMask)));
     }
     {
         auto layoutResult = m_text.layout({ text });

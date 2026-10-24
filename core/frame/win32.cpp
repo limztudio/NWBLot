@@ -45,6 +45,9 @@ namespace __hidden_frame_win32{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr WPARAM s_SysCommandTypeMask = 0xFFF0u;
+
+
 namespace Win32MessagePumpResult{
     enum Enum : u8{
         Continue,
@@ -249,7 +252,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         if(const Optional<LRESULT> inputResult = input.handleMessage(uMsg, wParam, lParam))
             return *inputResult;
 
-        if(uMsg == WM_SYSCOMMAND && (wParam & 0xFFF0u) == SC_MINIMIZE && frame->graphics().shouldRenderUnfocused())
+        if(uMsg == WM_SYSCOMMAND && (wParam & __hidden_frame_win32::s_SysCommandTypeMask) == SC_MINIMIZE && frame->graphics().shouldRenderUnfocused())
             return 0;
 
         if(uMsg == WM_DPICHANGED || uMsg == WM_DISPLAYCHANGE){

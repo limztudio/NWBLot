@@ -39,6 +39,10 @@ WHITE = (1.0, 1.0, 1.0, 1.0)
 SENTINEL = linear_rgb_bytes((0.07, 0.13, 0.2))
 
 
+MAX_MARKER_24BIT_VALUE = 0xFFFFFF
+MAX_UINT64_VALUE = 0xFFFFFFFFFFFFFFFF
+
+
 def snapshot_from_logs(text):
     snapshot = snapshot_from_patterns(text, STATE, DISPLAY, SKIN, GEOMETRY, FIELDS, RECTANGLES, fixture="progress", bit_fields=BIT_FIELDS)
     if snapshot is None:
@@ -47,7 +51,7 @@ def snapshot_from_logs(text):
     bits = snapshot[LIT_BITS]
     if any(r[2] < 0.0 or r[3] < 0.0 for r in rectangles.values()):
         raise SmokeFailure("progress fixture reported invalid display or placement extents")
-    if any(value > 0xFFFFFF for value in (*values, sequence)) or any(value > 0xFFFFFFFFFFFFFFFF for value in bits):
+    if any(value > MAX_MARKER_24BIT_VALUE for value in (*values, sequence)) or any(value > MAX_UINT64_VALUE for value in bits):
         raise SmokeFailure("progress fixture exceeds its displayed marker schema")
     if not all(math.isfinite(bits_value(value)) for value in bits):
         raise SmokeFailure("progress fixture reported a nonfinite frozen value")

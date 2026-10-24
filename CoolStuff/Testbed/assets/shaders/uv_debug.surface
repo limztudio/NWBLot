@@ -9,15 +9,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static const half NWB_TESTBED_UV_DEBUG_CHECKER_CELLS_PER_AXIS = 8.0h;
+static const half NWB_TESTBED_UV_DEBUG_CHECKER_PERIOD = 2.0h;
+static const half NWB_TESTBED_UV_DEBUG_CHECKER_DARK_SCALE = 0.55h;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 half3 nwbProjectUvDebug(const float2 uv0){
-    const half checkerCellsPerAxis = half(8.0);
-    const half checkerPeriod = half(2.0);
-    const half checkerDarkScale = half(0.55);
     const half2 wrappedUv = half2(frac(uv0));
-    const half2 checkerCell = floor(wrappedUv * checkerCellsPerAxis);
-    const half checker = fmod(checkerCell.x + checkerCell.y, checkerPeriod);
+    const half2 checkerCell = floor(wrappedUv * NWB_TESTBED_UV_DEBUG_CHECKER_CELLS_PER_AXIS);
+    const half checker = fmod(checkerCell.x + checkerCell.y, NWB_TESTBED_UV_DEBUG_CHECKER_PERIOD);
     const half3 uvColor = half3(wrappedUv, half(1.0) - wrappedUv.x);
-    return lerp(uvColor * checkerDarkScale, uvColor, checker);
+    return lerp(uvColor * NWB_TESTBED_UV_DEBUG_CHECKER_DARK_SCALE, uvColor, checker);
 }
 
 

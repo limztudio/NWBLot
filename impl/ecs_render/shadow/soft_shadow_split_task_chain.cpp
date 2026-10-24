@@ -86,7 +86,7 @@ Expected<SoftShadowSplitTaskChainBuilder::LightSpaceShadowMaps> SoftShadowSplitT
     }
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> lightSpaceReads{ scratchArena };
     constexpr usize s_LightSpaceReadCapacity = 9u;
-    lightSpaceReads.reserve(s_LightSpaceReadCapacity + inputs.rayTracingPlan.lightSpace.csgDynamicBoundsCount + (route.traceGeometryStatesGraphOwned ? 0u : inputs.traceGeometryResources.size()));
+    lightSpaceReads.reserve(s_LightSpaceReadCapacity + inputs.rayTracingPlan.lightSpace.csgDynamicBounds.size() + (route.traceGeometryStatesGraphOwned ? 0u : inputs.traceGeometryResources.size()));
     if(!RendererFramePipelineDetail::AppendRayTracingSceneShadowBuffers(inputs.rayTracingResources, importBuffer, [&](const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state)noexcept{
         lightSpaceReads.push_back(ReadUse(resource, state));
     }))
@@ -100,9 +100,8 @@ Expected<SoftShadowSplitTaskChainBuilder::LightSpaceShadowMaps> SoftShadowSplitT
             lightSpaceReads.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
     }
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> csgBoundsResources{ scratchArena };
-    csgBoundsResources.reserve(inputs.rayTracingPlan.lightSpace.csgDynamicBoundsCount);
-    for(usize index = 0u; index < inputs.rayTracingPlan.lightSpace.csgDynamicBoundsCount; ++index){
-        const Core::BufferHandle& buffer = inputs.rayTracingPlan.lightSpace.csgDynamicBounds[index];
+    csgBoundsResources.reserve(inputs.rayTracingPlan.lightSpace.csgDynamicBounds.size());
+    for(const Core::BufferHandle& buffer : inputs.rayTracingPlan.lightSpace.csgDynamicBounds){
         Core::GpuGraphResourceId resource;
         {
             const Core::GpuTaskGraph::DeclarationReadView declarations(m_graph);

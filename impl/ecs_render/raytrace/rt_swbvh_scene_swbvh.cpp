@@ -402,12 +402,24 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
             nodes.push_back(node);
         }
 
-        if(!capturePreparedSceneBvh(staticScene, sceneStaticHash, nodes.data(), nodes.size(), nodes.size() * sizeof(NwbBvhNodeGpu), instances.data(), instances.size(), instances.size() * sizeof(SceneSwBvhInstanceGpu)))
+        if(!capturePreparedSceneBvh(
+            staticScene,
+            sceneStaticHash,
+            Span<const NwbBvhNodeGpu>(nodes.data(), nodes.size()),
+            Span<const SceneSwBvhInstanceGpu>(instances.data(), instances.size())
+        ))
             return false;
     }
 
     if(!staticScene){
-        auto preparedRefit = m_sceneSwBvhRefit.prepare(sceneRefitInputs.data(), sceneRefitRoots.data(), sceneRefitInputs.size(), m_preparedSceneBvh.nodeBuffer(), m_preparedSceneBvh.nodeHeapHandle(), static_cast<u32>(requiredNodeCount), m_shaderSystem);
+        auto preparedRefit = m_sceneSwBvhRefit.prepare(
+            Span<const SoftwareSceneRefitInstanceGpu>(sceneRefitInputs.data(), sceneRefitInputs.size()),
+            Span<const Core::BufferHandle>(sceneRefitRoots.data(), sceneRefitRoots.size()),
+            m_preparedSceneBvh.nodeBuffer(),
+            m_preparedSceneBvh.nodeHeapHandle(),
+            static_cast<u32>(requiredNodeCount),
+            m_shaderSystem
+        );
         if(!preparedRefit){
             m_preparedSceneSwBvhRefit.reset();
             return false;
@@ -440,14 +452,9 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
             PreparedShadowMaterialContextRoute::Software,
             staticScene,
             swMaterialContextHash,
-            instanceMaterials.data(),
-            instanceMaterials.size(),
-            instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu),
-            shadowInstanceData.data(),
-            shadowInstanceData.size(),
-            shadowInstanceData.size() * sizeof(InstanceGpuData),
-            shadowMaterialTypedBytes.data(),
-            materialTypedUploadBytes
+            Span<const NwbRtInstanceMaterialGpu>(instanceMaterials.data(), instanceMaterials.size()),
+            Span<const InstanceGpuData>(shadowInstanceData.data(), shadowInstanceData.size()),
+            Span<const u8>(shadowMaterialTypedBytes.data(), materialTypedUploadBytes)
         ))
             return false;
     }
@@ -455,7 +462,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     m_rayTracingState.m_sceneBvhInstanceCount = instanceCount;
     const bool frozenGraphScene = m_preparedSceneBvh.ready() && m_preparedShadowMaterialContext.ready() && m_preparedShadowMaterialContext.route() == PreparedShadowMaterialContextRoute::Software;
     if(frozenGraphScene){
-        if(!capturePreparedSceneSwBvhTraversal(preparedMeshes.data(), preparedMeshes.size(), instanceCount)){
+        if(!capturePreparedSceneSwBvhTraversal(Span<const PreparedSceneSwBvhMesh>(preparedMeshes.data(), preparedMeshes.size()), instanceCount)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze software scene traversal"));
             clearPreparedSceneBvh();
             clearPreparedShadowMaterialContext();
@@ -484,9 +491,11 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
         Fnv64AppendValue(captureSceneIdentity, csg.identity);
         if(m_lightSpaceShadow.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseOneFrame || m_lightSpaceShadow.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseTwoFrames){
             captureSceneIdentity = BuildLightSpaceCsgCaptureIdentity(
-                m_lightSpaceShadow.m_csg, instanceMaterials.data(), shadowInstanceData.data(), instanceMaterials.size(),
-                shadowMaterialTypedBytes.data(), shadowMaterialTypedBytes.size(),
-                m_preparedShadowTraceMaterialSampledTextures.data(), m_preparedShadowTraceMaterialSampledTextures.size()
+                m_lightSpaceShadow.m_csg,
+                Span<const NwbRtInstanceMaterialGpu>(instanceMaterials.data(), instanceMaterials.size()),
+                Span<const InstanceGpuData>(shadowInstanceData.data(), shadowInstanceData.size()),
+                Span<const u8>(shadowMaterialTypedBytes.data(), shadowMaterialTypedBytes.size()),
+                Span<const Core::TextureHandle>(m_preparedShadowTraceMaterialSampledTextures.data(), m_preparedShadowTraceMaterialSampledTextures.size())
             );
             captureSceneTrusted = m_lightSpaceShadow.m_csg.captureGeometryTrusted;
         }

@@ -135,14 +135,6 @@ inline constexpr usize s_BvhBuildInitialCapacity = 1024u;
 // Maximum per-mesh software BVH size; oversized meshes are skipped.
 inline constexpr u32 s_BvhMaxPrimitivesPerMesh = 262144u;
 
-// CPU mirror of the shader BVH node.
-struct NwbBvhNodeGpu{
-    Float3UInt aabbMinLeftChild;
-    Float3UInt aabbMaxRightChild;
-};
-static constexpr usize s_NwbBvhNodeGpuByteSize = 32u;
-static_assert(sizeof(NwbBvhNodeGpu) == s_NwbBvhNodeGpuByteSize, "NwbBvhNodeGpu must match the shader NwbBvhNode std430 layout");
-
 // Scratch scene-BVH build records. They stay in memory during the build, so they use Float storage.
 struct SceneBvhPrimitiveCalculation{
     Float4 aabbMin;
@@ -200,16 +192,6 @@ inline constexpr usize s_SceneBvhInitialInstanceCapacity = 64u;
 inline constexpr u32 s_SceneBvhAxisCount = 3u;
 inline constexpr u32 s_SceneBvhSahBinCount = 12u;
 inline constexpr f32 s_SceneBvhSahTraversalCost = 1.0f;
-
-// CPU mirror of the software scene-BVH instance ABI.
-struct SceneSwBvhInstanceGpu{
-    Float34 worldToObject{};
-    u32 reservedMeshIndex = 0u;
-    u32 primitiveCount = 0u;
-    u32 pad0 = 0u;
-    u32 pad1 = 0u;
-};
-static_assert(sizeof(SceneSwBvhInstanceGpu) == sizeof(Float34) + sizeof(u32) * 4u, "SceneSwBvhInstanceGpu must stay a tight 64-byte record");
 
 inline constexpr usize s_CausticEmissionTargetInitialCapacity = 32u;
 

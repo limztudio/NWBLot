@@ -415,15 +415,11 @@ void RendererRayTracingSystem::clearPreparedShadowTraceMaterialSampledTextures()
 bool RendererRayTracingSystem::capturePreparedSceneBvh(
     const bool staticScene,
     const u64 staticSceneHash,
-    const void* const nodeData,
-    const usize nodeCount,
-    const usize nodeByteCount,
-    const void* const instanceData,
-    const usize instanceCount,
-    const usize instanceByteCount
+    const Span<const NwbBvhNodeGpu> nodes,
+    const Span<const SceneSwBvhInstanceGpu> instances
 ){
     clearPreparedSceneBvh();
-    return m_preparedSceneBvh.capture(m_rayTracingState, staticScene, staticSceneHash, nodeData, nodeCount, nodeByteCount, instanceData, instanceCount, instanceByteCount);
+    return m_preparedSceneBvh.capture(m_rayTracingState, staticScene, staticSceneHash, nodes, instances);
 }
 
 bool RendererRayTracingSystem::capturePreparedSceneBvhCacheReuse(const u64 staticSceneHash, const u32 instanceCount)noexcept{
@@ -437,14 +433,14 @@ void RendererRayTracingSystem::clearPreparedSceneBvh()noexcept{
     m_preparedSceneBvh.clear();
 }
 
-bool RendererRayTracingSystem::capturePreparedSceneSwBvhTraversal(const PreparedSceneSwBvhMesh* const meshes, const usize meshCount, const u32 instanceCount){
+bool RendererRayTracingSystem::capturePreparedSceneSwBvhTraversal(const Span<const PreparedSceneSwBvhMesh> meshes, const u32 instanceCount){
     clearPreparedSceneSwBvhTraversal();
+    const usize meshCount = meshes.size();
     const auto validStorageHandle = [](const Core::GpuDescriptorHandle handle)noexcept{
         return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
     };
     if(
-        !meshes
-        || meshCount == 0u
+        meshCount == 0u
         || meshCount > static_cast<usize>(Limit<u32>::s_Max)
         || instanceCount == 0u
         || !m_preparedSceneBvh.covers(instanceCount)

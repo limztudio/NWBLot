@@ -308,7 +308,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const Core::GpuPhysicalQueueInfo* const graphicsPrefixQueue = deferredCompiledPlan.queueInfoForTask(m_graphicsPrefixTask);
     OpaqueEmulationMergeValidator opaqueEmulationMergeValidator(MakeNotNull(this));
     OpaqueEmulationMergeValidationResult opaqueEmulationMerge;
-    opaqueEmulationMergeValidator.validate(deferredCompiledPlan, graphicsPrefixTimingTasks, FrameExecuteTimingState::s_GraphicsPrefixTimingTicketCount, graphicsPrefixTimingBindingsValid, hasOpaqueCsgFrameWork, opaqueEmulationMerge);
+    opaqueEmulationMergeValidator.validate(deferredCompiledPlan, graphicsPrefixTimingTasks, graphicsPrefixTimingBindingsValid, hasOpaqueCsgFrameWork, opaqueEmulationMerge);
     const bool graphicsPrefixPacketsAreGraphics = opaqueEmulationMerge.packetsAreGraphics;
     const bool graphicsPrefixOpaqueComputeEmulationMerged = opaqueEmulationMerge.opaqueComputeEmulationMerged;
     const bool graphicsPrefixOpaqueSharedComputeEmulationMerged = opaqueEmulationMerge.opaqueSharedComputeEmulationMerged;
@@ -710,7 +710,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     }
 
     FrameExecutePresentTails presentTails(*this, recovery, deferredCompiledPlan, finalPresentationSubmissionToken);
-    if(!presentTails.executeSurfelCounterReadback(surfelGiCounterReadbackQueue, lifecycles.surfelGiCounterBuffers, LengthOf(lifecycles.surfelGiCounterBuffers)))
+    if(!presentTails.executeSurfelCounterReadback(surfelGiCounterReadbackQueue, lifecycles.surfelGiCounterBuffers))
         return;
     presentTails.executeLaggedLightingHistoryCapture(deferredTargets, deferredLaggedLightingHistoryQueue, requestsLaggedLightingHistoryCapture, captureLaggedLightingHistory, laggedAsyncLightingSchedule);
 }

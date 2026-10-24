@@ -139,7 +139,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     constexpr usize s_SurfelCsgTraceContextUseCapacity = 2u;
     const bool hasCsgTraceContext = rayTracingResources.csgTraceContextBuffer.get() != nullptr;
     resourceUses.reserve(s_SurfelResourceUseCapacity + (hasCsgTraceContext ? 1u : 0u) + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResources.size()));
-    traceResourceUses.reserve(s_SurfelTraceResourceUseCapacity + (hasCsgTraceContext ? s_SurfelCsgTraceContextUseCapacity : 0u) + rayTracingResources.csgTraceBoundsBufferCount + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResources.size()));
+    traceResourceUses.reserve(s_SurfelTraceResourceUseCapacity + (hasCsgTraceContext ? s_SurfelCsgTraceContextUseCapacity : 0u) + rayTracingResources.csgTraceBoundsBuffers.size() + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResources.size()));
     resourceUses.push_back(ReadUse(worldPosition));
     resourceUses.push_back(ReadUse(normal));
     resourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
@@ -330,8 +330,9 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         traceResourceUses.push_back(ReadUse(shadowInstances, Core::ResourceStates::ShaderResource));
         if(csgTraceContext.valid()){
             if(!RendererFramePipelineDetail::AppendCurrentCsgRayGeometry(
-                m_deferredLightingTaskGraph, rayTracingResources.csgTraceContextBuffer,
-                rayTracingResources.csgTraceBoundsBuffers, rayTracingResources.csgTraceBoundsBufferCount,
+                rayTracingResources.csgTraceContextBuffer,
+                rayTracingResources.csgTraceBoundsBuffers,
+                m_deferredLightingTaskGraph,
                 [&](const Core::GpuGraphResourceId resource)noexcept{ traceResourceUses.push_back(ReadUse(resource)); }
             ))
                 return false;

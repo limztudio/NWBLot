@@ -7,6 +7,8 @@
 
 #include <impl/global.h>
 
+#include <global/span.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -23,7 +25,7 @@ namespace ECSRenderDetail{
 };
 
 // Hashes the immutable upload payload, including edits and light order.
-[[nodiscard]] u64 ComputeSceneLightingContentHash(const ECSRenderDetail::SceneShadingGpuData& shading, const ECSRenderDetail::SceneLightGpuData* lights, u32 lightCount)noexcept;
+[[nodiscard]] u64 ComputeSceneLightingContentHash(const ECSRenderDetail::SceneShadingGpuData& shading, Span<const ECSRenderDetail::SceneLightGpuData> lights)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

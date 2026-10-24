@@ -80,7 +80,11 @@ SceneShadingBufferUploads RendererDeferredSystem::prepareSceneShadingBufferUploa
     const u32 lightCount = ECSRenderDetail::ResolveSceneLights(m_world, NWB_SCENE_MAX_LIGHTS, uploads.lightData, causticLightImportance);
 
     // Rank caustic lights into params.w; needs a refractive instance.
-    const u32 causticLightCount = ECSRenderDetail::ResolveCausticLights(uploads.lightData, causticLightImportance, lightCount, rayTracingInput.refractiveInstanceCount);
+    const u32 causticLightCount = ECSRenderDetail::ResolveCausticLights(
+        Span<const f32>(causticLightImportance, lightCount),
+        rayTracingInput.refractiveInstanceCount,
+        Span<ECSRenderDetail::SceneLightGpuData>(uploads.lightData, lightCount)
+    );
     uploads.lightingClassification.causticLightCount = causticLightCount;
     // Bitmask of shadow slots holding a light.
     u32 softShadowSlotMask = 0u;
@@ -107,18 +111,17 @@ SceneShadingBufferUploads RendererDeferredSystem::prepareSceneShadingBufferUploa
 }
 
 void RendererDeferredSystem::confirmSceneShadingBufferUploads(
-    const ECSRenderDetail::SceneLightGpuData* const lightData,
-    const u32 lightCount,
+    const Span<const ECSRenderDetail::SceneLightGpuData> lights,
     const bool lightUploadRequired,
     const ECSRenderDetail::SceneShadingGpuData& sceneShadingState,
     const bool sceneShadingUploadRequired
 )noexcept{
-    const usize lightByteCount = static_cast<usize>(lightCount) * sizeof(ECSRenderDetail::SceneLightGpuData);
+    const u32 lightCount = static_cast<u32>(lights.size());
+    const usize lightByteCount = lights.size() * sizeof(ECSRenderDetail::SceneLightGpuData);
     // Commit the empty mirror on accept so later diffs stay correct.
     if(lightUploadRequired || lightCount == 0u){
-        NWB_ASSERT(lightData || lightByteCount == 0u);
         if(lightByteCount != 0u){
-            NWB_MEMCPY(m_deferredState.m_lightGpuData, sizeof(m_deferredState.m_lightGpuData), lightData, lightByteCount);
+            NWB_MEMCPY(m_deferredState.m_lightGpuData, sizeof(m_deferredState.m_lightGpuData), lights.data(), lightByteCount);
         }
         m_deferredState.m_lightGpuDataCount = lightCount;
         m_deferredState.m_lightGpuDataValid = true;

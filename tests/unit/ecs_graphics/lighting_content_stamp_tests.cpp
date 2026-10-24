@@ -30,12 +30,15 @@ using namespace NWB::Impl;
 TEST(LightingContentStamp, OnlyTheSelectedLightPrefixContributes){
     ECSRenderDetail::SceneShadingGpuData shading;
     ECSRenderDetail::SceneLightGpuData lights[2];
-    const u64 original = ComputeSceneLightingContentHash(shading, lights, 1u);
+    const u64 original = ComputeSceneLightingContentHash(shading, Span<const ECSRenderDetail::SceneLightGpuData>(lights, 1u));
     lights[1].position.x = 3.f;
     lights[1].colorIntensity.w = 0.f;
-    EXPECT_EQ(ComputeSceneLightingContentHash(shading, lights, 1u), original);
-    EXPECT_NE(ComputeSceneLightingContentHash(shading, lights, s_ExpectedDualCount), original);
-    EXPECT_EQ(ComputeSceneLightingContentHash(shading, nullptr, 0u), ComputeSceneLightingContentHash(shading, lights, 0u));
+    EXPECT_EQ(ComputeSceneLightingContentHash(shading, Span<const ECSRenderDetail::SceneLightGpuData>(lights, 1u)), original);
+    EXPECT_NE(ComputeSceneLightingContentHash(shading, Span<const ECSRenderDetail::SceneLightGpuData>(lights, s_ExpectedDualCount)), original);
+    EXPECT_EQ(
+        ComputeSceneLightingContentHash(shading, Span<const ECSRenderDetail::SceneLightGpuData>{}),
+        ComputeSceneLightingContentHash(shading, Span<const ECSRenderDetail::SceneLightGpuData>(lights, 0u))
+    );
 }
 
 
@@ -44,9 +47,9 @@ TEST(LightingContentStamp, ReversingSelectedLightsChangesSemanticIdentity){
     ECSRenderDetail::SceneLightGpuData lights[2];
     lights[0].colorIntensity.x = 0.2f;
     lights[1].colorIntensity.y = 0.7f;
-    const u64 original = ComputeSceneLightingContentHash(shading, lights, s_ExpectedDualCount);
+    const u64 original = ComputeSceneLightingContentHash(shading, Span<const ECSRenderDetail::SceneLightGpuData>(lights, s_ExpectedDualCount));
     const ECSRenderDetail::SceneLightGpuData reversed[2] = {lights[1], lights[0]};
-    EXPECT_NE(ComputeSceneLightingContentHash(shading, reversed, s_ExpectedDualCount), original);
+    EXPECT_NE(ComputeSceneLightingContentHash(shading, Span<const ECSRenderDetail::SceneLightGpuData>(reversed, s_ExpectedDualCount)), original);
 }
 
 

@@ -34,7 +34,12 @@ namespace ECSRenderDetail{
 
 void SceneShadingSetupGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
     static_cast<void>(token);
-    payload.deferredSystem.confirmSceneShadingBufferUploads(payload.lightData, payload.lightCount, payload.lightUploadRequired, payload.sceneShadingState, payload.sceneShadingUploadRequired);
+    payload.deferredSystem.confirmSceneShadingBufferUploads(
+        Span<const ECSRenderDetail::SceneLightGpuData>(payload.lightData, payload.lightCount),
+        payload.lightUploadRequired,
+        payload.sceneShadingState,
+        payload.sceneShadingUploadRequired
+    );
 }
 
 

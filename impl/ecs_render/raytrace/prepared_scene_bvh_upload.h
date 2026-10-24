@@ -10,6 +10,9 @@
 
 #include <core/task/gpu/task_graph.h>
 
+#include <global/simdmath.h>
+#include <global/span.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -26,6 +29,24 @@ class RendererRayTracingState;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// CPU mirror of the shader BVH node.
+struct NwbBvhNodeGpu{
+    Float3UInt aabbMinLeftChild;
+    Float3UInt aabbMaxRightChild;
+};
+static constexpr usize s_NwbBvhNodeGpuByteSize = 32u;
+static_assert(sizeof(NwbBvhNodeGpu) == s_NwbBvhNodeGpuByteSize, "NwbBvhNodeGpu must match the shader NwbBvhNode std430 layout");
+
+// CPU mirror of the software scene-BVH instance ABI.
+struct SceneSwBvhInstanceGpu{
+    Float34 worldToObject{};
+    u32 reservedMeshIndex = 0u;
+    u32 primitiveCount = 0u;
+    u32 pad0 = 0u;
+    u32 pad1 = 0u;
+};
+static_assert(sizeof(SceneSwBvhInstanceGpu) == sizeof(Float34) + sizeof(u32) * 4u, "SceneSwBvhInstanceGpu must stay a tight 64-byte record");
+
 // The software scene hierarchy and its leaf instances share topology and leaf indices, so preflight freezes them as one batch against the selected storage generation.
 // A fresh capture keeps node and instance bytes together for one graph upload; accepted static-cache reuse keeps only identity, counts, and hash.
 class PreparedSceneBvhUpload final : NoCopy{
@@ -41,7 +62,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool capture(const RendererRayTracingState& state, bool staticScene, u64 staticSceneHash, const void* nodeData, usize nodeCount, usize nodeByteCount, const void* instanceData, usize instanceCount, usize instanceByteCount);
+    [[nodiscard]] bool capture(const RendererRayTracingState& state, bool staticScene, u64 staticSceneHash, Span<const NwbBvhNodeGpu> nodes, Span<const SceneSwBvhInstanceGpu> instances);
     [[nodiscard]] bool captureCacheReuse(const RendererRayTracingState& state, u64 staticSceneHash, u32 instanceCount)noexcept;
     void clear()noexcept;
 

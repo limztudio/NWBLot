@@ -18,13 +18,12 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u64 ComputeSceneLightingContentHash(const ECSRenderDetail::SceneShadingGpuData& shading, const ECSRenderDetail::SceneLightGpuData* lights, const u32 lightCount)noexcept{
-    NWB_ASSERT(lightCount == 0u || lights);
+u64 ComputeSceneLightingContentHash(const ECSRenderDetail::SceneShadingGpuData& shading, const Span<const ECSRenderDetail::SceneLightGpuData> lights)noexcept{
+    const u32 lightCount = static_cast<u32>(lights.size());
     u64 hash = s_Fnv64OffsetBasis;
     Fnv64AppendValue(hash, shading.cameraPositionLightCount);
     Fnv64AppendValue(hash, lightCount);
-    for(u32 index = 0u; index < lightCount; ++index){
-        const ECSRenderDetail::SceneLightGpuData& light = lights[index];
+    for(const ECSRenderDetail::SceneLightGpuData& light : lights){
         Fnv64AppendValue(hash, light.position);
         Fnv64AppendValue(hash, light.direction);
         Fnv64AppendValue(hash, light.colorIntensity);

@@ -40,37 +40,32 @@ bool PreparedShadowMaterialContext::capture(
     const PreparedShadowMaterialContextRoute::Enum route,
     const bool staticScene,
     const u64 hash,
-    const void* const instanceMaterialData,
-    const usize instanceMaterialCount,
-    const usize instanceMaterialByteCount,
-    const void* const instanceData,
-    const usize instanceCount,
-    const usize instanceByteCount,
-    const void* const materialTypedData,
-    const usize materialTypedByteCount
+    const Span<const NwbRtInstanceMaterialGpu> instanceMaterials,
+    const Span<const InstanceGpuData> instances,
+    const Span<const u8> materialTypedBytes
 ){
+    const usize instanceMaterialCount = instanceMaterials.size();
+    const usize instanceCount = instances.size();
+    const usize materialTypedByteCount = materialTypedBytes.size();
     const bool validStorage = StorageReady(state, instanceMaterialCount, instanceCount, materialTypedByteCount);
     if(
         route == PreparedShadowMaterialContextRoute::None
-        || !instanceMaterialData
-        || !instanceData
-        || !materialTypedData
         || instanceMaterialCount == 0u
         || instanceCount == 0u
-        || instanceMaterialByteCount == 0u
-        || instanceByteCount == 0u
         || materialTypedByteCount == 0u
         || !validStorage
     )
         return false;
 
+    const usize instanceMaterialByteCount = instanceMaterialCount * sizeof(NwbRtInstanceMaterialGpu);
+    const usize instanceByteCount = instanceCount * sizeof(InstanceGpuData);
     clear();
     m_instanceMaterialBytes.resize(instanceMaterialByteCount);
     m_instanceBytes.resize(instanceByteCount);
     m_materialTypedBytes.resize(materialTypedByteCount);
-    NWB_MEMCPY(m_instanceMaterialBytes.data(), m_instanceMaterialBytes.size(), instanceMaterialData, instanceMaterialByteCount);
-    NWB_MEMCPY(m_instanceBytes.data(), m_instanceBytes.size(), instanceData, instanceByteCount);
-    NWB_MEMCPY(m_materialTypedBytes.data(), m_materialTypedBytes.size(), materialTypedData, materialTypedByteCount);
+    NWB_MEMCPY(m_instanceMaterialBytes.data(), m_instanceMaterialBytes.size(), instanceMaterials.data(), instanceMaterialByteCount);
+    NWB_MEMCPY(m_instanceBytes.data(), m_instanceBytes.size(), instances.data(), instanceByteCount);
+    NWB_MEMCPY(m_materialTypedBytes.data(), m_materialTypedBytes.size(), materialTypedBytes.data(), materialTypedByteCount);
     captureStorage(state, hash, instanceMaterialCount, instanceCount, materialTypedByteCount);
     m_route = route;
     m_static = staticScene;

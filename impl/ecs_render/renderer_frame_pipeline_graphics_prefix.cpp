@@ -726,7 +726,10 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     }
     m_graphicsPrefixTask = *mGraphicsPrefixTaskResult;
     // Publish only after every prefix task accepts declaration. The caller freezes dependent ray-tracing routes immediately after this successful return.
-    m_raytracingSystem.publishPreparedLightingClassification(rayTracingLightingClassification, prefixSceneUploadResult->lightData, sceneLightCount);
+    m_raytracingSystem.publishPreparedLightingClassification(
+        rayTracingLightingClassification,
+        Span<const ECSRenderDetail::SceneLightGpuData>(prefixSceneUploadResult->lightData, sceneLightCount)
+    );
     return prefixSceneUploadResult->sceneLightingContentHash;
 }
 

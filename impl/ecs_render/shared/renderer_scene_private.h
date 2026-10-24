@@ -12,6 +12,7 @@
 #include <core/ecs/world.h>
 
 #include <global/simd/vector.h>
+#include <global/span.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -160,8 +161,9 @@ inline bool CausticLightEnabled(const SceneLightGpuData& light)noexcept{
 }
 
 // Assigns caustic slots to top caustic-enabled lights after ResolveSceneLights when a refractive instance and caustic opt-in are present.
-inline u32 ResolveCausticLights(SceneLightGpuData* outLights, const f32* causticImportance, const u32 lightCount, const u32 refractiveInstanceCount)noexcept{
-    if(refractiveInstanceCount == 0u || lightCount == 0u)
+inline u32 ResolveCausticLights(const Span<const f32> causticImportance, const u32 refractiveInstanceCount, const Span<SceneLightGpuData> lights)noexcept{
+    const u32 lightCount = static_cast<u32>(lights.size());
+    if(refractiveInstanceCount == 0u || lightCount == 0u || causticImportance.size() < lightCount)
         return 0u;
 
     // Importance-ranked caustic-slot allocator (mirrors the shadow-slot selection in ResolveSceneLights): hand each slot to the highest eligible light without one. Point lights never qualify.
@@ -170,11 +172,11 @@ inline u32 ResolveCausticLights(SceneLightGpuData* outLights, const f32* caustic
         f32 bestImportance = -1.f;
         u32 bestIndex = lightCount;
         for(u32 i = 0u; i < lightCount; ++i){
-            if(outLights[i].params.w >= 0.f)
+            if(lights[i].params.w >= 0.f)
                 continue;
-            if(!CausticLightEnabled(outLights[i]))
+            if(!CausticLightEnabled(lights[i]))
                 continue;
-            if(!CausticLightEligible(outLights[i]))
+            if(!CausticLightEligible(lights[i]))
                 continue;
             const f32 importance = causticImportance[i];
             if(importance > bestImportance){
@@ -184,7 +186,7 @@ inline u32 ResolveCausticLights(SceneLightGpuData* outLights, const f32* caustic
         }
         if(bestIndex >= lightCount)
             break;
-        outLights[bestIndex].params.w = static_cast<f32>(slot);
+        lights[bestIndex].params.w = static_cast<f32>(slot);
         ++assignedCount;
     }
 

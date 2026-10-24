@@ -77,9 +77,9 @@ Expected<RayTracingSceneGraphReads> ImportRayTracingSceneGraphReads(
     }
     result.uses[LengthOf(result.uses) - 1u] = RendererTaskGraphDetail::ReadUse(optical.resource);
     if(resources.csgTraceContextBuffer){
-        result.csgUses.reserve(1u + resources.csgTraceBoundsBufferCount);
+        result.csgUses.reserve(1u + resources.csgTraceBoundsBuffers.size());
         if(!RendererFramePipelineDetail::AppendCurrentCsgRayGeometry(
-            graph, resources.csgTraceContextBuffer, resources.csgTraceBoundsBuffers, resources.csgTraceBoundsBufferCount,
+            resources.csgTraceContextBuffer, resources.csgTraceBoundsBuffers, graph,
             [&](const Core::GpuGraphResourceId resource)noexcept{ result.csgUses.push_back(RendererTaskGraphDetail::ReadUse(resource)); }
         ))
             return MakeUnexpected(Failure{});

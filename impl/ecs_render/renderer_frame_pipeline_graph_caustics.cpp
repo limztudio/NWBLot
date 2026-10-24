@@ -90,7 +90,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> photonResourceUses{ scratchArena };
     const bool softwareTraceGeometryStatesGraphOwned = softwareTraceGeometrySet.valid();
     constexpr usize s_PhotonResourceUseCapacity = 20u;
-    photonResourceUses.reserve(s_PhotonResourceUseCapacity + (rayTracingResources.csgTraceContextBuffer ? 1u : 0u) + rayTracingResources.csgTraceBoundsBufferCount + (softwareTraceGeometryStatesGraphOwned ? 0u : softwareTraceGeometryResources.size()));
+    photonResourceUses.reserve(s_PhotonResourceUseCapacity + (rayTracingResources.csgTraceContextBuffer ? 1u : 0u) + rayTracingResources.csgTraceBoundsBuffers.size() + (softwareTraceGeometryStatesGraphOwned ? 0u : softwareTraceGeometryResources.size()));
     photonResourceUses.push_back(ReadTextureUse(worldPosition, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
     // Declared layout must match the shader read.
     photonResourceUses.push_back(ReadTextureUse(depth, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
@@ -160,8 +160,9 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
             }
         )
         && RendererFramePipelineDetail::AppendCurrentCsgRayGeometry(
-            m_deferredLightingTaskGraph, rayTracingResources.csgTraceContextBuffer,
-            rayTracingResources.csgTraceBoundsBuffers, rayTracingResources.csgTraceBoundsBufferCount,
+            rayTracingResources.csgTraceContextBuffer,
+            rayTracingResources.csgTraceBoundsBuffers,
+            m_deferredLightingTaskGraph,
             [&](const Core::GpuGraphResourceId resource)noexcept{ photonResourceUses.push_back(ReadUse(resource)); }
         );
     if(!optionalResourcesImported){

@@ -52,7 +52,7 @@ RayTracingLightingClassificationInput RendererRayTracingSystem::snapshotLighting
     return { .refractiveInstanceCount = m_rayTracingState.m_causticRefractiveInstanceCount, };
 }
 
-void RendererRayTracingSystem::publishPreparedLightingClassification(const RayTracingLightingClassification& classification, const ECSRenderDetail::SceneLightGpuData* const lights, const u32 lightCount){
+void RendererRayTracingSystem::publishPreparedLightingClassification(const RayTracingLightingClassification& classification, const Span<const ECSRenderDetail::SceneLightGpuData> lights){
     m_rayTracingState.m_causticLightCount = classification.causticLightCount;
     if(m_shadowVisibilityTraceResourcesPreflighted && classification.causticLightCount != 0u && m_unsupportedCausticVolumeCount != 0u && (!m_unsupportedCausticVolumeReported || m_reportedUnsupportedCausticVolumeHash != m_unsupportedCausticVolumeHash)){
         m_reportedUnsupportedCausticVolumeHash = m_unsupportedCausticVolumeHash;
@@ -60,8 +60,8 @@ void RendererRayTracingSystem::publishPreparedLightingClassification(const RayTr
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: caustic photons unavailable: {} refractive volume(s) need an explicit closed homogeneous optical boundary mode (first entity {})"), m_unsupportedCausticVolumeCount, m_firstUnsupportedCausticVolumeEntity);
     }
     m_rayTracingState.m_softShadowSlotMask = classification.softShadowSlotMask;
-    m_rayTracingState.m_softwareTransparentSampling.m_history.prepareLighting(lights, lightCount);
-    prepareLightSpaceShadows(lights, lightCount);
+    m_rayTracingState.m_softwareTransparentSampling.m_history.prepareLighting(lights);
+    prepareLightSpaceShadows(lights);
 
     // Emit the selected caustic-light and refractive-target gate once from the domain that owns the gathered bounds and diagnostic latch.
     // A successful prefix publication leaves the latch set across optional graph-build retries; final declaration failure restores the earlier snapshot.
@@ -82,6 +82,7 @@ void RendererRayTracingSystem::publishPreparedLightingClassification(const RayTr
         , boundsMax.z
     );
 
+    const u32 lightCount = static_cast<u32>(lights.size());
     for(u32 i = 0u; i < lightCount; ++i){
         if(lights[i].params.w < 0.f)
             continue;
@@ -118,10 +119,12 @@ RayTracingDeferredGraphResourceSnapshot RendererRayTracingSystem::snapshotDeferr
     return RayTracingDeferredGraphResourceSnapshot{
         .materialContextSlotsBuffer = state.m_rayTraceMaterialContextSlotsBuffer,
         .csgTraceContextBuffer = hasCsgTrace ? state.m_csgTraceContextBuffer : nullptr,
-        .rayTraceContextReadSubmissionTokens = contextReadTokenCount != 0u ? state.m_rayTraceContextReadSubmissionTokens.data() : nullptr,
-        .rayTraceContextReadSubmissionTokenCount = contextReadTokenCount,
-        .csgTraceBoundsBuffers = hasCsgTrace ? m_lightSpaceShadow.m_csg.dynamicBounds.data() : nullptr,
-        .csgTraceBoundsBufferCount = hasCsgTrace ? m_lightSpaceShadow.m_csg.dynamicBounds.size() : 0u,
+        .rayTraceContextReadSubmissionTokens = contextReadTokenCount != 0u
+            ? Span<const Core::QueueSubmissionToken>(state.m_rayTraceContextReadSubmissionTokens.data(), contextReadTokenCount)
+            : Span<const Core::QueueSubmissionToken>{},
+        .csgTraceBoundsBuffers = hasCsgTrace
+            ? Span<const Core::BufferHandle>(m_lightSpaceShadow.m_csg.dynamicBounds.data(), m_lightSpaceShadow.m_csg.dynamicBounds.size())
+            : Span<const Core::BufferHandle>{},
         .shadowInstanceMaterialBuffer = state.m_shadowInstanceMaterialBuffer,
         .shadowMaterialTypedBuffer = state.m_shadowMaterialTypedBuffer,
         .shadowInstanceBuffer = state.m_shadowInstanceBuffer,

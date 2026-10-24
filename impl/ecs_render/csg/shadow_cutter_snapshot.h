@@ -9,6 +9,8 @@
 
 #include <impl/assets/graphics/csg/ray_constants.h>
 
+#include <global/span.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -58,7 +60,7 @@ public:
 };
 
 // Receiver order must match the shadow instance table; an empty CSG scene leaves both vectors empty.
-[[nodiscard]] bool BuildCsgShadowSnapshot(Core::ECS::World& world, const CsgShapeRegistry& shapeRegistry, const CsgShadowReceiverInput* receivers, usize receiverCount, Core::Alloc::ScratchArena& scratchArena, CsgShadowSnapshot& outSnapshot);
+[[nodiscard]] bool BuildCsgShadowSnapshot(const CsgShapeRegistry& shapeRegistry, Span<const CsgShadowReceiverInput> receivers, Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena, CsgShadowSnapshot& outSnapshot);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -431,14 +431,9 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
             PreparedShadowMaterialContextRoute::Hardware,
             staticScene,
             hwMaterialContextHash,
-            instanceMaterials.data(),
-            instanceMaterials.size(),
-            instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu),
-            shadowInstanceData.data(),
-            shadowInstanceData.size(),
-            shadowInstanceData.size() * sizeof(InstanceGpuData),
-            shadowMaterialTypedBytes.data(),
-            materialTypedUploadBytes
+            Span<const NwbRtInstanceMaterialGpu>(instanceMaterials.data(), instanceMaterials.size()),
+            Span<const InstanceGpuData>(shadowInstanceData.data(), shadowInstanceData.size()),
+            Span<const u8>(shadowMaterialTypedBytes.data(), materialTypedUploadBytes)
         ))
             return false;
 
@@ -473,9 +468,11 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
         bool captureTrusted = staticScene && contentComplete;
         if(m_lightSpaceShadow.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseOneFrame || m_lightSpaceShadow.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseTwoFrames){
             captureIdentity = BuildLightSpaceCsgCaptureIdentity(
-                m_lightSpaceShadow.m_csg, instanceMaterials.data(), shadowInstanceData.data(), instanceMaterials.size(),
-                shadowMaterialTypedBytes.data(), shadowMaterialTypedBytes.size(),
-                m_preparedShadowTraceMaterialSampledTextures.data(), m_preparedShadowTraceMaterialSampledTextures.size()
+                m_lightSpaceShadow.m_csg,
+                Span<const NwbRtInstanceMaterialGpu>(instanceMaterials.data(), instanceMaterials.size()),
+                Span<const InstanceGpuData>(shadowInstanceData.data(), shadowInstanceData.size()),
+                Span<const u8>(shadowMaterialTypedBytes.data(), shadowMaterialTypedBytes.size()),
+                Span<const Core::TextureHandle>(m_preparedShadowTraceMaterialSampledTextures.data(), m_preparedShadowTraceMaterialSampledTextures.size())
             );
             captureTrusted = m_lightSpaceShadow.m_csg.captureGeometryTrusted && contentComplete;
         }

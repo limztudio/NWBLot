@@ -99,7 +99,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
     constexpr usize s_HardwarePhotonResourceUseCapacity = 15u;
     hardwarePhotonResourceUses.reserve(s_HardwarePhotonResourceUseCapacity
         + (inputs.rayTracingResources->csgTraceContextBuffer ? 1u : 0u)
-        + inputs.rayTracingResources->csgTraceBoundsBufferCount + (hardwareTraceGeometryStatesGraphOwned ? 0u : inputs.hardwareTraceGeometryResources.size())
+        + inputs.rayTracingResources->csgTraceBoundsBuffers.size() + (hardwareTraceGeometryStatesGraphOwned ? 0u : inputs.hardwareTraceGeometryResources.size())
     );
     hardwarePhotonResourceUses.push_back(ReadTextureUse(inputs.worldPosition, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
     hardwarePhotonResourceUses.push_back(ReadTextureUse(inputs.depth, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
@@ -193,8 +193,9 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
         }
     }
     optionalResourcesImported = optionalResourcesImported && RendererFramePipelineDetail::AppendCurrentCsgRayGeometry(
-        m_graph, inputs.rayTracingResources->csgTraceContextBuffer,
-        inputs.rayTracingResources->csgTraceBoundsBuffers, inputs.rayTracingResources->csgTraceBoundsBufferCount,
+        inputs.rayTracingResources->csgTraceContextBuffer,
+        inputs.rayTracingResources->csgTraceBoundsBuffers,
+        m_graph,
         [&](const Core::GpuGraphResourceId resource)noexcept{ hardwarePhotonResourceUses.push_back(ReadUse(resource)); }
     );
     if(!optionalResourcesImported){

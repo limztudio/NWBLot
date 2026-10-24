@@ -46,7 +46,7 @@ inline constexpr usize s_FixedResourceUseCount = 5u;
     const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
     if(!declarations.valid())
         return false;
-    usize capacity = inputs.sceneReads.size() + inputs.snapshot.casterCount + s_FixedResourceUseCount;
+    usize capacity = inputs.sceneReads.size() + inputs.snapshot.casters.size() + s_FixedResourceUseCount;
     for(const Core::GpuTaskResourceSetUse& use : inputs.sceneReadSets){
         if(!declarations.validResourceSet(use.resourceSet))
             return false;
@@ -75,8 +75,7 @@ inline constexpr usize s_FixedResourceUseCount = 5u;
             appendRead(Core::GpuTaskResourceUse{ .resource = members.members[member], .range = use.range, .requiredState = use.requiredState, .access = use.access, .hasIndependentStateSource = use.hasIndependentStateSource, });
         }
     }
-    for(usize index = 0u; index < inputs.snapshot.casterCount; ++index){
-        const auto& caster = inputs.snapshot.casters[index];
+    for(const auto& caster : inputs.snapshot.casters){
         // The scene geometry importer already retains this exact frozen canonical index buffer.
         const Core::GpuGraphResourceId resource = declarations.findImportedBuffer(caster.triangleIndexBuffer);
         if(!resource.valid())
@@ -182,17 +181,15 @@ public:
         , snapshot(inputs.snapshot)
         , casters(inputs.arena)
     {
-        casters.assign(inputs.snapshot.casters, inputs.snapshot.casters + inputs.snapshot.casterCount);
-        snapshot.casters = nullptr;
-        snapshot.casterCount = 0u;
+        casters.assign(inputs.snapshot.casters.begin(), inputs.snapshot.casters.end());
+        snapshot.casters = {};
     }
 
 
 public:
     [[nodiscard]] LightSpaceShadowSnapshot frozenSnapshot()const noexcept{
         LightSpaceShadowSnapshot result = snapshot;
-        result.casters = casters.data();
-        result.casterCount = casters.size();
+        result.casters = Span<const LightSpaceShadowCaster>(casters.data(), casters.size());
         return result;
     }
 };
@@ -302,7 +299,7 @@ Expected<Core::GpuTaskId> DeclareLightSpaceShadowDiagnostics(const LightSpaceSha
 Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(const LightSpaceShadowGraphInputs& inputs, Core::GpuTaskGraph& graph){
     using namespace RendererTaskGraphDetail;
     const auto& snapshot = inputs.snapshot;
-    if(!snapshot.ready || !inputs.dependency.valid() || !snapshot.casters || snapshot.casterCount == 0u)
+    if(!snapshot.ready || !inputs.dependency.valid() || snapshot.casters.empty())
         return MakeUnexpected(Failure{});
     const auto importBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label){
         return graph.importBuffer(buffer, BufferResourceDesc(identity, label).setInitialState(Core::ResourceStates::Common).setExternalFinalState(Core::ResourceStates::Common));
@@ -379,11 +376,11 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(const LightSpaceShad
     uploadDesc.setIdentity(__hidden_task_graph_light_space_shadow::s_ViewUploadIdentity).setMarkerLabel(__hidden_task_graph_light_space_shadow::s_ViewUploadLabel).setScheduling(scheduling).setDependencies(&inputs.dependency, 1u).setExternalStateSources(inputs.stateSources.data(), inputs.stateSources.size());
     Core::GpuTaskId csgUpload;
     if(csg){
-        if(!snapshot.diagnostics || snapshot.csgContextByteCount < NWB_CSG_RAY_CONTEXT_BYTES)
+        if(!snapshot.diagnostics || snapshot.csgContextBytes.size() < NWB_CSG_RAY_CONTEXT_BYTES)
             return MakeUnexpected(Failure{});
         const bool initialize = !snapshot.diagnostics->contextInitialized.valid();
-        const usize prefixBytes = initialize ? snapshot.csgContextByteCount : NWB_CSG_SHADOW_RAY_FAILURE_OFFSET;
-        const auto csgBytesResult = graph.copyUploadData(snapshot.csgContextBytes, prefixBytes, alignof(u32));
+        const usize prefixBytes = initialize ? snapshot.csgContextBytes.size() : NWB_CSG_SHADOW_RAY_FAILURE_OFFSET;
+        const auto csgBytesResult = graph.copyUploadData(snapshot.csgContextBytes.data(), prefixBytes, alignof(u32));
         if(!csgBytesResult)
             return MakeUnexpected(Failure{});
         const Core::GpuUploadBlobId csgBytes = *csgBytesResult;
@@ -400,7 +397,7 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(const LightSpaceShad
         if(!initialize){
             // Retain accumulated failures across new captures until the bounded asynchronous readback observes them.
             constexpr u32 s_PayloadOffset = NWB_CSG_SHADOW_RAY_FAILURE_OFFSET + sizeof(u32);
-            const auto payloadResult = graph.copyUploadData(snapshot.csgContextBytes + s_PayloadOffset, snapshot.csgContextByteCount - s_PayloadOffset, alignof(u32));
+            const auto payloadResult = graph.copyUploadData(snapshot.csgContextBytes.data() + s_PayloadOffset, snapshot.csgContextBytes.size() - s_PayloadOffset, alignof(u32));
             if(!payloadResult)
                 return MakeUnexpected(Failure{});
             const Core::GpuUploadBlobId payload = *payloadResult;
@@ -456,8 +453,7 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(const LightSpaceShad
     uses.pop_back();
     uses.push_back(ReadUse(result.views, Core::ResourceStates::ShaderResource));
     uses.push_back(WriteUse(result.drawArguments, Core::ResourceStates::UnorderedAccess));
-    for(usize index = 0u; index < snapshot.casterCount; ++index){
-        const auto& caster = snapshot.casters[index];
+    for(const auto& caster : snapshot.casters){
         if(caster.meshletCount == 0u)
             continue;
         const ReferenceWrapper<const Core::BufferHandle> buffers[] = { caster.meshletDescBuffer, caster.meshletBoundsBuffer };

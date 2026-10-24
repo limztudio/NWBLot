@@ -129,11 +129,9 @@ struct TraceResourceSetUses{
 };
 
 template<typename AppendBufferFn>
-[[nodiscard]] inline bool AppendCurrentCsgRayGeometry(Core::GpuTaskGraph& graph, const Core::BufferHandle& context, const Core::BufferHandle* bounds, const usize boundsCount, AppendBufferFn&& appendBuffer){
+[[nodiscard]] inline bool AppendCurrentCsgRayGeometry(const Core::BufferHandle& context, const Span<const Core::BufferHandle> bounds, Core::GpuTaskGraph& graph, AppendBufferFn&& appendBuffer){
     if(!context)
         return true;
-    if(boundsCount != 0u && !bounds)
-        return false;
     const auto appendRead = [&](const Core::BufferHandle& buffer){
         if(!buffer)
             return false;
@@ -157,8 +155,8 @@ template<typename AppendBufferFn>
     };
     if(!appendRead(context))
         return false;
-    for(usize index = 0u; index < boundsCount; ++index){
-        if(!appendRead(bounds[index]))
+    for(const Core::BufferHandle& boundBuffer : bounds){
+        if(!appendRead(boundBuffer))
             return false;
     }
     return true;

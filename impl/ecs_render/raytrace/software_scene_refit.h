@@ -15,6 +15,7 @@
 #include <global/arena_object.h>
 #include <global/refcount_ptr.h>
 #include <global/simdmath.h>
+#include <global/span.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -83,7 +84,7 @@ public:
 public:
     void invalidate();
     [[nodiscard]] Expected<SoftwareSceneRefitHandle> prepare(
-        const SoftwareSceneRefitInstanceGpu* inputs, const Core::BufferHandle* meshNodes, usize instanceCount,
+        Span<const SoftwareSceneRefitInstanceGpu> inputs, Span<const Core::BufferHandle> meshNodes,
         const Core::BufferHandle& sceneNodes, Core::GpuDescriptorHandle sceneDescriptor, u32 nodeCount,
         RendererShaderSystem& shaderSystem
     );

@@ -31,8 +31,7 @@ public:
         Core::Alloc::ScratchArena& scratchArena;
         NotNull<RendererFramePipeline*> renderer;
         NotNull<Core::GpuPersistentResourceStateCache::Candidate*> candidate;
-        const Core::BufferHandle* buffers = nullptr;
-        usize bufferCount = 0u;
+        Span<const Core::BufferHandle> buffers{};
         bool finalStateReady = false;
         bool acceptedStateReady = false;
     };

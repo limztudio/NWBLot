@@ -23,16 +23,16 @@ void SoftwareTransparentSamplingHistory::prepareScene(const RayTracingSceneConte
     m_lightingPrepared = false;
 }
 
-void SoftwareTransparentSamplingHistory::prepareLighting(const ECSRenderDetail::SceneLightGpuData* lights, const u32 lightCount)noexcept{
-    NWB_ASSERT(lights || lightCount == 0u);
+void SoftwareTransparentSamplingHistory::prepareLighting(const Span<const ECSRenderDetail::SceneLightGpuData> lights)noexcept{
+    const u32 lightCount = static_cast<u32>(lights.size());
     m_lightHash = s_Fnv64OffsetBasis;
     Fnv64AppendValue(m_lightHash, lightCount);
-    for(u32 index = 0u; index < lightCount; ++index){
-        Fnv64AppendValue(m_lightHash, lights[index].position);
-        Fnv64AppendValue(m_lightHash, lights[index].direction);
-        Fnv64AppendValue(m_lightHash, lights[index].colorIntensity);
-        Fnv64AppendValue(m_lightHash, lights[index].params);
-        Fnv64AppendValue(m_lightHash, lights[index].params2);
+    for(const ECSRenderDetail::SceneLightGpuData& light : lights){
+        Fnv64AppendValue(m_lightHash, light.position);
+        Fnv64AppendValue(m_lightHash, light.direction);
+        Fnv64AppendValue(m_lightHash, light.colorIntensity);
+        Fnv64AppendValue(m_lightHash, light.params);
+        Fnv64AppendValue(m_lightHash, light.params2);
     }
     m_lightingPrepared = true;
 }

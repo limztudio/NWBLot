@@ -35,22 +35,22 @@ bool PreparedSceneBvhUpload::capture(
     const RendererRayTracingState& state,
     const bool staticScene,
     const u64 staticSceneHash,
-    const void* const nodeData,
-    const usize nodeCount,
-    const usize nodeByteCount,
-    const void* const instanceData,
-    const usize instanceCount,
-    const usize instanceByteCount
+    const Span<const NwbBvhNodeGpu> nodes,
+    const Span<const SceneSwBvhInstanceGpu> instances
 ){
     clear();
+    const usize nodeCount = nodes.size();
+    const usize instanceCount = instances.size();
     const bool validStorage = StorageReady(state, nodeCount, instanceCount);
-    if(!nodeData || !instanceData || nodeCount == 0u || instanceCount == 0u || nodeByteCount != nodeCount * sizeof(NwbBvhNodeGpu) || instanceByteCount != instanceCount * sizeof(SceneSwBvhInstanceGpu) || !validStorage)
+    if(nodeCount == 0u || instanceCount == 0u || !validStorage)
         return false;
 
+    const usize nodeByteCount = nodeCount * sizeof(NwbBvhNodeGpu);
+    const usize instanceByteCount = instanceCount * sizeof(SceneSwBvhInstanceGpu);
     m_nodeBytes.resize(nodeByteCount);
     m_instanceBytes.resize(instanceByteCount);
-    NWB_MEMCPY(m_nodeBytes.data(), m_nodeBytes.size(), nodeData, nodeByteCount);
-    NWB_MEMCPY(m_instanceBytes.data(), m_instanceBytes.size(), instanceData, instanceByteCount);
+    NWB_MEMCPY(m_nodeBytes.data(), m_nodeBytes.size(), nodes.data(), nodeByteCount);
+    NWB_MEMCPY(m_instanceBytes.data(), m_instanceBytes.size(), instances.data(), instanceByteCount);
     m_nodeBuffer = state.m_sceneBvhNodeBuffer;
     m_instanceBuffer = state.m_sceneInstanceBuffer;
     m_nodeHeapHandle = state.m_sceneBvhNodeHeapHandle;

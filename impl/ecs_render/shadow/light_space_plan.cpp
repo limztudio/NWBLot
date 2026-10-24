@@ -17,8 +17,9 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<LightSpacePlan> BuildLightSpacePlan(const SoftwareShadowSettings& settings, const LightSpaceLightRequest* const requests, const usize requestCount, const u64 maxStorageBufferRange, const u32 drawCount, const bool csgIntervalDepth)noexcept{
-    if(maxStorageBufferRange == 0u || !ValidateSoftwareShadowSettings(settings) || requestCount > NWB_SCENE_SHADOW_SLOT_COUNT || (requestCount != 0u && !requests))
+Expected<LightSpacePlan> BuildLightSpacePlan(const SoftwareShadowSettings& settings, const Span<const LightSpaceLightRequest> requests, const u64 maxStorageBufferRange, const u32 drawCount, const bool csgIntervalDepth)noexcept{
+    const usize requestCount = requests.size();
+    if(maxStorageBufferRange == 0u || !ValidateSoftwareShadowSettings(settings) || requestCount > NWB_SCENE_SHADOW_SLOT_COUNT)
         return MakeUnexpected(Failure{});
     u32 seenSlots = 0u;
     u64 seenLights = 0u;

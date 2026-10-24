@@ -11,6 +11,8 @@
 #include <core/graphics/rhi/raytracing.h>
 #include <core/graphics/rhi/resource.h>
 
+#include <global/span.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -41,8 +43,7 @@ struct RayTracingSceneGraphResources{
     Core::BufferHandle materialTypedBuffer;
     Core::BufferHandle instanceBuffer;
     Core::BufferHandle csgTraceContextBuffer;
-    const Core::BufferHandle* csgTraceBoundsBuffers = nullptr;
-    usize csgTraceBoundsBufferCount = 0u;
+    Span<const Core::BufferHandle> csgTraceBoundsBuffers{};
     RayTracingOpticalSceneSnapshot opticalScene;
     u32 materialContextSlotsHeapSlot = 0u;
     bool hardwareAvailable = false;

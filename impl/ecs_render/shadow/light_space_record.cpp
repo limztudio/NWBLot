@@ -32,15 +32,14 @@ bool RecordLightSpaceViews(Core::CommandList& commandList, Core::GpuDescriptorHe
 }
 
 bool RecordLightSpaceCull(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot){
-    if(!snapshot.ready || !snapshot.cullPipeline || !snapshot.drawArguments || !snapshot.casters || snapshot.plan.viewCount == 0u)
+    if(!snapshot.ready || !snapshot.cullPipeline || !snapshot.drawArguments || snapshot.casters.empty() || snapshot.plan.viewCount == 0u)
         return false;
     commandList.setComputeState(Core::ComputeState{}.setPipeline(snapshot.cullPipeline.get()));
     heap.bindCompute(commandList, *snapshot.cullPipeline);
     LightSpaceShadowPush push = snapshot.push;
     push.casterDrawOffset = 0u;
-    for(usize index = 0u; index < snapshot.casterCount; ++index){
-        const auto& caster = snapshot.casters[index];
-        const auto drawCount = LightSpaceShadowDrawCount(&caster, 1u);
+    for(const auto& caster : snapshot.casters){
+        const auto drawCount = LightSpaceShadowDrawCount(Span<const LightSpaceShadowCaster>(&caster, 1u));
         if(!drawCount)
             return false;
         push.instanceIndex = caster.instanceIndex;
@@ -57,14 +56,13 @@ bool RecordLightSpaceCull(Core::CommandList& commandList, Core::GpuDescriptorHea
 
 bool RecordLightSpaceCapture(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot, const u32 viewIndex, const bool transparent){
     static_assert(sizeof(Core::DrawIndexedIndirectArguments) == NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES);
-    if(!snapshot.ready || !snapshot.drawArguments || viewIndex >= snapshot.plan.viewCount || (snapshot.casterCount != 0u && !snapshot.casters))
+    if(!snapshot.ready || !snapshot.drawArguments || viewIndex >= snapshot.plan.viewCount)
         return false;
     const auto& framebuffer = transparent ? snapshot.transparentFramebuffers[viewIndex] : snapshot.opaqueFramebuffers[viewIndex];
     const auto& pipeline = transparent ? snapshot.transparentCapture : snapshot.opaqueCapture;
     if(!framebuffer || !pipeline)
         return false;
-    for(usize index = 0u; index < snapshot.casterCount; ++index){
-        const auto& caster = snapshot.casters[index];
+    for(const auto& caster : snapshot.casters){
         if((caster.transparent || caster.csg) != transparent || caster.indexCount == 0u || ((snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_HW_COMPOSE) != 0u && !caster.csg))
             continue;
         if(!caster.triangleIndexBuffer || !caster.triangleIndexBuffer->getCreationDescription().isIndexBuffer)
@@ -84,9 +82,8 @@ bool RecordLightSpaceCapture(Core::CommandList& commandList, Core::GpuDescriptor
     LightSpaceShadowPush push = snapshot.push;
     push.viewIndex = viewIndex;
     u32 drawOffset = viewIndex * snapshot.push.captureDrawCount;
-    for(usize index = 0u; index < snapshot.casterCount; ++index){
-        const LightSpaceShadowCaster& caster = snapshot.casters[index];
-        const auto drawCount = LightSpaceShadowDrawCount(&caster, 1u);
+    for(const LightSpaceShadowCaster& caster : snapshot.casters){
+        const auto drawCount = LightSpaceShadowDrawCount(Span<const LightSpaceShadowCaster>(&caster, 1u));
         if(!drawCount){
             commandList.endRenderPass();
             return false;

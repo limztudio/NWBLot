@@ -10,6 +10,8 @@
 
 #include <core/task/gpu/compiled_graph.h>
 
+#include <global/span.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -40,7 +42,7 @@ public:
 
 public:
     // Returns false when an accepted readback lost its retained state and the frame must stop.
-    [[nodiscard]] bool executeSurfelCounterReadback(const Core::GpuPhysicalQueueInfo* readbackQueue, const Core::BufferHandle* counterBuffers, usize counterBufferCount);
+    [[nodiscard]] bool executeSurfelCounterReadback(const Core::GpuPhysicalQueueInfo* readbackQueue, Span<const Core::BufferHandle> counterBuffers);
     void executeLaggedLightingHistoryCapture(DeferredFrameTargets& targets, const Core::GpuPhysicalQueueInfo* historyQueue, bool requestsCapture, bool captureDeclared, bool laggedAsyncLightingSchedule);
 
 

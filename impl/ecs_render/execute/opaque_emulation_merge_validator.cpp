@@ -26,8 +26,7 @@ OpaqueEmulationMergeValidator::OpaqueEmulationMergeValidator(NotNull<RendererFra
 
 void OpaqueEmulationMergeValidator::validate(
     const Core::GpuCompiledGraph::ReadView& compiledPlan,
-    const Core::GpuTaskId* timingTasks,
-    usize timingTaskCount,
+    const Span<const Core::GpuTaskId> timingTasks,
     bool timingBindingsValid,
     bool hasOpaqueCsgFrameWork,
     OpaqueEmulationMergeValidationResult& outResult
@@ -55,7 +54,7 @@ void OpaqueEmulationMergeValidator::validate(
             : nullptr
     ;
     outResult.packetsAreGraphics = timingBindingsValid;
-    for(usize prefixTaskIndex = 0u; outResult.packetsAreGraphics && prefixTaskIndex < timingTaskCount; ++prefixTaskIndex){
+    for(usize prefixTaskIndex = 0u; outResult.packetsAreGraphics && prefixTaskIndex < timingTasks.size(); ++prefixTaskIndex){
         const Core::GpuPhysicalQueueInfo* const queue = compiledPlan.queueInfoForTask(timingTasks[prefixTaskIndex]);
         outResult.packetsAreGraphics = queue && queue->queueClass == Core::CommandQueue::Graphics;
     }

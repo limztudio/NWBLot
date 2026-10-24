@@ -13,6 +13,7 @@
 
 #include <global/containers.h>
 #include <global/simdmath.h>
+#include <global/span.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -67,7 +68,7 @@ struct LightSpacePlan{
 };
 
 // Invalid input is rejected. Valid but ineligible or over-budget lights retain software tracing.
-[[nodiscard]] Expected<LightSpacePlan> BuildLightSpacePlan(const SoftwareShadowSettings& settings, const LightSpaceLightRequest* requests, usize requestCount, u64 maxStorageBufferRange, u32 drawCount, bool csgIntervalDepth = false)noexcept;
+[[nodiscard]] Expected<LightSpacePlan> BuildLightSpacePlan(const SoftwareShadowSettings& settings, Span<const LightSpaceLightRequest> requests, u64 maxStorageBufferRange, u32 drawCount, bool csgIntervalDepth = false)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

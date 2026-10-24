@@ -10,6 +10,8 @@
 #include <core/assets/ref.h>
 #include <core/ecs/entity_id.h>
 
+#include <global/span.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -49,8 +51,7 @@ struct CoincidentOpticalVolumeCandidate{
     Float3U position = Float3U(0.f, 0.f, 0.f);
     Float4U rotation = Float4U(0.f, 0.f, 0.f, 1.f);
     Float3U scale = Float3U(1.f, 1.f, 1.f);
-    const u8* mutableTypedBytes = nullptr;
-    usize mutableTypedByteCount = 0u;
+    Span<const u8> mutableTypedBytes{};
     Name group = s_NameNone;
     Core::ECS::EntityID entity;
     i32 priority = 0;
@@ -71,8 +72,8 @@ public:
 
 public:
     void prepare(Core::ECS::World& world, RendererMaterialSystem& materials, Core::Alloc::ScratchArena& scratchArena);
-    // Candidates must contain each entity at most once. Null denotes an empty candidate range.
-    void select(const CoincidentOpticalVolumeCandidate* candidates, usize candidateCount, Core::Alloc::ScratchArena& scratchArena);
+    // Candidates must contain each entity at most once.
+    void select(Span<const CoincidentOpticalVolumeCandidate> candidates, Core::Alloc::ScratchArena& scratchArena);
     void reset()noexcept;
     [[nodiscard]] bool isSuppressed(Core::ECS::EntityID entity)const noexcept;
 

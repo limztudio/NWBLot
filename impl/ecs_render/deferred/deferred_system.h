@@ -15,6 +15,8 @@
 #include <core/graphics/gpu_timing.h>
 #include <core/task/gpu/task_graph.h>
 
+#include <global/span.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -104,7 +106,7 @@ public:
 
     // Resolve immutable per-frame data; confirm CPU mirrors only after packet accepts.
     [[nodiscard]] SceneShadingBufferUploads prepareSceneShadingBufferUploads(f32 fallbackAspectRatio, const RayTracingLightingClassificationInput& rayTracingInput)noexcept;
-    void confirmSceneShadingBufferUploads(const ECSRenderDetail::SceneLightGpuData* lightData, u32 lightCount, bool lightUploadRequired, const ECSRenderDetail::SceneShadingGpuData& sceneShadingState, bool sceneShadingUploadRequired)noexcept;
+    void confirmSceneShadingBufferUploads(Span<const ECSRenderDetail::SceneLightGpuData> lights, bool lightUploadRequired, const ECSRenderDetail::SceneShadingGpuData& sceneShadingState, bool sceneShadingUploadRequired)noexcept;
     [[nodiscard]] bool createDeferredLightingResources();
     [[nodiscard]] bool createDeferredLightingPipeline();
     [[nodiscard]] Expected<Core::GpuTaskId> declareDeferredLightingTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc, bool useLaggedLightingHistory, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket);

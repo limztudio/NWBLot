@@ -22,7 +22,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool FrameExecutePresentTails::executeSurfelCounterReadback(const Core::GpuPhysicalQueueInfo* const readbackQueue, const Core::BufferHandle* const counterBuffers, const usize counterBufferCount){
+bool FrameExecutePresentTails::executeSurfelCounterReadback(const Core::GpuPhysicalQueueInfo* const readbackQueue, const Span<const Core::BufferHandle> counterBuffers){
     RendererFramePipeline& renderer = m_renderer;
     if(!renderer.m_deferredSurfelGiCounterReadbackTask.valid())
         return true;
@@ -43,7 +43,7 @@ bool FrameExecutePresentTails::executeSurfelCounterReadback(const Core::GpuPhysi
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
         Core::GpuPersistentResourceStateCache::Candidate readbackCounterStateCandidate(renderer.m_surfelGiCounterPersistentState);
         // Keep the candidate private until Transfer accepts.
-        FrameExecuteSurfelReadback::Context readbackContext{ .scratchArena = scratchArena, .renderer = MakeNotNull(&renderer), .candidate = MakeNotNull(&readbackCounterStateCandidate), .buffers = counterBuffers, .bufferCount = counterBufferCount, };
+        FrameExecuteSurfelReadback::Context readbackContext{ .scratchArena = scratchArena, .renderer = MakeNotNull(&renderer), .candidate = MakeNotNull(&readbackCounterStateCandidate), .buffers = counterBuffers, };
         const Core::GpuTaskGraphTaskRecordedCallback readbackRecordedCallback{ .task = renderer.m_deferredSurfelGiCounterReadbackTask, .context = &readbackContext, .invoke = FrameExecuteSurfelReadback::PrepareReadbackFinalState, };
         const Core::GpuTaskGraphTaskAcceptedCallback readbackAcceptedCallback{ .task = renderer.m_deferredSurfelGiCounterReadbackTask, .context = &readbackContext, .invoke = FrameExecuteSurfelReadback::AcceptReadbackFinalState, };
         const Core::GpuTaskScheduler& scheduler = renderer.m_graphics.gpuTasks();

@@ -11,6 +11,8 @@
 
 #include <core/task/gpu/task_graph.h>
 
+#include <global/span.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -106,10 +108,8 @@ struct RayTracingShadowPreparationResourceSnapshot{
 struct RayTracingDeferredGraphResourceSnapshot{
     Core::BufferHandle materialContextSlotsBuffer;
     Core::BufferHandle csgTraceContextBuffer;
-    const Core::QueueSubmissionToken* rayTraceContextReadSubmissionTokens = nullptr;
-    usize rayTraceContextReadSubmissionTokenCount = 0u;
-    const Core::BufferHandle* csgTraceBoundsBuffers = nullptr;
-    usize csgTraceBoundsBufferCount = 0u;
+    Span<const Core::QueueSubmissionToken> rayTraceContextReadSubmissionTokens{};
+    Span<const Core::BufferHandle> csgTraceBoundsBuffers{};
     Core::BufferHandle shadowInstanceMaterialBuffer;
     Core::BufferHandle shadowMaterialTypedBuffer;
     Core::BufferHandle shadowInstanceBuffer;

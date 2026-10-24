@@ -106,7 +106,7 @@ struct LightSpaceShadowCaster{
     bool csg = false;
 };
 
-[[nodiscard]] Expected<u32> LightSpaceShadowDrawCount(const LightSpaceShadowCaster* casters, usize casterCount)noexcept;
+[[nodiscard]] Expected<u32> LightSpaceShadowDrawCount(Span<const LightSpaceShadowCaster> casters)noexcept;
 
 struct LightSpaceShadowDiagnostics{
     Core::BufferHandle readback;
@@ -155,17 +155,14 @@ struct LightSpaceShadowSnapshot{
     Core::GraphicsPipelineHandle opaqueCapture;
     Core::GraphicsPipelineHandle transparentCapture;
     LightSpaceShadowPush push;
-    const LightSpaceShadowCaster* casters = nullptr;
-    usize casterCount = 0u;
+    Span<const LightSpaceShadowCaster> casters{};
     LightSpaceCaptureTicket captureTicket;
     LightSpaceCaptureHistory* captureHistory = nullptr;
     LightSpaceShadowDiagnostics* diagnostics = nullptr;
     Core::BufferHandle diagnosticReadback;
     u32 diagnosticFrame = 0u;
-    const u8* csgContextBytes = nullptr;
-    usize csgContextByteCount = 0u;
-    const Core::BufferHandle* csgDynamicBounds = nullptr;
-    usize csgDynamicBoundsCount = 0u;
+    Span<const u8> csgContextBytes{};
+    Span<const Core::BufferHandle> csgDynamicBounds{};
     bool ready = false;
 };
 

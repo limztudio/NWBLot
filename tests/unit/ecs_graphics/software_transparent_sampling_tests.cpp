@@ -37,13 +37,13 @@ TEST(SoftwareTransparentSampling, OnlyAcceptedCompleteStaticScenePermitsLocalBud
     const RayTracingSceneContentStamp scene{ 10u, 20u, true };
     const ECSRenderDetail::SceneLightGpuData light;
     history.prepareScene(scene);
-    history.prepareLighting(&light, 1u);
+    history.prepareLighting(Span<const ECSRenderDetail::SceneLightGpuData>(&light, 1u));
     EXPECT_FALSE(history.usable());
     history.accept();
     EXPECT_TRUE(history.usable());
     history.prepareScene(scene);
     EXPECT_FALSE(history.usable());
-    history.prepareLighting(&light, 1u);
+    history.prepareLighting(Span<const ECSRenderDetail::SceneLightGpuData>(&light, 1u));
     EXPECT_TRUE(history.usable());
     history.discard();
     EXPECT_FALSE(history.usable());
@@ -53,19 +53,19 @@ TEST(SoftwareTransparentSampling, MovingCasterWithStationaryReceiverCannotReuseT
     SoftwareTransparentSamplingHistory history;
     const ECSRenderDetail::SceneLightGpuData light;
     history.prepareScene({ 10u, 20u, true });
-    history.prepareLighting(&light, 1u);
+    history.prepareLighting(Span<const ECSRenderDetail::SceneLightGpuData>(&light, 1u));
     history.accept();
     // No camera/receiver input changes: the caster transform is part of the independently gathered scene identity.
     history.prepareScene({ 11u, 20u, true });
-    history.prepareLighting(&light, 1u);
+    history.prepareLighting(Span<const ECSRenderDetail::SceneLightGpuData>(&light, 1u));
     EXPECT_FALSE(history.usable());
     history.accept();
     EXPECT_TRUE(history.usable());
     history.prepareScene({ 11u, 21u, true });
-    history.prepareLighting(&light, 1u);
+    history.prepareLighting(Span<const ECSRenderDetail::SceneLightGpuData>(&light, 1u));
     EXPECT_FALSE(history.usable());
     history.prepareScene({ 11u, 20u, false });
-    history.prepareLighting(&light, 1u);
+    history.prepareLighting(Span<const ECSRenderDetail::SceneLightGpuData>(&light, 1u));
     history.accept();
     EXPECT_FALSE(history.usable());
 }
@@ -82,22 +82,22 @@ TEST(SoftwareTransparentSampling, EveryLightInputAndSlotOrderInvalidatesTrust){
     for(const auto field : s_Fields){
         SoftwareTransparentSamplingHistory history;
         history.prepareScene(scene);
-        history.prepareLighting(original, s_ExpectedDualCount);
+        history.prepareLighting(Span<const ECSRenderDetail::SceneLightGpuData>(original, s_ExpectedDualCount));
         history.accept();
         ECSRenderDetail::SceneLightGpuData changed[] = { original[0], original[1] };
         Float4& value = changed[0].*field;
         value.x = VectorGetX(VectorAdd(VectorReplicate(value.x), VectorReplicate(0.125f)));
-        history.prepareLighting(changed, s_ExpectedDualCount);
+        history.prepareLighting(Span<const ECSRenderDetail::SceneLightGpuData>(changed, s_ExpectedDualCount));
         EXPECT_FALSE(history.usable());
     }
     SoftwareTransparentSamplingHistory history;
     history.prepareScene(scene);
-    history.prepareLighting(original, s_ExpectedDualCount);
+    history.prepareLighting(Span<const ECSRenderDetail::SceneLightGpuData>(original, s_ExpectedDualCount));
     history.accept();
     ECSRenderDetail::SceneLightGpuData reversed[] = { original[1], original[0] };
-    history.prepareLighting(reversed, s_ExpectedDualCount);
+    history.prepareLighting(Span<const ECSRenderDetail::SceneLightGpuData>(reversed, s_ExpectedDualCount));
     EXPECT_FALSE(history.usable());
-    history.prepareLighting(original, 1u);
+    history.prepareLighting(Span<const ECSRenderDetail::SceneLightGpuData>(original, 1u));
     EXPECT_FALSE(history.usable());
 }
 

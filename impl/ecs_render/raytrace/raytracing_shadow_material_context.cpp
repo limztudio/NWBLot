@@ -28,16 +28,11 @@ bool RendererRayTracingSystem::capturePreparedShadowMaterialContext(
     const PreparedShadowMaterialContextRoute::Enum route,
     const bool staticScene,
     const u64 hash,
-    const void* const instanceMaterialData,
-    const usize instanceMaterialCount,
-    const usize instanceMaterialByteCount,
-    const void* const instanceData,
-    const usize instanceCount,
-    const usize instanceByteCount,
-    const void* const materialTypedData,
-    const usize materialTypedByteCount
+    const Span<const NwbRtInstanceMaterialGpu> instanceMaterials,
+    const Span<const InstanceGpuData> instances,
+    const Span<const u8> materialTypedBytes
 ){
-    if(!m_preparedShadowMaterialContext.capture(m_rayTracingState, route, staticScene, hash, instanceMaterialData, instanceMaterialCount, instanceMaterialByteCount, instanceData, instanceCount, instanceByteCount, materialTypedData, materialTypedByteCount))
+    if(!m_preparedShadowMaterialContext.capture(m_rayTracingState, route, staticScene, hash, instanceMaterials, instances, materialTypedBytes))
         return false;
     clearPreparedSceneSwBvhTraversal();
     return true;

@@ -13,6 +13,7 @@
 #include <core/graphics/rhi/command.h>
 
 #include <global/simdmath.h>
+#include <global/span.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -32,7 +33,7 @@ namespace ECSRenderDetail{
 class SoftwareTransparentSamplingHistory final{
 public:
     void prepareScene(const RayTracingSceneContentStamp& scene)noexcept;
-    void prepareLighting(const ECSRenderDetail::SceneLightGpuData* lights, u32 lightCount)noexcept;
+    void prepareLighting(Span<const ECSRenderDetail::SceneLightGpuData> lights)noexcept;
     void accept()noexcept;
     void discard()noexcept{ m_accepted = false; }
     [[nodiscard]] bool usable()const noexcept;

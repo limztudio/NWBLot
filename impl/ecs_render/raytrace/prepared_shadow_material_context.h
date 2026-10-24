@@ -6,9 +6,13 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/mesh/renderer_mesh_types.h>
 #include <impl/ecs_render/raytrace/graph_snapshots.h>
+#include <impl/ecs_render/raytrace/instance_material.h>
 
 #include <core/task/gpu/task_graph.h>
+
+#include <global/span.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -56,14 +60,9 @@ public:
         PreparedShadowMaterialContextRoute::Enum route,
         bool staticScene,
         u64 hash,
-        const void* instanceMaterialData,
-        usize instanceMaterialCount,
-        usize instanceMaterialByteCount,
-        const void* instanceData,
-        usize instanceCount,
-        usize instanceByteCount,
-        const void* materialTypedData,
-        usize materialTypedByteCount
+        Span<const NwbRtInstanceMaterialGpu> instanceMaterials,
+        Span<const InstanceGpuData> instances,
+        Span<const u8> materialTypedBytes
     );
     [[nodiscard]] bool captureCacheReuse(const RendererRayTracingState& state, u64 hash, usize instanceMaterialCount, usize instanceCount, usize materialTypedByteCount)noexcept;
     void clear()noexcept;

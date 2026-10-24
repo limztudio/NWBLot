@@ -25,13 +25,12 @@ NWB_IMPL_BEGIN
 
 u64 BuildLightSpaceCsgCaptureIdentity(
     const LightSpaceCsgState& state,
-    const NwbRtInstanceMaterialGpu* const materials, const InstanceGpuData* const instances, const usize instanceCount,
-    const u8* const materialBytes, const usize materialByteCount,
-    const Core::TextureHandle* const textures, const usize textureCount
+    const Span<const NwbRtInstanceMaterialGpu> materials, const Span<const InstanceGpuData> instances,
+    const Span<const u8> materialBytes,
+    const Span<const Core::TextureHandle> textures
 )noexcept{
-    NWB_ASSERT(instanceCount == 0u || (materials && instances));
-    NWB_ASSERT(materialByteCount == 0u || materialBytes);
-    NWB_ASSERT(textureCount == 0u || textures);
+    const usize instanceCount = instances.size();
+    NWB_ASSERT(materials.size() == instanceCount);
     u64 identity = state.captureGeometryIdentity;
     Fnv64AppendValue(identity, state.snapshot.contentIdentity);
     Fnv64AppendValue(identity, instanceCount);
@@ -40,10 +39,10 @@ u64 BuildLightSpaceCsgCaptureIdentity(
         Fnv64AppendValue(identity, instances[index].translation.w);
         Fnv64AppendValue(identity, instances[index].geometryHeapSlots);
     }
-    Fnv64AppendBuffer(identity, materialBytes, materialByteCount);
-    Fnv64AppendValue(identity, textureCount);
-    for(usize index = 0u; index < textureCount; ++index)
-        Fnv64AppendValue(identity, textures[index].get());
+    Fnv64AppendBuffer(identity, materialBytes.data(), materialBytes.size());
+    Fnv64AppendValue(identity, textures.size());
+    for(const Core::TextureHandle& texture : textures)
+        Fnv64AppendValue(identity, texture.get());
     return identity;
 }
 
@@ -133,7 +132,7 @@ bool FinishLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& worl
         return true;
     if(state.receivers.size() != state.instances.size())
         return false;
-    if(!BuildCsgShadowSnapshot(world, registry, state.receivers.data(), state.receivers.size(), scratchArena, state.snapshot))
+    if(!BuildCsgShadowSnapshot(registry, Span<const CsgShadowReceiverInput>(state.receivers.data(), state.receivers.size()), world, scratchArena, state.snapshot))
         return false;
     if(!state.snapshot.hasCsg)
         return true;

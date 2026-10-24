@@ -10,6 +10,8 @@
 #include <core/task/gpu/compiled_graph.h>
 #include <core/task/gpu/task_graph.h>
 
+#include <global/span.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -46,7 +48,7 @@ public:
 
 
 public:
-    void validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, const Core::GpuTaskId* timingTasks, usize timingTaskCount, bool timingBindingsValid, bool hasOpaqueCsgFrameWork, OpaqueEmulationMergeValidationResult& outResult)const noexcept;
+    void validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, Span<const Core::GpuTaskId> timingTasks, bool timingBindingsValid, bool hasOpaqueCsgFrameWork, OpaqueEmulationMergeValidationResult& outResult)const noexcept;
 
 
 private:

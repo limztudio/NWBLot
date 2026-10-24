@@ -37,12 +37,10 @@ bool LightSpaceShadowStorageFits(const LightSpacePlan& plan, const LightSpaceSha
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<u32> LightSpaceShadowDrawCount(const LightSpaceShadowCaster* const casters, const usize casterCount)noexcept{
-    if(casterCount != 0u && !casters)
-        return MakeUnexpected(Failure{});
+Expected<u32> LightSpaceShadowDrawCount(const Span<const LightSpaceShadowCaster> casters)noexcept{
     u64 drawCount = 0u;
-    for(usize index = 0u; index < casterCount; ++index){
-        const u32 meshletCount = casters[index].meshletCount;
+    for(const LightSpaceShadowCaster& caster : casters){
+        const u32 meshletCount = caster.meshletCount;
         drawCount += meshletCount == 0u ? 1u : meshletCount / NWB_LIGHT_SPACE_MESHLETS_PER_DRAW + (meshletCount % NWB_LIGHT_SPACE_MESHLETS_PER_DRAW != 0u ? 1u : 0u);
         if(drawCount > Limit<u32>::s_Max)
             return MakeUnexpected(Failure{});
@@ -78,12 +76,9 @@ bool RendererRayTracingSystem::setSoftwareShadowSettings(const SoftwareShadowSet
 
 LightSpaceShadowSnapshot RendererRayTracingSystem::lightSpaceShadowSnapshot()const noexcept{
     LightSpaceShadowSnapshot result = m_lightSpaceShadow.m_snapshot;
-    result.casters = m_lightSpaceShadow.m_casters.data();
-    result.casterCount = m_lightSpaceShadow.m_casters.size();
-    result.csgContextBytes = m_lightSpaceShadow.m_csg.bytes.data();
-    result.csgContextByteCount = m_lightSpaceShadow.m_csg.bytes.size();
-    result.csgDynamicBounds = m_lightSpaceShadow.m_csg.dynamicBounds.data();
-    result.csgDynamicBoundsCount = m_lightSpaceShadow.m_csg.dynamicBounds.size();
+    result.casters = Span<const LightSpaceShadowCaster>(m_lightSpaceShadow.m_casters.data(), m_lightSpaceShadow.m_casters.size());
+    result.csgContextBytes = Span<const u8>(m_lightSpaceShadow.m_csg.bytes.data(), m_lightSpaceShadow.m_csg.bytes.size());
+    result.csgDynamicBounds = Span<const Core::BufferHandle>(m_lightSpaceShadow.m_csg.dynamicBounds.data(), m_lightSpaceShadow.m_csg.dynamicBounds.size());
     return result;
 }
 
@@ -142,25 +137,26 @@ void RendererRayTracingSystem::preflightLightSpaceShadowResources(){
     const u32 lightCount = ECSRenderDetail::ResolveSceneLights(m_world, NWB_SCENE_MAX_LIGHTS, lights, causticImportance);
     for(u32 index = 0u; index < lightCount; ++index)
         state.m_csgRequired = state.m_csgRequired || (state.m_csg.snapshot.hasCsg && lights[index].params.z >= 0.f);
-    const auto planResult = buildLightSpaceShadowPlan(lights, lightCount);
+    const auto planResult = buildLightSpaceShadowPlan(Span<const ECSRenderDetail::SceneLightGpuData>(lights, lightCount));
     if(!planResult)
         return;
     const LightSpacePlan& plan = *planResult;
     state.m_resourcesPrepared = ensureLightSpaceShadowPipelines() && ensureLightSpaceShadowStorage(plan);
 }
 
-Expected<LightSpacePlan> RendererRayTracingSystem::buildLightSpaceShadowPlan(const ECSRenderDetail::SceneLightGpuData* const lights, const u32 lightCount)const noexcept{
+Expected<LightSpacePlan> RendererRayTracingSystem::buildLightSpaceShadowPlan(const Span<const ECSRenderDetail::SceneLightGpuData> lights)const noexcept{
     const auto& state = m_lightSpaceShadow;
+    const usize lightCount = lights.size();
     if(
         (!state.m_csg.snapshot.hasCsg && (m_shadowVisibilityHardwareSupported || state.m_settings.backend == SoftwareShadowBackend::SoftwareTrace))
         || !state.m_sceneEligible || !m_shadowVisibilityPreparedTargets || (!m_shadowVisibilityHardwareSupported && !m_preparedSceneSwBvhReady)
         || !m_rayTracingState.m_softShadowReady || !m_rayTracingState.m_softTransparentReady
-        || state.m_casters.empty() || !lights || lightCount > NWB_SCENE_MAX_LIGHTS
+        || state.m_casters.empty() || lightCount > NWB_SCENE_MAX_LIGHTS
     )
         return MakeUnexpected(Failure{});
     Array<LightSpaceLightRequest, NWB_SCENE_SHADOW_SLOT_COUNT> requests;
     usize requestCount = 0u;
-    for(u32 index = 0u; index < lightCount; ++index){
+    for(u32 index = 0u; index < static_cast<u32>(lightCount); ++index){
         const auto& light = lights[index];
         if(light.params.z < 0.f || light.params.z >= static_cast<f32>(NWB_SCENE_SHADOW_SLOT_COUNT))
             continue;
@@ -176,17 +172,17 @@ Expected<LightSpacePlan> RendererRayTracingSystem::buildLightSpaceShadowPlan(con
             return MakeUnexpected(Failure{});
         settings.memoryBudgetBytes -= state.m_csg.bytes.size() + sizeof(u32);
     }
-    const auto drawCount = LightSpaceShadowDrawCount(state.m_casters.data(), state.m_casters.size());
+    const auto drawCount = LightSpaceShadowDrawCount(Span<const LightSpaceShadowCaster>(state.m_casters.data(), state.m_casters.size()));
     if(!drawCount)
         return MakeUnexpected(drawCount.error());
-    auto plan = BuildLightSpacePlan(settings, requests.data(), requestCount, m_graphics.getDevice().getMaxStorageBufferRange(), *drawCount, state.m_csg.snapshot.hasCsg);
+    auto plan = BuildLightSpacePlan(settings, Span<const LightSpaceLightRequest>(requests.data(), requestCount), m_graphics.getDevice().getMaxStorageBufferRange(), *drawCount, state.m_csg.snapshot.hasCsg);
     if(!plan || plan->viewCount == 0u)
         return MakeUnexpected(Failure{});
     return Move(*plan);
 }
 
 // Graph declaration can change the admitted light list, but never creates or grows its GPU resources.
-void RendererRayTracingSystem::prepareLightSpaceShadows(const ECSRenderDetail::SceneLightGpuData* const lights, const u32 lightCount){
+void RendererRayTracingSystem::prepareLightSpaceShadows(const Span<const ECSRenderDetail::SceneLightGpuData> lights){
     auto& state = m_lightSpaceShadow;
     auto& snapshot = state.m_snapshot;
     snapshot.ready = false;
@@ -199,11 +195,11 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(const ECSRenderDetail::S
         || !snapshot.counts || !snapshot.events || !snapshot.views || !snapshot.drawArguments || !snapshot.depth
     )
         return;
-    const auto planResult = buildLightSpaceShadowPlan(lights, lightCount);
+    const auto planResult = buildLightSpaceShadowPlan(lights);
     if(!planResult)
         return;
     const LightSpacePlan& plan = *planResult;
-    const auto drawCount = LightSpaceShadowDrawCount(state.m_casters.data(), state.m_casters.size());
+    const auto drawCount = LightSpaceShadowDrawCount(Span<const LightSpaceShadowCaster>(state.m_casters.data(), state.m_casters.size()));
     if(!drawCount)
         return;
     const LightSpaceShadowStorageCapacity capacity{
@@ -223,13 +219,14 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(const ECSRenderDetail::S
     identity.scene = state.m_captureSceneIdentity;
     identity.trusted = state.m_captureSceneTrusted;
     identity.lighting = s_Fnv64OffsetBasis;
+    const u32 lightCount = static_cast<u32>(lights.size());
     Fnv64AppendValue(identity.lighting, lightCount);
-    for(u32 index = 0u; index < lightCount; ++index){
-        Fnv64AppendValue(identity.lighting, lights[index].position);
-        Fnv64AppendValue(identity.lighting, lights[index].direction);
-        Fnv64AppendValue(identity.lighting, lights[index].colorIntensity);
-        Fnv64AppendValue(identity.lighting, lights[index].params);
-        Fnv64AppendValue(identity.lighting, lights[index].params2);
+    for(const ECSRenderDetail::SceneLightGpuData& light : lights){
+        Fnv64AppendValue(identity.lighting, light.position);
+        Fnv64AppendValue(identity.lighting, light.direction);
+        Fnv64AppendValue(identity.lighting, light.colorIntensity);
+        Fnv64AppendValue(identity.lighting, light.params);
+        Fnv64AppendValue(identity.lighting, light.params2);
     }
     identity.layout = s_Fnv64OffsetBasis;
     Fnv64AppendValue(identity.layout, targets.width);
@@ -285,8 +282,7 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(const ECSRenderDetail::S
     }
     snapshot.push.viewCount = plan.viewCount;
     snapshot.push.outputSlot = snapshot.drawArgumentsDescriptor.slot();
-    snapshot.casters = state.m_casters.data();
-    snapshot.casterCount = state.m_casters.size();
+    snapshot.casters = Span<const LightSpaceShadowCaster>(state.m_casters.data(), state.m_casters.size());
     snapshot.ready = true;
 }
 

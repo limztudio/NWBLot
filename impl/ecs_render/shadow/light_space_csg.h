@@ -6,6 +6,8 @@
 
 
 #include <impl/ecs_render/csg/shadow_cutter_snapshot.h>
+#include <impl/ecs_render/mesh/renderer_mesh_types.h>
+#include <impl/ecs_render/raytrace/instance_material.h>
 #include <impl/assets/graphics/shadow/csg_shadow_constants.h>
 
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
@@ -22,9 +24,6 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-struct InstanceGpuData;
-struct NwbRtInstanceMaterialGpu;
 
 namespace ECSRenderDetail{
     struct MeshRayTracingResourceSnapshot;
@@ -74,9 +73,9 @@ public:
 // Excludes only world transforms; geometry/material edits still invalidate the bounded capture approximation.
 [[nodiscard]] u64 BuildLightSpaceCsgCaptureIdentity(
     const LightSpaceCsgState& state,
-    const NwbRtInstanceMaterialGpu* materials, const InstanceGpuData* instances, usize instanceCount,
-    const u8* materialBytes, usize materialByteCount,
-    const Core::TextureHandle* textures, usize textureCount
+    Span<const NwbRtInstanceMaterialGpu> materials, Span<const InstanceGpuData> instances,
+    Span<const u8> materialBytes,
+    Span<const Core::TextureHandle> textures
 )noexcept;
 
 void BeginLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& world, usize capacity, bool hardware);

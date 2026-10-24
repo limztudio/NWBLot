@@ -122,13 +122,14 @@ void AppendReceiverCutters(const CsgShadowReceiverInput& receiver, const CsgRece
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BuildCsgShadowSnapshot(Core::ECS::World& world, const CsgShapeRegistry& shapeRegistry, const CsgShadowReceiverInput* const receivers, const usize receiverCount, Core::Alloc::ScratchArena& scratchArena, CsgShadowSnapshot& outSnapshot){
+bool BuildCsgShadowSnapshot(const CsgShapeRegistry& shapeRegistry, const Span<const CsgShadowReceiverInput> receivers, Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena, CsgShadowSnapshot& outSnapshot){
     outSnapshot.receiverRanges.clear();
     outSnapshot.cutters.clear();
     outSnapshot.identity = 0u;
     outSnapshot.contentIdentity = 0u;
     outSnapshot.hasCsg = false;
-    if(receiverCount > static_cast<usize>(Limit<u32>::s_Max) || (receiverCount != 0u && !receivers))
+    const usize receiverCount = receivers.size();
+    if(receiverCount > static_cast<usize>(Limit<u32>::s_Max))
         return false;
     if(receiverCount == 0u || !HasCsgFrameCandidates(world))
         return true;

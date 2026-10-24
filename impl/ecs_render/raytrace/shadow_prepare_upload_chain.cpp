@@ -77,12 +77,9 @@ bool ShadowPrepareUploadChainBuilder::declareSelectorAndContextUploads(Core::All
     const Core::GpuUploadBlobId rayTraceMaterialContextSlotsBlob = *rayTraceMaterialContextSlotsBlobResult;
 
     Vector<Core::GpuExternalCompletionId, Core::Alloc::ScratchArena> csgReadCompletions{ scratchArena };
-    if(inputs.rayTracingResources.rayTraceContextReadSubmissionTokenCount != 0u){
-        if(!inputs.rayTracingResources.rayTraceContextReadSubmissionTokens)
-            return false;
-        csgReadCompletions.reserve(inputs.rayTracingResources.rayTraceContextReadSubmissionTokenCount);
-        for(usize index = 0u; index < inputs.rayTracingResources.rayTraceContextReadSubmissionTokenCount; ++index){
-            const auto& token = inputs.rayTracingResources.rayTraceContextReadSubmissionTokens[index];
+    if(!inputs.rayTracingResources.rayTraceContextReadSubmissionTokens.empty()){
+        csgReadCompletions.reserve(inputs.rayTracingResources.rayTraceContextReadSubmissionTokens.size());
+        for(const auto& token : inputs.rayTracingResources.rayTraceContextReadSubmissionTokens){
             if(!token.valid())
                 continue;
             const AString<Core::Alloc::ScratchArena> completionName = StringFormat(scratchArena, "render.raytrace.csg_queue_{}.read_complete", token.physicalQueueIndex);

@@ -146,7 +146,7 @@ public:
     void releaseSceneTlasHeapHandle();
 
     [[nodiscard]] RayTracingLightingClassificationInput snapshotLightingClassificationInput()const noexcept;
-    void publishPreparedLightingClassification(const RayTracingLightingClassification& classification, const ECSRenderDetail::SceneLightGpuData* lights, u32 lightCount);
+    void publishPreparedLightingClassification(const RayTracingLightingClassification& classification, Span<const ECSRenderDetail::SceneLightGpuData> lights);
     [[nodiscard]] RayTracingFrameCpuStateSnapshot captureFrameCpuState()const noexcept;
     void restoreShadowPacketCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept;
     void restoreCausticPacketCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept;
@@ -506,24 +506,19 @@ private:
         PreparedShadowMaterialContextRoute::Enum route,
         bool staticScene,
         u64 hash,
-        const void* instanceMaterialData,
-        usize instanceMaterialCount,
-        usize instanceMaterialByteCount,
-        const void* instanceData,
-        usize instanceCount,
-        usize instanceByteCount,
-        const void* materialTypedData,
-        usize materialTypedByteCount
+        Span<const NwbRtInstanceMaterialGpu> instanceMaterials,
+        Span<const InstanceGpuData> instances,
+        Span<const u8> materialTypedBytes
     );
     [[nodiscard]] bool preparedTraversalStorageMatchesCurrent()const noexcept;
     [[nodiscard]] bool capturePreparedShadowMaterialContextCacheReuse(u64 hash, usize instanceMaterialCount, usize instanceCount, usize materialTypedByteCount)noexcept;
     void clearPreparedShadowMaterialContext()noexcept;
     [[nodiscard]] bool appendPreparedShadowTraceMaterialSampledTextures(const MaterialSurfaceInfo& materialInfo, ShadowMaterialSampledTextureCollector& collector);
     void clearPreparedShadowTraceMaterialSampledTextures()noexcept;
-    [[nodiscard]] bool capturePreparedSceneBvh(bool staticScene, u64 staticSceneHash, const void* nodeData, usize nodeCount, usize nodeByteCount, const void* instanceData, usize instanceCount, usize instanceByteCount);
+    [[nodiscard]] bool capturePreparedSceneBvh(bool staticScene, u64 staticSceneHash, Span<const NwbBvhNodeGpu> nodes, Span<const SceneSwBvhInstanceGpu> instances);
     [[nodiscard]] bool capturePreparedSceneBvhCacheReuse(u64 staticSceneHash, u32 instanceCount)noexcept;
     void clearPreparedSceneBvh()noexcept;
-    [[nodiscard]] bool capturePreparedSceneSwBvhTraversal(const PreparedSceneSwBvhMesh* meshes, usize meshCount, u32 instanceCount);
+    [[nodiscard]] bool capturePreparedSceneSwBvhTraversal(Span<const PreparedSceneSwBvhMesh> meshes, u32 instanceCount);
     // Preflight leaves the exact software descriptor tables populated. The frozen traversal validates those tables and retained resource identities without republishing mutable state.
     [[nodiscard]] bool recordPreparedSceneSwBvhTraversal();
     void clearPreparedSceneSwBvhTraversal()noexcept;
@@ -698,8 +693,8 @@ private:
         Core::CommandList& commandList, u32 positionHeapSlot, u32 triangleIndexHeapSlot, u32 primitiveCount, Core::GpuDescriptorHandle nodeHeapHandle, Core::GpuDescriptorHandle parentHeapHandle, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer
     );
     void preflightLightSpaceShadowResources();
-    [[nodiscard]] Expected<LightSpacePlan> buildLightSpaceShadowPlan(const ECSRenderDetail::SceneLightGpuData* lights, u32 lightCount)const noexcept;
-    void prepareLightSpaceShadows(const ECSRenderDetail::SceneLightGpuData* lights, u32 lightCount);
+    [[nodiscard]] Expected<LightSpacePlan> buildLightSpaceShadowPlan(Span<const ECSRenderDetail::SceneLightGpuData> lights)const noexcept;
+    void prepareLightSpaceShadows(Span<const ECSRenderDetail::SceneLightGpuData> lights);
     [[nodiscard]] bool ensureLightSpaceShadowPipelines();
     [[nodiscard]] bool ensureLightSpaceShadowStorage(const LightSpacePlan& plan);
     void releaseLightSpaceShadowResources();

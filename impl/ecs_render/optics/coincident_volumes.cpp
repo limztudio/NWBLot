@@ -44,8 +44,6 @@ inline constexpr usize s_MinCoincidentCandidateCount = 2u;
 [[nodiscard]] bool ValidCandidate(const Candidate& candidate, const SIMDVectorSingle position, const SIMDVectorSingle rotation, const SIMDVectorSingle scale)noexcept{
     if(!candidate.entity.valid() || !candidate.mesh.valid() || !candidate.material.valid())
         return false;
-    if(candidate.mutableTypedByteCount != 0u && !candidate.mutableTypedBytes)
-        return false;
     return ValidCandidateLanes(position, rotation, scale);
 }
 
@@ -59,8 +57,8 @@ public:
         if(candidate->group == s_NameNone){
             HashCombine(hash, candidate->boundaryMode);
             HashCombine(hash, candidate->mediumPriority);
-            HashCombine(hash, candidate->mutableTypedByteCount);
-            HashCombine(hash, ComputeFnv64Bytes(candidate->mutableTypedBytes, candidate->mutableTypedByteCount));
+            HashCombine(hash, candidate->mutableTypedBytes.size());
+            HashCombine(hash, ComputeFnv64Bytes(candidate->mutableTypedBytes.data(), candidate->mutableTypedBytes.size()));
         }
         return hash;
     }
@@ -98,8 +96,8 @@ public:
             || (
                 lhs->boundaryMode == rhs->boundaryMode
                 && lhs->mediumPriority == rhs->mediumPriority
-                && lhs->mutableTypedByteCount == rhs->mutableTypedByteCount
-                && (lhs->mutableTypedByteCount == 0u || NWB_MEMCMP(lhs->mutableTypedBytes, rhs->mutableTypedBytes, lhs->mutableTypedByteCount) == 0)
+                && lhs->mutableTypedBytes.size() == rhs->mutableTypedBytes.size()
+                && (lhs->mutableTypedBytes.empty() || NWB_MEMCMP(lhs->mutableTypedBytes.data(), rhs->mutableTypedBytes.data(), lhs->mutableTypedBytes.size()) == 0)
             )
         ;
     }
@@ -182,8 +180,7 @@ void RendererOpticalVolumeSelection::prepare(Core::ECS::World& world, RendererMa
         candidate.priority = renderer.opticalVolumePriority;
         candidate.boundaryMode = static_cast<u32>(renderer.opticalBoundaryMode);
         candidate.mediumPriority = renderer.opticalMediumPriority;
-        candidate.mutableTypedBytes = mutableBytes->data();
-        candidate.mutableTypedByteCount = mutableBytes->size();
+        candidate.mutableTypedBytes = *mutableBytes;
         if(const auto* transformPtr = world.tryGetComponent<Scene::TransformComponent>(entity)){
             StoreFloat(LoadFloat(transformPtr->position), candidate.position);
             StoreFloat(LoadFloat(transformPtr->rotation), candidate.rotation);
@@ -191,12 +188,13 @@ void RendererOpticalVolumeSelection::prepare(Core::ECS::World& world, RendererMa
         }
         candidates.push_back(candidate);
     }
-    select(candidates.data(), candidates.size(), scratchArena);
+    select(Span<const CoincidentOpticalVolumeCandidate>(candidates.data(), candidates.size()), scratchArena);
 }
 
-void RendererOpticalVolumeSelection::select(const CoincidentOpticalVolumeCandidate* candidates, const usize candidateCount, Core::Alloc::ScratchArena& scratchArena){
+void RendererOpticalVolumeSelection::select(const Span<const CoincidentOpticalVolumeCandidate> candidates, Core::Alloc::ScratchArena& scratchArena){
     reset();
-    if(!candidates || candidateCount < __hidden_coincident_volumes::s_MinCoincidentCandidateCount)
+    const usize candidateCount = candidates.size();
+    if(candidateCount < __hidden_coincident_volumes::s_MinCoincidentCandidateCount)
         return;
 
     using namespace __hidden_coincident_volumes;

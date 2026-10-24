@@ -50,7 +50,7 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(Core::GpuTaskGraph& graph, Re
     const auto& rayTracingLightingClassification = uploads.lightingClassification;
     const bool sceneLightUploadRequired = uploads.lightUploadRequired;
     const bool sceneShadingUploadRequired = uploads.sceneShadingUploadRequired;
-    result.sceneLightingContentHash = ComputeSceneLightingContentHash(sceneShadingState, sceneLightData, sceneLightCount);
+    result.sceneLightingContentHash = ComputeSceneLightingContentHash(sceneShadingState, Span<const ECSRenderDetail::SceneLightGpuData>(sceneLightData, sceneLightCount));
 
     Core::GpuTaskSchedulingHint meshViewSetupScheduling;
     meshViewSetupScheduling.cost = Core::GpuTaskCostHint::Medium;

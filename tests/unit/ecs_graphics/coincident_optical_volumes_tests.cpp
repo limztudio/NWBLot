@@ -50,10 +50,8 @@ TEST(CoincidentOpticalVolumes, AutomaticSelectionComparesBytesFromSeparateAlloca
     candidates[0].mutableTypedBytes = firstBytes;
     candidates[1].mutableTypedBytes = secondBytes;
     candidates[2].mutableTypedBytes = firstBytes;
-    for(auto& candidate : candidates)
-        candidate.mutableTypedByteCount = sizeof(firstBytes);
 
-    context.selection.select(candidates, LengthOf(candidates), context.scratch);
+    context.selection.select(candidates, context.scratch);
 
     EXPECT_TRUE(context.selection.isSuppressed(candidates[0].entity));
     EXPECT_FALSE(context.selection.isSuppressed(candidates[1].entity));
@@ -67,14 +65,11 @@ TEST(CoincidentOpticalVolumes, AutomaticSelectionKeepsDifferentByteValuesAndLeng
     const u8 changedBytes[] = { 1u, 2u, 3u, 5u };
     CoincidentOpticalVolumeCandidate candidates[] = { MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u), MakeCandidate(40u) };
     candidates[0].mutableTypedBytes = firstBytes;
-    candidates[0].mutableTypedByteCount = sizeof(firstBytes);
     candidates[1].mutableTypedBytes = changedBytes;
-    candidates[1].mutableTypedByteCount = sizeof(changedBytes);
-    candidates[2].mutableTypedBytes = firstBytes;
-    candidates[2].mutableTypedByteCount = sizeof(firstBytes) - 1u;
+    candidates[2].mutableTypedBytes = Span<const u8>(firstBytes, sizeof(firstBytes) - 1u);
     candidates[1].priority = 100;
 
-    context.selection.select(candidates, LengthOf(candidates), context.scratch);
+    context.selection.select(candidates, context.scratch);
 
     for(const auto& candidate : candidates)
         EXPECT_FALSE(context.selection.isSuppressed(candidate.entity));
@@ -87,12 +82,12 @@ TEST(CoincidentOpticalVolumes, IdenticalMaterialGroupingKeepsDistinctMediumSeman
     candidates[2].boundaryMode = 2u;
     candidates[3].boundaryMode = 2u;
     candidates[3].mediumPriority = 50;
-    context.selection.select(candidates, LengthOf(candidates), context.scratch);
+    context.selection.select(candidates, context.scratch);
     for(const auto& candidate : candidates)
         EXPECT_FALSE(context.selection.isSuppressed(candidate.entity));
 
     candidates[3].mediumPriority = 0;
-    context.selection.select(candidates, LengthOf(candidates), context.scratch);
+    context.selection.select(candidates, context.scratch);
     EXPECT_FALSE(context.selection.isSuppressed(candidates[2].entity));
     EXPECT_TRUE(context.selection.isSuppressed(candidates[3].entity));
 }
@@ -113,7 +108,7 @@ TEST(CoincidentOpticalVolumes, PriorityTiesUseFullEntityIdRegardlessOfInputPermu
 
     for(const auto& permutation : permutations){
         const CoincidentOpticalVolumeCandidate candidates[] = { source[permutation[0]], source[permutation[1]], source[permutation[2]] };
-        context.selection.select(candidates, LengthOf(candidates), context.scratch);
+        context.selection.select(candidates, context.scratch);
         EXPECT_FALSE(context.selection.isSuppressed(source[0].entity));
         EXPECT_TRUE(context.selection.isSuppressed(source[1].entity));
         EXPECT_TRUE(context.selection.isSuppressed(source[2].entity));
@@ -135,7 +130,7 @@ TEST(CoincidentOpticalVolumes, GroupsMeshAndMaterialRemainIndependentBoundaries)
     candidates[7].material = Core::Assets::AssetRef<Material>("tests/coincident_optical_volumes/other_glass");
     candidates[8].group = Name("tests/coincident_optical_volumes/third");
 
-    context.selection.select(candidates, LengthOf(candidates), context.scratch);
+    context.selection.select(candidates, context.scratch);
 
     for(usize index = 0u; index < LengthOf(candidates); ++index){
         const bool expectedSuppressed = index == 1u || index == 3u || index == 5u;
@@ -152,7 +147,7 @@ TEST(CoincidentOpticalVolumes, TinyTranslationDifferencesAreNotCoincidentEvenInE
     candidates[2].position.y = 0.0000001f;
     candidates[3].position.z = 0.0000001f;
 
-    context.selection.select(candidates, LengthOf(candidates), context.scratch);
+    context.selection.select(candidates, context.scratch);
 
     for(const auto& candidate : candidates)
         EXPECT_FALSE(context.selection.isSuppressed(candidate.entity));
@@ -171,7 +166,7 @@ TEST(CoincidentOpticalVolumes, RotationAndScaleDifferencesPreserveDistinctBounda
     candidates[6].scale.y = 1.000001f;
     candidates[7].scale.z = 1.000001f;
 
-    context.selection.select(candidates, LengthOf(candidates), context.scratch);
+    context.selection.select(candidates, context.scratch);
 
     for(const auto& candidate : candidates)
         EXPECT_FALSE(context.selection.isSuppressed(candidate.entity));
@@ -185,7 +180,7 @@ TEST(CoincidentOpticalVolumes, SignedZeroTransformLanesHaveTheSameIdentity){
     candidates[1].position = Float3U(0.f, -0.f, 0.f);
     candidates[1].rotation = Float4U(0.f, -0.f, 0.f, 1.f);
 
-    context.selection.select(candidates, LengthOf(candidates), context.scratch);
+    context.selection.select(candidates, context.scratch);
 
     EXPECT_TRUE(context.selection.isSuppressed(candidates[0].entity));
     EXPECT_FALSE(context.selection.isSuppressed(candidates[1].entity));
@@ -193,7 +188,7 @@ TEST(CoincidentOpticalVolumes, SignedZeroTransformLanesHaveTheSameIdentity){
 
 TEST(CoincidentOpticalVolumes, InvalidCandidatesCannotSuppressEachOtherOrValidGeometry){
     SelectionContext context;
-    CoincidentOpticalVolumeCandidate invalidCases[13u];
+    CoincidentOpticalVolumeCandidate invalidCases[11u];
     for(usize index = 0u; index < LengthOf(invalidCases); ++index){
         invalidCases[index] = MakeCandidate(static_cast<u32>(index) + 100u);
         invalidCases[index].priority = 100;
@@ -209,9 +204,6 @@ TEST(CoincidentOpticalVolumes, InvalidCandidatesCannotSuppressEachOtherOrValidGe
     invalidCases[8].scale.y = -0.f;
     invalidCases[9].scale.z = 0.f;
     invalidCases[10].rotation = Float4U(0.f, 0.f, 0.f, 0.f);
-    invalidCases[11].mutableTypedByteCount = 4u;
-    invalidCases[12].mutableTypedByteCount = 4u;
-    invalidCases[12].group = Name("tests/coincident_optical_volumes/invalid_group_bytes");
 
     for(const auto& invalidCase : invalidCases){
         CoincidentOpticalVolumeCandidate candidates[] = { MakeCandidate(10u), invalidCase, invalidCase };
@@ -220,7 +212,7 @@ TEST(CoincidentOpticalVolumes, InvalidCandidatesCannotSuppressEachOtherOrValidGe
         else
             candidates[2].entity = Core::ECS::EntityID(candidates[1].entity.index(), 0u);
 
-        context.selection.select(candidates, LengthOf(candidates), context.scratch);
+        context.selection.select(candidates, context.scratch);
 
         for(const auto& candidate : candidates)
             EXPECT_FALSE(context.selection.isSuppressed(candidate.entity)) << candidate.entity.id;
@@ -237,9 +229,7 @@ TEST(CoincidentOpticalVolumes, SelectionOwnsOnlyItsResultAfterBorrowedInputsChan
         CoincidentOpticalVolumeCandidate candidates[] = { MakeCandidate(10u), MakeCandidate(20u) };
         candidates[0].mutableTypedBytes = firstBytes;
         candidates[1].mutableTypedBytes = secondBytes;
-        candidates[0].mutableTypedByteCount = sizeof(firstBytes);
-        candidates[1].mutableTypedByteCount = sizeof(secondBytes);
-        context.selection.select(candidates, LengthOf(candidates), context.scratch);
+        context.selection.select(candidates, context.scratch);
 
         secondBytes[0] = 99u;
         candidates[0].entity = Core::ECS::EntityID(100u, 0u);
@@ -253,7 +243,7 @@ TEST(CoincidentOpticalVolumes, SelectionOwnsOnlyItsResultAfterBorrowedInputsChan
     EXPECT_TRUE(context.selection.isSuppressed(suppressed));
 
     const CoincidentOpticalVolumeCandidate nextFrame[] = { MakeCandidate(30u), MakeCandidate(40u) };
-    context.selection.select(nextFrame, LengthOf(nextFrame), context.scratch);
+    context.selection.select(nextFrame, context.scratch);
     EXPECT_FALSE(context.selection.isSuppressed(suppressed));
     EXPECT_FALSE(context.selection.isSuppressed(nextFrame[0].entity));
     EXPECT_TRUE(context.selection.isSuppressed(nextFrame[1].entity));
@@ -266,26 +256,25 @@ TEST(CoincidentOpticalVolumes, NextFrameReevaluatesSurfaceBytesPriorityAndRemove
     CoincidentOpticalVolumeCandidate candidates[] = { MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u) };
     for(auto& candidate : candidates){
         candidate.mutableTypedBytes = firstBytes;
-        candidate.mutableTypedByteCount = sizeof(firstBytes);
     }
     candidates[1].mutableTypedBytes = secondBytes;
-    context.selection.select(candidates, LengthOf(candidates), context.scratch);
+    context.selection.select(candidates, context.scratch);
     EXPECT_TRUE(context.selection.isSuppressed(candidates[1].entity));
     EXPECT_TRUE(context.selection.isSuppressed(candidates[2].entity));
 
     secondBytes[3] = 99u;
-    context.selection.select(candidates, LengthOf(candidates), context.scratch);
+    context.selection.select(candidates, context.scratch);
     EXPECT_FALSE(context.selection.isSuppressed(candidates[1].entity));
     EXPECT_TRUE(context.selection.isSuppressed(candidates[2].entity));
 
     secondBytes[3] = firstBytes[3];
     candidates[2].priority = 1;
-    context.selection.select(candidates, LengthOf(candidates), context.scratch);
+    context.selection.select(candidates, context.scratch);
     EXPECT_TRUE(context.selection.isSuppressed(candidates[0].entity));
     EXPECT_TRUE(context.selection.isSuppressed(candidates[1].entity));
     EXPECT_FALSE(context.selection.isSuppressed(candidates[2].entity));
 
-    context.selection.select(candidates, 2u, context.scratch);
+    context.selection.select(Span<const CoincidentOpticalVolumeCandidate>(candidates, 2u), context.scratch);
     EXPECT_FALSE(context.selection.isSuppressed(candidates[0].entity));
     EXPECT_TRUE(context.selection.isSuppressed(candidates[1].entity));
     EXPECT_FALSE(context.selection.isSuppressed(candidates[2].entity));
@@ -294,17 +283,17 @@ TEST(CoincidentOpticalVolumes, NextFrameReevaluatesSurfaceBytesPriorityAndRemove
 TEST(CoincidentOpticalVolumes, ResetEmptyAndSingleCandidateClearPriorSuppression){
     SelectionContext context;
     const CoincidentOpticalVolumeCandidate candidates[] = { MakeCandidate(10u), MakeCandidate(20u) };
-    context.selection.select(candidates, LengthOf(candidates), context.scratch);
+    context.selection.select(candidates, context.scratch);
     ASSERT_TRUE(context.selection.isSuppressed(candidates[1].entity));
     context.selection.reset();
     EXPECT_FALSE(context.selection.isSuppressed(candidates[1].entity));
 
-    context.selection.select(candidates, LengthOf(candidates), context.scratch);
-    context.selection.select(nullptr, 0u, context.scratch);
+    context.selection.select(candidates, context.scratch);
+    context.selection.select(Span<const CoincidentOpticalVolumeCandidate>{}, context.scratch);
     EXPECT_FALSE(context.selection.isSuppressed(candidates[1].entity));
 
-    context.selection.select(candidates, LengthOf(candidates), context.scratch);
-    context.selection.select(&candidates[1], 1u, context.scratch);
+    context.selection.select(candidates, context.scratch);
+    context.selection.select(Span<const CoincidentOpticalVolumeCandidate>(&candidates[1], 1u), context.scratch);
     EXPECT_FALSE(context.selection.isSuppressed(candidates[0].entity));
     EXPECT_FALSE(context.selection.isSuppressed(candidates[1].entity));
     EXPECT_FALSE(context.selection.isSuppressed(Core::ECS::s_InvalidEntityId));
@@ -316,8 +305,8 @@ TEST(CoincidentOpticalVolumes, EmptyAndSingleCandidateFastPathsDoNotAllocate){
     const ArenaMemoryStats ownerBefore = context.arena.memoryStats();
     const ArenaMemoryStats scratchBefore = context.scratch.memoryStats();
 
-    context.selection.select(nullptr, 0u, context.scratch);
-    context.selection.select(&candidate, 1u, context.scratch);
+    context.selection.select(Span<const CoincidentOpticalVolumeCandidate>{}, context.scratch);
+    context.selection.select(Span<const CoincidentOpticalVolumeCandidate>(&candidate, 1u), context.scratch);
     context.selection.reset();
 
     const ArenaMemoryStats ownerAfter = context.arena.memoryStats();

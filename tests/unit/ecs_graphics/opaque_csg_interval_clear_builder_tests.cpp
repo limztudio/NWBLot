@@ -5,7 +5,6 @@
 #include <impl/ecs_render/csg/renderer_csg_types.h>
 #include <impl/ecs_render/deferred/opaque_csg_interval_clear_builder.h>
 
-#include <core/alloc/scratch.h>
 #include <core/task/gpu/task_graph.h>
 
 #include <tests/common/test_context.h>
@@ -29,7 +28,6 @@ using TestArena = NWB::Tests::TestArena<>;
 
 TEST(OpaqueCsgIntervalClearBuilder, NoOpaqueWorkDoesNotPublishDependencyAsClear){
     TestArena testArena;
-    Core::Alloc::ScratchArena scratchArena(Name("tests/opaque_csg_interval_clear/scratch"));
     Core::GpuTaskGraph graph(testArena.arena);
     Core::GpuTaskDesc dependencyDesc;
     dependencyDesc.setIdentity(Name("tests/opaque_csg_interval_clear/dependency")).setMarkerLabel("Incoming CSG Dependency");
@@ -47,11 +45,10 @@ TEST(OpaqueCsgIntervalClearBuilder, NoOpaqueWorkDoesNotPublishDependencyAsClear)
     }
 
     Impl::DeferredFrameTargets targets;
-    Impl::CsgFrameGpuData csgFrameData(scratchArena);
     Impl::GraphClearTimingRecordState clearTimingState;
     const Impl::OpaqueCsgIntervalClearInputs inputs{
         .targets = targets,
-        .csgFrameData = csgFrameData,
+        .csgFrameData = {},
         .csgIntervalId = {},
         .csgReceiverEventCount = {},
         .csgPeelSubresources = {},

@@ -111,10 +111,10 @@ Expected<FrameGraphAvboitAccumulationUploadResult> FrameGraphAvboitAccumulationU
         }
         if(accumulationUploadResult->hasDrawItems){
 
-            const MaterialPassDrawItems* const accumulationMaterialGeometryDrawSets[] = { &accumulationDrawItems.regular, &accumulationDrawItems.csg, };
+            const MaterialPassDrawItemsView accumulationMaterialGeometryDrawSets[] = { accumulationDrawItems.regular, accumulationDrawItems.csg, };
             AvboitGeometryPreparationBuilder accumulationGeometryPreparationBuilder(m_graph, m_materialSystem, scratchArena);
             auto accumulationGeometryPreparationResult = accumulationGeometryPreparationBuilder.declare(
-                AvboitGeometryPreparationInputs{ .drawItemSets = accumulationMaterialGeometryDrawSets, .drawItemSetCount = LengthOf(accumulationMaterialGeometryDrawSets), .phase = AvboitGeometryPhase::Accumulation, }
+                AvboitGeometryPreparationInputs{ .drawItemSets = accumulationMaterialGeometryDrawSets, .phase = AvboitGeometryPhase::Accumulation, }
             );
             if(!accumulationGeometryPreparationResult)
                 return MakeUnexpected(Failure{});
@@ -123,7 +123,7 @@ Expected<FrameGraphAvboitAccumulationUploadResult> FrameGraphAvboitAccumulationU
             accumulationMaterialSampledTextureSet = accumulationGeometryPreparationResult->materialSampledTextureSet;
             accumulationMaterialSampledTexturesCollected = accumulationGeometryPreparationResult->sampledTexturesCollected;
 
-            m_materialSystem.prepareMaterialPassInstanceUploadData(accumulationInstanceData, csgResources);
+            m_materialSystem.prepareMaterialPassInstanceUploadData(csgResources, accumulationInstanceData);
 #if defined(NWB_DEBUG)
             if(
                 accumulationInstanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData)
@@ -177,9 +177,9 @@ Expected<FrameGraphAvboitAccumulationUploadResult> FrameGraphAvboitAccumulationU
                     .csgStreamsUploaded = accumulationCsgStreamsUploaded,
                     .intervalOutputsGraphOwned = intervalOutputsGraphOwned,
                 },
-                scratchArena,
                 accumulationInstanceData.size(),
                 accumulationMaterialTypedBytes.size(),
+                scratchArena,
                 avboitAccumulationComputeEmulationPayload.plan,
                 avboitAccumulationComputeEmulationPayload.csgPlan
             );

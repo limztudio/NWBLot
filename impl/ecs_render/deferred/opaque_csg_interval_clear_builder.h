@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/csg/renderer_csg_types.h>
 #include <impl/ecs_render/kernel/task_graph_clear_timing.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
 
@@ -22,13 +23,12 @@ NWB_IMPL_BEGIN
 
 
 struct DeferredFrameTargets;
-struct CsgFrameGpuData;
 
 
 // Opaque CSG interval clears own the interval-id plus receiver-event-count clears.
 struct OpaqueCsgIntervalClearInputs{
     DeferredFrameTargets& targets;
-    const CsgFrameGpuData& csgFrameData;
+    CsgFrameGpuDataView csgFrameData{};
     Core::GpuGraphResourceId csgIntervalId;
     Core::GpuGraphResourceId csgReceiverEventCount;
     Core::TextureSubresourceSet csgPeelSubresources{};

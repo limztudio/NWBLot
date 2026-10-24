@@ -140,8 +140,7 @@ ObjectGeometryCacheGraph::ObjectGeometryCacheGraph(Core::GpuTaskGraph& graph, Re
 {}
 
 bool ObjectGeometryCacheGraph::prepare(
-    const MaterialPassDrawItem* draws,
-    const usize drawCount,
+    const Span<const MaterialPassDrawItem> draws,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const DeferredFrameTargets& targets,
     Core::Alloc::ScratchArena& scratchArena,
@@ -152,14 +151,11 @@ bool ObjectGeometryCacheGraph::prepare(
 ){
     using namespace RendererTaskGraphDetail;
     using namespace __hidden_task_graph_object_geometry_cache;
-    if(drawCount != 0u && !draws)
-        return false;
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> cacheReads{scratchArena};
     Vector<Core::GpuTaskId, Core::Alloc::ScratchArena> producers{scratchArena};
-    cacheReads.reserve(drawCount);
-    producers.reserve(drawCount + 1u);
-    for(usize drawIndex = 0u; drawIndex < drawCount; ++drawIndex){
-        const MaterialPassDrawItem& draw = draws[drawIndex];
+    cacheReads.reserve(draws.size());
+    producers.reserve(draws.size() + 1u);
+    for(const MaterialPassDrawItem& draw : draws){
         if(!draw.pipelineResources.indexedPipeline || !draw.pipelineResources.objectGeometryDecodePipeline)
             return false;
         const auto& cache = draw.meshResources.objectGeometryCache;
@@ -183,10 +179,10 @@ bool ObjectGeometryCacheGraph::prepare(
                 return false;
             entry.resource = *importedResource;
             if(cache.requiresDecode){
-                MaterialPassDrawItems sourceDraws{scratchArena};
-                sourceDraws.computeDrawItems.push_back(draw);
-                const MaterialPassDrawItems* const sets[] = {&sourceDraws};
-                auto gatheredUses = GatherPreparedMaterialGeometryUses(m_graph, sets, LengthOf(sets), scratchArena);
+                const MaterialPassDrawItemsView sets[] = {
+                    MaterialPassDrawItemsView{ {}, {}, Span<const MaterialPassDrawItem>(&draw, 1u) },
+                };
+                auto gatheredUses = GatherPreparedMaterialGeometryUses(sets, m_graph, scratchArena);
                 if(!gatheredUses)
                     return false;
                 auto& uses = *gatheredUses;

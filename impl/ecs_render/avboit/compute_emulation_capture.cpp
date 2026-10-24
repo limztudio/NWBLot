@@ -18,14 +18,14 @@ NWB_IMPL_BEGIN
 
 [[nodiscard]] Expected<AvboitComputeEmulationCaptureResult> AvboitComputeEmulationCapture::capture(
     const AvboitComputeEmulationCaptureInputs& inputs,
+    const usize instanceCount,
+    const usize materialTypedByteCount,
     Core::Alloc::ScratchArena& scratchArena,
-    usize instanceCount,
-    usize materialTypedByteCount,
     ECSRenderDetail::AvboitAliasFreeComputeEmulationGraphPlan& plan,
     ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphPlan& csgPlan
 ){
     AvboitComputeEmulationCaptureResult result{};
-    const MaterialPassDrawItemPartitions& drawItems = inputs.drawItems;
+    const MaterialPassDrawItemPartitionsView& drawItems = inputs.drawItems;
     // A phase owns one alias-free stream; mixed work keeps local interleaving.
     result.regularCaptured = drawItems.csg.computeDrawItems.empty() && inputs.geometryOwned && inputs.sampledTexturesCollected && plan.capture(drawItems.regular, scratchArena);
     result.csgCaptured = drawItems.regular.computeDrawItems.empty()

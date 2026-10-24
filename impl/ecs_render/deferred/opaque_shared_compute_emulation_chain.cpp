@@ -54,7 +54,7 @@ Expected<OpaqueSharedComputeEmulationChainResult> OpaqueSharedComputeEmulationCh
     generateResourceUses.push_back(WriteUse(inputs.sharedOutput, Core::ResourceStates::UnorderedAccess));
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> rasterResourceUses{ scratchArena };
-    rasterResourceUses.reserve(s_RasterResourceUseCapacity);
+    rasterResourceUses.reserve(inputs.objectGeometryReads.size() + s_RasterResourceUseCapacity);
     rasterResourceUses.insert(rasterResourceUses.end(), inputs.objectGeometryReads.begin(), inputs.objectGeometryReads.end());
     rasterResourceUses.push_back(ReadUse(resources.meshView, Core::ResourceStates::ConstantBuffer));
     rasterResourceUses.push_back(ReadBufferUse(resources.materialInstances, inputs.materialInstanceRange));
@@ -110,6 +110,7 @@ Expected<OpaqueSharedComputeEmulationChainResult> OpaqueSharedComputeEmulationCh
         return MakeUnexpected(Failure{});
     }
     Core::GpuTaskId dependency = inputs.gbufferTask;
+    const Span<const Core::GpuTaskResourceSetUse> resourceSetUseSpan(resourceSetUses, resourceSetUseCount);
     for(usize phaseIndex = 0u; phaseIndex < phaseCount; ++phaseIndex){
         const bool isRasterPhase = phaseIndex % ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw != 0u;
         const auto phaseTask = declarePhase(
@@ -121,9 +122,8 @@ Expected<OpaqueSharedComputeEmulationChainResult> OpaqueSharedComputeEmulationCh
             isRasterPhase ? OpaqueSharedPhase::Raster : OpaqueSharedPhase::Generate,
             phaseIndex / ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw,
             phaseIndex + 1u == phaseCount,
-            isRasterPhase ? rasterResourceUses : generateResourceUses,
-            resourceSetUses,
-            resourceSetUseCount
+            isRasterPhase ? Span<const Core::GpuTaskResourceUse>(rasterResourceUses) : Span<const Core::GpuTaskResourceUse>(generateResourceUses),
+            resourceSetUseSpan
         );
         if(!phaseTask){
             tasks[phaseIndex] = {};
@@ -146,9 +146,8 @@ Expected<Core::GpuTaskId> OpaqueSharedComputeEmulationChainBuilder::declarePhase
     const ECSRenderDetail::OpaqueRegularSharedComputeEmulationGraphTask::Phase::Enum phase,
     const usize drawIndex,
     const bool finishTiming,
-    const Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& resourceUses,
-    const Core::GpuTaskResourceSetUse* const resourceSetUses,
-    const usize resourceSetUseCount
+    const Span<const Core::GpuTaskResourceUse> resourceUses,
+    const Span<const Core::GpuTaskResourceSetUse> resourceSetUses
 ){
     Core::GpuTaskDesc desc;
     desc
@@ -157,7 +156,7 @@ Expected<Core::GpuTaskId> OpaqueSharedComputeEmulationChainBuilder::declarePhase
         .setScheduling(scheduling)
         .setDependencies(&dependency, 1u)
         .setResourceUses(resourceUses.data(), resourceUses.size())
-        .setResourceSetUses(resourceSetUses, resourceSetUseCount)
+        .setResourceSetUses(resourceSetUses.empty() ? nullptr : resourceSetUses.data(), resourceSetUses.size())
     ;
     ECSRenderDetail::OpaqueRegularSharedComputeEmulationGraphTask::Payload payload{
         m_materialSystem,

@@ -7,6 +7,7 @@
 
 #include <impl/global.h>
 #include <impl/ecs_render/csg/csg_graph_resource_snapshot.h>
+#include <impl/ecs_render/csg/renderer_csg_types.h>
 #include <impl/ecs_render/material/material_typed_private.h>
 #include <impl/ecs_render/material/renderer_draw_types.h>
 #include <impl/ecs_render/shared/renderer_frame_bindings.h>
@@ -33,13 +34,13 @@ struct OpaqueUploadChainInputs{
     DeferredFrameTargets& targets;
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings;
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources;
-    const MaterialPassDrawItemPartitions& drawItems;
-    InstanceGpuDataVector& instanceData;
-    const CsgFrameGpuData& csgFrameData;
+    MaterialPassDrawItemPartitionsView drawItems{};
+    Span<InstanceGpuData> instanceData;
+    CsgFrameGpuDataView csgFrameData{};
 #if defined(NWB_DEBUG)
-    const ECSRenderDetail::MaterialTypedInstanceRangeVector& materialTypedRanges;
+    Span<const ECSRenderDetail::MaterialTypedInstanceRanges> materialTypedRanges;
 #endif
-    const MaterialTypedByteDataVector& materialTypedBytes;
+    Span<const u8> materialTypedBytes;
     Core::GpuGraphResourceId materialInstances;
     Core::GpuGraphResourceId materialTyped;
     Core::GpuGraphResourceId csgReceiverRanges;

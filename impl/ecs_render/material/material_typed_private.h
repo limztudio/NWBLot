@@ -261,8 +261,7 @@ inline InstanceGpuData BuildInstanceGpuData(const Core::ECS::EntityID entity, co
     return data;
 }
 
-template<typename MaterialTypedByteVector>
-[[nodiscard]] inline usize ResolveMaterialTypedUploadByteCount(const MaterialTypedByteVector& materialTypedBytes)noexcept(noexcept(DeclVal<void(*)(usize)noexcept>()(materialTypedBytes.size()))){
+[[nodiscard]] inline usize ResolveMaterialTypedUploadByteCount(const Span<const u8> materialTypedBytes)noexcept{
     const usize uploadByteCount = materialTypedBytes.size();
     NWB_ASSERT_MSG(uploadByteCount != 0u, NWB_TEXT("RendererSystem: material typed data upload is empty"));
     NWB_ASSERT_MSG((uploadByteCount & (s_MaterialTypedWordBytes - 1u)) == 0u, NWB_TEXT("RendererSystem: material typed data upload is not word-aligned"));
@@ -300,8 +299,7 @@ inline void AssertMaterialTypedInstanceRange(const MaterialTypedInstanceRanges& 
 
 using MaterialTypedInstanceRangeVector = Vector<MaterialTypedInstanceRanges, Core::Alloc::ScratchArena>;
 
-template<typename MaterialTypedByteVector>
-inline void AssertMaterialTypedUploadRanges(const MaterialTypedInstanceRangeVector& instanceRanges, const MaterialTypedByteVector& materialTypedBytes)noexcept(noexcept(DeclVal<void(*)(usize)noexcept>()(materialTypedBytes.size()))){
+inline void AssertMaterialTypedUploadRanges(const Span<const MaterialTypedInstanceRanges> instanceRanges, const Span<const u8> materialTypedBytes)noexcept{
     if(instanceRanges.empty())
         return;
 

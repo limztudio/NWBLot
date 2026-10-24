@@ -223,14 +223,12 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
         m_avboitSystem.taskGraphStage().m_accumulationStreamTask = accumulationStreamTask;
     Core::GpuTaskId accumulationDependency = inputs.uploadTask;
     if(inputs.streamsUploaded && !objectGeometry.prepare(
-        accumulationPayload.accumulationSnapshot.regularIndexedDrawItems.data(),
-        accumulationPayload.accumulationSnapshot.regularIndexedDrawItems.size(),
+        accumulationPayload.accumulationSnapshot.regularIndexedDrawItems,
         frameBindings, inputs.targets, scratchArena, accumulationDependency, accumulationResourceUses, &inputs.accumulationTimingTicket
     ))
         return MakeUnexpected(Failure{});
     if(inputs.streamsUploaded && !objectGeometry.prepare(
-        accumulationPayload.accumulationSnapshot.csgIndexedDrawItems.data(),
-        accumulationPayload.accumulationSnapshot.csgIndexedDrawItems.size(),
+        accumulationPayload.accumulationSnapshot.csgIndexedDrawItems,
         frameBindings, inputs.targets, scratchArena, accumulationDependency, accumulationResourceUses, &inputs.accumulationTimingTicket
     ))
         return MakeUnexpected(Failure{});
@@ -326,12 +324,11 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
             const usize drawIndex,
             const bool beginTiming,
             const bool finishTiming,
-            const Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& resourceUses,
-            const Core::GpuTaskResourceSetUse* const resourceSetUses,
-            const usize resourceSetUseCount
+            const Span<const Core::GpuTaskResourceUse> resourceUses,
+            const Span<const Core::GpuTaskResourceSetUse> resourceSetUses
         ){
             Core::GpuTaskDesc desc;
-            RendererTaskGraphDetail::MakeSharedComputeEmulationPhaseTaskDesc(desc, identity, markerLabel, dependency, resourceUses, resourceSetUses, resourceSetUseCount);
+            RendererTaskGraphDetail::MakeSharedComputeEmulationPhaseTaskDesc(identity, markerLabel, dependency, resourceUses, resourceSetUses, desc);
             AvboitAccumulationSharedComputeEmulationGraphTask::Payload payload{
                 .graphics = m_graphics,
                 .materialSystem = m_materialSystem,
@@ -381,6 +378,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
         NWB_ASSERT(ECSRenderDetail::IsSupportedSharedComputeEmulationDrawCount(inputs.sharedComputeEmulationPlan.drawCount));
         NWB_ASSERT(accumulationSharedComputeEmulationPhaseCount <= LengthOf(accumulationSharedComputeEmulationPhaseIdentities));
         Core::GpuTaskId accumulationSharedComputeEmulationDependency = accumulationDependency;
+        const Span<const Core::GpuTaskResourceSetUse> accumulationMaterialResourceSetUseSpan(accumulationMaterialResourceSetUses, accumulationMaterialResourceSetUseCount);
         for(usize phaseIndex = 0u; phaseIndex < accumulationSharedComputeEmulationPhaseCount; ++phaseIndex){
             const bool isRasterPhase = phaseIndex % ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw != 0u;
             const auto mAvboitSystemTaskGraphStageMAccumulationSharedComputeEmulationTasksPhaseIndexResult = addAccumulationSharedComputeEmulationPhase(
@@ -391,9 +389,8 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
                 phaseIndex / ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw,
                 phaseIndex == 0u,
                 phaseIndex + 1u == accumulationSharedComputeEmulationPhaseCount,
-                isRasterPhase ? accumulationSharedRasterResourceUses : accumulationSharedGenerateResourceUses,
-                accumulationMaterialResourceSetUses,
-                accumulationMaterialResourceSetUseCount
+                isRasterPhase ? Span<const Core::GpuTaskResourceUse>(accumulationSharedRasterResourceUses) : Span<const Core::GpuTaskResourceUse>(accumulationSharedGenerateResourceUses),
+                accumulationMaterialResourceSetUseSpan
             );
             if(!mAvboitSystemTaskGraphStageMAccumulationSharedComputeEmulationTasksPhaseIndexResult){
                 m_avboitSystem.taskGraphStage().m_accumulationSharedComputeEmulationTasks[phaseIndex] = {};

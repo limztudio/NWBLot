@@ -55,7 +55,7 @@ public:
         captured = false;
     }
 
-    [[nodiscard]] bool capture(const MaterialPassDrawItems& sourceDrawItems, Core::Alloc::ScratchArena& scratchArena){
+    [[nodiscard]] bool capture(const MaterialPassDrawItemsView& sourceDrawItems, Core::Alloc::ScratchArena& scratchArena){
         reset();
         if(sourceDrawItems.computeDrawItems.empty())
             return false;

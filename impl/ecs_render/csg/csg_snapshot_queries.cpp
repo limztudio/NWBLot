@@ -44,7 +44,7 @@ bool ECSRenderDetail::CsgGraphResourceSnapshot::bindingValid()const noexcept{
     ;
 }
 
-bool ECSRenderDetail::CsgGraphResourceSnapshot::frameReady(const CsgFrameGpuData& csgFrameData)const noexcept{
+bool ECSRenderDetail::CsgGraphResourceSnapshot::frameReady(const CsgFrameGpuDataView& csgFrameData)const noexcept{
     if(!csgFrameData.hasWork())
         return true;
 

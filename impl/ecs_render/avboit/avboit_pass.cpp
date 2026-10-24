@@ -164,8 +164,8 @@ bool RendererAvboitSystem::prepareAvboitPassResources(Core::Alloc::ScratchArena&
 void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const MaterialPassDrawItems& receiverSurfaceDrawItems,
-    const CsgFrameGpuData& csgFrameData,
+    const MaterialPassDrawItemsView& receiverSurfaceDrawItems,
+    const CsgFrameGpuDataView& csgFrameData,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const usize instanceCount,
@@ -213,8 +213,8 @@ void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
 void RendererAvboitSystem::renderAvboitOccupancyPass(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const MaterialPassDrawItemPartitions& preparedOccupancyDrawItems,
-    const CsgFrameGpuData& preparedOccupancyCsgFrameData,
+    const MaterialPassDrawItemPartitionsView& preparedOccupancyDrawItems,
+    const CsgFrameGpuDataView& preparedOccupancyCsgFrameData,
     const ECSRenderDetail::CsgGraphResourceSnapshot& preparedOccupancyCsgResources,
     const ECSRenderDetail::MeshFrameBindingSnapshot& preparedOccupancyFrameBindings,
     const usize preparedOccupancyInstanceCount,
@@ -255,8 +255,8 @@ void RendererAvboitSystem::renderAvboitOccupancyPass(
 void RendererAvboitSystem::renderAvboitExtinctionPass(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const MaterialPassDrawItemPartitions& preparedExtinctionDrawItems,
-    const CsgFrameGpuData& preparedExtinctionCsgFrameData,
+    const MaterialPassDrawItemPartitionsView& preparedExtinctionDrawItems,
+    const CsgFrameGpuDataView& preparedExtinctionCsgFrameData,
     const ECSRenderDetail::CsgGraphResourceSnapshot& preparedExtinctionCsgResources,
     const ECSRenderDetail::MeshFrameBindingSnapshot& preparedExtinctionFrameBindings,
     const usize preparedExtinctionInstanceCount,
@@ -295,8 +295,8 @@ void RendererAvboitSystem::renderAvboitExtinctionPass(
 void RendererAvboitSystem::renderAvboitAccumulatePass(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const MaterialPassDrawItemPartitions& preparedAccumulationDrawItems,
-    const CsgFrameGpuData& preparedAccumulationCsgFrameData,
+    const MaterialPassDrawItemPartitionsView& preparedAccumulationDrawItems,
+    const CsgFrameGpuDataView& preparedAccumulationCsgFrameData,
     const ECSRenderDetail::CsgGraphResourceSnapshot& preparedAccumulationCsgResources,
     const ECSRenderDetail::MeshFrameBindingSnapshot& preparedAccumulationFrameBindings,
     const usize preparedAccumulationInstanceCount,

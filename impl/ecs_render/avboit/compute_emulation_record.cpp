@@ -23,7 +23,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool RecordAvboitComputeEmulation(Core::Alloc::ScratchArena& scratchArena, const AvboitComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitComputeEmulationRecordTrait& trait){
+[[nodiscard]] bool RecordAvboitComputeEmulation(const AvboitComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitComputeEmulationRecordTrait& trait){
     if(
         !trait.framebuffer
         || (!inputs.plan.captured && !inputs.csgPlan.captured)
@@ -41,22 +41,13 @@ NWB_IMPL_BEGIN
     const Span<const MaterialPassDrawItem> computeDrawItems = csgComputeEmulation ? Span<const MaterialPassDrawItem>(inputs.csgPlan.drawItems) : Span<const MaterialPassDrawItem>(inputs.plan.drawItems);
     // Reject late losses so the packet is discarded and the next frame re-preflights.
     const bool drawResourcesReady = csgComputeEmulation
-        ? (
-            materialSystem.meshMaterialPassDrawResourcesReady(inputs.csgPlan.meshDrawItems, inputs.frameBindings)
-            && materialSystem.indexedMaterialPassDrawResourcesReady(inputs.csgPlan.indexedDrawItems, inputs.frameBindings)
-            && materialSystem.computeMaterialPassDrawResourcesReady(computeDrawItems, inputs.frameBindings)
-        )
+        ? materialSystem.materialPassDrawResourcesReady(inputs.csgPlan.drawItemsView(), inputs.frameBindings)
         : materialSystem.computeMaterialPassDrawResourcesReady(computeDrawItems, inputs.frameBindings)
     ;
     if(!drawResourcesReady)
         return false;
     if(csgComputeEmulation){
-        CsgFrameGpuData csgFrameData{ scratchArena };
-        csgFrameData.receiverRanges.reserve(inputs.csgPlan.receiverRanges.size());
-        csgFrameData.receiverRanges.assign(inputs.csgPlan.receiverRanges.begin(), inputs.csgPlan.receiverRanges.end());
-        csgFrameData.cutters.reserve(inputs.csgPlan.cutters.size());
-        csgFrameData.cutters.assign(inputs.csgPlan.cutters.begin(), inputs.csgPlan.cutters.end());
-        csgFrameData.workRegion = inputs.csgPlan.workRegion;
+        const CsgFrameGpuDataView csgFrameData = inputs.csgPlan.csgFrameDataView();
         if(!inputs.csgFrameBuffersUploaded || !csgFrameData.hasWork() || !inputs.csgResources.frameReady(csgFrameData))
             return false;
     }

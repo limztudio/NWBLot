@@ -53,7 +53,7 @@ bool RendererMaterialSystem::materialPassDrawResourcesReady(const MaterialPassMe
     return mesh.valid() && frameBindings.bindingValid();
 }
 
-bool RendererMaterialSystem::materialPassDrawResourcesReady(const MaterialPassDrawItems& drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept{
+bool RendererMaterialSystem::materialPassDrawResourcesReady(const MaterialPassDrawItemsView& drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept{
     return meshMaterialPassDrawResourcesReady(drawItems.meshDrawItems, frameBindings) && indexedMaterialPassDrawResourcesReady(drawItems.indexedDrawItems, frameBindings) && computeMaterialPassDrawResourcesReady(drawItems.computeDrawItems, frameBindings);
 }
 
@@ -231,7 +231,7 @@ void RendererMaterialSystem::drawComputeMaterialPassDrawItem(const MaterialPassD
     }
 }
 
-void RendererMaterialSystem::renderMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItems& drawItems){
+void RendererMaterialSystem::renderMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemsView& drawItems){
     renderMeshMaterialPassDrawItems(context, drawItems.meshDrawItems);
     renderIndexedMaterialPassDrawItems(context, drawItems.indexedDrawItems);
     if(context.emulationOutputEntryStateGraphOwned)

@@ -5,7 +5,6 @@
 #include "task_graph_gbuffer_task.h"
 
 #include <impl/ecs_render/csg/csg_system.h>
-#include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/material/material_system.h>
@@ -39,28 +38,21 @@ namespace ECSRenderDetail{
     RendererCsgSystem& csgSystem = payload.csgSystem;
     DeferredFrameTargets& deferredTargets = payload.targets;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
-
-    MaterialPassDrawItemPartitions opaqueDrawItems{ scratchArena };
-    CsgFrameGpuData csgFrameData{ scratchArena };
 
     Core::ViewportState deferredViewportState;
     deferredViewportState.addViewportAndScissorRect(deferredTargets.framebuffer->getFramebufferInfo().getViewport());
 
     const bool frameSetupReady = ECSRenderDetail::FrameSetupReady(payload.meshViewSetupReady, payload.sceneShadingSetupReady);
-    if(frameSetupReady)
-        payload.opaqueDrawSnapshot.materialize(opaqueDrawItems, csgFrameData);
+    const MaterialPassDrawItemPartitionsView opaqueDrawItems = frameSetupReady ? payload.opaqueDrawSnapshot.drawItemsView() : MaterialPassDrawItemPartitionsView{};
+    const CsgFrameGpuDataView csgFrameData = frameSetupReady ? payload.opaqueDrawSnapshot.csgFrameDataView() : CsgFrameGpuDataView{};
 
     const bool hasDeferredDrawItems = !opaqueDrawItems.empty();
     const bool deferredResourcesReady = hasDeferredDrawItems && payload.materialDrawBuffersUploaded && payload.frameBindings.frameReady(payload.opaqueDrawSnapshot.instanceCount, payload.opaqueDrawSnapshot.materialTypedByteCount);
     const bool regularDrawResourcesReady = deferredResourcesReady && materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.regular, payload.frameBindings);
-    MaterialPassDrawItems regularMeshDrawItems{ scratchArena };
-    NotNull<const MaterialPassDrawItems*> regularDrawItemsForGbuffer(&opaqueDrawItems.regular);
-    if(payload.regularSharedComputeEmulationDrawsGraphOwned){
-        regularMeshDrawItems.meshDrawItems = Move(opaqueDrawItems.regular.meshDrawItems);
-        regularMeshDrawItems.indexedDrawItems = Move(opaqueDrawItems.regular.indexedDrawItems);
-        regularDrawItemsForGbuffer = &regularMeshDrawItems;
-    }
+    const MaterialPassDrawItemsView regularDrawItemsForGbuffer = payload.regularSharedComputeEmulationDrawsGraphOwned
+        ? MaterialPassDrawItemsView{ opaqueDrawItems.regular.meshDrawItems, opaqueDrawItems.regular.indexedDrawItems, {} }
+        : opaqueDrawItems.regular
+    ;
     const bool csgResourcesReady = deferredResourcesReady && (!csgFrameData.hasWork() || (payload.csgFrameBuffersUploaded && payload.csgResources.frameReady(csgFrameData) && payload.frameBindings.bindingValid()));
     const bool csgReceiverSurfaceDrawResourcesReady = csgResourcesReady && (opaqueDrawItems.csgReceiverSurface.empty() || materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface, payload.frameBindings));
     if(regularDrawResourcesReady && payload.regularSharedComputeEmulationDrawsGraphOwned && (!payload.regularSharedComputeEmulationTiming || payload.regularSharedComputeEmulationTiming->has_value()))
@@ -96,20 +88,20 @@ namespace ECSRenderDetail{
             payload.materialGeometryStatesGraphOwned,
             payload.regularComputeEmulationOutputStatesGraphOwned
         };
-        if(regularDrawResourcesReady && (payload.regularSharedComputeEmulationDrawsGraphOwned || !regularDrawItemsForGbuffer->empty())){
+        if(regularDrawResourcesReady && (payload.regularSharedComputeEmulationDrawsGraphOwned || !regularDrawItemsForGbuffer.empty())){
             if(payload.regularSharedComputeEmulationDrawsGraphOwned){
                 payload.regularSharedComputeEmulationTiming->emplace(graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueRegular, graphics.getDevice(), commandList);
                 // Close the marker before finalizing this command list.
                 if(!Core::FinishSplitGpuTimingMarker(payload.regularSharedComputeEmulationTiming))
                     return false;
-                if(!regularDrawItemsForGbuffer->empty()){
-                    materialSystem.renderMaterialPassDrawItems(opaqueDrawContext, *regularDrawItemsForGbuffer);
+                if(!regularDrawItemsForGbuffer.empty()){
+                    materialSystem.renderMaterialPassDrawItems(opaqueDrawContext, regularDrawItemsForGbuffer);
                 }
             }
             else{
                 Core::GpuTimingMeasure timing(graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueRegular, graphics.getDevice(), commandList);
 
-                materialSystem.renderMaterialPassDrawItems(opaqueDrawContext, *regularDrawItemsForGbuffer);
+                materialSystem.renderMaterialPassDrawItems(opaqueDrawContext, regularDrawItemsForGbuffer);
             }
         }
 

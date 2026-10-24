@@ -239,7 +239,7 @@ ECSRenderDetail::CsgGraphResourceSnapshot RendererCsgSystem::csgGraphResourceSna
 
 Expected<CsgClipContextSlots> RendererCsgSystem::prepareCsgClipContextSlotData(
     const DeferredFrameTargets& targets,
-    const CsgFrameGpuData& csgFrameData,
+    const CsgFrameGpuDataView& csgFrameData,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
 )const noexcept{

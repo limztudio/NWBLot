@@ -6,7 +6,6 @@
 
 #include <impl/ecs_render/avboit/compute_emulation_record.h>
 #include <impl/ecs_render/avboit/avboit_system.h>
-#include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/task_timing_feedback.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/material/material_system.h>
@@ -38,16 +37,12 @@ namespace RendererTaskGraphDetail{
         return false;
 
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
-    MaterialPassDrawItems transparentCsgReceiverSurfaceDrawItems{ scratchArena };
-    CsgFrameGpuData transparentCsgFrameData{ scratchArena };
     if(payload.hasTransparentRenderers && payload.transparentCsgStreamsUploaded){
-        payload.transparentCsgSnapshot.materialize(transparentCsgReceiverSurfaceDrawItems, transparentCsgFrameData);
         payload.avboitSystem.renderAvboitTransparentCsgIntervals(
             commandList,
             payload.targets,
-            transparentCsgReceiverSurfaceDrawItems,
-            transparentCsgFrameData,
+            payload.transparentCsgSnapshot.receiverSurfaceDrawItemsView(),
+            payload.transparentCsgSnapshot.csgFrameDataView(),
             payload.csgResources,
             payload.frameBindings,
             payload.transparentCsgSnapshot.instanceCount,
@@ -66,9 +61,8 @@ namespace RendererTaskGraphDetail{
 [[nodiscard]] bool AvboitOccupancyComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_cast<void>(context);
     const AvboitComputeEmulationRecordTrait trait{ RendererGpuTimingScope::s_AvboitOccupancy, MaterialPipelinePass::AvboitOccupancy, &AvboitFrameTargets::lowFramebuffer, };
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
 
-    return RecordAvboitComputeEmulationFromPayload(scratchArena, payload, commandList, trait, payload.occupancyTiming);
+    return RecordAvboitComputeEmulationFromPayload(payload, commandList, trait, payload.occupancyTiming);
 }
 
 
@@ -88,17 +82,15 @@ namespace RendererTaskGraphDetail{
 
 [[nodiscard]] bool AvboitOccupancyGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_cast<void>(context);
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
 
     return RecordAvboitRasterPassFromPayload(
-        scratchArena,
         payload,
         commandList,
         &Payload::occupancyPhasePrepared,
         &Payload::occupancySnapshot,
         &Payload::occupancyComputeEmulationOutputStatesGraphOwned,
         &Payload::occupancyCsgComputeEmulationOutputStatesGraphOwned,
-        [&](Core::CommandList& dispatchCommandList, const MaterialPassDrawItemPartitions& dispatchDrawItems, const CsgFrameGpuData& dispatchCsgFrameData, const usize dispatchInstanceCount, const usize dispatchMaterialTypedByteCount){
+        [&](Core::CommandList& dispatchCommandList, const MaterialPassDrawItemPartitionsView& dispatchDrawItems, const CsgFrameGpuDataView& dispatchCsgFrameData, const usize dispatchInstanceCount, const usize dispatchMaterialTypedByteCount){
             payload.avboitSystem.renderAvboitOccupancyPass(
                 dispatchCommandList,
                 payload.targets,

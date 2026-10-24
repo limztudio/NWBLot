@@ -4,7 +4,6 @@
 
 #include "task_graph_transparent_interval_tasks.h"
 
-#include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
@@ -35,34 +34,27 @@ namespace __hidden_transparent_interval_tasks{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Both transparent interval passes materialize the same snapshot and gate on the same framebuffer, draw-buffer, CSG-resource, and material-resource readiness.
+// Both transparent interval passes inspect the same snapshot and gate on the same framebuffer, draw-buffer, CSG-resource, and material-resource readiness.
 struct TransparentIntervalReadiness{
-    MaterialPassDrawItems receiverSurfaceDrawItems;
-    CsgFrameGpuData csgFrameData;
+    CsgFrameGpuDataView csgFrameData;
     bool ready = false;
-
-
-public:
-    explicit TransparentIntervalReadiness(Core::Alloc::ScratchArena& arena)noexcept
-        : receiverSurfaceDrawItems(arena)
-        , csgFrameData(arena)
-    {}
 };
 
-[[nodiscard]] inline TransparentIntervalReadiness ResolveTransparentIntervalReadiness(const TransparentCsgIntervalRecordInputs& payload, RendererMaterialSystem& materialSystem, Core::Alloc::ScratchArena& scratchArena){
-    TransparentIntervalReadiness readiness{ scratchArena };
-    payload.transparentCsgSnapshot.materialize(readiness.receiverSurfaceDrawItems, readiness.csgFrameData);
+[[nodiscard]] inline TransparentIntervalReadiness ResolveTransparentIntervalReadiness(const TransparentCsgIntervalRecordInputs& payload, RendererMaterialSystem& materialSystem){
+    TransparentIntervalReadiness readiness{};
+    const MaterialPassDrawItemsView receiverSurfaceDrawItems = payload.transparentCsgSnapshot.receiverSurfaceDrawItemsView();
+    readiness.csgFrameData = payload.transparentCsgSnapshot.csgFrameDataView();
     const bool drawBuffersReady = payload.frameBindings.frameReady(payload.transparentCsgSnapshot.instanceCount, payload.transparentCsgSnapshot.materialTypedByteCount);
     const bool csgResourcesReady = payload.csgResources.frameReady(readiness.csgFrameData);
-    const bool receiverSurfaceDrawResourcesReady = materialSystem.materialPassDrawResourcesReady(readiness.receiverSurfaceDrawItems, payload.frameBindings);
-    readiness.ready = payload.csgFrameBuffersUploaded && payload.targets.framebuffer && !readiness.receiverSurfaceDrawItems.empty() && readiness.csgFrameData.hasWork() && drawBuffersReady && csgResourcesReady && receiverSurfaceDrawResourcesReady;
+    const bool receiverSurfaceDrawResourcesReady = materialSystem.materialPassDrawResourcesReady(receiverSurfaceDrawItems, payload.frameBindings);
+    readiness.ready = payload.csgFrameBuffersUploaded && payload.targets.framebuffer && !receiverSurfaceDrawItems.empty() && readiness.csgFrameData.hasWork() && drawBuffersReady && csgResourcesReady && receiverSurfaceDrawResourcesReady;
     return readiness;
 }
 
 
 template<typename Dispatch>
-[[nodiscard]] bool RecordTransparentInterval(const TransparentCsgIntervalRecordInputs& payload, Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena, Dispatch dispatch){
-    const TransparentIntervalReadiness readiness = ResolveTransparentIntervalReadiness(payload, payload.materialSystem, scratchArena);
+[[nodiscard]] bool RecordTransparentInterval(const TransparentCsgIntervalRecordInputs& payload, Core::CommandList& commandList, Dispatch dispatch){
+    const TransparentIntervalReadiness readiness = ResolveTransparentIntervalReadiness(payload, payload.materialSystem);
     if(readiness.ready)
         dispatch(readiness);
     else
@@ -111,8 +103,7 @@ bool AvboitCsgReceiverSpanGraphTask::Record(const Payload& payload, Core::Comman
         commandList.endRenderPass();
         return true;
     }
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
-    return __hidden_transparent_interval_tasks::RecordTransparentInterval(payload, commandList, scratchArena, [&](const auto& readiness){
+    return __hidden_transparent_interval_tasks::RecordTransparentInterval(payload, commandList, [&](const auto& readiness){
         payload.csgSystem.dispatchCsgReceiverSpanBuild(commandList, payload.targets, readiness.csgFrameData, payload.csgResources);
     });
 }
@@ -131,8 +122,7 @@ bool AvboitCsgIntervalCombineGraphTask::Record(const Payload& payload, Core::Com
         commandList.endRenderPass();
         return true;
     }
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
-    return __hidden_transparent_interval_tasks::RecordTransparentInterval(payload, commandList, scratchArena, [&](const auto& readiness){
+    return __hidden_transparent_interval_tasks::RecordTransparentInterval(payload, commandList, [&](const auto& readiness){
         payload.csgSystem.dispatchCsgIntervalCombine(commandList, payload.targets, readiness.csgFrameData, payload.csgResources);
         payload.transparentCsgIntervalsTiming.value().finishTiming(commandList);
         payload.transparentCsgIntervalsTiming.reset();

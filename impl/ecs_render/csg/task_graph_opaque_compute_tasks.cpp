@@ -61,13 +61,12 @@ bool OpaqueCsgReceiverComputeEmulationGraphTask::Record(const Payload& payload, 
         return true;
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
-    MaterialPassDrawItems drawItems{ scratchArena };
-    CsgFrameGpuData csgFrameData{ scratchArena };
-    payload.plan.materialize(drawItems, csgFrameData);
     // The imported output set is immutable; reject a corrupted plan.
     if(!payload.plan.matches(scratchArena))
         return false;
 
+    const MaterialPassDrawItemsView drawItems = payload.plan.drawItemsView();
+    const CsgFrameGpuDataView csgFrameData = payload.plan.csgFrameDataView();
     const bool deferredResourcesReady = payload.materialDrawBuffersUploaded && payload.frameBindings.frameReady(payload.instanceCount, payload.materialTypedByteCount);
     const bool csgResourcesReady = deferredResourcesReady && payload.csgFrameBuffersUploaded && csgFrameData.hasWork() && payload.csgResources.frameReady(csgFrameData);
     if(!csgResourcesReady || !materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings))
@@ -131,14 +130,12 @@ bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::Record(const Payload& pay
     if(!frameSetupReady)
         return true;
 
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
-    MaterialPassDrawItems drawItems{ scratchArena };
-    CsgFrameGpuData csgFrameData{ scratchArena };
-    payload.plan.materialize(drawItems, csgFrameData);
     // Reject a corrupted retained plan.
     if(!payload.plan.matches())
         return false;
 
+    const MaterialPassDrawItemsView drawItems = payload.plan.drawItemsView();
+    const CsgFrameGpuDataView csgFrameData = payload.plan.csgFrameDataView();
     const bool deferredResourcesReady = payload.materialDrawBuffersUploaded && payload.frameBindings.frameReady(payload.instanceCount, payload.materialTypedByteCount);
     const bool csgResourcesReady = deferredResourcesReady && payload.csgFrameBuffersUploaded && csgFrameData.hasWork() && payload.csgResources.frameReady(csgFrameData);
     if(!csgResourcesReady || !materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings))

@@ -20,7 +20,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct CsgFrameGpuData;
+struct CsgFrameGpuDataView;
 
 namespace ECSRenderDetail{
     struct CsgGraphResourceSnapshot{
@@ -39,7 +39,7 @@ namespace ECSRenderDetail{
 
     public:
         [[nodiscard]] bool bindingValid()const noexcept;
-        [[nodiscard]] bool frameReady(const CsgFrameGpuData& csgFrameData)const noexcept;
+        [[nodiscard]] bool frameReady(const CsgFrameGpuDataView& csgFrameData)const noexcept;
         [[nodiscard]] Expected<u32> findClipContextHeapSlot()const noexcept;
     };
 };

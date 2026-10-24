@@ -241,11 +241,11 @@ bool nwbRefractionScreenBackgroundPixel(const NwbRefractionEntry entry, const fl
     if(sourceOpaqueDepth >= 1.0)
         return false;
     const float3 sourceOpaque = nwbRefractionReconstruct(sourcePixel, sourceOpaqueDepth);
-    const float maxDistance = min(max(length(sourceOpaque - entry.position) * 2.0, entry.bias * NWB_REFRACTION_SCREEN_MAX_DISTANCE_BIAS_SCALE), NWB_REFRACTION_MAX_DISTANCE);
+    const float stepScale = min(max(length(sourceOpaque - entry.position) * 2.0, entry.bias * NWB_REFRACTION_SCREEN_MAX_DISTANCE_BIAS_SCALE), NWB_REFRACTION_MAX_DISTANCE) * (1.0 / (float(NWB_REFRACTION_SCREEN_STEP_COUNT) * float(NWB_REFRACTION_SCREEN_STEP_COUNT)));
     const float entryCameraDistance = entry.cameraDistance;
     float previousT = entry.bias;
     for(uint step = 1u; step <= NWB_REFRACTION_SCREEN_STEP_COUNT; ++step){
-        const float t = maxDistance * float(step * step) / (float(NWB_REFRACTION_SCREEN_STEP_COUNT) * float(NWB_REFRACTION_SCREEN_STEP_COUNT));
+        const float t = stepScale * float(step * step);
         const float3 sampleWorld = entry.position + direction * t;
         uint2 samplePixel;
         float rayDepth;
@@ -256,10 +256,14 @@ bool nwbRefractionScreenBackgroundPixel(const NwbRefractionEntry entry, const fl
             const float3 sceneWorld = nwbRefractionReconstruct(samplePixel, sceneDepth);
             const float3 delta = sceneWorld - entry.position;
             const float alongRay = dot(delta, direction);
+            if(alongRay <= entry.bias)
+                return false;
             const float tolerance = max(entry.bias * NWB_REFRACTION_BIAS_TOLERANCE_SCALE, (t - previousT) * NWB_REFRACTION_SCREEN_STEP_TOLERANCE_SCALE);
             const float3 perpendicular = delta - direction * alongRay;
+            if(dot(perpendicular, perpendicular) >= tolerance * tolerance)
+                return false;
             const float3 sceneCameraDelta = sceneWorld - g_NwbRefractionView.cameraPosition.xyz;
-            if(alongRay > entry.bias && dot(perpendicular, perpendicular) < tolerance * tolerance && dot(sceneCameraDelta, sceneCameraDelta) > entryCameraDistance * entryCameraDistance){
+            if(dot(sceneCameraDelta, sceneCameraDelta) > entryCameraDistance * entryCameraDistance){
                 outSamplePixel = samplePixel;
                 return true;
             }
@@ -274,7 +278,7 @@ half4 nwbRefractionResolveScreen(const uint2 pixel, const NwbRefractionEntry ent
     uint2 samplePixel = pixel;
     const float3 direction = refract(entry.incident, entry.normal, 1.0 / float(entry.ior));
     const bool displaced = dot(direction, direction) > NWB_REFRACTION_DIRECTION_LENGTH_SQUARED_MIN && nwbRefractionScreenBackgroundPixel(entry, direction, samplePixel);
-    const half3 background = nwbRefractionBackgroundForEntry(select(bool2(displaced), samplePixel, pixel), entry, true, displaced);
+    const half3 background = nwbRefractionBackgroundForEntry(select(bool2(displaced), samplePixel, pixel), entry, true, displaced && any(samplePixel != pixel));
     return half4(background * nwbRefractionFallbackAttenuation(entry.tint, entry.ior, entry.cosine), 1.0h);
 }
 

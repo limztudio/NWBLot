@@ -65,7 +65,7 @@ struct AvboitComputeEmulationRecordInputs{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool RecordAvboitComputeEmulation(Core::Alloc::ScratchArena& scratchArena, const AvboitComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitComputeEmulationRecordTrait& trait);
+[[nodiscard]] bool RecordAvboitComputeEmulation(const AvboitComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitComputeEmulationRecordTrait& trait);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -107,7 +107,6 @@ using AvboitSharedComputeEmulationRecordTrait = AvboitComputeEmulationRecordTrai
 
 template<typename PayloadT>
 [[nodiscard]] inline bool RecordAvboitComputeEmulationFromPayload(
-    Core::Alloc::ScratchArena& scratchArena,
     const PayloadT& payload,
     Core::CommandList& commandList,
     const AvboitComputeEmulationRecordTrait& trait,
@@ -131,12 +130,11 @@ template<typename PayloadT>
         payload.materialGeometryStatesGraphOwned,
         payload.conservativeGeometryScissor,
     };
-    return RecordAvboitComputeEmulation(scratchArena, inputs, commandList, trait);
+    return RecordAvboitComputeEmulation(inputs, commandList, trait);
 }
 
 template<typename PayloadT, typename DispatchFn>
 [[nodiscard]] inline bool RecordAvboitRasterPassFromPayload(
-    Core::Alloc::ScratchArena& scratchArena,
     const PayloadT& payload,
     Core::CommandList& commandList,
     const bool PayloadT::* phasePreparedMember,
@@ -150,14 +148,15 @@ template<typename PayloadT, typename DispatchFn>
         return false;
 
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
-    MaterialPassDrawItemPartitions drawItems{ scratchArena };
-    CsgFrameGpuData csgFrameData{ scratchArena };
+    MaterialPassDrawItemPartitionsView drawItems{};
+    CsgFrameGpuDataView csgFrameData{};
     usize preparedInstanceCount = 0u;
     usize preparedMaterialTypedByteCount = 0u;
     if(payload.hasTransparentRenderers && (!(payload.*phasePreparedMember) || !(payload.*snapshotMember).captured))
         return false;
     if((payload.*phasePreparedMember) && (payload.*snapshotMember).captured){
-        (payload.*snapshotMember).materialize(drawItems, csgFrameData);
+        drawItems = (payload.*snapshotMember).drawItemsView();
+        csgFrameData = (payload.*snapshotMember).csgFrameDataView();
         preparedInstanceCount = (payload.*snapshotMember).instanceCount;
         preparedMaterialTypedByteCount = (payload.*snapshotMember).materialTypedByteCount;
     }

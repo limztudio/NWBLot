@@ -27,22 +27,6 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename Plan>
-static void MaterializeCsgComputePlan(const Plan& plan, MaterialPassDrawItems& outDrawItems, CsgFrameGpuData& outCsgFrameData){
-    outDrawItems.meshDrawItems.reserve(plan.meshDrawItems.size());
-    outDrawItems.meshDrawItems.assign(plan.meshDrawItems.begin(), plan.meshDrawItems.end());
-    outDrawItems.indexedDrawItems.reserve(plan.indexedDrawItems.size());
-    outDrawItems.indexedDrawItems.assign(plan.indexedDrawItems.begin(), plan.indexedDrawItems.end());
-    outDrawItems.computeDrawItems.reserve(plan.drawItems.size());
-    outDrawItems.computeDrawItems.assign(plan.drawItems.begin(), plan.drawItems.end());
-    outCsgFrameData.receiverRanges.reserve(plan.receiverRanges.size());
-    outCsgFrameData.receiverRanges.assign(plan.receiverRanges.begin(), plan.receiverRanges.end());
-    outCsgFrameData.cutters.reserve(plan.cutters.size());
-    outCsgFrameData.cutters.assign(plan.cutters.begin(), plan.cutters.end());
-    outCsgFrameData.workRegion = plan.workRegion;
-}
-
-
 struct OpaqueCsgReceiverComputeEmulationGraphPlan{
     using DrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::GlobalArena>;
     using BufferVector = Vector<Core::BufferHandle, Core::Alloc::GlobalArena>;
@@ -182,8 +166,12 @@ public:
         return true;
     }
 
-    void materialize(MaterialPassDrawItems& outDrawItems, CsgFrameGpuData& outCsgFrameData)const{
-        MaterializeCsgComputePlan(*this, outDrawItems, outCsgFrameData);
+    [[nodiscard]] MaterialPassDrawItemsView drawItemsView()const noexcept{
+        return { meshDrawItems, indexedDrawItems, drawItems };
+    }
+
+    [[nodiscard]] CsgFrameGpuDataView csgFrameDataView()const noexcept{
+        return { receiverRanges, cutters, workRegion };
     }
 };
 
@@ -263,8 +251,12 @@ public:
         return MatchesRetainedGeneratedGeometryOutputs(captured, drawItems, outputBuffers, outputLayouts, outputHeapSlots);
     }
 
-    void materialize(MaterialPassDrawItems& outDrawItems, CsgFrameGpuData& outCsgFrameData)const{
-        MaterializeCsgComputePlan(*this, outDrawItems, outCsgFrameData);
+    [[nodiscard]] MaterialPassDrawItemsView drawItemsView()const noexcept{
+        return { meshDrawItems, indexedDrawItems, drawItems };
+    }
+
+    [[nodiscard]] CsgFrameGpuDataView csgFrameDataView()const noexcept{
+        return { receiverRanges, cutters, workRegion };
     }
 };
 

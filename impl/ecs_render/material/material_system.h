@@ -142,8 +142,8 @@ public:
         Core::Framebuffer* framebuffer,
         MaterialPipelinePass::Enum pass,
         const AvboitFrameTargets* avboitTargets,
-        const MaterialPassDrawItemPartitions& drawItems,
-        const CsgFrameGpuData& csgFrameData,
+        const MaterialPassDrawItemPartitionsView& drawItems,
+        const CsgFrameGpuDataView& csgFrameData,
         const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         usize instanceCount,
@@ -201,7 +201,7 @@ public:
     );
     void pruneMaterialInstanceMutableCache()noexcept;
     [[nodiscard]] bool materialPassDrawResourcesReady(const MaterialPassMeshResourceSnapshot& mesh, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)const noexcept;
-    [[nodiscard]] bool materialPassDrawResourcesReady(const MaterialPassDrawItems& drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept;
+    [[nodiscard]] bool materialPassDrawResourcesReady(const MaterialPassDrawItemsView& drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept;
     [[nodiscard]] bool meshMaterialPassDrawResourcesReady(Span<const MaterialPassDrawItem> drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept;
     [[nodiscard]] bool indexedMaterialPassDrawResourcesReady(Span<const MaterialPassDrawItem> drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept;
     [[nodiscard]] bool computeMaterialPassDrawResourcesReady(Span<const MaterialPassDrawItem> drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept;
@@ -219,7 +219,7 @@ public:
     [[nodiscard]] bool setMaterialPassDrawPushConstants(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh);
     void dispatchComputeMaterialPassDrawItem(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh, const MaterialPassPipelineResourceSnapshot& pipelineResources);
     void drawComputeMaterialPassDrawItem(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh, const MaterialPassPipelineResourceSnapshot& pipelineResources);
-    void renderMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItems& drawItems);
+    void renderMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemsView& drawItems);
     void renderIndexedMaterialPassDrawItems(const MaterialPassDrawContext& context, Span<const MaterialPassDrawItem> drawItems);
     void renderMeshMaterialPassDrawItems(const MaterialPassDrawContext& context, Span<const MaterialPassDrawItem> drawItems);
     // Records the fixed object-space decoder; the graph owns source reads and the cache UAV-to-vertex/index handoff.

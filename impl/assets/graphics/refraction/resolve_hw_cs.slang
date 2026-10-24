@@ -336,7 +336,7 @@ half4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry e
     const bool displaced = dot(continuationDirection, continuationDirection) > NWB_REFRACTION_DIRECTION_LENGTH_SQUARED_MIN && nwbRefractionScreenBackgroundPixel(continuationEntry, continuationDirection, samplePixel);
     if(volumeExited)
         nwbRefractionCount(displaced ? NWB_REFRACTION_COUNTER_exitScreenBackgroundReturns : NWB_REFRACTION_COUNTER_exitStraightFallbackPixels);
-    const half3 backgroundRadiance = nwbRefractionBackgroundForEntry(select(bool2(displaced), samplePixel, pixel), entry, true, displaced);
+    const half3 backgroundRadiance = nwbRefractionBackgroundForEntry(select(bool2(displaced), samplePixel, pixel), entry, true, displaced && any(samplePixel != pixel));
     return half4(half3(backgroundRadiance) * half3(continuationAttenuation), 1.0h);
 }
 

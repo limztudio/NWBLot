@@ -152,6 +152,34 @@ public:
     }
 };
 
+struct MaterialPassDrawItemsView{
+    Span<const MaterialPassDrawItem> meshDrawItems;
+    Span<const MaterialPassDrawItem> indexedDrawItems;
+    Span<const MaterialPassDrawItem> computeDrawItems;
+
+
+public:
+    constexpr MaterialPassDrawItemsView()noexcept = default;
+    constexpr MaterialPassDrawItemsView(
+        const Span<const MaterialPassDrawItem> inMeshDrawItems,
+        const Span<const MaterialPassDrawItem> inIndexedDrawItems,
+        const Span<const MaterialPassDrawItem> inComputeDrawItems
+    )noexcept
+        : meshDrawItems(inMeshDrawItems)
+        , indexedDrawItems(inIndexedDrawItems)
+        , computeDrawItems(inComputeDrawItems)
+    {}
+    MaterialPassDrawItemsView(const MaterialPassDrawItems& drawItems)noexcept
+        : meshDrawItems(drawItems.meshDrawItems)
+        , indexedDrawItems(drawItems.indexedDrawItems)
+        , computeDrawItems(drawItems.computeDrawItems)
+    {}
+
+
+public:
+    [[nodiscard]] constexpr bool empty()const noexcept{ return meshDrawItems.empty() && indexedDrawItems.empty() && computeDrawItems.empty(); }
+};
+
 struct MaterialPassDrawItemPartitions{
     MaterialPassDrawItems regular;
     MaterialPassDrawItems csg;
@@ -174,6 +202,34 @@ public:
         csg.reserve(capacity);
         csgReceiverSurface.reserve(capacity);
     }
+};
+
+struct MaterialPassDrawItemPartitionsView{
+    MaterialPassDrawItemsView regular;
+    MaterialPassDrawItemsView csg;
+    MaterialPassDrawItemsView csgReceiverSurface;
+
+
+public:
+    constexpr MaterialPassDrawItemPartitionsView()noexcept = default;
+    constexpr MaterialPassDrawItemPartitionsView(
+        const MaterialPassDrawItemsView inRegular,
+        const MaterialPassDrawItemsView inCsg,
+        const MaterialPassDrawItemsView inCsgReceiverSurface = {}
+    )noexcept
+        : regular(inRegular)
+        , csg(inCsg)
+        , csgReceiverSurface(inCsgReceiverSurface)
+    {}
+    MaterialPassDrawItemPartitionsView(const MaterialPassDrawItemPartitions& partitions)noexcept
+        : regular(partitions.regular)
+        , csg(partitions.csg)
+        , csgReceiverSurface(partitions.csgReceiverSurface)
+    {}
+
+
+public:
+    [[nodiscard]] constexpr bool empty()const noexcept{ return regular.empty() && csg.empty() && csgReceiverSurface.empty(); }
 };
 
 

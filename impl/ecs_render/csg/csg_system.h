@@ -77,13 +77,13 @@ public:
     void dispatchCsgIntervalPeels(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
-        const CsgFrameGpuData& csgFrameData,
+        const CsgFrameGpuDataView& csgFrameData,
         const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
     );
-    void dispatchCsgReceiverSpanBuild(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources);
-    void dispatchCsgIntervalCombine(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources);
-    void renderCsgIntervalCaps(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources);
+    void dispatchCsgReceiverSpanBuild(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuDataView& csgFrameData, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources);
+    void dispatchCsgIntervalCombine(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuDataView& csgFrameData, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources);
+    void renderCsgIntervalCaps(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuDataView& csgFrameData, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources);
     void renderRefractionIntervalCaps(Core::CommandList& commandList, const DeferredFrameTargets& targets, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources, const Core::Rect& workRect, const Span<const u32> receiverIndices);
     [[nodiscard]] bool createCsgIntervalSampleStateBuffer();
     [[nodiscard]] bool reserveCsgReceiverRangeBufferCapacity(usize rangeCount);
@@ -94,13 +94,13 @@ public:
     // Capture frozen CSG uniform bytes as immutable blobs before native recording.
     [[nodiscard]] Expected<CsgClipContextSlots> prepareCsgClipContextSlotData(
         const DeferredFrameTargets& targets,
-        const CsgFrameGpuData& csgFrameData,
+        const CsgFrameGpuDataView& csgFrameData,
         const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
     )const noexcept;
     [[nodiscard]] Expected<CsgIntervalSampleStateGpuData> prepareCsgIntervalSampleStateData(
         const DeferredFrameTargets& targets,
-        const CsgFrameGpuData& csgFrameData,
+        const CsgFrameGpuDataView& csgFrameData,
         const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
     )const noexcept;

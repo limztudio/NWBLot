@@ -61,9 +61,12 @@ class RendererMaterialSystem;
 class RendererShaderSystem;
 class RendererAvboitState;
 struct CsgFrameGpuData;
+struct CsgFrameGpuDataView;
 struct CsgFrameState;
 struct MaterialPassDrawItemPartitions;
+struct MaterialPassDrawItemPartitionsView;
 struct MaterialPassDrawItems;
+struct MaterialPassDrawItemsView;
 namespace ECSRenderDetail{
     struct CsgGraphResourceSnapshot;
     struct MeshFrameBindingSnapshot;
@@ -104,8 +107,8 @@ public:
     void renderAvboitTransparentCsgIntervals(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
-        const MaterialPassDrawItems& receiverSurfaceDrawItems,
-        const CsgFrameGpuData& csgFrameData,
+        const MaterialPassDrawItemsView& receiverSurfaceDrawItems,
+        const CsgFrameGpuDataView& csgFrameData,
         const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         usize instanceCount,
@@ -116,8 +119,8 @@ public:
     void renderAvboitOccupancyPass(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
-        const MaterialPassDrawItemPartitions& preparedOccupancyDrawItems,
-        const CsgFrameGpuData& preparedOccupancyCsgFrameData,
+        const MaterialPassDrawItemPartitionsView& preparedOccupancyDrawItems,
+        const CsgFrameGpuDataView& preparedOccupancyCsgFrameData,
         const ECSRenderDetail::CsgGraphResourceSnapshot& preparedOccupancyCsgResources,
         const ECSRenderDetail::MeshFrameBindingSnapshot& preparedOccupancyFrameBindings,
         usize preparedOccupancyInstanceCount,
@@ -133,8 +136,8 @@ public:
     void renderAvboitExtinctionPass(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
-        const MaterialPassDrawItemPartitions& preparedExtinctionDrawItems,
-        const CsgFrameGpuData& preparedExtinctionCsgFrameData,
+        const MaterialPassDrawItemPartitionsView& preparedExtinctionDrawItems,
+        const CsgFrameGpuDataView& preparedExtinctionCsgFrameData,
         const ECSRenderDetail::CsgGraphResourceSnapshot& preparedExtinctionCsgResources,
         const ECSRenderDetail::MeshFrameBindingSnapshot& preparedExtinctionFrameBindings,
         usize preparedExtinctionInstanceCount,
@@ -149,8 +152,8 @@ public:
     void renderAvboitAccumulatePass(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
-        const MaterialPassDrawItemPartitions& preparedAccumulationDrawItems,
-        const CsgFrameGpuData& preparedAccumulationCsgFrameData,
+        const MaterialPassDrawItemPartitionsView& preparedAccumulationDrawItems,
+        const CsgFrameGpuDataView& preparedAccumulationCsgFrameData,
         const ECSRenderDetail::CsgGraphResourceSnapshot& preparedAccumulationCsgResources,
         const ECSRenderDetail::MeshFrameBindingSnapshot& preparedAccumulationFrameBindings,
         usize preparedAccumulationInstanceCount,

@@ -54,20 +54,6 @@ inline void CaptureMaterialPassSnapshot(Snapshot& snapshot, const MaterialPassDr
 }
 
 
-template<typename Snapshot>
-inline void MaterializeMaterialPassSnapshot(const Snapshot& snapshot, MaterialPassDrawItemPartitions& outDrawItems, CsgFrameGpuData& outCsgFrameData){
-    AssignVector(outDrawItems.regular.meshDrawItems, snapshot.regularMeshDrawItems);
-    AssignVector(outDrawItems.regular.indexedDrawItems, snapshot.regularIndexedDrawItems);
-    AssignVector(outDrawItems.regular.computeDrawItems, snapshot.regularComputeDrawItems);
-    AssignVector(outDrawItems.csg.meshDrawItems, snapshot.csgMeshDrawItems);
-    AssignVector(outDrawItems.csg.indexedDrawItems, snapshot.csgIndexedDrawItems);
-    AssignVector(outDrawItems.csg.computeDrawItems, snapshot.csgComputeDrawItems);
-    AssignVector(outCsgFrameData.receiverRanges, snapshot.csgReceiverRanges);
-    AssignVector(outCsgFrameData.cutters, snapshot.csgCutters);
-    outCsgFrameData.workRegion = snapshot.csgWorkRegion;
-}
-
-
 struct OpaqueMaterialPassGraphSnapshot{
     using DrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::GlobalArena>;
     using ReceiverRangeVector = Vector<CsgReceiverRangeGpuData, Core::Alloc::GlobalArena>;
@@ -117,11 +103,24 @@ public:
         captured = true;
     }
 
-    void materialize(MaterialPassDrawItemPartitions& outDrawItems, CsgFrameGpuData& outCsgFrameData)const{
-        MaterializeMaterialPassSnapshot(*this, outDrawItems, outCsgFrameData);
-        AssignVector(outDrawItems.csgReceiverSurface.meshDrawItems, csgReceiverSurfaceMeshDrawItems);
-        AssignVector(outDrawItems.csgReceiverSurface.indexedDrawItems, csgReceiverSurfaceIndexedDrawItems);
-        AssignVector(outDrawItems.csgReceiverSurface.computeDrawItems, csgReceiverSurfaceComputeDrawItems);
+    [[nodiscard]] MaterialPassDrawItemsView regularView()const noexcept{
+        return { regularMeshDrawItems, regularIndexedDrawItems, regularComputeDrawItems };
+    }
+
+    [[nodiscard]] MaterialPassDrawItemsView csgView()const noexcept{
+        return { csgMeshDrawItems, csgIndexedDrawItems, csgComputeDrawItems };
+    }
+
+    [[nodiscard]] MaterialPassDrawItemsView csgReceiverSurfaceView()const noexcept{
+        return { csgReceiverSurfaceMeshDrawItems, csgReceiverSurfaceIndexedDrawItems, csgReceiverSurfaceComputeDrawItems };
+    }
+
+    [[nodiscard]] MaterialPassDrawItemPartitionsView drawItemsView()const noexcept{
+        return { regularView(), csgView(), csgReceiverSurfaceView() };
+    }
+
+    [[nodiscard]] CsgFrameGpuDataView csgFrameDataView()const noexcept{
+        return { csgReceiverRanges, csgCutters, csgWorkRegion };
     }
 };
 
@@ -167,17 +166,12 @@ public:
         captured = true;
     }
 
-    void materialize(MaterialPassDrawItems& outReceiverSurfaceDrawItems, CsgFrameGpuData& outCsgFrameData)const{
-        AssignVector(outReceiverSurfaceDrawItems.meshDrawItems, receiverSurfaceMeshDrawItems);
-        AssignVector(outReceiverSurfaceDrawItems.indexedDrawItems, receiverSurfaceIndexedDrawItems);
-        AssignVector(outReceiverSurfaceDrawItems.computeDrawItems, receiverSurfaceComputeDrawItems);
-        materializeCsgFrameData(outCsgFrameData);
+    [[nodiscard]] MaterialPassDrawItemsView receiverSurfaceDrawItemsView()const noexcept{
+        return { receiverSurfaceMeshDrawItems, receiverSurfaceIndexedDrawItems, receiverSurfaceComputeDrawItems };
     }
 
-    void materializeCsgFrameData(CsgFrameGpuData& outCsgFrameData)const{
-        AssignVector(outCsgFrameData.receiverRanges, csgReceiverRanges);
-        AssignVector(outCsgFrameData.cutters, csgCutters);
-        outCsgFrameData.workRegion = csgWorkRegion;
+    [[nodiscard]] CsgFrameGpuDataView csgFrameDataView()const noexcept{
+        return { csgReceiverRanges, csgCutters, csgWorkRegion };
     }
 };
 
@@ -222,8 +216,20 @@ public:
         captured = true;
     }
 
-    void materialize(MaterialPassDrawItemPartitions& outDrawItems, CsgFrameGpuData& outCsgFrameData)const{
-        MaterializeMaterialPassSnapshot(*this, outDrawItems, outCsgFrameData);
+    [[nodiscard]] MaterialPassDrawItemsView regularView()const noexcept{
+        return { regularMeshDrawItems, regularIndexedDrawItems, regularComputeDrawItems };
+    }
+
+    [[nodiscard]] MaterialPassDrawItemsView csgView()const noexcept{
+        return { csgMeshDrawItems, csgIndexedDrawItems, csgComputeDrawItems };
+    }
+
+    [[nodiscard]] MaterialPassDrawItemPartitionsView drawItemsView()const noexcept{
+        return { regularView(), csgView() };
+    }
+
+    [[nodiscard]] CsgFrameGpuDataView csgFrameDataView()const noexcept{
+        return { csgReceiverRanges, csgCutters, csgWorkRegion };
     }
 };
 

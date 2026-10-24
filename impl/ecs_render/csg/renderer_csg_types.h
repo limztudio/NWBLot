@@ -209,6 +209,34 @@ public:
     }
 };
 
+struct CsgFrameGpuDataView{
+    Span<const CsgReceiverRangeGpuData> receiverRanges;
+    Span<const CsgCutterGpuData> cutters;
+    CsgFrameWorkRegion workRegion;
+
+
+public:
+    constexpr CsgFrameGpuDataView()noexcept = default;
+    constexpr CsgFrameGpuDataView(
+        const Span<const CsgReceiverRangeGpuData> inReceiverRanges,
+        const Span<const CsgCutterGpuData> inCutters,
+        const CsgFrameWorkRegion& inWorkRegion
+    )noexcept
+        : receiverRanges(inReceiverRanges)
+        , cutters(inCutters)
+        , workRegion(inWorkRegion)
+    {}
+    CsgFrameGpuDataView(const CsgFrameGpuData& frameData)noexcept
+        : receiverRanges(frameData.receiverRanges)
+        , cutters(frameData.cutters)
+        , workRegion(frameData.workRegion)
+    {}
+
+
+public:
+    [[nodiscard]] constexpr bool hasWork()const noexcept{ return !receiverRanges.empty() && !cutters.empty(); }
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

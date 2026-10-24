@@ -6,7 +6,6 @@
 
 #include <impl/ecs_render/avboit/compute_emulation_record.h>
 #include <impl/ecs_render/avboit/avboit_system.h>
-#include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
@@ -32,9 +31,8 @@ namespace RendererTaskGraphDetail{
 [[nodiscard]] bool AvboitAccumulationComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_cast<void>(context);
     const AvboitComputeEmulationRecordTrait trait{ RendererGpuTimingScope::s_AvboitAccumulate, MaterialPipelinePass::AvboitAccumulate, &AvboitFrameTargets::accumulationFramebuffer, };
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
 
-    return RecordAvboitComputeEmulationFromPayload(scratchArena, payload, commandList, trait, payload.accumulationTiming);
+    return RecordAvboitComputeEmulationFromPayload(payload, commandList, trait, payload.accumulationTiming);
 }
 
 
@@ -54,17 +52,15 @@ namespace RendererTaskGraphDetail{
 
 [[nodiscard]] bool AvboitAccumulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     static_cast<void>(context);
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
 
     return RecordAvboitRasterPassFromPayload(
-        scratchArena,
         payload,
         commandList,
         &Payload::accumulationPhasePrepared,
         &Payload::accumulationSnapshot,
         &Payload::accumulationComputeEmulationOutputStatesGraphOwned,
         &Payload::accumulationCsgComputeEmulationOutputStatesGraphOwned,
-        [&](Core::CommandList& dispatchCommandList, const MaterialPassDrawItemPartitions& dispatchDrawItems, const CsgFrameGpuData& dispatchCsgFrameData, const usize dispatchInstanceCount, const usize dispatchMaterialTypedByteCount){
+        [&](Core::CommandList& dispatchCommandList, const MaterialPassDrawItemPartitionsView& dispatchDrawItems, const CsgFrameGpuDataView& dispatchCsgFrameData, const usize dispatchInstanceCount, const usize dispatchMaterialTypedByteCount){
             payload.avboitSystem.renderAvboitAccumulatePass(
                 dispatchCommandList,
                 payload.targets,

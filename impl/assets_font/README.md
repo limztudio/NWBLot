@@ -4,7 +4,7 @@
 
 ## Two-file authoring
 
-`utilities/font_builder` produces exactly two same-stem files. `name.nwb` contains readable Font and FontAtlas metadata, including every glyph mapping. `name.font` is a `FON2` source container holding the prepared SFNT and compact atlas image pixels. The original `.ttf` or `.otf` is an external builder input and is not a checked-in runtime asset.
+Offline preparation produces exactly two same-stem files. `name.nwb` contains readable Font and FontAtlas metadata, including every glyph mapping. `name.font` is a `FON2` source container holding the prepared SFNT and compact atlas image pixels. The original `.ttf` or `.otf` is an external preparation input and is not a checked-in runtime asset.
 
 The metadata declares independent assets and gathers them through the ordinary asset bunch:
 
@@ -13,7 +13,7 @@ font face;
 
 font_atlas atlas;
 atlas.font = face;
-// The builder writes atlas bake settings, layout metrics, and all glyph records here.
+// Preparation writes atlas bake settings, layout metrics, and all glyph records here.
 
 asset_bunch bunch = [face, atlas];
 ```
@@ -26,7 +26,7 @@ A standalone `font asset;` document also has no fields and finds its sibling `.f
 
 ## Prepared source and runtime payload
 
-The FON2 authoring container retains exact shaping SFNT bytes and compact image groups with internal integrity hashes. Readable atlas mappings stay in `.nwb`; source cooking reconstructs the independent runtime assets from the pair. The prepared source supports one static scalable SFNT face with Unicode character mapping: TrueType outlines or CFF outlines, with face index zero. Font collections, variable fonts (`fvar`/`CFF2`), compressed web fonts, bitmap-only faces, and non-Unicode faces are unsupported.
+The FON2 authoring container retains exact shaping SFNT bytes and compact image groups with internal integrity hashes. It stores a 56-byte header, 48-byte image directory entries, the exact SFNT, then tightly interleaved compact image bytes. Readable atlas mappings stay in `.nwb`; source cooking reconstructs the independent runtime assets from the pair. The prepared source supports one static scalable SFNT face with Unicode character mapping: TrueType outlines or CFF outlines, with face index zero. Font collections, variable fonts (`fvar`/`CFF2`), compressed web fonts, bitmap-only faces, and non-Unicode faces are unsupported.
 
 SFNT bytes must be nonempty and at most 32 MiB. Directories must have 1..256 distinct tables whose ranges stay inside the source buffer. Required outline and metrics tables are checked before FreeType opens the face. Native validation uses the source buffer's explicit asset arena for temporary allocations.
 

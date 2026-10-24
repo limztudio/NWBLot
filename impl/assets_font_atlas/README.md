@@ -2,15 +2,15 @@
 
 `FontAtlas` is the CPU asset for a complete static font face baked into independent scalar SDF pages. Each image group owns exact linear R8, RG8, RGB8, or RGBA8 bytes, with one distance page per stored channel. Alpha, when present, is the fourth distance plane; no channel is opacity. Images have one base mip, a one-texel exterior guard, and a fixed internal FreeType scalar SDF encoding (zero at byte 128, positive inside).
 
-The offline generator lives in `utilities/font_builder`. Runtime users link `nwb_assets_font_atlas` and include `asset.h`; source cooking uses the ordinary `font_atlas` importer.
+Atlases are generated offline. Runtime users link `nwb_assets_font_atlas` and include `asset.h`; source cooking uses the ordinary `font_atlas` importer.
 
 ## Two-file authoring
 
-The builder emits exactly `name.nwb` and `name.font`. The readable `.nwb` owns separately declared `font face;` and `font_atlas atlas;` objects gathered by `asset_bunch bunch = [face, atlas];`. The `.font` file is a `FON2` prepared-source container holding the exact SFNT shaping data and compact image pixels. All glyph mappings stay in the readable metadata; cooking builds the complete runtime atlas from these mappings and the paired source images.
+Offline preparation emits exactly `name.nwb` and `name.font`. The readable `.nwb` owns separately declared `font face;` and `font_atlas atlas;` objects gathered by `asset_bunch bunch = [face, atlas];`. The `.font` file is a `FON2` prepared-source container holding the exact SFNT shaping data and compact image pixels. All glyph mappings stay in the readable metadata; cooking builds the complete runtime atlas from these mappings and the paired source images.
 
 The atlas declares its typed Font relation with `atlas.font = face;`. Bunch expansion resolves that local reference to the published Font identity. Both importers derive the sibling `.font` from the original document filename, including when importing a named bunch child. Named declarations publish under the metadata identity with `/face` and `/atlas` appended. For example, `engine/ui/fonts/default/latin` publishes `engine/ui/fonts/default/latin/face` and `engine/ui/fonts/default/latin/atlas`.
 
-A standalone `font_atlas asset;` document provides an explicit Font virtual-path string and finds its same-stem `.font` source. The Font metadata and atlas metadata can be authored independently, or gathered in a single bunch. The original `.ttf` or `.otf` is only a builder input; the prepared source retains the exact SFNT required by HarfBuzz and FreeType.
+A standalone `font_atlas asset;` document provides an explicit Font virtual-path string and finds its same-stem `.font` source. The Font metadata and atlas metadata can be authored independently, or gathered in a single bunch. The original `.ttf` or `.otf` is only a preparation input; the prepared source retains the exact SFNT required by HarfBuzz and FreeType.
 
 ## Readable metadata contract
 
@@ -34,7 +34,7 @@ The cooker derives face index, units per em, and glyph count from the paired SFN
 
 `FontAtlasGroup::width` and `height` are independent dimensions; neither must be square or a power of two. `channelCount` is 1..4, and tightly interleaved rows contain exactly `width * channelCount` bytes. Each group stores exactly `width * height * channelCount` bytes, without row padding or a mip chain.
 
-The builder crops guarded occupied bounds across every used channel and removes unused trailing channels. Glyph pixels, SDF spread, and exterior guards remain unchanged without resampling. Glyph coordinates are rebased to the cropped image. Groups may have different dimensions and channel counts.
+Preparation crops guarded occupied bounds across every used channel and removes unused trailing channels. Glyph pixels, SDF spread, and exterior guards remain unchanged without resampling. Glyph coordinates are rebased to the cropped image. Groups may have different dimensions and channel counts.
 
 The UI uploader uses the corresponding linear UNORM GPU format. A three-channel group uses RGB8 when filtered sampling is supported; otherwise the uploader expands once to RGBA8. The three logical distance pages retain their exact values. Cropping reduces texture extent on either path; removing the fourth channel reduces GPU storage where RGB8 is supported. Actual GPU allocations also depend on driver alignment and tiling.
 
@@ -42,13 +42,13 @@ The UI uploader uses the corresponding linear UNORM GPU format. A three-channel 
 
 `FontAtlasPayload::font` is a typed `AssetRef<Font>`. Its internal source hash, face index, units per em, and glyph count identify the shaping source. The UI installation layer checks that identity against the actual Font before binding an atlas. A mismatched atlas uses the selected font's native coverage fallback. HarfBuzz supplies glyph IDs and positioned advances/offsets; atlas advances and positioning data are not applied a second time.
 
-`CopyFontAtlasPositioningTables` copies the exact nonempty `kern`, `GPOS`, and `GDEF` tables directly from the prepared SFNT, sorts them by numeric tag, and computes internal content hashes. Both the builder and source cooker use this shared atlas-domain helper. `ValidateFontAtlasSourceMatch` requires the complete original table set and exact bytes to match the Font, preserving pair/class maps, script/language/feature selection, lookup order, and contextual/mark records without expanding possible glyph pairs.
+`CopyFontAtlasPositioningTables` copies the exact nonempty `kern`, `GPOS`, and `GDEF` tables directly from the prepared SFNT, sorts them by numeric tag, and computes internal content hashes. Offline preparation and the source cooker share this atlas-domain helper. `ValidateFontAtlasSourceMatch` requires the complete original table set and exact bytes to match the Font, preserving pair/class maps, script/language/feature selection, lookup order, and contextual/mark records without expanding possible glyph pairs.
 
 The admission validator checks OpenType `kern` format-0 pairs, GPOS roots, SinglePos, PairPos formats 1 and 2, coverage/class definitions, value records, device bounds, and positioning extensions. Other lookup families remain original opaque bytes with bounded root admission. The retained SFNT remains the authoritative shaping source.
 
 ## Bounds and failure atomicity
 
-Shared limits in `model.h` apply to the builder, cooker, runtime binary, and GPU admission: 65,535 glyphs, eight groups, 1..4 channels and at most 2048 by 2048 per group, 128 MiB total image bytes, and 32 MiB total positioning bytes. Bake size is 16..256 ppem; spread is 2..32 pixels.
+Shared limits in `model.h` apply to offline preparation, cooking, the runtime binary, and GPU admission: 65,535 glyphs, eight groups, 1..4 channels and at most 2048 by 2048 per group, 128 MiB total image bytes, and 32 MiB total positioning bytes. Bake size is 16..256 ppem; spread is 2..32 pixels.
 
 Prepared-source reads check the complete container layout before allocation and verify SFNT and image integrity before atlas construction. Metadata admission checks bounded integer fields, finite editable metrics, complete source glyph order, and a resolved typed Font reference; image layouts are read from the prepared source. Shared atlas validation checks byte counts and hashes, valid channel selection, padded plane extents against bitmap size, and guarded region overlap within the same channel. Different channels can share coordinates. Failed metadata parsing or runtime loading preserves the previously published output.
 

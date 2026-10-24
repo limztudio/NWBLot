@@ -298,13 +298,15 @@ private:
         const auto extent = NWB::QueryProjectFrameClientSize();
         const u32 frameWidth = extent.width;
         const u32 frameHeight = extent.height;
-        const f32 width = static_cast<f32>(frameWidth);
-        const f32 height = static_cast<f32>(frameHeight);
-        const f32 aspect = width / height;
-        const f32 tangent = Tan(s_PI / 6.f);
-        const f32 fractionEdge = Sqrt(static_cast<f32>(percent) * 0.01f);
-        const u32 coveredWidth = Min(frameWidth, 2u * static_cast<u32>(width * fractionEdge * 0.5f + 0.5f));
-        const u32 coveredHeight = Min(frameHeight, 2u * static_cast<u32>(height * fractionEdge * 0.5f + 0.5f));
+        // z and w stay 1 so the lane-wise divides below stay finite.
+        const SIMDVectorSingle frameSize = VectorSet(static_cast<f32>(frameWidth), static_cast<f32>(frameHeight), 1.f, 1.f);
+        const SIMDVectorSingle aspect = VectorDivide(VectorSplatX(frameSize), VectorSplatY(frameSize));
+        const SIMDVectorSingle tangent = VectorReplicate(Tan(s_PI / 6.f));
+        const SIMDVectorSingle fractionEdge = VectorSqrt(VectorScale(VectorReplicate(static_cast<f32>(percent)), 0.01f));
+        const SIMDVectorSingle halfLane = VectorReplicate(0.5f);
+        const SIMDVectorSingle coveredHalfSize = VectorMultiplyAddExpression(VectorMultiply(frameSize, fractionEdge), halfLane, halfLane);
+        const u32 coveredWidth = Min(frameWidth, 2u * static_cast<u32>(VectorGetX(coveredHalfSize)));
+        const u32 coveredHeight = Min(frameHeight, 2u * static_cast<u32>(VectorGetY(coveredHalfSize)));
         const u32 left = percent == 0u ? 0u : (frameWidth - coveredWidth) / 2u;
         const u32 top = percent == 0u ? 0u : (frameHeight - coveredHeight) / 2u;
         const u32 right = left + coveredWidth;
@@ -320,7 +322,7 @@ private:
             return false;
         auto& cameraComponent = m_world->entity(camera).getComponent<NWB::Impl::Scene::CameraComponent>();
         cameraComponent.setVerticalFovRadians(s_PI / 3.f);
-        cameraComponent.setAspectRatio(aspect);
+        cameraComponent.setAspectRatio(VectorGetX(aspect));
         const auto light = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, 0.6f, 0.4f, 0.f, Float4(1.f, 1.f, 1.f, 1.f), 1.f);
         if(!light.valid())
             return false;
@@ -329,24 +331,28 @@ private:
         // The opaque base closes stripe seams and fully occludes the in-frustum zero-coverage slab.
         // All density cases retain this same unlit backdrop, camera, and light.
         constexpr f32 s_BackdropDepth = 2.8f;
-        const f32 backdropHalfHeight = (6.f + s_BackdropDepth) * tangent;
-        const f32 backdropHalfWidth = backdropHalfHeight * aspect;
-        createPanel(s_OpaqueMaterial, Float4(0.04f, 0.04f, 0.04f, 1.f), Float4(0.f, 1.4f, s_BackdropDepth, 0.f), Float4(backdropHalfWidth * 1.05f, 1.f, backdropHalfHeight * 1.05f, 0.f));
+        const SIMDVectorSingle backdropHalfHeight = VectorScale(tangent, 6.f + s_BackdropDepth);
+        const SIMDVectorSingle backdropHalfWidth = VectorMultiply(backdropHalfHeight, aspect);
+        // x = padded half width, y = padded half height.
+        const SIMDVectorSingle backdropPanelHalf = VectorScale(VectorSelect(backdropHalfHeight, backdropHalfWidth, s_SIMDMaskX), 1.05f);
+        createPanel(s_OpaqueMaterial, Float4(0.04f, 0.04f, 0.04f, 1.f), Float4(0.f, 1.4f, s_BackdropDepth, 0.f), Float4(VectorGetX(backdropPanelHalf), 1.f, VectorGetY(backdropPanelHalf), 0.f));
         constexpr u32 s_StripeCount = 48u;
-        const f32 stripeHalfWidth = backdropHalfWidth / static_cast<f32>(s_StripeCount);
+        const SIMDVectorSingle stripeHalfWidth = VectorDivide(backdropHalfWidth, VectorReplicate(static_cast<f32>(s_StripeCount)));
+        const SIMDVectorSingle stripeStart = VectorNegate(backdropHalfWidth);
         for(u32 stripe = 1u; stripe < s_StripeCount; stripe += 2u){
-            const f32 x = -backdropHalfWidth + (2.f * static_cast<f32>(stripe) + 1.f) * stripeHalfWidth;
-            createPanel(s_OpaqueMaterial, Float4(0.92f, 0.92f, 0.92f, 1.f), Float4(x, 1.4f, s_BackdropDepth - 0.01f, 0.f), Float4(stripeHalfWidth, 1.f, backdropHalfHeight * 1.05f, 0.f));
+            const SIMDVectorSingle stripeSlot = VectorMultiplyAddExpression(VectorReplicate(2.f), VectorReplicate(static_cast<f32>(stripe)), VectorSplatOne());
+            const f32 x = VectorGetX(VectorMultiplyAddExpression(stripeSlot, stripeHalfWidth, stripeStart));
+            createPanel(s_OpaqueMaterial, Float4(0.92f, 0.92f, 0.92f, 1.f), Float4(x, 1.4f, s_BackdropDepth - 0.01f, 0.f), Float4(VectorGetX(stripeHalfWidth), 1.f, VectorGetY(backdropPanelHalf), 0.f));
         }
 
         // cube_hard_edges spans [-0.5, 0.5]; its front rectangle projects onto integer pixel boundaries.
         // The full case extends one pixel past every edge; the empty case keeps one admitted refractor behind the opaque wall so capture and classification stay live.
-        const f32 frontDepth = percent == 0u ? 4.f : 0.f;
-        const f32 projectedWidth = percent == 0u || percent == 100u ? width + 2.f : static_cast<f32>(coveredWidth);
-        const f32 projectedHeight = percent == 0u || percent == 100u ? height + 2.f : static_cast<f32>(coveredHeight);
-        const f32 halfHeight = (6.f + frontDepth) * tangent;
-        const Float4 scale(2.f * halfHeight * aspect * projectedWidth / width, 2.f * halfHeight * projectedHeight / height, 0.2f, 0.f);
-        m_glass = CreateTintedStaticMeshEntity(*m_world, m_context.objectArena, s_CubeMesh, s_ClearMaterial, s_MaterialInterface, Float4(1.f, 1.f, 1.f, 0.f), Float4(0.f, 1.4f, frontDepth + 0.1f, 0.f), scale);
+        const SIMDVectorSingle frontDepth = VectorReplicate(percent == 0u ? 4.f : 0.f);
+        const SIMDVectorSingle projectedSize = percent == 0u || percent == 100u ? VectorAdd(frameSize, VectorReplicate(2.f)) : VectorSet(static_cast<f32>(coveredWidth), static_cast<f32>(coveredHeight), 1.f, 1.f);
+        const SIMDVectorSingle halfHeight = VectorMultiply(VectorAdd(VectorReplicate(6.f), frontDepth), tangent);
+        const SIMDVectorSingle scaleLanes = VectorDivide(VectorMultiply(VectorMultiply(VectorScale(halfHeight, 2.f), VectorSelect(VectorSplatOne(), aspect, s_SIMDMaskX)), projectedSize), frameSize);
+        const Float4 scale(VectorGetX(scaleLanes), VectorGetY(scaleLanes), 0.2f, 0.f);
+        m_glass = CreateTintedStaticMeshEntity(*m_world, m_context.objectArena, s_CubeMesh, s_ClearMaterial, s_MaterialInterface, Float4(1.f, 1.f, 1.f, 0.f), Float4(0.f, 1.4f, VectorGetX(VectorAdd(frontDepth, VectorReplicate(0.1f))), 0.f), scale);
         if(!m_glass.valid())
             return false;
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionDensity: extent {}x{} requested_percent {} admitted_pixels {} total_pixels {} active_tiles {} total_tiles {} glass_instances 1 capture_mode {}")

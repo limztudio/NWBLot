@@ -8,7 +8,7 @@ targets and the asset build libraries.
 Run the complete pipeline through the repository launcher:
 
 ```console
-python -m launcher pipeline --config dbg --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
+python -m launcher pipeline --config dbg --asset-root impl/assets project/assets --output-directory runtime/res
 ```
 
 To prepare the tools without running asset stages, use:
@@ -32,10 +32,16 @@ non-engine `--asset-root` directories and expands the dependency graph from the 
 `start_scene` through scene subsystems, conditional subsystem features, and reachable
 assets. When explicit `--input` or `--input-list` values are provided, it preserves those
 seed inputs and expands their transitive dependencies across `--asset-root` providers.
-Its `--output` is a UTF-8 file containing one resolved provider path per line.
+That resolution accepts `--repo-root` (default: the working directory) and repeated
+`--asset-root` values. Its provider catalog resolves metadata identities without reading
+unrelated asset documents, and provider ownership follows asset-root order. Unresolved,
+wrong-type, or ambiguous asset references fail before the output list is written.
+Paired encoded texture payloads stay with the texture cooker and are not added as
+separate inputs. Its `--output` is a UTF-8 file containing one resolved provider path
+per line.
 
 ```console
-python -m launcher run nwb_dependency_computer --config dbg --working-directory . -- --repo-root . --asset-root impl/assets CoolStuff/Testbed/assets --output dependencies.list
+python -m launcher run nwb_dependency_computer --config dbg --working-directory . -- --repo-root . --asset-root impl/assets project/assets --output dependencies.list
 ```
 
 `asset_builder` compiles selected `.nwb` assets into standalone runtime binary
@@ -90,7 +96,7 @@ builds `nwb_pipeline`, calls `dependency_computer`, passes that result to
 errors and failed stages stop the pipeline and preserve the published volume.
 
 ```console
-python -m launcher pipeline --config dbg --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
+python -m launcher pipeline --config dbg --asset-root impl/assets project/assets --output-directory runtime/res
 ```
 
 Build and asset options share one argument list. Use the root entry point for
@@ -116,7 +122,7 @@ configuration and compilation; CMake asset commands use it to avoid starting a
 nested build. For example:
 
 ```console
-python -m launcher pipeline --skip-build --tool-directory __exec/windows/arm64/full/dbg --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
+python -m launcher pipeline --skip-build --tool-directory __exec/windows/arm64/full/dbg --asset-root impl/assets project/assets --output-directory runtime/res
 ```
 
 `--dry-run` prints planned build and pipeline commands without writing manifests,

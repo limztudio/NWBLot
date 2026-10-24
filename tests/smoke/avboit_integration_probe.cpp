@@ -14,6 +14,7 @@
 #include <core/task/gpu/task_graph.h>
 
 #include <global/simd/convert_half.h>
+#include <global/simd/vector.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -180,10 +181,11 @@ static void PreparePhase(ProbeTask::Payload& payload, const u32 phase)noexcept{
         for(u32 pixel = 0u; pixel < s_PixelCount; ++pixel){
             Half observed;
             NWB_MEMCPY(&observed, sizeof(observed), static_cast<const u8*>(mapping->data) + (pixel / s_Width) * mapping->rowPitch + (pixel % s_Width) * sizeof(Half), sizeof(observed));
-            const f32 expected = ConvertHalfToFloat(ConvertFloatToHalf(Exp(-static_cast<f32>(extinctionFixed[pixel]) / static_cast<f32>(s_FixedScale))));
+            const f32 exponent = VectorGetX(VectorDivide(VectorNegate(VectorReplicate(static_cast<f32>(extinctionFixed[pixel]))), VectorReplicate(static_cast<f32>(s_FixedScale))));
+            const SIMDVectorSingle expected = VectorReplicate(ConvertHalfToFloat(ConvertFloatToHalf(Exp(exponent))));
             const f32 actual = ConvertHalfToFloat(observed);
-            if(!IsFinite(actual) || (extinctionFixed[pixel] == 0u ? actual != 1.f : Abs(actual - expected) > Max(0.0000002f, expected * 0.002f))){
-                NWB_LOGGER_ERROR(NWB_TEXT("AvboitIntegrationProbe: mismatch phase {} pixel {} slice {} expected {} observed {}"), phase, pixel, slice, expected, actual);
+            if(!IsFinite(actual) || (extinctionFixed[pixel] == 0u ? actual != 1.f : Vector4Greater(VectorAbs(VectorSubtract(VectorReplicate(actual), expected)), VectorMax(VectorReplicate(0.0000002f), VectorScale(expected, 0.002f))))){
+                NWB_LOGGER_ERROR(NWB_TEXT("AvboitIntegrationProbe: mismatch phase {} pixel {} slice {} expected {} observed {}"), phase, pixel, slice, VectorGetX(expected), actual);
                 return false;
             }
             if(slice < payload.controlWords[NWB_AVBOIT_CONTROL_ACTIVE_PHYSICAL_SLICES]){

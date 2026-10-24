@@ -104,7 +104,7 @@ void CsgDeformWallBuilder::EmitTriangle(CsgDeformTriangleVector<ScratchArena>& t
 Expected<void, CsgDeformViabilityReason::Enum> CsgDeformWallBuilder::ClipShell(
     ScratchArena& scratchArena,
     const CsgDeformShape& shape,
-    const f32 epsilon,
+    const SIMDVectorSingle epsilon,
     CsgDeformTriangleVector<ScratchArena>& scratchKept,
     Vector<f32, ScratchArena>& scratchDistances,
     CsgDeformVertexVector<ScratchArena>& inOutVertices,

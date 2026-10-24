@@ -1,6 +1,6 @@
 # MetaScript
 
-MetaScript parses metadata into arena-backed values and declarations. It supports declarations, nested field assignments, literal arithmetic, symbolic references, lists, dictionaries, and the struct/attribute syntax used by material `.bind` files.
+MetaScript parses metadata into arena-backed values and declarations. It supports declarations, nested field assignments, literal arithmetic, symbolic references, lists, dictionaries, and the struct/attribute syntax for typed schema declarations.
 
 The public API lives in `NWB::Core::Metascript`. Include [parser.h](parser.h) for `Document`, [value.h](value.h) for values, or [lexer.h](lexer.h) for token-level tools. Link the `nwb_metascript` static library:
 
@@ -142,12 +142,12 @@ The source buffer needs to remain valid only during the synchronous parse. Parse
 
 A `Value` copy constructor uses the source arena. Copy and move assignment retain the destination arena and recursively copy across different arenas; a cross-arena move clears the source after copying. To transfer data into another arena, construct a destination `Value` with that arena and assign into it.
 
-## Structs and attributes for `.bind` files
+## Structs and attributes
 
 Struct declarations describe fields and attributes as metadata:
 
 ```text
-[material_mutable]
+[mutable]
 struct Parameters {
     [default("half4(1.0h, 1.0h, 1.0h, 1.0h)")]
     half4 tint;
@@ -162,7 +162,7 @@ Struct definitions have their own namespace and require no variable declaration 
 
 ```text
 Parameters:
-    attributes: [{"name": "material_mutable", "arguments": []}]
+    attributes: [{"name": "mutable", "arguments": []}]
     fields:
         - {"type": "half4", "name": "tint",
            "attributes": [{"name": "default",
@@ -173,11 +173,11 @@ Parameters:
 
 Duplicate struct names, field names within a struct, and variable names are errors. A struct and a variable may share a name. Struct definitions do not create variables named `structs`, `instances`, or `asset`, and variable assignments cannot change the struct definition map.
 
-The material bind consumer uses struct descriptors and typed variable declarations to construct its own structs and instances. Attribute meanings, supported field types, instance initialization restrictions, and binding layouts are validated by material code. Its source can contain just the structs and instances shown above.
+Consumers use struct descriptors and typed variable declarations to construct their own structs and instances. Attribute meanings, supported field types, instance initialization restrictions, and binding layouts are validated by the consuming schema. A schema source can contain just the structs and instances shown above.
 
 ## Integration and source layout
 
-MetaScript handles syntax and generic value operations. File access, UTF-8 BOM removal, asset type dispatch, schema validation, dependency expansion, and reference resolution belong to callers. The asset metadata entry point is [cook_metadata.cpp](../assets/cook_metadata.cpp); bunch expansion is in [core/assets/bunch](../assets/bunch). Concrete schemas live under `impl/assets_*`, including the [shader](../../impl/assets_shader/README.md) and [UI skin](../../impl/assets_ui_skin/README.md) guides. The FBX metadata refresh utility also uses the lexer directly.
+MetaScript handles syntax and generic value operations. File access, UTF-8 BOM removal, asset type dispatch, schema validation, dependency expansion, and reference resolution belong to callers. The asset metadata entry point is [cook_metadata.cpp](../assets/cook_metadata.cpp); bunch expansion is in [core/assets/bunch](../assets/bunch). Concrete schemas belong to their consuming modules.
 
 | Files | Responsibility |
 | --- | --- |

@@ -63,7 +63,7 @@ static CacheReadStatus::Enum TryReadCachedBytecode(const ShaderCook::ShaderEntry
     if(read){
         const auto stageName = ToName(entry.stage);
         if(!stageName){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: shader stage contains an embedded null for entry '{}'"), StringConvert(entry.name));
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: shader stage contains an embedded null for entry '{}'"), StringConvert(entry.name));
             return CacheReadStatus::Error;
         }
         const Core::ShaderType::Enum shaderType = Core::ShaderStageNames::ShaderTypeFromArchiveStageName(*stageName ? **stageName : s_NameNone);
@@ -75,7 +75,7 @@ static CacheReadStatus::Enum TryReadCachedBytecode(const ShaderCook::ShaderEntry
     }
 
     if(!IsMissingPathError(read.error())){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to read bytecode cache '{}' for entry '{}': {}"), PathToString<tchar>(bytecodePath), StringConvert(entry.name), StringConvert(read.error().message()));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to read bytecode cache '{}' for entry '{}': {}"), PathToString<tchar>(bytecodePath), StringConvert(entry.name), StringConvert(read.error().message()));
         return CacheReadStatus::Error;
     }
 
@@ -118,7 +118,7 @@ static bool GetVariantBytecode(
 
     Vector<ShaderCook::ShaderMacroDefinition, ScratchArena> compileDefines{ scratchArena };
     if(mergedDefines.size() > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: entry '{}' has too many merged defines for shader compilation"), StringConvert(entry.name));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: entry '{}' has too many merged defines for shader compilation"), StringConvert(entry.name));
         return false;
     }
     compileDefines.reserve(mergedDefines.size());
@@ -131,7 +131,7 @@ static bool GetVariantBytecode(
     const ScratchPath cacheParentPath = bytecodeCachePath.parentPath();
     auto ensureDirectoriesResult = EnsureDirectories(cacheParentPath);
     if(!ensureDirectoriesResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to create cache directory '{}': {}"), PathToString<tchar>(cacheParentPath), StringConvert(ensureDirectoriesResult.error().message()));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to create cache directory '{}': {}"), PathToString<tchar>(cacheParentPath), StringConvert(ensureDirectoriesResult.error().message()));
         return false;
     }
 
@@ -159,13 +159,13 @@ static Expected<usize> ReserveShaderIndexRecords(const PreparedShaderVector& pre
     u64 shaderRecordCount = 0;
     for(const PreparedShaderEntry& preparedEntry : preparedEntries){
         if(shaderRecordCount > Limit<u64>::s_Max - preparedEntry.variantCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: shader record count overflow"));
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: shader record count overflow"));
             return MakeUnexpected(Failure{});
         }
         shaderRecordCount += preparedEntry.variantCount;
     }
     if(shaderRecordCount > static_cast<u64>(Limit<usize>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: shader record count exceeds container capacity"));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: shader record count exceeds container capacity"));
         return MakeUnexpected(Failure{});
     }
 
@@ -184,19 +184,19 @@ static bool AppendShaderIndexToManifest(
 ){
     const Name& shaderIndexVirtualPath = Core::ShaderArchive::IndexVirtualPathName();
     if(!inOutSeenVirtualPathHashes.insert(shaderIndexVirtualPath.hash()).second){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: duplicate shader archive index virtual path '{}'"), StringConvert(shaderIndexVirtualPath.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: duplicate shader archive index virtual path '{}'"), StringConvert(shaderIndexVirtualPath.resolvedText()));
         return false;
     }
 
     const auto indexBinary = Core::ShaderArchive::SerializeIndex(cookArena, shaderIndexRecords, scratchArena);
     if(!indexBinary){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to serialize shader index"));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to serialize shader index"));
         return false;
     }
     if(Core::Assets::AssetsVolumeCookDetail::AppendPayloadBytesToManifest(manifest, shaderIndexVirtualPath, *indexBinary))
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to append shader index to manifest"));
+    NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to append shader index to manifest"));
     return false;
 }
 
@@ -324,7 +324,7 @@ bool AppendPreparedShadersToManifest(
         };
 
         if(!shaderCook.expandDefineCombinations(entry.defineValues, scratchArena, defineCombinations)){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: variant combination count exceeds runtime limits for entry '{}'"), StringConvert(entry.name));
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: variant combination count exceeds runtime limits for entry '{}'"), StringConvert(entry.name));
             return false;
         }
         if(defineCombinations.empty())

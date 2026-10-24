@@ -315,23 +315,16 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
     if(staticScene && opticalScene.boundsCompleteExceptRuntime && !csg.hasCsg && allInstanceBoundsValid && refractiveInstanceCount == 1u && singleRefractiveInstanceIndex < instances.size()){
         constexpr f32 s_RefractionCertifiedBoundsMargin = 0.016f;
         const InstanceWorldBounds& targetBounds = instanceWorldBounds[singleRefractiveInstanceIndex];
-        const f32 expandedMinX = targetBounds.minimum.x - s_RefractionCertifiedBoundsMargin;
-        const f32 expandedMinY = targetBounds.minimum.y - s_RefractionCertifiedBoundsMargin;
-        const f32 expandedMinZ = targetBounds.minimum.z - s_RefractionCertifiedBoundsMargin;
-        const f32 expandedMaxX = targetBounds.maximum.x + s_RefractionCertifiedBoundsMargin;
-        const f32 expandedMaxY = targetBounds.maximum.y + s_RefractionCertifiedBoundsMargin;
-        const f32 expandedMaxZ = targetBounds.maximum.z + s_RefractionCertifiedBoundsMargin;
+        const SIMDVectorSingle margin = VectorReplicate(s_RefractionCertifiedBoundsMargin);
+        const SIMDVectorSingle expandedMin = VectorSubtract(LoadFloat(targetBounds.minimum), margin);
+        const SIMDVectorSingle expandedMax = VectorAdd(LoadFloat(targetBounds.maximum), margin);
         bool isolated = true;
         for(usize index = 0u; index < instanceWorldBounds.size(); ++index){
             if(index == singleRefractiveInstanceIndex)
                 continue;
             const InstanceWorldBounds& otherBounds = instanceWorldBounds[index];
-            const bool separated =
-                expandedMaxX < otherBounds.minimum.x || otherBounds.maximum.x < expandedMinX
-                || expandedMaxY < otherBounds.minimum.y || otherBounds.maximum.y < expandedMinY
-                || expandedMaxZ < otherBounds.minimum.z || otherBounds.maximum.z < expandedMinZ
-            ;
-            if(!separated){
+            const SIMDVectorSingle separatedAxes = VectorOrInt(VectorLess(expandedMax, LoadFloat(otherBounds.minimum)), VectorLess(LoadFloat(otherBounds.maximum), expandedMin));
+            if((VectorMoveMask(separatedAxes) & VectorComponentMask::s_XYZ) == 0u){
                 isolated = false;
                 break;
             }

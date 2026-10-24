@@ -124,7 +124,7 @@ static Expected<DecodedObjectFileHeader> ReadObjectFileHeader(const Path& object
     if(!read){
         const ErrorCode& errorCode = read.error();
         if(errorCode && !IsMissingPathError(errorCode)){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to read object cache '{}': {}"), PathToString<tchar>(objectPath), StringConvert(errorCode.message()));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to read object cache '{}': {}"), PathToString<tchar>(objectPath), StringConvert(errorCode.message()));
         }
         return MakeUnexpected(Failure{});
     }
@@ -151,7 +151,7 @@ static Expected<DecodedObjectFileHeader> ReadObjectFileHeader(const Path& object
 
 static bool WriteObjectFile(const Path& objectPath, const AssetVolumeObjectFileHeader& header, const Core::Assets::AssetBytes& payload, ScratchBytes& objectBytes){
     if(payload.size() > Limit<usize>::s_Max - sizeof(AssetVolumeObjectFileHeader)){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: object cache payload is too large for '{}'"), PathToString<tchar>(objectPath));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: object cache payload is too large for '{}'"), PathToString<tchar>(objectPath));
         return false;
     }
 
@@ -163,13 +163,13 @@ static bool WriteObjectFile(const Path& objectPath, const AssetVolumeObjectFileH
     const auto directories = EnsureDirectories(objectPath.parentPath());
     if(!directories){
         const ErrorCode& errorCode = directories.error();
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to create object cache directory '{}': {}"), PathToString<tchar>(objectPath.parentPath()), StringConvert(errorCode.message()));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to create object cache directory '{}': {}"), PathToString<tchar>(objectPath.parentPath()), StringConvert(errorCode.message()));
         return false;
     }
     if(WriteBinaryFile(objectPath, objectBytes))
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to write object cache '{}'"), PathToString<tchar>(objectPath));
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to write object cache '{}'"), PathToString<tchar>(objectPath));
     return false;
 }
 
@@ -198,7 +198,7 @@ public:
     virtual bool writeCookedAsset(const TStringView assetKind, const Name& virtualPath, const Core::Assets::IAsset& asset, const Core::Assets::IAssetCodec& codec)override{
         m_payloadBinary.clear();
         if(!codec.serialize(asset, m_payloadBinary)){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to serialize {} '{}'"), assetKind, StringConvert(virtualPath.resolvedText()));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to serialize {} '{}'"), assetKind, StringConvert(virtualPath.resolvedText()));
             return false;
         }
 
@@ -254,14 +254,14 @@ static bool BuildRegistryObjectBucketManifestEntries(
 
 static bool RegisterMergedManifestVirtualPath(const Name& virtualPath, AssetsVolumeCookDetail::VirtualPathHashSet& seenVirtualPathHashes){
     if(!virtualPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: registry manifest produced an empty virtual path"));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: registry manifest produced an empty virtual path"));
         return false;
     }
 
     if(seenVirtualPathHashes.insert(virtualPath.hash()).second)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: duplicate registry manifest virtual path '{}'"), StringConvert(virtualPath.resolvedText()));
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: duplicate registry manifest virtual path '{}'"), StringConvert(virtualPath.resolvedText()));
     return false;
 }
 
@@ -327,7 +327,7 @@ bool BuildRegistryObjectManifestEntries(
         failed.store(true, MemoryOrder::release);
     });
     if(!parallelWork){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: registry object preparation rejected CPU work: {}"), static_cast<u32>(parallelWork.error()));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: registry object preparation rejected CPU work: {}"), static_cast<u32>(parallelWork.error()));
         return false;
     }
     if(failed.load(MemoryOrder::acquire))
@@ -339,7 +339,7 @@ bool BuildRegistryObjectManifestEntries(
 Expected<CookedObjectPayloadView> ReadCookedObjectPayload(const Path& objectPath, const Name& expectedVirtualPath, Vector<u8, ScratchArena>& inOutObjectBytes){
     const auto decoded = __hidden_cooked_object_cache::ReadObjectFileHeader(objectPath, inOutObjectBytes);
     if(!decoded){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: invalid object cache '{}' for '{}'"), PathToString<tchar>(objectPath), StringConvert(expectedVirtualPath.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: invalid object cache '{}' for '{}'"), PathToString<tchar>(objectPath), StringConvert(expectedVirtualPath.resolvedText()));
         return MakeUnexpected(Failure{});
     }
     const auto& header = decoded->header;

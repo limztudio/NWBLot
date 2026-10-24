@@ -69,18 +69,20 @@ bool RendererReflectionFeedback::prepareResources(const u32 width, const u32 hei
     const bool changed = width != m_extent.width || height != m_extent.height || deviceGeneration != m_deviceGeneration;
     const bool active = enabled && settings.traceMode == ReflectionTraceMode::Hybrid && settings.maxHardwareRaysPerFrame > 0u;
     if(active && (changed || !m_banks[0].valid() || !m_banks[1].valid())){
-        ReflectionFeedbackBinding banks[2];
-        if(!prepareBank(banks[0], extent.byteCount, Name("engine/reflection/screen_feedback_0")) || !prepareBank(banks[1], extent.byteCount, Name("engine/reflection/screen_feedback_1"))){
-            Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-            for(const ReflectionFeedbackBinding& bank : banks){
-                if(bank.descriptor.valid())
-                    heap.free(bank.descriptor);
-            }
+        auto firstBank = prepareBank(extent.byteCount, Name("engine/reflection/screen_feedback_0"));
+        if(!firstBank)
             return false;
-        }
+        Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+        Core::GpuDescriptorRetirementGuard retireFirst(heap, firstBank->descriptor);
+        auto secondBank = prepareBank(extent.byteCount, Name("engine/reflection/screen_feedback_1"));
+        if(!secondBank)
+            return false;
+        Core::GpuDescriptorRetirementGuard retireSecond(heap, secondBank->descriptor);
         releaseBuffers();
-        m_banks[0] = Move(banks[0]);
-        m_banks[1] = Move(banks[1]);
+        m_banks[0] = Move(*firstBank);
+        m_banks[1] = Move(*secondBank);
+        retireFirst.release();
+        retireSecond.release();
     }
     else if(changed)
         releaseBuffers();
@@ -112,30 +114,34 @@ void RendererReflectionFeedback::releaseBuffers(){
     }
 }
 
-bool RendererReflectionFeedback::prepareBank(ReflectionFeedbackBinding& bank, const u32 byteCount, const Name name){
+Expected<ReflectionFeedbackBinding> RendererReflectionFeedback::prepareBank(const u32 byteCount, const Name name){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("Reflection feedback: descriptor heap is unavailable during preflight"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
     Core::BufferDesc desc;
     desc.setByteSize(byteCount).setCanHaveRawViews(true).setCanHaveUAVs(true).setDebugName(name).enableAutomaticStateTracking(Core::ResourceStates::Common);
     auto bufferResult = m_graphics.createBuffer(desc);
     if(!bufferResult){
         NWB_LOGGER_ERROR(NWB_TEXT("Reflection feedback: failed to create {}-byte buffer"), byteCount);
-        return false;
+        return MakeUnexpected(Failure{});
     }
     Core::BufferHandle buffer = Move(*bufferResult);
     const Expected<Core::GpuDescriptorHandle> descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-    if(!descriptor || !heap.write(*descriptor, Core::DescriptorWriteItem::RawBufferUav(0u, buffer.get()))){
-        if(descriptor)
-            heap.free(*descriptor);
+    if(!descriptor){
         NWB_LOGGER_ERROR(NWB_TEXT("Reflection feedback: failed to register storage buffer"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    bank = ReflectionFeedbackBinding{Move(buffer), *descriptor};
-    return true;
+    Core::GpuDescriptorRetirementGuard retireDescriptor(heap, *descriptor);
+    if(!heap.write(*descriptor, Core::DescriptorWriteItem::RawBufferUav(0u, buffer.get()))){
+        NWB_LOGGER_ERROR(NWB_TEXT("Reflection feedback: failed to register storage buffer"));
+        return MakeUnexpected(Failure{});
+    }
+    ReflectionFeedbackBinding bank{Move(buffer), *descriptor};
+    retireDescriptor.release();
+    return bank;
 }
 
 

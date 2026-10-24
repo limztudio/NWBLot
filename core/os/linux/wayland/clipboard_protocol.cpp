@@ -143,7 +143,7 @@ void WaylandClipboardService::OnSourceSend(void* const data, wl_data_source*, co
     CloseClipboardPipe(rejectedFd);
 }
 
-void WaylandClipboardService::OnSourceCancelled(void* const data, wl_data_source* const native){
+void WaylandClipboardService::OnSourceCancelled(void* const data, wl_data_source* const native)noexcept{
     auto& source = *static_cast<Source*>(data);
     wl_data_source_destroy(native);
     source.handle = nullptr;
@@ -182,7 +182,7 @@ void WaylandClipboardService::OnPrimarySend(void* const data, zwp_primary_select
     OnSourceSend(data, nullptr, mime, fd);
 }
 
-void WaylandClipboardService::OnPrimaryCancelled(void* const data, zwp_primary_selection_source_v1* const native){
+void WaylandClipboardService::OnPrimaryCancelled(void* const data, zwp_primary_selection_source_v1* const native)noexcept{
     auto& source = *static_cast<Source*>(data);
     zwp_primary_selection_source_v1_destroy(native);
     source.handle = nullptr;

@@ -40,7 +40,6 @@ public:
     explicit PreparedSubmissionUnwindScope(GpuTimingSubmissionTicket& ticket)noexcept
         : m_ticket(ticket)
     {}
-
     ~PreparedSubmissionUnwindScope()noexcept{
         if(m_active)
             m_ticket.abandonWithoutCallbacks();

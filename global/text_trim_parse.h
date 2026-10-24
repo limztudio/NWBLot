@@ -255,10 +255,7 @@ inline void NormalizeLineEndingsInPlace(StringT& inOutText, const bool useCrlf)n
 
 
 template<typename StringT>
-inline void StripUtf8Bom(StringT& inOutText)noexcept(
-    noexcept(static_cast<bool>(inOutText.size() < TextDetail::s_Utf8BomByteCount)) && noexcept(static_cast<u8>(inOutText[0]))
-    && noexcept(inOutText.erase(0, TextDetail::s_Utf8BomByteCount))
-){
+inline void StripUtf8Bom(StringT& inOutText)noexcept(noexcept(static_cast<bool>(inOutText.size() < TextDetail::s_Utf8BomByteCount)) && noexcept(static_cast<u8>(inOutText[0])) && noexcept(inOutText.erase(0, TextDetail::s_Utf8BomByteCount))){
     if(inOutText.size() < TextDetail::s_Utf8BomByteCount)
         return;
 

@@ -216,14 +216,6 @@ bool MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(MeshSkinningRu
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to register persistent compute buffers for runtime mesh '{}' in the descriptor heap"), instance.handle.value);
         return false;
     };
-    const auto registerBuffer = [&](Core::GpuDescriptorHandle& inOutHandle, const Core::DescriptorWriteItem& item){
-        const auto handle = __hidden_resources::RegisterStorageBuffer(heap, item);
-        if(!handle)
-            return false;
-        inOutHandle = *handle;
-        return true;
-    };
-
     if(
         !resources.bindlessResourceSlotsBuffer
         || !instance.restPositionBuffer || !instance.skinnedPositionBuffer
@@ -239,40 +231,87 @@ bool MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(MeshSkinningRu
         return false;
     }
 
-    if(
-        !registerBuffer(resources.bindlessHeapHandles.restPosition, Core::DescriptorWriteItem::StructuredBufferSrv(0u, instance.restPositionBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.skinnedPosition, Core::DescriptorWriteItem::StructuredBufferUav(0u, instance.skinnedPositionBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.restNormal, Core::DescriptorWriteItem::StructuredBufferSrv(0u, instance.restNormalBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.skinnedNormal, Core::DescriptorWriteItem::StructuredBufferUav(0u, instance.skinnedNormalBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.restTangent, Core::DescriptorWriteItem::StructuredBufferSrv(0u, instance.restTangentBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.skinnedTangent, Core::DescriptorWriteItem::StructuredBufferUav(0u, instance.skinnedTangentBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.meshletDesc, Core::DescriptorWriteItem::StructuredBufferSrv(0u, instance.meshletDescBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.positionRefDeltas, Core::DescriptorWriteItem::RawBufferSrv(0u, instance.meshletPositionRefDeltaBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.attributeRefDeltas, Core::DescriptorWriteItem::RawBufferSrv(0u, instance.meshletAttributeRefDeltaBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.attributeSkins, Core::DescriptorWriteItem::StructuredBufferSrv(0u, instance.attributeSkinBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.localVertexRefs, Core::DescriptorWriteItem::StructuredBufferSrv(0u, instance.meshletLocalVertexRefBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.primitiveIndices, Core::DescriptorWriteItem::RawBufferSrv(0u, instance.meshletPrimitiveIndexBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.meshletBounds, Core::DescriptorWriteItem::RawBufferUav(0u, instance.meshletBoundsBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.meshletLocalBounds, Core::DescriptorWriteItem::RawBufferUav(0u, instance.meshletLocalBoundsBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.localBounds, Core::DescriptorWriteItem::RawBufferUav(0u, instance.localBoundsBuffer.get()))
-    )
+    const auto restPosition = __hidden_resources::RegisterStorageBuffer(heap, Core::DescriptorWriteItem::StructuredBufferSrv(0u, instance.restPositionBuffer.get()));
+    if(!restPosition)
         return fail();
+    resources.bindlessHeapHandles.restPosition = *restPosition;
+    const auto skinnedPosition = __hidden_resources::RegisterStorageBuffer(heap, Core::DescriptorWriteItem::StructuredBufferUav(0u, instance.skinnedPositionBuffer.get()));
+    if(!skinnedPosition)
+        return fail();
+    resources.bindlessHeapHandles.skinnedPosition = *skinnedPosition;
+    const auto restNormal = __hidden_resources::RegisterStorageBuffer(heap, Core::DescriptorWriteItem::StructuredBufferSrv(0u, instance.restNormalBuffer.get()));
+    if(!restNormal)
+        return fail();
+    resources.bindlessHeapHandles.restNormal = *restNormal;
+    const auto skinnedNormal = __hidden_resources::RegisterStorageBuffer(heap, Core::DescriptorWriteItem::StructuredBufferUav(0u, instance.skinnedNormalBuffer.get()));
+    if(!skinnedNormal)
+        return fail();
+    resources.bindlessHeapHandles.skinnedNormal = *skinnedNormal;
+    const auto restTangent = __hidden_resources::RegisterStorageBuffer(heap, Core::DescriptorWriteItem::StructuredBufferSrv(0u, instance.restTangentBuffer.get()));
+    if(!restTangent)
+        return fail();
+    resources.bindlessHeapHandles.restTangent = *restTangent;
+    const auto skinnedTangent = __hidden_resources::RegisterStorageBuffer(heap, Core::DescriptorWriteItem::StructuredBufferUav(0u, instance.skinnedTangentBuffer.get()));
+    if(!skinnedTangent)
+        return fail();
+    resources.bindlessHeapHandles.skinnedTangent = *skinnedTangent;
+    const auto meshletDesc = __hidden_resources::RegisterStorageBuffer(heap, Core::DescriptorWriteItem::StructuredBufferSrv(0u, instance.meshletDescBuffer.get()));
+    if(!meshletDesc)
+        return fail();
+    resources.bindlessHeapHandles.meshletDesc = *meshletDesc;
+    const auto positionRefDeltas = __hidden_resources::RegisterStorageBuffer(heap, Core::DescriptorWriteItem::RawBufferSrv(0u, instance.meshletPositionRefDeltaBuffer.get()));
+    if(!positionRefDeltas)
+        return fail();
+    resources.bindlessHeapHandles.positionRefDeltas = *positionRefDeltas;
+    const auto attributeRefDeltas = __hidden_resources::RegisterStorageBuffer(heap, Core::DescriptorWriteItem::RawBufferSrv(0u, instance.meshletAttributeRefDeltaBuffer.get()));
+    if(!attributeRefDeltas)
+        return fail();
+    resources.bindlessHeapHandles.attributeRefDeltas = *attributeRefDeltas;
+    const auto attributeSkins = __hidden_resources::RegisterStorageBuffer(heap, Core::DescriptorWriteItem::StructuredBufferSrv(0u, instance.attributeSkinBuffer.get()));
+    if(!attributeSkins)
+        return fail();
+    resources.bindlessHeapHandles.attributeSkins = *attributeSkins;
+    const auto localVertexRefs = __hidden_resources::RegisterStorageBuffer(heap, Core::DescriptorWriteItem::StructuredBufferSrv(0u, instance.meshletLocalVertexRefBuffer.get()));
+    if(!localVertexRefs)
+        return fail();
+    resources.bindlessHeapHandles.localVertexRefs = *localVertexRefs;
+    const auto primitiveIndices = __hidden_resources::RegisterStorageBuffer(heap, Core::DescriptorWriteItem::RawBufferSrv(0u, instance.meshletPrimitiveIndexBuffer.get()));
+    if(!primitiveIndices)
+        return fail();
+    resources.bindlessHeapHandles.primitiveIndices = *primitiveIndices;
+    const auto meshletBounds = __hidden_resources::RegisterStorageBuffer(heap, Core::DescriptorWriteItem::RawBufferUav(0u, instance.meshletBoundsBuffer.get()));
+    if(!meshletBounds)
+        return fail();
+    resources.bindlessHeapHandles.meshletBounds = *meshletBounds;
+    const auto meshletLocalBounds = __hidden_resources::RegisterStorageBuffer(heap, Core::DescriptorWriteItem::RawBufferUav(0u, instance.meshletLocalBoundsBuffer.get()));
+    if(!meshletLocalBounds)
+        return fail();
+    resources.bindlessHeapHandles.meshletLocalBounds = *meshletLocalBounds;
+    const auto localBounds = __hidden_resources::RegisterStorageBuffer(heap, Core::DescriptorWriteItem::RawBufferUav(0u, instance.localBoundsBuffer.get()));
+    if(!localBounds)
+        return fail();
+    resources.bindlessHeapHandles.localBounds = *localBounds;
 
     if(resources.skinCount != 0u){
         if(!resources.skinBuffer || !resources.jointPaletteBuffer){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' has incomplete persistent skinning payload buffers"), instance.handle.value);
             return fail();
         }
-        if(
-            !registerBuffer(resources.bindlessHeapHandles.skinInfluences, Core::DescriptorWriteItem::StructuredBufferSrv(0u, resources.skinBuffer.get()))
-            || !registerBuffer(resources.bindlessHeapHandles.jointPalette, Core::DescriptorWriteItem::StructuredBufferSrv(0u, resources.jointPaletteBuffer.get()))
-        )
+        const auto skinInfluences = __hidden_resources::RegisterStorageBuffer(heap, Core::DescriptorWriteItem::StructuredBufferSrv(0u, resources.skinBuffer.get()));
+        if(!skinInfluences)
             return fail();
+        resources.bindlessHeapHandles.skinInfluences = *skinInfluences;
+        const auto jointPalette = __hidden_resources::RegisterStorageBuffer(heap, Core::DescriptorWriteItem::StructuredBufferSrv(0u, resources.jointPaletteBuffer.get()));
+        if(!jointPalette)
+            return fail();
+        resources.bindlessHeapHandles.jointPalette = *jointPalette;
     }
 
     if(instance.attributeBuffer){
-        if(!registerBuffer(resources.bindlessHeapHandles.attributeBuffer, Core::DescriptorWriteItem::RawBufferUav(0u, instance.attributeBuffer.get())))
+        const auto attributeBuffer = __hidden_resources::RegisterStorageBuffer(heap, Core::DescriptorWriteItem::RawBufferUav(0u, instance.attributeBuffer.get()));
+        if(!attributeBuffer)
             return fail();
+        resources.bindlessHeapHandles.attributeBuffer = *attributeBuffer;
     }
     const auto resourceSlots = __hidden_resources::RegisterUniformBuffer(heap, *resources.bindlessResourceSlotsBuffer.get());
     if(!resourceSlots)

@@ -27,8 +27,13 @@ bool SoftShadowSplitTaskChainBuilder::declare(Core::Alloc::ScratchArena& scratch
 
     Core::GpuTaskId shadowTraceDependency = inputs.prefixTask;
     Core::GpuGraphResourceId csgShadowContext;
-    if(inputs.rayTracingPlan.lightSpace.ready && !declareLightSpaceShadowMaps(scratchArena, inputs, uses, shadowTraceDependency, csgShadowContext))
-        return false;
+    if(inputs.rayTracingPlan.lightSpace.ready){
+        const auto maps = declareLightSpaceShadowMaps(scratchArena, inputs, uses);
+        if(!maps)
+            return false;
+        shadowTraceDependency = maps->shadowTraceDependency;
+        csgShadowContext = maps->csgShadowContext;
+    }
 
     Core::GpuTaskSchedulingHint tailScheduling;
     tailScheduling.cost = Core::GpuTaskCostHint::Medium;
@@ -43,13 +48,7 @@ bool SoftShadowSplitTaskChainBuilder::declare(Core::Alloc::ScratchArena& scratch
     return declareTransparentTasks(scratchArena, inputs, uses, tailScheduling, csgShadowContext, tasks);
 }
 
-bool SoftShadowSplitTaskChainBuilder::declareLightSpaceShadowMaps(
-    Core::Alloc::ScratchArena& scratchArena,
-    const SoftShadowSplitTaskChainInputs& inputs,
-    SoftShadowSplitResourceUses& uses,
-    Core::GpuTaskId& shadowTraceDependency,
-    Core::GpuGraphResourceId& csgShadowContext
-){
+Expected<SoftShadowSplitTaskChainBuilder::LightSpaceShadowMaps> SoftShadowSplitTaskChainBuilder::declareLightSpaceShadowMaps(Core::Alloc::ScratchArena& scratchArena, const SoftShadowSplitTaskChainInputs& inputs, SoftShadowSplitResourceUses& uses){
     using namespace RendererTaskGraphDetail;
 
     const SoftShadowSplitRoute& route = inputs.route;
@@ -66,7 +65,7 @@ bool SoftShadowSplitTaskChainBuilder::declareLightSpaceShadowMaps(
         const Core::GpuGraphResourceId receiverCapCount = declarations.findImportedTexture(inputs.targets.csgRemovedIntervalCount);
         if(!receiverView.valid() || !receiverCapState.valid() || !receiverCapDepth.valid() || !receiverCapData.valid() || !receiverCapCount.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not find the current light-space shadow receiver cap resources"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
         const Core::TextureSubresourceSet layers(0u, 1u, 0u, inputs.targets.csgRemovedIntervalLayerCount);
         const Core::GpuTaskResourceUse receiverReads[]{
@@ -87,7 +86,7 @@ bool SoftShadowSplitTaskChainBuilder::declareLightSpaceShadowMaps(
     if(!RendererFramePipelineDetail::AppendRayTracingSceneShadowBuffers(inputs.rayTracingResources, importBuffer, [&](const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state)noexcept{
         lightSpaceReads.push_back(ReadUse(resource, state));
     }))
-        return false;
+        return MakeUnexpected(Failure{});
     lightSpaceReads.push_back(ReadUse(inputs.materialContextSlots, Core::ResourceStates::ConstantBuffer));
     lightSpaceReads.push_back(ReadUse(inputs.currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
     lightSpaceReads.push_back(ReadUse(inputs.sceneShading, Core::ResourceStates::ConstantBuffer));
@@ -109,13 +108,13 @@ bool SoftShadowSplitTaskChainBuilder::declareLightSpaceShadowMaps(
             const auto importedResource = importBuffer(buffer, buffer->getCreationDescription().debugName, "CSG Shadow Dynamic Bounds");
             if(!importedResource){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import CSG shadow dynamic bounds"));
-                return false;
+                return MakeUnexpected(Failure{});
             }
             resource = *importedResource;
         }
         if(!resource.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import CSG shadow dynamic bounds"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
         if(FindIf(csgBoundsResources.begin(), csgBoundsResources.end(), [&](const auto existing)noexcept{ return existing == resource; }) != csgBoundsResources.end())
             continue;
@@ -140,7 +139,7 @@ bool SoftShadowSplitTaskChainBuilder::declareLightSpaceShadowMaps(
     });
     if(!mapsResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare light-space shadow maps"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
     const LightSpaceShadowGraph maps = Move(*mapsResult);
     const Core::GpuGraphResourceId mapBuffers[] = { maps.counts, maps.events, maps.views };
@@ -148,8 +147,9 @@ bool SoftShadowSplitTaskChainBuilder::declareLightSpaceShadowMaps(
         uses.opaque.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
         uses.transparentTrace.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
     }
+    LightSpaceShadowMaps result;
     if(maps.csgContext.valid()){
-        csgShadowContext = maps.csgContext;
+        result.csgShadowContext = maps.csgContext;
         uses.opaque.push_back(ReadWriteUse(maps.csgContext, Core::ResourceStates::UnorderedAccess));
         uses.transparentTrace.push_back(ReadWriteUse(maps.csgContext, Core::ResourceStates::UnorderedAccess));
         uses.opaque.push_back(ReadUse(maps.csgOpaqueDepth, Core::ResourceStates::ShaderResource));
@@ -158,8 +158,8 @@ bool SoftShadowSplitTaskChainBuilder::declareLightSpaceShadowMaps(
     const Core::TextureSubresourceSet layers{ 0u, 1u, 0u, inputs.rayTracingPlan.lightSpace.plan.viewCount };
     uses.opaque.push_back(ReadTextureUse(maps.depth, layers, Core::ResourceStates::ShaderResource));
     uses.transparentTrace.push_back(ReadTextureUse(maps.depth, layers, Core::ResourceStates::ShaderResource));
-    shadowTraceDependency = maps.ready;
-    return true;
+    result.shadowTraceDependency = maps.ready;
+    return result;
 }
 
 bool SoftShadowSplitTaskChainBuilder::declareOpaqueTasks(

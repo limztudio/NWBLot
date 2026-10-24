@@ -153,7 +153,7 @@ void WaylandTextInputService::commitState(const TextInputSessionToken token, con
     m_serials.record(m_commitSerial, token, revision);
 }
 
-void WaylandTextInputService::sendCaret(const TextInputRect caret){
+void WaylandTextInputService::sendCaret(const TextInputRect caret)noexcept{
     const TextInputRect logical = WaylandTextInputRectForPixels(caret, m_bufferScale);
     zwp_text_input_v3_set_cursor_rectangle(m_input, logical.x, logical.y, logical.width, logical.height);
 }

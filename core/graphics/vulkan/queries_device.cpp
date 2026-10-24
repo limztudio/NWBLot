@@ -177,14 +177,7 @@ bool Device::resetTimerQuery(TimerQuery& query){
 
     ScopedLock queryLock(query.m_mutex);
     const QueueSubmissionToken currentPriorSubmission = query.prerequisiteSubmissionWithinLock();
-    if(
-        query.m_resetRecordingOwner.commandBuffer
-        || query.m_cycleGeneration != 0u
-        || query.m_recordingActive
-        || query.m_nextResetAuthorizationGeneration == Limit<u64>::s_Max
-        || requiresRecreation()
-        || currentPriorSubmission != priorSubmission
-    )
+    if(query.m_resetRecordingOwner.commandBuffer || query.m_cycleGeneration != 0u || query.m_recordingActive || query.m_nextResetAuthorizationGeneration == Limit<u64>::s_Max || requiresRecreation() || currentPriorSubmission != priorSubmission)
         return false;
     m_context.deviceDispatch.vkResetQueryPool(m_context.device, query.m_queryPool, s_TimerQueryBeginIndex, s_TimerQueryTimestampCount);
     query.m_timestampQueue = {};

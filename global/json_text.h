@@ -20,9 +20,7 @@ inline constexpr u8 s_ControlMaxExclusive = 0x20u;
 
 
 template<typename StringT>
-inline void AppendJsonEscapedText(StringT& out, const AStringView text)noexcept(
-    noexcept(out += DeclVal<const char(&)[3]>()) && noexcept(out += '?') && noexcept(out += DeclVal<const char&>())
-){
+inline void AppendJsonEscapedText(StringT& out, const AStringView text)noexcept(noexcept(out += DeclVal<const char(&)[3]>()) && noexcept(out += '?') && noexcept(out += DeclVal<const char&>())){
     for(const char ch : text){
         switch(ch){
         case '"':

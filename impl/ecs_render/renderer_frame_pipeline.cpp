@@ -88,15 +88,15 @@ RendererFramePipeline::~RendererFramePipeline(){
 }
 
 
+Expected<RefractionStatistics> RendererFramePipeline::tryGetLatestRefractionStatistics()const noexcept{
+    return m_raytracingSystem.tryGetLatestRefractionStatistics();
+}
+
 bool RendererFramePipeline::setReflectionSettings(const ReflectionSettings& settings)noexcept{
     if(!ValidateReflectionSettings(settings))
         return false;
     m_reflectionSettings = settings;
     return true;
-}
-
-Expected<RefractionStatistics> RendererFramePipeline::tryGetLatestRefractionStatistics()const noexcept{
-    return m_raytracingSystem.tryGetLatestRefractionStatistics();
 }
 
 Expected<ReflectionStatistics> RendererFramePipeline::tryGetLatestReflectionStatistics()const noexcept{

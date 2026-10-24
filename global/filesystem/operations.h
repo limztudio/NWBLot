@@ -73,32 +73,24 @@ inline constexpr usize s_BackupDirectoryNameExtraCharacters = 1u + s_BackupDirec
 }
 
 #if defined(NWB_PLATFORM_WINDOWS)
-inline void SetLastSystemError(ErrorCode& outError)noexcept{
-    outError = ErrorCode(static_cast<i32>(GetLastError()), std::system_category());
-}
-
 inline void CloseDirectory(const HANDLE findHandle, ErrorCode& outError)noexcept{
     if(!FindClose(findHandle) && !outError)
-        SetLastSystemError(outError);
+        outError = LastSystemError();
 }
 
 inline void CaptureDirectoryIterationError(ErrorCode& outError)noexcept{
     if(GetLastError() != ERROR_NO_MORE_FILES && !outError)
-        SetLastSystemError(outError);
+        outError = LastSystemError();
 }
 #else
-inline void SetLastSystemError(ErrorCode& outError)noexcept{
-    outError = ErrorCode(errno, std::generic_category());
-}
-
 inline void CloseDirectory(const NotNull<DIR*> directory, ErrorCode& outError)noexcept{
     if(closedir(directory.get()) != 0 && !outError)
-        SetLastSystemError(outError);
+        outError = LastSystemError();
 }
 
 inline void CaptureDirectoryIterationError(ErrorCode& outError)noexcept{
     if(errno != 0 && !outError)
-        SetLastSystemError(outError);
+        outError = LastSystemError();
 }
 #endif
 

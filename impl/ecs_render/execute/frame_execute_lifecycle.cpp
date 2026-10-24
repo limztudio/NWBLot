@@ -135,14 +135,7 @@ NWB_IMPL_BEGIN
 
 [[nodiscard]] bool FrameExecuteLifecycle::PrepareSurfelGiTask(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
     FrameExecuteLifecycle::SurfelGiStateLifecycleContext* const context = static_cast<SurfelGiStateLifecycleContext*>(rawContext);
-    if(
-        !context
-        || !context->returnTextures
-        || !context->counterBuffers
-        || !context->computeTextures
-        || !context->computeBuffers
-        || !finalState
-    )
+    if(!context || !context->returnTextures || !context->counterBuffers || !context->computeTextures || !context->computeBuffers || !finalState)
         return false;
 
     const bool returnStateReady = context->renderer->m_surfelIrradianceReturnState.buildFilteredResourceSubset(*context->returnStateCandidate, *finalState, context->returnTextures, context->returnTextureCount, nullptr, 0u, context->scratchArena);
@@ -218,13 +211,7 @@ NWB_IMPL_BEGIN
 
 [[nodiscard]] bool FrameExecuteLifecycle::PrepareDeferredLightingTask(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
     FrameExecuteLifecycle::DeferredLightingStateLifecycleContext* const context = static_cast<DeferredLightingStateLifecycleContext*>(rawContext);
-    if(
-        !context
-        || !context->shadowReturnTextures
-        || !context->causticReturnTextures
-        || !context->surfelReturnTextures
-        || !finalState
-    )
+    if(!context || !context->shadowReturnTextures || !context->causticReturnTextures || !context->surfelReturnTextures || !finalState)
         return false;
 
     bool shadowStateReady = true;

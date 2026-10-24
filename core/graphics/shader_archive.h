@@ -48,7 +48,7 @@ public:
 
 
 public:
-    [[nodiscard]] static const Name& IndexVirtualPathName()noexcept;
+    [[nodiscard]] static const Name& IndexVirtualPathName()noexcept{ return s_IndexVirtualPathName; }
     [[nodiscard]] static Expected<Name> BuildVirtualPathName(const Name& shaderName, AStringView variantName, const Name& stageName);
     [[nodiscard]] static Expected<GraphicsBytes> SerializeIndex(GraphicsArena& arena, Span<const Record> records, Alloc::ScratchArena& scratchArena);
     [[nodiscard]] static Expected<GraphicsVector<Record>> DeserializeIndex(GraphicsArena& arena, BinaryByteView binary);

@@ -38,7 +38,6 @@ public:
         , m_recordingAttemptGeneration(recordingAttemptGeneration)
         , m_uncaughtExceptionCount(UncaughtExceptionCount())
     {}
-
     ~RejectingPacketUnwindScope()noexcept{
         if(UncaughtExceptionCount() <= m_uncaughtExceptionCount)
             return;
@@ -78,7 +77,6 @@ public:
         , m_packet(packet)
         , m_uncaughtExceptionCount(UncaughtExceptionCount())
     {}
-
     ~RejectingSubmissionUnwindScope()noexcept{
         if(UncaughtExceptionCount() <= m_uncaughtExceptionCount)
             return;
@@ -106,7 +104,6 @@ public:
         , m_compiledGraph(compiledGraph)
         , m_uncaughtExceptionCount(UncaughtExceptionCount())
     {}
-
     ~UnacceptedPacketsFinalizationScope()noexcept{
         if(UncaughtExceptionCount() > m_uncaughtExceptionCount)
             completeWithoutCallbacks();
@@ -174,7 +171,6 @@ public:
         : m_finalization(finalization)
         , m_uncaughtExceptionCount(UncaughtExceptionCount())
     {}
-
     ~UnacceptedPacketsUnwindScope()noexcept{
         if(UncaughtExceptionCount() <= m_uncaughtExceptionCount)
             return;

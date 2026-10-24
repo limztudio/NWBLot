@@ -193,6 +193,15 @@ struct SkinPaintSample{
 [[nodiscard]] bool InstallLatinFixtureFont(Core::Alloc::ScratchArena& scratchArena, Core::Alloc::GlobalArena& arena, Font& font, TextService& text);
 
 class WidgetFixture : public testing::Test{
+protected:
+    [[nodiscard]] static ImageOptions Fixed(const f32 width = 96.0f, const f32 height = 40.0f)noexcept{
+        ImageOptions options;
+        options.width = { LayoutSizePolicy::Fixed, width };
+        options.height = { LayoutSizePolicy::Fixed, height };
+        return options;
+    }
+
+
 public:
     WidgetFixture()
         : m_arena(Name("tests/ui/widgets"))
@@ -254,13 +263,6 @@ protected:
 
     [[nodiscard]] bool finishWindow(){
         return m_builder.endWindow() && m_context.endRoot() && m_context.finishFrame();
-    }
-
-    [[nodiscard]] static ImageOptions Fixed(const f32 width = 96.0f, const f32 height = 40.0f)noexcept{
-        ImageOptions options;
-        options.width = { LayoutSizePolicy::Fixed, width };
-        options.height = { LayoutSizePolicy::Fixed, height };
-        return options;
     }
 
     [[nodiscard]] bool panel(const u64 generation, const AStringView key = "panel", const Rect& bounds = { 10.0f, 10.0f, 360.0f, 400.0f }){

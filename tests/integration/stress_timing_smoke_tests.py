@@ -114,6 +114,17 @@ class StressSoftwareShadowSettingsTests(unittest.TestCase):
         executable.write_bytes(LIT_FIXTURE.encode(LIT_UTF_8))
         self.argv = [LIT_EXECUTABLE, str(executable), LIT_WORKING_DIRECTORY, str(self.output), LIT_NO_LOGSERVER]
 
+    def test_cold_csg_timeout_budget_keeps_admission_bounds(self):
+        csg_argv = self.argv + ["--csg-profile", "waist_bands"]
+        self.assertEqual(smoke.parse_args(csg_argv).timeout, 90.0)
+        for seconds in ("35.000001", "180", "300"):
+            with self.subTest(seconds=seconds):
+                self.assertEqual(smoke.parse_args(csg_argv + ["--timeout", seconds]).timeout, float(seconds))
+        for seconds in ("0", "35", "300.000001", "nan", "inf", "-inf"):
+            with self.subTest(seconds=seconds), patch(LIT_SYS_STDERR), self.assertRaises(SystemExit) as rejected:
+                smoke.parse_args(csg_argv + ["--timeout=" + seconds])
+            self.assertEqual(rejected.exception.code, 2)
+
     def test_shadow_quarter_requires_matching_allocated_grid(self):
         args = smoke.parse_args(self.argv + [LIT_SHADOW_RECEIVER_RESOLUTION, LIT_QUARTER])
         env = smoke.launch_environment({LIT_NWB_SHADOW_RECEIVER_RESOLUTION: LIT_HALF}, args, self.output)

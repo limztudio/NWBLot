@@ -232,8 +232,7 @@ private:
         const f32 x = comparison ? VectorGetX(VectorMultiply(slotOffset, spacing)) : VectorGetX(VectorMultiplyAddExpression(slotOffset, spacing, VectorMultiply(VectorReplicate(transparentMaterialClass ? -0.25f : 0.25f), spacing)));
         const f32 z = transparentMaterialClass ? s_TransparentRowZ : s_OpaqueRowZ;
 
-        bool tintApplied = false;
-        const NWB::Core::ECS::EntityID entity = CreateTintedModelEntity(
+        const auto modelResult = CreateTintedModelEntity(
             *m_world,
             m_context.objectArena,
             transparentMaterialClass ? s_CausticModel : s_Model,
@@ -241,10 +240,10 @@ private:
             s_SmokeSurfaceMaterialInterface,
             CharacterTint(classIndex, transparent),
             Float4(x, s_CharacterLift, z, 0.0f),
-            Float4(1.0f, 1.0f, 1.0f, 0.0f),
-            tintApplied
+            Float4(1.0f, 1.0f, 1.0f, 0.0f)
         );
-        if(!tintApplied)
+        const NWB::Core::ECS::EntityID entity = modelResult.entity;
+        if(!modelResult.tintApplied)
             NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: failed to set character tint (index {})"), index);
 
         return entity;

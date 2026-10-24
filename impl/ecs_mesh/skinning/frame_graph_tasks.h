@@ -96,8 +96,11 @@ public:
 
 // Deformation produces UAV streams; compiler owns the UAV-to-SRV handoff.
 struct MeshSkinningSystem::TaskGraphSkinningDeformationTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
     using Payload = TaskGraphSkinningPlansPayload;
+
+
+public:
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
 
 public:
@@ -109,8 +112,11 @@ public:
 
 // Bounds/repack consume deformation and publish UAV outputs for the local-bounds reduction.
 struct MeshSkinningSystem::TaskGraphSkinningPostDispatchTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
     using Payload = TaskGraphSkinningPlansPayload;
+
+
+public:
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
 
 public:

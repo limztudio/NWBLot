@@ -167,8 +167,11 @@ public:
 
 
 struct SurfelGiHashBuildGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
     using Payload = SurfelGiAsyncPassPayload;
+
+
+public:
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
 
 public:
@@ -183,8 +186,11 @@ public:
 
 
 struct SurfelGiSpawnGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
     using Payload = SurfelGiAsyncPassPayload;
+
+
+public:
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
 
 public:
@@ -199,8 +205,11 @@ public:
 
 
 struct SurfelGiTraceBuildArgsGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
     using Payload = SurfelGiAsyncPassPayload;
+
+
+public:
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
 
 public:
@@ -215,8 +224,11 @@ public:
 
 
 struct SurfelGiTraceGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
     using Payload = SurfelGiAsyncPassPayload;
+
+
+public:
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
 
 public:
@@ -235,8 +247,11 @@ public:
 
 
 struct SurfelGiResolveGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
     using Payload = SurfelGiAsyncPassPayload;
+
+
+public:
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
 
 public:

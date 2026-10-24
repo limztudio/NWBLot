@@ -314,7 +314,6 @@ struct ArenaDeleter<T[], POOL>{
 
 public:
     constexpr ArenaDeleter()noexcept = default;
-
     constexpr ArenaDeleter(POOL& pool, usize size)noexcept
         : m_pool(&pool)
         , m_size(size)
@@ -354,7 +353,6 @@ struct EmptyDeleter<T[]>{
 
 public:
     constexpr EmptyDeleter()noexcept = default;
-
     constexpr EmptyDeleter(usize size)noexcept
         : m_size(size)
     {}
@@ -383,7 +381,6 @@ struct BlankDeleter{
 template<typename T>
 struct BlankDeleter<T[]>{
     constexpr BlankDeleter()noexcept = default;
-
     constexpr BlankDeleter(usize size)noexcept{
         static_cast<void>(size);
     }

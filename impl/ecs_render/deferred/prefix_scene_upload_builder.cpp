@@ -37,12 +37,7 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(Core::GpuTaskGraph& graph, Re
 
 [[nodiscard]] Expected<PrefixSceneUploadResult> PrefixSceneUploadBuilder::declare(const PrefixSceneUploadInputs& inputs){
     PrefixSceneUploadResult result{};
-    if(
-        !inputs.meshView.valid()
-        || !inputs.lights.valid()
-        || !inputs.sceneShading.valid()
-        || !inputs.shadowPrepareTask.valid()
-    )
+    if(!inputs.meshView.valid() || !inputs.lights.valid() || !inputs.sceneShading.valid() || !inputs.shadowPrepareTask.valid())
         return MakeUnexpected(Failure{});
 
     const ECSRenderDetail::MeshViewGpuData& meshViewState = inputs.meshViewState;

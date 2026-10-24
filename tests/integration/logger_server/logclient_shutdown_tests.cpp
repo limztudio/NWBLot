@@ -32,7 +32,7 @@ inline constexpr u32 s_FirstRequestDelayMilliseconds = 250u;
 
 class ShutdownCaptureServer final : NoCopy{
 private:
-    static MHD_Result RequestCallback(void* serverContext, MHD_Connection* connection, const char* url, const char* method, const char* version, const char* uploadData, size_t* uploadDataSize, void** connectionContext);
+    static MHD_Result RequestCallback(void* serverContext, MHD_Connection* connection, const char* url, const char* method, const char* version, const char* uploadData, size_t* uploadDataSize, void** connectionContext)noexcept;
 
 
 public:
@@ -41,7 +41,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool start();
+    [[nodiscard]] bool start()noexcept;
     [[nodiscard]] inline u16 port()const noexcept{ return m_port; }
 
     [[nodiscard]] inline u32 requestCount()const noexcept{ return m_requestCount.load(MemoryOrder::acquire); }
@@ -64,7 +64,7 @@ MHD_Result ShutdownCaptureServer::RequestCallback(
     const char* const uploadData,
     size_t* const uploadDataSize,
     void** const connectionContext
-){
+)noexcept{
     static_cast<void>(url);
     static_cast<void>(version);
     static_cast<void>(uploadData);
@@ -107,7 +107,7 @@ ShutdownCaptureServer::~ShutdownCaptureServer()noexcept{
 }
 
 
-bool ShutdownCaptureServer::start(){
+bool ShutdownCaptureServer::start()noexcept{
     if(m_daemon)
         return false;
 

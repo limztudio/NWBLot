@@ -91,7 +91,12 @@ inline constexpr AStringView s_GeneratedFunctionEnd = "}\n\n";
 
 
 template<typename StringT>
-void AppendMaterialBindGeneratedUpperIdentifier(const AStringView text, StringT& inOutText){
+void AppendMaterialBindGeneratedUpperIdentifier(const AStringView text, StringT& inOutText)noexcept(
+    noexcept(DeclVal<void(*)(usize)noexcept>()(inOutText.size()))
+    && noexcept(static_cast<bool>(inOutText.size() == DeclVal<const usize&>()))
+    && noexcept(inOutText += char{})
+    && noexcept(inOutText += "VALUE")
+){
     const usize beginSize = inOutText.size();
     for(const char ch : text)
         inOutText += IsAsciiAlphaNumeric(ch) ? ToAsciiUpper(ch) : '_';
@@ -100,7 +105,13 @@ void AppendMaterialBindGeneratedUpperIdentifier(const AStringView text, StringT&
 }
 
 template<typename StringT>
-void AppendMaterialBindGeneratedPascalIdentifier(const AStringView text, StringT& inOutText){
+void AppendMaterialBindGeneratedPascalIdentifier(const AStringView text, StringT& inOutText)noexcept(
+    noexcept(DeclVal<void(*)(usize)noexcept>()(inOutText.size()))
+    && noexcept(static_cast<bool>(inOutText.size() == DeclVal<const usize&>()))
+    && noexcept(inOutText += char{})
+    && noexcept(inOutText += DeclVal<const char&>())
+    && noexcept(inOutText += "Value")
+){
     const usize beginSize = inOutText.size();
     bool upperNext = true;
     for(const char ch : text){

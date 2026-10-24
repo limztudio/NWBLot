@@ -154,9 +154,7 @@ template<typename NumberT, typename ParseT>
         && noexcept(Expected<NumericTextPrefix<NumberT>, ErrorCode>(NumericTextPrefix<NumberT>{ .value = static_cast<NumberT>(DeclVal<const ParsedT&>()), .consumed = DeclVal<usize>() }))
     ;
     if constexpr(IsIntegral_V<NumberT> && sizeof(NumberT) < sizeof(ParsedT)){
-        return s_ResultIsNothrow && noexcept(
-            false || DeclVal<const ParsedT&>() < static_cast<ParsedT>(Limit<NumberT>::s_Min) || DeclVal<const ParsedT&>() > static_cast<ParsedT>(Limit<NumberT>::s_Max)
-        );
+        return s_ResultIsNothrow && noexcept(false || DeclVal<const ParsedT&>() < static_cast<ParsedT>(Limit<NumberT>::s_Min) || DeclVal<const ParsedT&>() > static_cast<ParsedT>(Limit<NumberT>::s_Max));
     }
     else
         return s_ResultIsNothrow;

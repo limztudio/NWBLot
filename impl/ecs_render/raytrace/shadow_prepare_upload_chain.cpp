@@ -22,11 +22,7 @@ NWB_IMPL_BEGIN
 
 
 bool ShadowPrepareUploadChainBuilder::declare(Core::Alloc::ScratchArena& scratchArena, const ShadowPrepareUploadInputs& inputs, ShadowPrepareUploadChain& chain){
-    return declareSelectorAndContextUploads(scratchArena, inputs, chain)
-        && declareSurfelFrameConstantsUpload(inputs, chain)
-        && declareShadowMaterialContextUploads(inputs, chain)
-        && declareSceneBvhUploads(inputs, chain)
-    ;
+    return declareSelectorAndContextUploads(scratchArena, inputs, chain) && declareSurfelFrameConstantsUpload(inputs, chain) && declareShadowMaterialContextUploads(inputs, chain) && declareSceneBvhUploads(inputs, chain);
 }
 
 Expected<Core::GpuGraphResourceId> ShadowPrepareUploadChainBuilder::importBuffer(const Core::BufferHandle& buffer, const Name& identity, const AStringView label){

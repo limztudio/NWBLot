@@ -74,12 +74,7 @@ struct TangentFrameAccumulator{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline SIMDVectorSingle ResolveTangentHandedness(
-    const SIMDVectorSingle tangentWithHandedness,
-    const SIMDVectorSingle normal,
-    const SIMDVectorSingle tangent,
-    const SIMDVectorSingle bitangent
-)noexcept{
+[[nodiscard]] inline SIMDVectorSingle ResolveTangentHandedness(const SIMDVectorSingle tangentWithHandedness, const SIMDVectorSingle normal, const SIMDVectorSingle tangent, const SIMDVectorSingle bitangent)noexcept{
     const SIMDVectorSingle value = VectorSplatW(tangentWithHandedness);
     SIMDVectorSingle handedness = s_SIMDOne;
     if(VectorIsFinite(value, VectorComponentMask::s_XYZW)){

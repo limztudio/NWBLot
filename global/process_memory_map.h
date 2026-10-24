@@ -106,9 +106,7 @@ inline void SkipProcMapWhitespace(const AStringView line, usize& cursor)noexcept
 }
 
 template<typename EntryVectorT>
-inline void ParseLinuxProcessMemoryMaps(const AStringView mapsText, EntryVectorT& outEntries)noexcept(
-    noexcept(outEntries.clear()) && noexcept(outEntries.push_back(DeclVal<const LinuxProcessMemoryMapEntry&>()))
-){
+inline void ParseLinuxProcessMemoryMaps(const AStringView mapsText, EntryVectorT& outEntries)noexcept(noexcept(outEntries.clear()) && noexcept(outEntries.push_back(DeclVal<const LinuxProcessMemoryMapEntry&>()))){
     outEntries.clear();
 
     usize cursor = 0u;

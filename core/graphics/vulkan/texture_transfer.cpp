@@ -30,9 +30,13 @@ static constexpr TStringView s_NativeImageNotDistinctReason = NWB_TEXT("source a
 [[nodiscard]] inline bool TextureTransferImagesWithinFormatLimits(const VulkanContext& context, const VkImageCreateInfo& source, const VkImageCreateInfo& destination){
     VkImageFormatProperties sourceProperties{};
     const VkResult sourceResult = context.instanceDispatch.vkGetPhysicalDeviceImageFormatProperties(context.physicalDevice, source.format, source.imageType, source.tiling, source.usage, source.flags, &sourceProperties);
+    if(sourceResult != VK_SUCCESS)
+        return false;
     VkImageFormatProperties destinationProperties{};
     const VkResult destinationResult = context.instanceDispatch.vkGetPhysicalDeviceImageFormatProperties(context.physicalDevice, destination.format, destination.imageType, destination.tiling, destination.usage, destination.flags, &destinationProperties);
-    return sourceResult == VK_SUCCESS && destinationResult == VK_SUCCESS && VulkanTextureDetail::IsTextureImageWithinFormatLimits(source, sourceProperties) && VulkanTextureDetail::IsTextureImageWithinFormatLimits(destination, destinationProperties);
+    if(destinationResult != VK_SUCCESS)
+        return false;
+    return VulkanTextureDetail::IsTextureImageWithinFormatLimits(source, sourceProperties) && VulkanTextureDetail::IsTextureImageWithinFormatLimits(destination, destinationProperties);
 }
 
 [[nodiscard]] inline bool ResolveMipExtentsMatch(const TextureDesc& destinationDesc, const TextureSubresourceSet& destinationSubresources, const TextureDesc& sourceDesc, const TextureSubresourceSet& sourceSubresources)noexcept{
@@ -92,26 +96,6 @@ struct TextureUploadCopyAspect{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-bool CommandList::validateTextureTransferResources(Texture& dest, const ResourceStates::Mask destState, Texture& src, const ResourceStates::Mask srcState, const TStringView operationName){
-    if(&src.m_context != &m_context || &dest.m_context != &m_context){
-        rejectCommandRecording(operationName, __hidden_texture_transfer::s_TexturesNotOwnedReason);
-        return false;
-    }
-    if(src.m_image == VK_NULL_HANDLE || dest.m_image == VK_NULL_HANDLE){
-        rejectCommandRecording(operationName, __hidden_texture_transfer::s_NativeImageNullReason);
-        return false;
-    }
-    if(&src == &dest || src.m_image == dest.m_image){
-        rejectCommandRecording(operationName, __hidden_texture_transfer::s_NativeImageNotDistinctReason);
-        return false;
-    }
-    if(!validateTextureForGpuState(&src, srcState, operationName, VK_IMAGE_USAGE_TRANSFER_SRC_BIT))
-        return false;
-    if(!validateTextureForGpuState(&dest, destState, operationName, VK_IMAGE_USAGE_TRANSFER_DST_BIT))
-        return false;
-    return true;
-}
 
 void CommandList::copyTexture(Texture& dest, const TextureSlice& destSlice, Texture& src, const TextureSlice& srcSlice){
     constexpr TStringView s_OperationName = NWB_TEXT("copy texture");
@@ -255,12 +239,7 @@ bool CommandList::tryWriteTexture(Texture& dest, u32 arraySlice, u32 mipLevel, c
     }
     Buffer& stagingBuffer = *staging->buffer;
     const u64 stagingOffset = staging->offset;
-    if(
-        (stagingOffset % *uploadAlignment) != 0u
-        || (stagingOffset % uploadAlignmentRequirement) != 0u
-        || stagingOffset > stagingBuffer.m_creationDesc.byteSize
-        || static_cast<u64>(uploadSize) > stagingBuffer.m_creationDesc.byteSize - stagingOffset
-    ){
+    if((stagingOffset % *uploadAlignment) != 0u || (stagingOffset % uploadAlignmentRequirement) != 0u || stagingOffset > stagingBuffer.m_creationDesc.byteSize || static_cast<u64>(uploadSize) > stagingBuffer.m_creationDesc.byteSize - stagingOffset){
         rejectCommandRecording(s_OperationName, NWB_TEXT("staging allocation returned an invalid offset or range"));
         return false;
     }
@@ -377,6 +356,30 @@ void CommandList::resolveTexture(Texture& dest, const TextureSubresourceSet& dst
 
     retainResource(&src);
     retainResource(&dest);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool CommandList::validateTextureTransferResources(Texture& dest, const ResourceStates::Mask destState, Texture& src, const ResourceStates::Mask srcState, const TStringView operationName){
+    if(&src.m_context != &m_context || &dest.m_context != &m_context){
+        rejectCommandRecording(operationName, __hidden_texture_transfer::s_TexturesNotOwnedReason);
+        return false;
+    }
+    if(src.m_image == VK_NULL_HANDLE || dest.m_image == VK_NULL_HANDLE){
+        rejectCommandRecording(operationName, __hidden_texture_transfer::s_NativeImageNullReason);
+        return false;
+    }
+    if(&src == &dest || src.m_image == dest.m_image){
+        rejectCommandRecording(operationName, __hidden_texture_transfer::s_NativeImageNotDistinctReason);
+        return false;
+    }
+    if(!validateTextureForGpuState(&src, srcState, operationName, VK_IMAGE_USAGE_TRANSFER_SRC_BIT))
+        return false;
+    if(!validateTextureForGpuState(&dest, destState, operationName, VK_IMAGE_USAGE_TRANSFER_DST_BIT))
+        return false;
+    return true;
 }
 
 

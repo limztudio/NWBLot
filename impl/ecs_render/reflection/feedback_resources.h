@@ -89,7 +89,7 @@ public:
 
 private:
     void releaseBuffers();
-    [[nodiscard]] bool prepareBank(ReflectionFeedbackBinding& bank, u32 byteCount, Name name);
+    [[nodiscard]] Expected<ReflectionFeedbackBinding> prepareBank(u32 byteCount, Name name);
 
 
 private:

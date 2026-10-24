@@ -55,13 +55,7 @@ Expected<FrameGraphTraceGeometryResult> FrameGraphTraceGeometryImporter::declare
             result.softwareTraceGeometry.push_back(resource);
     }
     // Trace dispatchers select textures via frozen material context; reuse typed preflight import when owned.
-    const auto traceMaterialSampledTextureResources = ImportMaterialSampledTextureResources(
-        m_graph,
-        preparedTraceMaterialSampledTextures.data(),
-        preparedTraceMaterialSampledTextures.size(),
-        "Prepared Trace Material Sampled Texture",
-        scratchArena
-    );
+    const auto traceMaterialSampledTextureResources = ImportMaterialSampledTextureResources(m_graph, preparedTraceMaterialSampledTextures.data(), preparedTraceMaterialSampledTextures.size(), "Prepared Trace Material Sampled Texture", scratchArena);
     if(!traceMaterialSampledTextureResources){
         switch(traceMaterialSampledTextureResources.error()){
         case SampledTextureImportFailure::GraphUnavailable:

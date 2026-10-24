@@ -268,9 +268,9 @@ private:
     }
 
     [[nodiscard]] bool createRuntime(const u32 index, const Float4& position){
-        bool tintApplied = false;
-        const auto owner = CreateTintedModelEntity(*m_world, m_context.objectArena, s_Model, s_Opaque, s_Interface, Float4(0.9f, 0.45f, 0.2f, 1.f), position, Float4(0.22f, 0.22f, 0.22f, 0.f), tintApplied);
-        if(!owner.valid() || !tintApplied)
+        const auto modelResult = CreateTintedModelEntity(*m_world, m_context.objectArena, s_Model, s_Opaque, s_Interface, Float4(0.9f, 0.45f, 0.2f, 1.f), position, Float4(0.22f, 0.22f, 0.22f, 0.f));
+        const auto owner = modelResult.entity;
+        if(!owner.valid() || !modelResult.tintApplied)
             return false;
         SyncSmokeModelRuntimes(*m_world);
         const auto skeleton = FindSpawnedModelObject(*m_world, owner, Name("skeleton"), NWB::Impl::ModelObjectKind::Skeleton);

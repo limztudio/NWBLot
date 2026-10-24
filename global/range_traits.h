@@ -19,13 +19,7 @@ namespace RangeForDetail{
 
 template<typename IteratorT, typename SentinelT, typename VisitT>
 [[nodiscard]] consteval bool IsNothrowIteration()noexcept{
-    return
-        IsNothrowDestructible_V<IteratorT>
-        && IsNothrowDestructible_V<SentinelT>
-        && noexcept(static_cast<bool>(DeclVal<IteratorT&>() != DeclVal<SentinelT&>()))
-        && noexcept(++DeclVal<IteratorT&>())
-        && noexcept(DeclVal<VisitT&>()(*DeclVal<IteratorT&>()))
-    ;
+    return IsNothrowDestructible_V<IteratorT> && IsNothrowDestructible_V<SentinelT> && noexcept(static_cast<bool>(DeclVal<IteratorT&>() != DeclVal<SentinelT&>())) && noexcept(++DeclVal<IteratorT&>()) && noexcept(DeclVal<VisitT&>()(*DeclVal<IteratorT&>()));
 }
 
 
@@ -48,20 +42,12 @@ template<typename RangeT, typename VisitT>
     else if constexpr(requires(RangeT& range){ range.begin(); range.end(); }){
         using IteratorT = Decay_T<decltype(DeclVal<RangeT&>().begin())>;
         using SentinelT = Decay_T<decltype(DeclVal<RangeT&>().end())>;
-        return
-            noexcept(IteratorT(DeclVal<RangeT&>().begin()))
-            && noexcept(SentinelT(DeclVal<RangeT&>().end()))
-            && RangeForDetail::IsNothrowIteration<IteratorT, SentinelT, VisitT>()
-        ;
+        return noexcept(IteratorT(DeclVal<RangeT&>().begin())) && noexcept(SentinelT(DeclVal<RangeT&>().end())) && RangeForDetail::IsNothrowIteration<IteratorT, SentinelT, VisitT>();
     }
     else{
         using IteratorT = Decay_T<decltype(begin(DeclVal<RangeT&>()))>;
         using SentinelT = Decay_T<decltype(end(DeclVal<RangeT&>()))>;
-        return
-            noexcept(IteratorT(begin(DeclVal<RangeT&>())))
-            && noexcept(SentinelT(end(DeclVal<RangeT&>())))
-            && RangeForDetail::IsNothrowIteration<IteratorT, SentinelT, VisitT>()
-        ;
+        return noexcept(IteratorT(begin(DeclVal<RangeT&>()))) && noexcept(SentinelT(end(DeclVal<RangeT&>()))) && RangeForDetail::IsNothrowIteration<IteratorT, SentinelT, VisitT>();
     }
 }
 

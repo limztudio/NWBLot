@@ -61,6 +61,7 @@ foreach(_nwb_engine_static_vendor_target
     nwb_vendor_curl
     nwb_vendor_microhttpd
     nwb_vendor_miniz
+    nwb_vendor_zlib
     nwb_vendor_freetype
     nwb_vendor_harfbuzz
 )

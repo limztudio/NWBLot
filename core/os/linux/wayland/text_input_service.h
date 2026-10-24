@@ -70,13 +70,13 @@ protected:
 
 
 private:
-    void releaseDevice();
+    void releaseDevice()noexcept;
     void clearPending()noexcept;
     void nativeFailure();
-    [[nodiscard]] bool flush();
+    [[nodiscard]] bool flush()noexcept;
 #if defined(NWB_OS_WITH_TEXT_INPUT_V3)
     void commitState(TextInputSessionToken token, u64 revision);
-    void sendCaret(TextInputRect caret);
+    void sendCaret(TextInputRect caret)noexcept;
     void sendSurrounding(AStringView text, usize anchorByte, usize caretByte, u64 revision);
     void receiveDone(u32 serial);
 #endif

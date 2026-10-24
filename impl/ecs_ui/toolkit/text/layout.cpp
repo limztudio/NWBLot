@@ -40,8 +40,7 @@ inline constexpr usize s_CarriageReturnLineFeedBytes = 2u;
 
 [[nodiscard]] static bool FitsCoordinateXY(const SIMDVectorDouble value)noexcept{
     const SIMDVectorDouble limit = VectorDoubleReplicate(static_cast<f64>(Limit<f32>::s_Max));
-    return VectorDoubleIsFinite(value, VectorDoubleComponentMask::s_DoubleXY)
-        && (VectorDoubleMoveMask(VectorDoubleInBounds(value, limit)) & VectorDoubleComponentMask::s_DoubleXY) == VectorDoubleComponentMask::s_DoubleXY;
+    return VectorDoubleIsFinite(value, VectorDoubleComponentMask::s_DoubleXY) && (VectorDoubleMoveMask(VectorDoubleInBounds(value, limit)) & VectorDoubleComponentMask::s_DoubleXY) == VectorDoubleComponentMask::s_DoubleXY;
 }
 
 [[nodiscard]] static Expected<SIMDVectorDoubleResult> TranslateInk(const SIMDVectorDouble position, const SIMDVectorDouble ink)noexcept{

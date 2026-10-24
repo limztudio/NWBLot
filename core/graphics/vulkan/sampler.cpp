@@ -98,9 +98,7 @@ Expected<SamplerHandle> Device::createSampler(const SamplerDesc& d){
 
     SamplerDesc normalizedDesc = d;
     // x: requested anisotropy, y: device limit. Both are raised to at least 1 before the limit applies.
-    normalizedDesc.maxAnisotropy = VectorGetX(
-        __hidden_vulkan_sampler::ResolveSamplerMaxAnisotropy(VectorSet(normalizedDesc.maxAnisotropy, m_context.physicalDeviceProperties.limits.maxSamplerAnisotropy, 0.0f, 0.0f))
-    );
+    normalizedDesc.maxAnisotropy = VectorGetX(__hidden_vulkan_sampler::ResolveSamplerMaxAnisotropy(VectorSet(normalizedDesc.maxAnisotropy, m_context.physicalDeviceProperties.limits.maxSamplerAnisotropy, 0.0f, 0.0f)));
 
     SamplerHandle sampler(NewArenaObject<Sampler>(m_context.objectArena, m_context), SamplerHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
     if(!sampler)

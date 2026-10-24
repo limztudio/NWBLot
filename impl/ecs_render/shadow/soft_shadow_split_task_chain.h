@@ -92,6 +92,13 @@ struct SoftShadowSplitTasks{
 // The prepared soft-transparent shadow route: light-space maps when ready, the opaque producer with its wavelet and resolve tail, then transparent trace, temporal merge, wavelet, and fold.
 // Tasks declared before a failure stay in `tasks`.
 class SoftShadowSplitTaskChainBuilder final : NoCopy{
+private:
+    struct LightSpaceShadowMaps{
+        Core::GpuTaskId shadowTraceDependency;
+        Core::GpuGraphResourceId csgShadowContext;
+    };
+
+
 public:
     SoftShadowSplitTaskChainBuilder(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, Core::Alloc::GlobalArena& arena, RendererRayTracingSystem& raytracingSystem)noexcept
         : m_graph(graph)
@@ -107,20 +114,8 @@ public:
 
 private:
     // Adds the map, cap, and CSG bound reads to the opaque producer and transparent trace.
-    [[nodiscard]] bool declareLightSpaceShadowMaps(
-        Core::Alloc::ScratchArena& scratchArena,
-        const SoftShadowSplitTaskChainInputs& inputs,
-        SoftShadowSplitResourceUses& uses,
-        Core::GpuTaskId& shadowTraceDependency,
-        Core::GpuGraphResourceId& csgShadowContext
-    );
-    [[nodiscard]] bool declareOpaqueTasks(
-        const SoftShadowSplitTaskChainInputs& inputs,
-        const SoftShadowSplitResourceUses& uses,
-        const Core::GpuTaskId& shadowTraceDependency,
-        const Core::GpuTaskSchedulingHint& tailScheduling,
-        SoftShadowSplitTasks& tasks
-    );
+    [[nodiscard]] Expected<LightSpaceShadowMaps> declareLightSpaceShadowMaps(Core::Alloc::ScratchArena& scratchArena, const SoftShadowSplitTaskChainInputs& inputs, SoftShadowSplitResourceUses& uses);
+    [[nodiscard]] bool declareOpaqueTasks(const SoftShadowSplitTaskChainInputs& inputs, const SoftShadowSplitResourceUses& uses, const Core::GpuTaskId& shadowTraceDependency, const Core::GpuTaskSchedulingHint& tailScheduling, SoftShadowSplitTasks& tasks);
     [[nodiscard]] bool declareTransparentTasks(
         Core::Alloc::ScratchArena& scratchArena,
         const SoftShadowSplitTaskChainInputs& inputs,

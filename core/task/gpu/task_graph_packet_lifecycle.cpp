@@ -23,7 +23,6 @@ public:
         , m_recordingAttemptGeneration(recordingAttemptGeneration)
         , m_claimGeneration(claimGeneration)
     {}
-
     ~RecordThunkClaimGuard()noexcept{
         if(!m_active)
             return;
@@ -68,7 +67,6 @@ public:
         , m_compiledGraph(compiledGraph)
         , m_recordingAttemptGeneration(recordingAttemptGeneration)
     {}
-
     ~RecordingAttemptResolutionGuard()noexcept{
         complete();
     }

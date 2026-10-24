@@ -24,11 +24,7 @@ NWB_IMPL_BEGIN
 
 
 [[nodiscard]] bool RecordAvboitComputeEmulation(const AvboitComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitComputeEmulationRecordTrait& trait){
-    if(
-        !trait.framebuffer
-        || (!inputs.plan.captured && !inputs.csgPlan.captured)
-        || inputs.plan.captured == inputs.csgPlan.captured
-    )
+    if(!trait.framebuffer || (!inputs.plan.captured && !inputs.csgPlan.captured) || inputs.plan.captured == inputs.csgPlan.captured)
         return false;
 
     Core::GraphicsRuntime& graphics = inputs.graphics;
@@ -84,12 +80,7 @@ NWB_IMPL_BEGIN
 
 [[nodiscard]] bool RecordAvboitSharedComputeEmulation(const AvboitSharedComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitSharedComputeEmulationRecordTrait& trait){
     const bool generatePhase = inputs.phase == AvboitSharedComputeEmulationPhase::Generate;
-    if(
-        !trait.framebuffer
-        || !(inputs.targets.avboit.*(trait.framebuffer))
-        || !inputs.plan.captured
-        || inputs.drawIndex >= inputs.plan.drawCount
-    )
+    if(!trait.framebuffer || !(inputs.targets.avboit.*(trait.framebuffer)) || !inputs.plan.captured || inputs.drawIndex >= inputs.plan.drawCount)
         return false;
 
     Core::GraphicsRuntime& graphics = inputs.graphics;

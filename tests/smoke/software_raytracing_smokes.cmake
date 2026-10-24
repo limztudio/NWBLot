@@ -3,7 +3,8 @@ function(nwb_add_software_raytracing_smoke TEST_NAME TARGET_NAME RUNTIME_DIRECTO
     nwb_add_window_capture_smoke("${TEST_NAME}" "${TEST_NAME}.bmp" "$<TARGET_FILE:${TARGET_NAME}>" "${RUNTIME_DIRECTORY}" "${WINDOW_TITLE}" "--application-arg=--disable-hardware-ray-tracing" "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>"
         "--timeout" "150" "--render-ready-timeout" "90" "--settle-seconds" "8" "--expect-log-message" "Loader: hardware ray tracing disabled before device creation" "--expect-log-message" "RendererSystem: dispatched software shadow traversal"
         "--reject-log-message" "RendererSystem: dispatched hardware transparent shadow traversal" "--reject-log-message" "RendererSystem: dispatched hardware caustic producer" "--reject-log-message" "RendererSystem: created surfel HW trace compute pipeline"
-        "--reject-log-message" "RendererSystem: created refraction resolve pipeline (hardware ray query)" ${ARGN})
+        "--reject-log-message" "RendererSystem: created refraction resolve pipeline (hardware ray query, sparse queue)"
+        "--reject-log-message" "RendererSystem: created refraction resolve pipeline (hardware ray query, dense grid)" "--reject-log-message" "AVBOIT refraction resolve: hardware" ${ARGN})
     set_tests_properties("${TEST_NAME}" PROPERTIES LABELS "software_raytracing" TIMEOUT 180 ENVIRONMENT "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS=0.016666667;NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME=0")
 endfunction()
 
@@ -39,7 +40,8 @@ endif()
 if(TARGET nwb_stress_test_smoke)
     nwb_add_software_raytracing_smoke(nwb_software_raytracing_stress_resize_smoke nwb_stress_test_smoke "${_nwb_sw_skinned_runtime}" "NWB Stress Test Smoke" "--resize-client" "1001" "701" "--resize-settle-seconds" "8"
         "--expect-log-message" "StressTestSmokeProject: spawned 20 spinning characters (10 transparent + 10 opaque)" "--expect-log-message" "RendererSystem: dispatched software caustic producer"
-        "--expect-log-message" "RendererSystem: created surfel trace compute pipeline" "--expect-log-message" "RendererSystem: created refraction resolve pipeline (screen space)" "--expect-log-message" "StressTestSmokeProject: shutdown")
+        "--expect-log-message" "RendererSystem: created surfel trace compute pipeline" "--expect-log-message" "RendererSystem: created refraction resolve pipeline (screen space, sparse queue)"
+        "--expect-log-message" "RendererSystem: created refraction resolve pipeline (screen space, dense grid)" "--expect-log-message" "AVBOIT refraction resolve: screen-space" "--expect-log-message" "StressTestSmokeProject: shutdown")
     set_property(TEST nwb_software_raytracing_stress_resize_smoke APPEND PROPERTY ENVIRONMENT "NWB_STRESS_CHARACTERS_PER_CLASS=10")
 endif()
 

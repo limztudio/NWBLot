@@ -301,7 +301,7 @@ TEST(GpuTaskGraph, ExportsTextureTerminalFragmentsAfterPartialWholeResourceOverw
     EXPECT_TRUE(hasWholeWriterTail);
     EXPECT_TRUE(hasPartialWriterMipZero);
 
-    const auto hasStateExport = [&](const Graphics::GpuTaskId task, const Graphics::TextureSubresourceSet& range, const Graphics::ResourceStates::Mask before, const Graphics::GpuPhysicalQueueId& queue){
+    const auto hasStateExport = [&](const Graphics::GpuTaskId task, const Graphics::TextureSubresourceSet& range, const Graphics::ResourceStates::Mask before, const Graphics::GpuPhysicalQueueId& queue)noexcept{
         const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
         const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).epilogueBarriers;
         if(!compiledTask || !barriers)
@@ -321,7 +321,7 @@ TEST(GpuTaskGraph, ExportsTextureTerminalFragmentsAfterPartialWholeResourceOverw
         }
         return false;
     };
-    const auto hasExternalRelease = [&](const Graphics::GpuTaskId task, const Graphics::TextureSubresourceSet& range, const Graphics::GpuPhysicalQueueId& sourceQueue){
+    const auto hasExternalRelease = [&](const Graphics::GpuTaskId task, const Graphics::TextureSubresourceSet& range, const Graphics::GpuPhysicalQueueId& sourceQueue)noexcept{
         const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
         const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).epilogueBarriers;
         if(!compiledTask || !barriers)

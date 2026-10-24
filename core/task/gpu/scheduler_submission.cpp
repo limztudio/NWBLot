@@ -38,7 +38,6 @@ public:
         : m_tickets(tickets)
         , m_preparedTicketCount(preparedTicketCount)
     {}
-
     ~PreparedTimingTicketsUnwindScope()noexcept{
         static_assert(noexcept(static_cast<GpuTimingSubmissionTicket*>(nullptr)->rollbackPreparedSubmission()));
         static_assert(noexcept(static_cast<GpuTimingSubmissionTicket*>(nullptr)->abandonWithoutCallbacks()));
@@ -75,7 +74,6 @@ public:
         , m_planAccess(planAccess)
         , m_transaction(transaction)
     {}
-
     ~SubmittingPacketUnwindScope()noexcept{
         if(!m_submissionLease)
             return;

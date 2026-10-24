@@ -137,9 +137,7 @@ bool nwbCausticAppendBoundary(
     return true;
 }
 
-bool nwbCausticCheckBoundary(
-    const NwbOpticalTraceConfig config, const float3 origin, const float3 direction, const NwbCausticHit hit, out NwbCausticBoundary boundary, inout NwbOpticalTraceResult result
-){
+bool nwbCausticCheckBoundary(const NwbOpticalTraceConfig config, const float3 origin, const float3 direction, const NwbCausticHit hit, out NwbCausticBoundary boundary, inout NwbOpticalTraceResult result){
     const float tolerance = NWB_OPTICS_POSITION_TOLERANCE_SCALE * max(nwbOpticsPositionUncertainty(origin), nwbOpticsPositionUncertainty(hit.worldPos));
     NwbOpticalBootstrapEvent events[NWB_OPTICAL_MAX_CANDIDATE_EVENTS];
     uint count;

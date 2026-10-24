@@ -19,10 +19,7 @@ template<typename CharT>
 }
 
 template<typename CLI, typename CharT>
-inline void CommandLineParseApp(CLI& cli, const isize argc, CharT** argv)noexcept(
-    noexcept(cli.parse(static_cast<int>(argc), argv)) && noexcept(CharT('\0')) && IsNothrowDestructible_V<CharT>
-    && noexcept(cli.parse(1, DeclVal<CharT*(&)[2]>()))
-){
+inline void CommandLineParseApp(CLI& cli, const isize argc, CharT** argv)noexcept(noexcept(cli.parse(static_cast<int>(argc), argv)) && noexcept(CharT('\0')) && IsNothrowDestructible_V<CharT> && noexcept(cli.parse(1, DeclVal<CharT*(&)[2]>()))){
     if(CommandLineHasValidArgv(argc, argv)){
         cli.parse(static_cast<int>(argc), argv);
         return;
@@ -38,9 +35,7 @@ inline void CommandLineParseApp(CLI& cli, const isize argc, CharT** argv)noexcep
 
 
 template<typename StringT>
-[[nodiscard]] inline StringT NormalizeOptionText(StringT text)noexcept(
-    noexcept(TrimInPlace(text)) && noexcept(ToAsciiLowerInPlace(text)) && IsNothrowMoveConstructible_V<StringT> && IsNothrowDestructible_V<StringT>
-){
+[[nodiscard]] inline StringT NormalizeOptionText(StringT text)noexcept(noexcept(TrimInPlace(text)) && noexcept(ToAsciiLowerInPlace(text)) && IsNothrowMoveConstructible_V<StringT> && IsNothrowDestructible_V<StringT>){
     TrimInPlace(text);
     ToAsciiLowerInPlace(text);
     return text;

@@ -85,7 +85,7 @@ def capture(args, variant):
         if variant != LIT_CAUSTICS_DISABLED:
             command += [LIT_EXPECT_LOG_MESSAGE, "RendererSystem: dispatched software caustic producer"]
         for message in (LIT_REFLECTION_RESOLVE_HARDWARE, LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA, "RendererSystem: dispatched hardware caustic producer", "RendererSystem: created surfel HW trace compute pipeline",
-            "RendererSystem: created refraction resolve pipeline (hardware ray query)",):
+            "RendererSystem: created refraction resolve pipeline (hardware ray query, sparse queue)", "RendererSystem: created refraction resolve pipeline (hardware ray query, dense grid)",):
             command += [LIT_REJECT_LOG_MESSAGE, message]
     else:
         command += [LIT_EXPECT_LOG_MESSAGE if args.require_hardware else "--skip-log-message", "natural hardware shadow route selected on RayQuery-capable hardware" if args.require_hardware else LIT_NATURAL_SOFTWARE_ONLY_SHADOW_ROUTE_SEL]

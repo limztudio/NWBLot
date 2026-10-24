@@ -162,8 +162,7 @@ public:
         );
 
         // Overlapping opaque and glass shadows exercise their combined response.
-        bool opaqueTintApplied = false;
-        m_opaqueOwner = CreateTintedModelEntity(
+        const auto opaqueModel = CreateTintedModelEntity(
             *m_world,
             m_context.objectArena,
             s_Model,
@@ -171,11 +170,10 @@ public:
             s_SmokeSurfaceMaterialInterface,
             Float4(0.86f, 0.80f, 0.74f, 1.0f),
             Float4(-s_CharacterSpacingX, 0.0f, s_OpaqueBackZ, 0.0f),
-            Float4(1.0f, 1.0f, 1.0f, 0.0f),
-            opaqueTintApplied
+            Float4(1.0f, 1.0f, 1.0f, 0.0f)
         );
-        bool transparentTintApplied = false;
-        m_transparentOwner = CreateTintedModelEntity(
+        m_opaqueOwner = opaqueModel.entity;
+        const auto transparentModel = CreateTintedModelEntity(
             *m_world,
             m_context.objectArena,
             s_CausticModel,
@@ -183,11 +181,11 @@ public:
             s_SmokeSurfaceMaterialInterface,
             Float4(0.72f, 0.86f, 1.00f, 0.42f),
             Float4(s_CharacterSpacingX, 0.0f, s_TransparentFrontZ, 0.0f),
-            Float4(1.0f, 1.0f, 1.0f, 0.0f),
-            transparentTintApplied
+            Float4(1.0f, 1.0f, 1.0f, 0.0f)
         );
-        if(!opaqueTintApplied || !transparentTintApplied)
-            NWB_LOGGER_ERROR(NWB_TEXT("FlickerTestSmokeProject: failed to set character tint (opaque {}, transparent {})"), opaqueTintApplied, transparentTintApplied);
+        m_transparentOwner = transparentModel.entity;
+        if(!opaqueModel.tintApplied || !transparentModel.tintApplied)
+            NWB_LOGGER_ERROR(NWB_TEXT("FlickerTestSmokeProject: failed to set character tint (opaque {}, transparent {})"), opaqueModel.tintApplied, transparentModel.tintApplied);
 
         SyncSmokeModelRuntimes(*m_world);
         const auto meshEntity = NWB::Tests::Smoke::FindSpawnedModelObject(*m_world, m_transparentOwner, Name("mesh"), NWB::Impl::ModelObjectKind::SkinnedMesh);

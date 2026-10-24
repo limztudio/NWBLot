@@ -106,7 +106,7 @@ CsgFrameReceiverLookup::CsgFrameReceiverLookup(Core::ECS::World& world, Core::Al
 
     m_cutterRefs.resize(static_cast<usize>(firstCutter));
 
-    cutterView.each([&](const Core::ECS::EntityID entity, CsgCutterComponent& cutter){
+    cutterView.each([&](const Core::ECS::EntityID entity, CsgCutterComponent& cutter)noexcept{
         if(!__hidden_frame_state::ActiveCutter(cutter))
             return;
 

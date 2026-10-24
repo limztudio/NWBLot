@@ -140,22 +140,17 @@ bool ReflectionStatisticsReadback::prepareResources(){
         m_control = Move(*controlResult);
     }
     static constexpr Name s_Names[] = { Name("engine/reflection/statistics_readback_0"), Name("engine/reflection/statistics_readback_1"), Name("engine/reflection/statistics_readback_2"), };
-    Core::BufferHandle buffers[ReflectionStatisticsState::s_SlotCount];
-    if(!ECSRenderDetail::CreateStatisticsReadbackBuffers(m_graphics, NWB_REFLECTION_COUNTER_SIZE, s_Names, buffers))
+    auto buffers = ECSRenderDetail::CreateStatisticsReadbackBuffers(m_graphics, NWB_REFLECTION_COUNTER_SIZE, s_Names);
+    if(!buffers)
         return false;
     m_control->reset(deviceGeneration);
     for(u32 index = 0u; index < ReflectionStatisticsState::s_SlotCount; ++index)
-        m_buffers[index] = Move(buffers[index]);
+        m_buffers[index] = Move((*buffers)[index]);
     return true;
 }
 
 void ReflectionStatisticsReadback::pollCompleted(){
-    ECSRenderDetail::PollCompletedStatisticsReadback<NWB_REFLECTION_COUNTER_SIZE>(
-        m_control,
-        m_graphics,
-        m_buffers,
-        NWB_TEXT("Reflection statistics: failed to map a completed readback")
-    );
+    ECSRenderDetail::PollCompletedStatisticsReadback<NWB_REFLECTION_COUNTER_SIZE>(m_control, m_graphics, m_buffers, NWB_TEXT("Reflection statistics: failed to map a completed readback"));
 }
 
 Expected<ReflectionStatistics> ReflectionStatisticsReadback::tryGetLatestStatistics()const noexcept{

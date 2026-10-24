@@ -48,9 +48,7 @@ inline constexpr f32 s_DecodeScale = 1.0f / 1.055f;
 struct FlagsSnapshot{
     friend bool operator==(const FlagsSnapshot&, const FlagsSnapshot&)noexcept = default;
     template<typename Stream>
-    friend Stream& operator<<(Stream& stream, const FlagsSnapshot& value)noexcept(
-        noexcept(DeclVal<void(*)(Stream&)noexcept>()(stream << value.standard << '/' << value.mapped << '/' << value.native))
-    ){
+    friend Stream& operator<<(Stream& stream, const FlagsSnapshot& value)noexcept(noexcept(DeclVal<void(*)(Stream&)noexcept>()(stream << value.standard << '/' << value.mapped << '/' << value.native))){
         return stream << value.standard << '/' << value.mapped << '/' << value.native;
     }
 
@@ -368,7 +366,7 @@ struct TrapEdgeObservation{
     u64 nativeStatus{}, nativeControl{};
 };
 
-[[nodiscard]] Expected<TrapEdgeObservation> ObserveTrapEdge(const NotNull<Evaluate> evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y, const u32 enabled){
+[[nodiscard]] Expected<TrapEdgeObservation> ObserveTrapEdge(const NotNull<Evaluate> evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y, const u32 enabled)noexcept{
     u32 initial{}, control{}, exception{}, valueBits{};
     if(_controlfp_s(&initial, 0u, 0u) != 0)
         return MakeUnexpected(Failure{});

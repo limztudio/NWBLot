@@ -17,6 +17,8 @@
 #include <core/assets/manager.h>
 #include <core/ecs/entity.h>
 
+#include <global/expected.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -42,6 +44,12 @@ namespace Smoke{
 using SmokeModelRef = Core::Assets::AssetRef<Impl::Model>;
 
 
+struct SmokeTintedModelEntityResult{
+    Core::ECS::EntityID entity;
+    bool tintApplied = false;
+};
+
+
 inline void AddSmokeSkinnedRenderSystems(Core::ECS::World& world, ProjectRuntimeContext& context, const SmokeRenderQualitySettings& baseSettings = {}){
     const SmokeRenderSystems systems = CreateSmokeRenderSystems(world, context, baseSettings);
     world.addSystem<Impl::ModelSystem>(world, context.assetManager, Impl::CreateModelObjectRendererHooks());
@@ -58,8 +66,8 @@ inline void AddSmokeSkinnedRenderSystems(Core::ECS::World& world, ProjectRuntime
     return world;
 }
 
-[[nodiscard]] inline bool LoadSmokeSkeletonBindJoints(
-    Vector<Impl::SkeletonJointMatrix, Core::Alloc::GlobalArena>& outBindJoints,
+[[nodiscard]] inline Expected<Vector<Impl::SkeletonJointMatrix, Core::Alloc::GlobalArena>> LoadSmokeSkeletonBindJoints(
+    Core::Alloc::GlobalArena& arena,
     Core::Assets::AssetManager& assetManager,
     const SmokeModelRef& modelRef,
     const TStringView projectName,
@@ -69,13 +77,13 @@ inline void AddSmokeSkinnedRenderSystems(Core::ECS::World& world, ProjectRuntime
     const auto loadedModelAsset = assetManager.loadSync(Impl::Model::AssetTypeName(), modelRef.name());
     if(!loadedModelAsset){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to load model for skeleton bind joints"), projectName);
-        return false;
+        return MakeUnexpected(Failure{});
     }
     NWB_ASSERT(*loadedModelAsset);
     const auto* model = Core::Assets::CastAsset<Impl::Model>(loadedModelAsset->get());
     if(!model){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: loaded model has unexpected type"), projectName);
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const Impl::ModelSkeletonObject* skeletonObject = nullptr;
@@ -91,35 +99,35 @@ inline void AddSmokeSkinnedRenderSystems(Core::ECS::World& world, ProjectRuntime
         skeletonObject = &model->skeletonObjects().front();
     if(!skeletonObject || !skeletonObject->skeleton.valid()){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: model has no skeleton object"), projectName);
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const auto loadedSkeletonAsset = assetManager.loadSync(Impl::Skeleton::AssetTypeName(), skeletonObject->skeleton.name());
     if(!loadedSkeletonAsset){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to load skeleton for bind joints"), projectName);
-        return false;
+        return MakeUnexpected(Failure{});
     }
     NWB_ASSERT(*loadedSkeletonAsset);
     const auto* skeleton = Core::Assets::CastAsset<Impl::Skeleton>(loadedSkeletonAsset->get());
     if(!skeleton){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: loaded skeleton has unexpected type"), projectName);
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(skeleton->joints().empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: skeleton has no joints"), projectName);
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outBindJoints.clear();
-    outBindJoints.reserve(skeleton->joints().size());
+    Vector<Impl::SkeletonJointMatrix, Core::Alloc::GlobalArena> bindJoints{arena};
+    bindJoints.reserve(skeleton->joints().size());
     for(const Impl::SkeletonJoint& joint : skeleton->joints()){
         if(requireInvertibleBindPose && !MatrixIsInvertibleAffine(LoadFloat(joint.localBindPose), Impl::SkeletonRuntime::s_AffineEpsilon, Impl::SkeletonRuntime::s_JointDeterminantEpsilon)){
             NWB_LOGGER_ERROR(NWB_TEXT("{}: skeleton contains an invalid bind pose"), projectName);
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        outBindJoints.push_back(joint.localBindPose);
+        bindJoints.push_back(joint.localBindPose);
     }
-    return !outBindJoints.empty();
+    return bindJoints;
 }
 
 inline void DestroySmokeSkinnedRenderWorld(ProjectRuntimeContext& context, NotNullUniquePtr<Core::ECS::World>& world){
@@ -142,31 +150,7 @@ inline void SyncSmokeModelRuntimes(Core::ECS::World& world){
     modelSystem.syncModelRuntimes();
 }
 
-[[nodiscard]] inline Core::ECS::EntityID CreateTintedModelEntity(
-    Core::ECS::World& world,
-    Core::Alloc::GlobalArena& arena,
-    const SmokeModelRef& model,
-    const SmokeMaterialRef& material,
-    const NameText<char> materialInterfacePath,
-    const Float4& colorTint,
-    const Float4& position,
-    const Float4& scale,
-    bool& outTintApplied
-){
-    outTintApplied = false;
-
-    const SmokeTintedEntitySetup setup = CreateSmokeTintedEntity(world, arena, material, materialInterfacePath, position, scale);
-
-    auto& modelComponent = world.entity(setup.entity).addComponent<Impl::ModelComponent>();
-    modelComponent.model = model;
-
-    const bool tintApplied = ApplySmokeMaterialTint(world, setup, colorTint);
-    outTintApplied = tintApplied;
-
-    return setup.entity;
-}
-
-[[nodiscard]] inline Core::ECS::EntityID CreateTintedModelEntity(
+[[nodiscard]] inline SmokeTintedModelEntityResult CreateTintedModelEntity(
     Core::ECS::World& world,
     Core::Alloc::GlobalArena& arena,
     const SmokeModelRef& model,
@@ -176,8 +160,12 @@ inline void SyncSmokeModelRuntimes(Core::ECS::World& world){
     const Float4& position,
     const Float4& scale
 ){
-    bool tintApplied = false;
-    return CreateTintedModelEntity(world, arena, model, material, materialInterfacePath, colorTint, position, scale, tintApplied);
+    const SmokeTintedEntitySetup setup = CreateSmokeTintedEntity(world, arena, material, materialInterfacePath, position, scale);
+
+    auto& modelComponent = world.entity(setup.entity).addComponent<Impl::ModelComponent>();
+    modelComponent.model = model;
+
+    return {.entity = setup.entity, .tintApplied = ApplySmokeMaterialTint(world, setup, colorTint)};
 }
 
 [[nodiscard]] inline Core::ECS::EntityID FindSpawnedModelObject(Core::ECS::World& world, const Core::ECS::EntityID owner, const Name objectName, const u32 objectKind)noexcept{

@@ -49,8 +49,8 @@ struct RefractionClearTileArgumentsGraphTask{
 };
 
 
-// Diagnostic work stays on the resolve's primary Graphics queue. Shared counter writes and
-// the bounded copy serialize there; accepted readbacks never introduce a renderer wait.
+// Diagnostic work stays on the resolve's primary Graphics queue.
+// Shared counter writes and the bounded copy serialize there; accepted readbacks never introduce a renderer wait.
 struct RefractionClearStatisticsGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Transfer, true };
     struct Payload{
@@ -161,9 +161,14 @@ public:
 // Diagnostic counter reuse has an explicit physical-queue contract across frame rejection.
 // Keep ordinary resolve scheduling unchanged when diagnostics are disabled.
 struct RefractionDiagnosticResolveGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute, true };
     using Payload = RefractionResolveGraphTask::Payload;
 
+
+public:
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute, true };
+
+
+public:
     static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         return RefractionResolveGraphTask::Record(payload, commandList, context);
     }

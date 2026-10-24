@@ -101,11 +101,7 @@ inline void AdvanceRevision(u64& inOutRevision)noexcept{
     ++inOutRevision;
 }
 
-[[nodiscard]] inline Expected<bool, ErrorCode> CanonicalizeDraft(
-    const Expected<AStringView, ErrorCode>& formatted,
-    EditModel& inOutDraft,
-    AString<Core::Alloc::GlobalArena>& outAcceptedDraft
-){
+[[nodiscard]] inline Expected<bool, ErrorCode> CanonicalizeDraft(const Expected<AStringView, ErrorCode>& formatted, EditModel& inOutDraft, AString<Core::Alloc::GlobalArena>& outAcceptedDraft){
     if(!formatted)
         return MakeUnexpected(formatted.error());
     const bool changed = *formatted != inOutDraft.text();
@@ -134,7 +130,7 @@ template<typename Value, typename Bounds>
 }
 
 template<typename Canonicalize>
-[[nodiscard]] inline NumericEditResult RestoreModelDraft(Canonicalize canonicalize, const bool cancelled, u64& inOutRevision){
+[[nodiscard]] inline NumericEditResult RestoreModelDraft(Canonicalize canonicalize, const bool cancelled, u64& inOutRevision)noexcept(noexcept(RestoreDraft(Move(canonicalize), cancelled))){
     NumericEditResult result = RestoreDraft(Move(canonicalize), cancelled);
     if(result.valid)
         AdvanceRevision(inOutRevision);

@@ -24,6 +24,8 @@ namespace __hidden_box_normal_benchmark{
 template<typename Scalar>
 struct Case{
     using Storage = Conditional_T<IsSame_V<Scalar, f64>, Double4, Float4>;
+
+
     Storage position;
     Storage extents;
     Storage fallback;

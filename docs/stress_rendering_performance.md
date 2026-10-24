@@ -10,6 +10,8 @@ The `two_rows_v1` signature checks the two rows of ten, 0.72 spacing, 0.18 stagg
 
 The harness excludes a five-second warmup and measures approximately thirty seconds with a steady clock. FPS is accepted native presentations divided by elapsed seconds. Each acquisition retains executable/runtime/helper hashes, requested and applied settings, route markers, raw logs, and results. Serialize runs, use fresh output directories, and do not change the executable or assets during acquisition.
 
+`--timeout` bounds the whole process, including startup and preparation. It defaults to 90 seconds; explicit budgets must be finite, greater than 35 seconds and at most 300 seconds. Use `--timeout 180` for cold CSG acquisitions on both comparison arms. This budget does not extend the five-second warmup or thirty-second measurement window.
+
 ## Implementation and tradeoffs
 
 The renderer reduces repeated high-detail geometry and optical work across rays and views while retaining GI and explicit fallback paths for unsupported or unresolved cases.

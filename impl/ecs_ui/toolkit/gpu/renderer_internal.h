@@ -111,12 +111,7 @@ inline void FreeGpuDescriptor(Core::GraphicsRuntime& graphics, const Core::GpuDe
         graphics.getDevice().getDescriptorHeap().free(descriptor);
 }
 
-[[nodiscard]] inline bool PrepareGpuSampledImageDescriptor(
-    Core::GraphicsRuntime& graphics,
-    const Core::TextureHandle& texture,
-    const Core::Format::Enum format,
-    Core::GpuDescriptorHandle& inOutDescriptor
-){
+[[nodiscard]] inline bool PrepareGpuSampledImageDescriptor(Core::GraphicsRuntime& graphics, const Core::TextureHandle& texture, const Core::Format::Enum format, Core::GpuDescriptorHandle& inOutDescriptor){
     if(inOutDescriptor.valid())
         return true;
     Core::GpuDescriptorHeap& heap = graphics.getDevice().getDescriptorHeap();

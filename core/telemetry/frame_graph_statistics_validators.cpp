@@ -234,16 +234,7 @@ template<typename StatisticsT>
         return false;
     if(recording.taskCount - recording.packetCount > compile.mergedTaskCount)
         return false;
-    return
-        recording.packetCount != 0u
-        || (
-            recording.taskCount == 0u
-            && recording.commandListCount == 0u
-            && recording.barrierCount == 0u
-            && recording.workerRoutedPacketCount == 0u
-            && recording.parallelPacketCount == 0u
-        )
-    ;
+    return recording.packetCount != 0u || (recording.taskCount == 0u && recording.commandListCount == 0u && recording.barrierCount == 0u && recording.workerRoutedPacketCount == 0u && recording.parallelPacketCount == 0u);
 }
 
 [[nodiscard]] static bool PhysicalQueueSubmissionCountsAreValid(const FrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
@@ -412,15 +403,7 @@ template<typename StatisticsT>
         return false;
 
     const FrameGraphPhysicalQueueRecordingRuntimeStatistics& recording = statistics.recording;
-    if(
-        recording.packetCount == 0u
-        && (
-            recording.commandListAcquisitionSeconds != 0.0
-            || recording.graphBarrierRecordingSeconds != 0.0
-            || recording.taskRecordSeconds != 0.0
-            || recording.recordingSeconds != 0.0
-        )
-    )
+    if(recording.packetCount == 0u && (recording.commandListAcquisitionSeconds != 0.0 || recording.graphBarrierRecordingSeconds != 0.0 || recording.taskRecordSeconds != 0.0 || recording.recordingSeconds != 0.0))
         return false;
 
     const FrameGraphPhysicalQueueSubmissionRuntimeStatistics& submission = statistics.submission;
@@ -505,11 +488,7 @@ bool IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(const FrameGraphPhy
     if(!__hidden_frame_graph_statistics_validators::DurationsAreOrdinary(durations))
         return ScalarIsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(statistics, ownerStatistics);
 
-    if(
-        !IsValidFrameGraphRuntimeStatistics(ownerStatistics)
-        || !IsValidFrameGraphPhysicalQueueRuntimeStatistics(statistics)
-        || !__hidden_frame_graph_statistics_validators::PhysicalQueueOwnerCompileAndRecordingPrefixAreValid(statistics, ownerStatistics)
-    )
+    if(!IsValidFrameGraphRuntimeStatistics(ownerStatistics) || !IsValidFrameGraphPhysicalQueueRuntimeStatistics(statistics) || !__hidden_frame_graph_statistics_validators::PhysicalQueueOwnerCompileAndRecordingPrefixAreValid(statistics, ownerStatistics))
         return false;
 
     const FrameGraphPhysicalQueueRecordingRuntimeStatistics& recording = statistics.recording;

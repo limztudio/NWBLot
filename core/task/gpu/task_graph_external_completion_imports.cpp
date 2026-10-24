@@ -26,6 +26,7 @@ namespace __hidden_gpu_task_graph_external_completion_imports{
     return token.queue != CommandQueue::kCount || token.value != 0u || token.physicalQueueIndex != Limit<u16>::s_Max || token.deviceGeneration != 0u;
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

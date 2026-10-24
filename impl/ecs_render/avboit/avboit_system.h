@@ -60,12 +60,9 @@ class RendererCsgSystem;
 class RendererMaterialSystem;
 class RendererShaderSystem;
 class RendererAvboitState;
-struct CsgFrameGpuData;
 struct CsgFrameGpuDataView;
 struct CsgFrameState;
-struct MaterialPassDrawItemPartitions;
 struct MaterialPassDrawItemPartitionsView;
-struct MaterialPassDrawItems;
 struct MaterialPassDrawItemsView;
 namespace ECSRenderDetail{
     struct CsgGraphResourceSnapshot;

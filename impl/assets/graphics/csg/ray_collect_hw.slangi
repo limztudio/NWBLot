@@ -37,7 +37,7 @@ NwbCsgRayCollection nwbCsgRayCollectCrossings<T : NwbCsgRayOpenVisitor>(
     const uint cutCount,
     __ref NwbCsgRayCrossing crossings[NWB_CSG_RAY_CROSSING_CAPACITY],
     inout uint crossingCount,
-    inout T openVisitor
+    __ref T openVisitor
 ){
     NwbCsgRayCollection result = (NwbCsgRayCollection)0;
     const NwbSwBvhInstance instance = nwbCsgRayLoadInstance(contextSlot, instanceIndex);

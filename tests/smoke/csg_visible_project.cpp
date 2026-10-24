@@ -379,8 +379,11 @@ public:
             else if(*view != "full")
                 return false;
             const NWB::Tests::Smoke::FramebufferCaptureOptions captureOptions{ .shouldCapture = ShouldCapture, .predicateContext = this, .requiredWidth = 1280u, .requiredHeight = 900u, .quitWhenReady = false, };
-            if(!PrepareSmokeCaptureSeries(m_context, AStringView(*output), s_TemporalSampleCount, captureOptions, m_capturePaths, m_capture))
+            auto captureSeries = PrepareSmokeCaptureSeries(m_context, AStringView(*output), s_TemporalSampleCount, captureOptions);
+            if(!captureSeries)
                 return false;
+            m_capturePaths = Move(captureSeries->paths);
+            m_capture = Move(captureSeries->capture);
             m_temporalAnimated = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_CSG_GI_TEMPORAL_ANIMATED");
             if(overlapping && m_temporalAnimated){
                 NWB_LOGGER_ERROR(NWB_TEXT("CsgVisibleSmokeProject: overlapping receiver regression requires a static scene"));

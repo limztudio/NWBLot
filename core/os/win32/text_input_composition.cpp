@@ -46,7 +46,7 @@ TextInputAdmission::Enum Win32TextInputService::readCompositionText(const NotNul
     return converted == utf8Length ? TextInputAdmission::Accepted : TextInputAdmission::InvalidText;
 }
 
-Expected<usize, TextInputAdmission::Enum> Win32TextInputService::compositionCursor(const NotNull<void*> nativeContext){
+Expected<usize, TextInputAdmission::Enum> Win32TextInputService::compositionCursor(const NotNull<void*> nativeContext)noexcept{
     const LONG cursor = ImmGetCompositionStringW(static_cast<HIMC>(nativeContext.get()), GCS_CURSORPOS, nullptr, 0u);
     if(cursor < 0 || static_cast<usize>(cursor) > m_wideText.size())
         return MakeUnexpected(TextInputAdmission::InvalidRange);

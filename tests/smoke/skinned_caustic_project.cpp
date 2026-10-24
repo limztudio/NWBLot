@@ -302,19 +302,9 @@ private:
     }
 
     NWB::Core::ECS::EntityID createGlassCharacter(){
-        bool tintApplied = false;
-        const NWB::Core::ECS::EntityID entity = CreateTintedModelEntity(
-            *m_world,
-            m_context.objectArena,
-            s_Model,
-            s_GlassMaterial,
-            s_SmokeSurfaceMaterialInterface,
-            Float4(0.72f, 0.86f, 1.0f, 0.42f),
-            Float4(0.0f, s_CharacterLift, 0.0f, 0.0f),
-            Float4(1.0f, 1.0f, 1.0f, 0.0f),
-            tintApplied
-        );
-        if(!tintApplied)
+        const auto modelResult = CreateTintedModelEntity(*m_world, m_context.objectArena, s_Model, s_GlassMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.72f, 0.86f, 1.0f, 0.42f), Float4(0.0f, s_CharacterLift, 0.0f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f));
+        const NWB::Core::ECS::EntityID entity = modelResult.entity;
+        if(!modelResult.tintApplied)
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: failed to set glass character tint"));
 
         return entity;
@@ -364,15 +354,20 @@ public:
             if(!output)
                 return false;
             const NWB::Tests::Smoke::FramebufferCaptureOptions captureOptions{ .shouldCapture = ShouldCapture, .predicateContext = this, .requiredWidth = 1280u, .requiredHeight = 900u, .quitWhenReady = false, };
-            if(!PrepareSmokeCaptureSeries(m_context, AStringView(*output), s_TransitionSampleCount, captureOptions, m_capturePaths, m_capture))
+            auto captureSeries = PrepareSmokeCaptureSeries(m_context, AStringView(*output), s_TransitionSampleCount, captureOptions);
+            if(!captureSeries)
                 return false;
+            m_capturePaths = Move(captureSeries->paths);
+            m_capture = Move(captureSeries->capture);
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedCausticTransition: setup lagged={} caustics={} minimum_frame=360 warmup_seconds=30 phase_frames=64 samples=8 model=closed_prism")
                 , NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_SKINNED_CAUSTIC_CSG_LAGGED") ? 1u : 0u
                 , NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_SKINNED_CAUSTIC_CSG_NO_PHOTONS") ? 0u : 1u
             );
         }
-        if(!LoadSmokeSkeletonBindJoints(m_bindJoints, m_context.assetManager, s_Model, s_ProjectName))
+        auto bindJoints = LoadSmokeSkeletonBindJoints(m_context.objectArena, m_context.assetManager, s_Model, s_ProjectName);
+        if(!bindJoints)
             return false;
+        m_bindJoints = Move(*bindJoints);
 
         auto activeCameraEntity = m_world->createEntity();
         auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();

@@ -8,7 +8,6 @@
 #include <impl/ecs_render/material/generated_geometry_state.h>
 #include <impl/ecs_render/material/task_graph_object_geometry_cache.h>
 #include <impl/ecs_render/csg/csg_system.h>
-#include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/material/task_graph_resource_sets.h>
 #include <impl/ecs_render/mesh/mesh_view_private.h>

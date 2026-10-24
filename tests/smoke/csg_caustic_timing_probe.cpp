@@ -195,9 +195,7 @@ bool CsgCausticTimingProbe::capture(const Core::Perf::TimingView& view, const u6
             if(stats.firstSampleFrameIndex < m_firstSource)
                 continue;
             // This fixed fixture emits exactly one accepted range for each selected scope and source frame.
-            if(stats.lastSampleFrameIndex >= sourceFrame || stats.firstSampleFrameIndex > stats.lastSampleFrameIndex
-                || stats.sampleCount != stats.lastSampleFrameIndex - stats.firstSampleFrameIndex + 1u || m_records.size() == s_MaxRecords
-            ){
+            if(stats.lastSampleFrameIndex >= sourceFrame || stats.firstSampleFrameIndex > stats.lastSampleFrameIndex || stats.sampleCount != stats.lastSampleFrameIndex - stats.firstSampleFrameIndex + 1u || m_records.size() == s_MaxRecords){
                 NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: source coverage is incomplete, duplicated or outside buffered native endpoints"));
                 return false;
             }

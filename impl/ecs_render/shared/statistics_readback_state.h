@@ -168,14 +168,12 @@ public:
         if(m_control)
             m_key = m_control->reserve(metadata);
     }
-
     StatisticsReservationBase(StatisticsReservationBase&& other)noexcept
         : m_control(Move(other.m_control))
         , m_key(other.m_key)
     {
         other.m_key = {};
     }
-
     ~StatisticsReservationBase()noexcept{
         discard();
     }

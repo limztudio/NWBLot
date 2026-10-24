@@ -276,6 +276,8 @@ public:
 struct ThrowingDiagnosticTemporary{
     ~ThrowingDiagnosticTemporary()noexcept(false){ throw s_ReadFailure; }
 
+
+public:
     operator AStringView()const noexcept{ return "unsafe"; }
 };
 

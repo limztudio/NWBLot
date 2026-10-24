@@ -88,6 +88,13 @@ struct SoftShadowSplitTasks{
 // The prepared soft-transparent shadow route: light-space maps when ready, the opaque producer with its wavelet and resolve tail, then transparent trace, temporal merge, wavelet, and fold.
 // Tasks declared before a failure stay in `tasks`.
 class SoftShadowSplitTaskChainBuilder final : NoCopy{
+private:
+    struct LightSpaceShadowMaps{
+        Core::GpuTaskId shadowTraceDependency;
+        Core::GpuGraphResourceId csgShadowContext;
+    };
+
+
 public:
     SoftShadowSplitTaskChainBuilder(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, Core::Alloc::GlobalArena& arena, RendererRayTracingSystem& raytracingSystem)noexcept
         : m_graph(graph)
@@ -103,12 +110,10 @@ public:
 
 private:
     // Adds the map, cap, and CSG bound reads to the opaque producer and transparent trace.
-    [[nodiscard]] bool declareLightSpaceShadowMaps(
+    [[nodiscard]] Expected<LightSpaceShadowMaps> declareLightSpaceShadowMaps(
         const SoftShadowSplitTaskChainInputs& inputs,
         Core::Alloc::ScratchArena& scratchArena,
-        SoftShadowSplitResourceUses& uses,
-        Core::GpuTaskId& shadowTraceDependency,
-        Core::GpuGraphResourceId& csgShadowContext
+        SoftShadowSplitResourceUses& uses
     );
     [[nodiscard]] bool declareOpaqueTasks(
         const SoftShadowSplitTaskChainInputs& inputs,

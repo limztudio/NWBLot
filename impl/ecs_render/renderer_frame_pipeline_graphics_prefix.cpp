@@ -648,7 +648,6 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     }
     if(hasOpaqueCsgFrameWork){
         const auto opaqueCsgTasks = opaqueCsgIntervalStage.declare(
-            scratchArena,
             OpaqueCsgIntervalStageInputs{
                 .targets = deferredTargets,
                 .resources = resources,
@@ -671,6 +670,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
                 .hasOpaqueDrawItems = hasOpaqueDrawItems,
                 .hasCsgFrameGpuWork = hasCsgFrameGpuWork,
             },
+            scratchArena,
             objectGeometry
         );
         if(!opaqueCsgTasks)

@@ -54,10 +54,9 @@ def require_displacement(reference, candidate, region, label):
 
 def expected_sheet_fallback_gray(before, x, y, width, height):
     # Fixed fixture: eye(0,1.4,-6), sphere(4.2,1.4,0), radius1.15, IOR1.5.
-    # Match the two Schlick factors in nwbRefractionStraightFallback. Presentation
-    # applies the default Reinhard shoulder then sRGB; exposure cancels when the
-    # disabled reference is inverted. A 1.5-code tolerance below covers reference
-    # and result quantization plus the faceted sphere's interpolated normals.
+    # Match the two Schlick factors in nwbRefractionFallbackAttenuation.
+    # Presentation applies the default Reinhard shoulder then sRGB; exposure cancels when the disabled reference is inverted.
+    # A 1.5-code tolerance below covers reference and result quantization plus the faceted sphere's interpolated normals.
     tangent = math.tan(math.pi / 6)
     ray_x = (2 * (x + .5) / width - 1) * tangent * width / height
     ray_y = (1 - 2 * (y + .5) / height) * tangent

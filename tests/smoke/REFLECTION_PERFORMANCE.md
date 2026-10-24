@@ -69,7 +69,7 @@ if($LASTEXITCODE -ne 0){ throw 'Diagnostics-off image checks failed' }
 $reflectionBenchmarkArgs = @('--executable', $reflectionExe, '--working-directory', $reflectionRuntime,
     '--logserver-executable', $reflectionLogserver, '--require-hardware',
     '--width', '960', '--height', '720', '--ray-budget', '1382400', '--sampling-seed', '0',
-    '--optical-queries', '16', '--warmup-intervals', '2', '--sample-intervals', '6',
+    '--optical-queries', '16', '--warmup-intervals', '2', '--sample-intervals', '11',
     '--minimum-frame-samples', '100', '--timeout', '90', '--order-seed', '0', '--analysis-seed', '0')
 python tests/smoke/reflection_benchmark.py @reflectionBenchmarkArgs --family offscreen --include-feedback --blocks 8 --screen-steps 96 --output-directory "$reflectionResults/timing_offscreen"
 if($LASTEXITCODE -ne 0){ throw 'Offscreen timing failed' }

@@ -178,9 +178,9 @@ bool ReflectionRoughnessScene::createDeformingSource(){
     m_bindJoints.reserve(skeleton.joints().size());
     for(const NWB::Impl::SkeletonJoint& joint : skeleton.joints())
         m_bindJoints.push_back(joint.localBindPose);
-    bool tintApplied = false;
-    m_red = CreateTintedModelEntity(m_world, m_context.objectArena, s_Model, s_Opaque, s_Interface, Float4(1.f, 0.f, 0.f, 1.f), Float4(-1.6f, 0.55f, -8.f, 0.f), Float4(0.85f, 0.85f, 0.85f, 0.f), tintApplied);
-    if(!m_red.valid() || !tintApplied)
+    const auto redModel = CreateTintedModelEntity(m_world, m_context.objectArena, s_Model, s_Opaque, s_Interface, Float4(1.f, 0.f, 0.f, 1.f), Float4(-1.6f, 0.55f, -8.f, 0.f), Float4(0.85f, 0.85f, 0.85f, 0.f));
+    m_red = redModel.entity;
+    if(!m_red.valid() || !redModel.tintApplied)
         return false;
     SyncSmokeModelRuntimes(m_world);
     m_skeleton = FindSpawnedModelObject(m_world, m_red, Name("skeleton"), NWB::Impl::ModelObjectKind::Skeleton);

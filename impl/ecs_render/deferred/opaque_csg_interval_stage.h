@@ -105,7 +105,7 @@ public:
         bool hasOpaqueDrawItems,
         bool hasOpaqueCsgFrameWork
     );
-    [[nodiscard]] Expected<OpaqueCsgIntervalStageTasks> declare(Core::Alloc::ScratchArena& scratchArena, const OpaqueCsgIntervalStageInputs& inputs, ObjectGeometryCacheGraph& objectGeometry);
+    [[nodiscard]] Expected<OpaqueCsgIntervalStageTasks> declare(const OpaqueCsgIntervalStageInputs& inputs, Core::Alloc::ScratchArena& scratchArena, ObjectGeometryCacheGraph& objectGeometry);
 
 
 private:

@@ -69,89 +69,9 @@ SlangCompilerWorkspace::ScopedDirectoryCleanupGuard::~ScopedDirectoryCleanupGuar
     CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = __hidden_slang_compiler_workspace::s_DiagnosticWarningEventName, .category = "shader_compiler_cleanup", .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
 }
 
-Expected<SlangCompilerWorkspace::ScratchPath> SlangCompilerWorkspace::CreateCompilerWorkDirectory(const ScratchPath& parentDirectory, Alloc::ScratchArena& scratchArena){
-    auto ensureDirectoriesResult = EnsureDirectories(parentDirectory);
-    if(!ensureDirectoriesResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to create compiler temporary parent '{}' : {}"), PathToString<tchar>(parentDirectory), StringConvert(ensureDirectoriesResult.error().message()));
-        return MakeUnexpected(Failure{});
-    }
 
-    for(;;){
-        const u64 sequence = __hidden_slang_compiler_workspace::g_TemporarySequence.fetch_add(1u, MemoryOrder::relaxed);
-        if(sequence == Limit<u64>::s_Max){
-            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: compiler temporary sequence overflow"));
-            return MakeUnexpected(Failure{});
-        }
-        ScratchString directoryName(".nwb_shader_", scratchArena);
-        directoryName.reserve(directoryName.size() + 2u * sizeof(u64) * 2u + 1u);
-        AppendHexU64(CurrentProcessId(), directoryName);
-        directoryName += '_';
-        AppendHexU64(sequence, directoryName);
-        ScratchPath directory = parentDirectory / directoryName;
-        const auto created = CreateDirectories(directory);
-        if(created && *created)
-            return directory;
-        if(!created){
-            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to create isolated compiler directory '{}' : {}"), PathToString<tchar>(directory), StringConvert(created.error().message()));
-            return MakeUnexpected(Failure{});
-        }
-    }
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-Expected<usize> SlangCompilerWorkspace::CompilerPathTextCapacity(const ScratchPath& path){
-    constexpr usize s_MaxEncodedBytesPerUnit = IsSame_V<ScratchPath::value_type, char> ? 1u : 4u;
-    if(path.native().size() > Limit<usize>::s_Max / s_MaxEncodedBytesPerUnit){
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: compiler path text exceeds representable size"));
-        return MakeUnexpected(Failure{});
-    }
-    return path.native().size() * s_MaxEncodedBytesPerUnit;
-}
-
-Expected<SlangCompilerWorkspace::ScratchString> SlangCompilerWorkspace::BuildCompilerPathText(const ScratchPath& path, Alloc::ScratchArena& scratchArena){
-    const auto capacity = CompilerPathTextCapacity(path);
-    if(!capacity)
-        return MakeUnexpected(Failure{});
-    ScratchString text{scratchArena};
-    text.reserve(*capacity);
-    auto out = BackInserter(text);
-    BasicStringDetail::WriteConvertedText<char>(out, path.native());
-    return text;
-}
-
-Expected<SlangCompilerWorkspace::ScratchPath> SlangCompilerWorkspace::BuildCompilerOverlayPath(const ScratchPath& overlayRoot, const ScratchPath& absolutePath, Alloc::ScratchArena& scratchArena){
-    if(!absolutePath.isAbsolute())
-        return MakeUnexpected(Failure{});
-
-    const auto rootIt = absolutePath.begin();
-    if(rootIt == absolutePath.end())
-        return MakeUnexpected(Failure{});
-
-    const ScratchPath rootPath(scratchArena, rootIt.nativeComponent());
-    const ScratchPath relativePath = absolutePath.lexicallyRelative(rootPath);
-    if(relativePath.empty())
-        return MakeUnexpected(Failure{});
-
-    const auto rootText = BuildCompilerPathText(rootPath, scratchArena);
-    if(!rootText || rootText->size() > (Limit<usize>::s_Max - __hidden_slang_compiler_workspace::s_RootKeyPrefix.size()) / 2u)
-        return MakeUnexpected(Failure{});
-    ScratchString rootKey(__hidden_slang_compiler_workspace::s_RootKeyPrefix, scratchArena);
-    rootKey.reserve(__hidden_slang_compiler_workspace::s_RootKeyPrefix.size() + rootText->size() * 2u);
-    static constexpr AStringView s_HexDigits = "0123456789abcdef";
-    for(const char ch : *rootText){
-        const u8 byte = static_cast<u8>(ch);
-        rootKey += s_HexDigits[byte >> s_HexNibbleBits];
-        rootKey += s_HexDigits[byte & s_HexNibbleMask];
-    }
-    return overlayRoot / rootKey / relativePath;
-}
-
-bool SlangCompilerWorkspace::IsCompilerDependency(const ShaderCook::CookVector<Path>& dependencies, const ScratchPath& absolutePath)noexcept{
-    for(const Path& dependency : dependencies){
-        if(dependency == absolutePath)
-            return true;
-    }
-    return false;
-}
 
 bool SlangCompilerWorkspace::WriteBomStrippedCompilerInput(ScratchString& source, const Path& sourcePath, const ShaderCook::ShaderCompilerRequest& request, const ScratchPath& overlayRoot, const ScratchPath& outputPath, Alloc::ScratchArena& scratchArena){
     ShaderSourceDependencies::SpliceSourceLines(source);
@@ -238,6 +158,90 @@ bool SlangCompilerWorkspace::WriteBomStrippedCompilerInput(ScratchString& source
         return false;
     }
     return true;
+}
+
+Expected<SlangCompilerWorkspace::ScratchPath> SlangCompilerWorkspace::CreateCompilerWorkDirectory(const ScratchPath& parentDirectory, Alloc::ScratchArena& scratchArena){
+    auto ensureDirectoriesResult = EnsureDirectories(parentDirectory);
+    if(!ensureDirectoriesResult){
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to create compiler temporary parent '{}' : {}"), PathToString<tchar>(parentDirectory), StringConvert(ensureDirectoriesResult.error().message()));
+        return MakeUnexpected(Failure{});
+    }
+
+    for(;;){
+        const u64 sequence = __hidden_slang_compiler_workspace::g_TemporarySequence.fetch_add(1u, MemoryOrder::relaxed);
+        if(sequence == Limit<u64>::s_Max){
+            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: compiler temporary sequence overflow"));
+            return MakeUnexpected(Failure{});
+        }
+        ScratchString directoryName(".nwb_shader_", scratchArena);
+        directoryName.reserve(directoryName.size() + 2u * sizeof(u64) * 2u + 1u);
+        AppendHexU64(CurrentProcessId(), directoryName);
+        directoryName += '_';
+        AppendHexU64(sequence, directoryName);
+        ScratchPath directory = parentDirectory / directoryName;
+        const auto created = CreateDirectories(directory);
+        if(created && *created)
+            return directory;
+        if(!created){
+            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to create isolated compiler directory '{}' : {}"), PathToString<tchar>(directory), StringConvert(created.error().message()));
+            return MakeUnexpected(Failure{});
+        }
+    }
+}
+
+Expected<usize> SlangCompilerWorkspace::CompilerPathTextCapacity(const ScratchPath& path){
+    constexpr usize s_MaxEncodedBytesPerUnit = IsSame_V<ScratchPath::value_type, char> ? 1u : 4u;
+    if(path.native().size() > Limit<usize>::s_Max / s_MaxEncodedBytesPerUnit){
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: compiler path text exceeds representable size"));
+        return MakeUnexpected(Failure{});
+    }
+    return path.native().size() * s_MaxEncodedBytesPerUnit;
+}
+
+Expected<SlangCompilerWorkspace::ScratchString> SlangCompilerWorkspace::BuildCompilerPathText(const ScratchPath& path, Alloc::ScratchArena& scratchArena){
+    const auto capacity = CompilerPathTextCapacity(path);
+    if(!capacity)
+        return MakeUnexpected(Failure{});
+    ScratchString text{scratchArena};
+    text.reserve(*capacity);
+    auto out = BackInserter(text);
+    BasicStringDetail::WriteConvertedText<char>(out, path.native());
+    return text;
+}
+
+Expected<SlangCompilerWorkspace::ScratchPath> SlangCompilerWorkspace::BuildCompilerOverlayPath(const ScratchPath& overlayRoot, const ScratchPath& absolutePath, Alloc::ScratchArena& scratchArena){
+    if(!absolutePath.isAbsolute())
+        return MakeUnexpected(Failure{});
+
+    const auto rootIt = absolutePath.begin();
+    if(rootIt == absolutePath.end())
+        return MakeUnexpected(Failure{});
+
+    const ScratchPath rootPath(scratchArena, rootIt.nativeComponent());
+    const ScratchPath relativePath = absolutePath.lexicallyRelative(rootPath);
+    if(relativePath.empty())
+        return MakeUnexpected(Failure{});
+
+    const auto rootText = BuildCompilerPathText(rootPath, scratchArena);
+    if(!rootText || rootText->size() > (Limit<usize>::s_Max - __hidden_slang_compiler_workspace::s_RootKeyPrefix.size()) / 2u)
+        return MakeUnexpected(Failure{});
+    ScratchString rootKey(__hidden_slang_compiler_workspace::s_RootKeyPrefix, scratchArena);
+    rootKey.reserve(__hidden_slang_compiler_workspace::s_RootKeyPrefix.size() + rootText->size() * 2u);
+    static constexpr AStringView s_HexDigits = "0123456789abcdef";
+    for(const char ch : *rootText){
+        const u8 byte = static_cast<u8>(ch);
+        rootKey += s_HexDigits[byte >> s_HexNibbleBits];
+        rootKey += s_HexDigits[byte & s_HexNibbleMask];
+    }
+    return overlayRoot / rootKey / relativePath;
+}
+
+bool SlangCompilerWorkspace::IsCompilerDependency(const ShaderCook::CookVector<Path>& dependencies, const ScratchPath& absolutePath)noexcept{
+    for(const Path& dependency : dependencies){
+        if(dependency == absolutePath)
+            return true;
+    }
+    return false;
 }
 
 Expected<SlangCompilerWorkspace::CompilerInputs> SlangCompilerWorkspace::PrepareBomStrippedCompilerInputs(const ShaderCook::ShaderCompilerRequest& request, const ScratchPath& overlayRoot, Alloc::ScratchArena& scratchArena){

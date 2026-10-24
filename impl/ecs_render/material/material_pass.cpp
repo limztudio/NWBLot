@@ -585,7 +585,8 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
                 csgReceiverState = *resolvedState;
         }
 
-        appendDrawForMesh(entity, MakeNotNull(materialInfo), *mesh, csgReceiverState);
+        if(!appendDrawForMesh(entity, MakeNotNull(materialInfo), *mesh, csgReceiverState))
+            continue;
     }
 }
 

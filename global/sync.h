@@ -239,13 +239,11 @@ template<isize LeastMaxValue>
 class ScopedLock<Semaphore<LeastMaxValue>> : NoCopy{
 public:
     ScopedLock(const ScopedLock&) = delete;
-
     ScopedLock(Semaphore<LeastMaxValue>& obj)noexcept(noexcept(obj.acquire()))
         : m_obj(obj)
     {
         m_obj.acquire();
     }
-
     ~ScopedLock()noexcept{ m_obj.release(); }
 
 

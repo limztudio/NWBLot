@@ -160,11 +160,7 @@ struct MaterialPassDrawItemsView{
 
 public:
     constexpr MaterialPassDrawItemsView()noexcept = default;
-    constexpr MaterialPassDrawItemsView(
-        const Span<const MaterialPassDrawItem> inMeshDrawItems,
-        const Span<const MaterialPassDrawItem> inIndexedDrawItems,
-        const Span<const MaterialPassDrawItem> inComputeDrawItems
-    )noexcept
+    constexpr MaterialPassDrawItemsView(const Span<const MaterialPassDrawItem> inMeshDrawItems, const Span<const MaterialPassDrawItem> inIndexedDrawItems, const Span<const MaterialPassDrawItem> inComputeDrawItems)noexcept
         : meshDrawItems(inMeshDrawItems)
         , indexedDrawItems(inIndexedDrawItems)
         , computeDrawItems(inComputeDrawItems)
@@ -212,11 +208,7 @@ struct MaterialPassDrawItemPartitionsView{
 
 public:
     constexpr MaterialPassDrawItemPartitionsView()noexcept = default;
-    constexpr MaterialPassDrawItemPartitionsView(
-        const MaterialPassDrawItemsView inRegular,
-        const MaterialPassDrawItemsView inCsg,
-        const MaterialPassDrawItemsView inCsgReceiverSurface = {}
-    )noexcept
+    constexpr MaterialPassDrawItemPartitionsView(const MaterialPassDrawItemsView inRegular, const MaterialPassDrawItemsView inCsg, const MaterialPassDrawItemsView inCsgReceiverSurface = {})noexcept
         : regular(inRegular)
         , csg(inCsg)
         , csgReceiverSurface(inCsgReceiverSurface)

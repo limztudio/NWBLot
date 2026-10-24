@@ -219,23 +219,23 @@ public:
         );
 
         // The opaque caster provides the contact-hardening reference.
-        bool tintApplied = false;
-        m_characterOwner = CreateTintedModelEntity(*m_world, m_context.objectArena, s_Model, opaqueMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.86f, 0.80f, 0.74f, 1.0f), Float4(0.7f, 0.0f, -1.1f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f), tintApplied);
-        if(!tintApplied)
+        const auto characterModel = CreateTintedModelEntity(*m_world, m_context.objectArena, s_Model, opaqueMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.86f, 0.80f, 0.74f, 1.0f), Float4(0.7f, 0.0f, -1.1f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f));
+        m_characterOwner = characterModel.entity;
+        if(!characterModel.tintApplied)
             NWB_LOGGER_ERROR(NWB_TEXT("SoftShadowTestSmokeProject: failed to set character tint"));
 
         // The glass caster must preserve tint while its penumbra widens with receiver distance.
-        bool glassTintApplied = false;
-        m_glassOwner = CreateTintedModelEntity(
+        const auto glassModel = CreateTintedModelEntity(
             *m_world,
             m_context.objectArena,
             s_Model,
             transparentMaterial,
             s_SmokeSurfaceMaterialInterface,
             // Coverage and absorption share authored tint/density; Beer-Lambert integrates the actual mesh chord.
-            Float4(0.20f, 0.55f, 0.12f, 0.6f), Float4(-0.6f, 0.0f, -1.1f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f), glassTintApplied
+            Float4(0.20f, 0.55f, 0.12f, 0.6f), Float4(-0.6f, 0.0f, -1.1f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f)
         );
-        if(!glassTintApplied)
+        m_glassOwner = glassModel.entity;
+        if(!glassModel.tintApplied)
             NWB_LOGGER_ERROR(NWB_TEXT("SoftShadowTestSmokeProject: failed to set glass tint"));
 
         SyncSmokeModelRuntimes(*m_world);

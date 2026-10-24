@@ -30,6 +30,68 @@ namespace __hidden_assets_graphics_meshlet_ref_codec_tests{
 
 using TestArena = AssetsGraphicsFixture::TestArena;
 
+using MeshletView = Span<Impl::MeshletDesc>;
+using PositionRefView = Span<const Impl::MeshletPositionStreamRef>;
+using AttributeRefView = Span<const Impl::MeshletAttributeStreamRef>;
+
+
+// These declarations check throw paths without calling them.
+struct NoThrowMeshletBytes{
+    [[nodiscard]] usize size()const noexcept;
+    [[nodiscard]] const u8* data()const noexcept;
+    void clear()noexcept;
+    void reserve(usize)noexcept;
+    void push_back(u8)noexcept;
+};
+
+struct ThrowingMeshletAppendResult{
+    ~ThrowingMeshletAppendResult()noexcept(false);
+};
+
+struct ThrowingMeshletAppend : NoThrowMeshletBytes{
+    ThrowingMeshletAppendResult push_back(u8)noexcept;
+};
+
+struct ThrowingLvalueMeshletIndex : MeshletView{
+    [[nodiscard]] Impl::MeshletDesc& operator[](usize&);
+    [[nodiscard]] Impl::MeshletDesc& operator[](usize&&)noexcept;
+};
+
+struct NoThrowMeshletFailure{
+    [[nodiscard]] bool operator()(usize, TStringView)const noexcept;
+};
+
+struct ThrowingMeshletFailureBool{
+    operator bool()const;
+};
+
+struct ThrowingMeshletFailureConversion{
+    [[nodiscard]] ThrowingMeshletFailureBool operator()(usize, TStringView)const noexcept;
+};
+
+static_assert(noexcept(Impl::AppendMeshletRefDelta(DeclVal<NoThrowMeshletBytes&>(), 0u, Impl::MeshletRefDeltaWidth::U8)));
+static_assert(!noexcept(Impl::AppendMeshletRefDelta(DeclVal<ThrowingMeshletAppend&>(), 0u, Impl::MeshletRefDeltaWidth::U8)));
+static_assert(noexcept(Impl::EncodeMeshletRefDeltas(DeclVal<const PositionRefView&>(), DeclVal<const AttributeRefView&>(), false, DeclVal<NoThrowMeshletFailure>(), DeclVal<MeshletView&>(), DeclVal<NoThrowMeshletBytes&>(), DeclVal<NoThrowMeshletBytes&>())));
+static_assert(!noexcept(Impl::EncodeMeshletRefDeltas(
+    DeclVal<const PositionRefView&>(),
+    DeclVal<const AttributeRefView&>(),
+    false,
+    DeclVal<NoThrowMeshletFailure>(),
+    DeclVal<ThrowingLvalueMeshletIndex&>(),
+    DeclVal<NoThrowMeshletBytes&>(),
+    DeclVal<NoThrowMeshletBytes&>()
+)));
+static_assert(!noexcept(Impl::EncodeMeshletRefDeltas(
+    DeclVal<const PositionRefView&>(),
+    DeclVal<const AttributeRefView&>(),
+    false,
+    DeclVal<ThrowingMeshletFailureConversion>(),
+    DeclVal<MeshletView&>(),
+    DeclVal<NoThrowMeshletBytes&>(),
+    DeclVal<NoThrowMeshletBytes&>()
+)));
+
+
 struct OctEncodingBoundary{
     Float3U axis;
     u32 packed;

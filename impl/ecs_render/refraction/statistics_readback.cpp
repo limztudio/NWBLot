@@ -107,9 +107,7 @@ bool RefractionStatisticsReadback::prepareResources(){
     }
     static constexpr Name s_Names[] = { Name("engine/refraction/statistics_readback_0"), Name("engine/refraction/statistics_readback_1"), Name("engine/refraction/statistics_readback_2"), };
     Core::BufferDesc counterDesc;
-    counterDesc.setByteSize(NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE).setCanHaveUAVs(true).setCanHaveRawViews(true)
-        .setDebugName(Name("engine/refraction/diagnostic_counters"))
-        .enableAutomaticStateTracking(Core::ResourceStates::UnorderedAccess);
+    counterDesc.setByteSize(NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE).setCanHaveUAVs(true).setCanHaveRawViews(true).setDebugName(Name("engine/refraction/diagnostic_counters")).enableAutomaticStateTracking(Core::ResourceStates::UnorderedAccess);
     const auto counterResult = m_graphics.createBuffer(counterDesc);
     if(!counterResult)
         return false;
@@ -120,30 +118,23 @@ bool RefractionStatisticsReadback::prepareResources(){
     const auto descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
     if(!descriptor)
         return false;
-    if(!heap.write(*descriptor, Core::DescriptorWriteItem::RawBufferUav(0u, counters.get()))){
-        heap.free(*descriptor);
+    Core::GpuDescriptorRetirementGuard retireDescriptor(heap, *descriptor);
+    if(!heap.write(*descriptor, Core::DescriptorWriteItem::RawBufferUav(0u, counters.get())))
         return false;
-    }
-    Core::BufferHandle buffers[RefractionStatisticsState::s_SlotCount];
-    if(!ECSRenderDetail::CreateStatisticsReadbackBuffers(m_graphics, NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE, s_Names, buffers)){
-        heap.free(*descriptor);
+    auto buffers = ECSRenderDetail::CreateStatisticsReadbackBuffers(m_graphics, NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE, s_Names);
+    if(!buffers)
         return false;
-    }
     m_control->reset(deviceGeneration);
     m_counters = Move(counters);
     m_counterDescriptor = *descriptor;
     for(u32 index = 0u; index < RefractionStatisticsState::s_SlotCount; ++index)
-        m_buffers[index] = Move(buffers[index]);
+        m_buffers[index] = Move((*buffers)[index]);
+    retireDescriptor.release();
     return true;
 }
 
 void RefractionStatisticsReadback::pollCompleted(){
-    ECSRenderDetail::PollCompletedStatisticsReadback<NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE>(
-        m_control,
-        m_graphics,
-        m_buffers,
-        NWB_TEXT("Refraction statistics: failed to map a completed readback")
-    );
+    ECSRenderDetail::PollCompletedStatisticsReadback<NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE>(m_control, m_graphics, m_buffers, NWB_TEXT("Refraction statistics: failed to map a completed readback"));
 }
 
 Expected<RefractionStatistics> RefractionStatisticsReadback::tryGetLatestStatistics()const noexcept{

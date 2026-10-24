@@ -92,7 +92,7 @@ public:
     void attachTextInput(ITextInputService& textInput)const;
     void stopKeyRepeat()noexcept;
     // Shortens an idle poll timeout so a pending key repeat still fires on time.
-    [[nodiscard]] i32 pollTimeoutForKeyRepeat(i32 timeoutMs)const;
+    [[nodiscard]] i32 pollTimeoutForKeyRepeat(i32 timeoutMs)const noexcept;
     void processKeyRepeat();
     // Releases the seat objects; this must run before the display disconnects.
     void destroy()noexcept;

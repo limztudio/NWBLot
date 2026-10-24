@@ -22,12 +22,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuGraphSubmissionTransaction::bindRecordingAttemptWithinSubmissionOperation(
-    const GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
-    const u64 recordingAttemptGeneration,
-    const GpuRecordingAttemptScope* const preparationAttempt
-)noexcept{
+bool GpuGraphSubmissionTransaction::bindRecordingAttemptWithinSubmissionOperation(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const u64 recordingAttemptGeneration, const GpuRecordingAttemptScope* const preparationAttempt)noexcept{
     if(!SubmissionOperation::ActiveFor(*this) || recordingAttemptGeneration == 0u)
         return false;
     GpuCompiledGraph::ReadView planAccess(compiledGraph);

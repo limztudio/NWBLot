@@ -49,10 +49,7 @@ namespace ECSRenderDetail{
     const bool hasDeferredDrawItems = !opaqueDrawItems.empty();
     const bool deferredResourcesReady = hasDeferredDrawItems && payload.materialDrawBuffersUploaded && payload.frameBindings.frameReady(payload.opaqueDrawSnapshot.instanceCount, payload.opaqueDrawSnapshot.materialTypedByteCount);
     const bool regularDrawResourcesReady = deferredResourcesReady && materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.regular, payload.frameBindings);
-    const MaterialPassDrawItemsView regularDrawItemsForGbuffer = payload.regularSharedComputeEmulationDrawsGraphOwned
-        ? MaterialPassDrawItemsView{ opaqueDrawItems.regular.meshDrawItems, opaqueDrawItems.regular.indexedDrawItems, {} }
-        : opaqueDrawItems.regular
-    ;
+    const MaterialPassDrawItemsView regularDrawItemsForGbuffer = payload.regularSharedComputeEmulationDrawsGraphOwned ? MaterialPassDrawItemsView{ opaqueDrawItems.regular.meshDrawItems, opaqueDrawItems.regular.indexedDrawItems, {} } : opaqueDrawItems.regular;
     const bool csgResourcesReady = deferredResourcesReady && (!csgFrameData.hasWork() || (payload.csgFrameBuffersUploaded && payload.csgResources.frameReady(csgFrameData) && payload.frameBindings.bindingValid()));
     const bool csgReceiverSurfaceDrawResourcesReady = csgResourcesReady && (opaqueDrawItems.csgReceiverSurface.empty() || materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface, payload.frameBindings));
     if(regularDrawResourcesReady && payload.regularSharedComputeEmulationDrawsGraphOwned && (!payload.regularSharedComputeEmulationTiming || payload.regularSharedComputeEmulationTiming->has_value()))

@@ -223,7 +223,7 @@ void WaylandTextInputService::updateNativeSurrounding(const AStringView text, co
 #endif
 }
 
-void WaylandTextInputService::releaseDevice(){
+void WaylandTextInputService::releaseDevice()noexcept{
 #if defined(NWB_OS_WITH_TEXT_INPUT_V3)
     if(m_input){
         zwp_text_input_v3_destroy(m_input);
@@ -260,7 +260,7 @@ void WaylandTextInputService::nativeFailure(){
         NWB_LOGGER_WARNING(NWB_TEXT("Wayland text input: native failure could not cancel current session"));
 }
 
-bool WaylandTextInputService::flush(){
+bool WaylandTextInputService::flush()noexcept{
     return wl_display_flush(&m_display) >= 0 || errno == EAGAIN;
 }
 

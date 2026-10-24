@@ -76,17 +76,17 @@ private:
 };
 
 class LoopLogger final : public NWB::Core::Common::ILogger{
-public:
-    virtual NWB::Core::Common::LogArena& arena()noexcept override{ return m_arena; }
-    virtual void enqueue(NWB::Core::Common::LogString&& text, NWB::Core::Common::LogType::Enum type)override{ record(text, type); }
-    virtual void enqueue(const NWB::Core::Common::LogString& text, NWB::Core::Common::LogType::Enum type)override{ record(text, type); }
-
-
 private:
-    static void record(const NWB::Core::Common::LogString& text, const NWB::Core::Common::LogType::Enum type){
+    static void Record(const NWB::Core::Common::LogString& text, const NWB::Core::Common::LogType::Enum type){
         if(type >= NWB::Core::Common::LogType::Warning)
             NWB_TCERR << text.data() << NWB_TEXT("\n");
     }
+
+
+public:
+    virtual NWB::Core::Common::LogArena& arena()noexcept override{ return m_arena; }
+    virtual void enqueue(NWB::Core::Common::LogString&& text, NWB::Core::Common::LogType::Enum type)override{ Record(text, type); }
+    virtual void enqueue(const NWB::Core::Common::LogString& text, NWB::Core::Common::LogType::Enum type)override{ Record(text, type); }
 
 
 private:

@@ -435,6 +435,11 @@ void RendererFramePipeline::resetDeferredTaskGraphRuntime(){
     m_deferredLightingTaskGraphScheduled = false;
 }
 
+void RendererFramePipeline::resetFrameTaskState(){
+    resetDeferredFrameTaskIdsAndFlags();
+    resetDeferredTaskGraphRuntime();
+}
+
 void RendererFramePipeline::resetShadowPrepareUploadTaskState()noexcept{
     m_deferredBindlessSlotsUploadTask = {};
     m_rayTraceMaterialContextSlotsUploadTask = {};
@@ -469,11 +474,6 @@ void RendererFramePipeline::resetDeferredFrameTaskIdsAndFlags()noexcept{
     m_deferredFrameRecoveryArmed = false;
     m_deferredFrameRecoveryRetiresTiming = false;
     m_deferredPresentationOverlayRequired = false;
-}
-
-void RendererFramePipeline::resetFrameTaskState(){
-    resetDeferredFrameTaskIdsAndFlags();
-    resetDeferredTaskGraphRuntime();
 }
 
 void RendererFramePipeline::resetDeferredCausticsTaskState()noexcept{

@@ -40,7 +40,7 @@ struct TransparentIntervalReadiness{
     bool ready = false;
 };
 
-[[nodiscard]] inline TransparentIntervalReadiness ResolveTransparentIntervalReadiness(const TransparentCsgIntervalRecordInputs& payload, RendererMaterialSystem& materialSystem){
+[[nodiscard]] inline TransparentIntervalReadiness ResolveTransparentIntervalReadiness(const TransparentCsgIntervalRecordInputs& payload, RendererMaterialSystem& materialSystem)noexcept{
     TransparentIntervalReadiness readiness{};
     const MaterialPassDrawItemsView receiverSurfaceDrawItems = payload.transparentCsgSnapshot.receiverSurfaceDrawItemsView();
     readiness.csgFrameData = payload.transparentCsgSnapshot.csgFrameDataView();

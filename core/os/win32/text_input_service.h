@@ -42,7 +42,7 @@ private:
     [[nodiscard]] TextInputAdmission::Enum acceptCodePoint(TextInputSessionToken token, u32 codePoint, u32 repeatCount);
     [[nodiscard]] TextInputAdmission::Enum acceptUtf16Unit(TextInputSessionToken token, u32 unit, u32 repeatCount);
     [[nodiscard]] TextInputAdmission::Enum readCompositionText(NotNull<void*> nativeContext, u32 index);
-    [[nodiscard]] Expected<usize, TextInputAdmission::Enum> compositionCursor(NotNull<void*> nativeContext);
+    [[nodiscard]] Expected<usize, TextInputAdmission::Enum> compositionCursor(NotNull<void*> nativeContext)noexcept;
     [[nodiscard]] TextInputAdmission::Enum acceptComposition(TextInputSessionToken token, usize wParam, isize flags);
     [[nodiscard]] TextInputAdmission::Enum acceptInsertedPreedit(TextInputSessionToken token, u32 unit, bool moveCaret);
     [[nodiscard]] TextInputAdmission::Enum publishCompositionPreedit(TextInputSessionToken token, AStringView text, usize anchorByte, usize caretByte);

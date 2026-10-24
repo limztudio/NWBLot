@@ -69,12 +69,7 @@ namespace __hidden_gpu_packet_runtime_transaction_handoff{
         bool matchesProducer = false;
         for(usize producerIndex = 0u; producerIndex < handoff.producerCount; ++producerIndex){
             const GpuTaskGraphExternalResourceHandoffProducer& producer = handoff.producers[producerIndex];
-            matchesProducer = matchesProducer || (
-                planAccess.packetForTask(range.producerTask)
-                    == planAccess.packetForTask(producer.producerTask)
-                && range.sourceQueue == producer.sourceQueue
-                && range.token == producer.token
-            );
+            matchesProducer = matchesProducer || (planAccess.packetForTask(range.producerTask) == planAccess.packetForTask(producer.producerTask) && range.sourceQueue == producer.sourceQueue && range.token == producer.token);
         }
         if(!matchesProducer)
             return false;
@@ -84,11 +79,7 @@ namespace __hidden_gpu_packet_runtime_transaction_handoff{
         return !handoff.producerTask.valid() && !handoff.sourceQueue.valid() && !handoff.token.valid();
     }
     const GpuTaskGraphExternalResourceHandoffProducer& producer = handoff.producers[0u];
-    return
-        handoff.producerTask == producer.producerTask
-        && handoff.sourceQueue == producer.sourceQueue
-        && handoff.token == producer.token
-    ;
+    return handoff.producerTask == producer.producerTask && handoff.sourceQueue == producer.sourceQueue && handoff.token == producer.token;
 }
 
 

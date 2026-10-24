@@ -198,10 +198,7 @@ void WaylandFrameInput::OnPointerEnter(void* data, wl_pointer* pointer, u32 seri
     static_cast<void>(surface);
 
     auto& frameInput = *static_cast<WaylandFrameInput*>(data);
-    const SIMDVectorDouble pixelCoordinates = SurfaceCoordinatesToPixels(
-        VectorDoubleSet(wl_fixed_to_double(sx), wl_fixed_to_double(sy), 0.0, 0.0),
-        VectorDoubleReplicate(static_cast<f64>(FrameDetail::ClampBufferScale(frameInput.m_bufferScale)))
-    );
+    const SIMDVectorDouble pixelCoordinates = SurfaceCoordinatesToPixels(VectorDoubleSet(wl_fixed_to_double(sx), wl_fixed_to_double(sy), 0.0, 0.0), VectorDoubleReplicate(static_cast<f64>(FrameDetail::ClampBufferScale(frameInput.m_bufferScale))));
     frameInput.m_frame.input().mousePosUpdate(VectorDoubleGetX(pixelCoordinates), VectorDoubleGetY(pixelCoordinates));
 }
 
@@ -223,10 +220,7 @@ void WaylandFrameInput::OnPointerMotion(void* data, wl_pointer* pointer, u32 tim
     static_cast<void>(time);
 
     auto& frameInput = *static_cast<WaylandFrameInput*>(data);
-    const SIMDVectorDouble pixelCoordinates = SurfaceCoordinatesToPixels(
-        VectorDoubleSet(wl_fixed_to_double(sx), wl_fixed_to_double(sy), 0.0, 0.0),
-        VectorDoubleReplicate(static_cast<f64>(FrameDetail::ClampBufferScale(frameInput.m_bufferScale)))
-    );
+    const SIMDVectorDouble pixelCoordinates = SurfaceCoordinatesToPixels(VectorDoubleSet(wl_fixed_to_double(sx), wl_fixed_to_double(sy), 0.0, 0.0), VectorDoubleReplicate(static_cast<f64>(FrameDetail::ClampBufferScale(frameInput.m_bufferScale))));
     frameInput.m_frame.input().mousePosUpdate(VectorDoubleGetX(pixelCoordinates), VectorDoubleGetY(pixelCoordinates));
 }
 
@@ -561,7 +555,7 @@ void WaylandFrameInput::stopKeyRepeat()noexcept{
     m_repeatScancode = 0;
 }
 
-i32 WaylandFrameInput::pollTimeoutForKeyRepeat(const i32 timeoutMs)const{
+i32 WaylandFrameInput::pollTimeoutForKeyRepeat(const i32 timeoutMs)const noexcept{
     using namespace __hidden_frame_linux_wayland_input;
 
     if(!m_repeatPending || timeoutMs <= 0)

@@ -209,12 +209,7 @@ inline Expected<TextureClearUploadLayout> BuildTextureClearUploadLayout(const u6
     return TextureClearUploadLayout{ uploadSize, *layerPitch, static_cast<usize>(clearByteCount), *copyOffsetAlignment, *stagingAlignment, mergeArrayLayerCopies };
 }
 
-[[nodiscard]] inline bool TextureClearStagingRangeValid(
-    const void* const stagingBytes,
-    const u64 stagingOffset,
-    const u64 stagingBufferByteSize,
-    const TextureClearUploadLayout& uploadLayout
-)noexcept{
+[[nodiscard]] inline bool TextureClearStagingRangeValid(const void* const stagingBytes, const u64 stagingOffset, const u64 stagingBufferByteSize, const TextureClearUploadLayout& uploadLayout)noexcept{
     return
         stagingBytes != nullptr
         && (stagingOffset % uploadLayout.stagingAlignment) == 0u

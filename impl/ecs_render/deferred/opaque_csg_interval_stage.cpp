@@ -86,7 +86,7 @@ void OpaqueCsgIntervalStage::capturePayloads(
     m_intervalSamplePayload.opaqueDrawSnapshot.capture(opaqueDrawItems, csgFrameData, instanceCount, materialTypedByteCount);
 }
 
-Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(Core::Alloc::ScratchArena& scratchArena, const OpaqueCsgIntervalStageInputs& inputs, ObjectGeometryCacheGraph& objectGeometry){
+Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(const OpaqueCsgIntervalStageInputs& inputs, Core::Alloc::ScratchArena& scratchArena, ObjectGeometryCacheGraph& objectGeometry){
     using namespace RendererTaskGraphDetail;
 
     OpaqueCsgIntervalStageTasks tasks;
@@ -312,9 +312,7 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(Core::Allo
             .setResourceUses(opaqueCsgIntervalSampleComputeEmulationResourceUses, LengthOf(opaqueCsgIntervalSampleComputeEmulationResourceUses))
             .setResourceSetUses(opaqueCsgIntervalSampleComputeEmulationResourceSetUses, opaqueCsgIntervalSampleComputeEmulationResourceSetUseCount)
         ;
-        const auto intervalSampleComputeEmulationTaskResult = m_graph.addTask<
-                ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphTask
-            >(opaqueCsgIntervalSampleComputeEmulationDesc, Move(m_intervalSampleComputeEmulationPayload));
+        const auto intervalSampleComputeEmulationTaskResult = m_graph.addTask< ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphTask >(opaqueCsgIntervalSampleComputeEmulationDesc, Move(m_intervalSampleComputeEmulationPayload));
         if(!intervalSampleComputeEmulationTaskResult){
             tasks.intervalSampleComputeEmulationTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque CSG interval-sample compute-emulation producer"));

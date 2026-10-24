@@ -4,6 +4,8 @@
 
 #include "assets_graphics_fixture.h"
 
+#include <impl/assets_material/cook_private.h>
+
 #include <gtest/gtest.h>
 
 
@@ -46,6 +48,39 @@ static constexpr AStringView s_Materials = "materials";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// These declarations check throw paths without calling them.
+struct ThrowingConstIdentifierAppend{
+    ThrowingConstIdentifierAppend& operator+=(char&&)noexcept;
+    ThrowingConstIdentifierAppend& operator+=(const char&);
+    ThrowingConstIdentifierAppend& operator+=(const char*)noexcept;
+
+
+public:
+    [[nodiscard]] usize size()const noexcept;
+};
+
+struct ThrowingImplicitIdentifierSize{
+    explicit operator usize()const noexcept;
+    operator u16()const;
+};
+
+[[nodiscard]] bool operator==(const ThrowingImplicitIdentifierSize&, const usize&)noexcept;
+
+struct ThrowingIdentifierSizeAppend{
+    ThrowingIdentifierSizeAppend& operator+=(char)noexcept;
+    ThrowingIdentifierSizeAppend& operator+=(const char*)noexcept;
+
+
+public:
+    [[nodiscard]] ThrowingImplicitIdentifierSize size()const noexcept;
+};
+
+static_assert(noexcept(Impl::MaterialCookDetail::AppendMaterialBindGeneratedUpperIdentifier({}, DeclVal<ThrowingConstIdentifierAppend&>())));
+static_assert(!noexcept(Impl::MaterialCookDetail::AppendMaterialBindGeneratedPascalIdentifier({}, DeclVal<ThrowingConstIdentifierAppend&>())));
+static_assert(!noexcept(Impl::MaterialCookDetail::AppendMaterialBindGeneratedUpperIdentifier({}, DeclVal<ThrowingIdentifierSizeAppend&>())));
+static_assert(!noexcept(Impl::MaterialCookDetail::AppendMaterialBindGeneratedPascalIdentifier({}, DeclVal<ThrowingIdentifierSizeAppend&>())));
 
 
 using CapturingLogger = AssetsGraphicsFixture::CapturingLogger;

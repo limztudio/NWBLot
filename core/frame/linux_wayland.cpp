@@ -260,12 +260,12 @@ static void OnRegistryGlobalRemove(void* data, wl_registry* registry, u32 name){
     static_cast<WaylandContext*>(data)->input.removeSeat(name);
 }
 
-static void OnWmBasePing(void* data, xdg_wm_base* wmBase, u32 serial){
+static void OnWmBasePing(void* data, xdg_wm_base* wmBase, u32 serial)noexcept{
     static_cast<void>(data);
     xdg_wm_base_pong(wmBase, serial);
 }
 
-static void OnXdgSurfaceConfigure(void* data, xdg_surface* xdgSurface, u32 serial){
+static void OnXdgSurfaceConfigure(void* data, xdg_surface* xdgSurface, u32 serial)noexcept{
     auto& context = *static_cast<WaylandContext*>(data);
     xdg_surface_ack_configure(xdgSurface, serial);
 

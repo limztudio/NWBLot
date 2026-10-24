@@ -111,7 +111,7 @@ static void ExpectDelta(const Perf::MemoryDelta& actual, const Perf::MemoryDelta
     EXPECT_EQ(actual.deallocationCount, expected.deallocationCount);
 }
 
-[[nodiscard]] static const Telemetry::EventRecord* FindOwnerEvent(const Telemetry::EventView& events, const Name& owner, const Perf::MemorySource::Enum source){
+[[nodiscard]] static const Telemetry::EventRecord* FindOwnerEvent(const Telemetry::EventView& events, const Name& owner, const Perf::MemorySource::Enum source)noexcept{
     for(usize eventIndex = 0u; eventIndex < events.eventCount(); ++eventIndex){
         const Telemetry::EventRecord* const event = events.eventAt(eventIndex);
         if(!event || event->header.kind != Telemetry::EventKind::MemoryFrame)

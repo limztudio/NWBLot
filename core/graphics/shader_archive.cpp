@@ -60,10 +60,6 @@ bool LessRecord(const ShaderArchive::Record& lhs, const ShaderArchive::Record& r
     return LessNameHash(lhs.virtualPathHash, rhs.virtualPathHash);
 }
 
-bool LessRecordPointer(NotNull<const ShaderArchive::Record*> lhs, NotNull<const ShaderArchive::Record*> rhs){
-    return LessRecord(*lhs, *rhs);
-}
-
 
 bool SameShaderVariantStage(const ShaderArchive::Record& lhs, const ShaderArchive::Record& rhs)noexcept{
     return lhs.shaderName == rhs.shaderName && lhs.variantName == rhs.variantName && lhs.stage == rhs.stage;
@@ -129,10 +125,6 @@ const ShaderArchive::Record* FindRecord(const RecordVector& records, const Name&
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const Name& ShaderArchive::IndexVirtualPathName()noexcept{
-    return s_IndexVirtualPathName;
-}
-
 Expected<Name> ShaderArchive::BuildVirtualPathName(const Name& shaderName, const AStringView variantName, const Name& stageName){
     if(!shaderName || variantName.empty() || !stageName)
         return MakeUnexpected(Failure{});
@@ -162,7 +154,7 @@ Expected<GraphicsBytes> ShaderArchive::SerializeIndex(GraphicsArena& arena, cons
     sortedRecords.reserve(records.size());
     for(const Record& record : records)
         sortedRecords.push_back(MakeNotNull(&record));
-    Sort(sortedRecords.begin(), sortedRecords.end(), [](NotNull<const Record*> lhs, NotNull<const Record*> rhs){ return __hidden_shader_archive::LessRecordPointer(lhs, rhs); });
+    Sort(sortedRecords.begin(), sortedRecords.end(), [](NotNull<const Record*> lhs, NotNull<const Record*> rhs){ return __hidden_shader_archive::LessRecord(*lhs, *rhs); });
 
     usize variantTextBinaryBytes = 0;
     for(usize i = 0u; i < sortedRecords.size(); ++i){

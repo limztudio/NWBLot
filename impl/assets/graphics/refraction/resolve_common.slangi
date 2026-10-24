@@ -73,8 +73,6 @@ bool nwbRefractionResolvePixel(const uint3 groupId, const uint3 groupThreadId, o
 
 static const float NWB_REFRACTION_MAX_DISTANCE = 10000.0;
 static const float NWB_REFRACTION_MIN_DISTANCE = 0.001;
-// Without a geometric exit, treat the boundary as a unit-thickness sheet. Never use the background distance as glass thickness; it darkens distant backgrounds.
-static const float NWB_REFRACTION_FALLBACK_THICKNESS = 1.0;
 static const float NWB_REFRACTION_MIN_CLIP_W = 1e-6;
 static const half NWB_REFRACTION_FRONT_TRANSMITTANCE_MIN = 1e-4h;
 static const float NWB_REFRACTION_TINT_MIN = 1e-4;
@@ -128,15 +126,6 @@ half3 nwbRefractionCompositeBehindBackground(const int3 texel, const half3 opaqu
     const half backTransmittance = exp(-min(behindExtinction, half(NWB_AVBOIT_EXTINCTION_SATURATION)));
     // AVBOIT weights contain transmittance from fragments in front of the retained primary. Undo that prefix here; the final compositor applies it once. Clamp only the ill-conditioned occluded tail.
     return behind / max(frontTransmittance, half(NWB_REFRACTION_FRONT_TRANSMITTANCE_MIN)) + opaque * backTransmittance;
-}
-
-half3 nwbRefractionBackground(const uint2 pixel){
-    const int3 texel = int3(pixel, 0);
-    const half3 opaque = nwbRefractionOpaqueBackground(pixel);
-    const half behindExtinction = half(nwbHeapSampledImage2D(g_NwbRefractionResources.compositeSlots.z).Load(texel).r);
-    if(behindExtinction <= half(0.0h))
-        return opaque;
-    return nwbRefractionCompositeBehindBackground(texel, opaque, behindExtinction);
 }
 
 half nwbRefractionFresnelTransmissionFromR0(const half r0, const half cosine){
@@ -226,10 +215,6 @@ half3 nwbRefractionBackgroundForEntry(const uint2 pixel, const NwbRefractionEntr
     return nwbRefractionCompositeBehindBackground(texel, opaque, behindExtinction);
 }
 
-half3 nwbRefractionStraightFallback(const uint2 pixel, const NwbRefractionEntry entry){
-    return half3(nwbRefractionBackground(pixel)) * nwbRefractionFallbackAttenuation(entry.tint, entry.ior, entry.cosine);
-}
-
 // Single-boundary screen-space continuation; falls back to straight-through when the depth crossing is far from the ray or offscreen.
 bool nwbRefractionScreenBackgroundPixel(const NwbRefractionEntry entry, const float3 direction, out uint2 outSamplePixel){
     outSamplePixel = uint2(0u, 0u);
@@ -272,14 +257,6 @@ bool nwbRefractionScreenBackgroundPixel(const NwbRefractionEntry entry, const fl
         previousT = t;
     }
     return false;
-}
-
-half4 nwbRefractionResolveScreen(const uint2 pixel, const NwbRefractionEntry entry){
-    uint2 samplePixel = pixel;
-    const float3 direction = refract(entry.incident, entry.normal, 1.0 / float(entry.ior));
-    const bool displaced = dot(direction, direction) > NWB_REFRACTION_DIRECTION_LENGTH_SQUARED_MIN && nwbRefractionScreenBackgroundPixel(entry, direction, samplePixel);
-    const half3 background = nwbRefractionBackgroundForEntry(select(bool2(displaced), samplePixel, pixel), entry, true, displaced && any(samplePixel != pixel));
-    return half4(background * nwbRefractionFallbackAttenuation(entry.tint, entry.ior, entry.cosine), 1.0h);
 }
 
 

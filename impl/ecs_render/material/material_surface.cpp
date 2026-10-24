@@ -35,7 +35,24 @@ namespace __hidden_material_surface{
 
 
 template<typename CacheT, typename ReleaseFn>
-static void ReleaseAssetCache(CacheT& cache, ReleaseFn&& releaseItem){
+static void ReleaseAssetCache(CacheT& cache, ReleaseFn&& releaseItem)noexcept(
+    []()constexpr noexcept{
+        using Returned = decltype(DeclVal<CacheT&>().begin());
+        using Iterator = Decay_T<Returned>;
+        return
+            noexcept(DeclVal<CacheT&>().begin())
+            && (!IsReference_V<Returned> || IsNothrowConvertible_V<Returned, Iterator>)
+            && IsNothrowDestructible_V<Iterator>
+            && noexcept(static_cast<bool>(DeclVal<Iterator&>() != DeclVal<CacheT&>().end()))
+            && noexcept(++DeclVal<Iterator&>())
+#if NWB_OCCUR_ASSERT
+            && noexcept(static_cast<bool>(!DeclVal<Iterator&>().value()))
+#endif
+            && noexcept(DeclVal<ReleaseFn&>()(*DeclVal<Iterator&>().value()))
+            && noexcept(DeclVal<CacheT&>().clear())
+        ;
+    }()
+){
     for(auto it = cache.begin(); it != cache.end(); ++it){
         NWB_ASSERT(it.value());
         releaseItem(*it.value());

@@ -169,15 +169,12 @@ private:
 
 public:
     Implementation()noexcept(noexcept(Base())){}
-
     Implementation(typename Base::first_param_type x, typename Base::second_param_type y)noexcept(noexcept(Base(BothValuesTag{}, x, y)) && IsNothrowDestructible_V<typename Base::first_param_type> && IsNothrowDestructible_V<typename Base::second_param_type>)
         : Base(BothValuesTag{}, x, y)
     {}
-
     Implementation(typename Base::first_param_type x)noexcept(noexcept(Base(FirstValueTag{}, x)) && IsNothrowDestructible_V<typename Base::first_param_type>)
         : Base(FirstValueTag{}, x)
     {}
-
     Implementation(typename Base::second_param_type y)noexcept(noexcept(Base(SecondValueTag{}, y)) && IsNothrowDestructible_V<typename Base::second_param_type>)
         : Base(SecondValueTag{}, y)
     {}
@@ -190,7 +187,6 @@ private:
 
 public:
     Implementation()noexcept(IsNothrowConstructible_V<typename Types::first_type> && IsNothrowConstructible_V<typename Types::second_type> && IsNothrowDestructible_V<typename Types::first_type> && IsNothrowDestructible_V<typename Types::second_type>){}
-
     Implementation(typename Types::first_param_type x, typename Types::second_param_type y)noexcept(
         IsNothrowConstructible_V<typename Types::first_type, decltype((x))>
         && IsNothrowConstructible_V<typename Types::second_type, decltype((y))>
@@ -202,7 +198,6 @@ public:
         : T1(x)
         , m_second(y)
     {}
-
     Implementation(typename Types::first_param_type x)noexcept(
         IsNothrowConstructible_V<typename Types::first_type, decltype((x))>
         && IsNothrowConstructible_V<typename Types::second_type>
@@ -212,7 +207,6 @@ public:
     )
         : T1(x)
     {}
-
     Implementation(typename Types::second_param_type y)noexcept(
         IsNothrowConstructible_V<typename Types::first_type>
         && IsNothrowConstructible_V<typename Types::second_type, decltype((y))>
@@ -249,7 +243,6 @@ private:
 
 public:
     Implementation()noexcept(IsNothrowConstructible_V<typename Types::first_type> && IsNothrowConstructible_V<typename Types::second_type> && IsNothrowDestructible_V<typename Types::first_type> && IsNothrowDestructible_V<typename Types::second_type>){}
-
     Implementation(typename Types::first_param_type x, typename Types::second_param_type y)noexcept(
         IsNothrowConstructible_V<typename Types::first_type, decltype((x))>
         && IsNothrowConstructible_V<typename Types::second_type, decltype((y))>
@@ -261,7 +254,6 @@ public:
         : T2(y)
         , m_first(x)
     {}
-
     Implementation(typename Types::first_param_type x)noexcept(
         IsNothrowConstructible_V<typename Types::first_type, decltype((x))>
         && IsNothrowConstructible_V<typename Types::second_type>
@@ -271,7 +263,6 @@ public:
     )
         : m_first(x)
     {}
-
     Implementation(typename Types::second_param_type y)noexcept(
         IsNothrowConstructible_V<typename Types::first_type>
         && IsNothrowConstructible_V<typename Types::second_type, decltype((y))>
@@ -314,7 +305,6 @@ private:
 
 public:
     Implementation()noexcept(IsNothrowConstructible_V<typename Types::first_type> && IsNothrowConstructible_V<typename Types::second_type> && IsNothrowDestructible_V<typename Types::first_type> && IsNothrowDestructible_V<typename Types::second_type>){}
-
     Implementation(typename Types::first_param_type x, typename Types::second_param_type y)noexcept(
         IsNothrowConstructible_V<typename Types::first_type, decltype((x))>
         && IsNothrowConstructible_V<typename Types::second_type, decltype((y))>
@@ -326,7 +316,6 @@ public:
         : T1(x)
         , T2(y)
     {}
-
     Implementation(typename Types::first_param_type x)noexcept(
         IsNothrowConstructible_V<typename Types::first_type, decltype((x))>
         && IsNothrowConstructible_V<typename Types::second_type>
@@ -336,7 +325,6 @@ public:
     )
         : T1(x)
     {}
-
     Implementation(typename Types::second_param_type y)noexcept(
         IsNothrowConstructible_V<typename Types::first_type>
         && IsNothrowConstructible_V<typename Types::second_type, decltype((y))>
@@ -360,7 +348,6 @@ private:
 
 public:
     Implementation()noexcept(IsNothrowConstructible_V<typename Types::first_type> && IsNothrowDestructible_V<typename Types::first_type>){}
-
     Implementation(typename Types::first_param_type x, typename Types::second_param_type)noexcept(
         IsNothrowConstructible_V<typename Types::first_type, decltype((x))>
         && IsNothrowDestructible_V<typename Types::first_type>
@@ -369,7 +356,6 @@ public:
     )
         : T1(x)
     {}
-
     Implementation(typename Types::first_param_type x)noexcept(IsNothrowConstructible_V<typename Types::first_type, decltype((x))> && IsNothrowDestructible_V<typename Types::first_type> && IsNothrowDestructible_V<typename Types::first_param_type>)
         : T1(x)
     {}
@@ -382,11 +368,9 @@ private:
 
 public:
     Implementation()noexcept(noexcept(Base())){}
-
     Implementation(typename Base::first_param_type x, typename Base::second_param_type y)noexcept(noexcept(Base(BothValuesTag{}, x, y)) && IsNothrowDestructible_V<typename Base::first_param_type> && IsNothrowDestructible_V<typename Base::second_param_type>)
         : Base(BothValuesTag{}, x, y)
     {}
-
     Implementation(typename Base::first_param_type x)noexcept(noexcept(Base(BothValuesTag{}, x, x)) && IsNothrowDestructible_V<typename Base::first_param_type>)
         : Base(BothValuesTag{}, x, x)
     {}

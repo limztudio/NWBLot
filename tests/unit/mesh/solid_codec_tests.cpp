@@ -67,8 +67,9 @@ struct ThrowingPrimitiveSize{
 struct ThrowingIncrementIterator{
     [[nodiscard]] const u32& operator*()const noexcept;
     ThrowingIncrementIterator& operator++();
-    [[nodiscard]] bool operator!=(const ThrowingIncrementIterator&)const noexcept;
 };
+
+[[nodiscard]] bool operator!=(const ThrowingIncrementIterator&, const ThrowingIncrementIterator&)noexcept;
 
 struct ThrowingIncrementRange{
     [[nodiscard]] ThrowingIncrementIterator begin()const noexcept;

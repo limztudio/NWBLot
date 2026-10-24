@@ -127,7 +127,7 @@ struct ArmArithmetic{
     u32 control;
 
     template<typename T, typename Operation>
-    [[nodiscard]] NWB_INLINE T Evaluate(const Operation& operation)const noexcept{
+    [[nodiscard]] NWB_INLINE T evaluate(const Operation& operation)const noexcept{
 #pragma STDC FENV_ACCESS ON
         if constexpr(!Ordered)
             return operation();
@@ -170,37 +170,37 @@ struct ArmArithmetic{
         }
     }
 
-    [[nodiscard]] NWB_INLINE SIMDVectorSingle Add(SIMDVectorSingle a, SIMDVectorSingle b)const noexcept{
+    [[nodiscard]] NWB_INLINE SIMDVectorSingle add(SIMDVectorSingle a, SIMDVectorSingle b)const noexcept{
 #pragma STDC FENV_ACCESS ON
-        return Evaluate<SIMDVectorSingle>([&]()noexcept{ return VectorAdd(a, b); });
+        return evaluate<SIMDVectorSingle>([&]()noexcept{ return VectorAdd(a, b); });
     }
 
-    [[nodiscard]] NWB_INLINE SIMDVectorDouble DoubleAdd(SIMDVectorDouble a, SIMDVectorDouble b)const noexcept{
+    [[nodiscard]] NWB_INLINE SIMDVectorDouble doubleAdd(SIMDVectorDouble a, SIMDVectorDouble b)const noexcept{
 #pragma STDC FENV_ACCESS ON
-        return Evaluate<SIMDVectorDouble>([&]()noexcept{ return VectorDoubleAdd(a, b); });
+        return evaluate<SIMDVectorDouble>([&]()noexcept{ return VectorDoubleAdd(a, b); });
     }
 
-    [[nodiscard]] NWB_INLINE SIMDVectorDouble DoubleSubtract(SIMDVectorDouble a, SIMDVectorDouble b)const noexcept{
+    [[nodiscard]] NWB_INLINE SIMDVectorDouble doubleSubtract(SIMDVectorDouble a, SIMDVectorDouble b)const noexcept{
 #pragma STDC FENV_ACCESS ON
-        return Evaluate<SIMDVectorDouble>([&]()noexcept{ return VectorDoubleSubtract(a, b); });
+        return evaluate<SIMDVectorDouble>([&]()noexcept{ return VectorDoubleSubtract(a, b); });
     }
 
-    [[nodiscard]] NWB_INLINE SIMDVectorSingle Multiply(SIMDVectorSingle a, SIMDVectorSingle b)const noexcept{
+    [[nodiscard]] NWB_INLINE SIMDVectorSingle multiply(SIMDVectorSingle a, SIMDVectorSingle b)const noexcept{
 #pragma STDC FENV_ACCESS ON
-        return Evaluate<SIMDVectorSingle>([&]()noexcept{ return VectorMultiply(a, b); });
+        return evaluate<SIMDVectorSingle>([&]()noexcept{ return VectorMultiply(a, b); });
     }
 
-    [[nodiscard]] NWB_INLINE SIMDVectorDouble DoubleMultiply(SIMDVectorDouble a, SIMDVectorDouble b)const noexcept{
+    [[nodiscard]] NWB_INLINE SIMDVectorDouble doubleMultiply(SIMDVectorDouble a, SIMDVectorDouble b)const noexcept{
 #pragma STDC FENV_ACCESS ON
-        return Evaluate<SIMDVectorDouble>([&]()noexcept{ return VectorDoubleMultiply(a, b); });
+        return evaluate<SIMDVectorDouble>([&]()noexcept{ return VectorDoubleMultiply(a, b); });
     }
 
-    [[nodiscard]] NWB_INLINE SIMDVectorDouble DoubleFma(SIMDVectorDouble a, SIMDVectorDouble b, SIMDVectorDouble c)const noexcept{
+    [[nodiscard]] NWB_INLINE SIMDVectorDouble doubleFma(SIMDVectorDouble a, SIMDVectorDouble b, SIMDVectorDouble c)const noexcept{
 #pragma STDC FENV_ACCESS ON
-        return Evaluate<SIMDVectorDouble>([&]()noexcept{ return VectorDoubleMultiplyAdd(a, b, c); });
+        return evaluate<SIMDVectorDouble>([&]()noexcept{ return VectorDoubleMultiplyAdd(a, b, c); });
     }
 
-    [[nodiscard]] NWB_INLINE SIMDVectorSingle Narrow(SIMDVectorDouble a)const noexcept{
+    [[nodiscard]] NWB_INLINE SIMDVectorSingle narrow(SIMDVectorDouble a)const noexcept{
 #pragma STDC FENV_ACCESS ON
         if constexpr(Ordered){
             // Conversion tests tininess before rounding and before inexact.
@@ -215,19 +215,19 @@ struct ArmArithmetic{
                     __builtin_trap();
             }
         }
-        return Evaluate<SIMDVectorSingle>([&]()noexcept{ return ConvertVectorDoubleToSingle(a); });
+        return evaluate<SIMDVectorSingle>([&]()noexcept{ return ConvertVectorDoubleToSingle(a); });
     }
 
-    [[nodiscard]] NWB_INLINE SIMDVectorSingle Divide(SIMDVectorSingle a, SIMDVectorSingle b)const noexcept{
+    [[nodiscard]] NWB_INLINE SIMDVectorSingle divide(SIMDVectorSingle a, SIMDVectorSingle b)const noexcept{
 #pragma STDC FENV_ACCESS ON
         __asm__ __volatile__("" : "+w"(a), "+w"(b));
-        return Evaluate<SIMDVectorSingle>([&]()noexcept{ return VectorDivide(a, b); });
+        return evaluate<SIMDVectorSingle>([&]()noexcept{ return VectorDivide(a, b); });
     }
 
-    [[nodiscard]] NWB_INLINE SIMDVectorSingle Invalid(SIMDVectorSingle x)const noexcept{
+    [[nodiscard]] NWB_INLINE SIMDVectorSingle invalid(SIMDVectorSingle x)const noexcept{
 #pragma STDC FENV_ACCESS ON
-        const SIMDVectorSingle z = Evaluate<SIMDVectorSingle>([&]()noexcept{ return VectorSubtract(x, x); });
-        return Divide(z, z);
+        const SIMDVectorSingle z = evaluate<SIMDVectorSingle>([&]()noexcept{ return VectorSubtract(x, x); });
+        return divide(z, z);
     }
 };
 
@@ -283,41 +283,41 @@ NWB_INLINE SIMDVectorSingle ArmPackedBody(const SIMDVectorSingle x, const SIMDVe
                 admitted[lane] = 0x3f800000u;
                 if(ArmSpecialBits(b)){
                     if(2u * b == 0u){
-                        result[lane] = ArmSignaling(a) ? VectorGetIntX(math.Add(VectorReplicate(BitCast<f32>(a)), VectorReplicate(BitCast<f32>(b)))) : 0x3f800000u;
+                        result[lane] = ArmSignaling(a) ? VectorGetIntX(math.add(VectorReplicate(BitCast<f32>(a)), VectorReplicate(BitCast<f32>(b)))) : 0x3f800000u;
                     }
                     else if(a == 0x3f800000u){
-                        result[lane] = ArmSignaling(b) ? VectorGetIntX(math.Add(VectorReplicate(BitCast<f32>(a)), VectorReplicate(BitCast<f32>(b)))) : 0x3f800000u;
+                        result[lane] = ArmSignaling(b) ? VectorGetIntX(math.add(VectorReplicate(BitCast<f32>(a)), VectorReplicate(BitCast<f32>(b)))) : 0x3f800000u;
                     }
                     else if(2u * a > 2u * s_F32InfinityBits || 2u * b > 2u * s_F32InfinityBits){
-                        result[lane] = VectorGetIntX(math.Add(VectorReplicate(BitCast<f32>(a)), VectorReplicate(BitCast<f32>(b))));
+                        result[lane] = VectorGetIntX(math.add(VectorReplicate(BitCast<f32>(a)), VectorReplicate(BitCast<f32>(b))));
                     }
                     else if(2u * a == 2u * 0x3f800000u)
                         result[lane] = 0x3f800000u;
                     else if((2u * a < 2u * 0x3f800000u) == !(b & s_F32SignBitMask))
                         result[lane] = 0u;
                     else
-                        result[lane] = VectorGetIntX(math.Multiply(VectorReplicate(BitCast<f32>(b)), VectorReplicate(BitCast<f32>(b))));
+                        result[lane] = VectorGetIntX(math.multiply(VectorReplicate(BitCast<f32>(b)), VectorReplicate(BitCast<f32>(b))));
                     continue;
                 }
                 if(ArmSpecialBits(a)){
-                    SIMDVectorSingle square = math.Multiply(VectorReplicate(BitCast<f32>(a)), VectorReplicate(BitCast<f32>(a)));
+                    SIMDVectorSingle square = math.multiply(VectorReplicate(BitCast<f32>(a)), VectorReplicate(BitCast<f32>(a)));
                     const bool negative = (a & s_F32SignBitMask) != 0u && ArmCheckInt(b) == s_ArmOddInteger;
                     if(negative)
                         square = VectorXorInt(square, s_SIMDNegativeZero);
                     if(2u * a == 0u && (b & s_F32SignBitMask) != 0u){
                         errors[lane] = ERANGE;
                         errno = ERANGE;
-                        square = math.Multiply(math.Divide(s_SIMDOne, VectorZero()), negative ? VectorReplicate(-1.0f) : s_SIMDOne);
+                        square = math.multiply(math.divide(s_SIMDOne, VectorZero()), negative ? VectorReplicate(-1.0f) : s_SIMDOne);
                     }
                     else if((b & s_F32SignBitMask) != 0u)
-                        square = math.Divide(s_SIMDOne, square);
+                        square = math.divide(s_SIMDOne, square);
                     result[lane] = VectorGetIntX(square);
                     continue;
                 }
                 if((a & s_F32SignBitMask) != 0u){
                     const i32 integral = ArmCheckInt(b);
                     if(integral == s_ArmNotInteger){
-                        result[lane] = VectorGetIntX(math.Invalid(VectorReplicate(BitCast<f32>(a))));
+                        result[lane] = VectorGetIntX(math.invalid(VectorReplicate(BitCast<f32>(a))));
                         errors[lane] = EDOM;
                         errno = EDOM;
                         continue;
@@ -329,7 +329,7 @@ NWB_INLINE SIMDVectorSingle ArmPackedBody(const SIMDVectorSingle x, const SIMDVe
                 if(b == 0x3f800000u){
                     if(a < s_F32MinNormalBits){
                         // The CRT normalizes subnormal x before its y == 1 return.
-                        const SIMDVectorSingle normalizedShortcut = math.Multiply(VectorReplicate(BitCast<f32>(ix[lane])), VectorReplicate(0x1p23f));
+                        const SIMDVectorSingle normalizedShortcut = math.multiply(VectorReplicate(BitCast<f32>(ix[lane])), VectorReplicate(0x1p23f));
                         __asm__ __volatile__("" : : "w"(normalizedShortcut));
                     }
                     result[lane] = ix[lane];
@@ -346,7 +346,7 @@ NWB_INLINE SIMDVectorSingle ArmPackedBody(const SIMDVectorSingle x, const SIMDVe
     }
     if constexpr(!Bounded){
         const auto subnormal = admitted < s_F32MinNormalBits;
-        const SIMDVectorSingle normalized = math.Multiply(BitCast<SIMDVectorSingle>(subnormal ? admitted : UInt4{}), VectorReplicate(0x1p23f));
+        const SIMDVectorSingle normalized = math.multiply(BitCast<SIMDVectorSingle>(subnormal ? admitted : UInt4{}), VectorReplicate(0x1p23f));
         const UInt4 norm = BitCast<UInt4>(normalized) & s_F32AbsoluteBitMask;
         admitted = subnormal ? norm - (23u << 23u) : admitted;
     }
@@ -359,17 +359,17 @@ NWB_INLINE SIMDVectorSingle ArmPackedBody(const SIMDVectorSingle x, const SIMDVe
         invc[lane] = s_ArmLogTable[indices[lane]].invc;
         logc[lane] = s_ArmLogTable[indices[lane]].logc;
     }
-    const SIMDVectorDouble r = math.DoubleFma(z, invc, VectorDoubleReplicate(-1.0));
-    const SIMDVectorDouble r2 = math.DoubleMultiply(r, r);
-    const SIMDVectorDouble y0 = math.DoubleAdd(logc, __builtin_convertvector(exponent, SIMDVectorDouble));
-    const SIMDVectorDouble q = math.DoubleFma(r, VectorDoubleReplicate(s_ArmLogA4), y0);
-    const SIMDVectorDouble p = math.DoubleFma(r, VectorDoubleReplicate(s_ArmLogA2), VectorDoubleReplicate(s_ArmLogA3));
-    const SIMDVectorDouble q2 = math.DoubleFma(p, r2, q);
-    const SIMDVectorDouble t = math.DoubleFma(r, VectorDoubleReplicate(s_ArmLogA0), VectorDoubleReplicate(s_ArmLogA1));
-    const SIMDVectorDouble r4 = math.DoubleMultiply(r2, r2);
-    const SIMDVectorDouble logarithm = math.DoubleFma(t, r4, q2);
+    const SIMDVectorDouble r = math.doubleFma(z, invc, VectorDoubleReplicate(-1.0));
+    const SIMDVectorDouble r2 = math.doubleMultiply(r, r);
+    const SIMDVectorDouble y0 = math.doubleAdd(logc, __builtin_convertvector(exponent, SIMDVectorDouble));
+    const SIMDVectorDouble q = math.doubleFma(r, VectorDoubleReplicate(s_ArmLogA4), y0);
+    const SIMDVectorDouble p = math.doubleFma(r, VectorDoubleReplicate(s_ArmLogA2), VectorDoubleReplicate(s_ArmLogA3));
+    const SIMDVectorDouble q2 = math.doubleFma(p, r2, q);
+    const SIMDVectorDouble t = math.doubleFma(r, VectorDoubleReplicate(s_ArmLogA0), VectorDoubleReplicate(s_ArmLogA1));
+    const SIMDVectorDouble r4 = math.doubleMultiply(r2, r2);
+    const SIMDVectorDouble logarithm = math.doubleFma(t, r4, q2);
     const SIMDVectorSingle safeY = BitCast<SIMDVectorSingle>(special != 0 ? iy : UInt4{});
-    const SIMDVectorDouble power = math.DoubleMultiply(logarithm, ConvertVectorSingleToDouble(safeY));
+    const SIMDVectorDouble power = math.doubleMultiply(logarithm, ConvertVectorSingleToDouble(safeY));
     SIMDVectorDouble safePower = power;
     if constexpr(!Bounded){
         const UInt64x4 overflow = ArmCompareMask<false>(power, VectorDoubleReplicate(s_ArmOverflow));
@@ -386,7 +386,7 @@ NWB_INLINE SIMDVectorSingle ArmPackedBody(const SIMDVectorSingle x, const SIMDVe
                 if(overflow[lane] != 0u)
                     exceptional = 1;
                 else if(nearOverflow[lane] != 0u){
-                    const SIMDVectorSingle perturb = math.Add(negative ? VectorReplicate(-1.0f) : s_SIMDOne, negative ? VectorReplicate(-0x1p-25f) : VectorReplicate(0x1p-25f));
+                    const SIMDVectorSingle perturb = math.add(negative ? VectorReplicate(-1.0f) : s_SIMDOne, negative ? VectorReplicate(-0x1p-25f) : VectorReplicate(0x1p-25f));
                     if(VectorGetIntX(perturb) != (negative ? 0xbf800000u : 0x3f800000u))
                         exceptional = 1;
                 }
@@ -399,7 +399,7 @@ NWB_INLINE SIMDVectorSingle ArmPackedBody(const SIMDVectorSingle x, const SIMDVe
                     const u32 signedMultiplier = multiplier | (negative ? s_F32SignBitMask : 0u);
                     errno = ERANGE;
                     errors[lane] = ERANGE;
-                    result[lane] = VectorGetIntX(math.Multiply(VectorReplicate(BitCast<f32>(signedMultiplier)), VectorReplicate(BitCast<f32>(multiplier))));
+                    result[lane] = VectorGetIntX(math.multiply(VectorReplicate(BitCast<f32>(signedMultiplier)), VectorReplicate(BitCast<f32>(multiplier))));
                     special[lane] = 0;
                     safePower[lane] = 0.0;
                 }
@@ -408,15 +408,15 @@ NWB_INLINE SIMDVectorSingle ArmPackedBody(const SIMDVectorSingle x, const SIMDVe
     }
     const SIMDVectorDouble kd = SIMDVectorDoubleDetail::FromPairs(vrndaq_f64(SIMDVectorDoubleDetail::GetLow(safePower)), vrndaq_f64(SIMDVectorDoubleDetail::GetHigh(safePower)));
     const Int64x4 ki = __builtin_convertvector(kd, Int64x4);
-    const SIMDVectorDouble rem = math.DoubleSubtract(safePower, kd);
-    const SIMDVectorDouble ep = math.DoubleFma(rem, VectorDoubleReplicate(s_ArmExpC0), VectorDoubleReplicate(s_ArmExpC1));
-    const SIMDVectorDouble er2 = math.DoubleMultiply(rem, rem);
-    const SIMDVectorDouble eq = math.DoubleFma(rem, VectorDoubleReplicate(s_ArmExpC2), s_DoubleSIMDOne);
-    const SIMDVectorDouble exponential = math.DoubleFma(er2, ep, eq);
+    const SIMDVectorDouble rem = math.doubleSubtract(safePower, kd);
+    const SIMDVectorDouble ep = math.doubleFma(rem, VectorDoubleReplicate(s_ArmExpC0), VectorDoubleReplicate(s_ArmExpC1));
+    const SIMDVectorDouble er2 = math.doubleMultiply(rem, rem);
+    const SIMDVectorDouble eq = math.doubleFma(rem, VectorDoubleReplicate(s_ArmExpC2), s_DoubleSIMDOne);
+    const SIMDVectorDouble exponential = math.doubleFma(er2, ep, eq);
     UInt64x4 scale{};
     for(usize lane = 0u; lane < 4u; ++lane)
         scale[lane] = s_ArmExpTable[ki[lane] & s_ArmExpTableIndexMask] + ((static_cast<u64>(ki[lane]) + sign[lane]) << s_ArmExpScaleShift);
-    const UInt4 narrowed = BitCast<UInt4>(math.Narrow(math.DoubleMultiply(exponential, BitCast<SIMDVectorDouble>(scale))));
+    const UInt4 narrowed = BitCast<UInt4>(math.narrow(math.doubleMultiply(exponential, BitCast<SIMDVectorDouble>(scale))));
     if constexpr(Bounded)
         return BitCast<SIMDVectorSingle>(special != 0 ? narrowed : result);
     if(__builtin_reduce_or(errors) != 0){

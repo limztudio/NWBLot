@@ -138,10 +138,7 @@ Expected<TimerQueryRecordingToken> CommandList::beginTimerQuery(TimerQuery& quer
     {
         ScopedLock queryLock(query.m_mutex);
         const bool resetOwnedByCurrentCommandBuffer = query.m_resetRecordingOwner.commandBuffer == m_currentCmdBuf.get() && query.m_resetRecordingOwner.recordingID == m_currentCmdBuf->m_recordingID && query.m_resetRecordingAuthorizationGeneration != 0u;
-        const QueueSubmissionToken currentPriorSubmission = !recordsInlineReset && !resetOwnedByCurrentCommandBuffer
-            ? query.m_resetAuthorizationSubmission
-            : query.prerequisiteSubmissionWithinLock()
-        ;
+        const QueueSubmissionToken currentPriorSubmission = !recordsInlineReset && !resetOwnedByCurrentCommandBuffer ? query.m_resetAuthorizationSubmission : query.prerequisiteSubmissionWithinLock();
         if(
             !query.m_recordingActive
             && query.m_cycleGeneration == 0u

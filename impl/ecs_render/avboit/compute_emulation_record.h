@@ -106,12 +106,7 @@ using AvboitSharedComputeEmulationRecordTrait = AvboitComputeEmulationRecordTrai
 [[nodiscard]] bool RecordAvboitSharedComputeEmulation(const AvboitSharedComputeEmulationRecordInputs& inputs, Core::CommandList& commandList, const AvboitSharedComputeEmulationRecordTrait& trait);
 
 template<typename PayloadT>
-[[nodiscard]] inline bool RecordAvboitComputeEmulationFromPayload(
-    const PayloadT& payload,
-    Core::CommandList& commandList,
-    const AvboitComputeEmulationRecordTrait& trait,
-    Optional<Core::GpuTimingMeasure>& timing
-){
+[[nodiscard]] inline bool RecordAvboitComputeEmulationFromPayload(const PayloadT& payload, Core::CommandList& commandList, const AvboitComputeEmulationRecordTrait& trait, Optional<Core::GpuTimingMeasure>& timing){
     const AvboitComputeEmulationRecordInputs inputs{
         payload.graphics,
         payload.materialSystem,
@@ -167,13 +162,7 @@ template<typename PayloadT, typename DispatchFn>
 }
 
 template<typename PayloadT>
-[[nodiscard]] inline bool RecordAvboitSharedComputeEmulationFromPayload(
-    const PayloadT& payload,
-    Core::CommandList& commandList,
-    const bool isRasterPhase,
-    const AvboitSharedComputeEmulationRecordTrait& trait,
-    Optional<Core::GpuTimingMeasure>& timing
-){
+[[nodiscard]] inline bool RecordAvboitSharedComputeEmulationFromPayload(const PayloadT& payload, Core::CommandList& commandList, const bool isRasterPhase, const AvboitSharedComputeEmulationRecordTrait& trait, Optional<Core::GpuTimingMeasure>& timing){
     const AvboitSharedComputeEmulationRecordInputs inputs{
         payload.graphics,
         payload.materialSystem,

@@ -15,7 +15,7 @@ from types import SimpleNamespace
 LIT_MINIMUM_CAPTURE_SECONDS = 30.0
 LIT_MILLISECONDS_PER_SECOND = 1000.0
 LIT_MINIMUM_TIMEOUT_SECONDS = 35
-LIT_MAXIMUM_TIMEOUT_SECONDS = 100
+LIT_MAXIMUM_TIMEOUT_SECONDS = 300
 LIT_MAXIMUM_FIXED_DELTA_SECONDS = .25
 
 LIT_TOKEN_FIELD_PATTERN = r"=(\S+)"
@@ -648,7 +648,7 @@ def parse_args(argv=None):
     parser.add_argument("--logserver-executable", type=Path)
     parser.add_argument("--no-logserver", action=LIT_STORE_TRUE)
     parser.add_argument("--output-directory", type=Path)
-    parser.add_argument("--timeout", type=float, default=90.0)
+    parser.add_argument("--timeout", type=float, default=90.0, help="Whole-process budget including startup; warmup and measurement durations stay fixed.")
     parser.add_argument("--minimum-fps", type=float, help="Require strictly greater accepted presentation FPS; equality fails. Diagnostic runs cannot qualify, and ten or fewer positive intervals are inconclusive.")
     parser.add_argument("--characters-per-class", type=int, choices=(5, 10), default=10, help="Ten per class is the twenty-body target; five preserves the historical comparison layout/camera.")
     parser.add_argument("--csg-profile", choices=(LIT_NONE, LIT_WAIST_BANDS), default=LIT_NONE, help="Waist bands add two moving box cutters to all twenty mesh children.")
@@ -690,7 +690,7 @@ def parse_args(argv=None):
     if not args.no_logserver and (args.logserver_executable is None or not args.logserver_executable.is_file()):
         parser.error("an existing logger is required unless --no-logserver is selected")
     if not math.isfinite(args.timeout) or not LIT_MINIMUM_TIMEOUT_SECONDS < args.timeout <= LIT_MAXIMUM_TIMEOUT_SECONDS:
-        parser.error("timeout must be finite and greater than 35 through 100 seconds")
+        parser.error(f"timeout must be finite and greater than {LIT_MINIMUM_TIMEOUT_SECONDS} through {LIT_MAXIMUM_TIMEOUT_SECONDS} seconds")
     if not math.isfinite(args.spin_angle) or not 0 <= args.spin_angle < math.tau:
         parser.error("spin angle must be finite in [0, 2pi)")
     if args.animate and args.fixed_delta_seconds is not None:

@@ -167,7 +167,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     const DeferredLightingGraphResources deferredLightingResources = m_deferredSystem.lightingGraphResources();
     const ECSRenderDetail::MeshFrameBindingSnapshot frameBindings = m_meshSystem.meshFrameBindingSnapshot();
     const bool retainRefractionCapPipeline = m_preparedRefractionActive && (csgFrameState.hasTransparentStaticWork || csgFrameState.hasTransparentSkinnedWork);
-    const ECSRenderDetail::CsgGraphResourceSnapshot csgResources = m_csgSystem.csgGraphResourceSnapshot(retainRefractionCapPipeline);
+    const ECSRenderDetail::CsgGraphResourceSnapshot csgResources = csgFrameState.empty() ? ECSRenderDetail::CsgGraphResourceSnapshot{} : m_csgSystem.csgGraphResourceSnapshot(retainRefractionCapPipeline);
     const ECSRenderDetail::MeshViewBufferSnapshot& meshViewBufferSnapshot = frameBindings.meshView;
     if(
         !deferredTargets.valid()

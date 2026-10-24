@@ -217,11 +217,7 @@ struct CsgFrameGpuDataView{
 
 public:
     constexpr CsgFrameGpuDataView()noexcept = default;
-    constexpr CsgFrameGpuDataView(
-        const Span<const CsgReceiverRangeGpuData> inReceiverRanges,
-        const Span<const CsgCutterGpuData> inCutters,
-        const CsgFrameWorkRegion& inWorkRegion
-    )noexcept
+    constexpr CsgFrameGpuDataView(const Span<const CsgReceiverRangeGpuData> inReceiverRanges, const Span<const CsgCutterGpuData> inCutters, const CsgFrameWorkRegion& inWorkRegion)noexcept
         : receiverRanges(inReceiverRanges)
         , cutters(inCutters)
         , workRegion(inWorkRegion)

@@ -415,11 +415,13 @@ public:
         if(m_gpuTimingEnabled)
             m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
 
-        if(!LoadSmokeSkeletonBindJoints(m_bindJoints, m_context.assetManager, s_BenchmarkModel, s_ProjectName, s_ModelSkeletonObject, true)){
+        auto bindJoints = LoadSmokeSkeletonBindJoints(m_context.objectArena, m_context.assetManager, s_BenchmarkModel, s_ProjectName, s_ModelSkeletonObject, true);
+        if(!bindJoints){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark mesh has no skeleton joints"));
             requestQuit();
             return true;
         }
+        m_bindJoints = Move(*bindJoints);
         auto* const meshSystemPtr = m_world->getSystem<NWB::Impl::MeshSystem>();
         NWB_ASSERT(meshSystemPtr);
         NWB::Impl::MeshSystem& meshSystem = *meshSystemPtr;

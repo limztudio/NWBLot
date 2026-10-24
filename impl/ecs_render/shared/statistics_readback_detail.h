@@ -11,6 +11,9 @@
 #include <core/graphics/backend_selection/backend.h>
 #include <core/graphics/runtime/runtime.h>
 
+#include <global/array.h>
+#include <global/expected.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -28,34 +31,21 @@ namespace ECSRenderDetail{
 
 
 template<u32 SlotCount>
-[[nodiscard]] inline bool CreateStatisticsReadbackBuffers(
-    Core::GraphicsRuntime& graphics,
-    const usize counterByteSize,
-    const Name (&names)[SlotCount],
-    Core::BufferHandle (&outBuffers)[SlotCount]
-){
+[[nodiscard]] inline Expected<Array<Core::BufferHandle, SlotCount>> CreateStatisticsReadbackBuffers(Core::GraphicsRuntime& graphics, const usize counterByteSize, const Name (&names)[SlotCount]){
+    Array<Core::BufferHandle, SlotCount> buffers;
     for(u32 index = 0u; index < SlotCount; ++index){
         Core::BufferDesc desc;
-        desc.setByteSize(counterByteSize)
-            .setCpuAccess(Core::CpuAccessMode::Read)
-            .setDebugName(names[index])
-            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-            .enableAutomaticStateTracking(Core::ResourceStates::CopyDest);
+        desc.setByteSize(counterByteSize).setCpuAccess(Core::CpuAccessMode::Read).setDebugName(names[index]).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).enableAutomaticStateTracking(Core::ResourceStates::CopyDest);
         auto bufferResult = graphics.createBuffer(desc);
         if(!bufferResult)
-            return false;
-        outBuffers[index] = Move(*bufferResult);
+            return MakeUnexpected(Failure{});
+        buffers[index] = Move(*bufferResult);
     }
-    return true;
+    return buffers;
 }
 
 template<usize CounterByteSize, u32 SlotCount, typename ControlHandleT>
-inline void PollCompletedStatisticsReadback(
-    ControlHandleT& control,
-    Core::GraphicsRuntime& graphics,
-    const Core::BufferHandle (&buffers)[SlotCount],
-    const TStringView mapErrorMessage
-){
+inline void PollCompletedStatisticsReadback(ControlHandleT& control, Core::GraphicsRuntime& graphics, const Core::BufferHandle (&buffers)[SlotCount], const TStringView mapErrorMessage){
     if(!control)
         return;
     auto& device = graphics.getDevice();

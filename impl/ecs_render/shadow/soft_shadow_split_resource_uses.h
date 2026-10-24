@@ -45,8 +45,7 @@ struct SoftShadowSplitResourceInputs{
     const RayTracingSceneGraphReads& hardwareSceneReads;
     const Core::GpuGraphResourceId (&hardwareTransparentScratch)[s_HardwareTransparentShadowScratchCount];
     SoftShadowSplitRoute route;
-    const Core::GpuGraphResourceId* traceGeometryResources = nullptr;
-    usize traceGeometryResourceCount = 0u;
+    Span<const Core::GpuGraphResourceId> traceGeometryResources{};
     Core::GpuGraphResourceId worldPosition;
     Core::GpuGraphResourceId normal;
     Core::GpuGraphResourceId depth;
@@ -61,25 +60,31 @@ struct SoftShadowSplitResourceInputs{
 
 // Per-callback resource declarations of the prepared soft-transparent shadow route.
 struct SoftShadowSplitResourceUses{
+    static constexpr usize s_MaxOpaqueFirstWaveletUses = 12u;
+    static constexpr usize s_MaxOpaqueResolveUses = 8u;
+    static constexpr usize s_MaxTransparentTemporalMergeUses = 13u;
+    static constexpr usize s_MaxTransparentFirstWaveletUses = 7u;
+    static constexpr usize s_MaxTransparentFoldUses = 9u;
+
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> opaque;
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> opaqueFirstWavelet;
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> opaqueResolve;
+    Core::GpuTaskResourceUse opaqueFirstWavelet[s_MaxOpaqueFirstWaveletUses] = {};
+    usize opaqueFirstWaveletCount = 0u;
+    Core::GpuTaskResourceUse opaqueResolve[s_MaxOpaqueResolveUses] = {};
+    usize opaqueResolveCount = 0u;
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> transparentTrace;
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> transparentTemporalMerge;
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> transparentFirstWavelet;
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> transparentFold;
+    Core::GpuTaskResourceUse transparentTemporalMerge[s_MaxTransparentTemporalMergeUses] = {};
+    usize transparentTemporalMergeCount = 0u;
+    Core::GpuTaskResourceUse transparentFirstWavelet[s_MaxTransparentFirstWaveletUses] = {};
+    usize transparentFirstWaveletCount = 0u;
+    Core::GpuTaskResourceUse transparentFold[s_MaxTransparentFoldUses] = {};
+    usize transparentFoldCount = 0u;
     bool graphOwnsTransparentTemporalMergeEntryStates = false;
 
 
 public:
     explicit SoftShadowSplitResourceUses(Core::Alloc::ScratchArena& scratchArena)noexcept
         : opaque(scratchArena)
-        , opaqueFirstWavelet(scratchArena)
-        , opaqueResolve(scratchArena)
         , transparentTrace(scratchArena)
-        , transparentTemporalMerge(scratchArena)
-        , transparentFirstWavelet(scratchArena)
-        , transparentFold(scratchArena)
     {}
 };
 

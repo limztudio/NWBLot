@@ -28,14 +28,13 @@ SoftwareCausticsResolveChainBuilder::SoftwareCausticsResolveChainBuilder(Core::G
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<SoftwareCausticsResolveChainResult> SoftwareCausticsResolveChainBuilder::declare(const SoftwareCausticsResolveChainInputs& inputs, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] Expected<SoftwareCausticsResolveChainResult> SoftwareCausticsResolveChainBuilder::declare(const SoftwareCausticsResolveChainInputs& inputs){
     SoftwareCausticsResolveChainResult result{};
     CausticsResolveChainInputs sharedInputs(inputs.targets, inputs.producerDispatched, inputs.timingTicket, inputs.resolveTiming);
     static_cast<CausticsResolveChainStageUseInputs&>(sharedInputs) = inputs;
     sharedInputs.geometryTask = inputs.geometryTask;
     sharedInputs.baseScheduling = inputs.baseScheduling;
     sharedInputs.stateSources = inputs.stateSources;
-    sharedInputs.stateSourceCount = inputs.stateSourceCount;
     const CausticsResolveChainNaming naming{
         {Name("render.software_caustics.resolve_prepare"), "Software Caustics Resolve Prepare", NWB_TEXT("RendererSystem: could not declare deferred software-caustics resolve-prepare graph task")},
         {Name("render.software_caustics.resolve_wavelet"), "Software Caustics Resolve Wavelet", NWB_TEXT("RendererSystem: could not declare deferred software-caustics first-wavelet graph task")},
@@ -47,7 +46,7 @@ SoftwareCausticsResolveChainBuilder::SoftwareCausticsResolveChainBuilder(Core::G
         {Name("render.software_caustics.resolve_timing_close"), "Software Caustics Resolve Timing Close", NWB_TEXT("RendererSystem: could not declare deferred software-caustics resolve graph task")},
     };
     CausticsResolveChainBuilder sharedBuilder(m_graph, m_raytracingSystem);
-    auto sharedResult = sharedBuilder.declare(sharedInputs, naming, scratchArena);
+    auto sharedResult = sharedBuilder.declare(sharedInputs, naming);
     if(!sharedResult)
         return MakeUnexpected(Failure{});
     static_cast<CausticsResolveChainStageTasks&>(result) = *sharedResult;

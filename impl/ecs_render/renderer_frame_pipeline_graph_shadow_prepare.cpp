@@ -31,16 +31,14 @@ NWB_IMPL_BEGIN
 
 
 bool RendererFramePipeline::declareDeferredShadowPrepareTask(
-    Core::Alloc::ScratchArena& scratchArena,
     const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources,
     const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
     const Core::GpuGraphResourceId currentBindlessSlots,
     const Core::GpuGraphResourceId materialContextSlots,
-    const Core::GpuGraphResourceId* const shadowTraceGeometryResources,
-    const usize shadowTraceGeometryResourceCount,
-    const Core::GpuGraphResourceId* const softwareBvhBuildStateResources,
-    const usize softwareBvhBuildStateResourceCount,
+    const Span<const Core::GpuGraphResourceId> shadowTraceGeometryResources,
+    const Span<const Core::GpuGraphResourceId> softwareBvhBuildStateResources,
     const bool softwareTraceResourcesPrepared,
+    Core::Alloc::ScratchArena& scratchArena,
     DeferredFrameTargets& deferredTargets,
     Core::GpuTimingSubmissionTicket& timingTicket
 ){
@@ -55,8 +53,6 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         || !m_raytracingSystem.shadowVisibilityResourcesPreflighted()
         || !currentBindlessSlots.valid()
         || !materialContextSlots.valid()
-        || (shadowTraceGeometryResourceCount != 0u && !shadowTraceGeometryResources)
-        || (softwareBvhBuildStateResourceCount != 0u && !softwareBvhBuildStateResources)
     )
         return false;
 
@@ -104,9 +100,11 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     const bool pureSoftwareMeshSwBvhBuildsGraphOwnedCandidate = meshSwBvhBuildsGraphOwned && !m_raytracingSystem.shadowVisibilityHardwareSupported();
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
-    Vector<Core::GpuTaskResourceSetUse, Core::Alloc::ScratchArena> resourceSetUses{ scratchArena };
+    constexpr usize s_ShadowPrepareResourceSetUseCapacity = 3u;
+    Core::GpuTaskResourceSetUse resourceSetUses[s_ShadowPrepareResourceSetUseCapacity] = {};
+    usize resourceSetUseCount = 0u;
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accelStructFinalizeResourceUses{ scratchArena };
-    const ShadowPrepareGeometryInputs geometryInputs{ .blasBuilds = preparedMeshBlasBuilds, .traceResources = Span<const Core::GpuGraphResourceId>(shadowTraceGeometryResources, shadowTraceGeometryResourceCount), .blasBuildsGraphOwned = meshBlasBuildsGraphOwned, };
+    const ShadowPrepareGeometryInputs geometryInputs{ .blasBuilds = preparedMeshBlasBuilds, .traceResources = shadowTraceGeometryResources, .blasBuildsGraphOwned = meshBlasBuildsGraphOwned, };
     ShadowPrepareGeometryResources geometryResources(geometryInputs, scratchArena);
     const auto& meshBlasGeometryBuildInputResources = geometryResources.m_blasBuildInputs;
     const auto& shadowPrepareTraceGeometryResources = geometryResources.m_remainingTraceGeometry;
@@ -114,10 +112,8 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     ECSRenderDetail::MeshBlasGraphStateVector liveMeshBlasGraphStates{ scratchArena };
     m_meshSystem.collectBlasGraphStates(liveMeshBlasGraphStates);
     constexpr usize s_ShadowPrepareResourceUseCapacity = 19u;
-    resourceUses.reserve(s_ShadowPrepareResourceUseCapacity + (uploads.csgTraceContext.valid() ? 1u : 0u) + shadowTraceGeometryResourceCount + softwareBvhBuildStateResourceCount + liveMeshBlasGraphStates.size() + preparedMeshBlasBuilds.size() * 2u);
+    resourceUses.reserve(s_ShadowPrepareResourceUseCapacity + (uploads.csgTraceContext.valid() ? 1u : 0u) + shadowTraceGeometryResources.size() + softwareBvhBuildStateResources.size() + liveMeshBlasGraphStates.size() + preparedMeshBlasBuilds.size() * 2u);
     accelStructFinalizeResourceUses.reserve((sceneTlasBuildGraphOwned ? 1u : 0u) + preparedMeshBlasBuilds.size());
-    constexpr usize s_ShadowPrepareResourceSetUseCapacity = 3u;
-    resourceSetUses.reserve(s_ShadowPrepareResourceSetUseCapacity);
     geometryResources.prepareStorage(meshBlasGeometryBuildInputStatesGraphOwned);
     // Shadow Preparation owns post-transition boundaries; Compute readers wait on this packet.
     resourceUses.push_back(ReadWriteUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
@@ -181,7 +177,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     }
     const Core::GpuTaskResourceSetUse meshBlasGeometryBuildInputSetUse{ .resourceSet = meshBlasGeometryBuildInputSet, .range = {}, .requiredState = Core::ResourceStates::AccelStructBuildInput, .access = Core::GpuTaskResourceAccess::ReadWrite, };
     if(meshBlasGeometryBuildInputSetGraphOwned)
-        resourceSetUses.push_back(meshBlasGeometryBuildInputSetUse);
+        resourceSetUses[resourceSetUseCount++] = meshBlasGeometryBuildInputSetUse;
     if(!geometryResources.gatherRemainingTraceResources())
         return false;
 
@@ -205,32 +201,32 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     }
     const Core::GpuTaskResourceSetUse shadowPrepareTraceGeometrySetUse{ .resourceSet = shadowPrepareTraceGeometrySet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::ReadWrite, };
     if(shadowPrepareTraceGeometryStatesGraphOwned)
-        resourceSetUses.push_back(shadowPrepareTraceGeometrySetUse);
-    for(usize resourceIndex = 0u; resourceIndex < softwareBvhBuildStateResourceCount; ++resourceIndex){
-        if(!softwareBvhBuildStateResources[resourceIndex].valid())
+        resourceSetUses[resourceSetUseCount++] = shadowPrepareTraceGeometrySetUse;
+    for(const Core::GpuGraphResourceId resource : softwareBvhBuildStateResources){
+        if(!resource.valid())
             return false;
     }
     Core::GpuGraphResourceSetId softwareBvhBuildStateSet;
-    if(softwareBvhBuildStateResourceCount != 0u){
+    if(!softwareBvhBuildStateResources.empty()){
         const auto softwareBvhBuildStateSetResult = m_deferredLightingTaskGraph.importResourceSet(
             Core::GpuGraphResourceSetDesc{}
                 .setIdentity(Name("render.shadow_prepare.software_bvh_build_state"))
                 .setMarkerLabel("Shadow Prepare Software BVH Build State")
-                .setMembers(softwareBvhBuildStateResources, softwareBvhBuildStateResourceCount)
+                .setMembers(softwareBvhBuildStateResources.data(), softwareBvhBuildStateResources.size())
         );
         if(softwareBvhBuildStateSetResult)
             softwareBvhBuildStateSet = *softwareBvhBuildStateSetResult;
     }
     const bool softwareBvhBuildStateStatesGraphOwned = softwareBvhBuildStateSet.valid();
     if(!softwareBvhBuildStateStatesGraphOwned){
-        for(usize resourceIndex = 0u; resourceIndex < softwareBvhBuildStateResourceCount; ++resourceIndex){
+        for(const Core::GpuGraphResourceId resource : softwareBvhBuildStateResources){
             // Parent links and scratch keep native UAV state; they are state-only resources.
-            resourceUses.push_back(ReadWriteUse(softwareBvhBuildStateResources[resourceIndex], Core::ResourceStates::UnorderedAccess));
+            resourceUses.push_back(ReadWriteUse(resource, Core::ResourceStates::UnorderedAccess));
         }
     }
     const Core::GpuTaskResourceSetUse softwareBvhBuildStateSetUse{ .resourceSet = softwareBvhBuildStateSet, .range = {}, .requiredState = Core::ResourceStates::UnorderedAccess, .access = Core::GpuTaskResourceAccess::ReadWrite, };
     if(softwareBvhBuildStateStatesGraphOwned)
-        resourceSetUses.push_back(softwareBvhBuildStateSetUse);
+        resourceSetUses[resourceSetUseCount++] = softwareBvhBuildStateSetUse;
 
     Core::GpuGraphResourceId sceneTlas;
     if(rayTracingShadowResources.sceneTlas){
@@ -406,7 +402,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         .setDependencies(&shadowPrepareDependency, s_DependencyCount)
         .setExternalStateSources(shadowPrepareStateSource.states ? &shadowPrepareStateSource : nullptr, shadowPrepareStateSource.states ? 1u : 0u)
         .setResourceUses(resourceUses.data(), resourceUses.size())
-        .setResourceSetUses(resourceSetUses.data(), resourceSetUses.size())
+        .setResourceSetUses(resourceSetUses, resourceSetUseCount)
     ;
     const auto mDeferredShadowPrepareTaskResult = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::ShadowPrepareGraphTask>(
         desc,

@@ -54,7 +54,7 @@ SurfelGiLifecycleBuilder::SurfelGiLifecycleBuilder(Core::GpuTaskGraph& graph, Re
                 .setMarkerLabel("Surfel GI Initialize Pool Clear")
                 .setScheduling(initializationScheduling)
                 .setDependencies(&dependency, 1u)
-                .setExternalDependencies(inputs.externalDependencies, inputs.externalDependencyCount)
+                .setExternalDependencies(inputs.externalDependencies.data(), inputs.externalDependencies.size())
                 .setExternalStateSources(inputs.computeStateSource.states ? &inputs.computeStateSource : nullptr, inputs.computeStateSource.states ? 1u : 0u)
             ;
             const auto resultPreparationTaskResult = m_graph.addClearBufferTask(poolClearDesc, Core::GpuClearBufferTaskDesc{ .destination = inputs.surfelPool, .clearValue = 0u, });

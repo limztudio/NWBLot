@@ -45,12 +45,9 @@ struct LightSpaceShadowGraphInputs{
     const bool& shadowPrepared;
     const LightSpaceShadowSnapshot& snapshot;
     Core::GpuTaskId dependency;
-    const Core::GpuTaskResourceUse* sceneReads = nullptr;
-    usize sceneReadCount = 0u;
-    const Core::GpuTaskResourceSetUse* sceneReadSets = nullptr;
-    usize sceneReadSetCount = 0u;
-    const Core::GpuTaskExternalStateSource* stateSources = nullptr;
-    usize stateSourceCount = 0u;
+    Span<const Core::GpuTaskResourceUse> sceneReads{};
+    Span<const Core::GpuTaskResourceSetUse> sceneReadSets{};
+    Span<const Core::GpuTaskExternalStateSource> stateSources{};
 };
 
 struct LightSpaceShadowGraph{
@@ -77,10 +74,10 @@ public:
     }
 };
 
-[[nodiscard]] Expected<Core::GpuTaskId> DeclareLightSpaceShadowDiagnostics(Core::GpuTaskGraph& graph, const LightSpaceShadowGraphInputs& inputs, Core::GpuGraphResourceId context);
+[[nodiscard]] Expected<Core::GpuTaskId> DeclareLightSpaceShadowDiagnostics(const LightSpaceShadowGraphInputs& inputs, Core::GpuGraphResourceId context, Core::GpuTaskGraph& graph);
 
 // Capture and reuse import the same map generation; accepted state sources and frame ordering preserve availability.
-[[nodiscard]] Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, const LightSpaceShadowGraphInputs& inputs);
+[[nodiscard]] Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(const LightSpaceShadowGraphInputs& inputs, Core::GpuTaskGraph& graph);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

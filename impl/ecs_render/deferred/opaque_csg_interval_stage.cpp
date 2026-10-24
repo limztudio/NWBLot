@@ -134,7 +134,6 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(Core::Allo
     tasks.intervalCombineTask = *intervalCombineTaskResult;
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> csgIntervalSampleResourceUses{ scratchArena };
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> opaqueCsgIntervalSampleComputeEmulationResourceUses{ scratchArena };
     Core::GpuGraphResourceSetId csgIntervalSampleMaterialGeometrySet;
     Core::GpuGraphResourceSetId csgIntervalSampleMaterialSampledTextureSet;
     const MaterialPassDrawItemsView csgIntervalSampleMaterialGeometryDrawSets[] = { inputs.opaqueDrawItems.csg };
@@ -275,20 +274,20 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(Core::Allo
         m_intervalSampleComputeEmulationPayload.materialFrameStatesGraphOwned = m_intervalSamplePayload.materialFrameStatesGraphOwned;
         m_intervalSampleComputeEmulationPayload.materialGeometryStatesGraphOwned = m_intervalSamplePayload.materialGeometryStatesGraphOwned;
 
-        constexpr usize s_OpaqueCsgIntervalSampleCapacity = 12u;
-        opaqueCsgIntervalSampleComputeEmulationResourceUses.reserve(s_OpaqueCsgIntervalSampleCapacity);
-        opaqueCsgIntervalSampleComputeEmulationResourceUses.push_back(ReadUse(inputs.resources.meshView, Core::ResourceStates::ConstantBuffer));
-        opaqueCsgIntervalSampleComputeEmulationResourceUses.push_back(ReadBufferUse(inputs.resources.materialInstances, inputs.materialInstanceRange));
-        opaqueCsgIntervalSampleComputeEmulationResourceUses.push_back(ReadBufferUse(inputs.resources.materialTyped, inputs.materialTypedRange));
-        opaqueCsgIntervalSampleComputeEmulationResourceUses.push_back(ReadBufferUse(inputs.resources.csgReceiverRanges, inputs.csgReceiverRange));
-        opaqueCsgIntervalSampleComputeEmulationResourceUses.push_back(ReadBufferUse(inputs.resources.csgCutters, inputs.csgCutterRange));
-        opaqueCsgIntervalSampleComputeEmulationResourceUses.push_back(ReadUse(inputs.resources.csgClipContextSlots, Core::ResourceStates::ConstantBuffer));
-        opaqueCsgIntervalSampleComputeEmulationResourceUses.push_back(ReadUse(inputs.resources.csgIntervalSampleState, Core::ResourceStates::ConstantBuffer));
-        opaqueCsgIntervalSampleComputeEmulationResourceUses.push_back(ReadUse(inputs.resources.currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
-        opaqueCsgIntervalSampleComputeEmulationResourceUses.push_back(ReadTextureUse(inputs.resources.csgRemovedIntervalDepth, inputs.removedIntervalSubresources, Core::ResourceStates::UnorderedAccess));
-        opaqueCsgIntervalSampleComputeEmulationResourceUses.push_back(ReadTextureUse(inputs.resources.csgRemovedIntervalCapNormal, inputs.removedIntervalSubresources, Core::ResourceStates::UnorderedAccess));
-        opaqueCsgIntervalSampleComputeEmulationResourceUses.push_back(ReadTextureUse(inputs.resources.csgRemovedIntervalData, inputs.removedIntervalSubresources, Core::ResourceStates::UnorderedAccess));
-        opaqueCsgIntervalSampleComputeEmulationResourceUses.push_back(ReadTextureUse(inputs.resources.csgRemovedIntervalCount, inputs.removedIntervalCountSubresources, Core::ResourceStates::UnorderedAccess));
+        const Core::GpuTaskResourceUse opaqueCsgIntervalSampleComputeEmulationResourceUses[] = {
+            ReadUse(inputs.resources.meshView, Core::ResourceStates::ConstantBuffer),
+            ReadBufferUse(inputs.resources.materialInstances, inputs.materialInstanceRange),
+            ReadBufferUse(inputs.resources.materialTyped, inputs.materialTypedRange),
+            ReadBufferUse(inputs.resources.csgReceiverRanges, inputs.csgReceiverRange),
+            ReadBufferUse(inputs.resources.csgCutters, inputs.csgCutterRange),
+            ReadUse(inputs.resources.csgClipContextSlots, Core::ResourceStates::ConstantBuffer),
+            ReadUse(inputs.resources.csgIntervalSampleState, Core::ResourceStates::ConstantBuffer),
+            ReadUse(inputs.resources.currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
+            ReadTextureUse(inputs.resources.csgRemovedIntervalDepth, inputs.removedIntervalSubresources, Core::ResourceStates::UnorderedAccess),
+            ReadTextureUse(inputs.resources.csgRemovedIntervalCapNormal, inputs.removedIntervalSubresources, Core::ResourceStates::UnorderedAccess),
+            ReadTextureUse(inputs.resources.csgRemovedIntervalData, inputs.removedIntervalSubresources, Core::ResourceStates::UnorderedAccess),
+            ReadTextureUse(inputs.resources.csgRemovedIntervalCount, inputs.removedIntervalCountSubresources, Core::ResourceStates::UnorderedAccess),
+        };
         Core::GpuTaskResourceSetUse opaqueCsgIntervalSampleComputeEmulationResourceSetUses[3u] = {};
         usize opaqueCsgIntervalSampleComputeEmulationResourceSetUseCount = 0u;
         opaqueCsgIntervalSampleComputeEmulationResourceSetUses[opaqueCsgIntervalSampleComputeEmulationResourceSetUseCount++] = csgIntervalSampleMaterialGeometrySetUse;
@@ -310,7 +309,7 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(Core::Allo
             .setMarkerLabel("Opaque CSG Interval-Sample Compute Emulation")
             .setScheduling(opaqueCsgIntervalSampleComputeEmulationScheduling)
             .setDependencies(&csgIntervalSampleDependency, 1u)
-            .setResourceUses(opaqueCsgIntervalSampleComputeEmulationResourceUses.data(), opaqueCsgIntervalSampleComputeEmulationResourceUses.size())
+            .setResourceUses(opaqueCsgIntervalSampleComputeEmulationResourceUses, LengthOf(opaqueCsgIntervalSampleComputeEmulationResourceUses))
             .setResourceSetUses(opaqueCsgIntervalSampleComputeEmulationResourceSetUses, opaqueCsgIntervalSampleComputeEmulationResourceSetUseCount)
         ;
         const auto intervalSampleComputeEmulationTaskResult = m_graph.addTask<

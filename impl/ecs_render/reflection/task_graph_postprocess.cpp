@@ -174,9 +174,9 @@ Expected<Core::GpuTaskId> DeclareReflectionPostprocessTasks(
     if(!reservation.valid() || (snapshot.history.eligible && !snapshot.temporalPipeline))
         return MakeUnexpected(Failure{});
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses{scratchArena};
-    uses.reserve(inputs.surfaceReadCount + s_TemporalExtraResourceUseCount);
+    uses.reserve(inputs.surfaceReads.size() + s_TemporalExtraResourceUseCount);
     if(snapshot.history.eligible){
-        uses.assign(inputs.surfaceReads, inputs.surfaceReads + inputs.surfaceReadCount);
+        uses.assign(inputs.surfaceReads.begin(), inputs.surfaceReads.end());
         uses.push_back(ReadWriteUse(result.opaqueRadiance, Core::ResourceStates::UnorderedAccess));
         if(snapshot.history.reused){
             const auto previousResult = ImportImage(graph, snapshot.previous.texture, false);
@@ -205,7 +205,7 @@ Expected<Core::GpuTaskId> DeclareReflectionPostprocessTasks(
     if(!spatialResult)
         return MakeUnexpected(Failure{});
     const Core::GpuGraphResourceId spatial = *spatialResult;
-    uses.assign(inputs.surfaceReads, inputs.surfaceReads + inputs.surfaceReadCount);
+    uses.assign(inputs.surfaceReads.begin(), inputs.surfaceReads.end());
     uses.push_back(ReadUse(result.opaqueRadiance));
     uses.push_back(WriteUse(spatial, Core::ResourceStates::UnorderedAccess));
     desc = TaskDesc(Name("render.reflection.spatial"), "Reflection Spatial Filter", dependency);

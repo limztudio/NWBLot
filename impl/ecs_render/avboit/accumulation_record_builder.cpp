@@ -36,7 +36,6 @@ static constexpr usize s_StreamUseCount = 7u;
 static constexpr usize s_CsgIntervalUseCount = 4u;
 static constexpr usize s_EmulationBaseCount = 4u;
 static constexpr usize s_EmulationPlanUseCount = 8u;
-static constexpr usize s_SharedGenerateUseCount = 5u;
 static constexpr usize s_MaterialResourceSetUseCapacity = 3u;
 static constexpr usize s_ComputeEmulationResourceSetUseCapacity = 3u;
 
@@ -240,26 +239,22 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
         computeEmulationPayload.materialFrameStatesGraphOwned = accumulationPayload.accumulationMaterialFrameStatesGraphOwned;
         computeEmulationPayload.materialGeometryStatesGraphOwned = accumulationPayload.accumulationMaterialGeometryStatesGraphOwned;
 
-        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accumulationComputeEmulationResourceUses{ scratchArena };
-        accumulationComputeEmulationResourceUses.reserve(__hidden_avboit_accumulation_record_builder::s_EmulationBaseCount + (inputs.csgComputeEmulationPlanCaptured ? __hidden_avboit_accumulation_record_builder::s_EmulationPlanUseCount : 0u));
-        accumulationComputeEmulationResourceUses.push_back(ReadUse(inputs.meshView, Core::ResourceStates::ConstantBuffer));
-        accumulationComputeEmulationResourceUses.push_back(ReadBufferUse(inputs.materialInstances, inputs.instanceRange));
-        accumulationComputeEmulationResourceUses.push_back(ReadBufferUse(inputs.materialTyped, inputs.materialTypedRange));
-        accumulationComputeEmulationResourceUses.push_back(ReadUse(inputs.currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
+        Core::GpuTaskResourceUse accumulationComputeEmulationResourceUses[__hidden_avboit_accumulation_record_builder::s_EmulationBaseCount + __hidden_avboit_accumulation_record_builder::s_EmulationPlanUseCount] = {
+            ReadUse(inputs.meshView, Core::ResourceStates::ConstantBuffer),
+            ReadBufferUse(inputs.materialInstances, inputs.instanceRange),
+            ReadBufferUse(inputs.materialTyped, inputs.materialTypedRange),
+            ReadUse(inputs.currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
+        };
+        usize accumulationComputeEmulationResourceUseCount = __hidden_avboit_accumulation_record_builder::s_EmulationBaseCount;
         if(inputs.csgComputeEmulationPlanCaptured){
-            accumulationComputeEmulationResourceUses.push_back(ReadBufferUse(inputs.csgReceiverRanges, inputs.receiverRange));
-            accumulationComputeEmulationResourceUses.push_back(ReadBufferUse(inputs.csgCutters, inputs.cutterRange));
-            accumulationComputeEmulationResourceUses.push_back(ReadUse(inputs.csgClipContextSlots, Core::ResourceStates::ConstantBuffer));
-            accumulationComputeEmulationResourceUses.push_back(ReadUse(inputs.csgIntervalSampleState, Core::ResourceStates::ConstantBuffer));
-            AppendCsgRemovedIntervalUses(
-                accumulationComputeEmulationResourceUses,
-                inputs.csgRemovedIntervalDepth,
-                inputs.csgRemovedIntervalCapNormal,
-                inputs.csgRemovedIntervalData,
-                inputs.csgRemovedIntervalCount,
-                inputs.csgRemovedIntervalSubresources,
-                inputs.csgRemovedIntervalCountSubresources
-            );
+            accumulationComputeEmulationResourceUses[accumulationComputeEmulationResourceUseCount++] = ReadBufferUse(inputs.csgReceiverRanges, inputs.receiverRange);
+            accumulationComputeEmulationResourceUses[accumulationComputeEmulationResourceUseCount++] = ReadBufferUse(inputs.csgCutters, inputs.cutterRange);
+            accumulationComputeEmulationResourceUses[accumulationComputeEmulationResourceUseCount++] = ReadUse(inputs.csgClipContextSlots, Core::ResourceStates::ConstantBuffer);
+            accumulationComputeEmulationResourceUses[accumulationComputeEmulationResourceUseCount++] = ReadUse(inputs.csgIntervalSampleState, Core::ResourceStates::ConstantBuffer);
+            accumulationComputeEmulationResourceUses[accumulationComputeEmulationResourceUseCount++] = ReadTextureUse(inputs.csgRemovedIntervalDepth, inputs.csgRemovedIntervalSubresources, Core::ResourceStates::UnorderedAccess);
+            accumulationComputeEmulationResourceUses[accumulationComputeEmulationResourceUseCount++] = ReadTextureUse(inputs.csgRemovedIntervalCapNormal, inputs.csgRemovedIntervalSubresources, Core::ResourceStates::UnorderedAccess);
+            accumulationComputeEmulationResourceUses[accumulationComputeEmulationResourceUseCount++] = ReadTextureUse(inputs.csgRemovedIntervalData, inputs.csgRemovedIntervalSubresources, Core::ResourceStates::UnorderedAccess);
+            accumulationComputeEmulationResourceUses[accumulationComputeEmulationResourceUseCount++] = ReadTextureUse(inputs.csgRemovedIntervalCount, inputs.csgRemovedIntervalCountSubresources, Core::ResourceStates::UnorderedAccess);
         }
         Core::GpuTaskResourceSetUse accumulationComputeEmulationResourceSetUses[__hidden_avboit_accumulation_record_builder::s_ComputeEmulationResourceSetUseCapacity] = {};
         usize accumulationComputeEmulationResourceSetUseCount = 0u;
@@ -282,7 +277,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
             .setMarkerLabel(inputs.csgComputeEmulationPlanCaptured ? "AVBOIT Accumulation CSG Compute Emulation" : "AVBOIT Accumulation Compute Emulation")
             .setScheduling(accumulationComputeEmulationScheduling)
             .setDependencies(&accumulationDependency, 1u)
-            .setResourceUses(accumulationComputeEmulationResourceUses.data(), accumulationComputeEmulationResourceUses.size())
+            .setResourceUses(accumulationComputeEmulationResourceUses, accumulationComputeEmulationResourceUseCount)
             .setResourceSetUses(accumulationComputeEmulationResourceSetUses, accumulationComputeEmulationResourceSetUseCount)
         ;
         const auto mAvboitSystemTaskGraphStageMAccumulationComputeEmulationTaskResult = m_graph.addTask< AvboitAccumulationComputeEmulationGraphTask >(accumulationComputeEmulationDesc, Move(computeEmulationPayload));
@@ -297,13 +292,13 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(Core::GpuTaskGr
     }
     if(accumulationSharedComputeEmulationOutputStatesGraphOwned){
         // Retained output appears in every phase; keep it exact to preserve alternating uses.
-        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accumulationSharedGenerateResourceUses{ scratchArena };
-        accumulationSharedGenerateResourceUses.reserve(__hidden_avboit_accumulation_record_builder::s_SharedGenerateUseCount);
-        accumulationSharedGenerateResourceUses.push_back(ReadUse(inputs.meshView, Core::ResourceStates::ConstantBuffer));
-        accumulationSharedGenerateResourceUses.push_back(ReadBufferUse(inputs.materialInstances, inputs.instanceRange));
-        accumulationSharedGenerateResourceUses.push_back(ReadBufferUse(inputs.materialTyped, inputs.materialTypedRange));
-        accumulationSharedGenerateResourceUses.push_back(ReadUse(inputs.currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
-        accumulationSharedGenerateResourceUses.push_back(WriteUse(accumulationSharedComputeEmulationOutput, Core::ResourceStates::UnorderedAccess));
+        const Core::GpuTaskResourceUse accumulationSharedGenerateResourceUses[] = {
+            ReadUse(inputs.meshView, Core::ResourceStates::ConstantBuffer),
+            ReadBufferUse(inputs.materialInstances, inputs.instanceRange),
+            ReadBufferUse(inputs.materialTyped, inputs.materialTypedRange),
+            ReadUse(inputs.currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
+            WriteUse(accumulationSharedComputeEmulationOutput, Core::ResourceStates::UnorderedAccess),
+        };
 
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accumulationSharedRasterResourceUses{ scratchArena };
         accumulationSharedRasterResourceUses.reserve(accumulationResourceUses.size() + 1u);

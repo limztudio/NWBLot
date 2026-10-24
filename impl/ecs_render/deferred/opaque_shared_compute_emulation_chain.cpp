@@ -26,7 +26,6 @@ namespace __hidden_opaque_shared_compute_emulation_chain{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr usize s_GenerateResourceUseCapacity = 4u;
 constexpr usize s_RasterResourceUseCapacity = 9u;
 constexpr usize s_ResourceSetUseCapacity = 2u;
 
@@ -40,18 +39,18 @@ constexpr usize s_ResourceSetUseCapacity = 2u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<OpaqueSharedComputeEmulationChainResult> OpaqueSharedComputeEmulationChainBuilder::declare(Core::Alloc::ScratchArena& scratchArena, const OpaqueSharedComputeEmulationChainInputs& inputs, const usize taskCapacity, Core::GpuTaskId* const tasks){
+Expected<OpaqueSharedComputeEmulationChainResult> OpaqueSharedComputeEmulationChainBuilder::declare(const OpaqueSharedComputeEmulationChainInputs& inputs, Core::Alloc::ScratchArena& scratchArena, const Span<Core::GpuTaskId> tasks){
     using namespace RendererTaskGraphDetail;
     using namespace __hidden_opaque_shared_compute_emulation_chain;
     using OpaqueSharedPhase = ECSRenderDetail::OpaqueRegularSharedComputeEmulationGraphTask::Phase::Enum;
 
     const DeferredGraphResourceImportResult& resources = inputs.resources;
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> generateResourceUses{ scratchArena };
-    generateResourceUses.reserve(s_GenerateResourceUseCapacity);
-    generateResourceUses.push_back(ReadUse(resources.meshView, Core::ResourceStates::ConstantBuffer));
-    generateResourceUses.push_back(ReadBufferUse(resources.materialInstances, inputs.materialInstanceRange));
-    generateResourceUses.push_back(ReadBufferUse(resources.materialTyped, inputs.materialTypedRange));
-    generateResourceUses.push_back(WriteUse(inputs.sharedOutput, Core::ResourceStates::UnorderedAccess));
+    const Core::GpuTaskResourceUse generateResourceUses[] = {
+        ReadUse(resources.meshView, Core::ResourceStates::ConstantBuffer),
+        ReadBufferUse(resources.materialInstances, inputs.materialInstanceRange),
+        ReadBufferUse(resources.materialTyped, inputs.materialTypedRange),
+        WriteUse(inputs.sharedOutput, Core::ResourceStates::UnorderedAccess),
+    };
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> rasterResourceUses{ scratchArena };
     rasterResourceUses.reserve(inputs.objectGeometryReads.size() + s_RasterResourceUseCapacity);
@@ -105,7 +104,7 @@ Expected<OpaqueSharedComputeEmulationChainResult> OpaqueSharedComputeEmulationCh
         "Opaque Shared Compute Emulation Raster E",
     };
     const usize phaseCount = ECSRenderDetail::SharedComputeEmulationPhaseCountForDrawCount(inputs.plan.drawCount);
-    if(!ECSRenderDetail::IsSupportedSharedComputeEmulationPhaseCount(phaseCount) || phaseCount > taskCapacity){
+    if(!ECSRenderDetail::IsSupportedSharedComputeEmulationPhaseCount(phaseCount) || phaseCount > tasks.size()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: invalid shared opaque compute-emulation phase count"));
         return MakeUnexpected(Failure{});
     }

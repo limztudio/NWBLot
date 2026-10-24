@@ -58,7 +58,7 @@ public:
 
 
 public:
-    [[nodiscard]] Expected<HardwareCausticsResolveChainResult> declare(const HardwareCausticsResolveChainInputs& inputs, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] Expected<HardwareCausticsResolveChainResult> declare(const HardwareCausticsResolveChainInputs& inputs);
 
 
 private:

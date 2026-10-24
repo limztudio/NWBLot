@@ -29,7 +29,6 @@ NWB_IMPL_BEGIN
 
 
 bool RendererFramePipeline::declareDeferredSurfelGiTask(
-    Core::Alloc::ScratchArena& scratchArena,
     const DeferredLightingGraphResources& deferredLightingResources,
     const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
     const RayTracingSurfelPersistentResourceSnapshot& rayTracingSurfelResources,
@@ -40,13 +39,13 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     const Core::GpuGraphResourceId sceneShading,
     const Core::GpuGraphResourceId lights,
     const Core::GpuGraphResourceId materialContextSlots,
-    const Core::GpuGraphResourceId* const traceGeometryResources,
-    const usize traceGeometryResourceCount,
+    const Span<const Core::GpuGraphResourceId> traceGeometryResources,
     const Core::GpuGraphResourceSetId traceGeometrySet,
     const Core::GpuGraphResourceSetId traceMaterialSampledTextureSet,
     const Core::GpuTaskId effectsTask,
     const bool useLaggedLightingHistory,
     const Core::GpuExternalCompletionId surfelCounterReadbackCompletion,
+    Core::Alloc::ScratchArena& scratchArena,
     DeferredFrameTargets& deferredTargets,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>& asyncTiming
@@ -78,7 +77,6 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         || !sceneShading.valid()
         || !lights.valid()
         || !effectsTask.valid()
-        || (traceGeometryResourceCount != 0u && !traceGeometryResources)
     )
         return false;
 
@@ -134,29 +132,14 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     const Core::GpuGraphResourceId sceneGeometryDomain = *sceneGeometryDomainResult;
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> ageFreeResourceUses{ scratchArena };
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hashBuildResourceUses{ scratchArena };
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> spawnResourceUses{ scratchArena };
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> traceBuildArgsResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> traceResourceUses{ scratchArena };
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resolveResourceUses{ scratchArena };
     constexpr usize s_SurfelResourceUseCapacity = 29u;
     constexpr usize s_SurfelTraceResourceUseCapacity = 17u;
-    constexpr usize s_SurfelAgeFreeResourceUseCapacity = 4u;
-    constexpr usize s_SurfelHashBuildResourceUseCapacity = 3u;
-    constexpr usize s_SurfelSpawnResourceUseCapacity = 10u;
-    constexpr usize s_SurfelTraceBuildArgsResourceUseCapacity = 3u;
-    constexpr usize s_SurfelResolveResourceUseCapacity = 6u;
     // The CSG trace context and the surfel counter it updates.
     constexpr usize s_SurfelCsgTraceContextUseCapacity = 2u;
     const bool hasCsgTraceContext = rayTracingResources.csgTraceContextBuffer.get() != nullptr;
-    resourceUses.reserve(s_SurfelResourceUseCapacity + (hasCsgTraceContext ? 1u : 0u) + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResourceCount));
-    ageFreeResourceUses.reserve(s_SurfelAgeFreeResourceUseCapacity);
-    hashBuildResourceUses.reserve(s_SurfelHashBuildResourceUseCapacity);
-    spawnResourceUses.reserve(s_SurfelSpawnResourceUseCapacity);
-    traceBuildArgsResourceUses.reserve(s_SurfelTraceBuildArgsResourceUseCapacity);
-    traceResourceUses.reserve(s_SurfelTraceResourceUseCapacity + (hasCsgTraceContext ? s_SurfelCsgTraceContextUseCapacity : 0u) + rayTracingResources.csgTraceBoundsBufferCount + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResourceCount));
-    resolveResourceUses.reserve(s_SurfelResolveResourceUseCapacity);
+    resourceUses.reserve(s_SurfelResourceUseCapacity + (hasCsgTraceContext ? 1u : 0u) + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResources.size()));
+    traceResourceUses.reserve(s_SurfelTraceResourceUseCapacity + (hasCsgTraceContext ? s_SurfelCsgTraceContextUseCapacity : 0u) + rayTracingResources.csgTraceBoundsBufferCount + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResources.size()));
     resourceUses.push_back(ReadUse(worldPosition));
     resourceUses.push_back(ReadUse(normal));
     resourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
@@ -167,8 +150,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     resourceUses.push_back(ReadUse(sceneGeometryDomain));
     if(materialContextSlots.valid())
         resourceUses.push_back(ReadUse(materialContextSlots, Core::ResourceStates::ConstantBuffer));
-    for(usize resourceIndex = 0u; resourceIndex < traceGeometryResourceCount; ++resourceIndex){
-        const Core::GpuGraphResourceId resource = traceGeometryResources[resourceIndex];
+    for(const Core::GpuGraphResourceId resource : traceGeometryResources){
         if(!resource.valid())
             return false;
         if(!traceGeometryStatesGraphOwned)
@@ -338,13 +320,6 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         resourceUses.push_back(ReadUse(surfelIrradianceHalf, Core::ResourceStates::ShaderResource));
         resourceUses.push_back(WriteUse(surfelIrradiance, Core::ResourceStates::UnorderedAccess));
 
-        resolveResourceUses.push_back(ReadUse(worldPosition));
-        resolveResourceUses.push_back(ReadUse(normal));
-        resolveResourceUses.push_back(ReadUse(surfelConstants, Core::ResourceStates::ConstantBuffer));
-        resolveResourceUses.push_back(ReadUse(surfelPool, Core::ResourceStates::ShaderResource));
-        resolveResourceUses.push_back(ReadUse(surfelCellHead, Core::ResourceStates::ShaderResource));
-        resolveResourceUses.push_back(WriteUse(surfelIrradianceHalf, Core::ResourceStates::UnorderedAccess));
-
         traceResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
         traceResourceUses.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
         traceResourceUses.push_back(ReadUse(lights, Core::ResourceStates::ShaderResource));
@@ -369,8 +344,8 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         traceResourceUses.push_back(ReadUse(surfelCellHeadSnapshot, Core::ResourceStates::ShaderResource));
         traceResourceUses.push_back(ReadUse(surfelTraceIndirectArgs, Core::ResourceStates::IndirectArgument));
         if(!traceGeometryStatesGraphOwned){
-            for(usize resourceIndex = 0u; resourceIndex < traceGeometryResourceCount; ++resourceIndex)
-                traceResourceUses.push_back(ReadUse(traceGeometryResources[resourceIndex], Core::ResourceStates::ShaderResource));
+            for(const Core::GpuGraphResourceId resource : traceGeometryResources)
+                traceResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
         }
         if(useHwTrace){
             traceResourceUses.push_back(ReadUse(tlas, Core::ResourceStates::AccelStructRead));
@@ -407,8 +382,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     surfelGiLifecycleInputs.poolSnapshotByteSize = rayTracingSurfelResources.poolBuffer->getCreationDescription().byteSize;
     surfelGiLifecycleInputs.cellHeadSnapshotByteSize = rayTracingSurfelResources.cellHeadBuffer->getCreationDescription().byteSize;
     surfelGiLifecycleInputs.scheduling = scheduling;
-    surfelGiLifecycleInputs.externalDependencies = surfelGiExternalDependencies;
-    surfelGiLifecycleInputs.externalDependencyCount = surfelGiExternalDependencyCount;
+    surfelGiLifecycleInputs.externalDependencies = { surfelGiExternalDependencies, surfelGiExternalDependencyCount };
     surfelGiLifecycleInputs.computeStateSource = surfelGiComputeStateSource;
     surfelGiLifecycleInputs.counterStateSource = surfelGiCounterStateSource;
     surfelGiLifecycleInputs.hasWork = hasSurfelWork;
@@ -462,10 +436,12 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     EnableSameFamilyComputeEffectRouting(surfelGiScheduling);
     EnableCrossFamilyComputeEffectRouting(surfelGiScheduling);
     if(graphOwnsSurfelGiResolve){
-        ageFreeResourceUses.push_back(ReadUse(surfelConstants, Core::ResourceStates::ConstantBuffer));
-        ageFreeResourceUses.push_back(WriteUse(surfelPool, Core::ResourceStates::UnorderedAccess));
-        ageFreeResourceUses.push_back(WriteUse(surfelCounter, Core::ResourceStates::UnorderedAccess));
-        ageFreeResourceUses.push_back(WriteUse(surfelFreeList, Core::ResourceStates::UnorderedAccess));
+        const Core::GpuTaskResourceUse ageFreeResourceUses[] = {
+            ReadUse(surfelConstants, Core::ResourceStates::ConstantBuffer),
+            WriteUse(surfelPool, Core::ResourceStates::UnorderedAccess),
+            WriteUse(surfelCounter, Core::ResourceStates::UnorderedAccess),
+            WriteUse(surfelFreeList, Core::ResourceStates::UnorderedAccess),
+        };
 
         Core::GpuTaskDesc ageFreeDesc;
         ageFreeDesc
@@ -475,7 +451,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             .setDependencies(&surfelGiDependency, 1u)
             .setExternalDependencies(surfelGiExternalDependencies, surfelGiExternalDependencyCount)
             .setExternalStateSources(surfelGiComputeCounterStateSources.count != 0u ? surfelGiComputeCounterStateSources.values : nullptr, surfelGiComputeCounterStateSources.count)
-            .setResourceUses(ageFreeResourceUses.data(), ageFreeResourceUses.size())
+            .setResourceUses(ageFreeResourceUses, LengthOf(ageFreeResourceUses))
         ;
         const auto mDeferredSurfelGiAgeFreeTaskResult = surfelGiTasks.declareAgeFreeTask(ageFreeDesc, deferredLightingResources, deferredTargets, timingTicket, asyncTiming);
         if(!mDeferredSurfelGiAgeFreeTaskResult){
@@ -501,16 +477,18 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         }
         m_deferredSurfelGiCellHeadClearTask = *mDeferredSurfelGiCellHeadClearTaskResult;
 
-        hashBuildResourceUses.push_back(ReadUse(surfelConstants, Core::ResourceStates::ConstantBuffer));
-        hashBuildResourceUses.push_back(ReadWriteUse(surfelPool, Core::ResourceStates::UnorderedAccess));
-        hashBuildResourceUses.push_back(ReadWriteUse(surfelCellHead, Core::ResourceStates::UnorderedAccess));
+        const Core::GpuTaskResourceUse hashBuildResourceUses[] = {
+            ReadUse(surfelConstants, Core::ResourceStates::ConstantBuffer),
+            ReadWriteUse(surfelPool, Core::ResourceStates::UnorderedAccess),
+            ReadWriteUse(surfelCellHead, Core::ResourceStates::UnorderedAccess),
+        };
         Core::GpuTaskDesc hashBuildDesc;
         hashBuildDesc
             .setIdentity(Name("render.surfel_gi.hash_build"))
             .setMarkerLabel("Surfel GI Hash Build")
             .setScheduling(surfelGiScheduling)
             .setDependencies(&m_deferredSurfelGiCellHeadClearTask, 1u)
-            .setResourceUses(hashBuildResourceUses.data(), hashBuildResourceUses.size())
+            .setResourceUses(hashBuildResourceUses, LengthOf(hashBuildResourceUses))
         ;
         const auto mDeferredSurfelGiHashBuildTaskResult = surfelGiTasks.declareHashBuildTask(hashBuildDesc, deferredLightingResources, deferredTargets, timingTicket, asyncTiming);
         if(!mDeferredSurfelGiHashBuildTaskResult){
@@ -520,18 +498,20 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         }
         m_deferredSurfelGiHashBuildTask = *mDeferredSurfelGiHashBuildTaskResult;
 
-        spawnResourceUses.push_back(ReadUse(worldPosition));
-        spawnResourceUses.push_back(ReadUse(normal));
-        spawnResourceUses.push_back(ReadUse(surfelConstants, Core::ResourceStates::ConstantBuffer));
-        spawnResourceUses.push_back(ReadWriteUse(surfelPool, Core::ResourceStates::UnorderedAccess));
-        spawnResourceUses.push_back(ReadWriteUse(surfelGuidePool, Core::ResourceStates::UnorderedAccess));
-        spawnResourceUses.push_back(ReadWriteUse(surfelCellHead, Core::ResourceStates::UnorderedAccess));
-        spawnResourceUses.push_back(ReadWriteUse(surfelCounter, Core::ResourceStates::UnorderedAccess));
-        spawnResourceUses.push_back(ReadWriteUse(surfelFreeList, Core::ResourceStates::UnorderedAccess));
-        spawnResourceUses.push_back(ReadUse(surfelPoolSnapshot, Core::ResourceStates::ShaderResource));
-        spawnResourceUses.push_back(ReadUse(surfelCellHeadSnapshot, Core::ResourceStates::ShaderResource));
+        const Core::GpuTaskResourceUse spawnResourceUses[] = {
+            ReadUse(worldPosition),
+            ReadUse(normal),
+            ReadUse(surfelConstants, Core::ResourceStates::ConstantBuffer),
+            ReadWriteUse(surfelPool, Core::ResourceStates::UnorderedAccess),
+            ReadWriteUse(surfelGuidePool, Core::ResourceStates::UnorderedAccess),
+            ReadWriteUse(surfelCellHead, Core::ResourceStates::UnorderedAccess),
+            ReadWriteUse(surfelCounter, Core::ResourceStates::UnorderedAccess),
+            ReadWriteUse(surfelFreeList, Core::ResourceStates::UnorderedAccess),
+            ReadUse(surfelPoolSnapshot, Core::ResourceStates::ShaderResource),
+            ReadUse(surfelCellHeadSnapshot, Core::ResourceStates::ShaderResource),
+        };
         Core::GpuTaskDesc spawnDesc;
-        spawnDesc.setIdentity(Name("render.surfel_gi.spawn")).setMarkerLabel("Surfel GI Spawn").setScheduling(surfelGiScheduling).setDependencies(&m_deferredSurfelGiHashBuildTask, 1u).setResourceUses(spawnResourceUses.data(), spawnResourceUses.size());
+        spawnDesc.setIdentity(Name("render.surfel_gi.spawn")).setMarkerLabel("Surfel GI Spawn").setScheduling(surfelGiScheduling).setDependencies(&m_deferredSurfelGiHashBuildTask, 1u).setResourceUses(spawnResourceUses, LengthOf(spawnResourceUses));
         const auto mDeferredSurfelGiSpawnTaskResult = surfelGiTasks.declareSpawnTask(spawnDesc, deferredLightingResources, deferredTargets, timingTicket, asyncTiming);
         if(!mDeferredSurfelGiSpawnTaskResult){
             m_deferredSurfelGiSpawnTask = {};
@@ -540,9 +520,11 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         }
         m_deferredSurfelGiSpawnTask = *mDeferredSurfelGiSpawnTaskResult;
 
-        traceBuildArgsResourceUses.push_back(ReadUse(surfelConstants, Core::ResourceStates::ConstantBuffer));
-        traceBuildArgsResourceUses.push_back(ReadUse(surfelCounter, Core::ResourceStates::UnorderedAccess));
-        traceBuildArgsResourceUses.push_back(WriteUse(surfelTraceIndirectArgs, Core::ResourceStates::UnorderedAccess));
+        const Core::GpuTaskResourceUse traceBuildArgsResourceUses[] = {
+            ReadUse(surfelConstants, Core::ResourceStates::ConstantBuffer),
+            ReadUse(surfelCounter, Core::ResourceStates::UnorderedAccess),
+            WriteUse(surfelTraceIndirectArgs, Core::ResourceStates::UnorderedAccess),
+        };
         Core::GpuTaskDesc traceBuildArgsDesc;
         traceBuildArgsDesc
             .setIdentity(Name("render.surfel_gi.trace_build_args"))
@@ -550,7 +532,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             .setScheduling(surfelGiScheduling)
             .setDependencies(&m_deferredSurfelGiSpawnTask, 1u)
             .setExternalStateSources(surfelGiComputeCounterStateSources.count != 0u ? surfelGiComputeCounterStateSources.values : nullptr, surfelGiComputeCounterStateSources.count)
-            .setResourceUses(traceBuildArgsResourceUses.data(), traceBuildArgsResourceUses.size())
+            .setResourceUses(traceBuildArgsResourceUses, LengthOf(traceBuildArgsResourceUses))
         ;
         const auto mDeferredSurfelGiTraceBuildArgsTaskResult = surfelGiTasks.declareTraceBuildArgsTask(traceBuildArgsDesc, deferredLightingResources, deferredTargets, timingTicket, asyncTiming);
         if(!mDeferredSurfelGiTraceBuildArgsTaskResult){
@@ -579,6 +561,14 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         }
         m_deferredSurfelGiTraceTask = *mDeferredSurfelGiTraceTaskResult;
 
+        const Core::GpuTaskResourceUse resolveResourceUses[] = {
+            ReadUse(worldPosition),
+            ReadUse(normal),
+            ReadUse(surfelConstants, Core::ResourceStates::ConstantBuffer),
+            ReadUse(surfelPool, Core::ResourceStates::ShaderResource),
+            ReadUse(surfelCellHead, Core::ResourceStates::ShaderResource),
+            WriteUse(surfelIrradianceHalf, Core::ResourceStates::UnorderedAccess),
+        };
         Core::GpuTaskDesc resolveDesc;
         resolveDesc
             .setIdentity(Name("render.surfel_gi.resolve"))
@@ -586,7 +576,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             .setScheduling(surfelGiScheduling)
             .setDependencies(&m_deferredSurfelGiTraceTask, 1u)
             .setExternalStateSources(surfelGiComputeStateSource.states ? &surfelGiComputeStateSource : nullptr, surfelGiComputeStateSource.states ? 1u : 0u)
-            .setResourceUses(resolveResourceUses.data(), resolveResourceUses.size())
+            .setResourceUses(resolveResourceUses, LengthOf(resolveResourceUses))
         ;
         const auto mDeferredSurfelGiResolveTaskResult = surfelGiTasks.declareResolveTask(resolveDesc, deferredLightingResources, deferredTargets, timingTicket, asyncTiming);
         if(!mDeferredSurfelGiResolveTaskResult){

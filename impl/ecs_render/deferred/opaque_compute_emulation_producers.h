@@ -57,14 +57,12 @@ public:
 
 public:
     [[nodiscard]] Expected<Core::GpuTaskId> declareRegular(
-        Core::Alloc::ScratchArena& scratchArena,
         const OpaqueComputeEmulationProducerInputs& inputs,
         const Core::GpuTaskResourceSetUse& outputUavSetUse,
         const Core::GpuTaskId& dependency,
         ECSRenderDetail::OpaqueRegularComputeEmulationGraphTask::Payload& payload
     );
     [[nodiscard]] Expected<Core::GpuTaskId> declareCsgReceiver(
-        Core::Alloc::ScratchArena& scratchArena,
         const OpaqueComputeEmulationProducerInputs& inputs,
         const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
         const Core::GpuTaskResourceSetUse& outputUavSetUse,

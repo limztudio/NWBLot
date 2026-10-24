@@ -40,13 +40,14 @@ namespace __hidden_caustics_resolve_chain{
 struct ResolveStageDesc{
     const CausticsResolveStageNaming& naming;
     bool applyStateSources;
-    const CausticsResolveStageUses& stageUses;
+    CausticsResolveStageUses stageUses;
     Core::GpuTaskId& outTask;
     Expected<Core::GpuTaskId> (RendererRayTracingSystem::*declareTask)(Core::GpuTaskGraph&, const Core::GpuTaskDesc&, const bool&, DeferredFrameTargets&);
 };
 
 // One activity read of the previous stage and one activity write of this stage.
 inline constexpr usize s_ActivityUsesPerStage = 2u;
+inline constexpr usize s_MaxStageResourceUses = 8u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -58,7 +59,7 @@ inline constexpr usize s_ActivityUsesPerStage = 2u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<CausticsResolveChainResult> CausticsResolveChainBuilder::declare(const CausticsResolveChainInputs& inputs, const CausticsResolveChainNaming& naming, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] Expected<CausticsResolveChainResult> CausticsResolveChainBuilder::declare(const CausticsResolveChainInputs& inputs, const CausticsResolveChainNaming& naming){
     using namespace RendererTaskGraphDetail;
     CausticsResolveChainResult result{};
     if(!inputs.geometryTask.valid())
@@ -88,33 +89,29 @@ inline constexpr usize s_ActivityUsesPerStage = 2u;
         {naming.fifthWavelet, false, inputs.fifthWavelet, result.causticResolveFifthWaveletTask, &RendererRayTracingSystem::declareCausticResolveFifthWaveletTask},
         {naming.upsample, false, inputs.upsample, result.causticResolveUpsampleTask, &RendererRayTracingSystem::declareCausticResolveUpsampleTask},
     };
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> activityUses{ scratchArena };
-    if(activity.valid()){
-        usize maximumUses = 0u;
-        for(const auto& stage : stages)
-            maximumUses = Max(maximumUses, static_cast<usize>(stage.stageUses.useCount));
-        activityUses.reserve(maximumUses + __hidden_caustics_resolve_chain::s_ActivityUsesPerStage);
-    }
+    Core::GpuTaskResourceUse activityUses[__hidden_caustics_resolve_chain::s_MaxStageResourceUses + __hidden_caustics_resolve_chain::s_ActivityUsesPerStage] = {};
     Core::GpuTaskSchedulingHint stageScheduling = inputs.baseScheduling;
     stageScheduling.mergeWithPrevious = true;
     Core::GpuTaskId previousTask = inputs.geometryTask;
     for(usize stageIndex = 0u; stageIndex < LengthOf(stages); ++stageIndex){
         const __hidden_caustics_resolve_chain::ResolveStageDesc& stage = stages[stageIndex];
         Core::GpuTaskDesc stageDesc;
-        stageDesc.setIdentity(stage.naming.identity).setMarkerLabel(stage.naming.label).setScheduling(stageScheduling).setDependencies(&previousTask, 1u).setResourceUses(stage.stageUses.uses, stage.stageUses.useCount);
+        stageDesc.setIdentity(stage.naming.identity).setMarkerLabel(stage.naming.label).setScheduling(stageScheduling).setDependencies(&previousTask, 1u).setResourceUses(stage.stageUses.data(), stage.stageUses.size());
         if(activity.valid()){
-            activityUses.clear();
-            for(usize useIndex = 0u; useIndex < stage.stageUses.useCount; ++useIndex)
-                activityUses.push_back(stage.stageUses.uses[useIndex]);
+            if(stage.stageUses.size() > __hidden_caustics_resolve_chain::s_MaxStageResourceUses)
+                return MakeUnexpected(Failure{});
+            usize activityUseCount = 0u;
+            for(const Core::GpuTaskResourceUse& use : stage.stageUses)
+                activityUses[activityUseCount++] = use;
             // Prepare publishes A; every wavelet alternates masks with its quantized color output.
             if(stageIndex > 0u)
-                activityUses.push_back(ReadUse(activityResources[(stageIndex - 1u) % 2u], Core::ResourceStates::ShaderResource));
+                activityUses[activityUseCount++] = ReadUse(activityResources[(stageIndex - 1u) % 2u], Core::ResourceStates::ShaderResource);
             if(stageIndex <= NWB_CAUSTIC_RESOLVE_PASS_COUNT)
-                activityUses.push_back(WriteUse(activityResources[stageIndex % 2u], Core::ResourceStates::UnorderedAccess));
-            stageDesc.setResourceUses(activityUses.data(), activityUses.size());
+                activityUses[activityUseCount++] = WriteUse(activityResources[stageIndex % 2u], Core::ResourceStates::UnorderedAccess);
+            stageDesc.setResourceUses(activityUses, activityUseCount);
         }
         if(!inputs.applyStateSourcesToPrepareOnly || stage.applyStateSources)
-            stageDesc.setExternalStateSources(inputs.stateSources, inputs.stateSourceCount);
+            stageDesc.setExternalStateSources(inputs.stateSources.data(), inputs.stateSources.size());
         const auto stageTask = (m_raytracingSystem.*(stage.declareTask))(m_graph, stageDesc, (inputs.producerDispatched), (inputs.targets));
         if(!stageTask){
             stage.outTask = {};

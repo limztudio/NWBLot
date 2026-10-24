@@ -245,16 +245,14 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     const Core::GpuGraphResourceId avboitForegroundExtinction = deferredGraphResources->avboitForegroundExtinction;
 
     if(!declareDeferredShadowPrepareTask(
-        scratchArena,
         rayTracingShadowResources,
         rayTracingGraphResources,
         currentBindlessSlots,
         materialContextSlots,
-        traceGeometry.traceGeometry.data(),
-        traceGeometry.traceGeometry.size(),
-        traceGeometry.softwareBvhBuildState.data(),
-        traceGeometry.softwareBvhBuildState.size(),
+        Span<const Core::GpuGraphResourceId>(traceGeometry.traceGeometry.data(), traceGeometry.traceGeometry.size()),
+        Span<const Core::GpuGraphResourceId>(traceGeometry.softwareBvhBuildState.data(), traceGeometry.softwareBvhBuildState.size()),
         traceGeometry.softwareTraceResourcesPrepared,
+        scratchArena,
         deferredTargets,
         shadowPrepareTimingTicket
     )){
@@ -271,7 +269,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     reflectionContentStamp.view = ComputeFnv64Bytes(&meshViewState, sizeof(meshViewState));
     ObjectGeometryCacheGraph objectGeometry(m_deferredLightingTaskGraph, m_materialSystem, m_meshSystem, scratchArena);
     auto graphicsPrefixResult = declareDeferredGraphicsPrefixTasks(
-        scratchArena,
         shadowPrepareHandoffTask,
         csgFrameState,
         frameBindings,
@@ -281,10 +278,10 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         meshViewState,
         meshViewUploadRequired,
         *deferredGraphResources,
-        traceGeometry.traceGeometry.data(),
-        traceGeometry.traceGeometry.size(),
+        Span<const Core::GpuGraphResourceId>(traceGeometry.traceGeometry.data(), traceGeometry.traceGeometry.size()),
         traceGeometry.shadowTraceGeometrySet,
         asyncPrefixTimingSpansOnePacket,
+        scratchArena,
         deferredTargets,
         objectGeometry,
         asyncPrefixTiming,
@@ -391,7 +388,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
 
     // Effects start from the prefix packet; declare Shadow/Software first for stable queue assignment.
     if(!declareDeferredShadowVisibilityTask(
-        scratchArena,
         deferredLightingResources,
         rayTracingShadowResources,
         rayTracingGraphResources,
@@ -406,12 +402,14 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         sceneShading,
         lights,
         materialContextSlots,
-        rayTracingShadowVisibilityPlan.hardwareTransparentTrace ? traceGeometry.hardwareTraceGeometry.data() : traceGeometry.softwareTraceGeometry.data(),
-        rayTracingShadowVisibilityPlan.hardwareTransparentTrace ? traceGeometry.hardwareTraceGeometry.size() : traceGeometry.softwareTraceGeometry.size(),
+        rayTracingShadowVisibilityPlan.hardwareTransparentTrace
+            ? Span<const Core::GpuGraphResourceId>(traceGeometry.hardwareTraceGeometry.data(), traceGeometry.hardwareTraceGeometry.size())
+            : Span<const Core::GpuGraphResourceId>(traceGeometry.softwareTraceGeometry.data(), traceGeometry.softwareTraceGeometry.size()),
         rayTracingShadowVisibilityPlan.hardwareTransparentTrace ? traceGeometry.hardwareTraceGeometrySet : traceGeometry.softwareTraceGeometrySet,
         traceGeometry.traceMaterialSampledTextureSet,
         m_graphicsPrefixTask,
         features.laggedLightingHistoryWriterWaitPending ? m_deferredLightingHistoryWriterDrainCompletion : Core::GpuExternalCompletionId{},
+        scratchArena,
         deferredTargets,
         shadowVisibilityTimingTicket,
         shadowVisibilityAsyncTiming,
@@ -424,7 +422,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     ))
         return;
     if(!declaresHardwareCaustics && !declareDeferredSoftwareCausticsTask(
-        scratchArena,
         declaresHardwareCaustics,
         deferredLightingResources,
         rayTracingGraphResources,
@@ -436,10 +433,10 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         lights,
         materialContextSlots,
         causticOpticalScene,
-        traceGeometry.softwareTraceGeometry.data(),
-        traceGeometry.softwareTraceGeometry.size(),
+        Span<const Core::GpuGraphResourceId>(traceGeometry.softwareTraceGeometry.data(), traceGeometry.softwareTraceGeometry.size()),
         traceGeometry.softwareTraceGeometrySet,
         traceGeometry.traceMaterialSampledTextureSet,
+        scratchArena,
         deferredTargets,
         softwareCausticsTimingTicket,
         causticPhotonTiming,
@@ -449,7 +446,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     const Core::GpuTaskId effectsTask = declaresHardwareCaustics ? m_deferredShadowVisibilityTask : m_deferredSoftwareCausticsTask;
     // Declare Surfel GI before hardware/AVBOIT to keep effects -> surfel -> suffix order.
     if(!declareDeferredSurfelGiTask(
-        scratchArena,
         deferredLightingResources,
         rayTracingGraphResources,
         rayTracingSurfelResources,
@@ -460,13 +456,15 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         sceneShading,
         lights,
         materialContextSlots,
-        (rayTracingGraphResources.surfelUsesHardwareTrace ? traceGeometry.hardwareTraceGeometry.data() : traceGeometry.softwareTraceGeometry.data()),
-        (rayTracingGraphResources.surfelUsesHardwareTrace ? traceGeometry.hardwareTraceGeometry.size() : traceGeometry.softwareTraceGeometry.size()),
-        (rayTracingGraphResources.surfelUsesHardwareTrace ? traceGeometry.hardwareTraceGeometrySet : traceGeometry.softwareTraceGeometrySet),
+        rayTracingGraphResources.surfelUsesHardwareTrace
+            ? Span<const Core::GpuGraphResourceId>(traceGeometry.hardwareTraceGeometry.data(), traceGeometry.hardwareTraceGeometry.size())
+            : Span<const Core::GpuGraphResourceId>(traceGeometry.softwareTraceGeometry.data(), traceGeometry.softwareTraceGeometry.size()),
+        rayTracingGraphResources.surfelUsesHardwareTrace ? traceGeometry.hardwareTraceGeometrySet : traceGeometry.softwareTraceGeometrySet,
         traceGeometry.traceMaterialSampledTextureSet,
         effectsTask,
         useLaggedLightingHistory,
         m_deferredSurfelGiCounterReadbackCompletion,
+        scratchArena,
         deferredTargets,
         surfelGiTimingTicket,
         surfelGiAsyncTiming
@@ -478,7 +476,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     if(declaresHardwareCaustics){
         HardwareCausticsStageBuilder hardwareCausticsStageBuilder(m_deferredLightingTaskGraph, m_raytracingSystem);
         auto hardwareCausticsStageResult = hardwareCausticsStageBuilder.declare(
-            scratchArena,
             HardwareCausticsStageInputs{
                 .targets = &deferredTargets,
                 .lightingResources = &deferredLightingResources,
@@ -494,8 +491,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 .materialContextSlots = materialContextSlots,
                 .opticalScene = causticOpticalScene,
                 .hardwareTraceGeometrySet = causticTraceGeometrySet,
-                .hardwareTraceGeometryResources = causticTraceGeometryResources.data(),
-                .hardwareTraceGeometryResourceCount = causticTraceGeometryResources.size(),
+                .hardwareTraceGeometryResources = causticTraceGeometryResources,
                 .traceMaterialSampledTextureSet = traceGeometry.traceMaterialSampledTextureSet,
                 .graphicsPrefixTask = m_graphicsPrefixTask,
                 .shadowPreparationReady = &m_shadowPreparationOutcome.ready,
@@ -506,7 +502,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 .timingTicket = &hardwareCausticsTimingTicket,
                 .photonTiming = &causticPhotonTiming,
                 .resolveTiming = &causticResolveTiming,
-            }
+            },
+            scratchArena
         );
         if(!hardwareCausticsStageResult){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare hardware-caustics stage"));

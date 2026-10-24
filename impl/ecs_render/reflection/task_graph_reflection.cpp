@@ -406,16 +406,16 @@ Expected<Name, ErrorCode> ReflectionCsgHardwareSliceIdentity(const u32 slice){
 }
 
 Expected<ReflectionGraphResult> DeclareReflectionTasks(
+    const ReflectionFrameSnapshot& resources,
+    const ReflectionGraphInputs& inputs,
+    Core::GpuTaskId dependency,
     Core::GpuTaskGraph& graph,
     Core::GraphicsRuntime& graphics,
     RendererReflectionSystem& reflectionSystem,
-    Core::Alloc::ScratchArena& scratchArena,
-    const ReflectionFrameSnapshot& resources,
-    const ReflectionGraphInputs& inputs,
-    Core::GpuTaskId dependency
+    Core::Alloc::ScratchArena& scratchArena
 ){
     using namespace __hidden_task_graph_reflection;
-    if(!resources.valid() || !inputs.surfaceReads || inputs.surfaceReadCount == 0u || (inputs.hardwareReadCount > 0u && !inputs.hardwareReads) || (inputs.hardwareSetReadCount > 0u && !inputs.hardwareSetReads))
+    if(!resources.valid() || inputs.surfaceReads.empty())
         return MakeUnexpected(Failure{});
     const bool screen = resources.parameters.traceMode == NWB_REFLECTION_MODE_SCREEN || resources.parameters.traceMode == NWB_REFLECTION_MODE_HYBRID;
     if(screen && (!inputs.opaqueDepth.valid() || !inputs.opaqueColor.valid()))
@@ -530,9 +530,9 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses{scratchArena};
     constexpr usize s_ReflectionUseCapacity = 12u;
-    uses.reserve(inputs.surfaceReadCount + inputs.hardwareReadCount + s_ReflectionUseCapacity);
+    uses.reserve(inputs.surfaceReads.size() + inputs.hardwareReads.size() + s_ReflectionUseCapacity);
     const auto appendSurfaceReads = [&]()noexcept{
-        uses.assign(inputs.surfaceReads, inputs.surfaceReads + inputs.surfaceReadCount);
+        uses.assign(inputs.surfaceReads.begin(), inputs.surfaceReads.end());
         uses.push_back(ReadUse(result.frameParameters, Core::ResourceStates::ConstantBuffer));
     };
     const auto appendDispatch = [&](const Name identity, const AStringView label, const DispatchStage::Enum stage){
@@ -540,7 +540,7 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
         dispatchDesc.setResourceUses(uses.data(), uses.size());
         dispatchDesc.setTimingMetadata(Core::GpuTaskTimingMetadata{.policy = Core::GpuTaskTimingPolicy::PacketOnly});
         if(stage == DispatchStage::Hardware)
-            dispatchDesc.setResourceSetUses(inputs.hardwareSetReads, inputs.hardwareSetReadCount);
+            dispatchDesc.setResourceSetUses(inputs.hardwareSetReads.data(), inputs.hardwareSetReads.size());
         ReflectionFeedbackReservation dispatchFeedback(nullptr, {});
         if(stage == feedbackPublicationStage)
             dispatchFeedback = Move(feedbackReservation);
@@ -586,11 +586,11 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
         }
         if(!appendDispatch(Name("render.reflection.build_args"), "Reflection Build Arguments", DispatchStage::BuildArgs))
             return MakeUnexpected(Failure{});
-        if(!resources.hardwarePipeline || !resources.scene.valid() || inputs.hardwareReadCount == 0u)
+        if(!resources.hardwarePipeline || !resources.scene.valid() || inputs.hardwareReads.empty())
             return MakeUnexpected(Failure{});
         appendSurfaceReads();
-        for(usize index = 0u; index < inputs.hardwareReadCount; ++index)
-            uses.push_back(inputs.hardwareReads[index]);
+        for(const Core::GpuTaskResourceUse& use : inputs.hardwareReads)
+            uses.push_back(use);
         uses.push_back(ReadUse(queue));
         uses.push_back(ReadUse(args, Core::ResourceStates::IndirectArgument));
         uses.push_back(ReadWriteUse(result.counters, Core::ResourceStates::UnorderedAccess));
@@ -617,7 +617,7 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
                 scheduling.forceSubmissionBoundary = true;
                 scheduling.allowPacketMerge = false;
                 sliceDesc.setScheduling(scheduling).setResourceUses(uses.data(), uses.size());
-                sliceDesc.setResourceSetUses(inputs.hardwareSetReads, inputs.hardwareSetReadCount);
+                sliceDesc.setResourceSetUses(inputs.hardwareSetReads.data(), inputs.hardwareSetReads.size());
                 sliceDesc.setTimingMetadata(Core::GpuTaskTimingMetadata{.policy = Core::GpuTaskTimingPolicy::PacketOnly});
                 const auto dependencyResult4 = graph.addTask<CsgHardwareSliceTask>(sliceDesc, CsgHardwareSliceTask::Payload{ graphics, inputs.raytracingSystem, dispatch, slice, sliceCount, inputs.hardwarePreparationReady, inputs.hardwareDispatchLogged, });
                 if(!dependencyResult4){

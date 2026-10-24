@@ -45,8 +45,7 @@ struct HardwareCausticsStageInputs{
     Core::GpuGraphResourceId materialContextSlots;
     Core::GpuGraphResourceId opticalScene;
     Core::GpuGraphResourceSetId hardwareTraceGeometrySet;
-    const Core::GpuGraphResourceId* hardwareTraceGeometryResources = nullptr;
-    usize hardwareTraceGeometryResourceCount = 0u;
+    Span<const Core::GpuGraphResourceId> hardwareTraceGeometryResources{};
     Core::GpuGraphResourceSetId traceMaterialSampledTextureSet;
     Core::GpuTaskId graphicsPrefixTask;
     const bool* shadowPreparationReady = nullptr;
@@ -87,7 +86,7 @@ public:
 
 
 public:
-    [[nodiscard]] Expected<HardwareCausticsStageResult> declare(Core::Alloc::ScratchArena& scratchArena, const HardwareCausticsStageInputs& inputs);
+    [[nodiscard]] Expected<HardwareCausticsStageResult> declare(const HardwareCausticsStageInputs& inputs, Core::Alloc::ScratchArena& scratchArena);
 
 
 private:
@@ -103,4 +102,5 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

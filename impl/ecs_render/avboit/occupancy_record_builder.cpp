@@ -36,7 +36,6 @@ static constexpr usize s_StreamUseCount = 7u;
 static constexpr usize s_CsgIntervalUseCount = 4u;
 static constexpr usize s_EmulationBaseCount = 4u;
 static constexpr usize s_EmulationPlanUseCount = 8u;
-static constexpr usize s_SharedGenerateUseCount = 5u;
 static constexpr usize s_MaterialResourceSetUseCapacity = 3u;
 static constexpr usize s_ComputeEmulationResourceSetUseCapacity = 3u;
 
@@ -225,26 +224,22 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
         computeEmulationPayload.materialFrameStatesGraphOwned = occupancyPayload.occupancyMaterialFrameStatesGraphOwned;
         computeEmulationPayload.materialGeometryStatesGraphOwned = occupancyPayload.occupancyMaterialGeometryStatesGraphOwned;
 
-        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> occupancyComputeEmulationResourceUses{ scratchArena };
-        occupancyComputeEmulationResourceUses.reserve(__hidden_avboit_occupancy_record_builder::s_EmulationBaseCount + (inputs.csgComputeEmulationPlanCaptured ? __hidden_avboit_occupancy_record_builder::s_EmulationPlanUseCount : 0u));
-        occupancyComputeEmulationResourceUses.push_back(ReadUse(inputs.meshView, Core::ResourceStates::ConstantBuffer));
-        occupancyComputeEmulationResourceUses.push_back(ReadBufferUse(inputs.materialInstances, occupancyInstanceRange));
-        occupancyComputeEmulationResourceUses.push_back(ReadBufferUse(inputs.materialTyped, occupancyMaterialTypedRange));
-        occupancyComputeEmulationResourceUses.push_back(ReadUse(inputs.currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
+        Core::GpuTaskResourceUse occupancyComputeEmulationResourceUses[__hidden_avboit_occupancy_record_builder::s_EmulationBaseCount + __hidden_avboit_occupancy_record_builder::s_EmulationPlanUseCount] = {
+            ReadUse(inputs.meshView, Core::ResourceStates::ConstantBuffer),
+            ReadBufferUse(inputs.materialInstances, occupancyInstanceRange),
+            ReadBufferUse(inputs.materialTyped, occupancyMaterialTypedRange),
+            ReadUse(inputs.currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
+        };
+        usize occupancyComputeEmulationResourceUseCount = __hidden_avboit_occupancy_record_builder::s_EmulationBaseCount;
         if(inputs.csgComputeEmulationPlanCaptured){
-            occupancyComputeEmulationResourceUses.push_back(ReadBufferUse(inputs.csgReceiverRanges, occupancyReceiverRange));
-            occupancyComputeEmulationResourceUses.push_back(ReadBufferUse(inputs.csgCutters, occupancyCutterRange));
-            occupancyComputeEmulationResourceUses.push_back(ReadUse(inputs.csgClipContextSlots, Core::ResourceStates::ConstantBuffer));
-            occupancyComputeEmulationResourceUses.push_back(ReadUse(inputs.csgIntervalSampleState, Core::ResourceStates::ConstantBuffer));
-            AppendCsgRemovedIntervalUses(
-                occupancyComputeEmulationResourceUses,
-                inputs.csgRemovedIntervalDepth,
-                inputs.csgRemovedIntervalCapNormal,
-                inputs.csgRemovedIntervalData,
-                inputs.csgRemovedIntervalCount,
-                inputs.csgRemovedIntervalSubresources,
-                inputs.csgRemovedIntervalCountSubresources
-            );
+            occupancyComputeEmulationResourceUses[occupancyComputeEmulationResourceUseCount++] = ReadBufferUse(inputs.csgReceiverRanges, occupancyReceiverRange);
+            occupancyComputeEmulationResourceUses[occupancyComputeEmulationResourceUseCount++] = ReadBufferUse(inputs.csgCutters, occupancyCutterRange);
+            occupancyComputeEmulationResourceUses[occupancyComputeEmulationResourceUseCount++] = ReadUse(inputs.csgClipContextSlots, Core::ResourceStates::ConstantBuffer);
+            occupancyComputeEmulationResourceUses[occupancyComputeEmulationResourceUseCount++] = ReadUse(inputs.csgIntervalSampleState, Core::ResourceStates::ConstantBuffer);
+            occupancyComputeEmulationResourceUses[occupancyComputeEmulationResourceUseCount++] = ReadTextureUse(inputs.csgRemovedIntervalDepth, inputs.csgRemovedIntervalSubresources, Core::ResourceStates::UnorderedAccess);
+            occupancyComputeEmulationResourceUses[occupancyComputeEmulationResourceUseCount++] = ReadTextureUse(inputs.csgRemovedIntervalCapNormal, inputs.csgRemovedIntervalSubresources, Core::ResourceStates::UnorderedAccess);
+            occupancyComputeEmulationResourceUses[occupancyComputeEmulationResourceUseCount++] = ReadTextureUse(inputs.csgRemovedIntervalData, inputs.csgRemovedIntervalSubresources, Core::ResourceStates::UnorderedAccess);
+            occupancyComputeEmulationResourceUses[occupancyComputeEmulationResourceUseCount++] = ReadTextureUse(inputs.csgRemovedIntervalCount, inputs.csgRemovedIntervalCountSubresources, Core::ResourceStates::UnorderedAccess);
         }
         Core::GpuTaskResourceSetUse occupancyComputeEmulationResourceSetUses[__hidden_avboit_occupancy_record_builder::s_ComputeEmulationResourceSetUseCapacity] = {};
         usize occupancyComputeEmulationResourceSetUseCount = 0u;
@@ -267,7 +262,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
             .setMarkerLabel(inputs.csgComputeEmulationPlanCaptured ? "AVBOIT Occupancy CSG Compute Emulation" : "AVBOIT Occupancy Compute Emulation")
             .setScheduling(occupancyComputeEmulationScheduling)
             .setDependencies(&occupancyDependency, 1u)
-            .setResourceUses(occupancyComputeEmulationResourceUses.data(), occupancyComputeEmulationResourceUses.size())
+            .setResourceUses(occupancyComputeEmulationResourceUses, occupancyComputeEmulationResourceUseCount)
             .setResourceSetUses(occupancyComputeEmulationResourceSetUses, occupancyComputeEmulationResourceSetUseCount)
         ;
         const auto mAvboitSystemTaskGraphStageMOccupancyComputeEmulationTaskResult = m_graph.addTask< AvboitOccupancyComputeEmulationGraphTask >(occupancyComputeEmulationDesc, Move(computeEmulationPayload));
@@ -293,13 +288,13 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& g
 
     if(occupancySharedComputeEmulationOutputStatesGraphOwned){
         // Retained output appears in every phase; keep it exact to preserve alternating uses.
-        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> occupancySharedGenerateResourceUses{ scratchArena };
-        occupancySharedGenerateResourceUses.reserve(__hidden_avboit_occupancy_record_builder::s_SharedGenerateUseCount);
-        occupancySharedGenerateResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
-        occupancySharedGenerateResourceUses.push_back(ReadBufferUse(materialInstances, occupancyInstanceRange));
-        occupancySharedGenerateResourceUses.push_back(ReadBufferUse(materialTyped, occupancyMaterialTypedRange));
-        occupancySharedGenerateResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
-        occupancySharedGenerateResourceUses.push_back(WriteUse(occupancySharedComputeEmulationOutput, Core::ResourceStates::UnorderedAccess));
+        const Core::GpuTaskResourceUse occupancySharedGenerateResourceUses[] = {
+            ReadUse(meshView, Core::ResourceStates::ConstantBuffer),
+            ReadBufferUse(materialInstances, occupancyInstanceRange),
+            ReadBufferUse(materialTyped, occupancyMaterialTypedRange),
+            ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
+            WriteUse(occupancySharedComputeEmulationOutput, Core::ResourceStates::UnorderedAccess),
+        };
 
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> occupancySharedRasterResourceUses{ scratchArena };
         occupancySharedRasterResourceUses.reserve(avboitPreResourceUses.size() + 1u);

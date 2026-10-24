@@ -30,7 +30,6 @@ NWB_IMPL_BEGIN
 
 
 bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
-    Core::Alloc::ScratchArena& scratchArena,
     const DeferredLightingGraphResources& deferredLightingResources,
     const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources,
     const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
@@ -45,12 +44,12 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     const Core::GpuGraphResourceId sceneShading,
     const Core::GpuGraphResourceId lights,
     const Core::GpuGraphResourceId materialContextSlots,
-    const Core::GpuGraphResourceId* const traceGeometryResources,
-    const usize traceGeometryResourceCount,
+    const Span<const Core::GpuGraphResourceId> traceGeometryResources,
     const Core::GpuGraphResourceSetId traceGeometrySet,
     const Core::GpuGraphResourceSetId traceMaterialSampledTextureSet,
     const Core::GpuTaskId prefixTask,
     const Core::GpuExternalCompletionId laggedLightingHistoryWriterDrainCompletion,
+    Core::Alloc::ScratchArena& scratchArena,
     DeferredFrameTargets& deferredTargets,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>& asyncTiming,
@@ -91,7 +90,6 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         || !sceneShading.valid()
         || !lights.valid()
         || !prefixTask.valid()
-        || (traceGeometryResourceCount != 0u && !traceGeometryResources)
         || (hardwareTransparentTrace && !hardwareSceneReads.valid())
     )
         return false;
@@ -132,7 +130,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         && deferredTargets.transparentMomentsA
         && deferredTargets.transparentMomentsB
         && materialContextSlots.valid()
-        && traceGeometryResourceCount != 0u
+        && !traceGeometryResources.empty()
     ;
     const bool splitSoftTransparentFold = preparedSoftTransparentFoldCandidate;
     const bool combinedSoftUpsample = splitSoftTransparentFold && rayTracingPlan.combinedSoftUpsample;
@@ -174,7 +172,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
     const bool traceGeometryStatesGraphOwned = traceGeometrySet.valid();
     constexpr usize s_ShadowVisibilityResourceUseCapacity = 40u;
-    resourceUses.reserve(s_ShadowVisibilityResourceUseCapacity + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResourceCount));
+    resourceUses.reserve(s_ShadowVisibilityResourceUseCapacity + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResources.size()));
     resourceUses.push_back(ReadUse(worldPosition));
     resourceUses.push_back(ReadUse(normal));
     // Shadow visibility samples the bindless depth image, so its declared layout must match the native shader read.
@@ -341,8 +339,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     if(materialContextSlots.valid() && !hardwareTransparentTrace)
         resourceUses.push_back(ReadUse(materialContextSlots, Core::ResourceStates::ConstantBuffer));
     if(!traceGeometryStatesGraphOwned){
-        for(usize resourceIndex = 0u; resourceIndex < traceGeometryResourceCount; ++resourceIndex){
-            const Core::GpuGraphResourceId resource = traceGeometryResources[resourceIndex];
+        for(const Core::GpuGraphResourceId resource : traceGeometryResources){
             if(!resource.valid())
                 return false;
             resourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
@@ -375,7 +372,6 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             .hardwareTransparentScratch = hardwareTransparentScratch,
             .route = splitRoute,
             .traceGeometryResources = traceGeometryResources,
-            .traceGeometryResourceCount = traceGeometryResourceCount,
             .worldPosition = worldPosition,
             .normal = normal,
             .depth = depth,
@@ -408,14 +404,10 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             .opaqueFrameIndex = opaqueFrameIndex,
             .route = splitRoute,
             .traceGeometryResources = traceGeometryResources,
-            .traceGeometryResourceCount = traceGeometryResourceCount,
-            .traceResourceSetUses = traceResourceSetUses,
-            .traceResourceSetUseCount = traceResourceSetUseCount,
+            .traceResourceSetUses = Span<const Core::GpuTaskResourceSetUse>(traceResourceSetUses, traceResourceSetUseCount),
             .traceGeometrySetUse = traceGeometrySetUse,
-            .stateSources = shadowVisibilityStateSourceData,
-            .stateSourceCount = shadowVisibilityStateSourceCount,
-            .historyWriterDrainDependencies = laggedLightingHistoryWriterDrainDependencies,
-            .historyWriterDrainDependencyCount = laggedLightingHistoryWriterDrainDependencyCount,
+            .stateSources = Span<const Core::GpuTaskExternalStateSource>(shadowVisibilityStateSources, shadowVisibilityStateSourceCount),
+            .historyWriterDrainDependencies = Span<const Core::GpuExternalCompletionId>(laggedLightingHistoryWriterDrainDependencies, laggedLightingHistoryWriterDrainDependencyCount),
             .currentBindlessSlots = currentBindlessSlots,
             .sceneShading = sceneShading,
             .lights = lights,
@@ -424,7 +416,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         };
         SoftShadowSplitTasks splitTasks;
         SoftShadowSplitTaskChainBuilder taskChainBuilder(m_deferredLightingTaskGraph, m_graphics, m_arena, m_raytracingSystem);
-        const bool declared = taskChainBuilder.declare(scratchArena, taskChainInputs, splitResourceUses, splitTasks);
+        const bool declared = taskChainBuilder.declare(taskChainInputs, scratchArena, splitResourceUses, splitTasks);
         m_deferredShadowVisibilityOpaqueTask = splitTasks.opaque;
         m_deferredShadowVisibilityOpaqueFirstWaveletTask = splitTasks.opaqueFirstWavelet;
         m_deferredShadowVisibilityOpaqueResolveTask = splitTasks.opaqueResolve;

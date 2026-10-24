@@ -47,7 +47,6 @@ NWB_IMPL_BEGIN
 
 
 Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
-    Core::Alloc::ScratchArena& scratchArena,
     const Core::GpuTaskId shadowPrepareTask,
     const CsgFrameState& csgFrameState,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
@@ -57,10 +56,10 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     const ECSRenderDetail::MeshViewGpuData& meshViewState,
     const bool meshViewUploadRequired,
     const DeferredGraphResourceImportResult& resources,
-    const Core::GpuGraphResourceId* const shadowTraceGeometryResources,
-    const usize shadowTraceGeometryResourceCount,
+    const Span<const Core::GpuGraphResourceId> shadowTraceGeometryResources,
     const Core::GpuGraphResourceSetId shadowTraceGeometrySet,
     const bool& asyncPrefixTimingSpansOnePacket,
+    Core::Alloc::ScratchArena& scratchArena,
     DeferredFrameTargets& deferredTargets,
     ObjectGeometryCacheGraph& objectGeometry,
     Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
@@ -119,7 +118,6 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         || !deferredClearTimingState.graphics
         || deferredClearTimingState.timing != &deferredClearTiming
         || !deferredClearTimingState.rebindableTimingTicket
-        || (shadowTraceGeometryResourceCount != 0u && !shadowTraceGeometryResources)
     )
         return MakeUnexpected(Failure{});
     for(usize timingSlot = 0u; timingSlot < static_cast<usize>(PrefixTimingSlotNs::kCount); ++timingSlot){
@@ -312,8 +310,10 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     const Core::BufferRange csgCutterRange(0u, csgFrameData.cutters.size() * sizeof(CsgCutterGpuData));
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> gbufferResourceUses{ scratchArena };
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> csgReceiverSpanResourceUses{ scratchArena };
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> csgIntervalCombineResourceUses{ scratchArena };
+    Core::GpuTaskResourceUse csgReceiverSpanResourceUses[6u] = {};
+    usize csgReceiverSpanResourceUseCount = 0u;
+    Core::GpuTaskResourceUse csgIntervalCombineResourceUses[11u] = {};
+    usize csgIntervalCombineResourceUseCount = 0u;
     Core::GpuGraphResourceSetId gbufferMaterialGeometrySet;
     Core::GpuGraphResourceSetId gbufferMaterialSampledTextureSet;
     Core::GpuGraphResourceSetId opaqueComputeEmulationOutputSet;
@@ -471,12 +471,6 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         gbufferResourceUses.push_back(ReadUse(resources.currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
     }
     if(hasOpaqueCsgFrameWork){
-        constexpr usize s_CsgReceiverSpanResourceUseCapacity = 4u;
-        // Clip context slots and bindless slots.
-        constexpr usize s_CsgSlotResourceUseCount = 2u;
-        csgReceiverSpanResourceUses.reserve(s_CsgReceiverSpanResourceUseCapacity + (hasCsgFrameGpuWork ? s_CsgSlotResourceUseCount : 0u));
-        constexpr usize s_CsgIntervalCombineResourceUseCapacity = 9u;
-        csgIntervalCombineResourceUses.reserve(s_CsgIntervalCombineResourceUseCapacity + (hasCsgFrameGpuWork ? s_CsgSlotResourceUseCount : 0u));
         // Peel payloads and receiver-event entries never load their prior values.
         // Their paired interval ID and event count preserve the sparse-write validity contract after the preceding explicit clears, so only those two resources require ReadWrite access.
         // Keeping the payloads write-only also permits their first graph use to begin at a fresh texture's native Unknown state.
@@ -485,27 +479,27 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         gbufferResourceUses.push_back(ReadWriteTextureUse(resources.csgIntervalId, csgPeelSubresources, Core::ResourceStates::UnorderedAccess));
         gbufferResourceUses.push_back(WriteTextureUse(resources.csgReceiverEventData, csgReceiverEventDataSubresources, Core::ResourceStates::UnorderedAccess));
         gbufferResourceUses.push_back(ReadWriteTextureUse(resources.csgReceiverEventCount, csgReceiverEventCountSubresources, Core::ResourceStates::UnorderedAccess));
-        csgReceiverSpanResourceUses.push_back(ReadTextureUse(resources.csgReceiverEventData, csgReceiverEventDataSubresources, Core::ResourceStates::UnorderedAccess));
-        csgReceiverSpanResourceUses.push_back(ReadTextureUse(resources.csgReceiverEventCount, csgReceiverEventCountSubresources, Core::ResourceStates::UnorderedAccess));
+        csgReceiverSpanResourceUses[csgReceiverSpanResourceUseCount++] = ReadTextureUse(resources.csgReceiverEventData, csgReceiverEventDataSubresources, Core::ResourceStates::UnorderedAccess);
+        csgReceiverSpanResourceUses[csgReceiverSpanResourceUseCount++] = ReadTextureUse(resources.csgReceiverEventCount, csgReceiverEventCountSubresources, Core::ResourceStates::UnorderedAccess);
         if(hasCsgFrameGpuWork){
-            csgReceiverSpanResourceUses.push_back(ReadUse(resources.csgClipContextSlots, Core::ResourceStates::ConstantBuffer));
-            csgReceiverSpanResourceUses.push_back(ReadUse(resources.currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
+            csgReceiverSpanResourceUses[csgReceiverSpanResourceUseCount++] = ReadUse(resources.csgClipContextSlots, Core::ResourceStates::ConstantBuffer);
+            csgReceiverSpanResourceUses[csgReceiverSpanResourceUseCount++] = ReadUse(resources.currentBindlessSlots, Core::ResourceStates::ConstantBuffer);
         }
-        csgReceiverSpanResourceUses.push_back(WriteTextureUse(resources.csgReceiverSpanData, csgReceiverSpanDataSubresources, Core::ResourceStates::UnorderedAccess));
-        csgReceiverSpanResourceUses.push_back(WriteTextureUse(resources.csgReceiverSpanCount, csgReceiverSpanCountSubresources, Core::ResourceStates::UnorderedAccess));
-        csgIntervalCombineResourceUses.push_back(ReadTextureUse(resources.csgCapBackNormal, csgPeelSubresources, Core::ResourceStates::UnorderedAccess));
-        csgIntervalCombineResourceUses.push_back(ReadTextureUse(resources.csgIntervalDepth, csgPeelSubresources, Core::ResourceStates::UnorderedAccess));
-        csgIntervalCombineResourceUses.push_back(ReadTextureUse(resources.csgIntervalId, csgPeelSubresources, Core::ResourceStates::UnorderedAccess));
-        csgIntervalCombineResourceUses.push_back(ReadTextureUse(resources.csgReceiverSpanData, csgReceiverSpanDataSubresources, Core::ResourceStates::UnorderedAccess));
-        csgIntervalCombineResourceUses.push_back(ReadTextureUse(resources.csgReceiverSpanCount, csgReceiverSpanCountSubresources, Core::ResourceStates::UnorderedAccess));
+        csgReceiverSpanResourceUses[csgReceiverSpanResourceUseCount++] = WriteTextureUse(resources.csgReceiverSpanData, csgReceiverSpanDataSubresources, Core::ResourceStates::UnorderedAccess);
+        csgReceiverSpanResourceUses[csgReceiverSpanResourceUseCount++] = WriteTextureUse(resources.csgReceiverSpanCount, csgReceiverSpanCountSubresources, Core::ResourceStates::UnorderedAccess);
+        csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = ReadTextureUse(resources.csgCapBackNormal, csgPeelSubresources, Core::ResourceStates::UnorderedAccess);
+        csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = ReadTextureUse(resources.csgIntervalDepth, csgPeelSubresources, Core::ResourceStates::UnorderedAccess);
+        csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = ReadTextureUse(resources.csgIntervalId, csgPeelSubresources, Core::ResourceStates::UnorderedAccess);
+        csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = ReadTextureUse(resources.csgReceiverSpanData, csgReceiverSpanDataSubresources, Core::ResourceStates::UnorderedAccess);
+        csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = ReadTextureUse(resources.csgReceiverSpanCount, csgReceiverSpanCountSubresources, Core::ResourceStates::UnorderedAccess);
         if(hasCsgFrameGpuWork){
-            csgIntervalCombineResourceUses.push_back(ReadUse(resources.csgClipContextSlots, Core::ResourceStates::ConstantBuffer));
-            csgIntervalCombineResourceUses.push_back(ReadUse(resources.currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
+            csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = ReadUse(resources.csgClipContextSlots, Core::ResourceStates::ConstantBuffer);
+            csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = ReadUse(resources.currentBindlessSlots, Core::ResourceStates::ConstantBuffer);
         }
-        csgIntervalCombineResourceUses.push_back(WriteTextureUse(resources.csgRemovedIntervalDepth, csgRemovedIntervalSubresources, Core::ResourceStates::UnorderedAccess));
-        csgIntervalCombineResourceUses.push_back(WriteTextureUse(resources.csgRemovedIntervalCapNormal, csgRemovedIntervalSubresources, Core::ResourceStates::UnorderedAccess));
-        csgIntervalCombineResourceUses.push_back(WriteTextureUse(resources.csgRemovedIntervalData, csgRemovedIntervalSubresources, Core::ResourceStates::UnorderedAccess));
-        csgIntervalCombineResourceUses.push_back(WriteTextureUse(resources.csgRemovedIntervalCount, csgRemovedIntervalCountSubresources, Core::ResourceStates::UnorderedAccess));
+        csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = WriteTextureUse(resources.csgRemovedIntervalDepth, csgRemovedIntervalSubresources, Core::ResourceStates::UnorderedAccess);
+        csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = WriteTextureUse(resources.csgRemovedIntervalCapNormal, csgRemovedIntervalSubresources, Core::ResourceStates::UnorderedAccess);
+        csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = WriteTextureUse(resources.csgRemovedIntervalData, csgRemovedIntervalSubresources, Core::ResourceStates::UnorderedAccess);
+        csgIntervalCombineResourceUses[csgIntervalCombineResourceUseCount++] = WriteTextureUse(resources.csgRemovedIntervalCount, csgRemovedIntervalCountSubresources, Core::ResourceStates::UnorderedAccess);
     }
     gbufferResourceUses.push_back(WriteUse(resources.albedo, Core::ResourceStates::RenderTarget));
     gbufferResourceUses.push_back(WriteUse(resources.normal, Core::ResourceStates::RenderTarget));
@@ -574,14 +568,14 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     };
     OpaqueComputeEmulationProducerBuilder computeEmulationProducerBuilder(m_deferredLightingTaskGraph);
     if(opaqueComputeEmulationOutputStatesGraphOwned){
-        const auto producerTask = computeEmulationProducerBuilder.declareRegular(scratchArena, computeEmulationProducerInputs, opaqueComputeEmulationOutputUavSetUse, gbufferDependency, opaqueComputeEmulationPayload);
+        const auto producerTask = computeEmulationProducerBuilder.declareRegular(computeEmulationProducerInputs, opaqueComputeEmulationOutputUavSetUse, gbufferDependency, opaqueComputeEmulationPayload);
         if(!producerTask)
             return MakeUnexpected(Failure{});
         m_graphicsPrefixOpaqueComputeEmulationTask = *producerTask;
         gbufferDependency = m_graphicsPrefixOpaqueComputeEmulationTask;
     }
     if(opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned){
-        const auto producerTask = computeEmulationProducerBuilder.declareCsgReceiver(scratchArena, computeEmulationProducerInputs, csgResources, opaqueCsgReceiverComputeEmulationOutputUavSetUse, gbufferDependency, opaqueCsgReceiverComputeEmulationPayload);
+        const auto producerTask = computeEmulationProducerBuilder.declareCsgReceiver(computeEmulationProducerInputs, csgResources, opaqueCsgReceiverComputeEmulationOutputUavSetUse, gbufferDependency, opaqueCsgReceiverComputeEmulationPayload);
         if(!producerTask)
             return MakeUnexpected(Failure{});
         m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask = *producerTask;
@@ -622,7 +616,6 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     if(opaqueSharedComputeEmulationOutputStatesGraphOwned){
         OpaqueSharedComputeEmulationChainBuilder sharedComputeEmulationChainBuilder(m_deferredLightingTaskGraph, m_materialSystem);
         const auto sharedComputeEmulationChain = sharedComputeEmulationChainBuilder.declare(
-            scratchArena,
             OpaqueSharedComputeEmulationChainInputs{
                 .targets = deferredTargets,
                 .resources = resources,
@@ -645,7 +638,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
                 .materialFrameStatesGraphOwned = opaqueSharedMaterialFrameStatesGraphOwned,
                 .materialGeometryStatesGraphOwned = opaqueSharedMaterialGeometryStatesGraphOwned,
             },
-            LengthOf(m_graphicsPrefixOpaqueSharedComputeEmulationTasks),
+            scratchArena,
             m_graphicsPrefixOpaqueSharedComputeEmulationTasks
         );
         if(!sharedComputeEmulationChain)
@@ -663,8 +656,8 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
                 .csgResources = csgResources,
                 .opaqueDrawItems = opaqueDrawItems,
                 .csgFrameData = csgFrameData,
-                .receiverSpanResourceUses = csgReceiverSpanResourceUses,
-                .intervalCombineResourceUses = csgIntervalCombineResourceUses,
+                .receiverSpanResourceUses = { csgReceiverSpanResourceUses, csgReceiverSpanResourceUseCount },
+                .intervalCombineResourceUses = { csgIntervalCombineResourceUses, csgIntervalCombineResourceUseCount },
                 .intervalSampleTimingTicket = timingTicketSlot(PrefixTimingSlotNs::CsgIntervalSample),
                 .removedIntervalSubresources = csgRemovedIntervalSubresources,
                 .removedIntervalCountSubresources = csgRemovedIntervalCountSubresources,
@@ -691,7 +684,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> normalizeResourceUses{ scratchArena };
     constexpr usize s_NormalizeResourceUseCapacity = 9u;
-    normalizeResourceUses.reserve(s_NormalizeResourceUseCapacity + (shadowTraceGeometryStatesGraphOwned ? 0u : shadowTraceGeometryResourceCount));
+    normalizeResourceUses.reserve(s_NormalizeResourceUseCapacity + (shadowTraceGeometryStatesGraphOwned ? 0u : shadowTraceGeometryResources.size()));
     normalizeResourceUses.push_back(ReadUse(resources.meshView, Core::ResourceStates::ConstantBuffer));
     normalizeResourceUses.push_back(ReadUse(resources.normal, Core::ResourceStates::ShaderResource));
     normalizeResourceUses.push_back(ReadUse(resources.worldPosition, Core::ResourceStates::ShaderResource));
@@ -701,8 +694,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     normalizeResourceUses.push_back(ReadUse(resources.lights, Core::ResourceStates::ShaderResource));
     normalizeResourceUses.push_back(ReadUse(resources.currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
     normalizeResourceUses.push_back(ReadUse(resources.materialContextSlots, Core::ResourceStates::ConstantBuffer));
-    for(usize resourceIndex = 0u; resourceIndex < shadowTraceGeometryResourceCount; ++resourceIndex){
-        const Core::GpuGraphResourceId resource = shadowTraceGeometryResources[resourceIndex];
+    for(const Core::GpuGraphResourceId resource : shadowTraceGeometryResources){
         if(!resource.valid())
             return MakeUnexpected(Failure{});
         if(!shadowTraceGeometryStatesGraphOwned)

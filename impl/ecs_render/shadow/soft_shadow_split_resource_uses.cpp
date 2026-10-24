@@ -109,7 +109,7 @@ bool SoftShadowSplitResourceUseBuilder::build(const SoftShadowSplitResourceInput
 
     // The opaque callback has no temporal or coarse scratch access. Keep its serial writes separate from the unsplit adaptive declaration so a fresh target never becomes a synthetic first read.
     constexpr usize s_OpaqueResourceUseCapacity = 18u;
-    uses.opaque.reserve(s_OpaqueResourceUseCapacity + (route.traceGeometryStatesGraphOwned ? 0u : inputs.traceGeometryResourceCount));
+    uses.opaque.reserve(s_OpaqueResourceUseCapacity + (route.traceGeometryStatesGraphOwned ? 0u : inputs.traceGeometryResources.size()));
     uses.opaque.push_back(ReadUse(inputs.worldPosition));
     uses.opaque.push_back(ReadUse(inputs.normal));
     uses.opaque.push_back(ReadUse(inputs.depth, Core::ResourceStates::ShaderResource));
@@ -130,8 +130,8 @@ bool SoftShadowSplitResourceUseBuilder::build(const SoftShadowSplitResourceInput
             uses.opaque.push_back(ReadUse(shadowInstances, Core::ResourceStates::ShaderResource));
             uses.opaque.push_back(ReadUse(inputs.materialContextSlots, Core::ResourceStates::ConstantBuffer));
             if(!route.traceGeometryStatesGraphOwned){
-                for(usize resourceIndex = 0u; resourceIndex < inputs.traceGeometryResourceCount; ++resourceIndex)
-                    uses.opaque.push_back(ReadUse(inputs.traceGeometryResources[resourceIndex], Core::ResourceStates::ShaderResource));
+                for(const Core::GpuGraphResourceId resource : inputs.traceGeometryResources)
+                    uses.opaque.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
             }
         }
     }else{
@@ -143,54 +143,52 @@ bool SoftShadowSplitResourceUseBuilder::build(const SoftShadowSplitResourceInput
         if(inputs.materialContextSlots.valid())
             uses.opaque.push_back(ReadUse(inputs.materialContextSlots, Core::ResourceStates::ConstantBuffer));
         if(!route.traceGeometryStatesGraphOwned){
-            for(usize resourceIndex = 0u; resourceIndex < inputs.traceGeometryResourceCount; ++resourceIndex)
-                uses.opaque.push_back(ReadUse(inputs.traceGeometryResources[resourceIndex], Core::ResourceStates::ShaderResource));
+            for(const Core::GpuGraphResourceId resource : inputs.traceGeometryResources)
+                uses.opaque.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
         }
     }
 
-    constexpr usize s_OpaqueFirstWaveletResourceUseCapacity = 12u;
-    uses.opaqueFirstWavelet.reserve(s_OpaqueFirstWaveletResourceUseCapacity);
+    uses.opaqueFirstWaveletCount = 0u;
     // The compiler lowers the opaque trace from UAV to the exact sampled state required by temporal merge or the first wavelet. The first wavelet then publishes half-B for the resolve tail.
-    uses.opaqueFirstWavelet.push_back(ReadUse(shadowSoftHalfA, Core::ResourceStates::ShaderResource));
+    uses.opaqueFirstWavelet[uses.opaqueFirstWaveletCount++] = ReadUse(shadowSoftHalfA, Core::ResourceStates::ShaderResource);
     if(!route.combinedSoftWavelet)
-        uses.opaqueFirstWavelet.push_back(WriteUse(shadowSoftHalfB, Core::ResourceStates::UnorderedAccess));
-    uses.opaqueFirstWavelet.push_back(ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource));
+        uses.opaqueFirstWavelet[uses.opaqueFirstWaveletCount++] = WriteUse(shadowSoftHalfB, Core::ResourceStates::UnorderedAccess);
+    uses.opaqueFirstWavelet[uses.opaqueFirstWaveletCount++] = ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource);
     if(route.graphOwnsOpaqueTemporalMergeEntryStates){
         // The frozen selector permits exact selected input/output declarations for the opaque temporal merge.
         const Core::GpuGraphResourceId opaqueHistoryIn = opaqueHistoryFrontIsA ? opaqueHistoryA : opaqueHistoryB;
         const Core::GpuGraphResourceId opaqueMomentsIn = opaqueHistoryFrontIsA ? opaqueMomentsA : opaqueMomentsB;
         const Core::GpuGraphResourceId opaqueHistoryOut = opaqueHistoryFrontIsA ? opaqueHistoryB : opaqueHistoryA;
         const Core::GpuGraphResourceId opaqueMomentsOut = opaqueHistoryFrontIsA ? opaqueMomentsB : opaqueMomentsA;
-        uses.opaqueFirstWavelet.push_back(ReadUse(inputs.worldPosition, Core::ResourceStates::ShaderResource));
+        uses.opaqueFirstWavelet[uses.opaqueFirstWaveletCount++] = ReadUse(inputs.worldPosition, Core::ResourceStates::ShaderResource);
         if(softShadowHistoryReadable){
-            uses.opaqueFirstWavelet.push_back(ReadUse(shadowSoftGeometryPrevious, Core::ResourceStates::ShaderResource));
-            uses.opaqueFirstWavelet.push_back(ReadUse(opaqueHistoryIn, Core::ResourceStates::ShaderResource));
-            uses.opaqueFirstWavelet.push_back(ReadUse(opaqueMomentsIn, Core::ResourceStates::ShaderResource));
+            uses.opaqueFirstWavelet[uses.opaqueFirstWaveletCount++] = ReadUse(shadowSoftGeometryPrevious, Core::ResourceStates::ShaderResource);
+            uses.opaqueFirstWavelet[uses.opaqueFirstWaveletCount++] = ReadUse(opaqueHistoryIn, Core::ResourceStates::ShaderResource);
+            uses.opaqueFirstWavelet[uses.opaqueFirstWaveletCount++] = ReadUse(opaqueMomentsIn, Core::ResourceStates::ShaderResource);
         }
-        uses.opaqueFirstWavelet.push_back(WriteUse(opaqueHistoryOut, Core::ResourceStates::UnorderedAccess));
-        uses.opaqueFirstWavelet.push_back(WriteUse(opaqueMomentsOut, Core::ResourceStates::UnorderedAccess));
+        uses.opaqueFirstWavelet[uses.opaqueFirstWaveletCount++] = WriteUse(opaqueHistoryOut, Core::ResourceStates::UnorderedAccess);
+        uses.opaqueFirstWavelet[uses.opaqueFirstWaveletCount++] = WriteUse(opaqueMomentsOut, Core::ResourceStates::UnorderedAccess);
     }
 
+    uses.opaqueResolveCount = 0u;
     if(!route.combinedSoftUpsample){
-        constexpr usize s_OpaqueResolveResourceUseCapacity = 8u;
-        uses.opaqueResolve.reserve(s_OpaqueResolveResourceUseCapacity);
         // With the current one-wavelet opaque resolve, the tail only samples the first-wavelet half-B result for upsample. Keep a conservative ping-pong declaration if that pass count grows.
         if(NWB_SHADOW_RESOLVE_PASS_COUNT == 1u)
-            uses.opaqueResolve.push_back(ReadUse(shadowSoftHalfB, Core::ResourceStates::ShaderResource));
+            uses.opaqueResolve[uses.opaqueResolveCount++] = ReadUse(shadowSoftHalfB, Core::ResourceStates::ShaderResource);
         else{
-            uses.opaqueResolve.push_back(ReadWriteUse(shadowSoftHalfA, Core::ResourceStates::UnorderedAccess));
-            uses.opaqueResolve.push_back(ReadWriteUse(shadowSoftHalfB, Core::ResourceStates::UnorderedAccess));
+            uses.opaqueResolve[uses.opaqueResolveCount++] = ReadWriteUse(shadowSoftHalfA, Core::ResourceStates::UnorderedAccess);
+            uses.opaqueResolve[uses.opaqueResolveCount++] = ReadWriteUse(shadowSoftHalfB, Core::ResourceStates::UnorderedAccess);
         }
-        uses.opaqueResolve.push_back(WriteUse(inputs.shadowVisibility, Core::ResourceStates::UnorderedAccess));
-        uses.opaqueResolve.push_back(ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource));
-        uses.opaqueResolve.push_back(ReadUse(inputs.worldPosition, Core::ResourceStates::ShaderResource));
-        uses.opaqueResolve.push_back(ReadUse(inputs.normal, Core::ResourceStates::ShaderResource));
-        uses.opaqueResolve.push_back(ReadUse(inputs.depth, Core::ResourceStates::ShaderResource));
-        uses.opaqueResolve.push_back(ReadUse(inputs.sceneShading, Core::ResourceStates::ConstantBuffer));
+        uses.opaqueResolve[uses.opaqueResolveCount++] = WriteUse(inputs.shadowVisibility, Core::ResourceStates::UnorderedAccess);
+        uses.opaqueResolve[uses.opaqueResolveCount++] = ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource);
+        uses.opaqueResolve[uses.opaqueResolveCount++] = ReadUse(inputs.worldPosition, Core::ResourceStates::ShaderResource);
+        uses.opaqueResolve[uses.opaqueResolveCount++] = ReadUse(inputs.normal, Core::ResourceStates::ShaderResource);
+        uses.opaqueResolve[uses.opaqueResolveCount++] = ReadUse(inputs.depth, Core::ResourceStates::ShaderResource);
+        uses.opaqueResolve[uses.opaqueResolveCount++] = ReadUse(inputs.sceneShading, Core::ResourceStates::ConstantBuffer);
     }
 
     constexpr usize s_TransparentTraceResourceUseCapacity = 16u;
-    uses.transparentTrace.reserve(s_TransparentTraceResourceUseCapacity + (route.traceGeometryStatesGraphOwned ? 0u : inputs.traceGeometryResourceCount));
+    uses.transparentTrace.reserve(s_TransparentTraceResourceUseCapacity + (route.traceGeometryStatesGraphOwned ? 0u : inputs.traceGeometryResources.size()));
     uses.transparentTrace.push_back(ReadUse(inputs.worldPosition, Core::ResourceStates::ShaderResource));
     uses.transparentTrace.push_back(ReadUse(inputs.normal, Core::ResourceStates::ShaderResource));
     uses.transparentTrace.push_back(ReadUse(inputs.depth, Core::ResourceStates::ShaderResource));
@@ -214,8 +212,8 @@ bool SoftShadowSplitResourceUseBuilder::build(const SoftShadowSplitResourceInput
     uses.transparentTrace.push_back(ReadUse(inputs.sceneShading, Core::ResourceStates::ConstantBuffer));
     uses.transparentTrace.push_back(ReadUse(inputs.lights, Core::ResourceStates::ShaderResource));
     if(!route.traceGeometryStatesGraphOwned){
-        for(usize resourceIndex = 0u; resourceIndex < inputs.traceGeometryResourceCount; ++resourceIndex)
-            uses.transparentTrace.push_back(ReadUse(inputs.traceGeometryResources[resourceIndex], Core::ResourceStates::ShaderResource));
+        for(const Core::GpuGraphResourceId resource : inputs.traceGeometryResources)
+            uses.transparentTrace.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
     }
 
     uses.graphOwnsTransparentTemporalMergeEntryStates = inputs.rayTracingPlan.transparentTemporalMergeReady;
@@ -229,69 +227,62 @@ bool SoftShadowSplitResourceUseBuilder::build(const SoftShadowSplitResourceInput
         uses.transparentTrace.push_back(ReadUse(shadowSoftGeometryPrevious, Core::ResourceStates::ShaderResource));
         uses.transparentTrace.push_back(ReadUse(transparentMomentsIn, Core::ResourceStates::ShaderResource));
     }
+    uses.transparentTemporalMergeCount = 0u;
+    uses.transparentFirstWaveletCount = 0u;
     if(uses.graphOwnsTransparentTemporalMergeEntryStates){
         // Selection is frozen with the compiled frame. The merge samples the current front pair and publishes the opposite pair, which the following wavelet receives as graph-owned sampled inputs.
-        constexpr usize s_TransparentTemporalMergeResourceUseCapacity = 8u;
-        constexpr usize s_CombinedSoftTemporalExtraUseCapacity = 5u;
-        uses.transparentTemporalMerge.reserve(s_TransparentTemporalMergeResourceUseCapacity + (route.combinedSoftTemporal ? s_CombinedSoftTemporalExtraUseCapacity : 0u));
-        uses.transparentTemporalMerge.push_back(ReadUse(transparentSoftHalf, Core::ResourceStates::ShaderResource));
-        uses.transparentTemporalMerge.push_back(ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource));
-        uses.transparentTemporalMerge.push_back(ReadUse(inputs.worldPosition, Core::ResourceStates::ShaderResource));
+        uses.transparentTemporalMerge[uses.transparentTemporalMergeCount++] = ReadUse(transparentSoftHalf, Core::ResourceStates::ShaderResource);
+        uses.transparentTemporalMerge[uses.transparentTemporalMergeCount++] = ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource);
+        uses.transparentTemporalMerge[uses.transparentTemporalMergeCount++] = ReadUse(inputs.worldPosition, Core::ResourceStates::ShaderResource);
         if(softShadowHistoryReadable){
-            uses.transparentTemporalMerge.push_back(ReadUse(shadowSoftGeometryPrevious, Core::ResourceStates::ShaderResource));
-            uses.transparentTemporalMerge.push_back(ReadUse(transparentHistoryIn, Core::ResourceStates::ShaderResource));
-            uses.transparentTemporalMerge.push_back(ReadUse(transparentMomentsIn, Core::ResourceStates::ShaderResource));
+            uses.transparentTemporalMerge[uses.transparentTemporalMergeCount++] = ReadUse(shadowSoftGeometryPrevious, Core::ResourceStates::ShaderResource);
+            uses.transparentTemporalMerge[uses.transparentTemporalMergeCount++] = ReadUse(transparentHistoryIn, Core::ResourceStates::ShaderResource);
+            uses.transparentTemporalMerge[uses.transparentTemporalMergeCount++] = ReadUse(transparentMomentsIn, Core::ResourceStates::ShaderResource);
         }
-        uses.transparentTemporalMerge.push_back(WriteUse(transparentHistoryOut, Core::ResourceStates::UnorderedAccess));
-        uses.transparentTemporalMerge.push_back(WriteUse(transparentMomentsOut, Core::ResourceStates::UnorderedAccess));
+        uses.transparentTemporalMerge[uses.transparentTemporalMergeCount++] = WriteUse(transparentHistoryOut, Core::ResourceStates::UnorderedAccess);
+        uses.transparentTemporalMerge[uses.transparentTemporalMergeCount++] = WriteUse(transparentMomentsOut, Core::ResourceStates::UnorderedAccess);
         if(route.combinedSoftTemporal){
-            uses.transparentTemporalMerge.push_back(ReadUse(shadowSoftHalfA, Core::ResourceStates::ShaderResource));
+            uses.transparentTemporalMerge[uses.transparentTemporalMergeCount++] = ReadUse(shadowSoftHalfA, Core::ResourceStates::ShaderResource);
             if(softShadowHistoryReadable){
-                uses.transparentTemporalMerge.push_back(ReadUse(opaqueHistoryFrontIsA ? opaqueHistoryA : opaqueHistoryB, Core::ResourceStates::ShaderResource));
-                uses.transparentTemporalMerge.push_back(ReadUse(opaqueHistoryFrontIsA ? opaqueMomentsA : opaqueMomentsB, Core::ResourceStates::ShaderResource));
+                uses.transparentTemporalMerge[uses.transparentTemporalMergeCount++] = ReadUse(opaqueHistoryFrontIsA ? opaqueHistoryA : opaqueHistoryB, Core::ResourceStates::ShaderResource);
+                uses.transparentTemporalMerge[uses.transparentTemporalMergeCount++] = ReadUse(opaqueHistoryFrontIsA ? opaqueMomentsA : opaqueMomentsB, Core::ResourceStates::ShaderResource);
             }
-            uses.transparentTemporalMerge.push_back(WriteUse(opaqueHistoryFrontIsA ? opaqueHistoryB : opaqueHistoryA, Core::ResourceStates::UnorderedAccess));
-            uses.transparentTemporalMerge.push_back(WriteUse(opaqueHistoryFrontIsA ? opaqueMomentsB : opaqueMomentsA, Core::ResourceStates::UnorderedAccess));
+            uses.transparentTemporalMerge[uses.transparentTemporalMergeCount++] = WriteUse(opaqueHistoryFrontIsA ? opaqueHistoryB : opaqueHistoryA, Core::ResourceStates::UnorderedAccess);
+            uses.transparentTemporalMerge[uses.transparentTemporalMergeCount++] = WriteUse(opaqueHistoryFrontIsA ? opaqueMomentsB : opaqueMomentsA, Core::ResourceStates::UnorderedAccess);
         }
 
-        constexpr usize s_CombinedFirstWaveletResourceUseCapacity = 7u;
-        constexpr usize s_FirstWaveletResourceUseCapacity = 4u;
-        uses.transparentFirstWavelet.reserve(route.combinedSoftWavelet ? s_CombinedFirstWaveletResourceUseCapacity : s_FirstWaveletResourceUseCapacity);
-        uses.transparentFirstWavelet.push_back(ReadUse(transparentHistoryOut, Core::ResourceStates::ShaderResource));
-        uses.transparentFirstWavelet.push_back(ReadUse(transparentMomentsOut, Core::ResourceStates::ShaderResource));
-        uses.transparentFirstWavelet.push_back(WriteUse(shadowSoftHalfA, Core::ResourceStates::UnorderedAccess));
-        uses.transparentFirstWavelet.push_back(ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource));
+        uses.transparentFirstWavelet[uses.transparentFirstWaveletCount++] = ReadUse(transparentHistoryOut, Core::ResourceStates::ShaderResource);
+        uses.transparentFirstWavelet[uses.transparentFirstWaveletCount++] = ReadUse(transparentMomentsOut, Core::ResourceStates::ShaderResource);
+        uses.transparentFirstWavelet[uses.transparentFirstWaveletCount++] = WriteUse(shadowSoftHalfA, Core::ResourceStates::UnorderedAccess);
+        uses.transparentFirstWavelet[uses.transparentFirstWaveletCount++] = ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource);
     }else{
         // Inactive temporal frames keep their existing trace-to-wavelet route and do not acquire stale-history declarations or a no-op merge callback.
-        constexpr usize s_InactiveFirstWaveletResourceUseCapacity = 3u;
-        uses.transparentFirstWavelet.reserve(s_InactiveFirstWaveletResourceUseCapacity);
-        uses.transparentFirstWavelet.push_back(ReadUse(transparentSoftHalf, Core::ResourceStates::ShaderResource));
-        uses.transparentFirstWavelet.push_back(WriteUse(shadowSoftHalfA, Core::ResourceStates::UnorderedAccess));
-        uses.transparentFirstWavelet.push_back(ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource));
+        uses.transparentFirstWavelet[uses.transparentFirstWaveletCount++] = ReadUse(transparentSoftHalf, Core::ResourceStates::ShaderResource);
+        uses.transparentFirstWavelet[uses.transparentFirstWaveletCount++] = WriteUse(shadowSoftHalfA, Core::ResourceStates::UnorderedAccess);
+        uses.transparentFirstWavelet[uses.transparentFirstWaveletCount++] = ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource);
     }
     if(route.combinedSoftWavelet){
         // Both temporal merges publish their selected output pair before the fused wavelet reads either pair.
-        uses.transparentFirstWavelet.push_back(ReadUse(opaqueHistoryFrontIsA ? opaqueHistoryB : opaqueHistoryA, Core::ResourceStates::ShaderResource));
-        uses.transparentFirstWavelet.push_back(ReadUse(opaqueHistoryFrontIsA ? opaqueMomentsB : opaqueMomentsA, Core::ResourceStates::ShaderResource));
-        uses.transparentFirstWavelet.push_back(WriteUse(shadowSoftHalfB, Core::ResourceStates::UnorderedAccess));
+        uses.transparentFirstWavelet[uses.transparentFirstWaveletCount++] = ReadUse(opaqueHistoryFrontIsA ? opaqueHistoryB : opaqueHistoryA, Core::ResourceStates::ShaderResource);
+        uses.transparentFirstWavelet[uses.transparentFirstWaveletCount++] = ReadUse(opaqueHistoryFrontIsA ? opaqueMomentsB : opaqueMomentsA, Core::ResourceStates::ShaderResource);
+        uses.transparentFirstWavelet[uses.transparentFirstWaveletCount++] = WriteUse(shadowSoftHalfB, Core::ResourceStates::UnorderedAccess);
     }
-    constexpr usize s_TransparentFoldResourceUseCapacity = 9u;
-    uses.transparentFold.reserve(s_TransparentFoldResourceUseCapacity);
+    uses.transparentFoldCount = 0u;
     if(route.combinedSoftUpsample)
-        uses.transparentFold.push_back(ReadUse(shadowSoftHalfB, Core::ResourceStates::ShaderResource));
+        uses.transparentFold[uses.transparentFoldCount++] = ReadUse(shadowSoftHalfB, Core::ResourceStates::ShaderResource);
     // With one RGB wavelet the terminal task only samples half-A before multiplying visibility. Preserve a native ping-pong declaration if the compile-time pass count grows.
     if(NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT == 1u)
-        uses.transparentFold.push_back(ReadUse(shadowSoftHalfA, Core::ResourceStates::ShaderResource));
+        uses.transparentFold[uses.transparentFoldCount++] = ReadUse(shadowSoftHalfA, Core::ResourceStates::ShaderResource);
     else{
-        uses.transparentFold.push_back(ReadWriteUse(shadowSoftHalfA, Core::ResourceStates::UnorderedAccess));
-        uses.transparentFold.push_back(ReadWriteUse(shadowSoftHalfB, Core::ResourceStates::UnorderedAccess));
+        uses.transparentFold[uses.transparentFoldCount++] = ReadWriteUse(shadowSoftHalfA, Core::ResourceStates::UnorderedAccess);
+        uses.transparentFold[uses.transparentFoldCount++] = ReadWriteUse(shadowSoftHalfB, Core::ResourceStates::UnorderedAccess);
     }
-    uses.transparentFold.push_back(route.combinedSoftUpsample ? WriteUse(inputs.shadowVisibility, Core::ResourceStates::UnorderedAccess) : ReadWriteUse(inputs.shadowVisibility, Core::ResourceStates::UnorderedAccess));
-    uses.transparentFold.push_back(ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource));
-    uses.transparentFold.push_back(ReadUse(inputs.worldPosition, Core::ResourceStates::ShaderResource));
-    uses.transparentFold.push_back(ReadUse(inputs.normal, Core::ResourceStates::ShaderResource));
-    uses.transparentFold.push_back(ReadUse(inputs.depth, Core::ResourceStates::ShaderResource));
-    uses.transparentFold.push_back(ReadUse(inputs.sceneShading, Core::ResourceStates::ConstantBuffer));
+    uses.transparentFold[uses.transparentFoldCount++] = route.combinedSoftUpsample ? WriteUse(inputs.shadowVisibility, Core::ResourceStates::UnorderedAccess) : ReadWriteUse(inputs.shadowVisibility, Core::ResourceStates::UnorderedAccess);
+    uses.transparentFold[uses.transparentFoldCount++] = ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource);
+    uses.transparentFold[uses.transparentFoldCount++] = ReadUse(inputs.worldPosition, Core::ResourceStates::ShaderResource);
+    uses.transparentFold[uses.transparentFoldCount++] = ReadUse(inputs.normal, Core::ResourceStates::ShaderResource);
+    uses.transparentFold[uses.transparentFoldCount++] = ReadUse(inputs.depth, Core::ResourceStates::ShaderResource);
+    uses.transparentFold[uses.transparentFoldCount++] = ReadUse(inputs.sceneShading, Core::ResourceStates::ConstantBuffer);
     return true;
 }
 

@@ -33,7 +33,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<HardwareCausticsStageResult> HardwareCausticsStageBuilder::declare(Core::Alloc::ScratchArena& scratchArena, const HardwareCausticsStageInputs& inputs){
+[[nodiscard]] Expected<HardwareCausticsStageResult> HardwareCausticsStageBuilder::declare(const HardwareCausticsStageInputs& inputs, Core::Alloc::ScratchArena& scratchArena){
     using namespace RendererTaskGraphDetail;
     HardwareCausticsStageResult result{};
     if(!inputs.declaresHardwareCaustics)
@@ -58,7 +58,6 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
         || !inputs.sceneShading.valid()
         || !inputs.lights.valid()
         || !inputs.graphicsPrefixTask.valid()
-        || (inputs.hardwareTraceGeometryResourceCount != 0u && !inputs.hardwareTraceGeometryResources)
     )
         return MakeUnexpected(Failure{});
     if(m_raytracingSystem.hasHwCausticWork(*inputs.meshViewSnapshot) && !inputs.opticalScene.valid())
@@ -86,14 +85,6 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
     const Core::GpuGraphResourceId sceneGeometryDomain = *sceneGeometryDomainResult;
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwarePhotonResourceUses{ scratchArena };
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwareGeometryResourceUses{ scratchArena };
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwareResolvePrepareResourceUses{ scratchArena };
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwareResolveWaveletResourceUses{ scratchArena };
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwareResolveSecondWaveletResourceUses{ scratchArena };
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwareResolveThirdWaveletResourceUses{ scratchArena };
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwareResolveFourthWaveletResourceUses{ scratchArena };
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwareResolveFifthWaveletResourceUses{ scratchArena };
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwareResolveUpsampleResourceUses{ scratchArena };
     const bool hardwareTraceGeometryStatesGraphOwned = inputs.hardwareTraceGeometrySet.valid();
     const Core::GpuTaskResourceSetUse hardwareTraceGeometrySetUse{ .resourceSet = inputs.hardwareTraceGeometrySet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
     const Core::GpuTaskResourceSetUse traceMaterialSampledTextureSetUse{ .resourceSet = inputs.traceMaterialSampledTextureSet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
@@ -108,16 +99,8 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
     constexpr usize s_HardwarePhotonResourceUseCapacity = 15u;
     hardwarePhotonResourceUses.reserve(s_HardwarePhotonResourceUseCapacity
         + (inputs.rayTracingResources->csgTraceContextBuffer ? 1u : 0u)
-        + inputs.rayTracingResources->csgTraceBoundsBufferCount + (hardwareTraceGeometryStatesGraphOwned ? 0u : inputs.hardwareTraceGeometryResourceCount)
+        + inputs.rayTracingResources->csgTraceBoundsBufferCount + (hardwareTraceGeometryStatesGraphOwned ? 0u : inputs.hardwareTraceGeometryResources.size())
     );
-    hardwareGeometryResourceUses.reserve(RendererFramePipelineDetail::s_CausticResolveStageResourceUseCapacity);
-    hardwareResolvePrepareResourceUses.reserve(RendererFramePipelineDetail::s_CausticResolveStageResourceUseCapacity);
-    hardwareResolveWaveletResourceUses.reserve(RendererFramePipelineDetail::s_CausticResolveStageResourceUseCapacity);
-    hardwareResolveSecondWaveletResourceUses.reserve(RendererFramePipelineDetail::s_CausticResolveStageResourceUseCapacity);
-    hardwareResolveThirdWaveletResourceUses.reserve(RendererFramePipelineDetail::s_CausticResolveStageResourceUseCapacity);
-    hardwareResolveFourthWaveletResourceUses.reserve(RendererFramePipelineDetail::s_CausticResolveStageResourceUseCapacity);
-    hardwareResolveFifthWaveletResourceUses.reserve(RendererFramePipelineDetail::s_CausticResolveStageResourceUseCapacity);
-    hardwareResolveUpsampleResourceUses.reserve(RendererFramePipelineDetail::s_CausticResolveUpsampleResourceUseCapacity);
     hardwarePhotonResourceUses.push_back(ReadTextureUse(inputs.worldPosition, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
     hardwarePhotonResourceUses.push_back(ReadTextureUse(inputs.depth, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
     hardwarePhotonResourceUses.push_back(ReadUse(inputs.currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
@@ -129,52 +112,40 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
     hardwarePhotonResourceUses.push_back(ReadWriteTextureUse(causticAccumulator, ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::UnorderedAccess));
 
     // Geometry downsample feeds the wavelet cache; compiler owns the UAV-to-SRV handoff.
-    hardwareGeometryResourceUses.push_back(ReadTextureUse(inputs.worldPosition, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
-    hardwareGeometryResourceUses.push_back(ReadTextureUse(inputs.depth, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
-    hardwareGeometryResourceUses.push_back(WriteTextureUse(causticResolveGeometry, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess));
+    const Core::GpuTaskResourceUse hardwareGeometryResourceUses[] = {
+        ReadTextureUse(inputs.worldPosition, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
+        ReadTextureUse(inputs.depth, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
+        WriteTextureUse(causticResolveGeometry, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess),
+    };
 
     // Prepare writes the parity-selected ping-pong target; wavelets own the alternating sequence.
     constexpr bool s_HardwareCausticResolvePrepareWritesHalf = (NWB_CAUSTIC_RESOLVE_PASS_COUNT % 2u) == 0u;
-    hardwareResolvePrepareResourceUses.push_back(ReadTextureUse(causticAccumulator, ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::ShaderResource));
-    hardwareResolvePrepareResourceUses.push_back(ReadTextureUse(causticResolveGeometry, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
-    hardwareResolveWaveletResourceUses.push_back(ReadTextureUse(causticResolveGeometry, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
-    hardwareResolveSecondWaveletResourceUses.push_back(ReadTextureUse(causticResolveGeometry, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
-    hardwareResolveThirdWaveletResourceUses.push_back(ReadTextureUse(causticResolveGeometry, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
-    hardwareResolveFourthWaveletResourceUses.push_back(ReadTextureUse(causticResolveGeometry, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
-    hardwareResolveFifthWaveletResourceUses.push_back(ReadTextureUse(causticResolveGeometry, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
-    if(s_HardwareCausticResolvePrepareWritesHalf){
-        hardwareResolvePrepareResourceUses.push_back(WriteTextureUse(causticResolveHalf, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess));
-        hardwareResolveWaveletResourceUses.push_back(ReadTextureUse(causticResolveHalf, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
-        hardwareResolveWaveletResourceUses.push_back(WriteTextureUse(causticHistory, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess));
-        hardwareResolveSecondWaveletResourceUses.push_back(ReadTextureUse(causticHistory, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
-        hardwareResolveSecondWaveletResourceUses.push_back(WriteTextureUse(causticResolveHalf, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess));
-        hardwareResolveThirdWaveletResourceUses.push_back(ReadTextureUse(causticResolveHalf, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
-        hardwareResolveThirdWaveletResourceUses.push_back(WriteTextureUse(causticHistory, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess));
-        hardwareResolveFourthWaveletResourceUses.push_back(ReadTextureUse(causticHistory, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
-        hardwareResolveFourthWaveletResourceUses.push_back(WriteTextureUse(causticResolveHalf, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess));
-        hardwareResolveFifthWaveletResourceUses.push_back(ReadTextureUse(causticResolveHalf, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
-        hardwareResolveFifthWaveletResourceUses.push_back(WriteTextureUse(causticHistory, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess));
-    }
-    else{
-        hardwareResolvePrepareResourceUses.push_back(WriteTextureUse(causticHistory, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess));
-        hardwareResolveWaveletResourceUses.push_back(ReadTextureUse(causticHistory, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
-        hardwareResolveWaveletResourceUses.push_back(WriteTextureUse(causticResolveHalf, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess));
-        hardwareResolveSecondWaveletResourceUses.push_back(ReadTextureUse(causticResolveHalf, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
-        hardwareResolveSecondWaveletResourceUses.push_back(WriteTextureUse(causticHistory, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess));
-        hardwareResolveThirdWaveletResourceUses.push_back(ReadTextureUse(causticHistory, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
-        hardwareResolveThirdWaveletResourceUses.push_back(WriteTextureUse(causticResolveHalf, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess));
-        hardwareResolveFourthWaveletResourceUses.push_back(ReadTextureUse(causticResolveHalf, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
-        hardwareResolveFourthWaveletResourceUses.push_back(WriteTextureUse(causticHistory, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess));
-        hardwareResolveFifthWaveletResourceUses.push_back(ReadTextureUse(causticHistory, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
-        hardwareResolveFifthWaveletResourceUses.push_back(WriteTextureUse(causticResolveHalf, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess));
-    }
+    const Core::GpuGraphResourceId oddWaveletSource = s_HardwareCausticResolvePrepareWritesHalf ? causticResolveHalf : causticHistory;
+    const Core::GpuGraphResourceId oddWaveletDest = s_HardwareCausticResolvePrepareWritesHalf ? causticHistory : causticResolveHalf;
+    const Core::GpuTaskResourceUse hardwareResolvePrepareResourceUses[] = {
+        ReadTextureUse(causticAccumulator, ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::ShaderResource),
+        ReadTextureUse(causticResolveGeometry, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
+        WriteTextureUse(oddWaveletSource, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess),
+    };
+    const Core::GpuTaskResourceUse hardwareResolveOddWaveletResourceUses[] = {
+        ReadTextureUse(causticResolveGeometry, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
+        ReadTextureUse(oddWaveletSource, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
+        WriteTextureUse(oddWaveletDest, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess),
+    };
+    const Core::GpuTaskResourceUse hardwareResolveEvenWaveletResourceUses[] = {
+        ReadTextureUse(causticResolveGeometry, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
+        ReadTextureUse(oddWaveletDest, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
+        WriteTextureUse(oddWaveletSource, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess),
+    };
 
     // Upsample takes the final graph handoff; timing-close carries no resource use.
-    hardwareResolveUpsampleResourceUses.push_back(ReadTextureUse(inputs.worldPosition, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
-    hardwareResolveUpsampleResourceUses.push_back(ReadTextureUse(inputs.depth, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
-    hardwareResolveUpsampleResourceUses.push_back(ReadTextureUse(causticResolveHalf, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
-    hardwareResolveUpsampleResourceUses.push_back(ReadTextureUse(causticResolveGeometry, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
-    hardwareResolveUpsampleResourceUses.push_back(WriteTextureUse(inputs.currentCausticIrradiance, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess));
+    const Core::GpuTaskResourceUse hardwareResolveUpsampleResourceUses[] = {
+        ReadTextureUse(inputs.worldPosition, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
+        ReadTextureUse(inputs.depth, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
+        ReadTextureUse(causticResolveHalf, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
+        ReadTextureUse(causticResolveGeometry, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
+        WriteTextureUse(inputs.currentCausticIrradiance, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess),
+    };
 
     const auto appendOptionalReadBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label, const Core::ResourceStates::Mask state){
         if(!buffer)
@@ -202,8 +173,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
         hardwarePhotonResourceUses.push_back(ReadUse(inputs.materialContextSlots, Core::ResourceStates::ConstantBuffer));
     }
     // Candidate normal and seam checks read the frozen position and index streams.
-    for(usize resourceIndex = 0u; resourceIndex < inputs.hardwareTraceGeometryResourceCount; ++resourceIndex){
-        const Core::GpuGraphResourceId resource = inputs.hardwareTraceGeometryResources[resourceIndex];
+    for(const Core::GpuGraphResourceId resource : inputs.hardwareTraceGeometryResources){
         if(!resource.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: invalid prepared hardware-caustics geometry resource"));
             return MakeUnexpected(Failure{});
@@ -420,7 +390,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
         .setMarkerLabel("Hardware Caustics Geometry Downsample")
         .setScheduling(hardwareGeometryScheduling)
         .setDependencies(&result.causticPhotonTask, 1u)
-        .setResourceUses(hardwareGeometryResourceUses.data(), hardwareGeometryResourceUses.size())
+        .setResourceUses(hardwareGeometryResourceUses, LengthOf(hardwareGeometryResourceUses))
     ;
     const auto resultCausticGeometryTaskResult = m_raytracingSystem.declareCausticGeometryDownsampleTask(m_graph, hardwareGeometryDesc, *inputs.producerDispatched, (*inputs.targets), (*inputs.timingTicket), *inputs.resolveTiming);
     if(!resultCausticGeometryTaskResult){
@@ -434,14 +404,14 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
     HardwareCausticsResolveChainInputs resolveChainInputs(*inputs.targets, *inputs.producerDispatched, *inputs.timingTicket, *inputs.resolveTiming);
     resolveChainInputs.geometryTask = result.causticGeometryTask;
     resolveChainInputs.baseScheduling = hardwareGeometryScheduling;
-    resolveChainInputs.prepare = {hardwareResolvePrepareResourceUses.data(), hardwareResolvePrepareResourceUses.size()};
-    resolveChainInputs.wavelet = {hardwareResolveWaveletResourceUses.data(), hardwareResolveWaveletResourceUses.size()};
-    resolveChainInputs.secondWavelet = {hardwareResolveSecondWaveletResourceUses.data(), hardwareResolveSecondWaveletResourceUses.size()};
-    resolveChainInputs.thirdWavelet = {hardwareResolveThirdWaveletResourceUses.data(), hardwareResolveThirdWaveletResourceUses.size()};
-    resolveChainInputs.fourthWavelet = {hardwareResolveFourthWaveletResourceUses.data(), hardwareResolveFourthWaveletResourceUses.size()};
-    resolveChainInputs.fifthWavelet = {hardwareResolveFifthWaveletResourceUses.data(), hardwareResolveFifthWaveletResourceUses.size()};
-    resolveChainInputs.upsample = {hardwareResolveUpsampleResourceUses.data(), hardwareResolveUpsampleResourceUses.size()};
-    auto resolveChainResult = resolveChainBuilder.declare(resolveChainInputs, scratchArena);
+    resolveChainInputs.prepare = hardwareResolvePrepareResourceUses;
+    resolveChainInputs.wavelet = hardwareResolveOddWaveletResourceUses;
+    resolveChainInputs.secondWavelet = hardwareResolveEvenWaveletResourceUses;
+    resolveChainInputs.thirdWavelet = hardwareResolveOddWaveletResourceUses;
+    resolveChainInputs.fourthWavelet = hardwareResolveEvenWaveletResourceUses;
+    resolveChainInputs.fifthWavelet = hardwareResolveOddWaveletResourceUses;
+    resolveChainInputs.upsample = hardwareResolveUpsampleResourceUses;
+    auto resolveChainResult = resolveChainBuilder.declare(resolveChainInputs);
     if(!resolveChainResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare hardware-caustics resolve chain"));
         return MakeUnexpected(Failure{});

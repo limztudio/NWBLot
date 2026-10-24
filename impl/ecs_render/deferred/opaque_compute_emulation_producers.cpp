@@ -20,7 +20,6 @@ NWB_IMPL_BEGIN
 
 
 Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareRegular(
-    Core::Alloc::ScratchArena& scratchArena,
     const OpaqueComputeEmulationProducerInputs& inputs,
     const Core::GpuTaskResourceSetUse& outputUavSetUse,
     const Core::GpuTaskId& dependency,
@@ -28,7 +27,6 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareRegular(
 ){
     using namespace RendererTaskGraphDetail;
 
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
     // G-buffer's semantic timing ticket spans its preparatory compute half and its raster half in one packet.
     payload.instanceCount = inputs.instanceCount;
     payload.materialTypedByteCount = inputs.materialTypedByteCount;
@@ -36,11 +34,11 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareRegular(
     payload.materialFrameStatesGraphOwned = inputs.materialFrameStatesGraphOwned;
     payload.materialGeometryStatesGraphOwned = inputs.materialGeometryStatesGraphOwned;
 
-    constexpr usize s_OpaqueComputeEmulationResourceUseCapacity = 3u;
-    resourceUses.reserve(s_OpaqueComputeEmulationResourceUseCapacity);
-    resourceUses.push_back(ReadUse(inputs.resources.meshView, Core::ResourceStates::ConstantBuffer));
-    resourceUses.push_back(ReadBufferUse(inputs.resources.materialInstances, inputs.materialInstanceRange));
-    resourceUses.push_back(ReadBufferUse(inputs.resources.materialTyped, inputs.materialTypedRange));
+    const Core::GpuTaskResourceUse resourceUses[] = {
+        ReadUse(inputs.resources.meshView, Core::ResourceStates::ConstantBuffer),
+        ReadBufferUse(inputs.resources.materialInstances, inputs.materialInstanceRange),
+        ReadBufferUse(inputs.resources.materialTyped, inputs.materialTypedRange),
+    };
     Core::GpuTaskResourceSetUse opaqueComputeEmulationResourceSetUses[3u] = {};
     usize opaqueComputeEmulationResourceSetUseCount = 0u;
     opaqueComputeEmulationResourceSetUses[opaqueComputeEmulationResourceSetUseCount++] = inputs.materialGeometrySetUse;
@@ -61,7 +59,7 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareRegular(
         .setMarkerLabel("Opaque Compute Emulation")
         .setScheduling(opaqueComputeEmulationScheduling)
         .setDependencies(&dependency, 1u)
-        .setResourceUses(resourceUses.data(), resourceUses.size())
+        .setResourceUses(resourceUses, LengthOf(resourceUses))
         .setResourceSetUses(opaqueComputeEmulationResourceSetUses, opaqueComputeEmulationResourceSetUseCount)
     ;
     const auto taskResult = m_graph.addTask< ECSRenderDetail::OpaqueRegularComputeEmulationGraphTask >(opaqueComputeEmulationDesc, Move(payload));
@@ -73,7 +71,6 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareRegular(
 }
 
 Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareCsgReceiver(
-    Core::Alloc::ScratchArena& scratchArena,
     const OpaqueComputeEmulationProducerInputs& inputs,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
     const Core::GpuTaskResourceSetUse& outputUavSetUse,
@@ -82,7 +79,6 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareCsgRecei
 ){
     using namespace RendererTaskGraphDetail;
 
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
     payload.csgResources = csgResources;
     // The receiver producer is an early part of G-buffer's one Graphics submission; its dispatch timing shares the existing ticket while the receiver raster keeps its own scope in G-buffer.
     payload.instanceCount = inputs.instanceCount;
@@ -92,17 +88,17 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareCsgRecei
     payload.materialFrameStatesGraphOwned = inputs.materialFrameStatesGraphOwned;
     payload.materialGeometryStatesGraphOwned = inputs.materialGeometryStatesGraphOwned;
 
-    constexpr usize s_OpaqueCsgReceiverComputeEmulationCapacity = 8u;
-    resourceUses.reserve(s_OpaqueCsgReceiverComputeEmulationCapacity);
-    resourceUses.push_back(ReadUse(inputs.resources.meshView, Core::ResourceStates::ConstantBuffer));
-    resourceUses.push_back(ReadBufferUse(inputs.resources.materialInstances, inputs.materialInstanceRange));
-    resourceUses.push_back(ReadBufferUse(inputs.resources.materialTyped, inputs.materialTypedRange));
     // The compute pipeline shares CSG's clip context. It does not write receiver-event images; those stay G-buffer raster outputs absent from this producer's uses.
-    resourceUses.push_back(ReadBufferUse(inputs.resources.csgReceiverRanges, inputs.csgReceiverRange));
-    resourceUses.push_back(ReadBufferUse(inputs.resources.csgCutters, inputs.csgCutterRange));
-    resourceUses.push_back(ReadUse(inputs.resources.csgClipContextSlots, Core::ResourceStates::ConstantBuffer));
-    resourceUses.push_back(ReadUse(inputs.resources.csgIntervalSampleState, Core::ResourceStates::ConstantBuffer));
-    resourceUses.push_back(ReadUse(inputs.resources.currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
+    const Core::GpuTaskResourceUse resourceUses[] = {
+        ReadUse(inputs.resources.meshView, Core::ResourceStates::ConstantBuffer),
+        ReadBufferUse(inputs.resources.materialInstances, inputs.materialInstanceRange),
+        ReadBufferUse(inputs.resources.materialTyped, inputs.materialTypedRange),
+        ReadBufferUse(inputs.resources.csgReceiverRanges, inputs.csgReceiverRange),
+        ReadBufferUse(inputs.resources.csgCutters, inputs.csgCutterRange),
+        ReadUse(inputs.resources.csgClipContextSlots, Core::ResourceStates::ConstantBuffer),
+        ReadUse(inputs.resources.csgIntervalSampleState, Core::ResourceStates::ConstantBuffer),
+        ReadUse(inputs.resources.currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
+    };
     Core::GpuTaskResourceSetUse opaqueCsgReceiverComputeEmulationResourceSetUses[3u] = {};
     usize opaqueCsgReceiverComputeEmulationResourceSetUseCount = 0u;
     opaqueCsgReceiverComputeEmulationResourceSetUses[opaqueCsgReceiverComputeEmulationResourceSetUseCount++] = inputs.materialGeometrySetUse;
@@ -123,7 +119,7 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareCsgRecei
         .setMarkerLabel("Opaque CSG Receiver Compute Emulation")
         .setScheduling(opaqueCsgReceiverComputeEmulationScheduling)
         .setDependencies(&dependency, 1u)
-        .setResourceUses(resourceUses.data(), resourceUses.size())
+        .setResourceUses(resourceUses, LengthOf(resourceUses))
         .setResourceSetUses(opaqueCsgReceiverComputeEmulationResourceSetUses, opaqueCsgReceiverComputeEmulationResourceSetUseCount)
     ;
     const auto taskResult = m_graph.addTask< ECSRenderDetail::OpaqueCsgReceiverComputeEmulationGraphTask >(

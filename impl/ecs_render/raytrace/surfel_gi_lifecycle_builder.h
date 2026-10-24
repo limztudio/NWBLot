@@ -38,8 +38,7 @@ struct SurfelGiLifecycleInputs{
     u64 poolSnapshotByteSize = 0u;
     u64 cellHeadSnapshotByteSize = 0u;
     Core::GpuTaskSchedulingHint scheduling;
-    const Core::GpuExternalCompletionId* externalDependencies = nullptr;
-    usize externalDependencyCount = 0u;
+    Span<const Core::GpuExternalCompletionId> externalDependencies{};
     Core::GpuTaskExternalStateSource computeStateSource;
     Core::GpuTaskExternalStateSource counterStateSource;
     bool hasWork = false;
@@ -78,4 +77,5 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

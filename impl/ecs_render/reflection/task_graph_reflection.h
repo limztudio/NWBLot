@@ -40,12 +40,9 @@ struct ReflectionGraphInputs{
     Core::GpuGraphResourceId opaqueDepth;
     Core::GpuGraphResourceId opaqueColor;
     // Surface reads cover view/deferred selectors, F0/roughness, depth/normal, glass captures.
-    const Core::GpuTaskResourceUse* surfaceReads = nullptr;
-    usize surfaceReadCount = 0u;
-    const Core::GpuTaskResourceUse* hardwareReads = nullptr;
-    usize hardwareReadCount = 0u;
-    const Core::GpuTaskResourceSetUse* hardwareSetReads = nullptr;
-    usize hardwareSetReadCount = 0u;
+    Span<const Core::GpuTaskResourceUse> surfaceReads{};
+    Span<const Core::GpuTaskResourceUse> hardwareReads{};
+    Span<const Core::GpuTaskResourceSetUse> hardwareSetReads{};
     const bool* hardwarePreparationReady = nullptr;
     bool* hardwareDispatchLogged = nullptr;
     bool* fallbackDispatchLogged = nullptr;
@@ -65,13 +62,13 @@ public:
 
 // Inputs copy at declaration; outcomes and latches are frame-owned past packet lifetime.
 [[nodiscard]] Expected<ReflectionGraphResult> DeclareReflectionTasks(
+    const ReflectionFrameSnapshot& resources,
+    const ReflectionGraphInputs& inputs,
+    Core::GpuTaskId dependency,
     Core::GpuTaskGraph& graph,
     Core::GraphicsRuntime& graphics,
     RendererReflectionSystem& reflectionSystem,
-    Core::Alloc::ScratchArena& scratchArena,
-    const ReflectionFrameSnapshot& resources,
-    const ReflectionGraphInputs& inputs,
-    Core::GpuTaskId dependency
+    Core::Alloc::ScratchArena& scratchArena
 );
 
 

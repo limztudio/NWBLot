@@ -27,19 +27,16 @@ struct DeferredFrameTargets;
 
 
 // Shared prepare plus five-wavelet plus upsample plus timing-close resolve declaration.
-struct CausticsResolveStageUses{
-    const Core::GpuTaskResourceUse* uses = nullptr;
-    usize useCount = 0u;
-};
+using CausticsResolveStageUses = Span<const Core::GpuTaskResourceUse>;
 
 struct CausticsResolveChainStageUseInputs{
-    CausticsResolveStageUses prepare;
-    CausticsResolveStageUses wavelet;
-    CausticsResolveStageUses secondWavelet;
-    CausticsResolveStageUses thirdWavelet;
-    CausticsResolveStageUses fourthWavelet;
-    CausticsResolveStageUses fifthWavelet;
-    CausticsResolveStageUses upsample;
+    CausticsResolveStageUses prepare{};
+    CausticsResolveStageUses wavelet{};
+    CausticsResolveStageUses secondWavelet{};
+    CausticsResolveStageUses thirdWavelet{};
+    CausticsResolveStageUses fourthWavelet{};
+    CausticsResolveStageUses fifthWavelet{};
+    CausticsResolveStageUses upsample{};
 };
 
 struct CausticsResolveStageNaming{
@@ -52,8 +49,7 @@ struct CausticsResolveChainInputs : public CausticsResolveChainStageUseInputs{
     DeferredFrameTargets& targets;
     Core::GpuTaskId geometryTask;
     Core::GpuTaskSchedulingHint baseScheduling;
-    const Core::GpuTaskExternalStateSource* stateSources = nullptr;
-    usize stateSourceCount = 0u;
+    Span<const Core::GpuTaskExternalStateSource> stateSources{};
     bool applyStateSourcesToPrepareOnly = true;
     bool& producerDispatched;
     Core::GpuTimingSubmissionTicket& timingTicket;
@@ -103,7 +99,7 @@ public:
 
 
 public:
-    [[nodiscard]] Expected<CausticsResolveChainResult> declare(const CausticsResolveChainInputs& inputs, const CausticsResolveChainNaming& naming, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] Expected<CausticsResolveChainResult> declare(const CausticsResolveChainInputs& inputs, const CausticsResolveChainNaming& naming);
 
 
 private:
@@ -119,4 +115,5 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

@@ -152,33 +152,6 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
         && avboitCsgReceiverSpanPayload.csgFrameBuffersUploaded
     ;
     const bool avboitCsgIntervalCombineGraphOwned = avboitCsgReceiverSpanGraphOwned && avboitCsgIntervalCombinePayload.transparentCsgSnapshot.captured && avboitCsgIntervalCombinePayload.csgFrameBuffersUploaded;
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> avboitIntervalSpanResourceUses{ scratchArena };
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> avboitIntervalCombineResourceUses{ scratchArena };
-    if(avboitCsgReceiverSpanGraphOwned){
-        constexpr usize s_IntervalSpanResourceUseCapacity = 6u;
-        avboitIntervalSpanResourceUses.reserve(s_IntervalSpanResourceUseCapacity);
-        avboitIntervalSpanResourceUses.push_back(ReadTextureUse(csgReceiverEventData, csgReceiverEventDataSubresources, Core::ResourceStates::UnorderedAccess));
-        avboitIntervalSpanResourceUses.push_back(ReadTextureUse(csgReceiverEventCount, csgReceiverEventCountSubresources, Core::ResourceStates::UnorderedAccess));
-        avboitIntervalSpanResourceUses.push_back(ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer));
-        avboitIntervalSpanResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
-        avboitIntervalSpanResourceUses.push_back(WriteTextureUse(csgReceiverSpanData, csgReceiverSpanDataSubresources, Core::ResourceStates::UnorderedAccess));
-        avboitIntervalSpanResourceUses.push_back(WriteTextureUse(csgReceiverSpanCount, csgReceiverSpanCountSubresources, Core::ResourceStates::UnorderedAccess));
-    }
-    if(avboitCsgIntervalCombineGraphOwned){
-        constexpr usize s_IntervalCombineResourceUseCapacity = 11u;
-        avboitIntervalCombineResourceUses.reserve(s_IntervalCombineResourceUseCapacity);
-        avboitIntervalCombineResourceUses.push_back(ReadTextureUse(csgCapBackNormal, csgPeelSubresources, Core::ResourceStates::UnorderedAccess));
-        avboitIntervalCombineResourceUses.push_back(ReadTextureUse(csgIntervalDepth, csgPeelSubresources, Core::ResourceStates::UnorderedAccess));
-        avboitIntervalCombineResourceUses.push_back(ReadTextureUse(csgIntervalId, csgPeelSubresources, Core::ResourceStates::UnorderedAccess));
-        avboitIntervalCombineResourceUses.push_back(ReadTextureUse(csgReceiverSpanData, csgReceiverSpanDataSubresources, Core::ResourceStates::UnorderedAccess));
-        avboitIntervalCombineResourceUses.push_back(ReadTextureUse(csgReceiverSpanCount, csgReceiverSpanCountSubresources, Core::ResourceStates::UnorderedAccess));
-        avboitIntervalCombineResourceUses.push_back(ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer));
-        avboitIntervalCombineResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
-        avboitIntervalCombineResourceUses.push_back(WriteTextureUse(csgRemovedIntervalDepth, csgRemovedIntervalSubresources, Core::ResourceStates::UnorderedAccess));
-        avboitIntervalCombineResourceUses.push_back(WriteTextureUse(csgRemovedIntervalCapNormal, csgRemovedIntervalSubresources, Core::ResourceStates::UnorderedAccess));
-        avboitIntervalCombineResourceUses.push_back(WriteTextureUse(csgRemovedIntervalData, csgRemovedIntervalSubresources, Core::ResourceStates::UnorderedAccess));
-        avboitIntervalCombineResourceUses.push_back(WriteTextureUse(csgRemovedIntervalCount, csgRemovedIntervalCountSubresources, Core::ResourceStates::UnorderedAccess));
-    }
     const auto mAvboitSystemTaskGraphStageMPreTaskResult = m_graph.addTask<AvboitPreGraphTask>(avboitIntervalDesc, Move(avboitPrePayload));
     if(!mAvboitSystemTaskGraphStageMPreTaskResult){
         m_avboitSystem.taskGraphStage().m_preTask = {};
@@ -190,6 +163,14 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
     Core::GpuTaskId avboitIntervalCompletionTask = m_avboitSystem.taskGraphStage().m_preTask;
     bool avboitIntervalOutputsGraphOwned = false;
     if(avboitCsgReceiverSpanGraphOwned){
+        const Core::GpuTaskResourceUse avboitIntervalSpanResourceUses[] = {
+            ReadTextureUse(csgReceiverEventData, csgReceiverEventDataSubresources, Core::ResourceStates::UnorderedAccess),
+            ReadTextureUse(csgReceiverEventCount, csgReceiverEventCountSubresources, Core::ResourceStates::UnorderedAccess),
+            ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer),
+            ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
+            WriteTextureUse(csgReceiverSpanData, csgReceiverSpanDataSubresources, Core::ResourceStates::UnorderedAccess),
+            WriteTextureUse(csgReceiverSpanCount, csgReceiverSpanCountSubresources, Core::ResourceStates::UnorderedAccess),
+        };
         Core::GpuTaskSchedulingHint avboitIntervalSpanScheduling;
         avboitIntervalSpanScheduling.cost = Core::GpuTaskCostHint::Medium;
         avboitIntervalSpanScheduling.forceSubmissionBoundary = false;
@@ -201,7 +182,7 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
             .setMarkerLabel("Transparent CSG Receiver Span")
             .setScheduling(avboitIntervalSpanScheduling)
             .setDependencies(&m_avboitSystem.taskGraphStage().m_preTask, 1u)
-            .setResourceUses(avboitIntervalSpanResourceUses.data(), avboitIntervalSpanResourceUses.size())
+            .setResourceUses(avboitIntervalSpanResourceUses, LengthOf(avboitIntervalSpanResourceUses))
         ;
         const auto mAvboitSystemTaskGraphStageMCsgReceiverSpanTaskResult = m_graph.addTask< ECSRenderDetail::AvboitCsgReceiverSpanGraphTask >(avboitIntervalSpanDesc, Move(avboitCsgReceiverSpanPayload));
         if(!mAvboitSystemTaskGraphStageMCsgReceiverSpanTaskResult){
@@ -213,6 +194,19 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
         avboitIntervalCompletionTask = m_avboitSystem.taskGraphStage().m_csgReceiverSpanTask;
     }
     if(avboitCsgIntervalCombineGraphOwned){
+        const Core::GpuTaskResourceUse avboitIntervalCombineResourceUses[] = {
+            ReadTextureUse(csgCapBackNormal, csgPeelSubresources, Core::ResourceStates::UnorderedAccess),
+            ReadTextureUse(csgIntervalDepth, csgPeelSubresources, Core::ResourceStates::UnorderedAccess),
+            ReadTextureUse(csgIntervalId, csgPeelSubresources, Core::ResourceStates::UnorderedAccess),
+            ReadTextureUse(csgReceiverSpanData, csgReceiverSpanDataSubresources, Core::ResourceStates::UnorderedAccess),
+            ReadTextureUse(csgReceiverSpanCount, csgReceiverSpanCountSubresources, Core::ResourceStates::UnorderedAccess),
+            ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer),
+            ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
+            WriteTextureUse(csgRemovedIntervalDepth, csgRemovedIntervalSubresources, Core::ResourceStates::UnorderedAccess),
+            WriteTextureUse(csgRemovedIntervalCapNormal, csgRemovedIntervalSubresources, Core::ResourceStates::UnorderedAccess),
+            WriteTextureUse(csgRemovedIntervalData, csgRemovedIntervalSubresources, Core::ResourceStates::UnorderedAccess),
+            WriteTextureUse(csgRemovedIntervalCount, csgRemovedIntervalCountSubresources, Core::ResourceStates::UnorderedAccess),
+        };
         Core::GpuTaskSchedulingHint avboitIntervalCombineScheduling;
         avboitIntervalCombineScheduling.cost = Core::GpuTaskCostHint::Medium;
         avboitIntervalCombineScheduling.forceSubmissionBoundary = false;
@@ -224,7 +218,7 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
             .setMarkerLabel("Transparent CSG Interval Combine")
             .setScheduling(avboitIntervalCombineScheduling)
             .setDependencies(&avboitIntervalCompletionTask, 1u)
-            .setResourceUses(avboitIntervalCombineResourceUses.data(), avboitIntervalCombineResourceUses.size())
+            .setResourceUses(avboitIntervalCombineResourceUses, LengthOf(avboitIntervalCombineResourceUses))
         ;
         const auto mAvboitSystemTaskGraphStageMCsgIntervalCombineTaskResult = m_graph.addTask< ECSRenderDetail::AvboitCsgIntervalCombineGraphTask >(avboitIntervalCombineDesc, Move(avboitCsgIntervalCombinePayload));
         if(!mAvboitSystemTaskGraphStageMCsgIntervalCombineTaskResult){

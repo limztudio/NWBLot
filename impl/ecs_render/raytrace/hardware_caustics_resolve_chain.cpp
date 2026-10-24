@@ -28,7 +28,7 @@ HardwareCausticsResolveChainBuilder::HardwareCausticsResolveChainBuilder(Core::G
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<HardwareCausticsResolveChainResult> HardwareCausticsResolveChainBuilder::declare(const HardwareCausticsResolveChainInputs& inputs, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] Expected<HardwareCausticsResolveChainResult> HardwareCausticsResolveChainBuilder::declare(const HardwareCausticsResolveChainInputs& inputs){
     HardwareCausticsResolveChainResult result{};
     CausticsResolveChainInputs sharedInputs(inputs.targets, inputs.producerDispatched, inputs.timingTicket, inputs.resolveTiming);
     static_cast<CausticsResolveChainStageUseInputs&>(sharedInputs) = inputs;
@@ -45,7 +45,7 @@ HardwareCausticsResolveChainBuilder::HardwareCausticsResolveChainBuilder(Core::G
         {Name("render.hardware_caustics.resolve_timing_close"), "Hardware Caustics Resolve Timing Close", NWB_TEXT("RendererSystem: could not declare hardware-caustics resolve graph task")},
     };
     CausticsResolveChainBuilder sharedBuilder(m_graph, m_raytracingSystem);
-    auto sharedResult = sharedBuilder.declare(sharedInputs, naming, scratchArena);
+    auto sharedResult = sharedBuilder.declare(sharedInputs, naming);
     if(!sharedResult)
         return MakeUnexpected(Failure{});
     static_cast<CausticsResolveChainStageTasks&>(result) = *sharedResult;

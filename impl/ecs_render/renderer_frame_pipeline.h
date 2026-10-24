@@ -233,21 +233,18 @@ private:
     void resetLaggedLightingHistoryReadTracking()noexcept;
     void resetLaggedLightingHistoryTracking()noexcept;
     [[nodiscard]] bool declareDeferredShadowPrepareTask(
-        Core::Alloc::ScratchArena& scratchArena,
         const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources,
         const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
         Core::GpuGraphResourceId currentBindlessSlots,
         Core::GpuGraphResourceId materialContextSlots,
-        const Core::GpuGraphResourceId* shadowTraceGeometryResources,
-        usize shadowTraceGeometryResourceCount,
-        const Core::GpuGraphResourceId* softwareBvhBuildStateResources,
-        usize softwareBvhBuildStateResourceCount,
+        Span<const Core::GpuGraphResourceId> shadowTraceGeometryResources,
+        Span<const Core::GpuGraphResourceId> softwareBvhBuildStateResources,
         bool softwareTraceResourcesPrepared,
+        Core::Alloc::ScratchArena& scratchArena,
         DeferredFrameTargets& deferredTargets,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
     [[nodiscard]] Expected<u64> declareDeferredGraphicsPrefixTasks(
-        Core::Alloc::ScratchArena& scratchArena,
         Core::GpuTaskId shadowPrepareTask,
         const CsgFrameState& csgFrameState,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
@@ -257,10 +254,10 @@ private:
         const ECSRenderDetail::MeshViewGpuData& meshViewState,
         bool meshViewUploadRequired,
         const DeferredGraphResourceImportResult& resources,
-        const Core::GpuGraphResourceId* shadowTraceGeometryResources,
-        usize shadowTraceGeometryResourceCount,
+        Span<const Core::GpuGraphResourceId> shadowTraceGeometryResources,
         Core::GpuGraphResourceSetId shadowTraceGeometrySet,
         const bool& asyncPrefixTimingSpansOnePacket,
+        Core::Alloc::ScratchArena& scratchArena,
         DeferredFrameTargets& deferredTargets,
         ObjectGeometryCacheGraph& objectGeometry,
         Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
@@ -272,7 +269,6 @@ private:
         Core::GpuTimingSubmissionTicket** timingTickets
     );
     [[nodiscard]] bool declareDeferredShadowVisibilityTask(
-        Core::Alloc::ScratchArena& scratchArena,
         const DeferredLightingGraphResources& deferredLightingResources,
         const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources,
         const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
@@ -287,12 +283,12 @@ private:
         Core::GpuGraphResourceId sceneShading,
         Core::GpuGraphResourceId lights,
         Core::GpuGraphResourceId materialContextSlots,
-        const Core::GpuGraphResourceId* traceGeometryResources,
-        usize traceGeometryResourceCount,
+        Span<const Core::GpuGraphResourceId> traceGeometryResources,
         Core::GpuGraphResourceSetId traceGeometrySet,
         Core::GpuGraphResourceSetId traceMaterialSampledTextureSet,
         Core::GpuTaskId prefixTask,
         Core::GpuExternalCompletionId laggedLightingHistoryWriterDrainCompletion,
+        Core::Alloc::ScratchArena& scratchArena,
         DeferredFrameTargets& deferredTargets,
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>& asyncTiming,
@@ -304,7 +300,6 @@ private:
         u32& opaqueFrameIndex
     );
     [[nodiscard]] bool declareDeferredSoftwareCausticsTask(
-        Core::Alloc::ScratchArena& scratchArena,
         bool hardwareCaustics,
         const DeferredLightingGraphResources& deferredLightingResources,
         const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
@@ -316,17 +311,16 @@ private:
         Core::GpuGraphResourceId lights,
         Core::GpuGraphResourceId materialContextSlots,
         Core::GpuGraphResourceId opticalScene,
-        const Core::GpuGraphResourceId* softwareTraceGeometryResources,
-        usize softwareTraceGeometryResourceCount,
+        Span<const Core::GpuGraphResourceId> softwareTraceGeometryResources,
         Core::GpuGraphResourceSetId softwareTraceGeometrySet,
         Core::GpuGraphResourceSetId traceMaterialSampledTextureSet,
+        Core::Alloc::ScratchArena& scratchArena,
         DeferredFrameTargets& deferredTargets,
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>& causticPhotonTiming,
         Optional<Core::GpuTimingMeasure>& causticResolveTiming
     );
     [[nodiscard]] bool declareDeferredSurfelGiTask(
-        Core::Alloc::ScratchArena& scratchArena,
         const DeferredLightingGraphResources& deferredLightingResources,
         const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
         const RayTracingSurfelPersistentResourceSnapshot& rayTracingSurfelResources,
@@ -337,13 +331,13 @@ private:
         Core::GpuGraphResourceId sceneShading,
         Core::GpuGraphResourceId lights,
         Core::GpuGraphResourceId materialContextSlots,
-        const Core::GpuGraphResourceId* traceGeometryResources,
-        usize traceGeometryResourceCount,
+        Span<const Core::GpuGraphResourceId> traceGeometryResources,
         Core::GpuGraphResourceSetId traceGeometrySet,
         Core::GpuGraphResourceSetId traceMaterialSampledTextureSet,
         Core::GpuTaskId effectsTask,
         bool useLaggedLightingHistory,
         Core::GpuExternalCompletionId surfelCounterReadbackCompletion,
+        Core::Alloc::ScratchArena& scratchArena,
         DeferredFrameTargets& deferredTargets,
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>& asyncTiming

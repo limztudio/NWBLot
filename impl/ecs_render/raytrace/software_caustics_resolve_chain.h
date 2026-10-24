@@ -31,8 +31,7 @@ struct SoftwareCausticsResolveChainInputs : public CausticsResolveChainStageUseI
     DeferredFrameTargets& targets;
     Core::GpuTaskId geometryTask;
     Core::GpuTaskSchedulingHint baseScheduling;
-    const Core::GpuTaskExternalStateSource* stateSources = nullptr;
-    usize stateSourceCount = 0u;
+    Span<const Core::GpuTaskExternalStateSource> stateSources{};
     bool& producerDispatched;
     Core::GpuTimingSubmissionTicket& timingTicket;
     Optional<Core::GpuTimingMeasure>& resolveTiming;
@@ -60,7 +59,7 @@ public:
 
 
 public:
-    [[nodiscard]] Expected<SoftwareCausticsResolveChainResult> declare(const SoftwareCausticsResolveChainInputs& inputs, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] Expected<SoftwareCausticsResolveChainResult> declare(const SoftwareCausticsResolveChainInputs& inputs);
 
 
 private:

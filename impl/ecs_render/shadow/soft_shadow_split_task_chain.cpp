@@ -22,12 +22,12 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SoftShadowSplitTaskChainBuilder::declare(Core::Alloc::ScratchArena& scratchArena, const SoftShadowSplitTaskChainInputs& inputs, SoftShadowSplitResourceUses& uses, SoftShadowSplitTasks& tasks){
+bool SoftShadowSplitTaskChainBuilder::declare(const SoftShadowSplitTaskChainInputs& inputs, Core::Alloc::ScratchArena& scratchArena, SoftShadowSplitResourceUses& uses, SoftShadowSplitTasks& tasks){
     using namespace RendererTaskGraphDetail;
 
     Core::GpuTaskId shadowTraceDependency = inputs.prefixTask;
     Core::GpuGraphResourceId csgShadowContext;
-    if(inputs.rayTracingPlan.lightSpace.ready && !declareLightSpaceShadowMaps(scratchArena, inputs, uses, shadowTraceDependency, csgShadowContext))
+    if(inputs.rayTracingPlan.lightSpace.ready && !declareLightSpaceShadowMaps(inputs, scratchArena, uses, shadowTraceDependency, csgShadowContext))
         return false;
 
     Core::GpuTaskSchedulingHint tailScheduling;
@@ -40,12 +40,12 @@ bool SoftShadowSplitTaskChainBuilder::declare(Core::Alloc::ScratchArena& scratch
     EnableCrossFamilyComputeEffectRouting(tailScheduling);
     if(!declareOpaqueTasks(inputs, uses, shadowTraceDependency, tailScheduling, tasks))
         return false;
-    return declareTransparentTasks(scratchArena, inputs, uses, tailScheduling, csgShadowContext, tasks);
+    return declareTransparentTasks(inputs, uses, tailScheduling, csgShadowContext, scratchArena, tasks);
 }
 
 bool SoftShadowSplitTaskChainBuilder::declareLightSpaceShadowMaps(
-    Core::Alloc::ScratchArena& scratchArena,
     const SoftShadowSplitTaskChainInputs& inputs,
+    Core::Alloc::ScratchArena& scratchArena,
     SoftShadowSplitResourceUses& uses,
     Core::GpuTaskId& shadowTraceDependency,
     Core::GpuGraphResourceId& csgShadowContext
@@ -83,7 +83,7 @@ bool SoftShadowSplitTaskChainBuilder::declareLightSpaceShadowMaps(
     }
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> lightSpaceReads{ scratchArena };
     constexpr usize s_LightSpaceReadCapacity = 9u;
-    lightSpaceReads.reserve(s_LightSpaceReadCapacity + inputs.rayTracingPlan.lightSpace.csgDynamicBoundsCount + (route.traceGeometryStatesGraphOwned ? 0u : inputs.traceGeometryResourceCount));
+    lightSpaceReads.reserve(s_LightSpaceReadCapacity + inputs.rayTracingPlan.lightSpace.csgDynamicBoundsCount + (route.traceGeometryStatesGraphOwned ? 0u : inputs.traceGeometryResources.size()));
     if(!RendererFramePipelineDetail::AppendRayTracingSceneShadowBuffers(inputs.rayTracingResources, importBuffer, [&](const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state)noexcept{
         lightSpaceReads.push_back(ReadUse(resource, state));
     }))
@@ -93,8 +93,8 @@ bool SoftShadowSplitTaskChainBuilder::declareLightSpaceShadowMaps(
     lightSpaceReads.push_back(ReadUse(inputs.sceneShading, Core::ResourceStates::ConstantBuffer));
     lightSpaceReads.push_back(ReadUse(inputs.lights, Core::ResourceStates::ShaderResource));
     if(!route.traceGeometryStatesGraphOwned){
-        for(usize index = 0u; index < inputs.traceGeometryResourceCount; ++index)
-            lightSpaceReads.push_back(ReadUse(inputs.traceGeometryResources[index], Core::ResourceStates::ShaderResource));
+        for(const Core::GpuGraphResourceId resource : inputs.traceGeometryResources)
+            lightSpaceReads.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
     }
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> csgBoundsResources{ scratchArena };
     csgBoundsResources.reserve(inputs.rayTracingPlan.lightSpace.csgDynamicBoundsCount);
@@ -124,20 +124,20 @@ bool SoftShadowSplitTaskChainBuilder::declareLightSpaceShadowMaps(
         uses.opaque.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
         uses.transparentTrace.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
     }
-    auto mapsResult = DeclareLightSpaceShadowMaps(m_graph, LightSpaceShadowGraphInputs{
-        .graphics = m_graphics,
-        .arena = m_arena,
-        .scratchArena = scratchArena,
-        .shadowPrepared = inputs.shadowPrepared,
-        .snapshot = inputs.rayTracingPlan.lightSpace,
-        .dependency = inputs.prefixTask,
-        .sceneReads = lightSpaceReads.data(),
-        .sceneReadCount = lightSpaceReads.size(),
-        .sceneReadSets = inputs.traceResourceSetUses,
-        .sceneReadSetCount = inputs.traceResourceSetUseCount,
-        .stateSources = inputs.stateSources,
-        .stateSourceCount = inputs.stateSourceCount,
-    });
+    auto mapsResult = DeclareLightSpaceShadowMaps(
+        LightSpaceShadowGraphInputs{
+            .graphics = m_graphics,
+            .arena = m_arena,
+            .scratchArena = scratchArena,
+            .shadowPrepared = inputs.shadowPrepared,
+            .snapshot = inputs.rayTracingPlan.lightSpace,
+            .dependency = inputs.prefixTask,
+            .sceneReads = Span<const Core::GpuTaskResourceUse>(lightSpaceReads.data(), lightSpaceReads.size()),
+            .sceneReadSets = inputs.traceResourceSetUses,
+            .stateSources = inputs.stateSources,
+        },
+        m_graph
+    );
     if(!mapsResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare light-space shadow maps"));
         return false;
@@ -185,13 +185,13 @@ bool SoftShadowSplitTaskChainBuilder::declareOpaqueTasks(
         .setMarkerLabel("Shadow Visibility Opaque")
         .setScheduling(opaqueScheduling)
         .setDependencies(&shadowTraceDependency, 1u)
-        .setExternalDependencies(inputs.historyWriterDrainDependencies, inputs.historyWriterDrainDependencyCount)
-        .setExternalStateSources(inputs.stateSources, inputs.stateSourceCount)
+        .setExternalDependencies(inputs.historyWriterDrainDependencies.data(), inputs.historyWriterDrainDependencies.size())
+        .setExternalStateSources(inputs.stateSources.data(), inputs.stateSources.size())
         .setResourceUses(uses.opaque.data(), uses.opaque.size())
         .setResourceSetUses(
-            route.hardwareCsgShadow ? inputs.traceResourceSetUses
+            route.hardwareCsgShadow ? inputs.traceResourceSetUses.data()
                 : (!route.hardwareShadowSupported && route.traceGeometryStatesGraphOwned ? &inputs.traceGeometrySetUse : nullptr),
-            route.hardwareCsgShadow ? inputs.traceResourceSetUseCount : (!route.hardwareShadowSupported && route.traceGeometryStatesGraphOwned ? 1u : 0u)
+            route.hardwareCsgShadow ? inputs.traceResourceSetUses.size() : (!route.hardwareShadowSupported && route.traceGeometryStatesGraphOwned ? 1u : 0u)
         )
     ;
     const auto opaqueTaskResult = m_raytracingSystem.declareShadowVisibilityOpaqueTask(
@@ -224,8 +224,8 @@ bool SoftShadowSplitTaskChainBuilder::declareOpaqueTasks(
             .setMarkerLabel(route.combinedSoftWavelet ? "Shadow Opaque Temporal Merge" : "Shadow Opaque First Wavelet")
             .setScheduling(tailScheduling)
             .setDependencies(opaqueFirstWaveletDependencies, LengthOf(opaqueFirstWaveletDependencies))
-            .setExternalStateSources(inputs.stateSources, inputs.stateSourceCount)
-            .setResourceUses(uses.opaqueFirstWavelet.data(), uses.opaqueFirstWavelet.size())
+            .setExternalStateSources(inputs.stateSources.data(), inputs.stateSources.size())
+            .setResourceUses(uses.opaqueFirstWavelet, uses.opaqueFirstWaveletCount)
         ;
         const auto opaqueFirstWaveletTaskResult = m_raytracingSystem.declareShadowVisibilityOpaqueFirstWaveletTask(
             m_graph,
@@ -259,7 +259,7 @@ bool SoftShadowSplitTaskChainBuilder::declareOpaqueTasks(
             .setMarkerLabel("Shadow Opaque Soft Resolve")
             .setScheduling(tailScheduling)
             .setDependencies(opaqueResolveDependencies, LengthOf(opaqueResolveDependencies))
-            .setResourceUses(uses.opaqueResolve.data(), uses.opaqueResolve.size())
+            .setResourceUses(uses.opaqueResolve, uses.opaqueResolveCount)
         ;
         const auto opaqueResolveTaskResult = m_raytracingSystem.declareShadowVisibilityOpaqueResolveTailTask(
             m_graph,
@@ -285,11 +285,11 @@ bool SoftShadowSplitTaskChainBuilder::declareOpaqueTasks(
 }
 
 bool SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
-    Core::Alloc::ScratchArena& scratchArena,
     const SoftShadowSplitTaskChainInputs& inputs,
     const SoftShadowSplitResourceUses& uses,
     const Core::GpuTaskSchedulingHint& tailScheduling,
     const Core::GpuGraphResourceId csgShadowContext,
+    Core::Alloc::ScratchArena& scratchArena,
     SoftShadowSplitTasks& tasks
 ){
     const SoftShadowSplitRoute& route = inputs.route;
@@ -302,9 +302,9 @@ bool SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
         .setMarkerLabel("Shadow Transparent Soft Trace")
         .setScheduling(tailScheduling)
         .setDependencies(traceDependencies, LengthOf(traceDependencies))
-        .setExternalStateSources(inputs.stateSources, inputs.stateSourceCount)
+        .setExternalStateSources(inputs.stateSources.data(), inputs.stateSources.size())
         .setResourceUses(uses.transparentTrace.data(), uses.transparentTrace.size())
-        .setResourceSetUses(inputs.traceResourceSetUseCount != 0u ? inputs.traceResourceSetUses : nullptr, inputs.traceResourceSetUseCount)
+        .setResourceSetUses(!inputs.traceResourceSetUses.empty() ? inputs.traceResourceSetUses.data() : nullptr, inputs.traceResourceSetUses.size())
     ;
     const auto transparentTraceTaskResult = m_raytracingSystem.declareShadowTransparentSoftTraceTask(
         m_graph,
@@ -333,8 +333,8 @@ bool SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
             .setMarkerLabel(route.combinedSoftTemporal ? "Shadow Combined Temporal Merge" : "Shadow Transparent Temporal Merge")
             .setScheduling(tailScheduling)
             .setDependencies(transparentTemporalMergeDependencies, LengthOf(transparentTemporalMergeDependencies))
-            .setExternalStateSources(inputs.stateSources, inputs.stateSourceCount)
-            .setResourceUses(uses.transparentTemporalMerge.data(), uses.transparentTemporalMerge.size())
+            .setExternalStateSources(inputs.stateSources.data(), inputs.stateSources.size())
+            .setResourceUses(uses.transparentTemporalMerge, uses.transparentTemporalMergeCount)
         ;
         const auto transparentTemporalMergeTaskResult = m_raytracingSystem.declareShadowTransparentSoftTemporalMergeTask(
             m_graph,
@@ -366,7 +366,7 @@ bool SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
         .setMarkerLabel(route.combinedSoftWavelet ? "Shadow Combined First Wavelet" : "Shadow Transparent First Wavelet")
         .setScheduling(tailScheduling)
         .setDependencies(transparentFirstWaveletDependencies, LengthOf(transparentFirstWaveletDependencies))
-        .setResourceUses(uses.transparentFirstWavelet.data(), uses.transparentFirstWavelet.size())
+        .setResourceUses(uses.transparentFirstWavelet, uses.transparentFirstWaveletCount)
     ;
     const auto transparentFirstWaveletTaskResult = m_raytracingSystem.declareShadowTransparentSoftFirstWaveletTask(
         m_graph,
@@ -396,7 +396,7 @@ bool SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
         .setMarkerLabel("Shadow Transparent Soft Fold")
         .setScheduling(tailScheduling)
         .setDependencies(foldDependencies, LengthOf(foldDependencies))
-        .setResourceUses(uses.transparentFold.data(), uses.transparentFold.size())
+        .setResourceUses(uses.transparentFold, uses.transparentFoldCount)
     ;
     // The terminal fold owns effect completion, so lighting, recovery and acceptance observe fully folded visibility.
     const auto foldTaskResult = m_raytracingSystem.declareShadowTransparentSoftFoldTask(
@@ -420,16 +420,18 @@ bool SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
     }
     tasks.fold = *foldTaskResult;
     if(inputs.rayTracingPlan.lightSpace.diagnosticReadback){
-        const auto diagnosticsTaskResult = DeclareLightSpaceShadowDiagnostics(m_graph, LightSpaceShadowGraphInputs{
-            .graphics = m_graphics,
-            .arena = m_arena,
-            .scratchArena = scratchArena,
-            .shadowPrepared = inputs.shadowPrepared,
-            .snapshot = inputs.rayTracingPlan.lightSpace,
-            .dependency = tasks.fold,
-            .stateSources = inputs.stateSources,
-            .stateSourceCount = inputs.stateSourceCount,
-        }, csgShadowContext
+        const auto diagnosticsTaskResult = DeclareLightSpaceShadowDiagnostics(
+            LightSpaceShadowGraphInputs{
+                .graphics = m_graphics,
+                .arena = m_arena,
+                .scratchArena = scratchArena,
+                .shadowPrepared = inputs.shadowPrepared,
+                .snapshot = inputs.rayTracingPlan.lightSpace,
+                .dependency = tasks.fold,
+                .stateSources = inputs.stateSources,
+            },
+            csgShadowContext,
+            m_graph
         );
         if(!diagnosticsTaskResult){
             tasks.diagnostics = {};

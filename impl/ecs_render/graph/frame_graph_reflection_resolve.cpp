@@ -111,14 +111,14 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
         .raytracingSystem = m_raytracingSystem,
         .opaqueDepth = depth,
         .opaqueColor = opaqueColor,
-        .surfaceReads = reflectionSurfaceReads, .surfaceReadCount = LengthOf(reflectionSurfaceReads),
-        .hardwareReads = reflectionHardwareReads.data(), .hardwareReadCount = reflectionHardwareReads.size(),
-        .hardwareSetReads = reflectionSets, .hardwareSetReadCount = reflectionSetCount,
+        .surfaceReads = Span<const Core::GpuTaskResourceUse>(reflectionSurfaceReads, LengthOf(reflectionSurfaceReads)),
+        .hardwareReads = Span<const Core::GpuTaskResourceUse>(reflectionHardwareReads.data(), reflectionHardwareReads.size()),
+        .hardwareSetReads = Span<const Core::GpuTaskResourceSetUse>(reflectionSets, reflectionSetCount),
         .hardwarePreparationReady = inputs.hardwarePreparationReady,
         .hardwareDispatchLogged = inputs.hardwareDispatchLogged,
         .fallbackDispatchLogged = inputs.fallbackDispatchLogged,
     };
-    auto reflectionGraphResult = DeclareReflectionTasks(m_graph, m_graphics, m_reflectionSystem, traceGeometryScratchArena, reflectionResources, reflectionInputs, inputs.lightingTask);
+    auto reflectionGraphResult = DeclareReflectionTasks(reflectionResources, reflectionInputs, inputs.lightingTask, m_graph, m_graphics, m_reflectionSystem, traceGeometryScratchArena);
     if(!reflectionGraphResult)
         return MakeUnexpected(Failure{});
     const ReflectionGraphResult reflectionGraph = Move(*reflectionGraphResult);

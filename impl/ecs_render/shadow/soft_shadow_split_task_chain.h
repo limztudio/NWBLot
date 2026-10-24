@@ -58,15 +58,11 @@ struct SoftShadowSplitTaskChainInputs{
     bool& transparentTraceProduced;
     u32& opaqueFrameIndex;
     SoftShadowSplitRoute route;
-    const Core::GpuGraphResourceId* traceGeometryResources = nullptr;
-    usize traceGeometryResourceCount = 0u;
-    const Core::GpuTaskResourceSetUse* traceResourceSetUses = nullptr;
-    usize traceResourceSetUseCount = 0u;
+    Span<const Core::GpuGraphResourceId> traceGeometryResources{};
+    Span<const Core::GpuTaskResourceSetUse> traceResourceSetUses{};
     Core::GpuTaskResourceSetUse traceGeometrySetUse{};
-    const Core::GpuTaskExternalStateSource* stateSources = nullptr;
-    usize stateSourceCount = 0u;
-    const Core::GpuExternalCompletionId* historyWriterDrainDependencies = nullptr;
-    usize historyWriterDrainDependencyCount = 0u;
+    Span<const Core::GpuTaskExternalStateSource> stateSources{};
+    Span<const Core::GpuExternalCompletionId> historyWriterDrainDependencies{};
     Core::GpuGraphResourceId currentBindlessSlots;
     Core::GpuGraphResourceId sceneShading;
     Core::GpuGraphResourceId lights;
@@ -102,14 +98,14 @@ public:
 
 
 public:
-    [[nodiscard]] bool declare(Core::Alloc::ScratchArena& scratchArena, const SoftShadowSplitTaskChainInputs& inputs, SoftShadowSplitResourceUses& uses, SoftShadowSplitTasks& tasks);
+    [[nodiscard]] bool declare(const SoftShadowSplitTaskChainInputs& inputs, Core::Alloc::ScratchArena& scratchArena, SoftShadowSplitResourceUses& uses, SoftShadowSplitTasks& tasks);
 
 
 private:
     // Adds the map, cap, and CSG bound reads to the opaque producer and transparent trace.
     [[nodiscard]] bool declareLightSpaceShadowMaps(
-        Core::Alloc::ScratchArena& scratchArena,
         const SoftShadowSplitTaskChainInputs& inputs,
+        Core::Alloc::ScratchArena& scratchArena,
         SoftShadowSplitResourceUses& uses,
         Core::GpuTaskId& shadowTraceDependency,
         Core::GpuGraphResourceId& csgShadowContext
@@ -122,11 +118,11 @@ private:
         SoftShadowSplitTasks& tasks
     );
     [[nodiscard]] bool declareTransparentTasks(
-        Core::Alloc::ScratchArena& scratchArena,
         const SoftShadowSplitTaskChainInputs& inputs,
         const SoftShadowSplitResourceUses& uses,
         const Core::GpuTaskSchedulingHint& tailScheduling,
         Core::GpuGraphResourceId csgShadowContext,
+        Core::Alloc::ScratchArena& scratchArena,
         SoftShadowSplitTasks& tasks
     );
 

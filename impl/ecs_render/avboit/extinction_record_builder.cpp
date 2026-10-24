@@ -36,7 +36,6 @@ static constexpr usize s_StreamUseCount = 7u;
 static constexpr usize s_CsgIntervalUseCount = 4u;
 static constexpr usize s_EmulationBaseCount = 4u;
 static constexpr usize s_EmulationPlanUseCount = 8u;
-static constexpr usize s_SharedGenerateUseCount = 5u;
 static constexpr usize s_MaterialResourceSetUseCapacity = 3u;
 static constexpr usize s_ComputeEmulationResourceSetUseCapacity = 3u;
 
@@ -230,26 +229,22 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
         computeEmulationPayload.materialFrameStatesGraphOwned = extinctionPayload.extinctionMaterialFrameStatesGraphOwned;
         computeEmulationPayload.materialGeometryStatesGraphOwned = extinctionPayload.extinctionMaterialGeometryStatesGraphOwned;
 
-        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> extinctionComputeEmulationResourceUses{ scratchArena };
-        extinctionComputeEmulationResourceUses.reserve(__hidden_avboit_extinction_record_builder::s_EmulationBaseCount + (inputs.csgComputeEmulationPlanCaptured ? __hidden_avboit_extinction_record_builder::s_EmulationPlanUseCount : 0u));
-        extinctionComputeEmulationResourceUses.push_back(ReadUse(inputs.meshView, Core::ResourceStates::ConstantBuffer));
-        extinctionComputeEmulationResourceUses.push_back(ReadBufferUse(inputs.materialInstances, extinctionInstanceRange));
-        extinctionComputeEmulationResourceUses.push_back(ReadBufferUse(inputs.materialTyped, extinctionMaterialTypedRange));
-        extinctionComputeEmulationResourceUses.push_back(ReadUse(inputs.currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
+        Core::GpuTaskResourceUse extinctionComputeEmulationResourceUses[__hidden_avboit_extinction_record_builder::s_EmulationBaseCount + __hidden_avboit_extinction_record_builder::s_EmulationPlanUseCount] = {
+            ReadUse(inputs.meshView, Core::ResourceStates::ConstantBuffer),
+            ReadBufferUse(inputs.materialInstances, extinctionInstanceRange),
+            ReadBufferUse(inputs.materialTyped, extinctionMaterialTypedRange),
+            ReadUse(inputs.currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
+        };
+        usize extinctionComputeEmulationResourceUseCount = __hidden_avboit_extinction_record_builder::s_EmulationBaseCount;
         if(inputs.csgComputeEmulationPlanCaptured){
-            extinctionComputeEmulationResourceUses.push_back(ReadBufferUse(inputs.csgReceiverRanges, extinctionReceiverRange));
-            extinctionComputeEmulationResourceUses.push_back(ReadBufferUse(inputs.csgCutters, extinctionCutterRange));
-            extinctionComputeEmulationResourceUses.push_back(ReadUse(inputs.csgClipContextSlots, Core::ResourceStates::ConstantBuffer));
-            extinctionComputeEmulationResourceUses.push_back(ReadUse(inputs.csgIntervalSampleState, Core::ResourceStates::ConstantBuffer));
-            AppendCsgRemovedIntervalUses(
-                extinctionComputeEmulationResourceUses,
-                inputs.csgRemovedIntervalDepth,
-                inputs.csgRemovedIntervalCapNormal,
-                inputs.csgRemovedIntervalData,
-                inputs.csgRemovedIntervalCount,
-                inputs.csgRemovedIntervalSubresources,
-                inputs.csgRemovedIntervalCountSubresources
-            );
+            extinctionComputeEmulationResourceUses[extinctionComputeEmulationResourceUseCount++] = ReadBufferUse(inputs.csgReceiverRanges, extinctionReceiverRange);
+            extinctionComputeEmulationResourceUses[extinctionComputeEmulationResourceUseCount++] = ReadBufferUse(inputs.csgCutters, extinctionCutterRange);
+            extinctionComputeEmulationResourceUses[extinctionComputeEmulationResourceUseCount++] = ReadUse(inputs.csgClipContextSlots, Core::ResourceStates::ConstantBuffer);
+            extinctionComputeEmulationResourceUses[extinctionComputeEmulationResourceUseCount++] = ReadUse(inputs.csgIntervalSampleState, Core::ResourceStates::ConstantBuffer);
+            extinctionComputeEmulationResourceUses[extinctionComputeEmulationResourceUseCount++] = ReadTextureUse(inputs.csgRemovedIntervalDepth, inputs.csgRemovedIntervalSubresources, Core::ResourceStates::UnorderedAccess);
+            extinctionComputeEmulationResourceUses[extinctionComputeEmulationResourceUseCount++] = ReadTextureUse(inputs.csgRemovedIntervalCapNormal, inputs.csgRemovedIntervalSubresources, Core::ResourceStates::UnorderedAccess);
+            extinctionComputeEmulationResourceUses[extinctionComputeEmulationResourceUseCount++] = ReadTextureUse(inputs.csgRemovedIntervalData, inputs.csgRemovedIntervalSubresources, Core::ResourceStates::UnorderedAccess);
+            extinctionComputeEmulationResourceUses[extinctionComputeEmulationResourceUseCount++] = ReadTextureUse(inputs.csgRemovedIntervalCount, inputs.csgRemovedIntervalCountSubresources, Core::ResourceStates::UnorderedAccess);
         }
         Core::GpuTaskResourceSetUse extinctionComputeEmulationResourceSetUses[__hidden_avboit_extinction_record_builder::s_ComputeEmulationResourceSetUseCapacity] = {};
         usize extinctionComputeEmulationResourceSetUseCount = 0u;
@@ -272,7 +267,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
             .setMarkerLabel(inputs.csgComputeEmulationPlanCaptured ? "AVBOIT Extinction CSG Compute Emulation" : "AVBOIT Extinction Compute Emulation")
             .setScheduling(extinctionComputeEmulationScheduling)
             .setDependencies(&extinctionDependency, 1u)
-            .setResourceUses(extinctionComputeEmulationResourceUses.data(), extinctionComputeEmulationResourceUses.size())
+            .setResourceUses(extinctionComputeEmulationResourceUses, extinctionComputeEmulationResourceUseCount)
             .setResourceSetUses(extinctionComputeEmulationResourceSetUses, extinctionComputeEmulationResourceSetUseCount)
         ;
         const auto mAvboitSystemTaskGraphStageMExtinctionComputeEmulationTaskResult = m_graph.addTask< AvboitExtinctionComputeEmulationGraphTask >(extinctionComputeEmulationDesc, Move(computeEmulationPayload));
@@ -287,13 +282,13 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
     }
     if(extinctionSharedComputeEmulationOutputStatesGraphOwned){
         // Keep the retained output concrete so the compiler preserves alternating uses.
-        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> extinctionSharedGenerateResourceUses{ scratchArena };
-        extinctionSharedGenerateResourceUses.reserve(__hidden_avboit_extinction_record_builder::s_SharedGenerateUseCount);
-        extinctionSharedGenerateResourceUses.push_back(ReadUse(inputs.meshView, Core::ResourceStates::ConstantBuffer));
-        extinctionSharedGenerateResourceUses.push_back(ReadBufferUse(inputs.materialInstances, extinctionInstanceRange));
-        extinctionSharedGenerateResourceUses.push_back(ReadBufferUse(inputs.materialTyped, extinctionMaterialTypedRange));
-        extinctionSharedGenerateResourceUses.push_back(ReadUse(inputs.currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
-        extinctionSharedGenerateResourceUses.push_back(WriteUse(extinctionSharedComputeEmulationOutput, Core::ResourceStates::UnorderedAccess));
+        const Core::GpuTaskResourceUse extinctionSharedGenerateResourceUses[] = {
+            ReadUse(inputs.meshView, Core::ResourceStates::ConstantBuffer),
+            ReadBufferUse(inputs.materialInstances, extinctionInstanceRange),
+            ReadBufferUse(inputs.materialTyped, extinctionMaterialTypedRange),
+            ReadUse(inputs.currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
+            WriteUse(extinctionSharedComputeEmulationOutput, Core::ResourceStates::UnorderedAccess),
+        };
 
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> extinctionSharedRasterResourceUses{ scratchArena };
         extinctionSharedRasterResourceUses.reserve(extinctionResourceUses.size() + 1u);

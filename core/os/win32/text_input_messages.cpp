@@ -43,7 +43,7 @@ bool Win32TextInputService::handleMessage(const u32 message, const usize wParam,
         if(wParam == UNICODE_NOCHAR)
             return false;
         m_pendingHighSurrogate = 0u;
-        admission = wParam <= BasicStringDetail::s_UnicodeMaxCodePoint ? acceptCodePoint(token, static_cast<u32>(wParam), repeatCount) : TextInputAdmission::InvalidText;
+        admission = wParam <= s_UnicodeMaxCodePoint ? acceptCodePoint(token, static_cast<u32>(wParam), repeatCount) : TextInputAdmission::InvalidText;
         break;
     case WM_IME_STARTCOMPOSITION:
         m_pendingHighSurrogate = 0u;
@@ -78,9 +78,9 @@ bool Win32TextInputService::handleMessage(const u32 message, const usize wParam,
 
 TextInputAdmission::Enum Win32TextInputService::acceptCodePoint(const TextInputSessionToken token, const u32 codePoint, const u32 repeatCount){
     // Editing/navigation control keys are delivered through the ordinary key path, never committed as document text.
-    if(codePoint < s_TextInputFirstPrintableCodePoint || codePoint == s_TextInputDeleteCodePoint)
+    if(codePoint < s_UnicodeSpace || codePoint == s_UnicodeDelete)
         return TextInputAdmission::Accepted;
-    char bytes[4];
+    char bytes[s_Utf8MaxSequenceBytes];
     const auto encoded = EncodeTextInputCodePoint(codePoint, bytes);
     if(!encoded)
         return encoded.error();
@@ -108,15 +108,15 @@ TextInputAdmission::Enum Win32TextInputService::acceptUtf16Unit(const TextInputS
         m_pendingHighSurrogate = 0u;
         return TextInputAdmission::InvalidText;
     }
-    if(unit >= BasicStringDetail::s_UnicodeHighSurrogateMin && unit <= BasicStringDetail::s_UnicodeHighSurrogateMax){
+    if(IsUtf16HighSurrogate(unit)){
         const bool interruptedPair = m_pendingHighSurrogate != 0u;
         m_pendingHighSurrogate = unit;
         return interruptedPair ? TextInputAdmission::InvalidText : TextInputAdmission::Accepted;
     }
-    if(unit >= BasicStringDetail::s_UnicodeLowSurrogateMin && unit <= BasicStringDetail::s_UnicodeLowSurrogateMax){
+    if(IsUtf16LowSurrogate(unit)){
         if(m_pendingHighSurrogate == 0u)
             return TextInputAdmission::InvalidText;
-        const u32 codePoint = BasicStringDetail::s_Utf8FourByteMinCodePoint + ((m_pendingHighSurrogate - BasicStringDetail::s_UnicodeHighSurrogateMin) << BasicStringDetail::s_Utf16SurrogatePayloadBits) + (unit - BasicStringDetail::s_UnicodeLowSurrogateMin);
+        const u32 codePoint = DecodeUtf16SurrogatePair(m_pendingHighSurrogate, unit);
         m_pendingHighSurrogate = 0u;
         return acceptCodePoint(token, codePoint, repeatCount);
     }

@@ -131,9 +131,9 @@ inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, const WStr
 }
 
 template<typename In>
-    requires((IsPointer_V<In> || IsArray_V<In>) && (BasicStringDetail::CanMakeCharView<In> || BasicStringDetail::CanMakeWCharView<In>))
+    requires((IsPointer_V<In> || IsArray_V<In>) && (CanMakeCharView<In> || CanMakeWCharView<In>))
 inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, const In& message){
-    if constexpr(BasicStringDetail::CanMakeCharView<In>)
+    if constexpr(CanMakeCharView<In>)
         EnqueueMessage(logger, type, AStringView(message));
     else
         EnqueueMessage(logger, type, WStringView(message));
@@ -145,7 +145,7 @@ inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, const TStr
 }
 
 template<typename In>
-inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, const BasicStringDetail::StringConvertArg<In>& message){
+inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, const StringConvertArg<In>& message){
     logger.enqueue(StringConvert(logger.arena(), message.value), type);
 }
 
@@ -176,19 +176,19 @@ inline void CaptureMessageDiagnostic(const LogType::Enum type, const StringView 
 }
 
 template<typename In>
-[[nodiscard]] inline DiagnosticEventText MakeConvertedDiagnosticEventText(const BasicStringDetail::StringConvertArg<In>& message)noexcept([]()consteval noexcept{
-    if constexpr(BasicStringDetail::CanMakeCharView<In>)
+[[nodiscard]] inline DiagnosticEventText MakeConvertedDiagnosticEventText(const StringConvertArg<In>& message)noexcept([]()consteval noexcept{
+    if constexpr(CanMakeCharView<In>)
         return noexcept(AStringView(DeclVal<const In&>()));
-    else if constexpr(BasicStringDetail::CanMakeWCharView<In>)
+    else if constexpr(CanMakeWCharView<In>)
         return noexcept(WStringView(DeclVal<const In&>()));
     else
         return true;
 }()){
     DiagnosticEventText output;
-    if constexpr(BasicStringDetail::CanMakeCharView<In>)
-        DiagnosticDetail::CopyEventText(output.value, AStringView(message.value));
-    else if constexpr(BasicStringDetail::CanMakeWCharView<In>)
-        DiagnosticDetail::CopyEventText(output.value, WStringView(message.value));
+    if constexpr(CanMakeCharView<In>)
+        CopyEventText(output.value, AStringView(message.value));
+    else if constexpr(CanMakeWCharView<In>)
+        CopyEventText(output.value, WStringView(message.value));
     return output;
 }
 
@@ -211,9 +211,9 @@ inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, 
 }
 
 template<typename In>
-    requires((IsPointer_V<In> || IsArray_V<In>) && (BasicStringDetail::CanMakeCharView<In> || BasicStringDetail::CanMakeWCharView<In>))
+    requires((IsPointer_V<In> || IsArray_V<In>) && (CanMakeCharView<In> || CanMakeWCharView<In>))
 inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const StringView diagnosticCategory, const StringView file, const u32 line, const In& message){
-    if constexpr(BasicStringDetail::CanMakeCharView<In>)
+    if constexpr(CanMakeCharView<In>)
         EnqueueMessageAndCapture(logger, type, diagnosticCategory, file, line, AStringView(message));
     else
         EnqueueMessageAndCapture(logger, type, diagnosticCategory, file, line, WStringView(message));
@@ -226,7 +226,7 @@ inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, 
 }
 
 template<typename In>
-inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const StringView diagnosticCategory, const StringView file, const u32 line, const BasicStringDetail::StringConvertArg<In>& message){
+inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const StringView diagnosticCategory, const StringView file, const u32 line, const StringConvertArg<In>& message){
     CaptureMessageDiagnostic(type, diagnosticCategory, file, line, MakeConvertedDiagnosticEventText(message));
     EnqueueMessage(logger, type, message);
 }

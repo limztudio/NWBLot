@@ -48,20 +48,17 @@ ClipboardStatus::Enum DecodeClipboardLatin1(const AStringView text, AString<Allo
     for(const char character : text){
         if(character == '\0')
             return ClipboardStatus::InvalidText;
-        if(static_cast<u8>(character) >= BasicStringDetail::s_Utf8OneByteMaxExclusive)
+        if(static_cast<u8>(character) >= s_Utf8OneByteMaxExclusive)
             ++outputSize;
     }
     if(outputSize > s_ClipboardMaxTextBytes)
         return ClipboardStatus::TooLarge;
     output.reserve(outputSize);
+    char encoded[s_Utf8MaxSequenceBytes];
     for(const char character : text){
-        const u8 byte = static_cast<u8>(character);
-        if(byte >= BasicStringDetail::s_Utf8OneByteMaxExclusive){
-            output.push_back(static_cast<char>(BasicStringDetail::s_Utf8TwoByteMarker | (byte >> BasicStringDetail::s_Utf8ContinuationPayloadBits)));
-            output.push_back(static_cast<char>(BasicStringDetail::s_Utf8ContinuationMarker | (byte & BasicStringDetail::s_Utf8ContinuationPayloadMask)));
-        }
-        else
-            output.push_back(character);
+        const auto encodedLength = EncodeUtf8CodePoint(static_cast<u8>(character), encoded);
+        NWB_ASSERT(encodedLength);
+        output.append(encoded, *encodedLength);
     }
     return ClipboardStatus::Success;
 }

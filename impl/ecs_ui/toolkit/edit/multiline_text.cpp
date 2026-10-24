@@ -37,8 +37,8 @@ struct TextStep{
 
 [[nodiscard]] static Expected<TextStep> ReadStep(const AStringView source, const usize offset)noexcept{
     // Callers admit the whole source with GraphemeSegmentation::Validate first.
-    const auto decoded = DecodeUtf8CodePoint(source.substr(offset, s_Utf8MaxSequenceBytes));
-    NWB_ASSERT(decoded && !(decoded->codePoint >= s_UnicodeSurrogateFirst && decoded->codePoint <= s_UnicodeSurrogateLast));
+    const auto decoded = DecodeUtf8Scalar(source.substr(offset, s_Utf8MaxSequenceBytes));
+    NWB_ASSERT(decoded);
     const u32 scalar = decoded->codePoint;
     TextStep step;
     step.sourceBytes = static_cast<usize>(decoded->byteCount);
@@ -72,7 +72,7 @@ bool ValidateMultilineText(const AStringView text)noexcept{
         return false;
     usize offset = 0u;
     while(offset < text.size()){
-        const auto decoded = DecodeUtf8CodePoint(text.substr(offset, s_Utf8MaxSequenceBytes));
+        const auto decoded = DecodeUtf8Scalar(text.substr(offset, s_Utf8MaxSequenceBytes));
         NWB_ASSERT(decoded);
         if(!__hidden_ui_multiline_text::IsCanonicalScalar(decoded->codePoint))
             return false;

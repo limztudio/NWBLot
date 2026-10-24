@@ -65,13 +65,6 @@ public:
     {}
 };
 
-static usize PathDepth(const ScratchPath& path)noexcept{
-    usize depth = 0u;
-    for(auto it = path.begin(); it != path.end(); ++it)
-        ++depth;
-    return depth;
-}
-
 static ScratchPath NormalizeDependencyRootAliasPath(const ScratchPath& source){
     ScratchPath path = source.lexicallyNormal();
     while(!path.empty() && !path.hasFilename()){
@@ -187,7 +180,7 @@ Expected<ShaderCook::DependencyChecksum> ShaderCook::computeDependencyChecksum(
             NWB_LOGGER_ERROR(NWB_TEXT("Dependency checksum requires non-empty dependency root alias keys"));
             return MakeUnexpected(Failure{});
         }
-        normalizedAlias.depth = __hidden_shader_cook_checksum::PathDepth(normalizedAlias.root);
+        normalizedAlias.depth = PathDepth(normalizedAlias.root);
         normalizedRootAliases.push_back(Move(normalizedAlias));
     }
 
@@ -230,7 +223,7 @@ Expected<ShaderCook::DependencyChecksum> ShaderCook::computeDependencyChecksum(
             }
             return MakeUnexpected(Failure{});
         }
-        if(dependencyBytes.size() >= TextDetail::s_Utf8BomByteCount && dependencyBytes[0u] == TextDetail::s_Utf8BomByte0 && dependencyBytes[1u] == TextDetail::s_Utf8BomByte1 && dependencyBytes[2u] == TextDetail::s_Utf8BomByte2)
+        if(HasUtf8Bom(dependencyBytes))
             result.compilerInputsHaveBom = true;
         if(!dependencyBytes.empty()){
             result.checksum = UpdateFnv64(result.checksum, dependencyBytes.data(), dependencyBytes.size());

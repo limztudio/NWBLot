@@ -33,7 +33,7 @@ static TextInputAdmission::Enum ValidateSurrounding(const AStringView text, cons
     const TextInputAdmission::Enum status = ValidateTextInputUtf8(text, s_TextInputMaxSurroundingBytes);
     if(status != TextInputAdmission::Accepted)
         return status;
-    if(!IsTextInputUtf8Boundary(text, anchorByte) || !IsTextInputUtf8Boundary(text, caretByte))
+    if(!IsUtf8ScalarBoundary(text, anchorByte) || !IsUtf8ScalarBoundary(text, caretByte))
         return TextInputAdmission::InvalidRange;
     return TextInputAdmission::Accepted;
 }

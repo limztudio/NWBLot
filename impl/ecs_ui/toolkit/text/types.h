@@ -28,8 +28,6 @@ inline constexpr f64 s_TextFixedPointScaleF64 = static_cast<f64>(s_TextFixedPoin
 inline constexpr f32 s_TextMaxFontSize = 2048.0f;
 inline constexpr u32 s_TextMaxRasterPpem = 4096u;
 inline constexpr f32 s_TextMaxRasterPpemF32 = static_cast<f32>(s_TextMaxRasterPpem);
-inline constexpr u32 s_Utf8ContinuationMask = 0xc0u;
-inline constexpr u32 s_Utf8ContinuationMarker = 0x80u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

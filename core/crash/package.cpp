@@ -105,7 +105,7 @@ static CrashStringT<ArenaT> BuildManifest(ArenaT& arena, const CrashRequest& req
 #else
     const bool hasExceptionContext = request.exceptionPointers != 0u;
 #endif
-    manifest += hasExceptionContext ? DiagnosticDetail::s_TrueText : DiagnosticDetail::s_FalseText;
+    manifest += hasExceptionContext ? s_TrueText : s_FalseText;
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestFaultAddressKey, false);
     AppendUnsignedText(manifest, request.faultAddress);
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestInstructionPointerKey, false);
@@ -301,14 +301,14 @@ static bool WriteWindowsMinidump(ArenaT& arena, const CrashRequest& request){
     const ::Path<ArenaT> dumpPath = RequestPendingDirectory(arena, request) / PackageNames::s_ProcessDumpFileName;
     HANDLE process = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ | PROCESS_DUP_HANDLE, FALSE, request.processId);
     if(!process){
-        CaptureCrashPackageFilesystemFailure("open_dump_process", GlobalFilesystemDetail::LastSystemError());
+        CaptureCrashPackageFilesystemFailure("open_dump_process", LastSystemError());
         return false;
     }
     HANDLE dumpFile = CreateFile(dumpPath.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if(dumpFile == INVALID_HANDLE_VALUE){
-        const ErrorCode createError = GlobalFilesystemDetail::LastSystemError();
+        const ErrorCode createError = LastSystemError();
         const BOOL processClosed = CloseHandle(process);
-        const ErrorCode closeError = processClosed ? ErrorCode{} : GlobalFilesystemDetail::LastSystemError();
+        const ErrorCode closeError = processClosed ? ErrorCode{} : LastSystemError();
         CaptureCrashPackageFilesystemFailure("create_minidump_file", createError);
         if(!processClosed)
             CaptureCrashPackageFilesystemFailure(s_CloseDumpProcessOperation, closeError);
@@ -334,11 +334,11 @@ static bool WriteWindowsMinidump(ArenaT& arena, const CrashRequest& request){
         exceptionInformationPointer = &exceptionInformation;
     }
     const BOOL written = MiniDumpWriteDump(process, request.processId, dumpFile, dumpType, exceptionInformationPointer, nullptr, nullptr);
-    const ErrorCode writeError = written ? ErrorCode{} : GlobalFilesystemDetail::LastSystemError();
+    const ErrorCode writeError = written ? ErrorCode{} : LastSystemError();
     const BOOL dumpClosed = CloseHandle(dumpFile);
-    const ErrorCode dumpCloseError = dumpClosed ? ErrorCode{} : GlobalFilesystemDetail::LastSystemError();
+    const ErrorCode dumpCloseError = dumpClosed ? ErrorCode{} : LastSystemError();
     const BOOL processClosed = CloseHandle(process);
-    const ErrorCode processCloseError = processClosed ? ErrorCode{} : GlobalFilesystemDetail::LastSystemError();
+    const ErrorCode processCloseError = processClosed ? ErrorCode{} : LastSystemError();
     if(!written)
         CaptureCrashPackageFilesystemFailure("write_minidump", writeError);
     if(!dumpClosed)

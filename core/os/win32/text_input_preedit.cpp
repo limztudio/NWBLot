@@ -17,7 +17,7 @@ NWB_CORE_BEGIN
 
 
 TextInputAdmission::Enum Win32TextInputService::acceptInsertedPreedit(const TextInputSessionToken token, const u32 unit, const bool moveCaret){
-    if(unit >= BasicStringDetail::s_UnicodeHighSurrogateMin && unit <= BasicStringDetail::s_UnicodeHighSurrogateMax){
+    if(IsUtf16HighSurrogate(unit)){
         if(m_pendingPreeditHighSurrogate != 0u)
             return TextInputAdmission::InvalidText;
         m_pendingPreeditHighSurrogate = unit;
@@ -26,10 +26,10 @@ TextInputAdmission::Enum Win32TextInputService::acceptInsertedPreedit(const Text
     }
     u32 codePoint = unit;
     bool advanceCaret = moveCaret;
-    if(unit >= BasicStringDetail::s_UnicodeLowSurrogateMin && unit <= BasicStringDetail::s_UnicodeLowSurrogateMax){
+    if(IsUtf16LowSurrogate(unit)){
         if(m_pendingPreeditHighSurrogate == 0u)
             return TextInputAdmission::InvalidText;
-        codePoint = BasicStringDetail::s_Utf8FourByteMinCodePoint + ((m_pendingPreeditHighSurrogate - BasicStringDetail::s_UnicodeHighSurrogateMin) << BasicStringDetail::s_Utf16SurrogatePayloadBits) + (unit - BasicStringDetail::s_UnicodeLowSurrogateMin);
+        codePoint = DecodeUtf16SurrogatePair(m_pendingPreeditHighSurrogate, unit);
         advanceCaret = advanceCaret && m_pendingPreeditMoveCaret;
         m_pendingPreeditHighSurrogate = 0u;
     }
@@ -37,7 +37,7 @@ TextInputAdmission::Enum Win32TextInputService::acceptInsertedPreedit(const Text
         m_pendingPreeditHighSurrogate = 0u;
         return TextInputAdmission::InvalidText;
     }
-    char bytes[4];
+    char bytes[s_Utf8MaxSequenceBytes];
     const auto encoded = EncodeTextInputCodePoint(codePoint, bytes);
     if(!encoded)
         return encoded.error();

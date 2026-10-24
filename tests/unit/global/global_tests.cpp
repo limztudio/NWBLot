@@ -70,26 +70,15 @@ static AStringView s_DiagnosticEventCategory = {};
 static AStringView s_DiagnosticEventExpression = {};
 static AStringView s_DiagnosticEventMessage = {};
 static AStringView s_DiagnosticEventFile = {};
-inline constexpr usize s_DiagnosticEventCaptureTextBytes = 2048u;
-static char s_DiagnosticEventNameText[s_DiagnosticEventCaptureTextBytes] = {};
-static char s_DiagnosticEventCategoryText[s_DiagnosticEventCaptureTextBytes] = {};
-static char s_DiagnosticEventExpressionText[s_DiagnosticEventCaptureTextBytes] = {};
-static char s_DiagnosticEventMessageText[s_DiagnosticEventCaptureTextBytes] = {};
-static char s_DiagnosticEventFileText[s_DiagnosticEventCaptureTextBytes] = {};
+static char s_DiagnosticEventNameText[s_MaxEventTextBytes] = {};
+static char s_DiagnosticEventCategoryText[s_MaxEventTextBytes] = {};
+static char s_DiagnosticEventExpressionText[s_MaxEventTextBytes] = {};
+static char s_DiagnosticEventMessageText[s_MaxEventTextBytes] = {};
+static char s_DiagnosticEventFileText[s_MaxEventTextBytes] = {};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-static AStringView CopyDiagnosticEventText(char (&outText)[s_DiagnosticEventCaptureTextBytes], const AStringView text)noexcept{
-    usize copied = 0u;
-    while(copied < text.size() && copied + 1u < s_DiagnosticEventCaptureTextBytes){
-        outText[copied] = text[copied];
-        ++copied;
-    }
-    outText[copied] = 0;
-    return AStringView(outText, copied);
-}
 
 static void ResetDiagnosticEventCapture()noexcept{
     s_DiagnosticEventCaptureCount = 0u;
@@ -107,11 +96,16 @@ static void ResetDiagnosticEventCapture()noexcept{
 
 static void RecordDiagnosticEvent(const DiagnosticEventRecord& record)noexcept{
     ++s_DiagnosticEventCaptureCount;
-    s_DiagnosticEventName = CopyDiagnosticEventText(s_DiagnosticEventNameText, record.event);
-    s_DiagnosticEventCategory = CopyDiagnosticEventText(s_DiagnosticEventCategoryText, record.category);
-    s_DiagnosticEventExpression = CopyDiagnosticEventText(s_DiagnosticEventExpressionText, record.expression);
-    s_DiagnosticEventMessage = CopyDiagnosticEventText(s_DiagnosticEventMessageText, record.message);
-    s_DiagnosticEventFile = CopyDiagnosticEventText(s_DiagnosticEventFileText, record.file);
+    CopyFixedBuffer(s_DiagnosticEventNameText, record.event);
+    CopyFixedBuffer(s_DiagnosticEventCategoryText, record.category);
+    CopyFixedBuffer(s_DiagnosticEventExpressionText, record.expression);
+    CopyFixedBuffer(s_DiagnosticEventMessageText, record.message);
+    CopyFixedBuffer(s_DiagnosticEventFileText, record.file);
+    s_DiagnosticEventName = AStringView(s_DiagnosticEventNameText);
+    s_DiagnosticEventCategory = AStringView(s_DiagnosticEventCategoryText);
+    s_DiagnosticEventExpression = AStringView(s_DiagnosticEventExpressionText);
+    s_DiagnosticEventMessage = AStringView(s_DiagnosticEventMessageText);
+    s_DiagnosticEventFile = AStringView(s_DiagnosticEventFileText);
 }
 
 
@@ -151,7 +145,7 @@ public:
 TEST(Global, DecimalFormattingUsesExactMinimumStorageWithoutEmptySentinelsOrOverrun){
     struct Storage{
         char first = 'a';
-        char buffer[TextDetail::s_UsizeDecimalDigitCount]{};
+        char buffer[s_UsizeDecimalDigitCount]{};
         char last = 'z';
     };
     struct Case{
@@ -579,6 +573,76 @@ TEST(Global, DiagnosticEventHookRejectsReentryAndHonorsBoundedText){
     EXPECT_EQ(s_DiagnosticEventExpression, AStringView(""));
     EXPECT_EQ(s_DiagnosticEventMessage, AStringView("message"));
     EXPECT_EQ(DiagnosticEventNameFromCategory("unknown"), StringView{});
+}
+
+TEST(Global, UnicodeAndAsciiHelpersRejectSurrogatesOverlongsAndInvalidIdentifiers){
+    EXPECT_FALSE(IsUtf16HighSurrogate(0xD7FFu));
+    EXPECT_TRUE(IsUtf16HighSurrogate(0xD800u));
+    EXPECT_TRUE(IsUtf16HighSurrogate(0xDBFFu));
+    EXPECT_FALSE(IsUtf16HighSurrogate(0xDC00u));
+    EXPECT_FALSE(IsUtf16LowSurrogate(0xDBFFu));
+    EXPECT_TRUE(IsUtf16LowSurrogate(0xDC00u));
+    EXPECT_TRUE(IsUtf16LowSurrogate(0xDFFFu));
+    EXPECT_FALSE(IsUtf16LowSurrogate(0xE000u));
+    EXPECT_TRUE(IsUnicodeScalarValue(0xD7FFu));
+    EXPECT_FALSE(IsUnicodeScalarValue(0xD800u));
+    EXPECT_FALSE(IsUnicodeScalarValue(0xDFFFu));
+    EXPECT_TRUE(IsUnicodeScalarValue(0xE000u));
+    EXPECT_TRUE(IsUnicodeScalarValue(s_UnicodeMaxCodePoint));
+    EXPECT_FALSE(IsUnicodeScalarValue(s_UnicodeMaxCodePoint + 1u));
+    EXPECT_EQ(DecodeUtf16SurrogatePair(0xD800u, 0xDC00u), 0x10000u);
+    EXPECT_EQ(DecodeUtf16SurrogatePair(0xDBFFu, 0xDFFFu), s_UnicodeMaxCodePoint);
+
+    const char bomPrefixed[] = { static_cast<char>(0xEF), static_cast<char>(0xBB), static_cast<char>(0xBF), 'a' };
+    EXPECT_TRUE(HasUtf8Bom(AStringView(bomPrefixed, sizeof(bomPrefixed))));
+    EXPECT_FALSE(HasUtf8Bom(AStringView(bomPrefixed, 2u)));
+
+    char encoded[s_Utf8MaxSequenceBytes] = {};
+    EXPECT_FALSE(EncodeUtf8CodePoint(0xD800u, encoded));
+    EXPECT_FALSE(EncodeUtf8CodePoint(s_UnicodeMaxCodePoint + 1u, encoded));
+    const auto encodedBytes = EncodeUtf8CodePoint(s_UnicodeMaxCodePoint, encoded);
+    ASSERT_TRUE(encodedBytes);
+    ASSERT_EQ(*encodedBytes, 4u);
+    EXPECT_TRUE(IsUtf8ScalarBoundary(AStringView(encoded, sizeof(encoded)), 0u));
+    EXPECT_FALSE(IsUtf8ScalarBoundary(AStringView(encoded, sizeof(encoded)), 1u));
+    EXPECT_TRUE(IsUtf8ScalarBoundary(AStringView(encoded, sizeof(encoded)), 4u));
+    EXPECT_FALSE(IsUtf8ScalarBoundary(AStringView(encoded, sizeof(encoded)), 5u));
+
+    const auto decoded = DecodeUtf8Scalar(AStringView(encoded, sizeof(encoded)));
+    ASSERT_TRUE(decoded);
+    EXPECT_EQ(decoded->codePoint, s_UnicodeMaxCodePoint);
+    EXPECT_EQ(decoded->byteCount, 4);
+    EXPECT_FALSE(DecodeUtf8Scalar(AStringView(encoded, 3u)));
+    const char surrogateBytes[] = { static_cast<char>(0xED), static_cast<char>(0xA0), static_cast<char>(0x80) };
+    EXPECT_FALSE(DecodeUtf8Scalar(AStringView(surrogateBytes, sizeof(surrogateBytes))));
+
+    EXPECT_FALSE(IsAsciiIdentifier(AStringView()));
+    EXPECT_FALSE(IsAsciiIdentifier(AStringView("9abc")));
+    EXPECT_FALSE(IsAsciiIdentifier(AStringView("a-b")));
+    EXPECT_TRUE(IsAsciiIdentifier(AStringView("_a9")));
+}
+
+TEST(Global, FilesystemStreamAndStageHelpersRejectInvalidAndTruncatedInputs){
+    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
+    const Path<NWB::Core::Alloc::ScratchArena> emptyPath(scratchArena);
+    EXPECT_EQ(PathDepth(emptyPath), 0u);
+    const Path<NWB::Core::Alloc::ScratchArena> stageDir(scratchArena, "global_test_artifacts/stage_edge_test");
+    ASSERT_TRUE(EnsureEmptyDirectory(stageDir));
+    const auto stagedFile = stageDir / "payload.bin";
+    const u8 payload[] = { 0x10u, 0x20u, 0x30u, 0x40u };
+    bool created = false;
+    ASSERT_TRUE(StageNewBinaryFileDurable(stagedFile, payload, sizeof(payload), created));
+    EXPECT_TRUE(created);
+    EXPECT_TRUE(VerifyBinaryFileBytes(stagedFile, payload, sizeof(payload)));
+    const u8 mismatched[] = { 0x10u, 0x20u, 0x30u, 0x41u };
+    EXPECT_FALSE(VerifyBinaryFileBytes(stagedFile, mismatched, sizeof(mismatched)));
+    EXPECT_FALSE(VerifyBinaryFileBytes(stagedFile, payload, sizeof(payload) - 1u));
+    EXPECT_FALSE(StageNewBinaryFileDurable(stagedFile, mismatched, sizeof(mismatched), created));
+    EXPECT_FALSE(created);
+    EXPECT_TRUE(VerifyBinaryFileBytes(stagedFile, payload, sizeof(payload)));
+    ASSERT_TRUE(ResizeFile(stagedFile, 2u));
+    EXPECT_TRUE(VerifyBinaryFileBytes(stagedFile, payload, 2u));
+    ASSERT_TRUE(RemoveAllIfExists(stageDir));
 }
 
 TEST(Global, OwnershipInvariantTerminationIsAlwaysActive){

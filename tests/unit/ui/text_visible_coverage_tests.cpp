@@ -105,15 +105,11 @@ TEST_F(TextVisibleCoverageTests, MoreThan4096DistinctHiddenHangulDoNotExhaustThe
     const usize hiddenCount = s_GlyphAtlasMaxGlyphs + 1u;
     text.reserve(2u + hiddenCount * 3u);
     constexpr u32 s_HangulSyllableBase = 0xac00u;
-    constexpr u32 s_Utf8ThreeByteLeadPrefix = 0xe0u;
-    constexpr u32 s_Utf8ThreeByteLeadShift = 12u;
-    constexpr u32 s_Utf8ContinuationMiddleShift = 6u;
-    constexpr u32 s_Utf8ContinuationPayloadMask = 0x3fu;
+    char encoded[s_Utf8MaxSequenceBytes];
     for(u32 index = 0u; index < hiddenCount; ++index){
-        const u32 scalar = s_HangulSyllableBase + index;
-        text.push_back(static_cast<char>(s_Utf8ThreeByteLeadPrefix | (scalar >> s_Utf8ThreeByteLeadShift)));
-        text.push_back(static_cast<char>(s_Utf8ContinuationMarker | ((scalar >> s_Utf8ContinuationMiddleShift) & s_Utf8ContinuationPayloadMask)));
-        text.push_back(static_cast<char>(s_Utf8ContinuationMarker | (scalar & s_Utf8ContinuationPayloadMask)));
+        const auto encodedLength = EncodeUtf8CodePoint(s_HangulSyllableBase + index, encoded);
+        ASSERT_TRUE(encodedLength);
+        text.append(encoded, *encodedLength);
     }
     {
         auto layoutResult = m_text.layout({ text });

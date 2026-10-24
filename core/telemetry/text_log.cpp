@@ -29,7 +29,7 @@ namespace __hidden_telemetry_text_log{
 
 static void AppendUtf8Text(TelemetryBytes& outText, const TStringView message){
     auto inserter = BackInserter(outText);
-    BasicStringDetail::WriteConvertedText<char>(inserter, message);
+    WriteConvertedText<char>(inserter, message);
 }
 
 

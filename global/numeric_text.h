@@ -44,6 +44,9 @@ inline constexpr usize s_UsizeDecimalDigitCount = []()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using TextDetail::s_DecimalTextBufferBytes;
+using TextDetail::s_UsizeDecimalDigitCount;
+
 inline constexpr usize s_HexDecimalDigitCount = 10u;
 inline constexpr usize s_HexPrefixLength = 2u;
 inline constexpr usize s_HexU32DigitCount = 8u;
@@ -81,7 +84,7 @@ template<usize N>
 
 // Full-range caller storage makes decimal formatting total, including zero and the largest usize.
 template<usize N>
-    requires (N >= TextDetail::s_UsizeDecimalDigitCount)
+    requires (N >= s_UsizeDecimalDigitCount)
 [[nodiscard]] inline constexpr AStringView FormatDecimal(const usize value, char (&buffer)[N])noexcept{
     usize remaining = value;
     usize length = 0u;

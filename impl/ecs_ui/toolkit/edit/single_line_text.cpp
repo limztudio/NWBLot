@@ -29,8 +29,8 @@ struct TextStep{
 
 static Expected<TextStep> ReadStep(const AStringView source, const usize offset)noexcept{
     // Callers admit the whole source with GraphemeSegmentation::Validate first.
-    const auto decoded = DecodeUtf8CodePoint(source.substr(offset, s_Utf8MaxSequenceBytes));
-    NWB_ASSERT(decoded && !(decoded->codePoint >= s_UnicodeSurrogateFirst && decoded->codePoint <= s_UnicodeSurrogateLast));
+    const auto decoded = DecodeUtf8Scalar(source.substr(offset, s_Utf8MaxSequenceBytes));
+    NWB_ASSERT(decoded);
     const u32 scalar = decoded->codePoint;
     const bool space = (scalar >= s_UnicodeTab && scalar <= s_UnicodeCarriageReturn) || scalar == s_UnicodeNextLine || scalar == s_UnicodeLineSeparator || scalar == s_UnicodeParagraphSeparator;
     if(!space && (scalar < s_UnicodeSpace || scalar == s_UnicodeDelete))

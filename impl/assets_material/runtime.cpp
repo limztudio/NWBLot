@@ -231,7 +231,7 @@ static Expected<MaterialTypedLayoutPayload> ReadMaterialTypedLayout(const Core::
     }
 
     payload.blockBytes.resize(blockByteCount);
-    if(!BinaryDetail::ReadBytes(binary, blockByteCount, inOutCursor, payload.blockBytes.data())){
+    if(!ReadBytes(binary, blockByteCount, inOutCursor, payload.blockBytes.data())){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: malformed typed block bytes"));
         return MakeUnexpected(Failure{});
     }

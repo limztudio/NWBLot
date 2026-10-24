@@ -14,6 +14,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr usize s_Utf8MaxSequenceBytes = 4u;
+inline constexpr u32 s_UnicodeTab = 0x9u;
+inline constexpr u32 s_UnicodeLineFeed = 0xAu;
+inline constexpr u32 s_UnicodeCarriageReturn = 0xDu;
+inline constexpr u32 s_UnicodeSpace = 0x20u;
+inline constexpr u32 s_UnicodeDelete = 0x7Fu;
+inline constexpr u32 s_UnicodeNextLine = 0x85u;
+inline constexpr u32 s_UnicodeC1Last = 0x9Fu;
+inline constexpr u32 s_UnicodeLineSeparator = 0x2028u;
+inline constexpr u32 s_UnicodeParagraphSeparator = 0x2029u;
+
+
 template<typename CharT>
 [[nodiscard]] inline bool IsAsciiSpace(const CharT ch)noexcept(IsArithmetic_V<CharT>){
     return ch == CharT(' ') || ch == CharT('\t') || ch == CharT('\n') || ch == CharT('\r') || ch == CharT('\f') || ch == CharT('\v');
@@ -36,8 +48,6 @@ inline constexpr u8 s_Utf8BomByte2 = 0xBFu;
 inline constexpr i32 s_Utf8TwoByteLength = 2;
 inline constexpr i32 s_Utf8ThreeByteLength = 3;
 inline constexpr i32 s_Utf8FourByteLength = 4;
-inline constexpr u32 s_AsciiControlMaxExclusive = 32u;
-inline constexpr u32 s_AsciiDelete = 127u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -254,22 +264,30 @@ inline void NormalizeLineEndingsInPlace(StringT& inOutText, const bool useCrlf)n
 }
 
 
-template<typename StringT>
-inline void StripUtf8Bom(StringT& inOutText)noexcept(noexcept(static_cast<bool>(inOutText.size() < TextDetail::s_Utf8BomByteCount)) && noexcept(static_cast<u8>(inOutText[0])) && noexcept(inOutText.erase(0, TextDetail::s_Utf8BomByteCount))){
-    if(inOutText.size() < TextDetail::s_Utf8BomByteCount)
-        return;
+template<typename ByteContainer>
+[[nodiscard]] inline constexpr bool HasUtf8Bom(const ByteContainer& bytes)noexcept(noexcept(static_cast<bool>(bytes.size() < TextDetail::s_Utf8BomByteCount)) && noexcept(static_cast<u8>(bytes[0u]))){
+    if(bytes.size() < TextDetail::s_Utf8BomByteCount)
+        return false;
 
-    const u8 byte0 = static_cast<u8>(inOutText[0]);
-    const u8 byte1 = static_cast<u8>(inOutText[1]);
-    const u8 byte2 = static_cast<u8>(inOutText[2]);
-    const bool hasUtf8Bom = byte0 == TextDetail::s_Utf8BomByte0 && byte1 == TextDetail::s_Utf8BomByte1 && byte2 == TextDetail::s_Utf8BomByte2;
-    if(hasUtf8Bom)
+    const u8 byte0 = static_cast<u8>(bytes[0u]);
+    const u8 byte1 = static_cast<u8>(bytes[1u]);
+    const u8 byte2 = static_cast<u8>(bytes[2u]);
+    return byte0 == TextDetail::s_Utf8BomByte0 && byte1 == TextDetail::s_Utf8BomByte1 && byte2 == TextDetail::s_Utf8BomByte2;
+}
+
+template<typename StringT>
+inline void StripUtf8Bom(StringT& inOutText)noexcept(noexcept(HasUtf8Bom(inOutText)) && noexcept(inOutText.erase(0, TextDetail::s_Utf8BomByteCount))){
+    if(HasUtf8Bom(inOutText))
         inOutText.erase(0, TextDetail::s_Utf8BomByteCount);
 }
 
 
-[[nodiscard]] inline bool IsUtf8Continuation(const u8 value)noexcept{
+[[nodiscard]] inline constexpr bool IsUtf8Continuation(const u8 value)noexcept{
     return (value & BasicStringDetail::s_Utf8ContinuationMask) == BasicStringDetail::s_Utf8ContinuationMarker;
+}
+
+[[nodiscard]] inline constexpr bool IsUtf8ScalarBoundary(const AStringView text, const usize byteOffset)noexcept{
+    return byteOffset <= text.size() && (byteOffset == text.size() || !IsUtf8Continuation(static_cast<u8>(text[byteOffset])));
 }
 
 struct DecodedUtf8CodePoint{
@@ -345,14 +363,42 @@ struct DecodedUtf8CodePoint{
     return MakeUnexpected(Failure{});
 }
 
-[[nodiscard]] inline bool IsTextInputCodePoint(const u32 unicode)noexcept{
-    if(unicode < TextDetail::s_AsciiControlMaxExclusive || unicode == TextDetail::s_AsciiDelete)
+[[nodiscard]] inline Expected<DecodedUtf8CodePoint> DecodeUtf8Scalar(const AStringView bytes)noexcept{
+    const auto decoded = DecodeUtf8CodePoint(bytes);
+    if(!decoded || IsUnicodeSurrogate(decoded->codePoint))
+        return MakeUnexpected(Failure{});
+    return *decoded;
+}
+
+[[nodiscard]] inline constexpr Expected<usize> EncodeUtf8CodePoint(const u32 codePoint, char (&outBytes)[s_Utf8MaxSequenceBytes])noexcept{
+    if(!IsUnicodeScalarValue(codePoint))
+        return MakeUnexpected(Failure{});
+    if(codePoint < BasicStringDetail::s_Utf8TwoByteMinCodePoint){
+        outBytes[0u] = static_cast<char>(codePoint);
+        return 1u;
+    }
+    if(codePoint < BasicStringDetail::s_Utf8ThreeByteMinCodePoint){
+        outBytes[0u] = static_cast<char>(BasicStringDetail::s_Utf8TwoByteMarker | (codePoint >> BasicStringDetail::s_Utf8ContinuationPayloadBits));
+        outBytes[1u] = static_cast<char>(BasicStringDetail::s_Utf8ContinuationMarker | (codePoint & BasicStringDetail::s_Utf8ContinuationPayloadMask));
+        return 2u;
+    }
+    if(codePoint < BasicStringDetail::s_Utf8FourByteMinCodePoint){
+        outBytes[0u] = static_cast<char>(BasicStringDetail::s_Utf8ThreeByteMarker | (codePoint >> (BasicStringDetail::s_Utf8ContinuationPayloadBits * 2u)));
+        outBytes[1u] = static_cast<char>(BasicStringDetail::s_Utf8ContinuationMarker | ((codePoint >> BasicStringDetail::s_Utf8ContinuationPayloadBits) & BasicStringDetail::s_Utf8ContinuationPayloadMask));
+        outBytes[2u] = static_cast<char>(BasicStringDetail::s_Utf8ContinuationMarker | (codePoint & BasicStringDetail::s_Utf8ContinuationPayloadMask));
+        return 3u;
+    }
+    outBytes[0u] = static_cast<char>(BasicStringDetail::s_Utf8FourByteMarker | (codePoint >> (BasicStringDetail::s_Utf8ContinuationPayloadBits * 3u)));
+    outBytes[1u] = static_cast<char>(BasicStringDetail::s_Utf8ContinuationMarker | ((codePoint >> (BasicStringDetail::s_Utf8ContinuationPayloadBits * 2u)) & BasicStringDetail::s_Utf8ContinuationPayloadMask));
+    outBytes[2u] = static_cast<char>(BasicStringDetail::s_Utf8ContinuationMarker | ((codePoint >> BasicStringDetail::s_Utf8ContinuationPayloadBits) & BasicStringDetail::s_Utf8ContinuationPayloadMask));
+    outBytes[3u] = static_cast<char>(BasicStringDetail::s_Utf8ContinuationMarker | (codePoint & BasicStringDetail::s_Utf8ContinuationPayloadMask));
+    return 4u;
+}
+
+[[nodiscard]] inline constexpr bool IsTextInputCodePoint(const u32 unicode)noexcept{
+    if(unicode < s_UnicodeSpace || unicode == s_UnicodeDelete)
         return false;
-    if(unicode > BasicStringDetail::s_UnicodeMaxCodePoint)
-        return false;
-    if(unicode >= BasicStringDetail::s_UnicodeHighSurrogateMin && unicode <= BasicStringDetail::s_UnicodeLowSurrogateMax)
-        return false;
-    return true;
+    return IsUnicodeScalarValue(unicode);
 }
 
 

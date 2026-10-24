@@ -179,21 +179,6 @@ void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previo
 }
 
 bool UiEditBoxHost::character(const u32 unicode){
-    constexpr u32 s_Utf8OneByteLimit = 0x80u;
-    constexpr u32 s_Utf8TwoByteLimit = 0x800u;
-    constexpr u32 s_Utf8ThreeByteLimit = 0x10000u;
-    constexpr u32 s_UnicodeMaxCodePoint = 0x10ffffu;
-    constexpr u32 s_Utf8TwoByteLead = 0xc0u;
-    constexpr u32 s_Utf8ThreeByteLead = 0xe0u;
-    constexpr u32 s_Utf8FourByteLead = 0xf0u;
-    constexpr u32 s_Utf8ContinuationMarker = 0x80u;
-    constexpr u32 s_Utf8ContinuationPayloadMask = 63u;
-    constexpr u32 s_Utf8OneContinuationBits = 6u;
-    constexpr u32 s_Utf8TwoContinuationBits = 12u;
-    constexpr u32 s_Utf8ThreeContinuationBits = 18u;
-    constexpr usize s_Utf8TwoByteLength = 2u;
-    constexpr usize s_Utf8ThreeByteLength = 3u;
-    constexpr usize s_Utf8FourByteLength = 4u;
     if(rejectBorrowedMutation())
         return false;
     synchronizeFocus();
@@ -201,38 +186,18 @@ bool UiEditBoxHost::character(const u32 unicode){
         return false;
     if(m_session.token().valid())
         return true;
-    if(unicode < s_UiEditBoxAsciiControlLimit || unicode == s_UiEditBoxAsciiDelete || unicode > s_UnicodeMaxCodePoint || (unicode >= Ui::s_UnicodeSurrogateFirst && unicode <= Ui::s_UnicodeSurrogateLast))
+    if(!IsTextInputCodePoint(unicode))
         return true;
     Entry* entry = find(m_context.input().focus());
     Event event(m_arena);
     event.kind = UiEditBoxEventKind::Character;
     event.owner = entry->owner;
     event.focusGeneration = entry->focusGeneration;
-    char bytes[s_Utf8FourByteLength];
-    usize count = 0u;
-    if(unicode < s_Utf8OneByteLimit){
-        bytes[0u] = static_cast<char>(unicode);
-        count = 1u;
-    }
-    else if(unicode < s_Utf8TwoByteLimit){
-        bytes[0u] = static_cast<char>(s_Utf8TwoByteLead | (unicode >> s_Utf8OneContinuationBits));
-        bytes[1u] = static_cast<char>(s_Utf8ContinuationMarker | (unicode & s_Utf8ContinuationPayloadMask));
-        count = s_Utf8TwoByteLength;
-    }
-    else if(unicode < s_Utf8ThreeByteLimit){
-        bytes[0u] = static_cast<char>(s_Utf8ThreeByteLead | (unicode >> s_Utf8TwoContinuationBits));
-        bytes[1u] = static_cast<char>(s_Utf8ContinuationMarker | ((unicode >> s_Utf8OneContinuationBits) & s_Utf8ContinuationPayloadMask));
-        bytes[2u] = static_cast<char>(s_Utf8ContinuationMarker | (unicode & s_Utf8ContinuationPayloadMask));
-        count = s_Utf8ThreeByteLength;
-    }
-    else{
-        bytes[0u] = static_cast<char>(s_Utf8FourByteLead | (unicode >> s_Utf8ThreeContinuationBits));
-        bytes[1u] = static_cast<char>(s_Utf8ContinuationMarker | ((unicode >> s_Utf8TwoContinuationBits) & s_Utf8ContinuationPayloadMask));
-        bytes[2u] = static_cast<char>(s_Utf8ContinuationMarker | ((unicode >> s_Utf8OneContinuationBits) & s_Utf8ContinuationPayloadMask));
-        bytes[3u] = static_cast<char>(s_Utf8ContinuationMarker | (unicode & s_Utf8ContinuationPayloadMask));
-        count = s_Utf8FourByteLength;
-    }
-    event.native.text.assign(bytes, count);
+    char bytes[s_Utf8MaxSequenceBytes];
+    const auto count = EncodeUtf8CodePoint(unicode, bytes);
+    if(!count)
+        return true;
+    event.native.text.assign(bytes, *count);
     m_clickTracker.cancel();
     if(!append(Move(event)))
         return true;

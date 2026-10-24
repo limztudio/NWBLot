@@ -127,7 +127,7 @@ struct ArchiveFileHeader{
             return MakeUnexpected(ensured.error());
     }
 
-    if(!GlobalFilesystemDetail::CanRepresentStreamSize(static_cast<u64>(byteCount)))
+    if(!CanRepresentStreamSize(static_cast<u64>(byteCount)))
         return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
     const BinaryByteView fileBytes{ bytes, byteCount };
     if(!WriteBinaryFile(outputPath, fileBytes))
@@ -272,7 +272,7 @@ template<typename ArenaT>
     usize cursor = *valueCursor;
 
     const usize begin = cursor;
-    while(cursor < manifest.size() && manifest[cursor] >= '0' && manifest[cursor] <= '9')
+    while(cursor < manifest.size() && IsAsciiDigit(manifest[cursor]))
         ++cursor;
     if(cursor == begin)
         return MakeUnexpected(Failure{});
@@ -286,8 +286,6 @@ template<typename ArenaT>
         return MakeUnexpected(Failure{});
     usize cursor = *valueCursor;
 
-    constexpr AStringView s_TrueText("true");
-    constexpr AStringView s_FalseText("false");
     if(cursor + s_TrueText.size() <= manifest.size() && AStringView(manifest.data() + cursor, s_TrueText.size()) == s_TrueText){
         return true;
     }

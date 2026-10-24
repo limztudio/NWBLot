@@ -173,7 +173,7 @@ Expected<GpuTextureGraphResources> GpuRendererState::declareTextureImages(Core::
         const auto& source = frame->m_snapshot.textureImages()[index];
         if(!image || !source || !image->m_source || image->m_source->generation() != source->generation() || image->m_source->identity() != source->identity() || !__hidden_ui_gpu_texture_resources::ValidVersion(*image))
             return MakeUnexpected(Failure{});
-        char identityText[TextDetail::s_DecimalTextBufferBytes];
+        char identityText[s_DecimalTextBufferBytes];
         const AStringView suffix = FormatDecimal(index, identityText);
         const auto readyIdentity = DeriveName(Name("ui.texture_image_ready/"), suffix);
         const auto textureIdentity = DeriveName(Name("ui.texture_image/"), suffix);

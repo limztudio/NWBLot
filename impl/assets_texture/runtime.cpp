@@ -232,19 +232,19 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
         NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: mip payload byte size overflows"));
         return false;
     }
-    if(!BinaryDetail::CanReadBytes(binary, cursor, *mipByteCount)){
+    if(!CanReadBytes(binary, cursor, *mipByteCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: malformed mip levels payload"));
         return false;
     }
 
     const usize payloadByteCount = static_cast<usize>(payloadByteCount64);
-    if(!BinaryDetail::CanReadBytes(binary, cursor + *mipByteCount, payloadByteCount)){
+    if(!CanReadBytes(binary, cursor + *mipByteCount, payloadByteCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: texture payload is truncated"));
         return false;
     }
 
     MipLevelVector mipLevels(m_mipLevels.get_allocator().arena());
-    if(!BinaryDetail::CanStoreValueCount(mipLevels, mipCount)){
+    if(!CanStoreValueCount(mipLevels, mipCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: mip count exceeds runtime container limits"));
         return false;
     }
@@ -274,7 +274,7 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
 
     Core::Assets::AssetBytes payloadBytes(m_payloadBytes.get_allocator().arena());
     payloadBytes.resize(payloadByteCount);
-    if(!BinaryDetail::ReadBytes(binary, payloadByteCount, cursor, payloadBytes.data())){
+    if(!ReadBytes(binary, payloadByteCount, cursor, payloadBytes.data())){
         NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: texture payload is malformed"));
         return false;
     }

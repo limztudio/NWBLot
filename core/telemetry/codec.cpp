@@ -66,7 +66,7 @@ static void AppendEncodedEvent(TelemetryBytes& outBytes, const EventHeader& head
     const EncodedEventHeader encodedHeader = EncodeHeader(header);
     AppendPOD(outBytes, encodedHeader);
     if(payloadBytes != 0u)
-        BinaryDetail::AppendBytesNoReserveUnchecked(outBytes, payload, payloadBytes);
+        AppendBytesNoReserveUnchecked(outBytes, payload, payloadBytes);
 }
 
 
@@ -107,7 +107,7 @@ bool EncodeEvent(const EventHeader& header, const void* payload, const usize pay
     outBytes.reserve(encodedBytes);
     AppendPOD(outBytes, encodedHeader);
     if(payloadBytes != 0u)
-        BinaryDetail::AppendBytesNoReserveUnchecked(outBytes, payload, payloadBytes);
+        AppendBytesNoReserveUnchecked(outBytes, payload, payloadBytes);
     NWB_ASSERT(outBytes.size() == encodedBytes);
     return true;
 }

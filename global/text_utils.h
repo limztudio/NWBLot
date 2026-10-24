@@ -90,13 +90,44 @@ template<typename CharT>
 }
 
 template<typename CharT>
+[[nodiscard]] inline constexpr bool IsAsciiDigit(CharT ch)noexcept(IsArithmetic_V<CharT>){
+    return ch >= static_cast<CharT>('0') && ch <= static_cast<CharT>('9');
+}
+
+template<typename CharT>
+[[nodiscard]] inline constexpr bool IsAsciiAlpha(CharT ch)noexcept(IsArithmetic_V<CharT>){
+    return (ch >= static_cast<CharT>('A') && ch <= static_cast<CharT>('Z')) || (ch >= static_cast<CharT>('a') && ch <= static_cast<CharT>('z'));
+}
+
+template<typename CharT>
 [[nodiscard]] inline constexpr bool IsAsciiAlphaNumeric(CharT ch)noexcept(IsArithmetic_V<CharT>){
-    return (ch >= static_cast<CharT>('0') && ch <= static_cast<CharT>('9')) || (ch >= static_cast<CharT>('A') && ch <= static_cast<CharT>('Z')) || (ch >= static_cast<CharT>('a') && ch <= static_cast<CharT>('z'));
+    return IsAsciiDigit(ch) || IsAsciiAlpha(ch);
+}
+
+template<typename CharT>
+[[nodiscard]] inline constexpr bool IsAsciiIdentifierStart(CharT ch)noexcept(IsArithmetic_V<CharT>){
+    return IsAsciiAlpha(ch) || ch == static_cast<CharT>('_');
 }
 
 template<typename CharT>
 [[nodiscard]] inline constexpr bool IsAsciiIdentifierChar(CharT ch)noexcept(IsArithmetic_V<CharT>){
-    return (ch >= static_cast<CharT>('a') && ch <= static_cast<CharT>('z')) || (ch >= static_cast<CharT>('A') && ch <= static_cast<CharT>('Z')) || (ch >= static_cast<CharT>('0') && ch <= static_cast<CharT>('9')) || ch == static_cast<CharT>('_');
+    return IsAsciiIdentifierStart(ch) || IsAsciiDigit(ch);
+}
+
+template<typename CharT>
+[[nodiscard]] inline constexpr bool IsAsciiIdentifier(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
+    if(text.empty() || !IsAsciiIdentifierStart(text.front()))
+        return false;
+    for(usize i = 1u; i < text.size(); ++i){
+        if(!IsAsciiIdentifierChar(text[i]))
+            return false;
+    }
+    return true;
+}
+
+template<typename CharT, typename ArenaT>
+[[nodiscard]] inline constexpr bool IsAsciiIdentifier(const BasicString<CharT, ArenaT>& text)noexcept(IsArithmetic_V<CharT>){
+    return IsAsciiIdentifier<CharT>(BasicStringView<CharT>{text});
 }
 
 template<typename CharT>

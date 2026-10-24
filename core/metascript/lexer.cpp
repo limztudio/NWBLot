@@ -20,21 +20,9 @@ namespace __hidden_metascript_lexer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr MChar s_DigitFirst = '0';
-inline constexpr MChar s_DigitLast = '9';
 inline constexpr MStringView s_NewlineInStringMessage = MStringView("newline in string literal");
 inline constexpr MStringView s_UnterminatedStringMessage = MStringView("unterminated string literal");
 constexpr usize s_CompoundAssignmentTokenLength = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] inline bool IsDigit(MChar c)noexcept{ return c >= s_DigitFirst && c <= s_DigitLast; }
-
-[[nodiscard]] inline bool IsAlpha(MChar c)noexcept{ return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'; }
-
-[[nodiscard]] inline bool IsAlphaNumeric(MChar c)noexcept{ return IsAlpha(c) || IsDigit(c); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,10 +60,10 @@ Token Lexer::next()noexcept{
 
     const MChar c = peek();
 
-    if(IsAlpha(c))
+    if(IsAsciiIdentifierStart(c))
         return readIdentifier();
 
-    if(IsDigit(c))
+    if(IsAsciiDigit(c))
         return readNumber();
 
     if(c == '"')
@@ -195,7 +183,7 @@ Token Lexer::readIdentifier()noexcept{
     const u32 startLine = m_line;
     const u32 startColumn = m_column;
 
-    while(!isAtEnd() && IsAlphaNumeric(peek()))
+    while(!isAtEnd() && IsAsciiIdentifierChar(peek()))
         advance();
 
     Token tok;
@@ -214,15 +202,15 @@ Token Lexer::readNumber()noexcept{
     const u32 startColumn = m_column;
     bool isDouble = false;
 
-    while(!isAtEnd() && IsDigit(peek()))
+    while(!isAtEnd() && IsAsciiDigit(peek()))
         advance();
 
     if(!isAtEnd() && peek() == '.'){
         const MChar afterDot = peekNext();
-        if(afterDot >= '0' && afterDot <= '9'){
+        if(IsAsciiDigit(afterDot)){
             isDouble = true;
             advance();
-            while(!isAtEnd() && IsDigit(peek()))
+            while(!isAtEnd() && IsAsciiDigit(peek()))
                 advance();
         }
     }
@@ -232,9 +220,9 @@ Token Lexer::readNumber()noexcept{
         advance();
         if(!isAtEnd() && (peek() == '+' || peek() == '-'))
             advance();
-        if(isAtEnd() || !IsDigit(peek()))
+        if(isAtEnd() || !IsAsciiDigit(peek()))
             return makeErrorToken(MStringView("invalid exponent in number literal"), startLine, startColumn);
-        while(!isAtEnd() && IsDigit(peek()))
+        while(!isAtEnd() && IsAsciiDigit(peek()))
             advance();
     }
 

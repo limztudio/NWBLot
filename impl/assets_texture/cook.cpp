@@ -146,7 +146,7 @@ bool TextureAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asset
         AppendPOD(outBinary, binaryMip);
     }
 
-    BinaryDetail::AppendBytesNoReserveUnchecked(outBinary, texture.payloadBytes().data(), texture.payloadBytes().size());
+    AppendBytesNoReserveUnchecked(outBinary, texture.payloadBytes().data(), texture.payloadBytes().size());
     return true;
 }
 

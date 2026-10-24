@@ -434,7 +434,7 @@ static void AppendResolvedSymbol(const HANDLE symbolProcess, const DWORD frameIn
 
     DWORD64 displacement = 0u;
     if(SymFromAddrW(symbolProcess, address, &displacement, symbol.get())){
-        const AString<Core::Alloc::ScratchArena> name = BasicStringDetail::WideToUtf8(scratchArena, WStringView(symbol->Name, symbol->NameLen));
+        const AString<Core::Alloc::ScratchArena> name = WideToUtf8(scratchArena, WStringView(symbol->Name, symbol->NameLen));
         outReport += " ";
         outReport += name;
         if(displacement != 0u){
@@ -449,7 +449,7 @@ static void AppendResolvedSymbol(const HANDLE symbolProcess, const DWORD frameIn
     line.SizeOfStruct = sizeof(line);
     DWORD lineDisplacement = 0u;
     if(SymGetLineFromAddrW64(symbolProcess, address, &lineDisplacement, &line)){
-        const AString<Core::Alloc::ScratchArena> file = BasicStringDetail::WideToUtf8(scratchArena, WStringView(line.FileName));
+        const AString<Core::Alloc::ScratchArena> file = WideToUtf8(scratchArena, WStringView(line.FileName));
         outReport += " at ";
         outReport += file;
         outReport += ":";
@@ -534,7 +534,7 @@ Expected<bool, CrashSymbolicationFailure> AppendWindowsMinidumpStack(Core::Alloc
     const WString<Core::Alloc::ScratchArena> symbolPath = BuildSymbolSearchPath(scratchArena, packageDirectory, config);
     SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_UNDNAME | SYMOPT_LOAD_LINES);
     if(!SymInitializeW(symbolProcess, symbolPath.c_str(), FALSE)){
-        const ErrorCode error = GlobalFilesystemDetail::LastSystemError();
+        const ErrorCode error = LastSystemError();
         outReport += "status=not_decoded\nresolver=windows_pdb_minidump\ndetail=SymInitializeW failed\n";
         return MakeUnexpected(CrashSymbolicationFailure{ .operation = "initialize_windows_symbols", .code = error, });
     }
@@ -549,7 +549,7 @@ Expected<bool, CrashSymbolicationFailure> AppendWindowsMinidumpStack(Core::Alloc
     ScopeExit clearMemoryReader([]()noexcept{ s_CurrentDumpMemoryReader = nullptr; });
 
     outReport += "status=decoded\nresolver=windows_pdb_minidump\nsymbol_path=";
-    outReport += BasicStringDetail::WideToUtf8(scratchArena, WStringView(symbolPath));
+    outReport += WideToUtf8(scratchArena, WStringView(symbolPath));
     outReport += "\nthread_id=";
     char threadBuffer[s_DecimalTextBufferCapacity];
     outReport += FormatDecimal(static_cast<usize>(crashContext->threadId), threadBuffer);

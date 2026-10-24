@@ -245,6 +245,17 @@ template<typename Container>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using BinaryDetail::AppendBytesNoReserveUnchecked;
+using BinaryDetail::AppendBytesUnchecked;
+using BinaryDetail::CanAppendBytes;
+using BinaryDetail::CanReadBytes;
+using BinaryDetail::CanStoreValueCount;
+using BinaryDetail::ReadBytes;
+using BinaryDetail::ReadLengthPrefixedString;
+using BinaryDetail::ReadStringTableTextView;
+using BinaryDetail::ReserveAppendBytesIfSupported;
+using BinaryDetail::SkipBytes;
+
 template<typename Container>
 [[nodiscard]] inline bool AppendString(Container& outBinary, const AStringView text){
     if(text.size() > Limit<u32>::s_Max)

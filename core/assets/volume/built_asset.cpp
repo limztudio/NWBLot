@@ -141,7 +141,7 @@ bool WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail:
         AppendPOD(artifactBytes, entry.virtualPath.hash());
         AppendPOD(artifactBytes, entry.identity.payloadSize);
         AppendPOD(artifactBytes, entry.identity.payloadHash);
-        BinaryDetail::AppendBytesNoReserveUnchecked(artifactBytes, payloadData, payloadSize);
+        AppendBytesNoReserveUnchecked(artifactBytes, payloadData, payloadSize);
 
         // Preserve files referenced by the previous manifest if a later entry fails during this publication.
         for(;;){
@@ -176,7 +176,7 @@ bool WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail:
 
     artifactBytes.clear();
     artifactBytes.reserve(manifestText.size());
-    BinaryDetail::AppendBytesNoReserveUnchecked(artifactBytes, manifestText.data(), manifestText.size());
+    AppendBytesNoReserveUnchecked(artifactBytes, manifestText.data(), manifestText.size());
     path = scratchOutputDirectory;
     path /= s_ManifestFilename;
     return __hidden_built_asset::WriteIfChanged(existingBytes, path, artifactBytes);

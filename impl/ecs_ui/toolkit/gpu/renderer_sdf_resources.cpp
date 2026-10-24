@@ -189,7 +189,7 @@ Expected<GpuSdfGraphResources> GpuRendererState::declareSdfPages(Core::GpuTaskGr
     }
     for(usize index = 0u; index < frame->m_sdfPages.size(); ++index){
         const auto& page = frame->m_sdfPages[index];
-        char identityText[TextDetail::s_DecimalTextBufferBytes];
+        char identityText[s_DecimalTextBufferBytes];
         const AStringView suffix = FormatDecimal(index, identityText);
         const auto readyIdentity = DeriveName(Name("ui.sdf_page_ready/"), suffix);
         const auto textureIdentity = DeriveName(Name("ui.sdf_page/"), suffix);

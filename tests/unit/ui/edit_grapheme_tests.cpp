@@ -54,7 +54,7 @@ TEST_F(UiEditGraphemeTests, PassesEveryPinnedOfficialUnicode17ExtendedGraphemeCa
         usize offsetIndex = 0u;
         while(cursor < expectedOffsets.size()){
             usize expected = 0u;
-            while(cursor < expectedOffsets.size() && expectedOffsets[cursor] >= '0' && expectedOffsets[cursor] <= '9'){
+            while(cursor < expectedOffsets.size() && IsAsciiDigit(expectedOffsets[cursor])){
                 expected = expected * 10u + static_cast<usize>(expectedOffsets[cursor] - '0');
                 ++cursor;
             }
@@ -118,12 +118,12 @@ TEST_F(UiEditGraphemeTests, InvalidUtf8FailsBeforeAllocatingBoundaries){
 TEST_F(UiEditGraphemeTests, ScalarPositionsDifferFromGraphemePositionsWithoutSplittingUtf8){
     const AStringView text("a\xCC\x81");
     ASSERT_TRUE(GraphemeSegmentation::Validate(text));
-    EXPECT_TRUE(GraphemeSegmentation::IsScalarBoundary(text, 0u));
-    EXPECT_TRUE(GraphemeSegmentation::IsScalarBoundary(text, 1u));
-    EXPECT_FALSE(GraphemeSegmentation::IsScalarBoundary(text, 2u));
-    EXPECT_TRUE(GraphemeSegmentation::IsScalarBoundary(text, 3u));
-    EXPECT_FALSE(GraphemeSegmentation::IsScalarBoundary(text, 4u));
-    EXPECT_TRUE(GraphemeSegmentation::IsScalarBoundary({}, 0u));
+    EXPECT_TRUE(IsUtf8ScalarBoundary(text, 0u));
+    EXPECT_TRUE(IsUtf8ScalarBoundary(text, 1u));
+    EXPECT_FALSE(IsUtf8ScalarBoundary(text, 2u));
+    EXPECT_TRUE(IsUtf8ScalarBoundary(text, 3u));
+    EXPECT_FALSE(IsUtf8ScalarBoundary(text, 4u));
+    EXPECT_TRUE(IsUtf8ScalarBoundary({}, 0u));
 }
 
 

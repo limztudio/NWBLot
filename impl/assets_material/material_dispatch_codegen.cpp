@@ -160,7 +160,7 @@ Expected<Path> EmitDeferredBxdfDispatchModuleImpl(const Path& cacheDirectory, co
         if(sourceById[id].empty())
             continue;
 
-        char idText[TextDetail::s_DecimalTextBufferBytes];
+        char idText[s_DecimalTextBufferBytes];
         const AStringView idView = FormatDecimal(static_cast<u32>(id), idText);
         source += s_GeneratedDefineDirective;
         source += s_DeferredBxdfFunctionMacro;
@@ -182,7 +182,7 @@ Expected<Path> EmitDeferredBxdfDispatchModuleImpl(const Path& cacheDirectory, co
         if(sourceById[id].empty())
             continue;
 
-        char idText[TextDetail::s_DecimalTextBufferBytes];
+        char idText[s_DecimalTextBufferBytes];
         const AStringView idView = FormatDecimal(static_cast<u32>(id), idText);
         source += s_GeneratedSwitchCaseLabel;
         source += idView;
@@ -274,7 +274,7 @@ static bool AppendShadowSurfaceBindAliases(
     outAliasSymbols.reserve(static_cast<usize>(NameDetail::s_HashLaneCount) + s_ShadowSurfaceBindLayoutAliasCount + bindEntry.structs.size() + bindEntry.instances.size() * s_ShadowSurfaceBindInstanceAliasReserveCount);
 
     for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane){
-        char laneDigits[TextDetail::s_DecimalTextBufferBytes];
+        char laneDigits[s_DecimalTextBufferBytes];
         ScratchString suffix(s_MaterialBindInterfaceHashSymbolPrefix, scratchArena);
         suffix += FormatDecimal(static_cast<usize>(lane), laneDigits);
         const ScratchString symbol = BuildMaterialBindGeneratedSymbol(scratchArena, {}, AStringView(suffix));
@@ -484,10 +484,10 @@ Expected<Path> EmitShadowSurfaceDispatchModuleImpl(const Path& cacheDirectory, c
         if(surfaceById[id].empty())
             continue;
 
-        char idText[TextDetail::s_DecimalTextBufferBytes];
+        char idText[s_DecimalTextBufferBytes];
         const AStringView idView = FormatDecimal(static_cast<u32>(id), idText);
         const u32 bindNamespaceId = bindNamespaceIdById[id];
-        char bindNamespaceIdText[TextDetail::s_DecimalTextBufferBytes];
+        char bindNamespaceIdText[s_DecimalTextBufferBytes];
         const AStringView bindNamespaceIdView = FormatDecimal(bindNamespaceId, bindNamespaceIdText);
         bindNamespace.clear();
         bindNamespace += s_ShadowSurfaceBindNamespacePrefix;
@@ -526,7 +526,7 @@ Expected<Path> EmitShadowSurfaceDispatchModuleImpl(const Path& cacheDirectory, c
         if(surfaceById[id].empty())
             continue;
 
-        char idText[TextDetail::s_DecimalTextBufferBytes];
+        char idText[s_DecimalTextBufferBytes];
         const AStringView idView = FormatDecimal(static_cast<u32>(id), idText);
         source += s_GeneratedSwitchCaseLabel;
         source += idView;

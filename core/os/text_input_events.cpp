@@ -40,7 +40,7 @@ TextInputAdmission::Enum QueuedTextInputService::emitDeleteSurrounding(const Tex
     const usize end = basis == TextInputDeletionBasis::Selection ? Max(m_anchorByte, m_caretByte) : m_caretByte;
     if(beforeBytes > start || afterBytes > m_surrounding.size() - end)
         return TextInputAdmission::InvalidRange;
-    if(!IsTextInputUtf8Boundary(m_surrounding, start - beforeBytes) || !IsTextInputUtf8Boundary(m_surrounding, end + afterBytes))
+    if(!IsUtf8ScalarBoundary(m_surrounding, start - beforeBytes) || !IsUtf8ScalarBoundary(m_surrounding, end + afterBytes))
         return TextInputAdmission::InvalidRange;
     return admitEvent(token, TextInputEventKind::DeleteSurrounding, {}, 0u, 0u, beforeBytes, afterBytes, true, basis);
 }
@@ -91,7 +91,7 @@ TextInputAdmission::Enum QueuedTextInputService::admitEvent(
     if(validation != TextInputAdmission::Accepted)
         return validation;
     if(kind == TextInputEventKind::Preedit){
-        if(!IsTextInputUtf8Boundary(text, anchorByte) || !IsTextInputUtf8Boundary(text, caretByte))
+        if(!IsUtf8ScalarBoundary(text, anchorByte) || !IsUtf8ScalarBoundary(text, caretByte))
             return TextInputAdmission::InvalidRange;
     }
     else if(kind == TextInputEventKind::Commit && text.empty())

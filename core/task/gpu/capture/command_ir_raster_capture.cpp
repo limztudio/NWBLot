@@ -288,15 +288,15 @@ bool GpuCommandIrCapture::appendRasterBytes(
         || (m_planGeneration != 0u && m_planGeneration != packet.generation)
         || m_nextSerial == Limit<u64>::s_Max
         || m_recordEndOffsets.size() == Limit<usize>::s_Max
-        || !BinaryDetail::CanAppendBytes(m_commandBytes, encoded.size())
-        || !BinaryDetail::CanAppendBytes(m_blobBytes, blob.size())
+        || !CanAppendBytes(m_commandBytes, encoded.size())
+        || !CanAppendBytes(m_blobBytes, blob.size())
         || m_commandBytes.size() - sizeof(GpuCommandIrStreamHeader) > Limit<u64>::s_Max - encoded.size()
         || m_blobBytes.size() > Limit<u64>::s_Max - blob.size()
     )
         return false;
 
     const usize nextCount = m_recordEndOffsets.size() + 1u;
-    if(!BinaryDetail::CanStoreValueCount(m_recordEndOffsets, nextCount) || !BinaryDetail::CanStoreValueCount(m_blobEndOffsets, nextCount) || !BinaryDetail::CanStoreValueCount(m_recordSerials, nextCount))
+    if(!CanStoreValueCount(m_recordEndOffsets, nextCount) || !CanStoreValueCount(m_blobEndOffsets, nextCount) || !CanStoreValueCount(m_recordSerials, nextCount))
         return false;
     if((stateOwner || heapOwner) && !m_rasterOwners){
         m_rasterOwners = NewArenaObject<GpuCommandIrRasterOwnerTable>(m_arena, m_arena);

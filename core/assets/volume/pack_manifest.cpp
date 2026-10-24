@@ -114,7 +114,7 @@ bool AppendPayloadBytesToManifest(AssetVolumePackManifest& manifest, const Name&
     entry.source = AssetVolumePackEntrySource::PayloadBytes;
     entry.identity = identity;
     entry.payloadBytes.reserve(payloadByteCount);
-    BinaryDetail::AppendBytesNoReserveUnchecked(entry.payloadBytes, payloadBytes, payloadByteCount);
+    AppendBytesNoReserveUnchecked(entry.payloadBytes, payloadBytes, payloadByteCount);
     return true;
 }
 

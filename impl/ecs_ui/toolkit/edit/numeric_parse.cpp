@@ -23,8 +23,6 @@ namespace __hidden_ui_numeric_parse{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool IsDigit(const char value)noexcept{ return value >= '0' && value <= '9'; }
-
 [[nodiscard]] static usize SkipSign(const AStringView text)noexcept{
     return !text.empty() && (text.front() == '+' || text.front() == '-') ? 1u : 0u;
 }
@@ -34,7 +32,7 @@ namespace __hidden_ui_numeric_parse{
     if(begin == text.size())
         return NumericParseStatus::Incomplete;
     for(usize index = begin; index < text.size(); ++index){
-        if(!IsDigit(text[index]))
+        if(!IsAsciiDigit(text[index]))
             return NumericParseStatus::Invalid;
     }
     return NumericParseStatus::Complete;
@@ -43,13 +41,13 @@ namespace __hidden_ui_numeric_parse{
 [[nodiscard]] static NumericParseStatus::Enum FloatGrammar(const AStringView text)noexcept{
     usize index = SkipSign(text);
     bool digits = false;
-    while(index < text.size() && IsDigit(text[index])){
+    while(index < text.size() && IsAsciiDigit(text[index])){
         digits = true;
         ++index;
     }
     if(index < text.size() && text[index] == '.'){
         ++index;
-        while(index < text.size() && IsDigit(text[index])){
+        while(index < text.size() && IsAsciiDigit(text[index])){
             digits = true;
             ++index;
         }
@@ -61,7 +59,7 @@ namespace __hidden_ui_numeric_parse{
         if(index < text.size() && (text[index] == '+' || text[index] == '-'))
             ++index;
         const usize exponent = index;
-        while(index < text.size() && IsDigit(text[index]))
+        while(index < text.size() && IsAsciiDigit(text[index]))
             ++index;
         if(exponent == index)
             return index == text.size() ? NumericParseStatus::Incomplete : NumericParseStatus::Invalid;

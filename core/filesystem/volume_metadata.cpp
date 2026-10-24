@@ -261,7 +261,7 @@ bool VolumeFileSystem::flushMetadataLocked(Alloc::ScratchArena& scratchArena, co
     Vector<u8, Core::Alloc::ScratchArena> metadataBuffer{scratchArena};
     metadataBuffer.reserve(static_cast<usize>(m_metadataBytes));
     AppendPOD(metadataBuffer, header);
-    ::BinaryDetail::AppendBytesNoReserveUnchecked(metadataBuffer, sortedRecords.data(), static_cast<usize>(header.indexBytes));
+    AppendBytesNoReserveUnchecked(metadataBuffer, sortedRecords.data(), static_cast<usize>(header.indexBytes));
     metadataBuffer.resize(static_cast<usize>(m_metadataBytes), 0u);
 
     if(writeBytesLocked(0, metadataBuffer.data(), metadataBuffer.size()))

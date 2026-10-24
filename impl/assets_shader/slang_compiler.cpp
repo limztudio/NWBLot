@@ -129,7 +129,7 @@ static constexpr usize s_QuotePairByteCount = 2u;
         if(overlayIncludePath){
             argument += '"';
             auto out = BackInserter(argument);
-            BasicStringDetail::WriteConvertedText<char>(out, overlayIncludePath->native());
+            WriteConvertedText<char>(out, overlayIncludePath->native());
             argument += '"';
         }
         else

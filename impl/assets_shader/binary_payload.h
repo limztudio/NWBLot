@@ -86,12 +86,12 @@ template<typename BytecodeContainer, typename PayloadContainer>
 
     const usize payloadBytes = headerAndEntryPointBytes + bytecode.size();
     outPayload.clear();
-    BinaryDetail::ReserveAppendBytesIfSupported(outPayload, payloadBytes);
+    ReserveAppendBytesIfSupported(outPayload, payloadBytes);
     AppendPOD(outPayload, s_AssetPayloadMagic);
     AppendPOD(outPayload, s_AssetPayloadVersion);
     if(!AppendString(outPayload, entryPoint))
         return AssetPayloadEncodeFailure::OutputSizeOverflow;
-    BinaryDetail::AppendBytesNoReserveUnchecked(outPayload, bytecode.data(), bytecode.size());
+    AppendBytesNoReserveUnchecked(outPayload, bytecode.data(), bytecode.size());
     return AssetPayloadEncodeFailure::None;
 }
 

@@ -12,10 +12,6 @@
 #include <global/error_code.h>
 #include <global/scope_exit.h>
 
-#if !defined(NWB_PLATFORM_WINDOWS)
-#include <fcntl.h>
-#endif
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -90,88 +86,7 @@ public:
 
 public:
     [[nodiscard]] Expected<void, ErrorCode> stage(const u8* data, const usize count)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
-        if(static_cast<u64>(count) > static_cast<u64>(Limit<i64>::s_Max))
-            return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
-        const HANDLE handle = CreateFile(m_path.c_str(), GENERIC_WRITE, 0u, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
-        if(handle == INVALID_HANDLE_VALUE)
-            return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
-        m_owned = true;
-        ErrorCode error;
-        const u8* cursor = static_cast<const u8*>(data);
-        usize remaining = count;
-        while(remaining > 0u){
-            const DWORD requestSize = remaining > static_cast<usize>(Limit<DWORD>::s_Max) ? Limit<DWORD>::s_Max : static_cast<DWORD>(remaining);
-            DWORD transferred = 0u;
-            if(!WriteFile(handle, cursor, requestSize, &transferred, nullptr)){
-                error = GlobalFilesystemDetail::LastSystemError();
-                break;
-            }
-            if(transferred == 0u){
-                error = MakeErrorCode(ErrorCondition::io_error);
-                break;
-            }
-            cursor += transferred;
-            remaining -= transferred;
-        }
-        if(!error && !FlushFileBuffers(handle))
-            error = GlobalFilesystemDetail::LastSystemError();
-        if(!CloseHandle(handle) && !error)
-            error = GlobalFilesystemDetail::LastSystemError();
-#else
-        if(static_cast<u64>(count) > static_cast<u64>(Limit<off_t>::s_Max))
-            return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
-        constexpr u32 s_NewFileMode = 0666u;
-        const int descriptor = open(m_path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, s_NewFileMode);
-        if(descriptor < 0)
-            return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
-        m_owned = true;
-        ErrorCode error;
-        const u8* cursor = static_cast<const u8*>(data);
-        usize remaining = count;
-        while(remaining > 0u){
-            const usize requestSize = remaining > static_cast<usize>(Limit<ssize_t>::s_Max) ? static_cast<usize>(Limit<ssize_t>::s_Max) : remaining;
-            const ssize_t transferred = write(descriptor, cursor, requestSize);
-            if(transferred < 0){
-                if(errno == EINTR)
-                    continue;
-                error = GlobalFilesystemDetail::LastSystemError();
-                break;
-            }
-            if(transferred == 0){
-                error = MakeErrorCode(ErrorCondition::io_error);
-                break;
-            }
-            cursor += static_cast<usize>(transferred);
-            remaining -= static_cast<usize>(transferred);
-        }
-        if(!error && fsync(descriptor) != 0)
-            error = GlobalFilesystemDetail::LastSystemError();
-        if(close(descriptor) != 0 && !error)
-            error = GlobalFilesystemDetail::LastSystemError();
-#endif
-        if(error)
-            return MakeUnexpected(error);
-        return {};
-    }
-
-    [[nodiscard]] bool verify(const u8* expected, const usize count)const{
-        InputFileStream stream(m_path, InputFileStream::binary);
-        if(!stream.is_open())
-            return false;
-        constexpr usize s_VerifyChunkSize = 4096u;
-        u8 buffer[s_VerifyChunkSize];
-        for(usize offset = 0u; offset < count;){
-            const usize remaining = count - offset;
-            const usize chunk = remaining < sizeof(buffer) ? remaining : sizeof(buffer);
-            stream.read(reinterpret_cast<char*>(buffer), static_cast<StreamSize>(chunk));
-            if(stream.gcount() != static_cast<StreamSize>(chunk) || NWB_MEMCMP(buffer, expected + offset, chunk) != 0)
-                return false;
-            offset += chunk;
-        }
-        char extra = 0;
-        stream.read(&extra, 1);
-        return stream.gcount() == 0 && stream.eof();
+        return StageNewBinaryFileDurable(m_path, data, count, m_owned);
     }
 
     void published()noexcept{ m_owned = false; }
@@ -341,7 +256,7 @@ bool WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payl
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: failed to stage metadata temporary: {}"), StringConvert(metadataStaged.error().message()));
         return false;
     }
-    if(!stagedFont.verify(fontBinary->data(), fontBinary->size()) || !stagedMetadata.verify(metadataBytes.get(), metadata.size())){
+    if(!VerifyBinaryFileBytes(paths.fontTemporary, fontBinary->data(), fontBinary->size()) || !VerifyBinaryFileBytes(paths.metadataTemporary, metadataBytes.get(), metadata.size())){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: staging or verification failed; previous pair remains in place"));
         return false;
     }

@@ -106,7 +106,7 @@ template<typename RecordT>
     static_assert(sizeof(RecordT) <= Limit<u16>::s_Max, "Command IR record exceeds its u16 byte-size field");
 
     NWB_ASSERT(outBytes.size() >= sizeof(GpuCommandIrStreamHeader));
-    if(!BinaryDetail::CanAppendBytes(outBytes, sizeof(RecordT)) || outBytes.size() - sizeof(GpuCommandIrStreamHeader) > Limit<u64>::s_Max - sizeof(RecordT))
+    if(!CanAppendBytes(outBytes, sizeof(RecordT)) || outBytes.size() - sizeof(GpuCommandIrStreamHeader) > Limit<u64>::s_Max - sizeof(RecordT))
         return false;
 
     ContainerDetail::ReserveGrowingCapacity(outBytes, outBytes.size() + sizeof(RecordT));
@@ -421,9 +421,9 @@ bool GpuCommandIrCapture::append(const GpuCommandIrBuiltinTaskRecord& record){
     if(
         nextRecordCount == 0u
         || m_nextSerial == Limit<u64>::s_Max
-        || !BinaryDetail::CanStoreValueCount(m_recordEndOffsets, nextRecordCount)
-        || !BinaryDetail::CanStoreValueCount(m_blobEndOffsets, nextRecordCount)
-        || !BinaryDetail::CanStoreValueCount(m_recordSerials, nextRecordCount)
+        || !CanStoreValueCount(m_recordEndOffsets, nextRecordCount)
+        || !CanStoreValueCount(m_blobEndOffsets, nextRecordCount)
+        || !CanStoreValueCount(m_recordSerials, nextRecordCount)
     )
         return false;
 

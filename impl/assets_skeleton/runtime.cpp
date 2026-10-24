@@ -76,14 +76,14 @@ bool Skeleton::loadBinary(const Core::Assets::AssetBytes& binary){
         NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: joint payload byte size overflows"));
         return false;
     }
-    if(!BinaryDetail::CanReadBytes(binary, cursor, *jointByteCount)){
+    if(!CanReadBytes(binary, cursor, *jointByteCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: malformed joints payload"));
         return false;
     }
 
     Skeleton candidate(m_joints.get_allocator().arena(), virtualPath());
     const usize jointCount = static_cast<usize>(header.jointCount);
-    if(!BinaryDetail::CanStoreValueCount(candidate.m_joints, jointCount)){
+    if(!CanStoreValueCount(candidate.m_joints, jointCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: joint count exceeds runtime container limits"));
         return false;
     }

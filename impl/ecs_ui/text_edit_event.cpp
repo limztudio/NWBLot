@@ -37,7 +37,7 @@ UiTextEditStatus::Enum ApplyUiTextEditEvent(Ui::EditModel& model, const Core::Te
         return (model.composition().active ? model.commitComposition(event.text) : model.replaceSelection(event.text)) ? UiTextEditStatus::Applied : UiTextEditStatus::ModelRejected;
     }
     case Core::TextInputEventKind::Preedit: {
-        if(Core::ValidateTextInputUtf8(event.text, Core::s_TextInputMaxEventTextBytes) != Core::TextInputAdmission::Accepted || !Core::IsTextInputUtf8Boundary(event.text, event.anchorByte) || !Core::IsTextInputUtf8Boundary(event.text, event.caretByte))
+        if(Core::ValidateTextInputUtf8(event.text, Core::s_TextInputMaxEventTextBytes) != Core::TextInputAdmission::Accepted || !IsUtf8ScalarBoundary(event.text, event.anchorByte) || !IsUtf8ScalarBoundary(event.text, event.caretByte))
             return UiTextEditStatus::InvalidEvent;
         if(event.text.empty()){
             model.cancelComposition();

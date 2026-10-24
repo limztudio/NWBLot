@@ -85,7 +85,7 @@ void WaylandTextInputService::OnPreedit(void* const data, zwp_text_input_v3* con
     const AStringView value = text ? AStringView(text) : AStringView{};
     const bool hidden = begin == -1 && end == -1;
     const bool valid = ValidateTextInputUtf8(value, s_TextInputMaxEventTextBytes) == TextInputAdmission::Accepted;
-    const bool range = hidden || (begin >= 0 && end >= 0 && IsTextInputUtf8Boundary(value, static_cast<usize>(begin)) && IsTextInputUtf8Boundary(value, static_cast<usize>(end)));
+    const bool range = hidden || (begin >= 0 && end >= 0 && IsUtf8ScalarBoundary(value, static_cast<usize>(begin)) && IsUtf8ScalarBoundary(value, static_cast<usize>(end)));
     service.m_pendingInvalid |= !valid || !range;
     if(valid && range)
         service.m_pendingPreedit.assign(value.data(), value.size());

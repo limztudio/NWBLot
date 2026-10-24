@@ -28,8 +28,7 @@ struct NwbBvhRayIterator<let capacity : uint>{
     bool overflow;
 };
 
-NwbBvhRayIterator<capacity> nwbBvhRayBeginWalk<let capacity : uint>(const uint nodeSlot, const float3 origin, const float3 direction, const float minimum, const float maximum){
-    NwbBvhRayIterator<capacity> iterator;
+void nwbBvhRayBeginWalk<let capacity : uint>(const uint nodeSlot, const float3 origin, const float3 direction, const float minimum, const float maximum, __ref NwbBvhRayIterator<capacity> iterator){
     iterator.origin = origin;
     iterator.direction = direction;
     iterator.inverseDirection = nwbBvhSafeInvDir(direction);
@@ -39,7 +38,6 @@ NwbBvhRayIterator<capacity> nwbBvhRayBeginWalk<let capacity : uint>(const uint n
     iterator.stack[0u] = 0u;
     iterator.stackPointer = 1u;
     iterator.overflow = false;
-    return iterator;
 }
 
 bool nwbBvhRayNextLeaf<let capacity : uint>(__ref NwbBvhRayIterator<capacity> iterator, out uint primitive){

@@ -42,7 +42,7 @@ struct OpaqueIntervalReadiness{
     bool csgReceiverSurfaceDrawResourcesReady = false;
 };
 
-[[nodiscard]] inline OpaqueIntervalReadiness ResolveOpaqueIntervalReadiness(const CsgOpaqueIntervalRecordInputs& payload, RendererMaterialSystem& materialSystem){
+[[nodiscard]] inline OpaqueIntervalReadiness ResolveOpaqueIntervalReadiness(const CsgOpaqueIntervalRecordInputs& payload, RendererMaterialSystem& materialSystem)noexcept{
     OpaqueIntervalReadiness readiness{};
     const bool frameSetupReady = ECSRenderDetail::FrameSetupReady(payload.meshViewSetupReady, payload.sceneShadingSetupReady);
     const MaterialPassDrawItemPartitionsView opaqueDrawItems = frameSetupReady ? payload.opaqueDrawSnapshot.drawItemsView() : MaterialPassDrawItemPartitionsView{};

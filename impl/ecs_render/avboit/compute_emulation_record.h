@@ -162,13 +162,7 @@ template<typename PayloadT, typename DispatchFn>
 }
 
 template<typename PayloadT>
-[[nodiscard]] inline bool RecordAvboitSharedComputeEmulationFromPayload(
-    const PayloadT& payload,
-    Core::CommandList& commandList,
-    const bool isRasterPhase,
-    const AvboitSharedComputeEmulationRecordTrait& trait,
-    Optional<Core::GpuTimingMeasure>& timing
-){
+[[nodiscard]] inline bool RecordAvboitSharedComputeEmulationFromPayload(const PayloadT& payload, Core::CommandList& commandList, const bool isRasterPhase, const AvboitSharedComputeEmulationRecordTrait& trait, Optional<Core::GpuTimingMeasure>& timing){
     const AvboitSharedComputeEmulationRecordInputs inputs{
         payload.graphics,
         payload.materialSystem,

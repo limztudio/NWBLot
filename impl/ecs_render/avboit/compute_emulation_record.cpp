@@ -36,10 +36,7 @@ NWB_IMPL_BEGIN
 
     const Span<const MaterialPassDrawItem> computeDrawItems = csgComputeEmulation ? Span<const MaterialPassDrawItem>(inputs.csgPlan.drawItems) : Span<const MaterialPassDrawItem>(inputs.plan.drawItems);
     // Reject late losses so the packet is discarded and the next frame re-preflights.
-    const bool drawResourcesReady = csgComputeEmulation
-        ? materialSystem.materialPassDrawResourcesReady(inputs.csgPlan.drawItemsView(), inputs.frameBindings)
-        : materialSystem.computeMaterialPassDrawResourcesReady(computeDrawItems, inputs.frameBindings)
-    ;
+    const bool drawResourcesReady = csgComputeEmulation ? materialSystem.materialPassDrawResourcesReady(inputs.csgPlan.drawItemsView(), inputs.frameBindings) : materialSystem.computeMaterialPassDrawResourcesReady(computeDrawItems, inputs.frameBindings);
     if(!drawResourcesReady)
         return false;
     if(csgComputeEmulation){

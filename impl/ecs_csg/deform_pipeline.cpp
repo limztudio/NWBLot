@@ -58,7 +58,7 @@ Expected<CsgDeformStats, CsgDeformFailure> CsgDeformPipeline::RebuildSequentialC
         return MakeUnexpected(CsgDeformFailure{ CsgDeformViabilityReason::InvalidTopology, stats });
     }
 
-    const f32 epsilon = CsgDeformValidator::ShapeEpsilon(options);
+    const SIMDVectorSingle epsilon = CsgDeformValidator::ShapeEpsilon(VectorReplicate(options.distanceEpsilon));
     outVertices.reserve(inputVertexCount + cutCount * s_RebuildReservePerCut);
     outTriangles.reserve(inputTriangleCount * s_KeptReserveMultiplier + cutCount * s_RebuildReservePerCut);
     for(usize vertexIndex = 0u; vertexIndex < inputVertexCount; ++vertexIndex)

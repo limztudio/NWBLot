@@ -65,7 +65,7 @@ SIMDVectorSingle CsgDeformCutterField::CapsuleSignedDistanceVec(SIMDVectorSingle
     return VectorSubtract(Vector3Length(delta), VectorSplatX(parameter0));
 }
 
-Expected<void, CsgDeformViabilityReason::Enum> CsgDeformCutterField::ShapeDistances(const CsgDeformShape& shape, const CsgDeformVertexVector<ScratchArena>& vertices, const f32 epsilon, Vector<f32, ScratchArena>& outDistances){
+Expected<void, CsgDeformViabilityReason::Enum> CsgDeformCutterField::ShapeDistances(const CsgDeformShape& shape, const CsgDeformVertexVector<ScratchArena>& vertices, const SIMDVectorSingle epsilon, Vector<f32, ScratchArena>& outDistances){
     const CsgDeformShapeKind::Enum shapeKind = CsgDeformCutterField::ClassifyDeformShape(shape.shapeType);
     if(shapeKind == CsgDeformShapeKind::Invalid){
         return MakeUnexpected(CsgDeformViabilityReason::InvalidCutter);
@@ -100,12 +100,12 @@ Expected<void, CsgDeformViabilityReason::Enum> CsgDeformCutterField::ShapeDistan
     for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
         const CsgDeformVertex& vertex = vertices[vertexIndex];
         const SIMDVectorSingle shapePosition = Vector4Transform(VectorSetW(LoadFloat(vertex.position), s_AffineW), worldToShape);
-        const SIMDVectorSingle distanceValue = distanceFunc(shapePosition, parameter0);
+        const SIMDVectorSingle distanceValue = VectorSplatX(distanceFunc(shapePosition, parameter0));
         f32 distance = VectorGetX(distanceValue);
         if(!CsgDeformValidator::FiniteFloat(distance)){
             return MakeUnexpected(CsgDeformViabilityReason::NonFiniteInput);
         }
-        if(VectorGetX(VectorAbs(distanceValue)) <= epsilon)
+        if(Vector4LessOrEqual(VectorAbs(distanceValue), epsilon))
             distance = s_KeepDistanceZero;
         outDistances[vertexIndex] = distance;
     }

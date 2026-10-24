@@ -32,7 +32,7 @@ public:
     [[nodiscard]] static Expected<void, CsgDeformViabilityReason::Enum> ClipShell(
         Core::Alloc::ScratchArena& scratchArena,
         const CsgDeformShape& shape,
-        const f32 epsilon,
+        const SIMDVectorSingle epsilon,
         CsgDeformTriangleVector<Core::Alloc::ScratchArena>& scratchKept,
         Vector<f32, Core::Alloc::ScratchArena>& scratchDistances,
         CsgDeformVertexVector<Core::Alloc::ScratchArena>& inOutVertices,

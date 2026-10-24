@@ -49,17 +49,6 @@ inline constexpr f32 s_LightTypePointMax = static_cast<f32>(NWB_SCENE_LIGHT_TYPE
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE f32 ResolveExtentAspectRatio(const u32 width, const u32 height)noexcept{
-    if(width != 0u && height != 0u)
-        return static_cast<f32>(width) / static_cast<f32>(height);
-
-    return NWB::Impl::Scene::CameraDefaults::s_FallbackAspectRatio;
-}
-
-NWB_INLINE f32 ResolveFramebufferAspectRatio(const Core::FramebufferInfoEx& framebufferInfo)noexcept{
-    return ResolveExtentAspectRatio(framebufferInfo.width, framebufferInfo.height);
-}
-
 // Importance heuristic for the bounded shadow-slot pool: radiant power (luminance * intensity) weighted by screen coverage.
 // Directional lights cover the whole frame (and always outrank comparable local lights); local lights are weighted by influence range relative to distance (a squared proxy -- no sqrt).
 // Higher = more worth a scarce shadow slot.

@@ -207,7 +207,10 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     bool shadowVisibilityTransparentTraceProduced = false;
     u32 shadowVisibilityOpaqueFrameIndex = 0u;
     const bool clearAvboitTargets = m_avboitSystem.shouldClearTargets(hasTransparentRenderers);
-    const f32 meshViewAspectRatio = ECSRenderDetail::ResolveFramebufferAspectRatio(deferredTargets.framebuffer->getFramebufferInfo());
+    const Core::FramebufferInfoEx& meshViewFramebufferInfo = deferredTargets.framebuffer->getFramebufferInfo();
+    f32 meshViewAspectRatio = Scene::CameraDefaults::s_FallbackAspectRatio;
+    if(meshViewFramebufferInfo.width != 0u && meshViewFramebufferInfo.height != 0u)
+        meshViewAspectRatio = VectorGetX(VectorDivide(VectorReplicate(static_cast<f32>(meshViewFramebufferInfo.width)), VectorReplicate(static_cast<f32>(meshViewFramebufferInfo.height))));
     Core::GpuGraphSubmissionTransaction::PayloadLifetimeScope graphPayloadLifetime(m_deferredLightingSubmissionTransaction, m_deferredLightingTaskGraph, m_deferredLightingCompiledGraph);
     // Graph build, its retry, and scheduling share one scratch arena.
     Core::Alloc::ScratchArena deferredGraphScratchArena(RendererArenaScope::s_TaskGraphArena);

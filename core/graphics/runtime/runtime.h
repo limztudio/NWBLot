@@ -323,6 +323,7 @@ public:
 
 private:
     bool animateRenderPresentInternal(CpuTimingPhaseBatch* phaseTiming);
+    [[nodiscard]] bool registerCpuTimingScopes();
     [[nodiscard]] bool resizeBackBuffer(u32 width, u32 height, bool vsyncEnabled);
 
 
@@ -338,8 +339,17 @@ private:
     // Optional and non-owning: Frame's perf Session owns this sink and outlives Graphics.
     // It is used only by the main-thread runFrame boundary; packet recording and setup workers intentionally remain outside this sink.
     Perf::TimingSink* m_cpuTiming = nullptr;
-    // Frame scope registered once when the sink is attached, not per frame in runFrame().
+    // Frame and phase scopes registered once when the sink is attached, not per frame in runFrame().
     Perf::TimingScopeId m_frameTimingScope;
+    Perf::TimingScopeId m_animateTimingScope;
+    Perf::TimingScopeId m_beginFrameTimingScope;
+    Perf::TimingScopeId m_framePreambleTimingScope;
+    Perf::TimingScopeId m_prepareResourcesTimingScope;
+    Perf::TimingScopeId m_prepareResourcesFailedTimingScope;
+    Perf::TimingScopeId m_renderPassesTimingScope;
+    Perf::TimingScopeId m_renderTimingScope;
+    Perf::TimingScopeId m_presentTimingScope;
+    Perf::TimingScopeId m_garbageCollectTimingScope;
 
 
 private:

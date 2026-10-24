@@ -82,7 +82,6 @@ inline constexpr usize s_MaxBeginFrameResizeAttempts = 3u;
 struct GraphicsRuntime::CpuTimingPhaseBatch final : NoCopy{
 private:
     struct PhaseTiming{
-        Name scopeName = s_NameNone;
         Perf::TimingScopeId scope;
         f64 seconds = 0.0;
     };
@@ -93,16 +92,18 @@ private:
 
 
 public:
-    void stage(const Name& scopeName, const Timer begin, Perf::TimingSink* timing = nullptr){
-        accumulate(scopeName, DurationInSeconds<f64>(TimerNow(), begin), timing);
+    void stage(const Perf::TimingScopeId scope, const Timer begin)noexcept{
+        accumulate(scope, DurationInSeconds<f64>(TimerNow(), begin));
     }
 
     // Render passes execute on the main thread.
     // One frame sample sums each callback without counting queue waits twice.
-    // Scopes resolve once at stage time so flush() stays a pure record path.
-    void accumulate(const Name& scopeName, const f64 seconds, Perf::TimingSink* timing = nullptr){
+    void accumulate(const Perf::TimingScopeId scope, const f64 seconds)noexcept{
+        if(!scope.valid())
+            return;
+
         for(u32 index = 0u; index < m_phaseCount; ++index){
-            if(m_phases[index].scopeName == scopeName){
+            if(m_phases[index].scope.index == scope.index && m_phases[index].scope.generation == scope.generation){
                 m_phases[index].seconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(m_phases[index].seconds), VectorDoubleReplicate(seconds)));
                 return;
             }
@@ -111,15 +112,7 @@ public:
             return;
 
         PhaseTiming& phase = m_phases[m_phaseCount];
-        phase.scopeName = scopeName;
-        if(timing && scopeName){
-            const auto scope = timing->registerScope(scopeName);
-            if(!scope){
-                NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: CPU phase timing scope registration failed"));
-                return;
-            }
-            phase.scope = *scope;
-        }
+        phase.scope = scope;
         phase.seconds = seconds;
         ++m_phaseCount;
     }
@@ -130,16 +123,8 @@ public:
 
         for(u32 phaseIndex = 0u; phaseIndex < m_phaseCount; ++phaseIndex){
             const PhaseTiming& phase = m_phases[phaseIndex];
-            if(phase.scope.valid()){
+            if(phase.scope.valid())
                 timing.recordSample(phase.scope, phase.seconds, sampleFrameIndex);
-                continue;
-            }
-            const auto scope = timing.registerScope(phase.scopeName);
-            if(!scope){
-                NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: CPU phase timing scope registration failed"));
-                continue;
-            }
-            timing.recordSample(*scope, phase.seconds, sampleFrameIndex);
         }
     }
 };
@@ -191,14 +176,8 @@ GraphicsRuntime::~GraphicsRuntime()noexcept(false){
 }
 
 bool GraphicsRuntime::init(const Common::FrameData& data){
-    if(m_cpuTiming && !m_frameTimingScope.valid()){
-        const auto scope = m_cpuTiming->registerScope(__hidden_graphics_runtime::s_GraphicsFrameCpuTimingScope);
-        if(!scope){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: CPU frame timing scope registration failed"));
-            return false;
-        }
-        m_frameTimingScope = *scope;
-    }
+    if(!registerCpuTimingScopes())
+        return false;
 
     m_lastPresentationReceipt.reset();
     m_acquiredPresentationFrame = {};
@@ -244,14 +223,8 @@ bool GraphicsRuntime::init(const Common::FrameData& data){
 }
 
 bool GraphicsRuntime::createHeadlessDevice(){
-    if(m_cpuTiming && !m_frameTimingScope.valid()){
-        const auto scope = m_cpuTiming->registerScope(__hidden_graphics_runtime::s_GraphicsFrameCpuTimingScope);
-        if(!scope){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: CPU frame timing scope registration failed"));
-            return false;
-        }
-        m_frameTimingScope = *scope;
-    }
+    if(!registerCpuTimingScopes())
+        return false;
 
     m_lastPresentationReceipt.reset();
     m_acquiredPresentationFrame = {};
@@ -544,7 +517,7 @@ Expected<void, CpuTaskAdmissionError::Enum> GraphicsRuntime::renderWithPhaseTimi
                 prepareBegin = TimerNow();
             const bool resourcesPrepared = renderPass->prepareResources(framebuffer);
             if(phaseTiming)
-                phaseTiming->stage(resourcesPrepared ? __hidden_graphics_runtime::s_GraphicsPrepareResourcesCpuTimingScope : __hidden_graphics_runtime::s_GraphicsPrepareResourcesFailedCpuTimingScope, prepareBegin, m_cpuTiming);
+                phaseTiming->stage(resourcesPrepared ? m_prepareResourcesTimingScope : m_prepareResourcesFailedTimingScope, prepareBegin);
             if(!resourcesPrepared){
                 NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: render pass skipped after resource preparation failed"));
                 return;
@@ -555,7 +528,7 @@ Expected<void, CpuTaskAdmissionError::Enum> GraphicsRuntime::renderWithPhaseTimi
                 renderBegin = TimerNow();
             renderPass->render(framebuffer);
             if(phaseTiming)
-                phaseTiming->stage(__hidden_graphics_runtime::s_GraphicsRenderPassesCpuTimingScope, renderBegin, m_cpuTiming);
+                phaseTiming->stage(m_renderPassesTimingScope, renderBegin);
 
             // Later task callbacks observe this request before touching the invalidated device generation.
             if(device.requiresRecreation())
@@ -621,7 +594,7 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
             animateBegin = TimerNow();
         animate(elapsedTime);
         if(phaseTiming)
-            phaseTiming->stage(__hidden_graphics_runtime::s_GraphicsAnimateCpuTimingScope, animateBegin, m_cpuTiming);
+            phaseTiming->stage(m_animateTimingScope, animateBegin);
 
         Timer beginFrameBegin;
         if(phaseTiming)
@@ -635,7 +608,7 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
                 break;
         }
         if(phaseTiming)
-            phaseTiming->stage(__hidden_graphics_runtime::s_GraphicsBeginFrameCpuTimingScope, beginFrameBegin, m_cpuTiming);
+            phaseTiming->stage(m_beginFrameTimingScope, beginFrameBegin);
         if(!beginFrameResult.acquired()){
             if(beginFrameResult.status == BeginFrameStatus::ResizeRequired)
                 NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: swap-chain resize retries were exhausted; requesting device recreation."));
@@ -673,7 +646,7 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
                 framePreambleBegin = TimerNow();
             const bool preamblePrepared = prepareFramePreamble();
             if(phaseTiming)
-                phaseTiming->stage(__hidden_graphics_runtime::s_GraphicsFramePreambleCpuTimingScope, framePreambleBegin, m_cpuTiming);
+                phaseTiming->stage(m_framePreambleTimingScope, framePreambleBegin);
             if(!preamblePrepared){
                 // prepareFramePreamble() returns false only after the device requires recreation.
                 // Do not issue recovery GPU work; required device teardown owns the unresolved acquired image and synchronization.
@@ -694,7 +667,7 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
                 return false;
             }
             if(phaseTiming)
-                phaseTiming->stage(__hidden_graphics_runtime::s_GraphicsRenderCpuTimingScope, renderBegin, m_cpuTiming);
+                phaseTiming->stage(m_renderTimingScope, renderBegin);
 
             if(m_deviceRecreationRequested || device.requiresRecreation()){
                 if(device.requiresRecreation())
@@ -713,7 +686,7 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
             if(presentationAccepted)
                 ++m_successfulPresentationCount;
             if(phaseTiming)
-                phaseTiming->stage(__hidden_graphics_runtime::s_GraphicsPresentCpuTimingScope, presentBegin, m_cpuTiming);
+                phaseTiming->stage(m_presentTimingScope, presentBegin);
             if(!presented){
                 // A consumed presentation already cleared acquisition and makes abandonment a no-op.
                 // Every healthy unconsumed failure is drained and quarantined before recreation.
@@ -739,7 +712,7 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
         garbageCollectionBegin = TimerNow();
     device.runGarbageCollection();
     if(phaseTiming)
-        phaseTiming->stage(__hidden_graphics_runtime::s_GraphicsGarbageCollectCpuTimingScope, garbageCollectionBegin, m_cpuTiming);
+        phaseTiming->stage(m_garbageCollectTimingScope, garbageCollectionBegin);
     if(device.requiresRecreation()){
         requestDeviceRecreation();
         return false;
@@ -748,6 +721,39 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
     m_previousFrameTimestamp = now;
 
     ++m_frameIndex;
+    return true;
+}
+
+bool GraphicsRuntime::registerCpuTimingScopes(){
+    if(!m_cpuTiming)
+        return true;
+
+    struct ScopeRegistration{
+        const Name& name;
+        Perf::TimingScopeId& id;
+    };
+    const ScopeRegistration registrations[] = {
+        { __hidden_graphics_runtime::s_GraphicsFrameCpuTimingScope, m_frameTimingScope },
+        { __hidden_graphics_runtime::s_GraphicsAnimateCpuTimingScope, m_animateTimingScope },
+        { __hidden_graphics_runtime::s_GraphicsBeginFrameCpuTimingScope, m_beginFrameTimingScope },
+        { __hidden_graphics_runtime::s_GraphicsFramePreambleCpuTimingScope, m_framePreambleTimingScope },
+        { __hidden_graphics_runtime::s_GraphicsPrepareResourcesCpuTimingScope, m_prepareResourcesTimingScope },
+        { __hidden_graphics_runtime::s_GraphicsPrepareResourcesFailedCpuTimingScope, m_prepareResourcesFailedTimingScope },
+        { __hidden_graphics_runtime::s_GraphicsRenderPassesCpuTimingScope, m_renderPassesTimingScope },
+        { __hidden_graphics_runtime::s_GraphicsRenderCpuTimingScope, m_renderTimingScope },
+        { __hidden_graphics_runtime::s_GraphicsPresentCpuTimingScope, m_presentTimingScope },
+        { __hidden_graphics_runtime::s_GraphicsGarbageCollectCpuTimingScope, m_garbageCollectTimingScope },
+    };
+    for(const ScopeRegistration& registration : registrations){
+        if(registration.id.valid())
+            continue;
+        const auto scope = m_cpuTiming->registerScope(registration.name);
+        if(!scope){
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: CPU timing scope registration failed"));
+            return false;
+        }
+        registration.id = *scope;
+    }
     return true;
 }
 

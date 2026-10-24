@@ -293,6 +293,7 @@ bool RendererFramePipeline::prepareGpuTimingScopes(){
     // A timestamp range consumes a begin/end query pair. High-frequency raster/mesh scopes may emit many ranges; the sort and interval-clear scopes each emit two ranges.
     static constexpr u32 s_GpuTimingQueriesPerRange = 2u;
     static constexpr u32 s_GpuTimingQueriesPerTwoRangeScope = 2u * s_GpuTimingQueriesPerRange;
+    static constexpr u32 s_GpuTimingRefractionTileScopeQueryBudget = 32u;
     static constexpr u32 s_GpuTimingHighFrequencyScopeQueryBudget = 128u;
 
     struct ScopeReservation{
@@ -332,6 +333,8 @@ bool RendererFramePipeline::prepareGpuTimingScopes(){
         { RendererGpuTimingScope::s_SwBvhSort, s_GpuTimingQueriesPerTwoRangeScope },
         { RendererGpuTimingScope::s_CausticPhotons, s_GpuTimingQueriesPerRange },
         { RendererGpuTimingScope::s_CausticResolve, s_GpuTimingQueriesPerRange },
+        { RendererGpuTimingScope::s_RefractionClassifyTiles, s_GpuTimingRefractionTileScopeQueryBudget },
+        { RendererGpuTimingScope::s_RefractionClearTileArguments, s_GpuTimingRefractionTileScopeQueryBudget },
         { RendererGpuTimingScope::s_RefractionResolve, s_GpuTimingQueriesPerRange },
         { RendererGpuTimingScope::s_OpticalBoundsFinalize, s_GpuTimingQueriesPerRange },
         { RendererGpuTimingScope::s_DeferredLighting, s_GpuTimingQueriesPerRange },

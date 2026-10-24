@@ -58,12 +58,10 @@ bool Builder::beginPopup(const AStringView stableKey, PopupState& state, const P
     if(!nested)
         reset();
     else{
-        if(m_popupFrameCount == s_InputMaxPopups - 1u){
+        if(m_popupFrameCount >= m_popupFrames.size() || !m_popupFrames[m_popupFrameCount]){
             m_context.fail();
             return false;
         }
-        if(m_popupFrameCount == m_popupFrames.size())
-            m_popupFrames.push_back(Core::MakeGlobalUnique<BuilderScopeFrame>(m_arena, m_arena));
         BuilderScopeFrame& child = *m_popupFrames[m_popupFrameCount++];
         child.reset();
         child.m_parent = m_scope.get();

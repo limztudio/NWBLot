@@ -28,7 +28,12 @@ Builder::Builder(Core::Alloc::GlobalArena& arena, Context& context, PaintBuilder
     , m_scope(MakeNotNull(&m_scopeFrame))
     , m_popupFrames(arena)
     , m_textLanguage(s_TextDefaultLanguage, arena)
-{}
+{
+    constexpr usize s_MaxNestedPopupFrames = s_InputMaxPopups - 1u;
+    m_popupFrames.reserve(s_MaxNestedPopupFrames);
+    for(usize frameIndex = 0u; frameIndex < s_MaxNestedPopupFrames; ++frameIndex)
+        m_popupFrames.push_back(Core::MakeGlobalUnique<BuilderScopeFrame>(m_arena, m_arena));
+}
 
 bool Builder::beginPanel(const AStringView stableKey, const Rect& bounds, const LayoutDirection::Enum direction){
     if(declarationBlocked() || m_scope->m_panelActive || m_scope->m_windowActive || !m_skin || (direction != LayoutDirection::Row && direction != LayoutDirection::Column)){

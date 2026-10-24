@@ -61,11 +61,11 @@ struct MeshSkinningLocalBoundsTask{
     struct Payload{
         Core::GraphicsRuntime& graphics;
         Core::GpuTimingSubmissionTicket& timingTicket;
-        Vector<MeshSkinningLocalBoundsDispatch, Core::Alloc::GlobalArena> dispatches;
+        Span<const MeshSkinningLocalBoundsDispatch> dispatches;
 
 
     public:
-        Payload(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Core::GpuTimingSubmissionTicket& timingTicket)noexcept;
+        Payload(Core::GraphicsRuntime& graphics, Core::GpuTimingSubmissionTicket& timingTicket, Span<const MeshSkinningLocalBoundsDispatch> dispatches)noexcept;
     };
 
 

@@ -82,14 +82,14 @@ template<SkinningPlanRecorder Recorder>
 struct TaskGraphSkinningPlansPayload{
     MeshSkinningSystem& system;
     Core::GpuTimingSubmissionTicket& timingTicket;
-    Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena> plans;
+    Span<const MeshSkinningGraphDispatchPlan> plans;
 
 
 public:
-    explicit TaskGraphSkinningPlansPayload(Core::Alloc::GlobalArena& arena, MeshSkinningSystem& systemIn, Core::GpuTimingSubmissionTicket& timingTicketIn)noexcept
+    TaskGraphSkinningPlansPayload(MeshSkinningSystem& systemIn, Core::GpuTimingSubmissionTicket& timingTicketIn, const Span<const MeshSkinningGraphDispatchPlan> plansIn)noexcept
         : system(systemIn)
         , timingTicket(timingTicketIn)
-        , plans(arena)
+        , plans(plansIn)
     {}
 };
 
@@ -133,13 +133,13 @@ struct MeshSkinningSystem::TaskGraphSkinningFinalizerTask{
 
     struct Payload{
         MeshSkinningSystem& system;
-        Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena> plans;
+        Span<const MeshSkinningGraphDispatchPlan> plans;
 
 
     public:
-        Payload(Core::Alloc::GlobalArena& arena, MeshSkinningSystem& system)noexcept
+        Payload(MeshSkinningSystem& system, const Span<const MeshSkinningGraphDispatchPlan> plans)noexcept
             : system(system)
-            , plans(arena)
+            , plans(plans)
         {}
     };
 

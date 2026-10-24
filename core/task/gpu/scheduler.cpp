@@ -24,14 +24,12 @@ namespace __hidden_gpu_task_scheduler{
 
 
 // A frontier packet is only a recovery/finalization tail. The compiler keeps it out of ordinary work, but does not force declaration order, so execution rejects one inside its endpoint.
-[[nodiscard]] Expected<GpuSubmissionPacketRange, GpuSubmissionPacketId> FindNormalGraphPacketRange(const GpuTaskGraph::DeclarationReadView& declarations, const GpuCompiledGraph::ReadView& planAccess, const GpuTaskId& terminalTask)noexcept{
+[[nodiscard]] Expected<GpuSubmissionPacketRange, GpuSubmissionPacketId> FindNormalGraphPacketRange(const GpuCompiledGraph::ReadView& planAccess, const GpuTaskId& terminalTask)noexcept{
     const usize packetCount = planAccess.packetCount();
     if(packetCount == 0u)
         return MakeUnexpected(GpuSubmissionPacketId{});
 
     if(terminalTask.valid()){
-        if(!declarations.validTask(terminalTask) || !planAccess.findTask(terminalTask).valid())
-            return MakeUnexpected(GpuSubmissionPacketId{});
         const GpuSubmissionPacketId terminalPacket = planAccess.packetForTask(terminalTask);
         if(!terminalPacket.valid())
             return MakeUnexpected(GpuSubmissionPacketId{});
@@ -122,9 +120,9 @@ bool GpuTaskScheduler::submitGraph(
     GpuSubmissionPacketId failedPacket;
     {
         GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::TryAcquire(graph);
-        if(!declarationAccess.valid() || !planAccess.validFor(declarationAccess) || !transaction.validFor(planAccess))
+        if(!planAccess.validFor(declarationAccess) || !transaction.validFor(planAccess))
             return false;
-        const auto range = __hidden_gpu_task_scheduler::FindNormalGraphPacketRange(declarationAccess, planAccess, desc.terminalTask);
+        const auto range = __hidden_gpu_task_scheduler::FindNormalGraphPacketRange(planAccess, desc.terminalTask);
         if(!range){
             if(outFailedPacket)
                 *outFailedPacket = range.error();
@@ -227,7 +225,7 @@ bool GpuTaskScheduler::recordAndSubmitAcceptedFrontierTask(
 
 
     const auto rejectTask = [&](const GpuTaskGraph::DeclarationReadView& declarationAccess){
-        if(planAccess.validFor(declarationAccess) && transaction.validFor(planAccess) && declarationAccess.validTask(task) && planAccess.findTask(task).valid()){
+        if(planAccess.validFor(declarationAccess) && transaction.validFor(planAccess) && planAccess.findTask(task).valid()){
             u64 recordingAttemptGeneration = recordedGraph.recordingAttemptGeneration();
             if(recordingAttemptGeneration == 0u){
                 const GpuSubmissionPacketId packet = planAccess.packetForTask(task);
@@ -249,7 +247,7 @@ bool GpuTaskScheduler::recordAndSubmitAcceptedFrontierTask(
             return false;
         packet = planAccess.packetForTask(task);
         exceptionScope.setFailedPacket(packet);
-        if(!planAccess.validFor(declarationAccess) || !transaction.validFor(planAccess) || !declarationAccess.validTask(task) || !planAccess.findTask(task).valid() || !planAccess.taskJoinsAcceptedQueueFrontier(task)){
+        if(!planAccess.validFor(declarationAccess) || !transaction.validFor(planAccess) || !planAccess.taskJoinsAcceptedQueueFrontier(task)){
             rejectTask(declarationAccess);
             return false;
         }
@@ -300,7 +298,7 @@ bool GpuTaskScheduler::recordAndSubmitTask(
 
     {
         GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::TryAcquire(graph);
-        if(!declarationAccess.valid() || !planAccess.validFor(declarationAccess) || !transaction.validFor(planAccess) || !declarationAccess.validTask(task) || !planAccess.findTask(task).valid())
+        if(!planAccess.validFor(declarationAccess) || !transaction.validFor(planAccess) || !planAccess.findTask(task).valid())
             return false;
 
         const GpuSubmissionPacketId packet = planAccess.packetForTask(task);
@@ -331,7 +329,7 @@ bool GpuTaskScheduler::recordAndSubmitTaskWithinSubmissionOperation(
         return false;
 
     GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::TryAcquire(graph);
-    if(!declarationAccess.valid() || !planAccess.validFor(declarationAccess) || !transaction.validFor(planAccess) || !declarationAccess.validTask(task) || !planAccess.findTask(task).valid())
+    if(!planAccess.validFor(declarationAccess) || !transaction.validFor(planAccess) || !planAccess.findTask(task).valid())
         return false;
 
     const u64 recordingAttemptGeneration = recordedGraph.recordingAttemptGeneration();

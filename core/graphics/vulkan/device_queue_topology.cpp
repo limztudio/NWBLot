@@ -68,16 +68,18 @@ Expected<GpuQueueTimelineSnapshot> Device::getQueueTimelineSnapshot(const GpuPhy
 }
 
 GpuCommandArenaStatistics Device::getCommandArenaStatistics(const GpuPhysicalQueueId& queue)const noexcept{
-    if(!getPhysicalQueueInfo(queue) || queue.index >= m_physicalQueues.size())
+    if(!getPhysicalQueueInfo(queue))
         return {};
+    NWB_ASSERT(queue.index < m_physicalQueues.size());
     const auto physicalQueue = m_physicalQueues[queue.index];
 
     return physicalQueue->commandArenaStatistics();
 }
 
 GpuCommandArenaWorkerStatistics Device::getCommandArenaWorkerStatistics(const GpuPhysicalQueueId& queue, const u64 recordingWorkerDomain, const u32 recordingWorkerIndex)const noexcept{
-    if(!getPhysicalQueueInfo(queue) || queue.index >= m_physicalQueues.size())
+    if(!getPhysicalQueueInfo(queue))
         return {};
+    NWB_ASSERT(queue.index < m_physicalQueues.size());
     const auto physicalQueue = m_physicalQueues[queue.index];
 
     return physicalQueue->commandArenaWorkerStatistics(recordingWorkerDomain, recordingWorkerIndex);

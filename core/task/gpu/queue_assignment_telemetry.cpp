@@ -68,7 +68,7 @@ bool GpuTaskGraphQueueAssignmentTelemetryTracker::update(
     const GpuGraphSubmissionTransaction& transaction,
     Alloc::ScratchArena& scratchArena
 ){
-    if(!declarations.valid() || !compiledPlan.validFor(declarations))
+    if(!compiledPlan.validFor(declarations))
         return false;
 
     const bool currentMatchesPlan = validFor(declarations, assignments, compiledPlan);
@@ -111,12 +111,8 @@ bool GpuTaskGraphQueueAssignmentTelemetryTracker::update(
         const GpuPhysicalQueueInfo* const initialQueueInfo = compiledPlan.queueInfo(assignment->initialQueue);
         const GpuPhysicalQueueInfo* const queueInfo = compiledPlan.queueInfo(assignment->queue);
         if(
-            !assignment->initialQueue.valid()
-            || !assignment->queue.valid()
-            || !initialQueueInfo
+            !initialQueueInfo
             || !queueInfo
-            || assignment->initialQueue.deviceGeneration != compiledPlan.deviceGeneration()
-            || assignment->queue.deviceGeneration != compiledPlan.deviceGeneration()
             || assignment->queueClass != queueInfo->queueClass
             || assignment->dedicated != queueInfo->dedicated
         )
@@ -187,7 +183,7 @@ bool GpuTaskGraphQueueAssignmentTelemetryTracker::update(
 }
 
 bool GpuTaskGraphQueueAssignmentTelemetryTracker::validFor(const GpuTaskGraph::DeclarationReadView& declarations, const GpuTaskGraphQueueAssignments& assignments, const GpuCompiledGraph::ReadView& compiledPlan)const noexcept{
-    if(!declarations.valid() || !compiledPlan.validFor(declarations))
+    if(!compiledPlan.validFor(declarations))
         return false;
 
     if(

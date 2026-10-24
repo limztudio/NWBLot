@@ -128,9 +128,7 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
         return false;
 
     if(
-        !planAccess.validFor(declarationAccess)
-        || device().getDeviceGeneration() != planAccess.deviceGeneration()
-        || !planAccess.validPacket(packetID)
+        device().getDeviceGeneration() != planAccess.deviceGeneration()
         || !recordedGraph.validForWithinArtifactOperation(graph, declarationAccess, compiledGraph, planAccess, artifactAccess)
         || !transaction.validFor(planAccess)
         || (timingTicketCount != 0u && !timingTickets)

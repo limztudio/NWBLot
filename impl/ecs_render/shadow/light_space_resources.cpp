@@ -175,10 +175,12 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePla
     auto& heap = device.getDescriptorHeap();
     const u64 sizes[] = { plan.countByteSize, plan.eventByteSize, plan.viewByteSize, plan.drawArgumentByteSize };
     const u64 maximumRange = device.getMaxStorageBufferRange();
-    for(const u64 size : sizes){
-        if(size == 0u || size > maximumRange || size > Limit<u32>::s_Max)
-            return false;
-    }
+    NWB_ASSERT(
+        sizes[0] != 0u && sizes[0] <= maximumRange && sizes[0] <= Limit<u32>::s_Max
+        && sizes[1] != 0u && sizes[1] <= maximumRange && sizes[1] <= Limit<u32>::s_Max
+        && sizes[2] != 0u && sizes[2] <= maximumRange && sizes[2] <= Limit<u32>::s_Max
+        && sizes[3] != 0u && sizes[3] <= maximumRange && sizes[3] <= Limit<u32>::s_Max
+    );
     if(m_lightSpaceShadow.m_csg.snapshot.hasCsg){
         auto& diagnostics = m_lightSpaceShadow.m_diagnostics;
         if(!diagnostics.readback){

@@ -160,7 +160,7 @@ void GpuTaskGraph::completePacketSubmissionAcceptance(const GpuCompiledGraph& co
 
 
 void GpuTaskGraph::abortPacketSubmission(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet, GpuPacketSubmissionLease& lease)const{
-    if(!planAccess.validFor(compiledGraph) || !planAccess.validPacket(packet) || !lease.valid() || lease.m_packet != packet || lease.m_planGeneration != planAccess.planGeneration())
+    if(!planAccess.validFor(compiledGraph) || !lease.valid() || lease.m_packet != packet || lease.m_planGeneration != planAccess.planGeneration())
         return;
     const GpuCompiledPacketView packetView = planAccess.packetWithTasks(packet);
     if(!packetView.valid())

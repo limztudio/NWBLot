@@ -396,7 +396,7 @@ private:
 
 private:
     [[nodiscard]] static Expected<GpuCompiledPacketView> ResolvePacketView(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet)noexcept{
-        if(!planAccess.validFor(compiledGraph) || !planAccess.validPacket(packet))
+        if(!planAccess.validFor(compiledGraph))
             return MakeUnexpected(Failure{});
         const GpuCompiledPacketView packetView = planAccess.packetWithTasks(packet);
         if(!packetView.valid())

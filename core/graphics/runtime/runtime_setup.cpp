@@ -60,14 +60,14 @@ inline constexpr Name s_SetupTextureUploadIdentity("graphics.setup_texture.uploa
 
     const u64 naturalRowPitch = blockCountX * aspectLayout->bytesPerBlock;
     const u64 effectiveRowPitch = desc.rowPitch != 0 ? static_cast<u64>(desc.rowPitch) : naturalRowPitch;
-    if(effectiveRowPitch == 0 || effectiveRowPitch < naturalRowPitch || (effectiveRowPitch % aspectLayout->bytesPerBlock) != 0)
+    if(effectiveRowPitch < naturalRowPitch || (effectiveRowPitch % aspectLayout->bytesPerBlock) != 0)
         return MakeUnexpected(Failure{});
     if(blockCountY > Limit<u64>::s_Max / effectiveRowPitch)
         return MakeUnexpected(Failure{});
 
     const u64 packedSlicePitch = effectiveRowPitch * blockCountY;
     const u64 effectiveDepthPitch = desc.depthPitch != 0 ? static_cast<u64>(desc.depthPitch) : packedSlicePitch;
-    if(effectiveDepthPitch == 0 || effectiveDepthPitch < packedSlicePitch || (effectiveDepthPitch % effectiveRowPitch) != 0)
+    if(effectiveDepthPitch < packedSlicePitch || (effectiveDepthPitch % effectiveRowPitch) != 0)
         return MakeUnexpected(Failure{});
 
     if(depth > 1 && static_cast<u64>(depth - 1) > (Limit<u64>::s_Max - packedSlicePitch) / effectiveDepthPitch)

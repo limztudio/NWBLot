@@ -44,8 +44,6 @@ void RendererRayTracingSystem::confirmRayTraceContextReadSubmission(const Core::
     // Every physical reader protects the next upload, including accepted prefixes of partially rejected graphs.
     auto& readTokens = m_rayTracingState.m_rayTraceContextReadSubmissionTokens;
     NWB_ASSERT(token.hasPhysicalQueueIdentity() && token.physicalQueueIndex < readTokens.size());
-    if(!token.hasPhysicalQueueIdentity() || token.physicalQueueIndex >= readTokens.size())
-        return;
     auto& previous = readTokens[token.physicalQueueIndex];
     if(!previous.valid() || !previous.matchesPhysicalQueue(token.physicalQueueIndex, token.deviceGeneration) || token.value > previous.value)
         previous = token;

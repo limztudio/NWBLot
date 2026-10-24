@@ -139,7 +139,7 @@ bool RendererFramePipeline::scheduleDeferredLightingTaskGraphForExecution(Core::
 
     const Core::GpuTaskGraph::DeclarationReadView declarations(m_deferredLightingTaskGraph);
     const Core::GpuCompiledGraph::ReadView compiledPlan(m_deferredLightingCompiledGraph);
-    if(!declarations.valid() || !compiledPlan.validFor(declarations)){
+    if(!compiledPlan.validFor(declarations)){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred graph scheduling lost its compiler plan"));
         return false;
     }

@@ -207,10 +207,7 @@ bool RendererMaterialSystem::materialPassDrawBuffersReady(const usize instanceCo
     if(materialTypedByteCount == 0u || (materialTypedByteCount & (sizeof(u32) - 1u)) != 0u)
         return false;
 
-    const usize requiredMaterialTypedBytes = Max<usize>(materialTypedByteCount, sizeof(u32));
-    NWB_ASSERT((requiredMaterialTypedBytes & (sizeof(u32) - 1u)) == 0u);
-
-    return (instanceCount == 0u || (m_materialState.m_instanceBuffer && m_materialState.m_instanceBufferCapacity >= instanceCount)) && m_materialState.m_materialTypedBuffer && m_materialState.m_materialTypedBufferCapacity >= requiredMaterialTypedBytes;
+    return (instanceCount == 0u || (m_materialState.m_instanceBuffer && m_materialState.m_instanceBufferCapacity >= instanceCount)) && m_materialState.m_materialTypedBuffer && m_materialState.m_materialTypedBufferCapacity >= materialTypedByteCount;
 }
 
 ECSRenderDetail::MaterialPassBufferSnapshot RendererMaterialSystem::materialPassBufferSnapshot()const noexcept{

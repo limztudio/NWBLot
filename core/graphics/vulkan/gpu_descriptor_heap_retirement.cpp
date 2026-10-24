@@ -202,7 +202,7 @@ bool GpuDescriptorHeap::trackCommandBufferUseLocked(TrackedCommandBuffer& comman
 }
 
 Expected<usize> GpuDescriptorHeap::validateCommandBufferUseSubmissionLocked(TrackedCommandBuffer& commandBuffer, const QueueSubmissionToken& submissionToken){
-    if(!submissionToken.valid() || !submissionToken.hasPhysicalQueueIdentity() || !m_device.matchesPhysicalQueueIdentity(GpuPhysicalQueueId{ .index = submissionToken.physicalQueueIndex, .deviceGeneration = submissionToken.deviceGeneration })){
+    if(!submissionToken.valid() || !m_device.matchesPhysicalQueueIdentity(GpuPhysicalQueueId{ .index = submissionToken.physicalQueueIndex, .deviceGeneration = submissionToken.deviceGeneration })){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap received an invalid physical command-buffer submission token."));
         return MakeUnexpected(Failure{});
     }

@@ -222,7 +222,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
             if(effectiveFrontier == Limit<u32>::s_Max)
                 return false;
             const auto raiseFromSourcePacket = [&](const GpuSubmissionPacketId sourcePacket)noexcept{
-                if(!planAccess.validPacket(sourcePacket) || sourcePacket == packet || sourcePacket.index >= packet.index)
+                if(!planAccess.validPacket(sourcePacket) || sourcePacket.index >= packet.index)
                     return false;
                 if(sourcePacket.index < rangeBegin)
                     return true;
@@ -316,7 +316,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
             const GpuPacketStateSeed* const stateSeeds = compiledTaskView.prologueStateSeeds;
             for(u32 stateSeedIndex = 0u; stateSeedIndex < compiledTask.prologueStateSeedCount; ++stateSeedIndex){
                 const GpuSubmissionPacketId sourcePacket = stateSeeds[stateSeedIndex].sourcePacket;
-                if(!planAccess.validPacket(sourcePacket) || sourcePacket == packet || sourcePacket.index >= packet.index || !outRecordedGraph.findWithinArtifactOperation(sourcePacket, artifactOperation))
+                if(!planAccess.validPacket(sourcePacket) || sourcePacket.index >= packet.index || !outRecordedGraph.findWithinArtifactOperation(sourcePacket, artifactOperation))
                     return false;
             }
         }

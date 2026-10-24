@@ -366,7 +366,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
 
     const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
     const Core::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
-    if(!declarations.valid() || !compiledPlan.validFor(declarations)){
+    if(!compiledPlan.validFor(declarations)){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to retain graph-owned skinning compiler inputs"));
         return false;
     }

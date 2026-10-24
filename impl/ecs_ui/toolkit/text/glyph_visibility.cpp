@@ -114,7 +114,7 @@ TextGlyphIntersection::Enum TextGlyphVisibility::Candidate(const PlacedGlyph& gl
     if(glyph.coverage.known && (ink.width <= 0.0f || ink.height <= 0.0f))
         return TextGlyphIntersection::Invisible;
     if(!glyph.coverage.known){
-        if(!glyph.face || !glyph.face->valid() || glyph.face->unitsPerEm() == 0u)
+        if(!glyph.face || !glyph.face->valid())
             return TextGlyphIntersection::Invalid;
         if(ink.width <= 0.0f || ink.height <= 0.0f || !glyph.face->coverageInkReliable())
             return TextGlyphIntersection::Visible;

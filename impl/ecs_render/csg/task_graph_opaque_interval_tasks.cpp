@@ -154,18 +154,18 @@ bool CsgIntervalSampleGraphTask::Record(const Payload& payload, Core::CommandLis
 
     const bool hasDeferredDrawItems = !opaqueDrawItems.empty();
     const bool deferredResourcesReady = hasDeferredDrawItems && payload.materialDrawBuffersUploaded && payload.frameBindings.frameReady(payload.opaqueDrawSnapshot.instanceCount, payload.opaqueDrawSnapshot.materialTypedByteCount);
-    const bool csgResourcesReady = deferredResourcesReady && (!csgFrameData.hasWork() || (payload.csgFrameBuffersUploaded && payload.csgResources.frameReady(csgFrameData) && payload.frameBindings.bindingValid()));
+    const bool csgResourcesReady = deferredResourcesReady && (!csgFrameData.hasWork() || (payload.csgFrameBuffersUploaded && payload.csgResources.frameReady(csgFrameData)));
     const bool csgDrawResourcesReady = csgResourcesReady && (opaqueDrawItems.csg.empty() || materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csg, payload.frameBindings));
     const bool csgReceiverSurfaceDrawResourcesReady = csgResourcesReady && (opaqueDrawItems.csgReceiverSurface.empty() || materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface, payload.frameBindings));
     // Retire the reservation on later disagreement; never leave it stale.
-    if(payload.csgComputeEmulationOutputStatesGraphOwned && payload.opaqueCsgComputeEmulationTiming->has_value() && (!csgResourcesReady || !csgDrawResourcesReady)){
+    if(payload.csgComputeEmulationOutputStatesGraphOwned && payload.opaqueCsgComputeEmulationTiming->has_value() && !csgDrawResourcesReady){
         payload.opaqueCsgComputeEmulationTiming->value().discardTiming();
         payload.opaqueCsgComputeEmulationTiming->reset();
         commandList.endRenderPass();
         return true;
     }
     const bool csgComputeEmulationReady = !payload.csgComputeEmulationOutputStatesGraphOwned || payload.opaqueCsgComputeEmulationTiming->has_value();
-    if(csgResourcesReady && csgDrawResourcesReady && csgComputeEmulationReady){
+    if(csgDrawResourcesReady && csgComputeEmulationReady){
         Core::ViewportState deferredViewportState;
         deferredViewportState.addViewportAndScissorRect(deferredTargets.framebuffer->getFramebufferInfo().getViewport());
         const MaterialPassDrawContext csgDrawContext{

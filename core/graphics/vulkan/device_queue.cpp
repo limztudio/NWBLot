@@ -346,9 +346,10 @@ Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
 }
 
 bool Device::validateSubmissionWaitToken(const QueueSubmissionToken& token)const noexcept{
-    if(!token.valid() || !token.hasPhysicalQueueIdentity() || !matchesPhysicalQueueIdentity(token.queue, token.physicalQueueIndex, token.deviceGeneration) || token.physicalQueueIndex >= m_physicalQueues.size())
+    if(!token.valid() || !matchesPhysicalQueueIdentity(token.queue, token.physicalQueueIndex, token.deviceGeneration))
         return false;
 
+    NWB_ASSERT(token.physicalQueueIndex < m_physicalQueues.size());
     const auto producerQueue = m_physicalQueues[token.physicalQueueIndex];
     NWB_ASSERT(producerQueue->m_queueID == token.queue && token.matchesPhysicalQueue(producerQueue->m_physicalQueue.index, producerQueue->m_physicalQueue.deviceGeneration));
 
@@ -370,9 +371,10 @@ u32 Device::getQueueFamilyIndex(const GpuPhysicalQueueId& queue)const noexcept{
 }
 
 bool Device::waitForSubmissionTokenInternal(const QueueSubmissionToken& token, const DeviceLossDiagnosticPolicy::Enum deviceLossDiagnosticPolicy){
-    if(!token.valid() || !token.hasPhysicalQueueIdentity() || !matchesPhysicalQueueIdentity(token.queue, token.physicalQueueIndex, token.deviceGeneration) || token.physicalQueueIndex >= m_physicalQueues.size())
+    if(!token.valid() || !matchesPhysicalQueueIdentity(token.queue, token.physicalQueueIndex, token.deviceGeneration))
         return false;
 
+    NWB_ASSERT(token.physicalQueueIndex < m_physicalQueues.size());
     const auto producerQueue = m_physicalQueues[token.physicalQueueIndex];
     NWB_ASSERT(producerQueue->m_queueID == token.queue);
 

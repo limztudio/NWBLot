@@ -215,7 +215,7 @@ bool GpuGraphSubmissionTransaction::discardUnaccepted(GpuTaskGraph& graph, const
     if(!submissionOperation.valid())
         return false;
     GpuCompiledGraph::ReadView planAccess(compiledGraph);
-    if(!planAccess.valid() || !validFor(planAccess) || recordingAttemptGeneration == 0u)
+    if(!validFor(planAccess) || recordingAttemptGeneration == 0u)
         return false;
     GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::TryAcquire(graph);
     if(!planAccess.validFor(declarationAccess))

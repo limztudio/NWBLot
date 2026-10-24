@@ -97,7 +97,7 @@ ReflectionFeedbackPlan ReflectionFeedbackState::plan(const ReflectionSceneConten
 bool ReflectionFeedbackState::reserve(const ReflectionFeedbackPlan& plan)noexcept{
     NothrowScopedLock lock(m_mutex);
 
-    if(m_quarantined || m_deviceGeneration == 0u || m_reservedSequence != 0u || plan.generation != m_generation || plan.sequence == 0u || plan.sequence <= m_acceptedSequence || plan.acceptedSequence != m_acceptedSequence)
+    if(m_quarantined || m_deviceGeneration == 0u || m_reservedSequence != 0u || plan.generation != m_generation || plan.sequence <= m_acceptedSequence || plan.acceptedSequence != m_acceptedSequence)
         return false;
     m_reservedSequence = plan.sequence;
     return true;

@@ -200,8 +200,7 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(const Span<const ECSRend
         return;
     const LightSpacePlan& plan = *planResult;
     const auto drawCount = LightSpaceShadowDrawCount(Span<const LightSpaceShadowCaster>(state.m_casters.data(), state.m_casters.size()));
-    if(!drawCount)
-        return;
+    NWB_ASSERT(drawCount);
     const LightSpaceShadowStorageCapacity capacity{
         snapshot.counts->getCreationDescription().byteSize, snapshot.events->getCreationDescription().byteSize,
         snapshot.views->getCreationDescription().byteSize, snapshot.drawArguments->getCreationDescription().byteSize,
@@ -268,8 +267,6 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(const Span<const ECSRend
             hasOrdinaryTransparent = hasOrdinaryTransparent || (caster.transparent && !caster.csg);
         if(!hasOrdinaryTransparent)
             snapshot.push.csgFlags |= NWB_CSG_SHADOW_FLAG_NO_ORDINARY_TRANSPARENT;
-    }
-    if(state.m_csg.snapshot.hasCsg){
         snapshot.push.csgContextSlot = snapshot.csgContextDescriptor.slot();
         snapshot.push.csgOpaqueDepthSlot = snapshot.csgOpaqueDepthDescriptor.slot();
     }

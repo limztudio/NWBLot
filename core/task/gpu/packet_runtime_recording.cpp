@@ -159,9 +159,7 @@ bool GpuNativePacketRecorder::recordPacket(
     const u64 recordingAttemptGeneration = outRecordedGraph.recordingAttemptGenerationWithinArtifactOperation(artifactAccess);
     if(
         !graph.matchesRecordingAttempt(compiledGraph, recordingAttemptGeneration)
-        || !planAccess.validFor(declarationAccess)
         || m_device.getDeviceGeneration() != planAccess.deviceGeneration()
-        || !planAccess.validPacket(packetID)
         || !outRecordedGraph.validForWithinArtifactOperation(graph, declarationAccess, compiledGraph, planAccess, artifactAccess)
     )
         return false;
@@ -181,8 +179,7 @@ bool GpuNativePacketRecorder::recordPacket(
     const GpuPhysicalQueueInfo* const queue = planAccess.queueInfo(packet.queue);
     GpuTimingSubmissionTicket* const packetTimingTicket = outRecordedGraph.packetTimingTicket(packetID, artifactAccess);
     if(
-        !tasks
-        || packet.taskCount == 0u
+        packet.taskCount == 0u
         || !queue
         || queue->queueClass >= CommandQueue::kCount
         || !m_device.matchesPhysicalQueueIdentity(packet.queue)
@@ -289,7 +286,8 @@ bool GpuNativePacketRecorder::recordPacket(
         const GpuTaskGraphTaskView taskView = declarationAccess.taskAt(task.index);
         const GpuCompiledTaskView compiledTaskView = planAccess.findTask(task);
         const GpuCompiledTask* const compiledTask = compiledTaskView.plan;
-        if(!compiledTaskView.valid() || compiledTask->packet != packetID || compiledTask->timingPolicy != taskView.timing.policy){
+        NWB_ASSERT(compiledTaskView.valid() && compiledTask->packet == packetID);
+        if(compiledTask->timingPolicy != taskView.timing.policy){
             recorded = false;
             break;
         }

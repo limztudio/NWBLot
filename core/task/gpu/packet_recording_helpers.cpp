@@ -117,7 +117,7 @@ bool HasExplicitKnownInitialState(const GpuTaskGraph::DeclarationReadView& decla
         return false;
 
     const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(barrier.resource.index);
-    if(resource.id != barrier.resource || !resource.hasBackendResource)
+    if(!resource.hasBackendResource)
         return false;
 
     switch(resource.type){

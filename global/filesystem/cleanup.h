@@ -40,7 +40,7 @@ template<typename CharT>
     if(begin < rootNameEnd)
         begin = rootNameEnd;
     const BasicStringView<CharT> leaf(path.data() + begin, end - begin);
-    return !leaf.empty() && !GlobalFilesystemPathDetail::IsDot(leaf) && !GlobalFilesystemPathDetail::IsDotDot(leaf);
+    return !leaf.empty() && !IsDot(leaf) && !IsDotDot(leaf);
 }
 
 #if defined(NWB_PLATFORM_WINDOWS)
@@ -123,7 +123,7 @@ inline constexpr usize s_ChildNameOverhead = 2u;
             if(findHandle != INVALID_HANDLE_VALUE){
                 for(;;){
                     const WStringView name(data.cFileName);
-                    if(!GlobalFilesystemPathDetail::IsDot(name) && !GlobalFilesystemPathDetail::IsDotDot(name)){
+                    if(!IsDot(name) && !IsDotDot(name)){
                         if(name.size() > s_PathCapacity - end - s_ChildNameOverhead)
                             iterationError = WindowsError(ERROR_FILENAME_EXCED_RANGE);
                         else{
@@ -144,7 +144,7 @@ inline constexpr usize s_ChildNameOverhead = 2u;
                     break;
                 }
                 if(!FindClose(findHandle) && !iterationError)
-                    iterationError = GlobalFilesystemDetail::LastSystemError();
+                    iterationError = LastSystemError();
             }
             else{
                 const DWORD error = GetLastError();
@@ -187,7 +187,7 @@ inline constexpr usize s_ChildNameOverhead = 2u;
     if(!S_ISDIR(status.st_mode)){
         if(unlinkat(parent, name.get(), 0) == 0 || errno == ENOENT)
             return {};
-        return GlobalFilesystemDetail::LastSystemError();
+        return LastSystemError();
     }
     const int descriptor = openat(parent, name.get(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
     if(descriptor < 0){
@@ -196,9 +196,9 @@ inline constexpr usize s_ChildNameOverhead = 2u;
     }
     DIR* const directory = fdopendir(descriptor);
     if(directory == nullptr){
-        ErrorCode error = GlobalFilesystemDetail::LastSystemError();
+        ErrorCode error = LastSystemError();
         if(close(descriptor) != 0 && !error)
-            error = GlobalFilesystemDetail::LastSystemError();
+            error = LastSystemError();
         return error;
     }
     ErrorCode error;
@@ -207,23 +207,23 @@ inline constexpr usize s_ChildNameOverhead = 2u;
         const dirent* const entry = readdir(directory);
         if(entry == nullptr){
             if(errno != 0)
-                error = GlobalFilesystemDetail::LastSystemError();
+                error = LastSystemError();
             break;
         }
         const AStringView child(entry->d_name);
-        if(GlobalFilesystemPathDetail::IsDot(child) || GlobalFilesystemPathDetail::IsDotDot(child))
+        if(IsDot(child) || IsDotDot(child))
             continue;
         error = RemoveAt(descriptor, MakeNotNull<const char*>(entry->d_name));
         if(error)
             break;
     }
     if(closedir(directory) != 0 && !error)
-        error = GlobalFilesystemDetail::LastSystemError();
+        error = LastSystemError();
     if(error)
         return error;
     if(unlinkat(parent, name.get(), AT_REMOVEDIR) == 0 || errno == ENOENT)
         return {};
-    return GlobalFilesystemDetail::LastSystemError();
+    return LastSystemError();
 }
 #endif
 
@@ -254,7 +254,7 @@ template<typename ArenaT>
     wchar buffer[GlobalFilesystemCleanupDetail::s_PathCapacity];
     const DWORD absoluteSize = GetFullPathNameW(path.c_str(), static_cast<DWORD>(GlobalFilesystemCleanupDetail::s_PathCapacity), buffer, nullptr);
     if(absoluteSize == 0u)
-        return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
+        return MakeUnexpected(LastSystemError());
     if(absoluteSize >= GlobalFilesystemCleanupDetail::s_PathCapacity)
         return MakeUnexpected(GlobalFilesystemCleanupDetail::WindowsError(ERROR_FILENAME_EXCED_RANGE));
     usize end = GlobalFilesystemCleanupDetail::NamedPathEnd(WStringView(buffer, absoluteSize));
@@ -282,7 +282,7 @@ template<typename ArenaT>
         return MakeUnexpected(ErrorCode(EINVAL, std::generic_category()));
     int parent = open(text[0] == '/' ? "/" : ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
     if(parent < 0)
-        return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
+        return MakeUnexpected(LastSystemError());
     ErrorCode error;
     usize begin = text[0] == '/' ? 1u : 0u;
     while(begin < namedEnd){
@@ -311,9 +311,9 @@ template<typename ArenaT>
             break;
         }
         if(close(parent) != 0){
-            error = GlobalFilesystemDetail::LastSystemError();
+            error = LastSystemError();
             if(close(next) != 0 && !error)
-                error = GlobalFilesystemDetail::LastSystemError();
+                error = LastSystemError();
             parent = -1;
             break;
         }
@@ -321,7 +321,7 @@ template<typename ArenaT>
         begin = end + 1u;
     }
     if(parent >= 0 && close(parent) != 0 && !error)
-        error = GlobalFilesystemDetail::LastSystemError();
+        error = LastSystemError();
     if(error)
         return MakeUnexpected(error);
     return {};

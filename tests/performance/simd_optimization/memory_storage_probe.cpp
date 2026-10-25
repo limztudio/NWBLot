@@ -530,7 +530,7 @@ int main(int argc, char** argv){
     }
     usize samples = 7u;
     if(argc >= 3){
-        const auto parsedSamples = ParseU64FromChars(AStringView(argv[2]));
+        const auto parsedSamples = ParseU64(AStringView(argv[2]));
         if(!parsedSamples || *parsedSamples == 0u || *parsedSamples > 100u)
             return 2;
         samples = static_cast<usize>(*parsedSamples);

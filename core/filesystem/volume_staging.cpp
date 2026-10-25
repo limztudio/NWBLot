@@ -155,7 +155,7 @@ StagedVolumePaths BuildStagedVolumePaths(const Path& outputDirectory, const AStr
     AString<Core::Alloc::ScratchArena> stageToken{scratchArena};
     stageToken.reserve(s_StagedVolumeTokenPrefix.size() + s_StagedVolumeHashDigits);
     stageToken += s_StagedVolumeTokenPrefix;
-    AppendHexU64<char, Core::Alloc::ScratchArena>(ComputeFnv64Text(AStringView(stageKey)), stageToken);
+    AppendHexU64(ComputeFnv64Text(AStringView(stageKey)), stageToken);
     return BuildStagedDirectoryPaths(scratchArena, outputDirectory, stageToken);
 }
 

@@ -37,7 +37,7 @@ template<typename CharT>
 concept PathChar = SameAs<CharT, char> || SameAs<CharT, wchar> || SameAs<CharT, char8_t>;
 
 template<typename SourceT>
-concept PathSourceLike = BasicStringDetail::CanMakeCharView<SourceT> || BasicStringDetail::CanMakeWCharView<SourceT> || requires(const SourceT& source){ BasicStringView<char8_t>(source); };
+concept PathSourceLike = CanMakeCharView<SourceT> || CanMakeWCharView<SourceT> || requires(const SourceT& source){ BasicStringView<char8_t>(source); };
 
 template<typename CharT>
 [[nodiscard]] inline bool IsSeparator(const CharT ch)noexcept(IsArithmetic_V<CharT>){
@@ -84,16 +84,6 @@ template<typename CharT>
     return 0u;
 }
 
-template<typename CharT>
-[[nodiscard]] inline bool IsDot(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
-    return text.size() == 1u && text[0] == static_cast<CharT>('.');
-}
-
-template<typename CharT>
-[[nodiscard]] inline bool IsDotDot(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
-    return text.size() == s_DotDotLength && text[0] == static_cast<CharT>('.') && text[1] == static_cast<CharT>('.');
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -104,8 +94,15 @@ template<typename CharT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using GlobalFilesystemPathDetail::IsDot;
-using GlobalFilesystemPathDetail::IsDotDot;
+template<typename CharT>
+[[nodiscard]] inline bool IsDot(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
+    return text.size() == 1u && text[0] == static_cast<CharT>('.');
+}
+
+template<typename CharT>
+[[nodiscard]] inline bool IsDotDot(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
+    return text.size() == GlobalFilesystemPathDetail::s_DotDotLength && text[0] == static_cast<CharT>('.') && text[1] == static_cast<CharT>('.');
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -521,9 +518,9 @@ private:
 
     template<typename SourceT>
     void assignSource(const SourceT& source){
-        if constexpr(BasicStringDetail::CanMakeCharView<SourceT>)
+        if constexpr(CanMakeCharView<SourceT>)
             assignSource(AStringView(source));
-        else if constexpr(BasicStringDetail::CanMakeWCharView<SourceT>)
+        else if constexpr(CanMakeWCharView<SourceT>)
             assignSource(WStringView(source));
         else
             assignSource(BasicStringView<char8_t>(source));
@@ -604,13 +601,13 @@ private:
             if(rootDirectoryLength == 0u && rootNameLength != 0u && text == native_string_view(m_text.data(), rootNameLength))
                 continue;
 #endif
-            if(text.empty() || GlobalFilesystemPathDetail::IsDot(text))
+            if(text.empty() || IsDot(text))
                 continue;
             if(text.size() == 1u && GlobalFilesystemPathDetail::IsSeparator(text[0]))
                 continue;
-            if(GlobalFilesystemPathDetail::IsDotDot(text)){
+            if(IsDotDot(text)){
                 const native_string_view fileName = output.trimmedFilename();
-                if(!fileName.empty() && !GlobalFilesystemPathDetail::IsDotDot(fileName)){
+                if(!fileName.empty() && !IsDotDot(fileName)){
                     const usize outputRootLength = output.rootDirectoryLengthInText();
                     usize separator = output.trimTrailingSeparators(output.m_text.size());
                     while(separator > outputRootLength && !GlobalFilesystemPathDetail::IsSeparator(output.m_text[separator - 1u]))

@@ -60,41 +60,15 @@ template<typename ScopeId, typename ScopeVector, typename ScopeMap, typename Cre
 // Generation-stamped scope lookup shared by memory and timing recorders.
 
 
-namespace NamedRegistryDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename ScopeEntry>
-[[nodiscard]] constexpr auto ScopeRecordPointer(const ScopeEntry& entry)noexcept(noexcept(entry.get())) -> RemoveCVRef_T<decltype(entry.get())>{
-    return entry.get();
-}
-
-template<typename Record>
-[[nodiscard]] constexpr Record* ScopeRecordPointer(Record* const entry)noexcept{
-    return entry;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 template<typename ScopeId, typename ScopeVector>
 [[nodiscard]] auto FindNamedScope(const ScopeVector& scopes, const ScopeId scope)noexcept(
     noexcept(DeclVal<ScopeId&>().~ScopeId()) && noexcept(static_cast<bool>(!scope.valid() || scope.index >= scopes.size())) &&
-    noexcept(NamedRegistryDetail::ScopeRecordPointer(scopes[scope.index])) && noexcept(static_cast<bool>(!NamedRegistryDetail::ScopeRecordPointer(scopes[scope.index]) || NamedRegistryDetail::ScopeRecordPointer(scopes[scope.index])->generation != scope.generation))
-) -> RemoveCVRef_T<decltype(NamedRegistryDetail::ScopeRecordPointer(scopes[scope.index]))>{
+    noexcept(scopes[scope.index].get()) && noexcept(static_cast<bool>(!scopes[scope.index].get() || scopes[scope.index].get()->generation != scope.generation))
+) -> RemoveCVRef_T<decltype(scopes[scope.index].get())>{
     if(!scope.valid() || scope.index >= scopes.size())
         return nullptr;
 
-    auto* record = NamedRegistryDetail::ScopeRecordPointer(scopes[scope.index]);
+    auto* record = scopes[scope.index].get();
     if(!record || record->generation != scope.generation)
         return nullptr;
 
@@ -103,13 +77,13 @@ template<typename ScopeId, typename ScopeVector>
 
 template<typename ScopeId, typename ScopeVector>
 [[nodiscard]] ScopeId ScopeAt(const ScopeVector& scopes, const usize index)noexcept(
-    noexcept(ScopeId{}) && noexcept(ScopeId(DeclVal<ScopeId&&>())) && noexcept(static_cast<bool>(index >= scopes.size())) && noexcept(NamedRegistryDetail::ScopeRecordPointer(scopes[index])) &&
-    noexcept(DeclVal<ScopeId&>().index = static_cast<u32>(index)) && noexcept(DeclVal<ScopeId&>().generation = NamedRegistryDetail::ScopeRecordPointer(scopes[index])->generation)
+    noexcept(ScopeId{}) && noexcept(ScopeId(DeclVal<ScopeId&&>())) && noexcept(static_cast<bool>(index >= scopes.size())) && noexcept(scopes[index].get()) &&
+    noexcept(DeclVal<ScopeId&>().index = static_cast<u32>(index)) && noexcept(DeclVal<ScopeId&>().generation = scopes[index].get()->generation)
 ){
     if(index >= scopes.size())
         return {};
 
-    auto* record = NamedRegistryDetail::ScopeRecordPointer(scopes[index]);
+    auto* record = scopes[index].get();
     if(!record)
         return {};
 
@@ -121,13 +95,13 @@ template<typename ScopeId, typename ScopeVector>
 
 template<typename ScopeVector>
 [[nodiscard]] Name ScopeNameAt(const ScopeVector& scopes, const usize index)noexcept(
-    noexcept(static_cast<bool>(index >= scopes.size())) && noexcept(NamedRegistryDetail::ScopeRecordPointer(scopes[index])) &&
-    noexcept(static_cast<bool>(!NamedRegistryDetail::ScopeRecordPointer(scopes[index]))) && noexcept(DeclVal<void(*)(Name)noexcept>()(NamedRegistryDetail::ScopeRecordPointer(scopes[index])->name))
+    noexcept(static_cast<bool>(index >= scopes.size())) && noexcept(scopes[index].get()) &&
+    noexcept(static_cast<bool>(!scopes[index].get())) && noexcept(DeclVal<void(*)(Name)noexcept>()(scopes[index].get()->name))
 ){
     if(index >= scopes.size())
         return s_NameNone;
 
-    auto* record = NamedRegistryDetail::ScopeRecordPointer(scopes[index]);
+    auto* record = scopes[index].get();
     if(!record)
         return s_NameNone;
 

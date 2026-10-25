@@ -58,12 +58,12 @@ struct formatter<GlobalFilesystemUtilityDetail::PathToStringArg<RequestedCharT, 
     auto format(const GlobalFilesystemUtilityDetail::PathToStringArg<RequestedCharT, PathT>& arg, FormatContext& ctx)const noexcept([]()consteval noexcept{
         using Output = Decay_T<decltype(DeclVal<FormatContext&>().out())>;
         return noexcept(DeclVal<void(*)(Output)noexcept>()(DeclVal<FormatContext&>().out()))
-            && noexcept(BasicStringDetail::WriteConvertedText<FormatCharT>(DeclVal<Output&>(), DeclVal<const PathT&>().native()))
+            && noexcept(WriteConvertedText<FormatCharT>(DeclVal<Output&>(), DeclVal<const PathT&>().native()))
             && IsNothrowMoveConstructible_V<Output> && IsNothrowDestructible_V<Output>
         ;
     }()){
         auto out = ctx.out();
-        BasicStringDetail::WriteConvertedText<FormatCharT>(out, arg.path.native());
+        WriteConvertedText<FormatCharT>(out, arg.path.native());
         return out;
     }
 };
@@ -87,7 +87,7 @@ template<typename CharT = char, typename ArenaT, typename PathT>
     else{
         BasicString<CharT, ArenaT> output{arena};
         auto out = std::back_inserter(output);
-        BasicStringDetail::WriteConvertedText<CharT>(out, path.native());
+        WriteConvertedText<CharT>(out, path.native());
         return output;
     }
 }
@@ -108,7 +108,7 @@ template<typename StringT, typename PathT>
 
     StringT output;
     auto out = std::back_inserter(output);
-    BasicStringDetail::WriteConvertedText<CharT>(out, path.native());
+    WriteConvertedText<CharT>(out, path.native());
     for(CharT& ch : output){
         if(ch == static_cast<CharT>('\\'))
             ch = static_cast<CharT>('/');

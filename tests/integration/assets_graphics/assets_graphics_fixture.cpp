@@ -507,7 +507,7 @@ Expected<AssetsGraphicsFixture::MaterialBinaryTypedLayoutOffsets> AssetsGraphics
     if(!magic || *magic != NWB::Impl::MaterialBinaryPayload::s_MaterialMagic)
         return MakeUnexpected(Failure{});
 
-    const auto shaderVariantView = ReadLengthPrefixedString(binary, cursor);
+    const auto shaderVariantView = ReadString(binary, cursor);
     if(!shaderVariantView || shaderVariantView->empty())
         return MakeUnexpected(Failure{});
 

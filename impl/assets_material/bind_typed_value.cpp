@@ -101,7 +101,7 @@ Expected<f32> MaterialTypedValueParser::ParseMaterialParameterF32Token(const ASt
 }
 
 Expected<u32> MaterialTypedValueParser::ParseMaterialParameterSignedToken(const AStringView token, const i64 minValue, const i64 maxValue, const u32 storageMask)noexcept{
-    const auto parsed = ParseI64FromChars(token);
+    const auto parsed = ParseI64(token);
     if(!parsed)
         return MakeUnexpected(Failure{});
     if(*parsed < minValue || *parsed > maxValue)
@@ -111,7 +111,7 @@ Expected<u32> MaterialTypedValueParser::ParseMaterialParameterSignedToken(const 
 }
 
 Expected<u32> MaterialTypedValueParser::ParseMaterialParameterUnsignedToken(const AStringView token, const u64 maxValue)noexcept{
-    const auto parsed = ParseU64FromChars(token);
+    const auto parsed = ParseU64(token);
     if(!parsed || *parsed > maxValue)
         return MakeUnexpected(Failure{});
 

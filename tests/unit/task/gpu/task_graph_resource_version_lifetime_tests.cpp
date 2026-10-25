@@ -70,7 +70,7 @@ TEST(GpuTaskGraphResourceVersion, PreservesProducedVersionUntilAllConsumersFinis
     ASSERT_TRUE(consumer.valid());
 
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    ASSERT_TRUE(Analyze(operationScratchArena, graph, analysis));
+    ASSERT_TRUE(TaskGraphTestUtils::Analyze(operationScratchArena, graph, analysis));
     ASSERT_EQ(analysis.topologicalOrder().size(), 3u);
     EXPECT_EQ(analysis.topologicalOrder()[0u], producer);
     EXPECT_EQ(analysis.topologicalOrder()[1u], consumer);
@@ -116,7 +116,7 @@ TEST(GpuTaskGraphResourceVersion, ReportsExplicitClobberCycleWithVersionLifetime
     ASSERT_TRUE(consumer.valid());
 
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    EXPECT_FALSE(Analyze(operationScratchArena, graph, analysis));
+    EXPECT_FALSE(TaskGraphTestUtils::Analyze(operationScratchArena, graph, analysis));
     EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::Cycle);
     EXPECT_EQ(analysis.diagnostic().resource, resource);
     EXPECT_EQ(analysis.diagnostic().resourceVersion, version);
@@ -173,7 +173,7 @@ TEST(GpuTaskGraphResourceVersion, HonorsExplicitClobberBeforeVersionProducer){
     ASSERT_TRUE(consumer.valid());
 
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    ASSERT_TRUE(Analyze(operationScratchArena, graph, analysis));
+    ASSERT_TRUE(TaskGraphTestUtils::Analyze(operationScratchArena, graph, analysis));
     ASSERT_EQ(analysis.topologicalOrder().size(), 3u);
     EXPECT_EQ(analysis.topologicalOrder()[0u], clobber);
     EXPECT_EQ(analysis.topologicalOrder()[1u], producer);
@@ -209,7 +209,7 @@ TEST(GpuTaskGraphResourceVersion, ProtectsImportedRootConsumerFromLaterClobber){
     ASSERT_TRUE(clobber.valid());
 
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    ASSERT_TRUE(Analyze(operationScratchArena, graph, analysis));
+    ASSERT_TRUE(TaskGraphTestUtils::Analyze(operationScratchArena, graph, analysis));
     ASSERT_EQ(analysis.topologicalOrder().size(), s_ExpectedDualCount);
     EXPECT_EQ(analysis.topologicalOrder()[0u], consumer);
     EXPECT_EQ(analysis.topologicalOrder()[1u], clobber);
@@ -261,7 +261,7 @@ TEST(GpuTaskGraphResourceVersion, TreatsImportedRootLifetimeWriterAsPreBirthForP
     ASSERT_TRUE(consumer.valid());
 
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    ASSERT_TRUE(Analyze(operationScratchArena, graph, analysis));
+    ASSERT_TRUE(TaskGraphTestUtils::Analyze(operationScratchArena, graph, analysis));
     ASSERT_EQ(analysis.topologicalOrder().size(), 3u);
     EXPECT_EQ(analysis.topologicalOrder()[0u], importedConsumer);
     EXPECT_EQ(analysis.topologicalOrder()[1u], producer);
@@ -305,7 +305,7 @@ TEST(GpuTaskGraphResourceVersion, LeavesDisjointBufferWriterOutsideVersionLifeti
     ASSERT_TRUE(writer.valid());
 
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    ASSERT_TRUE(Analyze(operationScratchArena, graph, analysis));
+    ASSERT_TRUE(TaskGraphTestUtils::Analyze(operationScratchArena, graph, analysis));
     EXPECT_FALSE(HasResourceVersionEdge(analysis, consumer, writer, resource, version, Graphics::GpuTaskHazardType::VersionLifetime));
     EXPECT_FALSE(HasResourceVersionEdge(analysis, writer, producer, resource, version, Graphics::GpuTaskHazardType::VersionLifetime));
 }

@@ -26,8 +26,6 @@ struct PacketMergeSummary{
     bool hasCrossQueueConsumerFrontier = false;
 };
 
-using GpuTaskGraphCompilerDetail::TaskAllowsPacketMerge;
-
 [[nodiscard]] bool SchedulingConsumersContain(const GpuTaskGraphAnalysis& analysis, const GpuTaskId& producer, const GpuTaskId& consumer)noexcept{
     const GpuTaskGraphSchedulingTaskIndexView consumers = analysis.schedulingConsumers(producer);
     for(usize consumerIndex = 0u; consumerIndex < consumers.taskCount; ++consumerIndex){
@@ -58,7 +56,7 @@ static void InitializePacketMergeSummary(
     PacketMergeSummary& outSummary
 )noexcept{
     outSummary.uniformFrontierScoredMergeDomain = task.scheduling.frontierScoredMergeDomain;
-    outSummary.allTasksAllowMerge = TaskAllowsPacketMerge(task);
+    outSummary.allTasksAllowMerge = GpuTaskGraphCompilerDetail::TaskAllowsPacketMerge(task);
     outSummary.hasCrossQueueConsumerFrontier = trackConsumerFrontiers && HasCrossQueueConsumerFrontier(analysis, assignments, task.id, packetQueue);
 }
 
@@ -70,7 +68,7 @@ static void AccumulatePacketMergeSummary(
     const bool trackConsumerFrontiers,
     PacketMergeSummary& inOutSummary
 )noexcept{
-    inOutSummary.allTasksAllowMerge = inOutSummary.allTasksAllowMerge && TaskAllowsPacketMerge(task);
+    inOutSummary.allTasksAllowMerge = inOutSummary.allTasksAllowMerge && GpuTaskGraphCompilerDetail::TaskAllowsPacketMerge(task);
     if(!inOutSummary.uniformFrontierScoredMergeDomain || !task.scheduling.frontierScoredMergeDomain || inOutSummary.uniformFrontierScoredMergeDomain != task.scheduling.frontierScoredMergeDomain)
         inOutSummary.uniformFrontierScoredMergeDomain = Name{};
     if(trackConsumerFrontiers && !inOutSummary.hasCrossQueueConsumerFrontier && HasCrossQueueConsumerFrontier(analysis, assignments, task.id, packetQueue))

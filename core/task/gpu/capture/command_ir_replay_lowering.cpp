@@ -50,8 +50,6 @@ namespace __hidden_gpu_command_ir_replay_lowering{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using GpuCommandIrDetail::ReplayFailure;
-
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateBufferBackendOperand(Buffer& buffer, const ResourceStates::Mask requiredState, CommandList& commandList, const GpuPhysicalQueueInfo& commandQueue)noexcept{
     if(!GraphicsBackend::IsBufferReadyForState(commandList.getDevice(), &buffer, requiredState) || !ResourceQueueAdmissionAdmitsQueue(buffer.getQueueAdmissionSnapshot(), commandQueue))
         return GpuCommandIrReplayError::BackendResourceNotReady;
@@ -123,7 +121,7 @@ using GpuCommandIrDetail::ReplayFailure;
     const CommandListParameters commandListDescription = commandList.getResolvedDescription();
     const GpuPhysicalQueueInfo* const commandQueue = commandList.getDevice().getPhysicalQueueInfo(commandListDescription.physicalQueue);
     if(!commandQueue)
-        return ReplayFailure(GpuCommandIrReplayError::BackendResourceNotReady, expectedStreamValidation);
+        return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::BackendResourceNotReady, expectedStreamValidation);
 
     // A reader failure surfaces through next() below.
     GpuCommandIrStreamReader reader(bytes);
@@ -135,7 +133,7 @@ using GpuCommandIrDetail::ReplayFailure;
             return GpuCommandIrReplayResult{ .streamValidation = reader.validation(), .recordIndex = recordIndex, };
         }
         if(!decodedResult){
-            return ReplayFailure(GpuCommandIrReplayError::StreamChangedDuringReplay, reader.validation(), reader.validation().recordIndex);
+            return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::StreamChangedDuringReplay, reader.validation(), reader.validation().recordIndex);
         }
         const auto& decoded = *decodedResult;
 
@@ -146,7 +144,7 @@ using GpuCommandIrDetail::ReplayFailure;
             NWB_ASSERT(!raster || ownedStream);
             const GpuCommandIrReplayError::Enum operandError = raster ? GpuCommandIrDetail::ValidateRasterBackendOperand(decoded.raster, *ownedStream, graph, *commandQueue, commandList, recordIndex, rasterState) : ValidateBackendOperands(decoded.builtin, graph, commandList, *commandQueue);
             if(operandError != GpuCommandIrReplayError::None)
-                return ReplayFailure(operandError, expectedStreamValidation, recordIndex);
+                return GpuCommandIrDetail::ReplayFailure(operandError, expectedStreamValidation, recordIndex);
         }
         ++recordIndex;
     }
@@ -218,18 +216,18 @@ static void LowerOperation(const GpuCommandIrBuiltinTaskRecord& record, const Gp
     const GpuSubmissionPacket& packetPlan = *packetView.plan;
     auto& queue = *MakeNotNull(compiledGraph.queueInfo(packetPlan.queue));
     if(!commandList.isRecording()){
-        return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(GpuCommandIrReplayError::CommandListNotRecording, result.streamValidation);
+        return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::CommandListNotRecording, result.streamValidation);
     }
     if(commandList.commandRecordingFailed()){
-        return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(GpuCommandIrReplayError::CommandListRecordingFailed, result.streamValidation);
+        return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::CommandListRecordingFailed, result.streamValidation);
     }
     if(commandList.isRenderPassActive()){
-        return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(GpuCommandIrReplayError::CommandListRenderPassActive, result.streamValidation);
+        return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::CommandListRenderPassActive, result.streamValidation);
     }
     const CommandListParameters commandListDescription = commandList.getResolvedDescription();
     const GpuCommandIrReplayError::Enum commandListQueueError = GpuCommandIrDetail::ValidateReplayCommandListQueue(commandListDescription, packetPlan.queue, queue.queueClass);
     if(commandListQueueError != GpuCommandIrReplayError::None){
-        return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(commandListQueueError, result.streamValidation);
+        return GpuCommandIrDetail::ReplayFailure(commandListQueueError, result.streamValidation);
     }
     const GpuCommandIrReplayResult backendPreflight = __hidden_gpu_command_ir_replay_lowering::ValidateBackendOperandPacket(bytes, ownedStream, graph, packet, commandList, result.streamValidation);
     if(!backendPreflight.valid())
@@ -244,7 +242,7 @@ static void LowerOperation(const GpuCommandIrBuiltinTaskRecord& record, const Gp
         if(!decodedResult && decodedResult.error() == GpuCommandIrStreamReadStatus::End)
             return GpuCommandIrReplayResult{ .streamValidation = reader.validation(), .recordIndex = recordIndex, };
         if(!decodedResult){
-            return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(GpuCommandIrReplayError::StreamChangedDuringReplay, reader.validation(), reader.validation().recordIndex);
+            return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::StreamChangedDuringReplay, reader.validation(), reader.validation().recordIndex);
         }
         const auto& decoded = *decodedResult;
 
@@ -261,17 +259,17 @@ static void LowerOperation(const GpuCommandIrBuiltinTaskRecord& record, const Gp
         if(raster){
             NWB_ASSERT(ownedStream);
             if(!GpuCommandIrDetail::LowerRasterOperation(decoded.raster, *ownedStream, reader.blobBytes(), commandList))
-                return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(GpuCommandIrReplayError::CommandListRecordingFailed, result.streamValidation, recordIndex);
+                return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::CommandListRecordingFailed, result.streamValidation, recordIndex);
         }
         else if(decoded.builtin.opcode == GpuCommandIrOpcode::UploadBuffer || decoded.builtin.opcode == GpuCommandIrOpcode::UploadTexture){
             if(!GpuCommandIrDetail::LowerUploadOperation(decoded.builtin, reader.blobBytes(), graph, commandList)){
-                return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(GpuCommandIrReplayError::CommandListRecordingFailed, result.streamValidation, recordIndex);
+                return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::CommandListRecordingFailed, result.streamValidation, recordIndex);
             }
         }
         else
             __hidden_gpu_command_ir_replay_lowering::LowerOperation(decoded.builtin, graph, commandList);
         if(!commandList.matchesRecordingLease(recordingLeaseSerial) || commandList.commandRecordingFailed()){
-            return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(GpuCommandIrReplayError::CommandListRecordingFailed, result.streamValidation, recordIndex);
+            return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::CommandListRecordingFailed, result.streamValidation, recordIndex);
         }
         ++recordIndex;
     }

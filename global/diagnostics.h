@@ -77,6 +77,14 @@ inline constexpr StringView s_GpuCrash = "gpu_crash";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr usize s_MaxEventTextBytes = 2048u;
+inline constexpr StringView s_TrueText = "true";
+inline constexpr StringView s_FalseText = "false";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace DiagnosticDetail{
 
 
@@ -85,13 +93,10 @@ namespace DiagnosticDetail{
 
 inline Atomic<DiagnosticEventCallback> g_EventCallback{ nullptr };
 inline AtomicFlag g_EventActive;
-inline constexpr usize s_MaxEventTextBytes = 2048u;
 inline constexpr usize s_NumberTextBufferBytes = 128u;
 inline constexpr wchar_t s_AsciiCharacterMax = 0x7F;
 inline constexpr StringView s_NullText = "(null)";
 inline constexpr StringView s_PointerHexPrefix = "0x";
-inline constexpr StringView s_TrueText = "true";
-inline constexpr StringView s_FalseText = "false";
 inline constexpr StringView s_UnprintableText = "<unprintable>";
 inline constexpr i32 s_PointerTextRadix = 16;
 
@@ -119,13 +124,6 @@ template<typename CharT>
 inline void AppendEventText(char (&outText)[s_MaxEventTextBytes], usize& outCursor, const BasicStringView<CharT> text)noexcept{
     for(const CharT ch : text)
         AppendEventChar(outText, outCursor, ToEventAsciiChar(ch));
-}
-
-template<typename CharT>
-inline void CopyEventText(char (&outText)[s_MaxEventTextBytes], const BasicStringView<CharT> text)noexcept{
-    usize outCursor = 0u;
-    outText[0] = 0;
-    AppendEventText(outText, outCursor, text);
 }
 
 template<typename CharT>
@@ -291,10 +289,12 @@ inline void FormatEventText(char (&outText)[s_MaxEventTextBytes], const BasicStr
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using DiagnosticDetail::s_MaxEventTextBytes;
-using DiagnosticDetail::s_TrueText;
-using DiagnosticDetail::s_FalseText;
-using DiagnosticDetail::CopyEventText;
+template<typename CharT>
+inline void CopyEventText(char (&outText)[s_MaxEventTextBytes], const BasicStringView<CharT> text)noexcept{
+    usize outCursor = 0u;
+    outText[0] = 0;
+    DiagnosticDetail::AppendEventText(outText, outCursor, text);
+}
 
 [[nodiscard]] inline StringView DiagnosticEventNameFromCategory(const StringView category)noexcept{
     if(category == DiagnosticEventCategory::s_Assert || category == DiagnosticEventCategory::s_FatalAssert)
@@ -311,7 +311,7 @@ using DiagnosticDetail::CopyEventText;
 }
 
 struct DiagnosticEventText{
-    char value[DiagnosticDetail::s_MaxEventTextBytes] = {};
+    char value[s_MaxEventTextBytes] = {};
 
 
 public:

@@ -129,7 +129,7 @@ Value ExpressionParser::parsePrimary(){
         const auto text = m_cursor.m_current.text;
         m_cursor.advance();
 
-        const auto result = ParseI64FromChars(text);
+        const auto result = ParseI64(text);
         if(!result){
             m_cursor.error("invalid integer literal");
             return Value(m_arena);

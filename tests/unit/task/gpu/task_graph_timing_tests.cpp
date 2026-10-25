@@ -5,7 +5,6 @@
 #include <tests/common/test_context.h>
 #include <tests/common/gpu_task_graph_read_views.h>
 
-#include "task_graph_resource_version_test_utils.h"
 #include "task_graph_test_utils.h"
 
 #include <gtest/gtest.h>
@@ -44,8 +43,6 @@ namespace __hidden_task_graph_timing_tests{
 using TestArena = ::NWB::Tests::TestArena<struct TaskGraphTimingTestsTag>;
 namespace Graphics = Core;
 
-using TaskGraphResourceVersionTestUtils::GraphicsQueue;
-
 
 [[nodiscard]] Expected<Graphics::GpuTaskId> AddTask(Graphics::GpuTaskGraph& graph, const Name& identity, const Graphics::GpuTaskId dependency = {}, const Graphics::GpuTaskSchedulingHint& scheduling = {}, const Graphics::GpuTaskTimingMetadata& timing = {}){
     Graphics::GpuTaskDesc desc;
@@ -56,7 +53,7 @@ using TaskGraphResourceVersionTestUtils::GraphicsQueue;
 }
 
 [[nodiscard]] bool Compile(Graphics::GpuTaskGraphAnalysis& analysis, Graphics::GpuTaskGraphQueueAssignments& assignments, Graphics::GpuCompiledGraph& compiledGraph, Core::Alloc::ScratchArena& scratchArena, const Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskGraphCompileOptions& options = {}){
-    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuPhysicalQueueInfo queue = TaskGraphTestUtils::GraphicsQueue();
     const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u };
     return TaskGraphTestUtils::Compile(analysis, assignments, compiledGraph, scratchArena, graph, topology, options);
 }

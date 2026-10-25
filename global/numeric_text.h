@@ -25,14 +25,7 @@ namespace TextDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_DecimalTextBufferBytes = 32u;
 inline constexpr i32 s_DefaultNumericTextBase = 10;
-inline constexpr usize s_UsizeDecimalDigitCount = []()noexcept{
-    usize digits = 1u;
-    for(usize value = Limit<usize>::s_Max; value >= 10u; value /= 10u)
-        ++digits;
-    return digits;
-}();
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -44,8 +37,13 @@ inline constexpr usize s_UsizeDecimalDigitCount = []()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using TextDetail::s_DecimalTextBufferBytes;
-using TextDetail::s_UsizeDecimalDigitCount;
+inline constexpr usize s_DecimalTextBufferBytes = 32u;
+inline constexpr usize s_UsizeDecimalDigitCount = []()noexcept{
+    usize digits = 1u;
+    for(usize value = Limit<usize>::s_Max; value >= 10u; value /= 10u)
+        ++digits;
+    return digits;
+}();
 
 inline constexpr usize s_HexDecimalDigitCount = 10u;
 inline constexpr usize s_HexPrefixLength = 2u;
@@ -187,10 +185,6 @@ template<typename NumberT, typename ParseT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Expected<i64> ParseI64FromChars(const AStringView text)noexcept{
-    return TextParseDetail::ParseNumber<i64>(text);
-}
-
 // Stops at the first nondigit and wraps modulo 2^64, including overlong prefixes.
 template<typename CharT>
 [[nodiscard]] inline constexpr u64 ParseDecimalPrefixU64(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
@@ -201,10 +195,6 @@ template<typename CharT>
         value = value * 10u + static_cast<u64>(ch - static_cast<CharT>('0'));
     }
     return value;
-}
-
-[[nodiscard]] inline Expected<u64> ParseU64FromChars(const AStringView text)noexcept{
-    return TextParseDetail::ParseNumber<u64>(text);
 }
 
 [[nodiscard]] inline Expected<f64> ParseF64FromChars(const AStringView text)noexcept{
@@ -332,16 +322,6 @@ inline void AppendFixedHexImpl(const u64 value, const u32 nibbleCount, StringT& 
     }
 }
 
-template<typename StringT>
-inline void AppendHexU32Impl(const u32 value, StringT& outText)noexcept(noexcept(AppendFixedHexImpl(static_cast<u64>(value), s_HexU32DigitCount, outText))){
-    AppendFixedHexImpl(static_cast<u64>(value), s_HexU32DigitCount, outText);
-}
-
-template<typename StringT>
-inline void AppendHexU64Impl(const u64 value, StringT& outText)noexcept(noexcept(AppendFixedHexImpl(value, s_HexU64DigitCount, outText))){
-    AppendFixedHexImpl(value, s_HexU64DigitCount, outText);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -352,11 +332,6 @@ inline void AppendHexU64Impl(const u64 value, StringT& outText)noexcept(noexcept
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename CharT, typename ArenaT>
-inline void AppendHexU32(const u32 value, BasicString<CharT, ArenaT>& outText)noexcept(noexcept(NumericTextDetail::AppendHexU32Impl(value, outText))){
-    NumericTextDetail::AppendHexU32Impl(value, outText);
-}
-
 template<typename StringT>
     requires requires(StringT& text){
         typename StringT::value_type;
@@ -364,8 +339,8 @@ template<typename StringT>
         text.max_size();
         text.push_back(typename StringT::value_type{});
     }
-inline void AppendHexU32(const u32 value, StringT& outText)noexcept(noexcept(NumericTextDetail::AppendHexU32Impl(value, outText))){
-    NumericTextDetail::AppendHexU32Impl(value, outText);
+inline void AppendHexU32(const u32 value, StringT& outText)noexcept(noexcept(NumericTextDetail::AppendFixedHexImpl(static_cast<u64>(value), s_HexU32DigitCount, outText))){
+    NumericTextDetail::AppendFixedHexImpl(static_cast<u64>(value), s_HexU32DigitCount, outText);
 }
 
 template<typename StringT>
@@ -381,11 +356,6 @@ inline void AppendHexU32UnsignedLiteral(const u32 value, StringT& outText)noexce
     outText += static_cast<CharT>('u');
 }
 
-template<typename CharT, typename ArenaT>
-inline void AppendHexU64(const u64 value, BasicString<CharT, ArenaT>& outText)noexcept(noexcept(NumericTextDetail::AppendHexU64Impl(value, outText))){
-    NumericTextDetail::AppendHexU64Impl(value, outText);
-}
-
 template<typename StringT>
     requires requires(StringT& text){
         typename StringT::value_type;
@@ -393,8 +363,8 @@ template<typename StringT>
         text.max_size();
         text.push_back(typename StringT::value_type{});
     }
-inline void AppendHexU64(const u64 value, StringT& outText)noexcept(noexcept(NumericTextDetail::AppendHexU64Impl(value, outText))){
-    NumericTextDetail::AppendHexU64Impl(value, outText);
+inline void AppendHexU64(const u64 value, StringT& outText)noexcept(noexcept(NumericTextDetail::AppendFixedHexImpl(value, s_HexU64DigitCount, outText))){
+    NumericTextDetail::AppendFixedHexImpl(value, s_HexU64DigitCount, outText);
 }
 
 

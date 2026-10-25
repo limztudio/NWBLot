@@ -114,7 +114,7 @@ TEST(GpuTaskGraphResourceVersion, RejectsMissingAndDuplicateTaskProducedVersionP
         }
 
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-        EXPECT_FALSE(Analyze(operationScratchArena, graph, analysis));
+        EXPECT_FALSE(TaskGraphTestUtils::Analyze(operationScratchArena, graph, analysis));
         EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::MissingResourceVersionProducer);
         EXPECT_EQ(analysis.diagnostic().resource, resource);
         EXPECT_EQ(analysis.diagnostic().resourceVersion, version);
@@ -143,7 +143,7 @@ TEST(GpuTaskGraphResourceVersion, RejectsMissingAndDuplicateTaskProducedVersionP
         ASSERT_TRUE(second.valid());
 
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-        EXPECT_FALSE(Analyze(operationScratchArena, graph, analysis));
+        EXPECT_FALSE(TaskGraphTestUtils::Analyze(operationScratchArena, graph, analysis));
         EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::DuplicateResourceVersionProducer);
         EXPECT_EQ(analysis.diagnostic().task, second);
         EXPECT_EQ(analysis.diagnostic().relatedTask, first);
@@ -167,7 +167,7 @@ TEST(GpuTaskGraphResourceVersion, RejectsInvalidVersionDeclarations){
         const Graphics::GpuGraphResourceVersionId version = *versionResult;
         ASSERT_TRUE(version.valid());
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-        EXPECT_FALSE(Analyze(operationScratchArena, graph, analysis));
+        EXPECT_FALSE(TaskGraphTestUtils::Analyze(operationScratchArena, graph, analysis));
         EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::InvalidResourceVersion);
         EXPECT_EQ(analysis.diagnostic().resource, resource);
         EXPECT_EQ(analysis.diagnostic().resourceVersion, version);
@@ -186,7 +186,7 @@ TEST(GpuTaskGraphResourceVersion, RejectsInvalidVersionDeclarations){
         const Graphics::GpuGraphResourceVersionId version = *versionResult;
         ASSERT_TRUE(version.valid());
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-        EXPECT_FALSE(Analyze(operationScratchArena, graph, analysis));
+        EXPECT_FALSE(TaskGraphTestUtils::Analyze(operationScratchArena, graph, analysis));
         EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::InvalidResourceVersion);
         EXPECT_EQ(analysis.diagnostic().resource, staleResource);
         EXPECT_EQ(analysis.diagnostic().resourceVersion, version);
@@ -204,7 +204,7 @@ TEST(GpuTaskGraphResourceVersion, RejectsInvalidVersionDeclarations){
         const Graphics::GpuGraphResourceVersionId version = *versionResult;
         ASSERT_TRUE(version.valid());
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-        EXPECT_FALSE(Analyze(operationScratchArena, graph, analysis));
+        EXPECT_FALSE(TaskGraphTestUtils::Analyze(operationScratchArena, graph, analysis));
         EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::InvalidResourceVersion);
         EXPECT_EQ(analysis.diagnostic().resource, resource);
         EXPECT_EQ(analysis.diagnostic().resourceVersion, version);
@@ -230,7 +230,7 @@ TEST(GpuTaskGraphResourceVersion, RejectsInvalidVersionDeclarations){
         const Graphics::GpuGraphResourceVersionId version = *versionResult;
         ASSERT_TRUE(version.valid());
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-        EXPECT_FALSE(Analyze(operationScratchArena, graph, analysis));
+        EXPECT_FALSE(TaskGraphTestUtils::Analyze(operationScratchArena, graph, analysis));
         EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::InvalidResourceVersion);
         EXPECT_EQ(analysis.diagnostic().resource, resource);
         EXPECT_EQ(analysis.diagnostic().resourceVersion, version);
@@ -263,7 +263,7 @@ TEST(GpuTaskGraphResourceVersion, RejectsStaleRoleAccessAndRangeVersionUses){
         ASSERT_TRUE(resource.valid());
         ASSERT_TRUE(task.valid());
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-        EXPECT_FALSE(Analyze(operationScratchArena, graph, analysis));
+        EXPECT_FALSE(TaskGraphTestUtils::Analyze(operationScratchArena, graph, analysis));
         EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::InvalidResourceVersionUse);
         EXPECT_EQ(analysis.diagnostic().task, task);
         EXPECT_EQ(analysis.diagnostic().resourceVersion, staleVersion);
@@ -301,7 +301,7 @@ TEST(GpuTaskGraphResourceVersion, RejectsStaleRoleAccessAndRangeVersionUses){
         ASSERT_TRUE(task.valid());
 
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-        EXPECT_FALSE(Analyze(operationScratchArena, graph, analysis));
+        EXPECT_FALSE(TaskGraphTestUtils::Analyze(operationScratchArena, graph, analysis));
         EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::InvalidResourceVersionUse);
         EXPECT_EQ(analysis.diagnostic().task, task);
         EXPECT_EQ(analysis.diagnostic().resource, resource);

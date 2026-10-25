@@ -36,7 +36,7 @@ template<typename ArenaT>
 class DirectoryIteratorBase{
 public:
     using Entry = DirectoryEntry<ArenaT>;
-    using EntryVector = std::vector<Entry, ContainerDetail::ArenaAllocatorFor_T<Entry, ArenaT>>;
+    using EntryVector = std::vector<Entry, ContainerDetail::ArenaAllocator<Entry, ArenaT>>;
     using iterator = typename EntryVector::const_iterator;
 
 
@@ -95,7 +95,7 @@ private:
         WIN32_FIND_DATA data = {};
         const HANDLE findHandle = FindFirstFile(pattern.c_str(), &data);
         if(findHandle == INVALID_HANDLE_VALUE)
-            return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
+            return MakeUnexpected(LastSystemError());
         ScopeExit close([&]()noexcept{ GlobalFilesystemDetail::CloseDirectory(findHandle, iterationError); });
         for(;;){
             const TStringView fileName(data.cFileName);
@@ -110,7 +110,7 @@ private:
 #else
         DIR* const directory = opendir(path.c_str());
         if(directory == nullptr)
-            return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
+            return MakeUnexpected(LastSystemError());
         ScopeExit close([&]()noexcept{ GlobalFilesystemDetail::CloseDirectory(MakeNotNull(directory), iterationError); });
         for(;;){
             errno = 0;
@@ -120,7 +120,7 @@ private:
                 break;
             }
             const AStringView fileName(entry->d_name);
-            if(GlobalFilesystemPathDetail::IsDot(fileName) || GlobalFilesystemPathDetail::IsDotDot(fileName))
+            if(IsDot(fileName) || IsDotDot(fileName))
                 continue;
             this->m_entries.emplace_back(path / fileName);
         }

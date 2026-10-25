@@ -124,7 +124,7 @@ TEST(GpuTaskGraphResourceVersion, ExportsDependencyAndLifetimeReasonsWithExplici
     ASSERT_TRUE(overwriter.valid());
 
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    ASSERT_TRUE(Analyze(scratchArena, graph, analysis));
+    ASSERT_TRUE(TaskGraphTestUtils::Analyze(scratchArena, graph, analysis));
     EXPECT_TRUE(analysis.hasExplicitEdge(producer, consumer));
     EXPECT_TRUE(HasResourceVersionEdge(analysis, producer, consumer, resource, version, Graphics::GpuTaskHazardType::VersionDependency));
     EXPECT_TRUE(HasResourceVersionEdge(analysis, consumer, overwriter, resource, version, Graphics::GpuTaskHazardType::VersionLifetime));
@@ -198,7 +198,7 @@ TEST(GpuTaskGraphResourceVersion, DeduplicatesVersionAndPhysicalHazardsInQueueSc
     ASSERT_TRUE(consumer.valid());
 
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    ASSERT_TRUE(Analyze(operationScratchArena, graph, analysis));
+    ASSERT_TRUE(TaskGraphTestUtils::Analyze(operationScratchArena, graph, analysis));
     ASSERT_EQ(analysis.inferredEdges().size(), s_ExpectedDualCount);
     ASSERT_EQ(analysis.schedulingEdges().size(), 1u);
     bool foundVersionDependency = false;
@@ -211,7 +211,7 @@ TEST(GpuTaskGraphResourceVersion, DeduplicatesVersionAndPhysicalHazardsInQueueSc
     EXPECT_TRUE(foundPhysicalRaw);
 
     // The graphics queue has no compute support, so the compute consumer must cross queues.
-    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(0u, TaskGraphTestUtils::QueueCapabilities(Graphics::GpuQueueCapability::Graphics, Graphics::GpuQueueCapability::Transfer)), DedicatedComputeQueue(), };
+    const Graphics::GpuPhysicalQueueInfo queues[] = { TaskGraphTestUtils::GraphicsQueue(0u, TaskGraphTestUtils::QueueCapabilities(Graphics::GpuQueueCapability::Graphics, Graphics::GpuQueueCapability::Transfer)), TaskGraphTestUtils::DedicatedComputeQueue(), };
     const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues), };
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology));
@@ -252,7 +252,7 @@ TEST(GpuTaskGraphResourceVersion, RetainsExternalCompletionForImportedRootConsum
     ASSERT_TRUE(consumer.valid());
 
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    ASSERT_TRUE(Analyze(operationScratchArena, graph, analysis));
+    ASSERT_TRUE(TaskGraphTestUtils::Analyze(operationScratchArena, graph, analysis));
     EXPECT_EQ(analysis.resourceVersionEdgeCount(), 0u);
     ASSERT_EQ(analysis.externalDependencies().size(), 1u);
     u64 analyzedRevision = 0u;
@@ -317,7 +317,7 @@ TEST(GpuTaskGraphResourceVersion, ReportsClosedPureResourceVersionCycle){
     ASSERT_TRUE(taskB.valid());
 
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    EXPECT_FALSE(Analyze(operationScratchArena, graph, analysis));
+    EXPECT_FALSE(TaskGraphTestUtils::Analyze(operationScratchArena, graph, analysis));
     EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::Cycle);
     EXPECT_EQ(analysis.resourceVersionEdgeCount(), s_ExpectedDualCount);
     ExpectClosedCycle(analysis);
@@ -360,7 +360,7 @@ TEST(GpuTaskGraphResourceVersion, ReportsClosedMixedExplicitAndResourceVersionCy
     ASSERT_TRUE(producer.valid());
 
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    EXPECT_FALSE(Analyze(operationScratchArena, graph, analysis));
+    EXPECT_FALSE(TaskGraphTestUtils::Analyze(operationScratchArena, graph, analysis));
     EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::Cycle);
     EXPECT_EQ(analysis.resourceVersionEdgeCount(), 1u);
     ExpectClosedCycle(analysis);

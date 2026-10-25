@@ -82,7 +82,7 @@ Expected<MaterialLayoutFieldType::Enum> ParseMaterialBindResourceFieldTypeText(c
 static Expected<AStringView> ParseMaterialBindStringField(const Path& bindFilePath, const Metascript::Value& map, const AStringView fieldName, const AStringView contextLabel){
     const Metascript::Value* value = map.findField(fieldName);
     if(!value || !value->isString()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': {} field '{}' must be a string"), PathToString<tchar>(bindFilePath), StringConvert(contextLabel), StringConvert(fieldName));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': {} field '{}' must be a string"), PathToString<tchar>(bindFilePath), ConvertString(contextLabel), ConvertString(fieldName));
         return MakeUnexpected(Failure{});
     }
 
@@ -100,7 +100,7 @@ static Expected<MaterialCookVector<MaterialBindAttribute>> ParseMaterialBindAttr
         return attributes;
 
     if(!attributesValue->isList()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': {} attributes must be a list"), PathToString<tchar>(bindFilePath), StringConvert(contextLabel));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': {} attributes must be a list"), PathToString<tchar>(bindFilePath), ConvertString(contextLabel));
         return MakeUnexpected(Failure{});
     }
 
@@ -108,7 +108,7 @@ static Expected<MaterialCookVector<MaterialBindAttribute>> ParseMaterialBindAttr
     attributes.reserve(attributeList.size());
     for(const Metascript::Value& attributeValue : attributeList){
         if(!attributeValue.isMap()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': {} attribute entries must be maps"), PathToString<tchar>(bindFilePath), StringConvert(contextLabel));
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': {} attribute entries must be maps"), PathToString<tchar>(bindFilePath), ConvertString(contextLabel));
             return MakeUnexpected(Failure{});
         }
 
@@ -118,14 +118,14 @@ static Expected<MaterialCookVector<MaterialBindAttribute>> ParseMaterialBindAttr
             return MakeUnexpected(Failure{});
         attribute.name = *parsedName;
         if(!IsAsciiIdentifier(attribute.name)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': invalid attribute name '{}' in {}"), PathToString<tchar>(bindFilePath), StringConvert(attribute.name), StringConvert(contextLabel));
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': invalid attribute name '{}' in {}"), PathToString<tchar>(bindFilePath), ConvertString(attribute.name), ConvertString(contextLabel));
             return MakeUnexpected(Failure{});
         }
 
         const Metascript::Value* argumentsValue = attributeValue.findField("arguments");
         if(argumentsValue){
             if(!argumentsValue->isList()){
-                NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': attribute '{}' arguments must be a list"), PathToString<tchar>(bindFilePath), StringConvert(attribute.name));
+                NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': attribute '{}' arguments must be a list"), PathToString<tchar>(bindFilePath), ConvertString(attribute.name));
                 return MakeUnexpected(Failure{});
             }
 
@@ -133,7 +133,7 @@ static Expected<MaterialCookVector<MaterialBindAttribute>> ParseMaterialBindAttr
             attribute.arguments.reserve(argumentList.size());
             for(const Metascript::Value& argumentValue : argumentList){
                 if(!argumentValue.isString()){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': attribute '{}' arguments must be strings"), PathToString<tchar>(bindFilePath), StringConvert(attribute.name));
+                    NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': attribute '{}' arguments must be strings"), PathToString<tchar>(bindFilePath), ConvertString(attribute.name));
                     return MakeUnexpected(Failure{});
                 }
 
@@ -157,15 +157,15 @@ static bool ValidateMaterialBindStructAttributes(const Path& bindFilePath, const
 
     for(const MaterialBindAttribute& attribute : bindStruct.attributes){
         if(attribute.name != s_MaterialConstantAttribute && attribute.name != s_MaterialMutableAttribute){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' has unsupported attribute '{}'"), PathToString<tchar>(bindFilePath), StringConvert(bindStruct.name), StringConvert(attribute.name));
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' has unsupported attribute '{}'"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name), ConvertString(attribute.name));
             return false;
         }
         if(!attribute.arguments.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' block class attribute '{}' must not have arguments"), PathToString<tchar>(bindFilePath), StringConvert(bindStruct.name), StringConvert(attribute.name));
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' block class attribute '{}' must not have arguments"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name), ConvertString(attribute.name));
             return false;
         }
         if(foundBlockClass){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' declares more than one block class attribute"), PathToString<tchar>(bindFilePath), StringConvert(bindStruct.name));
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' declares more than one block class attribute"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name));
             return false;
         }
 
@@ -175,7 +175,7 @@ static bool ValidateMaterialBindStructAttributes(const Path& bindFilePath, const
     if(foundBlockClass)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' must declare a material block class attribute"), PathToString<tchar>(bindFilePath), StringConvert(bindStruct.name));
+    NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' must declare a material block class attribute"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name));
     return false;
 }
 
@@ -191,22 +191,22 @@ static bool ValidateMaterialBindFieldAttributes(const Path& bindFilePath, const 
 
     for(const MaterialBindAttribute& attribute : field.attributes){
         if(isResourceField || attribute.name != s_DefaultAttribute){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' has unsupported attribute '{}'"), PathToString<tchar>(bindFilePath), StringConvert(bindStruct.name), StringConvert(field.name), StringConvert(attribute.name));
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' has unsupported attribute '{}'"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name), ConvertString(field.name), ConvertString(attribute.name));
             return false;
         }
         if(foundRequiredAttribute){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' declares {} more than once"), PathToString<tchar>(bindFilePath), StringConvert(bindStruct.name), StringConvert(field.name), StringConvert(s_DefaultAttribute));
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' declares {} more than once"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name), ConvertString(field.name), ConvertString(s_DefaultAttribute));
             return false;
         }
         if(attribute.arguments.size() != 1u || attribute.arguments[0].empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' attribute '{}' requires one non-empty string argument"), PathToString<tchar>(bindFilePath), StringConvert(bindStruct.name), StringConvert(field.name), StringConvert(attribute.name));
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' attribute '{}' requires one non-empty string argument"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name), ConvertString(field.name), ConvertString(attribute.name));
             return false;
         }
         foundRequiredAttribute = true;
     }
 
     if(!foundRequiredAttribute){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' must declare a {} attribute"), PathToString<tchar>(bindFilePath), StringConvert(bindStruct.name), StringConvert(field.name), StringConvert(s_DefaultAttribute));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' must declare a {} attribute"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name), ConvertString(field.name), ConvertString(s_DefaultAttribute));
         return false;
     }
 
@@ -220,7 +220,7 @@ static bool ValidateMaterialBindFieldAttributes(const Path& bindFilePath, const 
 static Expected<MaterialBindField> ParseMaterialBindField(const Path& bindFilePath, const Metascript::Value& fieldValue, const MaterialBindStruct& bindStruct, MaterialCookArena& arena){
     MaterialBindField field(arena);
     if(!fieldValue.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' field entries must be maps"), PathToString<tchar>(bindFilePath), StringConvert(bindStruct.name));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' field entries must be maps"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name));
         return MakeUnexpected(Failure{});
     }
 
@@ -234,15 +234,15 @@ static Expected<MaterialBindField> ParseMaterialBindField(const Path& bindFilePa
     field.name = *parsedName;
     const bool isResourceField = ParseMaterialBindResourceFieldTypeText(AStringView(field.type)).has_value();
     if(!IsAsciiIdentifier(field.type) || (!isResourceField && !ParseMaterialParameterTypeText(AStringView(field.type)))){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' has unsupported type '{}'"), PathToString<tchar>(bindFilePath), StringConvert(bindStruct.name), StringConvert(field.name), StringConvert(field.type));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' has unsupported type '{}'"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name), ConvertString(field.name), ConvertString(field.type));
         return MakeUnexpected(Failure{});
     }
     if(isResourceField && bindStruct.findAttribute(s_MaterialMutableAttribute)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': resource field '{}.{}' must use material_constant storage"), PathToString<tchar>(bindFilePath), StringConvert(bindStruct.name), StringConvert(field.name));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': resource field '{}.{}' must use material_constant storage"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name), ConvertString(field.name));
         return MakeUnexpected(Failure{});
     }
     if(!IsAsciiIdentifier(field.name)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' has invalid name"), PathToString<tchar>(bindFilePath), StringConvert(bindStruct.name), StringConvert(field.name));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' has invalid name"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name), ConvertString(field.name));
         return MakeUnexpected(Failure{});
     }
     auto attributes = ParseMaterialBindAttributeList(bindFilePath, fieldValue.findField(s_BindAttributesKey), field.name, arena);
@@ -262,13 +262,13 @@ static Expected<MaterialBindField> ParseMaterialBindField(const Path& bindFilePa
 static Expected<MaterialBindStruct> ParseMaterialBindStruct(const Path& bindFilePath, const Metascript::MStringView structName, const Metascript::Value& structValue, MaterialCookArena& arena){
     MaterialBindStruct bindStruct(arena);
     if(!structValue.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' must be a map"), PathToString<tchar>(bindFilePath), StringConvert(AStringView(structName.data(), structName.size())));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' must be a map"), PathToString<tchar>(bindFilePath), ConvertString(AStringView(structName.data(), structName.size())));
         return MakeUnexpected(Failure{});
     }
 
     bindStruct.name.assign(structName.data(), structName.size());
     if(!IsAsciiIdentifier(bindStruct.name)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': invalid struct name '{}'"), PathToString<tchar>(bindFilePath), StringConvert(bindStruct.name));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': invalid struct name '{}'"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name));
         return MakeUnexpected(Failure{});
     }
     auto attributes = ParseMaterialBindAttributeList(bindFilePath, structValue.findField(s_BindAttributesKey), bindStruct.name, arena);
@@ -280,11 +280,11 @@ static Expected<MaterialBindStruct> ParseMaterialBindStruct(const Path& bindFile
 
     const Metascript::Value* fieldsValue = structValue.findField(s_BindFieldsKey);
     if(!fieldsValue || !fieldsValue->isList()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' fields must be a list"), PathToString<tchar>(bindFilePath), StringConvert(bindStruct.name));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' fields must be a list"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name));
         return MakeUnexpected(Failure{});
     }
     if(fieldsValue->asList().empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' must declare at least one field"), PathToString<tchar>(bindFilePath), StringConvert(bindStruct.name));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' must declare at least one field"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name));
         return MakeUnexpected(Failure{});
     }
 
@@ -295,7 +295,7 @@ static Expected<MaterialBindStruct> ParseMaterialBindStruct(const Path& bindFile
             return MakeUnexpected(Failure{});
 
         if(bindStruct.findField(AStringView(field->name))){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': duplicate field '{}.{}'"), PathToString<tchar>(bindFilePath), StringConvert(bindStruct.name), StringConvert(field->name));
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': duplicate field '{}.{}'"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name), ConvertString(field->name));
             return MakeUnexpected(Failure{});
         }
 
@@ -350,7 +350,7 @@ static bool ParseMaterialBindInstances(const Path& bindFilePath, const Metascrip
         const AStringView instanceName(declaration.variable.data(), declaration.variable.size());
         const Metascript::Value* instanceValue = doc.findVariable(instanceName);
         if(!instanceValue || !instanceValue->isNull()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': instance '{}' must not have an initializer or assignments"), PathToString<tchar>(bindFilePath), StringConvert(instanceName));
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': instance '{}' must not have an initializer or assignments"), PathToString<tchar>(bindFilePath), ConvertString(instanceName));
             return false;
         }
 
@@ -358,15 +358,15 @@ static bool ParseMaterialBindInstances(const Path& bindFilePath, const Metascrip
         instance.type = typeName;
         instance.name = instanceName;
         if(!IsAsciiIdentifier(instance.type) || !outEntry.findStruct(AStringView(instance.type))){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': instance '{}' references unknown struct type '{}'"), PathToString<tchar>(bindFilePath), StringConvert(instance.name), StringConvert(instance.type));
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': instance '{}' references unknown struct type '{}'"), PathToString<tchar>(bindFilePath), ConvertString(instance.name), ConvertString(instance.type));
             return false;
         }
         if(!IsAsciiIdentifier(instance.name)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': invalid instance name '{}'"), PathToString<tchar>(bindFilePath), StringConvert(instance.name));
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': invalid instance name '{}'"), PathToString<tchar>(bindFilePath), ConvertString(instance.name));
             return false;
         }
         if(outEntry.findInstance(AStringView(instance.name))){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': duplicate instance name '{}'"), PathToString<tchar>(bindFilePath), StringConvert(instance.name));
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': duplicate instance name '{}'"), PathToString<tchar>(bindFilePath), ConvertString(instance.name));
             return false;
         }
 

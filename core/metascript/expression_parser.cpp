@@ -25,9 +25,9 @@ namespace __hidden_metascript_expression_parser{
 
 
 constexpr usize s_InitialReferencePathSegmentCount = 4u;
-constexpr const char* s_ListExpectedCommaOrCloseMessage = "expected ',' or '}' in list";
-constexpr const char* s_MapKeysMustBeStringsMessage = "map keys must be strings";
-constexpr const char* s_MapExpectedCommaOrCloseMessage = "expected ',' or '}' in map";
+constexpr MStringView s_ListExpectedCommaOrCloseMessage = "expected ',' or '}' in list";
+constexpr MStringView s_MapKeysMustBeStringsMessage = "map keys must be strings";
+constexpr MStringView s_MapExpectedCommaOrCloseMessage = "expected ',' or '}' in map";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -129,7 +129,7 @@ Value ExpressionParser::parsePrimary(){
         const auto text = m_cursor.m_current.text;
         m_cursor.advance();
 
-        const auto result = ParseI64FromChars(text);
+        const auto result = ParseI64(text);
         if(!result){
             m_cursor.error("invalid integer literal");
             return Value(m_arena);

@@ -206,7 +206,7 @@ Expected<GpuVersion<GpuTargetVersion>> GpuRendererState::createTarget(const u32 
         .setName(s_GpuLayerTextureName)
         .setWidth(width).setHeight(height)
         .setFormat(Core::Format::RGBA16_FLOAT)
-        .setInRenderTarget(true)
+        .setIsRenderTarget(true)
         .setInitialState(Core::ResourceStates::ShaderResource)
         .setKeepInitialState(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)

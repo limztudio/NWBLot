@@ -294,8 +294,8 @@ private:
     [[nodiscard]] bool replaceFeedbackCollectionScopes(const GpuTimingSampleSubscription& subscription, const Name* scopeNames, usize scopeCount);
     [[nodiscard]] usize findFeedbackScopeDemandLocked(const Name& scopeName)const noexcept;
     [[nodiscard]] bool feedbackScopeDemandedLocked(const Name& scopeName)const noexcept;
-    void addFeedbackScopeDemandsLocked(const Vector<Name, Alloc::GlobalArena>& scopeNames)noexcept;
-    void removeFeedbackScopeDemandsLocked(const Vector<Name, Alloc::GlobalArena>& scopeNames)noexcept;
+    void addFeedbackScopeDemandsLocked(Span<const Name> scopeNames)noexcept;
+    void removeFeedbackScopeDemandsLocked(Span<const Name> scopeNames)noexcept;
     [[nodiscard]] Expected<GpuTimingScope> beginScope(const Name& scopeName, Device& device, CommandList& commandList, GpuTimingSampleAttribution attribution, bool requiresComparableTimestamps);
     [[nodiscard]] Expected<GpuTimingScope> beginDeferredScope(const Name& scopeName, Device& device, CommandList& commandList, GpuTimingSampleAttribution attribution);
     void endScope(CommandList& commandList, GpuTimingScope& scope);
@@ -318,7 +318,7 @@ private:
     void publishSampleSubscriptionIdentityLimitLocked()noexcept;
     void eraseSampleListenerLocked(SampleListenerRecord& record)noexcept;
     void dispatchCompletedSample(const GpuTimingSample& sample, u64 subscriptionIdentityLimit);
-    void dispatchCompletedSamples(const SampleDispatchVector& samples);
+    void dispatchCompletedSamples(Span<const SampleDispatch> samples);
     void reservePendingAttributionSamplesLocked(SampleDispatchVector& outSamples)const;
     void retireMarkedPendingAttributionsLocked(SampleDispatchVector& outSamples);
     void discardMarkedPendingAttributionsLocked()noexcept;

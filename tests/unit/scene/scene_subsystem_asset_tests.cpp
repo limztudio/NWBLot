@@ -48,9 +48,9 @@ using namespace NWB::Impl;
 
 [[nodiscard]] static AssetBytes MakeSceneBinary(
     AssetArena& arena,
-    const SceneAsset::SubsystemRefVector& subsystems,
-    const SceneAsset::NameVector& enabledFeatures,
-    const SceneAsset::AssetRefVector& assets
+    const Span<const SceneAsset::SubsystemRef> subsystems,
+    const Span<const Name> enabledFeatures,
+    const Span<const SceneAsset::AssetRef> assets
 ){
     SceneBinaryPayload::SceneHeaderBinary header;
     header.subsystemCount = static_cast<u64>(subsystems.size());
@@ -74,9 +74,9 @@ using namespace NWB::Impl;
 
 [[nodiscard]] static AssetBytes MakeSubsystemBinary(
     AssetArena& arena,
-    const Subsystem::SubsystemRefVector& subsystems,
-    const Subsystem::AssetRefVector& assets,
-    const Subsystem::FeatureVector& features
+    const Span<const Subsystem::SubsystemRef> subsystems,
+    const Span<const Subsystem::AssetRef> assets,
+    const Span<const SubsystemFeature> features
 ){
     u64 featureAssetCount = 0u;
     for(const SubsystemFeature& feature : features)
@@ -141,7 +141,7 @@ public:
 
 
 public:
-    void setBinary(const Name& virtualPath, const AssetBytes& binary){
+    void setBinary(const Name& virtualPath, const Span<const u8> binary){
         AssetBytes copy(m_arena);
         copy.assign(binary.begin(), binary.end());
         for(Entry& entry : m_entries){

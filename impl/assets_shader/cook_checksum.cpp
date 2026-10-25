@@ -79,7 +79,7 @@ static ScratchPath NormalizeDependencyRootAliasPath(const ScratchPath& source){
 static Expected<ScratchString> BuildCanonicalDependencyPath(const Path& dependency, const Span<const NormalizedDependencyRootAlias> normalizedRootAliases, Core::Alloc::ScratchArena& scratchArena, const bool allowUnaliasedPath){
     const auto normalizedDependencyResult = AbsolutePath(ScratchPath(scratchArena, dependency));
     if(!normalizedDependencyResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve dependency path '{}' : {}"), PathToString<tchar>(dependency), StringConvert(normalizedDependencyResult.error().message()));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve dependency path '{}' : {}"), PathToString<tchar>(dependency), ConvertString(normalizedDependencyResult.error().message()));
         return MakeUnexpected(Failure{});
     }
     const ScratchPath normalizedDependency = normalizedDependencyResult->lexicallyNormal();
@@ -139,8 +139,8 @@ static Expected<ScratchString> BuildCanonicalDependencyPath(const Path& dependen
 
 
 Expected<ShaderCook::DependencyChecksum> ShaderCook::computeDependencyChecksum(
-    const CookVector<Path>& dependencies,
-    const CookVector<Path>& includeDirectories,
+    const Span<const Path> dependencies,
+    const Span<const Path> includeDirectories,
     const InitializerList<DependencyRootAlias> dependencyRootAliases,
     Core::Alloc::ScratchArena& scratchArena
 ){
@@ -169,7 +169,7 @@ Expected<ShaderCook::DependencyChecksum> ShaderCook::computeDependencyChecksum(
         __hidden_shader_cook_checksum::NormalizedDependencyRootAlias normalizedAlias{scratchArena};
         const auto rootPath = AbsolutePath(__hidden_shader_cook_checksum::ScratchPath(scratchArena, rootAlias.root));
         if(!rootPath){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve dependency root alias '{}' : {}"), PathToString<tchar>(rootAlias.root), StringConvert(rootPath.error().message()));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve dependency root alias '{}' : {}"), PathToString<tchar>(rootAlias.root), ConvertString(rootPath.error().message()));
             return MakeUnexpected(Failure{});
         }
 
@@ -216,7 +216,7 @@ Expected<ShaderCook::DependencyChecksum> ShaderCook::computeDependencyChecksum(
         auto readBinaryFileResult = ReadBinaryFile(*item.path, dependencyBytes);
         if(!readBinaryFileResult){
             if(readBinaryFileResult.error()){
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to read dependency file '{}' : {}"), PathToString<tchar>(*item.path), StringConvert(readBinaryFileResult.error().message()));
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to read dependency file '{}' : {}"), PathToString<tchar>(*item.path), ConvertString(readBinaryFileResult.error().message()));
             }
             else{
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to read dependency file '{}'"), PathToString<tchar>(*item.path));

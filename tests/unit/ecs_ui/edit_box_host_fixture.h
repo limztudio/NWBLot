@@ -96,8 +96,6 @@ public:
     bool delayed = false;
 };
 
-using FixtureShaper = UiEditHostFixtureSupport::FixtureShaper;
-
 class UiEditBoxHostTests : public testing::Test{
 public:
     UiEditBoxHostTests()
@@ -243,7 +241,7 @@ protected:
     FakeClipboard m_clipboard;
     UiEditBoxHost m_host;
     Ui::EditModel m_model;
-    FixtureShaper m_shaper;
+    UiEditHostFixtureSupport::FixtureShaper m_shaper;
     Ui::TextLayoutBuilder m_layoutBuilder;
     Ui::WidgetState m_widget;
     Ui::EditBoxPlacement m_placement;

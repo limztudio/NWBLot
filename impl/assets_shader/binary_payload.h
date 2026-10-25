@@ -48,8 +48,7 @@ namespace BytecodeValidationFailure{
     return byteSize >= s_SpvWordBytes && (byteSize % s_SpvWordBytes) == 0u;
 }
 
-template<typename BinaryContainer>
-[[nodiscard]] inline BytecodeValidationFailure::Enum ValidateBytecode(const BinaryContainer& binary)noexcept(noexcept(IsValidBytecodeSize(binary.size())) && noexcept(ReadPOD<u32>(binary, DeclVal<usize&>()))){
+[[nodiscard]] inline BytecodeValidationFailure::Enum ValidateBytecode(const Span<const u8> binary)noexcept{
     if(!IsValidBytecodeSize(binary.size()))
         return BytecodeValidationFailure::InvalidSize;
 
@@ -70,8 +69,8 @@ namespace AssetPayloadEncodeFailure{
     };
 };
 
-template<typename BytecodeContainer, typename PayloadContainer>
-[[nodiscard]] inline AssetPayloadEncodeFailure::Enum EncodeAssetPayload(const AStringView entryPoint, const BytecodeContainer& bytecode, PayloadContainer& outPayload){
+template<typename PayloadContainer>
+[[nodiscard]] inline AssetPayloadEncodeFailure::Enum EncodeAssetPayload(const AStringView entryPoint, const Span<const u8> bytecode, PayloadContainer& outPayload){
     if(entryPoint.empty() || entryPoint.size() > Limit<u32>::s_Max)
         return AssetPayloadEncodeFailure::InvalidEntryPoint;
     if(ValidateBytecode(bytecode) != BytecodeValidationFailure::None)
@@ -110,12 +109,7 @@ struct AssetPayloadView{
 };
 
 // The result borrows the serialized payload, which must outlive both views.
-template<typename PayloadContainer>
-[[nodiscard]] inline Expected<AssetPayloadView, AssetPayloadDecodeFailure::Enum> DecodeAssetPayload(const PayloadContainer& payload)noexcept(
-    noexcept(ReadPOD<u32>(payload, DeclVal<usize&>()))
-    && noexcept(ReadString(payload, DeclVal<usize&>()))
-    && noexcept(BinaryByteView{ payload.data() + DeclVal<usize&>(), payload.size() - DeclVal<usize&>() })
-){
+[[nodiscard]] inline Expected<AssetPayloadView, AssetPayloadDecodeFailure::Enum> DecodeAssetPayload(const Span<const u8> payload)noexcept{
     usize cursor = 0u;
     const auto magic = ReadPOD<u32>(payload, cursor);
     const auto version = ReadPOD<u32>(payload, cursor);

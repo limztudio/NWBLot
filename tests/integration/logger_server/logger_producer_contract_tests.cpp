@@ -68,7 +68,7 @@ TEST_F(LoggerProducerContracts, MissingArchiveRetainsNativeReadFailureInOwningRe
     const auto native = MakeDiagnosticEventText("native_category='{}'; native_code={}", missing.error().category().name(), missing.error().value());
     constexpr Name s_FailureTextScratchName("tests/integration/logger_server/producer_contracts/scratch");
     NWB::Core::Alloc::ScratchArena scratchArena(s_FailureTextScratchName);
-    const auto nativeText = StringConvert(scratchArena, native.view());
+    const auto nativeText = ConvertString(scratchArena, native.view());
     EXPECT_TRUE(ContainsMessage(result.message, nativeText));
     RemoveTestArtifacts(arena, s_Group);
 }

@@ -37,7 +37,7 @@ namespace AssetsSkeletonCookDetail{
     SkeletonJointMatrix matrix = ::MatrixIdentity<Float34>();
 
     if(!value.isList() || value.asList().size() != s_SkeletonJointMatrixRowCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must be a 3x4 affine matrix"), StringConvert(metaKind), PathToString<tchar>(nwbFilePath), StringConvert(label));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must be a 3x4 affine matrix"), ConvertString(metaKind), PathToString<tchar>(nwbFilePath), ConvertString(label));
         return MakeUnexpected(Failure{});
     }
 
@@ -45,7 +45,7 @@ namespace AssetsSkeletonCookDetail{
     for(usize rowIndex = 0u; rowIndex < s_SkeletonJointMatrixRowCount; ++rowIndex){
         const Core::Metascript::Value& row = rows[rowIndex];
         if(!row.isList() || row.asList().size() != s_SkeletonJointMatrixColumnCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' row {} must have 4 numeric values"), StringConvert(metaKind), PathToString<tchar>(nwbFilePath), StringConvert(label), rowIndex);
+            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' row {} must have 4 numeric values"), ConvertString(metaKind), PathToString<tchar>(nwbFilePath), ConvertString(label), rowIndex);
             return MakeUnexpected(Failure{});
         }
 
@@ -56,11 +56,11 @@ namespace AssetsSkeletonCookDetail{
             auto columnIndexResult = Core::Assets::TryDecodeMetadataFiniteF32(column);
             if(!columnIndexResult){
                 if(!column.isNumeric()){
-                    NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' row {} column {} must be numeric"), StringConvert(metaKind), PathToString<tchar>(nwbFilePath), StringConvert(label), rowIndex, columnIndex);
+                    NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' row {} column {} must be numeric"), ConvertString(metaKind), PathToString<tchar>(nwbFilePath), ConvertString(label), rowIndex, columnIndex);
                     return MakeUnexpected(Failure{});
                 }
 
-                NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' row {} column {} is non-finite or outside f32 range"), StringConvert(metaKind), PathToString<tchar>(nwbFilePath), StringConvert(label), rowIndex, columnIndex);
+                NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' row {} column {} is non-finite or outside f32 range"), ConvertString(metaKind), PathToString<tchar>(nwbFilePath), ConvertString(label), rowIndex, columnIndex);
                 return MakeUnexpected(Failure{});
             }
             rowValues[columnIndex] = *columnIndexResult;

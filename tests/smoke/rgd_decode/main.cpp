@@ -49,7 +49,7 @@ TEST(RgdDecode, GarbageInputFailsGracefully){
     });
     ASSERT_TRUE(WriteBinaryFile(inputPath, StringView("not a valid radeon gpu detective capture\n")));
 
-    const auto result = NWB::Log::Rgd::DecodeCrashDumpToText(s_Path.data());
+    const auto result = NWB::Log::Rgd::DecodeCrashDumpToText(s_Path);
     const auto removed = RemoveFile(inputPath);
     ASSERT_TRUE(removed);
     EXPECT_TRUE(*removed);
@@ -76,7 +76,7 @@ TEST(RgdDecode, AdmittedContainerWithoutCrashChunksFailsGracefully){
     });
     ASSERT_TRUE(WriteBinaryFile(inputPath, s_EmptyContainer));
 
-    const auto result = NWB::Log::Rgd::DecodeCrashDumpToText(AInteropString(s_Path));
+    const auto result = NWB::Log::Rgd::DecodeCrashDumpToText(s_Path);
     const auto removed = RemoveFile(inputPath);
     ASSERT_TRUE(removed);
     EXPECT_TRUE(*removed);

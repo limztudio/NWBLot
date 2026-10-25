@@ -80,8 +80,9 @@ Expected<NotNullUniquePtr<Core::ECS::World>> CreateUiLayerSmokeWorld(ProjectRunt
         return MakeUnexpected(Failure{});
     }
 
-    const Impl::UiLayerSystem::FontReferences fonts{
-        { { __hidden_ui_layer_smoke_world::s_DefaultLatin, __hidden_ui_layer_smoke_world::s_DefaultLatinAtlas }, { __hidden_ui_layer_smoke_world::s_DefaultKorean, __hidden_ui_layer_smoke_world::s_DefaultKoreanAtlas } }, context.objectArena
+    const Impl::UiFontBinding fonts[] = {
+        { __hidden_ui_layer_smoke_world::s_DefaultLatin, __hidden_ui_layer_smoke_world::s_DefaultLatinAtlas },
+        { __hidden_ui_layer_smoke_world::s_DefaultKorean, __hidden_ui_layer_smoke_world::s_DefaultKoreanAtlas },
     };
     const bool windowSmoke = IsUiLayerWindowSmokeEnabled();
     const bool popupSmoke = IsUiLayerPopupSmokeEnabled();

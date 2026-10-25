@@ -59,7 +59,7 @@ bool Skeleton::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     return AssetsSkeletonPayloadDetail::ValidateJoints<Core::Assets::AssetArena>(Span<const SkeletonJoint>(m_joints.data(), m_joints.size()), m_jointIndices, scratchArena);
 }
 
-bool Skeleton::loadBinary(const Core::Assets::AssetBytes& binary){
+bool Skeleton::loadBinary(const Span<const u8> binary){
     Core::Alloc::ScratchArena scratchArena(AssetsSkeletonArenaScope::s_LoadBinaryArena);
     usize cursor = 0u;
     const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SkeletonBinaryPayload::HeaderBinary>(binary, SkeletonBinaryPayload::s_SkeletonMagic, SkeletonBinaryPayload::s_SkeletonLoadBinaryContext, SkeletonBinaryPayload::s_SkeletonAssetKindLabel, cursor);
@@ -102,7 +102,7 @@ bool Skeleton::loadBinary(const Core::Assets::AssetBytes& binary){
         }
         const Name jointName(jointBinary.nameHash);
         if(!candidate.m_jointIndices.emplace(jointName, static_cast<u32>(candidate.m_joints.size())).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: duplicate joint '{}'"), StringConvert(jointName.resolvedText()));
+            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: duplicate joint '{}'"), ConvertString(jointName.resolvedText()));
             return false;
         }
 

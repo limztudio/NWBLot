@@ -66,7 +66,7 @@ public:
         bool& inOutSawVertexUvs,
         bool& inOutUsedDefaultUvs
     );
-    static Expected<usize> EstimateSelectedTriangleCorners(const UtilityVector<MeshInstance>& instances, const UtilityVector<usize>& selection);
+    static Expected<usize> EstimateSelectedTriangleCorners(Span<const MeshInstance> instances, Span<const usize> selection);
 
 
 public:

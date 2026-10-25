@@ -72,13 +72,13 @@ public:
 [[nodiscard]] inline bool PrepareGeneratedIncludeRoot(const Path& includeRoot, const AStringView generatorName){
     const auto removed = RemoveAllIfExists(includeRoot);
     if(!removed){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to clear generated include directory '{}': {}"), StringConvert(generatorName), PathToString<tchar>(includeRoot), StringConvert(removed.error().message()));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to clear generated include directory '{}': {}"), ConvertString(generatorName), PathToString<tchar>(includeRoot), ConvertString(removed.error().message()));
         return false;
     }
 
     const auto ensured = EnsureDirectories(includeRoot);
     if(!ensured){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create generated include directory '{}': {}"), StringConvert(generatorName), PathToString<tchar>(includeRoot), StringConvert(ensured.error().message()));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create generated include directory '{}': {}"), ConvertString(generatorName), PathToString<tchar>(includeRoot), ConvertString(ensured.error().message()));
         return false;
     }
     return true;

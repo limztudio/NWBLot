@@ -124,16 +124,16 @@ template<typename TAsset>
     Core::Alloc::ScratchArena& scratchArena
 ){
     if(TrimView(text).empty() || text != TrimView(text)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entry '{}' must be a non-empty trimmed virtual path"), StringConvert(diagnosticPrefix), PathToString<tchar>(nwbFilePath), StringConvert(fieldLabel), StringConvert(text));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entry '{}' must be a non-empty trimmed virtual path"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel), ConvertString(text));
         return MakeUnexpected(Failure{});
     }
     if(text.find('\\') != AStringView::npos || !Core::Assets::HasReservedAssetVirtualRoot(text, scratchArena)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entry '{}' must be an engine/- or project/-rooted virtual path"), StringConvert(diagnosticPrefix), PathToString<tchar>(nwbFilePath), StringConvert(fieldLabel), StringConvert(text));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entry '{}' must be an engine/- or project/-rooted virtual path"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel), ConvertString(text));
         return MakeUnexpected(Failure{});
     }
     const auto ref = Core::Assets::AssetRef<TAsset>::FromText(text);
     if(!ref || !ref->valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entry '{}' is invalid"), StringConvert(diagnosticPrefix), PathToString<tchar>(nwbFilePath), StringConvert(fieldLabel), StringConvert(text));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entry '{}' is invalid"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel), ConvertString(text));
         return MakeUnexpected(Failure{});
     }
     return *ref;
@@ -148,7 +148,7 @@ template<typename TAsset>
     Core::Alloc::ScratchArena& scratchArena
 ){
     if(!listValue.isList()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a list"), StringConvert(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), StringConvert(fieldLabel));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a list"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
         return MakeUnexpected(Failure{});
     }
     const auto& items = listValue.asList();
@@ -156,7 +156,7 @@ template<typename TAsset>
     refs.reserve(items.size());
     for(const Value& item : items){
         if(!item.isString()){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entries must be strings"), StringConvert(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), StringConvert(fieldLabel));
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entries must be strings"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
             return MakeUnexpected(Failure{});
         }
         const AStringView text(item.asString().data(), item.asString().size());
@@ -174,7 +174,7 @@ template<typename TAsset>
     Core::Assets::AssetArena& arena
 ){
     if(!listValue.isList()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a list"), StringConvert(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), StringConvert(s_EnabledFeaturesField));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a list"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_EnabledFeaturesField));
         return MakeUnexpected(Failure{});
     }
     const auto& items = listValue.asList();
@@ -182,17 +182,17 @@ template<typename TAsset>
     names.reserve(items.size());
     for(const Value& item : items){
         if(!item.isString()){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entries must be strings"), StringConvert(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), StringConvert(s_EnabledFeaturesField));
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entries must be strings"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_EnabledFeaturesField));
             return MakeUnexpected(Failure{});
         }
         const AStringView text(item.asString().data(), item.asString().size());
         if(TrimView(text).empty() || text != TrimView(text)){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': feature name '{}' must not be empty or padded"), StringConvert(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), StringConvert(text));
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': feature name '{}' must not be empty or padded"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(text));
             return MakeUnexpected(Failure{});
         }
         const auto parsedName = Name::FromText(text);
         if(!parsedName || !*parsedName){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': feature name '{}' contains an embedded null"), StringConvert(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), StringConvert(text));
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': feature name '{}' contains an embedded null"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(text));
             return MakeUnexpected(Failure{});
         }
         names.push_back(*parsedName);
@@ -295,7 +295,7 @@ Expected<SceneCookEntry> ParseSceneCookMetadata(
 
     const Core::Metascript::Value* subsystemsValue = asset.findField(s_SubsystemsField);
     if(!subsystemsValue){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required"), StringConvert(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), StringConvert(s_SubsystemsField));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_SubsystemsField));
         return MakeUnexpected(Failure{});
     }
     auto subsystems = ParseAssetRefList<Subsystem>(nwbFilePath, *subsystemsValue, s_SubsystemsField, arena, scratchArena);

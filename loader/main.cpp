@@ -306,7 +306,7 @@ static int RunProjectRuntime(NWB::Core::Alloc::ScratchArena& scratchArena, const
 
             auto archiveRecords = __hidden_loader::LoadShaderArchiveRecords(frame.projectObjectArena(), assetBinarySource);
             if(!archiveRecords){
-                NWB_LOGGER_FATAL(NWB_TEXT("Failed to load shader archive index '{}'"), StringConvert(NWB::Core::ShaderArchive::s_IndexVirtualPath));
+                NWB_LOGGER_FATAL(NWB_TEXT("Failed to load shader archive index '{}'"), ConvertString(NWB::Core::ShaderArchive::s_IndexVirtualPath));
                 return __hidden_loader::s_LoaderExitFailure;
             }
 
@@ -401,7 +401,7 @@ static int MainLogic(NWB::Core::Alloc::ScratchArena& scratchArena, const __hidde
     if(!logger.init(AStringView(options.logAddress.data(), options.logAddress.size())))
         return __hidden_loader::s_LoaderExitFailure;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: connected to log server '{}'"), StringConvert(options.logAddress));
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: connected to log server '{}'"), ConvertString(options.logAddress));
     if(crashReportingInstalled)
         __hidden_loader::ConfigureCrashReporting(options);
     else

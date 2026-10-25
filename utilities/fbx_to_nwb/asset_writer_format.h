@@ -1,0 +1,56 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "module.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_FBX_TO_NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace AssetWriterFormatDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] bool WriteMeshAsset(const ScratchPath& outputPath, const SourceMeshStreams& mesh);
+[[nodiscard]] bool WriteSkeletonAsset(const ScratchPath& outputPath, Span<ufbx_node* const> joints, Span<const JointMatrix> bindPoseMatrices, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] bool WriteSkinAsset(const ScratchPath& outputPath, AStringView meshName, AStringView skeletonName, Span<const MeshSkinInfluence> influences, Span<const JointMatrix> inverseBindMatrices, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] bool WriteModelAsset(const ScratchPath& outputPath, AStringView meshName, Optional<AStringView> skinName, Optional<AStringView> skeletonName, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] bool WriteAssetBunch(
+    const ScratchPath& outputPath,
+    const SourceMeshStreams& mesh,
+    Optional<AStringView> skinName,
+    Optional<AStringView> skeletonName,
+    Span<ufbx_node* const> skeletonJoints,
+    Span<const JointMatrix> skeletonBindPoseMatrices,
+    Span<const MeshSkinInfluence> skinInfluences,
+    Span<const JointMatrix> inverseBindMatrices,
+    Core::Alloc::ScratchArena& scratchArena
+);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_FBX_TO_NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

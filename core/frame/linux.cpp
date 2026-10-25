@@ -78,7 +78,7 @@ static Expected<LinuxBackendOrder> BuildBackendOrder(Alloc::ScratchArena& scratc
 
     const auto requestedBackend = ReadEnvironmentVariable(scratchArena, s_LinuxBackendEnvName);
     if(!requestedBackend){
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame: Failed to read Linux backend environment: {}"), StringConvert(requestedBackend.error().message()));
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame: Failed to read Linux backend environment: {}"), ConvertString(requestedBackend.error().message()));
         return MakeUnexpected(Failure{});
     }
     if(*requestedBackend){
@@ -98,21 +98,21 @@ static Expected<LinuxBackendOrder> BuildBackendOrder(Alloc::ScratchArena& scratc
         }
 #endif
 
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame: Unsupported NWB_LINUX_BACKEND='{}'."), StringConvert(**requestedBackend));
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame: Unsupported NWB_LINUX_BACKEND='{}'."), ConvertString(**requestedBackend));
         return MakeUnexpected(Failure{});
     }
 
 #if defined(NWB_WITH_WAYLAND)
     const auto sessionIsWayland = EnvironmentVariableEquals(scratchArena, s_XdgSessionTypeEnvName, s_WaylandBackendRequest);
     if(!sessionIsWayland){
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame: Failed to read session environment: {}"), StringConvert(sessionIsWayland.error().message()));
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame: Failed to read session environment: {}"), ConvertString(sessionIsWayland.error().message()));
         return MakeUnexpected(Failure{});
     }
     bool preferWayland = *sessionIsWayland;
     if(!preferWayland){
         const auto hasWaylandDisplay = HasEnvironmentValue(scratchArena, s_WaylandDisplayEnvName);
         if(!hasWaylandDisplay){
-            NWB_LOGGER_ERROR(NWB_TEXT("Frame: Failed to read Wayland display environment: {}"), StringConvert(hasWaylandDisplay.error().message()));
+            NWB_LOGGER_ERROR(NWB_TEXT("Frame: Failed to read Wayland display environment: {}"), ConvertString(hasWaylandDisplay.error().message()));
             return MakeUnexpected(Failure{});
         }
         preferWayland = *hasWaylandDisplay;
@@ -214,7 +214,7 @@ bool Frame::init(){
         const Common::LinuxFrameBackend::Enum backend = backendOrder->backends[i];
         if(FrameDetail::TryInitBackend(*this, backend)){
             frameData.setBackend(backend);
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Frame: Using Linux {} backend."), StringConvert(FrameDetail::BackendName(backend)));
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Frame: Using Linux {} backend."), ConvertString(FrameDetail::BackendName(backend)));
 
             if(!startup())
                 return false;
@@ -222,7 +222,7 @@ bool Frame::init(){
             return true;
         }
 
-        NWB_LOGGER_WARNING(NWB_TEXT("Frame: Failed to initialize Linux {} backend."), StringConvert(FrameDetail::BackendName(backend)));
+        NWB_LOGGER_WARNING(NWB_TEXT("Frame: Failed to initialize Linux {} backend."), ConvertString(FrameDetail::BackendName(backend)));
     }
 
     NWB_LOGGER_FATAL(NWB_TEXT("Frame: Failed to initialize any Linux window backend."));

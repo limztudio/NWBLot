@@ -282,7 +282,7 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePla
     Core::TextureDesc depthDesc;
     depthDesc
         .setWidth(plan.textureResolution).setHeight(plan.textureResolution).setArraySize(plan.viewCount)
-        .setDimension(Core::TextureDimension::Texture2DArray).setFormat(Core::Format::D32).setInRenderTarget(true)
+        .setDimension(Core::TextureDimension::Texture2DArray).setFormat(Core::Format::D32).setIsRenderTarget(true)
         .setInitialState(Core::ResourceStates::Common).setKeepInitialState(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName(Name("light_space_depth"))
     ;

@@ -253,7 +253,7 @@ Expected<bool> CsgGiScene::start(){
         return MakeUnexpected(Failure{});
     m_capture = Move(*capture);
     m_active = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: CSG GI arm={} overlapping_box_cutters=2 accepted_presentations={}"), StringConvert(arm), m_requiredPresentations);
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: CSG GI arm={} overlapping_box_cutters=2 accepted_presentations={}"), ConvertString(arm), m_requiredPresentations);
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: mixed CSG receiver has 12 closed and 2 open triangles"));
     return true;
 }

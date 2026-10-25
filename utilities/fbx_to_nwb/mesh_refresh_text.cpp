@@ -116,7 +116,7 @@ struct AssignmentRange{
 }
 
 template<typename Value, typename WriteValue>
-[[nodiscard]] ScratchString WriteValueList(const UtilityVector<Value>& values, WriteValue&& writeValue, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] ScratchString WriteValueList(const Span<const Value> values, WriteValue&& writeValue, Core::Alloc::ScratchArena& scratchArena){
     ScratchStringStream out(s_FileOpenWrite, scratchArena);
     out.precision(s_OutputFloatPrecision);
     out << s_ListOpenText;
@@ -129,7 +129,7 @@ template<typename Value, typename WriteValue>
     return Move(out).str();
 }
 
-[[nodiscard]] ScratchString WriteIndexList(const UtilityVector<u32>& indices, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] ScratchString WriteIndexList(const Span<const u32> indices, Core::Alloc::ScratchArena& scratchArena){
     ScratchStringStream out(s_FileOpenWrite, scratchArena);
     out.precision(s_OutputFloatPrecision);
     out << s_ListOpenText;
@@ -139,7 +139,7 @@ template<typename Value, typename WriteValue>
     return Move(out).str();
 }
 
-[[nodiscard]] ScratchString WriteVertexRefList(const UtilityVector<SourceVertexRef>& refs, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] ScratchString WriteVertexRefList(const Span<const SourceVertexRef> refs, Core::Alloc::ScratchArena& scratchArena){
     ScratchStringStream out(s_FileOpenWrite, scratchArena);
     out.precision(s_OutputFloatPrecision);
     out << s_ListOpenText;
@@ -153,7 +153,7 @@ template<typename Value, typename WriteValue>
 [[nodiscard]] bool AddReplacement(TextReplacements& replacements, const AStringView source, const AStringView variableName, const AStringView fieldName, ScratchString&& replacementText){
     auto replacementResult = FindListAssignmentRange(source, variableName, fieldName);
     if(!replacementResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: missing or ambiguous direct list assignment '{}.{}'"), StringConvert(variableName), StringConvert(fieldName));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: missing or ambiguous direct list assignment '{}.{}'"), ConvertString(variableName), ConvertString(fieldName));
         return false;
     }
 
@@ -163,15 +163,15 @@ template<typename Value, typename WriteValue>
 }
 
 [[nodiscard]] bool AppendMeshReplacements(TextReplacements& replacements, const AStringView source, const AStringView variableName, const SourceMeshStreamCounts& before, const SourceMeshStreams& after, Core::Alloc::ScratchArena& scratchArena){
-    if(before.positions != after.positions.size() && !AddReplacement(replacements, source, variableName, s_PositionsStreamLabel, WriteValueList(after.positions, [](ScratchStringStream& out, const Vec3& value){ WriteVec3(out, value); }, scratchArena)))
+    if(before.positions != after.positions.size() && !AddReplacement(replacements, source, variableName, s_PositionsStreamLabel, WriteValueList<Vec3>(after.positions, [](ScratchStringStream& out, const Vec3& value){ WriteVec3(out, value); }, scratchArena)))
         return false;
-    if(before.normals != after.normals.size() && !AddReplacement(replacements, source, variableName, s_NormalsStreamLabel, WriteValueList(after.normals, [](ScratchStringStream& out, const Vec3& value){ WriteVec3(out, value); }, scratchArena)))
+    if(before.normals != after.normals.size() && !AddReplacement(replacements, source, variableName, s_NormalsStreamLabel, WriteValueList<Vec3>(after.normals, [](ScratchStringStream& out, const Vec3& value){ WriteVec3(out, value); }, scratchArena)))
         return false;
-    if(before.tangents != after.tangents.size() && !AddReplacement(replacements, source, variableName, s_TangentsStreamLabel, WriteValueList(after.tangents, [](ScratchStringStream& out, const Vec4& value){ WriteVec4(out, value); }, scratchArena)))
+    if(before.tangents != after.tangents.size() && !AddReplacement(replacements, source, variableName, s_TangentsStreamLabel, WriteValueList<Vec4>(after.tangents, [](ScratchStringStream& out, const Vec4& value){ WriteVec4(out, value); }, scratchArena)))
         return false;
-    if(before.uv0 != after.uv0.size() && !AddReplacement(replacements, source, variableName, s_Uv0StreamLabel, WriteValueList(after.uv0, [](ScratchStringStream& out, const Vec2& value){ WriteVec2(out, value); }, scratchArena)))
+    if(before.uv0 != after.uv0.size() && !AddReplacement(replacements, source, variableName, s_Uv0StreamLabel, WriteValueList<Vec2>(after.uv0, [](ScratchStringStream& out, const Vec2& value){ WriteVec2(out, value); }, scratchArena)))
         return false;
-    if(before.colors != after.colors.size() && !AddReplacement(replacements, source, variableName, s_ColorsStreamLabel, WriteValueList(after.colors, [](ScratchStringStream& out, const Vec4& value){ WriteVec4(out, value); }, scratchArena)))
+    if(before.colors != after.colors.size() && !AddReplacement(replacements, source, variableName, s_ColorsStreamLabel, WriteValueList<Vec4>(after.colors, [](ScratchStringStream& out, const Vec4& value){ WriteVec4(out, value); }, scratchArena)))
         return false;
 
     const bool componentRefsChanged =
@@ -190,7 +190,7 @@ template<typename Value, typename WriteValue>
     return true;
 }
 
-void ApplyTextReplacements(ScratchString& inOutSource, TextReplacements& replacements){
+void ApplyTextReplacements(ScratchString& inOutSource, const Span<TextReplacement> replacements){
     Sort(replacements.begin(), replacements.end(), [](const TextReplacement& lhs, const TextReplacement& rhs)noexcept{
         return lhs.begin > rhs.begin;
     });
@@ -237,7 +237,7 @@ void ApplyTextReplacements(ScratchString& inOutSource, TextReplacements& replace
             continue;
 
         if(result.value){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: mesh '{}' has multiple skin assets"), StringConvert(meshVariableName));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: mesh '{}' has multiple skin assets"), ConvertString(meshVariableName));
             return MakeUnexpected(Failure{});
         }
 

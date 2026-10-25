@@ -579,7 +579,7 @@ void Value::appendListCopy(const Value& val){
     m_data.m_list->push_back(Move(candidate));
 }
 
-void Value::appendListCopies(const ListType& values, const usize count){
+void Value::appendListCopies(const Span<const Value> values, const usize count){
     NWB_ASSERT(count <= values.size());
     for(usize i = 0u; i < count; ++i)
         appendListCopy(values[i]);

@@ -50,7 +50,7 @@ static void InsertShaderKey(ShaderStageKeySet& outShaderKeys, const Name& shader
     }
 }
 
-static void CollectMaterialMeshShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>& materialEntries, ShaderStageKeySet& outShaderKeys){
+static void CollectMaterialMeshShaderKeys(const Span<const MaterialCookEntry> materialEntries, ShaderStageKeySet& outShaderKeys){
     const Name& meshStageName = Core::ShaderStageNames::ArchiveStageNameFromShaderType(Core::ShaderType::MeshStage);
     for(const MaterialCookEntry& materialEntry : materialEntries){
         const auto foundMeshShader = materialEntry.stageShaders.find(Core::ShaderType::MeshStage);
@@ -61,7 +61,7 @@ static void CollectMaterialMeshShaderKeys(const ShaderCook::CookVector<MaterialC
     }
 }
 
-ShaderStageKeySet CollectMaterialClipShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>& materialEntries, Core::Alloc::ScratchArena& scratchArena){
+ShaderStageKeySet CollectMaterialClipShaderKeys(const Span<const MaterialCookEntry> materialEntries, Core::Alloc::ScratchArena& scratchArena){
     ShaderStageKeySet shaderKeys{ 0, AssetsGraphicsCookDetail::ShaderStageKeyHasher(), EqualTo<AssetsGraphicsCookDetail::ShaderStageKey>(), scratchArena };
     shaderKeys.reserve(materialEntries.size());
 
@@ -76,7 +76,7 @@ ShaderStageKeySet CollectMaterialClipShaderKeys(const ShaderCook::CookVector<Mat
     return shaderKeys;
 }
 
-Expected<ShaderStageKeySet, NameTextError::Enum> CollectAvboitClipShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>& materialEntries, Core::Alloc::ScratchArena& scratchArena){
+Expected<ShaderStageKeySet, NameTextError::Enum> CollectAvboitClipShaderKeys(const Span<const MaterialCookEntry> materialEntries, Core::Alloc::ScratchArena& scratchArena){
     ShaderStageKeySet shaderKeys{ 0, AssetsGraphicsCookDetail::ShaderStageKeyHasher(), EqualTo<AssetsGraphicsCookDetail::ShaderStageKey>(), scratchArena };
     shaderKeys.reserve(materialEntries.size());
 
@@ -124,14 +124,14 @@ bool AddClipVariantCount(const ShaderCook::ShaderEntry& entry, const u64 sourceV
         return true;
     }
 
-    NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: CSG clip variant count overflow for entry '{}'"), StringConvert(entry.name));
+    NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: CSG clip variant count overflow for entry '{}'"), ConvertString(entry.name));
     return false;
 }
 
 Expected<ShaderCook::DefineCombo> BuildClipDefineCombo(ShaderCook::CookArena& cookArena, const AStringView entryName, const ShaderCook::DefineCombo& sourceCombo){
     constexpr usize s_AddedDefineCount = 2u;
     if(sourceCombo.size() > Limit<usize>::s_Max - s_AddedDefineCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: CSG shader define combo size overflow for entry '{}'"), StringConvert(entryName));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: CSG shader define combo size overflow for entry '{}'"), ConvertString(entryName));
         return MakeUnexpected(Failure{});
     }
 
@@ -145,14 +145,14 @@ Expected<ShaderCook::DefineCombo> BuildClipDefineCombo(ShaderCook::CookArena& co
     }
 
     if(!combo.try_emplace(s_IntervalSampleEnabledImplicitDefineName, s_IntervalSampleEnabledImplicitDefineValue).second){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: reserved CSG shader define '{}' already exists for entry '{}'"), StringConvert(s_IntervalSampleEnabledImplicitDefineName), StringConvert(entryName));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: reserved CSG shader define '{}' already exists for entry '{}'"), ConvertString(s_IntervalSampleEnabledImplicitDefineName), ConvertString(entryName));
         return MakeUnexpected(Failure{});
     }
 
     if(combo.try_emplace(s_ClipImplicitDefineName, s_EnabledImplicitDefineValue).second)
         return combo;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: reserved CSG shader define '{}' already exists for entry '{}'"), StringConvert(s_ClipImplicitDefineName), StringConvert(entryName));
+    NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: reserved CSG shader define '{}' already exists for entry '{}'"), ConvertString(s_ClipImplicitDefineName), ConvertString(entryName));
     return MakeUnexpected(Failure{});
 }
 

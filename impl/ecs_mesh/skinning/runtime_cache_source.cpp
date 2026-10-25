@@ -45,8 +45,7 @@ static constexpr TStringView s_AssetLoadContext = NWB_TEXT("MeshSkinningRuntimeC
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename MeshletVectorT, typename PositionRefVectorT, typename LocalVertexRefVectorT>
-[[nodiscard]] bool ResolveAttributeSkins(const MeshletVectorT& meshlets, const PositionRefVectorT& positionRefs, const LocalVertexRefVectorT& localVertexRefs, const usize attributeRefCount, MeshSkinningRuntimeInstance::AttributeSkinVector& outAttributeSkins){
+[[nodiscard]] bool ResolveAttributeSkins(const Span<const MeshletDesc> meshlets, const Span<const MeshletPositionStreamRef> positionRefs, const Span<const MeshletLocalVertexRef> localVertexRefs, const usize attributeRefCount, MeshSkinningRuntimeInstance::AttributeSkinVector& outAttributeSkins){
     return MeshMeshletRefValidation::ResolveMeshletAttributeSkins(meshlets, positionRefs, localVertexRefs, attributeRefCount, [](const usize meshletIndex, const usize attributeIndex, const u32 previousSkin, const u32 skinIndex){
             static_cast<void>(attributeIndex);
             static_cast<void>(previousSkin);
@@ -65,7 +64,7 @@ template<typename MeshletVectorT, typename PositionRefVectorT, typename LocalVer
 [[nodiscard]] bool BuildRuntimeLocalBounds(MeshSkinningRuntimeInstance& instance){
     instance.localBounds = RuntimeMeshLocalBounds{};
     if(instance.restPositions.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: skinning source '{}' has no positions for runtime bounds"), StringConvert(instance.sourceName.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: skinning source '{}' has no positions for runtime bounds"), ConvertString(instance.sourceName.resolvedText()));
         return false;
     }
 
@@ -76,7 +75,7 @@ template<typename MeshletVectorT, typename PositionRefVectorT, typename LocalVer
         AabbTests::Expand(LoadFloat(position), minBounds, maxBounds);
 
     if(!AabbTests::Valid(minBounds, maxBounds)){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: skinning source '{}' has invalid runtime bounds"), StringConvert(instance.sourceName.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: skinning source '{}' has invalid runtime bounds"), ConvertString(instance.sourceName.resolvedText()));
         return false;
     }
 
@@ -87,8 +86,8 @@ template<typename MeshletVectorT, typename PositionRefVectorT, typename LocalVer
 }
 
 
-template<typename MeshT, typename SkinStreamT>
-[[nodiscard]] bool BuildRuntimeZippedPayload(const MeshT& mesh, const SkinStreamT& skinStream, Core::Alloc::ScratchArena& scratchArena, MeshSkinningRuntimeInstance& instance){
+template<typename MeshT>
+[[nodiscard]] bool BuildRuntimeZippedPayload(const MeshT& mesh, const Span<const SkinInfluence4> skinStream, Core::Alloc::ScratchArena& scratchArena, MeshSkinningRuntimeInstance& instance){
     Vector<MeshletPositionStreamRef, Core::Alloc::ScratchArena> runtimePositionRefs{scratchArena};
     Vector<MeshletAttributeStreamRef, Core::Alloc::ScratchArena> runtimeAttributeRefs{scratchArena};
     usize positionRefCount = 0u;

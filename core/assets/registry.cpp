@@ -42,7 +42,7 @@ bool AssetRegistry::registerCodec(UniquePtr<IAssetCodec>&& codec, const bool rep
     const auto found = m_codecs.find(typeName);
     if(found != m_codecs.end()){
         if(!replaceExisting){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: codec for type '{}' is already registered"), StringConvert(typeName.resolvedText()));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: codec for type '{}' is already registered"), ConvertString(typeName.resolvedText()));
             return false;
         }
 
@@ -65,7 +65,7 @@ bool AssetRegistry::unregisterCodec(const Name& assetType)noexcept{
     return m_codecs.erase(assetType) != 0;
 }
 
-Expected<UniquePtr<IAsset>> AssetRegistry::deserializeAsset(const Name& assetType, const Name& virtualPath, const AssetBytes& binary)const{
+Expected<UniquePtr<IAsset>> AssetRegistry::deserializeAsset(const Name& assetType, const Name& virtualPath, const Span<const u8> binary)const{
     if(!assetType){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: asset type is empty"));
         return MakeUnexpected(Failure{});
@@ -74,11 +74,11 @@ Expected<UniquePtr<IAsset>> AssetRegistry::deserializeAsset(const Name& assetTyp
     return deserializeAssetByName(assetType, virtualPath, binary);
 }
 
-Expected<UniquePtr<IAsset>> AssetRegistry::deserializeAssetByName(const Name& assetType, const Name& virtualPath, const AssetBytes& binary)const{
+Expected<UniquePtr<IAsset>> AssetRegistry::deserializeAssetByName(const Name& assetType, const Name& virtualPath, const Span<const u8> binary)const{
     ScopedLock lock(m_mutex);
     const auto found = m_codecs.find(assetType);
     if(found == m_codecs.end()){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: no codec for type '{}'"), StringConvert(assetType.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: no codec for type '{}'"), ConvertString(assetType.resolvedText()));
         return MakeUnexpected(Failure{});
     }
     const NotNull<IAssetCodec*> codec(found.value().get());

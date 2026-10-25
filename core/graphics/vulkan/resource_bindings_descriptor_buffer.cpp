@@ -557,14 +557,14 @@ bool DescriptorBufferManager::initializeSegment(SegmentStorage& segment, const A
 
     const auto allocation = m_allocator.createHostMappedBuffer(bufferInfo);
     if(!allocation){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor buffer '{}': {}"), StringConvert(debugName), ResultToString(allocation.error()));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor buffer '{}': {}"), ConvertString(debugName), ResultToString(allocation.error()));
         return false;
     }
     segment.buffer = allocation->buffer;
     segment.allocation = allocation->allocation;
     segment.mappedMemory = allocation->mappedMemory;
     if(!segment.mappedMemory){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map descriptor buffer memory '{}'"), StringConvert(debugName));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map descriptor buffer memory '{}'"), ConvertString(debugName));
         shutdownSegment(segment);
         return false;
     }
@@ -574,7 +574,7 @@ bool DescriptorBufferManager::initializeSegment(SegmentStorage& segment, const A
     addressInfo.buffer = segment.buffer;
     segment.deviceAddress = m_context.deviceDispatch.vkGetBufferDeviceAddress(m_context.device, &addressInfo);
     if(segment.deviceAddress == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to query descriptor buffer device address '{}'."), StringConvert(debugName));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to query descriptor buffer device address '{}'."), ConvertString(debugName));
         shutdownSegment(segment);
         return false;
     }

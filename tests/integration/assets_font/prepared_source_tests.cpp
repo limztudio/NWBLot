@@ -89,7 +89,7 @@ struct MalformedField{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<Path> WriteCase(SourceTestArena& testArena, const AStringView filename, const Core::Assets::AssetBytes& binary){
+[[nodiscard]] static Expected<Path> WriteCase(SourceTestArena& testArena, const AStringView filename, const Span<const u8> binary){
     Path candidate = Path(testArena.arena, NWB_REPO_ROOT) / "__artifacts" / "font_source_tests" / filename;
     if(!EnsureDirectories(candidate.parentPath()) || !WriteBinaryFile(candidate, binary))
         return MakeUnexpected(Failure{});

@@ -39,13 +39,13 @@ namespace __hidden_gather{
     for(const Assets::AssetString& input : options.inputs){
         const auto absolutePath = AbsolutePath(Path(arena, input));
         if(!absolutePath){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to resolve input '{}'"), StringConvert(input));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to resolve input '{}'"), ConvertString(input));
             return MakeUnexpected(Failure{});
         }
         const Path path = absolutePath->lexicallyNormal();
         const auto directory = IsDirectory(path);
         if(!directory){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to inspect input '{}'"), StringConvert(input));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to inspect input '{}'"), ConvertString(input));
             return MakeUnexpected(Failure{});
         }
         if(!*directory){
@@ -66,7 +66,7 @@ namespace __hidden_gather{
         }
         const auto entries = RecursiveDirectoryIterator<Assets::AssetArena>::Create(path);
         if(!entries){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to scan input '{}'"), StringConvert(input));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to scan input '{}'"), ConvertString(input));
             return MakeUnexpected(Failure{});
         }
         for(const auto& entry : *entries){
@@ -75,7 +75,7 @@ namespace __hidden_gather{
                 NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to inspect input entry '{}'"), PathToString<tchar>(entry.path()));
                 return MakeUnexpected(Failure{});
             }
-            if(*regular && PathToString(arena, entry.path().extension()) == Assets::BuiltAssetDetail::s_Extension)
+            if(*regular && PathToString(scratchArena, entry.path().extensionView()) == Assets::BuiltAssetDetail::s_Extension)
                 files.emplace_back(PathToString(arena, entry.path()));
         }
     }
@@ -126,7 +126,7 @@ bool GatherAssets(const AssetGatherOptions& options){
             const bool identical = existing.payloadBytes.size() == payloadSize && NWB_MEMCMP(existing.payloadBytes.data(), bytes.data() + payloadOffset, payloadSize) == 0;
             if(!identical){
                 if(!options.mergePayloads || !options.mergePayloads(virtualPath, bytes.data() + payloadOffset, payloadSize, scratchArena, existing.payloadBytes)){
-                    NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: conflicting built asset identity '{}'"), StringConvert(virtualPath.resolvedText()));
+                    NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: conflicting built asset identity '{}'"), ConvertString(virtualPath.resolvedText()));
                     return false;
                 }
                 existing.identity.payloadSize = existing.payloadBytes.size();
@@ -142,7 +142,7 @@ bool GatherAssets(const AssetGatherOptions& options){
     Assets::ResolvedCookPaths paths(arena);
     const auto outputDirectory = AbsolutePath(Path(arena, options.outputDirectory));
     if(!outputDirectory){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to resolve output '{}'"), StringConvert(options.outputDirectory));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to resolve output '{}'"), ConvertString(options.outputDirectory));
         return false;
     }
     paths.outputDirectory = outputDirectory->lexicallyNormal();
@@ -153,7 +153,7 @@ bool GatherAssets(const AssetGatherOptions& options){
     const auto result = Assets::AssetsVolumeCookDetail::WriteAssetVolume(arena, paths, configuration, manifest, scratchArena);
     if(!result)
         return false;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("AssetGatherer: gathered {} assets into '{}'"), result->fileCount, StringConvert(options.outputDirectory));
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("AssetGatherer: gathered {} assets into '{}'"), result->fileCount, ConvertString(options.outputDirectory));
     return true;
 }
 

@@ -89,8 +89,8 @@ template<usize Capacity, typename Input>
     return saved;
 }
 
-template<usize Capacity, typename Input>
-void ExpectAcceptedTargets(const Input& input, const Array<HitTarget, Capacity>& targets, const usize count, const bool checkOwnerDeclaration = false){
+template<typename Input>
+void ExpectAcceptedTargets(const Input& input, const Span<const HitTarget> targets, const usize count, const bool checkOwnerDeclaration = false){
     ASSERT_EQ(input.targets().size(), count);
     ASSERT_LE(count, targets.size());
     for(usize index = 0u; index < count; ++index){

@@ -49,7 +49,7 @@ TEST(GpuTaskGraphResourceVersion, RequiresWholeResourceRangesForAccelStructAndHa
         if(!version.valid())
             return MakeUnexpected(Graphics::GpuTaskGraphAnalysisStatus::NotAnalyzed);
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-        if(!Analyze(operationScratchArena, graph, analysis))
+        if(!TaskGraphTestUtils::Analyze(operationScratchArena, graph, analysis))
             return MakeUnexpected(analysis.diagnostic().status);
         return {};
     };

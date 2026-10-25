@@ -245,11 +245,11 @@ ScratchPath DefaultOutputPath(const AStringView inputPath, Core::Alloc::ScratchA
 
 Expected<SceneHandle> LoadScene(const ImportOptions& options, Core::Alloc::ScratchArena& scratchArena);
 UtilityVector<MeshInstance> CollectMeshInstances(ufbx_scene* scene, bool includeHidden);
-void PrintMeshInstances(const UtilityVector<MeshInstance>& instances, Core::Alloc::ScratchArena& scratchArena);
-Expected<UtilityVector<usize>> SelectMeshInstances(const UtilityVector<MeshInstance>& instances, const AStringView selector, Core::Alloc::ScratchArena& scratchArena);
+void PrintMeshInstances(Span<const MeshInstance> instances, Core::Alloc::ScratchArena& scratchArena);
+Expected<UtilityVector<usize>> SelectMeshInstances(Span<const MeshInstance> instances, const AStringView selector, Core::Alloc::ScratchArena& scratchArena);
 Expected<MeshBuildResult> BuildMesh(
-    const UtilityVector<MeshInstance>& instances,
-    const UtilityVector<usize>& selection,
+    Span<const MeshInstance> instances,
+    Span<const usize> selection,
     const ImportOptions& options,
     bool wantsSkinning,
     const Vec4& defaultColor,
@@ -267,9 +267,9 @@ bool WriteNwbAsset(
     const AStringView assetTypeText,
     const AStringView virtualRoot,
     bool separateAssets,
-    const UtilityVector<ufbx_node*>& skeletonJoints,
-    const UtilityVector<JointMatrix>& skeletonBindPoseMatrices,
-    const UtilityVector<JointMatrix>& inverseBindMatrices,
+    Span<ufbx_node* const> skeletonJoints,
+    Span<const JointMatrix> skeletonBindPoseMatrices,
+    Span<const JointMatrix> inverseBindMatrices,
     Core::Alloc::ScratchArena& scratchArena
 );
 

@@ -335,7 +335,7 @@ TEST(AssetsGraphics, ShaderMetadataRejectsEngineTransportDefinesAndRecoversWithR
             ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(shaderPath, obsoleteShaderMetadata));
             EXPECT_FALSE(AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(shaderPath, testArena, scratchArena, shaderCook));
             EXPECT_FALSE(shaderEntry.defineValues.empty());
-            const auto expectedDiagnostic = StringFormat(testArena.arena, NWB_TEXT("define '{}' is an engine transport feature"), StringConvert(transportName));
+            const auto expectedDiagnostic = StringFormat(testArena.arena, NWB_TEXT("define '{}' is an engine transport feature"), ConvertString(transportName));
             EXPECT_TRUE(logger.sawErrorContaining(expectedDiagnostic));
             ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(shaderPath, validShaderMetadata));
             auto metadataResult4 = AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(shaderPath, testArena, scratchArena, shaderCook);

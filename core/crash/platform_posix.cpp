@@ -6,6 +6,7 @@
 
 #include <global/algorithm.h>
 #include <global/blocking_io.h>
+#include <global/process_capture.h>
 #include <global/process_execution.h>
 #include <global/scope_exit.h>
 

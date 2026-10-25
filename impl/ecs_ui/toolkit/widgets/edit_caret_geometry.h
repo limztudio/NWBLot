@@ -50,7 +50,7 @@ struct EditCaretLine{
 };
 
 // Queries owned projections of validated caret geometry; copied hosts share line, midpoint and preedit endpoint behavior.
-[[nodiscard]] Expected<usize> HitEditCaretGeometry(const PaintVector<EditCaretLine>& lines, const PaintVector<EditBoxCaretStop>& stops, Point localPoint)noexcept;
+[[nodiscard]] Expected<usize> HitEditCaretGeometry(Span<const EditCaretLine> lines, Span<const EditBoxCaretStop> stops, Point localPoint)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,7 +72,7 @@ public:
 
 public:
     // Mapping is supplied by the committed/preedit snapshot; adoption is atomic.
-    [[nodiscard]] bool adoptLayout(TextLayout&& layout, StringView expectedText, const PaintVector<EditCaretMapping>& mapping, usize committedBytes, EditTextMode::Enum mode);
+    [[nodiscard]] bool adoptLayout(TextLayout&& layout, StringView expectedText, Span<const EditCaretMapping> mapping, usize committedBytes, EditTextMode::Enum mode);
     // Native preedit can address scalar edges inside graphemes; rectangles are local and have zero width.
     [[nodiscard]] Expected<Rect> caretRect(usize displayByte)const noexcept;
     [[nodiscard]] Expected<usize> hitTest(Point localPoint)const noexcept;

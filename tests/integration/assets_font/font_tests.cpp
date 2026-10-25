@@ -87,7 +87,7 @@ static constexpr usize s_HeadUnitsPerEmEnd = 20u;
     return candidate;
 }
 
-[[nodiscard]] static Core::Assets::AssetBytes MakeBinary(FontTestArena& testArena, const FontBinaryPayload::HeaderBinary& header, const Core::Assets::AssetBytes& source){
+[[nodiscard]] static Core::Assets::AssetBytes MakeBinary(FontTestArena& testArena, const FontBinaryPayload::HeaderBinary& header, const Span<const u8> source){
     Core::Assets::AssetBytes binary(testArena.arena);
     binary.reserve(sizeof(header) + source.size());
     AppendPOD(binary, header);
@@ -102,7 +102,7 @@ static void WriteBigU32(const NotNull<u8*> bytes, const u32 value)noexcept{
     bytes.get()[3u] = static_cast<u8>(value);
 }
 
-[[nodiscard]] static usize FindTableRecord(const Core::Assets::AssetBytes& bytes, const u32 tag)noexcept{
+[[nodiscard]] static usize FindTableRecord(const Span<const u8> bytes, const u32 tag)noexcept{
     const u32 tableCount = (static_cast<u32>(bytes[s_SfntTableCountHighByte]) << 8u) | bytes[s_SfntTableCountLowByte];
     for(u32 index = 0u; index < tableCount; ++index){
         const usize record = s_FontSfntHeaderBytes + static_cast<usize>(index) * s_SfntTableRecordBytes;
@@ -399,7 +399,7 @@ TEST(AssetsFont, NativeFaceFailurePreservesErrorCodeAndReclaimsValidationAllocat
     AppendUnsignedToFixedBuffer(expectedCode, static_cast<u64>(signedCode < 0 ? -signedCode : signedCode));
     constexpr Name s_DiagnosticScratch("tests/assets_font/native_validation_diagnostic");
     Core::Alloc::ScratchArena scratchArena(s_DiagnosticScratch);
-    const auto expectedDiagnostic = StringConvert(scratchArena, AStringView(expectedCode));
+    const auto expectedDiagnostic = ConvertString(scratchArena, AStringView(expectedCode));
     EXPECT_TRUE(logger.sawErrorContaining(expectedDiagnostic));
     EXPECT_EQ(logger.errorCount(), 1u);
     EXPECT_TRUE(ValidateFontSource(font.fontBytes(), 0u));

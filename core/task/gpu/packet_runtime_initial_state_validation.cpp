@@ -66,7 +66,7 @@ template<typename States, typename ResourceGetter>
 }
 
 template<typename States, typename Resource, typename ResourceGetter>
-[[nodiscard]] static ResourceStates::Mask FindPermanentState(const States& states, const Vector<usize, Alloc::ScratchArena>& index, Resource* const resource, const ResourceGetter resourceGetter)noexcept{
+[[nodiscard]] static ResourceStates::Mask FindPermanentState(const States& states, const Span<const usize> index, Resource* const resource, const ResourceGetter resourceGetter)noexcept{
     usize begin = 0u;
     usize end = index.size();
     while(begin < end){

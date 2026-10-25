@@ -39,7 +39,7 @@ void AppendRadeonGpuDetectiveSummary(Core::Alloc::ScratchArena& arena, const Cra
     const CrashScratchPath rgdCapture = packageDirectory / CrashNames::s_GpuDetectiveCaptureFileName;
     const auto regularCapture = IsRegularFile(rgdCapture);
     if(!regularCapture){
-        NWB_LOGGER_WARNING(NWB_TEXT("Log server: failed to inspect Radeon GPU Detective capture '{}': {}"), PathToString<tchar>(rgdCapture), StringConvert(regularCapture.error().message()));
+        NWB_LOGGER_WARNING(NWB_TEXT("Log server: failed to inspect Radeon GPU Detective capture '{}': {}"), PathToString<tchar>(rgdCapture), ConvertString(regularCapture.error().message()));
         outReport += s_GpuDetectiveSectionHeader;
         outReport += "status=inspect_failed\n";
         return;
@@ -49,7 +49,7 @@ void AppendRadeonGpuDetectiveSummary(Core::Alloc::ScratchArena& arena, const Cra
 
     const AString<Core::Alloc::ScratchArena> capturePath = PathToString<char>(arena, rgdCapture);
 
-    const auto decoded = Rgd::DecodeCrashDumpToText(AInteropString(capturePath.data(), capturePath.size()));
+    const auto decoded = Rgd::DecodeCrashDumpToText(capturePath);
     if(!decoded){
         outReport += s_GpuDetectiveSectionHeader;
         outReport += s_GpuDetectiveDecodeFailedStatus;

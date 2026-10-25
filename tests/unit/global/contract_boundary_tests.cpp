@@ -14,6 +14,7 @@
 #include <global/numeric_text.h>
 #include <global/overflow.h>
 #include <global/process_execution.h>
+#include <global/process_capture.h>
 #include <global/refcount_ptr.h>
 #include <global/utf8_text.h>
 

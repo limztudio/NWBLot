@@ -136,7 +136,7 @@ public:
         // The benchmark still checks sample coverage.
         for(const Name& scope : singleRangeScopes){
             if(!timing.prepareScopeQueries(scope, device, s_InFlightRanges)){
-                NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: failed to prepare timing scope '{}'"), StringConvert(scope.resolvedText()));
+                NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: failed to prepare timing scope '{}'"), ConvertString(scope.resolvedText()));
                 return false;
             }
         }
@@ -214,7 +214,7 @@ public:
         }
         const bool screenCase = caseName == "onscreen" || caseName == s_OnscreenMovedCase || caseName == s_BoundaryCase || caseName == s_FloorCase;
         if(caseName != s_OffscreenCase && caseName != s_MovedCase && caseName != s_OpaqueGlassCase && !screenCase && !m_extendedCase){
-            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: unknown case '{}'"), StringConvert(caseName));
+            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: unknown case '{}'"), ConvertString(caseName));
             return false;
         }
         const auto cameraId = CreateSmokeCamera(*m_world, 1.4f, 6.0f, 0.0f);
@@ -275,7 +275,7 @@ public:
             m_timingRenderPassRegistered = true;
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: timing render unfocused 1"));
         }
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: case {} created"), StringConvert(caseName));
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: case {} created"), ConvertString(caseName));
         return true;
     }
 
@@ -323,7 +323,7 @@ private:
         else if(*text == "1")
             value = true;
         else{
-            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: {} must be 0 or 1"), StringConvert(name));
+            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: {} must be 0 or 1"), ConvertString(name));
             return false;
         }
         return true;
@@ -335,7 +335,7 @@ private:
             return true;
         const auto parsed = ParseU64(AStringView(text->data(), text->size()));
         if(!parsed || *parsed < minimum || *parsed > maximum){
-            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: {} must be in [{}, {}]"), StringConvert(name), minimum, maximum);
+            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: {} must be in [{}, {}]"), ConvertString(name), minimum, maximum);
             return false;
         }
         value = static_cast<u32>(*parsed);
@@ -456,7 +456,7 @@ private:
         else if(route == "hybrid")
             settings.traceMode = NWB::Impl::ReflectionTraceMode::Hybrid;
         else if(route != s_HardwareRoute){
-            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: unknown reflection mode '{}'"), StringConvert(route));
+            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: unknown reflection mode '{}'"), ConvertString(route));
             return false;
         }
         const auto debugText = ReadSmokeEnvironmentText(scratchArena, "NWB_REFLECTION_SMOKE_DEBUG");
@@ -467,7 +467,7 @@ private:
             else if(debugView == "confidence")
                 settings.debugView = NWB::Impl::ReflectionDebugView::Confidence;
             else if(debugView != "none"){
-                NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: unknown debug view '{}'"), StringConvert(debugView));
+                NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: unknown debug view '{}'"), ConvertString(debugView));
                 return false;
             }
         }
@@ -479,7 +479,7 @@ private:
         m_renderer.setRefractionHardwareTracingEnabled(true);
         const bool hardwareAvailable = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct) && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: hardware {}"), hardwareAvailable ? NWB_TEXT("available") : NWB_TEXT("unavailable"));
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: reflection mode {}"), StringConvert(route));
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: reflection mode {}"), ConvertString(route));
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: hardware ray budget {}"), settings.maxHardwareRaysPerFrame);
         if(m_opticalCase)
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: optical query limit {}"), settings.maxOpticalQueries);

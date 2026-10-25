@@ -35,11 +35,11 @@ public:
     {}
 };
 
-void BuildTaskDependencyAdjacency(const GraphicsVector<GpuTaskDependencyEdge>& edges, usize taskCount, Alloc::ScratchArena& scratchArena, TaskDependencyAdjacency& outAdjacency);
+void BuildTaskDependencyAdjacency(Span<const GpuTaskDependencyEdge> edges, usize taskCount, Alloc::ScratchArena& scratchArena, TaskDependencyAdjacency& outAdjacency);
 
 [[nodiscard]] bool BuildTopologicalOrder(
     const GpuTaskGraph::DeclarationReadView& graph,
-    const GraphicsVector<GpuTaskDependencyEdge>& edges,
+    Span<const GpuTaskDependencyEdge> edges,
     const TaskDependencyAdjacency& adjacency,
     Alloc::ScratchArena& scratchArena,
     GraphicsVector<GpuTaskId>& outOrder,
@@ -48,15 +48,15 @@ void BuildTaskDependencyAdjacency(const GraphicsVector<GpuTaskDependencyEdge>& e
 );
 
 void BuildSchedulingEdges(
-    const GraphicsVector<GpuTaskDependencyEdge>& rawEdges,
+    Span<const GpuTaskDependencyEdge> rawEdges,
     const TaskDependencyAdjacency& adjacency,
-    const GraphicsVector<GpuTaskId>& topologicalOrder,
+    Span<const GpuTaskId> topologicalOrder,
     Alloc::ScratchArena& scratchArena,
     GraphicsVector<GpuTaskDependencyEdge>& outSchedulingEdges
 );
 
 void BuildSchedulingTaskAdjacency(
-    const GraphicsVector<GpuTaskDependencyEdge>& schedulingEdges,
+    Span<const GpuTaskDependencyEdge> schedulingEdges,
     usize taskCount,
     u64 graphGeneration,
     Alloc::ScratchArena& scratchArena,

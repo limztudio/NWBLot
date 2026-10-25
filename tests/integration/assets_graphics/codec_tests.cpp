@@ -139,7 +139,7 @@ using AssetObjectCachePathVector = Vector<Path, NWB::Core::Alloc::GlobalArena>;
         if(!*isRegularFile)
             continue;
 
-        const auto extension = PathToString(testArena.arena, entry.path().extension());
+        const auto extension = PathToString(testArena.arena, entry.path().extensionView());
         if(extension != ".nwbobj")
             continue;
 
@@ -196,7 +196,7 @@ using AssetObjectCachePathVector = Vector<Path, NWB::Core::Alloc::GlobalArena>;
     return bytes;
 }
 
-static bool AssetBytesEqual(const NWB::Core::Assets::AssetBytes& lhs, const NWB::Core::Assets::AssetBytes& rhs)noexcept{
+static bool AssetBytesEqual(const Span<const u8> lhs, const Span<const u8> rhs)noexcept{
     if(lhs.size() != rhs.size())
         return false;
     for(usize i = 0u; i < lhs.size(); ++i){

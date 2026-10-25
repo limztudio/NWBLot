@@ -97,12 +97,12 @@ public:
     const Path& deferredBxdfIncludeRoot,
     const Path& shadowSurfaceIncludeRoot,
     const IncludeMetadataMap& includeMetadata,
-    const ShaderCook::CookVector<MaterialBindEntry>& materialBindEntries,
-    const ShaderCook::CookVector<MaterialCookEntry>& materialEntries,
+    Span<const MaterialBindEntry> materialBindEntries,
+    Span<const MaterialCookEntry> materialEntries,
     ShaderCook::CookArena& cookArena,
     ScratchArena& scratchArena,
     ShaderCook& shaderCook,
-    ShaderEntryVector& inOutShaderEntries
+    Span<ShaderCook::ShaderEntry> inOutShaderEntries
 );
 
 

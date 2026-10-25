@@ -299,7 +299,7 @@ using ImageQueueFamilyVector = Vector<u32, Alloc::GlobalArena>;
     return result;
 }
 
-[[nodiscard]] static VkImageCreateInfo RetainImageCreateInfo(const VkImageCreateInfo& imageInfo, const ImageQueueFamilyVector& queueFamilyIndices)noexcept{
+[[nodiscard]] static VkImageCreateInfo RetainImageCreateInfo(const VkImageCreateInfo& imageInfo, const Span<const u32> queueFamilyIndices)noexcept{
     NWB_ASSERT(queueFamilyIndices.size() <= Limit<u32>::s_Max);
     VkImageCreateInfo result = imageInfo;
     result.pNext = nullptr;

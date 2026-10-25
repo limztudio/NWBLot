@@ -74,7 +74,7 @@ Expected<NotNull<const Core::Metascript::Value*>> MeshCookMetadata::FindRequired
     if(field && field->isList())
         return MakeNotNull(field);
 
-    NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': field '{}' must be a list"), metaKind, PathToString<tchar>(nwbFilePath), StringConvert(fieldName));
+    NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': field '{}' must be a list"), metaKind, PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
     return MakeUnexpected(Failure{});
 }
 
@@ -96,15 +96,15 @@ Expected<f32, MetadataF32ValueFailure::Enum> MeshCookMetadata::ValidateMetadataF
 void MeshCookMetadata::LogMetadataFiniteF32ValueFailure(const Path& nwbFilePath, const TStringView metaKind, const AStringView label, const MetadataF32ValueFailure::Enum failure){
     switch(failure){
     case MetadataF32ValueFailure::NotNumeric:
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only numeric values"), metaKind, PathToString<tchar>(nwbFilePath), StringConvert(label));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only numeric values"), metaKind, PathToString<tchar>(nwbFilePath), ConvertString(label));
         return;
 
     case MetadataF32ValueFailure::NonFinite:
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only finite numeric values"), metaKind, PathToString<tchar>(nwbFilePath), StringConvert(label));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only finite numeric values"), metaKind, PathToString<tchar>(nwbFilePath), ConvertString(label));
         return;
 
     case MetadataF32ValueFailure::OutOfRange:
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a value outside the f32 range"), metaKind, PathToString<tchar>(nwbFilePath), StringConvert(label));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a value outside the f32 range"), metaKind, PathToString<tchar>(nwbFilePath), ConvertString(label));
         return;
 
     default:
@@ -130,15 +130,15 @@ Expected<u32, MetadataU32ValueFailure::Enum> MeshCookMetadata::ValidateMetadataU
 void MeshCookMetadata::LogMetadataU32ValueFailure(const Path& nwbFilePath, const TStringView metaKind, const AStringView label, const MetadataU32ValueFailure::Enum failure){
     switch(failure){
     case MetadataU32ValueFailure::NotNumeric:
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only integer values"), metaKind, PathToString<tchar>(nwbFilePath), StringConvert(label));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only integer values"), metaKind, PathToString<tchar>(nwbFilePath), ConvertString(label));
         return;
 
     case MetadataU32ValueFailure::NonIntegerOrNegative:
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a non-integer or negative value"), metaKind, PathToString<tchar>(nwbFilePath), StringConvert(label));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a non-integer or negative value"), metaKind, PathToString<tchar>(nwbFilePath), ConvertString(label));
         return;
 
     case MetadataU32ValueFailure::OutOfRange:
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a value that exceeds u32"), metaKind, PathToString<tchar>(nwbFilePath), StringConvert(label));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a value that exceeds u32"), metaKind, PathToString<tchar>(nwbFilePath), ConvertString(label));
         return;
 
     default:

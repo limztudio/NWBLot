@@ -166,7 +166,7 @@ bool RendererReflectionPostprocess::prepareImage(ReflectionRadianceBinding& imag
     if(image.texture)
         return true;
     Core::TextureDesc desc;
-    desc.setWidth(m_width).setHeight(m_height).setFormat(Core::Format::RGBA16_FLOAT).setInUAV(true).setName(name).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setInitialState(Core::ResourceStates::Common).setKeepInitialState(true);
+    desc.setWidth(m_width).setHeight(m_height).setFormat(Core::Format::RGBA16_FLOAT).setIsUAV(true).setName(name).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setInitialState(Core::ResourceStates::Common).setKeepInitialState(true);
     auto textureResult = m_graphics.createTexture(desc);
     if(!textureResult)
         return false;

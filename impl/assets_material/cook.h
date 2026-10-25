@@ -129,9 +129,9 @@ public:
 
 
 [[nodiscard]] Expected<MaterialCookEntry> ParseMaterialCookMetadata(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] bool ValidateMaterialCookInterfaces(const MaterialCookVector<MaterialBindEntry>& materialBindEntries, Core::Alloc::ScratchArena& scratchArena, MaterialCookVector<MaterialCookEntry>& materialEntries);
+[[nodiscard]] bool ValidateMaterialCookInterfaces(Span<const MaterialBindEntry> materialBindEntries, Core::Alloc::ScratchArena& scratchArena, MaterialCookVector<MaterialCookEntry>& materialEntries);
 [[nodiscard]] Expected<MaterialCookString> BuildMaterialBindIncludeSource(MaterialCookArena& arena, const MaterialBindEntry& entry, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] Expected<Path> EmitMaterialBindIncludes(MaterialCookArena& arena, const Path& cacheDirectory, AStringView configurationSafeName, const MaterialCookVector<MaterialBindEntry>& materialBindEntries, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<Path> EmitMaterialBindIncludes(MaterialCookArena& arena, const Path& cacheDirectory, AStringView configurationSafeName, Span<const MaterialBindEntry> materialBindEntries, Core::Alloc::ScratchArena& scratchArena);
 struct MaterialBindDependency{
     MaterialCookString interfacePath;
     // Authored `.bind` files behind the generated includes. They are not compiler inputs, but their edits must recook the shader.
@@ -151,18 +151,18 @@ public:
     MaterialCookArena& arena,
     AStringView shaderName,
     const Path& materialBindIncludeRoot,
-    const MaterialCookVector<MaterialBindEntry>& materialBindEntries,
-    const MaterialCookVector<Path>& dependencies,
+    Span<const MaterialBindEntry> materialBindEntries,
+    Span<const Path> dependencies,
     Core::Alloc::ScratchArena& scratchArena
 );
 [[nodiscard]] Expected<Material> BuildMaterialAsset(const MaterialCookEntry& materialEntry, Core::Assets::AssetArena& arena);
 
 // Deterministic shading-model id (unique `bxdf`) + surface dispatch id (unique `surface`); shared sources share ids.
 // Before material build + dispatch emission.
-[[nodiscard]] bool AssignMaterialShadingModelIds(MaterialCookVector<MaterialCookEntry>& materialEntries, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] bool AssignMaterialShadingModelIds(Span<MaterialCookEntry> materialEntries, Core::Alloc::ScratchArena& scratchArena);
 // BXDF dispatch module (per-bxdf include, macro-renamed per id; unknown id = magenta, no engine default).
 // Always written; after AssignMaterialShadingModelIds, before PrepareShaderEntriesForCook.
-[[nodiscard]] Expected<Path> EmitDeferredBxdfDispatchModule(const Path& cacheDirectory, AStringView configurationSafeName, const MaterialCookVector<MaterialCookEntry>& materialEntries, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<Path> EmitDeferredBxdfDispatchModule(const Path& cacheDirectory, AStringView configurationSafeName, Span<const MaterialCookEntry> materialEntries, Core::Alloc::ScratchArena& scratchArena);
 
 // Surface dispatch module (per-`.surface` include, macro-isolated per id, switch on surfaceDispatchId).
 // Unknown id: neutral optical fields for shadow, fixed mid-grey for GI.
@@ -170,8 +170,8 @@ public:
 [[nodiscard]] Expected<Path> EmitShadowSurfaceDispatchModule(
     const Path& cacheDirectory,
     AStringView configurationSafeName,
-    const MaterialCookVector<MaterialBindEntry>& materialBindEntries,
-    const MaterialCookVector<MaterialCookEntry>& materialEntries,
+    Span<const MaterialBindEntry> materialBindEntries,
+    Span<const MaterialCookEntry> materialEntries,
     Core::Alloc::ScratchArena& scratchArena
 );
 
@@ -184,7 +184,7 @@ public:
     AStringView sharedMeshShaderName,
     MaterialCookArena& arena,
     Core::Alloc::ScratchArena& scratchArena,
-    MaterialCookVector<MaterialCookEntry>& materialEntries
+    Span<MaterialCookEntry> materialEntries
 );
 
 // Transparent-pass twin of EmitMaterialPixelShaders: generates each TRANSPARENT `surface` material's AVBOIT accumulate PS (not a material stage shader; name stored on the cooked material).
@@ -195,7 +195,7 @@ public:
     AStringView configurationSafeName,
     MaterialCookArena& arena,
     Core::Alloc::ScratchArena& scratchArena,
-    MaterialCookVector<MaterialCookEntry>& materialEntries
+    Span<MaterialCookEntry> materialEntries
 );
 
 // Occupancy/extinction twins of the accumulate PS: same surface.renderCoverage contract, names stored on the cooked material (not stage shaders). `surfaceSource` must already be resolved.
@@ -204,14 +204,14 @@ public:
     AStringView configurationSafeName,
     MaterialCookArena& arena,
     Core::Alloc::ScratchArena& scratchArena,
-    MaterialCookVector<MaterialCookEntry>& materialEntries
+    Span<MaterialCookEntry> materialEntries
 );
 [[nodiscard]] Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitExtinctionPixelShaders(
     const Path& cacheDirectory,
     AStringView configurationSafeName,
     MaterialCookArena& arena,
     Core::Alloc::ScratchArena& scratchArena,
-    MaterialCookVector<MaterialCookEntry>& materialEntries
+    Span<MaterialCookEntry> materialEntries
 );
 
 

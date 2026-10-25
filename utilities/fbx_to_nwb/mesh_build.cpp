@@ -323,7 +323,7 @@ bool FbxMeshBuild::AppendInstanceMesh(
 }
 
 
-Expected<usize> FbxMeshBuild::EstimateSelectedTriangleCorners(const UtilityVector<MeshInstance>& instances, const UtilityVector<usize>& selection){
+Expected<usize> FbxMeshBuild::EstimateSelectedTriangleCorners(const Span<const MeshInstance> instances, const Span<const usize> selection){
     usize outTriangleCorners = 0u;
     for(const usize instanceIndex : selection){
         if(instanceIndex >= instances.size()){

@@ -90,14 +90,14 @@ static bool PushManifestObjectFilePayloadToVolume(const AssetsVolumeCookDetail::
     if(!payload)
         return false;
     if(payload->identity.payloadSize != entry.identity.payloadSize || payload->identity.payloadHash != entry.identity.payloadHash || payload->identity.cookKeyHash != entry.identity.cookKeyHash){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: object cache identity mismatch '{}' for '{}'"), PathToString<tchar>(entry.objectPath), StringConvert(entry.virtualPath.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: object cache identity mismatch '{}' for '{}'"), PathToString<tchar>(entry.objectPath), ConvertString(entry.virtualPath.resolvedText()));
         return false;
     }
 
     if(filesystem.writeFileDeferred(entry.virtualPath, payload->data.get(), payload->size))
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to push cached asset '{}'"), StringConvert(entry.virtualPath.resolvedText()));
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to push cached asset '{}'"), ConvertString(entry.virtualPath.resolvedText()));
     return false;
 }
 
@@ -105,13 +105,13 @@ static bool PushManifestEntryToVolume(const AssetsVolumeCookDetail::AssetVolumeP
     switch(entry.source){
     case AssetsVolumeCookDetail::AssetVolumePackEntrySource::PayloadBytes:
         if(entry.identity.payloadSize != static_cast<u64>(entry.payloadBytes.size()) || entry.identity.payloadHash != ComputeFnv64Bytes(entry.payloadBytes.data(), entry.payloadBytes.size())){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: manifest payload identity mismatch '{}'"), StringConvert(entry.virtualPath.resolvedText()));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: manifest payload identity mismatch '{}'"), ConvertString(entry.virtualPath.resolvedText()));
             return false;
         }
         if(filesystem.writeFileDeferred(entry.virtualPath, entry.payloadBytes))
             return true;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to push manifest payload '{}'"), StringConvert(entry.virtualPath.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to push manifest payload '{}'"), ConvertString(entry.virtualPath.resolvedText()));
         return false;
     case AssetsVolumeCookDetail::AssetVolumePackEntrySource::ObjectFilePayload:
         return PushManifestObjectFilePayloadToVolume(entry, filesystem, objectBytes);
@@ -119,7 +119,7 @@ static bool PushManifestEntryToVolume(const AssetsVolumeCookDetail::AssetVolumeP
         break;
     }
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: manifest entry '{}' has an unknown source"), StringConvert(entry.virtualPath.resolvedText()));
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: manifest entry '{}' has an unknown source"), ConvertString(entry.virtualPath.resolvedText()));
     return false;
 }
 

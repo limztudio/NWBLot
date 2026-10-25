@@ -373,7 +373,7 @@ bool BackendContext::createVulkanSwapChain(Alloc::ScratchArena& scratchArena){
            << "\n    readback: " << VulkanDetail::BoolToYesNoText(m_swapChainState.swapChainReadbackAvailable)
            << "\n    queue sharing: " << (enableSwapChainSharing ? "concurrent" : "exclusive")
         ;
-        NWB_LOGGER_ESSENTIAL_INFO(StringConvert(ss.str()));
+        NWB_LOGGER_ESSENTIAL_INFO(ConvertString(ss.str()));
     }
 
     return true;

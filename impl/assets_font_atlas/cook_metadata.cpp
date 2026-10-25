@@ -55,7 +55,7 @@ static constexpr AStringView s_RasterModeOutline = "outline";
     if(value && value->isInteger() && value->asInteger() >= minimum && static_cast<u64>(value->asInteger()) <= maximum){
         return static_cast<u32>(value->asInteger());
     }
-    NWB_LOGGER_ERROR(NWB_TEXT("Font atlas meta '{}': field '{}' must be an integer in {}..{}"), PathToString<tchar>(path), StringConvert(field), minimum, maximum);
+    NWB_LOGGER_ERROR(NWB_TEXT("Font atlas meta '{}': field '{}' must be an integer in {}..{}"), PathToString<tchar>(path), ConvertString(field), minimum, maximum);
     return MakeUnexpected(Failure{});
 }
 

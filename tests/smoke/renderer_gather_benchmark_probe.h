@@ -61,7 +61,7 @@ private:
 
 
 private:
-    static void WriteMemory(OutputFileStream& output, const Array<Core::Perf::MemorySnapshot, s_ArenaScopeCount>& snapshots);
+    static void WriteMemory(OutputFileStream& output, Span<const Core::Perf::MemorySnapshot> snapshots);
 
 
 public:

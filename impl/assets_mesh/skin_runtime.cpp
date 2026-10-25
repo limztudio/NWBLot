@@ -38,7 +38,7 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SkinAssetCodecAutoRegistrar, SkinAssetCodec);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Skin::loadBinary(const Core::Assets::AssetBytes& binary){
+bool Skin::loadBinary(const Span<const u8> binary){
     usize cursor = 0u;
     const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SkinBinaryPayload::HeaderBinary>(binary, SkinBinaryPayload::s_SkinMagic, SkinBinaryPayload::s_SkinLoadBinaryContext, SkinBinaryPayload::s_SkinAssetKindLabel, cursor);
     if(!headerResult)

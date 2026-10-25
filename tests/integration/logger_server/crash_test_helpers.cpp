@@ -166,14 +166,14 @@ CrashTestText BuildManifest(
     return manifest;
 }
 
-bool WriteArchive(Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, const CrashTestText& archive){
+bool WriteArchive(Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, const AStringView archive){
     if(!EnsureDirectories(ArchiveInputDirectory(arena, testGroup)))
         return false;
 
-    return WriteTextFile(ArchivePath(arena, testGroup, stem), AStringView(archive.data(), archive.size()));
+    return WriteTextFile(ArchivePath(arena, testGroup, stem), archive);
 }
 
-bool WriteArchiveBytes(Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, const CrashTestBytes& archive){
+bool WriteArchiveBytes(Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, const Span<const u8> archive){
     if(!EnsureDirectories(ArchiveInputDirectory(arena, testGroup)))
         return false;
 
@@ -194,7 +194,7 @@ Log::CrashIngestConfig MakeIngestConfig(Core::Alloc::GlobalArena& arena, const A
     return config;
 }
 
-static bool ManifestContainsStringValue(Core::Alloc::GlobalArena& arena, const CrashTestText& manifest, const AStringView key, const AStringView value){
+static bool ManifestContainsStringValue(Core::Alloc::GlobalArena& arena, const AStringView manifest, const AStringView key, const AStringView value){
     if(value.empty())
         return true;
 
@@ -269,12 +269,12 @@ void BuildLinuxCrashArchive(CrashTestText& archive, Core::Alloc::GlobalArena& ar
     AppendArchiveFile(archive, CrashNames::s_ProcMapsFileName, "00400000-00452000 r-xp 00000000 08:01 123 /tmp/nwb_loader\n");
 }
 
-bool Contains(const CrashTestText& text, const AStringView needle)noexcept{
-    return AStringView(text.data(), text.size()).find(needle) != AStringView::npos;
+bool Contains(const AStringView text, const AStringView needle)noexcept{
+    return text.find(needle) != AStringView::npos;
 }
 
-bool ContainsMessage(const Log::LogString& text, const TStringView needle)noexcept{
-    return TStringView(text.data(), text.size()).find(needle) != TStringView::npos;
+bool ContainsMessage(const TStringView text, const TStringView needle)noexcept{
+    return text.find(needle) != TStringView::npos;
 }
 
 static CrashTestPath ObservedReportPath(Core::Alloc::GlobalArena& arena, const CrashTestPath& basePath, const AStringView suffix){
@@ -282,8 +282,8 @@ static CrashTestPath ObservedReportPath(Core::Alloc::GlobalArena& arena, const C
         return basePath;
 
     CrashTestText fileName(arena);
-    const CrashTestText stem = PathToString<char>(arena, basePath.stem());
-    const CrashTestText extension = PathToString<char>(arena, basePath.extension());
+    const CrashTestText stem = PathToString<char>(arena, basePath.stemView());
+    const CrashTestText extension = PathToString<char>(arena, basePath.extensionView());
     fileName += AStringView(stem.data(), stem.size());
     fileName += ".";
     fileName += suffix;
@@ -291,7 +291,7 @@ static CrashTestPath ObservedReportPath(Core::Alloc::GlobalArena& arena, const C
     return basePath.parentPath() / AStringView(fileName.data(), fileName.size());
 }
 
-void PreserveObservedReport(Core::Alloc::GlobalArena& arena, const CrashTestText& report, const AStringView suffix){
+void PreserveObservedReport(Core::Alloc::GlobalArena& arena, const AStringView report, const AStringView suffix){
     const auto outputPathText = ReadEnvironmentVariable(arena, "NWB_LOGSERVER_CRASH_TEST_OBSERVE_PATH");
     EXPECT_TRUE(outputPathText);
     if(!outputPathText || !*outputPathText || (*outputPathText)->empty())
@@ -300,7 +300,7 @@ void PreserveObservedReport(Core::Alloc::GlobalArena& arena, const CrashTestText
     const CrashTestPath baseOutputPath(arena, AStringView((*outputPathText)->data(), (*outputPathText)->size()));
     const CrashTestPath outputPath = ObservedReportPath(arena, baseOutputPath, suffix);
     EXPECT_TRUE(EnsureDirectories(outputPath.parentPath()));
-    EXPECT_TRUE(WriteTextFile(outputPath, AStringView(report.data(), report.size())));
+    EXPECT_TRUE(WriteTextFile(outputPath, report));
 }
 
 

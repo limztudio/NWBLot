@@ -96,8 +96,6 @@ public:
     ClipboardRequestToken startedToken;
 };
 
-using FixtureShaper = UiEditHostFixtureSupport::FixtureShaper;
-
 class UiPopupInputTests : public testing::Test{
 protected:
     struct DeclaredEdit{
@@ -393,7 +391,7 @@ protected:
     Ui::EditModel m_baseModel;
     Ui::EditModel m_popupModel;
     Ui::EditModel m_childModel;
-    FixtureShaper m_shaper;
+    UiEditHostFixtureSupport::FixtureShaper m_shaper;
     Ui::TextLayoutBuilder m_layoutBuilder;
     Ui::PopupState m_popupState;
     Ui::PopupState m_childState;

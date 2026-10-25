@@ -83,7 +83,7 @@ private:
 
 
 public:
-    [[nodiscard]] static Expected<MaterialTypedValueData> Parse(const ACompactString& key, const ACompactString& value)noexcept;
+    [[nodiscard]] static Expected<MaterialTypedValueData> Parse(AStringView key, AStringView value)noexcept;
     [[nodiscard]] static UInt4U ToLayoutValue(const MaterialTypedValueData& parameter)noexcept;
 
 

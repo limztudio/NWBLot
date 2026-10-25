@@ -73,7 +73,7 @@ public:
     [[nodiscard]] static MeshletTriangleVectors MakeMeshletTriangleVectors(const SIMDVectorSingle position0, const SIMDVectorSingle position1, const SIMDVectorSingle position2, const SIMDVectorSingle centroid, const SIMDVectorSingle areaNormal)noexcept;
     [[nodiscard]] static SIMDVectorSingle NormalizeMeshletDirectionOrZero(const SIMDVectorSingle value)noexcept;
     template<typename CookEntryT>
-    [[nodiscard]] static Expected<MeshletTrianglePrecompute> PrecomputeMeshletTriangleData(const Path& nwbFilePath, const TStringView metaKind, const Core::Assets::AssetVector<u32>& indices, const CookEntryT& entry, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] static Expected<MeshletTrianglePrecompute> PrecomputeMeshletTriangleData(const Path& nwbFilePath, const TStringView metaKind, Span<const u32> indices, const CookEntryT& entry, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] static Expected<u32> FindNextUnvisitedMeshletTriangle(const MeshletTrianglePrecompute& trianglePrecompute, const usize searchOffset)noexcept;
 
 
@@ -86,7 +86,7 @@ public:
 
 
 template<typename CookEntryT>
-Expected<MeshletTrianglePrecompute> MeshletTriangleGeometry::PrecomputeMeshletTriangleData(const Path& nwbFilePath, const TStringView metaKind, const Core::Assets::AssetVector<u32>& indices, const CookEntryT& entry, Core::Alloc::ScratchArena& scratchArena){
+Expected<MeshletTrianglePrecompute> MeshletTriangleGeometry::PrecomputeMeshletTriangleData(const Path& nwbFilePath, const TStringView metaKind, const Span<const u32> indices, const CookEntryT& entry, Core::Alloc::ScratchArena& scratchArena){
     MeshletTrianglePrecompute data(entry.positions.get_allocator().arena());
 
     const usize triangleCount = indices.size() / s_MeshletTriangleIndexCount;

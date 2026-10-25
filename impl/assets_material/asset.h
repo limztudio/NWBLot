@@ -376,7 +376,7 @@ public:
 
 
 public:
-    bool loadBinary(const Core::Assets::AssetBytes& binary);
+    bool loadBinary(Span<const u8> binary);
 
 public:
     void setShaderVariant(AStringView variantName){ m_shaderVariant.assign(variantName); }
@@ -398,8 +398,8 @@ public:
     void setTwoSided(const bool twoSided)noexcept{ m_twoSided = twoSided; }
 
     void setRefractive(const bool refractive)noexcept{ m_refractive = refractive; }
-    void setTypedLayout(u64 layoutHash, const TypedLayoutBlockVector& blocks, const TypedLayoutFieldVector& fields, const TypedBlockByteVector& blockBytes);
-    void setResourceReferences(const ResourceReferenceVector& resourceReferences);
+    void setTypedLayout(u64 layoutHash, Span<const MaterialTypedLayoutBlock> blocks, Span<const MaterialTypedLayoutField> fields, Span<const u8> blockBytes);
+    void setResourceReferences(Span<const MaterialResourceReference> resourceReferences);
     bool setShaderForStage(Core::ShaderType::Enum shaderType, const Core::Assets::AssetRef<IShader>& shaderAsset)noexcept;
 
     template<typename TShader>

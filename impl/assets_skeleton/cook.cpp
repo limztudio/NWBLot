@@ -138,9 +138,9 @@ template<typename ArenaT>
     }
 
     NWB_LOGGER_ERROR(NWB_TEXT("Skeleton meta '{}': joint '{}' references missing or later parent '{}'")
-        , StringConvert(skeletonEntry.virtualPath.resolvedText())
-        , StringConvert(skeletonEntry.joints[jointIndex].name.resolvedText())
-        , StringConvert(parent.resolvedText())
+        , ConvertString(skeletonEntry.virtualPath.resolvedText())
+        , ConvertString(skeletonEntry.joints[jointIndex].name.resolvedText())
+        , ConvertString(parent.resolvedText())
     );
     return MakeUnexpected(Failure{});
 }
@@ -174,7 +174,7 @@ template<typename ArenaT>
             return MakeUnexpected(Failure{});
         joint.parentIndex = *parentIndexResult;
         if(!payload.jointIndices.emplace(cookJoint.name, static_cast<u32>(payload.joints.size())).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton meta '{}': duplicate joint name '{}'"), StringConvert(skeletonEntry.virtualPath.resolvedText()), StringConvert(cookJoint.name.resolvedText()));
+            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton meta '{}': duplicate joint name '{}'"), ConvertString(skeletonEntry.virtualPath.resolvedText()), ConvertString(cookJoint.name.resolvedText()));
             return MakeUnexpected(Failure{});
         }
 

@@ -241,11 +241,6 @@ template<typename CharT>
     return false;
 }
 
-template<typename CharT, typename ArenaT>
-[[nodiscard]] inline bool HasEmbeddedNull(const BasicString<CharT, ArenaT>& text)noexcept(IsArithmetic_V<CharT>){
-    return HasEmbeddedNull(BasicStringView<CharT>(text));
-}
-
 template<typename StringT>
     requires requires(const StringT& text){
         typename StringT::value_type;

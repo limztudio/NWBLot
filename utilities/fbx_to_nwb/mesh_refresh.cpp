@@ -161,7 +161,7 @@ template<typename Value>
     }
 
     if(uniqueCount >= static_cast<usize>(s_MissingSourceStreamIndex)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to canonicalize mesh: {} stream has too many unique values"), StringConvert(streamName));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to canonicalize mesh: {} stream has too many unique values"), ConvertString(streamName));
         return MakeUnexpected(Failure{});
     }
 
@@ -189,7 +189,7 @@ template<typename Value>
         return true;
     }
 
-    NWB_LOGGER_ERROR(NWB_TEXT("Failed to canonicalize mesh: vertex_ref {} index is out of range"), StringConvert(streamName));
+    NWB_LOGGER_ERROR(NWB_TEXT("Failed to canonicalize mesh: vertex_ref {} index is out of range"), ConvertString(streamName));
     return false;
 }
 
@@ -217,7 +217,7 @@ template<typename Value>
     return true;
 }
 
-[[nodiscard]] Expected<SourceMeshCanonicalizeReport> CanonicalizeSkinnedMeshStreams(SourceMeshStreams& mesh, UtilityVector<MeshSkinInfluence>& skinInfluences, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] Expected<SourceMeshCanonicalizeReport> CanonicalizeSkinnedMeshStreams(SourceMeshStreams& mesh, const Span<const MeshSkinInfluence> skinInfluences, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena){
     if(mesh.positions.size() != skinInfluences.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to canonicalize skinned mesh: position and skin influence counts must match"));
         return MakeUnexpected(Failure{});
@@ -273,7 +273,7 @@ template<typename Value>
         return outDoc;
 
     for(const Core::Metascript::ParseError& error : outDoc.errors()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: '{}' parse error at {}:{}: {}"), PathToString<tchar>(nwbFilePath), error.line, error.column, StringConvert(AStringView(error.message.data(), error.message.size())));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: '{}' parse error at {}:{}: {}"), PathToString<tchar>(nwbFilePath), error.line, error.column, ConvertString(AStringView(error.message.data(), error.message.size())));
     }
     return MakeUnexpected(Failure{});
 }
@@ -357,7 +357,7 @@ Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const ScratchPath& in
 
     auto sourceResult = __hidden_mesh_refresh::ReadMetascriptSource(inputPath, scratchArena);
     if(!sourceResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: failed to read '{}': {}"), PathToString<tchar>(inputPath), StringConvert(sourceResult.error().message()));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: failed to read '{}': {}"), PathToString<tchar>(inputPath), ConvertString(sourceResult.error().message()));
         return MakeUnexpected(Failure{});
     }
     ScratchString& source = *sourceResult;
@@ -389,7 +389,7 @@ Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const ScratchPath& in
         const AStringView meshVariableName = meshVariableView;
         const Core::Metascript::Value* meshValue = doc.findVariable(meshVariableView);
         if(!meshValue){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: missing mesh variable '{}'"), StringConvert(meshVariableName));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: missing mesh variable '{}'"), ConvertString(meshVariableName));
             return MakeUnexpected(Failure{});
         }
 

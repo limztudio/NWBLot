@@ -54,8 +54,8 @@ static constexpr AStringView s_NativeCleanupFailedFormat = "Font native cleanup 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidateSfntDirectory(const Core::Assets::AssetBytes& bytes)noexcept{
-    const auto directoryResult = FontSfntDirectory::Read({ bytes.data(), bytes.size() });
+[[nodiscard]] static bool ValidateSfntDirectory(const Span<const u8> bytes)noexcept{
+    const auto directoryResult = FontSfntDirectory::Read(bytes);
     if(!directoryResult)
         return false;
     const FontSfntDirectory& directory = *directoryResult;
@@ -163,7 +163,7 @@ public:
 
 
 public:
-    [[nodiscard]] Expected<void, NativeFontFailure> validate(const Core::Assets::AssetBytes& bytes)noexcept{
+    [[nodiscard]] Expected<void, NativeFontFailure> validate(const Span<const u8> bytes)noexcept{
         const FT_Error libraryError = FT_New_Library(&m_memory, &m_library);
         if(libraryError != 0)
             return MakeUnexpected(NativeFontFailure{ .operation = "FT_New_Library", .nativeError = libraryError });
@@ -210,9 +210,9 @@ bool ValidateFontSource(const Core::Assets::AssetBytes& bytes, const u32 faceInd
     if(!nativeValidation){
         const auto& failure = nativeValidation.error();
         if(failure.nativeError)
-            NWB_LOGGER_ERROR(NWB_TEXT("ValidateFontSource failed: native_operation={} native_domain=FreeType native_code={}"), StringConvert(failure.operation), *failure.nativeError);
+            NWB_LOGGER_ERROR(NWB_TEXT("ValidateFontSource failed: native_operation={} native_domain=FreeType native_code={}"), ConvertString(failure.operation), *failure.nativeError);
         else
-            NWB_LOGGER_ERROR(NWB_TEXT("ValidateFontSource failed: FreeType rejected the scalable Unicode face ({})"), StringConvert(failure.operation));
+            NWB_LOGGER_ERROR(NWB_TEXT("ValidateFontSource failed: FreeType rejected the scalable Unicode face ({})"), ConvertString(failure.operation));
         return false;
     }
     return true;

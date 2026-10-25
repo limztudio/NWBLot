@@ -72,7 +72,7 @@ public:
         Core::Assets::AssetManager& assetManager,
         ShaderPathResolveCallback shaderPathResolver,
         const Core::Assets::AssetRef<UiSkin>& skin,
-        const FontReferences& fonts,
+        Span<const UiFontBinding> fonts,
         UiLayerPresentation::Enum presentation
     );
     virtual ~UiLayerSystem()noexcept override;

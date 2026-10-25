@@ -56,7 +56,7 @@ CookEntryAutoRegistrar::CookEntryAutoRegistrar(const CookEntryRegistrationFuncti
 
 bool CookEntryRegistry::registerBucket(const Name& assetType, BucketPtr owner){
     if(!owner){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: bucket allocation returned null for '{}'"), StringConvert(assetType.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: bucket allocation returned null for '{}'"), ConvertString(assetType.resolvedText()));
         return false;
     }
 
@@ -73,7 +73,7 @@ bool CookEntryRegistry::registerBucket(const Name& assetType, BucketPtr owner){
         }
     }
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate cook entry type registration '{}'"), StringConvert(assetType.resolvedText()));
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate cook entry type registration '{}'"), ConvertString(assetType.resolvedText()));
     return false;
 }
 

@@ -430,8 +430,7 @@ Expected<bool, DefaultFileLoadFailure> LoadDefaultFile(){
         if(!*isRegularFile)
             continue;
 
-        const ::Path<Alloc::ScratchArena> extensionPath = entry.path().extension();
-        if(extensionPath.native() != s_FileExtension)
+        if(entry.path().extensionView() != s_FileExtension)
             continue;
 
         const auto loaded = LoadFile(entry.path(), scratchArena);

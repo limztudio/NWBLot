@@ -91,7 +91,7 @@ Expected<i64, NumericParseStatus::Enum> ParseIntegerDraft(const AStringView text
     if(status != NumericParseStatus::Complete)
         return MakeUnexpected(status);
     const AStringView number = trimmed.front() == '+' ? trimmed.substr(1u) : trimmed;
-    const auto value = ParseI64FromChars(number);
+    const auto value = ParseI64(number);
     if(!value)
         return MakeUnexpected(NumericParseStatus::OutOfRange);
     return *value;

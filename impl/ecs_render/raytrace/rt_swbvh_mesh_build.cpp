@@ -72,13 +72,13 @@ bool RendererRayTracingSystem::prepareMeshBlasResources(ECSRenderDetail::MeshRay
     accelStructDesc.setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
     const auto blasName = DeriveName(meshResources.meshName, RendererFramePipelineDetail::s_BlasNameSuffix);
     if(!blasName){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BLAS for mesh '{}'"), StringConvert(meshResources.meshName.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BLAS for mesh '{}'"), ConvertString(meshResources.meshName.resolvedText()));
         return false;
     }
     accelStructDesc.setDebugName(*blasName);
     auto blasResult = m_graphics.getDevice().createAccelStruct(accelStructDesc);
     if(!blasResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BLAS for mesh '{}'"), StringConvert(meshResources.meshName.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BLAS for mesh '{}'"), ConvertString(meshResources.meshName.resolvedText()));
         return false;
     }
     Core::RayTracingAccelStructHandle blas = Move(*blasResult);

@@ -28,7 +28,7 @@ static constexpr u32 s_QwordHighWordShift = 32u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<FontAtlasGlyph> ReadGlyph(const Core::Assets::AssetBytes& bytes, usize& cursor)noexcept{
+[[nodiscard]] static Expected<FontAtlasGlyph> ReadGlyph(const Span<const u8> bytes, usize& cursor)noexcept{
     FontAtlasGlyph glyph;
     const auto glyphId = ReadU32LittleEndian(bytes, cursor);
     if(!glyphId)
@@ -85,7 +85,7 @@ static constexpr u32 s_QwordHighWordShift = 32u;
     return glyph;
 }
 
-[[nodiscard]] static Expected<FontAtlasPayload> Deserialize(const Core::Assets::AssetBytes& bytes, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] static Expected<FontAtlasPayload> Deserialize(const Span<const u8> bytes, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     usize cursor = 0u;
     FontAtlasPayload payload(arena);
     const auto magic = ReadU32LittleEndian(bytes, cursor);
@@ -298,7 +298,7 @@ Expected<Core::Assets::AssetBytes> SerializeFontAtlasPayload(const FontAtlasPayl
     return binary;
 }
 
-Expected<FontAtlasPayload> DeserializeFontAtlasPayload(const Core::Assets::AssetBytes& binary, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+Expected<FontAtlasPayload> DeserializeFontAtlasPayload(const Span<const u8> binary, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     auto payload = __hidden_font_atlas_binary::Deserialize(binary, arena, scratchArena);
     if(!payload){
         NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas binary failed: malformed, noncanonical, unsupported, or invalid content"));

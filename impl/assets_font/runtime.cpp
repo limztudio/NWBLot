@@ -37,7 +37,7 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_FontAssetCodecAutoRegistrar, FontAssetCodec);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Font::loadBinary(const Core::Assets::AssetBytes& binary){
+bool Font::loadBinary(const Span<const u8> binary){
     usize cursor = 0u;
     const auto headerResult = Core::Assets::ReadMagicHeaderPayload<FontBinaryPayload::HeaderBinary>(binary, FontBinaryPayload::s_FontMagic, NWB_TEXT("Font::loadBinary"), FontBinaryPayload::s_FontAssetKindLabel, cursor);
     if(!headerResult)

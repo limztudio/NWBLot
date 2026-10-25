@@ -33,7 +33,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool loadBinary(const Core::Assets::AssetBytes& binary);
+    [[nodiscard]] bool loadBinary(Span<const u8> binary);
     [[nodiscard]] bool validatePayload(Core::Alloc::ScratchArena& scratchArena)const;
     void setPayload(FontAtlasPayload&& payload)noexcept{ m_payload = Move(payload); }
 

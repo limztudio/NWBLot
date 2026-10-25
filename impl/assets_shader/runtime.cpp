@@ -42,7 +42,7 @@ NWB_SHADER_ASSET_TYPE_ENTRIES(NWB_REGISTER_SHADER_ASSET_CODEC)
 IShader::~IShader()noexcept = default;
 
 
-bool IShader::loadBinaryForStage(const Core::Assets::AssetBytes& binary, const Core::ShaderType::Enum shaderType){
+bool IShader::loadBinaryForStage(const Span<const u8> binary, const Core::ShaderType::Enum shaderType){
     if(!checkVirtualPath(NWB_TEXT("IShader::loadBinaryForStage")))
         return false;
 
@@ -67,7 +67,7 @@ bool IShader::loadBinaryForStage(const Core::Assets::AssetBytes& binary, const C
 
     const auto lookupResult = Core::ResolveSpirvEntryPointName(payload->bytecode, payload->entryPoint, Core::ShaderType::ToMask(shaderType));
     if(!lookupResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("IShader::loadBinaryForStage failed: entry point '{}' does not match asset type '{}' or SPIR-V is malformed"), StringConvert(payload->entryPoint), StringConvert(assetType().resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("IShader::loadBinaryForStage failed: entry point '{}' does not match asset type '{}' or SPIR-V is malformed"), ConvertString(payload->entryPoint), ConvertString(assetType().resolvedText()));
         return false;
     }
 

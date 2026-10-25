@@ -28,13 +28,13 @@ constexpr MStringView s_ArgumentsFieldKey = LiteralView("arguments");
 constexpr MStringView s_AttributesFieldKey = LiteralView("attributes");
 constexpr MStringView s_FieldsFieldKey = LiteralView("fields");
 constexpr MStringView s_TypeFieldKey = LiteralView("type");
-constexpr const char* s_DuplicateVariableDeclarationMessage = "duplicate variable declaration";
+constexpr MStringView s_DuplicateVariableDeclarationMessage = "duplicate variable declaration";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool IsNameInList(const Vector<MStringView, Alloc::ScratchArena>& names, MStringView name)noexcept{
+[[nodiscard]] bool IsNameInList(const Span<const MStringView> names, const MStringView name)noexcept{
     for(const MStringView currentName : names){
         if(currentName == name)
             return true;

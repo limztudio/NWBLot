@@ -149,7 +149,7 @@ template<typename StringT>
     if(inOutSeenVirtualPathHashes.insert(pathHash).second)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate property asset virtual path '{}' for {}"), StringConvert(virtualPath.resolvedText()), assetKind);
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate property asset virtual path '{}' for {}"), ConvertString(virtualPath.resolvedText()), assetKind);
     return false;
 }
 
@@ -163,7 +163,7 @@ template<typename StringT>
     if(inOutSeenVirtualPathHashes.insert(virtualPathHash).second)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate {} virtual path '{}'"), assetKind, StringConvert(virtualPath.resolvedText()));
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate {} virtual path '{}'"), assetKind, ConvertString(virtualPath.resolvedText()));
     return false;
 }
 
@@ -208,7 +208,7 @@ public:
 public:
     virtual bool parseDocument(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, CookEntryParseContext& context)override{
         if(!m_parseDocument){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: asset type '{}' cannot be parsed from document '{}'"), StringConvert(m_assetType.resolvedText()), PathToString<tchar>(nwbFilePath));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: asset type '{}' cannot be parsed from document '{}'"), ConvertString(m_assetType.resolvedText()), PathToString<tchar>(nwbFilePath));
             return false;
         }
 
@@ -221,7 +221,7 @@ public:
 
     virtual bool parseValue(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, CookEntryParseContext& context)override{
         if(!m_parseValue){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: asset type '{}' cannot be parsed from asset_bunch item in '{}'"), StringConvert(m_assetType.resolvedText()), PathToString<tchar>(nwbFilePath));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: asset type '{}' cannot be parsed from asset_bunch item in '{}'"), ConvertString(m_assetType.resolvedText()), PathToString<tchar>(nwbFilePath));
             return false;
         }
 
@@ -248,7 +248,7 @@ public:
             auto asset = m_buildAsset.get()(entry, assetArena, context.scratchArena);
             if(!asset){
                 if(m_logBuildFailure){
-                    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to build {} '{}'"), m_assetKindText, StringConvert(CookEntryRegistryDetail::ToCookEntryText(entry.virtualPath)));
+                    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to build {} '{}'"), m_assetKindText, ConvertString(CookEntryRegistryDetail::ToCookEntryText(entry.virtualPath)));
                 }
                 return false;
             }
@@ -339,7 +339,7 @@ public:
             return false;
         }
         if(!buildAsset){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: cook entry type '{}' has no build function"), StringConvert(assetType.resolvedText()));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: cook entry type '{}' has no build function"), ConvertString(assetType.resolvedText()));
             return false;
         }
 
@@ -367,7 +367,7 @@ public:
         if(bucket)
             return bucket->parseDocument(assetRoot, virtualRoot, nwbFilePath, doc, context);
 
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: unsupported asset type '{}' in meta '{}'"), StringConvert(assetType.resolvedText()), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: unsupported asset type '{}' in meta '{}'"), ConvertString(assetType.resolvedText()), PathToString<tchar>(nwbFilePath));
         return false;
     }
 
@@ -376,7 +376,7 @@ public:
         if(bucket)
             return bucket->parseValue(virtualPath, nwbFilePath, asset, context);
 
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: unsupported asset type '{}' in asset_bunch from meta '{}'"), StringConvert(assetType.resolvedText()), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: unsupported asset type '{}' in asset_bunch from meta '{}'"), ConvertString(assetType.resolvedText()), PathToString<tchar>(nwbFilePath));
         return false;
     }
 

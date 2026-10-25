@@ -105,7 +105,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
         .setWidth(createdTargets.width)
         .setHeight(createdTargets.height)
         .setFormat(createdTargets.albedoFormat)
-        .setInRenderTarget(true)
+        .setIsRenderTarget(true)
         // AsyncCompute lighting samples every G-buffer attachment after Graphics AVBOIT; keep their sharing concurrent.
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/deferred/gbuffer_albedo").setClearValue(ECSRenderDetail::s_ClearColor)
     ;
@@ -124,7 +124,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
         .setWidth(createdTargets.width)
         .setHeight(createdTargets.height)
         .setFormat(createdTargets.normalFormat)
-        .setInRenderTarget(true)
+        .setIsRenderTarget(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/deferred/gbuffer_normal")
         .setClearValue(ECSRenderDetail::s_GBufferNormalClearColor)
@@ -144,7 +144,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
         .setWidth(createdTargets.width)
         .setHeight(createdTargets.height)
         .setFormat(createdTargets.worldPositionFormat)
-        .setInRenderTarget(true)
+        .setIsRenderTarget(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/deferred/gbuffer_world_position")
         .setClearValue(ECSRenderDetail::s_GBufferWorldPositionClearColor)
@@ -164,7 +164,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
         .setWidth(createdTargets.width)
         .setHeight(createdTargets.height)
         .setFormat(createdTargets.specularRoughnessFormat)
-        .setInRenderTarget(true)
+        .setIsRenderTarget(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/deferred/gbuffer_specular_roughness")
         .setClearValue(ECSRenderDetail::s_GBufferSpecularRoughnessClearColor)
@@ -184,7 +184,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
         .setWidth(createdTargets.width)
         .setHeight(createdTargets.height)
         .setFormat(createdTargets.opaqueColorFormat)
-        .setInUAV(true)
+        .setIsUAV(true)
         .setInitialState(Core::ResourceStates::Common)
         .setKeepInitialState(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
@@ -206,7 +206,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
         .setWidth(createdTargets.width)
         .setHeight(createdTargets.height)
         .setFormat(createdTargets.compositeColorFormat)
-        .setInUAV(true)
+        .setIsUAV(true)
         .setInitialState(Core::ResourceStates::Common)
         .setKeepInitialState(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
@@ -224,7 +224,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
     }
 
     Core::TextureDesc depthDesc;
-    depthDesc.setWidth(createdTargets.width).setHeight(createdTargets.height).setFormat(createdTargets.depthFormat).setInRenderTarget(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/deferred/depth");
+    depthDesc.setWidth(createdTargets.width).setHeight(createdTargets.height).setFormat(createdTargets.depthFormat).setIsRenderTarget(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/deferred/depth");
     auto depthResult = m_graphics.createTexture(depthDesc);
     if(depthResult)
         createdTargets.depth = Move(*depthResult);

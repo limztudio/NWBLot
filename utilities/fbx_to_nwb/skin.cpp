@@ -140,7 +140,7 @@ Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const Me
             NWB_ASSERT(jointIndex < context.bindPoseMatrices.size());
             const SIMDMatrix existingInverseBind = LoadFloat(context.inverseBindMatrices[jointIndex]);
             if(!NearlyEqualJointMatrices(existingInverseBind, inverseBindValue)){
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected meshes bind skeleton joint '{}' with different inverse bind matrices"), StringConvert(NodeDisplayName(cluster->bone_node)));
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected meshes bind skeleton joint '{}' with different inverse bind matrices"), ConvertString(NodeDisplayName(cluster->bone_node)));
                 return MakeUnexpected(Failure{});
             }
             outClusterJoints.push_back(foundJoint.value());

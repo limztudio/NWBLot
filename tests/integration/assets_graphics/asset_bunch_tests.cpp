@@ -77,7 +77,7 @@ asset_bunch bunch = [second, first];
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void VerifyOwnedOutput(const ExpandedAssetMetadataVector& output, const Metascript::Document& document){
+static void VerifyOwnedOutput(const Span<const ExpandedAssetMetadata> output, const Metascript::Document& document){
     ASSERT_EQ(output.size(), s_ExpectedDualCount);
     EXPECT_EQ(output[0u].virtualPath, Name("project/fixtures/bundle/second"));
     EXPECT_EQ(output[1u].virtualPath, Name(s_ProjectFixturesBundleFirst));

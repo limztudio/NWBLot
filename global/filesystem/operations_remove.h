@@ -99,7 +99,7 @@ template<typename ArenaT>
             break;
         }
         const AStringView name(entry->d_name);
-        if(GlobalFilesystemPathDetail::IsDot(name) || GlobalFilesystemPathDetail::IsDotDot(name))
+        if(IsDot(name) || IsDotDot(name))
             continue;
         const auto removed = RemoveAllImpl(path / name);
         if(!removed)
@@ -139,7 +139,7 @@ template<typename ArenaT>
     if(std::rename(from.c_str(), to.c_str()) == 0)
 #endif
         return {};
-    return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
+    return MakeUnexpected(LastSystemError());
 }
 
 
@@ -179,7 +179,7 @@ template<typename ArenaT>
     const auto ensured = EnsureDirectories(destinationDirectory);
     if(!ensured)
         return MakeUnexpected(ensured.error());
-    const Path<ArenaT> destination = destinationDirectory / sourcePath.filename();
+    const Path<ArenaT> destination = destinationDirectory / sourcePath.filenameView();
     const auto removed = RemoveAllIfExists(destination);
     if(!removed)
         return MakeUnexpected(removed.error());

@@ -411,7 +411,7 @@ bool CreateRefractionGalleryScene(ProjectRuntimeContext& context, Core::ECS::Wor
         return false;
     }
     scene.backdrop();
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionSmokeProject: gallery case {} created"), StringConvert(caseName));
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionSmokeProject: gallery case {} created"), ConvertString(caseName));
     return true;
 }
 

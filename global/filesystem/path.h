@@ -37,7 +37,7 @@ template<typename CharT>
 concept PathChar = SameAs<CharT, char> || SameAs<CharT, wchar> || SameAs<CharT, char8_t>;
 
 template<typename SourceT>
-concept PathSourceLike = BasicStringDetail::CanMakeCharView<SourceT> || BasicStringDetail::CanMakeWCharView<SourceT> || requires(const SourceT& source){ BasicStringView<char8_t>(source); };
+concept PathSourceLike = CanMakeCharView<SourceT> || CanMakeWCharView<SourceT> || requires(const SourceT& source){ BasicStringView<char8_t>(source); };
 
 template<typename CharT>
 [[nodiscard]] inline bool IsSeparator(const CharT ch)noexcept(IsArithmetic_V<CharT>){
@@ -84,16 +84,6 @@ template<typename CharT>
     return 0u;
 }
 
-template<typename CharT>
-[[nodiscard]] inline bool IsDot(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
-    return text.size() == 1u && text[0] == static_cast<CharT>('.');
-}
-
-template<typename CharT>
-[[nodiscard]] inline bool IsDotDot(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
-    return text.size() == s_DotDotLength && text[0] == static_cast<CharT>('.') && text[1] == static_cast<CharT>('.');
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -104,8 +94,15 @@ template<typename CharT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using GlobalFilesystemPathDetail::IsDot;
-using GlobalFilesystemPathDetail::IsDotDot;
+template<typename CharT>
+[[nodiscard]] inline bool IsDot(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
+    return text.size() == 1u && text[0] == static_cast<CharT>('.');
+}
+
+template<typename CharT>
+[[nodiscard]] inline bool IsDotDot(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
+    return text.size() == GlobalFilesystemPathDetail::s_DotDotLength && text[0] == static_cast<CharT>('.') && text[1] == static_cast<CharT>('.');
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -307,6 +304,20 @@ public:
 
     template<typename SourceT>
     Path& operator+=(const SourceT& rhs){
+        if constexpr(requires{ rhs.native(); }){
+            const native_string_view view = rhs.native();
+            if(!aliasesText(view)){
+                m_text.append(view.data(), view.size());
+                return *this;
+            }
+        }
+        else if constexpr(requires{ native_string_view(rhs); }){
+            const native_string_view view(rhs);
+            if(!aliasesText(view)){
+                m_text.append(view.data(), view.size());
+                return *this;
+            }
+        }
         const Path rhsPath(arena(), rhs);
         m_text.append(rhsPath.native().data(), rhsPath.native().size());
         return *this;
@@ -314,6 +325,32 @@ public:
 
     template<typename SourceT>
     Path& operator/=(const SourceT& rhs){
+        if constexpr(requires{ rhs.native(); }){
+            const native_string_view view = rhs.native();
+            if(!aliasesText(view)){
+                if(view.empty())
+                    return *this;
+                if(isAbsoluteView(view)){
+                    m_text.assign(view.data(), view.size());
+                    return *this;
+                }
+                appendComponent(view);
+                return *this;
+            }
+        }
+        else if constexpr(requires{ native_string_view(rhs); }){
+            const native_string_view view(rhs);
+            if(!aliasesText(view)){
+                if(view.empty())
+                    return *this;
+                if(isAbsoluteView(view)){
+                    m_text.assign(view.data(), view.size());
+                    return *this;
+                }
+                appendComponent(view);
+                return *this;
+            }
+        }
         Path rhsPath(arena(), rhs);
         if(rhsPath.empty())
             return *this;
@@ -356,15 +393,7 @@ public:
     }
 
     [[nodiscard]] bool isAbsolute()const noexcept{
-        if(m_text.empty())
-            return false;
-
-#if defined(NWB_PLATFORM_WINDOWS)
-        const usize rootNameLength = rootNameLengthInText();
-        if(rootNameLength != 0u && rootDirectoryLengthInText() > rootNameLength)
-            return true;
-#endif
-        return GlobalFilesystemPathDetail::IsSeparator(m_text[0]);
+        return isAbsoluteView(native());
     }
 
     [[nodiscard]] bool hasFilename()const noexcept{
@@ -373,58 +402,78 @@ public:
         return !GlobalFilesystemPathDetail::IsSeparator(m_text.back());
     }
 
-    [[nodiscard]] Path parentPath()const{
+    [[nodiscard]] native_string_view parentPathView()const noexcept{
         if(m_text.empty())
-            return Path(arena());
+            return native_string_view();
 
         const usize rootDirectoryLength = rootDirectoryLengthInText();
         const usize rootLength = rootDirectoryLength != 0u ? rootDirectoryLength : rootNameLengthInText();
-        usize end = trimTrailingSeparators(m_text.size());
+        const usize end = trimTrailingSeparators(m_text.size());
         if(rootLength != 0u && end <= rootLength)
-            return Path(arena(), native_string_view(m_text.data(), rootLength));
+            return native_string_view(m_text.data(), rootLength);
 
         usize separator = end;
         while(separator > rootLength && !GlobalFilesystemPathDetail::IsSeparator(m_text[separator - 1u]))
             --separator;
 
         if(separator == 0u)
-            return Path(arena());
+            return native_string_view();
         if(rootLength != 0u && separator <= rootLength)
-            return Path(arena(), native_string_view(m_text.data(), rootLength));
+            return native_string_view(m_text.data(), rootLength);
 
-        return Path(arena(), native_string_view(m_text.data(), trimTrailingSeparators(separator - 1u)));
+        return native_string_view(m_text.data(), trimTrailingSeparators(separator - 1u));
     }
 
-    [[nodiscard]] Path filename()const{
+    [[nodiscard]] Path parentPath()const{
+        const native_string_view view = parentPathView();
+        return view.empty() ? Path(arena()) : Path(arena(), view);
+    }
+
+    [[nodiscard]] native_string_view filenameView()const noexcept{
         if(m_text.empty())
-            return Path(arena());
+            return native_string_view();
 
         const usize rootNameLength = rootNameLengthInText();
         const usize rootDirectoryLength = rootDirectoryLengthInText();
         const usize end = trimTrailingSeparators(m_text.size());
         if((rootDirectoryLength != 0u && end <= rootDirectoryLength) || (rootNameLength != 0u && end <= rootNameLength))
-            return Path(arena());
+            return native_string_view();
 
         usize begin = end;
         const usize boundary = rootDirectoryLength != 0u ? rootDirectoryLength : rootNameLength;
         while(begin > boundary && !GlobalFilesystemPathDetail::IsSeparator(m_text[begin - 1u]))
             --begin;
-        return Path(arena(), native_string_view(m_text.data() + begin, end - begin));
+        return native_string_view(m_text.data() + begin, end - begin);
     }
 
-    [[nodiscard]] Path stem()const{
+    [[nodiscard]] Path filename()const{
+        const native_string_view view = filenameView();
+        return view.empty() ? Path(arena()) : Path(arena(), view);
+    }
+
+    [[nodiscard]] native_string_view stemView()const noexcept{
         const native_string_view fileName = trimmedFilename();
         const usize extensionBegin = fileName.rfind(static_cast<value_type>('.'));
         const usize stemSize = extensionBegin == native_string_view::npos || extensionBegin == 0u ? fileName.size() : extensionBegin;
-        return Path(arena(), fileName.substr(0u, stemSize));
+        return fileName.substr(0u, stemSize);
     }
 
-    [[nodiscard]] Path extension()const{
+    [[nodiscard]] Path stem()const{
+        const native_string_view view = stemView();
+        return view.empty() ? Path(arena()) : Path(arena(), view);
+    }
+
+    [[nodiscard]] native_string_view extensionView()const noexcept{
         const native_string_view fileName = trimmedFilename();
         const usize extensionBegin = fileName.rfind(static_cast<value_type>('.'));
         if(extensionBegin == native_string_view::npos || extensionBegin == 0u)
-            return Path(arena());
-        return Path(arena(), fileName.substr(extensionBegin));
+            return native_string_view();
+        return fileName.substr(extensionBegin);
+    }
+
+    [[nodiscard]] Path extension()const{
+        const native_string_view view = extensionView();
+        return view.empty() ? Path(arena()) : Path(arena(), view);
     }
 
     [[nodiscard]] Path lexicallyNormal()const{
@@ -494,6 +543,30 @@ public:
 
     template<typename SourceT>
     Path& replaceExtension(const SourceT& replacement){
+        if constexpr(requires{ replacement.native(); }){
+            const native_string_view view = replacement.native();
+            if(!aliasesText(view)){
+                replaceExtension();
+                if(view.empty())
+                    return *this;
+                if(view.front() != static_cast<value_type>('.'))
+                    m_text += static_cast<value_type>('.');
+                m_text.append(view.data(), view.size());
+                return *this;
+            }
+        }
+        else if constexpr(requires{ native_string_view(replacement); }){
+            const native_string_view view(replacement);
+            if(!aliasesText(view)){
+                replaceExtension();
+                if(view.empty())
+                    return *this;
+                if(view.front() != static_cast<value_type>('.'))
+                    m_text += static_cast<value_type>('.');
+                m_text.append(view.data(), view.size());
+                return *this;
+            }
+        }
         replaceExtension();
         Path replacementPath(arena(), replacement);
         if(replacementPath.empty())
@@ -506,6 +579,28 @@ public:
 
 
 private:
+    [[nodiscard]] static bool isAbsoluteView(const native_string_view text)noexcept{
+        if(text.empty())
+            return false;
+
+#if defined(NWB_PLATFORM_WINDOWS)
+        const usize rootNameLength = GlobalFilesystemPathDetail::RootNameLength(text);
+        if(rootNameLength != 0u && GlobalFilesystemPathDetail::RootDirectoryLength(text) > rootNameLength)
+            return true;
+#endif
+        return GlobalFilesystemPathDetail::IsSeparator(text[0]);
+    }
+
+    [[nodiscard]] bool aliasesText(const native_string_view view)const noexcept{
+        if(m_text.empty() || view.empty())
+            return false;
+        const usize textBegin = reinterpret_cast<usize>(m_text.data());
+        const usize textEnd = reinterpret_cast<usize>(m_text.data() + m_text.size());
+        const usize viewBegin = reinterpret_cast<usize>(view.data());
+        const usize viewEnd = reinterpret_cast<usize>(view.data() + view.size());
+        return viewBegin < textEnd && viewEnd > textBegin;
+    }
+
     template<GlobalFilesystemPathDetail::PathChar CharT>
     void assignSource(const BasicStringView<CharT> source){
         if constexpr(SameAs<CharT, value_type>){
@@ -515,15 +610,15 @@ private:
             assignSource(AStringView(reinterpret_cast<const char*>(source.data()), source.size()));
         }
         else{
-            m_text = StringConvert(arena(), source);
+            m_text = ConvertString(arena(), source);
         }
     }
 
     template<typename SourceT>
     void assignSource(const SourceT& source){
-        if constexpr(BasicStringDetail::CanMakeCharView<SourceT>)
+        if constexpr(CanMakeCharView<SourceT>)
             assignSource(AStringView(source));
-        else if constexpr(BasicStringDetail::CanMakeWCharView<SourceT>)
+        else if constexpr(CanMakeWCharView<SourceT>)
             assignSource(WStringView(source));
         else
             assignSource(BasicStringView<char8_t>(source));
@@ -604,13 +699,13 @@ private:
             if(rootDirectoryLength == 0u && rootNameLength != 0u && text == native_string_view(m_text.data(), rootNameLength))
                 continue;
 #endif
-            if(text.empty() || GlobalFilesystemPathDetail::IsDot(text))
+            if(text.empty() || IsDot(text))
                 continue;
             if(text.size() == 1u && GlobalFilesystemPathDetail::IsSeparator(text[0]))
                 continue;
-            if(GlobalFilesystemPathDetail::IsDotDot(text)){
+            if(IsDotDot(text)){
                 const native_string_view fileName = output.trimmedFilename();
-                if(!fileName.empty() && !GlobalFilesystemPathDetail::IsDotDot(fileName)){
+                if(!fileName.empty() && !IsDotDot(fileName)){
                     const usize outputRootLength = output.rootDirectoryLengthInText();
                     usize separator = output.trimTrailingSeparators(output.m_text.size());
                     while(separator > outputRootLength && !GlobalFilesystemPathDetail::IsSeparator(output.m_text[separator - 1u]))

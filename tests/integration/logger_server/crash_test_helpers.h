@@ -92,15 +92,15 @@ void BeginArchiveWithManifest(
     ManifestEventField::Enum eventField = ManifestEventField::Include,
     const ManifestTriggerFields& trigger = ManifestTriggerFields{}
 );
-[[nodiscard]] bool WriteArchive(Core::Alloc::GlobalArena& arena, AStringView testGroup, AStringView stem, const CrashTestText& archive);
-[[nodiscard]] bool WriteArchiveBytes(Core::Alloc::GlobalArena& arena, AStringView testGroup, AStringView stem, const CrashTestBytes& archive);
+[[nodiscard]] bool WriteArchive(Core::Alloc::GlobalArena& arena, AStringView testGroup, AStringView stem, AStringView archive);
+[[nodiscard]] bool WriteArchiveBytes(Core::Alloc::GlobalArena& arena, AStringView testGroup, AStringView stem, Span<const u8> archive);
 [[nodiscard]] Expected<CrashTestText, ErrorCode> ReadServerSymbolication(Core::Alloc::GlobalArena& arena, AStringView testGroup, AStringView stem);
 [[nodiscard]] Log::CrashIngestConfig MakeIngestConfig(Core::Alloc::GlobalArena& arena, AStringView testGroup);
 [[nodiscard]] Expected<CrashTestPath, ErrorCode> WaitForTriggerPackage(Core::Alloc::GlobalArena& arena, const CrashTestPath& pendingDirectory, AStringView category, AStringView expression, AStringView message, AStringView file);
 void BuildLinuxCrashArchive(CrashTestText& archive, Core::Alloc::GlobalArena& arena, AStringView crashId);
-[[nodiscard]] bool Contains(const CrashTestText& text, AStringView needle)noexcept;
-[[nodiscard]] bool ContainsMessage(const Log::LogString& text, TStringView needle)noexcept;
-void PreserveObservedReport(Core::Alloc::GlobalArena& arena, const CrashTestText& report, AStringView suffix);
+[[nodiscard]] bool Contains(AStringView text, AStringView needle)noexcept;
+[[nodiscard]] bool ContainsMessage(TStringView text, TStringView needle)noexcept;
+void PreserveObservedReport(Core::Alloc::GlobalArena& arena, AStringView report, AStringView suffix);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

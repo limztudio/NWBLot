@@ -71,7 +71,7 @@ static Path BuildMaterialBindIncludeRoot(const Path& cacheDirectory, const AStri
 
 static Expected<ScratchString> BuildMaterialBindIncludeVirtualPathImpl(ScratchArena& arena, const MaterialBindEntry& entry){
     if(entry.virtualPath.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind include generation failed: virtual path is empty for '{}'"), StringConvert(entry.source));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind include generation failed: virtual path is empty for '{}'"), ConvertString(entry.source));
         return MakeUnexpected(Failure{});
     }
 
@@ -118,7 +118,7 @@ static bool RegisterGeneratedMaterialBindSymbol(const AStringView includePath, c
     if(inOutSymbols.insert(Move(scratchSymbol)).second)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': generated symbol '{}' is ambiguous"), StringConvert(includePath), StringConvert(symbol));
+    NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': generated symbol '{}' is ambiguous"), ConvertString(includePath), ConvertString(symbol));
     return false;
 }
 
@@ -285,7 +285,7 @@ static Expected<MaterialBindStorageByteSizes> ComputeMaterialBindStorageByteSize
     for(const MaterialTypedLayoutBlock& block : layout.typedLayoutBlocks){
         u32& storageByteSize = MaterialBindStorageByteSize(block.blockClass, sizes.constantBytes, sizes.mutableBytes);
         if(block.byteSize > Limit<u32>::s_Max - storageByteSize){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': typed layout storage byte size exceeds u32"), StringConvert(includePath));
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': typed layout storage byte size exceeds u32"), ConvertString(includePath));
             return MakeUnexpected(Failure{});
         }
 
@@ -609,7 +609,7 @@ Expected<CookString> BuildMaterialBindIncludeSourceImpl(CookArena& arena, const 
 }
 
 
-Expected<Path> EmitMaterialBindIncludes(CookArena& arena, const Path& cacheDirectory, const AStringView configurationSafeName, const CookVector<MaterialBindEntry>& materialBindEntries, ScratchArena& scratchArena){
+Expected<Path> EmitMaterialBindIncludes(CookArena& arena, const Path& cacheDirectory, const AStringView configurationSafeName, const Span<const MaterialBindEntry> materialBindEntries, ScratchArena& scratchArena){
     Path includeRoot = BuildMaterialBindIncludeRoot(cacheDirectory, configurationSafeName);
     if(!Core::Assets::PrepareGeneratedIncludeRoot(includeRoot, "Material bind include generation"))
         return MakeUnexpected(Failure{});
@@ -625,7 +625,7 @@ Expected<Path> EmitMaterialBindIncludes(CookArena& arena, const Path& cacheDirec
             return MakeUnexpected(Failure{});
         ScratchString includePath = Move(*includePathResult);
         if(!seenIncludePaths.insert(includePath).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include generation: duplicate material bind include path '{}'"), StringConvert(includePath));
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include generation: duplicate material bind include path '{}'"), ConvertString(includePath));
             return MakeUnexpected(Failure{});
         }
 
@@ -637,7 +637,7 @@ Expected<Path> EmitMaterialBindIncludes(CookArena& arena, const Path& cacheDirec
         const ScratchPath outputPath = ScratchPath(scratchArena, includeRoot) / AStringView(includePath);
         auto ensureDirectoriesResult = EnsureDirectories(outputPath.parentPath());
         if(!ensureDirectoriesResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include generation: failed to create generated include parent '{}': {}"), PathToString<tchar>(outputPath.parentPath()), StringConvert(ensureDirectoriesResult.error().message()));
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include generation: failed to create generated include parent '{}': {}"), PathToString<tchar>(outputPath.parentPath()), ConvertString(ensureDirectoriesResult.error().message()));
             return MakeUnexpected(Failure{});
         }
 

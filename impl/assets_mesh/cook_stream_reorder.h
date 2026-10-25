@@ -59,7 +59,7 @@ public:
     template<typename StreamVectorT>
     static void PrepareMeshStreamReorder(const StreamVectorT& source, StreamVectorT& outStream, ScratchVector<u32>& outRemap);
     template<typename StreamVectorT>
-    [[nodiscard]] static bool RemapMeshStreamRef(const Name& virtualPath, const TStringView metaKind, const TStringView streamName, const StreamVectorT& source, ScratchVector<u32>& remap, StreamVectorT& reordered, u32& index);
+    [[nodiscard]] static bool RemapMeshStreamRef(const Name& virtualPath, const TStringView metaKind, const TStringView streamName, const StreamVectorT& source, Span<u32> remap, StreamVectorT& reordered, u32& index);
     template<typename CookEntryT>
     static void PrepareCommonMeshStreamReorder(const CookEntryT& entry, MeshCookCommonStreamReorder& reorder);
     template<typename CookEntryT>
@@ -95,22 +95,22 @@ void MeshCookStreamReorder::PrepareMeshStreamReorder(const StreamVectorT& source
 
 
 template<typename StreamVectorT>
-bool MeshCookStreamReorder::RemapMeshStreamRef(const Name& virtualPath, const TStringView metaKind, const TStringView streamName, const StreamVectorT& source, ScratchVector<u32>& remap, StreamVectorT& reordered, u32& index){
+bool MeshCookStreamReorder::RemapMeshStreamRef(const Name& virtualPath, const TStringView metaKind, const TStringView streamName, const StreamVectorT& source, const Span<u32> remap, StreamVectorT& reordered, u32& index){
     if(index == s_MeshMissingStreamIndex){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet {} stream reference is missing"), metaKind, StringConvert(virtualPath.resolvedText()), streamName);
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet {} stream reference is missing"), metaKind, ConvertString(virtualPath.resolvedText()), streamName);
         return false;
     }
 
     const u32 sourceIndex = index;
     if(static_cast<usize>(sourceIndex) >= source.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet {} stream reference is out of range"), metaKind, StringConvert(virtualPath.resolvedText()), streamName);
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet {} stream reference is out of range"), metaKind, ConvertString(virtualPath.resolvedText()), streamName);
         return false;
     }
 
     u32 mappedIndex = remap[sourceIndex];
     if(mappedIndex == s_MeshMissingStreamIndex){
         if(reordered.size() >= static_cast<usize>(s_MeshMissingStreamIndex)){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': reordered {} stream exceeds u32 index limits"), metaKind, StringConvert(virtualPath.resolvedText()), streamName);
+            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': reordered {} stream exceeds u32 index limits"), metaKind, ConvertString(virtualPath.resolvedText()), streamName);
             return false;
         }
         mappedIndex = static_cast<u32>(reordered.size());

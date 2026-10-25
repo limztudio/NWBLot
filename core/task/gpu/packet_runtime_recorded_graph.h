@@ -320,7 +320,7 @@ private:
     [[nodiscard]] u64 recordingAttemptGenerationWithinArtifactOperation(const ArtifactOperation& artifactAccess)const noexcept;
     void addRecordingElapsedSeconds(f64 elapsedSeconds, const ArtifactOperation& artifactAccess)noexcept;
     void addReadyFrontierStatistics(f64 elapsedSeconds, f64 workerBusySeconds, f64 workerCapacitySeconds, const ArtifactOperation& artifactAccess)noexcept;
-    void cachePacketRecordingOverlaps(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const Vector<u32, Alloc::ScratchArena>& packetIndices, Alloc::ScratchArena& scratchArena, const ArtifactOperation& artifactAccess);
+    void cachePacketRecordingOverlaps(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, Span<const u32> packetIndices, Alloc::ScratchArena& scratchArena, const ArtifactOperation& artifactAccess);
 
 
 private:

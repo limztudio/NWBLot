@@ -126,7 +126,7 @@ Expected<Array<f32, ComponentCount>> MeshCookMetadata::ParseMetadataF32TupleList
 ){
     if(!value.isList() || value.asList().size() != ComponentCount){
         const ScratchString label = MakeIndexedLabel(scratchArena, fieldName, elementIndex);
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must be a {}-component list"), metaKind, PathToString<tchar>(nwbFilePath), StringConvert(label), ComponentCount);
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must be a {}-component list"), metaKind, PathToString<tchar>(nwbFilePath), ConvertString(label), ComponentCount);
         return MakeUnexpected(Failure{});
     }
 
@@ -173,7 +173,7 @@ Expected<ScratchVector<ElementT>> MeshCookMetadata::ParseMetadataFloatListField(
     }
 
     if(values.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must not be empty"), metaKind, PathToString<tchar>(nwbFilePath), StringConvert(fieldName));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must not be empty"), metaKind, PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
         return MakeUnexpected(Failure{});
     }
 

@@ -145,12 +145,12 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
 
             const bool isLastSegment = segmentIndex + 1u == segmentPathCount;
             if(!isLastSegment && segmentFileSize != m_segmentSize){
-                NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): mount failed: segment '{}' has size {}, expected {}"), StringConvert(m_volumeName), StringConvert(segmentPath.native()), segmentFileSize, m_segmentSize);
+                NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): mount failed: segment '{}' has size {}, expected {}"), ConvertString(m_volumeName), ConvertString(segmentPath.native()), segmentFileSize, m_segmentSize);
                 unmountLocked();
                 return false;
             }
             if(isLastSegment && segmentFileSize > m_segmentSize){
-                NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): mount failed: final segment '{}' has size {}, exceeding logical segment size {}"), StringConvert(m_volumeName), StringConvert(segmentPath.native()), segmentFileSize, m_segmentSize);
+                NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): mount failed: final segment '{}' has size {}, exceeding logical segment size {}"), ConvertString(m_volumeName), ConvertString(segmentPath.native()), segmentFileSize, m_segmentSize);
                 unmountLocked();
                 return false;
             }
@@ -168,7 +168,7 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
         }
 
         if(desc.segmentSize != 0 && desc.segmentSize != m_segmentSize){
-            NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): mount failed: requested segment size {} does not match volume size {}"), StringConvert(m_volumeName), desc.segmentSize, m_segmentSize);
+            NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): mount failed: requested segment size {} does not match volume size {}"), ConvertString(m_volumeName), desc.segmentSize, m_segmentSize);
             unmountLocked();
             return false;
         }
@@ -180,14 +180,14 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
         }
 
         if(desc.metadataSize != 0 && desc.metadataSize != m_metadataBytes){
-            NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): mount failed: requested metadata size {} does not match volume metadata size {}"), StringConvert(m_volumeName), desc.metadataSize, m_metadataBytes);
+            NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): mount failed: requested metadata size {} does not match volume metadata size {}"), ConvertString(m_volumeName), desc.metadataSize, m_metadataBytes);
             unmountLocked();
             return false;
         }
     }
 
     if(m_maxSegments != 0 && m_segmentPaths.size() > m_maxSegments){
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): mount failed: discovered {} segments, maxSegments is {}"), StringConvert(m_volumeName), m_segmentPaths.size(), m_maxSegments);
+        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): mount failed: discovered {} segments, maxSegments is {}"), ConvertString(m_volumeName), m_segmentPaths.size(), m_maxSegments);
         unmountLocked();
         return false;
     }
@@ -421,153 +421,6 @@ Vector<Name, VolumeArena> VolumeFileSystem::listFiles()const{
 }
 
 
-bool VolumeFileSystem::compact(const bool shrinkSegments){
-    ScopedLock lock(m_mutex);
-    if(!m_mounted || !m_writable){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpCompact, FilesystemVolumeDetail::s_VolumeDetailNotMountedWritable);
-        return false;
-    }
-
-    struct FileLayout{
-        Name path;
-        NotNull<FileRecord*> record;
-        u64 sourceOffset = 0u;
-        u64 destinationOffset = 0u;
-        u64 size = 0u;
-    };
-
-    Core::Alloc::ScratchArena scratchArena(FilesystemArenaScope::s_CompactScratch);
-    Vector<FileLayout, Core::Alloc::ScratchArena> layouts(scratchArena);
-    layouts.reserve(m_files.size());
-    for(auto entry = m_files.begin(); entry != m_files.end(); ++entry){
-        FileRecord& record = entry.value();
-        const auto endOffset = AddNoOverflow(record.offset, record.size);
-        if(!endOffset || record.offset < m_metadataBytes || *endOffset > m_nextFreeOffset){
-            FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpCompact, "invalid source file layout");
-            return false;
-        }
-        layouts.push_back(FileLayout{ entry.key(), NotNull<FileRecord*>(&record), record.offset, 0u, record.size });
-    }
-    Sort(layouts.begin(), layouts.end(), [](const FileLayout& lhs, const FileLayout& rhs)noexcept{ return lhs.sourceOffset < rhs.sourceOffset; });
-
-    u64 compactedWriteOffset = m_metadataBytes;
-    u64 previousSourceEnd = m_metadataBytes;
-    bool movesPayload = false;
-    for(auto& layout : layouts){
-        if(layout.sourceOffset < previousSourceEnd){
-            FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpCompact, "file layout overlap detected");
-            return false;
-        }
-        layout.destinationOffset = compactedWriteOffset;
-        movesPayload |= layout.size != 0u && layout.destinationOffset != layout.sourceOffset;
-        const auto sourceEnd = AddNoOverflow(layout.sourceOffset, layout.size);
-        const auto destinationEnd = AddNoOverflow(compactedWriteOffset, layout.size);
-        if(!sourceEnd || !destinationEnd){
-            FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpCompact, "compaction offset overflow");
-            return false;
-        }
-        previousSourceEnd = *sourceEnd;
-        compactedWriteOffset = *destinationEnd;
-    }
-    if(!movesPayload){
-        const u64 previousNextFreeOffset = m_nextFreeOffset;
-        ScopeExit restoreRecords([this, &layouts, previousNextFreeOffset]()noexcept{
-            for(const auto& layout : layouts)
-                *layout.record = FileRecord{ layout.sourceOffset, layout.size };
-            m_nextFreeOffset = previousNextFreeOffset;
-        });
-        for(const auto& layout : layouts)
-            *layout.record = FileRecord{ layout.destinationOffset, layout.size };
-        m_nextFreeOffset = compactedWriteOffset;
-        if(!flushMetadataLocked(scratchArena))
-            return false;
-        restoreRecords.release();
-        return !shrinkSegments || trimSegmentsForNextFreeOffsetLocked();
-    }
-
-    const auto originalPhysicalCapacity = computePhysicalCapacityLocked();
-    if(!originalPhysicalCapacity)
-        return false;
-    const u64 copyChunkBytes = Min(FilesystemVolumeDetail::s_VolumeMoveChunkBytes, m_segmentSize);
-    if(copyChunkBytes == 0u || !CanRepresentU64<usize>(copyChunkBytes)){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpCompact, "invalid compaction chunk size");
-        return false;
-    }
-
-    const StagedDirectoryPaths stagedPaths = FilesystemVolumeStagingDetail::BuildStagedVolumePaths(m_mountDirectory, m_volumeName.view(), scratchArena);
-    if(!EnsureEmptyStagedDirectory(stagedPaths.stageDirectory, FilesystemVolumeStagingDetail::s_VolumePublishLogPrefix, s_StageDirectoryLabel))
-        return false;
-    StagedDirectoryCleanupGuard stageCleanup(stagedPaths.stageDirectory, FilesystemVolumeStagingDetail::s_VolumePublishLogPrefix);
-    if(!RemoveStagedDirectoryIfPresent(stagedPaths.backupDirectory, FilesystemVolumeStagingDetail::s_VolumePublishLogPrefix, s_BackupDirectoryLabel))
-        return false;
-    Vector<u8, Core::Alloc::ScratchArena> copyBuffer(static_cast<usize>(copyChunkBytes), 0u, scratchArena);
-    usize stagedSegmentCount = 0u;
-    {
-        VolumeFileSystem stagedVolume(m_arena);
-        VolumeMountDesc stagedDesc(m_arena);
-        stagedDesc.volumeName = m_volumeName;
-        stagedDesc.mountDirectory = stagedPaths.stageDirectory;
-        stagedDesc.segmentSize = m_segmentSize;
-        stagedDesc.metadataSize = m_metadataBytes;
-        stagedDesc.maxSegments = m_maxSegments;
-        stagedDesc.createIfMissing = true;
-        stagedDesc.usage = VolumeUsage::CookWrite;
-        if(!stagedVolume.mount(stagedDesc))
-            return false;
-        const u64 requiredBytes = shrinkSegments ? compactedWriteOffset : *originalPhysicalCapacity;
-        if(!stagedVolume.ensureCapacityLocked(requiredBytes))
-            return false;
-        stagedVolume.m_files.reserve(layouts.size());
-        for(const auto& layout : layouts){
-            if(!stagedVolume.m_files.emplace(layout.path, FileRecord{ layout.destinationOffset, layout.size }).second){
-                FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpCompact, "duplicate compacted file identity");
-                return false;
-            }
-            u64 copiedBytes = 0u;
-            while(copiedBytes < layout.size){
-                const u64 bytes = Min(copyChunkBytes, layout.size - copiedBytes);
-                if(!readBytesLocked(layout.sourceOffset + copiedBytes, copyBuffer.data(), bytes))
-                    return false;
-                if(!stagedVolume.writeBytesLocked(layout.destinationOffset + copiedBytes, copyBuffer.data(), bytes))
-                    return false;
-                copiedBytes += bytes;
-            }
-        }
-        stagedVolume.m_nextFreeOffset = requiredBytes;
-        if(!stagedVolume.trimSegmentsForNextFreeOffsetLocked())
-            return false;
-        stagedVolume.m_nextFreeOffset = compactedWriteOffset;
-        stagedSegmentCount = stagedVolume.m_segmentPaths.size();
-        if(!stagedVolume.unmount())
-            return false;
-    }
-
-    struct CompactPublication{
-        Vector<FileLayout, Core::Alloc::ScratchArena>& layouts;
-        SegmentPathVector& segmentPaths;
-        u64& nextFreeOffset;
-        u64 compactedWriteOffset;
-        usize segmentCount;
-    };
-    CompactPublication publication{ layouts, m_segmentPaths, m_nextFreeOffset, compactedWriteOffset, stagedSegmentCount };
-    const FilesystemVolumeStagingDetail::VolumePublicationObserver observer{
-        .context = &publication,
-        .commit = [](void* context)noexcept{
-            auto& state = *MakeNotNull(static_cast<CompactPublication*>(context));
-            for(const auto& layout : state.layouts)
-                *layout.record = FileRecord{ layout.destinationOffset, layout.size };
-            state.nextFreeOffset = state.compactedWriteOffset;
-            while(state.segmentPaths.size() > state.segmentCount)
-                state.segmentPaths.pop_back();
-        },
-    };
-    if(!FilesystemVolumeStagingDetail::PromoteStagedVolume(stagedPaths, m_mountDirectory, m_volumeName.view(), stagedSegmentCount, scratchArena, observer))
-        return false;
-    stageCleanup.dismiss();
-    return true;
-}
-
-
 bool VolumeFileSystem::writeFileLocked(const Name& virtualPath, const void* data, const usize bytes, const MetadataFlushMode::Enum flushMode){
     if(!m_mounted || !m_writable){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpWriteFile, FilesystemVolumeDetail::s_VolumeDetailNotMountedWritable);
@@ -594,7 +447,7 @@ bool VolumeFileSystem::writeFileLocked(const Name& virtualPath, const void* data
         ++fileCountAfterWrite;
     }
     if(!canFitMetadataForFileCountLocked(fileCountAfterWrite)){
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): writeFile failed: metadata area is full for file count {}"), StringConvert(m_volumeName), fileCountAfterWrite);
+        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): writeFile failed: metadata area is full for file count {}"), ConvertString(m_volumeName), fileCountAfterWrite);
         return false;
     }
 

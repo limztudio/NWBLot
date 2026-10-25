@@ -191,29 +191,29 @@ NWB_NOINLINE static void CaptureRecoverableErrorForCrashObservation(const AStrin
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static NWB::Log::CrashIngestResult ProcessCrashArchive(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, const CrashTestText& archive, const NWB::Log::CrashIngestConfig& config){
+static NWB::Log::CrashIngestResult ProcessCrashArchive(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, const AStringView archive, const NWB::Log::CrashIngestConfig& config){
     EXPECT_TRUE(WriteArchive(arena, testGroup, stem, archive));
     return NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, testGroup, stem), config);
 }
 
-static NWB::Log::CrashIngestResult ProcessCrashArchive(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, const CrashTestText& archive){
+static NWB::Log::CrashIngestResult ProcessCrashArchive(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, const AStringView archive){
     const NWB::Log::CrashIngestConfig config = MakeIngestConfig(arena, testGroup);
     return ProcessCrashArchive(arena, testGroup, stem, archive, config);
 }
 
-static NWB::Log::CrashIngestResult ProcessCrashArchiveBytes(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, const CrashTestBytes& archive, const NWB::Log::CrashIngestConfig& config){
+static NWB::Log::CrashIngestResult ProcessCrashArchiveBytes(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, const Span<const u8> archive, const NWB::Log::CrashIngestConfig& config){
     EXPECT_TRUE(WriteArchiveBytes(arena, testGroup, stem, archive));
     return NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, testGroup, stem), config);
 }
 
-static NWB::Log::CrashIngestResult ProcessCrashArchiveBytes(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, const CrashTestBytes& archive){
+static NWB::Log::CrashIngestResult ProcessCrashArchiveBytes(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, const Span<const u8> archive){
     const NWB::Log::CrashIngestConfig config = MakeIngestConfig(arena, testGroup);
     return ProcessCrashArchiveBytes(arena, testGroup, stem, archive, config);
 }
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-[[nodiscard]] static usize FindText(const CrashTestText& text, const AStringView needle)noexcept{
-    return AStringView(text.data(), text.size()).find(needle);
+[[nodiscard]] static usize FindText(const AStringView text, const AStringView needle)noexcept{
+    return text.find(needle);
 }
 #endif
 

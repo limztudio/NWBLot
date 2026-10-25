@@ -246,6 +246,18 @@ template<typename OutputT, typename InputT>
     return decoded;
 }
 
+struct FrameGraphPhysicalQueueRuntimeStatisticsAccumulator{
+    FrameGraphPhysicalQueueCompileRuntimeStatistics compile;
+    FrameGraphPhysicalQueueRecordingRuntimeStatistics recording;
+    FrameGraphPhysicalQueueSubmissionRuntimeStatistics submission;
+};
+
+[[nodiscard]] EncodedFrameGraphRuntimeStatistics EncodeRuntimeStatistics(u32 nodeIndex, const FrameGraphRuntimeStatistics& statistics)noexcept;
+[[nodiscard]] Expected<FrameGraphRuntimeStatistics> DecodeRuntimeStatistics(const EncodedFrameGraphRuntimeStatistics& encoded)noexcept;
+[[nodiscard]] bool PhysicalQueueRuntimeStatisticsRecordLess(const FrameGraphPhysicalQueueRuntimeStatisticsRecord& lhs, const FrameGraphPhysicalQueueRuntimeStatisticsRecord& rhs)noexcept;
+[[nodiscard]] bool AccumulatePhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueueRuntimeStatistics& statistics, const FrameGraphRuntimeStatistics& ownerStatistics, FrameGraphPhysicalQueueRuntimeStatisticsAccumulator& total)noexcept;
+[[nodiscard]] bool ValidatePhysicalQueueRuntimeStatisticsOwner(const FrameGraphPhysicalQueueRuntimeStatisticsRecord& record, usize nodeCount, FrameGraphNodeKind::Enum ownerKind, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept;
+
 struct FrameGraphPacketSubmissionStatisticsAccumulator{
     u64 nativeSubmissionCount = 0u;
     u64 taskCount = 0u;

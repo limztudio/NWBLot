@@ -134,7 +134,7 @@ Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> Compute
     DependencyProviderCatalog catalog(arena);
     if(!catalog.discover(options, scratchArena))
         return MakeUnexpected(Failure{});
-    const auto selection = catalog.selectInputs(options, scratchArena);
+    auto selection = catalog.selectInputs(options, scratchArena);
     if(!selection)
         return MakeUnexpected(Failure{});
 
@@ -151,7 +151,7 @@ Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> Compute
             candidate.emplace_back(PathToString(arena, files[index].filePath.lexicallyNormal()));
     }
 
-    Vector<u8, Assets::ScratchArena> included(selection->selected, scratchArena);
+    const Span<u8> included = selection->selected;
     Vector<u8, Assets::ScratchArena> processed(files.size(), u8(0), scratchArena);
     Vector<usize, Assets::ScratchArena> fileQueue(selection->order, scratchArena);
     HashSet<Name, Assets::ScratchArena, Hasher<Name>, EqualTo<Name>> activeFeatures(0, Hasher<Name>(), EqualTo<Name>(), scratchArena);

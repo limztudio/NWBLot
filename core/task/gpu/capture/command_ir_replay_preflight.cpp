@@ -53,16 +53,13 @@ namespace __hidden_gpu_command_ir_replay_preflight{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using GpuCommandIrDetail::FindTaskResourceUse;
-using GpuCommandIrDetail::ReplayFailure;
-
 // Finish the syntax walk first, so malformed later bytes still report InvalidStream before this semantic error.
 [[nodiscard]] static GpuCommandIrReplayResult SemanticFailure(GpuCommandIrStreamReader& reader, const GpuCommandIrReplayError::Enum error, const u64 recordIndex = Limit<u64>::s_Max)noexcept{
     while(reader.next()){}
     const GpuCommandIrStreamValidationResult& streamValidation = reader.validation();
     if(!streamValidation.valid())
-        return ReplayFailure(GpuCommandIrReplayError::InvalidStream, streamValidation, streamValidation.recordIndex);
-    return ReplayFailure(error, streamValidation, recordIndex);
+        return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::InvalidStream, streamValidation, streamValidation.recordIndex);
+    return GpuCommandIrDetail::ReplayFailure(error, streamValidation, recordIndex);
 }
 
 [[nodiscard]] static bool QueueHasTransferCapability(const GpuPhysicalQueueInfo& queue)noexcept{
@@ -196,7 +193,7 @@ using GpuCommandIrDetail::ReplayFailure;
         }
         return false;
     };
-    if(!FindTaskResourceUse(task, record.source, ResourceStates::CopySource, GpuTaskResourceAccess::Read) || !FindTaskResourceUse(task, record.destination, ResourceStates::CopyDest, GpuTaskResourceAccess::Write))
+    if(!GpuCommandIrDetail::FindTaskResourceUse(task, record.source, ResourceStates::CopySource, GpuTaskResourceAccess::Read) || !GpuCommandIrDetail::FindTaskResourceUse(task, record.destination, ResourceStates::CopyDest, GpuTaskResourceAccess::Write))
         return GpuCommandIrReplayError::ResourceUseMismatch;
     if(
         record.dataSizeBytes == 0u
@@ -224,7 +221,7 @@ using GpuCommandIrDetail::ReplayFailure;
     if(source == destination)
         return GpuCommandIrReplayError::InvalidTextureCopy;
 
-    if(!FindTaskResourceUse(task, record.source, ResourceStates::CopySource, GpuTaskResourceAccess::Read) || !FindTaskResourceUse(task, record.destination, ResourceStates::CopyDest, GpuTaskResourceAccess::Write))
+    if(!GpuCommandIrDetail::FindTaskResourceUse(task, record.source, ResourceStates::CopySource, GpuTaskResourceAccess::Read) || !GpuCommandIrDetail::FindTaskResourceUse(task, record.destination, ResourceStates::CopyDest, GpuTaskResourceAccess::Write))
         return GpuCommandIrReplayError::ResourceUseMismatch;
 
     const TextureDesc& sourceDescription = source->getCreationDescription();
@@ -263,7 +260,7 @@ using GpuCommandIrDetail::ReplayFailure;
     if(!destination)
         return GpuCommandIrReplayError::MissingBackendResource;
 
-    const GpuTaskResourceUse* const destinationUse = FindTaskResourceUse(task, record.destination, ResourceStates::CopyDest, GpuTaskResourceAccess::Write);
+    const GpuTaskResourceUse* const destinationUse = GpuCommandIrDetail::FindTaskResourceUse(task, record.destination, ResourceStates::CopyDest, GpuTaskResourceAccess::Write);
     if(!destinationUse)
         return GpuCommandIrReplayError::ResourceUseMismatch;
 
@@ -290,7 +287,7 @@ struct TextureClearDestination{
     if(!destination)
         return MakeUnexpected(GpuCommandIrReplayError::MissingBackendResource);
 
-    const GpuTaskResourceUse* const destinationUse = FindTaskResourceUse(task, record.destination, ResourceStates::CopyDest, GpuTaskResourceAccess::Write);
+    const GpuTaskResourceUse* const destinationUse = GpuCommandIrDetail::FindTaskResourceUse(task, record.destination, ResourceStates::CopyDest, GpuTaskResourceAccess::Write);
     if(!destinationUse)
         return MakeUnexpected(GpuCommandIrReplayError::ResourceUseMismatch);
     return TextureClearDestination{ .texture = *destination, .use = *destinationUse, };
@@ -388,7 +385,7 @@ struct TextureClearDestination{
     // One reader walk admits syntax and packet semantics; a syntax failure anywhere in the stream wins over a semantic failure.
     GpuCommandIrStreamReader reader(bytes);
     if(reader.validation().failed())
-        return __hidden_gpu_command_ir_replay_preflight::ReplayFailure(GpuCommandIrReplayError::InvalidStream, reader.validation(), reader.validation().recordIndex);
+        return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::InvalidStream, reader.validation(), reader.validation().recordIndex);
     if(!compiledGraph.validFor(graph))
         return __hidden_gpu_command_ir_replay_preflight::SemanticFailure(reader, GpuCommandIrReplayError::InvalidCompiledGraph);
 
@@ -411,11 +408,11 @@ struct TextureClearDestination{
         const auto decodedResult = reader.next();
         if(!decodedResult && decodedResult.error() == GpuCommandIrStreamReadStatus::End){
             if(rasterState.active)
-                return __hidden_gpu_command_ir_replay_preflight::ReplayFailure(GpuCommandIrReplayError::InvalidRasterState, reader.validation(), recordIndex);
+                return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::InvalidRasterState, reader.validation(), recordIndex);
             return GpuCommandIrReplayResult{ .streamValidation = reader.validation(), .recordIndex = recordIndex, };
         }
         if(!decodedResult)
-            return __hidden_gpu_command_ir_replay_preflight::ReplayFailure(GpuCommandIrReplayError::InvalidStream, reader.validation(), reader.validation().recordIndex);
+            return GpuCommandIrDetail::ReplayFailure(GpuCommandIrReplayError::InvalidStream, reader.validation(), reader.validation().recordIndex);
         const auto& decoded = *decodedResult;
 
         const bool raster = GpuCommandIrDetail::IsRasterOpcode(decoded.opcode);

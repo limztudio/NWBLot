@@ -35,7 +35,7 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_FontAtlasAssetCodecAutoRegistrar, FontAtlasAs
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool FontAtlas::loadBinary(const Core::Assets::AssetBytes& binary){
+bool FontAtlas::loadBinary(const Span<const u8> binary){
     if(!checkVirtualPath(NWB_TEXT("FontAtlas::loadBinary")))
         return false;
     Core::Alloc::ScratchArena scratchArena(AssetsFontAtlasArenaScope::s_LoadBinaryArena);

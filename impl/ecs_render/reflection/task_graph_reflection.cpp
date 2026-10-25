@@ -611,7 +611,7 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
             for(u32 slice = 0u; slice < sliceCount; ++slice){
                 const auto sliceIdentity = ReflectionCsgHardwareSliceIdentity(slice);
                 if(!sliceIdentity){
-                    NWB_LOGGER_ERROR(NWB_TEXT("RendererReflectionSystem: failed to format CSG hardware slice identity: {}"), StringConvert(sliceIdentity.error().message()));
+                    NWB_LOGGER_ERROR(NWB_TEXT("RendererReflectionSystem: failed to format CSG hardware slice identity: {}"), ConvertString(sliceIdentity.error().message()));
                     return MakeUnexpected(Failure{});
                 }
                 Core::GpuTaskDesc sliceDesc = TaskDesc(*sliceIdentity, s_HardwareResolveTaskLabel, dependency);

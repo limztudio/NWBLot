@@ -36,7 +36,7 @@ template<typename ArenaT>
 [[nodiscard]] inline Expected<AString<ArenaT>, ErrorCode> ReadSmokeEnvironmentText(ArenaT& arena, const AStringView variableName){
     auto value = ReadEnvironmentVariable(arena, variableName);
     if(!value){
-        NWB_LOGGER_ERROR(NWB_TEXT("Smoke: failed to read environment '{}': {}"), StringConvert(variableName), StringConvert(value.error().message()));
+        NWB_LOGGER_ERROR(NWB_TEXT("Smoke: failed to read environment '{}': {}"), ConvertString(variableName), ConvertString(value.error().message()));
         return MakeUnexpected(value.error());
     }
     if(!*value || (*value)->empty())
@@ -48,7 +48,7 @@ template<typename ArenaT>
     Core::Alloc::ScratchArena arena(s_SmokeEnvironmentArena);
     const auto value = ReadEnvironmentVariable(arena, variableName);
     if(!value){
-        NWB_LOGGER_ERROR(NWB_TEXT("Smoke: failed to read environment '{}': {}"), StringConvert(variableName), StringConvert(value.error().message()));
+        NWB_LOGGER_ERROR(NWB_TEXT("Smoke: failed to read environment '{}': {}"), ConvertString(variableName), ConvertString(value.error().message()));
         return MakeUnexpected(Failure{});
     }
     if(!*value || (*value)->empty())

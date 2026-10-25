@@ -75,7 +75,7 @@ FontSource::~FontSource()noexcept{
 bool FontSource::open(const BakeOptions& options, Impl::FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratch){
     auto bytes = ReadFontSourceInput(options.source, m_bytes.get_allocator().arena(), scratch);
     if(!bytes){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: source admission failed: {}"), StringConvert(bytes.error()));
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: source admission failed: {}"), ConvertString(bytes.error()));
         return false;
     }
     if(!Impl::ValidateFontSource(*bytes, 0u)){
@@ -110,8 +110,7 @@ bool FontSource::open(const BakeOptions& options, Impl::FontAtlasPayload& payloa
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: FreeType rejected bake size, error {}"), sizeSet);
         return false;
     }
-    const ScratchPath output(scratch, options.output);
-    const auto stem = PathToGenericString(scratch, output.stem());
+    const auto stem = PathToGenericString(scratch, options.output.stemView());
     const auto fontReference = Core::Assets::AssetRef<Impl::Font>::FromText(AStringView(stem));
     if(!fontReference){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: output asset stem contains an embedded null"));

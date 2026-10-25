@@ -52,9 +52,9 @@ template<bool AlphaMask>
     const auto isRegularFile = IsRegularFile(path);
     if(!isRegularFile && !IsMissingPathError(isRegularFile.error())){
         if constexpr(AlphaMask)
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to inspect alpha image '{}': {}"), PathToString<tchar>(path), StringConvert(isRegularFile.error().message()));
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to inspect alpha image '{}': {}"), PathToString<tchar>(path), ConvertString(isRegularFile.error().message()));
         else
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to inspect input '{}': {}"), PathToString<tchar>(path), StringConvert(isRegularFile.error().message()));
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to inspect input '{}': {}"), PathToString<tchar>(path), ConvertString(isRegularFile.error().message()));
         return false;
     }
     if(!isRegularFile || !*isRegularFile){
@@ -187,7 +187,7 @@ int Run(const int argc, char** argv){
             else if(payload->dimension == TextureDimension::Texture3D)
                 StringAppendFormat(report, "x{}", payload->depth);
             StringAppendFormat(report, ", {} linear UASTC mips, {} raw bytes\n", payload->mipCount, payload->bytes.size());
-            NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report));
+            NWB_LOGGER_ESSENTIAL_INFO(ConvertString(report));
             return TexConvCliDetail::s_TexConvExitSuccess;
         }
     }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, []()noexcept{ return TexConvCliDetail::s_TexConvExitFatal; }

@@ -143,7 +143,7 @@ private:
     if(const Metascript::Document::Declaration* declaration = declarations.find(itemReference))
         return MakeNotNull(declaration);
 
-    NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': item {} references undeclared asset variable '{}'"), PathToString<tchar>(nwbFilePath), itemIndex, StringConvert(itemReference));
+    NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': item {} references undeclared asset variable '{}'"), PathToString<tchar>(nwbFilePath), itemIndex, ConvertString(itemReference));
     return MakeUnexpected(Failure{});
 }
 
@@ -243,7 +243,7 @@ struct ItemVirtualPath{
     const Metascript::MStringView reference = source.asReference();
     const Metascript::Document::Declaration* declaration = declarations.find(reference);
     if(!declaration){
-        NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': reference '{}' does not target a declared asset"), PathToString<tchar>(nwbFilePath), StringConvert(AStringView(reference.data(), reference.size())));
+        NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': reference '{}' does not target a declared asset"), PathToString<tchar>(nwbFilePath), ConvertString(AStringView(reference.data(), reference.size())));
         return MakeUnexpected(Failure{});
     }
 
@@ -255,13 +255,13 @@ struct ItemVirtualPath{
     const NameHash variableHash = *variableHashResult;
     if(assetVariableHashes.find(variableHash) == assetVariableHashes.end()){
         if(!resolvingVariableHashes.insert(variableHash).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': cyclic local metadata reference '{}'"), PathToString<tchar>(nwbFilePath), StringConvert(AStringView(reference.data(), reference.size())));
+            NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': cyclic local metadata reference '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(AStringView(reference.data(), reference.size())));
             return MakeUnexpected(Failure{});
         }
 
         const Metascript::Value* localValue = doc.findVariable(DeclarationVariableMetaView(*declaration));
         if(!localValue){
-            NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': reference '{}' targets a missing local variable"), PathToString<tchar>(nwbFilePath), StringConvert(AStringView(reference.data(), reference.size())));
+            NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': reference '{}' targets a missing local variable"), PathToString<tchar>(nwbFilePath), ConvertString(AStringView(reference.data(), reference.size())));
             return MakeUnexpected(Failure{});
         }
 
@@ -272,7 +272,7 @@ struct ItemVirtualPath{
 
     const auto virtualPath = BuildItemVirtualPath(baseVirtualPath, DeclarationVariable(*declaration), scratchArena);
     if(!virtualPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': failed to build virtual path for reference '{}'"), PathToString<tchar>(nwbFilePath), StringConvert(AStringView(reference.data(), reference.size())));
+        NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': failed to build virtual path for reference '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(AStringView(reference.data(), reference.size())));
         return MakeUnexpected(Failure{});
     }
 
@@ -403,7 +403,7 @@ Expected<ExpandedAssetMetadataVector> ExpandAssetBunch(const Path& assetRoot, co
                 return MakeUnexpected(Failure{});
             }
             if(!usedVariables.insert(*variableHash).second){
-                NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': variable '{}' is listed more than once"), PathToString<tchar>(nwbFilePath), StringConvert(variableName));
+                NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': variable '{}' is listed more than once"), PathToString<tchar>(nwbFilePath), ConvertString(variableName));
                 return MakeUnexpected(Failure{});
             }
 
@@ -416,7 +416,7 @@ Expected<ExpandedAssetMetadataVector> ExpandAssetBunch(const Path& assetRoot, co
             const AStringView variableName = DeclarationVariable(*itemDeclaration);
             const Metascript::Value* assetValue = doc.findVariable(DeclarationVariableMetaView(*itemDeclaration));
             if(!assetValue){
-                NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': references missing variable '{}'"), PathToString<tchar>(nwbFilePath), StringConvert(variableName));
+                NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': references missing variable '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(variableName));
                 return MakeUnexpected(Failure{});
             }
 
@@ -426,7 +426,7 @@ Expected<ExpandedAssetMetadataVector> ExpandAssetBunch(const Path& assetRoot, co
 
             const auto virtualPath = BuildItemVirtualPath(AStringView(baseVirtualPathText->data(), baseVirtualPathText->size()), variableName, scratchArena);
             if(!virtualPath){
-                NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': failed to build virtual path for variable '{}'"), PathToString<tchar>(nwbFilePath), StringConvert(variableName));
+                NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': failed to build virtual path for variable '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(variableName));
                 return MakeUnexpected(Failure{});
             }
 

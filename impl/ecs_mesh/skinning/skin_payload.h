@@ -102,8 +102,8 @@ namespace MeshSkinningPayload{
     return Span<const SkeletonJointMatrix>(payload.jointMatrices.data(), jointCount);
 }
 
-template<typename SourceJointVector, typename JointPaletteVector>
-[[nodiscard]] bool BuildSkinJointPalette(const MeshSkinningRuntimeInstance& instance, const SourceJointVector& sourceJoints, const u32 skinningMode, JointPaletteVector& outJointPalette){
+template<typename JointPaletteVector>
+[[nodiscard]] bool BuildSkinJointPalette(const MeshSkinningRuntimeInstance& instance, const Span<const SkeletonJointMatrix> sourceJoints, const u32 skinningMode, JointPaletteVector& outJointPalette){
     outJointPalette.clear();
 
     if(instance.skin.empty() || sourceJoints.empty())

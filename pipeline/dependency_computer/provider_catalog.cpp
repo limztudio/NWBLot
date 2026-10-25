@@ -70,7 +70,7 @@ inline constexpr AStringView s_CsgShapeFileSuffix = "/shape";
     return Optional<Name>(*shapeFileVirtualPath);
 }
 
-[[nodiscard]] static bool SelectInput(const NWB::Path& path, const bool directory, const Assets::DiscoveredNwbFileVector& files, Assets::ScratchArena& scratchArena, Vector<u8, Assets::ScratchArena>& selected, Vector<usize, Assets::ScratchArena>& order){
+[[nodiscard]] static bool SelectInput(const NWB::Path& path, const bool directory, const Span<const Assets::DiscoveredNwbFile> files, Assets::ScratchArena& scratchArena, const Span<u8> selected, Vector<usize, Assets::ScratchArena>& order){
     Assets::ScratchString input = PathToString(scratchArena, path);
 #if defined(NWB_PLATFORM_WINDOWS)
     CanonicalizeTextInPlace(input);
@@ -134,7 +134,7 @@ bool DependencyProviderCatalog::discover(const PipelineOptions& options, NWB::Co
         if(error.reason == Assets::AssetRootResolutionFailure::InspectInput)
             NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to inspect input '{}'"), PathToString<tchar>(error.inputPath));
         else
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to resolve asset root from '{}'"), StringConvert(sources[error.sourceIndex]));
+            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to resolve asset root from '{}'"), ConvertString(sources[error.sourceIndex]));
         return false;
     }
     if(roots->empty()){
@@ -175,7 +175,7 @@ Expected<DependencyInputSelection> DependencyProviderCatalog::selectInputs(const
             scratchArena
         );
         if(!projectProvider){
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: no project root '{}' found in asset roots"), StringConvert(Impl::ProjectAssetDefaults::s_DefaultProjectVirtualPathText));
+            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: no project root '{}' found in asset roots"), ConvertString(Impl::ProjectAssetDefaults::s_DefaultProjectVirtualPathText));
             return MakeUnexpected(Failure{});
         }
         selected[*projectProvider] = 1u;
@@ -186,7 +186,7 @@ Expected<DependencyInputSelection> DependencyProviderCatalog::selectInputs(const
     for(const auto& input : options.inputs){
         const auto resolved = ResolveAbsolutePath(m_arena, m_repoRoot, AStringView(input));
         if(!resolved){
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to resolve input '{}'"), StringConvert(input));
+            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to resolve input '{}'"), ConvertString(input));
             return MakeUnexpected(Failure{});
         }
         const NWB::Path& path = *resolved;
@@ -244,7 +244,7 @@ Expected<usize> DependencyProviderCatalog::resolve(const Name& virtualPath, cons
     usize matched = Limit<usize>::s_Max;
     const auto recordMatch = [&](const usize index) -> bool{
         if(matched != Limit<usize>::s_Max && matched != index){
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: multiple physical providers for '{}'"), StringConvert(virtualPath));
+            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: multiple physical providers for '{}'"), ConvertString(virtualPath));
             return false;
         }
         matched = index;
@@ -262,7 +262,7 @@ Expected<usize> DependencyProviderCatalog::resolve(const Name& virtualPath, cons
                 return MakeUnexpected(Failure{});
             if(*hasBunch){
                 if(assetType){
-                    NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: provider '{}' declares multiple assets for '{}'"), PathToString<tchar>(m_files[index].filePath), StringConvert(virtualPath));
+                    NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: provider '{}' declares multiple assets for '{}'"), PathToString<tchar>(m_files[index].filePath), ConvertString(virtualPath));
                     return MakeUnexpected(Failure{});
                 }
                 const auto expanded = Assets::AssetsBunchCook::ExpandAssetBunch(m_files[index].assetRoot, m_files[index].virtualRoot.view(), m_files[index].filePath, *document, scratchArena);
@@ -282,7 +282,7 @@ Expected<usize> DependencyProviderCatalog::resolve(const Name& virtualPath, cons
             if(assetType && *documentAssetType != assetType)
                 continue;
             if(document->declarations().size() != 1u){
-                NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: provider '{}' declares multiple assets for '{}'"), PathToString<tchar>(m_files[index].filePath), StringConvert(virtualPath));
+                NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: provider '{}' declares multiple assets for '{}'"), PathToString<tchar>(m_files[index].filePath), ConvertString(virtualPath));
                 return MakeUnexpected(Failure{});
             }
             if(!recordMatch(index))
@@ -342,9 +342,9 @@ Expected<usize> DependencyProviderCatalog::resolve(const Name& virtualPath, cons
 
     if(matched == Limit<usize>::s_Max){
         if(assetType)
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: no typed '{}' provider for '{}'"), StringConvert(assetType), StringConvert(virtualPath));
+            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: no typed '{}' provider for '{}'"), ConvertString(assetType), ConvertString(virtualPath));
         else
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: no provider for '{}'"), StringConvert(virtualPath));
+            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: no provider for '{}'"), ConvertString(virtualPath));
         return MakeUnexpected(Failure{});
     }
     return matched;

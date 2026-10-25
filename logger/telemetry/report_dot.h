@@ -86,8 +86,8 @@ using GraphTimingMap = HashMap<GraphTimingKey, f64, Core::Alloc::ScratchArena, G
 [[nodiscard]] AStringView FrameGraphQueueAssignmentAcceptanceText(const Telemetry::FrameGraphQueueAssignmentAcceptance::Enum acceptance)noexcept;
 [[nodiscard]] AStringView FrameGraphTaskPacketizationDecisionText(const Telemetry::FrameGraphTaskPacketizationDecision::Enum decision)noexcept;
 [[nodiscard]] usize EstimateTimedGraphDotReserve(const Telemetry::FrameGraphPayload& graph)noexcept;
-[[nodiscard]] usize EstimateTimedGraphsDotReserve(const FrameGraphReportRecords& graphs)noexcept;
-void BuildTimedGraphsDot(Core::Alloc::ScratchArena& scratchArena, const FrameGraphReportRecords& graphs, const GraphTimingMap& timing, AString<TelemetryArena>& out);
+[[nodiscard]] usize EstimateTimedGraphsDotReserve(Span<const FrameGraphReportRecord> graphs)noexcept;
+void BuildTimedGraphsDot(Core::Alloc::ScratchArena& scratchArena, Span<const FrameGraphReportRecord> graphs, const GraphTimingMap& timing, AString<TelemetryArena>& out);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

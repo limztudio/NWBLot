@@ -242,8 +242,8 @@ namespace GpuTaskGraphCompilerDetail{
 [[nodiscard]] GpuQueueAssignmentScore BuildQueuePlacementGroupScore(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
-    const GraphicsVector<GpuTaskQueueAssignment>& assignments,
-    const GraphicsVector<u32>& assignmentIndicesByTask,
+    const Span<const GpuTaskQueueAssignment> assignments,
+    const Span<const u32> assignmentIndicesByTask,
     const GpuPhysicalQueueTopology& topology,
     const GpuTaskSchedulingReachability& schedulingReachability,
     const GpuTaskQueueScoringData& scoringData,

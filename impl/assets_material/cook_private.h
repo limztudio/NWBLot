@@ -160,24 +160,24 @@ Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface(
     CookArena& arena,
     const AStringView shaderName,
     const Path& materialBindIncludeRoot,
-    const CookVector<MaterialBindEntry>& materialBindEntries,
-    const CookVector<Path>& dependencies,
+    const Span<const MaterialBindEntry> materialBindEntries,
+    const Span<const Path> dependencies,
     ScratchArena& scratchArena
 );
 
 Expected<CookString> BuildMaterialBindIncludeSourceImpl(CookArena& arena, const MaterialBindEntry& entry, ScratchArena& scratchArena);
 
-Expected<Path> EmitMaterialBindIncludes(CookArena& arena, const Path& cacheDirectory, const AStringView configurationSafeName, const CookVector<MaterialBindEntry>& materialBindEntries, ScratchArena& scratchArena);
+Expected<Path> EmitMaterialBindIncludes(CookArena& arena, const Path& cacheDirectory, const AStringView configurationSafeName, Span<const MaterialBindEntry> materialBindEntries, ScratchArena& scratchArena);
 
-bool ValidateMaterialCookInterfaces(const CookVector<MaterialBindEntry>& materialBindEntries, ScratchArena& scratchArena, CookVector<MaterialCookEntry>& materialEntries);
+bool ValidateMaterialCookInterfaces(Span<const MaterialBindEntry> materialBindEntries, ScratchArena& scratchArena, CookVector<MaterialCookEntry>& materialEntries);
 
 Expected<MaterialCookEntry> ParseMaterialMeta(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, ScratchArena& scratchArena);
 
-bool AssignMaterialShadingModelIdsImpl(CookVector<MaterialCookEntry>& materialEntries, ScratchArena& scratchArena);
+bool AssignMaterialShadingModelIdsImpl(Span<MaterialCookEntry> materialEntries, ScratchArena& scratchArena);
 
-Expected<Path> EmitDeferredBxdfDispatchModuleImpl(const Path& cacheDirectory, const AStringView configurationSafeName, const CookVector<MaterialCookEntry>& materialEntries, ScratchArena& scratchArena);
+Expected<Path> EmitDeferredBxdfDispatchModuleImpl(const Path& cacheDirectory, const AStringView configurationSafeName, Span<const MaterialCookEntry> materialEntries, ScratchArena& scratchArena);
 
-Expected<Path> EmitShadowSurfaceDispatchModuleImpl(const Path& cacheDirectory, const AStringView configurationSafeName, const CookVector<MaterialBindEntry>& materialBindEntries, const CookVector<MaterialCookEntry>& materialEntries, ScratchArena& scratchArena);
+Expected<Path> EmitShadowSurfaceDispatchModuleImpl(const Path& cacheDirectory, const AStringView configurationSafeName, Span<const MaterialBindEntry> materialBindEntries, Span<const MaterialCookEntry> materialEntries, ScratchArena& scratchArena);
 
 Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShadersImpl(
     const Path& cacheDirectory,
@@ -185,7 +185,7 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShad
     const AStringView sharedMeshShaderName,
     CookArena& arena,
     ScratchArena& scratchArena,
-    CookVector<MaterialCookEntry>& materialEntries
+    Span<MaterialCookEntry> materialEntries
 );
 
 Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitAccumulatePixelShadersImpl(
@@ -193,7 +193,7 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitAcc
     const AStringView configurationSafeName,
     CookArena& arena,
     ScratchArena& scratchArena,
-    CookVector<MaterialCookEntry>& materialEntries
+    Span<MaterialCookEntry> materialEntries
 );
 
 Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitOccupancyPixelShadersImpl(
@@ -201,7 +201,7 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitOcc
     const AStringView configurationSafeName,
     CookArena& arena,
     ScratchArena& scratchArena,
-    CookVector<MaterialCookEntry>& materialEntries
+    Span<MaterialCookEntry> materialEntries
 );
 
 Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitExtinctionPixelShadersImpl(
@@ -209,7 +209,7 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitExt
     const AStringView configurationSafeName,
     CookArena& arena,
     ScratchArena& scratchArena,
-    CookVector<MaterialCookEntry>& materialEntries
+    Span<MaterialCookEntry> materialEntries
 );
 
 

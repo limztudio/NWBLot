@@ -35,9 +35,9 @@ inline void AppendF32LittleEndian(Container& bytes, const f32 value)noexcept(noe
 }
 
 template<typename Container>
-[[nodiscard]] inline Expected<u32> ReadU32LittleEndian(const Container& bytes, usize& cursor)noexcept(noexcept(BinaryDetail::CanReadBytes(bytes, cursor, sizeof(u32))) && IsPointer_V<decltype(bytes.data())> && noexcept(bytes.data())){
+[[nodiscard]] inline Expected<u32> ReadU32LittleEndian(const Container& bytes, usize& cursor)noexcept(noexcept(CanReadBytes(bytes, cursor, sizeof(u32))) && IsPointer_V<decltype(bytes.data())> && noexcept(bytes.data())){
     BinaryDetail::RequireByteContainer<Container>();
-    if(!BinaryDetail::CanReadBytes(bytes, cursor, sizeof(u32)))
+    if(!CanReadBytes(bytes, cursor, sizeof(u32)))
         return MakeUnexpected(Failure{});
     const u32 value = ReadU32LittleEndian(NotNull<const u8*>(reinterpret_cast<const u8*>(bytes.data()) + cursor));
     cursor += sizeof(u32);

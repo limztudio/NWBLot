@@ -51,7 +51,7 @@ static constexpr AStringView s_PlaneTopField = "plane_top";
     if(value && value->isInteger() && value->asInteger() >= 0 && static_cast<u64>(value->asInteger()) <= maximum){
         return static_cast<u32>(value->asInteger());
     }
-    NWB_LOGGER_ERROR(NWB_TEXT("Font atlas glyph meta '{}': field '{}' must be an integer in 0..{}"), PathToString<tchar>(path), StringConvert(field), maximum);
+    NWB_LOGGER_ERROR(NWB_TEXT("Font atlas glyph meta '{}': field '{}' must be an integer in 0..{}"), PathToString<tchar>(path), ConvertString(field), maximum);
     return MakeUnexpected(Failure{});
 }
 

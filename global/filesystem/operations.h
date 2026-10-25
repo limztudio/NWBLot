@@ -34,28 +34,25 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace GlobalFilesystemDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+template<typename T>
+using BasicOutputFileStream = std::basic_ofstream<T>;
 using InputFileStream = std::ifstream;
 using OutputFileStream = std::ofstream;
 using FileStream = std::fstream;
 using StreamOffset = std::streamoff;
 using StreamSize = std::streamsize;
 
-inline constexpr usize s_InitialPathBufferCapacity = 256u;
-inline constexpr usize s_FileSizeHighPartShiftBits = sizeof(u32) * 8u;
-inline constexpr u32 s_CreateDirectoryPermissionMask = 0777u;
-inline constexpr char s_StagedDirectoryPrefix = '.';
-inline constexpr AStringView s_StageDirectorySuffix = "_stage";
-inline constexpr AStringView s_BackupDirectorySuffix = "_backup";
-inline constexpr usize s_StageDirectorySuffixLength = s_StageDirectorySuffix.size();
-inline constexpr usize s_BackupDirectorySuffixLength = s_BackupDirectorySuffix.size();
-inline constexpr usize s_StageDirectoryNameExtraCharacters = 1u + s_StageDirectorySuffixLength;
-inline constexpr usize s_BackupDirectoryNameExtraCharacters = 1u + s_BackupDirectorySuffixLength;
+using FileOpenMode = std::ios_base::openmode;
+
+inline constexpr FileOpenMode s_FileOpenWrite = std::ios::out;
+inline constexpr FileOpenMode s_FileOpenAppend = std::ios::app;
+inline constexpr FileOpenMode s_FileOpenBinary = std::ios::binary;
+inline constexpr FileOpenMode s_FileOpenTruncate = std::ios::trunc;
+
+using FileFormatFlags = std::ios_base::fmtflags;
+
+inline constexpr FileFormatFlags s_FileFormatFixed = std::ios::fixed;
+inline constexpr FileFormatFlags s_FileFormatFloatField = std::ios::floatfield;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,6 +69,31 @@ inline constexpr usize s_BackupDirectoryNameExtraCharacters = 1u + s_BackupDirec
     return ErrorCode(errno, std::generic_category());
 #endif
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace GlobalFilesystemDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr usize s_InitialPathBufferCapacity = 256u;
+inline constexpr usize s_FileSizeHighPartShiftBits = sizeof(u32) * 8u;
+inline constexpr u32 s_CreateDirectoryPermissionMask = 0777u;
+inline constexpr char s_StagedDirectoryPrefix = '.';
+inline constexpr AStringView s_StageDirectorySuffix = "_stage";
+inline constexpr AStringView s_BackupDirectorySuffix = "_backup";
+inline constexpr usize s_StageDirectorySuffixLength = s_StageDirectorySuffix.size();
+inline constexpr usize s_BackupDirectorySuffixLength = s_BackupDirectorySuffix.size();
+inline constexpr usize s_StageDirectoryNameExtraCharacters = 1u + s_StageDirectorySuffixLength;
+inline constexpr usize s_BackupDirectoryNameExtraCharacters = 1u + s_BackupDirectorySuffixLength;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 #if defined(NWB_PLATFORM_WINDOWS)
 inline void CloseDirectory(const HANDLE findHandle, ErrorCode& outError)noexcept{
@@ -111,32 +133,6 @@ template<typename ArenaT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T>
-using BasicOutputFileStream = std::basic_ofstream<T>;
-using InputFileStream = GlobalFilesystemDetail::InputFileStream;
-using OutputFileStream = GlobalFilesystemDetail::OutputFileStream;
-using FileStream = GlobalFilesystemDetail::FileStream;
-using StreamOffset = GlobalFilesystemDetail::StreamOffset;
-using StreamSize = GlobalFilesystemDetail::StreamSize;
-using GlobalFilesystemDetail::CanRepresentStreamSize;
-using GlobalFilesystemDetail::LastSystemError;
-
-using FileOpenMode = std::ios_base::openmode;
-
-inline constexpr FileOpenMode s_FileOpenWrite = std::ios::out;
-inline constexpr FileOpenMode s_FileOpenAppend = std::ios::app;
-inline constexpr FileOpenMode s_FileOpenBinary = std::ios::binary;
-inline constexpr FileOpenMode s_FileOpenTruncate = std::ios::trunc;
-
-using FileFormatFlags = std::ios_base::fmtflags;
-
-inline constexpr FileFormatFlags s_FileFormatFixed = std::ios::fixed;
-inline constexpr FileFormatFlags s_FileFormatFloatField = std::ios::floatfield;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 template<typename ArenaT>
 struct StagedDirectoryPaths{
     Path<ArenaT> stageDirectory;
@@ -166,7 +162,7 @@ template<typename ArenaT>
         buffer.resize(capacity);
         const ssize_t copiedBytes = readlink(path.c_str(), buffer.data(), buffer.size());
         if(copiedBytes < 0)
-            return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
+            return MakeUnexpected(LastSystemError());
         if(static_cast<usize>(copiedBytes) < buffer.size())
             return Path<ArenaT>(path.arena(), TStringView(buffer.data(), static_cast<usize>(copiedBytes)));
         if(capacity > Limit<usize>::s_Max / 2u)
@@ -185,7 +181,7 @@ template<typename ArenaT>
         buffer.resize(static_cast<usize>(capacity));
         const DWORD copiedLength = GetCurrentDirectory(capacity, buffer.data());
         if(copiedLength == 0u)
-            return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
+            return MakeUnexpected(LastSystemError());
         if(copiedLength < capacity)
             return Path<ArenaT>(arena, TStringView(buffer.data(), static_cast<usize>(copiedLength)));
         if(copiedLength == Limit<DWORD>::s_Max)
@@ -199,7 +195,7 @@ template<typename ArenaT>
         if(getcwd(buffer.data(), buffer.size()) != nullptr)
             return Path<ArenaT>(arena, TStringView(buffer.data(), std::char_traits<tchar>::length(buffer.data())));
         if(errno != ERANGE)
-            return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
+            return MakeUnexpected(LastSystemError());
         if(capacity > Limit<usize>::s_Max / 2u)
             return MakeUnexpected(std::make_error_code(std::errc::value_too_large));
         capacity *= 2u;
@@ -249,7 +245,7 @@ template<typename ArenaT>
     tchar executablePathBuffer[s_MaxPathLength];
     const DWORD copiedLength = GetModuleFileName(nullptr, executablePathBuffer, static_cast<DWORD>(s_MaxPathLength));
     if(copiedLength == 0u)
-        return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
+        return MakeUnexpected(LastSystemError());
     if(copiedLength >= static_cast<DWORD>(s_MaxPathLength))
         return MakeUnexpected(std::make_error_code(std::errc::value_too_large));
     return Path<ArenaT>(arena, TStringView(executablePathBuffer, static_cast<usize>(copiedLength)));
@@ -543,15 +539,8 @@ template<typename ArenaT>
     if(errno == ENOENT || errno == ENOTDIR)
         return false;
 #endif
-    return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
+    return MakeUnexpected(LastSystemError());
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include "operations_file_io.h"
-#include "operations_remove.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

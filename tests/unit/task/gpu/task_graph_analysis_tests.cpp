@@ -67,7 +67,7 @@ static void ExpectEdgeEqual(const Graphics::GpuTaskDependencyEdge& expected, con
     EXPECT_EQ(actual.hazard, expected.hazard);
 }
 
-static void ExpectDagAnalysis(const Graphics::GpuTaskGraph& graph, const Vector<Graphics::GpuTaskDependencyEdge, Core::Alloc::ScratchArena>& expectedEdges, Core::Alloc::ScratchArena& scratchArena, Graphics::GpuTaskGraphAnalysis& analysis){
+static void ExpectDagAnalysis(const Graphics::GpuTaskGraph& graph, const Span<const Graphics::GpuTaskDependencyEdge> expectedEdges, Core::Alloc::ScratchArena& scratchArena, Graphics::GpuTaskGraphAnalysis& analysis){
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
     ASSERT_TRUE(declarations.valid());
     const Graphics::GpuTaskGraphCompiler compiler;

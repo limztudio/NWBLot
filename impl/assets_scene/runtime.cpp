@@ -35,7 +35,7 @@ using NameHashSet = HashSet<NameHash, Core::Alloc::ScratchArena, Hasher<NameHash
 
 template<typename TAsset>
 [[nodiscard]] static bool ValidateUniqueAssetRefs(
-    const Core::Assets::AssetVector<Core::Assets::AssetRef<TAsset>>& references,
+    const Span<const Core::Assets::AssetRef<TAsset>> references,
     const TStringView contextLabel,
     Core::Alloc::ScratchArena& scratchArena
 ){
@@ -56,7 +56,7 @@ template<typename TAsset>
 }
 
 [[nodiscard]] static bool ValidateUniqueNames(
-    const SceneAsset::NameVector& names,
+    const Span<const Name> names,
     const TStringView contextLabel,
     Core::Alloc::ScratchArena& scratchArena
 ){
@@ -117,7 +117,7 @@ bool ProjectAsset::validatePayload()const{
     return true;
 }
 
-bool ProjectAsset::loadBinary(const Core::Assets::AssetBytes& binary){
+bool ProjectAsset::loadBinary(const Span<const u8> binary){
     usize cursor = 0u;
     const auto headerResult = Core::Assets::ReadMagicHeaderPayload<ProjectBinaryPayload::ProjectHeaderBinary>(
         binary,
@@ -151,16 +151,16 @@ bool SceneAsset::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
         NWB_LOGGER_ERROR(NWB_TEXT("SceneAsset::validatePayload failed: scene must declare at least one subsystem"));
         return false;
     }
-    if(!__hidden_scene_runtime::ValidateUniqueAssetRefs(m_subsystems, NWB_TEXT("subsystem"), scratchArena))
+    if(!__hidden_scene_runtime::ValidateUniqueAssetRefs(Span<const SubsystemRef>(m_subsystems), NWB_TEXT("subsystem"), scratchArena))
         return false;
-    if(!__hidden_scene_runtime::ValidateUniqueNames(m_enabledFeatures, NWB_TEXT("enabled feature"), scratchArena))
+    if(!__hidden_scene_runtime::ValidateUniqueNames(Span<const Name>(m_enabledFeatures), NWB_TEXT("enabled feature"), scratchArena))
         return false;
-    if(!__hidden_scene_runtime::ValidateUniqueAssetRefs(m_assets, NWB_TEXT("referenced asset"), scratchArena))
+    if(!__hidden_scene_runtime::ValidateUniqueAssetRefs(Span<const AssetRef>(m_assets), NWB_TEXT("referenced asset"), scratchArena))
         return false;
     return true;
 }
 
-bool SceneAsset::loadBinary(const Core::Assets::AssetBytes& binary){
+bool SceneAsset::loadBinary(const Span<const u8> binary){
     Core::Alloc::ScratchArena scratchArena(AssetsSceneArenaScope::s_SceneLoadBinaryArena);
     usize cursor = 0u;
     const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SceneBinaryPayload::SceneHeaderBinary>(

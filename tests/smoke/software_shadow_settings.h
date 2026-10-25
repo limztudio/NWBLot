@@ -76,13 +76,13 @@ namespace NWB::Tests::Smoke{
         const auto value = ReadSmokeEnvironmentText(arena, setting.name);
         if(!value)
             continue;
-        const auto parsed = ParseU64FromChars(AStringView(value->data(), value->size()));
+        const auto parsed = ParseU64(AStringView(value->data(), value->size()));
         if(!parsed || *parsed > Limit<u32>::s_Max)
             return false;
         setting.destination = static_cast<u32>(*parsed);
     }
     if(const auto value = ReadSmokeEnvironmentText(arena, "NWB_SOFTWARE_SHADOW_BUDGET_MIB")){
-        const auto parsed = ParseU64FromChars(AStringView(value->data(), value->size()));
+        const auto parsed = ParseU64(AStringView(value->data(), value->size()));
         if(!parsed || *parsed > Limit<u32>::s_Max / (1024u * 1024u))
             return false;
         settings.memoryBudgetBytes = *parsed * 1024u * 1024u;

@@ -32,7 +32,7 @@ UiLayerSystem::UiLayerSystem(
     Core::Assets::AssetManager& assetManager,
     ShaderPathResolveCallback shaderPathResolver,
     const Core::Assets::AssetRef<UiSkin>& skin,
-    const FontReferences& fonts,
+    const Span<const UiFontBinding> fonts,
     const UiLayerPresentation::Enum presentation
 )
     : Core::ECS::ISystem(arena)
@@ -45,7 +45,7 @@ UiLayerSystem::UiLayerSystem(
     , m_assetManager(assetManager)
     , m_defaultSceneSubsystems(arena)
     , m_skinSelection(skin)
-    , m_fontRefs(fonts, arena)
+    , m_fontRefs(fonts.begin(), fonts.end(), arena)
     , m_paint(arena)
     , m_text(arena)
     , m_context(arena)
@@ -109,7 +109,7 @@ bool UiLayerSystem::validateResources(const u32 width, const u32 height, const u
         m_activeSceneSubsystems = &m_defaultSceneSubsystems;
     }
     if(!m_activeSceneSubsystems->hasSubsystem(BuiltInSubsystems::s_Ui)){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: active scene does not include required subsystem '{}'"), StringConvert(BuiltInSubsystems::s_UiText));
+        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: active scene does not include required subsystem '{}'"), ConvertString(BuiltInSubsystems::s_UiText));
         return false;
     }
 
@@ -136,7 +136,7 @@ bool UiLayerSystem::validateResources(const u32 width, const u32 height, const u
     if(selection == UiSkinSelectionResult::Failed)
         return false;
     if(selection == UiSkinSelectionResult::DefaultFallback){
-        NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: custom UI skin '{}' is unavailable; using engine default"), StringConvert(m_skinSelection.requested().name().resolvedText()));
+        NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: custom UI skin '{}' is unavailable; using engine default"), ConvertString(m_skinSelection.requested().name().resolvedText()));
     }
 
     f32 scaleX = 1.0f;

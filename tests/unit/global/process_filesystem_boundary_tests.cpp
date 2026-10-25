@@ -14,6 +14,7 @@
 #include <global/filesystem/utility.h>
 #include <global/limit.h>
 #include <global/process_execution.h>
+#include <global/process_capture.h>
 #include <global/shared_library.h>
 #include <global/text_utils.h>
 
@@ -187,8 +188,8 @@ TEST(Global, WindowsProcessInputsSupportBoundedViews){
     ASSERT_TRUE(*executableResult);
     auto executableText = Move(**executableResult);
     const Path<NWB::Core::Alloc::GlobalArena> executablePath(testArena.arena, AStringView(executableText));
-    ::AString<NWB::Core::Alloc::GlobalArena> searchPathText = PathToString<char>(testArena.arena, executablePath.parentPath());
-    ::AString<NWB::Core::Alloc::GlobalArena> executableNameText = PathToString<char>(testArena.arena, executablePath.filename());
+    ::AString<NWB::Core::Alloc::GlobalArena> searchPathText = PathToString<char>(testArena.arena, executablePath.parentPathView());
+    ::AString<NWB::Core::Alloc::GlobalArena> executableNameText = PathToString<char>(testArena.arena, executablePath.filenameView());
     const usize searchPathLength = searchPathText.size();
     const usize executableNameLength = executableNameText.size();
     searchPathText += s_TrailingSuffix;
@@ -481,6 +482,46 @@ TEST(Global, MovePathReplacesExistingDestinationWithoutRetainingSource){
     EXPECT_FALSE(*sourceExists);
 
     EXPECT_TRUE(RemoveAllIfExists(root));
+}
+
+TEST(Global, PathViewAccessorsAndSelfAliasingMutationsPreserveBoundariesWithoutExtraAllocations){
+    NWB::Tests::TestArena<> testArena;
+    const Path<NWB::Core::Alloc::GlobalArena> emptyPath(testArena.arena);
+    const Path<NWB::Core::Alloc::GlobalArena> rootSlash(testArena.arena, NWB_TEXT("///"));
+    const Path<NWB::Core::Alloc::GlobalArena> hiddenPath(testArena.arena, NWB_TEXT("dir/.hidden///"));
+    const Path<NWB::Core::Alloc::GlobalArena> multiDotPath(testArena.arena, NWB_TEXT("alpha/beta/archive.tar.NWB"));
+    const usize baselineUsedBytes = testArena.arena.memoryStats().usedBytes;
+
+    EXPECT_TRUE(emptyPath.parentPathView().empty());
+    EXPECT_TRUE(emptyPath.filenameView().empty());
+    EXPECT_TRUE(emptyPath.stemView().empty());
+    EXPECT_TRUE(emptyPath.extensionView().empty());
+    EXPECT_EQ(rootSlash.parentPathView(), TStringView(NWB_TEXT("/")));
+    EXPECT_TRUE(rootSlash.filenameView().empty());
+    EXPECT_EQ(hiddenPath.parentPathView(), TStringView(NWB_TEXT("dir")));
+    EXPECT_EQ(hiddenPath.filenameView(), TStringView(NWB_TEXT(".hidden")));
+    EXPECT_EQ(hiddenPath.stemView(), TStringView(NWB_TEXT(".hidden")));
+    EXPECT_TRUE(hiddenPath.extensionView().empty());
+    EXPECT_EQ(multiDotPath.parentPathView(), TStringView(NWB_TEXT("alpha/beta")));
+    EXPECT_EQ(multiDotPath.filenameView(), TStringView(NWB_TEXT("archive.tar.NWB")));
+    EXPECT_EQ(multiDotPath.stemView(), TStringView(NWB_TEXT("archive.tar")));
+    EXPECT_EQ(multiDotPath.extensionView(), TStringView(NWB_TEXT(".NWB")));
+
+    constexpr AStringView s_AllowedExtensions[] = { ".nwb", ".slang" };
+    EXPECT_TRUE(PathHasListedExtension(multiDotPath, s_AllowedExtensions));
+    EXPECT_FALSE(PathHasListedExtension(hiddenPath, s_AllowedExtensions));
+    EXPECT_EQ(testArena.arena.memoryStats().usedBytes, baselineUsedBytes);
+
+    Path<NWB::Core::Alloc::GlobalArena> aliased(
+        testArena.arena,
+        NWB_TEXT("alpha_segment_0123456789/beta_segment_0123456789/gamma_segment_0123456789/delta.ext")
+    );
+    aliased += aliased.extensionView();
+    EXPECT_EQ(aliased.filenameView(), TStringView(NWB_TEXT("delta.ext.ext")));
+    aliased.replaceExtension(aliased.stemView());
+    EXPECT_EQ(aliased.filenameView(), TStringView(NWB_TEXT("delta.ext.delta.ext")));
+    aliased /= aliased.parentPathView();
+    EXPECT_EQ(aliased.filenameView(), TStringView(NWB_TEXT("gamma_segment_0123456789")));
 }
 
 #if defined(NWB_PLATFORM_LINUX)

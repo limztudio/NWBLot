@@ -510,7 +510,8 @@ void BenchEquality(usize samples, bool firstWord){
 
 int main(int argc, char** argv){
     using namespace __hidden_memory_storage_probe;
-    if(argc < 2 || (NWB_STRCMP(argv[1], s_QualifyOption.data()) != 0 && NWB_STRCMP(argv[1], s_BenchCopyOption.data()) != 0 && NWB_STRCMP(argv[1], "--bench-equality") != 0 && NWB_STRCMP(argv[1], s_BenchEqualityFirstWordOption.data()) != 0)){
+    const StringView option = argc >= 2 ? StringView(argv[1]) : StringView{};
+    if(option != s_QualifyOption && option != s_BenchCopyOption && option != "--bench-equality" && option != s_BenchEqualityFirstWordOption){
         NWB_CERR << "usage: memory_storage_probe --qualify|--bench-copy|--bench-equality|--bench-equality-first-word [samples]\n";
         return 2;
     }
@@ -524,21 +525,21 @@ int main(int argc, char** argv){
         return 1;
     }
 #endif
-    if(NWB_STRCMP(argv[1], s_QualifyOption.data()) == 0){
+    if(option == s_QualifyOption){
         NWB_COUT << "qualification passed: exact bytes/tails, adjacent ranges, page boundaries, admission, integer bits and FENV\n";
         return 0;
     }
     usize samples = 7u;
     if(argc >= 3){
-        const auto parsedSamples = ParseU64FromChars(AStringView(argv[2]));
+        const auto parsedSamples = ParseU64(AStringView(argv[2]));
         if(!parsedSamples || *parsedSamples == 0u || *parsedSamples > 100u)
             return 2;
         samples = static_cast<usize>(*parsedSamples);
     }
-    if(NWB_STRCMP(argv[1], s_BenchCopyOption.data()) == 0)
+    if(option == s_BenchCopyOption)
         BenchCopy(samples);
     else
-        BenchEquality(samples, NWB_STRCMP(argv[1], s_BenchEqualityFirstWordOption.data()) == 0);
+        BenchEquality(samples, option == s_BenchEqualityFirstWordOption);
     return 0;
 }
 

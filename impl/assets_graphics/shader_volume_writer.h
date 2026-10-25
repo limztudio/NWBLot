@@ -37,7 +37,7 @@ namespace AssetsGraphicsCookDetail{
     ShaderCook::CookArena& cookArena,
     ScratchArena& scratchArena,
     ShaderCook& shaderCook,
-    PreparedShaderVector& preparedEntries,
+    Span<const PreparedShaderEntry> preparedEntries,
     Core::Assets::AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
     VirtualPathHashSet& inOutSeenVirtualPathHashes
 );

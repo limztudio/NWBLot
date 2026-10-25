@@ -44,7 +44,7 @@ public:
 
 
 protected:
-    bool loadBinaryForStage(const Core::Assets::AssetBytes& binary, Core::ShaderType::Enum shaderType);
+    bool loadBinaryForStage(Span<const u8> binary, Core::ShaderType::Enum shaderType);
 
 
 private:
@@ -77,7 +77,7 @@ public:
 
 
 public:
-    bool loadBinary(const Core::Assets::AssetBytes& binary){
+    bool loadBinary(const Span<const u8> binary){
         static_assert(Core::ShaderType::IsValid(ShaderT::s_Stage));
         return loadBinaryForStage(binary, ShaderT::s_Stage);
     }

@@ -22,7 +22,7 @@ bool MeshCookStreamReorder::ReorderMeshStreamsByMeshletTraversal(MeshCookEntry& 
         if(ref.skin == s_MeshMissingStreamIndex)
             return true;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': static meshlet position reference cannot contain skin"), s_MeshMetaKind, StringConvert(entry.virtualPath.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': static meshlet position reference cannot contain skin"), s_MeshMetaKind, ConvertString(entry.virtualPath.resolvedText()));
         return false;
     }, entry, reorder
     ))

@@ -125,21 +125,21 @@ template<typename TAsset>
     Core::Alloc::ScratchArena& scratchArena
 ){
     if(!itemValue.isString()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entries must be strings"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), StringConvert(fieldLabel));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entries must be strings"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
         return MakeUnexpected(Failure{});
     }
     const AStringView text(itemValue.asString().data(), itemValue.asString().size());
     if(TrimView(text).empty() || text != TrimView(text)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entry '{}' must be a non-empty trimmed virtual path"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), StringConvert(fieldLabel), StringConvert(text));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entry '{}' must be a non-empty trimmed virtual path"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel), ConvertString(text));
         return MakeUnexpected(Failure{});
     }
     if(text.find('\\') != AStringView::npos || !Core::Assets::HasReservedAssetVirtualRoot(text, scratchArena)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entry '{}' must be an engine/- or project/-rooted virtual path"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), StringConvert(fieldLabel), StringConvert(text));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entry '{}' must be an engine/- or project/-rooted virtual path"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel), ConvertString(text));
         return MakeUnexpected(Failure{});
     }
     const auto ref = Core::Assets::AssetRef<TAsset>::FromText(text);
     if(!ref || !ref->valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entry '{}' is invalid"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), StringConvert(fieldLabel), StringConvert(text));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entry '{}' is invalid"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel), ConvertString(text));
         return MakeUnexpected(Failure{});
     }
     return *ref;
@@ -154,7 +154,7 @@ template<typename TAsset>
     Core::Alloc::ScratchArena& scratchArena
 ){
     if(!listValue.isList()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a list"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), StringConvert(fieldLabel));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a list"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
         return MakeUnexpected(Failure{});
     }
     const auto& items = listValue.asList();
@@ -180,7 +180,7 @@ template<typename TAsset>
     if(!fieldValue)
         return features;
     if(!fieldValue->isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a map"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), StringConvert(s_FeaturesField));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a map"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_FeaturesField));
         return MakeUnexpected(Failure{});
     }
 
@@ -189,12 +189,12 @@ template<typename TAsset>
     for(const auto& [featureKey, featureListValue] : map){
         const AStringView featureKeyView(featureKey.data(), featureKey.size());
         if(TrimView(featureKeyView).empty() || featureKeyView != TrimView(featureKeyView)){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': feature name '{}' must not be empty or padded"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), StringConvert(featureKeyView));
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': feature name '{}' must not be empty or padded"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(featureKeyView));
             return MakeUnexpected(Failure{});
         }
         const auto featureName = Name::FromText(featureKeyView);
         if(!featureName || !*featureName){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': feature name '{}' contains an embedded null"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), StringConvert(featureKeyView));
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': feature name '{}' contains an embedded null"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(featureKeyView));
             return MakeUnexpected(Failure{});
         }
 
@@ -202,7 +202,7 @@ template<typename TAsset>
         if(!featureAssets)
             return MakeUnexpected(Failure{});
         if(featureAssets->empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': feature '{}' must declare at least one asset"), StringConvert(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), StringConvert(featureKeyView));
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': feature '{}' must declare at least one asset"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(featureKeyView));
             return MakeUnexpected(Failure{});
         }
         features.push_back(SubsystemFeature(*featureName, Move(*featureAssets)));

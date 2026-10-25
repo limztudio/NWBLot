@@ -51,7 +51,7 @@ static void TransposeTaskRelationTile(Array<u64, s_BitsPerWord>& tile)noexcept{
     }
 }
 
-static void SymmetrizeTaskRelations(Vector<u64, Alloc::ScratchArena>& words, const usize taskCount, const usize wordsPerRow)noexcept{
+static void SymmetrizeTaskRelations(const Span<u64> words, const usize taskCount, const usize wordsPerRow)noexcept{
     for(usize rowBlock = 0u; rowBlock < wordsPerRow; ++rowBlock){
         const usize rowBase = rowBlock * s_BitsPerWord;
         const usize rowCount = Min(s_BitsPerWord, taskCount - rowBase);
@@ -94,13 +94,13 @@ static void SymmetrizeTaskRelations(Vector<u64, Alloc::ScratchArena>& words, con
 
 
 template<typename RowRanges>
-static void SymmetrizeCompactTaskRelations(Vector<u64, Alloc::ScratchArena>& words, const Vector<usize, Alloc::ScratchArena>& offsets, const RowRanges& ranges, const usize taskCount, const usize wordsPerRow)noexcept(
+static void SymmetrizeCompactTaskRelations(const Span<u64> words, const Span<const usize> offsets, const RowRanges& ranges, const usize taskCount, const usize wordsPerRow)noexcept(
     []()constexpr noexcept{
         using Range = const RemoveReference_T<decltype(DeclVal<const RowRanges&>()[DeclVal<const usize&>()])>&;
         return
             noexcept(DeclVal<const RowRanges&>()[DeclVal<const usize&>()])
             && noexcept(static_cast<bool>(DeclVal<const usize&>() < DeclVal<Range>().m_begin || DeclVal<const usize&>() >= DeclVal<Range>().m_end))
-            && noexcept(DeclVal<Vector<u64, Alloc::ScratchArena>&>()[DeclVal<const Vector<usize, Alloc::ScratchArena>&>()[DeclVal<const usize&>()] + DeclVal<const usize&>() - DeclVal<Range>().m_begin])
+            && noexcept(DeclVal<const Span<u64>&>()[DeclVal<const Span<const usize>&>()[DeclVal<const usize&>()] + DeclVal<const usize&>() - DeclVal<Range>().m_begin])
             && noexcept(static_cast<bool>(DeclVal<const usize&>() >= DeclVal<Range>().m_begin && DeclVal<const usize&>() < DeclVal<Range>().m_end))
             && noexcept(DeclVal<usize&>() = Max(DeclVal<usize&>(), DeclVal<const RowRanges&>()[DeclVal<usize>()].m_end))
         ;
@@ -114,7 +114,7 @@ static void SymmetrizeCompactTaskRelations(Vector<u64, Alloc::ScratchArena>& wor
                 && noexcept(
                     DeclVal<const usize&>() < DeclVal<Range>().m_begin || DeclVal<const usize&>() >= DeclVal<Range>().m_end
                     ? static_cast<u64>(0u)
-                    : DeclVal<Vector<u64, Alloc::ScratchArena>&>()[DeclVal<const Vector<usize, Alloc::ScratchArena>&>()[DeclVal<const usize&>()] + DeclVal<const usize&>() - DeclVal<Range>().m_begin]
+                    : DeclVal<const Span<u64>&>()[DeclVal<const Span<const usize>&>()[DeclVal<const usize&>()] + DeclVal<const usize&>() - DeclVal<Range>().m_begin]
                 )
             ;
         }()
@@ -128,7 +128,7 @@ static void SymmetrizeCompactTaskRelations(Vector<u64, Alloc::ScratchArena>& wor
             return
                 noexcept(DeclVal<const RowRanges&>()[DeclVal<const usize&>()])
                 && noexcept(static_cast<bool>(DeclVal<const usize&>() >= DeclVal<Range>().m_begin && DeclVal<const usize&>() < DeclVal<Range>().m_end))
-                && noexcept(DeclVal<Vector<u64, Alloc::ScratchArena>&>()[DeclVal<const Vector<usize, Alloc::ScratchArena>&>()[DeclVal<const usize&>()] + DeclVal<const usize&>() - DeclVal<Range>().m_begin] |= DeclVal<const u64&>())
+                && noexcept(DeclVal<const Span<u64>&>()[DeclVal<const Span<const usize>&>()[DeclVal<const usize&>()] + DeclVal<const usize&>() - DeclVal<Range>().m_begin] |= DeclVal<const u64&>())
             ;
         }()
     ){

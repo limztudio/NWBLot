@@ -21,7 +21,7 @@ namespace __hidden_text_log_payload_tests{
 using namespace TelemetryTestDetail;
 namespace LogType = NWB::Core::Common::LogType;
 
-void CheckPayload(const Telemetry::TelemetryBytes& payload, const u8* expected, const usize count){
+void CheckPayload(const Span<const u8> payload, const u8* expected, const usize count){
     ASSERT_EQ(payload.size(), sizeof(Telemetry::EncodedTextLogPayloadHeader) + count);
     usize cursor = 0u;
     const auto readHeader = ReadPOD<Telemetry::EncodedTextLogPayloadHeader>(payload, cursor);

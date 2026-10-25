@@ -9,6 +9,7 @@
 #include <global/filesystem/retention.h>
 #include <global/optional.h>
 #include <global/scope_exit.h>
+#include <global/span.h>
 
 #include <cstddef>
 
@@ -130,9 +131,8 @@ static void* CrashCurlCalloc(const size_t count, const size_t size)noexcept{
 }
 
 template<typename ArenaT>
-static bool IsSafePackageName(const ::Path<ArenaT>& path){
-    const ::Path<ArenaT> filename = path.filename();
-    const auto name = filename.native();
+static bool IsSafePackageName(const ::Path<ArenaT>& path)noexcept{
+    const auto name = path.filenameView();
     if(name.empty() || IsDot(name) || IsDotDot(name))
         return false;
     for(const auto ch : name){
@@ -180,8 +180,7 @@ static void CaptureUploadFailure(const UploadFailure& failure)noexcept{
     CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_WarningEventName, .category = s_UploadCategory, .expression = failure.operation, .message = "Crash upload SDK resource admission failed", .file = __FILE__, .line = __LINE__, });
 }
 
-template<typename ArenaT>
-static Expected<void, UploadFailure> UploadPackage(Alloc::ScratchArena& scratchArena, const CrashStringT<Alloc::ScratchArena>& url, const CrashBytesT<ArenaT>& archiveBytes, const AStringView crashUploadToken){
+static Expected<void, UploadFailure> UploadPackage(Alloc::ScratchArena& scratchArena, const CrashStringT<Alloc::ScratchArena>& url, const Span<const u8> archiveBytes, const AStringView crashUploadToken){
     if(!CanRepresentU64<curl_off_t>(static_cast<u64>(archiveBytes.size())))
         return MakeUnexpected(UploadFailure{ .operation = "admit_upload_size" });
     if(crashUploadToken.size() > Limit<usize>::s_Max - s_AuthorizationBearerPrefixLength)
@@ -284,8 +283,7 @@ Expected<void, ErrorCode> ApplyCrashSpoolRetention(Alloc::ScratchArena& scratchA
         if(protectedPendingPackageName.empty())
             return true;
 
-        const ::Path<Alloc::ScratchArena> filename = path.filename();
-        const CrashStringT<Alloc::ScratchArena> packageName = PathToString<char>(scratchArena, filename);
+        const CrashStringT<Alloc::ScratchArena> packageName = PathToString<char>(scratchArena, path.filenameView());
         return AStringView(packageName.data(), packageName.size()) != protectedPendingPackageName;
     };
 
@@ -422,8 +420,7 @@ static void CollectAndroidEmergencyRecord(Alloc::ScratchArena& scratchArena, con
                 .line = __LINE__,
             });
     }
-    CrashBytesT<Alloc::ScratchArena> empty(scratchArena);
-    if(!WriteBinaryFile(recordPath, empty))
+    if(!WriteBinaryFile(recordPath, Span<const u8>{}))
         CaptureDiagnosticEvent(DiagnosticEventRecord{
             .event = s_WarningEventName,
             .category = s_PackageErrorCategory,

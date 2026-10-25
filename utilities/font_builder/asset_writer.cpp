@@ -172,9 +172,9 @@ private:
         restoreOnFailure.release();
         for(u32 index = 0u; index < s_OutputFileCount; ++index){
             if(removalErrors[index])
-                NWB_LOGGER_ERROR(NWB_TEXT("font_builder: could not remove failed new '{}': {}"), PathToString<tchar>(*outputs[index]), StringConvert(removalErrors[index].message()));
+                NWB_LOGGER_ERROR(NWB_TEXT("font_builder: could not remove failed new '{}': {}"), PathToString<tchar>(*outputs[index]), ConvertString(removalErrors[index].message()));
             if(restorationErrors[index])
-                NWB_LOGGER_ERROR(NWB_TEXT("font_builder: could not restore previous '{}': {}"), PathToString<tchar>(*outputs[index]), StringConvert(restorationErrors[index].message()));
+                NWB_LOGGER_ERROR(NWB_TEXT("font_builder: could not restore previous '{}': {}"), PathToString<tchar>(*outputs[index]), ConvertString(restorationErrors[index].message()));
         }
         return MakeUnexpected(error);
     };
@@ -197,7 +197,7 @@ private:
     for(u32 index = 0u; index < backedUp; ++index){
         const auto removed = RemoveFile(*backups[index]);
         if(!removed)
-            NWB_LOGGER_WARNING(NWB_TEXT("font_builder: published pair but could not remove backup '{}': {}"), PathToString<tchar>(*backups[index]), StringConvert(removed.error().message()));
+            NWB_LOGGER_WARNING(NWB_TEXT("font_builder: published pair but could not remove backup '{}': {}"), PathToString<tchar>(*backups[index]), ConvertString(removed.error().message()));
         else if(!*removed)
             NWB_LOGGER_WARNING(NWB_TEXT("font_builder: published pair but previous backup was already absent: '{}'"), PathToString<tchar>(*backups[index]));
     }
@@ -218,7 +218,7 @@ bool WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payl
     auto fontBinary = BuildPreparedFont(options, payload, scratch);
     MetadataString metadata(scratch);
     if(!fontBinary){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: prepared font failed: {}"), StringConvert(fontBinary.error()));
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: prepared font failed: {}"), ConvertString(fontBinary.error()));
         return false;
     }
     BuildFontMetadata(payload, metadata);
@@ -226,19 +226,19 @@ bool WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payl
     const __hidden_font_builder_asset_writer::OutputPaths paths(scratch, options.output);
     const auto outputs = __hidden_font_builder_asset_writer::CheckOutputs(paths, options.overwrite);
     if(!outputs){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: output pair unavailable; use --overwrite for complete regular .nwb and .font files: {}"), StringConvert(outputs.error().message()));
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: output pair unavailable; use --overwrite for complete regular .nwb and .font files: {}"), ConvertString(outputs.error().message()));
         return false;
     }
     const auto workPaths = __hidden_font_builder_asset_writer::CheckWorkPaths(paths);
     if(!workPaths){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: publication work paths unavailable: {}"), StringConvert(workPaths.error().message()));
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: publication work paths unavailable: {}"), ConvertString(workPaths.error().message()));
         return false;
     }
     const ScratchPath directory = paths.metadata.parentPath();
     if(!directory.empty()){
         const auto ensured = EnsureDirectories(directory);
         if(!ensured){
-            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: failed to prepare output directory '{}': {}"), PathToString<tchar>(directory), StringConvert(ensured.error().message()));
+            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: failed to prepare output directory '{}': {}"), PathToString<tchar>(directory), ConvertString(ensured.error().message()));
             return false;
         }
     }
@@ -248,12 +248,12 @@ bool WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payl
     const auto metadataBytes = MakeNotNull(reinterpret_cast<const u8*>(metadata.data()));
     const auto fontStaged = stagedFont.stage(fontBinary->data(), fontBinary->size());
     if(!fontStaged){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: failed to stage font temporary: {}"), StringConvert(fontStaged.error().message()));
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: failed to stage font temporary: {}"), ConvertString(fontStaged.error().message()));
         return false;
     }
     const auto metadataStaged = stagedMetadata.stage(metadataBytes.get(), metadata.size());
     if(!metadataStaged){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: failed to stage metadata temporary: {}"), StringConvert(metadataStaged.error().message()));
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: failed to stage metadata temporary: {}"), ConvertString(metadataStaged.error().message()));
         return false;
     }
     if(!VerifyBinaryFileBytes(paths.fontTemporary, fontBinary->data(), fontBinary->size()) || !VerifyBinaryFileBytes(paths.metadataTemporary, metadataBytes.get(), metadata.size())){
@@ -262,7 +262,7 @@ bool WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payl
     }
     const auto published = __hidden_font_builder_asset_writer::Publish(paths, options.overwrite, stagedFont, stagedMetadata);
     if(!published){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: pair publication failed: {}"), StringConvert(published.error().message()));
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: pair publication failed: {}"), ConvertString(published.error().message()));
         return false;
     }
     return true;

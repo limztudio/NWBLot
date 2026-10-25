@@ -29,7 +29,7 @@
 
 
 template<typename T, typename ArenaT>
-using BasicString = std::basic_string<T, std::char_traits<T>, ContainerDetail::ArenaAllocatorFor_T<T, ArenaT>>;
+using BasicString = std::basic_string<T, std::char_traits<T>, ContainerDetail::ArenaAllocator<T, ArenaT>>;
 template<typename ArenaT>
 using AString = BasicString<char, ArenaT>;
 template<typename ArenaT>
@@ -38,7 +38,7 @@ template<typename ArenaT>
 using TString = BasicString<tchar, ArenaT>;
 
 template<typename T, typename ArenaT, ArenaT& (*DefaultArena)()>
-using DefaultBasicString = std::basic_string<T, std::char_traits<T>, ContainerDetail::DefaultArenaAllocatorFor_T<T, ArenaT, DefaultArena>>;
+using DefaultBasicString = std::basic_string<T, std::char_traits<T>, ContainerDetail::DefaultArenaAllocator<T, ArenaT, DefaultArena>>;
 template<typename ArenaT, ArenaT& (*DefaultArena)()>
 using DefaultAString = DefaultBasicString<char, ArenaT, DefaultArena>;
 template<typename ArenaT, ArenaT& (*DefaultArena)()>
@@ -59,7 +59,7 @@ using WStreamBuffer = BasicStreamBuffer<wchar>;
 using TStreamBuffer = BasicStreamBuffer<tchar>;
 
 template<typename T, typename ArenaT>
-using BasicStringStream = std::basic_stringstream<T, std::char_traits<T>, ContainerDetail::ArenaAllocatorFor_T<T, ArenaT>>;
+using BasicStringStream = std::basic_stringstream<T, std::char_traits<T>, ContainerDetail::ArenaAllocator<T, ArenaT>>;
 template<typename ArenaT>
 using AStringStream = BasicStringStream<char, ArenaT>;
 template<typename ArenaT>
@@ -68,7 +68,7 @@ template<typename ArenaT>
 using TStringStream = BasicStringStream<tchar, ArenaT>;
 
 template<typename T, typename ArenaT, ArenaT& (*DefaultArena)()>
-using DefaultBasicStringStream = std::basic_stringstream< T, std::char_traits<T>, ContainerDetail::DefaultArenaAllocatorFor_T<T, ArenaT, DefaultArena> >;
+using DefaultBasicStringStream = std::basic_stringstream< T, std::char_traits<T>, ContainerDetail::DefaultArenaAllocator<T, ArenaT, DefaultArena> >;
 template<typename ArenaT, ArenaT& (*DefaultArena)()>
 using DefaultAStringStream = DefaultBasicStringStream<char, ArenaT, DefaultArena>;
 template<typename ArenaT, ArenaT& (*DefaultArena)()>
@@ -154,6 +154,19 @@ constexpr auto MakeConstWString(const wchar(&str)[N])noexcept{ return ConstWStri
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<typename In>
+concept CanMakeCharView = requires(const In& input){ AStringView(input); };
+
+template<typename In>
+concept CanMakeWCharView = requires(const In& input){ WStringView(input); };
+
+inline constexpr u8 s_Utf8OneByteMaxExclusive = 0x80u;
+inline constexpr u32 s_UnicodeMaxCodePoint = 0x10FFFFu;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace BasicStringDetail{
 
 
@@ -166,15 +179,8 @@ concept FromWcharView = IsConvertible_V<In, WStringView>;
 template<typename In>
 concept FromCharView = IsConvertible_V<In, AStringView>;
 
-template<typename In>
-concept CanMakeCharView = requires(const In& input){ AStringView(input); };
-
-template<typename In>
-concept CanMakeWCharView = requires(const In& input){ WStringView(input); };
-
 inline constexpr u8 s_Utf8ContinuationMask = 0xC0u;
 inline constexpr u8 s_Utf8ContinuationMarker = 0x80u;
-inline constexpr u8 s_Utf8OneByteMaxExclusive = 0x80u;
 inline constexpr u8 s_Utf8TwoByteMask = 0xE0u;
 inline constexpr u8 s_Utf8TwoByteMarker = 0xC0u;
 inline constexpr u8 s_Utf8ThreeByteMask = 0xF0u;
@@ -192,7 +198,6 @@ inline constexpr u32 s_Utf8ThreeByteMaxCodePoint = 0xFFFFu;
 inline constexpr u32 s_Utf8TwoByteMinCodePoint = 0x80u;
 inline constexpr u32 s_Utf8ThreeByteMinCodePoint = 0x800u;
 inline constexpr u32 s_Utf8FourByteMinCodePoint = 0x10000u;
-inline constexpr u32 s_UnicodeMaxCodePoint = 0x10FFFFu;
 inline constexpr u32 s_UnicodeHighSurrogateMin = 0xD800u;
 inline constexpr u32 s_UnicodeHighSurrogateMax = 0xDBFFu;
 inline constexpr u32 s_UnicodeLowSurrogateMin = 0xDC00u;
@@ -205,16 +210,22 @@ inline constexpr u32 s_InvalidCodePointReplacement = static_cast<u32>('?');
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] inline constexpr bool IsUtf16HighSurrogate(const u32 codeUnit)noexcept{
-    return codeUnit >= s_UnicodeHighSurrogateMin && codeUnit <= s_UnicodeHighSurrogateMax;
+    return codeUnit >= BasicStringDetail::s_UnicodeHighSurrogateMin && codeUnit <= BasicStringDetail::s_UnicodeHighSurrogateMax;
 }
 
 [[nodiscard]] inline constexpr bool IsUtf16LowSurrogate(const u32 codeUnit)noexcept{
-    return codeUnit >= s_UnicodeLowSurrogateMin && codeUnit <= s_UnicodeLowSurrogateMax;
+    return codeUnit >= BasicStringDetail::s_UnicodeLowSurrogateMin && codeUnit <= BasicStringDetail::s_UnicodeLowSurrogateMax;
 }
 
 [[nodiscard]] inline constexpr bool IsUnicodeSurrogate(const u32 codePoint)noexcept{
-    return codePoint >= s_UnicodeHighSurrogateMin && codePoint <= s_UnicodeLowSurrogateMax;
+    return codePoint >= BasicStringDetail::s_UnicodeHighSurrogateMin && codePoint <= BasicStringDetail::s_UnicodeLowSurrogateMax;
 }
 
 [[nodiscard]] inline constexpr bool IsUnicodeScalarValue(const u32 codePoint)noexcept{
@@ -222,17 +233,23 @@ inline constexpr u32 s_InvalidCodePointReplacement = static_cast<u32>('?');
 }
 
 [[nodiscard]] inline constexpr u32 DecodeUtf16SurrogatePair(const u32 highSurrogate, const u32 lowSurrogate)noexcept{
-    return s_Utf8FourByteMinCodePoint + ((highSurrogate - s_UnicodeHighSurrogateMin) << s_Utf16SurrogatePayloadBits) + (lowSurrogate - s_UnicodeLowSurrogateMin);
+    return BasicStringDetail::s_Utf8FourByteMinCodePoint + ((highSurrogate - BasicStringDetail::s_UnicodeHighSurrogateMin) << BasicStringDetail::s_Utf16SurrogatePayloadBits) + (lowSurrogate - BasicStringDetail::s_UnicodeLowSurrogateMin);
 }
+
+template<typename In>
+struct ConvertStringArg{
+    const In& value;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename In>
-struct StringConvertArg{
-    const In& value;
-};
+namespace BasicStringDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 template<typename Out>
 inline void WriteUtf8CodePoint(Out& out, u32 codePoint)noexcept(noexcept(*out++ = char{})){
@@ -306,18 +323,6 @@ inline void WriteWStringAsUtf8(Out& out, const WStringView src)noexcept(noexcept
     }
 }
 
-template<typename ArenaT>
-[[nodiscard]] inline AString<ArenaT> WideToUtf8(ArenaT& arena, WStringView src){
-    AString<ArenaT> dst{arena};
-    if(src.empty())
-        return dst;
-
-    dst.reserve(src.size());
-    auto out = std::back_inserter(dst);
-    WriteWStringAsUtf8(out, src);
-    return dst;
-}
-
 template<typename Out>
 inline void WriteUtf8AsWString(Out& out, const AStringView src)noexcept(noexcept(WriteWideCodePoint(out, u32{}))){
     usize i = 0u;
@@ -384,30 +389,6 @@ template<typename CharT, typename Out, typename In>
         return true;
 }
 
-template<typename CharT, typename Out, typename In>
-inline void WriteConvertedText(Out& out, const In& input)noexcept(ConvertedTextIsNothrow<CharT, Out, In>()){
-    if constexpr(CanMakeCharView<In>){
-        const AStringView text(input);
-        if constexpr(IsSame_V<CharT, char>){
-            for(const char ch : text)
-                *out++ = ch;
-        }
-        else{
-            WriteUtf8AsWString(out, text);
-        }
-    }
-    else if constexpr(CanMakeWCharView<In>){
-        const WStringView text(input);
-        if constexpr(IsSame_V<CharT, wchar>){
-            for(const wchar ch : text)
-                *out++ = ch;
-        }
-        else{
-            WriteWStringAsUtf8(out, text);
-        }
-    }
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -418,18 +399,41 @@ inline void WriteConvertedText(Out& out, const In& input)noexcept(ConvertedTextI
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using BasicStringDetail::s_Utf8OneByteMaxExclusive;
-using BasicStringDetail::s_UnicodeMaxCodePoint;
-using BasicStringDetail::IsUtf16HighSurrogate;
-using BasicStringDetail::IsUtf16LowSurrogate;
-using BasicStringDetail::IsUnicodeSurrogate;
-using BasicStringDetail::IsUnicodeScalarValue;
-using BasicStringDetail::DecodeUtf16SurrogatePair;
-using BasicStringDetail::CanMakeCharView;
-using BasicStringDetail::CanMakeWCharView;
-using BasicStringDetail::StringConvertArg;
-using BasicStringDetail::WideToUtf8;
-using BasicStringDetail::WriteConvertedText;
+template<typename ArenaT>
+[[nodiscard]] inline AString<ArenaT> WideToUtf8(ArenaT& arena, WStringView src){
+    AString<ArenaT> dst{arena};
+    if(src.empty())
+        return dst;
+
+    dst.reserve(src.size());
+    auto out = std::back_inserter(dst);
+    BasicStringDetail::WriteWStringAsUtf8(out, src);
+    return dst;
+}
+
+template<typename CharT, typename Out, typename In>
+inline void WriteConvertedText(Out& out, const In& input)noexcept(BasicStringDetail::ConvertedTextIsNothrow<CharT, Out, In>()){
+    if constexpr(CanMakeCharView<In>){
+        const AStringView text(input);
+        if constexpr(IsSame_V<CharT, char>){
+            for(const char ch : text)
+                *out++ = ch;
+        }
+        else{
+            BasicStringDetail::WriteUtf8AsWString(out, text);
+        }
+    }
+    else if constexpr(CanMakeWCharView<In>){
+        const WStringView text(input);
+        if constexpr(IsSame_V<CharT, wchar>){
+            for(const wchar ch : text)
+                *out++ = ch;
+        }
+        else{
+            BasicStringDetail::WriteWStringAsUtf8(out, text);
+        }
+    }
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -437,7 +441,7 @@ using BasicStringDetail::WriteConvertedText;
 
 #if defined(NWB_UNICODE)
 template<typename ArenaT, typename In> requires BasicStringDetail::FromCharView<In>
-inline TString<ArenaT> StringConvert(ArenaT& arena, const In& raw){
+inline TString<ArenaT> ConvertString(ArenaT& arena, const In& raw){
     AStringView src(raw);
     TString<ArenaT> dst{arena};
     if(src.empty())
@@ -461,12 +465,12 @@ inline TString<ArenaT> StringConvert(ArenaT& arena, const In& raw){
 }
 
 template<typename ArenaT, typename In>
-inline TString<ArenaT> StringConvert(ArenaT& arena, const In& src){
+inline TString<ArenaT> ConvertString(ArenaT& arena, const In& src){
     return TString<ArenaT>(src, arena);
 }
 #else
 template<typename ArenaT, typename In> requires BasicStringDetail::FromWcharView<In>
-inline TString<ArenaT> StringConvert(ArenaT& arena, const In& raw){
+inline TString<ArenaT> ConvertString(ArenaT& arena, const In& raw){
     const WStringView src(raw);
     if(src.empty())
         return TString<ArenaT>{arena};
@@ -482,19 +486,19 @@ inline TString<ArenaT> StringConvert(ArenaT& arena, const In& raw){
     NWB_FATAL_ASSERT(written == len);
     return dst;
 #else
-    return BasicStringDetail::WideToUtf8(arena, src);
+    return WideToUtf8(arena, src);
 #endif
 }
 
 template<typename ArenaT, typename In>
-inline TString<ArenaT> StringConvert(ArenaT& arena, const In& src){
+inline TString<ArenaT> ConvertString(ArenaT& arena, const In& src){
     return TString<ArenaT>(src, arena);
 }
 #endif
 
 template<typename In>
-inline BasicStringDetail::StringConvertArg<In> StringConvert(const In& src)noexcept{
-    return BasicStringDetail::StringConvertArg<In>{ src };
+inline ConvertStringArg<In> ConvertString(const In& src)noexcept{
+    return ConvertStringArg<In>{ src };
 }
 
 
@@ -531,21 +535,21 @@ namespace std{
 
 
 template<typename In, typename CharT>
-struct formatter<BasicStringDetail::StringConvertArg<In>, CharT>{
+struct formatter<ConvertStringArg<In>, CharT>{
     constexpr auto parse(basic_format_parse_context<CharT>& ctx)noexcept{
         return ctx.begin();
     }
 
     template<typename FormatContext>
-    auto format(const BasicStringDetail::StringConvertArg<In>& arg, FormatContext& ctx)const noexcept([]()consteval noexcept{
+    auto format(const ConvertStringArg<In>& arg, FormatContext& ctx)const noexcept([]()consteval noexcept{
         using Output = Decay_T<decltype(DeclVal<FormatContext&>().out())>;
         return noexcept(DeclVal<void(*)(Output)noexcept>()(DeclVal<FormatContext&>().out()))
-            && noexcept(BasicStringDetail::WriteConvertedText<CharT>(DeclVal<Output&>(), DeclVal<const In&>()))
+            && noexcept(WriteConvertedText<CharT>(DeclVal<Output&>(), DeclVal<const In&>()))
             && IsNothrowMoveConstructible_V<Output> && IsNothrowDestructible_V<Output>
         ;
     }()){
         auto out = ctx.out();
-        BasicStringDetail::WriteConvertedText<CharT>(out, arg.value);
+        WriteConvertedText<CharT>(out, arg.value);
         return out;
     }
 };

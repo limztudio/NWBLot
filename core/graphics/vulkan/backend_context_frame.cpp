@@ -109,7 +109,7 @@ bool BackendContext::recreateSemaphores(SemaphoreVector& semaphores, const usize
         VkSemaphore sem = VK_NULL_HANDLE;
         res = m_deviceDispatch.vkCreateSemaphore(m_vulkanDevice, &semInfo, nullptr, &sem);
         if(res != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}. {}"), StringConvert(operationName), ResultToString(res));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}. {}"), ConvertString(operationName), ResultToString(res));
             clearSemaphores(semaphores);
             return false;
         }

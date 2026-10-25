@@ -370,13 +370,13 @@ private:
         auto& renderer = *MakeNotNull(m_world->getSystem<NWB::Impl::RendererSystem>());
         transform.position = Float4(phase.glassX, 1.4f, 0.0f, 0.0f);
         renderer.setRefractionEnabled(phase.enabled);
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionLifecycle: phase {} applied"), StringConvert(phase.name));
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionLifecycle: phase {} applied"), ConvertString(phase.name));
     }
 
     bool advanceLifecycleCapture(){
         if(!m_lifecycleEnabled || !m_framebufferCapture->captureReady() || m_lifecyclePhase == LengthOf(s_LifecyclePhases))
             return true;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionLifecycle: captured {} graphics frame {}"), StringConvert(s_LifecyclePhases[m_lifecyclePhase].name), m_framebufferCapture->capturedGraphicsFrameIndex());
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionLifecycle: captured {} graphics frame {}"), ConvertString(s_LifecyclePhases[m_lifecyclePhase].name), m_framebufferCapture->capturedGraphicsFrameIndex());
         ++m_lifecyclePhase;
         if(m_lifecyclePhase == LengthOf(s_LifecyclePhases)){
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionLifecycle: complete samples=7"));

@@ -62,7 +62,7 @@ static Expected<UniquePtr<NWB::Core::ECS::World>, TStringView> CreateInitialWorl
     auto& rendererSystem = world->addSystem<NWB::Impl::RendererSystem>(*world, context.graphics, context.assetManager, context.shaderPathResolver);
     world->addSystem<NWB::Impl::ModelSystem>(*world, context.assetManager, NWB::Impl::CreateModelObjectRendererHooks());
     auto& meshSkinningSystem = world->addSystem<NWB::Impl::MeshSkinningSystem>(*world, context.graphics, context.assetManager, meshSystem, context.shaderPathResolver);
-    const NWB::Impl::UiLayerSystem::FontReferences fonts{ { { s_DefaultLatin, s_DefaultLatinAtlas }, { s_DefaultKorean, s_DefaultKoreanAtlas } }, context.objectArena };
+    const NWB::Impl::UiFontBinding fonts[] = { { s_DefaultLatin, s_DefaultLatinAtlas }, { s_DefaultKorean, s_DefaultKoreanAtlas } };
     auto& uiLayerSystem = world->addSystem<NWB::Impl::UiLayerSystem>(
         *world,
         context.graphics,

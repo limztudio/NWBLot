@@ -112,12 +112,12 @@ protected:
     }
 
     template<typename HeaderT>
-    [[nodiscard]] bool readGeometryAttributeStreams(const Core::Assets::AssetBytes& binary, const HeaderT& header, const TStringView failureContext, usize& inOutCursor){
+    [[nodiscard]] bool readGeometryAttributeStreams(const Span<const u8> binary, const HeaderT& header, const TStringView failureContext, usize& inOutCursor){
         return MeshAssetBinaryPayload::ReadMeshAttributeStreams(binary, header, failureContext, inOutCursor, m_positionStream, m_normalStream, m_tangentStream, m_uv0Stream, m_colorStream);
     }
 
     template<typename HeaderT>
-    [[nodiscard]] bool readGeometryMeshletStreams(const Core::Assets::AssetBytes& binary, const HeaderT& header, const TStringView failureContext, usize& inOutCursor){
+    [[nodiscard]] bool readGeometryMeshletStreams(const Span<const u8> binary, const HeaderT& header, const TStringView failureContext, usize& inOutCursor){
         return MeshAssetBinaryPayload::ReadMeshletStreams(
             binary,
             header,

@@ -11,6 +11,7 @@
 #include <global/diagnostics.h>
 #include <global/process.h>
 #include <global/scope_exit.h>
+#include <global/span.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -48,9 +49,13 @@ Atomic<u64> g_TemporarySequence{0u};
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool WriteIfChanged(ScratchBytes& existing, const ScratchPath& path, const ScratchBytes& bytes, const bool replaceDifferent = true){
+[[nodiscard]] static bool BytesMatch(const Span<const u8> existing, const Span<const u8> bytes)noexcept{
+    return existing.size() == bytes.size() && (bytes.empty() || NWB_MEMCMP(existing.data(), bytes.data(), bytes.size()) == 0);
+}
+
+static bool WriteIfChanged(ScratchBytes& existing, const ScratchPath& path, const Span<const u8> bytes, const bool replaceDifferent = true){
     const auto read = ReadBinaryFile(path, existing);
-    if(read && existing == bytes)
+    if(read && BytesMatch(existing, bytes))
         return true;
     if(!replaceDifferent && (read || !IsMissingPathError(read.error()))){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: cannot publish built asset without replacing existing data '{}'"), PathToString<tchar>(path));
@@ -68,7 +73,7 @@ static bool WriteIfChanged(ScratchBytes& existing, const ScratchPath& path, cons
             CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_WarningEventName, .category = "built_asset_temporary_cleanup", .message = "AssetVolume: failed to remove temporary output", });
         }
     });
-    if(!WriteBinaryFile(temporary, bytes) || !ReadBinaryFile(temporary, existing) || existing != bytes || !RenamePath(temporary, path)){
+    if(!WriteBinaryFile(temporary, bytes) || !ReadBinaryFile(temporary, existing) || !BytesMatch(existing, bytes) || !RenamePath(temporary, path)){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to publish built asset '{}'"), PathToString<tchar>(path));
         return false;
     }
@@ -119,14 +124,14 @@ bool WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail:
             if(!payload)
                 return false;
             if(payload->identity.payloadSize != entry.identity.payloadSize || payload->identity.payloadHash != entry.identity.payloadHash || payload->identity.cookKeyHash != entry.identity.cookKeyHash){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: object cache identity mismatch '{}' for '{}'"), PathToString<tchar>(entry.objectPath), StringConvert(entry.virtualPath.resolvedText()));
+                NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: object cache identity mismatch '{}' for '{}'"), PathToString<tchar>(entry.objectPath), ConvertString(entry.virtualPath.resolvedText()));
                 return false;
             }
             payloadData = payload->data.get();
             payloadSize = payload->size;
         }
         if(entry.identity.payloadSize != payloadSize || (entry.source != AssetsVolumeCookDetail::AssetVolumePackEntrySource::ObjectFilePayload && entry.identity.payloadHash != ComputeFnv64Bytes(payloadData, payloadSize))){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: invalid payload identity '{}'"), StringConvert(entry.virtualPath.resolvedText()));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: invalid payload identity '{}'"), ConvertString(entry.virtualPath.resolvedText()));
             return false;
         }
         if(payloadSize > Limit<usize>::s_Max - __hidden_built_asset::s_HeaderSize){
@@ -174,12 +179,9 @@ bool WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail:
         manifestText += '\n';
     }
 
-    artifactBytes.clear();
-    artifactBytes.reserve(manifestText.size());
-    AppendBytesNoReserveUnchecked(artifactBytes, manifestText.data(), manifestText.size());
     path = scratchOutputDirectory;
     path /= s_ManifestFilename;
-    return __hidden_built_asset::WriteIfChanged(existingBytes, path, artifactBytes);
+    return __hidden_built_asset::WriteIfChanged(existingBytes, path, Span<const u8>(reinterpret_cast<const u8*>(manifestText.data()), manifestText.size()));
 }
 
 Expected<BuiltAssetPayload> ReadBuiltAsset(const Path& path, AssetBytes& inOutBytes){

@@ -194,7 +194,7 @@ namespace GpuTaskGraphCompilerDetail{
 [[nodiscard]] bool PlanTaskResourceStates(GpuTaskGraphResourceStatePlan& plan){
     const GpuTaskGraph::DeclarationReadView& graph = plan.graph;
     const GpuPhysicalQueueTopology& topology = plan.topology;
-    const GraphicsVector<GpuTaskId>& topologicalOrder = plan.topologicalOrder;
+    const Span<const GpuTaskId> topologicalOrder = plan.topologicalOrder;
     GpuTaskGraphCompiledPlanStorage& compiledPlan = plan.compiledPlan;
     Alloc::ScratchArena& scratchArena = plan.scratchArena;
     Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& trackedResourceStates = plan.trackedResourceStates;

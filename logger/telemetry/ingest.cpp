@@ -69,7 +69,7 @@ static Atomic<u64> s_TelemetryUploadCounter{ 1u };
 }
 
 void SetResultMessage(TelemetryIngestResult& result, AStringView message, const Core::Common::LogType::Enum type){
-    result.message = StringConvert(result.message.get_allocator().arena(), message);
+    result.message = ConvertString(result.message.get_allocator().arena(), message);
     result.type = type;
 }
 

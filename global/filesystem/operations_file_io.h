@@ -16,12 +16,12 @@ template<typename ArenaT>
 #if defined(NWB_PLATFORM_WINDOWS)
     WIN32_FILE_ATTRIBUTE_DATA data = {};
     if(!GetFileAttributesEx(path.c_str(), GetFileExInfoStandard, &data))
-        return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
+        return MakeUnexpected(LastSystemError());
     return (static_cast<u64>(data.nFileSizeHigh) << GlobalFilesystemDetail::s_FileSizeHighPartShiftBits) | static_cast<u64>(data.nFileSizeLow);
 #else
     struct stat pathStat = {};
     if(stat(path.c_str(), &pathStat) != 0)
-        return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
+        return MakeUnexpected(LastSystemError());
     return static_cast<u64>(pathStat.st_size);
 #endif
 }
@@ -105,15 +105,15 @@ template<typename ArenaT, typename StringT>
 
 template<typename ArenaT>
 [[nodiscard]] inline bool WriteTextFile(const Path<ArenaT>& path, const AStringView content){
-    if(!GlobalFilesystemDetail::CanRepresentStreamSize(static_cast<u64>(content.size())))
+    if(!CanRepresentStreamSize(static_cast<u64>(content.size())))
         return false;
 
-    GlobalFilesystemDetail::OutputFileStream stream(path, GlobalFilesystemDetail::OutputFileStream::binary | GlobalFilesystemDetail::OutputFileStream::trunc);
+    OutputFileStream stream(path, OutputFileStream::binary | OutputFileStream::trunc);
     if(!stream.is_open())
         return false;
 
     if(!content.empty())
-        stream.write(content.data(), static_cast<GlobalFilesystemDetail::StreamSize>(content.size()));
+        stream.write(content.data(), static_cast<StreamSize>(content.size()));
     stream.close();
     return stream.good();
 }
@@ -160,15 +160,15 @@ template<typename ArenaT, typename Container>
 
 template<typename ArenaT, typename Container>
 [[nodiscard]] inline bool WriteBinaryFile(const Path<ArenaT>& path, const Container& bytes){
-    if(!GlobalFilesystemDetail::CanRepresentStreamSize(static_cast<u64>(bytes.size())))
+    if(!CanRepresentStreamSize(static_cast<u64>(bytes.size())))
         return false;
 
-    GlobalFilesystemDetail::OutputFileStream stream(path, GlobalFilesystemDetail::OutputFileStream::binary | GlobalFilesystemDetail::OutputFileStream::trunc);
+    OutputFileStream stream(path, OutputFileStream::binary | OutputFileStream::trunc);
     if(!stream.is_open())
         return false;
 
     if(!bytes.empty()){
-        stream.write(reinterpret_cast<const char*>(bytes.data()), static_cast<GlobalFilesystemDetail::StreamSize>(bytes.size()));
+        stream.write(reinterpret_cast<const char*>(bytes.data()), static_cast<StreamSize>(bytes.size()));
     }
     stream.close();
     return stream.good();
@@ -182,7 +182,7 @@ template<typename ArenaT>
         return MakeUnexpected(std::make_error_code(std::errc::value_too_large));
     const HANDLE handle = CreateFile(path.c_str(), GENERIC_WRITE, 0u, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
     if(handle == INVALID_HANDLE_VALUE)
-        return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
+        return MakeUnexpected(LastSystemError());
     outCreated = true;
     ErrorCode error;
     const u8* cursor = static_cast<const u8*>(data);
@@ -191,7 +191,7 @@ template<typename ArenaT>
         const DWORD requestSize = remaining > static_cast<usize>(Limit<DWORD>::s_Max) ? Limit<DWORD>::s_Max : static_cast<DWORD>(remaining);
         DWORD transferred = 0u;
         if(!WriteFile(handle, cursor, requestSize, &transferred, nullptr)){
-            error = GlobalFilesystemDetail::LastSystemError();
+            error = LastSystemError();
             break;
         }
         if(transferred == 0u){
@@ -202,16 +202,16 @@ template<typename ArenaT>
         remaining -= transferred;
     }
     if(!error && !FlushFileBuffers(handle))
-        error = GlobalFilesystemDetail::LastSystemError();
+        error = LastSystemError();
     if(!CloseHandle(handle) && !error)
-        error = GlobalFilesystemDetail::LastSystemError();
+        error = LastSystemError();
 #else
     if(static_cast<u64>(count) > static_cast<u64>(Limit<off_t>::s_Max))
         return MakeUnexpected(std::make_error_code(std::errc::value_too_large));
     constexpr u32 s_NewFileMode = 0666u;
     const int descriptor = open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, s_NewFileMode);
     if(descriptor < 0)
-        return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
+        return MakeUnexpected(LastSystemError());
     outCreated = true;
     ErrorCode error;
     const u8* cursor = static_cast<const u8*>(data);
@@ -222,7 +222,7 @@ template<typename ArenaT>
         if(transferred < 0){
             if(errno == EINTR)
                 continue;
-            error = GlobalFilesystemDetail::LastSystemError();
+            error = LastSystemError();
             break;
         }
         if(transferred == 0){
@@ -233,9 +233,9 @@ template<typename ArenaT>
         remaining -= static_cast<usize>(transferred);
     }
     if(!error && fsync(descriptor) != 0)
-        error = GlobalFilesystemDetail::LastSystemError();
+        error = LastSystemError();
     if(close(descriptor) != 0 && !error)
-        error = GlobalFilesystemDetail::LastSystemError();
+        error = LastSystemError();
 #endif
     if(error)
         return MakeUnexpected(error);
@@ -249,15 +249,15 @@ template<typename ArenaT>
         return MakeUnexpected(std::make_error_code(std::errc::value_too_large));
     const HANDLE file = CreateFile(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if(file == INVALID_HANDLE_VALUE)
-        return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
+        return MakeUnexpected(LastSystemError());
 
     LARGE_INTEGER offset{};
     offset.QuadPart = static_cast<LONGLONG>(byteCount);
     const bool seekSucceeded = SetFilePointerEx(file, offset, nullptr, FILE_BEGIN) != 0;
     const bool resizeSucceeded = seekSucceeded && SetEndOfFile(file) != 0;
-    const ErrorCode errorCode = resizeSucceeded ? ErrorCode{} : GlobalFilesystemDetail::LastSystemError();
+    const ErrorCode errorCode = resizeSucceeded ? ErrorCode{} : LastSystemError();
     const bool closeSucceeded = CloseHandle(file) != 0;
-    const ErrorCode closeError = closeSucceeded ? ErrorCode{} : GlobalFilesystemDetail::LastSystemError();
+    const ErrorCode closeError = closeSucceeded ? ErrorCode{} : LastSystemError();
     if(errorCode)
         return MakeUnexpected(errorCode);
     if(closeError)
@@ -267,7 +267,7 @@ template<typename ArenaT>
     if(!::CanRepresentU64<off_t>(byteCount))
         return MakeUnexpected(std::make_error_code(std::errc::value_too_large));
     if(::truncate(path.c_str(), static_cast<off_t>(byteCount)) != 0)
-        return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
+        return MakeUnexpected(LastSystemError());
     return {};
 #endif
 }

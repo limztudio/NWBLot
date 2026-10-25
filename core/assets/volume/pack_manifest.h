@@ -13,6 +13,8 @@
 
 #include "cook_types.h"
 
+#include <global/span.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -78,8 +80,7 @@ public:
 [[nodiscard]] bool AppendObjectFilePayloadToManifest(AssetVolumePackManifest& manifest, const Name& virtualPath, const Path& objectPath, const AssetVolumePayloadIdentity& identity);
 [[nodiscard]] bool AppendPayloadBytesToManifest(AssetVolumePackManifest& manifest, const Name& virtualPath, const void* payloadBytes, usize payloadByteCount, u64 cookKeyHash = 0u);
 
-template<typename ByteContainer>
-[[nodiscard]] bool AppendPayloadBytesToManifest(AssetVolumePackManifest& manifest, const Name& virtualPath, const ByteContainer& payloadBytes, const u64 cookKeyHash = 0u){
+[[nodiscard]] inline bool AppendPayloadBytesToManifest(AssetVolumePackManifest& manifest, const Name& virtualPath, const Span<const u8> payloadBytes, const u64 cookKeyHash = 0u){
     return AppendPayloadBytesToManifest(manifest, virtualPath, payloadBytes.empty() ? nullptr : payloadBytes.data(), payloadBytes.size(), cookKeyHash);
 }
 

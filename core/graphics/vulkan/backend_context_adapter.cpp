@@ -300,13 +300,13 @@ bool BackendContext::pickPhysicalDevice(Alloc::ScratchArena& scratchArena){
         VkPhysicalDeviceProperties properties{};
         m_instanceDispatch.vkGetPhysicalDeviceProperties(m_vulkanPhysicalDevice, &properties);
         if(adapterIndex >= 0)
-            NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Using explicitly selected software device '{}'. Rendering will run on the CPU."), StringConvert(properties.deviceName));
+            NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Using explicitly selected software device '{}'. Rendering will run on the CPU."), ConvertString(properties.deviceName));
         else
-            NWB_LOGGER_INFO(NWB_TEXT("Vulkan: No compatible hardware device found; falling back to software device '{}'. Rendering will run on the CPU."), StringConvert(properties.deviceName));
+            NWB_LOGGER_INFO(NWB_TEXT("Vulkan: No compatible hardware device found; falling back to software device '{}'. Rendering will run on the CPU."), ConvertString(properties.deviceName));
         return true;
     }
 
-    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {}"), StringConvert(errorStream.str()));
+    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {}"), ConvertString(errorStream.str()));
     return false;
 }
 

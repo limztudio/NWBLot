@@ -199,7 +199,7 @@ public:
 
 
 public:
-    bool loadBinary(const AssetBytes&)noexcept{
+    bool loadBinary(const Span<const u8>)noexcept{
         s_LoadCalled = true;
         return true;
     }
@@ -239,7 +239,7 @@ public:
 
 
 public:
-    bool loadBinary(const AssetBytes&)noexcept{ return true; }
+    bool loadBinary(const Span<const u8>)noexcept{ return true; }
 };
 
 class ImplicitNameCodec final : public AssetCodec<ImplicitNameAsset>{
@@ -514,7 +514,7 @@ TEST(MetadataExtensionOwnership, GraphicsParserFailureReleasesItsActualExtension
     ASSERT_TRUE(document.parse("compute_shader asset;"));
     const NWB::Path root(fixtureArena, "tests/metadata_extension/assets");
     const NWB::Path path = root / "invalid_shader.nwb";
-    const DiscoveredNwbFile file(fixtureArena, root, path, "tests/metadata_extension/assets/invalid_shader.nwb", ACompactString(s_ProjectVirtualRoot));
+    const DiscoveredNwbFile file(fixtureArena, root, path, "tests/metadata_extension/assets/invalid_shader.nwb", s_ProjectVirtualRoot);
     for(usize iteration = 0u; iteration < 4u; ++iteration){
         {
             ParsedAssetMetadata metadata(ownerArena);
@@ -560,7 +560,7 @@ TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnu
         source += StringFormat(fixtureArena, "asset.mip_bias = {};\r\n", identity);
         ASSERT_TRUE(::WriteTextFile(path, source));
         const AssetString normalized = PathToString(fixtureArena, path.lexicallyNormal());
-        files.emplace_back(fixtureArena, root, path, normalized, ACompactString(s_ProjectVirtualRoot));
+        files.emplace_back(fixtureArena, root, path, normalized, s_ProjectVirtualRoot);
     }
     for(const bool rejectDuplicate : { false, true }){
         if(rejectDuplicate)
@@ -616,8 +616,8 @@ TEST(MetadataDiscoveryAdmission, CaseDistinctNativeFilesBothReachMetadataAdmissi
         GTEST_SKIP() << "The test filesystem does not preserve distinct native path case";
 
     CookVector<ResolvedAssetRoot> roots(arena);
-    roots.emplace_back(NWB::Path(arena, root), ACompactString(s_ProjectVirtualRoot));
-    roots.emplace_back(NWB::Path(arena, root), ACompactString(s_ProjectVirtualRoot));
+    roots.emplace_back(NWB::Path(arena, root), s_ProjectVirtualRoot);
+    roots.emplace_back(NWB::Path(arena, root), s_ProjectVirtualRoot);
     const auto files = DiscoverFilesWithExtension(arena, roots, s_NwbExtension, scratchArena);
     ASSERT_TRUE(files);
     ASSERT_EQ(files->size(), 2u);

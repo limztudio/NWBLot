@@ -204,7 +204,7 @@ public:
 
     constexpr RasterState& setDepthBiasClamp(f32 value)noexcept{ depthBiasClamp = value; return *this; }
 
-    constexpr RasterState& setSlopeScaleDepthBias(f32 value)noexcept{ slopeScaledDepthBias = value; return *this; }
+    constexpr RasterState& setSlopeScaledDepthBias(f32 value)noexcept{ slopeScaledDepthBias = value; return *this; }
 };
 
 

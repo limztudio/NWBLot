@@ -144,7 +144,7 @@ bool RendererReflectionSystem::prepareResources(const u32 width, const u32 heigh
 
     const auto createOutput = [&](const Name name){
         Core::TextureDesc desc;
-        desc.setWidth(width).setHeight(height).setFormat(Core::Format::RGBA16_FLOAT).setInUAV(true).setName(name).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setInitialState(Core::ResourceStates::Common).setKeepInitialState(true);
+        desc.setWidth(width).setHeight(height).setFormat(Core::Format::RGBA16_FLOAT).setIsUAV(true).setName(name).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setInitialState(Core::ResourceStates::Common).setKeepInitialState(true);
         return m_graphics.createTexture(desc);
     };
     const auto createBuffer = [&](const Name name, const u64 byteSize, const bool uniform, const bool indirect){
@@ -225,7 +225,7 @@ bool RendererReflectionSystem::prepareResources(const u32 width, const u32 heigh
         .setHeight(height)
         .setMipLevels(depthPyramid.mipCount)
         .setFormat(depthFormat)
-        .setInUAV(true)
+        .setIsUAV(true)
         .setName(Name("engine/reflection/depth_pyramid"))
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setInitialState(Core::ResourceStates::Common)

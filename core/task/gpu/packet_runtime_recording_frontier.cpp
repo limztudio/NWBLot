@@ -26,10 +26,10 @@ public:
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
         const GpuRecordedGraph::ArtifactOperation& artifactOperation,
-        const Vector<u32, Alloc::ScratchArena>& packetIndices,
+        const Span<const u32> packetIndices,
         const u64 recordingAttemptGeneration,
         GpuRecordedGraph& recordedGraph,
-        Vector<GpuPacketRecordingAbort, Alloc::ScratchArena>& aborts
+        const Span<GpuPacketRecordingAbort> aborts
     )noexcept
         : m_graph(graph)
         , m_compiledGraph(compiledGraph)
@@ -68,8 +68,8 @@ private:
     const GpuCompiledGraph::ReadView& m_planAccess;
     GpuRecordedGraph& m_recordedGraph;
     const GpuRecordedGraph::ArtifactOperation& m_artifactOperation;
-    const Vector<u32, Alloc::ScratchArena>& m_packetIndices;
-    Vector<GpuPacketRecordingAbort, Alloc::ScratchArena>& m_aborts;
+    Span<const u32> m_packetIndices;
+    Span<GpuPacketRecordingAbort> m_aborts;
     u64 m_recordingAttemptGeneration = 0u;
     bool m_active = true;
 };

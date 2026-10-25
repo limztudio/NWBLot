@@ -52,11 +52,6 @@ struct ThrowingMeshletAppend : NoThrowMeshletBytes{
     ThrowingMeshletAppendResult push_back(u8)noexcept;
 };
 
-struct ThrowingLvalueMeshletIndex : MeshletView{
-    [[nodiscard]] Impl::MeshletDesc& operator[](usize&);
-    [[nodiscard]] Impl::MeshletDesc& operator[](usize&&)noexcept;
-};
-
 struct NoThrowMeshletFailure{
     [[nodiscard]] bool operator()(usize, TStringView)const noexcept;
 };
@@ -77,8 +72,8 @@ static_assert(!noexcept(Impl::EncodeMeshletRefDeltas(
     DeclVal<const AttributeRefView&>(),
     false,
     DeclVal<NoThrowMeshletFailure>(),
-    DeclVal<ThrowingLvalueMeshletIndex&>(),
-    DeclVal<NoThrowMeshletBytes&>(),
+    DeclVal<MeshletView&>(),
+    DeclVal<ThrowingMeshletAppend&>(),
     DeclVal<NoThrowMeshletBytes&>()
 )));
 static_assert(!noexcept(Impl::EncodeMeshletRefDeltas(

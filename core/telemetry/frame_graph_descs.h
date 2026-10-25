@@ -10,6 +10,7 @@
 #include <core/alloc/scratch.h>
 
 #include <global/expected.h>
+#include <global/span.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -95,43 +96,43 @@ using FrameGraphPacketSubmissionStatisticsRecords = Vector<FrameGraphPacketSubmi
 [[nodiscard]] bool IsValidFrameGraphPhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept;
 [[nodiscard]] bool IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(const FrameGraphPhysicalQueueRuntimeStatistics& statistics, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept;
 [[nodiscard]] bool IsValidFrameGraphPacketSubmissionStatistics(const FrameGraphPacketSubmissionStatisticsRecord& statistics)noexcept;
-[[nodiscard]] bool BuildFrameGraphPayload(Alloc::ScratchArena& scratchArena, u64 frameIndex, const FrameGraphNodeDescs& nodes, const FrameGraphEdgeDescs& edges, TelemetryBytes& outPayload);
+[[nodiscard]] bool BuildFrameGraphPayload(Alloc::ScratchArena& scratchArena, u64 frameIndex, Span<const FrameGraphNodeDesc> nodes, Span<const FrameGraphEdgeDesc> edges, TelemetryBytes& outPayload);
 [[nodiscard]] bool BuildFrameGraphPayload(
     Alloc::ScratchArena& scratchArena,
     u64 frameIndex,
-    const FrameGraphNodeDescs& nodes,
-    const FrameGraphEdgeDescs& edges,
-    const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
+    Span<const FrameGraphNodeDesc> nodes,
+    Span<const FrameGraphEdgeDesc> edges,
+    Span<const FrameGraphPhysicalQueueRuntimeStatisticsRecord> physicalQueueRuntimeStatistics,
     TelemetryBytes& outPayload
 );
 [[nodiscard]] bool BuildFrameGraphPayload(
     Alloc::ScratchArena& scratchArena,
     u64 frameIndex,
-    const FrameGraphNodeDescs& nodes,
-    const FrameGraphEdgeDescs& edges,
-    const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
-    const FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics,
+    Span<const FrameGraphNodeDesc> nodes,
+    Span<const FrameGraphEdgeDesc> edges,
+    Span<const FrameGraphPhysicalQueueRuntimeStatisticsRecord> physicalQueueRuntimeStatistics,
+    Span<const FrameGraphPacketSubmissionStatisticsRecord> packetSubmissionStatistics,
     TelemetryBytes& outPayload
 );
 [[nodiscard]] Expected<FrameGraphPayload> ParseFrameGraphPayload(TelemetryArena& arena, Alloc::ScratchArena& scratchArena, const void* payload, usize payloadBytes);
-[[nodiscard]] bool RecordFrameGraph(Recorder& recorder, Alloc::ScratchArena& scratchArena, u64 frameIndex, const FrameGraphNodeDescs& nodes, const FrameGraphEdgeDescs& edges, u32 streamId = 0u);
+[[nodiscard]] bool RecordFrameGraph(Recorder& recorder, Alloc::ScratchArena& scratchArena, u64 frameIndex, Span<const FrameGraphNodeDesc> nodes, Span<const FrameGraphEdgeDesc> edges, u32 streamId = 0u);
 [[nodiscard]] bool RecordFrameGraph(
     Recorder& recorder,
     Alloc::ScratchArena& scratchArena,
     u64 frameIndex,
-    const FrameGraphNodeDescs& nodes,
-    const FrameGraphEdgeDescs& edges,
-    const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
+    Span<const FrameGraphNodeDesc> nodes,
+    Span<const FrameGraphEdgeDesc> edges,
+    Span<const FrameGraphPhysicalQueueRuntimeStatisticsRecord> physicalQueueRuntimeStatistics,
     u32 streamId = 0u
 );
 [[nodiscard]] bool RecordFrameGraph(
     Recorder& recorder,
     Alloc::ScratchArena& scratchArena,
     u64 frameIndex,
-    const FrameGraphNodeDescs& nodes,
-    const FrameGraphEdgeDescs& edges,
-    const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
-    const FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics,
+    Span<const FrameGraphNodeDesc> nodes,
+    Span<const FrameGraphEdgeDesc> edges,
+    Span<const FrameGraphPhysicalQueueRuntimeStatisticsRecord> physicalQueueRuntimeStatistics,
+    Span<const FrameGraphPacketSubmissionStatisticsRecord> packetSubmissionStatistics,
     u32 streamId = 0u
 );
 

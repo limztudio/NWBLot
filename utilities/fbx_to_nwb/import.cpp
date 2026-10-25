@@ -22,8 +22,8 @@ NWB_FBX_TO_NWB_BEGIN
 
 
 Expected<MeshBuildResult> BuildMesh(
-    const UtilityVector<MeshInstance>& instances,
-    const UtilityVector<usize>& selection,
+    const Span<const MeshInstance> instances,
+    const Span<const usize> selection,
     const ImportOptions& options,
     const bool wantsSkinning,
     const Vec4& defaultColor,
@@ -37,7 +37,7 @@ Expected<MeshBuildResult> BuildMesh(
 
     const auto normalMode = ParseNormalModeText(options.normalMode, scratchArena);
     if(!normalMode){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: {}"), StringConvert(NormalModeErrorText(scratchArena)));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: {}"), ConvertString(NormalModeErrorText(scratchArena)));
         return MakeUnexpected(Failure{});
     }
 

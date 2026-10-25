@@ -195,7 +195,7 @@ struct MeasureOptions{
     const bool latency = StringView(argv[5]) == "latency";
     if((latency && !allowLatency) || (!latency && StringView(argv[5]) != "throughput"))
         return MakeUnexpected(Failure{});
-    const auto parsedIterations = ParseU64FromChars(AStringView(argv[4]));
+    const auto parsedIterations = ParseU64(AStringView(argv[4]));
     if(!parsedIterations || *parsedIterations == 0u || *parsedIterations > maximumIterations)
         return MakeUnexpected(Failure{});
     return MeasureOptions{ candidate, latency, static_cast<usize>(*parsedIterations) };

@@ -98,8 +98,8 @@ public:
         AStringView entryPoint;
         AStringView variantName;
         const ShaderMacroDefinition* defines = nullptr;
-        const CookVector<Path>& includeDirectories;
-        const CookVector<Path>& dependencies;
+        Span<const Path> includeDirectories;
+        Span<const Path> dependencies;
         Span<const AStringView> externallyPlannedMacroIncludes;
         const Path& sourcePath;
         const ::Path<Core::Alloc::ScratchArena>& outputPath;
@@ -217,14 +217,14 @@ public:
 
     [[nodiscard]] bool validateVariantSignature(AStringView contextLabel, AStringView variantSignature, const CookMap<CookString, DefineEntry>& defineValues, Core::Alloc::ScratchArena& scratchArena);
 
-    void mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector<Path>& dependencies, const CookMap<CookString, IncludeEntry>& includeMetadata, Core::Alloc::ScratchArena& scratchArena);
+    void mergeInheritedDefines(ShaderEntry& inOutEntry, Span<const Path> dependencies, const CookMap<CookString, IncludeEntry>& includeMetadata, Core::Alloc::ScratchArena& scratchArena);
 
     [[nodiscard]] bool expandDefineCombinations(const CookMap<CookString, DefineEntry>& defineValues, Core::Alloc::ScratchArena& scratchArena, CookVector<DefineCombo>& outCombinations);
 
     [[nodiscard]] CookString buildVariantName(const DefineCombo& combo, Core::Alloc::ScratchArena& scratchArena);
 
 
-    [[nodiscard]] Expected<DependencyChecksum> computeDependencyChecksum(const CookVector<Path>& dependencies, const CookVector<Path>& includeDirectories, InitializerList<DependencyRootAlias> dependencyRootAliases, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] Expected<DependencyChecksum> computeDependencyChecksum(Span<const Path> dependencies, Span<const Path> includeDirectories, InitializerList<DependencyRootAlias> dependencyRootAliases, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] u64 computeSourceChecksum(const ShaderEntry& entry, const AStringView variantSignature, u64 dependencyChecksum, u64 compilerFingerprint, Core::Alloc::ScratchArena& scratchArena);
 
 

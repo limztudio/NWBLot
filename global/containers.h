@@ -85,61 +85,61 @@ constexpr auto Tie(Args&... args)noexcept{ return std::tie(args...); }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T, typename ArenaT, typename Hash = Hasher<T>, typename Equal = EqualTo<T>> using ParallelHashSet = tbb::concurrent_unordered_set<T, Hash, Equal, ContainerDetail::ArenaCacheAlignedAllocatorFor_T<T, ArenaT>>;
+template<typename T, typename ArenaT, typename Hash = Hasher<T>, typename Equal = EqualTo<T>> using ParallelHashSet = tbb::concurrent_unordered_set<T, Hash, Equal, ContainerDetail::ArenaCacheAlignedAllocator<T, ArenaT>>;
 
 template<typename T, typename V, typename ArenaT, typename Hash = Hasher<T>, typename Equal = EqualTo<T>>
-using ParallelHashMap = tbb::concurrent_unordered_map< T, V, Hash, Equal, ContainerDetail::ArenaCacheAlignedAllocatorFor_T<typename tbb::concurrent_unordered_map<T, V, Hash, Equal>::value_type, ArenaT> >;
+using ParallelHashMap = tbb::concurrent_unordered_map< T, V, Hash, Equal, ContainerDetail::ArenaCacheAlignedAllocator<typename tbb::concurrent_unordered_map<T, V, Hash, Equal>::value_type, ArenaT> >;
 
 template<typename T, typename ArenaT>
-using ParallelVector = tbb::concurrent_vector<T, ContainerDetail::ArenaCacheAlignedAllocatorFor_T<T, ArenaT>>;
+using ParallelVector = tbb::concurrent_vector<T, ContainerDetail::ArenaCacheAlignedAllocator<T, ArenaT>>;
 
 template<typename T, typename ArenaT>
-using ParallelQueue = tbb::concurrent_queue<T, ContainerDetail::ArenaCacheAlignedAllocatorFor_T<T, ArenaT>>;
+using ParallelQueue = tbb::concurrent_queue<T, ContainerDetail::ArenaCacheAlignedAllocator<T, ArenaT>>;
 
 template<typename T, typename ArenaT>
-using ParallelBlockQueue = tbb::concurrent_bounded_queue<T, ContainerDetail::ArenaCacheAlignedAllocatorFor_T<T, ArenaT>>;
+using ParallelBlockQueue = tbb::concurrent_bounded_queue<T, ContainerDetail::ArenaCacheAlignedAllocator<T, ArenaT>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T, typename ArenaT, typename Hash = Hasher<T>, typename Equal = EqualTo<T>> using HashSet = tsl::robin_set<T, Hash, Equal, ContainerDetail::ArenaAllocatorFor_T<T, ArenaT>>;
+template<typename T, typename ArenaT, typename Hash = Hasher<T>, typename Equal = EqualTo<T>> using HashSet = tsl::robin_set<T, Hash, Equal, ContainerDetail::ArenaAllocator<T, ArenaT>>;
 
-template<typename T, typename V, typename ArenaT, typename Hash = Hasher<T>, typename Equal = EqualTo<T>> using HashMap = tsl::robin_map<T, V, Hash, Equal, ContainerDetail::ArenaAllocatorFor_T<Pair<T, V>, ArenaT>>;
+template<typename T, typename V, typename ArenaT, typename Hash = Hasher<T>, typename Equal = EqualTo<T>> using HashMap = tsl::robin_map<T, V, Hash, Equal, ContainerDetail::ArenaAllocator<Pair<T, V>, ArenaT>>;
 
 template<
     typename K,
     typename V,
     typename ArenaT,
     ArenaT& (*DefaultArena)(),
-    typename Hash = Hasher<K>, typename Equal = EqualTo<K> > using DefaultHashMap = tsl::robin_map< K, V, Hash, Equal, ContainerDetail::DefaultArenaAllocatorFor_T<Pair<K, V>, ArenaT, DefaultArena> >;
+    typename Hash = Hasher<K>, typename Equal = EqualTo<K> > using DefaultHashMap = tsl::robin_map< K, V, Hash, Equal, ContainerDetail::DefaultArenaAllocator<Pair<K, V>, ArenaT, DefaultArena> >;
 
 template<typename T, typename ArenaT>
-using ForwardList = std::forward_list<T, ContainerDetail::ArenaAllocatorFor_T<T, ArenaT>>;
+using ForwardList = std::forward_list<T, ContainerDetail::ArenaAllocator<T, ArenaT>>;
 
 template<typename T, typename ArenaT>
-using List = std::list<T, ContainerDetail::ArenaAllocatorFor_T<T, ArenaT>>;
+using List = std::list<T, ContainerDetail::ArenaAllocator<T, ArenaT>>;
 
 template<typename T, typename ArenaT>
-using Vector = std::vector<T, ContainerDetail::ArenaAllocatorFor_T<T, ArenaT>>;
+using Vector = std::vector<T, ContainerDetail::ArenaAllocator<T, ArenaT>>;
 
 template<typename T>
 using InteropVector = std::vector<T>;
 
 template<typename T, typename ArenaT, ArenaT& (*DefaultArena)()>
-using DefaultVector = std::vector<T, ContainerDetail::DefaultArenaAllocatorFor_T<T, ArenaT, DefaultArena>>;
+using DefaultVector = std::vector<T, ContainerDetail::DefaultArenaAllocator<T, ArenaT, DefaultArena>>;
 
 template<typename T, typename ArenaT>
-using Set = std::set<T, std::less<T>, ContainerDetail::ArenaAllocatorFor_T<T, ArenaT>>;
+using Set = std::set<T, std::less<T>, ContainerDetail::ArenaAllocator<T, ArenaT>>;
 
 template<typename T, typename V, typename ArenaT>
-using Map = std::map<T, V, std::less<T>, ContainerDetail::ArenaAllocatorFor_T<typename std::map<T, V>::value_type, ArenaT>>;
+using Map = std::map<T, V, std::less<T>, ContainerDetail::ArenaAllocator<typename std::map<T, V>::value_type, ArenaT>>;
 
 template<typename T, typename ArenaT>
-using Queue = std::queue<T, std::deque<T, ContainerDetail::ArenaAllocatorFor_T<T, ArenaT>>>;
+using Queue = std::queue<T, std::deque<T, ContainerDetail::ArenaAllocator<T, ArenaT>>>;
 
 template<typename T, typename ArenaT>
-using Deque = std::deque<T, ContainerDetail::ArenaAllocatorFor_T<T, ArenaT>>;
+using Deque = std::deque<T, ContainerDetail::ArenaAllocator<T, ArenaT>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

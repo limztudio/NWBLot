@@ -143,7 +143,7 @@ bool BackendContext::createVulkanInstance(Alloc::ScratchArena& scratchArena){
         ss << "Cannot create a Vulkan instance because the following required extension(s) are not supported:";
         for(const auto& ext : requiredExtensions)
             ss << "\n  - " << ext;
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {}"), StringConvert(ss.str()));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {}"), ConvertString(ss.str()));
         return false;
     }
 
@@ -152,7 +152,7 @@ bool BackendContext::createVulkanInstance(Alloc::ScratchArena& scratchArena){
         ss << "Vulkan: Enabled instance extensions:";
         for(const auto& ext : m_enabledExtensions.instance)
             ss << "\n    " << ext;
-        NWB_LOGGER_INFO(StringConvert(ss.str()));
+        NWB_LOGGER_INFO(ConvertString(ss.str()));
     }
 
     ScratchExtensionSet requiredLayers(0, ExtensionNameHasher(), ExtensionNameEqualTo(), scratchArena);
@@ -190,7 +190,7 @@ bool BackendContext::createVulkanInstance(Alloc::ScratchArena& scratchArena){
         ss << "Cannot create a Vulkan instance because the following required layer(s) are not supported:";
         for(const auto& ext : requiredLayers)
             ss << "\n  - " << ext;
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {}"), StringConvert(ss.str()));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {}"), ConvertString(ss.str()));
         return false;
     }
 
@@ -202,7 +202,7 @@ bool BackendContext::createVulkanInstance(Alloc::ScratchArena& scratchArena){
         ss << "Vulkan: Enabled layers:";
         for(const auto& layer : m_enabledExtensions.layers)
             ss << "\n    " << layer;
-        NWB_LOGGER_INFO(StringConvert(ss.str()));
+        NWB_LOGGER_INFO(ConvertString(ss.str()));
     }
 
     Vector<const char*, Alloc::ScratchArena> instanceExtVec(scratchArena);
@@ -254,7 +254,7 @@ bool BackendContext::createVulkanInstance(Alloc::ScratchArena& scratchArena){
            << "\n    enabled instance extensions: " << m_enabledExtensions.instance.size()
            << "\n    enabled layers: " << m_enabledExtensions.layers.size()
         ;
-        NWB_LOGGER_ESSENTIAL_INFO(StringConvert(ss.str()));
+        NWB_LOGGER_ESSENTIAL_INFO(ConvertString(ss.str()));
     }
 
     VkInstanceCreateInfo createInfo = {};

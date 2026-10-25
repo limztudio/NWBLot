@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-usize MeshletCookMetricsReport::EstimateMeshletSourceBytes(const Core::Assets::AssetVector<u32>& indices, const MeshCookEntry& entry)noexcept{
+usize MeshletCookMetricsReport::EstimateMeshletSourceBytes(const Span<const u32> indices, const MeshCookEntry& entry)noexcept{
     return EstimateCommonMeshletSourceBytes(indices, entry);
 }
 

@@ -56,7 +56,7 @@ static constexpr AStringView s_JsonRecordingCountsFormat = "{{\"packetCount\": {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] usize EstimateJsonReportReserve(const FrameGraphReportRecords& graphs)noexcept{
+[[nodiscard]] usize EstimateJsonReportReserve(const Span<const FrameGraphReportRecord> graphs)noexcept{
     usize reserveBytes = s_JsonReportReserveBytes;
     for(const FrameGraphReportRecord& graph : graphs){
         reserveBytes += s_JsonReportBytesPerGraph;
@@ -352,8 +352,8 @@ void AppendFrameGraphPacketSubmissionStatisticsJson(AString<TelemetryArena>& out
 void AppendFrameGraphRuntimeStatisticsJson(
     AString<TelemetryArena>& out,
     const Telemetry::FrameGraphRuntimeStatistics& statistics,
-    const Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
-    const Telemetry::FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics,
+    const Span<const Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord> physicalQueueRuntimeStatistics,
+    const Span<const Telemetry::FrameGraphPacketSubmissionStatisticsRecord> packetSubmissionStatistics,
     const FrameGraphOwnerStatisticsRange& ownerRange,
     const bool physicalQueueRuntimeStatisticsPresent,
     const bool packetSubmissionStatisticsPresent
@@ -448,7 +448,7 @@ void AppendFrameGraphJson(const FrameGraphReportRecord& record, const usize grap
     StringAppendFormat(out, "      }}{}\n", finalGraph ? "" : ",");
 }
 
-void BuildJson(const TelemetryReportSummary& summary, const FrameGraphReportRecords& graphs, const AStringView memoryRecords, AString<TelemetryArena>& out){
+void BuildJson(const TelemetryReportSummary& summary, const Span<const FrameGraphReportRecord> graphs, const AStringView memoryRecords, AString<TelemetryArena>& out){
     out.clear();
     usize reserveBytes = EstimateJsonReportReserve(graphs);
     if(!AddBinaryReserveBytes(reserveBytes, memoryRecords.size()))

@@ -230,8 +230,8 @@ TEST(Global, NumericParsersRespectViewBoundsAndRejectEmptyInput){
     ASSERT_TRUE(unsignedValue);
     EXPECT_EQ(*unsignedValue, 42u);
     EXPECT_FALSE(ParseU64("-1"));
-    EXPECT_FALSE(ParseI64FromChars({}));
-    EXPECT_FALSE(ParseU64FromChars({}));
+    EXPECT_FALSE(ParseI64({}));
+    EXPECT_FALSE(ParseU64({}));
     EXPECT_FALSE(ParseF64FromChars({}));
     EXPECT_FALSE(ParseF32FromChars({}));
     const auto doubleValue = ParseF64FromChars(AStringView("1.25trailing").substr(0u, 4u));

@@ -239,7 +239,7 @@ int main(const int argc, const char* const* argv){
     const bool candidate = StringView(argv[3]) == "candidate", latency = StringView(argv[5]) == "latency";
     if((!candidate && StringView(argv[3]) != "baseline") || (!latency && StringView(argv[5]) != "throughput"))
         return 2;
-    const auto parsedIterations = ParseU64FromChars(AStringView(argv[4]));
+    const auto parsedIterations = ParseU64(AStringView(argv[4]));
     if(!parsedIterations || *parsedIterations == 0u || *parsedIterations > Limit<usize>::s_Max / (latency ? 1u : 8u))
         return 2;
     const usize iterations = static_cast<usize>(*parsedIterations);

@@ -44,11 +44,6 @@ inline constexpr Name s_ResourceVersionScratchArena("tests/task/gpu/resource_ver
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using TaskGraphTestUtils::ComputeCommands;
-using TaskGraphTestUtils::DedicatedComputeQueue;
-using TaskGraphTestUtils::GraphicsQueue;
-using TaskGraphTestUtils::GraphicsCommands;
-
 [[nodiscard]] inline Graphics::GpuTaskResourceRange BufferRange(const u64 byteOffset, const u64 byteSize)noexcept{
     Graphics::GpuTaskResourceRange range;
     range.bufferRange = Graphics::BufferRange(byteOffset, byteSize);
@@ -118,8 +113,6 @@ struct VersionConsumerUses{
     return graph.addTask(desc);
 }
 
-using TaskGraphTestUtils::Analyze;
-
 [[nodiscard]] inline bool Assign(
     Graphics::GpuTaskGraphQueueAssignments& assignments,
     Core::Alloc::ScratchArena& scratchArena,
@@ -134,7 +127,7 @@ using TaskGraphTestUtils::Analyze;
 }
 
 [[nodiscard]] inline bool Compile(Graphics::GpuTaskGraphAnalysis& analysis, Graphics::GpuTaskGraphQueueAssignments& assignments, Graphics::GpuCompiledGraph& compiledGraph, Core::Alloc::ScratchArena& scratchArena, const Graphics::GpuTaskGraph& graph){
-    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuPhysicalQueueInfo queue = TaskGraphTestUtils::GraphicsQueue();
     const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u, };
     Graphics::GpuTaskGraphCompileOptions options;
     options.allowMetadataOnlyTasks = true;
@@ -217,7 +210,7 @@ inline void ExpectInvalidBoundUse(
     ASSERT_TRUE(task.valid());
 
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    EXPECT_FALSE(Analyze(operationScratchArena, graph, analysis));
+    EXPECT_FALSE(TaskGraphTestUtils::Analyze(operationScratchArena, graph, analysis));
     EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::InvalidResourceVersionUse);
     EXPECT_EQ(analysis.diagnostic().task, task);
     EXPECT_EQ(analysis.diagnostic().resource, resource);

@@ -108,7 +108,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual Expected<UniquePtr<IAsset>> deserialize(AssetArena& arena, const Name& virtualPath, const AssetBytes& binary)const override{
+    [[nodiscard]] virtual Expected<UniquePtr<IAsset>> deserialize(AssetArena& arena, const Name& virtualPath, const Span<const u8> binary)const override{
         if(m_wrongType){
             return UniquePtr<IAsset>(MakeUnique<UiSkin>(arena, virtualPath));
         }

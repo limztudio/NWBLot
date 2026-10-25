@@ -54,7 +54,7 @@ static constexpr u64 s_MaxFileBytes = s_HeaderBytes + s_MaxGroupCount * s_GroupH
 }
 
 [[nodiscard]] static Unexpected<AStringView> ReadFailure(const Path& path, const AStringView reason){
-    NWB_LOGGER_ERROR(NWB_TEXT("Prepared font '{}': {}"), PathToString<tchar>(path), StringConvert(reason));
+    NWB_LOGGER_ERROR(NWB_TEXT("Prepared font '{}': {}"), PathToString<tchar>(path), ConvertString(reason));
     return MakeUnexpected(reason);
 }
 

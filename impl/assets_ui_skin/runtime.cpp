@@ -78,7 +78,7 @@ static_assert(UiSkinColorRole::Count == UiSkinBinaryPayload::s_UiSkinPaletteColo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool UiSkin::loadBinary(const Core::Assets::AssetBytes& binary){
+bool UiSkin::loadBinary(const Span<const u8> binary){
     usize cursor = 0u;
     const auto headerResult = Core::Assets::ReadMagicHeaderPayload<UiSkinBinaryPayload::HeaderBinary>(binary, UiSkinBinaryPayload::s_UiSkinMagic, UiSkinBinaryPayload::s_UiSkinLoadBinaryContext, UiSkinBinaryPayload::s_UiSkinAssetKindLabel, cursor);
     if(!headerResult)
@@ -180,14 +180,14 @@ bool UiSkin::validatePayload()const{
     for(usize index = 0u; index < m_regions.size(); ++index){
         const UiSkinRegion& region = m_regions[index];
         if(!__hidden_ui_skin_runtime::IsValidRegion(region, m_atlasWidth, m_atlasHeight)){
-            NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: region {} '{}' has invalid bounds, slice borders, draw mode, or logical metrics"), index, StringConvert(region.name.resolvedText()));
+            NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: region {} '{}' has invalid bounds, slice borders, draw mode, or logical metrics"), index, ConvertString(region.name.resolvedText()));
             return false;
         }
     }
     for(usize index = 1u; index < m_regionIndex.size(); ++index){
         const Name& name = m_regions[m_regionIndex[index]].name;
         if(name == m_regions[m_regionIndex[index - 1u]].name){
-            NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: duplicate region '{}'"), StringConvert(name.resolvedText()));
+            NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: duplicate region '{}'"), ConvertString(name.resolvedText()));
             return false;
         }
     }

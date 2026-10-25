@@ -10,6 +10,7 @@
 #include <core/common/log.h>
 
 #include <global/expected.h>
+#include <global/span.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -93,7 +94,7 @@ private:
 
 template<typename ArenaT>
 [[nodiscard]] inline TString<ArenaT> AssetVirtualPathText(ArenaT& arena, const IAsset& asset){
-    return asset.virtualPath() ? StringConvert(arena, asset.virtualPath().resolvedText()) : TString<ArenaT>(s_UnnamedAssetPathText, arena);
+    return asset.virtualPath() ? ConvertString(arena, asset.virtualPath().resolvedText()) : TString<ArenaT>(s_UnnamedAssetPathText, arena);
 }
 
 template<typename AssetT>
@@ -130,7 +131,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual Expected<UniquePtr<IAsset>> deserialize(AssetArena& arena, const Name& virtualPath, const AssetBytes& binary)const = 0;
+    [[nodiscard]] virtual Expected<UniquePtr<IAsset>> deserialize(AssetArena& arena, const Name& virtualPath, Span<const u8> binary)const = 0;
 
 #if defined(NWB_COOK)
 
@@ -144,7 +145,7 @@ public:
         if(asset.assetType() == assetType())
             return true;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: invalid asset type '{}', expected '{}'"), failureContext, StringConvert(asset.assetType().resolvedText()), StringConvert(assetType().resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: invalid asset type '{}', expected '{}'"), failureContext, ConvertString(asset.assetType().resolvedText()), ConvertString(assetType().resolvedText()));
         return false;
     }
 #endif
@@ -163,7 +164,7 @@ protected:
 
 
 public:
-    [[nodiscard]] virtual Expected<UniquePtr<IAsset>> deserialize(AssetArena& arena, const Name& virtualPath, const AssetBytes& binary)const final override{
+    [[nodiscard]] virtual Expected<UniquePtr<IAsset>> deserialize(AssetArena& arena, const Name& virtualPath, const Span<const u8> binary)const final override{
         auto asset = MakeUnique<AssetT>(arena, virtualPath);
         if(!asset || !asset->loadBinary(binary))
             return MakeUnexpected(Failure{});

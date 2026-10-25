@@ -57,14 +57,14 @@ struct IncludeDirective{
     AStringView includeName,
     IncludeKind::Enum kind,
     const ::Path<Core::Alloc::ScratchArena>& sourceDirectory,
-    const ShaderCook::CookVector<Path>& includeDirectories,
+    Span<const Path> includeDirectories,
     Core::Alloc::ScratchArena& scratchArena
 );
 
 template<typename SourceArenaT, typename DependencyVectorT>
 [[nodiscard]] bool Gather(
     const ::Path<SourceArenaT>& sourcePath,
-    const ShaderCook::CookVector<Path>& includeDirectories,
+    Span<const Path> includeDirectories,
     const Span<const AStringView> externallyPlannedMacroIncludes,
     Core::Alloc::ScratchArena& scratchArena,
     DependencyVectorT& outDependencies
@@ -85,7 +85,7 @@ template<typename SourceArenaT, typename DependencyVectorT>
 
         const auto absolutePathResult = AbsolutePath(dependencyPath);
         if(!absolutePathResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve dependency path '{}' : {}"), PathToString<tchar>(dependencyPath), StringConvert(absolutePathResult.error().message()));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve dependency path '{}' : {}"), PathToString<tchar>(dependencyPath), ConvertString(absolutePathResult.error().message()));
             return false;
         }
         const ScratchPath absolutePath = absolutePathResult->lexicallyNormal();
@@ -100,7 +100,7 @@ template<typename SourceArenaT, typename DependencyVectorT>
         sourceText.clear();
         const auto sourceRead = ReadTextFile(absolutePath, sourceText);
         if(!sourceRead){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to read dependency '{}': {}:{}"), PathToString<tchar>(absolutePath), StringConvert(sourceRead.error().category().name()), sourceRead.error().value());
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to read dependency '{}': {}:{}"), PathToString<tchar>(absolutePath), ConvertString(sourceRead.error().category().name()), sourceRead.error().value());
             return false;
         }
         StripUtf8Bom(sourceText);
@@ -132,12 +132,12 @@ template<typename SourceArenaT, typename DependencyVectorT>
                         lineBegin = lineEnd + 1u;
                         continue;
                     }
-                    NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: unsupported or untracked dependency directive '{}' in '{}'"), StringConvert(TrimView(line)), PathToString<tchar>(absolutePath));
+                    NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: unsupported or untracked dependency directive '{}' in '{}'"), ConvertString(TrimView(line)), PathToString<tchar>(absolutePath));
                     return false;
                 }
                 auto includePath = ShaderSourceDependencies::ResolveIncludeFile(includeName, includeKind, absolutePath.parentPath(), includeDirectories, scratchArena);
                 if(!includePath){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Unable to resolve include '{}' from '{}'"), StringConvert(includeName), PathToString<tchar>(absolutePath));
+                    NWB_LOGGER_ERROR(NWB_TEXT("Unable to resolve include '{}' from '{}'"), ConvertString(includeName), PathToString<tchar>(absolutePath));
                     return false;
                 }
 

@@ -39,7 +39,7 @@ public:
     explicit AssetBuildRoot(Core::Assets::AssetArena& arena)noexcept
         : path(arena)
     {}
-    AssetBuildRoot(Core::Assets::AssetArena& arena, AStringView inPath, const ACompactString& inVirtualRoot)
+    AssetBuildRoot(Core::Assets::AssetArena& arena, AStringView inPath, AStringView inVirtualRoot)
         : path(inPath, arena)
         , virtualRoot(inVirtualRoot)
     {}

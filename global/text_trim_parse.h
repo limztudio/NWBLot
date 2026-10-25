@@ -72,11 +72,6 @@ template<typename CharT>
     return text.substr(begin, end - begin);
 }
 
-template<typename CharT, typename ArenaT>
-[[nodiscard]] inline BasicStringView<CharT> TrimView(const BasicString<CharT, ArenaT>& text)noexcept(IsArithmetic_V<CharT>){
-    return TrimView<CharT>(BasicStringView<CharT>{text});
-}
-
 template<typename StringT> requires requires(const StringT& text){ typename StringT::value_type; text.data(); text.size(); }
 [[nodiscard]] inline BasicStringView<typename StringT::value_type> TrimView(const StringT& text)noexcept(noexcept(BasicStringView<typename StringT::value_type>{text.data(), text.size()}) && IsArithmetic_V<typename StringT::value_type>){
     using CharT = typename StringT::value_type;
@@ -91,11 +86,6 @@ template<typename CharT>
     while(!text.empty() && IsAsciiSpace(text.front()))
         text.remove_prefix(1u);
     return text;
-}
-
-template<typename CharT, typename ArenaT>
-[[nodiscard]] inline BasicStringView<CharT> TrimLeftView(const BasicString<CharT, ArenaT>& text)noexcept(IsArithmetic_V<CharT>){
-    return TrimLeftView<CharT>(BasicStringView<CharT>{text});
 }
 
 template<typename StringT> requires requires(const StringT& text){ typename StringT::value_type; text.data(); text.size(); }
@@ -301,7 +291,7 @@ struct DecodedUtf8CodePoint{
         return MakeUnexpected(Failure{});
 
     const u8 c0 = static_cast<u8>(bytes[0]);
-    if(c0 < BasicStringDetail::s_Utf8OneByteMaxExclusive){
+    if(c0 < s_Utf8OneByteMaxExclusive){
         unicode = c0;
         return DecodedUtf8CodePoint{ unicode, 1 };
     }
@@ -355,7 +345,7 @@ struct DecodedUtf8CodePoint{
             | (static_cast<u32>(c2 & BasicStringDetail::s_Utf8ContinuationPayloadMask) << BasicStringDetail::s_Utf8ContinuationPayloadBits)
             | static_cast<u32>(c3 & BasicStringDetail::s_Utf8ContinuationPayloadMask)
         ;
-        if(unicode < BasicStringDetail::s_Utf8FourByteMinCodePoint || unicode > BasicStringDetail::s_UnicodeMaxCodePoint)
+        if(unicode < BasicStringDetail::s_Utf8FourByteMinCodePoint || unicode > s_UnicodeMaxCodePoint)
             return MakeUnexpected(Failure{});
         return DecodedUtf8CodePoint{ unicode, TextDetail::s_Utf8FourByteLength };
     }

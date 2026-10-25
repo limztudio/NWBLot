@@ -29,7 +29,7 @@ Expected<MaterialCookEntry> ParseMaterialCookMetadata(const Path& assetRoot, con
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateMaterialCookInterfaces(const MaterialCookVector<MaterialBindEntry>& materialBindEntries, Core::Alloc::ScratchArena& scratchArena, MaterialCookVector<MaterialCookEntry>& materialEntries){
+bool ValidateMaterialCookInterfaces(const Span<const MaterialBindEntry> materialBindEntries, Core::Alloc::ScratchArena& scratchArena, MaterialCookVector<MaterialCookEntry>& materialEntries){
     return MaterialCookDetail::ValidateMaterialCookInterfaces(materialBindEntries, scratchArena, materialEntries);
 }
 
@@ -45,7 +45,7 @@ Expected<MaterialCookString> BuildMaterialBindIncludeSource(MaterialCookArena& a
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<Path> EmitMaterialBindIncludes(MaterialCookArena& arena, const Path& cacheDirectory, const AStringView configurationSafeName, const MaterialCookVector<MaterialBindEntry>& materialBindEntries, Core::Alloc::ScratchArena& scratchArena){
+Expected<Path> EmitMaterialBindIncludes(MaterialCookArena& arena, const Path& cacheDirectory, const AStringView configurationSafeName, const Span<const MaterialBindEntry> materialBindEntries, Core::Alloc::ScratchArena& scratchArena){
     return MaterialCookDetail::EmitMaterialBindIncludes(arena, cacheDirectory, configurationSafeName, materialBindEntries, scratchArena);
 }
 
@@ -57,8 +57,8 @@ Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface(
     MaterialCookArena& arena,
     const AStringView shaderName,
     const Path& materialBindIncludeRoot,
-    const MaterialCookVector<MaterialBindEntry>& materialBindEntries,
-    const MaterialCookVector<Path>& dependencies,
+    const Span<const MaterialBindEntry> materialBindEntries,
+    const Span<const Path> dependencies,
     Core::Alloc::ScratchArena& scratchArena
 ){
     return MaterialCookDetail::ResolveMaterialBindDependencyInterface(arena, shaderName, materialBindIncludeRoot, materialBindEntries, dependencies, scratchArena);
@@ -78,7 +78,7 @@ static bool SetOptionalAvboitPixelShader(const MaterialCookEntry& materialEntry,
 
     const auto shaderName = ToName(shaderNameText);
     if(!shaderName || !*shaderName){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' has an invalid AVBOIT {} pixel shader name"), StringConvert(AStringView(materialEntry.virtualPath)), StringConvert(passLabel));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' has an invalid AVBOIT {} pixel shader name"), ConvertString(AStringView(materialEntry.virtualPath)), ConvertString(passLabel));
         return false;
     }
 
@@ -94,15 +94,15 @@ static bool SetOptionalAvboitPixelShader(const MaterialCookEntry& materialEntry,
 
 Expected<Material> BuildMaterialAsset(const MaterialCookEntry& materialEntry, Core::Assets::AssetArena& arena){
     if(materialEntry.materialInterface.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' is missing required material interface"), StringConvert(AStringView(materialEntry.virtualPath)));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' is missing required material interface"), ConvertString(AStringView(materialEntry.virtualPath)));
         return MakeUnexpected(Failure{});
     }
     if(materialEntry.typedLayoutHash == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: interface material '{}' is missing typed layout data"), StringConvert(AStringView(materialEntry.virtualPath)));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: interface material '{}' is missing typed layout data"), ConvertString(AStringView(materialEntry.virtualPath)));
         return MakeUnexpected(Failure{});
     }
     if(materialEntry.shaderVariant.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' has empty shader variant"), StringConvert(AStringView(materialEntry.virtualPath)));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' has empty shader variant"), ConvertString(AStringView(materialEntry.virtualPath)));
         return MakeUnexpected(Failure{});
     }
 
@@ -131,7 +131,7 @@ Expected<Material> BuildMaterialAsset(const MaterialCookEntry& materialEntry, Co
     asset.setTwoSided(materialEntry.twoSided);
     asset.setRefractive(materialEntry.refractive);
     if(!HasValidMaterialAvboitPixelShaderContract(asset.transparent(), asset.avboitAccumulatePixelShader(), asset.avboitOccupancyPixelShader(), asset.avboitExtinctionPixelShader())){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' AVBOIT pixel shaders must be present if and only if it is transparent"), StringConvert(AStringView(materialEntry.virtualPath)));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' AVBOIT pixel shaders must be present if and only if it is transparent"), ConvertString(AStringView(materialEntry.virtualPath)));
         return MakeUnexpected(Failure{});
     }
     asset.setTypedLayout(materialEntry.typedLayoutHash, materialEntry.typedLayoutBlocks, materialEntry.typedLayoutFields, materialEntry.typedBlockBytes);
@@ -140,7 +140,7 @@ Expected<Material> BuildMaterialAsset(const MaterialCookEntry& materialEntry, Co
     for(const auto& [shaderType, shaderAsset] : materialEntry.stageShaders){
         if(!asset.setShaderForStage(shaderType, shaderAsset)){
             const Name& stageName = Core::ShaderStageNames::ArchiveStageNameFromShaderType(shaderType);
-            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: invalid shader stage '{}' for '{}'"), StringConvert(stageName.resolvedText()), StringConvert(AStringView(materialEntry.virtualPath)));
+            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: invalid shader stage '{}' for '{}'"), ConvertString(stageName.resolvedText()), ConvertString(AStringView(materialEntry.virtualPath)));
             return MakeUnexpected(Failure{});
         }
     }
@@ -152,7 +152,7 @@ Expected<Material> BuildMaterialAsset(const MaterialCookEntry& materialEntry, Co
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AssignMaterialShadingModelIds(MaterialCookVector<MaterialCookEntry>& materialEntries, Core::Alloc::ScratchArena& scratchArena){
+bool AssignMaterialShadingModelIds(const Span<MaterialCookEntry> materialEntries, Core::Alloc::ScratchArena& scratchArena){
     return MaterialCookDetail::AssignMaterialShadingModelIdsImpl(materialEntries, scratchArena);
 }
 
@@ -160,7 +160,7 @@ bool AssignMaterialShadingModelIds(MaterialCookVector<MaterialCookEntry>& materi
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<Path> EmitDeferredBxdfDispatchModule(const Path& cacheDirectory, const AStringView configurationSafeName, const MaterialCookVector<MaterialCookEntry>& materialEntries, Core::Alloc::ScratchArena& scratchArena){
+Expected<Path> EmitDeferredBxdfDispatchModule(const Path& cacheDirectory, const AStringView configurationSafeName, const Span<const MaterialCookEntry> materialEntries, Core::Alloc::ScratchArena& scratchArena){
     return MaterialCookDetail::EmitDeferredBxdfDispatchModuleImpl(cacheDirectory, configurationSafeName, materialEntries, scratchArena);
 }
 
@@ -171,8 +171,8 @@ Expected<Path> EmitDeferredBxdfDispatchModule(const Path& cacheDirectory, const 
 Expected<Path> EmitShadowSurfaceDispatchModule(
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
-    const MaterialCookVector<MaterialBindEntry>& materialBindEntries,
-    const MaterialCookVector<MaterialCookEntry>& materialEntries,
+    const Span<const MaterialBindEntry> materialBindEntries,
+    const Span<const MaterialCookEntry> materialEntries,
     Core::Alloc::ScratchArena& scratchArena
 ){
     return MaterialCookDetail::EmitShadowSurfaceDispatchModuleImpl(cacheDirectory, configurationSafeName, materialBindEntries, materialEntries, scratchArena);
@@ -188,7 +188,7 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShad
     const AStringView sharedMeshShaderName,
     MaterialCookArena& arena,
     Core::Alloc::ScratchArena& scratchArena,
-    MaterialCookVector<MaterialCookEntry>& materialEntries
+    const Span<MaterialCookEntry> materialEntries
 ){
     return MaterialCookDetail::EmitMaterialPixelShadersImpl(cacheDirectory, configurationSafeName, sharedMeshShaderName, arena, scratchArena, materialEntries);
 }
@@ -202,7 +202,7 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitAcc
     const AStringView configurationSafeName,
     MaterialCookArena& arena,
     Core::Alloc::ScratchArena& scratchArena,
-    MaterialCookVector<MaterialCookEntry>& materialEntries
+    const Span<MaterialCookEntry> materialEntries
 ){
     return MaterialCookDetail::EmitMaterialAvboitAccumulatePixelShadersImpl(cacheDirectory, configurationSafeName, arena, scratchArena, materialEntries);
 }
@@ -216,7 +216,7 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitOcc
     const AStringView configurationSafeName,
     MaterialCookArena& arena,
     Core::Alloc::ScratchArena& scratchArena,
-    MaterialCookVector<MaterialCookEntry>& materialEntries
+    const Span<MaterialCookEntry> materialEntries
 ){
     return MaterialCookDetail::EmitMaterialAvboitOccupancyPixelShadersImpl(cacheDirectory, configurationSafeName, arena, scratchArena, materialEntries);
 }
@@ -230,7 +230,7 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitExt
     const AStringView configurationSafeName,
     MaterialCookArena& arena,
     Core::Alloc::ScratchArena& scratchArena,
-    MaterialCookVector<MaterialCookEntry>& materialEntries
+    const Span<MaterialCookEntry> materialEntries
 ){
     return MaterialCookDetail::EmitMaterialAvboitExtinctionPixelShadersImpl(cacheDirectory, configurationSafeName, arena, scratchArena, materialEntries);
 }

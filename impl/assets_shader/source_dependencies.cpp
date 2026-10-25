@@ -156,7 +156,7 @@ Expected<::Path<Core::Alloc::ScratchArena>> ShaderSourceDependencies::ResolveInc
     const AStringView includeName,
     const ShaderSourceDependencies::IncludeKind::Enum kind,
     const ::Path<Core::Alloc::ScratchArena>& sourceDirectory,
-    const ShaderCook::CookVector<Path>& includeDirectories,
+    const Span<const Path> includeDirectories,
     Core::Alloc::ScratchArena& scratchArena
 ){
 
@@ -167,7 +167,7 @@ Expected<::Path<Core::Alloc::ScratchArena>> ShaderSourceDependencies::ResolveInc
             return localCandidate;
         }
         if(!localCandidateQueryResult && !IsMissingPathError(localCandidateQueryResult.error())){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to query include candidate '{}': {}"), PathToString<tchar>(localCandidate), StringConvert(localCandidateQueryResult.error().message()));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to query include candidate '{}': {}"), PathToString<tchar>(localCandidate), ConvertString(localCandidateQueryResult.error().message()));
             return MakeUnexpected(Failure{});
         }
     }
@@ -179,7 +179,7 @@ Expected<::Path<Core::Alloc::ScratchArena>> ShaderSourceDependencies::ResolveInc
             return includeCandidate;
         }
         if(!includeCandidateQueryResult && !IsMissingPathError(includeCandidateQueryResult.error())){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to query include candidate '{}': {}"), PathToString<tchar>(includeCandidate), StringConvert(includeCandidateQueryResult.error().message()));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to query include candidate '{}': {}"), PathToString<tchar>(includeCandidate), ConvertString(includeCandidateQueryResult.error().message()));
             return MakeUnexpected(Failure{});
         }
     }

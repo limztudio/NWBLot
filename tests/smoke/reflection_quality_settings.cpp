@@ -25,7 +25,7 @@ bool ApplyReflectionQualitySmokeSettings(Impl::RendererSystem& renderer, const I
     Impl::ReflectionSettings settings = baseSettings;
     const auto value = ReadSmokeEnvironmentText(arena, "NWB_REFLECTION_SCREEN_STEPS");
     if(value){
-        const auto parsed = ParseU64FromChars(AStringView(value->data(), value->size()));
+        const auto parsed = ParseU64(AStringView(value->data(), value->size()));
         if(!parsed || *parsed > Limit<u32>::s_Max)
             return false;
         settings.screenMaxSteps = static_cast<u32>(*parsed);

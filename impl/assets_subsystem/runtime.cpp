@@ -33,7 +33,7 @@ using NameHashSet = HashSet<NameHash, Core::Alloc::ScratchArena, Hasher<NameHash
 
 template<typename TAsset>
 [[nodiscard]] static bool ValidateUniqueAssetRefs(
-    const Core::Assets::AssetVector<Core::Assets::AssetRef<TAsset>>& references,
+    const Span<const Core::Assets::AssetRef<TAsset>> references,
     const TStringView contextLabel,
     const Name disallowedSelfName,
     Core::Alloc::ScratchArena& scratchArena
@@ -76,9 +76,9 @@ bool Subsystem::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
         return false;
     }
 
-    if(!__hidden_subsystem_runtime::ValidateUniqueAssetRefs(m_subsystems, NWB_TEXT("child subsystem"), virtualPath(), scratchArena))
+    if(!__hidden_subsystem_runtime::ValidateUniqueAssetRefs(Span<const SubsystemRef>(m_subsystems), NWB_TEXT("child subsystem"), virtualPath(), scratchArena))
         return false;
-    if(!__hidden_subsystem_runtime::ValidateUniqueAssetRefs(m_assets, NWB_TEXT("asset"), s_NameNone, scratchArena))
+    if(!__hidden_subsystem_runtime::ValidateUniqueAssetRefs(Span<const AssetRef>(m_assets), NWB_TEXT("asset"), s_NameNone, scratchArena))
         return false;
 
     __hidden_subsystem_runtime::NameHashSet seenFeatures(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
@@ -97,14 +97,14 @@ bool Subsystem::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
             NWB_LOGGER_ERROR(NWB_TEXT("Subsystem::validatePayload failed: feature {} must list at least one asset"), i);
             return false;
         }
-        if(!__hidden_subsystem_runtime::ValidateUniqueAssetRefs(feature.assets, NWB_TEXT("feature asset"), s_NameNone, scratchArena))
+        if(!__hidden_subsystem_runtime::ValidateUniqueAssetRefs(Span<const SubsystemFeature::AssetRef>(feature.assets), NWB_TEXT("feature asset"), s_NameNone, scratchArena))
             return false;
     }
 
     return true;
 }
 
-bool Subsystem::loadBinary(const Core::Assets::AssetBytes& binary){
+bool Subsystem::loadBinary(const Span<const u8> binary){
     Core::Alloc::ScratchArena scratchArena(AssetsSubsystemArenaScope::s_LoadBinaryArena);
     usize cursor = 0u;
     const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SubsystemBinaryPayload::SubsystemHeaderBinary>(

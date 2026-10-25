@@ -177,7 +177,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool build(const Vector<GpuTaskDependencyEdge, Alloc::ScratchArena>& edges, const usize taskCount, const usize maximumRowCount){
+    [[nodiscard]] bool build(const Span<const GpuTaskDependencyEdge> edges, const usize taskCount, const usize maximumRowCount){
         m_wordsPerRow = taskCount == 0u ? 0u : (taskCount - 1u) / s_BitsPerWord + 1u;
         if(m_wordsPerRow != 0u && taskCount > Limit<usize>::s_Max / m_wordsPerRow)
             return false;

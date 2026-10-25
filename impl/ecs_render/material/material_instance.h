@@ -33,11 +33,11 @@ struct MaterialInstanceParameterNames{
 [[nodiscard]] inline Expected<MaterialInstanceParameterNames> SplitMaterialInstanceParameterName(const AStringView parameterName){
     const usize dotIndex = parameterName.find('.');
     if(parameterName.empty() || dotIndex == AStringView::npos || dotIndex == 0u || dotIndex + 1u >= parameterName.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' must use block.field form"), StringConvert(parameterName));
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' must use block.field form"), ConvertString(parameterName));
         return MakeUnexpected(Failure{});
     }
     if(parameterName.find('.', dotIndex + 1u) != AStringView::npos){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' must not contain more than one block separator"), StringConvert(parameterName));
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' must not contain more than one block separator"), ConvertString(parameterName));
         return MakeUnexpected(Failure{});
     }
 
@@ -45,7 +45,7 @@ struct MaterialInstanceParameterNames{
     const auto blockName = Name::FromText(parameterName.substr(0u, dotIndex));
     const auto fieldName = Name::FromText(parameterName.substr(dotIndex + 1u));
     if(!name || !blockName || !fieldName){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' contains an embedded null"), StringConvert(parameterName));
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' contains an embedded null"), ConvertString(parameterName));
         return MakeUnexpected(Failure{});
     }
     return MaterialInstanceParameterNames{ *name, *blockName, *fieldName };
@@ -96,20 +96,20 @@ public:
 
 [[nodiscard]] inline bool ValidateMaterialInstanceInterface(const MaterialInstanceComponent& component, const Name& materialInterface, const AStringView parameterNameText){
     if(!materialInterface){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' requires a material interface"), StringConvert(parameterNameText));
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' requires a material interface"), ConvertString(parameterNameText));
         return false;
     }
     if(!component.materialInterface){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' requires a component material interface"), StringConvert(parameterNameText));
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' requires a component material interface"), ConvertString(parameterNameText));
         return false;
     }
     if(component.materialInterface == materialInterface)
         return true;
 
     NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' targets interface '{}' but component expects '{}'")
-        , StringConvert(parameterNameText)
-        , StringConvert(materialInterface.resolvedText())
-        , StringConvert(component.materialInterface.resolvedText())
+        , ConvertString(parameterNameText)
+        , ConvertString(materialInterface.resolvedText())
+        , ConvertString(component.materialInterface.resolvedText())
     );
     return false;
 }
@@ -120,7 +120,7 @@ public:
             continue;
 
         if(existingParameter.fieldType != parameter.fieldType){
-            NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' was already set with a different type"), StringConvert(parameterNameText));
+            NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' was already set with a different type"), ConvertString(parameterNameText));
             return false;
         }
 
@@ -145,7 +145,7 @@ public:
 
 [[nodiscard]] inline bool SetMaterialMutableParameter(MaterialInstanceComponent& component, const Name& materialInterface, const AStringView parameterNameText, const MaterialLayoutFieldType::Enum fieldType, const UInt4U value){
     if(!IsMaterialLayoutNumericFieldType(fieldType)){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' must use a numeric mutable field type"), StringConvert(parameterNameText));
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' must use a numeric mutable field type"), ConvertString(parameterNameText));
         return false;
     }
     if(!ValidateMaterialInstanceInterface(component, materialInterface, parameterNameText))

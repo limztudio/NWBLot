@@ -61,6 +61,11 @@ template<typename ScopeId, typename ScopeVector, typename ScopeMap, typename Cre
 
 
 namespace NamedRegistryDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename ScopeEntry>
 [[nodiscard]] constexpr auto ScopeRecordPointer(const ScopeEntry& entry)noexcept(noexcept(entry.get())) -> RemoveCVRef_T<decltype(entry.get())>{
     return entry.get();
@@ -70,7 +75,16 @@ template<typename Record>
 [[nodiscard]] constexpr Record* ScopeRecordPointer(Record* const entry)noexcept{
     return entry;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 template<typename ScopeId, typename ScopeVector>
 [[nodiscard]] auto FindNamedScope(const ScopeVector& scopes, const ScopeId scope)noexcept(

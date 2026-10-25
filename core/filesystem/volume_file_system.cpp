@@ -553,7 +553,7 @@ bool VolumeFileSystem::compact(const bool shrinkSegments){
     const FilesystemVolumeStagingDetail::VolumePublicationObserver observer{
         .context = &publication,
         .commit = [](void* context)noexcept{
-            auto& state = *static_cast<CompactPublication*>(context);
+            auto& state = *MakeNotNull(static_cast<CompactPublication*>(context));
             for(const auto& layout : state.layouts)
                 *layout.record = FileRecord{ layout.destinationOffset, layout.size };
             state.nextFreeOffset = state.compactedWriteOffset;

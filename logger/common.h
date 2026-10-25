@@ -306,7 +306,7 @@ protected:
         const bool alreadyStopping = m_exit.exchange(true, MemoryOrder::acq_rel);
 
         if(!alreadyStopping)
-            checked_cast<T*>(this)->internalDestroy();
+            MakeNotNull(checked_cast<T*>(this))->internalDestroy();
         if(m_thread.joinable())
             m_thread.join();
     }
@@ -327,11 +327,11 @@ public:
             }
         }
 
-        const bool initialized = checked_cast<T*>(this)->internalInit(Forward<Args>(args)...);
+        const bool initialized = MakeNotNull(checked_cast<T*>(this))->internalInit(Forward<Args>(args)...);
         if(!initialized)
             return false;
 
-        m_thread = Thread([this](){ T::GlobalUpdate(*checked_cast<T*>(this)); });
+        m_thread = Thread([this](){ T::GlobalUpdate(*MakeNotNull(checked_cast<T*>(this))); });
 
         return true;
     }
@@ -340,17 +340,17 @@ public:
 public:
     inline void enqueue(LogString&& str, Core::Common::LogType::Enum type = Core::Common::LogType::Info){
         LogString message(Move(str), m_arena);
-        return checked_cast<T*>(this)->T::enqueue(MakeTuple(TimerNow(), type, Move(message)));
+        return MakeNotNull(checked_cast<T*>(this))->T::enqueue(MakeTuple(TimerNow(), type, Move(message)));
     }
 
     inline void enqueue(const LogString& str, Core::Common::LogType::Enum type = Core::Common::LogType::Info){
         LogString message(str, m_arena);
-        return checked_cast<T*>(this)->T::enqueue(MakeTuple(TimerNow(), type, Move(message)));
+        return MakeNotNull(checked_cast<T*>(this))->T::enqueue(MakeTuple(TimerNow(), type, Move(message)));
     }
 
     inline void enqueue(BasicStringView<tchar> str, Core::Common::LogType::Enum type = Core::Common::LogType::Info){
         LogString message(str, m_arena);
-        return checked_cast<T*>(this)->T::enqueue(MakeTuple(TimerNow(), type, Move(message)));
+        return MakeNotNull(checked_cast<T*>(this))->T::enqueue(MakeTuple(TimerNow(), type, Move(message)));
     }
 
 

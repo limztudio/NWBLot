@@ -36,7 +36,7 @@ bool SkeletonAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
     if(!checkSerializeAssetType(asset, NWB_TEXT("SkeletonAssetCodec::serialize")))
         return false;
 
-    const Skeleton& skeleton = *checked_cast<const Skeleton*>(&asset);
+    const Skeleton& skeleton = *MakeNotNull(checked_cast<const Skeleton*>(&asset));
     Core::Alloc::ScratchArena scratchArena(AssetsSkeletonArenaScope::s_SerializeArena);
     if(!skeleton.validatePayload(scratchArena))
         return false;

@@ -28,12 +28,12 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 void* FontSource::Allocate(FT_Memory memory, FT_Long size)noexcept{
     if(size <= 0)
         return nullptr;
-    return static_cast<Core::Assets::AssetArena*>(memory->user)->allocate(alignof(MaxAlign), static_cast<usize>(size));
+    return MakeNotNull(static_cast<Core::Assets::AssetArena*>(memory->user))->allocate(alignof(MaxAlign), static_cast<usize>(size));
 }
 
 void FontSource::Release(FT_Memory memory, void* block)noexcept{
     if(block)
-        static_cast<Core::Assets::AssetArena*>(memory->user)->deallocate(block, alignof(MaxAlign), 0u);
+        MakeNotNull(static_cast<Core::Assets::AssetArena*>(memory->user))->deallocate(block, alignof(MaxAlign), 0u);
 }
 
 void* FontSource::Reallocate(FT_Memory memory, FT_Long oldSize, FT_Long newSize, void* block)noexcept{
@@ -42,7 +42,7 @@ void* FontSource::Reallocate(FT_Memory memory, FT_Long oldSize, FT_Long newSize,
         Release(memory, block);
         return nullptr;
     }
-    return static_cast<Core::Assets::AssetArena*>(memory->user)->reallocate(block, alignof(MaxAlign), static_cast<usize>(newSize));
+    return MakeNotNull(static_cast<Core::Assets::AssetArena*>(memory->user))->reallocate(block, alignof(MaxAlign), static_cast<usize>(newSize));
 }
 
 FontSource::FontSource(Core::Assets::AssetArena& arena)noexcept

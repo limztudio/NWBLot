@@ -122,28 +122,28 @@ bool Client::internalInit(const AStringView url){
         return false;
     }
 
-    CURL* const curlHandle = static_cast<CURL*>(m_curl);
+    const NotNull<CURL*> curlHandle = MakeNotNull(static_cast<CURL*>(m_curl));
     CURLcode curlResult;
 
-    curlResult = curl_easy_setopt(curlHandle, CURLOPT_POST, 1);
+    curlResult = curl_easy_setopt(curlHandle.get(), CURLOPT_POST, 1);
     if(curlResult != CURLE_OK){
         __hidden_log_client::CaptureInitializationFailure("CURLOPT_POST", curlResult);
         return false;
     }
 
-    curlResult = curl_easy_setopt(curlHandle, CURLOPT_NOSIGNAL, 1L);
+    curlResult = curl_easy_setopt(curlHandle.get(), CURLOPT_NOSIGNAL, 1L);
     if(curlResult != CURLE_OK){
         __hidden_log_client::CaptureInitializationFailure("CURLOPT_NOSIGNAL", curlResult);
         return false;
     }
 
-    curlResult = curl_easy_setopt(curlHandle, CURLOPT_CONNECTTIMEOUT_MS, __hidden_log_client::s_ConnectTimeoutMs);
+    curlResult = curl_easy_setopt(curlHandle.get(), CURLOPT_CONNECTTIMEOUT_MS, __hidden_log_client::s_ConnectTimeoutMs);
     if(curlResult != CURLE_OK){
         __hidden_log_client::CaptureInitializationFailure("CURLOPT_CONNECTTIMEOUT_MS", curlResult);
         return false;
     }
 
-    curlResult = curl_easy_setopt(curlHandle, CURLOPT_TIMEOUT_MS, __hidden_log_client::s_RequestTimeoutMs);
+    curlResult = curl_easy_setopt(curlHandle.get(), CURLOPT_TIMEOUT_MS, __hidden_log_client::s_RequestTimeoutMs);
     if(curlResult != CURLE_OK){
         __hidden_log_client::CaptureInitializationFailure("CURLOPT_TIMEOUT_MS", curlResult);
         return false;
@@ -197,7 +197,7 @@ bool Client::internalUpdate(){
         return true;
     };
 
-    CURL* const curlHandle = static_cast<CURL*>(m_curl);
+    const NotNull<CURL*> curlHandle = MakeNotNull(static_cast<CURL*>(m_curl));
     CURLcode curlResult;
     if(m_pendingPayload.size() > static_cast<usize>(Limit<curl_off_t>::s_Max)){
         m_pendingPayload.clear();
@@ -205,19 +205,19 @@ bool Client::internalUpdate(){
         return true;
     }
 
-    curlResult = curl_easy_setopt(curlHandle, CURLOPT_URL, m_pendingPayloadKind == ClientPayloadKind::Telemetry ? m_telemetryUrl.c_str() : m_messageUrl.c_str());
+    curlResult = curl_easy_setopt(curlHandle.get(), CURLOPT_URL, m_pendingPayloadKind == ClientPayloadKind::Telemetry ? m_telemetryUrl.c_str() : m_messageUrl.c_str());
     if(curlResult != CURLE_OK)
         return scheduleRetry();
 
-    curlResult = curl_easy_setopt(curlHandle, CURLOPT_POSTFIELDS, reinterpret_cast<char*>(m_pendingPayload.data()));
+    curlResult = curl_easy_setopt(curlHandle.get(), CURLOPT_POSTFIELDS, reinterpret_cast<char*>(m_pendingPayload.data()));
     if(curlResult != CURLE_OK)
         return scheduleRetry();
 
-    curlResult = curl_easy_setopt(curlHandle, CURLOPT_POSTFIELDSIZE_LARGE, static_cast<curl_off_t>(m_pendingPayload.size()));
+    curlResult = curl_easy_setopt(curlHandle.get(), CURLOPT_POSTFIELDSIZE_LARGE, static_cast<curl_off_t>(m_pendingPayload.size()));
     if(curlResult != CURLE_OK)
         return scheduleRetry();
 
-    curlResult = curl_easy_perform(curlHandle);
+    curlResult = curl_easy_perform(curlHandle.get());
     if(curlResult != CURLE_OK)
         return scheduleRetry();
 

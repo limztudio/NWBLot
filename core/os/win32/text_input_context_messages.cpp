@@ -54,7 +54,7 @@ void Win32TextInputService::replayContextVisibility(){
 Expected<isize> ResolveWin32TextInputContextMessage(ITextInputService& service, const u32 message, const usize wParam, const isize lParam)noexcept{
     if(!service.isOwnerThread() || service.capabilities().backend != TextInputBackend::Win32Imm32)
         return MakeUnexpected(Failure{});
-    return checked_cast<Win32TextInputService*>(&service)->resolveContextMessage(message, wParam, lParam);
+    return MakeNotNull(checked_cast<Win32TextInputService*>(&service))->resolveContextMessage(message, wParam, lParam);
 }
 
 

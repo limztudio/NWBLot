@@ -139,9 +139,7 @@ inline void FinishDestroyingSmokeWorld(ProjectRuntimeContext& context, NotNullUn
 }
 
 inline void RemoveSmokeRendererSystem(ProjectRuntimeContext& context, Core::ECS::World& world){
-    auto* rendererSystemPtr = world.getSystem<Impl::RendererSystem>();
-    NWB_ASSERT(rendererSystemPtr);
-    Impl::RendererSystem& rendererSystem = *rendererSystemPtr;
+    Impl::RendererSystem& rendererSystem = *MakeNotNull(world.getSystem<Impl::RendererSystem>());
     context.frameGraphRegistry.unregisterContributor(rendererSystem);
     context.graphics.removeRenderPass(rendererSystem);
 }

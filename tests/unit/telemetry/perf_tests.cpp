@@ -356,12 +356,12 @@ TEST(Telemetry, GenericScopeHelpersPreserveBorrowedPointerValuesAndImplicitNameF
     EXPECT_EQ(FindNamedScope<TimingScopeId>(owners, TimingScopeId{ 0u, 4u }), nullptr);
     EXPECT_EQ(FindNamedScope<TimingScopeId>(owners, TimingScopeId{ 1u, 3u }), nullptr);
 
-    const Array<GenericScopeRecord*, 1u> records{ &record };
+    const Array<NotNull<GenericScopeRecord*>, 1u> records{ MakeNotNull(&record) };
     static_assert(noexcept(ScopeNameAt(records, 0u)));
     EXPECT_EQ(ScopeNameAt(records, 0u), record.name);
 
     ThrowingScopeRecord throwing{};
-    const Array<ThrowingScopeRecord*, 1u> throwingRecords{ &throwing };
+    const Array<NotNull<ThrowingScopeRecord*>, 1u> throwingRecords{ MakeNotNull(&throwing) };
     static_assert(noexcept(Name(throwing.name)));
     static_assert(!noexcept(DeclVal<void(*)(Name)noexcept>()(throwing.name)));
     static_assert(!noexcept(ScopeNameAt(throwingRecords, 0u)));

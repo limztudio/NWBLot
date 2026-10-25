@@ -578,12 +578,12 @@ TEST(Math, PartialHalfFloatBuffersPreserveSubnormalsAndNonfiniteInput){
     Half packed[6] = {};
     f32 unpacked[6] = {};
 
-    ASSERT_EQ(ConvertFloatBufferToHalf(packed, source, 6u), packed);
+    ASSERT_EQ(ConvertFloatBufferToHalf(MakeNotNull(packed), MakeNotNull(source), 6u).get(), packed);
     EXPECT_EQ(packed[3], static_cast<Half>(0x7bffu));
     EXPECT_EQ(packed[4], static_cast<Half>(0x0001u));
     EXPECT_EQ(packed[5], static_cast<Half>(0x7c00u));
 
-    ASSERT_EQ(ConvertHalfBufferToFloat(unpacked, packed, 6u), unpacked);
+    ASSERT_EQ(ConvertHalfBufferToFloat(MakeNotNull(unpacked), MakeNotNull(packed), 6u).get(), unpacked);
     EXPECT_TRUE(NearlyEqual(unpacked[3], 65504.0f));
     EXPECT_TRUE(NearlyEqual(unpacked[4], 5.9604644775390625e-8f));
     EXPECT_EQ(unpacked[5], Limit<f32>::s_Infinity);

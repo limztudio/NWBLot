@@ -430,19 +430,19 @@ private:
     static bool RecordTaskPayload(const void* const payload, CommandList& commandList, const GpuTaskRecordContext& context)noexcept(IsSame_V<decltype(TaskT::Record(*static_cast<const typename TaskT::Payload*>(payload), commandList, context)), bool>
         && noexcept(TaskT::Record(*static_cast<const typename TaskT::Payload*>(payload), commandList, context))){
         using Payload = typename TaskT::Payload;
-        return TaskT::Record(*static_cast<const Payload*>(payload), commandList, context);
+        return TaskT::Record(*MakeNotNull(static_cast<const Payload*>(payload)), commandList, context);
     }
 
     template<typename TaskT>
     static void AcceptTaskPayload(void* const payload, const QueueSubmissionToken& token)noexcept(noexcept(TaskT::Accepted(*static_cast<typename TaskT::Payload*>(payload), token))){
         using Payload = typename TaskT::Payload;
-        TaskT::Accepted(*static_cast<Payload*>(payload), token);
+        TaskT::Accepted(*MakeNotNull(static_cast<Payload*>(payload)), token);
     }
 
     template<typename TaskT>
     static void DiscardTaskPayload(void* const payload)noexcept(noexcept(TaskT::Discarded(*static_cast<typename TaskT::Payload*>(payload)))){
         using Payload = typename TaskT::Payload;
-        TaskT::Discarded(*static_cast<Payload*>(payload));
+        TaskT::Discarded(*MakeNotNull(static_cast<Payload*>(payload)));
     }
 
     template<typename PayloadT>

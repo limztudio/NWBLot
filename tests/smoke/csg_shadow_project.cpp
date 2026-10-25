@@ -500,30 +500,30 @@ public:
         if(!readMode())
             return false;
         const auto camera = CreateSmokeCamera(*m_world, 0.0f, -s_CameraDepth, 0.0f);
-        auto* cameraTransform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(camera);
-        NWB_FATAL_ASSERT_MSG(cameraTransform, NWB_TEXT("CsgShadowSmokeProject: camera creation failed"));
+        NWB_FATAL_ASSERT_MSG(camera.valid(), NWB_TEXT("CsgShadowSmokeProject: camera creation failed"));
+        auto& cameraTransform = *MakeNotNull(m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(camera));
         const f32 cameraX = m_arm == Arm::CameraShift ? 0.3f : 0.0f;
-        cameraTransform->position.x = cameraX;
+        cameraTransform.position.x = cameraX;
         const auto receiver = CreateTintedStaticMeshEntity(*m_world, m_context.objectArena, s_PlaneMesh, s_OpaqueMaterial, s_MaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(4.0f, 1.0f, 3.0f, 0.0f));
-        auto* receiverTransform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(receiver);
-        NWB_FATAL_ASSERT_MSG(camera.valid() && receiverTransform, NWB_TEXT("CsgShadowSmokeProject: camera/receiver creation failed"));
-        StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), receiverTransform->rotation);
+        NWB_FATAL_ASSERT_MSG(receiver.valid(), NWB_TEXT("CsgShadowSmokeProject: camera/receiver creation failed"));
+        auto& receiverTransform = *MakeNotNull(m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(receiver));
+        StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), receiverTransform.rotation);
         const auto light = m_pointLight
             ? NWB::Impl::Scene::CreatePointLightEntity(*m_world, Float4(0.0f, 0.0f, -12.0f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f, 30.0f)
             : NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, 0.0f, 0.0f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f);
-        auto* lightComponent = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(light);
-        NWB_FATAL_ASSERT_MSG(lightComponent, NWB_TEXT("CsgShadowSmokeProject: light creation failed"));
-        lightComponent->angularRadius = m_finiteLightSource && !m_pointLight ? 0.005f : 0.0f;
-        lightComponent->sourceRadius = m_finiteLightSource && m_pointLight ? 0.02f : 0.0f;
+        NWB_FATAL_ASSERT_MSG(light.valid(), NWB_TEXT("CsgShadowSmokeProject: light creation failed"));
+        auto& lightComponent = *MakeNotNull(m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(light));
+        lightComponent.angularRadius = m_finiteLightSource && !m_pointLight ? 0.005f : 0.0f;
+        lightComponent.sourceRadius = m_finiteLightSource && m_pointLight ? 0.02f : 0.0f;
 #if defined(NWB_CSG_CAUSTIC_SMOKE)
-        lightComponent->enableCaustics = !ReadSmokeEnvironmentFlag("NWB_CSG_CAUSTIC_DISABLED");
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticSmokeProject: photons {}"), lightComponent->enableCaustics ? NWB_TEXT("enabled") : NWB_TEXT("disabled"));
+        lightComponent.enableCaustics = !ReadSmokeEnvironmentFlag("NWB_CSG_CAUSTIC_DISABLED");
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticSmokeProject: photons {}"), lightComponent.enableCaustics ? NWB_TEXT("enabled") : NWB_TEXT("disabled"));
 #else
-        lightComponent->enableCaustics = false;
+        lightComponent.enableCaustics = false;
 #endif
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: light_source={} angular_radius={:.3f} source_radius={:.3f}")
             , StringConvert(m_finiteLightSource ? s_Finite : s_Hard)
-            , static_cast<f64>(lightComponent->angularRadius), static_cast<f64>(lightComponent->sourceRadius)
+            , static_cast<f64>(lightComponent.angularRadius), static_cast<f64>(lightComponent.sourceRadius)
         );
         if(m_openAtlas){
             if(!createOpenAtlas())
@@ -566,9 +566,8 @@ public:
         ++m_update;
         if(m_arm == Arm::Moved && m_update == s_MoveUpdate){
             for(u32 index = 0u; index < m_movingCount; ++index){
-                auto* cutter = m_world->tryGetComponent<NWB::Impl::CsgCutterComponent>(m_movingCutters[index]);
-                NWB_ASSERT(cutter);
-                AssignCsgCutterTransform(*cutter, LoadFloat(m_finalCutterCenters[index]), QuaternionIdentity());
+                auto& cutter = *MakeNotNull(m_world->tryGetComponent<NWB::Impl::CsgCutterComponent>(m_movingCutters[index]));
+                AssignCsgCutterTransform(cutter, LoadFloat(m_finalCutterCenters[index]), QuaternionIdentity());
             }
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: cutters moved at update40"));
         }

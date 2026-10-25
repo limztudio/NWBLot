@@ -51,11 +51,11 @@ void VerifyVectorMove(const bool foreignArena, const usize targetSize = 1u){
             VectorT source{ typename VectorT::allocator_type(sourceArena) };
             for(u32 index = 0u; index < 128u; ++index)
                 source.push_back(index);
-            const u32* const firstElement = &source[0u];
+            const NotNull<const u32*> firstElement = MakeNotNull(&source[0u]);
             target = Move(source);
             EXPECT_EQ(target.get_allocator().arenaPtr(), &sourceArena);
             ASSERT_EQ(target.size(), 128u);
-            EXPECT_EQ(&target[0u], firstElement);
+            EXPECT_EQ(&target[0u], firstElement.get());
             EXPECT_TRUE(source.empty());
             source.push_back(7u);
             EXPECT_EQ(source[0u], 7u);
@@ -116,15 +116,15 @@ void VerifyVectorSwap(const bool foreignArena){
             first.push_back(index);
         for(u32 index = 0u; index < 96u; ++index)
             second.push_back(index + 100u);
-        const u32* const firstStorage = &first[0u];
-        const u32* const secondStorage = &second[0u];
+        const NotNull<const u32*> firstStorage = MakeNotNull(&first[0u]);
+        const NotNull<const u32*> secondStorage = MakeNotNull(&second[0u]);
         first.swap(second);
         EXPECT_EQ(first.get_allocator().arenaPtr(), &secondOwner);
         EXPECT_EQ(second.get_allocator().arenaPtr(), &firstArena);
         ASSERT_EQ(first.size(), 96u);
         ASSERT_EQ(second.size(), 64u);
-        EXPECT_EQ(&first[0u], secondStorage);
-        EXPECT_EQ(&second[0u], firstStorage);
+        EXPECT_EQ(&first[0u], secondStorage.get());
+        EXPECT_EQ(&second[0u], firstStorage.get());
         for(u32 index = 0u; index < 96u; ++index)
             EXPECT_EQ(first[index], index + 100u);
         for(u32 index = 0u; index < 64u; ++index)
@@ -211,12 +211,12 @@ TEST(AllocatorPropagation, CacheAlignedVectorMoveConstructionPreservesExplicitAr
                 Values source{ sourceArena };
                 for(u32 index = 0u; index < 128u; ++index)
                     source.push_back(index);
-                const u32* const firstElement = &source[0u];
+                const NotNull<const u32*> firstElement = MakeNotNull(&source[0u]);
                 GlobalArena& destinationArena = explicitAllocator && foreignArena ? targetArena : sourceArena;
                 Values target = explicitAllocator ? Values(Move(source), destinationArena) : Values(Move(source));
                 EXPECT_EQ(target.get_allocator().arenaPtr(), &destinationArena);
                 ASSERT_EQ(target.size(), 128u);
-                EXPECT_EQ(&target[0u] == firstElement, &destinationArena == &sourceArena);
+                EXPECT_EQ(&target[0u] == firstElement.get(), &destinationArena == &sourceArena);
                 for(u32 index = 0u; index < 128u; ++index)
                     EXPECT_EQ(target[index], index);
                 source.clear();
@@ -255,11 +255,11 @@ TEST(AllocatorPropagation, OrderedMapMoveTransfersNodesAndTheirDeallocationOwner
                 Map<u32, u32, GlobalArena> source{ sourceArena };
                 for(u32 key = 0u; key < 64u; ++key)
                     ASSERT_TRUE(source.emplace(key, key * 3u).second);
-                const u32* const sourceValue = &source.find(0u)->second;
+                const NotNull<const u32*> sourceValue = MakeNotNull(&source.find(0u)->second);
                 target = Move(source);
                 EXPECT_EQ(target.get_allocator().arenaPtr(), &sourceArena);
                 ASSERT_EQ(target.size(), 64u);
-                EXPECT_EQ(&target.find(0u)->second, sourceValue);
+                EXPECT_EQ(&target.find(0u)->second, sourceValue.get());
                 EXPECT_TRUE(source.empty());
                 ASSERT_TRUE(source.emplace(7u, 8u).second);
             }
@@ -303,15 +303,15 @@ TEST(AllocatorPropagation, OrderedMapSwapsTransferNodesAndTheirArena){
                 ASSERT_TRUE(first.emplace(key, key * 3u).second);
             for(u32 key = 100u; key < 132u; ++key)
                 ASSERT_TRUE(second.emplace(key, key * 5u).second);
-            const u32* const firstNode = &first.find(0u)->second;
-            const u32* const secondNode = &second.find(100u)->second;
+            const NotNull<const u32*> firstNode = MakeNotNull(&first.find(0u)->second);
+            const NotNull<const u32*> secondNode = MakeNotNull(&second.find(100u)->second);
             first.swap(second);
             EXPECT_EQ(first.get_allocator().arenaPtr(), &secondOwner);
             EXPECT_EQ(second.get_allocator().arenaPtr(), &firstArena);
             ASSERT_EQ(first.size(), 32u);
             ASSERT_EQ(second.size(), 16u);
-            EXPECT_EQ(&first.find(100u)->second, secondNode);
-            EXPECT_EQ(&second.find(0u)->second, firstNode);
+            EXPECT_EQ(&first.find(100u)->second, secondNode.get());
+            EXPECT_EQ(&second.find(0u)->second, firstNode.get());
             for(u32 key = 100u; key < 132u; ++key)
                 EXPECT_EQ(first.at(key), key * 5u);
             for(u32 key = 0u; key < 16u; ++key)
@@ -338,19 +338,19 @@ TEST(AllocatorPropagation, HashMapSwapsAndMovesPreserveArenaAndSourceReuse){
                 ASSERT_TRUE(first.emplace(key, key * 3u).second);
             for(u32 key = 100u; key < 132u; ++key)
                 ASSERT_TRUE(second.emplace(key, key * 5u).second);
-            const u32* const firstStorage = &first.at(0u);
-            const u32* const secondStorage = &second.at(100u);
+            const NotNull<const u32*> firstStorage = MakeNotNull(&first.at(0u));
+            const NotNull<const u32*> secondStorage = MakeNotNull(&second.at(100u));
             first.swap(second);
             EXPECT_EQ(first.get_allocator().arenaPtr(), &secondOwner);
             EXPECT_EQ(second.get_allocator().arenaPtr(), &firstArena);
             ASSERT_EQ(first.size(), 32u);
             ASSERT_EQ(second.size(), 64u);
-            EXPECT_EQ(&first.at(100u), secondStorage);
-            EXPECT_EQ(&second.at(0u), firstStorage);
+            EXPECT_EQ(&first.at(100u), secondStorage.get());
+            EXPECT_EQ(&second.at(0u), firstStorage.get());
             first = Move(second);
             EXPECT_EQ(first.get_allocator().arenaPtr(), &firstArena);
             ASSERT_EQ(first.size(), 64u);
-            EXPECT_EQ(&first.at(0u), firstStorage);
+            EXPECT_EQ(&first.at(0u), firstStorage.get());
             EXPECT_TRUE(second.empty());
             for(u32 key = 0u; key < 64u; ++key)
                 EXPECT_EQ(first.at(key), key * 3u);
@@ -380,19 +380,19 @@ TEST(AllocatorPropagation, HashSetSwapsAndMovesPreserveArenaAndSourceReuse){
                 ASSERT_TRUE(first.insert(key).second);
             for(u32 key = 100u; key < 132u; ++key)
                 ASSERT_TRUE(second.insert(key).second);
-            const u32* const firstStorage = &*first.find(0u);
-            const u32* const secondStorage = &*second.find(100u);
+            const NotNull<const u32*> firstStorage = MakeNotNull(&*first.find(0u));
+            const NotNull<const u32*> secondStorage = MakeNotNull(&*second.find(100u));
             first.swap(second);
             EXPECT_EQ(first.get_allocator().arenaPtr(), &secondOwner);
             EXPECT_EQ(second.get_allocator().arenaPtr(), &firstArena);
             ASSERT_EQ(first.size(), 32u);
             ASSERT_EQ(second.size(), 64u);
-            EXPECT_EQ(&*first.find(100u), secondStorage);
-            EXPECT_EQ(&*second.find(0u), firstStorage);
+            EXPECT_EQ(&*first.find(100u), secondStorage.get());
+            EXPECT_EQ(&*second.find(0u), firstStorage.get());
             first = Move(second);
             EXPECT_EQ(first.get_allocator().arenaPtr(), &firstArena);
             ASSERT_EQ(first.size(), 64u);
-            EXPECT_EQ(&*first.find(0u), firstStorage);
+            EXPECT_EQ(&*first.find(0u), firstStorage.get());
             EXPECT_TRUE(second.empty());
             for(u32 key = 0u; key < 64u; ++key)
                 EXPECT_EQ(first.count(key), 1u);

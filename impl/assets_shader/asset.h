@@ -331,7 +331,7 @@ public:
         if(!this->checkSerializeAssetType(asset, NWB_TEXT("ShaderAssetCodec::serialize")))
             return false;
 
-        return ShaderAssetSerialization::Serialize(*checked_cast<const ShaderT*>(&asset), outBinary);
+        return ShaderAssetSerialization::Serialize(*MakeNotNull(checked_cast<const ShaderT*>(&asset)), outBinary);
     }
 #endif
 };

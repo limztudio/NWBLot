@@ -49,7 +49,7 @@ public:
 };
 
 [[nodiscard]] static Expected<Core::GpuTaskId> DeclareTargetInitialization(void* const rawTarget, Core::GpuTaskGraph& graph){
-    const auto& target = *static_cast<GpuVersion<GpuTargetVersion>*>(rawTarget);
+    const auto& target = *MakeNotNull(static_cast<GpuVersion<GpuTargetVersion>*>(rawTarget));
     const auto colorResult = graph.importTexture(
         target->m_color,
         Core::GpuGraphResourceDesc().setIdentity(Name("ui.target_initialization")).setMarkerLabel("UI Target Initialization")

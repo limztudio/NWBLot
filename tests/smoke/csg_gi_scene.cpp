@@ -168,7 +168,7 @@ struct Box{
 
 
 bool CsgGiScene::ShouldCapture(void* context, const u64)noexcept{
-    const auto& scene = *static_cast<CsgGiScene*>(context);
+    const auto& scene = *MakeNotNull(static_cast<CsgGiScene*>(context));
     return scene.m_liveWarmupComplete && scene.m_context.graphics.getSuccessfulPresentationCount() >= scene.m_requiredPresentations;
 }
 
@@ -201,9 +201,7 @@ Expected<bool> CsgGiScene::start(){
         m_requiredPresentations = *count;
     }
 
-    auto* const rendererPtr = m_world.getSystem<Impl::RendererSystem>();
-    NWB_ASSERT(rendererPtr);
-    Impl::RendererSystem& renderer = *rendererPtr;
+    Impl::RendererSystem& renderer = *MakeNotNull(m_world.getSystem<Impl::RendererSystem>());
     if(ReadSmokeEnvironmentFlag("NWB_GI_CSG_LAGGED_LIGHTING"))
         renderer.setFrameLaggedAsyncLightingEnabled(true);
     Impl::ReflectionSettings reflection;

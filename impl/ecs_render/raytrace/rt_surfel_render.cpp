@@ -281,7 +281,6 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
     // The graph-owned late copy publishes its token only after Transfer/Compute/Graphics accepts. This pass only consumes completed diagnostics.
     {
         const u32 frameIndex = m_rayTracingState.m_surfelFrameIndex;
-        Core::Buffer* readback = m_rayTracingState.m_surfelCounterReadback.get();
         const Core::QueueSubmissionToken submissionToken = m_rayTracingState.m_surfelCountReadbackSubmissionToken;
         bool submissionComplete = false;
         if(submissionToken.valid() && submissionToken.hasPhysicalQueueIdentity()){
@@ -289,13 +288,14 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
             submissionComplete = completedValue && *completedValue >= submissionToken.value;
         }
         if(submissionComplete && (frameIndex - m_rayTracingState.m_surfelCountReadbackFrame) >= s_SurfelCountLogDelay){
-            const Expected<void*> mappedCounts = m_graphics.getDevice().mapBuffer(*readback, Core::CpuAccessMode::Read);
+            Core::Buffer& readback = *m_rayTracingState.m_surfelCounterReadback;
+            const Expected<void*> mappedCounts = m_graphics.getDevice().mapBuffer(readback, Core::CpuAccessMode::Read);
             if(mappedCounts){
-                const u32* counts = static_cast<const u32*>(*mappedCounts);
-                const u32 bumpTop = counts[NWB_SURFEL_COUNTER_BUMP_TOP];
-                const u32 freeTop = counts[NWB_SURFEL_COUNTER_FREE_TOP];
-                const u32 geometryFailures = counts[NWB_SURFEL_COUNTER_TRACE_GEOMETRY_FAILURE];
-                m_graphics.getDevice().unmapBuffer(*readback);
+                const NotNull<const u32*> counts = MakeNotNull(static_cast<const u32*>(*mappedCounts));
+                const u32 bumpTop = counts.get()[NWB_SURFEL_COUNTER_BUMP_TOP];
+                const u32 freeTop = counts.get()[NWB_SURFEL_COUNTER_FREE_TOP];
+                const u32 geometryFailures = counts.get()[NWB_SURFEL_COUNTER_TRACE_GEOMETRY_FAILURE];
+                m_graphics.getDevice().unmapBuffer(readback);
                 if((geometryFailures & ~m_rayTracingState.m_surfelTraceGeometryFailureFlags) != 0u){
                     m_rayTracingState.m_surfelTraceGeometryFailureFlags |= geometryFailures;
                     NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: CSG GI traversal rejected incomplete geometry or exceeded crossing capacity (flags={}); conservative occlusion and zero bounce radiance retained"), geometryFailures);

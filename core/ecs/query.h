@@ -36,8 +36,8 @@ using ViewEntityVector = Vector<EntityID, Alloc::GlobalArena>;
 
 struct ViewTupleAccess{
     template<usize I, typename... Ts>
-    static const ViewEntityVector* EntityVector(const Tuple<ComponentPool<Ts>*...>& pools)noexcept{
-        return &Get<I>(pools)->m_dense;
+    static const ViewEntityVector& EntityVector(const Tuple<ComponentPool<Ts>*...>& pools)noexcept{
+        return MakeNotNull(Get<I>(pools))->m_dense;
     }
 
     static EntityID EntityAt(const ViewEntityVector& entities, const usize denseIndex)noexcept{
@@ -56,7 +56,7 @@ struct ViewTupleAccess{
 
     template<usize I, typename... Ts>
     static auto& ComponentAtDense(const Tuple<ComponentPool<Ts>*...>& pools, u32 denseIndex)noexcept{
-        return Get<I>(pools)->m_components[denseIndex];
+        return MakeNotNull(Get<I>(pools))->m_components[denseIndex];
     }
 };
 
@@ -292,7 +292,7 @@ private:
         const usize poolSize = pool->size();
         if(poolSize < m_count){
             m_count = poolSize;
-            m_anchorEntities = ECSDetail::ViewTupleAccess::EntityVector<I>(m_pools);
+            m_anchorEntities = &ECSDetail::ViewTupleAccess::EntityVector<I>(m_pools);
             m_anchorPoolIndex = I;
         }
     }

@@ -306,7 +306,7 @@ template<typename AssetRootVector>
         return MakeUnexpected(Failure{});
     }
 
-    const ::Path<Alloc::ScratchArena> normalizedSourcePath = matchedSourcePath->lexicallyNormal();
+    const ::Path<Alloc::ScratchArena> normalizedSourcePath = MakeNotNull(matchedSourcePath)->lexicallyNormal();
     return PathToString(arena, normalizedSourcePath);
 }
 

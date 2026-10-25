@@ -22,7 +22,7 @@ NWB_CORE_BEGIN
 
 
 Bool X11TextInputService::OnPreeditStart(XIC context, const XPointer data, XPointer){
-    auto& service = *reinterpret_cast<X11TextInputService*>(data);
+    auto& service = *MakeNotNull(reinterpret_cast<X11TextInputService*>(data));
     if(service.m_resetting || context != service.m_context || service.m_nativeToken != service.activeSession())
         return 0;
     service.m_preedit.clear();
@@ -32,7 +32,7 @@ Bool X11TextInputService::OnPreeditStart(XIC context, const XPointer data, XPoin
 }
 
 Bool X11TextInputService::OnPreeditDone(XIC context, const XPointer data, XPointer){
-    auto& service = *reinterpret_cast<X11TextInputService*>(data);
+    auto& service = *MakeNotNull(reinterpret_cast<X11TextInputService*>(data));
     if(service.m_resetting || context != service.m_context || service.m_nativeToken != service.activeSession())
         return 0;
     service.m_preedit.clear();
@@ -41,10 +41,10 @@ Bool X11TextInputService::OnPreeditDone(XIC context, const XPointer data, XPoint
 }
 
 Bool X11TextInputService::OnPreeditDraw(XIC context, const XPointer data, const XPointer callData){
-    auto& service = *reinterpret_cast<X11TextInputService*>(data);
+    auto& service = *MakeNotNull(reinterpret_cast<X11TextInputService*>(data));
     if(service.m_resetting || context != service.m_context || service.m_nativeToken != service.activeSession() || !callData)
         return 0;
-    const auto& draw = *reinterpret_cast<const XIMPreeditDrawCallbackStruct*>(callData);
+    const auto& draw = *MakeNotNull(reinterpret_cast<const XIMPreeditDrawCallbackStruct*>(callData));
     if(draw.chg_first < 0 || draw.chg_length < 0 || draw.caret < 0){
         service.nativeFailure();
         return 0;
@@ -69,10 +69,10 @@ Bool X11TextInputService::OnPreeditDraw(XIC context, const XPointer data, const 
 }
 
 Bool X11TextInputService::OnPreeditCaret(XIC context, const XPointer data, const XPointer callData){
-    auto& service = *reinterpret_cast<X11TextInputService*>(data);
+    auto& service = *MakeNotNull(reinterpret_cast<X11TextInputService*>(data));
     if(service.m_resetting || context != service.m_context || service.m_nativeToken != service.activeSession() || !callData)
         return 0;
-    auto& caret = *reinterpret_cast<XIMPreeditCaretCallbackStruct*>(callData);
+    auto& caret = *MakeNotNull(reinterpret_cast<XIMPreeditCaretCallbackStruct*>(callData));
     const AStringView text = service.m_preedit.text();
     usize position = 0u;
     usize current = 0u;

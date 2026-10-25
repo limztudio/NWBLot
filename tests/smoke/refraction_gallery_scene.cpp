@@ -130,8 +130,8 @@ public:
         const auto entity = CreateTintedStaticMeshEntity(m_world, m_context.objectArena, mesh, m_preview ? s_Preview : s_Glass, s_Interface, tint, position, scale);
 
         NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("RefractionSmokeProject: gallery object creation failed"));
-        auto* transform = m_world.tryGetComponent<Impl::Scene::TransformComponent>(entity);
-        StoreFloat(QuaternionRotationRollPitchYaw(pitch, yaw, roll), transform->rotation);
+        auto& transform = *MakeNotNull(m_world.tryGetComponent<Impl::Scene::TransformComponent>(entity));
+        StoreFloat(QuaternionRotationRollPitchYaw(pitch, yaw, roll), transform.rotation);
         if(!m_preview){
             auto& renderer = m_world.entity(entity).getComponent<Impl::RendererComponent>();
             renderer.opticalVolumeGroup = opticalGroup;
@@ -282,8 +282,8 @@ public:
     void panel(const SmokeMaterialRef& material, const Float4& tint, const f32 x, const f32 y, const f32 z, const f32 halfWidth, const f32 halfHeight){
         const auto entity = CreateTintedStaticMeshEntity(m_world, m_context.objectArena, s_Plane, material, s_Interface, tint, Float4(x, y, z, 0.0f), Float4(halfWidth, 1.0f, halfHeight, 0.0f));
         NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("RefractionSmokeProject: gallery backdrop creation failed"));
-        auto* transform = m_world.tryGetComponent<Impl::Scene::TransformComponent>(entity);
-        StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), transform->rotation);
+        auto& transform = *MakeNotNull(m_world.tryGetComponent<Impl::Scene::TransformComponent>(entity));
+        StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), transform.rotation);
     }
 
     void backdrop(){

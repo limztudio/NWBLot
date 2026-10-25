@@ -103,7 +103,7 @@ public:
 };
 
 [[nodiscard]] static Expected<Core::GpuTaskId> DeclareProbe(void* userData, Core::GpuTaskGraph& graph){
-    const auto& payload = *static_cast<const ProbeTask::Payload*>(userData);
+    const auto& payload = *MakeNotNull(static_cast<const ProbeTask::Payload*>(userData));
     payload.stage = NWB_TEXT("buffer imports");
     const auto import = [&graph](const Core::BufferHandle& buffer, const AStringView label, const Core::ResourceStates::Mask state){
         return graph.importBuffer(buffer, Core::GpuGraphResourceDesc{}.setIdentity(buffer->getCreationDescription().debugName).setMarkerLabel(label).setType(Core::GpuGraphResourceType::Buffer).setInitialState(state).setExternalFinalState(state));

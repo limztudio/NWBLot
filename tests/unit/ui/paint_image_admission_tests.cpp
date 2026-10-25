@@ -187,8 +187,8 @@ TEST_F(PaintImageFixture, SamePathFreshVersionsCoexistWhileCopiedHandlesUseOneSl
     SharedImageSource copy = first;
     const u64 firstGeneration = first->generation();
     const u64 secondGeneration = second->generation();
-    const auto* firstPointer = first.get();
-    const auto* secondPointer = second.get();
+    const auto firstPointer = MakeNotNull(first.get());
+    const auto secondPointer = MakeNotNull(second.get());
     Array<SharedImageSource, 4u> candidates{ first, copy, second, first };
     ASSERT_TRUE(m_builder.prepareTextureImages(candidates.data(), candidates.size()));
     ASSERT_TRUE(m_builder.prepareTextureImages(&copy, 1u));
@@ -199,8 +199,8 @@ TEST_F(PaintImageFixture, SamePathFreshVersionsCoexistWhileCopiedHandlesUseOneSl
     copy.reset();
     const DrawSnapshot actual = m_builder.freeze();
     ASSERT_EQ(actual.textureImages().size(), 2u);
-    EXPECT_EQ(actual.textureImages()[0u].get(), firstPointer);
-    EXPECT_EQ(actual.textureImages()[1u].get(), secondPointer);
+    EXPECT_EQ(actual.textureImages()[0u].get(), firstPointer.get());
+    EXPECT_EQ(actual.textureImages()[1u].get(), secondPointer.get());
     EXPECT_EQ(actual.textureImages()[0u]->generation(), firstGeneration);
     EXPECT_EQ(actual.textureImages()[1u]->generation(), secondGeneration);
     EXPECT_EQ(actual.textureImages()[0u]->identity(), actual.textureImages()[1u]->identity());

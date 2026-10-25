@@ -141,7 +141,7 @@ void WaylandFrameInput::OnSeatCapabilities(void* data, wl_seat* seat, u32 capabi
     };
     static const wl_keyboard_listener s_KeyboardListener = { &OnKeyboardKeymap, &OnKeyboardEnter, &OnKeyboardLeave, &OnKeyboardKey, &OnKeyboardModifiers, &OnKeyboardRepeatInfo, };
 
-    auto& frameInput = *static_cast<WaylandFrameInput*>(data);
+    auto& frameInput = *MakeNotNull(static_cast<WaylandFrameInput*>(data));
 
     if((capabilities & WL_SEAT_CAPABILITY_POINTER) != 0u){
         if(!frameInput.m_pointer){
@@ -197,7 +197,7 @@ void WaylandFrameInput::OnPointerEnter(void* data, wl_pointer* pointer, u32 seri
     static_cast<void>(serial);
     static_cast<void>(surface);
 
-    auto& frameInput = *static_cast<WaylandFrameInput*>(data);
+    auto& frameInput = *MakeNotNull(static_cast<WaylandFrameInput*>(data));
     const SIMDVectorDouble pixelCoordinates = SurfaceCoordinatesToPixels(VectorDoubleSet(wl_fixed_to_double(sx), wl_fixed_to_double(sy), 0.0, 0.0), VectorDoubleReplicate(static_cast<f64>(FrameDetail::ClampBufferScale(frameInput.m_bufferScale))));
     frameInput.m_frame.input().mousePosUpdate(VectorDoubleGetX(pixelCoordinates), VectorDoubleGetY(pixelCoordinates));
 }
@@ -207,7 +207,7 @@ void WaylandFrameInput::OnPointerLeave(void* data, wl_pointer* pointer, u32 seri
     static_cast<void>(serial);
     static_cast<void>(surface);
 
-    auto& frameInput = *static_cast<WaylandFrameInput*>(data);
+    auto& frameInput = *MakeNotNull(static_cast<WaylandFrameInput*>(data));
     frameInput.m_frame.input().pointerLeave();
     // The compositor retains pointer focus during the implicit grab; leave terminates any remaining grab.
     frameInput.m_frame.input().pointerCaptureLost();
@@ -219,7 +219,7 @@ void WaylandFrameInput::OnPointerMotion(void* data, wl_pointer* pointer, u32 tim
     static_cast<void>(pointer);
     static_cast<void>(time);
 
-    auto& frameInput = *static_cast<WaylandFrameInput*>(data);
+    auto& frameInput = *MakeNotNull(static_cast<WaylandFrameInput*>(data));
     const SIMDVectorDouble pixelCoordinates = SurfaceCoordinatesToPixels(VectorDoubleSet(wl_fixed_to_double(sx), wl_fixed_to_double(sy), 0.0, 0.0), VectorDoubleReplicate(static_cast<f64>(FrameDetail::ClampBufferScale(frameInput.m_bufferScale))));
     frameInput.m_frame.input().mousePosUpdate(VectorDoubleGetX(pixelCoordinates), VectorDoubleGetY(pixelCoordinates));
 }
@@ -230,7 +230,7 @@ void WaylandFrameInput::OnPointerButton(void* data, wl_pointer* pointer, u32 ser
     static_cast<void>(pointer);
     static_cast<void>(time);
 
-    auto& frameInput = *static_cast<WaylandFrameInput*>(data);
+    auto& frameInput = *MakeNotNull(static_cast<WaylandFrameInput*>(data));
     frameInput.m_inputSerial = serial;
     if(IClipboardService* const clipboard = frameInput.m_frame.tryClipboard())
         ObserveWaylandClipboardInputSerial(*clipboard, serial);
@@ -246,7 +246,7 @@ void WaylandFrameInput::OnPointerAxis(void* data, wl_pointer* pointer, u32 time,
     static_cast<void>(pointer);
     static_cast<void>(time);
 
-    auto& frameInput = *static_cast<WaylandFrameInput*>(data);
+    auto& frameInput = *MakeNotNull(static_cast<WaylandFrameInput*>(data));
     frameInput.m_scrollPending = true;
 
     const SIMDVectorDouble delta = VectorDoubleReplicate(wl_fixed_to_double(value));
@@ -261,7 +261,7 @@ void WaylandFrameInput::OnPointerAxis(void* data, wl_pointer* pointer, u32 time,
 
 void WaylandFrameInput::OnPointerFrame(void* data, wl_pointer* pointer){
     static_cast<void>(pointer);
-    static_cast<WaylandFrameInput*>(data)->dispatchScroll();
+    MakeNotNull(static_cast<WaylandFrameInput*>(data))->dispatchScroll();
 }
 
 void WaylandFrameInput::OnPointerAxisSource(void* data, wl_pointer* pointer, u32 axisSource)noexcept{
@@ -280,7 +280,7 @@ void WaylandFrameInput::OnPointerAxisStop(void* data, wl_pointer* pointer, u32 t
 void WaylandFrameInput::OnPointerAxisDiscrete(void* data, wl_pointer* pointer, u32 axis, i32 discrete)noexcept{
     static_cast<void>(pointer);
 
-    auto& frameInput = *static_cast<WaylandFrameInput*>(data);
+    auto& frameInput = *MakeNotNull(static_cast<WaylandFrameInput*>(data));
     frameInput.m_scrollPending = true;
 
     if(axis == WL_POINTER_AXIS_HORIZONTAL_SCROLL)
@@ -312,7 +312,7 @@ void WaylandFrameInput::OnKeyboardKeymap(void* data, wl_keyboard* keyboard, u32 
 
     static_cast<void>(keyboard);
 
-    auto& frameInput = *static_cast<WaylandFrameInput*>(data);
+    auto& frameInput = *MakeNotNull(static_cast<WaylandFrameInput*>(data));
 
     if(format != WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1){
         ReleaseKeymapResources(fd, nullptr, 0u);
@@ -356,7 +356,7 @@ void WaylandFrameInput::OnKeyboardEnter(void* data, wl_keyboard* keyboard, u32 s
     static_cast<void>(serial);
     static_cast<void>(keys);
 
-    auto& frameInput = *static_cast<WaylandFrameInput*>(data);
+    auto& frameInput = *MakeNotNull(static_cast<WaylandFrameInput*>(data));
     if(surface != frameInput.m_surface)
         return;
     frameInput.m_keyboardFocused = true;
@@ -374,7 +374,7 @@ void WaylandFrameInput::OnKeyboardLeave(void* data, wl_keyboard* keyboard, u32 s
     static_cast<void>(keyboard);
     static_cast<void>(serial);
 
-    auto& frameInput = *static_cast<WaylandFrameInput*>(data);
+    auto& frameInput = *MakeNotNull(static_cast<WaylandFrameInput*>(data));
     if(surface != frameInput.m_surface)
         return;
     frameInput.m_keyboardFocused = false;
@@ -396,7 +396,7 @@ void WaylandFrameInput::OnKeyboardKey(void* data, wl_keyboard* keyboard, u32 ser
     static_cast<void>(keyboard);
     static_cast<void>(time);
 
-    auto& frameInput = *static_cast<WaylandFrameInput*>(data);
+    auto& frameInput = *MakeNotNull(static_cast<WaylandFrameInput*>(data));
     frameInput.m_inputSerial = serial;
     if(IClipboardService* const clipboard = frameInput.m_frame.tryClipboard())
         ObserveWaylandClipboardInputSerial(*clipboard, serial);
@@ -437,7 +437,7 @@ void WaylandFrameInput::OnKeyboardModifiers(void* data, wl_keyboard* keyboard, u
     static_cast<void>(keyboard);
     static_cast<void>(serial);
 
-    auto& frameInput = *static_cast<WaylandFrameInput*>(data);
+    auto& frameInput = *MakeNotNull(static_cast<WaylandFrameInput*>(data));
     if(frameInput.m_xkbState)
         xkb_state_update_mask(frameInput.m_xkbState, depressed, latched, locked, 0, 0, group);
 }
@@ -445,7 +445,7 @@ void WaylandFrameInput::OnKeyboardModifiers(void* data, wl_keyboard* keyboard, u
 void WaylandFrameInput::OnKeyboardRepeatInfo(void* data, wl_keyboard* keyboard, i32 rate, i32 delay)noexcept{
     static_cast<void>(keyboard);
 
-    auto& frameInput = *static_cast<WaylandFrameInput*>(data);
+    auto& frameInput = *MakeNotNull(static_cast<WaylandFrameInput*>(data));
     frameInput.m_repeatRate = rate;
     frameInput.m_repeatDelayMs = delay;
 

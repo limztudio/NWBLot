@@ -82,10 +82,7 @@ static NWB::Impl::RendererSystem& CreateReflectionRenderer(NWB::Core::ECS::World
     const AStringView caseName = hasCase ? AStringView(caseText->data(), caseText->size()) : AStringView{};
     if(hasCase && (caseName == "temporal_deform" || caseName == "rough_deform")){
         AddSmokeSkinnedRenderSystems(world, context);
-        auto* rendererPtr = world.getSystem<NWB::Impl::RendererSystem>();
-        NWB_FATAL_ASSERT(rendererPtr);
-        NWB::Impl::RendererSystem& renderer = *rendererPtr;
-        return renderer;
+        return *MakeNotNull(world.getSystem<NWB::Impl::RendererSystem>());
     }
     return AddSmokeRenderSystems(world, context);
 }
@@ -575,7 +572,7 @@ private:
             options.quitWhenReady = false;
             options.predicateContext = this;
             options.shouldCapture = [](void* owner, const u64 graphicsFrame)noexcept{
-                return static_cast<ReflectionSmokeProject*>(owner)->shouldCapture(graphicsFrame);
+                return MakeNotNull(static_cast<ReflectionSmokeProject*>(owner))->shouldCapture(graphicsFrame);
             };
         }
         constexpr u32 s_DefaultCaptureFrameCount = 16u;

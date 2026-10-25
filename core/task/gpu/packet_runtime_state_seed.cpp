@@ -300,7 +300,7 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
             }
             usize firstBranch = 0u;
             if(!scratch.initialStateSeed.valid()){
-                if(!scratch.initialStateSeed.copyFrom(*branches[0u]))
+                if(!scratch.initialStateSeed.copyFrom(*MakeNotNull(branches[0u])))
                     return MakeUnexpected(Failure{});
                 firstBranch = 1u;
             }

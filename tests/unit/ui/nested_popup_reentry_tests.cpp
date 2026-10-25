@@ -43,9 +43,8 @@ public:
         observeCallback();
         ++m_metadataCalls;
         if(m_revisionBuilder){
-            Builder* builder = m_revisionBuilder;
-            m_revisionBuilder = nullptr;
-            attempt(*builder, ReentryKind::Panel);
+            Builder& builder = *MakeNotNull(Exchange(m_revisionBuilder, nullptr));
+            attempt(builder, ReentryKind::Panel);
         }
         return contentRevision;
     }
@@ -75,17 +74,14 @@ public:
         observeCallback();
         const StringView value = ComboSource::text(index);
         if(m_textBuilder){
-            Builder* builder = m_textBuilder;
-            m_textBuilder = nullptr;
-            attempt(*builder, m_kind);
+            Builder& builder = *MakeNotNull(Exchange(m_textBuilder, nullptr));
+            attempt(builder, m_kind);
         }
         if(m_armSource){
-            ReentrySource* source = m_armSource;
-            Builder* builder = m_armBuilder;
-            m_armSource = nullptr;
-            m_armBuilder = nullptr;
+            ReentrySource& source = *MakeNotNull(Exchange(m_armSource, nullptr));
+            Builder* builder = Exchange(m_armBuilder, nullptr);
             ++m_arms;
-            source->m_revisionBuilder = builder;
+            source.m_revisionBuilder = builder;
         }
         return value;
     }

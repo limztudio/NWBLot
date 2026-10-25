@@ -144,9 +144,8 @@ private:
             NWB_LOGGER_ERROR(NWB_TEXT("RefractionSmokeProject: query diagnostics require a hardware density framebuffer capture with timing, lifecycle, and frame freeze disabled"));
             return false;
         }
-        auto* const renderer = m_world->getSystem<NWB::Impl::RendererSystem>();
-        NWB_FATAL_ASSERT(renderer);
-        renderer->setRefractionDiagnosticsEnabled(true);
+        auto& renderer = *MakeNotNull(m_world->getSystem<NWB::Impl::RendererSystem>());
+        renderer.setRefractionDiagnosticsEnabled(true);
         return true;
     }
 
@@ -169,9 +168,8 @@ private:
         constexpr u64 s_RequiredTargetFrames = 16u;
         if(currentFrame - *m_diagnosticsTargetStart < s_RequiredTargetFrames)
             return;
-        const auto* const renderer = m_world->getSystem<NWB::Impl::RendererSystem>();
-        NWB_FATAL_ASSERT(renderer);
-        const auto result = renderer->tryGetLatestRefractionStatistics();
+        const auto& renderer = *MakeNotNull(m_world->getSystem<NWB::Impl::RendererSystem>());
+        const auto result = renderer.tryGetLatestRefractionStatistics();
         if(!result)
             return;
         const auto& statistics = *result;
@@ -262,7 +260,7 @@ private:
         if(m_diagnosticsEnabled){
             options.predicateContext = this;
             options.shouldCapture = [](void* owner, const u64 graphicsFrame)noexcept{
-                const auto& project = *static_cast<RefractionSmokeProject*>(owner);
+                const auto& project = *MakeNotNull(static_cast<RefractionSmokeProject*>(owner));
                 return project.m_diagnosticsReported && graphicsFrame > project.m_diagnosticsSourceFrame;
             };
         }
@@ -276,9 +274,9 @@ private:
     NWB::Core::ECS::EntityID createPanel(const SmokeMaterialRef& material, const Float4& tint, const Float4& position, const Float4& scale){
         const auto entity = CreateTintedStaticMeshEntity(*m_world, m_context.objectArena, s_PlaneMesh, material, s_MaterialInterface, tint, position, scale);
         NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("RefractionSmokeProject: panel creation failed"));
-        auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
+        auto& transform = *MakeNotNull(m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity));
         // The plane starts in XZ with a +Y normal; face the camera along -Z.
-        StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), transform->rotation);
+        StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), transform.rotation);
         return entity;
     }
 
@@ -368,11 +366,10 @@ private:
 
     void applyLifecyclePhase(){
         const auto& phase = s_LifecyclePhases[m_lifecyclePhase];
-        auto* const transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(m_glass);
-        auto* const renderer = m_world->getSystem<NWB::Impl::RendererSystem>();
-        NWB_FATAL_ASSERT(transform && renderer);
-        transform->position = Float4(phase.glassX, 1.4f, 0.0f, 0.0f);
-        renderer->setRefractionEnabled(phase.enabled);
+        auto& transform = *MakeNotNull(m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(m_glass));
+        auto& renderer = *MakeNotNull(m_world->getSystem<NWB::Impl::RendererSystem>());
+        transform.position = Float4(phase.glassX, 1.4f, 0.0f, 0.0f);
+        renderer.setRefractionEnabled(phase.enabled);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionLifecycle: phase {} applied"), StringConvert(phase.name));
     }
 

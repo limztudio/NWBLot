@@ -181,9 +181,8 @@ void RendererTaskTimingFeedbackState::retirePendingSample(const usize pendingInd
 
 
 void RendererTaskTimingFeedback::OnGpuTimingSampleCallback(void* const context, const Core::GpuTimingSample& sample)noexcept{
-    RendererTaskTimingFeedback* const feedback = static_cast<RendererTaskTimingFeedback*>(context);
-    NWB_ASSERT(feedback);
-    feedback->onGpuTimingSample(sample);
+    auto& feedback = *MakeNotNull(static_cast<RendererTaskTimingFeedback*>(context));
+    feedback.onGpuTimingSample(sample);
 }
 
 

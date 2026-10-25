@@ -37,9 +37,8 @@ UiLayerSmokeProject::~UiLayerSmokeProject()noexcept{
 }
 
 bool UiLayerSmokeProject::onStartup(){
-    auto* const layer = m_world->getSystem<Impl::UiLayerSystem>();
-    NWB_ASSERT(layer);
-    m_context.graphics.addRenderPassToBack(*layer);
+    auto& layer = *MakeNotNull(m_world->getSystem<Impl::UiLayerSystem>());
+    m_context.graphics.addRenderPassToBack(layer);
     FramebufferCaptureOptions captureOptions;
     if(ReadSmokeEnvironmentFlag("NWB_UI_LAYER_RESIZE_CAPTURE")){
         captureOptions.requiredWidth = 800u;

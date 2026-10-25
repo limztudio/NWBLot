@@ -214,16 +214,16 @@ public:
 
         size = AlignmentPowerOfTwo(align, size);
 
-        Chunk* chunk = bucket.active;
-        const usize oldSize = chunk->lifoTopSpan(p);
+        Chunk& chunk = *bucket.active;
+        const usize oldSize = chunk.lifoTopSpan(p);
         NWB_ASSERT_MSG(oldSize != 0, NWB_TEXT("ScratchArena can only reallocate its most-recent allocation"));
         if(oldSize == 0)
             return nullptr;
 
-        if(chunk->tryResizeLifoTop(MakeNotNull(p), size)){
+        if(chunk.tryResizeLifoTop(MakeNotNull(p), size)){
             m_memoryStats.recordReallocation(oldSize, size);
-            if(chunk->m_remaining == chunk->m_size)
-                cacheEmptyChunk(bucket, *chunk, nullptr);
+            if(chunk.m_remaining == chunk.m_size)
+                cacheEmptyChunk(bucket, chunk, nullptr);
             return p;
         }
 
@@ -232,10 +232,10 @@ public:
             return nullptr;
 
         NWB_MEMCPY(next, size, p, oldSize);
-        if(chunk->tryPopLifo(p, oldSize)){
+        if(chunk.tryPopLifo(p, oldSize)){
             m_memoryStats.recordDeallocation(oldSize);
-            if(chunk->m_remaining == chunk->m_size)
-                cacheEmptyChunk(bucket, *chunk, bucket.active);
+            if(chunk.m_remaining == chunk.m_size)
+                cacheEmptyChunk(bucket, chunk, bucket.active);
         }
         return next;
     }
@@ -253,11 +253,11 @@ public:
             return;
 
         size = AlignmentPowerOfTwo(align, size);
-        Chunk* chunk = bucket.active;
-        if(chunk->tryPopLifo(p, size)){
+        Chunk& chunk = *bucket.active;
+        if(chunk.tryPopLifo(p, size)){
             m_memoryStats.recordDeallocation(size);
-            if(chunk->m_remaining == chunk->m_size)
-                cacheEmptyChunk(bucket, *chunk, nullptr);
+            if(chunk.m_remaining == chunk.m_size)
+                cacheEmptyChunk(bucket, chunk, nullptr);
         }
     }
 

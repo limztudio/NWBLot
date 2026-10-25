@@ -151,7 +151,7 @@ struct SRGBClearEdgeInputs{
 
 [[nodiscard]] static Expected<NWB::Core::GpuTaskId> DeclareSRGBClearEdges(void* const userData, NWB::Core::GpuTaskGraph& graph){
     using namespace NWB::Core;
-    const auto& inputs = *static_cast<const SRGBClearEdgeInputs*>(userData);
+    const auto& inputs = *MakeNotNull(static_cast<const SRGBClearEdgeInputs*>(userData));
     const auto texture = graph.importTexture(inputs.texture, GpuGraphResourceDesc{}.setIdentity(Name("tests.smoke.texture.srgb_edges")).setMarkerLabel("sRGB clear edge texture").setType(GpuGraphResourceType::Texture).setInitialState(ResourceStates::Unknown));
     const auto readback = graph.importHazardDomain(GpuGraphResourceDesc{}.setIdentity(Name(s_ReadbackResourcePath)).setMarkerLabel("sRGB clear edge staging writes").setType(GpuGraphResourceType::HazardDomain));
     if(!texture || !readback)

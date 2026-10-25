@@ -328,7 +328,7 @@ TEST(MetadataExtensionOwnership, EraseClearAndGrowthDestroyEveryConcretePayloadO
     {
         ParsedAssetMetadata metadata(arena);
         const Name firstName(s_FirstMetadataName);
-        AlignedExtension* const first = &RequireParsedMetadataExtension<AlignedExtension>(metadata, firstName, arena, state);
+        const NotNull<AlignedExtension*> first = MakeNotNull(&RequireParsedMetadataExtension<AlignedExtension>(metadata, firstName, arena, state));
         for(usize index = 0u; index < 80u; ++index){
             const AssetString nameText = StringFormat(arena, "tests/metadata_extension/growth_{}", index);
             const auto nameResult = ToName(nameText);
@@ -337,7 +337,7 @@ TEST(MetadataExtensionOwnership, EraseClearAndGrowthDestroyEveryConcretePayloadO
             const AlignedExtension& created = RequireParsedMetadataExtension<AlignedExtension>(metadata, **nameResult, arena, state);
             EXPECT_EQ(created.identity, index + s_ExpectedDualCount);
         }
-        EXPECT_EQ(FindParsedMetadataExtension<AlignedExtension>(metadata, firstName), first);
+        EXPECT_EQ(FindParsedMetadataExtension<AlignedExtension>(metadata, firstName), first.get());
         EXPECT_EQ(metadata.extensions.erase(firstName), 1u);
         EXPECT_EQ(state.destructions, 1u);
         metadata.extensions.clear();
@@ -361,24 +361,24 @@ TEST(MetadataExtensionOwnership, MapMoveAndReplacementUseEachOriginalObjectArena
     {
         ParsedMetadataExtensionMap firstMap(0u, Hasher<Name>{}, EqualTo<Name>{}, firstMapArena);
         ParsedMetadataExtension first = MakeParsedMetadataExtension<AlignedExtension>(firstOwnerArena, firstOwnerArena, firstState);
-        void* const firstAddress = first.get();
+        const NotNull<void*> firstAddress = MakeNotNull(first.get());
         ASSERT_TRUE(firstMap.try_emplace(firstName, Move(first)).second);
         ParsedMetadataExtensionMap movedMap(Move(firstMap));
-        EXPECT_EQ(movedMap.at(firstName).get(), firstAddress);
+        EXPECT_EQ(movedMap.at(firstName).get(), firstAddress.get());
         EXPECT_TRUE(firstMap.empty());
         ParsedMetadataExtensionMap secondMap(0u, Hasher<Name>{}, EqualTo<Name>{}, secondMapArena);
         ASSERT_TRUE(secondMap.try_emplace(otherName, MakeParsedMetadataExtension<TextExtension>(secondOwnerArena, secondOwnerArena, secondState)).second);
         secondMap = Move(movedMap);
         EXPECT_EQ(secondState.destructions, 1u);
         EXPECT_EQ(secondOwnerArena.memoryStats().usedBytes, 0u);
-        EXPECT_EQ(secondMap.at(firstName).get(), firstAddress);
+        EXPECT_EQ(secondMap.at(firstName).get(), firstAddress.get());
         EXPECT_TRUE(movedMap.empty());
         secondMap.at(firstName) = MakeParsedMetadataExtension<TextExtension>(secondOwnerArena, secondOwnerArena, secondState);
         EXPECT_EQ(firstState.destructions, 1u);
         EXPECT_EQ(firstState.memberDestructions, 1u);
         EXPECT_EQ(firstOwnerArena.memoryStats().usedBytes, 0u);
         ASSERT_GT(secondOwnerArena.memoryStats().usedBytes, 0u);
-        EXPECT_EQ(static_cast<TextExtension*>(secondMap.at(firstName).get())->strings.size(), s_ExpectedDualCount);
+        EXPECT_EQ(MakeNotNull(static_cast<TextExtension*>(secondMap.at(firstName).get()))->strings.size(), s_ExpectedDualCount);
     }
     EXPECT_EQ(firstState.destructions, 1u);
     EXPECT_EQ(secondState.destructions, s_ExpectedDualCount);
@@ -394,12 +394,12 @@ TEST(MetadataExtensionOwnership, RequireRefillsAnExplicitlyMovedOutOwner){
     {
         ParsedAssetMetadata metadata(arena);
         const Name name(s_MovedSlotMetadataName);
-        AlignedExtension* const first = &RequireParsedMetadataExtension<AlignedExtension>(metadata, name, arena, state);
+        const NotNull<AlignedExtension*> first = MakeNotNull(&RequireParsedMetadataExtension<AlignedExtension>(metadata, name, arena, state));
         ParsedMetadataExtension detached = Move(metadata.extensions.at(name));
-        EXPECT_EQ(detached.get(), first);
+        EXPECT_EQ(detached.get(), first.get());
         EXPECT_EQ(FindParsedMetadataExtension<AlignedExtension>(metadata, name), nullptr);
         AlignedExtension& replacement = RequireParsedMetadataExtension<AlignedExtension>(metadata, name, arena, state);
-        EXPECT_NE(&replacement, first);
+        EXPECT_NE(&replacement, first.get());
         EXPECT_EQ(replacement.identity, s_ExpectedDualCount);
         EXPECT_EQ(metadata.extensions.size(), 1u);
         detached.reset();

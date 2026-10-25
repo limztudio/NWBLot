@@ -61,7 +61,7 @@ void X11ClipboardService::receiveSelection(const XSelectionEvent& event){
             finishOperation(ClipboardStatus::InvalidText);
             return;
         }
-        const unsigned long lowerBound = *reinterpret_cast<const unsigned long*>(property->bytes);
+        const unsigned long lowerBound = *MakeNotNull(reinterpret_cast<const unsigned long*>(property->bytes));
         if(lowerBound > s_ClipboardMaxTextBytes){
             finishOperation(ClipboardStatus::TooLarge);
             return;

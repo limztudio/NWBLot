@@ -596,9 +596,8 @@ Expected<CookString> BuildMaterialBindIncludeSourceImpl(CookArena& arena, const 
     }
 
     for(const MaterialBindInstance& instance : entry.instances){
-        const MaterialBindStruct* bindStruct = entry.findStruct(AStringView(instance.type));
-        NWB_ASSERT(bindStruct);
-        if(!AppendMaterialBindGeneratedInstance(AStringView(includePath), instance, *bindStruct, layout, scratchArena, generatedSymbols, source))
+        const MaterialBindStruct& bindStruct = *MakeNotNull(entry.findStruct(AStringView(instance.type)));
+        if(!AppendMaterialBindGeneratedInstance(AStringView(includePath), instance, bindStruct, layout, scratchArena, generatedSymbols, source))
             return MakeUnexpected(Failure{});
     }
 

@@ -110,7 +110,7 @@ void RendererRayTracingSystem::preflightLightSpaceShadowResources(){
             if(completedValue && *completedValue >= submission.value){
                 const Expected<void*> mappedFailures = device.mapBuffer(*diagnostics.readback, Core::CpuAccessMode::Read);
                 if(mappedFailures){
-                    const u32 failureFlags = *static_cast<const u32*>(*mappedFailures);
+                    const u32 failureFlags = *MakeNotNull(static_cast<const u32*>(*mappedFailures));
                     device.unmapBuffer(*diagnostics.readback);
                     const u32 newFailures = failureFlags & ~diagnostics.reportedFailures;
                     diagnostics.reportedFailures |= failureFlags;

@@ -167,8 +167,8 @@ void WaylandClipboardService::pumpNativeRequests(){
             m_writers.erase(m_writers.begin() + static_cast<isize>(index - 1u));
     }
     for(usize index = m_offers.size(); index > 0u; --index){
-        Offer* const offer = m_offers[index - 1u].get();
-        if(offer != m_selected[0] && offer != m_selected[1] && now >= TimerAddMS(offer->created, s_TimeoutMs))
+        const Offer& offer = *m_offers[index - 1u];
+        if(&offer != m_selected[0] && &offer != m_selected[1] && now >= TimerAddMS(offer.created, s_TimeoutMs))
             m_offers.erase(m_offers.begin() + static_cast<isize>(index - 1u));
     }
     if(wl_display_flush(&m_display) < 0 && errno != EAGAIN && m_readToken.valid())
@@ -261,15 +261,15 @@ Expected<GlobalUniquePtr<IClipboardService>> CreateWaylandClipboardService(Alloc
 }
 
 void AttachWaylandClipboardSeat(IClipboardService& service, wl_seat* const seat, const u32 seatGlobalName){
-    checked_cast<WaylandClipboardService*>(&service)->attachSeat(seat, seatGlobalName);
+    MakeNotNull(checked_cast<WaylandClipboardService*>(&service))->attachSeat(seat, seatGlobalName);
 }
 
 void ObserveWaylandClipboardInputSerial(IClipboardService& service, const u32 serial)noexcept{
-    checked_cast<WaylandClipboardService*>(&service)->observeSerial(serial);
+    MakeNotNull(checked_cast<WaylandClipboardService*>(&service))->observeSerial(serial);
 }
 
 void SetWaylandClipboardKeyboardFocus(IClipboardService& service, const bool focused)noexcept{
-    checked_cast<WaylandClipboardService*>(&service)->setKeyboardFocus(focused);
+    MakeNotNull(checked_cast<WaylandClipboardService*>(&service))->setKeyboardFocus(focused);
 }
 
 

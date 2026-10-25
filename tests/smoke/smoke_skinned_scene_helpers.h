@@ -134,9 +134,7 @@ inline void DestroySmokeSkinnedRenderWorld(ProjectRuntimeContext& context, NotNu
     if(!world.owner())
         return;
 
-    auto* meshSkinningSystemPtr = world->getSystem<Impl::MeshSkinningSystem>();
-    NWB_ASSERT(meshSkinningSystemPtr);
-    Impl::MeshSkinningSystem& meshSkinningSystem = *meshSkinningSystemPtr;
+    Impl::MeshSkinningSystem& meshSkinningSystem = *MakeNotNull(world->getSystem<Impl::MeshSkinningSystem>());
     context.graphics.removeRenderPass(meshSkinningSystem);
 
     RemoveSmokeRendererSystem(context, *world);
@@ -144,9 +142,7 @@ inline void DestroySmokeSkinnedRenderWorld(ProjectRuntimeContext& context, NotNu
 }
 
 inline void SyncSmokeModelRuntimes(Core::ECS::World& world){
-    auto* modelSystemPtr = world.getSystem<Impl::ModelSystem>();
-    NWB_ASSERT(modelSystemPtr);
-    Impl::ModelSystem& modelSystem = *modelSystemPtr;
+    Impl::ModelSystem& modelSystem = *MakeNotNull(world.getSystem<Impl::ModelSystem>());
     modelSystem.syncModelRuntimes();
 }
 

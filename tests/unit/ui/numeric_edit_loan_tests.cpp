@@ -27,9 +27,8 @@ public:
 public:
     [[nodiscard]] virtual u64 revision()const override{
         if(onRevision){
-            IntegerEditModel* model = onRevision;
-            onRevision = nullptr;
-            mutationApplied = model->setValue(99);
+            IntegerEditModel& model = *MakeNotNull(Exchange(onRevision, nullptr));
+            mutationApplied = model.setValue(99);
         }
         return contentRevision;
     }
@@ -37,9 +36,8 @@ public:
     [[nodiscard]] virtual StringView text(const u64 index)const override{
         const StringView result = ComboSource::text(index);
         if(onText){
-            IntegerEditModel* model = onText;
-            onText = nullptr;
-            mutationApplied = model->setValue(99);
+            IntegerEditModel& model = *MakeNotNull(Exchange(onText, nullptr));
+            mutationApplied = model.setValue(99);
         }
         if(armSource){
             armSource->onRevision = armModel;

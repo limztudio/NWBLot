@@ -264,7 +264,7 @@ public:
 };
 
 [[nodiscard]] static Expected<Core::GpuTaskId> DeclareBatch(void* userData, Core::GpuTaskGraph& graph){
-    const auto& payload = *static_cast<const ProbeBatchTask::Payload*>(userData);
+    const auto& payload = *MakeNotNull(static_cast<const ProbeBatchTask::Payload*>(userData));
     const auto import = [&graph](const Core::BufferHandle& buffer, const AStringView label, const Core::ResourceStates::Mask state){
         Core::GpuGraphResourceDesc desc;
         desc.setIdentity(buffer->getCreationDescription().debugName).setMarkerLabel(label).setType(Core::GpuGraphResourceType::Buffer).setInitialState(state).setExternalFinalState(state);

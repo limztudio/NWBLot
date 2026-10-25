@@ -666,9 +666,7 @@ public:
         m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
         if(m_frameLaggedAsyncLightingToggleInput.consumeToggleRequest()){
-            auto* const rendererSystemPtr = m_world->getSystem<NWB::Impl::RendererSystem>();
-            NWB_FATAL_ASSERT_MSG(rendererSystemPtr, NWB_TEXT("FrameLaggedAsyncLightingSmokeProject renderer system disappeared"));
-            NWB::Impl::RendererSystem& rendererSystem = *rendererSystemPtr;
+            NWB::Impl::RendererSystem& rendererSystem = *MakeNotNull(m_world->getSystem<NWB::Impl::RendererSystem>());
             m_frameLaggedAsyncLightingEnabled = !m_frameLaggedAsyncLightingEnabled;
             rendererSystem.setFrameLaggedAsyncLightingEnabled(m_frameLaggedAsyncLightingEnabled);
             if(m_frameLaggedAsyncLightingEnabled)

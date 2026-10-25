@@ -315,7 +315,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
         case WM_MEASUREITEM:
         {
-            auto& mis = *reinterpret_cast<LPMEASUREITEMSTRUCT>(lParam);
+            auto& mis = *MakeNotNull(reinterpret_cast<LPMEASUREITEMSTRUCT>(lParam));
             ScopedLock lock(s_ListMutex);
             if(IsMessageIndexValid(mis.itemID)){
                 const auto& curStr = s_Store->messages[static_cast<usize>(mis.itemID)];
@@ -373,7 +373,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
         case WM_DRAWITEM:
         {
-            auto& dis = *reinterpret_cast<LPDRAWITEMSTRUCT>(lParam);
+            auto& dis = *MakeNotNull(reinterpret_cast<LPDRAWITEMSTRUCT>(lParam));
             ScopedLock lock(s_ListMutex);
             if(IsMessageIndexValid(dis.itemID)){
                 const auto& curData = s_Store->messages[static_cast<usize>(dis.itemID)];

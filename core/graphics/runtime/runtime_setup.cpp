@@ -91,7 +91,7 @@ struct BufferSetupSubmissionData{
 };
 
 [[nodiscard]] static Expected<GpuTaskId> DeclareBufferSetupUpload(void* const userData, GpuTaskGraph& graph){
-    auto& submissionData = *static_cast<BufferSetupSubmissionData*>(userData);
+    auto& submissionData = *MakeNotNull(static_cast<BufferSetupSubmissionData*>(userData));
     const auto destinationResult = graph.importBuffer(
         submissionData.buffer,
         GpuGraphResourceDesc{}
@@ -141,7 +141,7 @@ struct TextureSetupSubmissionData{
 };
 
 [[nodiscard]] static Expected<GpuTaskId> DeclareTextureSetupUpload(void* const userData, GpuTaskGraph& graph){
-    auto& submissionData = *static_cast<TextureSetupSubmissionData*>(userData);
+    auto& submissionData = *MakeNotNull(static_cast<TextureSetupSubmissionData*>(userData));
     const auto destinationResult = graph.importTexture(
         submissionData.texture,
         GpuGraphResourceDesc{}

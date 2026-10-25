@@ -48,11 +48,11 @@ struct NameSymbolCallbackProbe{
 public:
     NameSymbolCallbackProbe()noexcept{
         SetNameSymbolRecordCallback([](const NameHash&, AStringView, void* context)noexcept{
-            ++static_cast<NameSymbolCallbackProbe*>(context)->recordCount;
+            ++MakeNotNull(static_cast<NameSymbolCallbackProbe*>(context))->recordCount;
         }, this
         );
         SetNameSymbolResolveCallback([](char*, usize, const NameHash&, void* context)noexcept{
-            ++static_cast<NameSymbolCallbackProbe*>(context)->resolveCount;
+            ++MakeNotNull(static_cast<NameSymbolCallbackProbe*>(context))->resolveCount;
             return false;
         }, this
         );
@@ -174,12 +174,12 @@ TEST(Global, DiagnosticNameTextNeverInvokesForeignSymbolCallbacks){
     const Name binary{ComputeNameHash(MakeNotNull("diagnostic/binary"))};
     NameSymbolCallbackProbe probe;
     SetNameSymbolRecordCallback([](const NameHash&, AStringView, void* context){
-        ++static_cast<NameSymbolCallbackProbe*>(context)->recordCount;
+        ++MakeNotNull(static_cast<NameSymbolCallbackProbe*>(context))->recordCount;
         throw 17u;
     }, &probe
     );
     SetNameSymbolResolveCallback([](char*, usize, const NameHash&, void* context)->bool{
-        ++static_cast<NameSymbolCallbackProbe*>(context)->resolveCount;
+        ++MakeNotNull(static_cast<NameSymbolCallbackProbe*>(context))->resolveCount;
         throw 29u;
     }, &probe
     );
@@ -329,7 +329,7 @@ TEST(Global, RuntimeNameFactoryPreservesRecursiveRecorderGuard){
     NameSymbolCallbackProbe restoreCallbacks;
     RecursiveProbe probe;
     SetNameSymbolRecordCallback([](const NameHash&, AStringView, void* context)noexcept{
-        auto& state = *static_cast<RecursiveProbe*>(context);
+        auto& state = *MakeNotNull(static_cast<RecursiveProbe*>(context));
         ++state.recordCount;
         const auto nested = Name::FromText(AStringView(s_RecursiveInnerName));
         state.nestedAccepted = nested && nested->identityHash() == ComputeNameHash(MakeNotNull(s_RecursiveInnerName.data()));

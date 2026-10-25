@@ -24,7 +24,7 @@ NWB_IMPL_BEGIN
 bool FontAtlasAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
     if(!checkSerializeAssetType(asset, NWB_TEXT("FontAtlasAssetCodec::serialize")))
         return false;
-    const FontAtlas& atlas = *checked_cast<const FontAtlas*>(&asset);
+    const FontAtlas& atlas = *MakeNotNull(checked_cast<const FontAtlas*>(&asset));
     if(!atlas.checkVirtualPath(s_FontAtlasValidatePayloadContext))
         return false;
     Core::Alloc::ScratchArena scratchArena(AssetsFontAtlasArenaScope::s_SerializeArena);

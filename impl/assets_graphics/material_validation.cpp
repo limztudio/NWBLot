@@ -63,7 +63,7 @@ namespace AssetsGraphicsCookDetail{
 
 
 bool ValidateMaterials(ShaderCook& shaderCook, const PreparedShaderVector& preparedEntries, const ShaderCook::CookVector<MaterialCookEntry>& materialEntries, ScratchArena& scratchArena){
-    HashMap<ShaderStageKey, const PreparedShaderEntry*, ScratchArena, ShaderStageKeyHasher, EqualTo<ShaderStageKey>> preparedShaderLookup(0, ShaderStageKeyHasher(), EqualTo<ShaderStageKey>(), scratchArena);
+    HashMap<ShaderStageKey, NotNull<const PreparedShaderEntry*>, ScratchArena, ShaderStageKeyHasher, EqualTo<ShaderStageKey>> preparedShaderLookup(0, ShaderStageKeyHasher(), EqualTo<ShaderStageKey>(), scratchArena);
     preparedShaderLookup.reserve(preparedEntries.size());
     for(const PreparedShaderEntry& preparedEntry : preparedEntries){
         const auto shaderName = ToName(preparedEntry.entry.name);
@@ -77,7 +77,7 @@ bool ValidateMaterials(ShaderCook& shaderCook, const PreparedShaderVector& prepa
             return false;
         }
         const ShaderStageKey shaderKey{ *shaderName ? **shaderName : s_NameNone, *stageName ? **stageName : s_NameNone };
-        if(!preparedShaderLookup.emplace(shaderKey, &preparedEntry).second){
+        if(!preparedShaderLookup.emplace(shaderKey, MakeNotNull(&preparedEntry)).second){
             NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: duplicate prepared shader key '{}' stage '{}'"), StringConvert(preparedEntry.entry.name), StringConvert(preparedEntry.entry.archiveStage));
             return false;
         }

@@ -83,7 +83,7 @@ void UiLayerSystem::requestSkin(const Core::Assets::AssetRef<UiSkin>& skin)noexc
 void UiLayerSystem::prepare(Core::ECS::World& world){
     static_cast<void>(world);
     synchronizeInput();
-    const UiSkinChangeResult::Enum skinChange = m_skinSelection.applyChangeIfReady(m_resourcesReady, m_renderer.hasPendingFrame(), m_context.ready(), [this](const Core::Assets::AssetRef<UiSkin>& ref, const u64 generation){
+    const UiSkinChangeResult::Enum skinChange = m_skinSelection.applyChangeIfReady(m_resourcesReady, m_renderer.hasPendingFrame(), m_context.ready(), defaultSkin(), [this](const Core::Assets::AssetRef<UiSkin>& ref, const u64 generation){
         const Core::Assets::AssetRef<UiSkin> resolvedRef = resolveSkin(ref);
         auto candidateAsset = m_assetManager.loadTypedSync<UiSkin>(resolvedRef.name(), s_UiLayerSystemOwnerName, s_UiSkinAssetKindText);
         const UiSkin* skin = candidateAsset ? candidateAsset->get() : nullptr;
@@ -111,7 +111,7 @@ bool UiLayerSystem::validateResources(const u32 width, const u32 height, const u
         m_renderer.setActiveSceneSubsystems(m_activeSceneSubsystems);
     }
     if(!m_activeSceneSubsystems->hasSubsystem<UiSubsystem>()){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: active scene does not include required subsystem '{}'"), ConvertString(BuiltInSubsystems::s_UiText));
+        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: active scene does not include required subsystem '{}'"), ConvertString(UiSubsystem::s_AssetTypeText));
         return false;
     }
 
@@ -123,7 +123,7 @@ bool UiLayerSystem::validateResources(const u32 width, const u32 height, const u
     if(!m_renderer.validateResources(width, height))
         return false;
 
-    const UiSkinSelectionResult::Enum selection = m_skinSelection.ensure([this](const Core::Assets::AssetRef<UiSkin>& ref){
+    const UiSkinSelectionResult::Enum selection = m_skinSelection.ensure(defaultSkin(), [this](const Core::Assets::AssetRef<UiSkin>& ref){
         const Core::Assets::AssetRef<UiSkin> resolvedRef = resolveSkin(ref);
         if(ref == m_skinSelection.selected() && m_skinAsset){
             const UiSkin* skin = Core::Assets::CastAsset<UiSkin>(m_skinAsset.get());
@@ -205,4 +205,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

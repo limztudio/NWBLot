@@ -33,6 +33,11 @@
 #include <impl/assets/graphics/bvh/binding_slots.h>
 #include <impl/assets/graphics/bvh/constants.h>
 #include <impl/assets/graphics/gi/surfel/surfel_binding_slots.h>
+#include <impl/assets_graphics/bvh/subsystem.h>
+#include <impl/assets_graphics/gi/subsystem.h>
+#include <impl/assets_graphics/refractive/subsystem.h>
+#include <impl/assets_graphics/shadow/subsystem.h>
+#include <impl/assets_graphics/transparent/subsystem.h>
 #include <impl/assets_mesh/asset.h>
 #include <impl/assets/graphics/avboit/binding_slots.h>
 #include <impl/assets/graphics/avboit/constants.h>

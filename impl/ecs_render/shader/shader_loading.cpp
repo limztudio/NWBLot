@@ -4,6 +4,7 @@
 
 #include "shader_system.h"
 
+#include <impl/assets_graphics/deferred/subsystem.h>
 #include <impl/assets_shader/loader.h>
 
 #include <core/graphics/shader_archive.h>

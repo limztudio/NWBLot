@@ -11,6 +11,7 @@
 #include "skin_selection.h"
 
 #include <impl/assets_scene/asset.h>
+#include <impl/assets_ui_skin/subsystem.h>
 #include <impl/ecs_ui/toolkit/input/pointer.h>
 #include <impl/ecs_ui/toolkit/gpu/renderer.h>
 
@@ -133,14 +134,18 @@ private:
     void routePointerInput(const Ui::PointerInput& input, bool* consumed = nullptr);
     void synchronizeNativeInput();
     [[nodiscard]] bool loadFonts(Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] Core::Assets::AssetRef<UiSkin> resolveSkin(const Core::Assets::AssetRef<UiSkin>& ref)const noexcept{
+    [[nodiscard]] Core::Assets::AssetRef<UiSkin> defaultSkin()const noexcept{
         if(!m_activeSceneSubsystems)
             return {};
         const UiSubsystem* const uiSubsystem = m_activeSceneSubsystems->findSubsystem<UiSubsystem>();
-        if(!uiSubsystem)
+        return uiSubsystem ? uiSubsystem->defaultSkin : Core::Assets::AssetRef<UiSkin>{};
+    }
+    [[nodiscard]] Core::Assets::AssetRef<UiSkin> resolveSkin(const Core::Assets::AssetRef<UiSkin>& ref)const noexcept{
+        const Core::Assets::AssetRef<UiSkin> fallbackSkin = defaultSkin();
+        if(!fallbackSkin.valid())
             return {};
-        if(!ref.valid() || ref == s_DefaultUiSkinRef || ref == uiSubsystem->defaultSkin)
-            return uiSubsystem->defaultSkin;
+        if(!ref.valid() || ref == fallbackSkin)
+            return fallbackSkin;
         return m_activeSceneSubsystems->findSceneAsset<UiSkin>(ref.name());
     }
     [[nodiscard]] Core::Assets::AssetRef<Font> resolveFont(const Core::Assets::AssetRef<Font>& ref)const noexcept{
@@ -208,4 +213,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

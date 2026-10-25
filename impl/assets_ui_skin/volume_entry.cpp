@@ -10,7 +10,9 @@
 
 #include "cook.h"
 #include "binary_payload.h"
+#include "subsystem.h"
 
+#include <impl/assets_subsystem/cook.h>
 #include <impl/assets_texture/asset.h>
 
 #include <core/assets/cook_dependency_registry.h>
@@ -46,17 +48,23 @@ static bool ExtractUiSkinDependencies(const Core::Assets::CookDependencyItemCont
 }
 
 static bool RegisterUiSkinCookEntry(Core::Assets::CookEntryRegistry& registry){
-    return Core::Assets::RegisterSingleDocumentCookEntry<UiSkinCookEntry, UiSkin, UiSkinAssetCodec>(
-        registry,
-        UiSkinBinaryPayload::s_UiSkinAssetKindLabel,
-        &ParseUiSkinDocument,
-        [](UiSkinCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){ return BuildUiSkinAsset(entry, arena); },
-        false
-    );
+    return
+        Core::Assets::RegisterSingleDocumentCookEntry<UiSkinCookEntry, UiSkin, UiSkinAssetCodec>(
+            registry,
+            UiSkinBinaryPayload::s_UiSkinAssetKindLabel,
+            &ParseUiSkinDocument,
+            [](UiSkinCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){ return BuildUiSkinAsset(entry, arena); },
+            false
+        )
+        && AssetsSubsystemCook::RegisterSubsystemCookEntry<UiSubsystem>(registry)
+    ;
 }
 
 static bool RegisterUiSkinCookDependency(Core::Assets::CookDependencyRegistry& registry){
-    return registry.registerType(UiSkin::AssetTypeName(), &ExtractUiSkinDependencies);
+    return
+        registry.registerType(UiSkin::AssetTypeName(), &ExtractUiSkinDependencies)
+        && AssetsSubsystemCook::RegisterSubsystemCookDependency<UiSubsystem>(registry)
+    ;
 }
 
 
@@ -86,4 +94,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

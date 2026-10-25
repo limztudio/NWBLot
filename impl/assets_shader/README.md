@@ -41,7 +41,7 @@ Dependency checksums also record whether any compiler input has a UTF-8 BOM. Inp
 
 Use `Core::Assets::AssetRef<ComputeShader>` or the required concrete type for a known stage. `ShaderAssetLoader::Load<ComputeShader>(...)` derives the stage from that type. A heterogeneous material stage array uses `AssetRef<IShader>`, while known AVBOIT pixel bindings use `AssetRef<PixelShader>`. `LoadForStage(...)` handles genuinely dynamic physical-stage requests. `IShader` is abstract and is not registered as a generic loadable asset.
 
-Archive stage names also describe roles. `mesh_compute` selects `ComputeShader` payloads; `mesh_object_vertex` selects a `VertexShader` payload. An explicit archive role selects the lookup key without changing the concrete type's physical stage. Materials continue to author the supported `mesh` and `ps` stage map.
+Archive stage names also describe roles. `mesh_compute` selects `ComputeShader` payloads. An explicit archive role selects the lookup key without changing the concrete type's physical stage. Materials continue to author the supported `mesh` and `ps` stage map.
 
 Loading validates the current payload, bounded SPIR-V instruction stream, and exact entry point for the concrete physical stage before publishing the asset's state. A wrong-stage or malformed payload fails without replacing previously loaded entry-point or bytecode storage. Validation reads byte views directly, including unaligned payload offsets, without copying into a temporary word vector. Backend shader-module creation retains its own validation through the selected graphics API. Rendering accesses the admitted common data directly; it adds no per-frame virtual stage dispatch.
 

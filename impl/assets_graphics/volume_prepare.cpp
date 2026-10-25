@@ -13,11 +13,12 @@
 #include "shader_volume_writer.h"
 
 #include <impl/assets_csg/cook.h>
-#include <impl/assets_graphics/mesh/names.h>
+#include <impl/assets_graphics/mesh/subsystem.h>
 #include <impl/assets_material/cook.h>
 #include <impl/assets_material/shader_stage_names.h>
 #include <impl/assets_shader/shader_types.h>
 #include <impl/assets_shader/cook.h>
+#include <impl/assets_subsystem/cook.h>
 
 #include <core/assets/volume/volume_prepare_registry.h>
 #include <core/assets/cook_metadata.h>
@@ -287,9 +288,15 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
         return false;
     const Path& shadowSurfaceIncludeRoot = *shadowSurfaceIncludeRootResult;
 
+    AStringView sharedMeshShaderText;
+    if(const Core::Assets::ICookEntryBucket* const meshSubsystemBucket = context.parsedMetadata.entryRegistry.find(MeshSubsystem::AssetTypeName()); meshSubsystemBucket && meshSubsystemBucket->size() > 0u){
+        const auto& meshSubsystemEntries = context.parsedMetadata.entryRegistry.entries<SubsystemCookEntry<MeshSubsystem>>(MeshSubsystem::AssetTypeName());
+        sharedMeshShaderText = meshSubsystemEntries[0u].subsystem.sharedMs.name().resolvedText();
+    }
+
     // Generate per-`surface` G-buffer PS (pixel = generated, mesh = shared), synthesize shader entries like authored ones. Before shader prep + ValidateMaterials.
     auto& materialCookArena = materialEntries.get_allocator().arena();
-    auto generatedPixelShadersResult = EmitMaterialPixelShaders(context.resolvedPaths.cacheDirectory, context.configurationSafeName, AssetsGraphicsMesh::s_SharedMeshShaderText, materialCookArena, context.scratchArena, materialEntries);
+    auto generatedPixelShadersResult = EmitMaterialPixelShaders(context.resolvedPaths.cacheDirectory, context.configurationSafeName, sharedMeshShaderText, materialCookArena, context.scratchArena, materialEntries);
     if(!generatedPixelShadersResult)
         return false;
 
@@ -436,4 +443,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

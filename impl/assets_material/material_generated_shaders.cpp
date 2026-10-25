@@ -81,10 +81,14 @@ Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShadersImpl(
     }
     generatedShaders.reserve(generatedShaderCount);
 
-    const auto sharedMeshShaderNameId = ToName(sharedMeshShaderName);
-    if(!sharedMeshShaderNameId || !*sharedMeshShaderNameId){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material pixel shader generation: invalid shared mesh shader name '{}'"), ConvertString(sharedMeshShaderName));
-        return MakeUnexpected(Failure{});
+    Name sharedMeshShaderNameId = s_NameNone;
+    if(generatedShaderCount > 0u){
+        const auto parsedSharedMeshShaderNameId = ToName(sharedMeshShaderName);
+        if(!parsedSharedMeshShaderNameId || !*parsedSharedMeshShaderNameId){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material pixel shader generation: invalid shared mesh shader name '{}'"), ConvertString(sharedMeshShaderName));
+            return MakeUnexpected(Failure{});
+        }
+        sharedMeshShaderNameId = **parsedSharedMeshShaderNameId;
     }
 
     const ScratchPath generatedRoot = ScratchPath(scratchArena, cacheDirectory) / configurationSafeName / s_GeneratedCacheDirectory / "material_pixel_shaders";
@@ -148,7 +152,7 @@ Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShadersImpl(
         Core::Assets::AssetRef<IShader> pixelShaderRef;
         pixelShaderRef.virtualPath = **pixelShaderName;
         Core::Assets::AssetRef<IShader> meshShaderRef;
-        meshShaderRef.virtualPath = **sharedMeshShaderNameId;
+        meshShaderRef.virtualPath = sharedMeshShaderNameId;
         if(!entry.stageShaders.emplace(Core::ShaderType::PixelStage, pixelShaderRef).second || !entry.stageShaders.emplace(Core::ShaderType::MeshStage, meshShaderRef).second){
             NWB_LOGGER_ERROR(NWB_TEXT("Material cook: failed to assign generated stage shaders for material '{}'"), ConvertString(AStringView(entry.virtualPath)));
             return MakeUnexpected(Failure{});
@@ -338,4 +342,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

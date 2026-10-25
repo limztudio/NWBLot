@@ -2,4 +2,5 @@ mesh_subsystem asset;
 
 asset.emulation_vs = "engine/graphics/mesh/emulation_vs";
 asset.object_decode_cs = "engine/graphics/mesh/object_decode_cs";
+asset.object_vs = "engine/graphics/mesh/object_vs";
 asset.shared_ms = "engine/graphics/mesh/shared_ms";

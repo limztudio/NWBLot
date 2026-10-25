@@ -1,17 +1,10 @@
 renderer_subsystem asset;
 
-asset.subsystems = [
-    "engine/subsystems/mesh",
-    "engine/subsystems/deferred",
-    "engine/subsystems/bvh",
-    "engine/subsystems/shadow",
-    "engine/subsystems/gi",
-    "engine/subsystems/reflection"
+asset.basic_samplers = [
+    "engine/samplers/linear_clamp",
+    "engine/samplers/linear_mirror",
+    "engine/samplers/linear_wrap",
+    "engine/samplers/nearest_clamp",
+    "engine/samplers/nearest_mirror",
+    "engine/samplers/nearest_wrap",
 ];
-
-asset.linear_clamp = "engine/samplers/linear_clamp";
-asset.linear_mirror = "engine/samplers/linear_mirror";
-asset.linear_wrap = "engine/samplers/linear_wrap";
-asset.nearest_clamp = "engine/samplers/nearest_clamp";
-asset.nearest_mirror = "engine/samplers/nearest_mirror";
-asset.nearest_wrap = "engine/samplers/nearest_wrap";

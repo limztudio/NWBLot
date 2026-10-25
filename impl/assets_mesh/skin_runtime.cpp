@@ -5,6 +5,7 @@
 #include "skin_asset.h"
 #include "skin_binary_payload.h"
 #include "skin_validation.h"
+#include "subsystem.h"
 
 #include <core/assets/auto_registration.h>
 #include <core/assets/binary_payload_io.h>
@@ -27,6 +28,7 @@ namespace __hidden_skin_runtime{
 
 
 NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SkinAssetCodecAutoRegistrar, SkinAssetCodec);
+NWB_DEFINE_SUBSYSTEM_ASSET_REGISTRAR(s_SkinningSubsystemAssetAutoRegistrar, SkinningSubsystem);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

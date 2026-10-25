@@ -110,7 +110,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             "${CMAKE_CURRENT_LIST_DIR}/reflection_quality_settings.h"
         )
         set_target_properties("${TARGET_NAME}" PROPERTIES DEBUGGER_WORKING_DIRECTORY "${RUNTIME_ROOT}" WIN32_EXECUTABLE ON VS_DEBUGGER_WORKING_DIRECTORY "${RUNTIME_ROOT}")
-        nwb_target_link_libraries_whole_archive("${TARGET_NAME}" nwb_assets_mesh nwb_assets_skeleton nwb_assets_model nwb_assets_material nwb_assets_shader nwb_assets_texture nwb_assets_sampler nwb_assets_subsystem nwb_assets_scene)
+        nwb_target_link_libraries_whole_archive("${TARGET_NAME}" nwb_assets_mesh nwb_assets_skeleton nwb_assets_model nwb_assets_material nwb_assets_shader nwb_assets_texture nwb_assets_sampler nwb_assets_subsystem nwb_assets_scene nwb_assets_graphics)
         target_link_libraries("${TARGET_NAME}" PRIVATE nwb_common nwb_alloc nwb_loader nwb_ecs_scene nwb_ecs_mesh nwb_ecs_render nwb_ecs_model_renderer nwb_assets_graphics ${ARGN})
         if(TARGET nwb_logserver)
             add_dependencies("${TARGET_NAME}" nwb_logserver)

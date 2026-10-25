@@ -361,7 +361,7 @@ Expected<usize> DependencyProviderCatalog::resolve(
 
     if(matched == Limit<usize>::s_Max){
         if(assetType)
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: no typed '{}' provider for '{}'"), ConvertString(assetType), ConvertString(virtualPath));
+            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: no typed '{}' provider for '{}'"), ConvertString(assetType), ConvertString(virtualPathText));
         else
             NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: no provider for '{}'"), ConvertString(virtualPath));
         return MakeUnexpected(Failure{});

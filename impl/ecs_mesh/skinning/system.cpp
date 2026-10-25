@@ -145,10 +145,6 @@ bool MeshSkinningSystem::validateResources(const u32 width, const u32 height, co
             return false;
         m_activeSceneSubsystems = &m_defaultSceneSubsystems;
     }
-    if(!m_activeSceneSubsystems->hasSubsystem<RendererSubsystem>()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: active scene does not include required subsystem '{}'"), ConvertString(BuiltInSubsystems::s_RendererText));
-        return false;
-    }
     if(!isSkinningFeatureEnabled())
         return true;
 

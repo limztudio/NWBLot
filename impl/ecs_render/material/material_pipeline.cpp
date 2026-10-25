@@ -8,12 +8,15 @@
 #include <impl/ecs_render/material/material_shader_variants_private.h>
 #include <impl/ecs_render/material/renderer_material_state.h>
 #include <impl/ecs_render/shader/shader_system.h>
+#include <impl/assets_graphics/csg/subsystem.h>
+#include <impl/assets_graphics/mesh/subsystem.h>
 #include <impl/assets_material/shader_stage_names.h>
 #include <impl/ecs_csg/shape_registry.h>
 
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
 #include <core/graphics/shader_archive.h>
+#include <core/graphics/shader_stage_names.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -213,8 +216,8 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
     const AStringView meshShaderVariant = csgClipPipeline ? AStringView(csgShaderVariant) : shaderVariant;
 
     const Name sharedMeshShaderAssetName = m_shaderSystem.resolveSubsystemAsset<MeshSubsystem>(&MeshSubsystem::sharedMs);
+    const Name objectVertexShaderAssetName = m_shaderSystem.resolveSubsystemAsset<MeshSubsystem>(&MeshSubsystem::objectVs);
     const bool sharedObjectGeometry = sharedMeshShaderAssetName && materialInfo.meshShader.name() == sharedMeshShaderAssetName && shaderVariant == Core::ShaderArchive::s_DefaultVariant;
-    const AStringView objectGeometryShaderVariant = sharedObjectGeometry ? shaderVariant : meshShaderVariant;
 
     Core::ShaderHandle passPixelShader;
     Name passPixelShaderName = s_NameNone;
@@ -301,7 +304,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
     };
 
     auto tryBuildIndexedPipeline = [&]() -> bool{
-        if(!createObjectGeometryPipelineResources(materialInfo.meshShader.name(), objectGeometryShaderVariant, resources))
+        if(!createObjectGeometryPipelineResources(resources))
             return false;
         if(!loadPassPixelShader())
             return false;
@@ -398,8 +401,9 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
         return MakeNotNull(&resources);
     }
 
-    const bool indexedAvailable = (pipelineKey.csgMode == MaterialPipelineCsgMode::None || sharedObjectGeometry)
-        && m_shaderSystem.hasShaderArchiveStage(materialInfo.meshShader.name(), objectGeometryShaderVariant, MaterialShaderStageNames::s_MeshObjectVertexArchiveStageName)
+    const bool indexedAvailable = sharedObjectGeometry
+        && objectVertexShaderAssetName
+        && m_shaderSystem.hasShaderArchiveStage(objectVertexShaderAssetName, Core::ShaderArchive::s_DefaultVariant, Core::ShaderStageNames::ArchiveStageNameFromShaderType(Core::ShaderType::VertexStage))
     ;
     if(indexedAvailable){
         if(!tryBuildIndexedPipeline())
@@ -489,4 +493,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

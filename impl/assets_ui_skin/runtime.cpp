@@ -4,6 +4,7 @@
 
 #include "asset.h"
 #include "binary_payload.h"
+#include "subsystem.h"
 
 #include <impl/assets_texture/asset.h>
 
@@ -31,6 +32,7 @@ namespace __hidden_ui_skin_runtime{
 
 
 NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_UiSkinAssetCodecAutoRegistrar, UiSkinAssetCodec);
+NWB_DEFINE_SUBSYSTEM_ASSET_REGISTRAR(s_UiSubsystemAssetAutoRegistrar, UiSubsystem);
 static_assert(UiSkinColorRole::Count == UiSkinBinaryPayload::s_UiSkinPaletteColorCount, "UI skin palette layout drifted");
 
 

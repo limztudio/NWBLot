@@ -20,6 +20,12 @@ SCENE_NWB = b"""scene asset;\r
 \r
 asset.subsystems = [\r
     "engine/subsystems/renderer",\r
+    "engine/subsystems/mesh",\r
+    "engine/subsystems/deferred",\r
+    "engine/subsystems/bvh",\r
+    "engine/subsystems/shadow",\r
+    "engine/subsystems/gi",\r
+    "engine/subsystems/reflection",\r
     "engine/subsystems/skinning",\r
     "engine/subsystems/transparent",\r
     "engine/subsystems/refractive",\r

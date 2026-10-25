@@ -8,6 +8,7 @@
 #include "history.h"
 
 #include <impl/assets/graphics/reflection/spatial_constants.h>
+#include <impl/assets_graphics/reflection/subsystem.h>
 
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
 #include <core/graphics/rhi/pipeline.h>

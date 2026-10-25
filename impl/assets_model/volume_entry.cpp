@@ -11,8 +11,6 @@
 #include "cook.h"
 #include "binary_payload.h"
 
-#include <impl/assets_subsystem/asset.h>
-
 #include <core/assets/cook_dependency_registry.h>
 #include <core/assets/cook_entry_registry.h>
 
@@ -61,8 +59,6 @@ static bool ExtractModelDependencies(const Core::Assets::CookDependencyItemConte
         if(skinnedMeshObject.material.valid() && !collector.addAssetDependency(skinnedMeshObject.material.name(), Material::AssetTypeName()))
             return false;
     }
-    if(!modelEntry->skinnedMeshObjects.empty() && !collector.addSubsystemDependency(BuiltInSubsystems::s_Skinning.name()))
-        return false;
     return true;
 }
 

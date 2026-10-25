@@ -63,7 +63,7 @@ def generated_contents(mesh_text, surface_text):
     assets_lines = ("," + LIT_N).join(f'    "asset_{idx:03d}": "{item}"' for idx, item in enumerate(sorted(scene_assets)))
     scene_text = (
         "scene asset;\n\n"
-        'asset.subsystems = [\n    "engine/subsystems/renderer",\n    "engine/subsystems/skinning",\n    "engine/subsystems/transparent",\n    "engine/subsystems/refractive"\n];\n\n'
+        'asset.subsystems = [\n    "engine/subsystems/renderer",\n    "engine/subsystems/mesh",\n    "engine/subsystems/deferred",\n    "engine/subsystems/bvh",\n    "engine/subsystems/shadow",\n    "engine/subsystems/gi",\n    "engine/subsystems/reflection",\n    "engine/subsystems/skinning",\n    "engine/subsystems/transparent",\n    "engine/subsystems/refractive"\n];\n\n'
         f"asset.assets = {{\n{assets_lines}\n}};\n"
     )
     result["scenes/main.nwb"] = crlf(scene_text)

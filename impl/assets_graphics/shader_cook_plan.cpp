@@ -11,7 +11,6 @@
 #include "shader_cook_plan.h"
 
 #include "csg_shader_variants.h"
-#include "mesh_object_shader_plan.h"
 
 #include <impl/assets_csg/cook.h>
 #include <impl/assets_material/cook.h>
@@ -43,8 +42,8 @@ namespace __hidden_shader_cook_plan{
 using namespace AssetsGraphicsCookDetail;
 
 static constexpr AStringView s_EnabledImplicitDefineValue = "1";
-// One shader entry can expand to itself, its object-vertex entry, and its mesh-compute shadow entry.
-static constexpr usize s_MaxPreparedEntriesPerShaderEntry = 3u;
+// One shader entry can expand to itself and its mesh-compute shadow entry.
+static constexpr usize s_MaxPreparedEntriesPerShaderEntry = 2u;
 using IncludeDirectoryScratchSet = HashSet<ScratchString, ScratchArena, Hasher<ScratchString>, EqualTo<ScratchString>>;
 using DependencyPathScratchSet = HashSet<ScratchString, ScratchArena, Hasher<ScratchString>, EqualTo<ScratchString>>;
 
@@ -461,8 +460,6 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
         const bool emitMeshComputeShadow = preparedEntry.entry.archiveStage == Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::MeshStage) && preparedEntry.entry.emitMeshComputeShadow;
         const usize meshEntryIndex = plan.preparedEntries.size();
         plan.preparedEntries.push_back(Move(preparedEntry));
-        if(!AppendMeshObjectShaderEntries(resolvedPaths, plan.preparedEntries[meshEntryIndex], cookArena, scratchArena, shaderCook, plan))
-            return MakeUnexpected(Failure{});
 
         if(!emitMeshComputeShadow)
             continue;
@@ -517,4 +514,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

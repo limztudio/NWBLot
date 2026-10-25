@@ -261,15 +261,15 @@ def _run_scene_subsystem_feature_tests(args: argparse.Namespace, root: pathlib.P
 
     _write_metadata(
         subsystem_manifest,
-        'renderer_subsystem asset;\nasset.linear_clamp = "engine/samplers/base";\nasset.linear_mirror = "engine/samplers/base";\nasset.linear_wrap = "engine/samplers/base";\nasset.nearest_clamp = "engine/samplers/base";\nasset.nearest_mirror = "engine/samplers/base";\nasset.nearest_wrap = "engine/samplers/base";\n',
+        'renderer_subsystem asset;\nasset.basic_samplers = [\n    "engine/samplers/base",\n];\n',
     )
     _write_metadata(
         active_fx_subsystem_manifest,
-        'renderer_subsystem asset;\nasset.linear_clamp = "engine/samplers/active_fx";\nasset.linear_mirror = "engine/samplers/active_fx";\nasset.linear_wrap = "engine/samplers/active_fx";\nasset.nearest_clamp = "engine/samplers/active_fx";\nasset.nearest_mirror = "engine/samplers/active_fx";\nasset.nearest_wrap = "engine/samplers/active_fx";\n',
+        'renderer_subsystem asset;\nasset.basic_samplers = [\n    "engine/samplers/active_fx",\n];\n',
     )
     _write_metadata(
         inactive_fx_subsystem_manifest,
-        'renderer_subsystem asset;\nasset.linear_clamp = "engine/samplers/inactive_fx";\nasset.linear_mirror = "engine/samplers/inactive_fx";\nasset.linear_wrap = "engine/samplers/inactive_fx";\nasset.nearest_clamp = "engine/samplers/inactive_fx";\nasset.nearest_mirror = "engine/samplers/inactive_fx";\nasset.nearest_wrap = "engine/samplers/inactive_fx";\n',
+        'renderer_subsystem asset;\nasset.basic_samplers = [\n    "engine/samplers/inactive_fx",\n];\n',
     )
     _write_metadata(
         scene_manifest,

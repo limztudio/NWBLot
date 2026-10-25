@@ -135,7 +135,7 @@ public:
     void logMaterialRenderPathDecision(const Name& materialKey, RenderPath::Enum renderPath, bool meshSupported);
     [[nodiscard]] bool prepareMeshComputeBindingLayout();
     [[nodiscard]] bool createComputeEmulationResources();
-    [[nodiscard]] bool createObjectGeometryPipelineResources(const Name& meshShaderName, AStringView variantName, MaterialPipelineResources& resources);
+    [[nodiscard]] bool createObjectGeometryPipelineResources(MaterialPipelineResources& resources);
     // Graph-owned draw streams are already gathered, patched, and uploaded before native recording. This consumer deliberately performs no mutable mesh-view or material/CSG buffer updates.
     void renderPreparedMaterialPass(
         Core::CommandList& commandList,
@@ -265,4 +265,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

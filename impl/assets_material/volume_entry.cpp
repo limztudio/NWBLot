@@ -11,9 +11,6 @@
 #include "cook.h"
 #include "binary_payload.h"
 
-#include <impl/assets_graphics/mesh/names.h>
-#include <impl/assets_subsystem/asset.h>
-
 #include <core/assets/cook_dependency_registry.h>
 #include <core/assets/cook_entry_registry.h>
 #include <core/assets/paths.h>
@@ -53,15 +50,6 @@ static bool ExtractMaterialDependencies(const Core::Assets::CookDependencyItemCo
     const auto materialEntry = ParseMaterialCookMetadata(context.assetRoot, context.virtualRoot, context.nwbFilePath, *context.document, context.arena, context.scratchArena);
     if(!materialEntry)
         return false;
-
-    if(materialEntry->transparent && !collector.addSubsystemDependency(BuiltInSubsystems::s_Transparent.name()))
-        return false;
-    if(materialEntry->refractive && !collector.addSubsystemDependency(BuiltInSubsystems::s_Refractive.name()))
-        return false;
-    if(!materialEntry->surfaceSource.empty()){
-        if(!collector.addAssetDependency(Name(AssetsGraphicsMesh::s_SharedMeshShaderText)))
-            return false;
-    }
 
     Vector<Name, Core::Alloc::ScratchArena> stageShaderNames(context.scratchArena);
     stageShaderNames.reserve(materialEntry->stageShaders.size());
@@ -135,4 +123,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

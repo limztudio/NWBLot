@@ -106,7 +106,6 @@ TEST(LightSpacePlan, SkipsUnsupportedAndIneligibleCastersWithoutDroppingLaterEli
 }
 
 TEST(LightSpacePlan, RejectsInvalidIdentityWithoutPublishingPartialPlan){
-    Expected<LightSpacePlan> plan;
     SoftwareShadowSettings settings;
     LightSpaceLightRequest requests[9] = { { 0u, 0u }, { 1u, 1u } };
     EXPECT_FALSE(BuildLightSpacePlan(settings, requests, Limit<u32>::s_Max, 20u));

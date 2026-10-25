@@ -31,13 +31,10 @@ int RunPipelineTool(const int argc, char** argv){
     PipelineCommandLine commandLine(PipelineTool::DependencyComputer);
     return commandLine.run(argc, argv, arena, [&](PipelineOptions& parsed){
         NWB::Core::Alloc::ScratchArena scratchArena(__hidden_dependency_computer::s_DependencyComputerArena);
-        Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> resolvedInputs = MakeUnexpected(Failure{});
-        if(parsed.includeSkinDependencies){
-            resolvedInputs = ComputeSkinDependencies(parsed, arena, scratchArena);
-            if(!resolvedInputs)
-                return s_PipelineExitFailure;
-        }
-        const auto& inputs = parsed.includeSkinDependencies ? *resolvedInputs : parsed.inputs;
+        const auto resolvedInputs = ComputeAssetDependencies(parsed, arena, scratchArena);
+        if(!resolvedInputs)
+            return s_PipelineExitFailure;
+        const auto& inputs = *resolvedInputs;
 
         usize outputReserveBytes = 0u;
         for(const auto& input : inputs)
@@ -53,7 +50,7 @@ int RunPipelineTool(const int argc, char** argv){
             NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to write output '{}'"), ConvertString(parsed.outputPath));
             return s_PipelineExitFailure;
         }
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("DependencyComputer: returned {} inputs (skin dependencies: {})"), inputs.size(), parsed.includeSkinDependencies);
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("DependencyComputer: returned {} inputs"), inputs.size());
         return s_PipelineExitSuccess;
     });
 }

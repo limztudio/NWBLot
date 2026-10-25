@@ -46,6 +46,6 @@ if(NWB_BUILD_PIPELINE)
     target_sources(nwb_assets_mesh_volume_entries PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/volume_entries.cpp"
     )
-    target_link_libraries(nwb_assets_mesh_volume_entries PRIVATE nwb_assets_mesh_cook nwb_assets_cook)
+    target_link_libraries(nwb_assets_mesh_volume_entries PRIVATE nwb_assets_mesh_cook nwb_assets_subsystem nwb_assets_cook)
     target_compile_definitions(nwb_assets_mesh_volume_entries PRIVATE NWB_COOK=1)
 endif()

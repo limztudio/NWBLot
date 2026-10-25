@@ -13,7 +13,12 @@ LIT_GENERATION_IDENTITY_JSON = "generation_identity.json"
 LIT_EMPTY = ", "
 LIT_MAIN = "__main__"
 
-MATERIAL = '''material asset;
+PROJECT = """project asset;
+
+asset.start_scene = "project/scenes/main";
+"""
+
+MATERIAL = """material asset;
 
 asset.interface = "project/shaders/smoke_surface.bind";
 asset.surface = "project/shaders/gather_benchmark_glass.surface";
@@ -30,7 +35,7 @@ asset.parameters = {
     },
     "runtime": { "color_tint": "half4(1.0h, 1.0h, 1.0h, 1.0h)" },
 };
-'''
+"""
 
 
 def crlf(text):
@@ -38,10 +43,30 @@ def crlf(text):
 
 
 def generated_contents(mesh_text, surface_text):
-    result = {"shaders/gather_benchmark_glass.surface": crlf(surface_text)}
+    result = {
+        "project.nwb": crlf(PROJECT),
+        "shaders/gather_benchmark_glass.surface": crlf(surface_text),
+    }
+    scene_assets = [
+        "project/characters/body/model",
+        "project/meshes/octahedron",
+        "project/meshes/shadow_plane",
+        "project/smoke/reflection/materials/opaque",
+    ]
     for index in range(64):
-        result[f"smoke/gather_benchmark/meshes/mesh_{index:02d}.nwb"] = crlf(mesh_text)
-        result[f"smoke/gather_benchmark/materials/glass_{index:02d}.nwb"] = crlf(MATERIAL)
+        mesh_rel = f"smoke/gather_benchmark/meshes/mesh_{index:02d}.nwb"
+        mat_rel = f"smoke/gather_benchmark/materials/glass_{index:02d}.nwb"
+        result[mesh_rel] = crlf(mesh_text)
+        result[mat_rel] = crlf(MATERIAL)
+        scene_assets.append("project/" + mesh_rel[:-4])
+        scene_assets.append("project/" + mat_rel[:-4])
+    assets_lines = ("," + LIT_N).join(f'    "asset_{idx:03d}": "{item}"' for idx, item in enumerate(sorted(scene_assets)))
+    scene_text = (
+        "scene asset;\n\n"
+        'asset.subsystems = [\n    "engine/subsystems/renderer"\n];\n\n'
+        f"asset.assets = {{\n{assets_lines}\n}};\n"
+    )
+    result["scenes/main.nwb"] = crlf(scene_text)
     return result
 
 

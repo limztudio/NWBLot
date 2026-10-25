@@ -21,7 +21,7 @@ NWB_IMPL_BEGIN
 
 class UiSkin;
 
-inline constexpr Core::Assets::AssetRef<UiSkin> s_DefaultUiSkinRef{ "engine/ui/skins/default/atlas" };
+inline constexpr Core::Assets::AssetRef<UiSkin> s_DefaultUiSkinRef{ "default_skin" };
 
 namespace UiSkinSelectionResult{
     enum Enum : u8{ Failed, Selected, DefaultFallback };

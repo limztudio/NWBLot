@@ -27,7 +27,7 @@ public:
 
 // First discovery retains the same physical provider and root ownership as AssetBuilder.
 class DependencyProviderCatalog final : NoCopy{
-    friend Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> ComputeSkinDependencies(const PipelineOptions& options, NWB::Core::Assets::AssetArena& arena, NWB::Core::Alloc::ScratchArena& scratchArena);
+    friend Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> ComputeAssetDependencies(const PipelineOptions& options, NWB::Core::Assets::AssetArena& arena, NWB::Core::Alloc::ScratchArena& scratchArena);
 
 
 public:
@@ -39,7 +39,7 @@ public:
     [[nodiscard]] bool discover(const PipelineOptions& options, NWB::Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] Expected<DependencyInputSelection> selectInputs(const PipelineOptions& options, NWB::Core::Alloc::ScratchArena& scratchArena)const;
     [[nodiscard]] Expected<NWB::Core::Metascript::Document> read(usize index, NWB::Core::Alloc::ScratchArena& scratchArena)const;
-    [[nodiscard]] Expected<usize> resolve(const Name& virtualPath, const Name& assetType, NWB::Core::Alloc::ScratchArena& scratchArena)const;
+    [[nodiscard]] Expected<usize> resolve(const Name& virtualPath, const Name& assetType, AStringView virtualPathTextHint, NWB::Core::Alloc::ScratchArena& scratchArena)const;
 
 
 private:

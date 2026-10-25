@@ -23,10 +23,15 @@ TESTBED_BEGIN
 
 class UiSkinPreview final : NoCopy{
 public:
-    UiSkinPreview(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets);
+    explicit UiSkinPreview(NWB::Core::Alloc::GlobalArena& arena);
 
 
 public:
+    [[nodiscard]] bool loadAssets(
+        NWB::Core::Alloc::GlobalArena& arena,
+        const NWB::Core::Assets::AssetManager& assets,
+        const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems
+    );
     [[nodiscard]] Expected<NWB::Impl::Ui::Rect> galleryBounds(NWB::Impl::UiPaintContext& context);
     void paint(NWB::Impl::UiPaintContext& context);
 

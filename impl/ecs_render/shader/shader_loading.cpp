@@ -20,12 +20,14 @@ NWB_IMPL_BEGIN
 
 
 bool RendererShaderSystem::loadShaderForStage(Core::ShaderHandle& outShader, const Name& shaderName, const AStringView variantName, const Core::ShaderType::Mask shaderType, const Name& debugName, const Name* archiveStageName){
-    return ShaderAssetLoader::LoadForStage(outShader, shaderName, variantName, shaderType, debugName, m_graphics, m_assetManager, m_shaderPathResolver, s_RendererAssetOwnerName, archiveStageName);
+    const Name resolvedShaderName = resolveShaderName(shaderName);
+    return ShaderAssetLoader::LoadForStage(outShader, resolvedShaderName, variantName, shaderType, debugName, m_graphics, m_assetManager, m_shaderPathResolver, s_RendererAssetOwnerName, archiveStageName);
 }
 
 
 bool RendererShaderSystem::hasShaderArchiveStage(const Name& shaderName, const AStringView variantName, const Name& stageName)const{
-    return m_shaderPathResolver(shaderName, variantName, stageName).has_value();
+    const Name resolvedShaderName = resolveShaderName(shaderName);
+    return m_shaderPathResolver(resolvedShaderName, variantName, stageName).has_value();
 }
 
 

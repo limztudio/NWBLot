@@ -22,6 +22,8 @@ if(NWB_BUILD_PIPELINE)
     target_sources(nwb_assets_cook PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/input_list.h"
         "${CMAKE_CURRENT_LIST_DIR}/input_list.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/cook_dependency_registry.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/cook_dependency_registry.h"
         "${CMAKE_CURRENT_LIST_DIR}/cook_entry_registry.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/cook_entry_registry.h"
         "${CMAKE_CURRENT_LIST_DIR}/cook_paths.cpp"

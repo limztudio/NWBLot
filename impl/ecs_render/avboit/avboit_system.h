@@ -94,6 +94,7 @@ public:
 
 
 public:
+    [[nodiscard]] bool createAvboitSampler();
     [[nodiscard]] bool createAvboitResources();
     [[nodiscard]] bool createAvboitPipelines();
     void resetAvboitFrameTargets(AvboitFrameTargets& targets);

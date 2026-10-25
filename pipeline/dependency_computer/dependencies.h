@@ -13,8 +13,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Preserves the original inputs exactly and publishes dependency additions only after complete resolution.
-[[nodiscard]] Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> ComputeSkinDependencies(const PipelineOptions& options, NWB::Core::Assets::AssetArena& arena, NWB::Core::Alloc::ScratchArena& scratchArena);
+// Preserves explicit inputs when provided, or discovers the project start scene and resolves transitive asset dependencies.
+[[nodiscard]] Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> ComputeAssetDependencies(const PipelineOptions& options, NWB::Core::Assets::AssetArena& arena, NWB::Core::Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

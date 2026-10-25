@@ -27,6 +27,17 @@ bool RendererFramePipeline::validateResources(const u32 width, const u32 height,
     if(width == 0 || height == 0)
         return true;
 
+    if(!m_activeSceneSubsystems){
+        if(!m_defaultSceneSubsystems.loadProjectStartScene(m_assetManager))
+            return false;
+        m_activeSceneSubsystems = &m_defaultSceneSubsystems;
+        m_shaderSystem.setActiveSceneSubsystems(m_activeSceneSubsystems);
+    }
+    if(!m_activeSceneSubsystems->hasSubsystem(BuiltInSubsystems::s_Renderer)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: active scene does not include required subsystem '{}'"), ConvertString(BuiltInSubsystems::s_RendererText));
+        return false;
+    }
+
     const u32 surfelResolveFactor = static_cast<u32>(m_surfelGiQualitySettings.resolveResolution);
     const u32 shadowReceiverFactor = m_raytracingSystem.requestedShadowReceiverFactor();
     if((m_frameTargets.surfelResolveFactor != 0u && m_frameTargets.surfelResolveFactor != surfelResolveFactor) || (m_frameTargets.shadowReceiverFactor != 0u && m_frameTargets.shadowReceiverFactor != shadowReceiverFactor)){
@@ -56,7 +67,7 @@ bool RendererFramePipeline::validateResources(const u32 width, const u32 height,
             m_avboitSystem.resetAvboitFrameTargets(createdTargets.avboit);
             m_deferredSystem.resetDeferredFrameTargets(createdTargets);
         };
-        if(!m_avboitSystem.createAvboitResources()){
+        if(!m_avboitSystem.createAvboitSampler()){
             resetCreatedTargets();
             return false;
         }
@@ -113,14 +124,20 @@ bool RendererFramePipeline::validateResources(const u32 width, const u32 height,
     if(!m_materialSystem.prepareMaterialPassBindingLayout())
         return false;
 
-    if(!m_avboitSystem.createAvboitPipelines())
+    if(isTransparentFeatureEnabled() && !m_avboitSystem.createAvboitPipelines())
         return false;
 
     if(!m_meshSystem.createMeshViewBuffer())
         return false;
 
-    if(!m_csgSystem.createCsgIntervalPeelResources(*deferredTargets, true))
-        return false;
+    if(isCsgFeatureEnabled()){
+        if(!m_csgSystem.createCsgIntervalPeelResources(*deferredTargets, true))
+            return false;
+    }
+    else{
+        if(!m_csgSystem.createCsgClipResources())
+            return false;
+    }
 
     return true;
 }
@@ -189,7 +206,8 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_PrepareArena);
     m_meshSystem.pruneRuntimeMeshResources(scratchArena);
-    m_preparedHasTransparentRenderers = m_materialSystem.prepareVisibleMaterialSurfaceInfos();
+    const bool hasVisibleTransparentRenderers = m_materialSystem.prepareVisibleMaterialSurfaceInfos();
+    m_preparedHasTransparentRenderers = isTransparentFeatureEnabled() && hasVisibleTransparentRenderers;
     m_materialSystem.prepareVisibleMaterialInstanceMutableCache();
     m_preparedCsgFrameState = CsgFrameState{};
     m_preparedCsgFrameStateValid = false;
@@ -204,7 +222,7 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
         m_opticalVolumes.prepare(m_world, m_materialSystem, scratchArena);
     else
         m_opticalVolumes.reset();
-    m_preparedCsgFrameState = HasCsgFrameCandidates(m_world) ? m_csgSystem.buildFrameState(scratchArena, m_materialSystem) : CsgFrameState{};
+    m_preparedCsgFrameState = (isCsgFeatureEnabled() && HasCsgFrameCandidates(m_world)) ? m_csgSystem.buildFrameState(scratchArena, m_materialSystem) : CsgFrameState{};
     m_preparedCsgFrameStateValid = true;
     const bool hasCsgFrameWork = !m_preparedCsgFrameState.empty();
     if(!m_reflectionSystem.prepareResources(deferredTargets.width, deferredTargets.height, m_graphics.queryFeatureSupport(Core::Feature::RayQuery), hasCsgFrameWork && m_graphics.queryFeatureSupport(Core::Feature::RayQuery), m_reflectionSettings))

@@ -85,7 +85,7 @@ target_sources(nwb_ui_layer_smoke PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/../framebuffer_capture.cpp"
 )
 set_target_properties(nwb_ui_layer_smoke PROPERTIES WIN32_EXECUTABLE ON DEBUGGER_WORKING_DIRECTORY "${_nwb_ui_smoke_runtime_root}" VS_DEBUGGER_WORKING_DIRECTORY "${_nwb_ui_smoke_runtime_root}")
-nwb_target_link_libraries_whole_archive(nwb_ui_layer_smoke nwb_assets_shader nwb_assets_texture nwb_assets_ui_skin nwb_assets_font nwb_assets_font_atlas nwb_assets_sampler)
+nwb_target_link_libraries_whole_archive(nwb_ui_layer_smoke nwb_assets_shader nwb_assets_texture nwb_assets_ui_skin nwb_assets_font nwb_assets_font_atlas nwb_assets_sampler nwb_assets_subsystem nwb_assets_scene)
 target_link_libraries(nwb_ui_layer_smoke PRIVATE nwb_common nwb_alloc nwb_loader nwb_ecs_ui nwb_ui_widgets)
 if(COMMAND nwb_copy_aftermath_runtime)
     nwb_copy_aftermath_runtime(nwb_ui_layer_smoke)

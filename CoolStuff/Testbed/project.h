@@ -10,6 +10,7 @@
 
 #include <loader/project_entry.h>
 
+#include <impl/assets_scene/asset.h>
 #include <impl/ecs_ui/components.h>
 
 #include <core/ecs/module.h>
@@ -67,6 +68,7 @@ private:
 private:
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
+    NWB::Impl::ActiveSceneSubsystems m_sceneSubsystems;
     UiSkinPreview m_uiPreview;
     NWB::Impl::Ui::WindowState m_uiWindow;
     f64 m_lastMouseX = 0.0;

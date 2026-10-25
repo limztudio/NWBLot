@@ -25,10 +25,10 @@ namespace AssetsGraphicsUi{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_VertexShaderName("engine/graphics/ui/vs");
-inline constexpr Name s_PixelShaderName("engine/graphics/ui/ps");
-inline constexpr Name s_OutputVertexShaderName("engine/graphics/ui/output_vs");
-inline constexpr Name s_OutputPixelShaderName("engine/graphics/ui/output_ps");
+inline constexpr Name s_VertexShaderName("ui_vs");
+inline constexpr Name s_PixelShaderName("ui_ps");
+inline constexpr Name s_OutputVertexShaderName("ui_output_vs");
+inline constexpr Name s_OutputPixelShaderName("ui_output_ps");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

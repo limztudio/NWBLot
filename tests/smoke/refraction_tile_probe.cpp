@@ -43,7 +43,7 @@ inline constexpr u32 s_PhaseCount = 6u;
 inline constexpr u32 s_MissingTile = (s_TilesY / 2u) * s_TilesX + s_TilesX / 2u;
 inline constexpr Array<u32, 6u> s_SparseTiles{ 0u, s_TilesX - 1u, (s_TilesY - 1u) * s_TilesX, s_TileCount - 1u, 65534u, 65535u };
 inline constexpr Name s_ProbeName("RefractionTileProbe");
-inline constexpr Name s_VerifyShaderName("project/shaders/refraction_tile_probe_cs");
+inline constexpr Name s_VerifyShaderName("refraction_tile_probe_cs");
 
 struct ProbePushConstants{
 #define NWB_SMOKE_REFRACTION_CPU_FIELD(name, defaultValue) u32 name = defaultValue;
@@ -350,7 +350,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RunRefractionTileProbe(NWB::ProjectRuntimeContext& context){
+bool RunRefractionTileProbe(NWB::ProjectRuntimeContext& context, const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems){
     using namespace NWB;
     using namespace __hidden_refraction_tile_probe;
     auto& graphics = context.graphics;
@@ -361,11 +361,16 @@ bool RunRefractionTileProbe(NWB::ProjectRuntimeContext& context){
     Core::ShaderHandle finalizeShader;
     Core::ShaderHandle verifyCompactShader;
     Core::ShaderHandle verifyDenseShader;
+    const auto classifyShaderRef = sceneSubsystems.findAsset<Impl::ComputeShader>(Impl::AssetsGraphicsRefraction::s_ClassifyTilesShaderName);
+    const auto finalizeShaderRef = sceneSubsystems.findAsset<Impl::ComputeShader>(Impl::AssetsGraphicsRefraction::s_FinalizeTilesShaderName);
+    const auto verifyShaderRef = sceneSubsystems.findAsset<Impl::ComputeShader>(s_VerifyShaderName);
+    if(!classifyShaderRef.valid() || !finalizeShaderRef.valid() || !verifyShaderRef.valid())
+        return false;
     if(
-        !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(classifyShader, Impl::AssetsGraphicsRefraction::s_ClassifyTilesShaderName, Core::ShaderArchive::s_DefaultVariant, s_ProbeName, graphics, context.assetManager, context.shaderPathResolver, NWB_TEXT("RefractionTileProbe"))
-        || !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(finalizeShader, Impl::AssetsGraphicsRefraction::s_FinalizeTilesShaderName, Core::ShaderArchive::s_DefaultVariant, s_ProbeName, graphics, context.assetManager, context.shaderPathResolver, NWB_TEXT("RefractionTileProbe"))
-        || !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(verifyCompactShader, s_VerifyShaderName, AStringView("NWB_REFRACTION_DENSE_GRID=0"), s_ProbeName, graphics, context.assetManager, context.shaderPathResolver, NWB_TEXT("RefractionTileProbe"))
-        || !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(verifyDenseShader, s_VerifyShaderName, AStringView("NWB_REFRACTION_DENSE_GRID=1"), s_ProbeName, graphics, context.assetManager, context.shaderPathResolver, NWB_TEXT("RefractionTileProbe"))
+        !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(classifyShader, classifyShaderRef.name(), Core::ShaderArchive::s_DefaultVariant, s_ProbeName, graphics, context.assetManager, context.shaderPathResolver, NWB_TEXT("RefractionTileProbe"))
+        || !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(finalizeShader, finalizeShaderRef.name(), Core::ShaderArchive::s_DefaultVariant, s_ProbeName, graphics, context.assetManager, context.shaderPathResolver, NWB_TEXT("RefractionTileProbe"))
+        || !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(verifyCompactShader, verifyShaderRef.name(), AStringView("NWB_REFRACTION_DENSE_GRID=0"), s_ProbeName, graphics, context.assetManager, context.shaderPathResolver, NWB_TEXT("RefractionTileProbe"))
+        || !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(verifyDenseShader, verifyShaderRef.name(), AStringView("NWB_REFRACTION_DENSE_GRID=1"), s_ProbeName, graphics, context.assetManager, context.shaderPathResolver, NWB_TEXT("RefractionTileProbe"))
     )
         return false;
     Core::BindingLayoutDesc layoutDesc(context.objectArena);

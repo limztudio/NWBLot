@@ -329,6 +329,7 @@ public:
     explicit DepthWarpProbeProject(ProjectRuntimeContext& context)noexcept
         : m_context(context)
         , m_cases(context.objectArena)
+        , m_sceneSubsystems(context.objectArena)
     {}
 
 
@@ -346,9 +347,14 @@ public:
             NWB_LOGGER_ERROR(NWB_TEXT("AvboitDepthWarpProbe: bindless heap is unavailable"));
             return false;
         }
+        if(!m_sceneSubsystems.loadProjectStartScene(m_context.assetManager))
+            return false;
+        const auto depthWarpShaderRef = m_sceneSubsystems.findAsset<Impl::ComputeShader>(Impl::AssetsGraphicsAvboit::s_DepthWarpComputeShaderName);
+        if(!depthWarpShaderRef.valid())
+            return false;
         if(!Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(
             m_shader,
-            Impl::AssetsGraphicsAvboit::s_DepthWarpComputeShaderName,
+            depthWarpShaderRef.name(),
             Core::ShaderArchive::s_DefaultVariant,
             s_ProbeName,
             graphics,
@@ -455,9 +461,9 @@ public:
             if(!compareBatch(payload))
                 return false;
         }
-        if(!RunAvboitIntegrationProbe(m_context))
+        if(!RunAvboitIntegrationProbe(m_context, m_sceneSubsystems))
             return false;
-        if(!RunRefractionTileProbe(m_context))
+        if(!RunRefractionTileProbe(m_context, m_sceneSubsystems))
             return false;
         m_completed = true;
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("AvboitDepthWarpProbe: passed {} cases with full LUT/control comparison and sentinel tails"), s_TotalCaseCount);
@@ -511,6 +517,7 @@ private:
 private:
     ProjectRuntimeContext& m_context;
     Vector<ProbeCase, Core::Alloc::GlobalArena> m_cases;
+    Impl::ActiveSceneSubsystems m_sceneSubsystems;
     Core::ShaderHandle m_shader;
     Core::BindingLayoutHandle m_pushLayout;
     Core::ComputePipelineHandle m_pipeline;

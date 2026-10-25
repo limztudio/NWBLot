@@ -10,6 +10,7 @@
 #include "frame_delta.h"
 #include "skin_selection.h"
 
+#include <impl/assets_scene/asset.h>
 #include <impl/ecs_ui/toolkit/input/pointer.h>
 #include <impl/ecs_ui/toolkit/gpu/renderer.h>
 
@@ -78,6 +79,7 @@ public:
 
 
 public:
+    void setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept{ m_activeSceneSubsystems = subsystems; m_renderer.setActiveSceneSubsystems(subsystems); }
     void setGpuCommandRecordingMode(Ui::GpuCommandRecordingMode::Enum mode)noexcept;
     // Main-thread request; last request wins. Empty selects the engine default. Safe from a UI paint callback.
     void requestSkin(const Core::Assets::AssetRef<UiSkin>& skin)noexcept;
@@ -131,6 +133,15 @@ private:
     void routePointerInput(const Ui::PointerInput& input, bool* consumed = nullptr);
     void synchronizeNativeInput();
     [[nodiscard]] bool loadFonts(Core::Alloc::ScratchArena& scratchArena);
+    template<typename TAsset>
+    [[nodiscard]] Core::Assets::AssetRef<TAsset> resolveAsset(const Core::Assets::AssetRef<TAsset>& ref)const noexcept{
+        if(!ref.valid() || !m_activeSceneSubsystems)
+            return ref;
+        Core::Assets::AssetRef<TAsset> resolved = m_activeSceneSubsystems->findSubsystemAsset<TAsset>(BuiltInSubsystems::s_Ui, ref.name());
+        if(!resolved.valid())
+            resolved = m_activeSceneSubsystems->findAsset<TAsset>(ref.name());
+        return resolved.valid() ? resolved : ref;
+    }
 
 
 private:
@@ -140,6 +151,8 @@ private:
     Core::IClipboardService& m_clipboard;
     Core::ITextInputService& m_textInput;
     Core::Assets::AssetManager& m_assetManager;
+    ActiveSceneSubsystems m_defaultSceneSubsystems;
+    const ActiveSceneSubsystems* m_activeSceneSubsystems = nullptr;
     UiSkinSelection m_skinSelection;
     UniquePtr<Core::Assets::IAsset> m_skinAsset;
     FontReferences m_fontRefs;

@@ -26,21 +26,22 @@ needed with `NWB_BUILD_PIPELINE=ON`, builds `nwb_pipeline`, and resolves all thr
 tools from the selected CMake configuration. Configure, build, and pipeline
 failures retain their nonzero exit status at the root launcher.
 
-`dependency_computer` preserves its inputs, including their order and duplicates.
-With `--include-skin-dependencies`, it also resolves textures referenced by selected
-UI skins and appends each missing texture metadata provider once. That resolution
-accepts `--repo-root` (default: the working directory) and repeated `--asset-root`
-values. Its provider catalog resolves metadata identities without reading unrelated
-asset documents, and provider ownership follows asset-root order. Unresolved,
-wrong-type, or ambiguous texture references fail before the output list is written.
+`dependency_computer` computes transitive `.nwb` asset dependencies. When no explicit
+`--input` or `--input-list` is provided, it automatically discovers `project.nwb` in
+non-engine `--asset-root` directories and expands the dependency graph from the project's
+`start_scene` through scene subsystems, auto-activated feature subsystems, and reachable
+assets via `CookDependencyRegistry`. When explicit `--input` or `--input-list` values are provided, it preserves those
+seed inputs and expands their transitive dependencies across `--asset-root` providers.
+That resolution accepts `--repo-root` (default: the working directory) and repeated
+`--asset-root` values. Its provider catalog resolves metadata identities without reading
+unrelated asset documents, and provider ownership follows asset-root order. Unresolved,
+wrong-type, or ambiguous asset references fail before the output list is written.
 Paired encoded texture payloads stay with the texture cooker and are not added as
-separate inputs. Without the flag, dependency computation is pass-through. General
-dependency expansion is not implemented.
-It accepts multiple `--input` values, repeated `--input` options, or an
-`--input-list` file. Its `--output` is a UTF-8 file containing one input per line.
+separate inputs. Its `--output` is a UTF-8 file containing one resolved provider path
+per line.
 
 ```console
-python -m launcher run nwb_dependency_computer --config dbg --working-directory . -- --input project/assets/samplers/a.nwb project/assets/samplers/b.nwb --output dependencies.list
+python -m launcher run nwb_dependency_computer --config dbg --working-directory . -- --repo-root . --asset-root impl/assets project/assets --output dependencies.list
 ```
 
 `asset_builder` compiles selected `.nwb` assets into standalone runtime binary
@@ -89,7 +90,8 @@ python -m launcher run nwb_asset_gatherer --config dbg --working-directory . -- 
 ```
 
 `pipeline/launch.py` is discovered by the root launcher as the `pipeline` command,
-using the same convention as the repository's other runnable directories. It discovers `.nwb` files, configures and
+using the same convention as the repository's other runnable directories. It validates
+asset roots and optional input overrides, configures and
 builds `nwb_pipeline`, calls `dependency_computer`, passes that result to
 `asset_builder`, then passes the builder manifest to `asset_gatherer`. Discovery
 errors and failed stages stop the pipeline and preserve the published volume.
@@ -125,8 +127,8 @@ python -m launcher pipeline --skip-build --tool-directory __exec/windows/arm64/f
 ```
 
 `--dry-run` prints planned build and pipeline commands without writing manifests,
-artifacts, or volumes, or running tools. `--input` limits selected sources.
-Use `--include-skin-dependencies` to include textures referenced by selected skins.
+artifacts, or volumes, or running tools. `--input` overrides automatic `project.nwb`
+root discovery with an explicit seed list while still expanding transitive dependencies.
 `--build-directory` chooses where to retain intermediate artifacts; otherwise
 they live in an output-specific directory under the asset cache.
 

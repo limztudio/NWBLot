@@ -445,5 +445,5 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/csg/task_graph_resource_utils.h"
     "${CMAKE_CURRENT_LIST_DIR}/deferred/format_private.h"
 )
-target_link_libraries(nwb_ecs_render PUBLIC nwb_ecs_render_components nwb_ecs nwb_ecs_mesh nwb_graphics nwb_assets_material nwb_ecs_csg nwb_ecs_scene)
+target_link_libraries(nwb_ecs_render PUBLIC nwb_ecs_render_components nwb_ecs nwb_ecs_mesh nwb_graphics nwb_assets_material nwb_ecs_csg nwb_ecs_scene nwb_assets_scene)
 target_link_libraries(nwb_ecs_render PRIVATE nwb_assets_mesh nwb_assets_shader_loader nwb_assets_texture_loader nwb_assets_sampler_loader)

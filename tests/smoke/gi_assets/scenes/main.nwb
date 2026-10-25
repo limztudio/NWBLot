@@ -1,0 +1,19 @@
+scene asset;
+
+asset.subsystems = [
+    "engine/subsystems/renderer",
+    "engine/subsystems/csg"
+];
+
+asset.assets = {
+    "cube_hard_edges": "project/meshes/cube_hard_edges",
+    "gi_csg_mixed": "project/meshes/gi_csg_mixed",
+    "gi_csg_open_quad": "project/meshes/gi_csg_open_quad",
+    "shadow_plane": "project/meshes/shadow_plane",
+    "gi_coverage_probe": "project/smoke/gi/materials/coverage_probe",
+    "gi_csg_cap": "project/smoke/gi/materials/csg_cap",
+    "gi_csg_mixed_mat": "project/smoke/gi/materials/csg_mixed",
+    "gi_diffuse": "project/smoke/gi/materials/diffuse",
+    "gi_indirect": "project/smoke/gi/materials/indirect",
+    "transparent_multi_ground": "project/smoke/transparent_multi/materials/ground"
+};

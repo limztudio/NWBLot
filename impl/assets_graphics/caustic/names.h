@@ -26,15 +26,15 @@ namespace AssetsGraphicsCaustic{
 
 
 // SW producer/resolve plus HW producer paths; HW shares the SW resolve.
-inline constexpr Name s_SwPhotonShaderName("engine/graphics/caustic/caustic_photon_sw_cs");
-inline constexpr Name s_ResolveShaderName("engine/graphics/caustic/caustic_resolve_cs");
+inline constexpr Name s_SwPhotonShaderName("caustic_photon_sw_cs");
+inline constexpr Name s_ResolveShaderName("caustic_resolve_cs");
 // Downsamples G-buffer positions into the half-res geometry cache.
-inline constexpr Name s_GeometryDownsampleShaderName("engine/graphics/caustic/caustic_geometry_downsample_cs");
+inline constexpr Name s_GeometryDownsampleShaderName("caustic_geometry_downsample_cs");
 // Temporal EMA decay pre-pass; non-positive decay keeps the per-frame clear.
-inline constexpr Name s_AccumulatorDecayShaderName("engine/graphics/caustic/caustic_accumulator_decay_cs");
-inline constexpr Name s_HwRaygenShaderName("engine/graphics/caustic/caustic_photon_hw_raygen");
-inline constexpr Name s_HwClosestHitShaderName("engine/graphics/caustic/caustic_photon_hw_chit");
-inline constexpr Name s_HwMissShaderName("engine/graphics/caustic/caustic_photon_hw_miss");
+inline constexpr Name s_AccumulatorDecayShaderName("caustic_accumulator_decay_cs");
+inline constexpr Name s_HwRaygenShaderName("caustic_photon_hw_raygen");
+inline constexpr Name s_HwClosestHitShaderName("caustic_photon_hw_chit");
+inline constexpr Name s_HwMissShaderName("caustic_photon_hw_miss");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

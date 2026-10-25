@@ -25,10 +25,10 @@ namespace AssetsGraphicsSkinnedMesh{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_SkinningComputeShaderName("engine/graphics/skinned_mesh/skinning_cs");
-inline constexpr Name s_MeshletBoundsComputeShaderName("engine/graphics/skinned_mesh/meshlet_bounds_cs");
-inline constexpr Name s_LocalBoundsComputeShaderName("engine/graphics/skinned_mesh/local_bounds_cs");
-inline constexpr Name s_RepackNormalsComputeShaderName("engine/graphics/skinned_mesh/repack_normals_cs");
+inline constexpr Name s_SkinningComputeShaderName("skinning_cs");
+inline constexpr Name s_MeshletBoundsComputeShaderName("meshlet_bounds_cs");
+inline constexpr Name s_LocalBoundsComputeShaderName("local_bounds_cs");
+inline constexpr Name s_RepackNormalsComputeShaderName("repack_normals_cs");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

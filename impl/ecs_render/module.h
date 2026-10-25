@@ -52,6 +52,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class ActiveSceneSubsystems;
 class RendererFramePipeline;
 
 
@@ -79,6 +80,7 @@ public:
     virtual void render(Core::Framebuffer* framebuffer)override;
     virtual bool appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder)override;
 
+    void setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept;
     void setRefractionEnabled(bool enabled)noexcept;
     void setRefractionHardwareTracingEnabled(bool enabled)noexcept;
     void setRefractionDiagnosticsEnabled(bool enabled)noexcept;

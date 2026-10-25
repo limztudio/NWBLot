@@ -32,10 +32,10 @@ static constexpr TStringView s_WindowTitle = NWB_TEXT("NWB Testbed");
 static constexpr TStringView s_WorldAllocFailed = NWB_TEXT("CreateInitialProjectWorld failed: ECS world allocation failed");
 static constexpr TStringView s_ResolverNull = NWB_TEXT("CreateInitialProjectWorld failed: shader path resolver callback is null");
 static constexpr TStringView s_DestroyRequiresIdleOrLoss = NWB_TEXT("Project-world destruction requires either a completed device join or terminal device loss");
-static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::Font> s_DefaultLatin{"engine/ui/fonts/default/latin/face"};
-static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::Font> s_DefaultKorean{"engine/ui/fonts/default/korean/face"};
-static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::FontAtlas> s_DefaultLatinAtlas{"engine/ui/fonts/default/latin/atlas"};
-static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::FontAtlas> s_DefaultKoreanAtlas{"engine/ui/fonts/default/korean/atlas"};
+static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::Font> s_DefaultLatin{"default_latin_face"};
+static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::Font> s_DefaultKorean{"default_korean_face"};
+static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::FontAtlas> s_DefaultLatinAtlas{"default_latin_atlas"};
+static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::FontAtlas> s_DefaultKoreanAtlas{"default_korean_atlas"};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

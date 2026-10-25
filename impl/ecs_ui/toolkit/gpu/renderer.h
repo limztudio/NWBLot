@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <impl/assets_scene/asset.h>
 #include <impl/ecs_ui/toolkit/paint.h>
 
 #include <core/assets/manager.h>
@@ -44,6 +45,7 @@ public:
 
 
 public:
+    void setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept;
     [[nodiscard]] bool validateResources(u32 width, u32 height);
     void invalidateResources()noexcept;
     [[nodiscard]] bool setSkin(const Core::Assets::AssetRef<UiSkin>& identity, const UiSkin& skin, u64 skinGeneration);

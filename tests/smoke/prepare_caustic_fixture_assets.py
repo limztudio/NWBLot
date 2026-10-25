@@ -11,6 +11,30 @@ import tempfile
 
 from prepare_fixture_asset_root import prepare_asset_root
 
+PROJECT_NWB = b"""project asset;\r
+\r
+asset.start_scene = "project/scenes/main";\r
+"""
+
+SCENE_NWB = b"""scene asset;\r
+\r
+asset.subsystems = [\r
+    "engine/subsystems/renderer",\r
+    "engine/subsystems/csg"\r
+];\r
+\r
+asset.assets = {\r
+    "body_model": "project/characters/body/model",\r
+    "caustic_closed_body_model": "project/characters/caustic_closed_body/model",\r
+    "skinned_caustic_prism_model": "project/characters/skinned_caustic_prism/model",\r
+    "cube_hard_edges": "project/meshes/cube_hard_edges",\r
+    "shadow_plane": "project/meshes/shadow_plane",\r
+    "skinning_culling_benchmark_solid": "project/smoke/skinning_culling_benchmark/materials/solid",\r
+    "transparent_multi_ground": "project/smoke/transparent_multi/materials/ground",\r
+    "transparent_multi_shared": "project/smoke/transparent_multi/materials/shared"\r
+};\r
+"""
+
 
 def read_array(text, key):
     start = text.index(key + " = [") + len(key + " = ")
@@ -117,6 +141,10 @@ def prepare_caustic_assets(source_root, output_root):
         variant_path = generated / "characters/caustic_closed_body.nwb"
         variant_path.parent.mkdir(parents=True)
         variant_path.write_bytes(variant)
+        (generated / "project.nwb").write_bytes(PROJECT_NWB)
+        scene_path = generated / "scenes/main.nwb"
+        scene_path.parent.mkdir(parents=True)
+        scene_path.write_bytes(SCENE_NWB)
         count = prepare_asset_root(output_root, [source, generated])
     if body.read_bytes() != payload:
         raise ValueError("authored body changed while preparing the private catalog")

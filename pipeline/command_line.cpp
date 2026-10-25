@@ -61,8 +61,6 @@ PipelineCommandLine::PipelineCommandLine(const PipelineTool::Enum inTool)
     m_app.add_option(s_PipelineInputOption.data(), m_inputs, "Input assets; accepts multiple paths and repeated options");
     m_app.add_option(s_PipelineInputListOption.data(), m_inputList, "UTF-8 newline-separated input paths");
     m_app.add_option(s_PipelineOutputOption.data(), m_outputPath, m_tool == PipelineTool::DependencyComputer ? "Output dependency list file" : "Output directory")->required();
-    if(m_tool == PipelineTool::DependencyComputer)
-        m_app.add_flag(s_PipelineSkinDependenciesOption.data(), m_includeSkinDependencies, "Include the textures referenced by selected UI skins");
     if(m_tool == PipelineTool::AssetBuilder || m_tool == PipelineTool::DependencyComputer){
         m_app.add_option(s_PipelineRepoRootOption.data(), m_repoRoot, "Repository root; defaults to the working directory");
         m_app.add_option(s_PipelineAssetRootOption.data(), m_assetRoots, "Asset root directories used to resolve virtual paths");
@@ -79,7 +77,8 @@ Expected<PipelineOptions> PipelineCommandLine::parse(const int argc, char** argv
     PipelineOptions options(arena);
     CommandLineParseApp(m_app, argc, argv);
 
-    if(m_inputs.empty() && m_inputList.empty()){
+    const bool allowImplicitProjectInput = m_tool == PipelineTool::DependencyComputer && !m_assetRoots.empty();
+    if(m_inputs.empty() && m_inputList.empty() && !allowImplicitProjectInput){
         NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: provide --input or --input-list"));
         return MakeUnexpected(Failure{});
     }
@@ -111,7 +110,6 @@ Expected<PipelineOptions> PipelineCommandLine::parse(const int argc, char** argv
         if(!NWB::Core::Assets::ReadAssetInputList(options.inputs, Path(arena, listText), scratchArena, m_tool == PipelineTool::AssetGatherer))
             return MakeUnexpected(Failure{});
     }
-    options.includeSkinDependencies = m_includeSkinDependencies;
     return options;
 }
 

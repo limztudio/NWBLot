@@ -15,7 +15,7 @@ target_sources(nwb_assets_graphics INTERFACE
     "${CMAKE_CURRENT_LIST_DIR}/ui/names.h"
     "${CMAKE_CURRENT_LIST_DIR}/bindless/runtime_abi.h"
 )
-target_link_libraries(nwb_assets_graphics INTERFACE nwb_assets_mesh nwb_assets_skeleton nwb_assets_model nwb_assets_material nwb_assets_shader nwb_assets_texture nwb_assets_sampler)
+target_link_libraries(nwb_assets_graphics INTERFACE nwb_assets_mesh nwb_assets_skeleton nwb_assets_model nwb_assets_subsystem nwb_assets_scene nwb_assets_material nwb_assets_shader nwb_assets_texture nwb_assets_sampler)
 
 if(NWB_BUILD_PIPELINE)
     nwb_declare_static_library(nwb_assets_graphics_gather)
@@ -44,4 +44,3 @@ if(NWB_BUILD_PIPELINE)
     target_link_libraries(nwb_assets_graphics_cook PRIVATE nwb_assets_volume_cook nwb_assets_csg_cook nwb_assets_material_cook nwb_assets_shader_cook nwb_shader_archive nwb_filesystem)
     target_compile_definitions(nwb_assets_graphics_cook PRIVATE NWB_COOK=1)
 endif()
-

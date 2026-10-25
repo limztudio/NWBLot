@@ -25,12 +25,12 @@ namespace AssetsGraphicsReflection{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_BuildArgsShaderName("engine/graphics/reflection/build_args_cs");
-inline constexpr Name s_ClassifyShaderName("engine/graphics/reflection/classify_cs");
-inline constexpr Name s_DepthReduceShaderName("engine/graphics/reflection/depth_reduce_cs");
-inline constexpr Name s_HardwareResolveShaderName("engine/graphics/reflection/resolve_hw_cs");
-inline constexpr Name s_SpatialShaderName("engine/graphics/reflection/spatial_cs");
-inline constexpr Name s_TemporalShaderName("engine/graphics/reflection/temporal_cs");
+inline constexpr Name s_BuildArgsShaderName("reflection_build_args_cs");
+inline constexpr Name s_ClassifyShaderName("reflection_classify_cs");
+inline constexpr Name s_DepthReduceShaderName("reflection_depth_reduce_cs");
+inline constexpr Name s_HardwareResolveShaderName("reflection_resolve_hw_cs");
+inline constexpr Name s_SpatialShaderName("reflection_spatial_cs");
+inline constexpr Name s_TemporalShaderName("reflection_temporal_cs");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

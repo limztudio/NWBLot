@@ -29,8 +29,24 @@ namespace __hidden_pipeline{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool LoadComputeShader(Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, MeshSkinningSystem::ShaderPathResolveCallback& shaderPathResolver, const Name& shaderName, const Name& debugName, Core::ShaderHandle& shader){
-    return ShaderAssetLoader::Load<ComputeShader>(shader, shaderName, Core::ShaderArchive::s_DefaultVariant, debugName, graphics, assetManager, shaderPathResolver, NWB_TEXT("MeshSkinningSystem"));
+[[nodiscard]] static bool LoadComputeShader(
+    Core::GraphicsRuntime& graphics,
+    Core::Assets::AssetManager& assetManager,
+    MeshSkinningSystem::ShaderPathResolveCallback& shaderPathResolver,
+    const ActiveSceneSubsystems* activeSceneSubsystems,
+    const Name& shaderName,
+    const Name& debugName,
+    Core::ShaderHandle& shader
+){
+    Name resolvedShaderName = shaderName;
+    if(activeSceneSubsystems){
+        Core::Assets::AssetRef<ComputeShader> resolved = activeSceneSubsystems->findSubsystemAsset<ComputeShader>(BuiltInSubsystems::s_Skinning, shaderName);
+        if(!resolved.valid())
+            resolved = activeSceneSubsystems->findAsset<ComputeShader>(shaderName);
+        if(resolved.valid())
+            resolvedShaderName = resolved.name();
+    }
+    return ShaderAssetLoader::Load<ComputeShader>(shader, resolvedShaderName, Core::ShaderArchive::s_DefaultVariant, debugName, graphics, assetManager, shaderPathResolver, NWB_TEXT("MeshSkinningSystem"));
 }
 
 
@@ -68,7 +84,7 @@ bool MeshSkinningSystem::ensureSkinningPipeline(){
         }
     }
 
-    if(!__hidden_pipeline::LoadComputeShader(m_graphics, m_assetManager, m_shaderPathResolver, AssetsGraphicsSkinnedMesh::s_SkinningComputeShaderName, Name("ECSMeshSkinning_SkinningCS"), m_skinningComputeShader))
+    if(!__hidden_pipeline::LoadComputeShader(m_graphics, m_assetManager, m_shaderPathResolver, m_activeSceneSubsystems, AssetsGraphicsSkinnedMesh::s_SkinningComputeShaderName, Name("ECSMeshSkinning_SkinningCS"), m_skinningComputeShader))
         return false;
 
     if(m_skinningComputePipeline)
@@ -113,7 +129,7 @@ bool MeshSkinningSystem::ensureBoundsPipeline(){
         }
     }
 
-    if(!__hidden_pipeline::LoadComputeShader(m_graphics, m_assetManager, m_shaderPathResolver, AssetsGraphicsSkinnedMesh::s_MeshletBoundsComputeShaderName, Name("ECSMeshSkinning_MeshletBoundsCS"), m_boundsComputeShader))
+    if(!__hidden_pipeline::LoadComputeShader(m_graphics, m_assetManager, m_shaderPathResolver, m_activeSceneSubsystems, AssetsGraphicsSkinnedMesh::s_MeshletBoundsComputeShaderName, Name("ECSMeshSkinning_MeshletBoundsCS"), m_boundsComputeShader))
         return false;
 
     if(m_boundsComputePipeline)
@@ -138,7 +154,7 @@ bool MeshSkinningSystem::ensureLocalBoundsPipeline(){
         return true;
     if(!ensureBoundsPipeline())
         return false;
-    if(!__hidden_pipeline::LoadComputeShader(m_graphics, m_assetManager, m_shaderPathResolver, AssetsGraphicsSkinnedMesh::s_LocalBoundsComputeShaderName, Name("ECSMeshSkinning_LocalBoundsCS"), m_localBoundsComputeShader))
+    if(!__hidden_pipeline::LoadComputeShader(m_graphics, m_assetManager, m_shaderPathResolver, m_activeSceneSubsystems, AssetsGraphicsSkinnedMesh::s_LocalBoundsComputeShaderName, Name("ECSMeshSkinning_LocalBoundsCS"), m_localBoundsComputeShader))
         return false;
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
@@ -180,7 +196,7 @@ bool MeshSkinningSystem::ensureRepackPipeline(){
         }
     }
 
-    if(!__hidden_pipeline::LoadComputeShader(m_graphics, m_assetManager, m_shaderPathResolver, AssetsGraphicsSkinnedMesh::s_RepackNormalsComputeShaderName, Name("ECSMeshSkinning_RepackNormalsCS"), m_repackComputeShader))
+    if(!__hidden_pipeline::LoadComputeShader(m_graphics, m_assetManager, m_shaderPathResolver, m_activeSceneSubsystems, AssetsGraphicsSkinnedMesh::s_RepackNormalsComputeShaderName, Name("ECSMeshSkinning_RepackNormalsCS"), m_repackComputeShader))
         return false;
 
     if(m_repackComputePipeline)

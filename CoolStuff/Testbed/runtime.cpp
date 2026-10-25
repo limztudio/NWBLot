@@ -61,10 +61,10 @@ static constexpr Float4 s_PointLightPosition = Float4(1.5f, 1.6f, 1.5f);
 static constexpr Float4 s_PointLightColor = Float4(0.6f, 0.74f, 1.0f);
 static constexpr f32 s_PointLightIntensity = 2.0f;
 static constexpr f32 s_PointLightRange = 16.0f; // larger range = gentler distance falloff so it stays comparable to the directional across the scene
-static constexpr TestbedModelRef s_FemaleModel{"project/characters/female/model"};
-static constexpr TestbedMaterialRef s_ModelMaterial{"project/materials/mat_skinned_uv"};
-static constexpr TestbedModelRef s_GroundPlaneModel{"project/meshes/ground_plane/model"};
-static constexpr TestbedMaterialRef s_GroundPlaneMaterial{"project/materials/mat_white_opaque"};
+inline constexpr Name s_FemaleModelNickname("female_model");
+inline constexpr Name s_ModelMaterialNickname("skinned_uv_material");
+inline constexpr Name s_GroundPlaneModelNickname("ground_plane_model");
+inline constexpr Name s_GroundPlaneMaterialNickname("white_opaque_material");
 static constexpr TStringView s_DefaultSceneDescription = NWB_TEXT("45-degree directional + point light, female skinned character on a white ground plane");
 static constexpr TStringView s_InitWorldFailedText = NWB_TEXT("ProjectTestbed initialization failed: CreateInitialProjectWorld returned false");
 static constexpr TStringView s_CharacterInvalidText = NWB_TEXT("ProjectTestbed initialization failed: character creation returned an invalid entity");
@@ -179,12 +179,19 @@ static void ApplyFlyCameraInputToMainCamera(NWB::Core::ECS::World& world, const 
     return entity.id();
 }
 
-[[nodiscard]] static NWB::Core::ECS::EntityID CreateSkinnedCharacterEntity(NWB::Core::ECS::World& world){
-    return CreateModelEntity(world, s_FemaleModel, s_ModelMaterial);
+[[nodiscard]] static NWB::Core::ECS::EntityID CreateSkinnedCharacterEntity(NWB::Core::ECS::World& world, const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems){
+    const TestbedModelRef model = sceneSubsystems.findSceneAsset<NWB::Impl::Model>(s_FemaleModelNickname);
+    const TestbedMaterialRef material = sceneSubsystems.findSceneAsset<NWB::Impl::Material>(s_ModelMaterialNickname);
+    if(!model.valid() || !material.valid())
+        return {};
+    return CreateModelEntity(world, model, material);
 }
 
-static void CreateStaticGroundPlaneEntity(NWB::Core::ECS::World& world){
-    const auto groundEntity = CreateModelEntity(world, s_GroundPlaneModel, s_GroundPlaneMaterial);
+static void CreateStaticGroundPlaneEntity(NWB::Core::ECS::World& world, const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems){
+    const TestbedModelRef model = sceneSubsystems.findSceneAsset<NWB::Impl::Model>(s_GroundPlaneModelNickname);
+    const TestbedMaterialRef material = sceneSubsystems.findSceneAsset<NWB::Impl::Material>(s_GroundPlaneMaterialNickname);
+    NWB_FATAL_ASSERT(model.valid() && material.valid());
+    const auto groundEntity = CreateModelEntity(world, model, material);
     NWB_FATAL_ASSERT(groundEntity.valid());
 }
 
@@ -210,7 +217,8 @@ NotNullUniquePtr<NWB::Core::ECS::World> Project::CreateInitialWorldOrDie(NWB::Pr
 Project::Project(NWB::ProjectRuntimeContext& context)
     : m_context(context)
     , m_world(CreateInitialWorldOrDie(context))
-    , m_uiPreview(context.objectArena, context.assetManager)
+    , m_sceneSubsystems(context.objectArena)
+    , m_uiPreview(context.objectArena)
 {}
 
 Project::~Project()noexcept{
@@ -219,6 +227,17 @@ Project::~Project()noexcept{
 }
 
 bool Project::onStartup(){
+    if(!m_sceneSubsystems.loadProjectStartScene(m_context.assetManager))
+        return false;
+    if(!m_uiPreview.loadAssets(m_context.objectArena, m_context.assetManager, m_sceneSubsystems))
+        return false;
+    if(auto* const rendererSystem = m_world->getSystem<NWB::Impl::RendererSystem>())
+        rendererSystem->setActiveSceneSubsystems(&m_sceneSubsystems);
+    if(auto* const meshSkinningSystem = m_world->getSystem<NWB::Impl::MeshSkinningSystem>())
+        meshSkinningSystem->setActiveSceneSubsystems(&m_sceneSubsystems);
+    if(auto* const uiLayerSystem = m_world->getSystem<NWB::Impl::UiLayerSystem>())
+        uiLayerSystem->setActiveSceneSubsystems(&m_sceneSubsystems);
+
     auto activeCameraEntity = m_world->createEntity();
     auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
     const Float4 cameraPosition(0.0f, __hidden_runtime::s_CharacterCameraTargetY, __hidden_runtime::s_CameraStartDepth);
@@ -359,11 +378,11 @@ bool Project::mouseButtonUpdate(const i32 button, const i32 action, const i32 mo
 }
 
 bool Project::createDefaultScene(){
-    if(!__hidden_runtime::CreateSkinnedCharacterEntity(*m_world).valid()){
+    if(!__hidden_runtime::CreateSkinnedCharacterEntity(*m_world, m_sceneSubsystems).valid()){
         NWB_LOGGER_ERROR(__hidden_runtime::s_CharacterInvalidText);
         return false;
     }
-    __hidden_runtime::CreateStaticGroundPlaneEntity(*m_world);
+    __hidden_runtime::CreateStaticGroundPlaneEntity(*m_world, m_sceneSubsystems);
 
     auto uiEntity = m_world->createEntity();
     auto& customUi = uiEntity.addComponent<NWB::Impl::UiPaintComponent>();

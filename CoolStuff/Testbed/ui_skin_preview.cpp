@@ -134,7 +134,7 @@ static constexpr StringView s_KoreanText = "\xED\x95\x9C\xEA\xB8\x80 \xEC\xA1\xB
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiSkinPreview::UiSkinPreview(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets)
+UiSkinPreview::UiSkinPreview(NWB::Core::Alloc::GlobalArena& arena)
     : m_normal(arena)
     , m_hover(arena)
     , m_pressed(arena)
@@ -142,7 +142,7 @@ UiSkinPreview::UiSkinPreview(NWB::Core::Alloc::GlobalArena& arena, const NWB::Co
     , m_edit(arena)
     , m_caption(arena)
     , m_korean(arena)
-    , m_widgets(arena, assets)
+    , m_widgets(arena)
 {
     using namespace __hidden_ui_skin_preview;
     const bool configured = ConfigureLabel(m_normal, "Normal") && ConfigureLabel(m_hover, "Hover")
@@ -150,6 +150,14 @@ UiSkinPreview::UiSkinPreview(NWB::Core::Alloc::GlobalArena& arena, const NWB::Co
         && ConfigureLabel(m_edit, "UTF-8 labels", s_LargeLabelFontSize) && ConfigureLabel(m_caption, "FreeType + HarfBuzz", s_LargeLabelFontSize)
         && m_korean.setText(ShapeRequest{ .text = s_KoreanText, .fontSize = s_LabelFontSize, .scriptTag = NWB::Impl::Ui::TextScriptTag('H', 'a', 'n', 'g'), .language = "ko" }) == NWB::Impl::Ui::TextLayoutStatus::Success;
     NWB_FATAL_ASSERT_MSG(configured, NWB_TEXT("Testbed UI labels must have valid constant text"));
+}
+
+bool UiSkinPreview::loadAssets(
+    NWB::Core::Alloc::GlobalArena& arena,
+    const NWB::Core::Assets::AssetManager& assets,
+    const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems
+){
+    return m_widgets.loadAssets(arena, assets, sceneSubsystems);
 }
 
 Expected<NWB::Impl::Ui::Rect> UiSkinPreview::galleryBounds(NWB::Impl::UiPaintContext& context){

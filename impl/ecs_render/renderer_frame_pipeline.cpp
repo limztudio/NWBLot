@@ -45,6 +45,7 @@ RendererFramePipeline::RendererFramePipeline(Core::Alloc::GlobalArena& arena, Co
     , m_shaderPathResolver(Move(shaderPathResolver))
     , m_csgShapeRegistry(arena)
     , m_frameGraphRendererLabel(arena)
+    , m_defaultSceneSubsystems(arena)
     , m_meshState(arena)
     , m_materialState(arena)
     , m_opticalVolumes(arena)

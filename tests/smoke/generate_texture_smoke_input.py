@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the deterministic source image for the texture runtime smoke."""
+"""Generate the deterministic source image and project scene manifest for the texture runtime smoke."""
 
 import argparse
 from pathlib import Path
@@ -12,6 +12,25 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "common"))
 from png_fixture import write_png_rows  # noqa: E402
 
 LIT_MAIN = "__main__"
+
+PROJECT_NWB = b"""project asset;
+
+asset.start_scene = "project/scenes/main";
+"""
+
+SCENE_NWB = b"""scene asset;
+
+asset.subsystems = [
+    "engine/subsystems/renderer"
+];
+
+asset.assets = {
+    "caustic_sphere": "project/meshes/caustic_sphere",
+    "shadow_plane": "project/meshes/shadow_plane",
+    "texture_pattern": "project/smoke/texture/materials/pattern",
+    "texture_white_ground": "project/smoke/texture/materials/white_ground"
+};
+"""
 
 
 def texture_pixel(x: int, y: int) -> Tuple[int, int, int, int]:
@@ -37,6 +56,11 @@ def write_texture_png(path: Path) -> None:
 
     path.parent.mkdir(parents=True, exist_ok=True)
     write_png_rows(path, width, height, 6, rows, compression_level=9)
+    asset_root = path.parent.parent
+    (asset_root / "project.nwb").write_bytes(PROJECT_NWB)
+    scene_path = asset_root / "scenes" / "main.nwb"
+    scene_path.parent.mkdir(parents=True, exist_ok=True)
+    scene_path.write_bytes(SCENE_NWB)
 
 
 def main() -> int:

@@ -85,11 +85,11 @@ Build `nwb_gi_test_smoke` through the launcher, then run:
 ctest --test-dir <build-directory> -C opt -L csg_gi --output-on-failure
 ```
 
-The GI fixture owns its diagnostic materials and BXDF families under
+The GI fixture owns its diagnostic materials, BXDF families, and scene manifest under
 `tests/smoke/gi_assets`. Building `nwb_gi_test_smoke` also runs
-`nwb_gi_smoke_assets`, which prepares the disjoint union of that root and
-`tests/smoke/assets` with `tests/smoke/prepare_fixture_asset_root.py` and cooks
-it into `<build-directory>/Testing/gi_smoke_runtime/<config>/res`. These
+`nwb_gi_smoke_assets`, which cooks `tests/smoke/gi_assets` alongside
+`tests/smoke/assets` and `impl/assets` into
+`<build-directory>/Testing/gi_smoke_runtime/<config>/res`. These
 captures and the coverage probe run from that directory; the formal surfel-GI
 baseline scene keeps the shared `skinning_culling_benchmark_runtime` cook.
 
@@ -152,18 +152,12 @@ source-frame sequence, and all accepted readbacks. Missing, partial,
 stale-directory, or wrong-size captures fail. This settled GI acquisition
 protocol is not a renderer convergence guarantee or a rule for every smoke test.
 
-The fixture owns its diagnostic materials and nine BXDF families under
-`tests/smoke/csg_visible_assets`; ordinary smoke/performance cooks use only
-`tests/smoke/assets`. The executable's asset dependency runs
-`tests/smoke/prepare_fixture_asset_root.py` to copy and verify the disjoint union
-of those two source roots into
-`<build-directory>/Testing/csg_visible_generated/<config>`. It rejects identity
-collisions, unsafe root overlaps, and unexpected existing files without deleting
-anything. The cooker then receives engine `impl/assets` and this single project
-root, preserving the fixture's `project/...` virtual references. Passing two
-project roots is unsupported because source resolution selects the first
-matching virtual root without an existence fallback. The private cooked resource
-directory remains
+The fixture owns its diagnostic materials, nine BXDF families, and scene manifest under
+`tests/smoke/csg_visible_assets`; ordinary smoke/performance cooks use
+`tests/smoke/shared_assets` with `tests/smoke/assets`. The executable's asset
+dependency passes `impl/assets`, `tests/smoke/assets`, and
+`tests/smoke/csg_visible_assets` directly to the asset pipeline, cooking only the
+assets reachable from `tests/smoke/csg_visible_assets/scenes/main.nwb` into
 `<build-directory>/Testing/csg_visible_smoke_runtime/<config>/res`.
 
 Build the scene and its matching assets through the launcher, then acquire one

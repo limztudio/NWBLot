@@ -125,27 +125,23 @@ def run_discovery_failures(args: argparse.Namespace, root: pathlib.Path, asset_r
         raise AssertionError("could not load the pipeline launcher for discovery failure regression")
     pipeline_launcher = importlib.util.module_from_spec(specification)
     specification.loader.exec_module(pipeline_launcher)
-    options = pipeline_launcher.parse_arguments([LIT_SKIP_BUILD, LIT_REPO_ROOT, str(args.repo_root), LIT_ASSET_ROOT, str(asset_root), LIT_OUTPUT_DIRECTORY, str(output), LIT_CACHE_DIRECTORY, str(root / LIT_C), LIT_CONFIGURATION, LIT_TESTS,
-        LIT_DEPENDENCY_COMPUTER, str(args.dependency_computer), LIT_ASSET_BUILDER, str(args.asset_builder), LIT_ASSET_GATHERER, str(args.asset_gatherer),])
     previous_volume = read_volume(output)
-    with pipeline_launcher.os.scandir(asset_root) as entries:
-        readable_entry = next(iter(entries))
-    inaccessible_entry = mock.Mock()
-    inaccessible_entry.stat.side_effect = PermissionError("test entry cannot be inspected")
-    partial_scan = mock.MagicMock()
-    partial_scan.__enter__.return_value = (readable_entry, inaccessible_entry)
-    scan_failures = ({"side_effect": PermissionError("test directory cannot be scanned")}, {"return_value": partial_scan},)
-    for scan_failure in scan_failures:
-        with mock.patch.object(pipeline_launcher.os, "scandir", **scan_failure), mock.patch.object(pipeline_launcher, "run_stage") as stage:
+    missing_root = root / "missing_asset_root"
+    missing_root_options = pipeline_launcher.parse_arguments([LIT_SKIP_BUILD, LIT_REPO_ROOT, str(args.repo_root), LIT_ASSET_ROOT, str(missing_root), LIT_OUTPUT_DIRECTORY, str(output), LIT_CACHE_DIRECTORY, str(root / LIT_C), LIT_CONFIGURATION, LIT_TESTS,
+        LIT_DEPENDENCY_COMPUTER, str(args.dependency_computer), LIT_ASSET_BUILDER, str(args.asset_builder), LIT_ASSET_GATHERER, str(args.asset_gatherer),])
+    invalid_input_options = pipeline_launcher.parse_arguments([LIT_SKIP_BUILD, LIT_REPO_ROOT, str(args.repo_root), LIT_ASSET_ROOT, str(asset_root), LIT_INPUT, str(root / "missing_input.nwb"), LIT_OUTPUT_DIRECTORY, str(output), LIT_CACHE_DIRECTORY, str(root / LIT_C), LIT_CONFIGURATION, LIT_TESTS,
+        LIT_DEPENDENCY_COMPUTER, str(args.dependency_computer), LIT_ASSET_BUILDER, str(args.asset_builder), LIT_ASSET_GATHERER, str(args.asset_gatherer),])
+    for bad_options in (missing_root_options, invalid_input_options):
+        with mock.patch.object(pipeline_launcher, "run_stage") as stage:
             try:
-                pipeline_launcher.cook(options)
-            except PermissionError:
+                pipeline_launcher.cook(bad_options)
+            except ValueError:
                 pass
             else:
-                raise AssertionError("pipeline launcher accepted an incomplete asset discovery result")
+                raise AssertionError("pipeline launcher accepted a missing asset root or invalid input")
             stage.assert_not_called()
         if read_volume(output) != previous_volume:
-            raise AssertionError("a discovery failure changed an already published volume")
+            raise AssertionError("a preflight validation failure changed an already published volume")
 
 
 def run_pipeline_tests(args: argparse.Namespace, root: pathlib.Path) -> None:
@@ -208,7 +204,7 @@ def run_pipeline_tests(args: argparse.Namespace, root: pathlib.Path) -> None:
             raise AssertionError("Windows directory input selection changed when path spelling used uppercase letters")
 
     cooked_directory = root / "cooked"
-    run_command([sys.executable, str(args.pipeline_launcher), LIT_SKIP_BUILD, *build_options, LIT_DEPENDENCY_COMPUTER, str(args.dependency_computer), LIT_ASSET_BUILDER, str(args.asset_builder), LIT_ASSET_GATHERER, str(args.asset_gatherer),
+    run_command([sys.executable, str(args.pipeline_launcher), LIT_SKIP_BUILD, *build_options, LIT_INPUT, str(first_asset), str(second_asset), LIT_DEPENDENCY_COMPUTER, str(args.dependency_computer), LIT_ASSET_BUILDER, str(args.asset_builder), LIT_ASSET_GATHERER, str(args.asset_gatherer),
          LIT_OUTPUT_DIRECTORY, str(cooked_directory)], root,)
     if read_volume(cooked_directory) != combined_payloads:
         raise AssertionError("pipeline orchestration did not gather all built runtime payloads")
@@ -236,12 +232,12 @@ def run_pipeline_tests(args: argparse.Namespace, root: pathlib.Path) -> None:
     if read_volume(gathered_directory) != combined_payloads:
         raise AssertionError("a missing gather input changed an already published volume")
 
-    run_command([sys.executable, str(args.pipeline_launcher), LIT_SKIP_BUILD, *build_options, LIT_DEPENDENCY_COMPUTER, str(args.dependency_computer), LIT_ASSET_BUILDER, str(args.asset_builder), LIT_ASSET_GATHERER, str(args.asset_gatherer),
+    run_command([sys.executable, str(args.pipeline_launcher), LIT_SKIP_BUILD, *build_options, LIT_INPUT, str(first_asset), LIT_DEPENDENCY_COMPUTER, str(args.dependency_computer), LIT_ASSET_BUILDER, str(args.asset_builder), LIT_ASSET_GATHERER, str(args.asset_gatherer),
          LIT_OUTPUT_DIRECTORY, str(cooked_directory), LIT_ASSET_TYPE, ASSET_TYPE_SENTINEL], root, failure=True,)
     if read_volume(cooked_directory) != combined_payloads:
         raise AssertionError("a failed build stage did not preserve the previously cooked volume")
 
-    failure_output = run_command([sys.executable, str(args.pipeline_launcher), LIT_SKIP_BUILD, *build_options, LIT_DEPENDENCY_COMPUTER, str(args.dependency_computer), LIT_ASSET_BUILDER, str(args.asset_builder), LIT_ASSET_GATHERER, str(args.asset_gatherer),
+    failure_output = run_command([sys.executable, str(args.pipeline_launcher), LIT_SKIP_BUILD, *build_options, LIT_INPUT, str(first_asset), LIT_DEPENDENCY_COMPUTER, str(args.dependency_computer), LIT_ASSET_BUILDER, str(args.asset_builder), LIT_ASSET_GATHERER, str(args.asset_gatherer),
          LIT_OUTPUT_DIRECTORY, str(cooked_directory), LIT_ASSET_TYPE, LIT_EMPTY_ASSET_TYPE], root, failure=True,)
     if "unsupported --asset-type ''" not in failure_output:
         raise AssertionError(f"pipeline launcher accepted or replaced an explicitly empty domain:\n{failure_output[-4000:]}")

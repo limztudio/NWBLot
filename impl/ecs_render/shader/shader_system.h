@@ -7,6 +7,7 @@
 
 #include "shader_path_resolver.h"
 
+#include <impl/assets_scene/asset.h>
 #include <impl/assets_shader/loader.h>
 
 #include <core/assets/global.h>
@@ -70,12 +71,23 @@ public:
 
 
 public:
+    void setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept{ m_activeSceneSubsystems = subsystems; }
+    [[nodiscard]] Name resolveShaderName(const Name& shaderName)const noexcept{
+        if(m_activeSceneSubsystems){
+            const auto resolved = m_activeSceneSubsystems->findAsset(shaderName);
+            if(resolved.valid())
+                return resolved.name();
+        }
+        return shaderName;
+    }
+
     void invalidateResources()noexcept;
     template<typename TShader>
         requires(IsBaseOf_V<IShader, TShader> && requires{ TShader::s_Stage; })
     [[nodiscard]] bool loadShader(Core::ShaderHandle& outShader, const Name& shaderName, const AStringView variantName, const Name& debugName, const Name* archiveStageName = nullptr){
         static_assert(Core::ShaderType::IsValid(TShader::s_Stage));
-        return ShaderAssetLoader::Load<TShader>(outShader, shaderName, variantName, debugName, m_graphics, m_assetManager, m_shaderPathResolver, s_RendererAssetOwnerName, archiveStageName);
+        const Name resolvedShaderName = resolveShaderName(shaderName);
+        return ShaderAssetLoader::Load<TShader>(outShader, resolvedShaderName, variantName, debugName, m_graphics, m_assetManager, m_shaderPathResolver, s_RendererAssetOwnerName, archiveStageName);
     }
 
     [[nodiscard]] bool loadShaderForStage(Core::ShaderHandle& outShader, const Name& shaderName, AStringView variantName, Core::ShaderType::Mask shaderType, const Name& debugName, const Name* archiveStageName = nullptr);
@@ -90,6 +102,7 @@ private:
     Core::GraphicsRuntime& m_graphics;
     Core::Assets::AssetManager& m_assetManager;
     RendererShaderPathResolveCallback& m_shaderPathResolver;
+    const ActiveSceneSubsystems* m_activeSceneSubsystems = nullptr;
     Core::ShaderHandle m_deferredCompositeVertexShader;
 };
 

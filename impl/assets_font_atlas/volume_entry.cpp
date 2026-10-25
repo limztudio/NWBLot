@@ -10,7 +10,11 @@
 
 #include "cook.h"
 
+#include <impl/assets_font/asset.h>
+
+#include <core/assets/cook_dependency_registry.h>
 #include <core/assets/cook_entry_registry.h>
+#include <core/assets/cook_metadata.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -28,8 +32,19 @@ namespace __hidden_font_atlas_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr AStringView s_FontAtlasDiagnosticPrefix = "Font atlas meta";
+static constexpr AStringView s_FontField = "font";
+
+
 static Expected<FontAtlas> BuildFontAtlasCookedAsset(FontAtlasCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     return BuildFontAtlasAsset(entry, arena, scratchArena);
+}
+
+static bool ExtractFontAtlasDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
+    const auto fontRef = Core::Assets::ReadMetadataAssetRefField<Font>(context.nwbFilePath, context.asset, s_FontAtlasDiagnosticPrefix, s_FontField, true);
+    if(!fontRef)
+        return false;
+    return collector.addAssetDependency(fontRef->name(), Font::AssetTypeName());
 }
 
 static bool RegisterFontAtlasCookEntry(Core::Assets::CookEntryRegistry& registry){
@@ -45,11 +60,16 @@ static bool RegisterFontAtlasCookEntry(Core::Assets::CookEntryRegistry& registry
     );
 }
 
+static bool RegisterFontAtlasCookDependency(Core::Assets::CookDependencyRegistry& registry){
+    return registry.registerType(FontAtlas::AssetTypeName(), &ExtractFontAtlasDependencies);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_DEFINE_COOK_ENTRY_REGISTRAR(s_FontAtlasCookEntryRegistrar, RegisterFontAtlasCookEntry);
+NWB_DEFINE_COOK_DEPENDENCY_REGISTRAR(s_FontAtlasCookDependencyRegistrar, RegisterFontAtlasCookDependency);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

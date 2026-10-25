@@ -36,7 +36,6 @@ inline constexpr AStringView s_PipelineAssetRootOption = "--asset-root";
 inline constexpr AStringView s_PipelineCacheDirectoryOption = "--cache-directory";
 inline constexpr AStringView s_PipelineAssetTypeOption = "--asset-type";
 inline constexpr AStringView s_PipelineConfigurationOption = "--configuration";
-inline constexpr AStringView s_PipelineSkinDependenciesOption = "--include-skin-dependencies";
 inline constexpr AStringView s_PipelineCliHelpRequestName = "CallForHelp";
 
 struct PipelineOptions{
@@ -48,7 +47,6 @@ struct PipelineOptions{
     ACompactString configuration;
     // Unset when --asset-type is omitted; the asset builder owns the default domain.
     Optional<ACompactString> assetType;
-    bool includeSkinDependencies = false;
 
 
 public:
@@ -94,7 +92,6 @@ private:
     AInteropString m_cacheDirectory;
     AInteropString m_configuration;
     AInteropString m_assetType;
-    bool m_includeSkinDependencies = false;
     PipelineTool::Enum m_tool;
     CLI::App m_app;
 };

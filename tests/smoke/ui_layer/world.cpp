@@ -52,12 +52,12 @@ namespace __hidden_ui_layer_smoke_world{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr Core::Assets::AssetRef<Impl::UiSkin> s_DefaultSkin{"engine/ui/skins/default/atlas"};
-static constexpr Core::Assets::AssetRef<Impl::UiSkin> s_AlternateSkin{"project/ui/skins/alternate/atlas"};
-static constexpr Core::Assets::AssetRef<Impl::Font> s_DefaultLatin{"engine/ui/fonts/default/latin/face"};
-static constexpr Core::Assets::AssetRef<Impl::Font> s_DefaultKorean{"engine/ui/fonts/default/korean/face"};
-static constexpr Core::Assets::AssetRef<Impl::FontAtlas> s_DefaultLatinAtlas{"engine/ui/fonts/default/latin/atlas"};
-static constexpr Core::Assets::AssetRef<Impl::FontAtlas> s_DefaultKoreanAtlas{"engine/ui/fonts/default/korean/atlas"};
+static constexpr Core::Assets::AssetRef<Impl::UiSkin> s_DefaultSkin{"default_skin"};
+static constexpr Core::Assets::AssetRef<Impl::UiSkin> s_AlternateSkin{"alternate_skin"};
+static constexpr Core::Assets::AssetRef<Impl::Font> s_DefaultLatin{"default_latin_face"};
+static constexpr Core::Assets::AssetRef<Impl::Font> s_DefaultKorean{"default_korean_face"};
+static constexpr Core::Assets::AssetRef<Impl::FontAtlas> s_DefaultLatinAtlas{"default_latin_atlas"};
+static constexpr Core::Assets::AssetRef<Impl::FontAtlas> s_DefaultKoreanAtlas{"default_korean_atlas"};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

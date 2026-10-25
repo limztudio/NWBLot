@@ -1,0 +1,20 @@
+scene asset;
+
+asset.subsystems = [
+    "engine/subsystems/renderer",
+    "engine/subsystems/csg"
+];
+
+asset.assets = {
+    "csg_caustic_split": "project/meshes/csg_caustic_split",
+    "csg_shadow_open_2": "project/meshes/csg_shadow_open_2",
+    "csg_shadow_open_5": "project/meshes/csg_shadow_open_5",
+    "csg_shadow_open_6": "project/meshes/csg_shadow_open_6",
+    "csg_shadow_open_64": "project/meshes/csg_shadow_open_64",
+    "csg_shadow_open_65": "project/meshes/csg_shadow_open_65",
+    "cube_hard_edges": "project/meshes/cube_hard_edges",
+    "shadow_plane": "project/meshes/shadow_plane",
+    "csg_caustic_glass": "project/smoke/csg_caustic/materials/glass",
+    "csg_caustic_receiver": "project/smoke/csg_caustic/materials/receiver",
+    "reflection_optical_volume": "project/smoke/reflection/materials/optical_volume"
+};

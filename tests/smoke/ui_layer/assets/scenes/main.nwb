@@ -1,0 +1,9 @@
+scene asset;
+
+asset.subsystems = [
+    "engine/subsystems/ui"
+];
+
+asset.assets = {
+    "alternate_skin": "project/ui/skins/alternate/atlas"
+};

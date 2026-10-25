@@ -122,9 +122,7 @@ RayTracingDeferredGraphResourceSnapshot RendererRayTracingSystem::snapshotDeferr
         .rayTraceContextReadSubmissionTokens = contextReadTokenCount != 0u
             ? Span<const Core::QueueSubmissionToken>(state.m_rayTraceContextReadSubmissionTokens.data(), contextReadTokenCount)
             : Span<const Core::QueueSubmissionToken>{},
-        .csgTraceBoundsBuffers = hasCsgTrace
-            ? Span<const Core::BufferHandle>(m_lightSpaceShadow.m_csg.dynamicBounds.data(), m_lightSpaceShadow.m_csg.dynamicBounds.size())
-            : Span<const Core::BufferHandle>{},
+        .csgTraceBoundsBuffers = hasCsgTrace ? Span<const Core::BufferHandle>(m_lightSpaceShadow.m_csg.dynamicBounds) : Span<const Core::BufferHandle>{},
         .shadowInstanceMaterialBuffer = state.m_shadowInstanceMaterialBuffer,
         .shadowMaterialTypedBuffer = state.m_shadowMaterialTypedBuffer,
         .shadowInstanceBuffer = state.m_shadowInstanceBuffer,

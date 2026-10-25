@@ -188,14 +188,13 @@ static Expected<MaterialCookEntry::StageShaderMap> ParseMaterialStageShaders(con
     stageShaders.reserve(shadersValue->asMap().size());
 
     for(const auto& [stageKey, shaderValue] : shadersValue->asMap()){
-        const AStringView stageKeyText(stageKey.data(), stageKey.size());
+        const AStringView stageKeyText(stageKey);
         if(!shaderValue.isString()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shader '{}' must be a string"), PathToString<tchar>(nwbFilePath), ConvertString(stageKeyText));
             return MakeUnexpected(Failure{});
         }
 
-        const Core::Metascript::MStringView shaderText = shaderValue.asString();
-        const AStringView shaderPath = TrimView(AStringView(shaderText.data(), shaderText.size()));
+        const AStringView shaderPath = TrimView(shaderValue.asString());
         if(!HasProjectAssetVirtualRoot(shaderPath, scratchArena)){
             NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shader stage '{}' must use the project/ virtual root"), PathToString<tchar>(nwbFilePath), ConvertString(stageKeyText));
             return MakeUnexpected(Failure{});

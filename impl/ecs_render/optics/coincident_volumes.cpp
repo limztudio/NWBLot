@@ -188,7 +188,7 @@ void RendererOpticalVolumeSelection::prepare(Core::ECS::World& world, RendererMa
         }
         candidates.push_back(candidate);
     }
-    select(Span<const CoincidentOpticalVolumeCandidate>(candidates.data(), candidates.size()), scratchArena);
+    select(candidates, scratchArena);
 }
 
 void RendererOpticalVolumeSelection::select(const Span<const CoincidentOpticalVolumeCandidate> candidates, Core::Alloc::ScratchArena& scratchArena){

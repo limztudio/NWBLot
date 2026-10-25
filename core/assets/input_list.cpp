@@ -41,7 +41,7 @@ bool ReadAssetInputList(AssetVector<AssetString>& inputs, const Path& path, Allo
         if(resolveRelativePaths){
             ::Path<Alloc::ScratchArena> resolved(scratchArena, value);
             if(!resolved.isAbsolute())
-                resolved = ::Path<Alloc::ScratchArena>(scratchArena, path).parentPath() / resolved;
+                resolved = ::Path<Alloc::ScratchArena>(scratchArena, path.parentPathView()) / resolved;
             inputs.emplace_back(PathToString(arena, resolved.lexicallyNormal()));
         }
         else

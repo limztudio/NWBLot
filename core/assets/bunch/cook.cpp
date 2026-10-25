@@ -43,15 +43,11 @@ using ScratchNameHashSet = HashSet<NameHash, ScratchArena, Hasher<NameHash>, Equ
 
 
 [[nodiscard]] static AStringView DeclarationType(const Metascript::Document::Declaration& declaration)noexcept{
-    return AStringView(declaration.type.data(), declaration.type.size());
+    return declaration.type;
 }
 
 [[nodiscard]] static AStringView DeclarationVariable(const Metascript::Document::Declaration& declaration)noexcept{
-    return AStringView(declaration.variable.data(), declaration.variable.size());
-}
-
-[[nodiscard]] static Metascript::MStringView DeclarationVariableMetaView(const Metascript::Document::Declaration& declaration)noexcept{
-    return Metascript::MStringView(declaration.variable.data(), declaration.variable.size());
+    return declaration.variable;
 }
 
 [[nodiscard]] static Expected<bool, NameTextError::Enum> IsAssetBunchType(const AStringView typeName){
@@ -160,7 +156,7 @@ struct ItemVirtualPath{
     virtualPathText += '/';
     virtualPathText.append(variableName.data(), variableName.size());
 
-    const auto virtualPath = Name::FromText(AStringView(virtualPathText.data(), virtualPathText.size()));
+    const auto virtualPath = Name::FromText(AStringView(virtualPathText));
     if(!virtualPath)
         return MakeUnexpected(Failure{});
     return ItemVirtualPath{ *virtualPath, Move(virtualPathText) };
@@ -220,7 +216,7 @@ struct ItemVirtualPath{
     result.makeMap();
     result.asMap().reserve(source.asMap().size());
     for(const auto& [key, value] : source.asMap()){
-        Metascript::Value& field = result.field(Metascript::MStringView(key.data(), key.size()));
+        Metascript::Value& field = result.field(key);
         auto resolved = ResolveAssetReferenceValue(nwbFilePath, doc, declarations, baseVirtualPath, assetVariableHashes, value, valueArena, scratchArena, resolvingVariableHashes);
         if(!resolved)
             return MakeUnexpected(Failure{});
@@ -243,7 +239,7 @@ struct ItemVirtualPath{
     const Metascript::MStringView reference = source.asReference();
     const Metascript::Document::Declaration* declaration = declarations.find(reference);
     if(!declaration){
-        NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': reference '{}' does not target a declared asset"), PathToString<tchar>(nwbFilePath), ConvertString(AStringView(reference.data(), reference.size())));
+        NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': reference '{}' does not target a declared asset"), PathToString<tchar>(nwbFilePath), ConvertString(reference));
         return MakeUnexpected(Failure{});
     }
 
@@ -255,13 +251,13 @@ struct ItemVirtualPath{
     const NameHash variableHash = *variableHashResult;
     if(assetVariableHashes.find(variableHash) == assetVariableHashes.end()){
         if(!resolvingVariableHashes.insert(variableHash).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': cyclic local metadata reference '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(AStringView(reference.data(), reference.size())));
+            NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': cyclic local metadata reference '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(reference));
             return MakeUnexpected(Failure{});
         }
 
-        const Metascript::Value* localValue = doc.findVariable(DeclarationVariableMetaView(*declaration));
+        const Metascript::Value* localValue = doc.findVariable(DeclarationVariable(*declaration));
         if(!localValue){
-            NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': reference '{}' targets a missing local variable"), PathToString<tchar>(nwbFilePath), ConvertString(AStringView(reference.data(), reference.size())));
+            NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': reference '{}' targets a missing local variable"), PathToString<tchar>(nwbFilePath), ConvertString(reference));
             return MakeUnexpected(Failure{});
         }
 
@@ -272,12 +268,12 @@ struct ItemVirtualPath{
 
     const auto virtualPath = BuildItemVirtualPath(baseVirtualPath, DeclarationVariable(*declaration), scratchArena);
     if(!virtualPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': failed to build virtual path for reference '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(AStringView(reference.data(), reference.size())));
+        NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': failed to build virtual path for reference '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(reference));
         return MakeUnexpected(Failure{});
     }
 
     Metascript::Value result(valueArena);
-    result.setString(Metascript::MStringView(virtualPath->text.data(), virtualPath->text.size()));
+    result.setString(virtualPath->text);
     return result;
 }
 
@@ -364,7 +360,7 @@ Expected<ExpandedAssetMetadataVector> ExpandAssetBunch(const Path& assetRoot, co
         return MakeUnexpected(Failure{});
     }
 
-    const Metascript::Value* bunchValue = doc.findVariable(DeclarationVariableMetaView(*bunchDeclaration));
+    const Metascript::Value* bunchValue = doc.findVariable(DeclarationVariable(*bunchDeclaration));
     if(!bunchValue || !bunchValue->isList()){
         NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': declaration must be initialized with a list"), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
@@ -414,17 +410,17 @@ Expected<ExpandedAssetMetadataVector> ExpandAssetBunch(const Path& assetRoot, co
 
         for(const auto itemDeclaration : itemDeclarations){
             const AStringView variableName = DeclarationVariable(*itemDeclaration);
-            const Metascript::Value* assetValue = doc.findVariable(DeclarationVariableMetaView(*itemDeclaration));
+            const Metascript::Value* assetValue = doc.findVariable(variableName);
             if(!assetValue){
                 NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': references missing variable '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(variableName));
                 return MakeUnexpected(Failure{});
             }
 
-            auto resolvedAssetValue = ResolveAssetReferenceValue(nwbFilePath, doc, *declarations, AStringView(baseVirtualPathText->data(), baseVirtualPathText->size()), usedVariables, *assetValue, assetValue->arena(), scratchArena, resolvingVariableHashes);
+            auto resolvedAssetValue = ResolveAssetReferenceValue(nwbFilePath, doc, *declarations, *baseVirtualPathText, usedVariables, *assetValue, assetValue->arena(), scratchArena, resolvingVariableHashes);
             if(!resolvedAssetValue)
                 return MakeUnexpected(Failure{});
 
-            const auto virtualPath = BuildItemVirtualPath(AStringView(baseVirtualPathText->data(), baseVirtualPathText->size()), variableName, scratchArena);
+            const auto virtualPath = BuildItemVirtualPath(*baseVirtualPathText, variableName, scratchArena);
             if(!virtualPath){
                 NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': failed to build virtual path for variable '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(variableName));
                 return MakeUnexpected(Failure{});

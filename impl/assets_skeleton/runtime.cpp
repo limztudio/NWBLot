@@ -56,7 +56,7 @@ u32 Skeleton::findJointIndex(const Name jointName)const noexcept{
 bool Skeleton::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     if(!checkVirtualPath(NWB_TEXT("Skeleton::validatePayload")))
         return false;
-    return AssetsSkeletonPayloadDetail::ValidateJoints<Core::Assets::AssetArena>(Span<const SkeletonJoint>(m_joints.data(), m_joints.size()), m_jointIndices, scratchArena);
+    return AssetsSkeletonPayloadDetail::ValidateJoints<Core::Assets::AssetArena>(m_joints, m_jointIndices, scratchArena);
 }
 
 bool Skeleton::loadBinary(const Span<const u8> binary){

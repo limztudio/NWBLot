@@ -512,7 +512,7 @@ Expected<FrameGraphPayload> ParseFrameGraphPayload(TelemetryArena& arena, Alloc:
         parsedPayload.packetSubmissionStatistics.push_back(*statistics);
     }
     if(parsedPayload.packetSubmissionStatisticsPresent){
-        if(!FrameGraphStatisticsCodecDetail::ValidatePacketSubmissionStatisticsTable(scratchArena, parsedPayload.nodes, parsedPayload.physicalQueueRuntimeStatistics, parsedPayload.packetSubmissionStatistics))
+        if(!FrameGraphStatisticsCodecDetail::ValidatePacketSubmissionStatisticsTable<FrameGraphNodePayload>(scratchArena, parsedPayload.nodes, parsedPayload.physicalQueueRuntimeStatistics, parsedPayload.packetSubmissionStatistics))
             return MakeUnexpected(Failure{});
     }
 

@@ -56,7 +56,7 @@ struct IncludeDirective{
 [[nodiscard]] Expected<::Path<Core::Alloc::ScratchArena>> ResolveIncludeFile(
     AStringView includeName,
     IncludeKind::Enum kind,
-    const ::Path<Core::Alloc::ScratchArena>& sourceDirectory,
+    TStringView sourceDirectory,
     Span<const Path> includeDirectories,
     Core::Alloc::ScratchArena& scratchArena
 );
@@ -135,7 +135,7 @@ template<typename SourceArenaT, typename DependencyVectorT>
                     NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: unsupported or untracked dependency directive '{}' in '{}'"), ConvertString(TrimView(line)), PathToString<tchar>(absolutePath));
                     return false;
                 }
-                auto includePath = ShaderSourceDependencies::ResolveIncludeFile(includeName, includeKind, absolutePath.parentPath(), includeDirectories, scratchArena);
+                auto includePath = ShaderSourceDependencies::ResolveIncludeFile(includeName, includeKind, absolutePath.parentPathView(), includeDirectories, scratchArena);
                 if(!includePath){
                     NWB_LOGGER_ERROR(NWB_TEXT("Unable to resolve include '{}' from '{}'"), ConvertString(includeName), PathToString<tchar>(absolutePath));
                     return false;

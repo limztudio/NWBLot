@@ -268,9 +268,9 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
             });
         }
     }
-    const Span<const MeshSkinningGraphDispatchPlan> allDispatchPlans(dispatchPlans.data(), dispatchPlans.size());
+    const Span<const MeshSkinningGraphDispatchPlan> allDispatchPlans(dispatchPlans);
     TaskGraphSkinningFinalizerTask::Payload finalizerPayload(*this, allDispatchPlans);
-    MeshSkinningLocalBoundsTask::Payload localBoundsPayload(m_graphics, timingTicket, Span<const MeshSkinningLocalBoundsDispatch>(localBoundsDispatches.data(), localBoundsDispatches.size()));
+    MeshSkinningLocalBoundsTask::Payload localBoundsPayload(m_graphics, timingTicket, localBoundsDispatches);
     Core::GpuTaskId postDispatchDependency = terminalTask;
     if(!resourceUses->deformation.empty()){
         Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena>& deformationPlans = m_frameDeformationPlans;
@@ -280,7 +280,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
             if(plan.hasActiveSkin)
                 deformationPlans.push_back(plan);
         }
-        TaskGraphSkinningDeformationTask::Payload deformationPayload(*this, timingTicket, Span<const MeshSkinningGraphDispatchPlan>(deformationPlans.data(), deformationPlans.size()));
+        TaskGraphSkinningDeformationTask::Payload deformationPayload(*this, timingTicket, deformationPlans);
 
         Core::GpuTaskDesc deformationDesc;
         deformationDesc

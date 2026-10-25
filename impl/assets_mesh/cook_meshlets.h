@@ -24,18 +24,10 @@ NWB_IMPL_BEGIN
 // Greedy meshlet growth: seed an unvisited triangle, grow along its frontier, then flush bounds and zipped refs.
 class MeshCookMeshlets final : NoCopy{
 public:
-    template<typename FrontierVectorT>
-    static void ClearMeshletFrontier(FrontierVectorT& frontier, Span<u8> frontierFlags)noexcept(MeshletCookExceptionDetail::FrontierIndexIterationIsNothrow<FrontierVectorT>() && noexcept(frontier.clear()));
-    template<typename FrontierVectorT>
-    static void RemoveMeshletFrontierCandidate(FrontierVectorT& frontier, Span<u8> frontierFlags, const usize frontierOffset)noexcept(
-        noexcept(DeclVal<void(*)(u32)noexcept>()(frontier[frontierOffset]))
-        && noexcept(frontier[frontierOffset] = frontier.back())
-        && noexcept(frontier.pop_back())
-    );
-    template<typename FrontierVectorT>
-    static void AddMeshletTriangleNeighborsToFrontier(const MeshletTrianglePrecompute& trianglePrecompute, const u32 triangleIndex, FrontierVectorT& frontier, Span<u8> frontierFlags)noexcept(noexcept(frontier.push_back(DeclVal<const u32&>())));
-    template<typename VertexRefVectorT, typename PrimitiveIndexVectorT>
-    [[nodiscard]] static bool AddMeshletTriangleToBuilder(const Path& nwbFilePath, const TStringView metaKind, const MeshletTriangleData& triangle, VertexRefVectorT& localSourceVertexRefs, MeshletDesc& meshlet, PrimitiveIndexVectorT& primitiveIndices);
+    static void ClearMeshletFrontier(Vector<u32, Core::Alloc::ScratchArena>& frontier, Span<u8> frontierFlags)noexcept;
+    static void RemoveMeshletFrontierCandidate(Vector<u32, Core::Alloc::ScratchArena>& frontier, Span<u8> frontierFlags, const usize frontierOffset)noexcept;
+    static void AddMeshletTriangleNeighborsToFrontier(const MeshletTrianglePrecompute& trianglePrecompute, const u32 triangleIndex, Vector<u32, Core::Alloc::ScratchArena>& frontier, Span<u8> frontierFlags);
+    [[nodiscard]] static bool AddMeshletTriangleToBuilder(const Path& nwbFilePath, const TStringView metaKind, const MeshletTriangleData& triangle, Vector<u32, Core::Alloc::ScratchArena>& localSourceVertexRefs, MeshletDesc& meshlet, Core::Assets::AssetVector<u8>& primitiveIndices);
     [[nodiscard]] static bool AddVisitedMeshletTriangle(
         const Path& nwbFilePath,
         const TStringView metaKind,
@@ -74,65 +66,6 @@ public:
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename FrontierVectorT>
-void MeshCookMeshlets::ClearMeshletFrontier(FrontierVectorT& frontier, const Span<u8> frontierFlags)noexcept(MeshletCookExceptionDetail::FrontierIndexIterationIsNothrow<FrontierVectorT>() && noexcept(frontier.clear())){
-    for(const u32 triangleIndex : frontier)
-        frontierFlags[triangleIndex] = 0u;
-    frontier.clear();
-}
-
-
-template<typename FrontierVectorT>
-void MeshCookMeshlets::RemoveMeshletFrontierCandidate(FrontierVectorT& frontier, const Span<u8> frontierFlags, const usize frontierOffset)noexcept(
-    noexcept(DeclVal<void(*)(u32)noexcept>()(frontier[frontierOffset]))
-    && noexcept(frontier[frontierOffset] = frontier.back())
-    && noexcept(frontier.pop_back())
-){
-    const u32 triangleIndex = frontier[frontierOffset];
-    frontierFlags[triangleIndex] = 0u;
-    frontier[frontierOffset] = frontier.back();
-    frontier.pop_back();
-}
-
-
-template<typename FrontierVectorT>
-void MeshCookMeshlets::AddMeshletTriangleNeighborsToFrontier(const MeshletTrianglePrecompute& trianglePrecompute, const u32 triangleIndex, FrontierVectorT& frontier, const Span<u8> frontierFlags)noexcept(noexcept(frontier.push_back(DeclVal<const u32&>()))){
-    const MeshletTriangleData& triangle = trianglePrecompute.triangles[triangleIndex];
-    for(const u32 positionIndex : triangle.positions){
-        const u32 triangleOffsetBegin = trianglePrecompute.positionTriangleOffsets[positionIndex];
-        const u32 triangleOffsetEnd = trianglePrecompute.positionTriangleOffsets[positionIndex + 1u];
-        for(u32 triangleOffset = triangleOffsetBegin; triangleOffset < triangleOffsetEnd; ++triangleOffset){
-            const u32 neighborTriangleIndex = trianglePrecompute.positionTriangleIndices[triangleOffset];
-            if(neighborTriangleIndex == triangleIndex || trianglePrecompute.visitedTriangles[neighborTriangleIndex] != 0u || frontierFlags[neighborTriangleIndex] != 0u)
-                continue;
-
-            frontierFlags[neighborTriangleIndex] = 1u;
-            frontier.push_back(neighborTriangleIndex);
-        }
-    }
-}
-
-
-template<typename VertexRefVectorT, typename PrimitiveIndexVectorT>
-bool MeshCookMeshlets::AddMeshletTriangleToBuilder(const Path& nwbFilePath, const TStringView metaKind, const MeshletTriangleData& triangle, VertexRefVectorT& localSourceVertexRefs, MeshletDesc& meshlet, PrimitiveIndexVectorT& primitiveIndices){
-    for(const u32 vertexRefIndex : triangle.vertexRefs){
-        const auto found = MeshletCandidateSearch::FindMeshletLocalVertex(localSourceVertexRefs, vertexRefIndex);
-        u8 localVertex = found ? *found : 0u;
-        if(!found){
-            if(localSourceVertexRefs.size() >= s_MeshMaxMeshletVertices){
-                NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': triangle cannot fit within one meshlet"), metaKind, PathToString<tchar>(nwbFilePath));
-                return false;
-            }
-            localVertex = static_cast<u8>(localSourceVertexRefs.size());
-            localSourceVertexRefs.push_back(vertexRefIndex);
-        }
-        primitiveIndices.push_back(localVertex);
-    }
-    meshlet.counts = PackMeshletCounts(0u, MeshletPrimitiveCount(meshlet) + 1u, 0u, 0u);
-    return true;
-}
 
 
 template<typename CookEntryT>

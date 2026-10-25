@@ -155,13 +155,13 @@ Expected<ShaderSourceDependencies::IncludeDirective> ShaderSourceDependencies::E
 Expected<::Path<Core::Alloc::ScratchArena>> ShaderSourceDependencies::ResolveIncludeFile(
     const AStringView includeName,
     const ShaderSourceDependencies::IncludeKind::Enum kind,
-    const ::Path<Core::Alloc::ScratchArena>& sourceDirectory,
+    const TStringView sourceDirectory,
     const Span<const Path> includeDirectories,
     Core::Alloc::ScratchArena& scratchArena
 ){
 
     if(kind == ShaderSourceDependencies::IncludeKind::Relative){
-        ::Path<Alloc::ScratchArena> localCandidate = (sourceDirectory / includeName).lexicallyNormal();
+        ::Path<Alloc::ScratchArena> localCandidate = (::Path<Alloc::ScratchArena>(scratchArena, sourceDirectory) / includeName).lexicallyNormal();
         const auto localCandidateQueryResult = IsRegularFile(localCandidate);
         if(localCandidateQueryResult && *localCandidateQueryResult){
             return localCandidate;

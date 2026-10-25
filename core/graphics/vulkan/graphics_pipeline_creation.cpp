@@ -201,7 +201,7 @@ Expected<GraphicsPipelineHandle> Device::createGraphicsPipeline(const GraphicsPi
         VK_DYNAMIC_STATE_STENCIL_WRITE_MASK,
         VK_DYNAMIC_STATE_STENCIL_REFERENCE,
     };
-    const auto fixedState = VulkanDetail::BuildGraphicsPipelineFixedState(fbinfo, desc.renderState, VulkanDetail::PipelineStencilFaceMode::IncludeStencilFaces, dynamicStates, static_cast<u32>(LengthOf(dynamicStates)), s_OperationName, scratchArena);
+    const auto fixedState = VulkanDetail::BuildGraphicsPipelineFixedState(fbinfo, desc.renderState, VulkanDetail::PipelineStencilFaceMode::IncludeStencilFaces, dynamicStates, s_OperationName, scratchArena);
     if(!fixedState)
         return MakeUnexpected(Failure{});
 

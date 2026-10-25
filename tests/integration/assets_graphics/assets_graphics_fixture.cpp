@@ -123,7 +123,7 @@ AStringView AssetsGraphicsFixture::AssetsGraphicsTestConfigurationName()noexcept
 
 
 AssetsGraphicsFixture::Path AssetsGraphicsFixture::AssetsGraphicsTestRepoRoot(AssetsGraphicsFixture::TestArena& testArena){
-    return Path(testArena.arena, __FILE__).parentPath().parentPath().parentPath().parentPath().lexicallyNormal();
+    return NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
 }
 
 
@@ -184,7 +184,7 @@ bool AssetsGraphicsFixture::BuildPreparedGraphicsAssetRoots(
         const AStringView virtualRoot = parentDirectoryName == __hidden_assets_graphics_fixture::s_EngineDirectory ? NWB::Core::Assets::s_EngineVirtualRoot : NWB::Core::Assets::s_ProjectVirtualRoot;
 
         auto assetRootText = PathToString(testArena.arena, assetRoot);
-        options.assetRoots.emplace_back(testArena.arena, AStringView(assetRootText.data(), assetRootText.size()), virtualRoot);
+        options.assetRoots.emplace_back(testArena.arena, assetRootText, virtualRoot);
     }
     options.outputDirectory = PathToString(testArena.arena, outputDirectory);
     options.cacheDirectory = PathToString(testArena.arena, root / __hidden_assets_graphics_fixture::s_CacheDirectory);

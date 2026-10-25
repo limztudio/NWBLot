@@ -68,7 +68,7 @@ bool AppendMeshObjectShaderEntries(const ResolvedCookPaths& resolvedPaths, const
     prepared.entry.stage = Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::VertexStage);
     prepared.entry.archiveStage = MaterialShaderStageNames::s_MeshObjectVertexArchiveStageText;
     prepared.entry.emitMeshComputeShadow = false;
-    prepared.sourcePath = meshEntry.sourcePath.parentPath() / s_ObjectVertexSourceName;
+    prepared.sourcePath = Path(cookArena, meshEntry.sourcePath.parentPathView()) / s_ObjectVertexSourceName;
     prepared.entry.source = PathToString(cookArena, prepared.sourcePath);
     prepared.includeDirectories = meshEntry.includeDirectories;
     prepared.variantCount = 1u;

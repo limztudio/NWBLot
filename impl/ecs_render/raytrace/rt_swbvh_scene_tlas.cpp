@@ -420,14 +420,7 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
             || !HasPreparedShadowMaterialContextBuffers(m_rayTracingState, instanceMaterials.size(), shadowInstanceData.size(), materialTypedUploadBytes)
         )
             return false;
-        if(!capturePreparedShadowMaterialContext(
-            PreparedShadowMaterialContextRoute::Hardware,
-            staticScene,
-            hwMaterialContextHash,
-            Span<const NwbRtInstanceMaterialGpu>(instanceMaterials.data(), instanceMaterials.size()),
-            Span<const InstanceGpuData>(shadowInstanceData.data(), shadowInstanceData.size()),
-            Span<const u8>(shadowMaterialTypedBytes.data(), materialTypedUploadBytes)
-        ))
+        if(!capturePreparedShadowMaterialContext(PreparedShadowMaterialContextRoute::Hardware, staticScene, hwMaterialContextHash, instanceMaterials, shadowInstanceData, Span<const u8>(shadowMaterialTypedBytes.data(), materialTypedUploadBytes)))
             return false;
 
     }
@@ -460,13 +453,7 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
         }
         bool captureTrusted = staticScene && contentComplete;
         if(m_lightSpaceShadow.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseOneFrame || m_lightSpaceShadow.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseTwoFrames){
-            captureIdentity = BuildLightSpaceCsgCaptureIdentity(
-                m_lightSpaceShadow.m_csg,
-                Span<const NwbRtInstanceMaterialGpu>(instanceMaterials.data(), instanceMaterials.size()),
-                Span<const InstanceGpuData>(shadowInstanceData.data(), shadowInstanceData.size()),
-                Span<const u8>(shadowMaterialTypedBytes.data(), shadowMaterialTypedBytes.size()),
-                Span<const Core::TextureHandle>(m_preparedShadowTraceMaterialSampledTextures.data(), m_preparedShadowTraceMaterialSampledTextures.size())
-            );
+            captureIdentity = BuildLightSpaceCsgCaptureIdentity(m_lightSpaceShadow.m_csg, instanceMaterials, shadowInstanceData, shadowMaterialTypedBytes, m_preparedShadowTraceMaterialSampledTextures);
             captureTrusted = m_lightSpaceShadow.m_csg.captureGeometryTrusted && contentComplete;
         }
         m_lightSpaceShadow.m_captureSceneIdentity = captureIdentity;

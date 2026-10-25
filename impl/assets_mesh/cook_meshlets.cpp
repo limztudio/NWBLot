@@ -14,6 +14,53 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void MeshCookMeshlets::ClearMeshletFrontier(Vector<u32, Core::Alloc::ScratchArena>& frontier, const Span<u8> frontierFlags)noexcept{
+    for(const u32 triangleIndex : frontier)
+        frontierFlags[triangleIndex] = 0u;
+    frontier.clear();
+}
+
+void MeshCookMeshlets::RemoveMeshletFrontierCandidate(Vector<u32, Core::Alloc::ScratchArena>& frontier, const Span<u8> frontierFlags, const usize frontierOffset)noexcept{
+    const u32 triangleIndex = frontier[frontierOffset];
+    frontierFlags[triangleIndex] = 0u;
+    frontier[frontierOffset] = frontier.back();
+    frontier.pop_back();
+}
+
+void MeshCookMeshlets::AddMeshletTriangleNeighborsToFrontier(const MeshletTrianglePrecompute& trianglePrecompute, const u32 triangleIndex, Vector<u32, Core::Alloc::ScratchArena>& frontier, const Span<u8> frontierFlags){
+    const MeshletTriangleData& triangle = trianglePrecompute.triangles[triangleIndex];
+    for(const u32 positionIndex : triangle.positions){
+        const u32 triangleOffsetBegin = trianglePrecompute.positionTriangleOffsets[positionIndex];
+        const u32 triangleOffsetEnd = trianglePrecompute.positionTriangleOffsets[positionIndex + 1u];
+        for(u32 triangleOffset = triangleOffsetBegin; triangleOffset < triangleOffsetEnd; ++triangleOffset){
+            const u32 neighborTriangleIndex = trianglePrecompute.positionTriangleIndices[triangleOffset];
+            if(neighborTriangleIndex == triangleIndex || trianglePrecompute.visitedTriangles[neighborTriangleIndex] != 0u || frontierFlags[neighborTriangleIndex] != 0u)
+                continue;
+
+            frontierFlags[neighborTriangleIndex] = 1u;
+            frontier.push_back(neighborTriangleIndex);
+        }
+    }
+}
+
+bool MeshCookMeshlets::AddMeshletTriangleToBuilder(const Path& nwbFilePath, const TStringView metaKind, const MeshletTriangleData& triangle, Vector<u32, Core::Alloc::ScratchArena>& localSourceVertexRefs, MeshletDesc& meshlet, Core::Assets::AssetVector<u8>& primitiveIndices){
+    for(const u32 vertexRefIndex : triangle.vertexRefs){
+        const auto found = MeshletCandidateSearch::FindMeshletLocalVertex(localSourceVertexRefs, vertexRefIndex);
+        u8 localVertex = found ? *found : 0u;
+        if(!found){
+            if(localSourceVertexRefs.size() >= s_MeshMaxMeshletVertices){
+                NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': triangle cannot fit within one meshlet"), metaKind, PathToString<tchar>(nwbFilePath));
+                return false;
+            }
+            localVertex = static_cast<u8>(localSourceVertexRefs.size());
+            localSourceVertexRefs.push_back(vertexRefIndex);
+        }
+        primitiveIndices.push_back(localVertex);
+    }
+    meshlet.counts = PackMeshletCounts(0u, MeshletPrimitiveCount(meshlet) + 1u, 0u, 0u);
+    return true;
+}
+
 bool MeshCookMeshlets::AddVisitedMeshletTriangle(
     const Path& nwbFilePath,
     const TStringView metaKind,

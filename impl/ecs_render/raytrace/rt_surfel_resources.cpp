@@ -28,7 +28,7 @@ bool RendererRayTracingSystem::createSurfelTargets(DeferredFrameTargets& targets
     // Deferred lighting samples resolved surfel GI, never the writable pool.
     targets.surfelIrradianceFormat = Core::Format::RGBA16_FLOAT;
     Core::TextureDesc surfelIrradianceDesc;
-    surfelIrradianceDesc.setWidth(targets.width).setHeight(targets.height).setFormat(targets.surfelIrradianceFormat).setInUAV(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer).setName("engine/gi/surfel_irradiance");
+    surfelIrradianceDesc.setWidth(targets.width).setHeight(targets.height).setFormat(targets.surfelIrradianceFormat).setIsUAV(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer).setName("engine/gi/surfel_irradiance");
     auto surfelIrradianceResult = m_graphics.createTexture(surfelIrradianceDesc);
     if(surfelIrradianceResult)
         targets.surfelIrradiance = Move(*surfelIrradianceResult);
@@ -41,7 +41,7 @@ bool RendererRayTracingSystem::createSurfelTargets(DeferredFrameTargets& targets
 
     // Transient reduced-resolution surfel resolve input.
     Core::TextureDesc surfelIrradianceHalfDesc;
-    surfelIrradianceHalfDesc.setWidth(resolveSize.width).setHeight(resolveSize.height).setFormat(targets.surfelIrradianceFormat).setInUAV(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/gi/surfel_irradiance_half");
+    surfelIrradianceHalfDesc.setWidth(resolveSize.width).setHeight(resolveSize.height).setFormat(targets.surfelIrradianceFormat).setIsUAV(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/gi/surfel_irradiance_half");
     auto surfelIrradianceHalfResult = m_graphics.createTexture(surfelIrradianceHalfDesc);
     if(surfelIrradianceHalfResult)
         targets.surfelIrradianceHalf = Move(*surfelIrradianceHalfResult);

@@ -50,7 +50,7 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
         .setWidth(targets.width)
         .setHeight(targets.height)
         .setFormat(targets.causticIrradianceFormat)
-        .setInUAV(true)
+        .setIsUAV(true)
         // Graphics/async production and the graph-owned lagged-history transfer copy share this target concurrently.
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer).setName("engine/caustic/irradiance")
     ;
@@ -71,7 +71,7 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
         .setArraySize(ECSRenderDetail::s_CausticAccumulatorChannelCount)
         .setDimension(Core::TextureDimension::Texture2DArray)
         .setFormat(targets.causticAccumulatorFormat)
-        .setInUAV(true)
+        .setIsUAV(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/caustic/accumulator")
     ;
@@ -86,7 +86,7 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
     }
 
     Core::TextureDesc historyDesc;
-    historyDesc.setWidth(halfWidth).setHeight(halfHeight).setFormat(targets.causticHistoryFormat).setInUAV(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/caustic/atrous_half_a");
+    historyDesc.setWidth(halfWidth).setHeight(halfHeight).setFormat(targets.causticHistoryFormat).setIsUAV(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/caustic/atrous_half_a");
     auto causticHistoryResult = m_graphics.createTexture(historyDesc);
     if(causticHistoryResult)
         targets.causticHistory = Move(*causticHistoryResult);
@@ -98,7 +98,7 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
     }
 
     Core::TextureDesc halfBDesc;
-    halfBDesc.setWidth(halfWidth).setHeight(halfHeight).setFormat(targets.causticHistoryFormat).setInUAV(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/caustic/atrous_half_b");
+    halfBDesc.setWidth(halfWidth).setHeight(halfHeight).setFormat(targets.causticHistoryFormat).setIsUAV(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/caustic/atrous_half_b");
     auto causticResolveHalfResult = m_graphics.createTexture(halfBDesc);
     if(causticResolveHalfResult)
         targets.causticResolveHalf = Move(*causticResolveHalfResult);
@@ -111,7 +111,7 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
 
     // Half-resolution geometry cache for edge-aware resolve.
     Core::TextureDesc geometryDesc;
-    geometryDesc.setWidth(halfWidth).setHeight(halfHeight).setFormat(targets.causticHistoryFormat).setInUAV(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/caustic/resolve_geometry");
+    geometryDesc.setWidth(halfWidth).setHeight(halfHeight).setFormat(targets.causticHistoryFormat).setIsUAV(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/caustic/resolve_geometry");
     auto causticResolveGeometryResult = m_graphics.createTexture(geometryDesc);
     if(causticResolveGeometryResult)
         targets.causticResolveGeometry = Move(*causticResolveGeometryResult);

@@ -208,11 +208,11 @@ public:
 
     constexpr TextureDesc& setName(const Name& v)noexcept{ name = v; return *this; }
 
-    constexpr TextureDesc& setInRenderTarget(bool v)noexcept{ isRenderTarget = v; return *this; }
+    constexpr TextureDesc& setIsRenderTarget(bool v)noexcept{ isRenderTarget = v; return *this; }
 
-    constexpr TextureDesc& setInUAV(bool v)noexcept{ isUAV = v; return *this; }
+    constexpr TextureDesc& setIsUAV(bool v)noexcept{ isUAV = v; return *this; }
 
-    constexpr TextureDesc& setInTypeless(bool v)noexcept{ isTypeless = v; return *this; }
+    constexpr TextureDesc& setIsTypeless(bool v)noexcept{ isTypeless = v; return *this; }
 
     constexpr TextureDesc& setClearValue(const Color& v)noexcept{ clearValue = v; useClearValue = true; return *this; }
 

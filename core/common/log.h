@@ -145,7 +145,7 @@ inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, const TStr
 }
 
 template<typename In>
-inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, const StringConvertArg<In>& message){
+inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, const ConvertStringArg<In>& message){
     logger.enqueue(ConvertString(logger.arena(), message.value), type);
 }
 
@@ -176,7 +176,7 @@ inline void CaptureMessageDiagnostic(const LogType::Enum type, const StringView 
 }
 
 template<typename In>
-[[nodiscard]] inline DiagnosticEventText MakeConvertedDiagnosticEventText(const StringConvertArg<In>& message)noexcept([]()consteval noexcept{
+[[nodiscard]] inline DiagnosticEventText MakeConvertedDiagnosticEventText(const ConvertStringArg<In>& message)noexcept([]()consteval noexcept{
     if constexpr(CanMakeCharView<In>)
         return noexcept(AStringView(DeclVal<const In&>()));
     else if constexpr(CanMakeWCharView<In>)
@@ -226,7 +226,7 @@ inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, 
 }
 
 template<typename In>
-inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const StringView diagnosticCategory, const StringView file, const u32 line, const StringConvertArg<In>& message){
+inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const StringView diagnosticCategory, const StringView file, const u32 line, const ConvertStringArg<In>& message){
     CaptureMessageDiagnostic(type, diagnosticCategory, file, line, MakeConvertedDiagnosticEventText(message));
     EnqueueMessage(logger, type, message);
 }

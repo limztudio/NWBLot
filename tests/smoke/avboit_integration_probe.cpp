@@ -239,7 +239,7 @@ bool RunAvboitIntegrationProbe(NWB::ProjectRuntimeContext& context){
     const auto overflow = createBuffer(Name("AvboitIntegrationOverflow"), s_PixelCount * sizeof(u32), false);
     const auto control = createBuffer(Name("AvboitIntegrationControl"), NWB_AVBOIT_CONTROL_WORD_COUNT * sizeof(u32), false);
     Core::TextureDesc textureDesc;
-    textureDesc.setWidth(s_Width).setHeight(s_Height).setDepth(s_SliceCount).setDimension(Core::TextureDimension::Texture3D).setFormat(NWB_AVBOIT_TRANSMITTANCE_CORE_FORMAT).setInUAV(true).setName(s_ProbeName).setInitialState(Core::ResourceStates::CopyDest).setKeepInitialState(true);
+    textureDesc.setWidth(s_Width).setHeight(s_Height).setDepth(s_SliceCount).setDimension(Core::TextureDimension::Texture3D).setFormat(NWB_AVBOIT_TRANSMITTANCE_CORE_FORMAT).setIsUAV(true).setName(s_ProbeName).setInitialState(Core::ResourceStates::CopyDest).setKeepInitialState(true);
     const auto volume = graphics.createTexture(textureDesc);
     const auto readback = device.createStagingTexture(textureDesc, Core::CpuAccessMode::Read);
     if(!extinction || !overflow || !control || !volume || !readback)

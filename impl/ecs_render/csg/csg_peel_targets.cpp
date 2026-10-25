@@ -59,8 +59,8 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
         Core::TextureDesc desc;
         desc.setWidth(targets.width).setHeight(targets.height).setArraySize(layerCount).setFormat(format).setDimension(Core::TextureDimension::Texture2DArray).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
         if(renderTarget)
-            desc.setInRenderTarget(true);
-        desc.setInUAV(true).setName(name);
+            desc.setIsRenderTarget(true);
+        desc.setIsUAV(true).setName(name);
         return m_graphics.createTexture(desc);
     };
     auto createPeelTexture = [&](const Core::Format::Enum format, const Name& name){

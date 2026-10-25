@@ -230,7 +230,7 @@ inline constexpr u32 s_InvalidCodePointReplacement = static_cast<u32>('?');
 
 
 template<typename In>
-struct StringConvertArg{
+struct ConvertStringArg{
     const In& value;
 };
 
@@ -427,7 +427,7 @@ using BasicStringDetail::IsUnicodeScalarValue;
 using BasicStringDetail::DecodeUtf16SurrogatePair;
 using BasicStringDetail::CanMakeCharView;
 using BasicStringDetail::CanMakeWCharView;
-using BasicStringDetail::StringConvertArg;
+using BasicStringDetail::ConvertStringArg;
 using BasicStringDetail::WideToUtf8;
 using BasicStringDetail::WriteConvertedText;
 
@@ -493,8 +493,8 @@ inline TString<ArenaT> ConvertString(ArenaT& arena, const In& src){
 #endif
 
 template<typename In>
-inline BasicStringDetail::StringConvertArg<In> ConvertString(const In& src)noexcept{
-    return BasicStringDetail::StringConvertArg<In>{ src };
+inline BasicStringDetail::ConvertStringArg<In> ConvertString(const In& src)noexcept{
+    return BasicStringDetail::ConvertStringArg<In>{ src };
 }
 
 
@@ -531,13 +531,13 @@ namespace std{
 
 
 template<typename In, typename CharT>
-struct formatter<BasicStringDetail::StringConvertArg<In>, CharT>{
+struct formatter<BasicStringDetail::ConvertStringArg<In>, CharT>{
     constexpr auto parse(basic_format_parse_context<CharT>& ctx)noexcept{
         return ctx.begin();
     }
 
     template<typename FormatContext>
-    auto format(const BasicStringDetail::StringConvertArg<In>& arg, FormatContext& ctx)const noexcept([]()consteval noexcept{
+    auto format(const BasicStringDetail::ConvertStringArg<In>& arg, FormatContext& ctx)const noexcept([]()consteval noexcept{
         using Output = Decay_T<decltype(DeclVal<FormatContext&>().out())>;
         return noexcept(DeclVal<void(*)(Output)noexcept>()(DeclVal<FormatContext&>().out()))
             && noexcept(BasicStringDetail::WriteConvertedText<CharT>(DeclVal<Output&>(), DeclVal<const In&>()))

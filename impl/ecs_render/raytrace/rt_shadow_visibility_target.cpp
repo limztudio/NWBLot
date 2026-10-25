@@ -33,7 +33,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         .setArraySize(NWB_SCENE_SHADOW_SLOT_COUNT)
         .setDimension(Core::TextureDimension::Texture2DArray)
         .setFormat(targets.shadowVisibilityFormat)
-        .setInUAV(true)
+        .setIsUAV(true)
         // The graph-owned lagged-history copy may run on a dedicated Transfer family after the graphics/compute producers finish. Keep all three transports shareable rather than aliases.
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer).setName("engine/shadow/visibility")
     ;
@@ -56,7 +56,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         .setArraySize(NWB_SCENE_SHADOW_SLOT_COUNT)
         .setDimension(Core::TextureDimension::Texture2DArray)
         .setFormat(targets.shadowCoarseTransmittanceFormat)
-        .setInUAV(true)
+        .setIsUAV(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/shadow/coarse_transmittance")
     ;
@@ -83,7 +83,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         .setArraySize(NWB_SCENE_SHADOW_SLOT_COUNT)
         .setDimension(Core::TextureDimension::Texture2DArray)
         .setFormat(targets.shadowSoftFormat)
-        .setInUAV(true)
+        .setIsUAV(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/shadow/soft_half_a")
     ;
@@ -110,7 +110,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
     }
 
     Core::TextureDesc softGeometryDesc;
-    softGeometryDesc.setWidth(softHalfWidth).setHeight(softHalfHeight).setFormat(targets.shadowSoftGeometryFormat).setInUAV(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/shadow/soft_geometry");
+    softGeometryDesc.setWidth(softHalfWidth).setHeight(softHalfHeight).setFormat(targets.shadowSoftGeometryFormat).setIsUAV(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/shadow/soft_geometry");
     auto shadowSoftGeometryResult = m_graphics.createTexture(softGeometryDesc);
     if(shadowSoftGeometryResult)
         targets.shadowSoftGeometry = Move(*shadowSoftGeometryResult);

@@ -31,7 +31,7 @@ static Expected<Core::TextureHandle> CreateRenderTarget(
     const bool shareWithAsyncCompute = false
 ){
     Core::TextureDesc desc;
-    desc.setWidth(width).setHeight(height).setFormat(format).setInRenderTarget(true).setName(Name(debugName)).setClearValue(clearValue).setInitialState(Core::ResourceStates::Common).setKeepInitialState(true);
+    desc.setWidth(width).setHeight(height).setFormat(format).setIsRenderTarget(true).setName(Name(debugName)).setClearValue(clearValue).setInitialState(Core::ResourceStates::Common).setKeepInitialState(true);
     if(shareWithAsyncCompute)
         desc.setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
     return graphics.createTexture(desc);
@@ -45,7 +45,7 @@ static Expected<Core::TextureHandle> CreateTransmittanceVolume(Core::GraphicsRun
         .setDepth(depth)
         .setFormat(format)
         .setDimension(Core::TextureDimension::Texture3D)
-        .setInUAV(true)
+        .setIsUAV(true)
         // Cross-lane submissions own the execution/memory dependencies.
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setName("engine/avboit/transmittance_volume").setClearValue(Core::Color(1.f, 1.f, 1.f, 1.f)).setInitialState(Core::ResourceStates::Common).setKeepInitialState(true)
     ;
@@ -175,7 +175,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
         avboitTargets.refractionDepth.reset();
     Core::TextureDesc refractionResolveDesc;
     refractionResolveDesc.setWidth(createdTargets.width).setHeight(createdTargets.height)
-        .setFormat(Core::Format::RGBA16_FLOAT).setInUAV(true)
+        .setFormat(Core::Format::RGBA16_FLOAT).setIsUAV(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/avboit/refraction_resolve").setClearValue(transparentBlack)
         .setInitialState(Core::ResourceStates::Common).setKeepInitialState(true)

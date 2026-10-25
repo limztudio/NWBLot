@@ -26,10 +26,6 @@ if(NWB_BUILD_PIPELINE)
     )
     target_link_libraries(nwb_assets_scene_volume_entry PRIVATE
         nwb_assets_scene_cook
-        nwb_assets_csg_cook
-        nwb_assets_material_cook
-        nwb_assets_mesh_cook
-        nwb_assets_model_cook
         nwb_assets_volume_cook
     )
     target_compile_definitions(nwb_assets_scene_volume_entry PRIVATE NWB_COOK=1)

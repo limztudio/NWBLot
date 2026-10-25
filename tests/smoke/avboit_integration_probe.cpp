@@ -211,14 +211,18 @@ static void PreparePhase(ProbeTask::Payload& payload, const u32 phase)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RunAvboitIntegrationProbe(NWB::ProjectRuntimeContext& context){
+bool RunAvboitIntegrationProbe(NWB::ProjectRuntimeContext& context, const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems){
     using namespace NWB;
     using namespace __hidden_avboit_integration_probe;
     auto& graphics = context.graphics;
     auto& device = graphics.getDevice();
     auto& heap = device.getDescriptorHeap();
     Core::ShaderHandle shader;
-    if(!Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(shader, Impl::AssetsGraphicsAvboit::s_IntegrateComputeShaderName, Core::ShaderArchive::s_DefaultVariant, s_ProbeName, graphics, context.assetManager, context.shaderPathResolver, NWB_TEXT("AvboitIntegrationProbe")))
+    const auto integrateShaderRef = sceneSubsystems.findAsset<Impl::ComputeShader>(Impl::AssetsGraphicsAvboit::s_IntegrateComputeShaderName);
+    if(
+        !integrateShaderRef.valid()
+        || !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(shader, integrateShaderRef.name(), Core::ShaderArchive::s_DefaultVariant, s_ProbeName, graphics, context.assetManager, context.shaderPathResolver, NWB_TEXT("AvboitIntegrationProbe"))
+    )
         return false;
     Core::BindingLayoutDesc layoutDesc(context.objectArena);
     layoutDesc.setVisibility(Core::ShaderType::Compute).addItem(Core::BindingLayoutItem::PushConstants(0u, NWB_AVBOIT_PUSH_CONSTANT_BYTE_SIZE));

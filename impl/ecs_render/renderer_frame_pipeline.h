@@ -159,15 +159,15 @@ public:
     [[nodiscard]] bool prepareResources(Core::Framebuffer* framebuffer);
     void render(Core::Framebuffer* framebuffer);
     [[nodiscard]] bool appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder);
-    void setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept{ m_activeSceneSubsystems = subsystems; }
+    void setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept{ m_activeSceneSubsystems = subsystems; m_shaderSystem.setActiveSceneSubsystems(subsystems); }
     [[nodiscard]] bool isTransparentFeatureEnabled()const noexcept{
-        return m_activeSceneSubsystems && m_activeSceneSubsystems->isFeatureEnabled(BuiltInSubsystemFeatures::s_Transparent);
+        return m_activeSceneSubsystems && m_activeSceneSubsystems->hasSubsystem(BuiltInSubsystems::s_Transparent);
     }
     [[nodiscard]] bool isRefractiveFeatureEnabled()const noexcept{
-        return m_activeSceneSubsystems && m_activeSceneSubsystems->isFeatureEnabled(BuiltInSubsystemFeatures::s_Refractive);
+        return m_activeSceneSubsystems && m_activeSceneSubsystems->hasSubsystem(BuiltInSubsystems::s_Refractive);
     }
     [[nodiscard]] bool isCsgFeatureEnabled()const noexcept{
-        return m_activeSceneSubsystems && m_activeSceneSubsystems->isFeatureEnabled(BuiltInSubsystemFeatures::s_Csg);
+        return m_activeSceneSubsystems && m_activeSceneSubsystems->hasSubsystem(BuiltInSubsystems::s_Csg);
     }
     // Trades one frame of effect latency for overlap; off by default, self-bootstraps on toggle.
     void setRefractionEnabled(const bool enabled)noexcept{ m_refractionEnabled = enabled; }

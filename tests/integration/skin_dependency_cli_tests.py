@@ -243,6 +243,8 @@ def _run_scene_subsystem_feature_tests(args: argparse.Namespace, root: pathlib.P
     project_manifest = project_root / "project.nwb"
     scene_manifest = project_root / "scenes" / "main.nwb"
     subsystem_manifest = engine_root / "subsystems" / "ui_custom.nwb"
+    active_fx_subsystem_manifest = project_root / "subsystems" / "active_fx.nwb"
+    inactive_fx_subsystem_manifest = project_root / "subsystems" / "inactive_fx.nwb"
     skin = project_root / LIT_UI / LIT_ATLAS_NWB
     texture = engine_root / LIT_UI / LIT_TEXTURE_NWB
     base_sampler = engine_root / "samplers" / "base.nwb"
@@ -259,11 +261,19 @@ def _run_scene_subsystem_feature_tests(args: argparse.Namespace, root: pathlib.P
 
     _write_metadata(
         subsystem_manifest,
-        'subsystem asset;\nasset.assets = ["engine/samplers/base"];\nasset.features = {\n    "active_fx": ["engine/samplers/active_fx"],\n    "inactive_fx": ["engine/samplers/inactive_fx"]\n};\n',
+        'subsystem asset;\nasset.assets = {\n    "base_sampler": "engine/samplers/base"\n};\n',
+    )
+    _write_metadata(
+        active_fx_subsystem_manifest,
+        'subsystem asset;\nasset.assets = {\n    "active_fx_sampler": "engine/samplers/active_fx"\n};\n',
+    )
+    _write_metadata(
+        inactive_fx_subsystem_manifest,
+        'subsystem asset;\nasset.assets = {\n    "inactive_fx_sampler": "engine/samplers/inactive_fx"\n};\n',
     )
     _write_metadata(
         scene_manifest,
-        'scene asset;\nasset.subsystems = ["engine/subsystems/ui_custom"];\nasset.enabled_features = ["active_fx"];\nasset.assets = ["project/ui/atlas"];\n',
+        'scene asset;\nasset.subsystems = ["engine/subsystems/ui_custom", "project/subsystems/active_fx"];\nasset.assets = {\n    "ui_atlas": "project/ui/atlas"\n};\n',
     )
     _write_metadata(
         project_manifest,
@@ -272,7 +282,7 @@ def _run_scene_subsystem_feature_tests(args: argparse.Namespace, root: pathlib.P
 
     manifest = fixture / "scene_dependencies.txt"
     helpers.run_command(_dependency_command(args, fixture, roots, [], manifest), fixture)
-    expected_files = [project_manifest, scene_manifest, subsystem_manifest, skin, base_sampler, active_feature_sampler, texture]
+    expected_files = [project_manifest, scene_manifest, subsystem_manifest, active_fx_subsystem_manifest, skin, base_sampler, active_feature_sampler, texture]
     _expect_manifest(manifest, [], expected_files)
 
     packed = fixture / "scene_volume"
@@ -308,7 +318,7 @@ def _run_scene_subsystem_feature_tests(args: argparse.Namespace, root: pathlib.P
     expected_magic_counts = {
         PROJECT_MAGIC: 1,
         SCENE_MAGIC: 1,
-        SUBSYSTEM_MAGIC: 1,
+        SUBSYSTEM_MAGIC: 2,
         SKIN_MAGIC: 1,
         TEXTURE_MAGIC: 1,
         SAMPLER_MAGIC: 2,

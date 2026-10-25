@@ -33,13 +33,8 @@ namespace AssetsCsgCook{
 
 
 inline constexpr Name s_CsgShapeAssetTypeName("csg_shape");
-inline constexpr Name s_CsgVolumePresenceExtensionName("assets_csg/volume_presence");
 inline constexpr AStringView s_DefaultGeneratedIncludeDirectory = "engine/csg/generated";
 inline constexpr AStringView s_GeneratedIncludeCacheDirectory = "csg_modules";
-
-struct CsgVolumePresence{
-    u32 shapeCount = 0u;
-};
 
 using CookArena = Core::Alloc::GlobalArena;
 using CookString = AString<CookArena>;

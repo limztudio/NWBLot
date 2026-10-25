@@ -55,35 +55,18 @@ template<typename TAsset>
     return true;
 }
 
-[[nodiscard]] static bool ValidateUniqueNames(
-    const Span<const Name> names,
-    const TStringView contextLabel,
-    Core::Alloc::ScratchArena& scratchArena
-){
-    NameHashSet seen(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
-    seen.reserve(names.size());
-    for(usize i = 0u; i < names.size(); ++i){
-        const Name& entry = names[i];
-        if(!entry){
-            NWB_LOGGER_ERROR(NWB_TEXT("SceneAsset::validatePayload failed: {} entry {} is empty"), contextLabel, i);
+[[nodiscard]] static bool ValidateAssetMap(const SceneAsset::AssetMap& assets){
+    for(const auto& [nickname, assetRef] : assets){
+        if(!nickname){
+            NWB_LOGGER_ERROR(NWB_TEXT("SceneAsset::validatePayload failed: asset entry has an empty nickname"));
             return false;
         }
-        if(!seen.insert(entry.hash()).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("SceneAsset::validatePayload failed: duplicate {} entry at index {}"), contextLabel, i);
+        if(!assetRef.valid()){
+            NWB_LOGGER_ERROR(NWB_TEXT("SceneAsset::validatePayload failed: asset nickname '{}' has an empty asset reference"), ConvertString(nickname.resolvedText()));
             return false;
         }
     }
     return true;
-}
-
-static void AppendUniqueName(ActiveSceneSubsystems::NameVector& list, const Name& name){
-    if(!name)
-        return;
-    for(const Name& existing : list){
-        if(existing == name)
-            return;
-    }
-    list.push_back(name);
 }
 
 template<typename TAsset>
@@ -153,9 +136,7 @@ bool SceneAsset::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     }
     if(!__hidden_scene_runtime::ValidateUniqueAssetRefs(Span<const SubsystemRef>(m_subsystems), NWB_TEXT("subsystem"), scratchArena))
         return false;
-    if(!__hidden_scene_runtime::ValidateUniqueNames(Span<const Name>(m_enabledFeatures), NWB_TEXT("enabled feature"), scratchArena))
-        return false;
-    if(!__hidden_scene_runtime::ValidateUniqueAssetRefs(Span<const AssetRef>(m_assets), NWB_TEXT("referenced asset"), scratchArena))
+    if(!__hidden_scene_runtime::ValidateAssetMap(m_assets))
         return false;
     return true;
 }
@@ -179,14 +160,11 @@ bool SceneAsset::loadBinary(const Span<const u8> binary){
     }
 
     Vector<NameHash, Core::Alloc::ScratchArena> subsystemHashes(scratchArena);
-    Vector<NameHash, Core::Alloc::ScratchArena> enabledFeatureHashes(scratchArena);
-    Vector<NameHash, Core::Alloc::ScratchArena> assetHashes(scratchArena);
+    Vector<SceneBinaryPayload::SceneAssetEntryBinary, Core::Alloc::ScratchArena> assetEntries(scratchArena);
 
     if(!Core::Assets::ReadVectorPayload(binary, header.subsystemCount, SceneBinaryPayload::s_SceneLoadBinaryContext, SceneBinaryPayload::s_SubsystemsPayloadLabel, cursor, subsystemHashes))
         return false;
-    if(!Core::Assets::ReadVectorPayload(binary, header.enabledFeatureCount, SceneBinaryPayload::s_SceneLoadBinaryContext, SceneBinaryPayload::s_EnabledFeaturesPayloadLabel, cursor, enabledFeatureHashes))
-        return false;
-    if(!Core::Assets::ReadVectorPayload(binary, header.assetCount, SceneBinaryPayload::s_SceneLoadBinaryContext, SceneBinaryPayload::s_AssetsPayloadLabel, cursor, assetHashes))
+    if(!Core::Assets::ReadVectorPayload(binary, header.assetCount, SceneBinaryPayload::s_SceneLoadBinaryContext, SceneBinaryPayload::s_AssetsPayloadLabel, cursor, assetEntries))
         return false;
     if(!Core::Assets::ReadCompletePayload(binary, cursor, SceneBinaryPayload::s_SceneLoadBinaryContext))
         return false;
@@ -201,21 +179,36 @@ bool SceneAsset::loadBinary(const Span<const u8> binary){
         candidate.m_subsystems.push_back(ref);
     }
 
-    candidate.m_enabledFeatures.reserve(enabledFeatureHashes.size());
-    for(const NameHash& hash : enabledFeatureHashes)
-        candidate.m_enabledFeatures.push_back(Name(hash));
-
-    candidate.m_assets.reserve(assetHashes.size());
-    for(const NameHash& hash : assetHashes){
+    candidate.m_assets.reserve(assetEntries.size());
+    for(usize i = 0u; i < assetEntries.size(); ++i){
+        const SceneBinaryPayload::SceneAssetEntryBinary& entry = assetEntries[i];
+        const Name nickname(entry.nicknameHash);
         AssetRef ref;
-        ref.virtualPath = Name(hash);
-        candidate.m_assets.push_back(ref);
+        ref.virtualPath = Name(entry.assetHash);
+        if(!nickname || !ref.valid()){
+            NWB_LOGGER_ERROR(NWB_TEXT("SceneAsset::loadBinary failed: invalid asset entry at index {}"), i);
+            return false;
+        }
+        if(!candidate.m_assets.emplace(nickname, ref).second){
+            NWB_LOGGER_ERROR(NWB_TEXT("SceneAsset::loadBinary failed: duplicate asset nickname at index {}"), i);
+            return false;
+        }
     }
 
     if(!candidate.validatePayload(scratchArena))
         return false;
     *this = Move(candidate);
     return true;
+}
+
+bool SceneAsset::hasSubsystem(const SubsystemRef& subsystem)const noexcept{
+    if(!subsystem.valid())
+        return false;
+    for(const SubsystemRef& entry : m_subsystems){
+        if(entry == subsystem)
+            return true;
+    }
+    return false;
 }
 
 
@@ -226,8 +219,10 @@ bool ActiveSceneSubsystems::loadProjectStartScene(Core::Assets::AssetManager& as
     auto projectAsset = assetManager.loadTypedSync<ProjectAsset>(project.name(), __hidden_scene_runtime::s_ActiveSceneSubsystemsOwner, "project manifest");
     if(!projectAsset)
         return false;
+    if(!loadScene(assetManager, (*projectAsset)->startScene()))
+        return false;
     m_project = project;
-    return loadScene(assetManager, (*projectAsset)->startScene());
+    return true;
 }
 
 bool ActiveSceneSubsystems::loadScene(Core::Assets::AssetManager& assetManager, const SceneRef& scene){
@@ -236,21 +231,24 @@ bool ActiveSceneSubsystems::loadScene(Core::Assets::AssetManager& assetManager, 
         return false;
     const SceneAsset& sceneAsset = **sceneAssetResult;
 
-    m_scene = scene;
-    m_subsystems.clear();
-    m_enabledFeatures.clear();
-    m_resolvedAssets.clear();
+    SubsystemRefVector nextSubsystems(m_arena);
+    AssetMap nextSceneAssets(0, Hasher<Name>(), EqualTo<Name>(), m_arena);
+    LoadedSubsystemVector nextLoadedSubsystems(m_arena);
+    AssetRefVector nextResolvedAssets(m_arena);
 
-    for(const Name& feature : sceneAsset.enabledFeatures())
-        __hidden_scene_runtime::AppendUniqueName(m_enabledFeatures, feature);
-    for(const AssetRef& asset : sceneAsset.assets())
-        __hidden_scene_runtime::AppendUniqueAssetRef(m_resolvedAssets, asset);
+    nextSceneAssets.reserve(sceneAsset.assets().size());
+    for(const auto& [nickname, asset] : sceneAsset.assets()){
+        nextSceneAssets.emplace(nickname, asset);
+        __hidden_scene_runtime::AppendUniqueAssetRef(nextResolvedAssets, asset);
+    }
 
     Core::Alloc::ScratchArena scratchArena(AssetsSceneArenaScope::s_RuntimeSubsystemLoadArena);
     Vector<SubsystemRef, Core::Alloc::ScratchArena> worklist(scratchArena);
     for(const SubsystemRef& subsystem : sceneAsset.subsystems()){
-        __hidden_scene_runtime::AppendUniqueAssetRef(m_subsystems, subsystem);
-        worklist.push_back(subsystem);
+        const usize previousSize = nextSubsystems.size();
+        __hidden_scene_runtime::AppendUniqueAssetRef(nextSubsystems, subsystem);
+        if(nextSubsystems.size() != previousSize)
+            worklist.push_back(subsystem);
     }
 
     for(usize index = 0u; index < worklist.size(); ++index){
@@ -260,27 +258,82 @@ bool ActiveSceneSubsystems::loadScene(Core::Assets::AssetManager& assetManager, 
             return false;
         const Subsystem& subsystem = **subsystemResult;
 
+        LoadedSubsystem loaded(m_arena);
+        loaded.subsystem = currentSubsystem;
+        loaded.children.reserve(subsystem.subsystems().size());
         for(const SubsystemRef& childSubsystem : subsystem.subsystems()){
-            const usize previousSize = m_subsystems.size();
-            __hidden_scene_runtime::AppendUniqueAssetRef(m_subsystems, childSubsystem);
-            if(m_subsystems.size() != previousSize)
+            loaded.children.push_back(childSubsystem);
+            const usize previousSize = nextSubsystems.size();
+            __hidden_scene_runtime::AppendUniqueAssetRef(nextSubsystems, childSubsystem);
+            if(nextSubsystems.size() != previousSize)
                 worklist.push_back(childSubsystem);
         }
-        for(const AssetRef& unconditionalAsset : subsystem.assets())
-            __hidden_scene_runtime::AppendUniqueAssetRef(m_resolvedAssets, unconditionalAsset);
-        for(const SubsystemFeature& feature : subsystem.features()){
-            if(!isFeatureEnabled(feature.name))
-                continue;
-            for(const AssetRef& featureAsset : feature.assets)
-                __hidden_scene_runtime::AppendUniqueAssetRef(m_resolvedAssets, featureAsset);
+
+        loaded.assets.reserve(subsystem.assets().size());
+        for(const auto& [nickname, asset] : subsystem.assets()){
+            loaded.assets.emplace(nickname, asset);
+            __hidden_scene_runtime::AppendUniqueAssetRef(nextResolvedAssets, asset);
         }
+
+        nextLoadedSubsystems.push_back(Move(loaded));
     }
 
+    m_scene = scene;
+    m_subsystems = Move(nextSubsystems);
+    m_sceneAssets = Move(nextSceneAssets);
+    m_loadedSubsystems = Move(nextLoadedSubsystems);
+    m_resolvedAssets = Move(nextResolvedAssets);
     return true;
 }
 
-void ActiveSceneSubsystems::enableFeature(const Name& featureName){
-    __hidden_scene_runtime::AppendUniqueName(m_enabledFeatures, featureName);
+void ActiveSceneSubsystems::enableSubsystem(const SubsystemRef& subsystem){
+    __hidden_scene_runtime::AppendUniqueAssetRef(m_subsystems, subsystem);
+}
+
+bool ActiveSceneSubsystems::hasSubsystem(const SubsystemRef& subsystem)const noexcept{
+    if(!subsystem.valid())
+        return false;
+    for(const SubsystemRef& enabled : m_subsystems){
+        if(enabled == subsystem)
+            return true;
+    }
+    return false;
+}
+
+ActiveSceneSubsystems::AssetRef ActiveSceneSubsystems::findSubsystemAssetUntyped(const SubsystemRef& subsystem, const Name& nickname, const usize depth)const noexcept{
+    if(!subsystem.valid() || !nickname || depth >= m_loadedSubsystems.size())
+        return {};
+
+    for(const LoadedSubsystem& loaded : m_loadedSubsystems){
+        if(loaded.subsystem != subsystem)
+            continue;
+        const auto found = loaded.assets.find(nickname);
+        if(found != loaded.assets.end())
+            return found.value();
+        for(const SubsystemRef& child : loaded.children){
+            const AssetRef childFound = findSubsystemAssetUntyped(child, nickname, depth + 1u);
+            if(childFound.valid())
+                return childFound;
+        }
+        break;
+    }
+    return {};
+}
+
+ActiveSceneSubsystems::AssetRef ActiveSceneSubsystems::findAssetUntyped(const Name& nickname)const noexcept{
+    if(!nickname)
+        return {};
+
+    const auto sceneFound = m_sceneAssets.find(nickname);
+    if(sceneFound != m_sceneAssets.end())
+        return sceneFound.value();
+
+    for(const LoadedSubsystem& loaded : m_loadedSubsystems){
+        const auto found = loaded.assets.find(nickname);
+        if(found != loaded.assets.end())
+            return found.value();
+    }
+    return {};
 }
 
 

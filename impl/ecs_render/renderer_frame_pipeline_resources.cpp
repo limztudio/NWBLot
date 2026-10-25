@@ -31,6 +31,7 @@ bool RendererFramePipeline::validateResources(const u32 width, const u32 height,
         if(!m_defaultSceneSubsystems.loadProjectStartScene(m_assetManager))
             return false;
         m_activeSceneSubsystems = &m_defaultSceneSubsystems;
+        m_shaderSystem.setActiveSceneSubsystems(m_activeSceneSubsystems);
     }
     if(!m_activeSceneSubsystems->hasSubsystem(BuiltInSubsystems::s_Renderer)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: active scene does not include required subsystem '{}'"), ConvertString(BuiltInSubsystems::s_RendererText));

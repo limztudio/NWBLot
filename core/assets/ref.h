@@ -41,6 +41,9 @@ public:
     explicit constexpr AssetRef(const NameText<char> path)
         : virtualPath(path)
     {}
+    explicit constexpr AssetRef(const Name& path)noexcept
+        : virtualPath(path)
+    {}
 
 
 public:

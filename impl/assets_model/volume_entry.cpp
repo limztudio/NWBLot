@@ -11,6 +11,9 @@
 #include "cook.h"
 #include "binary_payload.h"
 
+#include <impl/assets_subsystem/asset.h>
+
+#include <core/assets/cook_dependency_registry.h>
 #include <core/assets/cook_entry_registry.h>
 
 
@@ -37,8 +40,38 @@ static Expected<ModelCookEntry> ParseModelValue(const Name virtualPath, const Pa
     return ParseModelCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
 }
 
+static bool ExtractModelDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
+    const auto modelEntry = ParseModelCookMetadata(context.virtualPath, context.nwbFilePath, context.asset, context.arena, context.scratchArena);
+    if(!modelEntry)
+        return false;
+
+    for(const ModelSkeletonObject& skeletonObject : modelEntry->skeletonObjects){
+        if(!collector.addAssetDependency(skeletonObject.skeleton.name(), Skeleton::AssetTypeName()))
+            return false;
+    }
+    for(const ModelStaticMeshObject& staticMeshObject : modelEntry->staticMeshObjects){
+        if(!collector.addAssetDependency(staticMeshObject.mesh.name(), Mesh::AssetTypeName()))
+            return false;
+        if(staticMeshObject.material.valid() && !collector.addAssetDependency(staticMeshObject.material.name(), Material::AssetTypeName()))
+            return false;
+    }
+    for(const ModelSkinnedMeshObject& skinnedMeshObject : modelEntry->skinnedMeshObjects){
+        if(!collector.addAssetDependency(skinnedMeshObject.skin.name(), Skin::AssetTypeName()))
+            return false;
+        if(skinnedMeshObject.material.valid() && !collector.addAssetDependency(skinnedMeshObject.material.name(), Material::AssetTypeName()))
+            return false;
+    }
+    if(!modelEntry->skinnedMeshObjects.empty() && !collector.addSubsystemDependency(BuiltInSubsystems::s_Skinning.name()))
+        return false;
+    return true;
+}
+
 static bool RegisterModelCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<ModelCookEntry, Model, ModelAssetCodec>(registry, ModelBinaryPayload::s_ModelAssetKindLabel, &ParseModelDocument, &ParseModelValue, &BuildModelAsset);
+}
+
+static bool RegisterModelCookDependency(Core::Assets::CookDependencyRegistry& registry){
+    return registry.registerType(Model::AssetTypeName(), &ExtractModelDependencies);
 }
 
 
@@ -46,6 +79,7 @@ static bool RegisterModelCookEntry(Core::Assets::CookEntryRegistry& registry){
 
 
 NWB_DEFINE_COOK_ENTRY_REGISTRAR(s_ModelCookEntryRegistrar, RegisterModelCookEntry);
+NWB_DEFINE_COOK_DEPENDENCY_REGISTRAR(s_ModelCookDependencyRegistrar, RegisterModelCookDependency);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -19,10 +19,37 @@ TESTBED_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiImageGallery::UiImageGallery(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets){
-    auto source = NWB::Impl::Ui::LoadImageSource(arena, assets, NWB::Core::Assets::AssetRef<NWB::Impl::Texture>{"engine/ui/skins/default/texture"});
-    if(source)
-        m_source = Move(*source);
+namespace __hidden_ui_image_gallery{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr Name s_GalleryImageTextureNickname("gallery_image_texture");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool UiImageGallery::loadAssets(
+    NWB::Core::Alloc::GlobalArena& arena,
+    const NWB::Core::Assets::AssetManager& assets,
+    const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems
+){
+    const auto textureRef = sceneSubsystems.findSceneAsset<NWB::Impl::Texture>(__hidden_ui_image_gallery::s_GalleryImageTextureNickname);
+    if(!textureRef.valid())
+        return false;
+    auto source = NWB::Impl::Ui::LoadImageSource(arena, assets, textureRef);
+    if(!source)
+        return false;
+    m_source = Move(*source);
+    return true;
 }
 
 void UiImageGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){

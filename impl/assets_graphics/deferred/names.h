@@ -25,10 +25,10 @@ namespace AssetsGraphicsDeferred{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_CompositeVertexShaderName("engine/graphics/deferred/composite_vs");
-inline constexpr Name s_LightingComputeShaderName("engine/graphics/deferred/lighting_cs");
-inline constexpr Name s_CompositeComputeShaderName("engine/graphics/deferred/composite_cs");
-inline constexpr Name s_PresentPixelShaderName("engine/graphics/deferred/composite_ps");
+inline constexpr Name s_CompositeVertexShaderName("composite_vs");
+inline constexpr Name s_LightingComputeShaderName("lighting_cs");
+inline constexpr Name s_CompositeComputeShaderName("composite_cs");
+inline constexpr Name s_PresentPixelShaderName("composite_ps");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

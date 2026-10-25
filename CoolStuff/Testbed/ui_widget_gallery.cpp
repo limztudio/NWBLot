@@ -70,14 +70,21 @@ SIMDVectorSingle UiWidgetGallery::LayoutBounds(const SIMDVectorSingle displaySiz
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiWidgetGallery::UiWidgetGallery(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets)
+UiWidgetGallery::UiWidgetGallery(NWB::Core::Alloc::GlobalArena& arena)
     : m_edits(arena)
     , m_searchCombos(arena)
     , m_nestedPopups(arena)
     , m_numericEdits(arena)
     , m_textAreas(arena)
-    , m_images(arena, assets)
 {}
+
+bool UiWidgetGallery::loadAssets(
+    NWB::Core::Alloc::GlobalArena& arena,
+    const NWB::Core::Assets::AssetManager& assets,
+    const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems
+){
+    return m_images.loadAssets(arena, assets, sceneSubsystems);
+}
 
 void UiWidgetGallery::paint(NWB::Impl::UiPaintContext& context, const NWB::Impl::Ui::Rect& bounds){
     using namespace NWB::Impl::Ui;

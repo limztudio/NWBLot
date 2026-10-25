@@ -7,6 +7,7 @@
 
 #include "namespace.h"
 
+#include <impl/assets_scene/asset.h>
 #include <impl/ecs_ui/components.h>
 
 #include <core/assets/manager.h>
@@ -23,10 +24,15 @@ TESTBED_BEGIN
 
 class UiImageGallery final : NoCopy{
 public:
-    UiImageGallery(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets);
+    UiImageGallery() = default;
 
 
 public:
+    [[nodiscard]] bool loadAssets(
+        NWB::Core::Alloc::GlobalArena& arena,
+        const NWB::Core::Assets::AssetManager& assets,
+        const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems
+    );
     void paint(NWB::Impl::UiPaintContext& context, f32 x, f32 y);
 
 

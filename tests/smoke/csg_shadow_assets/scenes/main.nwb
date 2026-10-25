@@ -1,22 +1,19 @@
 scene asset;
 
 asset.subsystems = [
-    "engine/subsystems/renderer"
+    "engine/subsystems/renderer",
+    "engine/subsystems/csg"
 ];
 
-asset.enabled_features = [
-    "csg"
-];
-
-asset.assets = [
-    "project/meshes/csg_shadow_open_2",
-    "project/meshes/csg_shadow_open_5",
-    "project/meshes/csg_shadow_open_6",
-    "project/meshes/csg_shadow_open_64",
-    "project/meshes/csg_shadow_open_65",
-    "project/meshes/cube_hard_edges",
-    "project/meshes/shadow_plane",
-    "project/smoke/csg_shadow/materials/glass",
-    "project/smoke/csg_shadow/materials/opaque",
-    "project/smoke/reflection/materials/optical_volume"
-];
+asset.assets = {
+    "csg_shadow_open_2": "project/meshes/csg_shadow_open_2",
+    "csg_shadow_open_5": "project/meshes/csg_shadow_open_5",
+    "csg_shadow_open_6": "project/meshes/csg_shadow_open_6",
+    "csg_shadow_open_64": "project/meshes/csg_shadow_open_64",
+    "csg_shadow_open_65": "project/meshes/csg_shadow_open_65",
+    "cube_hard_edges": "project/meshes/cube_hard_edges",
+    "shadow_plane": "project/meshes/shadow_plane",
+    "csg_shadow_glass": "project/smoke/csg_shadow/materials/glass",
+    "csg_shadow_opaque": "project/smoke/csg_shadow/materials/opaque",
+    "reflection_optical_volume": "project/smoke/reflection/materials/optical_volume"
+};

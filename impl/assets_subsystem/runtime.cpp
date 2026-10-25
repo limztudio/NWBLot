@@ -58,6 +58,20 @@ template<typename TAsset>
     return true;
 }
 
+[[nodiscard]] static bool ValidateAssetMap(const Subsystem::AssetMap& assets){
+    for(const auto& [nickname, assetRef] : assets){
+        if(!nickname){
+            NWB_LOGGER_ERROR(NWB_TEXT("Subsystem::validatePayload failed: asset entry has an empty nickname"));
+            return false;
+        }
+        if(!assetRef.valid()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Subsystem::validatePayload failed: asset nickname '{}' has an empty asset reference"), ConvertString(nickname.resolvedText()));
+            return false;
+        }
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -71,35 +85,15 @@ template<typename TAsset>
 bool Subsystem::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     if(!checkVirtualPath(NWB_TEXT("Subsystem::validatePayload")))
         return false;
-    if(m_subsystems.empty() && m_assets.empty() && m_features.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Subsystem::validatePayload failed: subsystem must declare at least one child subsystem, asset, or feature"));
+    if(m_subsystems.empty() && m_assets.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Subsystem::validatePayload failed: subsystem must declare at least one child subsystem or asset"));
         return false;
     }
 
     if(!__hidden_subsystem_runtime::ValidateUniqueAssetRefs(Span<const SubsystemRef>(m_subsystems), NWB_TEXT("child subsystem"), virtualPath(), scratchArena))
         return false;
-    if(!__hidden_subsystem_runtime::ValidateUniqueAssetRefs(Span<const AssetRef>(m_assets), NWB_TEXT("asset"), s_NameNone, scratchArena))
+    if(!__hidden_subsystem_runtime::ValidateAssetMap(m_assets))
         return false;
-
-    __hidden_subsystem_runtime::NameHashSet seenFeatures(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
-    seenFeatures.reserve(m_features.size());
-    for(usize i = 0u; i < m_features.size(); ++i){
-        const SubsystemFeature& feature = m_features[i];
-        if(!feature.name){
-            NWB_LOGGER_ERROR(NWB_TEXT("Subsystem::validatePayload failed: feature {} has an empty name"), i);
-            return false;
-        }
-        if(!seenFeatures.insert(feature.name.hash()).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("Subsystem::validatePayload failed: feature {} name is duplicated"), i);
-            return false;
-        }
-        if(feature.assets.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Subsystem::validatePayload failed: feature {} must list at least one asset"), i);
-            return false;
-        }
-        if(!__hidden_subsystem_runtime::ValidateUniqueAssetRefs(Span<const SubsystemFeature::AssetRef>(feature.assets), NWB_TEXT("feature asset"), s_NameNone, scratchArena))
-            return false;
-    }
 
     return true;
 }
@@ -123,17 +117,11 @@ bool Subsystem::loadBinary(const Span<const u8> binary){
     }
 
     Vector<NameHash, Core::Alloc::ScratchArena> subsystemHashes(scratchArena);
-    Vector<NameHash, Core::Alloc::ScratchArena> assetHashes(scratchArena);
-    Vector<SubsystemBinaryPayload::SubsystemFeatureBinary, Core::Alloc::ScratchArena> featureBinaries(scratchArena);
-    Vector<NameHash, Core::Alloc::ScratchArena> featureAssetHashes(scratchArena);
+    Vector<SubsystemBinaryPayload::SubsystemAssetEntryBinary, Core::Alloc::ScratchArena> assetEntries(scratchArena);
 
     if(!Core::Assets::ReadVectorPayload(binary, header.subsystemCount, SubsystemBinaryPayload::s_SubsystemLoadBinaryContext, SubsystemBinaryPayload::s_SubsystemsPayloadLabel, cursor, subsystemHashes))
         return false;
-    if(!Core::Assets::ReadVectorPayload(binary, header.assetCount, SubsystemBinaryPayload::s_SubsystemLoadBinaryContext, SubsystemBinaryPayload::s_AssetsPayloadLabel, cursor, assetHashes))
-        return false;
-    if(!Core::Assets::ReadVectorPayload(binary, header.featureCount, SubsystemBinaryPayload::s_SubsystemLoadBinaryContext, SubsystemBinaryPayload::s_FeaturesPayloadLabel, cursor, featureBinaries))
-        return false;
-    if(!Core::Assets::ReadVectorPayload(binary, header.featureAssetCount, SubsystemBinaryPayload::s_SubsystemLoadBinaryContext, SubsystemBinaryPayload::s_FeatureAssetsPayloadLabel, cursor, featureAssetHashes))
+    if(!Core::Assets::ReadVectorPayload(binary, header.assetCount, SubsystemBinaryPayload::s_SubsystemLoadBinaryContext, SubsystemBinaryPayload::s_AssetsPayloadLabel, cursor, assetEntries))
         return false;
     if(!Core::Assets::ReadCompletePayload(binary, cursor, SubsystemBinaryPayload::s_SubsystemLoadBinaryContext))
         return false;
@@ -148,34 +136,20 @@ bool Subsystem::loadBinary(const Span<const u8> binary){
         candidate.m_subsystems.push_back(ref);
     }
 
-    candidate.m_assets.reserve(assetHashes.size());
-    for(const NameHash& hash : assetHashes){
+    candidate.m_assets.reserve(assetEntries.size());
+    for(usize i = 0u; i < assetEntries.size(); ++i){
+        const SubsystemBinaryPayload::SubsystemAssetEntryBinary& entry = assetEntries[i];
+        const Name nickname(entry.nicknameHash);
         AssetRef ref;
-        ref.virtualPath = Name(hash);
-        candidate.m_assets.push_back(ref);
-    }
-
-    candidate.m_features.reserve(featureBinaries.size());
-    u64 expectedOffset = 0u;
-    for(const SubsystemBinaryPayload::SubsystemFeatureBinary& featureBinary : featureBinaries){
-        if(featureBinary.assetOffset != expectedOffset || featureBinary.assetCount > featureAssetHashes.size() - expectedOffset){
-            NWB_LOGGER_ERROR(NWB_TEXT("Subsystem::loadBinary failed: malformed feature asset range"));
+        ref.virtualPath = Name(entry.assetHash);
+        if(!nickname || !ref.valid()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Subsystem::loadBinary failed: invalid asset entry at index {}"), i);
             return false;
         }
-        SubsystemFeature feature(assetArena);
-        feature.name = Name(featureBinary.featureNameHash);
-        feature.assets.reserve(static_cast<usize>(featureBinary.assetCount));
-        for(u64 index = 0u; index < featureBinary.assetCount; ++index){
-            AssetRef ref;
-            ref.virtualPath = Name(featureAssetHashes[static_cast<usize>(featureBinary.assetOffset + index)]);
-            feature.assets.push_back(ref);
+        if(!candidate.m_assets.emplace(nickname, ref).second){
+            NWB_LOGGER_ERROR(NWB_TEXT("Subsystem::loadBinary failed: duplicate asset nickname at index {}"), i);
+            return false;
         }
-        expectedOffset += featureBinary.assetCount;
-        candidate.m_features.push_back(Move(feature));
-    }
-    if(expectedOffset != featureAssetHashes.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Subsystem::loadBinary failed: unreferenced feature asset entries"));
-        return false;
     }
 
     if(!candidate.validatePayload(scratchArena))

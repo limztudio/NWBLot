@@ -24,12 +24,12 @@ asset.subsystems = [
     "engine/subsystems/renderer"
 ];
 
-asset.assets = [
-    "project/meshes/caustic_sphere",
-    "project/meshes/shadow_plane",
-    "project/smoke/texture/materials/pattern",
-    "project/smoke/texture/materials/white_ground"
-];
+asset.assets = {
+    "caustic_sphere": "project/meshes/caustic_sphere",
+    "shadow_plane": "project/meshes/shadow_plane",
+    "texture_pattern": "project/smoke/texture/materials/pattern",
+    "texture_white_ground": "project/smoke/texture/materials/white_ground"
+};
 """
 
 

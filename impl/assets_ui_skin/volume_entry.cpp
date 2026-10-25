@@ -11,6 +11,9 @@
 #include "cook.h"
 #include "binary_payload.h"
 
+#include <impl/assets_texture/asset.h>
+
+#include <core/assets/cook_dependency_registry.h>
 #include <core/assets/cook_entry_registry.h>
 
 
@@ -33,6 +36,15 @@ static Expected<UiSkinCookEntry> ParseUiSkinDocument(const Path& assetRoot, cons
     return ParseUiSkinCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
 }
 
+static bool ExtractUiSkinDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
+    if(!context.document)
+        return false;
+    const auto skinEntry = ParseUiSkinCookMetadata(context.assetRoot, context.virtualRoot, context.nwbFilePath, *context.document, context.arena, context.scratchArena);
+    if(!skinEntry)
+        return false;
+    return collector.addAssetDependency(skinEntry->texture.name(), Texture::AssetTypeName());
+}
+
 static bool RegisterUiSkinCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterSingleDocumentCookEntry<UiSkinCookEntry, UiSkin, UiSkinAssetCodec>(
         registry,
@@ -43,11 +55,16 @@ static bool RegisterUiSkinCookEntry(Core::Assets::CookEntryRegistry& registry){
     );
 }
 
+static bool RegisterUiSkinCookDependency(Core::Assets::CookDependencyRegistry& registry){
+    return registry.registerType(UiSkin::AssetTypeName(), &ExtractUiSkinDependencies);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_DEFINE_COOK_ENTRY_REGISTRAR(s_UiSkinCookEntryRegistrar, RegisterUiSkinCookEntry);
+NWB_DEFINE_COOK_DEPENDENCY_REGISTRAR(s_UiSkinCookDependencyRegistrar, RegisterUiSkinCookDependency);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

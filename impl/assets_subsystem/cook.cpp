@@ -39,45 +39,27 @@ bool SubsystemAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Ass
         return false;
 
     Vector<NameHash, Core::Alloc::ScratchArena> subsystemHashes(scratchArena);
-    Vector<NameHash, Core::Alloc::ScratchArena> assetHashes(scratchArena);
-    Vector<SubsystemBinaryPayload::SubsystemFeatureBinary, Core::Alloc::ScratchArena> featureBinaries(scratchArena);
-    Vector<NameHash, Core::Alloc::ScratchArena> featureAssetHashes(scratchArena);
+    Vector<SubsystemBinaryPayload::SubsystemAssetEntryBinary, Core::Alloc::ScratchArena> assetEntries(scratchArena);
 
     subsystemHashes.reserve(subsystem.subsystems().size());
     for(const Subsystem::SubsystemRef& child : subsystem.subsystems())
         subsystemHashes.push_back(child.name().hash());
 
-    assetHashes.reserve(subsystem.assets().size());
-    for(const Subsystem::AssetRef& item : subsystem.assets())
-        assetHashes.push_back(item.name().hash());
-
-    usize totalFeatureAssets = 0u;
-    for(const SubsystemFeature& feature : subsystem.features()){
-        if(feature.assets.size() > Limit<usize>::s_Max - totalFeatureAssets){
-            NWB_LOGGER_ERROR(NWB_TEXT("SubsystemAssetCodec::serialize failed: total feature asset count overflows"));
-            return false;
-        }
-        totalFeatureAssets += feature.assets.size();
+    assetEntries.reserve(subsystem.assets().size());
+    for(const auto& [nickname, item] : subsystem.assets()){
+        SubsystemBinaryPayload::SubsystemAssetEntryBinary entry;
+        entry.nicknameHash = nickname.hash();
+        entry.assetHash = item.name().hash();
+        assetEntries.push_back(entry);
     }
-
-    featureBinaries.reserve(subsystem.features().size());
-    featureAssetHashes.reserve(totalFeatureAssets);
-    for(const SubsystemFeature& feature : subsystem.features()){
-        SubsystemBinaryPayload::SubsystemFeatureBinary featureBinary;
-        featureBinary.featureNameHash = feature.name.hash();
-        featureBinary.assetOffset = static_cast<u64>(featureAssetHashes.size());
-        featureBinary.assetCount = static_cast<u64>(feature.assets.size());
-        for(const Subsystem::AssetRef& item : feature.assets)
-            featureAssetHashes.push_back(item.name().hash());
-        featureBinaries.push_back(featureBinary);
-    }
+    Sort(assetEntries.begin(), assetEntries.end(), [](const SubsystemBinaryPayload::SubsystemAssetEntryBinary& lhs, const SubsystemBinaryPayload::SubsystemAssetEntryBinary& rhs)noexcept{
+        return LessNameHash(lhs.nicknameHash, rhs.nicknameHash);
+    });
 
     usize reserveBytes = sizeof(SubsystemBinaryPayload::SubsystemHeaderBinary);
     const bool canReserve =
         AddBinaryVectorReserveBytes(reserveBytes, subsystemHashes)
-        && AddBinaryVectorReserveBytes(reserveBytes, assetHashes)
-        && AddBinaryVectorReserveBytes(reserveBytes, featureBinaries)
-        && AddBinaryVectorReserveBytes(reserveBytes, featureAssetHashes)
+        && AddBinaryVectorReserveBytes(reserveBytes, assetEntries)
     ;
 
     outBinary.clear();
@@ -86,16 +68,12 @@ bool SubsystemAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Ass
 
     SubsystemBinaryPayload::SubsystemHeaderBinary header;
     header.subsystemCount = static_cast<u64>(subsystemHashes.size());
-    header.assetCount = static_cast<u64>(assetHashes.size());
-    header.featureCount = static_cast<u64>(featureBinaries.size());
-    header.featureAssetCount = static_cast<u64>(featureAssetHashes.size());
+    header.assetCount = static_cast<u64>(assetEntries.size());
     AppendPOD(outBinary, header);
 
     return
         Core::Assets::AppendVectorPayload(outBinary, subsystemHashes, SubsystemBinaryPayload::s_SubsystemSerializeContext, SubsystemBinaryPayload::s_SubsystemsPayloadLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, assetHashes, SubsystemBinaryPayload::s_SubsystemSerializeContext, SubsystemBinaryPayload::s_AssetsPayloadLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, featureBinaries, SubsystemBinaryPayload::s_SubsystemSerializeContext, SubsystemBinaryPayload::s_FeaturesPayloadLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, featureAssetHashes, SubsystemBinaryPayload::s_SubsystemSerializeContext, SubsystemBinaryPayload::s_FeatureAssetsPayloadLabel)
+        && Core::Assets::AppendVectorPayload(outBinary, assetEntries, SubsystemBinaryPayload::s_SubsystemSerializeContext, SubsystemBinaryPayload::s_AssetsPayloadLabel)
     ;
 }
 
@@ -113,7 +91,6 @@ using namespace Core::Metascript;
 
 static constexpr AStringView s_SubsystemsField = "subsystems";
 static constexpr AStringView s_AssetsField = "assets";
-static constexpr AStringView s_FeaturesField = "features";
 static constexpr AStringView s_DiagnosticPrefix = "Subsystem meta";
 
 
@@ -169,45 +146,41 @@ template<typename TAsset>
     return refs;
 }
 
-[[nodiscard]] static Expected<Subsystem::FeatureVector> ParseFeaturesMap(
+[[nodiscard]] static Expected<Subsystem::AssetMap> ParseAssetsMap(
     const Path& nwbFilePath,
-    const Value& asset,
+    const Value& mapValue,
     Core::Assets::AssetArena& arena,
     Core::Alloc::ScratchArena& scratchArena
 ){
-    Subsystem::FeatureVector features(arena);
-    const Value* fieldValue = asset.findField(s_FeaturesField);
-    if(!fieldValue)
-        return features;
-    if(!fieldValue->isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a map"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_FeaturesField));
+    if(!mapValue.isMap()){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a map"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_AssetsField));
         return MakeUnexpected(Failure{});
     }
 
-    const auto& map = fieldValue->asMap();
-    features.reserve(map.size());
-    for(const auto& [featureKey, featureListValue] : map){
-        const AStringView featureKeyView(featureKey.data(), featureKey.size());
-        if(TrimView(featureKeyView).empty() || featureKeyView != TrimView(featureKeyView)){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': feature name '{}' must not be empty or padded"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(featureKeyView));
+    const auto& map = mapValue.asMap();
+    Subsystem::AssetMap assets(0, Hasher<Name>(), EqualTo<Name>(), arena);
+    assets.reserve(map.size());
+    for(const auto& [nicknameKey, assetValue] : map){
+        const AStringView nicknameView(nicknameKey.data(), nicknameKey.size());
+        if(TrimView(nicknameView).empty() || nicknameView != TrimView(nicknameView)){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': asset nickname '{}' must not be empty or padded"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(nicknameView));
             return MakeUnexpected(Failure{});
         }
-        const auto featureName = Name::FromText(featureKeyView);
-        if(!featureName || !*featureName){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': feature name '{}' contains an embedded null"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(featureKeyView));
+        const auto nickname = Name::FromText(nicknameView);
+        if(!nickname || !*nickname){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': asset nickname '{}' contains an embedded null"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(nicknameView));
             return MakeUnexpected(Failure{});
         }
 
-        auto featureAssets = ParseAssetRefList<Core::Assets::IAsset>(nwbFilePath, featureListValue, featureKeyView, arena, scratchArena);
-        if(!featureAssets)
+        const auto parsedRef = ParseAssetRefString<Core::Assets::IAsset>(nwbFilePath, assetValue, nicknameView, scratchArena);
+        if(!parsedRef)
             return MakeUnexpected(Failure{});
-        if(featureAssets->empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': feature '{}' must declare at least one asset"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(featureKeyView));
+        if(!assets.emplace(*nickname, *parsedRef).second){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': duplicate asset nickname '{}'"), ConvertString(s_DiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(nicknameView));
             return MakeUnexpected(Failure{});
         }
-        features.push_back(SubsystemFeature(*featureName, Move(*featureAssets)));
     }
-    return features;
+    return assets;
 }
 
 
@@ -234,7 +207,7 @@ Expected<SubsystemCookEntry> ParseSubsystemCookMetadata(
         return MakeUnexpected(Failure{});
     if(!Core::Assets::AssignCookEntryVirtualPath(entry, virtualPath, nwbFilePath, s_DiagnosticPrefix))
         return MakeUnexpected(Failure{});
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_DiagnosticPrefix, { s_SubsystemsField, s_AssetsField, s_FeaturesField }))
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_DiagnosticPrefix, { s_SubsystemsField, s_AssetsField }))
         return MakeUnexpected(Failure{});
 
     if(const Core::Metascript::Value* subsystemsValue = asset.findField(s_SubsystemsField)){
@@ -245,23 +218,14 @@ Expected<SubsystemCookEntry> ParseSubsystemCookMetadata(
     }
 
     if(const Core::Metascript::Value* assetsValue = asset.findField(s_AssetsField)){
-        auto assets = ParseAssetRefList<Core::Assets::IAsset>(nwbFilePath, *assetsValue, s_AssetsField, arena, scratchArena);
+        auto assets = ParseAssetsMap(nwbFilePath, *assetsValue, arena, scratchArena);
         if(!assets)
             return MakeUnexpected(Failure{});
         entry.assets = Move(*assets);
     }
 
-    auto features = ParseFeaturesMap(nwbFilePath, asset, arena, scratchArena);
-    if(!features)
-        return MakeUnexpected(Failure{});
-    entry.features = Move(*features);
-
     Subsystem candidate(arena, entry.virtualPath);
-    Subsystem::FeatureVector candidateFeatures(arena);
-    candidateFeatures.reserve(entry.features.size());
-    for(const SubsystemFeature& feature : entry.features)
-        candidateFeatures.push_back(SubsystemFeature(feature.name, Subsystem::AssetRefVector(feature.assets)));
-    candidate.setContents(Subsystem::SubsystemRefVector(entry.subsystems), Subsystem::AssetRefVector(entry.assets), Move(candidateFeatures));
+    candidate.setContents(Subsystem::SubsystemRefVector(entry.subsystems), Subsystem::AssetMap(entry.assets));
     if(!candidate.validatePayload(scratchArena))
         return MakeUnexpected(Failure{});
 
@@ -291,7 +255,7 @@ Expected<Subsystem> BuildSubsystemAsset(
     Core::Alloc::ScratchArena& scratchArena
 ){
     Subsystem asset(arena, entry.virtualPath);
-    asset.setContents(Move(entry.subsystems), Move(entry.assets), Move(entry.features));
+    asset.setContents(Move(entry.subsystems), Move(entry.assets));
     if(!asset.validatePayload(scratchArena))
         return MakeUnexpected(Failure{});
     return asset;

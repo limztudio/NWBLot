@@ -1,24 +1,21 @@
 scene asset;
 
 asset.subsystems = [
-    "engine/subsystems/renderer"
+    "engine/subsystems/renderer",
+    "engine/subsystems/csg"
 ];
 
-asset.enabled_features = [
-    "csg"
-];
-
-asset.assets = [
-    "project/meshes/cube_hard_edges",
-    "project/smoke/csg_visible/materials/cap_state",
-    "project/smoke/csg_visible/materials/direct",
-    "project/smoke/csg_visible/materials/event_data",
-    "project/smoke/csg_visible/materials/event_order",
-    "project/smoke/csg_visible/materials/event_state",
-    "project/smoke/csg_visible/materials/indirect",
-    "project/smoke/csg_visible/materials/interval_state",
-    "project/smoke/csg_visible/materials/normal",
-    "project/smoke/csg_visible/materials/position",
-    "project/smoke/csg_visible/materials/solid",
-    "project/smoke/csg_visible/materials/span_state"
-];
+asset.assets = {
+    "cube_hard_edges": "project/meshes/cube_hard_edges",
+    "csg_visible_cap_state": "project/smoke/csg_visible/materials/cap_state",
+    "csg_visible_direct": "project/smoke/csg_visible/materials/direct",
+    "csg_visible_event_data": "project/smoke/csg_visible/materials/event_data",
+    "csg_visible_event_order": "project/smoke/csg_visible/materials/event_order",
+    "csg_visible_event_state": "project/smoke/csg_visible/materials/event_state",
+    "csg_visible_indirect": "project/smoke/csg_visible/materials/indirect",
+    "csg_visible_interval_state": "project/smoke/csg_visible/materials/interval_state",
+    "csg_visible_normal": "project/smoke/csg_visible/materials/normal",
+    "csg_visible_position": "project/smoke/csg_visible/materials/position",
+    "csg_visible_solid": "project/smoke/csg_visible/materials/solid",
+    "csg_visible_span_state": "project/smoke/csg_visible/materials/span_state"
+};

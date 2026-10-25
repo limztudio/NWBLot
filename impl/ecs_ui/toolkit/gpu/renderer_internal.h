@@ -368,6 +368,7 @@ struct GpuRendererState final : NoCopy{
     Core::GraphicsRuntime& m_graphics;
     Core::Assets::AssetManager& m_assets;
     GpuRenderer::ShaderPathResolveCallback m_resolver;
+    const ActiveSceneSubsystems* m_activeSceneSubsystems = nullptr;
     GpuVersion<GpuSharedResources> m_resources;
     GpuVersion<GpuSkinVersion> m_skin;
     Vector<GpuVersion<GpuGlyphVersion>, Core::Alloc::GlobalArena> m_glyphCache;

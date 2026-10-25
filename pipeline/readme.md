@@ -29,8 +29,8 @@ failures retain their nonzero exit status at the root launcher.
 `dependency_computer` computes transitive `.nwb` asset dependencies. When no explicit
 `--input` or `--input-list` is provided, it automatically discovers `project.nwb` in
 non-engine `--asset-root` directories and expands the dependency graph from the project's
-`start_scene` through scene subsystems, conditional subsystem features, and reachable
-assets. When explicit `--input` or `--input-list` values are provided, it preserves those
+`start_scene` through scene subsystems, auto-activated feature subsystems, and reachable
+assets via `CookDependencyRegistry`. When explicit `--input` or `--input-list` values are provided, it preserves those
 seed inputs and expands their transitive dependencies across `--asset-root` providers.
 That resolution accepts `--repo-root` (default: the working directory) and repeated
 `--asset-root` values. Its provider catalog resolves metadata identities without reading

@@ -28,9 +28,9 @@ namespace AssetsGraphicsMesh{
 
 inline constexpr AStringView s_SharedMeshShaderText = "engine/graphics/mesh/shared_ms";
 
-inline constexpr Name s_ObjectGeometryDecodeShaderName("engine/graphics/mesh/object_decode_cs");
-inline constexpr Name s_EmulationVertexShaderName("engine/graphics/mesh/emulation_vs");
-inline constexpr Name s_SharedMeshShaderName(s_SharedMeshShaderText);
+inline constexpr Name s_ObjectGeometryDecodeShaderName("object_decode_cs");
+inline constexpr Name s_EmulationVertexShaderName("emulation_vs");
+inline constexpr Name s_SharedMeshShaderName("shared_ms");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

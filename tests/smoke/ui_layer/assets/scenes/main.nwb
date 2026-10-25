@@ -4,7 +4,6 @@ asset.subsystems = [
     "engine/subsystems/ui"
 ];
 
-asset.assets = [
-    "project/ui/skins/alternate/atlas"
-];
-
+asset.assets = {
+    "alternate_skin": "project/ui/skins/alternate/atlas"
+};

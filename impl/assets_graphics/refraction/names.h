@@ -25,10 +25,10 @@ namespace AssetsGraphicsRefraction{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_ScreenResolveShaderName("engine/graphics/refraction/resolve_screen_cs");
-inline constexpr Name s_HwResolveShaderName("engine/graphics/refraction/resolve_hw_cs");
-inline constexpr Name s_ClassifyTilesShaderName("engine/graphics/refraction/classify_tiles_cs");
-inline constexpr Name s_FinalizeTilesShaderName("engine/graphics/refraction/finalize_tiles_cs");
+inline constexpr Name s_ScreenResolveShaderName("refraction_resolve_screen_cs");
+inline constexpr Name s_HwResolveShaderName("refraction_resolve_hw_cs");
+inline constexpr Name s_ClassifyTilesShaderName("refraction_classify_tiles_cs");
+inline constexpr Name s_FinalizeTilesShaderName("refraction_finalize_tiles_cs");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

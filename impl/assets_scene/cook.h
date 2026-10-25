@@ -38,15 +38,13 @@ public:
 struct SceneCookEntry{
     Name virtualPath = s_NameNone;
     SceneAsset::SubsystemRefVector subsystems;
-    SceneAsset::NameVector enabledFeatures;
-    SceneAsset::AssetRefVector assets;
+    SceneAsset::AssetMap assets;
 
 
 public:
     explicit SceneCookEntry(Core::Assets::AssetArena& arena)noexcept
         : subsystems(arena)
-        , enabledFeatures(arena)
-        , assets(arena)
+        , assets(0, Hasher<Name>(), EqualTo<Name>(), arena)
     {}
 };
 
@@ -55,17 +53,17 @@ public:
 
 
 [[nodiscard]] Expected<ProjectCookEntry> ParseProjectCookMetadata(
-    const Path& assetRoot,
-    AStringView virtualRoot,
+    Name virtualPath,
     const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
+    const Core::Metascript::Value& asset,
     Core::Assets::AssetArena& arena,
     Core::Alloc::ScratchArena& scratchArena
 );
 [[nodiscard]] Expected<ProjectCookEntry> ParseProjectCookMetadata(
-    Name virtualPath,
+    const Path& assetRoot,
+    AStringView virtualRoot,
     const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
+    const Core::Metascript::Document& doc,
     Core::Assets::AssetArena& arena,
     Core::Alloc::ScratchArena& scratchArena
 );
@@ -76,17 +74,17 @@ public:
 );
 
 [[nodiscard]] Expected<SceneCookEntry> ParseSceneCookMetadata(
-    const Path& assetRoot,
-    AStringView virtualRoot,
+    Name virtualPath,
     const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
+    const Core::Metascript::Value& asset,
     Core::Assets::AssetArena& arena,
     Core::Alloc::ScratchArena& scratchArena
 );
 [[nodiscard]] Expected<SceneCookEntry> ParseSceneCookMetadata(
-    Name virtualPath,
+    const Path& assetRoot,
+    AStringView virtualRoot,
     const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
+    const Core::Metascript::Document& doc,
     Core::Assets::AssetArena& arena,
     Core::Alloc::ScratchArena& scratchArena
 );

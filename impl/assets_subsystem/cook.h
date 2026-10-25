@@ -29,15 +29,13 @@ NWB_IMPL_BEGIN
 struct SubsystemCookEntry{
     Name virtualPath = s_NameNone;
     Subsystem::SubsystemRefVector subsystems;
-    Subsystem::AssetRefVector assets;
-    Subsystem::FeatureVector features;
+    Subsystem::AssetMap assets;
 
 
 public:
     explicit SubsystemCookEntry(Core::Assets::AssetArena& arena)noexcept
         : subsystems(arena)
-        , assets(arena)
-        , features(arena)
+        , assets(0, Hasher<Name>(), EqualTo<Name>(), arena)
     {}
 };
 
@@ -46,17 +44,17 @@ public:
 
 
 [[nodiscard]] Expected<SubsystemCookEntry> ParseSubsystemCookMetadata(
-    const Path& assetRoot,
-    AStringView virtualRoot,
+    Name virtualPath,
     const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
+    const Core::Metascript::Value& asset,
     Core::Assets::AssetArena& arena,
     Core::Alloc::ScratchArena& scratchArena
 );
 [[nodiscard]] Expected<SubsystemCookEntry> ParseSubsystemCookMetadata(
-    Name virtualPath,
+    const Path& assetRoot,
+    AStringView virtualRoot,
     const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
+    const Core::Metascript::Document& doc,
     Core::Assets::AssetArena& arena,
     Core::Alloc::ScratchArena& scratchArena
 );

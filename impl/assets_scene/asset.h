@@ -68,7 +68,6 @@ public:
     [[nodiscard]] bool validatePayload()const;
     bool loadBinary(Span<const u8> binary);
 
-public:
     void setStartScene(const SceneRef& startScene)noexcept{ m_startScene = startScene; }
     [[nodiscard]] const SceneRef& startScene()const noexcept{ return m_startScene; }
 
@@ -92,8 +91,7 @@ public:
     using SubsystemRef = Core::Assets::AssetRef<Subsystem>;
     using AssetRef = Core::Assets::AssetRef<Core::Assets::IAsset>;
     using SubsystemRefVector = Core::Assets::AssetVector<SubsystemRef>;
-    using NameVector = Core::Assets::AssetVector<Name>;
-    using AssetRefVector = Core::Assets::AssetVector<AssetRef>;
+    using AssetMap = HashMap<Name, AssetRef, Core::Assets::AssetArena, Hasher<Name>, EqualTo<Name>>;
 
 
 public:
@@ -103,14 +101,12 @@ public:
 public:
     explicit SceneAsset(Core::Assets::AssetArena& arena)noexcept
         : m_subsystems(arena)
-        , m_enabledFeatures(arena)
-        , m_assets(arena)
+        , m_assets(0, Hasher<Name>(), EqualTo<Name>(), arena)
     {}
     SceneAsset(Core::Assets::AssetArena& arena, const Name& virtualPath)noexcept
         : Core::Assets::TypedAsset<SceneAsset>(virtualPath)
         , m_subsystems(arena)
-        , m_enabledFeatures(arena)
-        , m_assets(arena)
+        , m_assets(0, Hasher<Name>(), EqualTo<Name>(), arena)
     {}
 
 
@@ -118,43 +114,32 @@ public:
     [[nodiscard]] bool validatePayload(Core::Alloc::ScratchArena& scratchArena)const;
     bool loadBinary(Span<const u8> binary);
 
-public:
-    void setContents(SubsystemRefVector&& subsystems, NameVector&& enabledFeatures, AssetRefVector&& assets)noexcept{
+    void setContents(SubsystemRefVector&& subsystems, AssetMap&& assets)noexcept{
         m_subsystems = Move(subsystems);
-        m_enabledFeatures = Move(enabledFeatures);
         m_assets = Move(assets);
     }
 
-public:
     [[nodiscard]] const SubsystemRefVector& subsystems()const noexcept{ return m_subsystems; }
-    [[nodiscard]] const NameVector& enabledFeatures()const noexcept{ return m_enabledFeatures; }
-    [[nodiscard]] const AssetRefVector& assets()const noexcept{ return m_assets; }
+    [[nodiscard]] const AssetMap& assets()const noexcept{ return m_assets; }
 
-    [[nodiscard]] bool hasSubsystem(const SubsystemRef& subsystem)const noexcept{
-        if(!subsystem.valid())
-            return false;
-        for(const SubsystemRef& entry : m_subsystems){
-            if(entry == subsystem)
-                return true;
-        }
-        return false;
-    }
+    [[nodiscard]] bool hasSubsystem(const SubsystemRef& subsystem)const noexcept;
 
-    [[nodiscard]] bool hasEnabledFeature(const Name& featureName)const noexcept{
-        if(!featureName)
-            return false;
-        for(const Name& entry : m_enabledFeatures){
-            if(entry == featureName)
-                return true;
-        }
-        return false;
+    template<typename TAsset = Core::Assets::IAsset>
+    [[nodiscard]] Core::Assets::AssetRef<TAsset> findAsset(const Name& nickname)const noexcept{
+        if(!nickname)
+            return {};
+        const auto found = m_assets.find(nickname);
+        if(found == m_assets.end())
+            return {};
+        Core::Assets::AssetRef<TAsset> result;
+        result.virtualPath = found.value().name();
+        return result;
     }
 
 
 private:
     SubsystemRefVector m_subsystems;
-    NameVector m_enabledFeatures;
-    AssetRefVector m_assets;
+    AssetMap m_assets;
 };
 
 
@@ -174,14 +159,32 @@ public:
     using SubsystemRef = Core::Assets::AssetRef<Subsystem>;
     using AssetRef = Core::Assets::AssetRef<Core::Assets::IAsset>;
     using SubsystemRefVector = Vector<SubsystemRef, Core::Alloc::GlobalArena>;
-    using NameVector = Vector<Name, Core::Alloc::GlobalArena>;
     using AssetRefVector = Vector<AssetRef, Core::Alloc::GlobalArena>;
+    using AssetMap = HashMap<Name, AssetRef, Core::Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>>;
+
+
+private:
+    struct LoadedSubsystem{
+        SubsystemRef subsystem;
+        SubsystemRefVector children;
+        AssetMap assets;
+
+
+    public:
+        explicit LoadedSubsystem(Core::Alloc::GlobalArena& arena)noexcept
+            : children(arena)
+            , assets(0, Hasher<Name>(), EqualTo<Name>(), arena)
+        {}
+    };
+    using LoadedSubsystemVector = Vector<LoadedSubsystem, Core::Alloc::GlobalArena>;
 
 
 public:
     explicit ActiveSceneSubsystems(Core::Alloc::GlobalArena& arena)noexcept
-        : m_subsystems(arena)
-        , m_enabledFeatures(arena)
+        : m_arena(arena)
+        , m_subsystems(arena)
+        , m_sceneAssets(0, Hasher<Name>(), EqualTo<Name>(), arena)
+        , m_loadedSubsystems(arena)
         , m_resolvedAssets(arena)
     {}
 
@@ -190,41 +193,62 @@ public:
     [[nodiscard]] bool loadProjectStartScene(Core::Assets::AssetManager& assetManager, const ProjectRef& project = ProjectAssetDefaults::s_DefaultProjectRef);
     [[nodiscard]] bool loadScene(Core::Assets::AssetManager& assetManager, const SceneRef& scene);
 
-    void enableFeature(const Name& featureName);
+    void enableSubsystem(const SubsystemRef& subsystem);
 
     [[nodiscard]] bool valid()const noexcept{ return m_scene.valid() && !m_subsystems.empty(); }
     [[nodiscard]] const ProjectRef& project()const noexcept{ return m_project; }
     [[nodiscard]] const SceneRef& scene()const noexcept{ return m_scene; }
     [[nodiscard]] const SubsystemRefVector& subsystems()const noexcept{ return m_subsystems; }
-    [[nodiscard]] const NameVector& enabledFeatures()const noexcept{ return m_enabledFeatures; }
+    [[nodiscard]] const AssetMap& sceneAssets()const noexcept{ return m_sceneAssets; }
     [[nodiscard]] const AssetRefVector& resolvedAssets()const noexcept{ return m_resolvedAssets; }
 
-    [[nodiscard]] bool hasSubsystem(const SubsystemRef& subsystem)const noexcept{
-        if(!subsystem.valid())
-            return false;
-        for(const SubsystemRef& enabled : m_subsystems){
-            if(enabled == subsystem)
-                return true;
-        }
-        return false;
+    [[nodiscard]] bool hasSubsystem(const SubsystemRef& subsystem)const noexcept;
+
+    template<typename TAsset = Core::Assets::IAsset>
+    [[nodiscard]] Core::Assets::AssetRef<TAsset> findSceneAsset(const Name& nickname)const noexcept{
+        if(!nickname)
+            return {};
+        const auto found = m_sceneAssets.find(nickname);
+        if(found == m_sceneAssets.end())
+            return {};
+        Core::Assets::AssetRef<TAsset> result;
+        result.virtualPath = found.value().name();
+        return result;
     }
 
-    [[nodiscard]] bool isFeatureEnabled(const Name& featureName)const noexcept{
-        if(!featureName)
-            return false;
-        for(const Name& enabled : m_enabledFeatures){
-            if(enabled == featureName)
-                return true;
-        }
-        return false;
+    template<typename TAsset = Core::Assets::IAsset>
+    [[nodiscard]] Core::Assets::AssetRef<TAsset> findSubsystemAsset(const SubsystemRef& subsystem, const Name& nickname)const noexcept{
+        const AssetRef found = findSubsystemAssetUntyped(subsystem, nickname);
+        if(!found.valid())
+            return {};
+        Core::Assets::AssetRef<TAsset> result;
+        result.virtualPath = found.name();
+        return result;
+    }
+
+    template<typename TAsset = Core::Assets::IAsset>
+    [[nodiscard]] Core::Assets::AssetRef<TAsset> findAsset(const Name& nickname)const noexcept{
+        const AssetRef found = findAssetUntyped(nickname);
+        if(!found.valid())
+            return {};
+        Core::Assets::AssetRef<TAsset> result;
+        result.virtualPath = found.name();
+        return result;
     }
 
 
 private:
+    [[nodiscard]] AssetRef findSubsystemAssetUntyped(const SubsystemRef& subsystem, const Name& nickname, usize depth = 0u)const noexcept;
+    [[nodiscard]] AssetRef findAssetUntyped(const Name& nickname)const noexcept;
+
+
+private:
+    Core::Alloc::GlobalArena& m_arena;
     ProjectRef m_project;
     SceneRef m_scene;
     SubsystemRefVector m_subsystems;
-    NameVector m_enabledFeatures;
+    AssetMap m_sceneAssets;
+    LoadedSubsystemVector m_loadedSubsystems;
     AssetRefVector m_resolvedAssets;
 };
 

@@ -26,14 +26,14 @@ namespace AssetsGraphicsGi{
 
 
 // Surfel GI shader paths; gather is folded into deferred lighting.
-inline constexpr Name s_SurfelSpawnShaderName("engine/graphics/gi/surfel/surfel_spawn_cs");
-inline constexpr Name s_SurfelAgeFreeShaderName("engine/graphics/gi/surfel/surfel_age_free_cs");
-inline constexpr Name s_SurfelHashBuildShaderName("engine/graphics/gi/surfel/surfel_hash_build_cs");
-inline constexpr Name s_SurfelTraceShaderName("engine/graphics/gi/surfel/surfel_trace_cs");
-inline constexpr Name s_SurfelTraceHwShaderName("engine/graphics/gi/surfel/surfel_trace_hw_cs");
-inline constexpr Name s_SurfelResolveShaderName("engine/graphics/gi/surfel/surfel_resolve_cs");
-inline constexpr Name s_SurfelUpsampleShaderName("engine/graphics/gi/surfel/surfel_upsample_cs");
-inline constexpr Name s_SurfelTraceBuildArgsShaderName("engine/graphics/gi/surfel/surfel_trace_build_args_cs");
+inline constexpr Name s_SurfelSpawnShaderName("surfel_spawn_cs");
+inline constexpr Name s_SurfelAgeFreeShaderName("surfel_age_free_cs");
+inline constexpr Name s_SurfelHashBuildShaderName("surfel_hash_build_cs");
+inline constexpr Name s_SurfelTraceShaderName("surfel_trace_cs");
+inline constexpr Name s_SurfelTraceHwShaderName("surfel_trace_hw_cs");
+inline constexpr Name s_SurfelResolveShaderName("surfel_resolve_cs");
+inline constexpr Name s_SurfelUpsampleShaderName("surfel_upsample_cs");
+inline constexpr Name s_SurfelTraceBuildArgsShaderName("surfel_trace_build_args_cs");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -31,6 +31,6 @@ if(NWB_BUILD_PIPELINE)
     target_sources(nwb_assets_ui_skin_volume_entry PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/volume_entry.cpp"
     )
-    target_link_libraries(nwb_assets_ui_skin_volume_entry PRIVATE nwb_assets_ui_skin_cook nwb_assets_cook)
+    target_link_libraries(nwb_assets_ui_skin_volume_entry PRIVATE nwb_assets_ui_skin_cook nwb_assets_texture nwb_assets_cook)
     target_compile_definitions(nwb_assets_ui_skin_volume_entry PRIVATE NWB_COOK=1)
 endif()

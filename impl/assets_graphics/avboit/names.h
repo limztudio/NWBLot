@@ -25,8 +25,8 @@ namespace AssetsGraphicsAvboit{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_DepthWarpComputeShaderName("engine/graphics/avboit/depth_warp_cs");
-inline constexpr Name s_IntegrateComputeShaderName("engine/graphics/avboit/integrate_cs");
+inline constexpr Name s_DepthWarpComputeShaderName("avboit_depth_warp_cs");
+inline constexpr Name s_IntegrateComputeShaderName("avboit_integrate_cs");
 // Cook-generated AVBOIT PS names are cook-private; the renderer binds the resolved Name.
 
 

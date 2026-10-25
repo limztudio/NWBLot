@@ -28,13 +28,15 @@ bool UiLayerSystem::loadFonts(Core::Alloc::ScratchArena& scratchArena){
     Vector<Ui::FontSource, Core::Alloc::ScratchArena> sources(scratchArena);
     sources.reserve(m_fontRefs.size());
     for(usize index = 0u; index < m_fontRefs.size(); ++index){
-        auto font = m_assetManager.loadTypedSync<Font>(m_fontRefs[index].font.name(), s_UiLayerSystemOwnerName, "UI font");
+        const Core::Assets::AssetRef<Font> resolvedFontRef = resolveAsset(m_fontRefs[index].font);
+        auto font = m_assetManager.loadTypedSync<Font>(resolvedFontRef.name(), s_UiLayerSystemOwnerName, "UI font");
         if(!font)
             return false;
         assets[index] = Move(*font);
         const FontAtlas* atlas = nullptr;
         if(m_fontRefs[index].atlas.valid()){
-            auto loadedAtlas = m_assetManager.loadTypedSync<FontAtlas>(m_fontRefs[index].atlas.name(), s_UiLayerSystemOwnerName, "UI font atlas");
+            const Core::Assets::AssetRef<FontAtlas> resolvedAtlasRef = resolveAsset(m_fontRefs[index].atlas);
+            auto loadedAtlas = m_assetManager.loadTypedSync<FontAtlas>(resolvedAtlasRef.name(), s_UiLayerSystemOwnerName, "UI font atlas");
             if(!loadedAtlas)
                 NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: optional font atlas unavailable; using native coverage"));
             else{
@@ -42,7 +44,7 @@ bool UiLayerSystem::loadFonts(Core::Alloc::ScratchArena& scratchArena){
                 atlas = atlasAssets[index].get();
             }
         }
-        sources.push_back({ m_fontRefs[index].font, *assets[index], 1u, atlas });
+        sources.push_back({ resolvedFontRef, *assets[index], 1u, atlas });
     }
     // TextService owns the exact font bytes and immutable baked atlas versions; loaded asset objects can be released here.
     m_fontsReady = m_text.setFonts(scratchArena, sources.data(), sources.size());

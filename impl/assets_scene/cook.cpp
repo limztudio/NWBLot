@@ -56,26 +56,27 @@ bool SceneAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
         return false;
 
     Vector<NameHash, Core::Alloc::ScratchArena> subsystemHashes(scratchArena);
-    Vector<NameHash, Core::Alloc::ScratchArena> enabledFeatureHashes(scratchArena);
-    Vector<NameHash, Core::Alloc::ScratchArena> assetHashes(scratchArena);
+    Vector<SceneBinaryPayload::SceneAssetEntryBinary, Core::Alloc::ScratchArena> assetEntries(scratchArena);
 
     subsystemHashes.reserve(scene.subsystems().size());
     for(const SceneAsset::SubsystemRef& item : scene.subsystems())
         subsystemHashes.push_back(item.name().hash());
 
-    enabledFeatureHashes.reserve(scene.enabledFeatures().size());
-    for(const Name& item : scene.enabledFeatures())
-        enabledFeatureHashes.push_back(item.hash());
-
-    assetHashes.reserve(scene.assets().size());
-    for(const SceneAsset::AssetRef& item : scene.assets())
-        assetHashes.push_back(item.name().hash());
+    assetEntries.reserve(scene.assets().size());
+    for(const auto& [nickname, item] : scene.assets()){
+        SceneBinaryPayload::SceneAssetEntryBinary entry;
+        entry.nicknameHash = nickname.hash();
+        entry.assetHash = item.name().hash();
+        assetEntries.push_back(entry);
+    }
+    Sort(assetEntries.begin(), assetEntries.end(), [](const SceneBinaryPayload::SceneAssetEntryBinary& lhs, const SceneBinaryPayload::SceneAssetEntryBinary& rhs)noexcept{
+        return LessNameHash(lhs.nicknameHash, rhs.nicknameHash);
+    });
 
     usize reserveBytes = sizeof(SceneBinaryPayload::SceneHeaderBinary);
     const bool canReserve =
         AddBinaryVectorReserveBytes(reserveBytes, subsystemHashes)
-        && AddBinaryVectorReserveBytes(reserveBytes, enabledFeatureHashes)
-        && AddBinaryVectorReserveBytes(reserveBytes, assetHashes)
+        && AddBinaryVectorReserveBytes(reserveBytes, assetEntries)
     ;
 
     outBinary.clear();
@@ -84,14 +85,12 @@ bool SceneAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
 
     SceneBinaryPayload::SceneHeaderBinary header;
     header.subsystemCount = static_cast<u64>(subsystemHashes.size());
-    header.enabledFeatureCount = static_cast<u64>(enabledFeatureHashes.size());
-    header.assetCount = static_cast<u64>(assetHashes.size());
+    header.assetCount = static_cast<u64>(assetEntries.size());
     AppendPOD(outBinary, header);
 
     return
         Core::Assets::AppendVectorPayload(outBinary, subsystemHashes, SceneBinaryPayload::s_SceneSerializeContext, SceneBinaryPayload::s_SubsystemsPayloadLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, enabledFeatureHashes, SceneBinaryPayload::s_SceneSerializeContext, SceneBinaryPayload::s_EnabledFeaturesPayloadLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, assetHashes, SceneBinaryPayload::s_SceneSerializeContext, SceneBinaryPayload::s_AssetsPayloadLabel)
+        && Core::Assets::AppendVectorPayload(outBinary, assetEntries, SceneBinaryPayload::s_SceneSerializeContext, SceneBinaryPayload::s_AssetsPayloadLabel)
     ;
 }
 
@@ -109,7 +108,6 @@ using namespace Core::Metascript;
 
 static constexpr AStringView s_StartSceneField = "start_scene";
 static constexpr AStringView s_SubsystemsField = "subsystems";
-static constexpr AStringView s_EnabledFeaturesField = "enabled_features";
 static constexpr AStringView s_AssetsField = "assets";
 static constexpr AStringView s_ProjectDiagnosticPrefix = "Project meta";
 static constexpr AStringView s_SceneDiagnosticPrefix = "Scene meta";
@@ -168,36 +166,45 @@ template<typename TAsset>
     return refs;
 }
 
-[[nodiscard]] static Expected<SceneAsset::NameVector> ParseFeatureNameList(
+[[nodiscard]] static Expected<SceneAsset::AssetMap> ParseAssetsMap(
     const Path& nwbFilePath,
-    const Value& listValue,
-    Core::Assets::AssetArena& arena
+    const Value& mapValue,
+    Core::Assets::AssetArena& arena,
+    Core::Alloc::ScratchArena& scratchArena
 ){
-    if(!listValue.isList()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a list"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_EnabledFeaturesField));
+    if(!mapValue.isMap()){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a map"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_AssetsField));
         return MakeUnexpected(Failure{});
     }
-    const auto& items = listValue.asList();
-    SceneAsset::NameVector names(arena);
-    names.reserve(items.size());
-    for(const Value& item : items){
-        if(!item.isString()){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entries must be strings"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_EnabledFeaturesField));
+
+    const auto& map = mapValue.asMap();
+    SceneAsset::AssetMap assets(0, Hasher<Name>(), EqualTo<Name>(), arena);
+    assets.reserve(map.size());
+    for(const auto& [nicknameKey, assetValue] : map){
+        const AStringView nicknameView(nicknameKey.data(), nicknameKey.size());
+        if(TrimView(nicknameView).empty() || nicknameView != TrimView(nicknameView)){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': asset nickname '{}' must not be empty or padded"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(nicknameView));
             return MakeUnexpected(Failure{});
         }
-        const AStringView text(item.asString().data(), item.asString().size());
-        if(TrimView(text).empty() || text != TrimView(text)){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': feature name '{}' must not be empty or padded"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(text));
+        const auto nickname = Name::FromText(nicknameView);
+        if(!nickname || !*nickname){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': asset nickname '{}' contains an embedded null"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(nicknameView));
             return MakeUnexpected(Failure{});
         }
-        const auto parsedName = Name::FromText(text);
-        if(!parsedName || !*parsedName){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': feature name '{}' contains an embedded null"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(text));
+        if(!assetValue.isString()){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entries must be strings"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(nicknameView));
             return MakeUnexpected(Failure{});
         }
-        names.push_back(*parsedName);
+        const AStringView text(assetValue.asString().data(), assetValue.asString().size());
+        const auto parsedRef = ParseAssetRefText<Core::Assets::IAsset>(nwbFilePath, s_SceneDiagnosticPrefix, nicknameView, text, scratchArena);
+        if(!parsedRef)
+            return MakeUnexpected(Failure{});
+        if(!assets.emplace(*nickname, *parsedRef).second){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': duplicate asset nickname '{}'"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(nicknameView));
+            return MakeUnexpected(Failure{});
+        }
     }
-    return names;
+    return assets;
 }
 
 
@@ -290,7 +297,7 @@ Expected<SceneCookEntry> ParseSceneCookMetadata(
         return MakeUnexpected(Failure{});
     if(!Core::Assets::AssignCookEntryVirtualPath(entry, virtualPath, nwbFilePath, s_SceneDiagnosticPrefix))
         return MakeUnexpected(Failure{});
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_SceneDiagnosticPrefix, { s_SubsystemsField, s_EnabledFeaturesField, s_AssetsField }))
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_SceneDiagnosticPrefix, { s_SubsystemsField, s_AssetsField }))
         return MakeUnexpected(Failure{});
 
     const Core::Metascript::Value* subsystemsValue = asset.findField(s_SubsystemsField);
@@ -303,26 +310,15 @@ Expected<SceneCookEntry> ParseSceneCookMetadata(
         return MakeUnexpected(Failure{});
     entry.subsystems = Move(*subsystems);
 
-    if(const Core::Metascript::Value* enabledFeaturesValue = asset.findField(s_EnabledFeaturesField)){
-        auto enabledFeatures = ParseFeatureNameList(nwbFilePath, *enabledFeaturesValue, arena);
-        if(!enabledFeatures)
-            return MakeUnexpected(Failure{});
-        entry.enabledFeatures = Move(*enabledFeatures);
-    }
-
     if(const Core::Metascript::Value* assetsValue = asset.findField(s_AssetsField)){
-        auto assets = ParseAssetRefList<Core::Assets::IAsset>(nwbFilePath, *assetsValue, s_AssetsField, arena, scratchArena);
+        auto assets = ParseAssetsMap(nwbFilePath, *assetsValue, arena, scratchArena);
         if(!assets)
             return MakeUnexpected(Failure{});
         entry.assets = Move(*assets);
     }
 
     SceneAsset candidate(arena, entry.virtualPath);
-    candidate.setContents(
-        SceneAsset::SubsystemRefVector(entry.subsystems),
-        SceneAsset::NameVector(entry.enabledFeatures),
-        SceneAsset::AssetRefVector(entry.assets)
-    );
+    candidate.setContents(SceneAsset::SubsystemRefVector(entry.subsystems), SceneAsset::AssetMap(entry.assets));
     if(!candidate.validatePayload(scratchArena))
         return MakeUnexpected(Failure{});
 
@@ -352,7 +348,7 @@ Expected<SceneAsset> BuildSceneAsset(
     Core::Alloc::ScratchArena& scratchArena
 ){
     SceneAsset asset(arena, entry.virtualPath);
-    asset.setContents(Move(entry.subsystems), Move(entry.enabledFeatures), Move(entry.assets));
+    asset.setContents(Move(entry.subsystems), Move(entry.assets));
     if(!asset.validatePayload(scratchArena))
         return MakeUnexpected(Failure{});
     return asset;

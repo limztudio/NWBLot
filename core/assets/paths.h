@@ -224,16 +224,15 @@ template<typename AssetRootVector>
         if(!requestedVirtualRoot.assign(AStringView(componentText)) || requestedVirtualRoot.empty())
             return MakeUnexpected(Failure{});
     }
-    ++componentIt;
 
-    Optional<Path> firstResolvedPath;
     for(const auto& assetRoot : assetRoots){
         if(assetRoot.virtualRoot != requestedVirtualRoot)
             continue;
 
         Path resolvedPath(arena, assetRoot.path);
-        for(auto subIt = componentIt; subIt != virtualPathPath.end(); ++subIt){
-            AString<Alloc::ScratchArena> componentText = PathToString(scratchArena, subIt.nativeComponent());
+        ++componentIt;
+        for(; componentIt != virtualPathPath.end(); ++componentIt){
+            AString<Alloc::ScratchArena> componentText = PathToString(scratchArena, componentIt.nativeComponent());
             CanonicalizeTextInPlace(componentText);
             if(componentText.empty() || componentText == "." || componentText == ".." || componentText.find('/') != AString<Alloc::ScratchArena>::npos){
                 NWB_LOGGER_ERROR(NWB_TEXT("Assets: invalid virtual path '{}'; components must not be empty, '.', '..' or contain path separators"), ConvertString(virtualPath));
@@ -243,18 +242,9 @@ template<typename AssetRootVector>
             resolvedPath /= componentText;
         }
         resolvedPath = resolvedPath.lexicallyNormal();
-        const auto fileExists = FileExists(resolvedPath);
-        if(fileExists && *fileExists)
-            return resolvedPath;
-        const auto dirExists = IsDirectory(resolvedPath);
-        if(dirExists && *dirExists)
-            return resolvedPath;
-        if(!firstResolvedPath.has_value())
-            firstResolvedPath.emplace(Move(resolvedPath));
+        return resolvedPath;
     }
 
-    if(firstResolvedPath.has_value())
-        return Move(*firstResolvedPath);
     return MakeUnexpected(Failure{});
 }
 

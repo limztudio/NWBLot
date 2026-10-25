@@ -214,7 +214,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
     const AStringView pixelShaderVariant = csgClipPipeline && !avboitCsgClipPipeline ? AStringView(csgShaderVariant) : shaderVariant;
     const AStringView meshShaderVariant = csgClipPipeline ? AStringView(csgShaderVariant) : shaderVariant;
 
-    const bool sharedObjectGeometry = materialInfo.meshShader.name() == AssetsGraphicsMesh::s_SharedMeshShaderName && shaderVariant == Core::ShaderArchive::s_DefaultVariant;
+    const bool sharedObjectGeometry = m_shaderSystem.resolveShaderName(materialInfo.meshShader.name()) == m_shaderSystem.resolveShaderName(AssetsGraphicsMesh::s_SharedMeshShaderName) && shaderVariant == Core::ShaderArchive::s_DefaultVariant;
     const AStringView objectGeometryShaderVariant = sharedObjectGeometry ? shaderVariant : meshShaderVariant;
 
     Core::ShaderHandle passPixelShader;
@@ -375,7 +375,10 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
 
         resources.renderPath = RenderPath::ComputeEmulation;
         // The shared mesh_compute program is independent of authored materials.
-        resources.sharedGeometryComputeProgram = pipelineKey.csgMode == MaterialPipelineCsgMode::None && materialInfo.meshShader.name() == AssetsGraphicsMesh::s_SharedMeshShaderName && meshShaderVariant == Core::ShaderArchive::s_DefaultVariant;
+        resources.sharedGeometryComputeProgram = pipelineKey.csgMode == MaterialPipelineCsgMode::None
+            && m_shaderSystem.resolveShaderName(materialInfo.meshShader.name()) == m_shaderSystem.resolveShaderName(AssetsGraphicsMesh::s_SharedMeshShaderName)
+            && meshShaderVariant == Core::ShaderArchive::s_DefaultVariant
+        ;
         resources.indexedGeometryOutput = resources.sharedGeometryComputeProgram;
         return true;
     };

@@ -60,11 +60,11 @@ def generated_contents(mesh_text, surface_text):
         result[mat_rel] = crlf(MATERIAL)
         scene_assets.append("project/" + mesh_rel[:-4])
         scene_assets.append("project/" + mat_rel[:-4])
-    assets_lines = ("," + LIT_N).join(f'    "{item}"' for item in sorted(scene_assets))
+    assets_lines = ("," + LIT_N).join(f'    "asset_{idx:03d}": "{item}"' for idx, item in enumerate(sorted(scene_assets)))
     scene_text = (
         "scene asset;\n\n"
         'asset.subsystems = [\n    "engine/subsystems/renderer"\n];\n\n'
-        f"asset.assets = [\n{assets_lines}\n];\n"
+        f"asset.assets = {{\n{assets_lines}\n}};\n"
     )
     result["scenes/main.nwb"] = crlf(scene_text)
     return result

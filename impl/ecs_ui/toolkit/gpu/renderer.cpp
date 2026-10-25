@@ -182,6 +182,10 @@ GpuRenderer::~GpuRenderer()noexcept{
     invalidateResources();
 }
 
+void GpuRenderer::setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept{
+    m_state->m_activeSceneSubsystems = subsystems;
+}
+
 bool GpuRenderer::validateResources(const u32 width, const u32 height){
     if(width == 0u || height == 0u || width > static_cast<u32>(Limit<i32>::s_Max) || height > static_cast<u32>(Limit<i32>::s_Max))
         return false;

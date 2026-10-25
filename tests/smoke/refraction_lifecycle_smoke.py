@@ -16,8 +16,7 @@ from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
 
 PHASES = ("baseline", "active", "moved", "edge", "empty", "disabled", "reenabled")
 EXTENT = (967, 727)
-# Camera distance 6, vertical FOV 60 degrees, aspect 967/727, sphere center X1.9
-# and radius 1.15 project to approximately X[.58,.85], Y[.33,.67].
+# Projected bounds for the sphere at X=1.9 with radius 1.15.
 MOVED_REGION = (.57, .31, .86, .68)
 # This part of the moved silhouette lies beyond the original sphere's X~.63 rim.
 MOVED_NEW_REGION = (.77, .38, .86, .58)
@@ -53,10 +52,7 @@ def require_displacement(reference, candidate, region, label):
 
 
 def expected_sheet_fallback_gray(before, x, y, width, height):
-    # Fixed fixture: eye(0,1.4,-6), sphere(4.2,1.4,0), radius1.15, IOR1.5.
-    # Match the two Schlick factors in nwbRefractionFallbackAttenuation.
-    # Presentation applies the default Reinhard shoulder then sRGB; exposure cancels when the disabled reference is inverted.
-    # A 1.5-code tolerance below covers reference and result quantization plus the faceted sphere's interpolated normals.
+    # Expected two-interface Schlick fallback attenuation after Reinhard and sRGB conversion.
     tangent = math.tan(math.pi / 6)
     ray_x = (2 * (x + .5) / width - 1) * tangent * width / height
     ray_y = (1 - 2 * (y + .5) / height) * tangent
@@ -86,9 +82,7 @@ def require_partial_tile_displacement(reference, candidate, allow_screen_fallbac
         if max(after) - min(after) < 25:
             dark_to_light += before_luma < 85 and after_luma > 155
             light_to_dark += before_luma > 170 and after_luma < 100
-    # A seven-column tail can lie wholly inside one background stripe. The wider
-    # edge region proves both polarities; the tail must displace every polarity
-    # that has enough reference pixels to test, rather than invent missing ones.
+    # Require the 7-column tail to displace every stripe polarity present in its reference region.
     if max(available_dark, available_light) < 12:
         raise SmokeFailure("partial right tile lacks measurable baseline stripe pixels")
     metrics = {"available_dark_pixels": available_dark, "available_light_pixels": available_light, "dark_to_light_pixels": dark_to_light, "light_to_dark_pixels": light_to_dark}
@@ -105,8 +99,7 @@ def require_partial_tile_displacement(reference, candidate, allow_screen_fallbac
             if expected is None:
                 continue
             tested += 1
-            # A missing tile restores the unchanged reference; a black or colored
-            # tail cannot imitate the clear sheet's small neutral Fresnel loss.
+            # Require neutral Fresnel attenuation in the partial tail tile.
             accepted += max(after) - min(after) <= 1 and min(after) > 0 and sum(before) / 3 - sum(after) / 3 >= 1 and abs(sum(after) / 3 - expected) <= 1.5
         if tested >= 12 and accepted >= tested * .95:
             return {**metrics, "mode": "bounded_sheet_fallback", "fallback_reference_pixels": tested, "fallback_accepted_pixels": accepted, "encoded_tolerance": 1.5}

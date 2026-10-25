@@ -177,7 +177,7 @@ TEST(MathTriangleIntersection, InactiveSignalingNaNsDoNotRaiseInvalidDuringInter
 
 TEST(MathTriangleIntersection, ExactlyContainedDyadicPointSurvivesSingleProjectionCancellation){
     const f64 first[][3] = { { 824370.0, 14961.0, -10577.0 }, { -393548.0, -764217.0, 231491.0 }, { -838274.0, -740881.0, -157088.0 } };
-    // Each coordinate is exactly representable in both precisions; the point equals (2*A0 + A1 + A2)/4.
+    // Exact coplanar interior point at the weighted average of A0, A1, and A2.
     const f64 contained[][3] = { { 104229.5, -368794.0, 13312.25 }, { 104229.5, -368794.0, 13312.25 }, { 104229.5, -368794.0, 13312.25 } };
     CheckBothPrecisions(first, contained, true);
 }
@@ -188,7 +188,7 @@ TEST(MathTriangleIntersection, ExactlyContainedDyadicPointSurvivesDoubleProjecti
         VectorDoubleSet(48651637.25, -531182607.0, 473308109.25, 0.0),
         VectorDoubleSet(-155700933.5, -479176747.0, 416710936.25, 0.0)
     };
-    // The exact convex combination (2*A0 + A1 + A2)/4 is coplanar, even when the computed dot products disagree near zero.
+    // Interior point remains coplanar even when near-zero dot products round differently.
     const SIMDVectorDouble contained[] = {
         VectorDoubleSet(220965845.9375, -388333679.875, 328878492.375, 0.0),
         VectorDoubleSet(220965845.9375, -388333679.875, 328878492.375, 0.0),

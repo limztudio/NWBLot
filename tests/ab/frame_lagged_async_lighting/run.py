@@ -61,8 +61,7 @@ CURRENT_FRAME_ACCEPTED = "RendererSystem: frame-lagged async lighting current-fr
 FORBIDDEN_LOG_MESSAGES = (*STRICT_LOG_FAILURE_MESSAGES, "cannot safely continue after an unresolved frame recovery submission", "deferred graph build with optional lagged lighting-history capture failed",
     "deferred lagged lighting-history tail was unavailable", LIT_LAGGED_LIGHTING_HISTORY_CAPTURE_SKIPPE, "graph-owned lagged lighting-history capture record/submission was rejected",)
 
-# A successful target run has exactly this accepted lifecycle.
-# Keep the sequence as data so the live poller and the offline self-test use the same verdict rather than independently counting markers.
+# Share the accepted lifecycle sequence between the live poller and offline self-test.
 LAGGED_LIGHTING_LIFECYCLE = ((LIT_BOOTSTRAP, BOOTSTRAP_ACCEPTED), (LIT_ACTIVE_HISTORY, ACTIVE_HISTORY_ACCEPTED), (LIT_CURRENT_FRAME, CURRENT_FRAME_ACCEPTED), (LIT_BOOTSTRAP, BOOTSTRAP_ACCEPTED), (LIT_ACTIVE_HISTORY, ACTIVE_HISTORY_ACCEPTED),)
 
 

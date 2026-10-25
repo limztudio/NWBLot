@@ -63,7 +63,7 @@ using TestArena = AssetsGraphicsFixture::TestArena;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A self-contained pixel shader that includes no material bind interface (this test exercises cooking a shader without any generated material_bind_includes root).
+// Self-contained pixel shader without generated material bind includes.
 static constexpr AStringView s_StandaloneShaderProbeSource = R"NWB_SLANG(struct NwbStandalonePixelOutput{
     float4 color : SV_Target0;
 };
@@ -88,8 +88,7 @@ static bool WriteStandaloneShaderProbe(const Path& assetRoot){
     return AssetsGraphicsFixture::WriteTextFile(assetRoot / s_ShadersDirectory / "standalone_ps.slang", s_StandaloneShaderProbeSource);
 }
 
-// This reaches Slang after dependency collection.
-// Both files deliberately start with a UTF-8 BOM so the compiler input normalization path, not only the dependency scanner, must make the generated invocation valid.
+// Start both files with a UTF-8 BOM to test compiler input normalization.
 static constexpr AStringView s_BomCompilerProbeIncludeSource = "\xEF\xBB\xBF" R"NWB_SLANG(float4 nwbBomCompilerProbeColor(){
     return float4(0.1, 0.2, 0.3, 1.0);
 }

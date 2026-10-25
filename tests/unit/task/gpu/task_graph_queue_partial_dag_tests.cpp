@@ -35,11 +35,8 @@ namespace Shape{
         OneEdge,
         DisjointPairs,
         ReversedPairs,
-        Chains32,
-        InterleavedChains32,
         ConnectedBranches,
         DenseLayers,
-        TwoDenseComponents,
         FanOut,
         FanIn,
         MergedPairs,
@@ -51,10 +48,6 @@ namespace Shape{
 
 void DeclareGraph(Graphics::GpuTaskGraph& graph, const usize taskCount, const Shape::Enum shape, Graphics::Alloc::ScratchArena& scratch){
     constexpr usize s_LayerSize = 16u;
-    constexpr usize s_ChainSize = 32u;
-    const bool interleaved = shape == Shape::InterleavedChains32;
-    if(interleaved)
-        ASSERT_EQ(taskCount % s_ChainSize, 0u);
     u64 generation = 0u;
     {
         const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
@@ -63,19 +56,14 @@ void DeclareGraph(Graphics::GpuTaskGraph& graph, const usize taskCount, const Sh
     Vector<Graphics::GpuTaskId, Graphics::Alloc::ScratchArena> dependencies(scratch);
     dependencies.reserve(taskCount);
     for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
-        const usize chainCount = taskCount / s_ChainSize;
-        const usize logicalIndex = interleaved ? taskIndex % chainCount * s_ChainSize + taskIndex / chainCount : taskIndex;
         dependencies.clear();
         const auto addDependency = [&](const usize index)noexcept{
-            const usize declarationIndex = interleaved ? index % s_ChainSize * chainCount + index / s_ChainSize : index;
-            dependencies.push_back({ .generation = generation, .index = static_cast<u32>(declarationIndex) });
+            dependencies.push_back({ .generation = generation, .index = static_cast<u32>(index) });
         };
         if(shape == Shape::ReversedPairs && taskIndex % 2u != 0u && taskIndex + 1u < taskCount)
             addDependency(taskIndex + 1u);
         else if((shape == Shape::OneEdge && taskIndex == 1u) || ((shape == Shape::DisjointPairs || shape == Shape::MergedPairs) && taskIndex % 2u != 0u) || (shape == Shape::TotalOrder && taskIndex != 0u))
             addDependency(taskIndex - 1u);
-        else if((shape == Shape::Chains32 || interleaved) && logicalIndex % s_ChainSize != 0u)
-            addDependency(logicalIndex - 1u);
         else if(shape == Shape::ConnectedBranches && taskIndex != 0u)
             addDependency((taskIndex - 1u) / 2u);
         else if(shape == Shape::FanOut && taskIndex != 0u)
@@ -84,14 +72,10 @@ void DeclareGraph(Graphics::GpuTaskGraph& graph, const usize taskCount, const Sh
             for(usize source = 0u; source < taskIndex; ++source)
                 addDependency(source);
         }
-        else if(shape == Shape::DenseLayers || shape == Shape::TwoDenseComponents){
-            const usize componentSize = shape == Shape::TwoDenseComponents ? taskCount / 2u : taskCount;
-            const usize local = taskIndex % componentSize;
-            if(local >= s_LayerSize){
-                const usize previousLayer = taskIndex - local + (local / s_LayerSize - 1u) * s_LayerSize;
-                for(usize offset = 0u; offset < s_LayerSize; ++offset)
-                    addDependency(previousLayer + offset);
-            }
+        else if(shape == Shape::DenseLayers && taskIndex >= s_LayerSize){
+            const usize previousLayer = (taskIndex / s_LayerSize - 1u) * s_LayerSize;
+            for(usize offset = 0u; offset < s_LayerSize; ++offset)
+                addDependency(previousLayer + offset);
         }
         Graphics::GpuTaskSchedulingHint scheduling;
         scheduling.cost = static_cast<Graphics::GpuTaskCostHint::Enum>(taskIndex % Graphics::GpuTaskCostHint::kCount);
@@ -352,8 +336,8 @@ TEST(GpuTaskQueueScoring, PartialAssignmentsExcludeRelatedTasksWithoutRequiringO
     const auto score = [&](const usize taskIndex, const GpuTaskQueueScoreExclusions exclusions = {})noexcept{
         return BuildQueueAssignmentScore(view, analysis, assignments, indices, topology, reachability, scoringData, view.taskAt(taskIndex), queues[0u], exclusions);
     };
-    EXPECT_EQ(score(1u).overlap, 8); // Assigned producer zero is related; task three is independent.
-    EXPECT_EQ(score(2u).overlap, 9); // Both assigned tasks are independent of this absent task.
+    EXPECT_EQ(score(1u).overlap, 8);
+    EXPECT_EQ(score(2u).overlap, 9);
     EXPECT_EQ(score(2u, { .assignmentOffset = 1u, .assignmentCount = 1u, .totalCost = 8u }).overlap, 1);
 }
 

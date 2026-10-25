@@ -391,8 +391,7 @@ TEST(Csg, SequentialCutsPreserveEarlierHalfSpaceAndUnweldedSourceVertices){
         { { 1u, 5u, 6u } }, { { 1u, 6u, s_ExpectedDualCount } },
     };
 
-    // Two sequential plane cuts: keep x >= -0.5, then keep y >= -0.5.
-    // Plane SDF keeps distance >= 0 with parameter0 = (normal, distance).
+    // Cut x >= -0.5 then y >= -0.5 using plane normal and distance.
     NWB::Impl::CsgDeformCutDesc cuts[s_ThirdElementIndex];
     cuts[0u].active = true;
     cuts[0u].shape.shapeType = Name(s_EngineCsgPlane);
@@ -413,9 +412,7 @@ TEST(Csg, SequentialCutsPreserveEarlierHalfSpaceAndUnweldedSourceVertices){
     ASSERT_FALSE(commitTriangles.empty());
     ASSERT_GE(commitVertices.size(), 8u);
 
-    // Sequential order matters: the second cut refines the first cut's output.
-    // Every triangle-referenced kept vertex must satisfy both half-spaces.
-    // (Unreferenced source verts are retained verbatim and never welded.)
+    // Referenced vertices must satisfy both cuts while unreferenced source vertices stay unchanged.
     for(const NWB::Impl::CsgDeformTriangle& triangle : commitTriangles){
         for(const u32 index : triangle.indices){
             ASSERT_LT(index, commitVertices.size());
@@ -450,7 +447,7 @@ TEST(Csg, CsgDeformCutViabilityRejectsDegenerateCommit){
     const NWB::Impl::CsgDeformVertex inputVertices[] = { vertex, vertex, vertex };
     const NWB::Impl::CsgDeformTriangle inputTriangles[] = { { { 0u, 1u, s_ExpectedDualCount } } };
 
-    // Cut keeps x >= 0; the whole triangle sits at x == -5, fully outside the kept half-space, so both preview and commit must agree on NoKeptGeometry failure.
+    // Triangle at x == -5 lies outside x >= 0 and fails with NoKeptGeometry.
     NWB::Impl::CsgDeformCutDesc cut;
     cut.active = true;
     cut.shape.shapeType = Name(s_EngineCsgPlane);

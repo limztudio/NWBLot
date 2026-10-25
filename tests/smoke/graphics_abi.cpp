@@ -22,7 +22,7 @@ bool NWB::ConfigureProjectRuntime(ProjectStartupContext& context)noexcept{
         return false;
 #endif
 
-    // The M4 synchronous baseline explicitly opts out; normal projects request the best-effort asynchronous Compute topology.
+    // Request asynchronous compute unless the synchronous baseline opts out.
 #if defined(NWB_SMOKE_DISABLE_ASYNC_COMPUTE)
     return graphics.setAsyncComputeLaneEnabled(false);
 #else

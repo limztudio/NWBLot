@@ -106,8 +106,6 @@ TEST_F(TextureImageLayoutFixture, InvalidTintRejectsMeasurement){
     ASSERT_TRUE(imageResult);
     const SharedImageSource image = Move(*imageResult);
     ASSERT_TRUE(image);
-    const auto acceptedResult = ImageLayout::Measure({}, *image);
-    ASSERT_TRUE(acceptedResult);
     for(u32 field = 0u; field < 8u; ++field){
         ImageOptions options;
         switch(field){

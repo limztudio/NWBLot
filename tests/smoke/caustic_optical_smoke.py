@@ -72,7 +72,7 @@ def capture(args, variant):
         command += [LIT_REJECT_LOG_MESSAGE, LIT_REFLECTION_RESOLVE_HARDWARE]
     command += [LIT_EXPECT_LOG_MESSAGE, "CausticSphereSmokeProject: camera refraction " + (LIT_DISABLED if variant == LIT_REFRACTION_DISABLED else "enabled")]
     if variant == LIT_REFRACTION_DISABLED or args.software_ray_tracing:
-        # Glass reflection retains optical composition when transmission is disabled; a no-RT device also uses this screen-space route.
+        # Disabled transmission and no-RT devices both use screen-space glass reflection.
         command += [LIT_EXPECT_LOG_MESSAGE, "AVBOIT refraction resolve: screen-space", LIT_REJECT_LOG_MESSAGE, "AVBOIT refraction resolve: hardware"]
     else:
         command += [LIT_EXPECT_LOG_MESSAGE, "AVBOIT refraction resolve:"]
@@ -126,8 +126,7 @@ def analyze_exterior_reflection(combined, disabled):
         tested += 1
         ratios.append(observed_gain / expected_gain)
         errors.extend(abs(a - b) for a, b in zip(observed, expected))
-        # Two display bytes cover baseline/output quantization and FP16 arithmetic.
-        # Missing half the expected visible signal after that allowance is a transport failure, including an otherwise small local patch.
+        # Allow two display bytes for quantization and require at least half of the expected signal.
         if observed_gain + 2 < 0.5 * expected_gain:
             missing.append((x, y))
     if tested < 2000 or weak > len(selected) * 0.1:
@@ -147,7 +146,7 @@ def analyze_frames(frames, software_ray_tracing=False):
     width, height, rows = validate_frame(combined)
     if any(frame[:2] != combined[:2] for frame in frames.values()):
         raise SmokeFailure("combined optical captures have different dimensions")
-    # Perspective sphere silhouette: camera(0,.85,-2.2), center(0,.85,0), radius.7, default60deg vertical FOV.
+    # Projected sphere bounds for camera at z=-2.2 and radius 0.7.
     radius = height / (2 * math.tan(math.pi / 6)) * 0.7 / math.sqrt(2.2 ** 2 - 0.7 ** 2)
     results = {}
     for variant in VARIANTS[1:]:
@@ -169,7 +168,7 @@ def analyze_frames(frames, software_ray_tracing=False):
                     gain = sum(a) - sum(b)
                     ground_gain += gain
                     if gain > 0:
-                        # 8x8 focus cells: a sphere-lens caustic converges into a crescent, so positive gain must concentrate in a few cells, not spread like quantization noise.
+                        # Focused caustic gain must concentrate in a few 8x8 cells rather than spread across the ground.
                         key = (x // (width // 8 + 1), y // (height // 8 + 1))
                         ground_cells[key] = ground_cells.get(key, 0) + gain
         if variant == LIT_REFLECTION_DISABLED:
@@ -181,7 +180,7 @@ def analyze_frames(frames, software_ray_tracing=False):
             positive_gain = sum(ground_cells.values())
             ordered_cells = sorted(ground_cells.values(), reverse=True)
             focus_share = sum(ordered_cells[:3]) / positive_gain if positive_gain > 0 else 0.0
-            # The tonemapped bright ground compresses the focused crescent to a few LSBs per pixel, so per-pixel delta counts cannot see it; the concentrated positive gain can.
+            # Measure concentrated positive gain because bright ground tonemapping compresses per-pixel deltas.
             if ground_gain < 1500 or focus_share < 0.4:
                 raise SmokeFailure("caustic toggle produced no visible positive photon contribution on the ground")
         elif sphere_changed < max(100, math.pi * radius * radius * 0.005):

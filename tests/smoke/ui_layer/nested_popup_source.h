@@ -23,7 +23,7 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Five immutable keys; filtering owns a bounded cached view without changing full-source identity.
+// Fixed five-key combo source with a filtered view.
 class UiNestedPopupSmokeSource final : public Impl::Ui::ISearchableListDataSource, NoCopy{
 private:
     class View final : public Impl::Ui::IListDataSource, NoCopy{

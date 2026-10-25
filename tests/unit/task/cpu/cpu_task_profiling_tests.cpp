@@ -72,7 +72,7 @@ TEST(CpuTaskProfilingTests, ReadyAndExecutionEventsRetainTheirOwnFramesAndLabels
             epoch = event.captureEpoch;
         EXPECT_EQ(event.captureEpoch, epoch);
         EXPECT_EQ(event.workerIndex, 0u);
-        // Ready/execution spans include sleeps; an already complete join may finish within one clock tick.
+        // Ready and execution spans include sleeps while a completed join can finish in zero ticks.
         if(event.kind == CpuTaskProfileKind::QueueDelay){
             EXPECT_GT(event.durationNanoseconds, 0u);
             ++queued;

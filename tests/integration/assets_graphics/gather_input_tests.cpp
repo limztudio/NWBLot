@@ -157,7 +157,7 @@ TEST_F(GatherInputs, MergedPayloadIdentitySurvivesLaterIdenticalDuplicate){
     ASSERT_NO_FATAL_FAILURE(writeInputs("a", 1u, 2u, 5u));
     ASSERT_NO_FATAL_FAILURE(writeInputs("b", 1u, 2u, 5u));
     ASSERT_NO_FATAL_FAILURE(writeInputs("c", 1u, 4u, 5u));
-    // The first two equal payloads collapse without merging; the third is appended exactly once.
+    // Equal payloads collapse while the distinct third payload is appended once.
     m_options.mergePayloads = &MergeBytes;
     ASSERT_TRUE(Gatherer::GatherAssets(m_options));
     EXPECT_EQ(s_MergeCalls, 1u);

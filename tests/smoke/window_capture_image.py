@@ -13,18 +13,11 @@ LIT_SIDE = "side"
 LIT_LITTLE = "little"
 LIT_BIG = "big"
 LIT_N_2SIHHI = "<2sIHHI"
-# The textured-GI smoke has a fixed camera and a white receiver plane.
-# This client-relative rectangle sits below the sphere silhouette, inside the nearby root of its foreground opaque direct shadow.
-# Because the light is white and the receiver has no texture or tint, a red value here can only come from the textured sphere's indirect bounce.
+# Receiver shadow region below the sphere where red light comes only from indirect texture bounce.
 TEXTURE_SMOKE_RECEIVER_REGION = (0.375, 0.667, 0.438, 0.700)
 TEXTURE_SMOKE_RECEIVER_MIN_RED = 36
 TEXTURE_SMOKE_RECEIVER_RED_CHROMA = 6
-# CSG pose names match the fixture's frozen yaw values 0, 1, and 2 radians.
-# Coordinates are offsets from image center, measured in image heights so the vertical-FOV projection remains valid at different aspect ratios.
-# These inset rectangles come from the projected radius-.468 octahedron at camera distance2.2/FOV60 and its retained local-y<=0 pyramid, after Ry(yaw)*Ry(yaw)*Rx(.32*yaw)*Rz(.16*yaw).
-# Each cut rectangle lies inside the uncut silhouette and outside the retained pyramid; each retained rectangle lies inside that pyramid.
-# Geometry-based synthetic tests protect those margins.
-# The late retained wedge is above/right of center because the cutter rotates with the receiver.
+# Center-relative cut and retained sample rectangles for CSG yaw poses 0, 1, and 2.
 TRANSPARENT_CSG_REGIONS = { "early": ((-.030, -.125, .030, -.065), (-.030, .065, .030, .125)), "mid": ((.025, -.125, .065, -.080), (-.065, .110, -.025, .140)), "late": ((-.055, -.128, -.025, -.104), (.045, -.075, .080, -.050)), }
 
 
@@ -159,8 +152,7 @@ def read_bmp_24_rows(path):
 def validate_surfel_coverage_probe(path):
     """Check the interior of both same-cell, perpendicular faces in the opt-in GI scene."""
     width, height, rows = read_bmp_24_rows(path)
-    # The cube is fixed in the 1280x900 smoke camera.
-    # Fractional ROIs tolerate framebuffer scaling and avoid silhouette pixels, where normal/depth filtering should deliberately reduce coverage.
+    # Fractional interior regions for the two perpendicular faces of the GI probe cube.
     regions = { LIT_FRONT: (0.80, 0.42, 0.92, 0.55), LIT_SIDE: (0.735, 0.42, 0.770, 0.55), }
     observed = {}
     for face, (left, top, right, bottom) in regions.items():
@@ -251,8 +243,7 @@ def analyze_transparent_csg_rows(rows_rgb, pose):
 
     background = estimate_background_rgb(rows_rgb, width, height)
     cut_region, remaining_region = transparent_csg_regions(width, height, pose)
-    # The center's unlit green material is distinct from the red cylinder, blue cone, and gray opaque occluders.
-    # Retain the ordinary foreground contrast threshold as well: color identity alone must not accept faint noise.
+    # Require both foreground contrast and green dominance in the central CSG receiver.
     remaining_center_pixels = count_foreground_pixels_in_region(rows_rgb, background, remaining_region, pixel_predicate=lambda rgb: rgb[1] > rgb[0] and rgb[1] > rgb[2],)
     return TransparentCsgAnalysis(count_background_like_pixels(rows_rgb, background, cut_region), region_pixel_count(cut_region), remaining_center_pixels, region_pixel_count(remaining_region),)
 
@@ -367,7 +358,7 @@ def ximage_rgb_rows(image, byte_order):
     raw = ctypes.string_at(image.data, raw_size)
     rows = []
 
-    # Common RGB888 masks map directly to byte channels; keep scaled-mask conversion for other XImage layouts.
+    # Map RGB888 masks directly and scale other XImage channel masks.
     if (image.bits_per_pixel in (24, 32) and (image.red_mask, image.green_mask, image.blue_mask) == (0xFF0000, 0xFF00, 0xFF)
             and byte_order in (LIT_LITTLE, LIT_BIG) and image.width >= 0 and image.bytes_per_line >= image.width * bytes_per_pixel):
         red, green, blue = (2, 1, 0) if byte_order == LIT_LITTLE else (bytes_per_pixel - 3, bytes_per_pixel - 2, bytes_per_pixel - 1)

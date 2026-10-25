@@ -203,10 +203,6 @@ template<typename ArenaT, typename RootArenaT, typename SourceArenaT>
     return *virtualPath;
 }
 
-[[nodiscard]] inline Expected<Name> BuildDerivedAssetVirtualPath(const Path& assetRoot, const ACompactString& virtualRoot, const Path& sourceOrMetaPath, Alloc::ScratchArena& scratchArena){
-    return BuildDerivedAssetVirtualPath(assetRoot, virtualRoot.view(), sourceOrMetaPath, scratchArena);
-}
-
 [[nodiscard]] inline bool HasReservedAssetVirtualRoot(const AStringView virtualPath, Alloc::ScratchArena& scratchArena){
     const auto virtualRoot = AssetPathsDetail::ExtractAssetVirtualRoot(virtualPath, scratchArena);
     if(!virtualRoot)

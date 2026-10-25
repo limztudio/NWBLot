@@ -205,7 +205,7 @@ TEST(OpticalScene, CancellationRetainsOrderedAffineEnclosure){
     StoreFloat(bounds->minimum, minimum);
     StoreFloat(bounds->maximum, maximum);
 
-    // X distinguishes fused cancellation, while Z loses its intermediate unit before the final translation; reassociation changes the enclosed point.
+    // Probe point where reassociation or fused multiply-add changes containment.
 #if defined(NWB_HAS_FMA3) || defined(NWB_HAS_NEON64)
     constexpr f64 s_ExpectedX = 0x1.fffffcp-1;
 #else

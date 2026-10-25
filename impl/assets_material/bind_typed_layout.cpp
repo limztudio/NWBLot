@@ -339,7 +339,7 @@ bool ApplyMaterialBindTypedLayoutParameterValue(
     const MaterialBindTypedLayout& layout,
     const Name& materialName,
     const ACompactString& parameterName,
-    const ACompactString& parameterValue,
+    const AStringView parameterValue,
     Material::TypedBlockByteVector& inOutBlockBytes,
     Material::ResourceReferenceVector& outResourceReferences
 ){
@@ -358,7 +358,7 @@ bool ApplyMaterialBindTypedLayoutParameterValue(
     const MaterialTypedLayoutField& field = layout.typedLayoutFields[parameterEntry.fieldIndex];
     if(IsMaterialLayoutResourceFieldType(field.fieldType)){
         const MaterialResourceKind::Enum resourceKind = MaterialLayoutFieldResourceKind(field.fieldType);
-        const AStringView resourcePath = TrimView(AStringView(parameterValue));
+        const AStringView resourcePath = TrimView(parameterValue);
         const auto resourceName = Name::FromText(resourcePath);
         NWB_ASSERT(parameterEntry.blockName && field.fieldName);
         if(!resourceName || !*resourceName || !IsSupportedMaterialResourceReference(resourceKind, resourcePath)){

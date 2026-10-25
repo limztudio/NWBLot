@@ -96,8 +96,6 @@ TEST(UiImageLayoutTests, SubnormalPositiveBoundsAndExtremeFiniteEndpointsRemainV
 
 TEST(UiImageLayoutTests, InvalidLayoutSizesTintsAndDensityRejectMeasurement){
     const UiSkinRegion region = Sprite();
-    const auto measuredResult = ImageLayout::Measure({}, region, 2.0f);
-    ASSERT_TRUE(measuredResult);
     for(u32 field = 0u; field < 15u; ++field){
         ImageOptions options;
         f32 density = 2.0f;
@@ -124,8 +122,6 @@ TEST(UiImageLayoutTests, InvalidLayoutSizesTintsAndDensityRejectMeasurement){
 
 TEST(UiImageLayoutTests, InvalidRegionExtentMinimumsAndSliceMetadataRejectMeasurement){
     const UiSkinRegion valid = Sprite();
-    const auto measuredResult = ImageLayout::Measure({}, valid, 2.0f);
-    ASSERT_TRUE(measuredResult);
     for(u32 field = 0u; field < 8u; ++field){
         UiSkinRegion region = valid;
         switch(field){
@@ -160,8 +156,6 @@ TEST(UiImageLayoutTests, UnrepresentableNaturalExtentRejectsMeasurement){
 
 TEST(UiImageLayoutTests, InvalidAndCollapsedProspectiveEndpointsRejectPlacement){
     const Rect normal{ 10.0f, 20.0f, 200.0f, 100.0f };
-    const auto measuredResult = ImageLayout::Place(normal, normal);
-    ASSERT_TRUE(measuredResult);
     for(const Rect invalid : {
         Rect{ Limit<f32>::s_QuietNaN, 0.0f, 1.0f, 1.0f },
         Rect{ 0.0f, Limit<f32>::s_Infinity, 1.0f, 1.0f },

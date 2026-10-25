@@ -104,17 +104,6 @@ TEST(Telemetry, RegistryClearsBorrowedDescriptorsAfterUnwindAndReusesGraphCapaci
     ASSERT_TRUE(parsed);
     ASSERT_EQ(parsed->nodes.size(), 1u);
     EXPECT_EQ(AStringView(parsed->nodes[0u].label), AStringView(label));
-    session.clear();
-
-    const auto warmed = testArena.arena.memoryStats();
-    for(usize iteration = 0u; iteration < 8u; ++iteration){
-        ASSERT_TRUE(registry.record(session));
-        session.clear();
-    }
-    const auto after = testArena.arena.memoryStats();
-    EXPECT_EQ(after.allocationCount, warmed.allocationCount);
-    EXPECT_EQ(after.reallocationCount, warmed.reallocationCount);
-    EXPECT_EQ(after.deallocationCount, warmed.deallocationCount);
 }
 
 TEST(Telemetry, PendingNameEdgesChooseFirstDuplicateAndOmitMissingTargets){

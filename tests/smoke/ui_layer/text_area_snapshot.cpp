@@ -75,7 +75,7 @@ bool UiTextAreaSmokeScene::observeState(Impl::UiPaintContext& context){
     current.rectangles[3u] = placement.caret;
     const SIMDVectorSingle labelOrigin = VectorSet(placement.bounds.x, placement.bounds.y, 112.0f, 30.0f);
     for(u32 index = 0u; index < 6u; ++index){
-        // Lane x steps by column; lane y lifts the row above the box.
+        // Lanes are column step and row offset.
         const SIMDVectorSingle lifted = VectorSubtract(labelOrigin, VectorSet(0.0f, index < 3u ? 76.0f : 38.0f, 0.0f, 0.0f));
         current.rectangles[4u + index] = StoreSmokeRect(VectorSelect(lifted, VectorMultiplyAddExpression(VectorReplicate(static_cast<f32>(index % 3u)), VectorReplicate(120.0f), labelOrigin), s_SIMDMaskX));
     }

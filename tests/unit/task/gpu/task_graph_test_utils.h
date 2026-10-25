@@ -134,8 +134,7 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     const Graphics::GpuTaskGraphCompileOptions& options = {}
 );
 
-// Compiles on a topology copy where Compute and Transfer capabilities stay only on their own queue class when that class exists.
-// Single-capability Graphics, Compute, and Transfer work then gets one legal queue class from its command requirements alone.
+// Compile on a topology where Compute and Transfer capabilities stay on their dedicated queue classes.
 [[nodiscard]] bool CompileWithSeparatedCommandQueues(
     Graphics::GpuTaskGraphAnalysis& analysis,
     Graphics::GpuTaskGraphQueueAssignments& assignments,

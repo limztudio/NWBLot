@@ -37,7 +37,7 @@ inline constexpr AStringView s_ScrollbarKey = "scrollbar";
 inline constexpr AStringView s_FirstRowText = "Ax";
 
 
-// This source represents a large dataset arithmetically; no allocation or full scan depends on rowCount().
+// Arithmetic list source that computes rows on demand without allocating per row.
 class ArithmeticSource final : public IListDataSource{
 public:
     virtual ~ArithmeticSource()noexcept override = default;

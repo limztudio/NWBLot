@@ -258,7 +258,7 @@ class CausticMeasurementTests(unittest.TestCase):
                 utility.validate_gpu_debug(text.replace(marker, "requested only"), [LIT_GPUDBG])
 
     def test_synthetic_distinct_frozen_roots_replay_and_tampering_checks(self):
-        # Small synthetic parser evidence only; this does not qualify a real framebuffer or GPU arm.
+        # Synthetic parser input only.
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             policy = {**benchmark.caustic.POLICY, "width": 160, "height": 120}
@@ -310,7 +310,7 @@ class CausticMeasurementTests(unittest.TestCase):
                 result, paths = utility.validate_report(report, identity)
                 self.assertEqual(result[LIT_METRICS], document[LIT_METRICS])
                 self.assertEqual(len(paths), 12)
-                # Both physical frozen roots contain identical launchers; replay must bind the selected arm's path.
+                # Replay must bind the launcher from the selected arm root.
                 baseline_identity = {**identity, LIT_SOURCE: sources[LIT_BASELINE]}
                 baseline_document = copy.deepcopy(document)
                 baseline_document[LIT_ARM] = baseline_identity

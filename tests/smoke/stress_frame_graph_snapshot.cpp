@@ -265,7 +265,7 @@ bool CaptureStressFrameGraphSnapshot(ProjectRuntimeContext& context, const AStri
         NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: no completed frame or output path"));
         return false;
     }
-    // runFrame increments its index after render/present; the contributor retains the preceding completed frame.
+    // Capture the completed frame before runFrame advances the frame index.
     const u64 sourceFrame = graphicsFrame - 1u;
     Core::Telemetry::TelemetryArena arena(Name("tests/smoke/frame_graph_snapshot"));
     Core::Telemetry::CaptureSession session(arena);

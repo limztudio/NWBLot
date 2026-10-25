@@ -56,7 +56,7 @@ TEST(ObjectGeometryCacheTests, LayoutChecksFinalStructuredPaddingWithinUintByteA
     EXPECT_LE(layout.bufferByteSize, s_AddressableBytes);
     EXPECT_EQ(layout.bufferByteSize % NWB_MESH_OBJECT_VERTEX_BYTE_SIZE, 0u);
     EXPECT_EQ(layout.indexByteOffset + 3u * sizeof(u32), layout.bufferByteSize - 36u);
-    // The next raw index span still fits uint addressing; the required structured padding does not.
+    // Structured alignment padding pushes this index span past uint32 addressing.
     EXPECT_LE(s_MaximumRecords * NWB_MESH_OBJECT_VERTEX_BYTE_SIZE + 3u * sizeof(u32), s_AddressableBytes);
     EXPECT_FALSE(ResolveObjectGeometryCacheLayout(s_LastValidRefBytes + sizeof(MeshletLocalVertexRef), 3u));
 }

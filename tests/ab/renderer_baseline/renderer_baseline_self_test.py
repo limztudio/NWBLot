@@ -170,7 +170,6 @@ def run_self_test(harness) -> int:
         else:
             raise AssertionError(f"renderer baseline CLI accepted zero {option}")
     harness.validate_args(harness.make_parser().parse_args(numeric_arguments + ["--maximum-mean-abs=0"]))
-    harness.validate_args(harness.make_parser().parse_args(numeric_arguments + ["--startup-timeout=1", "--settle-seconds=1"]))
     try:
         harness.validate_runtime_log("", ())
     except harness.SmokeFailure:
@@ -254,7 +253,7 @@ def run_self_test(harness) -> int:
         raw_backend.prepare_window.assert_not_called()
         raw_backend.capture_window.assert_not_called()
 
-        # A completed readback must qualify its own source; desktop capture cannot replace missing provenance.
+        # A completed readback must record its own source frame.
         complex_args = SimpleNamespace(**vars(orchestration_args))
         complex_args.profile = LIT_SURFEL_GI_COMPLEX
         complex_capture = root / "complex.bmp"

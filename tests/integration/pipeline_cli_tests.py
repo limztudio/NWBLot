@@ -273,7 +273,7 @@ def main() -> int:
                 raise AssertionError(f"pipeline tool does not exist: {path}")
             setattr(args, name, path)
         args.repo_root = args.repo_root.resolve()
-        # The object-cache directory includes a 128-character type hash; keep Windows paths below MAX_PATH.
+        # Keep object-cache paths with 128-character type hashes below Windows MAX_PATH.
         temporary_parent = args.repo_root / "__build_obj" / LIT_C
         temporary_parent.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix="p", dir=temporary_parent) as temporary_directory:

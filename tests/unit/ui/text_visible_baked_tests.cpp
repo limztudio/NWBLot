@@ -83,7 +83,7 @@ protected:
                 continue;
             if(payload.groups.size() == s_FontAtlasMaxGroupCount)
                 return false;
-            // Lanes are x and y. The plane has 8 pixels of room on each side.
+            // Lanes are x and y with an 8-pixel margin on each side.
             const SIMDVectorSingle inkStart = VectorSet(placed.ink.x, placed.ink.y, 0.0f, 0.0f);
             const SIMDVectorSingle start = VectorSubtract(VectorFloor(inkStart), VectorReplicate(8.0f));
             const SIMDVectorSingle extent = VectorAdd(VectorSubtract(VectorCeiling(VectorAdd(inkStart, VectorSet(placed.ink.width, placed.ink.height, 0.0f, 0.0f))), start), VectorReplicate(8.0f));

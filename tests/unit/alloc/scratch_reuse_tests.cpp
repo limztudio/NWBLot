@@ -270,7 +270,7 @@ TEST(ScratchArenaReuse, RelocatedAndZeroSizedTopReallocationsExposeThePreviousLi
     EXPECT_EQ(arena.reallocate(grown, 8u, 256u), grown);
     EXPECT_EQ(arena.memoryStats().reallocationCount, 1u);
     EXPECT_EQ(arena.memoryStats().usedBytes, 320u);
-    // Scratch's existing zero-size top resize returns its former address; that address is no longer live.
+    // Zero-size top resize returns the retired address.
     EXPECT_EQ(arena.reallocate(grown, 8u, 0u), grown);
     EXPECT_EQ(arena.memoryStats().usedBytes, 64u);
     EXPECT_EQ(sentinel[0u], 41u);
@@ -369,7 +369,7 @@ TEST(ScratchArenaReuse, RelocationReusesCachedBackingAndUnlinksAnEmptiedFormerTo
     EXPECT_EQ(sentinel[0u], 79u);
     arena.deallocate(sentinel, 8u, 64u);
 
-    // The first reused chunk now contains only this block; relocation must remove it beneath its replacement.
+    // Relocation must release the old chunk beneath the replacement block.
     allocation = static_cast<u8*>(arena.allocate(8u, 128u));
     ASSERT_NE(allocation, nullptr);
     allocation[0u] = 101u;
@@ -400,7 +400,7 @@ TEST(ScratchArenaReuse, FailedRelocationPreservesLiveAllocationsCachedChunksAndC
     arena.deallocate(cached, 1u, s_CachedBytes);
     const ArenaMemoryStats before = arena.memoryStats();
     EXPECT_EQ(arena.reallocate(allocation, 1u, Limit<usize>::s_Max), nullptr);
-    // This request is already aligned; only adding the chunk header can overflow.
+    // Aligned request that overflows only when adding the chunk header.
     EXPECT_EQ(arena.allocate(256u, Limit<usize>::s_Max - 255u), nullptr);
     const ArenaMemoryStats after = arena.memoryStats();
     EXPECT_EQ(after.usedBytes, before.usedBytes);

@@ -25,8 +25,7 @@ class Probe:
     tolerance: int = 4
 
 
-# These probes observe output behavior rather than vertices or command counts.
-# Atlas colors are authored sRGB; numeric solids and tints are linear, so the expected final bytes require exactly one output conversion.
+# Convert linear solid and tint colors to sRGB once while keeping authored sRGB atlas colors.
 PROBES = (Probe("cleared upper margin", 0.02, 0.03, (0, 0, 0), 2), Probe("cleared lower margin", 0.90, 0.90, (0, 0, 0), 2), Probe("opaque blue", 0.08, 0.18, (0, 0, 255)), Probe("half red over blue", 0.22, 0.18, linear_rgb_bytes((0.5, 0.0, 0.5))),
     Probe("half red over transparent black", 0.42, 0.18, linear_rgb_bytes((0.5, 0.0, 0.0))), Probe("linear quarter gray", 0.62, 0.18, linear_rgb_bytes((0.25, 0.25, 0.25))), Probe("half tinted white skin", 0.86, 0.18, linear_rgb_bytes((0.05, 0.4, 0.1)), 6),
     Probe("outside nested clips left", 0.08, 0.50, linear_rgb_bytes((0.0, 0.2, 0.3))), Probe("outer clip only", 0.12, 0.50, (0, 255, 0)), Probe("nested clip intersection", 0.20, 0.50, (255, 0, 0)),
@@ -46,8 +45,7 @@ def analyze_text_region(rows, name, left, top, right, bottom, minimum_ink=80):
 
 
 def analyze_latin_descenders(rows, width, height):
-    # The 22-pixel Latin label starts at (0.04 * width, 0.80 * height).
-    # These ranges isolate the four final glyphs in "office ffi e\u0301 gqyp" without depending on the viewport extent.
+    # Relative scan ranges for the final four glyphs of the 22px Latin sample.
     label_left = math.floor(width * 0.04)
     descender_row = math.floor(height * 0.80) + 29
     glyph_ranges = (("g", 107, 121), ("q", 123, 135), ("y", 134, 144), ("p", 145, 160))

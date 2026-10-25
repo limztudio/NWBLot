@@ -86,7 +86,7 @@ TEST(CommonLoggingBoundaries, CapturingLoggerSerializesConcurrentWritersAndReade
             observedMessages.fetch_add(messageCount - lastMessageCount, MemoryOrder::relaxed);
         if(errorCount > lastErrorCount)
             observedErrors.fetch_add(errorCount - lastErrorCount, MemoryOrder::relaxed);
-        // Reader may drain the full tail; overlap already proved by partial reads.
+        // Partial reads already proved reader and writer overlap.
     });
     Thread writers[s_ThreadCount];
     for(u32 threadIndex = 0u; threadIndex < s_ThreadCount; ++threadIndex){

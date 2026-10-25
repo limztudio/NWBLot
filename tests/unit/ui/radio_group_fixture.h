@@ -43,7 +43,7 @@ namespace RadioMutation{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Mutable callbacks model explicit application intents; temporary labels expire at every later source call.
+// Radio group source with expiring label views and reentrant callback hooks.
 class RadioSource final : public IListDataSource{
 public:
     virtual ~RadioSource()noexcept override = default;

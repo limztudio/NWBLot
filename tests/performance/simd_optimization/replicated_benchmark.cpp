@@ -133,7 +133,7 @@ NWB_INLINE SIMDVectorDouble QuaternionSlerp(const SIMDVectorDouble lhs, const SI
     signMask = VectorDoubleShiftLeft(signMask, VectorDoubleZero(), 3u);
     weights = VectorDoubleXorInt(weights, signMask);
     weights = VectorDoubleAdd(s_DoubleSIMDIdentityR0, weights);
-    // Weighted arguments are nonuniform; retain the ordinary four-lane sine path.
+    // Nonuniform weighted arguments use the four-lane sine path.
     SIMDVectorDouble firstWeight = VectorDoubleMultiply(weights, omega);
     firstWeight = VectorDoubleSin(firstWeight);
     firstWeight = VectorDoubleMultiply(firstWeight, VectorDoubleReciprocal(sine));

@@ -171,7 +171,7 @@ def png_rgb_bytes(frame):
     def chunk(kind, payload):
         return struct.pack(LIT_I, len(payload)) + kind + payload + struct.pack(LIT_I, zlib.crc32(kind + payload) & 0xffffffff)
 
-    # Filter 0 stores each channel exactly as read; DEFLATE only compresses bytes.
+    # PNG filter 0 stores raw RGB bytes before lossless compression.
     scanlines = bytearray()
     for row in rows:
         scanlines.append(0)
@@ -254,8 +254,7 @@ byId('zoom').addEventListener('input',updateZoom);byId('layout').addEventListene
 
 
 def write_gallery(output_directory, manifest):
-    # Preserve raw BMPs alongside the report.
-    # Embedded PNGs contain the same RGB pixels; no resizing, repainting, or generated image is involved.
+    # Embed lossless PNGs with the exact captured RGB pixels alongside the raw BMPs.
     (output_directory / "gallery_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding=LIT_UTF_8)
     embedded = json.loads(json.dumps(manifest))
     for case in embedded[LIT_CASES]:

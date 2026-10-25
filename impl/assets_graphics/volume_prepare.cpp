@@ -113,7 +113,7 @@ static Core::Assets::AssetMetadataParseResult::Enum ParseGraphicsDocumentMetadat
             return AssetMetadataParseResult::Error;
         ShaderCook::ShaderEntry& shaderEntry = *shaderEntryResult;
 
-        auto shaderName = Core::Assets::BuildDerivedAssetVirtualPath(context.cookArena, context.discoveredNwbFile.assetRoot, context.discoveredNwbFile.virtualRoot.view(), ::Path<ScratchArena>(context.scratchArena, shaderEntry.source), context.scratchArena);
+        auto shaderName = Core::Assets::BuildDerivedAssetVirtualPath(context.cookArena, context.discoveredNwbFile.assetRoot, context.discoveredNwbFile.virtualRoot, ::Path<ScratchArena>(context.scratchArena, shaderEntry.source), context.scratchArena);
         if(!shaderName)
             return AssetMetadataParseResult::Error;
         shaderEntry.name = Move(*shaderName);
@@ -182,7 +182,7 @@ static bool ParseMaterialBindFiles(Core::Assets::AssetsVolumeCookDetail::AssetVo
             return false;
         MaterialBindEntry& bindEntry = *bindResult;
 
-        auto virtualPath = Core::Assets::BuildDerivedAssetVirtualPath(context.arena, discoveredBindFile.assetRoot, discoveredBindFile.virtualRoot.view(), discoveredBindFile.filePath, context.scratchArena);
+        auto virtualPath = Core::Assets::BuildDerivedAssetVirtualPath(context.arena, discoveredBindFile.assetRoot, discoveredBindFile.virtualRoot, discoveredBindFile.filePath, context.scratchArena);
         if(!virtualPath)
             return false;
         bindEntry.virtualPath = Move(*virtualPath);

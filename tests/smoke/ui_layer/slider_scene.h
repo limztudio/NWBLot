@@ -27,7 +27,7 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// RefCounter derives from this scene; each value owner outlives the final enclosing Builder scope.
+// Scene fixture owning slider values across enclosing Builder scopes.
 class UiSliderSmokeScene : public Core::IInputEventHandler, NoCopy{
 public:
     explicit UiSliderSmokeScene(Core::InputDispatcher& input);

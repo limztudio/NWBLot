@@ -51,7 +51,7 @@ Expected<SkinPaintSample> WidgetFixture::sampleSkinPaint(const DrawSnapshot& sna
     const f32 topV = VectorGetZ(texCoordEdges);
     const f32 bottomV = VectorGetW(texCoordEdges);
     SkinPaintSample candidate;
-    // Lanes are x, y. The far corner also keeps the largest right U in z.
+    // Lanes are x, y, and maximum right U in z.
     SIMDVectorSingle origin = VectorZero();
     SIMDVectorSingle corner = VectorZero();
     for(const DrawCommand& command : snapshot.commands()){

@@ -67,7 +67,7 @@ def integrated_radiance(point, roughness, color, camera_x=0.0, resolution=24):
     view = normalize((camera_x - point[0], 1.4 - point[1], -6.0))
     nv = -view[2]
     if roughness == 0.0:
-        # Exact delta reflection intersects the emitter plane; this path has no quadrature singularity.
+        # Smooth reflection intersects the emitter plane directly.
         direction = (-view[0], -view[1], view[2])
         distance = -8.0 / direction[2]
         hit_x, hit_y = point[0] + direction[0] * distance, point[1] + direction[1] * distance
@@ -92,9 +92,7 @@ def integrated_radiance(point, roughness, color, camera_x=0.0, resolution=24):
         distribution = alpha_squared / (math.pi * denominator * denominator)
         masking = 1.0 / (1.0 + lambda_v + smith_lambda(nl, alpha))
         fresnel = MIRROR_F0 + (1.0 - MIRROR_F0) * (1.0 - vh) ** 5
-        # f_r * NdotL * emitterCosine / distance^2 * dA.
-        # The two planes have parallel normals, so emitterCosine=NdotL; one NdotL cancels the BRDF denominator.
-        # No VNDF sampler is used.
+        # Parallel receiver and emitter normals cancel one NdotL against the BRDF denominator.
         total += distribution * masking * fresnel * nl * area / (4.0 * nv * distance_squared)
     return total
 

@@ -265,7 +265,7 @@ Expected<usize> DependencyProviderCatalog::resolve(const Name& virtualPath, cons
                     NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: provider '{}' declares multiple assets for '{}'"), PathToString<tchar>(m_files[index].filePath), ConvertString(virtualPath));
                     return MakeUnexpected(Failure{});
                 }
-                const auto expanded = Assets::AssetsBunchCook::ExpandAssetBunch(m_files[index].assetRoot, m_files[index].virtualRoot.view(), m_files[index].filePath, *document, scratchArena);
+                const auto expanded = Assets::AssetsBunchCook::ExpandAssetBunch(m_files[index].assetRoot, m_files[index].virtualRoot, m_files[index].filePath, *document, scratchArena);
                 if(!expanded)
                     return MakeUnexpected(Failure{});
                 if(!recordMatch(index))
@@ -300,7 +300,7 @@ Expected<usize> DependencyProviderCatalog::resolve(const Name& virtualPath, cons
             if(!*hasBunch)
                 continue;
 
-            const auto expanded = Assets::AssetsBunchCook::ExpandAssetBunch(m_files[index].assetRoot, m_files[index].virtualRoot.view(), m_files[index].filePath, *document, scratchArena);
+            const auto expanded = Assets::AssetsBunchCook::ExpandAssetBunch(m_files[index].assetRoot, m_files[index].virtualRoot, m_files[index].filePath, *document, scratchArena);
             if(!expanded)
                 return MakeUnexpected(Failure{});
 

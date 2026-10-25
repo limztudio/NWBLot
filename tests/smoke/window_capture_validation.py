@@ -50,8 +50,7 @@ def validate_transparent_csg_result(result, pose):
 def validate_texture_smoke_result(result):
     analysis = result.texture_smoke
     min_pixels = max(220, (result.width * result.height) // 4000)
-    # The receiver-only region is deliberately tight enough to exclude authored sphere texels.
-    # Require substantial coverage within that region while retaining a fixed floor that rejects isolated red noise.
+    # Require red bounce coverage across the receiver shadow region.
     min_receiver_red_pixels = max(256, analysis.receiver_pixel_count // 4)
     missing = []
     if analysis.red_pixels < min_pixels:

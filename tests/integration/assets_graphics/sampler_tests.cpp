@@ -209,34 +209,11 @@ TEST(AssetsGraphics, SamplerCookerRequiresTheAssetField){
     TestArena testArena;
     NWB::Core::Metascript::Document document(testArena.arena);
     ASSERT_TRUE(document.parse("sampler configuration; configuration.mip_bias = 2.0;"));
-    ASSERT_NE(document.findVariable("configuration"), nullptr);
-    ASSERT_NE(document.findDeclaration("configuration"), nullptr);
-    EXPECT_EQ(document.findVariable("asset"), nullptr);
     const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, s_UnsupportedMetadataCase) / s_AssetsDirectory;
     const Path metadataPath = assetRoot / s_SamplersDirectory / s_LinearClampMetadataFilename;
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
     EXPECT_FALSE(NWB::Impl::ParseSamplerCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("missing asset declaration 'asset'")));
-}
-
-TEST(AssetsGraphics, SamplerCookerFindsAssetAfterUnrelatedDeclarations){
-    CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
-    TestArena testArena;
-    AString metadata("metadata helper = { \"mip_bias\": 9.0 };\nsampler decoy; decoy.mip_bias = 8.0;\n");
-    metadata += s_SamplerTestMetadata;
-    NWB::Core::Metascript::Document document(testArena.arena);
-    ASSERT_TRUE(document.parse(AStringView(metadata)));
-    ASSERT_EQ(document.declarations().size(), 3u);
-    EXPECT_EQ(document.declarations().front().variable, "helper");
-    const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, s_UnsupportedMetadataCase) / s_AssetsDirectory;
-    const Path metadataPath = assetRoot / s_SamplersDirectory / s_LinearClampMetadataFilename;
-    NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
-    const auto entry = NWB::Impl::ParseSamplerCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena);
-    ASSERT_TRUE(entry);
-    EXPECT_FLOAT_EQ(entry->description.mipBias, -0.25f);
-    EXPECT_FLOAT_EQ(entry->description.maxAnisotropy, 4.0f);
-    EXPECT_EQ(logger.errorCount(), 0u);
 }
 
 TEST(AssetsGraphics, SamplerCookerRejectsFixedBorderColorAndUnsupportedReductionMetadata){

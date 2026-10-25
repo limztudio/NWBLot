@@ -479,7 +479,7 @@ TEST(AllocationOwnerTelemetry, KeepsHeapBackingRecordsWithoutCountingTheirUsageA
     const Perf::MemorySource::Enum sources[] = { Perf::MemorySource::ExplicitScope, Perf::MemorySource::Arena, Perf::MemorySource::HeapBacking, };
     for(usize sourceIndex = 0u; sourceIndex < LengthOf(sources); ++sourceIndex){
         Perf::MemorySnapshot snapshot = MakeSnapshot(owner, sources[sourceIndex]);
-        // The explicit scope aliases the same arena; their values must remain separate in summaries.
+        // Keep explicit scope counters separate from the aliased arena summary.
         snapshot.usedBytes = sources[sourceIndex] == Perf::MemorySource::HeapBacking ? 300u : 100u;
         snapshot.peakUsedBytes = sources[sourceIndex] == Perf::MemorySource::HeapBacking ? 3000u : 1000u;
         Perf::MemoryDelta delta = TelemetryTestDetail::MakeTestMemoryDelta(-1);

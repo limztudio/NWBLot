@@ -254,18 +254,6 @@ TEST(ReflectionStatistics, InvalidAcceptedTokenQuarantinesSlotUntilReset){
     EXPECT_EQ(context.control->reserve(Metadata()).slot, key.slot);
 }
 
-TEST(ReflectionStatistics, LeaseDestructionReclaimsAnUnregisteredReservation){
-    StatisticsContext context;
-    ASSERT_TRUE(context.control);
-    u32 index = 0u;
-    {
-        ReflectionStatisticsReservation lease(context.control, Metadata());
-        ASSERT_TRUE(lease.valid());
-        index = lease.slotIndex();
-    }
-    EXPECT_EQ(context.control->reserve(Metadata()).slot, index);
-}
-
 TEST(ReflectionStatistics, MovingLeaseTransfersOwnershipAndReclaimsAssignmentDestination){
     StatisticsContext context;
     ASSERT_TRUE(context.control);
@@ -299,19 +287,13 @@ TEST(ReflectionStatistics, AcceptedLeaseRemainsInFlightAfterPayloadDestruction){
     EXPECT_EQ(context.control->reserve(Metadata()).slot, index);
 }
 
-TEST(ReflectionStatistics, RejectedGraphRegistrationReleasesLease){
+TEST(ReflectionStatistics, RejectedGraphRegistrationAndGraphResetReleaseUnacceptedLeases){
     StatisticsContext context;
     ASSERT_TRUE(context.control);
     Core::GpuTaskGraph graph(context.arena);
-    const auto task = graph.addTask<LeaseTask>(Core::GpuTaskDesc{}, LeaseTask::Payload{ReflectionStatisticsReservation(context.control, Metadata())});
-    EXPECT_FALSE(task.has_value());
+    EXPECT_FALSE(graph.addTask<LeaseTask>(Core::GpuTaskDesc{}, LeaseTask::Payload{ReflectionStatisticsReservation(context.control, Metadata())}).has_value());
     EXPECT_EQ(context.control->reserve(Metadata()).slot, 0u);
-}
-
-TEST(ReflectionStatistics, GraphResetDiscardsUnrecordedReservations){
-    StatisticsContext context;
-    ASSERT_TRUE(context.control);
-    Core::GpuTaskGraph graph(context.arena);
+    context.control->reset(1u);
     {
         const auto gpuTaskAdmission = graph.addTask<LeaseTask>(TaskDesc(), LeaseTask::Payload{ReflectionStatisticsReservation(context.control, Metadata())});
         ASSERT_TRUE(gpuTaskAdmission);

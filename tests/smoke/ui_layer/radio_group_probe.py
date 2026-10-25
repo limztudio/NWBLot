@@ -122,9 +122,9 @@ def observe_radio_group(frame, snapshot, expected, *, extent=None, skin="default
         tint = (0.55, 0.55, 0.55, 0.6) if not enabled or key == 30 else ((0.85, 0.85, 0.85, 1.0) if pressed == (prefix, key) else (1.0, 1.0, 1.0, 1.0))
         ix, iy, iw, ih = indicator
         probe(f"{prefix}indicator{key}_fill", (ix + 4.0, iy + ih / 2.0), compose(linear_channels(fill), 1.0, tint, backdrop))
-        # At scaled DPI the first border pixel can include alpha/filtering. Compare authored samples at each pixel center.
+        # Compare authored border samples at pixel centers for scaled DPI.
         candidates = []
-        # The whole-row focus overlay crosses the indicator's left edge; its right border remains independent.
+        # Sample the right indicator border away from the left focus overlay.
         left = max(0, math.floor((ix + iw - 1.5) * scale[0]))
         right = min(width, math.ceil((ix + iw) * scale[0]))
         top = round((iy + ih / 2.0) * scale[1])

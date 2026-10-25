@@ -216,7 +216,7 @@ class FontBuilderCli(unittest.TestCase):
             self.assertEqual(set(declared), (set(decoded) - {LIT_ID, LIT_DRAWABLE, LIT_PLANE_RIGHT, LIT_PLANE_BOTTOM}) if decoded[LIT_DRAWABLE] else {LIT_ADVANCE_UNITS})
             for origin, extent, end in ((LIT_PLANE_LEFT, LIT_WIDTH, LIT_PLANE_RIGHT), (LIT_PLANE_TOP, LIT_HEIGHT, LIT_PLANE_BOTTOM)):
                 size = struct.unpack(LIT_FLOAT32_LITTLE_ENDIAN, struct.pack(LIT_FLOAT32_LITTLE_ENDIAN, decoded[extent] * units_per_pixel))[0]
-                # ARM can fuse the multiply/add; either rounding retains the same bitmap plane.
+                # Fused and separate multiply-add roundings keep the same bitmap plane.
                 expected = (struct.pack(LIT_FLOAT32_LITTLE_ENDIAN, decoded[origin] + size), struct.pack(LIT_FLOAT32_LITTLE_ENDIAN, decoded[origin] + decoded[extent] * units_per_pixel))
                 self.assertIn(struct.pack(LIT_FLOAT32_LITTLE_ENDIAN, decoded[end]), expected)
             for key in declared:
@@ -259,11 +259,9 @@ class FontBuilderCli(unittest.TestCase):
     def pair_bytes(self, output):
         return {extension: output.with_suffix(extension).read_bytes() for extension in (LIT_METADATA_SUFFIX, LIT_FONT_SUFFIX)}
 
-    def test_non_drawable_glyphs_retain_positive_advance(self):
-        self.assertTrue(any(glyph[LIT_DRAWABLE] == 0 and glyph[LIT_ADVANCE_UNITS] > 0 for glyph in self.atlas[LIT_GLYPHS]))
-
     def test_compact_channels_preserve_guards_and_exact_positioning_tables(self):
         atlas = self.atlas
+        self.assertTrue(any(glyph[LIT_DRAWABLE] == 0 and glyph[LIT_ADVANCE_UNITS] > 0 for glyph in atlas[LIT_GLYPHS]))
         self.assert_compact_groups(atlas)
         expected = {f"group_{index}.pixels" for index in range(len(atlas[LIT_GROUPS]))}
         expected.update(f"table_{tag}.bin" for tag in atlas[LIT_TABLES])

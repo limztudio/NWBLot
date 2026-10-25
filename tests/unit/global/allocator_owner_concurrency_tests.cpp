@@ -81,7 +81,7 @@ TEST(AllocationOwnerConcurrency, CapturesLiveAndRetiringArenasWithoutLosingHisto
                         failed.store(true, MemoryOrder::relaxed);
                     if(first)
                         arena.deallocate(first, 8u, 64u);
-                    // The out-of-order free retains the first allocation; destruction releases both together.
+                    // Out-of-order free defers release until arena destruction.
                 }
                 {
                     PersistentArena arena(s_Owner, poolBytes);
@@ -187,8 +187,7 @@ TEST(AllocationOwnerConcurrency, CrossThreadRawReallocationAndFreeKeepSettledBac
         WaitForFlag(releaseWorkers);
     });
 
-    // Initialize each shard before baseline capture and keep both thread closures alive until final capture.
-    // The interval contains only the planned raw allocation/reallocation/free operations, with no test assertions.
+    // Keep thread closures outside the measured allocation interval.
     WaitForFlag(producerReady);
     WaitForFlag(consumerReady);
     const ArenaMemoryStats before = HeapBackingMemoryStats();

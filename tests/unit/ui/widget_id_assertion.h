@@ -19,7 +19,7 @@ namespace UiTestSupport{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Fixture IDs are required. A placeholder only permits continuation after an actual failed assertion.
+// Assert valid widget IDs and return a fallback ID only after recording a test failure.
 [[nodiscard]] inline NWB::Impl::Ui::WidgetId RequireWidgetId(const Expected<NWB::Impl::Ui::WidgetId>& result){
     EXPECT_TRUE(result);
     if(!result)

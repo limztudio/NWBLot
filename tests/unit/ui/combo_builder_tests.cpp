@@ -22,7 +22,7 @@ using namespace NWB::UiComboTests;
 
 class UiComboBuilderTests : public ComboFixture{};
 
-// Behavior resolves the selection first; the subsequent label lookup deliberately violates the stable-key round trip.
+// Source fixture that breaks stable-key lookup on the post-selection label read.
 class LabelLookupSource final : public ComboSource{
 public:
     [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const noexcept override{

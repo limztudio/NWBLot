@@ -209,7 +209,7 @@ Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> Compute
         if(assetType == Impl::ProjectAsset::s_AssetTypeName){
             if(!documentOrNull)
                 return false;
-            const auto projectEntry = Impl::ParseProjectCookMetadata(file.assetRoot, file.virtualRoot.view(), file.filePath, *documentOrNull, arena, scratchArena);
+            const auto projectEntry = Impl::ParseProjectCookMetadata(file.assetRoot, file.virtualRoot, file.filePath, *documentOrNull, arena, scratchArena);
             if(!projectEntry)
                 return false;
             return enqueueDependency(projectEntry->startScene.name(), Impl::SceneAsset::s_AssetTypeName);
@@ -218,7 +218,7 @@ Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> Compute
         if(assetType == Impl::SceneAsset::s_AssetTypeName){
             if(!documentOrNull)
                 return false;
-            const auto sceneEntry = Impl::ParseSceneCookMetadata(file.assetRoot, file.virtualRoot.view(), file.filePath, *documentOrNull, arena, scratchArena);
+            const auto sceneEntry = Impl::ParseSceneCookMetadata(file.assetRoot, file.virtualRoot, file.filePath, *documentOrNull, arena, scratchArena);
             if(!sceneEntry)
                 return false;
             for(const Assets::AssetRef<Impl::Subsystem>& subsystemRef : sceneEntry->subsystems){
@@ -239,7 +239,7 @@ Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> Compute
         if(assetType == Impl::Subsystem::s_AssetTypeName){
             if(!documentOrNull)
                 return false;
-            auto subsystemEntry = Impl::ParseSubsystemCookMetadata(file.assetRoot, file.virtualRoot.view(), file.filePath, *documentOrNull, arena, scratchArena);
+            auto subsystemEntry = Impl::ParseSubsystemCookMetadata(file.assetRoot, file.virtualRoot, file.filePath, *documentOrNull, arena, scratchArena);
             if(!subsystemEntry)
                 return false;
             for(const Assets::AssetRef<Impl::Subsystem>& childSubsystem : subsystemEntry->subsystems){
@@ -265,7 +265,7 @@ Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> Compute
         if(assetType == Impl::UiSkin::s_AssetTypeName){
             if(!documentOrNull)
                 return false;
-            const auto skinEntry = Impl::ParseUiSkinCookMetadata(file.assetRoot, file.virtualRoot.view(), file.filePath, *documentOrNull, arena, scratchArena);
+            const auto skinEntry = Impl::ParseUiSkinCookMetadata(file.assetRoot, file.virtualRoot, file.filePath, *documentOrNull, arena, scratchArena);
             if(!skinEntry)
                 return false;
             return enqueueDependency(skinEntry->texture.name(), Impl::Texture::s_AssetTypeName);
@@ -321,7 +321,7 @@ Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> Compute
         if(assetType == Impl::Material::s_AssetTypeName){
             if(!documentOrNull)
                 return false;
-            const auto materialEntry = Impl::ParseMaterialCookMetadata(file.assetRoot, file.virtualRoot.view(), file.filePath, *documentOrNull, arena, scratchArena);
+            const auto materialEntry = Impl::ParseMaterialCookMetadata(file.assetRoot, file.virtualRoot, file.filePath, *documentOrNull, arena, scratchArena);
             if(!materialEntry)
                 return false;
 
@@ -350,7 +350,7 @@ Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> Compute
             resourceParameterValues.reserve(materialEntry->parameters.size());
             for(const auto& [paramKey, paramValue] : materialEntry->parameters){
                 static_cast<void>(paramKey);
-                const AStringView valueView = TrimView(paramValue.view());
+                const AStringView valueView = TrimView(paramValue);
                 if(IsMaterialResourceParameterValue(valueView, scratchArena))
                     resourceParameterValues.push_back(valueView);
             }
@@ -393,7 +393,7 @@ Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> Compute
             return MakeUnexpected(Failure{});
         if(*hasBunch){
             const auto& file = files[fileIndex];
-            const auto expandedAssets = Assets::AssetsBunchCook::ExpandAssetBunch(file.assetRoot, file.virtualRoot.view(), file.filePath, *document, scratchArena);
+            const auto expandedAssets = Assets::AssetsBunchCook::ExpandAssetBunch(file.assetRoot, file.virtualRoot, file.filePath, *document, scratchArena);
             if(!expandedAssets)
                 return MakeUnexpected(Failure{});
             for(const Assets::ExpandedAssetMetadata& expanded : *expandedAssets)

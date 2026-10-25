@@ -100,7 +100,7 @@ struct Box{
     if(!receiver.valid())
         return false;
     AddStaticCsgMeshReceiver(world, receiver, s_Groups[slot], true, false);
-    // Two overlapping cutters form one opening; their internal union seam must not become a GI surface.
+    // Overlapping cutters form one opening without an internal GI seam.
     const SIMDVectorSingle cutterBegin = VectorReplicate(cutter.minimum.x);
     const SIMDVectorSingle cutterSpan = VectorSubtract(VectorReplicate(cutter.maximum.x), cutterBegin);
     const SIMDVectorSingle overlap = VectorMultiplyAddExpression(cutterSpan, VectorSet(0.35f, 0.65f, 0.0f, 0.0f), cutterBegin);
@@ -236,7 +236,7 @@ Expected<bool> CsgGiScene::start(){
     if(!CreateMixedSubtraction(m_context, m_world, arm))
         return MakeUnexpected(Failure{});
     const auto passage = CreateBox(m_context, m_world, { Float3U(-1.9f, 0.65f, 1.0f), Float3U(-0.7f, 1.95f, 1.08f) }, s_IndirectMaterial, s_White);
-    // The receiver is inside the removed cavity. Its upward hemisphere reaches the green generated back cap.
+    // The cavity receiver sees bounced light from the green generated back cap.
     const auto cavity = CreateBox(m_context, m_world, { Float3U(0.85f, 0.56f, -0.72f), Float3U(1.75f, 0.61f, 0.06f) }, s_IndirectMaterial, s_White);
     const auto control = CreateBox(m_context, m_world, { Float3U(-0.35f, 2.7f, 0.0f), Float3U(0.35f, 3.15f, 0.06f) }, s_IndirectMaterial, s_White);
     if(!passage.valid() || !cavity.valid() || !control.valid())

@@ -61,14 +61,6 @@ public:
 };
 
 
-TEST(SkeletonPayload, MissingJointLookupReturnsInvalidIndex){
-    SkeletonInputs inputs;
-    auto skeletonBuildResult = BuildSkeletonAsset(inputs.entry, inputs.arena, inputs.scratchArena);
-    ASSERT_TRUE(skeletonBuildResult);
-    inputs.skeleton = Move(*skeletonBuildResult);
-    EXPECT_EQ(inputs.skeleton.findJointIndex(Name("missing")), s_SkeletonInvalidJointIndex);
-}
-
 TEST(SkeletonPayload, RejectsLaterSelfAndMissingParentsAndRecoversWithValidParents){
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerRegistration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);

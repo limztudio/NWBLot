@@ -63,8 +63,7 @@ def require_windows_interactive_desktop(user32=None):
         raise SmokeFailure(f"GetProcessWindowStation failed: {ctypes.get_last_error()}")
     flags = WindowsUserObjectFlags()
     length_needed = ctypes.c_uint32()
-    # UOI_FLAGS returns USEROBJECTFLAGS; WSF_VISIBLE marks visible display surfaces.
-    # GetProcessWindowStation returns a borrowed handle that must not be closed.
+    # Check WSF_VISIBLE on the borrowed process window station handle.
     if not user32.GetUserObjectInformationW(ctypes.c_void_p(station), 1, ctypes.byref(flags), ctypes.sizeof(flags), ctypes.byref(length_needed)):
         raise SmokeFailure(f"GetUserObjectInformationW(UOI_FLAGS) failed: {ctypes.get_last_error()}")
     if not flags.dwFlags & 0x0001:
@@ -268,7 +267,7 @@ class WindowsCapture:
             raise SmokeFailure("window/client rectangles disagree while calculating the requested resize")
         flags = self.SWP_NOMOVE | self.SWP_NOZORDER | self.SWP_SHOWWINDOW | self.SWP_ASYNCWINDOWPOS
         if allow_outside_work_area:
-            # Exact framebuffer tests may exceed the desktop work area; keep WM_SIZE while bypassing default tracking bounds.
+            # Bypass default tracking bounds so large test framebuffers keep their requested size.
             flags |= self.SWP_NOSENDCHANGING
         if not self.user32.SetWindowPos(ctypes.c_void_p(hwnd), None, 0, 0, outer_width, outer_height, flags):
             raise SmokeFailure(f"SetWindowPos failed while resizing HWND 0x{hwnd:x}")
@@ -387,7 +386,7 @@ class WindowsCapture:
         return self.capture_client_window(hwnd, output_path)
 
     def capture_client_window(self, hwnd, output_path):
-        # M4 compares renderer output; GetWindowRect includes a DWM frame whose active/inactive pixels vary by process.
+        # Capture only the client area to exclude the DWM window frame.
         self._prepare_capture_window(hwnd)
         rect = self._client_rect(hwnd)
         if not rect:

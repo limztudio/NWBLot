@@ -233,11 +233,11 @@ public:
 
 ScratchString OutputAssetTypeOptionsText(Core::Alloc::ScratchArena& scratchArena);
 ScratchString OutputAssetTypeErrorText(Core::Alloc::ScratchArena& scratchArena);
-Expected<OutputAssetType::Enum> ParseAssetTypeText(const AStringView value, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<OutputAssetType::Enum> ParseAssetTypeText(AStringView value)noexcept;
 bool ValidateAssetTypeText(AString& inOutValue);
 ScratchString NormalModeOptionsText(Core::Alloc::ScratchArena& scratchArena);
 ScratchString NormalModeErrorText(Core::Alloc::ScratchArena& scratchArena);
-Expected<NormalMode::Enum> ParseNormalModeText(const AStringView value, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<NormalMode::Enum> ParseNormalModeText(AStringView value)noexcept;
 bool ValidateNormalModeText(AString& inOutValue);
 AStringView SourceTangentModeText(SourceTangentMode::Enum mode)noexcept;
 Expected<Vec4> ParseColorText(const AStringView text, Core::Alloc::ScratchArena& scratchArena);
@@ -246,7 +246,7 @@ ScratchPath DefaultOutputPath(const AStringView inputPath, Core::Alloc::ScratchA
 Expected<SceneHandle> LoadScene(const ImportOptions& options, Core::Alloc::ScratchArena& scratchArena);
 UtilityVector<MeshInstance> CollectMeshInstances(ufbx_scene* scene, bool includeHidden);
 void PrintMeshInstances(Span<const MeshInstance> instances, Core::Alloc::ScratchArena& scratchArena);
-Expected<UtilityVector<usize>> SelectMeshInstances(Span<const MeshInstance> instances, const AStringView selector, Core::Alloc::ScratchArena& scratchArena);
+Expected<UtilityVector<usize>> SelectMeshInstances(Span<const MeshInstance> instances, AStringView selector);
 Expected<MeshBuildResult> BuildMesh(
     Span<const MeshInstance> instances,
     Span<const usize> selection,

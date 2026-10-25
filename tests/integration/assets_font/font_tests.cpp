@@ -52,7 +52,7 @@ using FontTestArena = TestArena<FontTestArenaTag>;
 static constexpr u32 s_TrueTypeSignature = 0x00010000u;
 static constexpr u32 s_CollectionSignature = 0x74746366u;
 
-// SFNT directory layout: table count is a big-endian u16 at byte 4; each 16-byte table record holds tag, checksum, offset and length.
+// SFNT directory holds a big-endian u16 table count at byte 4 followed by 16-byte table records.
 static constexpr usize s_SfntTableCountHighByte = 4u;
 static constexpr usize s_SfntTableCountLowByte = 5u;
 static constexpr usize s_SfntTableRecordBytes = 16u;

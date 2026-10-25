@@ -26,7 +26,7 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Smoke-only buffered CPU/GPU publication evidence. Overlapping scopes are not additive wall-time components.
+// Buffered CPU and GPU scope publication probe for smoke tests.
 class SmokeCpuGpuTimingProbe final{
 private:
     static constexpr usize s_MaxScopesPerDomain = 512u;

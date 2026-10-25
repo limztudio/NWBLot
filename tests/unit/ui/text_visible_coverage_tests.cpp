@@ -36,7 +36,7 @@ protected:
         return { VectorGetX(position), VectorGetY(position), glyph.ink.width, glyph.ink.height };
     }
 
-    // Lanes are x and y. A fringe is half of the gap, but at most 0.05.
+    // Lanes are x and y.
     [[nodiscard]] static Rect RasterFringe(const Rect& raster, const Rect& outline)noexcept{
         const SIMDVectorSingle rasterStart = VectorSet(raster.x, raster.y, 0.0f, 0.0f);
         const SIMDVectorSingle outlineStart = VectorSet(outline.x, outline.y, 0.0f, 0.0f);
@@ -78,7 +78,7 @@ protected:
         if(!glyph.face->rasterize(glyph.glyphId, static_cast<u32>(VectorGetX(physicalSize)), m_bitmap))
             return MakeUnexpected(Failure{});
         const SIMDVectorSingle scale = VectorDivide(physicalSize, VectorReplicate(fontSize));
-        // Lanes are x and y. X adds the bearing and y subtracts it.
+        // Lanes are x and y.
         const SIMDVectorDouble base = VectorDoubleAdd(VectorDoubleSet(origin.x, origin.y, 0.0, 0.0), VectorDoubleSet(glyph.position.x, glyph.position.y, 0.0, 0.0));
         const SIMDVectorDouble bearing = VectorDoubleDivide(VectorDoubleSet(static_cast<f64>(m_bitmap.bearingX), static_cast<f64>(m_bitmap.bearingY), 0.0, 0.0), ConvertVectorSingleToDouble(scale));
         const SIMDVectorDouble unsnapped = VectorDoublePermute<0, 5, 2, 3>(VectorDoubleAdd(base, bearing), VectorDoubleSubtract(base, bearing));
@@ -432,7 +432,7 @@ TEST_F(TextVisibleCoverageTests, NaturalMeasurementContainsNativeMarksFallbackAn
 }
 
 
-// Texel lanes are x and y. Every lane of the result holds the distance.
+// Lanes are texel x and y.
 [[nodiscard]] static SIMDVectorSingle SampleSdfDistance(const SdfAtlasPage& page, const u32 channel, const SIMDVectorSingle texel)noexcept{
     const SdfAtlasPageBinding& binding = page.binding();
     const auto& pixels = page.pixels();
@@ -525,7 +525,7 @@ TEST_F(TextVisibleCoverageTests, NaturalSdfMeasurementExcludesTransparentSpreadA
             EXPECT_GT(measured->x, relativePlane->x);
             EXPECT_GT(measured->y, relativePlane->y);
             for(const f32 phase : { 0.0f, 0.25f, 0.53125f, 0.9375f }){
-                // Lanes are x and y. X moves by the full phase and y by half of it.
+                // Lanes are x and y phase offsets.
                 const SIMDVectorSingle contentStart = VectorMultiplyAddExpression(VectorReplicate(phase), VectorSet(1.0f, 0.5f, 0.0f, 0.0f), VectorReplicate(100.0f));
                 const Rect content{ VectorGetX(contentStart), VectorGetY(contentStart), measured->width, measured->height };
                 const SIMDVectorSingle originValue = VectorSubtract(contentStart, VectorSet(measured->x, measured->y, 0.0f, 0.0f));
@@ -545,7 +545,7 @@ TEST_F(TextVisibleCoverageTests, NaturalSdfMeasurementExcludesTransparentSpreadA
                 const SIMDVectorSingle recordStart = VectorSet(static_cast<f32>(record.x), static_cast<f32>(record.y), 0.0f, 0.0f);
                 const SIMDVectorSingle recordSize = VectorSet(static_cast<f32>(record.width), static_cast<f32>(record.height), 0.0f, 0.0f);
                 const SIMDVectorSingle planeSize = VectorSet(plane->width, plane->height, 1.0f, 1.0f);
-                // Pixel centers are in logical units. Lanes are x and y.
+                // Lanes are logical pixel center x and y.
                 const auto pixelCenter = [&](const i32 x, const i32 y)noexcept -> SIMDVectorSingle{ return VectorDivide(VectorAdd(VectorSet(static_cast<f32>(x), static_cast<f32>(y), 0.0f, 0.0f), VectorReplicate(0.5f)), pixelScale); };
                 const auto distance = [&](const i32 x, const i32 y)noexcept -> SIMDVectorSingle{
                     const SIMDVectorSingle local = VectorSubtract(pixelCenter(x, y), planeStart);

@@ -140,7 +140,7 @@ def capture_arm(args, arm):
 
 
 def project_point(x, y, z):
-    # Static camera at (0, 1.3, -5.5), no rotation, 60-degree vertical field of view.
+    # Static camera at x=0, y=1.3, z=-5.5 with a 60-degree vertical FOV.
     scale = EXPECTED_EXTENT[1] / (2.0 * math.tan(math.pi / 6.0) * (z + 5.5))
     return round(EXPECTED_EXTENT[0] * 0.5 + x * scale - 0.5), round(EXPECTED_EXTENT[1] * 0.5 - (y - 1.3) * scale - 0.5)
 
@@ -181,8 +181,7 @@ def validate_metrics(metrics):
             raise SmokeFailure(f"ordinary reference has insufficient {region} GI signal: {expected:.3f}")
         if expected - uncut[region][signal] < minimum:
             raise SmokeFailure(f"uncut control does not distinguish {region} from the ordinary reference")
-        # The same visible G-buffer surfaces seed different scene-instance orders.
-        # Compare regional color energy after convergence, rather than requiring identical stochastic ray sequences or edge pixels.
+        # Compare converged regional color energy across different instance orders.
         tolerance = max(10.0, expected * 0.30)
         if abs(cut[region][signal] - expected) > tolerance:
             raise SmokeFailure(f"CSG {region} differs from ordinary carved geometry: " f"reference={expected:.3f}, cut={cut[region][signal]:.3f}, tolerance={tolerance:.3f}")

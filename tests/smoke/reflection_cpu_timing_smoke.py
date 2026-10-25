@@ -157,7 +157,7 @@ def validate_publications(log_text, raw_path, measurement):
 
 
 def launch_environment(base, case, raw_path):
-    # Use the existing reflection workload settings; replace its output producer with the explicit CPU/GPU probe.
+    # Run the reflection workload with the CPU and GPU timing probe.
     workload = ab.reflection_workload(LIT_DIAGNOSTIC, case, LIT_HARDWARE, 0.0, False, False, reflection.HARDWARE)
     env, overrides = ab.configure_environment(base, workload, raw_path)
     env.pop("NWB_GPU_TIMING_FILE", None)

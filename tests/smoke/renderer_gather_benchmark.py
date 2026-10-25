@@ -168,7 +168,7 @@ def summarize_rows(rows, workload, mode):
         measured = row[LIT_SCOPES_MS]
         if measured[LIT_GRAPHICS_FRAME] <= 0 or measured[LIT_GRAPHICS_RENDER] <= 0:
             raise SmokeFailure("timed graphics work is empty")
-        # Siblings are chargeable subtotals. The enclosing timer includes scheduling and their instrumentation.
+        # Sibling subtotals must not exceed their enclosing timer.
         if measured[LIT_GRAPHICS_PREPARE_RESOURCES] + measured[LIT_GRAPHICS_RENDER_PASSES] > measured[LIT_GRAPHICS_RENDER] + .005:
             raise SmokeFailure("callback subtotals exceed their measured parent")
         if measured[LIT_GRAPHICS_RENDER] > measured[LIT_GRAPHICS_FRAME] + .005:

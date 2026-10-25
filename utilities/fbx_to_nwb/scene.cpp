@@ -166,8 +166,7 @@ void PrintMeshInstances(const Span<const MeshInstance> instances, Core::Alloc::S
     NWB_LOGGER_ESSENTIAL_INFO(ConvertString(report.str()));
 }
 
-Expected<UtilityVector<usize>> SelectMeshInstances(const Span<const MeshInstance> instances, const AStringView selector, Core::Alloc::ScratchArena& scratchArena){
-    static_cast<void>(scratchArena);
+Expected<UtilityVector<usize>> SelectMeshInstances(const Span<const MeshInstance> instances, const AStringView selector){
     UtilityVector<usize> outSelection;
 
     const AStringView normalized = TrimView(selector);

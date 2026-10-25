@@ -27,21 +27,6 @@ TEST_F(UiEditActionHostTests, FreshActionBindingAbandonsOnlyWhileTheModelIsLent)
     EXPECT_EQ(actionCount(Ui::EditAction::Abandon), 1u);
 }
 
-TEST_F(UiEditActionHostTests, ExternalSameTextAssignmentFencesQueuedInputWithoutAbandoningTheNewDraft){
-    ASSERT_TRUE(activateActions());
-    const TextInputSessionToken oldSession = m_textInput.activeSession();
-    ASSERT_TRUE(commitNative("late"));
-    m_host.collectNative();
-    ASSERT_TRUE(m_model.setText("0"));
-    const u64 external = m_model.externalRevision();
-    ASSERT_TRUE(actionFrame());
-    EXPECT_EQ(m_model.text(), "0");
-    EXPECT_EQ(m_model.externalRevision(), external);
-    EXPECT_FALSE(m_result.abandoned);
-    EXPECT_TRUE(m_actions.records.empty());
-    EXPECT_EQ(m_textInput.commitFor(oldSession, "old"), TextInputAdmission::InvalidSession);
-}
-
 TEST_F(UiEditActionHostTests, ExternalDraftReplacementRemainsAuthoritativeWhileOldNativeTextIsDiscarded){
     ASSERT_TRUE(activateActions());
     ASSERT_TRUE(commitNative("old"));

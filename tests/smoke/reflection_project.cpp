@@ -87,8 +87,7 @@ static NWB::Impl::RendererSystem& CreateReflectionRenderer(NWB::Core::ECS::World
     return AddSmokeRenderSystems(world, context);
 }
 
-// Timed fixtures need continued submissions when Windows denies foreground ownership.
-// This pass opts into the existing per-project policy without adding GPU work or changing production focus throttling.
+// Opt into unfocused rendering so timed smoke runs continue without foreground ownership.
 class ReflectionTimingRenderPass final : public NWB::Core::IRenderPass{
 private:
     static constexpr u32 s_InFlightRanges = 32u;
@@ -131,9 +130,7 @@ public:
         auto& graphics = getGraphics();
         auto& timing = graphics.gpuTiming();
         auto& device = graphics.getDevice();
-        // One TimerQuery owns both timestamps for a complete range.
-        // Reserve complete in-flight ranges, including every native depth mip, to cover expected completion latency.
-        // The benchmark still checks sample coverage.
+        // Reserve enough timer queries to cover all in-flight passes and depth mips.
         for(const Name& scope : singleRangeScopes){
             if(!timing.prepareScopeQueries(scope, device, s_InFlightRanges)){
                 NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: failed to prepare timing scope '{}'"), ConvertString(scope.resolvedText()));
@@ -633,7 +630,7 @@ private:
     void createMirrorScene(const bool moved){
         createMirrorBackdrop();
         const f32 shift = moved ? 0.9f : 0.0f;
-        // Both marker spheres are behind the camera. Reflecting them through z=0 gives virtual images at z=+8.
+        // Marker spheres behind the camera reflect through z=0 to virtual images at z=+8.
         const SIMDVectorSingle markerX = VectorAdd(VectorSet(-1.6f, 1.6f, 0.0f, 0.0f), VectorReplicate(shift));
         const auto red = createMesh(s_SphereMesh, s_OpaqueMaterial, Float4(1.0f, 0.01f, 0.01f, 1.0f), Float4(VectorGetX(markerX), 1.0f, -8.0f, 0.0f), Float4(0.65f, 0.65f, 0.65f, 0.0f));
         const auto green = createMesh(s_SphereMesh, s_OpaqueMaterial, Float4(0.01f, 1.0f, 0.01f, 1.0f), Float4(VectorGetY(markerX), 2.0f, -8.0f, 0.0f), Float4(0.65f, 0.65f, 0.65f, 0.0f));
@@ -644,9 +641,7 @@ private:
         createMirrorBackdrop();
         const f32 redX = moved ? -1.45f : -1.7f;
         const f32 greenX = boundary ? 3.0f : (moved ? 1.45f : 1.7f);
-        // Rays approach these two-sided markers from the back.
-        // Screen hits are provisional; hybrid must resolve the ambiguity.
-        // Direct images are three times larger than their virtual images at z=+3, and occupy separate screen regions.
+        // Hybrid reflection resolves provisional screen hits against virtual images at z=+3.
         createPanel(s_OpaqueMaterial, Float4(1.0f, 0.01f, 0.01f, 1.0f), Float4(redX, 1.0f, -3.0f, 0.0f), Float4(0.3f, 1.0f, 0.25f, 0.0f));
         createPanel(s_OpaqueMaterial, Float4(0.01f, 1.0f, 0.01f, 1.0f), Float4(greenX, 2.0f, -3.0f, 0.0f), Float4(0.3f, 1.0f, 0.35f, 0.0f));
     }
@@ -655,7 +650,7 @@ private:
         createPanel(s_OpaqueMaterial, Float4(0.12f, 0.12f, 0.12f, 1.0f), Float4(0.0f, 1.4f, 5.0f, 0.0f), Float4(6.0f, 1.0f, 4.5f, 0.0f));
         const auto floor = createMesh(s_PlaneMesh, s_OpaqueMaterial, Float4(0.008f, 0.008f, 0.008f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(4.0f, 1.0f, 4.0f, 0.0f), 0.95f);
         NWB_FATAL_ASSERT_MSG(floor.valid(), NWB_TEXT("ReflectionSmokeProject: floor mirror creation failed"));
-        // Camera and reflected rays both approach the marker fronts. Reflection through y=0 moves their virtual centers to y=-2.
+        // Reflection through y=0 places virtual marker centers at y=-2.
         createPanel(s_OpaqueMaterial, Float4(1.0f, 0.01f, 0.01f, 1.0f), Float4(-1.7f, 2.0f, 3.0f, 0.0f), Float4(0.3f, 1.0f, 0.25f, 0.0f));
         createPanel(s_OpaqueMaterial, Float4(0.01f, 1.0f, 0.01f, 1.0f), Float4(1.7f, 2.0f, 3.0f, 0.0f), Float4(0.3f, 1.0f, 0.35f, 0.0f));
     }

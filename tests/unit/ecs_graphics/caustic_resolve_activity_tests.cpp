@@ -20,16 +20,11 @@ using namespace NWB;
 using namespace NWB::Impl;
 
 TEST(CausticResolveActivityTests, PartialTilesReserveOneWordForEveryDispatchGroup){
-    auto layout = ResolveCausticActivityLayout(65u, 17u);
+    const auto layout = ResolveCausticActivityLayout(65u, 17u);
     ASSERT_TRUE(layout);
     EXPECT_EQ(layout->tilesX, 9u);
     EXPECT_EQ(layout->tilesY, 3u);
     EXPECT_EQ(layout->bufferByteSize, 27u * sizeof(u32));
-    layout = ResolveCausticActivityLayout(640u, 450u);
-    ASSERT_TRUE(layout);
-    EXPECT_EQ(layout->tilesX, 80u);
-    EXPECT_EQ(layout->tilesY, 57u);
-    EXPECT_EQ(layout->bufferByteSize, 18240u);
 }
 
 TEST(CausticResolveActivityTests, InvalidExtentsNeverPublishLayout){

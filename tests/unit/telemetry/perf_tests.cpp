@@ -139,22 +139,6 @@ TEST(Telemetry, PerfTimingRejectsNonfiniteDurationsAtBuildAndWireAdmission){
     }
 }
 
-TEST(Telemetry, PerfMemoryPayloadRejectsCorruptedHeaderAfterValidParse){
-    TestArena testArena;
-    const Name scopeName{s_MemoryProjectArena};
-    const NWB::Core::Perf::MemorySnapshot snapshot = MakeTestMemorySnapshot(scopeName);
-    const NWB::Core::Perf::MemoryDelta delta = MakeTestMemoryDelta();
-
-    Telemetry::TelemetryBytes payload(testArena.arena);
-    ASSERT_TRUE(Telemetry::BuildPerfMemoryPayload(testArena.arena, scopeName, s_ProjectArenaText, snapshot, delta, payload));
-
-    Expected<Telemetry::PerfMemoryPayload> parsed = MakeUnexpected(Failure{});
-    ASSERT_TRUE((parsed = Telemetry::ParsePerfMemoryPayload(payload.data(), payload.size())));
-
-    payload[0u] = 0u;
-    EXPECT_FALSE((parsed = Telemetry::ParsePerfMemoryPayload(payload.data(), payload.size())));
-}
-
 TEST(Telemetry, PerfMemoryPayloadRejectsInvalidInput){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);

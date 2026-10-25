@@ -43,8 +43,7 @@ LIT_MAIN = "__main__"
 
 class CombinedCausticTests(unittest.TestCase):
     def setUp(self):
-        # These small synthetic images isolate the broad toggle/ground checks.
-        # The mesh/radiometric oracle has separate full-resolution positive and deliberately missing-patch tests below.
+        # Small synthetic images for toggle and ground checks.
         isolate_exterior = patch.object(caustic, LIT_ANALYZE_EXTERIOR_REFLECTION, return_value={"isolated_in_test": True})
         isolate_exterior.start()
         self.addCleanup(isolate_exterior.stop)

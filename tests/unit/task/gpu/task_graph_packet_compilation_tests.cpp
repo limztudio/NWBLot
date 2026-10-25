@@ -401,8 +401,7 @@ TEST(GpuTaskGraph, DerivesRecordingReadyFrontiersFromStateSeedProducers){
     ASSERT_EQ(compiledPlan.packet(consumerPacket).plan->dependencyCount, s_ExpectedDualCount);
     const Graphics::GpuPacketDependency* const dependencies = compiledPlan.packet(consumerPacket).dependencies;
     ASSERT_NE(dependencies, nullptr);
-    // The state seed projects producerPacket a second time after both scheduling dependencies.
-    // Deduplication retains the original scheduling order rather than moving that producer to the end.
+    // Deduplicating a state-seed dependency preserves the original scheduling order.
     EXPECT_EQ(dependencies[0u].producer, producerPacket);
     EXPECT_EQ(dependencies[1u].producer, orderingProducerPacket);
     ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);

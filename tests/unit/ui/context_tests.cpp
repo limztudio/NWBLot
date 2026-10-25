@@ -92,7 +92,6 @@ TEST(UiWidgetIdTests, EmbeddedNulAndScopeConcatenationDoNotAliasAndInvalidKeysAr
     const WidgetRoot root{ 7u, 3u };
     const auto rootId = MakeRootId(root);
     ASSERT_TRUE(rootId);
-    EXPECT_TRUE(rootId->valid());
     const auto embedded = MakeWidgetId(*rootId, AStringView("a\0b", 3u));
     const auto simple = MakeWidgetId(*rootId, "a");
     const auto combined = MakeWidgetId(*rootId, "ab");

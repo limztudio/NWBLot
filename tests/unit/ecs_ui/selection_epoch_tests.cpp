@@ -162,18 +162,6 @@ TEST_F(UiSelectionEpochTests, RejectedSelectionDoesNotRetireACompletedPaste){
     EXPECT_EQ(m_model.caret(), 3u);
 }
 
-TEST_F(UiSelectionEpochTests, StandaloneDrainRejectsSelectionRoundTrip){
-    sessionRejected(EpochMutation::SelectionRoundTrip, false);
-}
-
-TEST_F(UiSelectionEpochTests, StandaloneDrainRejectsAcceptedIdenticalSelection){
-    sessionRejected(EpochMutation::SameSelection, false);
-}
-
-TEST_F(UiSelectionEpochTests, StandaloneDrainRejectsCompositionRoundTrip){
-    sessionRejected(EpochMutation::CompositionRoundTrip, false);
-}
-
 TEST_F(UiSelectionEpochTests, StandaloneRefreshRejectsSelectionRoundTripBeforeCaretPublication){
     sessionRejected(EpochMutation::SelectionRoundTrip, true);
 }

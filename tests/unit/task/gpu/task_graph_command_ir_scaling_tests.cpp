@@ -165,7 +165,7 @@ TEST(GpuCommandIrCapture, RejectedAppendsPreserveBytesAndGenerationUntilRollback
     EXPECT_TRUE(Graphics::ValidateGpuCommandIrStream(capture.commandBytes()).valid());
 }
 
-// CPU-only capture/rollback/reset workloads; opt in explicitly after correctness tests pass.
+// Opt-in scaling benchmark for command IR capture, rollback, and reset.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

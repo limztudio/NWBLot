@@ -51,7 +51,7 @@ constexpr AStringView s_OpticalInterface = "project/shaders/reflection_optical";
 constexpr Name s_DuplicateOpticalGroup("project/smoke/refraction/gallery_duplicate_volume");
 constexpr f32 s_GalleryCameraDistance = 6.f;
 constexpr f32 s_IdentityForeignFront = -0.0005f;
-// The near plane lies strictly between the foreign entry and the primary z=0 entry; ray queries still start at the camera.
+// Place the near plane between the foreign entry and the primary z=0 entry.
 constexpr f32 s_IdentityNearPlane = s_GalleryCameraDistance - 0.00025f;
 // Camera, objects and backdrop share this height.
 constexpr f32 s_GalleryCenterHeight = 1.4f;

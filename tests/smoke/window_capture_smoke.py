@@ -13,7 +13,7 @@ import tempfile
 import threading
 import time
 from window_capture_outcome import SmokeSkip, WindowsDesktopUnavailable, SmokeFailure, write_status  # noqa: E402
-from window_capture_image import TransparentCsgAnalysis, TextureSmokeAnalysis, write_bmp_24, capture_result_from_rgb_rows, write_capture_rows, read_bmp_24, read_bmp_24_rows, validate_surfel_coverage_probe, analyze_rgb_rows, transparent_csg_regions, analyze_transparent_csg_rows, analyze_texture_smoke_rows, estimate_background_rgb, count_foreground_pixels_in_region, ximage_rgb_rows, bgra_rgb_rows  # noqa: E402
+from window_capture_image import TRANSPARENT_CSG_REGIONS, TransparentCsgAnalysis, TextureSmokeAnalysis, write_bmp_24, capture_result_from_rgb_rows, write_capture_rows, read_bmp_24, read_bmp_24_rows, validate_surfel_coverage_probe, analyze_rgb_rows, transparent_csg_regions, analyze_transparent_csg_rows, analyze_texture_smoke_rows, estimate_background_rgb, count_foreground_pixels_in_region, ximage_rgb_rows, bgra_rgb_rows  # noqa: E402
 from window_capture_x11 import LinuxXImageFuncs, LinuxXImage, LinuxXEvent, LinuxX11Capture  # noqa: E402
 from window_capture_win32 import bind_windows_user32, create_windows_user32, WinRect, WinPoint, WindowsUserObjectFlags, require_windows_interactive_desktop, WindowsCapture  # noqa: E402
 from window_capture_logs import choose_free_port, wait_for_tcp_port, snapshot_log_files, collect_log_delta, standalone_log_pattern, wait_for_log_message, wait_for_log_drain  # noqa: E402
@@ -70,15 +70,6 @@ RENDER_READY_TIMEOUT_SECONDS = 10.0
 WINDOWS_ENUM_CALLBACK = getattr(ctypes, "WINFUNCTYPE", ctypes.CFUNCTYPE)(ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p,)
 
 
-# CSG pose names match the fixture's frozen yaw values 0, 1, and 2 radians.
-# Coordinates are offsets from image center, measured in image heights so the vertical-FOV projection remains valid at different aspect ratios.
-# These inset rectangles come from the projected radius-.468 octahedron at camera distance2.2/FOV60 and its retained local-y<=0 pyramid, after Ry(yaw)*Ry(yaw)*Rx(.32*yaw)*Rz(.16*yaw).
-# Each cut rectangle lies inside the uncut silhouette and outside the retained pyramid; each retained rectangle lies inside that pyramid.
-# Geometry-based synthetic tests protect those margins.
-# The late retained wedge is above/right of center because the cutter rotates with the receiver.
-TRANSPARENT_CSG_REGIONS = { "early": ((-.030, -.125, .030, -.065), (-.030, .065, .030, .125)), "mid": ((.025, -.125, .065, -.080), (-.065, .110, -.025, .140)), "late": ((-.055, -.128, -.025, -.104), (.045, -.075, .080, -.050)), }
-
-
 def run_smoke_main(argv, parse_args, run, *, default_timeout=None, self_test=None, output_stream=None, failure_types=(SmokeFailure, OSError, ValueError, TimeoutError)):
     """Apply common smoke CLI timeout and exit-status handling."""
     if default_timeout is not None and not any(argument == LIT_TIMEOUT or argument.startswith("--timeout=") for argument in argv):
@@ -113,7 +104,7 @@ WM_CLOSE_MESSAGE = 0x0010
 
 
 def request_windows_graceful_exit(pid):
-    # WM_CLOSE runs normal shutdown and writes name-symbol sidecars; forced termination skips it.
+    # Send WM_CLOSE so normal shutdown writes Name sidecars.
     user32 = create_windows_user32()
     wm_close = WM_CLOSE_MESSAGE
     targets = []
@@ -200,7 +191,7 @@ def terminate_process(process, name, window_handle=None):
     tail = ""
     try:
         if process.poll() is None:
-            # Graceful exit writes Name-symbol sidecars; forced termination can skip the normal exit path.
+            # Close the X11 window gracefully so shutdown writes Name sidecars.
             host_platform = platform.system()
             if host_platform == LIT_WINDOWS:
                 try:

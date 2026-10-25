@@ -69,7 +69,7 @@ static void SetOccupied(ProbeCase& probe, const u32 slice)noexcept{
 }
 
 static void PoisonUnusedCoverage(ProbeCase& probe)noexcept{
-    // Invalid bits are deliberately occupied; partial last words must not contribute a coarse bin.
+    // Occupied invalid tail bits must not add a coarse bin.
     for(u32 slice = probe.virtualCount; slice < s_CoverageWords * 32u; ++slice)
         probe.coverage[slice / 32u] |= 1u << (slice % 32u);
 }

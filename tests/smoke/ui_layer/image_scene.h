@@ -27,7 +27,7 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// RefCounter derives from this scene; image declarations retain copied region, size and tint inputs.
+// Scene fixture for passive image region, size, and tint declarations.
 class UiImageSmokeScene : public Core::IInputEventHandler, NoCopy{
 public:
     explicit UiImageSmokeScene(Core::InputDispatcher& input);

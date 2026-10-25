@@ -94,7 +94,7 @@ NWB_NOINLINE bool NWB_SIMD_CALL Baseline(const SIMDVectorDouble a0, const SIMDVe
         const auto projectionInterval = [&](const SIMDVectorDouble relative, const SIMDVectorDouble roundoff)noexcept{
             const SIMDVectorDouble projection = BaselineDot3(relative, axis);
             const SIMDVectorDouble magnitude = BaselineDot3(VectorDoubleAbs(relative), absoluteAxis), coordinateError = BaselineDot3(VectorDoubleAbs(roundoff), absoluteAxis);
-            // Three products and two additions need an absolute cancellation bound; eight epsilons also cover rounding the bound and endpoints.
+            // Eight epsilons bound cancellation and endpoint rounding across three products and two sums.
             const SIMDVectorDouble allowance = VectorDoubleMultiplyAddExpression(VectorDoubleAdd(magnitude, coordinateError), VectorDoubleReplicate(0x1p-49), coordinateError);
             return VectorDoubleSelect(VectorDoubleSubtract(projection, allowance), VectorDoubleAdd(projection, allowance), s_DoubleSIMDMaskY);
         };
@@ -370,7 +370,7 @@ static void StoreTrianglePair(const TrianglePairVectors& vectors, TrianglePair& 
 
 static void Fill(const u32 kind, TrianglePair (&pairs)[s_FixtureCount])noexcept{
     for(u32 index = 0u; index < s_FixtureCount; ++index){
-        // index * -0.25 has the same bits as -(index * 0.25).
+        // Multiply by -0.25 to match the negated product bits.
         const SIMDVectorDouble translation = VectorDoubleMultiply(VectorDoubleReplicate(static_cast<f64>(index)), VectorDoubleSet(0.25, -0.25, 0.25, 0.0));
         TrianglePairVectors pair;
         if(kind == 0u){

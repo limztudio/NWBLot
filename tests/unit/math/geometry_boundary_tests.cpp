@@ -32,7 +32,7 @@ TEST(MathGeometryBoundaries, TriangleAreaRejectsExactThreshold){
     EXPECT_FALSE(::TriangleHasArea(LoadFloat(a), LoadFloat(b), LoadFloat(c), 144.0));
 }
 
-// Binary32 subtraction collapses this nondegenerate triangle to a line; promotion must happen before subtracting its origin.
+// Promote vertices to binary64 before subtracting the origin.
 TEST(MathGeometryBoundaries, TriangleAreaPromotesBeforeCancellingLargeEdges){
     const SIMDVectorSingle a = VectorSet(33554432.0f, 0.0f, 0.0f, 0.0f);
     const SIMDVectorSingle b = VectorSet(1.0f, 1.0f, 0.0f, 0.0f);
@@ -52,7 +52,7 @@ TEST(MathGeometryBoundaries, TriangleAreaIgnoresNonfiniteInactiveCoordinates){
     EXPECT_FALSE(::TriangleHasArea(a, b, c, 144.0));
 }
 
-// The small squared components round away separately but survive their sum; retain the existing backend's strict area threshold.
+// Small squared cross-product terms survive when summed before the area threshold check.
 TEST(MathGeometryBoundaries, TriangleAreaPreservesSquaredSumOrderAtThreshold){
     const SIMDVectorSingle a = VectorZero();
     const SIMDVectorSingle b = VectorSet(1.0f, 0.0f, -1.0f, 0.0f);

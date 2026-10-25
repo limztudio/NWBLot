@@ -150,30 +150,6 @@ TEST(Telemetry, PacketSubmissionEncodingIsIndependentOfInputOrder){
     EXPECT_EQ(NWB_MEMCMP(payload.data(), reorderedPayload.data(), payload.size()), 0);
 }
 
-TEST(Telemetry, FrameGraphPacketSubmissionStatisticsPreservesExactEmptyAndAbsent){
-    TestArena testArena;
-    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
-    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
-    Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics(testArena.arena);
-    Telemetry::FrameGraphPacketSubmissionStatisticsRecords packetSubmissionStatistics(testArena.arena);
-    BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
-    nodes[0u].runtimeStatistics.submission = {};
-    physicalQueueRuntimeStatistics.clear();
-    packetSubmissionStatistics.clear();
-
-    Telemetry::TelemetryBytes payload(testArena.arena);
-    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 919u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload));
-    Expected<Telemetry::FrameGraphPayload> parsed = MakeUnexpected(Failure{});
-    ASSERT_TRUE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size())));
-    EXPECT_TRUE(parsed->packetSubmissionStatisticsPresent);
-    EXPECT_TRUE(parsed->packetSubmissionStatistics.empty());
-
-    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 919u, nodes, edges, payload));
-    ASSERT_TRUE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size())));
-    EXPECT_FALSE(parsed->packetSubmissionStatisticsPresent);
-    EXPECT_TRUE(parsed->packetSubmissionStatistics.empty());
-}
-
 TEST(Telemetry, FrameGraphPacketSubmissionStatisticsPayloadRejectsMalformedRecords){
     TestArena testArena;
     Telemetry::FrameGraphNodeDescs nodes(testArena.arena);

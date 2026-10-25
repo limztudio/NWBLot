@@ -71,7 +71,7 @@ public:
 
 [[nodiscard]] constexpr u8 PatternByte(usize index)noexcept{ return static_cast<u8>((index * 37u + (index >> 8u) * 13u + 11u) & 0xFFu); }
 
-// This candidate changes the internal AVX packet alignment choice; admission, cache policy, CRT threshold, and exact tails match the public operation.
+// Candidate changes only the internal AVX alignment choice.
 NWB_INLINE void CandidateCopy(void* destination, usize capacity, const void* source, usize count)noexcept{
 #if defined(NWB_HAS_AVX)
     if(count == 0u)
@@ -147,7 +147,7 @@ NWB_INLINE bool CandidateEqual(const NotNull<const u64*> lhs, const NotNull<cons
     const __m256i right = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(rhs.get()));
     const __m256 difference = _mm256_xor_ps(_mm256_castsi256_ps(left), _mm256_castsi256_ps(right));
     const __m256i bits = _mm256_castps_si256(difference);
-    // Integer VPTEST covers every bit; floating VTESTPS only examines sign bits.
+    // Use integer VPTEST to check every bit rather than sign-only VTESTPS.
     return _mm256_testz_si256(bits, bits) != 0;
 #else
     return MathTypeDetail::EqualElements<u64, 4u>(lhs, rhs);

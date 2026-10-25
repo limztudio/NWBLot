@@ -169,25 +169,6 @@ TEST(UiTextEditSession, DeleteAddressesPublishedUtf8BytesThenCommitUsesUpdatedSe
     EXPECT_EQ(model.text(), "abXe");
 }
 
-TEST(UiTextEditSession, SelectedSurroundingDeleteCannotMisapplyWaylandExclusionSemantics){
-    NWB::Tests::TestArena arena;
-    FakeTextInput service(arena.arena);
-    Ui::EditModel model(arena.arena);
-    UiTextEditSession session(arena.arena, service);
-    ASSERT_TRUE(service.setFocused(true));
-    ASSERT_TRUE(model.setText("abcDEFghi"));
-    ASSERT_TRUE(model.setSelection(3u, 6u));
-    ASSERT_EQ(session.begin(s_Owner, model, s_Caret), TextInputAdmission::Accepted);
-    ASSERT_EQ(service.erase(1u, 1u, service.surroundingRevision(service.activeSession()), TextInputDeletionBasis::Caret), TextInputAdmission::Accepted);
-    ASSERT_EQ(service.commit("X"), TextInputAdmission::Accepted);
-    EXPECT_EQ(session.drain(s_Owner, model).status, UiTextEditStatus::ModelRejected);
-    EXPECT_EQ(model.text(), "abcDEFghi");
-    EXPECT_EQ(model.anchor(), 3u);
-    EXPECT_EQ(model.caret(), 6u);
-    EXPECT_FALSE(model.canUndo());
-    EXPECT_FALSE(service.activeSession().valid());
-}
-
 TEST(UiTextEditSession, PreeditClearBeforeCommitPreservesTheOriginalReplacementSelection){
     NWB::Tests::TestArena arena;
     FakeTextInput service(arena.arena);

@@ -19,7 +19,7 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateOptions(const BakeOptions& options, Core::Alloc::ScratchArena& scratch){
+bool ValidateOptions(const BakeOptions& options){
     constexpr u32 s_MinExtent = 32u;
     if(
         options.ppem < Impl::s_FontAtlasMinBakePpem
@@ -37,7 +37,6 @@ bool ValidateOptions(const BakeOptions& options, Core::Alloc::ScratchArena& scra
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: invalid options; ppem16..256, spread2..32, extent32..2048, groups1..8, total capacity<=128MiB"));
         return false;
     }
-    static_cast<void>(scratch);
     if(options.output.extensionView() != NWB_TEXT(".nwb")){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: --output must name a .nwb font asset bunch"));
         return false;

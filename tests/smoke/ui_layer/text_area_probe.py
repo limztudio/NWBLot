@@ -116,7 +116,7 @@ def observe_text_area(frame, snapshot, expected, *, skin="default", extent=None,
     geometry_matches &= all(0.0 <= offset <= maximum + 0.05 for offset, maximum in zip(snapshot[LIT_SCROLL], snapshot[LIT_MAXIMUM]))
     enabled, focused = bool(snapshot["enabled"]), bool(snapshot["focus"])
     background = (29, 33, 40) if not enabled else (18, 26, 37) if focused else (15, 20, 28)
-    # The compressed rounded corner contains border colors; sample the uniform fill as the single-line edit probes do.
+    # Sample interior fill away from the rounded border corners.
     probe("edit_atlas", (bx + bw - 16.0, by + bh - 6.0), background, 5 if focused else 8)
     probe("horizontal_clip_gutter", (bx + bw + 4.0, by + bh / 2.0), panel, 8)
     thumb_color = ((49, 100, 63) if skin == LIT_ALTERNATE else (45, 60, 80)) if enabled else \
@@ -186,8 +186,7 @@ def observe_text_area(frame, snapshot, expected, *, skin="default", extent=None,
             if right - left < 4.0 or bottom - top < 4.0:
                 continue
             visible_selections += 1
-            # A clipped first/last line can end inside its glyphs.
-            # Find a solid selected patch inside this line's clipped rectangle, retaining the exact blend gate.
+            # Find a glyph-free selected patch inside the clipped line rectangle.
             pixel_left = max(1, math.ceil(left * scale_x) + 1)
             pixel_right = min(width - 2, math.floor(min(right, left + 72.0) * scale_x) - 1)
             pixel_top = max(1, math.ceil(top * scale_y) + 1)

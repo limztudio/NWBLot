@@ -17,8 +17,7 @@ namespace __hidden_output_layer_color_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Compile the production shader helper unchanged against a binary64 implementation of its vector intrinsics.
-// These tests exercise its actual transfer/mapping functions without duplicating the color equations in C++.
+// Compile the production Slang color helpers against C++ vector types.
 struct ShaderFloat3{
     f64 x;
     f64 y;
@@ -52,7 +51,7 @@ using float3 = ShaderFloat3;
     return { VectorDoubleGetX(quotient), VectorDoubleGetY(quotient), VectorDoubleGetZ(quotient) };
 }
 
-// Keep the scalar sum order: (x + y) + z.
+// Sum lanes in scalar left-to-right order.
 [[nodiscard]] f64 dot(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
     const SIMDVectorDouble partial = VectorDoubleMultiplyAddExpression(VectorDoubleReplicate(a.x), VectorDoubleReplicate(b.x), VectorDoubleMultiply(VectorDoubleReplicate(a.y), VectorDoubleReplicate(b.y)));
     return VectorDoubleGetX(VectorDoubleMultiplyAddExpression(VectorDoubleReplicate(a.z), VectorDoubleReplicate(b.z), partial));

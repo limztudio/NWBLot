@@ -59,7 +59,7 @@ function(nwb_require_no_match text pattern failure_message)
 endfunction()
 
 function(nwb_require_crlf_text_file path label)
-    # file(READ) normalizes line endings in a CMake string on some hosts, so inspect raw bytes instead.
+    # Read hex bytes because CMake string reads can normalize line endings.
     file(READ "${path}" text_hex HEX)
     string(FIND "${text_hex}" "0d0a" crlf_offset)
     if(crlf_offset EQUAL -1)

@@ -60,7 +60,7 @@ public:
 
 
 public:
-    // Registration follows the actual renderer; stop releases its optional borrow before world destruction.
+    // Release the borrowed renderer pointer before world destruction.
     [[nodiscard]] bool start(Impl::RendererSystem& renderer, AStringView path);
     void stop();
     [[nodiscard]] bool write()const;

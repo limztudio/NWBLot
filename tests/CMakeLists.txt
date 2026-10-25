@@ -10,7 +10,7 @@ endfunction()
 
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
-# Harnesses exit with this code when the host cannot run a test; window_capture_smoke.py SKIP_EXIT_CODE matches it.
+# Match SKIP_EXIT_CODE in window_capture_smoke.py when a host cannot run a test.
 set(NWB_TEST_SKIP_RETURN_CODE 77)
 # Tests that own the desktop or the foreground window take this lock so they never run together.
 set(NWB_TEST_DISPLAY_RESOURCE_LOCK nwb_display)

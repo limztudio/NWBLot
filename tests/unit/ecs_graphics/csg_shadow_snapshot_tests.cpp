@@ -406,7 +406,7 @@ TEST(CsgShadowSnapshot, BoundedCaptureReuseAllowsOnlyTransformLagAndRefreshesWit
         for(u32 frame = 0u; frame < 7u; ++frame){
             const SIMDVectorSingle shift = VectorScale(VectorReplicate(static_cast<f32>(frame)), 0.25f);
             const f32 x = VectorGetX(shift);
-            // Only lane X moves back; the other lanes stay +0.
+            // Move only lane X.
             const SIMDMatrix inverseShift = MatrixTranslationFromVector(VectorAndInt(VectorNegate(shift), s_SIMDMaskX));
             StoreFloat(MatrixTranslation(x, 0.f, 0.f), cutter->shapeToWorld);
             StoreFloat(inverseShift, cutter->worldToShape);

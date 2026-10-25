@@ -76,7 +76,7 @@ def validate_runtime(log_text, case, route, frames, warning_policy=LIT_ENABLED):
         message = "\n".join(lines[start + 1:end]).strip("\n")
         if message != OPEN_CAPACITY_MESSAGE:
             raise SmokeFailure("terminal65 requires the complete exact open-capacity flags=16 warning message")
-        # Remove only this admitted severity/message record; detached text never waives another diagnostic.
+        # Waive only this exact severity and message pair.
         remaining = "\n".join(lines[:start] + lines[end:])
     elif warning_indices:
         raise SmokeFailure(f"{case}: valid open shadow emitted a warning")

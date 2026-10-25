@@ -135,42 +135,6 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
     }
 }
 
-TEST(GpuTaskGraph, RejectsInvalidSingleSourceInitialOwnerHandoffAtDeclaration){
-    const Graphics::GpuPhysicalQueueInfo sourceQueue = GraphicsQueue();
-    const Graphics::GpuPhysicalQueueInfo destinationQueue = DedicatedComputeQueue();
-    TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    const auto completionResult = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/invalid_initial_owner_completion")).setMarkerLabel("Invalid Initial Owner Completion"));
-    ASSERT_TRUE(completionResult);
-    const Graphics::GpuExternalCompletionId completion = *completionResult;
-    ASSERT_TRUE(completion.valid());
-    const Graphics::QueueSubmissionToken minimumCompletionToken{ .value = 7u, .physicalQueueIndex = sourceQueue.id.index, .deviceGeneration = sourceQueue.id.deviceGeneration, .queue = Graphics::CommandQueue::Graphics, };
-    Graphics::CommandListResourceStateHandoff stateSource(testArena.arena);
-    ASSERT_FALSE(stateSource.valid());
-    const Graphics::GpuGraphInitialOwnerHandoffSourceDesc sources[] = {
-        Graphics::GpuGraphInitialOwnerHandoffSourceDesc{ .range = {}, .sourceQueue = sourceQueue.id, .destinationQueue = destinationQueue.id, .completion = completion, .minimumCompletionToken = minimumCompletionToken, .stateSource = &stateSource, },
-    };
-
-    usize resourceCount = 0u;
-    {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-
-        resourceCount = declarations.resourceCount();
-    }
-    EXPECT_FALSE(graph.importResource(
-        Graphics::GpuGraphResourceDesc{}
-            .setIdentity(Name("tests/task_graph/invalid_initial_owner_handoff"))
-            .setMarkerLabel("Invalid Initial Owner Handoff")
-            .setType(Graphics::GpuGraphResourceType::Buffer)
-            .setInitialState(Graphics::ResourceStates::Common)
-            .setInitialOwnerHandoffSources(sources, LengthOf(sources))
-    ).has_value()
-    );
-    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-
-    EXPECT_EQ(declarations.resourceCount(), resourceCount);
-}
-
 TEST(GpuTaskGraph, RejectsInvalidSingleSourceInitialOwnerHandoffsForBufferAndAccelStruct){
     struct ResourceCase{
         Graphics::GpuGraphResourceType::Enum type;

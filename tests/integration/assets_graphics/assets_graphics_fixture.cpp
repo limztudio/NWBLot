@@ -131,8 +131,7 @@ AssetsGraphicsFixture::Path AssetsGraphicsFixture::AssetsGraphicsTestRepoRoot(As
 
 
 AssetsGraphicsFixture::Path AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(AssetsGraphicsFixture::TestArena& testArena, const AStringView caseName){
-    // Object-cache paths append a wide asset-type hash and cache key.
-    // This target is RUN_SERIAL and each cook fixture clears its root, so retain fixture isolation through a compact config-plus-case key that keeps every generated Windows path below MAX_PATH.
+    // Use a short config-and-case key so object-cache paths stay below Windows MAX_PATH.
     AString caseKey;
     caseKey.reserve(1u + s_HexU32DigitCount);
     caseKey += AssetsGraphicsTestConfigurationName()[0u];
@@ -182,9 +181,7 @@ bool AssetsGraphicsFixture::BuildPreparedGraphicsAssetRoots(
         auto parentDirectoryName = PathToString(testArena.arena, assetRoot.lexicallyNormal().parentPath().filenameView());
         CanonicalizeTextInPlace(parentDirectoryName);
 
-        ACompactString virtualRoot;
-        if(!virtualRoot.assign(parentDirectoryName == __hidden_assets_graphics_fixture::s_EngineDirectory ? NWB::Core::Assets::s_EngineVirtualRoot : NWB::Core::Assets::s_ProjectVirtualRoot))
-            return false;
+        const AStringView virtualRoot = parentDirectoryName == __hidden_assets_graphics_fixture::s_EngineDirectory ? NWB::Core::Assets::s_EngineVirtualRoot : NWB::Core::Assets::s_ProjectVirtualRoot;
 
         auto assetRootText = PathToString(testArena.arena, assetRoot);
         options.assetRoots.emplace_back(testArena.arena, AStringView(assetRootText.data(), assetRootText.size()), virtualRoot);

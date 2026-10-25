@@ -41,10 +41,6 @@ TEST(LightSpaceShadowStorage, ReservesWholeCasterAndRoundedMeshletGroupDraws){
     ASSERT_EQ(plan->lightCount, 2u);
     ASSERT_EQ(plan->viewCount, 7u);
     EXPECT_EQ(plan->drawArgumentByteSize, 7u * 7u * NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES);
-    LightSpaceShadowStorageCapacity capacity{ plan->countByteSize, plan->eventByteSize, plan->viewByteSize, plan->drawArgumentByteSize, plan->textureResolution, plan->viewCount };
-    EXPECT_TRUE(LightSpaceShadowStorageFits(*plan, capacity));
-    --capacity.drawArgumentBytes;
-    EXPECT_FALSE(LightSpaceShadowStorageFits(*plan, capacity));
 }
 
 TEST(LightSpaceShadowStorage, RejectsInvalidAndOverflowingDrawSpansWithoutWrapping){

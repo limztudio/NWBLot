@@ -335,7 +335,7 @@ def evaluate_runs(args: argparse.Namespace, healthy: RunResult, baseline: RunRes
         threshold = args.maximum_transparent_frame_regression_percent
         gates.append(gate(LIT_OPTIONAL_HARDWARE_TRANSPARENT_FRAME_BU, frame_delta_percent <= threshold, f"healthy {healthy_frame.median_ms:.4f} ms, baseline {baseline_frame.median_ms:.4f} ms, " f"delta {frame_delta_percent:+.3f}% (limit +{threshold:.3f}%)",))
 
-    # Too few positive intervals make timing comparisons untrustworthy; functional gate failures still fail.
+    # Functional failures still fail when positive timing intervals are too few.
     if healthy_semantics_passed and baseline_semantics_passed and runtime_logs_passed and not intervals_passed:
         verdict = LIT_INCONCLUSIVE
     else:

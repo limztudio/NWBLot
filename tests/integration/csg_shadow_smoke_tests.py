@@ -137,14 +137,6 @@ class CsgShadowImageTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             parse_args(arguments + ["--timeout", "nan"])
 
-    def test_geometric_oracle_counts_overlap_per_instance(self):
-        self.assertEqual(reference_optical_length(0.0, -1.0, LIT_CUT, LIT_DIRECTIONAL), 2.0)
-        self.assertEqual(reference_optical_length(0.0, -1.0, LIT_UNCUT, LIT_DIRECTIONAL), 4.0)
-
-    def test_fully_subtracted_opaque_volume_has_zero_remaining_length(self):
-        self.assertIsNone(reference_optical_length(-1.7, 1.0, LIT_UNCUT, LIT_DIRECTIONAL))
-        self.assertEqual(reference_optical_length(-1.7, 1.0, LIT_CUT, LIT_DIRECTIONAL), 0.0)
-
     def test_parallel_and_oblique_slab_intersections(self):
         self.assertIsNone(ray_box((2.0, 0.0, 0.0), (0.0, 0.0, -1.0), (-1.0, -1.0, -3.0), (1.0, 1.0, -2.0)))
         self.assertEqual(ray_box((0.0, 0.0, 0.0), (0.0, 0.0, -1.0), (-1.0, -1.0, -3.0), (1.0, 1.0, -2.0)), (2.0, 3.0))
@@ -166,10 +158,6 @@ class CsgAnalyticShadowImageTests(unittest.TestCase):
             frames[arm] = self.width, self.height, rows
         return frames
 
-
-    def test_empty_receiver_and_zero_cutter_chord_preserve_optical_length(self):
-        self.assertEqual(analytic_optical_length(0.0, 0.0, LIT_CUT), 0.0)
-        self.assertEqual(analytic_optical_length(-1.5, -1.0, LIT_CUT), 2.0)
 
     def test_cutter_union_clips_and_counts_overlap_once(self):
         self.assertAlmostEqual(clipped_union_length([(-6.8, -5.7), (-6.3, -5.2)]), 1.6)

@@ -45,7 +45,7 @@ PROFILES: Mapping[str, BaselineProfile] = { "opaque-texture": BaselineProfile(ta
         target="nwb_caustic_sphere_smoke", runtime_directory=Path(LIT_TESTING) / LIT_SMOKE_RUNTIME, window_title="NWB Caustic Sphere Smoke", settle_seconds=0.75, frozen_environment={LIT_NWB_TRANSPARENT_MULTI_SPIN_ANGLE: LIT_N_0_6},
         description="Caustic accumulation baseline after the temporal warm-up.", capture_freeze_frame=360, capture_ready_log=LIT_TRANSPARENTMULTISMOKEPROJECT_RENDERER, fixed_delta_seconds=1.0 / 60.0,), "surfel-gi": BaselineProfile(
         target=LIT_NWB_GI_TEST_SMOKE, runtime_directory=Path(LIT_TESTING) / LIT_SKINNING_CULLING_BENCHMARK_RUNTIME, window_title=LIT_NWB_GI_TEST, settle_seconds=0.75,
-        # current-renderer-v1 pins the original open-box scene; the complex scene has its own profile.
+        # Keep the complex scene in its own profile.
         frozen_environment={}, description="Surfel-GI trace and resolve baseline.", capture_freeze_frame=360, capture_ready_log="GiTestSmokeProject: renderer baseline capture ready after", fixed_delta_seconds=1.0 / 60.0,), "surfel-gi-complex": BaselineProfile(
         target=LIT_NWB_GI_TEST_SMOKE, runtime_directory=Path(LIT_TESTING) / "gi_smoke_runtime", window_title=LIT_NWB_GI_TEST, settle_seconds=0.0, frozen_environment={ "NWB_GI_SMOKE_COMPLEX_SCENE": "1", "NWB_GI_SMOKE_MIN_SETTLE_SECONDS": "30",
         }, description="Closed, 20-body skylight scene for surfel-GI A/B readbacks after post-presentation warmup.", capture_freeze_frame=360,

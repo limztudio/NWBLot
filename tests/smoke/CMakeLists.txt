@@ -117,8 +117,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         endif()
     endfunction()
 
-    # Fixture-only material families stay out of the shared smoke catalog.
-    # Each fixture root supplies its own project.nwb and scenes/main.nwb alongside the shared smoke asset library.
+    # Cook the shared catalog and fixture-only materials together into a private root.
     function(nwb_add_fixture_smoke_assets TARGET_NAME FIXTURE_NAME RUNTIME_ROOT DESCRIPTION)
         set(_nwb_fixture_asset_root_args --asset-root "impl/assets" --asset-root "tests/smoke/assets")
         set(_nwb_fixture_input_patterns "${PROJECT_SOURCE_DIR}/impl/assets/*" "${CMAKE_CURRENT_LIST_DIR}/assets/*")
@@ -274,7 +273,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         nwb_add_fixture_smoke_assets(nwb_reflection_temporal_smoke_assets reflection_temporal "${_nwb_reflection_temporal_runtime_root}" "reflection temporal" reflection_temporal_assets)
         add_dependencies(nwb_reflection_smoke nwb_transparent_multi_smoke_assets nwb_reflection_temporal_smoke_assets)
 
-        # Opt-in profiling fixture. No performance acquisition runs as a default CTest.
+        # Opt-in profiling fixture excluded from default CTest runs.
         option(NWB_BUILD_RENDERER_GATHER_BENCHMARK "Build the fixed renderer CPU gathering benchmark" OFF)
         if(NWB_BUILD_RENDERER_GATHER_BENCHMARK)
             set(_nwb_gather_runtime_root "${CMAKE_BINARY_DIR}/Testing/gather_benchmark_runtime/$<CONFIG>")
@@ -658,8 +657,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             set_tests_properties(nwb_stress_presentation_timing_smoke PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} TIMEOUT ${_nwb_stress_presentation_timing_timeout_seconds} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE})
         endif()
 
-        # Hardware transparent shadows are compared against opaque-only hardware shadows.
-        # The test-owned A/B harness launches this same binary twice, selecting an opaque-only scene for its hardware baseline arm.
+        # The A/B harness runs this binary for both transparent and opaque-only shadow arms.
         nwb_declare_executable(nwb_hardware_shadow_boundary_healthy_benchmark)
         target_sources(nwb_hardware_shadow_boundary_healthy_benchmark PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
@@ -676,7 +674,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         nwb_configure_runtime_smoke_target(nwb_hardware_shadow_boundary_healthy_benchmark "${_nwb_skinning_culling_runtime_root}" nwb_ecs_model nwb_ecs_mesh_skinning)
         add_dependencies(nwb_hardware_shadow_boundary_healthy_benchmark nwb_skinning_culling_benchmark_assets)
 
-        # Both M4 arms share assets; the runner requires a distinct Compute queue for the async arm.
+        # Both M4 arms share assets while the async arm requires a dedicated Compute queue.
         nwb_declare_executable(nwb_async_shadow_m4_sync_benchmark)
         target_sources(nwb_async_shadow_m4_sync_benchmark PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/stress_frame_graph_snapshot.cpp"
@@ -729,12 +727,11 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             "${CMAKE_CURRENT_LIST_DIR}/shadow_timing_render_pass.cpp"
         )
         nwb_configure_runtime_smoke_target(nwb_soft_shadow_test_smoke "${_nwb_skinning_culling_runtime_root}" nwb_ecs_model nwb_ecs_mesh_skinning)
-        # NWB_SOFT_SHADOW_TEST_TIMING=1 selects timing materials that only this private runtime cooks; A/B shadow workloads run from it.
+        # Cook private timing materials for NWB_SOFT_SHADOW_TEST_TIMING=1 A/B runs.
         nwb_add_fixture_smoke_assets(nwb_soft_shadow_timing_smoke_assets soft_shadow_timing "${CMAKE_BINARY_DIR}/Testing/soft_shadow_timing_smoke_runtime/$<CONFIG>" "soft shadow timing" soft_shadow_timing_assets)
         add_dependencies(nwb_soft_shadow_test_smoke nwb_skinning_culling_benchmark_assets nwb_soft_shadow_timing_smoke_assets)
 
-        # The default surfel-GI smoke preserves the open-top box used by the pinned renderer baseline.
-        # A closed, 20-body skylight scene is available to opt-in A/B captures through NWB_GI_SMOKE_COMPLEX_SCENE.
+        # Default GI smoke uses the open-top box while NWB_GI_SMOKE_COMPLEX_SCENE selects the skylight maze.
         nwb_declare_executable(nwb_gi_test_smoke)
         target_compile_definitions(nwb_gi_test_smoke PRIVATE NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
         target_sources(nwb_gi_test_smoke PRIVATE
@@ -747,13 +744,12 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"
         )
         nwb_configure_runtime_smoke_target(nwb_gi_test_smoke "${_nwb_skinning_culling_runtime_root}" nwb_ecs_csg)
-        # The baseline scene keeps the shared catalog; coverage, complex, and CSG GI scenes need the private GI material families.
+        # Coverage, complex, and CSG GI scenes cook private GI material families.
         set(_nwb_gi_runtime_root "${CMAKE_BINARY_DIR}/Testing/gi_smoke_runtime/$<CONFIG>")
         nwb_add_fixture_smoke_assets(nwb_gi_smoke_assets gi "${_nwb_gi_runtime_root}" "GI" gi_assets)
         add_dependencies(nwb_gi_test_smoke nwb_skinning_culling_benchmark_assets nwb_gi_smoke_assets)
 
-        # Diagnostic material reads the resolved GI alpha on two perpendicular faces in the same spatial cell.
-        # Keep this opt-in fixture separate from the unchanged formal surfel-GI baseline scene.
+        # Separate opt-in fixture for same-cell perpendicular face GI coverage.
         nwb_add_window_capture_smoke(nwb_gi_coverage_probe_capture_smoke gi_coverage_probe_capture.bmp "$<TARGET_FILE:nwb_gi_test_smoke>" "${_nwb_gi_runtime_root}" "NWB GI Test" "--settle-seconds" "${_nwb_gi_coverage_probe_settle_seconds}"
             "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>" "--timeout" "${_nwb_gi_coverage_probe_script_timeout_seconds}" "--expect-log-message" "GiTestSmokeProject: coverage probe with perpendicular same-cell faces created" "--expect-log-message" "GiTestSmokeProject: shutdown"
             "--expect-surfel-coverage-probe")

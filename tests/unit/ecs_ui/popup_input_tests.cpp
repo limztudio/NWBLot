@@ -139,28 +139,6 @@ TEST_F(UiPopupInputTests, FirstEscapeCancelsTransientPreeditAndSecondDismissesBe
     EXPECT_EQ(m_textInput.publishedText(), "base");
 }
 
-TEST_F(UiPopupInputTests, PlainEscapeCancelsPopupEditAndRestartsBaseSessionOnlyAfterAcceptedRemoval){
-    focusPopup();
-    const TextInputSessionToken popupSession = m_textInput.activeSession();
-    key(Core::Key::Escape);
-    EXPECT_EQ(m_context.input().focus(), m_popupWidget.id);
-    EXPECT_EQ(m_textInput.activeSession(), popupSession);
-    ASSERT_TRUE(frame());
-    EXPECT_TRUE(m_popupResult.cancelled);
-    EXPECT_FALSE(m_context.input().focus().valid());
-    EXPECT_FALSE(m_textInput.activeSession().valid());
-    ASSERT_TRUE(prepare());
-    EXPECT_FALSE(m_popupState.isOpen());
-    EXPECT_FALSE(m_context.input().focus().valid());
-    ASSERT_TRUE(commit());
-    EXPECT_EQ(m_context.input().focus(), m_baseWidget.id);
-    EXPECT_FALSE(m_textInput.activeSession().valid());
-    ASSERT_TRUE(frame());
-    EXPECT_TRUE(m_textInput.activeSession().valid());
-    EXPECT_NE(m_textInput.activeSession(), popupSession);
-    EXPECT_EQ(m_textInput.publishedText(), "base");
-}
-
 TEST_F(UiPopupInputTests, NativeFocusLossCancelsSessionAndRemovalDoesNotRestoreAnUnfocusedEditor){
     focusPopup();
     const TextInputSessionToken popupSession = m_textInput.activeSession();

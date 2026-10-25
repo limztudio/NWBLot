@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # limztudio@gmail.com
-# Only Names reached by workloads are captured. GUI captures need a display; headless tools run directly.
+# Capture Name symbols reached by headless tools and GUI workloads.
 
 import argparse
 import glob
@@ -89,7 +89,7 @@ def resolve_cmake_command():
 
 
 def resolve_ctest_command():
-    # ctest shares CMake's directory; relative paths are evaluated from source-dir.
+    # Resolve relative paths from the source directory.
     cmake_command = resolve_cmake_command()
     if cmake_command == [CMAKE_DEFAULT]:
         return [CTEST_DEFAULT]

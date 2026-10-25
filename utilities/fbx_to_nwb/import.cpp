@@ -35,7 +35,7 @@ Expected<MeshBuildResult> BuildMesh(
     if(!estimatedTriangleCorners)
         return MakeUnexpected(Failure{});
 
-    const auto normalMode = ParseNormalModeText(options.normalMode, scratchArena);
+    const auto normalMode = ParseNormalModeText(options.normalMode);
     if(!normalMode){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: {}"), ConvertString(NormalModeErrorText(scratchArena)));
         return MakeUnexpected(Failure{});

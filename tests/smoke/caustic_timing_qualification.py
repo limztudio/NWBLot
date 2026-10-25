@@ -210,7 +210,7 @@ def receiver_pixels(width, height, distance):
             dx = (2 * (x + .5) / width - 1) * tangent * width / height
             if not POLICY[LIT_GROUND_X][0] + margin < dx * plane_t < POLICY[LIT_GROUND_X][1] - margin:
                 continue
-            # Sphere center and camera share x/y; roots parameterize direction (dx,dy,1), not a unit vector.
+            # Quadratic roots parameterize unnormalized ray direction.
             a = dx * dx + dy * dy + 1
             exclusion_radius = POLICY[LIT_SPHERE_RADIUS] + POLICY[LIT_SPHERE_EXCLUSION_MARGIN]
             discriminant = distance * distance - a * (distance * distance - exclusion_radius ** 2)

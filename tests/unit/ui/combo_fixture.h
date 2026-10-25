@@ -36,7 +36,7 @@ inline constexpr AStringView s_ComboRowsKey = "rows";
 inline constexpr AStringView s_ListRowsKey = "rows";
 
 
-// Keys remain stable through reorder and removal; the large source needs no row allocation.
+// Arithmetic combo source with stable keys across reorder and removal.
 class ComboSource : public IListDataSource{
 public:
     virtual ~ComboSource()noexcept override = default;

@@ -60,8 +60,7 @@ using SoftShadowMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Opaque and glass casters expose contact-to-distant penumbras under directional, point and spot lights.
-// NWB_SOFT_SHADOW_TEST_ANGLE and NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS control softness; NWB_SOFT_SHADOW_TEST_SPIN_ANGLE pins yaw for A/B captures.
+// Opaque and glass casters under directional, point, and spot soft shadows.
 static constexpr SoftShadowModelRef s_Model{"project/characters/body/model"};
 static constexpr SoftShadowMaterialRef s_OpaqueMaterial{"project/smoke/transparent_multi/materials/ground"};
 static constexpr SoftShadowMaterialRef s_TransparentMaterial{"project/smoke/transparent_multi/materials/shared"};
@@ -76,7 +75,7 @@ static constexpr f32 s_CameraDistance = 3.2f;
 static constexpr f32 s_CameraHeight = 1.5f;
 static constexpr f32 s_CameraPitch = 0.30f;
 
-// Directional sun rakes sideways (large yaw, moderate pitch): long high-contrast shadow, crisp at feet, soft far.
+// Low sun angle casts long shadows that soften with distance.
 static constexpr f32 s_DirectionalLightPitch = 0.65f;
 static constexpr f32 s_DirectionalLightYaw = 1.4f;
 static constexpr f32 s_DirectionalLightIntensity = 2.0f;
@@ -104,7 +103,7 @@ static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;
 
 class SoftShadowTestSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
-    // Angular radius is in radians; larger sources soften the penumbra.
+    // Directional light angular radius in radians.
     static f32 ConfiguredAngularRadius(){
         static const f32 s_Angle = [](){
             const auto parsed = ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_ANGLE");
@@ -116,7 +115,7 @@ private:
         return s_Angle;
     }
 
-    // Point/spot softness depends on source radius in world units and light distance: asin(radius / distance).
+    // Point and spot source radius in world units.
     static f32 ConfiguredSourceRadius(){
         static const f32 s_Radius = [](){
             const auto parsed = ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS");
@@ -142,7 +141,7 @@ public:
     {}
     virtual ~SoftShadowTestSmokeProject()noexcept override{
         m_timingRenderPass.stop();
-        m_context.input.removeHandler(m_arrowYawInput); // Backstop for skipped onShutdown; the dispatcher outlives this project.
+        m_context.input.removeHandler(m_arrowYawInput);
         destroyWorld();
     }
 
@@ -169,7 +168,7 @@ public:
             if(!m_timingRenderPass.start())
                 return false;
         }
-        // addHandlerToBack gives this scrubber first crack at the arrow keys; it consumes only Left/Right.
+        // Register arrow yaw scrubbing at the front of the input chain.
         m_context.input.addHandlerToBack(m_arrowYawInput);
 
         const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(*m_world, s_CameraHeight, s_CameraDistance, s_CameraPitch);
@@ -203,8 +202,7 @@ public:
             light->enableCaustics = false;
         }
 
-        // These project-owned BXDFs preserve direct shadow response and ignore only the stochastic surfel contribution.
-        // Surfel resource preparation/production remains an unchanged renderer responsibility in this fixture.
+        // Timing materials omit stochastic surfel GI while keeping direct shadows.
         const auto& opaqueMaterial = m_timingEnabled ? s_TimingOpaqueMaterial : s_OpaqueMaterial;
         const auto& transparentMaterial = m_timingEnabled ? s_TimingTransparentMaterial : s_TransparentMaterial;
         m_groundEntity = CreateTintedStaticMeshEntity(
@@ -231,7 +229,7 @@ public:
             s_Model,
             transparentMaterial,
             s_SmokeSurfaceMaterialInterface,
-            // Coverage and absorption share authored tint/density; Beer-Lambert integrates the actual mesh chord.
+            // Glass caster tint and density for Beer-Lambert shadow absorption.
             Float4(0.20f, 0.55f, 0.12f, 0.6f), Float4(-0.6f, 0.0f, -1.1f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f)
         );
         m_glassOwner = glassModel.entity;
@@ -273,8 +271,7 @@ public:
         const u32 captureFreezeFrame = RendererBaselineCaptureFreezeFrame();
         if(captureFreezeFrame != 0u && m_rendererBaselineRenderedFrameCount >= captureFreezeFrame){
             if(!m_rendererBaselineCapturePaused){
-                // Freeze the requested update-callback phase; this is not an accepted GPU submission counter.
-                // The capture runner waits for this marker before its settle delay and client capture.
+                // Log the held update phase for the baseline capture runner.
                 m_context.graphics.setFrameSubmissionSuspended(true);
                 m_rendererBaselineCapturePaused = true;
                 NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SoftShadowTestSmokeProject: renderer baseline capture ready after {} update callbacks; render submission suspended"), m_rendererBaselineRenderedFrameCount);

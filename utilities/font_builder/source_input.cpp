@@ -19,8 +19,7 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<Core::Assets::AssetBytes, AStringView> ReadFontSourceInput(const Path& path, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratch){
-    static_cast<void>(scratch);
+Expected<Core::Assets::AssetBytes, AStringView> ReadFontSourceInput(const Path& path, Core::Assets::AssetArena& arena){
     constexpr AStringView s_PreparedFontExtensions[] = { s_PreparedFontExtension };
     if(PathHasListedExtension(path, s_PreparedFontExtensions)){
         auto prepared = Impl::ReadPreparedFontSource(path, arena, false);

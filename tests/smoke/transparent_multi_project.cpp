@@ -91,7 +91,7 @@ static constexpr TransparentMeshRef s_TransparentLeftMesh{"project/meshes/cylind
 static constexpr TransparentMeshRef s_TransparentCenterMesh{"project/meshes/octahedron"};
 static constexpr TransparentMeshRef s_TransparentRightMesh{"project/meshes/cone"};
 #endif
-// The plain transparent-shadow scene spins for overlap inspection; the caustic sphere stays static so its focused photon result is easy to inspect.
+// Spin the transparent-shadow scene while keeping the caustic sphere static by default.
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
 static constexpr f32 s_TransparentSceneRotationSpeed = 0.0f;
 #else
@@ -112,8 +112,7 @@ static constexpr Name s_TransparentCsgReceiverGroup("project/smoke/transparent_m
 #endif
 
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
-// The target-hardware runner sends F1 only after it observes an accepted history.
-// Keeping the toggle in the smoke project makes the current-frame -> re-bootstrap transition deterministic without adding a renderer test control.
+// Toggle frame-lagged lighting on F1 to test teardown and re-bootstrap.
 class FrameLaggedAsyncLightingToggleInputHandler final : public NWB::Core::IInputEventHandler{
 public:
     virtual bool keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept override{
@@ -137,8 +136,7 @@ private:
     bool m_toggleRequested = false;
 };
 
-// Windows may deny a harness process foreground ownership even after SetForegroundWindow succeeds locally.
-// Target-hardware lifecycle needs real post-bootstrap submissions, so this smoke uses Graphics' render-pass opt-in; production projects keep normal focus throttling.
+// Opt into unfocused rendering so smoke runs continue when Windows denies foreground focus.
 class FrameLaggedAsyncLightingUnfocusedPass final : public NWB::Core::IRenderPass{
 public:
     explicit FrameLaggedAsyncLightingUnfocusedPass(NWB::Core::GraphicsRuntime& graphics)noexcept
@@ -154,7 +152,7 @@ public:
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
 [[nodiscard]] static bool CreateCausticRefractionBackdrop(NWB::Core::ECS::World& world, NWB::Core::Alloc::GlobalArena& arena){
     constexpr TransparentMaterialRef s_BackdropMaterial{"project/smoke/refraction/materials/opaque"};
-    // Screen refraction requires opaque depth and spatial color variation behind the retained glass entry. Reuse the unlit refraction fixture material, leaving ground and sphere unchanged.
+    // Place unlit colored stripes behind the sphere for screen-space refraction.
     for(u32 stripe = 0u; stripe < 24u; ++stripe){
         const f32 value = (stripe & 1u) != 0u ? 0.92f : 0.04f;
         Float4 position;
@@ -389,7 +387,7 @@ public:
         return s_Speed;
     }
 
-    // Pin yaw for deterministic captures; an unset override leaves normal spin active.
+    // Pin yaw when NWB_TRANSPARENT_MULTI_SPIN_ANGLE is set.
     static f32 EffectiveFrozenAngle(){
         static const f32 s_Angle = [](){
             const auto parsed = ReadSmokeEnvironmentF32("NWB_TRANSPARENT_MULTI_SPIN_ANGLE");
@@ -443,7 +441,7 @@ public:
     {}
     virtual ~TransparentMultiSmokeProject()noexcept override{
         m_timingRenderPass.stop();
-        m_context.input.removeHandler(m_arrowYawInput); // Backstop for skipped onShutdown; the dispatcher outlives this project.
+        m_context.input.removeHandler(m_arrowYawInput);
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
         m_context.input.removeHandler(m_frameLaggedAsyncLightingToggleInput);
         removeFrameLaggedAsyncLightingUnfocusedPass();
@@ -469,14 +467,12 @@ public:
             return false;
 #endif
 
-        // Arrows scrub yaw (title shows the angle; NWB_TRANSPARENT_MULTI_SPIN_ANGLE pins it).
-        // addHandlerToBack takes first crack; consumes Left/Right only.
+        // Register arrow yaw scrubbing at the front of the input chain.
         m_context.input.addHandlerToBack(m_arrowYawInput);
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
         m_context.graphics.addRenderPassToBack(m_frameLaggedAsyncLightingUnfocusedPass);
         m_frameLaggedAsyncLightingUnfocusedPassRegistered = true;
-        // The target-hardware harness presses F1 only after an accepted history is observed.
-        // It then proves the normal current-frame path and the following bootstrap without exposing a renderer-only test switch.
+        // Bind F1 to toggle frame-lagged lighting.
         m_context.input.addHandlerToBack(m_frameLaggedAsyncLightingToggleInput);
 #endif
 
@@ -561,7 +557,7 @@ public:
         m_centerShape = centerShapeEntity;
         m_rightShape = rightShapeEntity;
 
-        // Two static opaque occluders between the transparent shapes: fixed hard shadows overlap sweeping colored ones, verifying the multiplicative combine (opaque blocks even under tint).
+        // Static opaque occluders cast hard shadows across the sweeping tinted shadows.
         const auto opaqueLeftEntity = CreateTintedStaticMeshEntity(
             *m_world,
             m_context.objectArena,
@@ -644,15 +640,14 @@ public:
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
         if(m_framebufferCapture)
             m_framebufferCapture->update();
-        // The observer counts graphics presentation frames; a baseline update-count freeze must not stop it early.
+        // Skip update-count freeze while the framebuffer capture observer is active.
         const u32 captureFreezeFrame = m_framebufferCapture ? 0u : RendererBaselineCaptureFreezeFrame();
 #else
         const u32 captureFreezeFrame = RendererBaselineCaptureFreezeFrame();
 #endif
         if(captureFreezeFrame != 0u && m_rendererBaselineRenderedFrameCount >= captureFreezeFrame){
             if(!m_rendererBaselineCapturePaused){
-                // The harness captures only after the last requested render submission has completed.
-                // Keeping the event loop alive while submissions are suspended pins AVBOIT's temporal phase for a later image comparison without adding a renderer/runtime test feature.
+                // Suspend rendering at the target frame while keeping the window loop alive for capture.
                 m_context.graphics.setFrameSubmissionSuspended(true);
                 m_rendererBaselineCapturePaused = true;
                 NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TransparentMultiSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"), m_rendererBaselineRenderedFrameCount);
@@ -675,7 +670,7 @@ public:
                 NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("FrameLaggedAsyncLightingSmoke: F1 requested current-frame path"));
         }
 #endif
-        // Yaw: env freeze > arrow-scrub (latches off auto-spin) > auto-spin default.
+        // Yaw priority is environment override, manual arrow scrub, then auto-spin.
         const f32 frozenAngle = EffectiveFrozenAngle();
         m_sceneYaw.update(safeDelta, frozenAngle, IsFinite(frozenAngle), m_arrowYawInput, s_ManualYawSpeed, EffectiveRotationSpeed(), s_MaxAnimationDelta);
         updateTransparentSceneTransforms();

@@ -357,7 +357,7 @@ class LinuxX11Capture:
         return result
 
     def capture_client_window(self, window, output_path):
-        # The X11 drawable selected for the application is already its client content; keep the M4 capture API portable while Windows explicitly strips the compositor-owned non-client frame below.
+        # X11 application drawables already contain only client pixels.
         return self.capture_window(window, output_path)
 
     def capture_prepared_raw_client_window(self, window, output_path):

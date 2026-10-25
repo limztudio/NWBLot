@@ -309,20 +309,6 @@ class BenchmarkEnvironmentTests(unittest.TestCase):
                 benchmark.timed_environment(inherited, args, benchmark.Variant(LIT_RAW, LIT_HARDWARE), Path(LIT_NEW_TXT))
             self.assertEqual(inherited, {key: LIT_VK_LAYER_KHRONOS_VALIDATION, LIT_PRESERVED: LIT_YES})
 
-    def test_cli_rejects_capture_and_zero_ray_budget(self):
-        common = [LIT_EXECUTABLE, LIT_TEST_EXE, LIT_WORKING_DIRECTORY, ".", LIT_OUTPUT_DIRECTORY, LIT_OUTPUT]
-        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-            benchmark.parse_args(common + ["--application-arg=--gpudbg"])
-        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-            benchmark.parse_args(common + [LIT_RAY_BUDGET, "0"])
-
-    def test_feedback_cli_rejects_incomplete_samples_and_excessive_steps(self):
-        common = [LIT_EXECUTABLE, LIT_TEST_EXE, LIT_WORKING_DIRECTORY, ".", LIT_OUTPUT_DIRECTORY, LIT_OUTPUT]
-        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-            benchmark.parse_args(common + [LIT_INCLUDE_FEEDBACK, LIT_MINIMUM_FRAME_SAMPLES, "63"])
-        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-            benchmark.parse_args(common + [LIT_SCREEN_STEPS, LIT_N_257])
-
     def test_optical_family_rejects_missing_or_wrong_query_bound(self):
         args = benchmark.parse_args([LIT_EXECUTABLE, LIT_TEST_EXE, LIT_WORKING_DIRECTORY, ".", LIT_OUTPUT_DIRECTORY, LIT_OUTPUT, LIT_FAMILY, LIT_OPTICAL_CLEAR, "--require-hardware"])
         variant = benchmark.Variant(LIT_HARDWARE, LIT_HARDWARE)
@@ -336,7 +322,7 @@ class BenchmarkEnvironmentTests(unittest.TestCase):
 
     def test_cli_rejects_abbreviated_controls_and_invalid_screen_step_limits(self):
         common = [LIT_EXECUTABLE, LIT_TEST_EXE, LIT_WORKING_DIRECTORY, ".", LIT_OUTPUT_DIRECTORY, LIT_OUTPUT]
-        for options in (["--warmup", "2"], [LIT_SCREEN_STEPS, "7"], [LIT_SCREEN_STEPS, LIT_N_257]):
+        for options in (["--application-arg=--gpudbg"], [LIT_RAY_BUDGET, "0"], [LIT_INCLUDE_FEEDBACK, LIT_MINIMUM_FRAME_SAMPLES, "63"], ["--warmup", "2"], [LIT_SCREEN_STEPS, "7"], [LIT_SCREEN_STEPS, LIT_N_257]):
             with self.subTest(options=options), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
                 benchmark.parse_args(common + options)
         for steps in (8, 256):

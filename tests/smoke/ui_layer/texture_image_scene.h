@@ -28,7 +28,7 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// RefCounter owns the scene; primitive and Builder image declarations copy immutable source versions and geometry.
+// Scene fixture for primitive and Builder texture image declarations.
 class UiTextureImageSmokeScene : public Core::IInputEventHandler, NoCopy{
 public:
     UiTextureImageSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input, const Core::Assets::AssetManager& assets);

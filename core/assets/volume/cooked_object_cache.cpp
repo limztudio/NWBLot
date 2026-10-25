@@ -164,7 +164,7 @@ static bool WriteObjectFile(const Path& objectPath, const AssetVolumeObjectFileH
     const auto directories = EnsureDirectories(objectPath.parentPath());
     if(!directories){
         const ErrorCode& errorCode = directories.error();
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to create object cache directory '{}': {}"), PathToString<tchar>(objectPath.parentPath()), ConvertString(errorCode.message()));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to create object cache directory '{}': {}"), PathToString<tchar>(objectPath.parentPathView()), ConvertString(errorCode.message()));
         return false;
     }
     if(WriteBinaryFile(objectPath, objectBytes))

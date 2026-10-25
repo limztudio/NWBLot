@@ -29,7 +29,7 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Captures the completed pixel-freeze frame through public telemetry; no measured workload calls this helper.
+// Captures the pixel-freeze frame snapshot through public telemetry.
 [[nodiscard]] bool CaptureStressFrameGraphSnapshot(ProjectRuntimeContext& context, AStringView outputPath, u64 completedFrames);
 
 

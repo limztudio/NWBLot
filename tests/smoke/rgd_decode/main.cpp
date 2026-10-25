@@ -59,7 +59,7 @@ TEST(RgdDecode, GarbageInputFailsGracefully){
 }
 
 TEST(RgdDecode, AdmittedContainerWithoutCrashChunksFailsGracefully){
-    // Current RDF container header with an empty index; this reaches the crash parser after file/format admission.
+    // Minimal RDF container header with an empty chunk index.
     constexpr Array<u8, 32u> s_EmptyContainer{
         'A', 'M', 'D', '_', 'R', 'D', 'F', ' ',
         3u, 0u, 0u, 0u, 0u, 0u, 0u, 0u,

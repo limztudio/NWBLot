@@ -93,7 +93,7 @@ class Boundary:
     def contains(self, point):
         if self.planes:
             return all(dot(normal, point) < distance - 1e-7 for normal, distance in self.planes)
-        # The authored torus is behind the camera; none of these reference rays starts inside it.
+        # Reference rays start outside the torus behind the camera.
         return False
 
     def intersect(self, origin, direction):
@@ -157,7 +157,7 @@ def authored_torus_triangles():
     def rows(field):
         text = re.search(r"asset\." + field + r"\s*=\s*(\[.*?\]);", source, re.S).group(1)
         return json.loads(re.sub(r",\s*]", "]", text))
-    # The instance scale is 2 and its X rotation is -pi/2. This preserves the authored geometric triangle normals.
+    # Apply scale 2 and X rotation -pi/2 while preserving triangle normals.
     positions = [(2 * x, 1.4 + 2 * z, -9.5 - 2 * y) for x, y, z in rows("positions")]
     references = rows("vertex_refs")
     triangles = []
@@ -184,7 +184,7 @@ def boundaries(case):
         outer = box("outer", -3, 14, 1.5, CLEAR)
         return (outer, box("inner", -3, 10, 1.33, CLEAR, xy_scale=0.7)) if case.endswith(LIT_NESTED) else (outer,)
     if case in ("optical_same_mesh", "optical_disconnected"):
-        # ONE instance still contains two disconnected physical components; re-entry is a fresh interval.
+        # Treat re-entry into a disconnected component of the same instance as a new interval.
         return (box("front", -8, 0.5), box("back", -10, 0.5))
     if case == "optical_union_single":
         return (box(LIT_SINGLE, -9, 0.8),)
@@ -241,7 +241,7 @@ def dense_receiver_intersections(origin, direction):
 
 
 def csg_receiver_intersects(case, origin, direction, maximum):
-    # The open quad extends the same source receiver behind the chart; even a no-hit collection reserves a traversal unit.
+    # Even a no-hit collection on the open quad reserves one traversal unit.
     minimum_z = -16. if case == LIT_OPTICAL_CSG_OPEN_TAIL else -10.
     maximum_z = 4. if case == LIT_OPTICAL_CSG_CAVITY else -8.
     near, far = 0., maximum
@@ -344,7 +344,7 @@ def trace_transmission(case, origin, direction, max_queries=16):
                 reason = "opaque_alpha"
                 break
         elif item.mode == LIT_UNSPECIFIED:
-            # Authored air interfaces have zero render coverage; both geometric crossings still require tie checks without medium membership.
+            # Zero-coverage air interfaces still require tie checks at both crossings.
             crossings += 1
         else:
             crossings += 1

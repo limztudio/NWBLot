@@ -138,7 +138,7 @@ def blue_foreground(pixel):
 
 
 def marker_projection(width, height, color, moved=False):
-    # Reflect z=-8 through the z=0 plane. The virtual source is 14 units from the camera at z=-6.
+    # Virtual source reflected through z=0 sits 14 units from the camera at z=-6.
     focal_length = height / (2.0 * math.tan(math.pi / 6.0))
     x, y = (-1.6, 1.0) if color == LIT_RED else (1.6, 2.0)
     x += 0.9 if moved else 0.0
@@ -195,7 +195,7 @@ def panel_projection(width, height, color, case, reflected):
         source_x += 0.25 if color == LIT_RED else -0.25
     elif case == LIT_BOUNDARY and color == LIT_GREEN:
         source_x = 3.0
-    # Source z=-3 is three units from the camera. Its virtual image at z=+3 is nine units away.
+    # Virtual image at z=+3 sits three times farther from the camera than the source at z=-3.
     distance = 9.0 if reflected else 3.0
     if case == LIT_FLOOR:
         source_y = -2.0 if reflected else 2.0

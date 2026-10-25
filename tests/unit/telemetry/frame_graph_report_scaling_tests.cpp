@@ -127,15 +127,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] usize CountText(const AStringView text, const AStringView needle)noexcept{
-    usize count = 0u;
-    usize offset = 0u;
-    while((offset = text.find(needle, offset)) != AStringView::npos){
-        ++count;
-        offset += needle.size();
-    }
-    return count;
-}
+using NWB::Tests::CountText;
 
 [[nodiscard]] AStringView FindLine(const AStringView text, const AStringView prefix)noexcept{
     const usize begin = text.find(prefix);

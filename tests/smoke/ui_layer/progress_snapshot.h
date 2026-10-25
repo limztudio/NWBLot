@@ -23,7 +23,7 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Geometry is copied from declaration inputs and checked against displayed pixels; no borrowed targets survive publication.
+// Snapshot of copied progress declaration inputs and expected display geometry.
 struct UiProgressSnapshot{
     Array<u64, 8u> values{};
     Array<u64, 2u> bits{};

@@ -23,7 +23,7 @@ namespace MutationKind{
 };
 
 
-// Source callbacks can reenter host code; failed loans must retain that explicit mutation.
+// Reentrant combo source that mutates host selection during callbacks.
 class CallbackSource final : public ComboSource{
 public:
     explicit CallbackSource(ComboState& state)noexcept

@@ -27,7 +27,7 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Pacing trace: advancing observations average the whole interval (no per-frame recovery); idle preserves it, counts 50ms+ gaps once. Caller owns warmup exclusion.
+// Track frame intervals and count idle stalls of 50ms or more once per gap.
 struct PresentationPacingSample{
     f64 wallMsPerPresentation = 0.0;
     u64 newPresentations = 0u;

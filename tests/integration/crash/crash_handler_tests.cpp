@@ -231,7 +231,7 @@ TEST(Crash, LinuxManualDumpUnwindsBeyondTheLeafWithoutFramePointers){
         ASSERT_TRUE(pathQuery);
         EXPECT_TRUE(*pathQuery);
     }
-    // A "#1 " frame proves the unwinder walked past the leaf frame; final builds omit the frame pointer, so this guards that .eh_frame-based capture keeps producing a full callstack.
+    // Frame #1 proves unwinding walked past the leaf frame without frame pointers.
     EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_CallstackFileName, AStringView("#1 0x")));
     NWB::Core::Crash::UninstallCrashHandler();
     RemoveTestArtifacts(arena, s_Group);
@@ -362,7 +362,7 @@ TEST(Crash, LinuxSignalHandlerWritesCrashPackage){
             ASSERT_TRUE(pathQuery);
             EXPECT_TRUE(*pathQuery);
         }
-        // The faulting callstack must reach past the leaf frame even with the frame pointer omitted (final builds).
+        // The faulting callstack must reach past the leaf frame without frame pointers.
         EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_CallstackFileName, AStringView("#1 0x")));
         {
             const auto pathQuery = IsRegularFile(packageDirectory / CrashNames::s_ProcMapsFileName);

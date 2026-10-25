@@ -154,7 +154,7 @@ TEST_F(PaintImageFixture, NullThirdKindRejectsEarlierCandidatesAtomicallyAndAVal
             ASSERT_TRUE(builder->drawImage(image, { 12.0f, 3.0f, 8.0f, 4.0f }));
         }
         EXPECT_FALSE(m_builder.prepareImages(&upgrade, 1u, &sdf, 1u, invalidImages.data(), invalidImages.size()));
-        // The first pass freezes rejection; the second retries in the same recording before either builder freezes.
+        // Retry image admission in a second builder before either builder finishes.
         if(pass != 0u){
             for(const auto builder : builders){
                 ASSERT_TRUE(builder->prepareImages(&upgrade, 1u, &sdf, 1u, &addition, 1u));

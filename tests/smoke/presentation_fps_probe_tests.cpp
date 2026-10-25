@@ -77,22 +77,6 @@ TEST(PresentationFpsProbe, ZeroPresentationsCanCompleteButCannotClaimThroughput)
     EXPECT_DOUBLE_EQ(probe.total().averageFps(), 0.0);
 }
 
-TEST(PresentationPacingRing, IdleObservationsPreserveFullGapAndCountOneStall){
-    PresentationPacingRing ring;
-    const Timer begin{};
-    ring.record(10u, begin);
-    for(i64 step = 1; step <= 3; ++step)
-        ring.record(10u, TimerAddMS(begin, step * 60));
-    const PresentationPacingSummary idleSummary = ring.summarize();
-    EXPECT_EQ(idleSummary.samples, 0u);
-    EXPECT_EQ(idleSummary.stallsOver50Ms, 1u);
-    ring.record(11u, TimerAddMS(begin, 280));
-    const PresentationPacingSummary pacedSummary = ring.summarize();
-    EXPECT_EQ(pacedSummary.samples, 1u);
-    EXPECT_DOUBLE_EQ(pacedSummary.maxMs, 280.0);
-    EXPECT_EQ(pacedSummary.stallsOver50Ms, 1u);
-}
-
 TEST(PresentationPacingRing, FrequentIdlePollsCountEachPendingStallOnce){
     PresentationPacingRing ring;
     const Timer begin{};

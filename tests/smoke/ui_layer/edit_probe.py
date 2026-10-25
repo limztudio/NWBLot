@@ -151,7 +151,7 @@ def observe_edit(frame, snapshot, primary, secondary, readonly, visible, *, exte
             sx, sy, sw, sh = geometry["selection"]
             geometry_matches = geometry_matches and sw > 1.0 and sh > 1.0
             if sw > 1.0 and sh > 1.0:
-                # Selection is painted behind glyphs; the lower line edge avoids the glyph's ink.
+                # Sample selection fill near the bottom of the line to avoid glyph ink.
                 linear_background = linear_channels(background)
                 color = tuple(foreground * 0.75 + backdrop * 0.25 for foreground, backdrop in zip((0.20, 0.40, 0.78), linear_background))
                 probe(f"{field}_selection", (sx + min(sw / 2.0, 4.0), min(sy + sh, cy + ch) - 2.0), linear_rgb_bytes(color))

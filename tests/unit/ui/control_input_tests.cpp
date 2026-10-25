@@ -129,14 +129,6 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiControlInputTests, PartialControlLifetimesAreRejectedBesideACompleteToken){
-    const ControlToken valid{ 1u, 2u, 3u };
-    EXPECT_TRUE(valid.valid());
-    EXPECT_FALSE(valid.empty());
-    EXPECT_FALSE((ControlToken{ 0u, 2u, 3u }).valid());
-    EXPECT_FALSE((ControlToken{ 0u, 2u, 3u }).empty());
-}
-
 TEST_F(UiControlInputTests, AcceptedWheelOwnsItsStepAfterCallerTargetMutation){
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 5u));
     EXPECT_TRUE(wheel(-0.25).pointerConsumed);

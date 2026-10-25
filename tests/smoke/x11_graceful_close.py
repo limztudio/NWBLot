@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
 # Gracefully close a known X11 top-level window by sending a WM_DELETE_WINDOW ClientMessage.
 #
-# The NWB render apps exit gracefully ONLY via WM_DELETE_WINDOW (their X11 loop returns "stop" on that message, and a NWB_BUILDMODE build writes the .namesym sidecar).
-# SIGINT/SIGTERM/TerminateProcess skip that path, so a plain kill produces no sidecar.
-# This is the Linux analog of the window-capture smoke's Windows WM_CLOSE teardown.
+# Send WM_DELETE_WINDOW so X11 apps exit cleanly and write .namesym sidecars.
 #
-# The capture smoke provides the exact X11 window ID it captured.
-# Only the actual ClientMessage send needs libX11 via ctypes, so teardown cannot accidentally close another application's similarly titled window.
+# Send the ClientMessage to the exact captured X11 window ID.
 import ctypes
 import ctypes.util
 import sys
@@ -44,7 +41,7 @@ def send_wm_delete(disp, win):
     if not protocols or not delete_window:
         return False
     xlib.XSendEvent.argtypes = [DisplayP, Window, Bool, ctypes.c_long, ctypes.POINTER(XClientMessageEvent)]
-    # NoEventMask delivers directly even without a window manager. Send once: a retry can race window destruction.
+    # Send once with NoEventMask so delivery works without a window manager.
     ev = XClientMessageEvent()
     ev.type = X11_CLIENT_MESSAGE_TYPE  # ClientMessage
     ev.display = disp

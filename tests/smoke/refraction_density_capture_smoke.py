@@ -83,8 +83,7 @@ def physical_core_guard(width, height, bounds):
     incident_length = math.sqrt(1 + ray_x * ray_x + ray_y * ray_y)
     inside_z = math.sqrt(1 - (ray_x * ray_x + ray_y * ray_y) / (2.25 * incident_length * incident_length))
     focal_pixels = height / (2 * tangent)
-    # Exclude finite-slab side exits from the flat front/back Fresnel oracle only.
-    # The entire rectangle, including this band, still participates in coverage checks.
+    # Exclude slab side-wall exits from the flat Fresnel check.
     return max(2, math.ceil(.2 * max(ray_x, ray_y) / (1.5 * incident_length * inside_z) * focal_pixels / 6) + 2)
 
 

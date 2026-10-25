@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// gtest must come before X11 headers. X11 defines None as a macro.
+// Include gtest before X11 headers because X11 defines None as a macro.
 #include <tests/common/test_context.h>
 
 #include <core/os/linux/x11/clipboard.h>

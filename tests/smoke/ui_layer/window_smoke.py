@@ -74,7 +74,7 @@ class WindowRun:
             self.native._post(0x02A3)  # WM_MOUSELEAVE must retain the active title gesture.
         self.native.pointer(*finish)
         self.native.button(False, *finish)
-        # No sleep separates this complete native event batch. Release must retain the accumulated gesture.
+        # Send the drag and release batch without sleeps.
         scale_x, scale_y = self.snapshot[LIT_SCALE]
         return (finish[0] - start[0]) / scale_x, (finish[1] - start[1]) / scale_y
 

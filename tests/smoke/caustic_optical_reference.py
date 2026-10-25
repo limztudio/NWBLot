@@ -145,8 +145,7 @@ def exterior_samples(width=1280, height=900):
             reflected = add(direction, scale(normal, 2 * cosine))
             if cosine < 0.3 or dot(reflected, triangle.normal) < 0.2:
                 continue
-            # Both signs of a conservative half-millimeter depth-position perturbation must still escape the mesh and ground.
-            # The 1mm normal offset matches the fixture's stable captured-glass origin guard.
+            # Offset ray origins by 1mm along the normal and reject 0.5mm depth boundary hits.
             origins = tuple(add(add(point, scale(normal, 0.001)), scale(direction, perturbation)) for perturbation in (-0.0005, 0.0, 0.0005))
             if any(mesh.intersect(origin, reflected) is not None or hits_ground(origin, reflected) for origin in origins):
                 continue

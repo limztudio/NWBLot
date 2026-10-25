@@ -23,7 +23,7 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Image inputs and expected geometry are copied; accepted target references are borrowed only while observing.
+// Snapshot of copied image declaration inputs and expected display geometry.
 struct UiImageSnapshot{
     Array<u64, 10u> values{};
     Array<Impl::Ui::Rect, 16u> rectangles{};

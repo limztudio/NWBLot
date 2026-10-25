@@ -366,7 +366,7 @@ bool GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignme
     if(!m_context.descriptorBufferManager || !m_context.descriptorBufferManager->isEnabled())
         return false;
 
-    auto carve = [&](const BindingLayoutHandle& layout, const GpuDescriptorClass::Enum* classes, const u32 classCount) -> Expected<DescriptorBufferSegment>{
+    auto carve = [&](const BindingLayoutHandle& layout, const Span<const GpuDescriptorClass::Enum> classes) -> Expected<DescriptorBufferSegment>{
         const auto* bindingLayout = layout.get();
         if(!bindingLayout || !bindingLayout->isDescriptorBufferCompatible()){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap: bindless layout is not descriptor-buffer-compatible; cannot carve heap block."));
@@ -384,8 +384,7 @@ bool GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignme
             return MakeUnexpected(Failure{});
         }
         const auto& bindingOffsets = bindingLayout->getDescriptorBufferBindingOffsets();
-        for(u32 c = 0u; c < classCount; ++c){
-            const GpuDescriptorClass::Enum cls = classes[c];
+        for(const GpuDescriptorClass::Enum cls : classes){
             const auto it = bindingOffsets.find(getRegisterSlot(cls));
             if(it == bindingOffsets.end()){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap: descriptor-buffer layout has no offset for class {}."), static_cast<u32>(cls));
@@ -420,11 +419,11 @@ bool GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignme
         GpuDescriptorClass::SampledImageCube
     };
     static constexpr GpuDescriptorClass::Enum s_SamplerClasses[] = { GpuDescriptorClass::Sampler };
-    const auto resourceBlock = carve(m_resourceLayout, s_ResourceClasses, static_cast<u32>(LengthOf(s_ResourceClasses)));
+    const auto resourceBlock = carve(m_resourceLayout, s_ResourceClasses);
     if(!resourceBlock)
         return false;
     m_resourceBufferBlock = *resourceBlock;
-    const auto samplerBlock = carve(m_samplerLayout, s_SamplerClasses, static_cast<u32>(LengthOf(s_SamplerClasses)));
+    const auto samplerBlock = carve(m_samplerLayout, s_SamplerClasses);
     if(!samplerBlock)
         return false;
     m_samplerBufferBlock = *samplerBlock;

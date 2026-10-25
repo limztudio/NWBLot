@@ -217,10 +217,9 @@ template<typename ArenaT>
         if(parent == normalizedDirectory)
             return true;
 
-        const Path<ArenaT> nextParent = parent.parentPath();
-        if(nextParent == parent)
+        if(parent.parentPathView() == parent.native())
             break;
-        parent = nextParent;
+        parent = Move(parent).parentPath();
     }
 
     return false;

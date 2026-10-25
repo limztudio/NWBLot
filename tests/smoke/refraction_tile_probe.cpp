@@ -411,7 +411,7 @@ bool RunRefractionTileProbe(NWB::ProjectRuntimeContext& context){
         return false;
     Core::BufferHandle slotsBuffer;
     Array<Core::GpuDescriptorHandle, 6u> descriptors{};
-    Core::GpuDescriptorRetirementGuard retire(heap, Span<const Core::GpuDescriptorHandle>(descriptors.data(), descriptors.size()));
+    Core::GpuDescriptorRetirementGuard retire(heap, descriptors);
     const Array<Core::BufferHandle, 4u> storageBuffers{ *queue, *arguments, *visits, *reversedQueue };
     for(u32 index = 0u; index < storageBuffers.size(); ++index){
         const auto descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);

@@ -249,8 +249,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         rayTracingGraphResources,
         currentBindlessSlots,
         materialContextSlots,
-        Span<const Core::GpuGraphResourceId>(traceGeometry.traceGeometry.data(), traceGeometry.traceGeometry.size()),
-        Span<const Core::GpuGraphResourceId>(traceGeometry.softwareBvhBuildState.data(), traceGeometry.softwareBvhBuildState.size()),
+        traceGeometry.traceGeometry,
+        traceGeometry.softwareBvhBuildState,
         traceGeometry.softwareTraceResourcesPrepared,
         scratchArena,
         deferredTargets,
@@ -278,7 +278,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         meshViewState,
         meshViewUploadRequired,
         *deferredGraphResources,
-        Span<const Core::GpuGraphResourceId>(traceGeometry.traceGeometry.data(), traceGeometry.traceGeometry.size()),
+        traceGeometry.traceGeometry,
         traceGeometry.shadowTraceGeometrySet,
         asyncPrefixTimingSpansOnePacket,
         scratchArena,
@@ -403,8 +403,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         lights,
         materialContextSlots,
         rayTracingShadowVisibilityPlan.hardwareTransparentTrace
-            ? Span<const Core::GpuGraphResourceId>(traceGeometry.hardwareTraceGeometry.data(), traceGeometry.hardwareTraceGeometry.size())
-            : Span<const Core::GpuGraphResourceId>(traceGeometry.softwareTraceGeometry.data(), traceGeometry.softwareTraceGeometry.size()),
+            ? Span<const Core::GpuGraphResourceId>(traceGeometry.hardwareTraceGeometry)
+            : Span<const Core::GpuGraphResourceId>(traceGeometry.softwareTraceGeometry),
         rayTracingShadowVisibilityPlan.hardwareTransparentTrace ? traceGeometry.hardwareTraceGeometrySet : traceGeometry.softwareTraceGeometrySet,
         traceGeometry.traceMaterialSampledTextureSet,
         m_graphicsPrefixTask,
@@ -433,7 +433,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         lights,
         materialContextSlots,
         causticOpticalScene,
-        Span<const Core::GpuGraphResourceId>(traceGeometry.softwareTraceGeometry.data(), traceGeometry.softwareTraceGeometry.size()),
+        traceGeometry.softwareTraceGeometry,
         traceGeometry.softwareTraceGeometrySet,
         traceGeometry.traceMaterialSampledTextureSet,
         scratchArena,
@@ -457,8 +457,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         lights,
         materialContextSlots,
         rayTracingGraphResources.surfelUsesHardwareTrace
-            ? Span<const Core::GpuGraphResourceId>(traceGeometry.hardwareTraceGeometry.data(), traceGeometry.hardwareTraceGeometry.size())
-            : Span<const Core::GpuGraphResourceId>(traceGeometry.softwareTraceGeometry.data(), traceGeometry.softwareTraceGeometry.size()),
+            ? Span<const Core::GpuGraphResourceId>(traceGeometry.hardwareTraceGeometry)
+            : Span<const Core::GpuGraphResourceId>(traceGeometry.softwareTraceGeometry),
         rayTracingGraphResources.surfelUsesHardwareTrace ? traceGeometry.hardwareTraceGeometrySet : traceGeometry.softwareTraceGeometrySet,
         traceGeometry.traceMaterialSampledTextureSet,
         effectsTask,

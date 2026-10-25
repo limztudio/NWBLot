@@ -132,7 +132,7 @@ bool FinishLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& worl
         return true;
     if(state.receivers.size() != state.instances.size())
         return false;
-    if(!BuildCsgShadowSnapshot(registry, Span<const CsgShadowReceiverInput>(state.receivers.data(), state.receivers.size()), world, scratchArena, state.snapshot))
+    if(!BuildCsgShadowSnapshot(registry, state.receivers, world, scratchArena, state.snapshot))
         return false;
     if(!state.snapshot.hasCsg)
         return true;

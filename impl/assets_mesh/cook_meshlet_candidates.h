@@ -66,37 +66,6 @@ static constexpr usize s_MeshletDisconnectedCandidateParallelOversubscription = 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace MeshletCookExceptionDetail{
-
-
-template<typename Range>
-[[nodiscard]] constexpr bool FrontierIndexIterationIsNothrow()noexcept{
-    if constexpr(IsArray_V<Range>)
-        return noexcept(DeclVal<void(*)(u32)noexcept>()(DeclVal<RemoveExtent_T<Range>&>()));
-    else if constexpr(requires(Range& values){ values.begin(); values.end(); }){
-        using Iterator = RemoveCVRef_T<decltype(DeclVal<Range&>().begin())>;
-        using Sentinel = RemoveCVRef_T<decltype(DeclVal<Range&>().end())>;
-        return
-            noexcept(DeclVal<void(*)(Iterator)noexcept>()(DeclVal<Range&>().begin()))
-            && noexcept(DeclVal<void(*)(Sentinel)noexcept>()(DeclVal<Range&>().end()))
-            && IsNothrowDestructible_V<Iterator>
-            && IsNothrowDestructible_V<Sentinel>
-            && noexcept(static_cast<bool>(DeclVal<Iterator&>() != DeclVal<Sentinel&>()))
-            && noexcept(++DeclVal<Iterator&>())
-            && noexcept(DeclVal<void(*)(u32)noexcept>()(*DeclVal<Iterator&>()))
-        ;
-    }
-    else
-        return false;
-}
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Scores frontier and disconnected triangles against the growing meshlet and picks the best fit.
 class MeshletCandidateSearch final : NoCopy{
 public:

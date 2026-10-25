@@ -69,7 +69,7 @@ Expected<CookVector<ResolvedAssetRoot>, AssetRootResolutionError> ResolveAssetRo
                 return MakeUnexpected(AssetRootResolutionError{ .inputPath = Move(path), .sourceIndex = sourceIndex, .reason = AssetRootResolutionFailure::InspectInput, .error = directory.error(), });
             }
             if(!*directory)
-                path = path.parentPath();
+                path = Move(path).parentPath();
             ::Path<ScratchArena> ancestor(scratchArena, path);
             while(!ancestor.empty()){
                 ScratchString name = PathToString(scratchArena, ancestor.filenameView());
@@ -78,10 +78,9 @@ Expected<CookVector<ResolvedAssetRoot>, AssetRootResolutionError> ResolveAssetRo
                     path = Path(arena, ancestor);
                     break;
                 }
-                const ::Path<ScratchArena> parent = ancestor.parentPath();
-                if(parent == ancestor)
+                if(ancestor.parentPathView() == ancestor.native())
                     break;
-                ancestor = parent;
+                ancestor = Move(ancestor).parentPath();
             }
         }
 

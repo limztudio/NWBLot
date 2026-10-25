@@ -57,7 +57,7 @@ static constexpr ::NamedEnumCase<bool> s_FilterCases[] = {
 
 
 [[nodiscard]] static Expected<bool> ParseFilter(const Path& nwbFilePath, const Value& asset, const AStringView fieldName){
-    return Core::Assets::ParseNamedMetadataEnumField<bool>(nwbFilePath, asset, s_DiagnosticPrefix, fieldName, s_FilterCases, LengthOf(s_FilterCases), "must be 'nearest' or 'linear'");
+    return Core::Assets::ParseNamedMetadataEnumField<bool>(nwbFilePath, asset, s_DiagnosticPrefix, fieldName, s_FilterCases, "must be 'nearest' or 'linear'");
 }
 
 static constexpr ::NamedEnumCase<Core::SamplerAddressMode::Enum> s_AddressModeCases[] = {
@@ -78,11 +78,11 @@ static constexpr ::NamedEnumCase<Core::SamplerReductionType::Enum> s_ReductionTy
 
 
 [[nodiscard]] static Expected<Core::SamplerAddressMode::Enum> ParseAddressMode(const Path& nwbFilePath, const Value& asset, const AStringView fieldName){
-    return Core::Assets::ParseNamedMetadataEnumField<Core::SamplerAddressMode::Enum>(nwbFilePath, asset, s_DiagnosticPrefix, fieldName, s_AddressModeCases, LengthOf(s_AddressModeCases), "has an unsupported address mode");
+    return Core::Assets::ParseNamedMetadataEnumField<Core::SamplerAddressMode::Enum>(nwbFilePath, asset, s_DiagnosticPrefix, fieldName, s_AddressModeCases, "has an unsupported address mode");
 }
 
 [[nodiscard]] static Expected<Core::SamplerReductionType::Enum> ParseReductionType(const Path& nwbFilePath, const Value& asset){
-    return Core::Assets::ParseNamedMetadataEnumField<Core::SamplerReductionType::Enum>(nwbFilePath, asset, s_DiagnosticPrefix, s_ReductionField, s_ReductionTypeCases, LengthOf(s_ReductionTypeCases), "has an unsupported reduction type");
+    return Core::Assets::ParseNamedMetadataEnumField<Core::SamplerReductionType::Enum>(nwbFilePath, asset, s_DiagnosticPrefix, s_ReductionField, s_ReductionTypeCases, "has an unsupported reduction type");
 }
 
 

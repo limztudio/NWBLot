@@ -51,16 +51,13 @@ TEST(LightSpacePlan, ChargesLargerDepthExtentToPreviouslyAdmittedPointFaces){
     const LightSpaceLightRequest point{ 0u, 0u, Scene::LightType::Point };
     const LightSpaceLightRequest directional{ 1u, 1u, Scene::LightType::Directional };
     SoftwareShadowSettings settings;
-    Expected<LightSpacePlan> pointOnly;
-    Expected<LightSpacePlan> directionalOnly;
-    pointOnly = BuildLightSpacePlan(settings, Span<const LightSpaceLightRequest>(&point, 1u), Limit<u32>::s_Max, 20u);
+    const auto pointOnly = BuildLightSpacePlan(settings, Span<const LightSpaceLightRequest>(&point, 1u), Limit<u32>::s_Max, 20u);
     ASSERT_TRUE(pointOnly);
-    directionalOnly = BuildLightSpacePlan(settings, Span<const LightSpaceLightRequest>(&directional, 1u), Limit<u32>::s_Max, 20u);
+    const auto directionalOnly = BuildLightSpacePlan(settings, Span<const LightSpaceLightRequest>(&directional, 1u), Limit<u32>::s_Max, 20u);
     ASSERT_TRUE(directionalOnly);
     settings.memoryBudgetBytes = pointOnly->totalByteSize + directionalOnly->totalByteSize;
     const LightSpaceLightRequest requests[] = { point, directional };
-    Expected<LightSpacePlan> plan;
-    plan = BuildLightSpacePlan(settings, requests, Limit<u32>::s_Max, 20u);
+    const auto plan = BuildLightSpacePlan(settings, requests, Limit<u32>::s_Max, 20u);
     ASSERT_TRUE(plan);
     ASSERT_EQ(plan->lightCount, 1u);
     EXPECT_EQ(plan->views[0].light[0], 0u);
@@ -72,13 +69,11 @@ TEST(LightSpacePlan, ChargesLargerDepthExtentToPreviouslyAdmittedPointFaces){
 TEST(LightSpacePlan, BudgetBoundaryAdmitsWholeLightsAndLeavesOthersForTracing){
     SoftwareShadowSettings settings;
     const LightSpaceLightRequest light{};
-    Expected<LightSpacePlan> expected;
-    expected = BuildLightSpacePlan(settings, Span<const LightSpaceLightRequest>(&light, 1u), Limit<u32>::s_Max, 20u);
+    const auto expected = BuildLightSpacePlan(settings, Span<const LightSpaceLightRequest>(&light, 1u), Limit<u32>::s_Max, 20u);
     ASSERT_TRUE(expected);
     ASSERT_EQ(expected->lightCount, 1u);
     settings.memoryBudgetBytes = expected->totalByteSize;
-    Expected<LightSpacePlan> exact;
-    exact = BuildLightSpacePlan(settings, Span<const LightSpaceLightRequest>(&light, 1u), Limit<u32>::s_Max, 20u);
+    auto exact = BuildLightSpacePlan(settings, Span<const LightSpaceLightRequest>(&light, 1u), Limit<u32>::s_Max, 20u);
     ASSERT_TRUE(exact);
     EXPECT_EQ(exact->lightCount, 1u);
     --settings.memoryBudgetBytes;
@@ -95,10 +90,9 @@ TEST(LightSpacePlan, SkipsUnsupportedAndIneligibleCastersWithoutDroppingLaterEli
         { 1u, 1u, Scene::LightType::Directional, false },
         { s_ExpectedDualCount, s_ExpectedDualCount, Scene::LightType::Point },
     };
-    Expected<LightSpacePlan> plan;
     SoftwareShadowSettings settings;
     settings.backend = SoftwareShadowBackend::LightSpace;
-    plan = BuildLightSpacePlan(settings, requests, Limit<u32>::s_Max, 20u);
+    const auto plan = BuildLightSpacePlan(settings, requests, Limit<u32>::s_Max, 20u);
     ASSERT_TRUE(plan);
     ASSERT_EQ(plan->lightCount, 1u);
     EXPECT_EQ(plan->views[0].light[0], s_ExpectedDualCount);
@@ -132,9 +126,8 @@ TEST(LightSpacePlan, RespectsDeviceDescriptorRangeAndRetainsLaterFittingLights){
         { 0u, 0u, Scene::LightType::Point },
         { 1u, 1u, Scene::LightType::Directional },
     };
-    Expected<LightSpacePlan> plan;
     const u64 directionalEventBytes = 512ull * 512ull * NWB_LIGHT_SPACE_EVENTS_PER_TEXEL * NWB_LIGHT_SPACE_EVENT_BYTES;
-    plan = BuildLightSpacePlan(settings, requests, directionalEventBytes, 20u);
+    auto plan = BuildLightSpacePlan(settings, requests, directionalEventBytes, 20u);
     ASSERT_TRUE(plan);
     ASSERT_EQ(plan->lightCount, 1u);
     EXPECT_EQ(plan->views[0].light[0], 1u);
@@ -162,8 +155,7 @@ TEST(LightSpacePlan, BoundsExternalSettingsAndShaderAddressSpace){
     LightSpaceLightRequest requests[NWB_SCENE_SHADOW_SLOT_COUNT];
     for(u32 index = 0u; index < LengthOf(requests); ++index)
         requests[index] = { index, index, Scene::LightType::Point };
-    Expected<LightSpacePlan> plan;
-    plan = BuildLightSpacePlan(settings, requests, Limit<u32>::s_Max, 20u);
+    auto plan = BuildLightSpacePlan(settings, requests, Limit<u32>::s_Max, 20u);
     ASSERT_TRUE(plan);
     EXPECT_EQ(plan->lightCount, 0u); // One six-face 2048 map exceeds the shader address range.
     settings.pointResolution = 1024u;
@@ -187,8 +179,7 @@ TEST(LightSpacePlan, ChargesActualDrawArgumentsAndEnforcesTheirDescriptorRange){
     const LightSpaceLightRequest light{};
     constexpr u32 s_DrawCount = 65536u;
     constexpr u64 s_ArgumentBytes = static_cast<u64>(s_DrawCount) * NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES;
-    Expected<LightSpacePlan> plan;
-    plan = BuildLightSpacePlan(settings, Span<const LightSpaceLightRequest>(&light, 1u), s_ArgumentBytes, s_DrawCount);
+    auto plan = BuildLightSpacePlan(settings, Span<const LightSpaceLightRequest>(&light, 1u), s_ArgumentBytes, s_DrawCount);
     ASSERT_TRUE(plan);
     ASSERT_EQ(plan->lightCount, 1u);
     EXPECT_EQ(plan->drawArgumentByteSize, s_ArgumentBytes);

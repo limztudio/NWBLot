@@ -124,7 +124,7 @@ Expected<MeshletPipelineHandle> Device::createMeshletPipeline(const MeshletPipel
     auto rasterizer = VulkanDetail::BuildPipelineRasterizationState(desc.renderState.rasterState, VulkanDetail::ConvertFillMode(desc.renderState.rasterState.fillMode), desc.renderState.rasterState.depthClipEnable ? VK_FALSE : VK_TRUE);
 
     const VkDynamicState dynamicStates[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR, VK_DYNAMIC_STATE_BLEND_CONSTANTS, VK_DYNAMIC_STATE_STENCIL_REFERENCE, };
-    const auto fixedState = VulkanDetail::BuildGraphicsPipelineFixedState(fbinfo, desc.renderState, VulkanDetail::PipelineStencilFaceMode::IncludeStencilFaces, dynamicStates, static_cast<u32>(LengthOf(dynamicStates)), s_OperationName, scratchArena);
+    const auto fixedState = VulkanDetail::BuildGraphicsPipelineFixedState(fbinfo, desc.renderState, VulkanDetail::PipelineStencilFaceMode::IncludeStencilFaces, dynamicStates, s_OperationName, scratchArena);
     if(!fixedState)
         return MakeUnexpected(Failure{});
 

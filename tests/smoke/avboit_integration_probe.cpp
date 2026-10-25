@@ -246,7 +246,7 @@ bool RunAvboitIntegrationProbe(NWB::ProjectRuntimeContext& context){
         return false;
     Core::BufferHandle slotBuffer;
     Array<Core::GpuDescriptorHandle, 5u> descriptors{};
-    Core::GpuDescriptorRetirementGuard retire(heap, Span<const Core::GpuDescriptorHandle>(descriptors.data(), descriptors.size()));
+    Core::GpuDescriptorRetirementGuard retire(heap, descriptors);
     const Array<Core::BufferHandle, 3u> buffers{ *extinction, *overflow, *control };
     for(u32 index = 0u; index < buffers.size(); ++index){
         const auto descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);

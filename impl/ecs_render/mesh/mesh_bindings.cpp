@@ -322,7 +322,7 @@ bool RendererMeshSystem::createMeshGeometryHeapHandles(MeshResources& mesh){
         NWB_ASSERT(!handle.valid());
 
     Core::GpuDescriptorHandle acquired[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT] = {};
-    Core::GpuDescriptorRetirementGuard retireAcquired(heap, Span<const Core::GpuDescriptorHandle>(acquired, LengthOf(acquired)));
+    Core::GpuDescriptorRetirementGuard retireAcquired(heap, acquired);
     bool registered = true;
     ForEachMeshSourceBuffer(mesh, [&](const u32 bindingSlot, const Core::BufferHandle& buffer, const bool){
         if(!registered)

@@ -37,8 +37,7 @@ using ViewDenseIndexTuple = Tuple<Conditional_T<true, u32, Ts>...>;
 struct ViewTupleAccess{
     template<usize I, typename... Ts>
     static Span<const EntityID> EntityVector(const Tuple<ComponentPool<Ts>*...>& pools)noexcept{
-        const auto& dense = MakeNotNull(Get<I>(pools))->m_dense;
-        return Span<const EntityID>(dense.data(), dense.size());
+        return MakeNotNull(Get<I>(pools))->m_dense;
     }
 
     static EntityID EntityAt(const Span<const EntityID> entities, const usize denseIndex)noexcept{

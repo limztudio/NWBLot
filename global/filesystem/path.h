@@ -424,9 +424,16 @@ public:
         return native_string_view(m_text.data(), trimTrailingSeparators(separator - 1u));
     }
 
-    [[nodiscard]] Path parentPath()const{
+    [[nodiscard]] Path parentPath()const &{
         const native_string_view view = parentPathView();
         return view.empty() ? Path(arena()) : Path(arena(), view);
+    }
+
+    [[nodiscard]] Path parentPath()&& noexcept{
+        const usize parentLength = parentPathView().size();
+        if(parentLength < m_text.size())
+            m_text.erase(parentLength);
+        return Move(*this);
     }
 
     [[nodiscard]] native_string_view filenameView()const noexcept{
@@ -778,6 +785,12 @@ template<typename ArenaT, typename SourceT>
     Path<ArenaT> output(lhs);
     output /= rhs;
     return output;
+}
+
+template<typename ArenaT, typename SourceT>
+[[nodiscard]] inline Path<ArenaT> operator/(Path<ArenaT>&& lhs, const SourceT& rhs){
+    lhs /= rhs;
+    return Move(lhs);
 }
 
 

@@ -402,24 +402,12 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
             nodes.push_back(node);
         }
 
-        if(!capturePreparedSceneBvh(
-            staticScene,
-            sceneStaticHash,
-            Span<const NwbBvhNodeGpu>(nodes.data(), nodes.size()),
-            Span<const SceneSwBvhInstanceGpu>(instances.data(), instances.size())
-        ))
+        if(!capturePreparedSceneBvh(staticScene, sceneStaticHash, nodes, instances))
             return false;
     }
 
     if(!staticScene){
-        auto preparedRefit = m_sceneSwBvhRefit.prepare(
-            Span<const SoftwareSceneRefitInstanceGpu>(sceneRefitInputs.data(), sceneRefitInputs.size()),
-            Span<const Core::BufferHandle>(sceneRefitRoots.data(), sceneRefitRoots.size()),
-            m_preparedSceneBvh.nodeBuffer(),
-            m_preparedSceneBvh.nodeHeapHandle(),
-            static_cast<u32>(requiredNodeCount),
-            m_shaderSystem
-        );
+        auto preparedRefit = m_sceneSwBvhRefit.prepare(sceneRefitInputs, sceneRefitRoots, m_preparedSceneBvh.nodeBuffer(), m_preparedSceneBvh.nodeHeapHandle(), static_cast<u32>(requiredNodeCount), m_shaderSystem);
         if(!preparedRefit){
             m_preparedSceneSwBvhRefit.reset();
             return false;
@@ -448,21 +436,14 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
             || !HasPreparedShadowMaterialContextBuffers(m_rayTracingState, instanceMaterials.size(), shadowInstanceData.size(), materialTypedUploadBytes)
         )
             return false;
-        if(!capturePreparedShadowMaterialContext(
-            PreparedShadowMaterialContextRoute::Software,
-            staticScene,
-            swMaterialContextHash,
-            Span<const NwbRtInstanceMaterialGpu>(instanceMaterials.data(), instanceMaterials.size()),
-            Span<const InstanceGpuData>(shadowInstanceData.data(), shadowInstanceData.size()),
-            Span<const u8>(shadowMaterialTypedBytes.data(), materialTypedUploadBytes)
-        ))
+        if(!capturePreparedShadowMaterialContext(PreparedShadowMaterialContextRoute::Software, staticScene, swMaterialContextHash, instanceMaterials, shadowInstanceData, Span<const u8>(shadowMaterialTypedBytes.data(), materialTypedUploadBytes)))
             return false;
     }
 
     m_rayTracingState.m_sceneBvhInstanceCount = instanceCount;
     const bool frozenGraphScene = m_preparedSceneBvh.ready() && m_preparedShadowMaterialContext.ready() && m_preparedShadowMaterialContext.route() == PreparedShadowMaterialContextRoute::Software;
     if(frozenGraphScene){
-        if(!capturePreparedSceneSwBvhTraversal(Span<const PreparedSceneSwBvhMesh>(preparedMeshes.data(), preparedMeshes.size()), instanceCount)){
+        if(!capturePreparedSceneSwBvhTraversal(preparedMeshes, instanceCount)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze software scene traversal"));
             clearPreparedSceneBvh();
             clearPreparedShadowMaterialContext();
@@ -490,13 +471,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     if(csg.hasCsg){
         Fnv64AppendValue(captureSceneIdentity, csg.identity);
         if(m_lightSpaceShadow.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseOneFrame || m_lightSpaceShadow.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseTwoFrames){
-            captureSceneIdentity = BuildLightSpaceCsgCaptureIdentity(
-                m_lightSpaceShadow.m_csg,
-                Span<const NwbRtInstanceMaterialGpu>(instanceMaterials.data(), instanceMaterials.size()),
-                Span<const InstanceGpuData>(shadowInstanceData.data(), shadowInstanceData.size()),
-                Span<const u8>(shadowMaterialTypedBytes.data(), shadowMaterialTypedBytes.size()),
-                Span<const Core::TextureHandle>(m_preparedShadowTraceMaterialSampledTextures.data(), m_preparedShadowTraceMaterialSampledTextures.size())
-            );
+            captureSceneIdentity = BuildLightSpaceCsgCaptureIdentity(m_lightSpaceShadow.m_csg, instanceMaterials, shadowInstanceData, shadowMaterialTypedBytes, m_preparedShadowTraceMaterialSampledTextures);
             captureSceneTrusted = m_lightSpaceShadow.m_csg.captureGeometryTrusted;
         }
     }

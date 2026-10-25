@@ -127,8 +127,7 @@ Expected<GraphicsPipelineFixedState> BuildGraphicsPipelineFixedState(
     const FramebufferInfo& fbinfo,
     const RenderState& renderState,
     const PipelineStencilFaceMode::Enum stencilFaceMode,
-    const VkDynamicState* dynamicStates,
-    const u32 dynamicStateCount,
+    const Span<const VkDynamicState> dynamicStates,
     TStringView operationName,
     Alloc::ScratchArena& scratchArena
 ){
@@ -147,8 +146,8 @@ Expected<GraphicsPipelineFixedState> BuildGraphicsPipelineFixedState(
     state.colorBlending = BuildPipelineColorBlendState(fbinfo, renderState.blendState, state.blendAttachments);
 
     state.dynamicState = MakeVkStruct<VkPipelineDynamicStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO);
-    state.dynamicState.dynamicStateCount = dynamicStateCount;
-    state.dynamicState.pDynamicStates = dynamicStates;
+    state.dynamicState.dynamicStateCount = static_cast<u32>(dynamicStates.size());
+    state.dynamicState.pDynamicStates = dynamicStates.data();
 
     auto rendering = BuildPipelineRenderingInfo(fbinfo, operationName, scratchArena);
     if(!rendering)

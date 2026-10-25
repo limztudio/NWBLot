@@ -404,14 +404,14 @@ TEST(EcsGraphics, MaterialTypedByteRangeHashCollisionRetainsOwnedBytes){
     const Array<u8, 4> secondBytes = {1u, 2u, 3u, 5u};
     {
         Array<u8, 4> firstBytes = originalFirstBytes;
-        const ByteLookup lookup{s_CollisionHash, Span<const u8>(firstBytes.data(), firstBytes.size())};
+        const ByteLookup lookup{s_CollisionHash, firstBytes};
         ASSERT_TRUE(ranges.emplace(ByteKey(scratchArena, lookup), ByteRange{0u, 4u}).second);
         firstBytes.fill(0u);
     }
 
     // Compare payload bytes even when hash and byte length match.
-    const ByteLookup firstLookup{s_CollisionHash, Span<const u8>(originalFirstBytes.data(), originalFirstBytes.size())};
-    const ByteLookup secondLookup{s_CollisionHash, Span<const u8>(secondBytes.data(), secondBytes.size())};
+    const ByteLookup firstLookup{s_CollisionHash, originalFirstBytes};
+    const ByteLookup secondLookup{s_CollisionHash, secondBytes};
     const auto firstFound = ranges.find(firstLookup);
     ASSERT_NE(firstFound, ranges.end());
     EXPECT_EQ(firstFound.value().byteOffset, 0u);

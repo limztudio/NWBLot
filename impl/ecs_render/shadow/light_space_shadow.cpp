@@ -76,9 +76,9 @@ bool RendererRayTracingSystem::setSoftwareShadowSettings(const SoftwareShadowSet
 
 LightSpaceShadowSnapshot RendererRayTracingSystem::lightSpaceShadowSnapshot()const noexcept{
     LightSpaceShadowSnapshot result = m_lightSpaceShadow.m_snapshot;
-    result.casters = Span<const LightSpaceShadowCaster>(m_lightSpaceShadow.m_casters.data(), m_lightSpaceShadow.m_casters.size());
-    result.csgContextBytes = Span<const u8>(m_lightSpaceShadow.m_csg.bytes.data(), m_lightSpaceShadow.m_csg.bytes.size());
-    result.csgDynamicBounds = Span<const Core::BufferHandle>(m_lightSpaceShadow.m_csg.dynamicBounds.data(), m_lightSpaceShadow.m_csg.dynamicBounds.size());
+    result.casters = m_lightSpaceShadow.m_casters;
+    result.csgContextBytes = m_lightSpaceShadow.m_csg.bytes;
+    result.csgDynamicBounds = m_lightSpaceShadow.m_csg.dynamicBounds;
     return result;
 }
 
@@ -172,7 +172,7 @@ Expected<LightSpacePlan> RendererRayTracingSystem::buildLightSpaceShadowPlan(con
             return MakeUnexpected(Failure{});
         settings.memoryBudgetBytes -= state.m_csg.bytes.size() + sizeof(u32);
     }
-    const auto drawCount = LightSpaceShadowDrawCount(Span<const LightSpaceShadowCaster>(state.m_casters.data(), state.m_casters.size()));
+    const auto drawCount = LightSpaceShadowDrawCount(state.m_casters);
     if(!drawCount)
         return MakeUnexpected(drawCount.error());
     auto plan = BuildLightSpacePlan(settings, Span<const LightSpaceLightRequest>(requests.data(), requestCount), m_graphics.getDevice().getMaxStorageBufferRange(), *drawCount, state.m_csg.snapshot.hasCsg);
@@ -199,7 +199,7 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(const Span<const ECSRend
     if(!planResult)
         return;
     const LightSpacePlan& plan = *planResult;
-    const auto drawCount = LightSpaceShadowDrawCount(Span<const LightSpaceShadowCaster>(state.m_casters.data(), state.m_casters.size()));
+    const auto drawCount = LightSpaceShadowDrawCount(state.m_casters);
     NWB_ASSERT(drawCount);
     const LightSpaceShadowStorageCapacity capacity{
         snapshot.counts->getCreationDescription().byteSize, snapshot.events->getCreationDescription().byteSize,
@@ -279,7 +279,7 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(const Span<const ECSRend
     }
     snapshot.push.viewCount = plan.viewCount;
     snapshot.push.outputSlot = snapshot.drawArgumentsDescriptor.slot();
-    snapshot.casters = Span<const LightSpaceShadowCaster>(state.m_casters.data(), state.m_casters.size());
+    snapshot.casters = state.m_casters;
     snapshot.ready = true;
 }
 

@@ -304,13 +304,13 @@ template<typename ElementT, usize ComponentCount>
 
 [[nodiscard]] bool IsAllowedMeshAssetField(const Core::Metascript::MStringView fieldName)noexcept{
     return
-        fieldName == Core::Metascript::MStringView(s_PositionsField.data(), s_PositionsField.size())
-        || fieldName == Core::Metascript::MStringView(s_NormalsField.data(), s_NormalsField.size())
-        || fieldName == Core::Metascript::MStringView(s_TangentsField.data(), s_TangentsField.size())
-        || fieldName == Core::Metascript::MStringView(s_Uv0Field.data(), s_Uv0Field.size())
-        || fieldName == Core::Metascript::MStringView(s_ColorsField.data(), s_ColorsField.size())
-        || fieldName == Core::Metascript::MStringView(s_VertexRefsField.data(), s_VertexRefsField.size())
-        || fieldName == Core::Metascript::MStringView(s_IndicesField.data(), s_IndicesField.size())
+        fieldName == s_PositionsField
+        || fieldName == s_NormalsField
+        || fieldName == s_TangentsField
+        || fieldName == s_Uv0Field
+        || fieldName == s_ColorsField
+        || fieldName == s_VertexRefsField
+        || fieldName == s_IndicesField
     ;
 }
 
@@ -321,16 +321,11 @@ template<typename ElementT, usize ComponentCount>
     }
 
     for(const auto& field : asset.asMap()){
-        const Core::Metascript::MStringView fieldName(field.first.data(), field.first.size());
+        const Core::Metascript::MStringView fieldName(field.first);
         if(IsAllowedMeshAssetField(fieldName))
             continue;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': unsupported field '{}.{}' would be dropped by refresh")
-            , ConvertString(s_MeshMetaKind)
-            , PathToString<tchar>(nwbFilePath)
-            , ConvertString(meshVariableName)
-            , ConvertString(AStringView(field.first.data(), field.first.size()))
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': unsupported field '{}.{}' would be dropped by refresh"), ConvertString(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), ConvertString(meshVariableName), ConvertString(fieldName));
         return false;
     }
     return true;

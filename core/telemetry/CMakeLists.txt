@@ -4,6 +4,7 @@ target_sources(nwb_telemetry PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/diagnostic.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/frame_graph.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/frame_graph_queue_codec.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/frame_graph_statistics_codec.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/frame_graph_record.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/frame_graph_validators.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/frame_graph_statistics_validators.cpp"

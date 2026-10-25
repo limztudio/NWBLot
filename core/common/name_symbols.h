@@ -11,7 +11,7 @@
 #include <core/alloc/general.h>
 #include <core/alloc/scratch.h>
 
-#include <global/filesystem/operations.h>
+#include <global/filesystem/operations_file_io.h>
 #include <global/name.h>
 
 

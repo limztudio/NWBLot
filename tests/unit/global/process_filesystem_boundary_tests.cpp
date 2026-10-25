@@ -14,6 +14,7 @@
 #include <global/filesystem/utility.h>
 #include <global/limit.h>
 #include <global/process_execution.h>
+#include <global/process_capture.h>
 #include <global/shared_library.h>
 #include <global/text_utils.h>
 

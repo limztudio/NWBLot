@@ -7,6 +7,8 @@
 
 #include "filesystem/path.h"
 #include "filesystem/operations.h"
+#include "filesystem/operations_file_io.h"
+#include "filesystem/operations_remove.h"
 #include "filesystem/directory_iterator.h"
 #include "filesystem/utility.h"
 

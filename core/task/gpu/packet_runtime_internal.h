@@ -7,11 +7,50 @@
 
 #include "packet_runtime.h"
 
+#include <core/graphics/gpu_timing.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct GpuRecordedGraph::ArtifactStorage final : NoCopy{
+    GraphicsVector<GpuRecordedPacket> packets;
+    GraphicsVector<u8> packetRecordingOverlaps;
+    GraphicsVector<GlobalUniquePtr<GpuTimingSubmissionTicket>> packetTimingTickets;
+    GraphicsVector<CommandListResourceStateHandoff> packetStateSeeds;
+    PacketRecordingScratch serialRecordingScratch;
+    GraphicsVector<PacketRecordingScratch> packetRecordingScratch;
+    GpuTimingRecorder* timingRecorder = nullptr;
+    const GpuTaskGraph* graphIdentity = nullptr;
+    f64 recordingElapsedSeconds = 0.0;
+    f64 readyFrontierElapsedSeconds = 0.0;
+    f64 readyFrontierWorkerBusySeconds = 0.0;
+    f64 readyFrontierWorkerCapacitySeconds = 0.0;
+    usize packetCount = 0u;
+    u64 compiledObjectIdentity = 0u;
+    u64 generation = 0u;
+    u64 planGeneration = 0u;
+    u64 recordingAttemptGeneration = 0u;
+    u16 deviceGeneration = 0u;
+    bool valid = false;
+
+
+public:
+    explicit ArtifactStorage(GraphicsArena& arena)noexcept
+        : packets(arena)
+        , packetRecordingOverlaps(arena)
+        , packetTimingTickets(arena)
+        , packetStateSeeds(arena)
+        , serialRecordingScratch(arena)
+        , packetRecordingScratch(arena)
+    {}
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

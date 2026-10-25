@@ -139,7 +139,7 @@ using AssetObjectCachePathVector = Vector<Path, NWB::Core::Alloc::GlobalArena>;
         if(!*isRegularFile)
             continue;
 
-        const auto extension = PathToString(testArena.arena, entry.path().extension());
+        const auto extension = PathToString(testArena.arena, entry.path().extensionView());
         if(extension != ".nwbobj")
             continue;
 

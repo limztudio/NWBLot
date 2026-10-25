@@ -193,7 +193,7 @@ Expected<DiscoveredNwbFileVector> DiscoverFilesWithExtension(CookArena& cookAren
                 continue;
 
             const ::Path<ScratchArena>& filePath = dirEntry.path();
-            ScratchString extension = PathToString(scratchArena, filePath.extension());
+            ScratchString extension = PathToString(scratchArena, filePath.extensionView());
             CanonicalizeTextInPlace(extension);
             if(extension != expectedExtension)
                 continue;

@@ -62,16 +62,16 @@ template<usize N>
     return MStringView(text, N > 0u ? N - 1u : 0u);
 }
 
-static void CheckStringListElement(const Value& value, const AString& expected){
+static void CheckStringListElement(const Value& value, const MStringView expected){
     ASSERT_TRUE(value.isString());
-    EXPECT_EQ(value.asString(), ViewOf(expected));
+    EXPECT_EQ(value.asString(), expected);
 }
 
-static void CheckParseFailsWithMessage(const AString& source, MStringView expectedMessage){
+static void CheckParseFailsWithMessage(const MStringView source, MStringView expectedMessage){
     DestinationArena arena;
     Document document(arena.arena);
 
-    const bool parsed = document.parse(ViewOf(source));
+    const bool parsed = document.parse(source);
     EXPECT_FALSE(parsed);
     ASSERT_TRUE(document.hasErrors());
     ASSERT_FALSE(document.errors().empty());
@@ -81,16 +81,16 @@ static void CheckParseFailsWithMessage(const AString& source, MStringView expect
     EXPECT_EQ(message, expectedMessage);
 }
 
-static void CheckSingleStringListValue(const Value& value, const AString& text){
+static void CheckSingleStringListValue(const Value& value, const MStringView text){
     ASSERT_TRUE(value.isList());
     ASSERT_EQ(value.asList().size(), 1u);
     CheckStringListElement(value.asList()[0u], text);
 }
 
 template<typename ArenaT>
-static void MakeSingleStringList(Value& list, ArenaT& arena, const AString& text){
+static void MakeSingleStringList(Value& list, ArenaT& arena, const MStringView text){
     list.makeList();
-    list.append(Value(ViewOf(text), arena.arena));
+    list.append(Value(text, arena.arena));
 }
 
 TEST(Metascript, CrossArenaMoveAssignmentCopiesIntoDestinationArena){
@@ -397,10 +397,10 @@ TEST(Metascript, StructMetadataOwnsSourceAndSurvivesVariableStorageGrowth){
 }
 
 TEST(Metascript, StructAndVariableDuplicatesAreRejectedInTheirOwnNamespaces){
-    CheckParseFailsWithMessage(AString("struct Duplicate{ float value; float value; };"), "duplicate struct field declaration");
-    CheckParseFailsWithMessage(AString("struct Duplicate{}; struct Duplicate{};"), "duplicate struct declaration");
-    CheckParseFailsWithMessage(AString("struct Description{}; Description runtime; Description runtime;"), "duplicate variable declaration");
-    CheckParseFailsWithMessage(AString("number value; text value;"), "duplicate variable declaration");
+    CheckParseFailsWithMessage("struct Duplicate{ float value; float value; };", "duplicate struct field declaration");
+    CheckParseFailsWithMessage("struct Duplicate{}; struct Duplicate{};", "duplicate struct declaration");
+    CheckParseFailsWithMessage("struct Description{}; Description runtime; Description runtime;", "duplicate variable declaration");
+    CheckParseFailsWithMessage("number value; text value;", "duplicate variable declaration");
 }
 
 TEST(Metascript, ReparsingClearsStructsVariablesDeclarationsAndErrors){

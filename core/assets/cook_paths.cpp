@@ -72,7 +72,7 @@ Expected<CookVector<ResolvedAssetRoot>, AssetRootResolutionError> ResolveAssetRo
                 path = path.parentPath();
             ::Path<ScratchArena> ancestor(scratchArena, path);
             while(!ancestor.empty()){
-                ScratchString name = PathToString(scratchArena, ancestor.filename());
+                ScratchString name = PathToString(scratchArena, ancestor.filenameView());
                 CanonicalizeTextInPlace(name);
                 if(name == s_AssetsDirectoryName){
                     path = Path(arena, ancestor);
@@ -99,10 +99,10 @@ Expected<CookVector<ResolvedAssetRoot>, AssetRootResolutionError> ResolveAssetRo
         if(duplicate)
             continue;
 
-        ScratchString parentName = PathToString(scratchArena, path.parentPath().filename());
+        ScratchString parentName = PathToString(scratchArena, path.parentPath().filenameView());
         CanonicalizeTextInPlace(parentName);
         const AStringView virtualRoot = parentName == __hidden_cook_paths::s_ImplDirectoryName ? s_EngineVirtualRoot : s_ProjectVirtualRoot;
-        roots.emplace_back(Move(path), ACompactString(virtualRoot));
+        roots.emplace_back(Move(path), virtualRoot);
     }
     return roots;
 }

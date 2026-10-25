@@ -52,7 +52,7 @@ protected:
         m_root = NWB::Tests::RepoRootOf(m_testArena.arena, __FILE__) / "__build_obj" / "build_input_tests";
         ASSERT_TRUE(EnsureDirectories(m_root / s_Assets / "empty"));
         m_paths.repoRoot = m_root;
-        m_paths.assetRoots.emplace_back(m_root / s_Assets, ACompactString(s_Project));
+        m_paths.assetRoots.emplace_back(m_root / s_Assets, s_Project);
     }
 
     virtual void TearDown()override{
@@ -68,7 +68,7 @@ protected:
         ASSERT_TRUE(stream);
         Assets::AssetString normalized = PathToString(m_testArena.arena, path.lexicallyNormal());
         CanonicalizeTextInPlace(normalized);
-        m_files.emplace_back(m_testArena.arena, m_root / s_Assets, path, normalized, ACompactString(s_Project));
+        m_files.emplace_back(m_testArena.arena, m_root / s_Assets, path, normalized, s_Project);
     }
 
     void addInput(AStringView relativePath){
@@ -114,9 +114,9 @@ TEST_F(BuildInputSelection, ExactInputsPreserveDiscoveredOrderAndDuplicateRecord
     addInput(s_AssetsANwb);
     ASSERT_TRUE(select());
     ASSERT_EQ(m_files.size(), 3u);
-    EXPECT_EQ(PathToString(m_testArena.arena, m_files[0].filePath.filename()), "z.nwb");
-    EXPECT_EQ(PathToString(m_testArena.arena, m_files[1].filePath.filename()), s_ANwb);
-    EXPECT_EQ(PathToString(m_testArena.arena, m_files[2].filePath.filename()), s_ANwb);
+    EXPECT_EQ(PathToString(m_testArena.arena, m_files[0].filePath.filenameView()), "z.nwb");
+    EXPECT_EQ(PathToString(m_testArena.arena, m_files[1].filePath.filenameView()), s_ANwb);
+    EXPECT_EQ(PathToString(m_testArena.arena, m_files[2].filePath.filenameView()), s_ANwb);
 }
 
 TEST_F(BuildInputSelection, DirectoryInputsRespectBoundariesAndAllowEmptyRoots){
@@ -128,8 +128,8 @@ TEST_F(BuildInputSelection, DirectoryInputsRespectBoundariesAndAllowEmptyRoots){
     addInput("assets/empty");
     ASSERT_TRUE(select());
     ASSERT_EQ(m_files.size(), s_ExpectedDualCount);
-    EXPECT_EQ(PathToString(m_testArena.arena, m_files[0].filePath.filename()), s_ANwb);
-    EXPECT_EQ(PathToString(m_testArena.arena, m_files[1].filePath.filename()), "c.nwb");
+    EXPECT_EQ(PathToString(m_testArena.arena, m_files[0].filePath.filenameView()), s_ANwb);
+    EXPECT_EQ(PathToString(m_testArena.arena, m_files[1].filePath.filenameView()), "c.nwb");
 }
 
 TEST_F(BuildInputSelection, RejectedInputsLeaveDiscoveredFilesIntact){
@@ -158,7 +158,7 @@ TEST_F(BuildInputSelection, DirectoryCaseFollowsHostFilesystemContract){
     EXPECT_EQ(m_files.size(), s_ExpectedDualCount);
 #else
     ASSERT_EQ(m_files.size(), 1u);
-    EXPECT_EQ(PathToString(m_testArena.arena, m_files[0].filePath.filename()), s_ANwb);
+    EXPECT_EQ(PathToString(m_testArena.arena, m_files[0].filePath.filenameView()), s_ANwb);
 #endif
 }
 

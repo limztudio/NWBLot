@@ -75,7 +75,7 @@ namespace __hidden_gather{
                 NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to inspect input entry '{}'"), PathToString<tchar>(entry.path()));
                 return MakeUnexpected(Failure{});
             }
-            if(*regular && PathToString(arena, entry.path().extension()) == Assets::BuiltAssetDetail::s_Extension)
+            if(*regular && PathToString(scratchArena, entry.path().extensionView()) == Assets::BuiltAssetDetail::s_Extension)
                 files.emplace_back(PathToString(arena, entry.path()));
         }
     }

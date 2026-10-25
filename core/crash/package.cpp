@@ -230,7 +230,7 @@ static CrashStringT<ArenaT> BuildCallstackText(ArenaT& arena, const CrashRequest
         text += '#';
         AppendUnsignedText(text, i);
         text += " 0x";
-        text += FormatHex64A(arena, request.callstackFrames[i]);
+        AppendHexU64(request.callstackFrames[i], text);
         text += '\n';
     }
     return text;
@@ -417,7 +417,7 @@ static bool WriteCrashPackageWithArena(ArenaT& arena, const CrashRequest& reques
         const bool dumpWritten = WriteWindowsMinidump(arena, request);
         if(!WriteTextFile(
             RequestPendingDirectory(arena, request) / PackageNames::s_SymbolicationFileName,
-            CrashStringT<ArenaT>(dumpWritten ? "minidump captured; server-side PDB symbolication pending\n" : "minidump capture failed; metadata package only\n", arena)
+            dumpWritten ? "minidump captured; server-side PDB symbolication pending\n" : "minidump capture failed; metadata package only\n"
         ))
             return false;
     }
@@ -435,12 +435,12 @@ static bool WriteCrashPackageWithArena(ArenaT& arena, const CrashRequest& reques
         CopyFileToPackage(arena, request, PackageNames::s_LinuxCoreUsesPidPath, PackageNames::s_LinuxCoreUsesPidFileName);
         if(!WriteTextFile(
             RequestPendingDirectory(arena, request) / PackageNames::s_SymbolicationFileName,
-            CrashStringT<ArenaT>("linux crash package captured; OS core policy remains authoritative; server-side DWARF symbolication uses reachable module symbols\n", arena)
+            "linux crash package captured; OS core policy remains authoritative; server-side DWARF symbolication uses reachable module symbols\n"
         ))
             return false;
     }
 #else
-    if(!WriteTextFile(RequestPendingDirectory(arena, request) / PackageNames::s_SymbolicationFileName, CrashStringT<ArenaT>("native platform crash artifact expected; server-side symbolication pending\n", arena)))
+    if(!WriteTextFile(RequestPendingDirectory(arena, request) / PackageNames::s_SymbolicationFileName, "native platform crash artifact expected; server-side symbolication pending\n"))
         return false;
 #endif
 

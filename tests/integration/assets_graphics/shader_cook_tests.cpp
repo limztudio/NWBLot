@@ -297,7 +297,7 @@ static void ExpectNoShaderCompilerWorkDirectories(const Path& cacheDirectory){
     const auto entries = RecursiveDirectoryIterator<Path::Arena>::Create(cacheDirectory);
     ASSERT_TRUE(entries);
     for(const auto& entry : *entries){
-        const auto filename = PathToString(cacheDirectory.arena(), entry.path().filename());
+        const auto filename = PathToString(cacheDirectory.arena(), entry.path().filenameView());
         EXPECT_FALSE(AStringView(filename).starts_with(".nwb_shader_")) << filename;
     }
 }
@@ -410,7 +410,7 @@ TEST(AssetsGraphics, ShaderCookPreservesExactEntryPoint){
         if(!*isRegularFile)
             continue;
 
-        const auto extension = PathToString(testArena.arena, entry.path().extension());
+        const auto extension = PathToString(testArena.arena, entry.path().extensionView());
         if(extension != ".spv")
             continue;
 

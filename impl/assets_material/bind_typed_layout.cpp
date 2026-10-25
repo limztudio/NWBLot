@@ -314,17 +314,17 @@ static bool WriteMaterialTypedLayoutFieldBytes(Material::TypedBlockByteVector& i
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<UInt4U> ParseMaterialTypedLayoutParameterValue(const Name& materialName, const ACompactString& parameterName, const ACompactString& parameterValue, const MaterialTypedLayoutField& field){
+static Expected<UInt4U> ParseMaterialTypedLayoutParameterValue(const Name& materialName, const AStringView parameterName, const AStringView parameterValue, const MaterialTypedLayoutField& field){
 
     const auto parameter = MaterialTypedValueParser::Parse(parameterName, parameterValue);
     if(!parameter){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: parameter '{}' for '{}' has invalid value '{}'"), ConvertString(parameterName.view()), ConvertString(materialName.resolvedText()), ConvertString(parameterValue.view()));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: parameter '{}' for '{}' has invalid value '{}'"), ConvertString(parameterName), ConvertString(materialName.resolvedText()), ConvertString(parameterValue));
         return MakeUnexpected(Failure{});
     }
 
     const MaterialLayoutFieldType::Enum parameterFieldType = MaterialLayoutFieldTypeFromParameterType(static_cast<MaterialParameterValueType::Enum>(parameter->meta.z), parameter->meta.w);
     if(parameterFieldType != field.fieldType){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: parameter '{}' for '{}' does not match interface field type"), ConvertString(parameterName.view()), ConvertString(materialName.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: parameter '{}' for '{}' does not match interface field type"), ConvertString(parameterName), ConvertString(materialName.resolvedText()));
         return MakeUnexpected(Failure{});
     }
 

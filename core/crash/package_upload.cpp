@@ -131,9 +131,8 @@ static void* CrashCurlCalloc(const size_t count, const size_t size)noexcept{
 }
 
 template<typename ArenaT>
-static bool IsSafePackageName(const ::Path<ArenaT>& path){
-    const ::Path<ArenaT> filename = path.filename();
-    const auto name = filename.native();
+static bool IsSafePackageName(const ::Path<ArenaT>& path)noexcept{
+    const auto name = path.filenameView();
     if(name.empty() || IsDot(name) || IsDotDot(name))
         return false;
     for(const auto ch : name){
@@ -284,8 +283,7 @@ Expected<void, ErrorCode> ApplyCrashSpoolRetention(Alloc::ScratchArena& scratchA
         if(protectedPendingPackageName.empty())
             return true;
 
-        const ::Path<Alloc::ScratchArena> filename = path.filename();
-        const CrashStringT<Alloc::ScratchArena> packageName = PathToString<char>(scratchArena, filename);
+        const CrashStringT<Alloc::ScratchArena> packageName = PathToString<char>(scratchArena, path.filenameView());
         return AStringView(packageName.data(), packageName.size()) != protectedPendingPackageName;
     };
 

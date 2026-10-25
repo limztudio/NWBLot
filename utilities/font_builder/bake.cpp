@@ -37,19 +37,18 @@ bool ValidateOptions(const BakeOptions& options, Core::Alloc::ScratchArena& scra
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: invalid options; ppem16..256, spread2..32, extent32..2048, groups1..8, total capacity<=128MiB"));
         return false;
     }
-    const ScratchPath output(scratch, options.output);
-    if(PathToGenericString(scratch, output.extension()) != s_MetadataFileExtension){
+    static_cast<void>(scratch);
+    if(options.output.extensionView() != NWB_TEXT(".nwb")){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: --output must name a .nwb font asset bunch"));
         return false;
     }
-    const auto stem = PathToGenericString(scratch, output.stem());
-    if(stem.empty() || stem == "." || stem == ".."){
+    const auto stem = options.output.stemView();
+    if(stem.empty() || IsDot(stem) || IsDotDot(stem)){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: output must have a nonempty asset stem"));
         return false;
     }
-    const ScratchPath source(scratch, options.source);
-    const auto sourceExtension = ToAsciiLowerCopy(PathToGenericString(scratch, source.extension()));
-    if(sourceExtension != s_TrueTypeExtension && sourceExtension != s_OpenTypeExtension && sourceExtension != s_PreparedFontExtension){
+    constexpr AStringView s_SourceExtensions[] = { s_TrueTypeExtension, s_OpenTypeExtension, s_PreparedFontExtension };
+    if(!PathHasListedExtension(options.source, s_SourceExtensions)){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: --font must name a .ttf, .otf, or prepared .font source"));
         return false;
     }

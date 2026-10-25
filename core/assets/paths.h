@@ -123,7 +123,7 @@ template<typename StringT, typename PathArenaT>
     if(componentIt == virtualPathPath.end())
         return MakeUnexpected(Failure{});
 
-    const AString<Alloc::ScratchArena> componentText = PathToString(scratchArena, *componentIt);
+    const AString<Alloc::ScratchArena> componentText = PathToString(scratchArena, componentIt.nativeComponent());
     if(!virtualRoot.assign(AStringView(componentText)) || virtualRoot.empty())
         return MakeUnexpected(Failure{});
     return virtualRoot;
@@ -224,7 +224,7 @@ template<typename AssetRootVector>
 
     ACompactString requestedVirtualRoot;
     {
-        const AString<Alloc::ScratchArena> componentText = PathToString(scratchArena, *componentIt);
+        const AString<Alloc::ScratchArena> componentText = PathToString(scratchArena, componentIt.nativeComponent());
         if(!requestedVirtualRoot.assign(AStringView(componentText)) || requestedVirtualRoot.empty())
             return MakeUnexpected(Failure{});
     }
@@ -236,7 +236,7 @@ template<typename AssetRootVector>
         Path resolvedPath(arena, assetRoot.path);
         ++componentIt;
         for(; componentIt != virtualPathPath.end(); ++componentIt){
-            AString<Alloc::ScratchArena> componentText = PathToString(scratchArena, *componentIt);
+            AString<Alloc::ScratchArena> componentText = PathToString(scratchArena, componentIt.nativeComponent());
             CanonicalizeTextInPlace(componentText);
             if(componentText.empty() || componentText == "." || componentText == ".." || componentText.find('/') != AString<Alloc::ScratchArena>::npos){
                 NWB_LOGGER_ERROR(NWB_TEXT("Assets: invalid virtual path '{}'; components must not be empty, '.', '..' or contain path separators"), ConvertString(virtualPath));
@@ -260,7 +260,7 @@ template<typename AssetRootVector>
         return MakeUnexpected(Failure{});
     }
 
-    auto nwbStem = PathToString(scratchArena, metadataPath.stem());
+    auto nwbStem = PathToString(scratchArena, metadataPath.stemView());
     CanonicalizeTextInPlace(nwbStem);
     if(nwbStem.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': failed to resolve paired source because the metadata filename stem is empty"), PathToString<tchar>(nwbFilePath));
@@ -284,11 +284,11 @@ template<typename AssetRootVector>
             continue;
 
         const ::Path<Alloc::ScratchArena>& candidatePath = dirEntry.path();
-        auto candidateExtension = PathToString(scratchArena, candidatePath.extension());
+        auto candidateExtension = PathToString(scratchArena, candidatePath.extensionView());
         CanonicalizeTextInPlace(candidateExtension);
         if(candidateExtension == s_NwbExtension)
             continue;
-        auto candidateStem = PathToString(scratchArena, candidatePath.stem());
+        auto candidateStem = PathToString(scratchArena, candidatePath.stemView());
         CanonicalizeTextInPlace(candidateStem);
         if(candidateStem != nwbStem)
             continue;
@@ -462,7 +462,7 @@ template<typename SourceStringT, typename MetadataDocument, typename ParseDocume
 template<typename ScratchArenaT, typename SourceStringT>
 [[nodiscard]] inline bool CheckPairedSourceExtension(const Path& nwbFilePath, const SourceStringT& sourcePath, const AStringView expectedExtension, const AStringView diagnosticPrefix, ScratchArenaT& scratchArena){
     const ::Path<ScratchArenaT> sourcePathValue(scratchArena, sourcePath);
-    AString<ScratchArenaT> extension(PathToString(scratchArena, sourcePathValue.extension()));
+    AString<ScratchArenaT> extension(PathToString(scratchArena, sourcePathValue.extensionView()));
     CanonicalizeTextInPlace(extension);
     if(AStringView(extension) == expectedExtension)
         return true;

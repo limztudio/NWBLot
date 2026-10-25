@@ -234,12 +234,13 @@ static const wl_output_listener s_OutputListener = {
 
 static void OnRegistryGlobal(void* data, wl_registry* registry, u32 name, const char* interfaceName, u32 version){
     auto& context = *MakeNotNull(static_cast<WaylandContext*>(data));
+    const AStringView interfaceView(interfaceName);
 
-    if(NWB_STRCMP(interfaceName, wl_compositor_interface.name) == 0){
+    if(interfaceView == wl_compositor_interface.name){
         const u32 bindVersion = version < s_WaylandCompositorBindVersion ? version : s_WaylandCompositorBindVersion;
         context.compositor = static_cast<wl_compositor*>(wl_registry_bind(registry, name, &wl_compositor_interface, bindVersion));
     }
-    else if(NWB_STRCMP(interfaceName, wl_output_interface.name) == 0 && !context.output){
+    else if(interfaceView == wl_output_interface.name && !context.output){
         const u32 bindVersion = version < s_WaylandOutputBindVersion ? version : s_WaylandOutputBindVersion;
         context.output = static_cast<wl_output*>(wl_registry_bind(registry, name, &wl_output_interface, bindVersion));
         if(!context.output || wl_output_add_listener(context.output, &s_OutputListener, &context) != 0){
@@ -247,9 +248,9 @@ static void OnRegistryGlobal(void* data, wl_registry* registry, u32 name, const 
             return;
         }
     }
-    else if(NWB_STRCMP(interfaceName, wl_seat_interface.name) == 0)
+    else if(interfaceView == wl_seat_interface.name)
         context.input.bindSeat(*registry, name, version);
-    else if(NWB_STRCMP(interfaceName, xdg_wm_base_interface.name) == 0){
+    else if(interfaceView == xdg_wm_base_interface.name){
         const u32 bindVersion = version < s_WaylandWmBaseBindVersion ? version : s_WaylandWmBaseBindVersion;
         context.wmBase = static_cast<xdg_wm_base*>(wl_registry_bind(registry, name, &xdg_wm_base_interface, bindVersion));
     }

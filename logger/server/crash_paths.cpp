@@ -44,7 +44,7 @@ CrashScratchPath CrashExtractedDirectory(Core::Alloc::ScratchArena& arena, const
 }
 
 CrashScratchPath CrashExtractedPackageDirectory(Core::Alloc::ScratchArena& arena, const Path& configuredStorageDirectory, const CrashScratchPath& archivePath){
-    return CrashExtractedDirectory(arena, configuredStorageDirectory) / archivePath.stem();
+    return CrashExtractedDirectory(arena, configuredStorageDirectory) / archivePath.stemView();
 }
 
 

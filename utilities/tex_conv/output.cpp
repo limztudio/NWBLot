@@ -172,10 +172,8 @@ Expected<OutputPaths> ResolveOutputPaths(const ScratchPath& inputPath, const ASt
     }
     else{
         const ScratchPath outputBase(scratchArena, outputArgument);
-        const auto extension = ToAsciiLowerCopy(PathToGenericString(scratchArena, outputBase.extension()));
-        if(extension.empty())
-            paths.metadata = outputBase;
-        else if(extension == __hidden_output::s_NwbOutputExtension)
+        constexpr AStringView s_NwbOutputExtensions[] = { __hidden_output::s_NwbOutputExtension };
+        if(outputBase.extensionView().empty() || PathHasListedExtension(outputBase, s_NwbOutputExtensions))
             paths.metadata = outputBase;
         else{
             NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: --output must be an output base name or a .nwb filename."));

@@ -353,7 +353,7 @@ static Expected<CookString> ParseMaterialInterface(const Path& nwbFilePath, cons
 
     // The interface names a `.bind`; strip the extension to match the discovered virtual path.
     ::Path<ScratchArena> interfacePathPath(scratchArena, interfacePath);
-    ScratchString extension = PathToString(scratchArena, interfacePathPath.extension());
+    ScratchString extension = PathToString(scratchArena, interfacePathPath.extensionView());
     CanonicalizeTextInPlace(extension);
     if(AStringView(extension) != AStringView(".bind")){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': interface must reference a .bind file"), PathToString<tchar>(nwbFilePath));
@@ -403,7 +403,7 @@ static Expected<CookString> ParseMaterialVirtualAssetField(const Path& nwbFilePa
     }
 
     const ::Path<ScratchArena> virtualPathPath(scratchArena, virtualPath);
-    ScratchString extension = PathToString(scratchArena, virtualPathPath.extension());
+    ScratchString extension = PathToString(scratchArena, virtualPathPath.extensionView());
     CanonicalizeTextInPlace(extension);
     if(AStringView(extension) != requiredExtension){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must reference a {} file"), PathToString<tchar>(nwbFilePath), ConvertString(fieldName), ConvertString(requiredExtension));

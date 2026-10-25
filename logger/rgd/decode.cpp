@@ -145,9 +145,13 @@ AInteropString AssembleTextSummary(const Config& config, Core::Alloc::ScratchAre
 
 
 // RDF's C API returns explicit file/open/format status instead of using its throwing C++ file wrappers for expected input failures.
-[[nodiscard]] Expected<void, StringView> AdmitRdfInput(const AInteropString& filePath)noexcept{
+[[nodiscard]] Expected<void, StringView> AdmitRdfInput(Core::Alloc::ScratchArena& scratchArena, const StringView filePath){
+    if(filePath.empty() || filePath.find('\0') != StringView::npos)
+        return MakeUnexpected(s_RdfOpenFailedError);
+
+    const AString<Core::Alloc::ScratchArena> pathText(filePath, scratchArena);
     rdfStream* stream = nullptr;
-    if(rdfStreamOpenFile(filePath.c_str(), &stream) != rdfResultOk)
+    if(rdfStreamOpenFile(pathText.c_str(), &stream) != rdfResultOk)
         return MakeUnexpected(s_RdfOpenFailedError);
 
     rdfChunkFile* chunks = nullptr;
@@ -171,17 +175,17 @@ AInteropString AssembleTextSummary(const Config& config, Core::Alloc::ScratchAre
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<AInteropString, StringView> DecodeCrashDumpToText(const AInteropString& filePath){
-    const auto admitted = __hidden_rgd_decode::AdmitRdfInput(filePath);
-    if(!admitted)
-        return MakeUnexpected(admitted.error());
-
+Expected<AInteropString, StringView> DecodeCrashDumpToText(const StringView filePath){
     // The vendor trace loader owns process-global state; retain this lock through report assembly and local teardown.
     ScopedLock decodeLock(__hidden_rgd_decode::RgdDecodeMutex());
     Core::Alloc::ScratchArena scratchArena(__hidden_rgd_decode::s_RgdDecodeScratch);
 
+    const auto admitted = __hidden_rgd_decode::AdmitRdfInput(scratchArena, filePath);
+    if(!admitted)
+        return MakeUnexpected(admitted.error());
+
     Config config;
-    config.crash_dump_file = filePath;
+    config.crash_dump_file.assign(filePath.data(), filePath.size());
     RgdCrashDumpContents contents;
     // Keep vendor console diagnostics on their existing streams; replacing shared buffers races with the server output worker.
     if(!RgdParsingUtils::ParseCrashDump(config, contents))

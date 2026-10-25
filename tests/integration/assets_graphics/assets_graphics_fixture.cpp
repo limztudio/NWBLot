@@ -179,7 +179,7 @@ bool AssetsGraphicsFixture::BuildPreparedGraphicsAssetRoots(
     options.repoRoot = PathToString(testArena.arena, AssetsGraphicsTestRepoRoot(testArena));
     options.assetRoots.reserve(assetRoots.size());
     for(const Path& assetRoot : assetRoots){
-        auto parentDirectoryName = PathToString(testArena.arena, assetRoot.lexicallyNormal().parentPath().filename());
+        auto parentDirectoryName = PathToString(testArena.arena, assetRoot.lexicallyNormal().parentPath().filenameView());
         CanonicalizeTextInPlace(parentDirectoryName);
 
         ACompactString virtualRoot;

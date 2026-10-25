@@ -48,8 +48,8 @@ ScratchString BuildVirtualBasePath(const ScratchPath& outputPath, const AStringV
     BasicString<ScratchPath::value_type, Core::Alloc::ScratchArena> relativeNative(scratchArena);
     relativeNative.reserve(noExtension.native().size());
     bool foundAssets = false;
-    for(const ScratchPath& part : noExtension){
-        const auto partText = part.native();
+    for(auto partIt = noExtension.begin(); partIt != noExtension.end(); ++partIt){
+        const auto partText = partIt.nativeComponent();
         bool assetsDirectory = partText.size() == s_AssetsSourceDirectoryText.size();
         for(usize i = 0u; assetsDirectory && i < partText.size(); ++i)
             assetsDirectory = ToAsciiLower(partText[i]) == static_cast<ScratchPath::value_type>(s_AssetsSourceDirectoryText[i]);
@@ -66,7 +66,7 @@ ScratchString BuildVirtualBasePath(const ScratchPath& outputPath, const AStringV
     }
     ScratchPath relativePath(scratchArena);
     if(relativeNative.empty())
-        relativePath = noExtension.filename();
+        relativePath = noExtension.filenameView();
     else
         relativePath = BasicStringView<ScratchPath::value_type>(relativeNative);
 
@@ -79,6 +79,14 @@ ScratchString BuildVirtualBasePath(const ScratchPath& outputPath, const AStringV
         virtualPath.push_back('/');
     virtualPath += relativeText;
     return virtualPath;
+}
+
+ScratchString BuildSplitAssetName(const AStringView virtualBase, const AStringView suffix, Core::Alloc::ScratchArena& scratchArena){
+    ScratchString name(scratchArena);
+    name.reserve(AddSize(virtualBase.size(), suffix.size()));
+    name += virtualBase;
+    name += suffix;
+    return name;
 }
 
 
@@ -123,15 +131,15 @@ bool WriteNwbAsset(
     }
 
     const bool skinnedModel = !mesh.skin.empty() || !skeletonJoints.empty() || !inverseBindMatrices.empty();
-    const ScratchPath packageDirectory = outputPath.parentPath() / outputPath.stem();
+    const ScratchPath packageDirectory = outputPath.parentPath() / outputPath.stemView();
     const ScratchPath meshPath = packageDirectory / __hidden_asset_writer::s_MeshSplitFileName;
     const ScratchString virtualBase = __hidden_asset_writer::BuildVirtualBasePath(outputPath, virtualRoot);
-    const ScratchString meshName = virtualBase + __hidden_asset_writer::s_MeshNameSuffix.data();
+    const ScratchString meshName = __hidden_asset_writer::BuildSplitAssetName(virtualBase, __hidden_asset_writer::s_MeshNameSuffix, scratchArena);
 
     if(assetType == OutputAssetType::Model){
         if(skinnedModel){
-            const ScratchString skeletonName = virtualBase + __hidden_asset_writer::s_SkeletonNameSuffix.data();
-            const ScratchString skinName = virtualBase + __hidden_asset_writer::s_SkinNameSuffix.data();
+            const ScratchString skeletonName = __hidden_asset_writer::BuildSplitAssetName(virtualBase, __hidden_asset_writer::s_SkeletonNameSuffix, scratchArena);
+            const ScratchString skinName = __hidden_asset_writer::BuildSplitAssetName(virtualBase, __hidden_asset_writer::s_SkinNameSuffix, scratchArena);
             return AssetWriterFormatDetail::WriteModelAsset(outputPath, meshName, AStringView(skinName), AStringView(skeletonName), scratchArena);
         }
         return AssetWriterFormatDetail::WriteModelAsset(outputPath, meshName, {}, {}, scratchArena);
@@ -168,8 +176,8 @@ bool WriteNwbAsset(
 
     const ScratchPath skeletonPath = packageDirectory / __hidden_asset_writer::s_SkeletonSplitFileName;
     const ScratchPath skinPath = packageDirectory / __hidden_asset_writer::s_SkinSplitFileName;
-    const ScratchString skeletonName = virtualBase + __hidden_asset_writer::s_SkeletonNameSuffix.data();
-    const ScratchString skinName = virtualBase + __hidden_asset_writer::s_SkinNameSuffix.data();
+    const ScratchString skeletonName = __hidden_asset_writer::BuildSplitAssetName(virtualBase, __hidden_asset_writer::s_SkeletonNameSuffix, scratchArena);
+    const ScratchString skinName = __hidden_asset_writer::BuildSplitAssetName(virtualBase, __hidden_asset_writer::s_SkinNameSuffix, scratchArena);
 
     if(assetType == OutputAssetType::Skeleton)
         return AssetWriterFormatDetail::WriteSkeletonAsset(outputPath, skeletonOutput.joints, skeletonOutput.bindPoseMatrices, scratchArena);

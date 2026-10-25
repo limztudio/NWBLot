@@ -167,16 +167,17 @@ void PrintMeshInstances(const Span<const MeshInstance> instances, Core::Alloc::S
 }
 
 Expected<UtilityVector<usize>> SelectMeshInstances(const Span<const MeshInstance> instances, const AStringView selector, Core::Alloc::ScratchArena& scratchArena){
+    static_cast<void>(scratchArena);
     UtilityVector<usize> outSelection;
 
-    const ScratchString normalized = NormalizeOptionText(ScratchString(selector, scratchArena));
-    if(normalized.empty() || normalized == s_DefaultMeshSelectorText){
+    const AStringView normalized = TrimView(selector);
+    if(normalized.empty() || EqualsAsciiIgnoreCase(normalized, s_DefaultMeshSelectorText)){
         outSelection.reserve(instances.size());
         for(usize instanceIndex = 0u; instanceIndex < instances.size(); ++instanceIndex)
             outSelection.push_back(instanceIndex);
         return outSelection;
     }
-    if(normalized == s_FirstMeshSelectorText){
+    if(EqualsAsciiIgnoreCase(normalized, s_FirstMeshSelectorText)){
         if(instances.empty()){
             NWB_LOGGER_WARNING(NWB_TEXT("Invalid mesh selector '{}': no mesh instances are available"), ConvertString(selector));
             return MakeUnexpected(Failure{});
@@ -198,10 +199,10 @@ Expected<UtilityVector<usize>> SelectMeshInstances(const Span<const MeshInstance
     UtilityVector<usize> partialSelection;
     outSelection.reserve(instances.size());
     for(const MeshInstance& instance : instances){
-        if(EqualsAsciiIgnoreCase(__hidden_scene::UfbxStringView(instance.node->name), AStringView(normalized)) || EqualsAsciiIgnoreCase(__hidden_scene::UfbxStringView(instance.mesh->name), AStringView(normalized))){
+        if(EqualsAsciiIgnoreCase(__hidden_scene::UfbxStringView(instance.node->name), normalized) || EqualsAsciiIgnoreCase(__hidden_scene::UfbxStringView(instance.mesh->name), normalized)){
             outSelection.push_back(instance.index);
         }
-        else if(outSelection.empty() && (ContainsAsciiIgnoreCase(__hidden_scene::UfbxStringView(instance.node->name), AStringView(normalized)) || ContainsAsciiIgnoreCase(__hidden_scene::UfbxStringView(instance.mesh->name), AStringView(normalized)))){
+        else if(outSelection.empty() && (ContainsAsciiIgnoreCase(__hidden_scene::UfbxStringView(instance.node->name), normalized) || ContainsAsciiIgnoreCase(__hidden_scene::UfbxStringView(instance.mesh->name), normalized))){
             if(partialSelection.empty())
                 partialSelection.reserve(instances.size());
             partialSelection.push_back(instance.index);

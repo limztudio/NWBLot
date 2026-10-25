@@ -179,7 +179,7 @@ template<typename ArenaT>
     const auto ensured = EnsureDirectories(destinationDirectory);
     if(!ensured)
         return MakeUnexpected(ensured.error());
-    const Path<ArenaT> destination = destinationDirectory / sourcePath.filename();
+    const Path<ArenaT> destination = destinationDirectory / sourcePath.filenameView();
     const auto removed = RemoveAllIfExists(destination);
     if(!removed)
         return MakeUnexpected(removed.error());

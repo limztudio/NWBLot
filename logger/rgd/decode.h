@@ -28,7 +28,7 @@ namespace Rgd{
 
 
 // NWB-owned boundary to the vendor's native C++ string API; expected file/format failures return static diagnostics, and unexpected exceptions leave the ingest worker.
-[[nodiscard]] Expected<AInteropString, StringView> DecodeCrashDumpToText(const AInteropString& filePath);
+[[nodiscard]] Expected<AInteropString, StringView> DecodeCrashDumpToText(StringView filePath);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

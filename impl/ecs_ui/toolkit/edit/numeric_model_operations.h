@@ -118,8 +118,8 @@ template<typename Value, typename Bounds>
     return parsed ? NumericParseStatus::Complete : parsed.error();
 }
 
-[[nodiscard]] inline bool DraftDirty(const EditModel& draft, const AString<Core::Alloc::GlobalArena>& acceptedDraft)noexcept{
-    return draft.text() != AStringView(acceptedDraft.data(), acceptedDraft.size());
+[[nodiscard]] inline bool DraftDirty(const EditModel& draft, const AStringView acceptedDraft)noexcept{
+    return draft.text() != acceptedDraft;
 }
 
 [[nodiscard]] inline bool SetDraftText(const AStringView text, EditModel& inOutDraft, u64& inOutRevision){

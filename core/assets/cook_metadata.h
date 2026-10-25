@@ -45,7 +45,7 @@ public:
     explicit ResolvedAssetRoot(CookArena& arena)noexcept
         : path(arena)
     {}
-    ResolvedAssetRoot(Path&& inPath, const ACompactString& inVirtualRoot)noexcept
+    ResolvedAssetRoot(Path&& inPath, AStringView inVirtualRoot)noexcept
         : path(Move(inPath))
         , virtualRoot(inVirtualRoot)
     {}
@@ -60,7 +60,7 @@ struct DiscoveredNwbFile{
 
 public:
     template<typename FileArenaT>
-    DiscoveredNwbFile(CookArena& arena, const Path& inAssetRoot, const ::Path<FileArenaT>& inFilePath, AStringView inNormalizedPathText, const ACompactString& inVirtualRoot)
+    DiscoveredNwbFile(CookArena& arena, const Path& inAssetRoot, const ::Path<FileArenaT>& inFilePath, AStringView inNormalizedPathText, AStringView inVirtualRoot)
         : assetRoot(arena, inAssetRoot)
         , filePath(arena, inFilePath)
         , normalizedPathText(inNormalizedPathText, arena)

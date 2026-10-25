@@ -25,9 +25,9 @@ namespace __hidden_metascript_expression_parser{
 
 
 constexpr usize s_InitialReferencePathSegmentCount = 4u;
-constexpr const char* s_ListExpectedCommaOrCloseMessage = "expected ',' or '}' in list";
-constexpr const char* s_MapKeysMustBeStringsMessage = "map keys must be strings";
-constexpr const char* s_MapExpectedCommaOrCloseMessage = "expected ',' or '}' in map";
+constexpr MStringView s_ListExpectedCommaOrCloseMessage = "expected ',' or '}' in list";
+constexpr MStringView s_MapKeysMustBeStringsMessage = "map keys must be strings";
+constexpr MStringView s_MapExpectedCommaOrCloseMessage = "expected ',' or '}' in map";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

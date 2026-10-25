@@ -200,12 +200,12 @@ bool MaterialTypedValueParser::StoreMaterialTypedValueComponent(MaterialTypedVal
     }
 }
 
-Expected<MaterialTypedValueData> MaterialTypedValueParser::Parse(const ACompactString& key, const ACompactString& value)noexcept{
+Expected<MaterialTypedValueData> MaterialTypedValueParser::Parse(const AStringView key, const AStringView value)noexcept{
     MaterialTypedValueData parameter;
-    if(!key || !value)
+    if(key.empty() || key.size() > ACompactString::s_MaxLength || value.empty() || value.size() > ACompactString::s_MaxLength)
         return MakeUnexpected(Failure{});
 
-    const auto call = SplitMaterialParameterCall(TrimView(value.view()));
+    const auto call = SplitMaterialParameterCall(TrimView(value));
     if(!call)
         return MakeUnexpected(Failure{});
     const auto type = ParseMaterialParameterTypeText(call->type);
@@ -221,7 +221,7 @@ Expected<MaterialTypedValueData> MaterialTypedValueParser::Parse(const ACompactS
             return MakeUnexpected(Failure{});
     }
 
-    const u64 keyHash = ComputeMaterialBindParameterKeyHash(key.view());
+    const u64 keyHash = ComputeMaterialBindParameterKeyHash(key);
     parameter.meta.x = static_cast<u32>(keyHash & s_MaterialParameterKeyHashLowWordMask);
     parameter.meta.y = static_cast<u32>(keyHash >> s_MaterialParameterKeyHashHighWordBitShift);
     parameter.meta.z = static_cast<u32>(type->valueType);

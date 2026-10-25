@@ -41,7 +41,7 @@ static bool TryResolveMaterialBindDependencyInterface(const ScratchPath& normali
     if(!PathHasDirectoryAncestor(normalizedDependency, normalizedMaterialBindIncludeRoot))
         return true;
 
-    ScratchString extension = PathToString(scratchArena, normalizedDependency.extension());
+    ScratchString extension = PathToString(scratchArena, normalizedDependency.extensionView());
     CanonicalizeTextInPlace(extension);
     if(extension != MaterialBindNames::SourceExtensionText())
         return true;

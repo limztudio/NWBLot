@@ -207,7 +207,7 @@ public:
     if(symbolStoreDirectory.empty())
         return MakeUnexpected(Failure{});
 
-    const CrashScratchPath moduleFileName = modulePath.filename();
+    const auto moduleFileName = modulePath.filenameView();
     if(moduleFileName.empty())
         return MakeUnexpected(Failure{});
 

@@ -70,10 +70,14 @@ bool BackendContext::createDevice(){
         return DeviceExtensionFeature::None;
     };
 
-    auto registerDeviceExtension = [](DeviceExtensionMap& extensions, const GraphicsString& name, const DeviceExtensionFeature::Enum feature){
-        auto [it, inserted] = extensions.emplace(name, feature);
-        if(!inserted && it.value() == DeviceExtensionFeature::None && feature != DeviceExtensionFeature::None)
-            it.value() = feature;
+    auto registerDeviceExtension = [this](DeviceExtensionMap& extensions, const AStringView name, const DeviceExtensionFeature::Enum feature){
+        auto it = extensions.find(name);
+        if(it != extensions.end()){
+            if(it.value() == DeviceExtensionFeature::None && feature != DeviceExtensionFeature::None)
+                it.value() = feature;
+            return;
+        }
+        extensions.emplace(GraphicsString(name, m_arena), feature);
     };
 
     for(const auto& name : m_deviceParams.requiredBackendDeviceExtensions){
@@ -89,14 +93,14 @@ bool BackendContext::createDevice(){
         registerDeviceExtension(m_optionalExtensions.device, name, resolveDeviceExtensionFeature(name));
     }
     if(m_deviceParams.enableGpuCrashDiagnostics){
-        m_optionalExtensions.device.emplace(GraphicsString(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME, m_arena), DeviceExtensionFeature::None);
-        m_optionalExtensions.device.emplace(GraphicsString(VK_NV_DEVICE_DIAGNOSTICS_CONFIG_EXTENSION_NAME, m_arena), DeviceExtensionFeature::None);
+        registerDeviceExtension(m_optionalExtensions.device, VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME, DeviceExtensionFeature::None);
+        registerDeviceExtension(m_optionalExtensions.device, VK_NV_DEVICE_DIAGNOSTICS_CONFIG_EXTENSION_NAME, DeviceExtensionFeature::None);
     }
 
     m_swapChainState.backBufferFormat = VulkanDetail::GetBackBufferFormat(m_deviceParams);
     m_swapChainState.outputMode = SwapChainOutputMode::SDR;
     if(!m_deviceParams.headlessDevice)
-        m_enabledExtensions.device.emplace(GraphicsString(VK_KHR_SWAPCHAIN_EXTENSION_NAME, m_arena), DeviceExtensionFeature::None);
+        registerDeviceExtension(m_enabledExtensions.device, VK_KHR_SWAPCHAIN_EXTENSION_NAME, DeviceExtensionFeature::None);
     if(!m_deviceParams.headlessDevice){
         if(!createWindowSurface())
             return false;

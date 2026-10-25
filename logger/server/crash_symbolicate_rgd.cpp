@@ -49,7 +49,7 @@ void AppendRadeonGpuDetectiveSummary(Core::Alloc::ScratchArena& arena, const Cra
 
     const AString<Core::Alloc::ScratchArena> capturePath = PathToString<char>(arena, rgdCapture);
 
-    const auto decoded = Rgd::DecodeCrashDumpToText(AInteropString(capturePath.data(), capturePath.size()));
+    const auto decoded = Rgd::DecodeCrashDumpToText(capturePath);
     if(!decoded){
         outReport += s_GpuDetectiveSectionHeader;
         outReport += s_GpuDetectiveDecodeFailedStatus;

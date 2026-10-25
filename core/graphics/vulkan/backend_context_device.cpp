@@ -94,9 +94,13 @@ bool BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
         }
 
         if(enableExtension){
-            auto [it, inserted] = m_enabledExtensions.device.emplace(GraphicsString(name, m_arena), enabledFeature);
-            if(!inserted && it.value() == DeviceExtensionFeature::None && enabledFeature != DeviceExtensionFeature::None)
-                it.value() = enabledFeature;
+            auto it = m_enabledExtensions.device.find(name);
+            if(it != m_enabledExtensions.device.end()){
+                if(it.value() == DeviceExtensionFeature::None && enabledFeature != DeviceExtensionFeature::None)
+                    it.value() = enabledFeature;
+            }
+            else
+                m_enabledExtensions.device.emplace(GraphicsString(name, m_arena), enabledFeature);
         }
     }
 

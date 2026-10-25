@@ -124,9 +124,7 @@ public:
             AddSmokeSkinnedRenderSystems(*m_world, m_context);
         else
             AddSmokeRenderSystems(*m_world, m_context);
-        auto* rendererPtr = m_world->getSystem<NWB::Impl::RendererSystem>();
-        NWB_ASSERT(rendererPtr);
-        NWB::Impl::RendererSystem& renderer = *rendererPtr;
+        NWB::Impl::RendererSystem& renderer = *MakeNotNull(m_world->getSystem<NWB::Impl::RendererSystem>());
         m_worldReady = true;
         NWB::Impl::ReflectionSettings settings;
         settings.traceMode = NWB::Impl::ReflectionTraceMode::Hardware;
@@ -287,9 +285,7 @@ private:
     }
 
     [[nodiscard]] bool readActualCounts(){
-        auto* meshesPtr = m_world->getSystem<NWB::Impl::MeshSystem>();
-        NWB_ASSERT(meshesPtr);
-        NWB::Impl::MeshSystem& meshes = *meshesPtr;
+        NWB::Impl::MeshSystem& meshes = *MakeNotNull(m_world->getSystem<NWB::Impl::MeshSystem>());
         m_renderers = 0u;
         m_runtimeRenderers = 0u;
         auto view = m_world->view<NWB::Impl::RendererComponent>();

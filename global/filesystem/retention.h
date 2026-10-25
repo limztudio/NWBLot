@@ -7,6 +7,7 @@
 
 #include "../algorithm.h"
 #include "../containers.h"
+#include "../not_null.h"
 #include "directory_iterator.h"
 
 
@@ -51,20 +52,20 @@ template<typename ArenaT, typename PredicateT>
     if(!directoryIt)
         return MakeUnexpected(directoryIt.error());
 
-    Vector<const Path<ArenaT>*, ArenaT> entries{arena};
+    Vector<NotNull<const Path<ArenaT>*>, ArenaT> entries{arena};
     entries.reserve(static_cast<usize>(directoryIt->end() - directoryIt->begin()));
     for(const auto& entry : *directoryIt){
         const auto retained = shouldRetainPath(entry.path());
         if(!retained)
             return MakeUnexpected(retained.error());
         if(*retained)
-            entries.push_back(&entry.path());
+            entries.push_back(MakeNotNull(&entry.path()));
     }
 
     if(entries.size() <= maxEntries)
         return {};
 
-    Sort(entries.begin(), entries.end(), [](const Path<ArenaT>* lhs, const Path<ArenaT>* rhs)noexcept{ return *lhs < *rhs; });
+    Sort(entries.begin(), entries.end(), [](const NotNull<const Path<ArenaT>*> lhs, const NotNull<const Path<ArenaT>*> rhs)noexcept{ return *lhs < *rhs; });
 
     ErrorCode firstError;
     const usize removeCount = entries.size() - maxEntries;

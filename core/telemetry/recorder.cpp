@@ -191,10 +191,10 @@ Recorder::EventSlotPtr Recorder::acquireSlotUnlocked()noexcept{
     if(!m_availableSlots)
         return MakeGlobalUnique<EventSlot>(m_arena, m_arena);
 
-    EventSlot* const slot = m_availableSlots;
-    m_availableSlots = slot->nextAvailable;
-    slot->nextAvailable = nullptr;
-    return EventSlotPtr(slot, EventSlotPtr::deleter_type(m_arena));
+    EventSlot& slot = *m_availableSlots;
+    m_availableSlots = slot.nextAvailable;
+    slot.nextAvailable = nullptr;
+    return EventSlotPtr(&slot, EventSlotPtr::deleter_type(m_arena));
 }
 
 void Recorder::prepareDiagnosticSlotsUnlocked(){
@@ -231,8 +231,8 @@ void Recorder::recordCapturedDiagnostic(const u64 frameIndex, const NotNull<cons
         return;
     }
 
-    EventSlot* const available = m_diagnosticAvailableSlots;
-    auto& destination = available->record.payload;
+    EventSlot& available = *m_diagnosticAvailableSlots;
+    auto& destination = available.record.payload;
     if(payloadBytes > destination.capacity()){
         dropDiagnosticCapture();
         return;
@@ -240,10 +240,10 @@ void Recorder::recordCapturedDiagnostic(const u64 frameIndex, const NotNull<cons
     // Both capacities were admitted before publication. Byte initialization and owning-pointer movement cannot throw.
     destination.resize(payloadBytes);
     NWB_MEMCPY(destination.data(), destination.size(), payload.get(), payloadBytes);
-    available->record.header = __hidden_telemetry_recorder::MakeEventHeader(EventKind::Diagnostic, frameIndex, payloadBytes, streamId);
-    m_diagnosticAvailableSlots = available->nextAvailable;
-    available->nextAvailable = nullptr;
-    m_events.push_back(EventSlotPtr(available, EventSlotPtr::deleter_type(m_arena)));
+    available.record.header = __hidden_telemetry_recorder::MakeEventHeader(EventKind::Diagnostic, frameIndex, payloadBytes, streamId);
+    m_diagnosticAvailableSlots = available.nextAvailable;
+    available.nextAvailable = nullptr;
+    m_events.push_back(EventSlotPtr(&available, EventSlotPtr::deleter_type(m_arena)));
 }
 
 void Recorder::dropDiagnosticCapture()noexcept{
@@ -263,14 +263,14 @@ void Recorder::recycleSlotUnlocked(EventSlotPtr&& slot)noexcept{
 
 void Recorder::releaseAvailableSlotsUnlocked()noexcept{
     while(m_availableSlots){
-        EventSlot* const slot = m_availableSlots;
-        m_availableSlots = slot->nextAvailable;
-        EventSlotPtr::deleter_type{ m_arena }(slot);
+        EventSlot& slot = *m_availableSlots;
+        m_availableSlots = slot.nextAvailable;
+        EventSlotPtr::deleter_type{ m_arena }(&slot);
     }
     while(m_diagnosticAvailableSlots){
-        EventSlot* const slot = m_diagnosticAvailableSlots;
-        m_diagnosticAvailableSlots = slot->nextAvailable;
-        EventSlotPtr::deleter_type{ m_arena }(slot);
+        EventSlot& slot = *m_diagnosticAvailableSlots;
+        m_diagnosticAvailableSlots = slot.nextAvailable;
+        EventSlotPtr::deleter_type{ m_arena }(&slot);
     }
     m_diagnosticSlotCount = 0u;
     m_diagnosticPrepared = false;

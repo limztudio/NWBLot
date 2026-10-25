@@ -31,8 +31,7 @@ Expected<void, Core::CpuTaskAdmissionError::Enum> UiLayerSystem::update(Core::EC
     if(m_frameGeneration == Limit<u64>::s_Max)
         TerminateInvariant();
     ++m_frameGeneration;
-    const UiSkin* skin = Core::Assets::CastAsset<UiSkin>(m_skinAsset.get());
-    NWB_FATAL_ASSERT(skin);
+    const UiSkin& skin = *MakeNotNull(Core::Assets::CastAsset<UiSkin>(m_skinAsset.get()));
     if(!m_context.beginFrame(m_frameGeneration))
         TerminateInvariant();
     const f32 frameDelta = m_frameDelta.consume();
@@ -40,8 +39,8 @@ Expected<void, Core::CpuTaskAdmissionError::Enum> UiLayerSystem::update(Core::EC
     if(m_editHost.takeClipboardFailure())
         NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: clipboard publication failed"));
     m_ui.reset();
-    m_ui.setSkin(*skin);
-    m_paint.begin(m_display, m_frameGeneration, m_skinSelection.generation(), m_skinSelection.selected(), *skin);
+    m_ui.setSkin(skin);
+    m_paint.begin(m_display, m_frameGeneration, m_skinSelection.generation(), m_skinSelection.selected(), skin);
     constexpr usize s_PaintReserveQuads = 256u;
     m_paint.reserve(s_PaintReserveQuads);
     m_ui.setDeltaSeconds(frameDelta);

@@ -55,7 +55,7 @@ NotNull<const char*> WaylandClipboardService::NativeMimeForRank(const u8 rank)no
 }
 
 void WaylandClipboardService::OnRegistryGlobal(void* const data, wl_registry* const registry, const u32 name, const char* const interfaceName, const u32 version){
-    auto& service = *static_cast<WaylandClipboardService*>(data);
+    auto& service = *MakeNotNull(static_cast<WaylandClipboardService*>(data));
     if(AStringView(interfaceName) == wl_data_device_manager_interface.name && !service.m_manager){
         service.m_manager = static_cast<wl_data_device_manager*>(wl_registry_bind(registry, name, &wl_data_device_manager_interface, Min(version, s_MaxDataDeviceManagerVersion)));
         service.m_managerName = name;
@@ -73,7 +73,7 @@ void WaylandClipboardService::OnRegistryGlobal(void* const data, wl_registry* co
 }
 
 void WaylandClipboardService::OnRegistryRemove(void* const data, wl_registry*, const u32 name){
-    auto& service = *static_cast<WaylandClipboardService*>(data);
+    auto& service = *MakeNotNull(static_cast<WaylandClipboardService*>(data));
     if(name == service.m_seatName){
         service.attachSeat(nullptr, 0u);
         return;
@@ -105,7 +105,7 @@ void WaylandClipboardService::OnRegistryRemove(void* const data, wl_registry*, c
 
 
 void WaylandClipboardService::OnDataOffer(void* const data, wl_data_device*, wl_data_offer* const offer){
-    static_cast<WaylandClipboardService*>(data)->addOffer(offer, ClipboardChannel::Clipboard);
+    MakeNotNull(static_cast<WaylandClipboardService*>(data))->addOffer(offer, ClipboardChannel::Clipboard);
 }
 
 void WaylandClipboardService::OnEnter(void*, wl_data_device*, u32, wl_surface*, wl_fixed_t, wl_fixed_t, wl_data_offer*)noexcept{}
@@ -117,11 +117,11 @@ void WaylandClipboardService::OnMotion(void*, wl_data_device*, u32, wl_fixed_t, 
 void WaylandClipboardService::OnDrop(void*, wl_data_device*)noexcept{}
 
 void WaylandClipboardService::OnSelection(void* const data, wl_data_device*, wl_data_offer* const offer)noexcept{
-    static_cast<WaylandClipboardService*>(data)->selectOffer(offer, ClipboardChannel::Clipboard);
+    MakeNotNull(static_cast<WaylandClipboardService*>(data))->selectOffer(offer, ClipboardChannel::Clipboard);
 }
 
 void WaylandClipboardService::OnOfferMime(void* const data, wl_data_offer*, const char* const mime)noexcept{
-    auto& offer = *static_cast<Offer*>(data);
+    auto& offer = *MakeNotNull(static_cast<Offer*>(data));
     __hidden_wayland_clipboard_protocol::SelectMime(SafeStringView(mime), offer.rank);
 }
 
@@ -132,7 +132,7 @@ void WaylandClipboardService::OnOfferAction(void*, wl_data_offer*, u32)noexcept{
 void WaylandClipboardService::OnSourceTarget(void*, wl_data_source*, const char*)noexcept{}
 
 void WaylandClipboardService::OnSourceSend(void* const data, wl_data_source*, const char* const mime, const int fd){
-    auto& source = *static_cast<Source*>(data);
+    auto& source = *MakeNotNull(static_cast<Source*>(data));
     u8 rank = 0u;
     __hidden_wayland_clipboard_protocol::SelectMime(SafeStringView(mime), rank);
     if(rank != 0u){
@@ -144,7 +144,7 @@ void WaylandClipboardService::OnSourceSend(void* const data, wl_data_source*, co
 }
 
 void WaylandClipboardService::OnSourceCancelled(void* const data, wl_data_source* const native)noexcept{
-    auto& source = *static_cast<Source*>(data);
+    auto& source = *MakeNotNull(static_cast<Source*>(data));
     wl_data_source_destroy(native);
     source.handle = nullptr;
 }
@@ -166,15 +166,15 @@ void WaylandClipboardService::OnSourceAction(void*, wl_data_source*, u32)noexcep
 
 
 void WaylandClipboardService::OnPrimaryOffer(void* const data, zwp_primary_selection_device_v1*, zwp_primary_selection_offer_v1* const offer){
-    static_cast<WaylandClipboardService*>(data)->addOffer(offer, ClipboardChannel::PrimarySelection);
+    MakeNotNull(static_cast<WaylandClipboardService*>(data))->addOffer(offer, ClipboardChannel::PrimarySelection);
 }
 
 void WaylandClipboardService::OnPrimarySelection(void* const data, zwp_primary_selection_device_v1*, zwp_primary_selection_offer_v1* const offer)noexcept{
-    static_cast<WaylandClipboardService*>(data)->selectOffer(offer, ClipboardChannel::PrimarySelection);
+    MakeNotNull(static_cast<WaylandClipboardService*>(data))->selectOffer(offer, ClipboardChannel::PrimarySelection);
 }
 
 void WaylandClipboardService::OnPrimaryMime(void* const data, zwp_primary_selection_offer_v1*, const char* const mime)noexcept{
-    auto& offer = *static_cast<Offer*>(data);
+    auto& offer = *MakeNotNull(static_cast<Offer*>(data));
     __hidden_wayland_clipboard_protocol::SelectMime(SafeStringView(mime), offer.rank);
 }
 
@@ -183,7 +183,7 @@ void WaylandClipboardService::OnPrimarySend(void* const data, zwp_primary_select
 }
 
 void WaylandClipboardService::OnPrimaryCancelled(void* const data, zwp_primary_selection_source_v1* const native)noexcept{
-    auto& source = *static_cast<Source*>(data);
+    auto& source = *MakeNotNull(static_cast<Source*>(data));
     zwp_primary_selection_source_v1_destroy(native);
     source.handle = nullptr;
 }

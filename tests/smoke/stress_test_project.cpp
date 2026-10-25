@@ -379,12 +379,7 @@ public:
     explicit StressTestSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
         , m_world(CreateWorldOrDie(context))
-        , m_renderer([this]() -> NWB::Impl::RendererSystem&{
-            auto* const renderer = m_world->getSystem<NWB::Impl::RendererSystem>();
-            NWB_FATAL_ASSERT(renderer);
-            return *renderer;
-        }()
-        )
+        , m_renderer(*MakeNotNull(m_world->getSystem<NWB::Impl::RendererSystem>()))
         , m_characterOwners(context.objectArena)
     {}
     virtual ~StressTestSmokeProject()noexcept override{

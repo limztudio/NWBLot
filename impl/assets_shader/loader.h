@@ -93,7 +93,7 @@ template<typename ShaderPathResolver>
         return false;
     }
 
-    const IShader& shaderAsset = *checked_cast<const IShader*>(loadedAsset->get());
+    const IShader& shaderAsset = *MakeNotNull(checked_cast<const IShader*>(loadedAsset->get()));
     const Core::Assets::AssetBytes& shaderBinary = shaderAsset.bytecode();
     NWB_ASSERT(!shaderAsset.entryPoint().empty() && !shaderBinary.empty() && (shaderBinary.size() & ShaderBinaryPayload::s_SpvWordByteMask) == 0u);
 

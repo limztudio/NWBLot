@@ -126,7 +126,7 @@ TextInputAdmission::Enum Win32TextInputService::updateNativeCaret(const TextInpu
 bool DispatchWin32TextInputMessage(ITextInputService& service, const u32 message, const usize wParam, const isize lParam){
     if(!service.isOwnerThread() || service.capabilities().backend != TextInputBackend::Win32Imm32)
         return false;
-    return checked_cast<Win32TextInputService*>(&service)->handleMessage(message, wParam, lParam);
+    return MakeNotNull(checked_cast<Win32TextInputService*>(&service))->handleMessage(message, wParam, lParam);
 }
 
 

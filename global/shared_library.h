@@ -9,6 +9,7 @@
 #include "expected.h"
 #include "error_code.h"
 #include "diagnostics.h"
+#include "not_null.h"
 #include "termination.h"
 
 #if defined(NWB_PLATFORM_WINDOWS)
@@ -104,13 +105,13 @@ public:
         const auto symbol = resolveRaw(arena, symbolName);
         if(!symbol)
             return MakeUnexpected(symbol.error());
-        return reinterpret_cast<Fn>(*symbol);
+        return reinterpret_cast<Fn>(symbol->get());
     }
 
 
 private:
     template<typename ArenaT>
-    [[nodiscard]] Expected<void*, SharedLibraryFailure> resolveRaw(ArenaT& arena, const AStringView symbolName)const{
+    [[nodiscard]] Expected<NotNull<void*>, SharedLibraryFailure> resolveRaw(ArenaT& arena, const AStringView symbolName)const{
         if(!m_handle)
             return MakeUnexpected(SharedLibraryFailure{ .code = MakeErrorCode(ErrorCondition::bad_file_descriptor), });
         if(symbolName.empty() || symbolName.find(char{}) != AStringView::npos)
@@ -133,7 +134,7 @@ private:
         if(!symbol)
             return MakeUnexpected(SharedLibraryFailure{ .code = MakeErrorCode(ErrorCondition::bad_address), });
 #endif
-        return symbol;
+        return MakeNotNull(symbol);
     }
 
 

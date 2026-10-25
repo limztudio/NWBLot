@@ -173,7 +173,7 @@ static constexpr ComplexSceneBox s_ComplexFrontEnclosureBoxes[] = {
 class GiTestSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     [[nodiscard]] static bool ShouldCaptureComplex(void* context, const u64)noexcept{
-        return static_cast<GiTestSmokeProject*>(context)->m_complexLiveWarmupComplete;
+        return MakeNotNull(static_cast<GiTestSmokeProject*>(context))->m_complexLiveWarmupComplete;
     }
 
 
@@ -223,9 +223,7 @@ public:
             }
         }
         if(m_resolveSwitchEnabled){
-            auto* const rendererPtr = m_world->getSystem<NWB::Impl::RendererSystem>();
-            NWB_ASSERT(rendererPtr);
-            NWB::Impl::RendererSystem& renderer = *rendererPtr;
+            NWB::Impl::RendererSystem& renderer = *MakeNotNull(m_world->getSystem<NWB::Impl::RendererSystem>());
             renderer.setFrameLaggedAsyncLightingEnabled(true);
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: surfel GI resolve switch probe enabled (lagged_lighting=1)"));
         }
@@ -364,9 +362,7 @@ public:
             return false;
 
         if(m_resolveSwitchEnabled && (m_rendererBaselineRenderedFrameCount == 30u || m_rendererBaselineRenderedFrameCount == 90u)){
-            auto* const rendererPtr = m_world->getSystem<NWB::Impl::RendererSystem>();
-            NWB_ASSERT(rendererPtr);
-            NWB::Impl::RendererSystem& renderer = *rendererPtr;
+            NWB::Impl::RendererSystem& renderer = *MakeNotNull(m_world->getSystem<NWB::Impl::RendererSystem>());
             NWB::Impl::SurfelGiQualitySettings settings;
             settings.resolveResolution = m_rendererBaselineRenderedFrameCount == 30u ? NWB::Impl::SurfelGiResolveResolution::Quarter : NWB::Impl::SurfelGiResolveResolution::Half;
             if(!renderer.setSurfelGiQualitySettings(settings))
@@ -375,9 +371,7 @@ public:
         }
 
         if(m_resolveSwitchEnabled && (m_rendererBaselineRenderedFrameCount == 150u || m_rendererBaselineRenderedFrameCount == 210u)){
-            auto* const rendererPtr = m_world->getSystem<NWB::Impl::RendererSystem>();
-            NWB_ASSERT(rendererPtr);
-            NWB::Impl::RendererSystem& renderer = *rendererPtr;
+            NWB::Impl::RendererSystem& renderer = *MakeNotNull(m_world->getSystem<NWB::Impl::RendererSystem>());
             NWB::Impl::ShadowQualitySettings settings;
             settings.receiverResolution = m_rendererBaselineRenderedFrameCount == 150u ? NWB::Impl::ShadowReceiverResolution::Quarter : NWB::Impl::ShadowReceiverResolution::Half;
             if(!renderer.setShadowQualitySettings(settings))

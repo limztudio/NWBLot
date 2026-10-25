@@ -36,7 +36,7 @@ using SymbolMap = ParallelHashMap<NameHash, SymbolString, SymbolArena>;
 
 struct SymbolRecordView{
     NameHash hash = {};
-    const SymbolString* text = nullptr;
+    NotNull<const SymbolString*> text;
 };
 
 inline constexpr char s_NamesymRecordSeparator = '\t';
@@ -137,7 +137,7 @@ public:
         Vector<SymbolRecordView, Alloc::ScratchArena> records(scratchArena);
         records.reserve(m_symbols.size());
         for(const auto& symbol : m_symbols)
-            records.push_back(SymbolRecordView{ symbol.first, &symbol.second });
+            records.push_back(SymbolRecordView{ symbol.first, MakeNotNull(&symbol.second) });
 
         Sort(records.begin(), records.end(), [](const SymbolRecordView& lhs, const SymbolRecordView& rhs)noexcept{
             return LessNameHash(lhs.hash, rhs.hash);
@@ -146,9 +146,6 @@ public:
         usize requiredSize = AddSize(outText.size(), NameSymbols::s_FileHeader.size());
         requiredSize = AddSize(requiredSize, s_NamesymProducerSuffix.size());
         for(const SymbolRecordView& record : records){
-            if(!record.text)
-                continue;
-
             requiredSize = AddSize(requiredSize, ::NameDetail::s_DebugHashTextLength);
             requiredSize = AddSize(requiredSize, s_NamesymRuntimeSource.size());
             for(const char ch : *record.text){
@@ -162,9 +159,6 @@ public:
         outText += NameSymbols::s_FileHeader;
         outText += s_NamesymProducerSuffix;
         for(const SymbolRecordView& record : records){
-            if(!record.text)
-                continue;
-
             AppendDebugHashText(outText, record.hash);
             outText += s_NamesymRuntimeSource;
             AppendEscapedNamesymText(outText, AStringView(record.text->data(), record.text->size()));

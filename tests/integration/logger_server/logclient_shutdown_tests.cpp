@@ -83,7 +83,7 @@ MHD_Result ShutdownCaptureServer::RequestCallback(
         return MHD_YES;
     }
 
-    auto& server = *static_cast<ShutdownCaptureServer*>(serverContext);
+    auto& server = *MakeNotNull(static_cast<ShutdownCaptureServer*>(serverContext));
     if(!server.m_delayedFirstRequest.exchange(true, MemoryOrder::acq_rel))
         SleepMS(s_FirstRequestDelayMilliseconds);
     server.m_requestCount.fetch_add(1u, MemoryOrder::release);

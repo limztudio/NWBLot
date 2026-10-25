@@ -191,27 +191,26 @@ Expected<TelemetryReport> BuildTelemetryReport(TelemetryArena& arena, const Tele
     frameGraphs.reserve(events.eventCount());
 
     for(usize i = 0u; i < events.eventCount(); ++i){
-        const Telemetry::EventRecord* const event = events.eventAt(i);
-        NWB_ASSERT(event);
+        const Telemetry::EventRecord& event = *MakeNotNull(events.eventAt(i));
 
-        ++report.summary.eventKindCounts[TelemetryReportDetail::EventKindBucket(event->header.kind)];
-        TelemetryReportDetail::RecordFrameRange(report.summary, event->header.frameIndex);
+        ++report.summary.eventKindCounts[TelemetryReportDetail::EventKindBucket(event.header.kind)];
+        TelemetryReportDetail::RecordFrameRange(report.summary, event.header.frameIndex);
 
-        switch(event->header.kind){
+        switch(event.header.kind){
         case Telemetry::EventKind::TextLog: {
-            const auto payload = Telemetry::ParseTextLogPayload(event->payload.data(), event->payload.size());
+            const auto payload = Telemetry::ParseTextLogPayload(event.payload.data(), event.payload.size());
             if(!payload)
                 ++report.summary.parseFailureCount;
             break;
         }
         case Telemetry::EventKind::Diagnostic: {
-            const auto payload = Telemetry::ParseDiagnosticPayload(event->payload.data(), event->payload.size());
+            const auto payload = Telemetry::ParseDiagnosticPayload(event.payload.data(), event.payload.size());
             if(!payload)
                 ++report.summary.parseFailureCount;
             break;
         }
         case Telemetry::EventKind::PerfFrame: {
-            const auto payload = Telemetry::ParsePerfTimingPayload(event->payload.data(), event->payload.size());
+            const auto payload = Telemetry::ParsePerfTimingPayload(event.payload.data(), event.payload.size());
             if(!payload){
                 ++report.summary.parseFailureCount;
                 break;
@@ -226,19 +225,19 @@ Expected<TelemetryReport> BuildTelemetryReport(TelemetryArena& arena, const Tele
             break;
         }
         case Telemetry::EventKind::MemoryFrame: {
-            const auto payload = Telemetry::ParsePerfMemoryPayload(event->payload.data(), event->payload.size());
+            const auto payload = Telemetry::ParsePerfMemoryPayload(event.payload.data(), event.payload.size());
             if(!payload){
                 ++report.summary.parseFailureCount;
                 break;
             }
             AddTelemetryMemorySummary(report.summary, *payload);
-            AppendTelemetryMemoryRecordJson(memoryRecords, *payload, event->header.streamId);
+            AppendTelemetryMemoryRecordJson(memoryRecords, *payload, event.header.streamId);
             break;
         }
         case Telemetry::EventKind::FrameGraphFrame: {
             TelemetryReportDetail::FrameGraphReportRecord& record = frameGraphs.emplace_back(arena);
-            record.streamId = event->header.streamId;
-            auto payload = Telemetry::ParseFrameGraphPayload(arena, scratchArena, event->payload.data(), event->payload.size());
+            record.streamId = event.header.streamId;
+            auto payload = Telemetry::ParseFrameGraphPayload(arena, scratchArena, event.payload.data(), event.payload.size());
             if(!payload){
                 frameGraphs.pop_back();
                 ++report.summary.parseFailureCount;

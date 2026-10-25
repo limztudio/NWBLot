@@ -422,12 +422,8 @@ public:
             return true;
         }
         m_bindJoints = Move(*bindJoints);
-        auto* const meshSystemPtr = m_world->getSystem<NWB::Impl::MeshSystem>();
-        NWB_ASSERT(meshSystemPtr);
-        NWB::Impl::MeshSystem& meshSystem = *meshSystemPtr;
-        auto* const meshSkinningSystemPtr = m_world->getSystem<NWB::Impl::MeshSkinningSystem>();
-        NWB_ASSERT(meshSkinningSystemPtr);
-        NWB::Impl::MeshSkinningSystem& meshSkinningSystem = *meshSkinningSystemPtr;
+        NWB::Impl::MeshSystem& meshSystem = *MakeNotNull(m_world->getSystem<NWB::Impl::MeshSystem>());
+        NWB::Impl::MeshSkinningSystem& meshSkinningSystem = *MakeNotNull(m_world->getSystem<NWB::Impl::MeshSkinningSystem>());
 
         m_runtimeMeshProvider.install(meshSystem, meshSkinningSystem);
 

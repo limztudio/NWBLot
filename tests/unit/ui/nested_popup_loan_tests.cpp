@@ -40,9 +40,8 @@ public:
     [[nodiscard]] virtual u64 revision()const noexcept override{
         ++metadataCalls;
         if(selectListOnRevision){
-            ListState* state = selectListOnRevision;
-            selectListOnRevision = nullptr;
-            state->select(4u);
+            ListState& state = *MakeNotNull(Exchange(selectListOnRevision, nullptr));
+            state.select(4u);
         }
         return contentRevision;
     }
@@ -52,41 +51,34 @@ public:
     [[nodiscard]] virtual StringView text(const u64 index)const override{
         const StringView value = ComboSource::text(index);
         if(closePopupOnText){
-            PopupState* state = closePopupOnText;
-            closePopupOnText = nullptr;
-            state->close();
+            PopupState& state = *MakeNotNull(Exchange(closePopupOnText, nullptr));
+            state.close();
         }
         if(reopenPopupOnText){
-            PopupState* state = reopenPopupOnText;
-            reopenPopupOnText = nullptr;
-            state->close();
-            state->open();
+            PopupState& state = *MakeNotNull(Exchange(reopenPopupOnText, nullptr));
+            state.close();
+            state.open();
         }
         if(selectListOnText){
-            ListState* state = selectListOnText;
-            selectListOnText = nullptr;
-            state->select(4u);
+            ListState& state = *MakeNotNull(Exchange(selectListOnText, nullptr));
+            state.select(4u);
         }
         if(selectComboOnText){
-            ComboState* state = selectComboOnText;
-            selectComboOnText = nullptr;
-            state->select(4u);
+            ComboState& state = *MakeNotNull(Exchange(selectComboOnText, nullptr));
+            state.select(4u);
         }
         if(closeMenuOnText){
-            ContextMenuState* state = closeMenuOnText;
-            closeMenuOnText = nullptr;
-            state->close();
+            ContextMenuState& state = *MakeNotNull(Exchange(closeMenuOnText, nullptr));
+            state.close();
         }
         if(queryOnText){
-            EditModel* query = queryOnText;
-            queryOnText = nullptr;
-            if(!query->setText(s_CallbackQuery))
+            EditModel& query = *MakeNotNull(Exchange(queryOnText, nullptr));
+            if(!query.setText(s_CallbackQuery))
                 ADD_FAILURE() << "query callback failed";
         }
         if(armSourceOnText){
-            NestedMutationSource* source = armSourceOnText;
-            armSourceOnText = nullptr;
-            source->selectListOnRevision = armList;
+            NestedMutationSource& source = *MakeNotNull(Exchange(armSourceOnText, nullptr));
+            source.selectListOnRevision = armList;
         }
         return value;
     }

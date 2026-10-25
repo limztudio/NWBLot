@@ -628,8 +628,8 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
                 return false;
             }
 
-            Framebuffer* const acquiredFramebuffer = m_swapChainFramebuffers[acquiredBackBufferIndex].get();
-            const FramebufferDesc& acquiredFramebufferDesc = acquiredFramebuffer->getDescription();
+            const Framebuffer& acquiredFramebuffer = *m_swapChainFramebuffers[acquiredBackBufferIndex];
+            const FramebufferDesc& acquiredFramebufferDesc = acquiredFramebuffer.getDescription();
             if(acquiredFramebufferDesc.colorAttachments.size() != 1u || acquiredFramebufferDesc.colorAttachments[0].texture != acquiredBackBuffer.texture.get()){
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: acquired swap-chain image mismatches its framebuffer attachment; requesting recreation."));
                 if(!m_backend->abandonAcquiredFrame())

@@ -99,7 +99,7 @@ bool SamplerAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asset
     if(!checkSerializeAssetType(asset, NWB_TEXT("SamplerAssetCodec::serialize")))
         return false;
 
-    const Sampler& sampler = *checked_cast<const Sampler*>(&asset);
+    const Sampler& sampler = *MakeNotNull(checked_cast<const Sampler*>(&asset));
     if(!sampler.validatePayload())
         return false;
 

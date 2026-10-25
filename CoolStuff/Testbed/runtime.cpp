@@ -88,15 +88,13 @@ static constexpr AStringView s_InitWorldFailedNarrow = "ProjectTestbed initializ
 }
 
 [[nodiscard]] static bool UiWantsKeyboardCapture(NWB::Core::ECS::World& world)noexcept{
-    const auto* ui = world.getSystem<NWB::Impl::UiLayerSystem>();
-    NWB_ASSERT(ui);
-    return ui->wantsKeyboard();
+    const auto& ui = *MakeNotNull(world.getSystem<NWB::Impl::UiLayerSystem>());
+    return ui.wantsKeyboard();
 }
 
 [[nodiscard]] static bool UiWantsMouseCapture(NWB::Core::ECS::World& world)noexcept{
-    const auto* ui = world.getSystem<NWB::Impl::UiLayerSystem>();
-    NWB_ASSERT(ui);
-    return ui->wantsPointer();
+    const auto& ui = *MakeNotNull(world.getSystem<NWB::Impl::UiLayerSystem>());
+    return ui.wantsPointer();
 }
 
 [[nodiscard]] static SIMDVectorSingle ResolveFlyCameraAnglesFromRotation(const SIMDVectorSingle rotation)noexcept{
@@ -235,10 +233,9 @@ bool Project::onStartup(){
     auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
     const Float4 cameraPosition(0.0f, __hidden_runtime::s_CharacterCameraTargetY, __hidden_runtime::s_CameraStartDepth);
     activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(*m_world, cameraPosition);
-    auto* cameraTransform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(activeCamera.camera);
     NWB_ASSERT(activeCamera.camera.valid());
-    NWB_ASSERT(cameraTransform);
-    StoreFloat(QuaternionRotationRollPitchYaw(0.0f, __hidden_runtime::s_CameraStartYaw, 0.0f), cameraTransform->rotation);
+    auto& cameraTransform = *MakeNotNull(m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(activeCamera.camera));
+    StoreFloat(QuaternionRotationRollPitchYaw(0.0f, __hidden_runtime::s_CameraStartYaw, 0.0f), cameraTransform.rotation);
     const auto directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(
         *m_world,
         __hidden_runtime::s_DefaultDirectionalLightPitch,
@@ -253,9 +250,7 @@ bool Project::onStartup(){
 
     if(!createDefaultScene())
         return false;
-    auto* modelSystemPtr = m_world->getSystem<NWB::Impl::ModelSystem>();
-    NWB_ASSERT(modelSystemPtr);
-    NWB::Impl::ModelSystem& modelSystem = *modelSystemPtr;
+    NWB::Impl::ModelSystem& modelSystem = *MakeNotNull(m_world->getSystem<NWB::Impl::ModelSystem>());
     modelSystem.syncModelRuntimes();
     registerInputHandler();
     return true;

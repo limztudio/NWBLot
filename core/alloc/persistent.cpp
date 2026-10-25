@@ -145,9 +145,9 @@ inline void StoreBlockForAllocation(NotNull<void*> p, Block& block)noexcept{
     return AllocationLayout{ .userOffset = s_UserOffset, .spanBytes = spanBytes, };
 }
 
-[[nodiscard]] inline Expected<AllocationLayout> BuildExistingPointerLayout(const Block& block, void* const p, const usize requestedBytes)noexcept{
+[[nodiscard]] inline Expected<AllocationLayout> BuildExistingPointerLayout(const Block& block, const NotNull<void*> p, const usize requestedBytes)noexcept{
     const usize dataAddress = reinterpret_cast<usize>(BlockData(block).get());
-    const usize pointerAddress = reinterpret_cast<usize>(p);
+    const usize pointerAddress = reinterpret_cast<usize>(p.get());
     if(pointerAddress < dataAddress || pointerAddress - dataAddress < sizeof(Block*))
         return MakeUnexpected(Failure{});
 
@@ -358,15 +358,17 @@ void* PersistentArena::reallocate(void* const p, const usize align, usize size){
 
     NothrowScopedLock lock(m_mutex);
 
-    auto* const block = __hidden_persistent::BlockFromAllocation(MakeNotNull(p));
-    const bool liveBlock = __hidden_persistent::IsLiveBlock(m_bucket, m_maxSize, block);
+    const NotNull<void*> nonNullPtr = MakeNotNull(p);
+    auto* const blockPtr = __hidden_persistent::BlockFromAllocation(nonNullPtr);
+    const bool liveBlock = __hidden_persistent::IsLiveBlock(m_bucket, m_maxSize, blockPtr);
     NWB_ASSERT_MSG(liveBlock, NWB_TEXT("PersistentArena reallocation must reference a live block from this arena"));
     if(!liveBlock)
         return nullptr;
 
+    const NotNull<__hidden_persistent::Block*> block = MakeNotNull(blockPtr);
     const u64 oldSpanBytes = static_cast<u64>(block->spanBytes);
     if(size == 0u){
-        deallocateBlockLocked(MakeNotNull(static_cast<void*>(block)));
+        deallocateBlockLocked(MakeNotNull(static_cast<void*>(block.get())));
         m_memoryStats.recordReallocation(oldSpanBytes, 0u);
         return nullptr;
     }
@@ -376,8 +378,8 @@ void* PersistentArena::reallocate(void* const p, const usize align, usize size){
     }
 
     const usize alignment = __hidden_persistent::EffectiveAlignment(align);
-    const usize pointerAddress = reinterpret_cast<usize>(p);
-    const auto layout = (pointerAddress % alignment == 0u) ? __hidden_persistent::BuildExistingPointerLayout(*block, p, size) : Expected<__hidden_persistent::AllocationLayout>(MakeUnexpected(Failure{}));
+    const usize pointerAddress = reinterpret_cast<usize>(nonNullPtr.get());
+    const auto layout = (pointerAddress % alignment == 0u) ? __hidden_persistent::BuildExistingPointerLayout(*block, nonNullPtr, size) : Expected<__hidden_persistent::AllocationLayout>(MakeUnexpected(Failure{}));
     if(layout && layout->spanBytes <= block->spanBytes){
         __hidden_persistent::SplitUsedBlock(m_freeHead, *block, layout->spanBytes);
         block->requestedBytes = size;
@@ -413,8 +415,8 @@ void* PersistentArena::reallocate(void* const p, const usize align, usize size){
         return nullptr;
 
     auto& replacementBlock = *static_cast<__hidden_persistent::Block*>(replacement->block.get());
-    NWB_MEMCPY(replacement->pointer.get(), replacementBlock.requestedBytes, p, copyBytes);
-    deallocateBlockLocked(MakeNotNull(static_cast<void*>(block)));
+    NWB_MEMCPY(replacement->pointer.get(), replacementBlock.requestedBytes, nonNullPtr.get(), copyBytes);
+    deallocateBlockLocked(MakeNotNull(static_cast<void*>(block.get())));
     m_memoryStats.recordReallocation(oldSpanBytes, static_cast<u64>(replacementBlock.spanBytes));
     return replacement->pointer.get();
 }
@@ -427,14 +429,15 @@ void PersistentArena::deallocate(void* const p, const usize align, const usize s
 
     NothrowScopedLock lock(m_mutex);
 
-    auto* const block = __hidden_persistent::BlockFromAllocation(MakeNotNull(p));
-    const bool liveBlock = __hidden_persistent::IsLiveBlock(m_bucket, m_maxSize, block);
+    auto* const blockPtr = __hidden_persistent::BlockFromAllocation(MakeNotNull(p));
+    const bool liveBlock = __hidden_persistent::IsLiveBlock(m_bucket, m_maxSize, blockPtr);
     NWB_ASSERT_MSG(liveBlock, NWB_TEXT("PersistentArena deallocation must reference a live block from this arena"));
     if(!liveBlock)
         return;
 
+    const NotNull<__hidden_persistent::Block*> block = MakeNotNull(blockPtr);
     m_memoryStats.recordDeallocation(static_cast<u64>(block->spanBytes));
-    deallocateBlockLocked(MakeNotNull(static_cast<void*>(block)));
+    deallocateBlockLocked(MakeNotNull(static_cast<void*>(block.get())));
 }
 
 

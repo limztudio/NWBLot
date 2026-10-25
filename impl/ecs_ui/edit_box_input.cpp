@@ -188,11 +188,11 @@ bool UiEditBoxHost::character(const u32 unicode){
         return true;
     if(!IsTextInputCodePoint(unicode))
         return true;
-    Entry* entry = find(m_context.input().focus());
+    const Entry& entry = *MakeNotNull(find(m_context.input().focus()));
     Event event(m_arena);
     event.kind = UiEditBoxEventKind::Character;
-    event.owner = entry->owner;
-    event.focusGeneration = entry->focusGeneration;
+    event.owner = entry.owner;
+    event.focusGeneration = entry.focusGeneration;
     char bytes[s_Utf8MaxSequenceBytes];
     const auto count = EncodeUtf8CodePoint(unicode, bytes);
     if(!count)

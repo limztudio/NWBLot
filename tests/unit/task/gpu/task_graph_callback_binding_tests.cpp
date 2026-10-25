@@ -125,14 +125,14 @@ void RecordInvocation(CallbackContext& context){
 }
 
 bool InvokeRecorded(void* const context, const Graphics::CommandListResourceStateHandoff*){
-    RecordInvocation(*static_cast<CallbackContext*>(context));
+    RecordInvocation(*MakeNotNull(static_cast<CallbackContext*>(context)));
     return true;
 }
 
 bool InvokeAccepted(void* const context, const Graphics::QueueSubmissionToken& token){
     if(token.value != s_AcceptedTokenValue)
         return false;
-    RecordInvocation(*static_cast<CallbackContext*>(context));
+    RecordInvocation(*MakeNotNull(static_cast<CallbackContext*>(context)));
     return true;
 }
 

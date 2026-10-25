@@ -6,6 +6,7 @@
 
 
 #include "../bit.h"
+#include "../not_null.h"
 #include "type.h"
 #include "constant.h"
 
@@ -111,33 +112,37 @@ inline constexpr int s_F16CNearestRoundingControl = 0;
     return _mm_cvtss_f32(floatValue);
 }
 
-NWB_INLINE Half* FloatBufferToHalfF16C(Half* outHalfBuffer, const f32* floatBuffer, const usize count)noexcept{
+NWB_INLINE NotNull<Half*> FloatBufferToHalfF16C(const NotNull<Half*> outHalfBuffer, const NotNull<const f32*> floatBuffer, const usize count)noexcept{
+    Half* const outHalfPtr = outHalfBuffer.get();
+    const f32* const floatPtr = floatBuffer.get();
     usize i = 0u;
     const usize vectorCount = count >> s_F16CVectorElementShift;
     for(usize vectorIndex = 0u; vectorIndex < vectorCount; ++vectorIndex){
-        const __m128 floatValue = _mm_loadu_ps(floatBuffer + i);
+        const __m128 floatValue = _mm_loadu_ps(floatPtr + i);
         const __m128i halfValue = _mm_cvtps_ph(floatValue, s_F16CNearestRoundingControl);
-        _mm_storel_epi64(reinterpret_cast<__m128i*>(outHalfBuffer + i), halfValue);
+        _mm_storel_epi64(reinterpret_cast<__m128i*>(outHalfPtr + i), halfValue);
         i += s_F16CVectorElementCount;
     }
 
     for(; i < count; ++i)
-        outHalfBuffer[i] = FloatToHalfF16C(floatBuffer[i]);
+        outHalfPtr[i] = FloatToHalfF16C(floatPtr[i]);
     return outHalfBuffer;
 }
 
-NWB_INLINE f32* HalfBufferToFloatF16C(f32* outFloatBuffer, const Half* halfBuffer, const usize count)noexcept{
+NWB_INLINE NotNull<f32*> HalfBufferToFloatF16C(const NotNull<f32*> outFloatBuffer, const NotNull<const Half*> halfBuffer, const usize count)noexcept{
+    f32* const outFloatPtr = outFloatBuffer.get();
+    const Half* const halfPtr = halfBuffer.get();
     usize i = 0u;
     const usize vectorCount = count >> s_F16CVectorElementShift;
     for(usize vectorIndex = 0u; vectorIndex < vectorCount; ++vectorIndex){
-        const __m128i halfValue = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(halfBuffer + i));
+        const __m128i halfValue = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(halfPtr + i));
         const __m128 floatValue = _mm_cvtph_ps(halfValue);
-        _mm_storeu_ps(outFloatBuffer + i, floatValue);
+        _mm_storeu_ps(outFloatPtr + i, floatValue);
         i += s_F16CVectorElementCount;
     }
 
     for(; i < count; ++i)
-        outFloatBuffer[i] = HalfToFloatF16C(halfBuffer[i]);
+        outFloatPtr[i] = HalfToFloatF16C(halfPtr[i]);
     return outFloatBuffer;
 }
 #endif
@@ -232,22 +237,22 @@ template<u32 MantissaBitCount>
 #endif
 }
 
-NWB_INLINE Half* ConvertFloatBufferToHalf(Half* outHalfBuffer, const f32* floatBuffer, const usize count)noexcept{
+NWB_INLINE NotNull<Half*> ConvertFloatBufferToHalf(const NotNull<Half*> outHalfBuffer, const NotNull<const f32*> floatBuffer, const usize count)noexcept{
 #if defined(NWB_HAS_F16C)
     return HalfConvertDetail::FloatBufferToHalfF16C(outHalfBuffer, floatBuffer, count);
 #else
     for(usize i = 0u; i < count; ++i)
-        outHalfBuffer[i] = ConvertFloatToHalf(floatBuffer[i]);
+        outHalfBuffer.get()[i] = ConvertFloatToHalf(floatBuffer.get()[i]);
     return outHalfBuffer;
 #endif
 }
 
-NWB_INLINE f32* ConvertHalfBufferToFloat(f32* outFloatBuffer, const Half* halfBuffer, const usize count)noexcept{
+NWB_INLINE NotNull<f32*> ConvertHalfBufferToFloat(const NotNull<f32*> outFloatBuffer, const NotNull<const Half*> halfBuffer, const usize count)noexcept{
 #if defined(NWB_HAS_F16C)
     return HalfConvertDetail::HalfBufferToFloatF16C(outFloatBuffer, halfBuffer, count);
 #else
     for(usize i = 0u; i < count; ++i)
-        outFloatBuffer[i] = ConvertHalfToFloat(halfBuffer[i]);
+        outFloatBuffer.get()[i] = ConvertHalfToFloat(halfBuffer.get()[i]);
     return outFloatBuffer;
 #endif
 }
@@ -259,7 +264,7 @@ NWB_INLINE f32* ConvertHalfBufferToFloat(f32* outFloatBuffer, const Half* halfBu
 [[nodiscard]] NWB_INLINE Half4U MakeHalf4U(const f32 x, const f32 y, const f32 z, const f32 w)noexcept{
     const Float4U values(x, y, z, w);
     Half4U result;
-    ConvertFloatBufferToHalf(result.raw, values.raw, HalfConvertDetail::s_F16CVectorElementCount);
+    ConvertFloatBufferToHalf(MakeNotNull(result.raw), MakeNotNull(values.raw), HalfConvertDetail::s_F16CVectorElementCount);
     return result;
 }
 
@@ -269,7 +274,7 @@ NWB_INLINE f32* ConvertHalfBufferToFloat(f32* outFloatBuffer, const Half* halfBu
 
 [[nodiscard]] NWB_INLINE Float4U LoadHalf4U(const Half4U& value)noexcept{
     Float4U result{};
-    ConvertHalfBufferToFloat(result.raw, value.raw, HalfConvertDetail::s_F16CVectorElementCount);
+    ConvertHalfBufferToFloat(MakeNotNull(result.raw), MakeNotNull(value.raw), HalfConvertDetail::s_F16CVectorElementCount);
     return result;
 }
 

@@ -263,7 +263,7 @@ private:
     }
 
     [[nodiscard]] static bool ShouldCapture(void* const context, const u64 frame)noexcept{
-        return frame >= static_cast<CsgVisibleSmokeProject*>(context)->m_nextCaptureFrame;
+        return frame >= MakeNotNull(static_cast<CsgVisibleSmokeProject*>(context))->m_nextCaptureFrame;
     }
 
 

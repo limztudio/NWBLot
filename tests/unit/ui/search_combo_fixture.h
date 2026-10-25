@@ -80,9 +80,8 @@ public:
 
     [[nodiscard]] virtual StringView text(const u64 index)const override{
         if(textMutation){
-            EditModel* query = textMutation;
-            textMutation = nullptr;
-            if(!query->setText(s_CallbackQuery))
+            EditModel& query = *MakeNotNull(Exchange(textMutation, nullptr));
+            if(!query.setText(s_CallbackQuery))
                 ADD_FAILURE() << "callback query change failed";
         }
         return full->text(key(index) - 1u);
@@ -90,9 +89,8 @@ public:
 
     [[nodiscard]] virtual bool enabled(const u64 index)const override{
         if(enabledMutation){
-            EditModel* query = enabledMutation;
-            enabledMutation = nullptr;
-            if(!query->setText(s_EmptyResultQuery))
+            EditModel& query = *MakeNotNull(Exchange(enabledMutation, nullptr));
+            if(!query.setText(s_EmptyResultQuery))
                 ADD_FAILURE() << "enabled callback query change failed";
         }
         return index < rowCount() && full->enabled(key(index) - 1u);
@@ -137,9 +135,8 @@ public:
 
     [[nodiscard]] virtual bool enabled(const u64 index)const override{
         if(fullMutation){
-            EditModel* query = fullMutation;
-            fullMutation = nullptr;
-            if(!query->setText(s_EmptyResultQuery))
+            EditModel& query = *MakeNotNull(Exchange(fullMutation, nullptr));
+            if(!query.setText(s_EmptyResultQuery))
                 ADD_FAILURE() << "full source callback query change failed";
         }
         return full.enabled(index);
@@ -148,9 +145,8 @@ public:
     [[nodiscard]] virtual bool filter(const AStringView query)override{
         ++filterCalls;
         if(filterMutation){
-            EditModel* model = filterMutation;
-            filterMutation = nullptr;
-            if(!model->setText(s_CallbackQuery))
+            EditModel& model = *MakeNotNull(Exchange(filterMutation, nullptr));
+            if(!model.setText(s_CallbackQuery))
                 return false;
         }
         const AStringView previous{ m_query.data(), m_query.size() };
@@ -224,9 +220,8 @@ public:
         publishContextPopup = m_context.popupToken();
         publishedComposing = view.composing();
         if(publishMutation){
-            EditModel* query = publishMutation;
-            publishMutation = nullptr;
-            return query->setText("published");
+            EditModel& query = *MakeNotNull(Exchange(publishMutation, nullptr));
+            return query.setText("published");
         }
         return true;
     }

@@ -57,9 +57,9 @@ namespace TokenType{
 
 struct Token{
     MStringView text;
+    TokenType::Enum type = TokenType::EndOfFile;
     u32 line = 1;
     u32 column = 1;
-    TokenType::Enum type = TokenType::EndOfFile;
 };
 
 

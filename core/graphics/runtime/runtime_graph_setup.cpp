@@ -165,7 +165,7 @@ struct SetupUploadSubmissionData{
 };
 
 [[nodiscard]] static Expected<GpuTaskId> DeclareSetupUploadGraph(void* const userData, GpuTaskGraph& graph){
-    auto& submissionData = *static_cast<SetupUploadSubmissionData*>(userData);
+    auto& submissionData = *MakeNotNull(static_cast<SetupUploadSubmissionData*>(userData));
     const auto uploadTask = submissionData.declareTask.get()(submissionData.userData, graph);
     if(!uploadTask)
         return MakeUnexpected(uploadTask.error());
@@ -214,7 +214,7 @@ struct FrameTimingResetSubmissionData{
 };
 
 [[nodiscard]] static Expected<GpuTaskId> DeclareFrameTimingResetGraph(void* const userData, GpuTaskGraph& graph){
-    auto& submissionData = *static_cast<FrameTimingResetSubmissionData*>(userData);
+    auto& submissionData = *MakeNotNull(static_cast<FrameTimingResetSubmissionData*>(userData));
     GpuTaskDesc resetDesc;
     resetDesc.setIdentity(s_FrameTimingResetIdentity).setMarkerLabel("Frame GPU-Timing Reset").setScheduling(FrameTimingResetScheduling());
     const auto taskResult = graph.addTask<FrameTimingResetGraphTask>(resetDesc, FrameTimingResetGraphTask::Payload{ .timing = MakeNotNull(&submissionData.timing), });

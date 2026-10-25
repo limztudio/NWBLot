@@ -165,24 +165,23 @@ bool FreezePreparedShadowTraceGeometryBuffers(
     const auto appendBuffer = [&](const Core::BufferHandle& buffer, const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh, const AStringView identitySuffix, const u8 role){
         if(!buffer)
             return false;
-        BufferRecord* const record = bufferIndex.find(buffer.get());
-        NWB_ASSERT(record);
-        if(record->preparedIndex != s_MissingIndex){
-            outPrepared[record->preparedIndex].roles |= role;
+        BufferRecord& record = *MakeNotNull(bufferIndex.find(buffer.get()));
+        if(record.preparedIndex != s_MissingIndex){
+            outPrepared[record.preparedIndex].roles |= role;
             return true;
         }
 
         const auto identity = DeriveName(mesh.meshName, identitySuffix);
         if(!identity)
             return false;
-        const bool normalizedByAcceptedPacket = record->accepted;
+        const bool normalizedByAcceptedPacket = record.accepted;
         outPrepared.push_back(PreparedShadowTraceGeometryBuffer{
             .buffer = buffer,
             .identity = *identity,
             // Fresh buffers keep creation state; only normalized ones enter as ShaderResource.
             .initialState = normalizedByAcceptedPacket ? Core::ResourceStates::ShaderResource : buffer->getCreationDescription().initialState, .roles = role, .normalizationPending = !normalizedByAcceptedPacket, }
         );
-        record->preparedIndex = outPrepared.size() - 1u;
+        record.preparedIndex = outPrepared.size() - 1u;
         return true;
     };
     const auto appendSelected = [&](const Span<const NotNull<Core::Buffer*>> selectedBuffers, const u32 memberIndex, const AStringView identitySuffix, const u8 role){

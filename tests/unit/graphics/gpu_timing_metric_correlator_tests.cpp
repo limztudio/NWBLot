@@ -99,8 +99,8 @@ TEST(GpuTimingPacketEnvelopeMetrics, CorrelatesLargeOutOfOrderFrame){
         { .physicalQueue = { .index = 0u, .deviceGeneration = 7u }, .internalIdleScopeName = Name("tests/timing/large_idle_0") },
         { .physicalQueue = { .index = 1u, .deviceGeneration = 7u }, .internalIdleScopeName = Name("tests/timing/large_idle_1") },
     };
-    const Core::GpuPacketEnvelopeMetricScope* const scopeData = scopes.data();
-    const bool prepared = correlator.preparePacketEnvelopeMetrics(s_FrameIndex, MakeNotNull(scopeData), scopes.size(), overlapScope, MakeNotNull(&outputs[0u]), LengthOf(outputs));
+    const NotNull<const Core::GpuPacketEnvelopeMetricScope*> scopeData = MakeNotNull(scopes.data());
+    const bool prepared = correlator.preparePacketEnvelopeMetrics(s_FrameIndex, scopeData, scopes.size(), overlapScope, MakeNotNull(&outputs[0u]), LengthOf(outputs));
 
     ASSERT_TRUE(prepared);
 

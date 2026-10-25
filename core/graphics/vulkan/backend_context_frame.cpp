@@ -21,13 +21,13 @@ NWB_VULKAN_BEGIN
 Expected<QueueSubmissionNativeSignal> BackendContext::InvokeFramePresentationSignalPreparation(void* const context, const u64 identity, const GpuPhysicalQueueId& executionQueue)noexcept{
     if(!context)
         return MakeUnexpected(Failure{});
-    return static_cast<BackendContext*>(context)->prepareFramePresentationSignal(identity, executionQueue);
+    return MakeNotNull(static_cast<BackendContext*>(context))->prepareFramePresentationSignal(identity, executionQueue);
 }
 
 bool BackendContext::InvokeFramePresentationSignalResolution(void* const context, const u64 identity, const QueueSubmissionToken& token)noexcept{
     if(!context)
         return false;
-    return static_cast<BackendContext*>(context)->resolveFramePresentationSignal(identity, token);
+    return MakeNotNull(static_cast<BackendContext*>(context))->resolveFramePresentationSignal(identity, token);
 }
 
 Texture* BackendContext::getBackBuffer(u32 index)const noexcept{

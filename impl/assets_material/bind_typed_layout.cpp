@@ -241,8 +241,7 @@ static bool BuildMaterialBindTypedLayoutParameterLookup(const AStringView contex
 
     const MaterialBindEntry& bindEntry = *inOutLayout.bindEntry;
     for(const MaterialBindInstance& instance : bindEntry.instances){
-        const MaterialBindStruct* bindStruct = bindEntry.findStruct(AStringView(instance.type));
-        NWB_ASSERT(bindStruct);
+        const MaterialBindStruct& bindStruct = *MakeNotNull(bindEntry.findStruct(AStringView(instance.type)));
 
         const auto instanceName = Name::FromText(AStringView(instance.name));
         NWB_ASSERT(instanceName);
@@ -253,7 +252,7 @@ static bool BuildMaterialBindTypedLayoutParameterLookup(const AStringView contex
         NWB_ASSERT(blockEntry.blockIndex < inOutLayout.typedLayoutBlocks.size());
 
         const MaterialTypedLayoutBlock& block = inOutLayout.typedLayoutBlocks[blockEntry.blockIndex];
-        NWB_ASSERT(block.fieldCount == bindStruct->fields.size());
+        NWB_ASSERT(block.fieldCount == bindStruct.fields.size());
 
         for(u32 fieldOffset = 0u; fieldOffset < block.fieldCount; ++fieldOffset){
             const usize fieldIndex = static_cast<usize>(block.fieldBegin) + fieldOffset;
@@ -263,13 +262,13 @@ static bool BuildMaterialBindTypedLayoutParameterLookup(const AStringView contex
                 return false;
             }
 
-            const MaterialBindField& bindField = bindStruct->fields[fieldOffset];
+            const MaterialBindField& bindField = bindStruct.fields[fieldOffset];
             const MaterialTypedLayoutField& field = inOutLayout.typedLayoutFields[fieldIndex];
             NWB_ASSERT(Name::FromText(AStringView(bindField.name)) == field.fieldName);
             if(field.offset > Limit<u32>::s_Max - blockEntry.byteBegin){
                 NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' field '{}.{}' " "byte offset exceeds u32 for '{}'")
                     , StringConvert(bindEntry.virtualPath)
-                    , StringConvert(bindStruct->name)
+                    , StringConvert(bindStruct.name)
                     , StringConvert(bindField.name)
                     , StringConvert(contextLabel)
                 );

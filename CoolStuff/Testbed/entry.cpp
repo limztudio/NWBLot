@@ -86,17 +86,9 @@ static Expected<UniquePtr<NWB::Core::ECS::World>, TStringView> CreateInitialWorl
 static void DestroyInitialWorld(NWB::ProjectRuntimeContext& context, UniquePtr<NWB::Core::ECS::World>& world){
     NWB_ASSERT(world);
 
-    auto* meshSkinningSystemPtr = world->getSystem<NWB::Impl::MeshSkinningSystem>();
-    NWB_ASSERT(meshSkinningSystemPtr);
-    NWB::Impl::MeshSkinningSystem& meshSkinningSystem = *meshSkinningSystemPtr;
-
-    auto* rendererSystemPtr = world->getSystem<NWB::Impl::RendererSystem>();
-    NWB_ASSERT(rendererSystemPtr);
-    NWB::Impl::RendererSystem& rendererSystem = *rendererSystemPtr;
-
-    auto* uiLayerSystemPtr = world->getSystem<NWB::Impl::UiLayerSystem>();
-    NWB_ASSERT(uiLayerSystemPtr);
-    NWB::Impl::UiLayerSystem& uiLayerSystem = *uiLayerSystemPtr;
+    NWB::Impl::MeshSkinningSystem& meshSkinningSystem = *MakeNotNull(world->getSystem<NWB::Impl::MeshSkinningSystem>());
+    NWB::Impl::RendererSystem& rendererSystem = *MakeNotNull(world->getSystem<NWB::Impl::RendererSystem>());
+    NWB::Impl::UiLayerSystem& uiLayerSystem = *MakeNotNull(world->getSystem<NWB::Impl::UiLayerSystem>());
 
     context.frameGraphRegistry.unregisterContributor(rendererSystem);
     context.graphics.removeRenderPass(meshSkinningSystem);

@@ -41,8 +41,8 @@ namespace __hidden_material_instance{
         return false;
     }
 
-    const u8* valueBytes = reinterpret_cast<const u8*>(parameter.value.raw);
-    NWB_MEMCPY(inOutMutableTypedBytes.data() + byteOffset, fieldByteSize, valueBytes, fieldByteSize);
+    const NotNull<const u8*> valueBytes = MakeNotNull(reinterpret_cast<const u8*>(parameter.value.raw));
+    NWB_MEMCPY(inOutMutableTypedBytes.data() + byteOffset, fieldByteSize, valueBytes.get(), fieldByteSize);
     return true;
 }
 

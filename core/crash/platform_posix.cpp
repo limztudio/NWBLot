@@ -555,7 +555,7 @@ Expected<void, PlatformFailure> StartDesktopHandler(const ::Path<ArenaT>& handle
     if(child < 0)
         return MakeUnexpected(NativeFailure(PlatformOperation::CreateProcess, errno));
     if(child == 0){
-        for(int* descriptor : { &request[0u], &ack[0u], &startup[0u] }){
+        for(const NotNull<int*> descriptor : { MakeNotNull(&request[0u]), MakeNotNull(&ack[0u]), MakeNotNull(&startup[0u]) }){
             const auto released = ReleaseOwnedDescriptor(*descriptor);
             if(!released)
                 FailChild(startup[1u], static_cast<int>(released.error().code));
@@ -569,7 +569,7 @@ Expected<void, PlatformFailure> StartDesktopHandler(const ::Path<ArenaT>& handle
         execl(handlerExecutablePath.c_str(), handlerExecutablePath.c_str(), s_RequestFdArgument.data(), requestText, s_AckFdArgument.data(), ackText, nullptr);
         FailChild(startup[1u], errno);
     }
-    for(int* descriptor : { &request[1u], &ack[1u], &startup[1u] }){
+    for(const NotNull<int*> descriptor : { MakeNotNull(&request[1u]), MakeNotNull(&ack[1u]), MakeNotNull(&startup[1u]) }){
         const auto released = ReleaseOwnedDescriptor(*descriptor);
         if(!released)
             return MakeUnexpected(released.error());

@@ -41,9 +41,8 @@ public:
 
     [[nodiscard]] virtual u64 revision()const noexcept override{
         if(closeComboOnRevision){
-            ComboState* state = closeComboOnRevision;
-            closeComboOnRevision = nullptr;
-            state->close();
+            ComboState& state = *MakeNotNull(Exchange(closeComboOnRevision, nullptr));
+            state.close();
         }
         return contentRevision;
     }
@@ -86,19 +85,16 @@ public:
             ++contentRevision;
         }
         if(closeOnText){
-            ContextMenuState* state = closeOnText;
-            closeOnText = nullptr;
-            state->close();
+            ContextMenuState& state = *MakeNotNull(Exchange(closeOnText, nullptr));
+            state.close();
         }
         if(resetTooltipOnText){
-            TooltipState* state = resetTooltipOnText;
-            resetTooltipOnText = nullptr;
-            state->reset();
+            TooltipState& state = *MakeNotNull(Exchange(resetTooltipOnText, nullptr));
+            state.reset();
         }
         if(selectListOnText){
-            ListState* state = selectListOnText;
-            selectListOnText = nullptr;
-            state->select(selectListKey);
+            ListState& state = *MakeNotNull(Exchange(selectListOnText, nullptr));
+            state.select(selectListKey);
         }
         constexpr StringView s_Labels[]{ "One", "Two", "Three", "Four", "Five" };
         return index < count && index < 5u ? s_Labels[index] : StringView{};

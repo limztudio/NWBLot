@@ -30,9 +30,9 @@ class Win32TextInputFixture : public testing::Test{
 public:
     static LRESULT CALLBACK WindowProc(const HWND window, const UINT message, const WPARAM wParam, const LPARAM lParam){
         if(message == WM_NCCREATE){
-            const auto* const creation = reinterpret_cast<const CREATESTRUCTW*>(lParam);
+            const auto& creation = *MakeNotNull(reinterpret_cast<const CREATESTRUCTW*>(lParam));
             SetLastError(ERROR_SUCCESS);
-            const LONG_PTR previous = SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(creation->lpCreateParams));
+            const LONG_PTR previous = SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(creation.lpCreateParams));
             if(previous == 0 && GetLastError() != ERROR_SUCCESS)
                 return FALSE;
         }

@@ -54,9 +54,8 @@ public:
             hook();
         }
         if(armMetadataSource){
-            AreaMutationSource* source = armMetadataSource;
-            armMetadataSource = nullptr;
-            source->metadataHook = Move(metadataToArm);
+            AreaMutationSource& source = *MakeNotNull(Exchange(armMetadataSource, nullptr));
+            source.metadataHook = Move(metadataToArm);
             metadataToArm = {};
             ++arms;
         }

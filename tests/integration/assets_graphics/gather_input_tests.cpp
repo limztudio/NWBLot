@@ -38,8 +38,8 @@ static usize s_MergeCalls = 0u;
 
 [[nodiscard]] static bool MergeBytes(const Name&, const void* incoming, const usize size, NWB::Core::Alloc::ScratchArena&, Assets::AssetBytes& existing){
     ++s_MergeCalls;
-    const auto* bytes = static_cast<const u8*>(incoming);
-    existing.insert(existing.end(), bytes, bytes + size);
+    const NotNull<const u8*> bytes = MakeNotNull(static_cast<const u8*>(incoming));
+    existing.insert(existing.end(), bytes.get(), bytes.get() + size);
     return true;
 }
 

@@ -98,8 +98,8 @@ public:
 
 bool ProjectTickCallback(void* userData, f32 delta){
     NWB_FATAL_ASSERT_MSG(userData, NWB_TEXT("ProjectTickCallback received null user data"));
-    auto* updateContext = static_cast<UpdateCallbackContext*>(userData);
-    return updateContext->callbacks.onUpdate(delta);
+    auto& updateContext = *MakeNotNull(static_cast<UpdateCallbackContext*>(userData));
+    return updateContext.callbacks.onUpdate(delta);
 }
 
 Path ResolveResourceMountDirectory(NWB::Core::Alloc::GlobalArena& arena, NWB::Core::Alloc::ScratchArena& scratchArena){

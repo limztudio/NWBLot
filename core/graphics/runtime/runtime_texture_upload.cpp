@@ -137,7 +137,7 @@ struct TextureUploadBatchSubmissionData{
 };
 
 [[nodiscard]] static Expected<GpuTaskId> DeclareTextureUploadBatch(void* const userData, GpuTaskGraph& graph){
-    auto& submissionData = *static_cast<TextureUploadBatchSubmissionData*>(userData);
+    auto& submissionData = *MakeNotNull(static_cast<TextureUploadBatchSubmissionData*>(userData));
     const auto destinationResult = graph.importTexture(
         submissionData.setupDesc.destination,
         GpuGraphResourceDesc{}

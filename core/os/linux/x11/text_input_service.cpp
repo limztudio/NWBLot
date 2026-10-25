@@ -53,7 +53,7 @@ static constexpr usize s_InitialLookupBytes = 128u;
 
 
 void X11TextInputService::OnInputMethodDestroyed(const XIM method, const XPointer data, XPointer){
-    auto& service = *reinterpret_cast<X11TextInputService*>(data);
+    auto& service = *MakeNotNull(reinterpret_cast<X11TextInputService*>(data));
     if(service.m_method != method)
         return;
     service.m_method = nullptr;
@@ -325,13 +325,13 @@ Expected<GlobalUniquePtr<ITextInputService>> CreateX11TextInputService(Alloc::Gl
 bool FilterX11TextInputEvent(ITextInputService& service, XEvent& event){
     if(!service.isOwnerThread() || service.capabilities().backend != TextInputBackend::X11Xim)
         return false;
-    return checked_cast<X11TextInputService*>(&service)->filterEvent(event);
+    return MakeNotNull(checked_cast<X11TextInputService*>(&service))->filterEvent(event);
 }
 
 bool DispatchX11TextInputKey(ITextInputService& service, XKeyEvent& event){
     if(!service.isOwnerThread() || service.capabilities().backend != TextInputBackend::X11Xim)
         return false;
-    return checked_cast<X11TextInputService*>(&service)->dispatchKey(event);
+    return MakeNotNull(checked_cast<X11TextInputService*>(&service))->dispatchKey(event);
 }
 
 

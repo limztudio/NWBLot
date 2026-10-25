@@ -161,9 +161,8 @@ void X11ClipboardService::startNativeRequest(const ClipboardRequestToken token, 
             return;
         }
         if(owner == m_ownerWindow){
-            const OwnedSelection* const selection = ownedSelection(m_operationSelection);
-            NWB_FATAL_ASSERT(selection);
-            finishOperation(ClipboardStatus::Success, selection->utf8);
+            const OwnedSelection& selection = *MakeNotNull(ownedSelection(m_operationSelection));
+            finishOperation(ClipboardStatus::Success, selection.utf8);
             return;
         }
     }
@@ -241,8 +240,7 @@ void X11ClipboardService::receiveTimestamp(const Time timestamp){
         requestConversion();
         return;
     }
-    OwnedSelection* const selection = ownedSelection(m_operationSelection);
-    NWB_FATAL_ASSERT(selection);
+    OwnedSelection& selection = *MakeNotNull(ownedSelection(m_operationSelection));
     bool acquired = false;
     {
         X11CheckedOperation checked(m_display);
@@ -253,10 +251,10 @@ void X11ClipboardService::receiveTimestamp(const Time timestamp){
         finishOperation(ClipboardStatus::Unavailable);
         return;
     }
-    selection->utf8 = m_pendingWrite;
-    selection->latin1Available = EncodeClipboardLatin1(selection->utf8, selection->latin1) == ClipboardStatus::Success;
-    selection->timestamp = timestamp;
-    selection->owned = true;
+    selection.utf8 = m_pendingWrite;
+    selection.latin1Available = EncodeClipboardLatin1(selection.utf8, selection.latin1) == ClipboardStatus::Success;
+    selection.timestamp = timestamp;
+    selection.owned = true;
     finishOperation(ClipboardStatus::Success);
 }
 
@@ -274,7 +272,7 @@ Expected<GlobalUniquePtr<IClipboardService>> CreateX11ClipboardService(Alloc::Gl
 }
 
 bool DispatchX11ClipboardEvent(IClipboardService& service, const _XEvent& event){
-    return checked_cast<X11ClipboardService*>(&service)->handleEvent(event);
+    return MakeNotNull(checked_cast<X11ClipboardService*>(&service))->handleEvent(event);
 }
 
 

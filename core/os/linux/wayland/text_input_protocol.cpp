@@ -23,7 +23,7 @@ NWB_CORE_BEGIN
 
 
 void WaylandTextInputService::OnRegistryGlobal(void* const data, wl_registry* const registry, const u32 name, const char* const interfaceName, const u32 version){
-    auto& service = *static_cast<WaylandTextInputService*>(data);
+    auto& service = *MakeNotNull(static_cast<WaylandTextInputService*>(data));
     if(AStringView(interfaceName) != zwp_text_input_manager_v3_interface.name || service.m_manager || version == 0u)
         return;
     // Protocol v1 commits cursor-rectangle updates through its explicit commit request.
@@ -38,7 +38,7 @@ void WaylandTextInputService::OnRegistryGlobal(void* const data, wl_registry* co
 }
 
 void WaylandTextInputService::OnRegistryRemove(void* const data, wl_registry*, const u32 name){
-    auto& service = *static_cast<WaylandTextInputService*>(data);
+    auto& service = *MakeNotNull(static_cast<WaylandTextInputService*>(data));
     if(name == service.m_seatName){
         service.attachSeat(nullptr, 0u);
         return;
@@ -55,7 +55,7 @@ void WaylandTextInputService::OnRegistryRemove(void* const data, wl_registry*, c
 }
 
 void WaylandTextInputService::OnEnter(void* const data, zwp_text_input_v3* const input, wl_surface* const surface)noexcept{
-    auto& service = *static_cast<WaylandTextInputService*>(data);
+    auto& service = *MakeNotNull(static_cast<WaylandTextInputService*>(data));
     if(input != service.m_input)
         return;
     service.m_entered = surface == &service.m_surface;
@@ -63,7 +63,7 @@ void WaylandTextInputService::OnEnter(void* const data, zwp_text_input_v3* const
 }
 
 void WaylandTextInputService::OnLeave(void* const data, zwp_text_input_v3* const input, wl_surface* const surface){
-    auto& service = *static_cast<WaylandTextInputService*>(data);
+    auto& service = *MakeNotNull(static_cast<WaylandTextInputService*>(data));
     if(input != service.m_input || surface != &service.m_surface)
         return;
     service.m_entered = false;
@@ -79,7 +79,7 @@ void WaylandTextInputService::OnLeave(void* const data, zwp_text_input_v3* const
 
 
 void WaylandTextInputService::OnPreedit(void* const data, zwp_text_input_v3* const input, const char* const text, const i32 begin, const i32 end){
-    auto& service = *static_cast<WaylandTextInputService*>(data);
+    auto& service = *MakeNotNull(static_cast<WaylandTextInputService*>(data));
     if(input != service.m_input || !service.m_enabled)
         return;
     const AStringView value = text ? AStringView(text) : AStringView{};
@@ -95,7 +95,7 @@ void WaylandTextInputService::OnPreedit(void* const data, zwp_text_input_v3* con
 }
 
 void WaylandTextInputService::OnCommit(void* const data, zwp_text_input_v3* const input, const char* const text){
-    auto& service = *static_cast<WaylandTextInputService*>(data);
+    auto& service = *MakeNotNull(static_cast<WaylandTextInputService*>(data));
     if(input != service.m_input || !service.m_enabled)
         return;
     const AStringView value = text ? AStringView(text) : AStringView{};
@@ -107,7 +107,7 @@ void WaylandTextInputService::OnCommit(void* const data, zwp_text_input_v3* cons
 }
 
 void WaylandTextInputService::OnDelete(void* const data, zwp_text_input_v3* const input, const u32 before, const u32 after)noexcept{
-    auto& service = *static_cast<WaylandTextInputService*>(data);
+    auto& service = *MakeNotNull(static_cast<WaylandTextInputService*>(data));
     if(input != service.m_input || !service.m_enabled)
         return;
     service.m_pendingBefore = before;
@@ -116,7 +116,7 @@ void WaylandTextInputService::OnDelete(void* const data, zwp_text_input_v3* cons
 }
 
 void WaylandTextInputService::OnDone(void* const data, zwp_text_input_v3* const input, const u32 serial){
-    auto& service = *static_cast<WaylandTextInputService*>(data);
+    auto& service = *MakeNotNull(static_cast<WaylandTextInputService*>(data));
     if(input == service.m_input)
         service.receiveDone(serial);
 }

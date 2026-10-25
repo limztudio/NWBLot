@@ -277,24 +277,24 @@ Expected<GlobalUniquePtr<ITextInputService>> CreateWaylandTextInputService(Alloc
 
 void AttachWaylandTextInputSeat(ITextInputService& service, wl_seat* const seat, const u32 seatGlobalName){
     if(service.isOwnerThread() && service.capabilities().backend == TextInputBackend::Wayland)
-        checked_cast<WaylandTextInputService*>(&service)->attachSeat(seat, seatGlobalName);
+        MakeNotNull(checked_cast<WaylandTextInputService*>(&service))->attachSeat(seat, seatGlobalName);
 }
 
 bool SetWaylandTextInputKeyboardFocus(ITextInputService& service, const bool focused){
     if(!service.isOwnerThread() || service.capabilities().backend != TextInputBackend::Wayland)
         return false;
-    return checked_cast<WaylandTextInputService*>(&service)->setKeyboardFocused(focused);
+    return MakeNotNull(checked_cast<WaylandTextInputService*>(&service))->setKeyboardFocused(focused);
 }
 
 void SetWaylandTextInputBufferScale(ITextInputService& service, const i32 scale){
     if(service.isOwnerThread() && service.capabilities().backend == TextInputBackend::Wayland)
-        checked_cast<WaylandTextInputService*>(&service)->setBufferScale(scale);
+        MakeNotNull(checked_cast<WaylandTextInputService*>(&service))->setBufferScale(scale);
 }
 
 bool DispatchWaylandDirectTextInput(ITextInputService& service, const u32 codePoint){
     if(!service.isOwnerThread() || service.capabilities().backend != TextInputBackend::Wayland)
         return false;
-    return checked_cast<WaylandTextInputService*>(&service)->dispatchDirectCodePoint(codePoint);
+    return MakeNotNull(checked_cast<WaylandTextInputService*>(&service))->dispatchDirectCodePoint(codePoint);
 }
 
 

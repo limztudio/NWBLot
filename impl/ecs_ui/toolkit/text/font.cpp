@@ -67,13 +67,13 @@ private:
     [[nodiscard]] static void* Allocate(FT_Memory memory, FT_Long size)noexcept{
         if(size <= 0)
             return nullptr;
-        auto& arena = *static_cast<Core::Alloc::GlobalArena*>(memory->user);
+        auto& arena = *MakeNotNull(static_cast<Core::Alloc::GlobalArena*>(memory->user));
         return arena.allocate(alignof(MaxAlign), static_cast<usize>(size));
     }
 
     static void Release(FT_Memory memory, void* block)noexcept{
         if(block){
-            auto& arena = *static_cast<Core::Alloc::GlobalArena*>(memory->user);
+            auto& arena = *MakeNotNull(static_cast<Core::Alloc::GlobalArena*>(memory->user));
             arena.deallocate(block, alignof(MaxAlign), 0u);
         }
     }
@@ -84,7 +84,7 @@ private:
             Release(memory, block);
             return nullptr;
         }
-        auto& arena = *static_cast<Core::Alloc::GlobalArena*>(memory->user);
+        auto& arena = *MakeNotNull(static_cast<Core::Alloc::GlobalArena*>(memory->user));
         return arena.reallocate(block, alignof(MaxAlign), static_cast<usize>(newSize));
     }
 

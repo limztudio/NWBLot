@@ -57,9 +57,8 @@ inline constexpr f32 s_DegreesPerTurn = 360.0f;
     Float4 cameraPosition;
     StoreFloat(VectorXorInt(VectorSet(0.0f, cameraHeight, cameraDistance, 0.0f), s_SIMDFlipZ), cameraPosition);
     activeCamera.camera = Impl::Scene::CreateSceneCameraEntity(world, cameraPosition);
-    auto* cameraTransform = world.tryGetComponent<Impl::Scene::TransformComponent>(activeCamera.camera);
-    NWB_ASSERT(cameraTransform);
-    StoreFloat(QuaternionRotationRollPitchYaw(cameraPitch, 0.0f, 0.0f), cameraTransform->rotation);
+    auto& cameraTransform = *MakeNotNull(world.tryGetComponent<Impl::Scene::TransformComponent>(activeCamera.camera));
+    StoreFloat(QuaternionRotationRollPitchYaw(cameraPitch, 0.0f, 0.0f), cameraTransform.rotation);
 
     return activeCamera.camera;
 }

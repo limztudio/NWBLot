@@ -315,8 +315,8 @@ Expected<NotNull<Builder::Item*>, Builder::ItemDeclarationFailure> Builder::addI
             return MakeUnexpected(ItemDeclarationFailure{});
         }
         for(const auto& name : names){
-            const UiSkinRegion* skinRegion = region(name, m_style.checkbox);
-            const SIMDVectorSingle regionMinimum = VectorSet(skinRegion->minimumWidth, skinRegion->minimumHeight, 0.0f, 0.0f);
+            const UiSkinRegion& skinRegion = *MakeNotNull(region(name, m_style.checkbox));
+            const SIMDVectorSingle regionMinimum = VectorSet(skinRegion.minimumWidth, skinRegion.minimumHeight, 0.0f, 0.0f);
             checkboxExtent = VectorSplatX(VectorMax(checkboxExtent, VectorMax(regionMinimum, VectorSplatY(regionMinimum))));
         }
         const SIMDVectorSingle measuredSize = VectorSelect(VectorZero(), measured, s_SIMDMaskXY);

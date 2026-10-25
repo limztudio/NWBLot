@@ -357,7 +357,7 @@ inline void AppendOptionalDeviceFeature(DeviceExtensionFeature::Enum feature, vo
         return;
 
     if(void* featureStruct = GetOptionalDeviceFeatureStruct(features, feature)){
-        AppendFeatureStruct(pNext, *static_cast<VkBaseOutStructure*>(featureStruct));
+        AppendFeatureStruct(pNext, *MakeNotNull(static_cast<VkBaseOutStructure*>(featureStruct)));
         appended[featureIndex] = true;
     }
 }

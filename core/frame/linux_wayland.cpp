@@ -210,7 +210,7 @@ static void OnOutputDone(void* data, wl_output* output)noexcept{
 static void OnOutputScale(void* data, wl_output* output, i32 factor){
     static_cast<void>(output);
 
-    auto& context = *static_cast<WaylandContext*>(data);
+    auto& context = *MakeNotNull(static_cast<WaylandContext*>(data));
     ApplyBufferScale(context, factor);
 }
 
@@ -233,7 +233,7 @@ static const wl_output_listener s_OutputListener = {
 
 
 static void OnRegistryGlobal(void* data, wl_registry* registry, u32 name, const char* interfaceName, u32 version){
-    auto& context = *static_cast<WaylandContext*>(data);
+    auto& context = *MakeNotNull(static_cast<WaylandContext*>(data));
 
     if(NWB_STRCMP(interfaceName, wl_compositor_interface.name) == 0){
         const u32 bindVersion = version < s_WaylandCompositorBindVersion ? version : s_WaylandCompositorBindVersion;
@@ -257,7 +257,7 @@ static void OnRegistryGlobal(void* data, wl_registry* registry, u32 name, const 
 
 static void OnRegistryGlobalRemove(void* data, wl_registry* registry, u32 name){
     static_cast<void>(registry);
-    static_cast<WaylandContext*>(data)->input.removeSeat(name);
+    MakeNotNull(static_cast<WaylandContext*>(data))->input.removeSeat(name);
 }
 
 static void OnWmBasePing(void* data, xdg_wm_base* wmBase, u32 serial)noexcept{
@@ -266,7 +266,7 @@ static void OnWmBasePing(void* data, xdg_wm_base* wmBase, u32 serial)noexcept{
 }
 
 static void OnXdgSurfaceConfigure(void* data, xdg_surface* xdgSurface, u32 serial)noexcept{
-    auto& context = *static_cast<WaylandContext*>(data);
+    auto& context = *MakeNotNull(static_cast<WaylandContext*>(data));
     xdg_surface_ack_configure(xdgSurface, serial);
 
     context.configured = true;
@@ -285,7 +285,7 @@ static void OnXdgSurfaceConfigure(void* data, xdg_surface* xdgSurface, u32 seria
 static void OnToplevelConfigure(void* data, xdg_toplevel* toplevel, i32 width, i32 height, wl_array* states)noexcept{
     static_cast<void>(toplevel);
 
-    auto& context = *static_cast<WaylandContext*>(data);
+    auto& context = *MakeNotNull(static_cast<WaylandContext*>(data));
     auto& frameData = context.frame.data<Common::LinuxFrame>();
 
     if(width > 0)
@@ -311,7 +311,7 @@ static void OnToplevelConfigure(void* data, xdg_toplevel* toplevel, i32 width, i
 static void OnToplevelClose(void* data, xdg_toplevel* toplevel){
     static_cast<void>(toplevel);
 
-    auto& context = *static_cast<WaylandContext*>(data);
+    auto& context = *MakeNotNull(static_cast<WaylandContext*>(data));
     context.frame.input().pointerCaptureLost();
     context.frame.input().pointerLeave();
     if(ITextInputService* const textInput = context.frame.tryTextInput()){

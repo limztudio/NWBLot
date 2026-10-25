@@ -8,6 +8,7 @@
 #include <array>
 
 #include "generic.h"
+#include "not_null.h"
 #include "type.h"
 
 
@@ -85,12 +86,12 @@ public:
 
 public:
     constexpr reference back(){
-        requireNonEmpty("FixedVector back on empty vector");
+        requireNonEmpty(MakeNotNull("FixedVector back on empty vector"));
         return Base::operator[](m_currentSize - 1);
     }
 
     constexpr const_reference back()const{
-        requireNonEmpty("FixedVector back on empty vector");
+        requireNonEmpty(MakeNotNull("FixedVector back on empty vector"));
         return Base::operator[](m_currentSize - 1);
     }
 
@@ -141,7 +142,7 @@ public:
     }
 
     constexpr void pop_back(){
-        requireNonEmpty("FixedVector pop_back on empty vector");
+        requireNonEmpty(MakeNotNull("FixedVector pop_back on empty vector"));
         --m_currentSize;
     }
 
@@ -175,10 +176,10 @@ private:
             throw RuntimeException("FixedVector index out of range");
     }
 
-    constexpr void requireNonEmpty(const char* const message)const{
+    constexpr void requireNonEmpty(const NotNull<const char*> message)const{
         NWB_ASSERT(m_currentSize > 0);
         if(m_currentSize == 0)
-            throw RuntimeException(message);
+            throw RuntimeException(message.get());
     }
 
     constexpr void requireCapacity()const{

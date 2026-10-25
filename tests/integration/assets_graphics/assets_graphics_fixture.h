@@ -204,7 +204,7 @@ public:
 
 public:
     template<typename T>
-    static bool OverwritePOD(NWB::Core::Assets::AssetBytes& binary, const usize offset, const T value)noexcept(noexcept(NWB_MEMCPY(binary.data() + offset, sizeof(value), &value, sizeof(value))) && IsNothrowDestructible_V<T>){
+    static bool OverwritePOD(const Span<u8> binary, const usize offset, const T value)noexcept(noexcept(NWB_MEMCPY(binary.data() + offset, sizeof(value), &value, sizeof(value))) && IsNothrowDestructible_V<T>){
         if(offset > binary.size() || sizeof(value) > binary.size() - offset)
             return false;
 
@@ -213,17 +213,17 @@ public:
     }
 
     static bool EncodeTestMeshletRefs(
-        const NWB::Core::Assets::AssetVector<NWB::Impl::MeshletPositionStreamRef>& positionRefs,
-        const NWB::Core::Assets::AssetVector<NWB::Impl::MeshletAttributeStreamRef>& attributeRefs,
+        Span<const NWB::Impl::MeshletPositionStreamRef> positionRefs,
+        Span<const NWB::Impl::MeshletAttributeStreamRef> attributeRefs,
         const bool skinRequired,
-        NWB::Core::Assets::AssetVector<NWB::Impl::MeshletDesc>& meshlets,
+        Span<NWB::Impl::MeshletDesc> meshlets,
         NWB::Core::Assets::AssetVector<u8>& outPositionRefDeltas,
         NWB::Core::Assets::AssetVector<u8>& outAttributeRefDeltas
     );
-    [[nodiscard]] static Expected<MaterialBinaryTypedLayoutOffsets> FindMaterialBinaryTypedLayoutOffsets(const NWB::Core::Assets::AssetBytes& binary)noexcept;
-    static Expected<u64> FindShaderArchiveSourceChecksum(const NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>& records, const Name shaderName, const Name stageName)noexcept;
+    [[nodiscard]] static Expected<MaterialBinaryTypedLayoutOffsets> FindMaterialBinaryTypedLayoutOffsets(Span<const u8> binary)noexcept;
+    static Expected<u64> FindShaderArchiveSourceChecksum(Span<const NWB::Core::ShaderArchive::Record> records, const Name shaderName, const Name stageName)noexcept;
     template<typename CodecT>
-    static void CheckCodecRejectsBinary(TestArena& testArena, const CodecT& codec, const Name& virtualPath, const NWB::Core::Assets::AssetBytes& binary){
+    static void CheckCodecRejectsBinary(TestArena& testArena, const CodecT& codec, const Name& virtualPath, const Span<const u8> binary){
         EXPECT_FALSE(codec.deserialize(testArena.arena, virtualPath, binary));
     }
 

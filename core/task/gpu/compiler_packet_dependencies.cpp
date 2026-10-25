@@ -29,10 +29,10 @@ namespace GpuTaskGraphCompilerDetail{
 [[nodiscard]] bool PlanPacketDependencies(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
-    const Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialOwnershipDependencies,
-    const Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialAvailabilityDependencies,
+    const Span<const GpuTaskExternalDependencyEdge> initialOwnershipDependencies,
+    const Span<const GpuTaskExternalDependencyEdge> initialAvailabilityDependencies,
     Alloc::ScratchArena& scratchArena,
-    Vector<GpuPacketDependency, Alloc::ScratchArena>& resourceStateDependencies,
+    const Span<GpuPacketDependency> resourceStateDependencies,
     GpuTaskGraphCompiledPlanStorage& compiledPlan
 ){
     const usize packetCount = compiledPlan.packets.size();

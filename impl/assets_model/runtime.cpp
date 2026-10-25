@@ -174,7 +174,7 @@ bool Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     return true;
 }
 
-bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
+bool Model::loadBinary(const Span<const u8> binary){
     Core::Alloc::ScratchArena scratchArena(AssetsModelArenaScope::s_LoadBinaryArena);
     usize cursor = 0u;
     const auto headerResult = Core::Assets::ReadMagicHeaderPayload<ModelBinaryPayload::ModelHeaderBinary>(binary, ModelBinaryPayload::s_ModelMagic, ModelBinaryPayload::s_ModelLoadBinaryContext, ModelBinaryPayload::s_ModelAssetKindLabel, cursor);

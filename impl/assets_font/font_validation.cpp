@@ -54,8 +54,8 @@ static constexpr AStringView s_NativeCleanupFailedFormat = "Font native cleanup 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidateSfntDirectory(const Core::Assets::AssetBytes& bytes)noexcept{
-    const auto directoryResult = FontSfntDirectory::Read({ bytes.data(), bytes.size() });
+[[nodiscard]] static bool ValidateSfntDirectory(const Span<const u8> bytes)noexcept{
+    const auto directoryResult = FontSfntDirectory::Read(bytes);
     if(!directoryResult)
         return false;
     const FontSfntDirectory& directory = *directoryResult;
@@ -163,7 +163,7 @@ public:
 
 
 public:
-    [[nodiscard]] Expected<void, NativeFontFailure> validate(const Core::Assets::AssetBytes& bytes)noexcept{
+    [[nodiscard]] Expected<void, NativeFontFailure> validate(const Span<const u8> bytes)noexcept{
         const FT_Error libraryError = FT_New_Library(&m_memory, &m_library);
         if(libraryError != 0)
             return MakeUnexpected(NativeFontFailure{ .operation = "FT_New_Library", .nativeError = libraryError });

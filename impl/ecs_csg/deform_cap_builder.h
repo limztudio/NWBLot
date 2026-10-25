@@ -34,12 +34,12 @@ class CsgDeformCapBuilder final : NoCopy{
 public:
     // SIMD-domain cores: inputs and outputs stay on vector lanes, never touch storage.
     [[nodiscard]] static SIMDVectorSingle AccumulateFanAreaVec(SIMDVectorSingle inAreaVec, SIMDVectorSingle originVec, SIMDVectorSingle firstVec, SIMDVectorSingle secondVec)noexcept;
-    static void CollectBoundaryEdges(Core::Alloc::ScratchArena& scratchArena, const CsgDeformTriangleVector<Core::Alloc::ScratchArena>& triangles, Vector<CsgDeformCutLoopEdge, Core::Alloc::ScratchArena>& outEdges);
-    [[nodiscard]] static bool OrderBoundaryLoop(Core::Alloc::ScratchArena& scratchArena, const Vector<CsgDeformCutLoopEdge, Core::Alloc::ScratchArena>& edges, Vector<u32, Core::Alloc::ScratchArena>& outLoop);
+    static void CollectBoundaryEdges(Core::Alloc::ScratchArena& scratchArena, Span<const CsgDeformTriangle> triangles, Vector<CsgDeformCutLoopEdge, Core::Alloc::ScratchArena>& outEdges);
+    [[nodiscard]] static bool OrderBoundaryLoop(Core::Alloc::ScratchArena& scratchArena, Span<const CsgDeformCutLoopEdge> edges, Vector<u32, Core::Alloc::ScratchArena>& outLoop);
     [[nodiscard]] static Expected<SIMDVectorSingleResult> CapNormal(SIMDVectorSingle area)noexcept;
     [[nodiscard]] static Expected<u32> FillCapLoop(
         const SIMDVectorSingle loopNormalVec,
-        const Vector<u32, Core::Alloc::ScratchArena>& loop,
+        Span<const u32> loop,
         CsgDeformVertexVector<Core::Alloc::ScratchArena>& inOutVertices,
         CsgDeformTriangleVector<Core::Alloc::ScratchArena>& inOutTriangles
     );

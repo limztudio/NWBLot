@@ -46,8 +46,8 @@ public:
     template<typename VectorT>
     [[nodiscard]] static usize MeshletCookVectorBytes(const VectorT& values)noexcept(noexcept(static_cast<usize>(values.size() * sizeof(typename VectorT::value_type))));
     template<typename CookEntryT>
-    [[nodiscard]] static usize EstimateCommonMeshletSourceBytes(const Core::Assets::AssetVector<u32>& indices, const CookEntryT& entry)noexcept(noexcept(
-        MeshletCookVectorBytes(indices)
+    [[nodiscard]] static usize EstimateCommonMeshletSourceBytes(Span<const u32> indices, const CookEntryT& entry)noexcept(noexcept(
+        MeshletCookVectorBytes(DeclVal<Span<const u32>>())
         + MeshletCookVectorBytes(entry.positions)
         + MeshletCookVectorBytes(entry.normals)
         + MeshletCookVectorBytes(entry.tangents)
@@ -55,7 +55,7 @@ public:
         + MeshletCookVectorBytes(entry.colors)
         + MeshletCookVectorBytes(entry.vertexRefs)
     ));
-    [[nodiscard]] static usize EstimateMeshletSourceBytes(const Core::Assets::AssetVector<u32>& indices, const MeshCookEntry& entry)noexcept;
+    [[nodiscard]] static usize EstimateMeshletSourceBytes(Span<const u32> indices, const MeshCookEntry& entry)noexcept;
     template<typename CookEntryT>
     [[nodiscard]] static usize EstimateCommonMeshletRuntimeBytes(const CookEntryT& entry)noexcept(noexcept(
         MeshletCookVectorBytes(entry.positions)
@@ -79,7 +79,7 @@ public:
         && noexcept(DeclVal<void(*)(const MeshletBounds&)noexcept>()(entry.meshletBounds[DeclVal<usize&>()]))
     );
     template<typename CookEntryT>
-    static void LogMeshletCookMetrics(const Path& nwbFilePath, const TStringView metaKind, const Core::Assets::AssetVector<u32>& indices, const CookEntryT& entry);
+    static void LogMeshletCookMetrics(const Path& nwbFilePath, const TStringView metaKind, Span<const u32> indices, const CookEntryT& entry);
 
 
 public:
@@ -97,8 +97,8 @@ usize MeshletCookMetricsReport::MeshletCookVectorBytes(const VectorT& values)noe
 
 
 template<typename CookEntryT>
-usize MeshletCookMetricsReport::EstimateCommonMeshletSourceBytes(const Core::Assets::AssetVector<u32>& indices, const CookEntryT& entry)noexcept(noexcept(
-    MeshletCookVectorBytes(indices)
+usize MeshletCookMetricsReport::EstimateCommonMeshletSourceBytes(const Span<const u32> indices, const CookEntryT& entry)noexcept(noexcept(
+    MeshletCookVectorBytes(DeclVal<Span<const u32>>())
     + MeshletCookVectorBytes(entry.positions)
     + MeshletCookVectorBytes(entry.normals)
     + MeshletCookVectorBytes(entry.tangents)
@@ -197,7 +197,7 @@ MeshletCookMetrics MeshletCookMetricsReport::BuildMeshletCookMetrics(const CookE
 
 
 template<typename CookEntryT>
-void MeshletCookMetricsReport::LogMeshletCookMetrics(const Path& nwbFilePath, const TStringView metaKind, const Core::Assets::AssetVector<u32>& indices, const CookEntryT& entry){
+void MeshletCookMetricsReport::LogMeshletCookMetrics(const Path& nwbFilePath, const TStringView metaKind, const Span<const u32> indices, const CookEntryT& entry){
     const MeshletCookMetrics metrics = BuildMeshletCookMetrics(entry);
     if(metrics.meshletCount == 0u)
         return;

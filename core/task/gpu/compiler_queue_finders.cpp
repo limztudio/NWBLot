@@ -23,7 +23,7 @@ namespace GpuTaskGraphCompilerDetail{
 // Queues in one Vulkan family exchange work through a timeline semaphore with no ownership transfer. Cross-family use stays opt-in; planning emits the paired handoff when needed.
 [[nodiscard]] const GpuPhysicalQueueInfo* FindLeastLoadedSameClassQueue(
     const GpuTaskGraph::DeclarationReadView& graph,
-    const Vector<u64, Alloc::ScratchArena>& prefixQueueCosts,
+    const Span<const u64> prefixQueueCosts,
     const GpuTaskQueueScoringData& scoringData,
     const GpuPhysicalQueueTopology& topology,
     const GpuTaskGraphTaskView& task,
@@ -58,8 +58,8 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
     const GpuTaskGraphTaskView& task,
-    const GraphicsVector<GpuTaskQueueAssignment>& assignments,
-    const GraphicsVector<u32>& assignmentIndicesByTask,
+    const Span<const GpuTaskQueueAssignment> assignments,
+    const Span<const u32> assignmentIndicesByTask,
     const GpuPhysicalQueueTopology& topology,
     const GpuPhysicalQueueInfo& baseQueue,
     const usize assignedPrefixCount,
@@ -140,8 +140,8 @@ namespace GpuTaskGraphCompilerDetail{
 [[nodiscard]] const GpuPhysicalQueueInfo* FindTimingFeedbackQueue(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
-    const GraphicsVector<GpuTaskQueueAssignment>& assignments,
-    const GraphicsVector<u32>& assignmentIndicesByTask,
+    const Span<const GpuTaskQueueAssignment> assignments,
+    const Span<const u32> assignmentIndicesByTask,
     const GpuPhysicalQueueTopology& topology,
     const GpuTaskSchedulingReachability& schedulingReachability,
     const GpuTaskQueueScoringData& scoringData,

@@ -32,7 +32,7 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_MeshAssetCodecAutoRegistrar, MeshAssetCodec);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Mesh::loadBinary(const Core::Assets::AssetBytes& binary){
+bool Mesh::loadBinary(const Span<const u8> binary){
     if(!checkVirtualPath(MeshBinaryPayload::s_MeshLoadBinaryContext))
         return false;
 

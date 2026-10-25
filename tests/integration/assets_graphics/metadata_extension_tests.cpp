@@ -199,7 +199,7 @@ public:
 
 
 public:
-    bool loadBinary(const AssetBytes&)noexcept{
+    bool loadBinary(const Span<const u8>)noexcept{
         s_LoadCalled = true;
         return true;
     }
@@ -239,7 +239,7 @@ public:
 
 
 public:
-    bool loadBinary(const AssetBytes&)noexcept{ return true; }
+    bool loadBinary(const Span<const u8>)noexcept{ return true; }
 };
 
 class ImplicitNameCodec final : public AssetCodec<ImplicitNameAsset>{

@@ -8,6 +8,7 @@
 #include "basic_string.h"
 #include "expected.h"
 #include "numeric_text.h"
+#include "span.h"
 #include "text_utils.h"
 #include "type.h"
 
@@ -117,10 +118,8 @@ inline void ParseLinuxProcessMemoryMaps(const AStringView mapsText, EntryVectorT
     }
 }
 
-template<typename EntryRangeT>
-[[nodiscard]] inline Expected<LinuxProcessMemoryMapEntry> FindLinuxProcessMemoryMapForAddress(const EntryRangeT& entries, const u64 address)noexcept(
-    IsNothrowRangeFor<const EntryRangeT, decltype([](const LinuxProcessMemoryMapEntry&)noexcept{})>()
-    && noexcept(Expected<LinuxProcessMemoryMapEntry>(DeclVal<const LinuxProcessMemoryMapEntry&>()))
+[[nodiscard]] inline Expected<LinuxProcessMemoryMapEntry> FindLinuxProcessMemoryMapForAddress(const Span<const LinuxProcessMemoryMapEntry> entries, const u64 address)noexcept(
+    noexcept(Expected<LinuxProcessMemoryMapEntry>(DeclVal<const LinuxProcessMemoryMapEntry&>()))
 ){
     for(const LinuxProcessMemoryMapEntry& entry : entries){
         if(address < entry.begin || address >= entry.end)

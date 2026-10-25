@@ -70,7 +70,7 @@ struct GpuTaskGraphCompiledPlanStorage{
     GraphicsVector<GpuCompiledOwnershipTransfer>& ownershipTransfers;
     GraphicsVector<GpuCompiledExternalResourceExport>& externalResourceExports;
     GraphicsVector<GpuCompiledExternalResourceExportSource>& externalResourceExportSources;
-    const GraphicsVector<GpuPhysicalQueueInfo>& queueTopology;
+    Span<const GpuPhysicalQueueInfo> queueTopology;
     GpuCompiledPresentEndpoint& presentEndpoint;
     bool& hasPresentEndpoint;
     u64 graphGeneration = 0u;
@@ -92,7 +92,7 @@ struct PendingCompiledEpilogueBarrier{
 struct GpuTaskGraphResourceStatePlan{
     const GpuTaskGraph::DeclarationReadView& graph;
     const GpuPhysicalQueueTopology& topology;
-    const GraphicsVector<GpuTaskId>& topologicalOrder;
+    Span<const GpuTaskId> topologicalOrder;
     GpuTaskGraphCompiledPlanStorage& compiledPlan;
     Alloc::ScratchArena& scratchArena;
     Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& trackedResourceStates;
@@ -182,7 +182,7 @@ private:
 
 [[nodiscard]] bool BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphAnalysis& analysis, GpuTaskSchedulingReachability& outReachability);
 
-[[nodiscard]] const GpuTaskQueueAssignment* FindQueueAssignment(const GraphicsVector<GpuTaskQueueAssignment>& assignments, const GraphicsVector<u32>& assignmentIndicesByTask, const GpuTaskId& task)noexcept;
+[[nodiscard]] const GpuTaskQueueAssignment* FindQueueAssignment(Span<const GpuTaskQueueAssignment> assignments, Span<const u32> assignmentIndicesByTask, const GpuTaskId& task)noexcept;
 
 
 struct GpuTaskQueueScoringData{
@@ -206,7 +206,7 @@ public:
 
 public:
     [[nodiscard]] u64 externalQueueLoad(const GpuPhysicalQueueId& queue)const noexcept;
-    void rebuildAssignmentLoads(const GraphicsVector<GpuTaskQueueAssignment>& assignments, const GpuPhysicalQueueTopology& topology);
+    void rebuildAssignmentLoads(Span<const GpuTaskQueueAssignment> assignments, const GpuPhysicalQueueTopology& topology);
     void updateAssignmentLoads(const GpuTaskId& task, const GpuPhysicalQueueId& previousQueue, const GpuPhysicalQueueId& selectedQueue)noexcept;
     [[nodiscard]] u64 assignedQueueLoad(const GpuPhysicalQueueId& queue)const noexcept;
     [[nodiscard]] u64 independentQueueCost(const GpuTaskSchedulingReachability& reachability, const GpuPhysicalQueueId& queue, NotNull<const GpuTaskQueueAssignment*> members, usize memberCount)const noexcept;
@@ -222,8 +222,8 @@ struct GpuTaskQueueScoreExclusions{
 [[nodiscard]] GpuQueueAssignmentScore BuildQueueAssignmentScore(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
-    const GraphicsVector<GpuTaskQueueAssignment>& assignments,
-    const GraphicsVector<u32>& assignmentIndicesByTask,
+    Span<const GpuTaskQueueAssignment> assignments,
+    Span<const u32> assignmentIndicesByTask,
     const GpuPhysicalQueueTopology& topology,
     const GpuTaskSchedulingReachability& schedulingReachability,
     const GpuTaskQueueScoringData& scoringData,
@@ -258,8 +258,8 @@ struct GpuTaskQueuePlacementGroup{
 [[nodiscard]] GpuQueueAssignmentScore BuildQueuePlacementGroupScore(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
-    const GraphicsVector<GpuTaskQueueAssignment>& assignments,
-    const GraphicsVector<u32>& assignmentIndicesByTask,
+    Span<const GpuTaskQueueAssignment> assignments,
+    Span<const u32> assignmentIndicesByTask,
     const GpuPhysicalQueueTopology& topology,
     const GpuTaskSchedulingReachability& schedulingReachability,
     const GpuTaskQueueScoringData& scoringData,
@@ -277,7 +277,7 @@ struct GpuTaskQueuePlacementGroup{
 
 [[nodiscard]] const GpuPhysicalQueueInfo* FindLeastLoadedSameClassQueue(
     const GpuTaskGraph::DeclarationReadView& graph,
-    const Vector<u64, Alloc::ScratchArena>& prefixQueueCosts,
+    Span<const u64> prefixQueueCosts,
     const GpuTaskQueueScoringData& scoringData,
     const GpuPhysicalQueueTopology& topology,
     const GpuTaskGraphTaskView& task,
@@ -290,8 +290,8 @@ struct GpuTaskQueuePlacementGroup{
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
     const GpuTaskGraphTaskView& task,
-    const GraphicsVector<GpuTaskQueueAssignment>& assignments,
-    const GraphicsVector<u32>& assignmentIndicesByTask,
+    Span<const GpuTaskQueueAssignment> assignments,
+    Span<const u32> assignmentIndicesByTask,
     const GpuPhysicalQueueTopology& topology,
     const GpuPhysicalQueueInfo& baseQueue,
     const usize assignedPrefixCount,
@@ -310,8 +310,8 @@ struct GpuTaskQueuePlacementGroup{
 [[nodiscard]] const GpuPhysicalQueueInfo* FindTimingFeedbackQueue(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
-    const GraphicsVector<GpuTaskQueueAssignment>& assignments,
-    const GraphicsVector<u32>& assignmentIndicesByTask,
+    Span<const GpuTaskQueueAssignment> assignments,
+    Span<const u32> assignmentIndicesByTask,
     const GpuPhysicalQueueTopology& topology,
     const GpuTaskSchedulingReachability& schedulingReachability,
     const GpuTaskQueueScoringData& scoringData,
@@ -370,7 +370,7 @@ struct GpuTaskQueuePlacementGroup{
     const Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& trackedStates,
     const TrackedResourceStateHistory& history,
     const GpuTaskGraphResourceView& resource,
-    const Vector<GpuTaskResourceRange, Alloc::ScratchArena>& requestedRanges,
+    Span<const GpuTaskResourceRange> requestedRanges,
     Alloc::ScratchArena& scratchArena,
     Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& outFragments
 );
@@ -438,10 +438,10 @@ struct GpuTaskQueuePlacementGroup{
 [[nodiscard]] bool PlanPacketDependencies(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
-    const Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialOwnershipDependencies,
-    const Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialAvailabilityDependencies,
+    Span<const GpuTaskExternalDependencyEdge> initialOwnershipDependencies,
+    Span<const GpuTaskExternalDependencyEdge> initialAvailabilityDependencies,
     Alloc::ScratchArena& scratchArena,
-    Vector<GpuPacketDependency, Alloc::ScratchArena>& resourceStateDependencies,
+    Span<GpuPacketDependency> resourceStateDependencies,
     GpuTaskGraphCompiledPlanStorage& compiledPlan
 );
 

@@ -22,7 +22,7 @@ NWB_ASSETS_BEGIN
 
 
 template<typename ValueContainer>
-[[nodiscard]] bool ReadVectorPayload(const AssetBytes& binary, const u64 count, const TStringView failureContext, const TStringView label, usize& inOutCursor, ValueContainer& outValues){
+[[nodiscard]] bool ReadVectorPayload(const Span<const u8> binary, const u64 count, const TStringView failureContext, const TStringView label, usize& inOutCursor, ValueContainer& outValues){
     const auto result = ::ReadBinaryVectorPayload(binary, count, inOutCursor, outValues);
     if(result)
         return true;
@@ -38,7 +38,7 @@ template<typename ValueContainer>
 }
 
 template<typename HeaderT>
-[[nodiscard]] Expected<HeaderT> ReadMagicHeaderPayload(const AssetBytes& binary, const u32 expectedMagic, const TStringView failureContext, const TStringView assetType, usize& inOutCursor){
+[[nodiscard]] Expected<HeaderT> ReadMagicHeaderPayload(const Span<const u8> binary, const u32 expectedMagic, const TStringView failureContext, const TStringView assetType, usize& inOutCursor){
     const auto header = ReadPOD<HeaderT>(binary, inOutCursor);
     if(!header){
         NWB_LOGGER_ERROR(NWB_TEXT("{} failed: malformed header"), failureContext);
@@ -53,7 +53,7 @@ template<typename HeaderT>
     return header;
 }
 
-[[nodiscard]] inline bool ReadCompletePayload(const AssetBytes& binary, const usize cursor, const TStringView failureContext){
+[[nodiscard]] inline bool ReadCompletePayload(const Span<const u8> binary, const usize cursor, const TStringView failureContext){
     if(cursor != binary.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("{} failed: trailing bytes detected"), failureContext);
         return false;

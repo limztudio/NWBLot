@@ -25,7 +25,7 @@ bool MeshCookMeshlets::AddVisitedMeshletTriangle(
     Core::Assets::AssetVector<u8>& primitiveIndices,
     MeshletScoreState& scoreState,
     Vector<u32, Core::Alloc::ScratchArena>& frontier,
-    Vector<u8, Core::Alloc::ScratchArena>& frontierFlags
+    const Span<u8> frontierFlags
 ){
     const MeshletTriangleData& triangle = trianglePrecompute.triangles[triangleIndex];
     if(!AddMeshletTriangleToBuilder(nwbFilePath, metaKind, triangle, localSourceVertexRefs, meshlet, primitiveIndices))
@@ -57,7 +57,7 @@ bool MeshCookMeshlets::GrowMeshletFromFrontier(
     MeshletScoreState& scoreState,
     Vector<MeshletCandidateSearchResult, Core::Alloc::ScratchArena>& parallelCandidates,
     Vector<u32, Core::Alloc::ScratchArena>& frontier,
-    Vector<u8, Core::Alloc::ScratchArena>& frontierFlags
+    const Span<u8> frontierFlags
 ){
     while(MeshletPrimitiveCount(meshlet) < s_MeshMaxMeshletTriangles){
         if(frontier.empty()){

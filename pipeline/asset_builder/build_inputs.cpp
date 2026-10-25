@@ -39,7 +39,7 @@ struct PathSelectionIndex{
 
 
 public:
-    PathSelectionIndex(const Assets::DiscoveredNwbFileVector& files, Assets::ScratchArena& scratchArena, const bool preserveCase)
+    PathSelectionIndex(const Span<const Assets::DiscoveredNwbFile> files, Assets::ScratchArena& scratchArena, const bool preserveCase)
         : m_entries(scratchArena){
         m_entries.reserve(files.size());
         if(preserveCase){
@@ -58,7 +58,7 @@ public:
     }
 };
 
-[[nodiscard]] static bool SelectPathRange(const PathSelectionIndex& index, const AStringView path, const bool prefix, Vector<u8, Assets::ScratchArena>& selected)noexcept{
+[[nodiscard]] static bool SelectPathRange(const PathSelectionIndex& index, const AStringView path, const bool prefix, const Span<u8> selected)noexcept{
     auto entry = LowerBound(index.m_entries.begin(), index.m_entries.end(), path, [](const IndexedPath& candidate, const AStringView value)noexcept{ return candidate.text < value; });
     bool matched = false;
     for(; entry != index.m_entries.end(); ++entry){

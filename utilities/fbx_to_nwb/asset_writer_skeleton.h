@@ -41,9 +41,9 @@ struct PositionAlignedSkinnedMesh{
 
 [[nodiscard]] Expected<SIMDMatrix> InvertJointMatrix(const SIMDMatrix& matrix)noexcept;
 [[nodiscard]] Expected<SIMDMatrix> BuildLocalBindPoseMatrix(const SIMDMatrix& globalBindPose, const SIMDMatrix* parentGlobalBindPose)noexcept;
-[[nodiscard]] bool ValidateSplitSkinSource(const SourceMeshStreams& mesh, const UtilityVector<ufbx_node*>& skeletonJoints, const UtilityVector<JointMatrix>& skeletonBindPoseMatrices, const UtilityVector<JointMatrix>& inverseBindMatrices);
-[[nodiscard]] Expected<SkeletonOutputData> BuildSkeletonOutputData(const UtilityVector<ufbx_node*>& joints, const UtilityVector<JointMatrix>& bindPoseMatrices, const UtilityVector<JointMatrix>& inverseBindMatrices, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] bool RemapSkinInfluences(UtilityVector<MeshSkinInfluence>& inOutInfluences, const UtilityVector<u16>& oldToNewJointIndices);
+[[nodiscard]] bool ValidateSplitSkinSource(const SourceMeshStreams& mesh, Span<ufbx_node* const> skeletonJoints, Span<const JointMatrix> skeletonBindPoseMatrices, Span<const JointMatrix> inverseBindMatrices);
+[[nodiscard]] Expected<SkeletonOutputData> BuildSkeletonOutputData(Span<ufbx_node* const> joints, Span<const JointMatrix> bindPoseMatrices, Span<const JointMatrix> inverseBindMatrices, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] bool RemapSkinInfluences(Span<MeshSkinInfluence> inOutInfluences, Span<const u16> oldToNewJointIndices);
 [[nodiscard]] Expected<PositionAlignedSkinnedMesh> BuildPositionAlignedSkinnedMesh(const SourceMeshStreams& sourceMesh, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] bool ValidateSkinnedModelSourceMesh(const SourceMeshStreams& mesh);
 [[nodiscard]] bool ValidateStreamIndex(const u32 index, const usize count, const AStringView fieldName, const AStringView context);

@@ -93,8 +93,7 @@ u64 UpdateFnv64NameLane(u64 hash, const NameHash& nameHash, const u32 lane)noexc
 }
 
 
-template<typename RecordVector>
-const ShaderArchive::Record* FindRecord(const RecordVector& records, const Name& shaderName, const AStringView variantName, const Name& stageName){
+const ShaderArchive::Record* FindRecord(const Span<const ShaderArchive::Record> records, const Name& shaderName, const AStringView variantName, const Name& stageName){
     const NameHash& targetShader = shaderName.hash();
     const NameHash& targetStage = stageName.hash();
     const auto it = LowerBound(records.begin(), records.end(), nullptr, [&targetShader, &variantName, &targetStage](const ShaderArchive::Record& record, decltype(nullptr)){
@@ -308,7 +307,7 @@ Expected<GraphicsVector<ShaderArchive::Record>> ShaderArchive::DeserializeIndex(
     return parsedRecords;
 }
 
-Expected<Name> ShaderArchive::FindVirtualPath(const GraphicsVector<Record>& records, const Name& shaderName, const AStringView variantName, const Name& stageName){
+Expected<Name> ShaderArchive::FindVirtualPath(const Span<const Record> records, const Name& shaderName, const AStringView variantName, const Name& stageName){
     if(!shaderName || variantName.empty() || !stageName)
         return MakeUnexpected(Failure{});
 

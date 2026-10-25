@@ -22,8 +22,8 @@ NWB_FBX_TO_NWB_BEGIN
 
 
 Expected<MeshBuildResult> BuildMesh(
-    const UtilityVector<MeshInstance>& instances,
-    const UtilityVector<usize>& selection,
+    const Span<const MeshInstance> instances,
+    const Span<const usize> selection,
     const ImportOptions& options,
     const bool wantsSkinning,
     const Vec4& defaultColor,

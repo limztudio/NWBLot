@@ -75,7 +75,7 @@ inline bool TextureClearSubresourcesContainedBy(const TextureSubresourceSet& req
     ;
 }
 
-inline void BuildArrayLayerImageSubresourceRanges(const TextureSubresourceSet& subresources, const VkImageAspectFlags aspectMask, Vector<VkImageSubresourceRange, Alloc::ScratchArena>& ranges)noexcept{
+inline void BuildArrayLayerImageSubresourceRanges(const TextureSubresourceSet& subresources, const VkImageAspectFlags aspectMask, const Span<VkImageSubresourceRange> ranges)noexcept{
     const ArraySlice arrayEnd = subresources.baseArraySlice + subresources.numArraySlices;
     u32 rangeIndex = 0u;
     for(ArraySlice arraySlice = subresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice)
@@ -191,7 +191,7 @@ inline void BuildArrayLayerBufferImageCopies(
     const Box& resolvedBox,
     const u64 stagingOffset,
     const TextureClearUploadLayout& uploadLayout,
-    Vector<VkBufferImageCopy, Alloc::ScratchArena>& regions
+    const Span<VkBufferImageCopy> regions
 )noexcept{
     const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
     const u64 layerPitch = uploadLayout.mergeArrayLayerCopies ? uploadLayout.layerPitch : 0ull;

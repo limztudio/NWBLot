@@ -41,7 +41,7 @@ using TextureFormat::ComputeMipSliceCount;
 
 
 [[nodiscard]] static Expected<u64> ValidateTextureMipLevels(
-    const Texture::MipLevelVector& mipLevels,
+    const Span<const TextureMipLevel> mipLevels,
     const TexturePayloadFormat::Enum payloadFormat,
     const TextureDimension::Enum dimension,
     const u32 width,
@@ -189,7 +189,7 @@ bool Texture::validatePayload()const{
 }
 
 
-bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
+bool Texture::loadBinary(const Span<const u8> binary){
     if(!checkVirtualPath(__hidden_texture_runtime::s_LoadBinaryContext))
         return false;
 

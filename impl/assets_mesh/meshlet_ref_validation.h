@@ -26,7 +26,7 @@ namespace MeshletRefValidationExceptionDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename MeshletContainer, typename LocalVertexRefContainer, typename AttributeSkinContainer, typename SkinResolver, typename ConflictHandler, typename UnreferencedHandler>
+template<typename AttributeSkinContainer, typename SkinResolver, typename ConflictHandler, typename UnreferencedHandler>
 consteval bool AttributeSkinsIsNothrow()noexcept{
     using Result = decltype(DeclVal<SkinResolver&>()(DeclVal<usize&>(), DeclVal<const MeshletDesc&>(), DeclVal<usize&>(), DeclVal<const u32&>()));
     using SkinIndex = Decay_T<Result>;
@@ -34,9 +34,6 @@ consteval bool AttributeSkinsIsNothrow()noexcept{
         IsNothrowDestructible_V<SkinResolver> && IsNothrowDestructible_V<ConflictHandler> && IsNothrowDestructible_V<UnreferencedHandler>
         && noexcept(DeclVal<AttributeSkinContainer&>().clear())
         && noexcept(DeclVal<AttributeSkinContainer&>().resize(DeclVal<const usize&>(), s_MeshMissingStreamIndex))
-        && noexcept(static_cast<bool>(DeclVal<usize&>() < DeclVal<const MeshletContainer&>().size()))
-        && noexcept(DeclVal<void(*)(const MeshletDesc&)noexcept>()(DeclVal<const MeshletContainer&>()[DeclVal<usize&>()]))
-        && noexcept(DeclVal<void(*)(const MeshletLocalVertexRef&)noexcept>()(DeclVal<const LocalVertexRefContainer&>()[u32{}]))
         && noexcept(DeclVal<SkinResolver&>()(DeclVal<usize&>(), DeclVal<const MeshletDesc&>(), DeclVal<usize&>(), DeclVal<const u32&>()))
         && (!IsReference_V<Result> || IsNothrowConstructible_V<SkinIndex, Result>)
         && IsNothrowDestructible_V<SkinIndex>
@@ -52,8 +49,7 @@ consteval bool AttributeSkinsIsNothrow()noexcept{
 }
 
 
-template<typename PositionRefContainer>
-using PositionSkinResolver = Expected<u32>(*)(const usize, const MeshletDesc&, const usize, const u32)noexcept(noexcept(Expected<u32>{ DeclVal<const PositionRefContainer&>()[usize{}].skin }));
+using PositionSkinResolver = Expected<u32>(*)(const usize, const MeshletDesc&, const usize, const u32)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -70,41 +66,36 @@ public:
     [[nodiscard]] static bool MeshletPositionRefInRange(const MeshletPositionStreamRef& ref, const usize positionCount, const usize skinCount, const bool skinRequired)noexcept;
     [[nodiscard]] static bool MeshletAttributeRefInRange(const MeshletAttributeStreamRef& ref, const usize normalCount, const usize tangentCount, const usize uv0Count, const usize colorCount)noexcept;
     template<
-        typename MeshletContainer,
-        typename LocalVertexRefContainer,
         typename AttributeSkinContainer,
         typename SkinResolver,
         typename ConflictHandler,
         typename UnreferencedHandler
     >
     [[nodiscard]] static bool ResolveMeshletAttributeSkinsFromLocalVertices(
-        const MeshletContainer& meshlets,
-        const LocalVertexRefContainer& localVertexRefs,
+        Span<const MeshletDesc> meshlets,
+        Span<const MeshletLocalVertexRef> localVertexRefs,
         const usize attributeCount,
         SkinResolver resolveSkin,
         ConflictHandler onConflict,
         UnreferencedHandler onUnreferenced,
         AttributeSkinContainer& outAttributeSkins
-    )noexcept(MeshletRefValidationExceptionDetail::AttributeSkinsIsNothrow<MeshletContainer, LocalVertexRefContainer, AttributeSkinContainer, SkinResolver, ConflictHandler, UnreferencedHandler>());
+    )noexcept(MeshletRefValidationExceptionDetail::AttributeSkinsIsNothrow<AttributeSkinContainer, SkinResolver, ConflictHandler, UnreferencedHandler>());
     template<
-        typename MeshletContainer,
-        typename PositionRefContainer,
-        typename LocalVertexRefContainer,
         typename AttributeSkinContainer,
         typename ConflictHandler,
         typename UnreferencedHandler
     >
     [[nodiscard]] static bool ResolveMeshletAttributeSkins(
-        const MeshletContainer& meshlets,
-        const PositionRefContainer& positionRefs,
-        const LocalVertexRefContainer& localVertexRefs,
+        Span<const MeshletDesc> meshlets,
+        Span<const MeshletPositionStreamRef> positionRefs,
+        Span<const MeshletLocalVertexRef> localVertexRefs,
         const usize attributeCount,
         ConflictHandler onConflict,
         UnreferencedHandler onUnreferenced,
         AttributeSkinContainer& outAttributeSkins
     )noexcept(
         IsNothrowConstructible_V<ConflictHandler, ConflictHandler&> && IsNothrowConstructible_V<UnreferencedHandler, UnreferencedHandler&>
-        && MeshletRefValidationExceptionDetail::AttributeSkinsIsNothrow<MeshletContainer, LocalVertexRefContainer, AttributeSkinContainer, MeshletRefValidationExceptionDetail::PositionSkinResolver<PositionRefContainer>, ConflictHandler, UnreferencedHandler>()
+        && MeshletRefValidationExceptionDetail::AttributeSkinsIsNothrow<AttributeSkinContainer, MeshletRefValidationExceptionDetail::PositionSkinResolver, ConflictHandler, UnreferencedHandler>()
     );
 
 
@@ -117,22 +108,20 @@ public:
 
 
 template<
-    typename MeshletContainer,
-    typename LocalVertexRefContainer,
     typename AttributeSkinContainer,
     typename SkinResolver,
     typename ConflictHandler,
     typename UnreferencedHandler
 >
 [[nodiscard]] bool MeshMeshletRefValidation::ResolveMeshletAttributeSkinsFromLocalVertices(
-    const MeshletContainer& meshlets,
-    const LocalVertexRefContainer& localVertexRefs,
+    const Span<const MeshletDesc> meshlets,
+    const Span<const MeshletLocalVertexRef> localVertexRefs,
     const usize attributeCount,
     SkinResolver resolveSkin,
     ConflictHandler onConflict,
     UnreferencedHandler onUnreferenced,
     AttributeSkinContainer& outAttributeSkins
-)noexcept(MeshletRefValidationExceptionDetail::AttributeSkinsIsNothrow<MeshletContainer, LocalVertexRefContainer, AttributeSkinContainer, SkinResolver, ConflictHandler, UnreferencedHandler>()){
+)noexcept(MeshletRefValidationExceptionDetail::AttributeSkinsIsNothrow<AttributeSkinContainer, SkinResolver, ConflictHandler, UnreferencedHandler>()){
     outAttributeSkins.clear();
     outAttributeSkins.resize(attributeCount, s_MeshMissingStreamIndex);
 
@@ -173,30 +162,27 @@ template<
 
 
 template<
-    typename MeshletContainer,
-    typename PositionRefContainer,
-    typename LocalVertexRefContainer,
     typename AttributeSkinContainer,
     typename ConflictHandler,
     typename UnreferencedHandler
 >
 [[nodiscard]] bool MeshMeshletRefValidation::ResolveMeshletAttributeSkins(
-    const MeshletContainer& meshlets,
-    const PositionRefContainer& positionRefs,
-    const LocalVertexRefContainer& localVertexRefs,
+    const Span<const MeshletDesc> meshlets,
+    const Span<const MeshletPositionStreamRef> positionRefs,
+    const Span<const MeshletLocalVertexRef> localVertexRefs,
     const usize attributeCount,
     ConflictHandler onConflict,
     UnreferencedHandler onUnreferenced,
     AttributeSkinContainer& outAttributeSkins
 )noexcept(
     IsNothrowConstructible_V<ConflictHandler, ConflictHandler&> && IsNothrowConstructible_V<UnreferencedHandler, UnreferencedHandler&>
-    && MeshletRefValidationExceptionDetail::AttributeSkinsIsNothrow<MeshletContainer, LocalVertexRefContainer, AttributeSkinContainer, MeshletRefValidationExceptionDetail::PositionSkinResolver<PositionRefContainer>, ConflictHandler, UnreferencedHandler>()
+    && MeshletRefValidationExceptionDetail::AttributeSkinsIsNothrow<AttributeSkinContainer, MeshletRefValidationExceptionDetail::PositionSkinResolver, ConflictHandler, UnreferencedHandler>()
 ){
     return ResolveMeshletAttributeSkinsFromLocalVertices(
         meshlets,
         localVertexRefs,
         attributeCount,
-        [&](const usize, const MeshletDesc&, const usize meshletPositionBase, const u32 localPositionIndex)noexcept(noexcept(Expected<u32>{ positionRefs[meshletPositionBase + localPositionIndex].skin }))->Expected<u32>{
+        [&](const usize, const MeshletDesc&, const usize meshletPositionBase, const u32 localPositionIndex)noexcept->Expected<u32>{
             return positionRefs[meshletPositionBase + localPositionIndex].skin;
         },
         onConflict,

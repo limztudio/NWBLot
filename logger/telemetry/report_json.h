@@ -36,7 +36,7 @@ inline constexpr AStringView s_JsonReasonKey = ", \"reason\": ";
 inline constexpr AStringView s_JsonAcceptanceKey = ", \"acceptance\": ";
 
 
-[[nodiscard]] usize EstimateJsonReportReserve(const FrameGraphReportRecords& graphs)noexcept;
+[[nodiscard]] usize EstimateJsonReportReserve(Span<const FrameGraphReportRecord> graphs)noexcept;
 void AppendFrameGraphPhysicalQueueJson(AString<TelemetryArena>& out, const Telemetry::FrameGraphPhysicalQueueId& queue);
 void AppendFrameGraphQueueAssignmentJson(AString<TelemetryArena>& out, const Telemetry::FrameGraphQueueAssignment& assignment);
 void AppendFrameGraphCompiledTaskJson(AString<TelemetryArena>& out, const Telemetry::FrameGraphCompiledTask& compiledTask);
@@ -51,14 +51,14 @@ void AppendFrameGraphPacketSubmissionStatisticsJson(AString<TelemetryArena>& out
 void AppendFrameGraphRuntimeStatisticsJson(
     AString<TelemetryArena>& out,
     const Telemetry::FrameGraphRuntimeStatistics& statistics,
-    const Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
-    const Telemetry::FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics,
+    Span<const Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord> physicalQueueRuntimeStatistics,
+    Span<const Telemetry::FrameGraphPacketSubmissionStatisticsRecord> packetSubmissionStatistics,
     const FrameGraphOwnerStatisticsRange& ownerRange,
     const bool physicalQueueRuntimeStatisticsPresent,
     const bool packetSubmissionStatisticsPresent
 );
 void AppendFrameGraphJson(const FrameGraphReportRecord& record, const usize graphIndex, const bool finalGraph, AString<TelemetryArena>& out);
-void BuildJson(const TelemetryReportSummary& summary, const FrameGraphReportRecords& graphs, const AStringView memoryRecords, AString<TelemetryArena>& out);
+void BuildJson(const TelemetryReportSummary& summary, Span<const FrameGraphReportRecord> graphs, const AStringView memoryRecords, AString<TelemetryArena>& out);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

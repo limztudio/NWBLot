@@ -26,11 +26,11 @@ Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> Compute
     DependencyProviderCatalog catalog(arena);
     if(!catalog.discover(options, scratchArena))
         return MakeUnexpected(Failure{});
-    const auto selection = catalog.selectInputs(options, scratchArena);
+    auto selection = catalog.selectInputs(options, scratchArena);
     if(!selection)
         return MakeUnexpected(Failure{});
     const auto& files = catalog.m_files;
-    Vector<u8, Assets::ScratchArena> included(selection->selected, scratchArena);
+    const Span<u8> included = selection->selected;
     for(const usize index : selection->order){
         const auto document = catalog.read(index, scratchArena);
         if(!document)

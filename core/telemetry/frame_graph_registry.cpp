@@ -29,7 +29,7 @@ namespace __hidden_frame_graph_registry{
 
 using FrameGraphNodeIndexLookup = HashMap<Name, u32, Alloc::ScratchArena, Hasher<Name>, EqualTo<Name>>;
 
-static void ResolvePendingNameEdges(Alloc::ScratchArena& scratchArena, const FrameGraphNodeDescs& nodes, const FrameGraphPendingNameEdges& pendingNameEdges, FrameGraphEdgeDescs& edges){
+static void ResolvePendingNameEdges(Alloc::ScratchArena& scratchArena, const Span<const FrameGraphNodeDesc> nodes, const Span<const FrameGraphPendingNameEdge> pendingNameEdges, FrameGraphEdgeDescs& edges){
     if(nodes.empty() || pendingNameEdges.empty())
         return;
 

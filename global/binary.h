@@ -149,6 +149,10 @@ public:
 
     [[nodiscard]] const u8* data()const noexcept{ return bytes; }
 
+    [[nodiscard]] const u8* begin()const noexcept{ return bytes; }
+
+    [[nodiscard]] const u8* end()const noexcept{ return bytes + byteCount; }
+
 };
 
 

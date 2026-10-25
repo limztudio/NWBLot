@@ -139,7 +139,7 @@ static void PadMaterialTypedLayoutBytesTo(Material::TypedBlockByteVector& outBlo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ReserveMaterialBindTypedLayoutVectors(const MaterialBindEntry& bindEntry, const Name& contextName, const ScratchVector<NotNull<const MaterialBindInstance*>>& sortedInstances, MaterialBindTypedLayout& outLayout){
+static bool ReserveMaterialBindTypedLayoutVectors(const MaterialBindEntry& bindEntry, const Name& contextName, const Span<const NotNull<const MaterialBindInstance*>> sortedInstances, MaterialBindTypedLayout& outLayout){
     usize fieldReserveCount = 0u;
     usize byteReserveCount = 0u;
     for(const NotNull<const MaterialBindInstance*> instance : sortedInstances){

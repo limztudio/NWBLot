@@ -29,7 +29,7 @@ Expected<MaterialCookEntry> ParseMaterialCookMetadata(const Path& assetRoot, con
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateMaterialCookInterfaces(const MaterialCookVector<MaterialBindEntry>& materialBindEntries, Core::Alloc::ScratchArena& scratchArena, MaterialCookVector<MaterialCookEntry>& materialEntries){
+bool ValidateMaterialCookInterfaces(const Span<const MaterialBindEntry> materialBindEntries, Core::Alloc::ScratchArena& scratchArena, MaterialCookVector<MaterialCookEntry>& materialEntries){
     return MaterialCookDetail::ValidateMaterialCookInterfaces(materialBindEntries, scratchArena, materialEntries);
 }
 
@@ -45,7 +45,7 @@ Expected<MaterialCookString> BuildMaterialBindIncludeSource(MaterialCookArena& a
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<Path> EmitMaterialBindIncludes(MaterialCookArena& arena, const Path& cacheDirectory, const AStringView configurationSafeName, const MaterialCookVector<MaterialBindEntry>& materialBindEntries, Core::Alloc::ScratchArena& scratchArena){
+Expected<Path> EmitMaterialBindIncludes(MaterialCookArena& arena, const Path& cacheDirectory, const AStringView configurationSafeName, const Span<const MaterialBindEntry> materialBindEntries, Core::Alloc::ScratchArena& scratchArena){
     return MaterialCookDetail::EmitMaterialBindIncludes(arena, cacheDirectory, configurationSafeName, materialBindEntries, scratchArena);
 }
 
@@ -57,8 +57,8 @@ Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface(
     MaterialCookArena& arena,
     const AStringView shaderName,
     const Path& materialBindIncludeRoot,
-    const MaterialCookVector<MaterialBindEntry>& materialBindEntries,
-    const MaterialCookVector<Path>& dependencies,
+    const Span<const MaterialBindEntry> materialBindEntries,
+    const Span<const Path> dependencies,
     Core::Alloc::ScratchArena& scratchArena
 ){
     return MaterialCookDetail::ResolveMaterialBindDependencyInterface(arena, shaderName, materialBindIncludeRoot, materialBindEntries, dependencies, scratchArena);
@@ -152,7 +152,7 @@ Expected<Material> BuildMaterialAsset(const MaterialCookEntry& materialEntry, Co
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AssignMaterialShadingModelIds(MaterialCookVector<MaterialCookEntry>& materialEntries, Core::Alloc::ScratchArena& scratchArena){
+bool AssignMaterialShadingModelIds(const Span<MaterialCookEntry> materialEntries, Core::Alloc::ScratchArena& scratchArena){
     return MaterialCookDetail::AssignMaterialShadingModelIdsImpl(materialEntries, scratchArena);
 }
 
@@ -160,7 +160,7 @@ bool AssignMaterialShadingModelIds(MaterialCookVector<MaterialCookEntry>& materi
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<Path> EmitDeferredBxdfDispatchModule(const Path& cacheDirectory, const AStringView configurationSafeName, const MaterialCookVector<MaterialCookEntry>& materialEntries, Core::Alloc::ScratchArena& scratchArena){
+Expected<Path> EmitDeferredBxdfDispatchModule(const Path& cacheDirectory, const AStringView configurationSafeName, const Span<const MaterialCookEntry> materialEntries, Core::Alloc::ScratchArena& scratchArena){
     return MaterialCookDetail::EmitDeferredBxdfDispatchModuleImpl(cacheDirectory, configurationSafeName, materialEntries, scratchArena);
 }
 
@@ -171,8 +171,8 @@ Expected<Path> EmitDeferredBxdfDispatchModule(const Path& cacheDirectory, const 
 Expected<Path> EmitShadowSurfaceDispatchModule(
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
-    const MaterialCookVector<MaterialBindEntry>& materialBindEntries,
-    const MaterialCookVector<MaterialCookEntry>& materialEntries,
+    const Span<const MaterialBindEntry> materialBindEntries,
+    const Span<const MaterialCookEntry> materialEntries,
     Core::Alloc::ScratchArena& scratchArena
 ){
     return MaterialCookDetail::EmitShadowSurfaceDispatchModuleImpl(cacheDirectory, configurationSafeName, materialBindEntries, materialEntries, scratchArena);
@@ -188,7 +188,7 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShad
     const AStringView sharedMeshShaderName,
     MaterialCookArena& arena,
     Core::Alloc::ScratchArena& scratchArena,
-    MaterialCookVector<MaterialCookEntry>& materialEntries
+    const Span<MaterialCookEntry> materialEntries
 ){
     return MaterialCookDetail::EmitMaterialPixelShadersImpl(cacheDirectory, configurationSafeName, sharedMeshShaderName, arena, scratchArena, materialEntries);
 }
@@ -202,7 +202,7 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitAcc
     const AStringView configurationSafeName,
     MaterialCookArena& arena,
     Core::Alloc::ScratchArena& scratchArena,
-    MaterialCookVector<MaterialCookEntry>& materialEntries
+    const Span<MaterialCookEntry> materialEntries
 ){
     return MaterialCookDetail::EmitMaterialAvboitAccumulatePixelShadersImpl(cacheDirectory, configurationSafeName, arena, scratchArena, materialEntries);
 }
@@ -216,7 +216,7 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitOcc
     const AStringView configurationSafeName,
     MaterialCookArena& arena,
     Core::Alloc::ScratchArena& scratchArena,
-    MaterialCookVector<MaterialCookEntry>& materialEntries
+    const Span<MaterialCookEntry> materialEntries
 ){
     return MaterialCookDetail::EmitMaterialAvboitOccupancyPixelShadersImpl(cacheDirectory, configurationSafeName, arena, scratchArena, materialEntries);
 }
@@ -230,7 +230,7 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitExt
     const AStringView configurationSafeName,
     MaterialCookArena& arena,
     Core::Alloc::ScratchArena& scratchArena,
-    MaterialCookVector<MaterialCookEntry>& materialEntries
+    const Span<MaterialCookEntry> materialEntries
 ){
     return MaterialCookDetail::EmitMaterialAvboitExtinctionPixelShadersImpl(cacheDirectory, configurationSafeName, arena, scratchArena, materialEntries);
 }

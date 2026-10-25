@@ -7,6 +7,8 @@
 
 #include "system.h"
 
+#include <global/span.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -32,15 +34,14 @@ using IndexSequenceFor = ::IndexSequenceFor<Ts...>;
 template<typename... Ts>
 using ViewDenseIndexTuple = Tuple<Conditional_T<true, u32, Ts>...>;
 
-using ViewEntityVector = Vector<EntityID, Alloc::GlobalArena>;
-
 struct ViewTupleAccess{
     template<usize I, typename... Ts>
-    static const ViewEntityVector& EntityVector(const Tuple<ComponentPool<Ts>*...>& pools)noexcept{
-        return MakeNotNull(Get<I>(pools))->m_dense;
+    static Span<const EntityID> EntityVector(const Tuple<ComponentPool<Ts>*...>& pools)noexcept{
+        const auto& dense = MakeNotNull(Get<I>(pools))->m_dense;
+        return Span<const EntityID>(dense.data(), dense.size());
     }
 
-    static EntityID EntityAt(const ViewEntityVector& entities, const usize denseIndex)noexcept{
+    static EntityID EntityAt(const Span<const EntityID> entities, const usize denseIndex)noexcept{
         NWB_ASSERT(denseIndex < entities.size());
         return entities[denseIndex];
     }
@@ -73,7 +74,7 @@ struct ViewIterator{
 
 public:
     ComponentTuple pools;
-    const ViewEntityVector* anchorEntities;
+    Span<const EntityID> anchorEntities;
     usize anchorPoolIndex;
     usize index;
     usize count;
@@ -82,7 +83,7 @@ public:
 
 
 public:
-    ViewIterator(ComponentTuple poolsValue, const ViewEntityVector* anchorEntitiesValue, usize anchorPoolIndexValue, usize indexValue, usize countValue, bool validValue)noexcept
+    ViewIterator(ComponentTuple poolsValue, const Span<const EntityID> anchorEntitiesValue, usize anchorPoolIndexValue, usize indexValue, usize countValue, bool validValue)noexcept
         : pools(Move(poolsValue))
         , anchorEntities(anchorEntitiesValue)
         , anchorPoolIndex(anchorPoolIndexValue)
@@ -154,7 +155,7 @@ public:
     }
 
     EntityID entityAt(usize denseIndex)const noexcept{
-        return ViewTupleAccess::EntityAt(*anchorEntities, denseIndex);
+        return ViewTupleAccess::EntityAt(anchorEntities, denseIndex);
     }
 
 
@@ -264,14 +265,14 @@ private:
 
     void initializeAnchor()noexcept{
         m_valid = true;
-        m_anchorEntities = nullptr;
+        m_anchorEntities = {};
         m_anchorPoolIndex = 0;
         m_count = Limit<usize>::s_Max;
 
         initializeAnchorImpl(ECSDetail::IndexSequenceFor<Ts...>{});
 
         if(!m_valid){
-            m_anchorEntities = nullptr;
+            m_anchorEntities = {};
             m_count = 0;
         }
     }
@@ -292,13 +293,13 @@ private:
         const usize poolSize = pool->size();
         if(poolSize < m_count){
             m_count = poolSize;
-            m_anchorEntities = &ECSDetail::ViewTupleAccess::EntityVector<I>(m_pools);
+            m_anchorEntities = ECSDetail::ViewTupleAccess::EntityVector<I>(m_pools);
             m_anchorPoolIndex = I;
         }
     }
 
     EntityID entityAt(usize denseIndex)const noexcept{
-        return ECSDetail::ViewTupleAccess::EntityAt(*m_anchorEntities, denseIndex);
+        return ECSDetail::ViewTupleAccess::EntityAt(m_anchorEntities, denseIndex);
     }
 
     template<usize I = 0, typename Func, typename... Args>
@@ -319,7 +320,7 @@ private:
 
 private:
     ComponentTuple m_pools;
-    const ECSDetail::ViewEntityVector* m_anchorEntities = nullptr;
+    Span<const EntityID> m_anchorEntities = {};
     usize m_anchorPoolIndex = 0;
     usize m_count = 0;
     bool m_valid = false;

@@ -29,8 +29,8 @@ namespace __hidden_assets_material_bind{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename ContainerT>
-[[nodiscard]] const typename ContainerT::value_type* FindNamedBindItem(const ContainerT& items, const AStringView itemName)noexcept{
+template<typename ItemT>
+[[nodiscard]] const ItemT* FindNamedBindItem(const Span<const ItemT> items, const AStringView itemName)noexcept{
     for(const auto& item : items){
         if(AStringView(item.name) == itemName)
             return &item;
@@ -49,7 +49,7 @@ template<typename ContainerT>
 
 
 const MaterialBindStruct* MaterialBindEntry::findStruct(const AStringView typeName)const noexcept{
-    return __hidden_assets_material_bind::FindNamedBindItem(structs, typeName);
+    return __hidden_assets_material_bind::FindNamedBindItem<MaterialBindStruct>(structs, typeName);
 }
 
 
@@ -57,7 +57,7 @@ const MaterialBindStruct* MaterialBindEntry::findStruct(const AStringView typeNa
 
 
 const MaterialBindAttribute* MaterialBindField::findAttribute(const AStringView attributeName)const noexcept{
-    return __hidden_assets_material_bind::FindNamedBindItem(attributes, attributeName);
+    return __hidden_assets_material_bind::FindNamedBindItem<MaterialBindAttribute>(attributes, attributeName);
 }
 
 AStringView MaterialBindField::defaultArgument()const noexcept{
@@ -70,11 +70,11 @@ AStringView MaterialBindField::defaultArgument()const noexcept{
 
 
 const MaterialBindField* MaterialBindStruct::findField(const AStringView fieldName)const noexcept{
-    return __hidden_assets_material_bind::FindNamedBindItem(fields, fieldName);
+    return __hidden_assets_material_bind::FindNamedBindItem<MaterialBindField>(fields, fieldName);
 }
 
 const MaterialBindAttribute* MaterialBindStruct::findAttribute(const AStringView attributeName)const noexcept{
-    return __hidden_assets_material_bind::FindNamedBindItem(attributes, attributeName);
+    return __hidden_assets_material_bind::FindNamedBindItem<MaterialBindAttribute>(attributes, attributeName);
 }
 
 
@@ -82,7 +82,7 @@ const MaterialBindAttribute* MaterialBindStruct::findAttribute(const AStringView
 
 
 const MaterialBindInstance* MaterialBindEntry::findInstance(const AStringView instanceName)const noexcept{
-    return __hidden_assets_material_bind::FindNamedBindItem(instances, instanceName);
+    return __hidden_assets_material_bind::FindNamedBindItem<MaterialBindInstance>(instances, instanceName);
 }
 
 

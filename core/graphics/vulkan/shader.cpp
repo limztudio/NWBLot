@@ -45,8 +45,7 @@ namespace __hidden_vulkan_shader{
     return words;
 }
 
-template<typename WordVector>
-[[nodiscard]] inline usize SpirvByteSize(const WordVector& words)noexcept{
+[[nodiscard]] inline usize SpirvByteSize(const Span<const u32> words)noexcept{
     return words.size() * sizeof(u32);
 }
 

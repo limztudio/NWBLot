@@ -173,7 +173,7 @@ bool WriteArchive(Core::Alloc::GlobalArena& arena, const AStringView testGroup, 
     return WriteTextFile(ArchivePath(arena, testGroup, stem), AStringView(archive.data(), archive.size()));
 }
 
-bool WriteArchiveBytes(Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, const CrashTestBytes& archive){
+bool WriteArchiveBytes(Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, const Span<const u8> archive){
     if(!EnsureDirectories(ArchiveInputDirectory(arena, testGroup)))
         return false;
 

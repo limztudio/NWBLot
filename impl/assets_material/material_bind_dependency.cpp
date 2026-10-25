@@ -56,7 +56,7 @@ static bool TryResolveMaterialBindDependencyInterface(const ScratchPath& normali
     return true;
 }
 
-static const MaterialBindEntry* FindMaterialBindEntry(const CookVector<MaterialBindEntry>& materialBindEntries, const Name& interfaceName){
+static const MaterialBindEntry* FindMaterialBindEntry(const Span<const MaterialBindEntry> materialBindEntries, const Name& interfaceName){
     for(const MaterialBindEntry& bindEntry : materialBindEntries){
         const auto bindInterfaceName = Name::FromText(AStringView(bindEntry.virtualPath));
         if(bindInterfaceName && *bindInterfaceName == interfaceName)
@@ -73,8 +73,8 @@ Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface(
     CookArena& arena,
     const AStringView shaderName,
     const Path& materialBindIncludeRoot,
-    const CookVector<MaterialBindEntry>& materialBindEntries,
-    const CookVector<Path>& dependencies,
+    const Span<const MaterialBindEntry> materialBindEntries,
+    const Span<const Path> dependencies,
     ScratchArena& scratchArena
 ){
     MaterialBindDependency result(arena);

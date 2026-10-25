@@ -52,7 +52,7 @@ template<typename TestArenaT>
 }
 #endif
 
-inline void WriteLittleU32(Core::Assets::AssetBytes& bytes, const usize offset, const u32 value)noexcept{
+inline void WriteLittleU32(const Span<u8> bytes, const usize offset, const u32 value)noexcept{
     for(u32 index = 0u; index < 4u; ++index)
         bytes[offset + index] = static_cast<u8>(value >> (index * 8u));
 }

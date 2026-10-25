@@ -63,7 +63,7 @@ public:
 
 public:
     [[nodiscard]] bool validatePayload()const;
-    [[nodiscard]] bool loadBinary(const Core::Assets::AssetBytes& binary);
+    [[nodiscard]] bool loadBinary(Span<const u8> binary);
 
 public:
     // Cooked RGB values use the engine's linear working space; alpha is linear coverage.

@@ -236,7 +236,7 @@ Expected<SlangCompilerWorkspace::ScratchPath> SlangCompilerWorkspace::BuildCompi
     return overlayRoot / rootKey / relativePath;
 }
 
-bool SlangCompilerWorkspace::IsCompilerDependency(const ShaderCook::CookVector<Path>& dependencies, const ScratchPath& absolutePath)noexcept{
+bool SlangCompilerWorkspace::IsCompilerDependency(const Span<const Path> dependencies, const ScratchPath& absolutePath)noexcept{
     for(const Path& dependency : dependencies){
         if(dependency == absolutePath)
             return true;

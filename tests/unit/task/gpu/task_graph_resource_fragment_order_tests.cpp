@@ -83,7 +83,7 @@ void AppendBufferState(TrackedStates& states, TrackedResourceStateHistory& histo
 }
 
 template<usize Count>
-void ExpectBufferFragments(const StateFragments& fragments, const TrackedStates& states, const ExpectedBufferFragment (&expected)[Count]){
+void ExpectBufferFragments(const Span<const TrackedResourceStateFragment> fragments, const Span<const TrackedCompiledResourceState> states, const ExpectedBufferFragment (&expected)[Count]){
     ASSERT_EQ(fragments.size(), Count);
     for(usize index = 0u; index < Count; ++index){
         SCOPED_TRACE(index);

@@ -91,10 +91,9 @@ NWB_INLINE void StoreMeshletAttributeRefEncodeBases(MeshletDesc& meshlet, const 
 }
 
 // The channel base and width come from these same refs, so every delta is in range.
-template<typename RefT, typename RefVectorT, typename DeltaVectorT>
-void AppendMeshletRefChannelDeltas(const RefVectorT& refs, const u32 sourceRefOffset, const MeshletDesc& meshlet, const MeshletRefEncodeChannel<RefT>& channel, const u32 refCount, DeltaVectorT& outDeltas)noexcept(
-    noexcept(static_cast<u32>(refs[u32{}].*(channel.indexMember)))
-    && noexcept(AppendMeshletRefDelta(outDeltas, u32{}, channel.width))
+template<typename RefT, typename DeltaVectorT>
+void AppendMeshletRefChannelDeltas(const Span<const RefT> refs, const u32 sourceRefOffset, const MeshletDesc& meshlet, const MeshletRefEncodeChannel<RefT>& channel, const u32 refCount, DeltaVectorT& outDeltas)noexcept(
+    noexcept(AppendMeshletRefDelta(outDeltas, u32{}, channel.width))
 ){
     const u32 base = meshlet.*(channel.baseMember);
     for(u32 localRefIndex = 0u; localRefIndex < refCount; ++localRefIndex){
@@ -112,39 +111,23 @@ void AppendMeshletRefChannelDeltas(const RefVectorT& refs, const u32 sourceRefOf
     return decoded.normal == source.normal && decoded.tangent == source.tangent && decoded.uv0 == source.uv0 && decoded.color == source.color;
 }
 
-template<
-    typename PositionRefVectorT,
-    typename AttributeRefVectorT,
-    typename PositionDeltaVectorT,
-    typename AttributeDeltaVectorT,
-    typename FailureHandlerT
->
+template<typename FailureHandlerT>
 [[nodiscard]] bool ValidateEncodedMeshletRefDeltas(
     const MeshletDesc& meshlet,
     const usize meshletIndex,
     const u32 sourcePositionRefOffset,
     const u32 sourceAttributeRefOffset,
-    const PositionRefVectorT& positionRefs,
-    const AttributeRefVectorT& attributeRefs,
-    const PositionDeltaVectorT& positionDeltas,
-    const AttributeDeltaVectorT& attributeDeltas,
+    const Span<const MeshletPositionStreamRef> positionRefs,
+    const Span<const MeshletAttributeStreamRef> attributeRefs,
+    const Span<const u8> positionDeltas,
+    const Span<const u8> attributeDeltas,
     const bool skinRequired,
     FailureHandlerT onFailure
 )noexcept(
     IsNothrowDestructible_V<FailureHandlerT>
     && noexcept(DeclVal<void(*)(bool)noexcept>()(onFailure(meshletIndex, s_InvalidEncodedRefWidthMessage)))
-    && noexcept(DeclVal<void(*)(bool)noexcept>()(
-        meshlet.positionRefOffset > positionDeltas.size()
-        || DeclVal<const usize&>() != positionDeltas.size() - meshlet.positionRefOffset
-        || meshlet.attributeRefOffset > attributeDeltas.size()
-        || DeclVal<const usize&>() != attributeDeltas.size() - meshlet.attributeRefOffset
-    ))
     && noexcept(DeclVal<void(*)(bool)noexcept>()(onFailure(meshletIndex, s_EncodedRefByteCountMismatchMessage)))
-    && noexcept(DeclVal<void(*)(const MeshletPositionStreamRef&)noexcept>()(positionRefs[sourcePositionRefOffset + u32{}]))
-    && noexcept(DecodeMeshletPositionRef(positionDeltas.data(), positionDeltas.size(), meshlet, DeclVal<u32&>(), skinRequired))
     && noexcept(DeclVal<void(*)(bool)noexcept>()(onFailure(meshletIndex, s_EncodedPositionRefDecodeMismatchMessage)))
-    && noexcept(DeclVal<void(*)(const MeshletAttributeStreamRef&)noexcept>()(attributeRefs[sourceAttributeRefOffset + u32{}]))
-    && noexcept(DecodeMeshletAttributeRef(attributeDeltas.data(), attributeDeltas.size(), meshlet, DeclVal<u32&>()))
     && noexcept(DeclVal<void(*)(bool)noexcept>()(onFailure(meshletIndex, s_EncodedAttributeRefDecodeMismatchMessage)))
 ){
     const auto encodedPositionBytes = MeshletEncodedPositionRefByteCount(meshlet, skinRequired);
@@ -177,19 +160,16 @@ template<
 }
 
 template<
-    typename MeshletVectorT,
-    typename PositionRefVectorT,
-    typename AttributeRefVectorT,
     typename PositionDeltaVectorT,
     typename AttributeDeltaVectorT,
     typename FailureHandlerT
 >
 [[nodiscard]] bool EncodeMeshletRefDeltas(
-    const PositionRefVectorT& positionRefs,
-    const AttributeRefVectorT& attributeRefs,
+    const Span<const MeshletPositionStreamRef> positionRefs,
+    const Span<const MeshletAttributeStreamRef> attributeRefs,
     const bool skinRequired,
     FailureHandlerT onFailure,
-    MeshletVectorT& meshlets,
+    const Span<MeshletDesc> meshlets,
     PositionDeltaVectorT& outPositionDeltas,
     AttributeDeltaVectorT& outAttributeDeltas
 )noexcept(
@@ -198,12 +178,8 @@ template<
     && noexcept(outAttributeDeltas.clear())
     && noexcept(outPositionDeltas.reserve(positionRefs.size() * sizeof(MeshletPositionStreamRef)))
     && noexcept(outAttributeDeltas.reserve(attributeRefs.size() * sizeof(MeshletAttributeStreamRef)))
-    && noexcept(static_cast<bool>(DeclVal<usize&>() < meshlets.size()))
-    && noexcept(DeclVal<void(*)(MeshletDesc&)noexcept>()(meshlets[DeclVal<usize&>()]))
     && noexcept(DeclVal<void(*)(bool)noexcept>()(onFailure(DeclVal<usize&>(), s_EmptyMeshletRefRangeMessage)))
-    && noexcept(DeclVal<void(*)(const MeshletPositionStreamRef&)noexcept>()(positionRefs[u32{}]))
     && noexcept(DeclVal<void(*)(bool)noexcept>()(onFailure(DeclVal<usize&>(), s_StaticMeshletSkinRefMessage)))
-    && noexcept(DeclVal<void(*)(const MeshletAttributeStreamRef&)noexcept>()(attributeRefs[u32{}]))
     && noexcept(static_cast<bool>(outPositionDeltas.size() > static_cast<usize>(Limit<u32>::s_Max) || outAttributeDeltas.size() > static_cast<usize>(Limit<u32>::s_Max)))
     && noexcept(DeclVal<void(*)(bool)noexcept>()(onFailure(DeclVal<usize&>(), s_EncodedRefByteOffsetLimitMessage)))
     && noexcept(static_cast<u32>(outPositionDeltas.size()))
@@ -218,8 +194,8 @@ template<
         DeclVal<const u32&>(),
         positionRefs,
         attributeRefs,
-        outPositionDeltas,
-        outAttributeDeltas,
+        { outPositionDeltas.data(), outPositionDeltas.size() },
+        { outAttributeDeltas.data(), outAttributeDeltas.size() },
         skinRequired,
         onFailure
     ))
@@ -291,7 +267,7 @@ template<
         for(const MeshletAttributeRefEncodeChannel& channel : attributeChannels)
             AppendMeshletRefChannelDeltas(attributeRefs, sourceAttributeRefOffset, meshlet, channel, MeshletAttributeCount(meshlet), outAttributeDeltas);
 
-        NWB_ASSERT(ValidateEncodedMeshletRefDeltas(meshlet, meshletIndex, sourcePositionRefOffset, sourceAttributeRefOffset, positionRefs, attributeRefs, outPositionDeltas, outAttributeDeltas, skinRequired, onFailure));
+        NWB_ASSERT(ValidateEncodedMeshletRefDeltas(meshlet, meshletIndex, sourcePositionRefOffset, sourceAttributeRefOffset, positionRefs, attributeRefs, { outPositionDeltas.data(), outPositionDeltas.size() }, { outAttributeDeltas.data(), outAttributeDeltas.size() }, skinRequired, onFailure));
     }
 
     if(outPositionDeltas.size() > static_cast<usize>(Limit<u32>::s_Max) || outAttributeDeltas.size() > static_cast<usize>(Limit<u32>::s_Max))

@@ -123,7 +123,7 @@ namespace __hidden_ui_edit_caret_geometry{
     return total == 0u ? VectorZero() : VectorDivide(VectorReplicate(static_cast<f32>(before)), VectorReplicate(static_cast<f32>(total)));
 }
 
-[[nodiscard]] static Expected<SIMDVectorSingleResult> LoadCaretRect(const TextLayout& layout, const EditBoundaryVector& boundaries, const usize byte)noexcept{
+[[nodiscard]] static Expected<SIMDVectorSingleResult> LoadCaretRect(const TextLayout& layout, const Span<const usize> boundaries, const usize byte)noexcept{
     if(layout.lines().empty() || !IsUtf8ScalarBoundary(layout.utf8(), byte))
         return MakeUnexpected(Failure{});
     const TextLine& line = layout.lines()[LineForByte(layout, byte)];
@@ -163,7 +163,7 @@ namespace __hidden_ui_edit_caret_geometry{
     return SIMDVectorSingleResult{ VectorSet(x, line.top, 0.0f, line.height) };
 }
 
-[[nodiscard]] static Expected<usize> NearestStop(const PaintVector<EditCaretLine>& lines, const PaintVector<EditBoxCaretStop>& stops, const u32 lineIndex, const Point point)noexcept{
+[[nodiscard]] static Expected<usize> NearestStop(const Span<const EditCaretLine> lines, const Span<const EditBoxCaretStop> stops, const u32 lineIndex, const Point point)noexcept{
     if(stops.empty() || lineIndex >= lines.size() || !IsFinite(point.x) || !IsFinite(point.y))
         return MakeUnexpected(Failure{});
     const EditCaretLine& line = lines[lineIndex];
@@ -218,7 +218,7 @@ namespace __hidden_ui_edit_caret_geometry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<usize> HitEditCaretGeometry(const PaintVector<EditCaretLine>& lines, const PaintVector<EditBoxCaretStop>& stops, const Point localPoint)noexcept{
+Expected<usize> HitEditCaretGeometry(const Span<const EditCaretLine> lines, const Span<const EditBoxCaretStop> stops, const Point localPoint)noexcept{
     if(lines.empty() || lines.size() > Limit<u32>::s_Max || stops.empty() || !IsFinite(localPoint.x) || !IsFinite(localPoint.y))
         return MakeUnexpected(Failure{});
     u32 lineIndex = static_cast<u32>(lines.size() - 1u);
@@ -249,7 +249,7 @@ EditCaretGeometry::EditCaretGeometry(Core::Alloc::GlobalArena& arena)noexcept
     , m_lines(arena)
 {}
 
-bool EditCaretGeometry::adoptLayout(TextLayout&& layout, const StringView expectedText, const PaintVector<EditCaretMapping>& mapping, const usize committedBytes, const EditTextMode::Enum mode){
+bool EditCaretGeometry::adoptLayout(TextLayout&& layout, const StringView expectedText, const Span<const EditCaretMapping> mapping, const usize committedBytes, const EditTextMode::Enum mode){
     // One stop per byte boundary 0..committedBytes, plus one extra at the preedit seam.
     constexpr usize s_MaxExtraMappingStops = 2u;
     if(

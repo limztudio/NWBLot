@@ -10,6 +10,7 @@
 #include <global/expected.h>
 #include <global/containers.h>
 #include <global/simd/frame.h>
+#include <global/span.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -222,8 +223,8 @@ template<typename ScratchArenaT>
     return result;
 }
 
-template<typename ScratchArenaT, typename IndexVectorT, typename VertexVectorT>
-[[nodiscard]] inline Expected<TangentFrameRebuildResult> RebuildTangentFrames(ScratchArenaT& scratchArena, const IndexVectorT& indices, VertexVectorT& vertices){
+template<typename ScratchArenaT>
+[[nodiscard]] inline Expected<TangentFrameRebuildResult> RebuildTangentFrames(ScratchArenaT& scratchArena, const Span<const u32> indices, const Span<TangentFrameRebuildVertex> vertices){
     return RebuildTangentFrames(scratchArena, vertices.size(), indices.data(), indices.size(), vertices.data());
 }
 

@@ -30,7 +30,7 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_MaterialAssetCodecAutoRegistrar, MaterialAsse
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ValidateMaterialTypedLayout(const u64 layoutHash, const Material::TypedLayoutBlockVector& blocks, const Material::TypedLayoutFieldVector& fields, const Material::TypedBlockByteVector& blockBytes, const TStringView failureContext){
+static bool ValidateMaterialTypedLayout(const u64 layoutHash, const Span<const MaterialTypedLayoutBlock> blocks, const Span<const MaterialTypedLayoutField> fields, const Span<const u8> blockBytes, const TStringView failureContext){
     if(blocks.empty() && fields.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout is empty"), failureContext);
         return false;
@@ -150,7 +150,7 @@ public:
     {}
 };
 
-static Expected<MaterialTypedLayoutPayload> ReadMaterialTypedLayout(const Core::Assets::AssetBytes& binary, Core::Assets::AssetArena& arena, usize& inOutCursor){
+static Expected<MaterialTypedLayoutPayload> ReadMaterialTypedLayout(const Span<const u8> binary, Core::Assets::AssetArena& arena, usize& inOutCursor){
     MaterialTypedLayoutPayload payload(arena);
 
     const auto layoutHashResult = ReadPOD<u64>(binary, inOutCursor);
@@ -294,7 +294,7 @@ static Expected<MaterialTypedLayoutPayload> ReadMaterialTypedLayout(const Core::
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
+bool Material::loadBinary(const Span<const u8> binary){
     if(!checkVirtualPath(MaterialBinaryPayload::s_MaterialLoadBinaryContext))
         return false;
 
@@ -490,7 +490,7 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
     return true;
 }
 
-void Material::setTypedLayout(const u64 layoutHash, const TypedLayoutBlockVector& blocks, const TypedLayoutFieldVector& fields, const TypedBlockByteVector& blockBytes){
+void Material::setTypedLayout(const u64 layoutHash, const Span<const MaterialTypedLayoutBlock> blocks, const Span<const MaterialTypedLayoutField> fields, const Span<const u8> blockBytes){
     m_typedLayoutHash = layoutHash;
     m_typedLayoutBlocks.reserve(blocks.size());
     m_typedLayoutBlocks.assign(blocks.begin(), blocks.end());
@@ -500,7 +500,7 @@ void Material::setTypedLayout(const u64 layoutHash, const TypedLayoutBlockVector
     m_typedBlockBytes.assign(blockBytes.begin(), blockBytes.end());
 }
 
-void Material::setResourceReferences(const ResourceReferenceVector& resourceReferences){
+void Material::setResourceReferences(const Span<const MaterialResourceReference> resourceReferences){
     m_resourceReferences.reserve(resourceReferences.size());
     m_resourceReferences.assign(resourceReferences.begin(), resourceReferences.end());
 }

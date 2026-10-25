@@ -490,10 +490,10 @@ Expected<NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>> AssetsGrap
 
 
 bool AssetsGraphicsFixture::EncodeTestMeshletRefs(
-    const NWB::Core::Assets::AssetVector<NWB::Impl::MeshletPositionStreamRef>& positionRefs,
-    const NWB::Core::Assets::AssetVector<NWB::Impl::MeshletAttributeStreamRef>& attributeRefs,
+    const Span<const NWB::Impl::MeshletPositionStreamRef> positionRefs,
+    const Span<const NWB::Impl::MeshletAttributeStreamRef> attributeRefs,
     const bool skinRequired,
-    NWB::Core::Assets::AssetVector<NWB::Impl::MeshletDesc>& meshlets,
+    const Span<NWB::Impl::MeshletDesc> meshlets,
     NWB::Core::Assets::AssetVector<u8>& outPositionRefDeltas,
     NWB::Core::Assets::AssetVector<u8>& outAttributeRefDeltas
 ){
@@ -501,7 +501,7 @@ bool AssetsGraphicsFixture::EncodeTestMeshletRefs(
     );
 }
 
-Expected<AssetsGraphicsFixture::MaterialBinaryTypedLayoutOffsets> AssetsGraphicsFixture::FindMaterialBinaryTypedLayoutOffsets(const NWB::Core::Assets::AssetBytes& binary)noexcept{
+Expected<AssetsGraphicsFixture::MaterialBinaryTypedLayoutOffsets> AssetsGraphicsFixture::FindMaterialBinaryTypedLayoutOffsets(const Span<const u8> binary)noexcept{
     usize cursor = 0u;
     const auto magic = ReadPOD<u32>(binary, cursor);
     if(!magic || *magic != NWB::Impl::MaterialBinaryPayload::s_MaterialMagic)
@@ -539,7 +539,7 @@ Expected<AssetsGraphicsFixture::MaterialBinaryTypedLayoutOffsets> AssetsGraphics
     return MaterialBinaryTypedLayoutOffsets{ typedLayoutBegin, cursor };
 }
 
-Expected<u64> AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(const NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>& records, const Name shaderName, const Name stageName)noexcept{
+Expected<u64> AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(const Span<const NWB::Core::ShaderArchive::Record> records, const Name shaderName, const Name stageName)noexcept{
     for(const NWB::Core::ShaderArchive::Record& record : records){
         const AStringView variantName(record.variantName.data(), record.variantName.size());
         if(record.shaderName == shaderName && record.stage == stageName && variantName == NWB::Core::ShaderArchive::s_DefaultVariant){

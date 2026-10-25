@@ -139,8 +139,8 @@ static Expected<ScratchString> BuildCanonicalDependencyPath(const Path& dependen
 
 
 Expected<ShaderCook::DependencyChecksum> ShaderCook::computeDependencyChecksum(
-    const CookVector<Path>& dependencies,
-    const CookVector<Path>& includeDirectories,
+    const Span<const Path> dependencies,
+    const Span<const Path> includeDirectories,
     const InitializerList<DependencyRootAlias> dependencyRootAliases,
     Core::Alloc::ScratchArena& scratchArena
 ){

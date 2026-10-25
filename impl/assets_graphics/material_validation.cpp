@@ -62,7 +62,7 @@ namespace AssetsGraphicsCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateMaterials(ShaderCook& shaderCook, const PreparedShaderVector& preparedEntries, const ShaderCook::CookVector<MaterialCookEntry>& materialEntries, ScratchArena& scratchArena){
+bool ValidateMaterials(ShaderCook& shaderCook, const Span<const PreparedShaderEntry> preparedEntries, const Span<const MaterialCookEntry> materialEntries, ScratchArena& scratchArena){
     HashMap<ShaderStageKey, NotNull<const PreparedShaderEntry*>, ScratchArena, ShaderStageKeyHasher, EqualTo<ShaderStageKey>> preparedShaderLookup(0, ShaderStageKeyHasher(), EqualTo<ShaderStageKey>(), scratchArena);
     preparedShaderLookup.reserve(preparedEntries.size());
     for(const PreparedShaderEntry& preparedEntry : preparedEntries){

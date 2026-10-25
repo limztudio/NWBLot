@@ -77,7 +77,7 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
     return s_TimedGraphDotFixedReserveBytes + s_TimedGraphDotBytesPerGraph + graph.nodes.size() * s_TimedGraphDotBytesPerNode + graph.edges.size() * s_TimedGraphDotBytesPerEdge + labelBytes + runtimeStatisticsBytes;
 }
 
-[[nodiscard]] usize EstimateTimedGraphsDotReserve(const FrameGraphReportRecords& graphs)noexcept{
+[[nodiscard]] usize EstimateTimedGraphsDotReserve(const Span<const FrameGraphReportRecord> graphs)noexcept{
     usize reserveBytes = 0u;
     for(const FrameGraphReportRecord& graph : graphs)
         reserveBytes += EstimateTimedGraphDotReserve(graph.payload);
@@ -353,7 +353,7 @@ void AppendTimedGraphDot(Core::Alloc::ScratchArena& scratchArena, const FrameGra
     out += "}\n";
 }
 
-void BuildTimedGraphsDot(Core::Alloc::ScratchArena& scratchArena, const FrameGraphReportRecords& graphs, const GraphTimingMap& timing, AString<TelemetryArena>& out){
+void BuildTimedGraphsDot(Core::Alloc::ScratchArena& scratchArena, const Span<const FrameGraphReportRecord> graphs, const GraphTimingMap& timing, AString<TelemetryArena>& out){
     out.clear();
     out.reserve(EstimateTimedGraphsDotReserve(graphs));
     for(usize graphIndex = 0u; graphIndex < graphs.size(); ++graphIndex){

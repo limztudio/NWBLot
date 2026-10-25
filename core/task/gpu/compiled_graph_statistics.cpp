@@ -73,7 +73,7 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
     for(const GpuPhysicalQueueInfo& queue : m_queueTopology){
         m_physicalQueueCompileStatistics.push_back({ .graphGeneration = m_generation, .planGeneration = m_planGeneration, .queue = queue.id, .queueClass = queue.queueClass, .deviceGeneration = m_deviceGeneration, });
     }
-    const auto countOwnershipBarriers = [](GpuTaskGraphPhysicalQueueCompileStatistics& physical, const GraphicsVector<GpuCompiledBarrier>& barriers, const u32 barrierOffset, const u32 barrierCount)noexcept{
+    const auto countOwnershipBarriers = [](GpuTaskGraphPhysicalQueueCompileStatistics& physical, const Span<const GpuCompiledBarrier> barriers, const u32 barrierOffset, const u32 barrierCount)noexcept{
         if(barrierCount == 0u)
             return;
         NWB_ASSERT(barrierOffset <= barriers.size() && barrierCount <= barriers.size() - barrierOffset);
@@ -150,7 +150,7 @@ void GpuCompiledGraph::buildPlanStatistics(const GpuTaskGraphDeclarationReadView
                 ++statistics.crossFamilyPacketDependencyCount;
         }
     }
-    const auto countBarriers = [&](const GraphicsVector<GpuCompiledBarrier>& barriers)noexcept{
+    const auto countBarriers = [&](const Span<const GpuCompiledBarrier> barriers)noexcept{
         for(const GpuCompiledBarrier& barrier : barriers){
             switch(barrier.type){
             case GpuCompiledBarrierType::TextureTransition:

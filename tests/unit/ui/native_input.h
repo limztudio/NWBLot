@@ -17,7 +17,7 @@ namespace UiTestSupport{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline const NWB::Impl::Ui::HitTarget* FindHitTarget(const NWB::Impl::Ui::InputVector<NWB::Impl::Ui::HitTarget>& targets, const NWB::Impl::Ui::WidgetId widget)noexcept{
+[[nodiscard]] inline const NWB::Impl::Ui::HitTarget* FindHitTarget(const Span<const NWB::Impl::Ui::HitTarget> targets, const NWB::Impl::Ui::WidgetId widget)noexcept{
     for(const auto& target : targets){
         if(target.id == widget)
             return &target;

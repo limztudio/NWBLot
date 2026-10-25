@@ -57,14 +57,14 @@ struct IncludeDirective{
     AStringView includeName,
     IncludeKind::Enum kind,
     const ::Path<Core::Alloc::ScratchArena>& sourceDirectory,
-    const ShaderCook::CookVector<Path>& includeDirectories,
+    Span<const Path> includeDirectories,
     Core::Alloc::ScratchArena& scratchArena
 );
 
 template<typename SourceArenaT, typename DependencyVectorT>
 [[nodiscard]] bool Gather(
     const ::Path<SourceArenaT>& sourcePath,
-    const ShaderCook::CookVector<Path>& includeDirectories,
+    Span<const Path> includeDirectories,
     const Span<const AStringView> externallyPlannedMacroIncludes,
     Core::Alloc::ScratchArena& scratchArena,
     DependencyVectorT& outDependencies

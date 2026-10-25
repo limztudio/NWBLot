@@ -99,7 +99,7 @@ bool MeshCookSourceStreams::ValidateSourceStreamIndex(const Path& nwbFilePath, c
 }
 
 
-bool MeshCookSourceStreams::ValidateSourceIndexStream(const Path& nwbFilePath, const TStringView metaKind, const Core::Assets::AssetVector<u32>& indices, const usize vertexRefCount){
+bool MeshCookSourceStreams::ValidateSourceIndexStream(const Path& nwbFilePath, const TStringView metaKind, const Span<const u32> indices, const usize vertexRefCount){
     if(indices.empty() || (indices.size() % s_MeshletTriangleIndexCount) != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' must contain whole triangles"), metaKind, PathToString<tchar>(nwbFilePath));
         return false;

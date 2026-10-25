@@ -380,7 +380,7 @@ bool ShaderCook::validateVariantSignature(const AStringView contextLabel, const 
     return __hidden_shader_cook::ValidateVariantSignature(contextLabel, variantSignature, defineValues, scratchArena);
 }
 
-void ShaderCook::mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector<Path>& dependencies, const CookMap<CookString, IncludeEntry>& includeMetadata, Alloc::ScratchArena& scratchArena){
+void ShaderCook::mergeInheritedDefines(ShaderEntry& inOutEntry, const Span<const Path> dependencies, const CookMap<CookString, IncludeEntry>& includeMetadata, Alloc::ScratchArena& scratchArena){
     __hidden_shader_cook::ScratchVector<NotNull<const IncludeEntry*>> inheritedEntries{scratchArena};
     inheritedEntries.reserve(dependencies.size());
 

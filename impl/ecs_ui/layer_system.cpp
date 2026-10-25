@@ -32,7 +32,7 @@ UiLayerSystem::UiLayerSystem(
     Core::Assets::AssetManager& assetManager,
     ShaderPathResolveCallback shaderPathResolver,
     const Core::Assets::AssetRef<UiSkin>& skin,
-    const FontReferences& fonts,
+    const Span<const UiFontBinding> fonts,
     const UiLayerPresentation::Enum presentation
 )
     : Core::ECS::ISystem(arena)
@@ -44,7 +44,7 @@ UiLayerSystem::UiLayerSystem(
     , m_textInput(textInput)
     , m_assetManager(assetManager)
     , m_skinSelection(skin)
-    , m_fontRefs(fonts, arena)
+    , m_fontRefs(fonts.begin(), fonts.end(), arena)
     , m_paint(arena)
     , m_text(arena)
     , m_context(arena)

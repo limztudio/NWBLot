@@ -17,7 +17,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<CreatedPipelineLayout> Device::createPipelineLayoutForBindingLayouts(const BindingLayoutVector& bindingLayouts, TStringView operationName, Alloc::ScratchArena& scratchArena)const{
+Expected<CreatedPipelineLayout> Device::createPipelineLayoutForBindingLayouts(const Span<const BindingLayoutHandle> bindingLayouts, TStringView operationName, Alloc::ScratchArena& scratchArena)const{
     CreatedPipelineLayout result;
 
     if(bindingLayouts.empty()){

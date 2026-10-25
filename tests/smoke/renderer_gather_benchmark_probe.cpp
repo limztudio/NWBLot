@@ -40,7 +40,7 @@ constexpr f64 s_MillisecondsPerSecond = 1000.0;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererGatherBenchmarkProbe::WriteMemory(OutputFileStream& output, const Array<Core::Perf::MemorySnapshot, s_ArenaScopeCount>& snapshots){
+void RendererGatherBenchmarkProbe::WriteMemory(OutputFileStream& output, const Span<const Core::Perf::MemorySnapshot> snapshots){
     output << '{';
     for(u32 scope = 0u; scope < s_ArenaScopeCount; ++scope){
         if(scope != 0u)

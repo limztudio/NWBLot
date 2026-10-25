@@ -49,7 +49,7 @@ public:
 
 
 public:
-    void initialize(const Vector<u32, Alloc::ScratchArena>& indegrees){
+    void initialize(const Span<const u32> indegrees){
         m_taskCount = indegrees.size();
         usize levelWords = (m_taskCount - 1u) / s_BitsPerWord + 1u;
         usize wordCount = 0u;
@@ -124,7 +124,7 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void BuildTaskDependencyAdjacency(const GraphicsVector<GpuTaskDependencyEdge>& edges, const usize taskCount, Alloc::ScratchArena& scratchArena, TaskDependencyAdjacency& outAdjacency){
+void BuildTaskDependencyAdjacency(const Span<const GpuTaskDependencyEdge> edges, const usize taskCount, Alloc::ScratchArena& scratchArena, TaskDependencyAdjacency& outAdjacency){
     outAdjacency.offsets.clear();
     outAdjacency.offsets.resize(taskCount + 1u, 0u);
     for(const GpuTaskDependencyEdge& edge : edges)
@@ -146,7 +146,7 @@ void BuildTaskDependencyAdjacency(const GraphicsVector<GpuTaskDependencyEdge>& e
 
 bool BuildTopologicalOrder(
     const GpuTaskGraph::DeclarationReadView& graph,
-    const GraphicsVector<GpuTaskDependencyEdge>& edges,
+    const Span<const GpuTaskDependencyEdge> edges,
     const TaskDependencyAdjacency& adjacency,
     Alloc::ScratchArena& scratchArena,
     GraphicsVector<GpuTaskId>& outOrder,
@@ -273,9 +273,9 @@ bool BuildTopologicalOrder(
 
 
 void BuildSchedulingEdges(
-    const GraphicsVector<GpuTaskDependencyEdge>& rawEdges,
+    const Span<const GpuTaskDependencyEdge> rawEdges,
     const TaskDependencyAdjacency& adjacency,
-    const GraphicsVector<GpuTaskId>& topologicalOrder,
+    const Span<const GpuTaskId> topologicalOrder,
     Alloc::ScratchArena& scratchArena,
     GraphicsVector<GpuTaskDependencyEdge>& outSchedulingEdges
 ){
@@ -364,7 +364,7 @@ void BuildSchedulingEdges(
 }
 
 void BuildSchedulingTaskAdjacency(
-    const GraphicsVector<GpuTaskDependencyEdge>& schedulingEdges,
+    const Span<const GpuTaskDependencyEdge> schedulingEdges,
     const usize taskCount,
     const u64 graphGeneration,
     Alloc::ScratchArena& scratchArena,

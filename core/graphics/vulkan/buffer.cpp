@@ -69,7 +69,7 @@ using BufferQueueFamilyVector = Vector<u32, Alloc::GlobalArena>;
     return result;
 }
 
-[[nodiscard]] static VkBufferCreateInfo RetainBufferCreateInfo(const VkBufferCreateInfo& bufferInfo, const BufferQueueFamilyVector& queueFamilyIndices)noexcept{
+[[nodiscard]] static VkBufferCreateInfo RetainBufferCreateInfo(const VkBufferCreateInfo& bufferInfo, const Span<const u32> queueFamilyIndices)noexcept{
     NWB_ASSERT(queueFamilyIndices.size() <= Limit<u32>::s_Max);
     VkBufferCreateInfo result = bufferInfo;
     result.pNext = nullptr;

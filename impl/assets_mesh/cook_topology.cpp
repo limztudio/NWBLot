@@ -38,7 +38,7 @@ struct TriangleEdge{
     bool forward = false;
 };
 
-[[nodiscard]] static u32 FindComponent(Vector<u32, Core::Alloc::ScratchArena>& parents, u32 triangle)noexcept{
+[[nodiscard]] static u32 FindComponent(const Span<u32> parents, u32 triangle)noexcept{
     while(parents[triangle] != triangle){
         parents[triangle] = parents[parents[triangle]];
         triangle = parents[triangle];
@@ -46,7 +46,7 @@ struct TriangleEdge{
     return triangle;
 }
 
-static void JoinComponents(Vector<u32, Core::Alloc::ScratchArena>& parents, Vector<u8, Core::Alloc::ScratchArena>& ranks, const u32 first, const u32 second)noexcept{
+static void JoinComponents(const Span<u32> parents, const Span<u8> ranks, const u32 first, const u32 second)noexcept{
     u32 firstRoot = FindComponent(parents, first);
     u32 secondRoot = FindComponent(parents, second);
     if(firstRoot == secondRoot)

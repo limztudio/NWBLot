@@ -63,7 +63,7 @@ template<usize Count>
 }
 
 template<usize Count>
-void ExpectBufferRanges(const Ranges& ranges, const Graphics::BufferRange (&expected)[Count]){
+void ExpectBufferRanges(const Span<const Graphics::GpuTaskResourceRange> ranges, const Graphics::BufferRange (&expected)[Count]){
     ASSERT_EQ(ranges.size(), Count);
     for(usize index = 0u; index < Count; ++index){
         SCOPED_TRACE(index);

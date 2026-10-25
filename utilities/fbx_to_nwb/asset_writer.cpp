@@ -97,9 +97,9 @@ bool WriteNwbAsset(
     const AStringView assetTypeText,
     const AStringView virtualRoot,
     const bool separateAssets,
-    const UtilityVector<ufbx_node*>& skeletonJoints,
-    const UtilityVector<JointMatrix>& skeletonBindPoseMatrices,
-    const UtilityVector<JointMatrix>& inverseBindMatrices,
+    const Span<ufbx_node* const> skeletonJoints,
+    const Span<const JointMatrix> skeletonBindPoseMatrices,
+    const Span<const JointMatrix> inverseBindMatrices,
     Core::Alloc::ScratchArena& scratchArena
 ){
     const auto assetTypeResult = ParseAssetTypeText(assetTypeText, scratchArena);
@@ -143,7 +143,7 @@ bool WriteNwbAsset(
             return false;
         }
         if(assetType == OutputAssetType::Bunch && !separateAssets)
-            return AssetWriterFormatDetail::WriteAssetBunch(outputPath, mesh, {}, {}, skeletonJoints, skeletonBindPoseMatrices, nullptr, inverseBindMatrices, scratchArena);
+            return AssetWriterFormatDetail::WriteAssetBunch(outputPath, mesh, {}, {}, skeletonJoints, skeletonBindPoseMatrices, {}, inverseBindMatrices, scratchArena);
 
         if(!AssetWriterFormatDetail::WriteMeshAsset(meshPath, mesh))
             return false;
@@ -176,7 +176,7 @@ bool WriteNwbAsset(
     if(assetType == OutputAssetType::Skin)
         return AssetWriterFormatDetail::WriteSkinAsset(outputPath, meshName, skeletonName, positionSkin, skeletonOutput.inverseBindMatrices, scratchArena);
     if(assetType == OutputAssetType::Bunch && !separateAssets)
-        return AssetWriterFormatDetail::WriteAssetBunch(outputPath, splitMesh, AStringView(skinName), AStringView(skeletonName), skeletonOutput.joints, skeletonOutput.bindPoseMatrices, &positionSkin, skeletonOutput.inverseBindMatrices, scratchArena);
+        return AssetWriterFormatDetail::WriteAssetBunch(outputPath, splitMesh, AStringView(skinName), AStringView(skeletonName), skeletonOutput.joints, skeletonOutput.bindPoseMatrices, positionSkin, skeletonOutput.inverseBindMatrices, scratchArena);
 
     return
         AssetWriterFormatDetail::WriteMeshAsset(meshPath, splitMesh)

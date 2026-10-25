@@ -236,7 +236,7 @@ static void AppendResourceRangeRemainder(const ResourceRangeBounds& outer, const
 
 // Both collectors discover contiguous state runs newest-to-oldest, followed only by uncovered initial-state fragments.
 // Reverse the runs, retaining forward discovery order within each run and the initial-state suffix.
-static void AppendResourceStateFragmentsInStateOrder(const Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& discovered, Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& outFragments){
+static void AppendResourceStateFragmentsInStateOrder(const Span<const TrackedResourceStateFragment> discovered, Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& outFragments){
     outFragments.clear();
     outFragments.reserve(discovered.size());
 
@@ -267,7 +267,7 @@ static void AppendResourceStateFragmentsInStateOrder(const Vector<TrackedResourc
     const Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& trackedStates,
     const TrackedResourceStateHistory& history,
     const GpuTaskGraphResourceView& resource,
-    const Vector<GpuTaskResourceRange, Alloc::ScratchArena>& requestedRanges,
+    const Span<const GpuTaskResourceRange> requestedRanges,
     Alloc::ScratchArena& scratchArena,
     Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& outFragments
 ){

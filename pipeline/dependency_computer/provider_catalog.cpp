@@ -26,7 +26,7 @@ inline constexpr AStringView s_DiagnosticPrefix = "DependencyComputer";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool SelectInput(const NWB::Path& path, const bool directory, const Assets::DiscoveredNwbFileVector& files, Assets::ScratchArena& scratchArena, Vector<u8, Assets::ScratchArena>& selected, Vector<usize, Assets::ScratchArena>& order){
+[[nodiscard]] static bool SelectInput(const NWB::Path& path, const bool directory, const Span<const Assets::DiscoveredNwbFile> files, Assets::ScratchArena& scratchArena, const Span<u8> selected, Vector<usize, Assets::ScratchArena>& order){
     Assets::ScratchString input = PathToString(scratchArena, path);
 #if defined(NWB_PLATFORM_WINDOWS)
     CanonicalizeTextInPlace(input);

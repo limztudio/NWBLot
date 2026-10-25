@@ -91,8 +91,8 @@ static bool GetVariantBytecode(
     const ShaderCook::ShaderEntry& entry,
     const AStringView variantName,
     const ShaderCook::DefineCombo& defineCombo,
-    const ShaderCook::CookVector<Path>& includeDirectories,
-    const ShaderCook::CookVector<Path>& dependencies,
+    const Span<const Path> includeDirectories,
+    const Span<const Path> dependencies,
     const Path& sourcePath,
     const ScratchPath& bytecodeCachePath,
     const bool compilerInputsHaveBom,
@@ -155,7 +155,7 @@ static bool GetVariantBytecode(
 }
 
 
-static Expected<usize> ReserveShaderIndexRecords(const PreparedShaderVector& preparedEntries, Vector<Core::ShaderArchive::Record, ScratchArena>& inOutShaderIndexRecords){
+static Expected<usize> ReserveShaderIndexRecords(const Span<const PreparedShaderEntry> preparedEntries, Vector<Core::ShaderArchive::Record, ScratchArena>& inOutShaderIndexRecords){
     u64 shaderRecordCount = 0;
     for(const PreparedShaderEntry& preparedEntry : preparedEntries){
         if(shaderRecordCount > Limit<u64>::s_Max - preparedEntry.variantCount){
@@ -232,7 +232,7 @@ bool AppendPreparedShadersToManifest(
     ShaderCook::CookArena& cookArena,
     ScratchArena& scratchArena,
     ShaderCook& shaderCook,
-    PreparedShaderVector& preparedEntries,
+    const Span<const PreparedShaderEntry> preparedEntries,
     Core::Assets::AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
     VirtualPathHashSet& inOutSeenVirtualPathHashes
 ){
@@ -254,8 +254,8 @@ bool AppendPreparedShadersToManifest(
     ShaderCook::CookVector<ShaderCook::DefineCombo> defineCombinations{ cookArena };
     shaderIndexRecords.clear();
 
-    for(PreparedShaderEntry& preparedEntry : preparedEntries){
-        ShaderCook::ShaderEntry& entry = preparedEntry.entry;
+    for(const PreparedShaderEntry& preparedEntry : preparedEntries){
+        const ShaderCook::ShaderEntry& entry = preparedEntry.entry;
         const auto shaderNameResult = ToName(entry.name);
         const auto stageNameResult = ToName(entry.archiveStage);
         if(!shaderNameResult || !stageNameResult || !*shaderNameResult || !*stageNameResult || entry.entryPoint.empty()){

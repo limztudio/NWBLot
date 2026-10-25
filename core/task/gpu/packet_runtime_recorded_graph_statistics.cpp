@@ -161,7 +161,7 @@ void GpuRecordedGraph::addReadyFrontierStatistics(const f64 elapsedSeconds, cons
 void GpuRecordedGraph::cachePacketRecordingOverlaps(
     const GpuCompiledGraph& compiledGraph,
     const GpuCompiledGraph::ReadView& planAccess,
-    const Vector<u32, Alloc::ScratchArena>& packetIndices,
+    const Span<const u32> packetIndices,
     Alloc::ScratchArena& scratchArena,
     const ArtifactOperation& artifactAccess
 ){

@@ -277,7 +277,7 @@ void WriteMeshAssetBody(Stream& file, const SourceMeshStreams& mesh, const AStri
 }
 
 
-bool NameUsed(const UtilityScratchVector<ScratchString>& names, const AStringView name)noexcept{
+bool NameUsed(const Span<const ScratchString> names, const AStringView name)noexcept{
     for(const ScratchString& usedName : names){
         if(usedName == name)
             return true;
@@ -285,7 +285,7 @@ bool NameUsed(const UtilityScratchVector<ScratchString>& names, const AStringVie
     return false;
 }
 
-ScratchString UniqueNodeName(const ufbx_node* node, const usize fallbackIndex, const UtilityScratchVector<ScratchString>& usedNames, Core::Alloc::ScratchArena& scratchArena){
+ScratchString UniqueNodeName(const ufbx_node* node, const usize fallbackIndex, const Span<const ScratchString> usedNames, Core::Alloc::ScratchArena& scratchArena){
     const ScratchString baseName = AssetWriterSkeletonDetail::NodeName(node, fallbackIndex, scratchArena);
     ScratchString name(baseName, scratchArena);
     name.reserve(AddSize(baseName.size(), s_UniqueNameSuffixReserve));
@@ -300,7 +300,7 @@ ScratchString UniqueNodeName(const ufbx_node* node, const usize fallbackIndex, c
     return name;
 }
 
-UtilityScratchVector<ScratchString> BuildUniqueJointNames(const UtilityVector<ufbx_node*>& joints, Core::Alloc::ScratchArena& scratchArena){
+UtilityScratchVector<ScratchString> BuildUniqueJointNames(const Span<ufbx_node* const> joints, Core::Alloc::ScratchArena& scratchArena){
     UtilityScratchVector<ScratchString> names(scratchArena);
     names.reserve(joints.size());
     for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex)
@@ -325,7 +325,7 @@ void WriteReferenceValue(Stream& file, const AStringView value, const bool quote
 
 
 template<typename Stream>
-bool WriteSkeletonAssetBody(Stream& file, const AStringView variableName, const UtilityVector<ufbx_node*>& joints, const UtilityVector<JointMatrix>& bindPoseMatrices, Core::Alloc::ScratchArena& scratchArena){
+bool WriteSkeletonAssetBody(Stream& file, const AStringView variableName, const Span<ufbx_node* const> joints, const Span<const JointMatrix> bindPoseMatrices, Core::Alloc::ScratchArena& scratchArena){
     file << variableName << ".joints = [\n";
     const auto jointNames = BuildUniqueJointNames(joints, scratchArena);
 
@@ -369,8 +369,8 @@ void WriteSkinAssetBody(
     const AStringView variableName,
     const AStringView meshName,
     const AStringView skeletonName,
-    const UtilityVector<MeshSkinInfluence>& influences,
-    const UtilityVector<JointMatrix>& inverseBindMatrices,
+    const Span<const MeshSkinInfluence> influences,
+    const Span<const JointMatrix> inverseBindMatrices,
     Core::Alloc::ScratchArena& scratchArena,
     const bool quoteReferences = true
 ){
@@ -487,7 +487,7 @@ bool WriteMeshAsset(const ScratchPath& outputPath, const SourceMeshStreams& mesh
 }
 
 
-bool WriteSkeletonAsset(const ScratchPath& outputPath, const UtilityVector<ufbx_node*>& joints, const UtilityVector<JointMatrix>& bindPoseMatrices, Core::Alloc::ScratchArena& scratchArena){
+bool WriteSkeletonAsset(const ScratchPath& outputPath, const Span<ufbx_node* const> joints, const Span<const JointMatrix> bindPoseMatrices, Core::Alloc::ScratchArena& scratchArena){
     if(!__hidden_asset_writer_format::EnsureOutputDirectory(outputPath, __hidden_asset_writer_format::s_SkeletonAssetKindText))
         return false;
 
@@ -512,7 +512,7 @@ bool WriteSkeletonAsset(const ScratchPath& outputPath, const UtilityVector<ufbx_
 }
 
 
-bool WriteSkinAsset(const ScratchPath& outputPath, const AStringView meshName, const AStringView skeletonName, const UtilityVector<MeshSkinInfluence>& influences, const UtilityVector<JointMatrix>& inverseBindMatrices, Core::Alloc::ScratchArena& scratchArena){
+bool WriteSkinAsset(const ScratchPath& outputPath, const AStringView meshName, const AStringView skeletonName, const Span<const MeshSkinInfluence> influences, const Span<const JointMatrix> inverseBindMatrices, Core::Alloc::ScratchArena& scratchArena){
     if(influences.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skin: no skin influences were produced"));
         return false;
@@ -568,10 +568,10 @@ bool WriteAssetBunch(
     const SourceMeshStreams& mesh,
     const Optional<AStringView> skinName,
     const Optional<AStringView> skeletonName,
-    const UtilityVector<ufbx_node*>& skeletonJoints,
-    const UtilityVector<JointMatrix>& skeletonBindPoseMatrices,
-    const UtilityVector<MeshSkinInfluence>* skinInfluences,
-    const UtilityVector<JointMatrix>& inverseBindMatrices,
+    const Span<ufbx_node* const> skeletonJoints,
+    const Span<const JointMatrix> skeletonBindPoseMatrices,
+    const Span<const MeshSkinInfluence> skinInfluences,
+    const Span<const JointMatrix> inverseBindMatrices,
     Core::Alloc::ScratchArena& scratchArena
 ){
     if(!__hidden_asset_writer_format::EnsureOutputDirectory(outputPath, __hidden_asset_writer_format::s_AssetBunchDisplayName))
@@ -588,7 +588,7 @@ bool WriteAssetBunch(
     file << "mesh mesh;\n\n";
     __hidden_asset_writer_format::WriteMeshAssetBody(file, mesh, __hidden_asset_writer_format::s_MeshAssetKindText);
 
-    if(skinName && skeletonName && skinInfluences){
+    if(skinName && skeletonName && !skinInfluences.empty()){
         file << __hidden_asset_writer_format::s_AssetSectionSeparatorText;
         file << "skeleton skeleton;\n\n";
         if(!__hidden_asset_writer_format::WriteSkeletonAssetBody(file, __hidden_asset_writer_format::s_SkeletonAssetKindText, skeletonJoints, skeletonBindPoseMatrices, scratchArena))
@@ -596,10 +596,10 @@ bool WriteAssetBunch(
 
         file << __hidden_asset_writer_format::s_AssetSectionSeparatorText;
         file << "skin skin;\n\n";
-        __hidden_asset_writer_format::WriteSkinAssetBody(file, __hidden_asset_writer_format::s_SkinAssetKindText, __hidden_asset_writer_format::s_MeshAssetKindText, __hidden_asset_writer_format::s_SkeletonAssetKindText, *skinInfluences, inverseBindMatrices, scratchArena, false);
+        __hidden_asset_writer_format::WriteSkinAssetBody(file, __hidden_asset_writer_format::s_SkinAssetKindText, __hidden_asset_writer_format::s_MeshAssetKindText, __hidden_asset_writer_format::s_SkeletonAssetKindText, skinInfluences, inverseBindMatrices, scratchArena, false);
     }
 
-    const bool skinnedBunch = skinName && skeletonName && skinInfluences;
+    const bool skinnedBunch = skinName && skeletonName && !skinInfluences.empty();
     file << __hidden_asset_writer_format::s_AssetSectionSeparatorText;
     file << "model model;\n\n";
     if(skinnedBunch){
@@ -612,7 +612,7 @@ bool WriteAssetBunch(
     file << __hidden_asset_writer_format::s_AssetSectionSeparatorText;
     file << "asset_bunch bunch = [\n";
     file << "    mesh,\n";
-    if(skinName && skeletonName && skinInfluences){
+    if(skinName && skeletonName && !skinInfluences.empty()){
         file << "    skeleton,\n";
         file << "    skin,\n";
     }

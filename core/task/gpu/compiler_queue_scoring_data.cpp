@@ -107,7 +107,7 @@ u64 GpuTaskQueueScoringData::externalQueueLoad(const GpuPhysicalQueueId& queue)c
     return 0u;
 }
 
-void GpuTaskQueueScoringData::rebuildAssignmentLoads(const GraphicsVector<GpuTaskQueueAssignment>& assignments, const GpuPhysicalQueueTopology& topology){
+void GpuTaskQueueScoringData::rebuildAssignmentLoads(const Span<const GpuTaskQueueAssignment> assignments, const GpuPhysicalQueueTopology& topology){
     constexpr usize s_BitsPerWord = sizeof(u64) * 8u;
 
     m_assignedQueueLoads.resize(topology.queueCount);

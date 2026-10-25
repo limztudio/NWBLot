@@ -75,7 +75,7 @@ bool IsLegalQueueAssignmentCandidate(const GpuTaskGraph::DeclarationReadView& gr
 }
 
 
-const GpuTaskQueueAssignment* FindQueueAssignment(const GraphicsVector<GpuTaskQueueAssignment>& assignments, const GraphicsVector<u32>& assignmentIndicesByTask, const GpuTaskId& task)noexcept{
+const GpuTaskQueueAssignment* FindQueueAssignment(const Span<const GpuTaskQueueAssignment> assignments, const Span<const u32> assignmentIndicesByTask, const GpuTaskId& task)noexcept{
     if(!task.valid() || task.index >= assignmentIndicesByTask.size())
         return nullptr;
     const u32 assignmentIndex = assignmentIndicesByTask[task.index];
@@ -92,8 +92,8 @@ const GpuTaskQueueAssignment* FindQueueAssignment(const GraphicsVector<GpuTaskQu
 GpuQueueAssignmentScore BuildQueueAssignmentScore(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
-    const GraphicsVector<GpuTaskQueueAssignment>& assignments,
-    const GraphicsVector<u32>& assignmentIndicesByTask,
+    const Span<const GpuTaskQueueAssignment> assignments,
+    const Span<const u32> assignmentIndicesByTask,
     const GpuPhysicalQueueTopology& topology,
     const GpuTaskSchedulingReachability& schedulingReachability,
     const GpuTaskQueueScoringData& scoringData,

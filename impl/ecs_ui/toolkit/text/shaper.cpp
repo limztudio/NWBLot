@@ -22,14 +22,14 @@ namespace __hidden_ui_text_shaper{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static usize ClusterEnd(const PaintVector<RawShapedGlyph>& glyphs, usize begin)noexcept{
+[[nodiscard]] static usize ClusterEnd(const Span<const RawShapedGlyph> glyphs, usize begin)noexcept{
     usize end = begin + 1u;
     while(end < glyphs.size() && glyphs[end].byteBegin == glyphs[begin].byteBegin)
         ++end;
     return end;
 }
 
-[[nodiscard]] static bool HasMissing(const PaintVector<RawShapedGlyph>& glyphs, usize begin, usize end)noexcept{
+[[nodiscard]] static bool HasMissing(const Span<const RawShapedGlyph> glyphs, usize begin, usize end)noexcept{
     for(usize index = begin; index < end; ++index){
         if(glyphs[index].glyphId == 0u)
             return true;
@@ -37,7 +37,7 @@ namespace __hidden_ui_text_shaper{
     return false;
 }
 
-static void Append(ShapedRun& run, const SharedFontFace& face, const PaintVector<RawShapedGlyph>& glyphs, usize begin, usize end){
+static void Append(ShapedRun& run, const SharedFontFace& face, const Span<const RawShapedGlyph> glyphs, usize begin, usize end){
     for(usize index = begin; index < end; ++index){
         const RawShapedGlyph& glyph = glyphs[index];
         run.glyphs.push_back({ face, glyph.glyphId, glyph.byteBegin, glyph.byteEnd, glyph.offset, glyph.advance, glyph.ink, glyph.coverage });

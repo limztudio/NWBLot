@@ -115,7 +115,7 @@ Expected<SIMDMatrix> BuildLocalBindPoseMatrix(const SIMDMatrix& globalBindPose, 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateSplitSkinSource(const SourceMeshStreams& mesh, const UtilityVector<ufbx_node*>& skeletonJoints, const UtilityVector<JointMatrix>& skeletonBindPoseMatrices, const UtilityVector<JointMatrix>& inverseBindMatrices){
+bool ValidateSplitSkinSource(const SourceMeshStreams& mesh, const Span<ufbx_node* const> skeletonJoints, const Span<const JointMatrix> skeletonBindPoseMatrices, const Span<const JointMatrix> inverseBindMatrices){
     if(mesh.skin.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB model: skinned model requires source skin influences"));
         return false;
@@ -147,7 +147,7 @@ ScratchString NodeName(const ufbx_node* node, const usize fallbackIndex, Core::A
     return name;
 }
 
-Expected<SkeletonOutputData> BuildSkeletonOutputData(const UtilityVector<ufbx_node*>& joints, const UtilityVector<JointMatrix>& bindPoseMatrices, const UtilityVector<JointMatrix>& inverseBindMatrices, Core::Alloc::ScratchArena& scratchArena){
+Expected<SkeletonOutputData> BuildSkeletonOutputData(const Span<ufbx_node* const> joints, const Span<const JointMatrix> bindPoseMatrices, const Span<const JointMatrix> inverseBindMatrices, Core::Alloc::ScratchArena& scratchArena){
     SkeletonOutputData outData;
 
     NWB_ASSERT(joints.size() == bindPoseMatrices.size());
@@ -249,7 +249,7 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const UtilityVector<ufbx_no
     return outData;
 }
 
-bool RemapSkinInfluences(UtilityVector<MeshSkinInfluence>& inOutInfluences, const UtilityVector<u16>& oldToNewJointIndices){
+bool RemapSkinInfluences(const Span<MeshSkinInfluence> inOutInfluences, const Span<const u16> oldToNewJointIndices){
     for(MeshSkinInfluence& influence : inOutInfluences){
         for(usize slot = 0u; slot < s_MeshSkinInfluenceCount; ++slot){
             const u16 oldJointIndex = influence.joint[slot];

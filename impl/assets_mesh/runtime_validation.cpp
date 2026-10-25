@@ -71,11 +71,11 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
 
 
 [[nodiscard]] bool MeshRuntimeValidation::ValidateMeshStreams(
-    const Core::Assets::AssetVector<Float3U>& positions,
-    const Core::Assets::AssetVector<Half4U>& normals,
-    const Core::Assets::AssetVector<Half4U>& tangents,
-    const Core::Assets::AssetVector<Float2U>& uv0,
-    const Core::Assets::AssetVector<Half4U>& colors,
+    const Span<const Float3U> positions,
+    const Span<const Half4U> normals,
+    const Span<const Half4U> tangents,
+    const Span<const Float2U> uv0,
+    const Span<const Half4U> colors,
     const TStringView contextText,
     const TStringView meshPathText
 ){
@@ -126,9 +126,9 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
 
 [[nodiscard]] bool MeshRuntimeValidation::ValidateMeshletAttributeSkinSharing(
     Core::Alloc::ScratchArena& scratchArena,
-    const Core::Assets::AssetVector<u8>& positionRefDeltas,
-    const Core::Assets::AssetVector<MeshletLocalVertexRef>& localVertexRefs,
-    const Core::Assets::AssetVector<MeshletDesc>& meshlets,
+    const Span<const u8> positionRefDeltas,
+    const Span<const MeshletLocalVertexRef> localVertexRefs,
+    const Span<const MeshletDesc> meshlets,
     const TStringView contextText,
     const TStringView meshPathText
 ){
@@ -167,12 +167,12 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
 
 [[nodiscard]] bool MeshRuntimeValidation::ValidateMeshletPayload(
     Core::Alloc::ScratchArena& scratchArena,
-    const Core::Assets::AssetVector<u8>& positionRefDeltas,
-    const Core::Assets::AssetVector<u8>& attributeRefDeltas,
-    const Core::Assets::AssetVector<MeshletLocalVertexRef>& localVertexRefs,
-    const Core::Assets::AssetVector<MeshletDesc>& meshlets,
-    const Core::Assets::AssetVector<MeshletBounds>& meshletBounds,
-    const Core::Assets::AssetVector<u8>& meshletPrimitiveIndices,
+    const Span<const u8> positionRefDeltas,
+    const Span<const u8> attributeRefDeltas,
+    const Span<const MeshletLocalVertexRef> localVertexRefs,
+    const Span<const MeshletDesc> meshlets,
+    const Span<const MeshletBounds> meshletBounds,
+    const Span<const u8> meshletPrimitiveIndices,
     const usize positionCount,
     const usize skinCount,
     const usize normalCount,
@@ -313,17 +313,17 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
 
 [[nodiscard]] bool MeshRuntimeValidation::ValidateSharedMeshPayload(
     Core::Alloc::ScratchArena& scratchArena,
-    const Core::Assets::AssetVector<Float3U>& positions,
-    const Core::Assets::AssetVector<Half4U>& normals,
-    const Core::Assets::AssetVector<Half4U>& tangents,
-    const Core::Assets::AssetVector<Float2U>& uv0,
-    const Core::Assets::AssetVector<Half4U>& colors,
-    const Core::Assets::AssetVector<u8>& positionRefDeltas,
-    const Core::Assets::AssetVector<u8>& attributeRefDeltas,
-    const Core::Assets::AssetVector<MeshletLocalVertexRef>& localVertexRefs,
-    const Core::Assets::AssetVector<MeshletDesc>& meshlets,
-    const Core::Assets::AssetVector<MeshletBounds>& meshletBounds,
-    const Core::Assets::AssetVector<u8>& meshletPrimitiveIndices,
+    const Span<const Float3U> positions,
+    const Span<const Half4U> normals,
+    const Span<const Half4U> tangents,
+    const Span<const Float2U> uv0,
+    const Span<const Half4U> colors,
+    const Span<const u8> positionRefDeltas,
+    const Span<const u8> attributeRefDeltas,
+    const Span<const MeshletLocalVertexRef> localVertexRefs,
+    const Span<const MeshletDesc> meshlets,
+    const Span<const MeshletBounds> meshletBounds,
+    const Span<const u8> meshletPrimitiveIndices,
     const usize skinCount,
     const bool skinRequired,
     const TStringView contextText,

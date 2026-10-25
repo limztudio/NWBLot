@@ -72,7 +72,7 @@ public:
 
 public:
     [[nodiscard]] bool validatePayload(Core::Alloc::ScratchArena& scratchArena)const;
-    bool loadBinary(const Core::Assets::AssetBytes& binary);
+    bool loadBinary(Span<const u8> binary);
 
 
 private:

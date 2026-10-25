@@ -7,6 +7,8 @@
 
 #include "framebuffer.h"
 
+#include <global/span.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -79,7 +81,7 @@ public:
 
     constexpr RayTracingOpacityMicromapDesc& setFlags(RayTracingOpacityMicromapBuildFlags::Mask value)noexcept{ flags = value; return *this; }
 
-    RayTracingOpacityMicromapDesc& setCounts(const GraphicsVector<RayTracingOpacityMicromapUsageCount>& value){ counts = value; return *this; }
+    RayTracingOpacityMicromapDesc& setCounts(const Span<const RayTracingOpacityMicromapUsageCount> value){ counts.assign(value.begin(), value.end()); return *this; }
 
     constexpr RayTracingOpacityMicromapDesc& setInputBuffer(Buffer* value)noexcept{ inputBuffer = value; return *this; }
 

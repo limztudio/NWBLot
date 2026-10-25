@@ -106,7 +106,7 @@ template<
     typename ColorContainer
 >
 [[nodiscard]] bool ReadMeshAttributeStreams(
-    const Core::Assets::AssetBytes& binary,
+    const Span<const u8> binary,
     const HeaderT& header,
     const TStringView failureContext,
     usize& inOutCursor,
@@ -136,7 +136,7 @@ template<
     typename SolidTriangleWordContainer
 >
 [[nodiscard]] bool ReadMeshletStreams(
-    const Core::Assets::AssetBytes& binary,
+    const Span<const u8> binary,
     const HeaderT& header,
     const TStringView failureContext,
     usize& inOutCursor,

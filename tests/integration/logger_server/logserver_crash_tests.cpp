@@ -201,12 +201,12 @@ static NWB::Log::CrashIngestResult ProcessCrashArchive(NWB::Core::Alloc::GlobalA
     return ProcessCrashArchive(arena, testGroup, stem, archive, config);
 }
 
-static NWB::Log::CrashIngestResult ProcessCrashArchiveBytes(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, const CrashTestBytes& archive, const NWB::Log::CrashIngestConfig& config){
+static NWB::Log::CrashIngestResult ProcessCrashArchiveBytes(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, const Span<const u8> archive, const NWB::Log::CrashIngestConfig& config){
     EXPECT_TRUE(WriteArchiveBytes(arena, testGroup, stem, archive));
     return NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, testGroup, stem), config);
 }
 
-static NWB::Log::CrashIngestResult ProcessCrashArchiveBytes(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, const CrashTestBytes& archive){
+static NWB::Log::CrashIngestResult ProcessCrashArchiveBytes(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, const Span<const u8> archive){
     const NWB::Log::CrashIngestConfig config = MakeIngestConfig(arena, testGroup);
     return ProcessCrashArchiveBytes(arena, testGroup, stem, archive, config);
 }

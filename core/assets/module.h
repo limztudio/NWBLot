@@ -10,6 +10,7 @@
 #include <core/common/log.h>
 
 #include <global/expected.h>
+#include <global/span.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -130,7 +131,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual Expected<UniquePtr<IAsset>> deserialize(AssetArena& arena, const Name& virtualPath, const AssetBytes& binary)const = 0;
+    [[nodiscard]] virtual Expected<UniquePtr<IAsset>> deserialize(AssetArena& arena, const Name& virtualPath, Span<const u8> binary)const = 0;
 
 #if defined(NWB_COOK)
 
@@ -163,7 +164,7 @@ protected:
 
 
 public:
-    [[nodiscard]] virtual Expected<UniquePtr<IAsset>> deserialize(AssetArena& arena, const Name& virtualPath, const AssetBytes& binary)const final override{
+    [[nodiscard]] virtual Expected<UniquePtr<IAsset>> deserialize(AssetArena& arena, const Name& virtualPath, const Span<const u8> binary)const final override{
         auto asset = MakeUnique<AssetT>(arena, virtualPath);
         if(!asset || !asset->loadBinary(binary))
             return MakeUnexpected(Failure{});

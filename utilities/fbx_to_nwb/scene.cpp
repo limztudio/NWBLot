@@ -149,7 +149,7 @@ UtilityVector<MeshInstance> CollectMeshInstances(ufbx_scene* scene, const bool i
     return instances;
 }
 
-void PrintMeshInstances(const UtilityVector<MeshInstance>& instances, Core::Alloc::ScratchArena& scratchArena){
+void PrintMeshInstances(const Span<const MeshInstance> instances, Core::Alloc::ScratchArena& scratchArena){
     ScratchStringStream report(s_FileOpenWrite, scratchArena);
     if(instances.empty()){
         report << "No mesh instances found.\n";
@@ -166,7 +166,7 @@ void PrintMeshInstances(const UtilityVector<MeshInstance>& instances, Core::Allo
     NWB_LOGGER_ESSENTIAL_INFO(ConvertString(report.str()));
 }
 
-Expected<UtilityVector<usize>> SelectMeshInstances(const UtilityVector<MeshInstance>& instances, const AStringView selector, Core::Alloc::ScratchArena& scratchArena){
+Expected<UtilityVector<usize>> SelectMeshInstances(const Span<const MeshInstance> instances, const AStringView selector, Core::Alloc::ScratchArena& scratchArena){
     UtilityVector<usize> outSelection;
 
     const ScratchString normalized = NormalizeOptionText(ScratchString(selector, scratchArena));

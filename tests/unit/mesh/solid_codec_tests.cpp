@@ -50,32 +50,6 @@ struct ThrowingCornerVisitor{
     [[nodiscard]] bool operator()(const Impl::MeshletDesc&, usize, const Impl::MeshletLocalVertexRef&)const;
 };
 
-struct ThrowingU32Conversion{
-    operator u32()const;
-};
-
-struct ThrowingPrimitiveConversion{
-    [[nodiscard]] usize size()const noexcept;
-    [[nodiscard]] ThrowingU32Conversion operator[](const usize&)const noexcept;
-};
-
-struct ThrowingPrimitiveSize{
-    [[nodiscard]] usize size()const;
-    [[nodiscard]] const u8& operator[](const usize&)const noexcept;
-};
-
-struct ThrowingIncrementIterator{
-    [[nodiscard]] const u32& operator*()const noexcept;
-    ThrowingIncrementIterator& operator++();
-};
-
-[[nodiscard]] bool operator!=(const ThrowingIncrementIterator&, const ThrowingIncrementIterator&)noexcept;
-
-struct ThrowingIncrementRange{
-    [[nodiscard]] ThrowingIncrementIterator begin()const noexcept;
-    [[nodiscard]] ThrowingIncrementIterator end()const noexcept;
-};
-
 struct NoThrowTriangleNormal{
     [[nodiscard]] SIMDVectorSingle operator()(const u32&)const noexcept;
 };
@@ -93,14 +67,10 @@ static_assert(noexcept(Impl::MeshAssetBinaryPayload::AddMeshBaseReserveBytes(Dec
 static_assert(!noexcept(Impl::MeshAssetBinaryPayload::AddMeshBaseReserveBytes(DeclVal<usize&>(), DeclVal<const ThrowingPositionStreamGeometry&>())));
 static_assert(noexcept(Impl::ForEachMeshletTriangleCorner(DeclVal<const OneMeshlet&>(), DeclVal<const OneLocalVertex&>(), DeclVal<const OnePrimitive&>(), DeclVal<NoThrowCornerVisitor&>())));
 static_assert(!noexcept(Impl::ForEachMeshletTriangleCorner(DeclVal<const OneMeshlet&>(), DeclVal<const OneLocalVertex&>(), DeclVal<const OnePrimitive&>(), DeclVal<ThrowingCornerVisitor&>())));
-static_assert(!noexcept(Impl::ForEachMeshletTriangleCorner(DeclVal<const OneMeshlet&>(), DeclVal<const OneLocalVertex&>(), DeclVal<const ThrowingPrimitiveSize&>(), DeclVal<NoThrowCornerVisitor&>())));
-static_assert(!noexcept(Impl::ForEachMeshletTriangleCorner(DeclVal<const OneMeshlet&>(), DeclVal<const OneLocalVertex&>(), DeclVal<const ThrowingPrimitiveConversion&>(), DeclVal<NoThrowCornerVisitor&>())));
 static_assert(noexcept(Impl::MeshletCandidateSearch::ComputeMeshletScoreConeCutoff(DeclVal<const OneTriangle&>(), VectorZero(), 0u, false, DeclVal<const NoThrowTriangleNormal&>())));
 static_assert(!noexcept(Impl::MeshletCandidateSearch::ComputeMeshletScoreConeCutoff(DeclVal<const OneTriangle&>(), VectorZero(), 0u, false, DeclVal<const ThrowingTriangleNormal&>())));
-static_assert(!noexcept(Impl::MeshletCandidateSearch::ComputeMeshletScoreConeCutoff(DeclVal<const ThrowingIncrementRange&>(), VectorZero(), 0u, false, DeclVal<const NoThrowTriangleNormal&>())));
 static_assert(noexcept(Impl::MeshletCandidateSearch::PredictMeshletScoreConeWidening(DeclVal<const OneTriangle&>(), DeclVal<const Impl::MeshletScoreState&>(), 0u, VectorZero(), DeclVal<const NoThrowTriangleNormal&>())));
 static_assert(!noexcept(Impl::MeshletCandidateSearch::PredictMeshletScoreConeWidening(DeclVal<const OneTriangle&>(), DeclVal<const Impl::MeshletScoreState&>(), 0u, VectorZero(), DeclVal<const ThrowingTriangleNormal&>())));
-static_assert(!noexcept(Impl::MeshletCandidateSearch::PredictMeshletScoreConeWidening(DeclVal<const ThrowingIncrementRange&>(), DeclVal<const Impl::MeshletScoreState&>(), 0u, VectorZero(), DeclVal<const NoThrowTriangleNormal&>())));
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -199,7 +199,7 @@ bool ConfigurePromptsBeforeLoad(const OptionPresence& presence, Core::Alloc::Scr
     return true;
 }
 
-bool ConfigurePromptsAfterLoad(const OptionPresence& presence, const UtilityVector<MeshInstance>& visibleInstances, Core::Alloc::ScratchArena& scratchArena, ImportOptions& options, bool& prompted){
+bool ConfigurePromptsAfterLoad(const OptionPresence& presence, const Span<const MeshInstance> visibleInstances, Core::Alloc::ScratchArena& scratchArena, ImportOptions& options, bool& prompted){
     if(!presence.assetType && !options.acceptDefaults){
         const ScratchString choices = OutputAssetTypeOptionsText(scratchArena);
         ScratchString prompt("Asset type (", scratchArena);
@@ -265,7 +265,7 @@ bool ConfigurePromptsAfterLoad(const OptionPresence& presence, const UtilityVect
     return true;
 }
 
-Expected<bool> SelectedMeshesUseSkinning(const UtilityVector<MeshInstance>& instances, const UtilityVector<usize>& selection){
+Expected<bool> SelectedMeshesUseSkinning(const Span<const MeshInstance> instances, const Span<const usize> selection){
     bool sawStatic = false;
     bool sawSkinned = false;
     for(const usize instanceIndex : selection){

@@ -16,6 +16,7 @@
 #include <core/common/log.h>
 
 #include <global/binary.h>
+#include <global/span.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -91,7 +92,7 @@ static Path BuildObjectFilePath(const Path& cacheDirectory, const AStringView co
     return cacheDirectory / configurationSafeName / s_ObjectCacheDirectoryName / assetTypeDirectory / payloadDirectory / objectFileName;
 }
 
-static AssetVolumeObjectFileHeader BuildObjectFileHeader(const Core::Assets::IAssetCodec& codec, const Core::Assets::AssetBytes& payload, const AStringView configurationSafeName){
+static AssetVolumeObjectFileHeader BuildObjectFileHeader(const Core::Assets::IAssetCodec& codec, const Span<const u8> payload, const AStringView configurationSafeName){
     static constexpr u32 s_ObjectCookKeyVersion = 1u;
 
     AssetVolumeObjectFileHeader header;
@@ -149,7 +150,7 @@ static Expected<DecodedObjectFileHeader> ReadObjectFileHeader(const Path& object
     return DecodedObjectFileHeader{ .header = *header, .payloadOffset = cursor };
 }
 
-static bool WriteObjectFile(const Path& objectPath, const AssetVolumeObjectFileHeader& header, const Core::Assets::AssetBytes& payload, ScratchBytes& objectBytes){
+static bool WriteObjectFile(const Path& objectPath, const AssetVolumeObjectFileHeader& header, const Span<const u8> payload, ScratchBytes& objectBytes){
     if(payload.size() > Limit<usize>::s_Max - sizeof(AssetVolumeObjectFileHeader)){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: object cache payload is too large for '{}'"), PathToString<tchar>(objectPath));
         return false;
@@ -173,7 +174,7 @@ static bool WriteObjectFile(const Path& objectPath, const AssetVolumeObjectFileH
     return false;
 }
 
-static bool UpdateObjectFileIfChanged(const Path& objectPath, const AssetVolumeObjectFileHeader& header, const Core::Assets::AssetBytes& payload, ScratchBytes& objectBytes){
+static bool UpdateObjectFileIfChanged(const Path& objectPath, const AssetVolumeObjectFileHeader& header, const Span<const u8> payload, ScratchBytes& objectBytes){
     const auto cached = ReadObjectFileHeader(objectPath, objectBytes);
     if(cached && HeaderMatches(cached->header, header))
         return true;
@@ -265,7 +266,7 @@ static bool RegisterMergedManifestVirtualPath(const Name& virtualPath, AssetsVol
     return false;
 }
 
-static bool MergeRegistryObjectBucketManifests(RegistryObjectBucketManifestVector& bucketManifests, AssetsVolumeCookDetail::AssetVolumePackManifest& manifest, AssetsVolumeCookDetail::VirtualPathHashSet& seenVirtualPathHashes){
+static bool MergeRegistryObjectBucketManifests(const Span<RegistryObjectBucketManifest> bucketManifests, AssetsVolumeCookDetail::AssetVolumePackManifest& manifest, AssetsVolumeCookDetail::VirtualPathHashSet& seenVirtualPathHashes){
     for(RegistryObjectBucketManifest& bucketManifest : bucketManifests){
         for(AssetsVolumeCookDetail::AssetVolumePackEntry& entry : bucketManifest.manifest.entries){
             if(!RegisterMergedManifestVirtualPath(entry.virtualPath, seenVirtualPathHashes))

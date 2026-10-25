@@ -51,7 +51,7 @@ static constexpr u32 s_NoSurfaceDispatchId = Limit<u32>::s_Max;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AssignMaterialShadingModelIdsImpl(CookVector<MaterialCookEntry>& materialEntries, ScratchArena& scratchArena){
+bool AssignMaterialShadingModelIdsImpl(const Span<MaterialCookEntry> materialEntries, ScratchArena& scratchArena){
     for(const MaterialCookEntry& entry : materialEntries){
         if(entry.bxdfSource.empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' is missing a deferred bxdf"), ConvertString(AStringView(entry.virtualPath)));
@@ -119,7 +119,7 @@ static Path BuildDeferredBxdfIncludeRoot(const Path& cacheDirectory, const AStri
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<Path> EmitDeferredBxdfDispatchModuleImpl(const Path& cacheDirectory, const AStringView configurationSafeName, const CookVector<MaterialCookEntry>& materialEntries, ScratchArena& scratchArena){
+Expected<Path> EmitDeferredBxdfDispatchModuleImpl(const Path& cacheDirectory, const AStringView configurationSafeName, const Span<const MaterialCookEntry> materialEntries, ScratchArena& scratchArena){
     Path includeRoot = BuildDeferredBxdfIncludeRoot(cacheDirectory, configurationSafeName);
     if(!Core::Assets::PrepareGeneratedIncludeRoot(includeRoot, "Deferred bxdf dispatch"))
         return MakeUnexpected(Failure{});
@@ -333,7 +333,7 @@ static bool AppendShadowSurfaceBindAliases(
     return true;
 }
 
-static void AppendShadowSurfaceBindAliasUndefines(const ShadowSurfaceBindAliasVector& aliasSymbols, ScratchString& inOutSource){
+static void AppendShadowSurfaceBindAliasUndefines(const Span<const ScratchString> aliasSymbols, ScratchString& inOutSource){
     for(usize index = aliasSymbols.size(); index > 0u; ){
         --index;
         const ScratchString& symbol = aliasSymbols[index];
@@ -361,7 +361,7 @@ static void AppendShadowSurfaceInputUndefines(ScratchString& inOutSource){
     inOutSource += "#undef inColor\n";
 }
 
-static Expected<ShadowSurfaceBindEntryLookup> BuildShadowSurfaceBindEntryLookup(const CookVector<MaterialBindEntry>& materialBindEntries, ScratchArena& arena){
+static Expected<ShadowSurfaceBindEntryLookup> BuildShadowSurfaceBindEntryLookup(const Span<const MaterialBindEntry> materialBindEntries, ScratchArena& arena){
     ShadowSurfaceBindEntryLookup lookup(0, Hasher<Name>(), EqualTo<Name>(), arena);
     lookup.reserve(materialBindEntries.size());
     for(const MaterialBindEntry& bindEntry : materialBindEntries){
@@ -384,7 +384,7 @@ static Expected<ShadowSurfaceBindEntryLookup> BuildShadowSurfaceBindEntryLookup(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<Path> EmitShadowSurfaceDispatchModuleImpl(const Path& cacheDirectory, const AStringView configurationSafeName, const CookVector<MaterialBindEntry>& materialBindEntries, const CookVector<MaterialCookEntry>& materialEntries, ScratchArena& scratchArena){
+Expected<Path> EmitShadowSurfaceDispatchModuleImpl(const Path& cacheDirectory, const AStringView configurationSafeName, const Span<const MaterialBindEntry> materialBindEntries, const Span<const MaterialCookEntry> materialEntries, ScratchArena& scratchArena){
     Path includeRoot = BuildShadowSurfaceIncludeRoot(cacheDirectory, configurationSafeName);
     if(!Core::Assets::PrepareGeneratedIncludeRoot(includeRoot, "Shadow surface dispatch"))
         return MakeUnexpected(Failure{});

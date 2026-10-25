@@ -156,7 +156,7 @@ Expected<::Path<Core::Alloc::ScratchArena>> ShaderSourceDependencies::ResolveInc
     const AStringView includeName,
     const ShaderSourceDependencies::IncludeKind::Enum kind,
     const ::Path<Core::Alloc::ScratchArena>& sourceDirectory,
-    const ShaderCook::CookVector<Path>& includeDirectories,
+    const Span<const Path> includeDirectories,
     Core::Alloc::ScratchArena& scratchArena
 ){
 

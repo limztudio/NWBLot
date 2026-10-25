@@ -34,7 +34,7 @@ constexpr const char* s_DuplicateVariableDeclarationMessage = "duplicate variabl
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool IsNameInList(const Vector<MStringView, Alloc::ScratchArena>& names, MStringView name)noexcept{
+[[nodiscard]] bool IsNameInList(const Span<const MStringView> names, const MStringView name)noexcept{
     for(const MStringView currentName : names){
         if(currentName == name)
             return true;

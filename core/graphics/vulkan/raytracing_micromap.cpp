@@ -57,7 +57,7 @@ Expected<VkBuildMicromapFlagsEXT> ConvertOpacityMicromapBuildFlags(const RayTrac
 }
 
 Expected<MicromapUsageVector> BuildOpacityMicromapUsageCounts(
-    const GraphicsVector<RayTracingOpacityMicromapUsageCount>& counts,
+    const Span<const RayTracingOpacityMicromapUsageCount> counts,
     const u32 maxOpacity2StateSubdivisionLevel,
     const u32 maxOpacity4StateSubdivisionLevel,
     Alloc::ScratchArena& scratchArena,

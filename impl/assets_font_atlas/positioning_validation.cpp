@@ -167,7 +167,7 @@ static constexpr u32 s_LookupFlagUseMarkFilteringSet = 0x10u;
 
 class TableValidator final{
 public:
-    TableValidator(const Core::Assets::AssetBytes& bytes, u32 glyphCount)noexcept
+    TableValidator(const Span<const u8> bytes, u32 glyphCount)noexcept
         : m_bytes(bytes)
         , m_glyphCount(glyphCount)
     {}
@@ -597,7 +597,7 @@ private:
 
 
 private:
-    const Core::Assets::AssetBytes& m_bytes;
+    Span<const u8> m_bytes;
     u32 m_glyphCount;
     u32 m_budget = s_ValidationWorkBudget;
 };

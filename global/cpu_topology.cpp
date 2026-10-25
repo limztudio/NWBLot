@@ -7,6 +7,7 @@
 #include "not_null.h"
 #include "platform.h"
 #include "simplemath.h"
+#include "span.h"
 #include "thread.h"
 
 #if defined(NWB_PLATFORM_WINDOWS)
@@ -34,7 +35,7 @@ static constexpr usize s_BitsPerByte = 8u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ClassifyPlacements(InteropVector<CpuWorkerPlacement>& placements)noexcept{
+void ClassifyPlacements(const Span<CpuWorkerPlacement> placements)noexcept{
     u32 minimumClass = Limit<u32>::s_Max;
     u32 maximumClass = 0u;
     for(const CpuWorkerPlacement& placement : placements){

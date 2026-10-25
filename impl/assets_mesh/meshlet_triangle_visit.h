@@ -17,19 +17,9 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<
-    typename MeshletContainer,
-    typename LocalVertexRefContainer,
-    typename PrimitiveContainer,
-    typename Visitor
->
-[[nodiscard]] bool ForEachMeshletTriangleCorner(const MeshletContainer& meshlets, const LocalVertexRefContainer& localVertexRefs, const PrimitiveContainer& primitiveIndices, Visitor&& visitor)noexcept(
-    noexcept(DeclVal<void(*)(usize)noexcept>()(localVertexRefs.size()))
-    && noexcept(DeclVal<void(*)(usize)noexcept>()(primitiveIndices.size()))
-    && noexcept(static_cast<bool>(DeclVal<usize&>() < meshlets.size()))
-    && noexcept(DeclVal<void(*)(const MeshletDesc&)noexcept>()(meshlets[DeclVal<usize&>()]))
-    && noexcept(static_cast<u32>(primitiveIndices[DeclVal<const usize&>()]))
-    && noexcept(static_cast<bool>(!visitor(DeclVal<const MeshletDesc&>(), DeclVal<const usize&>(), localVertexRefs[DeclVal<const usize&>()])))
+template<typename Visitor>
+[[nodiscard]] bool ForEachMeshletTriangleCorner(const Span<const MeshletDesc> meshlets, const Span<const MeshletLocalVertexRef> localVertexRefs, const Span<const u8> primitiveIndices, Visitor&& visitor)noexcept(
+    noexcept(static_cast<bool>(!visitor(DeclVal<const MeshletDesc&>(), DeclVal<const usize&>(), DeclVal<const MeshletLocalVertexRef&>())))
 ){
     const usize localVertexRefCount = localVertexRefs.size();
     const usize primitiveIndexCount = primitiveIndices.size();

@@ -78,7 +78,7 @@ static bool AppendIncludeDirectory(const Path& includeDirectory, const ShaderCoo
 
 static Expected<CookVector<Path>> BuildIncludeDirectories(
     const Path& repoRoot,
-    const CookVector<Core::Assets::ResolvedAssetRoot>& assetRoots,
+    const Span<const Core::Assets::ResolvedAssetRoot> assetRoots,
     const Span<const NotNull<const Path*>> implicitIncludeRoots,
     const ShaderCook::ShaderEntry& entry,
     ShaderCook::CookArena& arena,
@@ -173,7 +173,7 @@ static Expected<u64> CountShaderVariants(const ShaderCook::ShaderEntry& entry){
     return variantCount;
 }
 
-static Expected<::Path<ScratchArena>> ResolveProjectEvaluatorModuleIncludePath(const AStringView includeName, const ShaderCook::CookVector<Path>& includeDirectories, ScratchArena& scratchArena){
+static Expected<::Path<ScratchArena>> ResolveProjectEvaluatorModuleIncludePath(const AStringView includeName, const Span<const Path> includeDirectories, ScratchArena& scratchArena){
     if(includeName.empty())
         return MakeUnexpected(Failure{});
 
@@ -221,7 +221,7 @@ static bool AppendUniqueDependency(const ::Path<ScratchArena>& dependency, Scrat
     return true;
 }
 
-static bool AppendCsgProjectEvaluatorModuleDependencies(const ShaderCook::ShaderEntry& entry, const ShaderCook::CookVector<Path>& includeDirectories, ScratchArena& scratchArena, ShaderCook::CookVector<Path>& inOutDependencies){
+static bool AppendCsgProjectEvaluatorModuleDependencies(const ShaderCook::ShaderEntry& entry, const Span<const Path> includeDirectories, ScratchArena& scratchArena, ShaderCook::CookVector<Path>& inOutDependencies){
     const auto foundDefine = entry.defineValues.find(AssetsGraphicsCsgShaderVariants::s_ProjectEvaluatorModuleDefineName);
     if(foundDefine == entry.defineValues.end())
         return true;
@@ -289,12 +289,12 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
     const Path& deferredBxdfIncludeRoot,
     const Path& shadowSurfaceIncludeRoot,
     const IncludeMetadataMap& includeMetadata,
-    const ShaderCook::CookVector<MaterialBindEntry>& materialBindEntries,
-    const ShaderCook::CookVector<MaterialCookEntry>& materialEntries,
+    const Span<const MaterialBindEntry> materialBindEntries,
+    const Span<const MaterialCookEntry> materialEntries,
     ShaderCook::CookArena& cookArena,
     ScratchArena& scratchArena,
     ShaderCook& shaderCook,
-    ShaderEntryVector& inOutShaderEntries
+    const Span<ShaderCook::ShaderEntry> inOutShaderEntries
 ){
 
     PreparedShaderPlan plan(cookArena);
@@ -341,7 +341,7 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
             implicitIncludeRoots.push_back(MakeNotNull(&assetRoot.path));
     }
 
-    const ShaderCook::CookVector<Path> noIncludeDirectories(cookArena);
+    // Authored `.bind` files are not compiler inputs; computeDependencyChecksum receives empty includeDirectories `{}`.
     for(ShaderCook::ShaderEntry& entry : inOutShaderEntries){
         PreparedShaderEntry preparedEntry(cookArena);
         preparedEntry.entry = Move(entry);
@@ -431,7 +431,7 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
         preparedEntry.compilerInputsHaveBom = dependency->compilerInputsHaveBom;
         // Authored `.bind` files are not compiler inputs, so hash them on their own and fold that into the shader checksum.
         if(!materialDependency->interfaceSources.empty()){
-            const auto interfaceDependency = shaderCook.computeDependencyChecksum(materialDependency->interfaceSources, noIncludeDirectories, { { resolvedPaths.repoRoot, "repo" }, { resolvedPaths.cacheDirectory, "generated_cache" } }, scratchArena);
+            const auto interfaceDependency = shaderCook.computeDependencyChecksum(materialDependency->interfaceSources, {}, { { resolvedPaths.repoRoot, "repo" }, { resolvedPaths.cacheDirectory, "generated_cache" } }, scratchArena);
             if(!interfaceDependency)
                 return MakeUnexpected(Failure{});
             Fnv64AppendValue(preparedEntry.dependencyChecksum, interfaceDependency->checksum);

@@ -35,7 +35,7 @@ using namespace NWB;
 using DumpBytes = Vector<u8, Core::Alloc::GlobalArena>;
 
 template<typename T>
-void StoreDumpRecord(DumpBytes& bytes, const usize offset, const T& record)noexcept{
+void StoreDumpRecord(const Span<u8> bytes, const usize offset, const T& record)noexcept{
     NWB_ASSERT(offset <= bytes.size() && sizeof(T) <= bytes.size() - offset);
     NWB_MEMCPY(bytes.data() + offset, bytes.size() - offset, &record, sizeof(T));
 }
@@ -88,7 +88,7 @@ protected:
         EXPECT_TRUE(RemoveAllIfExists(m_directory));
     }
 
-    [[nodiscard]] Expected<Log::CrashReportText> report(const DumpBytes& bytes){
+    [[nodiscard]] Expected<Log::CrashReportText> report(const Span<const u8> bytes){
         if(!WriteBinaryFile(m_directory / Core::Crash::PackageNames::s_ProcessDumpFileName, bytes))
             return MakeUnexpected(Failure{});
         Log::CrashPackageSummary summary(m_testArena.arena);

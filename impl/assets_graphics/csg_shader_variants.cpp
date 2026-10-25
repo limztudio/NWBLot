@@ -50,7 +50,7 @@ static void InsertShaderKey(ShaderStageKeySet& outShaderKeys, const Name& shader
     }
 }
 
-static void CollectMaterialMeshShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>& materialEntries, ShaderStageKeySet& outShaderKeys){
+static void CollectMaterialMeshShaderKeys(const Span<const MaterialCookEntry> materialEntries, ShaderStageKeySet& outShaderKeys){
     const Name& meshStageName = Core::ShaderStageNames::ArchiveStageNameFromShaderType(Core::ShaderType::MeshStage);
     for(const MaterialCookEntry& materialEntry : materialEntries){
         const auto foundMeshShader = materialEntry.stageShaders.find(Core::ShaderType::MeshStage);
@@ -61,7 +61,7 @@ static void CollectMaterialMeshShaderKeys(const ShaderCook::CookVector<MaterialC
     }
 }
 
-ShaderStageKeySet CollectMaterialClipShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>& materialEntries, Core::Alloc::ScratchArena& scratchArena){
+ShaderStageKeySet CollectMaterialClipShaderKeys(const Span<const MaterialCookEntry> materialEntries, Core::Alloc::ScratchArena& scratchArena){
     ShaderStageKeySet shaderKeys{ 0, AssetsGraphicsCookDetail::ShaderStageKeyHasher(), EqualTo<AssetsGraphicsCookDetail::ShaderStageKey>(), scratchArena };
     shaderKeys.reserve(materialEntries.size());
 
@@ -76,7 +76,7 @@ ShaderStageKeySet CollectMaterialClipShaderKeys(const ShaderCook::CookVector<Mat
     return shaderKeys;
 }
 
-Expected<ShaderStageKeySet, NameTextError::Enum> CollectAvboitClipShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>& materialEntries, Core::Alloc::ScratchArena& scratchArena){
+Expected<ShaderStageKeySet, NameTextError::Enum> CollectAvboitClipShaderKeys(const Span<const MaterialCookEntry> materialEntries, Core::Alloc::ScratchArena& scratchArena){
     ShaderStageKeySet shaderKeys{ 0, AssetsGraphicsCookDetail::ShaderStageKeyHasher(), EqualTo<AssetsGraphicsCookDetail::ShaderStageKey>(), scratchArena };
     shaderKeys.reserve(materialEntries.size());
 

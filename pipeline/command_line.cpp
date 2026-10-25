@@ -31,7 +31,7 @@ static bool AssignText(const AInteropString& value, NWB::Core::Assets::AssetStri
     return true;
 }
 
-static bool AssignInputs(const InteropVector<AInteropString>& values, NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>& outputs){
+static bool AssignInputs(const Span<const AInteropString> values, NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>& outputs){
     auto& arena = outputs.get_allocator().arena();
     outputs.reserve(values.size());
     for(const AInteropString& value : values){

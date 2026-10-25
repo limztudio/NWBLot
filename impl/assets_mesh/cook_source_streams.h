@@ -54,7 +54,7 @@ class MeshCookSourceStreams final : NoCopy{
 public:
     static Expected<ScratchVector<MeshVertexRef>> ParseSourceVertexRefs(const Path& nwbFilePath, const Core::Metascript::Value& asset, const TStringView metaKind, Core::Alloc::ScratchArena& scratchArena);
     static bool ValidateSourceStreamIndex(const Path& nwbFilePath, const TStringView metaKind, const AStringView streamName, const u32 index, const usize streamCount);
-    static bool ValidateSourceIndexStream(const Path& nwbFilePath, const TStringView metaKind, const Core::Assets::AssetVector<u32>& indices, const usize vertexRefCount);
+    static bool ValidateSourceIndexStream(const Path& nwbFilePath, const TStringView metaKind, Span<const u32> indices, const usize vertexRefCount);
     static bool ValidateSourceVertexRefs(const Path& nwbFilePath, const TStringView metaKind, const SourceMeshStreams& streams);
     template<typename CookEntryT>
     static void CopySourceStreams(SourceMeshStreams& streams, CookEntryT& outEntry)noexcept(

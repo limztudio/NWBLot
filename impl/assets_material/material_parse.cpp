@@ -32,7 +32,7 @@ using MaterialBindInterfaceLookup = HashMap<Name, NotNull<const MaterialBindEntr
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<MaterialBindInterfaceLookup> BuildMaterialBindInterfaceLookup(const CookVector<MaterialBindEntry>& materialBindEntries, ScratchArena& scratchArena){
+static Expected<MaterialBindInterfaceLookup> BuildMaterialBindInterfaceLookup(const Span<const MaterialBindEntry> materialBindEntries, ScratchArena& scratchArena){
     MaterialBindInterfaceLookup lookup(0, Hasher<Name>(), EqualTo<Name>(), scratchArena);
     lookup.reserve(materialBindEntries.size());
     for(const MaterialBindEntry& bindEntry : materialBindEntries){
@@ -51,7 +51,7 @@ static Expected<MaterialBindInterfaceLookup> BuildMaterialBindInterfaceLookup(co
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateMaterialCookInterfaces(const CookVector<MaterialBindEntry>& materialBindEntries, ScratchArena& scratchArena, CookVector<MaterialCookEntry>& materialEntries){
+bool ValidateMaterialCookInterfaces(const Span<const MaterialBindEntry> materialBindEntries, ScratchArena& scratchArena, CookVector<MaterialCookEntry>& materialEntries){
     auto materialBindLookupResult = BuildMaterialBindInterfaceLookup(materialBindEntries, scratchArena);
     if(!materialBindLookupResult)
         return false;

@@ -363,7 +363,7 @@ private:
     [[nodiscard]] bool canCreateSampledTextureFormat(Format::Enum format)const;
     [[nodiscard]] Expected<GraphicsBytes> loadPipelineCacheData();
     void savePipelineCacheData(Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] Expected<CreatedPipelineLayout> createPipelineLayoutForBindingLayouts(const BindingLayoutVector& bindingLayouts, TStringView operationName, Alloc::ScratchArena& scratchArena)const;
+    [[nodiscard]] Expected<CreatedPipelineLayout> createPipelineLayoutForBindingLayouts(Span<const BindingLayoutHandle> bindingLayouts, TStringView operationName, Alloc::ScratchArena& scratchArena)const;
     [[nodiscard]] Expected<VulkanDetail::HeapBindingRange> validateHeapMemoryBinding(
         const Heap& heap,
         const VkMemoryRequirements& memoryRequirements,

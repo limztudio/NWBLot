@@ -70,7 +70,7 @@ static constexpr Name s_ScratchOwner("core/task/gpu/declaration_scratch");
     return true;
 }
 
-[[nodiscard]] static Core::GpuGraphResourceSetDesc SetDescription(const Name& identity, const ResourceIds& members, const usize count)noexcept{
+[[nodiscard]] static Core::GpuGraphResourceSetDesc SetDescription(const Name& identity, const Span<const Core::GpuGraphResourceId> members, const usize count)noexcept{
     return Core::GpuGraphResourceSetDesc{}.setIdentity(identity).setMarkerLabel("Resource Set Memory Members").setMembers(members.data(), count);
 }
 

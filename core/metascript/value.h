@@ -7,6 +7,8 @@
 
 #include "global.h"
 
+#include <global/span.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -209,7 +211,7 @@ private:
     void copyFrom(const Value& other);
     void moveFrom(Value&& other)noexcept;
     void appendListCopy(const Value& val);
-    void appendListCopies(const ListType& values, usize count);
+    void appendListCopies(Span<const Value> values, usize count);
 
     [[nodiscard]] NotNull<ListType*> allocList()const;
     [[nodiscard]] NotNull<MapType*> allocMap()const;

@@ -117,7 +117,7 @@ public:
     return hazard == GpuTaskHazardType::VersionDependency || hazard == GpuTaskHazardType::VersionLifetime;
 }
 
-[[nodiscard]] static const GpuTaskDependencyEdge* FindCycleDiagnosticEdge(const GraphicsVector<GpuTaskDependencyEdge>& cycleEdges)noexcept{
+[[nodiscard]] static const GpuTaskDependencyEdge* FindCycleDiagnosticEdge(const Span<const GpuTaskDependencyEdge> cycleEdges)noexcept{
     for(const GpuTaskDependencyEdge& edge : cycleEdges){
         if(IsResourceVersionHazard(edge.hazard))
             return &edge;

@@ -11,6 +11,7 @@
 
 #include <global/limit.h>
 #include <global/simplemath.h>
+#include <global/span.h>
 
 #include <cerrno>
 
@@ -98,8 +99,8 @@ Expected<VolumeHeaderDisk> ReadVolumeHeaderFromSegment(const AStringView volumeN
     return MakeUnexpected(Failure{});
 }
 
-template<typename SegmentPaths, typename ChunkFunc>
-static bool ForEachSegmentChunk(const AStringView volumeName, const AStringView operation, const SegmentPaths& segmentPaths, const u64 segmentSize, const u64 offset, const u64 byteCount, ChunkFunc&& chunkFunc){
+template<typename ChunkFunc>
+static bool ForEachSegmentChunk(const AStringView volumeName, const AStringView operation, const Span<const Path> segmentPaths, const u64 segmentSize, const u64 offset, const u64 byteCount, ChunkFunc&& chunkFunc){
     if(segmentSize == 0){
         LogFailure(volumeName, operation, FilesystemVolumeDetail::s_VolumeDetailSegmentSizeZero);
         return false;
@@ -150,10 +151,10 @@ static bool ForEachSegmentChunk(const AStringView volumeName, const AStringView 
     return true;
 }
 
-template<typename SegmentPaths, typename Stream, typename SeekStream, typename TransferStream>
+template<typename Stream, typename SeekStream, typename TransferStream>
 static bool TransferSegmentChunk(
     const AStringView volumeName,
-    const SegmentPaths& segmentPaths,
+    const Span<const Path> segmentPaths,
     const usize segmentIndex,
     const StreamOffset streamOffset,
     const AStringView openOperation,
@@ -176,8 +177,8 @@ static bool TransferSegmentChunk(
     return transferStream(stream);
 }
 
-template<typename SegmentPaths, typename Bytes, typename TransferChunk>
-static bool TransferVolumeBytes(const AStringView volumeName, const AStringView operation, const SegmentPaths& segmentPaths, const u64 segmentSize, const u64 offset, const u64 byteCount, TransferChunk&& transferChunk, Bytes& bytes){
+template<typename Bytes, typename TransferChunk>
+static bool TransferVolumeBytes(const AStringView volumeName, const AStringView operation, const Span<const Path> segmentPaths, const u64 segmentSize, const u64 offset, const u64 byteCount, TransferChunk&& transferChunk, Bytes& bytes){
     return ForEachSegmentChunk(
         volumeName,
         operation,
@@ -200,10 +201,9 @@ static bool TransferVolumeBytes(const AStringView volumeName, const AStringView 
     );
 }
 
-template<typename SegmentPaths>
 static bool ReadSegmentBytes(
     const AStringView volumeName,
-    const SegmentPaths& segmentPaths,
+    const Span<const Path> segmentPaths,
     const usize segmentIndex,
     const StreamOffset streamOffset,
     const StreamSize streamChunkSize,
@@ -239,10 +239,9 @@ static bool ReadSegmentBytes(
     );
 }
 
-template<typename SegmentPaths>
 static bool WriteSegmentBytes(
     const AStringView volumeName,
-    const SegmentPaths& segmentPaths,
+    const Span<const Path> segmentPaths,
     const usize segmentIndex,
     const StreamOffset streamOffset,
     const StreamSize streamChunkSize,
@@ -284,10 +283,9 @@ static bool WriteSegmentBytes(
 }
 
 struct ReadSegmentBytesOp{
-    template<typename SegmentPaths>
     bool operator()(
         const AStringView volumeName,
-        const SegmentPaths& segmentPaths,
+        const Span<const Path> segmentPaths,
         const usize segmentIndex,
         const StreamOffset streamOffset,
         const StreamSize streamChunkSize,
@@ -299,10 +297,9 @@ struct ReadSegmentBytesOp{
 };
 
 struct WriteSegmentBytesOp{
-    template<typename SegmentPaths>
     bool operator()(
         const AStringView volumeName,
-        const SegmentPaths& segmentPaths,
+        const Span<const Path> segmentPaths,
         const usize segmentIndex,
         const StreamOffset streamOffset,
         const StreamSize streamChunkSize,

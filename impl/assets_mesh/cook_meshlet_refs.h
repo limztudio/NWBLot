@@ -20,26 +20,10 @@ NWB_IMPL_BEGIN
 // Deduplicates a meshlet's source vertices into local deformed-position and attribute stream refs.
 class MeshletZippedRefBuilder final : NoCopy{
 public:
-    template<typename PositionRefVectorT>
-    [[nodiscard]] static Expected<u16> FindMeshletPositionRef(const PositionRefVectorT& refs, const MeshletPositionStreamRef& ref)noexcept(
-        noexcept(static_cast<bool>(DeclVal<usize&>() < refs.size()))
-        && noexcept(static_cast<bool>(refs[DeclVal<usize&>()].position != ref.position || refs[DeclVal<usize&>()].skin != ref.skin))
-    );
-    template<typename AttributeRefVectorT, typename AttributeSkinVectorT>
-    [[nodiscard]] static Expected<u16> FindMeshletAttributeRef(const AttributeRefVectorT& refs, const AttributeSkinVectorT& skins, const MeshletAttributeStreamRef& ref, const u32 skin)noexcept(
-        noexcept(static_cast<bool>(DeclVal<usize&>() < refs.size()))
-        && noexcept(DeclVal<void(*)(const MeshletAttributeStreamRef&)noexcept>()(refs[DeclVal<usize&>()]))
-        && noexcept(static_cast<bool>(
-            DeclVal<const MeshletAttributeStreamRef&>().normal != ref.normal
-            || DeclVal<const MeshletAttributeStreamRef&>().tangent != ref.tangent
-            || DeclVal<const MeshletAttributeStreamRef&>().uv0 != ref.uv0
-            || DeclVal<const MeshletAttributeStreamRef&>().color != ref.color
-            || skins[DeclVal<usize&>()] != skin
-        ))
-    );
+    [[nodiscard]] static Expected<u16> FindMeshletPositionRef(Span<const MeshletPositionStreamRef> refs, const MeshletPositionStreamRef& ref)noexcept;
+    [[nodiscard]] static Expected<u16> FindMeshletAttributeRef(Span<const MeshletAttributeStreamRef> refs, Span<const u32> skins, const MeshletAttributeStreamRef& ref, const u32 skin)noexcept;
     template<
         typename CookEntryT,
-        typename LocalVertexVectorT,
         typename PositionRefVectorT,
         typename AttributeRefVectorT,
         typename AttributeSkinVectorT,
@@ -49,7 +33,7 @@ public:
         const Path& nwbFilePath,
         const TStringView metaKind,
         const CookEntryT& entry,
-        const LocalVertexVectorT& sourceVertexRefs,
+        Span<const u32> sourceVertexRefs,
         PositionRefVectorT& outPositionRefs,
         AttributeRefVectorT& outAttributeRefs,
         AttributeSkinVectorT& outAttributeSkins,
@@ -65,11 +49,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename PositionRefVectorT>
-Expected<u16> MeshletZippedRefBuilder::FindMeshletPositionRef(const PositionRefVectorT& refs, const MeshletPositionStreamRef& ref)noexcept(
-    noexcept(static_cast<bool>(DeclVal<usize&>() < refs.size()))
-    && noexcept(static_cast<bool>(refs[DeclVal<usize&>()].position != ref.position || refs[DeclVal<usize&>()].skin != ref.skin))
-){
+inline Expected<u16> MeshletZippedRefBuilder::FindMeshletPositionRef(const Span<const MeshletPositionStreamRef> refs, const MeshletPositionStreamRef& ref)noexcept{
     for(usize localIndex = 0u; localIndex < refs.size(); ++localIndex){
         if(refs[localIndex].position != ref.position || refs[localIndex].skin != ref.skin)
             continue;
@@ -81,18 +61,7 @@ Expected<u16> MeshletZippedRefBuilder::FindMeshletPositionRef(const PositionRefV
 }
 
 
-template<typename AttributeRefVectorT, typename AttributeSkinVectorT>
-Expected<u16> MeshletZippedRefBuilder::FindMeshletAttributeRef(const AttributeRefVectorT& refs, const AttributeSkinVectorT& skins, const MeshletAttributeStreamRef& ref, const u32 skin)noexcept(
-    noexcept(static_cast<bool>(DeclVal<usize&>() < refs.size()))
-    && noexcept(DeclVal<void(*)(const MeshletAttributeStreamRef&)noexcept>()(refs[DeclVal<usize&>()]))
-    && noexcept(static_cast<bool>(
-        DeclVal<const MeshletAttributeStreamRef&>().normal != ref.normal
-        || DeclVal<const MeshletAttributeStreamRef&>().tangent != ref.tangent
-        || DeclVal<const MeshletAttributeStreamRef&>().uv0 != ref.uv0
-        || DeclVal<const MeshletAttributeStreamRef&>().color != ref.color
-        || skins[DeclVal<usize&>()] != skin
-    ))
-){
+inline Expected<u16> MeshletZippedRefBuilder::FindMeshletAttributeRef(const Span<const MeshletAttributeStreamRef> refs, const Span<const u32> skins, const MeshletAttributeStreamRef& ref, const u32 skin)noexcept{
     for(usize localIndex = 0u; localIndex < refs.size(); ++localIndex){
         const MeshletAttributeStreamRef& existing = refs[localIndex];
         if(existing.normal != ref.normal || existing.tangent != ref.tangent || existing.uv0 != ref.uv0 || existing.color != ref.color || skins[localIndex] != skin)
@@ -107,7 +76,6 @@ Expected<u16> MeshletZippedRefBuilder::FindMeshletAttributeRef(const AttributeRe
 
 template<
     typename CookEntryT,
-    typename LocalVertexVectorT,
     typename PositionRefVectorT,
     typename AttributeRefVectorT,
     typename AttributeSkinVectorT,
@@ -117,7 +85,7 @@ template<
     const Path& nwbFilePath,
     const TStringView metaKind,
     const CookEntryT& entry,
-    const LocalVertexVectorT& sourceVertexRefs,
+    const Span<const u32> sourceVertexRefs,
     PositionRefVectorT& outPositionRefs,
     AttributeRefVectorT& outAttributeRefs,
     AttributeSkinVectorT& outAttributeSkins,

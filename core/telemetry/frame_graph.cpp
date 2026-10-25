@@ -32,10 +32,10 @@ namespace __hidden_telemetry_frame_graph{
 [[nodiscard]] static bool BuildFrameGraphPayloadImpl(
     Alloc::ScratchArena& scratchArena,
     u64 frameIndex,
-    const FrameGraphNodeDescs& nodes,
-    const FrameGraphEdgeDescs& edges,
-    const Span<const FrameGraphPhysicalQueueRuntimeStatisticsRecord> physicalQueueRuntimeStatistics,
-    const FrameGraphPacketSubmissionStatisticsRecords* packetSubmissionStatistics,
+    Span<const FrameGraphNodeDesc> nodes,
+    Span<const FrameGraphEdgeDesc> edges,
+    Span<const FrameGraphPhysicalQueueRuntimeStatisticsRecord> physicalQueueRuntimeStatistics,
+    const Span<const FrameGraphPacketSubmissionStatisticsRecord>* packetSubmissionStatistics,
     TelemetryBytes& outPayload
 );
 
@@ -110,16 +110,16 @@ namespace __hidden_telemetry_frame_graph{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BuildFrameGraphPayload(Alloc::ScratchArena& scratchArena, const u64 frameIndex, const FrameGraphNodeDescs& nodes, const FrameGraphEdgeDescs& edges, TelemetryBytes& outPayload){
+bool BuildFrameGraphPayload(Alloc::ScratchArena& scratchArena, const u64 frameIndex, const Span<const FrameGraphNodeDesc> nodes, const Span<const FrameGraphEdgeDesc> edges, TelemetryBytes& outPayload){
     return __hidden_telemetry_frame_graph::BuildFrameGraphPayloadImpl(scratchArena, frameIndex, nodes, edges, Span<const FrameGraphPhysicalQueueRuntimeStatisticsRecord>{}, nullptr, outPayload);
 }
 
 bool BuildFrameGraphPayload(
     Alloc::ScratchArena& scratchArena,
     const u64 frameIndex,
-    const FrameGraphNodeDescs& nodes,
-    const FrameGraphEdgeDescs& edges,
-    const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
+    const Span<const FrameGraphNodeDesc> nodes,
+    const Span<const FrameGraphEdgeDesc> edges,
+    const Span<const FrameGraphPhysicalQueueRuntimeStatisticsRecord> physicalQueueRuntimeStatistics,
     TelemetryBytes& outPayload
 ){
     return __hidden_telemetry_frame_graph::BuildFrameGraphPayloadImpl(scratchArena, frameIndex, nodes, edges, physicalQueueRuntimeStatistics, nullptr, outPayload);
@@ -128,10 +128,10 @@ bool BuildFrameGraphPayload(
 bool BuildFrameGraphPayload(
     Alloc::ScratchArena& scratchArena,
     const u64 frameIndex,
-    const FrameGraphNodeDescs& nodes,
-    const FrameGraphEdgeDescs& edges,
-    const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
-    const FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics,
+    const Span<const FrameGraphNodeDesc> nodes,
+    const Span<const FrameGraphEdgeDesc> edges,
+    const Span<const FrameGraphPhysicalQueueRuntimeStatisticsRecord> physicalQueueRuntimeStatistics,
+    const Span<const FrameGraphPacketSubmissionStatisticsRecord> packetSubmissionStatistics,
     TelemetryBytes& outPayload
 ){
     return __hidden_telemetry_frame_graph::BuildFrameGraphPayloadImpl(scratchArena, frameIndex, nodes, edges, physicalQueueRuntimeStatistics, &packetSubmissionStatistics, outPayload);
@@ -150,10 +150,10 @@ namespace __hidden_telemetry_frame_graph{
 bool BuildFrameGraphPayloadImpl(
     Alloc::ScratchArena& scratchArena,
     const u64 frameIndex,
-    const FrameGraphNodeDescs& nodes,
-    const FrameGraphEdgeDescs& edges,
+    const Span<const FrameGraphNodeDesc> nodes,
+    const Span<const FrameGraphEdgeDesc> edges,
     const Span<const FrameGraphPhysicalQueueRuntimeStatisticsRecord> physicalQueueRuntimeStatistics,
-    const FrameGraphPacketSubmissionStatisticsRecords* const packetSubmissionStatistics,
+    const Span<const FrameGraphPacketSubmissionStatisticsRecord>* const packetSubmissionStatistics,
     TelemetryBytes& outPayload
 ){
     outPayload.clear();

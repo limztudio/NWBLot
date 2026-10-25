@@ -26,7 +26,7 @@ SIMDVectorSingle CsgDeformCapBuilder::AccumulateFanAreaVec(SIMDVectorSingle inAr
     return VectorAdd(inAreaVec, Vector3Cross(VectorSubtract(firstVec, originVec), VectorSubtract(secondVec, originVec)));
 }
 
-void CsgDeformCapBuilder::CollectBoundaryEdges(ScratchArena& scratchArena, const CsgDeformTriangleVector<ScratchArena>& triangles, Vector<CsgDeformCutLoopEdge, ScratchArena>& outEdges){
+void CsgDeformCapBuilder::CollectBoundaryEdges(ScratchArena& scratchArena, const Span<const CsgDeformTriangle> triangles, Vector<CsgDeformCutLoopEdge, ScratchArena>& outEdges){
     outEdges.clear();
     if(triangles.empty())
         return;
@@ -59,13 +59,13 @@ void CsgDeformCapBuilder::CollectBoundaryEdges(ScratchArena& scratchArena, const
     // Deterministic boundary order: traversal input matches emitted triangle order.
 }
 
-bool CsgDeformCapBuilder::OrderBoundaryLoop(ScratchArena& scratchArena, const Vector<CsgDeformCutLoopEdge, ScratchArena>& edges, Vector<u32, ScratchArena>& outLoop){
+bool CsgDeformCapBuilder::OrderBoundaryLoop(ScratchArena& scratchArena, const Span<const CsgDeformCutLoopEdge> edges, Vector<u32, ScratchArena>& outLoop){
     outLoop.clear();
     if(edges.empty())
         return true;
     // Boundary edges keep source-triangle winding, so consecutive edges meet head-to-tail or tail-to-tail. Walk them undirected for one closed ring.
     Vector<CsgDeformCutLoopEdge, ScratchArena> remaining(scratchArena);
-    remaining = edges;
+    remaining.assign(edges.begin(), edges.end());
     u32 start = remaining.front().first;
     u32 cursor = start;
     for(const CsgDeformCutLoopEdge& edge : remaining){
@@ -120,7 +120,7 @@ Expected<SIMDVectorSingleResult> CsgDeformCapBuilder::CapNormal(const SIMDVector
     return SIMDVectorSingleResult{ VectorSelect(normalized, CsgDeformWallBuilder::UpAxisVec(), s_SIMDMaskW) };
 }
 
-Expected<u32> CsgDeformCapBuilder::FillCapLoop(const SIMDVectorSingle loopNormalVec, const Vector<u32, ScratchArena>& loop, CsgDeformVertexVector<ScratchArena>& inOutVertices, CsgDeformTriangleVector<ScratchArena>& inOutTriangles){
+Expected<u32> CsgDeformCapBuilder::FillCapLoop(const SIMDVectorSingle loopNormalVec, const Span<const u32> loop, CsgDeformVertexVector<ScratchArena>& inOutVertices, CsgDeformTriangleVector<ScratchArena>& inOutTriangles){
     u32 capTriangles = 0u;
     if(loop.size() < s_MinLoopVertices)
         return MakeUnexpected(Failure{});

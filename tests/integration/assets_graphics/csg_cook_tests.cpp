@@ -55,7 +55,7 @@ static void AppendCsgShapeCookEntry(NWB::Impl::AssetsCsgCook::CsgShapeCookEntryV
     outEntries.push_back(Move(entry));
 }
 
-[[nodiscard]] static NWB::Impl::CsgShapeTypeId FindCookedCsgShapeTypeId(const NWB::Impl::AssetsCsgCook::CsgShapeCookEntryVector& entries, const Name shapeName)noexcept{
+[[nodiscard]] static NWB::Impl::CsgShapeTypeId FindCookedCsgShapeTypeId(const Span<const NWB::Impl::AssetsCsgCook::CsgShapeCookEntry> entries, const Name shapeName)noexcept{
     for(const NWB::Impl::AssetsCsgCook::CsgShapeCookEntry& entry : entries){
         if(entry.shapeName == shapeName)
             return entry.shapeTypeId;

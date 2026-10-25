@@ -227,7 +227,7 @@ bool GpuTimingRecorder::feedbackScopeDemandedLocked(const Name& scopeName)const 
     return demandIndex != m_feedbackScopeDemands.size() && m_feedbackScopeDemands[demandIndex].ownerCount != 0u;
 }
 
-void GpuTimingRecorder::addFeedbackScopeDemandsLocked(const Vector<Name, Alloc::GlobalArena>& scopeNames)noexcept{
+void GpuTimingRecorder::addFeedbackScopeDemandsLocked(const Span<const Name> scopeNames)noexcept{
     for(const Name& scopeName : scopeNames){
         const usize demandIndex = findFeedbackScopeDemandLocked(scopeName);
         if(demandIndex != m_feedbackScopeDemands.size()){
@@ -239,7 +239,7 @@ void GpuTimingRecorder::addFeedbackScopeDemandsLocked(const Vector<Name, Alloc::
     }
 }
 
-void GpuTimingRecorder::removeFeedbackScopeDemandsLocked(const Vector<Name, Alloc::GlobalArena>& scopeNames)noexcept{
+void GpuTimingRecorder::removeFeedbackScopeDemandsLocked(const Span<const Name> scopeNames)noexcept{
     for(const Name& scopeName : scopeNames){
         const usize demandIndex = findFeedbackScopeDemandLocked(scopeName);
         NWB_ASSERT(demandIndex != m_feedbackScopeDemands.size());
@@ -336,7 +336,7 @@ void GpuTimingRecorder::dispatchCompletedSample(const GpuTimingSample& sample, c
     }
 }
 
-void GpuTimingRecorder::dispatchCompletedSamples(const SampleDispatchVector& samples){
+void GpuTimingRecorder::dispatchCompletedSamples(const Span<const SampleDispatch> samples){
     for(const SampleDispatch& sample : samples)
         dispatchCompletedSample(sample.sample, sample.subscriptionIdentityLimit);
 }

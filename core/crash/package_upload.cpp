@@ -9,6 +9,7 @@
 #include <global/filesystem/retention.h>
 #include <global/optional.h>
 #include <global/scope_exit.h>
+#include <global/span.h>
 
 #include <cstddef>
 
@@ -180,8 +181,7 @@ static void CaptureUploadFailure(const UploadFailure& failure)noexcept{
     CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_WarningEventName, .category = s_UploadCategory, .expression = failure.operation, .message = "Crash upload SDK resource admission failed", .file = __FILE__, .line = __LINE__, });
 }
 
-template<typename ArenaT>
-static Expected<void, UploadFailure> UploadPackage(Alloc::ScratchArena& scratchArena, const CrashStringT<Alloc::ScratchArena>& url, const CrashBytesT<ArenaT>& archiveBytes, const AStringView crashUploadToken){
+static Expected<void, UploadFailure> UploadPackage(Alloc::ScratchArena& scratchArena, const CrashStringT<Alloc::ScratchArena>& url, const Span<const u8> archiveBytes, const AStringView crashUploadToken){
     if(!CanRepresentU64<curl_off_t>(static_cast<u64>(archiveBytes.size())))
         return MakeUnexpected(UploadFailure{ .operation = "admit_upload_size" });
     if(crashUploadToken.size() > Limit<usize>::s_Max - s_AuthorizationBearerPrefixLength)
@@ -422,8 +422,7 @@ static void CollectAndroidEmergencyRecord(Alloc::ScratchArena& scratchArena, con
                 .line = __LINE__,
             });
     }
-    CrashBytesT<Alloc::ScratchArena> empty(scratchArena);
-    if(!WriteBinaryFile(recordPath, empty))
+    if(!WriteBinaryFile(recordPath, Span<const u8>{}))
         CaptureDiagnosticEvent(DiagnosticEventRecord{
             .event = s_WarningEventName,
             .category = s_PackageErrorCategory,

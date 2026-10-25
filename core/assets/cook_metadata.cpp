@@ -159,7 +159,7 @@ AssetBunchExpanderAutoRegistrar::AssetBunchExpanderAutoRegistrar(const AssetBunc
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<DiscoveredNwbFileVector> DiscoverFilesWithExtension(CookArena& cookArena, const CookVector<ResolvedAssetRoot>& assetRoots, const AStringView expectedExtension, ScratchArena& scratchArena){
+Expected<DiscoveredNwbFileVector> DiscoverFilesWithExtension(CookArena& cookArena, const Span<const ResolvedAssetRoot> assetRoots, const AStringView expectedExtension, ScratchArena& scratchArena){
     DiscoveredNwbFileVector files(cookArena);
     HashSet<u64, ScratchArena, Hasher<u64>, EqualTo<u64>> seenPathHashes(0, Hasher<u64>(), EqualTo<u64>(), scratchArena);
 
@@ -277,7 +277,7 @@ Expected<ExpandedAssetMetadataVector, AssetBunchExpandFailure::Enum> TryAutoColl
     return MakeUnexpected(AssetBunchExpandFailure::Unsupported);
 }
 
-bool ParseAssetMetadata(CookArena& cookArena, const DiscoveredNwbFileVector& nwbFiles, Core::CpuTaskScheduler& cpuScheduler, ScratchArena& scratchArena, ParsedAssetMetadata& outMetadata){
+bool ParseAssetMetadata(CookArena& cookArena, const Span<const DiscoveredNwbFile> nwbFiles, Core::CpuTaskScheduler& cpuScheduler, ScratchArena& scratchArena, ParsedAssetMetadata& outMetadata){
     CookEntryPathHashSet seenPropertyAssetPathHashes(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
 
     seenPropertyAssetPathHashes.reserve(nwbFiles.size());

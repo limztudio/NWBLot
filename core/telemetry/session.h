@@ -69,20 +69,20 @@ public:
 
     [[nodiscard]] EventView view()const noexcept{ return m_recorder.view(); }
 
-    [[nodiscard]] bool recordFrameGraph(Alloc::ScratchArena& scratchArena, const FrameGraphNodeDescs& nodes, const FrameGraphEdgeDescs& edges){
+    [[nodiscard]] bool recordFrameGraph(Alloc::ScratchArena& scratchArena, const Span<const FrameGraphNodeDesc> nodes, const Span<const FrameGraphEdgeDesc> edges){
         return RecordFrameGraph(m_recorder, scratchArena, m_frameIndex, nodes, edges, m_streamId);
     }
 
-    [[nodiscard]] bool recordFrameGraph(Alloc::ScratchArena& scratchArena, const FrameGraphNodeDescs& nodes, const FrameGraphEdgeDescs& edges, const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics){
+    [[nodiscard]] bool recordFrameGraph(Alloc::ScratchArena& scratchArena, const Span<const FrameGraphNodeDesc> nodes, const Span<const FrameGraphEdgeDesc> edges, const Span<const FrameGraphPhysicalQueueRuntimeStatisticsRecord> physicalQueueRuntimeStatistics){
         return RecordFrameGraph(m_recorder, scratchArena, m_frameIndex, nodes, edges, physicalQueueRuntimeStatistics, m_streamId);
     }
 
     [[nodiscard]] bool recordFrameGraph(
         Alloc::ScratchArena& scratchArena,
-        const FrameGraphNodeDescs& nodes,
-        const FrameGraphEdgeDescs& edges,
-        const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
-        const FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics
+        const Span<const FrameGraphNodeDesc> nodes,
+        const Span<const FrameGraphEdgeDesc> edges,
+        const Span<const FrameGraphPhysicalQueueRuntimeStatisticsRecord> physicalQueueRuntimeStatistics,
+        const Span<const FrameGraphPacketSubmissionStatisticsRecord> packetSubmissionStatistics
     ){
         return RecordFrameGraph(m_recorder, scratchArena, m_frameIndex, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, m_streamId);
     }

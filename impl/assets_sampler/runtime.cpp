@@ -49,7 +49,7 @@ bool Sampler::validatePayload()const{
     return true;
 }
 
-bool Sampler::loadBinary(const Core::Assets::AssetBytes& binary){
+bool Sampler::loadBinary(const Span<const u8> binary){
     usize cursor = 0u;
     const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SamplerBinaryPayload::HeaderBinary>(binary, SamplerBinaryPayload::s_SamplerMagic, SamplerBinaryPayload::s_SamplerLoadBinaryContext, SamplerBinaryPayload::s_SamplerAssetKindLabel, cursor);
     if(!headerResult)
